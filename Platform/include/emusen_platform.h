@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 10u
+#define EMUSEN_PLATFORM_ABI_VERSION 11u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -885,6 +885,31 @@ int64_t emusen_serenity_device_findings(const emusen_serenity_device *device, ui
 /* Vulkan's own handle, for a caller that makes a call of its own on it; zero for a closed device. The device's queue is the library's: nothing else submits to it. */
 uint64_t emusen_serenity_device_raw(const emusen_serenity_device *device, uint32_t which);
 
+/* The device's UUID into `uuid` (16 bytes); 1 when it can export images and semaphores as opaque file descriptors, 0 when it cannot (EmuSen_DevicePicture.md, sections 2 and 4). Since interface 11. */
+int32_t emusen_serenity_device_identity(const emusen_serenity_device *device, uint8_t *uuid);
+
+/*
+ * An image a chain's picture is presented in, for a compositor to import (EmuSen_DevicePicture.md, section 4): RGBA8,
+ * in the device's own tiling or, with SHOWN_LINEAR, row after row, its memory not dedicated, exported as an opaque file descriptor with two binary semaphores, `ready`
+ * (signalled when a picture has been copied in) and `free` (for the compositor to signal when it has taken it). The
+ * three descriptors are the caller's, to hand on or close; `size` is set by the caller. Null when the device cannot
+ * export. Freeing waits for the device to finish with it. Since interface 11.
+ */
+typedef struct emusen_serenity_shown emusen_serenity_shown;
+
+typedef struct {
+    uint32_t size;
+    int32_t width, height;
+    int32_t memory_fd;
+    uint64_t memory_bytes;
+    int32_t ready_fd, free_fd;
+} emusen_serenity_shown_info;
+
+#define EMUSEN_SERENITY_SHOWN_LINEAR 1u /* laid out row after row, not in the device's own tiling */
+
+emusen_serenity_shown *emusen_serenity_shown_new(const emusen_serenity_device *device, int32_t width, int32_t height, uint32_t flags, emusen_serenity_shown_info *out);
+int32_t emusen_serenity_shown_free(emusen_serenity_shown *shown);
+
 /*
  * A bench's probe (EmuSen_Serenity.md, section 8.1). While it is on, each phase of a chain's calls and each
  * submission's timestamps wait to be taken, in order, a submission's device marks before its WAITED. A phase's
@@ -961,6 +986,16 @@ typedef struct {
 } emusen_serenity_lent;
 
 int32_t emusen_serenity_chain_render_lent(const emusen_serenity_chain *chain, int32_t width, int32_t height, emusen_serenity_lent *out);
+
+/*
+ * Every pass run for a view of `width` by `height`, no larger than the target, and the last one's picture copied into
+ * the target's corner, with no readback and no wait: the
+ * submission waits on the device for the target's `free` when `wait_free` is not zero, signals its `ready`, and leaves
+ * the image in the transfer-source layout, given to the external queue family. The chain's next call that writes
+ * what a pass reads waits for it first. DEVICE when no frame has been given yet or a Vulkan call failed. Since
+ * interface 11.
+ */
+int32_t emusen_serenity_chain_present(const emusen_serenity_chain *chain, const emusen_serenity_shown *shown, int32_t width, int32_t height, int32_t wait_free);
 int32_t emusen_serenity_lent_release(uint64_t slot);
 
 #define EMUSEN_SERENITY_CHAIN_COPIED_IMAGES 0u /* pictures that were copies because every lendable readback was held */

@@ -172,6 +172,8 @@ namespace EmuSen.Mistress.Views
             _hardwareDashboard = new LunaAction("_Hardware Dashboard...", () => OpenCoretopWindow(_debugTarget));
             _rewindReel = new LunaAction("Re_wind...", () => OpenRewindReel(resumeAfter: false));
             InitializeComponent();
+            // Why the game's picture is read back rather than handed to the compositor on the device, logged once a window - see EmuSen_DevicePicture.md §4.4.
+            GameFrame.DevicePictureReport += problem => ErrorLog.Warning("picture", problem);
             SetUpStatusLine();
             ApplyStatusBar();
             SetUpLibraryScreen();

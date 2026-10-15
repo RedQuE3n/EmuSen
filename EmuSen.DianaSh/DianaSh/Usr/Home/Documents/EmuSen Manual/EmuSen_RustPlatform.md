@@ -2591,3 +2591,16 @@ rest stay on the medium (`EmuSen_Galaxia.md` §3.9). The Windows half was compil
 run. The interface's number went from 9 to 10 in `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion`
 together.
 
+## 25. Interface 11, 2026-10-15: the slang device's identity, and a picture shown on it
+
+For the game's picture handed to the compositor on the device (`EmuSen_DevicePicture.md` §4, §13). Serenity's device
+enables `VK_KHR_external_memory_fd` and `VK_KHR_external_semaphore_fd` where the driver offers them, and the interface
+gains `emusen_serenity_device_identity` (the device's UUID and whether it exports), `emusen_serenity_shown_new` and
+`emusen_serenity_shown_free` (an image exported with its two binary semaphores, laid out linearly or in the device's
+tiling, its memory not dedicated) and `emusen_serenity_chain_present` (the chain run into a shown image, waiting on
+the device for its `free` semaphore and signalling its `ready`, returning without waiting). A chain's frame upload is
+recorded into the submission that runs its passes rather than one of its own. The C# facades are `SlangVulkan.Identity`,
+`SlangShown` and `SlangChain.Present`, the library alone serving them (the C# device exports nothing, so a C# chain
+keeps the readback). The interface's number went from 10 to 11 in `emusen_platform.h`, `lib.rs` and
+`PlatformLibrary.InterfaceVersion` together.
+

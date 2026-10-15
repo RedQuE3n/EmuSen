@@ -15,7 +15,7 @@ use emusen_serenity::chain::{self, Chain, Failure, Unfed};
 use emusen_serenity::compiler::Stage;
 use emusen_serenity::format;
 use emusen_serenity::preset::{PassSpec, Preset, ScaleType, TextureSpec, Wrap};
-use emusen_serenity::vulkan::{Device, Findings, Mark};
+use emusen_serenity::vulkan::{Device, Findings, Mark, Shown};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -126,6 +126,82 @@ pub unsafe extern "C" fn emusen_serenity_device_raw(h: *const DeviceHandle, whic
         (Ok(device), RAW_DEVICE) => device.raw_device(),
         _ => 0,
     }
+}
+
+/// The device's UUID into `uuid` (16 bytes), and 1 when it can export images and semaphores as opaque file
+/// descriptors, 0 when it cannot (EmuSen_DevicePicture.md §2, §4.4).
+///
+/// # Safety
+/// `h` live; `uuid` valid for 16 bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_serenity_device_identity(h: *const DeviceHandle, uuid: *mut u8) -> i32 {
+    let device = match unsafe { device(h) } {
+        Ok(device) => device,
+        Err(status) => return status,
+    };
+    if uuid.is_null() {
+        return fail(status::NULL, "nowhere to put the UUID");
+    }
+    unsafe { std::ptr::copy_nonoverlapping(device.uuid().as_ptr(), uuid, 16) };
+    device.exports() as i32
+}
+
+/// `emusen_serenity_shown_info`: a target's size and its three descriptors, each the caller's.
+#[repr(C)]
+pub struct ShownInfo {
+    pub size: u32,
+    pub width: i32,
+    pub height: i32,
+    pub memory_fd: i32,
+    pub memory_bytes: u64,
+    pub ready_fd: i32,
+    pub free_fd: i32,
+}
+
+/// The target's memory laid out row after row rather than in the device's own tiling.
+pub const SHOWN_LINEAR: u32 = 1;
+
+pub struct ShownHandle {
+    shown: Shown,
+}
+
+/// An image a chain's picture is presented in, laid out linearly with `SHOWN_LINEAR`, exported with its two
+/// semaphores; `out` receives their descriptors,
+/// which are the caller's to hand on or close. Null when the device cannot export, with the words why.
+///
+/// # Safety
+/// `d` live; `out` valid, with its size set.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_serenity_shown_new(d: *const DeviceHandle, width: i32, height: i32, flags: u32, out: *mut ShownInfo) -> *mut ShownHandle {
+    let made = (|| {
+        let device = unsafe { device(d) }?;
+        let out = unsafe { out.as_mut() }.ok_or_else(|| fail(status::NULL, "nowhere to put the target"))?;
+        if (out.size as usize) < std::mem::size_of::<ShownInfo>() {
+            return Err(fail(status::BAD_ARGUMENT, "the target's struct is too small"));
+        }
+        if width < 1 || height < 1 {
+            return Err(fail(status::BAD_ARGUMENT, "a target is at least one by one"));
+        }
+        let (shown, fds) = device.create_target(width as u32, height as u32, flags & SHOWN_LINEAR != 0).map_err(|words| fail(status::DEVICE, words))?;
+        (out.width, out.height, out.memory_fd, out.memory_bytes, out.ready_fd, out.free_fd) = (width, height, fds.memory, shown.memory_bytes, fds.ready, fds.free);
+        Ok(ShownHandle { shown })
+    })();
+    match made {
+        Ok(handle) => Box::into_raw(Box::new(handle)),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// Frees a target, waiting for the device to finish with it first.
+///
+/// # Safety
+/// `h` from `emusen_serenity_shown_new`, not freed, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_serenity_shown_free(h: *mut ShownHandle) -> i32 {
+    if !h.is_null() {
+        drop(unsafe { Box::from_raw(h) });
+    }
+    0
 }
 
 /// Turns the device's probe on, its clock started as the call returns, or off.
@@ -431,6 +507,23 @@ pub unsafe extern "C" fn emusen_serenity_chain_render_lent(h: *const ChainHandle
             (out.pixels, out.bytes, out.width, out.height, out.row_bytes, out.slot) = (lent.pixels, lent.bytes, lent.width, lent.height, lent.row_bytes, lent.slot);
             0
         }
+        Err(words) => fail(status::DEVICE, words),
+    }
+}
+
+/// Runs every pass for a view of `width` by `height`, no larger than the target, and copies the last one's picture into
+/// the target's corner, without waiting: the submission
+/// waits on the device for the target's `free` semaphore when `wait_free` is not zero, and signals its `ready`.
+/// DEVICE when no frame has been given yet or a Vulkan call failed.
+///
+/// # Safety
+/// `h` and `target` live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_serenity_chain_present(h: *const ChainHandle, target: *const ShownHandle, width: i32, height: i32, wait_free: i32) -> i32 {
+    let mut chain = chain!(h);
+    let Some(target) = (unsafe { target.as_ref() }) else { return fail(status::NULL, "no target") };
+    match chain.present(&target.shown, width, height, wait_free != 0) {
+        Ok(()) => 0,
         Err(words) => fail(status::DEVICE, words),
     }
 }

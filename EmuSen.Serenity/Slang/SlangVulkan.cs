@@ -100,6 +100,17 @@ namespace EmuSen.Serenity.Slang
 
         internal static void Check(Result result, string call) => Managed.Check(result, call);
 
+        // The physical device's UUID, and whether its images and semaphores can be exported; the C#'s device exports nothing - see EmuSen_DevicePicture.md §4.4.
+        public (byte[] Uuid, bool Exports) Identity()
+        {
+            if (_native is null) return (new byte[16], false);
+            var uuid = new byte[16];
+            int exports;
+            fixed (byte* u = uuid) exports = SerenityNative.DeviceIdentity(_native.Value, u);
+            GC.KeepAlive(_native);
+            return (uuid, exports == 1);
+        }
+
         private ulong Raw(uint which)
         {
             ulong raw = SerenityNative.DeviceRaw(_native!.Value, which);

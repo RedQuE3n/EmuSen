@@ -164,13 +164,19 @@ impl Drop for Root {
 struct Inner {
     device: ash::Device,
     queue: vk::Queue,
+    family: u32,
     pool: vk::CommandPool,
     commands: vk::CommandBuffer,
     fence: vk::Fence,
     memory: vk::PhysicalDeviceMemoryProperties,
     samplers: Mutex<[vk::Sampler; 16]>,
-    /// One command buffer, and a chain may be built on one thread while another draws.
-    submit: Mutex<()>,
+    /// One command buffer, and a chain may be built on one thread while another draws; true while a submission that
+    /// was not waited for may still be running (EmuSen_DevicePicture.md §4.2).
+    submit: Mutex<bool>,
+    /// The physical device's UUID, and the loaders of the two calls that export memory and semaphores, where the
+    /// device has the extensions (EmuSen_DevicePicture.md §2).
+    uuid: [u8; 16],
+    exports: Option<(ash::khr::external_memory_fd::Device, ash::khr::external_semaphore_fd::Device)>,
     probing: AtomicBool,
     probe: Mutex<Option<Probe>>,
     timestamp_period: f64,
@@ -343,6 +349,13 @@ impl Device {
         Self::open(root, physical, family, name, timestamp_period).map_err(unavailable)
     }
 
+    /// Whether the device offers both extensions an image and its semaphores are exported with.
+    fn offers_exports(instance: &ash::Instance, physical: vk::PhysicalDevice) -> bool {
+        let extensions = unsafe { instance.enumerate_device_extension_properties(physical) }.unwrap_or_default();
+        let has = |name: &CStr| extensions.iter().any(|e| e.extension_name_as_c_str().is_ok_and(|n| n == name));
+        has(ash::khr::external_memory_fd::NAME) && has(ash::khr::external_semaphore_fd::NAME)
+    }
+
     fn root(entry: ash::Entry, loader: libloading::Library, validate: bool) -> Result<Root, String> {
         let application = vk::ApplicationInfo::default().api_version(vk::API_VERSION_1_1);
         let mut create = vk::InstanceCreateInfo::default().application_info(&application);
@@ -380,8 +393,18 @@ impl Device {
     fn open(root: Root, physical: vk::PhysicalDevice, family: u32, name: String, timestamp_period: f64) -> Result<Device, String> {
         let priority = [1.0f32];
         let queue_info = [vk::DeviceQueueCreateInfo::default().queue_family_index(family).queue_priorities(&priority)];
-        let device_info = vk::DeviceCreateInfo::default().queue_create_infos(&queue_info);
+        let exporting = Self::offers_exports(&root.instance, physical);
+        let wanted = [ash::khr::external_memory_fd::NAME.as_ptr(), ash::khr::external_semaphore_fd::NAME.as_ptr()];
+        let mut device_info = vk::DeviceCreateInfo::default().queue_create_infos(&queue_info);
+        if exporting {
+            device_info = device_info.enabled_extension_names(&wanted);
+        }
         let device = unsafe { root.instance.create_device(physical, &device_info, None) }.check("vkCreateDevice")?;
+        let mut id = vk::PhysicalDeviceIDProperties::default();
+        let mut properties = vk::PhysicalDeviceProperties2::default().push_next(&mut id);
+        unsafe { root.instance.get_physical_device_properties2(physical, &mut properties) };
+        let uuid = id.device_uuid;
+        let exports = exporting.then(|| (ash::khr::external_memory_fd::Device::new(&root.instance, &device), ash::khr::external_semaphore_fd::Device::new(&root.instance, &device)));
         let made = (|| unsafe {
             let queue = device.get_device_queue(family, 0);
             let pool_info = vk::CommandPoolCreateInfo::default().queue_family_index(family).flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
@@ -415,12 +438,15 @@ impl Device {
             inner: Arc::new(Inner {
                 device,
                 queue,
+                family,
                 pool,
                 commands,
                 fence,
                 memory,
                 samplers: Mutex::new([vk::Sampler::null(); 16]),
-                submit: Mutex::new(()),
+                submit: Mutex::new(false),
+                uuid,
+                exports,
                 probing: AtomicBool::new(false),
                 probe: Mutex::new(None),
                 timestamp_period,
@@ -447,6 +473,16 @@ impl Device {
 
     pub fn raw_device(&self) -> u64 {
         self.inner.device.handle().as_raw()
+    }
+
+    /// The physical device's UUID, which a compositor's own must equal for an exported image to be imported there.
+    pub fn uuid(&self) -> [u8; 16] {
+        self.inner.uuid
+    }
+
+    /// Whether images and semaphores made here can be exported as opaque file descriptors.
+    pub fn exports(&self) -> bool {
+        self.inner.exports.is_some()
     }
 
     pub(crate) fn vk(&self) -> &ash::Device {
@@ -574,9 +610,58 @@ impl Device {
         Ok(*kept)
     }
 
+    /// Waits for a submission left running by `run_unwaited`, if there is one, under the queue's lock: what the host
+    /// writes next (a staging buffer, a pass's uniforms and descriptors) is then no longer read.
+    pub(crate) fn settle(&self) -> Result<(), String> {
+        let mut pending = locked(&self.inner.submit);
+        self.settle_held(&mut pending)
+    }
+
+    fn settle_held(&self, pending: &mut bool) -> Result<(), String> {
+        if !*pending {
+            return Ok(());
+        }
+        let fence = self.inner.fence;
+        unsafe {
+            self.inner.device.wait_for_fences(&[fence], true, u64::MAX).check("vkWaitForFences")?;
+            self.inner.device.reset_fences(&[fence]).check("vkResetFences")?;
+        }
+        *pending = false;
+        self.read_marks();
+        self.phase(point::WAITED);
+        Ok(())
+    }
+
+    /// Records and submits, waiting on the device for `wait` and signalling `signal`, and returns at once; the next
+    /// call that submits or settles waits for it (EmuSen_DevicePicture.md §4.2).
+    pub(crate) fn run_unwaited(&self, record: impl FnOnce(vk::CommandBuffer), wait: Option<vk::Semaphore>, signal: vk::Semaphore) -> Result<(), String> {
+        let mut pending = locked(&self.inner.submit);
+        self.settle_held(&mut pending)?;
+        let (device, commands, fence) = (&self.inner.device, self.inner.commands, self.inner.fence);
+        unsafe {
+            device.reset_command_buffer(commands, vk::CommandBufferResetFlags::empty()).check("vkResetCommandBuffer")?;
+            let begin = vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+            device.begin_command_buffer(commands, &begin).check("vkBeginCommandBuffer")?;
+            self.mark(commands, point::SUBMISSION_BEGIN);
+            record(commands);
+            self.mark(commands, point::SUBMISSION_END);
+            device.end_command_buffer(commands).check("vkEndCommandBuffer")?;
+            let buffers = [commands];
+            let waits: Vec<vk::Semaphore> = wait.into_iter().collect();
+            let stages = [vk::PipelineStageFlags::TRANSFER];
+            let signals = [signal];
+            let submit = [vk::SubmitInfo::default().command_buffers(&buffers).wait_semaphores(&waits).wait_dst_stage_mask(&stages[..waits.len()]).signal_semaphores(&signals)];
+            device.queue_submit(self.inner.queue, &submit, fence).check("vkQueueSubmit")?;
+            self.phase(point::SUBMITTED);
+        }
+        *pending = true;
+        Ok(())
+    }
+
     /// Records, submits and waits; nothing recorded here is still running when it returns.
     pub(crate) fn run(&self, record: impl FnOnce(vk::CommandBuffer)) -> Result<(), String> {
-        let _held = locked(&self.inner.submit);
+        let mut pending = locked(&self.inner.submit);
+        self.settle_held(&mut pending)?;
         let (device, commands, fence) = (&self.inner.device, self.inner.commands, self.inner.fence);
         unsafe {
             device.reset_command_buffer(commands, vk::CommandBufferResetFlags::empty()).check("vkResetCommandBuffer")?;
@@ -600,7 +685,8 @@ impl Device {
 
     /// Waits for everything the device has been given, with the queue held as Vulkan asks.
     pub(crate) fn wait_idle(&self) {
-        let _held = locked(&self.inner.submit);
+        let mut pending = locked(&self.inner.submit);
+        let _ = self.settle_held(&mut pending);
         let _ = unsafe { self.inner.device.device_wait_idle() };
     }
 
@@ -666,32 +752,38 @@ impl Device {
 
     /// Pixels in RGBA8 from the host into level 0, and the chain built if the image has one.
     pub(crate) fn upload(&self, image: &Image, rgba: &[u8], staging: &Buffer) -> Result<(), String> {
+        self.settle()?;
         staging.write(rgba);
-        self.run(|commands| {
-            self.transition(commands, image, vk::ImageLayout::TRANSFER_DST_OPTIMAL, 0, None, None);
-            self.copy_in(commands, staging, image);
-            self.finish(commands, image);
-        })
+        self.run(|commands| self.record_upload(commands, image, staging))
+    }
+
+    /// The commands of an upload whose pixels are already in `staging`, for a submission that carries more.
+    pub(crate) fn record_upload(&self, commands: vk::CommandBuffer, image: &Image, staging: &Buffer) {
+        self.transition(commands, image, vk::ImageLayout::TRANSFER_DST_OPTIMAL, 0, None, None);
+        self.copy_in(commands, staging, image);
+        self.finish(commands, image);
     }
 
     /// Each row uploaded once into `rows`, then blitted to `repeat` times its height by nearest filtering, which
-    /// repeats each row exactly (EmuSen_Serenity.md §9.2).
-    pub(crate) fn upload_repeated(&self, image: &Image, rgba: &[u8], rows: &Image, repeat: u32, staging: &Buffer) -> Result<(), String> {
-        staging.write(rgba);
-        self.run(|commands| {
-            self.transition(commands, rows, vk::ImageLayout::TRANSFER_DST_OPTIMAL, 0, None, Some(vk::ImageLayout::UNDEFINED));
-            self.copy_in(commands, staging, rows);
-            self.transition(commands, rows, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, 0, None, None);
-            self.transition(commands, image, vk::ImageLayout::TRANSFER_DST_OPTIMAL, 0, None, None);
-            let blit = vk::ImageBlit {
-                src_subresource: level(0),
-                src_offsets: [vk::Offset3D::default(), vk::Offset3D { x: rows.width as i32, y: rows.height as i32, z: 1 }],
-                dst_subresource: level(0),
-                dst_offsets: [vk::Offset3D::default(), vk::Offset3D { x: rows.width as i32, y: rows.height.wrapping_mul(repeat) as i32, z: 1 }],
-            };
-            unsafe { self.inner.device.cmd_blit_image(commands, rows.handle, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, image.handle, vk::ImageLayout::TRANSFER_DST_OPTIMAL, &[blit], vk::Filter::NEAREST) };
-            self.finish(commands, image);
-        })
+    /// repeats each row exactly (EmuSen_Serenity.md §9.2): the commands, the pixels already in `staging`.
+    pub(crate) fn record_upload_repeated(&self, commands: vk::CommandBuffer, image: &Image, rows: &Image, repeat: u32, staging: &Buffer) {
+        self.transition(commands, rows, vk::ImageLayout::TRANSFER_DST_OPTIMAL, 0, None, Some(vk::ImageLayout::UNDEFINED));
+        self.copy_in(commands, staging, rows);
+        self.transition(commands, rows, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, 0, None, None);
+        self.transition(commands, image, vk::ImageLayout::TRANSFER_DST_OPTIMAL, 0, None, None);
+        let blit = vk::ImageBlit {
+            src_subresource: level(0),
+            src_offsets: [vk::Offset3D::default(), vk::Offset3D { x: rows.width as i32, y: rows.height as i32, z: 1 }],
+            dst_subresource: level(0),
+            dst_offsets: [vk::Offset3D::default(), vk::Offset3D { x: rows.width as i32, y: rows.height.wrapping_mul(repeat) as i32, z: 1 }],
+        };
+        unsafe { self.inner.device.cmd_blit_image(commands, rows.handle, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, image.handle, vk::ImageLayout::TRANSFER_DST_OPTIMAL, &[blit], vk::Filter::NEAREST) };
+        self.finish(commands, image);
+    }
+
+    /// Bytes written into a host buffer that no submission still running reads, the caller having settled.
+    pub(crate) fn write_staging(&self, staging: &Buffer, bytes: &[u8]) {
+        staging.write(bytes);
     }
 
     /// A transfer's writes to a buffer made visible to the host, which a fence alone does not do.
@@ -711,7 +803,8 @@ impl Device {
     /// timestamps wait to be taken, which is what a bench reads a frame's cost from (EmuSen_Serenity.md §8.1).
     pub fn probe(&self, on: bool) -> Result<(), String> {
         // No submission is out while the pool it writes to is made or destroyed.
-        let _held = locked(&self.inner.submit);
+        let mut pending = locked(&self.inner.submit);
+        self.settle_held(&mut pending)?;
         let mut probe = locked(&self.inner.probe);
         if let Some(old) = probe.take() {
             unsafe { self.inner.device.destroy_query_pool(old.pool, None) };
@@ -787,6 +880,145 @@ impl Device {
             probe.marks.push(Mark { kind: MARK_GPU, point, value: value.wrapping_sub(begin) as f64 * self.inner.timestamp_period });
         }
     }
+}
+
+/// An image a picture is presented in, exported to a compositor with the two semaphores that order it there: `ready`,
+/// signalled when a picture has been copied in, and `free`, signalled by the compositor when it has taken its copy
+/// (EmuSen_DevicePicture.md §4.2).
+pub struct Shown {
+    pub(crate) image: Image,
+    pub(crate) ready: vk::Semaphore,
+    pub(crate) free: vk::Semaphore,
+    pub memory_bytes: u64,
+}
+
+impl Drop for Shown {
+    fn drop(&mut self) {
+        let device = self.image.device();
+        device.wait_idle();
+        unsafe {
+            device.vk().destroy_semaphore(self.ready, None);
+            device.vk().destroy_semaphore(self.free, None);
+        }
+    }
+}
+
+/// A target's memory and semaphores as file descriptors, each the caller's to hand on or close.
+pub struct Exported {
+    pub memory: i32,
+    pub ready: i32,
+    pub free: i32,
+}
+
+impl Device {
+    /// A target `width` by `height`, RGBA8, its memory not dedicated, as Avalonia's GL import takes it, laid out
+    /// linearly or optimally (which one a compositor reads as written is found by trying, EmuSen_DevicePicture.md
+    /// §13), and its descriptors; none on a device that cannot export.
+    pub fn create_target(&self, width: u32, height: u32, linear: bool) -> Result<(Shown, Exported), String> {
+        let Some((memory_fd, semaphore_fd)) = &self.inner.exports else { return Err("the device cannot export images".to_string()) };
+        let device = &self.inner.device;
+        let format = vk::Format::R8G8B8A8_UNORM;
+        let mut external = vk::ExternalMemoryImageCreateInfo::default().handle_types(vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD);
+        let info = vk::ImageCreateInfo::default()
+            .push_next(&mut external)
+            .image_type(vk::ImageType::TYPE_2D)
+            .format(format)
+            .extent(vk::Extent3D { width, height, depth: 1 })
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(if linear { vk::ImageTiling::LINEAR } else { vk::ImageTiling::OPTIMAL })
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::TRANSFER_SRC);
+        let handle = unsafe { device.create_image(&info, None) }.check("vkCreateImage")?;
+        let needs = unsafe { device.get_image_memory_requirements(handle) };
+        let made = (|| unsafe {
+            let kind = self.memory_type(needs.memory_type_bits, vk::MemoryPropertyFlags::DEVICE_LOCAL, vk::MemoryPropertyFlags::empty(), "DeviceLocalBit")?;
+            let mut export = vk::ExportMemoryAllocateInfo::default().handle_types(vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD);
+            let allocate = vk::MemoryAllocateInfo::default().push_next(&mut export).allocation_size(needs.size).memory_type_index(kind);
+            let memory = device.allocate_memory(&allocate, None).check("vkAllocateMemory")?;
+            // Only copied into and out of, so the image has no view.
+            match device.bind_image_memory(handle, memory, 0).check("vkBindImageMemory") {
+                Ok(()) => Ok((memory, vk::ImageView::null())),
+                Err(words) => {
+                    device.free_memory(memory, None);
+                    Err(words)
+                }
+            }
+        })();
+        let (memory, view) = match made {
+            Ok(made) => made,
+            Err(words) => {
+                unsafe { device.destroy_image(handle, None) };
+                return Err(words);
+            }
+        };
+        let image = Image { device: self.clone(), handle, memory, view, target: view, width, height, levels: 1, layout: Cell::new(vk::ImageLayout::UNDEFINED) };
+        let semaphore = || {
+            let mut export = vk::ExportSemaphoreCreateInfo::default().handle_types(vk::ExternalSemaphoreHandleTypeFlags::OPAQUE_FD);
+            unsafe { device.create_semaphore(&vk::SemaphoreCreateInfo::default().push_next(&mut export), None) }.check("vkCreateSemaphore")
+        };
+        let ready = semaphore()?;
+        let free = match semaphore() {
+            Ok(free) => free,
+            Err(words) => {
+                unsafe { device.destroy_semaphore(ready, None) };
+                return Err(words);
+            }
+        };
+        let target = Shown { image, ready, free, memory_bytes: needs.size };
+        let memory_out = unsafe { memory_fd.get_memory_fd(&vk::MemoryGetFdInfoKHR::default().memory(target.image.memory).handle_type(vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD)) }.check("vkGetMemoryFdKHR")?;
+        let fd = |semaphore: vk::Semaphore| unsafe { semaphore_fd.get_semaphore_fd(&vk::SemaphoreGetFdInfoKHR::default().semaphore(semaphore).handle_type(vk::ExternalSemaphoreHandleTypeFlags::OPAQUE_FD)) }.check("vkGetSemaphoreFdKHR");
+        let ready_out = match fd(target.ready) {
+            Ok(fd) => fd,
+            Err(words) => {
+                unsafe { libc_close(memory_out) };
+                return Err(words);
+            }
+        };
+        let free_out = match fd(target.free) {
+            Ok(fd) => fd,
+            Err(words) => {
+                unsafe {
+                    libc_close(memory_out);
+                    libc_close(ready_out);
+                }
+                return Err(words);
+            }
+        };
+        Ok((target, Exported { memory: memory_out, ready: ready_out, free: free_out }))
+    }
+
+    /// An image's ownership given to or taken back from the compositor, with its layout: taken back with its
+    /// contents discarded, given with the layout the compositor copies from.
+    pub(crate) fn external(&self, commands: vk::CommandBuffer, image: &Image, give: bool) {
+        let (from, to, old, new) = if give {
+            (self.inner.family, vk::QUEUE_FAMILY_EXTERNAL, vk::ImageLayout::TRANSFER_DST_OPTIMAL, vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+        } else {
+            (vk::QUEUE_FAMILY_EXTERNAL, self.inner.family, vk::ImageLayout::UNDEFINED, vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+        };
+        let barrier = vk::ImageMemoryBarrier::default()
+            .old_layout(old)
+            .new_layout(new)
+            .image(image.handle)
+            .src_access_mask(if give { vk::AccessFlags::TRANSFER_WRITE } else { vk::AccessFlags::empty() })
+            .dst_access_mask(if give { vk::AccessFlags::empty() } else { vk::AccessFlags::TRANSFER_WRITE })
+            .src_queue_family_index(from)
+            .dst_queue_family_index(to)
+            .subresource_range(color(0, 1));
+        let (source, destination) = if give { (vk::PipelineStageFlags::TRANSFER, vk::PipelineStageFlags::BOTTOM_OF_PIPE) } else { (vk::PipelineStageFlags::TOP_OF_PIPE, vk::PipelineStageFlags::TRANSFER) };
+        unsafe { self.inner.device.cmd_pipeline_barrier(commands, source, destination, vk::DependencyFlags::empty(), &[], &[], &[barrier]) };
+        image.layout.set(new);
+    }
+}
+
+/// Closes a descriptor the library made and could not hand over.
+unsafe fn libc_close(fd: i32) {
+    unsafe extern "C" {
+        fn close(fd: i32) -> i32;
+    }
+    unsafe { close(fd) };
 }
 
 #[cfg(test)]

@@ -399,12 +399,148 @@ namespace EmuSen.Serenity
             return builder;
         }
 
+        // The picture handed to the compositor on the device where it can be, Skia drawing it otherwise; EMUSEN_DEVICE_PICTURE=0 keeps Skia's - see EmuSen_DevicePicture.md §4.
+        public static bool DevicePictureAllowed { get; set; } = Environment.GetEnvironmentVariable("EMUSEN_DEVICE_PICTURE") != "0";
+
+        // Why the picture is not handed over on the device, said once per window; null when it is.
+        public event Action<string>? DevicePictureReport;
+
+        private DevicePresenter? _presenter;
+        private System.Threading.Tasks.Task? _presenterStart;
+        private Slang.SlangRunner? _deviceRunner, _deviceRunnerNext;
+        private long _deviceVersion = -1;
+
+        // Whether the picture is being handed to the compositor on the device, for a frontend's readout and a test.
+        public bool PresentsOnDevice => _presenter is { Visible: true };
+
+        public DevicePresenter? Presenter => _presenter;
+
+        // Waits for the presenter's start, for a probe that must not see the Skia picture first.
+        internal System.Threading.Tasks.Task PresenterStarted => _presenterStart ?? System.Threading.Tasks.Task.CompletedTask;
+
+        private async System.Threading.Tasks.Task StartPresenterAsync()
+        {
+            // The compositor is asked first, so a window whose compositor imports nothing (a headless one, EGL) makes no device.
+            if (Avalonia.Rendering.Composition.ElementComposition.GetElementVisual(this)?.Compositor is not { } compositor) return;
+            var interop = await compositor.TryGetCompositionGpuInterop();
+            if (interop is null || !interop.SupportedImageHandleTypes.Contains(Avalonia.Platform.KnownPlatformGraphicsExternalImageHandleTypes.VulkanOpaquePosixFileDescriptor))
+            {
+                DevicePictureReport?.Invoke("The picture is read back: " + (interop is null ? "the compositor offers no GPU interop" : "the compositor imports no Vulkan image by file descriptor"));
+                return;
+            }
+            Slang.SlangVulkan? device = await System.Threading.Tasks.Task.Run(() => Slang.SlangRunner.SharedDevice);
+            if (device is null) { DevicePictureReport?.Invoke($"No Vulkan device: {Slang.SlangRunner.DeviceReport}"); return; }
+            var (presenter, problem) = await DevicePresenter.TryCreateAsync(this, device, compositor, interop);
+            if (presenter is null) { DevicePictureReport?.Invoke($"The picture is read back: {problem}"); return; }
+            if (VisualRoot is null) { presenter.Dispose(); return; }
+            presenter.Visible = false;
+            lock (_cacheLock) _presenter = presenter;
+            InvalidateVisual();
+        }
+
+        // The preset the device path draws for a built-in filter, simple effect or plain picture, written again only when what it is written from changes.
+        private (ScreenFilter? Filter, string? Console, IReadOnlyDictionary<string, float>? Values, int By, ShaderEffect Effect, bool Bilinear) _presetKey;
+        private string? _presetPath;
+
+        private string DevicePresetPath(Offer offer)
+        {
+            ScreenFilter? filter = _activeFilter;
+            int by = filter is not null && filter.RowsOnce && filter.History == 0 && offer.Lines > 0 && offer.Height > offer.Lines && offer.Height % offer.Lines == 0
+                && offer.Height / offer.Lines <= FilterChain.MostRowsToALine && offer.Width % (offer.Height / offer.Lines) == 0 ? offer.Height / offer.Lines : 1;
+            var key = (filter, filter is null ? null : _filterConsole, filter is null ? null : _shaderParameters, by, ActiveEffect, GraphicsSettings.BilinearFiltering);
+            if (_presetPath is not null && key == _presetKey) return _presetPath;
+            _presetPath = filter is not null ? Shaders.BuiltInPreset.Write(filter, _filterConsole, _shaderParameters, by) : Shaders.BuiltInPreset.Write(BuiltInShaders.AsFilter(ActiveEffect, GraphicsSettings.BilinearFiltering), null);
+            _presetKey = key;
+            return _presetPath;
+        }
+
+        // The values a built-in's chain is given, made again only when what they come from changes.
+        private (ScreenFilter? Filter, IReadOnlyDictionary<string, float>? Values, string? Console, Point Origin, PictureCrop Crop, int RawWidth, int RawHeight) _valuesKey;
+        private Slang.SlangRunner? _valuesRunner;
+
+        // On the UI thread, under the lock: the newest offer run through the device's chain into the compositor; false when the device path cannot draw it now - see EmuSen_DevicePicture.md §4.3.
+        private bool PresentOnDevice(Offer offer)
+        {
+            if (_presenter is not { } presenter) return false;
+            Slang.SlangRunner? runner = _slang;
+            ScreenFilter? filter = runner is null ? _activeFilter ?? BuiltInShaders.AsFilter(ActiveEffect, GraphicsSettings.BilinearFiltering) : null;
+            if (runner is null)
+            {
+                string path;
+                try { path = DevicePresetPath(offer); }
+                catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException or InvalidOperationException) { DevicePictureReport?.Invoke($"The built-in filter could not be written: {e.Message}"); return false; }
+                if (!string.Equals(_deviceRunner?.PresetPath, path, StringComparison.Ordinal) && !string.Equals(_deviceRunnerNext?.PresetPath, path, StringComparison.Ordinal))
+                {
+                    _deviceRunnerNext?.Dispose();
+                    _deviceRunnerNext = new Slang.SlangRunner(path, problem => DevicePictureReport?.Invoke(problem), () => Avalonia.Threading.Dispatcher.UIThread.Post(InvalidateVisual));
+                }
+                if (_deviceRunnerNext is { Built: true } next)
+                {
+                    _deviceRunner?.Dispose();
+                    (_deviceRunner, _deviceRunnerNext) = (next, null);
+                    _deviceVersion = -1;
+                }
+                runner = _deviceRunner;
+                if (runner is null) return false;
+            }
+
+            Rect whole = DestinationFor(offer, filter?.Aspect), shown = whole;
+            bool cropsItself = filter?.CropsItself == true;
+            if (!cropsItself && !_crop.IsNone)
+            {
+                var (x, y, w, h) = _crop.Whole(whole.X, whole.Y, whole.Width, whole.Height);
+                whole = new Rect(x, y, w, h);
+            }
+            double scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
+            Rect snapped = new(Math.Round(whole.X * scaling) / scaling, Math.Round(whole.Y * scaling) / scaling, Math.Round(whole.Width * scaling) / scaling, Math.Round(whole.Height * scaling) / scaling);
+            if (filter is not null)
+            {
+                Point origin = TopLevel.GetTopLevel(this) is { } top && this.TranslatePoint(snapped.Position, top) is { } p ? new Point(p.X * scaling, p.Y * scaling) : snapped.Position;
+                var key = (filter, _shaderParameters, _filterConsole, origin, cropsItself ? _crop : PictureCrop.None, offer.Raw is null ? 0 : offer.Width, offer.Raw is null ? 0 : offer.Height);
+                if (key != _valuesKey || !ReferenceEquals(runner, _valuesRunner))
+                {
+                    var values = new Dictionary<string, float>(StringComparer.Ordinal);
+                    foreach (Slang.SlangParameter parameter in filter.Parameters ?? Array.Empty<Slang.SlangParameter>())
+                        values[parameter.Id] = _shaderParameters is not null && _shaderParameters.TryGetValue(parameter.Id, out float value) ? value : filter.DefaultFor(parameter, _filterConsole);
+                    (values[Shaders.BuiltInPreset.OriginX], values[Shaders.BuiltInPreset.OriginY]) = ((float)origin.X, (float)origin.Y);
+                    (values[Shaders.BuiltInPreset.RawWidth], values[Shaders.BuiltInPreset.RawHeight]) = (key.Item6, key.Item7);
+                    PictureCrop crop = key.Item5;
+                    (values[Shaders.BuiltInPreset.CropLeft], values[Shaders.BuiltInPreset.CropTop], values[Shaders.BuiltInPreset.CropWidth], values[Shaders.BuiltInPreset.CropHeight]) = ((float)crop.Left, (float)crop.Top, (float)crop.Width, (float)crop.Height);
+                    runner.SetParameters(values);
+                    (_valuesKey, _valuesRunner) = (key, runner);
+                }
+            }
+
+            bool newFrame = offer.Version != _deviceVersion;
+            int repeat = filter is { RowsOnce: false } ? offer.RowRepeat : 1;
+            if (!runner.Present(presenter, offer.Rgba, offer.Width, offer.Height, repeat, newFrame, (int)Math.Round(snapped.Width * scaling), (int)Math.Round(snapped.Height * scaling), offer.Raw)) return false;
+            _deviceVersion = offer.Version;
+            presenter.Place(snapped, cropsItself ? null : shown);
+            presenter.Visible = true;
+            return true;
+        }
+
+        // The rectangle a picture is drawn in, as the draw operation decides it - see EmuSen_Serenity.md §2.9.
+        private Rect DestinationFor(Offer source, double? filterAspect)
+        {
+            double aspect = filterAspect ?? (_squarePixels ? 0 : source.Aspect);
+            PictureCrop crop = _crop;
+            var (x, y, w, h) = ComputeLetterboxRect(source.Width * crop.Width, source.Height * source.RowRepeat * crop.Height, aspect, Bounds.Width, Bounds.Height);
+            return new Rect(x, y, Math.Max(1, Math.Round(w)), Math.Max(1, Math.Round(h)));
+        }
+
         // The cached image is native memory the size of a frame, so a control leaving the window gives it back; the offer it came from stays, to be copied again.
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnDetachedFromVisualTree(e);
             lock (_cacheLock)
             {
+                _presenter?.Dispose();
+                _presenter = null;
+                _presenterStart = null;
+                _deviceRunner?.Dispose();
+                _deviceRunnerNext?.Dispose();
+                (_deviceRunner, _deviceRunnerNext, _deviceVersion) = (null, null, -1);
                 _cachedImage?.Dispose();
                 _cachedImage = null;
                 _cachedRaw?.Dispose();
@@ -422,12 +558,53 @@ namespace EmuSen.Serenity
         {
             base.OnAttachedToVisualTree(e);
             lock (_cacheLock) if (_activeFilter is not null && _chain is null && _nextChain is null) Rechain();
+            if (DevicePictureAllowed && _presenterStart is null) _presenterStart = StartPresenterAsync();
         }
 
         public override void Render(DrawingContext context)
         {
             base.Render(context);
+            if (_presenter is not null && TryRenderOnDevice(context)) return;
             if (CaptureDrawOp(Bounds.Size) is { } op) context.Custom(op);
+        }
+
+        // The device path's turn of Render: the picture handed over, and a draw that only keeps the display's clock - see EmuSen_DevicePicture.md §4.3.
+        private bool TryRenderOnDevice(DrawingContext context)
+        {
+            Offer? offer = TakeReader(null);
+            if (offer is null) return false;
+            long started = System.Diagnostics.Stopwatch.GetTimestamp();
+            bool shown;
+            lock (_cacheLock)
+            {
+                try { shown = PresentOnDevice(offer); }
+                catch (Exception e) when (e is InvalidOperationException or ArgumentException or NotSupportedException)
+                {
+                    DevicePictureReport?.Invoke($"The picture is read back from now on: {e.Message}");
+                    _presenter?.Dispose();
+                    _presenter = null;
+                    shown = false;
+                }
+                if (!shown) { if (_presenter is { } p) p.Visible = false; }
+            }
+            if (!shown) { PutReader(offer); return false; }
+            bool fresh;
+            lock (_offerLock) fresh = offer.Version > _copiedVersion;
+            if (fresh) Copied(offer);
+            Presented(fresh, 0, System.Diagnostics.Stopwatch.GetTimestamp() - started, true, offer.Width, offer.Height);
+            context.Custom(new ClockOp(new Rect(Bounds.Size), this, offer.Sequence, fresh));
+            PutReader(offer);
+            return true;
+        }
+
+        // A draw that does nothing but tell the display's clock that the render thread drew, as every draw of the Skia path does - see EmuSen_Settings_Reference.md §4.87.2.
+        private sealed class ClockOp(Rect bounds, GameFrameControl owner, long sequence, bool fresh) : ICustomDrawOperation
+        {
+            public Rect Bounds { get; } = bounds;
+            public bool HitTest(Point p) => Bounds.Contains(p);
+            public bool Equals(ICustomDrawOperation? other) => false;
+            public void Dispose() { }
+            public void Render(ImmediateDrawingContext context) => owner.SampleDisplay(System.Diagnostics.Stopwatch.GetTimestamp(), sequence, fresh);
         }
 
         // What Render hands the compositor, holding the newest offer until disposed; the tests hold one and draw it when they like.

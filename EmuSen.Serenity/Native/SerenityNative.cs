@@ -76,6 +76,21 @@ namespace EmuSen.Serenity.Native
         internal static delegate* unmanaged[Cdecl]<nint, uint, long> ChainGet;
         internal static delegate* unmanaged[Cdecl]<byte*, nuint, int, int*, int> ParseFormat;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, long> LastError;
+        internal static delegate* unmanaged[Cdecl]<nint, byte*, int> DeviceIdentity;
+        internal static delegate* unmanaged[Cdecl]<nint, int, int, uint, ShownInfo*, nint> ShownNew;
+        internal static delegate* unmanaged[Cdecl]<nint, int> ShownFree;
+        internal static delegate* unmanaged[Cdecl]<nint, nint, int, int, int, int> ChainPresent;
+
+        // emusen_serenity_shown_info: an exported target's size and its three descriptors, since interface 11.
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct ShownInfo
+        {
+            public uint Size;
+            public int Width, Height;
+            public int MemoryFd;
+            public ulong MemoryBytes;
+            public int ReadyFd, FreeFd;
+        }
 
         // emusen_serenity_mark: one thing a device's probe saw.
         [StructLayout(LayoutKind.Sequential)]
@@ -108,7 +123,8 @@ namespace EmuSen.Serenity.Native
             "emusen_serenity_device_findings", "emusen_serenity_device_raw", "emusen_serenity_device_probe", "emusen_serenity_device_marks", "emusen_serenity_chain_new",
             "emusen_serenity_chain_free", "emusen_serenity_chain_parameters", "emusen_serenity_chain_lut", "emusen_serenity_chain_set_parameters", "emusen_serenity_chain_value",
             "emusen_serenity_chain_advance", "emusen_serenity_chain_render", "emusen_serenity_chain_render_lent", "emusen_serenity_lent_release", "emusen_serenity_chain_get",
-            "emusen_serenity_parse_format", "emusen_platform_last_error",
+            "emusen_serenity_parse_format", "emusen_platform_last_error", "emusen_serenity_device_identity", "emusen_serenity_shown_new", "emusen_serenity_shown_free",
+            "emusen_serenity_chain_present",
         };
 
         // Null when every export resolved and both libraries were lent; otherwise why the library is not in use.
@@ -162,6 +178,10 @@ namespace EmuSen.Serenity.Native
             ChainGet = (delegate* unmanaged[Cdecl]<nint, uint, long>)found[next++];
             ParseFormat = (delegate* unmanaged[Cdecl]<byte*, nuint, int, int*, int>)found[next++];
             LastError = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)found[next++];
+            DeviceIdentity = (delegate* unmanaged[Cdecl]<nint, byte*, int>)found[next++];
+            ShownNew = (delegate* unmanaged[Cdecl]<nint, int, int, uint, ShownInfo*, nint>)found[next++];
+            ShownFree = (delegate* unmanaged[Cdecl]<nint, int>)found[next++];
+            ChainPresent = (delegate* unmanaged[Cdecl]<nint, nint, int, int, int, int>)found[next++];
             return Lend();
         }
 

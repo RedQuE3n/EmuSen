@@ -442,12 +442,31 @@ Diamond, the latency in frames from a frame's emulation to its picture's present
 |---|---|---|
 | **Q1** | Avalonia's X11 Vulkan mode, with Serenity's device given to it (`CustomSharedDevice`), so that one device reaches the swapchain? | Not now. GLX stays; the mode is measured as an option once (c) is built, since it changes the renderer under every window |
 | **Q2** | §3.1's second stage removes Skia's filter path, which leaves a Mac, where no Vulkan device is shipped, with every built-in filter drawn plain (as the CRT is today on Skia's software path), and a Windows machine paying the readback for a built-in | Ship MoltenVK with the macOS build (`Mars_Gpu.md` §4's open publish decision), then convert and remove. Until this is answered, step (b) stops at its first stage: the SkSL text stays the one source, drawn on the device where §4's path is on and by Skia elsewhere |
+| **Q3** | The device path costs the plain picture and the built-in filters 0.5 to 1 ms more CPU a frame than Skia's path did (§13.4), and saves a RetroArch preset 1.5 to 8 ms of the render thread. Keep every picture on the device, or draw the plain picture and the built-ins with Skia where it is cheaper until the kit? | Keep every picture on the device, as decided: one path, the one a core's picture on the device needs (§5), and the kit's; the cost is CPU on two threads with no wait on either. Reconsider only if the handheld's run (§11) shows frames dropped by it |
 
 ---
 
 ## 11. The handheld: the tester's steps
 
-*(Written with the build that carries step (c), §13.)*
+*(Written with the build that carries step (c), §13.)* The device path has not run on the handheld. What to measure
+there, under Game Mode's gamescope and on the desktop, on the charger and on battery:
+
+1. **The build.** From the branch `gpu-picture` at the commit that records §13 or later:
+   `dotnet publish EmuSen.Mistress -c Release -r linux-x64 --self-contained true -o <folder>`, the platform library and
+   the cores built into it as every publish is, and the folder copied to the handheld as earlier builds were
+   (`EmuSen_Serenity.md` §8.4's `deck-out`). Nothing else changes: no setting, no file.
+2. **Whether the path is taken.** Start Mistress with `EMUSEN_DEVICE_PICTURE=1` (the default) and play any game for a
+   minute; the day's log in the log folder holds a `picture` warning only when a window did not take the device path,
+   with the reason (§4.4). Under gamescope the compositor is XWayland's GL, as on the desktop; a warning there names
+   which condition failed.
+3. **What to compare**, each case once with `EMUSEN_DEVICE_PICTURE=1` and once with `=0`, a game left running for a
+   minute on its title screen and then in play: the plain picture, the CRT at its three tiers, CRT (Lottes), and
+   `crt-royale`, on an SNES game and an N64 game at 4×. Read Mistress's presentation readout (§2.5 of
+   `EmuSen_Serenity.md`: frames offered and shown, and the draw's milliseconds) and the emulated frame rate, and note
+   whether the picture is the same in both runs by eye (a photograph of each is enough to say).
+4. **What would decide against it there**: a picture that differs between the two runs, a shown rate below the
+   offered one with the device path and not without it, or any frame the emulation drops with it and not without.
+   Report those with the log; do not change a setting to work around them.
 
 ---
 
@@ -537,3 +556,120 @@ needs them, and §3.1's second stage (the text converted and the Skia path remov
 reaches the chain's lookup image in the runner of §13; the comparison above drew the NES under the CRT from its
 palette's colours, not from the raw frame, and the PlayStation's pictures were synthetic only (Diamond's bench discs
 were not run for this step).
+
+---
+
+## 13. Step (c): the hand-over to the compositor, as built (2026-10-15)
+
+### 13.1 What was built
+
+**On the device** (the platform library, interface 11): `Shown`, an image exported with its two binary semaphores
+(`emusen_serenity_shown_new`, `_free`), its memory not dedicated, as Avalonia's GL import takes it, laid out linearly
+or in the device's tiling; the device's UUID and whether it exports (`emusen_serenity_device_identity`), the device
+enabling `VK_KHR_external_memory_fd` and `VK_KHR_external_semaphore_fd` where offered; and `chain_present`, which runs
+the passes for a view no larger than the target and copies the last pass into the target's corner, taking the image
+back from the external queue family with its contents discarded, giving it back in the transfer-source layout Avalonia
+waits for it in, waiting on the device for `free` and signalling `ready`, and returning **without waiting**. The device
+keeps one submission in flight: the next call that writes what a pass reads (a frame's staging, a pass's uniforms and
+descriptors) first waits for the last one's fence, which at 60 frames a second has long signalled. **A frame's upload
+is now recorded into the submission that runs its passes**, the readback's and the present's alike, so a frame costs
+one submission where it cost two and the host waited for both.
+
+**In Serenity**: `SlangShown`, `SlangChain.Present`, `SlangVulkan.Identity`; `DevicePresenter`, three slots of a
+`Shown` imported once each with `ImportImage` and `ImportSemaphore`, shown by a `CompositionSurfaceVisual` inside a
+container visual that clips it, updated with `UpdateWithSemaphoresAsync`, a slot reused only once its last update's
+task has completed and a frame skipped when none has; and `GameFrameControl`'s device path (§4.3, §4.5): on its
+`Render`, on the UI thread, the newest offer is run through the preset, the built-in filter or the plain picture as a
+`SlangRunner` over its translated preset (§12), presented, and placed at the destination of §2.9 and §2.10 of
+`EmuSen_Serenity.md`; the control then issues only a draw that keeps the display's clock. `EMUSEN_DEVICE_PICTURE=0`
+keeps Skia's path. Mistress logs the reason when a window does not take the device path.
+
+### 13.2 Two things the probe found, and what was done
+
+**The layout.** Imported optimally tiled, the image arrived in the compositor scrambled into 64-pixel columns, dedicated
+memory or not: radeonsi lays out a memory object imported without `GL_DEDICATED_MEMORY_OBJECT_EXT`, which Avalonia
+does not set, by its own rule, and reads it as linear [M, the probe's snapshot against the chain's readback, 2.33
+million channels differing]. Laid out linearly, the picture arrived exact. Since another vendor's driver may read the
+other way, **the presenter finds out**: on creation it presents a 13 × 7 picture each way and reads it back from the
+compositor (`CreateCompositionVisualSnapshot`), and keeps the first layout that the compositor shows as written, or
+refuses. On this machine it chooses linear under GLX and under Avalonia's Vulkan mode alike.
+
+**The row pitch.** Linear at an odd width (1,403 pixels), the picture arrived sheared: the two drivers pad a linear
+row differently. The image's rows are now padded to a whole number of 64 pixels, the picture copied into its corner,
+and the visual sized to the padded image with the container clipping the padding; at 1,403 the compositor's picture
+then equals the chain's own render, every channel [M]. The self-test's odd width checks the padding as well.
+
+### 13.3 Proof in a window
+
+The frontends' windows on this desktop open minimized and are never drawn, which no change of the probe's could
+undo, so the windows were run in a **nested, headless KWin** (`kwin_wayland --virtual --xwayland`, the probe's
+`~/.cache/emusen/probe/gpu/nested/`) at 1920 × 1080 and 3840 × 2160, with Mesa's `DRI_PRIME=1` putting the windows'
+GL on the RX 6800, which is a real compositor and a real Avalonia window under XWayland [M].
+
+- **The picture.** `GameFrameControl` with CRT (Lottes) on an SNES-shaped picture: the compositor's own picture of the
+  surface, read back, equals a second chain's render of the same frame, **0 channels differing**, at 1,403 × 1,052.
+- **The fallbacks**, each forced: Avalonia's EGL mode (no import offered) and a Vulkan device on the integrated GPU
+  (another UUID) are refused with their reasons and the picture is drawn as before; the C#'s device exports nothing;
+  `DevicePresenterTests` holds each of §4.4's conditions alone.
+- **The validation layer**, with synchronisation validation, its shader-access heuristic and no message limit, over
+  120 frames each of the plain picture, CRT (Lottes), the CRT at Accurate, `crt-royale` and Mega Bezel SMOOTH-ADV in
+  the window: **0 findings**. As a positive control, the transition of the last pass before its copy removed: 346
+  findings (`VUID-vkCmdCopyImage-srcImageLayout-00128` and a read-after-write hazard), so the layer was listening.
+  **Not seen by it**: the image taken back from the external queue family removed gave no finding, since the layer
+  does not track an image's layout across a release to `VK_QUEUE_FAMILY_EXTERNAL`; that barrier rests on the
+  specification and on the compositor's picture being right.
+- **Frames.** Every frame offered was handed over (300 of 300, against the Skia path's 274 to 290 drawn); no frame
+  was skipped for want of a free image.
+
+### 13.4 What it costs
+
+Each case 300 frames after 120 of warm-up, paced at about 15 ms, the CPU time of each thread read from `/proc`
+(10 ms ticks, so ±0.03 ms a frame), two rounds with the order of the paths reversed in the second; medians. The UI
+thread on the device path includes the frame's chain and its present; "render" is Avalonia's render thread, which on
+the device path does the compositor's copy of the image (§1.2) and composes. "Draw" is the control's own count:
+the render thread's draw on the Skia path, the UI thread's present on the device path. Load averages 2 to 10 (other
+work on the machine) [M, `results-c2.txt`]:
+
+| Picture | Window | Skia: UI + render CPU | Skia: draw | Device: UI + render CPU | Device: present |
+|---|---|---|---|---|---|
+| plain | 1080p | 0.27 + 0.23 = 0.50 | 0.08 | 0.52 + 0.72 = 1.23 | 0.23 |
+| CRT, Performance | 1080p | 0.30 + 0.37 = 0.67 | 0.17 | 0.68 + 0.95 = 1.63 | 0.27 |
+| CRT, Balanced | 1080p | 0.32 + 0.38 = 0.70 | 0.23 | 0.57 + 0.78 = 1.35 | 0.27 |
+| CRT, Accurate | 1080p | 0.30 + 0.45 = 0.75 | 0.27 | 0.57 + 0.82 = 1.38 | 0.29 |
+| CRT (Lottes) | 1080p | 0.28 + 0.30 = 0.58 | 0.12 | 0.50 + 0.67 = 1.17 | 0.22 |
+| `crt-royale` | 1080p | 0.32 + 0.93 = 1.25 | **1.87** | 0.67 + 0.82 = 1.48 | **0.36** |
+| Mega Bezel SMOOTH-ADV | 1080p | 0.35 + 1.85 = 2.20 | **4.86** | 1.32 + 0.87 = 2.18 | **0.95** |
+| plain | 4K | 0.32 + 0.30 = 0.62 | 0.17 | 0.55 + 1.03 = 1.58 | 0.17 |
+| CRT, Performance | 4K | 0.30 + 0.38 = 0.68 | 0.25 | 0.57 + 1.03 = 1.60 | 0.19 |
+| CRT, Balanced | 4K | 0.42 + 0.53 = 0.95 | 0.44 | 0.55 + 0.87 = 1.42 | 0.19 |
+| CRT, Accurate | 4K | 0.32 + 0.52 = 0.83 | 0.38 | 0.58 + 0.80 = 1.38 | 0.19 |
+| CRT (Lottes) | 4K | 0.32 + 0.35 = 0.67 | 0.22 | 0.53 + 0.83 = 1.37 | 0.15 |
+| `crt-royale` | 4K | 0.45 + 2.75 = 3.20 | **5.71** | 0.67 + 0.87 = 1.53 | **0.27** |
+| Mega Bezel SMOOTH-ADV | 4K | 0.30 + 2.27 = 2.57 | **9.55** | 1.83 + 1.13 = 2.97 | **1.48** |
+
+**What it says.**
+
+- **A RetroArch preset's frame leaves the render thread.** On the Skia path its render thread waits for the chain,
+  reads back and uploads: 1.9 to 9.6 ms of the thread that composes the window. On the device path the UI thread
+  spends 0.3 to 1.5 ms recording and submitting, waits for nothing, and the compositor's thread spends what it spends
+  on any picture. At 4K, `crt-royale` costs the two threads together half the CPU it did.
+- **The plain picture and the built-in filters cost more CPU on the device path**, 0.5 to 1 ms a frame across the two
+  threads: on the Skia path they were a texture upload and a shader in Skia's own pass, with no readback to remove,
+  and the device path adds a submission on the UI thread and, on the render thread, Avalonia's copy of the image into
+  a texture it makes for each update (§1.2). R1 is realised here; §4.1's rule for putting the choice back to the
+  tester is not met, since the (b) of §8.5.1 measured 1.12 ms of the render thread for the same Lottes picture
+  against the device path's 0.50 + 0.67 ms on two threads with no wait, but the trade is stated as Q3.
+- **Before the upload was folded into the present** (`results-c1.txt`, the same matrix the hour before), the device
+  path's UI thread spent 0.4 to 2.1 ms presenting, its frame's upload waited for on its own; folding it brought the
+  present to 0.15 to 0.36 ms for every case but Mega Bezel.
+- **GPU time** was not read in the window. The passes are the chain's, unchanged; the device path removes the
+  readback's copy and Skia's upload (0.40 and 0.43 ms at 1080p, 1.61 and 1.66 at 4K, §8.3 of `EmuSen_Serenity.md`)
+  and adds a copy of the shown picture on the device and the compositor's copy of it, of the order of §8.5.1's 0.02 to
+  0.05 ms each.
+
+### 13.5 What is not done
+
+The handheld (§11), Windows and macOS (the fallback is chosen there by §4.4; not run), a second vendor (the layout
+test covers the import's layout and pitch, not a driver's other choices), GPU timings in the window, and a mutant of
+the external acquire that the layer could see. Hotaru and `FramePresenter` take the device path too, as hosts of
+`GameFrameControl`; only Mistress logs why a window does not.

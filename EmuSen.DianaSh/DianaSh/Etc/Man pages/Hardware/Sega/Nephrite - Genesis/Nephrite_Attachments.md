@@ -450,6 +450,10 @@ then `B` (the slot's); `run_to` takes `A` then `B` to the same `to`; lines go to
 replaces `Both` for that pair, since only the assembly may name both attachments; `s32x` never names `mcd` (§5.3's
 source check). How a disc is known to want the 32X is stage 12's question, with its state (Q5).
 
+*Named 2026-10-15:* CD32X's target is **Doom CD32X Fusion**, a homebrew disc that runs on the Sega CD and the 32X
+together, with its music from the disc. Stage 12's gate includes it booting and played through `Genesis<Both<MegaCd,
+S32x>>`, from the player's own copy; the project fetches or commits none of it unless its licence allows.
+
 ### 3.11 The J-Cart: a cartridge feature, not an attachment
 
 *Recommended, with its reasons:* the J-Cart stays a feature of the cartridge, in the Genesis's module tree.

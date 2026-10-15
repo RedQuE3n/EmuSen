@@ -1129,6 +1129,7 @@ impl Device {
 /// Closes a descriptor the library made and could not hand over.
 unsafe fn libc_close(fd: i32) {
     unsafe extern "C" {
+        #[cfg_attr(windows, link_name = "_close")]
         fn close(fd: i32) -> i32;
     }
     unsafe { close(fd) };

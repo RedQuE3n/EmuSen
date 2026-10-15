@@ -22,7 +22,7 @@ fn production_lines(text: &str) -> Vec<(usize, &str)> {
 fn tree_files(tree: &str) -> Vec<(String, String)> {
     let dir = std::path::Path::new(SRC).join(tree);
     let Ok(entries) = std::fs::read_dir(&dir) else { return Vec::new() };
-    let root = std::fs::read_to_string(dir.join("mod.rs")).expect("the tree's mod.rs");
+    let root = std::fs::read_to_string(dir.join("mod.rs")).expect("the tree's mod.rs").replace("\r\n", "\n");
     let mut files: Vec<_> = entries.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "rs")).collect();
     files.sort();
     files

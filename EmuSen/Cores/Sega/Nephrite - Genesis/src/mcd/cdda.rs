@@ -13,17 +13,21 @@ pub const FRAMES: usize = 588;
 /// sample against the Genesis's output (argued; D-35).
 pub const FULL: i32 = 0x400;
 pub const GAIN: (i32, i32) = (1, 2);
+/// The PCM chip's limited 16-bit sum against the same range: half of it, as CD-DA's (argued; D-38).
+pub const PCM_GAIN: (i32, i32) = (1, 2);
 
 #[derive(Clone)]
 pub struct Cdda {
     pub steps: Steps,
     /// Samples not yet given to the synthesiser, each at its master clock.
     pub queue: VecDeque<(u64, [i32; 2])>,
+    /// The two sources' levels now, CD-DA's and the PCM chip's, which the synthesiser holds the sum of.
+    pub levels: [[i32; 2]; 2],
 }
 
 impl Cdda {
     pub fn new(num: u64, den: u64) -> Cdda {
-        Cdda { steps: Steps::new(num, den, crate::sound::RATE), queue: VecDeque::with_capacity(2 * FRAMES) }
+        Cdda { steps: Steps::new(num, den, crate::sound::RATE), queue: VecDeque::with_capacity(2 * FRAMES), levels: [[0; 2]; 2] }
     }
 
     /// A sector's samples from master clock `start`, `period` master clocks long, at `volume` of `FULL`.
@@ -35,26 +39,44 @@ impl Cdda {
         }
     }
 
-    /// The samples due by master clock `t` given to the synthesiser.
-    pub fn feed(&mut self, t: u64) {
-        while let Some(&(at, level)) = self.queue.front() {
-            if at > t {
-                break;
+    /// The samples due by master clock `t`, CD-DA's queued and the PCM chip's in `pcm` (each at its master clock, in
+    /// order), given to the synthesiser in time order as the sum of the two; the PCM's taken are removed.
+    pub fn feed(&mut self, t: u64, pcm: &mut Vec<(u64, [i32; 2])>) {
+        let mut i = 0;
+        loop {
+            let cd = self.queue.front().copied().filter(|e| e.0 <= t);
+            let pc = pcm.get(i).copied().filter(|e| e.0 <= t);
+            let (at, source, level) = match (cd, pc) {
+                (Some(c), Some(p)) if c.0 <= p.0 => (c.0, 0, c.1),
+                (Some(c), None) => (c.0, 0, c.1),
+                (_, Some(p)) => (p.0, 1, [p.1[0] * PCM_GAIN.0 / PCM_GAIN.1, p.1[1] * PCM_GAIN.0 / PCM_GAIN.1]),
+                (None, None) => break,
+            };
+            if source == 0 {
+                self.queue.pop_front();
+            } else {
+                i += 1;
             }
-            self.steps.set(at, level);
-            self.queue.pop_front();
+            self.levels[source] = level;
+            let [a, b] = self.levels;
+            self.steps.set(at, [a[0] + b[0], a[1] + b[1]]);
         }
+        pcm.drain(..i);
     }
 
     pub fn write_state(&self, w: &mut StateWriter) {
         self.steps.write_state(w);
         let q: Vec<u64> = self.queue.iter().flat_map(|&(at, [l, r])| [at, l as u32 as u64 | (r as u32 as u64) << 32]).collect();
+        w.i32s("MixLevels", &[self.levels[0][0], self.levels[0][1], self.levels[1][0], self.levels[1][1]]);
         w.u32("CddaQueued", self.queue.len() as u32);
         w.u64s("CddaQueue", &q);
     }
 
     pub fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
         self.steps.read_state(r)?;
+        let mut l = [0i32; 4];
+        r.i32s(&mut l)?;
+        self.levels = [[l[0], l[1]], [l[2], l[3]]];
         let n = r.u32()? as usize;
         let mut q = vec![0u64; 2 * n.min(4 * FRAMES)];
         r.u64s(&mut q)?;

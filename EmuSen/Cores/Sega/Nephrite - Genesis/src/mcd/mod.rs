@@ -7,6 +7,7 @@ pub mod asic;
 pub mod cdc;
 pub mod cdda;
 pub mod cdd;
+pub mod pcm;
 pub mod state;
 pub mod word;
 #[cfg(test)]
@@ -87,7 +88,8 @@ pub struct Sub {
     pub word: WordRam,
     pub bram: Vec<u8>,
     pub pcm_ram: Vec<u8>,
-    pub pcm_regs: [u8; 9],
+    /// The RF5C164.
+    pub pcm: pcm::Pcm,
     pub g: Gate,
     /// The sub CPU waits for Word RAM the main CPU holds: its writes owed, done when the RAM is its again.
     pub parked: bool,
@@ -190,7 +192,7 @@ impl MegaCd {
             word: WordRam::default(),
             bram: vec![0; BRAM_SIZE],
             pcm_ram: vec![0; PCM_RAM_SIZE],
-            pcm_regs: [0; 9],
+            pcm: pcm::Pcm::default(),
             // `$A12000` reads `$0002` at power-on: the sub CPU held in reset with its bus requested (§2, the initial values).
             g: Gate { reset_held: true, busreq: true, hivect: 0xFFFF, ..Gate::default() },
             parked: false,
@@ -459,7 +461,10 @@ impl Sub {
         }
         let (b0, b1) = self.cdc.dma_unit();
         match (self.cdc.dd, b1) {
-            (dest::PCM, _) => self.pcm_ram[((self.pcm_regs[7] as usize & 15) << 12) | (a >> 1 & 0xFFF)] = b0,
+            (dest::PCM, _) => {
+                self.pcm.run(self.clock, &self.pcm_ram);
+                self.pcm_ram[self.pcm.window(a >> 1)] = b0;
+            }
             (dest::PRG, Some(b1)) => (self.prg[a & 0x7_FFFE], self.prg[(a & 0x7_FFFE) + 1]) = (b0, b1),
             (_, Some(b1)) => {
                 self.asic.stolen();
@@ -790,29 +795,37 @@ impl Sub {
         }
     }
 
-    // ---- the RF5C164's memory as the sub CPU reaches it; its sound is stage 9's
+    // ---- the RF5C164 as the sub CPU reaches it
 
-    /// The PCM chip's register or RAM at its own address `r` (`$FF0000` + 2r + 1): registers 0-8, the RAM's window of
-    /// 4 KiB from `$1000` in the bank register 7 chose when its bit 6 was 0 (the PCM manual's register map).
-    fn pcm_read(&self, r: u32) -> u8 {
+    /// The PCM chip's register or RAM at its own address `r` (`$FF0000` + 2r + 1): its registers, and the wave RAM's
+    /// window of 4 KiB from `$1000` in the bank WB chose (the PCM manual's §4-1). The chip is brought up to the present
+    /// first.
+    fn pcm_read(&mut self, r: u32) -> u8 {
+        self.pcm.run(self.clock, &self.pcm_ram);
         match r {
-            0x1000..=0x1FFF => self.pcm_ram[((self.pcm_regs[7] as usize & 15) << 12) | (r as usize & 0xFFF)],
-            _ => 0,
+            0x1000..=0x1FFF => self.pcm_ram[self.pcm.window(r as usize)],
+            _ => self.pcm.read(r),
         }
     }
 
     fn pcm_write(&mut self, r: u32, v: u8) {
+        self.pcm.run(self.clock, &self.pcm_ram);
         match r {
-            0x0..=0x8 => {
-                if r != 7 || v & 0x40 == 0 {
-                    self.pcm_regs[r as usize] = v;
-                } else {
-                    self.pcm_regs[7] = (self.pcm_regs[7] & 0x0F) | (v & 0xF0);
-                }
-            }
-            0x1000..=0x1FFF => self.pcm_ram[((self.pcm_regs[7] as usize & 15) << 12) | (r as usize & 0xFFF)] = v,
-            _ => {}
+            0x1000..=0x1FFF => self.pcm_ram[self.pcm.window(r as usize)] = v,
+            _ => self.pcm.write(r, v),
         }
+    }
+
+    /// The attachment's sound up to master clock `master`: the PCM chip's samples made, and with CD-DA's handed to
+    /// the mix's synthesiser.
+    pub fn sound_to(&mut self, master: u64) {
+        let now = self.to_sub(master).min(self.clock);
+        self.pcm.run(now, &self.pcm_ram);
+        let (num, den) = self.ratio;
+        for e in self.pcm.out.iter_mut() {
+            e.0 = (e.0 as u128 * den as u128).div_ceil(num as u128) as u64;
+        }
+        self.cdda.feed(master, &mut self.pcm.out);
     }
 }
 

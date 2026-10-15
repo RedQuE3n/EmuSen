@@ -1615,3 +1615,19 @@ CPUs' disputes in their own record pages.
   16 KiB read taking 29.6 ms against 23.6), which is not built.
 - Pinned by: `asic.rs`'s four tests.
 - Implemented in: stage 9 step 1's commit.
+
+### D-38. The RF5C164's sum: a channel adds the top 14 of its 19-bit product, the eight are limited to 16 bits, and the limited sum is half the output's range
+- Opened: 2026-10-15, at stage 9 step 2.
+- Documents read: the Hardware Manual's "PCM Sound Source" §4-1 to §4-9 (its DCA figure read at 300 dpi), Ricoh's
+  RF5C68A data sheet (the DCA, the address pointer, the wave format, "one sampling requires ... source clock × 384").
+- Test program: mcd-verificator's own PCM RAM, PCM CLOCK and PCM VAR (`pcm.c`, in its V1.02 binary but not called;
+  §58.1), whose expected values krikzz took from his console. They test addresses, not levels.
+- Referee: none read.
+- Conclusion: argued. (1) The DCA figure multiplies the sample's seven magnitude bits by ENV's eight into 15, that by a
+  PAN nibble into 19 (bits 18-0), and draws the adder's input under bits 18 to 5: a channel's term is the product
+  shifted right 5, added or subtracted by the sample's sign bit. (2) The sum is limited to `$FFFF` above and `$0000`
+  below (both documents), a 16-bit range, taken here as signed. (3) Its level in the mix: half the output's range at
+  full scale, as CD-DA's (D-35), the two being the Sega CD's 16-bit sources; not measured, no recording of a console's
+  PCM existing here (§49.6 Q7).
+- Pinned by: `samples_are_sign_magnitude_scaled_by_env_and_pan_and_limited`.
+- Implemented in: stage 9 step 2's commit.

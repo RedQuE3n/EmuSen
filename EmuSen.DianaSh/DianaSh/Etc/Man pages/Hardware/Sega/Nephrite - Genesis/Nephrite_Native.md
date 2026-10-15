@@ -4209,3 +4209,44 @@ Each was proven by a run that failed with it and passed without it, then pinned 
   The lag is the drive's: the reference answers a track's start at once, and the LL logs, a console's drive, answer it
   as the lead-in's cycle passes the track (114 exchanges on a 35-track disc), as Nephrite does.
 - **The crate's tests**: 165 pass, the four of the ASIC and three for §57.2 among them.
+
+## 58. Stage 9, step 2: the RF5C164 (2026-10-15)
+
+### 58.1 What it built, and the oracle
+
+- **The RF5C164** (`src/mcd/pcm.rs`), from the Hardware Manual's "PCM Sound Source" and Ricoh's RF5C68A data sheet:
+  the control register (ON; MOD choosing the wave bank or the channel bank), the channel switches (a channel sounds
+  while its bit is 0), each channel's ENV, PAN, FD, LS and ST, the addresses read back at `$10`-`$1F`. A sample every
+  384 of the chip's clocks, the sub CPU's 12.5 MHz (32,552 Hz). A channel that is off while the chip sounds holds its
+  address at ST; the chip off holds every address; a channel's first sample reads ST's byte, and each later one steps
+  its 16.11 address by FD; a byte of `$FF` sends the address to LS and the RAM is read there. Samples are sign and
+  magnitude, bit 7 set for positive, summed and limited as D-38 says. The chip is brought up to the present at every
+  access to it, before the CDC's DMA writes its RAM, and at a frame's end.
+- **The mix**: CD-DA's samples and the PCM chip's go to one synthesiser in time order, as the sum of the two sources'
+  levels (`cdda.rs`'s `feed`).
+- **State version 20** holds the chip in the Sega CD's block in place of stage 8's nine register bytes.
+- **The oracle, built locally (§49.6 Q6)**: mcd-verificator V1.02's binary carries `pcm.c`'s three self-grading tests
+  though its `main` never calls them. Rebuilding its source with this machine's GCC 16 cross compiler (`-m68000`, with
+  32-bit multiply and divide routines written for the 68000 in place of libgcc, whose only build is for the 68020, and
+  the linked program's code shown free of instructions outside the 68000's set by disassembling it both as 68000 and
+  as 68020 code) gave a program whose timed loops differ from krikzz's compiler's: its standard list then failed VAR
+  TESTS, REG X002 and REG 8030 in Nephrite, which passes all of them in the original. So the rebuilt binary is no
+  oracle. Instead the original binary was patched in a scratch copy: `main`'s pointer to its test list now points at
+  a routine of 58 bytes in its unused space, which call `pcmTestRam`, `pcmTestClocking` and `pcmTestVar` at their
+  places in the binary (found by the strings they print) and store their verdicts in work RAM at `$FFA004`. The tests
+  run as krikzz's compiler built them. Not committed (GPL-3.0 allows the local copy).
+
+### 58.2 Measured (2026-10-15)
+
+| Test | What it checks | Nephrite | Genesis Plus GX | PicoDrive |
+|---|---|---|---|---|
+| PCM RAM | the 64 KiB through the 4 KiB window and its banks | OK | OK | OK |
+| PCM CLOCK | eight channels at eight steps, run for 8,192 turns of a `NOP`/`SUBQ`/`BPL` loop: the addresses 2, 4, 9, 79, 159 and 318 to 320, which only 636 to 639 samples give | OK | OK | ERROR 1 |
+| PCM VAR | a looped 15-byte sample read 4,096 times (the address from 0 to 14, never the marker's 15); an address held at ST while a channel is off | OK | ERROR 2 | ERROR 2 |
+
+Each rule shown held: a sample every 386 clocks fails PCM CLOCK (5), one every 382 passes it, so the test pins the rate
+from above to within 0.6%; the address left at the marker fails PCM VAR (1). The first sample's reading ST without a
+step is not pinned by the three. Both references fail PCM VAR at 2, the address reaching the marker; a test that
+every reference fails and Nephrite passes is not counted against Nephrite, the test's values being krikzz's console's.
+
+- **The crate's tests**: 168 pass, three new for the chip.

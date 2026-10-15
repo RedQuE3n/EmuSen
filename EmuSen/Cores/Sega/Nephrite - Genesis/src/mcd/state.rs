@@ -1,5 +1,5 @@
 //! The Sega CD's block of a state (version 20 on): the sub CPU, its clock and the gate array, Word RAM's switches, the
-//! sub CPU's wait, the PCM chip's registers, the drive, the CDC with its buffer, the fader, CD-DA's samples in flight,
+//! sub CPU's wait, the PCM chip, the drive, the CDC with its buffer, the fader, CD-DA's samples in flight,
 //! the RAM cartridge's switch and the disc's fingerprint. The memories are the machine's spaces (Nephrite_Native.md §53).
 
 use beryl_m68k::{M68000, Size};
@@ -17,7 +17,7 @@ pub struct Saved {
     word: [u8; 5],
     parked: bool,
     owed: Vec<(u32, Size, u16)>,
-    pcm_regs: [u8; 9],
+    pcm: super::pcm::Pcm,
     fader: u16,
     cdd: CddSaved,
     cdc: Cdc,
@@ -83,7 +83,17 @@ impl MegaCd {
         w.u32("SubOwed", h.owed.len() as u32);
         let owed: Vec<u64> = h.owed.iter().map(|&(a, s, v)| a as u64 | ((s == Size::Word) as u64) << 32 | (v as u64) << 40).collect();
         w.u64s("SubOwedWrites", &owed);
-        w.bytes("PcmRegisters", &h.pcm_regs);
+        let p = &h.pcm;
+        let bytes: Vec<u8> = p.ch.iter().flat_map(|c| [c.env, c.pan, c.st, c.fresh as u8]).chain([p.on as u8, p.wave_bank, p.chan_bank, p.off]).collect();
+        w.bytes("PcmBytes", &bytes);
+        let words: Vec<u16> = p.ch.iter().flat_map(|c| [c.fd, c.ls]).collect();
+        w.u16s("PcmWords", &words);
+        let addrs: Vec<u32> = p.ch.iter().map(|c| c.addr).collect();
+        w.u32s("PcmAddresses", &addrs);
+        w.u64("PcmNext", p.next);
+        w.u32("PcmQueued", p.out.len() as u32);
+        let q: Vec<u64> = p.out.iter().flat_map(|&(at, [l, r])| [at, l as u32 as u64 | (r as u32 as u64) << 32]).collect();
+        w.u64s("PcmQueue", &q);
         w.u16("Fader", h.fader);
         let c = &h.cdd;
         w.u32s("DriveMode", &mode_words(c.mode));
@@ -133,8 +143,23 @@ impl MegaCd {
         let mut owed = vec![0u64; n.min(64)];
         r.u64s(&mut owed)?;
         let owed = owed.iter().map(|&o| (o as u32, if o >> 32 & 1 != 0 { Size::Word } else { Size::Byte }, (o >> 40) as u16)).collect();
-        let mut pcm_regs = [0u8; 9];
-        r.bytes(&mut pcm_regs)?;
+        let mut pcm = super::pcm::Pcm::default();
+        let mut pb = [0u8; 36];
+        r.bytes(&mut pb)?;
+        let mut pw = [0u16; 16];
+        r.u16s(&mut pw)?;
+        let mut pa = [0u32; 8];
+        r.u32s(&mut pa)?;
+        for (k, c) in pcm.ch.iter_mut().enumerate() {
+            (c.env, c.pan, c.st, c.fresh) = (pb[4 * k], pb[4 * k + 1], pb[4 * k + 2], pb[4 * k + 3] != 0);
+            (c.fd, c.ls, c.addr) = (pw[2 * k], pw[2 * k + 1], pa[k] & 0x7FF_FFFF);
+        }
+        (pcm.on, pcm.wave_bank, pcm.chan_bank, pcm.off) = (pb[32] != 0, pb[33] & 15, pb[34] & 7, pb[35]);
+        pcm.next = r.u64()?;
+        let n = r.u32()? as usize;
+        let mut q = vec![0u64; 2 * n.min(4096)];
+        r.u64s(&mut q)?;
+        pcm.out = q.chunks_exact(2).map(|e| (e[0], [e[1] as u32 as i32, (e[1] >> 32) as u32 as i32])).collect();
         let fader = r.u16()?;
         let mut mode = [0u32; 7];
         r.u32s(&mut mode)?;
@@ -179,7 +204,7 @@ impl MegaCd {
         };
         let print = r.u64()?;
         let cdd = CddSaved { mode, words: dw, nibbles, flags, report };
-        let s = Saved { cpu, clock, g, word, parked, owed, pcm_regs, fader, cdd, cdc, cdda, cart_writable, asic, print };
+        let s = Saved { cpu, clock, g, word, parked, owed, pcm, fader, cdd, cdc, cdda, cart_writable, asic, print };
         Ok(s)
     }
 
@@ -187,7 +212,7 @@ impl MegaCd {
     pub fn apply_state(&mut self, s: Saved) {
         self.cpu = s.cpu;
         let h = &mut self.hw;
-        (h.clock, h.g, h.parked, h.owed, h.pcm_regs, h.fader, h.cdc, h.cdda, h.asic) = (s.clock, s.g, s.parked, s.owed, s.pcm_regs, s.fader, s.cdc, s.cdda, s.asic);
+        (h.clock, h.g, h.parked, h.owed, h.pcm, h.fader, h.cdc, h.cdda, h.asic) = (s.clock, s.g, s.parked, s.owed, s.pcm, s.fader, s.cdc, s.cdda, s.asic);
         let wr = &mut h.word;
         (wr.one_m, wr.sub_owns, wr.ret, wr.request, wr.priority) = (s.word[0] != 0, s.word[1] != 0, s.word[2] != 0, s.word[3] != 0, s.word[4] & 3);
         let c = &mut h.cdd;

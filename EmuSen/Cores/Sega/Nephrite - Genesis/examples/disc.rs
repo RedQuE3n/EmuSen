@@ -91,8 +91,12 @@ fn main() {
             (peak, sum) = (0, 0.0);
         }
     }
-    // `NEPHRITE_PRG` names a file for PRG-RAM at the end, for a homebrew boot ROM's records; never with a player's BIOS.
+    // `NEPHRITE_PRG` and `NEPHRITE_WRAM` name files for PRG-RAM and the main CPU's RAM at the end, for a homebrew boot
+    // ROM's records; never with a player's BIOS.
     if let Some(p) = std::env::var_os("NEPHRITE_PRG") {
         std::fs::write(p, &m.genesis.hw.mcd.as_ref().unwrap().hw.prg).expect("PRG-RAM");
+    }
+    if let Some(p) = std::env::var_os("NEPHRITE_WRAM") {
+        std::fs::write(p, &m.genesis.hw.wram).expect("the main CPU's RAM");
     }
 }

@@ -575,7 +575,7 @@ ran. **The effort is predicted** (P3). A stage's oracle must be met, or its miss
 | 9 | Sega CD, the rest: the graphics ASIC, the RF5C164, the fader and mix | Sega CD tests with the player's BIOS against Genesis Plus GX; mcd-verificator | 4 (split, `Nephrite_Native.md` §49.4) |
 | 10 | The Sega CD BIOS replacement (§5.6) | The 240p Sega CD suite; mcd-verificator in mode 1; games against the same games on the player's BIOS | 6 (split, `Nephrite_Native.md` §49.5) |
 | 11 | Beryl SH-2: the interpreter, delay slots, the cache, the SH7604's modules; the disassembler and assembler; its test programs | The manual's pseudocode as test programs; the SH-4 suite's shared instructions | 6 |
-| 12 | The 32X: system registers, comm ports, the FIFO, SDRAM, the frame buffers and VDP modes, the palette and the overlay, PWM, interrupts, the boot ROM replacements; CD32X | 240p 32X and homebrew against PicoDrive; S32X_MiSTer in disputes | 6 |
+| 12 | The 32X: system registers, comm ports, the FIFO, SDRAM, the frame buffers and VDP modes, the palette and the overlay, PWM, interrupts, the boot ROM replacements; CD32X | 240p 32X and homebrew against PicoDrive; S32X_MiSTer in disputes; CD32X: Doom CD32X Fusion, a homebrew disc that needs both attachments, booting and played with its CD audio (named 2026-10-15) | 6 |
 | 13 | Speed (§5.5): the exact levers for the 32X, measured on the bench and the handheld | §5.5's budget | 3 |
 | 14 | The gates of §7, the goldens, the clone check | §7 | 2 |
 

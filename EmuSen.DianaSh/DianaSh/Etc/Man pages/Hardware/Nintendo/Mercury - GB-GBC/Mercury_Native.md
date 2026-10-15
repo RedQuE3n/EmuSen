@@ -2723,3 +2723,9 @@ four synthetic programs' recorded digests. The whole `Mercury` filter passes, 80
 
 The same ticks are issued in a different order, a tick of four split from the end into the middle; every pair overlaps
 within the spread of this shared machine, Yellow's MercuryRT by the least (about 1.5% apart at the medians).
+
+**Mutants**, each in C# and in Rust separately: E1, a push's internal cycle settled at the end again; E2, RET cc's
+condition cycle settled at the end again; E3, the push's internal cycle between its two writes. Each is caught by its
+engine's harness, `Each_stack_access_lands_on_the_machine_cycle_the_hardware_gives_it` (C#: four cases for E1 and E3, one
+for E2; Rust: the one test), and by nothing through the rig, as expected of placement. Without the harnesses the corpus
+would be the only oracle, and CI has no corpus.

@@ -94,6 +94,9 @@ impl Ppu {
         self.mode_raw.is_none() && self.mode == mode
     }
 
+    /// Once a line, so kept out of the dot loop (Mercury_Native.md §13.11).
+    #[cold]
+    #[inline(never)]
     fn begin_scanline(&mut self, iflags: &mut u8) {
         self.dot = 0;
         self.ly = self.ly.wrapping_add(1);
@@ -129,6 +132,7 @@ impl Ppu {
     }
 
     /// With the LCD off the line does not move, so nothing written then raises the interrupt.
+    #[inline(never)]
     fn update_stat_line_with(&mut self, iflags: &mut u8, oam_at_vblank: bool) {
         if !self.lcd_enabled() {
             return;

@@ -3118,6 +3118,14 @@ its round 1 also expects STAT to read mode 0 right after the LCD comes on, which
 **The four games** keep the same PC, work RAM and VRAM at every 300th frame of MercuryRT's trace, and the real-games
 test passes.
 
+**Mutants**, each in C# and in Rust separately: K1, the comparison runs with the LCD off; K3, no line-144 interrupt on
+a DMG; K5, the frozen bit taken after LY is cleared (C#) or not carried by the tail (Rust): each caught on both engines
+by the step's claims. Two survived the first claims and gained one each: K2, the STAT line moving with the LCD off,
+which the frozen comparison's cases could not see because the line was already high (now
+`A_source_enabled_while_the_lcd_is_off_raises_nothing`, an hblank source enabled while the LCD is parked in mode 0); and
+K4 in Rust, the Color's interrupt a machine cycle too early, which the claim allowed because it only looked at the cycle
+it should arrive in (it now also asserts nothing has arrived a T-cycle before).
+
 #### 13.11.2 Retired
 
 The referee page put `stat_lyc_onoff` down to rules 4 and 5. Both were needed and neither was enough: it waits on rule 3
@@ -3135,3 +3143,93 @@ than a rule inside it, and it would move every game's timing. It is recorded as 
 designed against the `lcdon_*`, `intr_2_*` and `stat_lyc_onoff` tables, and not built in this audit. Rule 3 alone was
 considered and not built: the table shows mode 0 at LCD-on, but no source this audit may use says whether an enabled
 mode-0 source raises the interrupt then, and building half the rule would choose that unproven.
+
+### 13.12 The audit's cost, measured by instructions as well as time
+
+From step H on the machine was shared with other work (load averages of 3 to 11), and wall-clock benches moved by
+several percent between runs of identical code; some runs stalled to twice their time. So the whole audit was also
+measured by the user-space instructions MercuryRT's bench retires (`perf_event_open`, scratch `tools/icount.py`), which
+do not depend on load, for 3,900 frames of each game:
+
+| Snapshot | Tetris | Pokémon Yellow |
+|---|---|---|
+| before the audit | 37,795,896,576 | 38,919,540,695 |
+| step A | 37,795,692,935 | 38,919,044,363 |
+| step B, first form (`< 0` before `> 0`) | 38,069,364,254 (+0.72%) | 39,192,775,825 |
+| step B as committed | 37,795,697,868 | 38,919,033,278 |
+| step C | 37,795,767,074 | 38,919,332,004 |
+| step D, first form (a second field in the idle test) | 38,353,849,297 (**+1.48%**) | 39,477,083,752 |
+| steps E–J | 38,300,425,160 to 38,358,967,638 | 39,451,837,904 to 39,497,762,079 |
+| step K | 38,305,921,129 | 39,489,963,379 |
+| **after the fold below** | **37,763,224,412 (−0.09%)** | **38,947,229,369 (+0.07%)** |
+
+and Kirby's Dream Land +0.42%, Link's Awakening +0.12% over the audit. Step D's idle test, which read the start delay
+beside the counter on every T-cycle, was the one real cost; it was folded (`dae00467`): a fresh write sets the counter
+itself to cover the machine cycle before the transfer starts, so the idle test reads one field again, and the separate
+delay is used only for a restart written while a transfer runs, which keeps the old transfer alive until then. The
+claims, the corpus, the traces and every recorded digest were unchanged by the fold. The version-8 claim of §13.4 now
+holds a restart's delay, since a fresh write no longer uses the tail; states written by this branch's earlier commits
+with a fresh delay pending are not a population anyone holds and are not converted.
+
+**Time is a different matter for MercuryRT after step K.** With the same instruction count as step J (to 0.01%), the
+crate's bench ran 4–6% slower, interleaved run for run (Tetris 0.4475–0.4680 ms at step J against 0.4747–0.4786 after K,
+on a loaded machine). Three variants that each removed a part of step K (the comparison in the STAT read, the frozen
+bit's field, the console field and the dot check) did not recover it; marking the once-a-line `begin_scanline` cold and
+not inlined, and the STAT line's update not inlined, recovered about half (Tetris 0.4552–0.4632, Yellow 0.5749–0.5988
+against step J's 0.5648–0.5781). That is the placement effect §8.7.3 found, with the code doing the same work, and is
+recorded as such: the attributes were kept, as true statements about those paths, and the remainder is left for a
+measurement on a quiet machine before stage 9's goldens, through `ICore` as a player runs it. C#'s frame did not move
+measurably across the audit.
+
+### 13.13 What the audit settled, and what is left
+
+**Verdicts, candidate by candidate:**
+
+| Referee | Candidate | Verdict | Settled by |
+|---|---|---|---|
+| §2.1 | unmapped I/O reads `$FF`; HDMA1–4 write-only | proven, fixed | `01-registers` ×2, `unused_hwio-GS`, `unused_hwio-C` (with the Color's `$FF72`–`$FF77`, RP and OPRI) |
+| §2.2 | the timer's reload cycle | proven, fixed | `tima_write_reloading`, `tma_write_reloading`; `rapid_toggle` out of reach |
+| §2.3 | the vector chosen after the high push | proven, fixed | `ie_push`; the writes on M3/M4 by Pan Docs |
+| §2.4 | OAM DMA's start delay | proven, fixed | the three `oam_dma_*` and the eight instruction-timing ROMs it predicted |
+| §2.5, §3 CALL | PUSH, RST, RET cc, CALL, CALL cc placement | proven, fixed | the five remaining instruction-timing ROMs; GBCTR |
+| §2.6 | STAT edges: rules 2, 4, 5 | proven, fixed | `vblank_stat_intr-GS` and `-C` |
+| §2.6 | rules 1, 3, 6 and the `intr_2_*` skew | not built | one later change to the PPU's line boundary (§13.11.3) |
+| §2.7 | the joypad interrupt | proven, fixed | Pan Docs |
+| §2.8 | MBC1 RAM bank on a small chip; MBC1M | proven, fixed | `ram_64kb`, `multicart_rom_8Mb` |
+| §2.8 | MBC5 RAM enable | a dispute (GBCTR against Pan Docs) | put to the tester |
+| §2.8 | MBC3's four clock rules | out of reach | no document; the ROMs are not in the corpus |
+| §2.9 | HDMA: double-speed cost, `$FF55` after a stop, the overflow stop | proven, fixed | Pan Docs |
+| §2.9 | HDMA during HALT | proven by Pan Docs, not built | needs a new bus member; put to the tester |
+| §2.9 | HDMA started in hblank or with the LCD off | out of reach | Pan Docs silent |
+| §2.10 | the length quirks, the negate rule, the power rules | proven, fixed | `03-trigger`, `05-sweep details`, `08`, `11` |
+| §2.10 | the wave rows (`09`, `10`, `12`) | out of reach | their timing exists only as checksums |
+| §2.11 | palette ports in mode 3; SVBK read-back | proven, fixed | Pan Docs |
+| §2.12 | LCDC bit 0 on a DMG | decided: a dispute, white kept | Pan Docs; the tester, 2026-10-15 |
+| §2.13 | `EI; EI` before a dispatch | proven, fixed | GBCTR's `EI` |
+| §2.14 | STOP's cycle count | proven, fixed | the cycle harnesses |
+
+**The corpus**, from 94 passes in every column to **126 under Auto and 124 under Game Boy and Game Boy Color**, the
+same in both engines: all thirteen instruction-timing ROMs, the three `oam_dma_*`, `ie_push`, both timer reload ROMs,
+both `emulator-only` MBC1 failures, both `unused_hwio` ROMs, `vblank_stat_intr-GS` and `-C`, and nine blargg sound
+ROMs on the consoles they were written for. One verdict went from passing to failing, `cgb_sound`'s `08` run on the
+Game Boy, because a DMG now keeps its length counters as the ROM's header says it does (§13.10.2).
+
+**The referee page's corrections (its §10)** settled here: 1 (§3.4's thirteen ROMs, §13.4), 2 (`Mercury_Cgb.md` §4.1,
+§13.9), 5 (`Mercury_Apu.md` §4, §13.10.2; §3.4's wave read-back remains, out of reach), 6 (the joypad interrupt,
+§13.7). Not settled: 3 (LCDC bit 0, decided as a dispute), 4 (`Mercury_Memory.md` §6's DMA-from-VRAM claim, untested),
+7 (`Mercury_Cgb.md` §6 and §5), 8 (`Mercury_Ppu.md` §3, now true of Mercury: STAT no longer fires with the LCD off).
+
+**The state format** went from version 8 to 11, each addition after the mixer, each read back to version 5:
+9 a restart's OAM DMA delay, 10 channel 1's negate flag, 11 the frozen LY=LYC bit.
+
+**No RTL line was opened.** Every rule rests on a test ROM's source or on Pan Docs or GBCTR; no emulator source was
+read. **The four games** run as the unmodified build ran them throughout, the joypad's IF bit aside (§13.7).
+
+**Questions for the tester** (§13.0): MBC5's RAM enable (keep Pan Docs' rule), and HDMA during HALT (add the bus
+member). The PPU's line boundary is proposed as its own piece of work.
+
+**What changes for stage 9.** The goldens are recorded from C# after this audit, so they carry these rules. The state
+version the goldens and the legacy differential project pin is 11, with its tail. The corpus baseline the goldens
+extend is this one, 126/124/124. `MercuryAuditTests` is a further class of claims on both engines that, like
+`MercuryCycleTimingTests`, stage 10 must keep when the C# core leaves `main`; the four placement claims of §13.5 and the
+dispatch claim of §13.3 live only in the two cycle harnesses.

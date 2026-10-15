@@ -248,7 +248,9 @@ now appears at frame 330,743, the tests that had given up running to their ends.
 - **Rumble** stays in the core: the motors' state is kept and in the state, and reaches no frontend, since v1.0 has no
   output event (the plan's §4.2).
 - **The state**: `DMND` version 4 adds each device's state and each card's contents; a card loaded from a state is
-  marked changed so that the host writes what the state holds [C].
+  marked changed so that the host writes what the state holds [C]. *Since 2026-10-15 the cards are listed `removable`, and a machine
+  made with `EMUSEN_CREATE_SHARED_REMOVABLE` keeps its cards on a load instead, a card that differs from the state's
+  copy reading as newly inserted (`Diamond_Cards.md` §6).*
 
 ## 7. The DualShock (SCPH-1200)
 

@@ -756,6 +756,11 @@ reaches (the Sega CD is in development) [A]. It breaks nothing at any surface; i
 
 ## 9. Memory cards, packs, and a console's own memory
 
+*Built 2026-10-15 for the removable kind only, as the core ABI's minor 1.7 (`EmuSen_CoreAPI.md` §6.27,
+`Diamond_Cards.md`): battery entries' `kind`, `"game"` or `"removable"`, and a create flag under which a state load
+leaves a removable file as it stands, which answers §9.3's risk in the core rather than by a warning. The runtime's
+option has a third mode, named cards; `"console"` waits for a core that needs it.*
+
 *Diamond's §10 lists "a shared memory card option (one card for every game) in the runtime, if the tester wants
 one"; Nephrite's §4.4 has the same question for the Sega CD's internal backup RAM and its RAM cartridge.*
 

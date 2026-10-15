@@ -247,6 +247,88 @@ the state's pinned layout test is unchanged.
 
 ## 12. Step 2, written and not built: a card manager
 
+*Written 2026-10-15; nothing of it is built.* What a player of *Shared* and *Named cards* will want next is a console's
+card manager: to see what is on a card, to copy a save to another card, to delete one, and, the step that makes
+*Shared* a default anyone could choose, to bring the saves of the per-game cards they already have onto a shared card.
+
+### 12.1 What it must do
+
+- **List** a card's saves from its directory: frame 0's header, frames 1 to 15 one per block, each with its state
+  (first, middle or last block of a file, free, or deleted), the file's size, the next block of its chain and its name
+  (a region prefix and the game's serial, as `BASLUS-00067...`), each frame's checksum the XOR of its first 127 bytes
+  (psx-spx "Memory Card Data Format" [R]); and for each file its title and icon from its first block's header (the
+  `SC` magic, the icon's frame count, the block count, the Shift-JIS title of 64 bytes, the palette and the frames).
+- **Copy** a save to another card: free blocks found, the chain written with its directory frames, the checksums made;
+  a name already on the target refused unless the player replaces it.
+- **Delete** a save as the BIOS does, marking its directory frames deleted rather than clearing its blocks, so that an
+  undelete stays possible (the open kernel's `_card_undelete` does the same, `Diamond_OpenKernel_Phase2.md` §14).
+- **Move** a save between cards: a copy, then the delete, the delete only after the copy is written and read back.
+- **Import** the saves of a player's per-game cards (`Saves/PlayStation/<game>.mcr` and `.2.mcr`) onto a shared or named
+  card: every save of the chosen games copied, **refused as a whole when the 15 blocks of the card would be exceeded**,
+  with words naming the saves and the blocks each needs, so that a player never gets half an import. The per-game cards
+  are read and never written: the import copies, never moves, so the way back of §2 stays.
+- **Never write a card a running machine holds.** The machine writes its card's file whenever the game writes the
+  card (`BATTERY`), so a manager's write while it runs would be overwritten, or would overwrite a save the game made.
+  The manager refuses such a card with words; writing one under a running game would need the core ABI to hand a
+  card's bytes to a machine (§4's second form, an export `battery_insert` under its own capability, the core
+  presenting the card as reinserted), a minor of its own when a player needs it.
+
+### 12.2 The forms weighed
+
+By the design rules (`Diamond_Plan.md` §2, the project's rules on modules and surfaces), with one question first:
+**where the card format is read and written**, since every form needs it.
+
+| Where the format lives | For | Against |
+|---|---|---|
+| In Diamond, the core | Diamond has the card | the core is a machine behind the ABI, which has no surface for a file system and should not gain one; the on-card format is a convention of Sony's kernel, not of the card's hardware, so it is not the machine's fact; a host reaching into a core for it is what the surfaces forbid |
+| The open kernel's own code (`kernel/src/bu.rs`, `blocks.rs`) | the format already written once, in Rust | it is a program the emulated R3000A runs, `no_std` MIPS inside the console's RAM, not a host library; sharing it would couple the kernel's build to the frontend's |
+| **The PlayStation's system pack** (`EmuSen.Crystal/Systems/Psx`, C#) | it is where the runtime keeps the console's knowledge above the ABI: the cheat codecs (`EmuSen_Cheats.md` §10), the disc recogniser (`Diamond_Players.md` §1); both clients below are C# and reach it; it needs no surface of its own | a later Rust runtime (`EmuSen_Stack.md` §6, deferred) would port it, which a reader of pure functions over 131,072 bytes makes mechanical |
+| A Rust crate behind the platform library's C interface | one implementation for a Rust future | a new interface version for a feature with two C# clients today; the platform library's interfaces are for the runtime's services, not a console's knowledge |
+
+**The reader belongs in the system pack** [C]: a `PsxCard` of pure functions, bytes in and bytes out (parse the
+directory, list the saves, copy, delete, the checksums), with no file I/O; the paths stay Galaxia's (`CardPathFor`,
+`CardNames`, the per-game rule), and the writes go through `AtomicFile`, as every save does.
+
+Then the two clients:
+
+| Form | For | Against |
+|---|---|---|
+| **A DianaSh command module**, `memcard` (`memcard ls CARD`, `memcard cp CARD:SAVE CARD`, `memcard rm`, `memcard mv`, `memcard import GAME... --to CARD`) | Unix-like, one job per command, scriptable for the import over a whole library; testable headless; runs without an emulator, as DianaSh must (`EmuSen_DianaSh.md`); its man page is where the rules above are written | no icons; not reachable from a controller |
+| **A Mistress window on LunaP**, "Manage cards…" from the PlayStation's tab and big picture's game menu | what a player at a television needs: two cards side by side with their saves' icons and titles, a pad's A to copy and X to delete, as a console's manager | a window's fit and pad audits to pass; the window alone leaves the import unscriptable |
+
+**Recommended: both, over the system pack's reader, the command first** [C]: the command proves the reader and the
+import on synthetic cards built by the tests (the open kernel's own card program, `kernel-card.s`, writes real
+directory frames to borrow from), and the window then adds nothing to the format but the drawing. Each client is a
+module of its own: the command a DianaSh module with its man page under `Lib/dianash/emusen.memcard/man/memcard.1`, the window a LunaP
+window of Mistress. The `.gme` and `.vmp` conversions the plan's §4.4 left to "a later tool" fit the same reader as an
+import and an export, in the command first.
+
 ## 13. Questions for the tester
 
+1. **Q1, the default mode.** Built: *Per game*. *Recommended:* keep *Per game* as the default until the card
+   manager's import (§12.1) exists, then make *Shared* the default and offer the import once, the first time a game
+   is loaded under *Shared* while per-game cards exist (copied, never moved). The reason is the player who updates and
+   starts a game: under a *Shared* default today their saves are all still on disk but the game finds none, and a player
+   who does not know the setting has no way back they can see. Per game first, then Shared with the import, never
+   hides a save.
+2. **Q2, slot 2 under *Shared*.** Built: `Card 2`, a second shared card, with slot 2 empty by default as the plan's
+   §4.4 keeps it (§2). *Recommended:* as built.
+3. **Q3, two programs on one card.** Two of the project's programs running PlayStation games at once on the same
+   shared card would each write the file from its own copy, the last writer winning. Not built (§9.3). *Recommended:* an
+   advisory lock on the card's file held for a machine's life, a second machine given the card unshared with a notice,
+   built with the card manager, which needs the same lock to refuse a card in use.
+4. **Q4, naming a new card.** Built: *Named cards* offers `Card 1` to `Card 8` and any card file in the folder.
+   *Recommended:* naming and renaming in the card manager, not a text box in the settings, which a pad reaches badly.
+5. **Q5, other consoles' cards.** The N64's Controller Pak (Mars's `.mpk`) and the Sega CD's RAM cartridge (`.crm`)
+   are removable too; neither core lists them so yet, and each would honour the flag as Diamond does. *Recommended:*
+   each when its core is next worked on, a step of its own; the Sega CD's internal backup RAM is memory inside the
+   console, `EmuSen_CoreAPI_Extensions.md` §9.2's `"console"` kind, and would need a rule and a minor of its own.
+
 ## 14. Reading log, and exposures
+
+Read for this page: psx-spx `stable` `6d7d1bc`, "Memory Card Read/Write Commands" and its "FLAG Byte", and "Memory Card
+Data Format" for §12; the project's own pages and code (`Diamond_Plan.md` §4.4 and §11, `Diamond_Pad.md` §6 and §8,
+`Diamond_Players.md` §2 to §4, `Diamond_Native.md` §14, `Diamond_Enhancements.md` §4 and §6, `EmuSen_CoreAPI.md`
+§5.5, §6.9, §6.11 and §6.24, `EmuSen_CoreAPI_Extensions.md` §9 and §10.5, `EmuSen_Settings_Reference.md` §4.44 and
+§4.99, Galaxia's `SaveLibrary`). No emulator's source, no BIOS and no game was read; the player's BIOS folder and the
+ROM library were not opened. Every test uses temporary folders and synthetic programs.

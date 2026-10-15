@@ -657,6 +657,40 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(63, rig.Bus.Apu.Pulse1.Length.Counter);
             Assert.Equal(0x01, rig.Read(0xFF26) & 0x01);
         }
+
+        // J, blargg 08-len ctr during power and Pan Docs Audio_Registers.md: with the APU off, a DMG still takes NRx1's length, and nothing else of NRx1.
+        [Theory]
+        [InlineData(0x00, 16, 0x3F)]
+        [InlineData(0xC0, 64, 0x3F)]
+        public void A_length_written_while_the_apu_is_off_lands_only_on_a_game_boy(byte cgbFlag, int lengthAfterTrigger, byte nr11)
+        {
+            var rig = Load(cgbFlag: cgbFlag);
+            rig.Write(0xFF26, 0x80);
+            rig.Write(0xFF26, 0x00);
+            rig.Write(0xFF20, 0x30);
+            rig.Write(0xFF11, 0xF0);
+            rig.Write(0xFF26, 0x80);
+            rig.Write(0xFF21, 0xF0);
+            rig.Write(0xFF23, 0x80);
+            Assert.Equal(lengthAfterTrigger, rig.Bus.Apu.Noise.Length.Counter);
+            Assert.Equal(nr11, rig.Read(0xFF11));
+        }
+
+        // J, blargg 11-regs after power #4 (both suites): a power cycle keeps the length counters on a DMG and clears them on a CGB.
+        [Theory]
+        [InlineData(0x00, 16)]
+        [InlineData(0xC0, 64)]
+        public void A_power_cycle_clears_the_length_counters_only_on_a_game_boy_color(byte cgbFlag, int lengthAfterTrigger)
+        {
+            var rig = Load(cgbFlag: cgbFlag);
+            rig.Write(0xFF26, 0x80);
+            rig.Write(0xFF20, 0x30);
+            rig.Write(0xFF26, 0x00);
+            rig.Write(0xFF26, 0x80);
+            rig.Write(0xFF21, 0xF0);
+            rig.Write(0xFF23, 0x80);
+            Assert.Equal(lengthAfterTrigger, rig.Bus.Apu.Noise.Length.Counter);
+        }
     }
 
     public sealed class MercuryAuditTests : MercuryAuditClaims

@@ -154,7 +154,7 @@ Each step is committed with its tests and its record in `Nephrite_Native.md` whe
 | 10.3 | ROMREAD, ROMREADN, ROMREADE, ROMSEEK, the ROM pauses, the CDC calls and subcode calls over §52's CDC | BM §3-R, §3-C, §3-S, the load sample p. 44–45; Sanyo's LC8951 manual | The 240p suite loading its files and PCM data; the five discs' data loads (their pictures after the hand-over) |
 | 10.4 | `_buram` and `_mburam` in the real format, on the internal RAM and the cartridge; the format module (`ISaveMediumFormat`) as pure functions in the Genesis system pack | BM §7-1; TB p. 9, #1, #2; G3's source | Round trips through a game in both directions (save under one BIOS, load under the other) |
 | 10.5 | The main CPU's routines and tables games use by address, each found by a game reaching it on the open BIOS and written from a document that describes it | TB p. 15; G4's source | The five discs to their games after the hand-over |
-| 10.6 | The gate: the 240p suite; mcd-verificator in mode 1 and unchanged in mode 2; the five discs against the player's BIOS as black boxes; `_BURAM` round trips; the replacement made the default without the player's image | — | As stated in the brief of §49.5 |
+| 10.6 | The gate: the 240p suite; mcd-verificator in mode 1 and unchanged in mode 2; the five discs against the player's BIOS as black boxes; `_BURAM` round trips; the replacement made the default without the player's image | — | As §49.5 states |
 
 Mode 1 (`Nephrite_Native.md` §49.6 Q4 and §62.4): a Create setting for cartridges, off by default, giving
 `Genesis<MegaCd>` with the cartridge in its slot, the open BIOS at `$400000`, reported as an `md` machine with the

@@ -223,6 +223,77 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x7F, rig.Read(0xFF05));
             Assert.Equal(0x33, rig.Read(0xFF06));
         }
+
+        // C: a dispatch from $02xx with IE and IF as given and SP as given; the step is the dispatch itself.
+        private MercuryRig Dispatching(byte ie, byte iflags, ushort sp)
+        {
+            var rig = Load();
+            rig.Write(0xFFFF, ie);
+            rig.Write(0xFF0F, iflags);
+            rig.Cpu.PC = 0x0234;
+            rig.Cpu.SP = sp;
+            rig.Cpu.Ime = true;
+            rig.Step();
+            return rig;
+        }
+
+        // C, mooneye ie_push round 1: the high byte of PC ($02) lands on IE and clears the timer's enable, so nothing is left to dispatch and PC becomes $0000.
+        [Fact]
+        public void A_push_that_clears_ie_before_the_vector_is_chosen_cancels_the_dispatch()
+        {
+            var rig = Dispatching(ie: 0x04, iflags: 0x04, sp: 0x0000);
+            Assert.Equal(0x0000, rig.Cpu.PC);
+            Assert.Equal(0x04, rig.Read(0xFF0F) & 0x1F);
+            Assert.False(rig.Cpu.Ime);
+            Assert.Equal(0x02, rig.Read(0xFFFF));
+        }
+
+        // C, ie_push round 4: the push leaves STAT enabled and not vblank, so STAT is dispatched and vblank stays requested.
+        [Fact]
+        public void A_push_that_changes_ie_before_the_vector_is_chosen_redirects_the_dispatch()
+        {
+            var rig = Dispatching(ie: 0x03, iflags: 0x03, sp: 0x0000);
+            Assert.Equal(0x0048, rig.Cpu.PC);
+            Assert.Equal(0x01, rig.Read(0xFF0F) & 0x1F);
+        }
+
+        // C, ie_push round 3: the low byte lands on IE after the vector was chosen, too late to cancel.
+        [Fact]
+        public void A_push_of_the_low_byte_onto_ie_is_too_late_to_cancel()
+        {
+            var rig = Dispatching(ie: 0x08, iflags: 0x08, sp: 0x0001);
+            Assert.Equal(0x0058, rig.Cpu.PC);
+            Assert.Equal(0x00, rig.Read(0xFF0F) & 0x1F);
+            Assert.Equal(0x34, rig.Read(0xFFFF));
+        }
+
+        // C, GBCTR's EI: IME is set in the machine cycle after EI, so a second EI's effect is spent before the dispatch that follows it clears IME.
+        [Fact]
+        public void Ei_ei_before_a_dispatch_leaves_ime_clear_in_the_handler()
+        {
+            var rig = Load(patches: (0, new byte[] { 0xFB, 0xFB, 0x00 }));
+            rig.Cpu.PC = SyntheticGbRom.EntryPoint;
+            rig.Write(0xFFFF, 0x01);
+            rig.Write(0xFF0F, 0x01);
+            rig.Step();
+            rig.Step();
+            rig.Step();
+            Assert.Equal(0x0040, rig.Cpu.PC);
+            rig.Step();
+            Assert.False(rig.Cpu.Ime);
+        }
+
+        // C, the referee's §2.14: STOP fetches two bytes, so its step reports the eight T-cycles it ran.
+        [Fact]
+        public void Stop_reports_the_cycles_of_its_two_fetches()
+        {
+            var rig = Load(patches: (0, new byte[] { 0x10, 0x00 }));
+            rig.Cpu.PC = SyntheticGbRom.EntryPoint;
+            long before = rig.Cpu.Cycles;
+            Assert.Equal(8, rig.Step());
+            Assert.Equal(before + 8, rig.Cpu.Cycles);
+            Assert.Equal(SyntheticGbRom.EntryPoint + 2, rig.Cpu.PC);
+        }
     }
 
     public sealed class MercuryAuditTests : MercuryAuditClaims

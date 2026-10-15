@@ -105,6 +105,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(0xE8)]
         [InlineData(0xF0)]
         [InlineData(0x76)]
+        [InlineData(0x10)]
         public void The_bus_advances_by_exactly_what_the_step_reports(byte opcode)
         {
             var (cpu, bus) = Machine(opcode, 0x04, 0x01);
@@ -127,6 +128,28 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(20, cycles);
             Assert.Equal(20, bus.Ticked);
             Assert.Equal(0x0040, cpu.PC);
+        }
+
+        // Pan Docs' dispatch: two wait states, the push on the third and fourth machine cycles, the jump on the fifth - see Mercury_Native.md §13.3.
+        [Fact]
+        public void A_dispatch_pushes_on_its_third_and_fourth_machine_cycles()
+        {
+            var (cpu, bus) = Machine(0x00);
+            bus.Memory[0xFFFF] = 0x01;
+            bus.Memory[0xFF0F] = 0x01;
+            cpu.Ime = true;
+
+            cpu.Step(0x01, 0x01, out _);
+
+            var ticksBefore = new List<int>();
+            int sum = 0;
+            foreach (string entry in bus.Trace)
+            {
+                if (entry.StartsWith("T:", StringComparison.Ordinal)) sum += int.Parse(entry[2..]);
+                else ticksBefore.Add(sum);
+            }
+            Assert.Equal(new[] { 12, 16 }, ticksBefore);
+            Assert.Equal(20, bus.Ticked);
         }
 
         // A halted CPU still runs the machine, or nothing would ever wake it.

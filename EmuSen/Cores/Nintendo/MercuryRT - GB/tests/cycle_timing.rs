@@ -70,7 +70,7 @@ fn a_read_modify_write_ticks_between_its_read_and_its_write() {
 
 #[test]
 fn the_bus_advances_by_exactly_what_the_step_reports() {
-    for opcode in [0x00, 0x34, 0xC5, 0xE1, 0xFA, 0xCD, 0x18, 0xE8, 0xF0, 0x76] {
+    for opcode in [0x00, 0x34, 0xC5, 0xE1, 0xFA, 0xCD, 0x18, 0xE8, 0xF0, 0x76, 0x10] {
         let (mut cpu, mut bus) = machine(&[opcode, 0x04, 0x01]);
         let (cycles, _) = cpu.step(&mut bus, 0, 0).unwrap();
         assert_eq!(cycles, bus.ticked(), "opcode ${opcode:02X}");
@@ -86,6 +86,25 @@ fn servicing_an_interrupt_ticks_its_full_cost() {
     assert_eq!(cycles, 20);
     assert_eq!(bus.ticked(), 20);
     assert_eq!(cpu.pc, 0x0040);
+}
+
+/// Pan Docs' dispatch: two wait states, the push on the third and fourth machine cycles, the jump on the fifth (Mercury_Native.md §13.3).
+#[test]
+fn a_dispatch_pushes_on_its_third_and_fourth_machine_cycles() {
+    let (mut cpu, mut bus) = machine(&[0x00]);
+    (bus.memory[0xFFFF], bus.memory[0xFF0F]) = (0x01, 0x01);
+    cpu.ime = true;
+    cpu.step(&mut bus, 0x01, 0x01).unwrap();
+    let mut sum = 0;
+    let mut before = Vec::new();
+    for t in &bus.trace {
+        match t.strip_prefix("T:") {
+            Some(n) => sum += n.parse::<i32>().unwrap(),
+            None => before.push(sum),
+        }
+    }
+    assert_eq!(before, [12, 16]);
+    assert_eq!(bus.ticked(), 20);
 }
 
 #[test]

@@ -640,7 +640,7 @@ namespace EmuSen.WiseMan.Galaxia
                 Put(Path.Combine(folder, "notes.txt"), "x");
                 Put(Path.Combine(folder, "upper.JSON"), "x");
                 Directory.CreateDirectory(Path.Combine(folder, "a folder.json"));
-                if (!OperatingSystem.IsWindows()) File.CreateSymbolicLink(Path.Combine(folder, "dangling.json"), At("nowhere"));
+                if (Links.Allowed) File.CreateSymbolicLink(Path.Combine(folder, "dangling.json"), At("nowhere"));
             }
             Side("managed-names");
             IReadOnlyList<string> managed = CheatFile.Managed.ListNames();
@@ -768,7 +768,7 @@ namespace EmuSen.WiseMan.Galaxia
                     File.SetLastWriteTime(Path.Combine(folder, file), now.AddDays(-days).AddMinutes(days == 14 ? 30 : 0));
                 }
                 Directory.CreateDirectory(Path.Combine(folder, "emusen_folder.log"));
-                if (OperatingSystem.IsWindows()) return;
+                if (!Links.Allowed) return;
                 File.CreateSymbolicLink(Path.Combine(folder, "emusen_dangling.log"), At("nowhere"));
                 // A new link to an old file, and an old file's link: which of the two times decides.
                 string target = Path.Combine(Path.GetDirectoryName(folder)!, "target.log");

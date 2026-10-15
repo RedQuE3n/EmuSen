@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -43,6 +44,37 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.Equal(bytes.AsSpan(300_000).ToArray(), held.Span(300_000, 100).ToArray());
             Assert.True(held.Span(300_007, 1).IsEmpty && held.Span(-1, 1).IsEmpty);
             Assert.Equal(bytes.AsSpan(0, 16).ToArray(), held.Head(16));
+        }
+
+        private static string Fault(Action act)
+        {
+            try { act(); return "none"; }
+            catch (Exception e) { return e.GetType().Name; }
+        }
+
+        // While a file is mapped, another opener may do the same with it both ways: on Windows a reader comes in and a writer, a rename and a deletion are refused, as FileShare.Read has it - see EmuSen_Galaxia.md §3.8.
+        [Fact]
+        public void A_held_mapping_lets_in_the_same_openers_both_ways()
+        {
+            string file = At("held", "track.bin");
+            var seen = new List<string>();
+            foreach ((string side, Func<string, MappedFile> open) in new (string, Func<string, MappedFile>)[] { ("C#", MappedFile.Managed.Open), ("the library", MappedFile.Open) })
+            {
+                Put(file);
+                File.WriteAllBytes(file, new byte[70_000]);
+                using (MappedFile mapped = open(file))
+                {
+                    string reader = Fault(() => new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete).Dispose());
+                    string writer = Fault(() => new FileStream(file, FileMode.Open, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete).Dispose());
+                    string rename = Fault(() => { File.Move(file, file + ".moved"); File.Move(file + ".moved", file); });
+                    string deletion = Fault(() => File.Delete(file));
+                    seen.Add($"reader {reader}, writer {writer}, rename {rename}, deletion {deletion}");
+                    Assert.Equal(70_000, mapped.Length);
+                }
+                if (File.Exists(file)) File.Delete(file);
+            }
+            Assert.True(seen[0] == seen[1], $"C#: {seen[0]}; the library: {seen[1]}");
+            if (OperatingSystem.IsWindows()) Assert.Equal("reader none, writer IOException, rename IOException, deletion IOException", seen[1]);
         }
 
         [DllImport("libc", EntryPoint = "mincore")]

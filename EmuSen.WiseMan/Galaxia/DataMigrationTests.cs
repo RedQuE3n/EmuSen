@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
 using EmuSen.Galaxia.Library;
 
 namespace EmuSen.WiseMan.Galaxia
@@ -22,6 +25,7 @@ namespace EmuSen.WiseMan.Galaxia
 
         public void Dispose()
         {
+            if (Directory.Exists(_root + "-links")) Directory.Delete(_root + "-links", recursive: true);
             if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
         }
 
@@ -148,6 +152,64 @@ namespace EmuSen.WiseMan.Galaxia
             File.WriteAllText(Path.Combine(_destination, "x.txt"), "x");
 
             Assert.Equal(0, DataMigration.Run(_destination, _destination));
+        }
+
+        [DllImport("kernel32", CharSet = CharSet.Unicode, EntryPoint = "GetShortPathNameW")]
+        private static extern uint ShortPathName(string path, StringBuilder buffer, uint length);
+
+        [DllImport("kernel32", CharSet = CharSet.Unicode, EntryPoint = "GetLongPathNameW")]
+        private static extern uint LongPathName(string path, StringBuilder buffer, uint length);
+
+        private static string? Spelled(Func<string, StringBuilder, uint, uint> ask, string path)
+        {
+            var buffer = new StringBuilder(1024);
+            uint length = ask(path, buffer, (uint)buffer.Capacity);
+            return length > 0 && length < buffer.Capacity ? buffer.ToString() : null;
+        }
+
+        // Every entry under a directory with its bytes and when it was last written.
+        private static List<string> Snapshot(string root) =>
+            Directory.EnumerateFileSystemEntries(root, "*", SearchOption.AllDirectories)
+                .Select(e => $"{e} | {(File.Exists(e) ? Convert.ToHexString(File.ReadAllBytes(e)) : "folder")} | {File.GetLastWriteTimeUtc(e).Ticks}")
+                .OrderBy(line => line, StringComparer.Ordinal)
+                .ToList();
+
+        // A tree migrated onto itself, however the system lets it be spelled, copies nothing and changes nothing: the roots compare equal, or every file finds itself there - see EmuSen_Galaxia.md §3.2.
+        [Fact]
+        public void A_tree_spelled_any_way_the_system_reads_as_itself_is_left_alone()
+        {
+            string home = Path.Combine(_root, "Caf\u00e9"), links = Directory.CreateDirectory(_root + "-links").FullName;
+            foreach (string file in new[] { "Saves/a.srm", "Saves/Save States/a.state", "Logs/x/run.txt", "Firmware/dsp1.rom", "Cheats/SNES/a.cht" })
+            {
+                string path = Path.Combine(home, file.Replace('/', Path.DirectorySeparatorChar));
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllText(path, file);
+            }
+            var spellings = new List<string> { home, home + Path.DirectorySeparatorChar, Path.Combine(_root, "x", "..", "Caf\u00e9"), Path.Combine(_root, "CAF\u00c9"), Path.Combine(_root, "caf\u00e9") };
+            if (Links.Allowed)
+            {
+                Directory.CreateSymbolicLink(Path.Combine(links, "linked"), home);
+                spellings.Add(Path.Combine(links, "linked"));
+            }
+            if (OperatingSystem.IsMacOS()) spellings.Add(Path.Combine(_root, "Cafe\u0301"));
+            if (OperatingSystem.IsWindows())
+            {
+                spellings.AddRange(new[] { home.Replace('\\', '/'), @"\\?\" + home, char.ToLowerInvariant(home[0]) + home[1..], home + ".", home + " ", home + ". ." });
+                spellings.AddRange(new[] { Spelled(ShortPathName, home), Spelled(LongPathName, home) }.OfType<string>().Where(s => s != home));
+                Links.Junction(Path.Combine(links, "junction"), home);
+                spellings.Add(Path.Combine(links, "junction"));
+            }
+            if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()) Assert.True(Directory.Exists(Path.Combine(_root, "CAF\u00c9")), "this file system ignores case");
+            List<string> before = Snapshot(_root);
+
+            foreach (string spelling in spellings)
+            {
+                Assert.True(DataMigration.Run(home, spelling) == 0, $"onto {spelling}");
+                Assert.True(DataMigration.Run(spelling, home) == 0, $"from {spelling}");
+            }
+
+            List<string> after = Snapshot(_root);
+            Assert.True(before.SequenceEqual(after), $"before:\n{string.Join("\n", before.Except(after))}\nafter:\n{string.Join("\n", after.Except(before))}");
         }
 
         // A Mac bundle's Contents/Resources/home reaches the player's home, and never over a file already there - see EmuSen_Galaxia.md §3.4.

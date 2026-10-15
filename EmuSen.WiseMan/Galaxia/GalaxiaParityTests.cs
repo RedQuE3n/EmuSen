@@ -156,18 +156,33 @@ namespace EmuSen.WiseMan.Galaxia
         {
             string file = Put(At("exists", "file.bin"));
             var cases = new List<string?> { null, "", file, file + Path.DirectorySeparatorChar, At("exists"), At("exists") + Path.DirectorySeparatorChar, At("absent"), At("exists", "file.bin", "under") };
-            if (!OperatingSystem.IsWindows())
+            if (Links.Allowed)
             {
                 File.CreateSymbolicLink(At("exists", "to-file"), file);
                 Directory.CreateSymbolicLink(At("exists", "to-directory"), At("exists"));
                 File.CreateSymbolicLink(At("exists", "dangling"), At("nowhere"));
-                cases.AddRange(new[] { At("exists", "to-file"), At("exists", "to-directory"), At("exists", "dangling"), At("exists", "to-directory") + "/" });
+                Directory.CreateSymbolicLink(At("exists", "dangling-directory"), At("nowhere"));
+                File.CreateSymbolicLink(At("exists", "file-link-to-directory"), At("exists"));
+                Directory.CreateSymbolicLink(At("exists", "directory-link-to-file"), file);
+                cases.AddRange(new[] { At("exists", "to-file"), At("exists", "to-directory"), At("exists", "dangling"), At("exists", "to-directory") + "/",
+                    At("exists", "dangling-directory"), At("exists", "file-link-to-directory"), At("exists", "directory-link-to-file") });
             }
+            if (OperatingSystem.IsWindows())
+            {
+                Directory.CreateDirectory(At("gone"));
+                Links.Junction(At("exists", "junction"), At("exists"));
+                Links.Junction(At("exists", "dangling-junction"), At("gone"));
+                Directory.Delete(At("gone"));
+                cases.AddRange(new[] { At("exists", "junction"), At("exists", "dangling-junction"), At("exists", "junction") + "\\" });
+            }
+            var different = new List<string>();
             foreach (string? path in cases)
             {
-                Assert.True(File.Exists(path) == GalaxiaNative.TestRule(GalaxiaTestRule.FileExists, path), $"File.Exists({path})");
-                Assert.True(Directory.Exists(path) == GalaxiaNative.TestRule(GalaxiaTestRule.DirectoryExists, path), $"Directory.Exists({path})");
+                (bool file, bool directory) csharp = (File.Exists(path), Directory.Exists(path));
+                (bool file, bool directory) library = (GalaxiaNative.TestRule(GalaxiaTestRule.FileExists, path), GalaxiaNative.TestRule(GalaxiaTestRule.DirectoryExists, path));
+                if (csharp != library) different.Add($"{path}: C# (file, directory) {csharp}, the library {library}");
             }
+            Assert.True(different.Count == 0, string.Join("\n", different));
         }
 
         [Fact]
@@ -355,15 +370,15 @@ namespace EmuSen.WiseMan.Galaxia
             Put(file + AtomicFile.TempSuffix, "half a sa");
             var quiet = new List<string> { At("read", "none.srm"), At("read"), "", At("read", "save.srm", "under"), At("read", "other.srm") + AtomicFile.TempSuffix };
             var loud = new List<string>();
-            if (!OperatingSystem.IsWindows())
+            if (Links.Allowed)
             {
                 File.CreateSymbolicLink(At("read", "dangling.srm"), At("nowhere"));
                 loud.Add(At("read", "dangling.srm"));
-                if (Environment.UserName != "root")
-                {
-                    File.SetUnixFileMode(Put(At("read", "locked.srm")), UnixFileMode.None);
-                    loud.Add(At("read", "locked.srm"));
-                }
+            }
+            if (!OperatingSystem.IsWindows() && Environment.UserName != "root")
+            {
+                File.SetUnixFileMode(Put(At("read", "locked.srm")), UnixFileMode.None);
+                loud.Add(At("read", "locked.srm"));
             }
 
             Assert.Equal(AtomicFile.Managed.TryRead(file), GalaxiaNative.FileRead(file));
@@ -436,9 +451,9 @@ namespace EmuSen.WiseMan.Galaxia
             Put(Path.Combine(home, "Saves", "kept.srm"), "newer");
             Put(Path.Combine(legacy, "Saves", "blocked.srm"), "blocked");
             Directory.CreateDirectory(Path.Combine(home, "Saves", "blocked.srm"));
-            if (!OperatingSystem.IsWindows())
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(Path.Combine(legacy, "Firmware", "dsp1.rom"), UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            if (Links.Allowed)
             {
-                File.SetUnixFileMode(Path.Combine(legacy, "Firmware", "dsp1.rom"), UnixFileMode.UserRead | UnixFileMode.UserWrite);
                 Put(At(side, "outside", "inner", "linked.txt"), "linked");
                 Directory.CreateSymbolicLink(Path.Combine(legacy, "Saves", "linked"), At(side, "outside"));
                 File.CreateSymbolicLink(Path.Combine(legacy, "Logs", "to-file.txt"), Path.Combine(legacy, "Firmware", "dsp1.rom"));
@@ -502,7 +517,7 @@ namespace EmuSen.WiseMan.Galaxia
 
             // The same files were left, each said once; only .NET's words for why differ from the library's.
             Assert.Equal(managedTold.Count, nativeTold.Count);
-            Assert.Equal(OperatingSystem.IsWindows() ? 1 : 2, nativeTold.Count);
+            Assert.Equal(Links.Allowed ? 2 : 1, nativeTold.Count);
             foreach ((string m, string n) in managedTold.Zip(nativeTold))
             {
                 Assert.Equal(m[..m.IndexOf(": ", StringComparison.Ordinal)], n[..n.IndexOf(": ", StringComparison.Ordinal)]);

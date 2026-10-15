@@ -2645,9 +2645,32 @@ experiment was to add the delay and re-run them before touching the CPU. Done, w
 
 in all six columns, 111 of 173 in each. **The prediction held exactly**: the eight of the referee's right-hand column
 pass, and the five of its left-hand column, the ones whose probed access Mercury places a machine cycle early, still
-fail. `Mercury_Native.md` §3.4's "internal cycles settled at the end of an instruction, seen through OAM DMA" was true of
+fail. §3.4's "internal cycles settled at the end of an instruction, seen through OAM DMA" was true of
 those five and not of the other eight (the referee page's correction 1, §10, now settled). The five are step E's.
 
 **The four games.** The real-games test passes (their states after 600 frames, up to the tail, are the unmodified
 build's), and MercuryRT's trace from boot keeps the same PC, work RAM and VRAM at every 300th frame; its full-state hash
 moved, by the version and the tail. The whole `Mercury` filter passes, 799 cases.
+
+**Cost:**
+
+| Game | MercuryRT step C | step D | C# step C | step D |
+|---|---|---|---|---|
+| Tetris | 0.4302, 0.4387, 0.4340 | 0.4404, 0.4425, 0.4409 | 0.6325, 0.6301, 0.6247 | 0.6366, 0.6289, 0.6304 |
+| Kirby's Dream Land | 0.4900, 0.4997, 0.4894 | 0.4961, 0.4931, 0.4926 | 0.6944, 0.7006, 0.6840 | 0.6792, 0.6873, 0.6793 |
+| Link's Awakening | 0.4023, 0.4036, 0.3966 | 0.4063, 0.4014, 0.4040 | 0.5614, 0.5590, 0.5570 | 0.5637, 0.5612, 0.5700 |
+| Pokémon Yellow | 0.5365, 0.5402, 0.5398 | 0.5413, 0.5425, 0.5392 | 0.7231, 0.7181, 0.7136 | 0.7499, 0.7199, 0.7140 |
+
+The idle test now reads two fields where it read one, on every T-cycle. MercuryRT's Tetris is 1.6–2.5% slower and the
+rest within 1%; Tetris has moved by as much between runs of identical code in this audit (0.4231–0.4394 for the code of
+steps A and B), so the step's own cost is under the noise of this shared machine and is not claimed. C# is unchanged.
+
+**Mutants**, each in C# and in Rust separately, all caught by the step's claims on both engines:
+
+| # | Mutation | Caught by |
+|---|---|---|
+| D1 | the transfer starts on the T-cycle after the write | all three timing claims and the version-8 claim |
+| D2 | the transfer starts a machine cycle late | the same four |
+| D3 | the counter ends with the last byte, so OAM opens at the 161st cycle | the timing and restart claims |
+| D4 | a write stops the running transfer | the restart claim |
+| D5 | a state before version 9 keeps the delay the machine held | the version-8 claim |

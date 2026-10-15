@@ -111,7 +111,8 @@ market, so the rate, the height and which BIOS file is asked for, `the_settings_
 *Graphics chip* (the console model's one difference a program can see, GPUSTAT's version, `Diamond_GPU.md`), the two
 ports' pads and multitaps (the ports machine info lists) and the two memory card slots (which battery files exist). The
 plan's "card mode" is the slots' setting; a card shared between games (`EmuSen_CoreAPI_Extensions.md` §9) is not built,
-per game being the decided default.
+per game being the decided default. *Built 2026-10-15 as a card mode of the runtime's, Per game, Shared and Named
+cards, with Per game still the default (`Diamond_Cards.md`).*
 
 **The cards round-trip through their battery files** [M,
 `DiamondPlayersTests.A_card_a_program_writes_round_trips_through_its_battery_file`]: a program of the test's own writes
@@ -218,7 +219,7 @@ the toolchain the build names, after removing the mixed artifacts, cured it; not
 ## 10. What waits
 
 - The player's chooser for a file no recogniser decides (§1); a `.chd` probe; Pharaoh's own extension table.
-- A card shared between games (`EmuSen_CoreAPI_Extensions.md` §9); `ChtFile`'s RetroArch `cheat_type` 4 to 7, whose
+- ~~A card shared between games (`EmuSen_CoreAPI_Extensions.md` §9)~~ built 2026-10-15 (`Diamond_Cards.md`); `ChtFile`'s RetroArch `cheat_type` 4 to 7, whose
   "next code" is the import's.
 - `.pbp`; P5 with a multi-disc game; the DualShock's rumble (§4 there).
 - The DualShock's stick directions as regions of their own, if a drawing can give them a way out (§5).
@@ -329,7 +330,7 @@ Each was shown by a WiseMan test failing before the change and passing after [M]
    read the library file whole, so `firmware_for` received the archive (and the whole archive was read from the card
    once more before the load unpacked it); Diamond reads no disc in a zip and asked for no BIOS, where the same disc
    loose asks for its market's. *Proof:* `DiamondPlayersTests.A_zipped_disc_is_asked_for_the_firmware_its_image_is`:
-   before, none for the zip and `scph5501.bin` loose. *Fix:* the probe reads the image play opens, `DiscsOf(path)[0]`,
+   before, none for the zip and the declared American file loose. *Fix:* the probe reads the image play opens, `DiscsOf(path)[0]`,
    which unpacks an archive once, as the load then finds it unpacked.
 3. **A file that opens nowhere closed the program instead of saying why.** *Cause:* every start from the library, the
    list and big picture asks `EmulatorSession.MissingFirmwareFor` before the load; it creates the core, which for a file
@@ -1142,7 +1143,7 @@ skipped (the opt-in probes without their folders) [M].
 *Written 2026-10-12, on WiseMan `66bb54b5` and the merges after it (`c27bbfbf`, D-41; `60dce4e5`, stage 13 and the
 latched input).* After D-45 every one of the tester's seven games reached its title on the open kernel; none had been
 driven past it. Each was then played by a script of presses, the same script on Diamond (open kernel) and on
-SwanStation (`scph5501.bin`, by path), to about frame 18,000. The marks are §12's; [M] is measured on this date.
+SwanStation (the player's American BIOS, by path), to about frame 18,000. The marks are §12's; [M] is measured on this date.
 
 ### 13.1 How they were driven
 
@@ -1344,7 +1345,7 @@ its corridor and a fight with Reaverbots (§27.6).
 *Written 2026-10-12, on WiseMan `6141ad60`.* The tester played on the handheld and reported two faults: in Crash
 Bandicoot "weird graphical artifacts to the right of the screen in game", and in Mega Man Legends, "after Roll said
 some dialogue in game. it wouldnt close the dialogue box", the game closed by hand. The second ran on the player's
-own BIOS (`scph5501.bin`) with one cheat on, "Infinite Life", the GameShark code `800B521E 00C4`, at a steady 60
+own BIOS (the declared American file) with one cheat on, "Infinite Life", the GameShark code `800B521E 00C4`, at a steady 60
 frames a second for ten minutes; its log holds pacing lines only. The marks are §12's; [M] is measured on this date.
 
 ### 14.1 Crash Bandicoot: the ground at the right of the screen (D-47)
@@ -1400,7 +1401,7 @@ frames a second for ten minutes; its log holds pacing lines only. The marks are 
   Up for 90 frames every 900]: when Roll's last line ends the game shows its instructions and then asks "Read
   instructions again?" with the cursor on **Yes**. Cross takes Yes, and the instructions are shown again, then the
   question again: to the end of each run (80 seconds of boxes after Roll's lines) on Diamond's open kernel, on Diamond
-  with the player's BIOS, and on SwanStation on `scph5501.bin` with no cheat, whose prompt and cursor are the same
+  with the player's BIOS, and on SwanStation on the player's American BIOS with no cheat, whose prompt and cursor are the same
   picture as Diamond's. The box closes only with Right, then Cross on No, which is what `mega-man-legends.txt` does.
   This is the game's own prompt, and the course SwanStation follows; it is the fault the tester described as far as
   the description goes ("after Roll said some dialogue in game", a box that will not close, a game running at full

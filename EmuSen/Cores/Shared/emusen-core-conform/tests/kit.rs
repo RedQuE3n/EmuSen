@@ -34,9 +34,9 @@ fn verdicts(name: &str) -> Vec<(&'static str, bool)> {
 
 const ALL: [&str; 15] = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13", "C14", "C15"];
 
-/// The cases a core is run through: the fifteen, C16 where it claims MEDIA, C17 and C18.
+/// The cases a core is run through: the fifteen, C16 where it claims MEDIA, C17, C18 and C19.
 fn cases(media: bool) -> Vec<&'static str> {
-    ALL.iter().chain(media.then_some(&"C16")).chain(&["C17", "C18"]).copied().collect()
+    ALL.iter().chain(media.then_some(&"C16")).chain(&["C17", "C18", "C19"]).copied().collect()
 }
 
 #[test]
@@ -126,6 +126,27 @@ fn each_fault_of_c9_and_c12_to_c18_alone_fails_its_case_alone() {
     }
 }
 
+/// The test core's payload whose machine has a card in its slot, removable battery file 1 (`CARD`, since 1.7).
+const CARD: &[u8] = &[0xCD, 2, 3, 0x20, 0x41];
+
+// Since 1.7 (EmuSen_CoreAPI.md §6.27): a machine that lists a removable file keeps it as it stands across a state load
+// under SHARED_REMOVABLE and passes C19, in either form; one that lists none passes with that said; a core that rolls
+// the card back on such a load fails C19 alone, and on a machine with no card the same fault changes nothing.
+#[test]
+fn c19_holds_a_removable_file_as_it_stands_across_a_state_load() {
+    let carded = run(&library("kit_test_core"), &Options { image: image(CARD), ..options() });
+    let c19 = carded.cases.iter().find(|c| c.id == "C19").unwrap();
+    assert!(carded.cases.iter().all(|c| c.passed), "{:?}", carded.cases.iter().filter(|c| !c.passed).map(|c| (c.id, &c.evidence)).collect::<Vec<_>>());
+    assert_eq!(c19.evidence, ["1 removable file(s), file 1 (16 bytes): kept as they stood across a state made 120 frames into a machine whose files held other bytes"]);
+    let plain = run(&library("kit_test_core"), &options());
+    assert_eq!(plain.cases.iter().find(|c| c.id == "C19").unwrap().evidence, ["the machine lists no removable battery file, so nothing is kept apart"]);
+    let (failed, text) = failed_on("kit_faulty_full_core", CARD, 1 << 20, 120);
+    assert_eq!(failed, ["C19"], "{text}");
+    assert!(text.contains("removable battery file 1 changed across the state load: 16 of its 16 bytes differ") && text.contains("reads as changed after the state load"), "{text}");
+    let (failed, text) = failed_on("kit_faulty_full_core", &[1, 2, 3, 0x20, 0x41], 1 << 20, 120);
+    assert!(failed.is_empty(), "no card, nothing to roll back:\n{text}");
+}
+
 // Refusal passes C4 whether or not the system's format is self-delimiting.
 #[test]
 fn c4_reports_each_malformed_image_as_refused_or_accepted_and_passes_refusal_under_either_rule() {
@@ -155,7 +176,7 @@ fn a_report_says_what_was_run_and_a_missing_library_fails_c1() {
     let v = json::parse(report.json().as_bytes()).unwrap();
     assert_eq!(v.get("passed"), Some(&Value::Bool(true)));
     assert_eq!(v.get("id").and_then(Value::as_str), Some("v1-test-core"));
-    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(18));
+    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(19));
     let none = run(&library("no_such_core"), &options());
     assert!(!none.passed());
     assert_eq!(none.cases[0].id, "C1");
@@ -180,7 +201,7 @@ fn a_sidecar_carries_the_librarys_own_descriptors_and_hash() {
     assert_eq!(v.get("sidecar").and_then(Value::as_i64), Some(1));
     assert_eq!(v.get("library").and_then(Value::as_str), lib.file_name().and_then(|n| n.to_str()));
     assert_eq!(v.get("sha256").and_then(Value::as_str), Some(digest::sha256_hex(&std::fs::read(&lib).unwrap()).as_str()));
-    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.6"));
+    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.7"));
     assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0x1FFFFF));
     assert_eq!(v.get("info").and_then(|i| i.get("id")).and_then(Value::as_str), Some("v1-test-core"));
     assert_eq!(v.get("settings").and_then(Value::as_array).map(|a| a.len()), Some(4));
@@ -241,7 +262,7 @@ fn a_corpus_runs_the_cores_cases_once_and_the_images_cases_for_every_image() {
         }
         assert!(c.passed());
         let all: std::collections::BTreeSet<&str> = corpus::CORE_CASES.iter().chain(corpus::IMAGE_CASES.iter()).copied().collect();
-        assert_eq!(all, ALL.iter().chain(&["C16", "C17", "C18"]).copied().collect());
+        assert_eq!(all, ALL.iter().chain(&["C16", "C17", "C18", "C19"]).copied().collect());
     }
 }
 
@@ -323,7 +344,7 @@ fn the_runner_takes_a_directory_or_a_list_and_writes_a_report_for_each_image() {
             let file = i.get("report").and_then(Value::as_str).unwrap();
             let report = json::parse(&std::fs::read(reports.join(file)).unwrap()).unwrap();
             assert_eq!(report.get("image"), i.get("image"));
-            assert_eq!(report.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(8), "the five image cases, C16, MEDIA being claimed, C17 and C18");
+            assert_eq!(report.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(9), "the five image cases, C16, MEDIA being claimed, C17, C18 and C19");
         }
         assert_eq!(text.lines().filter(|l| l.starts_with("pass [") || l.starts_with("FAIL [")).count(), count, "{text}");
     }

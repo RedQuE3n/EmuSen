@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CORE_ABI_MAJOR 1u
-#define EMUSEN_CORE_ABI_MINOR 6u
+#define EMUSEN_CORE_ABI_MINOR 7u
 #define EMUSEN_CORE_ABI_VERSION ((EMUSEN_CORE_ABI_MAJOR << 16) | EMUSEN_CORE_ABI_MINOR)
 
 /* An opaque machine. Several may exist at once, from one library. */
@@ -108,6 +108,11 @@ typedef struct emusen_machine emusen_machine;
  * it keeps. A call the core refuses lends nothing. */
 #define EMUSEN_CREATE_LENT           1u  /* emusen_create_params.flags */
 #define EMUSEN_MEDIA_LENT            2u  /* emusen_media.flags */
+/* @since 1.7 (section 6.27): the host keeps every battery file machine info lists with kind "removable" apart from the
+ * game, shared between games. A state_load of either kind then leaves each such file's contents as they stand and
+ * raises no BATTERY_CHANGED of its own; how the machine learns of a card that differs from the state's copy is the
+ * core's. Set only for a core whose info lists a removable file; a core that lists one honours it. */
+#define EMUSEN_CREATE_SHARED_REMOVABLE 2u  /* emusen_create_params.flags */
 /* @since 1.4: in EMUSEN_EVENT_MEDIA_SEEK's `a`, the call's image itself, which no emusen_file numbers. */
 #define EMUSEN_FILE_IMAGE            0xFFFFFFFFu
 

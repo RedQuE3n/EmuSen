@@ -35,6 +35,10 @@ namespace EmuSen.Cores
             return new BatterySave(path);
         }
 
+        // A card shared between games, by its own path rather than a game's; --nobattery holds for it as for any save - see Diamond_Cards.md §9.2.
+        public static BatterySave Card(string console, string name, string extension, bool? disabled = null) =>
+            (disabled ?? CoreOptions.BatteryRamDisabled) ? None : new BatterySave(SaveLibrary.CardPathFor(console, name, extension));
+
         // The one place each console's saves were kept before: the flat Saves folder for the SNES and N64, beside the ROM for the NES and Game Boy.
         public static string? PreviousHome(string romPath, string console, string extension = SaveLibrary.SramExtension) => console switch
         {

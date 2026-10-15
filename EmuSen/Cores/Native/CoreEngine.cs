@@ -36,6 +36,9 @@ namespace EmuSen.Cores.Native
         private IReadOnlyList<string> _discs = Array.Empty<string>();
         private long _closeLidAt = -1;
 
+        // The card mode the frontend stored for the console, read at each load; Per game unless set - see Diamond_Cards.md §9.
+        public CardChoice Cards { get; set; } = CardChoice.PerGame;
+
         public CoreLibrary Library { get; }
         public CoreInfo Info => Library.Info;
         public CoreMachine Machine => _machine ?? throw new InvalidOperationException("No ROM is loaded.");
@@ -213,18 +216,20 @@ namespace EmuSen.Cores.Native
                     else if (FirmwareLibrary.TryLoadParts(Request(f)) is { } parts) firmware.AddRange(parts.Select((p, n) => (f.Which + (uint)n, p)));
                 }
                 var saves = system?.Battery is { } listed
-                    ? listed.Select(b => (b.Which, Save: BatteryFile(path, console, b.Which, b.Suffix))).ToList()
+                    ? listed.Select(b => (b.Which, Save: SaveFor(path, console, b, listed))).ToList()
                     : new List<(uint Which, BatterySave Save)> { (0, BatteryFile(path, console, 0, EmuSen.Galaxia.Library.SaveLibrary.SramExtension)) };
-                machine = Create(disc, firmware, saves);
+                bool apart = Cards.Apart && (system?.Battery ?? Array.Empty<CoreBatteryFile>()).Any(b => b.Removable);
+                machine = Create(disc, firmware, saves, apart);
                 kept = Lends;
-                wanted = machine.Info.Battery.Select(b => (b.Which, Save: BatteryFile(path, console, b.Which, b.Suffix))).ToList();
+                IReadOnlyList<CoreBatteryFile> slots = system?.Battery ?? machine.Info.Battery;
+                wanted = machine.Info.Battery.Select(b => (b.Which, Save: SaveFor(path, console, b, slots))).ToList();
                 // Machine info is the authority: a file it names that exists and was not passed means the machine is made again with it.
                 if (wanted.Any(w => w.Save.Read() is not null && !saves.Any(s => s.Which == w.Which && s.Save.Path == w.Save.Path)))
                 {
                     machine.Dispose();
                     kept = false;
                     if (Lends) disc = set.Open(0);
-                    machine = Create(disc, firmware, wanted);
+                    machine = Create(disc, firmware, wanted, Cards.Apart && machine.Info.Battery.Any(b => b.Removable));
                     kept = Lends;
                 }
             }
@@ -270,13 +275,17 @@ namespace EmuSen.Cores.Native
         // Battery file <which> of a game, by the runtime's path rule; a port's shim opens it as its oracle does.
         protected virtual BatterySave BatteryFile(string path, string console, uint which, string suffix) => BatterySave.Open(path, console, extension: suffix);
 
+        // A removable file under a card mode other than Per game is its slot's card, every other file the game's own - see Diamond_Cards.md §9.2.
+        private BatterySave SaveFor(string path, string console, CoreBatteryFile file, IEnumerable<CoreBatteryFile> listed) =>
+            MemoryCards.CardFor(console, file, MemoryCards.SlotOf(listed, file.Which), Cards) ?? BatteryFile(path, console, file.Which, file.Suffix);
+
         // The machine for a disc: lent where the core borrows, when the machine takes the files' keeping, else read by the core within the call.
-        private CoreMachine Create(DiscFiles disc, List<(uint, byte[])> firmware, List<(uint Which, BatterySave Save)> saves)
+        private CoreMachine Create(DiscFiles disc, List<(uint, byte[])> firmware, List<(uint Which, BatterySave Save)> saves, bool apart)
         {
             var files = new List<(uint, byte[])>(firmware);
             foreach (var (which, save) in saves)
                 if (save.Read() is { } saved) files.Add((which, saved));
-            return new CoreMachine(Library, Held(disc.Image), MediaOf(disc), SettingsText(createScope: true), files, Lends ? disc : null);
+            return new CoreMachine(Library, Held(disc.Image), MediaOf(disc), SettingsText(createScope: true), files, Lends ? disc : null, sharedRemovable: apart);
         }
 
         // Every value as key=value lines: create-time and run-time keys at create, run-time keys only after it.

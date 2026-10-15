@@ -33,6 +33,9 @@ pub struct Create<'a> {
     pub files: Vec<File<'a>>,
     pub pixel_formats: u64,
     pub host_abi_version: u32,
+    /// Since 1.7, `CREATE_SHARED_REMOVABLE`: the host keeps the removable battery files apart from the game, so a
+    /// state load leaves them as they stand (EmuSen_CoreAPI.md §6.27).
+    pub shared_removable: bool,
 }
 
 /// What `media_insert` receives (since 1.1): the disc or nothing, its companions from `flags::FILE_MEDIA`, and

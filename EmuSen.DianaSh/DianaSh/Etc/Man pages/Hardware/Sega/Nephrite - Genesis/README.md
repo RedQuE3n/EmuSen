@@ -15,5 +15,10 @@ crate `nephrite`). Written from hardware documents under a clean-room protocol, 
 - [`Nephrite_LfoTables.md`](Nephrite_LfoTables.md) — the YM2612's vibrato: the offset the LFO adds to a channel's
   frequency number for each PMS and LFO step, measured on the board's YM3438 for every frequency number, with the LFO's
   step timing at each rate.
+- [`Nephrite_Attachments.md`](Nephrite_Attachments.md) — the attachment interface, designed 2026-10-15 before its code:
+  the coupling between the Genesis and the Sega CD counted by kind, the three traits an attachment implements and
+  what the Genesis offers it, the dispatch that keeps the cartridge Genesis's hot path free, the module layout
+  inside the one `nephrite` crate with what its visibility holds and the two checks for what it cannot (separate crates
+  decided not now), the forms weighed, the migration in eight commits with the state kept byte-identical, and the questions for the tester.
 
 The CPUs and the PSG are documented with their crates in [`../Beryl-HW/`](../Beryl-HW/) (Beryl Hardware).

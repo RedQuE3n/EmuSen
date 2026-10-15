@@ -252,7 +252,7 @@ which their libraries enable by a byte store to DICR's third byte and which Diam
 DICR, clearing every channel's enable. Without it a frame's sectors were never marked complete: Silent Hill's sector
 callback dropped every sector after its first frame's [M, its code and RAM]; Tekken 3 and Castlevania, which store to
 the same byte, handed the decoder a word that is no command, which a frame never finished would explain [A]. With the store shifted to its byte, on the open kernel [M, pictures every 10
-frames against SwanStation's on `scph5501.bin`]: Silent Hill's movie from frame 1,460, within 1.9 grey levels of
+frames against SwanStation's on the player's American BIOS]: Silent Hill's movie from frame 1,460, within 1.9 grey levels of
 SwanStation's at a constant offset of 810 frames (median over 211 pictures to frame 3,600); Castlevania's movie from
 750, the Konami logo at 1,080 and the title at 1,320, SwanStation's at 1,780, 2,120 and 2,360; Tekken 3's movie from
 600, within 2.2 grey levels at an offset of 1,000 frames, SwanStation's from 1,610. Ape Escape, which never writes the

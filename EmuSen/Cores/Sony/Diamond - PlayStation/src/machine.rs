@@ -66,6 +66,8 @@ pub struct Machine {
     pub skip: bool,
     /// Whether each card's change was reported to the host since it last saved the card.
     pub card_reported: [bool; 2],
+    /// Whether the host keeps the cards apart from the game, so that a state load leaves them (Diamond_Cards.md §6).
+    pub cards_apart: bool,
     pub ports: [Option<&'static str>; 2],
     /// The firmware files given at create, by number.
     pub firmware: Vec<u32>,
@@ -142,6 +144,7 @@ impl Machine {
             frames: 0,
             skip: false,
             card_reported: [false; 2],
+            cards_apart: false,
             ports,
             firmware: Vec::new(),
             disc_print: 0,

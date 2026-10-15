@@ -1304,7 +1304,7 @@ number.~~ The exchange and the check are taken (§18.5), Q2 and Q3 answered ther
 ### 18.5 The cross-kernel step (2026-10-11)
 
 Its record is `Diamond_OpenKernel_Phase2.md` §22, written for the kernel's writer in terms of what a game sees at the
-interface; the player's BIOS was used only as the firmware (`scph5501.bin`, games started through `LoadExec`, D-29) and
+interface; the player's BIOS was used only as the firmware (the declared American file, games started through `LoadExec`, D-29) and
 as `firmwarecheck.py`'s input.
 
 - **Cards**: met both ways on Tekken 3 (§18.2's rows); the kernels' formats compared frame by frame, with a defect of

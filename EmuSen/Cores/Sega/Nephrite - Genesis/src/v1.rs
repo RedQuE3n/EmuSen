@@ -358,7 +358,7 @@ impl Core for Machine {
     }
 
     fn battery_files(system: &str) -> Option<Vec<Battery>> {
-        (system == "mcd").then(|| vec![Battery { which: 0, suffix: ".brm".into() }, Battery { which: RAM_CART, suffix: ".crm".into() }])
+        (system == "mcd").then(|| vec![Battery::game(0, ".brm"), Battery::game(RAM_CART, ".crm")])
     }
 
     fn create(request: &Create<'_>) -> Result<Self, i32> {
@@ -649,13 +649,13 @@ impl Machine {
     fn batteries(&self) -> Vec<Battery> {
         match self.genesis.hw.mcd.as_deref() {
             Some(m) => {
-                let mut v = vec![Battery { which: 0, suffix: ".brm".into() }];
+                let mut v = vec![Battery::game(0, ".brm")];
                 if m.hw.cart.is_some() {
-                    v.push(Battery { which: RAM_CART, suffix: ".crm".into() });
+                    v.push(Battery::game(RAM_CART, ".crm"));
                 }
                 v
             }
-            None => self.battery_id().map(|_| Battery { which: 0, suffix: ".srm".into() }).into_iter().collect(),
+            None => self.battery_id().map(|_| Battery::game(0, ".srm")).into_iter().collect(),
         }
     }
 }
@@ -668,7 +668,7 @@ mod tests {
     use crate::media::cartridge;
 
     fn create(image: &[u8], files: Vec<emusen_native::abi::File<'_>>) -> Result<Machine, i32> {
-        Machine::create(&Create { image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION })
+        Machine::create(&Create { image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false })
     }
 
     // The debugger's two processors and their buses through the ABI: listed, sized, read without side effects, refused a write (Nephrite_Native.md §41).
@@ -778,7 +778,7 @@ mod tests {
     #[test]
     fn the_region_setting_chooses_the_market_and_the_rate() {
         let image = cartridge("SEGA GENESIS", "U", None);
-        let made = |region: &str| Machine::create(&Create { image: &image, settings: Settings::from_pairs(vec![(REGION_KEY.into(), region.into())]), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION }).unwrap();
+        let made = |region: &str| Machine::create(&Create { image: &image, settings: Settings::from_pairs(vec![(REGION_KEY.into(), region.into())]), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false }).unwrap();
         for (region, overseas, pal) in [("auto", true, false), ("md.us", true, false), ("md.eu", true, true), ("md.jp", false, false), ("md.asia", false, true)] {
             let m = made(region);
             let version = m.genesis.hw.io.read(0xA1_0001, 0);
@@ -865,7 +865,7 @@ mod tests {
     #[test]
     fn the_model_setting_chooses_the_sound_chip_and_circuit() {
         let image = cartridge("SEGA GENESIS", "U", None);
-        let made = |settings: Vec<(String, String)>| Machine::create(&Create { image: &image, settings: Settings::from_pairs(settings), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION }).unwrap();
+        let made = |settings: Vec<(String, String)>| Machine::create(&Create { image: &image, settings: Settings::from_pairs(settings), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false }).unwrap();
         let sound = |m: &Machine| (m.genesis.hw.sound.ym.discrete, m.genesis.hw.sound.circuit);
         assert_eq!(sound(&made(vec![])), (true, crate::sound::Circuit::MODEL1));
         assert_eq!(sound(&made(vec![(MODEL_KEY.into(), "md.model1".into())])), (true, crate::sound::Circuit::MODEL1));
@@ -877,7 +877,7 @@ mod tests {
         assert!(Machine::settings_schema().iter().all(|s| s.check().is_ok()));
         let image = cartridge("SEGA GENESIS", "U", None);
         let settings = Settings::from_pairs(vec![("pad2".into(), "md.pad6".into())]);
-        let mut m = Machine::create(&Create { image: &image, settings, files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION }).unwrap();
+        let mut m = Machine::create(&Create { image: &image, settings, files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false }).unwrap();
         let ports = |m: &Machine| m.machine_info().ports.iter().map(|p| p.controller.clone().unwrap()).collect::<Vec<_>>();
         assert_eq!(ports(&m), ["md.pad3", "md.pad6"]);
         m.set_settings(&Settings::from_pairs(vec![("pad1".into(), "md.pad6".into()), ("pad2".into(), "md.pad3".into())])).unwrap();
@@ -1011,7 +1011,7 @@ mod tests {
         let mut crm = vec![0u8; 0x2_0000];
         crm[7] = 0x5A;
         let brm = vec![0x11u8; 0x2000];
-        let m = Machine::create(&Create { image: &iso, settings, files: vec![emusen_native::abi::File { which: 0, data: &brm }, emusen_native::abi::File { which: RAM_CART, data: &crm }], pixel_formats: 1, host_abi_version: sys::ABI_VERSION }).unwrap();
+        let m = Machine::create(&Create { image: &iso, settings, files: vec![emusen_native::abi::File { which: 0, data: &brm }, emusen_native::abi::File { which: RAM_CART, data: &crm }], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false }).unwrap();
         let info = m.machine_info();
         assert_eq!(info.battery.iter().map(|b| (b.which, b.suffix.as_str())).collect::<Vec<_>>(), [(0, ".brm"), (RAM_CART, ".crm")]);
         assert_eq!(m.battery(RAM_CART).unwrap().0[7], 0x5A);

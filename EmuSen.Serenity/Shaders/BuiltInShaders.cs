@@ -35,5 +35,25 @@ half4 main(float2 coord) {
     return half4(texColor.rgb * scanline * vignette, texColor.a);
 }
 ";
+
+        // The picture drawn into its rectangle with nothing over it, as Skia's DrawImage draws it.
+        public const string PlainSksl = @"
+uniform shader image;
+
+half4 main(float2 coord) {
+    return image.eval(coord);
+}
+";
+
+        // A simple effect, or the plain picture, as a one-pass filter whose image is the frame stretched to the rectangle, sampled as the setting says - see EmuSen_DevicePicture.md §3.2.
+        public static ScreenFilter AsFilter(ShaderEffect effect, bool bilinear) =>
+            (bilinear ? Linear : Nearest)[(int)effect];
+
+        private static ScreenFilter Make(ShaderEffect effect, bool bilinear) => new(effect.ToString(),
+            new[] { new FilterPass(effect switch { ShaderEffect.Scanlines => ScanlinesSksl, ShaderEffect.Crt => CrtSksl, _ => PlainSksl }, PassScale.Viewport, LinearSource: bilinear) },
+            null, "EmuSen's own") { RowsOnce = true };
+
+        private static readonly ScreenFilter[] Nearest = { Make(ShaderEffect.None, false), Make(ShaderEffect.Scanlines, false), Make(ShaderEffect.Crt, false) };
+        private static readonly ScreenFilter[] Linear = { Make(ShaderEffect.None, true), Make(ShaderEffect.Scanlines, true), Make(ShaderEffect.Crt, true) };
     }
 }

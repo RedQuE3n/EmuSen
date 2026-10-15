@@ -36,7 +36,7 @@ const ALL: [&str; 15] = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "
 
 /// The cases a core is run through: the fifteen, C16 where it claims MEDIA, C17, C18 and C19.
 fn cases(media: bool) -> Vec<&'static str> {
-    ALL.iter().chain(media.then_some(&"C16")).chain(&["C17", "C18", "C19"]).copied().collect()
+    ALL.iter().chain(media.then_some(&"C16")).chain(&["C17", "C18", "C19", "C20"]).copied().collect()
 }
 
 #[test]
@@ -94,20 +94,20 @@ fn the_seeded_faults_fail_the_cases_they_break_and_no_others() {
 
 // An exact setting that changes the state, a refusal of any host but 1.0, info that drifts, a writable read-only
 // space, an observed frame with other sound, a lent image read otherwise than its copy and a drive that names a place
-// past its image's end break C9, C12, C13, C14, C15, C17 and C18.
+// past its image's end break C9, C12, C13, C14, C15, C17 and C18, and a picture answered on a device nobody lent C20.
 #[test]
 fn the_faults_of_c9_and_c12_to_c18_fail_those_cases_and_no_others() {
-    let failing = ["C9", "C12", "C13", "C14", "C15", "C17", "C18"];
+    let failing = ["C9", "C12", "C13", "C14", "C15", "C17", "C18", "C20"];
     assert_eq!(verdicts("kit_faulty_full_core"), cases(true).into_iter().map(|c| (c, !failing.contains(&c))).collect::<Vec<_>>());
 }
 
 // Each of those faults alone, in a runner process of its own, fails exactly the case it is for; a core that takes
-// only a host of 1.0 also refuses the hosts of 1.3 and 1.4 that C17 and C18 play to lend.
+// only a host of 1.0 also refuses the hosts of 1.3 and 1.4 that C17 and C18 play to lend, and 1.9's that C20 plays.
 #[test]
 fn each_fault_of_c9_and_c12_to_c18_alone_fails_its_case_alone() {
     let file = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("kit-faulty-full.v1tc");
     std::fs::write(&file, image(&[1, 2, 3, 0x20, 0x41])).unwrap();
-    for (fault, cases) in [(8, vec!["C9"]), (16, vec!["C12", "C17", "C18"]), (32, vec!["C13"]), (64, vec!["C14"]), (128, vec!["C15"]), (256, vec!["C17"]), (512, vec!["C18"]), (1 << 22, vec!["C14"])] {
+    for (fault, cases) in [(8, vec!["C9"]), (16, vec!["C12", "C17", "C18", "C20"]), (32, vec!["C13"]), (64, vec!["C14"]), (128, vec!["C15"]), (256, vec!["C17"]), (512, vec!["C18"]), (1 << 22, vec!["C14"]), (1 << 23, vec!["C20"])] {
         let out = std::process::Command::new(env!("CARGO_BIN_EXE_emusen-core-conform"))
             .args(["--self-delimiting", "--frames", "120", "--core"])
             .arg(library("kit_faulty_full_core"))
@@ -197,7 +197,7 @@ fn a_report_says_what_was_run_and_a_missing_library_fails_c1() {
     let v = json::parse(report.json().as_bytes()).unwrap();
     assert_eq!(v.get("passed"), Some(&Value::Bool(true)));
     assert_eq!(v.get("id").and_then(Value::as_str), Some("v1-test-core"));
-    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(19));
+    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(20));
     let none = run(&library("no_such_core"), &options());
     assert!(!none.passed());
     assert_eq!(none.cases[0].id, "C1");
@@ -222,8 +222,8 @@ fn a_sidecar_carries_the_librarys_own_descriptors_and_hash() {
     assert_eq!(v.get("sidecar").and_then(Value::as_i64), Some(1));
     assert_eq!(v.get("library").and_then(Value::as_str), lib.file_name().and_then(|n| n.to_str()));
     assert_eq!(v.get("sha256").and_then(Value::as_str), Some(digest::sha256_hex(&std::fs::read(&lib).unwrap()).as_str()));
-    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.8"));
-    assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0x1FFFFF));
+    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.9"));
+    assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0x3FFFFF));
     assert_eq!(v.get("info").and_then(|i| i.get("id")).and_then(Value::as_str), Some("v1-test-core"));
     assert_eq!(v.get("settings").and_then(Value::as_array).map(|a| a.len()), Some(4));
     assert!(v.get("development").is_none());
@@ -283,7 +283,7 @@ fn a_corpus_runs_the_cores_cases_once_and_the_images_cases_for_every_image() {
         }
         assert!(c.passed());
         let all: std::collections::BTreeSet<&str> = corpus::CORE_CASES.iter().chain(corpus::IMAGE_CASES.iter()).copied().collect();
-        assert_eq!(all, ALL.iter().chain(&["C16", "C17", "C18", "C19"]).copied().collect());
+        assert_eq!(all, ALL.iter().chain(&["C16", "C17", "C18", "C19", "C20"]).copied().collect());
     }
 }
 
@@ -327,7 +327,7 @@ fn a_corpus_says_of_each_image_what_the_single_image_form_says() {
 #[test]
 fn the_seeded_faults_fail_the_same_cases_in_a_corpus() {
     let (_, list) = corpus_files("faults");
-    for (name, core, per_image) in [("kit_faulty_core", vec!["C4", "C9", "C10", "C12", "C13"], vec!["C7", "C8", "C17", "C18"]), ("kit_faulty_full_core", vec!["C9", "C12", "C13", "C15"], vec!["C14", "C17", "C18"])] {
+    for (name, core, per_image) in [("kit_faulty_core", vec!["C4", "C9", "C10", "C12", "C13"], vec!["C7", "C8", "C17", "C18"]), ("kit_faulty_full_core", vec!["C9", "C12", "C13", "C15"], vec!["C14", "C17", "C18", "C20"])] {
         let c = run_corpus(name, &list, 2);
         assert_eq!(c.core.cases.iter().filter(|x| !x.passed).map(|x| x.id).collect::<Vec<_>>(), core, "{name}");
         for i in &c.images {
@@ -365,7 +365,7 @@ fn the_runner_takes_a_directory_or_a_list_and_writes_a_report_for_each_image() {
             let file = i.get("report").and_then(Value::as_str).unwrap();
             let report = json::parse(&std::fs::read(reports.join(file)).unwrap()).unwrap();
             assert_eq!(report.get("image"), i.get("image"));
-            assert_eq!(report.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(9), "the five image cases, C16, MEDIA being claimed, C17, C18 and C19");
+            assert_eq!(report.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(10), "the five image cases, C16, MEDIA being claimed, C17, C18, C19 and C20");
         }
         assert_eq!(text.lines().filter(|l| l.starts_with("pass [") || l.starts_with("FAIL [")).count(), count, "{text}");
     }

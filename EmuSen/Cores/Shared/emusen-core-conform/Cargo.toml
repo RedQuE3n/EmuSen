@@ -21,6 +21,8 @@ emusen-disc = { path = "../emusen-disc" }
 # Galaxia's mapped file, the one place a file is mapped, for the case that lends an image as a host does (C17).
 emusen-galaxia = { path = "../../../../Platform/galaxia" }
 libloading = "0.8"
+# Vulkan's declarations and loader, for C20's lender (EmuSen_CoreAPI.md §6.29); the version emusen-gpu takes.
+ash = "0.38"
 
 # The two test cores, built here as well so that this crate's tests run the kit on them.
 [[example]]

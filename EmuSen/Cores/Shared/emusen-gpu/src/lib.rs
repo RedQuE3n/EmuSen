@@ -35,6 +35,49 @@ pub struct GpuBuffer {
     mapped: *mut u8,
 }
 
+/// A device someone else made and lends, with a queue the borrower alone submits to, so that no lock is shared; the
+/// handles are Vulkan's as integers, the loader's entry as Vulkan declares it (EmuSen_Gpu.md §5, EmuSen_DevicePicture.md §5).
+#[derive(Clone, Copy)]
+pub struct Lent {
+    pub get_instance_proc_addr: vk::PFN_vkGetInstanceProcAddr,
+    pub instance: u64,
+    pub physical: u64,
+    pub device: u64,
+    /// The API version the device was made with; 1.2 or later, for timeline semaphores.
+    pub api: u32,
+    /// The lent queue's family, which has compute, and its index there.
+    pub family: u32,
+    pub queue: u32,
+    /// The family the lender's own queue is of, which a buffer the lender reads must be shared with.
+    pub host_family: u32,
+}
+
+impl Lent {
+    /// A lend from an ABI that carries the loader's entry as a plain function pointer, as the core ABI does.
+    ///
+    /// # Safety
+    /// `get_instance_proc_addr` is `vkGetInstanceProcAddr` of the loader that made `instance`.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn from_raw(get_instance_proc_addr: unsafe extern "C" fn(), instance: u64, physical: u64, device: u64, api: u32, family: u32, queue: u32, host_family: u32) -> Lent {
+        // SAFETY: the caller's; one function pointer for another of the same ABI.
+        let get_instance_proc_addr = unsafe { std::mem::transmute::<unsafe extern "C" fn(), vk::PFN_vkGetInstanceProcAddr>(get_instance_proc_addr) };
+        Lent { get_instance_proc_addr, instance, physical, device, api, family, queue, host_family }
+    }
+}
+
+/// A timeline semaphore the device made: a value that only grows, signalled by submissions and waited for by others.
+pub struct Timeline {
+    semaphore: vk::Semaphore,
+}
+
+impl Timeline {
+    /// Vulkan's handle as an integer, for a host that waits for it on the same device.
+    pub fn raw(&self) -> u64 {
+        use ash::vk::Handle;
+        self.semaphore.as_raw()
+    }
+}
+
 // SAFETY: the mapped pointer is host memory the device owns for the buffer's life; which thread touches it when is the rasteriser's rule.
 unsafe impl Send for GpuBuffer {}
 unsafe impl Sync for GpuBuffer {}
@@ -42,6 +85,12 @@ unsafe impl Sync for GpuBuffer {}
 impl GpuBuffer {
     pub fn bytes(&self) -> u64 {
         self.bytes
+    }
+
+    /// Vulkan's handle as an integer, for a host that reads the buffer on the same device (EmuSen_DevicePicture.md §5).
+    pub fn raw(&self) -> u64 {
+        use ash::vk::Handle;
+        self.handle.as_raw()
     }
 
     /// The mapped bytes as values, for a host buffer.
@@ -95,6 +144,11 @@ impl Pending {
 }
 
 pub struct GpuDevice {
+    /// Whether the device and instance are this crate's to destroy; a lent one's are the lender's.
+    owned: bool,
+    /// The queue's family, and the lender's where the device is lent.
+    family: u32,
+    host_family: Option<u32>,
     _entry: ash::Entry,
     instance: ash::Instance,
     physical: vk::PhysicalDevice,
@@ -281,6 +335,9 @@ impl GpuDevice {
         let properties = unsafe { instance.get_physical_device_properties(pick.physical) };
 
         Ok(GpuDevice {
+            owned: true,
+            family: pick.family,
+            host_family: None,
             _entry: entry.clone(),
             instance: instance.clone(),
             physical: pick.physical,
@@ -299,6 +356,85 @@ impl GpuDevice {
         })
     }
 
+    /// A device someone else made, with the queue it lends; nothing about using it differs from a device made here, and
+    /// on drop only what this crate made is destroyed (EmuSen_Gpu.md §5).
+    ///
+    /// # Safety
+    /// The handles are live and of one device, which outlives the `GpuDevice`; the queue is the borrower's alone; the
+    /// device was made with the timeline semaphore feature enabled.
+    pub unsafe fn lent(lent: &Lent) -> Result<GpuDevice, String> {
+        use ash::vk::Handle;
+        if vk::api_version_major(lent.api) == 1 && vk::api_version_minor(lent.api) < 2 {
+            return Err("a lent device is Vulkan 1.2 or later, for timeline semaphores".to_string());
+        }
+        // SAFETY: the lender's entry point, of the type Vulkan declares for it; the handles are the caller's promise.
+        let entry = unsafe { ash::Entry::from_static_fn(ash::StaticFn { get_instance_proc_addr: lent.get_instance_proc_addr }) };
+        let instance = unsafe { ash::Instance::load(entry.static_fn(), vk::Instance::from_raw(lent.instance)) };
+        let physical = vk::PhysicalDevice::from_raw(lent.physical);
+        let queues = unsafe { instance.get_physical_device_queue_family_properties(physical) };
+        match queues.get(lent.family as usize) {
+            Some(q) if q.queue_flags.contains(vk::QueueFlags::COMPUTE) && lent.queue < q.queue_count => {}
+            _ => return Err("the lent queue is not a compute queue the device has".to_string()),
+        }
+        let device = unsafe { ash::Device::load(instance.fp_v1_0(), vk::Device::from_raw(lent.device)) };
+        let properties = unsafe { instance.get_physical_device_properties(physical) };
+        let name = properties.device_name_as_c_str().map_or_else(|_| "unnamed".to_string(), |n| n.to_string_lossy().into_owned());
+        let queue = unsafe { device.get_device_queue(lent.family, lent.queue) };
+        let pool_info = vk::CommandPoolCreateInfo::default().queue_family_index(lent.family).flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
+        let pool = unsafe { device.create_command_pool(&pool_info, None) }.map_err(|e| format!("vkCreateCommandPool returned {e}"))?;
+        let allocate = vk::CommandBufferAllocateInfo::default().command_pool(pool).level(vk::CommandBufferLevel::PRIMARY).command_buffer_count(2 + AHEAD as u32);
+        let buffers = unsafe { device.allocate_command_buffers(&allocate) }.map_err(|e| format!("vkAllocateCommandBuffers returned {e}"))?;
+        let fence = unsafe { device.create_fence(&vk::FenceCreateInfo::default(), None) }.map_err(|e| format!("vkCreateFence returned {e}"))?;
+        let pending_fence = unsafe { device.create_fence(&vk::FenceCreateInfo::default(), None) }.map_err(|e| format!("vkCreateFence returned {e}"))?;
+        let mut ahead = Vec::with_capacity(AHEAD);
+        for slot in 0..AHEAD {
+            let fence = unsafe { device.create_fence(&vk::FenceCreateInfo::default(), None) }.map_err(|e| format!("vkCreateFence returned {e}"))?;
+            ahead.push(Ahead { commands: buffers[2 + slot], fence, out: AtomicBool::new(false) });
+        }
+        let memory = unsafe { instance.get_physical_device_memory_properties(physical) };
+        Ok(GpuDevice {
+            owned: false,
+            family: lent.family,
+            host_family: Some(lent.host_family),
+            _entry: entry,
+            instance,
+            physical,
+            device: device.clone(),
+            queue,
+            pool,
+            commands: buffers[0],
+            pending_commands: buffers[1],
+            fence,
+            pending: Arc::new(Pending { device, fence: pending_fence, pending: AtomicBool::new(false), gone: AtomicBool::new(false) }),
+            ahead,
+            memory,
+            name,
+            software: properties.device_type == vk::PhysicalDeviceType::CPU,
+            max_buffer_bytes: properties.limits.max_storage_buffer_range as u64,
+        })
+    }
+
+    /// Whether the device is lent, and so may hand its pictures to the lender on the device.
+    pub fn is_lent(&self) -> bool {
+        !self.owned
+    }
+
+    /// A timeline semaphore, starting at zero, on a lent device (whose lender enabled the feature).
+    pub fn create_timeline(&self) -> Result<Timeline, String> {
+        let mut kind = vk::SemaphoreTypeCreateInfo::default().semaphore_type(vk::SemaphoreType::TIMELINE).initial_value(0);
+        let semaphore = unsafe { self.device.create_semaphore(&vk::SemaphoreCreateInfo::default().push_next(&mut kind), None) }.map_err(|e| format!("vkCreateSemaphore returned {e}"))?;
+        Ok(Timeline { semaphore })
+    }
+
+    /// The value a timeline has reached, waiting for nothing.
+    pub fn timeline_value(&self, timeline: &Timeline) -> u64 {
+        unsafe { self.device.get_semaphore_counter_value(timeline.semaphore) }.unwrap_or(0)
+    }
+
+    pub fn destroy_timeline(&self, timeline: Timeline) {
+        unsafe { self.device.destroy_semaphore(timeline.semaphore, None) };
+    }
+
     pub fn pending(&self) -> Arc<Pending> {
         self.pending.clone()
     }
@@ -308,11 +444,24 @@ impl GpuDevice {
     }
 
     pub fn create_buffer(&self, bytes: u64, at: Where) -> Result<GpuBuffer, String> {
+        self.create_buffer_for(bytes, at, false)
+    }
+
+    /// A buffer in the device's memory that the lender's queue may read as well, for a picture handed on the device.
+    pub fn create_buffer_shared(&self, bytes: u64) -> Result<GpuBuffer, String> {
+        self.create_buffer_for(bytes, Where::Device, true)
+    }
+
+    fn create_buffer_for(&self, bytes: u64, at: Where, shared: bool) -> Result<GpuBuffer, String> {
         let size = bytes.max(4);
-        let info = vk::BufferCreateInfo::default()
+        let families = [self.family, self.host_family.unwrap_or(self.family)];
+        let mut info = vk::BufferCreateInfo::default()
             .size(size)
             .usage(vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC | vk::BufferUsageFlags::TRANSFER_DST)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
+        if shared && families[0] != families[1] {
+            info = info.sharing_mode(vk::SharingMode::CONCURRENT).queue_family_indices(&families);
+        }
         let handle = unsafe { self.device.create_buffer(&info, None) }.map_err(|e| format!("vkCreateBuffer returned {e}"))?;
         let needs = unsafe { self.device.get_buffer_memory_requirements(handle) };
         let allocate = vk::MemoryAllocateInfo::default().allocation_size(needs.size).memory_type_index(self.memory_type(needs.memory_type_bits, at)?);
@@ -473,13 +622,24 @@ impl GpuDevice {
             None if buffer == self.pending_commands => Submission::Pending,
             None => Submission::Now,
         };
-        let mut commands = Commands { device: &self.device, commands: buffer, submission, written: [vk::DescriptorSet::null(); WRITTEN_SETS], count: 0 };
+        let mut commands = Commands { device: &self.device, commands: buffer, submission, written: [vk::DescriptorSet::null(); WRITTEN_SETS], count: 0, wait: None, signal: None };
         record(&mut commands);
         commands.barrier_to_host();
+        let (wait, signal) = (commands.wait, commands.signal);
         unsafe {
             self.device.end_command_buffer(buffer).expect("vkEndCommandBuffer");
             let buffers = [buffer];
-            self.device.queue_submit(self.queue, &[vk::SubmitInfo::default().command_buffers(&buffers)], fence).expect("vkQueueSubmit");
+            let waits: Vec<vk::Semaphore> = wait.iter().map(|w| w.0).collect();
+            let wait_values: Vec<u64> = wait.iter().map(|w| w.1).collect();
+            let stages = [vk::PipelineStageFlags::COMPUTE_SHADER | vk::PipelineStageFlags::TRANSFER];
+            let signals: Vec<vk::Semaphore> = signal.iter().map(|s| s.0).collect();
+            let signal_values: Vec<u64> = signal.iter().map(|s| s.1).collect();
+            let mut values = vk::TimelineSemaphoreSubmitInfo::default().wait_semaphore_values(&wait_values).signal_semaphore_values(&signal_values);
+            let mut submit = vk::SubmitInfo::default().command_buffers(&buffers);
+            if !waits.is_empty() || !signals.is_empty() {
+                submit = submit.wait_semaphores(&waits).wait_dst_stage_mask(&stages[..waits.len()]).signal_semaphores(&signals).push_next(&mut values);
+            }
+            self.device.queue_submit(self.queue, &[submit], fence).expect("vkQueueSubmit");
         }
     }
 }
@@ -487,7 +647,15 @@ impl GpuDevice {
 impl Drop for GpuDevice {
     fn drop(&mut self) {
         unsafe {
-            let _ = self.device.device_wait_idle();
+            if self.owned {
+                let _ = self.device.device_wait_idle();
+            } else {
+                // A lent device's other work is the lender's: only this crate's own submissions are waited for.
+                self.pending.wait();
+                for slot in 0..self.ahead.len() {
+                    self.wait_ahead(slot);
+                }
+            }
             self.pending.gone.store(true, Release);
             self.device.destroy_fence(self.fence, None);
             self.device.destroy_fence(self.pending.fence, None);
@@ -495,8 +663,92 @@ impl Drop for GpuDevice {
                 self.device.destroy_fence(ahead.fence, None);
             }
             self.device.destroy_command_pool(self.pool, None);
-            self.device.destroy_device(None);
-            self.instance.destroy_instance(None);
+            if self.owned {
+                self.device.destroy_device(None);
+                self.instance.destroy_instance(None);
+            }
+        }
+    }
+}
+
+/// A picture handed to the host at the end of a submission, in one of two slots: a slot in host memory read back, as
+/// every core's picture was, or, on a lent device with the lender's `done` timeline, a slot in the device's memory the
+/// lender reads on the device once `ready` reaches the picture's value, written again only once `done` has reached the
+/// value of the picture it last held (EmuSen_DevicePicture.md §5.3, §6).
+pub struct PictureOut {
+    slots: [GpuBuffer; 2],
+    ready: Option<Timeline>,
+    done: Option<vk::Semaphore>,
+    /// The value of the picture each slot last held, and the last value handed; cells, so that a recording that borrows
+    /// its owner can hand a picture.
+    held: [std::cell::Cell<u64>; 2],
+    last: std::cell::Cell<u64>,
+    /// The newest value the lender was told of, which alone it must let go of: a picture it never heard of is not waited for.
+    told: std::cell::Cell<u64>,
+}
+
+/// What `PictureOut::hand` recorded: the slot written, and the value `ready` reaches when it is (0 for a host slot).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Handed {
+    pub slot: usize,
+    pub value: u64,
+}
+
+impl PictureOut {
+    /// Two slots of `bytes`: on the device when the device is lent and `done` (the lender's timeline, as an integer)
+    /// is given, in host memory otherwise.
+    pub fn new(gpu: &GpuDevice, bytes: u64, done: Option<u64>) -> Result<PictureOut, String> {
+        use ash::vk::Handle;
+        let on_device = gpu.is_lent() && done.is_some();
+        let make = || if on_device { gpu.create_buffer_shared(bytes) } else { gpu.create_buffer(bytes, Where::Host) };
+        let slots = [make()?, make()?];
+        let ready = if on_device { Some(gpu.create_timeline()?) } else { None };
+        Ok(PictureOut { slots, ready, done: done.filter(|_| on_device).map(vk::Semaphore::from_raw), held: Default::default(), last: Default::default(), told: Default::default() })
+    }
+
+    /// Whether pictures are handed on the device.
+    pub fn on_device(&self) -> bool {
+        self.ready.is_some()
+    }
+
+    pub fn slot(&self, i: usize) -> &GpuBuffer {
+        &self.slots[i]
+    }
+
+    /// The lender told of the picture of `value`, which it will now let go of by `done` before its slot is written again.
+    pub fn tell(&self, value: u64) {
+        self.told.set(self.told.get().max(value));
+    }
+
+    /// The `ready` timeline, on the device.
+    pub fn ready(&self) -> Option<&Timeline> {
+        self.ready.as_ref()
+    }
+
+    /// `bytes` of `picture` copied into slot `i` in this recording, which then waits on the device for the lender to
+    /// have let go of what the slot held and signals `ready` with the new picture's value.
+    pub fn hand(&self, c: &mut Commands, picture: &GpuBuffer, bytes: u64, i: usize) -> Handed {
+        if let (Some(ready), Some(done)) = (&self.ready, self.done) {
+            if self.held[i].get() > 0 && self.held[i].get() <= self.told.get() {
+                c.wait = Some((done, self.held[i].get()));
+            }
+            let value = self.last.get() + 1;
+            self.last.set(value);
+            self.held[i].set(value);
+            c.copy(picture, &self.slots[i], bytes, 0, 0);
+            c.signal = Some((ready.semaphore, value));
+            return Handed { slot: i, value };
+        }
+        c.copy(picture, &self.slots[i], bytes, 0, 0);
+        Handed { slot: i, value: 0 }
+    }
+
+    pub fn destroy(self, gpu: &GpuDevice) {
+        let [a, b] = self.slots;
+        gpu.destroy_buffer(a);
+        gpu.destroy_buffer(b);
+        if let Some(ready) = self.ready {
+            gpu.destroy_timeline(ready);
         }
     }
 }
@@ -509,11 +761,26 @@ pub struct Commands<'a> {
     submission: Submission,
     written: [vk::DescriptorSet; WRITTEN_SETS],
     count: usize,
+    /// A timeline value the submission waits for on the device, and one it signals: a handed picture's (`PictureOut`).
+    wait: Option<(vk::Semaphore, u64)>,
+    signal: Option<(vk::Semaphore, u64)>,
 }
 
 impl Commands<'_> {
     pub fn submission(&self) -> Submission {
         self.submission
+    }
+
+    /// The submission waits on the device, before its commands, for a timeline semaphore of this device to reach `value`.
+    pub fn wait_for(&mut self, timeline: u64, value: u64) {
+        use ash::vk::Handle;
+        self.wait = Some((vk::Semaphore::from_raw(timeline), value));
+    }
+
+    /// The submission signals a timeline semaphore of this device with `value` once its commands are done.
+    pub fn signal(&mut self, timeline: u64, value: u64) {
+        use ash::vk::Handle;
+        self.signal = Some((vk::Semaphore::from_raw(timeline), value));
     }
 
     pub fn fill(&mut self, buffer: &GpuBuffer, word: u32) {

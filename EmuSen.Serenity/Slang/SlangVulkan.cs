@@ -85,6 +85,8 @@ namespace EmuSen.Serenity.Slang
             if (!native || (nameContains ?? Environment.GetEnvironmentVariable(DeviceVariable)) is { } wanted && !SerenityNative.Crosses(wanted))
                 return Managed.TryCreate(out report, nameContains, validation) is { } managed ? new SlangVulkan(managed) : null;
 
+            // The library attached before its first call, which an explicit choice of it would otherwise make first.
+            if (!SerenityNative.Ready) { report = SerenityNative.Report; return null; }
             byte[]? name = SerenityNative.Utf8(nameContains ?? Environment.GetEnvironmentVariable(DeviceVariable));
             nint made;
             fixed (byte* n = name) made = SerenityNative.DeviceNew(name is null ? null : SerenityNative.Pin(n), (nuint)(name?.Length ?? 0), validation is null ? 0 : 1);
@@ -99,6 +101,17 @@ namespace EmuSen.Serenity.Slang
         }
 
         internal static void Check(Result result, string call) => Managed.Check(result, call);
+
+        // The physical device's UUID, and whether its images and semaphores can be exported; the C#'s device exports nothing - see EmuSen_DevicePicture.md §4.4.
+        public (byte[] Uuid, bool Exports) Identity()
+        {
+            if (_native is null) return (new byte[16], false);
+            var uuid = new byte[16];
+            int exports;
+            fixed (byte* u = uuid) exports = SerenityNative.DeviceIdentity(_native.Value, u);
+            GC.KeepAlive(_native);
+            return (uuid, exports == 1);
+        }
 
         private ulong Raw(uint which)
         {

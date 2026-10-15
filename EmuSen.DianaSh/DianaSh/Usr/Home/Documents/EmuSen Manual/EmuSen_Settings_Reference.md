@@ -8554,7 +8554,8 @@ setting is:
 
 Each hint is the setting's help and its cost: a Vulkan graphics card, the picture shown a frame later than the
 console's (every one of the four, *Precise geometry* included, since the renderer's picture is handed a frame late so
-that the machine never waits for it, `Diamond_Enhancements.md` §38.1), and each its own price and breakage. Without a
+that the machine never waits for it, `Diamond_Enhancements.md` §38.1) unless the frontend presents it on the same card
+(§4.116, since 2026-10-15), and each its own price and breakage. Without a
 usable Vulkan device each row is still turned on, and the core's note shows under every one set. What players meet and
 the advice for the handheld: `Diamond_Players.md` §16.
 
@@ -8664,3 +8665,28 @@ again finds it as it was.
 
 **Tests.** `MemoryCardsOfferTests`; the window fit audit's `MemoryCardsPlayStation` and `MemoryCardsPlayStationHeld` at
 1280×800 and 1920×1200; `PadMenuTests` open the window from both menus.
+
+### 4.116 The game's picture drawn on the Vulkan device (2026-10-15)
+
+*Decided 2026-10-15 by the tester: the game's picture and its screen filters move off Skia* (`EmuSen_DevicePicture.md`).
+Where the window's compositor can import a Vulkan image on the device Serenity draws on (Linux under X11 or XWayland,
+Avalonia's GLX or Vulkan mode), the game's picture, a RetroArch preset and every built-in filter (the CRT at its three
+tiers, CRT (Lottes), the handheld LCDs and the simple effects) are drawn by the Vulkan chain and handed to the
+compositor with no readback; Skia draws the interface around it. The built-in filters are the same filters, translated
+to the chain and matched to their Skia pictures on real frames (§12 there). Nothing is set: the player's filter and
+preset choices are read as before.
+
+Where the compositor cannot take the image (no import offered, another GPU, Windows' ANGLE, macOS) the picture is drawn
+as before, and Mistress writes the reason to its log once (`picture: ...`). **`EMUSEN_DEVICE_PICTURE=0`** in the
+environment keeps the earlier path everywhere, for comparing the two.
+
+**A core's picture on the same card.** Where the picture is presented on the device and a core can draw on a device it
+is lent (core ABI 1.9; Diamond's enhancements today), Mistress lends the core that device when the game is loaded, and
+the core's picture goes from the core to the filter on the card without being copied out: the PlayStation's enhanced
+picture is then shown the frame it is drawn rather than a frame later (`EmuSen_DevicePicture.md` §17). Rewind's
+pictures and screenshots still read it back when they are taken. **`EMUSEN_DEVICE_LEND=0`** lends nothing, the
+picture then read back as before.
+
+**Tests.** `DevicePresenterTests` (each refusal alone, the device's identity, the shown image); `DeviceFilterMatchTests`
+(each built-in family against its Skia picture on real frames, with `EMUSEN_GPU_FRAMES`); the real-window proof of
+§13.3 there.

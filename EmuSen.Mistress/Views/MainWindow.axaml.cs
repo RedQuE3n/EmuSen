@@ -159,7 +159,7 @@ namespace EmuSen.Mistress.Views
 
         public MainWindow()
         {
-            _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw));
+            _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend));
             _pause = new LunaAction("_Pause", _ => TogglePause()) { IsCheckable = true };
             _reset = new LunaAction("_Reset", ResetEmulation);
             _closeGame = new LunaAction("_Close Game", ShowLibrary);
@@ -172,6 +172,8 @@ namespace EmuSen.Mistress.Views
             _hardwareDashboard = new LunaAction("_Hardware Dashboard...", () => OpenCoretopWindow(_debugTarget));
             _rewindReel = new LunaAction("Re_wind...", () => OpenRewindReel(resumeAfter: false));
             InitializeComponent();
+            // Why the game's picture is read back rather than handed to the compositor on the device, logged once a window - see EmuSen_DevicePicture.md §4.4.
+            GameFrame.DevicePictureReport += problem => ErrorLog.Warning("picture", problem);
             SetUpStatusLine();
             ApplyStatusBar();
             SetUpLibraryScreen();
@@ -940,7 +942,7 @@ namespace EmuSen.Mistress.Views
             {
                 // Off the path, not the session: no core exists yet to ask - see EmuSen_Multicore.md §12.
                 string console = EmuSen.Cores.CoreCatalog.ConsoleForRom(path) ?? "Unknown";
-                _session = new EmulatorSession { Cheats = _cheats, Engine = EngineChosenFor(path) };
+                _session = new EmulatorSession { Cheats = _cheats, Engine = EngineChosenFor(path), DeviceLender = GameFrame.TryLend };
                 StartLogging(console);
                 _session.LoadRom(path, loading?.GetAwaiter().GetResult());
                 if (_session.EngineNotice is { } engineNotice) Console.WriteLine("[core] " + engineNotice);
@@ -1390,9 +1392,18 @@ namespace EmuSen.Mistress.Views
 
                     if (!session.SkipRendering && (serial is null || serial != offeredSerial))
                     {
-                        byte[] frame = session.GetFrameBufferRgba();
-                        if (captured) Picture(session, frame, serial);
-                        SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release, session.TotalFrames, session.DisplayAspect, session.DisplayLines, session.RawPicture);
+                        // A picture on the device goes to the chain there, its pixels read back only for a rewind's picture - see EmuSen_DevicePicture.md §17.
+                        if (session.Core is EmuSen.Cores.IDevicePicture { PictureOnDevice: true, Lend: { } lend } && GameFrame.PresentsOnDevice)
+                        {
+                            if (captured) PictureUnchanged(session, serial);
+                            _frames.Offer(Array.Empty<byte>(), session.ScreenWidth, session.ScreenHeight, 1, null, session.TotalFrames, session.DisplayAspect, session.DisplayLines, null, lend);
+                        }
+                        else
+                        {
+                            byte[] frame = session.GetFrameBufferRgba();
+                            if (captured) Picture(session, frame, serial);
+                            SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release, session.TotalFrames, session.DisplayAspect, session.DisplayLines, session.RawPicture);
+                        }
                         offeredSerial = serial;
                         offeredInWindow++;
                         PresentationTrace.Frame(session.TotalFrames, frameStart, Stopwatch.GetTimestamp(), true);

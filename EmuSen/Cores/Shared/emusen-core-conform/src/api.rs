@@ -4,7 +4,7 @@ use std::ffi::c_char;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 
-use emusen_native::core::sys::{CreateParams, Event, FileEntry, FrameInfo, Machine as RawMachine, Media, caps, status};
+use emusen_native::core::sys::{CreateParams, DeviceFrame, DeviceLend, Event, FileEntry, FrameInfo, Machine as RawMachine, Media, caps, status};
 
 type M = *mut RawMachine;
 type C = *const RawMachine;
@@ -92,6 +92,7 @@ table! {
         media_lid: fn(M, u32, u32) -> i32,
         media_insert: fn(M, u32, *const Media) -> i32,
         debug_reads: fn(M, *mut u32, usize) -> i64,
+        frame_device: fn(M, *mut DeviceFrame) -> i32,
     }
 }
 
@@ -188,8 +189,14 @@ impl Lib {
     /// `create` from slices, with `emusen_create_params.flags` where the host played is of 1.3 or later; an earlier
     /// one has no such field, and passes the struct of 1.0.
     pub fn create_from(&self, image: &[u8], settings: &str, files: &[(u32, &[u8])], pixel_formats: u64, flags: u32) -> Result<Machine<'_>, (i32, String)> {
+        self.create_lending(image, settings, files, pixel_formats, flags, std::ptr::null())
+    }
+
+    /// `create_from` with a device lent (since 1.9, `DEVICE_PICTURE`), passed by a host of 1.9 or later; an earlier one
+    /// has no such field and passes the struct it knew.
+    pub fn create_lending(&self, image: &[u8], settings: &str, files: &[(u32, &[u8])], pixel_formats: u64, flags: u32, device: *const DeviceLend) -> Result<Machine<'_>, (i32, String)> {
         let (minor, pad) = self.host();
-        let known = if minor >= 3 { std::mem::size_of::<CreateParams>() } else { CreateParams::SIZE_1_0 };
+        let known = if minor >= 9 { std::mem::size_of::<CreateParams>() } else if minor >= 3 { std::mem::offset_of!(CreateParams, device) } else { CreateParams::SIZE_1_0 };
         let element = std::mem::size_of::<FileEntry>() + pad;
         let mut entries = vec![CANARY; element * files.len()];
         for (i, (w, d)) in files.iter().enumerate() {
@@ -212,6 +219,7 @@ impl Lib {
             error: error.as_mut_ptr(),
             error_len: error.len(),
             flags,
+            device,
         };
         // SAFETY: `params` holds at least `known` bytes, and `known` is no more than the struct.
         unsafe { std::ptr::copy_nonoverlapping(&p as *const CreateParams as *const u8, params.as_mut_ptr(), known) };
@@ -283,6 +291,17 @@ impl Machine<'_> {
             0 => Ok(unsafe { std::ptr::read(buf.as_ptr() as *const FrameInfo) }),
             e => Err(e),
         }
+    }
+
+    /// `frame_device` (since 1.9): `None` where the export is absent; the picture's place when it is on the device.
+    pub fn frame_device(&self) -> Option<Result<Option<DeviceFrame>, i32>> {
+        let f = self.lib.f.frame_device?;
+        let mut out = DeviceFrame { size: std::mem::size_of::<DeviceFrame>() as u32, ..DeviceFrame::default() };
+        Some(match unsafe { f(self.h, &mut out) } {
+            1 => Ok(Some(out)),
+            0 => Ok(None),
+            e => Err(e),
+        })
     }
 
     pub fn frame(&self) -> Vec<u8> {

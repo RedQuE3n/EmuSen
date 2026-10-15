@@ -41,6 +41,7 @@ fn params(image: &[u8], settings: &str, files: &[FileEntry]) -> CreateParams {
         error: null_mut(),
         error_len: 0,
         flags: 0,
+        device: std::ptr::null(),
     }
 }
 
@@ -88,9 +89,9 @@ fn every_descriptor_validates_against_its_committed_schema() {
         assert_eq!(schema::validate(s, doc), Vec::<String>::new(), "{doc}");
     }
     let v = crate::json::parse(info.as_bytes()).unwrap();
-    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.8"));
+    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.9"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
-    assert_eq!(names.len(), 21);
+    assert_eq!(names.len(), 22);
     assert!(
         info.contains(r#""battery":[{"which":0,"suffix":".srm"},{"which":1,"suffix":".card","kind":"removable","medium":"test.card","label":"Card slot"},{"which":2,"suffix":".mem","kind":"console","medium":"test.memory","label":"Inside the console"}]"#),
         "core info lists the system's battery files since 1.3, a removable one's kind since 1.7, a console one's and each slot's medium and label since 1.8, and nothing unset: {info}"
@@ -495,17 +496,18 @@ fn read_ranges_reach_a_core_that_claims_them_and_an_unknown_kind_is_refused() {
 
 #[test]
 fn the_crates_constants_are_the_headers_own_numbers() {
-    assert_eq!(ABI_VERSION, 0x0001_0008);
+    assert_eq!(ABI_VERSION, 0x0001_0009);
+    assert_eq!(caps::DEVICE_PICTURE, 1 << 21, "since 1.9");
     assert_eq!(flags::CREATE_SHARED_REMOVABLE, 2, "since 1.7, beside CREATE_LENT");
     assert_eq!(flags::CREATE_SHARED_CONSOLE, 4, "since 1.8, beside CREATE_SHARED_REMOVABLE");
     assert_eq!((event::MEDIA_SEEK, flags::FILE_IMAGE, crate::core::SEEK_SPAN), (8, 0xFFFF_FFFF, 1 << 20));
     assert_eq!((caps::BORROW, caps::UNASSIGNED & caps::BORROW, flags::CREATE_LENT, flags::MEDIA_LENT), (1 << 20, 0, 1, 2));
-    assert_eq!((CreateParams::SIZE_1_0, std::mem::size_of::<CreateParams>()), (88, 96));
+    assert_eq!((CreateParams::SIZE_1_0, std::mem::offset_of!(CreateParams, device), std::mem::size_of::<CreateParams>()), (88, 96, 104), "the device lent at 1.9 follows 1.3's flags and their padding");
     assert_eq!((status::BAD_STRUCT, status::BAD_IMAGE, status::STATE_VERSION), (-263, -264, -4));
     assert_eq!((status::LID_CLOSED, status::WRONG_MEDIA, status::NO_SUCH_DRIVE, flags::FILE_MEDIA, flags::MEDIA_RESTORE), (-265, -266, -267, 65_536, 1));
-    assert_eq!(EXPORTS.len(), 58);
+    assert_eq!(EXPORTS.len(), 59);
     assert_eq!(EXPORTS.iter().filter(|e| e.1 == 0).count(), 32);
-    assert_eq!(CAPABILITY_NAMES.len(), 21);
+    assert_eq!(CAPABILITY_NAMES.len(), 22);
     assert_eq!((caps::MEDIA, caps::DEBUG_READS, caps::UNASSIGNED & (caps::MEDIA | caps::DEBUG_READS)), (1 << 18, 1 << 19, 0));
     assert_eq!(super::EXPORTING & !(caps::SNAPSHOT | caps::FRAME_SERIAL | caps::ROW_REPEAT | caps::BATTERY_DIRTY), super::EXPORTING);
 }

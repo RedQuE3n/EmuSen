@@ -1,4 +1,4 @@
-/* emusen_core.h - the EmuSen core ABI, version 1.6.
+/* emusen_core.h - the EmuSen core ABI, version 1.9.
  *
  * A core is a shared library exporting the functions below, C calling convention. The normative text is
  * EmuSen_CoreAPI.md in the EmuSen manual; this header is its machine-checked half, and where the two disagree the
@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CORE_ABI_MAJOR 1u
-#define EMUSEN_CORE_ABI_MINOR 8u
+#define EMUSEN_CORE_ABI_MINOR 9u
 #define EMUSEN_CORE_ABI_VERSION ((EMUSEN_CORE_ABI_MAJOR << 16) | EMUSEN_CORE_ABI_MINOR)
 
 /* An opaque machine. Several may exist at once, from one library. */
@@ -88,6 +88,7 @@ typedef struct emusen_machine emusen_machine;
 #define EMUSEN_CAP_MEDIA             (1ull << 18)  /* @since 1.1: emusen_core_media_lid, emusen_core_media_insert */
 #define EMUSEN_CAP_DEBUG_READS       (1ull << 19)  /* @since 1.2, with DEBUG: emusen_core_debug_reads, range kinds 2 and 3 */
 #define EMUSEN_CAP_BORROW            (1ull << 20)  /* @since 1.3: the core keeps pointers into an image and media files lent to it */
+#define EMUSEN_CAP_DEVICE_PICTURE    (1ull << 21)  /* @since 1.9: the core draws on a device the host lends, emusen_core_frame_device */
 /* Bits 21..47 are for later minors; 48..63 are never assigned, for a core's private use in tests. */
 
 /* ---- Flags and small constants ------------------------------------------------------------------ */
@@ -202,7 +203,7 @@ typedef struct emusen_file {        /* a file the host read for this game (secti
     size_t len;
 } emusen_file;
 
-typedef struct emusen_create_params { /* 96 bytes; 88 at 1.0, the least a core accepts */
+typedef struct emusen_create_params { /* 104 bytes; 88 at 1.0, the least a core accepts */
     uint32_t size;
     uint32_t host_abi_version;      /* EMUSEN_CORE_ABI_VERSION the host was built with */
     const uint8_t *image;           /* the game file's bytes; the core parses it */
@@ -216,7 +217,45 @@ typedef struct emusen_create_params { /* 96 bytes; 88 at 1.0, the least a core a
     uint8_t *error;                 /* optional: a refusal's UTF-8 detail, NUL-terminated within error_len */
     size_t error_len;
     uint32_t flags;                 /* @since 1.3: EMUSEN_CREATE_LENT; absent from a shorter struct, which reads as zero */
+    const struct emusen_device_lend *device; /* @since 1.9, DEVICE_PICTURE: the host's device lent, or null; 104 bytes with it */
 } emusen_create_params;
+
+/* @since 1.9, DEVICE_PICTURE (section 6.29): the host's Vulkan device, lent to a core that claims the bit. Handles are
+ * Vulkan's, as integers. The device is Vulkan 1.2 or later with timeline semaphores enabled; the queue named is the
+ * core's alone to submit to. The core makes what it draws on it and destroys only that, never the lender's objects.
+ * `done` is the host's timeline semaphore: the host signals it, on the device and in order, with the value of every
+ * picture emusen_core_frame_device answered once it no longer reads it (one signal may cover several), and the core
+ * does not write such a picture's memory again before `done` has reached its value. A host that stops signalling stalls the core's device and then its machine; nothing is
+ * corrupted. 64 bytes. */
+typedef struct emusen_device_lend {
+    uint32_t size;
+    uint32_t api_version;           /* the device's VK_API_VERSION */
+    void (*get_instance_proc_addr)(void); /* the loader's vkGetInstanceProcAddr */
+    uint64_t instance;              /* VkInstance */
+    uint64_t physical_device;       /* VkPhysicalDevice */
+    uint64_t device;                /* VkDevice */
+    uint32_t queue_family;          /* the lent queue's family, which has compute */
+    uint32_t queue_index;           /* the lent queue's index in it */
+    uint32_t host_queue_family;     /* the family of the host's own queue, which reads what the core hands */
+    uint32_t reserved;
+    uint64_t done;                  /* VkSemaphore, timeline, the host's */
+} emusen_device_lend;
+
+/* @since 1.9, DEVICE_PICTURE: the frame's picture on the lent device. A core fills everything but `size`. The buffer
+ * is shared with the host's queue family; the picture is `height` rows of `stride` bytes from `offset`, in `format`;
+ * it is written once the core's timeline semaphore `ready` reaches `value`, which counts the pictures handed. 56 bytes. */
+typedef struct emusen_device_frame {
+    uint32_t size;
+    uint32_t format;                /* enum emusen_pixel_format, RGBA8888 */
+    uint64_t buffer;                /* VkBuffer */
+    uint64_t offset;
+    int32_t width;
+    int32_t height;
+    int32_t stride;
+    uint32_t reserved;
+    uint64_t ready;                 /* VkSemaphore, timeline, the core's */
+    uint64_t value;
+} emusen_device_frame;
 
 typedef struct emusen_frame_info {  /* 56 bytes */
     uint32_t size;
@@ -293,6 +332,10 @@ int64_t emusen_core_events(emusen_machine *machine, emusen_event *out, size_t co
 /* ---- Picture --------------------------------------------------------------------------- */
 int32_t emusen_core_frame_info(const emusen_machine *machine, emusen_frame_info *out);
 int64_t emusen_core_frame_copy(const emusen_machine *machine, uint8_t *out, size_t len);
+/* @since 1.9, DEVICE_PICTURE: after advance (and present), 1 with the frame's picture on the lent device as `out` says,
+ * 0 when this frame's picture is not there and frame_copy has it, or a status. frame_copy still answers on a frame
+ * whose picture is on the device, waiting for it. */
+int32_t emusen_core_frame_device(emusen_machine *machine, emusen_device_frame *out);
 
 /* ---- Sound: interleaved stereo int16 --------------------------------------------------- */
 int32_t emusen_core_audio_rate(const emusen_machine *machine);           /* the rate of the next sample drained */
@@ -435,6 +478,7 @@ typedef int64_t (*emusen_core_debug_disassemble_fn)(emusen_machine *, uint32_t, 
 typedef int32_t (*emusen_core_media_lid_fn)(emusen_machine *, uint32_t, uint32_t);
 typedef int32_t (*emusen_core_media_insert_fn)(emusen_machine *, uint32_t, const emusen_media *);
 typedef int64_t (*emusen_core_debug_reads_fn)(emusen_machine *, uint32_t *, size_t);
+typedef int32_t (*emusen_core_frame_device_fn)(emusen_machine *, emusen_device_frame *);
 
 #ifdef __cplusplus
 }

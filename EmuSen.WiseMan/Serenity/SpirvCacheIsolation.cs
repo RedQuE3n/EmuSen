@@ -5,10 +5,14 @@ using EmuSen.Serenity.Slang;
 
 namespace EmuSen.WiseMan.Serenity
 {
-    // Presets the suite builds keep their SPIR-V in the suite's scratch, not the data home a player's build reads - see EmuSen_Serenity.md §9.4.
+    // Presets the suite builds, and the built-in filters it writes as presets, stay in the suite's scratch - see EmuSen_Serenity.md §9.4.
     internal static class SpirvCacheIsolation
     {
         [ModuleInitializer]
-        internal static void Isolate() => SlangRunner.CachePath = Path.Combine(DianaShSandbox.ScratchDirectory, "spirv-cache.db");
+        internal static void Isolate()
+        {
+            SlangRunner.CachePath = Path.Combine(DianaShSandbox.ScratchDirectory, "spirv-cache.db");
+            EmuSen.Serenity.Shaders.BuiltInPreset.RootOverride = Path.Combine(DianaShSandbox.ScratchDirectory, "builtin-presets");
+        }
     }
 }

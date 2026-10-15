@@ -19,7 +19,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         public ushort HdmaSource;
         public ushort HdmaDestination;
 
-        // Blocks of 16 bytes still owed, or 0 when nothing is running.
+        // Blocks of 16 bytes still owed: running while hblank-driven, stopped with that many left otherwise, 0 when none - see Mercury_Native.md §13.9.
         public int HdmaBlocksLeft;
 
         public bool HdmaIsHBlankDriven;
@@ -38,8 +38,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             0xFF4D => (byte)(0x7E | (DoubleSpeed ? 0x80 : 0x00) | (SpeedSwitchArmed ? 0x01 : 0x00)),
             0xFF4F => (byte)(0xFE | VramBank),
 
-            // Bit 7 set means idle, and the low bits are the blocks still owed minus one; HDMA1-4 are write-only.
-            0xFF55 => HdmaBlocksLeft == 0 ? (byte)0xFF : (byte)(HdmaBlocksLeft - 1),
+            // Bit 7 set means idle, and the low bits are the blocks still owed minus one, a stopped transfer's too; HDMA1-4 are write-only.
+            0xFF55 => HdmaBlocksLeft == 0 ? (byte)0xFF : (byte)((HdmaIsHBlankDriven ? 0x00 : 0x80) | (HdmaBlocksLeft - 1)),
 
             // RP: no partner's light ever arrives, so bit 1 reads 1 whether or not reading is enabled.
             0xFF56 => (byte)(0x3E | Io[0x56]),
@@ -196,7 +196,6 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             // Clearing bit 7 during an hblank transfer cancels it rather than starting a new one.
             if (HdmaIsHBlankDriven && HdmaBlocksLeft > 0 && (data & 0x80) == 0)
             {
-                HdmaBlocksLeft = 0;
                 HdmaIsHBlankDriven = false;
                 return;
             }
@@ -216,8 +215,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             if (HdmaIsHBlankDriven && HdmaBlocksLeft > 0) TransferHdmaBlock();
         }
 
-        // Eight machine cycles a block, and they are half as long in double speed - see Mercury_Cgb.md §4.1.
-        private void ChargeHdmaBlock() => _stallCycles += DoubleSpeed ? 16 : 32;
+        // About 8 µs a block at either speed: 8 machine cycles, or 16 in double speed - see Mercury_Cgb.md §4.1, Mercury_Native.md §13.9.
+        private void ChargeHdmaBlock() => _stallCycles += DoubleSpeed ? 64 : 32;
 
         private void TransferHdmaBlock()
         {
@@ -232,6 +231,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
                 HdmaDestination = (ushort)((HdmaDestination + 1) & 0x1FFF);
             }
 
+            // A destination run off the end of VRAM ends the transfer - see Mercury_Native.md §13.9.
+            if (HdmaDestination == 0) HdmaBlocksLeft = 1;
             if (--HdmaBlocksLeft == 0) HdmaIsHBlankDriven = false;
         }
 

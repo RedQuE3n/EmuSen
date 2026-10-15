@@ -2336,6 +2336,10 @@ the thirteen instruction-timing ROMs are left for it.
 - **MBC5's RAM enable** (referee §2.8; §13.6). GBCTR says only `$0A` enables RAM; Pan Docs says any value whose low
   nibble is `$A`. Mercury follows Pan Docs, and no test ROM settles it. *Recommendation:* keep Pan Docs' rule, since the
   other could cost a game its saves, until a test ROM or a cartridge settles it.
+- **HDMA during HALT** (referee §2.9; §13.9). Pan Docs says an hblank transfer pauses while the CPU is halted. Building
+  it needs the CPU to tell the bus it is halted, a new member of `ICpuBus`/`CpuBus` in both engines. *Recommendation:*
+  add it (`ICpuBus.Halted`, set where HALT is entered and left), with Pan Docs as the oracle and MagenTests' HDMA case
+  fetched as a witness if its licence allows.
 - **§3's further leads** (the speed switch's duration, the serial port's transfer time, DMG `STOP`, the post-boot DIV)
   are outside §2 and are not part of this audit.
 
@@ -2893,3 +2897,47 @@ No difference stands out from the spread; this step's number is the weakest of t
 **Mutants**, each in C# and in Rust separately, all caught on both engines by the step's two claims: H1, BCPD readable
 in mode 3; H2, OCPD writable in mode 3; H3, a refused write leaves the index where it was; H4, SVBK stores a written 0
 as 1; H5, SVBK 0 maps bank 0.
+
+### 13.9 Step I: HDMA
+
+**The rules** (referee §2.9), from Pan Docs' `CGB_Registers.md` (HDMA5); no corpus ROM uses HDMA.
+
+1. **Cost in double speed.** "In both Normal Speed and Double Speed Mode it takes about 8 μs to transfer a block of $10
+   bytes. That is, 8 M-cycles in Normal Speed Mode, and 16 'fast' M-cycles in Double Speed Mode." Mercury charged 16 CPU
+   T-cycles a block in double speed, four fast M-cycles; the hardware's 16 fast M-cycles are 64. The referee page found
+   `Mercury_Cgb.md` §4.1 inconsistent with its own premise; Pan Docs shows the premise was wrong as well.
+2. **`$FF55` after a stop.** "Reading from FF55 will return how many $10 blocks remained (minus 1) in the lower 7 bits,
+   but Bit 7 will be read as 1." Mercury read `$FF`. The referee page listed this as a dispute in which "Pan Docs may
+   differ from both"; this Pan Docs (2026-10-03) agrees with the referee's readings, so it is settled here.
+3. **The destination's overflow.** "If the transfer's destination address overflows, the transfer stops prematurely."
+   Mercury wrapped the destination within VRAM and carried on. What the registers read after such a stop is, in Pan
+   Docs' words, still to be investigated; Mercury reads it as finished, `$FF`.
+
+**The proof.** Three claims, committed failing on both engines (`1632df86`); the normal-speed cost was the control.
+
+**The fix**, the same in both engines: a block charges 32 CPU T-cycles in normal speed and 64 in double; a stop keeps
+`HdmaBlocksLeft` and clears `HdmaIsHBlankDriven`, so "blocks owed and not hblank-driven" is a stopped transfer, which
+reads back with bit 7 set and is never advanced (a general-purpose transfer finishes inside the write, so that pair
+meant nothing before); and a block that leaves the destination at 0 ends the transfer. **The state format is
+unchanged**: an older state never holds a stopped transfer's blocks, and means the same. Two stage-8 claims stated the
+old rules and were brought to Pan Docs' (`A_general_purpose_hdma_costs_twice_the_cycles_in_double_speed`, 4 × 64;
+`Clearing_bit_seven_cancels_a_running_hblank_hdma`, `$82`). `Mercury_Cgb.md` §4 and §4.1 are corrected in place (the
+referee page's correction 2, §10).
+
+**Not built.**
+
+- **HDMA during HALT** (referee §2.9's last rule). Pan Docs states it: "upon halting the CPU, the transfer will also be
+  halted and will be resumed only when the CPU resumes execution", citing a test ROM (alloncm's MagenTests) that is not
+  in the corpus. Mercury's bus moves hblank blocks from inside the PPU's tick and does not know the CPU is halted; the
+  CPU would have to tell it, a new member of the CPU's bus surface in both engines. That is put to the tester (§13.0)
+  rather than added.
+- **A transfer started in hblank, and one started with the LCD off.** Pan Docs says only that an hblank transfer
+  "should not be started (write to FF55) during a HBlank period", and says nothing of the LCD being off. **Out of
+  reach.**
+
+**The corpus** did not move, and **the four games** are unchanged (MercuryRT's trace, the real-games test). The
+*colour* synthetic program's state digest moved, in one field: `Cpu.Cycles`, 230,496 lower after 600 frames. The
+program runs a general-purpose and an hblank transfer every frame in double speed and otherwise sits in HALT, so every
+block now stalls the CPU 48 T-cycles longer and the CPU counts that many fewer of its own; sound and picture are as
+recorded, and both engines agree. Its state and version-7 digests were re-recorded. The whole `Mercury` filter passes,
+836 cases.

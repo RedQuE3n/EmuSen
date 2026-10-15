@@ -333,6 +333,10 @@ MBC5's RAM enable a dispute between GBCTR and Pan Docs, put to the tester; MBC3'
 
 ### 2.9 HDMA in double speed is four times too cheap, by Mercury's own argument too **[V]**
 
+*Audited 2026-10-15 (`Mercury_Native.md` §13.9): the double-speed cost, `$FF55` after a stop and the overflow stop proven
+against Pan Docs and fixed in both engines; the pause during HALT put to the tester as a surface change; the start in
+hblank and with the LCD off out of reach.*
+
 **Mercury** charges `_stallCycles += DoubleSpeed ? 16 : 32` a block (`MemoryBus.Cgb.cs:154`), drained one CPU T-cycle
 at a time (`MercuryCore.cs:151-152`). A double-speed block therefore costs 4 fast M-cycles.
 

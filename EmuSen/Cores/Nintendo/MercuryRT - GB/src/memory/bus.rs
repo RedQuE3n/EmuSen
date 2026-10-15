@@ -473,11 +473,12 @@ impl MemoryBus {
             0xFF4D => 0x7E | if self.double_speed { 0x80 } else { 0 } | self.speed_switch_armed as u8,
             0xFF4F => (0xFE | self.vram_bank) as u8,
             // HDMA1-4 are write-only.
+            // A stopped transfer's blocks still owed read with bit 7 set (Mercury_Native.md §13.9).
             0xFF55 => {
                 if self.hdma_blocks_left == 0 {
                     0xFF
                 } else {
-                    (self.hdma_blocks_left - 1) as u8
+                    (if self.hdma_is_h_blank_driven { 0x00 } else { 0x80 }) | (self.hdma_blocks_left - 1) as u8
                 }
             }
             // RP: no partner's light ever arrives, so bit 1 reads 1 whether or not reading is enabled.
@@ -566,7 +567,6 @@ impl MemoryBus {
 
     fn start_hdma(&mut self, data: u8) {
         if self.hdma_is_h_blank_driven && self.hdma_blocks_left > 0 && data & 0x80 == 0 {
-            self.hdma_blocks_left = 0;
             self.hdma_is_h_blank_driven = false;
             return;
         }
@@ -586,15 +586,19 @@ impl MemoryBus {
         }
     }
 
-    /// Eight machine cycles a block, half as long in double speed - see Mercury_Cgb.md §4.1.
+    /// About 8 µs a block at either speed: 8 machine cycles, or 16 in double speed (Mercury_Native.md §13.9).
     fn transfer_hdma_block(&mut self) {
-        self.stall_cycles += if self.double_speed { 16 } else { 32 };
+        self.stall_cycles += if self.double_speed { 64 } else { 32 };
         for _ in 0..16 {
             let value = self.read(self.hdma_source);
             let offset = (self.vram_bank as usize).wrapping_mul(VRAM_BANK_SIZE).wrapping_add((self.hdma_destination & 0x1FFF) as usize);
             self.vram[offset] = value;
             self.hdma_source = self.hdma_source.wrapping_add(1);
             self.hdma_destination = (self.hdma_destination.wrapping_add(1)) & 0x1FFF;
+        }
+        // A destination run off the end of VRAM ends the transfer.
+        if self.hdma_destination == 0 {
+            self.hdma_blocks_left = 1;
         }
         self.hdma_blocks_left -= 1;
         if self.hdma_blocks_left == 0 {

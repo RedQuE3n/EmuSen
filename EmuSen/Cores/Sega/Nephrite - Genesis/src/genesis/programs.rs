@@ -39,11 +39,11 @@ fn word(b: &[u8], a: usize) -> u16 {
 fn the_bcd_verifier_counts_no_failure() {
     let Some(mut m) = program("exodus-techdocs/bcd_verifier/bcd-verifier-u1.bin") else { return };
     let finished = |m: &Machine| {
-        let ram = &m.genesis.hw.wram;
+        let ram = &m.hw().wram;
         ram[0xFEFF] == b'n' && ram[0x0090..0x00C0].iter().any(|&b| b != 0)
     };
     let frames = run_until(&mut m, 6000, finished).expect("the verifier finished");
-    let ram = &m.genesis.hw.wram;
+    let ram = &m.hw().wram;
     let counts: Vec<u32> = (0..6).map(|i| u32::from_be_bytes(ram[0xFF00 + 4 * i..][..4].try_into().unwrap())).collect();
     eprintln!("BCD verifier: finished at frame {frames}; failures (flags, results) abcd {:?} sbcd {:?} nbcd {:?}", &counts[0..2], &counts[2..4], &counts[4..6]);
     assert_eq!(counts, [0; 6]);
@@ -55,7 +55,7 @@ fn the_bcd_verifier_counts_no_failure() {
 fn the_opcode_sizes_match_both_crcs() {
     let Some(mut m) = program("exodus-techdocs/opcode_sizes/m68k_opcode_sizes.bin") else { return };
     let verdict = |m: &Machine, tile: usize| {
-        let v = &m.genesis.hw.vdp.vram[0x8000 + 32 * tile..][..32];
+        let v = &m.hw().vdp.vram[0x8000 + 32 * tile..][..32];
         if v.iter().all(|&b| b == 0x66) { Some(true) } else if v.iter().all(|&b| b == 0x99) { Some(false) } else { None }
     };
     let frames = run_until(&mut m, 3000, |m| verdict(m, 7).is_some()).expect("both checks reported");
@@ -68,7 +68,7 @@ fn the_opcode_sizes_match_both_crcs() {
 #[test]
 fn every_illegal_opcode_takes_its_exception() {
     let Some(mut m) = program("exodus-techdocs/illegal_opcodes/itest.BIN") else { return };
-    let colour = |m: &Machine| word(&m.genesis.hw.vdp.cram, 0);
+    let colour = |m: &Machine| word(&m.hw().vdp.cram, 0);
     let frames = run_until(&mut m, 3000, |m| matches!(colour(m), 0x00E0 | 0x000E)).expect("the test finished");
     eprintln!("illegal instructions: colour ${:04X} at frame {frames}", colour(&m));
     assert_eq!(colour(&m), 0x00E0);
@@ -80,10 +80,10 @@ fn every_illegal_opcode_takes_its_exception() {
 fn vdpfifotesting_passes_every_test() {
     let Some(mut m) = program("exodus-techdocs/vdp_port_access/VDPFIFOTesting.bin") else { return };
     while m.frames < 3000 {
-        m.pads[0] = crate::fifo_records::press(m.frames);
+        m.pads[0] = crate::genesis::fifo_records::press(m.frames);
         m.advance();
     }
-    let rs = crate::fifo_records::records(&m.genesis.hw.wram);
+    let rs = crate::genesis::fifo_records::records(&m.hw().wram);
     let failed: Vec<&str> = rs.iter().filter(|r| !r.passed()).map(|r| r.name.as_str()).collect();
     eprintln!("VDPFIFOTesting: {} of {} pass; failing {failed:?}", rs.len() - failed.len(), rs.len());
     assert_eq!((rs.len(), failed), (122, Vec::<&str>::new()));
@@ -129,7 +129,7 @@ fn the_window_bug_takes_the_partial_column_from_the_next() {
     let at = image.windows(4).position(|p| p == [0xE8, 0x48, 0x02, 0x40]).expect("the scroll's shift");
     image[at..at + 2].copy_from_slice(&[0x4E, 0x71]);
     let mut m = Machine::new(&image, Media::read(&image));
-    let px = |m: &Machine, x: usize, y: usize| m.genesis.hw.vdp.frame.rgba[(y * crate::render::MAX_W + x) * 4..][..3].to_vec();
+    let px = |m: &Machine, x: usize, y: usize| m.hw().vdp.frame.rgba[(y * crate::genesis::render::MAX_W + x) * 4..][..3].to_vec();
     for _ in 0..24 {
         m.advance();
     }
@@ -160,11 +160,11 @@ fn md1536_shows_the_boards_picture() {
     while m.frames < 300 {
         m.advance();
     }
-    let f = &m.genesis.hw.vdp.frame;
+    let f = &m.hw().vdp.frame;
     let mut h = 0x811c9dc5u32;
     for y in 0..f.height {
         for x in 0..f.width {
-            for &c in &f.rgba[(y * crate::render::MAX_W + x) * 4..][..3] {
+            for &c in &f.rgba[(y * crate::genesis::render::MAX_W + x) * 4..][..3] {
                 h = (h ^ c as u32).wrapping_mul(0x01000193);
             }
         }
@@ -177,7 +177,7 @@ fn md1536_shows_the_boards_picture() {
 /// kind first and `ST A C B R L D U` at +2 and, for six buttons, `MD X Y Z` at +4. Nephrite_Native.md §44.3.
 #[test]
 fn segas_io_check_program_reads_the_team_player_and_its_pads() {
-    use crate::io::Plug;
+    use crate::genesis::io::Plug;
     let path = "exodus-techdocs/io_sample/Multitap - IO Sample Program (U) (Nov 28 1992).gen";
     let run = |plugged: [(Plug, bool); 2], pads: &[u32]| -> Option<Vec<u8>> {
         let mut m = program(path)?;
@@ -186,7 +186,7 @@ fn segas_io_check_program_reads_the_team_player_and_its_pads() {
             m.pads[..pads.len()].copy_from_slice(pads);
             m.advance();
         }
-        Some(m.genesis.hw.wram[0xFD00..0xFD00 + 60].to_vec())
+        Some(m.hw().wram[0xFD00..0xFD00 + 60].to_vec())
     };
     let pad_row = |w: &[u8], n: usize| [w[10 * n], w[10 * n + 1], w[10 * n + 2], w[10 * n + 4]];
     let Some(pads) = run([(Plug::Pad, false), (Plug::Pad, true)], &[0x01, 0x212]) else { return };

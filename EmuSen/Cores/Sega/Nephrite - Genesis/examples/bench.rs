@@ -12,7 +12,7 @@ fn machine(path: &std::path::Path, raw: &[u8], bios: &Option<Vec<u8>>) -> Machin
         let tracks = sheet.files.iter().map(|f| Kept::from(std::fs::read(path.parent().unwrap().join(f)).expect("a track"))).collect();
         let mut disc = nephrite::mcd::open_disc(Kept::from(raw.to_vec()), tracks).expect("a disc");
         let media = Media::read(&nephrite::mcd::system_area(&mut disc));
-        return Machine::with_disc(&[], media.clone(), default_model(&media), bios.clone(), Some(disc));
+        return Machine::with_disc(media.clone(), default_model(&media), bios.clone(), Some(disc));
     }
     let image = nephrite::media::cartridge_bytes(raw).into_owned();
     let media = Media::read(&image);

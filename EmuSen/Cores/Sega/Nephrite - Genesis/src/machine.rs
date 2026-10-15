@@ -1,57 +1,64 @@
-//! The machine the ABI drives: the Genesis (`genesis.rs`), whose memories are the spaces, and the Sega CD's and the
-//! 32X's memories beside it until their stages. A Mega Drive image runs; the attachments' images are recognised and
-//! held (Nephrite_Native.md §1, §9).
+//! The machine the ABI drives: the Genesis (`genesis/`) and what is fitted to it, the Sega CD for a disc and the 32X's
+//! stub for a 32X image, held in `Fitted` and matched once per call, so that each configuration's frame is compiled
+//! apart (Nephrite_Attachments.md §4). A Mega Drive image and a disc run; a 32X image is recognised and held, and
+//! counts its frames (Nephrite_Native.md §1, §9).
 
-use crate::cart::Cart;
-use crate::genesis::{Genesis, Model};
+use crate::genesis::cart::Cart;
+use crate::genesis::{Genesis, Hw, Model};
+use crate::interface::{Attachment, AttachmentView, Bare};
+#[cfg(feature = "mcd")]
+use crate::mcd::MegaCd;
+#[cfg(feature = "s32x")]
+use crate::s32x::S32x;
 use crate::media::{Media, System};
+use crate::genesis::debugger::{M68K, M68K_REGISTERS, M68KBUS_ID, Z80, Z80_REGISTERS, Z80BUS_ID};
 use emusen_native::SampleQueue;
+use emusen_native::core::{Instruction, Processor};
 use emusen_native::debug::Hooks;
 
-/// A memory of the attachments, by its space name and id (Nephrite_Plan.md §4.3).
-pub struct Memory {
-    pub id: u32,
-    pub name: &'static str,
-    pub bytes: Vec<u8>,
-}
+pub use crate::interface::SpaceRef;
+#[cfg(feature = "mcd")]
+pub use crate::mcd::{BRAM_ID, CARTRAM_ID};
 
-/// One space as the ABI lists it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SpaceRef {
-    pub id: u32,
-    pub name: &'static str,
-    pub read_only: bool,
-}
-
-pub const WRAM_ID: u32 = 2;
-pub const Z80RAM_ID: u32 = 3;
-pub const VRAM_ID: u32 = 4;
-pub const CRAM_ID: u32 = 5;
-pub const VSRAM_ID: u32 = 6;
-pub const SRAM_ID: u32 = 7;
-pub const ROM_ID: u32 = 8;
-/// The Sega CD's backup RAM cartridge, when one is plugged in.
-pub const CARTRAM_ID: u32 = 21;
-/// The backup RAM inside the Sega CD, the last of `MCD_MEMORIES`.
-pub const BRAM_ID: u32 = 20;
-pub const MCD_MEMORIES: [(u32, &str, usize); 4] = [(17, "PRGRAM", 0x8_0000), (18, "WORDRAM", 0x4_0000), (19, "PCMRAM", 0x1_0000), (20, "BRAM", 0x2000)];
-pub const S32X_MEMORIES: [(u32, &str, usize); 3] = [(34, "SDRAM", 0x4_0000), (35, "FRAMEBUFFER", 0x4_0000), (36, "PALETTE", 512)];
+pub use crate::genesis::{CRAM_ID, ROM_ID, SRAM_ID, VRAM_ID, VSRAM_ID, WRAM_ID, Z80RAM_ID};
 
 /// The picture's size before the first frame: H40, 28 rows of tiles; each frame then has the VDP's width and height.
 pub const WIDTH: u32 = 320;
 pub const HEIGHT: u32 = 224;
 
+/// The Genesis as fitted: alone, or with the Sega CD for a disc's machine.
+pub(crate) enum Fitted {
+    Md(Genesis<Bare>),
+    #[cfg(feature = "mcd")]
+    Mcd(Genesis<MegaCd>),
+    #[cfg(feature = "s32x")]
+    S32x(Genesis<S32x>),
+}
+
+/// `$e` with `$g` bound to the Genesis fitted, its attachment's type known in each arm: the one match an ABI call makes.
+macro_rules! fitted {
+    ($f:expr, |$g:ident| $e:expr) => {
+        match $f {
+            Fitted::Md($g) => $e,
+            #[cfg(feature = "mcd")]
+            Fitted::Mcd($g) => $e,
+            #[cfg(feature = "s32x")]
+            Fitted::S32x($g) => $e,
+        }
+    };
+}
+pub(crate) use fitted;
+
 pub struct Machine {
     pub media: Media,
-    pub genesis: Genesis,
-    pub extra: Vec<Memory>,
+    pub(crate) fitted: Fitted,
     pub frames: i64,
     pub picture: Vec<u8>,
     pub skip: bool,
     /// Each pad's buttons in the players' order: port 1's pads, then port 2's (`io::Io::first_pad`).
-    pub pads: [u32; crate::io::PADS],
+    pub pads: [u32; crate::genesis::io::PADS],
     /// What each port holds, and whether its pads are six-button ones (the settings `pad1` and `pad2`).
-    pub plugged: [(crate::io::Plug, bool); 2],
+    pub plugged: [(crate::genesis::io::Plug, bool); 2],
     /// The firmware files given at create, by number; none is used yet.
     pub firmware: Vec<u32>,
     /// The samples made and not yet drained, stereo at `sound::RATE`.
@@ -64,8 +71,6 @@ pub struct Machine {
     pub z80_breakpoints: Vec<(i32, i32)>,
     pub debug_stopped: u32,
     pub debug_open: bool,
-    /// The fingerprint of the disc in the Sega CD's drive, 0 for none, which a state records and a load is held to.
-    pub disc_print: u64,
     /// Since core ABI 1.8, the host's create flags: the RAM cartridge (removable) and the backup RAM (the console's) kept
     /// apart from the game, so a state load leaves each as it stands (EmuSen_SaveMedia.md §7.3). Never part of a state.
     pub kept_apart: KeptApart,
@@ -80,8 +85,15 @@ pub struct KeptApart {
 
 impl KeptApart {
     /// Whether a state load leaves the memory of space `id` as it stands.
+    #[cfg(feature = "mcd")]
     pub fn keeps(&self, id: u32) -> bool {
         (id == CARTRAM_ID && self.cartridge) || (id == BRAM_ID && self.backup)
+    }
+
+    /// Without the Sega CD built, there is no memory to keep apart.
+    #[cfg(not(feature = "mcd"))]
+    pub fn keeps(&self, _: u32) -> bool {
+        false
     }
 }
 
@@ -103,59 +115,92 @@ impl Machine {
     }
 
     /// A machine with `bios` in a Sega CD's boot ROM and the image, when it is a disc, in its drive.
+    #[cfg_attr(not(feature = "mcd"), allow(unused_variables))]
     pub fn with_bios(image: &[u8], media: Media, model: Model, bios: Option<Vec<u8>>) -> Machine {
-        let disc = (media.system == System::Mcd).then(|| crate::mcd::open_disc(emusen_native::core::Kept::from(image.to_vec()), Vec::new()).ok()).flatten();
-        Machine::with_disc(image, media, model, bios, disc)
+        match media.system {
+            #[cfg(feature = "mcd")]
+            System::Mcd => {
+                let disc = crate::mcd::open_disc(emusen_native::core::Kept::from(image.to_vec()), Vec::new()).ok();
+                Machine::with_disc(media, model, bios, disc)
+            }
+            #[cfg(feature = "s32x")]
+            System::S32x => {
+                let cart = cartridge(image.to_vec(), &media);
+                Machine::assembled(media, Fitted::S32x(Genesis::with(cart, model, S32x::new())))
+            }
+            System::Md => {
+                let cart = cartridge(image.to_vec(), &media);
+                Machine::assembled(media, Fitted::Md(Genesis::with(cart, model, Bare)))
+            }
+        }
     }
 
-    /// A machine with `disc` in its Sega CD's drive; a disc's machine has its Sega CD whether a boot ROM is given or not.
-    pub fn with_disc(image: &[u8], media: Media, model: Model, bios: Option<Vec<u8>>, mut disc: Option<crate::mcd::cdd::Disc>) -> Machine {
-        let disc_print = disc.as_mut().map_or(0, crate::mcd::fingerprint);
-        let header = media.header.clone().unwrap_or_default();
-        let rom = if media.system == System::Mcd { Vec::new() } else { image.to_vec() };
-        let (rom, top, patch) = split_lock_on(rom, &header.serial);
-        let mut cart = Cart::new(rom, header.save, &header.system_type, &header.serial);
-        if let Some(top) = top {
-            cart.lock_on(top, patch);
+    /// A disc's machine with `disc` in its Sega CD's drive, which has its Sega CD whether a boot ROM is given or not.
+    #[cfg(feature = "mcd")]
+    pub fn with_disc(media: Media, model: Model, bios: Option<Vec<u8>>, disc: Option<crate::mcd::cdd::Disc>) -> Machine {
+        let cart = cartridge(Vec::new(), &media);
+        let board = crate::interface::Board { master_hz: crate::genesis::master_hz(model.pal), pal: model.pal, start: crate::genesis::START, rate: crate::genesis::sound::RATE };
+        Machine::assembled(media, Fitted::Mcd(Genesis::with(cart, model, MegaCd::new(board, bios.unwrap_or_default(), disc))))
+    }
+
+    fn assembled(media: Media, fitted: Fitted) -> Machine {
+        Machine { media, fitted, frames: 0, picture: blank(), skip: false, pads: [0; crate::genesis::io::PADS], plugged: [(crate::genesis::io::Plug::Pad, false); 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new(), hooks: Hooks::new(&[24, 16]), z80_breakpoints: Vec::new(), debug_stopped: 0, debug_open: false, kept_apart: KeptApart::default() }
+    }
+
+    /// The Genesis's devices, whatever is fitted.
+    pub fn hw(&self) -> &Hw {
+        fitted!(&self.fitted, |g| &g.hw.dev)
+    }
+
+    pub fn hw_mut(&mut self) -> &mut Hw {
+        fitted!(&mut self.fitted, |g| &mut g.hw.dev)
+    }
+
+    pub fn cpu(&self) -> &beryl_m68k::M68000 {
+        fitted!(&self.fitted, |g| &g.cpu)
+    }
+
+    pub fn z80(&self) -> &beryl_z80::Z80 {
+        fitted!(&self.fitted, |g| &g.z80)
+    }
+
+    /// The Sega CD, on a disc's machine.
+    #[cfg(feature = "mcd")]
+    pub fn mcd(&self) -> Option<&MegaCd> {
+        match &self.fitted {
+            Fitted::Mcd(g) => Some(&g.hw.att),
+            _ => None,
         }
-        let mut extra = Vec::new();
-        let list: &[(u32, &'static str, usize)] = match media.system {
-            System::S32x => &S32X_MEMORIES,
-            System::Md | System::Mcd => &[],
-        };
-        let bios = (media.system == System::Mcd).then(|| bios.unwrap_or_default());
-        for &(id, name, size) in list {
-            extra.push(Memory { id, name, bytes: vec![0; size] });
+    }
+
+    #[cfg(feature = "mcd")]
+    pub fn mcd_mut(&mut self) -> Option<&mut MegaCd> {
+        match &mut self.fitted {
+            Fitted::Mcd(g) => Some(&mut g.hw.att),
+            _ => None,
         }
-        Machine { media, genesis: Genesis::with_mcd(cart, model, bios, disc), extra, frames: 0, picture: blank(), skip: false, pads: [0; crate::io::PADS], plugged: [(crate::io::Plug::Pad, false); 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new(), hooks: Hooks::new(&[24, 16]), z80_breakpoints: Vec::new(), debug_stopped: 0, debug_open: false, disc_print, kept_apart: KeptApart::default() }
     }
 
     /// The spaces in id order: the two buses, the Genesis's memories, the battery's save RAM, the ROM, then the attachment's.
     pub fn spaces(&self) -> Vec<SpaceRef> {
         let mut v = vec![
-            SpaceRef { id: crate::debugger::M68KBUS_ID, name: "M68KBUS", read_only: true },
-            SpaceRef { id: crate::debugger::Z80BUS_ID, name: "Z80BUS", read_only: true },
+            SpaceRef { id: crate::genesis::debugger::M68KBUS_ID, name: "M68KBUS", read_only: true },
+            SpaceRef { id: crate::genesis::debugger::Z80BUS_ID, name: "Z80BUS", read_only: true },
         ];
         v.extend([(WRAM_ID, "WRAM"), (Z80RAM_ID, "Z80RAM"), (VRAM_ID, "VRAM"), (CRAM_ID, "CRAM"), (VSRAM_ID, "VSRAM")]
             .map(|(id, name)| SpaceRef { id, name, read_only: false }));
-        if self.genesis.hw.cart.has_battery() {
+        if self.hw().cart.has_battery() {
             v.push(SpaceRef { id: SRAM_ID, name: "SRAM", read_only: false });
         }
-        if self.media.system != System::Mcd {
+        if !self.media.system.is_disc() {
             v.push(SpaceRef { id: ROM_ID, name: "ROM", read_only: true });
         }
-        if let Some(m) = self.genesis.hw.mcd.as_deref() {
-            v.extend(MCD_MEMORIES.iter().map(|&(id, name, _)| SpaceRef { id, name, read_only: false }));
-            if m.hw.cart.is_some() {
-                v.push(SpaceRef { id: CARTRAM_ID, name: "CARTRAM", read_only: false });
-            }
-        }
-        v.extend(self.extra.iter().map(|m| SpaceRef { id: m.id, name: m.name, read_only: false }));
+        fitted!(&self.fitted, |g| g.hw.att.spaces(&mut v));
         v
     }
 
     pub fn bytes(&self, id: u32) -> Option<&[u8]> {
-        let hw = &self.genesis.hw;
+        let hw = self.hw();
         Some(match id {
             WRAM_ID => &hw.wram,
             Z80RAM_ID => &hw.zram,
@@ -163,50 +208,33 @@ impl Machine {
             CRAM_ID => &hw.vdp.cram,
             VSRAM_ID => &hw.vdp.vsram,
             SRAM_ID if hw.cart.has_battery() => hw.cart.battery(),
-            ROM_ID if self.media.system != System::Mcd => &hw.cart.rom,
-            17..=20 => {
-                let s = &hw.mcd.as_deref()?.hw;
-                match id {
-                    17 => &s.prg,
-                    18 => &s.word.bytes,
-                    19 => &s.pcm_ram,
-                    _ => &s.bram,
-                }
-            }
-            CARTRAM_ID => &hw.mcd.as_deref()?.hw.cart.as_ref()?.bytes,
-            _ => return self.extra.iter().find(|m| m.id == id).map(|m| m.bytes.as_slice()),
+            ROM_ID if !self.media.system.is_disc() => &hw.cart.rom,
+            _ => return fitted!(&self.fitted, |g| g.hw.att.bytes(id)),
         })
     }
 
     pub fn bytes_mut(&mut self, id: u32) -> Option<&mut [u8]> {
-        let hw = &mut self.genesis.hw;
-        let battery = hw.cart.has_battery();
-        Some(match id {
-            WRAM_ID => &mut hw.wram,
-            Z80RAM_ID => &mut hw.zram,
-            VRAM_ID => &mut hw.vdp.vram,
-            CRAM_ID => &mut hw.vdp.cram,
-            VSRAM_ID => &mut hw.vdp.vsram,
-            SRAM_ID if battery => hw.cart.battery_mut(),
-            17..=20 => {
-                let s = &mut hw.mcd.as_deref_mut()?.hw;
-                match id {
-                    17 => &mut s.prg,
-                    18 => &mut s.word.bytes,
-                    19 => &mut s.pcm_ram,
-                    _ => &mut s.bram,
-                }
-            }
-            CARTRAM_ID => &mut hw.mcd.as_deref_mut()?.hw.cart.as_mut()?.bytes,
-            _ => return self.extra.iter_mut().find(|m| m.id == id).map(|m| m.bytes.as_mut_slice()),
+        fitted!(&mut self.fitted, |g| {
+            let (hw, att) = (&mut g.hw.dev, &mut g.hw.att);
+            let battery = hw.cart.has_battery();
+            Some(match id {
+                WRAM_ID => &mut hw.wram,
+                Z80RAM_ID => &mut hw.zram,
+                VRAM_ID => &mut hw.vdp.vram,
+                CRAM_ID => &mut hw.vdp.cram,
+                VSRAM_ID => &mut hw.vdp.vsram,
+                SRAM_ID if battery => hw.cart.battery_mut(),
+                _ => return att.bytes_mut(id),
+            })
         })
     }
 
     /// The memory the battery file holds: the cartridge's save RAM, or the Sega CD's internal backup RAM.
     pub fn battery_id(&self) -> Option<u32> {
         match self.media.system {
-            System::Mcd => Some(20),
-            _ => self.genesis.hw.cart.has_battery().then_some(SRAM_ID),
+            #[cfg(feature = "mcd")]
+            System::Mcd => Some(BRAM_ID),
+            _ => self.hw().cart.has_battery().then_some(SRAM_ID),
         }
     }
 
@@ -214,7 +242,14 @@ impl Machine {
     pub fn advance(&mut self) {
         if self.runs() {
             self.begin_frame();
-            self.genesis.run_frame();
+            match &mut self.fitted {
+                Fitted::Md(g) => g.run_frame(),
+                #[cfg(feature = "mcd")]
+                Fitted::Mcd(g) => g.run_frame(),
+                // The 32X's stub runs no frame (`runs`), so none is compiled for it until its stage.
+                #[cfg(feature = "s32x")]
+                Fitted::S32x(_) => {}
+            }
         }
         self.end_frame();
     }
@@ -228,7 +263,13 @@ impl Machine {
                 self.begin_frame();
                 self.debug_open = true;
             }
-            let (why, processor) = self.genesis.run_frame_observed(&mut self.hooks, &self.z80_breakpoints, skip);
+            let (why, processor) = match &mut self.fitted {
+                Fitted::Md(g) => g.run_frame_observed(&mut self.hooks, &self.z80_breakpoints, skip),
+                #[cfg(feature = "mcd")]
+                Fitted::Mcd(g) => g.run_frame_observed(&mut self.hooks, &self.z80_breakpoints, skip),
+                #[cfg(feature = "s32x")]
+                Fitted::S32x(_) => (0, 0),
+            };
             if why != 0 {
                 self.debug_stopped = processor;
                 return why;
@@ -241,39 +282,37 @@ impl Machine {
 
     /// Whether the machine runs: a Genesis, alone or with its Sega CD; the 32X only counts frames until its stage.
     pub fn runs(&self) -> bool {
-        self.media.system != System::S32x
+        !self.media.system.is_32x()
     }
 
     /// The pads and the drawing switch as a frame takes them.
     fn begin_frame(&mut self) {
-        let io = &mut self.genesis.hw.io;
+        let io = &mut fitted!(&mut self.fitted, |g| &mut g.hw.dev).io;
         io.plugs = [self.plugged[0].0, self.plugged[1].0];
         let (second, ports, count) = (io.first_pad(1), io.pad_count(), io.players());
         for (i, pad) in io.pads.iter_mut().enumerate() {
             pad.buttons = if i < count { self.pads[i] } else { 0 };
             // The J-Cart's ports take three-button pads (§48).
-            pad.six = i < ports && self.plugged[(i >= second && self.plugged[0].0 != crate::io::Plug::FourWay) as usize].1;
+            pad.six = i < ports && self.plugged[(i >= second && self.plugged[0].0 != crate::genesis::io::Plug::FourWay) as usize].1;
         }
-        self.genesis.hw.draw = !self.skip;
+        let draw = !self.skip;
+        self.hw_mut().draw = draw;
     }
 
     /// The frame's sound and picture taken, and the count and the battery file brought up to it.
     fn end_frame(&mut self) {
         self.debug_open = false;
         if self.runs() {
-            let (hw, audio) = (&mut self.genesis.hw, &mut self.audio);
-            match hw.mcd.as_deref_mut() {
-                Some(m) => {
-                    m.hw.sound_to(hw.clock);
-                    hw.sound.take_with(hw.clock, Some(&mut m.hw.cdda.steps), |l, r| audio.push_pair(l, r));
-                }
-                None => hw.sound.take(hw.clock, |l, r| audio.push_pair(l, r)),
-            }
+            let audio = &mut self.audio;
+            fitted!(&mut self.fitted, |g| {
+                let (hw, att) = (&mut g.hw.dev, &mut g.hw.att);
+                hw.sound.take_with(hw.clock, att.sound(hw.clock), |l, r| audio.push_pair(l, r));
+            });
             if !self.skip {
-                let f = &self.genesis.hw.vdp.frame;
+                let f = &fitted!(&self.fitted, |g| &g.hw.dev).vdp.frame;
                 self.picture.clear();
                 for y in 0..f.height {
-                    self.picture.extend_from_slice(&f.rgba[y * crate::render::MAX_W * 4..][..f.width * 4]);
+                    self.picture.extend_from_slice(&f.rgba[y * crate::genesis::render::MAX_W * 4..][..f.width * 4]);
                 }
             }
         }
@@ -284,7 +323,7 @@ impl Machine {
     /// The battery file remade where the battery's bytes changed: a save RAM's in Genesis Plus GX's form, empty for an
     /// EEPROM, whose file is its bytes (Nephrite_Native.md §33).
     pub fn refresh_battery_file(&mut self) {
-        let cart = &mut self.genesis.hw.cart;
+        let cart = &mut fitted!(&mut self.fitted, |g| &mut g.hw.dev).cart;
         if cart.take_dirty() && !cart.battery_file(&mut self.battery_file) {
             self.battery_file.clear();
         }
@@ -297,11 +336,22 @@ impl Machine {
     }
 }
 
+/// The cartridge in the slot from its image, Sonic & Knuckles' split from what is locked on top; a disc's is empty.
+fn cartridge(rom: Vec<u8>, media: &Media) -> Cart {
+    let header = media.header.clone().unwrap_or_default();
+    let (rom, top, patch) = split_lock_on(rom, &header.serial);
+    let mut cart = Cart::new(rom, header.save, &header.system_type, &header.serial);
+    if let Some(top) = top {
+        cart.lock_on(top, patch);
+    }
+    cart
+}
+
 /// A combined Sonic & Knuckles image, its 2 MiB followed by the cartridge on top and, when the rest is a whole number
 /// of mebibytes and 256 KiB, the patch ROM last.
 pub fn split_lock_on(image: Vec<u8>, serial: &str) -> (Vec<u8>, Option<Vec<u8>>, Vec<u8>) {
     const SK: usize = 0x20_0000;
-    if !serial.starts_with(crate::cart::LOCK_ON_SERIAL) || image.len() <= SK {
+    if !serial.starts_with(crate::genesis::cart::LOCK_ON_SERIAL) || image.len() <= SK {
         return (image, None, Vec::new());
     }
     let mut sk = image;
@@ -313,4 +363,92 @@ pub fn split_lock_on(image: Vec<u8>, serial: &str) -> (Vec<u8>, Option<Vec<u8>>,
 /// An opaque black frame, RGBA.
 pub fn blank() -> Vec<u8> {
     (0..(WIDTH * HEIGHT) as usize).flat_map(|_| [0, 0, 0, 255]).collect()
+}
+
+/// The debugger's composition: the Genesis's processors and buses, read without side effects (Nephrite_Native.md §41).
+impl Machine {
+    pub fn processors(&self) -> Vec<Processor> {
+        let named = |r: &[(&str, u32)]| r.iter().map(|&(n, b)| (n.to_owned(), b)).collect::<Vec<_>>();
+        vec![
+            Processor { id: M68K, name: "M68K".into(), pc_bits: 24, registers: named(&M68K_REGISTERS), code_space: Some(M68KBUS_ID) },
+            Processor { id: Z80, name: "Z80".into(), pc_bits: 16, registers: named(&Z80_REGISTERS), code_space: Some(Z80BUS_ID) },
+        ]
+    }
+
+    /// The bytes `address` on of a bus space; another space is the caller's.
+    pub fn read_bus(&self, space: u32, address: u32, out: &mut [u8]) {
+        let hw = self.hw();
+        for (i, b) in out.iter_mut().enumerate() {
+            let at = address.wrapping_add(i as u32);
+            *b = match space {
+                M68KBUS_ID => hw.peek_m68k(at),
+                _ => hw.peek_z80(at as u16),
+            };
+        }
+    }
+
+    /// The address of the instruction `processor` stands in front of.
+    pub fn debug_pc(&self, processor: u32) -> Option<u64> {
+        match processor {
+            M68K => Some((self.cpu().regs.pc & 0xFF_FFFF) as u64),
+            Z80 => Some(self.z80().regs.pc as u64),
+            _ => None,
+        }
+    }
+
+    /// A processor's registers in the order its list gives them.
+    pub fn debug_registers(&self, processor: u32) -> Option<Vec<i64>> {
+        match processor {
+            M68K => {
+                let r = &self.cpu().regs;
+                let mut v: Vec<i64> = r.d.iter().chain(r.a.iter()).map(|&x| x as i64).collect();
+                v.extend([r.pc as i64, r.sr as i64, r.usp() as i64, r.ssp() as i64]);
+                Some(v)
+            }
+            Z80 => {
+                let r = &self.z80().regs;
+                Some(vec![
+                    r.af, r.bc, r.de, r.hl, r.af_, r.bc_, r.de_, r.hl_, r.ix, r.iy, r.sp, r.pc,
+                    r.i as u16, r.r as u16, r.wz, r.im as u16, r.iff1 as u16, r.iff2 as u16,
+                ].into_iter().map(i64::from).collect())
+            }
+            _ => None,
+        }
+    }
+
+    /// `count` instructions from `address`, each in its processor's set: the 68000's on its bus, the Z80's on its own
+    /// bus and in its RAM; another space is read as the processor asked would see it.
+    pub fn debug_disassemble(&self, processor: u32, space: u32, address: u32, count: u32) -> Option<Vec<Instruction>> {
+        let z80 = match space {
+            Z80BUS_ID => true,
+            M68KBUS_ID => false,
+            Z80RAM_ID => true,
+            _ => processor == Z80,
+        };
+        let byte = |a: u32| -> u8 {
+            match space {
+                M68KBUS_ID | Z80BUS_ID => {
+                    let mut b = [0];
+                    self.read_bus(space, a, &mut b);
+                    b[0]
+                }
+                _ => self.bytes(space).and_then(|m| m.get(a as usize).copied()).unwrap_or(0xFF),
+            }
+        };
+        if processor > Z80 || (space > 1 && self.bytes(space).is_none()) {
+            return None;
+        }
+        let mut out = Vec::with_capacity(count as usize);
+        let mut at = address;
+        for _ in 0..count {
+            let i = if z80 {
+                beryl_z80::disasm::disassemble(&|a: u16| byte(a as u32), at as u16)
+            } else {
+                beryl_m68k::disasm::disassemble(&|a: u32| (byte(a) as u16) << 8 | byte(a.wrapping_add(1)) as u16, at & 0xFF_FFFE)
+            };
+            at = i.address.wrapping_add(i.bytes.len().max(1) as u32);
+            out.push(i);
+        }
+        Some(out)
+    }
 }

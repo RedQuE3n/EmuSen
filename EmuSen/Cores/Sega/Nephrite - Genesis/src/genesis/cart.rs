@@ -1,56 +1,56 @@
 //! The cartridge on the 68000's bus: ROM up to 4 MiB with its mirrors, save RAM on its declared lanes and range, the
 //! `$A130F1` register that maps it over ROM, and the Sega mapper of `$A130F3`-`$A130FF`. Nephrite_Native.md §9.
 
-use crate::eeprom::{self, Eeprom};
-use crate::media::SaveRam;
+use crate::genesis::eeprom::{self, Eeprom};
+use crate::genesis::header::SaveRam;
 
-pub struct Cart {
-    pub rom: Vec<u8>,
+pub(crate) struct Cart {
+    pub(crate) rom: Vec<u8>,
     /// The ROM's address lines: its size rounded up to a power of two, less one, so a small ROM mirrors.
     mask: usize,
     /// Save RAM, battery-backed or not; empty when the header declares none.
-    pub sram: Vec<u8>,
+    pub(in crate::genesis) sram: Vec<u8>,
     save: Option<SaveRam>,
     /// `$A130F1`: bit 0 maps the save RAM over ROM, bit 1 protects it from writes.
-    pub sram_reg: u8,
+    pub(in crate::genesis) sram_reg: u8,
     /// Save RAM above the ROM's end is mapped without the register.
     sram_always: bool,
     /// The Sega mapper's pages for the eight 512 KiB banks, bank 0 fixed at page 0; absent on a plain board.
-    pub banks: Option<[u8; 8]>,
+    pub(in crate::genesis) banks: Option<[u8; 8]>,
     /// A serial EEPROM board's chip, which takes the place of the save RAM its header declares.
-    pub eeprom: Option<Eeprom>,
+    pub(crate) eeprom: Option<Eeprom>,
     /// A J-Cart board: two pad ports on the cartridge, known by the header (`JCARTS`).
-    pub jcart: bool,
+    pub(crate) jcart: bool,
     /// Sonic & Knuckles' lock-on: the cartridge on top, seen at `$200000`, and the 256 KiB patch ROM that `$A130F1`'s
     /// bit 0 maps over `$300000`-`$3FFFFF` (plutiedev's "Sonic & Knuckles Lock-on").
-    pub lockon: Option<Box<Cart>>,
-    pub patch: Vec<u8>,
+    pub(in crate::genesis) lockon: Option<Box<Cart>>,
+    pub(in crate::genesis) patch: Vec<u8>,
     /// Sonic & Knuckles' board, whose upper 2 MiB is the slot on top: nothing there with no cartridge in it.
     slot_on_top: bool,
     /// The battery's bytes have changed since its file was last made.
     dirty: bool,
     /// ROM patches as a Game Genie makes them on the cartridge port, (address, value, compare or `NO_COMPARE`): every
     /// read of the cartridge at the address answers the value, the save RAM's included; the host's, not in the state.
-    pub patches: Vec<(u32, u8, u32)>,
+    pub(crate) patches: Vec<(u32, u8, u32)>,
 }
 
 /// The J-Cart boards, by the serial and, where the serial is shared, the checksum their headers carry: Micro Machines 2,
 /// Micro Machines 96, Micro Machines Military, Pete Sampras Tennis 96 and Super Skidmarks (Nephrite_Native.md §48.1).
-pub const JCARTS: [(&str, Option<u16>); 5] = [("T-120096", None), ("00000000", Some(0x2C41)), ("00000000", Some(0x168B)), ("T-123456", Some(0xAABC)), ("XXXXXXXX", Some(0x71AB))];
+pub(in crate::genesis) const JCARTS: [(&str, Option<u16>); 5] = [("T-120096", None), ("00000000", Some(0x2C41)), ("00000000", Some(0x168B)), ("T-123456", Some(0xAABC)), ("XXXXXXXX", Some(0x71AB))];
 
 /// Whether a header's serial and checksum name a J-Cart board.
-pub fn is_jcart(serial: &str, checksum: u16) -> bool {
+pub(in crate::genesis) fn is_jcart(serial: &str, checksum: u16) -> bool {
     let s = serial.get(2..).unwrap_or("").trim_start_matches([' ', '_']);
     JCARTS.iter().any(|&(known, sum)| s.starts_with(known) && sum.is_none_or(|c| c == checksum))
 }
 
 /// Sonic & Knuckles' serial, whose cartridge takes another on top.
-pub const LOCK_ON_SERIAL: &str = "GM MK-1563";
+pub(crate) const LOCK_ON_SERIAL: &str = "GM MK-1563";
 
 impl Cart {
     /// The board an image's header describes: the mapper for "SEGA SSF" or an image above 4 MiB, a serial EEPROM for
     /// a serial the documents know.
-    pub fn new(rom: Vec<u8>, save: Option<SaveRam>, system_type: &str, serial: &str) -> Cart {
+    pub(crate) fn new(rom: Vec<u8>, save: Option<SaveRam>, system_type: &str, serial: &str) -> Cart {
         let mask = rom.len().max(2).next_power_of_two() - 1;
         let checksum = rom.get(0x18E..0x190).map_or(0, |c| u16::from_be_bytes([c[0], c[1]]));
         let eeprom = eeprom::board(serial, checksum).map(Eeprom::new);
@@ -64,8 +64,8 @@ impl Cart {
 
     /// A cartridge locked on top of this one, with Sonic & Knuckles' patch ROM when given. The cartridge on top keeps
     /// its own save RAM, switched by the register Sonic & Knuckles passes on.
-    pub fn lock_on(&mut self, top: Vec<u8>, patch: Vec<u8>) {
-        let h = crate::media::Header::read(&top, 0x100).unwrap_or_default();
+    pub(crate) fn lock_on(&mut self, top: Vec<u8>, patch: Vec<u8>) {
+        let h = crate::genesis::header::Header::read(&top, 0x100).unwrap_or_default();
         let mut c = Cart::new(top, h.save, &h.system_type, &h.serial);
         c.sram_always = false;
         self.lockon = Some(Box::new(c));
@@ -73,12 +73,12 @@ impl Cart {
     }
 
     /// Whether the cartridge answers at `a`: not in Sonic & Knuckles' empty slot on top, which reads the open bus.
-    pub fn answers(&self, a: u32) -> bool {
+    pub(in crate::genesis) fn answers(&self, a: u32) -> bool {
         !(self.slot_on_top && self.lockon.is_none() && a >= 0x20_0000)
     }
 
     /// Whether a battery keeps anything: an EEPROM, battery-backed save RAM, or the cartridge on top's.
-    pub fn has_battery(&self) -> bool {
+    pub(crate) fn has_battery(&self) -> bool {
         if let Some(l) = &self.lockon {
             return l.has_battery();
         }
@@ -86,14 +86,14 @@ impl Cart {
     }
 
     /// The bytes the battery keeps: the cartridge on top's, the EEPROM's, or the save RAM's.
-    pub fn battery(&self) -> &[u8] {
+    pub(crate) fn battery(&self) -> &[u8] {
         if let Some(l) = &self.lockon {
             return l.battery();
         }
         self.eeprom.as_ref().map_or(&self.sram, |e| &e.memory)
     }
 
-    pub fn battery_mut(&mut self) -> &mut [u8] {
+    pub(crate) fn battery_mut(&mut self) -> &mut [u8] {
         if let Some(l) = self.lockon.as_mut() {
             return l.battery_mut();
         }
@@ -118,7 +118,7 @@ impl Cart {
     /// The battery from a battery file: Genesis Plus GX's form, the RAM's range by address from its even start in 64 KiB
     /// or more, or the RAM's bytes in order, as BlastEm and Nephrite before 2026-10-06 wrote it; an EEPROM's bytes in order.
     /// A file longer than the RAM is the first, clipped to the RAM.
-    pub fn load_battery(&mut self, file: &[u8]) {
+    pub(crate) fn load_battery(&mut self, file: &[u8]) {
         if let Some(l) = self.lockon.as_mut() {
             return l.load_battery(file);
         }
@@ -139,7 +139,7 @@ impl Cart {
 
     /// The battery file of a save RAM, in Genesis Plus GX's form: 64 KiB, or its range if that is longer, each byte at its
     /// offset from the RAM's even start and `$FF` where the RAM has none; false, and `out` left, for an EEPROM or none.
-    pub fn battery_file(&self, out: &mut Vec<u8>) -> bool {
+    pub(crate) fn battery_file(&self, out: &mut Vec<u8>) -> bool {
         if let Some(l) = &self.lockon {
             return l.battery_file(out);
         }
@@ -154,7 +154,7 @@ impl Cart {
     }
 
     /// Whether the battery's bytes have changed since this was last asked.
-    pub fn take_dirty(&mut self) -> bool {
+    pub(crate) fn take_dirty(&mut self) -> bool {
         match self.lockon.as_mut() {
             Some(l) => l.take_dirty(),
             None => std::mem::take(&mut self.dirty),
@@ -185,7 +185,7 @@ impl Cart {
 
     /// A byte as the cartridge port gives it: the board's, or a patch's where one stands at the address and its compare,
     /// if any, is the board's byte.
-    pub fn read8(&self, a: u32) -> u8 {
+    pub(crate) fn read8(&self, a: u32) -> u8 {
         let v = self.board8(a);
         if self.patches.is_empty() {
             return v;
@@ -211,11 +211,11 @@ impl Cart {
     }
 
     /// A word: a save RAM on one lane answers its byte and leaves the other lane's ROM byte.
-    pub fn read16(&self, a: u32) -> u16 {
+    pub(crate) fn read16(&self, a: u32) -> u16 {
         (self.read8(a & !1) as u16) << 8 | self.read8(a | 1) as u16
     }
 
-    pub fn write8(&mut self, a: u32, v: u8) {
+    pub(crate) fn write8(&mut self, a: u32, v: u8) {
         if let Some(l) = self.lockon.as_mut().filter(|_| a >= 0x20_0000) {
             return l.write8(a, v);
         }
@@ -232,7 +232,7 @@ impl Cart {
     }
 
     /// A word: an EEPROM whose lines it reaches sees both bytes in the one bus cycle.
-    pub fn write16(&mut self, a: u32, v: u16) {
+    pub(in crate::genesis) fn write16(&mut self, a: u32, v: u16) {
         if let Some(l) = self.lockon.as_mut().filter(|_| a >= 0x20_0000) {
             return l.write16(a, v);
         }
@@ -246,7 +246,7 @@ impl Cart {
     }
 
     /// `$A130F1`-`$A130FF`, odd bytes: the save RAM's register, then the mapper's pages.
-    pub fn register(&mut self, a: u32, v: u8) {
+    pub(in crate::genesis) fn register(&mut self, a: u32, v: u8) {
         if let Some(l) = self.lockon.as_mut() {
             l.register(a, v);
         }

@@ -6,15 +6,15 @@
 
 /// A line: the cartridge address it is on and its bit there.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Line {
-    pub address: u32,
-    pub bit: u8,
+pub(in crate::genesis) struct Line {
+    pub(in crate::genesis) address: u32,
+    pub(in crate::genesis) bit: u8,
 }
 
 /// How the address follows the start: seven bits in the command byte (an X24C01), a word address after it with the
 /// command's three device bits as the upper bits (24C01-24C16), or two address bytes after it (24C32 and up).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Mode {
+pub(in crate::genesis) enum Mode {
     One,
     Two,
     Three,
@@ -23,19 +23,19 @@ pub enum Mode {
 /// A board: the serial its header carries (and its checksum where boards share a serial), the lines the console
 /// writes SDA and SCL on and reads SDA from, the mode, and the chip's size and page less one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Board {
-    pub serial: &'static str,
-    pub checksum: Option<u16>,
-    pub sda_in: Line,
-    pub sda_out: Line,
-    pub scl: Line,
-    pub mode: Mode,
-    pub size_mask: u16,
-    pub page_mask: u16,
+pub(crate) struct Board {
+    pub(in crate::genesis) serial: &'static str,
+    pub(in crate::genesis) checksum: Option<u16>,
+    pub(in crate::genesis) sda_in: Line,
+    pub(in crate::genesis) sda_out: Line,
+    pub(in crate::genesis) scl: Line,
+    pub(in crate::genesis) mode: Mode,
+    pub(in crate::genesis) size_mask: u16,
+    pub(in crate::genesis) page_mask: u16,
 }
 
 impl Board {
-    pub fn bytes(&self) -> usize {
+    pub(in crate::genesis) fn bytes(&self) -> usize {
         self.size_mask as usize + 1
     }
 }
@@ -63,7 +63,7 @@ const fn ea(serial: &'static str) -> Board {
 /// The boards of Eke's document whose games are in the corpus, by the serials their images carry (the document names
 /// the games). Brian Lara Cricket 96's page, which the document leaves open, is the 24C65 datasheet's: a write's six
 /// low address bits count, through its cache of 64 bytes.
-pub const BOARDS: [Board; 21] = [
+pub(in crate::genesis) const BOARDS: [Board; 21] = [
     sega("G-4060"),
     sega("T-12046"),
     sega("T-12053"),
@@ -88,7 +88,7 @@ pub const BOARDS: [Board; 21] = [
 ];
 
 /// The board a header's serial (`GM T-12046 -00`, `MK 00001211-00`) and checksum name, if the document knows it.
-pub fn board(serial: &str, checksum: u16) -> Option<Board> {
+pub(in crate::genesis) fn board(serial: &str, checksum: u16) -> Option<Board> {
     let s = serial.get(2..).unwrap_or("").trim_start_matches([' ', '_']);
     BOARDS.iter().copied().find(|b| s.starts_with(b.serial) && b.checksum.is_none_or(|c| c == checksum))
 }
@@ -102,9 +102,9 @@ enum State {
     Send,
 }
 
-pub struct Eeprom {
-    pub board: Board,
-    pub memory: Vec<u8>,
+pub(crate) struct Eeprom {
+    pub(crate) board: Board,
+    pub(crate) memory: Vec<u8>,
     state: State,
     /// The lines as the console drives them, and SDA as the EEPROM drives it (pulled up when released).
     scl: bool,
@@ -123,7 +123,7 @@ pub struct Eeprom {
 }
 
 impl Eeprom {
-    pub fn new(board: Board) -> Eeprom {
+    pub(crate) fn new(board: Board) -> Eeprom {
         Eeprom {
             board,
             memory: vec![0xFF; board.bytes()],
@@ -143,7 +143,7 @@ impl Eeprom {
 
     /// Where a transfer stands, for the state: the step, the lines, the byte being shifted, its bits, the bytes taken,
     /// the address, the command's upper bits and the read and acknowledge flags (Nephrite_Native.md §39).
-    pub fn protocol(&self) -> [u16; 11] {
+    pub(crate) fn protocol(&self) -> [u16; 11] {
         let state = match self.state {
             State::Idle => 0,
             State::Receive => 1,
@@ -153,9 +153,9 @@ impl Eeprom {
     }
 
     /// A board at rest, its lines released: where a power-on leaves it.
-    pub const IDLE: [u16; 11] = [0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0];
+    pub(crate) const IDLE: [u16; 11] = [0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0];
 
-    pub fn set_protocol(&mut self, p: [u16; 11]) {
+    pub(in crate::genesis) fn set_protocol(&mut self, p: [u16; 11]) {
         self.state = match p[0] {
             1 => State::Receive,
             2 => State::Send,
@@ -167,23 +167,23 @@ impl Eeprom {
     }
 
     /// SDA as the console reads it: the wire, low if either side pulls it low.
-    pub fn sda(&self) -> bool {
+    pub(in crate::genesis) fn sda(&self) -> bool {
         self.sda_in && self.sda_out
     }
 
     /// Whether a write to `a` reaches a line.
-    pub fn takes(&self, a: u32) -> bool {
+    pub(in crate::genesis) fn takes(&self, a: u32) -> bool {
         a == self.board.sda_in.address || a == self.board.scl.address
     }
 
     /// The byte a read of `a` returns, if SDA is read there: SDA on its bit, the others low.
-    pub fn read(&self, a: u32) -> Option<u8> {
+    pub(in crate::genesis) fn read(&self, a: u32) -> Option<u8> {
         (a == self.board.sda_out.address).then(|| (self.sda() as u8) << self.board.sda_out.bit)
     }
 
     /// The console's writes of one bus cycle: both lines change together, so a word write that sets SCL and SDA on
     /// two bytes is one change of the lines.
-    pub fn write(&mut self, writes: &[(u32, u8)]) {
+    pub(crate) fn write(&mut self, writes: &[(u32, u8)]) {
         let (mut sda, mut scl) = (self.sda_in, self.scl);
         for &(a, v) in writes {
             if a == self.board.sda_in.address {

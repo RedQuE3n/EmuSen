@@ -35,26 +35,27 @@ fn increment(rate: u8, cycle: usize) -> u16 {
 }
 
 // The log-sine and exponent ROMs (`fm_tables.rs`, whose sources Nephrite_OperatorTables.md gives).
-use crate::fm_tables::{EXP, LOGSIN};
+use crate::genesis::fm_tables::{EXP, LOGSIN};
 
-pub struct Tables {
-    pub logsin: [u16; 256],
-    pub exp: [u16; 256],
+pub(in crate::genesis) struct Tables {
+    pub(in crate::genesis) logsin: [u16; 256],
+    pub(in crate::genesis) exp: [u16; 256],
 }
 
 impl Tables {
-    pub fn new() -> Tables {
+    pub(in crate::genesis) fn new() -> Tables {
         Tables { logsin: LOGSIN, exp: EXP }
     }
 
     /// One operator's output: the phase with its modulation added, attenuated by `att` (ten bits, 4.6 fixed point),
     /// as a 14-bit signed value.
-    pub fn output(&self, phase: u16, att: u16) -> i16 {
+    #[cfg(test)]
+    pub(in crate::genesis) fn output(&self, phase: u16, att: u16) -> i16 {
         self.output_test(phase, att, false)
     }
 
     /// The same with the test register's bit 4, which inverts the top of the output's fourteen bits.
-    pub fn output_test(&self, phase: u16, att: u16, ugly: bool) -> i16 {
+    pub(in crate::genesis) fn output_test(&self, phase: u16, att: u16, ugly: bool) -> i16 {
         let p = phase & 0x3FF;
         let i = if p & 0x100 != 0 { 0xFF - (p & 0xFF) } else { p & 0xFF } as usize;
         let level = self.logsin[i] as u32 + ((att as u32) << 2);
@@ -78,7 +79,7 @@ impl Default for Tables {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum Eg {
+pub(in crate::genesis) enum Eg {
     Attack,
     Decay,
     Sustain,
@@ -87,19 +88,19 @@ pub enum Eg {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Op {
+pub(in crate::genesis) struct Op {
     /// The 20-bit phase counter.
-    pub phase: u32,
+    pub(in crate::genesis) phase: u32,
     /// The 10-bit attenuation, its phase, and the key's state the last sample saw.
-    pub att: u16,
-    pub eg: Eg,
-    pub key: bool,
+    pub(in crate::genesis) att: u16,
+    pub(in crate::genesis) eg: Eg,
+    pub(in crate::genesis) key: bool,
     /// The last output, 14 bits signed.
-    pub out: i16,
+    pub(in crate::genesis) out: i16,
     /// SSG-EG: the output's inversion as the alternate bit has left it, and the envelope's output at the last
     /// sample, inverted where SSG-EG inverts it, before TL and the tremolo.
-    pub flip: bool,
-    pub shown: u16,
+    pub(in crate::genesis) flip: bool,
+    pub(in crate::genesis) shown: u16,
 }
 
 impl Default for Op {
@@ -109,15 +110,15 @@ impl Default for Op {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub struct Channel {
+pub(in crate::genesis) struct Channel {
     /// Operators S1-S4, numbered as algorithm 0 chains them.
-    pub ops: [Op; 4],
+    pub(in crate::genesis) ops: [Op; 4],
     /// Operator 1's output of the last sample and of the one before: its feedback, and what operator 3 takes of it.
-    pub old1: i16,
-    pub out1: i16,
+    pub(in crate::genesis) old1: i16,
+    pub(in crate::genesis) out1: i16,
     /// The keys `$28` last wrote, S1-S4, and S1's as it has it, a sample after the others.
-    pub keys: [bool; 4],
-    pub key1: bool,
+    pub(in crate::genesis) keys: [bool; 4],
+    pub(in crate::genesis) key1: bool,
 }
 
 /// Each operator's register offset within its channel's: S1 at +0, S2 at +8, S3 at +4, S4 at +12.
@@ -127,18 +128,18 @@ const SLOT: [usize; 4] = [0, 8, 4, 12];
 /// (a cycle every third), and the frequency registers' high-byte latches (one each for `$A4`-`$A6` and `$AC`-`$AE`,
 /// in each part).
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
-pub struct Fm {
-    pub ch: [Channel; 6],
-    pub eg_counter: u32,
-    pub eg_div: u8,
-    pub latch: [[u8; 2]; 2],
+pub(in crate::genesis) struct Fm {
+    pub(in crate::genesis) ch: [Channel; 6],
+    pub(in crate::genesis) eg_counter: u32,
+    pub(in crate::genesis) eg_div: u8,
+    pub(in crate::genesis) latch: [[u8; 2]; 2],
     /// The LFO: its 7-bit count, the count it had before this sample's step, and its divider, which runs on while
     /// the LFO is off (Nephrite_Native.md §23).
-    pub lfo_count: u8,
-    pub lfo_prev: u8,
-    pub lfo_div: u8,
+    pub(in crate::genesis) lfo_count: u8,
+    pub(in crate::genesis) lfo_prev: u8,
+    pub(in crate::genesis) lfo_div: u8,
     /// CSM's key: timer A's overflow or load sets it, and channel 3's operators are keyed for the sample then due.
-    pub csm: bool,
+    pub(in crate::genesis) csm: bool,
 }
 
 /// Samples per LFO count at each rate of `$22`, 128 counts a cycle (Nephrite_LfoTables.md §4).
@@ -154,11 +155,11 @@ fn tremolo(count: u8) -> u32 {
 const AMS_SHIFT: [u32; 4] = [0, 3, 1, 0];
 
 /// What a register file read gives the FM unit: both parts' registers.
-pub type Regs = [[u8; 256]; 2];
+pub(in crate::genesis) type Regs = [[u8; 256]; 2];
 
 impl Fm {
     /// `$28`: the keys of the operators of one channel; channel codes 3 and 7 name none.
-    pub fn key(&mut self, v: u8) {
+    pub(in crate::genesis) fn key(&mut self, v: u8) {
         let c = (v & 7) as usize;
         if c & 3 == 3 {
             return;
@@ -170,7 +171,7 @@ impl Fm {
     }
 
     /// A frequency write: the high bytes wait in their part's latch until the low byte's write carries them in.
-    pub fn frequency(&mut self, regs: &mut Regs, part: usize, a: usize, v: u8) {
+    pub(in crate::genesis) fn frequency(&mut self, regs: &mut Regs, part: usize, a: usize, v: u8) {
         match a {
             0xA4..=0xA6 => self.latch[part][0] = v,
             0xAC..=0xAE => self.latch[part][1] = v,
@@ -209,7 +210,7 @@ impl Fm {
     /// One sample: the keys, the operators at the attenuation they have, each channel's nine-bit output (the top
     /// nine of its carriers' fourteen bits summed and saturated), the phases' advance, and last, every third sample,
     /// the envelope's cycle, whose step shows from the next sample (Nephrite_Disputes.md D-17).
-    pub fn sample(&mut self, regs: &Regs, t: &Tables) -> [i32; 6] {
+    pub(in crate::genesis) fn sample(&mut self, regs: &Regs, t: &Tables) -> [i32; 6] {
         let r22 = regs[0][0x22];
         let test = regs[0][0x21];
         // Every operator takes the LFO's count as it stood before this sample's step. The test register's bit 1
@@ -244,7 +245,7 @@ impl Fm {
             for o in 0..4 {
                 let (fnum, block) = Self::fnum_block(regs, c, o);
                 // The vibrato moves the frequency the phase counts by; the key code keeps the register's.
-                let half = crate::lfo_tables::pm_fnum(fnum, pms, pm_count >> 2);
+                let half = crate::genesis::lfo_tables::pm_fnum(fnum, pms, pm_count >> 2);
                 kcs[o] = Self::key_code(fnum, block);
                 let base = SLOT[o] + i;
                 incs[o] = Self::increment_half(half, block, r[0x30 + base], kcs[o]);
@@ -377,12 +378,13 @@ impl Fm {
 
     /// The phase increment: the frequency number shifted by the block into 17 bits, the detune added there, then the
     /// multiple applied (a half for 0) into 20 bits (Nemesis's account of the phase generator, topic 386).
-    pub fn increment(fnum: u16, block: u8, dt_mul: u8, kc: u8) -> u32 {
+    #[cfg(test)]
+    pub(in crate::genesis) fn increment(fnum: u16, block: u8, dt_mul: u8, kc: u8) -> u32 {
         Self::increment_half(fnum << 1, block, dt_mul, kc)
     }
 
     /// The same from a frequency number in half steps, twelve bits, as the vibrato leaves it (Nephrite_LfoTables.md).
-    pub fn increment_half(half: u16, block: u8, dt_mul: u8, kc: u8) -> u32 {
+    pub(in crate::genesis) fn increment_half(half: u16, block: u8, dt_mul: u8, kc: u8) -> u32 {
         let shifted = ((half as u32) << block) >> 2;
         let dt = dt_mul >> 4 & 7;
         let step = DETUNE[kc as usize][(dt & 3) as usize] as u32;
@@ -443,7 +445,7 @@ impl Fm {
 
     /// Whether operator `o` of channel `c`, as it stands after an envelope cycle at `counter`, took an increment in
     /// it: what the test read's high byte shows in its bit 6 (Nephrite_Disputes.md D-23).
-    pub fn eg_stepped(&self, regs: &Regs, c: usize, o: usize, counter: u32) -> bool {
+    pub(in crate::genesis) fn eg_stepped(&self, regs: &Regs, c: usize, o: usize, counter: u32) -> bool {
         let (fnum, block) = Self::fnum_block(regs, c, o);
         let op = &self.ch[c].ops[o];
         Self::eg_increment(Self::eg_rate(op, &regs[c / 3], SLOT[o] + c % 3, Self::key_code(fnum, block)), counter) != 0
@@ -478,7 +480,7 @@ impl Fm {
         }
     }
 
-    pub fn write_state(&self, w: &mut StateWriter) {
+    pub(in crate::genesis) fn write_state(&self, w: &mut StateWriter) {
         let mut ops = Vec::new();
         let mut keys = Vec::new();
         for c in &self.ch {
@@ -500,7 +502,7 @@ impl Fm {
         w.u16s("FmShown", &self.ch.iter().flat_map(|c| c.ops.iter().map(|o| o.shown)).collect::<Vec<_>>());
     }
 
-    pub fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
+    pub(in crate::genesis) fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
         let mut ops = [0u64; 6 * 22];
         r.u64s(&mut ops)?;
         let mut keys = [false; 24];

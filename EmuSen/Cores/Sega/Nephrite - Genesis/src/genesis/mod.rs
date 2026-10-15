@@ -2,65 +2,109 @@
 //! bus and its window onto the 68000's, BUSREQ and RESET, TMSS, and the interrupts. Charles MacDonald's "Sega Genesis
 //! hardware notes" §1-§2 is the map; Nephrite_Plan.md §5.1 and §5.3 the scheduling; Nephrite_Native.md §9 the record.
 
+pub(crate) mod cart;
+pub(crate) mod debugger;
+pub(crate) mod eeprom;
+pub mod fifo_records;
+pub(in crate::genesis) mod fm;
+pub(in crate::genesis) mod fm_tables;
+pub(crate) mod header;
+pub(crate) mod io;
+#[allow(dead_code)]
+mod lfo_tables;
+pub(crate) mod render;
+pub mod sound;
+pub(in crate::genesis) mod vdp;
+pub mod ym2612;
+#[cfg(test)]
+mod board_bus;
+#[cfg(test)]
+mod board_chip;
+#[cfg(test)]
+mod board_fm;
+#[cfg(test)]
+mod board_reads;
+#[cfg(test)]
+mod board_rows;
+#[cfg(test)]
+pub(crate) mod pictures;
+#[cfg(test)]
+pub(crate) mod programs;
+#[cfg(test)]
+mod sounds;
+#[cfg(test)]
+mod voices;
+
 use beryl_m68k::{Access, Bus as MainBusTrait, M68000, Observer, Size, Step, Unobserved};
 use beryl_z80::{Bus as Z80BusTrait, Z80};
 use emusen_native::{StateReader, StateWriter, Truncated};
 
-use crate::cart::Cart;
-use crate::io::Io;
-use crate::sound::Sound;
-use crate::vdp::{LINE, Vdp};
+use crate::genesis::cart::Cart;
+use crate::interface::{Answer, Attachment, Bare};
+use crate::genesis::io::Io;
+use crate::genesis::sound::Sound;
+use crate::genesis::vdp::{LINE, Vdp};
+
+/// The Genesis's memories by their space ids, from its range (Nephrite_Plan.md §4.3); 0 and 1 are its buses
+/// (`debugger.rs`).
+pub const WRAM_ID: u32 = 2;
+pub const Z80RAM_ID: u32 = 3;
+pub const VRAM_ID: u32 = 4;
+pub const CRAM_ID: u32 = 5;
+pub const VSRAM_ID: u32 = 6;
+pub const SRAM_ID: u32 = 7;
+pub const ROM_ID: u32 = 8;
 
 /// Master clocks a 68000 clock, and a Z80 T-state.
-pub const M68K: u64 = 7;
+pub(in crate::genesis) const M68K: u64 = 7;
 /// Where the VDP stands when the 68000 starts, as the board's does: the line, and master clocks into it. The 68000's
 /// cycles start `START` master clocks after that line's, and everything placed against the 68000 counts from there
 /// (Nephrite_Disputes.md D-26).
-pub const START_LINE: u32 = 159;
-pub const START: u64 = 745;
+pub(in crate::genesis) const START_LINE: u32 = 159;
+pub(crate) const START: u64 = 745;
 /// The bus's refresh, every 128 of the 68000's clocks from power-on, placed where the board has it against the 68000's
 /// start, the request before that start pending at its first access: the first access at or after one waits two clocks
 /// if it is to the cartridge's area, and passes it without a wait if it is anywhere else (Nephrite_Disputes.md D-2).
-pub const REFRESH: u64 = 128 * M68K;
-pub const REFRESH_FIRST: u64 = START + 889 - REFRESH;
-pub const REFRESH_WAIT: u64 = 2 * M68K;
+pub(in crate::genesis) const REFRESH: u64 = 128 * M68K;
+pub(in crate::genesis) const REFRESH_FIRST: u64 = START + 889 - REFRESH;
+pub(in crate::genesis) const REFRESH_WAIT: u64 = 2 * M68K;
 /// A cycle to the Z80's area that starts one to six of the 68000's clocks after a refresh's request waits a clock
 /// more, after its strobe on the Z80's bus (Nephrite_Disputes.md D-2).
-pub const REFRESH_Z80_LATE: std::ops::RangeInclusive<u64> = M68K..=6 * M68K;
+pub(in crate::genesis) const REFRESH_Z80_LATE: std::ops::RangeInclusive<u64> = M68K..=6 * M68K;
 /// The main RAM's refresh (D-2): first requested at `RAM_REFRESH_FIRST`, then `RAM_REFRESH_AFTER` after each one
 /// is done. A RAM access within `RAM_REFRESH_WINDOW` of a request waits three clocks while it is done; with none, it
 /// is done at the window's end without a wait.
-pub const RAM_REFRESH_FIRST: u64 = START + 1428;
-pub const RAM_REFRESH_AFTER: u64 = 806;
-pub const RAM_REFRESH_WINDOW: u64 = 133;
-pub const RAM_REFRESH_WAIT: u64 = 3 * M68K;
+pub(in crate::genesis) const RAM_REFRESH_FIRST: u64 = START + 1428;
+pub(in crate::genesis) const RAM_REFRESH_AFTER: u64 = 806;
+pub(in crate::genesis) const RAM_REFRESH_WINDOW: u64 = 133;
+pub(in crate::genesis) const RAM_REFRESH_WAIT: u64 = 3 * M68K;
 /// An access to the Z80's area, `$A00000`-`$A0FFFF`, takes the 68000 a clock more than four, and its strobe on the
 /// Z80's bus ends four clocks before the 68000's cycle does; the reset line moves as early in a write to `$A11200`
 /// (Nephrite_Disputes.md D-14, D-19).
-pub const Z80_AREA_WAIT: u64 = M68K;
+pub(in crate::genesis) const Z80_AREA_WAIT: u64 = M68K;
 /// A write held for a full FIFO: its DTACK falls 4 master clocks after the slot that frees an entry, and the 68000's
 /// cycle ends on the first of its own clocks at least 24 after that slot (Nephrite_Disputes.md D-26).
-pub const FIFO_RELEASE: u64 = 24;
+pub(in crate::genesis) const FIFO_RELEASE: u64 = 24;
 /// The VDP takes an access to its control port, and gives the status and the HV counter, this many master clocks
 /// before the 68000's cycle ends; the data port at the end (D-26).
-pub const HV_LATE: u64 = 14;
+pub(in crate::genesis) const HV_LATE: u64 = 14;
 /// A bus refresh requested while a write is held is done in the hold, the bus its own for `REFRESH_BUSY` master clocks
 /// from its request: a cartridge access starting before then waits until it ends, two clocks at most (D-26).
-pub const REFRESH_BUSY: u64 = 126;
-pub const Z80_AREA_LEAD: u64 = 4 * M68K;
-pub const Z80_T: u64 = 15;
+pub(in crate::genesis) const REFRESH_BUSY: u64 = 126;
+pub(in crate::genesis) const Z80_AREA_LEAD: u64 = 4 * M68K;
+pub(in crate::genesis) const Z80_T: u64 = 15;
 /// The Z80's INT, raised with the vertical interrupt, held for one line (argued: a pulse the Z80 misses with
 /// interrupts disabled, as MacDonald says).
-pub const Z80_INT: u64 = LINE;
+pub(in crate::genesis) const Z80_INT: u64 = LINE;
 /// A Z80 access through its window onto the 68000's bus: master clocks the Z80 waits (2.75 T) and the 68000 loses
 /// (9.5 clocks, 66.5 rounded down), measured means (Nephrite_Disputes.md D-1).
-pub const WINDOW_Z80_WAIT: u64 = 41;
-pub const WINDOW_68K_STALL: u64 = 66;
+pub(in crate::genesis) const WINDOW_Z80_WAIT: u64 = 41;
+pub(in crate::genesis) const WINDOW_68K_STALL: u64 = 66;
 
 /// Master clocks between a transfer's reads of the 68000's bus, and from its command to its first read (the board's
 /// pins and its transfer sweeps, with VDPFIFOTesting's wait states; Nephrite_Disputes.md D-11).
-pub const DMA_FETCH: u64 = 20;
-pub const DMA_START: u64 = 88;
+pub(in crate::genesis) const DMA_FETCH: u64 = 20;
+pub(in crate::genesis) const DMA_START: u64 = 88;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Event {
@@ -82,38 +126,38 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn tmss(self) -> bool {
+    pub(in crate::genesis) fn tmss(self) -> bool {
         self.version != 0
     }
 }
 
 /// Everything on the buses but the two processors.
 pub struct Hw {
-    pub clock: u64,
-    pub cart: Cart,
-    pub io: Io,
+    pub(crate) clock: u64,
+    pub(crate) cart: Cart,
+    pub(crate) io: Io,
     pub vdp: Vdp,
     pub wram: Vec<u8>,
-    pub zram: Vec<u8>,
+    pub(crate) zram: Vec<u8>,
     /// The Z80's window: bits 23-15 of the 68000 address its $8000-$FFFF reach.
-    pub z80_bank: u16,
+    pub(in crate::genesis) z80_bank: u16,
     /// BUSREQ asked by the 68000, and the Z80 held in reset.
-    pub z80_busreq: bool,
-    pub z80_reset: bool,
+    pub(in crate::genesis) z80_busreq: bool,
+    pub(in crate::genesis) z80_reset: bool,
     /// The master clock the Z80 has reached, and the end of its INT pulse.
-    pub z80_clock: u64,
-    pub z80_int: (u64, u64),
+    pub(in crate::genesis) z80_clock: u64,
+    pub(in crate::genesis) z80_int: (u64, u64),
     /// The line being drawn and where it began.
     pub line: u32,
-    pub line_begun: u64,
+    pub(in crate::genesis) line_begun: u64,
     vint_at: Option<u64>,
-    pub frame_done: bool,
-    pub model: Model,
+    pub(in crate::genesis) frame_done: bool,
+    pub(crate) model: Model,
     /// TMSS: the VDP unlocked by "SEGA" at `$A14000`, and the bytes written there.
-    pub tmss_unlocked: bool,
+    pub(in crate::genesis) tmss_unlocked: bool,
     tmss: [u8; 4],
     /// The machine has locked up: a TMSS console's VDP touched before unlocking, as the hardware hangs.
-    pub locked_up: bool,
+    pub(in crate::genesis) locked_up: bool,
     /// Master clocks the 68000 owes the Z80's window, paid at its next access.
     stall: u64,
     /// The master clock the 68000 started at, the origin of its clock's edges.
@@ -124,39 +168,38 @@ pub struct Hw {
     area_late: u64,
     /// The master clocks of the next refresh of the bus and of the main RAM, each paid by the 68000's next access
     /// it applies to (Nephrite_Disputes.md D-2).
-    pub refresh_at: u64,
-    pub ram_refresh_at: u64,
+    pub(in crate::genesis) refresh_at: u64,
+    pub(in crate::genesis) ram_refresh_at: u64,
     /// The last word the 68000 read in program space: the next instruction, which an unmapped read returns.
-    pub prefetch: u16,
+    pub(in crate::genesis) prefetch: u16,
     /// Whether this frame's picture is drawn at all (the sprite pass runs either way); the VDP holds the picture.
-    pub draw: bool,
+    pub(crate) draw: bool,
     /// The YM2612 and the PSG, and their mix.
     pub sound: Sound,
-    /// The Sega CD beside it, and whether its boot ROM, PRG-RAM and Word RAM fill `$000000`-`$3FFFFF` (mode 2).
-    pub mcd: Option<Box<crate::mcd::MegaCd>>,
-    pub mcd_low: bool,
-    /// A J-Cart or a Sega CD adds to the map: the one check the cartridge Genesis's accesses pay for them.
-    pub attached: bool,
 }
 
-pub struct Genesis {
-    pub cpu: M68000,
-    pub z80: Z80,
-    pub hw: Hw,
+/// The Genesis with `A` attached, `Bare` for nothing.
+pub(crate) struct Genesis<A = Bare> {
+    pub(crate) cpu: M68000,
+    pub(crate) z80: Z80,
+    pub(crate) hw: Wired<A>,
+}
+
+/// The master clock's rate, a fraction in Hz.
+pub const fn master_hz(pal: bool) -> (u64, u64) {
+    if pal { (53_203_425, 1) } else { (4_725_000_000, 88) }
 }
 
 impl Genesis {
-    pub fn new(cart: Cart, model: Model) -> Genesis {
-        Genesis::with_mcd(cart, model, None, None)
+    #[cfg(test)]
+    pub(in crate::genesis) fn new(cart: Cart, model: Model) -> Genesis {
+        Genesis::with(cart, model, Bare)
     }
+}
 
-    /// The master clock's rate, a fraction in Hz.
-    pub fn master_hz(pal: bool) -> (u64, u64) {
-        if pal { (53_203_425, 1) } else { (4_725_000_000, 88) }
-    }
-
-    /// A Genesis with `bios` as a Sega CD's boot ROM when given, the console in mode 2 (Nephrite_Native.md §50).
-    pub fn with_mcd(cart: Cart, model: Model, bios: Option<Vec<u8>>, disc: Option<crate::mcd::cdd::Disc>) -> Genesis {
+impl<A: Attachment> Genesis<A> {
+    /// A Genesis with `att` attached, at power-on: the 68000's reset reads its vectors through the attachment's map.
+    pub(crate) fn with(cart: Cart, model: Model, att: A) -> Genesis<A> {
         let jcart = cart.jcart;
         let hw = Hw {
             clock: START,
@@ -187,19 +230,16 @@ impl Genesis {
             prefetch: 0,
             draw: true,
             sound: if model.pal { Sound::new(53_203_425, 1, !model.model2) } else { Sound::new(4_725_000_000, 88, !model.model2) },
-            mcd_low: bios.is_some(),
-            attached: jcart || bios.is_some(),
-            mcd: bios.map(|b| Box::new(crate::mcd::MegaCd::new(Genesis::master_hz(model.pal), b, START, disc))),
         };
-        let mut g = Genesis { cpu: M68000::new(), z80: Z80::new(), hw };
+        let mut g = Genesis { cpu: M68000::new(), z80: Z80::new(), hw: Wired { dev: hw, att } };
         g.hw.io.jcart = jcart;
         // The version register's bit 5 reads 0 with an expansion unit, the Sega CD, attached (plutiedev's "Sub CPU in mode 1").
-        if g.hw.mcd.is_some() {
+        if A::EXPANSION {
             g.hw.io.version &= !0x20;
         }
-        // The debugger's numbers: each processor's, and the bus its stores are reported in (crate::debugger).
-        (g.cpu.processor, g.cpu.space) = (0, crate::debugger::M68KBUS_ID);
-        (g.z80.processor, g.z80.space) = (1, crate::debugger::Z80BUS_ID);
+        // The debugger's numbers: each processor's, and the bus its stores are reported in (crate::genesis::debugger).
+        (g.cpu.processor, g.cpu.space) = (0, crate::genesis::debugger::M68KBUS_ID);
+        (g.z80.processor, g.z80.space) = (1, crate::genesis::debugger::Z80BUS_ID);
         // The VDP is part-way through its frame: the line the 68000 starts on, begun at 0, as a line's start makes it.
         g.hw.vdp.line_start(START_LINE);
         (g.hw.vdp.cur_line, g.hw.vdp.cur_line_start) = (START_LINE, 0);
@@ -208,14 +248,15 @@ impl Genesis {
         g.hw.z80_clock = START;
         // The YM2612 is held with the Z80 from power-on, its sample cycle where the board's is (Nephrite_Disputes.md D-19).
         let ym = &mut g.hw.sound.ym;
-        let po = START + crate::ym2612::POWER_ON;
+        let po = START + crate::genesis::ym2612::POWER_ON;
         (ym.held, ym.next, ym.timers_next, ym.held_at) = (true, po, po, po);
         g.cpu.reset(&mut MainBus(&mut g.hw));
         g
     }
 
-    /// One frame: the 68000 instruction by instruction, the VDP's line events and the Z80 caught up after each.
-    pub fn run_frame(&mut self) {
+    /// One frame: the 68000 instruction by instruction, the VDP's line events, the attachment and the Z80 caught up
+    /// after each.
+    pub(crate) fn run_frame(&mut self) {
         self.hw.vdp.draw = self.hw.draw;
         loop {
             self.step_main(&mut Unobserved);
@@ -247,8 +288,8 @@ impl Genesis {
     /// The frame as `run_frame` runs it, each processor asked before its instruction (Nephrite_Native.md §42): the
     /// stop's reasons and the processor stopped on, or zero at the frame's end. `skip` is the processor whose next
     /// instruction runs unasked. A stop leaves the frame where it stood, the Z80 behind the 68000 if it stopped.
-    pub fn run_frame_observed(&mut self, hooks: &mut emusen_native::debug::Hooks, z80_breakpoints: &[(i32, i32)], skip: Option<u32>) -> (u32, u32) {
-        use crate::debugger::{MainWatch, Z80Watch};
+    pub(crate) fn run_frame_observed(&mut self, hooks: &mut emusen_native::debug::Hooks, z80_breakpoints: &[(i32, i32)], skip: Option<u32>) -> (u32, u32) {
+        use crate::genesis::debugger::{MainWatch, Z80Watch};
         self.hw.vdp.draw = self.hw.draw;
         let (mut skip_main, mut skip_z80) = (skip == Some(0), skip == Some(1));
         loop {
@@ -271,6 +312,143 @@ impl Genesis {
 }
 
 impl Hw {
+    /// The first external slot of the present line after `after`.
+    fn next_slot(&self, after: u64) -> Option<u64> {
+        let off = after.saturating_sub(self.line_begun);
+        let slots = self.vdp.slots(self.line);
+        let i = slots.partition_point(|&m| (m as u64) <= off);
+        slots.get(i).map(|&m| self.line_begun + m as u64)
+    }
+
+    /// A 68000 access to the main RAM about to begin: the RAM's refresh, if one has been requested by now.
+    fn ram_refresh(&mut self) {
+        let at = self.clock;
+        while self.ram_refresh_at <= at {
+            let requested = self.ram_refresh_at;
+            if at - requested < RAM_REFRESH_WINDOW {
+                self.clock += RAM_REFRESH_WAIT;
+                self.ram_refresh_at = at + RAM_REFRESH_AFTER;
+            } else {
+                self.ram_refresh_at = requested + RAM_REFRESH_WINDOW + RAM_REFRESH_AFTER;
+            }
+        }
+    }
+
+    /// A device on `port` driving TH, as a light gun does: the external interrupt when the port enables it.
+    pub fn device_th(&mut self, port: usize, th: bool) {
+        if self.io.device_th(port, th) {
+            let (line, dot) = (self.line, self.dot());
+            self.vdp.external(line, dot);
+        }
+    }
+
+    /// Where the control port is read in the 68000's cycle: `HV_LATE` before the cycle ends, in the line before when
+    /// that falls before the line's start (Nephrite_Disputes.md D-26).
+    fn hv_point(&self) -> (u32, u64) {
+        let t = self.clock - HV_LATE;
+        if t >= self.line_begun {
+            (self.line, t.saturating_sub(self.line_begun).min(LINE - 1))
+        } else {
+            let line = if self.line == 0 { self.vdp.lines() - 1 } else { self.line - 1 };
+            (line, LINE - (self.line_begun - t))
+        }
+    }
+
+    fn dot(&self) -> u64 {
+        self.clock.saturating_sub(self.line_begun).min(LINE - 1)
+    }
+
+    /// Whether the 68000 holds the Z80's bus: requested, and the Z80 out of reset.
+    fn has_z80_bus(&self) -> bool {
+        self.z80_busreq && !self.z80_reset
+    }
+
+    /// An unmapped byte: nothing drives the bus, which keeps the word last fetched, the next instruction's, so its
+    /// high byte at an even address and its low byte at an odd one. Measured on the board (Nephrite_Disputes.md D-29);
+    /// MacDonald's notes §1, note 1, have the low byte zero.
+    fn open8(&self, a: u32) -> u8 {
+        if a & 1 == 0 { (self.prefetch >> 8) as u8 } else { self.prefetch as u8 }
+    }
+
+    fn set_z80_reset(&mut self, held: bool) {
+        if self.z80_reset && !held {
+            self.z80_clock = self.clock;
+        }
+        if self.z80_reset != held {
+            self.sound.ym_reset(held, self.clock - Z80_AREA_LEAD);
+        }
+        self.z80_reset = held;
+    }
+
+    fn tmss_write(&mut self, a: u32, v: u8) {
+        if !self.model.tmss() {
+            return;
+        }
+        self.tmss[(a & 3) as usize] = v;
+        self.tmss_unlocked = &self.tmss == b"SEGA";
+    }
+
+    /// A TMSS console's VDP before "SEGA" is written: the hardware locks up, and so does the machine here.
+    fn vdp_locked(&mut self) -> bool {
+        if self.model.tmss() && !self.tmss_unlocked {
+            self.locked_up = true;
+        }
+        self.locked_up
+    }
+
+    /// MacDonald's rule for the VDP's mirrors: bits 21, 22 and 23 set as `110`, and bits 15-17 and 5-7 clear.
+    fn vdp_valid(a: u32) -> bool {
+        a & 0xE7_00E0 == 0xC0_0000
+    }
+
+    fn window_address(&self, a: u16) -> u32 {
+        (self.z80_bank as u32) << 15 | (a as u32 & 0x7FFF)
+    }
+}
+
+/// The Genesis's own devices with the attachment beside them: everything the 68000's and the Z80's buses reach, one
+/// type for each configuration, so that each is compiled apart and reached through one pointer (Nephrite_Attachments.md
+/// §4). It reads as the devices themselves.
+pub(crate) struct Wired<A> {
+    pub(crate) dev: Hw,
+    pub(crate) att: A,
+}
+
+impl<A> std::ops::Deref for Wired<A> {
+    type Target = Hw;
+    #[inline(always)]
+    fn deref(&self) -> &Hw {
+        &self.dev
+    }
+}
+
+impl<A> std::ops::DerefMut for Wired<A> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut Hw {
+        &mut self.dev
+    }
+}
+
+impl<A: Attachment> Wired<A> {
+    /// What the attachment answers at a byte or a word, None where the Genesis's own map does.
+    #[inline(always)]
+    fn asked8(&mut self, a: u32) -> Option<u8> {
+        match self.att.read8(a, self.dev.clock) {
+            Answer::Pass => None,
+            Answer::Open => Some(self.dev.open8(a)),
+            Answer::Value(v) => Some(v),
+        }
+    }
+
+    #[inline(always)]
+    fn asked16(&mut self, a: u32) -> Option<u16> {
+        match self.att.read16(a, self.dev.clock) {
+            Answer::Pass => None,
+            Answer::Open => Some(self.dev.prefetch),
+            Answer::Value(v) => Some(v),
+        }
+    }
+
     /// The VDP's slots, the line starts and the vertical interrupt up to `to`, in the order they fall.
     fn run_vdp(&mut self, to: u64) {
         loop {
@@ -311,7 +489,7 @@ impl Hw {
                 self.vdp.vint_pending = true;
                 self.z80_int = (t, t + Z80_INT);
             } else {
-                self.vdp.line_end(self.line as usize);
+                self.dev.vdp.line_end(self.dev.line as usize);
                 self.line_begun = next_line;
                 self.line += 1;
                 // A frame shortened under its current line (V30 cleared on an NTSC board) ends at once.
@@ -319,7 +497,7 @@ impl Hw {
                     self.line = 0;
                     self.frame_done = true;
                 }
-                self.vdp.line_start(self.line);
+                self.dev.vdp.line_start(self.dev.line);
                 (self.vdp.cur_line, self.vdp.cur_line_start) = (self.line, self.line_begun);
                 let line = self.line as usize;
                 self.vdp.latch_line(line);
@@ -328,14 +506,6 @@ impl Hw {
                 }
             }
         }
-    }
-
-    /// The first external slot of the present line after `after`.
-    fn next_slot(&self, after: u64) -> Option<u64> {
-        let off = after.saturating_sub(self.line_begun);
-        let slots = self.vdp.slots(self.line);
-        let i = slots.partition_point(|&m| (m as u64) <= off);
-        slots.get(i).map(|&m| self.line_begun + m as u64)
     }
 
     /// The 68000 held until `done`: the clock moved slot by slot.
@@ -348,20 +518,6 @@ impl Hw {
         }
     }
 
-    /// A 68000 access to the main RAM about to begin: the RAM's refresh, if one has been requested by now.
-    fn ram_refresh(&mut self) {
-        let at = self.clock;
-        while self.ram_refresh_at <= at {
-            let requested = self.ram_refresh_at;
-            if at - requested < RAM_REFRESH_WINDOW {
-                self.clock += RAM_REFRESH_WAIT;
-                self.ram_refresh_at = at + RAM_REFRESH_AFTER;
-            } else {
-                self.ram_refresh_at = requested + RAM_REFRESH_WINDOW + RAM_REFRESH_AFTER;
-            }
-        }
-    }
-
     /// One step of the 68000's hold during a transfer: the clock to the transfer's next bus read or slot.
     fn dma_hold(&mut self) {
         self.run_vdp(self.clock);
@@ -370,26 +526,17 @@ impl Hw {
         self.clock = self.clock.max(next);
     }
 
-    /// A word a transfer reads from the 68000's bus; the VDP's own addresses give nothing. Word RAM answers the VDP a
-    /// cycle late, so a transfer from it reads the word before the one addressed (the Mega-CD Hardware Manual's
-    /// "precautions in using DMA of the VDP").
+    /// A word a transfer reads from the 68000's bus; the VDP's own addresses give nothing. An attachment may answer a
+    /// transfer apart from the 68000, as the Sega CD's Word RAM does a word late.
     fn dma_read(&mut self, a: u32) -> u16 {
         if (0xC0_0000..=0xDF_FFFF).contains(&(a & 0xFF_FFFF)) {
-            0
-        } else if self.attached {
-            self.attached_dma_read(a)
-        } else {
-            self.read16(a)
+            return 0;
         }
-    }
-
-    #[inline(never)]
-    fn attached_dma_read(&mut self, a: u32) -> u16 {
-        let a = a & 0xFF_FFFF;
-        if self.mcd_low && (0x20_0000..0x24_0000).contains(&a) {
-            self.read16(0x20_0000 | (a.wrapping_sub(2) & 0x3_FFFF))
-        } else {
-            self.read16(a)
+        let a = a & 0xFF_FFFE;
+        match self.att.transfer16(a, self.dev.clock) {
+            Answer::Pass => self.read16(a),
+            Answer::Open => self.dev.prefetch,
+            Answer::Value(v) => v,
         }
     }
 
@@ -398,9 +545,7 @@ impl Hw {
     #[inline(always)]
     fn catch_up<O: Observer>(&mut self, z80: &mut Z80, o: &mut O) -> u32 {
         self.run_vdp(self.clock);
-        if let Some(m) = self.mcd.as_deref_mut() {
-            m.run_to(self.clock);
-        }
+        self.att.run_to(self.dev.clock);
         if self.z80_reset {
             reset_z80(z80);
         }
@@ -408,56 +553,25 @@ impl Hw {
             self.z80_clock = self.z80_clock.max(self.clock);
             return 0;
         }
-        while self.z80_clock < self.clock && !self.z80_busreq {
-            if let beryl_z80::Step::Observed(why) = z80.step_observed(&mut Z80Bus(self), o) {
+        let mut bus = Z80Bus(self);
+        while bus.0.z80_clock < bus.0.clock && !bus.0.z80_busreq {
+            if let beryl_z80::Step::Observed(why) = z80.step_observed(&mut bus, o) {
                 return why;
             }
         }
         0
     }
 
-    /// A device on `port` driving TH, as a light gun does: the external interrupt when the port enables it.
-    pub fn device_th(&mut self, port: usize, th: bool) {
-        if self.io.device_th(port, th) {
-            let (line, dot) = (self.line, self.dot());
-            self.vdp.external(line, dot);
-        }
-    }
-
-    /// Where the control port is read in the 68000's cycle: `HV_LATE` before the cycle ends, in the line before when
-    /// that falls before the line's start (Nephrite_Disputes.md D-26).
-    fn hv_point(&self) -> (u32, u64) {
-        let t = self.clock - HV_LATE;
-        if t >= self.line_begun {
-            (self.line, t.saturating_sub(self.line_begun).min(LINE - 1))
-        } else {
-            let line = if self.line == 0 { self.vdp.lines() - 1 } else { self.line - 1 };
-            (line, LINE - (self.line_begun - t))
-        }
-    }
-
-    fn dot(&self) -> u64 {
-        self.clock.saturating_sub(self.line_begun).min(LINE - 1)
-    }
-
-    /// Whether the 68000 holds the Z80's bus: requested, and the Z80 out of reset.
-    fn has_z80_bus(&self) -> bool {
-        self.z80_busreq && !self.z80_reset
-    }
-
     // ---- the 68000's map
-
-    /// An unmapped byte: nothing drives the bus, which keeps the word last fetched, the next instruction's, so its
-    /// high byte at an even address and its low byte at an odd one. Measured on the board (Nephrite_Disputes.md D-29);
-    /// MacDonald's notes §1, note 1, have the low byte zero.
-    fn open8(&self, a: u32) -> u8 {
-        if a & 1 == 0 { (self.prefetch >> 8) as u8 } else { self.prefetch as u8 }
-    }
 
     fn read8(&mut self, a: u32) -> u8 {
         let a = a & 0xFF_FFFF;
         match a {
-            _ if self.attached && let Some(v) = self.attached_read8(a) => v,
+            _ if let Some(v) = self.asked8(a) => v,
+            0x00_0000..=0x3F_FFFF if self.io.jcart && crate::genesis::io::JCART_ADDRESSES.contains(&(a & !1)) => {
+                let w = self.io.jcart_read(self.clock);
+                if a & 1 == 0 { (w >> 8) as u8 } else { w as u8 }
+            }
             0x00_0000..=0x3F_FFFF if self.cart.answers(a) => self.cart.read8(a),
             0xA0_0000..=0xA0_FFFF => {
                 if self.has_z80_bus() {
@@ -477,7 +591,8 @@ impl Hw {
     fn read16(&mut self, a: u32) -> u16 {
         let a = a & 0xFF_FFFE;
         match a {
-            _ if self.attached && let Some(v) = self.attached_read16(a) => v,
+            _ if let Some(v) = self.asked16(a) => v,
+            0x00_0000..=0x3F_FFFF if self.io.jcart && crate::genesis::io::JCART_ADDRESSES.contains(&a) => self.io.jcart_read(self.clock),
             0x00_0000..=0x3F_FFFF if self.cart.answers(a) => self.cart.read16(a),
             0xA0_0000..=0xA0_FFFF if self.has_z80_bus() => {
                 let b = self.read8(a) as u16;
@@ -497,14 +612,20 @@ impl Hw {
     fn write8(&mut self, a: u32, v: u8) {
         let a = a & 0xFF_FFFF;
         match a {
-            _ if self.attached && self.attached_write(a, (v as u16) << 8 | v as u16, if a & 1 == 0 { 0xFF00 } else { 0x00FF }) => {}
+            _ if self.att.write(a, (v as u16) << 8 | v as u16, if a & 1 == 0 { 0xFF00 } else { 0x00FF }, self.dev.clock) => {}
+            // A byte reaches the J-Cart's TH on the odd address's lane only (argued: the games write words).
+            0x00_0000..=0x3F_FFFF if self.io.jcart && crate::genesis::io::JCART_ADDRESSES.contains(&(a & !1)) => {
+                if a & 1 != 0 {
+                    self.dev.io.jcart_write(v as u16, self.dev.clock);
+                }
+            }
             0x00_0000..=0x3F_FFFF => self.cart.write8(a, v),
             0xA0_0000..=0xA0_FFFF => {
                 if self.has_z80_bus() {
                     self.z80_space_write(a as u16 & 0x7FFF, v, self.clock - Z80_AREA_LEAD - self.area_late);
                 }
             }
-            0xA1_0000..=0xA1_001F => self.io.write(a, v, self.clock),
+            0xA1_0000..=0xA1_001F => self.dev.io.write(a, v, self.dev.clock),
             0xA1_1100 => self.z80_busreq = v & 1 != 0,
             0xA1_1200 => self.set_z80_reset(v & 1 == 0),
             0xA1_30F0..=0xA1_30FF => self.cart.register(a, v),
@@ -518,7 +639,7 @@ impl Hw {
     fn write16(&mut self, a: u32, v: u16) {
         let a = a & 0xFF_FFFE;
         match a {
-            _ if self.attached && self.attached_write(a, v, 0xFFFF) => {}
+            _ if self.att.write(a, v, 0xFFFF, self.dev.clock) => {}
             0xA0_0000..=0xA0_FFFF => self.write8(a, (v >> 8) as u8),
             0xA1_1100 | 0xA1_1200 => self.write8(a, (v >> 8) as u8),
             0xC0_0000..=0xDF_FFFF => self.vdp_write(a, v, self.clock),
@@ -526,6 +647,7 @@ impl Hw {
                 self.wram[a as usize & 0xFFFF] = (v >> 8) as u8;
                 self.wram[(a as usize & 0xFFFF) | 1] = v as u8;
             }
+            0x00_0000..=0x3F_FFFF if self.io.jcart && crate::genesis::io::JCART_ADDRESSES.contains(&a) => self.dev.io.jcart_write(v, self.dev.clock),
             0x00_0000..=0x3F_FFFF => self.cart.write16(a, v),
             _ => {
                 self.write8(a, (v >> 8) as u8);
@@ -534,105 +656,8 @@ impl Hw {
         }
     }
 
-    // ---- what a cartridge or an attachment adds to the map: the J-Cart's port, the Sega CD's areas in mode 2
-
-    /// A byte the J-Cart or the Sega CD answers, or None where the Genesis's own map does.
-    fn attached_read8(&mut self, a: u32) -> Option<u8> {
-        if self.io.jcart && crate::io::JCART_ADDRESSES.contains(&(a & !1)) {
-            let w = self.io.jcart_read(self.clock);
-            return Some(if a & 1 == 0 { (w >> 8) as u8 } else { w as u8 });
-        }
-        ((self.mcd_low && a < 0x80_0000) || (self.mcd.is_some() && (0xA1_2000..=0xA1_203F).contains(&a))).then(|| self.mcd_read8(a))
-    }
-
-    fn attached_read16(&mut self, a: u32) -> Option<u16> {
-        if self.io.jcart && crate::io::JCART_ADDRESSES.contains(&a) {
-            return Some(self.io.jcart_read(self.clock));
-        }
-        ((self.mcd_low && a < 0x80_0000) || (self.mcd.is_some() && (0xA1_2000..=0xA1_203F).contains(&a))).then(|| self.mcd_read16(a))
-    }
-
-    /// A write the J-Cart or the Sega CD takes, `mask` its lanes; false where the Genesis's own map does. A byte reaches
-    /// the J-Cart's TH on the odd address's lane only (argued: the games write words).
-    fn attached_write(&mut self, a: u32, v: u16, mask: u16) -> bool {
-        if self.io.jcart && crate::io::JCART_ADDRESSES.contains(&(a & !1)) {
-            if mask & 0x00FF != 0 {
-                self.io.jcart_write(if mask == 0xFFFF { v } else { v & 0xFF }, self.clock);
-            }
-            return true;
-        }
-        if (self.mcd_low && a < 0x80_0000) || (self.mcd.is_some() && (0xA1_2000..=0xA1_203F).contains(&a)) {
-            self.mcd_write(a, v, mask);
-            return true;
-        }
-        false
-    }
-
-    // ---- the Sega CD's areas in mode 2, and its registers
-
-    /// The cartridge slot at `$400000` in mode 2: a backup RAM cartridge, or empty and reading `$FF` (D-32).
-    fn mcd_read8(&mut self, a: u32) -> u8 {
-        let m = self.mcd.as_deref_mut().expect("a Sega CD");
-        if (0x40_0000..0x80_0000).contains(&a) {
-            return m.hw.cart.as_ref().map_or(0xFF, |c| c.read8(a));
-        }
-        m.main_read8(a, self.clock).unwrap_or_else(|| self.open8(a))
-    }
-
-    fn mcd_read16(&mut self, a: u32) -> u16 {
-        let m = self.mcd.as_deref_mut().expect("a Sega CD");
-        if (0x40_0000..0x80_0000).contains(&a) {
-            return m.hw.cart.as_ref().map_or(0xFFFF, |c| (c.read8(a) as u16) << 8 | c.read8(a | 1) as u16);
-        }
-        m.main_read16(a, self.clock).unwrap_or(self.prefetch)
-    }
-
-    fn mcd_write(&mut self, a: u32, v: u16, mask: u16) {
-        let m = self.mcd.as_deref_mut().expect("a Sega CD");
-        if (0x40_0000..0x80_0000).contains(&a) {
-            if let Some(c) = m.hw.cart.as_mut()
-                && mask & 0x00FF != 0
-            {
-                c.write8(a | 1, v as u8);
-            }
-            return;
-        }
-        m.main_write(a, v, mask, self.clock);
-    }
-
-    fn set_z80_reset(&mut self, held: bool) {
-        if self.z80_reset && !held {
-            self.z80_clock = self.clock;
-        }
-        if self.z80_reset != held {
-            self.sound.ym_reset(held, self.clock - Z80_AREA_LEAD);
-        }
-        self.z80_reset = held;
-    }
-
-    fn tmss_write(&mut self, a: u32, v: u8) {
-        if !self.model.tmss() {
-            return;
-        }
-        self.tmss[(a & 3) as usize] = v;
-        self.tmss_unlocked = &self.tmss == b"SEGA";
-    }
-
-    /// A TMSS console's VDP before "SEGA" is written: the hardware locks up, and so does the machine here.
-    fn vdp_locked(&mut self) -> bool {
-        if self.model.tmss() && !self.tmss_unlocked {
-            self.locked_up = true;
-        }
-        self.locked_up
-    }
-
-    /// MacDonald's rule for the VDP's mirrors: bits 21, 22 and 23 set as `110`, and bits 15-17 and 5-7 clear.
-    fn vdp_valid(a: u32) -> bool {
-        a & 0xE7_00E0 == 0xC0_0000
-    }
-
     fn vdp_read16(&mut self, a: u32) -> u16 {
-        if !Self::vdp_valid(a) || self.vdp_locked() {
+        if !Hw::vdp_valid(a) || self.vdp_locked() {
             return 0;
         }
         self.run_vdp(self.clock);
@@ -656,7 +681,7 @@ impl Hw {
     /// A write to the VDP's ports at master clock `t`, the clock of the processor making it; the PSG at `$10`-`$17`
     /// takes the low byte.
     fn vdp_write(&mut self, a: u32, v: u16, t: u64) {
-        if !Self::vdp_valid(a) || self.vdp_locked() {
+        if !Hw::vdp_valid(a) || self.vdp_locked() {
             return;
         }
         if (0x10..=0x17).contains(&(a & 0x1F)) {
@@ -730,10 +755,6 @@ impl Hw {
             _ => {}
         }
     }
-
-    fn window_address(&self, a: u16) -> u32 {
-        (self.z80_bank as u32) << 15 | (a as u32 & 0x7FFF)
-    }
 }
 
 /// RESET held: the Z80's state as its reset leaves it (PC, I, R, the flip-flops and the mode cleared; AF and SP set).
@@ -745,12 +766,12 @@ fn reset_z80(z80: &mut Z80) {
 }
 
 /// The 68000's bus: four clocks an access, after any stall the Z80's window left it.
-pub struct MainBus<'a>(pub &'a mut Hw);
+pub(in crate::genesis) struct MainBus<'a, A>(pub &'a mut Wired<A>);
 
-impl MainBus<'_> {
+impl<A: Attachment> MainBus<'_, A> {
     /// A bus cycle to `a`: any refresh's wait that has come due, the Z80 area's extra clock, then four clocks.
     fn cycle(&mut self, a: u32) {
-        let hw = &mut *self.0;
+        let hw = &mut self.0.dev;
         let a = a & 0xFF_FFFF;
         // A wait on the VDP ends on one of the 68000's own clocks.
         hw.clock = hw.start + (hw.clock - hw.start).div_ceil(M68K) * M68K;
@@ -775,7 +796,7 @@ impl MainBus<'_> {
     }
 }
 
-impl MainBusTrait for MainBus<'_> {
+impl<A: Attachment> MainBusTrait for MainBus<'_, A> {
     fn read(&mut self, a: Access) -> u16 {
         self.cycle(a.address);
         let v = match a.size {
@@ -813,9 +834,9 @@ impl MainBusTrait for MainBus<'_> {
 }
 
 /// The Z80's bus: its T-states on the master clock, and the window that reaches the 68000's.
-pub struct Z80Bus<'a>(pub &'a mut Hw);
+pub(in crate::genesis) struct Z80Bus<'a, A>(pub &'a mut Wired<A>);
 
-impl Z80Bus<'_> {
+impl<A: Attachment> Z80Bus<'_, A> {
     fn t(&mut self, n: u32) {
         self.0.z80_clock += n as u64 * Z80_T;
     }
@@ -845,7 +866,7 @@ impl Z80Bus<'_> {
     }
 }
 
-impl Z80BusTrait for Z80Bus<'_> {
+impl<A: Attachment> Z80BusTrait for Z80Bus<'_, A> {
     fn fetch(&mut self, address: u16, _refresh: u16) -> u8 {
         self.t(4);
         self.read_any(address)
@@ -882,8 +903,8 @@ impl Z80BusTrait for Z80Bus<'_> {
 }
 
 /// A DMA in four words: its kind, then its source, length and data or byte.
-fn dma_words(d: crate::vdp::Dma) -> [u64; 4] {
-    use crate::vdp::Dma;
+fn dma_words(d: crate::genesis::vdp::Dma) -> [u64; 4] {
+    use crate::genesis::vdp::Dma;
     match d {
         Dma::None => [0, 0, 0, 0],
         Dma::Bus { source, left } => [1, source as u64, left as u64, 0],
@@ -893,8 +914,8 @@ fn dma_words(d: crate::vdp::Dma) -> [u64; 4] {
     }
 }
 
-fn dma_from(d: [u64; 4]) -> crate::vdp::Dma {
-    use crate::vdp::Dma;
+fn dma_from(d: [u64; 4]) -> crate::genesis::vdp::Dma {
+    use crate::genesis::vdp::Dma;
     match d[0] {
         1 => Dma::Bus { source: d[1] as u32 & 0xFF_FFFE, left: d[2] as u32 },
         2 => Dma::FillWait,
@@ -908,7 +929,7 @@ fn dma_from(d: [u64; 4]) -> crate::vdp::Dma {
 /// itself (code, the half-written flag, address and data).
 const LANDING_WORDS: usize = 1 + 2 * 16;
 
-fn landing_words(q: &std::collections::VecDeque<(u64, crate::vdp::Entry)>) -> [u64; LANDING_WORDS] {
+fn landing_words(q: &std::collections::VecDeque<(u64, crate::genesis::vdp::Entry)>) -> [u64; LANDING_WORDS] {
     let mut w = [0u64; LANDING_WORDS];
     w[0] = q.len().min(16) as u64;
     for (i, (ready, e)) in q.iter().take(16).enumerate() {
@@ -918,11 +939,11 @@ fn landing_words(q: &std::collections::VecDeque<(u64, crate::vdp::Entry)>) -> [u
     w
 }
 
-fn landing_from(w: &[u64; LANDING_WORDS]) -> std::collections::VecDeque<(u64, crate::vdp::Entry)> {
+fn landing_from(w: &[u64; LANDING_WORDS]) -> std::collections::VecDeque<(u64, crate::genesis::vdp::Entry)> {
     (0..(w[0] as usize).min(16))
         .map(|i| {
             let p = w[2 + 2 * i];
-            (w[1 + 2 * i], crate::vdp::Entry { code: p as u8, half: p >> 8 & 1 != 0, address: (p >> 16) as u16, data: (p >> 32) as u16 })
+            (w[1 + 2 * i], crate::genesis::vdp::Entry { code: p as u8, half: p >> 8 & 1 != 0, address: (p >> 16) as u16, data: (p >> 32) as u16 })
         })
         .collect()
 }
@@ -931,7 +952,7 @@ fn landing_from(w: &[u64; LANDING_WORDS]) -> std::collections::VecDeque<(u64, cr
 /// pixels and its latched scroll and window values, and the picture's size as the frame's line 0 took it. Its pixels
 /// are not kept, being the picture's and not the machine's (a state must not depend on whether frames were drawn); a
 /// loaded state draws them again from itself.
-pub struct OpenLine {
+pub(in crate::genesis) struct OpenLine {
     open: [u16; 2],
     sprites: Vec<u8>,
     latch: (Vec<u8>, (u16, u16), [u8; 2]),
@@ -940,18 +961,18 @@ pub struct OpenLine {
 }
 
 /// Everything of the Genesis a state holds beyond its memories, read whole before any of it is applied.
-pub struct Saved {
+pub(crate) struct Saved {
     cpu: M68000,
     z80: Z80,
-    vdp: crate::vdp::VdpRegs,
+    vdp: crate::genesis::vdp::VdpRegs,
     sat_cache: Vec<u8>,
     line_scroll: (Vec<u8>, (u16, u16)),
     line_window: [u8; 2],
     open_line: OpenLine,
-    write_path: ([u64; 4], std::collections::VecDeque<(u64, crate::vdp::Entry)>),
+    write_path: ([u64; 4], std::collections::VecDeque<(u64, crate::genesis::vdp::Entry)>),
     sound: Sound,
     sprite_buffer: Vec<u8>,
-    io: crate::io::IoRegs,
+    io: crate::genesis::io::IoRegs,
     sram_reg: u8,
     /// None in a version 16 state, which did not hold it: the board is left idle.
     eeprom: Option<[u16; 11]>,
@@ -975,8 +996,8 @@ pub struct Saved {
     ram_refresh_at: u64,
 }
 
-impl Genesis {
-    pub fn write_state(&self, w: &mut StateWriter) {
+impl<A> Genesis<A> {
+    pub(crate) fn write_state(&self, w: &mut StateWriter) {
         use emusen_native::State;
         w.group("M68000", |w| self.cpu.write_state(w));
         w.group("Z80", |w| self.z80.write_state(w));
@@ -1038,13 +1059,13 @@ impl Genesis {
 
     /// The state of `version`, 16 to 18: 16 lacks `FrameSize` and `EepromTransfer` (Nephrite_Native.md §39.4), and 16
     /// and 17 hold two pads where 18 holds eight and the taps (§44.4).
-    pub fn read_state(&self, r: &mut StateReader, version: i32) -> Result<Saved, Truncated> {
+    pub(crate) fn read_state(&self, r: &mut StateReader, version: i32) -> Result<Saved, Truncated> {
         use emusen_native::State;
         let mut cpu = self.cpu.clone();
         cpu.read_state(r)?;
         let mut z80 = self.z80.clone();
         z80.read_state(r)?;
-        let mut v = crate::vdp::VdpRegs::default();
+        let mut v = crate::genesis::vdp::VdpRegs::default();
         r.bytes(&mut v.regs)?;
         let mut latches = [false; 5];
         r.bools(&mut latches)?;
@@ -1057,7 +1078,7 @@ impl Genesis {
         let mut fifo = [0u16; 12];
         r.u16s(&mut fifo)?;
         for (e, f) in v.fifo.iter_mut().zip(fifo.chunks(3)) {
-            *e = crate::vdp::Entry { code: f[0] as u8, half: f[0] >> 8 != 0, address: f[1], data: f[2] };
+            *e = crate::genesis::vdp::Entry { code: f[0] as u8, half: f[0] >> 8 != 0, address: f[1], data: f[2] };
         }
         let mut p = [0u8; 2];
         r.bytes(&mut p)?;
@@ -1090,7 +1111,7 @@ impl Genesis {
         r.bytes(&mut line_window)?;
         let mut open = [0u16; 2];
         r.u16s(&mut open)?;
-        let mut sprites = vec![0u8; 2 * crate::render::MAX_W];
+        let mut sprites = vec![0u8; 2 * crate::genesis::render::MAX_W];
         r.bytes(&mut sprites)?;
         let mut span_vsram = vec![0u8; 80];
         r.bytes(&mut span_vsram)?;
@@ -1105,14 +1126,14 @@ impl Genesis {
         } else {
             None
         };
-        let mut io = crate::io::IoRegs::default();
+        let mut io = crate::genesis::io::IoRegs::default();
         r.bytes(&mut io.data)?;
         r.bytes(&mut io.ctrl)?;
         r.bytes(&mut io.tx)?;
         r.bytes(&mut io.sctrl)?;
         // Before version 18 a state held the two ports' pads alone (Nephrite_Native.md §44.4): the others are at rest.
-        let held = if version >= 18 { crate::io::PADS } else { 2 };
-        io.th = [true; crate::io::PADS];
+        let held = if version >= 18 { crate::genesis::io::PADS } else { 2 };
+        io.th = [true; crate::genesis::io::PADS];
         r.bools(&mut io.th[..held])?;
         r.bytes(&mut io.falls[..held])?;
         r.u64s(&mut io.last_fall[..held])?;
@@ -1177,7 +1198,7 @@ impl Genesis {
         })
     }
 
-    pub fn apply_state(&mut self, s: Saved) {
+    pub(crate) fn apply_state(&mut self, s: Saved) {
         self.cpu = s.cpu;
         self.z80 = s.z80;
         let h = &mut self.hw;
@@ -1199,7 +1220,7 @@ impl Genesis {
         h.io.set_regs_state(s.io);
         h.cart.sram_reg = s.sram_reg;
         if let Some(e) = h.cart.eeprom.as_mut() {
-            e.set_protocol(s.eeprom.unwrap_or(crate::eeprom::Eeprom::IDLE));
+            e.set_protocol(s.eeprom.unwrap_or(crate::genesis::eeprom::Eeprom::IDLE));
         }
         if h.cart.banks.is_some() {
             h.cart.banks = s.banks;
@@ -1239,15 +1260,36 @@ mod tests {
         assert_eq!(hw.vdp.level(), 0);
     }
 
-    // A transfer from Word RAM reads the word before the one addressed, which a source set a word later corrects (Nephrite_Native.md §57).
+    /// An attachment that answers one word apart to a transfer and to the 68000, as the Sega CD's Word RAM does.
+    struct Apart;
+
+    impl Attachment for Apart {
+        fn read8(&mut self, _: u32, _: u64) -> Answer<u8> {
+            Answer::Pass
+        }
+        fn read16(&mut self, a: u32, _: u64) -> Answer<u16> {
+            if a == 0x20_0002 { Answer::Value(0x0304) } else { Answer::Pass }
+        }
+        fn transfer16(&mut self, a: u32, _: u64) -> Answer<u16> {
+            if a == 0x20_0002 { Answer::Value(0x0102) } else { Answer::Pass }
+        }
+        fn write(&mut self, _: u32, _: u16, _: u16, _: u64) -> bool {
+            false
+        }
+        fn run_to(&mut self, _: u64) {}
+        fn sound(&mut self, _: u64) -> Option<&mut crate::interface::Steps> {
+            None
+        }
+    }
+
+    // The VDP's transfer asks the attachment's transfer, the 68000 its read, and both fall to the Genesis's map where it passes (Nephrite_Native.md §57).
     #[test]
-    fn a_transfer_from_word_ram_reads_a_word_late() {
+    fn a_transfer_asks_the_attachment_apart_from_the_68000() {
         let model = Model { overseas: true, pal: false, version: 0, model2: false };
-        let mut g = Genesis::with_mcd(Cart::new(Vec::new(), None, "SEGA CD", ""), model, Some(vec![0u8; 0x2_0000]), None);
+        let mut g = Genesis::with(Cart::new(vec![0x5Au8; 0x400], None, "SEGA GENESIS", ""), model, Apart);
         let hw = &mut g.hw;
-        hw.mcd.as_deref_mut().unwrap().hw.word.bytes[..4].copy_from_slice(&[1, 2, 3, 4]);
-        assert_eq!((hw.dma_read(0x20_0002), hw.dma_read(0x20_0004)), (0x0102, 0x0304));
-        assert_eq!(hw.read16(0x20_0002), 0x0304, "the CPU reads it in time");
+        assert_eq!((hw.dma_read(0x20_0002), hw.read16(0x20_0002)), (0x0102, 0x0304));
+        assert_eq!((hw.dma_read(0x00_0100), hw.read16(0x00_0100)), (0x5A5A, 0x5A5A), "the cartridge's, through the Genesis's map");
     }
 
     // The J-Cart's word at both its addresses, as Micro Machines 2 and Genesis Plus GX read it with players 3 and 4 holding Up and Right (Nephrite_Native.md §48.2).
@@ -1258,7 +1300,7 @@ mod tests {
         let hw = &mut g.hw;
         assert_eq!((hw.io.jcart, hw.io.players()), (true, 4));
         (hw.io.pads[2].buttons, hw.io.pads[3].buttons) = (1, 8);
-        for at in crate::io::JCART_ADDRESSES {
+        for at in crate::genesis::io::JCART_ADDRESSES {
             hw.write16(at, 0);
             assert_eq!((hw.read16(at), hw.read8(at), hw.read8(at + 1)), (0x33B2, 0x33, 0xB2), "{at:06X}, TH low");
             hw.write16(at, 0xFFFF);
@@ -1293,14 +1335,15 @@ mod tests {
             code.extend_from_slice(words);
         }
         code.push(0x60FE);
-        let image = crate::pictures::program(&[0x8004, 0x8104, 0x8F02], &[], &code);
-        let board = crate::board_bus::LOOPS.iter().find(|l| l.name == name).unwrap();
+        let image = crate::genesis::pictures::program(&[0x8004, 0x8104, 0x8F02], &[], &code);
+        let board = crate::genesis::board_bus::LOOPS.iter().find(|l| l.name == name).unwrap();
         let fnv = image.iter().fold(0x811C_9DC5u32, |h, &b| (h ^ b as u32).wrapping_mul(0x0100_0193));
         assert_eq!(fnv, board.image, "{name}: the program is not the one the board ran");
         let mut m = crate::machine::Machine::new(&image, crate::media::Media::read(&image));
         // The board's times count from its first cartridge read's strobe, which the refresh pending at the 68000's start
         // holds 14 master clocks after the first bus cycle, itself 98 into Nephrite's start.
-        let g = &mut m.genesis;
+        #[allow(irrefutable_let_patterns)]
+        let crate::machine::Fitted::Md(g) = &mut m.fitted else { unreachable!("a cartridge") };
         let end = 0x222 + 2 * (words.len() * count) as u32;
         let mut ends = Vec::new();
         while g.cpu.regs.pc < end {
@@ -1317,14 +1360,14 @@ mod tests {
     #[test]
     fn ram_loops_keep_the_boards_time_through_both_refreshes() {
         for (name, words, count) in [("ram-reads", &[0x3013][..], 400), ("ram-longs", &[0x2013][..], 300), ("ram-reads-3", &[0x3013, 0x4E71, 0x4E71, 0x4E71][..], 400)] {
-            let board = &crate::board_bus::LOOPS.iter().find(|l| l.name == name).unwrap().fetches;
+            let board = &crate::genesis::board_bus::LOOPS.iter().find(|l| l.name == name).unwrap().fetches;
             let ends = loop_fetches(name, words, count);
             let last = *board.last().unwrap();
             let wrong: Vec<u32> = ends.iter().copied().filter(|t| *t < last && !board.contains(t)).collect();
             assert!(wrong.is_empty(), "{name}: {} of {} instructions end off the board's reads, the first at {:?}", wrong.len(), ends.len(), wrong.first());
         }
         // Six NOPs between reads: the board's one late refresh, a wait of four clocks where the rule gives three, at 2,366.
-        let board = &crate::board_bus::LOOPS.iter().find(|l| l.name == "ram-reads-6").unwrap().fetches;
+        let board = &crate::genesis::board_bus::LOOPS.iter().find(|l| l.name == "ram-reads-6").unwrap().fetches;
         let ends = loop_fetches("ram-reads-6", &[0x3013, 0x4E71, 0x4E71, 0x4E71, 0x4E71, 0x4E71, 0x4E71], 228);
         let first_wrong = ends.iter().find(|t| !board.contains(t));
         assert_eq!(first_wrong, Some(&2415), "ram-reads-6 keeps the board's time until its four-clock wait");
@@ -1340,7 +1383,8 @@ mod tests {
         let end = base + 0xFFFE;
         r[0x200..0x218].copy_from_slice(&w(&[0x46FC, 0x2700, 0x207C, (base >> 16) as u16, base as u16, 0x203C, (end >> 16) as u16, end as u16, 0x7200, 0xD258, 0xB088, 0x64FA]));
         let mut m = crate::machine::Machine::new(&r, crate::media::Media::read(&r));
-        let g = &mut m.genesis;
+        #[allow(irrefutable_let_patterns)]
+        let crate::machine::Fitted::Md(g) = &mut m.fitted else { unreachable!("a cartridge") };
         let mut times = Vec::new();
         while times.len() < 4000 {
             let pc = g.cpu.regs.pc;

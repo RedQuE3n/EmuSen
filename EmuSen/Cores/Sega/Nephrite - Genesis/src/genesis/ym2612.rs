@@ -5,53 +5,53 @@
 
 use emusen_native::{StateReader, StateWriter, Truncated};
 
-use crate::fm::{Fm, Tables};
+use crate::genesis::fm::{Fm, Tables};
 
 static TABLES: std::sync::OnceLock<Tables> = std::sync::OnceLock::new();
 
 /// Master clocks a sample, and of one of its 24 slots, six of the chip's input clocks.
 pub const SAMPLE: u64 = 144 * 7;
-pub const SLOT: u64 = 6 * 7;
+pub(in crate::genesis) const SLOT: u64 = 6 * 7;
 /// The busy flag after a data write: from the first slot's edge at or after the write, 33 slots, as the board's
 /// ASIC has it (Nephrite_Disputes.md D-13). The slots' edges fall this far into each slot after a sample's deadline
 /// (Nephrite_Native.md §24).
-pub const BUSY: u64 = 33 * SLOT;
-pub const SLOT_EDGE: u64 = 32;
+pub(in crate::genesis) const BUSY: u64 = 33 * SLOT;
+pub(in crate::genesis) const SLOT_EDGE: u64 = 32;
 /// The reset line, as the board has it (Nephrite_Disputes.md D-19). The sample cycle restarts at the line's
 /// assertion: the first deadline is `RESTART` master clocks after it, its key moment 87, and one every 1,008 from
 /// there. A release up to `RELEASE_LEEWAY` after a key moment still starts the envelope's counter with that sample,
 /// and the counter's first cycle is the fourth sample from its start.
-pub const RESTART: u64 = 87 + KEY_LEAD;
+pub(in crate::genesis) const RESTART: u64 = 87 + KEY_LEAD;
 /// The first sample's deadline, where the reset line starts asserted: where the board's falls against its 68000's
 /// start, in master clocks from it (Nephrite_Disputes.md D-19, D-26, Nephrite_Native.md §25, §27).
-pub const POWER_ON: u64 = 924;
-pub const RELEASE_LEEWAY: u64 = 67;
+pub(in crate::genesis) const POWER_ON: u64 = 924;
+pub(in crate::genesis) const RELEASE_LEEWAY: u64 = 67;
 /// A sample's deadline is the moment its slot edges are counted from, each register part taken by its own (`TAKE_*`).
 /// The key register is taken before it, a channel at a time, a slot apart: a write keying channel 1 must come
 /// `KEY_LEAD` master clocks before the deadline, channel 6's five slots less. A timer's load bit must come `LOAD_LEAD`
 /// before it; the timers tick then, and a flag the tick raises reads set from `FLAG_LEAD` before the deadline
 /// (Nephrite_Disputes.md D-24, D-25, Nephrite_Native.md §24).
-pub const KEY_LEAD: u64 = 472;
-pub const LOAD_LEAD: u64 = KEY_LEAD - 2 * SLOT;
-pub const FLAG_LEAD: [u64; 2] = [KEY_LEAD - 196, KEY_LEAD - 196 - SLOT];
+pub(in crate::genesis) const KEY_LEAD: u64 = 472;
+pub(in crate::genesis) const LOAD_LEAD: u64 = KEY_LEAD - 2 * SLOT;
+pub(in crate::genesis) const FLAG_LEAD: [u64; 2] = [KEY_LEAD - 196, KEY_LEAD - 196 - SLOT];
 /// The slot edges after a sample's deadline by which a write must come to be taken by it, by what it writes, as D-25's
 /// landing sweeps measured them on S4 of channel 1 (Nephrite_Disputes.md D-25, Nephrite_Native.md §26): the operator's
 /// registers and the algorithm by the 18th, the feedback by the 6th, the frequency and the LFO's sensitivities by the
 /// 24th, the panning by the 42nd, the LFO and the top-bit test by the 35th, the phase test by the 11th, the envelope
 /// test by the 31st, channel 3's mode by the 13th, the DAC on every channel by the 48th, the DAC's data and enable by
 /// the 64th. A key's is the 12th edge before. A sample is made once its last edge, `TAKE_LAG`, has passed.
-pub const TAKE_OPERATOR: i64 = 18;
-pub const TAKE_FEEDBACK: i64 = 6;
-pub const TAKE_FREQUENCY: i64 = 24;
-pub const TAKE_PAN: i64 = 42;
-pub const TAKE_LFO: i64 = 35;
-pub const TAKE_PHASE_TEST: i64 = 11;
-pub const TAKE_TOP_BIT_TEST: i64 = 35;
-pub const TAKE_EG_TEST: i64 = 31;
-pub const TAKE_SPECIAL: i64 = 13;
-pub const TAKE_DAC_TEST: i64 = 48;
-pub const TAKE_DAC: i64 = 64;
-pub const TAKE_LAG: u64 = SLOT_EDGE + TAKE_DAC as u64 * SLOT;
+pub(in crate::genesis) const TAKE_OPERATOR: i64 = 18;
+pub(in crate::genesis) const TAKE_FEEDBACK: i64 = 6;
+pub(in crate::genesis) const TAKE_FREQUENCY: i64 = 24;
+pub(in crate::genesis) const TAKE_PAN: i64 = 42;
+pub(in crate::genesis) const TAKE_LFO: i64 = 35;
+pub(in crate::genesis) const TAKE_PHASE_TEST: i64 = 11;
+pub(in crate::genesis) const TAKE_TOP_BIT_TEST: i64 = 35;
+pub(in crate::genesis) const TAKE_EG_TEST: i64 = 31;
+pub(in crate::genesis) const TAKE_SPECIAL: i64 = 13;
+pub(in crate::genesis) const TAKE_DAC_TEST: i64 = 48;
+pub(in crate::genesis) const TAKE_DAC: i64 = 64;
+pub(in crate::genesis) const TAKE_LAG: u64 = SLOT_EDGE + TAKE_DAC as u64 * SLOT;
 /// Writes that can wait to be taken at once, and samples CSM can be keyed in ahead of their making; a program that
 /// writes faster than that has its oldest write taken at once.
 const PENDING: usize = 64;
@@ -65,44 +65,44 @@ const fn edge(n: i64) -> i64 {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ym2612 {
     /// Both parts' registers, `$00`-`$FF`; at power-on all zero but the left and right bits of `$B4`-`$B6`.
-    pub regs: [[u8; 256]; 2],
+    pub(in crate::genesis) regs: [[u8; 256]; 2],
     /// The address register: the address written and the part (0 or 1) of the port it was written through.
-    pub address: u8,
-    pub part: u8,
+    pub(in crate::genesis) address: u8,
+    pub(in crate::genesis) part: u8,
     /// Timer A's and timer B's counters, and the samples to timer B's next count.
-    pub counter_a: u16,
-    pub counter_b: u16,
-    pub divider_b: u8,
+    pub(in crate::genesis) counter_a: u16,
+    pub(in crate::genesis) counter_b: u16,
+    pub(in crate::genesis) divider_b: u8,
     /// A load bit has risen and waits for a tick; a tick has asked for the counter's value, which the next slot gives.
-    pub load: [bool; 2],
-    pub reload: [bool; 2],
+    pub(in crate::genesis) load: [bool; 2],
+    pub(in crate::genesis) reload: [bool; 2],
     /// `$27` as the timers have it, which is at once.
-    pub control: u8,
+    pub(in crate::genesis) control: u8,
     /// The deadline of the next sample whose timers have not ticked: they tick `LOAD_LEAD` before it.
-    pub timers_next: u64,
+    pub(in crate::genesis) timers_next: u64,
     /// The master clock from which each timer's flag, raised by a tick, reads set; none while it is `u64::MAX`.
-    pub rise: [u64; 2],
+    pub(in crate::genesis) rise: [u64; 2],
     /// Writes not yet taken, in the order made: the deadline of the sample that takes each, the part, the register,
     /// the value and the bits taken then.
-    pub pending: std::collections::VecDeque<(u64, u8, u8, u8, u8)>,
+    pub(in crate::genesis) pending: std::collections::VecDeque<(u64, u8, u8, u8, u8)>,
     /// The deadlines of the samples the timers have keyed CSM in, made or not.
-    pub csm_at: Vec<u64>,
+    pub(in crate::genesis) csm_at: Vec<u64>,
     /// Bits 0 and 1: timer A's and timer B's overflow flags.
-    pub flags: u8,
+    pub(in crate::genesis) flags: u8,
     /// The master clock until which the busy flag reads set.
-    pub busy_until: u64,
+    pub(in crate::genesis) busy_until: u64,
     /// The discrete YM2612 of model 1 answers its busy flag at port 0 only; the model 2 ASIC's copy at every port.
-    pub discrete: bool,
+    pub(crate) discrete: bool,
     /// The master clock of the next sample.
-    pub next: u64,
+    pub(in crate::genesis) next: u64,
     /// The reset line, the Z80's: while it is held the chip is at rest and takes no write. `held_at` is the first
     /// sample of the cycle its assertion started.
-    pub held: bool,
-    pub held_at: u64,
+    pub(in crate::genesis) held: bool,
+    pub(in crate::genesis) held_at: u64,
     /// The left and right pins' sums over the sample last made (`turn`), and each channel's nine-bit output.
-    pub out: [i32; 2],
-    pub channels: [i32; 6],
-    pub fm: Fm,
+    pub(in crate::genesis) out: [i32; 2],
+    pub(in crate::genesis) channels: [i32; 6],
+    pub(in crate::genesis) fm: Fm,
     /// Each sample's channel outputs, kept while set for comparison with a recording; not part of a state.
     pub trace: Option<Vec<[i32; 6]>>,
 }
@@ -373,12 +373,12 @@ impl Ym2612 {
     }
 
     /// The DAC's level: `$2A` with `$2C` bit 3 below it, as a signed nine-bit value.
-    pub fn dac_level(&self) -> i32 {
+    pub(in crate::genesis) fn dac_level(&self) -> i32 {
         (((self.regs[0][0x2A] as i32) << 1) | (self.regs[0][0x2C] >> 3 & 1) as i32) - 256
     }
 
     /// Channel 6's DAC, where `$2B` enables it.
-    pub fn dac(&self) -> Option<i32> {
+    pub(in crate::genesis) fn dac(&self) -> Option<i32> {
         (self.regs[0][0x2B] & 0x80 != 0).then(|| self.dac_level())
     }
 
@@ -420,7 +420,7 @@ impl Ym2612 {
     /// panned off. The discrete YM2612's has its two halves a step apart, so that a level of 0 or more stands a step
     /// higher, and rests a step to the sign's side of the middle in the turn's other three slots, and in all four on a
     /// side the channel is panned off: the ladder effect.
-    pub fn turn(discrete: bool, level: i32, on: bool) -> i32 {
+    pub(in crate::genesis) fn turn(discrete: bool, level: i32, on: bool) -> i32 {
         match (discrete, on, level >= 0) {
             (false, true, _) => level,
             (false, false, _) => 0,
@@ -432,7 +432,7 @@ impl Ym2612 {
     }
 
     /// What the pins sum to with every channel at rest: the discrete chip's six turns at a step above the middle.
-    pub fn rest(&self) -> i32 {
+    pub(in crate::genesis) fn rest(&self) -> i32 {
         if self.discrete { 6 * 4 } else { 0 }
     }
 
@@ -444,7 +444,7 @@ impl Ym2612 {
 
     /// Every sample whose deadline has come by `t`, writes still to come or not, each output handed to `level` at `t`:
     /// before the reset line clears the chip.
-    pub fn flush(&mut self, t: u64, level: impl FnMut(u64, [i32; 2])) {
+    pub(in crate::genesis) fn flush(&mut self, t: u64, level: impl FnMut(u64, [i32; 2])) {
         self.make(t, true, level);
     }
 
@@ -481,7 +481,7 @@ impl Ym2612 {
         }
     }
 
-    pub fn write_state(&self, w: &mut StateWriter) {
+    pub(in crate::genesis) fn write_state(&self, w: &mut StateWriter) {
         w.bytes("Part0", &self.regs[0]);
         w.bytes("Part1", &self.regs[1]);
         w.bytes("AddressPartFlags", &[self.address, self.part, self.flags, self.divider_b, self.discrete as u8, self.held as u8]);
@@ -503,7 +503,7 @@ impl Ym2612 {
         self.fm.write_state(w);
     }
 
-    pub fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
+    pub(in crate::genesis) fn read_state(&mut self, r: &mut StateReader) -> Result<(), Truncated> {
         r.bytes(&mut self.regs[0])?;
         r.bytes(&mut self.regs[1])?;
         let mut b = [0u8; 6];

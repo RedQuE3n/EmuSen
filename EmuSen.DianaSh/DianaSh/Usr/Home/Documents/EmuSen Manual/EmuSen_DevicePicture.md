@@ -448,3 +448,92 @@ Diamond, the latency in frames from a frame's emulation to its picture's present
 ## 11. The handheld: the tester's steps
 
 *(Written with the build that carries step (c), §13.)*
+
+---
+
+## 12. Step (b), first stage: the built-in filters translated and matched (2026-10-15)
+
+### 12.1 What was built
+
+**`BuiltInPreset`** (`EmuSen.Serenity/Shaders/BuiltInPreset.cs`) writes a built-in filter, for a console and its
+structural values, as a slang preset in a folder named by a digest of its content under `home/Shaders/builtin/`
+(`DataStore.Shaders`), each pass a `.slang` file. The translation is §3.1's first stage and §3.2's table: SkSL's type
+names replaced by GLSL's (eleven word patterns), each `x.eval(` by `x_eval(`, the `uniform shader` and `uniform`
+lines lifted into a sampler each and one uniform block, the SkSL `main` called by a GLSL `main` with
+`gl_FragCoord.xy`, an 8-bit pass written as `vec4(rgb, 1.0)` and a float pass as it is. A child read nearest is
+fetched at its texel, a child read linearly sampled through the bound sampler, the preset's `filter_linear` set for
+every image some pass reads linearly. `RowsToALine`'s reducing pass is a first pass at a source scale of 1 / *n*;
+the NES's raw frame is a lookup image named `raw`, black until replaced. **The plain picture and the two simple
+effects** (`BuiltInShaders.AsFilter`) are one-pass filters whose `image` is the frame stretched over the rectangle,
+nearest or linear as `BilinearFiltering` says, rows once, as `GameFrameControl`'s local matrix draws them.
+
+**One thing was added to the chain**, in both implementations: a lookup image replaced in place at the same size
+(`SlangChain.ReplaceLut`, the library's `load_lut`), so that the raw frame costs no image a frame (§3.4).
+
+### 12.2 How they were compared
+
+`DeviceFilterMatchTests` draws each filter both ways on the RX 6800: Skia from its SkSL on a GL context through
+`GameFrameControl` and `ShaderBench.Picture`, as every device test of `EmuSen_Serenity.md` §3.9 does; and the chain
+from the translation, advanced with each frame and rendered once for it, as the runner renders. The window is the
+picture's own rectangle at a whole-pixel position, so that §3.3's fractional placement does not enter. **The frames**
+are four synthetic patterns (a gradient under a moving checker, every level and edge different) followed by each real
+game's picture of that size, from the frontends' resume screenshots in the ROM library, copied into scratch and never
+committed: five Game Boy and Game Boy Color pictures, three NES, three SNES, two Genesis, and four N64 (two NTSC at
+640 × 480 and two PAL at 640 × 576, with their progressive fields of 240 and 288 rows taken from them). The variable
+`EMUSEN_GPU_FRAMES` names the folder; without it the synthetic frames alone run. Each picture is compared channel by
+channel.
+
+**A difference at a tie.** A channel that differs by more than one level is drawn again by the chain with every
+pass's sampling point moved by 1/1024 and then 4/1024 of a pixel, in the eight directions; if Skia's value lies
+within one of the range those drawings give, the channel sits where the filter meets a discontinuity (a nearest
+texel's edge, a mask's stripe boundary, a `floor`) or a slope too steep to resolve at that distance, at its pixel's
+centre. Such a channel is counted as a tie. A drawing that changes when its sampling points move by four thousandths
+of a pixel samples a boundary there, and which side either path takes is not a property of the filter.
+
+### 12.3 What was measured
+
+Over 474 pictures (each filter family's variants, consoles, frames and window sizes; `DeviceFilterMatchTests`, 22
+cases, 355 with the Serenity, Slang, ScreenFilter and GameFrameControl classes run beside them, all passing):
+
+| Family | Pictures | Channels differing at all, most in a picture | Beyond one | Of those at ties | The rest |
+|---|---|---|---|---|---|
+| The six handheld LCDs, at 2× and 5× | 72 | 0.22% | 0 | — | 0 |
+| The plain picture and the simple effects, bilinear | 84 | 0.10% | 1 | 1 | 0 |
+| The same, nearest | 84 | 6.8% | 2,853,367 | all | 0 |
+| CRT (Lottes) | 29 | 5.3% | 3,074,905 | all | 0 |
+| CRT, every tier and signal, nine kinds of frame of five consoles | 114 | 0.52% | 973 | 962 | 11, at most 2 in a picture |
+
+Every channel in the first two rows is within one level: the translation computes what the SkSL computes, in a
+different compiler's order.
+
+**The nearest-sampled rows and Lottes**, refuted §3.3's prediction that ties would be rare. They are frequent because
+Skia's `coord` is not the pixel's exact centre: it is a varying interpolated across the drawn rectangle, which a probe
+showed by drawing `fract` of a large coordinate both ways, and at a scale that is not whole a column or row of
+pixel centres falls exactly on a texel's edge every few texels (every fourth texel at 2.25×). Skia's interpolated
+centre lands a few millionths below the edge and takes the texel before; the chain's exact centre takes the texel at
+the edge. The same holds for Lottes's aperture mask, whose stripe test `fract(x / 6) < 0.333` meets a boundary at
+every sixth pixel along a diagonal: for coordinates above about 512, Skia's interpolation error moves those pixels
+into the blue stripe where the chain's exact centres leave them in the red. **The chain draws the intended pattern**
+(two pixels of each colour), and Skia's an unbalanced one (one red, two green, three blue), which is a defect of the
+SkSL path that the translation does not have. Every one of these channels is a tie by §12.2.
+
+**The CRT's eleven** (in 114 pictures of 4,665,600 channels: at most 2 in a picture, 2 to 14 levels) are not ties: the
+nudged drawings do not reach Skia's value. Most are 2 levels in dark parts of composite and S-Video pictures, where
+the receiver's passes subtract nearly equal half-float signals; the largest, 14 levels, is one pixel of an
+*EarthBound* picture under composite at Balanced and Accurate. Their cause was not isolated. An experiment that drew
+the float passes at 32 bits on both sides to remove the half-float rounding was confounded: Skia does not render
+`RgbaF32` surfaces on the device, drew those passes in memory, and the two paths then differed in a million channels;
+it is recorded as a negative result. **The tolerance is therefore stated as measured**: every channel within one
+level; beyond one, a tie by §12.2; and of the rest no more than one channel in a million, which the CRT's worst
+picture (2 in 4,665,600) keeps within. The bound is empirical and is labelled so.
+
+**A mutant**: the translation reading `history2` for `history1` failed five of the six handheld LCDs by up to 84
+levels; the sixth, the AGS-101, has no response blend and does not read its history, and passed, as it should.
+
+### 12.4 What is not done in this stage
+
+The runner does not yet draw the built-ins through the chain in the frontends: that is §13, where the device path
+needs them, and §3.1's second stage (the text converted and the Skia path removed) waits on Q2. The NES's raw frame
+reaches the chain's lookup image in the runner of §13; the comparison above drew the NES under the CRT from its
+palette's colours, not from the raw frame, and the PlayStation's pictures were synthetic only (Diamond's bench discs
+were not run for this step).

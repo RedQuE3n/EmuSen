@@ -201,7 +201,47 @@ game at a time, and a lock across programs is the question of §13 rather than b
 
 ## 10. What was measured
 
-*To be filled in as each piece is proven.*
+### 10.1 The hazard, on the code before the card mode
+
+**The program** [M]: `programs/card-save.s` is a game's save in miniature. It takes the card's ID, writes one sector
+with 128 bytes of one value through the card's write command, byte by byte as the kernel's driver sends them, and then
+takes the ID again and again, keeping the flag each answer carries. Which sector and which value are two words after
+its first jump, so that two images of it are two games that save in two places of one card. It is synthetic: no game
+or BIOS is involved, and the open kernel's card functions are not used, so the test isolates the protocol and the
+state.
+
+**The proof** [M, 2026-10-15, `v1::tests::a_shared_cards_save_survives_a_state_of_another_game` written first and run
+on WiseMan 76472894's core]: game A (sector 100h, A5h) saves on a blank card file and the host writes the file; a state
+of A is taken; game B (sector 140h, B6h) is made over the file, saves, and the host writes the file, which then holds
+both saves; A is made over the file again and its state loaded, the host writing the card whenever the machine reports
+it changed. The test asserted that B's sector still held B6h, and **failed**: "B's save survives A's state: [00, 00,
+00, 00, 00, 00, 00, 00]". The two assertions before it, that each save reached the file, passed. The test is kept as
+`per_game_a_state_puts_its_card_back`, which asserts the loss, since under *Per game* the same steps are the intended
+rollback of the game's own card.
+
+### 10.2 The core, built
+
+[M, 2026-10-15] `emusen-native` and the header at 1.7 (§5); Diamond's cards removable in core info and machine info;
+`Machine::cards_apart` set from the flag at create; `state.rs`'s `keep_cards` applied on a load when the machine or the
+state had its cards apart, and the empty `SHRD` block written by a machine with its cards apart. With the flag the
+hazard's steps keep both saves, the card the machine holds is the file byte for byte, and the program's next ID after
+the load answers flag 08h (`a_shared_cards_save_survives_a_state_of_another_game`). The rules of §6 and §8 hold on
+unit cases (`state::tests`): a per-game state is unchanged in size and bytes and a kept-apart one is the same followed
+by `SHRD` and four zero bytes (`a_state_made_with_the_cards_apart_says_so_and_one_made_per_game_does_not`); a card
+equal to the state's copy keeps the state's flag 00h, its command and the transfer under way, while one that differs
+reads 08h, its command cleared and the port silent, and a change the host has not yet saved stays to be saved
+(`kept_apart_a_card_stays_and_only_a_different_one_reads_as_inserted`); and the four rows of §8's table
+(`a_state_made_in_one_mode_and_loaded_in_another`).
+
+### 10.3 Per game, unchanged
+
+[M, 2026-10-15] The digests of three per-game states, FNV-1a over the whole state, were taken on WiseMan 76472894 in
+a probe worktree (`~/.cache/emusen/probe/diamond/cards/base`, removed once recorded) and on this branch, from
+`card-save.s` saving on a blank card: the state after the save, the same state loaded over a blank card and saved again,
+and five frames on. Both builds give `886135FFEF135A26`, `886135FFEF135A26` and `55CDED3F58B6961E`
+(`per_game_states_are_the_ones_before_the_card_mode`). The project's program goldens hold all 49 lines unchanged, the
+new program adding its fiftieth (`card-save.s`, recorded by Diamond_Enhancements.md §6.2's command and checked), and
+the state's pinned layout test is unchanged.
 
 ## 11. Tests
 

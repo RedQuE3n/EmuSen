@@ -47,7 +47,8 @@
             "required": ["which", "suffix"],
             "properties": {
               "which": { "type": "integer", "minimum": 0 },
-              "suffix": { "type": "string" }
+              "suffix": { "type": "string" },
+              "kind": { "type": "string", "enum": ["game", "removable"] }
             }
           }
         }

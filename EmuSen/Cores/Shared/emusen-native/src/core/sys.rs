@@ -4,7 +4,7 @@
 /// `EMUSEN_CORE_ABI_MAJOR`.
 pub const ABI_MAJOR: u32 = 1;
 /// `EMUSEN_CORE_ABI_MINOR`.
-pub const ABI_MINOR: u32 = 6;
+pub const ABI_MINOR: u32 = 7;
 /// `EMUSEN_CORE_ABI_VERSION`.
 pub const ABI_VERSION: u32 = (ABI_MAJOR << 16) | ABI_MINOR;
 
@@ -151,6 +151,8 @@ pub mod flags {
     pub const CREATE_LENT: u32 = 1;
     /// Since 1.3: `emusen_media.flags`, the same for an inserted disc.
     pub const MEDIA_LENT: u32 = 2;
+    /// Since 1.7: `emusen_create_params.flags`, the removable battery files kept by the host apart from the game.
+    pub const CREATE_SHARED_REMOVABLE: u32 = 2;
     /// Since 1.4: in `MEDIA_SEEK`'s `a`, the call's image itself, which no file entry numbers.
     pub const FILE_IMAGE: u32 = u32::MAX;
 }

@@ -10,7 +10,7 @@ use crate::gpu::raster::Vertex;
 use crate::gpu::vram::Rect;
 use crate::gpu::{Gpu, Parser, Polyline, ReadOut, Transfer, Word};
 use crate::machine::Machine;
-use crate::card::Card;
+use crate::card::{Card, FLAG_NEW};
 use crate::multitap::Answer;
 use crate::pad::Controller;
 use crate::sio0::{Phase, Sio0, Target};
@@ -21,6 +21,9 @@ pub const STATE_VERSION: i32 = 10;
 /// The versions a load reads: 9 adds the disc's fingerprint at the end, which an 8 lacks and is not held to; 10 adds
 /// the picture after it, which an earlier one lacks and has read from VRAM (Diamond_Native.md §23).
 pub const LOADS_FROM: [i32; 3] = [8, 9, 10];
+
+/// The tag of the empty block that marks a state made with the cards kept apart from the game (Diamond_Cards.md §6).
+pub const CARDS_APART: [u8; 4] = *b"SHRD";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StateError {
@@ -346,6 +349,31 @@ fn write_card(w: &mut StateWriter, c: &Card) {
     w.bytes("Data", &c.data);
 }
 
+/// Under Diamond_Cards.md §6, each card the machine holds stays as it stands rather than the state's copy, and the
+/// load raises no change of its own: a card equal to the copy takes the state's flag and transfer, the card the
+/// state's RAM knows; one that differs is as if newly inserted, its flag's bit 3 set and a transfer the state left
+/// under way with it silenced until the slot is deselected.
+fn keep_cards(live: &mut Sio0, loaded: &mut Sio0) {
+    for n in 0..8 {
+        let differs = match (live.card(n), loaded.card(n)) {
+            (Some(was), Some(card)) => {
+                card.changed = was.changed;
+                let differs = card.data != was.data;
+                if differs {
+                    std::mem::swap(&mut card.data, &mut was.data);
+                    card.flag |= FLAG_NEW;
+                    card.command = 0;
+                }
+                differs
+            }
+            _ => false,
+        };
+        if differs && loaded.transfer_with_card(n) {
+            loaded.phase = Phase::Silent;
+        }
+    }
+}
+
 /// A card loaded from a state is marked changed, so that the host writes the contents the state holds.
 fn read_card(r: &mut StateReader, c: &mut Card) -> Result<(), Truncated> {
     let mut b = [0u8; 4];
@@ -483,6 +511,12 @@ impl Machine {
         w.bytes("TTY", &b.tty.text);
         w.u64("Disc", self.disc_print);
         w.bytes("Picture", &b.gpu.display.picture);
+        if self.cards_apart {
+            w.group("SHRD", |w| {
+                w.u32("Tag", u32::from_le_bytes(CARDS_APART));
+                w.u32("Length", 0);
+            });
+        }
         if let Some(layer) = b.gpu.layer.get_ref() {
             for tag in layer.tags() {
                 write_block(w, layer, tag);
@@ -566,6 +600,9 @@ impl StateMachine for Machine {
             layer.seed(&board.gpu);
         }
         board.gpu.layer = attached;
+        if self.cards_apart || blocks.iter().any(|b| b.0 == CARDS_APART) {
+            keep_cards(&mut self.board.sio0, &mut board.sio0);
+        }
         board.schedule();
         self.frames = frames;
         self.cpu = cpu;
@@ -676,6 +713,76 @@ mod tests {
         b.disc_print = 7;
         assert_eq!(b.load_state(&s).unwrap_err().status(), emusen_native::core::status::WRONG_MEDIA, "a state over another disc than the drive's");
         assert_eq!(b.frames, 1, "and changes nothing");
+    }
+
+    fn carded(apart: bool, fill: u8) -> Machine {
+        let mut m = machine();
+        m.insert_card(0, Some(&vec![fill; crate::card::CARD_BYTES]));
+        m.cards_apart = apart;
+        m
+    }
+
+    fn saved(m: &Machine) -> Vec<u8> {
+        let mut s = vec![0; m.state_size()];
+        m.save_state(&mut s).unwrap();
+        s
+    }
+
+    /// Diamond_Cards.md §6: a state of a machine whose cards are kept apart ends with the 8 bytes of the empty `SHRD`
+    /// block, and one made per game has none, its size and bytes those of the code before the card mode.
+    #[test]
+    fn a_state_made_with_the_cards_apart_says_so_and_one_made_per_game_does_not() {
+        let (per_game, apart) = (saved(&carded(false, 0)), saved(&carded(true, 0)));
+        assert_eq!(per_game.len(), 5_267_532 + crate::card::CARD_BYTES + 4 + 4 + 128, "the size the layout pins, and the card's registers and data");
+        assert_eq!(apart.len(), per_game.len() + 8);
+        assert_eq!((&apart[..per_game.len()], &apart[per_game.len()..]), (&per_game[..], &b"SHRD\0\0\0\0"[..]));
+        assert!(!carded(false, 0).layout().contains("SHRD") && carded(true, 0).layout().contains("u32 SHRD.Length"));
+    }
+
+    /// Diamond_Cards.md §6: kept apart, a card equal to the state's copy takes the state's flag and transfer; one that
+    /// differs stays as it stands, its flag's bit 3 set and a transfer under way with it silenced; neither is marked
+    /// changed by the load.
+    #[test]
+    fn kept_apart_a_card_stays_and_only_a_different_one_reads_as_inserted() {
+        let mut a = carded(true, 0x11);
+        a.board.sio0.card(0).unwrap().flag = 0;
+        a.board.sio0.card(0).unwrap().command = crate::card::READ;
+        a.board.sio0.control = 0x1003;
+        a.board.sio0.phase = Phase::Device(Target::Card, 20);
+        let s = saved(&a);
+
+        let mut same = carded(true, 0x11);
+        same.load_state(&s).unwrap();
+        let c = same.card_in(0).unwrap();
+        assert_eq!((c.flag, c.command, c.changed, same.board.sio0.phase), (0, crate::card::READ, false, Phase::Device(Target::Card, 20)), "the card the state's RAM knows");
+
+        let mut other = carded(true, 0x22);
+        other.board.sio0.card(0).unwrap().flag = 0;
+        other.load_state(&s).unwrap();
+        let c = other.card_in(0).unwrap();
+        assert!(c.data.iter().all(|&b| b == 0x22), "the card as it stands");
+        assert_eq!((c.flag, c.command, c.changed, other.board.sio0.phase), (crate::card::FLAG_NEW, 0, false, Phase::Silent), "as if pulled and pushed in again");
+
+        let mut changed = carded(true, 0x22);
+        changed.board.sio0.card(0).unwrap().changed = true;
+        changed.load_state(&s).unwrap();
+        assert!(changed.card_in(0).unwrap().changed, "a change the host has not saved yet stays to be saved");
+    }
+
+    /// Diamond_Cards.md §8, across modes: per game, a per-game state's card is put back and marked changed, as before;
+    /// a state made with the cards apart leaves a per-game machine's card; a per-game state leaves a kept-apart card.
+    #[test]
+    fn a_state_made_in_one_mode_and_loaded_in_another() {
+        let (per_game, apart) = (saved(&carded(false, 0x11)), saved(&carded(true, 0x11)));
+        let mut m = carded(false, 0x22);
+        m.load_state(&per_game).unwrap();
+        assert!(m.card_in(0).unwrap().data.iter().all(|&b| b == 0x11) && m.card_in(0).unwrap().changed, "per game, as today");
+        let mut m = carded(false, 0x22);
+        m.load_state(&apart).unwrap();
+        assert!(m.card_in(0).unwrap().data.iter().all(|&b| b == 0x22) && !m.card_in(0).unwrap().changed, "the game's own card is not overwritten by a shared one");
+        let mut m = carded(true, 0x22);
+        m.load_state(&per_game).unwrap();
+        assert!(m.card_in(0).unwrap().data.iter().all(|&b| b == 0x22) && !m.card_in(0).unwrap().changed, "the shared card is not overwritten by a game's own");
     }
 
     /// 640 by 480 interlaced with the display on, the whole of it filled in a colour that changes about every field.

@@ -248,6 +248,30 @@ pub struct Processor {
 pub struct Battery {
     pub which: u32,
     pub suffix: String,
+    /// Since 1.7: whom the file belongs with (EmuSen_CoreAPI.md §6.27).
+    pub kind: BatteryKind,
+}
+
+/// Since 1.7: `"game"`, memory that belongs with the game, written as nothing; or `"removable"`, a card or pak a
+/// player carries between games, which a core listing it keeps as it stands across a state load under
+/// `CREATE_SHARED_REMOVABLE`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BatteryKind {
+    #[default]
+    Game,
+    Removable,
+}
+
+impl Battery {
+    /// A file that belongs with the game.
+    pub fn game(which: u32, suffix: &str) -> Battery {
+        Battery { which, suffix: suffix.into(), kind: BatteryKind::Game }
+    }
+
+    /// A card or pak a player carries between games.
+    pub fn removable(which: u32, suffix: &str) -> Battery {
+        Battery { which, suffix: suffix.into(), kind: BatteryKind::Removable }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -360,6 +384,13 @@ pub fn capability_names(bits: u64) -> Vec<&'static str> {
     sys::CAPABILITY_NAMES.iter().filter(|(b, _)| bits & b != 0).map(|&(_, n)| n).collect()
 }
 
+/// A battery file's kind, written only where it is not the game's, so that a core of 1.6 or before writes what it wrote.
+fn write_kind(j: &mut Json, kind: BatteryKind) {
+    if kind == BatteryKind::Removable {
+        j.field_str("kind", "removable");
+    }
+}
+
 fn write_firmware(j: &mut Json, f: &Firmware) {
     j.begin_object().field_uint("which", f.which as u64).field_str("name", &f.name).field_str("label", &f.label).field_uint("size", f.size).field_bool("required", f.required);
     j.key("parts").begin_array();
@@ -436,7 +467,9 @@ pub fn info_json(info: &Info, capabilities: u64, battery: &dyn Fn(&str) -> Optio
         if let Some(files) = battery(&s.id) {
             j.key("battery").begin_array();
             for b in &files {
-                j.begin_object().field_uint("which", b.which as u64).field_str("suffix", &b.suffix).end_object();
+                j.begin_object().field_uint("which", b.which as u64).field_str("suffix", &b.suffix);
+                write_kind(&mut j, b.kind);
+                j.end_object();
             }
             j.end_array();
         }
@@ -528,7 +561,9 @@ pub fn machine_info_json(m: &MachineInfo, measured: &Measured<'_>, drives: &[Dri
     j.end_array();
     j.key("battery").begin_array();
     for b in &m.battery {
-        j.begin_object().field_uint("which", b.which as u64).field_str("suffix", &b.suffix).field_int("length", (measured.battery_len)(b.which).unwrap_or(0)).end_object();
+        j.begin_object().field_uint("which", b.which as u64).field_str("suffix", &b.suffix).field_int("length", (measured.battery_len)(b.which).unwrap_or(0));
+        write_kind(&mut j, b.kind);
+        j.end_object();
     }
     j.end_array();
     j.key("state").begin_object().field_str("format", &m.state.format).field_int("version", m.state.version);

@@ -2421,6 +2421,24 @@ and Yellow 1.2%, outside their round-to-round spread; C# moves within 1.3% eithe
 cannot cost a frame 2%, so this is the placement effect of §8.7.3 on a changed `match`, and is recorded rather than
 explained further.
 
+**Mutants.** Every mutant of this audit is one edit in a scratch copy of the tree at the step's commit
+(`~/.cache/emusen/probe/mercury/audit/mut/`, `mut.py`): a Rust edit rebuilds the library and runs the crate's tests, a
+C# edit rebuilds `EmuSen.dll`; either goes into a copy of WiseMan's output, which runs the audit's claims and, where
+named, a wider filter; the edit and the output are restored after each. The unmutated control passes first. Step A's,
+each made in C# (c) and in Rust (r) separately:
+
+| # | Mutation | Caught by, in both engines |
+|---|---|---|
+| A1 | the fall-through reads the `Io` array again | `On_a_game_boy_every_unclaimed_io_address_reads_ff_and_keeps_no_write` |
+| A2 | HDMA1 readable in colour mode | `On_a_game_boy_color_in_colour_mode_the_gaps_and_the_hdma_addresses_read_ff` |
+| A3 | `$FF74` readable in the compatibility mode | the undocumented registers' compatibility case, and the compatibility gaps |
+| A4 | `$FF75` stores bits 0–6 | **no read**: bits 0–3 read 1 whatever is stored. Caught only by the lock-step corpus run (`The_hardware_corpus_runs_identically_on_each_console`), where `unused_hwio-C` writes `$FF75` and the two engines' states then differ; a mutant made in both engines at once is equivalent through every read |
+| A5 | RP reads light received | `The_infrared_port_reads_its_writable_bits_and_no_light` |
+| A6 | PCM12's nibbles swapped | both `Pcm12_carries_pulse_twos_digital_output_in_its_high_nibble` cases |
+| A7 | `$FF46`'s read case removed, so DMA's read-back falls to `$FF` | **only the corpus baseline**, three columns; so a claim was added, `The_dma_register_reads_back_the_page_written` |
+| A8 | OPRI's unused bits read 0 | `Opri_reads_back_its_one_bit_in_colour_mode` |
+| A9 | (C#) an unclaimed write still lands in `Io`, reads unchanged | seven lock-step cases: the random programs instruction by instruction, and the corpus rom by rom |
+
 ### 13.2 Step B: the timer's reload cycle
 
 **The rule.** Pan Docs (`Timer_Obscure_Behaviour.md`, "Timer overflow behavior") names two machine cycles after TIMA
@@ -2477,3 +2495,13 @@ Mercury puts at the cycle's end. No public document states that phase (GBCTR has
 **The four games** ran as the unmodified build ran them: the real-games version-5 test passed, and MercuryRT's trace of
 3,600 frames from boot is unchanged at every 300th frame. The whole `Mercury` filter, with the games and the corpus,
 passed: 779 cases.
+
+**Mutants**, each in C# and in Rust separately:
+
+| # | Mutation | Caught by, in both engines |
+|---|---|---|
+| B1 | a TIMA write in the reload cycle lands | `A_tima_write_in_the_reload_cycle_is_ignored` |
+| B2 | a TMA write in the reload cycle stays in TMA | `A_tma_write_in_the_reload_cycle_reaches_tima_as_well` |
+| B3 | the window one T-cycle short | at first only the lock-step window program, `The_window_counts_its_lines_with_rendering_skipped_instruction_by_instruction`, which caught each engine's mutant against the other's code; a mutant made in both engines would have survived. A claim was added for the case it needs, a reload on a cycle's first T-cycle after a DIV write: `A_reload_that_lands_early_in_its_cycle_still_ignores_a_tima_write_at_the_cycles_end` |
+| B4 | the window one T-cycle long | `After_the_reload_cycle_tima_and_tma_writes_are_ordinary` |
+| B5 | the window counts away from zero and never closes | `After_the_reload_cycle_tima_and_tma_writes_are_ordinary` |

@@ -196,6 +196,20 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x7F, rig.Read(0xFF06));
         }
 
+        // B, for mutant B3: a DIV write that drops the selected bit overflows TIMA on a cycle's first T-cycle, and the reload's whole machine cycle still ignores a TIMA write.
+        [Fact]
+        public void A_reload_that_lands_early_in_its_cycle_still_ignores_a_tima_write_at_the_cycles_end()
+        {
+            var rig = TimerAboutToOverflow();
+            rig.Tick(8);
+            rig.Write(0xFF04, 0x00);
+            rig.Tick(4);
+            Assert.Equal(0x00, rig.Read(0xFF05));
+            rig.Tick(4);
+            rig.Write(0xFF05, 0x7F);
+            Assert.Equal(0xFE, rig.Read(0xFF05));
+        }
+
         // B: one machine cycle later both registers are the CPU's again.
         [Fact]
         public void After_the_reload_cycle_tima_and_tma_writes_are_ordinary()

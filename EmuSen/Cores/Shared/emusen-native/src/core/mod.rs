@@ -222,7 +222,8 @@ pub trait Core: Sized + StateMachine {
         0
     }
 
-    /// `MEDIA`, since 1.1: machine info's `drives`.
+    /// `MEDIA`, since 1.1: machine info's `drives`. Since 1.6 a machine may have none, and then `media_lid` and
+    /// `media_insert` answer `NO_SUCH_DRIVE` for every drive and change nothing (EmuSen_CoreAPI.md §6.26).
     fn drives(&self) -> Vec<Drive> {
         Vec::new()
     }

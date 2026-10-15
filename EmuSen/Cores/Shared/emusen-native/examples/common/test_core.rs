@@ -56,6 +56,14 @@ pub const FAULT_HANGS: u32 = 65536;
 pub const SETTLE_FRAMES: u32 = 3;
 pub const SLOW_FRAME_MS: u64 = 4;
 pub const HANGING_IMAGE: u8 = 0xEE;
+/// Not a fault, since 1.6: an image whose payload begins with `CARTRIDGE` is a cartridge, whose machine lists no drive
+/// although the library claims MEDIA, as a cartridge console beside its disc attachment does (EmuSen_CoreAPI.md §6.26).
+pub const CARTRIDGE: u8 = 0xCA;
+/// Seeded faults for the kit's C16 and C18 on a machine that lists no drive: a media call taken, a media call answered
+/// with a status of the fault band, and a place named for the drive the machine does not list.
+pub const FAULT_DRIVELESS_ACCEPTS: u32 = 131072;
+pub const FAULT_DRIVELESS_FAULTS: u32 = 262144;
+pub const FAULT_DRIVELESS_NAMES_PLACES: u32 = 524288;
 /// The included faults, narrowed to the bits of `EMUSEN_TEST_CORE_FAULTS` when that is set, so each can be shown alone.
 fn faults() -> u32 {
     static MASK: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
@@ -122,6 +130,8 @@ pub struct TestCore {
     /// MEDIA's drive: a fingerprint of the disc in it, 0 for none, and its lid.
     disc: u32,
     lid_open: bool,
+    /// Whether the image is a cartridge (`CARTRIDGE`), so that the machine has no drive.
+    cartridge: bool,
     /// The image, kept past create and read a byte a frame: lent by a host that lends it, a copy otherwise (BORROW).
     rom: Kept,
     /// Frames after a load whose picture is still drawn otherwise (`SETTLES`).
@@ -140,6 +150,15 @@ fn fingerprint(payload: &[u8]) -> u32 {
 }
 
 impl TestCore {
+    /// Drive 0 is the one drive, which a cartridge's machine lacks; the faults answer otherwise for it.
+    fn has_drive(&self, drive: u32) -> Result<(), i32> {
+        match drive {
+            0 if self.cartridge && faults() & FAULT_DRIVELESS_FAULTS != 0 => Err(status::FAULT_BASE - 1),
+            0 if !self.cartridge || faults() & FAULT_DRIVELESS_ACCEPTS != 0 => Ok(()),
+            _ => Err(status::NO_SUCH_DRIVE),
+        }
+    }
+
     fn width(&self) -> i32 {
         if self.wide { 16 } else { 8 }
     }
@@ -308,6 +327,7 @@ impl Core for TestCore {
             threads: r.settings.get("Threads").and_then(|v| v.parse().ok()).unwrap_or(1),
             disc: fingerprint(body),
             lid_open: false,
+            cartridge: body.first() == Some(&CARTRIDGE),
             rom: keep(r.image),
             settling: 0,
         };
@@ -354,7 +374,7 @@ impl Core for TestCore {
         if !self.rom.is_empty() {
             let differs = faults() & FAULT_LENT_RUN_DIFFERS != 0 && self.rom.is_lent();
             self.ram[ROM_BYTE] = self.rom[self.frames as usize % self.rom.len()] ^ differs as u8;
-            if MEDIA {
+            if MEDIA && (!self.cartridge || faults() & FAULT_DRIVELESS_NAMES_PLACES != 0) {
                 // The drive names the byte the next frame reads, as a drive names where its head is going (1.4).
                 let past = if faults() & FAULT_NAMES_PAST_THE_IMAGE != 0 { self.rom.len() } else { 0 };
                 seek(0, None, ((self.frames as usize + 1) % self.rom.len() + past) as u64);
@@ -594,21 +614,20 @@ impl Core for TestCore {
     }
 
     fn drives(&self) -> Vec<Drive> {
+        if self.cartridge {
+            return Vec::new();
+        }
         vec![Drive { drive: 0, label: "Test drive".into(), kind: "cd".into(), lid_open: self.lid_open, loaded: self.disc != 0 }]
     }
 
     fn media_lid(&mut self, drive: u32, open: bool) -> Result<(), i32> {
-        if drive != 0 {
-            return Err(status::NO_SUCH_DRIVE);
-        }
+        self.has_drive(drive)?;
         self.lid_open = open;
         Ok(())
     }
 
     fn media_insert(&mut self, drive: u32, insert: &Insert<'_>) -> Result<(), i32> {
-        if drive != 0 {
-            return Err(status::NO_SUCH_DRIVE);
-        }
+        self.has_drive(drive)?;
         if !self.lid_open && !insert.restore {
             return Err(status::LID_CLOSED);
         }

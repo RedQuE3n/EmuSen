@@ -9,8 +9,8 @@ use emusen_native::core::{Kept, SEEK_SPAN, seek};
 /// The disc in the drive, its bytes the host's where the host lends them (`BORROW`).
 pub type Disc = emusen_disc::Disc<Kept>;
 
-/// Whether the drive names its places to the host (`MEDIA_SEEK`): not while the core cannot claim `MEDIA`.
-pub const NAMES_PLACES: bool = false;
+/// Whether the drive names its places to the host (`MEDIA_SEEK`), which core ABI 1.6 lets the core claim.
+pub const NAMES_PLACES: bool = true;
 
 /// The drive's number in machine info's `drives`.
 pub const DRIVE: u32 = 0;
@@ -141,8 +141,8 @@ impl Cdd {
         self.disc.as_ref().and_then(|d| d.track_at(at)).is_some_and(|t| !t.audio)
     }
 
-    /// Tells the host where the head is going, unless that lies in the megabyte after the place last named; only once
-    /// the core can claim `MEDIA`, whose drives the event names (Nephrite_Native.md §53.4).
+    /// Tells the host where the head is going, unless that lies in the megabyte after the place last named
+    /// (Nephrite_Native.md §53.2, §56).
     fn name(&mut self, at: u32) {
         if !NAMES_PLACES {
             return;

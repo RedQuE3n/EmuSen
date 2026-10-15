@@ -3953,6 +3953,9 @@ held on Sega Retro): §10 (the register tables), §11.1-§11.16, §12.5-§12.6 a
 
 ### 53.2 Not claimed: `MEDIA`, and with it `MEDIA_SEEK`
 
+*Answered 2026-10-15:* core ABI 1.6 lets a `MEDIA` machine list no drive, and Nephrite claims `MEDIA` and `MEDIA_SEEK`
+(§56).
+
 The tray and a disc change are written (`media_lid`, `media_insert`, `drives`, tested in the crate), and the
 conformance kit's C16 passed on the 240p disc with them claimed. But a capability is the library's, and C16 then
 failed on every Genesis cartridge: "MEDIA is claimed but machine info lists no drives". A Genesis has no drive. So
@@ -4032,7 +4035,7 @@ which are argued within what the logs and tests allow.
   the registers: the subcode registers and level 6 (`$FF8068`, `$FF8100`, not built); the graphics ASIC's registers
   (`$FF8058`-`$FF8066`, not built, reading 0); the PCM chip's registers, which read 0; the version bits of `$FF8000`;
   what a peripheral reset resets.
-- **`MEDIA` and `MEDIA_SEEK`**, waiting on the tester's answer to §53.2's question.
+- ~~**`MEDIA` and `MEDIA_SEEK`**, waiting on the tester's answer to §53.2's question.~~ *Claimed 2026-10-15 (§56).*
 - **`.cue` and `.chd` for the `mcd` system**: the core opens them, but the system pack claims `.iso` alone, since a
   frontend tells a Sega CD's sheet from a PlayStation's only by opening its first track, which the system pack's
   recogniser does not yet do. Due with the Sega CD offered (stage 10).
@@ -4144,3 +4147,22 @@ different tests; REG 8030's 0x07 in both, the timer's period, Nephrite passes as
 - **The drive probe** in Nephrite after the change: 67 busy exchanges after its HOCK, early in its first frames, then
   `00.000000.0F`; after a reset of the peripherals the same idle status at once; a TOC request busy for 20 exchanges,
   then `94.013500.18`.
+
+## 56. `MEDIA` and `MEDIA_SEEK` claimed, on core ABI 1.6 (2026-10-15)
+
+§53.2's question was answered yes and built elsewhere: core ABI 1.6 (`EmuSen_CoreAPI.md` §6.26, §17, §28.11) lets a
+`MEDIA` machine list no drive, its media calls then answering `NO_SUCH_DRIVE` and changing nothing, and the kit's C16
+checks the drive rules only where a drive is listed. Nephrite already answered so (`drives` empty without the Sega
+CD, both media calls `NO_SUCH_DRIVE`), so the claim is three lines: `caps::MEDIA` in the capabilities, `media` among
+the exports, and the drive naming its places (`cdd::NAMES_PLACES`), which turns `MEDIA_SEEK` on as §51.1 built it.
+
+**Measured (2026-10-15)**, `emusen-core-conform` 1.6:
+
+- The Genesis sample: the core's cases and 64 of 64 images pass, C16 by the no-drive rule and C18 with no place
+  named, in 77 s at 16 at a time.
+- The 240p disc with mcd-verificator as file 2, Sonic CD (USA) and Mickey Mania with a player's BIOS as file 2, 600
+  frames each: compliant, C16 (an insert refused with the tray closed, the disc changed through the tray, a state held
+  to its disc over 240 frames), C17 and C18 (one place named in 600 frames, every frame's picture, sound and state the
+  same whether the host acted on it or not).
+- The crate's tests, 159; WiseMan's Nephrite, Genesis and Registration tests, 83, the library's capabilities now
+  with `MEDIA`.

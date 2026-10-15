@@ -507,7 +507,7 @@ DICR itself reads alike on all six in `dicr-edge.s` but for SwanStation, which n
 
 **The discs' pictures.** `psxreferee.py pictures` runs a libretro referee on a disc and keeps its screen every K frames
 in the run tool's picture form, the probe's other spaces removed unread, since on the player's BIOS they hold its RAM.
-SwanStation and Beetle PSX ran the seven test discs to frame 6,000 on `scph5501.bin`; PCSX-ReARMed ran them on its own
+SwanStation and Beetle PSX ran the seven test discs to frame 6,000 on the player's American BIOS; PCSX-ReARMed ran them on its own
 kernel. The libretro channel carries no pad setting the driver pins, and SwanStation's port 1 is not a DualShock:
 Ape Escape shows it its "DUALSHOCK … has not been plugged into port 1" screen, Beetle PSX and Diamond go on to the
 game. `Diamond_CDROM.md` §9.4 records each disc against them.
@@ -521,7 +521,7 @@ those and DICR's flags and DPCR's other bytes (`0C880000h`, `0044003Fh`, `00000B
 to its byte. `Diamond_Disputes.md` D-45 has the table and the ruling; Diamond after the change reads as DuckStation,
 SwanStation and Beetle PSX in every case.
 
-SwanStation ran the seven test discs again to frame 6,000 on `scph5501.bin`, pictures every 150 frames, and Silent
+SwanStation ran the seven test discs again to frame 6,000 on the player's American BIOS, pictures every 150 frames, and Silent
 Hill, Castlevania: SotN and Tekken 3 to frame 4,500 every 10 frames, and Tekken 3 to frame 12,000 every 300, through
 `psxreferee.py pictures`; `Diamond_CDROM.md` §9.8 records the discs against them.
 

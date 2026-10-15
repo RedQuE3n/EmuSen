@@ -139,13 +139,7 @@ impl Header {
     }
 }
 
-/// Where a disc image's system area begins: the user data of its first sector, at 0 in a 2048-byte-sector image
-/// and after the 16 bytes of sync and sector header in a raw 2352-byte one.
-pub const DISC_SIGNATURE: &[u8; 14] = b"SEGADISCSYSTEM";
-
-pub fn disc_offset(image: &[u8]) -> Option<usize> {
-    [0usize, 16].into_iter().find(|&o| image.get(o..o + DISC_SIGNATURE.len()) == Some(DISC_SIGNATURE.as_slice()))
-}
+use crate::mcd::disc_offset;
 
 /// A copier's 512-byte header and 16 KiB blocks (Nephrite_Native.md §11.2).
 pub const COPIER_HEADER: usize = 0x200;
@@ -235,6 +229,7 @@ impl Media {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mcd::DISC_SIGNATURE;
 
     pub fn cartridge(system: &str, region: &str, save: Option<[u8; 12]>) -> Vec<u8> {
         let mut rom = vec![0u8; 0x8000];

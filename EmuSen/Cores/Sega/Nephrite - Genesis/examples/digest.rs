@@ -17,7 +17,7 @@ fn fnv(h: u64, bytes: &[u8]) -> u64 {
 const FNV: u64 = 0xCBF2_9CE4_8422_2325;
 
 fn machine(path: &std::path::Path, raw: &[u8], bios: &Option<Vec<u8>>) -> Machine {
-    if emusen_disc::is_sheet(raw) || nephrite::media::disc_offset(raw).is_some() {
+    if emusen_disc::is_sheet(raw) || nephrite::mcd::disc_offset(raw).is_some() {
         let tracks = if emusen_disc::is_sheet(raw) {
             let sheet = emusen_disc::cue::Sheet::parse(&String::from_utf8_lossy(raw)).expect("a sheet");
             sheet.files.iter().map(|f| Kept::from(std::fs::read(path.parent().unwrap().join(f)).expect("a track"))).collect()

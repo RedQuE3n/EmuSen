@@ -7,6 +7,7 @@ pub mod asic;
 pub mod cdc;
 pub mod cdda;
 pub mod cdd;
+pub mod frontend;
 pub mod pcm;
 pub mod state;
 pub mod word;
@@ -22,6 +23,8 @@ use crate::interface::{Answer, Attachment, AttachmentView, Board, Master, SpaceR
 use cdc::{Cdc, dest};
 use cdd::{Cdd, SECTOR};
 use word::{Lands, WordRam};
+
+pub use frontend::{DISC_SIGNATURE, SaveMemory, disc_offset, fingerprint, is_disc, open_disc, system_area};
 
 /// Sub CPU clocks a second: the 50 MHz crystal over 4.
 pub const SUB_HZ: u64 = 12_500_000;
@@ -214,7 +217,7 @@ impl MegaCd {
             cdc: Cdc::default(),
             raw: Box::new([0; 2352]),
             fader: 0,
-            cdda: cdda::Cdda::new(master_hz.0, master_hz.1),
+            cdda: cdda::Cdda::new(master_hz.0, master_hz.1, board.rate),
             cart: None,
             asic: asic::Asic::default(),
             seen: None,
@@ -417,26 +420,6 @@ impl AttachmentView for MegaCd {
             _ => return None,
         })
     }
-}
-
-/// A Sega CD disc from an image and its companions: a sheet with its tracks, a CHD, a raw track, or 2,048-byte
-/// sectors that begin with the system area's signature, the console's own mark of a disc (Nephrite_Native.md §51).
-pub fn open_disc(image: emusen_native::core::Kept, companions: Vec<emusen_native::core::Kept>) -> Result<cdd::Disc, emusen_disc::Refusal> {
-    let lone = if image.starts_with(crate::media::DISC_SIGNATURE) { emusen_disc::Lone::User } else { emusen_disc::Lone::Detect };
-    emusen_disc::open(image, companions, emusen_disc::IsoForm::Mode1, lone)
-}
-
-/// The disc's fingerprint, which a state is held to: its tracks, its lead-out and its first two sectors, the system
-/// area's.
-pub fn fingerprint(disc: &mut cdd::Disc) -> u64 {
-    disc.fingerprint([0, 1])
-}
-
-/// The system area's first 2,048 bytes as the drive reads them from sector 00:02:00, for telling what the disc is.
-pub fn system_area(disc: &mut cdd::Disc) -> Vec<u8> {
-    let mut raw = [0u8; 2352];
-    let k = disc.read(emusen_disc::msf::PROGRAM_START, &mut raw);
-    if k.audio() { Vec::new() } else { raw[16..16 + 2048].to_vec() }
 }
 
 fn gcd(a: u64, b: u64) -> u64 {

@@ -446,6 +446,13 @@ inherent methods of each attachment's module**, composed by the assembly, not tr
 - **Machine info**: the system id, extensions, the development mark, frame rate, ports and the description are the
   assembly's; spaces, processors, batteries and firmware are composed from the parts.
 
+**As built (commit 4, §11.4)** in `src/mcd/frontend.rs`: the disc's signature and offset, `is_disc`, `open_disc`,
+`fingerprint` and `system_area`; `bios_firmware(region, which)`; `ram_cart_setting` and `MegaCd::apply_settings`;
+`SaveMemory { Backup, Cartridge }` with `battery(memory, which)` and `MegaCd`'s `save_memories`, `save_memory` and
+`load_save_memory`; and the drive's `drive`, `lid_open`, `set_lid` and `insert`. Every number is the assembly's: files
+2–4, the battery files 0 and 10 (`v1::save_file`), the companions from `MEDIA_FILE`, `STATUS_BAD_DISC`, and the host's
+companions kept or borrowed (`v1::open_disc`).
+
 ### 3.7 Each kind, answered
 
 | Kind | Through | Sega CD | 32X | CD32X |
@@ -979,3 +986,19 @@ test, and no access pays it on a console without one but the flag's (§3.11).
 - **The form rejected on the way** (§3.4): `Map<'_, A>` cost the cartridge 1.3 to 2.4%; measured three ways (as it
   was, with the Sega CD's instantiation removed, and with `Hw`'s three removed fields put back as padding, 1.3%), so
   neither the second instantiation nor the devices' layout explained it. Not committed.
+
+### 11.4 Commit 4: the Sega CD's facts behind its module
+
+- **`src/mcd/frontend.rs`** (§3.6 as built): `DISC_SIGNATURE` and `disc_offset` from `media.rs`; `is_disc` from `v1.rs`;
+  `open_disc`, `fingerprint` and `system_area` from `mcd/mod.rs` (re-exported there, as the examples name them);
+  `bios_firmware` with the replacement's words from `v1.rs`'s `cd_bios` and `CD_COST`; the `ramcart` setting; the two
+  save memories' declarations, kinds, media and labels, from `v1.rs`'s `backup_ram` and `ram_cartridge`, and their
+  loading at create; the drive's calls from `v1.rs`'s `drives`, `media_lid` and `media_insert`, the fingerprint set by
+  `insert`.
+- **`Cdda::new` takes the mix's rate**, given by `Board::rate`, so `cdda.rs` no longer reads `crate::sound::RATE`. With
+  `DISC_SIGNATURE` the Sega CD's own, **no production line of `src/mcd/` reaches the crate outside it but
+  `crate::interface`** (§2.2 counted two).
+- **After it**, no line outside `src/mcd/` names the Sega CD but the assembly's (`lib.rs`, `machine.rs`, `media.rs`,
+  `state.rs`, `v1.rs`).
+- **Byte identity**: the 71 digests equal the baseline's; the crate's 175 tests; the kit's sample 64 of 64 and the 240p
+  disc compliant; WiseMan's 86. No code on a frame's path changed, so the bench was not run.

@@ -6,6 +6,8 @@ use emusen_native::core::*;
 
 use crate::genesis::Model;
 use crate::io::Plug;
+use crate::mcd::SaveMemory;
+use crate::mcd::frontend::ram_cart_setting;
 use crate::machine::{HEIGHT, Machine, WIDTH, default_model};
 use crate::media::{Media, System, cartridge_bytes};
 use crate::debugger::{M68KBUS_ID, M68KBUS_SIZE, Z80BUS_ID, Z80BUS_SIZE};
@@ -180,38 +182,18 @@ pub const LOCK_ON: u32 = 8;
 pub const SK_PATCH: u32 = 9;
 /// The Sega CD's backup RAM cartridge's battery file; 1 being the TMSS ROM's, it takes the next free number.
 pub const RAM_CART: u32 = 10;
+
+/// The battery file of each of the Sega CD's save memories: the backup RAM inside it file 0, its cartridge 10.
+fn save_file(memory: SaveMemory) -> u32 {
+    match memory {
+        SaveMemory::Backup => 0,
+        SaveMemory::Cartridge => RAM_CART,
+    }
+}
 /// A disc's companions, as the host numbers a sheet's files (EmuSen_CoreAPI.md §6.23).
 pub const MEDIA_FILE: u32 = flags::FILE_MEDIA;
 /// An image that is no disc this core reads, in a sheet, a CHD or 2,048-byte sectors.
 pub const STATUS_BAD_DISC: i32 = -11;
-
-/// The setting that plugs a backup RAM cartridge into a Sega CD's slot, read at create.
-pub const RAM_CART_KEY: &str = "ramcart";
-
-fn ram_cart_setting() -> Setting {
-    Setting {
-        key: RAM_CART_KEY.into(),
-        label: "Backup RAM cartridge".into(),
-        help: "For the Sega CD: whether Sega's Backup RAM Cartridge, 128 KiB of saves beside the 8 KiB inside the unit, is plugged into the cartridge slot. Its saves are kept in a file of their own. Takes effect when a game is next loaded.".into(),
-        kind: SettingKind::Choice(vec![
-            Choice { value: "none".into(), label: "None".into(), help: None },
-            Choice { value: "mcd.ramcart".into(), label: "Backup RAM Cartridge (128 KiB)".into(), help: None },
-        ]),
-        default: "none".into(),
-        scope: Scope::Create,
-        category: Some("Sega CD".into()),
-        effect: Effect::None,
-        advanced: false,
-        // Not shown while the Sega CD is offered to no player (Nephrite_Native.md §53.2).
-        hidden: true,
-        restart: true,
-    }
-}
-
-/// Whether an image is a disc's: a cue sheet, a CHD, or sectors that carry the system area's signature.
-fn is_disc(image: &[u8]) -> bool {
-    emusen_disc::is_sheet(image) || image.starts_with(emusen_disc::disc::CHD_MAGIC) || crate::media::disc_offset(image).is_some()
-}
 
 /// The disc an image and its companions make, kept with `keep`, which borrows where the host lends them (BORROW), and
 /// what it is read from its system area.
@@ -233,6 +215,16 @@ fn open_disc(image: &[u8], files: &[emusen_native::abi::File<'_>]) -> Result<(cr
     Ok((disc, media))
 }
 
+/// A market's Sega CD BIOS as file 2, 3 or 4.
+fn cd_bios(region: char) -> Firmware {
+    let which = match region {
+        'J' => CD_BIOS_J,
+        'E' => CD_BIOS_E,
+        _ => CD_BIOS_U,
+    };
+    crate::mcd::frontend::bios_firmware(region, which)
+}
+
 fn firmware(which: u32, name: &str, label: &str, size: u64, cost: &str) -> Firmware {
     Firmware { which, name: name.into(), label: label.into(), size, required: false, parts: vec![vec![name.into()]], replacement: Some(Replacement::None { cost: cost.into() }) }
 }
@@ -242,22 +234,7 @@ fn tmss() -> Firmware {
         "Without the image Nephrite runs as a console without TMSS, as the first Genesis and Mega Drive models were: licensed games start the same, without the licence screen.")
 }
 
-const CD_COST: &str = "Nephrite's open replacement for the Sega CD BIOS is not written yet (Nephrite_Plan.md §5.6): a disc runs on the player's BIOS, and without it no disc starts.";
 const S32X_COST: &str = "Nephrite's open replacements for the 32X's boot ROMs are not written yet (Nephrite_Plan.md §5.6): at this stage no 32X game runs, with the images or without them.";
-
-fn cd_bios(region: char) -> Firmware {
-    let which = match region {
-        'J' => CD_BIOS_J,
-        'E' => CD_BIOS_E,
-        _ => CD_BIOS_U,
-    };
-    let market = match region {
-        'J' => "Japanese Mega-CD",
-        'E' => "European Mega-CD",
-        _ => "American Sega CD",
-    };
-    firmware(which, &format!("bios_CD_{region}.bin"), &format!("The {market}'s BIOS (131,072 bytes)"), 131_072, CD_COST)
-}
 
 fn s32x_boot() -> Vec<Firmware> {
     vec![
@@ -360,11 +337,11 @@ impl Core for Machine {
     /// The Sega CD's backup RAM, the console's own memory, and its RAM cartridge, a removable one, each a slot of its
     /// medium since core ABI 1.8 (EmuSen_SaveMedia.md §7.3).
     fn battery_files(system: &str) -> Option<Vec<Battery>> {
-        (system == "mcd").then(|| vec![backup_ram(), ram_cartridge()])
+        (system == "mcd").then(|| [SaveMemory::Backup, SaveMemory::Cartridge].map(|k| crate::mcd::frontend::battery(k, save_file(k))).into())
     }
 
     fn create(request: &Create<'_>) -> Result<Self, i32> {
-        if is_disc(request.image) {
+        if crate::mcd::is_disc(request.image) {
             return Machine::create_disc(request);
         }
         if request.image.len() < MIN_IMAGE {
@@ -576,39 +553,35 @@ impl Core for Machine {
         match (which, self.battery_id()) {
             (0, Some(_)) => Ok((self.battery_bytes().expect("the battery's memory"), 0)),
             (0, None) => Ok((&[], 0)),
-            (RAM_CART, _) if self.media.system == System::Mcd => Ok((self.bytes(crate::machine::CARTRAM_ID).unwrap_or(&[]), 0)),
+            (RAM_CART, _) if self.media.system == System::Mcd => Ok((self.mcd().and_then(|m| m.save_memory(SaveMemory::Cartridge)).unwrap_or(&[]), 0)),
             _ => Err(status::BAD_FILE),
         }
     }
 
     fn drives(&self) -> Vec<Drive> {
         match self.mcd() {
-            Some(m) => vec![Drive { drive: crate::mcd::cdd::DRIVE, label: "CD drive".into(), kind: "cd".into(), lid_open: m.hw.cdd.mode == crate::mcd::cdd::Mode::TrayOpen, loaded: m.hw.cdd.disc.is_some() }],
+            Some(m) => vec![m.drive()],
             None => Vec::new(),
         }
     }
 
     /// The tray, opened or closed as the player would: the drive stops; closed, it reads its disc's TOC again.
     fn media_lid(&mut self, drive: u32, open: bool) -> Result<(), i32> {
-        let m = self.mcd_mut().filter(|_| drive == crate::mcd::cdd::DRIVE).ok_or(status::NO_SUCH_DRIVE)?;
-        m.hw.cdd.set_tray(open);
+        self.mcd_mut().filter(|m| drive == m.drive().drive).ok_or(status::NO_SUCH_DRIVE)?.set_lid(open);
         Ok(())
     }
 
     fn media_insert(&mut self, drive: u32, insert: &Insert<'_>) -> Result<(), i32> {
-        let open = self.mcd().filter(|_| drive == crate::mcd::cdd::DRIVE).ok_or(status::NO_SUCH_DRIVE)?.hw.cdd.mode == crate::mcd::cdd::Mode::TrayOpen;
+        let open = self.mcd().filter(|m| drive == m.drive().drive).ok_or(status::NO_SUCH_DRIVE)?.lid_open();
         if !open && !insert.restore {
             detail("the Sega CD's tray is closed; open it before changing the disc");
             return Err(status::LID_CLOSED);
         }
-        let mut disc = match insert.image {
+        let disc = match insert.image {
             None => None,
             Some(image) => Some(open_disc(image, &insert.files)?.0),
         };
-        let m = self.mcd_mut().expect("the drive");
-        m.disc_print = disc.as_mut().map_or(0, crate::mcd::fingerprint);
-        m.hw.cdd.disc = disc;
-        m.hw.cdd.named = None;
+        self.mcd_mut().expect("the drive").insert(disc);
         Ok(())
     }
 }
@@ -631,19 +604,11 @@ impl Machine {
         m.kept_apart = kept_apart;
         m.apply_pads(&request.settings);
         m.firmware = request.files.iter().filter(|f| (TMSS..=S32X_SLAVE).contains(&f.which)).map(|f| f.which).collect();
-        let s = &mut m.mcd_mut().expect("a disc's Sega CD").hw;
-        if request.settings.get(RAM_CART_KEY) == Some("mcd.ramcart") {
-            s.cart = Some(crate::mcd::RamCart::new(crate::mcd::RamCart::SEGA));
-        }
+        let s = m.mcd_mut().expect("a disc's Sega CD");
+        s.apply_settings(&request.settings);
         for f in request.files.iter() {
-            let into: Option<&mut Vec<u8>> = match f.which {
-                0 => Some(&mut s.bram),
-                RAM_CART => s.cart.as_mut().map(|c| &mut c.bytes),
-                _ => None,
-            };
-            if let Some(b) = into {
-                let n = b.len().min(f.data.len());
-                b[..n].copy_from_slice(&f.data[..n]);
+            if let Some(&k) = [SaveMemory::Backup, SaveMemory::Cartridge].iter().find(|&&k| save_file(k) == f.which) {
+                s.load_save_memory(k, f.data);
             }
         }
         Ok(m)
@@ -652,26 +617,10 @@ impl Machine {
     /// The battery files machine info names: the save RAM's, or the Sega CD's backup RAM and its cartridge's.
     fn batteries(&self) -> Vec<Battery> {
         match self.mcd() {
-            Some(m) => {
-                let mut v = vec![backup_ram()];
-                if m.hw.cart.is_some() {
-                    v.push(ram_cartridge());
-                }
-                v
-            }
+            Some(m) => m.save_memories().into_iter().map(|k| crate::mcd::frontend::battery(k, save_file(k))).collect(),
             None => self.battery_id().map(|_| Battery::game(0, ".srm")).into_iter().collect(),
         }
     }
-}
-
-/// The backup RAM inside the Sega CD: battery file 0, the console's (EmuSen_SaveMedia.md §7.3).
-fn backup_ram() -> Battery {
-    Battery::console(0, ".brm").medium("mcd.backup").label("Inside the console")
-}
-
-/// The backup RAM cartridge in its slot: battery file 10, removable.
-fn ram_cartridge() -> Battery {
-    Battery::removable(RAM_CART, ".crm").medium("mcd.ramcart").label("Cartridge slot")
 }
 
 emusen_native::core_exports!(Machine; rom_patches, settings, setting_notes, debug, debug_stack, debug_registers, debug_disassemble, media);
@@ -722,7 +671,7 @@ mod tests {
         assert!(Machine::firmware_for(&cartridge("SEGA GENESIS", "U", None)).is_empty());
 
         let mut iso = vec![0u8; 0x8000];
-        iso[..14].copy_from_slice(crate::media::DISC_SIGNATURE);
+        iso[..14].copy_from_slice(crate::mcd::DISC_SIGNATURE);
         iso[0x1F0] = b'E';
         let mcd = create(&iso, vec![]).unwrap();
         let info = mcd.machine_info();

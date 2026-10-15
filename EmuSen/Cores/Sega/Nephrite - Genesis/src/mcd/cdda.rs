@@ -51,8 +51,9 @@ fn gain(att: i32) -> i32 {
 }
 
 impl Cdda {
-    pub fn new(num: u64, den: u64) -> Cdda {
-        Cdda { steps: Steps::new(num, den, crate::sound::RATE), queue: VecDeque::with_capacity(2 * FRAMES), levels: [[0; 2]; 2], att: 0, emph: [[0.0; 2]; 2], hist: [[0; 4]; 2] }
+    /// CD-DA for a Genesis whose master clock runs at `num`/`den` Hz, synthesised at the mix's `rate`.
+    pub fn new(num: u64, den: u64, rate: u32) -> Cdda {
+        Cdda { steps: Steps::new(num, den, rate), queue: VecDeque::with_capacity(2 * FRAMES), levels: [[0; 2]; 2], att: 0, emph: [[0.0; 2]; 2], hist: [[0; 4]; 2] }
     }
 
     /// A sector's samples from master clock `start`, `period` master clocks long, toward `volume` of `FULL`, through
@@ -157,7 +158,7 @@ mod tests {
     #[test]
     fn de_emphasis_follows_the_50_15_us_curve() {
         let gain = |hz: f64| {
-            let mut c = super::Cdda::new(1, 1);
+            let mut c = super::Cdda::new(1, 1, 48_000);
             c.att = super::FULL;
             let mut raw = [0u8; 2352];
             let mut peak = 0i32;
@@ -189,7 +190,7 @@ mod tests {
     #[test]
     fn an_audio_track_played_reaches_the_mix_at_the_faders_volume() {
         let disc = crate::mcd::cdd::tests::disc(300, 150);
-        let board = crate::interface::Board { master_hz: (4_725_000_000, 88), pal: false, start: 0, rate: crate::sound::RATE };
+        let board = crate::interface::Board { master_hz: (4_725_000_000, 88), pal: false, start: 0, rate: 48_000 };
         let mut m = MegaCd::new(board, Vec::new(), Some(disc));
         let h = &mut m.hw;
         h.fader = 0x400 << 4;

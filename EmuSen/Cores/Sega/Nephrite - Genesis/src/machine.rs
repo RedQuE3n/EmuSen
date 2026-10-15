@@ -229,7 +229,7 @@ impl Machine {
     /// The memory the battery file holds: the cartridge's save RAM, or the Sega CD's internal backup RAM.
     pub fn battery_id(&self) -> Option<u32> {
         match self.media.system {
-            System::Mcd => Some(20),
+            System::Mcd => Some(BRAM_ID),
             _ => self.hw().cart.has_battery().then_some(SRAM_ID),
         }
     }

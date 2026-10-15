@@ -622,6 +622,19 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(after, rig.Bus.Apu.Pulse1.Length.Counter);
         }
 
+        // J, 03-trigger #4, for mutant J5: writing the enable bit again, or clearing it, clocks nothing.
+        [Fact]
+        public void Only_enabling_a_disabled_length_clocks_it()
+        {
+            var rig = LengthTwo(0);
+            rig.Write(0xFF14, 0x40);
+            rig.Bus.Apu.SequencerStep = 1;
+            rig.Write(0xFF14, 0x40);
+            rig.Write(0xFF14, 0x00);
+            rig.Write(0xFF14, 0x00);
+            Assert.Equal(2, rig.Bus.Apu.Pulse1.Length.Counter);
+        }
+
         // J, 03-trigger #5: an extra clock that empties the counter, with no trigger, silences the channel.
         [Fact]
         public void An_extra_clock_that_empties_the_length_silences_the_channel()

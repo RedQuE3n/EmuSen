@@ -2983,3 +2983,9 @@ empty enabled counter, so the channel's own trigger leaves it there. **The state
 (#3) and trigger cases (#6–#12) alike; the combined `dmg_sound` and `cgb_sound` now stop at `05-sweep details`,
 Failed(5) for Failed(3). 120 of 173 in each column. **The four games** and all four synthetic programs' digests, sound
 included, did not move. The whole `Mercury` filter passes, 848 cases.
+
+**Mutants**, each in C# and in Rust separately: J1, no extra clock; J2, the first half taken as the even step; J3, no
+reload to the maximum less one; J4, an emptied counter leaves the channel on: each caught on both engines by the
+step's claims. J5, enabling an enabled length clocks it too, was caught at first only by the corpus (`03-trigger` #4),
+which CI does not have; `Only_enabling_a_disabled_length_clocks_it` was added and catches it on both engines. The
+step's cost was not measured separately: the change touches only NRx4 writes, a few a frame.

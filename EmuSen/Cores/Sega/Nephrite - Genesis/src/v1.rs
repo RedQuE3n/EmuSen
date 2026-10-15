@@ -1017,6 +1017,77 @@ mod tests {
         assert_eq!(bad.err(), Some(STATUS_BAD_DISC));
     }
 
+    // A disc's machine with its RAM cartridge, the layout pinned as the cartridge's is, before the attachment interface (Nephrite_Attachments.md §7.1).
+    #[test]
+    fn a_disc_machines_layout_is_pinned() {
+        let iso = disc_image("A", 40);
+        let m = Machine::create(&Create { image: &iso, settings: Settings::parse(b"ramcart=mcd.ramcart").unwrap(), files: vec![], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false }).unwrap();
+        assert_eq!(
+            m.layout(),
+            concat!(
+                "0 4 u32 Magic\n4 4 i32 Version\n8 1 u8 System\n9 8 i64 Frames\n17 65536 u8[65536] WRAM\n",
+                "65553 8192 u8[8192] Z80RAM\n73745 65536 u8[65536] VRAM\n139281 128 u8[128] CRAM\n",
+                "139409 80 u8[80] VSRAM\n139489 524288 u8[524288] PRGRAM\n663777 262144 u8[262144] WORDRAM\n",
+                "925921 65536 u8[65536] PCMRAM\n991457 8192 u8[8192] BRAM\n999649 131072 u8[131072] CARTRAM\n",
+                "1130721 32 u32[8] M68000.D\n1130753 32 u32[8] M68000.A\n1130785 4 u32 M68000.OtherSp\n",
+                "1130789 2 u16 M68000.Sr\n1130791 4 u32 M68000.Pc\n1130795 4 u16[2] M68000.Prefetch\n",
+                "1130799 1 bool M68000.Stopped\n1130800 1 bool M68000.Halted\n1130801 1 u8 M68000.LastLevel\n",
+                "1130802 1 bool M68000.TracePending\n1130803 4 u32 M68000.TraceResume\n1130807 8 u16[4] Z80.Main\n",
+                "1130815 8 u16[4] Z80.Alternate\n1130823 4 u16[2] Z80.Index\n1130827 2 u16 Z80.Sp\n",
+                "1130829 2 u16 Z80.Pc\n1130831 1 u8 Z80.I\n1130832 1 u8 Z80.R\n1130833 2 u16 Z80.Wz\n",
+                "1130835 1 u8 Z80.Q\n1130836 1 bool Z80.P\n1130837 1 bool Z80.Iff1\n1130838 1 bool Z80.Iff2\n",
+                "1130839 1 u8 Z80.Im\n1130840 1 bool Z80.EiPending\n1130841 1 bool Z80.Halted\n",
+                "1130842 24 u8[24] VdpRegisters\n1130866 5 bool[5] VdpLatches\n1130871 4 u32 HvLatch\n",
+                "1130875 1 u8 VdpCode\n1130876 2 u16 VdpAddress\n1130878 1 u8 VdpLineCounter\n",
+                "1130879 24 u16[12] VdpFifo\n1130903 2 u8[2] VdpFifoPointers\n1130905 32 u64[4] VdpFifoReady\n",
+                "1130937 264 u64[33] VdpLanding\n1131201 2 u16 VdpReadBuffer\n1131203 32 u64[4] VdpDma\n",
+                "1131235 16 u64[2] VdpTimes\n1131251 320 u8[320] SpriteCache\n1131571 3 bool[3] SpriteFlags\n",
+                "1131574 2 u16 VscrollLatch\n1131576 2 u8[2] Field\n1131578 320 u8[320] SpriteLineBuffer\n",
+                "1131898 80 u8[80] LineVsram\n1131978 4 u16[2] LineHscroll\n1131982 2 u8[2] LineWindow\n",
+                "1131984 4 u16[2] OpenLine\n1131988 640 u8[640] OpenLineSprites\n1132628 80 u8[80] OpenLineVsram\n",
+                "1132708 4 u16[2] OpenLineScroll\n1132712 2 u8[2] OpenLineWindow\n1132714 4 u16[2] FrameSize\n",
+                "1132718 3 u8[3] IoData\n1132721 3 u8[3] IoCtrl\n1132724 3 u8[3] IoTx\n1132727 3 u8[3] IoSctrl\n",
+                "1132730 8 bool[8] PadTh\n1132738 8 u8[8] PadFalls\n1132746 64 u64[8] PadLastFall\n",
+                "1132810 6 u8[6] Taps\n1132816 1 u8 SramRegister\n1132817 1 bool Mapper\n",
+                "1132818 8 u8[8] MapperPages\n1132826 80 u64[10] Clocks\n1132906 4 u32 Line\n1132910 2 u16 Z80Bank\n",
+                "1132912 2 u16 OpenBus\n1132914 4 bool[4] Lines\n1132918 4 u8[4] Tmss\n",
+                "1132922 256 u8[256] Sound.Part0\n1133178 256 u8[256] Sound.Part1\n",
+                "1133434 6 u8[6] Sound.AddressPartFlags\n1133440 4 u16[2] Sound.Counters\n",
+                "1133444 24 u64[3] Sound.Times\n1133468 8 i32[2] Sound.Out\n1133476 24 i32[6] Sound.Channels\n",
+                "1133500 5 u8[5] Sound.Timers\n1133505 40 u64[5] Sound.TimersAndCounts\n",
+                "1133545 1024 u64[128] Sound.Writes\n1134569 32 u64[4] Sound.Csm\n",
+                "1134601 1056 u64[132] Sound.FmOperators\n1135657 24 bool[24] Sound.FmKeys\n",
+                "1135681 16 u64[2] Sound.FmEnvelope\n1135697 4 u8[4] Sound.FmLatches\n1135701 3 u8[3] Sound.FmLfo\n",
+                "1135704 31 bool[31] Sound.FmSsgKeys\n1135735 48 u16[24] Sound.FmShown\n1135783 6 u16[3] Sound.Tone\n",
+                "1135789 4 u8[4] Sound.Volume\n1135793 3 u8[3] Sound.NoiseLatchStereo\n",
+                "1135796 8 u16[4] Sound.Counter\n1135804 4 bool[4] Sound.Bit\n1135808 2 u16 Sound.Shift\n",
+                "1135810 16 u64[2] Sound.PsgTimeAndTime\n1135826 80 i32[20] Sound.Lines\n",
+                "1135906 8 i32[2] Sound.Level\n1135914 24 u64[3] Sound.Sum\n1135938 1024 u64[128] Sound.Pending\n",
+                "1136962 8 i32[2] Sound.Level\n1136970 24 u64[3] Sound.Sum\n1136994 1024 u64[128] Sound.Pending\n",
+                "1138018 88 u64[11] Sound.Circuit\n1138106 160 u64[20] Sound.CircuitSides\n",
+                "1138266 32 u32[8] SubCpu.D\n1138298 32 u32[8] SubCpu.A\n1138330 4 u32 SubCpu.OtherSp\n",
+                "1138334 2 u16 SubCpu.Sr\n1138336 4 u32 SubCpu.Pc\n1138340 4 u16[2] SubCpu.Prefetch\n",
+                "1138344 1 bool SubCpu.Stopped\n1138345 1 bool SubCpu.Halted\n1138346 1 u8 SubCpu.LastLevel\n",
+                "1138347 1 bool SubCpu.TracePending\n1138348 4 u32 SubCpu.TraceResume\n1138352 8 u64 SubClock\n",
+                "1138360 3 bool[3] GateLines\n1138363 11 u8[11] GateBytes\n1138374 4 u16[2] GateWords\n",
+                "1138378 16 u16[8] Commands\n1138394 16 u16[8] Statuses\n1138410 32 u64[4] GateTimes\n",
+                "1138442 5 u8[5] WordRamSwitches\n1138447 1 bool SubParked\n1138448 4 u32 SubOwed\n",
+                "1138452 0 u64[0] SubOwedWrites\n1138452 36 u8[36] PcmBytes\n1138488 32 u16[16] PcmWords\n",
+                "1138520 32 u32[8] PcmAddresses\n1138552 8 u64 PcmNext\n1138560 16 u64[2] PcmLowPass\n",
+                "1138576 4 u32 PcmQueued\n1138580 0 u64[0] PcmQueue\n1138580 2 u16 Fader\n",
+                "1138582 28 u32[7] DriveMode\n1138610 40 u64[5] DriveWords\n1138650 20 u8[20] DriveNibbles\n",
+                "1138670 4 bool[4] DriveFlags\n1138674 2 u8[2] DriveReport\n1138676 16384 u8[16384] CdcBuffer\n",
+                "1155060 5 u8[5] CdcBytes\n1155065 10 u16[5] CdcCounters\n1155075 8 u8[8] CdcHeader\n",
+                "1155083 6 bool[6] CdcFlags\n1155089 24 u64[3] CdcTimes\n1155113 8 i32[2] Cdda.Level\n",
+                "1155121 24 u64[3] Cdda.Sum\n1155145 1024 u64[128] Cdda.Pending\n1156169 20 i32[5] Cdda.MixLevels\n",
+                "1156189 32 u64[4] Cdda.Deemphasis\n1156221 32 i32[8] Cdda.CddaHistory\n",
+                "1156253 4 u32 Cdda.CddaQueued\n1156257 0 u64[0] Cdda.CddaQueue\n1156257 1 bool CartWritable\n",
+                "1156258 5 u8[5] AsicBytes\n1156263 8 u16[4] AsicWords\n1156271 24 u64[3] AsicTimes\n",
+                "1156295 8 u64 DiscFingerprint\n",
+            )
+        );
+    }
+
     // The backup RAM cartridge: plugged in by its setting, its bytes the second battery file, loaded at create.
     #[test]
     fn the_ram_cartridge_is_a_setting_and_a_battery_file() {

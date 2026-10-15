@@ -474,6 +474,10 @@ fn parse_operand(t: &str, sc: &str) -> Result<Op, String> {
             disp = Some(parts.remove(0));
         }
         let base = parts.first().ok_or_else(|| format!("bad operand `{t}`"))?.to_ascii_uppercase();
+        // A parenthesised expression with no register in it is an absolute address: `BASE+2*(N-1)`.
+        if base != "PC" && reg(&base).is_none() {
+            return Ok(Op::Abs(parse_expr(t, sc)?));
+        }
         let idx = match parts.get(1) {
             Some(x) => Some(index(x).ok_or_else(|| format!("bad index `{x}`"))?),
             None => None,
@@ -1542,7 +1546,9 @@ fn walk(stmts: &[Stmt], origin: u32, lay: &mut Layout, emit: Option<&mut BTreeMa
                 if !first && !fin && size.is_none() && !lay.short[i] && is_branch(name) {
                     if let [Op::Abs(t)] = ops.as_slice() {
                         if let Some(v) = eval(t, &Ctx { symbols: &lay.symbols, pc }) {
+                            // A forward target comes two bytes nearer once the branch loses its extension word.
                             let d = rel(v, pc + 2);
+                            let d = if d > 0 { d - 2 } else { d };
                             if fits_signed(d, 8) && d != 0 {
                                 lay.short[i] = true;
                                 changed = true;
@@ -1674,8 +1680,9 @@ far:    nop
         assert!(assemble(" bra.s *+2\n", 0).is_err(), "a short branch to the next word is the word form's marker");
         assert!(assemble(" move.w d0,undefined\n", 0).is_err());
         assert!(assemble(" moveq #300,d0\n", 0).is_err());
+        assert_eq!(assemble(" lea 2*(3+4),a0\n", 0).unwrap().bytes, [0x41, 0xF8, 0x00, 0x0E], "a parenthesised expression");
         let p = assemble("a: bra .w\n.w: nop\n", 0).unwrap();
-        assert_eq!(p.bytes, [0x60, 0x00, 0x00, 0x02, 0x4E, 0x71], "a local label named like a size");
+        assert_eq!(p.bytes, [0x60, 0x00, 0x00, 0x02, 0x4E, 0x71], "a local label named like a size, a branch to the next word kept long");
     }
 
     /// Extension words with the fields the 68000 ignores clear, so that every word is the disassembler's to print.

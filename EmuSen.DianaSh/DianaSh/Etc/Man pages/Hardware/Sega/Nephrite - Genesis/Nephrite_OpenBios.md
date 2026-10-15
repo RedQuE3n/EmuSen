@@ -308,6 +308,28 @@ Sonic CD's program needs (D-45: interrupts open and every communication word 0; 
 The two messages are the games' answers to `_BURAM`, which finds no RAM until step 10.4 (§5 Q2). Not yet compared with
 the player's BIOS.
 
+## 10. Step 10.4, the part the footer gives (2026-10-15)
+
+`docs/bram/emutos-mcd_bram-filesystem.md` (allowed by the tester's decision of §5 Q2) gives the volume's footer, the
+last `$40` bytes of the RAM as its bytes are counted on the odd addresses: eleven `$5F`, four `$00`, `$40`; the free
+blocks as a big-endian word four times; the files the same way; `SEGA_CD_ROM`, `$00 $01 $00 $00 $00`;
+`RAM_CARTRIDGE___`. A volume is Sega's when its last `$20` bytes match; blocks are `$40` bytes and an empty 8 KiB volume
+has 125 free, the footer's three blocks counted out (the Technical Bulletins' "last ID area, directory area, leading
+reserve area" of p. 9 are three such blocks); BRMINIT gives the size in `$1000` bytes; every byte before the footer of
+a blank volume is 0. The document states its own origin plainly: the footer's layout was first taken from an
+emulator's formatting function and then confirmed against a console's volume; it holds no code.
+
+Built on the internal RAM: **BRMINIT** (carry clear and `d0.w` 2 for a Sega volume; else carry set, `d1.w` 2 where the
+last line is `RAM_CARTRIDGE___` and the identifier differs, 1 otherwise; argued, BM §7-1 naming "other format" without
+its test), **BRMSTAT** (the two counts), **BRMFORMAT** (zeros, then the footer with 125 free and no file). The
+directory's calls (BRMSERCH, BRMREAD, BRMWRITE, BRMDEL, BRMDIR, BRMVERIFY) wait for §5 Q2's specification and fail;
+the cartridge's `_mburam` waits for its address.
+
+**Measured (2026-10-15)**, a blank volume made by the footer's rules given as the backup RAM: Sonic CD goes past its
+"not initialized" message to "Internal RAM is full. Game will start without save option." (its write refused), and
+Lunar to a message that its save data was destroyed (its search finding nothing a game can read), each the game's
+answer to a directory call that fails. A new machine's RAM stays unformatted until the round trips pass (§5 Q2).
+
 ## 9. Reading log (stage 10)
 
 Opened and read: `Nephrite_Plan.md` whole; `Nephrite_Native.md` §49–§52, §53.1–§53.3, §53.5, §54.1, §54.2, §54.3 from
@@ -340,7 +362,8 @@ closed parts was read by its headings' exact boundaries.
 `railgun/Trademark_Security_System.wiki`; mcd-verificator's `cd-log/BI-mcd-tst/` and `cd-log/sonic-bios/`; MiSTer's
 `docs/mcd logs` and every RTL file; `Nephrite_Native.md` §53.4, §54.3's first bullet beyond the line above, §55,
 §57.2, §60.1–§60.3; `Nephrite_Disputes.md`'s D-36 and D-40 beyond their headings; `~/.cache/emusen/probe/nephrite/s9/`;
-`docs/bram/`; the player's BIOS (`sysdir/scd/`), which was neither read nor run; any emulator's source. The register
+`docs/bram/` but for `emutos-mcd_bram-filesystem.md` (read whole once allowed, used for the footer and the odd-byte
+layout alone); the player's BIOS (`sysdir/scd/`), which was neither read nor run; any emulator's source. The register
 watch was run only with the open BIOS, never with a player's. *As of 2026-10-15, after the screening:*
 `spritesmind/t458_*` and `t3218_*` are cleared and not yet opened; `t1018_*` is cleared but for named posts, and not yet
 opened; `t3020_*` and `t2061_p001.html` stay closed.

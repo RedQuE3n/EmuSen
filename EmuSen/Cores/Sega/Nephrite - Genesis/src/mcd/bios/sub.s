@@ -1632,15 +1632,103 @@ level2:
         movem.l (sp)+,d0-d7/a0-a6
         rte
 
-; _BURAM (BM §7-1): the backup RAM's format is not yet written (Nephrite_OpenBios.md, step 10.4), so BRMINIT finds
-; no RAM, and every other call fails, leaving the memory as it stands.
+; _BURAM (BM §7-1) on the internal backup RAM, 8 KiB on the odd bytes from $FE0001. Its footer, the last $40 bytes,
+; is the one `docs/bram/emutos-mcd_bram-filesystem.md` gives (Nephrite_OpenBios.md §10): BRMINIT knows a formatted RAM
+; by its last $20 bytes, BRMSTAT reads the free blocks and the files from it, BRMFORMAT writes a blank. The directory's
+; calls wait for the format's specification (§5 Q2) and fail, leaving the memory as it stands.
+BRAM            equ $FE0001
+BRAM_BYTES      equ $2000
+
 buram:
+        movem.l d2-d3/a2-a3,-(sp)
         tst.w   d0
-        bne     .fail
-        moveq   #0,d0
-        moveq   #0,d1
-.fail:  ori     #1,ccr
+        beq     .init
+        cmp.w   #1,d0
+        beq     .stat
+        cmp.w   #6,d0
+        beq     .format
+.fail:  movem.l (sp)+,d2-d3/a2-a3
+        ori     #1,ccr
         rts
+.ok:    movem.l (sp)+,d2-d3/a2-a3
+        andi    #$FE,ccr
+        rts
+
+; BRMINIT: carry clear and d0.w the size in $1000 bytes for a Sega volume; else carry set, d1.w 1 for no volume, 2 for
+; a RAM that carries the footer's last line with another identifier.
+.init:  moveq   #BRAM_BYTES/$1000,d0
+        bsr     bram_is_sega
+        beq     .ok
+        moveq   #1,d1
+        lea     bram_footer+$30(pc),a2
+        lea     BRAM+2*(BRAM_BYTES-$10),a3
+        moveq   #15,d2
+.other: cmpm.b  (a2)+,(a3)+
+        bne     .fail
+        addq.l  #1,a3
+        dbra    d2,.other
+        moveq   #2,d1
+        bra     .fail
+
+; BRMSTAT: d0.w the free blocks, d1.w the files, from the footer.
+.stat:  bsr     bram_is_sega
+        bne     .fail
+        lea     BRAM+2*(BRAM_BYTES-$30),a2
+        bsr     bram_word
+        move.w  d2,d0
+        lea     BRAM+2*(BRAM_BYTES-$28),a2
+        bsr     bram_word
+        move.w  d2,d1
+        bra     .ok
+
+; BRMFORMAT: every byte 0, then the footer, with no file and every block free but the footer's three.
+.format:
+        lea     BRAM,a2
+        move.w  #BRAM_BYTES-$40-1,d2
+.zero:  clr.b   (a2)
+        addq.l  #2,a2
+        dbra    d2,.zero
+        lea     bram_footer(pc),a3
+        moveq   #$3F,d2
+.foot:  move.b  (a3)+,(a2)
+        addq.l  #2,a2
+        dbra    d2,.foot
+        lea     BRAM+2*(BRAM_BYTES-$30),a2
+        move.w  #BRAM_BYTES/$40-3,d3
+        moveq   #3,d2
+.free:  move.w  d3,d0
+        lsr.w   #8,d0
+        move.b  d0,(a2)
+        move.b  d3,2(a2)
+        addq.l  #4,a2
+        dbra    d2,.free
+        bra     .ok
+
+; Z set when the RAM's last $20 bytes are a Sega volume's.
+bram_is_sega:
+        lea     bram_footer+$20(pc),a2
+        lea     BRAM+2*(BRAM_BYTES-$20),a3
+        moveq   #$1F,d2
+.c:     cmpm.b  (a2)+,(a3)+
+        bne     .r
+        addq.l  #1,a3
+        dbra    d2,.c
+        moveq   #0,d2
+.r:     rts
+
+; The big-endian word at a2, the RAM's odd bytes, into d2.
+bram_word:
+        move.b  (a2),d2
+        lsl.w   #8,d2
+        move.b  2(a2),d2
+        rts
+
+bram_footer:
+        dc.b    $5F,$5F,$5F,$5F,$5F,$5F,$5F,$5F,$5F,$5F,$5F,$00,$00,$00,$00,$40
+        dc.b    0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0
+        dc.b    "SEGA_CD_ROM",0,1,0,0,0
+        dc.b    "RAM_CARTRIDGE___"
+        even
 
 ; _CDBOOT (BM §6-1): the tray's calls, and the disc's kind as the boot found it.
 cdboot:

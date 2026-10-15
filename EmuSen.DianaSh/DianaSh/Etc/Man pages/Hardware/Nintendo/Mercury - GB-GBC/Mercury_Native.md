@@ -2989,3 +2989,37 @@ reload to the maximum less one; J4, an emptied counter leaves the channel on: ea
 step's claims. J5, enabling an enabled length clocks it too, was caught at first only by the corpus (`03-trigger` #4),
 which CI does not have; `Only_enabling_a_disabled_length_clocks_it` was added and catches it on both engines. The
 step's cost was not measured separately: the change touches only NRx4 writes, a few a frame.
+
+#### 13.10.2 The length counters across a power cycle
+
+**The rules.** `08-len ctr during power.s`: "On CGB, length counters are reset when powered up. On DMG, they are
+unaffected, and not clocked." `11-regs after power.s`, DMG: "While powered off, writes to NR41 are NOT ignored"; CGB:
+"Powering off should clear NR41". Pan Docs (`Audio_Registers.md`, NR52) makes every register read-only while the APU
+is off "except NR52 ... and the length timers (in NRx1) on monochrome models". `Mercury_Apu.md` §4 had kept the CGB
+rule on both consoles and said where to start if a DMG test ROM ever failed on it; two did.
+
+**The proof.** Two theories over a Game Boy and a colour cartridge, committed failing (`a6684d54`): the DMG half of
+the first (a length written while off is kept, NR11's duty bits are not) and the CGB half of the second (a power cycle
+clears the counters) failed on both engines; the other halves passed.
+
+**The fix**, the same in both engines. The APU learns the console (`Apu.CgbHardware`, `cgb_hardware`, set by the bus,
+not in the state): on a DMG a write to NR11, NR21, NR31 or NR41 while the APU is off loads the length counter and
+nothing else; on a CGB powering up clears the four counters. **The state format is unchanged.** `Mercury_Apu.md` §4 is
+revised (the referee page's correction 5, first half).
+
+**The corpus.** Each suite now passes where its own console runs it:
+
+| ROM | Auto | Game Boy | Game Boy Color |
+|---|---|---|---|
+| `dmg_sound` `08-len ctr during power` | Failed(1) → **Passed** | Failed(1) → **Passed** | Failed(1) |
+| `dmg_sound` `11-regs after power` | Failed(4) → **Passed** | Failed(4) → **Passed** | Failed(4) |
+| `cgb_sound` `11-regs after power` | Failed(4) → **Passed** | Failed(4) | Failed(4) → **Passed** |
+| `cgb_sound` `08-len ctr during power` | Passed | **Passed → Failed(1)** | Passed |
+
+on both engines. The one verdict that went from passing to failing is the colour suite's test run on the Game Boy: its
+header says a DMG keeps its counters where the CGB clears them, and the expected checksum is the CGB's, so a DMG fails
+it; it passed before only because Mercury gave the DMG the CGB's rule. (`Auto` runs `cgb_sound` on the Color, since its
+header asks for colour.) Each `dmg_sound` ROM run on the Color still fails for the converse reason. Passes: 123 under
+Auto, 121 under Game Boy and Game Boy Color, the same in both engines.
+
+**The four games**, the recorded digests and the whole `Mercury` filter (858 cases) are unchanged.

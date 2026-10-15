@@ -27,6 +27,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
 
         public bool PoweredOn;
 
+        // The console, not the cartridge: the length counters' power rules differ between the two - see Mercury_Native.md §13.10.2.
+        [SkipInState] public bool CgbHardware;
+
         // NR50's two three-bit master volumes, and NR51's eight panning switches.
         public int LeftVolume;
         public int RightVolume;
@@ -217,8 +220,12 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
             int index = address - RegisterBase;
             if ((uint)index >= RegisterCount) return;
 
-            // With the power off every register but NR52 ignores its write - see Mercury_Apu.md §4.
-            if (!PoweredOn && address != 0xFF26) return;
+            // With the power off every register but NR52 ignores its write, except NRx1's length on a DMG - see Mercury_Apu.md §4.
+            if (!PoweredOn && address != 0xFF26)
+            {
+                if (!CgbHardware) WriteLengthWhileOff(address, value);
+                return;
+            }
 
             Registers[index] = value;
 
@@ -258,6 +265,17 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
                 case 0xFF26:
                     WritePower(value);
                     return;
+            }
+        }
+
+        private void WriteLengthWhileOff(int address, byte value)
+        {
+            switch (address)
+            {
+                case 0xFF11: Pulse1.Length.Load(value & 0x3F); return;
+                case 0xFF16: Pulse2.Length.Load(value & 0x3F); return;
+                case 0xFF1B: Wave.Length.Load(value); return;
+                case 0xFF20: Noise.Length.Load(value & 0x3F); return;
             }
         }
 
@@ -345,6 +363,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
 
                 // A power-up restarts the sequencer, so the first length clock is a known distance away.
                 SequencerStep = 0;
+
+                // A CGB clears the length counters as it powers up; a DMG keeps them - see Mercury_Native.md §13.10.2.
+                if (CgbHardware) Pulse1.Length.Counter = Pulse2.Length.Counter = Wave.Length.Counter = Noise.Length.Counter = 0;
                 return;
             }
 

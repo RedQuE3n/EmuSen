@@ -92,6 +92,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             Wram = new byte[WramBankSize * (CgbHardware ? 8 : 2)];
 
             Ppu = new Ppu(this);
+            Apu.CgbHardware = CgbHardware;
         }
 
         public Cartridge Cart => _cart;

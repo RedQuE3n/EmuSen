@@ -79,10 +79,12 @@ impl MemoryBus {
         let (cgb, compat) = (cgb_hardware && cart.is_cgb(), cgb_hardware && !cart.is_cgb());
         let mut ppu = Ppu::default();
         *ppu.compat = compat;
+        let mut apu = Apu::default();
+        *apu.cgb_hardware = cgb_hardware;
         MemoryBus {
             cart,
             mapper,
-            apu: Apu::default(),
+            apu,
             double_speed: false,
             hdma_blocks_left: 0,
             hdma_destination: 0,

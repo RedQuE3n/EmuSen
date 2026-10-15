@@ -67,6 +67,8 @@ pub struct Apu {
     pub sequencer_step: i32,
     pub wave: WaveChannel,
     pub mixer: Skip<Mixer>,
+    /// The console, not the cartridge: the length counters' power rules differ between the two (Mercury_Native.md §13.10.2).
+    pub cgb_hardware: Skip<bool>,
 }
 
 impl Default for Apu {
@@ -84,6 +86,7 @@ impl Default for Apu {
             sequencer_step: 0,
             wave: WaveChannel::default(),
             mixer: Skip(Mixer::default()),
+            cgb_hardware: Skip(false),
         }
     }
 }
@@ -247,7 +250,17 @@ impl Apu {
         if index >= REGISTER_COUNT {
             return;
         }
+        // With the power off every register but NR52 ignores its write, except NRx1's length on a DMG.
         if !self.powered_on && address != 0xFF26 {
+            if !*self.cgb_hardware {
+                match address {
+                    0xFF11 => self.pulse1.length.load((value & 0x3F) as i32),
+                    0xFF16 => self.pulse2.length.load((value & 0x3F) as i32),
+                    0xFF1B => self.wave.length.load(value as i32),
+                    0xFF20 => self.noise.length.load((value & 0x3F) as i32),
+                    _ => {}
+                }
+            }
             return;
         }
         self.registers[index] = value;
@@ -317,6 +330,12 @@ impl Apu {
                 if on {
                     self.powered_on = true;
                     self.sequencer_step = 0;
+                    // A CGB clears the length counters as it powers up; a DMG keeps them.
+                    if *self.cgb_hardware {
+                        for length in [&mut self.pulse1.length, &mut self.pulse2.length, &mut self.wave.length, &mut self.noise.length] {
+                            length.counter = 0;
+                        }
+                    }
                 } else {
                     self.power_off();
                 }

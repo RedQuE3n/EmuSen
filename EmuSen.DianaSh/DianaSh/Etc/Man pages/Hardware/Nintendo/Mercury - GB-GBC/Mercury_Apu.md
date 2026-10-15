@@ -128,15 +128,14 @@ the index, and treating it as one puts the lowest setting an octave out.
 silences every channel; turning it on restarts the frame sequencer at step 0, so
 the first length clock is a known distance away.
 
-While the power is off, **every register except `NR52` ignores its write.** Wave
-RAM is the exception that is not a register: it stays.
+While the power is off, **every register except `NR52` ignores its write**, with one exception on a DMG: NRx1's
+length still loads the length counter (not NR11's or NR21's duty bits). Wave RAM is the exception that is not a
+register: it stays. A CGB clears the four length counters as it powers up; a DMG keeps them.
 
-One documented divergence: on a DMG the length counters remain writable while the
-power is off, and on a CGB they do not. Mercury implements the CGB rule for both,
-because the DMG exception exists to support a specific power-up trick that no
-commercial game uses and because a single rule is easier to reason about than a
-model-dependent one. This is recorded rather than hidden — if a DMG test ROM ever
-fails on it, this paragraph is the place to start.
+*Revised 2026-10-15* (`Mercury_Native.md` §13.10.2). This section used to keep the CGB rule on both consoles, for
+simplicity, and named its own condition for revisiting it: "if a DMG test ROM ever fails on it, this paragraph is the
+place to start". Two did, blargg's `dmg_sound` `08-len ctr during power` and `11-regs after power`, and the rule now
+follows the console.
 
 ## 5. The mixer
 

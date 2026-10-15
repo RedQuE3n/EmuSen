@@ -8,10 +8,10 @@ blargg/cgb_sound/rom_singles/04-sweep.gb	ABFD1F6FA9E6701E	Passed	Passed	Passed	P
 blargg/cgb_sound/rom_singles/05-sweep details.gb	F51A80C5538FE4B3	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)
 blargg/cgb_sound/rom_singles/06-overflow on trigger.gb	5701414D13BA55D2	Passed	Passed	Passed	Passed	Passed	Passed
 blargg/cgb_sound/rom_singles/07-len sweep period sync.gb	47D57BA87C3A9305	Passed	Passed	Passed	Passed	Passed	Passed
-blargg/cgb_sound/rom_singles/08-len ctr during power.gb	BE7948C70946E0B8	Passed	Passed	Passed	Passed	Passed	Passed
+blargg/cgb_sound/rom_singles/08-len ctr during power.gb	BE7948C70946E0B8	Passed	Failed(1)	Passed	Passed	Failed(1)	Passed
 blargg/cgb_sound/rom_singles/09-wave read while on.gb	9B101C68B2DE1930	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)
 blargg/cgb_sound/rom_singles/10-wave trigger while on.gb	CBEA1771A5384F4D	Passed	Passed	Passed	Passed	Passed	Passed
-blargg/cgb_sound/rom_singles/11-regs after power.gb	D347DD195A78C2D0	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)
+blargg/cgb_sound/rom_singles/11-regs after power.gb	D347DD195A78C2D0	Passed	Failed(4)	Passed	Passed	Failed(4)	Passed
 blargg/cgb_sound/rom_singles/12-wave.gb	7BBD2E78E159DE42	Failed(2)	Failed(2)	Failed(2)	Failed(2)	Failed(2)	Failed(2)
 blargg/cpu_instrs/cpu_instrs.gb	8C5E12F41E0BA5BB	Passed	Passed	Passed	Passed	Passed	Passed
 blargg/cpu_instrs/individual/01-special.gb	FE61349CBAEE10CC	Passed	Passed	Passed	Passed	Passed	Passed
@@ -33,10 +33,10 @@ blargg/dmg_sound/rom_singles/04-sweep.gb	58BC14541D91BB02	Passed	Passed	Passed	P
 blargg/dmg_sound/rom_singles/05-sweep details.gb	F582CA3A0B2544B9	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)
 blargg/dmg_sound/rom_singles/06-overflow on trigger.gb	1A511E95E84ED6FE	Passed	Passed	Passed	Passed	Passed	Passed
 blargg/dmg_sound/rom_singles/07-len sweep period sync.gb	56BF5B0C18B99692	Passed	Passed	Passed	Passed	Passed	Passed
-blargg/dmg_sound/rom_singles/08-len ctr during power.gb	31CB41F7BE106A70	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)
+blargg/dmg_sound/rom_singles/08-len ctr during power.gb	31CB41F7BE106A70	Passed	Passed	Failed(1)	Passed	Passed	Failed(1)
 blargg/dmg_sound/rom_singles/09-wave read while on.gb	378B86F6A25DAA16	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)
 blargg/dmg_sound/rom_singles/10-wave trigger while on.gb	FA63C8ED7473411E	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)
-blargg/dmg_sound/rom_singles/11-regs after power.gb	D27DAB46E8B88102	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)	Failed(4)
+blargg/dmg_sound/rom_singles/11-regs after power.gb	D27DAB46E8B88102	Passed	Passed	Failed(4)	Passed	Passed	Failed(4)
 blargg/dmg_sound/rom_singles/12-wave write while on.gb	2EFBECD2C6D40928	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)	Failed(1)
 blargg/halt_bug.gb	DDEBFB81F9921329	NoVerdict	NoVerdict	NoVerdict	NoVerdict	NoVerdict	NoVerdict
 blargg/instr_timing/instr_timing.gb	646067B3D6C79FDA	Passed	Passed	Passed	Passed	Passed	Passed

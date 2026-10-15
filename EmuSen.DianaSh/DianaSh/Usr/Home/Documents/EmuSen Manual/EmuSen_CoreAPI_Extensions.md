@@ -761,6 +761,9 @@ reaches (the Sega CD is in development) [A]. It breaks nothing at any surface; i
 leaves a removable file as it stands, which answers §9.3's risk in the core rather than by a warning. The runtime's
 option has a third mode, named cards; `"console"` waits for a core that needs it.*
 
+*`"console"` built the same day as the minor 1.8 (`EmuSen_CoreAPI.md` §6.28), with a slot's medium, label and port and
+a second create flag; the framework's model, the card manager and the default are `EmuSen_SaveMedia.md`.*
+
 *Diamond's §10 lists "a shared memory card option (one card for every game) in the runtime, if the tester wants
 one"; Nephrite's §4.4 has the same question for the Sega CD's internal backup RAM and its RAM cartridge.*
 

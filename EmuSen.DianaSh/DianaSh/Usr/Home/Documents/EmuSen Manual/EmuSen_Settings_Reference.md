@@ -8629,3 +8629,36 @@ game B's card and both are on the file; named, the card follows the slot's name;
 leaves B's save; rewinding past a save takes it off a game's own card and leaves it on a shared one. The window fit
 audit's `GraphicsSettingsPlayStationNamedCards` opens the tab under *Named cards* with both slots' rows and the note
 shown, at 1280×800 and 1920×1200.
+
+*Since 2026-10-15, later the same day* (`EmuSen_SaveMedia.md`): the rows are every console's. Each **medium** a console's
+core declares (core ABI 1.8's `medium` on its battery files, or for a core of 1.7 each kind and extension) has its own
+group: a mode row titled by the medium (*Memory Card*, *Internal Backup RAM*, *Backup RAM Cartridge*), *Per game*,
+*Shared* or *Named*, and under *Named* a row per slot labelled by the core (*Memory Card: Slot 1*). The first removable
+medium keeps the keys above (`Cards`, `Card<n>`), the console's own memory takes `ConsoleMemory` and
+`ConsoleMemory<n>`, and any further medium `Media.<id>` and `Media.<id>.<n>`. Shared and named files are in `Cards` for a
+removable medium and in `Console` for the console's own. **The PlayStation's card is *Shared* by default** since its
+import exists (§4.115); a medium no format module reads stays *Per game*.
+
+### 4.115 Memory Cards: the window, and the import offered once (2026-10-15)
+
+*Decided 2026-10-15 by the tester: a menu in Mistress where the player manages memory cards.* **Memory Cards** is a
+window of its own (`EmuSen_SaveMedia.md` §6.5): a tab for each console whose core declares save media, and on it each
+medium with its mode and which card each slot holds, a **Card** chooser of the drawer's cards and each game's own, the
+**Saves** on the chosen card (each a row; choosing one selects it), **Copy or move to** with *Copy Save*, *Move Save* and
+*Delete Save*, **New card** with a name and *New Card*, and **Import** with *Import Every Game's Saves*, all or none. A
+medium no format module reads lists its size and offers only a new card. A card a running game holds is shown, its
+writes refused, and its line says "In use by *the game*, which is running: its saves can be looked at, and changed when
+the game is closed."; another program's card is refused the same way. What an action did is said under the tabs.
+
+**Where it opens.** *Settings → Memory Cards...* on the menu bar; *Settings → Memory Cards* in the pad's main menu;
+*Game Settings → Memory Cards* in a game's menu, on the running console's tab. In big picture both pad-menu rows are
+the big panel's, and the window is framed as a sheet like the others (§4.83).
+
+**The import offered once.** With the PlayStation's card *Shared* by default, the first time a PlayStation game is
+started while games' own cards exist and `Card 1` does not, Mistress asks, after the firmware question, whether to copy
+their saves onto `Card 1` (*Copy Saves*, *Not Now*). The answer is recorded as `CardsOffered` under the console in
+`graphics.json` and the question not asked again. Each game's own card is read and never written, so *Per game* chosen
+again finds it as it was.
+
+**Tests.** `MemoryCardsOfferTests`; the window fit audit's `MemoryCardsPlayStation` and `MemoryCardsPlayStationHeld` at
+1280×800 and 1920×1200; `PadMenuTests` open the window from both menus.

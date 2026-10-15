@@ -1,8 +1,10 @@
 # Diamond_Cards — memory cards a player carries between games
 
 *Since 2026-10-15 the card mode is the framework's, for every console with save media: `EmuSen_SaveMedia.md` holds the
-model, the core ABI's minor 1.8, the runtime's rule, the lock and the card manager, and this page keeps what is the
-PlayStation's.*
+model, the core ABI's minors 1.7 and 1.8, the runtime's modes, the files, the lock, the card manager and the default.
+This page keeps what is the PlayStation's: the hazard as Diamond met it, how Diamond keeps its cards apart, its states
+across modes, its card format, and what was measured on it. §3 to §5, §9, §12 and §13 are now short pointers to the
+framework's page; their text of the morning of 2026-10-15 is in this file's history.*
 
 *Written 2026-10-15, before its code.* Decided 2026-10-15 by the tester: the memory card a player uses is to appear in
 every game played, as on a console, through a **card mode** with three modes, *Per game* (the behaviour of
@@ -54,92 +56,21 @@ slot 2 empty by default is the plan's §4.4 default and Q12's recommendation, un
 a game that finds two cards asks the player which to use. A player who turns slot 2 on gets the same second card in
 every game, as a console owner who leaves a second card plugged in.
 
-**Named cards** are the console owner's drawer of cards. A slot's choice is a name, and its file is that name in the
-`Cards` folder; the names offered are `Card 1` to `Card 8` and every card file already in the folder, so that a card
-copied there by hand, or by the card manager later (§12), can be chosen [C]. A name with no file yet is a new,
-unformatted card, which the game or the kernel formats, as a new physical card. The same name in both slots is
-refused (§9.3).
+*Named cards*, the drawer, the rule that switching modes moves, copies and deletes nothing, and the default (*Shared*
+since 2026-10-15, with the import offered once) are the framework's: `EmuSen_SaveMedia.md` §3.3 and §9. The PlayStation's
+card is the medium `psx.card`, its two slots `Slot 1` and `Slot 2`, its noun `Card`, so its shared and named cards keep
+the names and the folder of this table.
 
-**Switching modes moves, copies and deletes nothing** [C]. The per-game files stay where they are while another mode is
-chosen, and are used again when *Per game* is chosen again; the shared and named cards stay in `Cards` likewise. That
-is the way back the tester asked for: a player's existing per-game saves are never lost, and they are hidden only
-while the player has chosen a mode that does not use them, with the setting itself as the way back. Moving saves from
-per-game cards onto a shared card is the card manager's import (§12), never a side effect of the setting.
+## 3. Who owns which fact, the forms weighed, and the core ABI's minor 1.7
 
-## 3. Who owns which fact
-
-By the project's rule of one owner for each fact:
-
-| Fact | Owner | Why |
-|---|---|---|
-| Which files are cards a player carries, as against memory that belongs to the game | **the core** | which numbers are the core's (`EmuSen_CoreAPI.md` §6.2); another engine of the same console may number its files otherwise, so the fact must come with the numbers (`EmuSen_CoreAPI_Extensions.md` §9.2) |
-| The card mode, and which card is in which slot | **the runtime**, as a setting of the console | the place of a battery file is the runtime's path rule (`EmuSen_CoreAPI.md` §6.11); no core sees a path |
-| Where a shared or named card lives | **Galaxia** | it owns every save path; the rule is `Saves/<console>/Cards/<name><extension>`, beside the per-game files' folder |
-| What a state load does to a card that is not the game's own, and how the machine learns of a different card | **the core** | it is the machine's behaviour: the flag byte and the transfer under way are Diamond's state, which no host can reach |
-| Whether a card is the game's own | **the runtime tells the core**, once, at create | the runtime chose the file, so only it knows |
-
-The last row is the one crossing that needs a surface, which §4 weighs.
-
-## 4. The forms weighed
-
-By the design rules' order, an extension of an existing surface first:
-
-1. **A setting in Diamond's own schema** (`cards=own|shared`), which the runtime would set from the mode. Rejected [A]:
-   the runtime would have to know a key of one core's schema to place files, which is per-core code above the ABI
-   (`EmuSen_CoreAPI.md` §2.4), and the mode would have two owners, the runtime's setting and the core's.
-2. **The host puts the card back after each load**, through `space_write` into a card space, or a new export that
-   hands a battery file's bytes to a running machine (`battery_insert`). Rejected for this step [A]: a space write
-   needs the host to know which space is which file, which no descriptor says, and cannot reach the flag or the
-   transfer; an export is the larger addition (an export, a capability, a typedef, the host's call after every load
-   and every rewind step, two copies of 128 KiB each time), and still needs the core to compare the card with the
-   state's copy to decide whether it was "reinserted". Its shape is kept for the card manager, whose card swapped while
-   a game runs would need it (§12.4).
-3. **Chosen: an extension of the core ABI, minor 1.7** [C], in two parts, each the smallest the fact allows:
-   - **`kind` on battery entries**, in core info's `systems[].battery[]` and machine info's `battery[]`: absent or
-     `"game"` for memory that belongs with the game, `"removable"` for a card or pak a player carries between games.
-     This is `EmuSen_CoreAPI_Extensions.md` §9.2's recommendation, less its third value, `"console"` (memory inside the
-     console, as the Sega CD's), which no core yet needs and which would need a rule of its own [C].
-   - **`EMUSEN_CREATE_SHARED_REMOVABLE`**, bit 1 of `emusen_create_params.flags`: the host keeps this machine's
-     removable battery files apart from the game, so that a state load must leave them as they stand.
-
-A host offers a card mode for a system only where core info lists a removable file, and sets the flag only on such a
-core, so that a core older than 1.7, which lists no kind and ignores the flag, is only ever run per game [C]. This is
-the coupling that makes a skewed pair safe: a core that writes `"removable"` promises to honour the flag.
-
-## 5. The core ABI's minor 1.7
-
-By `EmuSen_CoreAPI.md` §5.5's rules: the declarations tagged `@since 1.7` in `emusen_core.h` with
-`EMUSEN_CORE_ABI_MINOR` raised to 7, the baseline's new lines tagged `@1.7`, `emusen-native`'s definitions with their
-defaults, the C# host's constants, a conformance case and the changelog. The text added to `EmuSen_CoreAPI.md` is its
-§6.27; its essentials are:
-
-```c
-/* @since 1.7 (section 6.27): the host keeps every battery file machine info lists with kind "removable" apart from the
- * game, shared between games. A state_load of either kind leaves each such file's contents as they stand; what else
- * the machine does to present a card that differs from the state's copy is the core's. Set only for a core whose
- * info lists a removable file; a core that lists one honours it. */
-#define EMUSEN_CREATE_SHARED_REMOVABLE 2u  /* emusen_create_params.flags */
-```
-
-- **JSON**: `info.systems[].battery[].kind` and `machine.battery[].kind`, optional strings, `"game"` or `"removable"`;
-  absent is `"game"`, so every core that writes nothing is unchanged byte for byte, and the registration golden
-  (`EmuSen_CoreAPI.md` §25) with it.
-- **`emusen-native`**: `Battery` gains `kind: BatteryKind` (`Game` by default, written only when `Removable`), and
-  `Create` gains `shared_removable: bool`, read from the flag by `core_exports!`'s create.
-- **The rule a core keeps** under the flag: after a successful `state_load`, `battery(which)` of each removable file
-  returns the bytes it returned before the load, and the load does not raise its `BATTERY_CHANGED` flag. A refused load
-  changes nothing, as ever.
-- **The kit**: C14 checks that a `kind` is one of the two values and that a machine's removable files are listed
-  removable in core info; **C19**, where a machine lists a removable file, creates it with the flag and its file filled
-  with a pattern, saves a state, writes another pattern into the core's view through nothing but frames and loads (a
-  second machine made with the second pattern loads the first's state), and checks that the second pattern survives
-  the load with its changed flag clear. Without the flag C19 asks nothing, since per game the core's choice stands.
-- **Skew** (`EmuSen_CoreAPI.md` §4.6): a 1.6 host never sets the flag and never reads `kind`, so it runs every card
-  per game, as now; a 1.6 core lists no kind, so a 1.7 host offers it no mode.
+Now the framework's: who owns which fact is `EmuSen_SaveMedia.md` §4; the forms weighed for the removable kind and its
+create flag, and the minor 1.7 they became, are `EmuSen_CoreAPI.md` §6.27, with the console kind and a slot's medium,
+label and port added at 1.8 (§6.28 there). What the PlayStation added to them is §6 below.
 
 ## 6. Diamond under the flag
 
-- **Its files are removable**: files 0 and 4, `.mcr` and `.2.mcr`, in core info and in machine info.
+- **Its files are removable**: files 0 and 4, `.mcr` and `.2.mcr`, in core info and in machine info; since 1.8 core
+  info gives each the medium `psx.card` and the labels `Slot 1` and `Slot 2` (`EmuSen_SaveMedia.md` §7.1).
 - **A state load restores a card's contents only when neither the machine nor the state had its cards apart from the
   game** [C]. Otherwise the card the machine holds stays, byte for byte, with its `changed` mark as it was, so the load
   makes the runtime write nothing; the state's copy is read and set aside.
@@ -178,30 +109,12 @@ before this page carries no mark and is treated as per game, which it was.
 
 ## 9. The runtime
 
-### 9.1 The setting
-
-The PlayStation's tab in Graphics Settings gains a group of rows of the runtime's own, as the *Engine* row is the
-runtime's and not the core's (`EmuSen_Settings_Reference.md` §4.44), stored in `graphics.json` under the console and
-never passed to the core: **Memory cards** (`Cards`: `game`, `shared`, `named`; *Per game* the default), and, with
-*Named cards*, **Card in slot 1** and **Card in slot 2** (`Card1`, `Card2`). The rows appear for any console whose
-engine lists a removable battery file, so a later core with cards gets them with no code of its own. They sit beside
-the core's own *Memory card in slot 1/2*, which still decide whether a slot holds a card at all.
-
-### 9.2 The files
-
-The engine's battery files are placed by the runtime's rule as now, with one change: a removable file, under *Shared*
-or *Named cards*, is `SaveLibrary.CardPathFor(console, name, extension)`, the extension being the last part of the
-core's suffix (`.mcr` of `.2.mcr`), and the machine is created with `EMUSEN_CREATE_SHARED_REMOVABLE`. A game file that
-is not removable keeps its per-game place in every mode.
-
-### 9.3 Two slots and two machines on one card
-
-The same name in both slots under *Named cards* would be one file behind two cards. The setting says so under the
-row, and the engine then runs slot 2 per game, with words in the log [C]. Two machines on one card file at once (two
-programs of the project running PlayStation games) would each write the file from its own copy; one program runs one
-game at a time, and a lock across programs is the question of §13 rather than built [C].
-
----
+The runtime's modes, rows, files and lock are the framework's (`EmuSen_SaveMedia.md` §3; `EmuSen_Settings_Reference.md`
+§4.114). For the PlayStation: the rows are **Memory Card** (`Cards`) and, under *Named*, **Memory Card: Slot 1** and
+**Memory Card: Slot 2** (`Card1`, `Card2`), the keys of 1.7 unchanged; the card's format module is `PsxCardFormat`
+(§12), so its default is *Shared* and its import is offered once (`EmuSen_SaveMedia.md` §9). The core's own *Memory card
+in slot 1/2* rows still decide whether a slot holds a card at all. Two programs on one card are now refused by the lock
+(`EmuSen_SaveMedia.md` §3.5), which answers §13's Q3.
 
 ## 10. What was measured
 
@@ -294,84 +207,30 @@ Run on 2026-10-15, the blast radius only:
 | WiseMan | `DiamondCardsTests` (7), `DiamondPlayersTests`, `DiamondTests`, `CoreAbiTests`, `CoreAdapterTests`, `CoreDiscoveryTests`, the `GraphicsSettings` tests, `PlayStationLibraryTests`, `SaveLibrary` tests, the fit audit's PlayStation cases with the new one at both sizes | all pass |
 | the kit on the sample's nine discs | §10.5 | 9 of 9 |
 
-## 12. Step 2, written and not built: a card manager
+## 12. The card manager, and the PlayStation card's format module
 
-*Written 2026-10-15; nothing of it is built.* What a player of *Shared* and *Named cards* will want next is a console's
-card manager: to see what is on a card, to copy a save to another card, to delete one, and, the step that makes
-*Shared* a default anyone could choose, to bring the saves of the per-game cards they already have onto a shared card.
+*Built 2026-10-15 as the framework's* (`EmuSen_SaveMedia.md` §6): one generic tool, `SaveMediaManager` in Crystal, over a
+format module per medium; DianaSh's `memcard` and Mistress's Memory Cards window over it. The form argued here on the
+morning of 2026-10-15 (the reader in the PlayStation's system pack as pure functions, the command first, then the
+window, the import refused whole past 15 blocks and copying, never moving) is the form built.
 
-### 12.1 What it must do
-
-- **List** a card's saves from its directory: frame 0's header, frames 1 to 15 one per block, each with its state
-  (first, middle or last block of a file, free, or deleted), the file's size, the next block of its chain and its name
-  (a region prefix and the game's serial, as `BASLUS-00067...`), each frame's checksum the XOR of its first 127 bytes
-  (psx-spx "Memory Card Data Format" [R]); and for each file its title and icon from its first block's header (the
-  `SC` magic, the icon's frame count, the block count, the Shift-JIS title of 64 bytes, the palette and the frames).
-- **Copy** a save to another card: free blocks found, the chain written with its directory frames, the checksums made;
-  a name already on the target refused unless the player replaces it.
-- **Delete** a save as the BIOS does, marking its directory frames deleted rather than clearing its blocks, so that an
-  undelete stays possible (the open kernel's `_card_undelete` does the same, `Diamond_OpenKernel_Phase2.md` §14).
-- **Move** a save between cards: a copy, then the delete, the delete only after the copy is written and read back.
-- **Import** the saves of a player's per-game cards (`Saves/PlayStation/<game>.mcr` and `.2.mcr`) onto a shared or named
-  card: every save of the chosen games copied, **refused as a whole when the 15 blocks of the card would be exceeded**,
-  with words naming the saves and the blocks each needs, so that a player never gets half an import. The per-game cards
-  are read and never written: the import copies, never moves, so the way back of §2 stays.
-- **Never write a card a running machine holds.** The machine writes its card's file whenever the game writes the
-  card (`BATTERY`), so a manager's write while it runs would be overwritten, or would overwrite a save the game made.
-  The manager refuses such a card with words; writing one under a running game would need the core ABI to hand a
-  card's bytes to a machine (§4's second form, an export `battery_insert` under its own capability, the core
-  presenting the card as reinserted), a minor of its own when a player needs it.
-
-### 12.2 The forms weighed
-
-By the design rules (`Diamond_Plan.md` §2, the project's rules on modules and surfaces), with one question first:
-**where the card format is read and written**, since every form needs it.
-
-| Where the format lives | For | Against |
-|---|---|---|
-| In Diamond, the core | Diamond has the card | the core is a machine behind the ABI, which has no surface for a file system and should not gain one; the on-card format is a convention of Sony's kernel, not of the card's hardware, so it is not the machine's fact; a host reaching into a core for it is what the surfaces forbid |
-| The open kernel's own code (`kernel/src/bu.rs`, `blocks.rs`) | the format already written once, in Rust | it is a program the emulated R3000A runs, `no_std` MIPS inside the console's RAM, not a host library; sharing it would couple the kernel's build to the frontend's |
-| **The PlayStation's system pack** (`EmuSen.Crystal/Systems/Psx`, C#) | it is where the runtime keeps the console's knowledge above the ABI: the cheat codecs (`EmuSen_Cheats.md` §10), the disc recogniser (`Diamond_Players.md` §1); both clients below are C# and reach it; it needs no surface of its own | a later Rust runtime (`EmuSen_Stack.md` §6, deferred) would port it, which a reader of pure functions over 131,072 bytes makes mechanical |
-| A Rust crate behind the platform library's C interface | one implementation for a Rust future | a new interface version for a feature with two C# clients today; the platform library's interfaces are for the runtime's services, not a console's knowledge |
-
-**The reader belongs in the system pack** [C]: a `PsxCard` of pure functions, bytes in and bytes out (parse the
-directory, list the saves, copy, delete, the checksums), with no file I/O; the paths stay Galaxia's (`CardPathFor`,
-`CardNames`, the per-game rule), and the writes go through `AtomicFile`, as every save does.
-
-Then the two clients:
-
-| Form | For | Against |
-|---|---|---|
-| **A DianaSh command module**, `memcard` (`memcard ls CARD`, `memcard cp CARD:SAVE CARD`, `memcard rm`, `memcard mv`, `memcard import GAME... --to CARD`) | Unix-like, one job per command, scriptable for the import over a whole library; testable headless; runs without an emulator, as DianaSh must (`EmuSen_DianaSh.md`); its man page is where the rules above are written | no icons; not reachable from a controller |
-| **A Mistress window on LunaP**, "Manage cards…" from the PlayStation's tab and big picture's game menu | what a player at a television needs: two cards side by side with their saves' icons and titles, a pad's A to copy and X to delete, as a console's manager | a window's fit and pad audits to pass; the window alone leaves the import unscriptable |
-
-**Recommended: both, over the system pack's reader, the command first** [C]: the command proves the reader and the
-import on synthetic cards built by the tests (the open kernel's own card program, `kernel-card.s`, writes real
-directory frames to borrow from), and the window then adds nothing to the format but the drawing. Each client is a
-module of its own: the command a DianaSh module with its man page under `Lib/dianash/emusen.memcard/man/memcard.1`, the window a LunaP
-window of Mistress. The `.gme` and `.vmp` conversions the plan's §4.4 left to "a later tool" fit the same reader as an
-import and an export, in the command first.
+**The PlayStation's module**, `PsxCardFormat` in `EmuSen.Crystal/Systems/Psx`, reads and writes psx-spx's "Memory Card
+Data Format" [R]: the header frame (`MC`, checksum 0Eh), the fifteen directory frames (allocation states 51h, 52h and
+53h in use, A0h free, A1h to A3h deleted; the file size and the name in a file's first frame; the next block's number,
+FFFFh for none; the XOR of bytes 00h–7Eh in byte 7Fh), the broken-sector list and its replacement frames, the title
+frame (`SC`, the Shift-JIS title, read with code page 932 and its full-width letters folded to ASCII) and the blocks
+themselves. A save is named by its directory name (`BASLUS-00067DRACULA`), its game by the serial the name carries
+(`SLUS-00067`). A copy takes the lowest free frames and writes the chain with its checksums; a delete marks a file's
+frames A1h–A3h and keeps its blocks, as the BIOS does, so the open kernel's `_card_undelete` could bring it back; a
+chain that points at a free frame, loops or ends wrongly is listed damaged and never copied; formatting writes block 0
+as psx-spx lists a formatted card's, which is what the open kernel's `format_card` writes. Its tests are
+`SaveMediaManagerTests`, against cards whose saves the tests write into the directory themselves.
 
 ## 13. Questions for the tester
 
-1. **Q1, the default mode.** Built: *Per game*. *Recommended:* keep *Per game* as the default until the card
-   manager's import (§12.1) exists, then make *Shared* the default and offer the import once, the first time a game
-   is loaded under *Shared* while per-game cards exist (copied, never moved). The reason is the player who updates and
-   starts a game: under a *Shared* default today their saves are all still on disk but the game finds none, and a player
-   who does not know the setting has no way back they can see. Per game first, then Shared with the import, never
-   hides a save.
-2. **Q2, slot 2 under *Shared*.** Built: `Card 2`, a second shared card, with slot 2 empty by default as the plan's
-   §4.4 keeps it (§2). *Recommended:* as built.
-3. **Q3, two programs on one card.** Two of the project's programs running PlayStation games at once on the same
-   shared card would each write the file from its own copy, the last writer winning. Not built (§9.3). *Recommended:* an
-   advisory lock on the card's file held for a machine's life, a second machine given the card unshared with a notice,
-   built with the card manager, which needs the same lock to refuse a card in use.
-4. **Q4, naming a new card.** Built: *Named cards* offers `Card 1` to `Card 8` and any card file in the folder.
-   *Recommended:* naming and renaming in the card manager, not a text box in the settings, which a pad reaches badly.
-5. **Q5, other consoles' cards.** The N64's Controller Pak (Mars's `.mpk`) and the Sega CD's RAM cartridge (`.crm`)
-   are removable too; neither core lists them so yet, and each would honour the flag as Diamond does. *Recommended:*
-   each when its core is next worked on, a step of its own; the Sega CD's internal backup RAM is memory inside the
-   console, `EmuSen_CoreAPI_Extensions.md` §9.2's `"console"` kind, and would need a rule and a minor of its own.
+*Answered 2026-10-15*: all five recommendations were accepted (`EmuSen_SaveMedia.md` §0). Q1's default is *Shared* now
+that the import exists, with the import offered once; Q2 is as built; Q3's lock is built (§9); Q4's naming is the card
+manager's; Q5 is `EmuSen_SaveMedia.md` §7.
 
 ## 14. Reading log, and exposures
 

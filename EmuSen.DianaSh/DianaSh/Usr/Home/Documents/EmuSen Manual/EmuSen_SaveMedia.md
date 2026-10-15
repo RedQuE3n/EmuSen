@@ -326,7 +326,7 @@ target in memory, writing once.
 A medium's **entry** in its console's system pack names it whether or not a module reads it:
 
 ```csharp
-public sealed record SaveMediumEntry(string Id, string Title, string Noun, ISaveMediumFormat? Format = null);
+public sealed record SaveMediumEntry(string Id, string Title, string Noun, string Extension, ISaveMediumFormat? Format = null);
 ```
 
 **Where the modules live** [C], as `Diamond_Cards.md` §12.2 argued for the PlayStation's: in each console's system
@@ -365,14 +365,14 @@ The runtime's view (which card is in which slot of which running game) is the fr
 The module `emusen.memcard`, one command, `memcard`, its page `Lib/dianash/emusen.memcard/man/memcard.1`:
 
 ```
-memcard ls [<card>]                  every card, by console and medium; or the saves on one, with free space
-memcard cp <card>:<save> <card>      copy a save onto another card
-memcard mv <card>:<save> <card>      copy, read back, then delete from the first
-memcard rm <card>:<save>             delete a save, as the console's own manager does
-memcard import <card> <from>...      every save of the <from> cards onto <card>, all or none
-memcard new <card>                   a new card in the drawer, formatted where the medium's module can
-memcard dup <card> <card>            a whole card copied to a new name
-memcard rename <card> <name>         a drawer card renamed
+memcard ls [<card>]                every card under Saves by console, or the saves on one card
+memcard cp <card>:<save> <card>    copy a save onto another card of its medium
+memcard mv <card>:<save> <card>    copy a save, read it back, then delete the first
+memcard rm <card>:<save>           delete a save as the console's own manager does
+memcard import <card> <from>...    every save of <from> onto <card>, all or none
+memcard new <card>                 a new card, formatted where its medium allows
+memcard dup <card> <new>           a whole card copied to a new name
+memcard rename <card> <new>        a card renamed
 ```
 
 A `<card>` is a path in the sandbox (`Saves/PlayStation/Cards/Card 1.mcr`, `Saves/PlayStation/Amber Saga.mcr`), the
@@ -390,9 +390,12 @@ A `ToolWindow` of LunaP, framed as a menu in big picture, controller-navigable, 
 order. On a tab, each medium in turn: its title, its mode and which card is in each slot (`Shared: Card 1 in slot 1,
 Card 2 in slot 2`), and a card chooser holding the drawer's cards and then each game's own; under the chosen card, its
 saves with title, units and game, and its free space, or, where no module reads the medium, its size and the three
-whole-medium operations. Actions: *Copy To…*, *Move To…*, *Delete*, then for the card *New Card*, *Import Saves…*,
-*Duplicate…*, *Rename…*. A choice of target is a list of the medium's other cards; a name is typed, with the
-on-screen keyboard from a pad, prefilled with the next free `<Noun> n`.
+whole-medium operations. Actions: a save is chosen by pressing it, then *Copy Save* or *Move Save* to the card chosen
+in *Copy or move to*, a list of the medium's other cards, or *Delete Save*; for the card, *New Card* under a typed name
+(the on-screen keyboard from a pad), prefilled with the first free `<Noun> n`, and *Import Every Game's Saves* onto the
+chosen drawer card. Duplicating and renaming a card are `memcard`'s (§6.4) and not the window's, where a pad would
+reach them badly and a player seldom needs them [C]. What an action did, or why it did nothing, is said under the
+tabs.
 
 **Entry points.**
 
@@ -407,8 +410,8 @@ on-screen keyboard from a pad, prefilled with the next free `<Noun> n`.
 
 ### 6.6 Importing a game's cards
 
-*Import Saves…* on a card offers the console's per-game cards of the same medium, every game's by default, and copies
-every save on them onto the card, all or none. The per-game cards are read and never written, so *Per game* chosen
+*Import Every Game's Saves* on a drawer card, and `memcard import` with any cards named, copy every save on the console's
+per-game cards of the same medium onto the card, all or none. The per-game cards are read and never written, so *Per game* chosen
 again finds them as they were. The refusal past capacity is the medium's own: the PlayStation's 15 blocks, from its
 module.
 
@@ -430,7 +433,7 @@ on a load (the pak is in its state today, `src/memory/controller.rs`), and prese
 pushed in, which the pak's status byte to the joybus reports (to be read in the public N64 documentation when built).
 C# Mars stays as it is: it is the oracle of the port and is not offered a mode.
 
-### 7.3 The Sega CD, built in step c
+### 7.3 The Sega CD, built
 
 Nephrite's two files gain kinds and labels: the internal backup RAM, file 0 `.brm`, `console`, medium `mcd.backup`,
 label `Inside the console`; the RAM cartridge, file 10 `.crm`, `removable`, medium `mcd.ramcart`, label `Cartridge
@@ -472,13 +475,14 @@ module exists, since without a module the import could only copy one game's whol
 game's [C]. A mode the player chose is kept: only a console with nothing stored changes.
 
 **The import offered once.** The first time a game of such a console is started under the default *Shared* while
-per-game cards of that medium exist and the shared card does not, Mistress asks, before the game starts: "Your
-PlayStation games each kept their own memory card. Copy their saves onto the shared card, Card 1, so every game sees
-them? Each game's own card stays as it is." with **Copy Saves** and **Not Now**. Copy runs §6.6's import onto `Card 1`;
-past capacity it is refused as a whole, and the window opens on the console's tab to choose. Either way the offer is
-recorded (`CardsOffered` under the console in `graphics.json`) and not made again; the way back stays visible: *Import
-Saves…* in the Memory Cards window, and *Per game* in Graphics Settings, under which each game finds its own card as it
-was.
+per-game cards of that medium exist and the shared card does not, Mistress asks, after the firmware question and
+before the game starts: "Your PlayStation games each kept their own memory card. Copy their saves onto the shared one,
+Card 1, so that every game sees them? Each game's own stays as it is: Memory Cards can copy from them later, and Per
+game in Graphics Settings uses them again." with **Copy Saves** and **Not Now**. Copy runs §6.6's import onto `Card 1`;
+past capacity it is refused as a whole, its first line is shown, and the window opens to choose. Either way the offer is
+recorded (the medium's mode key followed by `Offered`, `CardsOffered` for the PlayStation, under the console in
+`graphics.json`) and not made again; the way back stays visible: *Import Every Game's Saves* in the Memory Cards
+window, `memcard import`, and *Per game* in Graphics Settings, under which each game finds its own card as it was.
 
 ## 10. Questions for the tester
 
@@ -493,7 +497,64 @@ was.
 
 ## 11. Build record
 
-*Written as each step is proven.*
+*Each step was committed when proven, on 2026-10-15.* Marks as the plan's.
+
+### 11.1 The core ABI's minor 1.8
+
+[M] The header's `EMUSEN_CORE_ABI_MINOR` is 8 with `EMUSEN_CREATE_SHARED_CONSOLE` (4u); the schemas accept `"console"`
+and core info's `medium` (`^[a-z0-9.]+$`), `label` and `port`; the baseline gains four lines tagged `@1.8` and moves its
+minor, and `emusen-core-abi-check --check --against` WiseMan's baseline reports 433 facts agreeing on four triples.
+`emusen-native` writes a slot's three fields only when set (`a_slots_medium_label_and_port_are_written_only_where_set`,
+with a medium outside the pattern refused by the schema), so every core of 1.7 writes the same bytes; 75 tests pass.
+The kit's 30 tests pass, among them C19 on the test core's console memory (`CEh` payload) and the two new seeded faults
+each failing its case alone. The C# host reads a kind it does not know as the game's
+(`Core_infos_battery_slots_are_read_with_kind_medium_and_label`), and `CoreAbiTests` hold both flags to the baseline.
+
+### 11.2 The runtime
+
+[M] `MemoryCards` groups a system's slots into media (`MediaOf`), reads each medium's choice with 1.7's keys for the first
+removable medium (`DiamondCardsTests`, seven, unedited at this step), places each slot at a load (`Place`), and
+`CoreEngine` makes the machine with each kind's flag and holds the locks. `SaveMediaTests`: the test core's two media
+and their keys, a core of 1.7 grouped by kind and extension with a second removable medium on `Media.<id>` keys, the
+console's memory one file for every game when shared and each game's own when not, and the lock: held for a machine's
+life, shared with a second machine of the same program, refused to the card manager and, through `flock -n` from
+another process, to another program, released by `ReleaseMedia`, its file gone with it, and a game started while the
+manager holds its card run on its own card with the notice. Diamond's 173 unit, 81 program and the rest of its tests
+pass with its slots declared.
+
+### 11.3 Nephrite
+
+[M] `Nephrite_Native.md` §61: the crate's 172 unit tests; `NephriteMediaTests` through the host. The kit on Nephrite's
+Genesis sample: the core's cases and 64 of 64 images, 87.9 s, at core ABI 1.8.
+
+### 11.4 The card manager
+
+[M] `SaveMediaManagerTests` (seven): a formatted card is psx-spx's directory block; a card's saves listed with their
+blocks, names, Shift-JIS titles and serials, a broken chain listed damaged; a copy into the lowest free blocks with its
+chain and checksums, refused onto a card that holds the name or lacks the blocks; a delete marking A1h–A3h and keeping
+the blocks; the import refused whole at 15 blocks needed against 14 free, naming each save and its blocks, then done
+with one save already present left as it was and the games' cards byte for byte unchanged; a held card refused with
+its holder's name, and a move that deletes only after the copy reads back; new, duplicate and rename never over a file,
+and a medium with no module only named. `memcard.golden` records four cases over every usage line and every failure the
+command words; `help.golden` and `man.golden` were recorded again for its eight usage lines and its page, no other line
+changing. The Memory Cards window passes the fit audit with saves listed and with its card held, at both sizes, and
+`PadMenuTests` open it from the main menu's Settings and a game's Game Settings.
+
+### 11.5 The default
+
+[M] `MemoryCardsOfferTests`: the PlayStation's card defaults to *Shared* and the Sega CD's media, read by no module, to
+*Per game*; accepted, the offer copies both games' saves onto `Card 1`, leaves each game's card unchanged, is recorded and
+is not made again; declined or needless (no game's card, or a mode the player chose) it copies nothing and asks once at
+most. Two tests were edited for the new default, each argued: `DiamondCardsTests`' rows assert the default `shared`,
+and its per-game case now chooses *Per game* as a player would; `DiamondPlayersTests`' card round trip, whose subject is
+the per-game file, chooses *Per game*, and the class now redirects the configuration folder, which it read from the
+player's before.
+
+### 11.6 The PlayStation, unchanged per game
+
+[M] A machine made per game is made as before: no flag, no `SHRD` block, so its states and their digests are 1.7's
+(`Diamond_Cards.md` §10.3's three, reproduced by Diamond's unedited tests). The kit on the sample's nine discs at 1,800
+frames passes the core's cases and 9 of 9 images, C19 among them, in 275.3 s at core ABI 1.8.
 
 ## 12. Reading log
 

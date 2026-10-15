@@ -326,6 +326,14 @@ string StatePathFor(romPath, slot, directoryOverride)  // Save States/<stem>[.sl
 *Revised 2026-09-28: the save is in a folder per console, named as the ROM library names them, and the flat
 `Saves/<stem>.srm` of earlier builds is copied in once (`EmuSen_Settings_Reference.md` §4.85.11).*
 
+### 5.0 Save media kept apart from the game (2026-10-15)
+
+A console's shared and named save media are files of their own beside its per-game saves:
+`Saves/<console>/Cards/<name><ext>` for a removable medium and `Saves/<console>/Console/<name><ext>` for the console's own memory
+(`SaveLibrary.MediumPathFor`, `MediumNames`; `CardPathFor` and `CardNames` are the removable kind's). `MediumLock` holds
+`<file>.lock` beside a medium's file, opened exclusively while a game or the card manager has it, so that two programs
+never write one card (`EmuSen_SaveMedia.md` §3.3, §3.5).
+
 ### 5.1 Two decisions worth knowing
 
 **Slot 1 is the unsuffixed name.** `<stem>.state`, not `<stem>.slot1.state` — that is what Hotaru, Mistress and DianaSh's `state save` have always written, and changing it would orphan every existing save state. Slots 2 and up take `.slotN`.

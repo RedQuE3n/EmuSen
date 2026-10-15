@@ -799,6 +799,16 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x00, rig.Read(0xFF0F) & 0x02);
         }
 
+        // K, for mutant K2: a source enabled while the LCD is off raises nothing, though the parked mode would match it.
+        [Fact]
+        public void A_source_enabled_while_the_lcd_is_off_raises_nothing()
+        {
+            var rig = AtLine144(0x00, 0);
+            rig.Write(0xFF40, 0x00);
+            rig.Write(0xFF41, 0x08);
+            Assert.Equal(0x00, rig.Read(0xFF0F) & 0x02);
+        }
+
         // K, stat_lyc_onoff round 4: a comparison that starts matching when the LCD comes back raises the interrupt.
         [Fact]
         public void A_comparison_that_starts_matching_as_the_lcd_comes_on_raises_the_interrupt()
@@ -848,7 +858,9 @@ namespace EmuSen.WiseMan.Cores
             TickToLine143(rig);
             TickUntil(rig, PpuMode.HBlank);
             rig.Write(0xFF0F, 0x00);
-            while (rig.Bus.Ppu.Dot < 452) rig.Tick(1);
+            while (rig.Bus.Ppu.Dot < 451) rig.Tick(1);
+            Assert.Equal(0x00, rig.Read(0xFF0F) & 0x03);
+            rig.Tick(1);
             Assert.Equal(interruptsBefore, rig.Read(0xFF0F) & 0x03);
             rig.Tick(4);
             Assert.Equal(0x03, rig.Read(0xFF0F) & 0x03);

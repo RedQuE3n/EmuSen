@@ -2145,17 +2145,137 @@ it.
 **Nothing else differed.** Every other converted claim passed on MercuryRT at the first run, and the corpus baseline's
 columns agree ROM for ROM.
 
-**The frame's cost.** No file of the machine changed (`cpu/`, `memory/`, `ppu/`, `apu/`, `machine.rs`); the library gained
-four test extensions and a peek. The crate's bench (`examples/frames`, 3,000 frames after 900, p50 in ms) was run on the
-crate at `175f9c36` and at this stage, three interleaved rounds under the timing lock, measured 2026-10-14:
+**The frame's cost.** The machine's per-cycle code did not change (`cpu/`, `memory/`, `ppu/`, the APU's channels and
+mixing); the library gained four test extensions and a peek, and the mixer's state walk moved into `Mixer` (§12.4).
+The crate's bench (`examples/frames`, 3,000 frames after 900, p50 in ms) was run on the crate at `175f9c36` and at this
+stage, three interleaved rounds under the timing lock each time, measured 2026-10-14 after the extensions and again
+2026-10-15 after the walk moved:
 
-| Game | before | after |
+| Game | before (14th) | after (14th) | before (15th) | after (15th) |
+|---|---|---|---|---|
+| Tetris | 0.4325, 0.4355, 0.4366 | 0.4308, 0.4363, 0.4364 | 0.4320, 0.4305, 0.4302 | 0.4294, 0.4275, 0.4293 |
+| Kirby's Dream Land | 0.4924, 0.4908, 0.4887 | 0.4843, 0.4895, 0.4958 | 0.4867, 0.4841, 0.4842 | 0.4813, 0.4786, 0.4800 |
+| Link's Awakening | 0.4004, 0.3996, 0.3993 | 0.3998, 0.4010, 0.3988 | 0.3988, 0.3977, 0.3984 | 0.3989, 0.3976, 0.3979 |
+| Pokémon Yellow | 0.5396, 0.5378, 0.5408 | 0.5378, 0.5312, 0.5377 | 0.5374, 0.5287, 0.5370 | 0.5290, 0.5286, 0.5304 |
+
+Every pair is within 1.6%. On the 15th every "after" is at or under its "before", by up to 1.6% on Yellow; a cold
+state walk cannot make a frame faster, so that is placement or noise, and is not claimed. The example links the
+machine and not the cdylib's export table, so this says the machine's code is where it was; §8.7.3's finding that
+placement in the shipped library can move a frame was not re-measured through `ICore`.
+
+### 12.4 Mutants for what had none
+
+**What was already covered.** Stage 1 (§8.1, 10), stages 2–5 (§8.4, 23), stage 6 (§8.5.4, 19 and two wide-table ones),
+stage 7's digests (§8.6), the move onto the common interface (§8.7.4, 19), D1–D3 (§9.5, 14) and the Model setting
+(`Mercury_Model.md` §6.8, 23). Nothing covered state version 8's mixer (§10), the v1 adapter's own code (§11), the
+Color's palette table in Rust, the machine areas that only the converted claims reach, or this stage's extensions.
+§3.6 also asked for two classes on purpose.
+
+**Method,** run 2026-10-14. The crate and `emusen-native` were copied to scratch space, and a copy of WiseMan's build
+output was made there, so that no source and no output in the tree was touched. For each mutant the runner
+(`mutants.py`, scratch) applied one edit to the copy, built the library with release settings less LTO, ran the
+crate's tests, put the library in the output copy (its sidecar's hash updated), and ran WiseMan's `MercuryRt`,
+`MercuryModelTests` and `MercuryDefectTests` filters with the four games (`EMUSEN_MERCURYRT_ROMS`), then restored the
+file. The unmutated control passed: the crate, and 514 of 514 WiseMan cases. The four ordering mutants were then run a
+second time against the corpus alone: the baseline (§12.2) and the lock-step `MercuryRtCorpusTests`. Each WiseMan run is
+bounded twice: vstest's hang detector at five minutes, which names the test that hung and aborts the run, and an outer
+limit that kills the run's whole process group.
+
+**The first round hung once.** The first runner bounded each command at an hour and killed only its direct child.
+Mutant X2 (the tick extension one T-cycle short) turned `Tick(1)` into no tick at all, so the access-blocking claims'
+`while (Dot != dot) Tick(1)` never returned. The runner's hour expired, and the test host it had started outlived it,
+holding the shared test lock until it was killed by hand two hours later. The runner now starts each command in its own
+session and kills the group, and the hang detector catches the same mutant in five minutes. A hang is a catch: it
+is recorded below with the test that hung.
+
+| # | Mutation | Caught by |
 |---|---|---|
-| Tetris | 0.4325, 0.4355, 0.4366 | 0.4308, 0.4363, 0.4364 |
-| Kirby's Dream Land | 0.4924, 0.4908, 0.4887 | 0.4843, 0.4895, 0.4958 |
-| Link's Awakening | 0.4004, 0.3996, 0.3993 | 0.3998, 0.4010, 0.3988 |
-| Pokémon Yellow | 0.5396, 0.5378, 0.5408 | 0.5378, 0.5312, 0.5377 |
+| **The ordering of `step_one_cycle`** (§3.6's first class) | | |
+| O1 | TIMA's reload counted down after the edge detector, not before | the interrupts program on all eleven boards, `The_window_counts_its_lines…` and the rendering-skip pair; **not** by the four games, the corpus's verdicts, or its lock-step run |
+| O2 | the OAM DMA byte before the PPU and APU, not after | **survived** the first round and the corpus; caught by the new `An_oam_dma_byte_landing_on_the_composite_dot_draws_identically` |
+| O3 | the frame sequencer reads DIV before its increment | 38 cases: the rig's envelope and sweep claims, the synthetic programs, the games, the platform digests; in the corpus, the lock-step run |
+| O4 | DIV incremented after the timer, so its edge sees the old counter | 22 cases: the interrupts program, random programs, the games, the platform digests; in the corpus, the lock-step run and all three MercuryRT columns of the baseline |
+| **Same-width neighbours in the state** (§3.6's second class, as it stands since D3) | | |
+| S1 | the writer puts each capacitor under the other's name | 23 cases, the games' byte round trip and the lock-step programs among them; **not** by the crate |
+| S2 | the reader takes the capacitors in the other order | `Real_games_states_come_back_from_rust_byte_for_byte` only, a case that needs the games |
+| S3 | the capacitors written in the other order, their labels with them | 45 cases; the running-machine and noise round trips among them |
+| S4 | MBC3 writes its ROM and RAM banks under each other's names | the crate's naming rule and board round trip; 19 WiseMan cases |
+| S1b, S2b | S1 and S2 again, after the mixer moved into `Mixer::write_state` and `read_state` | the crate's naming rule; and as before (23 and 1 cases) |
+| **State version 8 and the v1 adapter** (§10, §11) | | |
+| V1 | version 8's mixer not read back | the crate; 22 cases, the sound-resume claim among them |
+| V2 | no `MACHINE_INFO` for a state from the other console | `A_state_from_the_other_console_tells_the_host_its_machine_info_changed`; the debugger's call stack across a rebuild |
+| V3 | the setting "Game Boy" builds Auto | `The_debugger_shows_the_console_the_game_runs_on_on_both_engines` only |
+| V4 | a write to a space the machine does not have accepted | **survived**; caught by the new crate test `a_space_the_machine_does_not_have_is_refused_through_the_core_abi` |
+| **This stage's additions** | | |
+| X1 | the audio peek returns nothing | E1's claim, `The_debug_target_reports_four_channels_and_a_live_peek` |
+| X2 | the tick extension one T-cycle short | 19 rig claims (PPU, APU, CGB, OAM DMA, the O2 test); then **a hang** in `MercuryRtAccessBlockingTests.Oam_is_closed_for_the_scan_as_well_as_the_draw`, stopped by the hang detector |
+| X3 | the stop extension does nothing | four rig claims: the APU's and the CGB's double speed, the colour state's round trip |
+| X4 | a step leaves an HDMA stall pending | the random programs, instruction by instruction |
+| T1 | two checksums of the Color's palette table swapped | the TCRF rows on MercuryRT; `Every_palette_number_renders_identically_on_both_engines` |
+| **Machine areas the converted claims reach** | | |
+| N1 | noise's short mode feeds bit 5, not 6 | `Short_mode_makes_the_noise_repeat_after_127_steps`; a game; the platform digests; random programs |
+| N2 | wave volume code 2 shifts by two | the games only |
+| N3 | NRx4 reads its length-enable bit as 1 | `The_unreadable_register_bits_all_read_back_as_one`; the games |
+| N4 | STAT's unwired top bit reads 0 | `Stat_reports_the_mode_the_lyc_match_and_its_unwired_top_bit`; the games |
+| N5 | eleven sprites a line | `Only_the_first_ten_sprites_on_a_line_are_drawn`; the games |
+| N6 | SVBK 0 selects bank 0 | `Svbk_banks_the_upper_wram_window_and_treats_zero_as_one`; the HDMA program; random programs |
+| N7 | cancelling an hblank HDMA keeps its blocks | `Clearing_bit_seven_cancels_a_running_hblank_hdma` only |
+| N8 | SC's clock-speed bit read as 0 on a Game Boy | `Unused_control_bits_read_back_as_ones_on_a_dmg`; three Model cases |
+| N9 | a write to echo RAM dropped | `Echo_ram_is_the_same_storage_as_work_ram`; random programs |
+| N10 | writing DIV clears only its visible byte | the random programs only |
+| N11 | the palette index steps without bit 7 | `The_palette_index_auto_increments_only_when_its_top_bit_is_set` only |
+| N12 | the window line counts before WY is reached | the window claim; the window step test; the games |
 
-Every pair is within 1.5%, in both directions. The example links the machine and not the cdylib's export table, so this
-says the machine's code is where it was; §8.7.3's finding that placement in the shipped library can move a frame was not
-re-measured through `ICore`.
+**Result.** All 31 are caught; three needed a new test (O2, V4, and S1/S2's move under the naming rule). The converted
+claims are the only oracle for three of them (N7, N11, X1), and the only one without the games for three more (N3–N5);
+CI has no games. N2 is caught by the games alone, and N10 by the random programs alone: the converted
+`Writing_div_resets_the_counter` cannot see N10, because DIV is the counter's high byte and a test that reads only DIV
+reads zero either way. The claim was left as it was: it says what C# says, and the random programs hold the rest.
+
+**§3.6's two predictions, retired.**
+
+- *"Ordering could hide below game-level comparison and be caught only by mooneye's timer ROMs."* Half right. O1 hid
+  below the four games, as predicted, but it hid below the corpus too: no verdict moved and the lock-step run stayed
+  identical. What caught it was a synthetic program that takes timer, STAT and vblank interrupts every frame and is
+  compared state for state. O2 hid below everything until a test aligned a DMA with the composite dot, which §8.4 had
+  argued was the only place it could show (M7). O3 and O4 were caught widely. The class is real, and the corpus is not
+  its oracle; the lock-step synthetic programs are.
+- *"The cartridge copies could hide below a byte round trip and be caught only by `naming.rs`."* The copies are gone
+  (D3, §9.3), and §9.5's M11 is their last trace. The class that replaces them is any two same-width neighbours in the
+  walk, and the prediction failed for the first such pair tried: `naming.rs` never saw the mixer's three doubles,
+  because the rule reads only lines of the form `w.f64("Label", self.field)` and `self.field = r.f64()?; // Label`, and
+  version 8 wrote them as `mix.left_capacitor` with no comment on the read. S1 was caught by WiseMan's comparisons with
+  C#, and S2 by one case that needs the games. The mixer's walk now lives in `Mixer::write_state` and `read_state`,
+  under the group `Bus.Apu`, so the bytes and the layout listing are the same and every line is under the rule; S1b and
+  S2b fail the crate's naming test. A layout that is self-consistent (S3) is outside any rule that compares a line with
+  itself, and is caught only against C#'s walk; when C# leaves `main`, the committed layout listings of §3.7 take that
+  role.
+
+**Divergence kept.** None. **Equivalents argued.** None this round: O2, the one candidate (§8.4's M7), is now shown
+not to be equivalent, and has its test.
+
+### 12.5 What is not done, and what stage 9 needs
+
+**Not done.**
+
+- MBC2's built-in RAM size, the header's title and checksum, and the short-image refusal are held on C# alone (§12.1).
+- E2 is kept, not changed (§12.3).
+- The C# columns of the corpus baseline take eight times MercuryRT's; not investigated.
+- The frame's cost through `ICore`, as a player runs it, was not re-measured; only the machine's, by the crate's bench.
+- The handheld was not part of this stage.
+
+**What stage 9 needs from this one.**
+
+- **The view.** `MercuryRig` reads MercuryRT through a C# `MercuryCore` loaded from its state. When the C# core leaves
+  `main` (stage 10), the claims lose both their C# half, which goes to the legacy branch with it, and the view their
+  MercuryRT half reads through. Either the state classes stay on `main` as a reader with no machine behind them, or
+  the view becomes a reader driven by the committed layout listings of §3.7. That choice is stage 9's to propose.
+- **The corpus.** The verdicts are recorded (§12.2). The goldens add, per ROM, the frame of the verdict, the serial
+  bytes and per-frame hashes, from C#. The baseline's C# columns then stand as the record of what C# said.
+- **The traces** of §3.7 for the synthetic programs (`MercuryRtMachineTests`' busy, interrupts and colour programs on
+  eleven boards, the random programs), the corpus and the four games. O1 shows which matter most: the lock-step
+  synthetic programs caught what neither the games nor the corpus did.
+- **The palette expectations.** The TCRF rows carry their own expected strings; the palette-number rows and the
+  default take theirs from C#'s `CompatibilityPalettes`, which would need freezing as data when the C# core moves.
+- **The legacy differential project** pins the core ABI, the state format and the input script, and now also the four
+  test extensions the rig calls (`mercuryrt_core_step`, `_tick`, `_stop`, `_serial`).

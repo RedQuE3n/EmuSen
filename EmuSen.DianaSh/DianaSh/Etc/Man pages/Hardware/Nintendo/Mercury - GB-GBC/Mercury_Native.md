@@ -2572,3 +2572,26 @@ the two engines agree on every digest.
 
 The new digests were recorded for both (the `stateVersion7` column too, which is the same state with its version set back
 and the mixer removed, so it moves with the state). They are linux-x64's; Windows and macOS meet them on CI's next run.
+
+**Cost** (as in §13.1; from this step on other work shared the machine, load average about 3):
+
+| Game | MercuryRT step B | step C | C# step B | step C |
+|---|---|---|---|---|
+| Tetris | 0.4394, 0.4364, 0.4306 | 0.4354, 0.4329 (and one round of 0.8868, a stall) | 0.6343, 0.6253, 0.6310 | 0.6562, 0.6217, 0.6345 |
+| Kirby's Dream Land | 0.4908, 0.4914, 0.4917 | 0.4982, 0.4919, 0.4822 | 0.6904, 0.6930, 0.6926 | 0.7057, 0.6934, 0.6899 |
+| Link's Awakening | 0.4021, 0.4024, 0.3995 | 0.3987, 0.4029, 0.3987 | 0.5610, 0.5679, 0.5636 | 0.5624, 0.5641, 0.5703 |
+| Pokémon Yellow | 0.5302, 0.5284, 0.5348 | 0.5482, 0.5418, 0.5488 | 0.7210, 0.7187, 0.7160 | 0.7226, 0.7154, 0.7238 |
+
+The dispatch runs a few times a frame and STOP never in these games, so the work cannot cost a measurable fraction of a
+frame. Yellow on MercuryRT looked 3% slower; four more alternating pairs gave 0.5326–0.5390 before and 0.5350–0.5452
+after, about 1%, which is within what placement and the shared machine move.
+
+**Mutants**, each in C# and in Rust separately:
+
+| # | Mutation | Caught by |
+|---|---|---|
+| C1 | the vector chosen before the high push | ie_push's rounds 1 and 4, both engines |
+| C2 | a cancelled dispatch jumps to `$0040` | ie_push's round 1, both engines |
+| C3 | the scheduled `EI` survives the dispatch | `Ei_ei_before_a_dispatch_leaves_ime_clear_in_the_handler`, both engines |
+| C4 | the wait states after the push instead of before | C#: `MercuryCycleTimingTests.A_dispatch_pushes_on_its_third_and_fourth_machine_cycles`; Rust: the crate's `a_dispatch_pushes_on_its_third_and_fourth_machine_cycles`. Nothing through the rig sees it, as §12.1 found for every placement claim: the step's total is the same |
+| C5 | STOP reports four | the rig's STOP claim on both engines, and each harness's "bus advances" theory |

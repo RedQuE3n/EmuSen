@@ -182,6 +182,10 @@ sector 0 begins `SEGADISCSYSTEM`. The block itself is the game's own code and ru
 
 ## 5. Questions for the tester, with recommendations
 
+*Decided 2026-10-15: all five as recommended.* Each decision follows its question. The screening Q1 and Q2 call for is
+made by a screener who neither writes nor reviews the BIOS; until its verdicts, the include file and the format's
+public description stay unopened by the writer.
+
 1. **Q1, where G1 and G2 come from.** The interface's numbers and slots are in no document the writer may read. Three
    sources are possible:
    - **(a)** A homebrew program's interface header: the 240p Test Suite's Sega CD build carries one
@@ -200,6 +204,9 @@ sector 0 begins `SEGADISCSYSTEM`. The block itself is the game's own code and ru
 
    *Recommended:* (a) after screening, with (b) as its check: each constant used only once a game's call on the open
    BIOS confirms it, the confirmations recorded as disputes D-41 onward. Without an answer stage 10 cannot run a disc.
+   *Decided 2026-10-15:* the numbers and slots come from the 240p suite's include file only once a screener has
+   cleared it; each constant, once used, is confirmed by a game's call on the open BIOS and recorded as a dispute from
+   D-41.
 
 2. **Q2, where G3 comes from, and how a new machine's backup RAM is formatted.** No document gives the format beyond
    TB p. 9's three `$40` areas, and the replacement writers' rule (§1.3, §5.6) forbids reading what the player's BIOS writes. *Recommended:* a public
@@ -209,17 +216,27 @@ sector 0 begins `SEGADISCSYSTEM`. The block itself is the game's own code and ru
    start formatted, `Nephrite_Native.md` §60.5, and the open BIOS has no memory manager in which a player could format
    it), made by the format module's pure `format` function, so that the console's memory becomes Shared by default as
    decided.
+   *Decided 2026-10-15:* the format comes from a screened public description and is graded only by round trips
+   through games; once those pass, a new machine is given an internal backup RAM formatted by the format module, and
+   the Sega CD's console memory becomes Shared by default.
 
 3. **Q3, the security check (G5).** *Recommended:* none; every disc with `SEGADISCSYSTEM` boots, which §4's words
    state. The alternative, checking the disc ID's region letters against the console's, would refuse discs the real
    BIOS also refuses, but by a different test, and is not worth the difference.
+   *Decided 2026-10-15:* no security check; any disc with `SEGADISCSYSTEM` in sector 0 boots, and the replacement's
+   words say so.
 
 4. **Q4, the main CPU's routines (G4).** *Recommended:* found game by game on the open BIOS (a jump into
    `$000000`–`$01FFFF` that no table explains), each written only from a document that describes it and recorded as a
    dispute; a routine no document describes stays unwritten, the game's failure recorded, which P7 predicted.
+   *Decided 2026-10-15:* found game by game, written only where a document describes them, otherwise recorded as
+   disputes.
 
 5. **Q5, the assembler (G6).** *Recommended:* build it in `beryl-m68k` as step 10.0, for this stage and for the 32X's
    68000 boot ROM, graded by assembling and disassembling every instruction form back to the same words.
+   *Decided 2026-10-15:* built now as step 10.0, a development tool of the crate as `Beryl-HW/README.md` describes,
+   graded by assembling and disassembling every instruction form back to the same words and against the single-step
+   suite's opcode coverage.
 
 ---
 

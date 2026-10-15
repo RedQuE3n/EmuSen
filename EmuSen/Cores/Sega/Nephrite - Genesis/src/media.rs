@@ -79,7 +79,7 @@ impl Media {
             return Media { system: System::Mcd, header: Header::read(image, o + 0x100), sector: if o == 0 { 2048 } else { 2352 } };
         }
         let header = Header::read(image, 0x100);
-        let system = if header.as_ref().is_some_and(Header::is_32x) { System::S32x } else { System::Md };
+        let system = if header.as_ref().is_some_and(|h| crate::s32x::is_32x(&h.system_type)) { System::S32x } else { System::Md };
         Media { system, header, sector: 0 }
     }
 

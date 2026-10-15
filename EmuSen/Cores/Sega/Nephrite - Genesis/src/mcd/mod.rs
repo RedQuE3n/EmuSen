@@ -42,6 +42,8 @@ pub(in crate::mcd) const BIOS_SIZE: usize = 0x2_0000;
 /// is the last of `MEMORIES`, and the backup RAM cartridge's, when one is plugged in, follows.
 pub(in crate::mcd) const MEMORIES: [(u32, &str, usize); 4] = [(17, "PRGRAM", PRG_SIZE), (18, "WORDRAM", 0x4_0000), (19, "PCMRAM", PCM_RAM_SIZE), (20, "BRAM", BRAM_SIZE)];
 pub const BRAM_ID: u32 = 20;
+/// The sub CPU's processor id, from the Sega CD's range (Nephrite_Attachments.md Q7).
+pub const S68K: u32 = 2;
 pub const CARTRAM_ID: u32 = 21;
 
 /// The sub CPU and everything on its bus, and the fingerprint of the disc in its drive (0 for none), which a state

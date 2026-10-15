@@ -234,14 +234,9 @@ fn tmss() -> Firmware {
         "Without the image Nephrite runs as a console without TMSS, as the first Genesis and Mega Drive models were: licensed games start the same, without the licence screen.")
 }
 
-const S32X_COST: &str = "Nephrite's open replacements for the 32X's boot ROMs are not written yet (Nephrite_Plan.md §5.6): at this stage no 32X game runs, with the images or without them.";
 
 fn s32x_boot() -> Vec<Firmware> {
-    vec![
-        firmware(S32X_68K, "32X_G_BIOS.BIN", "The 32X's 68000 boot ROM (256 bytes)", 256, S32X_COST),
-        firmware(S32X_MASTER, "32X_M_BIOS.BIN", "The 32X's master SH-2 boot ROM (2,048 bytes)", 2048, S32X_COST),
-        firmware(S32X_SLAVE, "32X_S_BIOS.BIN", "The 32X's slave SH-2 boot ROM (1,024 bytes)", 1024, S32X_COST),
-    ]
+    crate::s32x::boot_firmware([S32X_68K, S32X_MASTER, S32X_SLAVE])
 }
 
 /// The files Sonic & Knuckles takes beside its own image: the player's cartridges, not firmware; a combined image
@@ -283,7 +278,7 @@ fn system(id: &str, name: &str, extensions: &[&str], firmware: Vec<Firmware>, de
 /// contents.
 pub const MD_EXTENSIONS: [&str; 4] = [".md", ".gen", ".bin", ".smd"];
 pub const MCD_EXTENSIONS: [&str; 1] = [".iso"];
-pub const S32X_EXTENSIONS: [&str; 1] = [".32x"];
+pub const S32X_EXTENSIONS: [&str; 1] = crate::s32x::EXTENSIONS;
 
 impl Core for Machine {
     const CAPABILITIES: u64 = caps::ROM_PATCHES | caps::SETTINGS | caps::SETTING_NOTES | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE | caps::BORROW | caps::MEDIA;

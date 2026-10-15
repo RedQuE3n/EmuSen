@@ -114,9 +114,4 @@ impl Header {
             save,
         })
     }
-
-    /// Whether the system field names the 32X.
-    pub(crate) fn is_32x(&self) -> bool {
-        self.system_type.contains("32X")
-    }
 }

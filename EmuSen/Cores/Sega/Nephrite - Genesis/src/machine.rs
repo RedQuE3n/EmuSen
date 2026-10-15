@@ -1,12 +1,13 @@
-//! The machine the ABI drives: the Genesis (`genesis.rs`) and what is fitted to it, the Sega CD for a disc, held in
-//! `Fitted` and matched once per call, so that each configuration's frame is compiled apart (Nephrite_Attachments.md
-//! §4); the 32X's memories beside it until its stage. A Mega Drive image and a disc run; a 32X image is recognised
-//! and held (Nephrite_Native.md §1, §9).
+//! The machine the ABI drives: the Genesis (`genesis/`) and what is fitted to it, the Sega CD for a disc and the 32X's
+//! stub for a 32X image, held in `Fitted` and matched once per call, so that each configuration's frame is compiled
+//! apart (Nephrite_Attachments.md §4). A Mega Drive image and a disc run; a 32X image is recognised and held, and
+//! counts its frames (Nephrite_Native.md §1, §9).
 
 use crate::genesis::cart::Cart;
 use crate::genesis::{Genesis, Hw, Model, START};
 use crate::interface::{Attachment, AttachmentView, Bare, Board};
 use crate::mcd::MegaCd;
+use crate::s32x::S32x;
 use crate::media::{Media, System};
 use crate::genesis::debugger::{M68K, M68K_REGISTERS, M68KBUS_ID, Z80, Z80_REGISTERS, Z80BUS_ID};
 use emusen_native::SampleQueue;
@@ -16,15 +17,7 @@ use emusen_native::debug::Hooks;
 pub use crate::interface::SpaceRef;
 pub use crate::mcd::{BRAM_ID, CARTRAM_ID};
 
-/// A memory of the attachments, by its space name and id (Nephrite_Plan.md §4.3).
-pub struct Memory {
-    pub id: u32,
-    pub name: &'static str,
-    pub bytes: Vec<u8>,
-}
-
 pub use crate::genesis::{CRAM_ID, ROM_ID, SRAM_ID, VRAM_ID, VSRAM_ID, WRAM_ID, Z80RAM_ID};
-pub const S32X_MEMORIES: [(u32, &str, usize); 3] = [(34, "SDRAM", 0x4_0000), (35, "FRAMEBUFFER", 0x4_0000), (36, "PALETTE", 512)];
 
 /// The picture's size before the first frame: H40, 28 rows of tiles; each frame then has the VDP's width and height.
 pub const WIDTH: u32 = 320;
@@ -34,6 +27,7 @@ pub const HEIGHT: u32 = 224;
 pub(crate) enum Fitted {
     Md(Genesis<Bare>),
     Mcd(Genesis<MegaCd>),
+    S32x(Genesis<S32x>),
 }
 
 /// `$e` with `$g` bound to the Genesis fitted, its attachment's type known in each arm: the one match an ABI call makes.
@@ -42,6 +36,7 @@ macro_rules! fitted {
         match $f {
             Fitted::Md($g) => $e,
             Fitted::Mcd($g) => $e,
+            Fitted::S32x($g) => $e,
         }
     };
 }
@@ -50,7 +45,6 @@ pub(crate) use fitted;
 pub struct Machine {
     pub media: Media,
     pub(crate) fitted: Fitted,
-    pub extra: Vec<Memory>,
     pub frames: i64,
     pub picture: Vec<u8>,
     pub skip: bool,
@@ -121,20 +115,13 @@ impl Machine {
         if let Some(top) = top {
             cart.lock_on(top, patch);
         }
-        let mut extra = Vec::new();
-        let list: &[(u32, &'static str, usize)] = match media.system {
-            System::S32x => &S32X_MEMORIES,
-            System::Md | System::Mcd => &[],
-        };
-        for &(id, name, size) in list {
-            extra.push(Memory { id, name, bytes: vec![0; size] });
-        }
         let board = Board { master_hz: crate::genesis::master_hz(model.pal), pal: model.pal, start: START, rate: crate::genesis::sound::RATE };
         let fitted = match media.system {
             System::Mcd => Fitted::Mcd(Genesis::with(cart, model, MegaCd::new(board, bios.unwrap_or_default(), disc))),
-            System::Md | System::S32x => Fitted::Md(Genesis::with(cart, model, Bare)),
+            System::S32x => Fitted::S32x(Genesis::with(cart, model, S32x::new())),
+            System::Md => Fitted::Md(Genesis::with(cart, model, Bare)),
         };
-        Machine { media, fitted, extra, frames: 0, picture: blank(), skip: false, pads: [0; crate::genesis::io::PADS], plugged: [(crate::genesis::io::Plug::Pad, false); 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new(), hooks: Hooks::new(&[24, 16]), z80_breakpoints: Vec::new(), debug_stopped: 0, debug_open: false, kept_apart: KeptApart::default() }
+        Machine { media, fitted, frames: 0, picture: blank(), skip: false, pads: [0; crate::genesis::io::PADS], plugged: [(crate::genesis::io::Plug::Pad, false); 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new(), hooks: Hooks::new(&[24, 16]), z80_breakpoints: Vec::new(), debug_stopped: 0, debug_open: false, kept_apart: KeptApart::default() }
     }
 
     /// The Genesis's devices, whatever is fitted.
@@ -184,7 +171,6 @@ impl Machine {
             v.push(SpaceRef { id: ROM_ID, name: "ROM", read_only: true });
         }
         fitted!(&self.fitted, |g| g.hw.att.spaces(&mut v));
-        v.extend(self.extra.iter().map(|m| SpaceRef { id: m.id, name: m.name, read_only: false }));
         v
     }
 
@@ -198,12 +184,11 @@ impl Machine {
             VSRAM_ID => &hw.vdp.vsram,
             SRAM_ID if hw.cart.has_battery() => hw.cart.battery(),
             ROM_ID if self.media.system != System::Mcd => &hw.cart.rom,
-            _ => return fitted!(&self.fitted, |g| g.hw.att.bytes(id)).or_else(|| self.extra.iter().find(|m| m.id == id).map(|m| m.bytes.as_slice())),
+            _ => return fitted!(&self.fitted, |g| g.hw.att.bytes(id)),
         })
     }
 
     pub fn bytes_mut(&mut self, id: u32) -> Option<&mut [u8]> {
-        let extra = &mut self.extra;
         fitted!(&mut self.fitted, |g| {
             let (hw, att) = (&mut g.hw.dev, &mut g.hw.att);
             let battery = hw.cart.has_battery();
@@ -214,10 +199,7 @@ impl Machine {
                 CRAM_ID => &mut hw.vdp.cram,
                 VSRAM_ID => &mut hw.vdp.vsram,
                 SRAM_ID if battery => hw.cart.battery_mut(),
-                _ => match att.bytes_mut(id) {
-                    Some(b) => b,
-                    None => return extra.iter_mut().find(|m| m.id == id).map(|m| m.bytes.as_mut_slice()),
-                },
+                _ => return att.bytes_mut(id),
             })
         })
     }

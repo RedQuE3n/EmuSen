@@ -83,6 +83,11 @@ pub const GENESIS_SPACES: std::ops::Range<u32> = 0..16;
 pub const MCD_SPACES: std::ops::Range<u32> = 16..32;
 pub const S32X_SPACES: std::ops::Range<u32> = 32..48;
 
+/// Each owner's range of processor ids, fixed whatever is fitted (decided 2026-10-15, Nephrite_Attachments.md Q7).
+pub const GENESIS_PROCESSORS: std::ops::Range<u32> = 0..2;
+pub const MCD_PROCESSORS: std::ops::Range<u32> = 2..3;
+pub const S32X_PROCESSORS: std::ops::Range<u32> = 3..5;
+
 /// The attachment's memories as the debugger and the state see them, from its own range of ids.
 pub trait AttachmentView {
     /// Its spaces in id order.

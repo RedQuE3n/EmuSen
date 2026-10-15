@@ -14,6 +14,7 @@ pub mod interface;
 pub mod machine;
 pub mod mcd;
 pub mod media;
+pub mod s32x;
 pub mod state;
 pub mod v1;
 #[cfg(test)]

@@ -61,6 +61,7 @@ fn system_byte(s: System) -> u8 {
 enum FittedSaved {
     Md(crate::genesis::Saved, ()),
     Mcd(crate::genesis::Saved, <crate::mcd::MegaCd as AttachmentState>::Saved),
+    S32x(crate::genesis::Saved, ()),
 }
 
 impl Fitted {
@@ -68,6 +69,7 @@ impl Fitted {
         Ok(match self {
             Fitted::Md(g) => FittedSaved::Md(g.read_state(r, version)?, g.hw.att.read_state(r, version)?),
             Fitted::Mcd(g) => FittedSaved::Mcd(g.read_state(r, version)?, g.hw.att.read_state(r, version)?),
+            Fitted::S32x(g) => FittedSaved::S32x(g.read_state(r, version)?, g.hw.att.read_state(r, version)?),
         })
     }
 
@@ -75,6 +77,7 @@ impl Fitted {
         let refused = match (self, saved) {
             (Fitted::Md(g), FittedSaved::Md(_, s)) => g.hw.att.check(s),
             (Fitted::Mcd(g), FittedSaved::Mcd(_, s)) => g.hw.att.check(s),
+            (Fitted::S32x(g), FittedSaved::S32x(_, s)) => g.hw.att.check(s),
             _ => unreachable!("a state read by the configuration fitted"),
         };
         refused.map_err(|Refusal::WrongMedia { saved, here }| StateError::WrongMedia { saved, here })
@@ -87,6 +90,10 @@ impl Fitted {
                 g.hw.att.apply_state(s);
             }
             (Fitted::Mcd(g), FittedSaved::Mcd(registers, s)) => {
+                g.apply_state(registers);
+                g.hw.att.apply_state(s);
+            }
+            (Fitted::S32x(g), FittedSaved::S32x(registers, s)) => {
                 g.apply_state(registers);
                 g.hw.att.apply_state(s);
             }

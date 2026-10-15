@@ -1054,3 +1054,18 @@ test, and no access pays it on a console without one but the flag's (§3.11).
   Hedgehog 1.347 ms (1.369), Sonic 2 1.234 (1.249), Thunder Force IV 1.355 (1.341; again alone, 1.363 against 1.361),
   Streets of Rage 2 1.129 (1.149), Phantasy Star IV 1.403 (1.415), Micro Machines 2 1.444 (1.458), the 240p disc 1.591
   (1.585). Within the runs' spread or faster.
+
+### 11.6 Commit 6: the 32X's stub
+
+`src/s32x/mod.rs` declares what the 32X is to the rest of the crate before any of it is built: `S32x` on the three
+traits, answering `Pass` and `false` to every access, with no state block and no sound; its three placeholder memories
+(`SDRAM` 34, `FRAMEBUFFER` 35, `PALETTE` 36, from its range), which `Machine::extra` and `Memory` held since stage 0
+and which are gone from the machine; its processors' ids, `MSH2` 3 and `SSH2` 4 (Q7, with `S68K` 2 in `mcd` and the
+three processor ranges in `interface`); its boot ROMs' descriptions with their replacement's words (`boot_firmware`,
+numbered 5–7 by the assembly); its extension; and the header's test, `is_32x`, which left the Genesis's `Header` for
+the 32X's tree (§5.5). `Fitted::S32x(Genesis<S32x>)` holds a 32X image's machine, which still counts frames only
+(`Machine::runs`). The crate still declares `beryl-sh2` and uses none of it, as before.
+
+- **Byte identity**: the 71 digests equal the baseline's, the kit's 32X cartridge (Knuckles Chaotix) among them, its
+  state of 672,346 bytes the same at frames 300, 600 and 1,200; the crate's 178 tests (one more, the stub's); the kit's
+  sample 64 of 64 and the 240p disc compliant. The stub is on no cartridge's or disc's path, so the bench was not run.

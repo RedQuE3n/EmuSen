@@ -2676,3 +2676,50 @@ steps A and B), so the step's own cost is under the noise of this shared machine
 | D3 | the counter ends with the last byte, so OAM opens at the 161st cycle | the timing and restart claims |
 | D4 | a write stops the running transfer | the restart claim |
 | D5 | a state before version 9 keeps the delay the machine held | the version-8 claim |
+
+### 13.5 Step E: where PUSH, RST, CALL and RET cc touch the stack
+
+**The rules.** Each of the five instruction-timing ROMs still failing after step D gives its instruction's machine
+cycles in its header, and GBCTR's instruction tables give the same:
+
+- `PUSH rr` and `RST n`: "M = 1: internal delay; M = 2: memory access for high byte; M = 3: memory access for low byte"
+  (`push_timing.s`, `rst_timing.s`). GBCTR's `PUSH rr` shows why: SP is decremented in M2 before the first write.
+- `CALL nn` and `CALL cc, nn` taken: the operand in M1–M2, "M = 3: internal delay", the pushes in M4–M5
+  (`call_timing2.s`, `call_cc_timing2.s`).
+- `RET cc` taken: "M = 1: internal delay; M = 2: PC pop: memory access for low byte; M = 3: … high byte; M = 4:
+  internal delay" (`ret_cc_timing.s`); GBCTR's `RET cc` has the condition in M2 and the pops in M3–M4.
+
+Mercury ticked each access in place and settled every internal cycle at the end of the instruction
+(`Mercury_Cpu.md` §3.1), so all five put their stack accesses one machine cycle early. The referee page found the first
+three (§2.5) and CALL (its §3, with Mesen alone, the RTL having kept the Z80's order); the test sources and GBCTR settle
+all five without either.
+
+**The proof.** `Each_stack_access_lands_on_the_machine_cycle_the_hardware_gives_it`, in both cycle harnesses (C#'s
+`MercuryCycleTimingTests`, the crate's `tests/cycle_timing.rs`), five cases, the T-cycles ticked before each access:
+committed failing on both engines (`7639db9c`). No claim through the rig can see placement, since a step's total is
+unchanged (§12.1); the corpus and the harnesses are the oracles.
+
+**The fix**, the same in both engines. A push begins with an internal machine cycle of its own, ticked in place
+(`InternalCycle`/`internal_cycle`), which covers PUSH, RST and both CALLs at once, since all three push through it; the
+dispatch of step C ticks its own two wait states and does not use it. A taken `RET cc` ticks its condition cycle before
+its pops. Every instruction's total is unchanged. The harnesses' claim that internal cycles settle at the end of an
+instruction kept its meaning and moved to `RET`, whose internal cycle does follow its pops (`ret_timing.s`: "M = 3:
+internal delay").
+
+**The corpus.** `push_timing`, `rst_timing`, `ret_cc_timing`, `call_timing2` and `call_cc_timing2` pass in all six
+columns, and nothing else moved: 116 of 173 in each. With step D, **all thirteen** instruction-timing ROMs of §3.4 pass.
+
+**The four games** are unchanged, at every 300th frame of MercuryRT's trace and in the real-games test, and so are the
+four synthetic programs' recorded digests. The whole `Mercury` filter passes, 806 cases.
+
+**Cost:**
+
+| Game | MercuryRT step D | step E | C# step D | step E |
+|---|---|---|---|---|
+| Tetris | 0.4345, 0.4363, 0.4452 | 0.4360, 0.4495, 0.4419 | 0.6270, 0.6300, 0.6283 | 0.6400, 0.6297, 0.6523 |
+| Kirby's Dream Land | 0.4938, 0.4920, 0.4968 | 0.4935, 0.4940, 0.4961 | 0.6858, 0.6877, 0.6898 | 0.6775, 0.6838, 0.6787 |
+| Link's Awakening | 0.4058, 0.4040, 0.4050 | 0.4061, 0.4068, 0.4057 | 0.5919, 0.5656, 0.5660 | 0.5682, 0.5601, 0.5681 |
+| Pokémon Yellow | 0.5388, 0.5439, 0.5335 | 0.5478, 0.5409, 0.5535 | 0.7207, 0.7207, 0.7254 | 0.7055, 0.7120, 0.7037 |
+
+The same ticks are issued in a different order, a tick of four split from the end into the middle; every pair overlaps
+within the spread of this shared machine, Yellow's MercuryRT by the least (about 1.5% apart at the medians).

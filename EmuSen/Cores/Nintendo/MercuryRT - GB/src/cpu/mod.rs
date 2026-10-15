@@ -210,7 +210,16 @@ impl Cpu {
         low | (high << 8)
     }
 
+    /// One machine cycle of the CPU's own, ticked where it falls rather than settled at the end (Mercury_Native.md §13.5).
+    #[inline(always)]
+    fn internal_cycle<B: CpuBus>(&mut self, bus: &mut B) {
+        bus.tick(4);
+        *self.ticked_this_step += 4;
+    }
+
+    /// SP is decremented in a machine cycle of its own before the first write.
     fn push<B: CpuBus>(&mut self, bus: &mut B, value: u16) {
+        self.internal_cycle(bus);
         self.sp = self.sp.wrapping_sub(1);
         self.write_cycle(bus, self.sp, (value >> 8) as u8);
         self.sp = self.sp.wrapping_sub(1);

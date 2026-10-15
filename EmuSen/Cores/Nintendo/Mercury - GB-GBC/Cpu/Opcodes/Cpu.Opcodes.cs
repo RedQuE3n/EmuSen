@@ -277,6 +277,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
         {
             if (!taken) return 8;
 
+            // The condition takes its own machine cycle before the pops - see Mercury_Native.md §13.5.
+            InternalCycle();
             PC = Pop();
             ReturnObserver?.Invoke();
             return 20;

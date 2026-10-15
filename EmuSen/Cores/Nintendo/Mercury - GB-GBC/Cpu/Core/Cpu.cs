@@ -194,8 +194,17 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
             return (ushort)(low | (high << 8));
         }
 
+        // One machine cycle of the CPU's own, ticked where it falls rather than settled at the end - see Mercury_Native.md §13.5.
+        private void InternalCycle()
+        {
+            _bus.Tick(4);
+            _tickedThisStep += 4;
+        }
+
+        // SP is decremented in a machine cycle of its own before the first write - see Mercury_Native.md §13.5.
         private void Push(ushort value)
         {
+            InternalCycle();
             WriteCycle(--SP, (byte)(value >> 8));
             WriteCycle(--SP, (byte)value);
         }

@@ -69,17 +69,17 @@ namespace EmuSen.WiseMan.Cores
                 bus.Trace);
         }
 
-        // PUSH BC: one cycle of the sixteen is internal, and it settles at the end - see Mercury_Cpu.md §6.1.
+        // RET: one cycle of the sixteen is internal, and it follows the pops, so it settles at the end - see Mercury_Cpu.md §6.1, Mercury_Native.md §13.5.
         [Fact]
         public void Internal_cycles_settle_at_the_end_of_the_instruction()
         {
-            var (cpu, bus) = Machine(0xC5);
+            var (cpu, bus) = Machine(0xC9);
 
             int cycles = cpu.Step(0, 0, out _);
 
             Assert.Equal(16, cycles);
             Assert.Equal(
-                new[] { "T:4", "R:0100", "T:4", "W:FFFD", "T:4", "W:FFFC", "T:4" },
+                new[] { "T:4", "R:0100", "T:4", "R:FFFE", "T:4", "R:FFFF", "T:4" },
                 bus.Trace);
         }
 

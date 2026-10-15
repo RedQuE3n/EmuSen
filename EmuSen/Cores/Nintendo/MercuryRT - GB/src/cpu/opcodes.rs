@@ -500,6 +500,8 @@ impl Cpu {
         if !taken {
             return 8;
         }
+        // The condition takes its own machine cycle before the pops.
+        self.internal_cycle(bus);
         self.pc = self.pop(bus);
         bus.note_return();
         20

@@ -58,10 +58,10 @@ fn each_memory_access_is_preceded_by_its_own_machine_cycle() {
 
 #[test]
 fn internal_cycles_settle_at_the_end_of_the_instruction() {
-    let (mut cpu, mut bus) = machine(&[0xC5]);
+    let (mut cpu, mut bus) = machine(&[0xC9]);
     let (cycles, _) = cpu.step(&mut bus, 0, 0).unwrap();
     assert_eq!(cycles, 16);
-    assert_eq!(bus.trace, ["T:4", "R:0100", "T:4", "W:FFFD", "T:4", "W:FFFC", "T:4"]);
+    assert_eq!(bus.trace, ["T:4", "R:0100", "T:4", "R:FFFE", "T:4", "R:FFFF", "T:4"]);
 }
 
 #[test]

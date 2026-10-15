@@ -213,6 +213,9 @@ Mercury places the access the ROM probes, and the split is not what that paragra
 
 ### 2.5 PUSH, RST and RET cc put their internal cycle at the end **[V]**
 
+*Proven and fixed in both engines with CALL and CALL cc, 2026-10-15 (`Mercury_Native.md` §13.5), against the ROMs'
+headers and GBCTR: all five ROMs pass, and with §2.4 all thirteen instruction-timing ROMs.*
+
 Hardware takes an internal M-cycle *before* the stack accesses of these three instructions. Mercury ticks the accesses
 in place and settles the remainder afterwards (`Cpu.cs:129-134`):
 - PUSH: `Push(BC); return 16` (`Cpu.Opcodes.cs:169`).

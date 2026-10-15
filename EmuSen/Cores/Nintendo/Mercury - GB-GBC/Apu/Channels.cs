@@ -55,6 +55,14 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
 
         public void Load(int value) => Counter = Maximum - value;
 
+        // Enabling it when the frame sequencer's next step will not clock it clocks it once; true if that empties it - see Mercury_Native.md §13.10.
+        public bool Enable(bool on, bool firstHalf)
+        {
+            bool clock = on && !Enabled && firstHalf && Counter != 0;
+            Enabled = on;
+            return clock && --Counter == 0;
+        }
+
         // A trigger with the counter already expired reloads it full, which is how a game retriggers.
         public void Trigger()
         {

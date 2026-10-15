@@ -282,10 +282,22 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
             if (!pulse.DacEnabled) pulse.Enabled = false;
         }
 
-        private static void WritePulseControl(PulseChannel pulse, byte value)
+        // NRx4's length half, with the two quirks of the frame sequencer's first half; true when the channel must go quiet - see Mercury_Native.md §13.10.
+        private bool WriteLengthEnable(LengthCounter length, byte value)
+        {
+            bool firstHalf = (SequencerStep & 1) != 0;
+            bool trigger = (value & 0x80) != 0;
+            bool emptied = length.Enable((value & 0x40) != 0, firstHalf);
+
+            // A trigger reloading an empty counter that is enabled loads one less in the first half.
+            if (trigger && firstHalf && length.Enabled && length.Counter == 0) length.Counter = length.Maximum - 1;
+            return emptied && !trigger;
+        }
+
+        private void WritePulseControl(PulseChannel pulse, byte value)
         {
             pulse.Frequency = (pulse.Frequency & 0x00FF) | ((value & 0x07) << 8);
-            pulse.Length.Enabled = (value & 0x40) != 0;
+            if (WriteLengthEnable(pulse.Length, value)) pulse.Enabled = false;
             if ((value & 0x80) != 0) pulse.Trigger();
         }
 
@@ -298,7 +310,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
         private void WriteWaveControl(byte value)
         {
             Wave.Frequency = (Wave.Frequency & 0x00FF) | ((value & 0x07) << 8);
-            Wave.Length.Enabled = (value & 0x40) != 0;
+            if (WriteLengthEnable(Wave.Length, value)) Wave.Enabled = false;
             if ((value & 0x80) != 0) Wave.Trigger();
         }
 
@@ -318,7 +330,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
 
         private void WriteNoiseControl(byte value)
         {
-            Noise.Length.Enabled = (value & 0x40) != 0;
+            if (WriteLengthEnable(Noise.Length, value)) Noise.Enabled = false;
             if ((value & 0x80) != 0) Noise.Trigger();
         }
 

@@ -2955,3 +2955,31 @@ recorded, and both engines agree. Its state and version-7 digests were re-record
 cost theory's double-speed case); I2, a stop forgets the blocks owed; I3, a stopped transfer reads without bit 7; I5, a
 stopped transfer still moves at hblank (all three by `A_stopped_hblank_hdma_reads_back_the_blocks_it_still_owed`); I4,
 the destination wraps and the transfer goes on (`A_transfer_that_runs_off_the_end_of_vram_stops`).
+
+### 13.10 Step J: the sound quirks blargg tests
+
+The referee's §2.10 rows are taken one rule at a time, each graded by its blargg ROM and by Pan Docs'
+`Audio_details.md`, "Obscure Behavior", which states the same rules in words. The RTL and Mesen readings the referee
+page compared are SameBoy's algorithm (its §0), and are not used.
+
+#### 13.10.1 The length counter's first half
+
+**The rules** (`03-trigger.s`; Pan Docs, the "extra length clocking" and trigger bullets): when the frame sequencer's
+next step is one that does not clock length, enabling length in NRx4 (it was disabled, it is now enabled, the counter
+is not zero) clocks the counter once, and if that empties it without a trigger the channel is disabled; and a trigger
+that reloads an empty counter while length is enabled loads the maximum less one. `CGB_02` is not defined in either
+suite's source, so both expect the later rule, in which the length must be enabled now as well. Mercury's sequencer
+counter holds the next step to run, so "the next step does not clock length" is an odd `SequencerStep`.
+
+**The proof.** Three claims, six cases with the theory's second-half controls, committed failing on both engines
+(`4790cb4f`).
+
+**The fix**, the same in both engines and for all four channels: `LengthCounter.Enable` (`enable`) clocks on the
+enabling write in the first half and reports whether that emptied it; the NRx4 writers share `WriteLengthEnable`
+(`write_length_enable`), which also sets the counter to the maximum less one ahead of a trigger that would reload an
+empty enabled counter, so the channel's own trigger leaves it there. **The state format is unchanged.**
+
+**The corpus.** `03-trigger` passes on both suites in all six columns, every subtest of it, the enable-in-first-half
+(#3) and trigger cases (#6–#12) alike; the combined `dmg_sound` and `cgb_sound` now stop at `05-sweep details`,
+Failed(5) for Failed(3). 120 of 173 in each column. **The four games** and all four synthetic programs' digests, sound
+included, did not move. The whole `Mercury` filter passes, 848 cases.

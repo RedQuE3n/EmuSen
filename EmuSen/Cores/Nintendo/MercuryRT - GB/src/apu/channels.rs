@@ -155,6 +155,16 @@ impl LengthCounter {
         self.counter = self.maximum.wrapping_sub(value);
     }
 
+    /// Enabling it when the frame sequencer's next step will not clock it clocks it once; true if that empties it.
+    pub fn enable(&mut self, on: bool, first_half: bool) -> bool {
+        let clock = on && !self.enabled && first_half && self.counter != 0;
+        self.enabled = on;
+        clock && {
+            self.counter -= 1;
+            self.counter == 0
+        }
+    }
+
     pub fn trigger(&mut self) {
         if self.counter == 0 {
             self.counter = self.maximum;

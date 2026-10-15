@@ -4,7 +4,7 @@ pub mod channels;
 
 use crate::Skip;
 use emusen_native::SampleQueue;
-use crate::apu::channels::{NoiseChannel, PulseChannel, WaveChannel};
+use crate::apu::channels::{LengthCounter, NoiseChannel, PulseChannel, WaveChannel};
 use crate::state::{State, StateReader, StateResult, StateWriter};
 
 pub const CHANNEL_COUNT: usize = 4;
@@ -260,11 +260,11 @@ impl Apu {
             0xFF11 => write_duty_length(&mut self.pulse1, value),
             0xFF12 => write_envelope(&mut self.pulse1, value),
             0xFF13 => self.pulse1.frequency = (self.pulse1.frequency & 0x0700) | value as i32,
-            0xFF14 => write_pulse_control(&mut self.pulse1, value),
+            0xFF14 => write_pulse_control(&mut self.pulse1, value, self.sequencer_step & 1 != 0),
             0xFF16 => write_duty_length(&mut self.pulse2, value),
             0xFF17 => write_envelope(&mut self.pulse2, value),
             0xFF18 => self.pulse2.frequency = (self.pulse2.frequency & 0x0700) | value as i32,
-            0xFF19 => write_pulse_control(&mut self.pulse2, value),
+            0xFF19 => write_pulse_control(&mut self.pulse2, value, self.sequencer_step & 1 != 0),
             0xFF1A => {
                 self.wave.dac_enabled = value & 0x80 != 0;
                 if !self.wave.dac_enabled {
@@ -276,7 +276,9 @@ impl Apu {
             0xFF1D => self.wave.frequency = (self.wave.frequency & 0x0700) | value as i32,
             0xFF1E => {
                 self.wave.frequency = (self.wave.frequency & 0x00FF) | (((value & 0x07) as i32) << 8);
-                self.wave.length.enabled = value & 0x40 != 0;
+                if write_length_enable(&mut self.wave.length, value, self.sequencer_step & 1 != 0) {
+                    self.wave.enabled = false;
+                }
                 if value & 0x80 != 0 {
                     self.wave.trigger();
                 }
@@ -295,7 +297,9 @@ impl Apu {
                 self.noise.divisor_code = (value & 0x07) as i32;
             }
             0xFF23 => {
-                self.noise.length.enabled = value & 0x40 != 0;
+                if write_length_enable(&mut self.noise.length, value, self.sequencer_step & 1 != 0) {
+                    self.noise.enabled = false;
+                }
                 if value & 0x80 != 0 {
                     self.noise.trigger();
                 }
@@ -390,9 +394,23 @@ fn write_envelope(pulse: &mut PulseChannel, value: u8) {
     }
 }
 
-fn write_pulse_control(pulse: &mut PulseChannel, value: u8) {
+/// NRx4's length half, with the two quirks of the frame sequencer's first half; true when the channel must go quiet
+/// (Mercury_Native.md §13.10).
+fn write_length_enable(length: &mut LengthCounter, value: u8, first_half: bool) -> bool {
+    let trigger = value & 0x80 != 0;
+    let emptied = length.enable(value & 0x40 != 0, first_half);
+    // A trigger reloading an empty counter that is enabled loads one less in the first half.
+    if trigger && first_half && length.enabled && length.counter == 0 {
+        length.counter = length.maximum - 1;
+    }
+    emptied && !trigger
+}
+
+fn write_pulse_control(pulse: &mut PulseChannel, value: u8, first_half: bool) {
     pulse.frequency = (pulse.frequency & 0x00FF) | (((value & 0x07) as i32) << 8);
-    pulse.length.enabled = value & 0x40 != 0;
+    if write_length_enable(&mut pulse.length, value, first_half) {
+        pulse.enabled = false;
+    }
     if value & 0x80 != 0 {
         pulse.trigger();
     }

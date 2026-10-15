@@ -96,8 +96,10 @@ marks.
 
 ## 2. Both references agree against Mercury: the defect candidates
 
-In each finding below, the RTL and Mesen say the same thing and Mercury says something else. **None of them has a test
-in WiseMan yet.** They are ordered by how little interpretation stands between the code and the claim:
+In each finding below, the RTL and Mesen say the same thing and Mercury says something else. **None of them had a test
+in WiseMan when this page was written.** The audit of 2026-10-15 (`Mercury_Native.md` §13) takes them in steps, each
+graded by a test ROM's source or a public document, and each finding below carries its verdict there. They are ordered
+by how little interpretation stands between the code and the claim:
 - §2.1–§2.4 each rest on a test ROM's own source or on a commit that names the failing ROM.
 - §2.9 also rests on an internal inconsistency in Mercury's own page.
 

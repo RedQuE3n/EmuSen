@@ -2279,3 +2279,62 @@ not to be equivalent, and has its test.
   default take theirs from C#'s `CompatibilityPalettes`, which would need freezing as data when the C# core moves.
 - **The legacy differential project** pins the core ABI, the state format and the input script, and now also the four
   test extensions the rig calls (`mercuryrt_core_step`, `_tick`, `_stop`, `_serial`).
+
+## 13. The audit of the referee's candidates (2026-10-15)
+
+*Decided 2026-10-14:* the defect candidates of `Mercury_Referee.md` §2 are audited before stage 9, so that the goldens C#
+records are recorded after the fixes. Q4's rule holds (§5): a defect is fixed in C# Mercury and MercuryRT together, and
+the two engines stay identical. This section is the audit's record, step by step, in the shape of `Moon_Native.md`
+§3.8–§3.12.
+
+### 13.0 The split, written before any code
+
+**The evidence, and what is not evidence.** The referee page found each candidate by reading two other implementations,
+the MiSTer core's RTL and Mesen 2. Those readings are leads. Nothing in this section rests on them, and neither tree was
+opened for it. A defect is proven by one of two things, and a fix is graded by the same:
+
+- **a test ROM's own source**, which states the rule it checks and, for mooneye, the M-cycle at which each access is
+  expected. blargg's sources ship with the corpus. mooneye's do not ship with the release the corpus was taken from
+  (`mts-20240926-1737-443f6e1`), so the test suite's repository was cloned beside it, MIT-licensed, at `31510e1`
+  (2026-07-14), into the scratch directory (`~/.cache/emusen/probe/mercury/sources/`);
+- **a public document**: Pan Docs (`gbdev/pandocs` at `0191af0`, 2026-10-03), and Gekkio's *Game Boy: Complete Technical
+  Reference* (`Gekkio/gb-ctr` at `5ce83a1`, 2026-08-16, CC BY-SA), whose instruction tables give every access its
+  M-cycle. Both were cloned to the same place. Nothing from either is copied into the tree; each rule is cited by file.
+
+A candidate is **proven** by a WiseMan test that fails on both engines, through `MercuryRig` or `ICore`, before the fix,
+and passes after. It is **refuted** when its own test or the documents contradict it, and the test is kept. It is **out
+of reach** when the only sources for the rule are the forbidden ones. It is **a question** when building it would change
+something a player sees by choice rather than by correction, or would add a setting or a surface.
+
+**The order.** The steps follow the subsystems, in order of how little interpretation stands between the test and the
+claim. §2.1–§2.4 come first, as the referee page asks. §2.5 follows §2.4, because §2.4's experiment decides how many of
+the thirteen instruction-timing ROMs are left for it.
+
+| Step | Candidates | Proven or graded by | Reach |
+|---|---|---|---|
+| A, read-back | §2.1 unmapped I/O reads `$FF`; HDMA1–4 write-only (§2.1's last paragraph); the undocumented `$FF72`–`$FF77` | blargg `dmg_sound`/`cgb_sound` `01-registers` (the mask row at `01-registers.s:115`); mooneye `bits/unused_hwio-GS` and `misc/bits/unused_hwio-C`, whose sources list every address and mask; Pan Docs `CGB_Registers.md` (HDMA1–4 "write-only"; `$FF72`–`$FF75`), `Audio_details.md` (PCM12/PCM34) | reachable |
+| B, timer | §2.2 the reload cycle's write arbitration | mooneye `timer/tima_write_reloading`, `timer/tma_write_reloading`; Pan Docs `Timer_Obscure_Behaviour.md`, "Timer overflow behavior", rules 1–3 | reachable; `rapid_toggle` is examined in the step, not assumed |
+| C, the CPU's dispatch | §2.3 the vector chosen after the high push; §2.14 STOP's cycle count; §2.13 `EI` before a dispatch | `interrupts/ie_push`, whose comments state the rule round by round; §2.14 is Mercury against its own count, a unit test; §2.13 against GBCTR's interrupt and `EI` description | §2.3 and §2.14 reachable; §2.13 reachable only if GBCTR or Pan Docs states it |
+| D, OAM DMA | §2.4 the start delay, then the experiment on the thirteen instruction-timing ROMs | `oam_dma_start`, `oam_dma_timing`, `oam_dma_restart`, whose headers give the M-cycle at which OAM closes; Pan Docs `OAM_DMA_Transfer.md` | reachable |
+| E, access placement | §2.5 PUSH, RST, RET cc; §3's CALL | each `*_timing` ROM's header (e.g. `push_timing.s`: "M = 1: internal delay; M = 2: memory access for high byte"); GBCTR's per-instruction tables | reachable; after D |
+| F, cartridge boards | §2.8: the RAM bank masked by the RAM's size; MBC1M; MBC3's clock; MBC5's RAM enable | `emulator-only/mbc1/ram_64kb` and `multicart_rom_8Mb`, verified by their author on a genuine MBC1; Pan Docs `MBC1.md` (MBC1M, and how such a cartridge is identified), `MBC3.md`, `MBC5.md` | the first two reachable. **MBC5's eight-bit compare is contradicted by Pan Docs** (`MBC5.md:30`, "any value whose bottom 4 bits equal $A"), so it is examined as a refutation. **MBC3's four rules are out of reach**: Pan Docs states none of them, and the ROMs that test them (rtc3test, `mbc3_rtc_prelim`) are not in the corpus |
+| G, the joypad interrupt | §2.7 | Pan Docs `Interrupt_Sources.md`, "INT $60" (a high-to-low change of P1 bits 0–3); a synthetic program | reachable; no corpus ROM tests it |
+| H, colour registers | §2.11 the palette data ports in mode 3; SVBK's read-back | Pan Docs `Palettes.md:56` (writes ignored, reads `$FF`, in mode 3) and `:81` (the index still increments); `CGB_Registers.md`'s SVBK table (bits 2–0 read/write, 0 maps bank 1) | the first reachable from the document; SVBK's rests on reading a bit table, and is built only if the table is unambiguous |
+| I, HDMA | §2.9: the double-speed charge; a cancelled transfer's `$FF55`; the destination's overflow; HDMA during HALT; a start in hblank; a start with the LCD off | Pan Docs `CGB_Registers.md`, "Transfer Timings" (8 µs a block at either speed: 16 fast M-cycles), "Reading from Register FF55" (bit 7 reads 1 with the blocks left), the overflow warning, the HALT paragraph | the first four reachable from the document; **a start in hblank** is left by Pan Docs as "should not be started" and **a start with the LCD off** is not described, so both are out of reach |
+| J, sound | §2.10's rows | each blargg ROM's source, which states the rule and prints the failure Mercury printed | reachable row by row; `10-wave trigger while on` (§3) is examined, not assumed |
+| K, STAT and the LCD's edges | §2.6 rules 1–6 | mooneye `ppu/*` sources and Pan Docs `STAT.md` | reachable; the most interpretation stands here, so it comes last |
+
+**Questions for the tester, written now and not built** (each recommendation is argued in the step that meets it):
+
+- **§2.12, LCDC bit 0 on a Game Boy.** Pan Docs (`LCDC.md:103`) says the background and window "become blank
+  (white)", which is what Mercury draws; the referee's two readings show BGP's colour 0. The only test named for it,
+  Mealybug's `m3_lcdc_bg_en_change`, changes the bit mid-line, which a per-line renderer cannot be graded on. It changes
+  what a player sees in fade routines, and the public evidence sides with Mercury. *Recommendation:* leave it, record
+  the dispute, and revisit with the per-dot renderer.
+- **§3's further leads** (the speed switch's duration, the serial port's transfer time, DMG `STOP`, the post-boot DIV)
+  are outside §2 and are not part of this audit.
+
+**What a step does.** For each step: a test that fails on both engines first, committed with the step; the fix in
+`Mercury - GB-GBC/` and `MercuryRT - GB/` together; the crate's bench and C#'s cost before and after; the corpus
+baseline re-recorded only for the ROMs that move, every move named; hand-made mutants of each fix in both engines, each
+caught by a named oracle; and the four games' state traces, which must not move unless the move is explained.

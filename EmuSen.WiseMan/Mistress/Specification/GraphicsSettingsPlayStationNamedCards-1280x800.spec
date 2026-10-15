@@ -11,7 +11,7 @@ frame 233.65,24,812.7,668
 title "Graphics Settings"
 case GraphicsSettingsPlayStationNamedCards
 entered shoulders
-palette #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
+palette #000000AA #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
   0 ContentControl at=234,124,813,548 by=panel limit=234,124,812.35,548 paints=#9C9CA0FF role=none seen=234,124,812.35,548
     1 DockPanel at=274,152,733,504 by=panel limit=234,124,812.35,548 role=none
@@ -42,7 +42,7 @@ tree
               26 DockPanel at=286,353,709,44 by=clip heard="Shader and shape" in=21 limit=286,268,709,129 role=none
                 27 Button at=286,353,128,44 by=clip drawn focus heard=SHADERS... in=21 limit=286,268,709,129 name=PlayStation.Shaders op paints=#55555AFF,#9C9CA0FF role=button text=Shaders...
                   28 TextBlock at=303,359,94,32 box=94,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=SHADERS... in=21 layout=93.96,31.2 limit=286,353,128,44 owner=27 paints=#EEEEF0FF role=text size=26 text=SHADERS...
-                29 Dropdown at=870,353,125,44 by=clip drawn focus in=21 limit=286,268,709,129 name=PlayStation.PictureShape op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
+                29 Dropdown at=870,353,125,44 by=clip drawn focus heard="Shader and shape" in=21 limit=286,268,709,129 name=PlayStation.PictureShape op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
                   30 TextBlock at=882,358,81,32 box=81,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="TV shape" in=21 layout=80.81,31.2 limit=882,358,81,32 owner=29 paints=#9C9CA0FF role=text size=26 text="TV shape"
                   31 ViewboxContainer at=973,371.73,12,6.54 by=clip in=21 limit=973,371.73,12,6.54 nohit role=none
                 32 TextBlock at=426,361,432,29 box=432,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=None in=21 layout=41.74,28.8 limit=286,268,709,129 name=PlayStation.ShaderInUse paints=#9C9CA0FF role=text size=24 text=None
@@ -50,7 +50,7 @@ tree
               34 TextBlock at=286,409,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Overscan in=21 layout=75.29,28.8 limit=286,409,709,105 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Overscan
               35 HintText at=286,442,709,24 box=709,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The whole picture, the part a television showed, or a crop of your own." in=21 layout=474.92,24 limit=286,409,709,105 paints=#86868AFF part role=text size=20 text="The whole picture, the part a television showed, or a crop of your own."
               36 StackPanel at=286,470,709,44 by=clip heard=Overscan in=21 limit=286,409,709,105 role=none
-                37 Dropdown at=286,470,166,44 by=clip drawn focus in=21 limit=286,409,709,105 name=PlayStation.Overscan op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
+                37 Dropdown at=286,470,166,44 by=clip drawn focus heard=Overscan in=21 limit=286,409,709,105 name=PlayStation.Overscan op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
                   38 TextBlock at=298,475,122,32 box=122,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Whole picture" in=21 layout=121.45,31.2 limit=298,475,122,32 owner=37 paints=#9C9CA0FF role=text size=26 text="Whole picture"
                   39 ViewboxContainer at=430,488.73,12,6.54 by=clip in=21 limit=430,488.73,12,6.54 nohit role=none
             40 FieldRow at=286,526,709,201 by=scroll heard="Memory Card" in=21 limit=286,260,709,342 name=PlayStation.Cards.Row paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=group seen=286,526,709,76

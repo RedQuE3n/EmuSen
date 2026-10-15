@@ -10,7 +10,7 @@ floor 16
 frame 233.65,24,812.7,668
 title "Memory Cards"
 case MemoryCardsPlayStation
-palette #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
+palette #000000AA #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
   0 ContentControl at=234,124,813,548 by=panel limit=234,124,812.35,548 paints=#9C9CA0FF role=none seen=234,124,812.35,548
     1 DockPanel at=274,152,733,504 by=panel limit=234,124,812.35,548 role=none
@@ -31,8 +31,8 @@ tree
                 16 TextBlock at=286,310,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Card in=11 layout=37.68,28.8 limit=286,310,709,133 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Card
                 17 HintText at=286,343,709,24 box=709,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="A card in the drawer, or a game's own." in=11 layout=256.56,24 limit=286,310,709,133 paints=#86868AFF part role=text size=20 text="A card in the drawer, or a game's own."
                 18 StackPanel at=286,371,709,72 by=clip heard=Card in=11 limit=286,310,709,133 role=none
-                  19 Dropdown at=286,371,260,44 by=clip drawn focus in=11 limit=286,310,709,133 name=PlayStation.psx.card.Card op paints=#0E0E10FF,#55555AFF,#9C9CA0FF,#FFFFFFCC,#FFFFFFFF role=combobox sideways
-                    20 TextBlock at=298,376,216,32 box=216,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Card 1" in=11 layout=52.68,31.2 limit=298,376,216,32 owner=19 paints=#FFFFFFFF role=text size=26 text="Card 1"
+                  19 Dropdown at=286,371,260,44 by=clip drawn focus heard=Card in=11 limit=286,310,709,133 name=PlayStation.psx.card.Card op paints=#0E0E10FF,#55555AFF,#9C9CA0FF,#EEEEF0FF role=combobox sideways
+                    20 TextBlock at=298,376,216,32 box=216,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Card 1" in=11 layout=52.68,31.2 limit=298,376,216,32 owner=19 paints=#EEEEF0FF role=text size=26 text="Card 1"
                     21 ViewboxContainer at=524,389.73,12,6.54 by=clip in=11 limit=524,389.73,12,6.54 nohit role=none
                   22 HintText at=286,419,709,24 box=709,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Shared: Card 1 in Slot 1, Card 2 in Slot 2. 2 save(s), 11 of 15 blocks free." in=11 layout=463.7,24 limit=286,310,709,133 name=PlayStation.psx.card.About paints=#86868AFF role=text size=20 text="Shared: Card 1 in Slot 1, Card 2 in Slot 2. 2 save(s), 11 of 15 blocks free."
               23 FieldRow at=286,451,709,153 by=scroll heard=Saves in=11 limit=286,260,709,310 paints=#9C9CA0FF role=group seen=286,451,709,119

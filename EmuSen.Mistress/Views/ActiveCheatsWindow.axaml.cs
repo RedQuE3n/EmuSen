@@ -193,6 +193,9 @@ namespace EmuSen.Mistress.Views
 
                 var codeBox = new TextBox { Name = console.Console + "CodeBox", PlaceholderText = "Code" };
                 TextBox descriptionBox = new TextBox { Name = console.Console + "DescriptionBox", PlaceholderText = "Description" }.Margin(8, 0, 0, 0);
+                // Labelled only by their placeholders, so a reader is given the same words - see EmuSen_InterfaceSpec.md §6.3.2.
+                Avalonia.Automation.AutomationProperties.SetName(codeBox, "Cheat code");
+                Avalonia.Automation.AutomationProperties.SetName(descriptionBox, "Cheat description");
                 Button addButton = new Button { Name = console.Console + "AddButton", Content = "Add" }.Margin(8, 0, 0, 0);
                 HintText formats = Ui.Hint("");
 

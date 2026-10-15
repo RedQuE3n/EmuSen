@@ -10,7 +10,7 @@ floor 16
 frame 220,168,840,464
 title "Find by Name"
 case FindByName
-palette #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
+palette #000000AA #000000FF #007ACCFF #050507FF #0E0E10FF #141416FF #161618F0 #161618FF #1B1B1EFF #1C1C1CE6 #1E1E1EFF #252526FF #2E8B57FF #32CD32FF #333337FF #4C9AE8FF #55555AFF #6E6E6EFF #808080FF #86868AFF #9C9CA0FF #9CDCFEFF #B4B4B8FF #CD5C5CFF #D08770FF #D2D2D6FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
   0 ContentControl at=220,268,840,344 by=panel limit=220,268,840,344 paints=#9C9CA0FF role=none
     1 StackPanel at=260,296,760,300 by=panel limit=220,268,840,344 paints=#9C9CA0FF role=none
@@ -18,7 +18,7 @@ tree
         3 TextBlock at=260,296,760,24 box=760,24 by=panel caps=13.999 drawn face="Barlow Condensed" heard="Cobalt Harbor (Synthetic)" layout=169.2,24 limit=220,268,840,344 name=FindByNameTitle paints=#9C9CA0FF role=text size=20 text="Cobalt Harbor (Synthetic)"
         4 HintText at=260,326,760,96 box=760,96 by=panel caps=13.999 drawn face="Barlow Condensed" heard="Searches ScreenScraper by name for this game's console, for a file its hashes did not find. Nothing is sent until you press Search; each search is one request, and one that finds nothing also counts against today's allowance of unrecognised games. Choosing a game keeps its text for this file and fetches its pictures, up to 4 more requests; the file itself is not renamed." layout=752.16,96 limit=220,268,840,344 name=FindByNameHint paints=#86868AFF role=text size=20 text="Searches ScreenScraper by name for this game's console, for a file its hashes did not find. Nothing is sent until you press Search; each search is one request, and one that finds nothing also counts against today's allowance of unrecognised games. Choosing a game keeps its text for this file and fetches its pictures, up to 4 more requests; the file itself is not renamed."
         5 Grid at=260,428,760,46 by=panel limit=220,268,840,344 role=none
-          6 TextBox at=260,428,649,46 by=panel drawn focus limit=220,268,840,344 name=FindByNameText op paints=#050507FF,#0E0E10FF,#55555AFF,#EEEEF0FF role=edit text="Cobalt Harbor"
+          6 TextBox at=260,428,649,46 by=panel drawn focus heard="The game's name" limit=220,268,840,344 name=FindByNameText op paints=#050507FF,#0E0E10FF,#55555AFF,#EEEEF0FF role=edit text="Cobalt Harbor"
             7 ScrollViewer allow="a text box scrolls its own text" at=271,435,627,32 name=PART_ScrollViewer paints=#EEEEF0FF part role=scrollviewer
           8 Button at=917,429,103,44 by=panel drawn heard=SEARCH limit=220,268,840,344 name=FindByNameSearch off paints=#55555AFF,#9C9CA0FF role=button text=Search
             9 TextBlock at=934,435,69,32 box=69,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=SEARCH layout=68.46,31.2 limit=917,429,103,44 off owner=8 paints=#55555AFF role=text size=26 text=SEARCH
@@ -35,8 +35,8 @@ edge 12 up 6
 edge 12 down same
 edge 12 left 6
 edge 12 right same
-press pageup focus="TextBox FindByNameText" title="Find by Name" top=FindByNameWindow
-press pagedown focus="TextBox FindByNameText" title="Find by Name" top=FindByNameWindow
-press first focus="TextBox FindByNameText" title="Find by Name" top=FindByNameWindow
-press last focus="TextBox FindByNameText" title="Find by Name" top=FindByNameWindow
+press pageup focus="TextBox FindByNameText (The game's name)" title="Find by Name" top=FindByNameWindow
+press pagedown focus="TextBox FindByNameText (The game's name)" title="Find by Name" top=FindByNameWindow
+press first focus="TextBox FindByNameText (The game's name)" title="Find by Name" top=FindByNameWindow
+press last focus="TextBox FindByNameText (The game's name)" title="Find by Name" top=FindByNameWindow
 press back top=none

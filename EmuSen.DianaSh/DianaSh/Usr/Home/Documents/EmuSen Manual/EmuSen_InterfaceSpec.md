@@ -223,25 +223,19 @@ rules (§4) read them where they can and skip them where they cannot.
 recorded sheet (none, as the audit requires) and in every one of `FitAuditTests`' planted faults. The other three rules
 find what §6.2 lists. Nothing else fails.
 
-### 6.2 Faults that stand in today's Mistress
+### 6.2 Faults the rules found
 
-These are what the rules found that no audit had looked for; each is in `WindowFitAuditTests.Known` with its reason,
-and `Every_fault_recorded_as_standing_still_stands` fails when one stops being found, so the table cannot outlive its
-faults. None was fixed here: the step records the interface as it is, and each is a change to Mistress or LunaP for
-the tester to schedule.
+These are what the rules found, when the specification was first recorded, that no audit had looked for. Each stood
+in `WindowFitAuditTests.Known` with its reason, and `Every_fault_recorded_as_standing_still_stands` fails when one
+stops being found, so the table cannot outlive its faults. The recording step changed none of them; each was worked
+through on 2026-10-15 (§6.3).
 
-| Rule | What | Where |
-|---|---|---|
-| Accessibility names | 10 choices whose label is drawn beside them but not given to them: Overscan and Picture Shape on the SNES, NES, Genesis and PlayStation tabs, the N64's Antialiasing, the PlayStation's card choice; the rest of each page's choices are named | Graphics Settings, Memory Cards |
-| | 4 big-screen menu option rows (Jump To, Sort By, Collection Grouping, Transitions), whose row label is drawn by `MenuRows` and not given to the control | Game options, Game Collection Settings, Theme Settings |
-| | 11 text boxes labelled only by a placeholder or a menu row: the cheat code and description boxes, the cover picker's and Find by Name's search, the metadata editor's seven fields | Active Cheats, Cover Picker, Find by Name, the metadata editor |
-| Palette reach | `#55555A`, the menu look's border colour, painted by the big-screen menus' own buttons where no scope that declares it is in reach | Theme Settings, Game Collection Settings, Game options, the metadata editor |
-| | `#FFFFFFCC`, painted by a dropdown while it has the focus, from a part of its stock template no resource declares | Memory Cards, the N64's tab |
-| | the screensaver's caption box (`Screensaver.BoxColour`) and the launch screen's card (MenuPanel's default panel colour), literal colours rather than tokens | the screensaver, the launch screen |
-| Fit (a scene) | the synthetic theme's help bar asks for every entry in one row and is laid out wider than the screen; ES-DE lays such a bar out the same, and Art Book Next asks for three entries | the gamelist scene, both sizes |
-
-The last is the theme's, not Mistress's, and stays for that reason. A fifth, the Cheat Database's games list reported
-unreachable past its second row at 1280 × 800, was the walk's and not Mistress's (§6.3.1).
+| Rule | What | Where | Worked through |
+|---|---|---|---|
+| Pad reachability | down from the games list's second row left the list; the third row, showing 5 pixels, and the fourth were reached by no direction | Cheat Database at 1280 × 800 | the walk's, not the window's (§6.3.1) |
+| Accessibility names | 10 choices whose label is drawn beside them but not given to them; 4 big-screen option rows and 7 metadata rows whose label `MenuRows` draws; 4 text boxes labelled only by a placeholder | Graphics Settings, Memory Cards, the big-screen menus, the metadata editor, Active Cheats, Cover Picker, Find by Name | named (§6.3.2) |
+| Palette reach | `#55555A` on the big-screen menus' push buttons, `#FFFFFFCC` on a focused dropdown, the screensaver's box and the launch screen's card painted as literals | the big-screen menus, Memory Cards, the N64's tab, the screensaver, the launch screen | tokens (§6.3.3) |
+| Fit (a scene) | the synthetic theme's help bar asks for every entry in one row and is laid out wider than the screen | the gamelist scene, both sizes | the test theme's (§6.3.4) |
 
 ### 6.3 The faults of §6.2 worked through (2026-10-15)
 
@@ -282,3 +276,43 @@ changed.
   stay with Big Picture's own tests.
 - **Presses that change the screen.** A, Start, Select and North are recorded only where they open a state that is
   itself recorded; their effects on settings are other tests' business.
+
+#### 6.3.2 25 controls a reader could not name
+
+**Before [M].** `Named` found 10 choices whose label is drawn beside them (Overscan and Picture Shape on four consoles'
+tabs, the N64's Antialiasing, the PlayStation's card), 4 big-screen option rows and 7 metadata rows whose label
+`MenuRows` draws, and 4 text boxes labelled only by their placeholders.
+
+**Where each belonged.** The first ten sit in a `FieldRow` whose content is a panel: the choice with a note under it,
+or beside the Shaders button. The row lent its label to the panel alone. LunaP's `FieldRow` now lends it on to the
+dropdowns, text boxes, sliders and number boxes inside, not to a button or switch, which have words of their own
+(LunaP's `docs/LunaP.md` §200.1). The next eleven are rows `MenuRows` draws from a label it was given and never told a
+reader; `MenuRows.Label` is now the name, below any the caller sets (§200.2). Those 21 are fixed once, in the two kit
+controls, and every other window built from them gains the same. The last four have no visible label but a
+placeholder, and the window names them with the same words: "Cheat code" and "Cheat description" on every console's
+tab of Active Cheats, "Search the library" and "The game's name". A placeholder vanishes as the player types, so the
+toolkit does not use one as a name on its own (§24.2 of LunaP's page).
+
+**After [M].** No recording has an operable control without `heard`. The picture shape's dropdown hears "Shader and
+shape", its row's label, which is the words beside it; four main-menu rows and Create New Custom Collection now hear
+the label their rows draw ("Library", not "Library  ›"). The presses that land on a named text box describe it with
+its name.
+
+#### 6.3.3 Four colours no theme could reach
+
+**Before [M].** `PaletteReach` found `#55555A` on the big-screen menus' push buttons, `#FFFFFFCC` on a focused
+dropdown, and the screensaver's box and the launch screen's card painted from literals.
+
+**Where each belonged.** The menu look's colours were resources only under an element the look was applied to; a
+menu drawing itself had none in reach. LunaP's `Theme/MenuPalette.axaml` now holds them, every `MenuPanel` merges a
+copy, and `MenuRows.ApplyButton` paints from the theme's button keys (§200.3 of LunaP's page). The focused dropdown's
+words and arrow came from two stock keys the look never declared; they are now the look's bar text, `#EEEEF0`, which
+is the one change a player can see. The launch screen merges the same palette and paints its card and words from
+`LunaSurface` and `LunaSectionHeader`, the same values as before. The screensaver's box is ES-DE's black at two
+thirds; no token held it (`LunaHudSurface` is a notice plate of another measured colour), so LunaP gained one,
+`LunaCaptionSurface`, and `Screensaver.BoxColour` is gone.
+
+**After [M].** No recording paints outside its palette. Every sheet's `palette` line gained the menu palette's
+colours, since each sheet's frame is a `MenuPanel`; the big-screen menus' rows record the look's colours for their
+hidden chrome (a row is drawn by `MenuRow`, which does not read them), and the two focused dropdowns `#EEEEF0`
+where they had white.

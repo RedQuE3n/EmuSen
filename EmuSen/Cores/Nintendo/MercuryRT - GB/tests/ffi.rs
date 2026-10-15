@@ -68,3 +68,13 @@ fn the_patch_table_keeps_the_first_entry_for_each_original_byte() {
     assert_eq!(map.len(), 2, "an address past 16 bits is dropped, not wrapped");
     assert!(build_rom_patches(&[]).is_none());
 }
+
+#[test]
+fn a_space_the_machine_does_not_have_is_refused_through_the_core_abi() {
+    use emusen_native::core::{Core, status as core_status};
+    let mut m = create(0x00, "", &[]).unwrap();
+    assert_eq!(<Machine as Core>::space_size(&m, 7).err(), Some(core_status::NO_SUCH_SPACE));
+    assert_eq!(<Machine as Core>::space_write(&mut m, 7, 0, &[1]).err(), Some(core_status::NO_SUCH_SPACE));
+    <Machine as Core>::space_write(&mut m, 3, 0, &[0x5A]).unwrap();
+    assert_eq!(m.bus.wram[0], 0x5A, "WRAM, space 3, takes the write");
+}

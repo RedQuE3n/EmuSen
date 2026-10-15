@@ -2671,6 +2671,9 @@ subclass of the generic adapter and loads its library through the v1 exports alo
   ones go. The pre-stable exports are untouched, and `MoonMachine` and `MercuryMachine` with their machine and state
   tests still use them; they are deleted with VenusRT's (§13.5). `NativeRtCore` now has no subclass; it stays only for
   `RomPatchTriples` until then.
+  *Since 2026-10-14* MercuryRT also has `AUDIO_PEEK`, which its debugger's audio view reads, and four test extensions
+  on the v1 handle for WiseMan's both-engine rig: `mercuryrt_core_step`, `_tick`, `_stop` and `_serial`
+  (`Mercury_Native.md` §12.1, §12.3).
 
 **What a frontend sees differently.** The shims now implement the adapter's neutral interfaces as well
 (`ISnapshotCore` writing the full state, `IFrameSerial` the frame count, `IRepeatedRows` a repeat of 1, and for MoonRT

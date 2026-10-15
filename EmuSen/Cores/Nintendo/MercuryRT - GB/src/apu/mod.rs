@@ -23,6 +23,22 @@ pub struct Mixer {
     pub samples: SampleQueue,
 }
 
+impl Mixer {
+    /// Version 8's tail after the walks: the resampler's fraction and the two capacitors, each line under the naming rule (Mercury_Native.md §10, §12.4).
+    pub fn write_state(&self, w: &mut StateWriter) {
+        w.f64("_cycleFraction", self.cycle_fraction);
+        w.f64("_leftCapacitor", self.left_capacitor);
+        w.f64("_rightCapacitor", self.right_capacitor);
+    }
+
+    pub fn read_state(&mut self, r: &mut StateReader) -> StateResult {
+        self.cycle_fraction = r.f64()?; // _cycleFraction
+        self.left_capacitor = r.f64()?; // _leftCapacitor
+        self.right_capacitor = r.f64()?; // _rightCapacitor
+        Ok(())
+    }
+}
+
 impl Default for Mixer {
     fn default() -> Self {
         Mixer {

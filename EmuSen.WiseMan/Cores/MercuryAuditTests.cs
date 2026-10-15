@@ -597,6 +597,53 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0xFF, rig.Read(0xFF55));
             Assert.Equal(32, rig.Bus.TakePendingStall());
         }
+
+        // J: the APU on, channel 1's DAC on and its length 2 with length disabled, the frame sequencer's next step as given.
+        private MercuryRig LengthTwo(int nextSequencerStep)
+        {
+            var rig = Load();
+            rig.Write(0xFF26, 0x80);
+            rig.Write(0xFF12, 0xF0);
+            rig.Write(0xFF11, 0x3E);
+            rig.Bus.Apu.SequencerStep = nextSequencerStep;
+            return rig;
+        }
+
+        // J, blargg 03-trigger #2-#3 and Pan Docs Audio_details.md: enabling length when the next step does not clock it clocks it once.
+        [Theory]
+        [InlineData(1, 1)]
+        [InlineData(3, 1)]
+        [InlineData(0, 2)]
+        [InlineData(6, 2)]
+        public void Enabling_length_in_the_first_half_of_its_period_clocks_it(int nextSequencerStep, int after)
+        {
+            var rig = LengthTwo(nextSequencerStep);
+            rig.Write(0xFF14, 0x40);
+            Assert.Equal(after, rig.Bus.Apu.Pulse1.Length.Counter);
+        }
+
+        // J, 03-trigger #5: an extra clock that empties the counter, with no trigger, silences the channel.
+        [Fact]
+        public void An_extra_clock_that_empties_the_length_silences_the_channel()
+        {
+            var rig = LengthTwo(1);
+            rig.Write(0xFF14, 0x80);
+            rig.Write(0xFF11, 0x3F);
+            rig.Write(0xFF14, 0x40);
+            Assert.Equal(0, rig.Bus.Apu.Pulse1.Length.Counter);
+            Assert.Equal(0, rig.Read(0xFF26) & 0x01);
+        }
+
+        // J, 03-trigger #8-#9 and Pan Docs: a trigger that reloads an empty, enabled counter in the first half loads one less than the maximum.
+        [Fact]
+        public void A_trigger_that_reloads_an_enabled_length_in_the_first_half_loads_one_less()
+        {
+            var rig = LengthTwo(1);
+            rig.Write(0xFF11, 0x3F);
+            rig.Write(0xFF14, 0xC0);
+            Assert.Equal(63, rig.Bus.Apu.Pulse1.Length.Counter);
+            Assert.Equal(0x01, rig.Read(0xFF26) & 0x01);
+        }
     }
 
     public sealed class MercuryAuditTests : MercuryAuditClaims

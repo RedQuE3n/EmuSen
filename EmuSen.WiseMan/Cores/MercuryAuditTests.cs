@@ -137,6 +137,78 @@ namespace EmuSen.WiseMan.Cores
             }
             Assert.Equal(new byte[] { 0x00, 0xF0 }, seen.OrderBy(b => b).ToArray());
         }
+
+        // A, for mutant A7, which only the corpus caught: $FF46 reads back the page written.
+        [Fact]
+        public void The_dma_register_reads_back_the_page_written()
+        {
+            var rig = Load();
+            rig.Write(0xFF46, 0xC1);
+            Assert.Equal(0xC1, rig.Read(0xFF46));
+        }
+
+        // B: the timer at 262,144 Hz with TIMA one count from overflowing; DIV's write leaves the counter at zero, so the 16th cycle overflows.
+        private MercuryRig TimerAboutToOverflow()
+        {
+            var rig = Load();
+            rig.Write(0xFF0F, 0x00);
+            rig.Write(0xFF07, 0x05);
+            rig.Write(0xFF06, 0xFE);
+            rig.Write(0xFF05, 0xFF);
+            rig.Write(0xFF04, 0x00);
+            return rig;
+        }
+
+        // B, Pan Docs Timer_Obscure_Behaviour.md rule 1: TIMA reads 0 for the machine cycle after it overflows, and a write then cancels the reload.
+        [Fact]
+        public void A_tima_write_in_the_cycle_after_overflow_cancels_the_reload_and_the_interrupt()
+        {
+            var rig = TimerAboutToOverflow();
+            rig.Tick(16);
+            Assert.Equal(0x00, rig.Read(0xFF05));
+            rig.Write(0xFF05, 0x7F);
+            rig.Tick(8);
+            Assert.Equal(0x7F, rig.Read(0xFF05));
+            Assert.Equal(0, rig.Read(0xFF0F) & 0x04);
+        }
+
+        // B, rule 2 and mooneye tima_write_reloading: a TIMA write in the cycle TMA is reloaded is lost to the reload.
+        [Fact]
+        public void A_tima_write_in_the_reload_cycle_is_ignored()
+        {
+            var rig = TimerAboutToOverflow();
+            rig.Tick(16);
+            rig.Tick(4);
+            rig.Write(0xFF05, 0x7F);
+            Assert.Equal(0xFE, rig.Read(0xFF05));
+            Assert.Equal(0x04, rig.Read(0xFF0F) & 0x04);
+        }
+
+        // B, rule 3 and mooneye tma_write_reloading: a TMA write in the reload cycle reaches TIMA too.
+        [Fact]
+        public void A_tma_write_in_the_reload_cycle_reaches_tima_as_well()
+        {
+            var rig = TimerAboutToOverflow();
+            rig.Tick(16);
+            rig.Tick(4);
+            rig.Write(0xFF06, 0x7F);
+            Assert.Equal(0x7F, rig.Read(0xFF05));
+            Assert.Equal(0x7F, rig.Read(0xFF06));
+        }
+
+        // B: one machine cycle later both registers are the CPU's again.
+        [Fact]
+        public void After_the_reload_cycle_tima_and_tma_writes_are_ordinary()
+        {
+            var rig = TimerAboutToOverflow();
+            rig.Tick(16);
+            rig.Tick(4);
+            rig.Tick(4);
+            rig.Write(0xFF06, 0x33);
+            rig.Write(0xFF05, 0x7F);
+            Assert.Equal(0x7F, rig.Read(0xFF05));
+            Assert.Equal(0x33, rig.Read(0xFF06));
+        }
     }
 
     public sealed class MercuryAuditTests : MercuryAuditClaims

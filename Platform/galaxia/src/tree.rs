@@ -446,6 +446,29 @@ mod tests {
         assert!(!directory_exists(&file));
     }
 
+    /// .NET's `SpecialFolder.ApplicationData` is the system's known folder on Windows and does not read the
+    /// environment; a host that passes none still finds it with `APPDATA` unset. The test runs itself again without it.
+    #[cfg(windows)]
+    #[test]
+    fn the_application_data_folder_does_not_depend_on_the_environment() {
+        const ASKED: &str = "EMUSEN_GALAXIA_TEST_APPLICATION_DATA";
+        if std::env::var_os(ASKED).is_some() {
+            println!("<<{}>>", application_data());
+            return;
+        }
+        let name = "tree::tests::the_application_data_folder_does_not_depend_on_the_environment";
+        let child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([name, "--exact", "--nocapture", "--test-threads=1"])
+            .env(ASKED, "1")
+            .env_remove("APPDATA")
+            .output()
+            .unwrap();
+        let said = String::from_utf8_lossy(&child.stdout);
+        let without = said.split_once("<<").and_then(|(_, rest)| rest.split_once(">>")).map(|(folder, _)| folder.to_string());
+        assert_eq!(without.as_deref(), Some(application_data().as_str()), "{said}");
+        assert!(path::is_rooted(Style::Windows, &application_data()) && application_data() == std::env::var("APPDATA").unwrap());
+    }
+
     #[test]
     fn a_bundle_roots_in_application_support_before_any_walk() {
         let temp = TempDir::new("bundle");

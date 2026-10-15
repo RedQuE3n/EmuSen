@@ -137,6 +137,26 @@ mod tests {
         assert_eq!(mapped.bytes(), &bytes[..]);
     }
 
+    /// Windows enforces §3.8's promise as the C# half's `FileShare.Read` does: while a file is mapped another opener may
+    /// read it, and may not write, rename or delete it.
+    #[cfg(windows)]
+    #[test]
+    fn a_mapped_file_is_read_and_not_written_renamed_or_deleted_while_held() {
+        const SHARING_VIOLATION: i32 = 32;
+        let temp = TempDir::new("mapped-held");
+        let (file, moved) = (temp.join("track.bin"), temp.join("moved.bin"));
+        std::fs::write(&file, vec![0x5Au8; 70_000]).unwrap();
+        let mapped = Mapped::open(&file).unwrap();
+        let refused = |result: std::io::Result<()>| result.err().and_then(|e| e.raw_os_error());
+        assert!(std::fs::read(&file).is_ok(), "a reader comes in");
+        assert_eq!(refused(std::fs::OpenOptions::new().write(true).open(&file).map(drop)), Some(SHARING_VIOLATION), "a writer");
+        assert_eq!(refused(std::fs::rename(&file, &moved)), Some(SHARING_VIOLATION), "a rename");
+        assert_eq!(refused(std::fs::remove_file(&file)), Some(SHARING_VIOLATION), "a deletion");
+        assert!(mapped.bytes().iter().all(|&b| b == 0x5A));
+        drop(mapped);
+        std::fs::rename(&file, &moved).unwrap();
+    }
+
     /// Unlinking a mapped file leaves its bytes readable where the system keeps a file's blocks past its name.
     #[cfg(unix)]
     #[test]

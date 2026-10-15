@@ -29,8 +29,8 @@ Usage: core <corename> <path-to-rom>
 status 1
 action none
 $ core nosuch x.sfc
-out 110
-core: unknown core 'nosuch'. Supported: gb, gbc, genesis, mars, mercury, moon, n64, nephrite, nes, snes, venus
+out 132
+core: unknown core 'nosuch'. Supported: diamond, gb, gbc, genesis, mars, mercury, moon, n64, nephrite, nes, playstation, snes, venus
 status 1
 action none
 $ core SNES Games/a.sfc

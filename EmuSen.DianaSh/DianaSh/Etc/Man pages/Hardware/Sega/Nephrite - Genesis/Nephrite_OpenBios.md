@@ -240,6 +240,13 @@ public description stay unopened by the writer.
 
 ---
 
+## 7. Step 10.0: the assembler (2026-10-15)
+
+Built in `beryl-m68k` behind its `asm` feature, as Q5 decided: `Beryl_M68k.md` §8 is its record. Every opcode the
+68000 decodes, 45,816 of them, assembles back from the disassembler's text to the words it came from; a branch or an
+absolute address with no size is the one choice it makes for the writer (§8.2 there). One change to the disassembler
+came with it: the PC-relative indexed mode now prints its target, as the PC-relative mode does.
+
 ## 6. Reading log (stage 10, to the plan)
 
 Opened and read: `Nephrite_Plan.md` whole; `Nephrite_Native.md` §49–§52, §53.1–§53.3, §53.5, §54.1, §54.2, §54.3 from

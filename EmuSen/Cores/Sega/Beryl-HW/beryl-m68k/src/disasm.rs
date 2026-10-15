@@ -128,7 +128,14 @@ impl D<'_> {
                     self.note(kind, a & 0xFF_FFFF);
                     format!("${:06X}(PC)", a & 0xFF_FFFF)
                 }
-                3 => self.brief("PC"),
+                3 => {
+                    let base = self.next;
+                    let ext = self.word();
+                    let target = base.wrapping_add(ext as u8 as i8 as i32 as u32) & 0xFF_FFFF;
+                    let kind = if ext & 0x8000 != 0 { 'A' } else { 'D' };
+                    let size = if ext & 0x800 != 0 { 'L' } else { 'W' };
+                    format!("${target:06X}(PC,{kind}{}.{size})", (ext >> 12) & 7)
+                }
                 _ => match size {
                     Sz::B => format!("#${:02X}", self.word() & 0xFF),
                     Sz::W => format!("#${:04X}", self.word()),
@@ -540,7 +547,7 @@ mod tests {
         assert_eq!(text(&[0x33C0, 0x00C0, 0x0000], 0), ("MOVE.W D0,$00C00000.L".into(), 6, Some((Reference::Write, 0xC0_0000))));
         assert_eq!(text(&[0x1039, 0x00A1, 0x0001], 0).2, Some((Reference::Read, 0xA1_0001)));
         assert_eq!(text(&[0x0839, 0x0003, 0x00A1, 0x0003], 0).0, "BTST #3,$00A10003.L");
-        assert_eq!(text(&[0x303B, 0x1006], 0).0, "MOVE.W $6(PC,D1.W),D0");
+        assert_eq!(text(&[0x303B, 0x1006], 0).0, "MOVE.W $000008(PC,D1.W),D0");
         assert_eq!(text(&[0xE74A], 0).0, "LSL.W #3,D2");
         assert_eq!(text(&[0x46FC, 0x2700], 0).0, "MOVE #$2700,SR");
         assert_eq!(text(&[0x027C, 0xF8FF], 0).0, "ANDI #$F8FF,SR");

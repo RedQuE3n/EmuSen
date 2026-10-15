@@ -112,6 +112,38 @@ fn a_dispatch_pushes_on_its_third_and_fourth_machine_cycles() {
     assert_eq!(bus.ticked(), 20);
 }
 
+/// Where each access lands, as the T-cycles ticked before it, then the total.
+fn access_times(bus: &RecordingBus) -> Vec<i32> {
+    let mut sum = 0;
+    let mut times = Vec::new();
+    for t in &bus.trace {
+        match t.strip_prefix("T:") {
+            Some(n) => sum += n.parse::<i32>().unwrap(),
+            None => times.push(sum),
+        }
+    }
+    times.push(sum);
+    times
+}
+
+/// mooneye's *_timing headers and GBCTR: the internal cycle that decrements SP comes before a push's writes, and RET cc's
+/// condition cycle before its pops (Mercury_Native.md §13.5).
+#[test]
+fn each_stack_access_lands_on_the_machine_cycle_the_hardware_gives_it() {
+    let cases: [(&[u8], &[i32]); 5] = [
+        (&[0xC5], &[4, 12, 16, 16]),
+        (&[0xCF], &[4, 12, 16, 16]),
+        (&[0xCD, 0x34, 0x12], &[4, 8, 12, 20, 24, 24]),
+        (&[0xCC, 0x34, 0x12], &[4, 8, 12, 20, 24, 24]),
+        (&[0xC8], &[4, 12, 16, 20]),
+    ];
+    for (program, times) in cases {
+        let (mut cpu, mut bus) = machine(program);
+        cpu.step(&mut bus, 0, 0).unwrap();
+        assert_eq!(access_times(&bus), times, "opcode ${:02X}", program[0]);
+    }
+}
+
 #[test]
 fn a_halted_cpu_still_advances_the_bus() {
     let (mut cpu, mut bus) = machine(&[0x00]);

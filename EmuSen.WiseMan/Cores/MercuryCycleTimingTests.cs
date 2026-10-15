@@ -156,6 +156,36 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(20, bus.Ticked);
         }
 
+        // Where each access lands, as the T-cycles ticked before it, then the total.
+        private static int[] AccessTimes(RecordingBus bus)
+        {
+            var times = new List<int>();
+            int sum = 0;
+            foreach (string entry in bus.Trace)
+            {
+                if (entry.StartsWith("T:", StringComparison.Ordinal)) sum += int.Parse(entry[2..]);
+                else times.Add(sum);
+            }
+            times.Add(sum);
+            return times.ToArray();
+        }
+
+        // mooneye's *_timing headers and GBCTR: the internal cycle that decrements SP comes before a push's writes, and RET cc's condition cycle before its pops - see Mercury_Native.md §13.5.
+        [Theory]
+        [InlineData(new byte[] { 0xC5 }, new[] { 4, 12, 16, 16 })]
+        [InlineData(new byte[] { 0xCF }, new[] { 4, 12, 16, 16 })]
+        [InlineData(new byte[] { 0xCD, 0x34, 0x12 }, new[] { 4, 8, 12, 20, 24, 24 })]
+        [InlineData(new byte[] { 0xCC, 0x34, 0x12 }, new[] { 4, 8, 12, 20, 24, 24 })]
+        [InlineData(new byte[] { 0xC8 }, new[] { 4, 12, 16, 20 })]
+        public void Each_stack_access_lands_on_the_machine_cycle_the_hardware_gives_it(byte[] program, int[] times)
+        {
+            var (cpu, bus) = Machine(program);
+
+            cpu.Step(0, 0, out _);
+
+            Assert.Equal(times, AccessTimes(bus));
+        }
+
         // A halted CPU still runs the machine, or nothing would ever wake it.
         [Fact]
         public void A_halted_cpu_still_advances_the_bus()

@@ -397,6 +397,10 @@ evidence is blargg's test source**, which states each rule and the failure text 
 
 ### 2.12 On a DMG, LCDC bit 0 shows BGP colour 0, not white **[V]**
 
+*Decided 2026-10-15: a dispute, not a defect. Pan Docs (`LCDC.md`) says the background and window "become blank
+(white)", which is what Mercury draws; the only test named for it changes the bit mid-line, which a per-line renderer
+cannot be graded on. Mercury keeps white, to be revisited with a per-dot renderer (`Mercury_Native.md` §13.0).*
+
 - **Mercury** writes shade 0 directly (`Ppu.Render.cs:34-38`). `Mercury_Ppu.md` §4.3 states the rule as fact: "it does
   not display colour 0 of BGP".
 - **The references** both show BGP's colour 0: RTL `video.v:1154`; Mesen `GbPpu.cpp:465`

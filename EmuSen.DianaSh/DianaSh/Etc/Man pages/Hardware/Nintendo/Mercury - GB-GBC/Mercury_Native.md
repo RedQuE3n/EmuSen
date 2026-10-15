@@ -2331,6 +2331,8 @@ the thirteen instruction-timing ROMs are left for it.
   Mealybug's `m3_lcdc_bg_en_change`, changes the bit mid-line, which a per-line renderer cannot be graded on. It changes
   what a player sees in fade routines, and the public evidence sides with Mercury. *Recommendation:* leave it, record
   the dispute, and revisit with the per-dot renderer.
+  *Decided 2026-10-15, as recommended:* LCDC bit 0 clear on a Game Boy stays blank (white), as Pan Docs has it. The
+  referee's two readings are recorded as a dispute, to be revisited with a per-dot renderer. Nothing is built.
 - **§3's further leads** (the speed switch's duration, the serial port's transfer time, DMG `STOP`, the post-boot DIV)
   are outside §2 and are not part of this audit.
 

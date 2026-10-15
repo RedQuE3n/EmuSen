@@ -88,7 +88,7 @@ fn every_descriptor_validates_against_its_committed_schema() {
         assert_eq!(schema::validate(s, doc), Vec::<String>::new(), "{doc}");
     }
     let v = crate::json::parse(info.as_bytes()).unwrap();
-    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.5"));
+    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.6"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
     assert_eq!(names.len(), 21);
     assert!(info.contains(r#""battery":[{"which":0,"suffix":".srm"}]"#), "core info lists the system's battery files since 1.3: {info}");
@@ -492,7 +492,7 @@ fn read_ranges_reach_a_core_that_claims_them_and_an_unknown_kind_is_refused() {
 
 #[test]
 fn the_crates_constants_are_the_headers_own_numbers() {
-    assert_eq!(ABI_VERSION, 0x0001_0005);
+    assert_eq!(ABI_VERSION, 0x0001_0006);
     assert_eq!((event::MEDIA_SEEK, flags::FILE_IMAGE, crate::core::SEEK_SPAN), (8, 0xFFFF_FFFF, 1 << 20));
     assert_eq!((caps::BORROW, caps::UNASSIGNED & caps::BORROW, flags::CREATE_LENT, flags::MEDIA_LENT), (1 << 20, 0, 1, 2));
     assert_eq!((CreateParams::SIZE_1_0, std::mem::size_of::<CreateParams>()), (88, 96));
@@ -560,6 +560,34 @@ fn a_disc_is_changed_through_the_lid_and_a_state_keeps_to_its_disc() {
     let mut short = media(None, 0);
     short.size = 8;
     assert_eq!(unsafe { emusen_core_media_insert(m, 0, &short) }, status::BAD_STRUCT);
+    unsafe { emusen_core_free(m) };
+}
+
+// §6.26, since 1.6: a MEDIA core's machine with no drive writes no `drives`, and each media call is refused with
+// NO_SUCH_DRIVE after the refusals of a malformed call, the machine unchanged.
+#[test]
+fn a_media_machine_with_no_drive_lists_none_and_refuses_every_media_call() {
+    let mut code = 1;
+    let img = image(&[CARTRIDGE, 2, 3]);
+    let m = unsafe { emusen_core_create(&params(&img, "", &[]), &mut code) };
+    assert_eq!(code, 0);
+    let info = text(|o, l| unsafe { emusen_core_machine_info(m, o, l) });
+    assert!(!info.contains("drives"), "{info}");
+    let before = digest(m);
+    for drive in [0, 1, u32::MAX] {
+        assert_eq!(unsafe { emusen_core_media_lid(m, drive, 1) }, status::NO_SUCH_DRIVE);
+        assert_eq!(unsafe { emusen_core_media_lid(m, drive, 0) }, status::NO_SUCH_DRIVE);
+        assert_eq!(unsafe { emusen_core_media_insert(m, drive, &media(Some(&image(&[9, 9])), 0)) }, status::NO_SUCH_DRIVE);
+        assert_eq!(unsafe { emusen_core_media_insert(m, drive, &media(None, flags::MEDIA_RESTORE)) }, status::NO_SUCH_DRIVE);
+    }
+    assert_eq!(unsafe { emusen_core_media_lid(m, 0, 2) }, status::NOT_SUPPORTED);
+    let mut short = media(None, 0);
+    short.size = 8;
+    assert_eq!(unsafe { emusen_core_media_insert(m, 0, &short) }, status::BAD_STRUCT);
+    assert_eq!((digest(m), text(|o, l| unsafe { emusen_core_machine_info(m, o, l) })), (before, info));
+    let mut detail = 0;
+    assert_eq!(unsafe { emusen_core_advance(m, &mut detail) }, 0, "the machine runs on");
+    assert!(drain_all(m).iter().all(|e| e.kind != event::MEDIA_SEEK), "a machine with no drive names no place");
     unsafe { emusen_core_free(m) };
 }
 

@@ -1402,7 +1402,8 @@ fn arm(m: &Machine<'_>) {
 
 /// C16, MEDIA (since 1.1, EmuSen_CoreAPI_Extensions.md §3.7): an insert while the lid is closed refused; the lid
 /// opened, the same disc inserted, the lid closed and frames run; a state made then loading only over its disc, the
-/// state unchanged by a refusal; RESTORE putting the disc back for it; an empty drive; machine info's drives.
+/// state unchanged by a refusal; RESTORE putting the disc back for it; an empty drive; machine info's drives. Since 1.6
+/// a machine may list no drive (EmuSen_CoreAPI.md §6.26), and then every media call is refused (`c16_no_drive`).
 fn c16(s: &mut Session<'_>) -> Case {
     let mut c = Check::new();
     let settings = s.opts.settings.clone();
@@ -1411,7 +1412,9 @@ fn c16(s: &mut Session<'_>) -> Case {
         let m = s.machine(&settings)?;
         let drives = |m: &Machine<'_>| m.machine_info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("drives")?.as_array().map(<[Value]>::to_vec)).unwrap_or_default();
         let listed = drives(&m);
-        c.that(!listed.is_empty(), || "MEDIA is claimed but machine info lists no drives".to_owned());
+        if listed.is_empty() {
+            return c16_no_drive(s, c, &m, &image, &media);
+        }
         let drive = listed.first().and_then(|d| d.get("drive")).and_then(Value::as_i64).unwrap_or(0) as u32;
         let lid = |m: &Machine<'_>| drives(m).iter().find(|d| d.get("drive").and_then(Value::as_i64) == Some(drive as i64)).and_then(|d| d.get("lid").and_then(Value::as_str).map(str::to_owned)).unwrap_or_default();
         let loaded = listed.first().and_then(|d| d.get("loaded")) == Some(&Value::Bool(true));
@@ -1459,6 +1462,31 @@ fn c16(s: &mut Session<'_>) -> Case {
         c.that(false, || e);
     }
     c.done("C16", "media")
+}
+
+/// C16 on a machine that lists no drive (since 1.6, EmuSen_CoreAPI.md §6.26): each media call, on drive 0 and on the
+/// last drive number, answers `EMUSEN_NO_SUCH_DRIVE`; none changes the state or machine info; the machine runs on.
+fn c16_no_drive(s: &mut Session<'_>, c: &mut Check, m: &Machine<'_>, image: &[u8], media: &[(u32, Vec<u8>)]) -> Result<(), String> {
+    s.play(m, 0, 30, false)?;
+    let (state, info) = (s.state_digest(m)?, m.machine_info().ok());
+    for drive in [0, u32::MAX] {
+        let calls = [
+            ("open", m.media_lid(drive, true)),
+            ("a disc", m.media_insert(drive, Some(image), media, 0)),
+            ("an empty drive", m.media_insert(drive, None, &[], 0)),
+            ("a restore", m.media_insert(drive, Some(image), media, emusen_native::core::flags::MEDIA_RESTORE)),
+            ("close", m.media_lid(drive, false)),
+        ];
+        for (what, r) in calls {
+            let call = if matches!(what, "open" | "close") { format!("media_lid({drive}, {what})") } else { format!("media_insert({drive}) of {what}") };
+            c.that(r == status::NO_SUCH_DRIVE, || format!("{call} answered {r}, not EMUSEN_NO_SUCH_DRIVE, on a machine that lists no drive"));
+        }
+    }
+    c.that(s.state_digest(m)? == state, || "a media call on a machine that lists no drive changed its state".to_owned());
+    c.that(m.machine_info().ok() == info, || "a media call on a machine that lists no drive changed its machine info".to_owned());
+    s.play(m, 30, 60, false)?;
+    c.note("machine info lists no drive: the lid opened and closed and a disc, an empty drive and a restore inserted on drives 0 and 4294967295, each refused with EMUSEN_NO_SUCH_DRIVE, the machine unchanged and running 60 frames after".to_owned());
+    Ok(())
 }
 
 /// The image and its media files as one leg of C17 holds them.

@@ -734,9 +734,26 @@ stopped, and through `systemd-run --user`, since the handheld ends a login's pro
 panel's refresh; record the present modes and colour spaces. A no makes the kit's KMS backend its own ash code below
 wgpu (§4.3), a larger `lunap-platform-kms`.
 
+*Run on 2026-10-15 on the handheld (SteamOS 3.9.2, Mesa 26.2.0-devel RADV on the Ryzen Z1 Extreme) [M]: **yes**.* With
+the display manager paused (gamescope's session refuses a manual stop and the autologin brings it back, so only
+pausing `sddm` as root leaves the card without a master), `kit-probe kms 600` made a DRM surface on the panel
+(eDP, 1920×1200) and presented 600 frames in FIFO: interval median 8.34 ms, p5 8.02, p95 8.62, max 14.74, the panel's
+120.002 Hz. Present modes: FIFO only; every format sRGB only. The off-screen modes there: `compute` 65,536 of 65,536;
+`vello` hashed `5119d53b7adca9b5`, bit for bit the desktop's, at 0.47 ms a frame. **Found on the way:** wgpu-hal matches
+the display mode by its refresh rate in millihertz exactly, computed from the pixel clock and the totals; a program
+passing `vrefresh × 1000` (120,000) finds no mode on a 120.002 Hz panel, so `lunap-platform-kms` takes the rate from
+the mode's timings, as the probe now does. A kiosk session (§6, K10) owns the seat itself, so pausing a display
+manager is the probe's arrangement, not the product's.
+
 **(g) on the television.** With the handheld docked, inside gamescope: `kit-probe window 600` under gamescope with HDR
 enabled, recording the colour spaces offered. Whether the codes then reach the television as PQ needs gamescope's own
 HDR debug view or the colorimeter (Q14).
+
+*Run on 2026-10-15 [M], the handheld docked, inside gamescope (Wayland socket `gamescope-0`):* the window presented 600
+frames in FIFO at the television's 60 Hz (median 16.67 ms, p95 16.74, max 16.87), with Mailbox and FIFO offered, and
+**every format in sRGB only**: no HDR colour space reached the client. Gamescope's X11 display offered sRGB alone too.
+Whether that is the television or gamescope's HDR setting being off was not established; it is to be run again with
+HDR enabled in the session's display settings before it counts as a no.
 
 **Hardware §11 Q11 still needs:** one low-end Android phone with Vulkan 1.1, one iPhone or iPad, and an ARM board for K2.
 

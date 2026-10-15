@@ -119,7 +119,7 @@ namespace EmuSen.Mistress.Views
                 return;
             }
             if (!await SameGameOrConfirmedAsync(item.Record, game.FullPath)) return;
-            await PromptForMissingFirmwareAsync(game.FullPath);
+            await PrepareGameAsync(game.FullPath);
             LoadGame(game.FullPath, game.FileName, resumeFrom: item.Path, reset: false);
         }
 

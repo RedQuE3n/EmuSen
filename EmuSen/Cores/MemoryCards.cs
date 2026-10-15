@@ -118,8 +118,16 @@ namespace EmuSen.Cores
             return media;
         }
 
-        // The mode a medium has when nothing is stored - see EmuSen_SaveMedia.md §9.
-        public static string DefaultMode(SaveMedium? medium) => PerGame;
+        // The mode a medium has when nothing is stored: Shared for a removable medium whose format module gives it the import, Per game otherwise - see EmuSen_SaveMedia.md §9.
+        public static string DefaultMode(SaveMedium? medium) => medium is { Kind: CoreBatteryKind.Removable, Entry.Format: not null } ? Shared : PerGame;
+
+        // The key recording that the import was offered for a medium, beside its mode's.
+        public static string OfferedKey(SaveMedium medium) => medium.ModeKey + "Offered";
+
+        // The medium whose import a frontend offers before a game starts: Shared by default with nothing stored, its first shared card absent, games' own cards present, and not offered before - see EmuSen_SaveMedia.md §9.
+        public static SaveMedium? ImportToOffer(IReadOnlyList<SaveMedium> media, Func<string, string?> stored) =>
+            media.FirstOrDefault(m => stored(m.ModeKey) is null && DefaultMode(m) == Shared && stored(OfferedKey(m)) is null
+                && !File.Exists(m.PathOf(m.DefaultName(0))) && CardsOf(m).Any(c => c.GamesOwn));
 
         // 1.7's reading: the console's first removable medium, two slots named Card n.
         public static CardChoice Read(Func<string, string?> stored) => Read(stored, null);

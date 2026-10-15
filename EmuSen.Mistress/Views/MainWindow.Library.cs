@@ -281,7 +281,7 @@ namespace EmuSen.Mistress.Views
 
         private async Task StartFreshAsync(RomEntry entry)
         {
-            await PromptForMissingFirmwareAsync(entry.FullPath);
+            await PrepareGameAsync(entry.FullPath);
             LoadGame(entry.FullPath, entry.FileName, resumeFrom: null, reset: false);
         }
 

@@ -154,10 +154,11 @@ namespace EmuSen.WiseMan.Fixtures
             return paths;
         }
 
-        // A row is its list and index; a control in an item's container its items control, index, way down and the name a reader hears, since containers are recycled and items rebuilt; else its place in the tree - see EmuSen_Settings_Reference.md §4.48.10.
+        // A row is its list, index and the name a reader hears, so a list refilled by another selection is new rows; a control in an item's container its items control, index, way down and name; else its place in the tree - see EmuSen_Settings_Reference.md §4.48.10.
         public static object KeyOf(InputElement e)
         {
-            if (e is ListBoxItem row && row.FindAncestorOfType<ListBox>() is { } list && list.IndexFromContainer(row) is var index and >= 0) return (list, index);
+            if (e is ListBoxItem row && row.FindAncestorOfType<ListBox>() is { } list && list.IndexFromContainer(row) is var index and >= 0)
+                return (list, index, Avalonia.Automation.Peers.ControlAutomationPeer.CreatePeerForElement(row).GetName() ?? "");
             for (Visual? at = e; at is not null && at is not TopLevel; at = at.GetVisualParent())
                 if (at is Control container && ItemsControl.ItemsControlFromItemContainer(container) is { } owner && owner.IndexFromContainer(container) is var item and >= 0)
                     return (owner, item, PathFrom(container, e), Avalonia.Automation.AutomationProperties.GetName(e) ?? "");
@@ -188,7 +189,7 @@ namespace EmuSen.WiseMan.Fixtures
         private static InputElement? Refocus(TopLevel top, object key, InputElement fallback)
         {
             InputElement? element = null;
-            if (key is (ListBox list, int index))
+            if (key is (ListBox list, int index, string _))
             {
                 list.ScrollIntoView(index);
                 list.UpdateLayout();

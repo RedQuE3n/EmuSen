@@ -2025,7 +2025,8 @@ later focusing it directly to press every direction from it. This window broke t
   known by its list and index, not by the container drawing it. **This was not the cause of the Update Pack report**
   (no container was reused there), and no audit case today has a list long enough to need it: the mutant that keys
   rows by container survives (§4.48.6). It is kept because a longer list in any audited window would make the walk
-  treat a row it has not explored as seen.
+  treat a row it has not explored as seen. *(Since 2026-10-15 a row is also known by the name a reader hears for it, so a
+  list another selection refills is new rows: `EmuSen_InterfaceSpec.md` §3.)*
 
 `Every_control_of_each_settings_sheet_is_reached_by_the_pad("Shaders")` audits the sheet and
 `In_desktop_mode_a_real_window_is_driven_and_every_control_reached("ShowShaderSettings")` the desktop window; the

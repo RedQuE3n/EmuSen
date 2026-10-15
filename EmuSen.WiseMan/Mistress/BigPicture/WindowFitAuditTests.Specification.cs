@@ -59,7 +59,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ["paints outside the palette: Border #2 #1B1B1EFF"] = "the launch screen's card takes MenuPanel's default panel colour, a literal in LunaP, rather than a token",
             ["past its clip: HintBar #5 at 38.4,726.4,1650.09,33.6 outside 0,0,1280,800"] = "the synthetic theme's help bar asks for every entry in one row from 3% of the width, and is laid out wider than the screen; ES-DE lays such a bar out the same, and Art Book Next asks for three entries",
             ["past its clip: HintBar #5 at 57.6,1089.6,2475.14,50.4 outside 0,0,1920,1200"] = "the synthetic theme's help bar asks for every entry in one row from 3% of the width, and is laid out wider than the screen; ES-DE lays such a bar out the same, and Art Book Next asks for three entries",
-            ["not reached by the pad: ListBoxItem 'Brass Lantern (Europe)'"] = "Cheat Database at 1280 by 800: down from the games list's second row leaves the list for the button below it instead of scrolling to the third row, which shows 5 pixels; the rows after it are reached by no direction",
         };
 
         [Theory]

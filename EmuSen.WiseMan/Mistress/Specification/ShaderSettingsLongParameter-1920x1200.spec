@@ -129,7 +129,7 @@ edge 23 up 8
 edge 23 down 28
 edge 23 left 20
 edge 23 right 76
-edge 28 up row:26/5
+edge 28 up "row:26/5/bezel / Mega Bezel / Presets / Base CRT Presets: MBZ 0 SMOOTH-ADV GDV"
 edge 28 down 37
 edge 28 left same
 edge 28 right 81
@@ -179,14 +179,14 @@ edge "item:84/2/0/0/0/0/Reset Shadow mask strength (0 = off, 1 = the whole of th
 edge "item:84/2/0/0/0/0/Reset Shadow mask strength (0 = off, 1 = the whole of the phosphor pattern, as a television of the time)" right same
 edge "item:84/2/0/0/1/Shadow mask strength (0 = off, 1 = the whole of the phosphor pattern, as a television of the time)" up "item:84/2/0/0/0/0/Reset Shadow mask strength (0 = off, 1 = the whole of the phosphor pattern, as a television of the time)"
 edge "item:84/2/0/0/1/Shadow mask strength (0 = off, 1 = the whole of the phosphor pattern, as a television of the time)" down same
-edge row:26/4 up row:26/3
-edge row:26/4 down row:26/5
-edge row:26/4 left same
-edge row:26/4 right 81
-edge row:26/5 up row:26/4
-edge row:26/5 down 28
-edge row:26/5 left same
-edge row:26/5 right 81
+edge "row:26/4/Simple CRT" up row:26/3/Scanlines
+edge "row:26/4/Simple CRT" down "row:26/5/bezel / Mega Bezel / Presets / Base CRT Presets: MBZ 0 SMOOTH-ADV GDV"
+edge "row:26/4/Simple CRT" left same
+edge "row:26/4/Simple CRT" right 81
+edge "row:26/5/bezel / Mega Bezel / Presets / Base CRT Presets: MBZ 0 SMOOTH-ADV GDV" up "row:26/4/Simple CRT"
+edge "row:26/5/bezel / Mega Bezel / Presets / Base CRT Presets: MBZ 0 SMOOTH-ADV GDV" down 28
+edge "row:26/5/bezel / Mega Bezel / Presets / Base CRT Presets: MBZ 0 SMOOTH-ADV GDV" left same
+edge "row:26/5/bezel / Mega Bezel / Presets / Base CRT Presets: MBZ 0 SMOOTH-ADV GDV" right 81
 press pageup focus="Dropdown PART_Facet (Category)" tab=GB title=Shaders top=ShaderSettingsWindow
 press pagedown focus="Dropdown PART_Facet (Category)" tab=SNES title=Shaders top=ShaderSettingsWindow
 press first focus="Dropdown PART_Facet (Category)" tab=SNES title=Shaders top=ShaderSettingsWindow

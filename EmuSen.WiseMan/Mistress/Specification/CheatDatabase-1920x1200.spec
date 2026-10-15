@@ -88,17 +88,17 @@ edge 23 right 35
 edge 25 up 23
 edge 25 down 27
 edge 25 left same
-edge 25 right 42
+edge 25 right "row:40/0/Fable of Tiles (USA)"
 edge 27 up 25
 edge 27 down 29
 edge 27 left same
 edge 27 right 42
 edge 29 up 27
-edge 29 down row:21/4
+edge 29 down "row:21/4/Nintendo - Nintendo 64  (not downloaded)"
 edge 29 left same
 edge 29 right 35
 edge 35 up 5
-edge 35 down 42
+edge 35 down "row:40/0/Hollow Comet (World)"
 edge 35 left 23
 edge 35 right 16
 edge 42 up 35
@@ -110,17 +110,29 @@ edge 44 down 46
 edge 44 left 27
 edge 44 right same
 edge 46 up 44
-edge 46 down row:40/3
+edge 46 down "row:40/3/Cobalt Harbor (USA)"
 edge 46 left 29
 edge 46 right same
-edge row:21/4 up 29
-edge row:21/4 down row:21/5
-edge row:21/4 left same
-edge row:21/4 right 35
-edge row:40/3 up 46
-edge row:40/3 down 14
-edge row:40/3 left 29
-edge row:40/3 right same
+edge "row:21/4/Nintendo - Nintendo 64  (not downloaded)" up 29
+edge "row:21/4/Nintendo - Nintendo 64  (not downloaded)" down "row:21/5/Nintendo - Satellaview  (not downloaded)"
+edge "row:21/4/Nintendo - Nintendo 64  (not downloaded)" left same
+edge "row:21/4/Nintendo - Nintendo 64  (not downloaded)" right 35
+edge "row:40/0/Fable of Tiles (USA)" up 35
+edge "row:40/0/Fable of Tiles (USA)" down "row:40/1/Granite Choir (Japan)"
+edge "row:40/0/Fable of Tiles (USA)" left 25
+edge "row:40/0/Fable of Tiles (USA)" right same
+edge "row:40/0/Hollow Comet (World)" up 35
+edge "row:40/0/Hollow Comet (World)" down 14
+edge "row:40/0/Hollow Comet (World)" left 25
+edge "row:40/0/Hollow Comet (World)" right same
+edge "row:40/1/Granite Choir (Japan)" up "row:40/0/Fable of Tiles (USA)"
+edge "row:40/1/Granite Choir (Japan)" down 14
+edge "row:40/1/Granite Choir (Japan)" left 27
+edge "row:40/1/Granite Choir (Japan)" right same
+edge "row:40/3/Cobalt Harbor (USA)" up 46
+edge "row:40/3/Cobalt Harbor (USA)" down 14
+edge "row:40/3/Cobalt Harbor (USA)" left 29
+edge "row:40/3/Cobalt Harbor (USA)" right same
 press pageup focus="TextBox PART_Path (Choose a cheat folder (a RetroArch cheats folder works as-is))" title="Cheat Database" top=CheatDatabaseWindow
 press pagedown focus="TextBox PART_Path (Choose a cheat folder (a RetroArch cheats folder works as-is))" title="Cheat Database" top=CheatDatabaseWindow
 press first focus="TextBox PART_Path (Choose a cheat folder (a RetroArch cheats folder works as-is))" title="Cheat Database" top=CheatDatabaseWindow

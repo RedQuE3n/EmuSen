@@ -142,7 +142,7 @@ edge 23 up 8
 edge 23 down 30
 edge 23 left 20
 edge 23 right 78
-edge 28 up row:26/1
+edge 28 up row:26/1/CRT
 edge 28 down 30
 edge 28 left same
 edge 28 right 83
@@ -163,10 +163,10 @@ edge 51 down 60
 edge 51 left same
 edge 51 right 98
 edge 60 up 51
-edge 60 down row:26/8
+edge 60 down row:26/8/crt-royale-kurozumi
 edge 60 left same
 edge 60 right 83
-edge 69 up row:26/9
+edge 69 up "row:26/9/handheld: lcd-grid-v2"
 edge 69 down same
 edge 69 left same
 edge 69 right "item:86/2/0/0/1/Scanline weight"
@@ -204,18 +204,18 @@ edge "item:86/3/0/0/0/0/Reset Parameter 0003" up 109
 edge "item:86/3/0/0/0/0/Reset Parameter 0003" down "item:86/3/0/0/1/Parameter 0003"
 edge "item:86/3/0/0/0/0/Reset Parameter 0003" left 60
 edge "item:86/3/0/0/0/0/Reset Parameter 0003" right same
-edge row:26/1 up row:26/0
-edge row:26/1 down 28
-edge row:26/1 left same
-edge row:26/1 right 83
-edge row:26/8 up 60
-edge row:26/8 down row:26/9
-edge row:26/8 left same
-edge row:26/8 right 83
-edge row:26/9 up row:26/8
-edge row:26/9 down 69
-edge row:26/9 left same
-edge row:26/9 right 83
+edge row:26/1/CRT up "row:26/0/Built into EmuSen: None"
+edge row:26/1/CRT down 28
+edge row:26/1/CRT left same
+edge row:26/1/CRT right 83
+edge row:26/8/crt-royale-kurozumi up 60
+edge row:26/8/crt-royale-kurozumi down "row:26/9/handheld: lcd-grid-v2"
+edge row:26/8/crt-royale-kurozumi left same
+edge row:26/8/crt-royale-kurozumi right 83
+edge "row:26/9/handheld: lcd-grid-v2" up row:26/8/crt-royale-kurozumi
+edge "row:26/9/handheld: lcd-grid-v2" down 69
+edge "row:26/9/handheld: lcd-grid-v2" left same
+edge "row:26/9/handheld: lcd-grid-v2" right 83
 press pageup focus="Dropdown PART_Facet (Category)" tab=GB title=Shaders top=ShaderSettingsWindow
 press pagedown focus="Dropdown PART_Facet (Category)" tab=SNES title=Shaders top=ShaderSettingsWindow
 press first focus="Dropdown PART_Facet (Category)" tab=SNES title=Shaders top=ShaderSettingsWindow

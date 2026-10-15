@@ -88,7 +88,7 @@ facts as `key=value` or a bare flag:
 
 `focus <id>` names where the focus starts; `edge <from> <direction> <to>` is one press of the walk, `to` being a
 control's id, `same` when the focus stayed, `none` when it was lost, or a reference to a control built only once
-scrolled to: `row:<list>/<index>`, `item:<owner>/<index>/<path>/<name>` or `path:<path>`. `press <button> key=value...`
+scrolled to: `row:<list>/<index>/<name>`, `item:<owner>/<index>/<path>/<name>` or `path:<path>`. `press <button> key=value...`
 is a press of the grammar and what it reached: `focus` (the control, described), `top` (the sheet on top, or `none`),
 `tab`, `title` and `menu`; or, in a scene, `view`, `system`, `game` and `sheet`.
 
@@ -112,10 +112,18 @@ change; where that does not bring the focus in, a press down. Each recorded wind
 the focus on the tab's header, as choosing it by the pad leaves it. 20 of the 212 recordings were entered, 14 by the
 shoulders and 6 by a press down **[M]**.
 
-A control is keyed as the audit keys it: a row by its list and index; a control inside an item's container by the
-items control, the index, its way down and its name; anything else by its path of child indices from the window. The
+A control is keyed as the audit keys it: a row by its list, its index and the name a reader hears for it; a control
+inside an item's container by the items control, the index, its way down and its name; anything else by its path of child indices from the window. The
 last can change when a press rebuilds part of the window, which is why a control can appear in the graph twice, once
 by id and once by `path:`: the walk sees it as two, and both are recorded.
+
+**Why a row carries its name (2026-10-15).** Until then a row was its list and index alone. A list that another
+selection refills, such as the Cheat Database's games, which follow the system chosen beside them, then had one key for
+the third row of every system's list, and the walk explored each key once, in the state it first found it in. At
+1280 × 800 it first reached the games list from the Nintendo Entertainment System's row, whose list holds two games, so
+down from the second row left the list, correctly for that list; the Super Nintendo's four were never walked, and the
+recording reported their third row unreachable (§6.3.1). With the name in the key a refilled list's rows are rows the
+walk has not seen, explored in their own state. A row whose name a reader cannot hear keys as before, by list and index.
 
 ## 4. §2.4's rules as checks
 
@@ -230,11 +238,39 @@ the tester to schedule.
 | Palette reach | `#55555A`, the menu look's border colour, painted by the big-screen menus' own buttons where no scope that declares it is in reach | Theme Settings, Game Collection Settings, Game options, the metadata editor |
 | | `#FFFFFFCC`, painted by a dropdown while it has the focus, from a part of its stock template no resource declares | Memory Cards, the N64's tab |
 | | the screensaver's caption box (`Screensaver.BoxColour`) and the launch screen's card (MenuPanel's default panel colour), literal colours rather than tokens | the screensaver, the launch screen |
-| Pad reachability | down from the games list's second row leaves the list for the button below instead of scrolling to the third row, which shows 5 pixels; the rows after it are reached by no direction | Cheat Database at 1280 × 800 only |
 | Fit (a scene) | the synthetic theme's help bar asks for every entry in one row and is laid out wider than the screen; ES-DE lays such a bar out the same, and Art Book Next asks for three entries | the gamelist scene, both sizes |
 
-The last is the theme's, not Mistress's, and stays for that reason. The Cheat Database's is the one a player meets: its
-list of games cannot be walked past its second row by the d-pad at 1280 × 800.
+The last is the theme's, not Mistress's, and stays for that reason. A fifth, the Cheat Database's games list reported
+unreachable past its second row at 1280 × 800, was the walk's and not Mistress's (§6.3.1).
+
+### 6.3 The faults of §6.2 worked through (2026-10-15)
+
+Each was proven before it was changed, and the recordings re-recorded after; `git diff` of the `.spec` files shows the
+interface each change made.
+
+#### 6.3.1 The Cheat Database's games: the walk's, not the window's
+
+**What was reported.** Down from the games list's second row went to Download from libretro; the third row, showing
+5 pixels, and the fourth were reached by no direction.
+
+**What a player meets [M].** `The_cheat_database_s_games_are_walked_to_the_last_by_the_pad`, at both sizes: from the
+folder box, down three times to the Super Nintendo's row, right into its four games and down three times reaches and
+selects each row in turn, the third scrolled into view from its 5 pixels. Mistress was right before the change; the
+router sends Down to a list's row unless it is the last (`PadWindowRouter`), and Avalonia's list brings the next row
+into view.
+
+**What the walk did.** A row was keyed by its list and index (§3). Breadth first, the walk first reached the games list
+by right from the Nintendo Entertainment System's row, where the list holds two games; down from the second of those
+correctly left the list. Each key is explored once, so index 2 was never explored, and the Super Nintendo's third row,
+recorded in the tree, had no edge to it. At 1920 × 1200 the walk reached the Super Nintendo's list first by up from the
+buttons, which is why only the smaller size reported it.
+
+**The fix** is in the walk: `PadAudit.KeyOf` keys a row by its list, index and the name a reader hears, so every
+audit that walks (the pad audits and the recorder) treats a refilled list's rows as new. The re-recording changed six
+files: the Cheat Database at both sizes, where `44 down 46` and `46 down "row:40/3/Cobalt Harbor (USA)"` now stand and
+the other systems' rows appear by name; and the Shaders sheets with sliders and a long parameter, whose `row:` edges
+gained their names. No other list in a recorded state is refilled by another control's selection, so no other graph
+changed.
 
 ## 7. What it does not cover
 

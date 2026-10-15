@@ -243,7 +243,52 @@ and five frames on. Both builds give `886135FFEF135A26`, `886135FFEF135A26` and 
 new program adding its fiftieth (`card-save.s`, recorded by Diamond_Enhancements.md §6.2's command and checked), and
 the state's pinned layout test is unchanged.
 
+### 10.4 The runtime and Mistress, built
+
+[M, 2026-10-15] `MemoryCards` (`EmuSen/Cores`) owns the mode's facts: its keys, its values, the rows of §9.1, the
+stored choice read safely (an unknown mode is *Per game*, a name with a separator or a leading dot is the slot's
+default, so no hand edit of `graphics.json` reaches outside the folder), a removable file's slot as its place among
+the removable files core info lists, and the card a slot holds. Galaxia's `SaveLibrary` gains `CardsFolder`,
+`CardPathFor` and `CardNames`, composed on `DataStore.Saves`; `BatterySave.Card` opens a card by its own path and keeps
+`--nobattery`'s latch. `CoreEngine.Cards`, set by `CoreFactory` from the console's stored values, places each file at
+create: a removable one under *Shared* or *Named cards* at its card, every other at the game's, and the machine is made
+with the flag when any listed file is removable. The C# host reads `kind` into `CoreBatteryFile.Removable` and is at
+1.7. In Mistress the rows are built by `BuildCardRows`, after *Engine* and before the core's rows, each slot's row
+hidden unless *Named cards* is chosen, as the crop's row is (`EmuSen_Settings_Reference.md` §4.114).
+
+Through the host, on two synthetic games that each write one frame of the card in slot 1 (`DiamondCardsTests`): per
+game, A's save is in `Amber Saga.mcr` and B finds a blank card, and no `Cards` folder is made; shared, A's save is in
+`Cards/Card 1.mcr`, B's machine is made with it on its card, B's save lands beside it, no per-game file is written, and
+*Per game* chosen again gives B its own blank card back; named, A saves to `Blue`, B to `Red` without seeing A's save,
+and B with `Blue` chosen sees A's and not its own; the hazard's steps through `CoreEngine` leave both saves on the
+shared file; and a state from before a save, loaded and the cards written as at the next frame's end, empties the
+game's own card per game and leaves the shared card's save. The fit audit's new case shows the tab under *Named cards*
+with both slots' rows and the note, nothing cut off or overlapping at 1280×800 and 1920×1200.
+
+### 10.5 The kit on the sample's discs
+
+[M, 2026-10-15] `kit/psx-sample.txt`'s command, the library this branch's build made, the nine discs at 1,800 frames,
+nine at once under a 10 GiB limit: the core's cases pass and **9 of 9 images pass**, C19 among their cases, each
+reporting its one removable file (file 0, 131,072 bytes) kept as it stood across a state made 120 frames into a
+machine whose card held another pattern. Ape Escape's C6 digests are those recorded on 2026-10-12
+(`Diamond_Native.md` §23.4), `A02BFAE09D41CF89` for the pictures, and every disc's state is 5,398,770 bytes as there:
+the kit sees the per-game machine unchanged. The run took 277.9 s against §23.4's 190 s, beside other builds on the
+desktop, with 9.2 GB peak resident.
+
 ## 11. Tests
+
+Run on 2026-10-15, the blast radius only:
+
+| Where | What | Result |
+|---|---|---|
+| `diamond`, `cargo test --release` with `EMUSEN_DIAMOND_PS1TESTS` | the crate's unit tests, among them the seven of §10.1–§10.3, and its program, golden, renderer and precision tests | 173 unit, 81 program, 14 precise, 7 scaled, 4 filtered, 3 colour and 3 renderer tests pass |
+| `diamond-v1` | the published library's tests | 4 pass |
+| `emusen-native` | the crate's tests, the header's numbers at 1.7, every descriptor against its schema, core info's removable file | 74 pass |
+| `emusen-core-abi-check` | the header, the Rust and the baseline | 429 facts agree on 4 triples; 6 tests pass |
+| `emusen-core-conform` | the kit's tests, C19 with the test core's card and its seeded fault failing C19 alone | 29 pass |
+| MercuryRT, MoonRT, VenusRT, Nephrite | their `Battery` and `Create` literals moved | build with their tests |
+| WiseMan | `DiamondCardsTests` (7), `DiamondPlayersTests`, `DiamondTests`, `CoreAbiTests`, `CoreAdapterTests`, `CoreDiscoveryTests`, the `GraphicsSettings` tests, `PlayStationLibraryTests`, `SaveLibrary` tests, the fit audit's PlayStation cases with the new one at both sizes | all pass |
+| the kit on the sample's nine discs | §10.5 | 9 of 9 |
 
 ## 12. Step 2, written and not built: a card manager
 

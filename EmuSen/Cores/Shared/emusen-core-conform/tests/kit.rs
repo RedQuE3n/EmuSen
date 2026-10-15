@@ -137,7 +137,7 @@ fn c19_holds_a_removable_file_as_it_stands_across_a_state_load() {
     let carded = run(&library("kit_test_core"), &Options { image: image(CARD), ..options() });
     let c19 = carded.cases.iter().find(|c| c.id == "C19").unwrap();
     assert!(carded.cases.iter().all(|c| c.passed), "{:?}", carded.cases.iter().filter(|c| !c.passed).map(|c| (c.id, &c.evidence)).collect::<Vec<_>>());
-    assert_eq!(c19.evidence, ["1 removable file(s), 1 of 16 bytes: kept as they stood across a state made 120 frames into a machine whose files held other bytes"]);
+    assert_eq!(c19.evidence, ["1 removable file(s), file 1 (16 bytes): kept as they stood across a state made 120 frames into a machine whose files held other bytes"]);
     let plain = run(&library("kit_test_core"), &options());
     assert_eq!(plain.cases.iter().find(|c| c.id == "C19").unwrap().evidence, ["the machine lists no removable battery file, so nothing is kept apart"]);
     let (failed, text) = failed_on("kit_faulty_full_core", CARD, 1 << 20, 120);

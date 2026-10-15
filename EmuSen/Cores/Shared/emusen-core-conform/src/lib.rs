@@ -1844,7 +1844,7 @@ fn c19(s: &mut Session<'_>) -> Case {
             c.that(&now == was, || format!("removable battery file {which} changed across the state load: {} of its {} bytes differ", now.iter().zip(was).filter(|(x, y)| x != y).count(), was.len()));
             c.that(flags_now & flags::BATTERY_CHANGED == 0 || flags_were & flags::BATTERY_CHANGED != 0, || format!("removable battery file {which} reads as changed after the state load, and did not before it"));
         }
-        c.note(format!("{} removable file(s), {}: kept as they stood across a state made {frames} frames into a machine whose files held other bytes", removable.len(), removable.iter().map(|r| format!("{} of {} bytes", r.0, r.1)).collect::<Vec<_>>().join(", ")));
+        c.note(format!("{} removable file(s), {}: kept as they stood across a state made {frames} frames into a machine whose files held other bytes", removable.len(), removable.iter().map(|r| format!("file {} ({} bytes)", r.0, r.1)).collect::<Vec<_>>().join(", ")));
         Ok(())
     };
     if let Err(e) = body(s, &mut c) {

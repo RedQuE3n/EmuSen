@@ -317,6 +317,21 @@ colours, since each sheet's frame is a `MenuPanel`; the big-screen menus' rows r
 hidden chrome (a row is drawn by `MenuRow`, which does not read them), and the two focused dropdowns `#EEEEF0`
 where they had white.
 
+#### 6.3.4 The help bar wider than the screen: the test theme's
+
+**What it was.** The synthetic theme the Big Picture tests write (`ThemedSession.Write`) asks for its help bar at
+3% from the left, every entry (`<entries>all</entries>`) in one row, at a font of 3.5% of the height. The gamelist's
+twelve entries then measure 1,650 pixels at 1280 × 800 and 2,475 at 1920 × 1200, from 38 and 58; the system view's
+four, 630 and 946, fit. Mistress lays a help bar out as the theme asks, in one row from its position, as ES-DE does;
+it does not shrink or wrap a bar a theme sized, and a real theme chooses its entries to fit (Art Book Next's gamelist
+asks for two, `back,a`).
+
+**Proven the theme's [M].** With nothing changed but the theme's font, 2.5% of the height, the same bar measures
+1,230 and 1,846 pixels and ends 11 and 17 pixels inside the screen, and the fault is gone at both sizes; the
+system view's bar shrinks with it. The theme is a fixture, so it is the theme that is changed: it still asks for every
+entry, at a size that fits. The re-recording changes the help bar's rectangle in the four scene recordings and
+nothing else.
+
 #### 6.3.5 Two tests that counted the consoles before the PlayStation was offered
 
 `ThemedSwitchesTests.The_systems_follow_the_chosen_order_and_the_startup_list_with_them` (three cases) expected seven

@@ -21,8 +21,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         // Faults the rules find in today's Mistress, each recorded with why it stands; an entry that stops failing must be removed, as PaletteReachTests' table is kept.
         internal static readonly Dictionary<string, string> Known = new()
         {
-            ["past its clip: HintBar #5 at 38.4,726.4,1650.09,33.6 outside 0,0,1280,800"] = "the synthetic theme's help bar asks for every entry in one row from 3% of the width, and is laid out wider than the screen; ES-DE lays such a bar out the same, and Art Book Next asks for three entries",
-            ["past its clip: HintBar #5 at 57.6,1089.6,2475.14,50.4 outside 0,0,1920,1200"] = "the synthetic theme's help bar asks for every entry in one row from 3% of the width, and is laid out wider than the screen; ES-DE lays such a bar out the same, and Art Book Next asks for three entries",
         };
 
         [Theory]

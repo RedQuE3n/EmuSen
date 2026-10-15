@@ -17,7 +17,7 @@ tree
       2 NormalizedCanvas at=0,0,1280,800 by=clip limit=0,0,1280,800 role=group
         3 TextRowList at=64,64,576,640 by=clip element=textlist:gamelist limit=0,0,1280,800 role=list
         4 DeviceStatusBar at=1228.96,12.8,28,28 by=clip element=systemstatus:(default) heard="Bluetooth on" limit=0,0,1280,800 role=statusbar
-        5 HintBar at=38.4,726.4,1650.09,33.6 by=clip element=helpsystem:help heard="D-pad up and down Choose, D-pad left and right System, LB Jump, RB Jump, LT First, RT Last, A Launch, B Back, Y Favorite, View Options, Thumbstick click Random, Menu Menu" limit=0,0,1280,800 role=group seen=38.4,726.4,1241.6,33.6
+        5 HintBar at=38.4,736,1230.4,24 by=clip element=helpsystem:help heard="D-pad up and down Choose, D-pad left and right System, LB Jump, RB Jump, LT First, RT Last, A Launch, B Back, Y Favorite, View Options, Thumbstick click Random, Menu Menu" limit=0,0,1280,800 role=group
       6 ScrollLetterOverlay at=0,0,1280,800 by=clip limit=0,0,1280,800 nohit role=text
 focus none
 press down game="Brass Lantern (Synthetic)" sheet=none system=snes view=gamelist

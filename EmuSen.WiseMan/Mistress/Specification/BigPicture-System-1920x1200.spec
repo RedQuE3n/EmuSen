@@ -19,7 +19,7 @@ tree
           4 FittedImage at=273.5,447,93,186 by=clip drawn limit=0,180,1920,720 role=image
           5 FittedImage at=1553.5,447,93,186 by=clip drawn limit=0,180,1920,720 role=image
           6 FittedImage at=904.2,428.4,111.6,223.2 by=clip drawn limit=0,180,1920,720 role=image
-        7 HintBar at=57.6,1089.6,945.59,50.4 by=clip element=helpsystem:help heard="D-pad left and right System, A Select, X Screensaver, Menu Menu" limit=0,0,1920,1200 role=group
+        7 HintBar at=57.6,1104,698.26,36 by=clip element=helpsystem:help heard="D-pad left and right System, A Select, X Screensaver, Menu Menu" limit=0,0,1920,1200 role=group
         8 DeviceStatusBar at=1843.44,19.2,42,42 by=clip element=systemstatus:(default) heard="Bluetooth on" limit=0,0,1920,1200 role=statusbar
       9 ScrollLetterOverlay at=0,0,1920,1200 by=clip limit=0,0,1920,1200 nohit role=text
 focus none

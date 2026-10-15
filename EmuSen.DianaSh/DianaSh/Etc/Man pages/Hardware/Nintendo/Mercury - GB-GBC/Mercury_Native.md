@@ -3023,3 +3023,8 @@ header asks for colour.) Each `dmg_sound` ROM run on the Color still fails for t
 Auto, 121 under Game Boy and Game Boy Color, the same in both engines.
 
 **The four games**, the recorded digests and the whole `Mercury` filter (858 cases) are unchanged.
+
+**Mutants**, each in C# and in Rust separately, all caught on both engines: J6, a DMG ignores lengths while off; J8, NR11
+written while off loads its duty too (both by the first theory's DMG case); J7, a CGB keeps its counters through a power
+cycle (the second theory's CGB case). Cost was not measured separately: only NR52 and writes while the APU is off
+changed.

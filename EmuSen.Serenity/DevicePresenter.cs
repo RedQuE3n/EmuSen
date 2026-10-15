@@ -41,8 +41,7 @@ namespace EmuSen.Serenity
         private readonly Slot?[] _slots = new Slot?[Slots];
         private int _width, _height, _imageWidth, _next;
 
-        // An image's rows padded to a whole number of 64 pixels, so that a compositor that lays a linear image out at its
-        // own pitch reads the rows where they are - see EmuSen_DevicePicture.md §13.
+        // Rows padded to a multiple of 64 pixels, so a compositor's own pitch reads them where they are - see EmuSen_DevicePicture.md §13.
         public const int RowPixels = 64;
         private bool _disposed;
 

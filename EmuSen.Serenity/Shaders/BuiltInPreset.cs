@@ -55,8 +55,7 @@ namespace EmuSen.Serenity.Shaders
         // One translated pass: its slang text and what the preset says of it.
         public sealed record Pass(string FileName, string Text, string? Alias, PassSize Width, PassSize Height, bool Float, bool LinearSampler);
 
-        // The passes a filter draws for these values on a console, the reducing pass first when the frame holds each line `reduceBy` times.
-        // nudge moves every pass's sampling point by a fraction of a pixel, for a test that asks whether a difference sits on a discontinuity - see EmuSen_DevicePicture.md §12.
+        // The passes a filter draws on a console, reducing pass first; `nudge` shifts every sampling point for the tie test - see EmuSen_DevicePicture.md §12.
         public static IReadOnlyList<Pass> Translate(ScreenFilter filter, IReadOnlyDictionary<string, float> values, int reduceBy = 1, (float X, float Y) nudge = default)
         {
             IReadOnlyList<FilterPass> passes = filter.Build?.Invoke(values) ?? filter.Passes;

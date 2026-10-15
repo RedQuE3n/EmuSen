@@ -3055,6 +3055,11 @@ now stop at their eighth test (`08-len ctr during power`) on the console they we
 games** run as before (MercuryRT's trace keeps the same PC, work RAM and VRAM; the real-games test passes); the whole
 `Mercury` filter passes.
 
+**Mutants**, each in C# and in Rust separately, all caught on both engines: J9, leaving negate mode never disables;
+J11, the flag never set (both by the rule's claim and the version-10 claim); J10, a trigger keeps the flag
+(`A_trigger_forgets_an_earlier_subtraction`); J12, the flag lost through the tail (C#: not written; Rust: not read;
+the version-10 claim).
+
 #### 13.10.4 The wave channel: out of reach
 
 The remaining rows, `09-wave read while on`, `12-wave write while on` and `12-wave` (CGB) and `10-wave trigger while on`

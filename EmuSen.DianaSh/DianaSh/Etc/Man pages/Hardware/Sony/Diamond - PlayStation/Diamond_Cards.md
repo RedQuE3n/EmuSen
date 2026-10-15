@@ -1,5 +1,9 @@
 # Diamond_Cards — memory cards a player carries between games
 
+*Since 2026-10-15 the card mode is the framework's, for every console with save media: `EmuSen_SaveMedia.md` holds the
+model, the core ABI's minor 1.8, the runtime's rule, the lock and the card manager, and this page keeps what is the
+PlayStation's.*
+
 *Written 2026-10-15, before its code.* Decided 2026-10-15 by the tester: the memory card a player uses is to appear in
 every game played, as on a console, through a **card mode** with three modes, *Per game* (the behaviour of
 `Diamond_Plan.md` §4.4 and `Diamond_Players.md` §4, unchanged), *Shared* and *Named cards*. This page records the form

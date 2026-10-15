@@ -22,5 +22,9 @@ crate `nephrite`). Written from hardware documents under a clean-room protocol, 
   cannot (separate crates decided not now), the forms weighed, the migration in eight commits with the state kept
   byte-identical, the questions for the tester as decided, and the build's record (§11), each design section followed
   by what was built where it differed.
+- [`Nephrite_OpenBios.md`](Nephrite_OpenBios.md) — stage 10's plan for the open Sega CD BIOS, written 2026-10-15
+  before its code: the five parts by Sega's manuals, cited by section; what the manuals leave unsaid (the function
+  numbers, the sub CPU's jump table slots, the backup RAM's format, the main CPU's routines), the steps with their
+  oracles, the accuracy cost and the questions for the tester.
 
 The CPUs and the PSG are documented with their crates in [`../Beryl-HW/`](../Beryl-HW/) (Beryl Hardware).

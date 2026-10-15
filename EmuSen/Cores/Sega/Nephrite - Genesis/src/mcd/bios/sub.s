@@ -1600,14 +1600,14 @@ msf_to_lba:
 
 ; d0.b in BCD to binary, the whole of d0.
 bcd_to_bin:
-        move.w  d1,-(sp)
+        move.l  d1,-(sp)
         and.l   #$FF,d0
         move.w  d0,d1
         lsr.w   #4,d1
         mulu    #10,d1
         and.w   #15,d0
         add.w   d1,d0
-        move.w  (sp)+,d1
+        move.l  (sp)+,d1
         rts
 
 ; d0.w, 0-99, to BCD in d0.b.

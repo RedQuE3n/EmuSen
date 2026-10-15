@@ -9,7 +9,7 @@ use crate::genesis::io::Plug;
 #[cfg(feature = "mcd")]
 use crate::mcd::SaveMemory;
 #[cfg(feature = "mcd")]
-use crate::mcd::frontend::ram_cart_setting;
+use crate::mcd::frontend::{BENEATH_KEY, BENEATH_VALUE, beneath_setting, ram_cart_setting};
 use crate::machine::{HEIGHT, Machine, WIDTH, default_model};
 use crate::media::{Media, System, cartridge_bytes};
 use crate::genesis::debugger::{M68KBUS_ID, M68KBUS_SIZE, Z80BUS_ID, Z80BUS_SIZE};
@@ -185,6 +185,10 @@ pub const SK_PATCH: u32 = 9;
 /// The Sega CD's backup RAM cartridge's battery file; 1 being the TMSS ROM's, it takes the next free number.
 pub const RAM_CART: u32 = 10;
 
+/// The backup RAM of a Sega CD beneath a cartridge (mode 1): the cartridge's save RAM keeps file 0 (Nephrite_Attachments.md
+/// Q8).
+pub const MODE1_BRAM: u32 = 11;
+
 /// The battery file of each of the Sega CD's save memories: the backup RAM inside it file 0, its cartridge 10.
 #[cfg(feature = "mcd")]
 fn save_file(memory: SaveMemory) -> u32 {
@@ -284,7 +288,7 @@ fn system(id: &str, name: &str, extensions: &[&str], firmware: Vec<Firmware>, de
 /// contents.
 pub const MD_EXTENSIONS: [&str; 4] = [".md", ".gen", ".bin", ".smd"];
 #[cfg(feature = "mcd")]
-pub const MCD_EXTENSIONS: [&str; 1] = [".iso"];
+pub const MCD_EXTENSIONS: [&str; 3] = [".iso", ".cue", ".chd"];
 #[cfg(feature = "s32x")]
 pub const S32X_EXTENSIONS: [&str; 1] = crate::s32x::EXTENSIONS;
 
@@ -338,7 +342,7 @@ impl Core for Machine {
         #[allow(unused_mut)]
         let mut v = vec![model_setting(), region_setting(), pad_setting(0), pad_setting(1)];
         #[cfg(feature = "mcd")]
-        v.push(ram_cart_setting());
+        v.extend([ram_cart_setting(), beneath_setting()]);
         v
     }
 
@@ -356,7 +360,12 @@ impl Core for Machine {
     /// medium since core ABI 1.8 (EmuSen_SaveMedia.md §7.3).
     #[cfg(feature = "mcd")]
     fn battery_files(system: &str) -> Option<Vec<Battery>> {
-        (system == "mcd").then(|| [SaveMemory::Backup, SaveMemory::Cartridge].map(|k| crate::mcd::frontend::battery(k, save_file(k))).into())
+        match system {
+            "mcd" => Some([SaveMemory::Backup, SaveMemory::Cartridge].map(|k| crate::mcd::frontend::battery(k, save_file(k))).into()),
+            // A cartridge's save RAM, and the backup RAM of a Sega CD beneath it (mode 1).
+            "md" => Some(vec![Battery::game(0, ".srm"), crate::mcd::frontend::battery(SaveMemory::Backup, MODE1_BRAM)]),
+            _ => None,
+        }
     }
 
     fn create(request: &Create<'_>) -> Result<Self, i32> {
@@ -368,7 +377,11 @@ impl Core for Machine {
             detail(&format!("the image is {} bytes; a cartridge's vectors and header take 512", request.image.len()));
             return Err(STATUS_IMAGE_TOO_SHORT);
         }
-        if let Some(f) = request.files.iter().find(|f| f.which > SK_PATCH && f.which < MEDIA_FILE) {
+        #[cfg(feature = "mcd")]
+        let beneath = request.settings.get(BENEATH_KEY) == Some(BENEATH_VALUE);
+        #[cfg(not(feature = "mcd"))]
+        let beneath = false;
+        if let Some(f) = request.files.iter().find(|f| f.which > SK_PATCH && f.which < MEDIA_FILE && !(beneath && f.which == MODE1_BRAM)) {
             detail(&format!("file {} is not one Nephrite names", f.which));
             return Err(status::BAD_FILE);
         }
@@ -384,6 +397,22 @@ impl Core for Machine {
             let file = request.files.iter().find(|f| f.which == mine).or_else(|| request.files.iter().find(|f| (CD_BIOS_U..=CD_BIOS_J).contains(&f.which)));
             file.map_or_else(|| crate::mcd::bios::OPEN_BIOS.to_vec(), |f| f.data.to_vec())
         });
+        #[cfg(feature = "mcd")]
+        let mut m = if beneath && media.system == System::Md {
+            // Mode 1: the market's BIOS where given, any of the three else, Nephrite's own without one.
+            let region = if model.pal { 'E' } else if model.overseas { 'U' } else { 'J' };
+            let mine = cd_bios(region).which;
+            let file = request.files.iter().find(|f| f.which == mine).or_else(|| request.files.iter().find(|f| (CD_BIOS_U..=CD_BIOS_J).contains(&f.which)));
+            let bios = file.map_or_else(|| crate::mcd::bios::OPEN_BIOS.to_vec(), |f| f.data.to_vec());
+            let mut m = Machine::with_cd_beneath(&image, media, model, bios, None);
+            if let Some(f) = request.files.iter().find(|f| f.which == MODE1_BRAM) {
+                m.mcd_mut().expect("the Sega CD beneath").load_save_memory(SaveMemory::Backup, f.data);
+            }
+            m
+        } else {
+            Machine::with_bios(&image, media, model, bios)
+        };
+        #[cfg(not(feature = "mcd"))]
         let mut m = Machine::with_bios(&image, media, model, bios);
         m.apply_pads(&request.settings);
         if let Some(top) = request.files.iter().find(|f| f.which == LOCK_ON) {
@@ -422,6 +451,13 @@ impl Core for Machine {
             patches: (self.media.system == System::Md).then_some((0, 0x3F_FFFF)),
             skip_rendering_state_neutral: true,
             firmware: match self.media.system {
+                #[cfg(feature = "mcd")]
+                System::Md if self.mcd().is_some() => {
+                    let pal = self.hw().model.pal;
+                    let region = if pal { 'E' } else if self.hw().model.overseas { 'U' } else { 'J' };
+                    let (which, source) = named(cd_bios(region).which);
+                    vec![(which, if source == FirmwareSource::Absent { FirmwareSource::Replacement } else { source })]
+                }
                 System::Md if takes_lock_on(&self.media, self.hw().cart.rom.len()) => vec![named(LOCK_ON), named(SK_PATCH)],
                 System::Md => Vec::new(),
                 #[cfg(feature = "mcd")]
@@ -583,6 +619,8 @@ impl Core for Machine {
             (0, None) => Ok((&[], 0)),
             #[cfg(feature = "mcd")]
             (RAM_CART, _) if self.media.system == System::Mcd => Ok((self.mcd().and_then(|m| m.save_memory(SaveMemory::Cartridge)).unwrap_or(&[]), 0)),
+            #[cfg(feature = "mcd")]
+            (MODE1_BRAM, _) if self.media.system == System::Md && self.mcd().is_some() => Ok((self.mcd().and_then(|m| m.save_memory(SaveMemory::Backup)).unwrap_or(&[]), 0)),
             _ => Err(status::BAD_FILE),
         }
     }
@@ -661,6 +699,11 @@ impl Machine {
 
     /// The battery files machine info names: the save RAM's, or the Sega CD's backup RAM and its cartridge's.
     fn batteries(&self) -> Vec<Battery> {
+        #[cfg(feature = "mcd")]
+        if self.media.system == System::Md && self.mcd().is_some() {
+            let srm = self.battery_id().map(|_| Battery::game(0, ".srm"));
+            return srm.into_iter().chain([crate::mcd::frontend::battery(SaveMemory::Backup, MODE1_BRAM)]).collect();
+        }
         #[cfg(feature = "mcd")]
         if let Some(m) = self.mcd() {
             return m.save_memories().into_iter().map(|k| crate::mcd::frontend::battery(k, save_file(k))).collect();
@@ -1149,5 +1192,34 @@ mod tests {
             let (brm, crm) = (b.battery(0).unwrap().0[5], b.battery(RAM_CART).unwrap().0[5]);
             assert_eq!((brm, crm), if apart { (0x33, 0x44) } else { (0x11, 0x22) }, "apart {apart}: the files after the load");
         }
+    }
+
+    /// Mode 1 (Nephrite_OpenBios.md §11): a cartridge with the Sega CD beneath it, by the Create setting; a machine of
+    /// the Genesis's system with the drive, the Sega CD's BIOS named (the open one without the player's), the backup
+    /// RAM file 11 beside the cartridge's file 0, and a state of its own system byte that a plain Genesis refuses.
+    #[cfg(feature = "mcd")]
+    #[test]
+    fn a_cartridge_takes_the_sega_cd_beneath_it_by_its_setting() {
+        let image = cartridge("SEGA GENESIS", "U", None);
+        let brm = vec![0x5Au8; 0x2000];
+        let made = |settings: &[u8], files: Vec<emusen_native::abi::File<'_>>| Machine::create(&Create { image: &image, settings: Settings::parse(settings).unwrap(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None });
+        let mut m = made(b"mcd_beneath=mcd.beneath", vec![emusen_native::abi::File { which: MODE1_BRAM, data: &brm }]).unwrap();
+        assert!(m.mcd().is_some_and(|s| s.mode1()));
+        let info = m.machine_info();
+        assert_eq!(info.system, "md");
+        assert_eq!(info.battery.iter().map(|b| (b.which, b.suffix.as_str())).collect::<Vec<_>>(), [(MODE1_BRAM, ".brm")]);
+        assert_eq!(info.firmware, vec![(CD_BIOS_U, FirmwareSource::Replacement)]);
+        assert_eq!(m.drives().len(), 1);
+        assert_eq!(m.battery(MODE1_BRAM).unwrap().0[0], 0x5A);
+        Machine::advance(&mut m);
+        let mut state = vec![0u8; m.state_size()];
+        let n = m.save_state(&mut state).unwrap();
+        assert_eq!(state[8], 3, "mode 1's system byte");
+        m.load_state(&state[..n]).unwrap();
+        let mut plain = made(b"", vec![]).unwrap();
+        assert!(plain.mcd().is_none());
+        assert_eq!(plain.load_state(&state[..n]), Err(crate::state::StateError::OtherSystem(3)));
+        assert!(made(b"", vec![emusen_native::abi::File { which: MODE1_BRAM, data: &brm }]).is_err(), "file 11 without the Sega CD beneath");
+        assert_eq!(Machine::battery_files("md").unwrap().iter().map(|b| b.which).collect::<Vec<_>>(), [0, MODE1_BRAM]);
     }
 }

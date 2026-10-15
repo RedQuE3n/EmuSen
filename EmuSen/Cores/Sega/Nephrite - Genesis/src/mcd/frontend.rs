@@ -60,6 +60,30 @@ pub(crate) fn bios_firmware(region: char, which: u32) -> Firmware {
     }
 }
 
+/// The setting that puts a Sega CD beneath a cartridge (mode 1), read at create.
+pub(crate) const BENEATH_KEY: &str = "mcd_beneath";
+pub(crate) const BENEATH_VALUE: &str = "mcd.beneath";
+
+pub(crate) fn beneath_setting() -> Setting {
+    Setting {
+        key: BENEATH_KEY.into(),
+        label: "Sega CD beneath the cartridge".into(),
+        help: "For a cartridge made to use the Sega CD from the cartridge slot: whether a Sega CD is attached beneath the console, running the player's Sega CD BIOS where one is given and Nephrite's own otherwise. Its backup RAM is kept in a file of its own. Takes effect when a game is next loaded.".into(),
+        kind: SettingKind::Choice(vec![
+            Choice { value: "none".into(), label: "None".into(), help: None },
+            Choice { value: BENEATH_VALUE.into(), label: "Sega CD".into(), help: None },
+        ]),
+        default: "none".into(),
+        scope: Scope::Create,
+        category: Some("Sega CD".into()),
+        effect: Effect::None,
+        advanced: false,
+        // Not shown while the Sega CD is offered to no player (Nephrite_Native.md §53.2).
+        hidden: true,
+        restart: true,
+    }
+}
+
 /// The setting that plugs a backup RAM cartridge into the cartridge slot, read at create.
 pub(in crate::mcd) const RAM_CART_KEY: &str = "ramcart";
 const RAM_CART_VALUE: &str = "mcd.ramcart";

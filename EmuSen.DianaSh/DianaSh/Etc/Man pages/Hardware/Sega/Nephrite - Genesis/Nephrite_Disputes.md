@@ -1783,3 +1783,15 @@ CPUs' disputes in their own record pages.
   both its reset and its bus. Measured by the game; what a player's BIOS leaves in the Z80 no document says.
 - Pinned by: the discs' runs (`Nephrite_OpenBios.md` §8).
 - Implemented in: stage 10's commit "the discs after the hand-over".
+
+### D-47. Mode 1: the Sega CD's boot ROM at `$400000` reads the H-INT vector at `$400070`-`$400073`, as mode 2's does at `$000070`
+- Opened: 2026-10-15, at stage 10, by mcd-verificator in mode 1: its REG 2006 reads the vector through the boot ROM's
+  `$70` wherever the ROM is mapped, and answered "ERROR: 02" with the override limited to mode 2.
+- Documents read: the Hardware Manual §4-1 (the H-INT vector register, read at `$000070` in mode 2); mcd-verificator's
+  `test_std.c`, `test2006` (the vector read at the boot ROM's `$70`, `0xFFFF1234` expected, in either mode).
+- Test program: mcd-verificator V1.02 as a cartridge with the Sega CD beneath it, the open BIOS at `$400000`.
+- Referee: none.
+- Conclusion: the override is the boot ROM's, so in mode 1 `$400070` reads `$FFFF` and `$400072` the register.
+  Measured by the program, whose author tested it on a console.
+- Pinned by: `mcd_verificator_runs_in_mode_1_on_the_open_bios`.
+- Implemented in: stage 10's commit "mode 1".

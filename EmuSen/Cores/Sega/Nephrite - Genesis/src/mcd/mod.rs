@@ -55,6 +55,9 @@ pub struct MegaCd {
     pub(in crate::mcd) cpu: M68000,
     pub hw: Sub,
     pub(in crate::mcd) disc_print: u64,
+    /// Mode 1: beneath a cartridge, its boot ROM and memories at `$400000` and the cartridge's area left to it (the
+    /// Hardware Manual's "Mega-CD construction"; the Mega-CD BIOS Manual §4-1). A configuration, not state.
+    pub(in crate::mcd) mode1: bool,
 }
 
 /// The gate array's registers, both sides'.
@@ -242,7 +245,29 @@ impl MegaCd {
         hw.cdd.next = hw.clock + SECTOR[0];
         hw.g.res0_at = hw.clock + PERIPHERAL_RESET;
         hw.word.sub_owns = false;
-        MegaCd { cpu: M68000::new(), hw, disc_print }
+        MegaCd { cpu: M68000::new(), hw, disc_print, mode1: false }
+    }
+
+    /// A Sega CD beneath a cartridge, in mode 1.
+    pub(crate) fn beneath(board: Board, bios: Vec<u8>, disc: Option<cdd::Disc>) -> MegaCd {
+        MegaCd { mode1: true, ..MegaCd::new(board, bios, disc) }
+    }
+
+    /// Whether it sits beneath a cartridge (mode 1).
+    pub fn mode1(&self) -> bool {
+        self.mode1
+    }
+
+    /// A main CPU address as the mode 2 map places it, or None where the Sega CD does not decode it: in mode 1 its
+    /// `$400000`-`$7FFFFF` is mode 2's `$000000`-`$3FFFFF`, and the cartridge has the rest.
+    fn place(&self, a: u32) -> Option<u32> {
+        if (0xA1_2000..=0xA1_203F).contains(&a) {
+            Some(a)
+        } else if self.mode1 {
+            (0x40_0000..0x80_0000).contains(&a).then(|| a - 0x40_0000)
+        } else {
+            (a < 0x80_0000).then_some(a)
+        }
     }
 
     /// The sub CPU, for development tools to read.
@@ -323,19 +348,11 @@ impl MegaCd {
     }
 }
 
-/// Whether the Sega CD decodes a main CPU address in mode 2: its boot ROM, PRG-RAM's window and Word RAM below
-/// `$400000`, the cartridge slot to `$7FFFFF`, and its registers.
-fn decodes(a: u32) -> bool {
-    a < 0x80_0000 || (0xA1_2000..=0xA1_203F).contains(&a)
-}
-
 impl Attachment for MegaCd {
     const EXPANSION: bool = true;
 
     fn read8(&mut self, a: u32, at: Master) -> Answer<u8> {
-        if !decodes(a) {
-            return Answer::Pass;
-        }
+        let Some(a) = self.place(a) else { return Answer::Pass };
         // The cartridge slot at `$400000` in mode 2: a backup RAM cartridge, or empty and reading `$FF` (D-32).
         if (0x40_0000..0x80_0000).contains(&a) {
             return Answer::Value(self.hw.cart.as_ref().map_or(0xFF, |c| c.read8(a)));
@@ -344,9 +361,7 @@ impl Attachment for MegaCd {
     }
 
     fn read16(&mut self, a: u32, at: Master) -> Answer<u16> {
-        if !decodes(a) {
-            return Answer::Pass;
-        }
+        let Some(a) = self.place(a) else { return Answer::Pass };
         if (0x40_0000..0x80_0000).contains(&a) {
             return Answer::Value(self.hw.cart.as_ref().map_or(0xFFFF, |c| (c.read8(a) as u16) << 8 | c.read8(a | 1) as u16));
         }
@@ -356,14 +371,13 @@ impl Attachment for MegaCd {
     /// Word RAM answers the VDP a cycle late, so a transfer from it reads the word before the one addressed (the
     /// Mega-CD Hardware Manual's "precautions in using DMA of the VDP").
     fn transfer16(&mut self, a: u32, at: Master) -> Answer<u16> {
-        let a = if (0x20_0000..0x24_0000).contains(&a) { 0x20_0000 | (a.wrapping_sub(2) & 0x3_FFFF) } else { a };
+        let word = if self.mode1 { 0x60_0000 } else { 0x20_0000 };
+        let a = if (word..word + 0x4_0000).contains(&a) { word | (a.wrapping_sub(2) & 0x3_FFFF) } else { a };
         self.read16(a, at)
     }
 
     fn write(&mut self, a: u32, v: u16, mask: u16, at: Master) -> bool {
-        if !decodes(a) {
-            return false;
-        }
+        let Some(a) = self.place(a) else { return false };
         if (0x40_0000..0x80_0000).contains(&a) {
             if let Some(c) = self.hw.cart.as_mut()
                 && mask & 0x00FF != 0

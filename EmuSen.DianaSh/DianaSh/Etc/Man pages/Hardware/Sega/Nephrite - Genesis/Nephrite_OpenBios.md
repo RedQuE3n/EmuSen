@@ -330,6 +330,32 @@ the cartridge's `_mburam` waits for its address.
 Lunar to a message that its save data was destroyed (its search finding nothing a game can read), each the game's
 answer to a directory call that fails. A new machine's RAM stays unformatted until the round trips pass (§5 Q2).
 
+## 11. Mode 1, the system pack's discs, and a conversion's high half (2026-10-15)
+
+- **Mode 1** (the plan's Q4 of `Nephrite_Native.md` §49.6, `Nephrite_Attachments.md` §3.12 and Q8): the Create setting
+  `mcd_beneath` (hidden while the Sega CD is offered to no player, "none" by default) gives a cartridge's machine the
+  Sega CD beneath it: `Genesis<MegaCd>` with the cartridge in its slot, the Sega CD decoding `$400000`-`$7FFFFF` as
+  mode 2's `$000000`-`$3FFFFF` and its registers, and declining the cartridge's area. The boot ROM is the player's
+  BIOS of the console's market where given (files 2-4), Nephrite's own else; machine info names it, as `Replacement`
+  without the player's. The machine stays of the `md` system; the cartridge's save RAM keeps file 0 and the backup RAM
+  is file 11 (`.brm`, kind `console`, medium `mcd.backup`), which core info now lists for `md`. Its state carries a
+  system byte of its own, 3, so that a plain Genesis refuses it and every other state keeps its bytes; this stands in
+  for Q5's "byte of the attachments present", which would have changed every cartridge's state. The drive starts empty;
+  a host puts a disc in it through `MEDIA`. The H-INT vector reads through the boot ROM's `$70` in mode 1 too (D-47).
+- **The system pack** (`GenesisSystems.MegaCd`) claims `.cue` and `.chd` beside `.iso`, as does the core: a sheet is
+  read by its first track, where `SEGADISCSYSTEM` tells a Sega CD's from a PlayStation's (whose pack also takes
+  `.cue`), and a CHD, which neither pack can read by its first bytes, by its folder's name, as routing already does.
+- **Found on the way**: the BCD conversion kept only the low half of a register its caller used for the sector being
+  summed, so every time past 14:33 lost its high half; Sonic CD's title asked for track 26 and the drive played its data
+  track. Shown by the drive's place and the title's silence, fixed, and the title's music then plays.
+
+**Measured (2026-10-15).** mcd-verificator V1.02 as a cartridge with the Sega CD beneath it and the open BIOS at
+`$400000`, the 240p disc in the drive: "CD hardware detected at 0x00400000", and RAM CART ("not present"), COLOR CALC,
+VAR TESTS, IRQ TEST, REG X000, REG X002, REG 2006, REG X00C, REG 8030, CDC REGS, PROG RAM, WORD RAM, WRAM PMOD, CDC INIT,
+CDC FLAGS, CDC DMA2, CDC DMA3 and CDC DMA1 all "OK", "Diagnostics complete." at frame 1,328
+(`mcd_verificator_runs_in_mode_1_on_the_open_bios`). Its mode 2 run is unchanged at eighteen of eighteen. The crate's
+182 tests pass, and those of the builds without each attachment.
+
 ## 9. Reading log (stage 10)
 
 Opened and read: `Nephrite_Plan.md` whole; `Nephrite_Native.md` §49–§52, §53.1–§53.3, §53.5, §54.1, §54.2, §54.3 from

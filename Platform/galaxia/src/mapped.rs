@@ -7,10 +7,26 @@ use std::io;
 use std::path::Path;
 
 /// One file's bytes, mapped. They stay readable and in place until this is dropped; what keeps them unchanged is that
-/// nothing of the program writes a file it has mapped (§3.8), which the system does not enforce everywhere.
+/// nothing of the program writes a file it has mapped (§3.8), which the system enforces on Windows alone.
 pub struct Mapped {
     /// `None` for an empty file, which has nothing to map.
     map: Option<memmap2::Mmap>,
+    /// The file, open for the mapping's life after it, as the C# half holds its stream: on Windows its share mode is
+    /// what refuses another program's writer, rename and deletion.
+    _held: Option<File>,
+}
+
+/// The file opened for reading; on Windows sharing reading alone, as .NET's `FileShare.Read`.
+fn open_shared(path: &Path) -> io::Result<File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_READ: u32 = 1;
+        options.share_mode(FILE_SHARE_READ);
+    }
+    options.open(path)
 }
 
 impl Mapped {
@@ -19,18 +35,18 @@ impl Mapped {
         let path = path.as_ref();
         // A directory is refused as one everywhere: Unix opens it and Windows refuses it as access denied (§3.8).
         let directory = || io::Error::from(io::ErrorKind::IsADirectory);
-        let file = File::open(path).map_err(|error| if path.is_dir() { directory() } else { error })?;
+        let file = open_shared(path).map_err(|error| if path.is_dir() { directory() } else { error })?;
         let meta = file.metadata()?;
         if meta.is_dir() {
             return Err(directory());
         }
         if meta.len() == 0 {
-            return Ok(Mapped { map: None });
+            return Ok(Mapped { map: None, _held: None });
         }
         // SAFETY: the mapping is read-only and private to this value; the file's bytes are the caller's promise not to
         // change, as memmap2 asks: the program never writes a file it maps, and says so of other programs in §3.8.
         let map = unsafe { memmap2::Mmap::map(&file) }?;
-        Ok(Mapped { map: Some(map) })
+        Ok(Mapped { map: Some(map), _held: Some(file) })
     }
 
     pub fn bytes(&self) -> &[u8] {

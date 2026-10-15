@@ -279,11 +279,51 @@ pub fn user_home() -> String {
     std::env::home_dir().map(|h| h.to_string_lossy().into_owned()).unwrap_or_default()
 }
 
-/// .NET's `SpecialFolder.ApplicationData` when the host passes none: `$XDG_CONFIG_HOME` or `~/.config`, `%APPDATA%` on Windows.
+/// .NET's `SpecialFolder.ApplicationData` when the host passes none: `$XDG_CONFIG_HOME` or `~/.config`, and on Windows the known folder the system keeps, not `%APPDATA%`.
 pub fn application_data() -> String {
-    if cfg!(windows) {
-        return std::env::var("APPDATA").unwrap_or_default();
+    #[cfg(windows)]
+    {
+        roaming_application_data()
     }
+    #[cfg(not(windows))]
+    {
+        unix_application_data()
+    }
+}
+
+/// `SHGetKnownFolderPath` for `FOLDERID_RoamingAppData` with `KF_FLAG_DONT_VERIFY`, as .NET asks it; empty where the system has none.
+#[cfg(windows)]
+fn roaming_application_data() -> String {
+    use std::os::windows::ffi::OsStringExt;
+    #[repr(C)]
+    struct Guid(u32, u16, u16, [u8; 8]);
+    const ROAMING_APP_DATA: Guid = Guid(0x3EB685DB, 0x65F9, 0x4CF6, [0xA0, 0x3A, 0xE3, 0xEF, 0x65, 0x72, 0x9F, 0x3D]);
+    const DONT_VERIFY: u32 = 0x4000;
+    #[link(name = "shell32")]
+    unsafe extern "system" {
+        fn SHGetKnownFolderPath(folder: *const Guid, flags: u32, token: *mut std::ffi::c_void, path: *mut *mut u16) -> i32;
+    }
+    #[link(name = "ole32")]
+    unsafe extern "system" {
+        fn CoTaskMemFree(memory: *mut std::ffi::c_void);
+    }
+    let mut path = std::ptr::null_mut();
+    // SAFETY: the folder's id and the out pointer live for the call; what the system allocates is read up to its NUL and freed once, even on failure, as its documentation asks.
+    unsafe {
+        let found = SHGetKnownFolderPath(&ROAMING_APP_DATA, DONT_VERIFY, std::ptr::null_mut(), &mut path);
+        let text = if found >= 0 && !path.is_null() {
+            let length = (0..).take_while(|&i| *path.add(i) != 0).count();
+            std::ffi::OsString::from_wide(std::slice::from_raw_parts(path, length)).to_string_lossy().into_owned()
+        } else {
+            String::new()
+        };
+        CoTaskMemFree(path.cast());
+        text
+    }
+}
+
+#[cfg(not(windows))]
+fn unix_application_data() -> String {
     let home = user_home();
     if cfg!(target_os = "macos") {
         return path::combine_all(Style::HOST, &[&home, "Library", "Application Support"]);

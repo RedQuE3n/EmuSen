@@ -161,7 +161,9 @@ ES-DE's captures instead (`EmuSen_BigPicture.md` §13.8).
 ### 4.5 Faults that stand
 
 `WindowFitAuditTests.Known` lists the faults the rules find in today's Mistress, each with why it stands; the tests
-pass over them and fail on any other, and an entry is removed when its fault is fixed. §6.2 lists them.
+pass over them and fail on any other, and an entry is removed when its fault is fixed. §6.2 lists them. Since 2026-10-15 it is
+empty: every fault §6.2 lists was worked through (§6.3), and a new one fails the tests until it is fixed or entered
+with its reason.
 
 ## 5. Recording, reading and re-recording
 
@@ -221,7 +223,7 @@ rules (§4) read them where they can and skip them where they cannot.
 
 **The rules, against today's Mistress.** The recorded fit rule finds exactly what `FitAudit.Check` finds in every
 recorded sheet (none, as the audit requires) and in every one of `FitAuditTests`' planted faults. The other three rules
-find what §6.2 lists. Nothing else fails.
+found what §6.2 lists; since §6.3 they find nothing.
 
 ### 6.2 Faults the rules found
 

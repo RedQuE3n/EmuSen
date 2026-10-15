@@ -80,6 +80,21 @@ namespace EmuSen.Serenity.Native
         internal static delegate* unmanaged[Cdecl]<nint, int, int, uint, ShownInfo*, nint> ShownNew;
         internal static delegate* unmanaged[Cdecl]<nint, int> ShownFree;
         internal static delegate* unmanaged[Cdecl]<nint, nint, int, int, int, int> ChainPresent;
+        internal static delegate* unmanaged[Cdecl]<nint, LendInfo*, nint> LendNew;
+        internal static delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, int, int, ulong, ulong, int> LendTake;
+        internal static delegate* unmanaged[Cdecl]<nint, int> LendSettle;
+        internal static delegate* unmanaged[Cdecl]<nint, int> LendFree;
+        internal static delegate* unmanaged[Cdecl]<nint, nint, int> ChainAdvanceLent;
+
+        // emusen_serenity_lend_info: what a core is lent, as the core ABI's emusen_device_lend holds it, since interface 11.
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct LendInfo
+        {
+            public uint Size, ApiVersion;
+            public ulong GetInstanceProcAddr, Instance, PhysicalDevice, Device;
+            public uint QueueFamily, QueueIndex, HostQueueFamily, Reserved;
+            public ulong Done;
+        }
 
         // emusen_serenity_shown_info: an exported target's size and its three descriptors, since interface 11.
         [StructLayout(LayoutKind.Sequential)]
@@ -124,7 +139,8 @@ namespace EmuSen.Serenity.Native
             "emusen_serenity_chain_free", "emusen_serenity_chain_parameters", "emusen_serenity_chain_lut", "emusen_serenity_chain_set_parameters", "emusen_serenity_chain_value",
             "emusen_serenity_chain_advance", "emusen_serenity_chain_render", "emusen_serenity_chain_render_lent", "emusen_serenity_lent_release", "emusen_serenity_chain_get",
             "emusen_serenity_parse_format", "emusen_platform_last_error", "emusen_serenity_device_identity", "emusen_serenity_shown_new", "emusen_serenity_shown_free",
-            "emusen_serenity_chain_present",
+            "emusen_serenity_chain_present", "emusen_serenity_lend_new", "emusen_serenity_lend_take", "emusen_serenity_lend_settle", "emusen_serenity_lend_free",
+            "emusen_serenity_chain_advance_lent",
         };
 
         // Null when every export resolved and both libraries were lent; otherwise why the library is not in use.
@@ -182,6 +198,11 @@ namespace EmuSen.Serenity.Native
             ShownNew = (delegate* unmanaged[Cdecl]<nint, int, int, uint, ShownInfo*, nint>)found[next++];
             ShownFree = (delegate* unmanaged[Cdecl]<nint, int>)found[next++];
             ChainPresent = (delegate* unmanaged[Cdecl]<nint, nint, int, int, int, int>)found[next++];
+            LendNew = (delegate* unmanaged[Cdecl]<nint, LendInfo*, nint>)found[next++];
+            LendTake = (delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, int, int, ulong, ulong, int>)found[next++];
+            LendSettle = (delegate* unmanaged[Cdecl]<nint, int>)found[next++];
+            LendFree = (delegate* unmanaged[Cdecl]<nint, int>)found[next++];
+            ChainAdvanceLent = (delegate* unmanaged[Cdecl]<nint, nint, int>)found[next++];
             return Lend();
         }
 

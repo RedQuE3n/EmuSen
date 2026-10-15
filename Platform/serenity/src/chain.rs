@@ -8,6 +8,7 @@
 //! EmuSen_RustPlatform.md §3.3 and §17.
 
 use crate::compiler::Stage;
+use crate::lend::{Lend, Taken};
 use crate::preset::{PassSpec, Preset, ScaleType, TextureSpec, Wrap};
 use crate::reflection::{self, Block, Fault, Reflection};
 use crate::source::{self, Parameter};
@@ -485,6 +486,10 @@ pub struct Chain {
     /// A frame written into the staging buffer whose copy to the device waits for the next render or present's
     /// submission, so that a frame costs one submission (EmuSen_DevicePicture.md §13).
     upload_pending: bool,
+    /// Where the pending frame is on the device, when it is a core's picture taken through a lend rather than pixels in
+    /// the staging buffer; and the last such picture's value (EmuSen_DevicePicture.md §17).
+    from_lend: Option<(Lend, Taken)>,
+    lent_value: u64,
     readbacks: Vec<Arc<Slot>>,
     scratch: Option<Buffer>,
     copied_images: i32,
@@ -545,6 +550,8 @@ impl Chain {
             upload_repeat: 0,
             frame_count: 0,
             upload_pending: false,
+            from_lend: None,
+            lent_value: 0,
             readbacks: Vec::new(),
             scratch: None,
             copied_images: 0,
@@ -619,10 +626,24 @@ impl Chain {
         self.device.phase(point::ADVANCE_BEGIN);
         self.device.settle()?;
         self.flush_upload()?;
+        self.let_go_of_lend();
         let repeat = row_repeat.max(1) as u32;
         let (w, rows) = (width as u32, height as u32);
-        let h = rows.wrapping_mul(repeat);
         let bytes = w.wrapping_mul(rows).wrapping_mul(4);
+        self.shape(w, rows, repeat)?;
+        self.head = (self.head + self.history.len() - 1) % self.history.len();
+        let picture = usize::try_from(bytes as i32).ok().and_then(|length| rgba.get(..length)).ok_or(Unfed::Short)?;
+        let (Some(_), Some(staging)) = (&self.history[self.head], &self.staging) else { return Err(Unfed::Device("The chain has no frame to write.".to_string())) };
+        self.device.write_staging(staging, picture);
+        (self.upload_pending, self.from_lend) = (true, None);
+        self.frame_count = self.frame_count.wrapping_add(1);
+        self.device.phase(point::ADVANCE_END);
+        Ok(())
+    }
+
+    /// The history and the staging made for a frame of this size, when it differs from the last.
+    fn shape(&mut self, w: u32, rows: u32, repeat: u32) -> Result<(), String> {
+        let h = rows.wrapping_mul(repeat);
         if w != self.original_width || h != self.original_height || rows != self.upload_rows || repeat != self.upload_repeat {
             self.device.wait_idle();
             for i in 0..self.history.len() {
@@ -630,24 +651,55 @@ impl Chain {
                 self.history[i] = Some(cleared(&self.device, w, h, UNORM, self.passes[0].spec.mipmap_input)?);
             }
             self.staging = None;
-            self.staging = Some(self.device.create_buffer(bytes as u64, vk::BufferUsageFlags::TRANSFER_SRC)?);
+            self.staging = Some(self.device.create_buffer(w.wrapping_mul(rows).wrapping_mul(4) as u64, vk::BufferUsageFlags::TRANSFER_SRC)?);
             self.rows = None;
             self.rows = if repeat > 1 { Some(self.device.create_image(w, rows, UNORM, false)?) } else { None };
             (self.original_width, self.original_height, self.upload_rows, self.upload_repeat) = (w, h, rows, repeat);
         }
+        Ok(())
+    }
+
+    /// The newest picture a core handed through `lend` joins the history, read on the device by the next render or
+    /// present, which waits for its copy: false when there is none newer than the last (EmuSen_DevicePicture.md §17).
+    pub fn advance_lent(&mut self, lend: &Lend) -> Result<bool, String> {
+        self.device.phase(point::ADVANCE_BEGIN);
+        self.device.settle()?;
+        self.flush_upload()?;
+        // The last submission has been waited for, so the copy it read may be written again.
+        self.let_go_of_lend();
+        let after = if self.from_lend.as_ref().is_some_and(|(held, _)| held.same(lend)) { self.lent_value } else { 0 };
+        let Some(taken) = lend.claim(after) else { return Ok(false) };
+        self.shape(taken.width, taken.height, 1)?;
         self.head = (self.head + self.history.len() - 1) % self.history.len();
-        let picture = usize::try_from(bytes as i32).ok().and_then(|length| rgba.get(..length)).ok_or(Unfed::Short)?;
-        let (Some(_), Some(staging)) = (&self.history[self.head], &self.staging) else { return Err(Unfed::Device("The chain has no frame to write.".to_string())) };
-        self.device.write_staging(staging, picture);
-        self.upload_pending = true;
+        (self.upload_pending, self.lent_value) = (true, taken.value);
+        self.from_lend = Some((lend.clone(), taken));
         self.frame_count = self.frame_count.wrapping_add(1);
         self.device.phase(point::ADVANCE_END);
-        Ok(())
+        Ok(true)
+    }
+
+    /// The lend's copy given back once nothing of this chain reads it, keeping which lend and value it was.
+    fn let_go_of_lend(&mut self) {
+        if let Some((lend, _)) = &self.from_lend {
+            lend.release();
+        }
+    }
+
+    /// The timeline wait of the frame pending, when it is a lent picture's copy.
+    fn upload_wait(&self, upload: bool) -> Option<(vk::Semaphore, u64)> {
+        if !upload {
+            return None;
+        }
+        self.from_lend.as_ref().map(|(_, taken)| (taken.semaphore, taken.value))
     }
 
     /// The frame's upload recorded into a submission that is about to run its passes, when `upload` says one waits.
     fn record_pending_upload(&self, commands: vk::CommandBuffer, upload: bool) {
         if !upload {
+            return;
+        }
+        if let (Some(image), Some((_, taken))) = (&self.history[self.head], &self.from_lend) {
+            self.device.record_copy_in(commands, image, taken.buffer, taken.row_pixels);
             return;
         }
         let (Some(image), Some(staging)) = (&self.history[self.head], &self.staging) else { return };
@@ -663,7 +715,8 @@ impl Chain {
             return Ok(());
         }
         self.upload_pending = false;
-        self.device.run(|commands| self.record_pending_upload(commands, true))
+        let wait = self.upload_wait(true);
+        self.device.run_after(|commands| self.record_pending_upload(commands, true), wait)
     }
 
     fn original_at(&self, back: usize) -> &Image {
@@ -766,6 +819,7 @@ impl Chain {
         }
         self.device.phase(point::BOUND);
         let upload = std::mem::take(&mut self.upload_pending);
+        let wait = self.upload_wait(upload);
         let device = &self.device;
         device.run_unwaited(
             |commands| {
@@ -787,6 +841,7 @@ impl Chain {
             },
             wait_free.then_some(target.free),
             target.ready,
+            wait,
         )?;
         self.device.phase(point::RAN);
         for pass in &mut self.passes {
@@ -841,8 +896,9 @@ impl Chain {
         self.device.phase(point::BOUND);
 
         let upload = std::mem::take(&mut self.upload_pending);
+        let wait = self.upload_wait(upload);
         let device = &self.device;
-        device.run(|commands| {
+        device.run_after(|commands| {
             self.record_pending_upload(commands, upload);
             for i in 0..count {
                 self.draw(commands, i);
@@ -856,7 +912,7 @@ impl Chain {
             unsafe { device.vk().cmd_copy_image_to_buffer(commands, last.image.handle, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, readback.handle, &region) };
             device.host_read_barrier(commands, readback);
             device.transition(commands, &last.image, READ, 0, None, None);
-        })?;
+        }, wait)?;
 
         self.device.phase(point::RAN);
         for pass in &mut self.passes {

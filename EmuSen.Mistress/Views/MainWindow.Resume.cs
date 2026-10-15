@@ -58,11 +58,16 @@ namespace EmuSen.Mistress.Views
         {
             if (EarlyLoader is not { } load || LaunchScreen.DurationOf(_appSettings.BigPictureInterface.LaunchScreenDuration) <= TimeSpan.Zero || path == _currentRomPath) return null;
             string? engine = EngineChosenFor(path);
-            return EmuSen.Cores.CoreFactory.RunsOnV1Engine(path, engine) ? Task.Run(() => load(path, engine)) : null;
+            if (!EmuSen.Cores.CoreFactory.RunsOnV1Engine(path, engine)) return null;
+            // The default load is lent the device the picture is presented on; a test's own loader is run as it is given.
+            Func<EmuSen.Serenity.Slang.SlangLend?> lender = GameFrame.TryLend;
+            return ReferenceEquals(load, DefaultEarlyLoader) ? Task.Run(() => EmuSen.Cores.CoreFactory.Loaded(path, headless: true, engine, lender)) : Task.Run(() => load(path, engine));
         }
 
         // What loads a game's core under the launch screen; a test gives one it can hold back, or none where its clock is stepped.
-        internal Func<string, string?, EmuSen.Cores.ICore>? EarlyLoader { get; set; } = (path, engine) => EmuSen.Cores.CoreFactory.Loaded(path, headless: true, engine);
+        internal Func<string, string?, EmuSen.Cores.ICore>? EarlyLoader { get; set; } = DefaultEarlyLoader;
+
+        private static readonly Func<string, string?, EmuSen.Cores.ICore> DefaultEarlyLoader = (path, engine) => EmuSen.Cores.CoreFactory.Loaded(path, headless: true, engine);
 
         private string ResumeStatePath(string romPath) => SaveLibrary.ResumeStatePathFor(romPath, _appSettings.StateDirectory);
 

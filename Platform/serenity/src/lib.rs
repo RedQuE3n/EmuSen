@@ -9,6 +9,7 @@ pub mod cache;
 pub mod chain;
 pub mod compiler;
 pub mod format;
+pub mod lend;
 pub mod parameters;
 pub mod preset;
 pub mod reflection;

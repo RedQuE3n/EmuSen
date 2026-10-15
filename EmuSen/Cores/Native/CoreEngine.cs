@@ -13,7 +13,7 @@ namespace EmuSen.Cores.Native
 {
     // The one engine class over any core ABI v1 library: every optional interface of the engine SPI, answered neutrally where the core lacks the capability; a port's shim subclasses it - see EmuSen_CoreAPI.md §13.2, §19, §26.
     public class CoreEngine : ICore, ICheatRegistryHost, IStateFormat, IFrameBufferPool, IFrameProfiler, IEngineFeatures, ISnapshotCore, IFrameSerial,
-        IRepeatedRows, ICoreSettings, ICoprocessorHalt, IDisposable
+        IRepeatedRows, ICoreSettings, ICoprocessorHalt, IDevicePicture, IDisposable
     {
         private CoreMachine? _machine;
         private byte[] _frame = Array.Empty<byte>();
@@ -302,7 +302,8 @@ namespace EmuSen.Cores.Native
             var files = new List<(uint, byte[])>(firmware);
             foreach (var (which, save) in saves)
                 if (save.Read() is { } saved) files.Add((which, saved));
-            return new CoreMachine(Library, Held(disc.Image), MediaOf(disc), SettingsText(createScope: true), files, Lends ? disc : null, sharedRemovable: placement.RemovableApart, sharedConsole: placement.ConsoleApart);
+            var lend = Library.Has(CoreInterface.CapDevicePicture) ? DeviceLender?.Invoke() : null;
+            return new CoreMachine(Library, Held(disc.Image), MediaOf(disc), SettingsText(createScope: true), files, Lends ? disc : null, sharedRemovable: placement.RemovableApart, sharedConsole: placement.ConsoleApart, device: lend);
         }
 
         // Every value as key=value lines: create-time and run-time keys at create, run-time keys only after it.
@@ -368,6 +369,8 @@ namespace EmuSen.Cores.Native
             }
             EndFrame(m);
             if (!_skipRendering && Library.Has(CoreInterface.CapPresent)) m.Present();
+            // A frame not drawn is not asked for, so the core is bound to nothing for it - see EmuSen_CoreAPI.md §6.29.
+            PictureOnDevice = !_skipRendering && m.TakeDeviceFrame();
             _lastFrameMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
             Drain();
             if (TotalFrames % 60 == 0) KeepLog(m.DrainLog());
@@ -454,6 +457,12 @@ namespace EmuSen.Cores.Native
         }
 
         public void ReturnFrameBuffer(byte[] buffer) => _lending.Return(buffer);
+
+        public Func<EmuSen.Serenity.Slang.SlangLend?>? DeviceLender { get; set; }
+
+        public EmuSen.Serenity.Slang.SlangLend? Lend => _machine?.Lend;
+
+        public bool PictureOnDevice { get; private set; }
 
         public FrameBufferLending FrameBuffers => _lending;
 

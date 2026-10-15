@@ -15,9 +15,11 @@ namespace EmuSen.Serenity
     public sealed class GameFrameControl : Control
     {
         // One offered picture, its rows' repeat (§2.7) and who can still read its array - see EmuSen_Serenity.md §2.8.
-        internal sealed class Offer(byte[] rgba, int width, int height, int rowRepeat, long version, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, byte[]? raw = null)
+        internal sealed class Offer(byte[] rgba, int width, int height, int rowRepeat, long version, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, byte[]? raw = null, Slang.SlangLend? lend = null)
         {
             public readonly byte[] Rgba = rgba;
+            // A core's picture on the device, taken through this lend, in place of the pixels - see EmuSen_DevicePicture.md §17.
+            public readonly Slang.SlangLend? Lend = lend;
             public readonly double Aspect = aspect;
             public readonly int Lines = lines;
             public readonly byte[]? Raw = raw;
@@ -257,13 +259,14 @@ namespace EmuSen.Serenity
         // aspect is the screen's width over height as the core reports it, 0 for none - see EmuSen_Serenity.md §2.9.
         // lines is the console's own count in a frame drawn at a multiple of its picture, 0 for the frame's rows - see EmuSen_CRT.md §16.
         // raw is the frame before the console's palette, where its core keeps one, for a filter that models the console's own signal - see EmuSen_CRT.md §22.
-        public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null, long sequence = 0, double aspect = 0, int lines = 0, byte[]? raw = null)
+        // lend is a core's picture on the device in place of rgba, which the device path alone draws - see EmuSen_DevicePicture.md §17.
+        public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null, long sequence = 0, double aspect = 0, int lines = 0, byte[]? raw = null, Slang.SlangLend? lend = null)
         {
             if (RenderFps > 0 && GraphicsSettings.SyncToDisplay) HoldRenderRate();
             lock (_offerLock)
             {
                 Offer? previous = _current;
-                _current = new Offer(rgba, width, height, Math.Max(1, rowRepeat), ++_version, release, sequence, aspect, lines, raw);
+                _current = new Offer(rgba, width, height, Math.Max(1, rowRepeat), ++_version, release, sequence, aspect, lines, raw, lend);
                 if (previous is not null)
                 {
                     previous.Superseded = true;
@@ -415,6 +418,20 @@ namespace EmuSen.Serenity
 
         public DevicePresenter? Presenter => _presenter;
 
+        // The device the picture is presented on, lent to a core so that its pictures reach the chain there; null while the picture is not presented on the device - see EmuSen_DevicePicture.md §17.
+        public Slang.SlangLend? TryLend()
+        {
+            DevicePresenter? presenter;
+            lock (_cacheLock) presenter = _presenter;
+            if (presenter is null || !DevicePictureAllowed || !DeviceLendAllowed) return null;
+            Slang.SlangLend? lend = Slang.SlangLend.TryCreate(presenter.Device, out string? problem);
+            if (lend is null) DevicePictureReport?.Invoke($"No device is lent to the core: {problem}");
+            return lend;
+        }
+
+        // EMUSEN_DEVICE_LEND=0 lends no core the device, its pictures then read back as before - see EmuSen_DevicePicture.md §17.
+        public static bool DeviceLendAllowed { get; set; } = Environment.GetEnvironmentVariable("EMUSEN_DEVICE_LEND") != "0";
+
         // Waits for the presenter's start, for a probe that must not see the Skia picture first.
         internal System.Threading.Tasks.Task PresenterStarted => _presenterStart ?? System.Threading.Tasks.Task.CompletedTask;
 
@@ -513,7 +530,8 @@ namespace EmuSen.Serenity
 
             bool newFrame = offer.Version != _deviceVersion;
             int repeat = filter is { RowsOnce: false } ? offer.RowRepeat : 1;
-            if (!runner.Present(presenter, offer.Rgba, offer.Width, offer.Height, repeat, newFrame, (int)Math.Round(snapped.Width * scaling), (int)Math.Round(snapped.Height * scaling), offer.Raw)) return false;
+            if (offer.Lend is { } lend && !ReferenceEquals(lend.Owner, presenter.Device)) return false;
+            if (!runner.Present(presenter, offer.Rgba, offer.Width, offer.Height, repeat, newFrame, (int)Math.Round(snapped.Width * scaling), (int)Math.Round(snapped.Height * scaling), offer.Raw, offer.Lend)) return false;
             _deviceVersion = offer.Version;
             presenter.Place(snapped, cropsItself ? null : shown);
             presenter.Visible = true;
@@ -612,7 +630,8 @@ namespace EmuSen.Serenity
         {
             Offer? offer = TakeReader(null);
             if (offer is null) return null;
-            if (offer.Width > 0 && offer.Height > 0) return new DrawOp(new Rect(size), this, offer, ActiveEffect);
+            // A picture on the device has no pixels here: the device path draws it or nothing does.
+            if (offer.Width > 0 && offer.Height > 0 && offer.Lend is null) return new DrawOp(new Rect(size), this, offer, ActiveEffect);
             PutReader(offer);
             return null;
         }

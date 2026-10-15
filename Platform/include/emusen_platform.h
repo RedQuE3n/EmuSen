@@ -911,6 +911,35 @@ emusen_serenity_shown *emusen_serenity_shown_new(const emusen_serenity_device *d
 int32_t emusen_serenity_shown_free(emusen_serenity_shown *shown);
 
 /*
+ * The device lent to a core through the core ABI (EmuSen_CoreAPI.md, section 6.29; EmuSen_DevicePicture.md, section
+ * 17): `out` is filled as the core ABI's emusen_device_lend is, the loader's vkGetInstanceProcAddr as an integer, a
+ * queue the core alone submits to, the family of the host's intake queue and the lend's own timeline `done`; `size`
+ * is set by the caller. Null when the device has no timeline semaphores or too few queues. One lend for each core
+ * machine, freed after the machine. Since interface 11.
+ */
+typedef struct emusen_serenity_lend emusen_serenity_lend;
+
+typedef struct {
+    uint32_t size;
+    uint32_t api_version;
+    uint64_t get_instance_proc_addr;
+    uint64_t instance, physical_device, device;
+    uint32_t queue_family, queue_index, host_queue_family, reserved;
+    uint64_t done;
+} emusen_serenity_lend_info;
+
+emusen_serenity_lend *emusen_serenity_lend_new(const emusen_serenity_device *device, emusen_serenity_lend_info *out);
+
+/* The core's picture as emusen_core_frame_device answered it, copied on the intake queue once `ready` reaches
+ * `value`, `done` then signalled with it: 1 when taken, 0 for a value not newer than the last, a status otherwise.
+ * Called on the thread that runs the machine. */
+int32_t emusen_serenity_lend_take(const emusen_serenity_lend *lend, uint64_t buffer, uint64_t offset, int32_t width, int32_t height, int32_t stride, uint64_t ready, uint64_t value);
+
+/* Waits for every copy taken, so that nothing of the core's is read; called before the machine is freed. */
+int32_t emusen_serenity_lend_settle(const emusen_serenity_lend *lend);
+int32_t emusen_serenity_lend_free(emusen_serenity_lend *lend);
+
+/*
  * A bench's probe (EmuSen_Serenity.md, section 8.1). While it is on, each phase of a chain's calls and each
  * submission's timestamps wait to be taken, in order, a submission's device marks before its WAITED. A phase's
  * value is nanoseconds since the call that turned the probe on returned; a device mark's is nanoseconds since its
@@ -996,6 +1025,10 @@ int32_t emusen_serenity_chain_render_lent(const emusen_serenity_chain *chain, in
  * interface 11.
  */
 int32_t emusen_serenity_chain_present(const emusen_serenity_chain *chain, const emusen_serenity_shown *shown, int32_t width, int32_t height, int32_t wait_free);
+
+/* The newest picture taken through `lend` as the chain's new frame, read on the device by its next render or present:
+ * 1 when there was one newer than the last, 0 when not, a status otherwise. Since interface 11. */
+int32_t emusen_serenity_chain_advance_lent(const emusen_serenity_chain *chain, const emusen_serenity_lend *lend);
 int32_t emusen_serenity_lent_release(uint64_t slot);
 
 #define EMUSEN_SERENITY_CHAIN_COPIED_IMAGES 0u /* pictures that were copies because every lendable readback was held */

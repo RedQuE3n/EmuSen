@@ -14,6 +14,7 @@ use emusen_serenity::cache;
 use emusen_serenity::chain::{self, Chain, Failure, Unfed};
 use emusen_serenity::compiler::Stage;
 use emusen_serenity::format;
+use emusen_serenity::lend::Lend;
 use emusen_serenity::preset::{PassSpec, Preset, ScaleType, TextureSpec, Wrap};
 use emusen_serenity::vulkan::{Device, Findings, Mark, Shown};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -198,6 +199,90 @@ pub unsafe extern "C" fn emusen_serenity_shown_new(d: *const DeviceHandle, width
 /// `h` from `emusen_serenity_shown_new`, not freed, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_shown_free(h: *mut ShownHandle) -> i32 {
+    if !h.is_null() {
+        drop(unsafe { Box::from_raw(h) });
+    }
+    0
+}
+
+/// `emusen_serenity_lend_info`: what a core is lent, as the core ABI's `emusen_device_lend` holds it.
+#[repr(C)]
+pub struct LendInfo {
+    pub size: u32,
+    pub api_version: u32,
+    pub get_instance_proc_addr: u64,
+    pub instance: u64,
+    pub physical_device: u64,
+    pub device: u64,
+    pub queue_family: u32,
+    pub queue_index: u32,
+    pub host_queue_family: u32,
+    pub reserved: u32,
+    pub done: u64,
+}
+
+pub struct LendHandle {
+    lend: Lend,
+}
+
+/// The device lent to one core machine, `out` filled with what the core is given; null when the device cannot lend,
+/// with the words why.
+///
+/// # Safety
+/// `d` live; `out` valid, with its size set.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_serenity_lend_new(d: *const DeviceHandle, out: *mut LendInfo) -> *mut LendHandle {
+    let made = (|| {
+        let device = unsafe { device(d) }?;
+        let out = unsafe { out.as_mut() }.ok_or_else(|| fail(status::NULL, "nowhere to put the lend"))?;
+        if (out.size as usize) < std::mem::size_of::<LendInfo>() {
+            return Err(fail(status::BAD_ARGUMENT, "the lend's struct is too small"));
+        }
+        let lend = Lend::new(&device).map_err(|words| fail(status::DEVICE, words))?;
+        let l = lend.lent();
+        (out.api_version, out.get_instance_proc_addr, out.instance, out.physical_device, out.device) = (l.api, l.get_instance_proc_addr as u64, l.instance, l.physical, l.device);
+        (out.queue_family, out.queue_index, out.host_queue_family, out.reserved, out.done) = (l.family, l.queue, l.host_family, 0, l.done);
+        Ok(LendHandle { lend })
+    })();
+    match made {
+        Ok(handle) => Box::into_raw(Box::new(handle)),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// The core's picture taken: 1, 0 for one not newer than the last, or a status.
+///
+/// # Safety
+/// `h` live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_serenity_lend_take(h: *const LendHandle, buffer: u64, offset: u64, width: i32, height: i32, stride: i32, ready: u64, value: u64) -> i32 {
+    let Some(handle) = (unsafe { h.as_ref() }) else { return fail(status::NULL, "no lend") };
+    if width < 1 || height < 1 || stride < 1 {
+        return fail(status::BAD_ARGUMENT, "a picture is at least one by one");
+    }
+    match handle.lend.take(buffer, offset, width as u32, height as u32, stride as u32, ready, value) {
+        Ok(taken) => taken as i32,
+        Err(words) => fail(status::DEVICE, words),
+    }
+}
+
+/// Waits for every copy taken.
+///
+/// # Safety
+/// `h` live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_serenity_lend_settle(h: *const LendHandle) -> i32 {
+    let Some(handle) = (unsafe { h.as_ref() }) else { return fail(status::NULL, "no lend") };
+    match handle.lend.settle() {
+        Ok(()) => 0,
+        Err(words) => fail(status::DEVICE, words),
+    }
+}
+
+/// # Safety
+/// `h` from `emusen_serenity_lend_new`, not freed, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_serenity_lend_free(h: *mut LendHandle) -> i32 {
     if !h.is_null() {
         drop(unsafe { Box::from_raw(h) });
     }
@@ -524,6 +609,20 @@ pub unsafe extern "C" fn emusen_serenity_chain_present(h: *const ChainHandle, ta
     let Some(target) = (unsafe { target.as_ref() }) else { return fail(status::NULL, "no target") };
     match chain.present(&target.shown, width, height, wait_free != 0) {
         Ok(()) => 0,
+        Err(words) => fail(status::DEVICE, words),
+    }
+}
+
+/// The newest picture taken through `lend` as the chain's new frame: 1, 0 when there is none newer, or a status.
+///
+/// # Safety
+/// `h` and `lend` live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_serenity_chain_advance_lent(h: *const ChainHandle, lend: *const LendHandle) -> i32 {
+    let mut chain = chain!(h);
+    let Some(lend) = (unsafe { lend.as_ref() }) else { return fail(status::NULL, "no lend") };
+    match chain.advance_lent(&lend.lend) {
+        Ok(advanced) => advanced as i32,
         Err(words) => fail(status::DEVICE, words),
     }
 }

@@ -25,7 +25,7 @@ pub const PRECISE_GEOMETRY: Enhancement = Enhancement {
     key: PRECISION_KEY,
     label: "Precise geometry",
     help: "Draws the picture on the graphics card with each 3D corner where the game's geometry puts it, between the pixels, and textures in perspective, so that polygons stop wobbling and textures stop bending as they move. The game itself runs exactly as on a console; only the picture shown is drawn otherwise.",
-    cost: "Needs a Vulkan graphics card, and takes some of its time and about half a millisecond of the processor's each frame; the picture is shown a frame later, and just after a save state is loaded it takes a moment to regain its detail. Corners a game moves itself, as in most 2D menus and overlays, stay on whole pixels, and an outline's top and left edges stay on the console's line.",
+    cost: "Needs a Vulkan graphics card, and takes some of its time and about half a millisecond of the processor's each frame; the picture is shown a frame later unless the frontend presents it on the same card, and just after a save state is loaded it takes a moment to regain its detail. Corners a game moves itself, as in most 2D menus and overlays, stay on whole pixels, and an outline's top and left edges stay on the console's line.",
     values: Values::Switch,
 };
 
@@ -34,7 +34,7 @@ pub const INTERNAL_RESOLUTION: Enhancement = Enhancement {
     key: RESOLUTION_KEY,
     label: "Internal resolution",
     help: "Draws the picture on the graphics card at a multiple of the console's resolution, so that 3D edges and textures are finer on a large screen; sprites, text and 2D backgrounds stay on the console's pixels, enlarged. The game itself runs exactly as on a console.",
-    cost: "Needs a Vulkan graphics card; each step costs its square in the card's work and memory (2x is four times the drawing, 4x sixteen), the picture is shown a frame later, and just after a save state is loaded it takes a moment to regain its detail. A CRT filter draws the enlarged picture's lines rather than the console's, and effects a game makes by reading the screen back through the processor stay at the console's resolution.",
+    cost: "Needs a Vulkan graphics card; each step costs its square in the card's work and memory (2x is four times the drawing, 4x sixteen), the picture is shown a frame later unless the frontend presents it on the same card, and just after a save state is loaded it takes a moment to regain its detail. A CRT filter draws the enlarged picture's lines rather than the console's, and effects a game makes by reading the screen back through the processor stay at the console's resolution.",
     values: Values::Choice(&[("1", "1x (the console's)"), ("2", "2x"), ("3", "3x"), ("4", "4x")]),
 };
 
@@ -43,7 +43,7 @@ pub const TRUE_COLOUR: Enhancement = Enhancement {
     key: COLOUR_KEY,
     label: "True colour",
     help: "Draws shading, lighting and see-through effects with eight bits a colour where the console keeps five, and without the console's dither, so that gradients, fog and shadows are smooth instead of grainy.",
-    cost: "Needs a Vulkan graphics card and a little more of its time and memory; the picture is shown a frame later, and just after a save state is loaded smooth fog and glows can take a few seconds to settle. Games whose art relies on the console's dither, such as a grainy sky or fog, look smoother than they were made to.",
+    cost: "Needs a Vulkan graphics card and a little more of its time and memory; the picture is shown a frame later unless the frontend presents it on the same card, and just after a save state is loaded smooth fog and glows can take a few seconds to settle. Games whose art relies on the console's dither, such as a grainy sky or fog, look smoother than they were made to.",
     values: Values::Switch,
 };
 
@@ -52,7 +52,7 @@ pub const TEXTURE_FILTERING: Enhancement = Enhancement {
     key: FILTERING_KEY,
     label: "Texture filtering",
     help: "Smooths textures between their texels instead of showing each as a block: on 3D surfaces alone, leaving sprites, text and menus sharp, or on everything. Cut-out shapes keep the console's edges.",
-    cost: "Needs a Vulkan graphics card and a little of its time; the picture is shown a frame later. Pixel art on 3D surfaces softens; with Everything, sprites and text blur once the internal resolution is above 1x; where a game packs its textures tightly an edge can show a trace of its neighbour.",
+    cost: "Needs a Vulkan graphics card and a little of its time; the picture is shown a frame later unless the frontend presents it on the same card. Pixel art on 3D surfaces softens; with Everything, sprites and text blur once the internal resolution is above 1x; where a game packs its textures tightly an edge can show a trace of its neighbour.",
     values: Values::Choice(&[("off", "Off (the console's)"), ("3d", "3D polygons"), ("all", "Everything")]),
 };
 

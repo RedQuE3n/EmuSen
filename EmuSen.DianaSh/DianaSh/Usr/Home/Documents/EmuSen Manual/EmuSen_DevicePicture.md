@@ -740,10 +740,9 @@ destroyed under a pending submission), was found by the validation layer and fix
   "from a frame's emulation to its picture's presentation" [M, the same run].
 - **A mutant** of `PictureOut` with no wait for `done` fails C20 alone [M].
 
-### 16.3 What is not built: the reference host's lend
+### 16.3 The reference host's lend, as it was planned
 
-The reference host reads 1.9 and lends nothing, so in Mistress Diamond's picture is still the frame before, read back
-and uploaded, until the host lends. What the host needs, in order, each its own step:
+*Built the same day: §17 is the record.* The plan, as written before it was built:
 
 1. **The device grows** (§2's table): Vulkan 1.2 where offered, `timelineSemaphore` enabled, a second queue (on the
    RX 6800 one of the four in the compute family, §1.3) and a timeline `done`; the platform library's interface
@@ -766,3 +765,73 @@ and uploaded, until the host lends. What the host needs, in order, each its own 
 
 Each is the host's and changes no surface of §5.
 
+## 17. Step (f): the reference host lends its device, as built (2026-10-15)
+
+### 17.1 What was built
+
+The plan of §16.3, in its order:
+
+1. **The device grows** (`Platform/serenity/src/vulkan.rs`): the instance is made at Vulkan 1.2 where the loader offers
+   it; the device enables `timelineSemaphore` where the card does, and asks for two more queues where the card has
+   them (`lend_queues`): the core's, in a compute family of its own, and the host's intake queue beside it or on the
+   graphics family; the host's graphics queue is never lent. On the RX 6800 the core is lent queue 0 of the compute
+   family and the intake is its queue 1.
+2. **The lend and the intake** (`lend.rs`): one lend for each core machine, its own timeline `done` (a new machine's
+   values start again at 1, so `done` cannot be shared between machines) and a second timeline `taken`; a ring of
+   three device buffers. `take`, on the emulation thread, picks a buffer that is neither the newest nor the one a
+   chain has claimed, copies the core's picture into it on the intake queue after waiting for `ready`, and signals
+   `done` with the picture's value and `taken` with the ring's count; a value not newer than the last is ignored. The
+   core is thereby let go of at the device's pace whatever the window does, and §5.3's rule ("in order") is kept by
+   one thread.
+3. **The chain's intake** (`chain.rs`): `advance_lent` waits for the chain's last submission, lets go of the buffer it
+   claimed, claims the newest and records its copy into the history image in the submission that runs the passes,
+   which waits on the device for `taken`; with nothing newer, the frame is unchanged.
+4. **The C# path**: `SlangLend`; `CoreMachine` takes a lend at create (only for a core that claims the bit), settles
+   its copies before the machine is freed and lets go of it after, and `TakeDeviceFrame` asks `frame_device` after
+   `advance` and `present` on a frame that is drawn; `CoreEngine` implements `IDevicePicture` (`DeviceLender`, `Lend`,
+   `PictureOnDevice`); `CoreFactory.Loaded` and `EmulatorSession` pass the lender; `GameFrameControl.TryLend` lends the
+   presenter's device; `FrameHandOff` and `GameFrameControl.UpdateFrame` carry a lend in place of pixels, which only
+   the device path draws; Mistress lends at load (and in the launch screen's early load) and offers the picture on the
+   device when the core says it is there and the window presents on the device, reading pixels back only for a
+   rewind's picture. `EMUSEN_DEVICE_LEND=0` lends nothing.
+5. **The setting's cost** in Diamond's four hints now reads "a frame later unless the frontend presents it on the
+   same card".
+
+### 17.2 What was shown
+
+- **On the device, the frame it is drawn** [M, `DevicePictureLendTests`, the RX 6800, with and without the validation
+  layer]: two Diamond machines through `CoreFactory`, one lent the slang device; with "Internal resolution" at 2x from
+  frame 3, every picture the lent machine hands is taken, read by a chain on the device, and equals its own
+  `frame_copy`, byte for byte, 11 of 11; each equals the lendless machine's picture a frame later; before the renderer
+  is on the two are the same picture at the same frame. The layer, with synchronisation validation, said nothing.
+- **In a real window** [M, the nested KWin of §13.3, a probe of its own, `GameFrameControl` with the plain picture and
+  with CRT (Lottes), the lent machine at 2x]: 300 of 300 pictures offered on the device shown; the compositor's
+  picture of a frame taken on the device equals the compositor's picture of the same frame offered as pixels, **0
+  channels differing** at 1,280 × 960, for both; under the validation layer with synchronisation validation and its
+  heuristic, **0 findings** over each run.
+- **A positive control**: the intake's wait for the core's `ready` removed, the same window run gave 181
+  `SYNC-HAZARD-READ-RACING-WRITE` findings and its picture differed in 447,423 channels; the lend's code was then
+  restored, byte for byte.
+- **The emulation side's cost** [M, the same probe, 300 frames, load 1 to 4]: the machine's frame, its picture's
+  hand-over and the offer took **0.79 to 0.89 ms** lent against **1.33 to 1.57 ms** for the lendless machine with its
+  readback and copy of 640 × 480 pixels, a saving of 0.5 to 0.7 ms a frame on the emulation thread; the UI thread's
+  present was unchanged (0.17 to 0.22 ms).
+
+- **A defect found on the way**: `SlangVulkan.TryCreate` with the library chosen explicitly (as tests choose it)
+  called the library's first export before the library was attached when nothing in the process had attached it yet,
+  a null function pointer; the test host crashed (exit 139) whenever such a test ran first. It now attaches first and
+  refuses with the library's report when it cannot.
+
+### 17.3 The latency, in frames
+
+From a frame's emulation to its picture's presentation, Diamond's enhanced picture was **one frame** later than the
+console's own picture path (§38.1 there); lent the device, it is **none**: the picture handed after `advance` N is
+frame N's (C20 and `DevicePictureLendTests`), the host takes it on the device in the same frame, and every later stage
+(the hand-off, the UI thread's present, the compositor) is the one every core's picture already took. The window's
+own frames of presentation are unchanged by this and were not measured again.
+
+### 17.4 What is left
+
+The handheld (§11; its device lends where its card offers the queues and timeline semaphores); Hotaru, which hosts
+`GameFrameControl` but does not pass a lender; MarsRT (§7); a lend refused by a core's device (a version below 1.2)
+falls back to the core's own device silently, the core's note not saying so.

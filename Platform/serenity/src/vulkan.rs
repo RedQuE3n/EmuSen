@@ -144,6 +144,8 @@ struct Probe {
 struct Root {
     entry: ash::Entry,
     instance: ash::Instance,
+    /// The API version the instance was made with: 1.2 where the loader offers it, for a device that may be lent.
+    api: u32,
     listener: Option<(ash::ext::debug_utils::Instance, vk::DebugUtilsMessengerEXT)>,
     findings: Arc<Findings>,
     // Last, so that the loader is let go of only once nothing made through it is left.
@@ -177,6 +179,12 @@ struct Inner {
     /// device has the extensions (EmuSen_DevicePicture.md §2).
     uuid: [u8; 16],
     exports: Option<(ash::khr::external_memory_fd::Device, ash::khr::external_semaphore_fd::Device)>,
+    /// The physical device and the API version the device was made with.
+    physical: vk::PhysicalDevice,
+    api: u32,
+    /// The queues a device that can be lent keeps for it: one lent to a core, and the host's own for taking the core's
+    /// pictures, with its lock (EmuSen_DevicePicture.md §17).
+    lending: Option<Lending>,
     probing: AtomicBool,
     probe: Mutex<Option<Probe>>,
     timestamp_period: f64,
@@ -199,6 +207,27 @@ impl Drop for Inner {
             self.device.destroy_command_pool(self.pool, None);
             self.device.destroy_device(None);
         }
+    }
+}
+
+/// A queue lent to a core, and the one the host takes the core's pictures on.
+pub(crate) struct Lending {
+    pub(crate) core: (u32, u32),
+    pub(crate) intake_family: u32,
+    pub(crate) intake: Mutex<vk::Queue>,
+}
+
+/// The queues lent and taken on, of a device's families: the core's in a compute family of its own where there is one,
+/// the intake's beside it or on the graphics family, the host's graphics queue (index 0) never lent; none where the
+/// device has too few queues.
+pub(crate) fn lend_queues(queues: &[vk::QueueFamilyProperties], graphics: u32) -> Option<((u32, u32), (u32, u32))> {
+    let count = |family: usize| queues.get(family).map_or(0, |q| q.queue_count);
+    let compute = queues.iter().enumerate().position(|(i, q)| i != graphics as usize && q.queue_flags.contains(vk::QueueFlags::COMPUTE));
+    match compute {
+        Some(c) if count(c) >= 2 => Some(((c as u32, 0), (c as u32, 1))),
+        Some(c) if count(graphics as usize) >= 2 => Some(((c as u32, 0), (graphics, 1))),
+        None if count(graphics as usize) >= 3 => Some(((graphics, 1), (graphics, 2))),
+        _ => None,
     }
 }
 
@@ -357,7 +386,9 @@ impl Device {
     }
 
     fn root(entry: ash::Entry, loader: libloading::Library, validate: bool) -> Result<Root, String> {
-        let application = vk::ApplicationInfo::default().api_version(vk::API_VERSION_1_1);
+        let offered = unsafe { entry.try_enumerate_instance_version() }.ok().flatten().unwrap_or(vk::API_VERSION_1_0);
+        let api = if offered >= vk::API_VERSION_1_2 { vk::API_VERSION_1_2 } else { vk::API_VERSION_1_1 };
+        let application = vk::ApplicationInfo::default().api_version(api);
         let mut create = vk::InstanceCreateInfo::default().application_info(&application);
         let setting = |name: &CStr, value: &'static u32| vk::LayerSettingEXT {
             p_layer_name: LAYER.as_ptr(),
@@ -376,7 +407,7 @@ impl Device {
         }
         let instance = unsafe { entry.create_instance(&create, None) }.check("vkCreateInstance")?;
         let findings = Arc::new(Findings::default());
-        let mut root = Root { entry, instance, listener: None, findings, _loader: loader };
+        let mut root = Root { entry, instance, api, listener: None, findings, _loader: loader };
         if validate {
             let messenger = vk::DebugUtilsMessengerCreateInfoEXT::default()
                 .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::WARNING | vk::DebugUtilsMessageSeverityFlagsEXT::ERROR)
@@ -391,13 +422,35 @@ impl Device {
     }
 
     fn open(root: Root, physical: vk::PhysicalDevice, family: u32, name: String, timestamp_period: f64) -> Result<Device, String> {
-        let priority = [1.0f32];
-        let queue_info = [vk::DeviceQueueCreateInfo::default().queue_family_index(family).queue_priorities(&priority)];
+        let instance = &root.instance;
+        let api = unsafe { instance.get_physical_device_properties(physical) }.api_version.min(root.api);
+        // Timeline semaphores and two more queues, where offered, so that a core can be lent the device (§2 of EmuSen_DevicePicture.md).
+        let timeline = api >= vk::API_VERSION_1_2 && {
+            let mut v12 = vk::PhysicalDeviceVulkan12Features::default();
+            let mut features = vk::PhysicalDeviceFeatures2::default().push_next(&mut v12);
+            unsafe { instance.get_physical_device_features2(physical, &mut features) };
+            v12.timeline_semaphore == vk::TRUE
+        };
+        let families = unsafe { instance.get_physical_device_queue_family_properties(physical) };
+        let lend = if timeline { lend_queues(&families, family) } else { None };
+        let mut wanted_queues = vec![(family, 1u32)];
+        for (f, index) in lend.iter().flat_map(|(core, intake)| [*core, *intake]) {
+            match wanted_queues.iter_mut().find(|(g, _)| *g == f) {
+                Some((_, n)) => *n = (*n).max(index + 1),
+                None => wanted_queues.push((f, index + 1)),
+            }
+        }
+        let priorities = [1.0f32; 4];
+        let queue_info: Vec<vk::DeviceQueueCreateInfo> = wanted_queues.iter().map(|&(f, n)| vk::DeviceQueueCreateInfo::default().queue_family_index(f).queue_priorities(&priorities[..n as usize])).collect();
         let exporting = Self::offers_exports(&root.instance, physical);
         let wanted = [ash::khr::external_memory_fd::NAME.as_ptr(), ash::khr::external_semaphore_fd::NAME.as_ptr()];
+        let mut v12 = vk::PhysicalDeviceVulkan12Features::default().timeline_semaphore(true);
         let mut device_info = vk::DeviceCreateInfo::default().queue_create_infos(&queue_info);
         if exporting {
             device_info = device_info.enabled_extension_names(&wanted);
+        }
+        if timeline {
+            device_info = device_info.push_next(&mut v12);
         }
         let device = unsafe { root.instance.create_device(physical, &device_info, None) }.check("vkCreateDevice")?;
         let mut id = vk::PhysicalDeviceIDProperties::default();
@@ -434,6 +487,7 @@ impl Device {
             }
         };
         let memory = unsafe { root.instance.get_physical_device_memory_properties(physical) };
+        let lending = lend.map(|(core, (intake_family, intake_index))| Lending { core, intake_family, intake: Mutex::new(unsafe { device.get_device_queue(intake_family, intake_index) }) });
         Ok(Device {
             inner: Arc::new(Inner {
                 device,
@@ -447,6 +501,9 @@ impl Device {
                 submit: Mutex::new(false),
                 uuid,
                 exports,
+                physical,
+                api,
+                lending,
                 probing: AtomicBool::new(false),
                 probe: Mutex::new(None),
                 timestamp_period,
@@ -489,7 +546,33 @@ impl Device {
         &self.inner.device
     }
 
-    fn memory_type(&self, allowed: u32, need: vk::MemoryPropertyFlags, want: vk::MemoryPropertyFlags, need_name: &str) -> Result<u32, String> {
+    /// The loader's entry, the instance and the physical device, the API version and the queues, for a lend.
+    pub(crate) fn entry(&self) -> &ash::Entry {
+        &self.inner.root.entry
+    }
+
+    pub(crate) fn raw_physical(&self) -> u64 {
+        self.inner.physical.as_raw()
+    }
+
+    pub(crate) fn api(&self) -> u32 {
+        self.inner.api
+    }
+
+    pub(crate) fn family(&self) -> u32 {
+        self.inner.family
+    }
+
+    pub(crate) fn lending(&self) -> Option<&Lending> {
+        self.inner.lending.as_ref()
+    }
+
+    /// Whether a core can be lent this device: timeline semaphores and the two queues of `lend_queues`.
+    pub fn lends(&self) -> bool {
+        self.inner.lending.is_some()
+    }
+
+    pub(crate) fn memory_type(&self, allowed: u32, need: vk::MemoryPropertyFlags, want: vk::MemoryPropertyFlags, need_name: &str) -> Result<u32, String> {
         let memory = &self.inner.memory;
         for flags in [need | want, need] {
             for i in 0..memory.memory_type_count as usize {
@@ -634,7 +717,7 @@ impl Device {
 
     /// Records and submits, waiting on the device for `wait` and signalling `signal`, and returns at once; the next
     /// call that submits or settles waits for it (EmuSen_DevicePicture.md §4.2).
-    pub(crate) fn run_unwaited(&self, record: impl FnOnce(vk::CommandBuffer), wait: Option<vk::Semaphore>, signal: vk::Semaphore) -> Result<(), String> {
+    pub(crate) fn run_unwaited(&self, record: impl FnOnce(vk::CommandBuffer), wait: Option<vk::Semaphore>, signal: vk::Semaphore, timeline: Option<(vk::Semaphore, u64)>) -> Result<(), String> {
         let mut pending = locked(&self.inner.submit);
         self.settle_held(&mut pending)?;
         let (device, commands, fence) = (&self.inner.device, self.inner.commands, self.inner.fence);
@@ -647,11 +730,21 @@ impl Device {
             self.mark(commands, point::SUBMISSION_END);
             device.end_command_buffer(commands).check("vkEndCommandBuffer")?;
             let buffers = [commands];
-            let waits: Vec<vk::Semaphore> = wait.into_iter().collect();
-            let stages = [vk::PipelineStageFlags::TRANSFER];
+            let mut waits: Vec<vk::Semaphore> = wait.into_iter().collect();
+            let mut values = vec![0u64; waits.len()];
+            if let Some((semaphore, value)) = timeline {
+                waits.push(semaphore);
+                values.push(value);
+            }
+            let stages = [vk::PipelineStageFlags::TRANSFER; 2];
             let signals = [signal];
-            let submit = [vk::SubmitInfo::default().command_buffers(&buffers).wait_semaphores(&waits).wait_dst_stage_mask(&stages[..waits.len()]).signal_semaphores(&signals)];
-            device.queue_submit(self.inner.queue, &submit, fence).check("vkQueueSubmit")?;
+            let signal_values = [0u64];
+            let mut timeline_info = vk::TimelineSemaphoreSubmitInfo::default().wait_semaphore_values(&values).signal_semaphore_values(&signal_values);
+            let mut submit = vk::SubmitInfo::default().command_buffers(&buffers).wait_semaphores(&waits).wait_dst_stage_mask(&stages[..waits.len()]).signal_semaphores(&signals);
+            if timeline.is_some() {
+                submit = submit.push_next(&mut timeline_info);
+            }
+            device.queue_submit(self.inner.queue, &[submit], fence).check("vkQueueSubmit")?;
             self.phase(point::SUBMITTED);
         }
         *pending = true;
@@ -660,6 +753,11 @@ impl Device {
 
     /// Records, submits and waits; nothing recorded here is still running when it returns.
     pub(crate) fn run(&self, record: impl FnOnce(vk::CommandBuffer)) -> Result<(), String> {
+        self.run_after(record, None)
+    }
+
+    /// The same, the submission first waiting on the device for a timeline semaphore to reach a value.
+    pub(crate) fn run_after(&self, record: impl FnOnce(vk::CommandBuffer), timeline: Option<(vk::Semaphore, u64)>) -> Result<(), String> {
         let mut pending = locked(&self.inner.submit);
         self.settle_held(&mut pending)?;
         let (device, commands, fence) = (&self.inner.device, self.inner.commands, self.inner.fence);
@@ -672,8 +770,15 @@ impl Device {
             self.mark(commands, point::SUBMISSION_END);
             device.end_command_buffer(commands).check("vkEndCommandBuffer")?;
             let buffers = [commands];
-            let submit = [vk::SubmitInfo::default().command_buffers(&buffers)];
-            device.queue_submit(self.inner.queue, &submit, fence).check("vkQueueSubmit")?;
+            let waits: Vec<vk::Semaphore> = timeline.iter().map(|t| t.0).collect();
+            let values: Vec<u64> = timeline.iter().map(|t| t.1).collect();
+            let stages = [vk::PipelineStageFlags::TRANSFER];
+            let mut timeline_info = vk::TimelineSemaphoreSubmitInfo::default().wait_semaphore_values(&values);
+            let mut submit = vk::SubmitInfo::default().command_buffers(&buffers).wait_semaphores(&waits).wait_dst_stage_mask(&stages[..waits.len()]);
+            if timeline.is_some() {
+                submit = submit.push_next(&mut timeline_info);
+            }
+            device.queue_submit(self.inner.queue, &[submit], fence).check("vkQueueSubmit")?;
             self.phase(point::SUBMITTED);
             device.wait_for_fences(&[fence], true, u64::MAX).check("vkWaitForFences")?;
             device.reset_fences(&[fence]).check("vkResetFences")?;
@@ -761,6 +866,14 @@ impl Device {
     pub(crate) fn record_upload(&self, commands: vk::CommandBuffer, image: &Image, staging: &Buffer) {
         self.transition(commands, image, vk::ImageLayout::TRANSFER_DST_OPTIMAL, 0, None, None);
         self.copy_in(commands, staging, image);
+        self.finish(commands, image);
+    }
+
+    /// A picture in a device buffer, `row_pixels` to a row, copied into level 0, and the chain built if the image has one.
+    pub(crate) fn record_copy_in(&self, commands: vk::CommandBuffer, image: &Image, source: vk::Buffer, row_pixels: u32) {
+        self.transition(commands, image, vk::ImageLayout::TRANSFER_DST_OPTIMAL, 0, None, None);
+        let region = vk::BufferImageCopy::default().buffer_row_length(row_pixels).image_subresource(level(0)).image_extent(vk::Extent3D { width: image.width, height: image.height, depth: 1 });
+        unsafe { self.inner.device.cmd_copy_buffer_to_image(commands, source, image.handle, vk::ImageLayout::TRANSFER_DST_OPTIMAL, &[region]) };
         self.finish(commands, image);
     }
 
@@ -1043,6 +1156,19 @@ mod tests {
             assert_eq!(levels_for(size, 0), levels, "{size}");
             assert_eq!(levels_for(1, size), levels, "{size}");
         }
+    }
+
+    #[test]
+    fn a_core_is_lent_a_compute_queue_of_its_own_and_never_the_hosts_graphics_queue() {
+        let family = |flags: vk::QueueFlags, count: u32| vk::QueueFamilyProperties { queue_flags: flags, queue_count: count, ..Default::default() };
+        let (g, c, t) = (vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE | vk::QueueFlags::TRANSFER, vk::QueueFlags::COMPUTE | vk::QueueFlags::TRANSFER, vk::QueueFlags::TRANSFER);
+        // The RX 6800 under RADV: graphics 1, compute 4, transfer 1.
+        assert_eq!(lend_queues(&[family(g, 1), family(c, 4), family(t, 1)], 0), Some(((1, 0), (1, 1))));
+        assert_eq!(lend_queues(&[family(g, 2), family(c, 1)], 0), Some(((1, 0), (0, 1))));
+        assert_eq!(lend_queues(&[family(g, 3)], 0), Some(((0, 1), (0, 2))));
+        assert_eq!(lend_queues(&[family(g, 1), family(c, 1)], 0), None);
+        assert_eq!(lend_queues(&[family(g, 2)], 0), None);
+        assert_eq!(lend_queues(&[family(t, 1), family(g, 1), family(c, 2)], 1), Some(((2, 0), (2, 1))));
     }
 
     #[test]

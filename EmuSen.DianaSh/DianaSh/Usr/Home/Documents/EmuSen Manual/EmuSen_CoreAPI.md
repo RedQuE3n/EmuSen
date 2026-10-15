@@ -2195,7 +2195,8 @@ the kit's C14 checks the slots and C19 keeps console files. Its reasons are `Emu
 `emusen_device_frame` and `emusen_core_frame_device`, so that a host lends its Vulkan device and a queue and a core
 hands its picture on it with a timeline semaphore instead of reading it back. `emusen-native` gains `Create.device`,
 `Core::frame_device` and the export; the guard's checker learns the two structs and a function pointer member
-(`void (*)(void)`); the C# host reads the structs and the export (`CoreInterface`), and lends nothing yet; kit case
+(`void (*)(void)`); the C# host reads the structs and the export (`CoreInterface`) and lends Serenity's device
+where the picture is presented on it (`EmuSen_DevicePicture.md` §17); kit case
 C20 is added, with the kit's own lender; Diamond claims the bit (`EmuSen_DevicePicture.md` §16). Its reasons are
 `EmuSen_DevicePicture.md` §5.
 

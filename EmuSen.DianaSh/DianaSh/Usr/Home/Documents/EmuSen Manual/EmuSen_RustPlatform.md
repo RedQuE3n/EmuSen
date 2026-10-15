@@ -2604,3 +2604,10 @@ recorded into the submission that runs its passes rather than one of its own. Th
 keeps the readback). The interface's number went from 10 to 11 in `emusen_platform.h`, `lib.rs` and
 `PlatformLibrary.InterfaceVersion` together.
 
+Interface 11 also carries the device's lend to a core (`EmuSen_DevicePicture.md` §17), added before 11 was merged: the
+device is made at Vulkan 1.2 where the loader and the card offer it, with timeline semaphores and, where the card has
+the queues, one queue lent to a core and one the host takes the core's pictures on; `emusen_serenity_lend_new` and
+`_free` (a lend for one core machine, filled as the core ABI's `emusen_device_lend`), `emusen_serenity_lend_take` and
+`_settle` (the core's picture copied into a ring of three device buffers once its `ready` is reached, `done` then
+signalled) and `emusen_serenity_chain_advance_lent` (the newest copy as a chain's frame, read on the device by its next
+render or present). The C# facade is `SlangLend` and `SlangChain.AdvanceLent`.

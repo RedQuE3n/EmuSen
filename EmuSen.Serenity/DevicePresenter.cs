@@ -60,6 +60,9 @@ namespace EmuSen.Serenity
 
         public CompositionVisual Visual => _clip;
 
+        // The device the pictures are drawn on.
+        public SlangVulkan Device => _device;
+
         private DevicePresenter(Compositor compositor, ICompositionGpuInterop interop, SlangVulkan device)
         {
             _compositor = compositor;

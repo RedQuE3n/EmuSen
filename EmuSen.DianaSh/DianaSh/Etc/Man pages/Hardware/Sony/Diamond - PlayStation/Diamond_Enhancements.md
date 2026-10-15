@@ -3810,9 +3810,9 @@ cases on `animated-triangle.exe` at 2×, the lent machines of C20 included.
 - **A mutant**: `PictureOut::hand` with the wait for `done` removed fails C20 with "the picture of frame 60, held
   until now, was written over before done let go of it".
 
-### 56.4 What it leaves
+### 56.4 The reference host
 
-The setting's cost still states §38.1's frame of latency, which holds for every host that lends nothing, the
-reference host included until it lends (`EmuSen_DevicePicture.md` §16). The latency a player sees is the host's to
-measure once it presents from the device.
+Mistress lends its presentation's device since the same day (`EmuSen_DevicePicture.md` §17): the enhanced picture is
+then shown the frame it is drawn, and the four settings' cost now says "a frame later unless the frontend presents it
+on the same card", which holds for every host that lends nothing.
 

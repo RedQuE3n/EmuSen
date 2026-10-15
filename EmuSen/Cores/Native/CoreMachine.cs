@@ -56,16 +56,20 @@ namespace EmuSen.Cores.Native
 
         // The same from bytes the host holds in place, the media files among them; with a loan they are lent, and the loan is released when the machine is freed or its drive takes another disc.
         // sharedRemovable and sharedConsole ask the core to leave those kinds of battery file out of what a state load restores - see EmuSen_CoreAPI.md §6.27, §6.28.
-        public CoreMachine(CoreLibrary library, CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, IDisposable? loan = null, bool sharedRemovable = false, bool sharedConsole = false)
+        // device is the host's Vulkan device lent to a core that claims DEVICE_PICTURE, the machine's from then on - see EmuSen_CoreAPI.md §6.29.
+        public CoreMachine(CoreLibrary library, CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, IDisposable? loan = null, bool sharedRemovable = false, bool sharedConsole = false, EmuSen.Serenity.Slang.SlangLend? device = null)
         {
+            Lend = device is not null && library.Has(CoreInterface.CapDevicePicture) ? device : null;
+            if (Lend is null) device?.Dispose();
             if (!library.Available) throw new InvalidOperationException($"{library.Info?.DisplayName ?? library.Path} is not in use: {library.Report}");
             Library = library;
             _api = library.Api;
-            try { _handle = Create(image, media, settings, files, lent: loan is not null, sharedRemovable, sharedConsole); }
+            try { _handle = Create(image, media, settings, files, lent: loan is not null, sharedRemovable, sharedConsole, Lend is { } l ? LendOf(l) : null); }
             catch
             {
                 // A refused create lends nothing.
                 loan?.Dispose();
+                Lend?.Dispose();
                 throw;
             }
             Info = ReadInfo();
@@ -86,8 +90,10 @@ namespace EmuSen.Cores.Native
             return entries;
         }
 
-        private nint Create(CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, bool lent, bool sharedRemovable, bool sharedConsole)
+        private nint Create(CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, bool lent, bool sharedRemovable, bool sharedConsole, CoreInterface.DeviceLend? device = null)
         {
+            CoreInterface.DeviceLend lend = device ?? default;
+            lend.Size = (uint)sizeof(CoreInterface.DeviceLend);
             byte[] text = Encoding.UTF8.GetBytes(settings);
             var pins = new GCHandle[files.Count];
             var error = new byte[1024];
@@ -115,6 +121,7 @@ namespace EmuSen.Cores.Native
                         Error = e,
                         ErrorLen = (nuint)error.Length,
                         Flags = (lent ? CoreInterface.CreateLent : 0) | (sharedRemovable ? CoreInterface.CreateSharedRemovable : 0) | (sharedConsole ? CoreInterface.CreateSharedConsole : 0),
+                        Device = device is not null && Library.Has(CoreInterface.CapDevicePicture) ? &lend : null,
                     };
                     handle = _api.Create(&p, &status);
                 }
@@ -213,6 +220,34 @@ namespace EmuSen.Cores.Native
                 lock (_gate) Ok(_api.FrameInfoOf(Handle, &info), "describe its picture");
                 return info;
             }
+        }
+
+        // The device lent to this machine, which takes its pictures; null when nothing is lent.
+        public EmuSen.Serenity.Slang.SlangLend? Lend { get; }
+
+        private static CoreInterface.DeviceLend LendOf(EmuSen.Serenity.Slang.SlangLend l) => new()
+        {
+            Size = (uint)sizeof(CoreInterface.DeviceLend), ApiVersion = l.ApiVersion, GetInstanceProcAddr = (nint)l.GetInstanceProcAddr, Instance = l.Instance,
+            PhysicalDevice = l.PhysicalDevice, Device = l.Device, QueueFamily = l.QueueFamily, QueueIndex = l.QueueIndex, HostQueueFamily = l.HostQueueFamily, Done = l.Done,
+        };
+
+        // After advance and present: the frame's picture taken on the lent device, true when it is there and frame_copy need not be read - see EmuSen_DevicePicture.md §17.
+        public bool TakeDeviceFrame()
+        {
+            if (Lend is not { } lend || FrameDevice() is not { } f) return false;
+            lend.Take(f.Buffer, f.Offset, f.Width, f.Height, f.Stride, f.Ready, f.Value);
+            return true;
+        }
+
+        // The frame's picture where it lies on the lent device, or null when frame_copy has it - see EmuSen_CoreAPI.md §6.29.
+        public CoreInterface.DeviceFrame? FrameDevice()
+        {
+            if (_api.FrameDevice == null || !Has(CoreInterface.CapDevicePicture)) return null;
+            var frame = new CoreInterface.DeviceFrame { Size = (uint)sizeof(CoreInterface.DeviceFrame) };
+            int status;
+            lock (_gate) status = _api.FrameDevice(Handle, &frame);
+            if (status < 0) throw new CoreRefusedException(status, $"{Library.Info.DisplayName} could not say where its picture is: {Library.Words(status)}.");
+            return status == 1 ? frame : null;
         }
 
         public long CopyFrame(byte[] into)
@@ -530,11 +565,14 @@ namespace EmuSen.Cores.Native
         {
             lock (_gate)
             {
+                // Nothing of the core's may still be read on the device once it is freed.
+                if (_handle != 0) Lend?.Settle();
                 if (_handle != 0) _api.Free(_handle);
                 _handle = 0;
                 // The machine is freed, so every loan has ended.
                 foreach (IDisposable loan in _loans.Values) loan.Dispose();
                 _loans.Clear();
+                Lend?.Dispose();
             }
             GC.SuppressFinalize(this);
         }

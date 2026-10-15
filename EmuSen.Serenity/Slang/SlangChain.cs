@@ -217,6 +217,16 @@ namespace EmuSen.Serenity.Slang
             After(status);
         }
 
+        // The newest picture a core handed through lend as the new frame, read on the device by the next render or present; false when there is none newer - see EmuSen_DevicePicture.md §17.
+        public bool AdvanceLent(SlangLend lend)
+        {
+            if (_managed is not null) throw new InvalidOperationException("The C#'s chain takes no picture on the device.");
+            int status = SerenityNative.ChainAdvanceLent(_native!.Value, lend.Value);
+            GC.KeepAlive(lend);
+            After(status);
+            return status == 1;
+        }
+
         // Runs every pass for the viewport's size and returns a copy of the last one's pixels, RGBA8, a row after row.
         public byte[] Render(int viewWidth, int viewHeight)
         {

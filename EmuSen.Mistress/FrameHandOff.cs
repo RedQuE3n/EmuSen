@@ -19,6 +19,7 @@ namespace EmuSen.Mistress
             public double Aspect;
             public int Lines;
             public byte[]? Raw;
+            public EmuSen.Serenity.Slang.SlangLend? Lend;
             public int State;
         }
 
@@ -34,7 +35,7 @@ namespace EmuSen.Mistress
             public void Cut() => Volatile.Write(ref _pool, null);
         }
 
-        public delegate void PresentFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence, double aspect, int lines, byte[]? raw);
+        public delegate void PresentFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence, double aspect, int lines, byte[]? raw, EmuSen.Serenity.Slang.SlangLend? lend);
 
         private readonly Latest<Frame> _latest;
         private readonly PresentFrame _present;
@@ -58,9 +59,10 @@ namespace EmuSen.Mistress
         }
 
         // Any one thread at a time: the frame this replaces goes back now if the UI thread never took it.
-        public void Offer(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, byte[]? raw = null)
+        // lend is a core's picture on the device in place of the pixels - see EmuSen_DevicePicture.md §17.
+        public void Offer(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, byte[]? raw = null, EmuSen.Serenity.Slang.SlangLend? lend = null)
         {
-            var frame = new Frame { Pixels = pixels, Width = width, Height = height, RowRepeat = rowRepeat, Release = release, Sequence = sequence, Aspect = aspect, Lines = lines, Raw = raw };
+            var frame = new Frame { Pixels = pixels, Width = width, Height = height, RowRepeat = rowRepeat, Release = release, Sequence = sequence, Aspect = aspect, Lines = lines, Raw = raw, Lend = lend };
             Drop(Interlocked.Exchange(ref _newest, frame));
             _latest.Offer(frame);
         }
@@ -84,7 +86,7 @@ namespace EmuSen.Mistress
         private void Present(Frame frame)
         {
             if (Interlocked.CompareExchange(ref frame.State, Presented, Waiting) != Waiting) return;
-            _present(frame.Pixels, frame.Width, frame.Height, frame.RowRepeat, frame.Release, frame.Sequence, frame.Aspect, frame.Lines, frame.Raw);
+            _present(frame.Pixels, frame.Width, frame.Height, frame.RowRepeat, frame.Release, frame.Sequence, frame.Aspect, frame.Lines, frame.Raw, frame.Lend);
         }
     }
 }

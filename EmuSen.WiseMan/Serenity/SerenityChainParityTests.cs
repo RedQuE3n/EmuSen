@@ -810,7 +810,7 @@ namespace EmuSen.WiseMan.Serenity
                     chain.Advance(ShaderBench.Pattern(13, 7, 1), 13, 7, 1);
                     // The frame's upload waits for the render's submission, so Advance submits nothing - see EmuSen_DevicePicture.md §13.1.
                     Assert.Equal(new[] { SlangProbe.AdvanceBegin, SlangProbe.AdvanceEnd }, heard.Marks.Where(m => m.Kind == "phase").Select(m => m.Point));
-                    Assert.Empty(heard.Marks.Where(m => m.Kind == "gpu"));
+                    Assert.DoesNotContain(heard.Marks, m => m.Kind == "gpu");
                     heard.Marks.Clear();
                     chain.Render(40, 30);
                 }

@@ -87,16 +87,18 @@ namespace EmuSen.Cores
 
         // Loads the ROM too, because a debug target needs the core's hardware to already exist.
         public static CoreBundle Load(string romPath, bool headless = true, CheatRegistry? cheats = null,
-            Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? venusFrameTimings = null, string? engine = null)
+            Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? venusFrameTimings = null, string? engine = null, Func<EmuSen.Serenity.Slang.SlangLend?>? lender = null)
         {
-            ICore core = Loaded(romPath, headless, engine);
+            ICore core = Loaded(romPath, headless, engine, lender);
             return Bundle(core, cheats, venusFrameTimings) with { Notice = EngineNotice(romPath, engine, core) };
         }
 
         // The core made and the file loaded into it, Load without its wiring, for a caller that loads off its own thread.
-        public static ICore Loaded(string romPath, bool headless = true, string? engine = null)
+        // lender is asked for the device to lend a core whose picture can lie on it - see EmuSen_DevicePicture.md §17.
+        public static ICore Loaded(string romPath, bool headless = true, string? engine = null, Func<EmuSen.Serenity.Slang.SlangLend?>? lender = null)
         {
             ICore core = Create(romPath, headless, engine);
+            if (core is IDevicePicture picture) picture.DeviceLender = lender;
             LoadInto(core, romPath);
             return core;
         }

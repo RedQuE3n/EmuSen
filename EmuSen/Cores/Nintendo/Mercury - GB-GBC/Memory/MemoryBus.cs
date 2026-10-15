@@ -62,8 +62,12 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         private int _oamDmaCyclesLeft;
         private int _oamDmaIndex;
 
-        // T-cycles until a written transfer starts, on the second machine cycle after the write; in the state's version-9 tail - see Mercury_Native.md §13.4.
+        // T-cycles until a transfer written while another runs takes over; in the state's version-9 tail - see Mercury_Native.md §13.4.
         [SkipInState] private int _oamDmaStartDelay;
+
+        // A transfer's span: 160 machine cycles and the one its last byte lands in; a fresh write's counter adds the machine cycle before it starts - see Mercury_Native.md §13.4.
+        private const int OamDmaSpan = (0xA0 + 1) * 4;
+        private const int OamDmaFromWrite = OamDmaSpan + 4;
 
         // Cycles a DMA took from the CPU, drained by the core after the instruction - see Mercury_Cgb.md §4.1.
         private int _stallCycles;
@@ -127,7 +131,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
 
         public void ClearSerialLog() => _serialLog.Clear();
 
-        public bool OamDmaActive => _oamDmaCyclesLeft > 0;
+        public bool OamDmaActive => _oamDmaCyclesLeft is > 0 and < OamDmaSpan;
 
         // The CPU loses VRAM while the PPU is drawing from it - see Mercury_Ppu.md §7.
         public bool VramAccessibleToCpu => !Ppu.LcdEnabled || Ppu.Mode != PpuMode.Drawing;
@@ -346,7 +350,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
 
                 case 0xFF46:
                     Io[0x46] = data;
-                    _oamDmaStartDelay = 5;
+                    StartOamDma(data);
                     return;
 
                 case 0xFF47:
@@ -390,25 +394,37 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             Request(Interrupt.Serial);
         }
 
+        // A fresh transfer starts on the second machine cycle after the write; one written while another runs lets that one carry on until then - see Mercury_Native.md §13.4.
+        private void StartOamDma(byte page)
+        {
+            if (_oamDmaCyclesLeft == 0)
+            {
+                _oamDmaPage = page;
+                _oamDmaIndex = 0;
+                _oamDmaCyclesLeft = OamDmaFromWrite;
+                return;
+            }
+
+            _oamDmaStartDelay = 5;
+            _oamDmaCyclesLeft = Math.Max(_oamDmaCyclesLeft, _oamDmaStartDelay);
+        }
+
         // 160 machine cycles, one OAM byte each, closing OAM through the cycle of the last byte - see Mercury_Memory.md §6, Mercury_Native.md §13.4.
         private void StepOamDma()
         {
-            if ((_oamDmaCyclesLeft | _oamDmaStartDelay) == 0) return;
+            if (_oamDmaCyclesLeft == 0) return;
 
-            // A transfer already running carries on until the written one starts.
             if (_oamDmaStartDelay != 0 && --_oamDmaStartDelay == 0)
             {
                 _oamDmaPage = Io[0x46];
                 _oamDmaIndex = 0;
-                _oamDmaCyclesLeft = (Oam.Length + 1) * 4;
+                _oamDmaCyclesLeft = OamDmaSpan;
             }
-
-            if (_oamDmaCyclesLeft == 0) return;
 
             _oamDmaCyclesLeft--;
 
             // One byte per machine cycle, which lands the 160th on the last cycle of the transfer.
-            if ((_oamDmaCyclesLeft & 3) != 0 || _oamDmaIndex >= Oam.Length) return;
+            if ((_oamDmaCyclesLeft & 3) != 0 || _oamDmaCyclesLeft > Oam.Length * 4 || _oamDmaIndex >= Oam.Length) return;
 
             Oam[_oamDmaIndex] = ReadForDma((ushort)((_oamDmaPage << 8) + _oamDmaIndex));
             _oamDmaIndex++;

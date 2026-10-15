@@ -12,9 +12,11 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
 
             Dot++;
 
-            if (Dot >= CyclesPerScanline)
+            // The line's last machine cycle, where a CGB's line-144 mode-2 interrupt comes early, shares the test for the line's end - see Mercury_Native.md §13.11.
+            if (Dot >= CyclesPerScanline - 4)
             {
-                BeginScanline();
+                if (Dot >= CyclesPerScanline) BeginScanline();
+                else if (Dot == CyclesPerScanline - 4 && Ly == ScreenHeight - 1 && _bus.CgbHardware) UpdateStatLine(oamAtVBlank: true);
                 return;
             }
 
@@ -35,11 +37,6 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
 
                 // An hblank-driven HDMA moves its next block here, which is the whole point of it - see Mercury_Cgb.md §4.
                 _bus.OnHBlankStarted();
-            }
-            else if (Dot == CyclesPerScanline - 4 && Ly == ScreenHeight - 1 && _bus.CgbHardware)
-            {
-                // A CGB's mode-2 source fires for line 144 one machine cycle before vblank - see Mercury_Native.md §13.11.
-                UpdateStatLine(oamAtVBlank: true);
             }
         }
 

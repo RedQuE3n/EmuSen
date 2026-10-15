@@ -361,12 +361,14 @@ namespace EmuSen.WiseMan.Cores
             return older;
         }
 
-        // D: version 9 appends the start delay after the mixer; a version-8 state, which has none, loads with no start pending and the rest as it was.
+        // D: version 9 appends a restart's delay after the mixer; a version-8 state, which has none, loads with no restart pending and the rest as it was.
         [Fact]
         public void A_version_8_state_loads_with_no_dma_start_pending()
         {
             var rig = DmaReady();
             rig.Write(0xFF46, 0xC0);
+            rig.Tick(4 * 10);
+            rig.Write(0xFF46, 0xC1);
             byte[] now = rig.State();
             Assert.Equal(MercuryCore.StateVersion, BitConverter.ToInt32(now, 4));
             Assert.Equal(5, BitConverter.ToInt32(now, now.Length - 6));

@@ -63,8 +63,13 @@ impl Ppu {
             return false;
         }
         self.dot += 1;
-        if self.dot >= CYCLES_PER_SCANLINE {
-            self.begin_scanline(iflags);
+        // The line's last machine cycle, where a CGB's line-144 mode-2 interrupt comes early, shares the test for the line's end.
+        if self.dot >= CYCLES_PER_SCANLINE - 4 {
+            if self.dot >= CYCLES_PER_SCANLINE {
+                self.begin_scanline(iflags);
+            } else if self.dot == CYCLES_PER_SCANLINE - 4 && self.ly as usize == SCREEN_HEIGHT - 1 && *self.cgb_hardware {
+                self.update_stat_line_with(iflags, true);
+            }
             return false;
         }
         if self.ly as usize >= SCREEN_HEIGHT {
@@ -81,9 +86,6 @@ impl Ppu {
             self.render_scanline(line, vram, oam, cgb);
             self.enter_mode(PpuMode::HBlank, iflags);
             return true;
-        } else if self.dot == CYCLES_PER_SCANLINE - 4 && self.ly as usize == SCREEN_HEIGHT - 1 && *self.cgb_hardware {
-            // A CGB's mode-2 source fires for line 144 one machine cycle before vblank.
-            self.update_stat_line_with(iflags, true);
         }
         false
     }

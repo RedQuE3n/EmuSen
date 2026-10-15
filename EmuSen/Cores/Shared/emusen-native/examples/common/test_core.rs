@@ -78,6 +78,10 @@ pub const FAULT_MEDIUM_DISAGREES: u32 = 1 << 22;
 pub const FAULT_DRIVELESS_ACCEPTS: u32 = 131072;
 pub const FAULT_DRIVELESS_FAULTS: u32 = 262144;
 pub const FAULT_DRIVELESS_NAMES_PLACES: u32 = 524288;
+/// Seeded fault for the kit's C20 (since 1.9): a picture answered as on the device by a machine nobody lent one, which
+/// the host would then read from a buffer that does not exist (EmuSen_CoreAPI.md §6.29). Without it the test core,
+/// which draws on no device, answers that every picture is in `frame_copy`.
+pub const FAULT_DEVICE_PICTURE_UNLENT: u32 = 1 << 23;
 /// The included faults, narrowed to the bits of `EMUSEN_TEST_CORE_FAULTS` when that is set, so each can be shown alone.
 fn faults() -> u32 {
     static MASK: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
@@ -158,6 +162,8 @@ pub struct TestCore {
     memory: Option<[u8; 16]>,
     memory_dirty: bool,
     shared_console: bool,
+    /// Whether the host lent a device, which this core keeps but draws nothing on (since 1.9).
+    lent: bool,
 }
 
 /// Where each frame's byte of the kept image lands in RAM, so that the state and its digests follow what was read.
@@ -376,6 +382,7 @@ impl Core for TestCore {
             memory,
             memory_dirty: false,
             shared_console: r.shared_console,
+            lent: r.device.is_some(),
         };
         m.draw();
         Ok(m)
@@ -491,6 +498,13 @@ impl Core for TestCore {
 
     fn frame(&self) -> &[u8] {
         &self.picture
+    }
+
+    fn frame_device(&mut self) -> Result<Option<DeviceFrame>, i32> {
+        if !self.lent && faults() & FAULT_DEVICE_PICTURE_UNLENT != 0 {
+            return Ok(Some(DeviceFrame { format: pixel::RGBA8888, buffer: 0xDEAD, width: self.width(), height: 4, stride: self.width() * 4, ready: 0xBEEF, value: self.frames as u64, ..DeviceFrame::default() }));
+        }
+        Ok(None)
     }
 
     fn audio_rate(&self) -> i32 {

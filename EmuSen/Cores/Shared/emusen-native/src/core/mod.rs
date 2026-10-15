@@ -21,7 +21,7 @@ pub use crate::ffi::StateMachine;
 pub use desc::*;
 pub use lend::{Kept, keep};
 pub use outbox::{Level, SEEK_SPAN, detail, emit, log, seek};
-pub use sys::{FrameInfo, caps, event, flags, kind, pixel, status};
+pub use sys::{DeviceFrame, DeviceLend, FrameInfo, caps, event, flags, kind, pixel, status};
 
 /// What `create` receives: the image, the settings resolved against the schema with every key present, the files,
 /// and the pixel formats the host accepts (bit 0, RGBA8888, always set). Every slice is the host's and valid for the
@@ -38,6 +38,9 @@ pub struct Create<'a> {
     pub shared_removable: bool,
     /// Since 1.8, `CREATE_SHARED_CONSOLE`: the same for the console's own battery files (EmuSen_CoreAPI.md §6.28).
     pub shared_console: bool,
+    /// Since 1.9, `DEVICE_PICTURE`: the host's device lent to the core, given only to a core that claims the bit and
+    /// only when the host has one to lend (EmuSen_CoreAPI.md §6.29).
+    pub device: Option<DeviceLend>,
 }
 
 /// What `media_insert` receives (since 1.1): the disc or nothing, its companions from `flags::FILE_MEDIA`, and
@@ -243,6 +246,12 @@ pub trait Core: Sized + StateMachine {
         Err(status::NOT_SUPPORTED)
     }
 
+    /// `DEVICE_PICTURE`, since 1.9: the frame's picture where it lies on the lent device, or `None` when this frame's
+    /// picture is not there and `frame` has it (EmuSen_CoreAPI.md §6.29).
+    fn frame_device(&mut self) -> Result<Option<DeviceFrame>, i32> {
+        Err(status::NOT_SUPPORTED)
+    }
+
     /// Clears whatever the core records between calls, after every call that changes the machine.
     fn end_call() {}
 }
@@ -263,7 +272,8 @@ pub const EXPORTING: u64 = caps::RESET
     | caps::DEBUG_REGISTERS
     | caps::DEBUG_DISASSEMBLE
     | caps::MEDIA
-    | caps::DEBUG_READS;
+    | caps::DEBUG_READS
+    | caps::DEVICE_PICTURE;
 
 /// `core_exports!`'s compile-time check: the groups named are exactly the claimed bits that have exports.
 #[doc(hidden)]
@@ -293,6 +303,7 @@ macro_rules! __core_capability {
     (debug_disassemble) => { $crate::core::caps::DEBUG_DISASSEMBLE };
     (media) => { $crate::core::caps::MEDIA };
     (debug_reads) => { $crate::core::caps::DEBUG_READS };
+    (device_picture) => { $crate::core::caps::DEVICE_PICTURE };
 }
 
 /// One export: the C signature, forwarding to the generic body of the same name in `core::exports`.
@@ -360,6 +371,9 @@ macro_rules! __core_optional {
     };
     ($t:ty, debug_reads) => {
         $crate::__core_export!($t, emusen_core_debug_reads => debug_reads(machine: *mut $crate::core::sys::Machine, out: *mut u32, len: usize) -> i64);
+    };
+    ($t:ty, device_picture) => {
+        $crate::__core_export!($t, emusen_core_frame_device => frame_device(machine: *mut $crate::core::sys::Machine, out: *mut $crate::core::sys::DeviceFrame) -> i32);
     };
     ($t:ty, debug) => {
         $crate::__core_export!($t, emusen_core_debug_set => debug_set(machine: *mut $crate::core::sys::Machine, flags: u32, depth_target: i32, depth_guard: i32) -> i32);

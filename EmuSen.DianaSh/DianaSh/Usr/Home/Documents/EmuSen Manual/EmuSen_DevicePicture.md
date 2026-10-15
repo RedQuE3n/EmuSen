@@ -346,6 +346,9 @@ path is off, Skia draws the plain picture as it does today.
   it showed the picture or not; it may cover several with one signal of the newest. **A host that stops signalling
   stalls the core's device and then its machine, and corrupts nothing** [A]: that is the failure the rule turns a
   host's mistake into.
+- *As built (§15): "handed" is "answered by `frame_device`".* A picture the host never asked for binds the core to
+  nothing, so a host that lends and reads `frame_copy` alone is never stalled; and the core's machine stalls only
+  once a picture is held past the next two `advance` calls.
 - **`frame_copy` still answers** on a frame whose picture is on the device, by waiting for it and reading it back. A
   screenshot, a state's picture, the kit and every tool keep working; they pay a wait where the presenter does not.
 - **States** hold nothing of the device; a state saved with a device lent loads without one and the reverse.
@@ -367,7 +370,10 @@ on its own queue after waiting for `ready`) equals the lendless machine's `frame
 machine equals both; the kit holds `done` back for a frame and checks that the core's next picture is still right
 when it is released; a lend whose struct is too short is refused or ignored, never read past. Where the bit is not
 claimed, C2 already checks that the export is absent. A skew fixture (§12.5 there): a host of 1.8 against a core of
-1.9, and the reverse, by the struct sizes above.
+1.9, and the reverse, by the struct sizes above. *As built (§15): the lent machine's `frame_copy` must equal the
+lendless one's at the same frame or a frame sooner, since a core lent a device may drop §7's frame of latency; each
+picture on the device equals the lent machine's own `frame_copy`; and the held picture is held through two `advance`
+calls, the second given 100 ms, so that a core writing its slot early is caught.*
 
 ---
 
@@ -690,3 +696,26 @@ the external acquire that the layer could see. Hotaru and `FramePresenter` take 
 Proof [M]: 17 tests of the crate on the RX 6800, 5 of them a lent device with the test as its own lender; clean under
 the validation layer with synchronisation validation; three mutants, two killed and one (exclusive sharing) surviving
 on a driver that does not need the ownership transfer, recorded in `EmuSen_Gpu.md` §5.1.
+
+## 15. Step (d): the core ABI's minor 1.9, as built (2026-10-15)
+
+`EmuSen_CoreAPI.md` §6.29 is the normative text and §28.12 the kit's case; §17 there records the minor.
+
+**Built** [C, as §5 designed, with the two refinements of §5.3 and §5.5 marked "as built"]:
+
+- the header: the bit, the appended `device` (104 bytes), `emusen_device_lend` (64), `emusen_device_frame` (56) and
+  `emusen_core_frame_device` with its type; the baseline regenerated, **460 facts**, `--check` and `--against` 1.8's
+  baseline passing (only lines added and the minor raised);
+- the guard's Rust checker, which learned the two structs and a member that is a function pointer;
+- `emusen-native`: `Create.device`, filled only for a core claiming the bit and only from a whole struct;
+  `Core::frame_device`; the export; the reference test core claiming the bit, keeping a lend and drawing on nothing,
+  with the seeded fault `FAULT_DEVICE_PICTURE_UNLENT` (1 << 23);
+- the C# host's reading of the surface (`CoreInterface`: the bit, `CreateParams.Device`, `DeviceLend`, `DeviceFrame`,
+  `FrameDevice`), held to the header by `CoreAbiTests`; it lends nothing yet (§16.3);
+- the kit's C20 and its own lender (`lender.rs`, `ash` 0.38, the version `emusen-gpu` links), playing a host of 1.9.
+
+**Proof** [M]: `emusen-native` 75 tests; the guard's 6; the kit's 30, among them each seeded fault failing its case
+alone (`FAULT_DEVICE_PICTURE_UNLENT` C20 alone; `FAULT_ONLY_HOST_1_0` now C20 with C12, C17 and C18, since C20 plays a
+host of 1.9); WiseMan's `CoreAbi` tests. A defect of the kit's own C20 was found by running it on Diamond: the case
+played the session's host minor, 0 by default, so its create passed 88 bytes and no lend reached the core, and the
+test core, which answers 0 lent or not, could not show it. C20 now plays 1.9; the Diamond run of §16 is its proof.

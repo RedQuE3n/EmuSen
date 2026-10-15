@@ -1138,7 +1138,7 @@ does not close the door:
   core and copies out the picture, which fits v1. A shared-device minor is possible later as an addition; v1.0 leaves
   `pixel_formats` open for a device-image format. *(2026-10-15: designed as the minor 1.9, the host lending its
   device and a queue and the core handing its picture as a buffer with a timeline semaphore, `EmuSen_DevicePicture.md`
-  §5.)*
+  §5; built as §6.29.)*
 
 ### 6.23 Media: a sheet's companions and the disc in a drive (1.1, 2026-10-11)
 
@@ -1380,6 +1380,57 @@ removable ones, making its machines with both flags. The test core lists `test.c
 of the card's medium and of port 7, fail C19 alone and C14 alone (`c19_holds_a_console_file_as_it_stands_across_a_state_load`,
 `each_fault_of_c9_and_c12_to_c18_alone_fails_its_case_alone`). A core of 1.8 that lists a console file is checked by a
 kit of 1.8 or later, whose C14 accepts it.
+
+### 6.29 The picture on the device: a lent device and `frame_device` (1.9, 2026-10-15)
+
+*Decided 2026-10-15, the tester's go to move the game's picture off Skia (`EmuSen_DevicePicture.md`), whose §5 weighs
+the forms; this section is the one built.* Before 1.9 a core that draws on a GPU made its own device and read its
+picture back into host memory for `frame_copy`, and the host uploaded it again; Diamond paid a frame of latency so that
+the readback never stalled its machine (`Diamond_Enhancements.md` §38.1).
+
+**The surface.**
+
+- **`EMUSEN_CAP_DEVICE_PICTURE`**, bit 21: the core may draw on a device the host lends, and exports
+  `emusen_core_frame_device`.
+- **`emusen_create_params.device`**, appended (104 bytes; 96 and 88 still accepted): `const emusen_device_lend *`,
+  null when nothing is lent. A core that does not claim the bit never reads it.
+- **`emusen_device_lend`** (64 bytes, beginning with `size`): the loader's `vkGetInstanceProcAddr`, the `VkInstance`,
+  `VkPhysicalDevice` and `VkDevice` as integers, the device's API version (1.2 or later, timeline semaphores enabled),
+  **the queue lent** (family, with compute, and index: the core's alone to submit to), the family of the host's own
+  queue, and the host's timeline semaphore **`done`**.
+- **`emusen_core_frame_device(m, emusen_device_frame *out)`**, called after `advance` (and `present`): 1 with the
+  frame's picture on the lent device, 0 when this frame's picture is not there and `frame_copy` has it, or a status.
+- **`emusen_device_frame`** (56 bytes, beginning with `size`, which stays the host's): the `VkBuffer`, the offset, the
+  width, height and row stride, the format (RGBA8888), and the core's timeline semaphore **`ready`** with the value it
+  reaches once the picture is written, which counts the pictures handed.
+- **`emusen-native`**: `Create.device: Option<DeviceLend>`, filled only for a core claiming the bit and only from a
+  whole struct (a shorter one is no lend); `Core::frame_device`, `NOT_SUPPORTED` by default; the export by
+  `core_exports!(…; device_picture)`.
+
+**The rules.**
+
+- **The core.** Lent a device, it may draw on it with the lent queue, and makes its own device, as before, when nothing
+  is lent or the lend does not suit it (a version below 1.2, a queue without compute). A picture it hands lies in a
+  buffer it made with concurrent sharing over its family and the host's; `ready` reaches the picture's value when it
+  is written; and **once `frame_device` has answered a picture, the core does not write its memory again until `done`
+  has reached its value**. A picture `frame_device` never answered binds the core to nothing, so a host that lends and
+  takes `frame_copy` alone is never stalled. It never destroys the lender's objects.
+- **The host.** It signals `done`, on the device and in order, with the value of every picture `frame_device` answered
+  once it no longer reads it; one signal of the newest covers the older. A host that stops signalling stalls the
+  core's device, and within two `advance` calls its machine; nothing is corrupted. The lent objects outlive the machine.
+- **`frame_copy` still answers** on a frame whose picture is on the device, by waiting for it and reading it back, so
+  a screenshot, a state's picture, the kit and every tool keep working.
+- **The latency may change**: lent a device, a core may hand each picture the frame it is drawn where without one it
+  hands it a frame later (Diamond does, §38.1 there). It does not change anything else of the run: states hold nothing
+  of the device, and a state saved with a device lent loads without one and the reverse.
+
+**Skew.** A host of 1.8 passes 96 or 88 bytes and never calls the export; the core reads no lend and hands pixels. A
+core of 1.8 claims no bit; a host of 1.9 never lends to it, and its 104 bytes are read only as far as the core knows.
+A host of 1.9 with no device to lend passes null, and `frame_device` answers 0.
+
+**The kit.** C20 (§28.12) where the bit is claimed. The test core claims it, keeps a lend and draws on nothing, so
+`frame_device` answers 0; its seeded fault `FAULT_DEVICE_PICTURE_UNLENT` (1 << 23), a picture answered on a device
+nobody lent, fails C20 alone.
 
 ## 7. Core discovery and trust
 
@@ -2138,6 +2189,15 @@ entries' kind `"console"`, core info's `medium`, `label` and `port` on battery e
 `emusen-native` gains `BatteryKind::Console`, `Battery::console` and the slot's three fields, written only when set, and
 `Create.shared_console`; the C# host reads the kind as `CoreBatteryKind` with the slot's fields and passes the flag;
 the kit's C14 checks the slots and C19 keeps console files. Its reasons are `EmuSen_SaveMedia.md` §1–§5.
+
+**v1.9, 2026-10-15** (§6.29), the tester's go to move the game's picture off Skia (`EmuSen_DevicePicture.md`):
+`EMUSEN_CAP_DEVICE_PICTURE` (bit 21), `emusen_create_params.device` appended (104 bytes), `emusen_device_lend`,
+`emusen_device_frame` and `emusen_core_frame_device`, so that a host lends its Vulkan device and a queue and a core
+hands its picture on it with a timeline semaphore instead of reading it back. `emusen-native` gains `Create.device`,
+`Core::frame_device` and the export; the guard's checker learns the two structs and a function pointer member
+(`void (*)(void)`); the C# host reads the structs and the export (`CoreInterface`), and lends nothing yet; kit case
+C20 is added, with the kit's own lender; Diamond claims the bit (`EmuSen_DevicePicture.md` §16). Its reasons are
+`EmuSen_DevicePicture.md` §5.
 
 **Host, 2026-10-12**, no change to the ABI: the reference host keeps §6.16 itself, input latched to the frame's start
 and every machine call behind a per-machine gate, after a pad timer's `set_axis` met a frame's call on the handheld
@@ -3202,6 +3262,30 @@ case's run now starts once each thread is calling and ends once each has called 
 - **Diamond unchanged** [M]: its crate's tests pass, 279, and its library's, 4; the kit on its sample
   (`kit/psx-sample.txt`, 1,800 frames, 10 GiB) reports core ABI 1.6, the core's cases pass and 9 of 9 discs pass, each
   disc's C16 taking the drive's path with the words it had before, in 258.5 s.
+
+### 28.12 C20, the picture on the device (1.9, 2026-10-15)
+
+Where `DEVICE_PICTURE` is claimed, C20 plays a host of 1.9 (§6.29). A machine made with no lend runs its frames and
+never answers a picture on a device. A lend of 32 bytes is refused with `BAD_STRUCT` or not read. Then the kit lends a
+device of its own (`lender.rs`: a Vulkan 1.2 device with timeline semaphores, a graphics queue for the kit and a
+compute queue of another family, or a second queue of the first, for the core), if this machine has one; else the
+case says so and passes on what it checked. A machine made with the lend and one made without run the same image for
+up to 120 frames:
+
+- every picture the lent machine answers on the device is read by the kit on its own queue once `ready` reaches its
+  value (`done` then signalled with it) and must equal the lent machine's own `frame_copy` of that frame, and be
+  RGBA8888 with a stride of at least its width;
+- the lent machine's `frame_copy`s must be the other's, at the same frame or a frame sooner throughout, the frame of
+  latency a core without the device may pay (§6.29);
+- the picture of the middle frame is held through the next two `advance` calls, the next one read without letting go
+  of anything, and read 100 ms into the second: it must still be the picture it was, which a core that writes a slot
+  before `done` lets go of it fails.
+
+The test core passes by answering 0 throughout; `FAULT_DEVICE_PICTURE_UNLENT` fails it alone, and a core that takes
+only a host of 1.0 fails it with C12, C17 and C18 (`each_fault_of_c9_and_c12_to_c18_alone_fails_its_case_alone`). On
+Diamond at 2× (`animated-triangle.exe`, 200 frames): 120 of 120 pictures handed on the device, each the machine's own
+`frame_copy` and the lendless machine's a frame later; with `PictureOut`'s wait for `done` removed, C20 fails with
+"the picture of frame 60, held until now, was written over" (`EmuSen_DevicePicture.md` §16).
 
 ## 29. A space that is a view, 2026-10-07
 

@@ -23,13 +23,17 @@ namespace EmuSen.WiseMan.Cores
             ["emusen_frame_info"] = typeof(CoreInterface.FrameInfo),
             ["emusen_event"] = typeof(CoreInterface.Event),
             ["emusen_media"] = typeof(CoreInterface.Media),
+            ["emusen_device_lend"] = typeof(CoreInterface.DeviceLend),
+            ["emusen_device_frame"] = typeof(CoreInterface.DeviceFrame),
         };
 
         // A C type as the baseline spells it, as the C# a host must declare it with.
         private static Type CSharp(string c)
         {
-            c = c.Replace("const ", "");
+            c = c.Replace("const ", "").Replace("struct ", "");
             if (c == "emusen_machine*") return typeof(nint);
+            // A function pointer the host passes through and never calls, held as an address.
+            if (c == "void (*)(void)") return typeof(nint);
             if (c.EndsWith('*')) return c == "char*" ? typeof(byte*) : CSharp(c[..^1]).MakePointerType();
             return c switch
             {
@@ -79,7 +83,7 @@ namespace EmuSen.WiseMan.Cores
         public void Every_export_of_the_baseline_has_its_field_with_the_headers_signature()
         {
             var functions = Lines("fn").ToList();
-            Assert.Equal(58, functions.Count);
+            Assert.Equal(59, functions.Count);
             Assert.Empty(Compare(typeof(CoreInterface), functions));
             var fields = typeof(CoreInterface).GetFields().Where(f => !f.IsLiteral && f.FieldType.IsFunctionPointer).Select(f => f.Name).ToHashSet();
             Assert.Equal(functions.Select(w => CoreInterface.FieldFor(w[1])).ToHashSet(), fields);
@@ -96,7 +100,7 @@ namespace EmuSen.WiseMan.Cores
                 Assert.True(Marshal.SizeOf(s) >= int.Parse(w[3]), $"{w[1]} is {Marshal.SizeOf(s)} bytes, less than the {w[3]} the header recorded");
                 Assert.True(Marshal.SizeOf(s) == (end + align - 1) / align * align, $"{w[1]} is {Marshal.SizeOf(s)} bytes, its fields end at {end}");
             }
-            Assert.Equal(96, Marshal.SizeOf<CoreInterface.CreateParams>());
+            Assert.Equal(104, Marshal.SizeOf<CoreInterface.CreateParams>());
             int checkedFields = 0;
             foreach (var w in Lines("field"))
             {

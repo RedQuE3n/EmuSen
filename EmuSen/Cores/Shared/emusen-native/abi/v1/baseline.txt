@@ -19,6 +19,7 @@ const EMUSEN_CAP_DEBUG_DISASSEMBLE 0x20000 @1.0
 const EMUSEN_CAP_DEBUG_READS 0x80000 @1.2
 const EMUSEN_CAP_DEBUG_REGISTERS 0x10000 @1.0
 const EMUSEN_CAP_DEBUG_STACK 0x2000 @1.0
+const EMUSEN_CAP_DEVICE_PICTURE 0x200000 @1.9
 const EMUSEN_CAP_FRAME_SERIAL 0x100 @1.0
 const EMUSEN_CAP_MEDIA 0x40000 @1.1
 const EMUSEN_CAP_MUTES 0x20 @1.0
@@ -31,8 +32,8 @@ const EMUSEN_CAP_SETTINGS 0x40 @1.0
 const EMUSEN_CAP_SETTING_NOTES 0x8000 @1.0
 const EMUSEN_CAP_SNAPSHOT 0x4 @1.0
 const EMUSEN_CORE_ABI_MAJOR 0x1 @1.0
-const EMUSEN_CORE_ABI_MINOR 0x8 @1.8
-const EMUSEN_CORE_ABI_VERSION 0x10008 @1.8
+const EMUSEN_CORE_ABI_MINOR 0x9 @1.9
+const EMUSEN_CORE_ABI_VERSION 0x10009 @1.9
 const EMUSEN_CREATE_LENT 0x1 @1.3
 const EMUSEN_CREATE_SHARED_CONSOLE 0x4 @1.8
 const EMUSEN_CREATE_SHARED_REMOVABLE 0x2 @1.7
@@ -126,6 +127,7 @@ export emusen_core_events required @1.0
 export emusen_core_firmware_for required @1.0
 export emusen_core_frame_copy required @1.0
 export emusen_core_frame_count required @1.0
+export emusen_core_frame_device optional EMUSEN_CAP_DEVICE_PICTURE @1.9
 export emusen_core_frame_info required @1.0
 export emusen_core_free required @1.0
 export emusen_core_info required @1.0
@@ -156,6 +158,7 @@ export emusen_core_state_load required @1.0
 export emusen_core_state_save required @1.0
 export emusen_core_state_size required @1.0
 export emusen_core_status_text required @1.0
+field emusen_create_params.device offset 96 type const struct emusen_device_lend* @1.9
 field emusen_create_params.error offset 72 type uint8_t* @1.0
 field emusen_create_params.error_len offset 80 type size_t @1.0
 field emusen_create_params.file_count offset 48 type size_t @1.0
@@ -169,6 +172,27 @@ field emusen_create_params.pixel_formats offset 64 type uint64_t @1.0
 field emusen_create_params.settings offset 24 type const uint8_t* @1.0
 field emusen_create_params.settings_len offset 32 type size_t @1.0
 field emusen_create_params.size offset 0 type uint32_t @1.0
+field emusen_device_frame.buffer offset 8 type uint64_t @1.9
+field emusen_device_frame.format offset 4 type uint32_t @1.9
+field emusen_device_frame.height offset 28 type int32_t @1.9
+field emusen_device_frame.offset offset 16 type uint64_t @1.9
+field emusen_device_frame.ready offset 40 type uint64_t @1.9
+field emusen_device_frame.reserved offset 36 type uint32_t @1.9
+field emusen_device_frame.size offset 0 type uint32_t @1.9
+field emusen_device_frame.stride offset 32 type int32_t @1.9
+field emusen_device_frame.value offset 48 type uint64_t @1.9
+field emusen_device_frame.width offset 24 type int32_t @1.9
+field emusen_device_lend.api_version offset 4 type uint32_t @1.9
+field emusen_device_lend.device offset 32 type uint64_t @1.9
+field emusen_device_lend.done offset 56 type uint64_t @1.9
+field emusen_device_lend.get_instance_proc_addr offset 8 type void (*)(void) @1.9
+field emusen_device_lend.host_queue_family offset 48 type uint32_t @1.9
+field emusen_device_lend.instance offset 16 type uint64_t @1.9
+field emusen_device_lend.physical_device offset 24 type uint64_t @1.9
+field emusen_device_lend.queue_family offset 40 type uint32_t @1.9
+field emusen_device_lend.queue_index offset 44 type uint32_t @1.9
+field emusen_device_lend.reserved offset 52 type uint32_t @1.9
+field emusen_device_lend.size offset 0 type uint32_t @1.9
 field emusen_event.a offset 8 type int64_t @1.0
 field emusen_event.b offset 16 type int64_t @1.0
 field emusen_event.kind offset 4 type uint32_t @1.0
@@ -224,6 +248,7 @@ fn emusen_core_events (emusen_machine*, emusen_event*, size_t, size_t) -> int64_
 fn emusen_core_firmware_for (const uint8_t*, size_t, uint8_t*, size_t) -> int64_t @1.0
 fn emusen_core_frame_copy (const emusen_machine*, uint8_t*, size_t) -> int64_t @1.0
 fn emusen_core_frame_count (const emusen_machine*) -> int64_t @1.0
+fn emusen_core_frame_device (emusen_machine*, emusen_device_frame*) -> int32_t @1.9
 fn emusen_core_frame_info (const emusen_machine*, emusen_frame_info*) -> int32_t @1.0
 fn emusen_core_free (emusen_machine*) -> int32_t @1.0
 fn emusen_core_info (uint8_t*, size_t) -> int64_t @1.0
@@ -430,6 +455,8 @@ status EMUSEN_TRUNCATED -2 @1.0
 status EMUSEN_UNKNOWN_SETTING -259 @1.0
 status EMUSEN_WRONG_MEDIA -266 @1.1
 struct emusen_create_params size 88 align 8 @1.0
+struct emusen_device_frame size 56 align 8 @1.9
+struct emusen_device_lend size 64 align 8 @1.9
 struct emusen_event size 24 align 8 @1.0
 struct emusen_file size 24 align 8 @1.0
 struct emusen_frame_info size 56 align 8 @1.0

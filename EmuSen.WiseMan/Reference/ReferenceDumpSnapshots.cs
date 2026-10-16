@@ -2,8 +2,6 @@ using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MoonRT;
-using EmuSen.Cores.Nintendo.Venus;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.Crystal.Debugger;
 using EmuSen.WiseMan.Fixtures;
@@ -174,9 +172,8 @@ namespace EmuSen.WiseMan.Reference
 
             if (system == "snes")
             {
-                var core = new VenusCore(headless: true);
-                core.LoadRom(romPath);
-                var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+                ICore core = CoreFactory.Loaded(romPath);
+                var target = CoreFactory.Bundle(core).DebugTarget;
 
                 long ran = 0;
                 foreach (long frame in frames)

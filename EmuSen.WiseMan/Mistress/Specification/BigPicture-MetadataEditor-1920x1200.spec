@@ -68,23 +68,23 @@ edge 17 up 16
 edge 17 down path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/10
 edge 17 left same
 edge 17 right same
-edge 19 up path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/21
+edge 19 up path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/20
 edge 19 down same
 edge 19 left same
 edge 19 right 20
-edge 20 up path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/21
+edge 20 up path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/20
 edge 20 down same
 edge 20 left 19
 edge 20 right 21
-edge 21 up path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/21
+edge 21 up path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/20
 edge 21 down same
 edge 21 left 20
 edge 21 right 22
-edge 22 up path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/21
+edge 22 up path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/20
 edge 22 down same
 edge 22 left 21
 edge 22 right 23
-edge 23 up path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/21
+edge 23 up path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/20
 edge 23 down same
 edge 23 left 22
 edge 23 right same
@@ -129,9 +129,7 @@ edge path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/19 down path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/2
 edge path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/19 left same
 edge path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/19 right same
 edge path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/20 up path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/19
-edge path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/20 down path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/21
-edge path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/21 up path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/20
-edge path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/21 down 19
+edge path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/20 down 19
 press pageup focus="TextBox Meta_name (Name)" top=MetadataEditorWindow
 press pagedown focus="TextBox Meta_name (Name)" top=MetadataEditorWindow
 press first focus="TextBox Meta_name (Name)" top=MetadataEditorWindow

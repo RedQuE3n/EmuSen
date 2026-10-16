@@ -1,5 +1,5 @@
+using EmuSen.Cores;
 using System.Linq;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.Crystal.Debugger;
@@ -11,10 +11,10 @@ namespace EmuSen.WiseMan.DianaSh
     [Collection(TestCollections.ProcessGlobals)]
     public class CoprocessorDebugTests
     {
-        private static SnesDebugTarget BuildTarget()
+        private static IDebugTarget BuildTarget()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            return new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            return SyntheticRom.TargetOf(core);
         }
 
         [Fact]
@@ -47,7 +47,7 @@ namespace EmuSen.WiseMan.DianaSh
 
             Assert.Contains("cpu", output);
             Assert.Contains("spc", output);
-            Assert.Contains("SPC700", output);
+            Assert.Contains("code space: APURAM", output);
             Assert.Contains("disasm", output);
         }
 
@@ -105,7 +105,7 @@ namespace EmuSen.WiseMan.DianaSh
 
             string output = shell.Submit("regs spc").Output;
 
-            Assert.Contains("SPC700", output);
+            Assert.StartsWith("SPC registers:", output);
             Assert.DoesNotContain("BGMODE", output);
         }
 
@@ -125,14 +125,14 @@ namespace EmuSen.WiseMan.DianaSh
         public void A_breakpoint_on_the_sound_cpu_halts_the_core()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            var target = SyntheticRom.TargetOf(core);
             var spc = target.DebugCpus.First(c => c.Name == "spc");
-            spc.Breakpoints.AddBreakpoint(core.Bus!.Spc700.PC);
+            spc.Breakpoints.AddBreakpoint(spc.ProgramCounter!());
 
             core.RunFrame();
 
             Assert.True(core.IsHaltedAtBreakpoint);
-            Assert.Equal("spc", core.HaltedCpu);
+            Assert.True(core is ICoprocessorHalt { IsHaltedOnCoprocessor: true });
         }
 
         // Resuming must arm the halted chip's own skip, not the main CPU's.
@@ -140,9 +140,9 @@ namespace EmuSen.WiseMan.DianaSh
         public void Resuming_a_sound_cpu_halt_does_not_instantly_re_halt()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            var target = SyntheticRom.TargetOf(core);
             var spc = target.DebugCpus.First(c => c.Name == "spc");
-            int id = spc.Breakpoints.AddBreakpoint(core.Bus!.Spc700.PC);
+            int id = spc.Breakpoints.AddBreakpoint(spc.ProgramCounter!());
             core.RunFrame();
             Assert.True(core.IsHaltedAtBreakpoint);
             spc.Breakpoints.RemoveBreakpoint(id);
@@ -156,7 +156,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Coverage_is_recorded_per_chip_not_shared()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            var target = SyntheticRom.TargetOf(core);
             var spc = target.DebugCpus.First(c => c.Name == "spc");
             spc.Coverage!.Arm();
 
@@ -164,20 +164,6 @@ namespace EmuSen.WiseMan.DianaSh
 
             Assert.True(spc.Coverage.InstructionsRecorded > 0);
             Assert.Equal(0, target.Coverage!.InstructionsRecorded);
-        }
-
-        [Fact]
-        public void Eval_scoped_to_a_chip_reads_that_chips_registers()
-        {
-            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
-            core.Cpu!.A = 0x1111;
-            core.Bus!.Spc700.A = 0x42;
-            target.RefreshProviders();
-            var shell = DianaShInterpreter.CreateDefault(target);
-
-            Assert.Contains("4369", shell.Submit("eval a").Output);      // 0x1111, the main CPU
-            Assert.Contains("66", shell.Submit("eval spc a").Output);    // 0x42, the SPC700
         }
 
         // A bare chip name has to stay an expression, or `eval a` breaks.
@@ -206,12 +192,12 @@ namespace EmuSen.WiseMan.DianaSh
         public void Disasm_with_no_address_starts_where_the_chip_is_executing()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            var target = SyntheticRom.TargetOf(core);
             var shell = DianaShInterpreter.CreateDefault(target);
 
             string output = shell.Submit("disasm cpu").Output;
 
-            Assert.Contains($"{(core.Cpu!.PB << 16) | core.Cpu.PC:X6}:", output);
+            Assert.Contains($"{target.DebugCpus.First(c => c.Name == "cpu").ProgramCounter!():X6}:", output);
         }
 
         [Fact]

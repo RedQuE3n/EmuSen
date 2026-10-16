@@ -162,33 +162,6 @@ status 1
 action none
 end
 
-case on venus
-target venus
-covers 2-3
-$ disasm cpu
-out 239
-  00ED3E: EA        NOP
-  00ED3F: EA        NOP
-  00ED40: EA        NOP
-  00ED41: EA        NOP
-  00ED42: EA        NOP
-  00ED43: EA        NOP
-  00ED44: EA        NOP
-  00ED45: EA        NOP
-  00ED46: EA        NOP
-  00ED47: EA        NOP
-status 0
-action none
-$ disasm cpu 0 4
-out 115
-  000000: 00 00     BRK #$00
-  000002: 00 00     BRK #$00
-  000004: 00 00     BRK #$00
-  000006: 00 00     BRK #$00
-status 0
-action none
-end
-
 case on venusrt
 target venusrt
 covers 2-3
@@ -324,25 +297,3 @@ status 0
 action none
 end
 
-case on venus with width hints
-target venus
-covers 2,4
-$ disasm cpu 8000 4 m16 x16
-out 133
-  ; decoding with m16 x16
-  008000: A9 01 8D  LDA #$8D01
-  008003: 00 42     BRK #$42
-  008005: EA        NOP
-  008006: EA        NOP
-status 0
-action none
-$ disasm cpu 8000 4 m8 x8
-out 130
-  ; decoding with m8 x8
-  008000: A9 01     LDA #$01
-  008002: 8D 00 42  STA $4200
-  008005: EA        NOP
-  008006: EA        NOP
-status 0
-action none
-end

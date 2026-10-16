@@ -1,5 +1,12 @@
 # Venus (SNES) — SuperFX (GSU)
 
+*Historical since 2026-10-16.* This page describes C# Venus, which was deleted from the source on 2026-10-16 at the
+tester's word (`VenusRT_Native.md` §68). Its content is kept as the record of that core. VenusRT, the SNES's only engine
+since, is a clean-room rewrite that was written without reading this page's algorithm sections (`VenusRT_Plan.md` §1.2),
+so nothing here describes VenusRT; the file, class and member names are C# Venus's, and the code it cites is in the
+repository's history and in the releases that carried it. The GSU runs on VenusRT as built at its stage 5
+(`VenusRT_Native.md` §26).
+
 Covers everything under `Cores/Nintendo/Venus - SNES/Coprocessors/SuperFx/`, plus `SuperFxMapper`. This is the second coprocessor this core implements, after the SA-1 (`Venus_SA1.md`).
 
 > **Status: working, with one open issue that is not the chip's.** The chip is fully built — memory map, the whole instruction set, the plot hardware — and since §10.4 (2026-08-02) Yoshi's Island's intro renders correctly: the frame, the sky, and every picture the GSU draws inside the frame. The one remaining defect is the story-text strip, and §10.5 shows the GSU decodes that text correctly into Game Pak RAM, so the fault is downstream on the S-CPU/PPU side. Everything in §1-§8 is implemented; treat §9's warnings as live.

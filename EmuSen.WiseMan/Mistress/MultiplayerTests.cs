@@ -11,7 +11,6 @@ using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -44,10 +43,6 @@ namespace EmuSen.WiseMan.Mistress
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             CoreOptions.BatteryRamDisabled = true;
-            // SnesPads reads Venus (C#)'s auto-read words, so the SNES cases pin it over the default - see VenusRT_Native.md §66.4.
-            GraphicsConfig config = GraphicsConfig.Load();
-            config.SetValue("SNES", CoreCatalog.EngineKey, CoreCatalog.VenusEngine);
-            config.Save();
         }
 
         public void Dispose()
@@ -92,13 +87,8 @@ namespace EmuSen.WiseMan.Mistress
             return Enumerable.Range(0, 4).Select(i => (state[present[i]] != 0, BitConverter.ToUInt16(state, buttons[i]), (sbyte)state[stick[i]])).ToArray();
         }
 
-        // The SNES auto-read's two words, as the game would read them at $4218 and $421A.
-        private static (ushort One, ushort Two) SnesPads(MainWindow w)
-        {
-            var venus = Assert.IsType<VenusCore>(SessionOf(w).Core);
-            venus.Bus!.Input.LatchAutoJoypad();
-            return ((ushort)(venus.Bus.Input.ReadJoy1Low() | venus.Bus.Input.ReadJoy1High() << 8), (ushort)(venus.Bus.Input.ReadJoy2Low() | venus.Bus.Input.ReadJoy2High() << 8));
-        }
+        // The SNES auto-read's two words, as the game reads them at $4218 and $421A and copies them to WRAM.
+        private static (ushort One, ushort Two) SnesPads(MainWindow w) => SyntheticRom.Pads(SessionOf(w).Core!);
 
         private const ushort SnesB = 0x8000, SnesA = 0x0080, SnesStart = 0x1000;
 
@@ -107,7 +97,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task A_second_pad_plays_as_player_2_and_its_slot_waits_while_it_is_unplugged() => Session.Dispatch(() =>
         {
-            (MainWindow window, PadDriver first) = Playing("Two.sfc", SyntheticRom.BuildBlank());
+            (MainWindow window, PadDriver first) = Playing("Two.sfc", SyntheticRom.BuildPadReader());
             Assert.Equal(2, SessionOf(window).ControllerPorts);
             PadDriver second = first.Plug("Second Pad");
             Poll(window);
@@ -137,7 +127,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Player_1s_pad_going_moves_nobody_up_and_a_spare_takes_its_seat() => Session.Dispatch(() =>
         {
-            (MainWindow window, PadDriver first) = Playing("Spare.sfc", SyntheticRom.BuildBlank());
+            (MainWindow window, PadDriver first) = Playing("Spare.sfc", SyntheticRom.BuildPadReader());
             PadDriver second = first.Plug("Second Pad");
             Poll(window);
             first.Unplug();
@@ -160,7 +150,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task The_keyboard_can_play_as_player_2() => Session.Dispatch(() =>
         {
-            (MainWindow window, PadDriver first) = Playing("Keys.sfc", SyntheticRom.BuildBlank(), a => a.KeyboardPlayer = 2);
+            (MainWindow window, PadDriver first) = Playing("Keys.sfc", SyntheticRom.BuildPadReader(), a => a.KeyboardPlayer = 2);
             window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
             first.Pad.Press(SDL.GamepadButton.South);
             Poll(window);

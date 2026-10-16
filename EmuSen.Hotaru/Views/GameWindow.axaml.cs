@@ -10,10 +10,7 @@ using EmuSen.LunaP.Windowing;
 using Avalonia.Input;
 using Avalonia.Threading;
 using EmuSen.LunaP.Threading;
-using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Venus.Debug;
-using EmuSen.Debug;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
@@ -45,9 +42,6 @@ namespace EmuSen.Hotaru.Views
 
         // Set by a drop on the UI thread, taken by ProcessHotkeys - SwapCore runs there. See §3d.
         private volatile string? _droppedRom;
-
-        // The Venus-only hotkeys below need the real core; null for any other console.
-        private VenusCore? Venus => _core as VenusCore;
 
         // Rebuilt per load, which is why it is not readonly - see EmuSen_Frontend_Driver.md §3f.
         private IDebugTarget _debugTarget = null!;
@@ -83,8 +77,6 @@ namespace EmuSen.Hotaru.Views
         private readonly PortRouter _ports;
         private bool _mirrorPlayer1ToPlayer2;
 
-        private readonly DebugTools.BoundedTrace _bgScrollTrace = new();
-
         private volatile bool _running = true;
         private readonly Thread _emuThread;
 
@@ -93,15 +85,12 @@ namespace EmuSen.Hotaru.Views
 
         // One writer (OnKeyDown), one reader/clearer (EmulationLoop) - see EmuSen_Frontend_Driver.md §2.
         private volatile bool _requestSummary;
-        private volatile bool _requestDumpOam;
         private volatile bool _requestScreenshot;
         private volatile bool _requestDebugPrompt;
         private volatile bool _requestSaveState;
         private volatile bool _requestLoadState;
         private volatile bool _requestToggleRecording;
         private volatile bool _requestMirrorToggle;
-        private volatile bool _requestDumpBackdrop;
-        private volatile bool _requestStartBgScrollTrace;
 
         // Held, not edge-triggered - see EmuSen_Rewind_And_FastForward.md §4.
         private volatile bool _turboHeld;
@@ -262,7 +251,6 @@ namespace EmuSen.Hotaru.Views
             switch (action)
             {
                 case HotaruHotkey.Summary: _requestSummary = true; break;
-                case HotaruHotkey.DumpOam: _requestDumpOam = true; break;
                 case HotaruHotkey.Screenshot: _requestScreenshot = true; break;
                 case HotaruHotkey.DebugPrompt: _requestDebugPrompt = true; break;
                 case HotaruHotkey.SaveState: _requestSaveState = true; break;
@@ -272,8 +260,6 @@ namespace EmuSen.Hotaru.Views
                 case HotaruHotkey.ShowHotkeys: DebugWindows.ShowHotkeyHelpWindow(); break;
                 case HotaruHotkey.CycleShader: CycleShaderEffect(); break; // pure UI-side (GameFrame.ActiveEffect) - no core state touched, safe to act on immediately
                 case HotaruHotkey.LoadState: _requestLoadState = true; break;
-                case HotaruHotkey.DumpBackdrop: _requestDumpBackdrop = true; break;
-                case HotaruHotkey.StartBgScrollTrace: _requestStartBgScrollTrace = true; break;
                 case HotaruHotkey.FastForward: _turboHeld = true; e.Handled = true; break; // Handled or Avalonia steals Tab for focus traversal
                 case HotaruHotkey.Rewind: _rewindHeld = true; break;
             }
@@ -516,21 +502,12 @@ namespace EmuSen.Hotaru.Views
             _frameRecorder.CaptureFrame(path => FrameImageWriter.SavePng(_core.GetFrameBufferRgba(), _core.ScreenWidth, _core.ScreenHeight, path));
 
             if (_requestToggleRecording) { _requestToggleRecording = false; ToggleRecording(); }
-            if (_requestStartBgScrollTrace) { _requestStartBgScrollTrace = false; StartBgScrollTrace(); }
-            if (_requestDumpBackdrop) { _requestDumpBackdrop = false; Venus?.Renderer!.DumpBackdropAndWindowDebugInfo(Venus.Bus!.Ppu, _core.TotalFrames); }
             if (_requestMirrorToggle) { _requestMirrorToggle = false; ToggleMirror(); }
             if (_requestSummary) { _requestSummary = false; Console.WriteLine(_debugTarget.GetSummaryText()); }
-            if (_requestDumpOam) { _requestDumpOam = false; Venus?.Renderer!.DumpActiveOam(Venus.Bus!.Ppu); }
             if (_requestDebugPrompt) { _requestDebugPrompt = false; if (RunDebugPrompt()) return true; }
             if (_requestScreenshot) { _requestScreenshot = false; TakeScreenshot(); }
             if (_requestSaveState) { _requestSaveState = false; SaveState(_statePath); }
             if (_requestLoadState) { _requestLoadState = false; LoadState(_statePath); }
-
-            if (_bgScrollTrace.ShouldLog())
-            {
-                if (Venus is { Bus: { } scrollBus }) Console.WriteLine($"[BG SCROLL] Frame {_core.TotalFrames}: BG1 X={scrollBus.Ppu.BgScrollX[0]} Y={scrollBus.Ppu.BgScrollY[0]}  |  BG2 X={scrollBus.Ppu.BgScrollX[1]} Y={scrollBus.Ppu.BgScrollY[1]}");
-                if (!_bgScrollTrace.IsActive) DebugSettings.AllScrollWriteLogging = false;
-            }
 
             return false;
         }
@@ -598,13 +575,6 @@ namespace EmuSen.Hotaru.Views
         {
             _mirrorPlayer1ToPlayer2 = !_mirrorPlayer1ToPlayer2;
             Console.WriteLine($"[INPUT] Mirror Player 1 -> Player 2: {(_mirrorPlayer1ToPlayer2 ? "ON" : "OFF")}");
-        }
-
-        private void StartBgScrollTrace()
-        {
-            _bgScrollTrace.Start(300);
-            DebugSettings.AllScrollWriteLogging = true;
-            Console.WriteLine("[BG SCROLL] --- Starting 300-frame scroll trace ---");
         }
 
         // Blocks the emulation thread, never the UI thread - see EmuSen_Frontend_Driver.md §2.

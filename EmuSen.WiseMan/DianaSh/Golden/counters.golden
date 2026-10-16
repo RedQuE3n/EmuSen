@@ -156,29 +156,6 @@ status 0
 action none
 end
 
-case counting on venus
-target venus
-covers 1-6
-$ counters on WRAM
-out 55
-Counting reads/writes/executes for WRAM (131072 bytes).
-status 0
-action none
-$ spaces
-out 283
-SNES memory spaces:
-  CpuBus     16777216 bytes  R/W
-  IO            65536 bytes  R/W
-  WRAM         131072 bytes  R/W
-  VRAM          65536 bytes  R/W
-  CGRAM           512 bytes  R/W
-  OAM             544 bytes  R/W
-  SRAM         131072 bytes  R/W
-  APURAM        65536 bytes  R/W
-status 0
-action none
-end
-
 case counting on moonrt
 target moonrt
 covers 1-6

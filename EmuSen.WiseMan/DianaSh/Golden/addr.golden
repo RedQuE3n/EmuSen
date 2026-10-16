@@ -89,29 +89,6 @@ status 0
 action none
 end
 
-case on venus
-target venus
-covers 1
-$ addr 0
-out 35
-$000000 -> WRAM 0x0
-  mem WRAM 0 10
-status 0
-action none
-$ addr 8000
-out 33
-$008000 -> ROM 0x0
-  mem ROM 0 10
-status 0
-action none
-$ addr FFFC
-out 39
-$00FFFC -> ROM 0x7FFC
-  mem ROM 7FFC 10
-status 0
-action none
-end
-
 case on moonrt
 target moonrt
 covers 1

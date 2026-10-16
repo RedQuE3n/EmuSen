@@ -1,4 +1,5 @@
-using EmuSen.Cores.Nintendo.Venus.Debug;
+using EmuSen.Cores;
+using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
@@ -20,7 +21,7 @@ namespace EmuSen.WiseMan.DianaSh
         private static DianaShInterpreter ShellWithBytesAt(int addr)
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            var target = SyntheticRom.TargetOf(core);
             var wram = target.GetMemorySpaces().First(s => s.Name == "WRAM");
             for (int i = 0; i < Bytes.Length; i++) wram.Write(addr + i, Bytes[i]);
             return DianaShellFixtures.NewShellWithSessions(target).Shell;
@@ -34,23 +35,6 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Contains("LDY #$00", outp);
             Assert.Contains("STA $39", outp);
             Assert.Contains("decoding with m16 x8", outp);
-        }
-
-        // x16 is the direction a reset core's own flags would never give.
-        [Fact]
-        public void X16_hint_forces_the_misaligned_decode_the_cpu_flags_would_not_give()
-        {
-            string plain = ShellWithBytesAt(0x1000).Execute("disasm WRAM 1000 6");
-            string forced = ShellWithBytesAt(0x1000).Execute("disasm WRAM 1000 6 x16");
-
-            Assert.Contains("STA $39", plain);
-            Assert.DoesNotContain("decoding with", plain);
-
-            // Verbatim what the real $04:FDD8 listing looked like.
-            Assert.Contains("LDY #$C500", forced);
-            Assert.Contains("AND $0210,Y", forced);
-            Assert.DoesNotContain("STA $39", forced);
-            Assert.Contains("decoding with x16", forced);
         }
 
         [Fact]

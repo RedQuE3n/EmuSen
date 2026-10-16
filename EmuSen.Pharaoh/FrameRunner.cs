@@ -1,8 +1,5 @@
 using EmuSen.Cores;
 using EmuSen.Common.Imaging;
-using EmuSen.Cores.Nintendo.Venus;
-using EmuSen.Cores.Nintendo.Venus.Controllers;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Pharaoh
@@ -22,14 +19,7 @@ namespace EmuSen.Pharaoh
         public long FrameCap { get; }
         public long CurrentFrame { get; private set; }
 
-        public long CpuLogStart { get; set; } = -1;
-        public long CpuLogEnd { get; set; } = -1;
         public bool Verbose { get; set; }
-
-        // --cputrace: binary S-CPU trace from boot, written once this frame completes - see §3.40.
-        public long CpuTraceEnd { get; set; } = -1;
-        public string? CpuTracePath { get; set; }
-        private bool _cpuTraceWritten;
 
 
         private readonly Action<string> emit;
@@ -76,32 +66,8 @@ namespace EmuSen.Pharaoh
             Release(button, controller);
         }
 
-        // Armed before any instruction executes, where Mesen's starts too - see §3.40.
-        private void EnsureCpuTraceArmed()
-        {
-            if (CpuTracePath == null || _cpuTraceArmed) return;
-            _cpuTraceArmed = true;
-            CpuBinaryTrace.Start();
-        }
-
-        private bool _cpuTraceArmed;
-
-        private void WriteCpuTraceIfDue()
-        {
-            if (CpuTracePath == null || _cpuTraceWritten || CurrentFrame < CpuTraceEnd) return;
-            _cpuTraceWritten = true;
-            CpuBinaryTrace.Stop();
-            CpuBinaryTrace.WriteTo(CpuTracePath);
-            emit($"[CPUTRACE] {CpuBinaryTrace.Count} steps through frame {CurrentFrame} -> {CpuTracePath}");
-            if (CpuBinaryTrace.Overflowed)
-            {
-                emit("[WARN] The trace buffer filled and recording stopped early - lower --cputrace's frame.");
-            }
-        }
-
         public void RunFrames(long count)
         {
-            EnsureCpuTraceArmed();
             for (long i = 0; i < count; i++)
             {
                 if (CurrentFrame >= FrameCap)
@@ -113,16 +79,6 @@ namespace EmuSen.Pharaoh
                     return;
                 }
                 ApplyHeld();
-                if (CpuLogStart >= 0)
-                {
-                    // CpuVerboseLogging's own getter is gated by
-                    // MasterLoggingEnabled (same pattern as DmaVerboseLogging),
-                    // so both need setting for this window to actually
-                    // produce output.
-                    bool inWindow = CurrentFrame >= CpuLogStart && CurrentFrame < CpuLogEnd;
-                    EmuSen.Debug.DebugSettings.MasterLoggingEnabled = inWindow || Verbose;
-                    EmuSen.Debug.DebugSettings.CpuVerboseLogging = inWindow;
-                }
                 Core.RunFrame();
 
                 // A breakpoint returns from RunFrame() mid-frame, so this
@@ -145,7 +101,6 @@ namespace EmuSen.Pharaoh
                 }
 
                 CurrentFrame++;
-                WriteCpuTraceIfDue();
                 Rewind.OnFrameCompleted(Core);
                 onFrameAdvanced?.Invoke(CurrentFrame);
                 AfterFrame?.Invoke();

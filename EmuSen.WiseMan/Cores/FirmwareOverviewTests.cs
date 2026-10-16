@@ -4,7 +4,6 @@ using System.Linq;
 using EmuSen.Common.Firmware;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -106,20 +105,20 @@ namespace EmuSen.WiseMan.Cores
             Assert.Null(FirmwareItem.FirstSentence(" "));
         }
 
+        // A stored choice of the retired Venus (C#) shows VenusRT's rows; with VenusRT's library gone the SNES lists nothing to use - see VenusRT_Native.md §68.5.
         [Fact]
-        public void With_venus_chosen_or_venusrt_s_library_gone_the_rows_are_the_reference_core_s_own_requests()
+        public void With_venus_stored_the_rows_are_venusrt_s_and_with_its_library_gone_there_are_none()
         {
             var config = new GraphicsConfig();
-            config.SetValue("SNES", CoreCatalog.EngineKey, CoreCatalog.VenusEngine);
+            config.SetValue("SNES", CoreCatalog.EngineKey, "Venus (C#)");
             FirmwareSystem snes = Snes(config);
-            Assert.Equal(CoreCatalog.VenusEngine, snes.Engine);
-            Assert.Equal(Enum.GetValues<NecDspVariant>().Select(v => NecDspFirmware.RequestFor(v).FileName).Distinct(), snes.Items.Select(i => i.FileName));
-            Assert.All(snes.Items, i => Assert.Equal((FirmwareItem.NoVersion, FirmwareItem.NeedsFile), (i.InUse, i.Change)));
+            Assert.Equal(CoreCatalog.VenusRtEngine, snes.Engine);
+            Assert.Equal(Snes().Items.Select(i => i.FileName), snes.Items.Select(i => i.FileName));
 
             CoreDiscovery.UseDirectories([Path.Combine(_root, "NoCores")]);
             try
             {
-                Assert.Equal(CoreCatalog.VenusEngine, Snes().Engine);
+                Assert.Empty(Snes().Items);
             }
             finally
             {

@@ -61,9 +61,6 @@ namespace EmuSen.Shell
             {
                 if (Interlocked.Exchange(ref shutdownGuard, 1) != 0) return;
 
-                // The trace first, while Console.Out still routes through the log writer - see EmuSen_Frontend_Driver.md §0.2.
-                (core as ITraceFlushable)?.FlushVerboseTrace();
-
                 Console.SetOut(originalOut);
                 logWriter?.Dispose();
             }

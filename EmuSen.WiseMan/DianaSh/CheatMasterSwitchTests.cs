@@ -1,6 +1,7 @@
+using EmuSen.Cores;
+using EmuSen.Crystal.Debugger;
 using System.Collections.Generic;
 using System.Linq;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
@@ -14,13 +15,13 @@ namespace EmuSen.WiseMan.DianaSh
     // The one switch over every cheat - see `man cheat`.
     public class CheatMasterSwitchTests
     {
-        private static DianaShInterpreter NewShell(out SnesDebugTarget target)
+        private static DianaShInterpreter NewShell(out IDebugTarget target)
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            target = SyntheticRom.TargetOf(core);
             return DianaShInterpreter.CreateDefault(target, null,
-                EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.ActionReplay(),
-                EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.GameGenie());
+                EmuSen.Crystal.Systems.Snes.SnesSystem.ProActionReplay(),
+                EmuSen.Crystal.Systems.Snes.SnesSystem.GameGenie());
         }
 
         // Collects what ApplyAll actually wrote, so "the poke stopped" is
@@ -103,7 +104,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Cheat_master_reports_and_flips_the_switch()
         {
-            var shell = NewShell(out SnesDebugTarget target);
+            var shell = NewShell(out IDebugTarget target);
 
             Assert.Contains("ON", shell.Execute("cheat master"));
 
@@ -117,7 +118,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Cheat_master_rejects_anything_that_is_not_on_or_off()
         {
-            var shell = NewShell(out SnesDebugTarget target);
+            var shell = NewShell(out IDebugTarget target);
 
             Assert.Contains("Usage", shell.Execute("cheat master maybe"));
             Assert.True(target.Cheats.MasterEnabled);

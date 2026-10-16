@@ -14,52 +14,8 @@ namespace EmuSen.Mistress.Views
     {
         private readonly record struct Flag(string Label, string Description, Func<bool> Get, Action<bool> Set);
 
-        private readonly (string Section, Flag[] Flags)[] _groups =
-        {
-            ("CPU", new[]
-            {
-                new Flag("CPU instruction trace", "Logs every executed 65816 instruction. Very high volume.",
-                    () => DebugSettings.CpuVerboseLogging, v => DebugSettings.CpuVerboseLogging = v),
-            }),
-            ("APU", new[]
-            {
-                new Flag("SPC700 instruction trace", "Logs every executed SPC700 instruction. Very high volume.",
-                    () => DebugSettings.Spc700VerboseLogging, v => DebugSettings.Spc700VerboseLogging = v),
-            }),
-            ("DMA / HDMA", new[]
-            {
-                new Flag("General DMA transfers", "Logs every one-shot DMA transfer (channel, direction, source, size). High volume during level loads.",
-                    () => DebugSettings.DmaVerboseLogging, v => DebugSettings.DmaVerboseLogging = v),
-                new Flag("DMA source-address writes", "Logs the CPU PC responsible for every DMA channel source-address write.",
-                    () => DebugSettings.DmaSourceAddrLogging, v => DebugSettings.DmaSourceAddrLogging = v),
-                new Flag("Window HDMA (channel 7)", "Logs HDMA writes/block-fetches for the window-position registers. High volume while active.",
-                    () => DebugSettings.WindowHdmaLogging, v => DebugSettings.WindowHdmaLogging = v),
-            }),
-            ("PPU / Renderer", new[]
-            {
-                new Flag("CGRAM color writes", "Logs every palette color write. High volume - a full palette refresh alone is 100+ writes.",
-                    () => DebugSettings.CgWriteLogging, v => DebugSettings.CgWriteLogging = v),
-                new Flag("BG3 scroll writes", "Logs every write to BG3's scroll registers specifically.",
-                    () => DebugSettings.Bg3ScrollWriteLogging, v => DebugSettings.Bg3ScrollWriteLogging = v),
-                new Flag("Camera RAM changes", "Logs $001A-$0021 camera RAM writes, only on value change. Low volume.",
-                    () => DebugSettings.CameraRamLogging, v => DebugSettings.CameraRamLogging = v),
-                new Flag("BG2 render-time reads", "Logs BG2 scroll values at the moment the renderer reads them each frame.",
-                    () => DebugSettings.RenderReadLogging, v => DebugSettings.RenderReadLogging = v),
-                new Flag("All BG scroll writes", "Logs every write to all four backgrounds' scroll registers, in order.",
-                    () => DebugSettings.AllScrollWriteLogging, v => DebugSettings.AllScrollWriteLogging = v),
-            }),
-            ("Memory Bus", new[]
-            {
-                new Flag("H/V-IRQ changes", "Logs $4200/$4207-$420A writes that actually change the H/V-IRQ enable bits or HTIME/VTIME. Low volume.",
-                    () => DebugSettings.HvIrqChangeLogging, v => DebugSettings.HvIrqChangeLogging = v),
-                new Flag("Math unit operations", "Logs every hardware multiply/divide ($4203/$4206) with operands and result.",
-                    () => DebugSettings.MathUnitLogging, v => DebugSettings.MathUnitLogging = v),
-                new Flag("BGMODE changes", "Logs $2105 writes, only when the byte actually changes. Low volume.",
-                    () => DebugSettings.BgModeChangeLogging, v => DebugSettings.BgModeChangeLogging = v),
-                new Flag("Mosaic writes", "Logs every $2106 write with the scanline it landed on. Low volume.",
-                    () => DebugSettings.MosaicWriteLogging, v => DebugSettings.MosaicWriteLogging = v),
-            }),
-        };
+        // The flags a core still reads: none since the C# cores left on 2026-10-16, so only the master switch remains - see VenusRT_Native.md §68.8.
+        private readonly (string Section, Flag[] Flags)[] _groups = Array.Empty<(string, Flag[])>();
 
         private readonly List<LunaSwitch> _flagSwitches = new();
         private readonly LunaSwitch _master = new() { Name = "MasterLoggingCheckBox", Label = "Enable Logging (master switch)", FontWeight = FontWeight.Bold };

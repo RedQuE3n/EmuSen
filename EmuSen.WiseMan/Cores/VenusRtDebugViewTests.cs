@@ -12,7 +12,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // VenusRT's views through the SNES system pack against C# Venus's on one synthetic image at one frame - see EmuSen_CoreAPI.md §31.
+    // VenusRT's views through the SNES system pack on one synthetic image at one frame - see EmuSen_CoreAPI.md §31.
     [Collection(TestCollections.ProcessGlobals)]
     public class VenusRtDebugViewTests : IDisposable
     {
@@ -125,139 +125,86 @@ namespace EmuSen.WiseMan.Cores
             return (core, CoreFactory.Bundle(core).DebugTarget);
         }
 
-        private Pair Both(byte[] image, int frames = 3, Action<IDebugTarget>? before = null)
+        private Game One(byte[] image, int frames = 3, Action<IDebugTarget>? before = null)
         {
-            string path = Write("game.sfc", image);
-            var (venus, venusView) = Run(path, CoreCatalog.VenusEngine, frames, before);
-            var (rust, rustView) = Run(path, CoreCatalog.VenusRtEngine, frames, before);
-            Assert.IsType<CoreEngine>(rust);
-            return new Pair(venus, venusView, rust, rustView);
+            var (core, target) = Run(Write("game.sfc", image), null, frames, before);
+            Assert.IsType<CoreEngine>(core);
+            return new Game(core, target);
         }
 
-        // C# Venus and VenusRT on one image, each with its target.
-        private sealed record Pair(ICore VenusCore, IDebugTarget Venus, ICore RustCore, IDebugTarget Rust) : IDisposable
+        // VenusRT on one image, with its target.
+        private sealed record Game(ICore Core, IDebugTarget Target) : IDisposable
         {
-            public void Deconstruct(out IDebugTarget venus, out IDebugTarget rust, out IDisposable owner) => (venus, rust, owner) = (Venus, Rust, this);
-
-            public void RunFrames(int frames)
-            {
-                for (int i = 0; i < frames; i++)
-                {
-                    VenusCore.RunFrame();
-                    RustCore.RunFrame();
-                }
-            }
-
-            public void Dispose()
-            {
-                (VenusCore as IDisposable)?.Dispose();
-                (RustCore as IDisposable)?.Dispose();
-            }
+            public void Dispose() => (Core as IDisposable)?.Dispose();
         }
 
         private static string Shell(IDebugTarget target, string line) => DianaShInterpreter.CreateDefault(target).Submit(line).Output;
 
         [Fact]
-        public void Palettes_match_Venus()
+        public void Palettes_are_the_packs_sixteen()
         {
-            var (venus, rust, owner) = Both(Image(Program));
-            using (owner)
-            {
-                string all = Shell(venus, "pal");
-                Assert.Equal(16, all.Split('\n').Length);
-                Assert.NotEqual(Shell(venus, "pal 1"), Shell(venus, "pal 3"));
-                Assert.Equal(all, Shell(rust, "pal"));
-                Assert.Equal(venus.RenderPaletteSwatch().Rgba, rust.RenderPaletteSwatch().Rgba);
-            }
+            using var game = One(Image(Program));
+            string all = Shell(game.Target, "pal");
+            Assert.Equal(16, all.Split('\n').Length);
+            Assert.NotEqual(Shell(game.Target, "pal 1"), Shell(game.Target, "pal 3"));
+            Assert.Equal((192, 192), (game.Target.RenderPaletteSwatch().Width, game.Target.RenderPaletteSwatch().Height));
         }
 
         [Fact]
-        public void Tiles_tilemaps_and_the_tile_sheet_match_Venus()
+        public void Tiles_tilemaps_and_the_tile_sheet_decode_vram()
         {
-            var (venus, rust, owner) = Both(Image(Program));
-            using (owner)
-            {
-                foreach (string line in new[] { "tile VRAM 0 2", "tile VRAM 0 4", "tile VRAM 0 8", "tile VRAM 10 2", "tilemap VRAM 0 8 4" })
-                    Assert.Equal(Shell(venus, line), Shell(rust, line));
-                Assert.Matches("[1-9A-F]", Shell(rust, "tile VRAM 0 4").Split('\n')[1]);
-                Assert.Equal(venus.TilemapEntryStride, rust.TilemapEntryStride);
-                var (sheet, w, h) = venus.RenderTileSheet();
-                var rustSheet = rust.RenderTileSheet();
-                Assert.Equal((w, h), (rustSheet.Width, rustSheet.Height));
-                Assert.Equal(sheet, rustSheet.Rgba);
-            }
+            using var game = One(Image(Program));
+            Assert.Matches("[1-9A-F]", Shell(game.Target, "tile VRAM 0 4").Split('\n')[1]);
+            Assert.Equal(2, game.Target.TilemapEntryStride);
+            var (sheet, w, h) = game.Target.RenderTileSheet();
+            Assert.Equal((256, 512), (w, h));
+            Assert.Contains(sheet, b => b is not (0 or 255));
         }
 
         [Fact]
-        public void Dma_channels_match_Venus()
+        public void Dma_channels_show_the_programs_transfers()
         {
-            var (venus, rust, owner) = Both(Image(Program));
-            using (owner)
-            {
-                string table = Shell(venus, "dma");
-                Assert.Contains("  2   on ", table);
-                Assert.Contains("  3   arm ", table);
-                Assert.Contains("$008140", table);
-                Assert.Equal(table, Shell(rust, "dma"));
-                Assert.Equal(venus.DmaChannels.Select(Fields), rust.DmaChannels.Select(Fields));
-            }
-        }
-
-        // Every field but the indirect address, which C# Venus keeps apart from the byte count the two share on the hardware - see EmuSen_CoreAPI.md §31.2.
-        private static string Fields(DebugDmaChannel c) =>
-            $"{c.Index} {c.GeneralEnabled} {c.HdmaEnabled} {c.Control:X2} {c.DestinationRegister:X2} {c.SourceAddress:X6} {c.TransferSize} {c.HdmaActive} {c.TableAddress:X6} {c.LineCounter:X2}";
-
-        [Fact]
-        public void Vectors_match_Venus()
-        {
-            var (venus, rust, owner) = Both(Image(Program));
-            using (owner)
-            {
-                string vectors = Shell(venus, "vectors");
-                Assert.Contains("RESET        $00FFFC -> $008000", vectors);
-                Assert.Equal(vectors, Shell(rust, "vectors"));
-            }
+            using var game = One(Image(Program));
+            string table = Shell(game.Target, "dma");
+            Assert.Contains("  2   on ", table);
+            Assert.Contains("  3   arm ", table);
+            Assert.Contains("$008140", table);
         }
 
         [Fact]
-        public void Flag_and_alias_symbols_match_Venus()
+        public void Vectors_name_the_reset()
         {
-            var (venus, rust, owner) = Both(Image(Program));
-            using (owner)
-            {
-                Assert.Equal("[STATE] CPU", Shell(venus, "summary")[..11]);
-                foreach (string symbol in new[] { "flag.c", "flag.z", "flag.i", "flag.d", "flag.x", "flag.m", "flag.v", "flag.n", "sp", "dp", "pbr", "dbr", "p" })
-                    Assert.Equal(Shell(venus, $"eval {symbol}"), Shell(rust, $"eval {symbol}"));
-                Assert.StartsWith("1 ", Shell(rust, "eval flag.n"));
-                Assert.StartsWith("0 ", Shell(rust, "eval flag.x"));
-            }
+            using var game = One(Image(Program));
+            Assert.Contains("RESET        $00FFFC -> $008000", Shell(game.Target, "vectors"));
         }
 
-        // The C# summary's CPU line is the pack's line under VenusRT's heading.
+        // P is A5h, N.MxdI.C: each flag symbol is its bit.
         [Fact]
-        public void The_summary_carries_Venus_CPU_line()
+        public void Flag_symbols_are_the_bits_of_P()
         {
-            var (venus, rust, owner) = Both(Image(Program));
-            using (owner)
-            {
-                string[] rustLines = rust.GetSummaryText().Split('\n');
-                Assert.StartsWith("VenusRT (Rust)", rustLines[0]);
-                Assert.Equal(venus.GetSummaryText().Split('\n')[0], rustLines[1]);
-                Assert.Contains("A=1234 X=5678 Y=9ABC", rustLines[1]);
-                Assert.Contains("P=A5 [NvMxdIzC]  E=0", rustLines[1]);
-            }
+            using var game = One(Image(Program));
+            foreach (var (symbol, bit) in new[] { ("flag.c", 1), ("flag.z", 0), ("flag.i", 1), ("flag.d", 0), ("flag.x", 0), ("flag.m", 1), ("flag.v", 0), ("flag.n", 1) })
+                Assert.StartsWith($"{bit} ", Shell(game.Target, $"eval {symbol}"));
+        }
+
+        // The pack's CPU line under VenusRT's heading.
+        [Fact]
+        public void The_summary_carries_the_CPU_line()
+        {
+            using var game = One(Image(Program));
+            string[] lines = game.Target.GetSummaryText().Split('\n');
+            Assert.StartsWith("VenusRT (Rust)", lines[0]);
+            Assert.StartsWith("[STATE] CPU", lines[1]);
+            Assert.Contains("A=1234 X=5678 Y=9ABC", lines[1]);
+            Assert.Contains("P=A5 [NvMxdIzC]  E=0", lines[1]);
         }
 
         // A call stack VenusRT keeps on observed frames, so coverage is armed before they run.
         [Fact]
-        public void Stack_depth_matches_Venus()
+        public void Stack_depth_counts_the_JSR()
         {
-            var (venus, rust, owner) = Both(Image(Program), before: t => t.Coverage!.Arm());
-            using (owner)
-            {
-                Assert.StartsWith("1 ", Shell(venus, "eval stackdepth"));
-                Assert.Equal(Shell(venus, "eval stackdepth"), Shell(rust, "eval stackdepth"));
-            }
+            using var game = One(Image(Program), before: t => t.Coverage!.Arm());
+            Assert.StartsWith("1 ", Shell(game.Target, "eval stackdepth"));
         }
 
         // The S-CPU starts the SA-1 at $8400 (CRV, then CCNT cleared), and the SA-1 sets its registers and loops.
@@ -265,42 +212,31 @@ namespace EmuSen.WiseMan.Cores
             (5, new byte[] { 0xA9, 0x00, 0x8D, 0x03, 0x22, 0xA9, 0x84, 0x8D, 0x04, 0x22, 0x9C, 0x00, 0x22, 0x80, 0xFE }),
             (0x400, new byte[] { 0x18, 0xFB, 0xC2, 0x30, 0xA9, 0x34, 0x12, 0xA2, 0x78, 0x56, 0xA0, 0xBC, 0x9A, 0xE2, 0xA5, 0x80, 0xFE }));
 
-        // The combined view shows what `cop` names, as `regs sa1` shows it, and the 65816 registers C# Venus's SA-1 view shares hold the same values.
+        // The combined view shows what `cop` names, as `regs sa1` shows it, with the values the SA-1's program set.
         [Fact]
         public void Regs_shows_the_SA1_as_the_coprocessor()
         {
-            using var pair = Both(Sa1Image(), frames: 2);
-            var (venus, rust, _) = pair;
-            string regs = Shell(rust, "regs");
+            using var game = One(Sa1Image(), frames: 2);
+            string regs = Shell(game.Target, "regs");
             Assert.Contains("Coprocessor registers:", regs);
             string combined = regs[(regs.IndexOf("Coprocessor registers:", StringComparison.Ordinal) + "Coprocessor registers:".Length)..].Trim();
-            string alone = Shell(rust, "regs sa1");
+            string alone = Shell(game.Target, "regs sa1");
             Assert.Equal(alone[(alone.IndexOf('\n') + 1)..].Trim(), combined);
 
             // S is the reset's: $01FF held, less the release's three stack cycles - see VenusRT_Disputes.md D-49.
-            string[] shared = { "PB", "PC", "A", "X", "Y", "S", "P" };
-            var csharp = venus.CoprocessorRegisters.Current.Where(r => shared.Contains(r.Name)).ToDictionary(r => r.Name, r => r.Value);
-            var native = rust.CoprocessorRegisters.Current.Where(r => shared.Contains(r.Name)).ToDictionary(r => r.Name, r => r.Value);
-            Assert.Equal(shared.Length, csharp.Count);
-            Assert.Equal(shared.Select(n => (n, csharp[n])), shared.Select(n => (n, native[n])));
-            Assert.Equal(0x1234ul, native["A"]);
-            Assert.Equal(0x01FCul, native["S"]);
+            var native = game.Target.CoprocessorRegisters.Current.ToDictionary(r => r.Name, r => r.Value);
+            Assert.Equal((0x1234ul, 0x5678ul, 0x9ABCul, 0x01FCul), (native["A"], native["X"], native["Y"], native["S"]));
         }
 
-        // A write the game makes each frame is undone by the frame's end on both, though VenusRT undoes it there and Venus at once.
+        // A write the game makes each frame is undone by the frame's end.
         [Fact]
-        public void A_freeze_holds_as_Venus_holds_it()
+        public void A_freeze_holds()
         {
-            byte[] image = Image(c => Op(c, 0xE6, 0x10, 0x80, 0xFC));
-            using var pair = Both(image, frames: 0);
-            var (venus, rust, _) = pair;
-            {
-                foreach (var t in new[] { venus, rust }) Assert.StartsWith("Frozen #1", Shell(t, "freeze add WRAM 10 AB"));
-                pair.RunFrames(3);
-                Assert.Equal(Shell(venus, "mem WRAM 10 1"), Shell(rust, "mem WRAM 10 1"));
-                Assert.Contains("AB", Shell(rust, "mem WRAM 10 1"));
-                Assert.Contains("(3 write(s) undone)", Shell(rust, "freeze list"));
-            }
+            using var game = One(Image(c => Op(c, 0xE6, 0x10, 0x80, 0xFC)), frames: 0);
+            Assert.StartsWith("Frozen #1", Shell(game.Target, "freeze add WRAM 10 AB"));
+            for (int i = 0; i < 3; i++) game.Core.RunFrame();
+            Assert.Contains("AB", Shell(game.Target, "mem WRAM 10 1"));
+            Assert.Contains("(3 write(s) undone)", Shell(game.Target, "freeze list"));
         }
 
         // The engine's timing as the one phase a core without PHASES has, against the machine's own frame.

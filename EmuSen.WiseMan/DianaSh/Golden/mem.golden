@@ -92,31 +92,6 @@ status 0
 action none
 end
 
-case on venus
-target venus
-covers 1
-$ spaces
-out 283
-SNES memory spaces:
-  CpuBus     16777216 bytes  R/W
-  IO            65536 bytes  R/W
-  WRAM         131072 bytes  R/W
-  VRAM          65536 bytes  R/W
-  CGRAM           512 bytes  R/W
-  OAM             544 bytes  R/W
-  SRAM         131072 bytes  R/W
-  APURAM        65536 bytes  R/W
-status 0
-action none
-$ mem CpuBus 0 20
-out 176
-CpuBus @ 0x0 (32 bytes):
-  000000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
-  000010: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
-status 0
-action none
-end
-
 case on venusrt
 target venusrt
 covers 1

@@ -46,24 +46,6 @@ status 1
 action none
 end
 
-case on venus
-target venus
-covers 1
-$ spaces
-out 283
-SNES memory spaces:
-  CpuBus     16777216 bytes  R/W
-  IO            65536 bytes  R/W
-  WRAM         131072 bytes  R/W
-  VRAM          65536 bytes  R/W
-  CGRAM           512 bytes  R/W
-  OAM             544 bytes  R/W
-  SRAM         131072 bytes  R/W
-  APURAM        65536 bytes  R/W
-status 0
-action none
-end
-
 case on venusrt
 target venusrt
 covers 1
@@ -151,14 +133,14 @@ status 0
 action none
 end
 
-case on venus-sa1
-target venus-sa1
+case on venusrt-sa1
+target venusrt-sa1
 covers 1
 $ spaces
-out 382
-SNES memory spaces:
+out 385
+VenusRT memory spaces:
   CpuBus     16777216 bytes  R/W
-  IO            65536 bytes  R/W
+  IO             1024 bytes  R/O
   WRAM         131072 bytes  R/W
   VRAM          65536 bytes  R/W
   CGRAM           512 bytes  R/W
@@ -167,27 +149,27 @@ SNES memory spaces:
   APURAM        65536 bytes  R/W
   SA1IRAM        2048 bytes  R/W
   BWRAM         32768 bytes  R/W
-  SA1BUS     16777216 bytes  R/W
+  SA1BUS     16777216 bytes  R/O
 status 0
 action none
 end
 
-case on venus-gsu
-target venus-gsu
+case on venusrt-gsu
+target venusrt-gsu
 covers 1
 $ spaces
-out 349
-SNES memory spaces:
+out 352
+VenusRT memory spaces:
   CpuBus     16777216 bytes  R/W
-  IO            65536 bytes  R/W
+  IO             1024 bytes  R/O
   WRAM         131072 bytes  R/W
   VRAM          65536 bytes  R/W
   CGRAM           512 bytes  R/W
   OAM             544 bytes  R/W
-  SRAM         131072 bytes  R/W
+  SRAM          32768 bytes  R/W
   APURAM        65536 bytes  R/W
-  GSURAM       131072 bytes  R/W
-  GSUBUS     16777216 bytes  R/W
+  GSURAM        32768 bytes  R/W
+  GSUBUS      8388608 bytes  R/O
 status 0
 action none
 end

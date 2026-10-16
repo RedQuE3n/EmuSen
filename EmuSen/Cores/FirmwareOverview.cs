@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using EmuSen.Common.Firmware;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp;
 using EmuSen.Galaxia.Models;
 
 namespace EmuSen.Cores
@@ -59,12 +58,12 @@ namespace EmuSen.Cores
             {
                 if (CoreCatalog.IsDiscovered(console)) continue;
                 string name = string.Join(" and ", CoreCatalog.ShelvesInReleaseOrder.Where(s => ReferenceEquals(s.Core, console)).Select(s => s.EsdeFullName));
-                string? chosen = CoreCatalog.EngineChosen(console.Console, config.Value(console.Console, CoreCatalog.EngineKey));
+                string? chosen = CoreCatalog.EngineChosen(console.Console, config.Value(console.Console, CoreCatalog.EngineKey)) ?? CoreCatalog.SoleDiscoveredEngine(console.Console);
                 if (Shipped(CoreDiscovery.ByEngineName(chosen)) is { } v1)
                     systems.Add(new FirmwareSystem(name, v1.EngineName, v1.Info.Systems.Where(s => CoreCatalog.SystemIdsFor(console.Console).Contains(s.Id)).SelectMany(s => s.Firmware)
                         .DistinctBy(f => f.Name).Select(f => Item(CoreEngine.Request(v1.Info.Name, f), f.Label)).ToArray()));
                 else
-                    systems.Add(new FirmwareSystem(name, CoreCatalog.ReferenceEngine(console.Console) ?? console.DisplayName, ReferenceFirmware(console.Console).Select(r => Item(r, $"{r.CoreName} {r.ChipName} chip")).ToArray()));
+                    systems.Add(new FirmwareSystem(name, CoreCatalog.ReferenceEngine(console.Console) ?? console.DisplayName, Array.Empty<FirmwareItem>()));
             }
             foreach (DiscoveredCore core in CoreDiscovery.Found)
             {
@@ -77,10 +76,6 @@ namespace EmuSen.Cores
 
         // A discovered engine a player is offered and whose library is there to run; one still in development never is, whatever discovery lists.
         private static DiscoveredCore? Shipped(DiscoveredCore? core) => core is { Sidecar.Development: false } && File.Exists(core.Sidecar.LibraryPath) ? core : null;
-
-        // What a C# reference core reads from the firmware folder, asked of the core's own request for each chip it knows.
-        private static IEnumerable<FirmwareRequest> ReferenceFirmware(string console) =>
-            string.Equals(console, "SNES", StringComparison.OrdinalIgnoreCase) ? Enum.GetValues<NecDspVariant>().Select(NecDspFirmware.RequestFor).DistinctBy(r => r.FileName) : [];
 
         private static FirmwareItem Item(FirmwareRequest request, string label)
         {

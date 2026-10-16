@@ -1,6 +1,5 @@
 using EmuSen.Cores;
 using EmuSen.Common.Imaging;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
@@ -38,7 +37,7 @@ namespace EmuSen.Pharaoh
         // Returns false if the commands file itself couldn't be found
         // (caller emits nothing further and exits 1) - true once the whole
         // script has run to completion. Deliberately doesn't touch
-        // FlushVerboseTrace/"[RUN] Done"/savestate/--out - those are the
+        // "[RUN] Done"/savestate/--out - those are the
         // shared epilogue, identical for this mode and the classic loop,
         // handled once by the caller after this returns.
         public bool Run(string commandsPath)
@@ -162,22 +161,6 @@ namespace EmuSen.Pharaoh
                     emit(now.SequenceEqual(target)
                         ? $"[TAPUNTIL] {space.Name} 0x{addr:X} reached {to} after {taps} {button} tap(s), {stepped} frame(s) (frame {runner.CurrentFrame})."
                         : $"[TAPUNTIL] {space.Name} 0x{addr:X} NOT reached - still {to} after {taps} {button} tap(s), {stepped} frame(s) (cap {cap}, frame {runner.CurrentFrame}).");
-                }
-                else if (verb == "gsutrace" && parts.Length >= 3)
-                {
-                    // Armed here, not from power-on, so it starts where tapuntil left off - see §3.41.
-                    emit($"> {cmdLine}");
-                    long frames = long.Parse(parts[1]);
-                    GsuBinaryTrace.Start();
-                    runner.RunFrames(frames);
-                    GsuBinaryTrace.Stop();
-                    GsuBinaryTrace.WriteTo(parts[2]);
-                    emit($"[GSUTRACE] {GsuBinaryTrace.Count} steps over {frames} frame(s) to frame {runner.CurrentFrame} -> {parts[2]}");
-                    if (GsuBinaryTrace.Overflowed)
-                    {
-                        emit("[WARN] The trace buffer filled and recording stopped early - lower the frame count.");
-                    }
-                    GsuBinaryTrace.Reset();
                 }
                 else if ((verb == "waitchange" || verb == "waitvalue") && parts.Length >= 4)
                 {
@@ -343,39 +326,6 @@ namespace EmuSen.Pharaoh
                     emit($"> {cmdLine}");
                     emit(RunAudioSum(parts.Length >= 2 ? long.Parse(parts[1]) : 300));
                 }
-                else if (verb == "layers")
-                {
-                    // Isolates one layer at a time - see §3.19.
-                    emit($"> {cmdLine}");
-                    string spec = parts.Length >= 2 ? parts[1].ToLowerInvariant() : "all";
-                    int mask = spec switch
-                    {
-                        "all" => 0x1F,
-                        "none" => 0x00,
-                        "bg1" => 0x01,
-                        "bg2" => 0x02,
-                        "bg3" => 0x04,
-                        "bg4" => 0x08,
-                        "obj" => 0x10,
-                        _ => Convert.ToInt32(spec, 16)
-                    };
-                    EmuSen.Debug.DebugSettings.LayerEnableMask = mask;
-                    emit($"[LAYERS] Mask 0x{mask:X2} - {(mask == 0x1F ? "all layers" : DescribeLayerMask(mask))}.");
-                }
-                else if (verb == "scanregs")
-                {
-                    // Per-scanline PPU register trace - see §3.19.
-                    emit($"> {cmdLine}");
-                    string spec = parts.Length >= 2 ? parts[1].ToLowerInvariant() : "off";
-                    int line = spec switch
-                    {
-                        "off" => -1,
-                        "all" => -2,
-                        _ => int.Parse(spec)
-                    };
-                    EmuSen.Debug.DebugSettings.ScanlineRegisterDumpLine = line;
-                    emit($"[SCANREGS] {(line == -1 ? "off" : line == -2 ? "every scanline" : $"scanline {line} only")}.");
-                }
                 else if (verb == "vramsheet" && parts.Length >= 2)
                 {
                     // IDebugTarget.RenderTileSheet(), not Renderer directly - core-agnostic.
@@ -455,7 +405,6 @@ namespace EmuSen.Pharaoh
             for (int p = 0; p < phaseNames.Length; p++) phases[p] = new double[count];
 
             double toMs = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-            var coprocessorsAtStart = (core as ICoprocessorLoad)?.CoprocessorClocks ?? Array.Empty<CoprocessorClocks>();
             long taken = 0;
             for (long i = 0; i < count; i++)
             {
@@ -506,17 +455,6 @@ namespace EmuSen.Pharaoh
                 }
                 sb.AppendLine("  " + string.Join("   ", top) + $"   unattributed {Mean(wall) - attributed:F2}ms");
                 if (nested.Count > 0) sb.AppendLine("  split: " + string.Join("  ", nested));
-            }
-
-            // Clocks per frame is what says whether a coprocessor is being starved - see Venus_SA1.md §2.3.
-            var coprocessorsNow = (core as ICoprocessorLoad)?.CoprocessorClocks ?? Array.Empty<CoprocessorClocks>();
-            foreach (var chip in coprocessorsNow)
-            {
-                var before = coprocessorsAtStart.FirstOrDefault(c => c.Name == chip.Name);
-                double runPerFrame = (chip.Executed - before.Executed) / (double)taken;
-                double offeredPerFrame = (chip.Offered - before.Offered) / (double)taken;
-                sb.AppendLine($"  {chip.Name}: {runPerFrame:F0} clocks/frame run of {offeredPerFrame:F0} offered "
-                            + $"({runPerFrame / chip.PerFrameBudget * 100:F1}% of the {chip.PerFrameBudget} a full-rate frame allows)");
             }
 
             var worst = Enumerable.Range(0, (int)taken).OrderByDescending(i => wall[i]).Take(worstCount);
@@ -585,16 +523,6 @@ namespace EmuSen.Pharaoh
                  + $"samples={samples} nonzero={nonzero} ({(samples == 0 ? 0 : 100.0 * nonzero / samples):F1}%) peak={peak} rms={rms:F1}";
         }
 
-        private static string DescribeLayerMask(int mask)
-        {
-            var names = new List<string>();
-            if ((mask & 0x01) != 0) names.Add("BG1");
-            if ((mask & 0x02) != 0) names.Add("BG2");
-            if ((mask & 0x04) != 0) names.Add("BG3");
-            if ((mask & 0x08) != 0) names.Add("BG4");
-            if ((mask & 0x10) != 0) names.Add("OBJ");
-            return names.Count == 0 ? "nothing" : string.Join('+', names);
-        }
 
         // "1E" or "1E,00" or "1E 00" - see §3.15's waitvalue entry.
         private static byte[] ParseHexBytes(string spec)

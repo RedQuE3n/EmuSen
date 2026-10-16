@@ -22,11 +22,6 @@ namespace EmuSen.Pharaoh.Cli
         public string? SaveStatePath { get; init; }
         public bool Verbose { get; init; }
         public bool NoBattery { get; init; }
-        public long CpuLogStart { get; init; } = -1;
-        public long CpuLogEnd { get; init; } = -1;
-        public long CpuTraceEnd { get; init; } = -1;
-        public string? CpuTracePath { get; init; }
-
         public List<string> FlagsToEnable { get; init; } = new();
         public List<(long Start, long End, PadButton Button, int Controller)> Taps { get; init; } = new();
         public List<(long Frame, string Path)> Screenshots { get; init; } = new();
@@ -102,8 +97,6 @@ namespace EmuSen.Pharaoh.Cli
             string? saveStatePath = null;
             bool verbose = false;
             bool noBattery = false;
-            long cpuLogStart = -1, cpuLogEnd = -1, cpuTraceEnd = -1;
-            string? cpuTracePath = null;
             var flagsToEnable = new List<string>();
             var taps = new List<(long Start, long End, PadButton Button, int Controller)>();
             var screenshots = new List<(long Frame, string Path)>();
@@ -119,22 +112,6 @@ namespace EmuSen.Pharaoh.Cli
                     // to true; "Name=value" parses value as whatever that
                     // member's actual type is.
                     flagsToEnable.Add(args[++i]);
-                }
-                else if (args[i] == "--cpulog" && i + 1 < args.Length)
-                {
-                    string[] p = args[++i].Split(':');
-                    cpuLogStart = long.Parse(p[0]);
-                    cpuLogEnd = long.Parse(p[1]);
-                }
-                else if (args[i] == "--cputrace" && i + 1 < args.Length)
-                {
-                    // <frame>:<path>, same shape as --screenshot - see §3.40.
-                    string[] p = args[++i].Split(new[] { ':' }, 2);
-                    if (p.Length < 2 || !long.TryParse(p[0], out cpuTraceEnd) || p[1].Length == 0)
-                    {
-                        return (null, warnings, $"[ERROR] --cputrace wants <frame>:<path>, got '{args[i]}'.");
-                    }
-                    cpuTracePath = p[1];
                 }
                 else if (args[i] == "--apulog")
                 {
@@ -216,10 +193,6 @@ namespace EmuSen.Pharaoh.Cli
                 SaveStatePath = saveStatePath,
                 Verbose = verbose,
                 NoBattery = noBattery,
-                CpuLogStart = cpuLogStart,
-                CpuLogEnd = cpuLogEnd,
-                CpuTraceEnd = cpuTraceEnd,
-                CpuTracePath = cpuTracePath,
                 FlagsToEnable = flagsToEnable,
                 Taps = taps,
                 Screenshots = screenshots,

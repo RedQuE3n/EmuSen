@@ -487,7 +487,7 @@ action none
 end
 
 case on a GSU cartridge
-target venus-gsu
+target venusrt-gsu
 covers 18-19
 $ bp gsu add 0
 out 35
@@ -507,17 +507,17 @@ action none
 end
 
 case on an SA-1 cartridge
-target venus-sa1
+target venusrt-sa1
 covers 18-19
 $ cpus
-out 465
-SNES debug processors:
-  cpu   PC=$00ED3E  Ricoh 5A22 (65816) main CPU
-        supports: bp, cov, bt, regs, setreg, disasm   code space: CpuBus
-  spc   PC=$00FFCF  Sony SPC700 sound CPU
-        supports: bp, cov, regs, setreg, disasm   code space: APURAM
-  sa1   PC=$000000  SA-1 (65816) cartridge coprocessor
-        supports: bp, cov, bt, regs, setreg, disasm   code space: SA1BUS
+out 367
+VenusRT debug processors:
+  cpu   PC=$00ED31  CPU
+        supports: bp, cov, bt, regs, disasm   code space: CpuBus
+  spc   PC=$00FFD2  SPC
+        supports: bp, cov, regs, disasm   code space: APURAM
+  sa1   PC=$000000  SA1
+        supports: bp, cov, regs, disasm   code space: SA1BUS
 Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
 status 0
 action none
@@ -532,32 +532,6 @@ out 31
 status 0
 action none
 $ bp cop list
-out 31
-  #1: $008000 (enabled, hit 0x)
-status 0
-action none
-end
-
-case on venus
-target venus
-covers 9-10,15
-$ bp when
-out 394
-Conditions this core detects:
-  stp          the 65816 executed STP and is stopped until reset  [off]
-  wdm          the 65816 executed WDM, a reserved opcode  [off]
-  brk          a BRK was taken  [off]
-  cop          a COP was taken  [off]
-  ppuaccess    VRAM/CGRAM/OAM written while the display is rendering  [off]
-  autojoy      $4218-$421F read while the auto-joypad read is running  [off]
-status 0
-action none
-$ bp add 8000
-out 31
-Breakpoint #1 added at $008000.
-status 0
-action none
-$ bp list
 out 31
   #1: $008000 (enabled, hit 0x)
 status 0

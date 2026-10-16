@@ -51,7 +51,7 @@
       <Dir>$(MSBuildThisFileDirectory)Nintendo\VenusRT - SNES\</Dir>
       <Core>VenusRT</Core>
       <Console>the SNES</Console>
-      <Fallback>Venus (C#)</Fallback>
+      <Fallback></Fallback>
       <CoreAbi>1</CoreAbi>
     </EmuSenRustCrate>
   </ItemGroup>

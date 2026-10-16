@@ -155,7 +155,8 @@ The comparison below renamed the cores, dropped blank lines and braces, and comp
   `MainWindow.axaml.cs:1331`, `is EmuSen.Cores.Nintendo.Mars.MarsCore`. The reason is recorded (`Mars_Native.md`
   §6.6.3): the C# core's snapshot can deadlock with several workers. It is a property of an engine, found by its type.
 - **Venus's hotkeys.** Hotaru reaches Venus with `_core as VenusCore` (`GameWindow.axaml.cs:47`), for three
-  debug hotkeys. `EmuSen_Multicore.md` §5 records these as legitimate. Nothing here changes them.
+  debug hotkeys. `EmuSen_Multicore.md` §5 records these as legitimate. Nothing here changes them. *Removed with C# Venus
+  on 2026-10-16, with the factory's `venusFrameTimings` parameter (`VenusRT_Native.md` §68.5).*
 - **The factory.** `CoreFactory` takes a Venus-only parameter, `venusFrameTimings`, in `Load` and `Bundle`. It names
   the Rust engines in `Create` (`CoreFactory.cs:44`–`:45`), `EngineNotice` (`:68`–`:69`) and `Running` (`:74`), and has
   a type switch in `Bundle` (`:84`).
@@ -194,6 +195,9 @@ The comparison below renamed the cores, dropped blank lines and braces, and comp
   *Since 2026-10-16 Mars (C#) is deleted (`Mars_Native.md` §6.7): the N64 runs on MarsRT alone, its shim registered by
   hand. C# Mercury is deleted the same day (`Mercury_Native.md` §15): MercuryRT is the Game Boy's only engine, a port
   with no mirror, for which `PortEngine`'s mirror became optional. The C# cores that remain are Venus and Moon.*
+  *C# Venus is deleted the same day (`VenusRT_Native.md` §68): the SNES runs on VenusRT alone, through the generic v1
+  branch as before, now as the console's one discovered engine (`CoreCatalog.SoleDiscoveredEngine`), so it has no Engine
+  row and any engine name a caller passes builds it.*
 - **A stable ABI for third parties.** The libraries ship beside the assemblies that load them. The version check
   guards a mismatched prebuilt library, not an ecosystem.
   *Superseded 2026-10-01: a stable ABI for third parties is now a goal, decided that day; `EmuSen_CoreAPI.md` §4.8
@@ -474,7 +478,8 @@ of that one contract:
   (`MercuryMachine.cs:84`–`:91`, `Mercury_Native.md` §3.3). That is a console rule. It stays an extension,
   `mercuryrt_set_sample_rate`, and the core reports 44,100 through the common call.
 - **Venus follows a setting**, `AudioSettings.SampleRate` (`VenusCore.cs:377`). Venus is C# and has no native engine. A
-  future one would take the output rate as a setting key and report it here.
+  future one would take the output rate as a setting key and report it here. *C# Venus was deleted on 2026-10-16;
+  VenusRT reports the S-DSP's 32 kHz and the host resamples.*
 - **Mars reports the rate the game programmed into the DAC**: the video clock over the period, rounded to even, and
   44,100 until the game sets it (`ai.rs:67`, `:81`–`:83`). It changes during play.
 

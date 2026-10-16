@@ -1,5 +1,9 @@
 # Venus — the referee: an FPGA implementation read against the whole core
 
+*Historical since 2026-10-16.* This page reads C# Venus, deleted from the source on 2026-10-16 (`VenusRT_Native.md` §68),
+against the SNES_MiSTer RTL. Its §0, the weighing of the referee, is still cited by VenusRT's dispute steps; the rest
+describes the C# core and is kept as its record.
+
 *Written 2026-09-20. Not a slice: no rule of Venus changed, no test was added and no code was touched. This
 page carries all six of Venus's subsystems to a third implementation — the SNES_MiSTer core's VHDL — and
 writes its answer beside Venus's and Mesen's.*

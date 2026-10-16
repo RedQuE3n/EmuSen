@@ -20,6 +20,12 @@ A game's category reflects its *current* state, not a permanent verdict — entr
 
 ## 2. Venus (SNES)
 
+*Historical since 2026-10-16.* Every rating in this section was taken on C# Venus, which was deleted from the source that
+day (`VenusRT_Native.md` §68). The list is kept as that core's record and is not a statement about VenusRT, the SNES's
+only engine since: VenusRT is graded by its goldens and the SNES test-ROM corpus, and its own game record is in
+`VenusRT_Native.md` (the goldens of §41.6, and §68.2's six games). A rating here is to be taken again on VenusRT before
+it is cited for the SNES as it now runs.
+
 ### Good
 
 - **Kirby's Dream Land 3** — **was Unplayable (black screen), now plays.** The first coprocessor game this core runs: map mode `$23`, cartridge type `$35` — a genuine **SA-1**. With no SA-1 emulation the S-CPU still ran, but everything the chip was meant to compute stayed zero, including the buffer holding the decompressed SPC700 sound driver; the S-CPU uploaded 64KB of zeroes to the APU and then parked forever at `$00:DEAC` (`LDA $2140 / BNE`) waiting for a sound driver that never signalled ready, leaving `INIDISP` in forced blank with VRAM/CGRAM/OAM all still zero. Fixed by implementing the SA-1 — second 65C816, Super MMC banking, I-RAM/BW-RAM, the control/message/vector registers, timer, arithmetic unit, variable-length bit stream reader, and normal DMA; see `Hardware/Nintendo/Venus - SNES/Venus_SA1.md`. Verified headless: HAL logo → intro cutscene → title screen → level 1 gameplay, all rendering correctly, with the sound driver uploading properly and save states round-tripping byte-identically. Rated Good rather than Perfect because coverage stops in the first level, and because **character-conversion DMA is not implemented** (`Venus_SA1.md` §8.1) — this game never requests it, but a game that does will get wrong tile data.

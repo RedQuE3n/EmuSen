@@ -26,13 +26,13 @@ Windows build lacked the platform library. 0.9.1 replaces it with both fixed. Th
 | Console | Engines | Where it stands |
 |---|---|---|
 | Nintendo 64 | **MarsRT** (Rust); the C# core it replaced was retired on 2026-10-16 | Super Mario 64, Ocarina of Time, GoldenEye 007, Donkey Kong 64 and Perfect Dark run, along with many others that haven't had full testing. Up to 4× internal resolution, antialiasing, an optional Vulkan renderer for the display processor, and a Cranelift recompiler. Donkey Kong 64 runs at full speed at 3× on a Legion Go S |
-| SNES | **VenusRT** (Rust), the default; **Venus** (C#), the fallback | VenusRT is a new SNES core written from scratch, the default since 2026-10-05. It runs SA-1, SuperFX, NEC DSP and OBC1 cartridges; Cx4, S-DD1, SPC7110 and the other special chips are not supported. Several games play well; none has a verified playthrough |
+| SNES | **VenusRT** (Rust); the C# core it replaced was retired on 2026-10-16 | VenusRT is a new SNES core written from scratch, the default since 2026-10-05 and the only SNES engine since 2026-10-16. It runs SA-1, SuperFX, NEC DSP and OBC1 cartridges; Cx4, S-DD1, SPC7110 and the other special chips are not supported. Several games play well; none has a verified playthrough |
 | Game Boy / Color | **Mercury** (C#), the default; **MercuryRT** (Rust), a choice | Everything but the boot ROM, the link cable and the Super Game Boy. 126 of the 173 blargg and mooneye hardware test ROMs pass under the Auto model, on both engines |
 | NES | **Moon** (C#), the default; **MoonRT** (Rust), a choice | CPU, PPU, full APU and sixteen mapper boards. 127 of AccuracyCoin's 144 tests pass. Plays Super Mario Bros. 3 and others, with far less play-testing than the SNES |
 | Sega Genesis / Mega Drive, Sega CD | **Nephrite** (Rust) | The Genesis is offered to players since 2026-10-07. Commercial cartridges run with battery and EEPROM saves, cheat codes, the three- and six-button pads, Sega's Team Player and Electronic Arts' 4 Way Play for four players, and Codemasters' J-Cart. The Sega CD is offered since 2026-10-16, on Nephrite's own open BIOS, with its backup RAM in the Memory Cards window. None has a verified playthrough. The 32X is in development and not offered yet |
 | Sony PlayStation | **Diamond** (Rust) | New since the last release, offered to players since 2026-10-11. Boots discs on its own open BIOS. Crash Bandicoot, Spyro the Dragon, Ape Escape, Rayman, Tekken 3, Silent Hill, Castlevania: Symphony of the Night and Mega Man Legends have been played into their games; none has a verified playthrough. Optional enhancements: precise geometry, internal resolution up to 4×, true colour and texture filtering |
 
-Every other console is an empty, reserved folder. A per-game list for the C# SNES and NES cores is in
+Every other console is an empty, reserved folder. A per-game list for the C# SNES and NES cores (the SNES's kept as history since Venus (C#) was retired) is in
 [`EmuSen_Games_Tested.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Games_Tested.md).
 
 Where a console has two engines, the choice is the Engine row of its tab in Graphics Settings, and the C# engine also
@@ -56,9 +56,10 @@ C# cores, checked against them frame by frame. Those C# cores were written from 
 but Mars's pages record where another implementation was read to understand a mechanism
 ([`Mars_References.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Mars%20-%20N64/Mars_References.md)),
 and the Game Boy and NES cores were refereed against MiSTer FPGA cores whose RTL was read for single disputed rules.
-Venus, the first SNES core, took parts from Mesen early in its development. That is why it is being replaced rather
-than repaired: VenusRT was written by people who do not read Venus, and Venus goes to a legacy branch once VenusRT has
-had its time as the default ([`VenusRT_Plan.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Venus%20-%20SNES/VenusRT_Plan.md) §1.1).
+Venus, the first SNES core, took parts from Mesen early in its development. That is why it was replaced rather
+than repaired: VenusRT was written by people who do not read Venus, and Venus (C#) was removed from the source on
+2026-10-16 ([`VenusRT_Plan.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Venus%20-%20SNES/VenusRT_Plan.md) §1.1,
+[`VenusRT_Native.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Venus%20-%20SNES/VenusRT_Native.md) §68).
 
 ### Firmware
 
@@ -150,8 +151,10 @@ These are being built now and are not finished:
 - **MercuryRT** has the C# core's move to a legacy branch ahead of it, then becomes the Game Boy's default once it
   has been played on the handheld.
 - **MoonRT** has its parity and goldens stages ahead; Moon (C#) stays the NES default until then.
-- **VenusRT** is the default, with Venus (C#) kept until VenusRT has had four weeks as the default with no open
-  regression. A battery run on the handheld is still owed.
+- **VenusRT** is the SNES's only engine since Venus (C#) was retired on 2026-10-16, graded by its own goldens and the
+  SNES test-ROM corpus. (This line said until then that Venus (C#) was kept until VenusRT had had four weeks as the
+  default with no open regression; that gate was proposed by `VenusRT_Plan.md` and never decided.) A battery run on
+  the handheld is still owed.
 - **Diamond** does not read `.pbp` images yet and has no rumble.
 - **The picture on the Vulkan device** is used on Linux; Windows and macOS still draw it the older way, with a
   readback.
@@ -230,7 +233,7 @@ dotnet run --project EmuSen.Pharaoh -- game.smc 3000 --commands script.txt --out
 ## Building
 
 You need the **.NET 10 SDK** and **Rust** (`cargo`). Without cargo the build warns and builds the C# cores alone:
-the N64, the Game Boy and the NES still run, the SNES falls back to Venus (C#), and there is no Genesis or PlayStation.
+the NES still runs, and there is no N64, Game Boy, SNES, Genesis or PlayStation.
 
 The build takes LunaP from a checkout next to this one, on its `openemu-library` branch, so clone both side by side:
 

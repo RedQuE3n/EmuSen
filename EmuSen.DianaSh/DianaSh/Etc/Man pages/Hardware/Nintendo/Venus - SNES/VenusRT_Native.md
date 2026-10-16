@@ -7244,3 +7244,131 @@ and VenusRT's passes are at least C# Venus's.
   ROMs graded by picture.
 - **The block-move suite.** C# Venus passed 0 of SingleStepTests' 10,000 `MVN` and 10,000 `MVP` cases (§3.5);
   VenusRT passes all of them in the crate's own harness, run again at §68.6.
+
+### 68.4 What VenusRT and the frontends took from C# Venus, and where it went
+
+VenusRT's shim never borrowed from C# Venus: it is the generic v1 engine with `VenusMachine` and `VenusNative` for the
+pre-stable interface. What the rest of the tree still took from the C# core had to find one owner each first.
+
+| What | Was | Now |
+|---|---|---|
+| The SNES pad's twelve buttons | `VenusCore.PadButtons` | `SnesSystem.PadButtons`, the pack's; `CoreCatalog.ButtonsFor("SNES")` reads it |
+| The two ports | `VenusCore.Ports` | `SnesSystem.Ports`; `ControllerPorts.ForConsole("SNES")` reads it |
+| The cheat codecs for a cheat window with no game, and for the SNES chosen in the UI | `VenusCheatCodecs.Pair()` | the pack's `ProActionReplay()` and `GameGenie()`, which VenusRT's games already used (plan §9, Q5) |
+| The firmware page's SNES rows where VenusRT was not chosen | `NecDspFirmware.RequestFor` per variant | VenusRT's info, always; none where its library is missing |
+| `SnesButton` and the cast from `PadButton` | `Venus/Input` | gone: no engine casts, the pack lists the pad |
+
+**One defect found in the pack, and fixed.** Moving `CheatChtCommandTests` onto the pack's codecs showed that its Pro
+Action Replay refused a libretro database entry whose codes are joined with `+` ("7E0DBF63+7E001900"), which the C#
+codec read as one cheat of two writes: the pack's `ProActionReplayWrites` decoded the whole string as one code, failed,
+and the import skipped the cheat. Every VenusRT player since 2026-10-03 had that loss. `ProActionReplayWrites` now
+reads each `+`-joined part, as the Genesis's formats do; `Action_replay_codes_joined_with_a_plus_are_one_cheat` holds
+it, and a malformed part still refuses the whole cheat. The codec is a file format, written from fullsnes; nothing of
+C# Venus's codec was copied.
+
+**What the C# core alone used, and left with it**, since nothing else read it:
+- Hotaru's three Venus hotkeys (F2, O and P: the OAM dump, the backdrop and window dump, the BG scroll trace);
+- every `DebugSettings` flag but the master switch and the NES's PPU write log; Mistress's Debug Logging window now lists
+  that one flag;
+- Pharaoh's `--cputrace` and `--cpulog`, the `gsutrace`, `layers` and `scanregs` verbs, the S-CPU and GSU kinds of
+  `--tracediff`, and the `65816` and `spc700` targets of `--singlestep` (VenusRT's own harness is §2.3's);
+- `ITraceFlushable` and `ICoprocessorLoad` with their callers, whose only implementer was `VenusCore`;
+- `gsudiff.py` and its test, which read the C# core's `[GSU]` log.
+
+### 68.5 C# Venus deleted, and what a player keeps
+
+**Deleted**: `EmuSen/Cores/Nintendo/Venus - SNES/` (84 files, 15,935 lines of C#), the SNES's Engine row and its Venus
+(C#) choice, the table that made a discovered engine a row's default (the SNES was its only entry),
+`ReferenceEngineByConsole["SNES"]`, the factory's C# arm and `Running`'s and `Bundle`'s C# cases, the
+`venusFrameTimings` parameter of `CoreFactory.Load` and `Bundle`, and the `<Fallback>` in `RustCores.props`.
+
+**One engine, no row.** VenusRT was never registered by hand, and it is not now: it stays the generic v1 engine
+discovery finds, opened by `CoreFactory`'s v1 branch. What is new is that it is the SNES's *sole discovered engine*
+(`CoreCatalog.SoleDiscoveredEngine("SNES")`): the factory opens it for an SNES file whatever engine name a caller passes,
+the retired name and an unknown one included, so `RunsOnV1Engine` stays true and the load still runs off the console
+thread (`Diamond_Players.md` §12.8.3). `CoreCatalog.EngineFor("SNES")` is null, as for any console with one engine, and
+the metadata editor offers an SNES game no alternative emulator. The difference from MarsRT and MercuryRT, which are
+`SoleEngines` built by their own shims, is deliberate: VenusRT has no shim to build it, and registering it by hand would
+take it off the v1 branch that the firmware page, the off-thread load and the debugger all rely on.
+
+**A stored Venus (C#).** A player's `graphics.json` may still hold it for the SNES tab. It is one of `CoreCatalog`'s
+retired engines beside Mars (C#) and Mercury (C#), so `EngineChosen` answers VenusRT (Rust), the status line says
+nothing, and the log gets one line a process: `Venus (C#) was retired; VenusRT (Rust) runs its games instead.` A
+game's own alternative-emulator entry naming it is ignored, since the console offers no such engine.
+
+**A build without the library**, or with one discovery refuses, says so: `This build has no SNES core: VenusRT (Rust) is
+missing (<the reason>).`, which Mistress shows after `Failed to load <game>: `. Unlike the Game Boy's, this is tested in
+process, by pointing discovery at an empty folder: a v1 library is opened per discovery, not loaded once a process.
+
+**What a player keeps.** Battery saves, which VenusRT already read and wrote in the C# core's format (§41.7). A Venus
+(C#) save state is refused in words naming its engine, as since §41.12, and the C# core's `.resume.state` files boot
+the game cold (plan §9, Q7).
+
+**What was checked before deleting.** The NES's retirement lost a picture only the C# core produced (its raw colour
+numbers for the composite filter). C# Venus fed nothing of that kind: it gave no `RawPicture`, the CRT filter's SNES
+timing is keyed by the console's name, and nothing in Serenity, Mistress, Galaxia or the shell read a Venus type. The
+losses are all in the debugger, and none is new to a player: VenusRT has been the default since §65, so a player
+already debugged an SNES game on VenusRT's target. What only C# Venus's `SnesDebugTarget` answered:
+- `setreg` (VenusRT's target exposes no register writer), `addr`'s decode, `counters`, `copflow`, `cophist`, `bp when`'s
+  conditions, the `dma` log and stats, `channels`' per-voice view, and `disasm`'s width hints;
+- **breakpoint conditions and logpoint expressions.** `BreakpointRegistry` treats a missing evaluator as a condition
+  that holds, and only `SnesDebugTarget` set one; no target in the tree does now, so a conditional breakpoint halts as
+  a plain one and a logpoint logs its expression unrendered. A fix is small and generic (set the evaluators in
+  `CoreDebugTarget` from `DebugCpuExpressionContext` for each processor, as the C# target did), and it would reach every
+  v1 engine; it is proposed here rather than built, as a change to a shared surface.
+
+### 68.6 The tests
+
+The C# core's own tests left with it: the APU, coprocessor, PPU, memory, validation, trace-differ, 65816 cycle-cost,
+disassembler and timeline classes (47 files). The tests that used C# Venus as "an SNES" now use VenusRT, through
+`SyntheticRom.LoadCore` (`CoreFactory.Loaded` on a synthetic image), `SyntheticRom.TargetOf` (the bundle's target),
+and `SyntheticRom.BuildPadReader` with `Pads`, a program that copies the auto-read's words to WRAM, for the cases that
+read the latched pads from the C# bus. `SyntheticRom.BuildSa1` now declares the SA-1 chipset (35h) that VenusRT reads,
+as fullsnes gives it; the goldens' SA-1 images, which set it already, are byte for byte the same. Where a case's claim
+was a fact of the hardware or of a command, it stands on VenusRT; where its only subject was a C# member (the bus's
+`Write8`, the CPU's `A`, `SnesDebugTarget.OnWrite`) or one of §68.5's C#-only features, it was deleted.
+`VenusRtDebugViewTests` lost its comparisons with C# Venus and keeps their facts, asserted on VenusRT alone.
+
+**The DianaSh golden corpus** loses its `venus`, `venus-sa1` and `venus-gsu` targets. Of their 47 cases, the 20 in
+commands that also had a `venusrt` case were deleted; the 27 others were retargeted to `venusrt`, `venusrt-sa1` and
+`venusrt-gsu` (the latter two new targets on the SA-1 and GSU images) and recorded again, and each recording was read:
+8 of them recorded only VenusRT's refusal (`addr`, `counters`, three `copflow`, two `cophist`, `disasm`'s width hints)
+and were deleted with §68.5's list; the other 19 kept their meaning (`callers`, `framelog`, `mute`, `readers`, `tile`,
+`tilemap`, `watch`, `writers`, `trace`'s hexadecimal count, and the SA-1's and GSU's `bp`, `cpus`, `regs`, `spaces`
+and `step`). No other file of the corpus changed.
+
+**Recorded again, each difference read**: the registration golden (the SNES rows are now the ones VenusRT's rows had,
+the engine row is null, and a stored `Venus (C#)` reads as VenusRT on every console as the other retired names do);
+eight window-fit recordings (the SNES tab and the Graphics Settings states without the Engine row, and the metadata
+editor's walk without the alternative-emulator field); and `VenusRtBaseline.tsv`'s VenusRT columns, run again with the
+runner's engine (the corpus's DSP images, VenusRT's own boot program), whose verdicts equal the goldens' on all 295 ROMs;
+its Mesen columns reproduced, its C# columns frozen.
+
+**Measured on 2026-10-16**, on the deletion's tree:
+- the whole solution builds;
+- the blast radius: the DianaSh classes and golden corpus, every Venus and SNES class, cheats, registration, catalog,
+  discovery and factory, audio, Pharaoh's headless tools, battery saves, controller ports, pads, firmware, display
+  aspect, bindings, Mistress's graphics settings, engine windows and fit audit, accessibility, the Mars frontend's
+  catalog case, the reference dumps and the session service: 2,248 cases, 2,240 passed and 8 opt-in skipped;
+- `VenusGoldenTests` and `VenusRtTestRomRunnerTests` with the corpus and the library's games: 35 of 35, in 11.9
+  minutes;
+- the crate's tests with the corpus: 143 of 143, the whole of SingleStepTests' 65816 suite among them, every failure one
+  of the disputes log's named exceptions (D-1, D-2, D-3, D-41) and so all 20,000 `MVN` and `MVP` cases passing, which
+  C# Venus passed none of (§3.5), and the SPC700 suite's 256,000 of 256,000;
+- the conformance kit (`emusen-core-conform`, the build's runner) with no firmware files, so on the open boot program
+  and the open DSP and ST010 programs: compliant on all ten images tried, Super Mario World, Super Mario RPG, Yoshi's
+  Island, Super Mario Kart, F1 ROC II and Metal Combat from the library, the 240p suite, blargg's `spc_timer`,
+  PeterLemon's `GSUADD` and absindx's `SA1RamProtectionTest`.
+
+### 68.7 What is not done
+
+- **The debugger's C#-only features** of §68.5, the breakpoint conditions and logpoints first among them, which a small
+  change to `CoreDebugTarget` would restore for every v1 engine; proposed, not built.
+- **Per-instruction goldens.** VenusRT exposes instruction stepping only through the debug bridge, so its goldens are
+  per frame and per chained frame; a difference is found to the frame and, where interval states are kept, to the state
+  field, but not to the instruction. MoonRT's and MercuryRT's step traces have no counterpart here yet.
+- **`EmuSen_Games_Tested.md`'s SNES list** describes C# Venus and is marked historical; no game's rating has been taken
+  again on VenusRT.
+- **G6's battery run on the handheld**, owed since §65, is still owed.
+- **The pre-stable interface.** `VenusMachine` and `VenusNative` stay for the runner and the native host's tests until
+  that interface retires (`EmuSen_CoreAPI.md` §13.5).

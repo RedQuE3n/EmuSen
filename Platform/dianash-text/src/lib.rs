@@ -69,6 +69,7 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
         "                                -a include dotfiles, -l show type/size/modified-time"
     )),
     ("mv", false, "  mv <src> <dst>                SUSPENDED - move/rename a file or directory (dst may be an existing directory)"),
+    ("cp", false, "  cp [-r] <src> <dst>           copy a file (-r: copy a directory and everything in it; dst may be an existing directory)"),
 
 ];
 

@@ -48,8 +48,9 @@ namespace EmuSen.Mistress.Library
             ? ForPreset(stored[SlangPrefix.Length..])
             : new ShaderEntry(ScreenFilters.Find(stored).Name, ScreenFilters.Find(stored).Name, BuiltIn, null);
 
+        // An attachment is offered its host's filters, the screen being the host's - see EmuSen_Serenity.md §3.12.
         public static IReadOnlyList<ShaderEntry> BuiltIns(string console) =>
-            ScreenFilters.NamesFor(console).Select(name => new ShaderEntry(name, name, BuiltIn, null)).ToArray();
+            ScreenFilters.NamesFor(EmuSen.Cores.CoreCatalog.HostOf(console)).Select(name => new ShaderEntry(name, name, BuiltIn, null)).ToArray();
 
         public static IReadOnlyList<ShaderEntry> Presets(IEnumerable<string> relatives) =>
             relatives.Select(ForPreset).OrderBy(e => e.Group, StringComparer.OrdinalIgnoreCase).ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToArray();

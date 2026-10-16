@@ -129,6 +129,10 @@ namespace EmuSen.Cores
             }
         }
 
+        // The console whose screen and pads a console uses: an attachment's host, the Sega CD's the Genesis, else the console itself - see EmuSen_Serenity.md §3.12.
+        public static string HostOf(string console) =>
+            Crystal.Systems.SystemPacks.All.FirstOrDefault(p => string.Equals(p.Entry.Console, console, StringComparison.OrdinalIgnoreCase))?.Entry.AttachedTo ?? console;
+
         private static Crystal.Systems.SystemEntry? PackOf(string console) =>
             Crystal.Systems.SystemPacks.All.Select(p => p.Entry).FirstOrDefault(e => string.Equals(e.Console, console, StringComparison.OrdinalIgnoreCase) && ConsoleForSystem(e.Id) is null);
 

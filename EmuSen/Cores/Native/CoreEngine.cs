@@ -187,6 +187,17 @@ namespace EmuSen.Cores.Native
             return null;
         }
 
+        // Which firmware the machine runs on, one line each for the session's log: the player's file or the core's own - see EmuSen_Firmware.md §3.1.
+        public static IEnumerable<string> FirmwareLines(string core, IReadOnlyList<CoreFirmwareSource> used, IReadOnlyList<CoreFirmware> wanted) =>
+            used.Select(u => (u.Source, F: wanted.FirstOrDefault(f => f.Which == u.Which)))
+                .Where(u => u.F is not null)
+                .Select(u => $"[Firmware] {u.F!.Label}: " + u.Source switch
+                {
+                    "file" => $"the player's {u.F.Name}",
+                    "replacement" => $"{core}'s own replacement",
+                    _ => "absent",
+                });
+
         // The discs of the game: an .m3u's, else the one image; each unpacked where it is an archive - see EmuSen_Galaxia.md §3.8.
         public static IReadOnlyList<string> DiscsOf(string path) => DiscSet.Of(path, CoreCatalog.IsImageExtension).Images;
 
@@ -261,6 +272,7 @@ namespace EmuSen.Cores.Native
             _machine?.Dispose();
             _machine = machine;
             FirmwareNotice = NoticeFor(machine, asked);
+            foreach (string line in FirmwareLines(Info.DisplayName, machine.Info.Firmware, asked)) System.Console.WriteLine(line);
             IsHaltedAtBreakpoint = false;
             AttachDebugger(machine);
             _battery.Clear();

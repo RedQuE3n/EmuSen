@@ -451,7 +451,7 @@ namespace EmuSen.Mistress.Views
             GameFrame.ShaderParameters = ShaderParameterValues(console, stored ?? choice.Name);
             GameFrame.ActiveEffect = choice.Effect;
             // Before the filter, whose chain starts from this console's defaults and constants - see EmuSen_Serenity.md §3.9.
-            GameFrame.FilterConsole = console;
+            GameFrame.FilterConsole = EmuSen.Cores.CoreCatalog.HostOf(console);
             GameFrame.SquarePixels = _graphics.Value(console, GraphicsSettingsWindow.PictureShapeKey) == GraphicsSettingsWindow.SquarePixels;
             GameFrame.Crop = RunningCrop(console);
             GameFrame.ActiveFilter = choice.Filter;

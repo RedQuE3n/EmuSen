@@ -97,8 +97,8 @@ namespace EmuSen.Mistress.Views
             "The whole picture, the part a television showed, or a crop of your own.",
             CoreSettingKind.Choice, NoOverscan, Choices: new[] { NoOverscan, TvOverscan, CustomCrop }, ChoiceLabels: new[] { "Whole picture", "TV overscan", "Custom crop" });
 
-        // The consoles that drove a television, which are the ones the tube's filter is offered for; an LCD showed every pixel.
-        public static bool HasOverscan(string console) => EmuSen.Serenity.Shaders.CrtFilter.Filter.Consoles!.Contains(console);
+        // The consoles that drove a television, an attachment by its host's screen; an LCD showed every pixel - see EmuSen_Serenity.md §3.12.
+        public static bool HasOverscan(string console) => EmuSen.Serenity.Shaders.CrtFilter.TelevisionConsoles.Contains(CoreCatalog.HostOf(console));
 
         // What a console's stored choice hides at each edge of the picture - see EmuSen_Settings_Reference.md §4.99.
         public static EmuSen.Serenity.PictureCrop CropFor(GraphicsConfig config, string console)

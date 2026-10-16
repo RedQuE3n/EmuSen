@@ -31,6 +31,10 @@ pub(in crate::mcd) const LAND_SHORT: u32 = 14;
 /// sectors up to there (krikzz's notes: "seek pos 250, loop range 240-247").
 pub(in crate::mcd) const SETTLE: u32 = 3;
 pub(in crate::mcd) const LOOP: u32 = 7;
+/// A track jump (command A): the tracks from the disc's centre to sector s are √(CENTRE² + AREA·s), and the jump is
+/// busy √tracks / 2 − 4.5 exchanges; both fitted to a console's recorded jumps (Nephrite_Native.md §64, D-57).
+pub(in crate::mcd) const CENTRE: f64 = 18_300.0;
+pub(in crate::mcd) const AREA: f64 = 3_385.0;
 
 /// The status's first nibble.
 pub(in crate::mcd) mod status {
@@ -43,6 +47,7 @@ pub(in crate::mcd) mod status {
     pub(in crate::mcd) const CHECKSUM: u8 = 0x6;
     pub(in crate::mcd) const READY: u8 = 0x9;
     pub(in crate::mcd) const NO_DISC: u8 = 0xB;
+    pub(in crate::mcd) const JUMPING: u8 = 0xA;
     pub(in crate::mcd) const LEAD_OUT: u8 = 0xC;
 }
 
@@ -67,6 +72,8 @@ pub(in crate::mcd) enum Mode {
     Paused { low: u32, high: u32, gap: bool },
     /// Fast forward or back.
     Scanning { forward: bool },
+    /// A track jump: the exchanges left before the head lands, and where.
+    Jumping { left: u32, land: u32 },
     TrayOpen,
 }
 
@@ -155,6 +162,16 @@ impl Cdd {
         seek(DRIVE, place.file.map(|f| f as u32), place.offset);
     }
 
+    /// Command A: across `tracks` tracks, outward or toward the centre, ending paused where the head lands.
+    fn jump(&mut self, tracks: u32, inward: bool) {
+        let from = (CENTRE * CENTRE + AREA * self.head as f64).sqrt();
+        let to = if inward { (from - tracks as f64).max(CENTRE) } else { from + tracks as f64 };
+        let land = (((to * to - CENTRE * CENTRE) / AREA).round() as u32).min(self.lead_out());
+        let left = ((tracks as f64).sqrt() / 2.0 - 4.5).round().max(1.0) as u32;
+        self.name(land);
+        self.mode = Mode::Jumping { left, land };
+    }
+
     fn seek_to(&mut self, target: u32, play: bool) {
         self.name(target);
         let from = self.head;
@@ -216,6 +233,8 @@ impl Cdd {
                 _ => {}
             },
             0x8 | 0x9 if ready => self.mode = Mode::Scanning { forward: c[0] & 15 == 8 },
+            // The tracks a hexadecimal count in nibbles 4-7, nibble 3 the direction (D-57).
+            0xA if ready => self.jump((c[4] as u32) << 12 | (c[5] as u32) << 8 | (c[6] as u32) << 4 | c[7] as u32, c[3] != 0),
             0xC => {
                 if self.mode == Mode::TrayOpen {
                     self.mode = if self.disc.is_some() { Mode::Spinning(SPIN_UP) } else { Mode::Stopped(status::NO_DISC) };
@@ -325,6 +344,18 @@ impl Cdd {
             Mode::TrayOpen => {
                 report = false;
                 status::TRAY_OPEN
+            }
+            // Busy with no report, the flags the place's; at the last exchange they are the landing's.
+            Mode::Jumping { left, land } => {
+                if left <= 1 {
+                    self.head = land;
+                    self.mode = Mode::Paused { low: land.saturating_sub(LOOP), high: land, gap: false };
+                } else {
+                    self.mode = Mode::Jumping { left: left - 1, land };
+                }
+                self.data = self.data_at(self.head);
+                report = false;
+                status::JUMPING
             }
         };
         if let Some(at) = sector {
@@ -621,6 +652,40 @@ pub(crate) mod tests {
         send(&mut c, [2, 0, 0, 4, 0, 0, 0, 0, 0]);
         c.exchange();
         assert_eq!(&line(&c)[..9], "94.010200");
+    }
+
+    /// A disc of one data track `data` sectors long, as long as a game's.
+    fn long_disc(data: u32) -> Disc {
+        let sheet = emusen_disc::cue::Sheet::parse("FILE \"d.iso\" BINARY\nTRACK 01 MODE1/2048\nINDEX 01 00:00:00\n").unwrap();
+        Disc::from_sheet(&sheet, vec![Kept::from(vec![0u8; data as usize * 2048])], emusen_disc::IsoForm::Mode1).unwrap()
+    }
+
+    // A recording of a console's drive: from 02:16:64, a jump of $33EC tracks is answered `AF` 54 times, then paused at 47:26:29 (Nephrite_Native.md §64, D-57).
+    #[test]
+    fn a_track_jump_is_busy_then_pauses_where_it_lands() {
+        let mut c = Cdd::new(Some(long_disc(260_000)), 0);
+        c.set_hock(true);
+        ready(&mut c);
+        c.head = Msf::new(2, 16, 64).sector();
+        c.mode = Mode::Paused { low: c.head - LOOP, high: c.head, gap: false };
+        send(&mut c, [0xA, 0, 0, 0, 3, 3, 0xE, 0xC, 0]);
+        let mut busy = 0;
+        loop {
+            c.exchange();
+            if c.status[0] != status::JUMPING {
+                break;
+            }
+            assert_eq!(&line(&c)[..9], "AF.000000", "busy, no report");
+            busy += 1;
+        }
+        assert!((52..=56).contains(&busy), "{busy} exchanges busy, the recording's 54");
+        assert_eq!(c.status[0], status::PAUSED);
+        let land = Msf::new(47, 26, 29).sector();
+        assert!(c.head.abs_diff(land) < 150, "landed at {} for the recording's {land}", c.head);
+        // Back toward the centre by the same tracks, it lands where it began.
+        send(&mut c, [0xA, 0, 0, 0xF, 3, 3, 0xE, 0xC, 0]);
+        while { c.exchange(); c.status[0] == status::JUMPING } {}
+        assert!(c.head.abs_diff(Msf::new(2, 16, 64).sector()) < 20, "{}", c.head);
     }
 
     #[test]

@@ -460,7 +460,8 @@ jobs:
         shell: bash
         run: |
           out=EmuSen-Project/EmuSen.WiseMan/bin/Release/net10.0
-          cp native/* "$out/"
+          # The test cores' artefact keeps its two crates' folders, since it holds the kit's runner too; every file goes beside the tests.
+          find native -type f -exec cp {} "$out/" \;
           chmod +x "$out"/emusen-core-conform* || true
           ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*nephrite* "$out"/*diamond* "$out"/*v1_test_core* "$out"/*v1_plain_core*
           ls -la "$out"/*emusen_platform* || echo "no platform library: Galaxia runs on its C#"

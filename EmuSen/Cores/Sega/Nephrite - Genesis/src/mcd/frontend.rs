@@ -39,7 +39,7 @@ pub fn system_area(disc: &mut Disc) -> Vec<u8> {
     if k.audio() { Vec::new() } else { raw[16..16 + 2048].to_vec() }
 }
 
-const BIOS_COST: &str = "Nephrite's open replacement for the Sega CD BIOS is not written yet (Nephrite_Plan.md §5.6): a disc runs on the player's BIOS, and without it no disc starts.";
+const BIOS_COST: &str = "Nephrite's own Sega CD BIOS, written from Sega's manuals: the documented calls answer as the manuals describe and discs boot. A game that calls a routine no manual names, reads the BIOS's code or depends on the exact timing of its loops may run differently; discs of every region start, since the security check is not made; the screen without a disc is Nephrite's own, with no CD player or memory manager; and until its backup RAM calls are written, games find no backup RAM.";
 
 /// The boot ROM of a market's console (`U`, `E` or `J`), as the frontend's file `which`.
 pub(crate) fn bios_firmware(region: char, which: u32) -> Firmware {
@@ -56,7 +56,31 @@ pub(crate) fn bios_firmware(region: char, which: u32) -> Firmware {
         size: super::BIOS_SIZE as u64,
         required: false,
         parts: vec![vec![name]],
-        replacement: Some(Replacement::None { cost: BIOS_COST.into() }),
+        replacement: Some(Replacement::Accuracy { cost: BIOS_COST.into() }),
+    }
+}
+
+/// The setting that puts a Sega CD beneath a cartridge (mode 1), read at create.
+pub(crate) const BENEATH_KEY: &str = "mcd_beneath";
+pub(crate) const BENEATH_VALUE: &str = "mcd.beneath";
+
+pub(crate) fn beneath_setting() -> Setting {
+    Setting {
+        key: BENEATH_KEY.into(),
+        label: "Sega CD beneath the cartridge".into(),
+        help: "For a cartridge made to use the Sega CD from the cartridge slot: whether a Sega CD is attached beneath the console, running the player's Sega CD BIOS where one is given and Nephrite's own otherwise. Its backup RAM is kept in a file of its own. Takes effect when a game is next loaded.".into(),
+        kind: SettingKind::Choice(vec![
+            Choice { value: "none".into(), label: "None".into(), help: None },
+            Choice { value: BENEATH_VALUE.into(), label: "Sega CD".into(), help: None },
+        ]),
+        default: "none".into(),
+        scope: Scope::Create,
+        category: Some("Sega CD".into()),
+        effect: Effect::None,
+        advanced: false,
+        // Not shown while the Sega CD is offered to no player (Nephrite_Native.md §53.2).
+        hidden: true,
+        restart: true,
     }
 }
 

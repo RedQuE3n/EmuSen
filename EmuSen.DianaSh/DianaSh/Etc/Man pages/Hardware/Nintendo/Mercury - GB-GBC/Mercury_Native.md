@@ -1306,6 +1306,14 @@ host's library from a foreign publish by MarsRT's three file names, and `marsrt.
   Hotaru. On a foreign runtime identifier it removes every row's three host names from the publish. For each row, it
   then either takes `$(EmuSenNativePrebuilt)/<rid>/<library>` or warns with that row's console and fallback. The
   foreign test compares against the portable identifier as well as the SDK's (`fedora.44-x64` here), as before.
+  *Amended 2026-10-15:* the host's sidecars, `<library>.core.json`, are dropped with the host's libraries, and a
+  library on the core ABI v1 takes its own sidecar from beside it in the prebuilt folder, where the workflow's
+  artefact puts it. Measured before the change, on a win-x64 publish with every prebuilt library present: the tree
+  held the five `.dll` libraries of the v1 cores and, beside them, the five Linux sidecars `lib<name>.so.core.json`,
+  naming libraries the tree did not hold, and no sidecar of its own. Argued from `CoreDiscovery`: a sidecar is read
+  without its library being looked for, and opening the core then refuses it as missing beside its sidecar, so such a
+  build would refuse VenusRT, MoonRT, MercuryRT, Nephrite and Diamond, leaving the Genesis and the PlayStation with
+  no engine. The same publish after the change holds the five `<name>.dll.core.json` and no Linux sidecar.
 - **`.github/workflows/rust-cores.yml`**, which was `marsrt.yml`, is a crate × platform matrix: two crates on the same
   four runners, which gives eight jobs and eight artefacts named `<crate>-<rid>`. A second job, `wiseman`, runs on
   linux-x64, win-x64 and osx-arm64:

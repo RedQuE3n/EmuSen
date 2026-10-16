@@ -755,6 +755,13 @@ frames in FIFO at the television's 60 Hz (median 16.67 ms, p95 16.74, max 16.87)
 Whether that is the television or gamescope's HDR setting being off was not established; it is to be run again with
 HDR enabled in the session's display settings before it counts as a no.
 
+*Run again on 2026-10-15 with HDR enabled in the session's display settings [M]:* gamescope's log reports "HDR output
+enabled" on the television's connector, yet the window was still offered every format in sRGB alone: through
+`gamescope-0` (where the run then stopped presenting and timed out) and through the X11 displays `:0` and `:1` with
+gamescope's WSI layer loaded (`ENABLE_GAMESCOPE_WSI=1`, which offered BGRA8 in sRGB only). So the television and the
+setting are not the cause; how gamescope's layer hands an HDR10 colour space to a native Vulkan client is unresolved,
+and (g) on the television stays open, neither yes nor no.
+
 **Hardware §11 Q11 still needs:** one low-end Android phone with Vulkan 1.1, one iPhone or iPad, and an ARM board for K2.
 
 ### 9.4 K2, as runnable steps (not started)

@@ -114,3 +114,30 @@ fn mcd_verificator_finds_the_ram_cartridge() {
     }
     assert_eq!(row.as_deref(), Some("OK"));
 }
+
+/// mcd-verificator as a cartridge with the Sega CD beneath it (mode 1), the open BIOS at `$400000` and the 240p disc in
+/// the drive: the program finds the boot ROM by its "SEGA" at `$400100` (Nephrite_OpenBios.md §11).
+#[test]
+fn mcd_verificator_runs_in_mode_1_on_the_open_bios() {
+    let Some(root) = std::env::var_os(crate::genesis::programs::ROMS_VARIABLE) else { return };
+    let root = std::path::Path::new(&root);
+    let cart = std::fs::read(root.join(PROGRAM)).expect("mcd-verificator");
+    let disc = std::fs::read(root.join(DISC)).expect("the 240p Sega CD disc");
+    let disc = crate::mcd::open_disc(emusen_native::core::Kept::from(disc), Vec::new()).expect("a disc");
+    let media = Media::read(&cart);
+    assert_eq!(media.system, crate::media::System::Md);
+    let mut m = Machine::with_cd_beneath(&cart, media.clone(), crate::machine::default_model(&media), super::bios::OPEN_BIOS.to_vec(), Some(disc));
+    let done = run(&mut m, 3000);
+    let rows = screen(&m);
+    for r in rows.iter().filter(|r| !r.is_empty()) {
+        eprintln!("| {r}");
+    }
+    eprintln!("finished at frame {done:?}");
+    assert!(done.is_some(), "Diagnostics complete.");
+    assert!(rows.iter().any(|r| r.contains("CD hardware detected at 0x00400000")), "mode 1: the boot ROM found at $400000");
+    let v = verdicts(&rows);
+    for name in TESTS.iter().skip(1) {
+        let got = v.iter().find(|(n, _)| n == name).map(|(_, r)| r.as_str());
+        assert!(got.is_some_and(|r| r.ends_with("OK")), "{name}: {got:?}");
+    }
+}

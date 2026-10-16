@@ -220,7 +220,7 @@ jobs:
         crate:
           - name: marsrt
             dir: 'EmuSen/Cores/Nintendo/MarsRT - N64'
-            symbol: mars_
+            symbol: emusen_core_
           - name: mercuryrt
             dir: 'EmuSen/Cores/Nintendo/MercuryRT - GB'
             symbol: emusen_native_
@@ -465,6 +465,8 @@ jobs:
           chmod +x "$out"/emusen-core-conform* || true
           ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*nephrite* "$out"/*diamond* "$out"/*v1_test_core* "$out"/*v1_plain_core*
           ls -la "$out"/*emusen_platform* || echo "no platform library: Galaxia runs on its C#"
+          # What the runner lacks of what Shaderc's library needs, and the system's own words for loading it.
+          if [ "$RUNNER_OS" = Linux ]; then find "$out" -name 'libshaderc_shared.so*' -exec sh -c 'echo "$1"; ldd "$1" | grep "not found" || echo "every dependency found"; python3 -c "import ctypes, sys; ctypes.CDLL(sys.argv[1]); print(\"loads\")" "$1" || true' _ {} \; ; fi
 
       # Printed in full, so each platform's digests can be read off the log.
       - name: Test the platform digests
@@ -475,8 +477,10 @@ jobs:
         working-directory: EmuSen-Project
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery|FullyQualifiedName~MoonRtCoreAbi|FullyQualifiedName~MercuryRtCoreAbi|FullyQualifiedName~Nephrite|FullyQualifiedName~Diamond|FullyQualifiedName~TestRomRunner" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
+      # The platform's steps run whatever the cores' comparison above found, since neither depends on the other (EmuSen_RustPlatform.md §27.3).
       # Galaxia on its C#, which EMUSEN_GALAXIA_NATIVE=0 selects. These tests had not run on Windows or macOS before step 2a, so it reports and does not yet gate.
       - name: Test Galaxia on its C#
+        if: ${{ !cancelled() }}
         working-directory: EmuSen-Project
         continue-on-error: true
         env:
@@ -485,12 +489,14 @@ jobs:
 
       # The same tests through the platform library, which is Galaxia's default since step 2c, and the parity class beside them; still reporting, since a platform without the library falls back to the C# (EmuSen_RustPlatform.md §13).
       - name: Test Galaxia on the platform library
+        if: ${{ !cancelled() }}
         working-directory: EmuSen-Project
         continue-on-error: true
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Galaxia.|FullyQualifiedName~DianaShSandboxTests|FullyQualifiedName~HierTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=galaxia-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       # Endymion on its C#, which EMUSEN_ENDYMION_NATIVE=0 selects since its state 2: the pad and audio tests on simulated pads and SDL's dummy driver; reported, not yet a gate, as Galaxia's steps above.
       - name: Test Endymion on its C#
+        if: ${{ !cancelled() }}
         working-directory: EmuSen-Project
         continue-on-error: true
         env:
@@ -499,12 +505,14 @@ jobs:
 
       # The same through the platform library, Endymion's default since its state 2, with the parity classes that hold the library to the C# (EmuSen_RustPlatform.md §12.5, §14.5, §19).
       - name: Test Endymion on the platform library
+        if: ${{ !cancelled() }}
         working-directory: EmuSen-Project
         continue-on-error: true
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Audio.|FullyQualifiedName~EmuSen.WiseMan.Input.|FullyQualifiedName~EmuSen.WiseMan.Endymion.|FullyQualifiedName~AudioProperties" --logger "console;verbosity=normal" --logger "trx;LogFileName=endymion-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       # Serenity's slang half on its C#, which EMUSEN_SERENITY_NATIVE=0 selects since its state 2: presets, sources, the compiler, reflection, the cache, the device and the chain; the tests that need a Vulkan device pass by without one. Reported, not yet a gate.
       - name: Test Serenity's slang half on its C#
+        if: ${{ !cancelled() }}
         working-directory: EmuSen-Project
         continue-on-error: true
         env:
@@ -513,6 +521,7 @@ jobs:
 
       # The same through the platform library, Serenity's default since its state 2, with the parity classes that hold the library to the C# (EmuSen_RustPlatform.md §16.5, §17.5, §19).
       - name: Test Serenity's slang half on the platform library
+        if: ${{ !cancelled() }}
         working-directory: EmuSen-Project
         continue-on-error: true
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Serenity.Slang|FullyQualifiedName~EmuSen.WiseMan.Serenity.Spirv|FullyQualifiedName~SerenityParityTests|FullyQualifiedName~SerenityChainParityTests|FullyQualifiedName~SerenitySwitchTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=serenity-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"

@@ -2,6 +2,7 @@
 
 use crate::state::{State, StateReader, StateResult, StateWriter, boxed};
 
+
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Controller {
     pub buttons: u16,
@@ -10,6 +11,9 @@ pub struct Controller {
     pub stick_y: i8,
     /// `Pak`: `[SkipInState]` in C#, and written by the bus's tail after the save chip.
     pub pak: Option<ControllerPak>,
+    /// A pak other than the one the game last saw, as a pak kept apart from a state that held another is: the next status
+    /// answers 3, "a new accessory inserted since the last", and clears it (Mars_Native.md §7.7). In no state, as C# has none.
+    pub inserted: crate::Skip<bool>,
 }
 
 impl State for Controller {

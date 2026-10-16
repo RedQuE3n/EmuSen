@@ -40,6 +40,10 @@ required-features = ["mcd"]
 name = "disc"
 required-features = ["mcd"]
 
+[[example]]
+name = "waits"
+required-features = ["mcd"]
+
 [profile.release]
 panic = "abort"
 opt-level = 3

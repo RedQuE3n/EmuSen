@@ -129,6 +129,10 @@ namespace EmuSen.Cores
             }
         }
 
+        // The console whose screen and pads a console uses: an attachment's host, the Sega CD's the Genesis, else the console itself - see EmuSen_Serenity.md §3.12.
+        public static string HostOf(string console) =>
+            Crystal.Systems.SystemPacks.All.FirstOrDefault(p => string.Equals(p.Entry.Console, console, StringComparison.OrdinalIgnoreCase))?.Entry.AttachedTo ?? console;
+
         private static Crystal.Systems.SystemEntry? PackOf(string console) =>
             Crystal.Systems.SystemPacks.All.Select(p => p.Entry).FirstOrDefault(e => string.Equals(e.Console, console, StringComparison.OrdinalIgnoreCase) && ConsoleForSystem(e.Id) is null);
 
@@ -267,6 +271,10 @@ namespace EmuSen.Cores
         // The system entry of a console discovery added, from the engine's info, for its pad and its ports.
         public static Native.CoreSystem? DiscoveredSystem(string console) =>
             DiscoveredFor(console) is { } core && PackOf(console) is { } pack ? core.Info.Systems.FirstOrDefault(s => s.Id == pack.Id) : null;
+
+        // The system entry a console's v1 engine gives, a discovered console's or a catalog console's own engine's, for its save media - see EmuSen_SaveMedia.md §7.2.
+        public static Native.CoreSystem? EngineSystem(string console) =>
+            DiscoveredSystem(console) ?? SystemIdsFor(console).SelectMany(id => Native.CoreDiscovery.ForSystem(id).Select(c => c.Info.Systems.FirstOrDefault(s => s.Id == id))).FirstOrDefault(s => s is not null);
 
         // Only a console with a stick is listed, a discovered one by its engine's controllers; every other one reads no axis - see EmuSen_Input.md §7.
         private static readonly Dictionary<string, IReadOnlyList<Galaxia.Input.PadAxis>> AxesByConsole =

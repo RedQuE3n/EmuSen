@@ -29,7 +29,7 @@ namespace EmuSen.Mistress.Views
             if (MemoryCards.ImportToOffer(media, key => _graphics.Value(console, key)) is not { } medium) return;
             _graphics.SetValue(console, MemoryCards.OfferedKey(medium), "true");
             _graphics.Save();
-            string noun = medium.Title.ToLowerInvariant(), shared = medium.DefaultName(0);
+            string noun = MediumWords.InText(medium.Title), shared = medium.DefaultName(0);
             string message = $"Your {console} games each kept their own {noun}. Copy their saves onto the shared one, {shared}, so that every game sees them? Each game's own stays as it is: Memory Cards can copy from them later, and Per game in Graphics Settings uses them again.";
             if (!await ConfirmCardImport(this, $"Shared {medium.Title}", message))
             {

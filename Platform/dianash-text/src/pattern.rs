@@ -14,6 +14,22 @@ pub fn compile(pattern: &str, ignore_case: bool) -> Result<Regex, String> {
     Regex::new(&source).map_err(|_| refusal(pattern))
 }
 
+/// A pattern compiled once per shell and kept, since compiling is most of what a `grep` in a loop costs; pure, so a
+/// kept pattern is the one compiling again would give. The cache is the call's per-shell slot (§6.3), and is emptied
+/// when it holds 64.
+pub fn cached(call: &dianash_module::Call, pattern: &str, ignore_case: bool) -> Result<Regex, String> {
+    let cache = call.slot(std::collections::HashMap::<(String, bool), Regex>::new);
+    if let Some(regex) = cache.get(&(pattern.to_string(), ignore_case)) {
+        return Ok(regex.clone());
+    }
+    let regex = compile(pattern, ignore_case)?;
+    if cache.len() >= 64 {
+        cache.clear();
+    }
+    cache.insert((pattern.to_string(), ignore_case), regex.clone());
+    Ok(regex)
+}
+
 /// `{` that does not begin a quantifier is a literal to .NET and an error to the crate.
 fn translate(pattern: &str) -> String {
     let chars: Vec<char> = pattern.chars().collect();

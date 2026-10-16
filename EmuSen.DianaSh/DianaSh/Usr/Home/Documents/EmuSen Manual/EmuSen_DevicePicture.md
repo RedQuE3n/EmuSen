@@ -407,6 +407,18 @@ goldens and the state digests are untouched, and with no device lent the picture
 by `PictureOut`; (3) the bit claimed. Its rasteriser is on `emusen-gpu` already, so (2) and (3) are small once (1) is
 done.
 
+*2026-10-16: (1) is done (`Mars_Native.md` §7); (2) and (3) are not, and are not small.* MarsRT's device does not hold
+the picture a frame shows in most of the cases where it draws: at a multiple without antialiasing, the device walks
+the scan and its words are read back and written into the host's raster, over the borders, held lines and fades the
+VI's raster keeps on the host, and the frame is composed from that raster on the host (`vi/scan.rs`, `walk` and
+`write_device_picture`). Only with antialiasing does the raster live on the device (`scan_into_raster`, Mars_Gpu.md
+§15), so that the averaged buffer is the frame but for its alpha, which the host sets opaque as it composes. A picture
+on the device is therefore the averaged path's alone today, and for the rest it needs the device's raster at every
+multiple the device draws, which the averaging pass with a side of one already gives, and a pass that writes the
+picture opaque into `PictureOut`'s slot; `frame_device` then answers from the device thread's handed slot. That is a
+change of the scan-out's design, to be proven exact against the host's raster as the averaged path was, and it is the
+next step for MarsRT here; the step counted on with "small" above is not this one.
+
 ---
 
 ## 8. The steps, and what each must show

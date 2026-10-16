@@ -463,6 +463,10 @@ mod tests {
         assert_eq!((unsafe { emusen_galaxia_mapped_bytes(handle, &mut at) }, at), (0, std::ptr::null()));
         assert_eq!(unsafe { emusen_galaxia_unmap(handle) }, 0);
         assert_eq!(map(&absent), (status::NOT_FOUND, std::ptr::null_mut()));
+        assert_eq!(map(&dir), (status::ACCESS, std::ptr::null_mut()), "a directory, refused alike everywhere");
+        let mut words = [0u8; 256];
+        let length = unsafe { crate::emusen_platform_last_error(words.as_mut_ptr(), words.len()) } as usize;
+        assert_eq!(std::str::from_utf8(&words[..length]), Ok("is a directory"), "words a frontend can show");
         assert_eq!(unsafe { emusen_galaxia_map(std::ptr::null(), 0, &mut std::ptr::null_mut()) }, status::NULL);
         assert_eq!(unsafe { emusen_galaxia_map(b"x".as_ptr(), 1, std::ptr::null_mut()) }, status::NULL);
         assert_eq!(unsafe { emusen_galaxia_mapped_bytes(std::ptr::null(), &mut at) }, status::NULL as i64);

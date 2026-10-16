@@ -26,6 +26,8 @@ namespace EmuSen.WiseMan.Galaxia
         [Fact]
         public void A_process_whose_home_has_no_config_folder_logs_under_that_home()
         {
+            // Only Linux takes .NET's application-data folder from the home's .config; Windows and macOS ask the system for a folder of their own.
+            if (!OperatingSystem.IsLinux()) return;
             string home = Path.Combine(_root, "home"), cwd = Path.Combine(_root, "cwd"), mark = Path.Combine(_root, "mark.txt");
             Directory.CreateDirectory(home);
             Directory.CreateDirectory(cwd);

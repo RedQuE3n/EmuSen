@@ -19,12 +19,21 @@ pub(crate) fn ends_as(name: &str, suffix: &str) -> bool {
     }
 }
 
-/// The files directly in a folder, by name: what is not a folder, a link judged by what it names and a dangling one counted, as .NET lists them.
+/// Whether a file name begins as a pattern `<prefix>*` asks.
+pub(crate) fn begins_as(name: &str, prefix: &str) -> bool {
+    match name.get(..prefix.len()) {
+        Some(head) if PATTERNS_IGNORE_CASE => equals_ignore_case(head, prefix),
+        Some(head) => head == prefix,
+        None => false,
+    }
+}
+
+/// The files directly in a folder, by name: what is not a folder as .NET lists them (`tree::listed_as_directory`).
 pub(crate) fn files_in(directory: &str) -> std::io::Result<Vec<String>> {
     let mut names = Vec::new();
     for entry in std::fs::read_dir(directory)? {
         let entry = entry?;
-        if !std::fs::metadata(entry.path()).is_ok_and(|m| m.is_dir()) {
+        if !crate::tree::listed_as_directory(&entry) {
             names.push(entry.file_name().to_string_lossy().into_owned());
         }
     }

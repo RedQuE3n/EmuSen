@@ -27,7 +27,8 @@ namespace EmuSen.WiseMan.Cores
             CoreDiscovery.UseDirectories(null);
             CoreDiscovery.UseDevelopment(null);
             DataStore.OverrideDirectory = null;
-            try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
+            // Windows refuses to delete a library the process has loaded, and answers it as access denied.
+            try { Directory.Delete(_root, recursive: true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
 
         // A copy of a test core in its own directory, with its sidecar written by loading the copy, as the build step does.

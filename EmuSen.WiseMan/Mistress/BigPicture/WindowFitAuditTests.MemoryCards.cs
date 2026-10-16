@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
+using EmuSen.Crystal.Systems.N64;
 using EmuSen.Crystal.Systems.Psx;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -11,7 +12,7 @@ using EmuSen.WiseMan.Crystal;
 
 namespace EmuSen.WiseMan.Mistress.BigPicture
 {
-    // The Memory Cards window on the PlayStation's tab, a shared card with saves and a game's own beside it, and the same card held by a running game - see EmuSen_SaveMedia.md §6.5.
+    // The Memory Cards window on the PlayStation's tab, a shared card with saves and a game's own beside it, the same card held by a running game, and the other consoles' tabs - see EmuSen_SaveMedia.md §6.5.
     public partial class WindowFitAuditTests
     {
         internal static void ShowMemoryCards(MainWindow window, bool held)
@@ -25,12 +26,46 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             File.WriteAllBytes(Path.Combine(DataStore.Saves, "PlayStation", "Amber Saga.mcr"), PsxCardFormat.Instance.Format());
             if (held && MediumLock.TryTake(card, "Amber Saga", shared: true) is { } taken) window.Closed += (_, _) => taken.Dispose();
             Call(window, "ShowMemoryCards");
-            Settle(window);
+            SelectTab(window, "PlayStation");
             var shown = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>().ToList();
             Assert.Contains(shown, c => c.Name == "PlayStation.psx.card.Save.1" && c.IsEffectivelyVisible);
             var about = shown.OfType<TextBlock>().First(t => t.Name == "PlayStation.psx.card.About");
             Assert.Equal(held, about.Text!.Contains("In use by Amber Saga"));
             Assert.StartsWith("Shared: Card 1 in Slot 1, Card 2 in Slot 2.", about.Text);
+        }
+
+        // Another console's tab, each of its media with a formatted card in the drawer under the name its first slot holds.
+        internal static void ShowMemoryCardsTab(MainWindow window, string console)
+        {
+            Assert.NotEmpty(EmuSen.Cores.MemoryCards.MediaFor(console));
+            foreach (EmuSen.Cores.SaveMedium medium in EmuSen.Cores.MemoryCards.MediaFor(console))
+                if (medium.Entry?.Format?.Format() is { } blank)
+                {
+                    string card = medium.PathOf(medium.DefaultName(0));
+                    Directory.CreateDirectory(Path.GetDirectoryName(card)!);
+                    File.WriteAllBytes(card, blank);
+                }
+            Call(window, "ShowMemoryCards");
+            SelectTab(window, console);
+            var shown = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<TextBlock>().ToList();
+            Assert.Contains(shown, t => t.Name?.StartsWith(console + ".", StringComparison.Ordinal) == true && t.Name.EndsWith(".About", StringComparison.Ordinal) && t.IsEffectivelyVisible);
+        }
+
+        // The N64's tab: four Controller Paks, a shared pak with two notes, one with a long name, and a game's own beside it - see EmuSen_SaveMedia.md §7.2.
+        internal static void ShowMemoryCardsN64(MainWindow window)
+        {
+            string pak = SaveLibrary.CardPathFor("N64", "Pak 1", ".mpk");
+            Directory.CreateDirectory(Path.GetDirectoryName(pak)!);
+            byte[] notes = N64PakFormatTests.WithNote(N64PakFormatTests.WithNote(N64PakFormat.Instance.Format(), 0, "NKTE", "01", new byte[] { 0x26, 0x1A, 0x2B, 0x22, 0x28, 0x01, 0x24, 0x1A, 0x2B, 0x2D }, new[] { 5, 6 }, 1),
+                1, "NZLE", "01", Enumerable.Repeat((byte)0x2C, 16).ToArray(), new[] { 7, 8, 9 }, 2);
+            File.WriteAllBytes(pak, notes);
+            File.WriteAllBytes(Path.Combine(DataStore.Saves, "N64", "Mario Kart 64.mpk"), N64PakFormat.Instance.Format());
+            Call(window, "ShowMemoryCards");
+            SelectTab(window, "N64");
+            var shown = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>().ToList();
+            Assert.Contains(shown, c => c.Name == "N64.n64.pak.Save.1" && c.IsEffectivelyVisible);
+            var about = shown.OfType<TextBlock>().First(t => t.Name == "N64.n64.pak.About");
+            Assert.StartsWith("Shared: Pak 1 in Controller 1, Pak 2 in Controller 2, Pak 3 in Controller 3, Pak 4 in Controller 4.", about.Text);
         }
     }
 }

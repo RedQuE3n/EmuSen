@@ -107,6 +107,25 @@ unpacked, before every launch only to learn of an optional BIOS (`Diamond_Player
 
 One line of core code serves every non-picker frontend, which is why this is worth having even though Mistress has a real dialog.
 
+### 3.1 Which firmware a session ran on (2026-10-16)
+
+Since a core always has an open replacement (§0), a running game says nothing about which of the two it is on, and a
+report from a player cannot be read without knowing. The tester's first day with the Sega CD showed the gap: films
+that would not load were first suspected of running on Nephrite's own BIOS, whose Sonic CD film is black (D-54),
+and nothing in the session could settle it. `CoreEngine.LoadRom` now writes one line per firmware entry that machine
+info reports, after the machine is made:
+
+```
+[Firmware] The American Sega CD's BIOS (131,072 bytes): the player's bios_CD_U.bin
+[Firmware] The American Sega CD's BIOS (131,072 bytes): Nephrite's own replacement
+```
+
+The source is machine info's (`file`, `replacement`, `absent`), the core's own account of what it booted, not the
+host's account of what it passed: a file the host handed over that the core did not use would otherwise be reported
+as running. The line is generic over cores, the label and the file name being the core's firmware entry. In Mistress
+it lands in the game's `general.log` under the log directory (`EmuSen_Settings_Reference.md` §4.22), since logging
+starts before the load. Tested by `NephriteFirmwareTests`.
+
 ---
 
 ## 4. Adding a core

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using EmuSen.Galaxia;
@@ -35,8 +36,11 @@ namespace EmuSen.WiseMan.Galaxia
             DataStore.OverrideDirectory = null;
             ErrorLog.DirectoryOverride = _logOverride;
             ErrorLog.Redactor = _redactor;
-            if (Directory.Exists(_temp)) Directory.Delete(_temp, recursive: true);
+            Links.DeleteTree(_temp);
         }
+
+        // What .NET refuses as no path at all: the empty string, and on Windows one of spaces only.
+        private static bool EffectivelyEmpty(string path) => path.Length == 0 || (OperatingSystem.IsWindows() && path.All(c => c == ' '));
 
         private string At(params string[] parts) => Path.Combine(parts.Prepend(_temp).ToArray());
 
@@ -107,19 +111,24 @@ namespace EmuSen.WiseMan.Galaxia
         public void Every_path_rule_gives_the_string_dotnet_gives()
         {
             string[] paths = Paths(3000, seed: 20261007).ToArray();
+            var different = new List<string>();
+            void Same(string? dotnet, string? library, string what) { if (dotnet != library) different.Add($"{what}: .NET [{dotnet}], the library [{library}]"); }
             for (int i = 0; i < paths.Length; i++)
             {
                 string a = paths[i], b = paths[(i * 7 + 3) % paths.Length];
-                Assert.Equal(Path.Combine(a, b), GalaxiaNative.PathRule(GalaxiaPathRule.Combine, a, b));
-                Assert.Equal(Path.GetFileName(a), GalaxiaNative.PathRule(GalaxiaPathRule.FileName, a));
-                Assert.Equal(Path.GetFileNameWithoutExtension(a), GalaxiaNative.PathRule(GalaxiaPathRule.FileNameWithoutExtension, a));
-                Assert.Equal(Path.ChangeExtension(a, ".png"), GalaxiaNative.PathRule(GalaxiaPathRule.ChangeExtension, a, ".png"));
-                Assert.Equal(Path.ChangeExtension(a, "png"), GalaxiaNative.PathRule(GalaxiaPathRule.ChangeExtension, a, "png"));
-                Assert.Equal(Path.ChangeExtension(a, ""), GalaxiaNative.PathRule(GalaxiaPathRule.ChangeExtension, a, ""));
-                Assert.Equal(Path.GetDirectoryName(a), GalaxiaNative.PathRule(GalaxiaPathRule.DirectoryName, a));
-                Assert.Equal(Path.TrimEndingDirectorySeparator(a), GalaxiaNative.PathRule(GalaxiaPathRule.TrimEndingSeparator, a));
-                if (a.Length > 0) Assert.Equal(Path.GetFullPath(a), GalaxiaNative.PathRule(GalaxiaPathRule.FullPath, a));
+                Same(Path.Combine(a, b), GalaxiaNative.PathRule(GalaxiaPathRule.Combine, a, b), $"Combine([{a}], [{b}])");
+                Same(Path.GetFileName(a), GalaxiaNative.PathRule(GalaxiaPathRule.FileName, a), $"GetFileName([{a}])");
+                Same(Path.GetFileNameWithoutExtension(a), GalaxiaNative.PathRule(GalaxiaPathRule.FileNameWithoutExtension, a), $"GetFileNameWithoutExtension([{a}])");
+                foreach (string extension in new[] { ".png", "png", "" })
+                    Same(Path.ChangeExtension(a, extension), GalaxiaNative.PathRule(GalaxiaPathRule.ChangeExtension, a, extension), $"ChangeExtension([{a}], [{extension}])");
+                Same(Path.GetDirectoryName(a), GalaxiaNative.PathRule(GalaxiaPathRule.DirectoryName, a), $"GetDirectoryName([{a}])");
+                Same(Path.TrimEndingDirectorySeparator(a), GalaxiaNative.PathRule(GalaxiaPathRule.TrimEndingSeparator, a), $"TrimEndingDirectorySeparator([{a}])");
+                // .NET refuses what is no path, and on Windows a UNC root with no share; no caller asks the library either.
+                string? full = null;
+                try { if (!EffectivelyEmpty(a)) full = Path.GetFullPath(a); } catch (ArgumentException) { }
+                if (full is not null) Same(full, GalaxiaNative.PathRule(GalaxiaPathRule.FullPath, a), $"GetFullPath([{a}])");
             }
+            Assert.True(different.Count == 0, $"{different.Count} differ:\n{string.Join("\n", different.Take(40))}");
         }
 
         [Fact]
@@ -143,6 +152,8 @@ namespace EmuSen.WiseMan.Galaxia
             }
             for (int c = 0x10000; c < 0x20000; c++)
             {
+                // Outside the BMP .NET asks the system's ICU, which on macOS knows letters newer than the runtime's own tables; only what those tables know is compared.
+                if (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.OtherNotAssigned) continue;
                 string text = char.ConvertFromUtf32(c), upper = text.ToUpperInvariant(), lower = text.ToLowerInvariant();
                 foreach (string other in new[] { upper, lower })
                     if (string.Equals(text, other, StringComparison.OrdinalIgnoreCase) != GalaxiaNative.TestRule(GalaxiaTestRule.EqualsIgnoreCase, text, other))
@@ -156,18 +167,33 @@ namespace EmuSen.WiseMan.Galaxia
         {
             string file = Put(At("exists", "file.bin"));
             var cases = new List<string?> { null, "", file, file + Path.DirectorySeparatorChar, At("exists"), At("exists") + Path.DirectorySeparatorChar, At("absent"), At("exists", "file.bin", "under") };
-            if (!OperatingSystem.IsWindows())
+            if (Links.Allowed)
             {
                 File.CreateSymbolicLink(At("exists", "to-file"), file);
                 Directory.CreateSymbolicLink(At("exists", "to-directory"), At("exists"));
                 File.CreateSymbolicLink(At("exists", "dangling"), At("nowhere"));
-                cases.AddRange(new[] { At("exists", "to-file"), At("exists", "to-directory"), At("exists", "dangling"), At("exists", "to-directory") + "/" });
+                Directory.CreateSymbolicLink(At("exists", "dangling-directory"), At("nowhere"));
+                File.CreateSymbolicLink(At("exists", "file-link-to-directory"), At("exists"));
+                Directory.CreateSymbolicLink(At("exists", "directory-link-to-file"), file);
+                cases.AddRange(new[] { At("exists", "to-file"), At("exists", "to-directory"), At("exists", "dangling"), At("exists", "to-directory") + "/",
+                    At("exists", "dangling-directory"), At("exists", "file-link-to-directory"), At("exists", "directory-link-to-file") });
             }
+            if (OperatingSystem.IsWindows())
+            {
+                Directory.CreateDirectory(At("gone"));
+                Links.Junction(At("exists", "junction"), At("exists"));
+                Links.Junction(At("exists", "dangling-junction"), At("gone"));
+                Directory.Delete(At("gone"));
+                cases.AddRange(new[] { At("exists", "junction"), At("exists", "dangling-junction"), At("exists", "junction") + "\\" });
+            }
+            var different = new List<string>();
             foreach (string? path in cases)
             {
-                Assert.True(File.Exists(path) == GalaxiaNative.TestRule(GalaxiaTestRule.FileExists, path), $"File.Exists({path})");
-                Assert.True(Directory.Exists(path) == GalaxiaNative.TestRule(GalaxiaTestRule.DirectoryExists, path), $"Directory.Exists({path})");
+                (bool file, bool directory) csharp = (File.Exists(path), Directory.Exists(path));
+                (bool file, bool directory) library = (GalaxiaNative.TestRule(GalaxiaTestRule.FileExists, path), GalaxiaNative.TestRule(GalaxiaTestRule.DirectoryExists, path));
+                if (csharp != library) different.Add($"{path}: C# (file, directory) {csharp}, the library {library}");
             }
+            Assert.True(different.Count == 0, string.Join("\n", different));
         }
 
         [Fact]
@@ -199,19 +225,28 @@ namespace EmuSen.WiseMan.Galaxia
                 At("x.APP", "contents", "macos"), At("checkout", "out", "EmuSen.app", "Contents"), Path.GetPathRoot(_temp)!, "relative", ".",
                 old, At("old", "lib", "EmuSen"), oldBare, bothBare,
             };
-            bases.AddRange(Paths(300, seed: 7).Where(p => p.Length > 0));
+            bases.AddRange(Paths(300, seed: 7).Where(p => !EffectivelyEmpty(p)));
 
+            var different = new List<string>();
+            void Same(Func<string?> dotnet, string? library, string what)
+            {
+                // A base .NET refuses (on Windows, a UNC root with no share) is one no host is started from.
+                string? expected;
+                try { expected = dotnet(); } catch (ArgumentException) { return; }
+                if (expected != library) different.Add($"{what}: .NET [{expected}], the library [{library}]");
+            }
             foreach (string from in bases)
             {
                 foreach (bool macOS in new[] { false, true })
                 {
-                    Assert.Equal(ConfigRoot.Managed.ComputeFor(from, macOS, home), GalaxiaNative.RootFor(from, macOS, home));
-                    Assert.Equal(ConfigRoot.Managed.SeedDirectoryFor(from, macOS), GalaxiaNative.SeedDirectoryFor(from, macOS));
+                    Same(() => ConfigRoot.Managed.ComputeFor(from, macOS, home), GalaxiaNative.RootFor(from, macOS, home), $"root for [{from}], macOS {macOS}");
+                    Same(() => ConfigRoot.Managed.SeedDirectoryFor(from, macOS), GalaxiaNative.SeedDirectoryFor(from, macOS), $"seed for [{from}], macOS {macOS}");
                 }
-                Assert.Equal(ConfigRoot.Managed.BundleContentsFor(from), GalaxiaNative.BundleContentsFor(from));
-                Assert.Equal(ConfigRoot.Managed.MacDataDirectoryFor(from), GalaxiaNative.MacDataDirectoryFor(from));
-                Assert.Equal(DataMigration.Managed.LegacyRootFor(from), GalaxiaNative.LegacyRootFor(from));
+                Same(() => ConfigRoot.Managed.BundleContentsFor(from), GalaxiaNative.BundleContentsFor(from), $"bundle for [{from}]");
+                Same(() => ConfigRoot.Managed.MacDataDirectoryFor(from), GalaxiaNative.MacDataDirectoryFor(from), $"Mac data for [{from}]");
+                Same(() => DataMigration.Managed.LegacyRootFor(from), GalaxiaNative.LegacyRootFor(from), $"legacy root for [{from}]");
             }
+            Assert.True(different.Count == 0, $"{different.Count} differ:\n{string.Join("\n", different.Take(40))}");
 
             // The cases are not vacuous: each branch of the rule is among them.
             Assert.Equal(marked, GalaxiaNative.RootFor(nine, false, home));
@@ -355,15 +390,15 @@ namespace EmuSen.WiseMan.Galaxia
             Put(file + AtomicFile.TempSuffix, "half a sa");
             var quiet = new List<string> { At("read", "none.srm"), At("read"), "", At("read", "save.srm", "under"), At("read", "other.srm") + AtomicFile.TempSuffix };
             var loud = new List<string>();
-            if (!OperatingSystem.IsWindows())
+            if (Links.Allowed)
             {
                 File.CreateSymbolicLink(At("read", "dangling.srm"), At("nowhere"));
                 loud.Add(At("read", "dangling.srm"));
-                if (Environment.UserName != "root")
-                {
-                    File.SetUnixFileMode(Put(At("read", "locked.srm")), UnixFileMode.None);
-                    loud.Add(At("read", "locked.srm"));
-                }
+            }
+            if (!OperatingSystem.IsWindows() && Environment.UserName != "root")
+            {
+                File.SetUnixFileMode(Put(At("read", "locked.srm")), UnixFileMode.None);
+                loud.Add(At("read", "locked.srm"));
             }
 
             Assert.Equal(AtomicFile.Managed.TryRead(file), GalaxiaNative.FileRead(file));
@@ -436,9 +471,9 @@ namespace EmuSen.WiseMan.Galaxia
             Put(Path.Combine(home, "Saves", "kept.srm"), "newer");
             Put(Path.Combine(legacy, "Saves", "blocked.srm"), "blocked");
             Directory.CreateDirectory(Path.Combine(home, "Saves", "blocked.srm"));
-            if (!OperatingSystem.IsWindows())
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(Path.Combine(legacy, "Firmware", "dsp1.rom"), UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            if (Links.Allowed)
             {
-                File.SetUnixFileMode(Path.Combine(legacy, "Firmware", "dsp1.rom"), UnixFileMode.UserRead | UnixFileMode.UserWrite);
                 Put(At(side, "outside", "inner", "linked.txt"), "linked");
                 Directory.CreateSymbolicLink(Path.Combine(legacy, "Saves", "linked"), At(side, "outside"));
                 File.CreateSymbolicLink(Path.Combine(legacy, "Logs", "to-file.txt"), Path.Combine(legacy, "Firmware", "dsp1.rom"));
@@ -502,7 +537,7 @@ namespace EmuSen.WiseMan.Galaxia
 
             // The same files were left, each said once; only .NET's words for why differ from the library's.
             Assert.Equal(managedTold.Count, nativeTold.Count);
-            Assert.Equal(OperatingSystem.IsWindows() ? 1 : 2, nativeTold.Count);
+            Assert.Equal(Links.Allowed ? 2 : 1, nativeTold.Count);
             foreach ((string m, string n) in managedTold.Zip(nativeTold))
             {
                 Assert.Equal(m[..m.IndexOf(": ", StringComparison.Ordinal)], n[..n.IndexOf(": ", StringComparison.Ordinal)]);

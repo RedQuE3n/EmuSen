@@ -31,7 +31,7 @@ namespace EmuSen.Cores.Native
         private int _audioRate;
         private bool _skipRendering;
         private double _lastFrameMs;
-        private byte[] _stateBuffer = Array.Empty<byte>();
+        private byte[] _stateBuffer = Array.Empty<byte>(), _loadBuffer = Array.Empty<byte>();
         private IReadOnlyDictionary<string, string> _notes = new Dictionary<string, string>();
         private DiscSet? _set;
         private IReadOnlyList<string> _discs = Array.Empty<string>();
@@ -133,6 +133,9 @@ namespace EmuSen.Cores.Native
         // A shim's own pad routing into the same latch: the bits of changed take mask's values at the next frame.
         protected void HoldButtons(int port, uint mask, uint changed) => _input.Hold(port, mask, changed);
 
+        // The latch sent now rather than as the next frame starts, for a shim that runs the machine by instructions between frames.
+        protected void SendInput(CoreMachine m) => _input.Send(m);
+
         public bool SkipRendering
         {
             get => _skipRendering;
@@ -186,6 +189,17 @@ namespace EmuSen.Cores.Native
             }
             return null;
         }
+
+        // Which firmware the machine runs on, one line each for the session's log: the player's file or the core's own - see EmuSen_Firmware.md §3.1.
+        public static IEnumerable<string> FirmwareLines(string core, IReadOnlyList<CoreFirmwareSource> used, IReadOnlyList<CoreFirmware> wanted) =>
+            used.Select(u => (u.Source, F: wanted.FirstOrDefault(f => f.Which == u.Which)))
+                .Where(u => u.F is not null)
+                .Select(u => $"[Firmware] {u.F!.Label}: " + u.Source switch
+                {
+                    "file" => $"the player's {u.F.Name}",
+                    "replacement" => $"{core}'s own replacement",
+                    _ => "absent",
+                });
 
         // The discs of the game: an .m3u's, else the one image; each unpacked where it is an archive - see EmuSen_Galaxia.md §3.8.
         public static IReadOnlyList<string> DiscsOf(string path) => DiscSet.Of(path, CoreCatalog.IsImageExtension).Images;
@@ -261,6 +275,7 @@ namespace EmuSen.Cores.Native
             _machine?.Dispose();
             _machine = machine;
             FirmwareNotice = NoticeFor(machine, asked);
+            foreach (string line in FirmwareLines(Info.DisplayName, machine.Info.Firmware, asked)) System.Console.WriteLine(line);
             IsHaltedAtBreakpoint = false;
             AttachDebugger(machine);
             _battery.Clear();
@@ -392,7 +407,8 @@ namespace EmuSen.Cores.Native
             return false;
         }
 
-        private void EndFrame(CoreMachine m)
+        // The frame-end work in the runtime's order; a port whose oracle's order differs overrides it - see EmuSen_NativeCores.md §8.2's R4.
+        protected virtual void EndFrame(CoreMachine m)
         {
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
             if (_machine is not null) _hostCheats.ApplyAll(ReadSpace, WriteSpace);
@@ -527,12 +543,23 @@ namespace EmuSen.Cores.Native
             stream.Write(_stateBuffer);
         }
 
+        // A stream that can say its length is read into an array kept for the purpose, so a step of rewind allocates no state - see Mars_Native.md §7.2.
         public virtual void LoadState(Stream stream)
         {
             CoreMachine m = _machine ?? throw new InvalidOperationException("LoadState() called before LoadRom().");
-            using var copy = new MemoryStream();
-            stream.CopyTo(copy);
-            LoadOverItsDisc(m, copy.ToArray());
+            if (stream.CanSeek)
+            {
+                int length = checked((int)(stream.Length - stream.Position));
+                if (_loadBuffer.Length < length) _loadBuffer = new byte[length];
+                stream.ReadExactly(_loadBuffer, 0, length);
+                LoadOverItsDisc(m, _loadBuffer.AsSpan(0, length));
+            }
+            else
+            {
+                using var copy = new MemoryStream();
+                stream.CopyTo(copy);
+                LoadOverItsDisc(m, copy.ToArray());
+            }
             if (Library.Has(CoreInterface.CapMedia)) m.ReadInfo();
             _cheatVersion = -1;
             IsHaltedAtBreakpoint = false;
@@ -540,7 +567,7 @@ namespace EmuSen.Cores.Native
         }
 
         // A state made over another disc of the set loads with that disc put back first; with none of the set, the drive is left as it was - see EmuSen_CoreAPI.md §6.23.
-        private void LoadOverItsDisc(CoreMachine m, byte[] state)
+        private void LoadOverItsDisc(CoreMachine m, ReadOnlySpan<byte> state)
         {
             try
             {

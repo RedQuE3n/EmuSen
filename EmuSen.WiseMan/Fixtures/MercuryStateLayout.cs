@@ -78,12 +78,15 @@ namespace EmuSen.WiseMan.Fixtures
             lock (Loaded)
             {
                 if (!Loaded.TryGetValue(path, out MercuryStateLayout? layout))
-                    Loaded[path] = layout = new MercuryStateLayout(Path.GetFileName(path), File.ReadAllText(path));
+                    Loaded[path] = layout = new MercuryStateLayout(Path.GetFileName(path), ReadListing(path));
                 return layout;
             }
         }
 
         public static MercuryStateLayout FromText(string name, string text) => new(name, text);
+
+        // A committed listing as the engines print it: a Windows checkout gives its lines CRLF ends, which the engines never write.
+        public static string ReadListing(string path) => File.ReadAllText(path).ReplaceLineEndings("\n");
 
         // A listing written from an engine's state_layout, named for its board, console and RAM size; the commit that adds it says why.
         public static string Record(byte cartridgeType, string text)

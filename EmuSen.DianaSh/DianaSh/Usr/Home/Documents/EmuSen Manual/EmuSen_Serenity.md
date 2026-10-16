@@ -341,7 +341,7 @@ A `ScreenFilter` is a list of `FilterPass`es, each an SkSL program drawn either 
 
 ### 3.4 CRT (Lottes)
 
-Timothy Lottes' CRT shader, in the public domain, ported from libretro's `crt/shaders/crt-lottes.slang` at its default parameters: Gaussian scanlines (`hardScan -8`) and pixels (`hardPix -3`), a small bloom (`0.15`), the barrel warp (`0.031`, `0.041`) with black outside it, and shadow mask 3 (the stretched VGA mask, dark `0.5`, light `1.5`), in linear light with the sRGB curve both ways. The port changed nothing but spelling: `vec` to `float`, the texture fetch to `source.eval` at a texel's centre, the output-pixel mask coordinate to SkSL's `coord`, and the parameters to constants. Offered for the NES, SNES and N64. *(2026-09-24: eleven of the constants are uniforms again, with the slang file's defaults and ranges, so a player can set them; §3.7.)*
+Timothy Lottes' CRT shader, in the public domain, ported from libretro's `crt/shaders/crt-lottes.slang` at its default parameters: Gaussian scanlines (`hardScan -8`) and pixels (`hardPix -3`), a small bloom (`0.15`), the barrel warp (`0.031`, `0.041`) with black outside it, and shadow mask 3 (the stretched VGA mask, dark `0.5`, light `1.5`), in linear light with the sRGB curve both ways. The port changed nothing but spelling: `vec` to `float`, the texture fetch to `source.eval` at a texel's centre, the output-pixel mask coordinate to SkSL's `coord`, and the parameters to constants. Offered for the NES, SNES and N64. *(2026-09-24: eleven of the constants are uniforms again, with the slang file's defaults and ranges, so a player can set them; §3.7.)* *(2026-10-16: offered for every console that had a television, the Genesis and the PlayStation added, and the Sega CD through its host; §3.12.)*
 
 ### 3.5 Handheld LCDs
 
@@ -533,6 +533,53 @@ measurement. Nothing tells a caller that a pass failed to compile on the device:
 SkiaSharp, and a filter that draws nothing still says it drew.
 
 ---
+
+### 3.12 An attachment on its host's screen: the Sega CD on the Genesis's (2026-10-16)
+
+**The defect.** On the first day the Sega CD was offered, its Shaders window had no CRT: `CrtFilter.Filter` named
+the NES, SNES, Genesis, N64 and PlayStation, `CrtFilters.Lottes` the NES, SNES and N64, and neither the Sega CD,
+which outputs the Genesis's own video through the Genesis's encoder. Adding "Sega CD" to both lists would have been
+the fifth and sixth copy of a fact that is one: the Sega CD has no screen of its own. Its name would then also be
+wanted as a key of `CrtFilter.ConsoleTiming` (a second Genesis row, two numbers to keep equal), in
+`GraphicsSettingsWindow.HasOverscan` and in `ControllerDiagrams.IsGenesis`, where it had already been typed.
+
+**The form.** The fact belongs to the console, so it goes in the console's system pack, which is the record of what
+a console is beyond any engine: `SystemEntry.AttachedTo`, an optional field, names the console an attachment plugs
+into. The Genesis pack sets it on the Sega CD and on the 32X, both of which draw through the Genesis's video output
+and read its pads. `CoreCatalog.HostOf(console)` answers the attachment's host, or the console itself, and the
+frontend asks it wherever a console stands for its screen or its pads:
+
+- the filters a console is offered (`ShaderCatalog.BuiltIns`, so the Shaders window and its list) and the console the
+  frame control's filter is built for (`MainWindow.ApplyScreenFilter` sets `FilterConsole`), from which the CRT takes
+  its line, its row of `ConsoleTiming` and its parameters' defaults (`ShaderSettingsWindow`'s sliders too);
+- whether the console had a television, hence overscan and a crop (`HasOverscan`);
+- the drawn pad and its labels (`ControllerDiagrams.IsGenesis`).
+
+The settings a player stores stay the attachment's own: graphics.json keeps the Sega CD's filter, parameters and
+recent shaders under "Sega CD", so a player may give it a filter the Genesis does not have. Serenity knows nothing of
+attachments; it is handed the host's name, as it was handed a console's before.
+
+**One list of television consoles.** `CrtFilter.TelevisionConsoles` is the list both tubes are offered for. Lottes had
+named the NES, SNES and N64 because those were the consoles of the build it was ported in (2026-09-21); it holds no
+console's constants, its mask and scanlines being the same on any picture, so nothing restricted it to them, and it
+is now offered for the Genesis, the PlayStation and, through the host, the Sega CD as well. The CRT keeps its console
+rows: those are the consoles' own clocks, and an attachment uses its host's.
+
+**What the audit found the same, or different on purpose.** The screen filters, overscan and pads now follow
+`HostOf`. graphics.json has no per-console defaults: every console starts at None. The per-console settings are the
+engine's sidecar's, the same schema for both (`NephriteTests`). The cheat codecs are the Genesis pack's on the Sega CD
+too; a Game Genie code patches cartridge ROM, which a disc has none of, and machine info gives a disc no patch range,
+so such a code has nothing to apply to; that is the medium, not a gap. The Firmware pane lists the Sega
+CD's three BIOS (`FirmwareOverviewTests`). Big picture has its own year, ScreenScraper id and ES-DE name (`segacd`,
+whose artwork Art Book Next carries); those are the console's own and stay so. Its saves keep their own folder,
+"Sega CD", by design (`EmuSen_SaveMedia.md` §7.3). `SystemsOrder.FirstRelease` repeats each pack's `ReleaseYear`; it
+agrees for the Sega CD and is left for its own change.
+
+**Tests.** `SegaCdScreenTests`: `HostOf` for the attachments and for consoles of their own; the Sega CD's Shaders
+window lists the CRT and Lottes, the same list as the Genesis's; a Sega CD game started with the CRT chosen for the
+Sega CD gets `CrtFilter.Filter` on the Genesis's line, and its frame, drawn on the GL device, differs from the same
+frame on the standard line a console without a row would get. `ShaderSettingsWindowTests` compares each tab with its
+host's filters.
 
 ## 4. `FramePresenter` — the bundle nothing consumes yet
 

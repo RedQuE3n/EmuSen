@@ -7,27 +7,46 @@ use std::io;
 use std::path::Path;
 
 /// One file's bytes, mapped. They stay readable and in place until this is dropped; what keeps them unchanged is that
-/// nothing of the program writes a file it has mapped (§3.8), which the system does not enforce everywhere.
+/// nothing of the program writes a file it has mapped (§3.8), which the system enforces on Windows alone.
 pub struct Mapped {
     /// `None` for an empty file, which has nothing to map.
     map: Option<memmap2::Mmap>,
+    /// The file, open for the mapping's life after it, as the C# half holds its stream: on Windows its share mode is
+    /// what refuses another program's writer, rename and deletion.
+    _held: Option<File>,
+}
+
+/// The file opened for reading; on Windows sharing reading alone, as .NET's `FileShare.Read`.
+fn open_shared(path: &Path) -> io::Result<File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_READ: u32 = 1;
+        options.share_mode(FILE_SHARE_READ);
+    }
+    options.open(path)
 }
 
 impl Mapped {
     /// Maps the file at `path` whole. Opening reads none of it.
     pub fn open(path: impl AsRef<Path>) -> io::Result<Mapped> {
-        let file = File::open(path)?;
+        let path = path.as_ref();
+        // A directory is refused as one everywhere: Unix opens it and Windows refuses it as access denied (§3.8).
+        let directory = || io::Error::from(io::ErrorKind::IsADirectory);
+        let file = open_shared(path).map_err(|error| if path.is_dir() { directory() } else { error })?;
         let meta = file.metadata()?;
         if meta.is_dir() {
-            return Err(io::Error::from(io::ErrorKind::IsADirectory));
+            return Err(directory());
         }
         if meta.len() == 0 {
-            return Ok(Mapped { map: None });
+            return Ok(Mapped { map: None, _held: None });
         }
         // SAFETY: the mapping is read-only and private to this value; the file's bytes are the caller's promise not to
         // change, as memmap2 asks: the program never writes a file it maps, and says so of other programs in §3.8.
         let map = unsafe { memmap2::Mmap::map(&file) }?;
-        Ok(Mapped { map: Some(map) })
+        Ok(Mapped { map: Some(map), _held: Some(file) })
     }
 
     pub fn bytes(&self) -> &[u8] {
@@ -132,6 +151,26 @@ mod tests {
         assert!(!mapped.advise(size, 4096) && !mapped.advise(u64::MAX, 1) && !mapped.advise(100, 0), "nothing to advise");
         assert!(!Mapped::open(&empty).unwrap().advise(0, 4096), "an empty file has no bytes to advise");
         assert_eq!(mapped.bytes(), &bytes[..]);
+    }
+
+    /// Windows enforces §3.8's promise as the C# half's `FileShare.Read` does: while a file is mapped another opener may
+    /// read it, and may not write, rename or delete it.
+    #[cfg(windows)]
+    #[test]
+    fn a_mapped_file_is_read_and_not_written_renamed_or_deleted_while_held() {
+        const SHARING_VIOLATION: i32 = 32;
+        let temp = TempDir::new("mapped-held");
+        let (file, moved) = (temp.join("track.bin"), temp.join("moved.bin"));
+        std::fs::write(&file, vec![0x5Au8; 70_000]).unwrap();
+        let mapped = Mapped::open(&file).unwrap();
+        let refused = |result: std::io::Result<()>| result.err().and_then(|e| e.raw_os_error());
+        assert!(std::fs::read(&file).is_ok(), "a reader comes in");
+        assert_eq!(refused(std::fs::OpenOptions::new().write(true).open(&file).map(drop)), Some(SHARING_VIOLATION), "a writer");
+        assert_eq!(refused(std::fs::rename(&file, &moved)), Some(SHARING_VIOLATION), "a rename");
+        assert_eq!(refused(std::fs::remove_file(&file)), Some(SHARING_VIOLATION), "a deletion");
+        assert!(mapped.bytes().iter().all(|&b| b == 0x5A));
+        drop(mapped);
+        std::fs::rename(&file, &moved).unwrap();
     }
 
     /// Unlinking a mapped file leaves its bytes readable where the system keeps a file's blocks past its name.

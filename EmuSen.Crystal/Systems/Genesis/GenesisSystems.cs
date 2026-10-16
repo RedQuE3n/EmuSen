@@ -45,7 +45,8 @@ namespace EmuSen.Crystal.Systems.Genesis
             "Sega CD",
             SelfDelimitingImages: false,
             // A sheet is read by its first track, which the PlayStation's pack also takes; a CHD by its folder's name - see Nephrite_OpenBios.md §11.
-            Recognise: probe => IsSegaCd(probe.Read(0x40)) ? new Recognition(MegaCdId) : null);
+            Recognise: probe => IsSegaCd(probe.Read(0x40)) ? new Recognition(MegaCdId) : null,
+            AttachedTo: MegaDrive.Console);
 
         public static readonly SystemEntry S32x = new(
             S32xId,
@@ -60,7 +61,8 @@ namespace EmuSen.Crystal.Systems.Genesis
             0.7,
             "sega32x",
             "Sega Mega Drive 32X",
-            SelfDelimitingImages: false);
+            SelfDelimitingImages: false,
+            AttachedTo: MegaDrive.Console);
 
         private static readonly byte[] Sync = { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 };
 

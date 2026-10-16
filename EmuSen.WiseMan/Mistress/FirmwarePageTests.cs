@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -72,9 +73,14 @@ namespace EmuSen.WiseMan.Mistress
             Assert.NotEmpty(systems.SelectMany(s => s.Items));
             foreach (FirmwareItem item in systems.SelectMany(s => s.Items))
             {
-                FieldRow row = RowOf(window, item.Title);
-                Assert.Equal(item.Note is { } note ? [item.InUse, item.Change, note] : [item.InUse, item.Change], Words(row));
-                Assert.Equal(item.Cost, (ToolTip.GetTip(row) as TextBlock)?.Text);
+                // A file two systems use, as the Genesis and the Sega CD both use the TMSS ROM, has a row under each.
+                List<FieldRow> rows = window.GetVisualDescendants().OfType<FieldRow>().Where(r => r.Label == item.Title).ToList();
+                Assert.Equal(systems.Count(s => s.Items.Any(i => i.Title == item.Title)), rows.Count);
+                Assert.All(rows, row =>
+                {
+                    Assert.Equal(item.Note is { } note ? [item.InUse, item.Change, note] : [item.InUse, item.Change], Words(row));
+                    Assert.Equal(item.Cost, (ToolTip.GetTip(row) as TextBlock)?.Text);
+                });
             }
             FieldRow folder = RowOf(window, FirmwarePane.FolderLabel);
             Assert.Equal(FirmwareOverview.Optional, folder.Hint);

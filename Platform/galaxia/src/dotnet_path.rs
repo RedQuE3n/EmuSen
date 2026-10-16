@@ -190,10 +190,14 @@ fn normalize_separators(style: Style, path: &str) -> String {
     String::from_utf8(out).expect("only separators were dropped or replaced")
 }
 
+/// `PathInternal.IsEffectivelyEmpty`: empty everywhere, and all spaces on Windows, where the system drops them.
+pub fn is_effectively_empty(style: Style, path: &str) -> bool {
+    path.is_empty() || (style == Style::Windows && path.bytes().all(|b| b == b' '))
+}
+
 /// `Path.GetDirectoryName`: none for an empty path or a root.
 pub fn directory_name(style: Style, path: &str) -> Option<String> {
-    // PathInternal.IsEffectivelyEmpty: empty everywhere, and all spaces on Windows.
-    if path.is_empty() || (style == Style::Windows && path.bytes().all(|b| b == b' ')) {
+    if is_effectively_empty(style, path) {
         return None;
     }
     let bytes = path.as_bytes();

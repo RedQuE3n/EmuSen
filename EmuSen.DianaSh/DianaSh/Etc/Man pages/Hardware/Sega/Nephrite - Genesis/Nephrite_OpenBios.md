@@ -570,6 +570,25 @@ number (Nephrite's answers `F` for ever), and the flags it gives. *Recommended:*
 player's BIOS, runs it with a probe build whose empty drive echoes a report request's number with zero data; if it then
 passes its first picture, the question becomes one for a console. The open BIOS shows its own no-disc screen either way.
 
+## 17. The replacement's words on the firmware page (2026-10-16)
+
+The firmware page quotes a replacement's cost by its first sentence alone (`FirmwareItem.Change`,
+`EmuSen_Settings_Reference.md` §4.89), and the big-screen menu shows that sentence, after "Using EmuSen's open
+version.", as the focused row's footer, which wraps to two lines and no more. §15's words opened with a sentence of 174
+characters, so the footer ran to 203. **Measured on 2026-10-16 [M]:** on the three BIOS rows the footer was cut with an
+ellipsis at 1280 × 800 and at 1920 × 1200 (`WindowFitAuditTests.The_firmware_page_in_preferences_is_whole_at_both_sizes`).
+The rows first reached the page when the Sega CD was offered to players, and nothing had measured them there before.
+
+The words keep all that §15 says, in another order. The first sentence is the part a player choosing a BIOS needs, and
+it is 63 characters: "Discs boot, and saves keep the console's own backup RAM format." The BIOS's provenance and the
+documented calls move to the second sentence, and the caveats follow unchanged. The other open firmware opens the same
+way (VenusRT's boot ROM: "Games may start a fraction of a second later."; Diamond's BIOS: "Most games start and save
+as on a console."). With these words the audit finds nothing on any of the page's rows at either size.
+
+Why the words were shortened and not the footer lengthened: the footer's two lines are the big-screen menu's for every
+row of every page (`BigMenuForm`), and the rule that nothing is cut is met there by every other firmware row. One row's
+long sentence is the outlier, and the desktop page, which shows the same sentence in full, reads better for it too.
+
 ## 9. Reading log (stage 10)
 
 Opened and read: `Nephrite_Plan.md` whole; `Nephrite_Native.md` §49–§52, §53.1–§53.3, §53.5, §54.1, §54.2, §54.3 from
@@ -611,7 +630,9 @@ closed parts was read by its headings' exact boundaries.
 **Not opened, by the rule:** `spritesmind/t2061_p001.html`, `t1018_*`, `t3020_*`, `t458_*`, `t3218_*`,
 `railgun/Trademark_Security_System.wiki`; mcd-verificator's `cd-log/BI-mcd-tst/` and `cd-log/sonic-bios/`; MiSTer's
 `docs/mcd logs` and every RTL file; `Nephrite_Native.md` §53.4, §54.3's first bullet beyond the line above, §55,
-§57.2, §60.1–§60.3; `Nephrite_Disputes.md`'s D-36 and D-40 beyond their headings; `~/.cache/emusen/probe/nephrite/s9/`;
+§57.2, §60.1–§60.3, §64 (*added 2026-10-16:* "Observations of the player's BIOS at work"); `Nephrite_Disputes.md`'s
+D-36, D-40 and D-57 beyond their headings; `src/mcd/cdd.rs`'s command A (`CENTRE`, `AREA`, `Cdd::jump`, the `Jumping` arm and its test) until the
+tester decides it (`Nephrite_Native.md` §64.8); `~/.cache/emusen/probe/nephrite/s9/`;
 `docs/bram/` but for `emutos-mcd_bram-filesystem.md` (read whole once allowed, used for the footer and the odd-byte
 layout alone); the player's BIOS (`sysdir/scd/`), which was never read, and was run only as the black box described above; any emulator's source. The register
 watch was run only with the open BIOS, never with a player's. *As of 2026-10-15, after the screening:*

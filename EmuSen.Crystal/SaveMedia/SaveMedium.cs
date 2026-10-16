@@ -43,16 +43,29 @@ namespace EmuSen.Crystal.SaveMedia
     // A console's medium as its system pack names it, read by a format module where one exists - see EmuSen_SaveMedia.md §6.2.
     public sealed record SaveMediumEntry(string Id, string Title, string Noun, string Extension, ISaveMediumFormat? Format = null);
 
+    // A medium's noun or title as it reads inside a sentence: every word lower case but an acronym, so "Backup RAM" is "backup RAM" - see EmuSen_SaveMedia.md §6.2.
+    public static class MediumWords
+    {
+        public static string InText(string words) =>
+            string.Join(' ', words.Split(' ').Select(w => w.Length > 1 && w.All(c => !char.IsLetter(c) || char.IsUpper(c)) ? w : w.ToLowerInvariant()));
+    }
+
     // The media every system pack names, by id or by extension.
     public static class SaveMediumFormats
     {
-        public static IEnumerable<SaveMediumEntry> All => SystemPacks.All.SelectMany(p => p.Media ?? Array.Empty<SaveMediumEntry>());
+        // The media of a console with no system pack yet, its facts still its catalog core's, by system id - see EmuSen_SaveMedia.md §7.2.
+        private static readonly (string System, SaveMediumEntry Entry)[] Unpacked = { (Systems.N64.N64Media.SystemId, Systems.N64.N64Media.Pak) };
+
+        public static IEnumerable<SaveMediumEntry> All => SystemPacks.All.SelectMany(p => p.Media ?? Array.Empty<SaveMediumEntry>()).Concat(Unpacked.Select(u => u.Entry));
 
         public static SaveMediumEntry? Entry(string? id) => id is null ? null : All.FirstOrDefault(e => e.Id == id);
 
+        // A system's media, its pack's or those named before it has one.
+        public static IEnumerable<SaveMediumEntry> Of(string systemId) =>
+            SystemPacks.For(systemId)?.Media ?? Unpacked.Where(u => u.System == systemId).Select(u => u.Entry);
+
         // A system's medium of this extension, or any pack's where no system is given.
         public static SaveMediumEntry? ForExtension(string extension, string? systemId = null) =>
-            (systemId is null ? All : SystemPacks.For(systemId)?.Media ?? Array.Empty<SaveMediumEntry>())
-                .FirstOrDefault(e => string.Equals(e.Extension, extension, StringComparison.OrdinalIgnoreCase));
+            (systemId is null ? All : Of(systemId)).FirstOrDefault(e => string.Equals(e.Extension, extension, StringComparison.OrdinalIgnoreCase));
     }
 }

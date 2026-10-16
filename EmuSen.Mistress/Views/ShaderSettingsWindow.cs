@@ -584,7 +584,7 @@ namespace EmuSen.Mistress.Views
                 }
 
                 // A built-in filter's default may be this console's own - see EmuSen_Serenity.md §3.9.
-                float initial = builtIn?.DefaultFor(parameter, Console) ?? parameter.Initial;
+                float initial = builtIn?.DefaultFor(parameter, CoreCatalog.HostOf(Console)) ?? parameter.Initial;
                 items.Add(new SliderItem(
                     string.IsNullOrWhiteSpace(parameter.Description) ? parameter.Id : parameter.Description.Trim(),
                     Exact(parameter.Minimum),

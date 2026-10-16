@@ -1415,6 +1415,13 @@ asserts rewind empty on Mars and filling on MarsRT, and `Holding_rewind_on_MarsR
 holds the hotkey; the ROM patches, the phases and rewind have their evidence and mutants in `Mars_Native.md` §6.6.1 to
 §6.6.3.*
 
+**MarsRT on the core ABI v1 (2026-10-15).** MarsRT is loaded through the core ABI v1 since this date
+(`Mars_Native.md` §7); nothing a player sets changes. The rows keep their keys, words and values, the switch is still
+`EMUSEN_MARS_NATIVE=0`, and C# Mars's own native components go with it. What reads differently: a library that is
+present but not on the ABI, or lacks what the engine calls, is reported in the v1 loader's words (for example
+*"libmarsrt.so: has no emusen_core_abi_version; it is not on the core ABI"*), and a library that has crashed leaves
+`marsrt_crash_<pid>.txt` where it left `native_crash_<pid>.txt`.
+
 **The SNES's engine, VenusRT (Rust) by default since 2026-10-05.** The SNES tab has the same Engine row, stored as
 `Consoles.SNES.Engine`. Its choices are *VenusRT (Rust)*, listed first and the default, and *Venus (C#)*, the
 reference, kept for now. *Decided by the tester 2026-10-05* (`VenusRT_Native.md` §65).
@@ -4621,8 +4628,8 @@ in `~/.config/EmuSen/Logs` or in the configured folder.
 - The other 27 of Mistress's 56 `catch (Exception …)` blocks write nothing. They are best-effort paths that report
   nothing to the player either: a status bar that cannot be read, a picture that cannot be decoded for a preview.
   They are left until one of them hides a real fault.
-- DianaSh commands and the cores do not write to it. The Rust cores' native crash files (`native_crash_*`,
-  `mercuryrt_crash_*`) stay under the data home's `Logs`, not this folder.
+- DianaSh commands and the cores do not write to it. The Rust cores' native crash files (`marsrt_crash_*`, once
+  `native_crash_*`, `mercuryrt_crash_*`) stay under the data home's `Logs`, not this folder.
 - There is no viewer inside Mistress. The file is meant for `cat`, a text editor, or a bug report.
 
 ### 4.69 Big picture: the Start menu and a game's options in ES-DE's layout (2026-09-27)
@@ -6977,7 +6984,7 @@ was), the load, the exact version check, the crash log, `Available`, `Report` an
 classes stay as facades of a few lines, since the shims' static tables, the tests and C# Mars's own native components (`Rsp.Native.cs`) read
 `MarsNative.Export` and its peers, which keep working unchanged. The crash logs keep their names, `moonrt_crash_<pid>`,
 `mercuryrt_crash_<pid>` and MarsRT's `native_crash_<pid>`; the rename to `marsrt_crash_<pid>` belongs to MarsRT's move
-(§4.1, §9's Q6). `Report`'s texts are the old ones word for word, and `NativeHostTests` pins the switches, the log
+(§4.1, §9's Q6). *Renamed 2026-10-15 with that move (`Mars_Native.md` §7.2).* `Report`'s texts are the old ones word for word, and `NativeHostTests` pins the switches, the log
 names, a library turned off and a version refused.
 
 **`NativeMachine`, the handle (§4.2).** `MoonMachine` and `MercuryMachine` shared most of their 190 and 200 lines; they are 78 and 87 now, and `MarsMachine` 65 of 93. The
@@ -8407,6 +8414,9 @@ example:
 <time> WARN [platform] libemusen_platform.so is not in use (libemusen_platform.so not found beside the assemblies); Endymion runs on its C# implementation.
 ```
 
+*Added 2026-10-16:* a fourth, `EMUSEN_DIANASH_NATIVE`, for DianaSh's shell, read the same way; §4.117 says what it
+covers and on which systems it has been proven.
+
 No component fails to start because of the library. SDL3, Shaderc and SQLite are the libraries the program already
 ships; the platform library is lent the copies the C# loaded, so a fallback changes nothing about them, and audio,
 pads and shaders work on the C# as before. The compiled-shader cache keeps the two implementations' shaders apart,
@@ -8699,3 +8709,59 @@ picture then read back as before.
 **Tests.** `DevicePresenterTests` (each refusal alone, the device's identity, the shown image); `DeviceFilterMatchTests`
 (each built-in family against its Skia picture on real frames, with `EMUSEN_GPU_FRAMES`); the real-window proof of
 §13.3 there.
+
+### 4.117 DianaSh's shell on the platform library: `EMUSEN_DIANASH_NATIVE` (2026-10-16)
+
+*Decided 2026-10-16 by the tester:* the shell every console window and terminal opens runs on its Rust implementation
+by default, and the C# shell is kept as the failover until the Rust one has been tested on Windows and macOS
+(`EmuSen_DianaSh.md` §13.10).
+
+| `EMUSEN_DIANASH_NATIVE` | The shell |
+|---|---|
+| unset, or any value but `0` | the Rust shell in `libemusen_platform`, when the library attaches; otherwise the C# shell, with one line in the error log saying why |
+| `0` | the C# shell |
+
+Before 2026-10-16 the variable selected the Rust shell only when it was `1`, and the C# shell otherwise; a script or
+a launcher that sets it to `1` still gets the Rust shell, and one that leaves it unset now gets it too. The variable is
+read once, the first time a shell is made.
+
+What it covers: the shell's language, its builtins, its sessions and accounts, and the text tools (`grep`, `sed`,
+`awk`, `ls` and the others of `dianash.text`). The debugger's, the cheats' and the session's commands are the C#'s
+under either shell until S5, reached by the Rust shell through a bridge. What a player sees is the same under both:
+the golden corpus holds every command's output byte for byte both ways.
+
+The library falls back to the C# shell, with one line, when it is missing, when its DianaSh exports or their major
+version are not the ones this build speaks, or when it cannot make a shell:
+
+```
+<time> WARN [platform] libemusen_platform.so is not in use (libemusen_platform.so not found beside the assemblies); DianaSh runs on its C# implementation.
+```
+
+| System | Default | Proven |
+|---|---|---|
+| Linux | the Rust shell | yes: the gate both ways, 2026-10-16 (`EmuSen_DianaSh.md` §13.10) |
+| Windows | the Rust shell where the published tree carries the library; the C# where it does not (release 0.9.0 ships none) | no: the Rust shell has not been run on Windows, and the C# is kept as its failover until it has |
+| macOS | the Rust shell where the bundle carries the library | no: not run on a Mac yet; the C# is kept likewise |
+
+**Tests.** `DianaShSwitchTests` (each fallback: no library, another major, a missing export, no shell made; the
+library chosen unless the variable is 0); `NativeSwitchTests`; the golden corpus and WiseMan's DianaSh tests, run with
+the variable unset and with it 0.
+
+### 4.118 The N64's Controller Paks: the pak mode (2026-10-16)
+
+*Decided 2026-10-15 by the tester (`EmuSen_SaveMedia.md` §10's Q3); built with MarsRT's move onto the core ABI v1
+(`Mars_Native.md` §7.7).* The N64's tab in Graphics Settings gains **Controller Pak**, the runtime's mode row of
+§4.114, stored under the N64 as `Cards`, and under *Named* four slot rows, **Controller Pak: Controller 1** to
+**Controller 4** (`Card1` to `Card4`), each a dropdown of `Pak 1` to `Pak 8` and every pak already in the drawer.
+
+- **The default is *Shared*** (`EmuSen_SaveMedia.md` §9), since the pak's format module and import exist: `Pak 1` to
+  `Pak 4` in `Saves/N64/Cards/`, `.mpk`, one per controller port, used by every N64 game. A mode a player chose is kept.
+- **Per game** keeps the names C# Mars and MarsRT have always written: `Saves/N64/<game>.mpk` for the first port and
+  `<game>.2.mpk` to `<game>.4.mpk` for the others. Per game, the first port always holds a pak and another port only
+  once its file exists.
+- **The cartridge's own save**, `<game>.srm`, is the game's and has no mode.
+- **The import offered once**: the first N64 game started under the default while per-game `.mpk` files exist and
+  `Pak 1` does not is preceded by §4.115's question, which copies every game's notes onto `Pak 1`.
+- **On Mars (C#)** none of this applies: the C# core keeps its one pak per game, as before.
+- **The Memory Cards window** has an N64 tab listing each pak's notes (game code, publisher and name) and pages free,
+  with copy, move, delete, new pak and import, as for the PlayStation's cards.

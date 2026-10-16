@@ -1,6 +1,8 @@
 # EmuSen — DianaSh: a standalone shell, its command modules, and the surfaces around it
 
-*This revision: the eighth, 2026-10-16: Q18 to Q24 decided as recommended, and Q18, Q19, Q20's page and Q21 built
+*This revision: the ninth, 2026-10-16: S6's state 2 reached ahead of S5, by decision, the Rust shell the default and
+the C# its failover until Windows and macOS are proven, with the facade's cost sampled and cut (§13.10). The eighth,
+2026-10-16: Q18 to Q24 decided as recommended, and Q18, Q19, Q20's page and Q21 built
 in both shells (§13.9). The seventh, 2026-10-15: S3 built, the Rust shell core in `Platform/dianash/` with its builtins,
 sessions and host API (`dianash.h`, stable, with its baseline), every C# command still running under it through a
 bridge, the facade choosing it under `EMUSEN_DIANASH_NATIVE=1`, and the standalone `dianash` (§13.7); S4 built,
@@ -1161,7 +1163,7 @@ No step leaves a broken shell; each has its gate, and each is its own commit or 
 | **S3** *(done 2026-10-15, §13.7)* | The Rust shell core, `Platform/dianash/`, with its builtins, lookup, manifests, the host API in the platform library and the `dianash` program; every C# command still runs, registered with the Rust shell as host commands through `dianash_add_commands` by a C# bridge that calls each `IDianaShCommand.Execute`; the C# frontends choose the C# interpreter or the Rust one by `EMUSEN_DIANASH_NATIVE` (§13.3) | the golden corpus, with the variable unset (the C# interpreter) and `1` (the Rust shell with C# commands); the language's 645 cases both ways |
 | **S4** *(done 2026-10-15, §13.8)* | `dianash.text` in Rust, command by command, each replacing its C# bridge entry when its golden file passes | that command's golden file and its WiseMan cases both ways; the same corpus run on Windows and macOS CI runners for the text module, since it must behave identically there |
 | **S5** | The four EmuSen modules in Rust over the session service, module by module, each command replacing its bridge entry when its golden file passes; `nano` as a program | that command's golden file both ways, on the fake provider and on each core; seeded faults in the module, as each platform step had (`EmuSen_RustPlatform.md` §6.5) |
-| **S6** | The shell to state 2, as `EmuSen_RustPlatform.md` §3.9 defines it: the Rust shell by default, `EMUSEN_DIANASH_NATIVE=0` selecting the C#, a missing library falling back with one line in the error log | a full WiseMan run with the variable set; the tester's word |
+| **S6** *(state 2 reached 2026-10-16 ahead of S5, by decision, §13.10; Windows and macOS not yet proven)* | The shell to state 2, as `EmuSen_RustPlatform.md` §3.9 defines it: the Rust shell by default, `EMUSEN_DIANASH_NATIVE=0` selecting the C#, a missing library falling back with one line in the error log | a full WiseMan run with the variable set; the tester's word |
 | **S7** | State 3: the C# interpreter and the C# commands deleted | below |
 
 **When C# command code may be deleted.** Only at S7, and only when all of these hold: the golden corpus passes with
@@ -1916,7 +1918,8 @@ machinery than the one directory it would protect. No golden case changed.
    lines it runs. No host calls either.
 5. *Open: a module's call costs about 2 µs more inside the C# process than in the bench* (§13.7's cost). Two
    hypotheses were measured and refuted; the next step is a sample of the WiseMan process running the loop, with
-   `ipsample.py`, before anything is changed.
+   `ipsample.py`, before anything is changed. *Closed 2026-10-16 (§13.10): the comparison was against a Debug C#, and the sample found ignore-case
+   comparison and `getcwd`, both fixed.*
 
 ### 13.8 S4 as built: `dianash.text` in Rust
 
@@ -2035,6 +2038,82 @@ into a program), so the approvals wait for the step that loads one.
 
 The gate after the four commits, both ways, over S3's filter: 1,297 tests, 1,289 passed, 8 skipped, none failed. The
 crate-alone corpus runner passes 59 cases and fails none.
+
+### 13.10 S6's state 2, reached ahead of S5 by decision
+
+*Decided 2026-10-16 by the tester:* make the Rust shell the default now, ahead of S5, and keep the C# shell as the
+failover until the Rust one has been tested on Windows and macOS. *Built the same day.*
+
+**The switch.** `DianaShNative`'s switch is now the platform's `PlatformSwitch`, as Galaxia's, Endymion's and
+Serenity's are (`EmuSen_RustPlatform.md` §3.9): `EMUSEN_DIANASH_NATIVE=0` runs the C# shell, and any other value, or
+none, runs the Rust shell when the library attaches, and the C# otherwise, with one line written to the host's sink
+and the error log, `<library> is not in use (<why>); DianaSh runs on its C# implementation.` Attaching is a check that
+runs over any export resolver before the process's pointers are taken: every export of the facade's list present,
+`dianash_abi_version`'s major this facade's, and a shell made and freed. So the three ways the tester named, a library
+missing, its DianaSh exports or version not this build's, and the Rust shell failing to attach, are each a refusal with
+its reason, and each is proven by `DianaShSwitchTests`: a folder with no library; the real library's exports with
+`dianash_abi_version` answering 2.0; the real exports less `dianash_session_replace`; and `dianash_new` answering
+null. Each falls back with exactly one line, the switch asks its load once however often it is asked, and `0` never
+asks at all. The resolver is the test's seam, and no test changes the process's own pointers.
+
+**Each system, and what proves it.**
+
+| System | Default | Failover | Proven |
+|---|---|---|---|
+| Linux | the Rust shell | the C#, by the variable or a refused library | yes: the gate below, both ways |
+| Windows | the Rust shell where the published tree carries `emusen_platform.dll`; release 0.9.0 carries none, and there the C# runs, with the line | the C# | no: the Rust shell has not been run on Windows |
+| macOS | the Rust shell where the bundle carries `libemusen_platform.dylib` | the C# | no: not run on a Mac |
+
+The C# shell is kept, with every C# command class, until each of the two has been tested, per the decision; S7's
+conditions (§13.2) are unchanged and add to it. The Windows half of the standalone `dianash`'s terminal code was
+type-checked at S3 and has never run.
+
+**The facade's cost, sampled.** §13.7 left a gap open: through the facade the Rust shell cost 2.5 µs a line against
+the C#'s 1.2, and a module's call about 2 µs more in the C# process than in the bench. Two things changed the
+picture once it was measured properly.
+
+First, the C# figures were a Debug build's. WiseMan builds Debug, and a scratch program built Release, running the
+same lines through the facade, gave the C# shell 0.5 µs for `true` and 11.0 µs for the ten-iteration loop, against
+1.2 and 33.0 in WiseMan. Against Release C#, the Rust shell through the facade was 3.8 times as slow on `true`
+(1.9 µs) and 4.5 times on the loop (50.2 µs). The Rust library is always a release build, so only a Release C# is a
+fair comparison.
+
+Second, `ipsample.py`, the project's sampler of one thread by `ptrace`, which no safepoint biases, extended for this
+to name the platform library's own symbols, over the loop placed 42% of the thread's time in ignore-case comparison, `simple_upper` and the
+Unicode upper-case tables it calls, and 13% in `getcwd`. Neither earlier hypothesis had been the cause. The
+comparisons came from `Table::find`, a linear scan in which every name was compared character by character through
+the full Unicode path; the `getcwd` from every module's call filling its `cwd`. Three fixes followed, each giving the
+same answers as before:
+
+1. ASCII's own paths in `emusen-dotnet`'s case rules (`simple_upper`, `lower_invariant`, `equals_ignore_case`,
+   `to_lower`, `starts_with_ignore_case`), exact because .NET's ordinal case for ASCII is ASCII's, with a test that holds
+   every ASCII character to the general path; and an index in the table by folded name, rebuilt when its entries change.
+2. The working directory's display kept for the line that read it, forgotten by `cd` and at the next line.
+3. Each `grep`, `sed` pattern compiled once per shell and kept in the module's slot, 64 at most, since compiling was
+   most of the remaining allocation (`malloc`'s `morecore` 11%); and the facade skips parsing a request list that
+   is `[]`.
+
+Medians in µs, Release on both sides, the scratch program on the development desktop:
+
+| Line | C# shell | Rust shell, first | Rust shell, after the fixes |
+|---|---|---|---|
+| `true` | 0.5 | 1.9 | 0.7 |
+| `echo hello` | 0.6 | — | 1.0 |
+| `echo a b c \| grep b \| wc -l` | 2.3 | — | 3.8 |
+| ten of `echo $i \| grep 1` | 11.3 | 50.2 | 11.7 |
+| `spaces`, a C# command | 2.2 | — | 3.9 |
+
+What remains is the facade's four calls a line, a few tenths of a microsecond, and a C# command's crossing of the
+bridge, about 1.7 µs (UTF-8 both ways, the slot, the handles); both are recorded and left, since a line a player types
+is three orders of magnitude from anything a player could see, and the decision did not make the cost a blocker. §13.7's
+open item is closed by this paragraph.
+
+**The gate.** *Measured on 2026-10-16*, over §13.7's filter with the windows of Mistress, Hotaru and Serenity that
+reach a console (`FeedWindowTests`, `CoretopWindowTests`, `AccessibilityTests`, `DianaShShellWindowTests`,
+`VstopWindowTests`): with the variable unset, now the Rust shell, 1,331 tests, 1,323 passed, 8 skipped; with
+`EMUSEN_DIANASH_NATIVE=0`, the same, before the cost's fixes and again after them. The 8 are `SettingPathsOpenTests`'
+own skips. `DianaShSwitchTests`' five cases and `NativeSwitchTests` are among them; the crate-alone corpus runner
+passes its 59 cases.
 
 ---
 

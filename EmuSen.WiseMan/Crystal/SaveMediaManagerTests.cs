@@ -184,8 +184,8 @@ namespace EmuSen.WiseMan.Crystal
             Assert.True(File.Exists(green) && !File.Exists(red));
             Assert.Null(SaveMediaManager.MediumOf("game.srm"));
             string cart = Path.Combine(DataStore.Saves, "Sega CD", "Cards", "Cartridge 1.crm");
-            MediaOutcome named = SaveMediaManager.New(cart);
-            Assert.True(named.Done && !File.Exists(cart), "a medium no module formats is only named");
+            Assert.True(SaveMediaManager.New(cart).Done);
+            Assert.True(EmuSen.Crystal.Systems.Genesis.SegaCdBramFormat.RamCartridge.Read(File.ReadAllBytes(cart)).Formatted, "the Sega CD's module formats its cartridge");
         }
     }
 }

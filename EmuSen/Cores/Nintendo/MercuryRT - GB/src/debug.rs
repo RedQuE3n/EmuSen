@@ -49,6 +49,10 @@ impl CpuBus for ObservedBus<'_> {
         crate::cpu::CpuBus::pending_interrupts(&*self.bus)
     }
 
+    fn set_halted(&mut self, halted: bool) {
+        crate::cpu::CpuBus::set_halted(self.bus, halted)
+    }
+
     fn note_call(&mut self, source: u16, target: u16, kind: u32) {
         self.hooks.note_call(source as u32, target as u32, kind);
     }

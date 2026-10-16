@@ -1,13 +1,14 @@
 using System;
 using System.IO;
-using EmuSen.Cores.Nintendo.Mercury.Memory;
 
 namespace EmuSen.WiseMan.Fixtures
 {
     // Builds a synthetic Game Boy image - never real game data. The Mercury counterpart of SyntheticNesRom.
     public static class SyntheticGbRom
     {
-        public const int RomBankSize = Cartridge.RomBankSize;
+        public const int RomBankSize = 0x4000;
+
+        public const int HeaderChecksumAddress = 0x014D;
 
         // The entry point the boot ROM jumps to, and where <patches> offset 0 lands.
         public const int EntryPoint = 0x0150;
@@ -40,7 +41,7 @@ namespace EmuSen.WiseMan.Fixtures
 
             foreach (var (offset, bytes) in patches) bytes.CopyTo(image, EntryPoint + offset);
 
-            image[Cartridge.HeaderChecksumAddress] = Cartridge.ComputeHeaderChecksum(image);
+            image[HeaderChecksumAddress] = HeaderChecksum(image);
             return image;
         }
 
@@ -50,6 +51,14 @@ namespace EmuSen.WiseMan.Fixtures
             byte code = 0;
             while (2 << code < romBanks) code++;
             return code;
+        }
+
+        // The header checksum the boot ROM verifies: x = x - byte - 1 over $0134-$014C - see Mercury_Memory.md §2.
+        public static byte HeaderChecksum(byte[] image)
+        {
+            byte x = 0;
+            for (int a = 0x0134; a < HeaderChecksumAddress; a++) x = (byte)(x - image[a] - 1);
+            return x;
         }
 
         public static string WriteTemp(byte[] image)

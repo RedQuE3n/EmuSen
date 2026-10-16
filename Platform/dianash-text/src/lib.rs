@@ -128,8 +128,8 @@ impl Module for Text {
             "xxd" => files::xxd(call, &args, stdin),
             "sort" => Ok(lines::sort(&args, stdin)),
             "uniq" => Ok(lines::uniq(&args, stdin)),
-            "grep" => lines::grep(&args, stdin),
-            "sed" => lines::sed(&args, stdin),
+            "grep" => lines::grep(call, &args, stdin),
+            "sed" => lines::sed(call, &args, stdin),
             "awk" => lines::awk(call, &args, stdin),
             other => Err(format!("dianash.text has no command '{other}'")),
         };

@@ -39,7 +39,7 @@ pub fn system_area(disc: &mut Disc) -> Vec<u8> {
     if k.audio() { Vec::new() } else { raw[16..16 + 2048].to_vec() }
 }
 
-const BIOS_COST: &str = "Nephrite's own Sega CD BIOS, written from Sega's manuals: the documented calls answer as the manuals describe and discs boot. A game that calls a routine no manual names, reads the BIOS's code or depends on the exact timing of its loops may run differently; discs of every region start, since the security check is not made; the screen without a disc is Nephrite's own, with no CD player or memory manager; and until its backup RAM calls are written, games find no backup RAM.";
+const BIOS_COST: &str = "Nephrite's own Sega CD BIOS, written from Sega's manuals: the documented calls answer as the manuals describe, saves keep the console's own backup RAM format, and discs boot. A game that calls a routine no manual names, reads the BIOS's code or depends on the exact timing of its loops may run differently; discs of every region start, since the security check is not made; games cannot yet reach a backup RAM cartridge; the screen without a disc is Nephrite's own, with no CD player or memory manager.";
 
 /// The boot ROM of a market's console (`U`, `E` or `J`), as the frontend's file `which`.
 pub(crate) fn bios_firmware(region: char, which: u32) -> Firmware {

@@ -1,0 +1,10 @@
+# A golden trace of MercuryRT, recorded from the engine named below; re-recorded only deliberately - see Mercury_Native.md §14.4.
+golden 1
+name steps/random-00-00-00-02
+rom 31EE7284DCD5315EA0220A6B11612480640F3A1F1F6DA0909B9647A37AE5AA54
+model Auto
+input none
+rendering on
+recorded Mercury
+3 7F990D64CF5CA99E
+stop 4

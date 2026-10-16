@@ -140,9 +140,9 @@ namespace EmuSen.WiseMan.Cores
         private static string PalettesOn(MercuryEngine engine, byte[] rom)
         {
             using MercuryRig core = MercuryRig.Create(engine, rom, GbModel.GameBoyColor);
-            var ppu = core.Bus.Ppu;
+            byte[] bg = core.FieldBytes("Bus.Ppu.BgPaletteRam"), obj = core.FieldBytes("Bus.Ppu.ObjPaletteRam");
             ushort[] Entries(byte[] ram, int at) => Enumerable.Range(0, 4).Select(i => (ushort)(ram[at + i * 2] | (ram[at + i * 2 + 1] << 8))).ToArray();
-            return $"{Rgb888(Entries(ppu.BgPaletteRam, 0))}|{Rgb888(Entries(ppu.ObjPaletteRam, 0))}|{Rgb888(Entries(ppu.ObjPaletteRam, 8))}";
+            return $"{Rgb888(Entries(bg, 0))}|{Rgb888(Entries(obj, 0))}|{Rgb888(Entries(obj, 8))}";
         }
 
         private static TheoryData<T1, T2, T3, MercuryEngine> OnEngines<T1, T2, T3>(TheoryData<T1, T2, T3> rows)
@@ -196,8 +196,7 @@ namespace EmuSen.WiseMan.Cores
         {
             byte[] rom = Header(checksum, fourth, licensee, newLicensee: newLicensee);
             Assert.Equal(number, CompatibilityPalettes.PaletteNumber(rom));
-            var (bg, obj0, obj1) = CompatibilityPalettes.ForNumber(number);
-            string expected = $"{Rgb888(bg)}|{Rgb888(obj0)}|{Rgb888(obj1)}";
+            string expected = FrozenPalettes()[number].Palettes;
             foreach (MercuryEngine engine in Enum.GetValues<MercuryEngine>()) Assert.Equal(expected, PalettesOn(engine, rom));
         }
 
@@ -206,11 +205,61 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(MercuryEngine.MercuryRt)]
         public void The_default_palette_is_the_one_pan_docs_gives(MercuryEngine engine)
         {
-            var (bg, obj0, obj1) = CompatibilityPalettes.ForNumber(0);
-            Assert.Equal(new ushort[] { 0x7FFF, 0x1BEF, 0x6180, 0x0000 }, bg);
-            Assert.Equal(new ushort[] { 0x7FFF, 0x421F, 0x1CF2, 0x0000 }, obj0);
-            Assert.Equal(new ushort[] { 0x7FFF, 0x421F, 0x1CF2, 0x0000 }, obj1);
-            Assert.Equal($"{Rgb888(bg)}|{Rgb888(obj0)}|{Rgb888(obj1)}", PalettesOn(engine, Header(0x70, null, licensee: 0x00)));
+            ushort[] bg = { 0x7FFF, 0x1BEF, 0x6180, 0x0000 }, obj = { 0x7FFF, 0x421F, 0x1CF2, 0x0000 };
+            Assert.Equal($"{Rgb888(bg)}|{Rgb888(obj)}|{Rgb888(obj)}", FrozenPalettes()[0].Palettes);
+            Assert.Equal(FrozenPalettes()[0].Palettes, PalettesOn(engine, Header(0x70, null, licensee: 0x00)));
+        }
+
+        // Set to 1 to write the frozen palettes from C# Mercury's table instead of comparing them.
+        public const string PalettesRecordVariable = "EMUSEN_MERCURY_PALETTES_RECORD";
+
+        public static string FrozenPalettesPath([System.Runtime.CompilerServices.CallerFilePath] string here = "") =>
+            Path.Combine(Path.GetDirectoryName(here)!, "MercuryGoldens", "palettes.tsv");
+
+        // The Color's 94 palettes for Game Boy games, each with a Nintendo header that selects it, as data that outlives C#'s table - see Mercury_Native.md §14.6.
+        public static IReadOnlyList<(int Checksum, char Fourth, string Palettes)> FrozenPalettes() => File.ReadAllLines(FrozenPalettesPath())
+            .Where(l => l.Length > 0 && l[0] != '#').Skip(1).Select(l => l.Split('\t'))
+            .Select(c => (Convert.ToInt32(c[1], 16), (char)Convert.ToInt32(c[2], 16), c[3])).ToArray();
+
+        // C# Mercury's table, written out for each palette number with the first header the search below finds for it.
+        private static string CsharpPalettes()
+        {
+            var found = new SortedDictionary<int, (int Checksum, char Fourth)>();
+            foreach (char fourth in "\0BEFAARBEKEK R-URAR INAILICE RZ".Distinct())
+                for (int checksum = 0; checksum < 256; checksum++)
+                    if (!found.ContainsKey(CompatibilityPalettes.PaletteNumber(Header(checksum, fourth == '\0' ? null : fourth))))
+                        found[CompatibilityPalettes.PaletteNumber(Header(checksum, fourth == '\0' ? null : fourth))] = (checksum, fourth);
+            Assert.Equal(CompatibilityPalettes.PaletteCount, found.Count);
+            var text = new List<string>
+            {
+                "# The Game Boy Color's palettes for Game Boy games, RGB888 as TCRF converts RGB555, from C# Mercury's CompatibilityPalettes; frozen - see Mercury_Native.md §14.6.",
+                "number\tchecksum\tfourth (its byte, 00 for none)\tpalettes",
+            };
+            foreach (var (number, (checksum, fourth)) in found)
+            {
+                var (bg, obj0, obj1) = CompatibilityPalettes.ForNumber(number);
+                text.Add($"{number}\t{checksum:X2}\t{(int)fourth:X2}\t{Rgb888(bg)}|{Rgb888(obj0)}|{Rgb888(obj1)}");
+            }
+            return string.Join('\n', text) + "\n";
+        }
+
+        // While C# Mercury is on main its table is the frozen file's oracle; the file is re-recorded only on purpose.
+        [Fact]
+        public void The_frozen_palettes_are_csharps_table()
+        {
+            string csharp = CsharpPalettes();
+            if (Environment.GetEnvironmentVariable(PalettesRecordVariable) == "1") File.WriteAllText(FrozenPalettesPath(), csharp);
+            Assert.Equal(csharp, File.ReadAllText(FrozenPalettesPath()));
+        }
+
+        // Each frozen palette, selected by its header, is what MercuryRT loads into colour RAM, with no C# table consulted.
+        [Fact]
+        public void Every_frozen_palette_is_what_mercuryrt_loads()
+        {
+            var rows = FrozenPalettes();
+            Assert.Equal(94, rows.Count);
+            for (int number = 0; number < rows.Count; number++)
+                Assert.True(rows[number].Palettes == PalettesOn(MercuryEngine.MercuryRt, Header(rows[number].Checksum, rows[number].Fourth == '\0' ? null : rows[number].Fourth)), $"palette {number}");
         }
 
         // Stores A, B, C, D, E, H, L and F at $C000, then reads the colour registers, tries a speed switch and a WRAM bank, and draws four shades.

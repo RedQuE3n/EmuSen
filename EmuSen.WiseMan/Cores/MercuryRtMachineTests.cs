@@ -23,48 +23,11 @@ namespace EmuSen.WiseMan.Cores
 
         public MercuryRtMachineTests(ITestOutputHelper output) => _output = output;
 
-        // Counts in WRAM, copies the count to cart RAM, keys a pulse note and scrolls - MercuryRtStateTests' program.
-        internal static readonly byte[] Busy =
-        {
-            0x3E, 0x0A, 0xEA, 0x00, 0x00, 0x3E, 0xF0, 0xE0, 0x12, 0x3E, 0x87, 0xE0, 0x14,
-            0x21, 0x00, 0xC0, 0x34, 0x7E, 0xEA, 0x00, 0xA0, 0xE0, 0x43, 0x18, 0xF4,
-        };
+        internal static readonly byte[] Busy = MercuryPrograms.Busy;
 
-        // Timer, STAT and vblank interrupts into HALT; each handler counts; OAM DMA, a window, sprites, a wave note and serial bytes every vblank.
-        internal static byte[] InterruptsRom(byte kind, byte ramCode, byte cgb) => SyntheticGbRom.Build(romBanks: 4, cartridgeType: kind, ramSizeCode: ramCode, cgbFlag: cgb,
-            patches: new (int, byte[])[]
-            {
-                (0x40 - 0x150, new byte[] { 0xC3, 0x00, 0x02 }),
-                (0x48 - 0x150, new byte[] { 0x21, 0x01, 0xC1, 0x34, 0xD9 }),
-                (0x50 - 0x150, new byte[] { 0x21, 0x02, 0xC1, 0x34, 0xD9 }),
-                (0x58 - 0x150, new byte[] { 0x21, 0x03, 0xC1, 0x34, 0xD9 }),
-                (0, new byte[]
-                {
-                    0x31, 0xFE, 0xFF, 0x3E, 0x05, 0xE0, 0x07, 0x3E, 0xF0, 0xE0, 0x06, 0x3E, 0x28, 0xE0, 0x41, 0x3E, 0x40, 0xE0, 0x45,
-                    0x3E, 0x30, 0xE0, 0x4A, 0x3E, 0x50, 0xE0, 0x4B, 0x3E, 0xE3, 0xE0, 0x40, 0x3E, 0x0F, 0xE0, 0xFF,
-                    0x3E, 0x80, 0xE0, 0x1A, 0x3E, 0x20, 0xE0, 0x1C, 0x3E, 0x87, 0xE0, 0x1E, 0xFB, 0x76, 0x00, 0x18, 0xFC,
-                }),
-                (0x200 - 0x150, new byte[]
-                {
-                    0xF5, 0xE5, 0x21, 0x00, 0xC1, 0x34, 0x7E, 0xE0, 0x01, 0x3E, 0x81, 0xE0, 0x02, 0x21, 0x00, 0xC0, 0x06, 0xA0,
-                    0x70, 0x23, 0x05, 0x20, 0xFB, 0x3E, 0xC0, 0xE0, 0x46, 0xE1, 0xF1, 0xD9,
-                }),
-            });
+        internal static byte[] InterruptsRom(byte kind, byte ramCode, byte cgb) => MercuryPrograms.InterruptsRom(kind, ramCode, cgb);
 
-        // On a colour console: a general-purpose HDMA and an hblank HDMA every frame, then KEY1 and STOP into double speed after 60 frames.
-        internal static byte[] ColourRom() => SyntheticGbRom.Build(romBanks: 4, cartridgeType: 0x1B, ramSizeCode: 0x03, cgbFlag: 0xC0,
-            patches: new (int, byte[])[]
-            {
-                (0x40 - 0x150, new byte[] { 0xC3, 0x00, 0x02 }),
-                (0, new byte[] { 0x31, 0xFE, 0xFF, 0x3E, 0x01, 0xE0, 0xFF, 0x3E, 0x91, 0xE0, 0x40, 0xFB, 0x76, 0x00, 0x18, 0xFC }),
-                (0x200 - 0x150, new byte[]
-                {
-                    0xF5, 0xE5, 0x21, 0x00, 0xC0, 0x34, 0x7E, 0xFE, 0x3C, 0x20, 0x06, 0x3E, 0x01, 0xE0, 0x4D, 0x10, 0x00,
-                    0x3E, 0xC0, 0xE0, 0x51, 0x3E, 0x00, 0xE0, 0x52, 0x3E, 0x08, 0xE0, 0x53, 0x3E, 0x00, 0xE0, 0x54, 0x3E, 0x07, 0xE0, 0x55,
-                    0x3E, 0x88, 0xE0, 0x55, 0x7E, 0xE0, 0x4F, 0x3E, 0x80, 0xE0, 0x68, 0x7E, 0xE0, 0x69, 0xE0, 0x69, 0xE0, 0x70,
-                    0xE1, 0xF1, 0xD9,
-                }),
-            });
+        internal static byte[] ColourRom() => MercuryPrograms.ColourRom();
 
         public static TheoryData<byte, byte, byte> Boards => MercuryRtStateTests.Boards;
 
@@ -132,15 +95,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_halt_bug_and_the_ei_delay_step_identically()
         {
-            byte[] rom = SyntheticGbRom.Build(patches: new (int, byte[])[]
-            {
-                (0x50 - 0x150, new byte[] { 0x0C, 0xD9 }),
-                (0, new byte[]
-                {
-                    0xF3, 0x3E, 0x04, 0xE0, 0xFF, 0x3E, 0x04, 0xE0, 0x0F, 0x06, 0x00, 0x76, 0x04, 0x78, 0xEA, 0x00, 0xC0,
-                    0x0E, 0x00, 0xFB, 0x04, 0x04, 0x79, 0xEA, 0x01, 0xC0, 0x18, 0xFE,
-                }),
-            });
+            byte[] rom = MercuryPrograms.HaltBugRom();
             var pair = new MercuryRtPair(rom, skipRendering: false);
             for (int i = 0; i < 40; i++) Assert.True(pair.Step());
             Assert.Equal(2, pair.Csharp.Bus!.Wram[0]);
@@ -194,15 +149,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_colour_background_priority_bit_hides_a_sprite_identically()
         {
-            byte[] rom = SyntheticGbRom.Build(cgbFlag: 0xC0, patches: (0, new byte[]
-            {
-                0x3E, 0x00, 0xE0, 0x40, 0x3E, 0x01, 0xE0, 0x4F, 0x21, 0x00, 0x98, 0x01, 0x00, 0x04,
-                0x3E, 0x80, 0x22, 0x0B, 0x78, 0xB1, 0x20, 0xF8,
-                0x3E, 0x00, 0xE0, 0x4F, 0x21, 0x00, 0x80, 0x06, 0x10, 0x3E, 0xFF, 0x22, 0x05, 0x20, 0xFC,
-                0x21, 0x00, 0xFE, 0x36, 0x20, 0x23, 0x36, 0x20, 0x23, 0x36, 0x00, 0x23, 0x36, 0x00,
-                0x3E, 0x80, 0xE0, 0x6A, 0xAF, 0x06, 0x08, 0xE0, 0x6B, 0x05, 0x20, 0xFB,
-                0x3E, 0x93, 0xE0, 0x40, 0x18, 0xFE,
-            }));
+            byte[] rom = MercuryPrograms.ColourPriorityRom();
             var pair = new MercuryRtPair(rom, skipRendering: false);
             pair.Run(30, null);
             byte[] picture = pair.Csharp.GetFrameBufferRgba();
@@ -214,10 +161,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_sweeps_second_overflow_check_silences_identically()
         {
-            byte[] rom = SyntheticGbRom.Build(patches: (0, new byte[]
-            {
-                0x3E, 0x11, 0xE0, 0x10, 0x3E, 0xF0, 0xE0, 0x12, 0x3E, 0x14, 0xE0, 0x13, 0x3E, 0x85, 0xE0, 0x14, 0x18, 0xFE,
-            }));
+            byte[] rom = MercuryPrograms.SweepOverflowRom();
             var pair = new MercuryRtPair(rom, skipRendering: false);
             pair.Run(10, null);
             var pulse = pair.Csharp.Bus!.Apu.Pulse1;
@@ -232,11 +176,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(0x05, 0x42)]
         public void A_written_bank_zero_selects_what_each_board_selects_identically(byte kind, byte expected)
         {
-            byte[] rom = SyntheticGbRom.Build(romBanks: 4, cartridgeType: kind, patches: new (int, byte[])[]
-            {
-                (0, new byte[] { 0xAF, 0xEA, 0x00, 0x21, 0xFA, 0x00, 0x40, 0xEA, 0x00, 0xC0, 0x18, 0xFE }),
-                (0x4000 - 0x150, new byte[] { 0x42 }),
-            });
+            byte[] rom = MercuryPrograms.BankZeroRom(kind);
             var pair = new MercuryRtPair(rom, skipRendering: false);
             pair.Run(2, null);
             Assert.Equal(expected, pair.Csharp.Bus!.Wram[0]);
@@ -246,12 +186,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_mbc3_clock_latches_only_on_zero_then_one_identically()
         {
-            byte[] rom = SyntheticGbRom.Build(romBanks: 4, cartridgeType: 0x10, ramSizeCode: 0x03, patches: (0, new byte[]
-            {
-                0x3E, 0x0A, 0xEA, 0x00, 0x00, 0x3E, 0x08, 0xEA, 0x00, 0x40, 0x3E, 0x05, 0xEA, 0x00, 0xA0,
-                0x3E, 0x01, 0xEA, 0x00, 0x60, 0xFA, 0x00, 0xA0, 0xEA, 0x00, 0xC0,
-                0xAF, 0xEA, 0x00, 0x60, 0x3E, 0x01, 0xEA, 0x00, 0x60, 0xFA, 0x00, 0xA0, 0xEA, 0x01, 0xC0, 0x18, 0xFE,
-            }));
+            byte[] rom = MercuryPrograms.Mbc3LatchRom();
             var pair = new MercuryRtPair(rom, skipRendering: false);
             pair.Run(2, null);
             Assert.Equal(0, pair.Csharp.Bus!.Wram[0]);
@@ -262,11 +197,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void An_oam_dma_steps_identically_byte_by_byte()
         {
-            byte[] rom = SyntheticGbRom.Build(patches: (0, new byte[]
-            {
-                0x21, 0x00, 0xC0, 0x06, 0xA0, 0x70, 0x23, 0x05, 0x20, 0xFB, 0x3E, 0xC0, 0xE0, 0x46,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x18, 0xF4,
-            }));
+            byte[] rom = MercuryPrograms.OamDmaRom();
             var pair = new MercuryRtPair(rom, skipRendering: false);
             for (int i = 0; i < 3000; i++) Assert.True(pair.Step());
             Assert.Equal(0xA0, pair.Csharp.Bus!.Oam[0]);
@@ -290,15 +221,7 @@ namespace EmuSen.WiseMan.Cores
             int steps = 0, illegal = 0;
             for (int seed = 0; seed < 16; seed++)
             {
-                var noise = new Random(seed * 131 + kind * 7 + cgb);
-                byte[] rom = SyntheticGbRom.Build(romBanks: 8, cartridgeType: kind, ramSizeCode: ramCode, cgbFlag: cgb);
-                noise.NextBytes(rom.AsSpan(0x150, 0x8000 - 0x150));
-                noise.NextBytes(rom.AsSpan(0x8000));
-                // Past the first four seeds the eleven opcodes no SM83 has become NOPs, so the programs run long.
-                if (seed >= 4)
-                    for (int i = 0x150; i < rom.Length; i++)
-                        if (rom[i] is 0xD3 or 0xDB or 0xDD or 0xE3 or 0xE4 or 0xEB or 0xEC or 0xED or 0xF4 or 0xFC or 0xFD) rom[i] = 0x00;
-                rom[0x14D] = EmuSen.Cores.Nintendo.Mercury.Memory.Cartridge.ComputeHeaderChecksum(rom);
+                byte[] rom = MercuryPrograms.RandomRom(kind, ramCode, cgb, seed);
                 var pair = new MercuryRtPair(rom, skipRendering: false);
                 for (int i = 0; i < 5000; i++, steps++)
                 {

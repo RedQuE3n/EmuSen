@@ -8407,6 +8407,9 @@ example:
 <time> WARN [platform] libemusen_platform.so is not in use (libemusen_platform.so not found beside the assemblies); Endymion runs on its C# implementation.
 ```
 
+*Added 2026-10-16:* a fourth, `EMUSEN_DIANASH_NATIVE`, for DianaSh's shell, read the same way; §4.117 says what it
+covers and on which systems it has been proven.
+
 No component fails to start because of the library. SDL3, Shaderc and SQLite are the libraries the program already
 ships; the platform library is lent the copies the C# loaded, so a fallback changes nothing about them, and audio,
 pads and shaders work on the C# as before. The compiled-shader cache keeps the two implementations' shaders apart,
@@ -8641,7 +8644,8 @@ group: a mode row titled by the medium (*Memory Card*, *Internal Backup RAM*, *B
 medium keeps the keys above (`Cards`, `Card<n>`), the console's own memory takes `ConsoleMemory` and
 `ConsoleMemory<n>`, and any further medium `Media.<id>` and `Media.<id>.<n>`. Shared and named files are in `Cards` for a
 removable medium and in `Console` for the console's own. **The PlayStation's card is *Shared* by default** since its
-import exists (§4.115); a medium no format module reads stays *Per game*.
+import exists (§4.115); a medium no format module reads stays *Per game*. *Since 2026-10-16* the Sega CD's two media are *Shared* by default too, their module
+built (`EmuSen_SaveMedia.md` §11.7), and a new machine's backup RAM with no file starts formatted.
 
 ### 4.115 Memory Cards: the window, and the import offered once (2026-10-15)
 
@@ -8698,3 +8702,41 @@ picture then read back as before.
 **Tests.** `DevicePresenterTests` (each refusal alone, the device's identity, the shown image); `DeviceFilterMatchTests`
 (each built-in family against its Skia picture on real frames, with `EMUSEN_GPU_FRAMES`); the real-window proof of
 §13.3 there.
+
+### 4.117 DianaSh's shell on the platform library: `EMUSEN_DIANASH_NATIVE` (2026-10-16)
+
+*Decided 2026-10-16 by the tester:* the shell every console window and terminal opens runs on its Rust implementation
+by default, and the C# shell is kept as the failover until the Rust one has been tested on Windows and macOS
+(`EmuSen_DianaSh.md` §13.10).
+
+| `EMUSEN_DIANASH_NATIVE` | The shell |
+|---|---|
+| unset, or any value but `0` | the Rust shell in `libemusen_platform`, when the library attaches; otherwise the C# shell, with one line in the error log saying why |
+| `0` | the C# shell |
+
+Before 2026-10-16 the variable selected the Rust shell only when it was `1`, and the C# shell otherwise; a script or
+a launcher that sets it to `1` still gets the Rust shell, and one that leaves it unset now gets it too. The variable is
+read once, the first time a shell is made.
+
+What it covers: the shell's language, its builtins, its sessions and accounts, and the text tools (`grep`, `sed`,
+`awk`, `ls` and the others of `dianash.text`). The debugger's, the cheats' and the session's commands are the C#'s
+under either shell until S5, reached by the Rust shell through a bridge. What a player sees is the same under both:
+the golden corpus holds every command's output byte for byte both ways.
+
+The library falls back to the C# shell, with one line, when it is missing, when its DianaSh exports or their major
+version are not the ones this build speaks, or when it cannot make a shell:
+
+```
+<time> WARN [platform] libemusen_platform.so is not in use (libemusen_platform.so not found beside the assemblies); DianaSh runs on its C# implementation.
+```
+
+| System | Default | Proven |
+|---|---|---|
+| Linux | the Rust shell | yes: the gate both ways, 2026-10-16 (`EmuSen_DianaSh.md` §13.10) |
+| Windows | the Rust shell where the published tree carries the library; the C# where it does not (release 0.9.0 ships none) | no: the Rust shell has not been run on Windows, and the C# is kept as its failover until it has |
+| macOS | the Rust shell where the bundle carries the library | no: not run on a Mac yet; the C# is kept likewise |
+
+**Tests.** `DianaShSwitchTests` (each fallback: no library, another major, a missing export, no shell made; the
+library chosen unless the variable is 0); `NativeSwitchTests`; the golden corpus and WiseMan's DianaSh tests, run with
+the variable unset and with it 0.
+

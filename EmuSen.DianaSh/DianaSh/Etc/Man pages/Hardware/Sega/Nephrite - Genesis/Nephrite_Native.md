@@ -4502,6 +4502,8 @@ which adds `peek` and the `Watch` to the interface.
 record, written before its code; this section is its summary. The stage stands open at step 10.4: the backup RAM's
 directory waits for a specification made by a separate observer (that page's §5 Q2), and with it the gate's `_BURAM`
 round trips and a new machine's formatted memory.
+*Since 2026-10-16* the directory is built from the observer's `Nephrite_Bram.md` and the gate is passed but for two
+open disputes (§63.5).
 
 ### 63.1 What was built
 
@@ -4545,3 +4547,168 @@ digest.
 The crate's 183 tests (with `EMUSEN_NEPHRITE_ROMS` and `EMUSEN_NEPHRITE_DISCS`), and those of the builds without each
 attachment; `beryl-m68k`'s 26 with its `asm` feature and 21 without; WiseMan's Nephrite, Genesis, Registration,
 SaveMedia and routing tests, 98.
+
+### 63.5 Step 10.4 and the gate (2026-10-16)
+
+- **`_BURAM`** (`bios/bram.s`) from `Nephrite_Bram.md` alone: all nine calls, the block code, the footer's checks, the
+  directory's placement, counts and compression; the choices where the specification is open are D-49 to D-52 and
+  D-56 (`Nephrite_OpenBios.md` §14). `_mburam` is not placed: its address is in no document the writer may read (D-55).
+- **The format module** `SegaCdBramFormat` in the Genesis system pack for `mcd.backup` and `mcd.ramcart`; the Sega CD's
+  media now default to *Shared*, and a new machine's backup RAM with no file is given the module's formatted blank.
+- **The gate**: the round trips pass in both directions with Sonic CD and Lunar, judged by the games; Lunar reaches its
+  intro (after D-53: a sub CPU read now carries the sector's header first) and Sonic CD saves; the 71 digests equal the
+  baseline's; the kit compliant on the sample and the discs. Open: Sonic CD's film is black (D-54, two boot ROM routines
+  no document describes) and the cartridge is unreachable (D-55). The replacement's words lose their backup RAM clause.
+- **Measured**: the crate's 192 tests (9 new for `_BURAM`), 190 and 144 without each attachment; `beryl-m68k`'s 26;
+  WiseMan's in the blast radius (`Nephrite_OpenBios.md` §15).
+- **Offered** (`Nephrite_Plan.md` §7, decided 2026-10-16): the `mcd` system's development mark is removed from the
+  core's info; `SegaCdRoutingTests` route the tester's library, PlayStation discs to Diamond, Sega CD discs to
+  Nephrite, cartridges to the Genesis, a CHD by its folder's name (`Nephrite_OpenBios.md` §15).
+
+## 64. Loading waits on the player's BIOS, and the drive's track jump (2026-10-16)
+
+**Observations of the player's BIOS at work: excluded from the open BIOS's writers.** This section, and D-57 beyond
+its heading, record what the drive was asked for while a player's BIOS ran, and recordings of a console's drive made
+under a BIOS. Whoever writes or reviews the open BIOS (`Nephrite_OpenBios.md`) does not read them (that page's §9).
+
+### 64.1 What the tester reported
+
+On the first day the Sega CD was offered, the tester played on the handheld with the player's own BIOS installed (the
+American and the European) and reported films that did not load, or loaded after about twenty seconds; then, more
+precisely, that Chuck Rock II waited long right after its boot and again after START on its title screen, that Sonic
+CD's films did the same, and that after START on Sonic CD's "New Game" no film played at all. The handheld's sessions
+ran at a steady 60 frames a second at about 2 ms a frame, so a wait of twenty seconds was emulated time or something
+that never came.
+
+### 64.2 How the waits were looked at
+
+`examples/waits.rs` runs a disc headless on a boot ROM given as a file, with a formatted backup RAM, and prints from
+the devices alone: each drive command the sub CPU sends but the idle and report requests (from its writes to
+`$FF8042`-`$FF804B`), each change of the drive's status nibble as the sub CPU reads it (`$FF8038`) with the head's
+sector, the levels 4 and 5 the sub CPU took between lines, and each frame where the picture turns one colour or
+shows again. A wait is read as frames from the request (the picture going blank after a scene, or a press) to the next
+picture shown. `examples/disc.rs` kept the pictures, every 20 to 60 frames, to name the scenes. Nothing of the boot
+ROM's code, memory or registers was read or printed; the player's BIOS was given as a file, the American M1 V1.10
+for the four American discs and the European M1 V1.00 for Sonic CD (Europe), each on the copies under
+`~/.cache/emusen/probe/nephrite/discs/`, measured on 2026-10-16.
+
+### 64.3 What the drive was asked for
+
+Every long wait had the same shape. Before reading far across the disc, the player's BIOS sent **command A** with a
+count in nibbles 4-7 and a direction in nibble 3, then the play or seek to its target. Nephrite's drive took command
+A for no command at all (`cdd.rs` matched it to nothing), so its status stayed what it was:
+
+- **sent while paused** (status 4), as at Sonic CD's boot, Lunar's and Mickey Mania's intros, the BIOS sent its play
+  one exchange later and the drive covered the whole distance by its coarse travel, about 0.9√sectors exchanges
+  (§51.1): 4.2 to 5.8 s for a jump across the disc.
+- **sent while playing** (status 1), as after Sonic CD's title, on START at Sonic CD's "New Game" and Chuck Rock II's
+  title, and at Chuck Rock II's boot, the BIOS waited, the drive went on playing CD-DA with no data read and no level
+  5, level 4 each exchange and an idle command answering each, until **600 frames** had passed; then it sent stop,
+  waited another 600 frames, sent pause, and sent command A again, which now came while paused, and the play after
+  it. **Twice 600 frames is the twenty seconds the tester saw.**
+
+### 64.4 What a console's drive does with command A
+
+krikzz's `notes/cdd-cmd-info.txt` names it only "0A track jump ?". mcd-verificator's `cd-log/sonic-bios/` holds
+recordings of a console's drive under a BIOS, one status and one command per exchange; three carry command A
+(`boot-log.txt` lines 897 and 1475, `stop-to-play (track 3).txt` line 152):
+
+| From | Command | Exchanges `AF` | Landed (paused, report 0) | Then asked for |
+|---|---|---|---|---|
+| 00:02:21 | `A0.00020B` (523 tracks out) | 8 | 01:29:26 | play 02:18:35 |
+| 00:01:66 | `A0.001313` (4,883 tracks out) | 28 | 13:17:49 | play 13:20:25 |
+| 02:16:64 | `A0.0033EC` (13,292 tracks out) | 54 | 47:26:29 | play 45:59:50 |
+
+The drive answers `AF.000000` with its flags, busy with no report, for a time that grows with the count; at the last
+of those exchanges the flags are the landing place's (`15` where it landed in audio); then it reports paused at the
+landing, and the BIOS sends its play. The count is hexadecimal, not BCD (`33EC` = 13,292). The direction is read from
+the runs on Nephrite, where the BIOS sent `A0.0F32B7` and `A0.0F12BF` with the head past its target, and from the count
+fitting the distance both ways (§64.5); no recording has a jump inward.
+
+The time and the landing follow a spiral read at constant linear velocity, the Mega-CD Disc Format Specifications
+fixing game discs at 1.25 m/s "to improve the accuracy of track jump access": tracks from the centre at sector *s*
+are √(R² + K·s), and a jump of *n* tracks lands where that is *n* more or fewer. A least-squares fit to the three
+landings gives R = 18,300 and K = 3,385 (the nominal 1.6 µm pitch, 25 mm start and 1.25 m/s give 15,625 and 3,316; the
+drive's count is not exactly a physical track), landing within 31 sectors of the console on the long jump and 227 on
+the middle one, and 789 short on the 523-track jump. The busy exchanges fit √n / 2 − 4.5 (7, 30 and 53 for the
+console's 8, 28 and 54). Both are measured against the recordings, three points from one disc; a fourth jump, or a
+disc of another pitch, would test them.
+
+The documents' figures for the whole access: the Mega-CD Outline gives the drive's access time as at most 1.5 s and
+0.8 s on average, and its §4-3 a maximum seek of 1.5 s; Sega Retro's specification page 800 ms and 150 KB/s at 1×. The
+console's long access above, jump and play together, took 54 + 85 exchanges, 1.85 s; Nephrite's seek of the same 6,504
+sectors after the jump takes 96 (§51.1's model, from the LL logs), 13% longer.
+
+### 64.5 What changed
+
+`cdd.rs` takes command A while ready: the head's track count from the spiral, the landing from the count and the
+direction, busy exchanges from the fit, status A with no report and the place's flags, the landing's on the last, then
+paused at the landing looping as a pause does. The drive's mode `Jumping` is saved as tag 10 of the drive's mode words;
+the layout is unchanged and no state of an earlier build holds the tag. D-57 records the rule.
+
+`a_track_jump_is_busy_then_pauses_where_it_lands` replays the long recorded jump: it failed before the change (no
+exchange busy, the head unmoved) and passes after it, with the landing within 150 sectors of 47:26:29 and a jump of the
+same count inward landing where it began.
+
+### 64.6 The waits, before and after, on the player's BIOS
+
+Frames from the request to the next picture (60 a second; Sonic CD (Europe) 50):
+
+| Disc | Moment | Before | After | What the wait is now |
+|---|---|---|---|---|
+| Sonic CD (USA) | boot, after Sega's logo, to the title | 326 (5.4 s) | 326 (5.4 s) | the game's own files read; the title music's access 338 → 71 frames |
+| Sonic CD (USA) | title left alone, to the opening film | 1,781 (29.7 s) | 270 (4.5 s) | fade, a jump and seek of 1.33 s, the film's first sectors |
+| Sonic CD (USA) | START on "New Game", to Palmtree Panic | 1,992 (33.2 s) | 476 (7.9 s) | two accesses of 1.37 and 1.53 s, 247 sectors read |
+| Sonic CD (Europe) | boot to the title | 232 (4.6 s) | 230 (4.6 s) | unchanged |
+| Sonic CD (Europe) | title left alone, to the opening film | 1,474 (29.5 s) | 227 (4.5 s) | as the American disc |
+| Chuck Rock II | boot, after Sega's logo, to Virgin's | 1,633 (27.2 s) | 357 (6.0 s) | a jump and seek of 1.57 s, then the game's reads |
+| Chuck Rock II | START in the intro, to the title | 513 (8.6 s) | 486 (8.1 s) | the game's reads; the title music's access 250 → 107 frames |
+| Chuck Rock II | START on the title, to the stage's card | 1,583 (26.4 s) | 204 (3.4 s) | a jump and seek of 1.65 s, then reads |
+| Lunar | boot, after Sega's logo, to Working Designs' | 1,119 (18.6 s) | 707 (11.8 s) | three jumps and seeks of 1.37 to 1.55 s, a pause of 169 frames that is the game's own, reads |
+| Lunar | each scene change of the intro | 136 | 136 | unchanged; no long access |
+| Mickey Mania | boot, after Sega's logo, to the first picture | 1,071 (17.9 s) | 1,071 (17.9 s) | unchanged: fourteen short seeks and reads near the disc's start and a stop of 102 frames the game asks for |
+| Mickey Mania | the intro's scenes | 429, 514, 762 | 167, 271, 526 | each had one access across the disc, 5.2 to 5.6 s, now 1.13 to 1.27 s |
+
+Every access across more than 20,000 sectors, a jump and its seek together, took 2.4 to 5.8 s before and takes 1.13
+to 1.78 s now, against the documents' 1.5 s at most and the console's recorded 1.85 s. What remains of each wait is
+reads at 75 sectors a second and short seeks, both §51.1's and §52.1's rules, and pauses the games ask for. The level
+5 count during reads equals the sectors read: the CDC's decoder interrupt each sector, its DMA (16 sub clocks a word,
+D-34) finishing a sector's 2,048 bytes in about 1.3 ms of the sector's 13.3 ms, so the CDC never bounded a wait.
+
+### 64.7 Sonic CD's "New Game" plays no film, on the player's BIOS as on the console
+
+After START on "New Game" the game asks for `R11A__.MMD` (sector 1,100), `SNCBNK1B.BIN` (171) and the first stage's
+CD-DA (60,025), before and after the change alike; it never asks for `OPN.STM` (sectors 10,410 to 17,253), the film's
+stream, which it reads only after its title has been left alone. On the console the boot's drive traffic
+(`boot-log.txt`) is Nephrite's command for command through to the title's music, but for one stop more at its start
+and the jumps' counts (`20B` and `33EC` there, `20A` and `328F` here, from heads a few sectors apart): it reads
+02:18:35 to 02:18:50 and goes to the music, never reaching the film's stream at 02:18:60, so on the console too the
+game goes to its title with no film. What the tester saw after "New Game" was the 33 s of black before the stage, with no film in it,
+which the change makes 7.9 s; the film itself plays after the title, and plays on the player's BIOS (it is black only
+on Nephrite's own, D-54).
+
+### 64.8 For the tester
+
+Whether the open BIOS's writer may read `cdd.rs`'s command A (`Cdd::jump` and the `Jumping` arm), which states the
+drive's rule in hardware terms but was found under a BIOS, is not decided here; until it is, it is listed with this
+section as closed to that writer (`Nephrite_OpenBios.md` §9). Nephrite's own BIOS does not send command A, and the five
+discs' drive traffic on it is unchanged, line for line, over 4,000 frames.
+
+## 65. Which BIOS a session runs on, and the Sega CD on the Genesis's screen (2026-10-16)
+
+- **Which BIOS.** The host loads each file `firmware_for` names from the firmware folder by name and exact size
+  (`FirmwareLibrary.TryLoad`, `DataStore.Firmware`, which Galaxia resolves to the sandbox's `home/Firmware`) and hands
+  them to create as files 2 to 4 (`CoreEngine.LoadRom`). For a sheet or a CHD `firmware_for` names all three markets'
+  BIOS, for an image its market's. Create boots the market's file, else another market's given, in the order U, E, J,
+  else Nephrite's own. Machine info had named the market's file as `Replacement` when another market's had booted;
+  it now names the file that booted (`chosen_bios`, `booted_bios`), shared by the disc's machine, the cartridge's
+  mode 1 and machine info, so the choice has one owner. `CoreEngine` writes a line per firmware entry at load,
+  `[Firmware] The American Sega CD's BIOS (131,072 bytes): the player's bios_CD_U.bin` or `...: Nephrite's own
+  replacement`, into the game's `general.log` (`EmuSen_Firmware.md` §3.1). With the player's American and European
+  files in the folder under those names, a session on the five discs boots the player's: `NephriteFirmwareTests`.
+- **The screen.** The Sega CD's system pack says it is attached to the Genesis (`SystemEntry.AttachedTo`, the 32X's
+  too), and the frontend gives it the Genesis's television filters, the CRT's Genesis row and parameters, overscan and
+  the Genesis's pads from that one fact (`EmuSen_Serenity.md` §3.12).
+- **Measured** (2026-10-16): the crate's 193 tests; the 71 digests of `Nephrite_Attachments.md` §11.1 equal the
+  baseline's; the five discs' drive traffic on the open BIOS unchanged; the conformance kit compliant on its 64-image
+  Genesis sample, on the 240p disc with mcd-verificator and on Sonic CD (USA) with the player's BIOS over 2,400 frames.

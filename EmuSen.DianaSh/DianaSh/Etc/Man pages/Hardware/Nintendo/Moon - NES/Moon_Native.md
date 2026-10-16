@@ -2193,3 +2193,33 @@ transcript has none. **No verdict is worse**, so nothing was papered over. The t
 `EmuSen.WiseMan/Cores/MoonCorpusBaseline.tsv`; the C# column is frozen there, since it cannot be produced again, and
 `No_corpus_verdict_is_worse_than_the_csharp_baseline` holds every committed corpus trace to the MoonRT column and to a
 standing no lower than the C# one.
+
+### 9.4 MoonRT the default, and what its shim took from the C# core
+
+*Decided 2026-10-16 by the tester: MoonRT is the default and the C# core is deleted.*
+
+The Engine row's default was switched first, with both engines still present and the corpus and goldens as the
+proof (§9.2, §9.3). Before the C# core could go, what MoonRT's shim borrowed from it was given one owner each:
+
+| Borrowed | Was | Now |
+|---|---|---|
+| The debugger's view: the CPU, PPU and APU registers, the sprites, the five channels, the summary | `MoonDebugTarget` over a hidden `MoonCore`, loaded from MoonRT's state before each read (§8.3) | `MoonRtDebugTarget` in the shim, reading MoonRT's saved state by its own layout listing (`StateLayout`, `EmuSen_NativeCores.md` §3.14.1); no C# machine is built |
+| The palettes, the swatch, the tile sheet, the nametable and tile decoders, the three vectors, the master palette | `MoonDebugTarget` and `Ppu.NesPalette` | the NES system pack's `NesDebugViews` (`EmuSen.Crystal/Systems/Nes/`), which any NES engine's spaces feed |
+| The 6502 disassembler | `Nes6502Disassembler` beside the C# CPU's opcode table | the pack, with its own mnemonic table |
+| Game Genie and `address:value` codecs | `Moon/Cheats` | the pack (`NesSystem.GameGenie`, `NesSystem.Raw`), as the SNES pack carries its two |
+| The pad's buttons, the two ports, the systems-table facts | `MoonCore.PadButtons`, `MoonCore.Ports`, the catalogue's own row | the pack's `NesSystem` |
+| The header read, and the battery rule | `Cartridge.FromImage`, which also built a board | the pack's `NesHeader`, which builds none; a battery file is opened only for a board MoonRT builds |
+| The board names, each board's registers for `regs`, and its nametable arrangement for the summary | each C# board's `Name`, `DebugState` and `Mirroring` | the shim's `MoonBoards`, a table of state paths and the arrangement rule per board |
+| The state's magic and versions, the frame rate, the screen's size | `MoonCore` constants | the shim's constants |
+| The debugger's registries: breakpoints, watches, coverage, the call stack, labels, cheats | the mirror's | the shim's own, wired as the C# core wired them (`PortEngine`'s mirror is now optional) |
+
+**What the shim derives, and why it is written down here.** Three values the C# debugger read off computed properties
+are derived in the shim from the state's fields by the same rule: a pulse channel's silencing (a period under 8, or a
+sweep target past `$7FF`), an envelope's output (the volume when constant, else the decay counter), and the DMC's
+activity (bytes remaining). The board table holds the nametable arrangement rule for each of the sixteen boards, as
+`Moon_Memory.md` §3–§4 states them. These are the only facts with a second statement outside the crate; each is a
+display rule, and none feeds the machine.
+
+**Proof.** The DianaSh golden corpus's `moonrt` cases, written while the mirror drove the debugger, are reproduced by
+the new target unchanged: the registers, the sprites, the channels, the summary, the disassembly, coverage, the call
+stack and the breakpoints. Only the `moon` cases were removed (§9.5).

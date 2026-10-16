@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Moon;
-using EmuSen.Cores.Nintendo.Moon.Cheats;
+using EmuSen.Crystal.Systems.Nes;
 using EmuSen.Crystal.Cheats;
 using EmuSen.WiseMan.Fixtures;
 
@@ -116,7 +116,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_game_genie_code_decodes_and_patches_end_to_end()
         {
-            ICheatCodeCodec codec = MoonCheatCodecs.GameGenie();
+            ICheatCodeCodec codec = NesSystem.GameGenie();
             // Decodes to $91D9, so this fixture patches the byte the code names rather than the one it has.
             (int address, byte value) = codec.Decode("SXIOPO");
             Assert.Equal(0x91D9, address);

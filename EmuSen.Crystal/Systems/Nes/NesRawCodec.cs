@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 
-namespace EmuSen.Cores.Nintendo.Moon.Cheats
+namespace EmuSen.Crystal.Systems.Nes
 {
     // The plain "address:value" form NES cheats are shared in when they did not come off a Game Genie - see Moon_Cheats.md §2.
     public static class NesRawCodec

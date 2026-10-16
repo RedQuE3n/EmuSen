@@ -12,7 +12,6 @@ using EmuSen.Cores.Nintendo.Mercury.Cheats;
 using EmuSen.Cores.Nintendo.Mercury.Debug;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Moon;
-using EmuSen.Cores.Nintendo.Moon.Cheats;
 using EmuSen.Cores.Nintendo.Moon.Debug;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia.Models;
@@ -168,17 +167,17 @@ namespace EmuSen.Cores
                     return new CoreBundle(
                         moon,
                         new MoonDebugTarget(moon),
-                        MoonCheatCodecs.Raw(),
-                        MoonCheatCodecs.GameGenie(),
+                        Crystal.Systems.Nes.NesSystem.Raw(),
+                        Crystal.Systems.Nes.NesSystem.GameGenie(),
                         null);
 
-                // The same codecs, and MoonRT's target: a mirror for what it shows; its hooks are stage 5's - see Moon_Native.md §8.3.
+                // The NES pack's codecs, and MoonRT's own target, reading its state by its listing - see Moon_Native.md §9.4.
                 case MoonRtCore moonRt:
                     return new CoreBundle(
                         moonRt,
                         moonRt.CreateDebugTarget(),
-                        MoonCheatCodecs.Raw(),
-                        MoonCheatCodecs.GameGenie(),
+                        Crystal.Systems.Nes.NesSystem.Raw(),
+                        Crystal.Systems.Nes.NesSystem.GameGenie(),
                         null);
 
                 case MercuryCore mercury:
@@ -238,7 +237,7 @@ namespace EmuSen.Cores
 
             // Dispatched on extension for the same reason Create is - no new public surface on the catalog.
             if (core.SupportsExtension(".sfc")) return VenusCheatCodecs.Pair();
-            if (core.SupportsExtension(".nes")) return MoonCheatCodecs.Pair();
+            if (core.SupportsExtension(".nes")) return Crystal.Systems.Nes.NesSystem.Pair();
             if (core.SupportsExtension(".gb")) return MercuryCheatCodecs.Pair();
             if (core.SupportsExtension(".z64")) return MarsCheatCodecs.Pair();
             // A console discovery added has its system pack's codecs, as a game of it running does.

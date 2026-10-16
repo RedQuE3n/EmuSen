@@ -717,6 +717,29 @@ the change removes the last instantiation of std's hasher (measured by `grep`; t
 plain frame" as not done. Honouring `DEBUG_STACK` would be one way to do it, and it would be a behaviour change with
 its own oracle. It is left out of the migration.
 
+#### 3.14.1 A port without a mirror (2026-10-16)
+
+Until its C# core was deleted, each port's shim (`PortEngine`) read the debugger's registers and views from a hidden C#
+core, the *mirror*, loaded from the Rust machine's state before each read, and its registries were the mirror's. With
+the C# core gone the mirror is optional: `PortEngine` keeps its own cheat, call-stack and coverage registries when a
+shim names no mirror, and the bridge feeds them exactly as it fed the mirror's. MoonRT is the first port without one
+(`Moon_Native.md` §9.4).
+
+What replaces the mirror's fields is the state's own listing. Every port's state writer already records a layout, one
+line per field, `offset length type path`, which the core ABI v1 publishes through `state_layout` (`EmuSen_CoreAPI.md`
+§6). `StateLayout` (`EmuSen/Cores/Native/StateLayout.cs`) parses that listing once per loaded game, and a shim reads any
+scalar, array element or byte run of a saved state by its path, `Cpu.PC` or `Apu.Pulse1.TimerPeriod`. The paths are
+the core's own names, so this couples the shim to its own crate and to nothing else, and both sit in one component.
+The cost is one state save per debugger refresh: 25 KB for an NROM cartridge, 279 KB for one whose state carries
+256 KB of CHR (measured 2026-10-16 on the goldens' kept states), at the debugger's polling rate; nothing on the frame
+path changes.
+
+The listing is the right source because it is already proven: stage 1 of each port held it to the C# reflection walk
+of the same objects, field for field, and the bisection of every golden failure names fields through it. Values the
+C# debugger *derived* from fields, such as a pulse channel's silencing by its sweep target or a board's current
+nametable arrangement, are derived in the shim from the same fields by the same rules, and are written down beside the
+board table that owns them.
+
 ### 3.15 Extension exports
 
 A console-specific feature is a named export with the crate's prefix, looked up by name by that console's C# part,

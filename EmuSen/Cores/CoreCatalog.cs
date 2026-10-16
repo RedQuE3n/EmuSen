@@ -15,15 +15,8 @@ namespace EmuSen.Cores
             new(displayName, e.Extensions.ToArray(), e.CheatSystems.ToArray(), e.Console, e.Manufacturer, e.ReleaseYear, CoverAspect: e.CoverAspect,
                 OpenVgdbSystems: e.OpenVgdbSystems.ToArray(), OpenVgdbBytes: e.OpenVgdbBytes);
 
-        // The libretro folder name for the NES; Famicom Disk System is different hardware and is not claimed.
-        private static readonly string[] NesCheatSystems =
-        {
-            "Nintendo - Nintendo Entertainment System",
-        };
-
-        private static readonly CoreDescriptor Moon =
-            new("NES (Moon)", new[] { ".nes" }, NesCheatSystems, "NES", "Nintendo", 1983, CoverAspect: 1.43,
-                OpenVgdbSystems: new[] { "NES" }, OpenVgdbBytes: WithoutInesHeader);
+        // The NES's facts are its system pack's, as the SNES's are; Famicom Disk System is different hardware and is not claimed.
+        private static readonly CoreDescriptor Moon = FromSystem("NES (Moon)", Crystal.Systems.Nes.NesSystem.Entry);
 
         // Two libretro folders for one core, the same way Venus claims Satellaview - see Mercury_Core.md §1.
         private static readonly string[] GameBoyCheatSystems =
@@ -46,10 +39,6 @@ namespace EmuSen.Cores
         private static readonly CoreDescriptor Mars =
             new("Nintendo 64 (Mars)", new[] { ".z64", ".n64", ".v64" }, N64CheatSystems, "N64", "Nintendo", 1996, CoverAspect: 0.7,
                 OpenVgdbSystems: new[] { "N64" }, OpenVgdbBytes: InByteSwappedOrder);
-
-        // Its SYSTEMS row gives the NES a 16-byte header to skip, which is the iNES header when the file has one.
-        private static byte[] WithoutInesHeader(byte[] file) =>
-            file.Length > 16 && file[0] == (byte)'N' && file[1] == (byte)'E' && file[2] == (byte)'S' && file[3] == 0x1A ? file[16..] : file;
 
         // Measured on this library: its N64 hashes are of the halfword-swapped .v64 order, whatever order the file is in.
         private static byte[] InByteSwappedOrder(byte[] file)
@@ -151,7 +140,7 @@ namespace EmuSen.Cores
 
         private static readonly Dictionary<string, (string System, string FullName)> EsdeNames = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["NES"] = ("nes", "Nintendo Entertainment System"),
+            [Moon.Console] = (Crystal.Systems.Nes.NesSystem.Entry.EsdeSystem, Crystal.Systems.Nes.NesSystem.Entry.EsdeFullName),
             [Venus.Console] = (Crystal.Systems.Snes.SnesSystem.Entry.EsdeSystem, Crystal.Systems.Snes.SnesSystem.Entry.EsdeFullName),
             ["N64"] = ("n64", "Nintendo 64"),
             ["GB"] = ("gb", "Game Boy"),
@@ -239,7 +228,7 @@ namespace EmuSen.Cores
             new(StringComparer.OrdinalIgnoreCase)
             {
                 [Venus.Console] = Nintendo.Venus.VenusCore.PadButtons,
-                [Moon.Console] = Nintendo.Moon.MoonCore.PadButtons,
+                [Moon.Console] = Crystal.Systems.Nes.NesSystem.PadButtons,
                 [Mercury.Console] = Nintendo.Mercury.MercuryCore.PadButtons,
                 [Mars.Console] = Nintendo.Mars.MarsCore.PadButtons,
             };
@@ -404,7 +393,7 @@ namespace EmuSen.Cores
         private static readonly Dictionary<string, string[]> SystemIdsByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
             ["SNES"] = new[] { Crystal.Systems.Snes.SnesSystem.Id },
-            ["NES"] = new[] { "nes" },
+            ["NES"] = new[] { Crystal.Systems.Nes.NesSystem.Id },
             ["GB"] = new[] { "gb", "gbc" },
             ["N64"] = new[] { "n64" },
         };

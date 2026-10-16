@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 
-namespace EmuSen.Cores.Nintendo.Moon.Cheats
+namespace EmuSen.Crystal.Systems.Nes
 {
     // Decodes real NES Game Genie codes (Galoob) - see Moon_Cheats.md §2.
     public static class NesGameGenieCodec

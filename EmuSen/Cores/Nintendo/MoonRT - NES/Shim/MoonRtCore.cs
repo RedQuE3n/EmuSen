@@ -2,48 +2,66 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.Moon;
-using EmuSen.Cores.Nintendo.Moon.Debug;
-using EmuSen.Cores.Nintendo.Moon.Memory;
-using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
+using EmuSen.Crystal.Systems.Nes;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Cores.Nintendo.MoonRT
 {
-    // MoonRT behind the NES's ICore: the generic v1 adapter, with C# Moon's exceptions, state checks, battery rule and mirror debugger kept for its oracle - see Moon_Native.md §8.3, EmuSen_CoreAPI.md §26.
+    // MoonRT, the NES's core, behind ICore: the generic v1 adapter with the NES's refusals, state checks, battery rule, pad routing and its own debugger - see Moon_Native.md §9.4, EmuSen_CoreAPI.md §26.
     public sealed class MoonRtCore : PortEngine
     {
-        public MoonRtCore() : base(MoonNative.Engine, "MoonRT", "Moon", pads: 2) { }
+        public const int Width = 256, Height = 240;
 
-        // The C# machine the debugger reads, refreshed from MoonRT's state; its registries are this core's - see Moon_Native.md §2.4.
-        public MoonCore Mirror { get; } = new();
+        // "MOON" little-endian, and the versions this build writes and reads - see Moon_Core.md §5.
+        public const uint StateMagic = 0x4E4F4F4D;
+        public const int CurrentStateVersion = 6, OldestReadableVersion = 3;
 
-        protected override ICore MirrorCore => Mirror;
-        protected override bool MirrorLoaded => Mirror.Bus is not null;
-        protected override CheatRegistry MirrorCheats { get => Mirror.Cheats; set => Mirror.Cheats = value; }
-        protected override CallStackRegistry MirrorCallStack => Mirror.CallStack;
-        protected override CoverageRegistry MirrorCoverage => Mirror.Coverage;
+        // The master clock over the clocks of a frame, 262 lines of 341 dots of 4.
+        public const double FrameRate = 21477272.0 / (262 * 341 * 4);
+
+        private uint _mutes;
+        private StateLayout? _layout;
+        private CoreMachine? _layoutOf;
+
+        public MoonRtCore() : base(MoonNative.Engine, "MoonRT", "Moon", pads: 2)
+        {
+            Breakpoints.CallStack = CallStack;
+            CallStack.EntryPointObserver = Coverage.RecordEntryPoint;
+        }
+
         protected override IReadOnlyList<string> SpaceNames => MoonMachine.SpaceNames;
         protected override int CpuBusSpace => 7;
 
         public static bool Available => MoonNative.Engine.Available;
 
         public override string CoreName => "NES";
-        public override int ScreenWidth => Moon.Video.Ppu.ScreenWidth;
-        public override int ScreenHeight => Moon.Video.Ppu.ScreenHeight;
-        public override double FrameRateHz => Mirror.FrameRateHz;
-        public override int StateVersion => MoonCore.StateVersion;
+        public override int ScreenWidth => Width;
+        public override int ScreenHeight => Height;
+        public override double FrameRateHz => FrameRate;
+        public override int StateVersion => CurrentStateVersion;
 
-        public override WatchRegistry Watches => Mirror.Watches;
-        public override FrameLogRegistry FrameLog => Mirror.FrameLog;
-        public override BreakpointRegistry Breakpoints => Mirror.Breakpoints;
-        public CallStackRegistry CallStack => Mirror.CallStack;
-        public CoverageRegistry Coverage => Mirror.Coverage;
-        public LabelRegistry Labels => Mirror.Labels;
+        public CallStackRegistry CallStack => MirrorCallStack;
+        public CoverageRegistry Coverage => MirrorCoverage;
+        public LabelRegistry Labels { get; } = new();
 
-        // The spaces the core logs a store under, as C#'s write observer names them.
-        private static readonly (uint Id, string Name)[] Reported = { (0, MoonCore.SpaceRam), (2, MoonCore.SpacePrgRam), (8, "PPUREG"), (9, "APUREG") };
+        // The loaded image's header, read before the library sees it.
+        public NesHeader? Header { get; private set; }
+
+        // The machine's state listing, read once per loaded game; the debugger reads registers through it.
+        public StateLayout? Layout
+        {
+            get
+            {
+                if (!IsRomLoaded) return null;
+                CoreMachine m = Machine.Core;
+                if (!ReferenceEquals(m, _layoutOf)) (_layout, _layoutOf) = (new StateLayout(m.Layout()), m);
+                return _layout;
+            }
+        }
+
+        // The spaces the core logs a store under, as the debugger names them.
+        private static readonly (uint Id, string Name)[] Reported = { (0, NesSystem.Ram), (2, NesSystem.PrgRam), (8, "PPUREG"), (9, "APUREG") };
 
         protected override string? ReportedName(uint id)
         {
@@ -57,14 +75,17 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             return null;
         }
 
-        // MoonCore.LoadRom: the header parsed by the C# Cartridge so its exceptions are C#'s own, the battery save opened as C# opens it.
+        // A battery file only for a board MoonRT builds whose header claims one; a malformed header is left for the library to refuse.
         protected override BatterySave Prepare(string path, byte[] image)
         {
-            Cartridge header = Cartridge.FromImage(image);
-            return BatterySave.Open(path, BatterySave.Nes, hasRam: header.HasBattery && header.PrgRam.Length > 0);
+            try { Header = NesHeader.Read(image); }
+            catch (InvalidDataException)
+            {
+                Header = null;
+                return BatterySave.None;
+            }
+            return MoonBoards.IsImplemented(Header.Mapper) ? BatterySave.Open(path, BatterySave.Nes, hasRam: Header.HasBattery) : BatterySave.None;
         }
-
-        protected override void Loaded(string path) => Mirror.LoadRom(path);
 
         // The RESET button - see Moon_Core.md §6.
         public void Reset()
@@ -88,25 +109,24 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             _ => -1,
         };
 
-        // Ports 0 and 1 are pads 1 and 2 and any other port is ignored, as MoonCore.SetButton has it.
+        // Ports 0 and 1 are pads 1 and 2 and any other port is ignored.
         protected override int PortFor(int port) => port is 0 or 1 ? port : -1;
 
-        public int ControllerPorts => MoonCore.Ports;
+        public int ControllerPorts => NesSystem.Ports;
 
-        // MoonCore.LoadState's two refusals with its messages.
         protected override void CheckState(byte[] state)
         {
             if (state.Length < 8) throw new EndOfStreamException("Unable to read beyond the end of the stream.");
-            if (BitConverter.ToUInt32(state, 0) != MoonCore.StateMagic) throw new InvalidDataException("Not a Moon save state.");
+            if (BitConverter.ToUInt32(state, 0) != StateMagic) throw new InvalidDataException("Not a Moon save state.");
             int version = BitConverter.ToInt32(state, 4);
-            if (version is < MoonCore.OldestReadableVersion or > MoonCore.StateVersion) throw new InvalidDataException($"Save state version {version} is not one this build reads ({MoonCore.OldestReadableVersion} to {MoonCore.StateVersion}).");
+            if (version is < OldestReadableVersion or > CurrentStateVersion) throw new InvalidDataException($"Save state version {version} is not one this build reads ({OldestReadableVersion} to {CurrentStateVersion}).");
         }
 
         protected override Exception? OwnRefusal(int status, ulong detail) => Own(status);
 
         protected override string? OwnWords(long status) => StatusWords(status);
 
-        // The C# exception MoonCore.LoadRom or RunFrame would have thrown for a status of MoonRT's band - see Moon_Native.md §6.2, D4.
+        // The exception a status of MoonRT's band stands for - see Moon_Native.md §6.2, D4.
         internal static Exception? Own(int status) => status switch
         {
             -9 => new InvalidDataException("Not an iNES image: missing the \"NES\\x1A\" magic."),
@@ -127,19 +147,21 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             _ => null,
         };
 
-        // The debugger's view: the mirror loaded from MoonRT's state, its reads and writes sent to MoonRT - see Moon_Native.md §2.4.
-        public new MoonDebugTarget CreateDebugTarget()
+        public new MoonRtDebugTarget CreateDebugTarget()
         {
             Debug.Listen();
-            return new(Mirror, () => (LastFrameMilliseconds, 0.0), new MoonDebugHost(
-                ReadSpace, WriteSpace, SyncMirror, ApplyCheats, () => TotalFrames, (_, _) => SyncMutes(), () => Pc, "MoonRT"));
+            return new MoonRtDebugTarget(this);
         }
 
-        protected override uint MuteMask()
+        public bool IsChannelMuted(int index) => (uint)index < 5 && (_mutes & (1u << index)) != 0;
+
+        public void SetChannelMuted(int index, bool muted)
         {
-            uint mask = 0;
-            for (int i = 0; i < 5; i++) if (Mirror.Apu!.IsChannelMuted(i)) mask |= 1u << i;
-            return mask;
+            if ((uint)index >= 5) return;
+            _mutes = muted ? _mutes | (1u << index) : _mutes & ~(1u << index);
+            SyncMutes();
         }
+
+        protected override uint MuteMask() => _mutes;
     }
 }

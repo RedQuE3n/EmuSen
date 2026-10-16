@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
 using EmuSen.Cores.Nintendo.Moon;
-using EmuSen.Cores.Nintendo.Moon.Cheats;
+using EmuSen.Crystal.Systems.Nes;
 using EmuSen.Cores.Nintendo.Moon.Memory;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Crystal.Cheats;

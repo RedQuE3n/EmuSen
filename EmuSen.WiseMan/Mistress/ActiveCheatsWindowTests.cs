@@ -202,8 +202,8 @@ namespace EmuSen.WiseMan.Mistress
         private static ActiveCheatsWindow OpenNes(CheatRegistry registry)
         {
             var window = new ActiveCheatsWindow(registry,
-                EmuSen.Cores.Nintendo.Moon.Cheats.MoonCheatCodecs.Raw(),
-                EmuSen.Cores.Nintendo.Moon.Cheats.MoonCheatCodecs.GameGenie(), console: "NES");
+                EmuSen.Crystal.Systems.Nes.NesSystem.Raw(),
+                EmuSen.Crystal.Systems.Nes.NesSystem.GameGenie(), console: "NES");
             window.Show();
             return window;
         }

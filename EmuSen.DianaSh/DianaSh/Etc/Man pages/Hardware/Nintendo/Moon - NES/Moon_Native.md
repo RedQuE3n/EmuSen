@@ -2096,6 +2096,152 @@ pre-stable set is deleted. The oracle and the timing are `EmuSen_CoreAPI.md` §2
 the bench's four state hashes unchanged, the kit's fifteen cases on the four games, and the plain frame −0.99% to
 +1.98% across the four games on a loaded machine.
 
+### 8.6 The bus cycle out of line: a seven-minute build (2026-10-16)
+
+MoonRT took longer to build than any other library in `rust-cores.yml`, although the NES is the simplest console the
+project emulates. This section records the cause, measured before anything was changed, and the change that removed
+it.
+
+#### 8.6.1 What CI showed
+
+In run 38861419247 (branch `windows-platform`, 2026-10-16), MoonRT's four jobs were the four slowest of the 28
+library jobs:
+
+| Platform | Job | `cargo test --release` | `cargo build --profile dist` |
+|---|---|---|---|
+| win-x64 | 37.4 min | 20.5 min | 15.6 min |
+| osx-arm64 | 30.6 min | 16.9 min | 12.9 min |
+| osx-x64 | 16.0 min | 9.2 min (under Rosetta) | 6.2 min |
+| linux-x64 | 11.2 min | 5.7 min | 4.8 min |
+
+No other library's dist build took more than 2.1 minutes (MarsRT's on linux-x64, with its PGO toolchain), and
+most took under half a minute. `libmoonrt.so` was 7.3 MB, near MarsRT's 8.3 MB, which carries Cranelift.
+
+#### 8.6.2 Where the time went (measured)
+
+Measured on the 7700X with Fedora's rustc 1.99.0, the toolchain the desktop builds with, in a target folder of its
+own:
+
+- **The build.** `cargo build --profile dist --timings` took 7 min 42 s. Of that, 460.7 s was the `moonrt` unit
+  and 1.9 s `emusen-native`.
+- **The library.** `.text` was 6,854,835 bytes. Two functions held 80.6% of it: `Cpu::dispatch::<Plain>` at
+  2,761,746 bytes and `Cpu::dispatch::<Observed>` at 2,762,526. The next largest MoonRT function,
+  `Cpu::run_oam_dma`, was 24,865 bytes.
+- **The compiler.** `-Ztime-passes -Ztime-llvm-passes` were run on the same rustc, through `RUSTC_BOOTSTRAP=1`, for
+  this measurement only. Of 438.6 s, 438.0 s were LLVM's passes, and the front end took under a second. The
+  passes that dominate are the ones whose cost grows faster than a function's size: CodeGenPrepare took 211.6 s
+  (48.5%), GVN 64.8 s (14.9%), MachineCSE 28.0 s, LoopRotate 17.6 s and LICM 17.6 s.
+
+**The mechanism (read from the code).** `Cpu::read` and `Cpu::write` were `#[inline(always)]`, and so was each
+function under them:
+
+- `begin_cycle` and `MemoryBus::tick`, which run the PPU's first two dots, the APU's step, the board's CPU-cycle
+  clock and the pad strobe;
+- `end_cycle`, which runs the third dot;
+- `Ppu::step`, `run_dot`, `run_visible_dot` and the fetches;
+- `Apu::step` with its channels and its mixer.
+
+Every bus access the opcodes make in `dispatch` therefore carried three copies of the PPU's dot logic and one of the
+APU's step. Once out of line, one `read` is 5,358 bytes. Each `dispatch` was about 515 times that, so about 515
+bus cycles had been inlined into it.
+
+#### 8.6.3 The change
+
+`Cpu::read` and `Cpu::write` are `#[inline(never)]`. Nothing else changed: the clock, the bus and the opcodes keep
+their attributes, so a bus cycle is one call with its whole clock inside it.
+
+A second form was measured beside it, with the clock (`MemoryBus::tick` and `MemoryBus::end_cycle`) out of line and
+the access inlined. It built in 13.5 s and gave a 1.55 MB library, with each `dispatch` at 384 KB. Its frame was
+2.5% slower than the chosen form's (geometric mean of the medians, §8.6.5). The chosen form is also the smaller
+change, made at the natural seam of one bus cycle, and it builds faster.
+
+| | Before | Clock out of line | Bus cycle out of line (chosen) |
+|---|---|---|---|
+| `cargo build --profile dist`, clean | 462 s | 13.5 s | 3.9 s |
+| `cargo test --release`, clean | 478.8 s | — | 16.6 s |
+| `libmoonrt.so` | 7,334,768 B | 1,554,032 B | 813,568 B |
+| `dispatch`, each | 2.76 MB | 384 KB | 13,922 B |
+
+Windows and macOS could not be measured here. CI measured them in run 38896556802, the first with the change
+(branch `ci-speed`, 2026-10-16), against run 38861419247 before it:
+
+| Platform | Job before | Job after | Test step after | Build step after |
+|---|---|---|---|---|
+| win-x64 | 37.4 min | 1.8 min | 0.4 min | 0.1 min |
+| osx-arm64 | 30.6 min | 0.9 min | 0.2 min | 0.1 min |
+| osx-x64 | 16.0 min | 1.1 min | 0.4 min (under Rosetta) | 0.1 min |
+| linux-x64 | 11.2 min | 0.7 min | 0.2 min | 0.1 min |
+
+The 28 library jobs together took 85.3 job-minutes in that run, against 187.7 before, and MoonRT's four took 4.5
+of them.
+
+#### 8.6.4 Same output, byte for byte
+
+- **The library's exports, frame by frame.** A small program (`nesbench`, in `~/.cache/emusen/probe/ci-speed/bench/`)
+  loads the dist library through its native exports and runs `moonbench`'s schedule (§1.1). That is 900 frames with
+  Start and A pressed in turn, then 3,000 more, with the picture copied and the audio drained after every frame. It
+  folds every frame's picture, every frame's samples and every frame's saved state into three FNV-1a digests.
+
+  It was run on 25 ROMs: the bench's four games, Castlevania, Kirby's Adventure, Mega Man 2, the two synthetic ROMs,
+  and the sixteen board ROMs (mappers 0, 1, 2, 3, 4, 7, 9, 11, 64, 65, 66, 67, 68, 69, 71 and 79). For all 25, the
+  three digests and the final state are identical across the library before the change, the chosen form and the
+  other form.
+- **The crate's tests.** All 6 pass before and after.
+- **WiseMan, with the new library beside the tests.** Every Moon-filtered class that holds MoonRT to C# Moon was
+  run: the state, machine, random-program, board, sound-and-picture, game, frontend, armed-equals-plain,
+  debug-target, sprite 0, AccuracyCoin and core ABI classes, and the Mistress engine tests. That is 260 cases, and
+  all pass. They include the bench games and the eleven library states run frame by frame against C#, and
+  AccuracyCoin scoring as C# does. The core ABI classes need the sidecar beside the library, as CI ships it, so it
+  was written with `emusen-core-conform --sidecar` first.
+- **The corpus.** `MoonRtCorpusTests` ran on both engines: 255 ROMs run, 8 refused by both, 363,935 frames
+  identical in state, and 114 verdicts with 105 passed. That is §3.14's transcript, unchanged.
+
+#### 8.6.5 Speed (measured)
+
+The comparison used `nesbench`'s timed 3,000 frames, through the library's exports. There were five rounds,
+interleaved by game and by library, under the timing lock. The load average was 3.5–5.0, since other work was
+running, so medians are reported.
+
+| Game | Before, median ms/frame | Chosen form | Change | Clock out of line | Change |
+|---|---|---|---|---|---|
+| Super Mario Bros. | 1.067 | 0.920 | −13.8% | 0.946 | −11.4% |
+| Zelda | 0.953 | 0.907 | −4.8% | 0.925 | −2.9% |
+| Super Mario Bros. 3 | 1.420 | 1.138 | −19.9% | 1.181 | −16.8% |
+| Punch-Out!! | 1.254 | 1.090 | −13.1% | 1.106 | −11.7% |
+
+The geometric mean of the medians is −13.0% for the chosen form and −10.9% for the other. In 18 of the 20 paired
+runs the chosen form was faster. Its two slower runs were 1.324 and 1.347 ms, against its other runs of 0.91–1.10
+ms on those games, and they read as interference.
+
+A second session repeated the comparison with the library as committed, before against after only, in five more
+rounds. The load average rose from 1.5 to 5.1 during it. The medians moved by −12.2% on Super Mario Bros., −1.1% on
+Zelda, −18.5% on Super Mario Bros. 3 and −13.7% on Punch-Out!!, a geometric mean of −11.6%.
+
+**The argued explanation.** The change adds a call per bus cycle and still makes the frame faster. The likely
+reason is the instruction cache. Each `dispatch` was 2.7 MB, and the 7700X has 1 MB of L2 per core, so the hot path
+cannot stay in L2. Now the PPU's and APU's code is one copy of 5 KB that every opcode shares. No counter was read
+to show this: the desktop has no `perf`. It stays argued.
+
+**Why this is not a rule about `#[inline(always)]`.** The attribute was right for the small pieces. It is the
+composition that went wrong: a per-cycle clock forced into every one of the ~515 bus cycles of a decode switch. A
+core whose bus access is cheap, or whose decode is a table of functions, does not meet this. A core that
+inlines a per-cycle clock into a large switch does. §8.6.6 records that no other library shows the sign.
+
+#### 8.6.6 The other libraries
+
+CI's step times for run 38861419247, and the largest functions of each core's dist library as built on 2026-10-15,
+show nothing similar:
+
+- **MercuryRT.** Its largest functions are `Cpu::execute`, at 114 KB for each bus view, and its build steps took
+  0.1–0.2 min.
+- **VenusRT.** Its largest functions are under 28 KB.
+- **Nephrite.** Its largest functions are the 68000's `execute`, under 20 KB each.
+- **Diamond.** Its largest function is `Machine::write`, at 54 KB.
+- **MarsRT.** Its 8.3 MB is mostly Cranelift (one generated simplifier of 308 KB) and two tables of 128 KB and 256
+  KB, which is a dependency's size rather than a composition's.
+
+MarsRT's long CI test steps (3.9–7.5 min) are its suites' running time, not its build.
+
 ## 9. Stage 8: the goldens, and the C# core's retirement (2026-10-16)
 
 *Decided 2026-10-16 by the tester:* MoonRT is no longer compared against C# Moon. A C# core is not kept as an oracle

@@ -193,6 +193,9 @@ much as the cores':
 - the `wiseman` job downloads the artifact beside the cores';
 - the path filters gain `Platform/**`.
 
+Since 2026-10-16 a run builds only the libraries whose inputs no earlier build had, and takes the rest from that
+earlier build (§28).
+
 ### 2.8 Native libraries the platform loads, and the one it brings
 
 - **SDL3 and Shaderc are loaded by path from the program's directory**, the files `SDL3-CS.Native` and
@@ -2883,3 +2886,199 @@ replacing: the program is 0.9.0's in every other respect, and 0.9.0's notes alre
 the Windows build. In favour of 0.9.1: an asset under a published tag would change its bytes and its checksum, and
 the build also carries the C# compiler's change of §27.4. The platform's WiseMan steps still report rather than gate
 (§10.6); making them a gate on Windows is a decision of its own, now that they pass there.
+
+## 28. CI builds only what changed, 2026-10-16
+
+Before this change, every push that matched `rust-cores.yml`'s path filters rebuilt and retested all 28 libraries
+(seven crates on four platforms), although most commits touch one core or none. This section records what a run
+cost, the rule that replaced the full rebuild, the inputs a library's key is made of, and the runs that show it
+working.
+
+### 28.1 What a run cost (measured)
+
+Run 38861419247 (branch `windows-platform`, 2026-10-16) is the reference:
+
+- **Size.** It had 33 jobs and used 173 job-minutes. It took 56 minutes from push to its last job.
+- **The critical path.** The three WiseMan jobs, which wait on every library job, started 54.5 minutes in. They
+  waited for MoonRT's osx-arm64 job, which had queued 24 minutes for a macOS runner and then ran for 30.6. The
+  macOS jobs started anywhere from 5 to 40 minutes in, so the account's macOS runners, not the work, set the pace.
+- **The platforms.** Decided 2026-10-16: the libraries are built for Linux, Windows and macOS on Apple Silicon
+  only. The osx-x64 leg is gone, with its Rosetta step, so a run has 21 libraries rather than 28. Seven
+  jobs fewer reach the macOS queue that set the pace above.
+- **The part §28's rule removes.** MoonRT's build cost is the subject of `Moon_Native.md` §8.6. That part is the
+  rebuilding of libraries whose inputs had not changed.
+
+### 28.2 The rule
+
+**A library is built when no earlier successful build of exactly its inputs exists. Otherwise that build's files
+are taken.**
+
+- **Main, tags and a dispatch with `full` build every library**, whatever earlier runs hold.
+- **A taken library is uploaded into the run** under the name the run would have given it (`<crate>-<rid>`).
+  Every run therefore carries all 21 artefacts, and the WiseMan job and a publish read them as they did before.
+- **The other jobs are unchanged.** `shared`, `abi-guard`, `diamond-kernel` and the WiseMan job run as before.
+
+The workflow had no step that compared commits. Such a comparison would be the wrong basis anyway:
+
+- **What "changed" means is unclear.** A push of several commits, a force-push, a revert or a branch's first push
+  each make the previous commit the wrong reference.
+- **It cannot tell which build to take.** A content key answers both questions at once: two trees with the same
+  key hold the same inputs, wherever and whenever they were built.
+
+### 28.3 The key
+
+`.github/scripts/library_key.py key <crate folder> <name> <target>` prints the key. It is the first 24 hex digits
+of the SHA-256 of these lines:
+
+1. **A version.** The script's own key version, raised to retire every earlier build at once.
+2. **The library's name and target triple.**
+3. **The toolchain, as `rustc +<spec> -V` names itself.** The spec is the one the PGO step chooses: the version a
+   target's `pgo/<name>.<target>.pgo` pins, or `stable`. A new stable release therefore changes every key that
+   builds on stable.
+4. **The git object id of each input folder and file**, which is a hash of its content:
+   - **The crate's folder.** It holds the crate's `Cargo.lock` and its PGO profiles.
+   - **Every folder its path dependencies reach, transitively.** Every `Cargo.toml` inside each folder is read, so
+     a workspace's members and a folder's nested crates count too.
+   - **The sidecar tool.** Every library job runs `emusen-core-conform --sidecar`, which writes the `.core.json`
+     the artefact carries. So that crate and its own dependencies are inputs of every library: `emusen-disc`,
+     `Platform/galaxia` and `Platform/dotnet`.
+   - **The declared extras of §28.4.**
+   - **`rust-cores.yml` and `library_key.py` themselves.**
+
+The plan job computes every key. Each library job computes its own key again on its own runner, after installing
+the toolchain it builds with, and names its keyed artefact by that. If a stable release falls between the two, the
+build is filed under the toolchain that actually built it.
+
+**What the key does not cover:**
+
+- **The runner image.** A new image is not an input. Its C toolchain links the Windows and macOS libraries, and
+  `ubuntu-22.04`'s glibc sets the Linux library's floor. A full build on main or a tag rebuilds everything on the
+  current images. A branch may take a library its image no longer matches, built from identical sources and the
+  same rustc.
+- **Third-party actions.** Their versions are not inputs, beyond their tags in the workflow file.
+
+### 28.4 Inputs outside the path dependencies: declared, and checked
+
+Reading the crates found sources that name files outside their path dependencies. `EXTRA` in `library_key.py`
+declares them, by the folder that reads them:
+
+| Read by | Input |
+|---|---|
+| MarsRT (`include_bytes!` in its GPU module, and a test) | `EmuSen/Cores/Nintendo/Mars - N64/Rdp/Gpu/Shaders` |
+| VenusRT's tests | `EmuSen.WiseMan/Reference/analysis/dsp1_tables.py`, `st010_tables.py` |
+| Diamond's tests | `EmuSen.WiseMan/Reference/analysis/psxplay` |
+| Diamond's kernel harness (in Diamond's folder) | `Diamond_OpenKernel.md` |
+| `Platform/serenity` (`include_str!`) | `EmuSen.Serenity/Slang/spirv-cache-schema.sql` |
+| `Platform/dianash`'s tests | `EmuSen.WiseMan/DianaSh/Golden`, `EmuSen.Crystal/include/emusen_session.h` |
+
+**The check.** The list will go stale as code changes, so the plan checks it on every run:
+
+- It reads every tracked `.rs` file of each library's folders for string literals that begin with `../`.
+- It resolves each one from the file's folder and from its crate's manifest folder.
+- A literal that names an existing path outside the declared inputs makes that library build, whatever earlier
+  runs hold, with a warning that names the file and the path. Such a library uploads no keyed artefact, so it
+  cannot be taken until the input is declared.
+
+**The check's limits.** It sees literal relative paths, which is how every one of the inputs above is named. It
+does not see a path assembled at run time from pieces, or one read from an environment variable. A test that reads
+a game or a corpus through an environment variable reads nothing on a runner, so that gap costs nothing today.
+
+### 28.5 Where builds are kept, and why artefacts rather than the cache
+
+**Keeping a build.** Each library job uploads its files twice: as `<crate>-<rid>`, as before, and as
+`<crate>-<rid>-key-<key>`.
+
+**Finding one.** For each library, the plan asks the API for the newest unexpired artefact of that keyed name.
+It refuses an artefact whose run came from a fork, which is judged by the run's head repository. It then
+downloads the artefact and opens it, and takes it only if all of these hold:
+
+- the library is present and not empty;
+- nothing else is in it but the sidecar;
+- the sidecar, if present, parses as JSON;
+- the archive passes its own check.
+
+Anything else, from a missing artefact to an expired or unreadable one, makes the library build. A failure of the
+lookup can only lead to a build, never to a missing library.
+
+**Taking one.** A `reuse` job copies the artefact into the run under `<crate>-<rid>`.
+
+**Why not `actions/cache`.** The cache was the other candidate, and two of its properties rule it out here:
+
+- **It is scoped by branch.** A branch reads only its own entries and the default branch's. Main lags `WiseMan`,
+  so a branch cut from `WiseMan` would find almost nothing.
+- **A hit cannot be checked before the jobs are laid out.** The library job's matrix has to be fixed when the
+  workflow starts. With the cache, every one of the 21 jobs would have to start, macOS ones included, only to
+  restore and finish.
+
+Artefacts are repository-wide and named by their key. They are kept for the repository's retention period, 90
+days by default. When one expires, the next run builds the library again.
+
+**Trust.** An artefact can be uploaded only by a run of this repository. Anyone who can push to the repository
+could therefore place a library under a key. That is the same trust as pushing code that CI builds and ships. The
+fork check keeps pull requests from forks out.
+
+### 28.6 Releases
+
+Main and tags always build every library on its own runner, and the plan takes nothing for them. A branch's run
+may take earlier builds of identical inputs. The plan's job summary lists, for each library, whether it was built
+or taken, the run it was taken from, and its key. Release assets come from main or a tag, so they are always built
+in the run that publishes them.
+
+### 28.7 What still runs every time, and what triggers a full rebuild
+
+**What still runs every time:**
+
+- the plan job;
+- the `shared` crates on three systems, which build the v1 test cores the WiseMan job needs;
+- `abi-guard` and `diamond-kernel`;
+- the WiseMan jobs.
+
+**What triggers a full rebuild.** A change to an input every library shares rebuilds them all:
+
+- `emusen-native`;
+- the sidecar tool and what it depends on (`emusen-disc`, `Platform/galaxia`, `Platform/dotnet`);
+- `rust-cores.yml`;
+- `library_key.py`;
+- a new stable release.
+
+In the fourteen days to 2026-10-16, on `WiseMan`, `emusen-native` changed in 32 commits, `emusen-core-conform` in
+23 and `rust-cores.yml` in 28. So a full rebuild stays common, and §8.6 of `Moon_Native.md` is what makes it
+cheaper.
+
+**Why the sidecar tool is an input.** Leaving it out was considered and rejected. The sidecar is part of what ships.
+A change to the tool that writes it can change it. And a sidecar cannot be regenerated on another system's runner,
+because writing it means loading the library.
+
+### 28.8 The runs (measured 2026-10-16, branch `ci-speed`)
+
+Each run below was pushed only after the one before it had finished. "Library minutes" sums the library jobs and
+the reuse jobs. "Libraries ready" is when the last of them finished, counted from the push.
+
+| Run | What the push changed | Built | Taken | Library minutes | Libraries ready |
+|---|---|---|---|---|---|
+| 38861419247 (`windows-platform`, before §28 and `Moon_Native.md` §8.6) | — | 28 | — | 187.7 | 54.5 min |
+| 38921031260 | the workflow, which changes every key | 21 | 0 | 72.8 | 22.3 min |
+| 38928103614 | MoonRT's `Cargo.toml` | 3, MoonRT's | 18 | 5.8 | 5.2 min |
+| 38933024285 | `RustCores.props`, an input of no library | 0 | 21 | 2.1 | 4.3 min |
+
+- **What each run built.** The plan built exactly what the change reached. A change to MoonRT built MoonRT on
+  its three platforms and nothing else. A change outside every library's inputs built nothing.
+- **What each part costs.** The plan job takes 0.5–0.8 minutes, and a reuse job about 6 seconds.
+- **The two keys agree.** The key a library job computed on its own runner, Linux or Windows, matched the plan's
+  for every library. The first run of the workflow, 38898739867, which still built osx-x64, checked this: its
+  keyed artefacts' names equal the keys computed from the same tree off the runners.
+- **The WiseMan jobs ran on every one of the three runs**, on libraries built, taken, or both, and gave the same
+  result each time:
+
+  | Platform | Result |
+  |---|---|
+  | win-x64 | passed |
+  | osx-arm64 | passed; the cores' step 908 of 908 |
+  | linux-x64 | the cores' step 907 passed and 1 failed |
+
+  The one failure is `DiamondShaderTests.Every_compiled_shader_of_the_renderer_is_the_compilation_of_its_source`.
+  It fails the same way on `WiseMan`'s own run 38897939664, so it predates this change. In 38933024285 the macOS
+  `shared` job first failed the conformance kit's `the_seeded_faults_fail_the_same_cases_in_a_corpus`, the
+  intermittent case §27.3 records, and passed when that job was run again. The WiseMan jobs ran after it.
+- **The tests are now the critical path.** With nothing to build, a run still takes about 30 minutes, almost all of
+  it the WiseMan jobs' 24–32 minutes of tests. That is the next place to look.

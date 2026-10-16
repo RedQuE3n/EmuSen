@@ -1,5 +1,7 @@
 # Mars — the audio interface
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Phase E's audio slice, landed 2026-09-18. `EmuSen/Cores/Nintendo/Mars - N64/Memory/AiInterface.cs`, stepped from
 `MemoryBus.Tick` — since Phase G only on the ticks a sample is due (`Mars_Performance.md` §9); tests in `MarsAudioTests`, and the game probe (`Mars_GameProbe.md`) for the end-to-end check.*
 

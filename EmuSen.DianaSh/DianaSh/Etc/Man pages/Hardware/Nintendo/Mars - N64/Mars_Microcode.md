@@ -1,5 +1,7 @@
 # Mars — the first commercial microcode, and the devices it waited for
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Landed 2026-09-17. Phase C's second "done when" condition — a commercial game's boot
 microcode running to the point of emitting a display list — measured against the two
 cartridges this project runs. The test is `MarsMicrocodeTests`; nothing in the core changed

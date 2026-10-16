@@ -1,5 +1,7 @@
 # Mars — the signal processor's scalar half
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Phase C's first slice, landed 2026-09-17. The RSP as a processor: its program counter,
 the scalar instruction set, the interface registers it is driven through, and the clock
 it shares with the main CPU. `Rsp/Rsp.cs`, with the interface in `Memory/SpInterface.cs`.

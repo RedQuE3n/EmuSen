@@ -1,5 +1,7 @@
 # Mars — the signal processor's vector unit
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Phase C's second slice, landed 2026-09-17. Coprocessor two on the RSP: thirty-two
 128-bit registers, three flag registers, a 48-bit accumulator, two hidden registers, and
 the sixty-four vector functions and twenty-four load and store formats that reach them.

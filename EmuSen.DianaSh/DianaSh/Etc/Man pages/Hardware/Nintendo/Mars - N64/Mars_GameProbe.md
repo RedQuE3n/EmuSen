@@ -1,5 +1,7 @@
 # Mars — the game probe: how far a commercial title runs
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Added 2026-09-18. `EmuSen.WiseMan/Cores/MarsGameProbeTests.cs`. A measurement, not a test: it
 asserts nothing, and it does nothing unless it is asked to.*
 

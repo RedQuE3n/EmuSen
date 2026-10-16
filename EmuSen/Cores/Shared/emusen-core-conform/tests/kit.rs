@@ -410,8 +410,9 @@ fn failed_on(core: &str, payload: &[u8], mask: u32, frames: u64) -> (Vec<String>
 
 // Since 1.5 (EmuSen_CoreAPI.md §28.10): pictures that differ for the three frames after a load pass where machine info
 // declares three, and C7 and C8 say from which frame they compared; a picture that never settles, one that differs
-// undeclared and sound that differs while it settles fail C8 and C12, which runs it again (C7's two machines both load
-// the state and agree); a bound past the maximum, or one the run is too short to check past, fails C7 and C8 too.
+// undeclared and sound that differs while it settles fail C7, C8 and C12, which runs them again (until C7 held each
+// loaded machine to one that never loaded, §28.14, its two machines both loaded the state and agreed, and it passed);
+// a bound past the maximum, or one the run is too short to check past, fails them too.
 #[test]
 fn pictures_that_settle_pass_within_their_bound_and_each_fault_of_the_rule_fails() {
     let (failed, text) = failed_with("kit_settling_core", 1024, 120);
@@ -419,7 +420,7 @@ fn pictures_that_settle_pass_within_their_bound_and_each_fault_of_the_rule_fails
     assert!(text.contains("compared from its frame 4 on, machine info's state.picture_settles being 3"), "{text}");
     let (failed, text) = failed_with("kit_settling_core", 0, 120);
     assert!(failed.is_empty() && !text.contains("picture_settles"), "a core declaring nothing is held as before: {text}");
-    for (mask, cases) in [(1024 | 2048, vec!["C8", "C12"]), (4096, vec!["C8", "C12"]), (8192, vec!["C8", "C12"]), (16384, vec!["C7", "C8", "C12"])] {
+    for (mask, cases) in [(1024 | 2048, vec!["C7", "C8", "C12"]), (4096, vec!["C7", "C8", "C12"]), (8192, vec!["C7", "C8", "C12"]), (16384, vec!["C7", "C8", "C12"])] {
         let (failed, text) = failed_with("kit_settling_core", mask, 120);
         assert_eq!(failed, cases, "faults {mask}:\n{text}");
     }
@@ -503,4 +504,18 @@ fn a_machine_listing_no_drive_that_takes_a_media_call_faults_or_names_a_place_fa
         let (failed, text) = failed_on("kit_faulty_full_core", &[1, 2, 3, 0x20, 0x41], mask, 120);
         assert!(failed.is_empty(), "faults {mask} on a disc:\n{text}");
     }
+}
+
+// Since 2026-10-15 (EmuSen_CoreAPI.md §28.14): a state that leaves out what the picture shows from frame 90 on passes a
+// round trip at frame 60, C8's middle and C7's one point before, over 120 frames; C7's points catch it at frame 90 and
+// after, each failure naming its point, and over 240 frames C8's middle at 120 catches it too.
+#[test]
+fn a_state_wrong_only_late_in_the_run_fails_c7_at_its_points_where_one_middle_misses_it() {
+    let (failed, text) = failed_with("kit_settling_core", 1 << 25, 120);
+    assert_eq!(failed, ["C7", "C12"], "{text}");
+    assert!(text.contains("frame 90: a machine just made and given the state saved there did not continue as the machine that saved it and never loaded, its pictures differing by frame 105"), "{text}");
+    assert!(!text.contains("frame 75: ") && text.contains("saved at frames 15, 30, 45, 60, 75, 90, 105, 112 of 120"), "{text}");
+    let (failed, text) = failed_with("kit_settling_core", 1 << 25, 240);
+    assert_eq!(failed, ["C7", "C8", "C12"], "{text}");
+    assert!(text.contains("across a save and load at frame 120 the run differs"), "{text}");
 }

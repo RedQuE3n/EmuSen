@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 
 use emusen_native::core::sys::{CreateParams, DeviceFrame, DeviceLend, Event, FileEntry, FrameInfo, Machine as RawMachine, Media, RawFrame, caps, status};
 
-type M = *mut RawMachine;
+pub(crate) type M = *mut RawMachine;
 type C = *const RawMachine;
 
 macro_rules! table {

@@ -85,6 +85,11 @@ pub const FAULT_DEVICE_PICTURE_UNLENT: u32 = 1 << 23;
 /// Seeded fault for the kit's C21 (since 1.10): the raw picture's first value one more than the frame's pixel, so that
 /// the palette the core declares no longer draws its own frame (EmuSen_CoreAPI.md §6.30).
 pub const FAULT_RAW_DISAGREES: u32 = 1 << 24;
+/// Seeded fault for the kit's C7 (EmuSen_CoreAPI.md §28.14): from frame `STATE_LOST_FROM` on, each picture's red adds a
+/// byte of the frame before that no state holds, as a woven picture's other field does, so that only a machine given a
+/// state there by another shows it wrong, for one frame; a machine loading its own state does not see it.
+pub const FAULT_STATE_LOST_LATE: u32 = 1 << 25;
+pub const STATE_LOST_FROM: i64 = 90;
 /// The included faults, narrowed to the bits of `EMUSEN_TEST_CORE_FAULTS` when that is set, so each can be shown alone.
 fn faults() -> u32 {
     static MASK: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
@@ -171,6 +176,8 @@ pub struct TestCore {
     /// `x-test.red` was, or `None` for a frame drawn without it.
     raw_mask: u64,
     raw: Option<Vec<u8>>,
+    /// The last frame's count, kept out of the state (`FAULT_STATE_LOST_LATE`).
+    held: u8,
 }
 
 /// The test core's one encoding of its picture before the palette: each pixel's red byte (EmuSen_CoreAPI.md §6.30).
@@ -204,7 +211,8 @@ impl TestCore {
     fn draw(&mut self) {
         let n = (self.width() * 4) as usize;
         let green = if self.settling > 0 { 0x80 } else { 0 };
-        self.picture = (0..n).flat_map(|i| [(self.frames as u8).wrapping_add(i as u8), green, 0, 255]).collect();
+        let late = if faults() & FAULT_STATE_LOST_LATE != 0 && self.frames >= STATE_LOST_FROM { self.held } else { 0 };
+        self.picture = (0..n).flat_map(|i| [(self.frames as u8).wrapping_add(i as u8).wrapping_add(late), green, 0, 255]).collect();
         self.raw = (self.raw_mask & 1 != 0).then(|| {
             let mut red: Vec<u8> = self.picture.chunks_exact(4).map(|p| p[0]).collect();
             red[0] = red[0].wrapping_add((faults() & FAULT_RAW_DISAGREES != 0) as u8);
@@ -400,6 +408,7 @@ impl Core for TestCore {
             lent: r.device.is_some(),
             raw_mask: 0,
             raw: None,
+            held: 0,
         };
         m.draw();
         Ok(m)
@@ -479,6 +488,7 @@ impl Core for TestCore {
         if !self.skip {
             self.draw();
         }
+        self.held = self.frames as u8;
         if self.settling > 0 && faults() & FAULT_NEVER_SETTLES == 0 {
             self.settling -= 1;
         }

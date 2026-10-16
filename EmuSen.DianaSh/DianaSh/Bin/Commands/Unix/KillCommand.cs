@@ -24,28 +24,39 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.Unix
         public bool IsReadOnly => false;
         public string Usage => "  kill <id>                     remove a breakpoint/watch/session by its `ps` id (bp<N>, watch<N>, or a session name)";
 
-        public DianaShResult Execute(IDebugTarget? target, string[] args, string? stdin)
+        // A bp<N> or watch<N> removed; false for any other id, which may be a session's name - see EmuSen_DianaSh.md §13.7.
+        public static bool TryJob(IDebugTarget? target, string id, out DianaShResult result)
         {
-            if (args.Length < 2) return DianaShResult.Fail("kill: usage: kill <id>");
-            string id = string.Join(' ', args.Skip(1));
-
             if (id.StartsWith("bp", StringComparison.OrdinalIgnoreCase)
                 && int.TryParse(id.Substring(2), out int bpId))
             {
                 var t = DebugCommandHelpers.RequireTarget(target);
-                return t.Breakpoints.RemoveBreakpoint(bpId)
+                result = t.Breakpoints.RemoveBreakpoint(bpId)
                     ? $"Breakpoint #{bpId} removed."
                     : DianaShResult.Fail($"kill: no breakpoint #{bpId} found.");
+                return true;
             }
 
             if (id.StartsWith("watch", StringComparison.OrdinalIgnoreCase)
                 && int.TryParse(id.Substring(5), out int watchId))
             {
                 var t = DebugCommandHelpers.RequireTarget(target);
-                return t.Watches.RemoveWatch(watchId)
+                result = t.Watches.RemoveWatch(watchId)
                     ? $"Watch #{watchId} removed."
                     : DianaShResult.Fail($"kill: no watch #{watchId} found.");
+                return true;
             }
+
+            result = default;
+            return false;
+        }
+
+        public DianaShResult Execute(IDebugTarget? target, string[] args, string? stdin)
+        {
+            if (args.Length < 2) return DianaShResult.Fail("kill: usage: kill <id>");
+            string id = string.Join(' ', args.Skip(1));
+
+            if (TryJob(target, id, out DianaShResult removed)) return removed;
 
             if (_sessions is null)
             {

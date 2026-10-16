@@ -1,0 +1,119 @@
+# DianaSh's host API and command module ABI, version 1: one fact per line, sorted; struct layouts are a 64-bit target's.
+# Written by `DIANASH_ABI_EMIT=1 cargo test -p emusen-platform --test dianash_abi`; a line is never edited once its minor is released.
+# See EmuSen_DianaSh.md section 11.4.
+const DIANASH_ABI_MAJOR 1 @1.0
+const DIANASH_ABSENT -268 @1.0
+const DIANASH_BAD_MANIFEST -272 @1.0
+const DIANASH_BAD_STRING -5 @1.0
+const DIANASH_BAD_STRUCT -263 @1.0
+const DIANASH_BUFFER_TOO_SMALL -7 @1.0
+const DIANASH_BUSY -267 @1.0
+const DIANASH_CALL_INTERACTIVE 2 @1.0
+const DIANASH_CALL_READ_ONLY_CONTEXT 1 @1.0
+const DIANASH_CONFIG_INTERACTIVE 2 @1.0
+const DIANASH_CONFIG_SESSIONS 1 @1.0
+const DIANASH_DONE 0 @1.0
+const DIANASH_EXISTS -269 @1.0
+const DIANASH_EXIT 2 @1.0
+const DIANASH_FAULT -320 @1.0
+const DIANASH_LAST_SESSION -271 @1.0
+const DIANASH_MODULE_ABI_MAJOR 1 @1.0
+const DIANASH_NEEDS_MORE 1 @1.0
+const DIANASH_NOT_SUPPORTED -256 @1.0
+const DIANASH_NO_SUCH_SESSION -270 @1.0
+const DIANASH_NULL -1 @1.0
+const DIANASH_OK 0 @1.0
+const DIANASH_OUTSIDE -273 @1.0
+const DIANASH_RESOLVE_READ 1 @1.0
+const DIANASH_RESOLVE_REMOVE 4 @1.0
+const DIANASH_RESOLVE_WRITE 2 @1.0
+const DIANASH_SERVICE_MISSING -266 @1.0
+const DIANASH_UNKNOWN_COMMAND -265 @1.0
+field dianash_bytes.data offset 0 @1.0
+field dianash_bytes.len offset 8 @1.0
+field dianash_call.argc offset 32 @1.0
+field dianash_call.argv offset 24 @1.0
+field dianash_call.command offset 8 @1.0
+field dianash_call.cwd offset 64 @1.0
+field dianash_call.flags offset 60 @1.0
+field dianash_call.io offset 96 @1.0
+field dianash_call.service_count offset 112 @1.0
+field dianash_call.services offset 104 @1.0
+field dianash_call.size offset 0 @1.0
+field dianash_call.stdin_data offset 40 @1.0
+field dianash_call.stdin_present offset 56 @1.0
+field dianash_call.user offset 80 @1.0
+field dianash_config.budget_ms offset 24 @1.0
+field dianash_config.flags offset 4 @1.0
+field dianash_config.root offset 8 @1.0
+field dianash_config.size offset 0 @1.0
+field dianash_host_commands.ctx offset 24 @1.0
+field dianash_host_commands.jobs offset 40 @1.0
+field dianash_host_commands.kill offset 48 @1.0
+field dianash_host_commands.manifest offset 8 @1.0
+field dianash_host_commands.run offset 32 @1.0
+field dianash_host_commands.size offset 0 @1.0
+field dianash_host_result.exit_status offset 4 @1.0
+field dianash_host_result.request offset 8 @1.0
+field dianash_host_result.size offset 0 @1.0
+field dianash_io.cancelled offset 48 @1.0
+field dianash_io.ctx offset 8 @1.0
+field dianash_io.display offset 40 @1.0
+field dianash_io.environment offset 64 @1.0
+field dianash_io.err offset 24 @1.0
+field dianash_io.out offset 16 @1.0
+field dianash_io.resolve offset 32 @1.0
+field dianash_io.size offset 0 @1.0
+field dianash_io.slot offset 56 @1.0
+field dianash_io.terminal offset 72 @1.0
+field dianash_result.exit_status offset 4 @1.0
+field dianash_result.size offset 0 @1.0
+field dianash_service.major offset 24 @1.0
+field dianash_service.minor offset 28 @1.0
+field dianash_service.name offset 8 @1.0
+field dianash_service.size offset 0 @1.0
+field dianash_service.table offset 32 @1.0
+field dianash_terminal.columns offset 4 @1.0
+field dianash_terminal.raw_capable offset 12 @1.0
+field dianash_terminal.rows offset 8 @1.0
+field dianash_terminal.size offset 0 @1.0
+fn dianash_abi_version uint32_t (void) @1.0
+fn dianash_add_commands int32_t (dianash_shell *, uint32_t, const dianash_host_commands *) @1.0
+fn dianash_awaiting int32_t (dianash_shell *, uint32_t) @1.0
+fn dianash_banner int64_t (dianash_shell *, uint8_t *, size_t) @1.0
+fn dianash_cancel int32_t (dianash_shell *) @1.0
+fn dianash_commands int64_t (dianash_shell *, uint32_t, uint8_t *, size_t) @1.0
+fn dianash_free int32_t (dianash_shell *) @1.0
+fn dianash_history int64_t (dianash_shell *, uint32_t, uint8_t *, size_t) @1.0
+fn dianash_is_read_only int32_t (dianash_shell *, uint32_t, const uint8_t *, size_t) @1.0
+fn dianash_last_error int64_t (uint8_t *, size_t) @1.0
+fn dianash_last_status int32_t (dianash_shell *, uint32_t, int32_t *) @1.0
+fn dianash_module_abi_version uint32_t (void) @1.0
+fn dianash_module_jobs int32_t (const dianash_call *) @1.0
+fn dianash_module_kill int32_t (const dianash_call *, const uint8_t *, size_t, dianash_result *) @1.0
+fn dianash_module_manifest int64_t (uint8_t *, size_t) @1.0
+fn dianash_module_run int32_t (const dianash_call *, dianash_result *) @1.0
+fn dianash_new dianash_shell * (const dianash_config *) @1.0
+fn dianash_output_take int64_t (dianash_shell *, uint8_t *, size_t) @1.0
+fn dianash_prompt int64_t (dianash_shell *, uint32_t, uint8_t *, size_t) @1.0
+fn dianash_requests_drain int64_t (dianash_shell *, uint8_t *, size_t) @1.0
+fn dianash_session_attach int32_t (dianash_shell *, uint32_t, const uint8_t *, size_t) @1.0
+fn dianash_session_kill int32_t (dianash_shell *, uint32_t) @1.0
+fn dianash_session_new int64_t (dianash_shell *) @1.0
+fn dianash_session_replace int32_t (dianash_shell *, uint32_t, uint32_t) @1.0
+fn dianash_session_switch int32_t (dianash_shell *, uint32_t) @1.0
+fn dianash_sessions int64_t (dianash_shell *, uint8_t *, size_t) @1.0
+fn dianash_set_services int32_t (dianash_shell *, const dianash_service *, size_t) @1.0
+fn dianash_set_user int32_t (dianash_shell *, uint32_t, const uint8_t *, size_t) @1.0
+fn dianash_submit int32_t (dianash_shell *, uint32_t, const uint8_t *, size_t) @1.0
+fn dianash_user int64_t (dianash_shell *, uint32_t, uint8_t *, size_t) @1.0
+fn dianash_version_text int64_t (uint8_t *, size_t) @1.0
+struct dianash_bytes size 16 align 8 @1.0
+struct dianash_call size 120 align 8 @1.0
+struct dianash_config size 32 align 8 @1.0
+struct dianash_host_commands size 56 align 8 @1.0
+struct dianash_host_result size 16 align 8 @1.0
+struct dianash_io size 80 align 8 @1.0
+struct dianash_result size 8 align 4 @1.0
+struct dianash_service size 40 align 8 @1.0
+struct dianash_terminal size 16 align 4 @1.0

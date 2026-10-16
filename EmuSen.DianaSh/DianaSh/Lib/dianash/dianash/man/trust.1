@@ -1,0 +1,22 @@
+NAME
+    trust - approve a module file you added, by its hash
+
+SYNOPSIS
+    trust <path>
+
+DESCRIPTION
+    Records a file's SHA-256 hash as approved, so that a command module
+    you added to the shell can be loaded once loading one is supported:
+    a module runs inside the program with your full permissions, and is
+    approved once, by you, at the prompt. A changed file has another hash
+    and must be approved again.
+
+    The approval is given only at the prompt: 'trust' refuses inside a
+    script run with 'source' and inside $(...), so a script cannot approve
+    a file on your behalf. The path is resolved through the sandbox, as
+    every path is (see 'man hier'). Approvals are kept, one hash and path
+    to a line, in the 'trusted' file of the 'dianash' folder beside the
+    program's configuration.
+
+EXAMPLES
+    trust /lib/dianash/mymodule.so

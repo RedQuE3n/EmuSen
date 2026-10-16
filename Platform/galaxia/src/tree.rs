@@ -303,6 +303,19 @@ pub fn init(base_directory: &str, application_data: Option<&str>) -> bool {
     HOST.set((base_directory.to_string(), application_data.map(str::to_string))).is_ok()
 }
 
+/// `ConfigRoot.ShellModulesDirName`: the folder beside the program that holds the shell's shipped command modules and their manuals.
+pub const SHELL_MODULES_DIR_NAME: &str = "dianash";
+
+/// The program's directory: what the host named, else the executable's own (`AppContext.BaseDirectory`).
+pub fn base_directory() -> String {
+    HOST.get_or_init(|| (own_directory(), None)).0.clone()
+}
+
+/// `ConfigRoot.ShellModulesDirectory`, outside the shell's sandbox as the program's own files are. See EmuSen_DianaSh.md §12.4.
+pub fn shell_modules_directory() -> String {
+    path::combine(Style::HOST, &base_directory(), SHELL_MODULES_DIR_NAME)
+}
+
 fn own_directory() -> String {
     std::env::current_exe().ok().and_then(|exe| exe.parent().map(|dir| dir.to_string_lossy().into_owned())).unwrap_or_else(|| ".".to_string())
 }

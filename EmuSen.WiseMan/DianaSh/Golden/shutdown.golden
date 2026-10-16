@@ -2,7 +2,7 @@
 # Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
 # a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
 command shutdown
-usage 1   shutdown | quit               terminate the process
+usage 1   shutdown | quit | exit        terminate the process
 
 case the host action
 target none
@@ -23,6 +23,16 @@ Shutting down.
 status 0
 action Shutdown { }
 $ shutdown now
+out 14
+Shutting down.
+status 0
+action Shutdown { }
+end
+
+case exit is shutdown
+target none
+covers 1
+$ exit
 out 14
 Shutting down.
 status 0

@@ -1,0 +1,21 @@
+[package]
+name = "dianash"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The standalone shell of EmuSen_DianaSh.md §8.2 and §10.4: the shell core, Galaxia's tree, a line editor and the
+# text tools' module, in one file.
+[[bin]]
+name = "dianash"
+path = "src/main.rs"
+
+[dependencies]
+dianash-text = { path = "../dianash-text" }
+emusen-dianash = { path = "../dianash" }
+emusen-galaxia = { path = "../galaxia" }
+
+# The terminal's raw mode for the line editor (termios).
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

@@ -837,3 +837,71 @@ own frames of presentation are unchanged by this and were not measured again.
 The handheld (§11; its device lends where its card offers the queues and timeline semaphores); Hotaru, which hosts
 `GameFrameControl` but does not pass a lender; MarsRT (§7); a lend refused by a core's device (a version below 1.2)
 falls back to the core's own device silently, the core's note not saying so.
+
+## 18. The handheld's black screen (2026-10-15): the device path off by default, the cause open
+
+### 18.1 The fault
+
+Reported by the tester at about 20:10: on the handheld (SteamOS 3.9.2, Ryzen Z1 Extreme, RADV PHOENIX on Mesa
+26.2.0-devel, Avalonia on X11/GLX under gamescope's Xwayland), with WiseMan 370c78a5, every PlayStation game loaded to a
+black screen. Mistress's own line showed the emulation at a steady 60 frames a second, "offered 60.8, shown 6.0" for the
+first second and "shown 0" every second after. The handheld's error log held two reports of an unobserved task: a
+superseded image's imports let go of off the UI thread, which Avalonia refuses (§18.3).
+
+### 18.2 What was measured
+
+A probe of the presentation path without Mistress (`~/devpicture/` on the handheld): `GameFrameControl` in a window,
+Diamond on a thread of its own handing its pictures as Mistress does, the frames shown counted each second, run under a
+headless gamescope (`gamescope --backend headless`) and under a nested headless KWin, through `systemd-run --user`.
+
+| Where | Path | Shown a second |
+|---|---|---|
+| the handheld, gamescope | the device path, pixels, nothing lent | a few in the first second, then **0** |
+| the handheld, nested KWin | the same | a few, then **0** |
+| the handheld, gamescope | the device path off (Skia) | **60 of 60** |
+| the handheld, gamescope | the device path, Diamond lent | a few, then **0** |
+| the desktop, nested KWin, RX 6800 | the device path, Diamond lent | 60 of 60 |
+| the desktop, nested KWin, Raphael iGPU (RADV and radeonsi) | the device path, pixels | 60 of 60 |
+
+So the fault is the device path's hand-over itself, on this machine, and neither the lend nor gamescope alone: it
+froze without a lend, and under KWin. A dump of the stalled process (taken by the runtime's own `createdump` at a
+deliberate fail-fast, read with `dotnet-dump`) puts Avalonia's render thread in `GlxInterface.SwapBuffers`, under
+`ServerCompositionTarget.Render`; the UI thread runs on (the probe's timer kept ticking), and the emulation thread too.
+The frame the render thread was swapping never completed, so nothing after it was drawn, Skia's picture included.
+
+Two facts were established by the probe's own hooks, since removed:
+- **The presenter's Vulkan side completes.** Each present's submission was waited for on the processor before the
+  compositor was handed the image (0.8 to 5.8 ms), and the update after it still never completed; and once the window had
+  stalled, an empty submission on the slang device's queue finished within a second.
+- **The fallback detects it and cannot undo it** (§18.3).
+
+**Negative results**, recorded and not offered as an explanation: Mesa's GL thread off (`mesa_glthread=false`), radeonsi's
+user queues off (`AMD_DEBUG=nouserq`), the window at 320 × 240, 640 × 480 and 1280 × 800, one slot instead of three, the
+`ready` and the `free` semaphore signalled again from Vulkan 0.7 s into a stall: the picture froze in each, after 1 to 5
+updates.
+
+**The cause is open.** It is being read from the sources of the path that stalls (Mesa's GLX/DRI3 swap, Xwayland,
+gamescope's WSI layer, Avalonia's GL import), and will be stated here only with the lines that establish it.
+
+### 18.3 What was done
+
+- **The device path is off by default** (`GameFrameControl.DevicePictureAllowed`): the picture is drawn by Skia from
+  the readback as before 7e7784c6, and nothing is lent to a core, unless `EMUSEN_DEVICE_PICTURE=1`; Mistress logs once
+  why. A check for gamescope alone would not have been enough, the freeze being the same under KWin on the handheld.
+- **A watchdog** (`WatchDevicePath`): while the device path is in use, 30 offers or more with nothing shown for a second
+  give it up for the readback, the presenter let go of, said once (`picture: The picture is read back from now on: ...`).
+  On the desktop's healthy device path it never fired (10 s of the lent Diamond, 60 of 60 shown). **On the handheld it
+  fired after a second and did not bring the picture back**: with the render thread stuck in its swap, Skia's frames are
+  not drawn either. It keeps a player from staying on the device path where the picture stops for another reason, and is
+  no remedy for this one.
+- **The superseded images' imports are let go of on the UI thread** (`DevicePresenter.Resize`), which Avalonia requires;
+  before, they were let go of on a pool thread, threw, and left their imports and their Vulkan images behind.
+
+### 18.4 Proven
+
+- The handheld under gamescope, the default build: **60 of 60** shown each second (seconds 2 to 6; 53 of 54 in the first,
+  during start-up), Diamond at 2× (`libdiamond.so` built from this branch, the core the handheld runs), and the log's one line saying the device path is
+  off.
+- The same with `EMUSEN_DEVICE_PICTURE=1`: the watchdog's line after one second, the picture still frozen (above).
+- The desktop: WiseMan's frame-control, presenter, hand-off, lend, screen-filter and main-window tests, 233 of 233.
+

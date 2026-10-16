@@ -26,5 +26,11 @@ crate `nephrite`). Written from hardware documents under a clean-room protocol, 
   before its code: the five parts by Sega's manuals, cited by section; what the manuals leave unsaid (the function
   numbers, the sub CPU's jump table slots, the backup RAM's format, the main CPU's routines), the steps with their
   oracles, the accuracy cost and the questions for the tester.
+- [`Nephrite_Bram.md`](Nephrite_Bram.md) — the Sega CD's backup RAM format as observed on 2026-10-15 by someone who
+  does not write the open BIOS, for `_BURAM` and `_mburam` to be written from: the footer and what the BIOS checks of
+  it, freshly formatted images of the internal RAM and of cartridges from 8 KiB to 512 KiB, the directory's two
+  entries per block, the block code every directory block and protected block uses (a CRC-16, six-bit symbols, eight
+  Reed–Solomon codewords over GF(64) and a column check), allocation, writes and deletes, the calls as the manuals
+  document them and the images show them, and the gaps, with each finding's run.
 
 The CPUs and the PSG are documented with their crates in [`../Beryl-HW/`](../Beryl-HW/) (Beryl Hardware).

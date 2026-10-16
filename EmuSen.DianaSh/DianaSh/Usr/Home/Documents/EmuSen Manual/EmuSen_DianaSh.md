@@ -1,6 +1,11 @@
 # EmuSen — DianaSh: a standalone shell, its command modules, and the surfaces around it
 
-*This revision: the sixth, 2026-10-11: S2 built, Crystal's assembly beneath the shell, the session service's header
+*This revision: the eighth, 2026-10-16: Q18 to Q24 decided as recommended, and Q18, Q19, Q20's page and Q21 built
+in both shells (§13.9). The seventh, 2026-10-15: S3 built, the Rust shell core in `Platform/dianash/` with its builtins,
+sessions and host API (`dianash.h`, stable, with its baseline), every C# command still running under it through a
+bridge, the facade choosing it under `EMUSEN_DIANASH_NATIVE=1`, and the standalone `dianash` (§13.7); S4 built,
+`dianash.text` in Rust, all sixteen commands (§13.8); Q15's case-insensitive root comparison corrected in both shells
+(§13.7); seven questions from S2 to S4 (§16.1). The sixth, 2026-10-11: S2 built, Crystal's assembly beneath the shell, the session service's header
 `emusen_session.h` and its C# provider, held to `IDebugTarget` by a parity class on the fake target and every core (§13.6).
 The fifth, the same day: S1 built, the C# shell reorganised without changing what it prints (§13.5). The fourth, 2026-10-10: §13.4's sandbox escapes, finding 10, fixed. The third, the same day: S0
 built, the golden corpus, its harness and what it recorded (§13.4). The
@@ -1073,6 +1078,8 @@ changed line failing it and an added line requiring the baseline in the same req
   that admits a path that differs from the root only by case, which on a case-sensitive file system is a different
   directory: a path outside the root can be accepted as inside it. It is reproduced byte for byte in the migration's
   first step so that the golden outputs hold, and is a finding for §16 Q15 to decide, with a test of its own.
+  *Corrected 2026-10-15, as Q15 decided, in both shells (§13.7): case is ignored only on Windows and macOS, whose
+  file systems ignore it by default.*
 - **Real paths given to programs** are native: backslashes and a drive on Windows.
 - **Line endings**: files the shell and its modules write end lines with `\n` on every system, as today's `File.WriteAllText`
   of `\n`-joined text does.
@@ -1141,6 +1148,8 @@ standard output, exit status and host action each line gives, over fixed inputs.
 ### 13.2 The steps
 
 **Decided 2026-10-11:** the go for S1. *S1 built the same day* (§13.5), *and S2 after it* (§13.6).
+**Decided 2026-10-15:** port DianaSh to Rust now, S3 first, after the sandbox's escapes; and S4 after S3's gate.
+*S3 built the same day* (§13.7), *and S4* (§13.8). S6 and S7 wait for the tester.
 
 No step leaves a broken shell; each has its gate, and each is its own commit or group of commits.
 
@@ -1149,8 +1158,8 @@ No step leaves a broken shell; each has its gate, and each is its own commit or 
 | **S0** | The golden corpus of §13.1, recorded from the C# shell | it covers every usage line (a test enumerates them); two recordings on two runs are identical |
 | **S1** *(done 2026-10-11, §13.5)* | The C# shell reorganised without changing what it prints: the 98 manual pages out of `ManPages.cs` into files read by the C# `man`; the five aliases and the read-only fast path made one table; `summary` and `log` turned into ordinary command classes; `Var/`'s shell state (`CommandHistory`, the sessions) separated from the debugger's registries | the golden corpus; `ManPageTests` |
 | **S2** *(done 2026-10-11, §13.6)* | The service API's header, `emusen_session.h`, and a C# provider over today's `IDebugTarget` and registries, exposing the table through `[UnmanagedCallersOnly]` functions; the registries, the cheat engine, `IDebugTarget`, the telemetry contracts and the system packs moved out of `EmuSen.DianaSh` into Crystal's assembly, `EmuSen.Crystal`, beneath the shell and beside the cores (§16 Q1), which `EmuSen.DianaSh` and the cores reference | a parity class calling every service function and the C# member it maps (§9.3) on the fake target and each core, equal; the golden corpus |
-| **S3** | The Rust shell core, `Platform/dianash/`, with its builtins, lookup, manifests, the host API in the platform library and the `dianash` program; every C# command still runs, registered with the Rust shell as host commands through `dianash_add_commands` by a C# bridge that calls each `IDianaShCommand.Execute`; the C# frontends choose the C# interpreter or the Rust one by `EMUSEN_DIANASH_NATIVE` (§13.3) | the golden corpus, with the variable unset (the C# interpreter) and `1` (the Rust shell with C# commands); the language's 645 cases both ways |
-| **S4** | `dianash.text` in Rust, command by command, each replacing its C# bridge entry when its golden file passes | that command's golden file and its WiseMan cases both ways; the same corpus run on Windows and macOS CI runners for the text module, since it must behave identically there |
+| **S3** *(done 2026-10-15, §13.7)* | The Rust shell core, `Platform/dianash/`, with its builtins, lookup, manifests, the host API in the platform library and the `dianash` program; every C# command still runs, registered with the Rust shell as host commands through `dianash_add_commands` by a C# bridge that calls each `IDianaShCommand.Execute`; the C# frontends choose the C# interpreter or the Rust one by `EMUSEN_DIANASH_NATIVE` (§13.3) | the golden corpus, with the variable unset (the C# interpreter) and `1` (the Rust shell with C# commands); the language's 645 cases both ways |
+| **S4** *(done 2026-10-15, §13.8)* | `dianash.text` in Rust, command by command, each replacing its C# bridge entry when its golden file passes | that command's golden file and its WiseMan cases both ways; the same corpus run on Windows and macOS CI runners for the text module, since it must behave identically there |
 | **S5** | The four EmuSen modules in Rust over the session service, module by module, each command replacing its bridge entry when its golden file passes; `nano` as a program | that command's golden file both ways, on the fake provider and on each core; seeded faults in the module, as each platform step had (`EmuSen_RustPlatform.md` §6.5) |
 | **S6** | The shell to state 2, as `EmuSen_RustPlatform.md` §3.9 defines it: the Rust shell by default, `EMUSEN_DIANASH_NATIVE=0` selecting the C#, a missing library falling back with one line in the error log | a full WiseMan run with the variable set; the tester's word |
 | **S7** | State 3: the C# interpreter and the C# commands deleted | below |
@@ -1676,6 +1685,357 @@ is the registries' own behaviour, which S2 moved and was not to change.
    commit, which a move does not make false; the overview's tree, `DESCRIPTION.md`'s table of assemblies and the
    index, which describe the tree as it is, are updated.
 
+### 13.7 S3 as built: the Rust shell core, its host API, the bridge and the facade
+
+*Built 2026-10-15. Decided the same day, before it: port DianaSh to Rust now, starting with S3; and first, fix the
+sandbox escapes of §13.4 finding 10, which on inspection had been fixed on 2026-10-10 (below).*
+
+S3's row asks for six things and sets one gate. They are taken in the order a line meets them: the shell core that
+runs it, the host API a frontend reaches it through, the bridge by which a C# command still answers it, the facade
+that chooses between the two shells, the standalone program, and the gate; what it costs, what was found and what
+remains close the section.
+
+**The sandbox's escapes, first.** The decision of 2026-10-15 put the fix of finding 10 before S3. The tree already
+held it: the merge `b6aef096` of 2026-10-10 closed the escapes of `dump`, `load` and `cov` (`b143e4df`), `core`
+(`c92914ef`), `state` (`ce1c2a75`) and `test -f`/`-d` (`dbf4000f`), each commit with the test that showed its escape
+first and the golden cases it re-recorded (§13.4 finding 10). Nothing was rebuilt. What was done is what the rule
+asks of a fix claimed: it was run again on this branch before S3 began, `SandboxEscapeTests` and the golden corpus
+together, 110 tests, all passing; and every command that names a file was read once more for a path that reaches
+the machine without `TryResolve` or `TryResolveRom`, and none was found. The case-insensitive comparison of Q15 is a
+different defect, kept through S3 by decision and corrected at its end (below).
+
+**The shell core, `Platform/dianash/`.** A crate, `emusen-dianash`, in the platform workspace beside Galaxia's, as
+§4.1 and Q11 placed it: 13 modules, about 2,900 lines with their tests, no dependency of the emulator's but
+Galaxia's crate, and `sha2` for `passwd`'s hash. Its parts, and how each was written:
+
+| Module | What | Written as |
+|---|---|---|
+| `lexer`, `ast`, `parser` | the grammar of `EmuSen_Debugging_Tools_Reference_v5.md` §3.17b | the C# `Lexer` and `Parser`, method for method, over Unicode scalar values where the C# reads UTF-16 units |
+| `interp` | statements, pipelines, expansion, redirection, `source`, `$(...)`, the budget | the C# `DianaShInterpreter`, member for member, so that its quirks (§13.4 findings 1 to 5) are reproduced by construction rather than by recollection |
+| `builtins` | the builtins below, with `help` and `man` | each C# command class's `Execute`, word for word |
+| `table` | which name runs which command, the aliases, the read-only flags, `help`'s order | the C# `CommandTable`, one per session |
+| `shell` | a shell: its sessions, accounts, host registrations, requests and output | the C# `DianaShSessionManager` and the parts of `CreateDefault` that are the shell's |
+| `host` | a call built for a host's command, its io table, and what it wrote gathered back | new: §6.2 and §6.3 |
+| `sandbox`, `accounts`, `man` | the sandbox over Galaxia's tree, the accounts, the pages beside the program | `DianaShSandbox.TryResolve`, `DianaShUserRegistry`, `ManPages` |
+| `dotnet` | the .NET rules the C# shell's words rest on: `Trim`, `int.TryParse`, `ToLowerInvariant`, padding by UTF-16 length, `File.ReadAllText`'s decoding and lines, and the words of `FileNotFoundException` and `UnauthorizedAccessException` | measured against the C# through the corpus |
+| `abi` | the structs and numbers of the two headers | `include/dianash_module.h` and `include/dianash.h` |
+
+Writing the interpreter member for member was a choice, argued here because it is the one place a cleaner Rust
+design was available and refused. The C# keeps a line's host action in a field that every nested submit resets, so
+that a script's action is lost when a later script line runs and an earlier line's survives an empty script; a
+subshell copies the root's stopwatch by reference, so a `$(...)` never gets a fresh budget, while a sourced line of
+the root restarts it; `su` inside `$(...)` changes the session's account, because the C# command reached the
+session's interpreter through its closure, not the subshell's copy. A design written from the description of these
+behaviours rather than from the code would have had to rediscover each from a failing case; a design written from
+the code has them by construction, and the golden corpus then checks that the construction was faithful. Where the
+port departs from the code, it says so: `char.IsLetter` and `IsLetterOrDigit` outside ASCII are approximated by
+Unicode's Alphabetic and Numeric properties, which also count the letter numbers and a few combining marks; and a
+character outside the Basic Multilingual Plane, two units to the C#, is one to the Rust, which matters only where
+`$` is followed by one. Neither occurs in the corpus.
+
+**Which builtins.** §4.2 lists 29. S3 builds 18 of them as builtins, beside the language's five (`help`, `man`,
+`export`, `unset`, `source` with `.`): `echo`, `cd`, `pwd`, `tmux`, `ps`, `kill`, `whoami`, `who`, `su`, `useradd`,
+`userdel`, `passwd`, `true`, `false`, `test`, `[`, `history` and `shutdown` (with `quit`, and `jobs` for `ps`). The
+rule that chose them is §6.0's: a command that reads or changes the shell's own state is the shell's. Every one of
+these does, or is one of the five conditions and loops are made of. Three of §4.2's are not built:
+
+- `clear` stays a host's command. Both frontends replace it with their own, which clears their window, and a builtin
+  that asked the host to clear would have needed the request §10.4 describes and a host that answered it; until the
+  frontends move to the host API's requests, the frontend's own command is what clears.
+- `exit`, `which`, `command` and `trust` are new names. Each would change what `help` lists, and `help` is a recorded
+  case that both shells must print alike until S6. *Built 2026-10-16 in both shells at once, as Q21 decided (§13.9).*
+
+A host's command takes the place of a builtin of its name, as a frontend's command has always replaced a default,
+except for the language's five, which no C# command could replace either; WiseMan's `HostActionPlumbingTests`
+register a `shutdown` of their own, and the rule is what keeps that test meaningful under both shells.
+
+**Sessions and accounts in the shell.** A Rust shell holds its sessions, as §10.2 has it: each an interpreter with
+its own variables, history and account, listed under a name, one of them current; `tmux new` makes one from the
+creating session's commands, as the C# builder made one from its `CreateDefault`'s arguments. A session a host
+makes is unlisted until the host attaches it under a name, which is how a C# host's `RegisterInitial` and
+`CreateSession` keep their order (the interpreter is built before the name is given). The accounts are the shell's,
+shared by its sessions, not the process's: two shells in one process no longer share accounts, which §4.1 asked
+for and which no case of the corpus can see, since each case has a shell of its own.
+
+**Requests instead of host actions.** §6.2 retires `HostAction`. Until the frontends move to events, the shell
+reports what the C# shell reported as an action, as a request a host drains after the line: `exit` for `shutdown`
+and `quit`; `session`, with the session's id and the name as the command gave it, for `tmux` and `kill`; `continue`
+for a bare `continue` that reached the prompt, which the shell knows only as a fact of its language and the C# host
+reads as `resume` (finding 4); and `host`, with a value of the host's own, for a host command that returned an
+action. The line's last request is the one it gives, a `source` stops at the first line that raises one, and a
+subshell's is dropped, each as the C# field behaved.
+
+**The host API as built.** `dianash.h` is §10.2's sketch with four changes, each forced by a host that existed:
+
+1. *Every call that reads or changes a session names it*, 0 being the current one, as `emusen_session.h` names its
+   sessions. The C# hosts hold one interpreter per session and submit to whichever they hold; a shell that only knew
+   its current session could not answer a host submitting to another, which Mistress's per-session schedulers do.
+2. *Sessions are managed by the host as well as by `tmux`*: `dianash_session_new`, `_attach`, `_switch`, `_kill` and
+   `_replace`, which are what `DianaShSessionManager`'s public members need (`RebuildAll` is `_replace`, since a
+   rebuilt session keeps its name, place and currency).
+3. *`dianash_last_status` writes `$?` through a pointer*, since a command may exit with a negative status that would
+   read as a failure of the call; *`dianash_user`, `dianash_set_user` and `dianash_awaiting`* are the facade's
+   `CurrentUser` and `IsAwaitingMoreInput`.
+4. *Re-entry is refused, not deadlocked.* A shell is used by one thread at a time; another thread's call waits, and
+   a call made on the thread running one of the shell's lines, from inside a host's command, answers `DIANASH_BUSY`.
+
+The module ABI's header, `dianash_module.h`, is Appendix A's with these changes: `slot` is an exchange (a null
+`*state` reads, a non-null one keeps, releasing what was kept); `resolve` answers `DIANASH_OUTSIDE` (−273) with the
+refusal's words in place of the path, since a module must print the shell's words and not invent its own; the
+optional `jobs` writes its lines through the io table rather than a buffer, and `kill` is given a result and
+answers `DIANASH_ABSENT` for an id that is not its own; and five statuses were added in the band (`EXISTS`,
+`NO_SUCH_SESSION`, `LAST_SESSION`, `BAD_MANIFEST`, `OUTSIDE`). A host's commands are added with a
+`dianash_host_commands` (a manifest, a context and `run`, `jobs` and `kill`), and a host command's result is a
+`dianash_host_result`, a module's with the request appended.
+
+**The baseline.** Both headers' facts, every constant, every export's signature with its parameter types, every
+struct's size and alignment and every field's offset, are generated by `platform/tests/dianash_abi.rs` and recorded
+in `Platform/dianash/abi/v1/baseline.txt`, 116 facts tagged `@1.0`. The test holds the headers to the Rust (the
+constants by value, each export's Rust signature against the header's, each layout against what a C compiler gives
+from the headers with `-std=c11 -Wall -Wextra -Werror -pedantic`), fails on a fact missing from the baseline until
+it is recorded (`DIANASH_ABI_EMIT=1`), fails on a baseline line that is no longer a fact, and, given the base
+branch's baseline (`DIANASH_ABI_AGAINST`), on any line that branch had and this one removed or changed. The core
+ABI's guard job runs it with the base's baseline on every pull request; the platform job compiles `dianash.h` as C99
+and C++17. A second test, `dianash/tests/surface.rs`, is §11.4's: the crate names no identifier `emusen_session.h`
+declares, and depends on no crate of the emulator's but Galaxia's. The layouts are recorded for a 64-bit target;
+a 32-bit one is not a target the project builds.
+
+**The bridge.** Every C# command the Rust shell does not answer itself is registered with it as a host command,
+through `dianash_add_commands`, by `HostBridge` (`EmuSen.DianaSh/DianaSh/Bin/Native/`). The facade sends one
+manifest: each command's name, usage and read-only flag as its class declares them; `help`'s order, which is the C#
+`CreateDefault`'s, builtins included; today's three aliases the shell does not own (`c`, `s`, `hexdump`); the `bp`
+and `watch` job prefixes; and the line `help` prints about hexadecimal addresses, which is EmuSen's and not the
+shell's, as a note. A call reaches `HostBridge.Run`, an `[UnmanagedCallersOnly]` function, which finds the command
+and calls its `Execute` with the target, the arguments and the standard input, null where the shell says none was
+given, and catches what it throws as the C# dispatcher did, `Error: <message>` with status 1. Three things needed a
+decision:
+
+- *Each session has its own command objects*, as each C# session had its own `CreateDefault`: `search`'s
+  candidates, `snapshot`'s baselines and the cheat command's state are per session. The bridge keeps a session's set
+  in the io table's slot, made on the session's first call by a factory that builds what `CreateDefault` builds; a
+  host's own commands are shared, as the C# builder shared them. The Rust side holds only weak handles; the C# objects
+  live as long as the facade that made them.
+- *Host actions travel as numbers.* A C# command's `HostAction` is kept by the bridge under a number that the Rust
+  shell carries as a `host` request, and the facade turns it back into the object after the line.
+- *`ps` and `kill` ask the bridge.* The breakpoints' and watches' rows are listed by `PsCommand.JobLines` and removed
+  by `KillCommand.TryJob`, both lifted out of the two C# classes so that the classes and the bridge share one copy.
+
+**The facade.** `DianaShInterpreter` keeps every public member, and its C# body moved, unchanged but for its name,
+into a nested `Managed` class (§13.3). Under `EMUSEN_DIANASH_NATIVE=1` each member forwards to the host API through
+`DianaShNative` and `NativeShell`; with the variable unset, or set otherwise, nothing of the Rust shell is loaded.
+This is state 1 of `EmuSen_RustPlatform.md` §3.9. The Rust shell also needs the platform library's Galaxia, since it
+reads the tree through it (Q11); a process that has Galaxia on its C# falls back to the C# shell with one line in
+the error log. `DianaShSessionManager` forwards to the Rust shell's sessions once a facade has been made with it,
+handing out one session object per session so that a host may keep using them as keys; `CommandHistory` reads the
+Rust session's history, and refuses `Add` and `Clear`, which no host calls, since the Rust shell's history changes
+only by the lines it runs. `GetWelcomeBanner` stays the facade's own in both states: it lists the host's cores, which
+the shell's banner (`dianash_banner`) no longer does (§4.1).
+
+**The standalone `dianash`.** The program of §10.4 and §8.2, `Platform/dianash/src/bin/dianash/`: the shell core,
+Galaxia's tree and a line editor, 0.7 MB stripped of nothing. The editor is `ConsoleLineReader`'s keys written for
+the three systems (termios on Linux and macOS, the console's virtual-terminal input on Windows): history on the
+arrows, Left, Right, Home, End, Backspace, Delete and Escape, anchored past the prompt, with the same gap in
+wrapping (Q12). Two keys the .NET runtime answered outside the reader are answered by the editor, since raw mode
+takes them from the terminal: Ctrl-C discards the line, and stops a running line through the shell's cancellation;
+Ctrl-D on an empty line ends input. `dianash -c LINE...` runs lines and exits with the last one's `$?`. Its page is
+`man dianash`.
+
+**The gate.** *Measured on 2026-10-15*, before S4, over WiseMan's DianaSh tests (the golden corpus among them, and
+`SandboxEscapeTests`, the language's cases, the users', sessions', scripting and continuation tests), the shell and
+`vstop` windows' tests, the leaf-assembly pins and Galaxia's, each run in a process of its own:
+
+| `EMUSEN_DIANASH_NATIVE` | Passed | Failed | Skipped |
+|---|---|---|---|
+| unset (the C# shell) | 1,282 | 0 | 8 |
+| `1` (the Rust shell, C# commands through the bridge) | 1,280 | 0 | 8 |
+
+The 8 skipped are `SettingPathsOpenTests`, each with a skip of its own. The native run counts two fewer because
+`NativeSwitchTests`, which proves that the variable chose the shell it names rather than a silent fallback, was
+written after it; it passed in the next native run (§13.8). Every one of the corpus's 538 cases passed byte for
+byte through the Rust shell, with its status, its continuation and its host action. No golden file changed.
+
+The first native run failed three tests, and both causes were the host's side, not the language's: an empty line
+reached the shell as the absent string, because C#'s `fixed` over an empty array gives a null pointer, so the
+facade now passes a pointer with no length; and `tmux kill` of the current session dropped the session while the
+host still held it, where the C# interpreter went on answering, so a killed session is now unlisted and kept. P2
+predicted that the first run would differ only where the C# relies on .NET's own text rules and nowhere in the
+language; it held, and more strongly than predicted, since with every text command still the C#'s there was no
+.NET text rule left to differ. **P2 is retired.**
+
+**What it costs, measured.** On the development desktop on 2026-10-16, after the merge of WiseMan, 2,000 runs after
+200 of warm-up, medians in microseconds with the 95th percentile in parentheses. The first two columns are
+`ShellRoundTripBench` through the facade, in the gate's two runs, the C# shell's and the Rust shell's (whose builtins
+and text tools are Rust's, and whose other commands cross the bridge); the third is the shell core alone
+(`dianash/tests/bench.rs`) with `dianash.text` and a host's 70 commands registered, as a C# host registers them:
+
+| Line | C# shell (facade) | Rust shell (facade) | Rust shell core alone |
+|---|---|---|---|
+| `true` | 1.2 (1.8) | 2.5 (2.9) | 0.51 (0.55) |
+| `echo hello` | 1.7 (2.7) | 2.3 (2.8) | 0.67 (0.71) |
+| `echo a b c \| grep b \| wc -l` | 6.2 (6.9) | 9.8 (10.3) | 4.88 (5.09) |
+| ten of `echo $i \| grep 1` in a loop | 33.0 (51.7) | 49.2 (52.0) | 26.7 (28.7) |
+| `spaces`, a C# command (no target) | 3.3 (3.9) | 5.6 (6.3) | — |
+
+The core's own cost of a line, lexing, parsing, dispatch and the output's copy, is half a microsecond, and every line
+of the corpus's kind costs the core less than it costs the C#. Through the facade the Rust shell is the slower of
+the two, and the measurements say where. A line costs about 2 µs more, the four calls into the library per line
+(submit, the output, the requests and their JSON, `$?`); a C# command crossing the bridge costs about 2.3 µs more
+than calling it in the C# (`spaces`). And a module's call inside the test process costs about 2 µs more than the same
+call in the bench, which two hypotheses tested on the bench do not explain: the host's 70 commands in the table add
+6% to the loop, not the 80% observed, and reading the root from Galaxia's tree adds 3 µs over the loop's ten calls.
+What remains is in the C# process and was not profiled; it is left as an open item (below), since no line a player
+types is near a cost a player could see, and §7.5's argument for a module over a program holds at either figure.
+The machine was loaded by other work during part of the day, and figures taken under load ran up to 60% higher;
+every figure in the table was taken within one quiet hour, and each column is internally consistent.
+`dianash -c true`, the standalone program started, run and ended, takes 0.61 ms (0.84 ms) with the text
+module linked in, against P4's 20 ms; **P4 is retired.**
+
+**Q15, corrected at the end of S3.** The root was compared ignoring case on every system (§12.1). It was shown first,
+in both shells, before anything was changed: in a checkout whose root is `<checkout>/home`, a directory `HOME` beside
+it, another directory on Linux, was entered by `cd "<checkout>/HOME"`, read by `cat` and by `source` (which ran the
+script found there), answered by `test -f`, and written by `echo x > "<checkout>/HOME/written.txt"`, by the C#
+shell and the Rust one alike. Both now ignore case only on Windows and macOS, whose file systems ignore it by default
+(`DianaShSandbox.PathCase`, `sandbox::IGNORES_CASE`), so on Linux such a path is no longer taken as it is: it is read
+chroot-style instead, as any refused absolute path is, and lands inside the root, where nothing is. The same lines
+then reach nothing outside. `SandboxEscapeTests.A_directory_differing_from_the_root_only_by_case_is_outside_it`
+and the sandbox's Rust test hold it. A file system made to ignore case on Linux, or to tell cases apart on a Mac, is
+not detected; the rule follows each system's default, and a probe of the actual file system was judged more
+machinery than the one directory it would protect. No golden case changed.
+
+**Found while building it.** None of these changes what a case prints.
+
+1. *The help's line about hexadecimal addresses is EmuSen's*, not the shell's; it now arrives as a note in the host's
+   manifest, and the standalone `dianash` does not print it.
+2. *Mistress's console window reads the history on its UI thread* while the emulation thread may be running a line
+   (`HistorySource = () => _shell.History.Entries`). The C# read a list another thread was changing; the Rust shell
+   makes the read wait for the line, which is the safe answer and costs the window a line's time at most.
+3. *A C# command can no longer call back into the shell running it*: the host API refuses re-entry with
+   `DIANASH_BUSY`. No command of today's does; the eleven that reached the interpreter through closures (§1.2) are all
+   builtins now.
+4. *The facade's `CommandHistory` refuses `Add` and `Clear`* under the Rust shell, whose history changes only by the
+   lines it runs. No host calls either.
+5. *Open: a module's call costs about 2 µs more inside the C# process than in the bench* (§13.7's cost). Two
+   hypotheses were measured and refuted; the next step is a sample of the WiseMan process running the loop, with
+   `ipsample.py`, before anything is changed.
+
+### 13.8 S4 as built: `dianash.text` in Rust
+
+*Built 2026-10-15, after S3's gate; each command committed on its own once its golden file passed both ways.*
+
+**Three crates, and why three.** A module may not link Galaxia (Q11), and the text tools need .NET's rules, which
+until now lived in Galaxia's crate. So the rules came out of it, and the module's side of the ABI was given a crate
+of its own:
+
+| Crate | What | Depends on |
+|---|---|---|
+| `emusen-dotnet` (`Platform/dotnet/`) | .NET's rules as pure functions: casing (`ToLowerInvariant`, the ordinal comparisons ignoring case), `CompareOrdinal`, `char.IsWhiteSpace` and `IsLetter`, lengths in UTF-16 units and padding by them; `int`, `long` and `double.TryParse`; `File.ReadAllText`'s decoding, its lines, its writes and the words of its exceptions | nothing |
+| `dianash-module` (`Platform/dianash-module/`) | what a module is written with: the module ABI's types (moved from the shell's crate), a safe view of a call, the `Module` trait, `run_module` with the fault boundary of §6.7, and `module_exports!`, which makes a module a library exporting `dianash_module_*` | nothing |
+| `dianash-text` (`Platform/dianash-text/`) | the module, `dianash.text`: sixteen commands and the `hexdump` alias | the two above, and `regex` |
+
+Galaxia's crate now re-exports the rules it gave up, so none of its users changed; the shell's crate names them
+through a module of re-exports, and is the owner of none. The standalone program moved to a package of its own,
+`Platform/dianash-program/`, because it links the module and the shell's core must not depend on a module; the move
+also put its sources where they are tracked, since the repository ignores every folder named `bin/` and the
+program's first home was one.
+
+**A module linked in.** A host links a module and gives it to the shell (`Shell::add_module`); its commands join
+every session's table, and a call to one is built exactly as a host command's is, the same `dianash_call` and io
+table, and run through `run_module`, so that the module's code is the code a library build would export. The
+platform library and the `dianash` program both link `dianash.text`. The facade leaves out of its manifest every
+command the shell lists as a module's, as it leaves out the builtins, so the C# class of a command the Rust shell has
+is never registered; with the variable unset the C# class runs, as before.
+
+**Standard error (Q10).** A module's failure words go to standard error, and the shell prints a stage's standard
+error where the line's output goes as the stage ends, taken by no pipe and no redirection. No case of the corpus
+pipes or redirects a failing text command, so none changed; the difference Q10 intended is real and visible, for
+instance `cat nosuch | wc -l`, where the C# piped the failure's words into `wc` and printed 1, and the Rust shell
+prints the words and then 0. It is recorded here rather than in the corpus, since a recorded case must read alike in
+both shells until S6.
+
+**What reproducing the C# took.** Each command was written from its C# class, as the interpreter was:
+
+- *Ordinal order is UTF-16's.* `sort`, `ls` and `find` order by `StringComparer.Ordinal`, which compares UTF-16
+  units and so puts a character outside the Basic Multilingual Plane before U+E000 to U+FFFF; Rust's string order
+  is UTF-8's and puts it after. `emusen-dotnet`'s `compare_ordinal` compares the units.
+- *`sort -n` is `OrderBy` over `double.TryParse`*, stable, with NaN first and −0 equal to 0. `TryParse` reads the
+  machine's culture, so the C#'s numeric order depended on the machine; the Rust reads en-US's rule on every machine,
+  measured with a probe of .NET 10 on 2026-10-15 rather than taken from its documentation: `,` between digits and
+  never before the first (`,5` is no number, `1,,0` is ten), `∞` and not `Infinity` for infinity, `NaN` in any case
+  and after a sign. The parity class below found the first two differences of the first draft, which had read
+  `Infinity` and `,5` as the invariant culture does.
+- *`wc`'s word count splits on `char.IsWhiteSpace`*, and its line count keeps the C#'s count of a file's final newline
+  (§13.4 finding 14).
+- *`cp` refuses a file onto itself*, as `File.Copy` does, with .NET's words; Rust's `fs::copy` would have truncated
+  the file first.
+- *`find -name` is `FileSystemName.MatchesSimpleExpression`*: `*`, `?` and `\`, case ignored.
+- *`ls -l`'s time is local*, from the C library's time zone on Linux and macOS and the system's on Windows.
+- *`mv` and `rm` are suspended* (`man rm`), and print the C#'s refusal; nothing else of them was ported, since nothing
+  else of them runs.
+- *`xxd` ends its lines with `\n` on every system*, where the C#'s `AppendLine` wrote `\r\n` on Windows; the Rust is
+  the one that agrees with itself on the three systems S4 must run on.
+
+**Patterns (P3).** `grep`, `sed` and `awk` take .NET regular expressions. They are run by the `regex` crate, with a
+translation for what the two read differently (a `{` that begins no quantifier is a literal to .NET and an error to
+the crate), `sed`'s replacement written in the crate's syntax (`&`, `\N`, a literal `$`, and a group the pattern does
+not have left as the text `$N`, as .NET leaves it), and a refusal worded as .NET's `RegexParseException` words the
+errors the two share: an unterminated set, too few or too many parentheses, a quantifier following nothing, a
+trailing backslash, a range in reverse order. What the crate does not run at all, look-around and back-references in
+a pattern, is refused with words of its own. Case is ignored by Unicode's simple folding where .NET uses its own
+table; the two differ only on a handful of characters, the Kelvin sign among them. P3 predicted that the crate could
+not match .NET's engine byte for byte unchanged and that a translation layer or a recorded set of differences would
+be needed; both were, the layer being `pattern.rs` and the differences this paragraph. **P3 is retired.** No case
+of the corpus meets a difference.
+
+**A parity class on generated text.** The corpus holds the inputs its cases were written with; §14 asks for
+generated ones too. `TextModuleParityTests` writes 200 generated texts (lines of ASCII, accented and dotted letters,
+a character outside the Basic Multilingual Plane, a private-use one, signed and grouped numbers, the words and
+symbols of infinity and not-a-number, tabs, empty lines, `\r\n` endings and none) and runs 36 command lines over
+each through both: the C# class's `Execute` with the file's text as its standard input, and the Rust shell, which
+the test makes directly whichever shell the switch chose, with the line's input redirected from the file. Every
+`sort`, `uniq`, `wc`, `head`, `tail`, `grep`, `sed`, `awk`, `xxd` and `cat` form the corpus uses is among them, and
+patterns, replacements with `&`, `\1` and `$1`, and `awk`'s field, record and pattern forms. Its first run found two
+differences in 7,200 comparisons, both `sort -n` over `Infinity`, the culture's rule above; since the fix all 7,200
+agree, in both of the gate's runs.
+
+**The gate, per command.** Every one of the sixteen golden files passed both ways, run once with all sixteen in Rust
+and committed one command at a time, each commit naming its file. The runs, over the same filter as S3's: before the
+merge of WiseMan, with the variable set to 1, 1,292 tests, 1,284 passed and 8 skipped, `NativeSwitchTests` and the
+parity class among them; after the merge (`5411c52b`), both ways, 1,292 tests, 1,284 passed and 8 skipped, none
+failed. One post-merge pair failed fifteen golden files on their `venusrt` cases, in both shells, because the build had
+been run with a different cargo on the path, whose libraries reached the output while the sidecars described the
+others, so discovery refused VenusRT and the C# Venus answered in its place; with the libraries rebuilt by the
+project's cargo, every case passed. It is recorded because the symptom, a whole core's cases failing at once in
+both shells, is easy to misread as the shell's. The Rust-side runner
+(`dianash/tests/golden.rs`) also runs every case of the corpus that needs no host's command through the crates
+alone, the text tools linked in: 56 cases, all passing.
+
+**Its cost.** In the shell core alone, `echo a b c | grep b | wc -l` costs 4.9 µs and the ten-iteration loop 26.7 µs,
+against 6.2 µs and 33.0 µs in the C# shell; a `grep` compiles its pattern on every call, as the C# does, and that is
+most of a stage's cost. Through the facade, see §13.7's table and its open item.
+
+### 13.9 The decisions of 2026-10-16, built
+
+*Built 2026-10-16, each in a commit of its own, the defect of each fix shown by a test before the fix.*
+
+| | What | Shown first | Golden |
+|---|---|---|---|
+| Q18 | `step over` and `step out` refuse, status 1 and no host action, when `ArmStepToDepth` declines because the breakpoints were never told the call stack: "This core does not report a call stack to its breakpoints, so `step over` cannot be armed." | `CallStackAndStepTests`' new case on the corpus's fake target read "Stepping over..." | `step.golden`'s first case, at its two such lines (`step over`, `step cpu over`) |
+| Q19 | `RegisterFlowRegistry.Clear` empties the log of any window ever armed and leaves it as armed as it was | `RegisterFlowTests`' new case found the access still counted after a clear of a disarmed window | a new case in `copflow.golden`, 'a clear after off' |
+| Q20 | `man cov` says that a map's entry counts add, the same map loaded twice counting each entry twice | — (the behaviour is kept) | `man.golden`'s case for the page |
+| Q21 | `exit` as a third name for `shutdown`; `which`, `command` (with `-v`) and `trust` as the language's own, answered before any table in both shells; `trust` records a file's SHA-256 in the `trusted` file of the `dianash` folder beside the program's configuration, at the prompt only | — (new) | `help.golden` and `shutdown.golden`'s usage line re-recorded, a case for `exit`; `which.golden`, `command.golden` and `trust.golden` new; `man.golden`'s three new pages and the cases that print `help` |
+
+Two choices in Q21 needed making. *Where the three names live*: as the language's, like `source`, rather than as
+commands of a table, because `command` must dispatch past the aliases and `trust` must know whether it runs inside a
+script, which only the interpreter knows; and because the language's names are the only ones no host's command takes
+the place of, so `which` and `trust` cannot be shadowed. *What `which` calls a builtin*: the names §4.2 gives the shell,
+which both shells can list alike. A host's command that takes the place of one of them is a command to the Rust shell
+and still a builtin to the C#; that is the one place the two answer differently, it occurs in no case of the corpus,
+and `man which` says so. `trust` approves; nothing loads a player's module yet (§5.4 and §6 are built for modules linked
+into a program), so the approvals wait for the step that loads one.
+
+The gate after the four commits, both ways, over S3's filter: 1,297 tests, 1,289 passed, 8 skipped, none failed. The
+crate-alone corpus runner passes 59 cases and fails none.
+
 ---
 
 ## 14. How it is tested
@@ -1701,11 +2061,14 @@ is the registries' own behaviour, which S2 moved and was not to change.
   0.2 ms on the desktop (0.04 µs and 51–63 µs measured for a minimal module, §7.5). Retired at S4 by timing the corpus.
 - **P2.** The golden corpus's first run against the Rust shell with C# commands (S3) differs only where the C# relies on
   .NET's own text rules (regular expressions in `grep`, `sed` and `awk`, number formatting, case mapping), and nowhere in
-  the language. Retired at S3.
+  the language. Retired at S3. *Held, 2026-10-15 (§13.7): the first run differed nowhere in the language; its two
+  differences were the host's (an empty line passed as absent, a killed session dropped).*
 - **P3.** The Rust `grep`, `sed` and `awk` cannot use a regular-expression crate unchanged and match .NET's engine byte
   for byte on every case of the corpus; a translation layer or a recorded set of differences will be needed. Retired at
-  S4, with the decision recorded.
-- **P4.** The standalone `dianash` starts in under 20 ms on the desktop with no module loaded. Retired at S3.
+  S4, with the decision recorded. *Held, 2026-10-15 (§13.8): both were needed, `pattern.rs` and its list of
+  differences, and with them every case of the corpus matched.*
+- **P4.** The standalone `dianash` starts in under 20 ms on the desktop with no module loaded. Retired at S3. *Held,
+  2026-10-15 (§13.7): 0.60 ms with no module, 0.61 ms with `dianash.text` linked in, started, run and ended.*
 - **P5.** Starting a small program costs 1–2 ms on the Mac mini and 5–15 ms on a Windows machine (§7.5). Retired when
   the text module's corpus first runs there.
 
@@ -1734,9 +2097,24 @@ C# and the Rust together, with a test that shows the escape first.
 | **Q12** | The line editor written to today's `ConsoleLineReader`'s behaviour for three systems, rather than a line-editing crate (§12.3)? And `exit` as a third name for `shutdown` (§4.2)? | Yes to both. A crate can follow once the golden corpus no longer depends on the editor's exact keys *Decided 2026-10-10 as recommended.* |
 | **Q13** | Modules a player adds: allowed, after a one-time approval by hash, as foreign cores are (§5.4)? | Yes, with approval only through `trust` at the prompt *Decided 2026-10-10 as recommended.* |
 | **Q14** | What `vstop` reports in a Rust shell, which has no .NET runtime: the hosting process's own figures (the .NET runtime's in a C# frontend, the shell process's in the terminal), or only in the C# frontends, as a host command? | A host command in the C# frontends while they exist, and in the terminal the shell process's own memory and threads, under the same name *Decided 2026-10-10 as recommended.* |
-| **Q15** | The sandbox's case-insensitive comparison on Linux, which can accept a path outside the root as inside it (§12.1): kept as today, or made case-sensitive where the file system is? | Kept through S3 so the golden corpus holds, then corrected in the C# and the Rust together, with a test that shows the defect first *Decided 2026-10-10 as recommended.* |
+| **Q15** | The sandbox's case-insensitive comparison on Linux, which can accept a path outside the root as inside it (§12.1): kept as today, or made case-sensitive where the file system is? | Kept through S3 so the golden corpus holds, then corrected in the C# and the Rust together, with a test that shows the defect first *Decided 2026-10-10 as recommended. Corrected 2026-10-15 at the end of S3 (§13.7).* |
 | **Q16** | The golden corpus committed as files in WiseMan (§13.1)? | Yes. It holds no ROM data, and it is the record that lets C# be deleted at S7 *Decided 2026-10-10 as recommended.* |
 | **Q17** | The host API's versioning: stable from S3, though its only hosts until then are the project's own frontends built from the same commit? | Stable from S3. The baseline costs one CI step, and an outside frontend or the kit can then embed the shell the day it wants to *Decided 2026-10-10 as recommended.* |
+
+### 16.1 Questions from S2, S3 and S4 (2026-10-15)
+
+*Decided 2026-10-16 by the tester:* all seven as recommended. Q18, Q19, Q21 and Q20's page are built after S4, each
+in a commit of its own (§13.9); Q22, Q23 and Q24 need nothing until the steps they name.
+
+| | Question | Recommendation |
+|---|---|---|
+| **Q18** | `step over` and `step out` report "Stepping over..." and arm nothing when the registry was never told its call stack (§13.6 finding 1). Should the command refuse instead? | Yes. Refuse with the words `cov` and the others use for a core that does not report something ("this core does not report a call stack"), status 1, in the C# now with a test that shows the false success first, and re-record `step.golden`'s first case in that commit. The session service already answers `NOT_SUPPORTED` there, so the S5 module would otherwise have to reproduce a false success on purpose *Decided 2026-10-16 by the tester: as recommended.* |
+| **Q19** | `copflow clear` after `copflow off` clears nothing while saying it did (§13.6 finding 2). Should it clear a disarmed window's log? | Yes: `Clear` empties the log whether or not the window is armed, and re-arms only one that was armed. A case for it in `copflow.golden`, recorded in the fix's commit, with a test that shows the stale log first *Decided 2026-10-16 by the tester: as recommended.* |
+| **Q20** | Importing a coverage map adds its counts to those recorded (§13.6 finding 3). Keep it, or replace? | Keep it: accumulating maps from several runs is the method's stated purpose. Say so in `man cov` ("load adds the file's counts to those already recorded") and in the session service's comment for `IMPORT`; no behaviour changes and no case moves *Decided 2026-10-16 by the tester: as recommended.* |
+| **Q21** | `exit`, `which`, `command` and `trust`, decided in §4.2 and Q12 and Q13, are not built, because each changes `help`, which both shells must print alike until S6 (§13.7). Add them to both shells now, re-recording `help` once, or wait for S6? | Add them to both now, in one change: four small C# classes and four Rust builtins, `help.golden` re-recorded and a golden file for each new name. Waiting leaves the standalone `dianash` without `exit` for its whole life before S6, which a terminal shell should not lack *Decided 2026-10-16 by the tester: as recommended.* |
+| **Q22** | `ps`'s answer with nothing to list ("No active breakpoints, watches, or sessions.") and `kill`'s refusal without a session manager ("isn't a bp<N>/watch<N> id") name the debugger's jobs, though they are now the shell's words (§13.7). Reword them? | Not before S7: the corpus holds them, and both shells must print them alike until the C# goes. Then: "No active jobs or sessions." and a refusal naming the claimed prefixes, read from the manifests *Decided 2026-10-16 by the tester: as recommended.* |
+| **Q23** | The platform library aborts on a panic, so `dianash.text`, linked into it, gets the crash log and not §6.7's `Error:` and status −320 if it ever panics (§13.8). Keep the library's abort, or build it to unwind? | Keep the abort: one crash log per process is the library's rule (`EmuSen_RustPlatform.md` §3.5), and the text module has no path that panics on input. A module shipped as a library of its own is built to unwind and gets the boundary, as §6.7 says *Decided 2026-10-16 by the tester: as recommended.* |
+| **Q24** | Q10's stderr changes what a pipeline prints when a text command in it fails (`cat nosuch \| wc -l`: the C# printed 1, the Rust shell prints the words and 0), and no recorded case shows it, since a recorded case must read alike in both shells (§13.8). Record a case for it now in a file of its own that only the Rust shell runs, or at S6? | At S6, when the Rust shell becomes the default and the corpus may hold its answers: a case in `shell.golden`, re-recorded that day with the reason *Decided 2026-10-16 by the tester: as recommended.* |
 
 ---
 
@@ -1832,7 +2210,8 @@ in the pane's title **[A]**.
 
 ## Appendix A. `dianash_module.h`, sketched
 
-Not normative until S3 is built; written so that the rules above can be checked against a shape.
+Not normative until S3 is built; written so that the rules above can be checked against a shape. *S3 built it: the
+normative header is `Platform/dianash/include/dianash_module.h`, and §13.7 says where it departs from this sketch.*
 
 ```c
 /* dianash_module.h - the command module ABI of DianaSh. See EmuSen_DianaSh.md §5 and §6. */

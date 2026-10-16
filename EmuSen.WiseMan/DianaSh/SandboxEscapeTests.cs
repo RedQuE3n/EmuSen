@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -22,6 +23,25 @@ namespace EmuSen.WiseMan.DianaSh
         private static string Text(GoldenStep step) => Encoding.UTF8.GetString(step.Output!);
 
         private static string Outside(GoldenRunner runner, string name) => Path.GetFullPath(Path.Combine(runner.Home, "..", name));
+
+        // A sibling of the root spelled as the root in another case is another directory where the file system tells cases apart - see EmuSen_DianaSh.md §16 Q15.
+        [Fact]
+        public void A_directory_differing_from_the_root_only_by_case_is_outside_it()
+        {
+            if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()) return;
+            using var runner = new GoldenRunner();
+            string sibling = Path.Combine(Path.GetDirectoryName(runner.Home)!, "HOME");
+            var steps = Run(runner, "none", [("../HOME/secret.sh", "echo SECRET")],
+                $"source \"{sibling}/secret.sh\"", $"cat \"{sibling}/secret.sh\"", $"test -f \"{sibling}/secret.sh\"", "echo $?",
+                $"echo x > \"{sibling}/written.txt\"", $"cd \"{sibling}\"", "pwd");
+            // Read as it is, the path is refused and read chroot-style instead, inside the root, where nothing is.
+            Assert.All(steps, s => Assert.DoesNotContain("SECRET", Text(s)));
+            Assert.Equal(1, steps[0].Status);
+            Assert.Equal("1", Text(steps[3]));
+            Assert.False(File.Exists(Path.Combine(sibling, "written.txt")));
+            Assert.Equal(1, steps[5].Status);
+            Assert.Equal("<ROOT>", Text(steps[6]));
+        }
 
         [Theory]
         [InlineData("dump RAM 0 4 ../../../escaped.bin")]

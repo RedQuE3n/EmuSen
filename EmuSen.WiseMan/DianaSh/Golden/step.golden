@@ -41,10 +41,10 @@ out 37
 status 1
 action none
 $ step over
-out 16
-Stepping over...
-status 0
-action Step { }
+out 90
+This core does not report a call stack to its breakpoints, so `step over` cannot be armed.
+status 1
+action none
 $ step out
 out 56
 Already at the outermost frame - nothing to step out of.
@@ -66,10 +66,10 @@ Stepping 2 instructions...
 status 0
 action Step { }
 $ step cpu over
-out 16
-Stepping over...
-status 0
-action Step { }
+out 90
+This core does not report a call stack to its breakpoints, so `step over` cannot be armed.
+status 1
+action none
 end
 
 case a bare target

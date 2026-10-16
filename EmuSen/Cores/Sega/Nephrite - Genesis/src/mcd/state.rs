@@ -49,6 +49,7 @@ fn mode_words(m: Mode) -> [u32; 7] {
         Mode::Paused { low, high, gap } => [7, low, high, gap as u32, 0, 0, 0],
         Mode::Scanning { forward } => [8, forward as u32, 0, 0, 0, 0, 0],
         Mode::TrayOpen => [9, 0, 0, 0, 0, 0, 0],
+        Mode::Jumping { left, land } => [10, left, land, 0, 0, 0, 0],
     }
 }
 
@@ -64,6 +65,7 @@ fn mode_from(w: [u32; 7]) -> Mode {
         7 => Mode::Paused { low: w[1], high: w[2], gap: w[3] != 0 },
         8 => Mode::Scanning { forward: w[1] != 0 },
         9 => Mode::TrayOpen,
+        10 => Mode::Jumping { left: w[1], land: w[2] },
         _ => Mode::Idle,
     }
 }

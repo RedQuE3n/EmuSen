@@ -235,6 +235,26 @@ fn cd_bios(region: char) -> Firmware {
     crate::mcd::frontend::bios_firmware(region, which)
 }
 
+/// The Sega CD BIOS a machine boots, by file number: its market's `mine` when given, else another market's in the order
+/// U, E, J; None for Nephrite's own (Nephrite_Native.md §49.2, §65).
+#[cfg(feature = "mcd")]
+fn chosen_bios(mine: u32, given: &[u32]) -> Option<u32> {
+    [mine, CD_BIOS_U, CD_BIOS_E, CD_BIOS_J].into_iter().find(|w| given.contains(w))
+}
+
+/// The boot ROM's bytes for a create's files: the chosen BIOS, else Nephrite's own (Nephrite_OpenBios.md).
+#[cfg(feature = "mcd")]
+fn boot_rom(mine: u32, files: &[emusen_native::abi::File<'_>]) -> Vec<u8> {
+    let given: Vec<u32> = files.iter().map(|f| f.which).collect();
+    chosen_bios(mine, &given).and_then(|w| files.iter().find(|f| f.which == w)).map_or_else(|| crate::mcd::bios::OPEN_BIOS.to_vec(), |f| f.data.to_vec())
+}
+
+/// Machine info's firmware for a Sega CD: the BIOS that booted, the player's file or Nephrite's own.
+#[cfg(feature = "mcd")]
+fn booted_bios(mine: u32, given: &[u32]) -> Vec<(u32, FirmwareSource)> {
+    chosen_bios(mine, given).map_or(vec![(mine, FirmwareSource::Replacement)], |w| vec![(w, FirmwareSource::File)])
+}
+
 fn firmware(which: u32, name: &str, label: &str, size: u64, cost: &str) -> Firmware {
     Firmware { which, name: name.into(), label: label.into(), size, required: false, parts: vec![vec![name.into()]], replacement: Some(Replacement::None { cost: cost.into() }) }
 }
@@ -391,18 +411,12 @@ impl Core for Machine {
         #[cfg(not(feature = "mcd"))]
         let bios = None;
         #[cfg(feature = "mcd")]
-        let bios = (media.system == System::Mcd).then(|| {
-            let mine = cd_bios(media.bios_region()).which;
-            let file = request.files.iter().find(|f| f.which == mine).or_else(|| request.files.iter().find(|f| (CD_BIOS_U..=CD_BIOS_J).contains(&f.which)));
-            file.map_or_else(|| crate::mcd::bios::OPEN_BIOS.to_vec(), |f| f.data.to_vec())
-        });
+        let bios = (media.system == System::Mcd).then(|| boot_rom(cd_bios(media.bios_region()).which, &request.files));
         #[cfg(feature = "mcd")]
         let mut m = if beneath && media.system == System::Md {
             // Mode 1: the market's BIOS where given, any of the three else, Nephrite's own without one.
             let region = if model.pal { 'E' } else if model.overseas { 'U' } else { 'J' };
-            let mine = cd_bios(region).which;
-            let file = request.files.iter().find(|f| f.which == mine).or_else(|| request.files.iter().find(|f| (CD_BIOS_U..=CD_BIOS_J).contains(&f.which)));
-            let bios = file.map_or_else(|| crate::mcd::bios::OPEN_BIOS.to_vec(), |f| f.data.to_vec());
+            let bios = boot_rom(cd_bios(region).which, &request.files);
             let mut m = Machine::with_cd_beneath(&image, media, model, bios, None);
             if let Some(f) = request.files.iter().find(|f| f.which == MODE1_BRAM) {
                 m.mcd_mut().expect("the Sega CD beneath").load_save_memory(SaveMemory::Backup, f.data);
@@ -454,16 +468,12 @@ impl Core for Machine {
                 System::Md if self.mcd().is_some() => {
                     let pal = self.hw().model.pal;
                     let region = if pal { 'E' } else if self.hw().model.overseas { 'U' } else { 'J' };
-                    let (which, source) = named(cd_bios(region).which);
-                    vec![(which, if source == FirmwareSource::Absent { FirmwareSource::Replacement } else { source })]
+                    booted_bios(cd_bios(region).which, &self.firmware)
                 }
                 System::Md if takes_lock_on(&self.media, self.hw().cart.rom.len()) => vec![named(LOCK_ON), named(SK_PATCH)],
                 System::Md => Vec::new(),
                 #[cfg(feature = "mcd")]
-                System::Mcd => {
-                    let (which, source) = named(cd_bios(self.media.bios_region()).which);
-                    vec![(which, if source == FirmwareSource::Absent { FirmwareSource::Replacement } else { source })]
-                }
+                System::Mcd => booted_bios(cd_bios(self.media.bios_region()).which, &self.firmware),
                 #[cfg(feature = "s32x")]
                 System::S32x => vec![named(S32X_68K), named(S32X_MASTER), named(S32X_SLAVE)],
             },
@@ -678,10 +688,7 @@ impl Machine {
         let (disc, media) = open_disc(request.image, &request.files)?;
         let kept_apart = crate::machine::KeptApart { cartridge: request.shared_removable, backup: request.shared_console };
         let model = region_model(Model { model2: request.settings.get(MODEL_KEY) == Some("md.model2"), ..default_model(&media) }, request.settings.get(REGION_KEY));
-        let mine = cd_bios(media.bios_region()).which;
-        let file = request.files.iter().find(|f| f.which == mine).or_else(|| request.files.iter().find(|f| (CD_BIOS_U..=CD_BIOS_J).contains(&f.which)));
-        // With no image of the player's, Nephrite's own (Nephrite_OpenBios.md).
-        let bios = file.map_or_else(|| crate::mcd::bios::OPEN_BIOS.to_vec(), |f| f.data.to_vec());
+        let bios = boot_rom(cd_bios(media.bios_region()).which, &request.files);
         let mut m = Machine::with_disc(media, model, Some(bios), Some(disc));
         m.kept_apart = kept_apart;
         m.apply_pads(&request.settings);
@@ -771,6 +778,12 @@ mod tests {
             assert_eq!(info.battery[0].suffix, ".brm");
             assert_eq!(Machine::firmware_for(&iso)[0].name, "bios_CD_E.bin");
             assert_eq!(info.firmware, vec![(CD_BIOS_E, FirmwareSource::Replacement)]);
+            // With only another market's BIOS given, that one boots, and machine info names it.
+            let bios = vec![0u8; 0x2_0000];
+            let mcd = create(&iso, vec![emusen_native::abi::File { which: CD_BIOS_U, data: &bios }]).unwrap();
+            assert_eq!(mcd.machine_info().firmware, vec![(CD_BIOS_U, FirmwareSource::File)]);
+            let mcd = create(&iso, vec![emusen_native::abi::File { which: CD_BIOS_U, data: &bios }, emusen_native::abi::File { which: CD_BIOS_E, data: &bios }]).unwrap();
+            assert_eq!(mcd.machine_info().firmware, vec![(CD_BIOS_E, FirmwareSource::File)]);
         }
     }
 

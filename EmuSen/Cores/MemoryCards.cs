@@ -92,7 +92,7 @@ namespace EmuSen.Cores
 
         // The removable files of a console's engine, as its core info lists them; empty for a console with none.
         public static IReadOnlyList<CoreBatteryFile> RemovableFor(string console) =>
-            CoreCatalog.DiscoveredSystem(console)?.Battery?.Where(b => b.Removable).ToArray() ?? Array.Empty<CoreBatteryFile>();
+            CoreCatalog.EngineSystem(console)?.Battery?.Where(b => b.Removable).ToArray() ?? Array.Empty<CoreBatteryFile>();
 
         public static bool OfferedFor(string console) => MediaFor(console).Count > 0;
 
@@ -100,7 +100,7 @@ namespace EmuSen.Cores
         public static string ExtensionOf(string suffix) => Path.GetExtension(suffix) is { Length: > 1 } e ? e : suffix;
 
         // A console's media, as its engine's core info lists them.
-        public static IReadOnlyList<SaveMedium> MediaFor(string console) => MediaOf(console, CoreCatalog.DiscoveredSystem(console));
+        public static IReadOnlyList<SaveMedium> MediaFor(string console) => MediaOf(console, CoreCatalog.EngineSystem(console));
 
         // The removable and console slots of a system grouped by medium, a core of 1.7's by kind and extension - see EmuSen_SaveMedia.md §3.2.
         public static IReadOnlyList<SaveMedium> MediaOf(string console, CoreSystem? system)

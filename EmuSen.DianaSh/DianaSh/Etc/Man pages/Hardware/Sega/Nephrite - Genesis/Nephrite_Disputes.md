@@ -1934,3 +1934,30 @@ CPUs' disputes in their own record pages.
   the game, which the manual's caution allows. All argued.
 - Pinned by: the tests above.
 - Implemented in: stage 10's commit "the backup RAM's directory".
+
+### D-57. The CDD's command A is a track jump: busy as status A for a time growing with the tracks, then paused where the head lands
+*Beyond this heading the entry records a console's drive under a BIOS and runs of the player's BIOS, and is closed to
+the open BIOS's writers (`Nephrite_Native.md` §64).*
+- Opened: 2026-10-16, by the tester's report of films that loaded after about twenty seconds or not at all on the
+  player's BIOS: the BIOS sends command A before a long read, the drive ignored it, and the BIOS waited 600 frames
+  twice before going on (`Nephrite_Native.md` §64.3).
+- Documents read: krikzz's `notes/cdd-cmd-info.txt` ("0A track jump ?", nothing more); the Mega-CD Disc Format
+  Specifications, "Line speed" (game discs fixed at 1.25 m/s "to improve the accuracy of track jump access"); the
+  Mega-CD Outline's specification table (access time at most 1.5 s, 0.8 s on average) and §4-3 (a maximum seek of
+  1.5 s); Sega Retro's Mega-CD specification page (800 ms, 150 KB/s). The Hardware Manual's §3-6 blacks the protocol
+  out.
+- Test program: mcd-verificator's `cd-log/sonic-bios/` recordings of a console's drive, one status and one command an
+  exchange: `boot-log.txt` lines 897 and 1475 and `stop-to-play (track 3).txt` line 152, three jumps of 523, 4,883 and
+  13,292 tracks outward, each answered `AF.000000` with the place's flags for 8, 28 and 54 exchanges, then paused at
+  01:29:26, 13:17:49 and 47:26:29; and `examples/waits.rs` on the player's BIOS, which sends jumps inward with nibble 3
+  set (`A0.0F32B7` with the head at 208,739 and its target 10,402).
+- Referee: none read; the recordings settle it.
+- Conclusion: command A, taken while the drive is ready, moves the head by the count in nibbles 4-7 (hexadecimal),
+  toward the centre when nibble 3 is not 0. The drive is busy `AF.000000` with its flags for round(√n / 2 − 4.5)
+  exchanges, at least one, the last carrying the landing's flags, and then pauses at the landing, which is where the
+  tracks from the centre, √(18,300² + 3,385·s) at sector s, are n more or fewer. Both curves are measured, fitted by
+  least squares to the three recordings (busy within 2 exchanges, the landing within 31 sectors on the long jump, 227
+  on the middle, 789 short on the 523-track jump), and argued in form from a spiral read at constant linear velocity.
+  One disc's recordings; the direction's nibble from the player's BIOS's own commands.
+- Pinned by: `a_track_jump_is_busy_then_pauses_where_it_lands` (crate).
+- Implemented in: the commit "The drive's track jump".

@@ -1,4 +1,4 @@
-//! The multiple, antialiasing and the device over the C ABI: C#'s `RenderScale`, `Antialiasing` and `Gpu`, applied between frames as
+//! The multiple, antialiasing and the device: C#'s `RenderScale`, `Antialiasing` and `Gpu`, applied between frames as
 //! `MarsCore.ApplyMultiple` applies them. See Mars_Native.md §6.4.
 
 use super::Core;
@@ -30,31 +30,6 @@ impl Core {
     pub fn gpu_report(&self) -> String {
         self.machine.bus.dp.gpu_report().to_string()
     }
-}
-
-/// The resolution multiple one to four, the antialiasing one to four, and whether the device is asked for.
-///
-/// # Safety
-/// `core` must be live or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mars_machine_set_multiple(core: *mut Core, render_scale: i32, antialiasing: i32, gpu: u32) {
-    if let Some(c) = unsafe { core.as_mut() } {
-        c.set_multiple(render_scale, antialiasing, gpu != 0);
-    }
-}
-
-/// The device report as UTF-8, copied up to `len` bytes; returns its whole length.
-///
-/// # Safety
-/// `core` must be live or null; `out` valid for `len` bytes, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mars_machine_gpu_report(core: *const Core, out: *mut u8, len: usize) -> i64 {
-    let Some(c) = (unsafe { core.as_ref() }) else { return super::STATUS_NULL as i64 };
-    let report = c.gpu_report();
-    if !out.is_null() {
-        unsafe { std::ptr::copy_nonoverlapping(report.as_ptr(), out, report.len().min(len)) };
-    }
-    report.len() as i64
 }
 
 #[cfg(test)]

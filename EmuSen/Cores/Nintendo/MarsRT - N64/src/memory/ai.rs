@@ -27,6 +27,8 @@ pub struct AiInterface {
     pub due: Skip<i64>,
     /// `_samples`: what the frontend has not drained.
     pub samples: Skip<VecDeque<i16>>,
+    /// `SampleQueue.Limit`: the most samples kept before the oldest pair goes; 0 is `MAX_BUFFERED_SAMPLES`, C#'s default.
+    pub limit: Skip<usize>,
 }
 
 impl State for AiInterface {
@@ -108,7 +110,8 @@ impl AiInterface {
     }
 
     fn enqueue(&mut self, left: i16, right: i16) {
-        if self.samples.len() + 2 > MAX_BUFFERED_SAMPLES {
+        let limit = if *self.limit == 0 { MAX_BUFFERED_SAMPLES } else { *self.limit };
+        if self.samples.len() + 2 > limit {
             self.samples.pop_front();
             self.samples.pop_front();
         }
@@ -238,5 +241,26 @@ impl MemoryBus {
         if self.ai.length == 0 {
             self.ai_end();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `SampleQueue`'s rule with a host's limit: past it the oldest pair goes, and no limit given is C#'s default.
+    #[test]
+    fn past_the_host_s_limit_the_oldest_pair_goes_and_none_given_is_the_default() {
+        let mut ai = AiInterface::default();
+        *ai.limit = 4;
+        for n in 0..3 {
+            ai.enqueue(n, -n);
+        }
+        assert_eq!(ai.samples.iter().copied().collect::<Vec<_>>(), vec![1, -1, 2, -2]);
+        *ai.limit = 0;
+        for n in 0..MAX_BUFFERED_SAMPLES {
+            ai.enqueue(n as i16, n as i16);
+        }
+        assert_eq!(ai.samples.len(), MAX_BUFFERED_SAMPLES);
     }
 }

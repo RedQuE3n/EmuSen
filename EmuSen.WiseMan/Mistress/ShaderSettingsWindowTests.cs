@@ -109,7 +109,7 @@ namespace EmuSen.WiseMan.Mistress
             foreach (string console in CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console))
             {
                 ShaderPanel panel = window.PanelFor(console);
-                Assert.Equal(ScreenFilters.NamesFor(console), panel.List.Models.Select(e => e.Stored));
+                Assert.Equal(ScreenFilters.NamesFor(CoreCatalog.HostOf(console)), panel.List.Models.Select(e => e.Stored));
                 Assert.All(panel.List.Models, e => Assert.Equal(ShaderCatalog.BuiltIn, e.Group));
                 string inUse = console == "NES" ? "Scanlines" : ScreenFilters.None;
                 Assert.Equal(inUse, panel.List.Selected?.Stored);

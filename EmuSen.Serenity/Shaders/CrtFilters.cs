@@ -140,7 +140,7 @@ half4 main(float2 coord) {
 
         public static ScreenFilter Lottes { get; } = new("CRT (Lottes)",
             new[] { new FilterPass(LottesSksl, PassScale.Viewport) },
-            new[] { "NES", "SNES", "N64" },
+            CrtFilter.TelevisionConsoles,
             "crt-lottes by Timothy Lottes, public domain, from libretro's slang-shaders",
             LottesParameters);
     }

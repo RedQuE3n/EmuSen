@@ -153,7 +153,7 @@ fn drain(m: &mut Machine) {
     hooks.calls_log.clear();
     hooks.flush();
     hooks.profile.clear();
-    if let Some(bits) = hooks.coverage.as_deref_mut() {
+    if let Some(bits) = hooks.coverage_bits() {
         bits.fill(0);
     }
     if let Some(trace) = m.bus.sp.trace.as_mut() {

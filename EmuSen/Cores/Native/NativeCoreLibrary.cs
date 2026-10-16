@@ -9,8 +9,8 @@ namespace EmuSen.Cores.Native
     {
         private readonly Lazy<(nint Handle, string Report)> _library;
 
-        // A per-core ABI's library, MercuryRT's and MarsRT's until their steps 4 and 5: its own version and crash-log exports.
-        public NativeCoreLibrary(string crate, string variable, uint interfaceVersion, string versionExport, string crashLogExport, string crashLogStem)
+        // The common interface's loader, made only by Common since MarsRT's per-core ABI retired at its step 5 - see EmuSen_NativeCores.md §7.
+        private NativeCoreLibrary(string crate, string variable, uint interfaceVersion, string versionExport, string crashLogExport, string crashLogStem)
         {
             Crate = crate;
             Variable = variable;

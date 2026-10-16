@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
+using EmuSen.Crystal.Systems.N64;
 using EmuSen.Crystal.Systems.Psx;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -31,6 +32,23 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var about = shown.OfType<TextBlock>().First(t => t.Name == "PlayStation.psx.card.About");
             Assert.Equal(held, about.Text!.Contains("In use by Amber Saga"));
             Assert.StartsWith("Shared: Card 1 in Slot 1, Card 2 in Slot 2.", about.Text);
+        }
+
+        // The N64's tab: four Controller Paks, a shared pak with two notes, one with a long name, and a game's own beside it - see EmuSen_SaveMedia.md §7.2.
+        internal static void ShowMemoryCardsN64(MainWindow window)
+        {
+            string pak = SaveLibrary.CardPathFor("N64", "Pak 1", ".mpk");
+            Directory.CreateDirectory(Path.GetDirectoryName(pak)!);
+            byte[] notes = N64PakFormatTests.WithNote(N64PakFormatTests.WithNote(N64PakFormat.Instance.Format(), 0, "NKTE", "01", new byte[] { 0x26, 0x1A, 0x2B, 0x22, 0x28, 0x01, 0x24, 0x1A, 0x2B, 0x2D }, new[] { 5, 6 }, 1),
+                1, "NZLE", "01", Enumerable.Repeat((byte)0x2C, 16).ToArray(), new[] { 7, 8, 9 }, 2);
+            File.WriteAllBytes(pak, notes);
+            File.WriteAllBytes(Path.Combine(DataStore.Saves, "N64", "Mario Kart 64.mpk"), N64PakFormat.Instance.Format());
+            Call(window, "ShowMemoryCards");
+            SelectTab(window, "N64");
+            var shown = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>().ToList();
+            Assert.Contains(shown, c => c.Name == "N64.n64.pak.Save.1" && c.IsEffectivelyVisible);
+            var about = shown.OfType<TextBlock>().First(t => t.Name == "N64.n64.pak.About");
+            Assert.StartsWith("Shared: Pak 1 in Controller 1, Pak 2 in Controller 2, Pak 3 in Controller 3, Pak 4 in Controller 4.", about.Text);
         }
     }
 }

@@ -80,7 +80,7 @@ const GREP_USAGE: &str = concat!(
     "                                Reads piped stdin if given, else operates on trailing literal text."
 );
 
-pub fn grep(args: &[String], stdin: Option<String>) -> Run {
+pub fn grep(call: &Call, args: &[String], stdin: Option<String>) -> Run {
     let (mut ignore_case, mut invert, mut numbered, mut count_only, mut quiet) = (false, false, false, false, false);
     let mut i = 1;
     while i < args.len() {
@@ -101,7 +101,7 @@ pub fn grep(args: &[String], stdin: Option<String>) -> Run {
     let Some(text) = input(stdin, args, i + 1) else {
         return Ok(Answer::ok("Nothing to search - pipe a command's output in, or pass literal text: grep <pattern> <text...>"));
     };
-    let regex = pattern::compile(regex, ignore_case)?;
+    let regex = pattern::cached(call, regex, ignore_case)?;
     let matches: Vec<(usize, &str)> = text.split('\n').enumerate().filter(|(_, line)| regex.is_match(line) != invert).map(|(n, line)| (n + 1, line)).collect();
     // Exit 0 on at least one match, which is what lets -q drive an if or while.
     let status = if matches.is_empty() { 1 } else { 0 };
@@ -121,7 +121,7 @@ const SED_USAGE: &str = concat!(
     "                                Real use is as a pipeline stage: <command> | sed s/pat/repl/"
 );
 
-pub fn sed(args: &[String], stdin: Option<String>) -> Run {
+pub fn sed(call: &Call, args: &[String], stdin: Option<String>) -> Run {
     if args.len() < 2 {
         return Ok(Answer::ok(SED_USAGE));
     }
@@ -140,7 +140,7 @@ pub fn sed(args: &[String], stdin: Option<String>) -> Run {
         return Err(format!("Malformed s{delimiter}pattern{delimiter}replacement{delimiter}[flags] expression: '{expression}'."));
     }
     let global = fields[2].contains('g');
-    let regex = pattern::compile(&fields[0], fields[2].contains('i'))?;
+    let regex = pattern::cached(call, &fields[0], fields[2].contains('i'))?;
     let replacement = pattern::replacement(&fields[1], regex.captures_len());
     let lines: Vec<String> = text
         .split('\n')

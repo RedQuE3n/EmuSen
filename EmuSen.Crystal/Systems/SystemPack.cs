@@ -18,7 +18,7 @@ namespace EmuSen.Crystal.Systems
     // A recogniser's claim: the system, and the game's serial and market where the pack can read them.
     public sealed record Recognition(string SystemId, string? Serial = null, string? Region = null);
 
-    // A console's facts that are no one engine's; SelfDelimitingImages says a malformed image must be refused, which C4 asks only of such a format; Recognise claims a file by its content where several systems take its extension - see EmuSen_CoreAPI.md §8.2, §20, §21.4 and EmuSen_CoreAPI_Extensions.md §8.4.
+    // A console's facts that are no one engine's; SelfDelimitingImages says a malformed image must be refused, which C4 asks only of such a format; Recognise claims a file by its content where several systems take its extension; AttachedTo names the console an attachment plugs into, whose screen and pads it uses - see EmuSen_CoreAPI.md §8.2, §20, §21.4, EmuSen_CoreAPI_Extensions.md §8.4 and EmuSen_Serenity.md §3.12.
     public sealed record SystemEntry(
         string Id,
         string Name,
@@ -33,7 +33,8 @@ namespace EmuSen.Crystal.Systems
         string EsdeSystem,
         string EsdeFullName,
         bool SelfDelimitingImages = false,
-        Func<IMediaProbe, Recognition?>? Recognise = null);
+        Func<IMediaProbe, Recognition?>? Recognise = null,
+        string? AttachedTo = null);
 
     // A console's system pack: its entry, its cheat codecs and its debugger views, which any engine of the console uses - see EmuSen_CoreAPI.md §8.2, §20, §31.
     // PlayerControllers answers each player's controller id from the console's settings (EmuSen_Settings_Reference.md §4.102); Media names its save media and their format modules (EmuSen_SaveMedia.md §6.2).

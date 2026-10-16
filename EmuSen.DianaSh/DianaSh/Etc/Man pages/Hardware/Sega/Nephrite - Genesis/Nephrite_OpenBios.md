@@ -630,7 +630,9 @@ closed parts was read by its headings' exact boundaries.
 **Not opened, by the rule:** `spritesmind/t2061_p001.html`, `t1018_*`, `t3020_*`, `t458_*`, `t3218_*`,
 `railgun/Trademark_Security_System.wiki`; mcd-verificator's `cd-log/BI-mcd-tst/` and `cd-log/sonic-bios/`; MiSTer's
 `docs/mcd logs` and every RTL file; `Nephrite_Native.md` §53.4, §54.3's first bullet beyond the line above, §55,
-§57.2, §60.1–§60.3; `Nephrite_Disputes.md`'s D-36 and D-40 beyond their headings; `~/.cache/emusen/probe/nephrite/s9/`;
+§57.2, §60.1–§60.3, §64 (*added 2026-10-16:* "Observations of the player's BIOS at work"); `Nephrite_Disputes.md`'s
+D-36, D-40 and D-57 beyond their headings; `src/mcd/cdd.rs`'s command A (`CENTRE`, `AREA`, `Cdd::jump`, the `Jumping` arm and its test) until the
+tester decides it (`Nephrite_Native.md` §64.8); `~/.cache/emusen/probe/nephrite/s9/`;
 `docs/bram/` but for `emutos-mcd_bram-filesystem.md` (read whole once allowed, used for the footer and the odd-byte
 layout alone); the player's BIOS (`sysdir/scd/`), which was never read, and was run only as the black box described above; any emulator's source. The register
 watch was run only with the open BIOS, never with a player's. *As of 2026-10-15, after the screening:*

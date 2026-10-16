@@ -1,95 +1,22 @@
-//! The debugger's hooks: tables the host pushes down, and what an observed frame records for it to read back.
-//! Nothing here calls the host; a frame that meets a table ends early with a reason. See Mars_Native.md §6.5.
+//! The debugger's hooks: `emusen_native::debug::Hooks`, the tables and logs every Rust core shares, and what MarsRT's
+//! observed loop keeps beside them, the return that waits for its delay slot and the observed frame's clock. Nothing here
+//! calls the host; a frame that meets a table ends early with a reason. See Mars_Native.md §6.5 and §7.3.
 
-use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
 
-/// Why an observed frame stopped, as bits; zero is the field's end.
-pub mod stop {
-    pub const FRAME: u32 = 0;
-    /// The next instruction's address is in a breakpoint range.
-    pub const BREAKPOINT: u32 = 1;
-    /// The host asked to stop before every instruction.
-    pub const EACH: u32 = 2;
-    /// The call stack's depth reached the target, or passed the guard.
-    pub const DEPTH: u32 = 4;
-    /// A store landed in a data-breakpoint range; the store has run.
-    pub const DATA: u32 = 8;
-    /// An interrupt was entered; the next instruction is the handler's first.
-    pub const INTERRUPT: u32 = 16;
-    /// A log is full and must be drained.
-    pub const RING: u32 = 32;
-}
+pub use emusen_native::debug::{Call, LOG_CAPACITY, MAX_DEPTH, Range, Write, flag, kind, stop};
 
-/// A stretch of one memory, numbered as `ffi::space` numbers memories, both ends included.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Range {
-    pub space: u32,
-    pub start: u32,
-    pub end: u32,
-}
-
-/// One byte a processor store left, in the memory it landed in, and the storing instruction's address.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Write {
-    pub space: u32,
-    pub address: u32,
-    pub value: u32,
-    pub pc: u32,
-}
-
-/// A call pushed (`kind` 1, with its source and target) or a return popped (`kind` 0).
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Call {
-    pub kind: u32,
-    pub source: u32,
-    pub target: u32,
-}
-
-/// C#'s `CallStackRegistry.MaxDepth`: a runaway chain stops growing here, and its returns still pop.
-pub const MAX_DEPTH: usize = 512;
-/// Entries a log holds before the frame stops to have it drained.
-pub const LOG_CAPACITY: usize = 1 << 16;
-/// One bit per 24-bit address, as C#'s `CoverageRegistry` keeps it.
+/// The processors' coverage widths: the CPU's a 24-bit address, as C#'s `CoverageRegistry` keeps it, the signal processor's
+/// its 4 KB IMEM.
+pub const WIDTHS: [u32; 2] = [24, 12];
+/// The CPU's bitmap, one bit per 24-bit address.
 pub const COVERAGE_BYTES: usize = 1 << 21;
 
 #[derive(Clone, Debug)]
 pub struct Hooks {
-    /// Calls and returns tracked; off, the stack stands where the last observed frame left it.
-    pub calls: bool,
-    /// Processor stores reported byte by byte, as C#'s `MemoryBus.Report`, into the ranges below.
-    pub writes: bool,
-    /// Stop after an interrupt is entered.
-    pub interrupts: bool,
-    /// Stop before every instruction.
-    pub each: bool,
-    /// Instructions charged to the innermost call, as C#'s `NoteInstruction`.
-    pub profiling: bool,
+    pub shared: emusen_native::debug::Hooks,
     /// A `jr ra` ran; the pop waits for its delay slot, as C#'s `_returnAfterSlot`.
     pub return_after_slot: bool,
-    pub interrupt_taken: bool,
-    pub data_pending: bool,
-    /// Stop once the depth is at or under this; `i32::MIN` is unarmed, as C#'s `_stepDepthTarget`.
-    pub depth_target: i32,
-    /// Stop once the depth is over this; `-1` is unarmed.
-    pub depth_guard: i32,
-    /// Enabled breakpoints, both ends included, compared as C# compares its `int`s.
-    pub breakpoints: Vec<(i32, i32)>,
-    pub watch_ranges: Vec<Range>,
-    pub break_ranges: Vec<Range>,
-    /// `(source, target)` of every open call, innermost last.
-    pub stack: Vec<(u32, u32)>,
-    pub unmatched_returns: i64,
-    pub calls_log: Vec<Call>,
-    pub writes_log: Vec<Write>,
-    /// The bitmap while coverage is armed, drained and cleared by the host.
-    pub coverage: Option<Box<[u8]>>,
-    pub covered: i64,
-    /// Instructions by the routine they ran in, zero outside any call; drained by the host.
-    pub profile: HashMap<u32, i64>,
-    owner: u32,
-    run: i64,
     /// The frame an observed loop is inside, so a stop the host resumes from does not start the frame's clock again.
     pub frame_open: bool,
     pub frame_start: i64,
@@ -98,153 +25,79 @@ pub struct Hooks {
 
 impl Default for Hooks {
     fn default() -> Self {
-        Hooks {
-            calls: false,
-            writes: false,
-            interrupts: false,
-            each: false,
-            profiling: false,
-            return_after_slot: false,
-            interrupt_taken: false,
-            data_pending: false,
-            depth_target: i32::MIN,
-            depth_guard: -1,
-            breakpoints: Vec::new(),
-            watch_ranges: Vec::new(),
-            break_ranges: Vec::new(),
-            stack: Vec::new(),
-            unmatched_returns: 0,
-            calls_log: Vec::new(),
-            writes_log: Vec::new(),
-            coverage: None,
-            covered: 0,
-            profile: HashMap::new(),
-            owner: 0,
-            run: 0,
-            frame_open: false,
-            frame_start: 0,
-            frame_fields: 0,
-        }
+        Hooks { shared: emusen_native::debug::Hooks::new(&WIDTHS), return_after_slot: false, frame_open: false, frame_start: 0, frame_fields: 0 }
+    }
+}
+
+impl Deref for Hooks {
+    type Target = emusen_native::debug::Hooks;
+    fn deref(&self) -> &Self::Target {
+        &self.shared
+    }
+}
+
+impl DerefMut for Hooks {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.shared
     }
 }
 
 impl Hooks {
-    /// The flags set at once, the profile's run closed first so no instruction is charged to a routine under the new rules.
+    /// The CPU's flags set at once, the depths and the signal processor's coverage left as they stand.
     pub fn configure(&mut self, calls: bool, writes: bool, interrupts: bool, each: bool, coverage: bool, profiling: bool) {
-        self.flush();
-        self.calls = calls;
-        if !calls {
+        let bit = |on: bool, b: u32| if on { b } else { 0 };
+        let rsp = self.shared.coverage.get(1).is_some_and(Option::is_some);
+        let flags = bit(calls, flag::CALLS)
+            | bit(writes, flag::WRITES)
+            | bit(interrupts, flag::INTERRUPTS)
+            | bit(each, flag::EACH)
+            | bit(profiling, flag::PROFILING)
+            | bit(coverage, 1 << flag::COVERAGE)
+            | bit(rsp, 1 << (flag::COVERAGE + 1));
+        let (target, guard) = (self.depth_target, self.depth_guard);
+        self.shared.configure(flags, target, guard);
+        self.settle_flags();
+    }
+
+    /// A return still waiting for its slot is dropped once calls are no longer tracked, so it cannot pop a frame later.
+    pub fn settle_flags(&mut self) {
+        if !self.shared.calls {
             self.return_after_slot = false;
         }
-        self.writes = writes;
-        self.interrupts = interrupts;
-        self.each = each;
-        if coverage != self.coverage.is_some() {
-            self.coverage = coverage.then(|| vec![0u8; COVERAGE_BYTES].into_boxed_slice());
-        }
-        self.profiling = profiling;
-        self.owner = self.stack.last().map_or(0, |f| f.1);
-    }
-
-    /// True while any table could stop, record or report: the frame loop the host chooses is the observed one.
-    pub fn armed(&self) -> bool {
-        self.calls || self.writes || self.interrupts || self.each || self.profiling || self.coverage.is_some() || !self.breakpoints.is_empty()
-    }
-
-    pub fn depth(&self) -> usize {
-        self.stack.len()
     }
 
     /// `CallObserver`: pushed as the call executes, so its delay slot is already a frame deeper.
     #[inline(never)]
     pub fn note_call(&mut self, source: u64, target: u64) {
-        let (source, target) = (source as u32, target as u32);
-        self.calls_log.push(Call { kind: 1, source, target });
-        if self.stack.len() < MAX_DEPTH {
-            self.stack.push((source, target));
-        }
-        self.flush();
-    }
-
-    /// `ReturnObserver`: popped once the return's delay slot has run; a pop with nothing open is counted, not swallowed.
-    #[inline(never)]
-    pub fn note_return(&mut self) {
-        self.calls_log.push(Call { kind: 0, source: 0, target: 0 });
-        if self.stack.pop().is_none() {
-            self.unmatched_returns += 1;
-        }
-        self.flush();
-    }
-
-    /// The profile's open run charged to its routine, and the routine that owns the next run named.
-    pub fn flush(&mut self) {
-        if self.run != 0 {
-            *self.profile.entry(self.owner).or_insert(0) += self.run;
-            self.run = 0;
-        }
-        self.owner = self.stack.last().map_or(0, |f| f.1);
+        self.shared.note_call(source as u32, target as u32, kind::CALL);
     }
 
     /// What the observed loop records before each instruction: the coverage bit and the profiler's count.
     #[inline(always)]
     pub fn record(&mut self, pc: u64) {
-        if let Some(bits) = &mut self.coverage {
-            let index = (pc as u32 & 0xFF_FFFF) as usize;
-            bits[index >> 3] |= 1 << (index & 7);
-            self.covered += 1;
-        }
-        if self.profiling {
-            self.run += 1;
-        }
+        self.shared.record(pc as u32);
     }
 
     /// Why the loop should stop before the instruction at `pc`, every reason that holds; the one-shot reasons are consumed.
     #[inline(always)]
     pub fn stop_before(&mut self, pc: u64) -> u32 {
-        let mut why = stop::FRAME;
-        if self.each {
-            why |= stop::EACH;
-        }
-        let depth = self.stack.len() as i32;
-        if (self.depth_target != i32::MIN && depth <= self.depth_target) || (self.depth_guard >= 0 && depth > self.depth_guard) {
-            why |= stop::DEPTH;
-        }
-        if self.data_pending {
-            self.data_pending = false;
-            why |= stop::DATA;
-        }
-        if self.interrupt_taken {
-            self.interrupt_taken = false;
-            why |= stop::INTERRUPT;
-        }
-        if self.writes_log.len() >= LOG_CAPACITY || self.calls_log.len() >= LOG_CAPACITY {
-            why |= stop::RING;
-        }
-        if !self.breakpoints.is_empty() && self.covers(pc) {
-            why |= stop::BREAKPOINT;
-        }
-        why
+        self.shared.stop_before(pc as u32)
     }
 
     /// `Breakpoint.Covers` on the address as C# holds it, a signed 32-bit integer.
-    #[inline(always)]
     pub fn covers(&self, pc: u64) -> bool {
-        let address = pc as u32 as i32;
-        self.breakpoints.iter().any(|&(start, end)| address >= start && address <= end)
+        self.shared.covers(pc as u32)
     }
 
     /// One byte of a store, as `IWriteObserver.OnWrite` would receive it: logged where a watch or a data breakpoint covers it.
     #[inline(never)]
     pub fn note_write(&mut self, space: u32, address: u32, value: u8, pc: u64) {
-        let hit = |r: &Range| r.space == space && address >= r.start && address <= r.end;
-        let watched = self.watch_ranges.iter().any(hit);
-        let breaks = self.break_ranges.iter().any(hit);
-        if watched || breaks {
-            self.writes_log.push(Write { space, address, value: value as u32, pc: pc as u32 });
-        }
-        if breaks {
-            self.data_pending = true;
-        }
+        self.shared.note_write(space, address, value, pc as u32);
+    }
+
+    /// The CPU's coverage bitmap while it is armed.
+    pub fn coverage_bits(&mut self) -> Option<&mut [u8]> {
+        self.shared.coverage.first_mut().and_then(Option::as_mut).map(|c| &mut c.bits[..])
     }
 }
 
@@ -255,6 +108,7 @@ mod tests {
     #[test]
     fn a_return_with_nothing_open_is_counted_and_the_depth_never_goes_negative() {
         let mut h = Hooks::default();
+        h.configure(true, false, false, false, false, false);
         h.note_return();
         assert_eq!((h.depth(), h.unmatched_returns), (0, 1));
         h.note_call(0x10, 0x20);
@@ -266,6 +120,7 @@ mod tests {
     #[test]
     fn the_stack_stops_growing_at_the_cap_and_its_returns_still_pop() {
         let mut h = Hooks::default();
+        h.configure(true, false, false, false, false, false);
         for i in 0..MAX_DEPTH as u64 + 3 {
             h.note_call(i, i);
         }
@@ -300,7 +155,10 @@ mod tests {
 
     #[test]
     fn a_stop_consumes_its_one_shot_reasons_and_reports_every_reason_at_once() {
-        let mut h = Hooks { each: true, data_pending: true, interrupt_taken: true, ..Hooks::default() };
+        let mut h = Hooks::default();
+        h.configure(true, false, false, true, false, false);
+        h.data_pending = true;
+        h.interrupt_taken = true;
         assert_eq!(h.stop_before(0), stop::EACH | stop::DATA | stop::INTERRUPT);
         assert_eq!(h.stop_before(0), stop::EACH);
         h.each = false;
@@ -324,5 +182,16 @@ mod tests {
         assert_eq!(h.writes_log.len(), 2);
         assert!(h.data_pending);
         assert_eq!(h.writes_log[0], Write { space: 0, address: 0x13, value: 7, pc: 0xA400_0040 });
+    }
+
+    #[test]
+    fn configure_keeps_the_signal_processor_s_coverage_and_drops_a_waiting_return_with_calls_off() {
+        let mut h = Hooks::default();
+        h.shared.configure(1 << (flag::COVERAGE + 1), i32::MIN, -1);
+        h.configure(true, false, false, false, true, false);
+        assert!(h.coverage[1].is_some() && h.coverage_bits().is_some_and(|b| b.len() == COVERAGE_BYTES));
+        h.return_after_slot = true;
+        h.configure(false, false, false, false, false, false);
+        assert!(!h.return_after_slot && h.coverage[0].is_none() && h.coverage[1].is_some());
     }
 }

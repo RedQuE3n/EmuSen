@@ -70,6 +70,7 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
     )),
     ("mv", false, "  mv <src> <dst>                SUSPENDED - move/rename a file or directory (dst may be an existing directory)"),
     ("cp", false, "  cp [-r] <src> <dst>           copy a file (-r: copy a directory and everything in it; dst may be an existing directory)"),
+    ("rm", false, "  rm [-r] <path>                SUSPENDED - delete a file (-r: delete a directory and everything in it)"),
 
 ];
 

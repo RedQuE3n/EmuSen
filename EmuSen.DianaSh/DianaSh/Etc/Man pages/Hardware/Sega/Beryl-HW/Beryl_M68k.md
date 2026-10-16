@@ -574,3 +574,63 @@ layout is unchanged and an older state reads as no sample owed.
 **Pinned by** `boundary.rs`'s `a_move_samples_the_level_before_its_store_and_a_movem_after` (the word, long and
 absolute-long MOVEs and the MOVEM; it fails on §5.1's rule, shown). **The suites are unchanged**, as they must be, having
 no interrupt: SingleStepTests' 310,649 of 317,500 and TomHarte's 794,139 of 1,000,060 (§6.5), measured 2026-10-07.
+
+## 8. The assembler (2026-10-15)
+
+*Built for Nephrite's open Sega CD BIOS (`Nephrite_OpenBios.md` §3, step 10.0, decided 2026-10-15); the 32X's 68000
+boot ROM will use it too.* `src/asm.rs`, behind the crate's `asm` feature: a development tool, so a core's library
+compiles none of it, and a firmware built at compile time takes it as a build dependency.
+
+### 8.1 What it reads
+
+Motorola's syntax, as M68000PRM §2–§4 write the instructions and as §5.5's disassembler prints them, case-insensitive
+in mnemonics and registers, case-sensitive in labels:
+
+- **Instructions**: the whole 68000 set with its sizes, the conditions' aliases `HS` and `LO`, `DBRA`, `SP` for A7.
+  An instruction is encoded as written; the only choices made for the writer are those an operand forces: `ADD`,
+  `SUB`, `AND`, `OR`, `EOR` or `CMP` with an immediate source and a destination other than a data register is the
+  immediate form (`ADDI` and the rest), with an address register the address form (`ADDA`, `SUBA`, `CMPA`), `CMP` of
+  two postincrements `CMPM`, and `MOVE` to an address register `MOVEA`. An immediate to a data register keeps the
+  plain form, `OR.B #n,D0` and `ORI.B #n,D0` being different words that the disassembler names apart.
+- **Operands**: every addressing mode in both of Motorola's spellings (`d(An)` and `(d,An)`, `d(An,Xn.s)` and
+  `(d,An,Xn.s)`); a PC-relative operand names its target, as the disassembler prints it, and the displacement is the
+  distance from the extension word over 24 address lines; `expr.W` and `expr.L` for absolute addresses; register lists
+  `D0-D3/A0/A5-A6`, or `#mask` for a raw one.
+- **Labels** in the first column or ending in `:`; local labels (`.name` or `@name`) belong to the global label before
+  them. **Constants** by `equ`, `=` or `set`. **Data**: `dc.b`/`.w`/`.l` with expressions and, in `dc.b`, strings;
+  `ds` and `dcb` with a count and a fill; `org`, `even`, `align`; `include` through a reader the caller passes;
+  `if`/`else`/`endif` over constants and the defines the caller passes.
+- **Expressions**: decimal, `$` and `0x` hexadecimal, `%` binary, character constants of up to four bytes, `*` for
+  the current address; unary `-`, `~`, `!`; `* / %`, `+ -`, `<< >>`, `&`, `^`, `|`, and comparisons, in C's order.
+
+### 8.2 The two choices it makes
+
+- **An absolute address with no size** takes the word form when its value is known on the first pass and the word's
+  sign extension reaches it over the 68000's 24 address lines (`$0000`–`$7FFF` and `$FF8000`–`$FFFFFF`), and the long
+  form otherwise; the choice is kept for the passes after, so a forward reference is long. `MOVE.W $FFFD00,D0` is
+  `$3038 $FD00`.
+- **A branch with no size** starts in the word form and becomes short when its target lies within a byte's reach and
+  is not the next word (a short displacement of 0 is the word form's marker); a branch is never lengthened again, so
+  the passes end, every distance only shrinking. `.S` (or `.B`) and `.W` are taken as written, and refused when out of
+  range.
+
+Anything out of range, undefined or misplaced (an instruction or word at an odd address, an `org` backwards) is an
+error naming its line; nothing is silently truncated.
+
+### 8.3 The oracle
+
+`every_instruction_form_assembles_back_to_its_words`: each of the 65,536 opcodes is disassembled at `$1000` with
+extension words whose fields the 68000 ignores are clear; the 45,816 the disassembler decodes (TomHarte's map's 45,815
+and `ILLEGAL`, by §5.5's map test) are assembled from that text, and every one gives back exactly the words it was
+disassembled from. Twice more with other extension words (address-register and long indexes, negative displacements,
+immediates with their high bits set, PC-relative targets that wrap the 24-bit space), the text read back from the
+assembled words is the text assembled. Beside it, the manual's encodings of a sample of instructions, labels and
+branch sizing, conditionals, and errors by line.
+
+**One change to the disassembler, found by the round trip**: the PC-relative indexed mode printed its 8-bit
+displacement (`$6(PC,D1.W)`) where the PC-relative mode prints its target (`$000412(PC)`), so the two forms read
+differently and the first could not be assembled back as a target. It now prints the target as well
+(`$000008(PC,D1.W)`). `DEBUG_DISASSEMBLE` is text for a person and no test of Nephrite's debugger names that form; the
+map test, which reads the mode only, is unchanged.
+
+**Measured (2026-10-15)**: the crate's 26 tests with the feature, 21 without, pass, the map tests with TomHarte's map.

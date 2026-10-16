@@ -36,7 +36,7 @@ namespace EmuSen.Crystal.Systems.Genesis
             "Sega CD",
             "Sega",
             1991,
-            new[] { ".iso" },
+            new[] { ".iso", ".cue", ".chd" },
             new[] { "Sega - Mega-CD - Sega CD" },
             new[] { "SCD" },
             file => file,
@@ -44,6 +44,7 @@ namespace EmuSen.Crystal.Systems.Genesis
             "segacd",
             "Sega CD",
             SelfDelimitingImages: false,
+            // A sheet is read by its first track, which the PlayStation's pack also takes; a CHD by its folder's name - see Nephrite_OpenBios.md §11.
             Recognise: probe => IsSegaCd(probe.Read(0x40)) ? new Recognition(MegaCdId) : null);
 
         public static readonly SystemEntry S32x = new(

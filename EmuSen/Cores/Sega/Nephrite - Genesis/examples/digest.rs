@@ -67,7 +67,8 @@ fn run(path: &std::path::Path, bios: &Option<Vec<u8>>) -> String {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let bios = std::env::var_os("NEPHRITE_BIOS").map(|p| std::fs::read(p).expect("the boot ROM"));
+    // `NEPHRITE_BIOS=open` runs Nephrite's own BIOS (Nephrite_OpenBios.md).
+    let bios = std::env::var_os("NEPHRITE_BIOS").map(|p| if p == "open" { nephrite::mcd::bios::OPEN_BIOS.to_vec() } else { std::fs::read(p).expect("the boot ROM") });
     let images: Vec<std::path::PathBuf> = match args.first().map(String::as_str) {
         Some("--list") => {
             let from = std::path::Path::new(&args[3]);

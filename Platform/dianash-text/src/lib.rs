@@ -35,6 +35,12 @@ pub(crate) type Run = Result<Answer, String>;
 
 /// The commands this module has, in the order the shell lists them, with today's usage lines.
 pub const COMMANDS: &[(&str, bool, &str)] = &[
+    ("sed", true, concat!(
+        "  sed s/pat/repl/[gi]           substitute (first match per line, or every match with 'g';\n",
+        "                                'i' = case-insensitive). Standalone: sed <expr> <text...>.\n",
+        "                                Real use is as a pipeline stage: <command> | sed s/pat/repl/"
+    )),
+
 ];
 
 /// The module: one value, no state of its own.

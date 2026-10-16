@@ -434,7 +434,7 @@ work RAM, disassembled with Beryl's disassembler where they called into the boot
 `$FF0560`-`$FF064C` and `$FF1000`-`$FF104E`, and a byte search of its first 8 KiB, which showed the first eight bytes of
 the security block, D-43). The player's BIOS was run as a black box with the five discs and the 240p suite: given to
 Nephrite as a file, the games' pictures kept only from frame 1,500 and while the main CPU ran outside the boot ROM,
-their sound's level, and the frame's wall time; nothing of the BIOS's code, bytes, registers, screens or sounds, no
+their sound's level from frame 1,500 (the sound's windows were not limited to frames outside the boot ROM, so a window may have held sound from before the hand-over; none of those levels was reported or used), and the frame's wall time; nothing of the BIOS's code, bytes, registers, screens or sounds, no
 register watch, and no backup RAM it wrote was looked at. Read in code: `Cargo.toml`, the source
 listing of `beryl-m68k`, and the firmware declaration in `src/mcd/frontend.rs`.
 
@@ -450,7 +450,7 @@ closed parts was read by its headings' exact boundaries.
 `docs/mcd logs` and every RTL file; `Nephrite_Native.md` §53.4, §54.3's first bullet beyond the line above, §55,
 §57.2, §60.1–§60.3; `Nephrite_Disputes.md`'s D-36 and D-40 beyond their headings; `~/.cache/emusen/probe/nephrite/s9/`;
 `docs/bram/` but for `emutos-mcd_bram-filesystem.md` (read whole once allowed, used for the footer and the odd-byte
-layout alone); the player's BIOS (`sysdir/scd/`), which was neither read nor run; any emulator's source. The register
+layout alone); the player's BIOS (`sysdir/scd/`), which was never read, and was run only as the black box described above; any emulator's source. The register
 watch was run only with the open BIOS, never with a player's. *As of 2026-10-15, after the screening:*
 `spritesmind/t458_*` and `t3218_*` are cleared and not yet opened; `t1018_*` is cleared but for named posts, and not yet
 opened; `t3020_*` and `t2061_p001.html` stay closed.

@@ -148,9 +148,11 @@ These are being built now and are not finished:
   Still open: Sonic CD's opening film is black on the open BIOS, the open BIOS does not save to a backup RAM cartridge,
   and a Sega CD `.chd` is recognised only in a folder named `segacd`.
 - **The 32X** is a stub behind the same attachment interface.
-- **MercuryRT** has the C# core's move to a legacy branch ahead of it, then becomes the Game Boy's default once it
-  has been played on the handheld.
-- **MoonRT** has its parity and goldens stages ahead; Moon (C#) stays the NES default until then.
+- **MercuryRT** is the Game Boy's only engine since Mercury (C#) was retired on 2026-10-16, graded by its own goldens
+  and the blargg and mooneye test ROMs.
+- **MoonRT** is the NES's only engine since Moon (C#) was retired on 2026-10-16, graded by its own goldens, the NES
+  test-ROM corpus and AccuracyCoin. The CRT filter's composite NES path, which read Moon (C#)'s raw picture, waits on
+  the core interface's raw picture output.
 - **VenusRT** is the SNES's only engine since Venus (C#) was retired on 2026-10-16, graded by its own goldens and the
   SNES test-ROM corpus. (This line said until then that Venus (C#) was kept until VenusRT had had four weeks as the
   default with no open regression; that gate was proposed by `VenusRT_Plan.md` and never decided.) A battery run on

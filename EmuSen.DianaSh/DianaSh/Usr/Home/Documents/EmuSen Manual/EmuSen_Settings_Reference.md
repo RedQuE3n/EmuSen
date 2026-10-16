@@ -1415,6 +1415,13 @@ asserts rewind empty on Mars and filling on MarsRT, and `Holding_rewind_on_MarsR
 holds the hotkey; the ROM patches, the phases and rewind have their evidence and mutants in `Mars_Native.md` §6.6.1 to
 §6.6.3.*
 
+**MarsRT on the core ABI v1 (2026-10-15).** MarsRT is loaded through the core ABI v1 since this date
+(`Mars_Native.md` §7); nothing a player sets changes. The rows keep their keys, words and values, the switch is still
+`EMUSEN_MARS_NATIVE=0`, and C# Mars's own native components go with it. What reads differently: a library that is
+present but not on the ABI, or lacks what the engine calls, is reported in the v1 loader's words (for example
+*"libmarsrt.so: has no emusen_core_abi_version; it is not on the core ABI"*), and a library that has crashed leaves
+`marsrt_crash_<pid>.txt` where it left `native_crash_<pid>.txt`.
+
 **The SNES's engine, VenusRT (Rust) by default since 2026-10-05.** The SNES tab has the same Engine row, stored as
 `Consoles.SNES.Engine`. Its choices are *VenusRT (Rust)*, listed first and the default, and *Venus (C#)*, the
 reference, kept for now. *Decided by the tester 2026-10-05* (`VenusRT_Native.md` §65).
@@ -4621,8 +4628,8 @@ in `~/.config/EmuSen/Logs` or in the configured folder.
 - The other 27 of Mistress's 56 `catch (Exception …)` blocks write nothing. They are best-effort paths that report
   nothing to the player either: a status bar that cannot be read, a picture that cannot be decoded for a preview.
   They are left until one of them hides a real fault.
-- DianaSh commands and the cores do not write to it. The Rust cores' native crash files (`native_crash_*`,
-  `mercuryrt_crash_*`) stay under the data home's `Logs`, not this folder.
+- DianaSh commands and the cores do not write to it. The Rust cores' native crash files (`marsrt_crash_*`, once
+  `native_crash_*`, `mercuryrt_crash_*`) stay under the data home's `Logs`, not this folder.
 - There is no viewer inside Mistress. The file is meant for `cat`, a text editor, or a bug report.
 
 ### 4.69 Big picture: the Start menu and a game's options in ES-DE's layout (2026-09-27)
@@ -6977,7 +6984,7 @@ was), the load, the exact version check, the crash log, `Available`, `Report` an
 classes stay as facades of a few lines, since the shims' static tables, the tests and C# Mars's own native components (`Rsp.Native.cs`) read
 `MarsNative.Export` and its peers, which keep working unchanged. The crash logs keep their names, `moonrt_crash_<pid>`,
 `mercuryrt_crash_<pid>` and MarsRT's `native_crash_<pid>`; the rename to `marsrt_crash_<pid>` belongs to MarsRT's move
-(§4.1, §9's Q6). `Report`'s texts are the old ones word for word, and `NativeHostTests` pins the switches, the log
+(§4.1, §9's Q6). *Renamed 2026-10-15 with that move (`Mars_Native.md` §7.2).* `Report`'s texts are the old ones word for word, and `NativeHostTests` pins the switches, the log
 names, a library turned off and a version refused.
 
 **`NativeMachine`, the handle (§4.2).** `MoonMachine` and `MercuryMachine` shared most of their 190 and 200 lines; they are 78 and 87 now, and `MarsMachine` 65 of 93. The

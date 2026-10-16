@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use super::support::{SyntheticRom, bus_with_cart, rom_image};
-use crate::ffi::{Core, NO_COMPARE, mars_machine_set_rom_patches};
+use crate::ffi::{Core, NO_COMPARE};
 use crate::machine::Machine;
 use crate::memory::bus::MemoryBus;
 use crate::memory::bus_access::map::{CART_DOMAIN1_ADDRESS2, PI_BASE};
@@ -80,14 +80,14 @@ fn past_the_cartridge_s_end_is_zero_whatever_is_patched() {
 fn the_host_s_list_replaces_the_last_one_and_survives_a_state_load() {
     let mut core = Core::new(Machine::load_rom(rom_image(&image()), false, None, None));
     let words = [ROM_OFFSET, 0xAD, NO_COMPARE, ROM_OFFSET + 2, 0x99, ORIGINAL as u32, ROM_OFFSET + 3, 0x98, 0x33];
-    assert_eq!(unsafe { mars_machine_set_rom_patches(&mut core, words.as_ptr(), 3) }, 3);
+    core.set_rom_patches(&words);
     assert_eq!(core.machine.bus.read32(PHYSICAL), 0xAD11_2298);
 
     let state = core.machine.save_state_vec(false).unwrap();
     core.machine.restore_state(&state).unwrap();
     assert_eq!(core.machine.bus.read32(PHYSICAL), 0xAD11_2298, "a state load dropped the patches");
 
-    assert_eq!(unsafe { mars_machine_set_rom_patches(&mut core, std::ptr::null(), 0) }, 0);
+    core.set_rom_patches(&[]);
     assert!(core.machine.bus.rom_patches.is_none());
     assert_eq!(core.machine.bus.read32(PHYSICAL), 0xCE11_2233);
 }

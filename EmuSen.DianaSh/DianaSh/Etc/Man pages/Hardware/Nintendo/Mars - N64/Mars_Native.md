@@ -28,6 +28,10 @@ the panic log. `EMUSEN_MARS_NATIVE=0` turns the library off. **Every component f
 library is absent, refused or off.**
 `MarsNativeTests` pins the load.
 
+*Since 2026-10-15 the library is on the core ABI v1 alone (§7): `MarsNative` is a `PortLibrary`, which refuses a library
+without `emusen_core_abi_version` of major 1 or without the capabilities and extensions MarsRT's shim calls, and the
+components keep their `mars_rsp_*`, `mars_rdp_*` and `mars_vi_*` names. The two `emusen_native_` exports are gone.*
+
 **A failed cargo step fails the build (2026-09-23).** The cargo `Exec` used to carry `ContinueOnError`, so that a
 machine without Rust would still build; it also meant a machine *with* Rust whose cargo step failed built anyway, kept
 the previous library, and said so only in an MSB3073 warning. That happened for real: with `/tmp` full, a series of
@@ -47,7 +51,8 @@ the one warning is left.
 `emusen_native_set_crash_log` gives the library a path, `DataStore.Logs/native_crash_<pid>.txt`. Its panic hook writes
 the message and a backtrace there, and the process then aborts. A panic in an emulator component is a bug, and
 unwinding into the runtime is undefined, so stopping with a record is the only honest choice. Mistress's own crash log
-cannot see a native abort, which is why the library keeps its own.
+cannot see a native abort, which is why the library keeps its own. *Since 2026-10-15 the path is given through the
+v1 export `emusen_core_set_crash_log`, and the file is `marsrt_crash_<pid>.txt` (§7.2).*
 
 ## 3. The signal processor in Rust
 
@@ -3520,6 +3525,8 @@ then, but its exactness still does. *They were fixed on 2026-09-23.*
 that removed its own reference would have to be graded against something else, and there is nothing else that is
 exact to the frame.
 
+*Decided 2026-10-16 by the tester:* the C# core is not kept as an oracle; once criteria 1 to 3 hold it is deleted with the tests that need it.
+
 ### 6.8 What this plan does not cover
 
 - Anything the recompiler could still gain (§5.8.9): the processor beside a block, the coprocessor's calls, chaining.
@@ -6408,3 +6415,198 @@ builds from (`EmuSen_RustState.md`). Three findings belong here.
   not a measurement. The retrain, with the interleaved rounds that measure both the loss and its recovery, is owed;
   it can wait for MarsRT's move to the common interface (`EmuSen_NativeCores.md` §7), which renames its exports and
   retrains in any case.
+
+## 7. On the core ABI v1 alone (2026-10-15)
+
+*Step 5 of `EmuSen_NativeCores.md` §7, approved in the order set on 2026-09-30 (MercuryRT, then MarsRT) and given its go
+on 2026-10-15.* Since that table was written every other Rust core moved further, onto the core ABI v1 alone
+(`EmuSen_CoreAPI.md` §22, §23, §26; `Mercury_Native.md` §11), so MarsRT goes straight from its own interface, 10, to v1,
+skipping the pre-stable common set, as `EmuSen_CoreAPI.md` §13.1's row for it says. What MarsRT keeps is unchanged:
+the recompiler, the threaded RDP and the device path, the Expansion Pak rule (8 MB from the frontends, a state of the
+other size rebuilding the machine), the snapshot form rewind takes, and C# Mars, whose legacy question is not this
+step's. Step 5a, the PGO retrain, stays deferred (decided 2026-09-30: profile work is batched after every core is
+ported).
+
+### 7.1 The baseline, before anything moved
+
+Taken from `80b0dfed`, the tree the step began from, with its own library (`lib-before/libmarsrt.so` in the step's
+scratch folder, kept for the comparisons):
+
+- **A digest of the run through `ICore`, frame by frame.** `MarsRtDigestProbe` (WiseMan, set to run by
+  `EMUSEN_MARSRT_DIGEST_OUT` and `EMUSEN_MARSRT_DIGEST_GAMES`) drives MarsRT only through `ICore`, `ICoreSettings`,
+  `ISnapshotCore`, `IFrameSerial` and `IRepeatedRows`, so the same file runs on either side of the move. For Super
+  Mario 64 and Ocarina of Time (copies of the measurement ROMs), it writes one line a frame: the SHA-256 of the picture
+  `GetFrameBufferRgba` lends, its width, height, rows shown per row, display lines and aspect, whether the serial moved,
+  the samples drained and their digest, the rate, the frame rate a frontend paces by and the frame count, and every
+  fiftieth frame and at the end the state's digest and length. The runs, 30 files and 9,120 frame lines:
+  - from power-on, 600 frames, in four configurations: the defaults (threaded RDP, deferred presentation, the
+    recompiler, four workers), the interpreter on one thread with nothing deferred, the RDP on two threads presenting
+    at once and walking repeated scans, and the multiple at 2× with 2× antialiasing; Start pulsed every 150 frames, the
+    stick swept, A held from frame 290 to 310, and rendering skipped for frames 200 to 239, as fast-forward skips it;
+  - from the measurement states (8 MB machines), 300 frames in each configuration;
+  - a state and a snapshot saved at frame 300 with A held, each loaded into a new machine that then presses nothing
+    (§8.2's R3 of `EmuSen_NativeCores.md`), 120 frames;
+  - the other RDRAM size both ways: a stock machine's state at frame 200 loaded into an 8 MB machine, and the 8 MB
+    measurement state loaded into a stock machine, 120 frames each;
+  - C# Mars's own state and snapshot after 120 frames from power-on, loaded and run 120 frames;
+  - and, separately on the RX 6800 alone (`EMUSEN_GPU_DEVICE`), the multiple at 2× drawn on the graphics card, 300
+    frames from power-on on each game (`EMUSEN_MARSRT_DIGEST_GPU=1`), with the device's report.
+
+  Two runs of the probe on the baseline gave identical files. Every configuration of a game ends on the one state
+  digest, which is the exactness the earlier sections claim, seen again here: `DFA514D2A6305401` for Super Mario 64 after
+  600 frames from power-on and `54CE73F0C5F12A6E` for Ocarina of Time, `F0F0E681F2C820DA` and `79E8E8441F4E2BFC` after
+  300 frames from their states.
+- **The crate's tests**, `cargo test --release` with `EMUSEN_MARSRT_STATES` set, the GPU tests apart: 460 passed.
+- **`examples/threads`** on the gameplay states of Super Mario 64 and Ocarina of Time, `split 4 blocks`, 600 frames:
+  `25147C9B669E3F4B` and `BB4F81DD089CDD41`.
+- **WiseMan**: the MarsRT, Mars-native, debugger, rewind, frame hand-off, screen-filter, VI-differential, settings,
+  ABI and engine-feature classes, 455 tests, all passing, with the real-game comparisons against C# Mars enabled
+  (`EMUSEN_MARSRT_STATES`). The run was cut short in C# Mars's own threaded-game tests (`MarsThreadedGamesTests`,
+  about a quarter of an hour a case), which MarsRT does not run and which held the shared test lock against the other
+  work on the machine; they are left out of both sides of the comparison.
+- **The state format**, pinned by the digests' state lines and by `MarsNativeStateTests`' field-by-field layout walk.
+
+### 7.2 The move
+
+**The library.** MarsRT implements `emusen_native::core::Core` (`src/ffi/v1.rs`) over the machine and its scan-out
+(`ffi::Core`, kept as the examples and the crate's tests know it), and `core_exports!` writes its exports: the 32 every
+core has and `present`, `phases`, `audio_peek`, `set_axis`, `set_settings`, `set_rom_patches` and the ten of `DEBUG`,
+48 in all, which `export_check.py` passes against the baseline at ABI 1.9. Its capabilities are `PRESENT | PHASES |
+AUDIO_PEEK | AXES | SETTINGS | SNAPSHOT | FRAME_SERIAL | ROW_REPEAT | BATTERY_DIRTY | ROM_PATCHES | DEBUG`
+(`0x1fde`). The 62 `mars_machine_*`, `mars_debug_*`, `mars_blocks_*` and `mars_threads_*` exports and the two
+library-level `emusen_native_*` ones are gone; what the shim and the tests still need beside the ABI is 21 extensions
+on a v1 handle, `marsrt_core_*` (counters, the thread and recompiler counters, the device report, the IS-Viewer text,
+the corpus's steps, the CPU's fields, the registers, the debugger's physical view, a test's bus, COP0, interrupt and
+signal-processor access, the depth counters, the kind of state last loaded, a load of the fields alone, and a
+controller plugged in). The 21 component exports C# Mars and its tests call (`mars_rsp_*`, `mars_rdp_*`, `mars_vi_*`)
+keep their names (`EmuSen_NativeCores.md` §2's non-goal). The library exports 90 symbols where it exported 85.
+
+**What the console's facts became.** Core info names one system, `n64`, its three extensions, both regions and one
+controller, `n64.pad`: the joybus's sixteen button bits, ten of them on the frontend's buttons in
+`MarsCore.PadButtons`' order (Z on L2), the four C buttons without one, and four axes: the stick, and the right stick
+as the C buttons. `set_axis` does what the shim did: the stick to its reach of 127, rounded to even as C#'s
+`Math.Round`, the right stick's halves past one half as the C buttons. Machine info lists four ports, the six spaces
+by `MarsDebugSpaces`' names (the processor's view a `view` of the others, the ROM read-only, the four RAMs cheat spaces
+that report stores), two processors (the CPU, and the RSP for coverage), the two battery files C# Mars has always
+written, the cartridge's save (file 0, `.srm`) and the first port's Controller Pak (file 1, `.mpk`), both `game` at
+this step, the state format `MARS` version 1 loading 1 and 2, the five phases, the ROM's range for patches, and the
+frame rate of the cartridge's region; `FrameRateHz` stays the shim's, the last field's cycles, as before.
+
+**Settings through the schema.** C# Mars's eight keys with MarsRT's words, and `Recompiler`, are the schema's visible
+settings, `ExpansionPak` and a hidden `Boot` create-time, the rest run-time; five more are hidden, for tests:
+`IdleSkip`, `RspWhole`, `VerifyBlocks`, `BlockTier` and `VerifyRdp`. The run-time values are applied as one value,
+group by group and only where a group changed, in the order the shim's `ApplyOptions` applied them (§6.4.8 found what
+sending an unchanged value again cost). `RdpWorkers`' default is C#'s rule, one per three processors, one to four.
+
+**The picture.** The scan-out no longer repeats rows itself: `ROW_REPEAT` reports 2 for a picture shown twice a row,
+and the host repeats them, byte for byte what the scan-out wrote (`compose_into` copies a row whole). Before the first
+scan the frame is C#'s blank, 640 × 480 and opaque. `FRAME_SERIAL` is the scan-out's serial.
+
+**Sound.** `set_audio_limit` is now honoured, as C# Mars's `SampleQueue` honours `AudioBufferMaxSamples`; the old
+shim never sent it, and MarsRT kept 128,000 samples, which is that setting's default, so nothing changes until a
+player changes it.
+
+**The debugger on the shared hooks.** `cpu::hooks::Hooks` is now `emusen_native::debug::Hooks` with the three things
+MarsRT's loop keeps beside it: the return that waits for its delay slot and the observed frame's clock (§6.5.1). The
+profile is the crate's `BTreeMap` (`EmuSen_NativeCores.md` §3.14), the flags its numbering (calls 1, writes 2,
+interrupts 4, each 8, profiling 16, coverage of processor n bit 8 + n), the coverage its per-processor bitmaps, 24
+address bits for the CPU and 12 for the signal processor. The signal processor's trace stays where its loop records
+it, in the bus, and is moved into the hooks' bitmap for processor 1 when the host drains it, armed and disarmed as the
+hooks are. An interrupt still stops the loop without pushing a frame, as MarsCore's loop does. The shim's own
+debugger is kept, over the v1 exports, and `CoreEngine`'s generic bridge is never attached to MarsRT.
+
+**The shim.** `MarsRtCore` is a subclass of the generic adapter, `CoreEngine`, and loads the library through
+`PortLibrary`, which `MarsNative` now is, so C# Mars's components and MarsRT share one loader, one switch
+(`EMUSEN_MARS_NATIVE=0`) and one report. It keeps every member the frontends and the tests read (the settings rows,
+the debugger's registries and its views, the corpus's `RunSteps`, the counters), Mars's frame end (the cheats gated on
+COP0's interrupt enable, the frame log read big-endian, then the breakpoints' frame and the periodic save), its own
+`FrameRateHz`, `DisplayLines` and `StateVersion`, and the phases read into one array. Two protected seams of the
+adapter were added for it, both by addition: `EndFrame` became `protected virtual` (the runtime's order with a port's
+own where its oracle's differs, §8.2's R4 of `EmuSen_NativeCores.md`), and `SendInput` sends the held buttons at once,
+for a shim that runs the machine by instructions between frames. `CoreEngine.LoadState` now reads a stream that can
+say its length into an array it keeps, as MarsRT's shim did, so that a step of rewind allocates no state for any
+engine. `MarsMachine`, the state tests' handle, is a v1 machine made from a cartridge image of a magic word and an
+empty boot code, which no state names. `LegacyNativeMachine` and `NativeCoreLibrary`'s per-core constructor are deleted
+with their last user (`EmuSen_CoreAPI.md` §13.5); the crash log is `marsrt_crash_<pid>.txt`, the v1 loader's name.
+
+**Two defects found on the way, both of the move.**
+- *A held button reached the corpus's steps a frame late.* The adapter holds buttons in a latch sent as a frame
+  starts; the old shim sent them at once. `RunSteps`, which the debugger's halt-and-resume test drives between frames,
+  ran with the previous frame's buttons: `MarsRtDebugTests.A_game_halted_at_breakpoints_and_resumed_is_the_game_run_through`
+  failed on all three games at the first frame it halted ("the states part at the end of frame 3"). `RunSteps` now
+  sends the latch first.
+- *The state's size changed in a frame with no event.* A game's first touch of its save chip gives the state the
+  chip's bytes (2,050 more for Super Mario 64's EEPROM), and the registers written and the paks present can change it
+  too; the crate measures sizes only after a load (`EmuSen_CoreAPI.md` §6.9), so the kit's C7 found the change
+  unannounced from frame 22. The machine now compares what the length depends on before and after each frame, a few
+  comparisons, and raises `STATE_SIZE` for both kinds when it moved.
+
+### 7.3 The proof
+
+| Oracle | Result |
+|---|---|
+| The digest probe, 30 runs and 9,120 frame lines, and the two GPU runs | every picture, every drain of sound, every state and its length, the rate and the frame rate, frame by frame, identical to the baseline; one line in each file differs, the load's, where the old shim moved its serial on a load and the core's serial starts at 0, which a frontend reads as "a new picture" either way. After §7.4's change, run again on the 26 runs that remain (§7.5) and the GPU runs: pictures, sound and everything else unchanged, and the state's digest moved only in the runs from a load, by the `Dirty` bytes a load no longer sets |
+| The crate | 465 tests pass (GPU tests apart), the 460 of the baseline and five new: the hooks' configuration, the schema, the pad's bits, the audio limit and the `Dirty` bytes of §7.4; the 30 GPU tests pass on the RX 6800 |
+| `export_check.py` | 48 `emusen_core_` symbols, ABI 1.9, capabilities `0x1fde` |
+| WiseMan | before the C# comparisons were retired (§7.5): 469 tests of the MarsRT, Mars-native, debugger, rewind, VI-differential, screen-filter, settings and ABI classes passed and none failed, the comparisons against C# Mars among them, until a run was stopped in the C#-at-a-multiple cases, which take six to twelve minutes each; after it, and after §7.4's change: 407 tests in three runs (the ABI, state, registration, adapter, port and rewind classes, 79; the frontend, engine, frame hand-off, save-media, device-picture and memory-card classes, 66; MarsRT's own, threads, debugger, VI and RDP classes, 262) and the corpus, all passing |
+| R3 | a state saved with A held, loaded into a new machine and run 60 frames pressing nothing more, equal every frame in state and picture to the run that went on (`MarsRtCoreAbiTests`) |
+| The generic adapter | `CoreEngine` with no shim, over the same library, runs a synthetic cartridge with an EEPROM 240 frames with the picture, the sound and the state the shim gives (`MarsRtCoreAbiTests`) |
+
+### 7.4 The conformance kit, and the `Dirty` bytes
+
+The kit (`emusen-core-conform`, `EmuSen_CoreAPI.md` §12, §21–§28) was run on copies of Super Mario 64 and Ocarina of
+Time, 600 frames, and WiseMan runs it on three synthetic cartridges (none, an EEPROM, a flash chip byte-swapped), 120
+frames. A core without a drive has 19 cases; C16 does not apply, and C20 says the bit is not claimed. C9 meets a
+setting it can check on a project core for the first time, as `EmuSen_CoreAPI.md` §24.3's P9 predicted: twelve values
+of exact settings against the defaults, every one exact.
+
+**The first runs failed C7, C8 and C12 for one reason.** A state load set the `Dirty` byte of the save chip and of
+each Controller Pak, as C# Mars's `LoadState` sets them, so that the host writes the battery files again; and `Dirty`
+is a field of the state. So a state saved, loaded and saved again was not the first (C7), a refused load was judged to
+have changed the machine because the comparison is with a state taken before an earlier load (C7), and a machine
+loaded with the state of a run's middle ended the run equal to it in everything but those bytes (C8, the only bytes
+that differed, by `tests/v1.rs`); C12 repeated the two as hosts of other minors. The rule was the oracle's, kept while
+MarsRT's states had to be C# Mars's values byte for byte.
+
+*Decided 2026-10-16 by the tester:* the question is MarsRT's alone; MarsRT keeps a host-only "unsaved" flag outside
+the state, and C# Mars is not touched. So a load leaves `Dirty` as the state says and marks each battery file it
+replaced unsaved in `ffi::Core::unsaved`, which `battery`'s `BATTERY_CHANGED` reports and `battery_saved` clears; the
+host writes the files after a load as it did. `tests/v1.rs` now holds that a state loaded mid-run saves back as the
+state it was and ends the run where the run ends, byte for byte; `RewindToMomentTests`' case on a fresh machine now
+holds that a load of the machine's own state changes nothing of it, where it held that the pak's `Dirty` changed. With
+it **all 19 cases pass** on Super Mario 64 and on the synthetic cartridges.
+
+**C4 on Ocarina of Time found a cost of this step's own.** The image truncated to half is accepted, as an N64 image
+must be, and its 300 frames did not finish in 60 seconds: about a second a frame, where `examples/threads` ran the same
+image at 33 ms. The truncated game writes registers at random, and C#'s `_registers` dictionary, which the state
+carries, grows by thousands each frame (the state reaches 128 MB); every frame's change of shape had the machine
+measure both state sizes for `STATE_SIZE`, half a second each. A change of the registers written alone now moves the
+sizes told by eight bytes a register, which needs no measuring, and the sizes so carried equal the measured ones after
+300 frames of it (128,295,963 and 128,558,111). The 300 frames then take 9.3 s, as without the event.
+
+### 7.5 C# Mars retired as MarsRT's oracle
+
+*Decided 2026-10-16 by the tester:* MarsRT is no longer compared against C# Mars; its oracles are its own recorded
+digests, the test ROM corpus and the kit. C# Mars itself stays until its own deletion (§6.7). The WiseMan tests whose
+oracle was C# Mars running alongside MarsRT were removed:
+
+- `MarsRtTests`: the synthetic ROM frame by frame; states written by either core run on in the other; the processor
+  single-stepping itself under the idle loop; the second break before the broke bit is cleared; the real games frame
+  by frame and at each tier of the recompiler; the random programs, interpreted and through the blocks; `Bench`. The
+  corpus test is now MarsRT's own: its summary (*Failed 46 of 4637 tests*) and the recompiler's transcript line for
+  line the interpreter's.
+- `MarsRtThreadsTests`: threaded, recompiled and threaded, and at a multiple, each against the C# core; the C# split's
+  half of the shared-list test; `Bench` and `Bench_at_a_multiple`. MarsRT's own comparisons, threaded and shared
+  against itself on one thread, and its phases, stay.
+- `MarsRTViTests`, the whole class: the scan-out against the C# VI.
+- `MarsViDifferentialTests`: MarsRT's case keeps angrylion and loses the C# VI.
+- `MarsNativeStateTests`: the running machine, every field filled with noise, the snapshot's pending words and the
+  bool byte, each against C#'s serializer or reader. The real games' states round trip and the refusals stay, the
+  latter on a state of MarsRT's own.
+- `MarsRtFrontendTests`: the cheat and the ROM patches against Mars frame by frame, the audio peek, the processor's
+  view of the TLB, and the battery file read by the other engine; the unlimited-lives cheat keeps its own check.
+- `ControllerPortTests`: MarsRT's ports against the C# cores'. It had shown one difference, which is the adapter's
+  rule: a button or a controller plugged in reaches the machine as the next frame starts, not at once.
+- `MarsRtEngineTests`: the state saved by the hotkeys read back by Mars, and the battery file read by Mars.
+- `MarsRtCoreAbiTests`: R3 against C# Mars, which is now R3 against MarsRT's own continuous run.
+- `MarsRtDigestProbe`: the runs from C# Mars's state and snapshot.

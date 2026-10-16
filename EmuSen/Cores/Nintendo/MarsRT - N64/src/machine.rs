@@ -191,6 +191,7 @@ impl Machine {
         machine.bus.sp.trace = std::mem::take(&mut self.bus.sp.trace);
         machine.bus.sp.decoded = std::mem::take(&mut self.bus.sp.decoded);
         machine.bus.sp.processor.simd = self.bus.sp.processor.simd;
+        machine.bus.ai.limit = self.bus.ai.limit;
         if machine.rdram_bytes() != self.rdram_bytes() {
             machine.blocks.clear();
         }
@@ -433,16 +434,12 @@ impl Machine {
         out.join()
     }
 
-    /// What `MemoryBus.ReadState` and `LoadState` run after the fields: marks, drops, rebases, replays, `Cop0Written`.
+    /// What `MemoryBus.ReadState` and `LoadState` run after the fields: drops, rebases, replays, `Cop0Written`. The battery files'
+    /// `Dirty` stay as the state says; that the files need writing after a load is the host's to know, kept outside the state
+    /// (Mars_Native.md §7.4).
     fn derive_after_load(&mut self) {
         let bus = &mut self.bus;
         *bus.written += 1;
-        bus.save.set_dirty(true);
-        for port in &mut bus.si.controllers {
-            if let Some(pak) = &mut port.pak {
-                pak.dirty = true;
-            }
-        }
         bus.ai.drop_undrained();
         bus.vi_rebase();
         bus.ai_rebase();

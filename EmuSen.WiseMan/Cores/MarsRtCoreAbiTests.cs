@@ -1,0 +1,152 @@
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using EmuSen.Cores;
+using EmuSen.Cores.Native;
+using EmuSen.Cores.Nintendo.Mars;
+using EmuSen.Cores.Nintendo.Mars.Native;
+using EmuSen.Cores.Nintendo.Mars.Rom;
+using EmuSen.Cores.Nintendo.MarsRT;
+using EmuSen.Galaxia.Input;
+using EmuSen.Galaxia.Library;
+using EmuSen.WiseMan.Fixtures;
+using Xunit.Abstractions;
+
+namespace EmuSen.WiseMan.Cores
+{
+    // MarsRT on the core ABI v1 alone: its sidecar, the shim a subclass of the v1 adapter, the generic adapter running it as the shim does, a held button across a state, and the kit - see Mars_Native.md §7.
+    [Collection(TestCollections.ProcessGlobals)]
+    public class MarsRtCoreAbiTests : IDisposable
+    {
+        private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenMarsRtV1_" + Guid.NewGuid().ToString("N"));
+        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
+        private readonly ITestOutputHelper _output;
+
+        public MarsRtCoreAbiTests(ITestOutputHelper output)
+        {
+            _output = output;
+            Directory.CreateDirectory(_root);
+            DataStore.OverrideDirectory = Path.Combine(_root, "Home");
+            CoreOptions.BatteryRamDisabled = true;
+            CoreDiscovery.UseDirectories(null);
+        }
+
+        public void Dispose()
+        {
+            CoreOptions.BatteryRamDisabled = _batteryWas;
+            DataStore.OverrideDirectory = null;
+            CoreDiscovery.UseDirectories(null);
+            try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
+        }
+
+        private static DiscoveredCore Discovered => CoreDiscovery.Found.Single(c => c.Info.Id == "marsrt");
+
+        private string Rom(byte[] image, string name = "game.z64")
+        {
+            string path = Path.Combine(_root, name);
+            File.WriteAllBytes(path, image);
+            return path;
+        }
+
+        [Fact]
+        public void The_build_writes_marsrts_sidecar_and_the_shim_loads_it_through_the_v1_exports_alone()
+        {
+            Assert.Equal("MarsRT (Rust)", Discovered.EngineName);
+            Assert.Equal(new[] { ".z64", ".n64", ".v64" }, Discovered.Info.Systems.Single().Extensions);
+            Assert.True(MarsNative.Available, MarsNative.Report);
+            CoreLibrary library = MarsNative.Library.Library!;
+            Assert.Equal(Path.GetFullPath(Discovered.Sidecar.SidecarPath), Path.GetFullPath(CoreSidecar.PathFor(library.Path)));
+            Assert.Equal(0, MarsNative.Export("mars_machine_load_rom"));
+            Assert.Equal(0, MarsNative.Export("emusen_native_interface_version"));
+            Assert.Equal(MarsRtCore.VideoSettings.Select(s => s.Key).Order(), library.Settings.Where(s => !s.Hidden).Select(s => s.Key).Order());
+            ICore core = CoreFactory.Create("game.z64", engine: CoreCatalog.MarsRtEngine);
+            Assert.IsType<MarsRtCore>(core);
+            Assert.Null(CoreFactory.EngineNotice("game.z64", CoreCatalog.MarsRtEngine, core));
+        }
+
+        // The generic adapter, with no shim, is what a v1 host other than Mistress runs; it must see the game the shim sees.
+        [Fact]
+        public void The_v1_adapter_over_marsrt_runs_a_game_exactly_as_the_shim()
+        {
+            string rom = Rom(SyntheticN64Rom.BuildHomebrew(N64SaveType.Eeprom4k));
+            var settings = new System.Collections.Generic.Dictionary<string, string> { ["ExpansionPak"] = "true" };
+            using var shim = new MarsRtCore(expansionPak: true, batteryRamDisabled: true);
+            using var adapter = new CoreEngine(MarsNative.Library.Library!, settings);
+            shim.LoadRom(rom);
+            adapter.LoadRom(rom);
+            Assert.Equal((shim.ScreenWidth, shim.ScreenHeight, shim.StateVersion), (adapter.ScreenWidth, adapter.ScreenHeight, adapter.StateVersion));
+            Assert.Equal(shim.SupportedButtons, adapter.SupportedButtons);
+            Assert.Equal(shim.SupportedAxes, adapter.SupportedAxes);
+            for (int f = 0; f < 240; f++)
+            {
+                foreach (ICore core in new ICore[] { shim, adapter })
+                {
+                    core.SetButton(0, PadButton.Start, f % 60 < 4);
+                    core.SetAxis(0, PadAxis.LeftX, Math.Sin(f / 10.0));
+                    core.SetAxis(0, PadAxis.RightY, f % 40 < 10 ? 1 : 0);
+                    core.RunFrame();
+                }
+                Assert.Equal(shim.GetFrameBufferRgba(), adapter.GetFrameBufferRgba());
+                Assert.Equal(shim.DequeueAudioSamples(int.MaxValue), adapter.DequeueAudioSamples(int.MaxValue));
+                if (f % 40 == 0) Assert.Equal(State(shim), State(adapter));
+            }
+            Assert.Equal(State(shim), State(adapter));
+        }
+
+        private static byte[] State(ICore core)
+        {
+            using var stream = new MemoryStream();
+            core.SaveState(stream);
+            return stream.ToArray();
+        }
+
+        // EmuSen_NativeCores.md §8.2's R3: a state saved with a button held, loaded and run on pressing nothing more, is the run that went on from it.
+        [Fact]
+        public void A_state_saved_with_a_button_held_runs_on_as_the_run_that_went_on()
+        {
+            string rom = Rom(SyntheticN64Rom.BuildHomebrew(N64SaveType.Eeprom4k));
+            using var through = new MarsRtCore(expansionPak: true, batteryRamDisabled: true);
+            through.LoadRom(rom);
+            for (int f = 0; f < 120; f++)
+            {
+                through.SetButton(0, PadButton.Start, f % 40 < 3);
+                through.SetButton(0, PadButton.A, f >= 100);
+                through.SetAxis(0, PadAxis.LeftX, 0.75);
+                through.RunFrame();
+            }
+            byte[] held = State(through);
+            using var loaded = new MarsRtCore(expansionPak: true, batteryRamDisabled: true);
+            loaded.LoadRom(rom);
+            loaded.LoadState(held);
+            Assert.Equal(held, State(loaded));
+            for (int f = 0; f < 60; f++)
+            {
+                through.RunFrame();
+                loaded.RunFrame();
+                Assert.True(State(through).AsSpan().SequenceEqual(State(loaded)), $"frame {f} differs after the load");
+                Assert.Equal(through.GetFrameBufferRgba(), loaded.GetFrameBufferRgba());
+            }
+        }
+
+        // The conformance kit on synthetic cartridges, one with each kind of save chip it builds: all 19 cases a core without a drive has.
+        [Fact]
+        public void The_kit_passes_on_synthetic_cartridges()
+        {
+            string runner = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "emusen-core-conform.exe" : "emusen-core-conform");
+            Assert.True(File.Exists(runner), $"no kit runner at {runner}");
+            foreach (var (name, image) in new[] { ("plain.z64", SyntheticN64Rom.Build()), ("eeprom.z64", SyntheticN64Rom.BuildHomebrew(N64SaveType.Eeprom4k)), ("flash.v64", SyntheticN64Rom.ToByteSwapped(SyntheticN64Rom.BuildHomebrew(N64SaveType.FlashRam))) })
+            {
+                var start = new ProcessStartInfo(runner) { RedirectStandardOutput = true, RedirectStandardError = true };
+                foreach (string a in new[] { "--core", MarsNative.Library.Library!.Path, "--image", Rom(image, name), "--frames", "120" }) start.ArgumentList.Add(a);
+                using var process = Process.Start(start)!;
+                var stderr = process.StandardError.ReadToEndAsync();
+                string output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit();
+                _output.WriteLine($"{name}:\n{output}{stderr.Result}");
+                Assert.True(process.ExitCode == 0, output + stderr.Result);
+                Assert.Equal(19, output.Split('\n').Count(l => l.StartsWith("pass C")));
+            }
+        }
+    }
+}

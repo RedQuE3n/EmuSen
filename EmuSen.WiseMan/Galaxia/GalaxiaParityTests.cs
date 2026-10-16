@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using EmuSen.Galaxia;
@@ -151,6 +152,8 @@ namespace EmuSen.WiseMan.Galaxia
             }
             for (int c = 0x10000; c < 0x20000; c++)
             {
+                // Outside the BMP .NET asks the system's ICU, which on macOS knows letters newer than the runtime's own tables; only what those tables know is compared.
+                if (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.OtherNotAssigned) continue;
                 string text = char.ConvertFromUtf32(c), upper = text.ToUpperInvariant(), lower = text.ToLowerInvariant();
                 foreach (string other in new[] { upper, lower })
                     if (string.Equals(text, other, StringComparison.OrdinalIgnoreCase) != GalaxiaNative.TestRule(GalaxiaTestRule.EqualsIgnoreCase, text, other))

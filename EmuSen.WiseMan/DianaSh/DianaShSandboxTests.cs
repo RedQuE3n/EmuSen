@@ -180,14 +180,14 @@ namespace EmuSen.WiseMan.DianaSh
         }
 
         // An app dir copied out on its own has no marker to find, so it still gets a
-        // root - the subdirectory the doc trees stage into. See `man hier`.
+        // root - the subdirectory the doc trees stage into, or on macOS Application Support. See `man hier`.
         [Fact]
         public void A_publish_without_the_layout_falls_back_to_a_subdirectory_beside_the_binary()
         {
             string temp = NewTempDir();
             try
             {
-                string expected = Path.Combine(temp, DianaShSandbox.PublishedRootDirName);
+                string expected = OperatingSystem.IsMacOS() ? ConfigRoot.MacDataDirectoryFor(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)) : Path.Combine(temp, DianaShSandbox.PublishedRootDirName);
 
                 Assert.Equal(expected, DianaShSandbox.ComputeRootFor(temp));
             }
@@ -272,7 +272,8 @@ namespace EmuSen.WiseMan.DianaSh
                 string bundle = Bundle(temp);
 
                 Assert.Equal(Path.Combine(bundle, DianaShSandbox.PublishedRootDirName), ConfigRoot.ComputeFor(bundle, macOS: false, Path.Combine(temp, "home")));
-                Assert.Equal(ConfigRoot.ComputeFor(bundle, macOS: false, "unused"), DianaShSandbox.ComputeRootFor(bundle));
+                // The shell takes the rule of the system it runs on, which on macOS is the bundle's.
+                Assert.Equal(ConfigRoot.ComputeFor(bundle, OperatingSystem.IsMacOS(), Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)), DianaShSandbox.ComputeRootFor(bundle));
             }
             finally { Directory.Delete(temp, true); }
         }

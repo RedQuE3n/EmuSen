@@ -871,7 +871,9 @@ namespace EmuSen.WiseMan.Galaxia
         [Fact]
         public void Names_are_ordered_as_OrdinalIgnoreCase_orders_them()
         {
-            string[] alphabet = { "a", "A", "b", "B", "z", "Z", "_", "[", "@", "`", "0", "9", " ", "é", "É", "ß", "ı", "I", "i", "日", "😀", "\ud801\udc00", "\ud801\udc28", "\ue000", "\uffff", "~" };
+            // APFS refuses a name holding a noncharacter, so macOS is not asked to make one.
+            string[] alphabet = new[] { "a", "A", "b", "B", "z", "Z", "_", "[", "@", "`", "0", "9", " ", "é", "É", "ß", "ı", "I", "i", "日", "😀", "\ud801\udc00", "\ud801\udc28", "\ue000", "\uffff", "~" }
+                .Where(c => !(OperatingSystem.IsMacOS() && c == "\uffff")).ToArray();
             var random = new Random(5);
             var different = new List<string>();
             foreach (string side in new[] { "managed", "native" }) Directory.CreateDirectory(At(side + "-order", "etc", CheatFile.CategoryDirName));

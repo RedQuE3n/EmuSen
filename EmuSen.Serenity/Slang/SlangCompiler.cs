@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using EmuSen.Serenity.Native;
@@ -69,8 +70,9 @@ namespace EmuSen.Serenity.Slang
                     fixed (byte* p = text) result = Api.CompileIntoSpv(compiler, p, (nuint)text.Length, kind, name, Entry, options);
                     try
                     {
+                        // Shaderc's words are UTF-8, which the binding's string would read as the system's code page on Windows.
                         if (Api.ResultGetCompilationStatus(result) != CompilationStatus.Success)
-                            throw new SlangCompileException($"{name} ({stage}) does not compile:\n{Api.ResultGetErrorMessageS(result)}");
+                            throw new SlangCompileException($"{name} ({stage}) does not compile:\n{Marshal.PtrToStringUTF8((nint)Api.ResultGetErrorMessage(result))}");
                         return new ReadOnlySpan<byte>(Api.ResultGetBytes(result), (int)Api.ResultGetLength(result)).ToArray();
                     }
                     finally

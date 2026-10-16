@@ -76,7 +76,7 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
     ("tail", true, "  tail [-n N] [path]            last N lines (default 10) of stdin or a file"),
     ("touch", false, "  touch <path>                  create an empty file, or update an existing one's modified time"),
     ("find", true, "  find [path] [-name pattern]   recursively list files/directories, optionally filtered by a glob"),
-
+    ("xxd", true, "  xxd | hexdump <path>          hexdump a real file's raw bytes, or piped stdin (UTF8-encoded first)"),
 ];
 
 /// The module: one value, no state of its own.

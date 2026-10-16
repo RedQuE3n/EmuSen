@@ -4,6 +4,7 @@
 command trace
 usage 1   trace <count>                 arm a live CPU instruction trace for the next <count> instructions
 usage 2   trace off                     cancel an in-progress trace early
+unreachable "Trace count must be at least 1." -- no target of the corpus has a trace switch; TraceCountTests holds the refusal over a recording one
 
 case with no trace switch
 target fake

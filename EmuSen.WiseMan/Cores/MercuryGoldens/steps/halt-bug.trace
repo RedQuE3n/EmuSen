@@ -1,0 +1,9 @@
+# A golden trace of MercuryRT, recorded from the engine named below; re-recorded only deliberately - see Mercury_Native.md §14.4.
+golden 1
+name steps/halt-bug
+rom 10DA02EDBAF90F2E232A800A1C269BC8315F4CB4E178B54612EB9BBE022140F2
+model Auto
+input none
+rendering on
+recorded Mercury
+40 3063BAEFC1C8FFA0

@@ -1,0 +1,10 @@
+# A golden trace of MercuryRT, recorded from the engine named below; re-recorded only deliberately - see Mercury_Native.md §14.4.
+golden 1
+name programs/bank-zero-0F
+rom 6009386EE88E179D7DF553F2968080B30F3413E9275A6F6FD78867CCA4444561
+model Auto
+input none
+rendering on
+recorded Mercury
+1 84B18A191C456027 FC7BC70FA8DE6EB7 7DF491C5F0816AEF
+2 08D2A71101194C39 = =

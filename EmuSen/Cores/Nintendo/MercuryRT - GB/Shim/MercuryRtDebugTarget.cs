@@ -1,3 +1,4 @@
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -21,7 +22,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         private readonly List<IDebugMemorySpace> _spaces = new();
         private readonly DebugCpu[] _cpus;
         private byte[] _state = Array.Empty<byte>();
-        private MercuryStateLayout? _layout;
+        private StateLayout? _layout;
 
         private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _cpuRegisters;
         private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _videoRegisters;

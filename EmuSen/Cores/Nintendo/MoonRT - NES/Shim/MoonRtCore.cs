@@ -55,7 +55,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             {
                 if (!IsRomLoaded) return null;
                 CoreMachine m = Machine.Core;
-                if (!ReferenceEquals(m, _layoutOf)) (_layout, _layoutOf) = (new StateLayout(m.Layout()), m);
+                if (!ReferenceEquals(m, _layoutOf)) (_layout, _layoutOf) = (StateLayout.FromText("MoonRT", m.Layout()), m);
                 return _layout;
             }
         }

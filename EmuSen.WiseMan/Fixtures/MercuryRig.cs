@@ -1,3 +1,4 @@
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -174,7 +175,7 @@ namespace EmuSen.WiseMan.Fixtures
         }
 
         // The listing for this state, written from MercuryRT's own state_layout when recording and none is committed.
-        private MercuryStateLayout Listing(byte[] state)
+        private StateLayout Listing(byte[] state)
         {
             try { return MercuryLayouts.For(Rom, state); }
             catch (InvalidDataException) when (Environment.GetEnvironmentVariable(MercuryLayouts.RecordVariable) == "1")

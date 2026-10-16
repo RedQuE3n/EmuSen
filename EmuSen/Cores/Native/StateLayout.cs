@@ -2,72 +2,126 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 
 namespace EmuSen.Cores.Native
 {
-    // A state read by its core's own listing, `offset length type path` a line, so a port's shim reads a field by path - see EmuSen_NativeCores.md §3.14.
+    // A port's state read and written field by field through its own state_layout listing, with no machine behind it - see EmuSen_NativeCores.md §3.14.1, Mercury_Native.md §14.5.
     public sealed class StateLayout
     {
-        private readonly record struct Field(int Offset, int Length, string Type, int Count);
+        public readonly record struct Field(int Offset, int Length, string Type, string Path);
 
-        private readonly Dictionary<string, Field> _fields = new(StringComparer.Ordinal);
-        private readonly List<string> _paths = new();
+        private readonly Dictionary<string, Field> _byPath;
 
-        public StateLayout(string listing)
+        private StateLayout(string name, string text)
         {
-            foreach (string line in listing.Split('\n'))
-            {
-                string[] p = line.TrimEnd('\r').Split(' ', 4);
-                if (p.Length < 4) continue;
-                string type = p[2];
-                int count = 1, bracket = type.IndexOf('[');
-                if (bracket >= 0)
-                {
-                    count = int.Parse(type[(bracket + 1)..^1], CultureInfo.InvariantCulture);
-                    type = type[..bracket];
-                }
-                if (_fields.TryAdd(p[3], new Field(int.Parse(p[0], CultureInfo.InvariantCulture), int.Parse(p[1], CultureInfo.InvariantCulture), type, count))) _paths.Add(p[3]);
-            }
+            Name = name;
+            Text = text;
+            Fields = text.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(Parse).ToArray();
+            _byPath = Fields.ToDictionary(f => f.Path, StringComparer.Ordinal);
+            Length = Fields.Count == 0 ? 0 : Fields[^1].Offset + Fields[^1].Length;
         }
 
-        // Every path in the order the state writes it.
-        public IReadOnlyList<string> Paths => _paths;
+        public string Name { get; }
+        public string Text { get; }
+        public IReadOnlyList<Field> Fields { get; }
+        public int Length { get; }
 
-        public bool Has(string path) => _fields.ContainsKey(path);
+        public static StateLayout FromText(string name, string text) => new(name, text);
 
-        // A scalar or an array element as a number, signed or not as its type is; a class flag reads as 0 or 1.
-        public long Int(ReadOnlySpan<byte> state, string path, int index = 0)
+        public Field this[string path] => _byPath.TryGetValue(path, out Field f) ? f : throw new KeyNotFoundException($"{Name} has no field {path}");
+
+        public bool Has(string path) => _byPath.ContainsKey(path);
+
+        // A scalar as a signed integer: bools 0 or 1, enums their number, doubles their bits.
+        public long Get(ReadOnlySpan<byte> state, string path) => Get(state, this[path]);
+
+        public static long Get(ReadOnlySpan<byte> state, Field f)
         {
-            Field f = _fields.TryGetValue(path, out var found) ? found : throw new KeyNotFoundException($"the state has no field {path}");
-            if (index < 0 || index >= f.Count) throw new ArgumentOutOfRangeException(nameof(index), $"{path} has {f.Count} elements");
-            int size = f.Length / Math.Max(1, f.Count);
-            ReadOnlySpan<byte> b = state.Slice(f.Offset + index * size, size);
+            ReadOnlySpan<byte> b = state.Slice(f.Offset, f.Length);
             return f.Type switch
             {
-                "u8" or "bool" or "class" => b[0],
+                "u8" => b[0],
                 "i8" => (sbyte)b[0],
+                "bool" => b[0] != 0 ? 1 : 0,
+                "class" => b[0],
                 "u16" => BinaryPrimitives.ReadUInt16LittleEndian(b),
                 "i16" => BinaryPrimitives.ReadInt16LittleEndian(b),
-                "u32" => BinaryPrimitives.ReadUInt32LittleEndian(b),
                 "i32" => BinaryPrimitives.ReadInt32LittleEndian(b),
-                "u64" or "i64" => BinaryPrimitives.ReadInt64LittleEndian(b),
-                _ => throw new InvalidOperationException($"{path} is a {f.Type}, not a number"),
+                "u32" => BinaryPrimitives.ReadUInt32LittleEndian(b),
+                "i64" or "u64" or "f64" => BinaryPrimitives.ReadInt64LittleEndian(b),
+                _ => throw new InvalidOperationException($"{f.Path} is a {f.Type}, not a scalar"),
             };
+        }
+
+        // A scalar, or element <index> of an array of scalars such as `i32[8]`, as a number.
+        public long Int(ReadOnlySpan<byte> state, string path, int index = 0)
+        {
+            Field f = this[path];
+            int bracket = f.Type.IndexOf('[');
+            if (bracket < 0) return index == 0 ? Get(state, f) : throw new ArgumentOutOfRangeException(nameof(index), $"{path} is not an array");
+            int count = Count(path);
+            if (index < 0 || index >= count) throw new ArgumentOutOfRangeException(nameof(index), $"{path} has {count} elements");
+            int size = f.Length / count;
+            return Get(state, new Field(f.Offset + index * size, size, f.Type[..bracket], path));
         }
 
         public bool Flag(ReadOnlySpan<byte> state, string path) => Int(state, path) != 0;
 
-        public double Double(ReadOnlySpan<byte> state, string path) =>
-            _fields.TryGetValue(path, out var f) && f.Type == "f64" ? BinaryPrimitives.ReadDoubleLittleEndian(state.Slice(f.Offset, 8)) : throw new KeyNotFoundException($"the state has no double {path}");
+        // An array field's element count, 1 for a scalar.
+        public int Count(string path)
+        {
+            string type = this[path].Type;
+            int bracket = type.IndexOf('[');
+            return bracket < 0 ? 1 : int.Parse(type[(bracket + 1)..^1], CultureInfo.InvariantCulture);
+        }
 
-        public ReadOnlySpan<byte> Bytes(ReadOnlySpan<byte> state, string path) =>
-            _fields.TryGetValue(path, out var f) ? state.Slice(f.Offset, f.Length) : throw new KeyNotFoundException($"the state has no field {path}");
+        public double GetDouble(ReadOnlySpan<byte> state, string path) => BitConverter.Int64BitsToDouble(Get(state, path));
 
-        // A field's bits as the debugger shows them: eight per byte of a scalar, one for a flag.
-        public int Bits(string path) => _fields.TryGetValue(path, out var f) ? f.Type is "bool" or "class" ? 1 : f.Length / Math.Max(1, f.Count) * 8 : 0;
+        public void Set(Span<byte> state, string path, long value)
+        {
+            Field f = this[path];
+            Span<byte> b = state.Slice(f.Offset, f.Length);
+            switch (f.Type)
+            {
+                case "u8" or "bool": b[0] = (byte)value; break;
+                case "u16": BinaryPrimitives.WriteUInt16LittleEndian(b, (ushort)value); break;
+                case "i32": BinaryPrimitives.WriteInt32LittleEndian(b, (int)value); break;
+                case "u32": BinaryPrimitives.WriteUInt32LittleEndian(b, (uint)value); break;
+                case "i64" or "f64": BinaryPrimitives.WriteInt64LittleEndian(b, value); break;
+                default: throw new InvalidOperationException($"{path} is a {f.Type}, not a scalar");
+            }
+        }
 
-        public int Count(string path) => _fields.TryGetValue(path, out var f) ? f.Count : 0;
+        // An array field's bytes in place.
+        public Span<byte> Bytes(Span<byte> state, string path)
+        {
+            Field f = this[path];
+            if (!f.Type.StartsWith("u8[", StringComparison.Ordinal)) throw new InvalidOperationException($"{path} is a {f.Type}, not a byte array");
+            return state.Slice(f.Offset, f.Length);
+        }
 
-        public bool IsNumber(string path) => _fields.TryGetValue(path, out var f) && f.Type is "u8" or "bool" or "class" or "i8" or "u16" or "i16" or "u32" or "i32" or "u64" or "i64";
+        // The fields two states of this layout differ in, each with both values, for a failure message.
+        public IEnumerable<string> Differences(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b)
+        {
+            var found = new List<string>();
+            foreach (Field f in Fields)
+            {
+                if (a.Slice(f.Offset, f.Length).SequenceEqual(b.Slice(f.Offset, f.Length))) continue;
+                if (f.Type.StartsWith("u8[", StringComparison.Ordinal))
+                {
+                    int at = a.Slice(f.Offset, f.Length).CommonPrefixLength(b.Slice(f.Offset, f.Length));
+                    found.Add($"{f.Path}[{at}]: {a[f.Offset + at]:X2} against {b[f.Offset + at]:X2}");
+                }
+                else found.Add($"{f.Path}: {Get(a, f)} against {Get(b, f)}");
+            }
+            return found;
+        }
+
+        private static Field Parse(string line)
+        {
+            string[] p = line.Split(' ', 4);
+            return new Field(int.Parse(p[0], CultureInfo.InvariantCulture), int.Parse(p[1], CultureInfo.InvariantCulture), p[2], p[3]);
+        }
     }
 }

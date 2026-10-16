@@ -83,7 +83,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         private byte _cartridgeType;
         private uint _mutes;
         private CheatRegistry _cheats = new();
-        private MercuryStateLayout? _layout;
+        private StateLayout? _layout;
 
         public MercuryRtCore() : base(MercuryNative.Engine, "MercuryRT", "Mercury", pads: 1)
         {
@@ -220,11 +220,11 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         public new MercuryRtDebugTarget CreateDebugTarget() => new(this);
 
         // The machine's state now, and the listing that names its bytes; a load from the other console changes the state's length, and the listing is asked for again.
-        public (byte[] State, MercuryStateLayout Layout) Snapshot()
+        public (byte[] State, StateLayout Layout) Snapshot()
         {
             byte[] state = Machine.Save();
             if (_layout is not { } layout || layout.Length != state.Length)
-                _layout = layout = MercuryStateLayout.FromText("MercuryRT", Machine.Core.Layout());
+                _layout = layout = StateLayout.FromText("MercuryRT", Machine.Core.Layout());
             return (state, layout);
         }
 

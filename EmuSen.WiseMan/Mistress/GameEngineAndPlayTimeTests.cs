@@ -36,7 +36,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             MetadataField field = GameMetadata.Fields.Single(f => f.Key == GameMetadata.AltEmulator);
             Assert.Equal(new[] { "", CoreCatalog.MarsRtEngine, CoreCatalog.MarsEngine }, GameMetadata.ChoicesFor(field, "/r/Game.z64").Select(c => c.Value));
-            Assert.Equal(new[] { "", CoreCatalog.MercuryEngine, CoreCatalog.MercuryRtEngine }, GameMetadata.ChoicesFor(field, "/r/Game.gbc").Select(c => c.Value));
+            Assert.Equal(new[] { "", CoreCatalog.MercuryRtEngine, CoreCatalog.MercuryEngine }, GameMetadata.ChoicesFor(field, "/r/Game.gbc").Select(c => c.Value));
             Assert.Equal(new[] { "" }.Concat(CoreCatalog.EngineFor("SNES")?.Choices ?? Array.Empty<string>()), GameMetadata.ChoicesFor(field, "/r/Game.sfc").Select(c => c.Value));
             Assert.Equal(CoreCatalog.MarsEngine, GameMetadata.EngineFor("/r/Game.z64", CoreCatalog.MarsEngine));
             Assert.Null(GameMetadata.EngineFor("/r/Game.z64", CoreCatalog.MercuryEngine));
@@ -61,7 +61,7 @@ namespace EmuSen.WiseMan.Mistress
             MetadataEditorWindow gb = ThemedGameOptionsTests.OpenEditor(s);
             var engine = (Dropdown)gb.EditorOf(GameMetadata.AltEmulator);
             Assert.True(engine.IsEnabled);
-            Assert.Equal(new[] { "None (the console's engine)", CoreCatalog.MercuryEngine, CoreCatalog.MercuryRtEngine }, ((System.Collections.IEnumerable)engine.ItemsSource!).Cast<string>());
+            Assert.Equal(new[] { "None (the console's engine)", CoreCatalog.MercuryRtEngine, CoreCatalog.MercuryEngine }, ((System.Collections.IEnumerable)engine.ItemsSource!).Cast<string>());
             engine.SelectedItem = CoreCatalog.MercuryRtEngine;
             ThemedGameOptionsTests.Reach(s, "MetadataSave");
             s.Pad.A();

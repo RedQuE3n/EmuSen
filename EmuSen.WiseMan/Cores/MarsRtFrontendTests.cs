@@ -81,7 +81,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void The_N64_defaults_to_MarsRT_and_the_Game_Boy_to_its_csharp_core()
+        public void The_N64_defaults_to_MarsRT_and_the_Game_Boy_to_MercuryRT()
         {
             CoreSetting engine = CoreCatalog.EngineFor("N64")!;
             Assert.Equal(CoreCatalog.EngineKey, engine.Key);
@@ -89,7 +89,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { CoreCatalog.MarsRtEngine, CoreCatalog.MarsEngine }, engine.Choices);
             Assert.Equal(CoreCatalog.MarsRtEngine, CoreCatalog.EngineChosen("N64", null));
             Assert.Equal(CoreCatalog.MarsEngine, CoreCatalog.EngineChosen("N64", CoreCatalog.MarsEngine));
-            Assert.Equal(CoreCatalog.MercuryEngine, CoreCatalog.EngineChosen("GB", null));
+            Assert.Equal(CoreCatalog.MercuryRtEngine, CoreCatalog.EngineChosen("GB", null));
             Assert.Equal(CoreCatalog.EngineFor("SNES")?.Default, CoreCatalog.EngineChosen("SNES", null));
             Assert.True(CoreCatalog.EngineFor("SNES") is null or { Default: CoreCatalog.VenusRtEngine, Choices: [CoreCatalog.VenusRtEngine, CoreCatalog.VenusEngine, ..] });
             Assert.Equal(CoreCatalog.VenusEngine, CoreCatalog.EngineChosen("SNES", CoreCatalog.VenusEngine));
@@ -97,8 +97,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(CoreCatalog.MoonEngine, nes.Default);
             Assert.Equal(new[] { CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine }, nes.Choices);
             CoreSetting gameBoy = CoreCatalog.EngineFor("GB")!;
-            Assert.Equal(CoreCatalog.MercuryEngine, gameBoy.Default);
-            Assert.Equal(new[] { CoreCatalog.MercuryEngine, CoreCatalog.MercuryRtEngine }, gameBoy.Choices);
+            Assert.Equal(CoreCatalog.MercuryRtEngine, gameBoy.Default);
+            Assert.Equal(new[] { CoreCatalog.MercuryRtEngine, CoreCatalog.MercuryEngine }, gameBoy.Choices);
             Assert.DoesNotContain(CoreCatalog.SettingsFor("N64"), s => s.Key == CoreCatalog.EngineKey);
         }
 

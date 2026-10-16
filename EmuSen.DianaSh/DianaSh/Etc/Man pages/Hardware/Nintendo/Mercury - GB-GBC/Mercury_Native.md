@@ -3571,3 +3571,27 @@ held only in C#.
 - **The PPU's line boundary** (§13.11.3), decided as the next piece of work; it will re-baseline the goldens.
 - **MagenTests' HDMA case** was not fetched as a witness for §14.2; Pan Docs is its only oracle.
 - **The handheld**, as in every stage since 7, and the alignment there (§8.7.5).
+
+## 15. Stage 10: MercuryRT alone (2026-10-16)
+
+*Decided 2026-10-16 by the tester: MercuryRT is the default and the C# core is deleted.* C# cores are not kept as
+oracles once a Rust core replaces them; the C# core leaves with the tests that need it, and MercuryRTs
+
+## 15. Stage 10: MercuryRT alone (2026-10-16)
+
+*Decided 2026-10-16 by the tester: MercuryRT is the default and the C# core is deleted.* C# cores are not kept as
+oracles once a Rust core replaces them: the C# core leaves with the tests that need it, and MercuryRT's oracles are
+the goldens of §14.4, the hardware test corpus with its baseline (§12.2) and the conformance kit. This section is
+stage 10's record, in the order the work was done.
+
+### 15.1 The default
+
+The Game Boy's engine row now names MercuryRT (Rust) first, and so as its default; Mercury (C#) stayed a choice until
+the C# core was deleted (§15.3). Before the switch was committed, MercuryRT was graded on the oracles that outlive the
+C# core, measured on 2026-10-16 from the build of the switch:
+
+- **The corpus**, the 173 blargg and mooneye ROMs under each of the three models, held to the baseline's MercuryRT
+  columns: no verdict moved, so Auto stands at 126 passed, 42 failed and 5 without a verdict, as recorded.
+- **The goldens**: the 36 frame runs and 3 step programs, the 176 random programs, the 173 corpus traces and the four
+  games (3,600 frames each with the bench's input) all reproduced, and the deliberately broken trace was caught in
+  each of its three columns.

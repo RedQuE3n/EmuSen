@@ -1,6 +1,7 @@
 # EmuSen — DianaSh: a standalone shell, its command modules, and the surfaces around it
 
-*This revision: the seventh, 2026-10-15: S3 built, the Rust shell core in `Platform/dianash/` with its builtins,
+*This revision: the eighth, 2026-10-16: Q18 to Q24 decided as recommended, and Q18, Q19, Q20's page and Q21 built
+in both shells (§13.9). The seventh, 2026-10-15: S3 built, the Rust shell core in `Platform/dianash/` with its builtins,
 sessions and host API (`dianash.h`, stable, with its baseline), every C# command still running under it through a
 bridge, the facade choosing it under `EMUSEN_DIANASH_NATIVE=1`, and the standalone `dianash` (§13.7); S4 built,
 `dianash.text` in Rust, all sixteen commands (§13.8); Q15's case-insensitive root comparison corrected in both shells
@@ -1742,8 +1743,7 @@ these does, or is one of the five conditions and loops are made of. Three of §4
   that asked the host to clear would have needed the request §10.4 describes and a host that answered it; until the
   frontends move to the host API's requests, the frontend's own command is what clears.
 - `exit`, `which`, `command` and `trust` are new names. Each would change what `help` lists, and `help` is a recorded
-  case that both shells must print alike until S6. They come with the first step that can re-record `help` in both,
-  which is S6 at the latest.
+  case that both shells must print alike until S6. *Built 2026-10-16 in both shells at once, as Q21 decided (§13.9).*
 
 A host's command takes the place of a builtin of its name, as a frontend's command has always replaced a default,
 except for the language's five, which no C# command could replace either; WiseMan's `HostActionPlumbingTests`
@@ -2012,6 +2012,29 @@ alone, the text tools linked in: 56 cases, all passing.
 **Its cost.** In the shell core alone, `echo a b c | grep b | wc -l` costs 4.9 µs and the ten-iteration loop 26.7 µs,
 against 6.2 µs and 33.0 µs in the C# shell; a `grep` compiles its pattern on every call, as the C# does, and that is
 most of a stage's cost. Through the facade, see §13.7's table and its open item.
+
+### 13.9 The decisions of 2026-10-16, built
+
+*Built 2026-10-16, each in a commit of its own, the defect of each fix shown by a test before the fix.*
+
+| | What | Shown first | Golden |
+|---|---|---|---|
+| Q18 | `step over` and `step out` refuse, status 1 and no host action, when `ArmStepToDepth` declines because the breakpoints were never told the call stack: "This core does not report a call stack to its breakpoints, so `step over` cannot be armed." | `CallStackAndStepTests`' new case on the corpus's fake target read "Stepping over..." | `step.golden`'s first case, at its two such lines (`step over`, `step cpu over`) |
+| Q19 | `RegisterFlowRegistry.Clear` empties the log of any window ever armed and leaves it as armed as it was | `RegisterFlowTests`' new case found the access still counted after a clear of a disarmed window | a new case in `copflow.golden`, 'a clear after off' |
+| Q20 | `man cov` says that a map's entry counts add, the same map loaded twice counting each entry twice | — (the behaviour is kept) | `man.golden`'s case for the page |
+| Q21 | `exit` as a third name for `shutdown`; `which`, `command` (with `-v`) and `trust` as the language's own, answered before any table in both shells; `trust` records a file's SHA-256 in the `trusted` file of the `dianash` folder beside the program's configuration, at the prompt only | — (new) | `help.golden` and `shutdown.golden`'s usage line re-recorded, a case for `exit`; `which.golden`, `command.golden` and `trust.golden` new; `man.golden`'s three new pages and the cases that print `help` |
+
+Two choices in Q21 needed making. *Where the three names live*: as the language's, like `source`, rather than as
+commands of a table, because `command` must dispatch past the aliases and `trust` must know whether it runs inside a
+script, which only the interpreter knows; and because the language's names are the only ones no host's command takes
+the place of, so `which` and `trust` cannot be shadowed. *What `which` calls a builtin*: the names §4.2 gives the shell,
+which both shells can list alike. A host's command that takes the place of one of them is a command to the Rust shell
+and still a builtin to the C#; that is the one place the two answer differently, it occurs in no case of the corpus,
+and `man which` says so. `trust` approves; nothing loads a player's module yet (§5.4 and §6 are built for modules linked
+into a program), so the approvals wait for the step that loads one.
+
+The gate after the four commits, both ways, over S3's filter: 1,297 tests, 1,289 passed, 8 skipped, none failed. The
+crate-alone corpus runner passes 59 cases and fails none.
 
 ---
 

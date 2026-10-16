@@ -17,6 +17,21 @@ namespace EmuSen.WiseMan.DianaSh
             return flow;
         }
 
+        // A clear after `off` empties the log it says it clears - see EmuSen_DianaSh.md §16 Q19.
+        [Fact]
+        public void Clear_empties_a_disarmed_window_and_leaves_it_disarmed()
+        {
+            var flow = Armed();
+            flow.Note(0x30, 0x01, isWrite: true, "cpu");
+            flow.Disarm();
+
+            flow.Clear();
+
+            Assert.Equal(0, flow.TotalAccesses);
+            Assert.Empty(flow.Tail(10));
+            Assert.False(flow.IsArmed);
+        }
+
         [Fact]
         public void A_disarmed_registry_records_nothing()
         {

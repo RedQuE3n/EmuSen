@@ -1,16 +1,33 @@
 using System;
+using System.Linq;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Bin.Native;
 using EmuSen.DianaSh.DianaSh.Var.Shell;
 using EmuSen.WiseMan.Fixtures;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.DianaSh
 {
     // The switch chose what the variable says, so a default run is a run of the Rust shell and not a silent fallback - see EmuSen_DianaSh.md §13.10.
     [Collection(TestCollections.ProcessGlobals)]
-    public class NativeSwitchTests
+    public class NativeSwitchTests(ITestOutputHelper output)
     {
+        // The line a run's log shows; EMUSEN_DIANASH_EXPECT=rust makes a run that fell back to the C# fail, as CI's Rust steps set it.
+        [Fact]
+        public void The_run_says_which_shell_it_uses_and_the_rust_shell_answers_with_its_modules()
+        {
+            DianaShInterpreter shell = DianaShInterpreter.CreateDefault(null);
+            string which = shell.NativeShellOf is null ? "C#" : "Rust";
+            output.WriteLine($"DianaSh in this run: the {which} shell ({Environment.OSVersion.Platform}, {System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier})");
+            if (Environment.GetEnvironmentVariable("EMUSEN_DIANASH_EXPECT") is { Length: > 0 } expected)
+                Assert.Equal(expected, which, ignoreCase: true);
+            if (shell.NativeShellOf is not { } native) return;
+            var kinds = native.Commands(shell.NativeSessionId).ToDictionary(c => c.Name, c => c.Kind);
+            foreach (string name in new[] { "mem", "disasm", "label", "bp", "watch", "step", "cov", "summary", "grep" })
+                Assert.Equal("module", kinds[name]);
+        }
+
         // State 2: the Rust shell unless the variable is 0, where the library this run was built with is there to choose.
         private static bool Native => Environment.GetEnvironmentVariable("EMUSEN_DIANASH_NATIVE") != "0" && DianaShNative.Ready;
 

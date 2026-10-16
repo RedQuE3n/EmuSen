@@ -6896,6 +6896,7 @@ Frames with the SPC700 in the boot program, from power-on, under the old program
 *Decided by the tester 2026-10-05:* "You may make venus the default." The default flips with every gate of §63.5 in its
 state there. G6's run on the handheld on battery is still owed, and stays recorded as owed. C# Venus is removed only
 after plan §7's four weeks of play as the default with no open regression.
+*Corrected 2026-10-16: the four-week gate and the legacy branch were proposed by this plan and never decided by the tester, whose instruction of 2026-09-30 was to ditch the C# core; the C# core was retired on 2026-10-16 at the tester's word.*
 
 ### 65.1 What changed
 
@@ -7123,3 +7124,123 @@ read from the core's info, so three things in VenusRT's declarations changed. No
 | The blast radius: every Mistress test, and the discovery, VenusRT, registration, ABI, adapter, firmware, Nephrite, NEC DSP, factory and catalog tests | 1,956 of 1,958 passed, 51 skipped (the picture tools) |
 | The two failures, both the new themed-page case | it asserted that the harness's recording launcher was empty, and earlier tests in the same process had left Steam keyboard requests in it; it now asserts that the page added none. Rerun with `EsdeSettingsMenusTests`, `FirmwarePageTests` and `ThemedSwitchesTests`: 47 of 47 |
 
+
+## 68. Stage 9, second half: VenusRT alone (2026-10-16)
+
+*Decided 2026-10-16 by the tester: "Yes, retire it."* C# Venus is deleted, and VenusRT is the SNES's only engine. The
+decision rests on the tester's instruction of 2026-09-30, "Ditch the original C# core", and on the standing rule of the
+same day recorded in `EmuSen_Stack.md`: a C# core is not kept as an oracle once its Rust core replaces it, and no
+C#-against-Rust comparison is made. VenusRT's oracles from here on are its own goldens (§68.2), the SNES test-ROM corpus
+with its recorded baseline (§68.3), the single-step suites and the conformance kit. The N64 and the Game Boy were
+retired the same way the same day (`Mars_Native.md` §6.7, `Mercury_Native.md` §15), and this section follows their
+pattern. It is the record of the work, in the order it was done.
+
+### 68.1 The record corrected
+
+Plan §7 stated a second gate, "VenusRT has been the default for four weeks of play with no open regression", followed
+by a move of C# Venus to a legacy branch (plan §9, Q9), and §65 above repeated it. Plan §9 recorded "every
+recommendation this page made was accepted as written". Both are corrected in place, with the original text kept:
+the four-week gate and the legacy branch were proposed by the plan and never decided by the tester, whose instruction of
+2026-09-30 was to ditch the C# core. Plan §9 now says which answers the record holds in the tester's own words: the
+instruction of 2026-09-30, and the later decisions dated where they are cited. For Q1–Q10 one by one, neither the page
+nor the repository's history (commit `301ca07c`) records an answer; what is there is the page's own summary. The
+general lesson is a process one and does not depend on the SNES: a plan's recommendation becomes a decision only when
+the record shows who decided it, and a "yes, please continue" to a step of work is not a decision on every question the
+page that step wrote had put.
+
+### 68.2 The goldens
+
+The goldens follow MercuryRT's stage 9 (`Mercury_Native.md` §14.4) and MoonRT's, with one difference that the
+decision of 2026-10-16 imposes: **they are recorded from VenusRT itself.** There is no C# recording to be faithful to,
+so a golden is a record of VenusRT's behaviour on the day it was taken, and what makes it an oracle is that every later
+change to that behaviour has to be deliberate and stated.
+
+**The form** is the shared `GoldenTrace` of `EmuSen.WiseMan/Fixtures/` (MoonRT's format, one file per run under
+`EmuSen.WiseMan/Cores/VenusGoldens/`): a header naming the run, the image's full SHA-256, the input script with a
+fingerprint of its masks, whether rendering is skipped, the engine it was recorded from and the reason it was recorded.
+A frame run has a line per frame, `frame state picture sound`, the first eight bytes of SHA-256 over the save state,
+the RGBA frame and the drained samples, with `=` for a value unchanged from the line before. A corpus run folds each
+frame's three hashes into a chain, written every 60 frames and at the end, and closes with its verdict by the
+runner's grader (§3.3): the outcome and the frame, the protocol, and the grader's detail with any byte outside
+printable ASCII written `\xNN`.
+
+**How a run is made.** Through `ICore`, as a frontend holds the engine: `CoreEngine` over the library discovery finds,
+with the battery off and an empty firmware folder, so that the SPC700's boot program and the NEC DSP are VenusRT's open
+replacements (`EmuSen_Firmware.md` §0), the path a player with no dumps takes. The runner's `VenusMachine` path, with
+the corpus's own DSP images, stays the corpus baseline's (§68.3).
+
+**The catalogue** (`VenusGoldenTests`):
+
+| Runs | Files | What | Rows |
+|---|---|---|---|
+| `programs/` | 10 | the project's own 65816 programs (`VenusPrograms`): a mode 1 screen scrolled by the pad, on LoROM and on HiROM; colour math on the backdrop from an HDMA table, with the multiply and divide units read before they finish; an SPC700 program uploaded through the boot program's protocol that plays a looped BRR square whose pitch and key-on follow the pad; the SA-1 counting in I-RAM and writing BW-RAM; the GSU plotting from ROM while the S-CPU waits in WRAM; a DSP-1 multiply each frame on the open replacement; the OBC1 given an object each frame; and the effects program with rendering skipped, and the sound program with two resets. 600 frames each, 300 for the last two | 5,400 |
+| `random/` | 48 | random bytes as code on each of the six boards (LoROM, HiROM, SA-1, GSU, DSP-1, OBC1), eight seeds, the last four with `STP` and `WAI` made `NOP`; 300 frames each | 14,400 |
+| `corpus/` | 295 | every ROM of the corpus manifest (§3.3) to the frames the runner grades it at, 3,600 or, for `spc_dsp6`, 18,000, chained, with its verdict | 17,880 chained rows |
+| `games/` | 6 | six commercial games from the library, named by hash alone, never committed: a plain LoROM game and one game each for the SA-1, GSU-2, DSP-1B, ST010 and OBC1, 3,600 frames with the bench's input | 21,600 |
+
+359 files, 2.4 MB. The input scripts are `none`, `bench` (Start for five frames every 90, A at 45) and `pads` (both
+pads changed every seventh frame through all twelve buttons).
+
+**Every frame run's state at each 300th frame** is kept while recording under `~/.cache/emusen/venusrt-goldens/<run>/`
+(`EMUSEN_VENUSRT_GOLDEN_STATES` moves it), outside the tree: 37 MB for the synthetic programs and the games. Grading a
+frame run on a machine that holds them does two more things, as MercuryRT's grader does: a failure is bisected to the
+first recorded state at or after it and the state field named through the machine's `state_layout`, and a run that
+passes is graded again from the recorded state of an early interval frame (300 for a 600-frame run, 900 for a game)
+loaded into a fresh machine.
+
+**Re-baselining** is `EMUSEN_VENUSRT_GOLDEN_RECORD=1`, and only with `EMUSEN_VENUSRT_GOLDEN_REASON` saying why; a trace
+that changes carries that reason in its header, so the directory's history is the list of intended changes to
+VenusRT's behaviour. Recording writes only the traces that changed. The first recording's reason is "first recording,
+from VenusRT at 0f117b4c, before C# Venus is deleted".
+
+**The broken-trace checks.** `A_deliberately_broken_trace_is_caught` changes one hex digit of frame 300 of
+`programs/sound` in memory, once in each of the state, picture and sound columns, and each fails with "frame 300: the
+state differs", "the picture differs" or "the sound differs". `A_deliberately_broken_corpus_chain_is_caught` does the
+same to the eleventh chained row of PeterLemon's `CPUADC`, which fails naming that row's frame. Those four are the
+check that grading compares anything at all.
+
+**Measured on 2026-10-16**, recorded and then graded from the same build: all 24 cases of `VenusGoldenTests` pass on the
+grading run, in 7.3 minutes with the corpus on six threads. The eight 600-frame programs and the six games were also
+graded again from their recorded states of frames 300 and 900; the 300-frame runs have no interval state early enough
+to resume from.
+
+### 68.3 The corpus against C# Venus's baseline
+
+The gate for deleting C# Venus was that VenusRT does no worse than C# Venus's recorded baseline anywhere in the corpus
+(§3.5, plan §3.5). C# Venus was not run again: its verdicts are the `venus` column of `VenusRtBaseline.tsv`, recorded
+on 2026-09-30 and re-read with the backdrop protocol on 2026-10-01, and now frozen. VenusRT's verdicts are the ones its
+corpus goldens record, so the gate is held by a test that reads the committed traces,
+`No_corpus_verdict_is_worse_than_the_csharp_baseline`: for each of the 295 ROMs VenusRT's verdict ranks no lower than
+C# Venus's (a pass above a ROM that gave no verdict of its own or did not finish, above a failure, above an error),
+and VenusRT's passes are at least C# Venus's.
+
+| Suite (by path) | ROMs | C# Venus passed (frozen) | Mesen passed | VenusRT passed, no firmware |
+|---|---|---|---|---|
+| gilyon `cputest` | 2 | 0 | 2 | 2 |
+| gilyon `spctest` | 2 | 2 | 2 | 2 |
+| PeterLemon CPU | 23 | 23 | 23 | 23 |
+| PeterLemon SPC700 | 7 | 7 | 7 | 7 |
+| PeterLemon GSU | 31 | 31 | 31 | 31 |
+| blargg SPC (`spc_smp`, `spc_timer`, `spc_mem_access_times`) | 3 | 0 | 3 | 2 |
+| blargg `spc_dsp6` | 1 | 0 | 1 | 1 |
+| blargg 2010 | 15 | 3 | 10 | 10 |
+| ADC/SBC | 6 | 6 | 6 | 6 |
+| multiply/divide | 7 | 0 | 5 | 5 |
+| absindx SA-1 | 2 | 0 | 1 | 1 |
+| higan collection, other (byuu's backdrop-graded ROMs among them) | 56 | 9 | 26 | 26 |
+| Cx4, undisbeliever, the 240p suite | 140 | 0 | 0 | 0 |
+| **All** | **295** | **81** | **117** | **116** |
+
+- **Every ROM C# Venus passed passes on VenusRT, and no verdict is worse.** In the plan's first count, the 93
+  self-grading ROMs of which C# Venus passed 73 (the runner's 92, the Cx4 test being graded by hand), VenusRT passes 91
+  of the runner's 92; with the 25 backdrop-graded ROMs counted as §16.2 counts them, 116 of Mesen's 117 against C# Venus's
+  81.
+- **The one Mesen pass VenusRT does not reach is `spc_smp`,** whose "CPU/verify IPL ROM" test compares the console's
+  64-byte boot program byte for byte, which the open replacement cannot be (§41.3). It passes with the player's own
+  image, as §63.5 measured; C# Venus failed it too.
+- **The rest:** 5 failures, each a failure on C# Venus as well: `spc_smp`; the Cx4 test, a chip outside parity; and
+  three that fail on Mesen too (absindx's SA-1 version code, `speed_2_freezes2` and one `mul_timing`, the last two
+  excluded as ungradable in plan §3.5). 2 `Done` (`test_speed`, `test_timer_speed3`, which print values), and 172
+  ROMs graded by picture.
+- **The block-move suite.** C# Venus passed 0 of SingleStepTests' 10,000 `MVN` and 10,000 `MVP` cases (§3.5);
+  VenusRT passes all of them in the crate's own harness, run again at §68.6.

@@ -68,6 +68,7 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
         "  ls [-a] [-l] [path]           list directory entries (default: current directory);\n",
         "                                -a include dotfiles, -l show type/size/modified-time"
     )),
+    ("mv", false, "  mv <src> <dst>                SUSPENDED - move/rename a file or directory (dst may be an existing directory)"),
 
 ];
 

@@ -40,6 +40,13 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
         "                                'i' = case-insensitive). Standalone: sed <expr> <text...>.\n",
         "                                Real use is as a pipeline stage: <command> | sed s/pat/repl/"
     )),
+    ("grep", true, concat!(
+        "  grep [-i] [-v] [-n] [-c] [-q] <pattern> [text...]\n",
+        "                                filter lines matching <pattern> (regex) - -i case-insensitive,\n",
+        "                                -v invert (non-matching), -n prefix line numbers, -c print only\n",
+        "                                the match count, -q no output (exit code only, for if/while).\n",
+        "                                Reads piped stdin if given, else operates on trailing literal text."
+    )),
 
 ];
 

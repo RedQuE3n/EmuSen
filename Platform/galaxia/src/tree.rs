@@ -19,20 +19,50 @@ pub const HOME_DIR_NAME: &str = "home";
 pub const CONFIG_DIR_NAME: &str = "etc";
 pub const PROGRAM_DIR_NAME: &str = "EmuSen";
 
-/// `File.Exists`: there and not a directory, with a link judged by what it names and a dangling link counted as a file; never a path that ends in a separator.
+/// `FILE_ATTRIBUTE_DIRECTORY`, which a directory, and a link or junction made for one, carries.
+#[cfg(windows)]
+const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
+
+/// Whether a path names a directory as .NET answers on this system: none for nothing there. On Unix a link is what it
+/// names and a dangling one a file; on Windows, where .NET reads the entry's own attributes, a link or junction made
+/// for a directory is one whether or not anything is behind it (EmuSen_RustPlatform.md §26.4).
+fn is_directory(path: impl AsRef<std::path::Path>) -> Option<bool> {
+    let path = path.as_ref();
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        std::fs::symlink_metadata(path).ok().map(|entry| entry.file_attributes() & FILE_ATTRIBUTE_DIRECTORY != 0)
+    }
+    #[cfg(not(windows))]
+    {
+        match std::fs::metadata(path) {
+            Ok(metadata) => Some(metadata.is_dir()),
+            Err(_) => std::fs::symlink_metadata(path).ok().filter(|link| link.file_type().is_symlink()).map(|_| false),
+        }
+    }
+}
+
+/// Whether an entry of a listing is a directory by `is_directory`'s rule; on Windows from the listing's own attributes.
+pub(crate) fn listed_as_directory(entry: &std::fs::DirEntry) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        entry.metadata().is_ok_and(|metadata| metadata.file_attributes() & FILE_ATTRIBUTE_DIRECTORY != 0)
+    }
+    #[cfg(not(windows))]
+    {
+        is_directory(entry.path()) == Some(true)
+    }
+}
+
+/// `File.Exists`: there and not a directory, by `is_directory`'s rule; never a path that ends in a separator.
 pub fn file_exists(file: &str) -> bool {
-    if file.is_empty() || path::ends_in_separator(Style::HOST, file) {
-        return false;
-    }
-    match std::fs::metadata(file) {
-        Ok(metadata) => !metadata.is_dir(),
-        Err(_) => std::fs::symlink_metadata(file).is_ok_and(|link| link.file_type().is_symlink()),
-    }
+    !file.is_empty() && !path::ends_in_separator(Style::HOST, file) && is_directory(file) == Some(false)
 }
 
 /// `Directory.Exists`.
 pub fn directory_exists(path: &str) -> bool {
-    !path.is_empty() && std::fs::metadata(path).is_ok_and(|m| m.is_dir())
+    !path.is_empty() && is_directory(path) == Some(true)
 }
 
 /// `ConfigRoot.MacDataDirectoryFor`.
@@ -507,6 +537,30 @@ mod tests {
         let without = said.split_once("<<").and_then(|(_, rest)| rest.split_once(">>")).map(|(folder, _)| folder.to_string());
         assert_eq!(without.as_deref(), Some(application_data().as_str()), "{said}");
         assert!(path::is_rooted(Style::Windows, &application_data()) && application_data() == std::env::var("APPDATA").unwrap());
+    }
+
+    /// On Windows a link or junction made for a directory is a directory whether or not anything is behind it, and one
+    /// made for a file is a file, as .NET reads the entry's own attributes there.
+    #[cfg(windows)]
+    #[test]
+    fn a_link_is_what_it_was_made_for_on_windows() {
+        let temp = TempDir::new("exists-windows");
+        let (target, gone) = (temp.join("target"), temp.join("gone"));
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::create_dir_all(&gone).unwrap();
+        for (link, to) in [("junction", &target), ("dangling-junction", &gone)] {
+            let made = std::process::Command::new("cmd").args(["/C", "mklink", "/J", &temp.join(link), to]).output().unwrap();
+            assert!(made.status.success(), "{made:?}");
+        }
+        std::fs::remove_dir(&gone).unwrap();
+        for link in ["junction", "dangling-junction"] {
+            assert!(directory_exists(&temp.join(link)) && !file_exists(&temp.join(link)), "{link}");
+        }
+        if std::os::windows::fs::symlink_file(&target, temp.join("file-link-to-directory")).is_ok() {
+            std::os::windows::fs::symlink_dir(temp.join("nowhere"), temp.join("dangling-directory")).unwrap();
+            assert!(file_exists(&temp.join("file-link-to-directory")) && !directory_exists(&temp.join("file-link-to-directory")));
+            assert!(directory_exists(&temp.join("dangling-directory")) && !file_exists(&temp.join("dangling-directory")));
+        }
     }
 
     #[test]

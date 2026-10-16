@@ -31,12 +31,12 @@ impl Copied {
     }
 }
 
-/// A directory's entries as (name, is a directory); a link is what it names, and a dangling one is a file, as .NET's enumeration has them.
+/// A directory's entries as (name, is a directory), as .NET's enumeration has them (`tree::listed_as_directory`).
 fn entries(directory: &str) -> io::Result<Vec<(String, bool)>> {
     let mut found = Vec::new();
     for entry in std::fs::read_dir(directory)? {
         let entry = entry?;
-        let is_directory = std::fs::metadata(entry.path()).is_ok_and(|m| m.is_dir());
+        let is_directory = crate::tree::listed_as_directory(&entry);
         found.push((entry.file_name().to_string_lossy().into_owned(), is_directory));
     }
     Ok(found)

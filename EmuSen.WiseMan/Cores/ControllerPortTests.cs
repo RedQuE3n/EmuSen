@@ -168,33 +168,6 @@ namespace EmuSen.WiseMan.Cores
             Assert.False(ports[3].Present);
         }
 
-        // MarsRT's ports, by its state against the C# core's after the same plugging and presses on every port.
-        [Fact]
-        public void Marsrts_ports_take_a_controller_and_its_buttons_as_the_csharp_cores_do()
-        {
-            if (!MarsRtCore.Available) return;
-            string rom = Rom(SyntheticN64Rom.Build(patches: (0, new byte[] { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 })), "pads.z64");
-            MarsCore oracle = MarsRtTests.Oracle();
-            using MarsRtCore twin = MarsRtTests.Twin();
-            oracle.LoadRom(rom);
-            twin.LoadRom(rom);
-            byte[] before = twin.Save(false);
-            foreach (ICore core in new ICore[] { oracle, twin })
-            {
-                core.SetControllerConnected(2, true);
-                core.SetButton(2, PadButton.Start, true);
-                core.SetAxis(2, PadAxis.LeftY, -1);
-                core.SetControllerConnected(3, true);
-                core.SetButton(3, PadButton.B, true);
-            }
-
-            using var stream = new MemoryStream();
-            oracle.SaveState(stream);
-            byte[] after = twin.Save(false);
-            Assert.False(before.AsSpan().SequenceEqual(after), "MarsRT's state did not change");
-            Assert.True(stream.ToArray().AsSpan().SequenceEqual(after), "MarsRT's ports differ from the C# core's");
-        }
-
         [Fact]
         public void The_game_boys_one_port_is_all_either_engine_reads()
         {

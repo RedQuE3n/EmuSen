@@ -1901,6 +1901,10 @@ know and reads only what was written. WiseMan runs both against the v1 adapter o
 | **MercuryRT** | the pre-stable set, `0x0001_0005` | the same; `Model` becomes a create-time schema key, the six `mercuryrt_*` extensions stay | the 586 WiseMan tests §12.5 there names; its digest over 24 runs; the kit; the plain frame timed interleaved, aligned build kept | 1 day |
 | **MarsRT** | its legacy ABI, interface 10 | **directly onto v1 at its step 5**, skipping the pre-stable set: the snapshot, `PRESENT`, `PHASES`, `AXES`, `SETTINGS`, `FRAME_SERIAL`, `ROW_REPEAT`, `BATTERY_DIRTY`, `CHEAT_POKES`; its settings from the schema; its extensions renamed | step 5's list (`EmuSen_NativeCores.md` §7: the 57 test methods, rewind per landing, `pacebench`'s hash, the three gameplay states, the probe on Super Mario 64 and Ocarina of Time), R3's held-button state test, the kit; then 5a (PGO retrained) and 5b (timed) | 2–3 days, plus 5a and 5b; **deferred with its retrain until the port is finished** |
 
+*MarsRT's row done 2026-10-15 (`Mars_Native.md` §7): on v1 alone, 48 exports and 21 `marsrt_core_*` extensions, the
+shim a subclass of the adapter; the kit's 19 cases pass, once a load left the `Dirty` bytes as the state says (§7.4
+there); 5a deferred.*
+
 ### 13.2 What must land before VenusRT's stage 6
 
 Stage 6 is "Frontends on the common interface" (`VenusRT_Plan.md` §6), planned as `VenusRtCore : NativeRtCore<VenusMachine>`
@@ -1959,7 +1963,7 @@ away). The DianaSh moves (D1–D5), MoonRT's and MercuryRT's moves and MarsRT's 
 ### 13.5 The legacy paths retire
 
 - **MarsRT's legacy ABI** (`LegacyNativeMachine`, `LegacyNativeExports`, `NativeCoreLibrary`'s per-core constructor) is
-  deleted at MarsRT's step 5, its last user, as `EmuSen_NativeCores.md` §12.5 already plans.
+  deleted at MarsRT's step 5, its last user, as `EmuSen_NativeCores.md` §12.5 already plans. *Deleted 2026-10-15 (`Mars_Native.md` §7.2).*
 - **The pre-stable `emusen_native_*` set** (`NativeCoreLibrary.Common`, `NativeInterface`, `NativeMachine`,
   `NativeRtCore`, the `abi` module's macro) is deleted when MoonRT, MercuryRT and VenusRT are on v1. Nothing outside the
   repository calls it, so it needs no deprecation period. The `debug` module's `Hooks` stay; they are data the v1 macro

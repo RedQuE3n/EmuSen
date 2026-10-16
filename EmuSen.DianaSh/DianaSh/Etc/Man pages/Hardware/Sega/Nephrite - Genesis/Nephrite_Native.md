@@ -4518,7 +4518,8 @@ open disputes (§63.5).
   confirmed by a program's call (D-41: 21 numbers so far).
 - **The replacement**: with no player's BIOS, a disc runs on the open one; machine info names the firmware
   `Replacement`, and its words are `Accuracy` (`mcd/frontend.rs`, `BIOS_COST`, as `Nephrite_OpenBios.md` §4 drafts them,
-  with the backup RAM's gap stated). With the player's image, theirs is used.
+  with the backup RAM's gap stated; reordered for the firmware page's footer in its §17). With the player's image, theirs
+  is used.
 - **Mode 1** (§49.6 Q4): a Create setting, hidden, puts the Sega CD beneath a cartridge; an `md` machine with the
   backup RAM as file 11 and a state of its own system byte (D-47).
 - **The system pack** claims `.cue` and `.chd` for the Sega CD, as does the core.

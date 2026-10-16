@@ -28,15 +28,17 @@ namespace EmuSen.WiseMan.Cores
             Assert.Empty(NativeRtCore<MoonMachine>.RomPatchTriples(new CheatRegistry(), 0, 0xFFFF));
         }
 
-        // One loader, three facades, and their switches and crash-log names; MoonRT and MercuryRT on the common interface, MarsRT on its own until its step.
+        // The loaders' switches and crash-log names; MoonRT and MercuryRT on the common interface, MarsRT on the core ABI v1 since its step 5.
         [Fact]
         public void The_three_loaders_keep_their_switches_and_crash_logs()
         {
             Assert.Equal(("moonrt", "EMUSEN_MOON_NATIVE", "moonrt_crash"), (MoonNative.Library.Crate, MoonNative.Library.Variable, MoonNative.Library.CrashLogStem));
             Assert.Equal(("mercuryrt", "EMUSEN_MERCURY_NATIVE", "mercuryrt_crash"), (MercuryNative.Library.Crate, MercuryNative.Library.Variable, MercuryNative.Library.CrashLogStem));
-            Assert.Equal(("marsrt", "EMUSEN_MARS_NATIVE", "native_crash"), (MarsNative.Library.Crate, MarsNative.Library.Variable, MarsNative.Library.CrashLogStem));
+            Assert.Equal(("marsrt", "EMUSEN_MARS_NATIVE"), (MarsNative.Library.Crate, MarsNative.Library.Variable));
             Assert.True(MarsNative.Available, MarsNative.Report);
-            Assert.NotEqual(0, MarsNative.Export("mars_machine_new"));
+            Assert.NotEqual(0, MarsNative.Export("emusen_core_create"));
+            Assert.NotEqual(0, MarsNative.Export("mars_rsp_new"));
+            Assert.Equal(0, MarsNative.Export("mars_machine_new"));
             Assert.Equal(0, MarsNative.Export("no_such_export"));
 
             var off = NativeCoreLibrary.Common("moonrt", "EMUSEN_CLEANUP_TEST_OFF", MoonNative.CoreVersion, MoonNative.RequiredCapabilities);
@@ -86,14 +88,14 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal("status -99", MoonMachine.Describe(-99));
         }
 
-        // MarsRT's handle has only its lifecycle in the shared table, so the 8-bit calls refuse rather than call a function of another shape.
+        // MarsRT's state handle is a v1 machine: it writes either kind, has loaded nothing, and is the size it was asked for.
         [Fact]
-        public void MarsRTs_handle_refuses_the_calls_its_library_shapes_differently()
+        public void MarsRTs_state_handle_is_a_v1_machine_of_the_size_asked()
         {
             using var machine = new MarsMachine(4 * 1024 * 1024);
-            Assert.Throws<NotSupportedException>(() => machine.TotalFrames);
-            Assert.Throws<NotSupportedException>(() => machine.Save());
+            Assert.Equal((0, 4 * 1024 * 1024), (machine.LoadedKind, machine.RdramBytes));
             Assert.NotEmpty(machine.Save(snapshot: false));
+            Assert.NotEmpty(machine.Save(snapshot: true));
         }
     }
 }

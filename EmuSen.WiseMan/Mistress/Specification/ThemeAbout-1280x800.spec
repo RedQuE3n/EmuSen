@@ -37,7 +37,7 @@ tree
           22 FieldRow at=264,516,752,91 by=scroll heard=Source in=5 limit=260,152,760,474 paints=#9C9CA0FF role=group
             23 TextBlock at=264,516,752,29 box=752,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Source in=5 layout=56.45,28.8 limit=264,516,752,91 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Source
             24 TextBlock at=264,549,752,58 box=752,58 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="https://github.com/bo/plain-shelf-es-de, branch master, commit 1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" in=5 layout=530.45,57.6 limit=264,516,752,91 name=AboutSource paints=#9C9CA0FF role=text size=24 text="https://github.com/bo/plain-shelf-es-de, branch master, commit 1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-          25 TextBlock at=264,619,752,58 box=752,58 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard="Downloaded at your request on 2026-10-15. It is not part of EmuSen, and EmuSen distributes none of it." in=5 layout=748.68,57.6 limit=260,152,760,474 name=AboutStatement paints=#9C9CA0FF role=text seen=264,619,752,7 size=24 text="Downloaded at your request on 2026-10-15. It is not part of EmuSen, and EmuSen distributes none of it."
+          25 TextBlock name=AboutStatement paints=#9C9CA0FF role=text volatile="says on which day the theme was downloaded, by the wall clock"
 focus 3
 edge 3 up same
 edge 3 down same

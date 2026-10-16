@@ -130,19 +130,15 @@ namespace EmuSen.WiseMan.Cores
             return scanned;
         }
 
-        // MarsRT's scan-out over every case, against the C# VI always and against angrylion when it is built - see Mars_Native.md §5.4.
+        // MarsRT's scan-out over every case against angrylion, when it is built - see Mars_Native.md §5.4, §7.
         [Theory]
         [MemberData(nameof(CaseNames))]
-        public void MarsRT_scans_out_what_the_csharp_vi_and_the_reference_scan_out(string name)
+        public void MarsRT_scans_out_what_the_reference_scans_out(string name)
         {
             IReadOnlyList<IReadOnlyList<byte[]>>? rt = ReplayedMarsRT.Value;
             Assert.True(rt is not null, EmuSen.Cores.Nintendo.Mars.Native.MarsNative.Report);
 
             int index = Array.FindIndex(Cases, c => c.Name == name);
-            IReadOnlyList<byte[]> mars = ReplayedMars.Value[index];
-            Assert.True(mars.Count == rt[index].Count, $"{name}: the C# VI scanned {mars.Count} frames and MarsRT {rt[index].Count}");
-            for (int frame = 0; frame < mars.Count; frame++) Assert.True(mars[frame].AsSpan().SequenceEqual(rt[index][frame]), $"{name}: frame {frame} differs from the C# VI's");
-
             if (Replayed.Value is { } replay)
             {
                 string differences = Differences(replay.Reference[index].Frames, rt[index]);

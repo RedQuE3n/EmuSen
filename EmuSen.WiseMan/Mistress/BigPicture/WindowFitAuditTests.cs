@@ -36,7 +36,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
         // The windows a player reaches in a game, and those reached from the themed library.
-        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "GraphicsSettingsCustomCrop", "GraphicsSettingsGameCropNote", "GameCrop", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ControllerBindingsGenesisSix", "ControllerBindingsGenesisTeamPlayer", "GraphicsSettingsPlayStation", "GraphicsSettingsPlayStationNamedCards", "MemoryCardsPlayStation", "MemoryCardsPlayStationHeld", "ShaderSettingsPlayStation", "ActiveCheatsPlayStation", "ControllerBindingsPlayStation", "ControllerBindingsPlayStationDigital", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
+        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "GraphicsSettingsCustomCrop", "GraphicsSettingsGameCropNote", "GameCrop", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ControllerBindingsGenesisSix", "ControllerBindingsGenesisTeamPlayer", "GraphicsSettingsPlayStation", "GraphicsSettingsPlayStationNamedCards", "MemoryCardsPlayStation", "MemoryCardsPlayStationHeld", "MemoryCardsGenesis", "MemoryCardsSegaCD", "MemoryCardsN64", "ShaderSettingsPlayStation", "ActiveCheatsPlayStation", "ControllerBindingsPlayStation", "ControllerBindingsPlayStationDigital", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
             "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ShaderSettingsCrt", "ScreenshotLongTitle", "ResumeLongTitle", "ControllerBindingsLongNames"];
         public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "FindByName", "CoverPicker", "CoverPickerCovers", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
             "FindByNameLongTitle", "CoverPickerLongTitle", "GameCropLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName"];
@@ -45,7 +45,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         internal static readonly Dictionary<string, Type> Opens = new()
         {
             ["ActiveCheats"] = typeof(ActiveCheatsWindow), ["ActiveCheatsGeneral"] = typeof(ActiveCheatsWindow), ["CheatDatabase"] = typeof(CheatDatabaseWindow),
-            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsSnesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGenesis"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsCustomCrop"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGameCropNote"] = typeof(GraphicsSettingsWindow), ["GameCrop"] = typeof(GameCropWindow), ["GameCropLongTitle"] = typeof(GameCropWindow), ["ShaderSettingsGenesis"] = typeof(ShaderSettingsWindow), ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["ControllerBindingsGenesis"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisSix"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisTeamPlayer"] = typeof(InputSettingsWindow), ["GraphicsSettingsPlayStation"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsPlayStationNamedCards"] = typeof(GraphicsSettingsWindow), ["MemoryCardsPlayStation"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStationHeld"] = typeof(MemoryCardsWindow), ["ShaderSettingsPlayStation"] = typeof(ShaderSettingsWindow), ["ActiveCheatsPlayStation"] = typeof(ActiveCheatsWindow), ["ControllerBindingsPlayStation"] = typeof(InputSettingsWindow), ["ControllerBindingsPlayStationDigital"] = typeof(InputSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
+            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsSnesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGenesis"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsCustomCrop"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGameCropNote"] = typeof(GraphicsSettingsWindow), ["GameCrop"] = typeof(GameCropWindow), ["GameCropLongTitle"] = typeof(GameCropWindow), ["ShaderSettingsGenesis"] = typeof(ShaderSettingsWindow), ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["ControllerBindingsGenesis"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisSix"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisTeamPlayer"] = typeof(InputSettingsWindow), ["GraphicsSettingsPlayStation"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsPlayStationNamedCards"] = typeof(GraphicsSettingsWindow), ["MemoryCardsPlayStation"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStationHeld"] = typeof(MemoryCardsWindow), ["MemoryCardsGenesis"] = typeof(MemoryCardsWindow), ["MemoryCardsSegaCD"] = typeof(MemoryCardsWindow), ["MemoryCardsN64"] = typeof(MemoryCardsWindow), ["ShaderSettingsPlayStation"] = typeof(ShaderSettingsWindow), ["ActiveCheatsPlayStation"] = typeof(ActiveCheatsWindow), ["ControllerBindingsPlayStation"] = typeof(InputSettingsWindow), ["ControllerBindingsPlayStationDigital"] = typeof(InputSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
             ["Screenshot"] = typeof(ScreenshotWindow), ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow), ["ControllerBindings"] = typeof(InputSettingsWindow),
             ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["FindByName"] = typeof(FindByNameWindow), ["CoverPicker"] = typeof(CoverPickerWindow),
             ["CoverPickerCovers"] = typeof(CoverPickerWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow), ["FolderEditor"] = typeof(FolderEditorWindow),
@@ -309,6 +309,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 case "MemoryCardsPlayStation":
                 case "MemoryCardsPlayStationHeld":
                     ShowMemoryCards(window, held: which.EndsWith("Held", StringComparison.Ordinal));
+                    break;
+                case "MemoryCardsGenesis":
+                case "MemoryCardsSegaCD":
+                    ShowMemoryCardsTab(window, which == "MemoryCardsGenesis" ? "Genesis" : "Sega CD");
+                    break;
+                case "MemoryCardsN64":
+                    ShowMemoryCardsN64(window);
                     break;
                 case "ShaderSettingsPlayStation":
                     Call(window, "ShowShaderSettings");
@@ -602,7 +609,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             string name = $"{which}-{width}x{height}";
             // A console only a discovered engine runs has its tabs and shelf with no core in development shown, as a player's build has them - see EmuSen_Settings_Reference.md §4.94.
-            if (which.Contains("Genesis", StringComparison.Ordinal) || which.Contains("PlayStation", StringComparison.Ordinal)) EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
+            if (which.Contains("Genesis", StringComparison.Ordinal) || which.Contains("PlayStation", StringComparison.Ordinal) || which.StartsWith("MemoryCards", StringComparison.Ordinal)) EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
             if (InGameWindows.Contains(which))
             {
                 (MainWindow window, PadDriver pad) = InGame(width, height, resumeAsk: which.StartsWith("Resume", StringComparison.Ordinal),

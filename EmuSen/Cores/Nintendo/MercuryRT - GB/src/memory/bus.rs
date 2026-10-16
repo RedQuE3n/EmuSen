@@ -644,9 +644,14 @@ impl MemoryBus {
     /// 160 machine cycles, one OAM byte each, closing OAM through the cycle of the last byte - see Mercury_Memory.md §6.
     #[inline(always)]
     fn step_oam_dma(&mut self) {
-        if self.oam_dma_cycles_left == 0 {
-            return;
+        if self.oam_dma_cycles_left != 0 {
+            self.step_oam_dma_running();
         }
+    }
+
+    /// A transfer's cycle, out of the copies of the cycle loop the CPU's accesses inline (Mercury_Native.md §14.1).
+    #[inline(never)]
+    fn step_oam_dma_running(&mut self) {
         if self.oam_dma_start_delay != 0 {
             self.oam_dma_start_delay -= 1;
             if self.oam_dma_start_delay == 0 {

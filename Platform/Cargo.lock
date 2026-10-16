@@ -226,6 +226,7 @@ dependencies = [
  "emusen-galaxia",
  "emusen-native",
  "emusen-serenity",
+ "emusen-session",
  "emusen-trace",
 ]
 
@@ -237,6 +238,14 @@ dependencies = [
  "emusen-galaxia",
  "libloading",
  "sha2",
+]
+
+[[package]]
+name = "emusen-session"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-session-service",
 ]
 
 [[package]]

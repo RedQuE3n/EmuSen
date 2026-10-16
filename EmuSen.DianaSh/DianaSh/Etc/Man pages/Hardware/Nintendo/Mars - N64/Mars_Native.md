@@ -6690,3 +6690,17 @@ and the N64 is one medium of four slots, `Controller 1` to `Controller 4`, Share
 `Saves/N64/Cards/Pak 1.mpk`, whose import copies a game's own pak's notes and leaves the game's pak as it was. The
 Memory Cards window has an N64 tab in the fit audit (`MemoryCardsN64`, a shared pak with two notes, one with a long
 name, and a game's own).
+
+### 7.8 The picture on the device: not built, and why
+
+`EmuSen_DevicePicture.md` §7 lists what MarsRT needs for core ABI 1.9's picture on the device: this move, then
+`PictureOut` in place of its readback slots, then the bit. The second turned out not to be a substitution. The device's
+readback slots (`rdp/gpu`'s `Pictures`, `scanned` and `averaged`) hold the walk's words, not the frame: at a multiple
+without antialiasing the host writes them into its own raster, over the borders, held lines and fades the VI keeps
+there, and composes the frame from that raster; only the antialiased path keeps the raster on the device, where the
+averaged buffer is the frame but for the alpha the host sets as it composes. So the picture can lie on the device only
+once the device keeps the raster at every multiple it draws, which the averaging pass with a side of one would give,
+and a pass writes it opaque into a `PictureOut` slot handed from the device thread's submission. That is a change of
+the scan-out to be proven exact against the host's raster, as §6.4 and Mars_Gpu.md §15 proved the averaged path, and it
+was not begun here; `DEVICE_PICTURE` is not claimed, and the kit's C20 says so. Nothing about it is a question: it is
+the next step for MarsRT on that page.

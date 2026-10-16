@@ -64,6 +64,9 @@ pub struct Core {
     /// The shape and the two sizes last told to the host, so a frame that changes only the registers written is told its sizes
     /// without measuring them again (Mars_Native.md §7.2).
     pub told: Option<(crate::memory::bus::StateShape, i64, i64)>,
+    /// The host keeps the Controller Paks apart from the game (`CREATE_SHARED_REMOVABLE`): a load leaves them as they stand
+    /// (Mars_Native.md §7.7).
+    pub paks_apart: bool,
 }
 
 /// `machine`, `machine/rdp-wait`, `present`, `present/rdp-wait`, `present/walk-join`: the phases `emusen_core_phases` reports.
@@ -78,7 +81,7 @@ impl Drop for Core {
 
 impl Core {
     pub fn new(machine: Machine) -> Core {
-        Core { machine, scanout: Scanout::default(), frame_serial: 0, skip_rendering: false, shown: false, render_scale: 1, antialiasing: 1, gpu: false, multiple_applied: false, profile: [0; PHASES], applied: None, unsaved: [false; v1::FILES], told: None }
+        Core { machine, scanout: Scanout::default(), frame_serial: 0, skip_rendering: false, shown: false, render_scale: 1, antialiasing: 1, gpu: false, multiple_applied: false, profile: [0; PHASES], applied: None, unsaved: [false; v1::FILES], told: None, paks_apart: false }
     }
 
     /// Every wait of this thread for the display processor's drain, in nanoseconds; zero while it runs on this thread.

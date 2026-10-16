@@ -345,7 +345,7 @@ is what the surfaces forbid. `SystemPack` gains `Media`, the console's `SaveMedi
   16×16 4-bit frames. `Delete` marks a file's frames A1h–A3h and keeps its blocks, as the BIOS does, so that an undelete
   stays possible; `Copy` takes the lowest free frames and writes the chain with its checksums; `Format` writes the
   directory block as psx-spx lists a formatted card's.
-- **`n64.pak`, designed**: 32 KiB of 256-byte pages; the module will read its ID area, its index table and its note
+- **`n64.pak`, built 2026-10-16** (§11.7), as designed here: 32 KiB of 256-byte pages; the module will read its ID area, its index table and its note
   table from N64brew's public "Controller Pak" pages, its unit the page (123 free on a formatted pak), a note's id its
   game code, publisher code and name. Written when MarsRT joins the ABI (§7.2).
 - **`mcd.ramcart` and `mcd.backup`, designed**: one module for both, the BIOS's backup RAM directory, read from Sega's
@@ -425,7 +425,9 @@ changes. A multitap's further slots, when Diamond offers them as files, are furt
 
 ### 7.2 The N64's Controller Pak: how MarsRT joins
 
-MarsRT is not on the core ABI v1 yet, and this page does not move it. When it moves, it lists its cartridge's save
+*Built 2026-10-16 (§11.7, `Mars_Native.md` §7.7). As built, the cartridge's save keeps the name C# Mars and MarsRT
+have always written, `<game>.srm`, whatever the chip; the suffixes below were this section's guess.* MarsRT is not on
+the core ABI v1 yet, and this page does not move it. When it moves, it lists its cartridge's save
 (`.eep`, `.sra`, `.fla`) as `game`, and four paks as `removable`, `medium: "n64.pak"`, `port` 0 to 3, labels
 `Controller 1` to `Controller 4`, suffixes `.mpk` for port 0, which keeps the name C# Mars and MarsRT write today
 (`Mars_Save.md` §7), and `.2.mpk` to `.4.mpk`; it honours `SHARED_REMOVABLE` by leaving each pak's bytes as they stand
@@ -557,6 +559,33 @@ player's before.
 [M] A machine made per game is made as before: no flag, no `SHRD` block, so its states and their digests are 1.7's
 (`Diamond_Cards.md` §10.3's three, reproduced by Diamond's unedited tests). The kit on the sample's nine discs at 1,800
 frames passes the core's cases and 9 of 9 images, C19 among them, in 275.3 s at core ABI 1.8.
+
+### 11.7 The N64's Controller Paks (2026-10-16)
+
+**The core.** MarsRT, now on the core ABI v1 (`Mars_Native.md` §7), declares file 0 (`.srm`) the cartridge's, `game`,
+and files 1 to 4 the paks of ports 1 to 4, `removable`, medium `n64.pak`, labels `Controller 1` to `Controller 4`,
+ports 0 to 3, suffixes `.mpk` to `.4.mpk`. Per game, the first port holds a pak always and the others when their file
+exists, the machine MarsRT always made; with the paks apart, all four are in. Apart, a load leaves each pak as it
+stood, and a port whose pak differs from the state's answers the joybus's next status as a newly inserted accessory
+(3), as N64brew's *Joybus Protocol* page describes the status byte. `Mars_Native.md` §7.7 has the rules and tests.
+
+**The format module**, `EmuSen.Crystal/Systems/N64/N64PakFormat.cs`, from N64brew's *Controller Pak/Filesystem* page
+[R]: the ID page's four copies of the 32-byte ID block (at 0x20, 0x60, 0x80 and 0xC0; two checksums, the sum of its
+first fourteen big-endian words and 0xFFF2 less it; bit 0 of byte 0x19 a controller pak); the index of pages 1 and its
+backup 2 (two big-endian bytes a page, 1 the last of a note, 3 free, 5 and up the next; byte 1 the low byte of the sum
+of bytes 2 onward); the note table of pages 3 and 4, sixteen 32-byte entries (game code, publisher code, start page,
+status, extension, name in the pak's own characters, which the module maps to text as the page lists them). Its unit
+is the page, 123 free on a formatted pak; a note's id is its game code, publisher code, name and extension. `Format`
+writes the blank pak the page describes, which is byte for byte the pak MarsRT formats where a port has no file.
+
+**Where it is named.** The N64 has no system pack yet: its facts are its catalog core's while C# Mars runs it. Its
+medium is listed beside the packs' in `SaveMediumFormats` until it has one, and `MemoryCards` takes a catalog
+console's media from its v1 engine's info (`CoreCatalog.EngineSystem`), as it takes a discovered console's from its
+own; the PlayStation's and the Sega CD's answers are unchanged.
+
+**The default.** With the module and the import, the N64's paks are *Shared* by default (§9), and Mistress offers the
+import once before an N64 game starts where per-game `.mpk` files exist and `Pak 1` does not; nothing of that was
+written for the N64, since every piece is the generic one.
 
 ## 12. Reading log
 

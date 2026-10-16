@@ -6640,3 +6640,53 @@ widened.
 for the two graded games**, unguided against unguided; it asked for both builds retrained, which waits for 5a. The
 state each run ends on is one hash a game in each build, and the two builds' hashes differ by design: the runs begin by
 loading a state, and §7.4 made a load leave the paks' `Dirty` as the state says.
+
+### 7.7 The Controller Paks as save media
+
+*Decided 2026-10-15 (`EmuSen_SaveMedia.md` §10's Q3, as recommended): four paks, one per controller port, a removable
+medium, `.mpk` keeping port 1's present name, and Shared by default once the pak's module and its import exist.* The
+cartridge's own save (EEPROM, SRAM, FlashRAM) stays the game's.
+
+**What the core declares.** File 0, `.srm`, is the cartridge's save, kind `game`. Files 1 to 4 are the paks of ports
+1 to 4, kind `removable`, medium `n64.pak`, labels `Controller 1` to `Controller 4`, ports 0 to 3, suffixes `.mpk`,
+`.2.mpk`, `.3.mpk` and `.4.mpk`. `EmuSen_SaveMedia.md` §7.2 had written the cartridge's suffixes as `.eep`, `.sra`
+and `.fla`; the file C# Mars and MarsRT write is `<game>.srm` whatever the chip, and that name is kept, so no
+player's save moves.
+
+**Which ports hold a pak.** As C# Mars, the first port always holds one, a formatted pak where no file is given. A
+port of 2 to 4 holds one when its file is given; and when the host keeps the paks apart from the game
+(`CREATE_SHARED_REMOVABLE`, which *Shared* and *Named* set), every port holds one, formatted where no file is given.
+So a game run per game with no further files is the machine MarsRT has always made, its states unchanged; under
+*Shared*, the default, the four paks are always in. A pak in a port whose controller is not plugged in answers nothing,
+as before, so a one-player game sees exactly the one pak it saw. The rule is the trade-off it looks like: per game, a
+pak in ports 2 to 4 is in only once its file (`<game>.2.mpk` and so on) exists, which a game cannot make, where under
+*Shared* the drawer's paks are always in and `memcard new` or the Memory Cards window's *New Card* makes one formatted.
+
+**A load, with the paks apart** (`EmuSen_CoreAPI.md` §6.27's rule). The four paks are kept as they stood before the
+load, bytes, presence and `Dirty` alike, so a load writes no pak file of its own. A port whose kept pak differs from
+the one the state held is marked, outside the state as C# keeps nothing of the kind, and its next status reply to the
+joybus's Info or Reset command reports the accessory as 3, "a new accessory was inserted since the last Info command"
+(N64brew, *Joybus Protocol*, the status byte's two low bits), and the mark is cleared; an unchanged pak answers 1, as
+before. Per game, the core's rule stands: the state's paks are the machine's, as C# Mars's are.
+
+**Tests** (`src/ffi/v1.rs`): the declarations; per game, the first port's pak always and another only from its file;
+apart, every port with a pak, a load leaving all four files byte for byte and flag for flag as they stood, and the two
+ports whose paks differed from the state's marked as newly inserted. With `keep_paks` removed from the load, the last
+fails on file 1, the mutant killed. A load marks the cartridge's save unsaved (§7.4) and leaves a kept pak's mark as it
+was, so the files a host writes after a load are the game's alone.
+
+**The format module** is `EmuSen.Crystal/Systems/N64/N64PakFormat.cs`, read from N64brew's *Controller Pak/Filesystem*
+page (`EmuSen_SaveMedia.md` §11.6 records it). The N64 has no system pack yet, its facts being its catalog core's while
+C# Mars is its reference, so its medium is named beside the packs' (`SaveMediumFormats`), and `MemoryCards` reads a
+catalog console's media from its v1 engine's info as it reads a discovered console's from its own
+(`CoreCatalog.EngineSystem`).
+
+**The module's tests** (`N64PakFormatTests`, WiseMan, notes written straight into a pak as N64brew lays them out,
+independently of the module): a formatted pak is byte for byte the pak MarsRT formats when a port has no file, and
+reads as formatted with no notes and 123 pages free; the notes are listed with their pages, codes and names, and a
+chain that meets a free page is damaged; a copy takes the lowest free pages, writes both copies of the index with
+their checksum and refuses a clash, a full pak and a seventeenth note; a delete frees the pages and clears the entry;
+and the N64 is one medium of four slots, `Controller 1` to `Controller 4`, Shared by default, its drawer at
+`Saves/N64/Cards/Pak 1.mpk`, whose import copies a game's own pak's notes and leaves the game's pak as it was. The
+Memory Cards window has an N64 tab in the fit audit (`MemoryCardsN64`, a shared pak with two notes, one with a long
+name, and a game's own).

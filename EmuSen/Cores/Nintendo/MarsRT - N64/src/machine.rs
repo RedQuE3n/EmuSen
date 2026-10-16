@@ -267,6 +267,16 @@ impl Machine {
         machine
     }
 
+    /// The Controller Paks of ports 2 to 4, each from its file, or a formatted one where `every_port` asks for one with no file;
+    /// a port neither names is left empty, as C# Mars leaves it (Mars_Native.md §7.7).
+    pub fn insert_paks(&mut self, files: [Option<&[u8]>; 3], every_port: bool) {
+        for (port, file) in self.bus.si.controllers[1..].iter_mut().zip(files) {
+            if file.is_some() || every_port {
+                port.pak = Some(ControllerPak::new(file));
+            }
+        }
+    }
+
     /// `Settle`, which a C# save runs before it writes.
     pub fn settle(&mut self) {
         self.bus.settle();

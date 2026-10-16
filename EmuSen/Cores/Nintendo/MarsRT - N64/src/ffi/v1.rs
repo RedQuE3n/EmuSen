@@ -49,15 +49,23 @@ const C_DOWN: u16 = 1 << 2;
 const C_LEFT: u16 = 1 << 1;
 const C_RIGHT: u16 = 1;
 
-/// The file numbers: the cartridge's save, and the Controller Pak in the first port.
+/// The file numbers: the cartridge's save, and the Controller Paks of ports 1 to 4, files 1 to 4.
 pub const FILE_SAVE: u32 = 0;
 pub const FILE_PAK: u32 = 1;
+pub const PAKS: u32 = 4;
 /// The battery files a machine can name.
-pub const FILES: usize = 2;
+pub const FILES: usize = 1 + PAKS as usize;
 
-/// `MarsCore.PakExtension` and the battery file's extension, the names C# Mars and MarsRT have always written.
+/// The battery file's extension and the paks', `MarsCore.PakExtension` for the first port, the names C# Mars and MarsRT have
+/// always written, and `.2.mpk` to `.4.mpk` for the others (EmuSen_SaveMedia.md §7.2).
 const SAVE_SUFFIX: &str = ".srm";
-const PAK_SUFFIX: &str = ".mpk";
+const PAK_SUFFIXES: [&str; PAKS as usize] = [".mpk", ".2.mpk", ".3.mpk", ".4.mpk"];
+const PAK_LABELS: [&str; PAKS as usize] = ["Controller 1", "Controller 2", "Controller 3", "Controller 4"];
+
+/// The pak a file number names, by its port.
+fn pak_port(which: u32) -> Option<usize> {
+    (FILE_PAK..FILE_PAK + PAKS).contains(&which).then(|| (which - FILE_PAK) as usize)
+}
 
 /// The run-scope settings as one value, so a group is applied only when it changed (Mars_Native.md §6.4.8).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -250,9 +258,11 @@ fn pad() -> Controller {
     }
 }
 
-/// The files a machine of the system can name: the cartridge's save chip and the first port's Controller Pak.
+/// The files a machine of the system can name: the cartridge's save chip, the game's, and a Controller Pak in each port, which a
+/// player carries between games (EmuSen_SaveMedia.md §7.2).
 fn battery() -> Vec<Battery> {
-    vec![Battery::game(FILE_SAVE, SAVE_SUFFIX), Battery::game(FILE_PAK, PAK_SUFFIX)]
+    let paks = (0..PAKS).map(|n| Battery::removable(FILE_PAK + n, PAK_SUFFIXES[n as usize]).medium("n64.pak").label(PAK_LABELS[n as usize]).port(n));
+    std::iter::once(Battery::game(FILE_SAVE, SAVE_SUFFIX)).chain(paks).collect()
 }
 
 /// The blank picture shown before the first scan, as C#'s `Blank(DefaultScreenHeight)`: 640 by 480, black and opaque.
@@ -327,6 +337,20 @@ impl Core {
         v1::emit(event::STATE_SIZE, snapshot, 1);
     }
 
+    /// The paks the host keeps apart put back as they stood before a load, their `Dirty` as it was, so the load writes no file; a
+    /// port whose pak differs from the state's is told a new one was inserted (EmuSen_CoreAPI.md §6.27, EmuSen_SaveMedia.md §7.2).
+    fn keep_paks(&mut self, kept: [Option<crate::memory::controller::ControllerPak>; 4]) {
+        for (port, pak) in self.machine.bus.si.controllers.iter_mut().zip(kept) {
+            let differs = match (&port.pak, &pak) {
+                (Some(state), Some(kept)) => state.data != kept.data,
+                (None, None) => false,
+                _ => true,
+            };
+            *port.inserted |= differs && pak.is_some();
+            port.pak = pak;
+        }
+    }
+
     fn state(&self, snapshot: bool) -> Result<usize, StateError> {
         self.machine.state_size(snapshot)
     }
@@ -343,8 +367,14 @@ impl StateMachine for Core {
         if self.machine.join_presentation(&mut self.scanout) {
             self.frame_serial += 1;
         }
+        let kept = self.paks_apart.then(|| self.machine.bus.si.controllers.each_ref().map(|c| c.pak.clone()));
         self.machine.restore_state(data)?;
+        let was = self.unsaved;
         self.unsaved = [true; FILES];
+        if let Some(kept) = kept {
+            self.keep_paks(kept);
+            self.unsaved[FILE_PAK as usize..].copy_from_slice(&was[FILE_PAK as usize..]);
+        }
         if self.machine.rdram_bytes() != rdram {
             self.scanout = Scanout::default();
             v1::emit(event::MACHINE_INFO, 0, 0);
@@ -433,19 +463,26 @@ impl v1::Core for Core {
         })?;
         let expansion = r.settings.get(EXPANSION_PAK) == Some("true");
         let mut saved = None;
-        let mut pak = None;
+        let mut paks: [Option<&[u8]>; PAKS as usize] = [None; PAKS as usize];
         for file in &r.files {
-            match file.which {
-                FILE_SAVE => saved = Some(file.data.to_vec()),
-                FILE_PAK => pak = Some(file.data.to_vec()),
-                which => {
+            match (file.which, pak_port(file.which)) {
+                (FILE_SAVE, _) => saved = Some(file.data.to_vec()),
+                (_, Some(port)) => paks[port] = Some(file.data),
+                (which, None) => {
                     v1::detail(&format!("file {which} is not one MarsRT takes"));
                     return Err(status::BAD_FILE);
                 }
             }
         }
-        let machine = if r.settings.get(BOOT) == Some("true") { Machine::boot(Arc::new(image), expansion) } else { Machine::load_rom(Arc::new(image), expansion, saved, pak) };
+        let machine = if r.settings.get(BOOT) == Some("true") {
+            Machine::boot(Arc::new(image), expansion)
+        } else {
+            let mut m = Machine::load_rom(Arc::new(image), expansion, saved, paks[0].map(<[u8]>::to_vec));
+            m.insert_paks([paks[1], paks[2], paks[3]], r.shared_removable);
+            m
+        };
         let mut core = Core::new(machine);
+        core.paks_apart = r.shared_removable;
         core.apply(defaults().with(&r.settings));
         Ok(core)
     }
@@ -622,8 +659,10 @@ impl v1::Core for Core {
         let bus = &self.machine.bus;
         match which {
             FILE_SAVE => Ok((bus.save.contents().unwrap_or(&[]), changed(bus.save.dirty()))),
-            FILE_PAK => Ok(bus.si.controllers[0].pak.as_ref().map_or((&[][..], flags::BATTERY_TRACKED), |p| (&p.data[..], changed(p.dirty)))),
-            _ => Err(status::BAD_FILE),
+            which => {
+                let port = pak_port(which).ok_or(status::BAD_FILE)?;
+                Ok(bus.si.controllers[port].pak.as_ref().map_or((&[][..], flags::BATTERY_TRACKED), |p| (&p.data[..], changed(p.dirty))))
+            }
         }
     }
 
@@ -633,12 +672,12 @@ impl v1::Core for Core {
         }
         match which {
             FILE_SAVE => self.machine.bus.save.set_dirty(false),
-            FILE_PAK => {
-                if let Some(pak) = &mut self.machine.bus.si.controllers[0].pak {
+            which => {
+                let port = pak_port(which).ok_or(status::BAD_FILE)?;
+                if let Some(pak) = &mut self.machine.bus.si.controllers[port].pak {
                     pak.dirty = false;
                 }
             }
-            _ => return Err(status::BAD_FILE),
         }
         Ok(())
     }
@@ -983,6 +1022,66 @@ mod tests {
         let defaults = defaults();
         let from_schema = Values { workers: 0, ..defaults }.with(&Settings::parse(schema().iter().map(|s| format!("{}={}\n", s.key, s.default)).collect::<String>().as_bytes()).unwrap());
         assert_eq!(from_schema, defaults);
+    }
+
+    use emusen_native::core::{BatteryKind, File};
+
+    /// A machine of an image no state names, with these files, the paks kept apart or the game's.
+    fn machine(files: &[(u32, Vec<u8>)], apart: bool) -> Core {
+        let mut image = vec![0u8; 0x2000];
+        image[..4].copy_from_slice(&[0x80, 0x37, 0x12, 0x40]);
+        let settings = v1::exports::resolve(&schema(), b"ThreadedRdp=false\nDeferredPresentation=false\nRecompiler=false", true, true).unwrap();
+        let files = files.iter().map(|(which, data)| File { which: *which, data }).collect();
+        let request = Create { image: &image, settings, files, pixel_formats: 1, host_abi_version: 0x1_0009, shared_removable: apart, shared_console: false, device: None };
+        <Core as v1::Core>::create(&request).unwrap_or_else(|e| panic!("refused {e}"))
+    }
+
+    fn pak(byte: u8) -> Vec<u8> {
+        let mut data = crate::memory::controller::ControllerPak::default();
+        crate::memory::controller::ControllerPak::format(&mut data.data[..]);
+        data.data[0x500] = byte;
+        data.data.to_vec()
+    }
+
+    #[test]
+    fn the_paks_are_four_removable_slots_of_one_medium_labelled_by_port() {
+        let files = battery();
+        assert_eq!((files[0].which, files[0].suffix.as_str(), files[0].kind), (0, ".srm", BatteryKind::Game));
+        for n in 0..4u32 {
+            let b = &files[1 + n as usize];
+            assert_eq!((b.which, b.kind, b.medium.as_deref(), b.port), (1 + n, BatteryKind::Removable, Some("n64.pak"), Some(n)));
+            assert_eq!(b.label.as_deref(), Some(PAK_LABELS[n as usize]));
+            assert!(b.suffix.ends_with(".mpk"));
+        }
+    }
+
+    /// Per game, as C# Mars: the first port's pak always, formatted with no file, and another port's only from its file.
+    #[test]
+    fn per_game_the_first_port_has_a_pak_and_another_port_only_with_its_file() {
+        let c = machine(&[(3, pak(7))], false);
+        let ports = &c.machine.bus.si.controllers;
+        assert!(ports[0].pak.is_some() && ports[1].pak.is_none() && ports[3].pak.is_none());
+        assert_eq!(ports[2].pak.as_ref().unwrap().data[0x500], 7);
+        assert_eq!(<Core as v1::Core>::battery(&c, 3).unwrap().0[0x500], 7);
+        assert_eq!(<Core as v1::Core>::battery(&c, 2).unwrap().0.len(), 0);
+    }
+
+    /// Kept apart (EmuSen_CoreAPI.md §6.27): every port has a pak, a load leaves each as it stands and unchanged, and a port whose
+    /// pak differs from the state's answers the next status as a pak newly inserted.
+    #[test]
+    fn kept_apart_a_load_leaves_each_pak_as_it_stands_and_tells_the_game_of_a_new_one() {
+        let saver = machine(&[(2, pak(1))], true);
+        assert!(saver.machine.bus.si.controllers.iter().all(|p| p.pak.is_some()));
+        let mut state = vec![0u8; saver.state_size()];
+        saver.save_state(&mut state).unwrap();
+        let mut loader = machine(&[(1, pak(5)), (2, pak(9))], true);
+        let before: Vec<(Vec<u8>, u32)> = (1..=4).map(|w| <Core as v1::Core>::battery(&loader, w).map(|(d, f)| (d.to_vec(), f)).unwrap()).collect();
+        loader.load_state(&state).unwrap();
+        for w in 1..=4u32 {
+            assert_eq!(<Core as v1::Core>::battery(&loader, w).map(|(d, f)| (d.to_vec(), f)).unwrap(), before[w as usize - 1], "file {w}");
+        }
+        let ports = &loader.machine.bus.si.controllers;
+        assert_eq!(ports.iter().map(|p| *p.inserted).collect::<Vec<_>>(), vec![true, true, false, false]);
     }
 
     #[test]

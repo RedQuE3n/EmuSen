@@ -8698,3 +8698,22 @@ picture then read back as before.
 **Tests.** `DevicePresenterTests` (each refusal alone, the device's identity, the shown image); `DeviceFilterMatchTests`
 (each built-in family against its Skia picture on real frames, with `EMUSEN_GPU_FRAMES`); the real-window proof of
 §13.3 there.
+
+### 4.117 The N64's Controller Paks: the pak mode (2026-10-16)
+
+*Decided 2026-10-15 by the tester (`EmuSen_SaveMedia.md` §10's Q3); built with MarsRT's move onto the core ABI v1
+(`Mars_Native.md` §7.7).* The N64's tab in Graphics Settings gains **Controller Pak**, the runtime's mode row of
+§4.114, stored under the N64 as `Cards`, and under *Named* four slot rows, **Controller Pak: Controller 1** to
+**Controller 4** (`Card1` to `Card4`), each a dropdown of `Pak 1` to `Pak 8` and every pak already in the drawer.
+
+- **The default is *Shared*** (`EmuSen_SaveMedia.md` §9), since the pak's format module and import exist: `Pak 1` to
+  `Pak 4` in `Saves/N64/Cards/`, `.mpk`, one per controller port, used by every N64 game. A mode a player chose is kept.
+- **Per game** keeps the names C# Mars and MarsRT have always written: `Saves/N64/<game>.mpk` for the first port and
+  `<game>.2.mpk` to `<game>.4.mpk` for the others. Per game, the first port always holds a pak and another port only
+  once its file exists.
+- **The cartridge's own save**, `<game>.srm`, is the game's and has no mode.
+- **The import offered once**: the first N64 game started under the default while per-game `.mpk` files exist and
+  `Pak 1` does not is preceded by §4.115's question, which copies every game's notes onto `Pak 1`.
+- **On Mars (C#)** none of this applies: the C# core keeps its one pak per game, as before.
+- **The Memory Cards window** has an N64 tab listing each pak's notes (game code, publisher and name) and pages free,
+  with copy, move, delete, new pak and import, as for the PlayStation's cards.

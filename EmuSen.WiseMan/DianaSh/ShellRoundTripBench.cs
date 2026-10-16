@@ -34,7 +34,7 @@ namespace EmuSen.WiseMan.DianaSh
         {
             if (Environment.GetEnvironmentVariable(BenchVariable) != "1") return;
             DianaShInterpreter shell = DianaShInterpreter.CreateDefault(null);
-            string mode = Environment.GetEnvironmentVariable("EMUSEN_DIANASH_NATIVE") == "1" ? "Rust shell (its builtins and dianash.text in Rust, the other commands through the bridge)" : "C# shell";
+            string mode = shell.NativeShellOf is not null ? "Rust shell (its builtins and dianash.text in Rust, the other commands through the bridge)" : "C# shell";
             _output.WriteLine($"{mode}; 2,000 runs after 200 of warm-up, median (95th percentile) in microseconds");
             foreach (string line in Lines)
             {

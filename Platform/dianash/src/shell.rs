@@ -123,6 +123,8 @@ pub(crate) struct World {
     pub hosts: Vec<Host>,
     pub requests: Vec<Request>,
     pub cancel: Arc<AtomicBool>,
+    /// The working directory as a call shows it, kept for the line that read it; `cd` and the next line forget it.
+    pub shown_cwd: Option<String>,
     /// The modules linked into the program, by index.
     pub modules: Vec<&'static dyn Module>,
     /// The table a new session starts from: the builtins and the linked modules' commands.
@@ -247,6 +249,7 @@ impl Shell {
             service_names: Vec::new(),
             modules: Vec::new(),
             base: Table::builtins(),
+            shown_cwd: None,
         };
         let mut interps = HashMap::new();
         if !world.config.sessions {
@@ -277,6 +280,7 @@ impl Shell {
         let id = self.resolve(session).ok_or(status::NO_SUCH_SESSION)?;
         let mut interp = self.interps.remove(&id).unwrap_or_else(|| Interp::new(id));
         self.world.cancel.store(false, Ordering::Relaxed);
+        self.world.shown_cwd = None;
         self.busy = true;
         let (needs_more, output, request) = interp.submit_core(&mut self.world, line, true);
         self.busy = false;

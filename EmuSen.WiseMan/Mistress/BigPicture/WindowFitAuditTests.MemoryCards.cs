@@ -25,7 +25,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             File.WriteAllBytes(Path.Combine(DataStore.Saves, "PlayStation", "Amber Saga.mcr"), PsxCardFormat.Instance.Format());
             if (held && MediumLock.TryTake(card, "Amber Saga", shared: true) is { } taken) window.Closed += (_, _) => taken.Dispose();
             Call(window, "ShowMemoryCards");
-            Settle(window);
+            SelectTab(window, "PlayStation");
             var shown = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>().ToList();
             Assert.Contains(shown, c => c.Name == "PlayStation.psx.card.Save.1" && c.IsEffectivelyVisible);
             var about = shown.OfType<TextBlock>().First(t => t.Name == "PlayStation.psx.card.About");

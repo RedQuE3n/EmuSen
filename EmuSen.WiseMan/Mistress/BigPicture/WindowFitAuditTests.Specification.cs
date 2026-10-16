@@ -80,6 +80,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         internal static string? Volatile(Control c) => c.Name switch
         {
             "ThemeBrowserFetched" => "says when the theme list was fetched, by the wall clock",
+            "AboutStatement" => "says on which day the theme was downloaded, by the wall clock",
             "ReelStrip" => "the running game's moments, taken as the emulation thread runs against the wall clock",
             _ => null,
         };

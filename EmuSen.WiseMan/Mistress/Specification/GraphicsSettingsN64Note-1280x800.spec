@@ -32,27 +32,29 @@ tree
           16 TextBlock at=479,216,40,36 box=40,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=N64 layout=39.54,36 limit=467,210,64,48 owner=15 paints=#EEEEF0FF role=text size=30 text=N64
         17 TabItem at=531,210,110,48 by=clip drawn focus heard=GENESIS limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text=Genesis
           18 TextBlock at=543,216,86,36 box=86,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=GENESIS layout=85.47,36 limit=531,210,110,48 owner=17 paints=#86868AFF role=text size=30 text=GENESIS
-        19 TabItem at=641,210,156,48 by=clip drawn focus heard=PLAYSTATION limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text=PlayStation
-          20 TextBlock at=653,216,132,36 box=132,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=PLAYSTATION layout=131.91,36 limit=641,210,156,48 owner=19 paints=#86868AFF role=text size=30 text=PLAYSTATION
-        21 ScrollViewer at=286,260,709,342 by=clip fades=tb limit=274,260,733,342 overflow=1341 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=286,260,709,342
-          22 StackPanel at=286,-803,709,1675 by=scroll in=21 limit=286,260,709,342 paints=#0E0E10FF,#4C9AE8FF,#55555AFF,#86868AFF,#9C9CA0FF,#FFFFFFFF role=none seen=286,260,709,342
-            23 FieldRow at=286,196,709,153 by=scroll heard="Internal resolution" in=21 limit=286,260,709,342 paints=#9C9CA0FF role=group seen=286,260,709,89
-              24 HintText at=286,229,709,72 box=709,72 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The picture drawn at a multiple of the console's, beside the exact drawing games read back. Each step costs its square in drawing: 2x is four times the pixels, 4x sixteen. Threads help; 2x is what most machines can hold at full speed." in=21 layout=694.68,72 limit=286,196,709,153 paints=#86868AFF part role=text seen=286,260,709,41 size=20 text="The picture drawn at a multiple of the console's, beside the exact drawing games read back. Each step costs its square in drawing: 2x is four times the pixels, 4x sixteen. Threads help; 2x is what most machines can hold at full speed."
-              25 Dropdown at=286,305,120,44 by=clip drawn focus heard="Internal resolution" in=21 limit=286,196,709,153 name=N64.RenderScale op paints=#0E0E10FF,#55555AFF,#9C9CA0FF,#EEEEF0FF role=combobox sideways
-                26 TextBlock at=298,310,76,32 box=76,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=3 in=21 layout=10.61,31.2 limit=298,310,76,32 owner=25 paints=#EEEEF0FF role=text size=26 text=3
-                27 ViewboxContainer at=384,323.73,12,6.54 by=clip in=21 limit=384,323.73,12,6.54 nohit role=none
-            28 FieldRow at=286,361,709,181 by=scroll heard=Antialiasing in=21 limit=286,260,709,342 paints=#9C9CA0FF role=group
-              29 TextBlock at=286,361,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Antialiasing in=21 layout=94.63,28.8 limit=286,361,709,181 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Antialiasing
-              30 HintText at=286,394,709,72 box=709,72 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Each pixel of the picture averaged from a drawing that many times finer each way, which smooths edges and shimmering textures. It multiplies the drawing's cost like the internal resolution, and the two together are held to four: at 2x resolution the most is 2x." in=21 layout=698.72,72 limit=286,361,709,181 paints=#86868AFF part role=text size=20 text="Each pixel of the picture averaged from a drawing that many times finer each way, which smooths edges and shimmering textures. It multiplies the drawing's cost like the internal resolution, and the two together are held to four: at 2x resolution the most is 2x."
-              31 StackPanel at=286,470,709,72 by=clip heard=Antialiasing in=21 limit=286,361,709,181 role=none
-                32 Dropdown at=286,470,120,44 by=clip drawn focus heard=Antialiasing in=21 limit=286,361,709,181 name=N64.Antialiasing op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
-                  33 TextBlock at=298,475,76,32 box=76,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=3x in=21 layout=20.38,31.2 limit=298,475,76,32 owner=32 paints=#9C9CA0FF role=text size=26 text=3x
-                  34 ViewboxContainer at=384,488.73,12,6.54 by=clip in=21 limit=384,488.73,12,6.54 nohit role=none
-                35 HintText at=286,518,709,24 box=709,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Off at 3x resolution: the two together are held to four, so 3x has no effect." in=21 layout=499.08,24 limit=286,361,709,181 name=N64.Antialiasing.Note paints=#86868AFF role=text size=20 text="Off at 3x resolution: the two together are held to four, so 3x has no effect."
-            36 FieldRow at=286,554,709,165 by=scroll heard="Draw the multiple on the graphics card" in=21 limit=286,260,709,342 paints=#86868AFF,#9C9CA0FF role=group seen=286,554,709,48
-              37 TextBlock at=286,554,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Draw the multiple on the graphics card" in=21 layout=316.15,28.8 limit=286,554,709,165 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Draw the multiple on the graphics card"
-              38 HintText at=286,587,709,96 box=709,96 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The picture at an internal resolution above one is shaded by the graphics card rather than by the processor's own threads, which is where nearly all of that setting's cost is. It needs Vulkan; without it the setting does nothing and the processor draws as before. It changes nothing at 1x, and the drawing the game itself reads back is never the card's." in=21 layout=707.46,96 limit=286,554,709,165 paints=#86868AFF part role=text seen=286,587,709,15 size=20 text="The picture at an internal resolution above one is shaded by the graphics card rather than by the processor's own threads, which is where nearly all of that setting's cost is. It needs Vulkan; without it the setting does nothing and the processor draws as before. It changes nothing at 1x, and the drawing the game itself reads back is never the card's."
-focus 25
+        19 TabItem at=641,210,109,48 by=clip drawn focus heard="SEGA CD" limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text="Sega CD"
+          20 TextBlock at=653,216,85,36 box=85,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="SEGA CD" layout=84.18,36 limit=641,210,109,48 owner=19 paints=#86868AFF role=text size=30 text="SEGA CD"
+        21 TabItem at=750,210,156,48 by=clip drawn focus heard=PLAYSTATION limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text=PlayStation
+          22 TextBlock at=762,216,132,36 box=132,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=PLAYSTATION layout=131.91,36 limit=750,210,156,48 owner=21 paints=#86868AFF role=text size=30 text=PLAYSTATION
+        23 ScrollViewer at=286,260,709,342 by=clip fades=tb limit=274,260,733,342 overflow=1341 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=286,260,709,342
+          24 StackPanel at=286,-803,709,1675 by=scroll in=23 limit=286,260,709,342 paints=#0E0E10FF,#4C9AE8FF,#55555AFF,#86868AFF,#9C9CA0FF,#FFFFFFFF role=none seen=286,260,709,342
+            25 FieldRow at=286,196,709,153 by=scroll heard="Internal resolution" in=23 limit=286,260,709,342 paints=#9C9CA0FF role=group seen=286,260,709,89
+              26 HintText at=286,229,709,72 box=709,72 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The picture drawn at a multiple of the console's, beside the exact drawing games read back. Each step costs its square in drawing: 2x is four times the pixels, 4x sixteen. Threads help; 2x is what most machines can hold at full speed." in=23 layout=694.68,72 limit=286,196,709,153 paints=#86868AFF part role=text seen=286,260,709,41 size=20 text="The picture drawn at a multiple of the console's, beside the exact drawing games read back. Each step costs its square in drawing: 2x is four times the pixels, 4x sixteen. Threads help; 2x is what most machines can hold at full speed."
+              27 Dropdown at=286,305,120,44 by=clip drawn focus heard="Internal resolution" in=23 limit=286,196,709,153 name=N64.RenderScale op paints=#0E0E10FF,#55555AFF,#9C9CA0FF,#EEEEF0FF role=combobox sideways
+                28 TextBlock at=298,310,76,32 box=76,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=3 in=23 layout=10.61,31.2 limit=298,310,76,32 owner=27 paints=#EEEEF0FF role=text size=26 text=3
+                29 ViewboxContainer at=384,323.73,12,6.54 by=clip in=23 limit=384,323.73,12,6.54 nohit role=none
+            30 FieldRow at=286,361,709,181 by=scroll heard=Antialiasing in=23 limit=286,260,709,342 paints=#9C9CA0FF role=group
+              31 TextBlock at=286,361,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Antialiasing in=23 layout=94.63,28.8 limit=286,361,709,181 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Antialiasing
+              32 HintText at=286,394,709,72 box=709,72 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Each pixel of the picture averaged from a drawing that many times finer each way, which smooths edges and shimmering textures. It multiplies the drawing's cost like the internal resolution, and the two together are held to four: at 2x resolution the most is 2x." in=23 layout=698.72,72 limit=286,361,709,181 paints=#86868AFF part role=text size=20 text="Each pixel of the picture averaged from a drawing that many times finer each way, which smooths edges and shimmering textures. It multiplies the drawing's cost like the internal resolution, and the two together are held to four: at 2x resolution the most is 2x."
+              33 StackPanel at=286,470,709,72 by=clip heard=Antialiasing in=23 limit=286,361,709,181 role=none
+                34 Dropdown at=286,470,120,44 by=clip drawn focus heard=Antialiasing in=23 limit=286,361,709,181 name=N64.Antialiasing op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
+                  35 TextBlock at=298,475,76,32 box=76,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=3x in=23 layout=20.38,31.2 limit=298,475,76,32 owner=34 paints=#9C9CA0FF role=text size=26 text=3x
+                  36 ViewboxContainer at=384,488.73,12,6.54 by=clip in=23 limit=384,488.73,12,6.54 nohit role=none
+                37 HintText at=286,518,709,24 box=709,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Off at 3x resolution: the two together are held to four, so 3x has no effect." in=23 layout=499.08,24 limit=286,361,709,181 name=N64.Antialiasing.Note paints=#86868AFF role=text size=20 text="Off at 3x resolution: the two together are held to four, so 3x has no effect."
+            38 FieldRow at=286,554,709,165 by=scroll heard="Draw the multiple on the graphics card" in=23 limit=286,260,709,342 paints=#86868AFF,#9C9CA0FF role=group seen=286,554,709,48
+              39 TextBlock at=286,554,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Draw the multiple on the graphics card" in=23 layout=316.15,28.8 limit=286,554,709,165 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Draw the multiple on the graphics card"
+              40 HintText at=286,587,709,96 box=709,96 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The picture at an internal resolution above one is shaded by the graphics card rather than by the processor's own threads, which is where nearly all of that setting's cost is. It needs Vulkan; without it the setting does nothing and the processor draws as before. It changes nothing at 1x, and the drawing the game itself reads back is never the card's." in=23 layout=707.46,96 limit=286,554,709,165 paints=#86868AFF part role=text seen=286,587,709,15 size=20 text="The picture at an internal resolution above one is shaded by the graphics card rather than by the processor's own threads, which is where nearly all of that setting's cost is. It needs Vulkan; without it the setting does nothing and the processor draws as before. It changes nothing at 1x, and the drawing the game itself reads back is never the card's."
+focus 27
 edge 4 up 15
 edge 4 down same
 edge 4 left path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/11/0/2/0
@@ -63,11 +65,11 @@ edge 6 left 4
 edge 6 right same
 edge 15 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/6/0/2/0
 edge 15 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/7/0/2/0
-edge 25 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/7/0/2/0
-edge 25 down 32
-edge 32 up 25
-edge 32 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/10/0/2/0
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/10/0/2/0 up 32
+edge 27 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/7/0/2/0
+edge 27 down 34
+edge 34 up 27
+edge 34 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/10/0/2/0
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/10/0/2/0 up 34
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/10/0/2/0 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/11/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/10/0/2/0 left same
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/10/0/2/0 right 15
@@ -88,7 +90,7 @@ edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/6/0/2/0 down path:0/3/0/0/2/
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/6/0/2/0 left same
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/6/0/2/0 right 15
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/7/0/2/0 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/6/0/2/0
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/7/0/2/0 down 25
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/7/0/2/0 down 27
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/7/0/2/0 left same
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/7/0/2/0 right 15
 press pageup focus="Button 'Shaders...'" tab=SNES title="Graphics Settings" top=GraphicsSettingsWindow

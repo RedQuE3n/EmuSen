@@ -32,31 +32,33 @@ tree
           16 TextBlock at=479,216,40,36 box=40,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=N64 layout=39.54,36 limit=467,210,64,48 owner=15 paints=#86868AFF role=text size=30 text=N64
         17 TabItem at=531,210,110,48 by=clip drawn focus heard=GENESIS limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text=Genesis
           18 TextBlock at=543,216,86,36 box=86,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=GENESIS layout=85.47,36 limit=531,210,110,48 owner=17 paints=#86868AFF role=text size=30 text=GENESIS
-        19 TabItem at=641,210,156,48 by=clip drawn focus heard=PLAYSTATION limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text=PlayStation
-          20 TextBlock at=653,216,132,36 box=132,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=PLAYSTATION layout=131.91,36 limit=641,210,156,48 owner=19 paints=#86868AFF role=text size=30 text=PLAYSTATION
-        21 ScrollViewer at=286,260,709,342 by=clip fades=b limit=274,260,733,342 overflow=337 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=286,260,709,342
-          22 StackPanel at=286,268,709,671 by=scroll in=21 limit=286,260,709,342 paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF role=none seen=286,268,709,334
-            23 FieldRow at=286,268,709,129 by=scroll heard="Shader and shape" in=21 limit=286,260,709,342 paints=#9C9CA0FF role=group
-              24 TextBlock at=286,268,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Shader and shape" in=21 layout=145.94,28.8 limit=286,268,709,129 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Shader and shape"
-              25 HintText at=286,301,709,48 box=709,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square." in=21 layout=699.98,48 limit=286,268,709,129 paints=#86868AFF part role=text size=20 text="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square."
-              26 DockPanel at=286,353,709,44 by=clip heard="Shader and shape" in=21 limit=286,268,709,129 role=none
-                27 Button at=286,353,128,44 by=clip drawn focus heard=SHADERS... in=21 limit=286,268,709,129 name=NES.Shaders op paints=#55555AFF,#9C9CA0FF role=button text=Shaders...
-                  28 TextBlock at=303,359,94,32 box=94,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=SHADERS... in=21 layout=93.96,31.2 limit=286,353,128,44 owner=27 paints=#EEEEF0FF role=text size=26 text=SHADERS...
-                29 Dropdown at=870,353,125,44 by=clip drawn focus heard="Shader and shape" in=21 limit=286,268,709,129 name=NES.PictureShape op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
-                  30 TextBlock at=882,358,81,32 box=81,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="TV shape" in=21 layout=80.81,31.2 limit=882,358,81,32 owner=29 paints=#9C9CA0FF role=text size=26 text="TV shape"
-                  31 ViewboxContainer at=973,371.73,12,6.54 by=clip in=21 limit=973,371.73,12,6.54 nohit role=none
-                32 TextBlock at=426,361,432,29 box=432,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=None in=21 layout=41.74,28.8 limit=286,268,709,129 name=NES.ShaderInUse paints=#9C9CA0FF role=text size=24 text=None
-            33 FieldRow at=286,409,709,105 by=scroll heard=Overscan in=21 limit=286,260,709,342 paints=#9C9CA0FF role=group
-              34 TextBlock at=286,409,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Overscan in=21 layout=75.29,28.8 limit=286,409,709,105 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Overscan
-              35 HintText at=286,442,709,24 box=709,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The whole picture, the part a television showed, or a crop of your own." in=21 layout=474.92,24 limit=286,409,709,105 paints=#86868AFF part role=text size=20 text="The whole picture, the part a television showed, or a crop of your own."
-              36 StackPanel at=286,470,709,44 by=clip heard=Overscan in=21 limit=286,409,709,105 role=none
-                37 Dropdown at=286,470,156,44 by=clip drawn focus heard=Overscan in=21 limit=286,409,709,105 name=NES.Overscan op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
-                  38 TextBlock at=298,475,112,32 box=112,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Custom crop" in=21 layout=111.98,31.2 limit=298,475,112,32 owner=37 paints=#9C9CA0FF role=text size=26 text="Custom crop"
-                  39 ViewboxContainer at=420,488.73,12,6.54 by=clip in=21 limit=420,488.73,12,6.54 nohit role=none
-            40 FieldRow at=286,526,709,131 by=scroll heard="Crop, % of the picture" in=21 limit=286,260,709,342 name=NES.Crop paints=#0E0E10FF,#55555AFF,#9C9CA0FF,#D2D2D6FF role=group seen=286,526,709,76
-              41 TextBlock at=286,526,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Crop, % of the picture" in=21 layout=180.77,28.8 limit=286,526,709,131 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Crop, % of the picture"
-              42 HintText at=286,559,709,48 box=709,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="How much of the picture's width or height to hide at each edge, up to 25. The rest fills the screen, the same for every game of this console in every mode." in=21 layout=684.3,48 limit=286,526,709,131 paints=#86868AFF part role=text seen=286,559,709,43 size=20 text="How much of the picture's width or height to hide at each edge, up to 25. The rest fills the screen, the same for every game of this console in every mode."
-focus 27
+        19 TabItem at=641,210,109,48 by=clip drawn focus heard="SEGA CD" limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text="Sega CD"
+          20 TextBlock at=653,216,85,36 box=85,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="SEGA CD" layout=84.18,36 limit=641,210,109,48 owner=19 paints=#86868AFF role=text size=30 text="SEGA CD"
+        21 TabItem at=750,210,156,48 by=clip drawn focus heard=PLAYSTATION limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text=PlayStation
+          22 TextBlock at=762,216,132,36 box=132,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=PLAYSTATION layout=131.91,36 limit=750,210,156,48 owner=21 paints=#86868AFF role=text size=30 text=PLAYSTATION
+        23 ScrollViewer at=286,260,709,342 by=clip fades=b limit=274,260,733,342 overflow=337 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=286,260,709,342
+          24 StackPanel at=286,268,709,671 by=scroll in=23 limit=286,260,709,342 paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF role=none seen=286,268,709,334
+            25 FieldRow at=286,268,709,129 by=scroll heard="Shader and shape" in=23 limit=286,260,709,342 paints=#9C9CA0FF role=group
+              26 TextBlock at=286,268,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Shader and shape" in=23 layout=145.94,28.8 limit=286,268,709,129 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Shader and shape"
+              27 HintText at=286,301,709,48 box=709,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square." in=23 layout=699.98,48 limit=286,268,709,129 paints=#86868AFF part role=text size=20 text="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square."
+              28 DockPanel at=286,353,709,44 by=clip heard="Shader and shape" in=23 limit=286,268,709,129 role=none
+                29 Button at=286,353,128,44 by=clip drawn focus heard=SHADERS... in=23 limit=286,268,709,129 name=NES.Shaders op paints=#55555AFF,#9C9CA0FF role=button text=Shaders...
+                  30 TextBlock at=303,359,94,32 box=94,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=SHADERS... in=23 layout=93.96,31.2 limit=286,353,128,44 owner=29 paints=#EEEEF0FF role=text size=26 text=SHADERS...
+                31 Dropdown at=870,353,125,44 by=clip drawn focus heard="Shader and shape" in=23 limit=286,268,709,129 name=NES.PictureShape op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
+                  32 TextBlock at=882,358,81,32 box=81,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="TV shape" in=23 layout=80.81,31.2 limit=882,358,81,32 owner=31 paints=#9C9CA0FF role=text size=26 text="TV shape"
+                  33 ViewboxContainer at=973,371.73,12,6.54 by=clip in=23 limit=973,371.73,12,6.54 nohit role=none
+                34 TextBlock at=426,361,432,29 box=432,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=None in=23 layout=41.74,28.8 limit=286,268,709,129 name=NES.ShaderInUse paints=#9C9CA0FF role=text size=24 text=None
+            35 FieldRow at=286,409,709,105 by=scroll heard=Overscan in=23 limit=286,260,709,342 paints=#9C9CA0FF role=group
+              36 TextBlock at=286,409,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Overscan in=23 layout=75.29,28.8 limit=286,409,709,105 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Overscan
+              37 HintText at=286,442,709,24 box=709,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The whole picture, the part a television showed, or a crop of your own." in=23 layout=474.92,24 limit=286,409,709,105 paints=#86868AFF part role=text size=20 text="The whole picture, the part a television showed, or a crop of your own."
+              38 StackPanel at=286,470,709,44 by=clip heard=Overscan in=23 limit=286,409,709,105 role=none
+                39 Dropdown at=286,470,156,44 by=clip drawn focus heard=Overscan in=23 limit=286,409,709,105 name=NES.Overscan op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
+                  40 TextBlock at=298,475,112,32 box=112,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Custom crop" in=23 layout=111.98,31.2 limit=298,475,112,32 owner=39 paints=#9C9CA0FF role=text size=26 text="Custom crop"
+                  41 ViewboxContainer at=420,488.73,12,6.54 by=clip in=23 limit=420,488.73,12,6.54 nohit role=none
+            42 FieldRow at=286,526,709,131 by=scroll heard="Crop, % of the picture" in=23 limit=286,260,709,342 name=NES.Crop paints=#0E0E10FF,#55555AFF,#9C9CA0FF,#D2D2D6FF role=group seen=286,526,709,76
+              43 TextBlock at=286,526,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Crop, % of the picture" in=23 layout=180.77,28.8 limit=286,526,709,131 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Crop, % of the picture"
+              44 HintText at=286,559,709,48 box=709,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="How much of the picture's width or height to hide at each edge, up to 25. The rest fills the screen, the same for every game of this console in every mode." in=23 layout=684.3,48 limit=286,526,709,131 paints=#86868AFF part role=text seen=286,559,709,43 size=20 text="How much of the picture's width or height to hide at each edge, up to 25. The rest fills the screen, the same for every game of this console in every mode."
+focus 29
 edge 4 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/7
 edge 4 down same
 edge 4 left path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/3
@@ -66,28 +68,28 @@ edge 6 down same
 edge 6 left 4
 edge 6 right same
 edge 9 up same
-edge 9 down 27
-edge 27 up 9
-edge 27 down 37
-edge 27 left same
-edge 27 right 29
+edge 9 down 29
 edge 29 up 9
-edge 29 down 37
-edge 37 up 27
-edge 37 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/1
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/1 up 37
+edge 29 down 39
+edge 29 left same
+edge 29 right 31
+edge 31 up 9
+edge 31 down 39
+edge 39 up 29
+edge 39 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/1
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/1 up 39
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/1 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/1 left same
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/1 right path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/3
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/3 up 37
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/3 up 39
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/3 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/3 left path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/1
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/3 right path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/5
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/5 up 37
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/5 up 39
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/5 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/5 left path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/3
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/5 right path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/7
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/7 up 37
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/7 up 39
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/7 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/7 left path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/5
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/2/0/2/0/7 right 6

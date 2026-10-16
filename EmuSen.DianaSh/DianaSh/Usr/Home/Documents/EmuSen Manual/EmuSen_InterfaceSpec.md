@@ -197,10 +197,11 @@ same screen, and the rules (§4) hold what matters of them.
 
 ### 6.1 The gate
 
-**It covers every audited state at both sizes and every Big Picture view [M].** 212 recordings: the 44 window cases
-without tabs and the 3 scraping states at two sizes (94), the seven Controller Bindings cases on each of their seven
-tabs at two sizes (98), and the ten views at two sizes (20): 106 states, each at both sizes. Together they hold 8,284
-controls and 7,928 focus edges, 2.2 MB of text. `Every_state_has_a_recording_and_every_recording_a_state` holds the
+**It covers every audited state at both sizes and every Big Picture view [M].** 226 recordings: the 44 window cases
+without tabs and the 3 scraping states at two sizes (94), the seven Controller Bindings cases on each of their eight
+tabs at two sizes (112), and the ten views at two sizes (20): 113 states, each at both sizes. Together they hold 9,122
+controls and 8,632 focus edges, 2.0 MB of text, as re-recorded on 2026-10-16 (§6.3.7); the first recording had 212
+files and 8,284 controls. `Every_state_has_a_recording_and_every_recording_a_state` holds the
 files to the cases both ways.
 
 **Two recordings in a row are identical [M].** The whole set was recorded twice in a row, into the repository and into
@@ -212,13 +213,14 @@ first pairs of recordings were not, and each difference was traced and removed:
 | paths in Cheat Database's folder field and status line, Theme Detail's state line, and every test's own folders | the run's temporary folders, named by a random identifier | the text written with `<run>`, `<temp>` and `<home>` in their place; where the words' **width** also changed with the identifier, as a proportional face draws `a` and `1` differently, the control is recorded as volatile |
 | the time a game was left, in Continue Playing | the state file's time, from the wall clock | the audit's opener now sets the state file's time to 2026-10-15 09:30 before the question opens |
 | the time the theme list was fetched | the wall clock, inside the theme browser | the line recorded as volatile |
+| the day a theme was downloaded, in its About sheet | the wall clock, when the theme is installed | the statement recorded as volatile (§6.3.7) |
 | the rewind reel's moments and their "1.55 s ago" | the emulation thread, run against the wall clock | the reel's strip recorded as volatile, without its moments |
 | where the focus was after Back on the search keyboard | work the keyboard posts on closing, done or not when the press was read | a scene's presses read after 200 ms of its clock |
 | a walk that explored Shaders' 944 rows to its limit of 400 | not a difference, but eight minutes a state | the walk's stop (§3) |
 
 A volatile control keeps its kind, name, role, the colours it paints and, where it does not come from the volatile source,
-the name a reader speaks; it loses its rectangle, its words and its measure, and nothing inside it is recorded. Seven
-controls in six states are volatile at each size **[M]**. What they show is the part of the interface a recording cannot fix; the
+the name a reader speaks; it loses its rectangle, its words and its measure, and nothing inside it is recorded. Eight
+controls in seven states are volatile at each size **[M]**. What they show is the part of the interface a recording cannot fix; the
 rules (§4) read them where they can and skip them where they cannot.
 
 **The rules, against today's Mistress.** The recorded fit rule finds exactly what `FitAudit.Check` finds in every
@@ -356,3 +358,50 @@ Re-recorded with `EMUSEN_DIANASH_GOLDEN=record`, its only change is that line, w
 **`CoreRegistrationGolden.txt`** (`CoreRegistrationEquivalenceTests`) still held the Game Boy's state version 8; the
 Mercury audit's merge (9c0b8721) made it 11. Re-recorded with `EMUSEN_RECORD_REGISTRATION=1`, its 40 changed lines are
 all `factory[GB …].state-version`, 8 to 11, in the four sections that record it; nothing else moved.
+
+#### 6.3.7 Seventy failures after the Sega CD was offered (2026-10-16)
+
+At 19427372 `WindowFitAuditTests` failed 70 of its 474 cases, 35 at each size. **Measured [M]**, each commit built in a
+scratch checkout with its Rust cores and run on the audit alone, bisecting WiseMan's first-parent history from
+63644fa3, the last recording:
+
+| Commit | Failures | What failed |
+|---|---|---|
+| 63644fa3, e8964dfa, 8f2aafab | 2 | ThemeAbout's recording at both sizes |
+| 4e8be3d2, nephrite-s10: the open Sega CD BIOS and mode 1 | 12 | and the Genesis's graphics tab; both Memory Cards cases, in both tests |
+| a3c5dff0, mcd-bram-spec, and 4a453787, dianash-s3 | 12 | the same 12 |
+| d84975d9, nephrite-s10: the Sega CD offered to players | 70 | and every console tab strip, Collection Settings, the Cheat Database and the firmware page, the same 70 as 19427372 |
+
+Four causes. Only the first was a window drawn wrong.
+
+1. **The firmware page's footer was cut [a fault].** The three Sega CD BIOS rows reached the big-screen firmware
+   menu when the Sega CD was offered, and the first sentence of their replacement's words, which the footer quotes, ran
+   the footer past its two lines at both sizes. The words were reordered so that their first sentence is short; the
+   footer is unchanged (`Nephrite_OpenBios.md` §17).
+2. **The recordings were stale [not a fault].** 4e8be3d2 declares the backup RAM of a Sega CD beneath a cartridge
+   (mode 1) as file 11 of every Genesis cartridge, so the Genesis gained a console medium: an Internal Backup RAM row on
+   its graphics tab and a Genesis tab in Memory Cards. d84975d9 offers the Sega CD (`development` false in the core's
+   info), so a Sega CD tab joined Graphics Settings, Shaders, Active Cheats, Controller Bindings and Memory Cards, and a
+   Sega CD entry joined Collection Settings' rows and the Cheat Database's systems. Re-recorded with
+   `EMUSEN_INTERFACE_SPEC=record`, the diff, read with the controls' ids taken out, holds those and what follows from
+   them alone: the new tabs and rows; the PlayStation's tab moved right by the Sega CD's (109 design pixels at
+   1280 × 800, 163.5 at 1920 × 1200); the lists and scroll extents that grew; the focus edges and paths numbered around
+   the new controls; and the presses that now reach the Sega CD's tab. The seven Controller Bindings cases each gained
+   a recording of their Sega CD tab at both sizes (14 files). The fit audit finds nothing in any of them.
+3. **The Memory Cards cases opened the wrong tab [the fixture's].** The window opens on the running game's console, else
+   on its first tab. The cases run an SNES game, and until 4e8be3d2 the PlayStation was the only console with a medium,
+   so its tab was the first. With the Genesis's and the Sega CD's before it in release order, the window opened on the
+   Genesis, and the fixture's check for the PlayStation card's second save failed before either test looked at the
+   window. The fixture now chooses the PlayStation's tab, as its description always said.
+4. **ThemeAbout's recording held the day it was made [the recorder's].** The About sheet says "Downloaded at your
+   request on" the day the test installs its theme. Recorded on 2026-10-15, it failed on every later day: on 63644fa3,
+   run on 2026-10-16, its only difference was the date and the 0.02-pixel width that came with it. The statement is now
+   recorded as volatile, as the theme list's fetched line is (§6.1).
+
+Outside the audit, the same merge made `FirmwarePageTests.The_tab_shows_every_system_and_each_file_s_words_from_the_overview`
+throw: it found each file's row by its title alone, and the TMSS ROM's row now stands under both the Genesis and the
+Sega CD, as each declares it. The page is right to show it under each; the test now holds every row of a title to the
+file's words, and expects one per system that declares it.
+
+**Not covered yet.** The Memory Cards window's Genesis and Sega CD tabs are opened by no case, so the audit has not
+looked at them; the PlayStation's is the only one audited.

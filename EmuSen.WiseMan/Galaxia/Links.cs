@@ -5,7 +5,7 @@ using System.IO;
 
 namespace EmuSen.WiseMan.Galaxia
 {
-    // The links a test makes: symbolic links wherever the system allows them, and Windows' junctions - see EmuSen_RustPlatform.md §26.
+    // The links a test makes: symbolic links wherever the system allows them, and Windows' junctions - see EmuSen_RustPlatform.md §27.
     internal static class Links
     {
         private static readonly Lazy<bool> Probe = new(() =>

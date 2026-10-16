@@ -25,7 +25,7 @@ const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
 
 /// Whether a path names a directory as .NET answers on this system: none for nothing there. On Unix a link is what it
 /// names and a dangling one a file; on Windows, where .NET reads the entry's own attributes, a link or junction made
-/// for a directory is one whether or not anything is behind it (EmuSen_RustPlatform.md §26.4).
+/// for a directory is one whether or not anything is behind it (EmuSen_RustPlatform.md §27.4).
 fn is_directory(path: impl AsRef<std::path::Path>) -> Option<bool> {
     let path = path.as_ref();
     #[cfg(windows)]

@@ -464,7 +464,7 @@ jobs:
         working-directory: EmuSen-Project
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery|FullyQualifiedName~MoonRtCoreAbi|FullyQualifiedName~MercuryRtCoreAbi|FullyQualifiedName~Nephrite|FullyQualifiedName~Diamond|FullyQualifiedName~TestRomRunner" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
-      # The platform's steps run whatever the cores' comparison above found, since neither depends on the other (EmuSen_RustPlatform.md §26.3).
+      # The platform's steps run whatever the cores' comparison above found, since neither depends on the other (EmuSen_RustPlatform.md §27.3).
       # Galaxia on its C#, which EMUSEN_GALAXIA_NATIVE=0 selects. These tests had not run on Windows or macOS before step 2a, so it reports and does not yet gate.
       - name: Test Galaxia on its C#
         if: ${{ !cancelled() }}

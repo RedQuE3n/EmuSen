@@ -117,7 +117,7 @@ namespace EmuSen.Serenity.Slang
             [DllImport("libc", EntryPoint = "dladdr")]
             private static extern int DlAddress(nint address, out DlInfo info);
 
-            // dladdr's file for one of Shaderc's functions: macOS lists none of a process's libraries to .NET - see EmuSen_RustPlatform.md §26.7.
+            // dladdr's file for one of Shaderc's functions: macOS lists none of a process's libraries to .NET - see EmuSen_RustPlatform.md §27.6.
             private static string? FileOfFunction()
             {
                 try

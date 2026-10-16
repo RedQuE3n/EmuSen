@@ -1620,8 +1620,8 @@ Kept here so that none is lost between steps; each names where it was found.
 - **P2** is not measured: whether any frontend asks Galaxia for a path once a frame (§8).
 - **Windows and macOS:** nothing of the platform has run on either (§10.7, §11.7, §12.4, §14.4); CI's steps there
   report and do not gate (Q14, Q22). *Partly closed 2026-10-15:* the crates' tests and every platform step of the
-  WiseMan job now run on win-x64 and osx-arm64, and on Windows they pass (§26); the four macOS failures left are
-  listed in §26.4. The steps still report rather than gate.
+  WiseMan job now run on win-x64 and osx-arm64, and on Windows they pass (§27); the four macOS failures left are
+  listed in §27.4. The steps still report rather than gate.
 - **A second `Dispose` of a player** lets go of SDL's audio twice; reproduced, not run (§14.3).
 - **A Rust program with no C# beside it** will need a SQLite of its own (Q25); what decodes lookup images then is
   decided at Serenity's retirement (Q27).
@@ -2614,7 +2614,7 @@ the queues, one queue lent to a core and one the host takes the core's pictures 
 signalled) and `emusen_serenity_chain_advance_lent` (the newest copy as a chain's frame, read on the device by its next
 render or present). The C# facade is `SlangLend` and `SlangChain.AdvanceLent`.
 
-## 26. Windows, 2026-10-15: the library shipped on win-x64
+## 27. Windows, 2026-10-15: the library shipped on win-x64
 
 Release 0.9.0 went out for Windows without `emusen_platform.dll`, so Galaxia, Endymion and Serenity's slang half ran
 on their C# there: the `emusen_platform win-x64` job of `rust-cores.yml` failed three of the Galaxia crate's tests
@@ -2622,7 +2622,7 @@ on their C# there: the `emusen_platform win-x64` job of `rust-cores.yml` failed 
 treated the library's absence on Windows as a defect to be fixed before the next Windows build. This section records
 what each failure was, what a review of the workspace for Windows assumptions found beside them, and what CI shows.
 
-### 26.1 The three failures: two in the tests, one in the code
+### 27.1 The three failures: two in the tests, one in the code
 
 Each was decided by asking which side broke a contract the other was right to hold, and then shown on the runner.
 
@@ -2656,9 +2656,9 @@ ways, for every spelling the runner's file system reads as the tree: a trailing 
 symbolic link, and on Windows `/`, `\\?\`, a lower-case drive, `.`, ` ` and `. .` appended, the 8.3 name and a
 junction, and on macOS `e` with a combining acute for `é`; the tree's bytes and times and its parent's entries are
 unchanged. `DataMigrationTests` asks the same of each half through the switch, and the C# and the library agree on
-every case (§26.4). Nothing was changed in the migration.
+every case (§27.4). Nothing was changed in the migration.
 
-### 26.2 What a review of the workspace found besides
+### 27.2 What a review of the workspace found besides
 
 Every crate was read for the assumptions Windows breaks: separators and case, a file open elsewhere, a rename over
 a file, long paths, links and junctions, line ends, the environment's folders, and names the C runtime exports.
@@ -2694,7 +2694,7 @@ a file, long paths, links and junctions, line ends, the environment's folders, a
   `CON.json`, a device on Windows 10 and an ordinary file on Windows 11. It is the C#'s rule as much as the
   library's, the parity class holds the two together, and changing what a player may type is a decision of its own.
 
-### 26.3 What CI could not show before, and the one change to the workflow
+### 27.3 What CI could not show before, and the one change to the workflow
 
 The WiseMan job's platform steps (Galaxia, Endymion and Serenity's slang half, each on its C# and on the library)
 followed the step that compares the Rust cores with the C# cores, and a failing step stops those after it unless
@@ -2707,7 +2707,7 @@ failure kept it from running: the conformance kit's `the_seeded_faults_fail_the_
 and Windows (C19 failing where the test expects it to pass; run 38829214351 was run again for it) and MarsRT's
 `a_snapshot_taken_while_workers_wait_at_barriers_is_answered_and_loads` on macOS (run 38823650539).
 
-### 26.4 What the parity class found on Windows, once it ran there
+### 27.4 What the parity class found on Windows, once it ran there
 
 The parity class had made no symbolic link on Windows, so the library's rules for links had never been held to
 .NET's there. It now asks the system once whether the process may make one (a runner may; a desktop without
@@ -2736,8 +2736,8 @@ privilege. Run 38834563430 was the first to run it on Windows, and it found thes
   string read it in the system's code page, which on Linux and macOS is UTF-8 already; the C# now decodes it as
   UTF-8. The device's name, which `SlangVulkan` reads the same way, is ASCII on every device seen and was left.
 - **A held mapping, and a tree spelled as itself (agreeing).** Both halves let a reader in and refuse a writer, a
-  rename and a deletion of a mapped file on Windows, once the library held its file (§26.2), and both migrate
-  nothing onto a tree under any of §26.1's spellings.
+  rename and a deletion of a mapped file on Windows, once the library held its file (§27.2), and both migrate
+  nothing onto a tree under any of §27.1's spellings.
 - **What the tests asked of Unix (the tests, fixed).** Tests failed in both halves alike, each over an assumption
   of its own: a recursive `Directory.Delete` refuses a junction on Windows, so links are removed first;
   the parity class handed .NET an all-space path and a UNC root with no share, which it refuses on Windows, and
@@ -2751,9 +2751,9 @@ privilege. Run 38834563430 was the first to run it on Windows, and it found thes
 **Left on macOS.** The same runs show four failures there that are not Windows': the sandbox's two fallback tests
 expect a temporary folder where macOS's rule gives Application Support, .NET's caseless comparison on macOS pairs
 fifty letters from U+16EA0 that the crate's tables, Rust's, do not yet, and APFS refuses a
-file name holding U+FFFF that the ordering case writes. They are recorded here and left to a pass of their own.
+file name holding U+FFFF that the ordering case writes. *All four were taken up in §27.6.*
 
-### 26.5 What CI shows now, and the publish
+### 27.5 What CI shows now, and the publish
 
 **CI, run 38845515166** (the branch merged with `WiseMan`): the four `emusen_platform` jobs pass, win-x64 among
 them, with the workspace's 159 tests there (25 Endymion's, 78 the Galaxia crate's, 25 the C layer's and 31
@@ -2773,7 +2773,7 @@ interface 11):
 
 The job as a whole still fails, on the cores' comparison step (eleven tests of Nephrite, Diamond and core
 discovery on Windows), which is not the platform's. On Linux the Serenity steps fail because the runner cannot load
-Shaderc ("Could not load from any of the possible library names"), and on macOS §26.4's four remain; neither is
+Shaderc ("Could not load from any of the possible library names"), and on macOS §27.4's four remain; neither is
 Windows', and both are left to a pass of their own.
 
 **The publish carries the library.** `RustCoresPublish.targets` already took `emusen_platform.dll` from
@@ -2782,13 +2782,42 @@ job that makes it had failed. A win-x64 publish of Mistress was made from 0.9.0'
 with 0.9.0's own core libraries and the library from run 38845515166. Its tree holds 584 files where 0.9.0's holds
 583, the one more being `lib/EmuSen/emusen_platform.dll` (919,040 bytes, SHA-256
 `87480a9631be88c041debe935befddce094ce9a77c15a163a0a228848da23a27`, byte for byte the CI artefact). Of the rest,
-the manual's pages differ and the managed assemblies differ, `EmuSen.Serenity.dll` by §26.4's change and the others
+the manual's pages differ and the managed assemblies differ, `EmuSen.Serenity.dll` by §27.4's change and the others
 by the folder they were built in, which .NET writes into an assembly; nothing was uploaded to the release.
 
-### 26.6 What is left to decide
+### 27.6 The rest of the WiseMan job, on all three systems (2026-10-16)
+
+With the platform's steps passing on Windows, the job itself was still red everywhere, on the cores' comparison step
+and, on macOS and Linux, on some platform steps. Each failure was read against 0.9.0's own run (38820622827, at the
+tag, before any change of this section): every one was there already, none came from this work or from the merge
+with `WiseMan` that brought Nephrite's stage 10, and those in the platform's reach, or in discovery's and the
+sidecars', were fixed here.
+
+- **A sheet's tracks shelved as games on Windows and macOS (the code, fixed).** `ImageSets.Beside` took a `FILE` name as
+  written wherever that file existed, which on a file system that ignores case keeps the sheet's spelling, so the
+  shelf, comparing paths as the folder holds them, hid nothing (`Diamond_Players.md` §12, amended). Each part is now
+  matched exactly, else by the one entry matching it ignoring case, and an `.m3u`'s discs are found the same way.
+- **Shaderc's file unnamed on macOS (the code, fixed).** .NET's `Process.Modules` lists no loaded library on macOS, so
+  the compiler identity was `shaderc unfound` in both halves and a changed Shaderc would have kept the cache's
+  shaders. The file is now asked of `dladdr` for one of Shaderc's functions where the module list does not name it.
+- **Windows' rules for open files (the tests, fixed).** Seven discovery cases and Nephrite's shipped-core case delete
+  a library they loaded, which Windows refuses as access denied; the teardown now leaves it to the temporary folder.
+  The two armed-debugger cases wrote their program twice to one path while the first engine held it mapped, which
+  Windows refuses a writer (§27.2); each load now writes into a folder of its own.
+- **macOS's rules (the tests, fixed).** The sandbox's root without a marker is Application Support on macOS
+  (`EmuSen_Galaxia.md` §3.4), which two tests did not expect; caseless equality outside the BMP is answered from the
+  system's ICU, which on macOS pairs fifty letters from U+16EA0 that the runtime's own tables, and the crate's, do not
+  know, so only characters the runtime's tables assign are compared; and APFS refuses a name holding U+FFFF, which the
+  ordering case no longer writes there.
+- **Linux's Shaderc (not fixed here).** On the ubuntu-24.04 runner Silk.NET cannot load Shaderc's library at all,
+  which fails Serenity's compiler, cache and parity cases and Diamond's shader case. The workflow now prints which of
+  the library's dependencies the runner lacks, which is where the fix starts; the program's own Linux builds are not
+  affected on the machines it has run on.
+
+### 27.7 What is left to decide
 
 Whether this build replaces 0.9.0's Windows asset or is released as 0.9.1 is the tester's decision. In favour of
 replacing: the program is 0.9.0's in every other respect, and 0.9.0's notes already say the library was left out of
 the Windows build. In favour of 0.9.1: an asset under a published tag would change its bytes and its checksum, and
-the build also carries the C# compiler's change of §26.4. The platform's WiseMan steps still report rather than gate
+the build also carries the C# compiler's change of §27.4. The platform's WiseMan steps still report rather than gate
 (§10.6); making them a gate on Windows is a decision of its own, now that they pass there.

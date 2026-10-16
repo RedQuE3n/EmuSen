@@ -1,0 +1,13 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/mmc3_test_2/rom_singles/2-details.nes
+rom E7AF16C764B119E60EFFB7B1CFEEC3DD8E2E657041283693CDBBEEDB4081F1E3
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+30 659CCD52B304571C
+resets 0
+text 2-details\n\nPassed
+verdict Passed 30

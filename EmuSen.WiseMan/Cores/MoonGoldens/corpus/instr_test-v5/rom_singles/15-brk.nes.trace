@@ -1,0 +1,13 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/instr_test-v5/rom_singles/15-brk.nes
+rom DA7AE9A191C4483B540771E15B1F6F18DF68F1D1ECD717B59EA8B1EE3596EC3E
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+27 CBDDF4E73DDBA0DF
+resets 0
+text 15-brk\n\nPassed
+verdict Passed 27

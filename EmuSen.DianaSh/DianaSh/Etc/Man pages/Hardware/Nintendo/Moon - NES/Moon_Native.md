@@ -2095,3 +2095,101 @@ the exhaustive patch test. The pre-stable exports and `MoonMachine` stay for the
 pre-stable set is deleted. The oracle and the timing are `EmuSen_CoreAPI.md` §26.3–§26.4: every MoonRT test unchanged,
 the bench's four state hashes unchanged, the kit's fifteen cases on the four games, and the plain frame −0.99% to
 +1.98% across the four games on a loaded machine.
+
+## 9. Stage 8: the goldens, and the C# core's retirement (2026-10-16)
+
+*Decided 2026-10-16 by the tester:* MoonRT is no longer compared against C# Moon. A C# core is not kept as an oracle
+once it is replaced; it is deleted with the tests that need it. A Rust core's oracles are its own recorded goldens and
+digests, the hardware test-ROM corpora and the conformance kit. This section is stage 8's record, and the record of
+the move that §3.6 planned, in the order the work was done.
+
+### 9.1 What changed in §3.6's plan
+
+§3.6 planned three layers on `Mercury_Native.md` §3.7's model: traces recorded from the C# core before it left,
+interval states kept locally, and a live differential on a legacy branch. The decision above removes the third layer,
+and it changes where the first is recorded from: the traces are recorded **from MoonRT itself**. The argument for
+that is the record of stages 1–5 and §3.8–§3.14: from stage 2 on, every comparison the project ran found the two
+engines identical in state, picture and sound, on the synthetic programs of every board, on random programs
+instruction by instruction, on the corpus frame by frame and on the bench games. A trace recorded from MoonRT is
+therefore a trace of the machine the C# core described, and §9.3 checks that claim once more against the corpus,
+the one oracle that is independent of both engines. What the recording does not carry is any authority beyond
+that: a defect the two engines shared is in the goldens too, and only a hardware test ROM can find it.
+
+### 9.2 The goldens
+
+**The form** is `Mercury_Native.md` §14.4's, in a shared reader (`EmuSen.WiseMan/Fixtures/GoldenTrace.cs`). A trace
+is a text file under `EmuSen.WiseMan/Cores/MoonGoldens/`. Its header names the run, the ROM's full SHA-256, the input
+script with a fingerprint of the masks it presses, whether rendering is skipped, the unit of its rows, the engine it
+was recorded from and the reason it was last recorded. Three units are used:
+
+- `frame`: a row per frame, `frame state picture sound`, each the first eight bytes of SHA-256 over the save state,
+  the RGBA frame and the drained samples; a value equal to the one above is written `=`.
+- `step`: an instruction run, each instruction's state hash folded into a chain,
+  `chain = SHA-256(chain ‖ state)[0..8]`, written every 100 instructions and at the end.
+- `chain`: the same fold over frames, the link being the hash of the frame's three hashes, written every 60 frames and
+  at the end. The corpus uses it, since 141 of its ROMs never give a verdict and run the whole 2,400 frames; a row per
+  frame would have cost about 16 MB for the corpus alone. A difference then names a 60-frame window, and the
+  interval states narrow it.
+
+A corpus run follows blargg's `$6000` protocol exactly as the runner does (`EmuSen.Pharaoh/NesTestRomProtocol.cs`,
+`Moon_TestRoms.md` §2), resets included, and ends at its verdict; its transcript holds the verdict and its frame, the
+number of resets and the `$6004` text.
+
+**The catalogue** (`MoonGoldenTests`), recorded 2026-10-16 at `ec9810f4`:
+
+| Runs | Files | What | Rows |
+|---|---|---|---|
+| `programs/busy-MM-C`, `programs/board-MM-C` | 64 | the busy loop and §3.5's board program on each of the sixteen boards with CHR ROM and CHR RAM, 600 frames; the board program with both pads changing every seventh frame | 38,400 |
+| `programs/rambo1-cycle-irq`, `mask-cycle`, `board-04-8-skipped`, `resets-01-0` | 4 | RAMBO-1's CPU-clocked IRQ; a palette entry and `$2001`'s grayscale and emphasis bits rewritten each frame; rendering skipped; the RESET button at frames 100 and 200 | 1,800 |
+| `steps/board-MM` | 4 | the board program on MMC3, MMC2, RAMBO-1 and FME-7, 60,000 instructions each | 2,400 |
+| `steps/random-MM-C-S` | 256 | eight random programs on each board, 4,000 instructions; from the fifth seed on the `JAM` opcodes are `NOP`s | 10,240 |
+| `corpus/…` | 263 | every ROM of `christopherpow/nes-test-roms` to its verdict or 2,400 frames, rendering skipped, with its transcript | 6,050 |
+| `games/<sha>` | 7 | seven commercial games from boot with the bench's Start and A presses, 3,600 frames | 25,200 |
+
+598 files and 3.2 MB of text. The games are named by the first sixteen digits of their SHA-256 and found in the ROM
+library by size, then hash (`EMUSEN_MOONRT_ROMS=library`, or a folder); they bring NROM, UxROM, MMC1 twice, MMC3 twice
+and MMC2. No ROM is committed, and nothing in a trace names a game.
+
+**Interval states.** While recording, every frame run keeps its state at every 300th frame under
+`~/.cache/emusen/moonrt-goldens/<run>/` (`EMUSEN_MOONRT_GOLDEN_STATES` moves it): 1,397 states, 52 MB, outside the
+tree. Where a machine holds them, a frame run that passes is graded a second time from the state of an early interval
+frame loaded into a fresh core, and a failure is bisected to the first byte and field, named by MoonRT's own layout
+listing, in which the engine's state differs from the recorded one.
+
+**Re-baselining** is deliberate and states its reason:
+
+```
+EMUSEN_MOONRT_GOLDEN_RECORD=1 EMUSEN_MOONRT_GOLDEN_REASON="<why>" EMUSEN_MOONRT_CORPUS=<corpus> \
+  EMUSEN_MOONRT_ROMS=library dotnet test EmuSen.WiseMan --filter "FullyQualifiedName~MoonGoldenTests"
+```
+
+A recording run without a reason fails. Only a trace whose content changed is rewritten, and its `reason` line is
+replaced, so each file says why it last moved, and the history of the directory is the list of intended departures.
+
+**The broken-trace check.** `A_deliberately_broken_trace_is_caught` changes one digit of frame 300 of
+`programs/board-04-8` in memory, once each in the state, picture and sound column, and the grader names the frame and
+the part; `A_deliberately_broken_step_chain_is_caught` does the same to a step chain. The same was done once to a
+committed file: frame 300's state of `programs/busy-04-8.trace` was changed from `A9CCF33A5C0FC781` to `…780`, and the
+case failed with "frame 300: the state differs (recorded A9CCF33A5C0FC780, now A9CCF33A5C0FC781); at frame 300 the
+state equals the recorded one byte for byte, so the trace moved and not the engine". The file was restored.
+
+**The result.** All 112 cases of `MoonGoldenTests` pass in 5.0 minutes with the corpus and the games present: every
+trace reproduced, and the frame runs reproduced again from their recorded interval states.
+
+### 9.3 The corpus against the C# core's baseline
+
+Before anything was recorded, the C# core's transcript was taken once more at `ec9810f4` with its own runner
+(`NesTestRomRunner`, 2,400 frames). It is the transcript of §3.14 line for line: 263 ROMs, every verdict, frame,
+reset count and text hash as on 2026-10-04. MoonRT's goldens give, against it:
+
+| | Passed | Failed | No verdict | No board |
+|---|---|---|---|---|
+| C# Moon, 2026-10-16 | 105 | 9 | 141 | 8 |
+| MoonRT, its goldens | 105 | 9 | 141 | 8 |
+
+Every ROM has the same verdict, on the same frame, after the same number of resets, with the same `$6004` text. The
+only lines that differ are the eight ROMs no board runs, whose C# "text" was the refusal's message and whose MoonRT
+transcript has none. **No verdict is worse**, so nothing was papered over. The two columns are committed as
+`EmuSen.WiseMan/Cores/MoonCorpusBaseline.tsv`; the C# column is frozen there, since it cannot be produced again, and
+`No_corpus_verdict_is_worse_than_the_csharp_baseline` holds every committed corpus trace to the MoonRT column and to a
+standing no lower than the C# one.

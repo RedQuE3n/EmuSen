@@ -1,6 +1,5 @@
 using EmuSen.Common.Imaging;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Moon.Validation;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Pharaoh;

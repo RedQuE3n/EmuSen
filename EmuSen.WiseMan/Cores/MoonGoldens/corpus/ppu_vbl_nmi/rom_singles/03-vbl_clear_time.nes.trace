@@ -1,0 +1,15 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/ppu_vbl_nmi/rom_singles/03-vbl_clear_time.nes
+rom 787FDAA4DD6C5B6DF5F4308FB6D55B57E2C2F69BD5ECDF8AD5C69735DB4FCC72
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 6859EF194FB23CAF
+120 CC5DF974F7A92366
+167 7BB6BAF98B18FAE1
+resets 0
+text 00 V\n01 V\n02 V\n03 V\n04 V\n05 V\n06 -\n07 -\n08 -\n\n03-vbl_clear_time\n\nPassed
+verdict Passed 167

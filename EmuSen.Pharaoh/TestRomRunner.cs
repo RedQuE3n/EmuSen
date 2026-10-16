@@ -1,5 +1,4 @@
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Moon.Validation;
 
 namespace EmuSen.Pharaoh
 {

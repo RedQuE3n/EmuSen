@@ -1,0 +1,19 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/cpu_interrupts_v2/rom_singles/5-branch_delays_irq.nes
+rom F9E10B4A24D8F3CD3E51FB7457C72858AAB96A6467FDBBD806D0661C2D32FDC7
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 122739A62DA28A9A
+120 C87A243D3E37312C
+180 2C43A1365A49F840
+240 777FB300F18B1136
+300 3C11E03EA7B6A2DA
+360 CBF248F52F6F3C49
+380 A4450649484C554F
+resets 0
+text test_jmp\nT+ CK PC\n00 02 04 \n01 01 04 \n02 03 07 \n03 02 07 \n04 01 07 \n05 02 08 \n06 01 08 \n07 03 08 \n08 02 08 \n09 01 08 \n\ntest_branch_not_taken\nT+ CK PC\n00 02 04 \n01 01 04 \n02 02 06 \n03 01 06 \n04 02 07 \n05 01 07 \n06 04 0A \n07 03 0A \n08 02 0A \n09 01 0A \n\ntest_branch_taken_pagecross\nT+ CK PC\n00 02 0D \n01 01 0D \n02 04 00 \n03 03 00 \n04 02 00 \n05 01 00 \n06 04 03 \n07 03 03 \n08 02 03 \n09 01 03 \n\ntest_branch_taken\nT+ CK PC\n00 02 04 \n01 01 04 \n02 03 07 \n03 02 07 \n04 05 0A \n05 04 0A \n06 03 0A \n07 02 0A \n08 01 0A \n09 03 0A \n\n\n5-branch_delays_irq\n\nPassed
+verdict Passed 380

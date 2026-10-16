@@ -1,0 +1,13 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/apu_test/rom_singles/8-dmc_rates.nes
+rom 5D9A79A505B37FA277CACC95A362F7E2A56E59ACE7A698213D78432CC06A8867
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+29 60CA4B4D3098A7EF
+resets 0
+text 8-dmc_rates\n\nPassed
+verdict Passed 29

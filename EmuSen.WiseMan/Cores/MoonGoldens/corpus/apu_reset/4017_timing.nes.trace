@@ -1,0 +1,13 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/apu_reset/4017_timing.nes
+rom 0E6072C6DCEE98FB73DC7F3AF2E48FACE78BE300E8510515ED48DC75D15C1F13
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+52 6C527C47A0EAA314
+resets 1
+text Delay after effective $4017 write: 9\n\n4017_timing\n\nPassed
+verdict Passed 52

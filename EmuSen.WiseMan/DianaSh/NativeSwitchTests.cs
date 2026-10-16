@@ -1,16 +1,18 @@
 using System;
 using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.DianaSh.DianaSh.Bin.Native;
 using EmuSen.DianaSh.DianaSh.Var.Shell;
 using EmuSen.WiseMan.Fixtures;
 using Xunit;
 
 namespace EmuSen.WiseMan.DianaSh
 {
-    // The switch chose what the variable says, so a run with it set is a run of the Rust shell and not a silent fallback - see EmuSen_DianaSh.md §13.7.
+    // The switch chose what the variable says, so a default run is a run of the Rust shell and not a silent fallback - see EmuSen_DianaSh.md §13.10.
     [Collection(TestCollections.ProcessGlobals)]
     public class NativeSwitchTests
     {
-        private static bool Native => Environment.GetEnvironmentVariable("EMUSEN_DIANASH_NATIVE") == "1";
+        // State 2: the Rust shell unless the variable is 0, where the library this run was built with is there to choose.
+        private static bool Native => Environment.GetEnvironmentVariable("EMUSEN_DIANASH_NATIVE") != "0" && DianaShNative.Ready;
 
         [Fact]
         public void The_shell_is_the_one_the_variable_chose()

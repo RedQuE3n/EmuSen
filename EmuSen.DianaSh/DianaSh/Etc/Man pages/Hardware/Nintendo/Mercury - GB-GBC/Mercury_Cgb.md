@@ -123,6 +123,12 @@ blocks it still owed with bit 7 set after it was stopped. Writing bit 7 clear *d
 rather than starting a general-purpose one — the one case where the same write means two different things depending
 on state. A transfer whose destination runs past `$9FFF` stops there (Pan Docs; `Mercury_Native.md` §13.9).
 
+**An hblank transfer waits while the CPU is halted.** Pan Docs: "Upon halting the CPU ..., the transfer will also be
+halted and will be resumed only when the CPU resumes execution." The CPU tells the bus when it enters `HALT` and when
+it wakes (`ICpuBus.SetHalted`), and a line that enters mode 0 in between moves no block; the blocks still owed move at
+the hblanks after the wake. *Added 2026-10-15* (`Mercury_Native.md` §14.2). The bus's copy of the flag is not in the
+state: a load takes it from the CPU's `Halted`.
+
 The destination register only has bits 12-4; a transfer is always 16-byte aligned
 and always lands in VRAM, in whichever bank `$FF4F` currently selects.
 

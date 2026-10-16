@@ -5,6 +5,9 @@ use std::cmp::Ordering;
 
 /// `char.ToLowerInvariant`: Unicode's one-to-one lower case, with the dotted capital I left as it is.
 pub fn lower_invariant(c: char) -> char {
+    if c.is_ascii() {
+        return c.to_ascii_lowercase();
+    }
     let mut lower = c.to_lowercase();
     match (lower.next(), lower.next()) {
         (Some(one), None) => one,
@@ -112,6 +115,9 @@ pub fn is_blank(text: Option<&str>) -> bool {
 
 /// One character's upper case as .NET's ordinal comparison sees it: Unicode's simple mapping, one character to one, less the two that would turn a letter outside ASCII into one inside it.
 pub fn simple_upper(c: char) -> char {
+    if c.is_ascii() {
+        return c.to_ascii_uppercase();
+    }
     match c {
         // The dotless i and the long s keep themselves, where Unicode sends them to I and S.
         '\u{131}' | '\u{17F}' => c,
@@ -131,6 +137,10 @@ pub fn simple_upper(c: char) -> char {
 
 /// `string.Equals(a, b, StringComparison.OrdinalIgnoreCase)`.
 pub fn equals_ignore_case(a: &str, b: &str) -> bool {
+    // ASCII's ordinal case is ASCII's own, and it is how nearly every name the shell compares is spelt.
+    if a.is_ascii() && b.is_ascii() {
+        return a.eq_ignore_ascii_case(b);
+    }
     a.chars().map(simple_upper).eq(b.chars().map(simple_upper))
 }
 
@@ -176,11 +186,17 @@ pub fn trim_start(text: &str) -> &str {
 
 /// `string.ToLowerInvariant()`.
 pub fn to_lower(text: &str) -> String {
+    if text.is_ascii() {
+        return text.to_ascii_lowercase();
+    }
     text.chars().map(lower_invariant).collect()
 }
 
 /// `text.StartsWith(prefix, OrdinalIgnoreCase)`.
 pub fn starts_with_ignore_case(text: &str, prefix: &str) -> bool {
+    if text.is_ascii() && prefix.is_ascii() {
+        return text.len() >= prefix.len() && text.as_bytes()[..prefix.len()].eq_ignore_ascii_case(prefix.as_bytes());
+    }
     let mut text = text.chars().map(simple_upper);
     prefix.chars().map(simple_upper).all(|c| text.next() == Some(c))
 }
@@ -212,6 +228,21 @@ pub fn pad_left(text: &str, width: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_ascii_paths_answer_as_the_general_ones() {
+        for c in (0u8..128).map(char::from) {
+            let mut upper = c.to_uppercase();
+            assert_eq!(simple_upper(c), upper.next().unwrap(), "{c:?}");
+            assert_eq!(lower_invariant(c), c.to_lowercase().next().unwrap(), "{c:?}");
+        }
+        assert!(equals_ignore_case("Grep", "gREP"));
+        assert!(!equals_ignore_case("k", "\u{212A}"));
+        assert!(!equals_ignore_case("grep", "grep "));
+        assert!(starts_with_ignore_case("BP3", "bp"));
+        assert!(!starts_with_ignore_case("b", "bp"));
+        assert_eq!(to_lower("SoRT"), "sort");
+    }
 
     #[test]
     fn a_text_holds_another_whatever_its_case() {

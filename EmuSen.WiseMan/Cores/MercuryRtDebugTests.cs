@@ -103,6 +103,10 @@ namespace EmuSen.WiseMan.Cores
         {
             foreach (var (name, program) in new[] { ("interrupts", Interrupts), ("count", CountForever), ("call", CallOnce), ("vram", StoresAcross(0x80, 0x6C)), ("oam", StoresAcross(0xFE, 0x7D)) })
                 Armed(Temporary(program), name, 300);
+            // HDMA in double speed, and an hblank transfer held back by HALT, which the observed step passes on to the bus - see Mercury_Native.md §14.2.
+            string colour = SyntheticGbRom.WriteTemp(MercuryRtMachineTests.ColourRom());
+            try { Armed(colour, "colour", 300); }
+            finally { File.Delete(colour); }
         }
 
         // ld hl,<page>00 / ld (hl+),a / inc a / bit <bit> / jr z,the store / jr the start: stores through the whole of a space, drawing or not, so some the bus refuses.

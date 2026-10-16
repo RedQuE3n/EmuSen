@@ -87,10 +87,13 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
         public const uint ConfigSessions = 1, ConfigInteractive = 2;
 
         private static readonly Lazy<string?> Attached = new(Attach);
-        private static readonly Lazy<bool> Chosen = new(Choose);
+        private static readonly PlatformSwitch Chosen = SwitchFor(() => Environment.GetEnvironmentVariable(Variable), () => (Attached.Value is null, Attached.Value ?? ""));
 
-        // State 1: the C# unless the variable is 1 and the library, its host API and Galaxia's tree are all there - see EmuSen_RustPlatform.md §3.9.
-        public static bool Active => Chosen.Value;
+        // State 2: the Rust shell unless the variable is 0; a library that is absent or refused leaves the C#, said once - see EmuSen_DianaSh.md §13.10.
+        public static bool Active => Chosen.Active;
+
+        // DianaSh's switch as the process makes it, for a test that makes one over another load.
+        internal static PlatformSwitch SwitchFor(Func<string?> variable, Func<(bool Available, string Report)> load) => new(variable, load, PlatformSwitch.Announce, "DianaSh");
 
         // The Rust shell usable, whichever the switch chose: what a parity test asks before making one.
         public static bool Ready => Attached.Value is null;
@@ -126,23 +129,27 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
             "dianash_session_attach", "dianash_session_switch", "dianash_session_kill", "dianash_session_replace",
         };
 
-        private static bool Choose()
+        // Null when every export resolves, the major is this facade's and a shell can be made and freed; otherwise why not - see EmuSen_DianaSh.md §13.10.
+        internal static string? Check(Func<string, nint> export, out nint[] found)
         {
-            if (Environment.GetEnvironmentVariable(Variable) != "1") return false;
-            string? refused = Attached.Value;
-            if (refused is null) return true;
-            PlatformSwitch.Announce($"DianaSh's Rust shell is not in use ({refused}); the shell runs on its C# implementation.");
-            return false;
+            found = new nint[Exports.Length];
+            for (int i = 0; i < Exports.Length; i++)
+                if ((found[i] = export(Exports[i])) == 0) return $"{PlatformLibrary.FileName} has no {Exports[i]}";
+            uint version = ((delegate* unmanaged[Cdecl]<uint>)found[0])();
+            if (version >> 16 != AbiMajor) return $"{PlatformLibrary.FileName} speaks DianaSh host API {version >> 16}.{version & 0xFFFF}, this build {AbiMajor}.x";
+            var config = new DianashConfig { Size = (uint)sizeof(DianashConfig) };
+            nint shell = ((delegate* unmanaged[Cdecl]<DianashConfig*, nint>)found[2])(&config);
+            if (shell == 0) return $"{PlatformLibrary.FileName} could not make a DianaSh shell";
+            ((delegate* unmanaged[Cdecl]<nint, int>)found[3])(shell);
+            return null;
         }
 
-        // Null when every export resolved and the major matched; otherwise why the library is not used.
+        // Null when the process's library passed Check, its exports then taken; otherwise why the library is not used.
         private static string? Attach()
         {
             if (!PlatformLibrary.Available) return PlatformLibrary.Report;
             if (!PlatformLibrary.GalaxiaActive) return "Galaxia runs on its C#, and the Rust shell reads the tree through the library's";
-            var found = new nint[Exports.Length];
-            for (int i = 0; i < Exports.Length; i++)
-                if ((found[i] = PlatformLibrary.Export(Exports[i])) == 0) return $"{PlatformLibrary.FileName} has no {Exports[i]}";
+            if (Check(PlatformLibrary.Export, out nint[] found) is { } refused) return refused;
             int next = 0;
             AbiVersion = (delegate* unmanaged[Cdecl]<uint>)found[next++];
             LastErrorFn = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)found[next++];
@@ -165,8 +172,6 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
             SessionSwitch = (delegate* unmanaged[Cdecl]<nint, uint, int>)found[next++];
             SessionKill = (delegate* unmanaged[Cdecl]<nint, uint, int>)found[next++];
             SessionReplace = (delegate* unmanaged[Cdecl]<nint, uint, uint, int>)found[next++];
-            uint version = AbiVersion();
-            if (version >> 16 != AbiMajor) return $"{PlatformLibrary.FileName} speaks DianaSh host API {version >> 16}.{version & 0xFFFF}, this build {AbiMajor}.x";
             return null;
         }
 

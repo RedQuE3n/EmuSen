@@ -30,12 +30,15 @@ namespace EmuSen.WiseMan.Cores
         };
 
         // Every board, with and without RAM, battery, clock and rumble, on both consoles.
-        public static TheoryData<byte, byte, byte> Boards => new()
+        public static TheoryData<byte, byte, byte> Boards
         {
-            { 0x00, 0x00, 0x00 }, { 0x08, 0x02, 0x00 }, { 0x03, 0x02, 0x00 }, { 0x03, 0x03, 0x80 },
-            { 0x06, 0x00, 0x00 }, { 0x06, 0x00, 0xC0 }, { 0x10, 0x03, 0x00 }, { 0x13, 0x03, 0xC0 },
-            { 0x1B, 0x03, 0x80 }, { 0x1E, 0x04, 0x00 }, { 0x19, 0x00, 0xC0 },
-        };
+            get
+            {
+                var data = new TheoryData<byte, byte, byte>();
+                foreach (var (kind, ram, cgb) in MercuryPrograms.Boards) data.Add(kind, ram, cgb);
+                return data;
+            }
+        }
 
         private readonly ITestOutputHelper _output;
 
@@ -262,7 +265,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // The C# serializer's own walk as "offset length type path" lines, MercuryCore.SaveState's header written by hand.
-        private static string Layout(MercuryCore core, byte[] state)
+        internal static string Layout(MercuryCore core, byte[] state)
         {
             var layout = new LayoutWalk();
             layout.Line("Magic", "u32", 4);

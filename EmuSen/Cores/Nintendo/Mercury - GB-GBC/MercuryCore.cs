@@ -311,6 +311,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
             if (version >= MixerInState) Bus.Apu.ReadMixer(r);
             // Fields an older version lacks start clear: no DMA start pending, no subtraction made - see Mercury_Native.md §13.4, §13.10.3.
             Bus.ReadTail(r, version);
+            Bus.SetHalted(Cpu.Halted);
         }
     }
 }

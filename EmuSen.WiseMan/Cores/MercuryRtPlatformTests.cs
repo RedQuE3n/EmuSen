@@ -17,26 +17,12 @@ namespace EmuSen.WiseMan.Cores
 
         public MercuryRtPlatformTests(ITestOutputHelper output) => _output = output;
 
-        // Keys all four channels panned apart and fills tile data with the LCD on; then, each time DIV wraps, re-keys the noise and the sweep and scrolls.
-        private static readonly byte[] FourChannels =
-        {
-            0x3E, 0x80, 0xE0, 0x26, 0x3E, 0x77, 0xE0, 0x24, 0x3E, 0xE7, 0xE0, 0x25,
-            0x3E, 0x15, 0xE0, 0x10, 0x3E, 0x80, 0xE0, 0x11, 0x3E, 0xF3, 0xE0, 0x12, 0x3E, 0x00, 0xE0, 0x13, 0x3E, 0x87, 0xE0, 0x14,
-            0x3E, 0x40, 0xE0, 0x16, 0x3E, 0xA5, 0xE0, 0x17, 0x3E, 0x30, 0xE0, 0x18, 0x3E, 0x86, 0xE0, 0x19,
-            0x3E, 0x80, 0xE0, 0x1A, 0x3E, 0x00, 0xE0, 0x1B, 0x3E, 0x20, 0xE0, 0x1C, 0x3E, 0x50, 0xE0, 0x1D, 0x3E, 0x85, 0xE0, 0x1E,
-            0x21, 0x00, 0x80, 0x7D, 0x22, 0x7C, 0xFE, 0x98, 0x20, 0xF9,
-            0xF0, 0x04, 0xB7, 0x20, 0xFB,
-            0x21, 0x00, 0xC0, 0x34, 0x7E, 0xE0, 0x22, 0xE0, 0x43, 0x3E, 0xF1, 0xE0, 0x21, 0x3E, 0x80, 0xE0, 0x23, 0x3E, 0x87, 0xE0, 0x14,
-            0xF0, 0x04, 0xB7, 0x28, 0xFB,
-            0x18, 0xDF,
-        };
-
         private static byte[] Program(string name) => name switch
         {
-            "four channels" => SyntheticGbRom.Build(patches: (0, FourChannels)),
-            "busy" => SyntheticGbRom.Build(romBanks: 4, cartridgeType: 0x1B, ramSizeCode: 0x03, cgbFlag: 0x80, patches: (0, MercuryRtMachineTests.Busy)),
-            "interrupts" => MercuryRtMachineTests.InterruptsRom(0x13, 0x03, 0x00),
-            "colour" => MercuryRtMachineTests.ColourRom(),
+            "four channels" => SyntheticGbRom.Build(patches: (0, MercuryPrograms.FourChannels)),
+            "busy" => SyntheticGbRom.Build(romBanks: 4, cartridgeType: 0x1B, ramSizeCode: 0x03, cgbFlag: 0x80, patches: (0, MercuryPrograms.Busy)),
+            "interrupts" => MercuryPrograms.InterruptsRom(0x13, 0x03, 0x00),
+            "colour" => MercuryPrograms.ColourRom(),
             _ => throw new ArgumentException(name),
         };
 
@@ -87,7 +73,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData("four channels", "420DFAA8EBA40746C2D711BEFF1F0DB7AAF122785EF8A9654F2F72D00F745E3A", "C0B17C1556732C6B10B6529BAA908977C7699AE27497BE3F70788D2899F222BA", "45789F271262BD0DCA53611A743F0451DC3146DE6974BA0374A88D5207D9862D", "77C2E5E688DADF3C29F3D9B59042B906F16516215980777F42CBA7BEB0659D1C")]
         [InlineData("busy", "B327BA1B261D9A7859CB8DE670F6C84ED355B853EC6B0C2F360F1EE82B399BF5", "8A0803654A95C3659704CC9C2BC839A75C04626BAA5F4926B09ADE2EE56FD705", "AE29E11F1B96005D34020DA3C8CC2F9FFC2C5C449343846124592FD2E493E038", "03A4D5FD14721517124E10FF600EBD5B416C549F4009206B28BA27975407A2D2")]
         [InlineData("interrupts", "2802C96FCC6175A4C59CCAD791DB5C69860133AEFCF42611F41A9A7808BB87AB", "8A0803654A95C3659704CC9C2BC839A75C04626BAA5F4926B09ADE2EE56FD705", "CEC354F94F5B6C23C19ED25364236AADEFDC9D7BDD48CE7FAF67B4BD5EE0C38D", "F740F8515E3809F250D80630A8FD86A718F319C030C04D8508846DAF5BE3A6CD")]
-        [InlineData("colour", "D3A2D8F2637085A1BAFD9F981A948D3170B2738889A7F70109ADDA16964B698B", "E293A91DAADF31E4B368DD0D0C2BDE7190D8D5312A4E924370CA4A8F4F180C39", "C5D7657632189F86FC76723CEBB11EA967579DEAF1EF5D7DFD55097CD3BE713C", "A27927322C965615BEE1220A02BCAB5B5BB1B222FADA8DBE26DF79611139E66F")]
+        [InlineData("colour", "D3A2D8F2637085A1BAFD9F981A948D3170B2738889A7F70109ADDA16964B698B", "E293A91DAADF31E4B368DD0D0C2BDE7190D8D5312A4E924370CA4A8F4F180C39", "0DAE338EA80B1AC6D5914FF8035831667C52F57111DF6F38F912A3A1E77FD6B7", "320BA9EE56401C683645F0C0042C8CD2E3A1FDA9637CB7867A3CDAC02192B776")]
         public void Sound_picture_and_state_match_linuxs_on_both_engines(string program, string sound, string picture, string state, string stateVersion7)
         {
             Assert.True(MercuryMachine.Available, MercuryNative.Report);

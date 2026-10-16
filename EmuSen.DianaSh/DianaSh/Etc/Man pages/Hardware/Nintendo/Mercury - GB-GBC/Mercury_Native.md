@@ -502,7 +502,8 @@ earlier state is loaded into MercuryRT and run to that frame. The two states are
 of §3.2, which names every byte. For synthetic ROMs these states can be regenerated from the legacy branch at any
 time.
 
-**3. A live differential on the legacy branch, built on demand.** The legacy branch keeps C# Mercury and its WiseMan
+**3. A live differential on the legacy branch, built on demand.** *Dropped 2026-10-16 by the tester's decision
+(§14.7); the rest of this paragraph is the proposal as written.* The legacy branch keeps C# Mercury and its WiseMan
 tests. A test project there loads MercuryRT's library built from `main`, by a path, as `RustCoresPublish.targets`'
 `EmuSenNativePrebuilt` already does for foreign platforms. It then runs §3.3's frame-by-frame comparison live. This is
 the tool for when a golden trace disagrees and the question is "which engine moved?". Three things couple the branches:
@@ -540,7 +541,7 @@ memory-space naming (110).
 | 6 | Debugger hooks: breakpoints, stepping, coverage and the write log as pushed tables and drained logs; `MercuryRtDebugTarget` over the state view (*done 2026-09-24, §8.5*) | `MercuryDebugTargetTests` on both engines; games with every table armed identical to plain runs | 1–2 days |
 | 7 | Platforms and CI: the second crate in the workflow's matrix; `MarsRtPublish.targets` and `EmuSen.csproj`'s single-library build generalised to a list of crates | Crate tests on four platforms; WiseMan's synthetic systems per platform | hours to half a day |
 | 8 | Parity: the rest of WiseMan's Mercury tests through `MercuryRig`; mutants for every stage not yet covered (*done 2026-10-14, §12*) | §3.5, §3.6 | a day |
-| 9 | Goldens: traces and interval states recorded from C# (§3.7), MercuryRT graded against them on `main`, and the legacy-branch differential project written and run once | Every golden reproduced by MercuryRT; one deliberately broken trace caught | half a day |
+| 9 | Goldens: traces and interval states recorded from C# (§3.7), MercuryRT graded against them on `main`, and the legacy-branch differential project written and run once (*done 2026-10-15, §14; the differential dropped 2026-10-16, §14.7*) | Every golden reproduced by MercuryRT; one deliberately broken trace caught | half a day |
 | 10 | The C# core's move to its legacy branch (Q5) | A decision, and stage 9 passing on `main` without it | — |
 
 **What "finished" means** is `Mars_Native.md` §6's three criteria, unchanged:
@@ -2344,10 +2345,15 @@ the thirteen instruction-timing ROMs are left for it.
 - **MBC5's RAM enable** (referee §2.8; §13.6). GBCTR says only `$0A` enables RAM; Pan Docs says any value whose low
   nibble is `$A`. Mercury follows Pan Docs, and no test ROM settles it. *Recommendation:* keep Pan Docs' rule, since the
   other could cost a game its saves, until a test ROM or a cartridge settles it.
+  *Decided 2026-10-15, as recommended:* MBC5's RAM is enabled by any value whose low nibble is `$A`, as Pan Docs has
+  it and as both engines already did. Nothing changes until a test ROM or a cartridge settles the dispute.
 - **HDMA during HALT** (referee §2.9; §13.9). Pan Docs says an hblank transfer pauses while the CPU is halted. Building
   it needs the CPU to tell the bus it is halted, a new member of `ICpuBus`/`CpuBus` in both engines. *Recommendation:*
   add it (`ICpuBus.Halted`, set where HALT is entered and left), with Pan Docs as the oracle and MagenTests' HDMA case
   fetched as a witness if its licence allows.
+  *Decided 2026-10-15, as recommended:* built in both engines, proven first by a claim failing on both (§14.2).
+- **The PPU's line boundary** (§13.11.3). *Decided 2026-10-15:* its own piece of work, after stage 9. The goldens are
+  recorded without it, and when it lands it is a deliberate re-baseline under §3.7's second rule.
 - **§3's further leads** (the speed switch's duration, the serial port's transfer time, DMG `STOP`, the post-boot DIV)
   are outside §2 and are not part of this audit.
 
@@ -3234,10 +3240,334 @@ Game Boy, because a DMG now keeps its length counters as the ROM's header says i
 read. **The four games** run as the unmodified build ran them throughout, the joypad's IF bit aside (§13.7).
 
 **Questions for the tester** (§13.0): MBC5's RAM enable (keep Pan Docs' rule), and HDMA during HALT (add the bus
-member). The PPU's line boundary is proposed as its own piece of work.
+member). The PPU's line boundary is proposed as its own piece of work. *All three decided 2026-10-15 as recommended*
+(§13.0); HDMA during HALT is built in §14.2.
 
 **What changes for stage 9.** The goldens are recorded from C# after this audit, so they carry these rules. The state
 version the goldens and the legacy differential project pin is 11, with its tail. The corpus baseline the goldens
 extend is this one, 126/124/124. `MercuryAuditTests` is a further class of claims on both engines that, like
 `MercuryCycleTimingTests`, stage 10 must keep when the C# core leaves `main`; the four placement claims of §13.5 and the
 dispatch claim of §13.3 live only in the two cycle harnesses.
+
+## 14. Stage 9: the goldens (2026-10-15)
+
+*Decided 2026-10-15:* the audit's questions (§13.0, §13.13) are answered as recommended. MBC5's RAM enable keeps Pan
+Docs' rule, and nothing changes. HDMA pauses during `HALT`, built in both engines with a new member on the CPU's bus
+(§14.2). The PPU's line boundary (§13.11.3) is its own piece of work after this stage: the goldens are recorded without
+it, and its arrival will be a deliberate re-baseline under §3.7's second rule. After the C# core leaves `main`, the
+rig reads a state through a reader driven by the committed layout listings (§14.5), and that reader is held to C#'s
+reading of every state the tests make for as long as both exist. *Decided 2026-10-16 by the tester:* MercuryRT is
+no longer compared against C# Mercury, and the legacy differential was dropped (§14.7). This section is stage 9's
+record, in the order the work was done.
+
+### 14.1 The audit's open slowdown, measured again
+
+**The question** (§13.12): after step K MercuryRT ran 4–6% slower with the same instructions, and marking the
+once-a-line path cold had recovered about half. That was measured on a loaded machine. It was measured again here, on
+the crate's bench (`examples/frames`, the p50 of 3,000 frames after 900) and through `ICore` (a scratch console app
+holding `MercuryRtCore` as a frontend does, 900 frames of the bench's input, then 3,000 timed with the picture and the
+sound taken), each run under a counter of the user-space instructions and cycles it retires (`perf_event_open`,
+scratch `pcount.py`). Builds were snapshots of the crate at the commit before the audit (`aea4f182`, "pre"), at `461f03b7`
+("head"), and with §14.2's fix ("hdma"), each with the crate's own alignment flags.
+
+**The load.** The machine was shared with four other lines of work throughout. Rounds under a one-minute load of 10 to
+48 gave instruction counts only: wall time and cycles moved by a factor of two with the load, since another process
+on a core's second thread takes its cycles. A watcher then ran a round only when the load fell under 2; six such rounds
+were taken at 22:04–22:31, with the load beside each run between 1.48 and 3.62. Later comparisons ran at 2 to 4, and are
+given with their load.
+
+**The loss stands, and it is not work.** At equal instructions (head against pre: Tetris −0.04%, Kirby's Dream Land
++0.45%, Link's Awakening +0.19%, Pokémon Yellow +0.12% over 3,900 frames), the medians of the six quiet rounds:
+
+| Game | crate bench, pre → head | through `ICore`, pre → head |
+|---|---|---|
+| Tetris | 0.4299 → 0.4553 ms (+5.9%) | 0.4582 → 0.4707 (+2.7%) |
+| Kirby's Dream Land | 0.4894 → 0.5141 (+5.0%) | 0.4974 → 0.5242 (+5.4%) |
+| Link's Awakening | 0.4027 → 0.4207 (+4.5%) | 0.4153 → 0.4319 (+4.0%) |
+| Pokémon Yellow | 0.5392 → 0.5753 (+6.7%) | 0.5612 → 0.5768 (+2.8%) |
+
+The runs of each pair were within 1–2% of their median, apart from one stalled `ICore` run, and user cycles moved
+with the time. So this is not noise.
+
+**Finding the cause.**
+
+- **Where.** An interrupt-style sampler of the bench (ptrace on the main thread, the pc mapped to the binary's
+  symbols, scratch `rsample.py`) put the growth in `Cpu::execute` (about +15% in absolute time) and `jump_relative`
+  (+12%), with `run_frame` +3% and the renderer −3%.
+- **Size.** `execute` had grown from 103,025 bytes to 122,865 over the audit while the executed instructions did not.
+  A bisection over the audit's commits gave its size at each: unchanged through step A, then +3.8 KB at B (the
+  timer), +4.1 KB at D (OAM DMA), +3.6 KB at K, +5.2 KB at the fold and +3.2 KB with the cold attributes. The time
+  drifted with it: 0–2% already at step A, whose `execute` was exactly the same size; about +2% at J; +4.5–8.3% at
+  K; +7–10% at the fold. The fold removed 1.4% of the instructions and still made the frame slower.
+- **Why.** `MemoryBus::tick` is `#[inline(always)]`, so the whole per-T-cycle step (PPU, APU, OAM DMA, DIV and the
+  timer) is copied into every bus access in every opcode arm. A change to that step is multiplied across the copies;
+  frontend-stall cycles rose by 180 million on Tetris against a gap of 640 million, while branch misses rose by 1.1
+  million.
+- **The experiments.** Loop alignment beside the crate's flags moved each game differently (`-align-loops=32`: Tetris
+  +0.6%, Link's Awakening +6.4%), so it was not a fix. Taking `tick` out of line shrank `execute` to 8.5 KB but cost
+  8.5% more instructions, and gave mixed results. It did make pre and head level with each other (Pokémon Yellow −1.0%
+  against −1.1%, Tetris +7.0% against +5.5%), which locates the difference in the copies' layout rather than their
+  work.
+
+**The fix** (`d327880b`), in MercuryRT alone, since the C# core has no such copies:
+
+- the PPU's dot loop tests whether the dot is one where something happens (the line's last machine cycle or its
+  end, the end of the OAM scan, the end of drawing) and only then calls `dot_event`, which is the old body unchanged;
+- a running OAM DMA's cycle is a call (`step_oam_dma_running`), and an idle one is the same single test as before.
+
+The copies now carry an increment and three compares. `execute` is 85 KB, and the bench retires 1.3–1.7% fewer
+instructions than either build (Tetris 37.27 billion over 3,900 frames, against pre's 37.80 and head's 37.78).
+Measured four interleaved rounds each, at a load of 3.4–4.1:
+
+| Game | crate bench, pre / head / fix | through `ICore`, pre / head / fix |
+|---|---|---|
+| Tetris | 0.4384 / 0.4713 / 0.4439 (+1.3%) | 0.4692 / 0.4850 / 0.4629 (−1.3%) |
+| Kirby's Dream Land | 0.4935 / 0.5198 / 0.4942 (+0.1%) | 0.5133 / 0.5405 / 0.5109 (−0.5%) |
+| Link's Awakening | 0.4088 / 0.4278 / 0.4118 (+0.7%) | 0.4273 / 0.4539 / 0.4322 (+1.2%) |
+| Pokémon Yellow | 0.5495 / 0.5852 / 0.5553 (+1.0%) | 0.5765 / 0.5938 / 0.5673 (−1.6%) |
+
+The bound left is ±1.6%, which is inside one round's spread. The four games' states at every 300th frame to 3,600 and
+the colour program's state are byte for byte the same as before the fix, and every golden reproduces (§14.4).
+
+**Why this does not generalise.** The fix makes the copies small. It does not make the layout of the copies that
+remain any more stable, and a future change to the dot loop can move the frame again. This is §8.7.3's finding a
+second time, now with a mechanism named. Two measures would do more: a smaller per-T-cycle step, or one copy, which
+would need the per-access ticks restructured, and neither was tried. The Ryzen 7 7700X is the only machine measured.
+
+### 14.2 HDMA during HALT
+
+**The rule.** Pan Docs (`CGB_Registers.md`, HDMA5): "Upon halting the CPU ..., the transfer will also be halted and
+will be resumed only when the CPU resumes execution." It cites a test ROM (alloncm's MagenTests) that is not in the
+corpus and was not fetched; Pan Docs is the oracle. The reading built is the plainest one: a visible line that enters
+mode 0 while the CPU is halted moves no block, and the blocks still owed move at the hblanks after the wake. Nothing in
+the rule says that a block missed during `HALT` is made up at the wake, so none is.
+
+**The proof** (`cd70f78e`). `An_hblank_hdma_moves_nothing_while_the_cpu_is_halted_and_resumes_after` arms a four-block
+hblank transfer, enables only the vblank interrupt with IME clear and halts; at line 144 the CPU wakes. It failed on
+both engines: `$FF55` read `$FF` at the wake, all four blocks having moved during the first four lines of the halt.
+Its control, `An_hblank_hdma_beside_a_running_cpu_moves_a_block_each_line`, the same program with a `NOP` for the
+`HALT`, passed on both.
+
+**The fix** (`9173647f`), the same in both engines. The CPU's bus gains one member, `ICpuBus.SetHalted(bool)` and
+`CpuBus::set_halted`. The CPU calls it when `HALT` puts it to sleep and when a pending interrupt wakes it, before
+anything else runs in that step; the HALT bug's path never sleeps and never calls it. The bus keeps the flag and
+`OnHBlankStarted` (`on_h_blank_started`) moves no block while it is set. The flag is a copy of `Cpu.Halted`, so it is
+not in the state: a load sets it from the CPU's field, and a reset clears it. **The state format stays at version
+11.** The two cycle harnesses (C#'s `MercuryCycleTimingTests`, the crate's `tests/cycle_timing.rs`) record the call
+as an `H:` entry and gained `Halt_and_its_wake_are_told_to_the_bus`, which fixes where in the step each call falls.
+`A_state_saved_in_halt_keeps_the_hblank_hdma_paused_after_a_load` holds the load's half on both engines.
+
+**What moved.** The corpus has no HDMA, and its baseline did not move. The four games' MercuryRT states every 300
+frames to frame 3,600, with the bench's input, are byte for byte those of the unmodified build. One recorded digest
+moved: the colour synthetic program halts between vblanks with an hblank transfer armed, so its blocks no longer move.
+Its state at frame 600 differs in four fields: `Cpu.Cycles`, 478,432 higher, since the CPU is no longer stalled by the
+blocks; `Bus.HdmaSource` and `Bus.HdmaDestination`, which stay where each frame's write puts them; and two bytes of
+VRAM. Its sound and picture digests did not move, and both engines agree on the new state digest, which is
+re-recorded with this reason. Because the program no longer exercises an hblank transfer at all, its goldens add a
+variant whose main loop spins instead of halting (`colour-running`, §14.4), and the debugger's armed-against-plain
+test gained the halting program, which is the one that sees the observed step pass the call on.
+
+**Cost.** Nothing on the per-cycle path moved for a game: the check is in the once-a-line hblank call and in `HALT`, and
+the four games' instruction counts are equal to within 0.0001% (Tetris 37,779,889,419 against 37,779,879,495). In the
+six quiet rounds of §14.1, hdma differs from head by −1.4 to +1.3 points in the crate's bench, in both directions,
+and by +0.3 to +2.8 points through `ICore`; at equal instructions that is the layout effect §14.1 describes, and §14.1's
+fix, built on hdma, measures it away. C#'s frame was not
+re-timed: the change there is the same two calls and one test.
+
+**Mutants**, each in C# and in Rust separately, run 2026-10-16 by §13.1's method (one edit in a scratch copy of the
+fix's tree, the library or `EmuSen.dll` rebuilt into a copy of WiseMan's output; the claims of §13, the two cycle
+harnesses and the debugger's armed-against-plain test, and on a survivor the lock-step, state, platform and model
+classes besides). The unmutated control passed, 138 cases.
+
+| # | Mutation | Caught by |
+|---|---|---|
+| H1 | an hblank block moves while the CPU is halted | the HALT claim and its state-load claim, and the halting colour program armed against plain, on both engines |
+| H2 | `HALT` does not tell the bus | the HALT claim and the armed colour program; in C# the cycle harness, in Rust the crate's `halt_and_its_wake_are_told_to_the_bus` |
+| H3 | the wake does not tell the bus | the HALT claim and its state-load claim; the cycle harness of the engine mutated |
+| H4 | a load does not set the bus's flag from the CPU's | `A_state_saved_in_halt_keeps_the_hblank_hdma_paused_after_a_load` only |
+| H5 | (Rust) the observed step does not pass `HALT` on | `Synthetic_programs_with_every_table_armed_are_the_programs_run_plain` only, with the colour program added for it |
+| H6 | a reset keeps the bus's flag | **survived**, in both engines, through the wide filter as well: **equivalent**. A load of a game builds a new bus, whose flag is already clear, and nothing else resets a bus; the line states what a reset means and is kept |
+
+H4 and H5 each have one oracle, and each was written for it.
+
+### 14.3 The synthetic programs, out of the classes that leave
+
+The programs the lock-step tests ran were fields of `MercuryRtMachineTests`, `MercuryRtPlatformTests` and
+`MercuryRtStateTests`, classes that compare MercuryRT with C# Mercury and so leave `main` with it. They now live in
+`EmuSen.WiseMan/Fixtures/MercuryPrograms.cs`: the busy and interrupts programs, the colour program halting or spinning,
+four channels, the colour priority, sweep, bank-zero and MBC3-latch programs, the HALT-bug and OAM DMA step programs,
+the random programs and the eleven boards. The old classes call them there, so no program has two copies.
+`SyntheticGbRom` computed the header checksum through C#'s `Cartridge`; it now has its own, so a synthetic image is
+built from the repository alone, with no Mercury class, which §3.7 assumed of it.
+
+### 14.4 The golden traces
+
+**The form.** A trace is a text file, one per run, under `EmuSen.WiseMan/Cores/MercuryGoldens/`. Its header names the
+run, the ROM's full SHA-256, the model, the input script with a fingerprint of the masks it presses, whether rendering
+is skipped, and the engine it was recorded from. Each frame of a frame run is a line `frame state picture sound`: the
+first eight bytes of SHA-256 over the engine's save state, over the RGBA frame, and over the drained samples as
+little-endian bytes, which is the pacebench "state sha" of §3.7. A value equal to the one on the line before is written
+`=`, so a still picture or a silent frame costs a character. An instruction run (a step program) is too long to keep
+a hash per instruction, so each instruction's state hash is folded into a chain, `chain = SHA-256(chain ‖ state)`, and
+the chain is written every 100 instructions and at the end: a difference names a hundred-instruction window. A corpus
+run ends at its verdict, by `MercuryHardwareTestRomTests`' rule, and adds its transcript: the verdict and its frame,
+the serial bytes, and blargg's cart-RAM text where the ROM reports through it.
+
+**The catalogue** (`MercuryGoldenTests`):
+
+| Runs | Files | What | Rows |
+|---|---|---|---|
+| `programs/busy-*`, `programs/interrupts-*` | 22 | §12.5's two lock-step programs on each of the eleven boards, 600 frames | 13,200 |
+| the interrupts program on a forced console, and with rendering skipped | 3 | a Game Boy cartridge on the Color, a colour one on the Game Boy, 600 frames; 300 frames skipped (O1's rendering-skip pair) | 1,500 |
+| `programs/colour`, `colour-running`, `colour-skipped` | 3 | HDMA and double speed, halting and spinning (§14.2), the spinning one also skipped | 1,500 |
+| `programs/four-channels` and the small lock-step programs | 8 | the platform digests' sound program; colour priority, the sweep's second check, bank zero on four boards, MBC3's latch | 650 |
+| `steps/halt-bug`, `steps/window`, `steps/oam-dma` | 3 | the HALT bug and `EI`, the window counted with rendering skipped (O1), OAM DMA byte by byte: 40, 20,000 and 3,000 instructions | 231 |
+| `steps/random-*` | 176 | sixteen random programs on each board, 5,000 instructions or to the first illegal opcode | 7,675 |
+| `corpus/…` | 173 | every corpus ROM under Auto, to its verdict or 3,600 frames, with its transcript | 36,120 |
+| `games/<sha>` | 4 | §3.3's four games, 3,600 frames with the bench's script | 14,400 |
+
+392 files and 2.9 MB of text (3.8 MB on disk), of which the corpus is 1.4 MB; a third of the frame columns are `=`.
+The C# states kept while recording are 198 files, 9 MB. Only the corpus's Auto column is traced frame by frame: the
+other two models' verdicts are in the baseline (§12.2), and their traces would have tripled the corpus's share for two
+columns that differ from Auto on a handful of ROMs. The corpus traces' verdicts reproduce that baseline's Auto column,
+126 passed, 42 failed and 5 without a verdict.
+
+**Recording** is from the C# engine only, as §3.7's first rule requires, and only on purpose:
+
+```
+EMUSEN_MERCURY_GOLDEN_RECORD=Mercury EMUSEN_MERCURYRT_ROMS=<games> EMUSEN_MERCURYRT_CORPUS=<corpus> \
+  dotnet test EmuSen.WiseMan --filter "FullyQualifiedName~MercuryGoldenTests"
+```
+
+The variable names the engine to record from; the other engine's cases then report that they were not graded. While
+recording, every frame run keeps the C# state of every 300th frame under `~/.cache/emusen/mercury-goldens/<run>/`
+(`EMUSEN_MERCURY_GOLDEN_STATES` moves it), outside the tree and so never committed.
+
+**Grading.** Each case runs its program on the engine through `MercuryRig`, so through `ICore` as a frontend holds it,
+builds the same trace, and compares it with the committed one: the header, then line by line, then the transcript. The
+first difference names the frame and the part ("frame 300: the state differs (recorded …, now …)"). When the machine
+running the test holds the recorded interval states, two more things happen. A failure is bisected: the engine is run
+to the first recorded state at or after the failing frame, and the fields its state differs in are named through the
+layout listing (§14.5). And a frame run that passes is graded a second time from the recorded C# state of an early
+interval frame (300 for a 600-frame run, 900 for a game), loaded into a fresh machine, which is §3.3's "from states"
+comparison with the state from the other engine. C# Mercury is graded as well while it is on `main`; its rows leave
+with it.
+
+**Re-baselining.** After the move, a deliberate change to MercuryRT's behaviour is recorded from MercuryRT with
+`EMUSEN_MERCURY_GOLDEN_RECORD=MercuryRt`, and the commit that replaces the traces states the reason (§3.7's second
+rule). The `recorded` line of each trace then says which engine each file speaks for, so the history of the directory
+is the list of intended departures from the C# oracle. The PPU's line boundary will be the first.
+
+**The result** (2026-10-15). Every trace was reproduced on both engines: the 36 frame runs and 3 step programs, the
+176 random programs, the 173 corpus ROMs and the four games, 1,061 of the filter's 1,062 cases on the first grading run
+(the one failure was the palette file of §14.6, since mended). The 27 synthetic programs of 600 frames were also reproduced
+from their kept C# state of frame 300, and the four games from that of frame 900, on both engines. The grading run of
+`MercuryGoldenTests` and `MercuryStateLayoutTests` alone takes six minutes, most of it the C# rows; with the C# rows gone
+it will take about two.
+
+**One deliberately broken trace, caught.** `A_deliberately_broken_trace_is_caught` changes one hex digit of frame 300 of
+`programs/interrupts-03-02-80` in memory, once each in the state, picture and sound column, and grades MercuryRT: each
+fails with "frame 300: the state differs", "the picture differs" or "the sound differs". The same was done once to the
+committed file itself: frame 300 of `programs/interrupts-03-03-80.trace` was changed from `D2D19B97AE91C3B1` to `…C3B0` and the
+synthetic-program theory run: that run failed on both engines with "frame 300: the state differs (recorded
+`D2D19B97AE91C3B0`, now `D2D19B97AE91C3B1`)", and the bisection found the recorded C# state of frame 300 equal to the
+engine's field for field. That is the correct reading, since the trace and not the engine had moved, and the message
+now says so in words. The file was restored.
+
+### 14.5 The layout listings, and the reader they drive
+
+**The listings.** `state_layout` prints one line per field, `offset length type path`, and the layout depends on the
+cartridge (the board's fields, the size of cartridge RAM) and on the console (VRAM and WRAM). So the listings are one
+per board, console and RAM size, named `<board>-<gb|gbc>-ram<bytes>.layout`, under `MercuryGoldens/layouts/`, written
+verbatim from MercuryRT's `state_layout` (`EMUSEN_MERCURY_LAYOUT_RECORD=1` writes one that a test needed and found
+missing). Eighteen are committed, 100 KB: the five boards on each console with the RAM sizes the programs' eleven boards
+use (none with 0 and 8 KB, MBC1 with 8 and 32 KB, MBC2's 512 bytes, MBC3 with 32 KB, MBC5 with none, 32 and 128 KB).
+`Every_board_on_every_console_has_a_committed_listing` runs each of the eleven boards under each model, so a board the
+programs use cannot lack one. `MercuryStateLayoutTests` holds each committed listing to MercuryRT's `state_layout` and to C#'s
+reflection walk for a cartridge of that shape, and `MercuryStateLayout.StateVersion` to the version both engines write:
+a listing is recorded again when the format moves. When the walk leaves `main`, these files are the format's
+specification (§3.7's third rule).
+
+**The reader** (`EmuSen.WiseMan/Fixtures/MercuryStateLayout.cs`) needs no machine. It picks the listing for a state
+from three facts the state and the image give: the board from the header's cartridge type, the console from the state's
+own console byte, and the RAM size from the state's length, since nothing else in a layout of one board and console
+varies. It then reads or writes any scalar field by its path and any byte array in place. The rig gains `Field`,
+`Flag`, `FieldByte`, `FieldBytes`, `SetField` and `SetFieldByte`: a read is a state saved through `ICore` and read
+through the listing; an edit is the same state rewritten and loaded back, which is how a field edit already reached
+MercuryRT (§12.1), now without a C# object between.
+
+**Both readers agree.** While C# Mercury is on `main`, every state read through a listing is also read by C#'s classes,
+and `MercuryStateAgreement` compares the two field by field: each scalar by value, each array byte for byte, the
+mixer's doubles by their bits. On the C# engine the state is the core's own; on MercuryRT it is loaded into the rig's
+view, which the rig's view reads also go through, so every pull of the view is checked as well. The whole `Mercury` filter, 1,062 cases, ran with the check in place, including every converted claim that reads
+`rig.Bus` on MercuryRT (which pulls the view at each read), and no field of any state disagreed. The view
+is retired from the rig at stage 10, once this check has stood; the claims written against the listing need nothing
+else.
+
+**What uses it.** `MercuryAuditTests` (§13) now reads and edits the machine only through the listing and the bus: its
+34 reads of `rig.Cpu` and `rig.Bus` became paths such as `Cpu.PC`, `Bus.Apu.Pulse1.Length.Counter` and
+`Bus._stallCycles`, `PpuMode` became the state's numbers, and its version constant is the listings'. Its only Mercury
+type left is `GbModel`, the setting's enum, which MercuryRT's shim uses too. The palette claims of §14.6 read colour RAM
+the same way.
+
+### 14.6 The palettes, frozen as data
+
+The TCRF rows of `MercuryModelTests` carry their expected palettes. The palette-number rows and the default palette
+took theirs from C#'s `CompatibilityPalettes`, so they would have lost their oracle with it (§12.5). The 94 palettes are
+now `MercuryGoldens/palettes.tsv`: per palette number, the title checksum and fourth letter of a Nintendo header that
+selects it (the first the search over checksums and letters finds) and the three palettes in RGB888, as TCRF writes
+them. `The_frozen_palettes_are_csharps_table` writes the file from C#'s table (`EMUSEN_MERCURY_PALETTES_RECORD=1`) and
+otherwise holds the file to it; the palette-number rows and the default compare each engine's colour RAM with the file;
+and `Every_frozen_palette_is_what_mercuryrt_loads` builds each row's header and reads MercuryRT's colour RAM through the
+listing, with no C# table consulted. The palette number a header selects is still asserted against C#'s lookup in the
+palette-number rows; that assertion leaves with C#, and the palettes it selects stay held.
+
+### 14.7 The legacy differential, dropped
+
+*Decided 2026-10-16 by the tester:* MercuryRT is no longer compared against C# Mercury; the legacy differential was
+dropped. MercuryRT's oracle from here on is the goldens of §14.4, recorded from C# Mercury before this decision,
+together with the hardware test corpus and its baseline (§12.2) and the conformance kit. Nothing more is spent on
+comparisons of the two engines.
+
+What had been built, for the record. `EmuSen.MercuryLegacy/` was §3.7's third layer: a test project outside
+`EmuSen.sln` that referenced C# Mercury and loaded a MercuryRT library by path through EmuSen's generic v1 host. It
+pinned the core ABI's major, the six `mercuryrt_core_*` extensions it called, state version 11, the bench script's
+fingerprint against the committed game goldens and `ICpuBus`'s members, then compared the two engines frame by frame
+and instruction by instruction. It had been run once, on 2026-10-15, before the decision reached this work: 17 of 17
+in 5.4 minutes, with the synthetic programs on every board, 765,483 random instructions, the 173 corpus ROMs over
+36,120 frames and the four games over 3,600 frames each identical. The project was removed from the tree with the
+decision. Of §3.7's three layers, the first (the traces) and the second (the kept states, used for bisection) stand,
+and the third does not exist.
+
+### 14.8 What survives the C# core's move, and what stage 10 needs
+
+**On `main` without C# Mercury**, the following stand as they are: the goldens and their grader on MercuryRT; the
+layout listings and the reader; `MercuryAuditTests`' claims, through the rig's MercuryRT half; the frozen palettes
+with `Every_frozen_palette_is_what_mercuryrt_loads`; `MercuryPrograms` and `SyntheticGbRom`; the corpus baseline's
+MercuryRT columns; and the crate's own tests. **`MercuryCycleTimingTests`** cannot drive MercuryRT, which takes no bus
+from C#, and leaves with the C# core; its claims are all in the crate's `tests/cycle_timing.rs`, case for case: the
+four single traces, the eleven opcodes of the bus-advance theory as one loop, the interrupt's cost and its push
+cycles, the five stack placements of §13.5, the halted step, and since §14.2 the HALT-and-wake trace. Nothing in it is
+held only in C#.
+
+**What stage 10 needs from the tester**, beyond the decision itself (Q5):
+
+- **The rig's C# half and view.** `CsharpRig`, the view and `MercuryStateAgreement` go with the C# core; `MercuryRig`
+  keeps its MercuryRT half and the listing-driven field access. The other `Mercury*Claims` classes still read
+  `rig.Bus` and `rig.Cpu` through the view (on about 200 lines of the PPU, CGB, APU, CPU, core, serial and access-blocking
+  classes) and must be converted as `MercuryAuditTests` was, or leave with C#: a choice for that stage.
+- **What MercuryRT's shim takes from C# Mercury.** `MercuryRtCore` uses `GbModel`, `Cartridge.FromImage` for the header
+  and its refusals, `Apu.HighPassSeed` for the mixer's coefficients, and a hidden `MercuryCore` as the debugger's
+  mirror (§8.5). These are the shim's dependencies, not the tests', and have to move into the shim or a small shared
+  file before the C# core can leave; the debugger's mirror is the largest, and the layout reader is a candidate for
+  replacing it.
+- **The lock-step classes** (`MercuryRtMachineTests`, `MercuryRtStateTests`, `MercuryRtPlatformTests`' C# half,
+  `MercuryRtCorpusTests`, the model lock-step cases) leave with C#, their comparisons now held by the goldens alone
+  (§14.7).
+
+### 14.9 What is not done
+
+- **The corpus's Game Boy and Game Boy Color columns** are graded by verdict alone (§12.2), not frame by frame.
+- **The PPU's line boundary** (§13.11.3), decided as the next piece of work; it will re-baseline the goldens.
+- **MagenTests' HDMA case** was not fetched as a witness for §14.2; Pan Docs is its only oracle.
+- **The handheld**, as in every stage since 7, and the alignment there (§8.7.5).

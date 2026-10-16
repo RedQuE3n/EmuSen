@@ -51,6 +51,10 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
         "  wc [-l] [-w] [-c] [path]     count lines/words/bytes (all three if no flag given);\n",
         "                                reads piped stdin, or a real file if <path> is given"
     )),
+    ("sort", true, concat!(
+        "  sort [-n] [-r]                sort input lines (numeric with -n, reversed with -r) -\n",
+        "                                reads piped stdin, or trailing literal text"
+    )),
 
 ];
 

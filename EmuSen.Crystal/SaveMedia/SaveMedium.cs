@@ -43,6 +43,13 @@ namespace EmuSen.Crystal.SaveMedia
     // A console's medium as its system pack names it, read by a format module where one exists - see EmuSen_SaveMedia.md §6.2.
     public sealed record SaveMediumEntry(string Id, string Title, string Noun, string Extension, ISaveMediumFormat? Format = null);
 
+    // A medium's noun or title as it reads inside a sentence: every word lower case but an acronym, so "Backup RAM" is "backup RAM" - see EmuSen_SaveMedia.md §6.2.
+    public static class MediumWords
+    {
+        public static string InText(string words) =>
+            string.Join(' ', words.Split(' ').Select(w => w.Length > 1 && w.All(c => !char.IsLetter(c) || char.IsUpper(c)) ? w : w.ToLowerInvariant()));
+    }
+
     // The media every system pack names, by id or by extension.
     public static class SaveMediumFormats
     {

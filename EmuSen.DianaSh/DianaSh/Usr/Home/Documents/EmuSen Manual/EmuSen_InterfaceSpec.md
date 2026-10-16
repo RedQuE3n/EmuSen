@@ -197,11 +197,11 @@ same screen, and the rules (§4) hold what matters of them.
 
 ### 6.1 The gate
 
-**It covers every audited state at both sizes and every Big Picture view [M].** 226 recordings: the 44 window cases
-without tabs and the 3 scraping states at two sizes (94), the seven Controller Bindings cases on each of their eight
-tabs at two sizes (112), and the ten views at two sizes (20): 113 states, each at both sizes. Together they hold 9,122
-controls and 8,632 focus edges, 2.0 MB of text, as re-recorded on 2026-10-16 (§6.3.7); the first recording had 212
-files and 8,284 controls. `Every_state_has_a_recording_and_every_recording_a_state` holds the
+**It covers every audited state at both sizes and every Big Picture view [M].** 232 recordings: the 47 window cases
+without tabs and the 3 scraping states at two sizes (100), the seven Controller Bindings cases on each of their eight
+tabs at two sizes (112), and the ten views at two sizes (20): 116 states, each at both sizes. Together they hold 9,368
+controls and 8,802 focus edges, 2.1 MB of text, as re-recorded on 2026-10-16 (§6.3.7, §6.3.8); the first recording had
+212 files and 8,284 controls. `Every_state_has_a_recording_and_every_recording_a_state` holds the
 files to the cases both ways.
 
 **Two recordings in a row are identical [M].** The whole set was recorded twice in a row, into the repository and into
@@ -403,5 +403,28 @@ throw: it found each file's row by its title alone, and the TMSS ROM's row now s
 Sega CD, as each declares it. The page is right to show it under each; the test now holds every row of a title to the
 file's words, and expects one per system that declares it.
 
-**Not covered yet.** The Memory Cards window's Genesis and Sega CD tabs are opened by no case, so the audit has not
-looked at them; the PlayStation's is the only one audited.
+The Memory Cards window's Genesis and Sega CD tabs were opened by no case; §6.3.8 adds them.
+
+#### 6.3.8 Three later merges, and every Memory Cards tab audited (2026-10-16)
+
+Three merges reached WiseMan after 19427372, and the recordings were taken again over them: a8c114cf (segacd-player),
+950d14c5 (dianash-s6) and 5000bc5a (marsrt-v1). Read with the controls' ids, their rectangles and the focus edges taken
+out, the differences are these, and nothing else **[M]**:
+
+| Recording (both sizes) | What changed | From |
+|---|---|---|
+| ShaderSettingsGenesis, ShaderSettingsPlayStation | a CRT (Lottes) row in the built-in list, its count 4 to 5, and the sheet 44 design pixels taller at 1280 × 800 | a8c114cf, CRT (Lottes) offered to the Genesis and the PlayStation |
+| MemoryCardsPlayStation, MemoryCardsPlayStationHeld | an N64 tab, first in release order | 5000bc5a, the Controller Paks as save media |
+| GraphicsSettingsN64Note | the N64 tab 213 design pixels longer above the note, so the note is scrolled further | 5000bc5a, the Controller Pak rows |
+| GraphicsSettingsGenesis | "one backup ram" now "one backup RAM" in Internal Backup RAM's help | `MediumWords.InText` (`EmuSen_SaveMedia.md` §6.2) |
+
+950d14c5 changes no recording. 5000bc5a added the case `MemoryCardsN64` but no file for it in `Specification/`, which
+`Every_audited_window_state_is_as_its_specification_records_it` requires; its two files are recorded here.
+
+Two cases are added, `MemoryCardsGenesis` and `MemoryCardsSegaCD`, each opening the window on that console's tab with a
+formatted backup RAM in the drawer under the name its slot holds. With the PlayStation's two and the N64's, every tab the
+window has is audited. The fit audit and the recorded rules find nothing in any of the 500 cases at either size.
+
+Outside the audit, `memcard.golden` (DianaSh's corpus) was re-recorded for that file alone with
+`EMUSEN_DIANASH_GOLDEN=record`. Its two changed lines are `memcard ls notes.txt`'s list of known media, which gained
+".mpk (Controller Pak)" with 5000bc5a, and `memcard new`'s "a formatted backup RAM cartridge", which said "backup ram".

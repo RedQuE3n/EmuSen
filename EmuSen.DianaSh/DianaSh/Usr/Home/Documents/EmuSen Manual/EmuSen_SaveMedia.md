@@ -355,6 +355,11 @@ is what the surfaces forbid. `SystemPack` gains `Media`, the console's `SaveMedi
   the player's BIOS by the two-person method of `Nephrite_OpenBios.md` §5 Q2, which the open BIOS writes too; its unit
   the 64-byte block (125 free on a formatted internal RAM, 2,045 on Sega's cartridge).
 
+An entry's `Title` and `Noun` are written as a heading writes them ("Internal Backup RAM", "Backup RAM", "Card"). Where
+a sentence uses one, `MediumWords.InText` gives it in running text: every word in lower case except an acronym, so
+"one backup RAM in each slot" and "a formatted backup RAM cartridge". Lower-casing the whole name, as every caller did
+before 2026-10-16, wrote "backup ram" in the Genesis's and the Sega CD's settings and in `memcard`'s replies.
+
 ### 6.3 The generic tool
 
 `SaveMediaManager` in `EmuSen.Crystal/SaveMedia`, over Galaxia's paths, `AtomicFile` and `MediumLock`: each operation

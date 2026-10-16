@@ -22,44 +22,46 @@ tree
           6 Button at=1376,919,135,66 by=clip drawn focus heard=CLOSE limit=1376,919,135,66 name=MemoryCardsClose op paints=#55555AFF,#9C9CA0FF role=button text=Close
             7 TextBlock at=1401.5,928,84,48 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=55.51,31.2 limit=1376,919,135,66 owner=6 paints=#9C9CA0FF role=text size=26 text=CLOSE
       8 Tabs at=410,316,1101,540 by=panel limit=350.48,187,1219.05,822 name=MemoryCardTabs paints=#9C9CA0FF role=tab
-        9 TabItem at=410,316,165,72 by=clip drawn focus heard=GENESIS limit=410,316,1101,540 paints=#86868AFF role=tabitem sideways text=Genesis
-          10 TextBlock at=428,325,129,54 box=86,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=GENESIS layout=85.47,36 limit=410,316,165,72 owner=9 paints=#86868AFF role=text size=30 text=GENESIS
-        11 TabItem at=575,316,163.5,72 by=clip drawn focus heard="SEGA CD" limit=410,316,1101,540 paints=#86868AFF role=tabitem sideways text="Sega CD"
-          12 TextBlock at=593,325,127.5,54 box=85,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="SEGA CD" layout=84.18,36 limit=575,316,163.5,72 owner=11 paints=#86868AFF role=text size=30 text="SEGA CD"
-        13 TabItem at=738.5,316,234,72 by=clip drawn focus heard=PLAYSTATION limit=410,316,1101,540 op paints=#EEEEF0FF role=tabitem sideways text=PlayStation
-          14 TextBlock at=756.5,325,198,54 box=132,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=PLAYSTATION layout=131.91,36 limit=738.5,316,234,72 owner=13 paints=#EEEEF0FF role=text size=30 text=PLAYSTATION
-        15 ScrollViewer at=428,391,1065,465 by=clip fades=b limit=410,391,1101,465 overflow=670.5 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=428,391,1065,465
-          16 StackPanel at=428,403,1065,1123.5 by=scroll in=15 limit=428,391,1065,465 role=none seen=428,403,1065,453
-            17 StackPanel at=428,403,1065,1123.5 by=scroll in=15 limit=428,391,1065,465 paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF,#D2D2D6FF role=none seen=428,403,1065,453
-              18 SectionHeader at=428,403,1065,51 box=710,34 by=scroll caps=19.5986 drawn face="Barlow Condensed" heard="Memory Card" in=15 layout=132.78,33.6 limit=428,391,1065,465 paints=#B4B4B8FF role=text size=28 text="Memory Card"
-              19 FieldRow at=428,466,1065,235.5 by=scroll heard=Card in=15 limit=428,391,1065,465 paints=#9C9CA0FF role=group
-                20 TextBlock at=428,466,1065,43.5 box=710,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Card in=15 layout=37.68,28.8 limit=428,466,1065,235.5 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Card
-                21 HintText at=428,515.5,1065,36 box=710,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="A card in the drawer, or a game's own." in=15 layout=256.56,24 limit=428,466,1065,235.5 paints=#86868AFF part role=text size=20 text="A card in the drawer, or a game's own."
-                22 StackPanel at=428,557.5,1065,144 by=clip heard=Card in=15 limit=428,466,1065,235.5 role=none
-                  23 Dropdown at=428,557.5,390,66 by=clip drawn focus heard=Card in=15 limit=428,466,1065,235.5 name=PlayStation.psx.card.Card op paints=#0E0E10FF,#55555AFF,#9C9CA0FF,#EEEEF0FF role=combobox sideways
-                    24 TextBlock at=446,565,324,48 box=216,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Card 1" in=15 layout=52.68,31.2 limit=446,565,324,48 owner=23 paints=#EEEEF0FF role=text size=26 text="Card 1"
-                    25 ViewboxContainer at=785,585.6,18,9.81 by=clip in=15 limit=785,585.6,18,9.81 nohit role=none
-                  26 HintText at=428,629.5,1065,72 box=710,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Shared: Card 1 in Slot 1, Card 2 in Slot 2. 2 save(s), 11 of 15 blocks free. In use by Amber Saga, which is running: its saves can be looked at, and changed when the game is closed." in=15 layout=676.32,48 limit=428,466,1065,235.5 name=PlayStation.psx.card.About paints=#86868AFF role=text size=20 text="Shared: Card 1 in Slot 1, Card 2 in Slot 2. 2 save(s), 11 of 15 blocks free. In use by Amber Saga, which is running: its saves can be looked at, and changed when the game is closed."
-              27 FieldRow at=428,713.5,1065,229.5 by=scroll heard=Saves in=15 limit=428,391,1065,465 paints=#9C9CA0FF role=group seen=428,713.5,1065,142.5
-                28 TextBlock at=428,713.5,1065,43.5 box=710,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Saves in=15 layout=47.38,28.8 limit=428,713.5,1065,229.5 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Saves
-                29 HintText at=428,763,1065,36 box=710,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Choose a save to copy, move or delete it." in=15 layout=276.04,24 limit=428,713.5,1065,229.5 paints=#86868AFF part role=text size=20 text="Choose a save to copy, move or delete it."
-                30 StackPanel at=428,805,1065,138 by=clip heard=Saves in=15 limit=428,713.5,1065,229.5 name=PlayStation.psx.card.Saves paints=#55555AFF,#9C9CA0FF role=none seen=428,805,1065,51
-                  31 Button at=428,805,1065,66 by=clip drawn focus heard="DRACULA X CHRONICLE SAVE  ·  1 BLOCK(S)" in=15 limit=428,713.5,1065,229.5 name=PlayStation.psx.card.Save.0 op paints=#55555AFF,#9C9CA0FF role=button seen=428,805,1065,51 text="DRACULA X CHRONICLE SAVE  ·  1 block(s)"
-                    32 TextBlock at=453.5,814,549,48 box=366,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="DRACULA X CHRONICLE SAVE  ·  1 BLOCK(S)" in=15 layout=365.79,31.2 limit=428,805,1065,66 owner=31 paints=#9C9CA0FF role=text seen=453.5,814,549,42 size=26 text="DRACULA X CHRONICLE SAVE  ·  1 BLOCK(S)"
-focus 23
-edge 6 up 31
+        9 TabItem at=410,316,96,72 by=clip drawn focus heard=N64 limit=410,316,1101,540 paints=#86868AFF role=tabitem sideways text=N64
+          10 TextBlock at=428,325,60,54 box=40,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=N64 layout=39.54,36 limit=410,316,96,72 owner=9 paints=#86868AFF role=text size=30 text=N64
+        11 TabItem at=506,316,165,72 by=clip drawn focus heard=GENESIS limit=410,316,1101,540 paints=#86868AFF role=tabitem sideways text=Genesis
+          12 TextBlock at=524,325,129,54 box=86,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=GENESIS layout=85.47,36 limit=506,316,165,72 owner=11 paints=#86868AFF role=text size=30 text=GENESIS
+        13 TabItem at=671,316,163.5,72 by=clip drawn focus heard="SEGA CD" limit=410,316,1101,540 paints=#86868AFF role=tabitem sideways text="Sega CD"
+          14 TextBlock at=689,325,127.5,54 box=85,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="SEGA CD" layout=84.18,36 limit=671,316,163.5,72 owner=13 paints=#86868AFF role=text size=30 text="SEGA CD"
+        15 TabItem at=834.5,316,234,72 by=clip drawn focus heard=PLAYSTATION limit=410,316,1101,540 op paints=#EEEEF0FF role=tabitem sideways text=PlayStation
+          16 TextBlock at=852.5,325,198,54 box=132,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=PLAYSTATION layout=131.91,36 limit=834.5,316,234,72 owner=15 paints=#EEEEF0FF role=text size=30 text=PLAYSTATION
+        17 ScrollViewer at=428,391,1065,465 by=clip fades=b limit=410,391,1101,465 overflow=670.5 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=428,391,1065,465
+          18 StackPanel at=428,403,1065,1123.5 by=scroll in=17 limit=428,391,1065,465 role=none seen=428,403,1065,453
+            19 StackPanel at=428,403,1065,1123.5 by=scroll in=17 limit=428,391,1065,465 paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF,#D2D2D6FF role=none seen=428,403,1065,453
+              20 SectionHeader at=428,403,1065,51 box=710,34 by=scroll caps=19.5986 drawn face="Barlow Condensed" heard="Memory Card" in=17 layout=132.78,33.6 limit=428,391,1065,465 paints=#B4B4B8FF role=text size=28 text="Memory Card"
+              21 FieldRow at=428,466,1065,235.5 by=scroll heard=Card in=17 limit=428,391,1065,465 paints=#9C9CA0FF role=group
+                22 TextBlock at=428,466,1065,43.5 box=710,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Card in=17 layout=37.68,28.8 limit=428,466,1065,235.5 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Card
+                23 HintText at=428,515.5,1065,36 box=710,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="A card in the drawer, or a game's own." in=17 layout=256.56,24 limit=428,466,1065,235.5 paints=#86868AFF part role=text size=20 text="A card in the drawer, or a game's own."
+                24 StackPanel at=428,557.5,1065,144 by=clip heard=Card in=17 limit=428,466,1065,235.5 role=none
+                  25 Dropdown at=428,557.5,390,66 by=clip drawn focus heard=Card in=17 limit=428,466,1065,235.5 name=PlayStation.psx.card.Card op paints=#0E0E10FF,#55555AFF,#9C9CA0FF,#EEEEF0FF role=combobox sideways
+                    26 TextBlock at=446,565,324,48 box=216,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Card 1" in=17 layout=52.68,31.2 limit=446,565,324,48 owner=25 paints=#EEEEF0FF role=text size=26 text="Card 1"
+                    27 ViewboxContainer at=785,585.6,18,9.81 by=clip in=17 limit=785,585.6,18,9.81 nohit role=none
+                  28 HintText at=428,629.5,1065,72 box=710,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Shared: Card 1 in Slot 1, Card 2 in Slot 2. 2 save(s), 11 of 15 blocks free. In use by Amber Saga, which is running: its saves can be looked at, and changed when the game is closed." in=17 layout=676.32,48 limit=428,466,1065,235.5 name=PlayStation.psx.card.About paints=#86868AFF role=text size=20 text="Shared: Card 1 in Slot 1, Card 2 in Slot 2. 2 save(s), 11 of 15 blocks free. In use by Amber Saga, which is running: its saves can be looked at, and changed when the game is closed."
+              29 FieldRow at=428,713.5,1065,229.5 by=scroll heard=Saves in=17 limit=428,391,1065,465 paints=#9C9CA0FF role=group seen=428,713.5,1065,142.5
+                30 TextBlock at=428,713.5,1065,43.5 box=710,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Saves in=17 layout=47.38,28.8 limit=428,713.5,1065,229.5 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Saves
+                31 HintText at=428,763,1065,36 box=710,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Choose a save to copy, move or delete it." in=17 layout=276.04,24 limit=428,713.5,1065,229.5 paints=#86868AFF part role=text size=20 text="Choose a save to copy, move or delete it."
+                32 StackPanel at=428,805,1065,138 by=clip heard=Saves in=17 limit=428,713.5,1065,229.5 name=PlayStation.psx.card.Saves paints=#55555AFF,#9C9CA0FF role=none seen=428,805,1065,51
+                  33 Button at=428,805,1065,66 by=clip drawn focus heard="DRACULA X CHRONICLE SAVE  ·  1 BLOCK(S)" in=17 limit=428,713.5,1065,229.5 name=PlayStation.psx.card.Save.0 op paints=#55555AFF,#9C9CA0FF role=button seen=428,805,1065,51 text="DRACULA X CHRONICLE SAVE  ·  1 block(s)"
+                    34 TextBlock at=453.5,814,549,48 box=366,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="DRACULA X CHRONICLE SAVE  ·  1 BLOCK(S)" in=17 layout=365.79,31.2 limit=428,805,1065,66 owner=33 paints=#9C9CA0FF role=text seen=453.5,814,549,42 size=26 text="DRACULA X CHRONICLE SAVE  ·  1 BLOCK(S)"
+focus 25
+edge 6 up 33
 edge 6 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/0/4/0/2/0/1
-edge 6 left 13
+edge 6 left 15
 edge 6 right same
-edge 13 up same
-edge 13 down 23
-edge 23 up 13
-edge 23 down 31
-edge 31 up 23
-edge 31 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/0/2/0/2/0/1
-edge 31 left same
-edge 31 right 6
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/0/2/0/2/0/1 up 31
+edge 15 up same
+edge 15 down 25
+edge 25 up 15
+edge 25 down 33
+edge 33 up 25
+edge 33 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/0/2/0/2/0/1
+edge 33 left same
+edge 33 right 6
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/0/2/0/2/0/1 up 33
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/0/2/0/2/0/1 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/0/3/0/2/0/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/0/2/0/2/0/1 left same
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/0/2/0/2/0/1 right 6

@@ -17,6 +17,8 @@ mod discs;
 #[cfg(test)]
 mod openbios;
 #[cfg(test)]
+mod openbram;
+#[cfg(test)]
 mod verificator;
 
 use beryl_m68k::{Access, Bus, M68000, Size};

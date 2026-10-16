@@ -28,6 +28,9 @@ namespace EmuSen.Shell
 
         static void Main(string[] args)
         {
+            // Before Avalonia's GLX screen exists, which reads it - see EmuSen_DevicePicture.md §18.
+            EmuSen.Serenity.DevicePictureEnvironment.Prepare();
+
             // A config file that won't parse falls back to defaults either way; this stops it doing so silently - see §6.2.
             EmuSen.Galaxia.ConfigDiagnostics.Sink = m =>
             {

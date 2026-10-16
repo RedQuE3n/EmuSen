@@ -7,6 +7,8 @@ pub use emusen_native::debug::{Observer, Unobserved};
 
 #[cfg(test)]
 mod boundary;
+#[cfg(feature = "asm")]
+pub mod asm;
 pub mod disasm;
 #[cfg(test)]
 mod decodemap;

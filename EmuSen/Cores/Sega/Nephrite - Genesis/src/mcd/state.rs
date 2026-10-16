@@ -57,7 +57,8 @@ fn mode_from(w: [u32; 7]) -> Mode {
         1 => Mode::Spinning(w[1]),
         2 => Mode::ReadingToc(w[1]),
         3 => Mode::Stopped(w[1] as u8),
-        4 => Mode::Seeking { target: w[1], play: w[2] != 0, busy: w[3], left: w[4], total: w[5].max(1), from: w[6] },
+        // The travel count divides only once the busy exchanges are over; before, it is 0 and kept so (Nephrite_OpenBios.md §12).
+        4 => Mode::Seeking { target: w[1], play: w[2] != 0, busy: w[3], left: w[4], total: if w[3] == 0 { w[5].max(1) } else { w[5] }, from: w[6] },
         5 => Mode::Approach { target: w[1], play: w[2] != 0, status: w[3] as u8 },
         6 => Mode::Playing,
         7 => Mode::Paused { low: w[1], high: w[2], gap: w[3] != 0 },
@@ -226,6 +227,7 @@ impl AttachmentState for MegaCd {
         self.cpu = s.cpu;
         let h = &mut self.hw;
         (h.clock, h.g, h.parked, h.owed, h.pcm, h.fader, h.cdc, h.cdda, h.asic) = (s.clock, s.g, s.parked, s.owed, s.pcm, s.fader, s.cdc, s.cdda, s.asic);
+        h.pcm_master = h.pcm.out.len();
         let wr = &mut h.word;
         (wr.one_m, wr.sub_owns, wr.ret, wr.request, wr.priority) = (s.word[0] != 0, s.word[1] != 0, s.word[2] != 0, s.word[3] != 0, s.word[4] & 3);
         let c = &mut h.cdd;

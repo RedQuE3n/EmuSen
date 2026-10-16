@@ -464,8 +464,21 @@ None is included in this repository.
   A developer document that circulated without Sega's release.
 - Sega, *Mega-CD BIOS Manual*, *Mega-CD Disc Format Specifications*, *Mega-CD Software Development Manual*, the
   *Sega-CD Technical Bulletins* and the *Sega-CD Software Standards*, from the same collection: the BIOS's call
-  interface, the boot, the disc's system area and the memory maps, which the open Sega CD BIOS is planned from
+  interface, the boot, the disc's system area, the main CPU's jump table and the memory maps, which Nephrite's open
+  Sega CD BIOS is written from
   ([`Nephrite_OpenBios.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Sega/Nephrite%20-%20Genesis/Nephrite_OpenBios.md)).
+  No BIOS's code, listing, disassembly, trace or log was read by its writer; a player's BIOS was run only as a black
+  box, its games compared after the hand-over.
+- The 240p Test Suite's Sega CD include file (`cdbios.asm`, Luke Usher's, in the suite's GPL-2.0 sources), screened
+  before it was read: the BIOS's function numbers and the sub CPU's entry addresses, which the Mega-CD BIOS Manual
+  leaves to Sega's include files. Each number is confirmed by a program's call on the open BIOS
+  ([`Nephrite_Disputes.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Sega/Nephrite%20-%20Genesis/Nephrite_Disputes.md) D-41). The suite's start-up and system
+  program sources, for what a program expects of the calls.
+- [*bram-filesystem*](https://github.com/1hedu/emuTOS-MCD/blob/HEAD/docs/bram-filesystem.md), in the emuTOS-MCD
+  project's documentation: the backup RAM volume's footer and its layout on the odd bytes, measured on a console's
+  volume (its author first took the footer from an emulator's formatting function, as the page says).
+- Plutiedev, [Using the Z80](https://plutiedev.com/using-the-z80): the Z80's reset and bus, as the open BIOS leaves
+  them.
 - Sanyo, *LC8950 Real-Time Error Correction and Host Interface Processor Design Manual*, revised for the LC8951,
   as hosted by Sega Retro: the CDC's registers, decoder (its monitor-only mode among them) and host transfer.
 - Sanyo, *LC7883* data sheet, as hosted by Sega Retro: CD-DA's digital filter, de-emphasis and attenuator.

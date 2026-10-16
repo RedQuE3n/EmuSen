@@ -1687,3 +1687,135 @@ CPUs' disputes in their own record pages.
   GX's 840, the same lead as on the American disc (`Nephrite_Native.md` §60.2).
 - Pinned by: `a_toc_request_after_a_stop_finds_the_drive_ready`.
 - Implemented in: stage 9 step 4's commit.
+
+### D-41. The open BIOS's interface constants: the sub CPU's entries from `$5F0A` and the function numbers are those of the 240p Test Suite's `cdbios.asm`, each confirmed by a program's call
+- Opened: 2026-10-15, at stage 10, by `Nephrite_OpenBios.md` §2.2's G1 and G2: the Mega-CD BIOS Manual names every call
+  but leaves its number to `CDBIOS.I` (BM p. 6, p. 11) and the jump table's slots to `cabios.i` (BM §5-1).
+- Documents read: the Mega-CD BIOS Manual, every page; the 240p Test Suite's Sega CD include file
+  (`segacdfiles/LukeProjectCD/_boot/_inc/cdbios.asm`, GPL-2.0), cleared whole for the writer on 2026-10-15 by a screener
+  who neither writes nor reviews the BIOS: constants, call macros and register comments, no BIOS code.
+- Test program: the 240p Test Suite's Sega CD build on the open BIOS, the functions its programs call recorded by the
+  sub CPU's program as they come (a bit a function, cleared at the hand-over). On the way to its menu its system
+  program reaches `_CDBIOS` at `$5F22` with DRVINIT (`$10`, the table `$01,$FF`), ROMREADN (`$20`, two longs), CDBCHK
+  (`$80`), CDBSTAT (`$81`, the table read at its BP12-BP14), CDCSTOP (`$89`), CDCSTAT (`$8A`), CDCREAD (`$8B`),
+  CDCTRN (`$8C`, a0 and a1) and CDCACK (`$8D`), each with the parameters BM's reference gives that call; its user calls
+  are found through its header and placed at `$5F28`-`$5F3A`, and run. Its menu is reached (`Nephrite_OpenBios.md` §8).
+  *Added 2026-10-15:* the five commercial discs and the suite's sound test, each run on the open BIOS, called besides
+  MSCSTOP (`$02`, the suite), MSCPAUSEON (`$03`, Mickey Mania), ROMPAUSEON (`$08`, Lunar), ROMPAUSEOFF (`$09`, Chuck
+  Rock II), MSCPLAY1 (`$12`, the suite and Sonic CD), MSCPLAYR (`$13`, Mickey Mania), ROMREAD (`$17`, Lunar), ROMSEEK
+  (`$18`, Chuck Rock II), CDBTOCREAD (`$83`, Mickey Mania), CDBPAUSE (`$84`), FDRSET (`$85`) and FDRCHG (`$86`, Sonic
+  CD and Mickey Mania), each game going on as a game whose call was answered goes on: the sound test's CD-DA plays at the
+  level and from the moment it plays on the player's BIOS (`Nephrite_OpenBios.md` §12), Sonic CD's title music plays.
+- Referee: none.
+- Conclusion: the numbers and slots as the include file gives them. Those nine numbers, the twelve added, and the entries `_CDBIOS`,
+  `_USERCALL0`, `_USERCALL1`, `_LEVEL2`, `_LEVEL4` and `_LEVEL5` are measured by the suite; every other number and slot is
+  argued until a program calls it, each added here as one does.
+- Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu`.
+- Implemented in: stage 10's commit "the open BIOS boots a disc".
+
+### D-42. The main CPU's boot ROM at `$0368`: a1 a V-INT handler, set in `_mlevel6` and V-INT enabled
+- Opened: 2026-10-15, at stage 10: the 240p Test Suite's main program stood with its picture black, its V-INT never
+  taken.
+- Documents read: the Technical Bulletins' "The status after booting is completed" (p. 15: "Subroutine in the boot ROM
+  may also be used (please see mainent.i, rom_util.doc)", neither in the corpus); the 240p Test Suite's start-up source
+  (`segacdfiles/segacd.s`, a test program's source), which comments the call "Enable VBlank" and passes its V-INT
+  handler in a1 before `jsr 0x0368`.
+- Test program: the suite on the open BIOS: with an RTS at `$0368` its V-INT is never installed; with the routine, its
+  menu runs.
+- Referee: none.
+- Conclusion: `$0368` takes a1 as the V-INT handler, stores it at `_mlevel6 + 2` (`$FFFD08`) and sets V-INT's enable in
+  the VDP's register 1, keeping every register. Measured by the suite; whether the BIOS's routine does more (the
+  display, the other interrupts) no document says.
+- Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu`.
+- Implemented in: stage 10's commit "the open BIOS boots a disc".
+
+### D-43. The main CPU's boot ROM at `$0364`: called by every disc's initial program at its first instruction; here it returns at once
+- Opened: 2026-10-15, at stage 10: the main CPU, started at `$FF0000`, called `$0364` within its first eight bytes
+  (the return address stacked was `$FF0008`), which lay inside the open BIOS's own code and restarted its boot.
+- Documents read: none describes the routine. The first bytes of every initial program are Sega's security block
+  (the Technical Bulletins' "The U.S. BIOS" and "PAL conversion" §IV), which a disc carries and the BIOS checks; the
+  call is that block's.
+- Test program: the 240p Test Suite on the open BIOS, the call caught by a breakpoint over the boot ROM's range after
+  the hand-over. Of the block itself only its first eight bytes were seen, in a search of Sonic CD's program in work
+  RAM for its calls into the boot ROM: a `LEA` of a1 ten bytes on, `JSR $0364`, and a branch past the block. Nothing
+  further of it was read; that a1 is passed suggests the routine takes an address, as `$0368` does (D-42).
+- Referee: none.
+- Conclusion: the open BIOS fills `$0200`-`$1FFF` with RTS, but for `$0368` (D-42), so that a routine no document
+  describes returns at once; with that, the block goes on to the program it heads. What a player's BIOS shows meanwhile
+  (its logo and sound, by the bulletin) the open BIOS does not. Open: what `$0364` does.
+- Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu`.
+- Implemented in: stage 10's commit "the open BIOS boots a disc".
+
+### D-44. CDCREAD and CDCTRN once each a sector: a second CDCREAD before CDCACK fails, and so does a second CDCTRN after its transfer
+- Opened: 2026-10-15, at stage 10. BM §3-C says CDCREAD prepares one sector and CDCTRN reads one, without saying what
+  a second call before CDCACK returns.
+- Documents read: BM §3-C; the load sample of BM p. 44-45 (one CDCREAD, one CDCTRN, one CDCACK a sector).
+- Test program: the 240p Test Suite's system program (`_boot/sp.asm`, `ReadCD`), which calls CDCREAD again while it
+  returns carry clear and CDCTRN again while it returns carry clear, so that each must fail the second time for a
+  read to end.
+- Referee: none.
+- Conclusion: CDCREAD succeeds once a sector until CDCACK, and CDCTRN once a sector after its CDCREAD. Measured by the
+  suite's loads; argued as the BIOS's behaviour, the suite having been made on consoles.
+- Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu`.
+- Implemented in: stage 10's commit "the open BIOS boots a disc".
+
+### D-45. The hand-over: the initial program starts with the interrupt mask at 0, V-INT on, and every communication word 0
+- Opened: 2026-10-15, at stage 10. Sonic CD's initial program sets its own V-INT handler (one that raises the sub
+  CPU's level 2) and then waits on a command its system program answers only after level 2, without ever lowering the
+  mask; started with the mask at 7, it waited for ever. Started while the boot's own state code still stood in the sub
+  CPU's first status word, it took that word for its command's answer and jumped into Word RAM before its program was
+  there.
+- Documents read: BM §4-2 and §5-3 (the user calls wait for level 2); the Technical Bulletins p. 18 (the main CPU must
+  raise level 2 every 16 ms while the system program loads). Neither says what the status register or the
+  communication words hold at the hand-over.
+- Test program: Sonic CD (USA and Europe) on the open BIOS: with the mask at 0 and the words cleared, its program goes on
+  to its own screens.
+- Referee: none.
+- Conclusion: the main CPU starts the initial program with the status register at `$2000` and the VDP's V-INT on, the
+  boot's V-INT raising level 2 until the program sets its own; the boot's last exchange (the main CPU's `$FFFF` in its
+  first command word, the sub CPU's statuses cleared, then the main CPU's commands cleared) leaves every communication
+  word 0 before the program's first instruction. Measured by the game; argued as the BIOS's, the game having been made
+  on consoles.
+- Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu`; the discs' runs (`Nephrite_OpenBios.md` §8).
+- Implemented in: stage 10's commit "the discs after the hand-over".
+
+### D-46. The hand-over: the Z80 out of reset, running a DI and a HALT, its bus released
+- Opened: 2026-10-15, at stage 10. Sonic CD's program asks for the Z80's bus and waits for the grant; the open BIOS had
+  left the Z80 held in reset, which never grants it.
+- Documents read: plutiedev, "Using the Z80" (the Z80's RAM cannot be reached while the Z80 is held in reset; the bus
+  is asked for and the grant read back).
+- Test program: Sonic CD on the open BIOS: with the Z80 running a DI and a HALT and its bus free, the program takes the
+  bus and goes on.
+- Referee: none.
+- Conclusion: the BIOS loads `DI`, `HALT` at the Z80's `$0000`, resets it as plutiedev's sequence does, and releases
+  both its reset and its bus. Measured by the game; what a player's BIOS leaves in the Z80 no document says.
+- Pinned by: the discs' runs (`Nephrite_OpenBios.md` §8).
+- Implemented in: stage 10's commit "the discs after the hand-over".
+
+### D-47. Mode 1: the Sega CD's boot ROM at `$400000` reads the H-INT vector at `$400070`-`$400073`, as mode 2's does at `$000070`
+- Opened: 2026-10-15, at stage 10, by mcd-verificator in mode 1: its REG 2006 reads the vector through the boot ROM's
+  `$70` wherever the ROM is mapped, and answered "ERROR: 02" with the override limited to mode 2.
+- Documents read: the Hardware Manual §4-1 (the H-INT vector register, read at `$000070` in mode 2); mcd-verificator's
+  `test_std.c`, `test2006` (the vector read at the boot ROM's `$70`, `0xFFFF1234` expected, in either mode).
+- Test program: mcd-verificator V1.02 as a cartridge with the Sega CD beneath it, the open BIOS at `$400000`.
+- Referee: none.
+- Conclusion: the override is the boot ROM's, so in mode 1 `$400070` reads `$FFFF` and `$400072` the register.
+  Measured by the program, whose author tested it on a console.
+- Pinned by: `mcd_verificator_runs_in_mode_1_on_the_open_bios`.
+- Implemented in: stage 10's commit "mode 1".
+
+### D-48. The PCM chip's samples reach the mix once each: a sample left waiting for a later frame is in master clocks and is not converted again
+- Opened: 2026-10-15, at stage 10, by Mickey Mania on the open BIOS: the frame's cost rose from 1.7 ms to 13 ms over
+  6,000 frames and the process's memory by about 8 KiB a frame. Every one of the PCM chip's samples since about frame
+  1,000 was still waiting for the mix, behind a first whose time had grown past `10^18`.
+- Documents read: none; a defect of stage 9's mix (`Sub::sound_to`), not a rule of the hardware.
+- Test program: the disc on the open BIOS, the waiting samples counted every 100 frames; and
+  `a_pcm_sample_left_for_a_later_frame_is_mixed_then`, which fails on the old conversion and passes on the new.
+- Referee: none.
+- Conclusion: a sample made by a register access at a sub CPU clock ahead of the mix's present waits for the next frame,
+  already converted to master clocks; the mix converted every waiting sample each frame, so such a sample was multiplied
+  by the clocks' ratio again each frame, never came due, and held every later sample back, silencing the PCM chip.
+  Only the samples made since the last mix are converted now. Measured: the cost stays at 1.3 to 2.7 ms a frame, the
+  memory flat; the 71 digests unchanged.
+- Pinned by: `a_pcm_sample_left_for_a_later_frame_is_mixed_then`.
+- Implemented in: stage 10's commit "the PCM's waiting samples".

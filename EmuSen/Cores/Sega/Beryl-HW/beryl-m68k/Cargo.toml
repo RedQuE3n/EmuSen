@@ -8,5 +8,9 @@ publish = false
 [lib]
 name = "beryl_m68k"
 
+# The assembler is a development tool, for test programs and the open firmware built at compile time (Beryl_M68k.md §8).
+[features]
+asm = []
+
 [dependencies]
 emusen-native = { path = "../../../Shared/emusen-native" }

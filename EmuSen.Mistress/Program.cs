@@ -17,6 +17,9 @@ namespace EmuSen.Mistress
             // First, so a fault anywhere after this leaves a report - see EmuSen_Settings_Reference.md §4.27.
             CrashLog.Install();
 
+            // Before Avalonia's GLX screen exists, which reads it - see EmuSen_DevicePicture.md §18.
+            EmuSen.Serenity.DevicePictureEnvironment.Prepare();
+
             // A config file that won't parse falls back to defaults either way;
             // this is what stops it doing so silently - see §6.2.
             EmuSen.Galaxia.ConfigDiagnostics.Sink = m =>

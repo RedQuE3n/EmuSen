@@ -19,6 +19,7 @@ dianash-text = { path = "../dianash-text" }
 dianash-module = { path = "../dianash-module" }
 # EmuSen's command modules over the session service, linked in beside it for the C# frontends' shells (§8.1, §13.11).
 emusen-debug = { path = "../emusen-debug" }
+emusen-trace = { path = "../emusen-trace" }
 emusen-endymion = { path = "../endymion" }
 emusen-galaxia = { path = "../galaxia" }
 emusen-native = { path = "../../EmuSen/Cores/Shared/emusen-native" }

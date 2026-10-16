@@ -226,6 +226,7 @@ dependencies = [
  "emusen-galaxia",
  "emusen-native",
  "emusen-serenity",
+ "emusen-trace",
 ]
 
 [[package]]
@@ -243,6 +244,15 @@ name = "emusen-session-service"
 version = "0.1.0"
 dependencies = [
  "emusen-dotnet",
+]
+
+[[package]]
+name = "emusen-trace"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
+ "emusen-session-service",
 ]
 
 [[package]]

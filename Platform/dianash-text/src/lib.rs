@@ -47,6 +47,10 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
         "                                the match count, -q no output (exit code only, for if/while).\n",
         "                                Reads piped stdin if given, else operates on trailing literal text."
     )),
+    ("wc", true, concat!(
+        "  wc [-l] [-w] [-c] [path]     count lines/words/bytes (all three if no flag given);\n",
+        "                                reads piped stdin, or a real file if <path> is given"
+    )),
 
 ];
 

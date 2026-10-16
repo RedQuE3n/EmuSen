@@ -118,7 +118,7 @@ namespace EmuSen.Mistress.Views
                     new FieldRow { Label = "Card", Hint = "A card in the drawer, or a game's own.", Content = Ui.Stack(4, _card, _about) },
                     new FieldRow { Label = "Saves", Hint = "Choose a save to copy, move or delete it.", Content = _saves },
                     new FieldRow { Label = "Copy or move to", Content = Ui.Stack(8, _target, Ui.Row(8, _copy, _move, _delete)) },
-                    new FieldRow { Label = "New card", Hint = $"A name for a new {medium.Noun.ToLowerInvariant()} in the drawer.", Content = Ui.Row(8, _name, _create) },
+                    new FieldRow { Label = "New card", Hint = $"A name for a new {MediumWords.InText(medium.Noun)} in the drawer.", Content = Ui.Row(8, _name, _create) },
                     new FieldRow { Label = "Import", Hint = "Every save on every game's own card copied onto the chosen card, all or none; each game's own card stays as it is.", Content = _import });
                 Refresh();
             }

@@ -35,7 +35,7 @@ tree
         19 DockPanel at=228,298,720,298.5 by=panel limit=192,187,1536,660 role=none
           20 TextBlock at=228,298,720,43.5 box=480,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard=Installed layout=69.24,28.8 limit=192,187,1536,660 paints=#9C9CA0FF role=text size=24 text=Installed
           21 LunaList at=228,347.5,720,249 by=panel heard="Systems with cheat files" limit=192,187,1536,660 name=SystemsList paints=#FFFFFFFF role=list
-            22 ScrollViewer at=228,347.5,720,249 fades=b name=PART_ScrollViewer overflow=255 paints=#55555AFF,#FFFFFFFF part role=scrollviewer viewport=228,347.5,720,249
+            22 ScrollViewer at=228,347.5,720,249 fades=b name=PART_ScrollViewer overflow=318 paints=#55555AFF,#FFFFFFFF part role=scrollviewer viewport=228,347.5,720,249
               23 ListBoxItem at=228,347.5,720,63 by=scroll drawn focus heard="Nintendo - Game Boy  (1)" in=22 limit=228,347.5,720,249 op paints=#333337FF,#9C9CA0FF role=listitem text="Nintendo - Game Boy  (1)"
                 24 TextBlock at=243,356.5,690,43.5 box=460,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Nintendo - Game Boy  (1)" in=22 layout=197.06,28.8 limit=228,347.5,720,63 owner=23 paints=#9C9CA0FF role=text size=24 text="Nintendo - Game Boy  (1)"
               25 ListBoxItem at=228,410.5,720,63 by=scroll drawn focus heard="Nintendo - Nintendo Entertainment System  (2)" in=22 limit=228,347.5,720,249 op paints=#333337FF,#9C9CA0FF role=listitem text="Nintendo - Nintendo Entertainment System  (2)"

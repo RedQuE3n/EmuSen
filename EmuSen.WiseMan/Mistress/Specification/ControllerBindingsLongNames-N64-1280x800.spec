@@ -28,111 +28,113 @@ tree
             13 TextBlock at=399,158,40,36 box=40,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=N64 layout=39.54,36 limit=387,152,64,48 owner=12 paints=#EEEEF0FF role=text size=30 text=N64
           14 TabItem at=451,152,110,48 by=clip drawn focus heard=GENESIS limit=78,152,1124,504 paints=#86868AFF role=tabitem sideways text=Genesis
             15 TextBlock at=463,158,86,36 box=86,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=GENESIS layout=85.47,36 limit=451,152,110,48 owner=14 paints=#86868AFF role=text size=30 text=GENESIS
-          16 TabItem at=561,152,156,48 by=clip drawn focus heard=PLAYSTATION limit=78,152,1124,504 paints=#86868AFF role=tabitem sideways text=PlayStation
-            17 TextBlock at=573,158,132,36 box=132,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=PLAYSTATION layout=131.91,36 limit=561,152,156,48 owner=16 paints=#86868AFF role=text size=30 text=PLAYSTATION
-          18 ScrollViewer at=90,202,1100,454 by=clip fades=b limit=78,202,1124,454 overflow=1096 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=90,202,1100,454
-            19 StackPanel at=90,202,1100,1550 by=scroll in=18 limit=90,202,1100,454 paints=#55555AFF,#86868AFF,#9C9CA0FF role=none seen=90,202,1100,454
-              20 DockPanel at=90,202,1100,450 by=scroll in=18 limit=90,202,1100,454 role=none
-                21 ControllerDiagram at=90,202,1100,450 by=scroll caps=11.6305 face="Barlow Condensed" heard="N64 controller" in=18 limit=90,202,1100,454 name=Diagram role=group size=16.62
-                  22 DiagramLabel at=94,216,165,52 by=clip drawn focus heard=L in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                  23 DiagramLabel at=1015,216,172,52 by=clip drawn focus heard=R in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                  24 DiagramLabel at=366,586,161,52 by=clip drawn focus heard=Z in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                  25 DiagramLabel at=194,285,161,52 by=clip drawn focus heard=Up in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                  26 DiagramLabel at=185,403,170,52 by=clip drawn focus heard=Down in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                  27 DiagramLabel at=194,344,161,52 by=clip drawn focus heard=Left in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                  28 DiagramLabel at=266,216,168,52 by=clip drawn focus heard=Right in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                  29 DiagramLabel at=635,216,204,52 by=clip drawn focus heard=Start in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                  30 DiagramLabel at=441,216,187,52 by=clip drawn focus heard="Stick Up" in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                  31 DiagramLabel at=744,586,204,52 by=clip drawn focus heard="Stick Down" in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                  32 DiagramLabel at=164,586,195,52 by=clip drawn focus heard="Stick Left" in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                  33 DiagramLabel at=534,586,202,52 by=clip drawn focus heard="Stick Right" in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                  34 DiagramLabel at=846,216,161,52 by=clip drawn focus heard=B in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                  35 DiagramLabel at=712,418,203,52 by=clip drawn focus heard=A in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                  36 DiagramLabel at=712,286,165,52 by=clip drawn focus heard="C Up" in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                  37 DiagramLabel at=922,385,181,52 by=clip drawn focus heard="C Down" in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                  38 DiagramLabel at=922,319,172,52 by=clip drawn focus heard="C Left" in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-                  39 DiagramLabel at=712,352,180,52 by=clip drawn focus heard="C Right" in=18 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
-        40 StackPanel at=836,152,366,44 by=panel limit=38.4,124,1203.2,548 name=PlayerBar role=none
-          41 TextBlock at=836,160,51,29 box=51,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard=Player layout=50.16,28.8 limit=38.4,124,1203.2,548 paints=#9C9CA0FF role=text size=24 text=Player
-          42 Dropdown at=897,152,130,44 by=panel drawn focus heard=Player limit=38.4,124,1203.2,548 name=PlayerSelector op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
-            43 TextBlock at=909,157,86,32 box=86,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Player 1" layout=66.2,31.2 limit=909,157,86,32 owner=42 paints=#9C9CA0FF role=text size=26 text="Player 1"
-            44 ViewboxContainer at=1005,170.73,12,6.54 by=clip limit=1005,170.73,12,6.54 nohit role=none
-          45 Button at=1037,152,165,44 by=panel drawn heard="USE PLAYER 1'S" limit=38.4,124,1203.2,548 name=UsePlayer1Button off paints=#55555AFF,#9C9CA0FF role=button text="Use Player 1's"
-            46 TextBlock at=1054,158,131,32 box=131,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="USE PLAYER 1'S" layout=130.94,31.2 limit=1037,152,165,44 off owner=45 paints=#55555AFF role=text size=26 text="USE PLAYER 1'S"
+          16 TabItem at=561,152,109,48 by=clip drawn focus heard="SEGA CD" limit=78,152,1124,504 paints=#86868AFF role=tabitem sideways text="Sega CD"
+            17 TextBlock at=573,158,85,36 box=85,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="SEGA CD" layout=84.18,36 limit=561,152,109,48 owner=16 paints=#86868AFF role=text size=30 text="SEGA CD"
+          18 TabItem at=670,152,156,48 by=clip drawn focus heard=PLAYSTATION limit=78,152,1124,504 paints=#86868AFF role=tabitem sideways text=PlayStation
+            19 TextBlock at=682,158,132,36 box=132,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=PLAYSTATION layout=131.91,36 limit=670,152,156,48 owner=18 paints=#86868AFF role=text size=30 text=PLAYSTATION
+          20 ScrollViewer at=90,202,1100,454 by=clip fades=b limit=78,202,1124,454 overflow=1096 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=90,202,1100,454
+            21 StackPanel at=90,202,1100,1550 by=scroll in=20 limit=90,202,1100,454 paints=#55555AFF,#86868AFF,#9C9CA0FF role=none seen=90,202,1100,454
+              22 DockPanel at=90,202,1100,450 by=scroll in=20 limit=90,202,1100,454 role=none
+                23 ControllerDiagram at=90,202,1100,450 by=scroll caps=11.6305 face="Barlow Condensed" heard="N64 controller" in=20 limit=90,202,1100,454 name=Diagram role=group size=16.62
+                  24 DiagramLabel at=94,216,165,52 by=clip drawn focus heard=L in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                  25 DiagramLabel at=1015,216,172,52 by=clip drawn focus heard=R in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                  26 DiagramLabel at=366,586,161,52 by=clip drawn focus heard=Z in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                  27 DiagramLabel at=194,285,161,52 by=clip drawn focus heard=Up in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                  28 DiagramLabel at=185,403,170,52 by=clip drawn focus heard=Down in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                  29 DiagramLabel at=194,344,161,52 by=clip drawn focus heard=Left in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                  30 DiagramLabel at=266,216,168,52 by=clip drawn focus heard=Right in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                  31 DiagramLabel at=635,216,204,52 by=clip drawn focus heard=Start in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                  32 DiagramLabel at=441,216,187,52 by=clip drawn focus heard="Stick Up" in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                  33 DiagramLabel at=744,586,204,52 by=clip drawn focus heard="Stick Down" in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                  34 DiagramLabel at=164,586,195,52 by=clip drawn focus heard="Stick Left" in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                  35 DiagramLabel at=534,586,202,52 by=clip drawn focus heard="Stick Right" in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                  36 DiagramLabel at=846,216,161,52 by=clip drawn focus heard=B in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                  37 DiagramLabel at=712,418,203,52 by=clip drawn focus heard=A in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                  38 DiagramLabel at=712,286,165,52 by=clip drawn focus heard="C Up" in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                  39 DiagramLabel at=922,385,181,52 by=clip drawn focus heard="C Down" in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                  40 DiagramLabel at=922,319,172,52 by=clip drawn focus heard="C Left" in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+                  41 DiagramLabel at=712,352,180,52 by=clip drawn focus heard="C Right" in=20 limit=90,202,1100,450 op paints=#9C9CA0FF role=button
+        42 StackPanel at=836,152,366,44 by=panel limit=38.4,124,1203.2,548 name=PlayerBar role=none
+          43 TextBlock at=836,160,51,29 box=51,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard=Player layout=50.16,28.8 limit=38.4,124,1203.2,548 paints=#9C9CA0FF role=text size=24 text=Player
+          44 Dropdown at=897,152,130,44 by=panel drawn focus heard=Player limit=38.4,124,1203.2,548 name=PlayerSelector op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
+            45 TextBlock at=909,157,86,32 box=86,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Player 1" layout=66.2,31.2 limit=909,157,86,32 owner=44 paints=#9C9CA0FF role=text size=26 text="Player 1"
+            46 ViewboxContainer at=1005,170.73,12,6.54 by=clip limit=1005,170.73,12,6.54 nohit role=none
+          47 Button at=1037,152,165,44 by=panel drawn heard="USE PLAYER 1'S" limit=38.4,124,1203.2,548 name=UsePlayer1Button off paints=#55555AFF,#9C9CA0FF role=button text="Use Player 1's"
+            48 TextBlock at=1054,158,131,32 box=131,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="USE PLAYER 1'S" layout=130.94,31.2 limit=1037,152,165,44 off owner=47 paints=#55555AFF role=text size=26 text="USE PLAYER 1'S"
 focus 12
 edge 12 up same
-edge 12 down 22
-edge 22 up 42
-edge 22 down 25
-edge 22 left 27
-edge 22 right 28
-edge 23 up 42
-edge 23 down 36
-edge 23 left 34
-edge 23 right 36
-edge 24 up 32
-edge 24 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/0/1/1/0/0/0/0/2/4/0/2
-edge 24 left 26
-edge 24 right 31
-edge 25 up 22
-edge 25 down 26
-edge 25 left 27
-edge 25 right 28
-edge 26 up 25
-edge 26 down 24
-edge 26 left 27
-edge 26 right 28
-edge 27 up 25
-edge 27 down 26
-edge 27 left same
-edge 27 right 28
-edge 28 up 25
+edge 12 down 24
+edge 24 up 44
+edge 24 down 27
+edge 24 left 29
+edge 24 right 30
+edge 25 up 44
+edge 25 down 38
+edge 25 left 36
+edge 25 right 38
+edge 26 up 34
+edge 26 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/0/1/1/0/0/0/0/2/4/0/2
+edge 26 left 28
+edge 26 right 33
+edge 27 up 24
+edge 27 down 28
+edge 27 left 29
+edge 27 right 30
+edge 28 up 27
 edge 28 down 26
-edge 28 left 27
-edge 28 right 29
-edge 29 up 25
-edge 29 down 30
-edge 29 left 28
-edge 29 right 34
-edge 30 up 29
-edge 30 down 31
-edge 30 left 32
-edge 30 right 33
-edge 31 up 30
-edge 31 down 24
-edge 31 left 32
-edge 31 right 33
-edge 32 up 30
-edge 32 down 31
-edge 32 left 26
-edge 32 right 33
-edge 33 up 30
-edge 33 down 31
-edge 33 left 32
+edge 28 left 29
+edge 28 right 30
+edge 29 up 27
+edge 29 down 28
+edge 29 left same
+edge 29 right 30
+edge 30 up 27
+edge 30 down 28
+edge 30 left 29
+edge 30 right 31
+edge 31 up 27
+edge 31 down 32
+edge 31 left 30
+edge 31 right 36
+edge 32 up 31
+edge 32 down 33
+edge 32 left 34
+edge 32 right 35
+edge 33 up 32
+edge 33 down 26
+edge 33 left 34
 edge 33 right 35
-edge 34 up 23
-edge 34 down 35
-edge 34 left 30
-edge 34 right 38
-edge 35 up 38
-edge 35 down 24
+edge 34 up 32
+edge 34 down 33
+edge 34 left 28
+edge 34 right 35
+edge 35 up 32
+edge 35 down 33
 edge 35 left 34
 edge 35 right 37
-edge 36 up 23
+edge 36 up 25
 edge 36 down 37
-edge 36 left 38
-edge 36 right 39
-edge 37 up 36
-edge 37 down 35
-edge 37 left 38
+edge 36 left 32
+edge 36 right 40
+edge 37 up 40
+edge 37 down 26
+edge 37 left 36
 edge 37 right 39
-edge 38 up 36
-edge 38 down 37
-edge 38 left 34
-edge 38 right 39
-edge 39 up 36
+edge 38 up 25
+edge 38 down 39
+edge 38 left 40
+edge 38 right 41
+edge 39 up 38
 edge 39 down 37
-edge 39 left 38
-edge 39 right 38
-edge 42 up 12
-edge 42 down 34
+edge 39 left 40
+edge 39 right 41
+edge 40 up 38
+edge 40 down 39
+edge 40 left 36
+edge 40 right 41
+edge 41 up 38
+edge 41 down 39
+edge 41 left 40
+edge 41 right 40
+edge 44 up 12
+edge 44 down 36

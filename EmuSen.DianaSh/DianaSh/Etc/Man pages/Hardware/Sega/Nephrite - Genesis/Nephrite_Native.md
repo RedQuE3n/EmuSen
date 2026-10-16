@@ -4495,3 +4495,53 @@ numbering is Q8's, consistent with §61 if mode 1 is a machine of the `md` syste
 state needs the configuration in the header (Q5). The Sega CD's processor, `S68K` 2, arrives with its debugger step,
 which adds `peek` and the `Watch` to the interface.
 
+
+## 63. Stage 10: the open Sega CD BIOS, as far as its backup RAM's directory (2026-10-15)
+
+*Written by a writer under the plan's §1.3 replacement writers' rule.* `Nephrite_OpenBios.md` is the stage's plan and
+record, written before its code; this section is its summary. The stage stands open at step 10.4: the backup RAM's
+directory waits for a specification made by a separate observer (that page's §5 Q2), and with it the gate's `_BURAM`
+round trips and a new machine's formatted memory.
+
+### 63.1 What was built
+
+- **Beryl's 68000 assembler** (step 10.0, `Beryl_M68k.md` §8): every one of the 45,816 opcodes the 68000 decodes
+  assembles back from the disassembler's text to its words.
+- **The open BIOS** (`src/mcd/bios/`, assembled by `build.rs` into `mcd::bios::OPEN_BIOS`, 128 KiB): the main CPU's
+  boot, its own screen with the drive's state and START for the tray, the jump table at `$FFFD00`, the hand-over to the
+  initial program (D-45, D-46); the sub CPU's boot (TOC, system area, initial and system programs, the user calls),
+  `_CDBIOS` over the drive and the CDC (D-41, D-44), the status table, the fader, the LEDs; `_BURAM`'s BRMINIT,
+  BRMSTAT and BRMFORMAT from the footer document; `$0368` (D-42) and RTS for every other routine of `$0200`-`$1FFF`
+  (D-43). The interface's numbers and slots come from the 240p suite's `cdbios.asm`, cleared by a screener, each
+  confirmed by a program's call (D-41: 21 numbers so far).
+- **The replacement**: with no player's BIOS, a disc runs on the open one; machine info names the firmware
+  `Replacement`, and its words are `Accuracy` (`mcd/frontend.rs`, `BIOS_COST`, as `Nephrite_OpenBios.md` §4 drafts them,
+  with the backup RAM's gap stated). With the player's image, theirs is used.
+- **Mode 1** (§49.6 Q4): a Create setting, hidden, puts the Sega CD beneath a cartridge; an `md` machine with the
+  backup RAM as file 11 and a state of its own system byte (D-47).
+- **The system pack** claims `.cue` and `.chd` for the Sega CD, as does the core.
+
+### 63.2 The gate, as it stands
+
+| Item | Result |
+|---|---|
+| The 240p Sega CD suite on the open BIOS | boots to its main menu, the picture equal byte for byte to the player's BIOS's; its sound test's CD-DA plays as on the player's |
+| mcd-verificator in mode 1 | 18 of 18 on the open BIOS at `$400000` |
+| mcd-verificator's mode 2 run | unchanged, 18 of 18 |
+| The five discs against the player's BIOS, games only | Chuck Rock II and Mickey Mania run as on the player's; Sonic CD reaches its title with its music once START passes its "RAM is full" message; Lunar stops at its save data message (`Nephrite_OpenBios.md` §12) |
+| `_BURAM` round trips | not yet: the directory's calls wait for the specification |
+| The Genesis unchanged | the 71 digests equal the baseline's; the kit's sample 64 of 64 |
+| The kit on the Sega CD | the 240p disc with mcd-verificator, the 240p sheet and the five discs on the open BIOS: compliant |
+| Cost | 1.3 to 2.7 ms a frame on the open BIOS, as on the player's (`Nephrite_OpenBios.md` §13) |
+
+### 63.3 Defects of the hardware model it found
+
+A seek's travel count loaded as 1 where it was saved as 0 (C7 on Chuck Rock II, `Nephrite_OpenBios.md` §12), and the
+PCM chip's waiting samples converted to master clocks again each frame (D-48). Both fixed with tests; neither changed a
+digest.
+
+### 63.4 Measured (2026-10-15)
+
+The crate's 183 tests (with `EMUSEN_NEPHRITE_ROMS` and `EMUSEN_NEPHRITE_DISCS`), and those of the builds without each
+attachment; `beryl-m68k`'s 26 with its `asm` feature and 21 without; WiseMan's Nephrite, Genesis, Registration,
+SaveMedia and routing tests, 98.

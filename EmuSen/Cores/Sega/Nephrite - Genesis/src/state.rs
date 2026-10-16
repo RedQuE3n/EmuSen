@@ -59,6 +59,10 @@ fn system_byte(s: System) -> u8 {
     }
 }
 
+/// A cartridge with a Sega CD beneath it (mode 1): the system byte's own value, so that its blocks are told apart and
+/// every other state's bytes stay as they were (Nephrite_OpenBios.md §11).
+const MODE1_BYTE: u8 = 3;
+
 /// The Genesis's block and the attachment's of a state, read whole, of the configuration fitted.
 enum FittedSaved {
     Md(crate::genesis::Saved, ()),
@@ -118,7 +122,7 @@ impl Machine {
     fn write(&self, w: &mut StateWriter) {
         w.u32("Magic", STATE_MAGIC);
         w.i32("Version", STATE_VERSION);
-        w.u8("System", system_byte(self.media.system));
+        w.u8("System", self.state_system());
         w.i64("Frames", self.frames);
         for m in self.spaces().into_iter().filter(|m| !m.read_only) {
             w.bytes(m.name, self.bytes(m.id).expect("a listed space"));
@@ -131,7 +135,16 @@ impl Machine {
 
     /// The oldest version this machine's system reads.
     pub fn oldest_state_version(&self) -> i32 {
-        if self.media.system.is_disc() { OLDEST_MCD_STATE_VERSION } else { OLDEST_STATE_VERSION }
+        if self.media.system.is_disc() || self.state_system() == MODE1_BYTE { OLDEST_MCD_STATE_VERSION } else { OLDEST_STATE_VERSION }
+    }
+
+    /// The system byte a state carries: the system's, or mode 1's.
+    fn state_system(&self) -> u8 {
+        #[cfg(feature = "mcd")]
+        if self.media.system == System::Md && self.mcd().is_some() {
+            return MODE1_BYTE;
+        }
+        system_byte(self.media.system)
     }
 }
 
@@ -149,7 +162,7 @@ impl StateMachine for Machine {
             return Err(StateError::Version(version));
         }
         let system = r.u8()?;
-        if system != system_byte(self.media.system) {
+        if system != self.state_system() {
             return Err(StateError::OtherSystem(system));
         }
         let frames = r.i64()?;

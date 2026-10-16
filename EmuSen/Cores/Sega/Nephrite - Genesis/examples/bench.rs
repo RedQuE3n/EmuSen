@@ -29,7 +29,8 @@ fn main() {
     let frames: u32 = args.get(2).map_or(600, |f| f.parse().expect("frames"));
     let runs: u32 = args.get(3).map_or(5, |r| r.parse().expect("runs"));
     let warm: u32 = std::env::var("NEPHRITE_WARM").ok().map_or(0, |w| w.parse().expect("warm-up frames"));
-    let bios = std::env::var_os("NEPHRITE_BIOS").map(|p| std::fs::read(p).expect("the boot ROM"));
+    // `NEPHRITE_BIOS=open` runs Nephrite's own BIOS (Nephrite_OpenBios.md).
+    let bios = std::env::var_os("NEPHRITE_BIOS").map(|p| if p == "open" { nephrite::mcd::bios::OPEN_BIOS.to_vec() } else { std::fs::read(p).expect("the boot ROM") });
     let mut best = f64::MAX;
     for _ in 0..runs {
         let mut m = machine(path, &raw, &bios);

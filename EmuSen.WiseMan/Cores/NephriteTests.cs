@@ -81,9 +81,16 @@ namespace EmuSen.WiseMan.Cores
                 var last = run.At(60)!;
                 Assert.Equal(spaces.Order(), last.Spaces.Keys.Order());
                 Assert.Equal((65536, 128, 80), (last.Spaces["wram"].Length, last.Spaces["cram"].Length, last.Spaces["vsram"].Length));
+                Assert.Equal(48000, run.AudioRate);
+                if (name.EndsWith(".iso"))
+                {
+                    // With no BIOS given the disc runs on Nephrite's own, whose screen is 40 cells wide and not black - see Nephrite_OpenBios.md §8.
+                    Assert.Equal((320, 224), (last.Picture!.Width, last.Picture.Height));
+                    Assert.Contains(last.Picture.Rgb, b => b != 0);
+                    continue;
+                }
                 Assert.Equal(name.EndsWith(".32x") ? (320, 224) : (256, 224), (last.Picture!.Width, last.Picture.Height));
                 Assert.All(last.Picture.Rgb, b => Assert.Equal(0, b));
-                Assert.Equal(48000, run.AudioRate);
                 Assert.True(TestRomDifferential.Steady(run, 1, 60));
                 Assert.Equal(RomOutcome.Visual, new TestRomGrader(Array.Empty<RomProtocol>()).Grade(name, run).Outcome);
             }

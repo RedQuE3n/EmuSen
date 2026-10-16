@@ -143,6 +143,15 @@ impl Machine {
         Machine::assembled(media, Fitted::Mcd(Genesis::with(cart, model, MegaCd::new(board, bios.unwrap_or_default(), disc))))
     }
 
+    /// A cartridge's machine with a Sega CD beneath it (mode 1), `bios` in its boot ROM at `$400000` and `disc` in its
+    /// drive; the machine stays one of the Genesis's system (Nephrite_Attachments.md §3.12, Q8).
+    #[cfg(feature = "mcd")]
+    pub fn with_cd_beneath(image: &[u8], media: Media, model: Model, bios: Vec<u8>, disc: Option<crate::mcd::cdd::Disc>) -> Machine {
+        let cart = cartridge(image.to_vec(), &media);
+        let board = crate::interface::Board { master_hz: crate::genesis::master_hz(model.pal), pal: model.pal, start: crate::genesis::START, rate: crate::genesis::sound::RATE };
+        Machine::assembled(media, Fitted::Mcd(Genesis::with(cart, model, MegaCd::beneath(board, bios, disc))))
+    }
+
     fn assembled(media: Media, fitted: Fitted) -> Machine {
         Machine { media, fitted, frames: 0, picture: blank(), skip: false, pads: [0; crate::genesis::io::PADS], plugged: [(crate::genesis::io::Plug::Pad, false); 2], firmware: Vec::new(), audio: SampleQueue::default(), battery_file: Vec::new(), hooks: Hooks::new(&[24, 16]), z80_breakpoints: Vec::new(), debug_stopped: 0, debug_open: false, kept_apart: KeptApart::default() }
     }

@@ -253,6 +253,36 @@ namespace EmuSen.Serenity
             System.Threading.Volatile.Write(ref _gpu, gpu ? 1 : 0);
             System.Threading.Interlocked.Exchange(ref _shape, (long)width << 32 | (uint)height);
             System.Threading.Interlocked.Increment(ref _presented);
+            System.Threading.Volatile.Write(ref _lastShown, System.Diagnostics.Stopwatch.GetTimestamp());
+            System.Threading.Interlocked.Exchange(ref _offersUnshown, 0);
+        }
+
+        // The device path watched: offers it never shows for StallSeconds give it up for the readback - see EmuSen_DevicePicture.md §18.
+        private long _lastShown;
+        private int _offersUnshown, _deviceGivenUp;
+        internal const double StallSeconds = 1.0;
+        internal const int StallOffers = 30;
+
+        private void WatchDevicePath()
+        {
+            if (System.Threading.Volatile.Read(ref _presenter) is null || System.Threading.Volatile.Read(ref _deviceGivenUp) != 0) return;
+            if (System.Threading.Interlocked.Increment(ref _offersUnshown) < StallOffers) return;
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(System.Threading.Volatile.Read(ref _lastShown)).TotalSeconds < StallSeconds) return;
+            if (System.Threading.Interlocked.Exchange(ref _deviceGivenUp, 1) != 0) return;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => GiveUpDevicePath($"nothing was shown for {StallSeconds:0.#} s while {StallOffers} or more frames were offered"));
+        }
+
+        // On the UI thread: the presenter let go of and the picture drawn by Skia from now on, said once.
+        internal void GiveUpDevicePath(string why)
+        {
+            DevicePresenter? presenter;
+            lock (_cacheLock) { presenter = _presenter; _presenter = null; }
+            if (presenter is null) return;
+            System.Threading.Volatile.Write(ref _deviceGivenUp, 1);
+            Avalonia.Rendering.Composition.ElementComposition.SetElementChildVisual(this, null);
+            presenter.Dispose();
+            DevicePictureReport?.Invoke($"The picture is read back from now on: {why}");
+            InvalidateVisual();
         }
 
         // Stores the frame and asks for a repaint; release, if given, is called once with the array when nothing here can read it again - see EmuSen_Serenity.md §2.8.
@@ -262,6 +292,7 @@ namespace EmuSen.Serenity
         // lend is a core's picture on the device in place of rgba, which the device path alone draws - see EmuSen_DevicePicture.md §17.
         public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null, long sequence = 0, double aspect = 0, int lines = 0, byte[]? raw = null, Slang.SlangLend? lend = null)
         {
+            WatchDevicePath();
             if (RenderFps > 0 && GraphicsSettings.SyncToDisplay) HoldRenderRate();
             lock (_offerLock)
             {
@@ -402,7 +433,7 @@ namespace EmuSen.Serenity
             return builder;
         }
 
-        // The picture handed to the compositor on the device where it can be, Skia drawing it otherwise; EMUSEN_DEVICE_PICTURE=0 keeps Skia's - see EmuSen_DevicePicture.md §4.
+        // The picture handed to the compositor on the device where it can be, Skia drawing it otherwise; EMUSEN_DEVICE_PICTURE=0 keeps Skia's - see EmuSen_DevicePicture.md §4 and §18.
         public static bool DevicePictureAllowed { get; set; } = Environment.GetEnvironmentVariable("EMUSEN_DEVICE_PICTURE") != "0";
 
         // Why the picture is not handed over on the device, said once per window; null when it is.
@@ -451,6 +482,7 @@ namespace EmuSen.Serenity
             if (presenter is null) { DevicePictureReport?.Invoke($"The picture is read back: {problem}"); return; }
             if (VisualRoot is null) { presenter.Dispose(); return; }
             presenter.Visible = false;
+            System.Threading.Volatile.Write(ref _lastShown, System.Diagnostics.Stopwatch.GetTimestamp());
             lock (_cacheLock) _presenter = presenter;
             InvalidateVisual();
         }

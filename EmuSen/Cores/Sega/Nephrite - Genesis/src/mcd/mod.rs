@@ -4,6 +4,7 @@
 //! what mcd-verificator's tests settled where the manual is silent.
 
 pub(in crate::mcd) mod asic;
+pub mod bios;
 pub(in crate::mcd) mod cdc;
 pub(in crate::mcd) mod cdda;
 pub(crate) mod cdd;
@@ -13,6 +14,8 @@ pub(in crate::mcd) mod state;
 pub(in crate::mcd) mod word;
 #[cfg(test)]
 mod discs;
+#[cfg(test)]
+mod openbios;
 #[cfg(test)]
 mod verificator;
 
@@ -52,6 +55,9 @@ pub struct MegaCd {
     pub(in crate::mcd) cpu: M68000,
     pub hw: Sub,
     pub(in crate::mcd) disc_print: u64,
+    /// Mode 1: beneath a cartridge, its boot ROM and memories at `$400000` and the cartridge's area left to it (the
+    /// Hardware Manual's "Mega-CD construction"; the Mega-CD BIOS Manual §4-1). A configuration, not state.
+    pub(in crate::mcd) mode1: bool,
 }
 
 /// The gate array's registers, both sides'.
@@ -91,6 +97,17 @@ pub struct Gate {
     pub(in crate::mcd) forced: u8,
 }
 
+impl Gate {
+    /// The communication words, for development tools to read: the main CPU's commands and the sub CPU's statuses.
+    pub fn cmd_word(&self, i: usize) -> u16 {
+        self.cmd[i]
+    }
+
+    pub fn sta_word(&self, i: usize) -> u16 {
+        self.sta[i]
+    }
+}
+
 /// The sub CPU's side: its clock, its memories and the gate array.
 pub struct Sub {
     /// Sub CPU clocks since power-on.
@@ -105,6 +122,9 @@ pub struct Sub {
     pub(in crate::mcd) pcm_ram: Vec<u8>,
     /// The RF5C164.
     pub(in crate::mcd) pcm: pcm::Pcm,
+    /// How many of the PCM chip's samples waiting for the mix are already in master clocks; those after are in sub
+    /// clocks. Not state: a state is taken after the frame's mix, when every one waiting is converted.
+    pub(in crate::mcd) pcm_master: usize,
     pub g: Gate,
     /// The sub CPU waits for Word RAM the main CPU holds: its writes owed, done when the RAM is its again.
     pub(in crate::mcd) parked: bool,
@@ -211,6 +231,7 @@ impl MegaCd {
             bram: vec![0; BRAM_SIZE],
             pcm_ram: vec![0; PCM_RAM_SIZE],
             pcm: pcm::Pcm::default(),
+            pcm_master: 0,
             // `$A12000` reads `$0002` at power-on: the sub CPU held in reset with its bus requested (§2, the initial values).
             g: Gate { reset_held: true, busreq: true, hivect: 0xFFFF, ..Gate::default() },
             parked: false,
@@ -228,7 +249,34 @@ impl MegaCd {
         hw.cdd.next = hw.clock + SECTOR[0];
         hw.g.res0_at = hw.clock + PERIPHERAL_RESET;
         hw.word.sub_owns = false;
-        MegaCd { cpu: M68000::new(), hw, disc_print }
+        MegaCd { cpu: M68000::new(), hw, disc_print, mode1: false }
+    }
+
+    /// A Sega CD beneath a cartridge, in mode 1.
+    pub(crate) fn beneath(board: Board, bios: Vec<u8>, disc: Option<cdd::Disc>) -> MegaCd {
+        MegaCd { mode1: true, ..MegaCd::new(board, bios, disc) }
+    }
+
+    /// Whether it sits beneath a cartridge (mode 1).
+    pub fn mode1(&self) -> bool {
+        self.mode1
+    }
+
+    /// A main CPU address as the mode 2 map places it, or None where the Sega CD does not decode it: in mode 1 its
+    /// `$400000`-`$7FFFFF` is mode 2's `$000000`-`$3FFFFF`, and the cartridge has the rest.
+    fn place(&self, a: u32) -> Option<u32> {
+        if (0xA1_2000..=0xA1_203F).contains(&a) {
+            Some(a)
+        } else if self.mode1 {
+            (0x40_0000..0x80_0000).contains(&a).then(|| a - 0x40_0000)
+        } else {
+            (a < 0x80_0000).then_some(a)
+        }
+    }
+
+    /// The sub CPU, for development tools to read.
+    pub fn sub_cpu(&self) -> &M68000 {
+        &self.cpu
     }
 
     // ---- the main CPU's side, mode 2
@@ -304,19 +352,11 @@ impl MegaCd {
     }
 }
 
-/// Whether the Sega CD decodes a main CPU address in mode 2: its boot ROM, PRG-RAM's window and Word RAM below
-/// `$400000`, the cartridge slot to `$7FFFFF`, and its registers.
-fn decodes(a: u32) -> bool {
-    a < 0x80_0000 || (0xA1_2000..=0xA1_203F).contains(&a)
-}
-
 impl Attachment for MegaCd {
     const EXPANSION: bool = true;
 
     fn read8(&mut self, a: u32, at: Master) -> Answer<u8> {
-        if !decodes(a) {
-            return Answer::Pass;
-        }
+        let Some(a) = self.place(a) else { return Answer::Pass };
         // The cartridge slot at `$400000` in mode 2: a backup RAM cartridge, or empty and reading `$FF` (D-32).
         if (0x40_0000..0x80_0000).contains(&a) {
             return Answer::Value(self.hw.cart.as_ref().map_or(0xFF, |c| c.read8(a)));
@@ -325,9 +365,7 @@ impl Attachment for MegaCd {
     }
 
     fn read16(&mut self, a: u32, at: Master) -> Answer<u16> {
-        if !decodes(a) {
-            return Answer::Pass;
-        }
+        let Some(a) = self.place(a) else { return Answer::Pass };
         if (0x40_0000..0x80_0000).contains(&a) {
             return Answer::Value(self.hw.cart.as_ref().map_or(0xFFFF, |c| (c.read8(a) as u16) << 8 | c.read8(a | 1) as u16));
         }
@@ -337,14 +375,13 @@ impl Attachment for MegaCd {
     /// Word RAM answers the VDP a cycle late, so a transfer from it reads the word before the one addressed (the
     /// Mega-CD Hardware Manual's "precautions in using DMA of the VDP").
     fn transfer16(&mut self, a: u32, at: Master) -> Answer<u16> {
-        let a = if (0x20_0000..0x24_0000).contains(&a) { 0x20_0000 | (a.wrapping_sub(2) & 0x3_FFFF) } else { a };
+        let word = if self.mode1 { 0x60_0000 } else { 0x20_0000 };
+        let a = if (word..word + 0x4_0000).contains(&a) { word | (a.wrapping_sub(2) & 0x3_FFFF) } else { a };
         self.read16(a, at)
     }
 
     fn write(&mut self, a: u32, v: u16, mask: u16, at: Master) -> bool {
-        if !decodes(a) {
-            return false;
-        }
+        let Some(a) = self.place(a) else { return false };
         if (0x40_0000..0x80_0000).contains(&a) {
             if let Some(c) = self.hw.cart.as_mut()
                 && mask & 0x00FF != 0
@@ -912,10 +949,12 @@ impl Sub {
         let now = self.to_sub(master).min(self.clock);
         self.pcm.run(now, &self.pcm_ram);
         let (num, den) = self.ratio;
-        for e in self.pcm.out.iter_mut() {
+        // Only the samples made since the last mix: one left waiting for a later frame is in master clocks already.
+        for e in self.pcm.out[self.pcm_master..].iter_mut() {
             e.0 = (e.0 as u128 * den as u128).div_ceil(num as u128) as u64;
         }
         self.cdda.feed(master, &mut self.pcm.out);
+        self.pcm_master = self.pcm.out.len();
     }
 }
 
@@ -957,6 +996,20 @@ impl Bus for SubBus<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // A PCM sample made ahead of the mix's present waits for a later frame in master clocks, and is mixed then; converted twice, it once stood for ever before every later one (Nephrite_OpenBios.md §13).
+    #[test]
+    fn a_pcm_sample_left_for_a_later_frame_is_mixed_then() {
+        let board = Board { master_hz: (4_725_000_000, 88), pal: false, start: 0, rate: 48_000 };
+        let mut m = MegaCd::new(board, vec![0u8; BIOS_SIZE], None);
+        let (num, den) = m.hw.ratio;
+        let at = (1_000u128 * den as u128).div_ceil(num as u128) as u64;
+        m.hw.pcm.out.push((1_000, [5, 5]));
+        m.hw.sound_to(at - 1);
+        assert_eq!(m.hw.pcm.out, [(at, [5, 5])], "left for later, in master clocks");
+        m.hw.sound_to(at);
+        assert!(m.hw.pcm.out.is_empty(), "mixed at its time");
+    }
 
     // A transfer from Word RAM reads the word before the one addressed, which a source set a word later corrects; the main CPU reads it in time (Nephrite_Native.md §57).
     #[test]

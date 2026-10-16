@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The live differential of C# Mercury against a MercuryRT library built elsewhere, for the branch C# Mercury moves to.
+       Not in EmuSen.sln and built only on demand - see Mercury_Native.md §14.7. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!-- C# Mercury from this checkout; the Rust library comes by path, so cargo is not run here. -->
+  <ItemGroup>
+    <ProjectReference Include="..\EmuSen\EmuSen.csproj" AdditionalProperties="EmuSenNative=false" />
+  </ItemGroup>
+
+  <!-- The synthetic programs, shared with WiseMan's goldens so both run the same images. -->
+  <ItemGroup>
+    <Compile Include="..\EmuSen.WiseMan\Fixtures\SyntheticGbRom.cs" Link="Fixtures\SyntheticGbRom.cs" />
+    <Compile Include="..\EmuSen.WiseMan\Fixtures\MercuryPrograms.cs" Link="Fixtures\MercuryPrograms.cs" />
+  </ItemGroup>
+
+</Project>

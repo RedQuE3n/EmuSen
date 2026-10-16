@@ -224,7 +224,10 @@ namespace EmuSen.WiseMan.Cores
             MercuryStateLayout layout;
             try { layout = MercuryStateLayout.For(run.Rom(), cached.State); }
             catch (InvalidDataException e) { return $"; at frame {cached.Frame} the states differ, and {e.Message}"; }
-            return $"; at frame {cached.Frame}, against the recorded state: " + string.Join(", ", layout.Differences(cached.State, mine).Take(12));
+            var fields = layout.Differences(cached.State, mine).Take(12).ToList();
+            return fields.Count == 0
+                ? $"; at frame {cached.Frame} the state equals the recorded one field for field, so the trace moved and not the engine"
+                : $"; at frame {cached.Frame}, against the recorded state: " + string.Join(", ", fields);
         }
     }
 }

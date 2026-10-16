@@ -375,6 +375,11 @@ namespace EmuSen.Cores
         // Engines built through their own shims though no row offers a choice of them: a console's only engine - see Mercury_Native.md §15.4.
         private static readonly string[] ShimEngines = { MercuryRtEngine };
 
+        // Engines a player's stored choice may still name though this build no longer has them; their console's own engine runs instead.
+        private static readonly string[] RetiredEngines = { "Mercury (C#)" };
+
+        public static bool IsRetiredEngine(string? name) => name is not null && RetiredEngines.Contains(name);
+
         public const string MoonEngine = "Moon (C#)";
         public const string MoonRtEngine = "MoonRT (Rust)";
 

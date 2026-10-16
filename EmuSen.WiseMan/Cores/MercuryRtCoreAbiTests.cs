@@ -65,6 +65,32 @@ namespace EmuSen.WiseMan.Cores
             Assert.Null(CoreFactory.EngineNotice("game.gb", CoreCatalog.MercuryRtEngine, core));
         }
 
+        // A player's stored choice of the C# core runs the game on MercuryRT, with no notice and one line on the log - see Mercury_Native.md §15.4.
+        [Fact]
+        public void A_stored_choice_of_the_retired_csharp_core_falls_back_quietly()
+        {
+            const string retired = "Mercury (C#)";
+            Assert.True(CoreCatalog.IsRetiredEngine(retired));
+            Assert.False(CoreCatalog.IsRegisteredEngine(retired));
+            string rom = Rom("stored.gb", 0x00);
+            var log = new StringWriter();
+            TextWriter was = Console.Out;
+            Console.SetOut(log);
+            try
+            {
+                CoreBundle bundle = CoreFactory.Load(rom, engine: CoreCatalog.EngineChosen("GB", retired));
+                Assert.IsType<MercuryRtCore>(bundle.Core);
+                Assert.Null(bundle.Notice);
+                (bundle.Core as IDisposable)?.Dispose();
+            }
+            finally
+            {
+                Console.SetOut(was);
+            }
+            string[] lines = log.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries).Where(l => l.Contains(retired)).ToArray();
+            Assert.Equal($"[core] {retired} is no longer in this build; {CoreCatalog.MercuryRtEngine} runs the game.", Assert.Single(lines).TrimEnd('\r'));
+        }
+
         // On a Game Boy and on a Game Boy Color, and with the Model setting forcing the colour console onto a Game Boy game.
         [Theory]
         [InlineData(0x00, "Auto")]

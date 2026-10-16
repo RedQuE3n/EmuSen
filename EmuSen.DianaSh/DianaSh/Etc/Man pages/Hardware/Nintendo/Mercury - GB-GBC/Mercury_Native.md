@@ -3674,6 +3674,13 @@ MercuryRT stays an engine the build constructs through its own shim even though 
 now also answers for the shim engines, so discovery's sidecar for `mercuryrt` is never opened as a generic v1 engine in
 the shim's place. A `.gb` or `.gbc` file is built on MercuryRT whatever engine name a caller passes.
 
+**A stored choice of the C# core.** A player's `graphics.json` may still hold `Engine = Mercury (C#)` for the GB tab,
+and a game's metadata may name it as its alternative emulator. The per-game name is already ignored, since the
+console offers no such engine. The console's stored name reaches the factory, which builds MercuryRT; the engine
+notice, which Mistress shows on its status line, says nothing (`CoreCatalog.IsRetiredEngine`), and the log gets one
+line a load: `[core] Mercury (C#) is no longer in this build; MercuryRT (Rust) runs the game.` The registration golden
+holds the factory's answers for that name on each Game Boy image.
+
 **A build without the library** says so rather than running nothing: the factory throws
 `This build has no Game Boy core: MercuryRT (Rust) is missing (<the loader's report>).`, and Mistress, which catches a
 failed load, returns to the library with `Failed to load <game>: ` and that sentence on its status line.

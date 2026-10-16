@@ -123,6 +123,12 @@ namespace EmuSen.Cores
         // Why the engine asked for is not running, or null when it is; an unavailable MarsRT says what MarsNative found - see Mars_Native.md §5.5.
         public static string? EngineNotice(string romPath, string? engine, ICore core)
         {
+            // A stored engine this build retired is no notice: its console's engine runs the game, and the log says so once a load - see Mercury_Native.md §15.4.
+            if (CoreCatalog.IsRetiredEngine(engine))
+            {
+                Console.WriteLine($"[core] {engine} is no longer in this build; {Running(core)} runs the game.");
+                return null;
+            }
             if (engine is null || CoreCatalog.EngineFor(CoreCatalog.ConsoleForRom(romPath) ?? "") is not { } choice) return null;
             if (choice.Choices?.Contains(engine) != true) return $"No {choice.Label.ToLowerInvariant()} is named \"{engine}\"; {Running(core)} is running.";
             if (engine == CoreCatalog.MarsRtEngine && core is not MarsRtCore) return $"{CoreCatalog.MarsRtEngine} is not available ({MarsNative.Report}); {CoreCatalog.MarsEngine} is running.";

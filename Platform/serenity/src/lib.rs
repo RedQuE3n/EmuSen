@@ -19,7 +19,7 @@ pub mod text;
 pub mod vulkan;
 pub mod word;
 
-use emusen_galaxia::dotnet_path::{Style, combine, full_path};
+use emusen_galaxia::dotnet_path::{Style, combine, full_path, is_effectively_empty};
 
 /// Why a preset or a source could not be read, as the C# exception it is.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -42,8 +42,11 @@ impl Error {
     }
 }
 
-/// `Path.GetFullPath`, with the two paths it refuses.
+/// `Path.GetFullPath`, with the paths it refuses: on Windows an empty or all-space path is "empty", elsewhere an empty one is an empty value.
 pub(crate) fn full(path: &str) -> Result<String, Error> {
+    if Style::HOST == Style::Windows && is_effectively_empty(Style::HOST, path) {
+        return Err(Error::Argument { message: "The path is empty.".to_string(), parameter: "path".to_string() });
+    }
     if path.is_empty() {
         return Err(Error::Argument { message: "The value cannot be an empty string.".to_string(), parameter: "path".to_string() });
     }

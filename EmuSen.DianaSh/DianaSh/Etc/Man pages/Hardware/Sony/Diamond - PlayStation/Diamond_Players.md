@@ -325,7 +325,11 @@ Each was shown by a WiseMan test failing before the change and passing after [M]
    shelf listed the tracks and the load threw `FileNotFoundException`. *Fix,* in the media module that owns a sheet's
    companions: a name is taken as written where that file exists, else part by part as the one entry of the folder that
    matches it ignoring case, `/` and `\` both separating parts; no match, or two, leaves the name as written, so the
-   load's words name it. The zipped probe already read an entry ignoring case; it now also takes `\`.
+   load's words name it. The zipped probe already read an entry ignoring case; it now also takes `\`. *Amended
+   2026-10-16:* "as written where that file exists" kept the sheet's spelling on a file system that ignores case, so on
+   Windows and macOS the tracks were found and still shelved as games, the shelf comparing names as the folder holds
+   them (this test, failing on both since CI first ran it there, `EmuSen_RustPlatform.md` §27.6). Each part is now
+   matched exactly, else by the one entry matching it ignoring case, and an `.m3u`'s discs are found the same way.
 2. **A zipped game was asked for the firmware of the archive's bytes.** *Cause:* `CoreEngine.GetFirmwareRequirements`
    read the library file whole, so `firmware_for` received the archive (and the whole archive was read from the card
    once more before the load unpacked it); Diamond reads no disc in a zip and asked for no BIOS, where the same disc

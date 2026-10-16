@@ -13,7 +13,7 @@ impl TempDir {
         let dir = std::env::temp_dir().join(name);
         std::fs::create_dir_all(&dir).unwrap();
         // The canonical spelling, so a symbolic link in the temporary directory's own path cannot differ between two answers.
-        TempDir(std::fs::canonicalize(&dir).unwrap().to_string_lossy().into_owned())
+        TempDir(ordinary(std::fs::canonicalize(&dir).unwrap().to_string_lossy().into_owned()))
     }
 
     pub fn path(&self) -> &str {
@@ -24,6 +24,15 @@ impl TempDir {
     pub fn join(&self, relative: &str) -> String {
         let separator = Style::HOST.separator().to_string();
         format!("{}{separator}{}", self.0, relative.replace('/', &separator))
+    }
+}
+
+/// Windows' canonical spelling is the extended `\\?\C:\…`, under which the system takes `..` and `/` as parts of a
+/// name; a player's paths are spelled `C:\…`, and so are the tests', with the long names canonicalising found.
+fn ordinary(canonical: String) -> String {
+    match canonical.strip_prefix(r"\\?\") {
+        Some(rest) if rest.as_bytes().get(1) == Some(&b':') => rest.to_string(),
+        _ => canonical,
     }
 }
 

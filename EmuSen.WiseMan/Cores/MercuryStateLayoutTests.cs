@@ -49,7 +49,7 @@ namespace EmuSen.WiseMan.Cores
         [MemberData(nameof(Listings))]
         public void A_committed_listing_is_what_both_engines_write(string listing)
         {
-            string committed = File.ReadAllText(Path.Combine(MercuryStateLayout.Directory(), listing));
+            string committed = MercuryStateLayout.ReadListing(Path.Combine(MercuryStateLayout.Directory(), listing));
             byte[] rom = RomFor(listing);
             CoreOptions.BatteryRamDisabled = true;
             using MercuryRig rust = MercuryRig.Create(MercuryEngine.MercuryRt, rom);

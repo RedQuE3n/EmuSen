@@ -16,6 +16,7 @@ namespace EmuSen.WiseMan.Cores
     public class DiamondDebugTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenDiamondDebug_" + Guid.NewGuid().ToString("N"));
+        private int _loads;
         private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         // The program's addresses: the loop's JAL, its delay slot, the J back, the routine and its store, and the counter in RAM.
@@ -36,7 +37,8 @@ namespace EmuSen.WiseMan.Cores
             DataStore.OverrideDirectory = null;
             CoreDiscovery.UseDirectories(null);
             CoreDiscovery.UseDevelopment(null);
-            try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
+            // Windows refuses to delete a library the process has loaded, and answers it as access denied.
+            try { Directory.Delete(_root, recursive: true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
 
         private static int At(uint address) => unchecked((int)address);
@@ -94,7 +96,8 @@ namespace EmuSen.WiseMan.Cores
         private (CoreEngine Engine, CoreDebugTarget Target) Load(int frames = 10, bool loads = false)
         {
             var found = CoreDiscovery.Found.Single(c => c.Info.Id == "diamond");
-            string exe = Path.Combine(_root, loads ? "loads.psexe" : "calls.psexe");
+            // A folder per load: an engine holds its image mapped, and Windows refuses to write a file mapped elsewhere (EmuSen_Galaxia.md §3.8).
+            string exe = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, $"load{++_loads}")).FullName, loads ? "loads.psexe" : "calls.psexe");
             File.WriteAllBytes(exe, loads ? LoadsProgram() : CallsProgram());
             var engine = new CoreEngine(found.Open()!);
             engine.LoadRom(exe);

@@ -100,7 +100,18 @@ fn action(request: Option<Request>) -> String {
 enum Outcome {
     Passed,
     NeedsHost(String),
+    /// A line naming a folder of the home in another case, whose answer is the file system's: Linux's recordings say
+    /// there is no such folder, where Windows' and macOS's find it.
+    CaseOfTheSystem,
     Failed(String),
+}
+
+/// Whether a line names an entry of the home only in another case, as `cd /LOGS` names `Logs`.
+fn names_in_another_case(input: &str, home: &Path) -> bool {
+    let entries: Vec<String> = std::fs::read_dir(home).map(|d| d.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect()).unwrap_or_default();
+    input.split_whitespace().filter_map(|word| word.trim_matches(['\'', '"']).trim_start_matches('/').split('/').next()).any(|first| {
+        !first.is_empty() && !entries.iter().any(|e| e == first) && entries.iter().any(|e| e.eq_ignore_ascii_case(first))
+    })
 }
 
 /// Whether a line runs a command only a host has (a word in command position: first, or after `|`, `;`, `&&`, `||`,
@@ -159,11 +170,16 @@ fn run(case: &Case, temp: &Path, host: &[String]) -> Outcome {
             return Outcome::NeedsHost(format!("{} answers Unknown command", step.input));
         }
         let where_ = format!("'{}', line {} ($ {})", case.title, i + 1, step.input);
+        if emusen_dianash::sandbox::IGNORES_CASE && names_in_another_case(&step.input, &home) {
+            return Outcome::CaseOfTheSystem;
+        }
         if let Some(recorded) = &recorded {
-            if &output != recorded && names_a_host_command(&step.input, recorded, host) {
+            // The recordings are Linux's; on Windows a path is printed with the system's separator, as the C# shell prints it.
+            let same = &output == recorded || (cfg!(windows) && output.replace('\\', "/") == recorded.replace('\\', "/"));
+            if !same && names_a_host_command(&step.input, recorded, host) {
                 return Outcome::NeedsHost(format!("{} runs a host's command", step.input));
             }
-            if &output != recorded {
+            if !same {
                 return Outcome::Failed(format!("{where_}: printed\n{output}\n-- recorded\n{recorded}"));
             }
         }
@@ -184,10 +200,21 @@ fn run(case: &Case, temp: &Path, host: &[String]) -> Outcome {
     Outcome::Passed
 }
 
+/// Windows' canonical spelling without its extended `\\?\` prefix, which the shell's paths do not carry.
+fn ordinary(canonical: PathBuf) -> PathBuf {
+    match canonical.to_string_lossy().strip_prefix(r"\\?\") {
+        Some(rest) if rest.as_bytes().get(1) == Some(&b':') => PathBuf::from(rest),
+        _ => canonical,
+    }
+}
+
 #[test]
 fn every_case_the_rust_shell_can_run_alone_prints_its_recording() {
     let temp = std::env::temp_dir().join(format!("dianash-golden-{}", std::process::id()));
     std::fs::create_dir_all(&temp).unwrap();
+    // The folder as the system names the working directory set in it: macOS's temporary folder is reached through the
+    // link /var, which the working directory reports as /private/var, and Windows' may be given by its 8.3 name.
+    let temp = ordinary(std::fs::canonicalize(&temp).unwrap());
     let mut files: Vec<PathBuf> = std::fs::read_dir(corpus()).unwrap().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "golden")).collect();
     files.sort();
     // Every command the corpus records that the Rust shell does not answer itself: a host's, through the bridge.
@@ -197,7 +224,7 @@ fn every_case_the_rust_shell_can_run_alone_prints_its_recording() {
         .map(|f| f.file_stem().unwrap().to_string_lossy().into_owned())
         .filter(|name| !own.contains(name) && !["help", "man", "export", "unset", "source", "shell", "bracket"].contains(&name.as_str()))
         .collect();
-    let (mut passed, mut needs_host, mut failures) = (0, 0, Vec::new());
+    let (mut passed, mut needs_host, mut case_of_the_system, mut failures) = (0, 0, 0, Vec::new());
     for file in files {
         let name = file.file_name().unwrap().to_string_lossy().into_owned();
         // help and man list and read what a host ships beside the program; WiseMan runs them.
@@ -213,13 +240,14 @@ fn every_case_the_rust_shell_can_run_alone_prints_its_recording() {
                         eprintln!("needs a host: {name} '{}': {why}", case.title);
                     }
                 }
+                Outcome::CaseOfTheSystem => case_of_the_system += 1,
                 Outcome::Failed(why) => failures.push(format!("{name}: {why}")),
             }
         }
     }
     std::env::set_current_dir(std::env::temp_dir()).unwrap();
     let _ = std::fs::remove_dir_all(&temp);
-    eprintln!("golden cases run by the Rust shell alone: {passed} passed, {needs_host} need a host's command, {} failed", failures.len());
+    eprintln!("golden cases run by the Rust shell alone: {passed} passed, {needs_host} need a host's command, {case_of_the_system} ask the file system's case, {} failed", failures.len());
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
     assert!(passed > 0);
 }

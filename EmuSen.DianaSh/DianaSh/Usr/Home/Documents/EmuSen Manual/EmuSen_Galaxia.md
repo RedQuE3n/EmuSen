@@ -73,6 +73,8 @@ This lived at `<root>/EmuSen.DianaSh/DianaSh/Usr/Home/` until the layout cleanup
 
 It **copies and never overwrites**, the same rule as `ConfigFile<T>.MigrateFromLegacy`: the migration itself destroys nothing, and a destination file that already exists always wins. Running it twice copies nothing the second time.
 
+A tree is not migrated onto itself. The two roots' full paths are compared without regard to case, which on Windows also unifies `/` and `\`, `..`, and trailing dots and spaces; a spelling the text cannot tell is the tree (the `\\?\` form, an 8.3 name, a junction or link, a decomposed character on macOS) is walked, and copies nothing, because every file finds itself already there. Both halves hold this on Linux, Windows and macOS (`EmuSen_RustPlatform.md` §27.1).
+
 Copying rather than moving buys a verification window, not a permanent fallback. In this repo that window has closed: the four source directories were confirmed byte-identical to their copies and then deleted, so `Usr/Home/` now holds only `Documents` (committed source) and the untouched `Games`/`Roms`. An older build run against this tree would come up with no saves — expected, and the reason the check happened before the delete rather than after.
 
 ### 3.3 The ROM library is never migrated
@@ -234,8 +236,10 @@ Galaxia. `MediaProbe` and `DiscSectors` stayed in Crystal: they serve routing.
 switch as every other rule is. `GalaxiaParityTests.A_file_is_mapped_to_the_same_bytes_and_refused_with_the_same_exception_both_ways`
 holds the two to the same bytes and the same exception for a missing file (`FileNotFoundException`), a missing folder
 (`DirectoryNotFoundException`) and a folder (`UnauthorizedAccessException`); writing it found the library answering a
-folder with the system's "no such device", and it now refuses one as .NET does. The conformance kit, which has no C#,
-maps through the Rust module.
+folder with the system's "no such device", and it now refuses one as .NET does. *Amended 2026-10-15:* Windows refuses
+to open a folder at all, so the library's refusal was the system's "Access is denied" there; a folder is now refused
+with the same words, "is a directory", on every system (`EmuSen_RustPlatform.md` §27.1). The conformance kit, which has
+no C#, maps through the Rust module.
 
 **The rule of keeping** [C]. A `DiscFiles` is kept for as long as a machine may read it and no longer: by the host's
 `CoreMachine` while a core that borrows holds the disc, released at `free` or when the drive takes another disc; for a
@@ -244,7 +248,11 @@ Another program may: on Linux and macOS a mapped file can be renamed or deleted 
 or rewritten under a running game is read as it is then, and a page past a truncation ends the process with the
 system's signal for a mapped page that no longer exists; removing the card has the same effect, where a copied disc
 outlived it. On Windows a mapped file cannot be deleted, renamed or written while the game runs; the player is told
-it is in use, until the game is closed or its disc changed. .NET's own advisory locks are not seen by the library's
+it is in use, until the game is closed or its disc changed. Each half makes that so by holding the file open for the
+mapping's life and sharing only reading, the C# by its `FileStream` with `FileShare.Read`, the library by its file
+with `FILE_SHARE_READ`; *until 2026-10-15 the library closed its file once the view was made, and a view refuses
+nothing, so on Windows this held for the C# half alone* (`EmuSen_RustPlatform.md` §27.2), and
+`GalaxiaParityTests.A_held_mapping_lets_in_the_same_openers_both_ways` now holds the two alike. .NET's own advisory locks are not seen by the library's
 mapping, as by any program that is not .NET, so the folder hold, and not a lock on each file, is what keeps pruning
 away.
 

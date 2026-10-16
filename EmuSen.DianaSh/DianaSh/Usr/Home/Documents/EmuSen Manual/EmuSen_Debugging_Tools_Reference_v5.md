@@ -42,7 +42,7 @@ These all live in `GameWindow`'s per-frame hotkey dispatch, consumed once per fr
 
 ## 2. `DebugSettings.cs` — every logging toggle
 
-*Since 2026-10-16* `DebugSettings` holds the master switch and the NES's PPU write log alone: every other flag below was read only by C# Venus and left with it (`VenusRT_Native.md` §68.5), and Mistress's Debug Logging window lists what remains. The section is kept as the record.
+*Since 2026-10-16* `DebugSettings` holds the master switch alone: every other flag below was read only by C# Venus and left with it (`VenusRT_Native.md` §68.5), and the NES's PPU write log, the last, left with C# Moon the same day; Mistress's Debug Logging window keeps the master switch, which the shell's watches and `log` still read. The section is kept as the record.
 
 One central static class (`Settings/DebugSettings.cs`), grouped by which file each flag affects. Flip these instead of hunting through individual files. All of them are **on/off switches for logging that already runs continuously** — none of them change emulation behavior, only whether/what gets printed.
 

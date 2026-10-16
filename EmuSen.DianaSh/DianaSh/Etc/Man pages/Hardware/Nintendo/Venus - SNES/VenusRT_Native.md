@@ -7380,7 +7380,9 @@ own: `RetiredEngines` holds Mars (C#), Mercury (C#), Moon (C#) and Venus (C#); `
 MercuryRT and MoonRT; `SoleDiscoveredEngines` VenusRT alone. `ReferenceEngineByConsole` is now empty, and no console has
 an Engine row. Two of Pharaoh's modes had one target each left after the other retirement and none after both:
 `--singlestep` (the NES's 6502, the SNES's 65816 and SPC700) and `--tracediff` (the NES's APU log, the SNES's S-CPU and
-GSU traces). Both are gone, with `EmuSen/Validation/` and `EmuSen/Cores/Debug/TraceDiff.cs`, which nothing else read.
+GSU traces). Both are gone, with `EmuSen/Validation/` and `EmuSen/Cores/Debug/TraceDiff.cs`, which nothing else read. So is
+`DebugSettings`' last flag, the NES's PPU write log, whose reader left with C# Moon; Mistress's Debug Logging window
+keeps the master switch, which the shell's watches and `log` read.
 The registration golden was recorded again on the merged tree; against the NES's retirement alone it differs only in
 the SNES's rows and the retired name's, as in §68.6.
 

@@ -14,15 +14,8 @@ namespace EmuSen.Mistress.Views
     {
         private readonly record struct Flag(string Label, string Description, Func<bool> Get, Action<bool> Set);
 
-        // The flags a core still reads; C# Venus's left with it on 2026-10-16 - see VenusRT_Native.md §68.4.
-        private readonly (string Section, Flag[] Flags)[] _groups =
-        {
-            ("NES", new[]
-            {
-                new Flag("PPU register writes", "Logs each frame's $2000-$2007 writes with the dot each landed on.",
-                    () => DebugSettings.NesPpuWriteLogging, v => DebugSettings.NesPpuWriteLogging = v),
-            }),
-        };
+        // The flags a core still reads: none since the C# cores left on 2026-10-16, so only the master switch remains - see VenusRT_Native.md §68.8.
+        private readonly (string Section, Flag[] Flags)[] _groups = Array.Empty<(string, Flag[])>();
 
         private readonly List<LunaSwitch> _flagSwitches = new();
         private readonly LunaSwitch _master = new() { Name = "MasterLoggingCheckBox", Label = "Enable Logging (master switch)", FontWeight = FontWeight.Bold };

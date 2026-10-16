@@ -9,13 +9,5 @@ namespace EmuSen.Debug
             get => EmuSen.Crystal.Debugger.DebugLogging.MasterEnabled;
             set => EmuSen.Crystal.Debugger.DebugLogging.MasterEnabled = value;
         }
-
-        // Per-frame $2000-$2007 traffic with the dot it landed on - see Moon_PPU.md §7.
-        private static bool _nesPpuWriteLogging = true;
-        public static bool NesPpuWriteLogging
-        {
-            get => MasterLoggingEnabled && _nesPpuWriteLogging;
-            set => _nesPpuWriteLogging = value;
-        }
     }
 }

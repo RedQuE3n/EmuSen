@@ -45,7 +45,8 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
                 int depth = mode == "over" ? stack.Depth : stack.Depth - 1;
                 if (depth < 0) return DianaShResult.Fail("Already at the outermost frame - nothing to step out of.");
 
-                breakpoints.ArmStepToDepth(depth);
+                // A registry never told the call stack arms nothing, so the step is refused rather than reported - see EmuSen_DianaSh.md §16 Q18.
+                if (!breakpoints.ArmStepToDepth(depth)) return DianaShResult.Fail($"This core does not report a call stack to its breakpoints, so `step {mode}` cannot be armed.");
                 return DianaShResult.Ok(mode == "over" ? "Stepping over..." : "Stepping out...", new HostAction.Step());
             }
 

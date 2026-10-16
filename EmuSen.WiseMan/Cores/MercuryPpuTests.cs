@@ -1,18 +1,15 @@
-using EmuSen.Cores.Nintendo.Mercury;
-using EmuSen.Cores.Nintendo.Mercury.Memory;
-using EmuSen.Cores.Nintendo.Mercury.Video;
-using GbPpu = EmuSen.Cores.Nintendo.Mercury.Video.Ppu;
+using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // Mercury's LCD controller - see Mercury_Ppu.md; Mercury and MercuryRT are held to the same claims - see Mercury_Native.md §12.
-    public abstract class MercuryPpuClaims : IDisposable
+    // Mercury's LCD controller - see Mercury_Ppu.md; held on MercuryRT - see Mercury_Native.md §12, §15.
+    public sealed class MercuryRtPpuTests : IDisposable
     {
-        private const int LineCycles = GbPpu.CyclesPerScanline;
+        private const int LineCycles = MercuryRig.CyclesPerScanline;
 
         // Where mode 3 ends with SCX zero, which is when the line is composited.
-        private const int DrawingEnd = GbPpu.OamScanCycles + GbPpu.BaseDrawingCycles;
+        private const int DrawingEnd = MercuryRig.OamScanCycles + MercuryRig.BaseDrawingCycles;
 
         private const byte White = 0xFF;
         private const byte LightGrey = 0xAA;
@@ -24,7 +21,6 @@ namespace EmuSen.WiseMan.Cores
 
         private readonly List<MercuryRig> _rigs = new();
 
-        protected abstract MercuryEngine Engine { get; }
 
         public void Dispose()
         {
@@ -33,30 +29,30 @@ namespace EmuSen.WiseMan.Cores
 
         private MercuryRig Load()
         {
-            var core = MercuryRig.Create(Engine, SyntheticGbRom.Build());
+            var core = MercuryRig.Create(SyntheticGbRom.Build());
             _rigs.Add(core);
             return core;
         }
 
         private static byte Pixel(MercuryRig core, int x, int y) =>
-            core.GetFrameBufferRgba()[(((y * GbPpu.ScreenWidth) + x) * 4)];
+            core.GetFrameBufferRgba()[(((y * MercuryRig.ScreenWidth) + x) * 4)];
 
         // Every row of one tile set to a single colour, written at the $8000-relative slot.
         private static void FillTile(MercuryRig core, int tile, int color)
         {
             for (int row = 0; row < 8; row++)
             {
-                core.Bus.Vram[(tile * 16) + (row * 2)] = (byte)((color & 0x01) != 0 ? 0xFF : 0x00);
-                core.Bus.Vram[(tile * 16) + (row * 2) + 1] = (byte)((color & 0x02) != 0 ? 0xFF : 0x00);
+                core.WriteSpace("VRAM", (tile * 16) + (row * 2), (byte)((color & 0x01) != 0 ? 0xFF : 0x00));
+                core.WriteSpace("VRAM", (tile * 16) + (row * 2) + 1, (byte)((color & 0x02) != 0 ? 0xFF : 0x00));
             }
         }
 
         private static void PutSprite(MercuryRig core, int slot, int y, int x, int tile, byte attributes)
         {
-            core.Bus.Oam[slot * 4] = (byte)y;
-            core.Bus.Oam[(slot * 4) + 1] = (byte)x;
-            core.Bus.Oam[(slot * 4) + 2] = (byte)tile;
-            core.Bus.Oam[(slot * 4) + 3] = attributes;
+            core.WriteSpace("OAM", slot * 4, (byte)y);
+            core.WriteSpace("OAM", (slot * 4) + 1, (byte)x);
+            core.WriteSpace("OAM", (slot * 4) + 2, (byte)tile);
+            core.WriteSpace("OAM", (slot * 4) + 3, attributes);
         }
 
         [Fact]
@@ -64,17 +60,17 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            Assert.Equal(PpuMode.OamScan, core.Bus.Ppu.Mode);
+            Assert.Equal(MercuryRig.OamScanMode, core.Field("Bus.Ppu.Mode"));
 
-            core.Tick(GbPpu.OamScanCycles);
-            Assert.Equal(PpuMode.Drawing, core.Bus.Ppu.Mode);
+            core.Tick(MercuryRig.OamScanCycles);
+            Assert.Equal(MercuryRig.DrawingMode, core.Field("Bus.Ppu.Mode"));
 
-            core.Tick(DrawingEnd - GbPpu.OamScanCycles);
-            Assert.Equal(PpuMode.HBlank, core.Bus.Ppu.Mode);
+            core.Tick(DrawingEnd - MercuryRig.OamScanCycles);
+            Assert.Equal(MercuryRig.HBlankMode, core.Field("Bus.Ppu.Mode"));
 
             core.Tick(LineCycles - DrawingEnd);
-            Assert.Equal(1, core.Bus.Ppu.Ly);
-            Assert.Equal(PpuMode.OamScan, core.Bus.Ppu.Mode);
+            Assert.Equal(1, core.Field("Bus.Ppu.Ly"));
+            Assert.Equal(MercuryRig.OamScanMode, core.Field("Bus.Ppu.Mode"));
         }
 
         // SCX's low three bits are the fine scroll, and hardware pays for them out of mode 3.
@@ -85,10 +81,10 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF43, 0x05);
 
             core.Tick(DrawingEnd);
-            Assert.Equal(PpuMode.Drawing, core.Bus.Ppu.Mode);
+            Assert.Equal(MercuryRig.DrawingMode, core.Field("Bus.Ppu.Mode"));
 
             core.Tick(5);
-            Assert.Equal(PpuMode.HBlank, core.Bus.Ppu.Mode);
+            Assert.Equal(MercuryRig.HBlankMode, core.Field("Bus.Ppu.Mode"));
         }
 
         [Fact]
@@ -97,13 +93,13 @@ namespace EmuSen.WiseMan.Cores
             var core = Load();
 
             core.Tick(LineCycles * 143);
-            Assert.Equal(143, core.Bus.Ppu.Ly);
-            Assert.Equal(0, core.Bus.InterruptFlags & (1 << (int)Interrupt.VBlank));
+            Assert.Equal(143, core.Field("Bus.Ppu.Ly"));
+            Assert.Equal(0, core.Field("Bus.InterruptFlags") & (1 << MercuryRig.VBlank));
 
             core.Tick(LineCycles);
-            Assert.Equal(144, core.Bus.Ppu.Ly);
-            Assert.Equal(PpuMode.VBlank, core.Bus.Ppu.Mode);
-            Assert.NotEqual(0, core.Bus.InterruptFlags & (1 << (int)Interrupt.VBlank));
+            Assert.Equal(144, core.Field("Bus.Ppu.Ly"));
+            Assert.Equal(MercuryRig.VBlankMode, core.Field("Bus.Ppu.Mode"));
+            Assert.NotEqual(0, core.Field("Bus.InterruptFlags") & (1 << MercuryRig.VBlank));
         }
 
         [Fact]
@@ -111,11 +107,11 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            core.Tick(LineCycles * GbPpu.TotalScanlines);
+            core.Tick(LineCycles * MercuryRig.TotalScanlines);
 
-            Assert.Equal(0, core.Bus.Ppu.Ly);
-            Assert.Equal(1, core.Bus.Ppu.FrameCount);
-            Assert.True(core.Bus.Ppu.FrameComplete);
+            Assert.Equal(0, core.Field("Bus.Ppu.Ly"));
+            Assert.Equal(1, core.Field("Bus.Ppu.FrameCount"));
+            Assert.True(core.Flag("Bus.Ppu.FrameComplete"));
         }
 
         [Fact]
@@ -127,7 +123,7 @@ namespace EmuSen.WiseMan.Cores
             byte stat = core.Read(0xFF41);
             Assert.Equal(0x80, stat & 0x80);
             Assert.Equal(0x04, stat & 0x04);
-            Assert.Equal((int)PpuMode.OamScan, stat & 0x03);
+            Assert.Equal((int)MercuryRig.OamScanMode, stat & 0x03);
 
             core.Tick(LineCycles);
             Assert.Equal(0x00, core.Read(0xFF41) & 0x04);
@@ -141,11 +137,11 @@ namespace EmuSen.WiseMan.Cores
 
             core.Write(0xFF45, 0x00);   // LYC = 0, which LY already matches
             core.Write(0xFF41, 0x48);    // LYC and hblank sources both enabled
-            core.Bus.InterruptFlags = 0;
+            core.SetField("Bus.InterruptFlags", 0);
 
             core.Tick(DrawingEnd);
-            Assert.Equal(PpuMode.HBlank, core.Bus.Ppu.Mode);
-            Assert.Equal(0, core.Bus.InterruptFlags & (1 << (int)Interrupt.LcdStat));
+            Assert.Equal(MercuryRig.HBlankMode, core.Field("Bus.Ppu.Mode"));
+            Assert.Equal(0, core.Field("Bus.InterruptFlags") & (1 << MercuryRig.LcdStat));
         }
 
         [Fact]
@@ -155,10 +151,10 @@ namespace EmuSen.WiseMan.Cores
 
             core.Write(0xFF45, 0x05);   // LYC far from LY, so nothing else holds the line
             core.Write(0xFF41, 0x48);
-            core.Bus.InterruptFlags = 0;
+            core.SetField("Bus.InterruptFlags", 0);
 
             core.Tick(DrawingEnd);
-            Assert.NotEqual(0, core.Bus.InterruptFlags & (1 << (int)Interrupt.LcdStat));
+            Assert.NotEqual(0, core.Field("Bus.InterruptFlags") & (1 << MercuryRig.LcdStat));
         }
 
         [Fact]
@@ -168,11 +164,11 @@ namespace EmuSen.WiseMan.Cores
 
             core.Write(0xFF45, 0x03);
             core.Write(0xFF41, 0x40);
-            core.Bus.InterruptFlags = 0;
+            core.SetField("Bus.InterruptFlags", 0);
 
             core.Tick(LineCycles * 3);
-            Assert.Equal(3, core.Bus.Ppu.Ly);
-            Assert.NotEqual(0, core.Bus.InterruptFlags & (1 << (int)Interrupt.LcdStat));
+            Assert.Equal(3, core.Field("Bus.Ppu.Ly"));
+            Assert.NotEqual(0, core.Field("Bus.InterruptFlags") & (1 << MercuryRig.LcdStat));
         }
 
         [Fact]
@@ -182,7 +178,7 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF47, IdentityPalette);
 
             FillTile(core, tile: 1, color: 1);
-            core.Bus.Vram[0x1800] = 1;
+            core.WriteSpace("VRAM", 0x1800, 1);
 
             core.Tick(LineCycles);
 
@@ -198,7 +194,7 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF47, 0x1B);   // 00 01 10 11: the identity mapping reversed
 
             FillTile(core, tile: 1, color: 1);
-            core.Bus.Vram[0x1800] = 1;
+            core.WriteSpace("VRAM", 0x1800, 1);
 
             core.Tick(LineCycles);
 
@@ -213,7 +209,7 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF47, IdentityPalette);
 
             FillTile(core, tile: 1, color: 3);
-            core.Bus.Vram[0x1800 + 32] = 1;   // map row 1, column 0
+            core.WriteSpace("VRAM", 0x1800 + 32, 1);   // map row 1, column 0
 
             // Row 1 of the map is off screen until SCY brings it up to line 0.
             core.Tick(LineCycles);
@@ -221,7 +217,7 @@ namespace EmuSen.WiseMan.Cores
 
             core.Write(0xFF42, 8);
             core.Write(0xFF43, 4);
-            core.Tick(LineCycles * (GbPpu.TotalScanlines - 1));
+            core.Tick(LineCycles * (MercuryRig.TotalScanlines - 1));
             core.Tick(LineCycles);
 
             // SCX 4 slides the tile four pixels left, so it occupies x 0-3 and nothing after.
@@ -237,8 +233,8 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF47, IdentityPalette);
             core.Write(0xFF40, 0x81);   // LCD on, BG on, tile data at $8800
 
-            for (int row = 0; row < 8; row++) core.Bus.Vram[0x1000 + (row * 2)] = 0xFF;
-            core.Bus.Vram[0x1800] = 0;
+            for (int row = 0; row < 8; row++) core.WriteSpace("VRAM", 0x1000 + (row * 2), 0xFF);
+            core.WriteSpace("VRAM", 0x1800, 0);
 
             core.Tick(LineCycles);
             Assert.Equal(LightGrey, Pixel(core, 0, 0));
@@ -251,7 +247,7 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF47, IdentityPalette);
 
             FillTile(core, tile: 1, color: 3);
-            core.Bus.Vram[0x1800] = 1;
+            core.WriteSpace("VRAM", 0x1800, 1);
 
             core.Write(0xFF40, 0x90);   // same as boot, minus BG enable
             core.Tick(LineCycles);
@@ -268,8 +264,8 @@ namespace EmuSen.WiseMan.Cores
             FillTile(core, tile: 1, color: 1);
             FillTile(core, tile: 2, color: 3);
 
-            for (int i = 0; i < 32; i++) core.Bus.Vram[0x1800 + i] = 1;
-            core.Bus.Vram[0x1C00] = 2;
+            for (int i = 0; i < 32; i++) core.WriteSpace("VRAM", 0x1800 + i, 1);
+            core.WriteSpace("VRAM", 0x1C00, 2);
 
             core.Write(0xFF4A, 0);      // WY
             core.Write(0xFF4B, 15);     // WX, so the window starts at x = 8
@@ -289,7 +285,7 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF47, IdentityPalette);
 
             FillTile(core, tile: 2, color: 3);
-            core.Bus.Vram[0x1C00] = 2;      // window map row 0 only
+            core.WriteSpace("VRAM", 0x1C00, 2);      // window map row 0 only
 
             core.Write(0xFF4A, 4);      // WY
             core.Write(0xFF4B, 7);      // WX, so the window starts at x = 0
@@ -299,7 +295,7 @@ namespace EmuSen.WiseMan.Cores
 
             Assert.Equal(White, Pixel(core, 0, 3));
             Assert.Equal(Black, Pixel(core, 0, 4));
-            Assert.Equal(1, core.Bus.Ppu.WindowLine);
+            Assert.Equal(1, core.Field("Bus.Ppu.WindowLine"));
         }
 
         [Fact]
@@ -330,7 +326,7 @@ namespace EmuSen.WiseMan.Cores
 
             FillTile(core, tile: 1, color: 1);
             FillTile(core, tile: 2, color: 0);
-            core.Bus.Vram[0x1800] = 1;
+            core.WriteSpace("VRAM", 0x1800, 1);
             PutSprite(core, slot: 0, y: 16, x: 8, tile: 2, attributes: 0x00);
 
             core.Tick(LineCycles);
@@ -346,7 +342,7 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF40, 0x93);
 
             // Column 0 opaque on row 0 only, so both flips are separately observable.
-            core.Bus.Vram[16] = 0x80;
+            core.WriteSpace("VRAM", 16, 0x80);
 
             PutSprite(core, slot: 0, y: 16, x: 8, tile: 1, attributes: 0x00);
             PutSprite(core, slot: 1, y: 16, x: 8 + 16, tile: 1, attributes: 0x20);
@@ -450,8 +446,8 @@ namespace EmuSen.WiseMan.Cores
             FillTile(core, tile: 2, color: 0);
             FillTile(core, tile: 3, color: 3);
 
-            core.Bus.Vram[0x1800] = 1;      // x 0-7 background colour 1
-            core.Bus.Vram[0x1801] = 2;      // x 8-15 background colour 0
+            core.WriteSpace("VRAM", 0x1800, 1);      // x 0-7 background colour 1
+            core.WriteSpace("VRAM", 0x1801, 2);      // x 8-15 background colour 0
             PutSprite(core, slot: 0, y: 16, x: 8 + 4, tile: 3, attributes: 0x80);
 
             core.Tick(LineCycles);
@@ -467,18 +463,18 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF47, IdentityPalette);
 
             FillTile(core, tile: 1, color: 3);
-            core.Bus.Vram[0x1800] = 1;
+            core.WriteSpace("VRAM", 0x1800, 1);
 
             core.Tick(LineCycles * 3);
             Assert.Equal(Black, Pixel(core, 0, 0));
 
             core.Write(0xFF40, 0x11);
-            Assert.Equal(0, core.Bus.Ppu.Ly);
+            Assert.Equal(0, core.Field("Bus.Ppu.Ly"));
             Assert.Equal(White, Pixel(core, 0, 0));
 
             // A disabled controller does not advance, whatever the clock does.
             core.Tick(LineCycles * 3);
-            Assert.Equal(0, core.Bus.Ppu.Ly);
+            Assert.Equal(0, core.Field("Bus.Ppu.Ly"));
         }
 
         [Fact]
@@ -488,8 +484,8 @@ namespace EmuSen.WiseMan.Cores
             core.RunFrame();
 
             Assert.Equal(1, core.TotalFrames);
-            Assert.Equal(0, core.Bus.Ppu.Ly);
-            Assert.Equal(1, core.Bus.Ppu.FrameCount);
+            Assert.Equal(0, core.Field("Bus.Ppu.Ly"));
+            Assert.Equal(1, core.Field("Bus.Ppu.FrameCount"));
         }
 
         // A game that leaves the LCD off still has to get frames out of RunFrame.
@@ -502,7 +498,7 @@ namespace EmuSen.WiseMan.Cores
             core.RunFrame();
 
             Assert.Equal(1, core.TotalFrames);
-            Assert.Equal(0, core.Bus.Ppu.FrameCount);
+            Assert.Equal(0, core.Field("Bus.Ppu.FrameCount"));
         }
 
         [Fact]
@@ -513,25 +509,15 @@ namespace EmuSen.WiseMan.Cores
 
             using var stream = new MemoryStream();
             core.SaveState(stream);
-            byte lyAtSave = core.Bus.Ppu.Ly;
+            long lyAtSave = core.Field("Bus.Ppu.Ly");
 
             core.Tick(LineCycles * 10);
-            Assert.NotEqual(lyAtSave, core.Bus.Ppu.Ly);
+            Assert.NotEqual(lyAtSave, core.Field("Bus.Ppu.Ly"));
 
             stream.Position = 0;
             core.LoadState(stream);
 
-            Assert.Equal(lyAtSave, core.Bus.Ppu.Ly);
+            Assert.Equal(lyAtSave, core.Field("Bus.Ppu.Ly"));
         }
-    }
-
-    public sealed class MercuryPpuTests : MercuryPpuClaims
-    {
-        protected override MercuryEngine Engine => MercuryEngine.Mercury;
-    }
-
-    public sealed class MercuryRtPpuTests : MercuryPpuClaims
-    {
-        protected override MercuryEngine Engine => MercuryEngine.MercuryRt;
     }
 }

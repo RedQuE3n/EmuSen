@@ -192,30 +192,6 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
-covers 1
-$ spaces
-out 248
-GB memory spaces:
-  ROM           32768 bytes  R/O
-  VRAM           8192 bytes  R/W
-  CARTRAM           0 bytes  R/W
-  WRAM           8192 bytes  R/W
-  OAM             160 bytes  R/W
-  HRAM            127 bytes  R/W
-  CPUBUS        65536 bytes  R/W
-status 0
-action none
-$ mem CpuBus 0 20
-out 176
-CPUBUS @ 0x0 (32 bytes):
-  000000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
-  000010: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
-status 0
-action none
-end
-
 case on mercuryrt
 target mercuryrt
 covers 1

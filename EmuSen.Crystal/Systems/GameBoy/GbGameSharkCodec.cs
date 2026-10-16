@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 
-namespace EmuSen.Cores.Nintendo.Mercury.Cheats
+namespace EmuSen.Crystal.Systems.GameBoy
 {
     // The Game Boy GameShark: eight hex digits, and a RAM poke rather than a ROM patch - see Mercury_Cheats.md §3.
     public static class GbGameSharkCodec
@@ -25,7 +25,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cheats
             return ((high << 8) | low, value);
         }
 
-        // The first byte is the external RAM bank a code applies to; Mercury pokes the live bus instead.
+        // The first byte is the external RAM bank a code applies to; the engine pokes the live bus instead.
         public static byte BankOf(string code) =>
             TryNormalize(code, out string hex) ? Convert.ToByte(hex.Substring(0, 2), 16) : (byte)0;
 

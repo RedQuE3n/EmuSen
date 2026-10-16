@@ -95,16 +95,6 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
-covers 1
-$ pal 0
-out 35
-pal  0: FFFFFF 000000 000000 000000
-status 0
-action none
-end
-
 case on mercuryrt
 target mercuryrt
 covers 1

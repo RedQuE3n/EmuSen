@@ -192,7 +192,8 @@ The comparison below renamed the cores, dropped blank lines and braces, and comp
 - **The C# cores.** Venus, Moon, Mercury and Mars keep their own `ICore` implementations. Registration covers them.
   The ABI does not, because they have none.
   *Since 2026-10-16 Mars (C#) is deleted (`Mars_Native.md` §6.7): the N64 runs on MarsRT alone, its shim registered by
-  hand, and the C# cores are Venus, Moon and Mercury.*
+  hand. C# Mercury is deleted the same day (`Mercury_Native.md` §15): MercuryRT is the Game Boy's only engine, a port
+  with no mirror, for which `PortEngine`'s mirror became optional. The C# cores that remain are Venus and Moon.*
 - **A stable ABI for third parties.** The libraries ship beside the assemblies that load them. The version check
   guards a mismatched prebuilt library, not an ecosystem.
   *Superseded 2026-10-01: a stable ABI for third parties is now a goal, decided that day; `EmuSen_CoreAPI.md` §4.8
@@ -1413,6 +1414,8 @@ measured and not kept.
 - A digest over the picture, the sound and the state matches pre-move MercuryRT on 24 runs. That is 7 games in the
   three models from boot and from a state, and 3 library resume states.
 - The fallback to Mercury (C#), with `EMUSEN_MERCURY_NATIVE=0` and without the library, is tested in a child process.
+  *Since 2026-10-16 there is no fallback: without the library a Game Boy game does not load, and the status line says
+  why (`Mercury_Native.md` §15.4).*
 
 **P4 held for the plain path, and was not enough.** The symbol diff found one inlining regression, and once it was
 removed every function of the plain path had its old size. The functions that still differ are all cold, though not

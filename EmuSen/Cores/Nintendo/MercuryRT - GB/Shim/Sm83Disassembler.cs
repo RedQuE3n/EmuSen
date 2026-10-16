@@ -1,7 +1,7 @@
 using System;
 using EmuSen.Crystal.Debugger;
 
-namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Disassembler
+namespace EmuSen.Cores.Nintendo.MercuryRT
 {
     // A second opcode table, independent of the executing one - see Mercury_Debug.md §4.
     public static class Sm83Disassembler

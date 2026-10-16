@@ -7,9 +7,9 @@ using System.Security.Cryptography;
 using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
+using EmuSen.Cores.Nintendo.MercuryRT;
 
 namespace EmuSen.WiseMan.Cores
 {
@@ -133,7 +133,7 @@ namespace EmuSen.WiseMan.Cores
 
         private static ICore GameBoy()
         {
-            var core = new MercuryCore();
+            var core = new MercuryRtCore();
             core.LoadRom(SyntheticGbRom.WriteTemp(GbRom));
             return core;
         }

@@ -175,8 +175,8 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
+case on mercuryrt
+target mercuryrt
 covers 1-4
 $ watch add WRAM 0 100 both
 out 36

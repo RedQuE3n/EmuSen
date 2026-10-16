@@ -166,26 +166,6 @@ status 1
 action none
 end
 
-case on mercury
-target mercury
-covers 1,3
-$ bt
-out 47
-  #0   $000038  <- call from $008000  (frame 1)
-status 0
-action none
-$ bt 2
-out 47
-  #0   $000038  <- call from $008000  (frame 1)
-status 0
-action none
-$ bt cop
-out 61
-This cartridge has no coprocessor to report a call stack for.
-status 1
-action none
-end
-
 case on mercuryrt
 target mercuryrt
 covers 1,3

@@ -225,7 +225,7 @@ namespace EmuSen.Cores
             {
                 [Venus.Console] = Nintendo.Venus.VenusCore.PadButtons,
                 [Moon.Console] = Nintendo.Moon.MoonCore.PadButtons,
-                [Mercury.Console] = Nintendo.Mercury.MercuryCore.PadButtons,
+                [Mercury.Console] = Nintendo.MercuryRT.MercuryRtCore.PadButtons,
                 [Mars.Console] = Nintendo.MarsRT.N64Console.PadButtons,
             };
 
@@ -307,7 +307,7 @@ namespace EmuSen.Cores
         private static readonly Dictionary<string, IReadOnlyList<CoreSetting>> SettingsByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
             ["N64"] = Nintendo.MarsRT.N64Console.VideoSettings,
-            ["GB"] = Nintendo.Mercury.MercuryCore.ModelSettings,
+            ["GB"] = Nintendo.MercuryRT.MercuryRtCore.ModelSettings,
         };
 
         public static IReadOnlyList<CoreSetting> SettingsFor(string console) =>
@@ -355,17 +355,17 @@ namespace EmuSen.Cores
         public const string MarsRtEngine = "MarsRT (Rust)";
 
         // An engine a console runs through its own shim, with no choice beside it, so it has no row - see EmuSen_Settings_Reference.md §4.44.
-        private static readonly string[] SoleEngines = { MarsRtEngine };
+        private static readonly string[] SoleEngines = { MarsRtEngine, MercuryRtEngine };
 
         // A retired engine's name a player's settings may still hold, and the engine that runs instead - see Mars_Native.md §6.7.
         private static readonly Dictionary<string, string> RetiredEngines = new(StringComparer.Ordinal)
         {
             ["Mars (C#)"] = MarsRtEngine,
+            ["Mercury (C#)"] = MercuryRtEngine,
         };
 
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> RetiredLogged = new(StringComparer.Ordinal);
 
-        public const string MercuryEngine = "Mercury (C#)";
         public const string MercuryRtEngine = "MercuryRT (Rust)";
 
         public const string MoonEngine = "Moon (C#)";
@@ -374,9 +374,6 @@ namespace EmuSen.Cores
         // Which implementation runs a console, for the consoles that have more than one; the first is the default - see EmuSen_Settings_Reference.md §4.44.
         private static readonly Dictionary<string, CoreSetting> EngineByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["GB"] = new(EngineKey, "Engine",
-                "Which implementation runs the console. Mercury (C#) is the reference. MercuryRT (Rust) is exact against it in state, picture and sound and reads the same save states and battery saves; its debugger view is refreshed from its state, and it stops at breakpoints, steps and records coverage, watches and the call stack as Mercury does. Takes effect when a game is next loaded.",
-                CoreSettingKind.Choice, MercuryEngine, Choices: new[] { MercuryEngine, MercuryRtEngine }),
             ["NES"] = new(EngineKey, "Engine",
                 "Which implementation runs the console. Moon (C#) is the reference. MoonRT (Rust) is exact against it in state, picture and sound, reads the same save states and battery saves, and takes the same cheats; its debugger view is refreshed from its state, and it stops at breakpoints, steps, runs to a frame or an interrupt, and records coverage, watches, the profile and the call stack as Moon does. Takes effect when a game is next loaded.",
                 CoreSettingKind.Choice, MoonEngine, Choices: new[] { MoonEngine, MoonRtEngine }),
@@ -410,7 +407,6 @@ namespace EmuSen.Cores
         {
             ["SNES"] = VenusEngine,
             ["NES"] = MoonEngine,
-            ["GB"] = MercuryEngine,
         };
 
         public static string? ReferenceEngine(string console) => ReferenceEngineByConsole.GetValueOrDefault(console);

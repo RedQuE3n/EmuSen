@@ -96,32 +96,17 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
-covers 1
-$ summary
-out 241
-GB (Mercury) - frame 2, LY 0, mode 2
-ROM, 2x16K ROM, no RAM
-CPU  A=01 F=B0 BC=0013 DE=00D8 HL=014D SP=FFFC PC=0AF2
-     IME=0 HALT=0 IE=00 IF=01
-PPU  LCDC=91 STAT=86 SCY=00 SCX=00 WY=00 WX=00
-APU  power=on vol=7/7 pan=F3 buffered=1476 frames
-status 0
-action none
-end
-
 case on mercuryrt
 target mercuryrt
 covers 1
 $ summary
-out 240
+out 243
 GB (MercuryRT) - frame 2, LY 0, mode 2
 ROM, 2x16K ROM, no RAM
 CPU  A=01 F=B0 BC=0013 DE=00D8 HL=014D SP=FFFC PC=0AF2
      IME=0 HALT=0 IE=00 IF=01
 PPU  LCDC=91 STAT=86 SCY=00 SCX=00 WY=00 WX=00
-APU  power=on vol=7/7 pan=F3 buffered=0 frames
+APU  power=on vol=7/7 pan=F3 buffered=1476 frames
 status 0
 action none
 end

@@ -94,22 +94,20 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void The_N64_defaults_to_MarsRT_and_the_Game_Boy_to_its_csharp_core()
+        public void The_N64_defaults_to_MarsRT_and_the_Game_Boy_has_one_engine()
         {
             Assert.Null(CoreCatalog.EngineFor("N64"));
             Assert.True(CoreCatalog.IsRegisteredEngine(CoreCatalog.MarsRtEngine));
             Assert.Null(CoreCatalog.EngineChosen("N64", null));
             Assert.Equal(CoreCatalog.MarsRtEngine, CoreCatalog.EngineChosen("N64", CoreCatalog.MarsRtEngine));
-            Assert.Equal(CoreCatalog.MercuryEngine, CoreCatalog.EngineChosen("GB", null));
+            Assert.Null(CoreCatalog.EngineChosen("GB", null));
             Assert.Equal(CoreCatalog.EngineFor("SNES")?.Default, CoreCatalog.EngineChosen("SNES", null));
             Assert.True(CoreCatalog.EngineFor("SNES") is null or { Default: CoreCatalog.VenusRtEngine, Choices: [CoreCatalog.VenusRtEngine, CoreCatalog.VenusEngine, ..] });
             Assert.Equal(CoreCatalog.VenusEngine, CoreCatalog.EngineChosen("SNES", CoreCatalog.VenusEngine));
             CoreSetting nes = CoreCatalog.EngineFor("NES")!;
             Assert.Equal(CoreCatalog.MoonEngine, nes.Default);
             Assert.Equal(new[] { CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine }, nes.Choices);
-            CoreSetting gameBoy = CoreCatalog.EngineFor("GB")!;
-            Assert.Equal(CoreCatalog.MercuryEngine, gameBoy.Default);
-            Assert.Equal(new[] { CoreCatalog.MercuryEngine, CoreCatalog.MercuryRtEngine }, gameBoy.Choices);
+            Assert.Null(CoreCatalog.EngineFor("GB"));
             Assert.DoesNotContain(CoreCatalog.SettingsFor("N64"), s => s.Key == CoreCatalog.EngineKey);
         }
 

@@ -1,15 +1,14 @@
 using EmuSen.Galaxia.Input;
-using EmuSen.Cores.Nintendo.Mercury;
+using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // The referee's defect candidates, each proven on both engines before its fix - see Mercury_Native.md §13.
-    public abstract class MercuryAuditClaims : IDisposable
+    // The referee's defect candidates, each proven before its fix, held on MercuryRT - see Mercury_Native.md §13, §15.
+    public sealed class MercuryRtAuditTests : IDisposable
     {
         private readonly List<MercuryRig> _rigs = new();
 
-        protected abstract MercuryEngine Engine { get; }
 
         public void Dispose()
         {
@@ -18,7 +17,7 @@ namespace EmuSen.WiseMan.Cores
 
         private MercuryRig Load(byte cgbFlag = 0x00, GbModel model = GbModel.Auto, params (int Offset, byte[] Bytes)[] patches)
         {
-            var rig = MercuryRig.Create(Engine, SyntheticGbRom.Build(cgbFlag: cgbFlag, patches: patches), model);
+            var rig = MercuryRig.Create(SyntheticGbRom.Build(cgbFlag: cgbFlag, patches: patches), model);
             _rigs.Add(rig);
             return rig;
         }
@@ -380,7 +379,7 @@ namespace EmuSen.WiseMan.Cores
             rig.Tick(4 * 10);
             rig.Write(0xFF46, 0xC1);
             byte[] now = rig.State();
-            Assert.Equal(MercuryStateLayout.StateVersion, BitConverter.ToInt32(now, 4));
+            Assert.Equal(MercuryLayouts.StateVersion, BitConverter.ToInt32(now, 4));
             Assert.Equal(5, BitConverter.ToInt32(now, now.Length - 6));
 
             rig.LoadState(new MemoryStream(AsVersion(now, 8)));
@@ -398,7 +397,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var rig = SweepTriggered(0x09);
             byte[] state = rig.State();
-            rig.LoadState(new MemoryStream(version == MercuryStateLayout.StateVersion ? state : AsVersion(state, version)));
+            rig.LoadState(new MemoryStream(version == MercuryLayouts.StateVersion ? state : AsVersion(state, version)));
             rig.Write(0xFF10, 0x01);
             Assert.Equal(channelOneAfter, rig.Read(0xFF26) & 0x01);
         }
@@ -407,7 +406,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void An_mbc1_with_one_ram_bank_answers_every_bank_number_with_it()
         {
-            var rig = MercuryRig.Create(Engine, SyntheticGbRom.Build(romBanks: 4, cartridgeType: 0x03, ramSizeCode: 0x02));
+            var rig = MercuryRig.Create(SyntheticGbRom.Build(romBanks: 4, cartridgeType: 0x03, ramSizeCode: 0x02));
             _rigs.Add(rig);
             rig.Write(0x0000, 0x0A);
             rig.Write(0x6000, 0x01);
@@ -427,7 +426,7 @@ namespace EmuSen.WiseMan.Cores
             for (int i = 0; i < 48; i++) image[0x104 + i] = blankLogo ? (byte)0x00 : (byte)(0x31 + i * 7);
             if (logoInBank16) Array.Copy(image, 0x104, image, (0x10 * 0x4000) + 0x104, 48);
             for (int bank = 0; bank < 64; bank++) image[(bank * 0x4000) + 0x2000] = (byte)bank;
-            var rig = MercuryRig.Create(Engine, image);
+            var rig = MercuryRig.Create(image);
             _rigs.Add(rig);
             return rig;
         }
@@ -918,7 +917,7 @@ namespace EmuSen.WiseMan.Cores
             var rig = AtLine144(0x00, 144);
             rig.Write(0xFF40, 0x00);
             byte[] state = rig.State();
-            rig.LoadState(new MemoryStream(version == MercuryStateLayout.StateVersion ? state : AsVersion(state, version)));
+            rig.LoadState(new MemoryStream(version == MercuryLayouts.StateVersion ? state : AsVersion(state, version)));
             Assert.Equal(bit, rig.Read(0xFF41) & 0x04);
         }
 
@@ -940,15 +939,5 @@ namespace EmuSen.WiseMan.Cores
             rig.Tick(4);
             Assert.Equal(0x03, rig.Read(0xFF0F) & 0x03);
         }
-    }
-
-    public sealed class MercuryAuditTests : MercuryAuditClaims
-    {
-        protected override MercuryEngine Engine => MercuryEngine.Mercury;
-    }
-
-    public sealed class MercuryRtAuditTests : MercuryAuditClaims
-    {
-        protected override MercuryEngine Engine => MercuryEngine.MercuryRt;
     }
 }

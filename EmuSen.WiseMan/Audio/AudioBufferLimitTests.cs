@@ -5,7 +5,6 @@ using EmuSen.Audio;
 using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
@@ -69,9 +68,6 @@ namespace EmuSen.WiseMan.Audio
             Assert.True(MoonRtCore.Available, MoonNative.Report);
             Assert.Equal(Limit, Undrained(new MoonRtCore(), Nes()).Length);
         }
-
-        [Fact]
-        public void Mercury_keeps_no_more_than_the_setting() => Assert.Equal(Limit, Undrained(new MercuryCore(), Gb()).Length);
 
         [Fact]
         public void MercuryRT_keeps_no_more_than_the_setting()

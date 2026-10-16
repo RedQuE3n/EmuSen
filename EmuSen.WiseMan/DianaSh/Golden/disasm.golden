@@ -270,33 +270,6 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
-covers 2-3
-$ disasm cpu
-out 239
-  000AF2: 00        NOP
-  000AF3: 00        NOP
-  000AF4: 00        NOP
-  000AF5: 00        NOP
-  000AF6: 00        NOP
-  000AF7: 00        NOP
-  000AF8: 00        NOP
-  000AF9: 00        NOP
-  000AFA: 00        NOP
-  000AFB: 00        NOP
-status 0
-action none
-$ disasm cpu 0 4
-out 95
-  000000: 00        NOP
-  000001: 00        NOP
-  000002: 00        NOP
-  000003: 00        NOP
-status 0
-action none
-end
-
 case on mercuryrt
 target mercuryrt
 covers 2-3

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
@@ -51,8 +50,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(MercuryRtCore.Available, MercuryNative.Report);
             using var core = new MercuryRtCore();
             core.LoadRom(Keep(SyntheticGbRom.WriteTemp(SyntheticGbRom.Build())));
-            Assert.Equal((MercuryCore.StateMagic, MercuryCore.StateVersion), Header(core));
-            Assert.Equal(MercuryCore.StateVersion, ((IStateFormat)core).StateVersion);
+            Assert.Equal((MercuryRtCore.StateMagic, MercuryRtCore.StateFormatVersion), Header(core));
+            Assert.Equal(MercuryRtCore.StateFormatVersion, ((IStateFormat)core).StateVersion);
         }
 
         [Fact]

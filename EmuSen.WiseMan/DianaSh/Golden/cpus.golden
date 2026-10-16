@@ -110,19 +110,6 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
-covers 1
-$ cpus
-out 193
-GB debug processors:
-  cpu   PC=$000AF2  SM83
-        supports: bp, cov, bt, regs, disasm   code space: CPUBUS
-Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
-status 0
-action none
-end
-
 case on mercuryrt
 target mercuryrt
 covers 1

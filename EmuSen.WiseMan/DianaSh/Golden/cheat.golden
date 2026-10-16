@@ -701,8 +701,8 @@ status 0
 action none
 end
 
-case on mercury, with its codecs
-target mercury
+case on mercuryrt, with its codecs
+target mercuryrt
 covers 1-14,24
 $ cheat add SXIOPO
 out 89

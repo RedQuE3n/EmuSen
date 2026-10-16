@@ -9,7 +9,6 @@ using Avalonia.Headless;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Galaxia;
@@ -22,6 +21,7 @@ using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Views;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using EmuSen.Cores.Nintendo.MercuryRT;
 
 namespace EmuSen.WiseMan.Serenity
 {
@@ -48,7 +48,7 @@ namespace EmuSen.WiseMan.Serenity
             Assert.Equal(DisplayShape.Television, new VenusCore().DisplayAspect);
             using var marsRt = new MarsRtCore();
             Assert.Equal(DisplayShape.Television, marsRt.DisplayAspect);
-            Assert.Equal(DisplayShape.GameBoy, new MercuryCore().DisplayAspect);
+            using (var gameBoy = new MercuryRtCore()) Assert.Equal(DisplayShape.GameBoy, gameBoy.DisplayAspect);
             Assert.Equal(DisplayShape.Television, CrtFilter.Filter.Aspect);
         }
 

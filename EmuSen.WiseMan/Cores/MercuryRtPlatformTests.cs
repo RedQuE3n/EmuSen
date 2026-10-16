@@ -3,14 +3,13 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // Both Game Boy engines' sound, picture and state, digested and held to the digests linux-x64 recorded - see Mercury_Native.md §8.6.
+    // MercuryRT's sound, picture and state, digested and held to the digests linux-x64 recorded - see Mercury_Native.md §8.6.
     public class MercuryRtPlatformTests
     {
         private readonly ITestOutputHelper _output;
@@ -26,47 +25,15 @@ namespace EmuSen.WiseMan.Cores
             _ => throw new ArgumentException(name),
         };
 
-        // Math.Pow's two uses in the APU, as linux-x64's libm answers them; since D1 the mixer uses the second alone (§3.3, §9.4).
+        // Math.Pow's two uses for the mixer, as linux-x64's libm answers them; since D1 the shim sends the second alone (§3.3, §9.4).
         [Fact]
         public void The_high_pass_charge_factors_are_linuxs()
         {
-            long integral = BitConverter.DoubleToInt64Bits(Math.Pow(EmuSen.Cores.Nintendo.Mercury.Audio.Apu.HighPassSeed, MercuryCore.CpuClockHz / 44100));
-            long fractional = BitConverter.DoubleToInt64Bits(Math.Pow(EmuSen.Cores.Nintendo.Mercury.Audio.Apu.HighPassSeed, MercuryCore.CpuClockHz / 44100.0));
+            long integral = BitConverter.DoubleToInt64Bits(Math.Pow(MercuryRtCore.HighPassSeed, MercuryRtCore.CpuClockHz / 44100));
+            long fractional = BitConverter.DoubleToInt64Bits(Math.Pow(MercuryRtCore.HighPassSeed, MercuryRtCore.CpuClockHz / 44100.0));
             _output.WriteLine($"{RuntimeInformation.RuntimeIdentifier}: pow(seed, 95) {integral:X16}, pow(seed, 95.108) {fractional:X16}");
             Assert.Equal(0x3FEFDF60DC188482L, integral);
             Assert.Equal(0x3FEFDF574D84E421L, fractional);
-        }
-
-        // The C# mixer's high-pass capacitors, bit for bit after every frame: a difference below what a sample's truncation hides.
-        [Theory]
-        [InlineData("four channels", "50E856155F0BB94ABECC0249755828C90EA256122EE5713808F463D57483A9CA")]
-        [InlineData("busy", "8FB248BAC4731BB42BF7D5E080EEEBC98BFD0D10C42B066642B94EE6C0333989")]
-        [InlineData("interrupts", "4D930F46AEA4964DE53A3BEB12E5CD37055C5B2C5CF3E0583722723404CEBB67")]
-        public void The_csharp_mixers_doubles_match_linuxs(string program, string capacitors)
-        {
-            CoreOptions.BatteryRamDisabled = true;
-            var csharp = new MercuryCore();
-            string path = SyntheticGbRom.WriteTemp(Program(program));
-            try { csharp.LoadRom(path); }
-            finally { File.Delete(path); }
-            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
-            var left = typeof(EmuSen.Cores.Nintendo.Mercury.Audio.Apu).GetField("_leftCapacitor", flags)!;
-            var right = typeof(EmuSen.Cores.Nintendo.Mercury.Audio.Apu).GetField("_rightCapacitor", flags)!;
-            using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            int moving = 0;
-            for (int f = 0; f < 600; f++)
-            {
-                csharp.RunFrame();
-                csharp.DequeueAudioSamples(int.MaxValue);
-                double l = (double)left.GetValue(csharp.Bus!.Apu)!, r = (double)right.GetValue(csharp.Bus!.Apu)!;
-                if (l != 0 || r != 0) moving++;
-                digest.AppendData(BitConverter.GetBytes(BitConverter.DoubleToInt64Bits(l)));
-                digest.AppendData(BitConverter.GetBytes(BitConverter.DoubleToInt64Bits(r)));
-            }
-            string got = Convert.ToHexString(digest.GetHashAndReset());
-            _output.WriteLine($"{RuntimeInformation.RuntimeIdentifier} {program}: {moving} frames with a charged capacitor; capacitors {got}");
-            Assert.True(moving > 500, $"{moving} frames with a charged capacitor");
-            Assert.True(got == capacitors, "the C# mixer's doubles differ from linux-x64's");
         }
 
         [Theory]
@@ -74,35 +41,22 @@ namespace EmuSen.WiseMan.Cores
         [InlineData("busy", "B327BA1B261D9A7859CB8DE670F6C84ED355B853EC6B0C2F360F1EE82B399BF5", "8A0803654A95C3659704CC9C2BC839A75C04626BAA5F4926B09ADE2EE56FD705", "AE29E11F1B96005D34020DA3C8CC2F9FFC2C5C449343846124592FD2E493E038", "03A4D5FD14721517124E10FF600EBD5B416C549F4009206B28BA27975407A2D2")]
         [InlineData("interrupts", "2802C96FCC6175A4C59CCAD791DB5C69860133AEFCF42611F41A9A7808BB87AB", "8A0803654A95C3659704CC9C2BC839A75C04626BAA5F4926B09ADE2EE56FD705", "CEC354F94F5B6C23C19ED25364236AADEFDC9D7BDD48CE7FAF67B4BD5EE0C38D", "F740F8515E3809F250D80630A8FD86A718F319C030C04D8508846DAF5BE3A6CD")]
         [InlineData("colour", "D3A2D8F2637085A1BAFD9F981A948D3170B2738889A7F70109ADDA16964B698B", "E293A91DAADF31E4B368DD0D0C2BDE7190D8D5312A4E924370CA4A8F4F180C39", "0DAE338EA80B1AC6D5914FF8035831667C52F57111DF6F38F912A3A1E77FD6B7", "320BA9EE56401C683645F0C0042C8CD2E3A1FDA9637CB7867A3CDAC02192B776")]
-        public void Sound_picture_and_state_match_linuxs_on_both_engines(string program, string sound, string picture, string state, string stateVersion7)
+        public void Sound_picture_and_state_match_linuxs(string program, string sound, string picture, string state, string stateVersion7)
         {
             Assert.True(MercuryMachine.Available, MercuryNative.Report);
             CoreOptions.BatteryRamDisabled = true;
-            byte[] rom = Program(program);
-            var csharp = new MercuryCore();
-            string path = SyntheticGbRom.WriteTemp(rom);
-            try { csharp.LoadRom(path); }
-            finally { File.Delete(path); }
-            using var rust = new MercuryMachine(rom);
+            using var rust = new MercuryMachine(Program(program));
 
-            var digests = new[] { new Digests(), new Digests() };
+            var digests = new Digests();
             var frame = new byte[MercuryMachine.FrameBytes];
             for (int f = 0; f < 600; f++)
             {
-                csharp.RunFrame();
                 rust.RunFrame();
-                digests[0].Frame(csharp.DequeueAudioSamples(int.MaxValue), csharp.GetFrameBufferRgba());
                 rust.CopyFrame(frame);
-                digests[1].Frame(rust.DrainAudio(int.MaxValue), frame);
+                digests.Frame(rust.DrainAudio(int.MaxValue), frame);
             }
-            byte[] saved;
-            using (var stream = new MemoryStream())
-            {
-                csharp.SaveState(stream);
-                saved = stream.ToArray();
-                digests[0].State = Convert.ToHexString(SHA256.HashData(saved));
-            }
-            digests[1].State = Convert.ToHexString(SHA256.HashData(rust.Save()));
+            byte[] saved = rust.Save();
+            digests.State = Convert.ToHexString(SHA256.HashData(saved));
 
             // Version 11 is version 7 with the mixer's 24 bytes, OAM DMA's 4, the sweep's 1 and the frozen LY=LYC bit's 1 after the walks: undone, the state hashes as version 7 would - see Mercury_Native.md §10, §13.
             byte[] asVersion7 = saved[..^30];
@@ -110,19 +64,11 @@ namespace EmuSen.WiseMan.Cores
             _output.WriteLine($"{program}: as version 7 {Convert.ToHexString(SHA256.HashData(asVersion7))}");
             Assert.True(Convert.ToHexString(SHA256.HashData(asVersion7)) == stateVersion7, "the state differs from version 7's by more than the version and the mixer");
 
-            string[] engines = { "Mercury (C#)", "MercuryRT" };
-            for (int e = 0; e < 2; e++)
-                _output.WriteLine($"{RuntimeInformation.RuntimeIdentifier} {engines[e]}: {digests[e].Samples} samples; sound {digests[e].Sound}, picture {digests[e].Picture}, state {digests[e].State}");
-            Assert.True(digests[0].Samples > 600 * 700, $"{digests[0].Samples} samples");
-            Assert.True(digests[0].Sound == digests[1].Sound, "the engines' sound differs on this platform");
-            Assert.True(digests[0].Picture == digests[1].Picture, "the engines' pictures differ on this platform");
-            Assert.True(digests[0].State == digests[1].State, "the engines' states differ on this platform");
-            for (int e = 0; e < 2; e++)
-            {
-                Assert.True(digests[e].Sound == sound, $"{engines[e]}'s sound differs from linux-x64's");
-                Assert.True(digests[e].Picture == picture, $"{engines[e]}'s picture differs from linux-x64's");
-                Assert.True(digests[e].State == state, $"{engines[e]}'s state differs from linux-x64's");
-            }
+            _output.WriteLine($"{RuntimeInformation.RuntimeIdentifier} MercuryRT: {digests.Samples} samples; sound {digests.Sound}, picture {digests.Picture}, state {digests.State}");
+            Assert.True(digests.Samples > 600 * 700, $"{digests.Samples} samples");
+            Assert.True(digests.Sound == sound, "MercuryRT's sound differs from linux-x64's");
+            Assert.True(digests.Picture == picture, "MercuryRT's picture differs from linux-x64's");
+            Assert.True(digests.State == state, "MercuryRT's state differs from linux-x64's");
         }
 
         private sealed class Digests

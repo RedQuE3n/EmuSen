@@ -2677,7 +2677,8 @@ undone. MoonRT is v1-compliant on the four games. P1's timing is still to be mea
   `MERC`, version 8, read from 5; the patch range 0000h–7FFFh; the frame rate 4,194,304 / 70,224; the four channels;
   and `status_text` in the shim's words. **The Model setting** is the schema's one entry, a create-time choice whose
   values are C# Mercury's own words (`Auto`, `Game Boy`, `Game Boy Color`), the values frontends already store.
-- **The shim stays the loader**, and Mercury (C#) the default, by §22.1's rule; `RustCores.props` marks MercuryRT
+- **The shim stays the loader**, and Mercury (C#) the default, by §22.1's rule (*the default moved to MercuryRT and the
+  C# core was deleted on 2026-10-16, `Mercury_Native.md` §15*); `RustCores.props` marks MercuryRT
   `CoreAbi 1`, so the build writes its sidecar.
 - **A defect of the adapter, found by this core and fixed.** The adapter chose a game's battery folder from the
   catalogue's console, under which a `.gbc` game is `GB`. The shim and C# Mercury file a `.gbc` game's save under `GBC`

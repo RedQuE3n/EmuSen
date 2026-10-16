@@ -838,7 +838,7 @@ The handheld (§11; its device lends where its card offers the queues and timeli
 `GameFrameControl` but does not pass a lender; MarsRT (§7); a lend refused by a core's device (a version below 1.2)
 falls back to the core's own device silently, the core's note not saying so.
 
-## 18. The handheld's black screen (2026-10-15): the device path off by default, the cause open
+## 18. The handheld's black screen (2026-10-15): a GLX drawable destroyed under a present, kept by Mesa's own option
 
 ### 18.1 The fault
 
@@ -880,10 +880,11 @@ user queues off (`AMD_DEBUG=nouserq`), the window at 320 × 240, 640 × 480 and 
 `ready` and the `free` semaphore signalled again from Vulkan 0.7 s into a stall: the picture froze in each, after 1 to 5
 updates.
 
-**The cause is open.** It is being read from the sources of the path that stalls (Mesa's GLX/DRI3 swap, Xwayland,
-gamescope's WSI layer, Avalonia's GL import), and will be stated here only with the lines that establish it.
+*At the time, the cause was open; it is §18.5, established from the sources and confirmed on the handheld.*
 
-### 18.3 What was done
+### 18.3 What was done first (1279c935, the hot fix)
+
+*Superseded in part by §18.6: the device path is on by default again.*
 
 - **The device path is off by default** (`GameFrameControl.DevicePictureAllowed`): the picture is drawn by Skia from
   the readback as before 7e7784c6, and nothing is lent to a core, unless `EMUSEN_DEVICE_PICTURE=1`; Mistress logs once
@@ -897,11 +898,105 @@ gamescope's WSI layer, Avalonia's GL import), and will be stated here only with 
 - **The superseded images' imports are let go of on the UI thread** (`DevicePresenter.Resize`), which Avalonia requires;
   before, they were let go of on a pool thread, threw, and left their imports and their Vulkan images behind.
 
-### 18.4 Proven
+### 18.4 Proven at the hot fix
 
 - The handheld under gamescope, the default build: **60 of 60** shown each second (seconds 2 to 6; 53 of 54 in the first,
   during start-up), Diamond at 2× (`libdiamond.so` built from this branch, the core the handheld runs), and the log's one line saying the device path is
   off.
 - The same with `EMUSEN_DEVICE_PICTURE=1`: the watchdog's line after one second, the picture still frozen (above).
 - The desktop: WiseMan's frame-control, presenter, hand-off, lend, screen-filter and main-window tests, 233 of 233.
+
+### 18.5 The cause, from the sources
+
+Read from the sources of the path that stalls, matched by build-id to the dump; nothing below rests on a setting tried
+to see what changes.
+
+**The versions.** The handheld's GL is a different Mesa from its Vulkan: GL is `libgallium-26.1.2.so`, SteamOS's tag
+`radeonsi-26.1.2` (18b3910ac08e: upstream 26.1.2 with SteamOS's frame-limiter patch; pacman
+`mesa 26.1.2.221562.radeonsi_26.1.2-2.1`); Vulkan is RADV 26.2.0-devel. The desktop's Mesa is 26.2.4. The sources read
+were gamescope (its WSI layer and Xwayland present handling), Xwayland 24.1.13, Mesa 26.1.2 and the SteamOS tag, and
+Avalonia 12.1.0.
+
+**The chain, file by file** (Avalonia 12.1.0; Mesa at the SteamOS tag unless said; Xwayland 24.1.13):
+
+1. Avalonia uses one GLX context for its pbuffer and for the window (`GlSkiaGpu.cs:108`, `GlxDisplay.cs:127-129`). Each
+   frame binds the window, swaps and makes nothing current again (`GlxGlPlatformSurface.cs:50-54, 104`;
+   `GlxContext.cs:41-45, 146-147`).
+2. Each `UpdateWithSemaphoresAsync` becomes a server job run before the next frame (`CompositionDrawingSurface.cs:44`,
+   `ExecuteServerJobs`); the job makes the context current (`ServerCompositionDrawingSurface.cs:74`,
+   `GlSkiaImportedImage.cs:182`), which with nothing current binds the **pbuffer** (`GlxContext.cs:86, 112-119`).
+3. Binding the pbuffer releases the window's drawable in Mesa: `dri_bind_context` calls `driReleaseDrawables`
+   (`dri_common.c:747-750`); its count reaching 0 and `keep_native_window_glx_drawable` being false, the drawable is
+   destroyed, `loader_dri3_drawable_fini`, while its last present is still in flight (`dri_common.c:415-421`;
+   `dri3_glx.c:147-151`).
+4. The next frame makes a new drawable for the same window (`dri_common.c:345`; `dri3_glx.c:194`), with a new event id
+   and `send_sbc` at 0. The X server sends `CompleteNotify` to every event selection on the window
+   (`present_event.c:168-172`), and the new drawable accepts any serial up to its `send_sbc`
+   (`loader_dri3_helper.c:552`), the old drawable's included.
+5. `loader_dri3_swap_buffers_msc` increments `send_sbc` before it waits (`loader_dri3_helper.c:1095` in upstream 26.1.2),
+   then, with a swap interval, waits `while (draw->recv_sbc + 1 != draw->send_sbc)` (upstream 26.1.2 `:1117`; the tag's
+   `:1154-1156`). A stale completion has set `recv_sbc` to the value `send_sbc` reaches, so the condition never fails:
+   the render thread waits in `poll` under `xcb_wait_for_special_event`, `dri3_wait_for_event_locked`, for ever.
+6. The swap interval is 1 here: SteamOS's patch to this function reads `GAMESCOPE_LIMITER_FILE` and forces an interval
+   of 1 when it reads 1, and under KWin the default is 1.
+7. The skia path runs no server job between frames, so it keeps one drawable for the whole run, and never meets this.
+
+**Upstream**: a known bug, introduced by a6bf07e7c245 and fixed by 0a0ee06c527f ("dri3: Increment draw->send_sbc after
+waiting for last presentation", MR 42758; Mesa issues 15765 and 15802), in 26.2.0 and, on the 26.1 branch, in 26.1.5
+(c11395053762). The desktop's 26.2.4 has the fix, which is why the desktop never froze.
+
+**Ruled out by reading**: gamescope's WSI layer hooks no memory or semaphore export and no queue submission; our
+binary semaphores keep Vulkan's rules (`ready` signalled before the update is asked for, `free` waited for only after
+its update completed).
+
+**In the dump**: the stalled drawable (0x7f027c0159e0, window 0x400010) reads `send_sbc` 2, `recv_sbc` 2, swap interval
+1; a dead second drawable of the same window (0x7f027c0212b0, event id 0x60000e) reads `send_sbc` 1, `recv_sbc` 0.
+
+**Confirmed on the handheld with gdb** (under a nested headless KWin, the device path on, breakpoints on
+`glXMakeContextCurrent`, `loader_dri3_drawable_init` and `loader_dri3_drawable_fini`): on each applied update the
+sequence is MCC pbuffer (0x600008) → FINI window (0x400010) → MCC window → INIT window, a new event id each time; the
+last FINI before the freeze reads `send_sbc` 2, `recv_sbc` 1. With `keep_native_window_glx_drawable=true` in the
+environment: one INIT, no FINI, and 60 of 60 shown.
+
+### 18.6 The fix
+
+**`DevicePictureEnvironment.Prepare`** sets `keep_native_window_glx_drawable=true` in the process's native environment,
+where Mesa reads it (`xmlconfig.c:422-431`, read at `glxext.c:845-849`), unless the player has set it; it is called
+first in Mistress's and the shell's `Main`, before Avalonia makes its GLX screen. .NET's `Environment.SetEnvironmentVariable`
+does not change the native environment on Linux, so it is libc's `setenv`. The publish's launcher (`launcher.sh`)
+exports the same, also without overriding. With it, Mesa keeps the window's drawable across the pbuffer binds, and no
+second drawable meets a stale completion. **The device path is on by default again**; `EMUSEN_DEVICE_PICTURE=0` keeps
+Skia's path; the watchdog of §18.3 stays.
+
+The fix does not depend on Mesa's version: it removes the drawable's destruction, which the bug needs, rather than
+deciding by `GL_VERSION`. Mesa from 26.2.0 or 26.1.5 has the fix upstream as well.
+
+### 18.7 Proven
+
+- **The setting by the call alone**: the probe calling `Prepare` with the variable not set and no launcher, under a
+  headless gamescope, Diamond lent at 2×: the native environment read back `true`, 60 of 60 each second.
+- **Ten minutes** under a headless gamescope, the default build, Diamond lent at 2×: **36,006 of 36,006** frames shown,
+  never fewer than 59 a second, on the device throughout, the watchdog silent.
+- **The cost** (the probe's draw time a frame and the process's CPU a second, seconds 6 to 30 of each run, Diamond at
+  2×):
+
+  | Machine, path | `true` | `false` |
+  |---|---|---|
+  | desktop, Skia | 0.100 ms, 87 ms/s | 0.096 ms, 86 ms/s |
+  | handheld, Skia | 0.184 ms, 177 ms/s | 0.182 ms, 184 ms/s |
+  | desktop, device path | 0.076 ms, **81 ms/s** | 0.087 ms, **110 ms/s** |
+
+  None measurable on Skia's path; on the desktop's device path the setting saves CPU, the drawable no longer made
+  again at every update.
+- **The desktop's proofs again**, the device path on by default: the compositor's picture of a frame taken on the device
+  equals the same frame as pixels, 0 channels, plain and CRT (Lottes), 300 of 300 shown; 0 validation findings over
+  each; WiseMan's frame-control, presenter, hand-off, lend, screen-filter, main-window and shell tests, 270 of 270.
+
+### 18.8 The handheld's screen during these runs
+
+The headless test compositors run on the handheld (a nested `gamescope --backend headless` and a nested
+`kwin_wayland --virtual`, each under `systemd-run --user`, from about 20:24 to 21:56) coincided with rapid flicker on
+the TV attached to it. The cause is not proven: the GPU's load and the nested gamescope's input emulation (libei) and
+PipeWire stream are candidates; the units had no display of the session in their environment. Runs on the handheld are
+agreed with the tester beforehand from now on.
 

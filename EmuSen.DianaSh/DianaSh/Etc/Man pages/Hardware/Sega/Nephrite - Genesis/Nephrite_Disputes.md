@@ -1736,7 +1736,9 @@ CPUs' disputes in their own record pages.
   (the Technical Bulletins' "The U.S. BIOS" and "PAL conversion" §IV), which a disc carries and the BIOS checks; the
   call is that block's.
 - Test program: the 240p Test Suite on the open BIOS, the call caught by a breakpoint over the boot ROM's range after
-  the hand-over; the block itself was not disassembled.
+  the hand-over. Of the block itself only its first eight bytes were seen, in a search of Sonic CD's program in work
+  RAM for its calls into the boot ROM: a `LEA` of a1 ten bytes on, `JSR $0364`, and a branch past the block. Nothing
+  further of it was read; that a1 is passed suggests the routine takes an address, as `$0368` does (D-42).
 - Referee: none.
 - Conclusion: the open BIOS fills `$0200`-`$1FFF` with RTS, but for `$0368` (D-42), so that a routine no document
   describes returns at once; with that, the block goes on to the program it heads. What a player's BIOS shows meanwhile

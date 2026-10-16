@@ -425,7 +425,17 @@ the screener cleared it (2026-10-15; DOCS.txt §X records the verdict); the same
 `_boot/ip-us.asm` and `segacdfiles/segacd.s` (its start-up's first 200 lines), a test program's own sources; the
 headings of `Nephrite_Disputes.md` (by `grep -n '^#'`, which shows D-36's and D-40's rule titles) and its head and
 D-32 for the entry shape. The security block the suite's initial program includes (`security/*.bin`) was not opened,
-listed or disassembled. Runs on the open BIOS only; the player's BIOS was not run. Read in code: `Cargo.toml`, the source
+listed or disassembled.
+
+*Later the same day:* plutiedev's `using-the-z80`; mcd-verificator's `test_std.c` (`testSTD` and `test2006`);
+`docs/bram/emutos-mcd_bram-filesystem.md` whole, once allowed (used for the footer and the odd-byte layout alone; it
+also shows one directory entry's bytes and where a first file's data lies, which were not used); the games' own code in
+work RAM, disassembled with Beryl's disassembler where they called into the boot ROM or waited (Sonic CD's program at
+`$FF0560`-`$FF064C` and `$FF1000`-`$FF104E`, and a byte search of its first 8 KiB, which showed the first eight bytes of
+the security block, D-43). The player's BIOS was run as a black box with the five discs and the 240p suite: given to
+Nephrite as a file, the games' pictures kept only from frame 1,500 and while the main CPU ran outside the boot ROM,
+their sound's level, and the frame's wall time; nothing of the BIOS's code, bytes, registers, screens or sounds, no
+register watch, and no backup RAM it wrote was looked at. Read in code: `Cargo.toml`, the source
 listing of `beryl-m68k`, and the firmware declaration in `src/mcd/frontend.rs`.
 
 **Seen by accident.** `Nephrite_Native.md` lines 3997–4033 were printed to read §53.5–§54.2; the last line was the

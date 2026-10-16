@@ -126,19 +126,6 @@ status 0
 action none
 end
 
-case on mars
-target mars
-covers 1
-$ summary
-out 210
-N64 (Mars) - frame 2, VI field 0, 0.09s of console time
-"WISEMAN" NWME v0, 0MB BigEndian, 8MB RDRAM
-CPU  PC=FFFFFFFFA4000040 SP=FFFFFFFFA4001FF0 RA=FFFFFFFFA4001550
-VI   ORIGIN=00000000 WIDTH=0 V_SYNC=0 640x480
-status 0
-action none
-end
-
 case on marsrt
 target marsrt
 covers 1

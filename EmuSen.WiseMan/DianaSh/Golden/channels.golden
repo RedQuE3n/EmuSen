@@ -131,16 +131,6 @@ status 0
 action none
 end
 
-case on mars
-target mars
-covers 1
-$ channels
-out 37
-(this core reports no audio channels)
-status 0
-action none
-end
-
 case on marsrt
 target marsrt
 covers 1

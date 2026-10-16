@@ -40,7 +40,7 @@ namespace EmuSen.WiseMan.Cores
             string? output = Environment.GetEnvironmentVariable(OutVariable);
             string? games = Environment.GetEnvironmentVariable(GamesVariable);
             if (string.IsNullOrWhiteSpace(output) || string.IsNullOrWhiteSpace(games)) return;
-            Assert.True(MarsRtCore.Available, EmuSen.Cores.Nintendo.Mars.Native.MarsNative.Report);
+            Assert.True(MarsRtCore.Available, MarsNative.Report);
             CoreOptions.BatteryRamDisabled = true;
             Directory.CreateDirectory(output);
             string scratch = Path.Combine(output, "states");

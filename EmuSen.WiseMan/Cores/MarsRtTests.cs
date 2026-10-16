@@ -3,11 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using EmuSen.Cores.Nintendo.Mars;
-using EmuSen.Cores.Nintendo.Mars.Cpu.Core;
-using EmuSen.Cores.Nintendo.Mars.Memory;
-using EmuSen.Cores.Nintendo.Mars.Native;
-using EmuSen.Cores.Nintendo.Mars.Rom;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.WiseMan.Fixtures;
@@ -27,31 +22,16 @@ namespace EmuSen.WiseMan.Cores
 
         private readonly ITestOutputHelper _output;
         private readonly List<string> _temporary = new();
-        private readonly bool _nativeWas = EmuSen.Cores.Nintendo.Mars.Rsp.Rsp.UseNative;
 
-        public MarsRtTests(ITestOutputHelper output)
-        {
-            _output = output;
-            EmuSen.Cores.Nintendo.Mars.Rsp.Rsp.UseNative = false;
-        }
+        public MarsRtTests(ITestOutputHelper output) => _output = output;
 
         public void Dispose()
         {
-            EmuSen.Cores.Nintendo.Mars.Rsp.Rsp.UseNative = _nativeWas;
             foreach (string path in _temporary)
             {
                 try { File.Delete(path); } catch (IOException) { }
             }
         }
-
-        // The C# Mars core, kept for the C# core's own tests that share this class's settings until it is deleted - see Mars_Native.md §6.7.
-        public static MarsCore Oracle(bool expansionPak = false) => new(expansionPak, batteryRamDisabled: true)
-        {
-            UseBlocks = false,
-            ThreadedRdp = false,
-            DeferredPresentation = false,
-            SkipRendering = true,
-        };
 
         // MarsRT's interpreter on one thread, now that the shim's defaults are production's; the tier and thread runs turn theirs on themselves.
         public static MarsRtCore Twin(bool expansionPak = false) => new(expansionPak, batteryRamDisabled: true) { SkipRendering = true, UseBlocks = false, ThreadedRdp = false, DeferredPresentation = false, RdpWorkers = 1 };

@@ -10,7 +10,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EmuSen.Common;
-using EmuSen.Cores.Nintendo.Mars;
+using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -77,7 +77,7 @@ namespace EmuSen.WiseMan.Mistress
 
             Assert.True(File.Exists(ResumeState));
             Assert.True(File.Exists(SaveLibrary.PicturePathFor(ResumeState)));
-            Assert.True(Saved().TotalFrames > 30);
+            Assert.True(SavedFrames() > 30);
             window.Close();
         }, default);
 
@@ -89,7 +89,7 @@ namespace EmuSen.WiseMan.Mistress
             Start(window);
             WaitFor(() => Game(window).TotalFrames > 60);
             Invoke(window, "ShowLibrary");
-            long closedAt = Saved().TotalFrames;
+            long closedAt = SavedFrames();
 
             Start(window);
 
@@ -105,7 +105,7 @@ namespace EmuSen.WiseMan.Mistress
             Start(window);
             WaitFor(() => Game(window).TotalFrames > 120);
             Invoke(window, "ShowLibrary");
-            long closedAt = Saved().TotalFrames;
+            long closedAt = SavedFrames();
 
             window.PauseEmulation();
             Start(window);
@@ -122,7 +122,7 @@ namespace EmuSen.WiseMan.Mistress
             Start(window);
             WaitFor(() => Game(window).TotalFrames > 60);
             Invoke(window, "ShowLibrary");
-            long closedAt = Saved().TotalFrames;
+            long closedAt = SavedFrames();
 
             Task starting = Starting(window);
             ResumeWindow ask = WaitForDialog(window);
@@ -221,12 +221,12 @@ namespace EmuSen.WiseMan.Mistress
         private Task Starting(MainWindow window) =>
             (Task)typeof(MainWindow).GetMethod("StartGameAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object?[] { _romPath, "Counter.z64", null })!;
 
-        private MarsCore Saved()
+        private long SavedFrames()
         {
-            var core = new MarsCore();
+            using var core = new MarsRtCore(batteryRamDisabled: true);
             core.LoadRom(_romPath);
             core.LoadState(ResumeState);
-            return core;
+            return core.TotalFrames;
         }
 
         private static ResumeWindow WaitForDialog(MainWindow window)

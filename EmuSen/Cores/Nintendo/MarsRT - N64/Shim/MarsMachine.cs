@@ -1,19 +1,21 @@
 using System;
 using System.IO;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.Mars;
-using EmuSen.Cores.Nintendo.Mars.Native;
 
 namespace EmuSen.Cores.Nintendo.MarsRT
 {
-    // MarsRT's machine behind a v1 handle, for its state alone: read and written in the C# Mars's own format, nothing derived - see Mars_Native.md §5.1, §7.2.
+    // MarsRT's machine behind a v1 handle, for its state alone: read and written in the Mars state format, nothing derived - see Mars_Native.md §5.1, §7.2.
     public sealed unsafe class MarsMachine : IDisposable
     {
         private static readonly delegate* unmanaged<nint, byte*, nuint, int> LoadFields = (delegate* unmanaged<nint, byte*, nuint, int>)MarsNative.Export("marsrt_core_load_fields");
         private static readonly delegate* unmanaged<nint, int> KindOf = (delegate* unmanaged<nint, int>)MarsNative.Export("marsrt_core_state_kind");
 
-        // The version a loaded state had; the numbers are MarsCore's own.
-        public const int StateKind = MarsCore.StateVersion, SnapshotKind = MarsCore.SnapshotVersion;
+        // "MARS" little-endian, then the format's version: a state, or a snapshot with the display processor's pending words - see Mars_SaveStates.md §1.
+        public const uint StateMagic = 0x5352_414D;
+        public const int StateKind = 1, SnapshotKind = 2;
+
+        // The display processor's pending words a snapshot's fixed tail holds - see Mars_SaveStates.md §1.
+        public const int SnapshotWords = 1 << 15;
 
         private const int Rdram = 4 * 1024 * 1024, ExpandedRdram = 8 * 1024 * 1024;
 
@@ -46,7 +48,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             if (status != 0) throw new InvalidDataException($"MarsRT refused the state: {Describe(status)}.");
         }
 
-        // A state or a snapshot, the clocks settled first as a C# save settles them.
+        // A state or a snapshot, the clocks settled first.
         public byte[] Save(bool snapshot)
         {
             uint kind = snapshot ? 1u : 0;
@@ -69,7 +71,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             -2 => "the state is truncated",
             -3 => "not a Mars save state",
             -4 => "an unknown state version",
-            -5 => "a string length the C# reader refuses",
+            -5 => "a string length the reader refuses",
             -7 => "the buffer is too small",
             -12 => "an RDRAM size that is neither 4 MB nor 8 MB",
             -13 => "more pending display-processor words than a snapshot holds",

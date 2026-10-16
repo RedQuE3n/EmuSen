@@ -159,16 +159,6 @@ status 0
 action none
 end
 
-case on mars
-target mars
-covers 1
-$ vectors
-out 46
-N64 does not report an interrupt vector table.
-status 0
-action none
-end
-
 case on marsrt
 target marsrt
 covers 1

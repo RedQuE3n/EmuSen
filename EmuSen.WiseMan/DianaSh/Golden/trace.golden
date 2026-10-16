@@ -145,26 +145,6 @@ status 0
 action none
 end
 
-case on mars
-target mars
-covers 1-2
-$ trace 10
-out 50
-No CPU trace switch is registered for this target.
-status 0
-action none
-$ trace off
-out 50
-No CPU trace switch is registered for this target.
-status 0
-action none
-$ trace zz
-out 50
-No CPU trace switch is registered for this target.
-status 0
-action none
-end
-
 case on marsrt
 target marsrt
 covers 1-2

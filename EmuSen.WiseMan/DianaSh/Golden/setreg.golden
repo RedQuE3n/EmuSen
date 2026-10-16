@@ -256,57 +256,6 @@ status 1
 action none
 end
 
-case on mars
-target mars
-covers 1
-$ regs cpu
-out 1205
-VR4300 registers:
-  PC        = 0xFFFFFFFFA4000040
-  zero      = 0x0000000000000000
-  at        = 0x0000000000000000
-  v0        = 0x0000000000000000
-  v1        = 0x0000000000000000
-  a0        = 0x0000000000000000
-  a1        = 0x0000000000000000
-  a2        = 0x0000000000000000
-  a3        = 0x0000000000000000
-  t0        = 0x0000000000000000
-  t1        = 0x0000000000000000
-  t2        = 0x0000000000000000
-  t3        = 0xFFFFFFFFA4000040
-  t4        = 0x0000000000000000
-  t5        = 0x0000000000000000
-  t6        = 0x0000000000000000
-  t7        = 0x0000000000000000
-  s0        = 0x0000000000000000
-  s1        = 0x0000000000000000
-  s2        = 0x0000000000000000
-  s3        = 0x0000000000000000
-  s4        = 0x0000000000000001
-  s5        = 0x0000000000000000
-  s6        = 0x000000000000003F
-  s7        = 0x0000000000000000
-  t8        = 0x0000000000000000
-  t9        = 0x0000000000000000
-  k0        = 0x0000000000000000
-  k1        = 0x0000000000000000
-  gp        = 0x0000000000000000
-  sp        = 0xFFFFFFFFA4001FF0
-  s8        = 0x0000000000000000
-  ra        = 0xFFFFFFFFA4001550
-  HI        = 0x0000000000000000
-  LO        = 0x0000000000000000
-  Cycles    = 0x00000000007D1F40
-status 0
-action none
-$ setreg NOPE 0
-out 194
-cpu has no register named 'NOPE'. Available: PC, zero, at, v0, v1, a0, a1, a2, a3, t0, t1, t2, t3, t4, t5, t6, t7, s0, s1, s2, s3, s4, s5, s6, s7, t8, t9, k0, k1, gp, sp, s8, ra, HI, LO, Cycles.
-status 1
-action none
-end
-
 case on marsrt
 target marsrt
 covers 1

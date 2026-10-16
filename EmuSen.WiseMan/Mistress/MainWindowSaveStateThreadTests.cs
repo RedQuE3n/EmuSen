@@ -7,7 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using EmuSen.Common;
-using EmuSen.Cores.Nintendo.Mars;
+using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -66,7 +66,7 @@ namespace EmuSen.WiseMan.Mistress
             for (int i = 0; i < 12; i++)
             {
                 SaveThroughTheHotkey(window);
-                AssertOneInstant(Load(StatePath(window)));
+                using (MarsRtCore saved = Load(StatePath(window))) AssertOneInstant(saved);
                 Thread.Sleep(7);
             }
 
@@ -84,7 +84,7 @@ namespace EmuSen.WiseMan.Mistress
             SaveThroughTheHotkey(window);
 
             Assert.Equal(frames, Game(window).TotalFrames);
-            AssertOneInstant(Load(StatePath(window)));
+            using (MarsRtCore saved = Load(StatePath(window))) AssertOneInstant(saved);
 
             window.Close();
         }, default);
@@ -94,7 +94,8 @@ namespace EmuSen.WiseMan.Mistress
         {
             MainWindow window = Start();
             SaveThroughTheHotkey(window);
-            long saved = Load(StatePath(window)).TotalFrames;
+            long saved;
+            using (MarsRtCore state = Load(StatePath(window))) saved = state.TotalFrames;
 
             WaitFor(() => Game(window).TotalFrames > saved + 60);
 
@@ -105,10 +106,10 @@ namespace EmuSen.WiseMan.Mistress
             WaitUntilParked(window);
 
             Assert.InRange(Game(window).TotalFrames, saved, saved + 60);
-            // Read back through Mars (C#), since either engine writes its format; the running one is the default, MarsRT.
+            // Read back through a MarsRT of its own, outside the window's session.
             string parked = Path.Combine(_root, "parked.state");
             Game(window).Core!.SaveState(parked);
-            AssertOneInstant(Load(parked));
+            using (MarsRtCore loaded = Load(parked)) AssertOneInstant(loaded);
 
             window.Close();
         }, default);
@@ -129,19 +130,19 @@ namespace EmuSen.WiseMan.Mistress
             WaitFor(() => Status(window).Text?.StartsWith("State saved") == true);
         }
 
-        private MarsCore Load(string path)
+        private MarsRtCore Load(string path)
         {
-            var core = new MarsCore();
+            var core = new MarsRtCore(batteryRamDisabled: true);
             core.LoadRom(_romPath);
             core.LoadState(path);
             return core;
         }
 
         // Between the add and the store the stored copy is one behind; any other difference is two instants in one state.
-        private static void AssertOneInstant(MarsCore core)
+        private static void AssertOneInstant(MarsRtCore core)
         {
-            uint counter = (uint)core.Cpu!.Gpr[T0];
-            uint stored = core.Bus!.Read32(Counter);
+            uint counter = (uint)core.CpuRegisters()[1 + T0];
+            uint stored = core.ReadBus32(Counter);
             Assert.True(stored == counter || stored + 1 == counter, $"the register holds {counter} and memory {stored}: the state is torn");
         }
 

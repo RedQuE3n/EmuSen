@@ -136,21 +136,6 @@ status 0
 action none
 end
 
-case on mars
-target mars
-covers 1
-$ cpus
-out 273
-N64 debug processors:
-  cpu   PC=$A4000040 VR4300
-        supports: bp, cov, bt, regs, disasm   code space: CPU
-  rsp   PC=$000000  RSP
-        supports: cov, regs, disasm   code space: IMEM
-Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
-status 0
-action none
-end
-
 case on marsrt
 target marsrt
 covers 1

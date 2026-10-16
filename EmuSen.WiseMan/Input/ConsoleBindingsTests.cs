@@ -174,7 +174,8 @@ namespace EmuSen.WiseMan.Input
 
             Assert.Contains(new EmuSen.Cores.Nintendo.Moon.MoonCore().CoreName, catalogNames);
             Assert.Contains(new EmuSen.Cores.Nintendo.Venus.VenusCore().CoreName, catalogNames);
-            Assert.Contains(new EmuSen.Cores.Nintendo.Mars.MarsCore().CoreName, catalogNames);
+            using var marsRt = new EmuSen.Cores.Nintendo.MarsRT.MarsRtCore();
+            Assert.Contains(marsRt.CoreName, catalogNames);
         }
 
         [Fact]
@@ -193,7 +194,8 @@ namespace EmuSen.WiseMan.Input
             Assert.Equal(new EmuSen.Cores.Nintendo.Moon.MoonCore().SupportedButtons, CoreCatalog.ButtonsFor("NES"));
             Assert.Equal(new EmuSen.Cores.Nintendo.Venus.VenusCore().SupportedButtons, CoreCatalog.ButtonsFor("SNES"));
             Assert.Equal(new EmuSen.Cores.Nintendo.Mercury.MercuryCore().SupportedButtons, CoreCatalog.ButtonsFor("GB"));
-            Assert.Equal(new EmuSen.Cores.Nintendo.Mars.MarsCore().SupportedButtons, CoreCatalog.ButtonsFor("N64"));
+            using var marsRt = new EmuSen.Cores.Nintendo.MarsRT.MarsRtCore();
+            Assert.Equal(marsRt.SupportedButtons, CoreCatalog.ButtonsFor("N64"));
         }
 
         [Fact]

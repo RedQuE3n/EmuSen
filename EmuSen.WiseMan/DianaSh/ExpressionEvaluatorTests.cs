@@ -143,6 +143,31 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Contains("nosuchthing", ex.Message);
         }
 
+        // What `bp` checks when a condition is set: the syntax and every symbol, even in a short-circuited branch, and never memory.
+        [Theory]
+        [InlineData("1 +")]
+        [InlineData("(1 + 2")]
+        [InlineData("[1")]
+        [InlineData("0 && nosuchthing")]
+        [InlineData("a == 1 2")]
+        public void Check_refuses_what_could_never_evaluate(string expression)
+        {
+            var context = new FakeContext();
+            context.Symbols["a"] = 1;
+            Assert.Throws<ExpressionException>(() => new ExpressionEvaluator(context).Check(expression));
+        }
+
+        [Theory]
+        [InlineData("a == 1")]
+        [InlineData("[$7E0020] == 3 && {VRAM:$10} != a")]
+        [InlineData("100 / [5]")]
+        public void Check_accepts_an_expression_without_reading_memory(string expression)
+        {
+            var context = new FakeContext();
+            context.Symbols["a"] = 1;
+            new ExpressionEvaluator(context).Check(expression);
+        }
+
         // Conditions run on the emulation thread, where a throw is fatal.
         [Fact]
         public void TryEvaluateBool_reports_an_error_instead_of_throwing()

@@ -154,16 +154,17 @@ namespace EmuSen.WiseMan.DianaSh
         }
 
         [Fact]
-        public void A_bad_logpoint_expression_records_its_error()
+        public void A_bad_logpoint_expression_is_refused_and_one_failing_at_the_hit_records_its_error()
         {
             var target = BuildTarget();
             var shell = Shell(target);
-            shell.Submit("bp add 808000 log wibble");
+            Assert.StartsWith("Error: Log expression 'wibble' refused: Unknown symbol 'wibble'.", shell.Submit("bp add 808000 log wibble").Output);
+            shell.Submit("bp add 808000 log \"1 / 0\"");
 
             target.Breakpoints.ShouldBreak(0x808000);
 
             Assert.Equal(1, target.Breakpoints.LogEntriesRecorded);
-            Assert.Contains("wibble", shell.Submit("bp log").Output);
+            Assert.Contains("1 / 0: Division by zero.", shell.Submit("bp log").Output);
         }
 
         [Fact]

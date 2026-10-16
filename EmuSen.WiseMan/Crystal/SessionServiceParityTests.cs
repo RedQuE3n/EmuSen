@@ -420,10 +420,14 @@ namespace EmuSen.WiseMan.Crystal
 
             private void BreakpointsOn(uint p, BreakpointRegistry bp)
             {
-                long id = C.Call("bp_add", () => SessionClient.With("{\"address\":32784,\"end\":32786,\"condition\":\"A == 1\",\"log\":\"A\"}", (s, n) => T->bp_add(X, 0, p, (byte*)s, n)));
+                long id = C.Call("bp_add", () => SessionClient.With("{\"address\":32784,\"end\":32786,\"condition\":\"frame >= 0\",\"log\":\"frame\"}", (s, n) => T->bp_add(X, 0, p, (byte*)s, n)));
                 Ok(id);
                 var added = bp.GetBreakpoints().Single(b => b.Id == id);
-                Assert.Equal((0x8010, 0x8012, "A == 1", "A", true), (added.Address, added.EndAddress, added.Condition, added.LogExpression, added.Enabled));
+                Assert.Equal((0x8010, 0x8012, "frame >= 0", "frame", true), (added.Address, added.EndAddress, added.Condition, added.LogExpression, added.Enabled));
+                int count = bp.GetBreakpoints().Count;
+                Status(C.Call("bp_add", () => SessionClient.With("{\"address\":32784,\"condition\":\"frame ==\"}", (s, n) => T->bp_add(X, 0, p, (byte*)s, n))), SessionAbi.Parse);
+                Status(C.Call("bp_add", () => SessionClient.With("{\"address\":32784,\"log\":\"nosuchsymbol\"}", (s, n) => T->bp_add(X, 0, p, (byte*)s, n))), SessionAbi.Parse);
+                Assert.Equal(count, bp.GetBreakpoints().Count);
 
                 int memberId = bp.AddBreakpoint(0x8020);
                 Ok(C.Call("bp_set_enabled", () => T->bp_set_enabled(X, 0, p, (uint)id, 0)));

@@ -1,4 +1,4 @@
-/* emusen_session.h - the session service, emusen.session@1, version 1.1. Owned by Crystal.
+/* emusen_session.h - the session service, emusen.session@1, version 1.2. Owned by Crystal.
  *
  * What a command module calls to reach a running core, and what a frontend's own windows call for the same thing: one
  * C function table, emusen_session_v1, provided by Crystal and handed to a module by the shell, which never reads it.
@@ -6,7 +6,7 @@
  * and where the two disagree the page wins and the header is in error. Section 13.6 there records version 1.0 as
  * built, and the C# provider that serves it until Crystal is written in Rust.
  *
- * Everything here is @since 1.0 unless marked otherwise; section 13.11 there records what 1.1 added. Names: the table emusen_session_v1, constants
+ * Everything here is @since 1.0 unless marked otherwise; section 13.11 there records what 1.1 added and 13.12 what 1.2 did. Names: the table emusen_session_v1, constants
  * EMUSEN_SESSION_* and, for statuses, EMUSEN_SVC_*; nothing here collides with emusen_core.h or emusen_platform.h, so a
  * module may include all three.
  *
@@ -51,7 +51,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_SESSION_MAJOR 1u
-#define EMUSEN_SESSION_MINOR 1u
+#define EMUSEN_SESSION_MINOR 2u
 #define EMUSEN_SESSION_VERSION ((EMUSEN_SESSION_MAJOR << 16) | EMUSEN_SESSION_MINOR)
 
 /* The name a module asks the shell for, with the major after an @. */
@@ -253,9 +253,12 @@ typedef struct emusen_session_v1 {
                            uint8_t *out, size_t len);
 
     /* -- Breakpoints and halts --------------------------------------------------------------------------- */
-    /* changes. {"address","end","condition","log"} -> the id. */
+    /* changes. {"address","end","condition","log"} -> the id. The condition and each comma-separated part of the log are
+     * expressions over the processor's expression context, read at each hit (@since 1.2; 1.1 stored them unread); PARSE
+     * with the evaluator's words for one that does not parse or names an unknown symbol, nothing added (@since 1.2). */
     int64_t (*bp_add)(void *ctx, uint32_t session, uint32_t processor, const uint8_t *spec, size_t spec_len);
-    /* changes. {"space","address","end","value","on_read","changed_only","condition","log"} -> the id; value -1 is any. */
+    /* changes. {"space","address","end","value","on_read","changed_only","condition","log"} -> the id; value -1 is any.
+     * The condition and the log as bp_add's. */
     int64_t (*bp_add_data)(void *ctx, uint32_t session, uint32_t processor, const uint8_t *spec, size_t spec_len);
     /* changes. */
     int32_t (*bp_set_enabled)(void *ctx, uint32_t session, uint32_t processor, uint32_t id, uint32_t enabled);

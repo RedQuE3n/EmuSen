@@ -82,8 +82,9 @@ namespace EmuSen.Crystal.Systems.Genesis
             GenesisCheatFormats.IsPatch, GenesisCheatFormats.DecodePatch, decodeWrites: GenesisCheatFormats.PatchWrites);
 
         public static readonly SystemPack MegaDrivePack = new(MegaDrive, ActionReplay, GameGenie, PlayerControllers);
-        // The Sega CD's backup RAM inside the unit and its RAM cartridge, named and read by no format module until Nephrite's stage 10 - see EmuSen_SaveMedia.md §6.2, §7.3.
-        public static readonly SaveMedia.SaveMediumEntry BackupRam = new("mcd.backup", "Internal Backup RAM", "Backup RAM", ".brm"), RamCartridge = new("mcd.ramcart", "Backup RAM Cartridge", "Cartridge", ".crm");
+        // The Sega CD's backup RAM inside the unit and its RAM cartridge, one format read by SegaCdBramFormat - see EmuSen_SaveMedia.md §6.2, §7.3.
+        public static readonly SaveMedia.SaveMediumEntry BackupRam = new("mcd.backup", "Internal Backup RAM", "Backup RAM", ".brm", SegaCdBramFormat.BackupRam),
+            RamCartridge = new("mcd.ramcart", "Backup RAM Cartridge", "Cartridge", ".crm", SegaCdBramFormat.RamCartridge);
 
         public static readonly SystemPack MegaCdPack = new(MegaCd, ActionReplay, GameGenie, PlayerControllers, Media: new[] { RamCartridge, BackupRam });
         public static readonly SystemPack S32xPack = new(S32x, ActionReplay, GameGenie, PlayerControllers);

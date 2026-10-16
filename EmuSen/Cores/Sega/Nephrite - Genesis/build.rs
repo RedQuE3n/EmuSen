@@ -30,8 +30,13 @@ fn main() {
     rom[..main.bytes.len()].copy_from_slice(&main.bytes);
     rom[font_at..font_at + font.len()].copy_from_slice(&font);
     rom[sub_at..sub_at + sub.bytes.len()].copy_from_slice(&sub.bytes);
-    let out = Path::new(&std::env::var_os("OUT_DIR").expect("OUT_DIR")).join("open_bios.bin");
-    std::fs::write(out, rom).expect("the boot ROM written");
+    let out = Path::new(&std::env::var_os("OUT_DIR").expect("OUT_DIR")).to_path_buf();
+    std::fs::write(out.join("open_bios.bin"), rom).expect("the boot ROM written");
+    let symbols: String = ["bram_call", "BRAMWORK", "BW_SIZE"]
+        .iter()
+        .map(|n| format!("pub const {}: u32 = {:#x};\n", n.to_uppercase(), sub.symbols[*n]))
+        .collect();
+    std::fs::write(out.join("open_bios_symbols.rs"), symbols).expect("the symbols written");
 }
 
 fn build(name: &str, p: Result<Program, beryl_m68k::asm::AsmError>) -> Program {

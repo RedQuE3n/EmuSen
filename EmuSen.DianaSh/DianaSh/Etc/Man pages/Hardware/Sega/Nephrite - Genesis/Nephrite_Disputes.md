@@ -1819,3 +1819,118 @@ CPUs' disputes in their own record pages.
   memory flat; the 71 digests unchanged.
 - Pinned by: `a_pcm_sample_left_for_a_later_frame_is_mixed_then`.
 - Implemented in: stage 10's commit "the PCM's waiting samples".
+
+### D-49. `_BURAM`'s returns where the specification records none: BRMINIT's identifier to `a1`, BRMSTAT's `-1` for a volume not Sega's, the footer's first row not checked
+- Opened: 2026-10-16, at stage 10's step 10.4, by `Nephrite_Bram.md` §10 items 3 and 9: no register value was
+  observed, and 14 of the footer's first 16 bytes were not tested for being checked.
+- Documents read: BM §7-1 (BRMINIT's `a1`, "pointer to display strings", 12 bytes; BRMSTAT's "when the number of blocks
+  and files are negative ... formatting is needed"); `Nephrite_Bram.md` §3 (the identifier the memory manager prints
+  after "FORMAT IS:"; the checks it observed), §9 (EM's `d0` of 2 and its `a0` of `$FE0080`).
+- Test program: the crate's `init_and_stat_read_the_footer_as_the_page_says` and `files_are_placed_counted_found_and_read`.
+- Referee: none.
+- Conclusion: BRMINIT copies the footer's identifier, 12 bytes, to `a1` for a volume of Sega's format or another
+  (none when `a1` is 0); `d0.w` is the size in `$1000` bytes; BRMSTAT gives `-1` and `-1` with carry set for a volume
+  not Sega's; BRMSERCH's `a0` is the even address of the file's first block. Only the checks §3 observed are made.
+  Argued; a game that reads another register would show it.
+- Pinned by: the two tests above.
+- Implemented in: stage 10's commit "the backup RAM's directory".
+
+### D-50. BRMWRITE onto a name already there: in place with the same blocks and flag, else deleted and written anew
+- Opened: 2026-10-16, by `Nephrite_Bram.md` §10 item 1: no game saved twice in the frames observed, and the memory
+  manager refuses to copy onto a name by itself.
+- Documents read: BM §7-1 (BRMWRITE: "cannot write in the file" is its only error); TB #2 item 2 (a file of 256 blocks
+  or more may not be deleted correctly, "normal writing may then succeed only once").
+- Test program: `a_name_written_again_replaces_its_file` (crate).
+- Referee: none.
+- Conclusion: refusing would leave a game unable to update its save, which games do; a write of the same size and flag
+  over the same blocks changes nothing else of the volume, so it is done in place; any other is the delete of §7.3
+  followed by the write of §7.2, the free count deciding as for a new file. No limit is placed at 256 blocks, which TB
+  #2 states as the real BIOS's defect, not a rule. Argued.
+- Pinned by: the test above.
+- Implemented in: stage 10's commit "the backup RAM's directory".
+
+### D-51. The read side: one symbol a codeword corrected, the low bits and the CRC unused, a protected block past correcting fails BRMREAD
+- Opened: 2026-10-16, by `Nephrite_Bram.md` §10 items 4 and 12: §6.7 observed the memory manager's listing, not the
+  calls' returns.
+- Documents read: `Nephrite_Bram.md` §6.3 (the codewords' roots 1 and `alpha`), §6.7 (one error a codeword corrected,
+  the low bits ignored, the CRC not checked, nothing written back); BM §7-1 (BRMREAD's "OK/ERROR").
+- Test program: `protected_files_are_corrected_as_the_page_observed` (crate), `A_block_decodes_with_one_error_a_codeword_corrected` (WiseMan).
+- Referee: none.
+- Conclusion: the decoder corrects as §6.7 observed and writes nothing back; a directory entry is used as decoded,
+  corrected or not, as the listing showed it; BRMREAD returns carry set when a protected data block holds a codeword
+  past correcting, its data still copied, since BM gives it an error return and a game told nothing would use damaged
+  data as good. Argued for the return.
+- Pinned by: the two tests above.
+- Implemented in: stage 10's commit "the backup RAM's directory".
+
+### D-52. BRMDIR: each matching entry's 16 stored bytes into the buffer, `*` matching the rest of the name
+- Opened: 2026-10-16, by `Nephrite_Bram.md` §10 item 6: "the buffer's layout is not documented and was not observed".
+- Documents read: BM §7-1 (BRMDIR: `d1.l` files to skip and the buffer's size in files, a template of `0`-`9`, `A`-`Z`,
+  `_` and `*`, carry set when the buffer is full).
+- Test program: `the_directory_lists_by_template` (crate).
+- Referee: none.
+- Conclusion: the simplest buffer that carries what a directory holds: the entry as stored, its name, flag, first block
+  and size, 16 bytes a file; `*` ends the comparison; carry set only when a further match finds the buffer full.
+  Argued; no game seen calls it.
+- Pinned by: the test above.
+- Implemented in: stage 10's commit "the backup RAM's directory".
+
+### D-53. CDCREAD for the sub CPU's read: the sector's header first, then its data, as CDCTRN's header buffer implies
+- Opened: 2026-10-16, by Lunar - Eternal Blue on the open BIOS: once its save was found it asked for sector `$1E53C`
+  again and again, its screen black and silent; on the player's BIOS its intro plays.
+- Documents read: BM §3-C (CDCTRN: `a0` the data buffer, `a1` "pointer to header buffer (size: 4 bytes)", reading "one
+  frame worth of data with the SUB-CPU"; CDCREAD: "be sure to set the CDC mode (device destination)").
+- Test program: the disc; the game's own read routine in its PRG-RAM (`$F048`-`$F1E2`) sets the destination to the sub
+  CPU's read, calls CDCREAD, reads two words from the host data port as the header, then the data to the PCM chip, and
+  asks again when the header's frame is not the one it wanted.
+- Referee: none.
+- Conclusion: with the destination the sub CPU's read, CDCREAD sets the transfer from the sector's header, 2,052 bytes
+  in mode 1 and 2,340 in mode 2, and CDCTRN reads the header into `a1` and then the data into `a0`; the DMA
+  destinations keep the data alone, which the games that run take. CDCTRN waits for DSR once and reads on, as Lunar's
+  routine does. Measured: Lunar plays its intro with music; the 240p suite, mcd-verificator and the kit's discs pass.
+- Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu` for the reads that stayed; the gate's Lunar run.
+- Implemented in: stage 10's commit "the backup RAM's directory".
+
+### D-54. Sonic CD's opening film calls the boot ROM at `$02B0` and `$02D4`: routines no document describes, so the film is black
+- Opened: 2026-10-16, by Sonic CD (USA) on the open BIOS: its opening film plays its sound over a black screen for its
+  whole length; on the player's BIOS the film shows.
+- Documents read: none describes either routine (§5 Q4's rule); the Technical Bulletins' main CPU jump table (p. 15-16)
+  lists neither address.
+- Test program: the disc; a search of the game's work RAM for calls below `$2000` finds `jsr $02B0` once, with `a1`
+  a table, before the film's set-up, and `jsr $02D4` twice in its V-INT, with `d0`, `d1` and `d2` loaded from a
+  queue of transfers; both land on the open BIOS's RTS field (D-43). The sub CPU streams the film's sectors at 75 a
+  second throughout, so the reads are not at fault.
+- Referee: none.
+- Conclusion: open. Writing the two routines needs a document; the caller's registers suggest a table of VDP
+  registers and a DMA to the VDP, which is reasoning from a game and not a description. Recorded as §5 Q4 decided.
+- Pinned by: nothing yet.
+- Implemented in: nothing.
+
+### D-55. The cartridge's `_mburam`: its address is in no document the writer may read
+- Opened: 2026-10-16, at step 10.4.
+- Documents read: TB #1, "How to access Back-Up Ram Cartridge" ("Make the BIOS ENTRY for Back-Up RAM ... mburam ...
+  For _mburam, see MEM_MAP ASS."); the corpus searched by text for `mburam`, finding only the bulletin.
+- Test program: none.
+- Referee: none.
+- Conclusion: not placed. `bios/bram.s` takes its volume in registers, so the main CPU's program can include it over
+  the cartridge's `$600001`, its size from the ID at `$400001` and its write latch at `$700001` (SM), once the address
+  is known. Until then a game cannot reach a RAM cartridge on the open BIOS, which the replacement's words say.
+- Pinned by: `the_file_system_runs_on_a_cartridge_sized_volume` for the code a cartridge would use.
+- Implemented in: nothing.
+
+### D-56. The rest of the specification's open points: block 0 left alone, an unused directory slot zeros, BRMVERIFY by blocks, flag and data, names unchecked, the BIOS's own buffers
+- Opened: 2026-10-16, by `Nephrite_Bram.md` §10 items 2, 5, 6 and 8, §7.4 and §5.5.
+- Documents read: `Nephrite_Bram.md` §5.5 (zeros in the unused slot in every case but one, which it argues is a buffer's
+  leftover), §7.4 (block 0 rewritten under both games, writer unknown), §10; BM §7-1 (BRMINIT's scratch "Do not
+  destroy the scratch RAM during the BRMXXX functions"; BRMVERIFY's `-1` and `0`; names of `0`-`9`, `A`-`Z`, `_`); TB #2
+  (a name with `-`).
+- Test program: `a_delete_moves_the_later_files_down`, `files_are_placed_counted_found_and_read` (crate);
+  `Copies_place_and_count_as_the_bios_writes` (WiseMan).
+- Referee: none.
+- Conclusion: the open BIOS never writes block 0, since nothing says what writes it; a new directory block's second
+  slot, and a slot left past the files by a delete, are zeros; BRMVERIFY answers "matches" only when the entry's
+  blocks and flag are those given and the data read back equals the data given; names are taken as given, TB #2's
+  own example lying outside BM's set; the calls' buffers are the BIOS's own (`$5650`-`$570D`), BRMINIT's scratch left to
+  the game, which the manual's caution allows. All argued.
+- Pinned by: the tests above.
+- Implemented in: stage 10's commit "the backup RAM's directory".

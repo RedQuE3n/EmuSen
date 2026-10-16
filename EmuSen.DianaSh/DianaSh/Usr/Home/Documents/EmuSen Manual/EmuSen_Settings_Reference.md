@@ -8641,7 +8641,8 @@ group: a mode row titled by the medium (*Memory Card*, *Internal Backup RAM*, *B
 medium keeps the keys above (`Cards`, `Card<n>`), the console's own memory takes `ConsoleMemory` and
 `ConsoleMemory<n>`, and any further medium `Media.<id>` and `Media.<id>.<n>`. Shared and named files are in `Cards` for a
 removable medium and in `Console` for the console's own. **The PlayStation's card is *Shared* by default** since its
-import exists (§4.115); a medium no format module reads stays *Per game*.
+import exists (§4.115); a medium no format module reads stays *Per game*. *Since 2026-10-16* the Sega CD's two media are *Shared* by default too, their module
+built (`EmuSen_SaveMedia.md` §11.7), and a new machine's backup RAM with no file starts formatted.
 
 ### 4.115 Memory Cards: the window, and the import offered once (2026-10-15)
 

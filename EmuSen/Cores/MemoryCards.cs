@@ -61,6 +61,8 @@ namespace EmuSen.Cores
         private readonly List<MediumLock> _locks = new();
 
         public Dictionary<uint, BatterySave> Files { get; } = new();
+        // The console media's slots a new machine finds formatted where no file exists yet - see EmuSen_SaveMedia.md §10 Q2.
+        public Dictionary<uint, ISaveMediumFormat> Fresh { get; } = new();
         public bool RemovableApart { get; internal set; }
         public bool ConsoleApart { get; internal set; }
         public List<string> Notices { get; } = new();
@@ -118,8 +120,8 @@ namespace EmuSen.Cores
             return media;
         }
 
-        // The mode a medium has when nothing is stored: Shared for a removable medium whose format module gives it the import, Per game otherwise - see EmuSen_SaveMedia.md §9.
-        public static string DefaultMode(SaveMedium? medium) => medium is { Kind: CoreBatteryKind.Removable, Entry.Format: not null } ? Shared : PerGame;
+        // The mode a medium has when nothing is stored: Shared where a format module gives it the import, Per game otherwise - see EmuSen_SaveMedia.md §9, §10 Q2.
+        public static string DefaultMode(SaveMedium? medium) => medium is { Kind: CoreBatteryKind.Removable or CoreBatteryKind.Console, Entry.Format: not null } ? Shared : PerGame;
 
         // The key recording that the import was offered for a medium, beside its mode's.
         public static string OfferedKey(SaveMedium medium) => medium.ModeKey + "Offered";
@@ -216,6 +218,7 @@ namespace EmuSen.Cores
                 for (int slot = 0; slot < medium.Slots.Count; slot++)
                 {
                     CoreBatteryFile file = medium.Slots[slot];
+                    if (medium.IsConsole && medium.Entry?.Format is { } format) placed.Fresh[file.Which] = format;
                     BatterySave? apart = choice.Apart ? Apart(console, medium, medium.NameFor(choice, slot), slot, holder, taken, placed) : null;
                     if (apart is not null)
                     {

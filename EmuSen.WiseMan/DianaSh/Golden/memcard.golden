@@ -44,8 +44,8 @@ memcard: Blue.mcr already exists
 status 1
 action none
 $ memcard new "Saves/Sega CD/Cards/Cartridge 1.crm"
-out 95
-Cartridge 1.crm is named; with no file yet it is a new, blank cartridge, which the game formats
+out 54
+Cartridge 1.crm made, a formatted backup ram cartridge
 status 0
 action none
 end

@@ -67,6 +67,8 @@ Q2's method (which names games' images, the manager and the player's files) and 
 judge it. The images and their outputs are under `~/.cache/emusen/probe/mcd-bram/` (`images/` for inputs, `runs/<run>/`
 for each run's `brm.bin`, `crm.bin`, screens and state).
 
+*Decided 2026-10-15 by the tester:* images built from the format already observed may be given to the player's BIOS as inputs, its handling of them being black-box evidence like the images games leave; the BIOS's code is still never read or watched.
+
 ### 1.4 Files the player already had
 
 None. `~/.config/EmuSen/Saves`, the ROM library, `~/Documents` and the sandbox's `Usr/Home/Saves` hold no `.brm`,

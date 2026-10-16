@@ -51,6 +51,18 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { "ConsoleMemory", "ConsoleMemory1", "Cards", "Card1" }, Media.SelectMany(m => { var (mode, slots) = MemoryCards.RowsFor(m); return slots.Prepend(mode); }).Select(r => r.Key));
         }
 
+        // A new machine's backup RAM, with no file yet, comes formatted by the format module, as the open BIOS has no memory manager to format it - see EmuSen_SaveMedia.md §10 Q2.
+        [Theory]
+        [InlineData(MemoryCards.PerGame)]
+        [InlineData(MemoryCards.Shared)]
+        public void A_new_machines_backup_ram_is_formatted(string mode)
+        {
+            var choices = MemoryCards.Stored(Media, key => key == MemoryCards.ConsoleModeKey ? mode : null);
+            using var engine = new CoreEngine(Library) { Media = choices };
+            engine.LoadRom(Disc("Fresh"));
+            Assert.Equal(EmuSen.Crystal.Systems.Genesis.SegaCdBramFormat.BackupRam.Format(), engine.Machine.Battery(0).Data.ToArray());
+        }
+
         // Shared, the backup RAM is one file in Console for every game, and a state of one game leaves it as it stands; per game a state puts the game's back.
         [Theory]
         [InlineData(MemoryCards.PerGame)]

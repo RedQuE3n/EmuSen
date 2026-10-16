@@ -141,7 +141,14 @@ namespace EmuSen.Common
 
         public int DisplayLines => _core?.DisplayLines ?? 0;
 
-        public byte[]? RawPicture => _core?.RawPicture;
+        public EmuSen.Serenity.RawPicture? RawPicture => _core?.RawPicture;
+
+        // What the frame control's filter reads, passed to the core before each frame - see EmuSen_CoreAPI.md §6.30.
+        public string? RawEncoding
+        {
+            get => _core?.RawEncoding;
+            set { if (_core is { } core) core.RawEncoding = value; }
+        }
 
         public byte[] GetFrameBufferRgba()
         {

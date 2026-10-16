@@ -222,6 +222,7 @@ namespace EmuSen.Serenity.Shaders
             "EmuSen's own, from the physics and measurements cited in EmuSen_CRT.md", Parameters)
         {
             Build = Passes,
+            RawEncoding = RawEncodings.NesPpu,
             Structural = Structural,
             ConsoleDefaults = ConsoleTiming,
             Aspect = DisplayShape.Television,

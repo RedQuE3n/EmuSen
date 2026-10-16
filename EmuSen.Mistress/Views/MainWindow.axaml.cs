@@ -1327,6 +1327,7 @@ namespace EmuSen.Mistress.Views
                 }
 
                 session.SkipRendering = !_speed.ShouldRender(session.TotalFrames);
+                session.RawEncoding = GameFrame.RawEncoding;
 
                 try
                 {
@@ -1494,7 +1495,7 @@ namespace EmuSen.Mistress.Views
         }
 
         // Called from the emulation thread; newest wins - see EmuSen_Serenity.md §4.
-        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, byte[]? raw = null)
+        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, EmuSen.Serenity.RawPicture? raw = null)
         {
             _frames.Offer(pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw);
         }

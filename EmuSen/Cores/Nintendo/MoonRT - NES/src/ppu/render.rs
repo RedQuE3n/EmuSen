@@ -50,7 +50,17 @@ impl Ppu {
             self.render_background(board);
         }
         self.evaluate_sprites(line);
-        self.composite(line, board);
+        if self.raw.as_ref().is_some_and(|r| r.on) {
+            self.composite_keeping_raw(line, board);
+        } else {
+            self.composite::<false>(line, board);
+        }
+    }
+
+    /// The line composed with `nes.ppu` beside it, out of line so that the line without it compiles as it did (Moon_Native.md §9.7).
+    #[inline(never)]
+    fn composite_keeping_raw(&mut self, line: i32, board: &mut Board) {
+        self.composite::<true>(line, board);
     }
 
     /// 33 tiles, so fine X can shift the first partly off the left edge.
@@ -101,12 +111,13 @@ impl Ppu {
         }
     }
 
-    fn composite(&mut self, line: i32, board: &mut Board) {
+    fn composite<const RAW: bool>(&mut self, line: i32, board: &mut Board) {
         let height = if self.sprites_are_8x16() { 16 } else { 8 };
         let frame_offset = line * SCREEN_WIDTH as i32 * 4;
         let show_sprites = self.show_sprites();
         let show_sprites_left = self.show_sprites_left();
         let show_background_left = self.show_background_left();
+        let mut raw_line = [0u8; SCREEN_WIDTH * 2];
         for x in 0..SCREEN_WIDTH as i32 {
             let bg_entry = self.bg_line[x as usize] as i32;
             let bg_opaque = bg_entry != 0 && (x >= 8 || show_background_left);
@@ -151,10 +162,20 @@ impl Ppu {
             }
             let palette = (nes_color & 0x3F) as usize * 3;
             let pixel = (frame_offset + x * 4) as usize;
+            if RAW {
+                let value = (nes_color & 0x3F) as u16 | ((self.mask >> 5) as u16) << 6;
+                raw_line[x as usize * 2..x as usize * 2 + 2].copy_from_slice(&value.to_le_bytes());
+            }
             if let Some(out) = self.frame_rgba.get_mut(pixel..pixel + 4) {
                 out.copy_from_slice(&[NES_PALETTE[palette], NES_PALETTE[palette + 1], NES_PALETTE[palette + 2], 0xFF]);
             } else {
                 crate::fault(crate::Fault::IndexOutOfRange);
+            }
+        }
+        if RAW && !*self.skip_rendering {
+            let at = line as usize * SCREEN_WIDTH * 2;
+            if let Some(out) = self.raw.as_deref_mut().and_then(|r| r.values.get_mut(at..at + SCREEN_WIDTH * 2)) {
+                out.copy_from_slice(&raw_line);
             }
         }
     }

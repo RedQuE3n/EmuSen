@@ -80,26 +80,32 @@ namespace EmuSen.WiseMan.Serenity
 
         // The filter drawn both ways over the same frames; the chain is given each new frame and rendered once for it, as the runner does.
         private (byte[] Skia, byte[] Device)? Both(ScreenFilter filter, string? console, IReadOnlyDictionary<string, float>? chosen, IReadOnlyList<byte[]> frames,
-            int width, int height, int rowRepeat, int windowWidth, int windowHeight, ShaderEffect? effect = null)
+            int width, int height, int rowRepeat, int windowWidth, int windowHeight, ShaderEffect? effect = null, RawPicture? raw = null)
         {
             if (GlDevice.Value is not { } gl || _gpu is null) return null;
             byte[] skia = Session.Dispatch(() =>
                 ShaderBench.Picture(effect is { } simple ? new GameFrameControl { ActiveEffect = simple } : new GameFrameControl { FilterConsole = console, ShaderParameters = chosen, ActiveFilter = filter },
-                    frames.ToArray(), width, height, rowRepeat, windowWidth, windowHeight, gl),
+                    frames.ToArray(), width, height, rowRepeat, windowWidth, windowHeight, gl, raw: raw),
                 default).GetAwaiter().GetResult();
 
-            return (skia, Device(filter, console, chosen, frames, width, height, rowRepeat, windowWidth, windowHeight, default));
+            return (skia, Device(filter, console, chosen, frames, width, height, rowRepeat, windowWidth, windowHeight, default, raw));
         }
 
         private byte[] Device(ScreenFilter filter, string? console, IReadOnlyDictionary<string, float>? chosen, IReadOnlyList<byte[]> frames,
-            int width, int height, int rowRepeat, int windowWidth, int windowHeight, (float X, float Y) nudge)
+            int width, int height, int rowRepeat, int windowWidth, int windowHeight, (float X, float Y) nudge, RawPicture? raw = null)
         {
             string path = BuiltInPreset.Write(filter, console, chosen, nudge: nudge);
             using var chain = new SlangChain(_gpu!, SlangPreset.Load(path), SlangRunner.Cache);
-            chain.SetParameters(chosen?.Where(v => filter.Parameters?.Any(p => p.Id == v.Key) == true).ToDictionary(v => v.Key, v => v.Value));
+            var values = chosen?.Where(v => filter.Parameters?.Any(p => p.Id == v.Key) == true).ToDictionary(v => v.Key, v => v.Value) ?? new Dictionary<string, float>();
+            // The picture before the palette as the frame control hands it to the device's chain: the filter's image of it, and its size - see EmuSen_CRT.md §22.8.
+            byte[]? image = null;
+            if (raw is { } r && filter.RawEncoding == r.Encoding && RawEncodings.ToImage(r, image = new byte[r.Width * r.Height * 4]))
+                (values[BuiltInPreset.RawWidth], values[BuiltInPreset.RawHeight]) = (r.Width, r.Height);
+            chain.SetParameters(values);
             byte[] device = Array.Empty<byte>();
             foreach (byte[] frame in frames)
             {
+                if (image is not null) chain.ReplaceLut(BuiltInPreset.RawTexture, image, raw!.Value.Width, raw.Value.Height);
                 chain.Advance(frame, width, height, filter.RowsOnce ? 1 : rowRepeat);
                 device = chain.Render(windowWidth, windowHeight);
             }
@@ -107,9 +113,9 @@ namespace EmuSen.WiseMan.Serenity
         }
 
         private Difference? Match(string what, ScreenFilter filter, string? console, IReadOnlyDictionary<string, float>? chosen, IReadOnlyList<byte[]> frames,
-            int width, int height, int rowRepeat, int windowWidth, int windowHeight, ShaderEffect? effect = null)
+            int width, int height, int rowRepeat, int windowWidth, int windowHeight, ShaderEffect? effect = null, RawPicture? raw = null)
         {
-            if (Both(filter, console, chosen, frames, width, height, rowRepeat, windowWidth, windowHeight, effect) is not var (skia, device)) return null;
+            if (Both(filter, console, chosen, frames, width, height, rowRepeat, windowWidth, windowHeight, effect, raw) is not var (skia, device)) return null;
             Difference d = Compare(skia, device, windowWidth);
             if (d.BeyondOne > 0)
             {
@@ -119,7 +125,7 @@ namespace EmuSen.WiseMan.Serenity
                 foreach ((float X, float Y) nudge in new[] { 1f, 4f }.SelectMany(k => new[] { (k * Nudge, 0f), (-k * Nudge, 0f), (0f, k * Nudge), (0f, -k * Nudge), (k * Nudge, k * Nudge), (-k * Nudge, -k * Nudge), (k * Nudge, -k * Nudge), (-k * Nudge, k * Nudge) }))
                 {
                     if (unexplained.Count == 0) break;
-                    byte[] moved = Device(filter, console, chosen, frames, width, height, rowRepeat, windowWidth, windowHeight, nudge);
+                    byte[] moved = Device(filter, console, chosen, frames, width, height, rowRepeat, windowWidth, windowHeight, nudge, raw);
                     foreach (int i in unexplained.Keys.ToArray())
                     {
                         var (low, high) = unexplained[i];
@@ -244,6 +250,20 @@ namespace EmuSen.WiseMan.Serenity
             }
         }
     
+
+        // The NES's own signal on the device: a nes.ppu picture of every colour under each emphasis setting, drawn by the chain as Skia draws it - see EmuSen_CRT.md §22.8.
+        [Theory]
+        [MemberData(nameof(CrtVariants))]
+        public void The_crt_on_the_chain_draws_the_nes_s_raw_picture_as_skia_does(int quality, int signal)
+        {
+            var chosen = new Dictionary<string, float> { ["quality"] = quality, ["signal"] = signal };
+            RawPicture raw = ScreenFilterRenderTests.RawField(256, 240, (x, y) => (y / 30 * 8 + x / 32, y / 30 % 8));
+            byte[] blank = new byte[256 * 240 * 4];
+            for (int i = 3; i < blank.Length; i += 4) blank[i] = 255;
+            string name = $"CRT q{quality} s{signal} NES from nes.ppu";
+            if (Match(name, CrtFilter.Filter, "NES", chosen, new[] { blank, blank }, 256, 240, 1, 1440, 1080, raw: raw) is not { } d) return;
+            Assert.True(WithinTolerance(d), $"{name}: {d}");
+        }
 
         // The CRT's frames by console: a frame of each kind a core hands over, drawn into the 4:3 tube filling a 1440 by 1080 window.
         private static readonly (string Console, int Width, int Height, int Repeat)[] CrtFrames =

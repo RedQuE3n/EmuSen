@@ -52,6 +52,9 @@ namespace EmuSen.Serenity.Shaders
         // The parameters whose value decides which passes exist, and so cannot be a uniform.
         public IReadOnlyList<string>? Structural { get; init; }
 
+        // The encoding of the picture before the palette that a pass declaring the child "raw" reads, or null - see EmuSen_CRT.md §22.1.
+        public string? RawEncoding { get; init; }
+
         // A parameter's default on one console, where it differs from the parameter's own.
         public IReadOnlyDictionary<string, IReadOnlyDictionary<string, float>>? ConsoleDefaults { get; init; }
 
@@ -88,6 +91,20 @@ namespace EmuSen.Serenity.Shaders
             ConsoleDefaults is null ? null
             : console is not null && ConsoleDefaults.TryGetValue(console, out var own) ? own
             : ConsoleDefaults.TryGetValue(AnyConsole, out var any) ? any : null;
+
+        // Every value the passes read on a console: each parameter's given value or its default there, then the console's constants.
+        public Dictionary<string, float> ValuesFor(string? console, IReadOnlyDictionary<string, float>? given)
+        {
+            var values = new Dictionary<string, float>(StringComparer.Ordinal);
+            foreach (SlangParameter parameter in Parameters ?? Array.Empty<SlangParameter>())
+                values[parameter.Id] = given is not null && given.TryGetValue(parameter.Id, out float value) ? value : DefaultFor(parameter, console);
+            if (DefaultsFor(console) is { } constants) foreach (var (id, value) in constants) values.TryAdd(id, value);
+            return values;
+        }
+
+        // Whether a pass made for this console and these values reads RawEncoding, so a frontend asks its core for that encoding.
+        public bool ReadsRaw(string? console, IReadOnlyDictionary<string, float>? given) =>
+            RawEncoding is not null && (Build?.Invoke(ValuesFor(console, given)) ?? Passes).Any(pass => pass.Sksl.Contains("uniform shader raw;", StringComparison.Ordinal));
 
         // What a parameter starts at on a console: the console's value where it has one, the parameter's own otherwise.
         public float DefaultFor(SlangParameter parameter, string? console) =>

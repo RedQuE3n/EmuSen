@@ -197,7 +197,7 @@ namespace EmuSen.WiseMan.Serenity
         }
 
         // What a control draws on a GL device after each frame is shown once, as RGBA rows; a null frame is a redraw - see EmuSen_Serenity.md §3.9.
-        public static byte[] Picture(GameFrameControl control, IReadOnlyList<byte[]?> frames, int sourceWidth, int sourceHeight, int rowRepeat, int windowWidth, int windowHeight, string? device, int lines = 0, byte[]? raw = null)
+        public static byte[] Picture(GameFrameControl control, IReadOnlyList<byte[]?> frames, int sourceWidth, int sourceHeight, int rowRepeat, int windowWidth, int windowHeight, string? device, int lines = 0, RawPicture? raw = null)
         {
             using var gl = GlContext.Create(device);
             using GRGlInterface glInterface = GRGlInterface.CreateOpenGl(name => GlContext.GetProc(name)) ?? throw new InvalidOperationException("no GL interface");

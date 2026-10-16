@@ -20,6 +20,10 @@ namespace EmuSen.Cores.Native
         private byte[] _frame = Array.Empty<byte>();
         private CoreInterface.FrameInfo _shape;
         private readonly FrameBufferLending _lending = new();
+        private readonly FrameBufferLending _rawLending = new();
+        private string? _rawWanted, _rawAsked;
+        private bool _rawCurrent;
+        private int _rawIndex = -1;
         private readonly Dictionary<string, string> _values = new(StringComparer.Ordinal);
         private readonly List<(uint Which, BatterySave Save)> _battery = new();
         private readonly List<string> _log = new();
@@ -285,6 +289,7 @@ namespace EmuSen.Cores.Native
             _input.Reset(Math.Max(2, machine.Info.Ports.Count), AxesOf(machine));
             _cheatVersion = -1;
             _audioLimitSent = -1;
+            (_rawCurrent, _rawIndex) = (false, -1);
             _log.Clear();
             machine.SetOptions(_skipRendering);
             _audioRate = machine.AudioSampleRate;
@@ -376,6 +381,7 @@ namespace EmuSen.Cores.Native
             RefreshCheats(m);
             SyncAudioLimit(m);
             _input.Send(m);
+            SyncRaw(m);
             long start = Stopwatch.GetTimestamp();
             if (!AdvanceFrame(m))
             {
@@ -433,6 +439,7 @@ namespace EmuSen.Cores.Native
                     case CoreInterface.EventMachineInfo:
                         m.ReadInfo();
                         _shape = m.FrameInfo;
+                        _rawCurrent = false;
                         // A port added while the game runs, as by an adapter plugged in, has its buttons held from now.
                         _input.Grow(m.Info.Ports.Count);
                         break;
@@ -473,7 +480,42 @@ namespace EmuSen.Cores.Native
             return buffer;
         }
 
-        public void ReturnFrameBuffer(byte[] buffer) => _lending.Return(buffer);
+        public void ReturnFrameBuffer(byte[] buffer)
+        {
+            if (_rawLending.Holds(buffer)) _rawLending.Return(buffer);
+            else _lending.Return(buffer);
+        }
+
+        // The encoding of the picture before the palette a filter reads, kept by the core from the next frame where it offers it; null keeps none - see EmuSen_CoreAPI.md §6.30.
+        public string? RawEncoding
+        {
+            get => System.Threading.Volatile.Read(ref _rawWanted);
+            set => System.Threading.Volatile.Write(ref _rawWanted, value);
+        }
+
+        // The choice sent to the machine before a frame, and only when it changed; an encoding the machine does not list keeps nothing.
+        private void SyncRaw(CoreMachine m)
+        {
+            string? wanted = RawEncoding;
+            if (_rawCurrent && string.Equals(wanted, _rawAsked, StringComparison.Ordinal)) return;
+            int index = -1;
+            for (int i = 0; i < Math.Min(64, m.Info.Raw.Count) && wanted is not null; i++)
+                if (m.Info.Raw[i].Encoding == wanted) { index = i; break; }
+            m.RawSelect(index < 0 ? 0 : 1UL << index);
+            (_rawAsked, _rawCurrent, _rawIndex) = (wanted, true, index);
+        }
+
+        // The last frame's picture before the palette in RawEncoding, copied into an array lent as the RGBA frame is; null where the core kept none.
+        public EmuSen.Serenity.RawPicture? RawPicture
+        {
+            get
+            {
+                if (_machine is not { } m || _rawIndex < 0 || _rawAsked is not { } encoding || m.RawInfo((uint)_rawIndex) is not { } f) return null;
+                byte[] values = _rawLending.Lend((int)f.Bytes);
+                m.CopyRaw((uint)_rawIndex, values);
+                return new EmuSen.Serenity.RawPicture(encoding, f.Width, f.Height, (int)f.Element, f.Stride, values);
+            }
+        }
 
         public Func<EmuSen.Serenity.Slang.SlangLend?>? DeviceLender { get; set; }
 
@@ -719,6 +761,7 @@ namespace EmuSen.Cores.Native
             _machine?.Dispose();
             _machine = null;
             _lending.Close();
+            _rawLending.Close();
         }
     }
 }

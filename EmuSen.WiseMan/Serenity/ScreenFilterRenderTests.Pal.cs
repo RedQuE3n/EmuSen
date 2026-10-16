@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using EmuSen.Serenity;
 using EmuSen.Serenity.Shaders;
 
 namespace EmuSen.WiseMan.Serenity
@@ -190,7 +191,7 @@ namespace EmuSen.WiseMan.Serenity
         public Task On_pal_the_nes_is_drawn_from_its_rgb_picture() => Session.Dispatch(() =>
         {
             byte[] frame = Paint(256, 240, (x, y) => (x / 255.0, y / 239.0, (x ^ y) % 7 / 6.0));
-            byte[] raw = RawField(256, 240, (x, y) => ((x + y) % 64, 0));
+            RawPicture raw = RawField(256, 240, (x, y) => ((x + y) % 64, 0));
             if (DrawNes(frame, raw, 640, 480, Pal) is not { } with) return;
             Crt without = DrawNes(frame, null, 640, 480, Pal)!;
             int worst = 0;

@@ -32,7 +32,8 @@ namespace EmuSen.WiseMan.Cores
         {
             CoreDiscovery.UseDevelopment(null);
             DataStore.OverrideDirectory = null;
-            try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
+            // Windows refuses to delete a library the process has loaded, and answers it as access denied.
+            try { Directory.Delete(_root, recursive: true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
 
         public static string LibraryPath => CoreAdapterTests.LibraryPath("nephrite");

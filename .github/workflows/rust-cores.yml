@@ -452,6 +452,8 @@ jobs:
           chmod +x "$out"/emusen-core-conform* || true
           ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*nephrite* "$out"/*diamond* "$out"/*v1_test_core* "$out"/*v1_plain_core*
           ls -la "$out"/*emusen_platform* || echo "no platform library: Galaxia runs on its C#"
+          # What the runner lacks of what Shaderc's library needs, where it cannot be loaded.
+          if [ "$RUNNER_OS" = Linux ]; then find "$out" -name 'libshaderc_shared.so*' -exec sh -c 'echo "$1"; ldd "$1" | grep "not found" || echo "every dependency found"' _ {} \; ; fi
 
       # Printed in full, so each platform's digests can be read off the log.
       - name: Test the platform digests

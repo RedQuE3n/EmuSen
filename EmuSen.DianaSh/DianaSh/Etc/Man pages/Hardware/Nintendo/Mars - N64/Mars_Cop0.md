@@ -1,5 +1,7 @@
 # Mars — coprocessor zero is not thirty-two words of storage
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Written 2026-09-16, from the hardware corpus's COP0, LL/SC and address-error
 sections. `Mars_Cpu.md` §9 described COP0 as "the register file is otherwise plain
 words", and said so accurately: it was. Almost every register turned out to be

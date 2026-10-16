@@ -3,17 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mercury;
-using EmuSen.Cores.Nintendo.Mercury.Debug;
-using EmuSen.Cores.Nintendo.Mercury.Memory;
-using EmuSen.Cores.Nintendo.Mercury.Video;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // The Model setting on both engines: each cartridge on each console, the Color's palettes for Game Boy games, and states across consoles - see Mercury_Model.md.
+    // The Model setting: each cartridge on each console, the Color's palettes for Game Boy games, and states across consoles - see Mercury_Model.md.
     [Collection(TestCollections.ProcessGlobals)]
     public class MercuryModelTests : IDisposable
     {
@@ -121,7 +117,7 @@ namespace EmuSen.WiseMan.Cores
             rom[0x144] = (byte)newLicensee[0];
             rom[0x145] = (byte)newLicensee[1];
             rom[0x14B] = licensee;
-            rom[Cartridge.HeaderChecksumAddress] = Cartridge.ComputeHeaderChecksum(rom);
+            rom[SyntheticGbRom.HeaderChecksumAddress] = SyntheticGbRom.HeaderChecksum(rom);
             return rom;
         }
 
@@ -130,56 +126,34 @@ namespace EmuSen.WiseMan.Cores
 
         private static int Scale(int five) => (int)Math.Round(five * 255 / 31.0, MidpointRounding.AwayFromZero);
 
-        private static string Palettes(byte[] rom)
+        // What a Game Boy game on the Color holds in colour RAM before its first instruction.
+        private static string PalettesOn(byte[] rom)
         {
-            var (bg, obj0, obj1) = CompatibilityPalettes.ForNumber(CompatibilityPalettes.PaletteNumber(rom));
-            return $"{Rgb888(bg)}|{Rgb888(obj0)}|{Rgb888(obj1)}";
-        }
-
-        // What a Game Boy game on the Color holds in colour RAM before its first instruction, on the engine given.
-        private static string PalettesOn(MercuryEngine engine, byte[] rom)
-        {
-            using MercuryRig core = MercuryRig.Create(engine, rom, GbModel.GameBoyColor);
+            using MercuryRig core = MercuryRig.Create(rom, GbModel.GameBoyColor);
             byte[] bg = core.FieldBytes("Bus.Ppu.BgPaletteRam"), obj = core.FieldBytes("Bus.Ppu.ObjPaletteRam");
             ushort[] Entries(byte[] ram, int at) => Enumerable.Range(0, 4).Select(i => (ushort)(ram[at + i * 2] | (ram[at + i * 2 + 1] << 8))).ToArray();
             return $"{Rgb888(Entries(bg, 0))}|{Rgb888(Entries(obj, 0))}|{Rgb888(Entries(obj, 8))}";
         }
 
-        private static TheoryData<T1, T2, T3, MercuryEngine> OnEngines<T1, T2, T3>(TheoryData<T1, T2, T3> rows)
-        {
-            var data = new TheoryData<T1, T2, T3, MercuryEngine>();
-            foreach (object?[] row in rows)
-                foreach (MercuryEngine engine in Enum.GetValues<MercuryEngine>()) data.Add((T1)row[0]!, (T2)row[1]!, (T3)row[2]!, engine);
-            return data;
-        }
-
-        public static TheoryData<int, char?, string, MercuryEngine> TcrfRowsOnEngines => OnEngines(TcrfRows);
-
-        // Each listed game's palettes in TCRF's words, the table's and each machine's colour RAM alike - see Mercury_Native.md §12.1.
+        // Each listed game's palettes in TCRF's words, as the machine's colour RAM holds them - see Mercury_Native.md §12.1.
         [Theory]
-        [MemberData(nameof(TcrfRowsOnEngines))]
-        public void The_colour_palette_for_a_listed_game_is_the_one_tcrf_documents(int checksum, char? fourth, string expected, MercuryEngine engine)
+        [MemberData(nameof(TcrfRows))]
+        public void The_colour_palette_for_a_listed_game_is_the_one_tcrf_documents(int checksum, char? fourth, string expected)
         {
-            byte[] rom = Header(checksum, fourth);
-            Assert.Equal((byte)checksum, CompatibilityPalettes.TitleChecksum(rom));
-            Assert.Equal(expected, Palettes(rom));
-            Assert.Equal(expected, PalettesOn(engine, rom));
+            Assert.Equal(expected, PalettesOn(Header(checksum, fourth)));
         }
 
         // TCRF lists Radar Mission ($8C) as entry $01 with flags $00; the boot ROM's own tables give $8C palette number 8, entry $00 with flags $01 - see Mercury_Model.md §3.3.
-        [Theory]
-        [InlineData(MercuryEngine.Mercury)]
-        [InlineData(MercuryEngine.MercuryRt)]
-        public void Radar_mission_follows_the_boot_roms_table_where_tcrf_disagrees(MercuryEngine engine)
+        [Fact]
+        public void Radar_mission_follows_the_boot_roms_table_where_tcrf_disagrees()
         {
-            byte[] rom = Header(0x8C, null);
-            Assert.Equal(8, CompatibilityPalettes.PaletteNumber(rom));
-            Assert.Equal("FFFFFF ADAD84 42737B 000000|FFFFFF FF7300 944200 000000|FFFFFF ADAD84 42737B 000000", Palettes(rom));
-            Assert.Equal(Palettes(rom), PalettesOn(engine, rom));
-            Assert.NotEqual("FFFF9C 94B5FF 639473 003A3A|FFFF9C 94B5FF 639473 003A3A|FFFF9C 94B5FF 639473 003A3A", Palettes(rom));
+            string loaded = PalettesOn(Header(0x8C, null));
+            Assert.Equal("FFFFFF ADAD84 42737B 000000|FFFFFF FF7300 944200 000000|FFFFFF ADAD84 42737B 000000", loaded);
+            Assert.Equal(FrozenPalettes()[8].Palettes, loaded);
+            Assert.NotEqual("FFFF9C 94B5FF 639473 003A3A|FFFF9C 94B5FF 639473 003A3A|FFFF9C 94B5FF 639473 003A3A", loaded);
         }
 
-        // Pan Docs' default: a game not Nintendo's, not listed, or listed as ambiguous with no matching letter gets palette 0; each machine loads the number's palettes.
+        // Pan Docs' default: a game not Nintendo's, not listed, or listed as ambiguous with no matching letter gets palette 0; the machine loads the number's palettes.
         [Theory]
         [InlineData(0x70, null, 0x00, "\0\0", 0)]
         [InlineData(0x70, null, 0x33, "08", 0)]
@@ -194,72 +168,33 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(0x46, 'R', 0x01, "\0\0", 80)]
         public void The_palette_number_follows_the_licensee_the_checksum_and_the_fourth_letter(int checksum, char? fourth, byte licensee, string newLicensee, int number)
         {
-            byte[] rom = Header(checksum, fourth, licensee, newLicensee: newLicensee);
-            Assert.Equal(number, CompatibilityPalettes.PaletteNumber(rom));
-            string expected = FrozenPalettes()[number].Palettes;
-            foreach (MercuryEngine engine in Enum.GetValues<MercuryEngine>()) Assert.Equal(expected, PalettesOn(engine, rom));
+            Assert.Equal(FrozenPalettes()[number].Palettes, PalettesOn(Header(checksum, fourth, licensee, newLicensee: newLicensee)));
         }
 
-        [Theory]
-        [InlineData(MercuryEngine.Mercury)]
-        [InlineData(MercuryEngine.MercuryRt)]
-        public void The_default_palette_is_the_one_pan_docs_gives(MercuryEngine engine)
+        [Fact]
+        public void The_default_palette_is_the_one_pan_docs_gives()
         {
             ushort[] bg = { 0x7FFF, 0x1BEF, 0x6180, 0x0000 }, obj = { 0x7FFF, 0x421F, 0x1CF2, 0x0000 };
             Assert.Equal($"{Rgb888(bg)}|{Rgb888(obj)}|{Rgb888(obj)}", FrozenPalettes()[0].Palettes);
-            Assert.Equal(FrozenPalettes()[0].Palettes, PalettesOn(engine, Header(0x70, null, licensee: 0x00)));
+            Assert.Equal(FrozenPalettes()[0].Palettes, PalettesOn(Header(0x70, null, licensee: 0x00)));
         }
-
-        // Set to 1 to write the frozen palettes from C# Mercury's table instead of comparing them.
-        public const string PalettesRecordVariable = "EMUSEN_MERCURY_PALETTES_RECORD";
 
         public static string FrozenPalettesPath([System.Runtime.CompilerServices.CallerFilePath] string here = "") =>
             Path.Combine(Path.GetDirectoryName(here)!, "MercuryGoldens", "palettes.tsv");
 
-        // The Color's 94 palettes for Game Boy games, each with a Nintendo header that selects it, as data that outlives C#'s table - see Mercury_Native.md §14.6.
+        // The Color's 94 palettes for Game Boy games, each with a Nintendo header that selects it, frozen from C# Mercury's table before it left - see Mercury_Native.md §14.6.
         public static IReadOnlyList<(int Checksum, char Fourth, string Palettes)> FrozenPalettes() => File.ReadAllLines(FrozenPalettesPath())
             .Where(l => l.Length > 0 && l[0] != '#').Skip(1).Select(l => l.Split('\t'))
             .Select(c => (Convert.ToInt32(c[1], 16), (char)Convert.ToInt32(c[2], 16), c[3])).ToArray();
 
-        // C# Mercury's table, written out for each palette number with the first header the search below finds for it.
-        private static string CsharpPalettes()
-        {
-            var found = new SortedDictionary<int, (int Checksum, char Fourth)>();
-            foreach (char fourth in "\0BEFAARBEKEK R-URAR INAILICE RZ".Distinct())
-                for (int checksum = 0; checksum < 256; checksum++)
-                    if (!found.ContainsKey(CompatibilityPalettes.PaletteNumber(Header(checksum, fourth == '\0' ? null : fourth))))
-                        found[CompatibilityPalettes.PaletteNumber(Header(checksum, fourth == '\0' ? null : fourth))] = (checksum, fourth);
-            Assert.Equal(CompatibilityPalettes.PaletteCount, found.Count);
-            var text = new List<string>
-            {
-                "# The Game Boy Color's palettes for Game Boy games, RGB888 as TCRF converts RGB555, from C# Mercury's CompatibilityPalettes; frozen - see Mercury_Native.md §14.6.",
-                "number\tchecksum\tfourth (its byte, 00 for none)\tpalettes",
-            };
-            foreach (var (number, (checksum, fourth)) in found)
-            {
-                var (bg, obj0, obj1) = CompatibilityPalettes.ForNumber(number);
-                text.Add($"{number}\t{checksum:X2}\t{(int)fourth:X2}\t{Rgb888(bg)}|{Rgb888(obj0)}|{Rgb888(obj1)}");
-            }
-            return string.Join('\n', text) + "\n";
-        }
-
-        // While C# Mercury is on main its table is the frozen file's oracle; the file is re-recorded only on purpose.
-        [Fact]
-        public void The_frozen_palettes_are_csharps_table()
-        {
-            string csharp = CsharpPalettes();
-            if (Environment.GetEnvironmentVariable(PalettesRecordVariable) == "1") File.WriteAllText(FrozenPalettesPath(), csharp);
-            Assert.Equal(csharp, File.ReadAllText(FrozenPalettesPath()));
-        }
-
-        // Each frozen palette, selected by its header, is what MercuryRT loads into colour RAM, with no C# table consulted.
+        // Each frozen palette, selected by its header, is what MercuryRT loads into colour RAM.
         [Fact]
         public void Every_frozen_palette_is_what_mercuryrt_loads()
         {
             var rows = FrozenPalettes();
             Assert.Equal(94, rows.Count);
             for (int number = 0; number < rows.Count; number++)
-                Assert.True(rows[number].Palettes == PalettesOn(MercuryEngine.MercuryRt, Header(rows[number].Checksum, rows[number].Fourth == '\0' ? null : rows[number].Fourth)), $"palette {number}");
+                Assert.True(rows[number].Palettes == PalettesOn(Header(rows[number].Checksum, rows[number].Fourth == '\0' ? null : rows[number].Fourth)), $"palette {number}");
         }
 
         // Stores A, B, C, D, E, H, L and F at $C000, then reads the colour registers, tries a speed switch and a WRAM bank, and draws four shades.
@@ -280,7 +215,7 @@ namespace EmuSen.WiseMan.Cores
         {
             byte[] rom = Header(checksum, null, licensee, cgb);
             Probe.CopyTo(rom, SyntheticGbRom.EntryPoint);
-            rom[Cartridge.HeaderChecksumAddress] = Cartridge.ComputeHeaderChecksum(rom);
+            rom[SyntheticGbRom.HeaderChecksumAddress] = SyntheticGbRom.HeaderChecksum(rom);
             return rom;
         }
 
@@ -296,97 +231,65 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // What each console hands the cartridge and shows it, the two engines in lock-step - see Mercury_Model.md §2.
+        // What each console hands the cartridge and shows it - see Mercury_Model.md §2.
         [Theory]
         [MemberData(nameof(Cases))]
-        public void Each_cartridge_on_each_console_runs_as_that_console_identically(byte cgb, GbModel model)
+        public void Each_cartridge_on_each_console_runs_as_that_console(byte cgb, GbModel model)
         {
-            var pair = new MercuryRtPair(ProbeRom(cgb), skipRendering: false, model: model);
-            pair.Run(10, null);
-            MemoryBus bus = pair.Csharp.Bus!;
-            byte[] wram = bus.Wram;
+            CoreOptions.BatteryRamDisabled = true;
+            using MercuryRig rig = MercuryRig.Create(ProbeRom(cgb), model);
+            for (int f = 0; f < 10; f++) rig.RunFrame();
+            byte[] wram = rig.FieldBytes("Bus.Wram");
             bool colourConsole = model == GbModel.GameBoyColor || (model == GbModel.Auto && cgb != 0);
             string kind = !colourConsole ? "Game Boy" : cgb == 0 ? "Color, compatibility" : "Color";
-            _output.WriteLine($"${cgb:X2} on {model}: {kind}; A {wram[0]:X2} F {wram[7]:X2} BC {wram[1]:X2}{wram[2]:X2} DE {wram[3]:X2}{wram[4]:X2} HL {wram[5]:X2}{wram[6]:X2}; FF4C-FF70 {string.Join(" ", wram[0x10..0x1D].Select(b => b.ToString("X2")))}; {pair.Summary}");
+            _output.WriteLine($"${cgb:X2} on {model}: {kind}; A {wram[0]:X2} F {wram[7]:X2} BC {wram[1]:X2}{wram[2]:X2} DE {wram[3]:X2}{wram[4]:X2} HL {wram[5]:X2}{wram[6]:X2}; FF4C-FF70 {string.Join(" ", wram[0x10..0x1D].Select(b => b.ToString("X2")))}");
 
-            Assert.Equal(colourConsole, bus.CgbHardware);
-            Assert.Equal(colourConsole ? "GBC" : "GB", pair.Csharp.CoreName);
-            Assert.Equal(colourConsole, pair.Rust.CgbHardware);
-            Assert.Equal(colourConsole ? 0x4000 : 0x2000, bus.Vram.Length);
+            Assert.Equal(colourConsole, rig.Flag("Console"));
+            Assert.Equal(colourConsole ? "GBC" : "GB", rig.CoreName);
+            Assert.Equal(colourConsole ? 0x4000 : 0x2000, rig.FieldBytes("Bus.Vram").Length);
 
             byte[] registers = wram[0..8];
-            byte[] frame = pair.Csharp.GetFrameBufferRgba();
+            byte[] frame = rig.GetFrameBufferRgba();
             if (!colourConsole)
             {
                 Assert.Equal(new byte[] { 0x01, 0x00, 0x13, 0x00, 0xD8, 0x01, 0x4D, 0xB0 }, registers);
-                Assert.False(bus.DoubleSpeed);
+                Assert.False(rig.Flag("Bus.DoubleSpeed"));
                 Assert.Equal(new byte[] { 0xFF, 0xAA, 0x55, 0x00 }, Enumerable.Range(0, 4).Select(x => frame[x * 4]).ToArray());
             }
             else if (cgb != 0)
             {
                 Assert.Equal(new byte[] { 0x11, 0x00, 0x00, 0xFF, 0x56, 0x00, 0x0D, 0x80 }, registers);
-                Assert.True(bus.DoubleSpeed, "a colour cartridge on the Color switches speed");
+                Assert.True(rig.Flag("Bus.DoubleSpeed"), "a colour cartridge on the Color switches speed");
             }
             else
             {
                 Assert.Equal(new byte[] { 0x11, 0x00, 0x00, 0x00, 0x08, 0x00, 0x7C, 0x80 }, registers);
                 Assert.Equal(new byte[] { 0xFF, 0xFF, 0xFE, 0xFF, 0xC8, 0xFF, 0xD0, 0xFF, 0xFF, 0xFF, 0x7E, 0xFF, 0xFF }, wram[0x10..0x1D]);
-                Assert.False(bus.DoubleSpeed, "compatibility mode has no speed switch");
-                Assert.Equal(1, bus.WramBank);
+                Assert.False(rig.Flag("Bus.DoubleSpeed"), "compatibility mode has no speed switch");
+                Assert.Equal(1, rig.Field("Bus.WramBank"));
 
-                // Palette 0's background colours, 7FFF 1BEF 6180 0000, through Mercury's 5-to-8-bit expansion, for shades 0 to 3.
+                // Palette 0's background colours, 7FFF 1BEF 6180 0000, through the 5-to-8-bit expansion, for shades 0 to 3.
                 Assert.Equal(new[] { "FFFFFF", "7BFF31", "0063C6", "000000" },
                     Enumerable.Range(0, 4).Select(x => $"{frame[x * 4]:X2}{frame[x * 4 + 1]:X2}{frame[x * 4 + 2]:X2}").ToArray());
             }
         }
 
-        // A Nintendo game's checksum reaches B, the logo map's two checksums leave HL at $991A, and its palette is in colour RAM - see Mercury_Model.md §3.2.
+        // A Nintendo game's checksum reaches B, and the logo map's two checksums leave HL at $991A - see Mercury_Model.md §3.2.
         [Theory]
         [InlineData(0x70, 0x007C)]
         [InlineData(0x58, 0x991A)]
         [InlineData(0x43, 0x991A)]
-        public void A_nintendo_game_on_the_color_hands_off_its_checksum_identically(int checksum, int hl)
+        public void A_nintendo_game_on_the_color_hands_off_its_checksum(int checksum, int hl)
         {
-            byte[] rom = ProbeRom(0x00, checksum, licensee: 0x01);
-            var pair = new MercuryRtPair(rom, skipRendering: false, model: GbModel.GameBoyColor);
-            pair.Run(3, null);
-            byte[] wram = pair.Csharp.Bus!.Wram;
+            CoreOptions.BatteryRamDisabled = true;
+            using MercuryRig rig = MercuryRig.Create(ProbeRom(0x00, checksum, licensee: 0x01), GbModel.GameBoyColor);
+            for (int f = 0; f < 3; f++) rig.RunFrame();
+            byte[] wram = rig.FieldBytes("Bus.Wram");
             Assert.Equal(checksum, wram[1]);
             Assert.Equal(hl, (wram[5] << 8) | wram[6]);
-
-            var (bg, obj0, obj1) = CompatibilityPalettes.ForNumber(CompatibilityPalettes.PaletteNumber(rom));
-            EmuSen.Cores.Nintendo.Mercury.Video.Ppu ppu = pair.Csharp.Bus!.Ppu;
-            for (int i = 0; i < 4; i++)
-            {
-                Assert.Equal(bg[i], ppu.BgPaletteRam[i * 2] | (ppu.BgPaletteRam[i * 2 + 1] << 8));
-                Assert.Equal(obj0[i], ppu.ObjPaletteRam[i * 2] | (ppu.ObjPaletteRam[i * 2 + 1] << 8));
-                Assert.Equal(obj1[i], ppu.ObjPaletteRam[8 + i * 2] | (ppu.ObjPaletteRam[8 + i * 2 + 1] << 8));
-            }
         }
 
-        // Every one of the 94 palettes on both engines, by a title that selects it; the picture and colour RAM are compared each frame.
-        [Fact]
-        public void Every_palette_number_renders_identically_on_both_engines()
-        {
-            var found = new Dictionary<int, byte[]>();
-            foreach (char fourth in "BEFAARBEKEK R-URAR INAILICE RZ".Distinct())
-                for (int checksum = 0; checksum < 256; checksum++)
-                {
-                    byte[] rom = ProbeRom(0x00, checksum, licensee: 0x01);
-                    rom[0x137] = (byte)fourth;
-                    rom[0x134] = (byte)(checksum - fourth);
-                    rom[Cartridge.HeaderChecksumAddress] = Cartridge.ComputeHeaderChecksum(rom);
-                    found.TryAdd(CompatibilityPalettes.PaletteNumber(rom), rom);
-                }
-            Assert.Equal(CompatibilityPalettes.PaletteCount, found.Count);
-            foreach (byte[] rom in found.Values)
-            {
-                var pair = new MercuryRtPair(rom, skipRendering: false, model: GbModel.GameBoyColor);
-                pair.Run(2, null);
-            }
-        }
-
-        // A state made on one console, loaded into a machine running as the other, rebuilds it as the state's console and runs on identically.
+        // A state made on one console, loaded into a machine running as the other, rebuilds it as the state's console and runs on as the machine that made it.
         [Theory]
         [InlineData((byte)0x00, GbModel.GameBoyColor, GbModel.Auto)]
         [InlineData((byte)0x00, GbModel.Auto, GbModel.GameBoyColor)]
@@ -394,203 +297,120 @@ namespace EmuSen.WiseMan.Cores
         [InlineData((byte)0xC0, GbModel.Auto, GbModel.GameBoy)]
         public void A_state_resumes_on_the_console_it_was_made_on(byte cgb, GbModel madeOn, GbModel loadedOn)
         {
-            byte[] rom = SyntheticGbRom.Build(romBanks: 4, cartridgeType: 0x03, ramSizeCode: 0x02, cgbFlag: cgb, patches: (0, MercuryRtMachineTests.Busy));
-            var first = new MercuryRtPair(rom, skipRendering: false, model: madeOn);
-            first.Run(120, null);
-            using var saved = new MemoryStream();
-            first.Csharp.SaveState(saved);
+            CoreOptions.BatteryRamDisabled = true;
+            byte[] rom = SyntheticGbRom.Build(romBanks: 4, cartridgeType: 0x03, ramSizeCode: 0x02, cgbFlag: cgb, patches: (0, MercuryPrograms.Busy));
+            using MercuryRig first = MercuryRig.Create(rom, madeOn);
+            for (int f = 0; f < 120; f++) first.RunFrame();
+            byte[] saved = first.State();
 
-            var second = new MercuryRtPair(rom, skipRendering: false, model: loadedOn);
-            Assert.NotEqual(first.Csharp.Bus!.CgbHardware, second.Csharp.Bus!.CgbHardware);
-            second.Csharp.SetButton(0, EmuSen.Galaxia.Input.PadButton.A, true);
-            second.Rust.SetButtons(1u << 4);
-            second.Csharp.LoadState(new MemoryStream(saved.ToArray()));
-            second.Rust.Load(saved.ToArray());
-            second.CompareState("after the load");
-            Assert.Equal(first.Csharp.CoreName, second.Csharp.CoreName);
-            Assert.Equal(first.Csharp.Bus!.CgbHardware, second.Rust.CgbHardware);
+            using MercuryRig second = MercuryRig.Create(rom, loadedOn);
+            Assert.NotEqual(first.CoreName, second.CoreName);
+            second.SetButton(0, EmuSen.Galaxia.Input.PadButton.A, true);
+            second.LoadState(new MemoryStream(saved));
+            Assert.Equal(saved, second.State());
+            Assert.Equal(first.CoreName, second.CoreName);
 
-            first.Run(60, null);
-            second.Run(60, null);
-            using var a = new MemoryStream();
-            using var b = new MemoryStream();
-            first.Csharp.SaveState(a);
-            second.Csharp.SaveState(b);
-            Assert.True(a.ToArray().AsSpan().SequenceEqual(b.ToArray()), "the rebuilt machine ran on differently from the one that made the state");
+            for (int f = 0; f < 60; f++)
+            {
+                first.RunFrame();
+                second.RunFrame();
+            }
+            Assert.True(first.State().AsSpan().SequenceEqual(second.State()), "the rebuilt machine ran on differently from the one that made the state");
 
-            // The button held before the load is still held after the rebuild, on both engines: the buttons row reads A down.
-            second.Csharp.Bus!.Write(0xFF00, 0x10);
-            second.Rust.WriteSpace(6, 0xFF00, new byte[] { 0x10 });
-            var p1 = new byte[1];
-            second.Rust.ReadSpace(6, 0xFF00, p1);
-            Assert.Equal(0xDE, second.Csharp.Bus!.Read(0xFF00));
-            Assert.Equal(0xDE, p1[0]);
+            // The button held before the load is still held after the rebuild: the buttons row reads A down.
+            second.Write(0xFF00, 0x10);
+            Assert.Equal(0xDE, second.Read(0xFF00));
         }
 
-        // The debugger's palette 0 is the four colours the probe draws, and MercuryRT's mirror is on the machine's console from the load on - see Mercury_Model.md §5.
+        // The debugger's palette 0 is the four colours the probe draws, its object palettes the registers through colour RAM, on the console the game runs on - see Mercury_Model.md §5.
         [Theory]
         [InlineData((byte)0x00, GbModel.Auto)]
         [InlineData((byte)0x00, GbModel.GameBoyColor)]
         [InlineData((byte)0x80, GbModel.GameBoy)]
-        public void The_debugger_shows_the_console_the_game_runs_on_on_both_engines(byte cgb, GbModel model)
+        public void The_debugger_shows_the_console_the_game_runs_on(byte cgb, GbModel model)
         {
             CoreOptions.BatteryRamDisabled = true;
             string path = Path.Combine(_dir, $"debug-{cgb:X2}-{model}.gb");
-            byte[] rom = ProbeRom(cgb, 0x70, licensee: 0x01);
-            File.WriteAllBytes(path, rom);
-            var cs = new MercuryCore { Model = model };
-            cs.LoadRom(path);
+            File.WriteAllBytes(path, ProbeRom(cgb, 0x70, licensee: 0x01));
             using var rt = new MercuryRtCore { Model = model };
             rt.LoadRom(path);
-            Assert.Equal(cs.Bus!.CgbHardware, rt.Mirror.Bus!.CgbHardware);
-            Assert.Equal(cs.Bus!.DmgCompat, rt.Mirror.Bus!.DmgCompat);
-
-            var csTarget = new MercuryDebugTarget(cs);
-            var rtTarget = rt.CreateDebugTarget();
-            for (int f = 0; f < 10; f++)
-            {
-                cs.RunFrame();
-                rt.RunFrame();
-            }
-            csTarget.RefreshProviders();
-            rtTarget.RefreshProviders();
+            var target = rt.CreateDebugTarget();
+            for (int f = 0; f < 10; f++) rt.RunFrame();
+            target.RefreshProviders();
 
             static string Show(IReadOnlyList<EmuSen.Crystal.Telemetry.DebugPaletteInfo> palettes) =>
                 string.Join("|", palettes.Select(p => string.Join(" ", p.Colors.Select(c => $"{c.r:X2}{c.g:X2}{c.b:X2}"))));
-            string shown = Show(csTarget.Palettes.Current);
+            string shown = Show(target.Palettes.Current);
             _output.WriteLine($"${cgb:X2} on {model}: {shown}");
-            Assert.Equal(shown, Show(rtTarget.Palettes.Current));
-            Assert.Equal(3, csTarget.Palettes.Current.Count);
+            Assert.Equal(3, target.Palettes.Current.Count);
 
             byte[] frame = rt.GetFrameBufferRgba();
             Assert.Equal(Enumerable.Range(0, 4).Select(x => $"{frame[x * 4]:X2}{frame[x * 4 + 1]:X2}{frame[x * 4 + 2]:X2}"),
-                csTarget.Palettes.Current[0].Colors.Select(c => $"{c.r:X2}{c.g:X2}{c.b:X2}"));
-            if (!cs.Bus!.DmgCompat) return;
+                target.Palettes.Current[0].Colors.Select(c => $"{c.r:X2}{c.g:X2}{c.b:X2}"));
+            bool compatibility = cgb == 0 && model == GbModel.GameBoyColor;
+            Assert.Equal(compatibility ? "GBC" : "GB", rt.CoreName);
+            if (!compatibility) return;
 
-            // The object registers through object palettes 0 and 1, from the table the boot ROM chose.
-            var (bg, obj0, obj1) = CompatibilityPalettes.ForNumber(CompatibilityPalettes.PaletteNumber(rom));
+            // The object registers through object palettes 0 and 1 of colour RAM, which the boot ROM filled.
+            var (state, layout) = rt.Snapshot();
+            byte[] obj = layout.Bytes(state, "Bus.Ppu.ObjPaletteRam").ToArray(), bg = layout.Bytes(state, "Bus.Ppu.BgPaletteRam").ToArray();
             static int Expand(int five) => (five << 3) | (five >> 2);
-            static string Through(byte register, ushort[] palette) => string.Join(" ", Enumerable.Range(0, 4)
-                .Select(c => palette[(register >> (c * 2)) & 3]).Select(v => $"{Expand(v & 0x1F):X2}{Expand((v >> 5) & 0x1F):X2}{Expand(v >> 10):X2}"));
-            var ppu = cs.Bus!.Ppu;
-            Assert.Equal($"{Through(ppu.Bgp, bg)}|{Through(ppu.Obp0, obj0)}|{Through(ppu.Obp1, obj1)}", shown);
+            static string Through(long register, byte[] ram, int palette) => string.Join(" ", Enumerable.Range(0, 4)
+                .Select(c => ram[palette * 8 + (int)((register >> (c * 2)) & 3) * 2] | (ram[palette * 8 + (int)((register >> (c * 2)) & 3) * 2 + 1] << 8))
+                .Select(v => $"{Expand(v & 0x1F):X2}{Expand((v >> 5) & 0x1F):X2}{Expand(v >> 10):X2}"));
+            Assert.Equal($"{Through(layout.Get(state, "Bus.Ppu.Bgp"), bg, 0)}|{Through(layout.Get(state, "Bus.Ppu.Obp0"), obj, 0)}|{Through(layout.Get(state, "Bus.Ppu.Obp1"), obj, 1)}", shown);
         }
 
-        // A rebuild for another console's state keeps the debugger's call stack following the game, on both engines - see Mercury_Model.md §5.
+        // A rebuild for another console's state keeps the debugger's call stack following the game - see Mercury_Model.md §5.
         [Theory]
         [InlineData((byte)0x00, GbModel.GameBoyColor, GbModel.Auto)]
         [InlineData((byte)0x80, GbModel.GameBoy, GbModel.Auto)]
-        public void A_rebuild_for_a_state_keeps_the_debuggers_call_stack_on_both_engines(byte cgb, GbModel madeOn, GbModel loadedOn)
+        public void A_rebuild_for_a_state_keeps_the_debuggers_call_stack(byte cgb, GbModel madeOn, GbModel loadedOn)
         {
             CoreOptions.BatteryRamDisabled = true;
             byte[] rom = SyntheticGbRom.Build(cgbFlag: cgb, patches: new[] { (0, new byte[] { 0xCD, 0x00, 0x02, 0x18, 0xFE }), (0xB0, new byte[] { 0x18, 0xFE }) });
             string path = Path.Combine(_dir, $"calls-{cgb:X2}.gb");
             File.WriteAllBytes(path, rom);
-            var maker = new MercuryCore { Model = madeOn };
+            using var maker = new MercuryRtCore { Model = madeOn };
             maker.LoadRom(path);
             using var saved = new MemoryStream();
             maker.SaveState(saved);
 
-            var cs = new MercuryCore { Model = loadedOn };
-            cs.LoadRom(path);
             using var rt = new MercuryRtCore { Model = loadedOn };
             rt.LoadRom(path);
-            cs.Breakpoints.AddBreakpoint(0x7000);
             rt.Breakpoints.AddBreakpoint(0x7000);
-            Assert.NotEqual(maker.CoreName, cs.CoreName);
-            cs.LoadState(new MemoryStream(saved.ToArray()));
+            Assert.NotEqual(maker.CoreName, rt.CoreName);
             rt.LoadState(new MemoryStream(saved.ToArray()));
-            Assert.Equal(maker.CoreName, cs.CoreName);
             Assert.Equal(maker.CoreName, rt.CoreName);
 
-            cs.RunFrame();
             rt.RunFrame();
-            Assert.Equal(new[] { 0x0200 }, cs.CallStack.Frames.Select(f => (int)f.Target));
             Assert.Equal(new[] { 0x0200 }, rt.CallStack.Frames.Select(f => (int)f.Target));
         }
 
-        // The setting through ICoreSettings on both engines: read, refused, and before the first frame a change reloads the game at once.
-        [Theory]
-        [MemberData(nameof(Engines))]
-        public void The_model_setting_is_honoured_before_the_first_frame_and_otherwise_at_the_next_load(string engine)
+        // The setting through ICoreSettings: read, refused, and before the first frame a change reloads the game at once.
+        [Fact]
+        public void The_model_setting_is_honoured_before_the_first_frame_and_otherwise_at_the_next_load()
         {
             CoreOptions.BatteryRamDisabled = true;
-            string path = Path.Combine(_dir, $"model-{engine}.gb");
+            string path = Path.Combine(_dir, "model.gb");
             File.WriteAllBytes(path, ProbeRom(0x00));
-            ICore core = engine == "C#" ? new MercuryCore() : new MercuryRtCore();
+            using var core = new MercuryRtCore();
             var settings = (ICoreSettings)core;
             Assert.Equal(CoreCatalog.SettingsFor("GB"), settings.Settings);
-            Assert.Equal(MercuryCore.ModelAuto, settings.Get(MercuryCore.ModelKey));
+            Assert.Equal(MercuryRtCore.ModelAuto, settings.Get(MercuryRtCore.ModelKey));
 
             core.LoadRom(path);
             Assert.Equal("GB", core.CoreName);
-            settings.Set(MercuryCore.ModelKey, MercuryCore.ModelGameBoyColor);
+            settings.Set(MercuryRtCore.ModelKey, MercuryRtCore.ModelGameBoyColor);
             Assert.Equal("GBC", core.CoreName);
             core.RunFrame();
-            settings.Set(MercuryCore.ModelKey, MercuryCore.ModelGameBoy);
+            settings.Set(MercuryRtCore.ModelKey, MercuryRtCore.ModelGameBoy);
             Assert.Equal("GBC", core.CoreName);
             core.LoadRom(path);
             Assert.Equal("GB", core.CoreName);
-            Assert.Throws<ArgumentException>(() => settings.Set(MercuryCore.ModelKey, "Super Game Boy"));
+            Assert.Throws<ArgumentException>(() => settings.Set(MercuryRtCore.ModelKey, "Super Game Boy"));
             Assert.Throws<ArgumentException>(() => settings.Get("Palette"));
-            Assert.Equal(MercuryCore.ModelGameBoy, settings.Get(MercuryCore.ModelKey));
-            (core as IDisposable)?.Dispose();
-        }
-
-        public static TheoryData<string> Engines => new() { "C#", "Rust" };
-
-        // The hardware corpus on each forced console, both engines in lock-step as MercuryRtCorpusTests runs it under Auto; absent, not run.
-        [Theory]
-        [InlineData(GbModel.GameBoy)]
-        [InlineData(GbModel.GameBoyColor)]
-        public void The_hardware_corpus_runs_identically_on_each_console(GbModel model)
-        {
-            string? folder = Environment.GetEnvironmentVariable(MercuryRtMachineTests.CorpusVariable);
-            if (folder is null || !Directory.Exists(folder))
-            {
-                _output.WriteLine($"{MercuryRtMachineTests.CorpusVariable} unset, not run");
-                return;
-            }
-            var files = Directory.GetFiles(folder, "*.gb*", SearchOption.AllDirectories).Where(f => f.EndsWith(".gb") || f.EndsWith(".gbc")).Order(StringComparer.Ordinal).ToList();
-            int frames = 0, passed = 0;
-            foreach (string path in files)
-            {
-                var pair = new MercuryRtPair(File.ReadAllBytes(path), skipRendering: true, stateEvery: 30, soundAndPicture: false, model: model);
-                var verdict = TestRomVerdict.NoVerdict;
-                for (int f = 0; f < 3600 && verdict == TestRomVerdict.NoVerdict; f++, frames++)
-                {
-                    if (!pair.Frame(null, f)) break;
-                    verdict = HardwareTestRomLibrary.ReadVerdict(pair.Csharp.Bus!.SerialLog);
-                    if (pair.Csharp.Cart!.Ram is { Length: >= 4 } ram && ram[1] == 0xDE && ram[2] == 0xB0 && ram[3] == 0x61 && ram[0] != 0x80) break;
-                }
-                pair.CompareState("the end");
-                if (verdict == TestRomVerdict.Passed) passed++;
-            }
-            _output.WriteLine($"{model}: {files.Count} ROMs, {frames} frames identical in serial every frame and in state every 30 frames and at the end; {passed} passed by serial");
-        }
-
-        // The four games on the console they were not made for, both engines in lock-step with the bench's input; each last picture saved where EMUSEN_UI_DUMP says.
-        [Theory]
-        [InlineData(GbModel.GameBoyColor)]
-        [InlineData(GbModel.GameBoy)]
-        public void Real_games_run_identically_on_the_other_console(GbModel model)
-        {
-            string? folder = Environment.GetEnvironmentVariable(MercuryRtStateTests.RomsVariable);
-            if (folder is null || !Directory.Exists(folder))
-            {
-                _output.WriteLine($"{MercuryRtStateTests.RomsVariable} unset, not run");
-                return;
-            }
-            foreach (string path in Directory.GetFiles(folder, "*.gb*").Order(StringComparer.Ordinal))
-            {
-                byte[] rom = File.ReadAllBytes(path);
-                var pair = new MercuryRtPair(rom, skipRendering: false, model: model, stateEvery: 10);
-                pair.Run(1500, f => (f % 90) switch { < 5 => 1u << 7, >= 45 and < 50 => 1u << 4, _ => 0u });
-                string console = pair.Csharp.CoreName;
-                _output.WriteLine($"{Path.GetFileName(path)} on {model} runs as {console}, palette {CompatibilityPalettes.PaletteNumber(rom)}: {pair.Summary}");
-                if (Environment.GetEnvironmentVariable("EMUSEN_UI_DUMP") is { Length: > 0 } dump)
-                    EmuSen.Hotaru.Imaging.FrameImageWriter.SavePng(pair.Csharp.GetFrameBufferRgba(), 160, 144, Path.Combine(dump, $"{Path.GetFileNameWithoutExtension(path)}-{model}.png"));
-            }
+            Assert.Equal(MercuryRtCore.ModelGameBoy, settings.Get(MercuryRtCore.ModelKey));
         }
 
         // mooneye's misc/boot_regs-cgb, verified on a CGB: a DMG header on the Color must hand over A=$11 F=$80 BC=$0000 DE=$0008 HL=$007C.
@@ -599,19 +419,20 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(GbModel.GameBoyColor, TestRomVerdict.Passed)]
         public void Mooneyes_cgb_boot_register_rom_passes_on_the_color_and_fails_on_the_game_boy(GbModel model, TestRomVerdict expected)
         {
-            string? folder = Environment.GetEnvironmentVariable(MercuryRtMachineTests.CorpusVariable);
-            string? rom = folder is null ? null : Directory.GetFiles(folder, "boot_regs-cgb.gb", SearchOption.AllDirectories).FirstOrDefault();
+            string? rom = HardwareTestRomLibrary.Find().FirstOrDefault(p => Path.GetFileName(p) == "boot_regs-cgb.gb");
             if (rom is null)
             {
                 _output.WriteLine("the corpus or boot_regs-cgb.gb is absent, not run");
                 return;
             }
-            var pair = new MercuryRtPair(File.ReadAllBytes(rom), skipRendering: true, model: model);
+            CoreOptions.BatteryRamDisabled = true;
+            using MercuryRig rig = MercuryRig.Open(rom, model);
+            rig.SkipRendering = true;
             var verdict = TestRomVerdict.NoVerdict;
             for (int f = 0; f < 600 && verdict == TestRomVerdict.NoVerdict; f++)
             {
-                pair.Frame(null, f);
-                verdict = HardwareTestRomLibrary.ReadVerdict(pair.Csharp.Bus!.SerialLog);
+                rig.RunFrame();
+                verdict = HardwareTestRomLibrary.ReadVerdict(rig.SerialLog);
             }
             Assert.Equal(expected, verdict);
         }

@@ -3,14 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // The committed layout listings are the state format's specification: each is what MercuryRT's state_layout prints, and while C# Mercury is on main, its walk too - see Mercury_Native.md §14.5.
+    // The committed layout listings are the state format's specification: each is what MercuryRT's state_layout prints - see Mercury_Native.md §14.5.
     public class MercuryStateLayoutTests
     {
         private readonly ITestOutputHelper _output;
@@ -22,7 +21,7 @@ namespace EmuSen.WiseMan.Cores
             get
             {
                 var data = new TheoryData<string>();
-                foreach (string path in Directory.GetFiles(MercuryStateLayout.Directory(), "*.layout").Order(StringComparer.Ordinal)) data.Add(Path.GetFileName(path));
+                foreach (string path in Directory.GetFiles(MercuryLayouts.Directory(), "*.layout").Order(StringComparer.Ordinal)) data.Add(Path.GetFileName(path));
                 return data;
             }
         }
@@ -47,20 +46,16 @@ namespace EmuSen.WiseMan.Cores
 
         [Theory]
         [MemberData(nameof(Listings))]
-        public void A_committed_listing_is_what_both_engines_write(string listing)
+        public void A_committed_listing_is_what_mercuryrt_writes(string listing)
         {
-            string committed = MercuryStateLayout.ReadListing(Path.Combine(MercuryStateLayout.Directory(), listing));
+            string committed = MercuryLayouts.ReadListing(Path.Combine(MercuryLayouts.Directory(), listing));
             byte[] rom = RomFor(listing);
             CoreOptions.BatteryRamDisabled = true;
-            using MercuryRig rust = MercuryRig.Create(MercuryEngine.MercuryRt, rom);
+            using MercuryRig rust = MercuryRig.Create(rom);
             rust.RunFrame();
-            Assert.Equal(committed, ((MercuryRtCore)rust.Core).Machine.Core.Layout());
-
-            using MercuryRig csharp = MercuryRig.Create(MercuryEngine.Mercury, rom);
-            csharp.RunFrame();
-            Assert.Equal(committed, MercuryRtStateTests.Layout(csharp.View, csharp.State()));
-            Assert.Equal(MercuryStateLayout.FileName(MercuryStateLayout.Board(rom[0x147]), listing.Contains("-gbc-"), MercuryStateLayout.FromText(listing, committed)["Cart.Ram"].Length), listing);
-            Assert.Same(MercuryStateLayout.Load(Path.Combine(MercuryStateLayout.Directory(), listing)), MercuryStateLayout.For(rom, rust.State()));
+            Assert.Equal(committed, rust.Core.Machine.Core.Layout());
+            Assert.Equal(MercuryLayouts.FileName(MercuryLayouts.Board(rom[0x147]), listing.Contains("-gbc-"), MercuryStateLayout.FromText(listing, committed)["Cart.Ram"].Length), listing);
+            Assert.Same(MercuryLayouts.Load(Path.Combine(MercuryLayouts.Directory(), listing)), MercuryLayouts.For(rom, rust.State()));
         }
 
         public static TheoryData<byte, byte, byte, GbModel> BoardsOnConsoles
@@ -80,15 +75,15 @@ namespace EmuSen.WiseMan.Cores
         public void Every_board_on_every_console_has_a_committed_listing(byte kind, byte ram, byte cgb, GbModel model)
         {
             CoreOptions.BatteryRamDisabled = true;
-            using MercuryRig rust = MercuryRig.Create(MercuryEngine.MercuryRt, SyntheticGbRom.Build(romBanks: 4, cartridgeType: kind, ramSizeCode: ram, cgbFlag: cgb), model);
+            using MercuryRig rust = MercuryRig.Create(SyntheticGbRom.Build(romBanks: 4, cartridgeType: kind, ramSizeCode: ram, cgbFlag: cgb), model);
             rust.RunFrame();
-            Assert.Equal(MercuryStateLayout.StateVersion, rust.Field("Version"));
+            Assert.Equal(MercuryLayouts.StateVersion, rust.Field("Version"));
         }
 
         [Fact]
-        public void The_listings_describe_the_state_version_both_engines_write()
+        public void The_listings_describe_the_state_version_mercuryrt_writes()
         {
-            Assert.Equal(MercuryCore.StateVersion, MercuryStateLayout.StateVersion);
+            Assert.Equal(MercuryRtCore.StateFormatVersion, MercuryLayouts.StateVersion);
             Assert.NotEmpty(Listings);
         }
     }

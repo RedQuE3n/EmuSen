@@ -1,5 +1,7 @@
 # Mars — the two-cycle mode: two combiner and blender cycles per pixel
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Landed 2026-09-17. Phase D's ninth slice: the mode in which every pixel runs the combiner twice and the
 blender twice, with its texels, its level of detail and the order in which one pixel's work interleaves with
 the next's. The code is `Rdp/Rdp.TwoCycle.cs` (the pixel loop and the first cycles), `Rdp/Rdp.OneCycle.cs`

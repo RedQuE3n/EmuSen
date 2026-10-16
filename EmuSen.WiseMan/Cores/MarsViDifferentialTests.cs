@@ -1,13 +1,15 @@
 using System.Text;
-using EmuSen.Cores.Nintendo.Mars.Memory;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // Mars's video interface against angrylion's, one scanned frame at a time - see Mars_Video.md §3.
+    // MarsRT's video interface against angrylion's, one scanned frame at a time - see Mars_Video.md §3.
     public class MarsViDifferentialTests
     {
         private const uint Framebuffer = 0x0020_0000;
+
+        // An Expansion Pak's RDRAM, and its hidden bits a byte for each sixteen-bit word - see Mars_VideoFilter.md §1.
+        private const int RdramBytes = 8 * 1024 * 1024, HiddenBytes = RdramBytes / 2;
 
         private const int Control = 0, Origin = 1, Width = 2, VerticalSync = 6, HorizontalStart = 9, VerticalStart = 10, ScaleX = 12, ScaleY = 13;
         private const int CurrentLine = 4;
@@ -30,13 +32,9 @@ namespace EmuSen.WiseMan.Cores
             public (uint Index, byte[] Bytes)[] Hidden { get; init; } = Array.Empty<(uint, byte[])>();
         }
 
-        private sealed record Replay(IReadOnlyList<RdpReferenceSync> Reference, IReadOnlyList<IReadOnlyList<byte[]>> Mars);
-
         private static readonly Case[] Cases = BuildCases();
 
-        private static readonly Lazy<Replay?> Replayed = new(ReplayAll);
-
-        private static readonly Lazy<IReadOnlyList<IReadOnlyList<byte[]>>> ReplayedMars = new(ReplayMars);
+        private static readonly Lazy<IReadOnlyList<RdpReferenceSync>?> Replayed = new(ReplayAll);
 
         private static readonly Lazy<IReadOnlyList<IReadOnlyList<byte[]>>?> ReplayedMarsRT = new(() => MarsRTViScan.Available ? ReplayMarsRT() : null);
 
@@ -47,20 +45,7 @@ namespace EmuSen.WiseMan.Cores
             return data;
         }
 
-        [Theory]
-        [MemberData(nameof(CaseNames))]
-        public void Mars_scans_out_what_the_reference_scans_out(string name)
-        {
-            Replay? replay = Replayed.Value;
-            if (replay is null) return;
-
-            int index = Array.FindIndex(Cases, c => c.Name == name);
-            string differences = Differences(replay.Reference[index].Frames, replay.Mars[index]);
-
-            Assert.True(differences.Length == 0, $"{name}:\n{differences}");
-        }
-
-        private static Replay? ReplayAll()
+        private static IReadOnlyList<RdpReferenceSync>? ReplayAll()
         {
             if (RdpReference.Grader is null) return null;
 
@@ -99,35 +84,7 @@ namespace EmuSen.WiseMan.Cores
 
             File.WriteAllBytes(path, dump.Finish());
 
-            return new Replay(RdpReference.Replay(path), ReplayMars());
-        }
-
-        // One interface for every case, as in the reference, with memory restored from the same upload cache where the dump flushes.
-        private static IReadOnlyList<IReadOnlyList<byte[]>> ReplayMars()
-        {
-            var bus = new MemoryBus(expansionPak: true);
-            var cache = new byte[bus.Rdram.Length];
-            var hidden = new byte[bus.RdramHidden.Length];
-            var scanned = new List<IReadOnlyList<byte[]>>();
-
-            foreach (Case c in Cases)
-            {
-                foreach ((uint address, byte[] bytes) in c.Uploads) bytes.CopyTo(cache, address);
-                foreach ((uint index, byte[] bytes) in c.Hidden) bytes.CopyTo(hidden, index);
-                cache.CopyTo(bus.Rdram, 0);
-                hidden.CopyTo(bus.RdramHidden, 0);
-
-                var frames = new List<byte[]>();
-                foreach (uint[] registers in c.Scans)
-                {
-                    for (int i = 0; i < registers.Length; i++) bus.Write32(MemoryMap.ViBase + (uint)i * 4, registers[i]);
-                    if (bus.Vi.Scan()) frames.Add(bus.Vi.Frame.ToArray());
-                }
-
-                scanned.Add(frames);
-            }
-
-            return scanned;
+            return RdpReference.Replay(path);
         }
 
         // MarsRT's scan-out over every case against angrylion, when it is built - see Mars_Native.md §5.4, §7.
@@ -136,22 +93,23 @@ namespace EmuSen.WiseMan.Cores
         public void MarsRT_scans_out_what_the_reference_scans_out(string name)
         {
             IReadOnlyList<IReadOnlyList<byte[]>>? rt = ReplayedMarsRT.Value;
-            Assert.True(rt is not null, EmuSen.Cores.Nintendo.Mars.Native.MarsNative.Report);
+            Assert.True(rt is not null, EmuSen.Cores.Nintendo.MarsRT.MarsNative.Report);
 
             int index = Array.FindIndex(Cases, c => c.Name == name);
-            if (Replayed.Value is { } replay)
+            if (Replayed.Value is { } reference)
             {
-                string differences = Differences(replay.Reference[index].Frames, rt[index]);
+                string differences = Differences(reference[index].Frames, rt[index]);
                 Assert.True(differences.Length == 0, $"{name}, MarsRT against the reference:\n{differences}");
             }
         }
 
-        // ReplayMars with MarsRT scanning the same memory, a frame being the raster's first rows as the C# VI's Frame is.
+        // One interface for every case, as in the reference, memory restored from the same upload cache where the dump flushes; a frame is the raster's first rows.
         private static IReadOnlyList<IReadOnlyList<byte[]>> ReplayMarsRT()
         {
-            var bus = new MemoryBus(expansionPak: true);
-            var cache = new byte[bus.Rdram.Length];
-            var hidden = new byte[bus.RdramHidden.Length];
+            var rdram = new byte[RdramBytes];
+            var cache = new byte[RdramBytes];
+            var hiddenRdram = new byte[HiddenBytes];
+            var hidden = new byte[HiddenBytes];
             var scanned = new List<IReadOnlyList<byte[]>>();
             using var rt = new MarsRTViScan { RepeatRows = false };
 
@@ -159,14 +117,14 @@ namespace EmuSen.WiseMan.Cores
             {
                 foreach ((uint address, byte[] bytes) in c.Uploads) bytes.CopyTo(cache, address);
                 foreach ((uint index, byte[] bytes) in c.Hidden) bytes.CopyTo(hidden, index);
-                cache.CopyTo(bus.Rdram, 0);
-                hidden.CopyTo(bus.RdramHidden, 0);
+                cache.CopyTo(rdram, 0);
+                hidden.CopyTo(hiddenRdram, 0);
 
                 var frames = new List<byte[]>();
                 foreach (uint[] registers in c.Scans)
                 {
                     rt.Set(registers);
-                    if (!rt.Scan(bus.Rdram, bus.RdramHidden)) continue;
+                    if (!rt.Scan(rdram, hiddenRdram)) continue;
                     rt.Frame(out int width, out int height, out _);
                     frames.Add(rt.Raster().AsSpan(0, width * height * 4).ToArray());
                 }

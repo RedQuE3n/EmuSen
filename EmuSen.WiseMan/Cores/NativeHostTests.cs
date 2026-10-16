@@ -1,6 +1,5 @@
 using System;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Moon.Cheats;

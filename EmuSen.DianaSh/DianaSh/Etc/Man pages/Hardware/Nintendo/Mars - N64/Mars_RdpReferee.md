@@ -1,5 +1,7 @@
 # Mars — the referee: an FPGA implementation read against Phase D's recorded disputes
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Written 2026-09-17. Not a slice: no rule of Mars changed and no case was added. Phase D grades against
 angrylion and cross-checks against parallel-rdp; where the two disagree the disagreement is recorded as a
 **dispute** and Mars follows angrylion. This page asks a third implementation — the N64_MiSTer core's VHDL —

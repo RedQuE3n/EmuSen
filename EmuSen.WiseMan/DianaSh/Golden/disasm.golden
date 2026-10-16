@@ -270,33 +270,6 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
-covers 2-3
-$ disasm cpu
-out 239
-  000AF2: 00        NOP
-  000AF3: 00        NOP
-  000AF4: 00        NOP
-  000AF5: 00        NOP
-  000AF6: 00        NOP
-  000AF7: 00        NOP
-  000AF8: 00        NOP
-  000AF9: 00        NOP
-  000AFA: 00        NOP
-  000AFB: 00        NOP
-status 0
-action none
-$ disasm cpu 0 4
-out 95
-  000000: 00        NOP
-  000001: 00        NOP
-  000002: 00        NOP
-  000003: 00        NOP
-status 0
-action none
-end
-
 case on mercuryrt
 target mercuryrt
 covers 2-3
@@ -320,33 +293,6 @@ out 95
   000001: 00        NOP
   000002: 00        NOP
   000003: 00        NOP
-status 0
-action none
-end
-
-case on mars
-target mars
-covers 2-3
-$ disasm cpu
-out 288
-  A4000040: 10 00 FF FF b 0xA4000040
-  A4000044: 00 00 00 00 nop
-  A4000048: 00 00 00 00 nop
-  A400004C: 00 00 00 00 nop
-  A4000050: 00 00 00 00 nop
-  A4000054: 00 00 00 00 nop
-  A4000058: 00 00 00 00 nop
-  A400005C: 00 00 00 00 nop
-  A4000060: 00 00 00 00 nop
-  A4000064: 00 00 00 00 nop
-status 0
-action none
-$ disasm cpu 0 4
-out 103
-  000000: 00 00 00 00 nop
-  000004: 00 00 00 00 nop
-  000008: 00 00 00 00 nop
-  00000C: 00 00 00 00 nop
 status 0
 action none
 end

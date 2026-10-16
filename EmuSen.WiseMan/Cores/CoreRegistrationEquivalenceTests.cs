@@ -9,11 +9,9 @@ using System.Text.Json.Nodes;
 using EmuSen.Common.Firmware;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.MoonRT;
-using EmuSen.Cores.Nintendo.Mars.Rom;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Systems;
@@ -37,16 +35,19 @@ namespace EmuSen.WiseMan.Cores
 
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenRegistration_" + Guid.NewGuid().ToString("N"));
         private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
+        private readonly string? _logsWere = ErrorLog.DirectoryOverride;
 
         public CoreRegistrationEquivalenceTests()
         {
             Directory.CreateDirectory(_root);
             CoreOptions.BatteryRamDisabled = false;
+            ErrorLog.DirectoryOverride = Path.Combine(_root, "Logs");
         }
 
         public void Dispose()
         {
             CoreOptions.BatteryRamDisabled = _batteryWas;
+            ErrorLog.DirectoryOverride = _logsWere;
             CoreDiscovery.UseDirectories(null);
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
@@ -130,6 +131,13 @@ namespace EmuSen.WiseMan.Cores
         private int _sandbox;
 
         private static readonly string[] Consoles = { "SNES", "NES", "GB", "N64", "Atari 2600" };
+
+        // The retired C# N64 core's name, which a player's settings may still hold - see Mars_Native.md §6.7.
+        private const string RetiredMars = "Mars (C#)", RetiredMercury = "Mercury (C#)";
+
+        // A console's engines: its row's choices, or the one engine a console without a row runs by hand.
+        private static IReadOnlyList<string> EnginesOf(string console) =>
+            CoreCatalog.EngineFor(console)?.Choices ?? (console == "N64" ? new[] { CoreCatalog.MarsRtEngine } : Array.Empty<string>());
         private static readonly string[] ProbeExtensions = { ".sfc", ".smc", ".SFC", ".nes", ".gb", ".gbc", ".z64", ".n64", ".v64", ".fds", ".gba", ".tst", ".xyz", "" };
         private static readonly string[] SampleCodes =
         {
@@ -149,7 +157,7 @@ namespace EmuSen.WiseMan.Cores
             return text;
         }
 
-        // A value the machine decides, MarsCore's one rasteriser thread per three cores, named rather than counted.
+        // A value the machine decides, the N64's one rasteriser thread per three cores, named rather than counted.
         private static string Value(string key, string value) => key == "RdpWorkers" && value == Math.Clamp(Environment.ProcessorCount / 3, 1, 4).ToString() ? "<one per three cores>" : value;
 
         private static string List(IEnumerable<object?> values) => "[" + string.Join(", ", values.Select(v => v?.ToString() ?? "<null>")) + "]";
@@ -276,7 +284,7 @@ namespace EmuSen.WiseMan.Cores
 
         private static IEnumerable<string> EngineNames() =>
             Consoles.SelectMany(c => CoreCatalog.EngineFor(c)?.Choices ?? Array.Empty<string>()).Concat(new[] { CoreCatalog.VenusEngine, CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine,
-                CoreCatalog.MercuryEngine, CoreCatalog.MercuryRtEngine, CoreCatalog.MarsEngine, CoreCatalog.MarsRtEngine, "VenusRT (Rust)" }).Distinct().Order(StringComparer.Ordinal);
+                RetiredMercury, CoreCatalog.MercuryRtEngine, RetiredMars, CoreCatalog.MarsRtEngine, "VenusRT (Rust)" }).Distinct().Order(StringComparer.Ordinal);
 
         // Synthetic images per console: what each is called, its extension and bytes.
         private static IEnumerable<(string Label, byte[] Image)> SampleImages(string console) => RomsFor(console).Select(r => (r.Label, r.Image));
@@ -299,7 +307,8 @@ namespace EmuSen.WiseMan.Cores
         {
             foreach (string console in Consoles.Where(c => RomsFor(c).Any()))
             {
-                string?[] engines = new string?[] { null }.Concat(CoreCatalog.EngineFor(console)?.Choices ?? Array.Empty<string>()).Append("Nope").Append(CoreCatalog.VenusEngine).Distinct().ToArray();
+                string?[] engines = new string?[] { null }.Concat(EnginesOf(console)).Append("Nope").Append(CoreCatalog.VenusEngine)
+                    .Concat(console == "N64" ? new[] { RetiredMars } : console == "GB" ? new[] { RetiredMercury } : Array.Empty<string>()).Distinct().ToArray();
                 foreach (var (label, ext, image) in RomsFor(console))
                 {
                     if (!withBattery && label != "plain") continue;
@@ -312,11 +321,16 @@ namespace EmuSen.WiseMan.Cores
                         File.WriteAllBytes(rom, image);
                         if (withBattery) PlacePreviousSaves(rom);
                         Add(k + ".supported", CoreFactory.IsSupported(rom));
-                        ICore probe = CoreFactory.ForFirmwareProbe(rom, engine);
-                        Add(k + ".probe", probe.GetType().Name);
-                        foreach (FirmwareRequest f in probe.GetFirmwareRequirements(rom))
-                            Add(k + ".firmware", $"{f.CoreName} | {f.ChipName} | {f.FileName} | {f.Size} | {f.Purpose} | {List(f.AlternateNames)} | {List(f.Parts.Select(p => List(p)))}");
-                        (probe as IDisposable)?.Dispose();
+                        ICore? probe = null;
+                        try { probe = CoreFactory.ForFirmwareProbe(rom, engine); }
+                        catch (NotSupportedException e) { Add(k + ".probe", $"{e.GetType().Name}: {e.Message}"); }
+                        if (probe is not null)
+                        {
+                            Add(k + ".probe", probe.GetType().Name);
+                            foreach (FirmwareRequest f in probe.GetFirmwareRequirements(rom))
+                                Add(k + ".firmware", $"{f.CoreName} | {f.ChipName} | {f.FileName} | {f.Size} | {f.Purpose} | {List(f.AlternateNames)} | {List(f.Parts.Select(p => List(p)))}");
+                            (probe as IDisposable)?.Dispose();
+                        }
                         CoreBundle bundle;
                         try { bundle = CoreFactory.Load(rom, engine: engine); }
                         catch (Exception e) { Add(k + ".load", $"{e.GetType().Name}: {e.Message}"); continue; }
@@ -390,10 +404,12 @@ namespace EmuSen.WiseMan.Cores
         {
             foreach (string console in Consoles)
             {
-                foreach (string engine in CoreCatalog.EngineFor(console)?.Choices ?? Array.Empty<string>())
+                foreach (string engine in EnginesOf(console))
                 {
                     if (RomsFor(console).FirstOrDefault() is not { Extension: { } ext }) continue;
-                    ICore core = CoreFactory.Create("Game" + ext, engine: engine);
+                    ICore core;
+                    try { core = CoreFactory.Create("Game" + ext, engine: engine); }
+                    catch (NotSupportedException e) { Add($"settings[{console} {engine}].core", $"{e.GetType().Name}: {e.Message}"); continue; }
                     Add($"settings[{console} {engine}].core", core.GetType().Name);
                     if (core is ICoreSettings s)
                         foreach (CoreSetting row in s.Settings) Setting($"settings[{console} {engine}].row", row);

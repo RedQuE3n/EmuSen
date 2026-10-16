@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
 
 // marsrt-pgo <rom> <state|-> <frames> [Setting=value]... [rewind=1] [mistress=1] [warmup=n]: Mistress's frame loop on MarsRT, ms a frame and the state's SHA-256 - see Mars_Native.md §6.17.

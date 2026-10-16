@@ -1,5 +1,10 @@
 # Mercury (Game Boy) — the LCD controller
 
+*Historical since 2026-10-16.* This page describes C# Mercury, which was deleted at stage 10 of the Rust port
+(`Mercury_Native.md` §15). MercuryRT implements the same machine field for field and is held to the goldens recorded
+from it, so the hardware described here stands; the file, class and member names are the C# core's, and a claim of the
+form "Mercury does" is now a claim about MercuryRT only where its goldens or its corpus baseline hold it.
+
 *Written 2026-08-08, when the PPU replaced the frame-boundary VBlank stand-in that
 `Mercury_Core.md` §3 described. DMG only; the colour extensions are Phase D and
 this page will grow a §7 when they land.*

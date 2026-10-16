@@ -13,13 +13,13 @@ use emusen_gpu::Submission;
 use emusen_gpu::{Commands, GpuBuffer, GpuProgram, Where};
 pub use emusen_gpu::{AHEAD, GpuDevice, Pending};
 
-/// The C# path's compiled shaders, the same files, so the differential between the two cores' device paths has no shader in it.
+/// The compiled shaders beside the crate, compiled from the `.comp` beside each, which WiseMan holds equal - see Mars_Gpu.md §2.
 pub mod shaders {
-    pub const SHADE: &[u8] = include_bytes!("../../../../Mars - N64/Rdp/Gpu/Shaders/shade.spv");
-    pub const SCAN: &[u8] = include_bytes!("../../../../Mars - N64/Rdp/Gpu/Shaders/scan.spv");
-    pub const CLEAR: &[u8] = include_bytes!("../../../../Mars - N64/Rdp/Gpu/Shaders/clear.spv");
-    pub const AVERAGE: &[u8] = include_bytes!("../../../../Mars - N64/Rdp/Gpu/Shaders/average.spv");
-    pub const ADD: &[u8] = include_bytes!("../../../../Mars - N64/Rdp/Gpu/Shaders/add.spv");
+    pub const SHADE: &[u8] = include_bytes!("../../../shaders/shade.spv");
+    pub const SCAN: &[u8] = include_bytes!("../../../shaders/scan.spv");
+    pub const CLEAR: &[u8] = include_bytes!("../../../shaders/clear.spv");
+    pub const AVERAGE: &[u8] = include_bytes!("../../../shaders/average.spv");
+    pub const ADD: &[u8] = include_bytes!("../../../shaders/add.spv");
 }
 
 pub const TILE_WIDTH: usize = 64;
@@ -897,7 +897,7 @@ impl Drop for GpuRasteriser {
 mod tests {
     use super::*;
 
-    /// The five binaries are the C# path's own files, whole words with the SPIR-V magic, so nothing here can have changed a shader.
+    /// The five binaries are whole words with the SPIR-V magic, so nothing here can have changed a shader.
     #[test]
     fn the_shaders_are_the_csharp_paths_binaries() {
         for (name, bytes) in [("shade", shaders::SHADE), ("scan", shaders::SCAN), ("clear", shaders::CLEAR), ("average", shaders::AVERAGE), ("add", shaders::ADD)] {

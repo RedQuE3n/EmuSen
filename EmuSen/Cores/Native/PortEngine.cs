@@ -112,9 +112,9 @@ namespace EmuSen.Cores.Native
             base.Cheats = MirrorCheats;
         }
 
-        // The C# core the debugger reads, refreshed from the machine's state; its registries are this engine's.
-        protected abstract ICore MirrorCore { get; }
-        protected abstract bool MirrorLoaded { get; }
+        // The C# core the debugger reads, refreshed from the machine's state, for a port that keeps one; its registries are this engine's.
+        protected virtual ICore? MirrorCore => null;
+        protected virtual bool MirrorLoaded => false;
         protected abstract CheatRegistry MirrorCheats { get; set; }
         protected abstract CallStackRegistry MirrorCallStack { get; }
         protected abstract CoverageRegistry MirrorCoverage { get; }
@@ -289,13 +289,13 @@ namespace EmuSen.Cores.Native
 
         public void SyncMirror()
         {
-            if (!IsRomLoaded || !MirrorLoaded) return;
-            MirrorCore.LoadState(new MemoryStream(Machine.Save()));
+            if (!IsRomLoaded || !MirrorLoaded || MirrorCore is not { } mirror) return;
+            mirror.LoadState(new MemoryStream(Machine.Save()));
         }
 
         public void SyncMutes()
         {
-            if (!IsRomLoaded || !MirrorLoaded) return;
+            if (!IsRomLoaded || MirrorCore is not null && !MirrorLoaded) return;
             base.Machine.SetMutes(MuteMask());
         }
     }

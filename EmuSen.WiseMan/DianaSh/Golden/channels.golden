@@ -105,19 +105,6 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
-covers 1
-$ channels
-out 321
-[0] Pulse 1  active=False level=  0 muted=False Duty=0 Freq=0 Vol=0 Len=0 Sweep=0/0+
-[1] Pulse 2  active=False level=  0 muted=False Duty=0 Freq=0 Vol=0 Len=0
-[2] Wave     active=False level=  0 muted=False Freq=0 Vol=0 Len=0 Dac=False
-[3] Noise    active=False level=  0 muted=False Shift=0 Div=0 Short=False Vol=0 Len=0
-status 0
-action none
-end
-
 case on mercuryrt
 target mercuryrt
 covers 1
@@ -127,16 +114,6 @@ out 321
 [1] Pulse 2  active=False level=  0 muted=False Duty=0 Freq=0 Vol=0 Len=0
 [2] Wave     active=False level=  0 muted=False Freq=0 Vol=0 Len=0 Dac=False
 [3] Noise    active=False level=  0 muted=False Shift=0 Div=0 Short=False Vol=0 Len=0
-status 0
-action none
-end
-
-case on mars
-target mars
-covers 1
-$ channels
-out 37
-(this core reports no audio channels)
 status 0
 action none
 end

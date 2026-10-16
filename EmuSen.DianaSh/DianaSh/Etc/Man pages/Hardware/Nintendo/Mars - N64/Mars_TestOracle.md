@@ -1,5 +1,7 @@
 # Mars — the test oracle, and what the machine has to do before the corpus will speak
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Written 2026-09-15, from a research pass plus direct reading of the corpus's own
 source. `Mars_Gameplan.md` §3 rested the entire phase order on an unverified
 assumption — that an N64 test ROM can report a text verdict headlessly, the way a

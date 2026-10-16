@@ -1,16 +1,13 @@
-using EmuSen.Cores.Nintendo.Mercury;
-using EmuSen.Cores.Nintendo.Mercury.Memory;
+using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
-using Sm83 = EmuSen.Cores.Nintendo.Mercury.Cpu.Core.Cpu;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // The SM83, which is neither an 8080 nor a Z80 - see Mercury_Cpu.md; Mercury and MercuryRT are held to the same claims - see Mercury_Native.md §12.
-    public abstract class MercuryCpuClaims : IDisposable
+    // The SM83, which is neither an 8080 nor a Z80 - see Mercury_Cpu.md; held on MercuryRT - see Mercury_Native.md §12, §15.
+    public sealed class MercuryRtCpuTests : IDisposable
     {
         private readonly List<MercuryRig> _rigs = new();
 
-        protected abstract MercuryEngine Engine { get; }
 
         public void Dispose()
         {
@@ -20,9 +17,9 @@ namespace EmuSen.WiseMan.Cores
         // The program at the entry point, the CPU parked in front of it.
         private MercuryRig Machine(params byte[] code)
         {
-            var core = MercuryRig.Create(Engine, SyntheticGbRom.Build(patches: (0, code)));
+            var core = MercuryRig.Create(SyntheticGbRom.Build(patches: (0, code)));
             _rigs.Add(core);
-            core.Cpu.PC = SyntheticGbRom.EntryPoint;
+            core.SetField("Cpu.PC", SyntheticGbRom.EntryPoint);
             return core;
         }
 
@@ -33,9 +30,9 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Machine(0x00);
 
-            Assert.Equal(0x01, core.Cpu.A);
-            Assert.Equal(0xFFFE, core.Cpu.SP);
-            Assert.Equal(0x014D, core.Cpu.HL);
+            Assert.Equal(0x01, core.Field("Cpu.A"));
+            Assert.Equal(0xFFFE, core.Field("Cpu.SP"));
+            Assert.Equal(0x014D, core.Pair("HL"));
         }
 
         // The low nibble of F is not wired up, however it is written: here by POP AF.
@@ -49,8 +46,8 @@ namespace EmuSen.WiseMan.Cores
             StepOne(core);
             StepOne(core);
 
-            Assert.Equal(0x12, core.Cpu.A);
-            Assert.Equal(0xF0, core.Cpu.F);
+            Assert.Equal(0x12, core.Field("Cpu.A"));
+            Assert.Equal(0xF0, core.Field("Cpu.F"));
         }
 
         [Fact]
@@ -62,9 +59,9 @@ namespace EmuSen.WiseMan.Cores
             StepOne(core);
             StepOne(core);
 
-            Assert.Equal(0x10, core.Cpu.A);
-            Assert.True((core.Cpu.F & Sm83.FlagH) != 0);
-            Assert.False((core.Cpu.F & Sm83.FlagZ) != 0);
+            Assert.Equal(0x10, core.Field("Cpu.A"));
+            Assert.True((core.Field("Cpu.F") & MercuryRig.FlagH) != 0);
+            Assert.False((core.Field("Cpu.F") & MercuryRig.FlagZ) != 0);
         }
 
         [Fact]
@@ -76,9 +73,9 @@ namespace EmuSen.WiseMan.Cores
             StepOne(core);
             StepOne(core);
 
-            Assert.Equal(0x00, core.Cpu.A);
-            Assert.True((core.Cpu.F & Sm83.FlagC) != 0);
-            Assert.True((core.Cpu.F & Sm83.FlagZ) != 0);
+            Assert.Equal(0x00, core.Field("Cpu.A"));
+            Assert.True((core.Field("Cpu.F") & MercuryRig.FlagC) != 0);
+            Assert.True((core.Field("Cpu.F") & MercuryRig.FlagZ) != 0);
         }
 
         // INC must leave carry alone, which is what makes it usable inside a multi-byte add.
@@ -91,7 +88,7 @@ namespace EmuSen.WiseMan.Cores
             StepOne(core);
             StepOne(core);
 
-            Assert.True((core.Cpu.F & Sm83.FlagC) != 0);
+            Assert.True((core.Field("Cpu.F") & MercuryRig.FlagC) != 0);
         }
 
         [Fact]
@@ -104,7 +101,7 @@ namespace EmuSen.WiseMan.Cores
             StepOne(core);
             StepOne(core);
 
-            Assert.Equal(0x10, core.Cpu.A);
+            Assert.Equal(0x10, core.Field("Cpu.A"));
         }
 
         // RLCA always clears Z; only the CB-prefixed RLC sets it from the result.
@@ -115,11 +112,11 @@ namespace EmuSen.WiseMan.Cores
             var core = Machine(0xAF, 0x07);
 
             StepOne(core);
-            Assert.True((core.Cpu.F & Sm83.FlagZ) != 0);
+            Assert.True((core.Field("Cpu.F") & MercuryRig.FlagZ) != 0);
 
             StepOne(core);
-            Assert.Equal(0x00, core.Cpu.A);
-            Assert.False((core.Cpu.F & Sm83.FlagZ) != 0);
+            Assert.Equal(0x00, core.Field("Cpu.A"));
+            Assert.False((core.Field("Cpu.F") & MercuryRig.FlagZ) != 0);
         }
 
         [Fact]
@@ -131,7 +128,7 @@ namespace EmuSen.WiseMan.Cores
             StepOne(core);
             StepOne(core);
 
-            Assert.True((core.Cpu.F & Sm83.FlagZ) != 0);
+            Assert.True((core.Field("Cpu.F") & MercuryRig.FlagZ) != 0);
         }
 
         [Fact]
@@ -144,9 +141,9 @@ namespace EmuSen.WiseMan.Cores
             StepOne(core);
             StepOne(core);
 
-            Assert.False((core.Cpu.F & Sm83.FlagZ) != 0);
-            Assert.True((core.Cpu.F & Sm83.FlagH) != 0);
-            Assert.True((core.Cpu.F & Sm83.FlagC) != 0);
+            Assert.False((core.Field("Cpu.F") & MercuryRig.FlagZ) != 0);
+            Assert.True((core.Field("Cpu.F") & MercuryRig.FlagH) != 0);
+            Assert.True((core.Field("Cpu.F") & MercuryRig.FlagC) != 0);
         }
 
         [Fact]
@@ -158,7 +155,7 @@ namespace EmuSen.WiseMan.Cores
             StepOne(core);
             StepOne(core);
 
-            Assert.Equal(0xBA, core.Cpu.A);
+            Assert.Equal(0xBA, core.Field("Cpu.A"));
         }
 
         [Fact]
@@ -172,7 +169,7 @@ namespace EmuSen.WiseMan.Cores
             StepOne(core);
 
             Assert.Equal(0x77, core.Read(0xC000));
-            Assert.Equal(0xC001, core.Cpu.HL);
+            Assert.Equal(0xC001, core.Pair("HL"));
         }
 
         [Fact]
@@ -199,16 +196,16 @@ namespace EmuSen.WiseMan.Cores
 
             StepOne(core);
 
-            Assert.Equal(0x0160, core.Cpu.PC);
-            Assert.Equal(0xFFFC, core.Cpu.SP);
+            Assert.Equal(0x0160, core.Field("Cpu.PC"));
+            Assert.Equal(0xFFFC, core.Field("Cpu.SP"));
 
-            core.Cpu.PC = 0x0160;
+            core.SetField("Cpu.PC", 0x0160);
             core.Write(0x0160, 0xC9);   // RET, into RAM-free ROM space is fine for a read
             Assert.Equal(expectedReturn, ReadStackWord(core));
         }
 
         private static ushort ReadStackWord(MercuryRig core) =>
-            (ushort)(core.Read(core.Cpu.SP) | (core.Read((ushort)(core.Cpu.SP + 1)) << 8));
+            (ushort)(core.Read((int)core.Field("Cpu.SP")) | (core.Read((int)core.Field("Cpu.SP") + 1) << 8));
 
         [Fact]
         public void Echo_ram_is_the_same_storage_as_work_ram()
@@ -230,13 +227,13 @@ namespace EmuSen.WiseMan.Cores
             StepOne(core);   // EI
             StepOne(core);   // the instruction EI's delay lets through
 
-            core.Bus.InterruptEnable = 0x01;
-            core.Bus.Request(Interrupt.VBlank);
+            core.SetField("Bus.InterruptEnable", 0x01);
+            core.Request(MercuryRig.VBlank);
             StepOne(core);
 
-            Assert.Equal(0x0040, core.Cpu.PC);
-            Assert.False(core.Cpu.Ime);
-            Assert.Equal(0x00, core.Bus.InterruptFlags & 0x01);
+            Assert.Equal(0x0040, core.Field("Cpu.PC"));
+            Assert.False(core.Flag("Cpu.Ime"));
+            Assert.Equal(0x00, core.Field("Bus.InterruptFlags") & 0x01);
         }
 
         // EI must not take effect until after the instruction that follows it.
@@ -246,10 +243,10 @@ namespace EmuSen.WiseMan.Cores
             var core = Machine(0xFB, 0x00);
 
             StepOne(core);
-            Assert.False(core.Cpu.Ime);
+            Assert.False(core.Flag("Cpu.Ime"));
 
             StepOne(core);
-            Assert.True(core.Cpu.Ime);
+            Assert.True(core.Flag("Cpu.Ime"));
         }
 
         [Fact]
@@ -259,14 +256,14 @@ namespace EmuSen.WiseMan.Cores
 
             StepOne(core);
             StepOne(core);
-            Assert.True(core.Cpu.Halted);
+            Assert.True(core.Flag("Cpu.Halted"));
 
-            core.Bus.InterruptEnable = 0x01;
-            core.Bus.Request(Interrupt.VBlank);
+            core.SetField("Bus.InterruptEnable", 0x01);
+            core.Request(MercuryRig.VBlank);
             StepOne(core);
 
-            Assert.False(core.Cpu.Halted);
-            Assert.NotEqual(0x0040, core.Cpu.PC);
+            Assert.False(core.Flag("Cpu.Halted"));
+            Assert.NotEqual(0x0040, core.Field("Cpu.PC"));
         }
 
         [Fact]
@@ -275,15 +272,5 @@ namespace EmuSen.WiseMan.Cores
             var core = Machine(0xD3);
             Assert.Throws<System.NotSupportedException>(() => StepOne(core));
         }
-    }
-
-    public sealed class MercuryCpuTests : MercuryCpuClaims
-    {
-        protected override MercuryEngine Engine => MercuryEngine.Mercury;
-    }
-
-    public sealed class MercuryRtCpuTests : MercuryCpuClaims
-    {
-        protected override MercuryEngine Engine => MercuryEngine.MercuryRt;
     }
 }

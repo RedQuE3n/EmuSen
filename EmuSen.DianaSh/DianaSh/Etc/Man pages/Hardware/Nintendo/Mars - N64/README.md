@@ -1,5 +1,7 @@
 # Mars (Nintendo 64)
 
+*Since 2026-10-16 the N64 runs on MarsRT alone: Mars (C#), the core these pages were written about, is deleted, and every page here but `Mars_Native.md` is kept as history (`Mars_Native.md` §6.7). The source tree mirrored here, `EmuSen/Cores/Nintendo/Mars - N64/`, is gone; MarsRT is `EmuSen/Cores/Nintendo/MarsRT - N64/`.*
+
 What exists is a plan: [`Mars_Gameplan.md`](Mars_Gameplan.md), pinned 2026-09-15, which is the "what should I work on next" doc for Mars in the same role `Mercury_Gameplan.md` plays for Mercury — with the difference that it was written before any code rather than during it, and says where it expects to be wrong.
 
 Two decisions are already taken and carry their reasoning there: the whole RCP is emulated at low level (§2.1), and correctness leads with performance as its own later phase (§2.2). §3 is the oracle question — what a Nintendo 64 core can be graded against — and it carries the one unverified assumption the phase order rests on.

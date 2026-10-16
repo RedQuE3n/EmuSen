@@ -1,11 +1,10 @@
-using EmuSen.Cores.Nintendo.Mars;
-using EmuSen.Cores.Nintendo.Mars.Cheats;
-using EmuSen.Cores.Nintendo.Mercury;
-using EmuSen.Cores.Nintendo.Mercury.Cheats;
+using EmuSen.Cores.Nintendo.MarsRT;
+using EmuSen.Crystal.Systems.GameBoy;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.Moon.Cheats;
 using EmuSen.Cores.Nintendo.Venus.Cheats;
 using EmuSen.Crystal.Cheats;
+using EmuSen.Cores.Nintendo.MercuryRT;
 
 namespace EmuSen.WiseMan.Cores
 {
@@ -16,9 +15,9 @@ namespace EmuSen.WiseMan.Cores
         {
             { "NES raw", "NES address:value", CheatCodeKind.RamPoke, MoonCore.SpaceCpuBus },
             { "NES Game Genie", "Game Genie", CheatCodeKind.RomPatch, null },
-            { "GB GameShark", "GameShark", CheatCodeKind.RamPoke, MercuryCore.SpaceCpuBus },
+            { "GB GameShark", "GameShark", CheatCodeKind.RamPoke, MercuryRtCore.SpaceCpuBus },
             { "GB Game Genie", "Game Genie", CheatCodeKind.RomPatch, null },
-            { "N64 GameShark", "GameShark", CheatCodeKind.RamPoke, MarsCore.SpaceRdram },
+            { "N64 GameShark", "GameShark", CheatCodeKind.RamPoke, MarsDebugSpaces.Rdram },
             { "SNES Action Replay", "Pro Action Replay/Game Wizard", CheatCodeKind.RamPoke, "CpuBus" },
             { "SNES Game Genie", "Game Genie", CheatCodeKind.RomPatch, null },
         };
@@ -27,8 +26,8 @@ namespace EmuSen.WiseMan.Cores
         {
             "NES raw" => MoonCheatCodecs.Raw(),
             "NES Game Genie" => MoonCheatCodecs.GameGenie(),
-            "GB GameShark" => MercuryCheatCodecs.GameShark(),
-            "GB Game Genie" => MercuryCheatCodecs.GameGenie(),
+            "GB GameShark" => GameBoyCheatCodecs.GameShark(),
+            "GB Game Genie" => GameBoyCheatCodecs.GameGenie(),
             "N64 GameShark" => MarsCheatCodecs.GameShark(),
             "SNES Action Replay" => VenusCheatCodecs.ActionReplay(),
             _ => VenusCheatCodecs.GameGenie(),

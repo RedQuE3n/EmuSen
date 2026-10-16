@@ -1,5 +1,7 @@
 # Mars — the reference emulators, what they are for, and the line around them
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Written 2026-09-15, when four existing N64-adjacent codebases were checked out for
 study. They are read, never copied, and §2 is the rule that keeps that true rather
 than aspirational. §5 is the half that turned out to be worth the most: not what

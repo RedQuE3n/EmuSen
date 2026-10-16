@@ -23,14 +23,14 @@
       <Dir>$(MSBuildThisFileDirectory)Nintendo\MarsRT - N64\</Dir>
       <Core>MarsRT</Core>
       <Console>the N64</Console>
-      <Fallback>Mars (C#)</Fallback>
+      <Fallback></Fallback>
       <CoreAbi>1</CoreAbi>
     </EmuSenRustCrate>
     <EmuSenRustCrate Include="mercuryrt">
       <Dir>$(MSBuildThisFileDirectory)Nintendo\MercuryRT - GB\</Dir>
       <Core>MercuryRT</Core>
       <Console>the Game Boy</Console>
-      <Fallback>Mercury (C#)</Fallback>
+      <Fallback></Fallback>
       <CoreAbi>1</CoreAbi>
     </EmuSenRustCrate>
     <EmuSenRustCrate Include="moonrt">

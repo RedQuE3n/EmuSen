@@ -11,7 +11,6 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
@@ -23,7 +22,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // MercuryRT chosen in the graphics window with its library turned off: Mistress runs Mercury (C#) and says why - see Mercury_Native.md §8.7.
+    // A build whose MercuryRT library is missing or turned off: Mistress loads no Game Boy game and says plainly why - see Mercury_Native.md §15.4.
     [Collection(TestCollections.ProcessGlobals)]
     public class MercuryRtFallbackTests : IDisposable
     {
@@ -56,16 +55,9 @@ namespace EmuSen.WiseMan.Mistress
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 
-        private static void Choose(string engine)
-        {
-            GraphicsConfig config = GraphicsConfig.Load();
-            config.SetValue("GB", CoreCatalog.EngineKey, engine);
-            config.Save();
-        }
-
         // The library is loaded once per process, so a process started with it off is the only honest test of the fallback - see Mars_Native.md §5.5.
         [Fact]
-        public void With_the_library_turned_off_a_game_asking_for_MercuryRT_runs_on_Mercury_and_says_why()
+        public void With_the_library_turned_off_a_game_boy_game_does_not_load_and_the_status_says_why()
         {
             string mark = Path.Combine(_root, "fallback.txt");
             var start = new ProcessStartInfo("dotnet")
@@ -87,9 +79,9 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(File.Exists(mark), "the child ran nothing:\n" + output.Result);
 
             string[] found = File.ReadAllLines(mark);
-            Assert.Equal(nameof(MercuryCore), found[0]);
+            Assert.Equal("no core", found[0]);
             Assert.Contains("turned off by EMUSEN_MERCURY_NATIVE=0", found[1]);
-            Assert.Contains(CoreCatalog.MercuryRtEngine + " is not available", found[2]);
+            Assert.Contains("This build has no Game Boy core: " + CoreCatalog.MercuryRtEngine + " is missing (turned off by EMUSEN_MERCURY_NATIVE=0)", found[2]);
         }
 
         // Run only by the test above, in its own process; it asserts nothing unless that process has the library off.
@@ -100,35 +92,16 @@ namespace EmuSen.WiseMan.Mistress
 
             Assert.False(MercuryNative.Available);
             Assert.False(MercuryRtCore.Available);
-            Choose(CoreCatalog.MercuryRtEngine);
             var window = new MainWindow();
             window.Show();
             Invoke(window, "LoadRom", _rom, "Loop.gb");
-            string? status = Status(window).Text;
-            EmulatorSession game = Game(window);
-            WaitFor(() => game.TotalFrames > 20);
+            string status = Status(window).Text ?? "";
 
-            Assert.IsType<MercuryCore>(game.Core);
-            Assert.Contains("turned off by EMUSEN_MERCURY_NATIVE=0", game.EngineNotice);
-            Assert.Contains(game.EngineNotice!, status);
-            File.WriteAllLines(mark, new[] { game.Core!.GetType().Name, MercuryNative.Report, game.EngineNotice! });
+            Assert.Null(typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
+            Assert.StartsWith("Failed to load Loop.gb: ", status);
+            File.WriteAllLines(mark, new[] { "no core", MercuryNative.Report, status });
             window.Close();
         }, default);
-
-        // Pumps the UI thread's queue, since the emulation thread reports back by posting to it.
-        private static void WaitFor(Func<bool> condition)
-        {
-            var clock = Stopwatch.StartNew();
-            while (!condition())
-            {
-                Dispatcher.UIThread.RunJobs();
-                if (clock.ElapsedMilliseconds > 20_000) Assert.Fail("timed out waiting for the emulation thread");
-                Thread.Sleep(2);
-            }
-        }
-
-        private static EmulatorSession Game(MainWindow window) =>
-            (EmulatorSession)typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
 
         private static TextBlock Status(MainWindow window) => window.GetControl<TextBlock>("StatusText");
 

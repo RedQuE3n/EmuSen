@@ -1,4 +1,4 @@
-using EmuSen.Cores.Nintendo.Mars.Native;
+using EmuSen.Cores.Nintendo.MarsRT;
 
 namespace EmuSen.WiseMan.Cores
 {

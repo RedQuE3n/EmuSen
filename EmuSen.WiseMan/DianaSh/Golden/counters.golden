@@ -202,8 +202,8 @@ status 0
 action none
 end
 
-case counting on mercury
-target mercury
+case counting on mercuryrt
+target mercuryrt
 covers 1-6
 $ counters on WRAM
 out 42
@@ -220,27 +220,6 @@ GB memory spaces:
   OAM             160 bytes  R/W
   HRAM            127 bytes  R/W
   CPUBUS        65536 bytes  R/W
-status 0
-action none
-end
-
-case counting on mars
-target mars
-covers 1-6
-$ counters on RDRAM
-out 42
-This core does not report access counters.
-status 1
-action none
-$ spaces
-out 218
-N64 memory spaces:
-  RDRAM       8388608 bytes  R/W
-  DMEM           4096 bytes  R/W
-  IMEM           4096 bytes  R/W
-  PIFRAM           64 bytes  R/W
-  ROM            4096 bytes  R/O
-  CPU        2147483647 bytes  R/W
 status 0
 action none
 end

@@ -1,15 +1,12 @@
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mercury;
-using EmuSen.Cores.Nintendo.Mercury.Cheats;
-using EmuSen.Cores.Nintendo.Mercury.Cpu.Disassembler;
-using EmuSen.Cores.Nintendo.Mercury.Debug;
+using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // The Game Boy's debug target and the SM83 disassembler under it, on either engine - see Mercury_Debug.md and Mercury_Native.md §8.5.
+    // The Game Boy's debug target and the SM83 disassembler under it - see Mercury_Debug.md and Mercury_Native.md §8.5, §15.
     public abstract class MercuryDebugTargetClaims : IDisposable
     {
         private readonly List<string> _temporaryFiles = new();
@@ -90,7 +87,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var (_, target) = Load(patches: (0, bytes));
 
-            var instruction = target.Disassemble(MercuryCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 1)[0];
+            var instruction = target.Disassemble(MercuryRtCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 1)[0];
             Assert.Equal(expected, Text(instruction));
             Assert.Equal(bytes.Length, instruction.Length);
         }
@@ -101,7 +98,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var (_, target) = Load(patches: (0, new byte[] { 0x18, 0xFE }));
 
-            var instruction = target.Disassemble(MercuryCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 1)[0];
+            var instruction = target.Disassemble(MercuryRtCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 1)[0];
             Assert.Equal($"JR ${SyntheticGbRom.EntryPoint:X4}", Text(instruction));
         }
 
@@ -111,7 +108,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var (_, target) = Load(patches: (0, new byte[] { 0xE8, 0xFE, 0xF8, 0x02 }));
 
-            var instructions = target.Disassemble(MercuryCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 2);
+            var instructions = target.Disassemble(MercuryRtCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 2);
             Assert.Equal("ADD SP,-2", Text(instructions[0]));
             Assert.Equal("LD HL,SP+2", Text(instructions[1]));
         }
@@ -126,7 +123,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var (_, target) = Load(patches: (0, bytes));
 
-            var instruction = target.Disassemble(MercuryCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 1)[0];
+            var instruction = target.Disassemble(MercuryRtCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 1)[0];
             Assert.Equal(expected, Text(instruction));
             Assert.Equal(2, instruction.Length);
         }
@@ -136,7 +133,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var (_, target) = Load(patches: (0, new byte[] { 0x00, 0x3E, 0x01, 0xC3, 0x50, 0x01 }));
 
-            var instructions = target.Disassemble(MercuryCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 3);
+            var instructions = target.Disassemble(MercuryRtCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 3);
 
             Assert.Equal(SyntheticGbRom.EntryPoint, instructions[0].Address);
             Assert.Equal(SyntheticGbRom.EntryPoint + 1, instructions[1].Address);
@@ -148,7 +145,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var (_, target) = Load(patches: (0, new byte[] { 0xCD, 0x00, 0x40, 0xEA, 0x10, 0xC0, 0xFA, 0x20, 0xC0, 0xE0, 0x47 }));
 
-            var instructions = target.Disassemble(MercuryCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 4);
+            var instructions = target.Disassemble(MercuryRtCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 4);
 
             Assert.Equal((StaticReferenceKind.Call, 0x4000), target.ClassifyStaticReference(instructions[0]));
             Assert.Equal((StaticReferenceKind.Write, 0xC010), target.ClassifyStaticReference(instructions[1]));
@@ -162,7 +159,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var (_, target) = Load(patches: (0, new byte[] { 0xE9 }));
 
-            var instruction = target.Disassemble(MercuryCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 1)[0];
+            var instruction = target.Disassemble(MercuryRtCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 1)[0];
             Assert.Null(target.ClassifyStaticReference(instruction));
         }
 
@@ -278,10 +275,10 @@ namespace EmuSen.WiseMan.Cores
         {
             var (_, target) = Load();
 
-            Assert.Equal(MercuryCore.SpaceVram, target.ResolvePhysical(0x8010)!.Value.Space);
-            Assert.Equal(MercuryCore.SpaceWram, target.ResolvePhysical(0xC005)!.Value.Space);
-            Assert.Equal(MercuryCore.SpaceOam, target.ResolvePhysical(0xFE04)!.Value.Space);
-            Assert.Equal(MercuryCore.SpaceHram, target.ResolvePhysical(0xFF85)!.Value.Space);
+            Assert.Equal(MercuryRtCore.SpaceVram, target.ResolvePhysical(0x8010)!.Value.Space);
+            Assert.Equal(MercuryRtCore.SpaceWram, target.ResolvePhysical(0xC005)!.Value.Space);
+            Assert.Equal(MercuryRtCore.SpaceOam, target.ResolvePhysical(0xFE04)!.Value.Space);
+            Assert.Equal(MercuryRtCore.SpaceHram, target.ResolvePhysical(0xFF85)!.Value.Space);
 
             // A banked ROM window depends on live mapper state, so it is reported as unknowable.
             Assert.Null(target.ResolvePhysical(0x4000));
@@ -318,7 +315,7 @@ namespace EmuSen.WiseMan.Cores
                 Assert.IsType(rig.CoreType, bundle.Core);
                 Assert.IsType(rig.TargetType, bundle.DebugTarget);
                 (bundle.Core as IDisposable)?.Dispose();
-                Assert.Equal(("GameShark", MercuryCore.SpaceCpuBus), (bundle.CheatAutoDetectCodec!.Name, bundle.CheatAutoDetectCodec.SpaceName));
+                Assert.Equal(("GameShark", MercuryRtCore.SpaceCpuBus), (bundle.CheatAutoDetectCodec!.Name, bundle.CheatAutoDetectCodec.SpaceName));
                 Assert.Equal(("Game Genie", CheatCodeKind.RomPatch), (bundle.CheatExplicitCodec!.Name, bundle.CheatExplicitCodec.Kind));
             }
         }
@@ -333,13 +330,7 @@ namespace EmuSen.WiseMan.Cores
         }
     }
 
-    public class MercuryDebugTargetTests : MercuryDebugTargetClaims
-    {
-        protected override MercuryDebugRig Rig(string rom) => MercuryDebugRig.Mercury(rom);
-        protected override string EngineName => "Mercury";
-    }
-
-    // The same claims on MercuryRT's target, which shows a mirror refreshed from the Rust machine's state - see Mercury_Native.md §8.5.
+    // The claims on MercuryRT's target, which reads the machine's state through its layout listing - see Mercury_Native.md §15.
     public class MercuryRtDebugTargetTests : MercuryDebugTargetClaims
     {
         protected override MercuryDebugRig Rig(string rom) => MercuryDebugRig.MercuryRt(rom);

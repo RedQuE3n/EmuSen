@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.Mars.Native;
+using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Crystal.SaveMedia;
 using EmuSen.Crystal.Systems.N64;
 using EmuSen.Galaxia;

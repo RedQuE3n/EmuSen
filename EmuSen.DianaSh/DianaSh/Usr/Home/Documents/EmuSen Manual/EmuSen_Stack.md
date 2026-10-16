@@ -41,6 +41,13 @@ against it, as §5 of `Mars_Native.md` was. The method carries over unchanged: t
 state the format, a shim implements its interfaces, and the port is proven frame for frame before it is offered. The
 paragraph above, "2D consoles' cores are C#", is retired by this one, and "the cores are C#, permanently" with it.
 
+*Revised 2026-10-16, by decision:* **a C# core is not kept as an oracle once its Rust port replaces it.** The C# core
+and the tests that need it are deleted, and the Rust core is graded on its own recorded digests, its console's
+hardware test corpus and the conformance kit. "The C# core is the oracle" above holds while a port is under way and
+ends with it. Mars (C#) and Mercury (C#) were the first deleted, the same day (`Mars_Native.md` §6.7,
+`Mercury_Native.md` §15): MercuryRT's oracle is the goldens recorded from C# Mercury before it left. The C# cores that
+remain are Venus and Moon, each until its port replaces it.
+
 **The one arguable case is `EmuSen.Endymion/AudioPlayer.cs`,** the only `unsafe` in the tree — a thin SDL3 binding on the audio submit path. It stays C#. Moving it to Rust would *add* an FFI boundary rather than remove one: today there is one hop (C# → SDL3), and a Rust sink would make it two with no accuracy or safety gained. Recorded here so the next reader does not have to re-derive it from the `unsafe` keyword alone.
 
 *Retired 2026-10-07, by decision (`EmuSen_RustPlatform.md` §9, Q12): Endymion's device half is to be ported to Rust
@@ -139,7 +146,8 @@ Recorded so they are not re-derived from scratch:
 ### 4.4 GLSL, for the one thing that runs on a GPU
 
 *2026-09-21.* Mars's compute shaders are GLSL (`Rdp/Gpu/Shaders/*.comp`), compiled to SPIR-V by a test-time
-dependency of WiseMan and embedded in the core (`Mars_Gpu.md` §2). It is a fifth language in the tree and is
+dependency of WiseMan and embedded in the core (`Mars_Gpu.md` §2). *Since 2026-10-16 they are MarsRT's, in `MarsRT - N64/shaders/`, embedded by
+its crate, and the C# host side went with the C# core; Diamond's renderer keeps its own beside its crate.* It is a fifth language in the tree and is
 recorded here as an exception rather than an addition to the four, because it is not a choice among languages for
 host code: a GPU runs shader code or nothing, and the host side of the same work is C# like the rest of the core.
 It does not generalise. Nothing that runs on the CPU has a reason to be written in it, and a second shading

@@ -1,45 +1,50 @@
 using System;
-using System.IO;
 using System.Linq;
-using EmuSen.WiseMan.Fixtures;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mars;
+using EmuSen.Cores.Nintendo.MarsRT;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // The four video settings Mars offers a frontend: their round trip, the clamp on a count, and what is refused - see Mars_Core.md §10.
+    // The video settings the N64 offers a frontend: their round trip, the clamp on a count, and what is refused - see Mars_Core.md §10.
     public class MarsCoreSettingsTests
     {
-        [Fact]
-        public void The_catalogue_offers_the_same_eight_settings_the_core_answers()
+        private static MarsRtCore Core()
         {
-            ICoreSettings core = new MarsCore();
-            Assert.Equal(new[] { "ThreadedRdp", "RdpWorkers", "DeferredPresentation", "SkipRepeatedScans", "RenderScale", "Antialiasing", "Gpu", "ExpansionPak" }, core.Settings.Select(s => s.Key));
-            Assert.Same(core.Settings, CoreCatalog.SettingsFor("N64"));
+            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            return new MarsRtCore();
+        }
+
+        [Fact]
+        public void The_catalogue_offers_the_console_s_eight_settings_and_the_core_answers_them_and_its_own()
+        {
+            var keys = new[] { "ThreadedRdp", "RdpWorkers", "DeferredPresentation", "SkipRepeatedScans", "RenderScale", "Antialiasing", "Gpu", "ExpansionPak" };
+            Assert.Equal(keys, CoreCatalog.SettingsFor("N64").Select(s => s.Key));
+            Assert.Same(N64Console.VideoSettings, CoreCatalog.SettingsFor("N64"));
+            Assert.Equal(keys.Append("Recompiler"), MarsRtCore.VideoSettings.Select(s => s.Key));
             Assert.Empty(CoreCatalog.SettingsFor("SNES"));
         }
 
-        // The Antialiasing row's note is the cores' own rule: silent exactly where the level chosen is the level drawn, and on MarsRT's row too - see Mars_Performance.md §42.5.
+        // The Antialiasing row's note is the core's own rule: silent exactly where the level chosen is the level drawn - see Mars_Performance.md §42.5.
         [Fact]
         public void The_antialiasing_note_speaks_exactly_where_the_core_draws_less_than_was_chosen()
         {
-            var core = new MarsCore();
+            using MarsRtCore core = Core();
             foreach (string scale in new[] { "1", "2", "3", "4" })
                 foreach (string level in new[] { "Off", "2x", "3x", "4x" })
                 {
                     ((ICoreSettings)core).Set("RenderScale", scale);
                     ((ICoreSettings)core).Set("Antialiasing", level);
-                    string? note = MarsCore.AntialiasingNote(key => key == "RenderScale" ? scale : level);
+                    string? note = N64Console.AntialiasingNote(key => key == "RenderScale" ? scale : level);
                     Assert.Equal(core.EffectiveAntialiasing < core.Antialiasing, note is not null);
                     if (note is not null) Assert.StartsWith(core.EffectiveAntialiasing == 1 ? $"Off at {scale}x" : $"{core.EffectiveAntialiasing}x at {scale}x", note);
                 }
-            Assert.NotNull(EmuSen.Cores.Nintendo.MarsRT.MarsRtCore.VideoSettings.Single(s => s.Key == "Antialiasing").Note);
+            Assert.NotNull(MarsRtCore.VideoSettings.Single(s => s.Key == "Antialiasing").Note);
         }
 
         [Fact]
         public void A_setting_set_is_the_setting_read_back_and_the_property_it_names()
         {
-            var core = new MarsCore();
+            using MarsRtCore core = Core();
             ICoreSettings settings = core;
 
             settings.Set("RdpWorkers", "3");
@@ -59,7 +64,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_defaults_are_what_the_frontend_set_by_hand()
         {
-            var core = new MarsCore();
+            using MarsRtCore core = Core();
             ICoreSettings settings = core;
             foreach (CoreSetting setting in settings.Settings) settings.Set(setting.Key, setting.Default);
 
@@ -74,66 +79,42 @@ namespace EmuSen.WiseMan.Cores
 
         // The drawing is the resolution times the averaging and never past four, the averaging giving way - see Mars_Video.md §2.10.
         [Theory]
-        [InlineData(1, "Off", 1, 1)]
-        [InlineData(1, "4x", 4, 4)]
-        [InlineData(2, "2x", 4, 2)]
-        [InlineData(2, "4x", 4, 2)]
-        [InlineData(3, "2x", 3, 1)]
-        [InlineData(4, "3x", 4, 1)]
-        public void Antialiasing_multiplies_the_drawing_and_is_held_to_four_with_the_resolution(int scale, string level, int drawn, int averaged)
+        [InlineData(1, "Off", 1)]
+        [InlineData(1, "4x", 4)]
+        [InlineData(2, "2x", 2)]
+        [InlineData(2, "4x", 2)]
+        [InlineData(3, "2x", 1)]
+        [InlineData(4, "3x", 1)]
+        public void Antialiasing_is_held_to_four_with_the_resolution(int scale, string level, int averaged)
         {
-            var core = new MarsCore(batteryRamDisabled: true);
-            core.LoadRom(WriteRom());
+            using MarsRtCore core = Core();
             ICoreSettings settings = core;
             settings.Set("RenderScale", scale.ToString());
             settings.Set("Antialiasing", level);
 
             Assert.Equal(level, settings.Get("Antialiasing"));
             Assert.Equal(scale, core.RenderScale);
-            Assert.Equal(drawn, core.Bus!.Dp.Scale);
-            Assert.Equal(averaged, core.Bus.Vi.Average);
+            Assert.Equal(averaged, core.EffectiveAntialiasing);
             Assert.Throws<ArgumentException>(() => settings.Set("Antialiasing", "8x"));
         }
 
-        // A square of the multiple's raster becomes one pixel, its rounded mean in every channel - see Mars_Video.md §2.10.
         [Fact]
-        public void The_average_of_a_square_is_its_rounded_mean_channel_by_channel()
+        public void The_multiple_is_a_choice_of_one_to_four()
         {
-            byte[] source =
-            {
-                0, 10, 255, 255,   1, 20, 255, 255,   100, 0, 0, 255,   100, 0, 0, 255,
-                1, 30, 255, 255,   1, 40, 255, 255,   100, 0, 0, 255,   104, 0, 0, 255,
-            };
-            var into = new byte[8];
-            EmuSen.Cores.Nintendo.Mars.Vi.Vi.BoxAverage(source, 4, 2, into);
-            Assert.Equal(new byte[] { 1, 25, 255, 255, 101, 0, 0, 255 }, into);
-        }
-
-        private static string WriteRom()
-        {
-            string path = Path.Combine(Path.GetTempPath(), "mars_settings_" + Guid.NewGuid().ToString("N") + ".z64");
-            File.WriteAllBytes(path, SyntheticN64Rom.Build());
-            return path;
-        }
-
-        [Fact]
-        public void The_multiple_is_a_choice_of_one_to_four_and_reaches_the_display_processor()
-        {
-            var core = new MarsCore();
+            using MarsRtCore core = Core();
             ICoreSettings settings = core;
             Assert.Equal(new[] { "1", "2", "3", "4" }, settings.Settings.Single(s => s.Key == "RenderScale").Choices);
 
             settings.Set("RenderScale", "3");
             Assert.Equal(3, core.RenderScale);
             Assert.Equal("3", settings.Get("RenderScale"));
-            settings.Set("RenderScale", "9");
-            Assert.Equal(4, core.RenderScale);
+            Assert.Throws<ArgumentException>(() => settings.Set("RenderScale", "9"));
         }
 
         [Fact]
         public void A_count_outside_its_range_is_clamped_and_text_that_is_neither_is_refused()
         {
-            var core = new MarsCore();
+            using MarsRtCore core = Core();
             ICoreSettings settings = core;
 
             settings.Set("RdpWorkers", "40");

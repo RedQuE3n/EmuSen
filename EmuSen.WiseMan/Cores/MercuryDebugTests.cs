@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mercury;
+using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Crystal.Debugger;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // The debugger's claims on a Game Boy engine, each driven by a few instructions at the entry point; Mercury and MercuryRT are held to the same transcripts - see Mercury_Native.md §8.5.
+    // The debugger's claims on the Game Boy's engine, each driven by a few instructions at the entry point - see Mercury_Native.md §8.5, §15.
     public abstract class MercuryDebugClaims : IDisposable
     {
         protected const int Entry = SyntheticGbRom.EntryPoint;
@@ -196,7 +196,7 @@ namespace EmuSen.WiseMan.Cores
             MercuryDebugRig core = Load(CountForever);
             int poke = core.Watches.AddWatch("WRAM", 0x10, 1);
             int typed = core.Watches.AddWatch("WRAM", 0x11, 1);
-            core.Cheats.AddRamPoke(MercuryCore.SpaceCpuBus, 0xC010, 0x5A, "a poke");
+            core.Cheats.AddRamPoke(MercuryRtCore.SpaceCpuBus, 0xC010, 0x5A, "a poke");
 
             core.RunFrame();
             core.Target.GetMemorySpaces().Single(s => s.Name == "CPUBUS").Write(0xC011, 0x33);
@@ -448,14 +448,14 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal($"Opcode $D3 at ${Entry + 1:X4} is not a real SM83 instruction - see Mercury_Cpu.md §6.1.", thrown.Message);
         }
 
-        // Halted at the vblank vector on every third frame and resumed, against the program run plain on the C# core.
+        // Halted at the vblank vector on every third frame and resumed, against the program run plain, unobserved.
         [Fact]
         public void A_frame_halted_and_resumed_is_the_frame_run_through()
         {
             string rom = Temporary(Interrupts);
             MercuryDebugRig core = Rig(rom);
             _rigs.Add(core);
-            var plain = new MercuryCore();
+            using var plain = new MercuryRtCore();
             plain.LoadRom(rom);
 
             int halts = 0;
@@ -527,23 +527,6 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0, new StepCommand().Execute(target, new[] { "step", "over" }, null).ExitCode);
             core.RunFrame();
             Assert.Equal(Entry + 3, core.HaltedAddress);
-        }
-    }
-
-    // The C# Mercury under the claims, and what only it does.
-    public class MercuryDebugTests : MercuryDebugClaims
-    {
-        protected override MercuryDebugRig Rig(string rom) => MercuryDebugRig.Mercury(rom);
-
-        // The C# core tracks the stack on every frame, armed or not; MercuryRT only in an observed one - see Mercury_Native.md §8.5.
-        [Fact]
-        public void A_call_made_in_a_frame_nothing_observes_is_on_the_stack()
-        {
-            MercuryDebugRig core = Load((0, new byte[] { 0xCD, 0x60, 0x01 }), (0x10, new byte[] { 0x18, 0xFE }));
-
-            core.RunFrame();
-
-            Assert.Equal(1, core.CallStack!.Depth);
         }
     }
 }

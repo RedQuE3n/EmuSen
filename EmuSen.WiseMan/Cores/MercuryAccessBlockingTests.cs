@@ -1,16 +1,13 @@
-using EmuSen.Cores.Nintendo.Mercury;
+using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
-using EmuSen.Cores.Nintendo.Mercury.Video;
-using GbPpu = EmuSen.Cores.Nintendo.Mercury.Video.Ppu;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // What the CPU can and cannot reach while the PPU is using it - see Mercury_Ppu.md §7; Mercury and MercuryRT are held to the same claims - see Mercury_Native.md §12.
-    public abstract class MercuryAccessBlockingClaims : IDisposable
+    // What the CPU can and cannot reach while the PPU is using it - see Mercury_Ppu.md §7; held on MercuryRT - see Mercury_Native.md §12, §15.
+    public sealed class MercuryRtAccessBlockingTests : IDisposable
     {
         private readonly List<MercuryRig> _rigs = new();
 
-        protected abstract MercuryEngine Engine { get; }
 
         public void Dispose()
         {
@@ -19,7 +16,7 @@ namespace EmuSen.WiseMan.Cores
 
         private MercuryRig Load(byte cgbFlag = 0x00)
         {
-            var core = MercuryRig.Create(Engine, SyntheticGbRom.Build(cgbFlag: cgbFlag));
+            var core = MercuryRig.Create(SyntheticGbRom.Build(cgbFlag: cgbFlag));
             _rigs.Add(core);
             return core;
         }
@@ -27,7 +24,7 @@ namespace EmuSen.WiseMan.Cores
         // Advances to a chosen dot of the current scanline; the LCD is on from reset.
         private static void AdvanceToDot(MercuryRig core, int dot)
         {
-            while (core.Bus.Ppu.Dot != dot) core.Tick(1);
+            while (core.Field("Bus.Ppu.Dot") != dot) core.Tick(1);
         }
 
         [Fact]
@@ -35,20 +32,20 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            AdvanceToDot(core, GbPpu.OamScanCycles + GbPpu.BaseDrawingCycles + 8);
-            Assert.Equal(PpuMode.HBlank, core.Bus.Ppu.Mode);
+            AdvanceToDot(core, MercuryRig.OamScanCycles + MercuryRig.BaseDrawingCycles + 8);
+            Assert.Equal(MercuryRig.HBlankMode, core.Field("Bus.Ppu.Mode"));
 
             core.Write(0x8000, 0x3C);
             Assert.Equal(0x3C, core.Read(0x8000));
 
-            AdvanceToDot(core, GbPpu.OamScanCycles + 8);
-            Assert.Equal(PpuMode.Drawing, core.Bus.Ppu.Mode);
+            AdvanceToDot(core, MercuryRig.OamScanCycles + 8);
+            Assert.Equal(MercuryRig.DrawingMode, core.Field("Bus.Ppu.Mode"));
 
             Assert.Equal(0xFF, core.Read(0x8000));
 
             // The write is dropped, not queued: the byte underneath is unchanged when drawing ends.
             core.Write(0x8000, 0x99);
-            AdvanceToDot(core, GbPpu.OamScanCycles + GbPpu.BaseDrawingCycles + 8);
+            AdvanceToDot(core, MercuryRig.OamScanCycles + MercuryRig.BaseDrawingCycles + 8);
             Assert.Equal(0x3C, core.Read(0x8000));
         }
 
@@ -57,16 +54,16 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = Load();
 
-            AdvanceToDot(core, GbPpu.OamScanCycles + GbPpu.BaseDrawingCycles + 8);
+            AdvanceToDot(core, MercuryRig.OamScanCycles + MercuryRig.BaseDrawingCycles + 8);
             core.Write(0xFE00, 0x2A);
             Assert.Equal(0x2A, core.Read(0xFE00));
 
             AdvanceToDot(core, 8);
-            Assert.Equal(PpuMode.OamScan, core.Bus.Ppu.Mode);
+            Assert.Equal(MercuryRig.OamScanMode, core.Field("Bus.Ppu.Mode"));
             Assert.Equal(0xFF, core.Read(0xFE00));
 
-            AdvanceToDot(core, GbPpu.OamScanCycles + 8);
-            Assert.Equal(PpuMode.Drawing, core.Bus.Ppu.Mode);
+            AdvanceToDot(core, MercuryRig.OamScanCycles + 8);
+            Assert.Equal(MercuryRig.DrawingMode, core.Field("Bus.Ppu.Mode"));
             Assert.Equal(0xFF, core.Read(0xFE00));
         }
 
@@ -81,7 +78,7 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0x8000, 0x3C);
             core.Write(0xFE00, 0x2A);
 
-            for (int i = 0; i < GbPpu.CyclesPerScanline * 4; i++)
+            for (int i = 0; i < MercuryRig.CyclesPerScanline * 4; i++)
             {
                 core.Tick(1);
                 Assert.Equal(0x3C, core.Read(0x8000));
@@ -104,20 +101,10 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF47, 0xE4);
             core.Write(0xFF40, 0x91);
 
-            for (int i = 0; i < GbPpu.CyclesPerScanline * GbPpu.TotalScanlines; i++) core.Tick(1);
+            for (int i = 0; i < MercuryRig.CyclesPerScanline * MercuryRig.TotalScanlines; i++) core.Tick(1);
 
             byte[] frame = core.GetFrameBufferRgba();
             Assert.Equal(0x00, frame[0]);
         }
-    }
-
-    public sealed class MercuryAccessBlockingTests : MercuryAccessBlockingClaims
-    {
-        protected override MercuryEngine Engine => MercuryEngine.Mercury;
-    }
-
-    public sealed class MercuryRtAccessBlockingTests : MercuryAccessBlockingClaims
-    {
-        protected override MercuryEngine Engine => MercuryEngine.MercuryRt;
     }
 }

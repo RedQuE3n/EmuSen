@@ -97,28 +97,8 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
-covers 1
-$ sprites | head -n 8
-out 19
-0 active sprite(s):
-status 0
-action none
-end
-
 case on mercuryrt
 target mercuryrt
-covers 1
-$ sprites | head -n 8
-out 19
-0 active sprite(s):
-status 0
-action none
-end
-
-case on mars
-target mars
 covers 1
 $ sprites | head -n 8
 out 19

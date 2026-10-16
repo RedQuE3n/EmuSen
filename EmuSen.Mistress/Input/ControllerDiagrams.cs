@@ -79,7 +79,7 @@ namespace EmuSen.Mistress.Input
             return null;
         }
 
-        // Past this share of its travel a stick direction counts as held; Mars reads its C buttons at the same share (MarsCore.CButtonThreshold).
+        // Past this share of its travel a stick direction counts as held; the N64 reads its C buttons at the same share (N64Console.CButtonThreshold).
         public const double DirectionThreshold = 0.5;
     }
 }

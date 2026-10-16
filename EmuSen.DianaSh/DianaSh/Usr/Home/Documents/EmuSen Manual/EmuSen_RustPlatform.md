@@ -3090,3 +3090,34 @@ the reuse jobs. "Libraries ready" is when the last of them finished, counted fro
   intermittent case §27.3 records, and passed when that job was run again. The WiseMan jobs ran after it.
 - **The tests are now the critical path.** With nothing to build, a run still takes about 30 minutes, almost all of
   it the WiseMan jobs' 24–32 minutes of tests. That is the next place to look.
+
+## 29. The Mac mini as the Apple Silicon runner, 2026-10-16
+
+The Apple Silicon jobs of `rust-cores.yml` (the shared crates, each library's `osx-arm64` job and WiseMan's) run
+on the project's own Mac mini when the run is a push or a manual start on a working branch. Runs on `main`, on a
+tag, or with the repository variable `EMUSEN_MAC_RUNNER` set to `off` take GitHub's `macos-latest` as before. A
+release's assets are therefore never built on the project's machine.
+
+**Why.** GitHub's macOS machines are virtual and offer no Metal device, so the device picture and the Vulkan-on-Metal
+tests could not run in CI, and the tests that measure time ran beside other tenants' work. The Mac mini is an Apple M1,
+the lowest Apple Silicon EmuSen targets, with MoltenVK and the Vulkan loader installed (`vulkaninfo` reports the
+Apple M1 through MoltenVK at Vulkan 1.4). Its caches persist between runs.
+
+**The runner.** GitHub's runner 2.338.0 (osx-arm64), its archive checked against the release's published SHA-256,
+lives in `~/actions-runner` under the tester's account, registered as `emusen-mac-mini-1` with the label `emusen-mac`,
+and runs as a launchd agent while that account is logged in. Its jobs keep their own Rust and .NET:
+`CARGO_HOME`, `RUSTUP_HOME` and `DOTNET_INSTALL_DIR` in the runner's `.env` point inside `~/actions-runner/_tools`, so
+a job's toolchain never replaces the one the tester uses on that machine.
+
+**Safety on a public repository.** The workflow runs on `push` and `workflow_dispatch` only; neither can be started
+from a fork, since both need write access. The `runs-on` expression also names the Mac only for those two events, so
+a `pull_request` trigger added later would still run on GitHub's machines. That expression must keep the event
+condition.
+
+**When the Mac is away.** FileVault is on, so after a restart the runner starts only once the tester logs in. A
+job waiting for it stays queued, and does not fail. `gh variable set EMUSEN_MAC_RUNNER --body off` sends the next runs
+to GitHub's machines, and deleting the variable brings them back.
+
+**One runner, one job at a time.** GitHub ran the Apple Silicon jobs side by side; this machine runs them one after
+another. Since §28, a push builds only the libraries it changed, which keeps the queue short; a second runner on the
+same machine is the next step if it is not short enough.

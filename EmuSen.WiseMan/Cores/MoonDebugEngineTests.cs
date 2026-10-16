@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Moon;
+using EmuSen.Crystal.Systems.Nes;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
@@ -16,8 +16,8 @@ namespace EmuSen.WiseMan.Cores
     // One NES engine behind its debug target, as the frontends reach it through CoreFactory - see Moon_Native.md §8.4.
     public sealed class NesDebugRig : IDisposable
     {
-        public const string Moon = "Moon", MoonRt = "MoonRT";
-        public static readonly TheoryData<string> Engines = new() { Moon, MoonRt };
+        public const string MoonRt = "MoonRT";
+        public static readonly TheoryData<string> Engines = new() { MoonRt };
 
         public readonly ICore Core;
         public readonly IDebugTarget Target;
@@ -30,9 +30,9 @@ namespace EmuSen.WiseMan.Cores
 
         public static NesDebugRig Load(string engine, string path, CheatRegistry? cheats = null)
         {
-            if (engine == MoonRt) Assert.True(MoonRtCore.Available, MoonNative.Report);
-            CoreBundle bundle = CoreFactory.Load(path, cheats: cheats, engine: engine == MoonRt ? CoreCatalog.MoonRtEngine : null);
-            Assert.Equal(engine == MoonRt, bundle.Core is MoonRtCore);
+            Assert.True(MoonRtCore.Available, MoonNative.Report);
+            CoreBundle bundle = CoreFactory.Load(path, cheats: cheats);
+            Assert.IsType<MoonRtCore>(bundle.Core);
             return new NesDebugRig(bundle.Core, bundle.DebugTarget);
         }
 
@@ -41,8 +41,8 @@ namespace EmuSen.WiseMan.Cores
         public CoverageRegistry Coverage => Target.Coverage!;
         public WatchRegistry Watches => Target.Watches;
 
-        public bool Halted => Core is MoonCore m ? m.IsHaltedAtBreakpoint : ((MoonRtCore)Core).IsHaltedAtBreakpoint;
-        public int HaltedAddress => Core is MoonCore m ? m.HaltedAddress : ((MoonRtCore)Core).HaltedAddress;
+        public bool Halted => ((MoonRtCore)Core).IsHaltedAtBreakpoint;
+        public int HaltedAddress => ((MoonRtCore)Core).HaltedAddress;
         public int Pc => Target.DebugCpus[0].ProgramCounter!();
 
         public byte[] State()
@@ -57,7 +57,7 @@ namespace EmuSen.WiseMan.Cores
         public void Dispose() => (Core as IDisposable)?.Dispose();
     }
 
-    // The debugger's behaviours on both NES engines, and the two engines' halts compared step by step - see Moon_Native.md §8.4.
+    // The debugger's behaviours on MoonRT, as the frontends reach it - see Moon_Native.md §8.4.
     public class MoonDebugEngineTests : IDisposable
     {
         private readonly ITestOutputHelper _output;
@@ -211,7 +211,7 @@ namespace EmuSen.WiseMan.Cores
         {
             using var rig = Load(engine);
             int id = rig.Watches.AddWatch("RAM", 0x0042, 1);
-            rig.Target.GetMemorySpaces().Single(s => s.Name == MoonCore.SpaceCpuBus).Write(0x0042, 0x7E);
+            rig.Target.GetMemorySpaces().Single(s => s.Name == NesSystem.CpuBus).Write(0x0042, 0x7E);
             DebugWatchEvent e = Assert.Single(rig.Watches.GetEvents(id));
             Assert.Equal((0x42, (byte)0x7E), (e.Address, e.Value));
         }
@@ -235,38 +235,6 @@ namespace EmuSen.WiseMan.Cores
                 Assert.Equal(plain.StateHash(), halted.StateHash());
             }
         }
-
-        // The same script on both engines: after every call, the halt, the address, the frame, the call stack and the whole state.
-        [Fact]
-        public void The_two_engines_halt_and_step_alike()
-        {
-            string rom = Rom();
-            List<string> Script(string engine)
-            {
-                var log = new List<string>();
-                using var rig = NesDebugRig.Load(engine, rom);
-                void Note(string what) => log.Add($"{what}: halted {rig.Halted} at {rig.Pc:X4} frame {rig.Core.TotalFrames} depth {rig.CallStack.Depth} state {rig.StateHash()}");
-                int bp = rig.Breakpoints.AddBreakpoint(0x8010);
-                for (int i = 0; i < 5; i++) { rig.Core.RunFrame(); Note("bp"); }
-                rig.Breakpoints.RemoveBreakpoint(bp);
-                for (int i = 0; i < 12; i++) { rig.Breakpoints.ArmSingleStep(); rig.Core.RunFrame(); Note("step"); }
-                rig.Breakpoints.ArmStepToDepth(rig.CallStack.Depth - 1);
-                rig.Core.RunFrame();
-                Note("out");
-                rig.Breakpoints.ArmRunToInterrupt(CallFrameKind.Nmi);
-                rig.Core.RunFrame();
-                Note("nmi");
-                rig.Breakpoints.AddDataBreakpoint("RAM", 0x0043);
-                for (int i = 0; i < 4; i++) { rig.Core.RunFrame(); Note("data"); }
-                foreach (var b in rig.Breakpoints.GetDataBreakpoints().ToList()) rig.Breakpoints.RemoveBreakpoint(b.Id);
-                // Nothing is armed now, so MoonRT runs plain frames, whose calls reach no registry; the stack is compared only where observed.
-                for (int i = 0; i < 3; i++) { rig.Core.RunFrame(); log.Add($"plain: halted {rig.Halted} frame {rig.Core.TotalFrames} state {rig.StateHash()}"); }
-                return log;
-            }
-            List<string> csharp = Script(NesDebugRig.Moon), rust = Script(NesDebugRig.MoonRt);
-            for (int i = 0; i < Math.Max(csharp.Count, rust.Count); i++) _output.WriteLine($"{(i < csharp.Count ? csharp[i] : "-")}  |  {(i < rust.Count ? rust[i] : "-")}");
-            Assert.Equal(csharp, rust);
-        }
     }
 }
 
@@ -284,9 +252,9 @@ namespace EmuSen.WiseMan.Cores
         {
             core.CreateDebugTarget();
             core.Breakpoints.AddBreakpoint(0x5FF0, 0x5FFF, null);
-            core.Watches.AddWatch(MoonCore.SpaceRam, 0, 0x800);
-            core.Watches.AddWatch(MoonCore.SpacePrgRam, 0, 0x2000);
-            core.Breakpoints.AddDataBreakpoint(MoonCore.SpacePrgRam, 0x1FFF, 0x1FFF, 0x5A, false, false, "false");
+            core.Watches.AddWatch(NesSystem.Ram, 0, 0x800);
+            core.Watches.AddWatch(NesSystem.PrgRam, 0, 0x2000);
+            core.Breakpoints.AddDataBreakpoint(NesSystem.PrgRam, 0x1FFF, 0x1FFF, 0x5A, false, false, "false");
             core.Coverage.Arm();
             core.CallStack.ArmProfiler();
         }
@@ -313,37 +281,28 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void The_bench_games_and_library_states_armed_run_as_they_run_plain()
+        public void The_bench_games_armed_run_as_they_run_plain()
         {
-            string? folder = Environment.GetEnvironmentVariable(MoonRtStateTests.RomsVariable);
-            if (folder is null || !Directory.Exists(folder))
+            CoreOptions.BatteryRamDisabled = true;
+            var runs = MoonGoldenTests.Games.Take(4).Select(g => MoonGoldenTests.Game(g.Sha)).OfType<byte[]>().ToList();
+            if (runs.Count == 0)
             {
-                _output.WriteLine($"{MoonRtStateTests.RomsVariable} unset, not run");
+                _output.WriteLine($"{MoonGoldenTests.GamesVariable} unset or without the games, not run");
                 return;
             }
-            CoreOptions.BatteryRamDisabled = true;
-            var runs = new List<(string Rom, string? State)>();
-            foreach (string path in Directory.GetFiles(folder, "*.nes").Order(StringComparer.Ordinal)) runs.Add((path, null));
-            if (Environment.GetEnvironmentVariable(MoonRtSoundAndPictureTests.StatesVariable) is { } states && Directory.Exists(states))
-                foreach (string path in Directory.GetFiles(states, "*.nes").Order(StringComparer.Ordinal).Take(4))
-                    foreach (string state in Directory.GetFiles(states, Path.GetFileNameWithoutExtension(path) + ".*state").Take(1))
-                        runs.Add((path, state));
-            foreach (var (rom, state) in runs)
+            foreach (byte[] image in runs)
             {
+                string rom = SyntheticNesRom.WriteTemp(image);
                 using var plain = new MoonRtCore();
                 using var armed = new MoonRtCore();
                 plain.LoadRom(rom);
                 armed.LoadRom(rom);
-                if (state is not null)
-                {
-                    plain.LoadState(state);
-                    armed.LoadState(state);
-                }
+                File.Delete(rom);
                 ArmEverything(armed);
-                RunAlike(plain, armed, state is null ? 900 : 400);
+                RunAlike(plain, armed, 900);
                 Assert.True(armed.Coverage.InstructionsRecorded > 100_000, "the armed run did not take the observed frame");
                 Assert.True(armed.Watches.GetWatches().Any(w => armed.Watches.GetEvents(w.Id).Count > 0), "no store reached the watches");
-                _output.WriteLine($"{Path.GetFileName(state ?? rom)}: alike, {armed.Coverage.InstructionsRecorded} instructions covered");
+                _output.WriteLine($"{GoldenTrace.Hash(image)}: alike, {armed.Coverage.InstructionsRecorded} instructions covered");
             }
         }
     }

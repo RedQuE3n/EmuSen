@@ -51,18 +51,6 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0, empty.Size);
         }
 
-        // Venus's arrays used to drop a write past the end and wrap a read there; both wrap now, as on every other core.
-        [Fact]
-        public void A_venus_write_past_the_end_of_an_array_space_wraps_as_its_read_does()
-        {
-            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = (IDebugTarget)EmuSen.Cores.CoreFactory.Bundle(core).DebugTarget;
-            IDebugMemorySpace wram = target.GetMemorySpaces().First(s => s.Name == "WRAM");
-            wram.Write(wram.Size + 5, 0x5A);
-            Assert.Equal(0x5A, core.Bus!.Ram[5]);
-            Assert.Equal(0x5A, wram.Read(-wram.Size + 5));
-        }
-
         // One map of physical addresses for both N64 engines.
         [Fact]
         public void Resolve_names_the_same_memory_for_either_engine()

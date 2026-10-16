@@ -39,22 +39,6 @@ status 0
 action none
 end
 
-case on venus
-target venus
-covers 1
-$ summary
-out 431
-[STATE] CPU  PC=00:ED3E  A=0001 X=0000 Y=0000 S=01F3 D=0000 DB=00  P=34 [nv-BdIzc]  E=1
-[STATE] PPU  BGMODE=00  INIDISP=00  TM=00  TS=00
-[STATE] PPU  CGWSEL=00  CGADSUB=00  MOSAIC=00 (anchor=0)  SETINI=00
-[STATE] PPU  BG1 SC=00 X=0 Y=0   BG2 SC=00 X=0 Y=0
-[STATE] PPU  BG3 SC=00 X=0 Y=0   BG4 SC=00 X=0 Y=0
-[STATE] PPU  BG12NBA=00  BG34NBA=00  OBSEL=00
-[STATE] PPU  M7SEL=00  M7A=0 M7B=0 M7C=0 M7D=0  M7X=0 M7Y=0  M7HOFS=0 M7VOFS=0
-status 0
-action none
-end
-
 case on venusrt
 target venusrt
 covers 1
@@ -62,21 +46,6 @@ $ summary
 out 123
 VenusRT (Rust) 0.1.0, snes, frame 2
 [STATE] CPU  PC=00:ED30  A=0001 X=0000 Y=0000 S=01F3 D=0000 DB=00  P=34 [nv-BdIzc]  E=1
-status 0
-action none
-end
-
-case on moon
-target moon
-covers 1
-$ summary
-out 282
-NES (Moon) - frame 2, scanline 0
-Mapper 0 (NROM), 1x16K PRG, 1x8K CHR ROM, mirroring Horizontal
-CPU  A=00 X=00 Y=00 S=FA PC=B454 P=24
-PPU  CTRL=00 MASK=00 STATUS=00 v=0000 t=0000 x=0
-     rendering=off vblank=0 sprite0=0
-APU  no synthesis modelled - registers and the frame IRQ only
 status 0
 action none
 end

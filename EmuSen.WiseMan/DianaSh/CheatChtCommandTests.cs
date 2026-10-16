@@ -1,6 +1,7 @@
+using EmuSen.Cores;
+using EmuSen.Crystal.Debugger;
 using System.IO;
 using System.Linq;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
@@ -15,13 +16,15 @@ namespace EmuSen.WiseMan.DianaSh
     // real core, with the real SNES codecs wired up - see `man cheat`.
     public class CheatChtCommandTests
     {
-        private static DianaShInterpreter NewShell(out SnesDebugTarget target)
+        private static DianaShInterpreter NewShell(out IDebugTarget target) => NewShell(out target, out _);
+
+        private static DianaShInterpreter NewShell(out IDebugTarget target, out ICore core)
         {
-            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
+            target = SyntheticRom.TargetOf(core);
             return DianaShInterpreter.CreateDefault(target, null,
-                EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.ActionReplay(),
-                EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.GameGenie());
+                EmuSen.Crystal.Systems.Snes.SnesSystem.ProActionReplay(),
+                EmuSen.Crystal.Systems.Snes.SnesSystem.GameGenie());
         }
 
         // Written inside the sandbox, since that is all `cheat import` will resolve.
@@ -49,7 +52,7 @@ namespace EmuSen.WiseMan.DianaSh
                 cheat1_enable = false
                 """);
 
-            DianaShInterpreter shell = NewShell(out SnesDebugTarget target);
+            DianaShInterpreter shell = NewShell(out IDebugTarget target);
 
             string imported = shell.Submit($"cheat import '{path}'").Output;
             Assert.Contains("Imported 2 cheat(s)", imported);
@@ -82,24 +85,24 @@ namespace EmuSen.WiseMan.DianaSh
                 cheat0_enable = false
                 """);
 
-            DianaShInterpreter shell = NewShell(out SnesDebugTarget target);
+            DianaShInterpreter shell = NewShell(out IDebugTarget target, out ICore core);
             shell.Submit($"cheat import '{path}'");
 
             var space = target.GetMemorySpaces().Single(s => s.Name == "CpuBus");
 
             // Disabled on import, so a frame changes nothing.
-            target.OnFrame(1);
+            core.RunFrame();
             Assert.NotEqual(0x63, space.Read(0x7E0019));
 
             shell.Submit($"cheat enable {target.Cheats.GetCheats().Single().Id}");
-            target.OnFrame(2);
+            core.RunFrame();
             Assert.Equal(0x63, space.Read(0x7E0019));
         }
 
         [Fact]
         public void Export_then_import_returns_the_same_cheats()
         {
-            DianaShInterpreter shell = NewShell(out SnesDebugTarget target);
+            DianaShInterpreter shell = NewShell(out IDebugTarget target);
             shell.Submit("cheat poke CpuBus 7E0019 63 99 lives");
             shell.Submit("cheat poke CpuBus 7E0DBF 04 coins");
 

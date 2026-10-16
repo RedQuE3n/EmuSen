@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text.Json.Nodes;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 
@@ -159,8 +158,9 @@ namespace EmuSen.WiseMan.Cores
             Assert.Contains("refused as altered", found.Report);
         }
 
+        // The SNES has one engine since 2026-10-16: another engine claiming it gets no row, and without VenusRT the factory says what is missing - see VenusRT_Native.md §68.5.
         [Fact]
-        public void A_v1_engine_of_a_known_system_joins_its_row_and_the_factory_honours_or_refuses_it_by_name()
+        public void A_v1_engine_of_a_sole_engine_console_gets_no_row_and_the_factory_names_the_missing_engine()
         {
             CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "nothing") });
             Assert.Null(CoreCatalog.EngineFor("SNES"));
@@ -168,17 +168,11 @@ namespace EmuSen.WiseMan.Cores
             Place(built, Path.Combine(_root, "snes"), ClaimSnes);
             CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "snes") });
 
-            var row = CoreCatalog.EngineFor("SNES")!;
-            Assert.Equal(new[] { CoreCatalog.VenusEngine, "V1TestCore (test)" }, row.Choices);
-            Assert.Equal(CoreCatalog.VenusEngine, row.Default);
-            Assert.Equal(new[] { CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine }, CoreCatalog.EngineFor("NES")!.Choices);
-            Assert.IsType<VenusCore>(CoreFactory.Create("game.sfc"));
-
-            ICore core = CoreFactory.Create("game.sfc", engine: "V1TestCore (test)");
-            Assert.IsType<VenusCore>(core);
-            string notice = CoreFactory.EngineNotice("game.sfc", "V1TestCore (test)", core)!;
-            Assert.StartsWith("V1TestCore (test) is not available (", notice);
-            Assert.EndsWith("refused as altered); Venus (C#) is running.", notice);
+            Assert.Null(CoreCatalog.EngineFor("SNES"));
+            Assert.Null(CoreCatalog.EngineFor("NES"));
+            const string missing = "This build has no SNES core: VenusRT (Rust) is missing (no sidecar for it was found beside the program).";
+            Assert.Equal(missing, Assert.Throws<NotSupportedException>(() => CoreFactory.Create("game.sfc")).Message);
+            Assert.Equal(missing, Assert.Throws<NotSupportedException>(() => CoreFactory.Create("game.sfc", engine: "V1TestCore (test)")).Message);
         }
 
         [Fact]

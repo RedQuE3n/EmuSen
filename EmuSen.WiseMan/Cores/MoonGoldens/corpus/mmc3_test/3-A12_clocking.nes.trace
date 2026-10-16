@@ -1,0 +1,13 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/mmc3_test/3-A12_clocking.nes
+rom DC6779B3D64E27B8D3B2B6DEE7A1B528B9B6401AC0E6A9A1D5AB928DCD8AD6BB
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+25 5CA2642991E2DF02
+resets 0
+text 3-A12_clocking\n\nPassed
+verdict Passed 25

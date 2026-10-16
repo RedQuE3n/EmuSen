@@ -1,0 +1,15 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/sprdma_and_dmc_dma/sprdma_and_dmc_dma.nes
+rom DB3199BC1B0BDC07A316B3AB999D8FD8BB361456D2154E364C132CB06A26A10F
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 EADE7C4F7BC9A263
+120 4074FF2EAE9EEECB
+140 933B441B8BDDA693
+resets 0
+text T+ Clocks (decimal)\n00 527\n01 528\n02 527\n03 528\n04 527\n05 526\n06 525\n07 526\n08 525\n09 526\n0A 525\n0B 526\n0C 525\n0D 526\n0E 525\n0F 526\n\nSPRDMA and DMC DMA\n\nPassed
+verdict Passed 140

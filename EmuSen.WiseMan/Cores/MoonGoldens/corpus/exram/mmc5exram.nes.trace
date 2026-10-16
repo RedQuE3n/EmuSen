@@ -1,0 +1,10 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/exram/mmc5exram.nes
+rom 8297CFB986A8393FFBD47549B120D16FAC53C1BF96DA4F26CEB9FF30ECCA50D2
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+verdict Unsupported NotSupportedException

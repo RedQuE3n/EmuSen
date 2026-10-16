@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.WiseMan.Fixtures;
@@ -15,27 +14,6 @@ namespace EmuSen.WiseMan.DianaSh
             public List<string> Calls { get; } = new();
             public void Arm(int instructionCount) => Calls.Add($"arm {instructionCount}");
             public void Disarm() => Calls.Add("disarm");
-        }
-
-        [Fact]
-        public void Venus_s_switch_armed_with_no_instructions_traces_without_end()
-        {
-            bool master = DebugLogging.MasterEnabled;
-            int countdown = EmuSen.Debug.DebugSettings.CpuTraceCountdown;
-            try
-            {
-                DebugLogging.MasterEnabled = true;
-                new VenusCpuTraceSwitch().Arm(0);
-                // The CPU counts down only from above 0 and turns the trace off when it reaches 0, so this one never stops.
-                Assert.True(EmuSen.Debug.DebugSettings.CpuVerboseLogging);
-                Assert.Equal(0, EmuSen.Debug.DebugSettings.CpuTraceCountdown);
-            }
-            finally
-            {
-                EmuSen.Debug.DebugSettings.CpuVerboseLogging = false;
-                EmuSen.Debug.DebugSettings.CpuTraceCountdown = countdown;
-                DebugLogging.MasterEnabled = master;
-            }
         }
 
         [Theory]

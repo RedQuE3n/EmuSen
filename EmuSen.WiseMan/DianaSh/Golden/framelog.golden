@@ -115,8 +115,8 @@ status 1
 action none
 end
 
-case recording on venus
-target venus
+case recording on venusrt
+target venusrt
 covers 1-2,4
 $ framelog add WRAM 0
 out 38
@@ -130,8 +130,8 @@ status 0
 action none
 end
 
-case recording on moon
-target moon
+case recording on moonrt
+target moonrt
 covers 1-2,4
 $ framelog add RAM 0
 out 37

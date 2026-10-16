@@ -114,31 +114,6 @@ status 0
 action none
 end
 
-case on venus
-target venus
-covers 1
-$ regs cpu
-out 239
-Ricoh 5A22 (65816) main CPU registers:
-  A         = 0x0001
-  X         = 0x0000
-  Y         = 0x0000
-  S         = 0x01F3
-  D         = 0x0000
-  PB        = 0x00
-  PC        = 0xED3E
-  DB        = 0x00
-  P         = 0x34
-  E         = 0x1
-status 0
-action none
-$ setreg NOPE 0
-out 77
-cpu has no register named 'NOPE'. Available: A, X, Y, S, D, PB, PC, DB, P, E.
-status 1
-action none
-end
-
 case on venusrt
 target venusrt
 covers 1
@@ -160,21 +135,6 @@ action none
 $ setreg NOPE 0
 out 77
 cpu has no register named 'NOPE'. Available: A, X, Y, S, D, PB, PC, DB, P, E.
-status 1
-action none
-end
-
-case on moon
-target moon
-covers 1
-$ regs cpu
-out 38
-cpu reports no registers on this core.
-status 0
-action none
-$ setreg NOPE 0
-out 52
-cpu has no register named 'NOPE'. Available: (none).
 status 1
 action none
 end

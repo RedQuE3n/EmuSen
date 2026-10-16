@@ -1,6 +1,5 @@
+using EmuSen.Cores;
 using System.Linq;
-using EmuSen.Cores.Nintendo.Venus;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.Crystal.Debugger;
@@ -18,20 +17,20 @@ namespace EmuSen.WiseMan.DianaSh
         private const int AfterCall = 0x008008;
         private const int Subroutine = 0x008010;
 
-        private static (VenusCore Core, SnesDebugTarget Target) BuildCallingRom()
+        private static (ICore Core, IDebugTarget Target) BuildCallingRom()
         {
             byte[] rom = SyntheticRom.Build(
                 (0x05, new byte[] { 0x20, 0x10, 0x80 }),          // JSR $8010
                 (0x08, new byte[] { 0x4C, 0x08, 0x80 }),          // JMP $8008 (spin)
                 (0x10, new byte[] { 0xEA, 0xEA, 0x60 }));         // NOP NOP RTS
             var core = SyntheticRom.LoadCore(rom);
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            var target = SyntheticRom.TargetOf(core);
             return (core, target);
         }
 
         // Runs frames until the core halts, so a test never spins forever on
         // a breakpoint that turns out never to fire.
-        private static bool RunUntilHalted(VenusCore core, int maxFrames = 8)
+        private static bool RunUntilHalted(ICore core, int maxFrames = 8)
         {
             for (int i = 0; i < maxFrames; i++)
             {

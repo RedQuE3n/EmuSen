@@ -1,3 +1,4 @@
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -215,7 +216,7 @@ namespace EmuSen.WiseMan.Cores
             byte[]? mine = null;
             MercuryGolden.Run(run with { Frames = cached.Frame }, interval: (f, s) => { if (f == cached.Frame) mine = s; });
             if (mine is null || mine.Length != cached.State.Length) return $"; at frame {cached.Frame} the states differ in length";
-            MercuryStateLayout layout;
+            StateLayout layout;
             try { layout = MercuryLayouts.For(run.Rom(), cached.State); }
             catch (InvalidDataException e) { return $"; at frame {cached.Frame} the states differ, and {e.Message}"; }
             var fields = layout.Differences(cached.State, mine).Take(12).ToList();

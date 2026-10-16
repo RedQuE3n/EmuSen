@@ -1,5 +1,11 @@
 # Venus (SNES) — PPU (video)
 
+*Historical since 2026-10-16.* This page describes C# Venus, which was deleted from the source on 2026-10-16 at the
+tester's word (`VenusRT_Native.md` §68). Its content is kept as the record of that core. VenusRT, the SNES's only engine
+since, is a clean-room rewrite that was written without reading this page's algorithm sections (`VenusRT_Plan.md` §1.2),
+so nothing here describes VenusRT; the file, class and member names are C# Venus's, and the code it cites is in the
+repository's history and in the releases that carried it.
+
 Covers `Cores/Nintendo/Venus - SNES/Ppu/`: register state and dispatch (`Ppu.cs`, `Ppu.Registers.cs`, `Ppu.RegisterTable.cs`) and the scanline renderer (`Renderer.cs`, `Renderer.Backgrounds.cs`, `Renderer.Mode7.cs`, `Renderer.Scanline.cs`, `Renderer.Sprites.cs`, `Renderer.Debug.cs`). See `Man pages/Hardware/README.md` for what this doc set is.
 
 ---

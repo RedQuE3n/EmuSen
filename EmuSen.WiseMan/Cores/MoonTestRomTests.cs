@@ -1,10 +1,10 @@
-using EmuSen.Cores.Nintendo.Moon;
-using EmuSen.Cores.Nintendo.Moon.Validation;
+using EmuSen.Cores.Nintendo.MoonRT;
+using EmuSen.Pharaoh;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // The blargg-protocol harness, proved against ROMs this file builds - see Moon_TestRoms.md §4.
+    // The blargg-protocol harness on MoonRT, proved against ROMs this file builds - see Moon_TestRoms.md §4.
     public class MoonTestRomTests : IDisposable
     {
         private readonly List<string> _temporaryFiles = new();
@@ -81,39 +81,38 @@ namespace EmuSen.WiseMan.Cores
             var result = NesTestRomRunner.Run(Rom(SyntheticNesRom.Build(mapper: 5)));
 
             Assert.Equal(NesTestRomOutcome.Unsupported, result.Outcome);
-            Assert.Contains("5", result.Text);
+            Assert.Contains("mapper", result.Text);
         }
 
         [Fact]
         public void A_soft_reset_restarts_the_cpu_without_clearing_ram()
         {
-            var core = new MoonCore();
+            using var core = new MoonRtCore();
             core.LoadRom(Rom(SyntheticNesRom.Build()));
 
             core.RunFrame();
-            core.WriteSpace(MoonCore.SpaceRam, 0x0123, 0x5A);
-            core.WriteSpace(MoonCore.SpacePrgRam, 0x6100, 0xA5);
+            core.WriteSpace("RAM", 0x0123, 0x5A);
+            core.WriteSpace("PRGRAM", 0x6100, 0xA5);
 
             core.Reset();
 
-            Assert.Equal(0x5A, core.ReadSpace(MoonCore.SpaceRam, 0x0123));
-            Assert.Equal(0xA5, core.ReadSpace(MoonCore.SpacePrgRam, 0x6100));
-            Assert.Equal(0x8000, core.Cpu!.PC);
+            Assert.Equal(0x5A, core.ReadSpace("RAM", 0x0123));
+            Assert.Equal(0xA5, core.ReadSpace("PRGRAM", 0x6100));
+            Assert.Equal(0x8000, core.Layout!.Int(core.Machine.Save(), "Cpu.PC"));
         }
 
         // A hard reset is the power switch, and it does clear both.
         [Fact]
         public void A_hard_reset_clears_what_a_soft_one_keeps()
         {
-            var core = new MoonCore();
+            using var core = new MoonRtCore();
             string path = Rom(SyntheticNesRom.Build());
             core.LoadRom(path);
 
-            core.WriteSpace(MoonCore.SpaceRam, 0x0123, 0x5A);
+            core.WriteSpace("RAM", 0x0123, 0x5A);
             core.LoadRom(path);
 
-            Assert.Equal(0x00, core.ReadSpace(MoonCore.SpaceRam, 0x0123));
+            Assert.Equal(0x00, core.ReadSpace("RAM", 0x0123));
         }
-
     }
 }

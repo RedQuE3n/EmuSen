@@ -23,8 +23,8 @@ namespace EmuSen.WiseMan.Mistress
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(ActiveCheatsWindowTests).GetTypeInfo().Assembly);
 
-        private static ICheatCodeCodec Poke() => EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.ActionReplay();
-        private static ICheatCodeCodec Patch() => EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.GameGenie();
+        private static ICheatCodeCodec Poke() => EmuSen.Crystal.Systems.Snes.SnesSystem.ProActionReplay();
+        private static ICheatCodeCodec Patch() => EmuSen.Crystal.Systems.Snes.SnesSystem.GameGenie();
 
         private static ActiveCheatsWindow Open(CheatRegistry registry)
         {
@@ -202,8 +202,8 @@ namespace EmuSen.WiseMan.Mistress
         private static ActiveCheatsWindow OpenNes(CheatRegistry registry)
         {
             var window = new ActiveCheatsWindow(registry,
-                EmuSen.Cores.Nintendo.Moon.Cheats.MoonCheatCodecs.Raw(),
-                EmuSen.Cores.Nintendo.Moon.Cheats.MoonCheatCodecs.GameGenie(), console: "NES");
+                EmuSen.Crystal.Systems.Nes.NesSystem.Raw(),
+                EmuSen.Crystal.Systems.Nes.NesSystem.GameGenie(), console: "NES");
             window.Show();
             return window;
         }

@@ -184,47 +184,6 @@ status 0
 action none
 end
 
-case on venus
-target venus
-covers 1-2
-$ eval symbols
-out 185
-  a
-  x
-  y
-  s
-  sp
-  d
-  dp
-  pc
-  pb
-  pbr
-  db
-  dbr
-  p
-  e
-  flag.c
-  flag.z
-  flag.i
-  flag.d
-  flag.x
-  flag.m
-  flag.v
-  flag.n
-  frame
-  scanline
-  cycle
-  opaddr
-  stackdepth
-status 0
-action none
-$ eval 1+1
-out 17
-2  $2  %0000 0010
-status 0
-action none
-end
-
 case on venusrt
 target venusrt
 covers 1-2
@@ -254,67 +213,6 @@ out 157
   stackdepth
   X
   Y
-status 0
-action none
-$ eval 1+1
-out 17
-2  $2  %0000 0010
-status 0
-action none
-end
-
-case on moon
-target moon
-covers 1-2
-$ eval symbols
-out 364
-  $4000
-  $4001
-  $4002
-  $4003
-  $4004
-  $4005
-  $4006
-  $4007
-  $4008
-  $4009
-  $400A
-  $400B
-  $400C
-  $400D
-  $400E
-  $400F
-  $4010
-  $4011
-  $4012
-  $4013
-  A
-  Board:NROM
-  C
-  Cycles
-  D
-  frame
-  FrameCounter
-  FrameIRQ
-  I
-  N
-  OAMADDR
-  P
-  PC
-  PPUCTRL
-  PPUMASK
-  PPUSTATUS
-  S
-  Scanline
-  Sprite0Hit
-  SpriteOverflow
-  t
-  V
-  VBlank
-  w
-  X
-  Y
-  Z
 status 0
 action none
 $ eval 1+1

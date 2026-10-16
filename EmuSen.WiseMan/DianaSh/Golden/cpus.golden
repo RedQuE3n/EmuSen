@@ -54,21 +54,6 @@ status 0
 action none
 end
 
-case on venus
-target venus
-covers 1
-$ cpus
-out 337
-SNES debug processors:
-  cpu   PC=$00ED3E  Ricoh 5A22 (65816) main CPU
-        supports: bp, cov, bt, regs, setreg, disasm   code space: CpuBus
-  spc   PC=$00FFCF  Sony SPC700 sound CPU
-        supports: bp, cov, regs, setreg, disasm   code space: APURAM
-Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
-status 0
-action none
-end
-
 case on venusrt
 target venusrt
 covers 1
@@ -79,19 +64,6 @@ VenusRT debug processors:
         supports: bp, cov, bt, regs, disasm   code space: CpuBus
   spc   PC=$00FFD2  SPC
         supports: bp, cov, regs, disasm   code space: APURAM
-Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
-status 0
-action none
-end
-
-case on moon
-target moon
-covers 1
-$ cpus
-out 188
-NES debug processors:
-  cpu   PC=$00B454  2A03
-        supports: bp, cov, bt, disasm   code space: CPUBUS
 Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
 status 0
 action none
@@ -153,34 +125,34 @@ status 0
 action none
 end
 
-case on venus-sa1
-target venus-sa1
+case on venusrt-sa1
+target venusrt-sa1
 covers 1
 $ cpus
-out 465
-SNES debug processors:
-  cpu   PC=$00ED3E  Ricoh 5A22 (65816) main CPU
-        supports: bp, cov, bt, regs, setreg, disasm   code space: CpuBus
-  spc   PC=$00FFCF  Sony SPC700 sound CPU
-        supports: bp, cov, regs, setreg, disasm   code space: APURAM
-  sa1   PC=$000000  SA-1 (65816) cartridge coprocessor
-        supports: bp, cov, bt, regs, setreg, disasm   code space: SA1BUS
+out 367
+VenusRT debug processors:
+  cpu   PC=$00ED31  CPU
+        supports: bp, cov, bt, regs, disasm   code space: CpuBus
+  spc   PC=$00FFD2  SPC
+        supports: bp, cov, regs, disasm   code space: APURAM
+  sa1   PC=$000000  SA1
+        supports: bp, cov, regs, disasm   code space: SA1BUS
 Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
 status 0
 action none
 end
 
-case on venus-gsu
-target venus-gsu
+case on venusrt-gsu
+target venusrt-gsu
 covers 1
 $ cpus
-out 452
-SNES debug processors:
-  cpu   PC=$00EA88  Ricoh 5A22 (65816) main CPU
-        supports: bp, cov, bt, regs, setreg, disasm   code space: CpuBus
-  spc   PC=$00FFCF  Sony SPC700 sound CPU
-        supports: bp, cov, regs, setreg, disasm   code space: APURAM
-  gsu   PC=$000000  SuperFX GSU cartridge coprocessor
+out 367
+VenusRT debug processors:
+  cpu   PC=$00EA7B  CPU
+        supports: bp, cov, bt, regs, disasm   code space: CpuBus
+  spc   PC=$00FFD2  SPC
+        supports: bp, cov, regs, disasm   code space: APURAM
+  gsu   PC=$000000  GSU
         supports: bp, cov, regs, disasm   code space: GSUBUS
 Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
 status 0

@@ -155,7 +155,8 @@ The comparison below renamed the cores, dropped blank lines and braces, and comp
   `MainWindow.axaml.cs:1331`, `is EmuSen.Cores.Nintendo.Mars.MarsCore`. The reason is recorded (`Mars_Native.md`
   §6.6.3): the C# core's snapshot can deadlock with several workers. It is a property of an engine, found by its type.
 - **Venus's hotkeys.** Hotaru reaches Venus with `_core as VenusCore` (`GameWindow.axaml.cs:47`), for three
-  debug hotkeys. `EmuSen_Multicore.md` §5 records these as legitimate. Nothing here changes them.
+  debug hotkeys. `EmuSen_Multicore.md` §5 records these as legitimate. Nothing here changes them. *Removed with C# Venus
+  on 2026-10-16, with the factory's `venusFrameTimings` parameter (`VenusRT_Native.md` §68.5).*
 - **The factory.** `CoreFactory` takes a Venus-only parameter, `venusFrameTimings`, in `Load` and `Bundle`. It names
   the Rust engines in `Create` (`CoreFactory.cs:44`–`:45`), `EngineNotice` (`:68`–`:69`) and `Running` (`:74`), and has
   a type switch in `Bundle` (`:84`).
@@ -193,7 +194,11 @@ The comparison below renamed the cores, dropped blank lines and braces, and comp
   The ABI does not, because they have none.
   *Since 2026-10-16 Mars (C#) is deleted (`Mars_Native.md` §6.7): the N64 runs on MarsRT alone, its shim registered by
   hand. C# Mercury is deleted the same day (`Mercury_Native.md` §15): MercuryRT is the Game Boy's only engine, a port
-  with no mirror, for which `PortEngine`'s mirror became optional. The C# cores that remain are Venus and Moon.*
+  with no mirror, for which `PortEngine`'s mirror became optional. Moon (C#) is deleted the same day (`Moon_Native.md`
+  §9.5): MoonRT is the NES's only engine, its shim registered by hand as the other two. C# Venus is deleted the same
+  day too (`VenusRT_Native.md` §68): the SNES runs on VenusRT alone, through the generic v1 branch as before, now as
+  the console's one discovered engine (`CoreCatalog.SoleDiscoveredEngine`), so it has no Engine row and any engine name
+  a caller passes builds it. No C# core remains.*
 - **A stable ABI for third parties.** The libraries ship beside the assemblies that load them. The version check
   guards a mismatched prebuilt library, not an ecosystem.
   *Superseded 2026-10-01: a stable ABI for third parties is now a goal, decided that day; `EmuSen_CoreAPI.md` §4.8
@@ -474,7 +479,8 @@ of that one contract:
   (`MercuryMachine.cs:84`–`:91`, `Mercury_Native.md` §3.3). That is a console rule. It stays an extension,
   `mercuryrt_set_sample_rate`, and the core reports 44,100 through the common call.
 - **Venus follows a setting**, `AudioSettings.SampleRate` (`VenusCore.cs:377`). Venus is C# and has no native engine. A
-  future one would take the output rate as a setting key and report it here.
+  future one would take the output rate as a setting key and report it here. *C# Venus was deleted on 2026-10-16;
+  VenusRT reports the S-DSP's 32 kHz and the host resamples.*
 - **Mars reports the rate the game programmed into the DAC**: the video clock over the period, rounded to even, and
   44,100 until the game sets it (`ai.rs:67`, `:81`–`:83`). It changes during play.
 
@@ -720,6 +726,29 @@ the change removes the last instantiation of std's hasher (measured by `grep`; t
 **`set_stack` for MarsRT is an opportunity, not part of the move.** `Mars_Native.md` §6.5.6 lists "the stack in a
 plain frame" as not done. Honouring `DEBUG_STACK` would be one way to do it, and it would be a behaviour change with
 its own oracle. It is left out of the migration.
+
+#### 3.14.1 A port without a mirror (2026-10-16)
+
+Until its C# core was deleted, each port's shim (`PortEngine`) read the debugger's registers and views from a hidden C#
+core, the *mirror*, loaded from the Rust machine's state before each read, and its registries were the mirror's. With
+the C# core gone the mirror is optional: `PortEngine` keeps its own cheat, call-stack and coverage registries when a
+shim names no mirror, and the bridge feeds them exactly as it fed the mirror's. MercuryRT and MoonRT are the ports
+without one (`Mercury_Native.md` §15, `Moon_Native.md` §9.4).
+
+What replaces the mirror's fields is the state's own listing. Every port's state writer already records a layout, one
+line per field, `offset length type path`, which the core ABI v1 publishes through `state_layout` (`EmuSen_CoreAPI.md`
+§6). `StateLayout` (`EmuSen/Cores/Native/StateLayout.cs`) parses that listing once per loaded game, and a shim reads any
+scalar, array element or byte run of a saved state by its path, `Cpu.PC` or `Apu.Pulse1.TimerPeriod`. The paths are
+the core's own names, so this couples the shim to its own crate and to nothing else, and both sit in one component.
+The cost is one state save per debugger refresh: 25 KB for an NROM cartridge, 279 KB for one whose state carries
+256 KB of CHR (measured 2026-10-16 on the goldens' kept states), at the debugger's polling rate; nothing on the frame
+path changes.
+
+The listing is the right source because it is already proven: stage 1 of each port held it to the C# reflection walk
+of the same objects, field for field, and the bisection of every golden failure names fields through it. Values the
+C# debugger *derived* from fields, such as a pulse channel's silencing by its sweep target or a board's current
+nametable arrangement, are derived in the shim from the same fields by the same rules, and are written down beside the
+board table that owns them.
 
 ### 3.15 Extension exports
 

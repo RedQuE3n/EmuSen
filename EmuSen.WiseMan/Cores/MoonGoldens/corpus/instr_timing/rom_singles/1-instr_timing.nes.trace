@@ -1,0 +1,29 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/instr_timing/rom_singles/1-instr_timing.nes
+rom E260068839FE3D0402376E97E4EE15F5790EE77C701FD0700BBA057527910222
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 ACEF33B462DBEDF1
+120 53CE8085C43E26F4
+180 71888A83852C8A6B
+240 FA3D8E573585406E
+300 8F5EDA71B8A317B4
+360 40BC42CFF4628173
+420 215F60CAB29B3968
+480 B15C1CA3B56DC623
+540 9EB6BBE5E095296D
+600 BD3A45DE93A0DE3C
+660 7A63579B72501F2A
+720 6D7454E4D6FA6D5D
+780 58E1ED578E085BFA
+840 1FB635E061E04E43
+900 3935F9BCC5865E12
+960 8B1161D6F67FDE0F
+1012 77A04B4BAEE6C9DE
+resets 0
+text Instruction timing test\n\nTakes about 25 seconds. Doesn't time the 8 branches and 12 illegal instructions.\n\nOfficial instructions...\n\nNOPs and alternate SBC...\n\nUnofficial instructions...\n\n1-instr_timing\n\nPassed
+verdict Passed 1012

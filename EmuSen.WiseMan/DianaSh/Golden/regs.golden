@@ -84,105 +84,6 @@ status 1
 action none
 end
 
-case on venus
-target venus
-covers 1-2
-$ regs
-out 1374
-SNES CPU registers:
-  A    = 0x0001
-  X    = 0x0000
-  Y    = 0x0000
-  S    = 0x01F3
-  D    = 0x0000
-  PB   = 0x00
-  PC   = 0xED3E
-  DB   = 0x00
-  P    = 0x34
-  E    = 0x1
-Video registers:
-  BGMODE   = 0x00
-  INIDISP  = 0x00
-  TM       = 0x00
-  TS       = 0x00
-  OBSEL    = 0x00
-  CGWSEL   = 0x00
-  CGADSUB  = 0x00
-  SETINI   = 0x00
-  MOSAIC   = 0x00
-  FixedColorR = 0x00
-  FixedColorG = 0x00
-  FixedColorB = 0x00
-  BG1ScrollX = 0x00
-  BG1ScrollY = 0x00
-  BG2ScrollX = 0x00
-  BG2ScrollY = 0x00
-  BG3ScrollX = 0x00
-  BG3ScrollY = 0x00
-  BG4ScrollX = 0x00
-  BG4ScrollY = 0x00
-  BG1SC    = 0x00
-  BG2SC    = 0x00
-  BG3SC    = 0x00
-  BG4SC    = 0x00
-  Bg12Nba  = 0x00
-  Bg34Nba  = 0x00
-  W12Sel   = 0x00
-  W34Sel   = 0x00
-  WObjSel  = 0x00
-  Wh0      = 0x00
-  Wh1      = 0x00
-  Wh2      = 0x00
-  Wh3      = 0x00
-APU registers:
-  A         = 0x00
-  X         = 0x00
-  Y         = 0x00
-  SP        = 0xEF
-  PC        = 0xFFCF
-  PSW       = 0x00
-  InPort0   = 0x00
-  InPort1   = 0x00
-  InPort2   = 0x00
-  InPort3   = 0x00
-  OutPort0  = 0xAA
-  OutPort1  = 0xBB
-  OutPort2  = 0x00
-  OutPort3  = 0x00
-  DSP_MVOLL = 0x00
-  DSP_MVOLR = 0x00
-  DSP_EVOLL = 0x00
-  DSP_EVOLR = 0x00
-  DSP_EFB   = 0x00
-  DSP_KON   = 0x00
-  DSP_KOFF  = 0x00
-  DSP_ENDX  = 0x00
-  DSP_EON   = 0x00
-  DSP_NON   = 0x00
-  DSP_PMON  = 0x00
-  DSP_DIR   = 0x00
-  DSP_FLG   = 0xE0
-  DSP_ESA   = 0x00
-  DSP_EDL   = 0x00
-status 0
-action none
-$ regs cpu
-out 239
-Ricoh 5A22 (65816) main CPU registers:
-  A         = 0x0001
-  X         = 0x0000
-  Y         = 0x0000
-  S         = 0x01F3
-  D         = 0x0000
-  PB        = 0x00
-  PC        = 0xED3E
-  DB        = 0x00
-  P         = 0x34
-  E         = 0x1
-status 0
-action none
-end
-
 case on venusrt
 target venusrt
 covers 1-2
@@ -215,71 +116,6 @@ CPU registers:
   DB        = 0x00
   P         = 0x34
   E         = 0x1
-status 0
-action none
-end
-
-case on moon
-target moon
-covers 1-2
-$ regs
-out 909
-NES CPU registers:
-  A    = 0x00
-  X    = 0x00
-  Y    = 0x00
-  S    = 0xFA
-  PC   = 0xB454
-  P    = 0x24
-  N    = 0x0
-  V    = 0x0
-  D    = 0x0
-  I    = 0x1
-  Z    = 0x0
-  C    = 0x0
-  Cycles = 0x000000000000E8AB
-Video registers:
-  PPUCTRL  = 0x00
-  PPUMASK  = 0x00
-  PPUSTATUS = 0x00
-  OAMADDR  = 0x00
-  v        = 0x00
-  t        = 0x00
-  x        = 0x00
-  w        = 0x00
-  Scanline = 0x00
-  VBlank   = 0x00
-  Sprite0Hit = 0x00
-  SpriteOverflow = 0x00
-APU registers:
-  $4000     = 0x00
-  $4001     = 0x00
-  $4002     = 0x00
-  $4003     = 0x00
-  $4004     = 0x00
-  $4005     = 0x00
-  $4006     = 0x00
-  $4007     = 0x00
-  $4008     = 0x00
-  $4009     = 0x00
-  $400A     = 0x00
-  $400B     = 0x00
-  $400C     = 0x00
-  $400D     = 0x00
-  $400E     = 0x00
-  $400F     = 0x00
-  $4010     = 0x00
-  $4011     = 0x00
-  $4012     = 0x00
-  $4013     = 0x00
-  FrameCounter = 0x00
-  FrameIRQ  = 0x1
-  Board:NROM = 0x00
-status 0
-action none
-$ regs cpu
-out 38
-cpu reports no registers on this core.
 status 0
 action none
 end
@@ -654,114 +490,46 @@ status 0
 action none
 end
 
-case on venus-sa1
-target venus-sa1
+case on venusrt-sa1
+target venusrt-sa1
 covers 1-2
 $ regs
-out 1723
-SNES CPU registers:
+out 414
+VenusRT CPU registers:
   A    = 0x0000
   X    = 0x0000
   Y    = 0x0000
   S    = 0x01F3
   D    = 0x0000
   PB   = 0x00
-  PC   = 0xED3E
+  PC   = 0xED31
   DB   = 0x00
   P    = 0x36
   E    = 0x1
 Video registers:
-  BGMODE   = 0x00
-  INIDISP  = 0x00
-  TM       = 0x00
-  TS       = 0x00
-  OBSEL    = 0x00
-  CGWSEL   = 0x00
-  CGADSUB  = 0x00
-  SETINI   = 0x00
-  MOSAIC   = 0x00
-  FixedColorR = 0x00
-  FixedColorG = 0x00
-  FixedColorB = 0x00
-  BG1ScrollX = 0x00
-  BG1ScrollY = 0x00
-  BG2ScrollX = 0x00
-  BG2ScrollY = 0x00
-  BG3ScrollX = 0x00
-  BG3ScrollY = 0x00
-  BG4ScrollX = 0x00
-  BG4ScrollY = 0x00
-  BG1SC    = 0x00
-  BG2SC    = 0x00
-  BG3SC    = 0x00
-  BG4SC    = 0x00
-  Bg12Nba  = 0x00
-  Bg34Nba  = 0x00
-  W12Sel   = 0x00
-  W34Sel   = 0x00
-  WObjSel  = 0x00
-  Wh0      = 0x00
-  Wh1      = 0x00
-  Wh2      = 0x00
-  Wh3      = 0x00
-APU registers:
-  A         = 0x00
-  X         = 0x00
-  Y         = 0x00
-  SP        = 0xEF
-  PC        = 0xFFCF
-  PSW       = 0x00
-  InPort0   = 0x00
-  InPort1   = 0x00
-  InPort2   = 0x00
-  InPort3   = 0x00
-  OutPort0  = 0xAA
-  OutPort1  = 0xBB
-  OutPort2  = 0x00
-  OutPort3  = 0x00
-  DSP_MVOLL = 0x00
-  DSP_MVOLR = 0x00
-  DSP_EVOLL = 0x00
-  DSP_EVOLR = 0x00
-  DSP_EFB   = 0x00
-  DSP_KON   = 0x00
-  DSP_KOFF  = 0x00
-  DSP_ENDX  = 0x00
-  DSP_EON   = 0x00
-  DSP_NON   = 0x00
-  DSP_PMON  = 0x00
-  DSP_DIR   = 0x00
-  DSP_FLG   = 0xE0
-  DSP_ESA   = 0x00
-  DSP_EDL   = 0x00
 Coprocessor registers:
-  CCNT      = 0x20
-  SCNT      = 0x00
-  SIE       = 0x00
-  CIE       = 0x00
-  BMAP      = 0x00
-  Halted    = 0x1
-  PB        = 0x00
-  PC        = 0x0000
   A         = 0x0000
   X         = 0x0000
   Y         = 0x0000
   S         = 0x01FF
-  P         = 0x34
-  ClocksRun = 0x0000000000000000
-  ClocksOffered = 0x00000000000AE7FC
+  D         = 0x0000
+  PB        = 0x00
+  PC        = 0x0000
+  DB        = 0x00
+  P         = 0x00
+  E         = 0x0
 status 0
 action none
 $ regs cpu
-out 239
-Ricoh 5A22 (65816) main CPU registers:
+out 215
+CPU registers:
   A         = 0x0000
   X         = 0x0000
   Y         = 0x0000
   S         = 0x01F3
   D         = 0x0000
   PB        = 0x00
-  PC        = 0xED3E
+  PC        = 0xED31
   DB        = 0x00
   P         = 0x36
   E         = 0x1
@@ -769,109 +537,24 @@ status 0
 action none
 end
 
-case on venus-gsu
-target venus-gsu
+case on venusrt-gsu
+target venusrt-gsu
 covers 1-2
 $ regs
-out 2201
-SNES CPU registers:
+out 762
+VenusRT CPU registers:
   A    = 0x0001
   X    = 0x0000
   Y    = 0x0000
   S    = 0x01F7
   D    = 0x0000
   PB   = 0x00
-  PC   = 0xEA88
+  PC   = 0xEA7B
   DB   = 0x00
   P    = 0x34
   E    = 0x1
 Video registers:
-  BGMODE   = 0x00
-  INIDISP  = 0x00
-  TM       = 0x00
-  TS       = 0x00
-  OBSEL    = 0x00
-  CGWSEL   = 0x00
-  CGADSUB  = 0x00
-  SETINI   = 0x00
-  MOSAIC   = 0x00
-  FixedColorR = 0x00
-  FixedColorG = 0x00
-  FixedColorB = 0x00
-  BG1ScrollX = 0x00
-  BG1ScrollY = 0x00
-  BG2ScrollX = 0x00
-  BG2ScrollY = 0x00
-  BG3ScrollX = 0x00
-  BG3ScrollY = 0x00
-  BG4ScrollX = 0x00
-  BG4ScrollY = 0x00
-  BG1SC    = 0x00
-  BG2SC    = 0x00
-  BG3SC    = 0x00
-  BG4SC    = 0x00
-  Bg12Nba  = 0x00
-  Bg34Nba  = 0x00
-  W12Sel   = 0x00
-  W34Sel   = 0x00
-  WObjSel  = 0x00
-  Wh0      = 0x00
-  Wh1      = 0x00
-  Wh2      = 0x00
-  Wh3      = 0x00
-APU registers:
-  A         = 0x00
-  X         = 0x00
-  Y         = 0x00
-  SP        = 0xEF
-  PC        = 0xFFCF
-  PSW       = 0x00
-  InPort0   = 0x00
-  InPort1   = 0x00
-  InPort2   = 0x00
-  InPort3   = 0x00
-  OutPort0  = 0xAA
-  OutPort1  = 0xBB
-  OutPort2  = 0x00
-  OutPort3  = 0x00
-  DSP_MVOLL = 0x00
-  DSP_MVOLR = 0x00
-  DSP_EVOLL = 0x00
-  DSP_EVOLR = 0x00
-  DSP_EFB   = 0x00
-  DSP_KON   = 0x00
-  DSP_KOFF  = 0x00
-  DSP_ENDX  = 0x00
-  DSP_EON   = 0x00
-  DSP_NON   = 0x00
-  DSP_PMON  = 0x00
-  DSP_DIR   = 0x00
-  DSP_FLG   = 0xE0
-  DSP_ESA   = 0x00
-  DSP_EDL   = 0x00
 Coprocessor registers:
-  SFR       = 0x0000
-  PBR       = 0x00
-  CBR       = 0x0000
-  SCBR      = 0x00
-  SCMR      = 0x00
-  ROMBR     = 0x00
-  RAMBR     = 0x00
-  POR       = 0x00
-  COLR      = 0x00
-  PLOTS     = 0x00000000
-  PLOTSOBJ  = 0x00000000
-  PLOTSCMR  = 0x00
-  PLOTPOR   = 0x00
-  PLOTSCBR  = 0x00
-  SCPURAMHOT = 0x00000000
-  PLOTMAXX  = 0x0000
-  PLOTMAXY  = 0x0000
-  PLOTXHIGH = 0x00000000
-  PLOTYODD  = 0x00000000
-  PLOTADRLO = 0x7FFFFFFF
-  PLOTADRHI = 0x00000000
-  Running   = 0x0
   R0        = 0x0000
   R1        = 0x0000
   R2        = 0x0000
@@ -888,18 +571,29 @@ Coprocessor registers:
   R13       = 0x0000
   R14       = 0x0000
   R15       = 0x0000
+  SFR       = 0x0000
+  PBR       = 0x00
+  ROMBR     = 0x00
+  RAMBR     = 0x00
+  CBR       = 0x0000
+  SCBR      = 0x00
+  SCMR      = 0x00
+  COLR      = 0x00
+  POR       = 0x00
+  CFGR      = 0x00
+  CLSR      = 0x00
 status 0
 action none
 $ regs cpu
-out 239
-Ricoh 5A22 (65816) main CPU registers:
+out 215
+CPU registers:
   A         = 0x0001
   X         = 0x0000
   Y         = 0x0000
   S         = 0x01F7
   D         = 0x0000
   PB        = 0x00
-  PC        = 0xEA88
+  PC        = 0xEA7B
   DB        = 0x00
   P         = 0x34
   E         = 0x1

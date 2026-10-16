@@ -1,6 +1,6 @@
 using System;
 using System.Globalization;
-using EmuSen.Cores.Nintendo.Moon.Cheats;
+using EmuSen.Crystal.Systems.Nes;
 
 namespace EmuSen.WiseMan.Cores
 {

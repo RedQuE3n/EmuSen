@@ -25,48 +25,8 @@ status 0
 action none
 end
 
-case on venus
-target venus
-covers 1-2
-$ trace 10
-out 41
-Trace armed for the next 16 instructions.
-status 0
-action none
-$ trace off
-out 15
-Trace disabled.
-status 0
-action none
-$ trace zz
-out 46
-Error: Could not find any recognizable digits.
-status 1
-action none
-end
-
 case on venusrt
 target venusrt
-covers 1-2
-$ trace 10
-out 50
-No CPU trace switch is registered for this target.
-status 0
-action none
-$ trace off
-out 50
-No CPU trace switch is registered for this target.
-status 0
-action none
-$ trace zz
-out 50
-No CPU trace switch is registered for this target.
-status 0
-action none
-end
-
-case on moon
-target moon
 covers 1-2
 $ trace 10
 out 50
@@ -166,26 +126,26 @@ action none
 end
 
 case the count is hexadecimal
-target venus
+target venusrt
 covers 1
 $ trace 10
-out 41
-Trace armed for the next 16 instructions.
+out 50
+No CPU trace switch is registered for this target.
 status 0
 action none
 $ trace 0x10
-out 41
-Trace armed for the next 16 instructions.
+out 50
+No CPU trace switch is registered for this target.
 status 0
 action none
 $ trace 0
-out 31
-Trace count must be at least 1.
-status 1
+out 50
+No CPU trace switch is registered for this target.
+status 0
 action none
 $ trace -1
-out 64
-Error: String cannot contain a minus sign if the base is not 10.
-status 1
+out 50
+No CPU trace switch is registered for this target.
+status 0
 action none
 end

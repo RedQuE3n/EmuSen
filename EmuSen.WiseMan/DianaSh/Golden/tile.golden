@@ -88,8 +88,8 @@ status 1
 action none
 end
 
-case on venus
-target venus
+case on venusrt
+target venusrt
 covers 1
 $ tile VRAM 0 2
 out 173
@@ -105,22 +105,22 @@ VRAM @ 0x0, 2bpp tile:
 status 0
 action none
 $ spaces
-out 283
-SNES memory spaces:
+out 286
+VenusRT memory spaces:
   CpuBus     16777216 bytes  R/W
-  IO            65536 bytes  R/W
+  IO             1024 bytes  R/O
   WRAM         131072 bytes  R/W
   VRAM          65536 bytes  R/W
   CGRAM           512 bytes  R/W
   OAM             544 bytes  R/W
-  SRAM         131072 bytes  R/W
+  SRAM              0 bytes  R/W
   APURAM        65536 bytes  R/W
 status 0
 action none
 end
 
-case on moon
-target moon
+case on moonrt
+target moonrt
 covers 1
 $ tile PPU 0 2
 out 100

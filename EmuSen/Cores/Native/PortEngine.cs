@@ -112,12 +112,13 @@ namespace EmuSen.Cores.Native
             base.Cheats = MirrorCheats;
         }
 
-        // The C# core the debugger reads, refreshed from the machine's state, for a port that keeps one; its registries are this engine's.
+        // A C# core the debugger reads, refreshed from the machine's state, whose registries are this engine's; without one the engine keeps its own - see EmuSen_NativeCores.md §3.14.
         protected virtual ICore? MirrorCore => null;
         protected virtual bool MirrorLoaded => false;
-        protected abstract CheatRegistry MirrorCheats { get; set; }
-        protected abstract CallStackRegistry MirrorCallStack { get; }
-        protected abstract CoverageRegistry MirrorCoverage { get; }
+        private CheatRegistry _ownCheats = new();
+        protected virtual CheatRegistry MirrorCheats { get => _ownCheats; set => _ownCheats = value; }
+        protected virtual CallStackRegistry MirrorCallStack { get; } = new();
+        protected virtual CoverageRegistry MirrorCoverage { get; } = new();
 
         // The C# core's space names, numbered as the core's ABI numbers them, and the one whose reads are the CPU's.
         protected abstract IReadOnlyList<string> SpaceNames { get; }

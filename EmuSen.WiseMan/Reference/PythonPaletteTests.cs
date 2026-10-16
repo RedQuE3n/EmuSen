@@ -34,7 +34,7 @@ namespace EmuSen.WiseMan.Reference
         [Fact]
         public void The_python_palette_is_the_cores_palette()
         {
-            Assert.Equal(EmuSen.Cores.Nintendo.Moon.Video.Ppu.NesPalette, PythonPalette());
+            Assert.Equal(EmuSen.Crystal.Systems.Nes.NesDebugViews.MasterPalette, PythonPalette());
         }
 
         [Fact]

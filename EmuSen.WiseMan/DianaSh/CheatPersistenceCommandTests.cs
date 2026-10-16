@@ -1,7 +1,8 @@
+using EmuSen.Cores;
+using EmuSen.Crystal.Debugger;
 using System;
 using System.IO;
 using System.Linq;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.Crystal.Cheats;
@@ -16,7 +17,7 @@ namespace EmuSen.WiseMan.DianaSh
     public class CheatPersistenceCommandTests : IDisposable
     {
         private readonly string _dir;
-        private readonly SnesDebugTarget _target = BuildTarget();
+        private readonly IDebugTarget _target = BuildTarget();
         private readonly CheatCommand _command = new();
 
         public CheatPersistenceCommandTests()
@@ -31,10 +32,10 @@ namespace EmuSen.WiseMan.DianaSh
             try { Directory.Delete(_dir, recursive: true); } catch { }
         }
 
-        private static SnesDebugTarget BuildTarget()
+        private static IDebugTarget BuildTarget()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            return new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            return SyntheticRom.TargetOf(core);
         }
 
         private string Run(params string[] args) => _command.Execute(_target, args, null).Output;

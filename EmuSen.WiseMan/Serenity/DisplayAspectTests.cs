@@ -9,8 +9,7 @@ using Avalonia.Headless;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.Moon;
-using EmuSen.Cores.Nintendo.Venus;
+using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -44,8 +43,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void Each_console_reports_its_screen_s_shape()
         {
-            Assert.Equal(DisplayShape.Television, new MoonCore().DisplayAspect);
-            Assert.Equal(DisplayShape.Television, new VenusCore().DisplayAspect);
+            using (var moonRt = new MoonRtCore()) Assert.Equal(DisplayShape.Television, moonRt.DisplayAspect);
             using var marsRt = new MarsRtCore();
             Assert.Equal(DisplayShape.Television, marsRt.DisplayAspect);
             using (var gameBoy = new MercuryRtCore()) Assert.Equal(DisplayShape.GameBoy, gameBoy.DisplayAspect);

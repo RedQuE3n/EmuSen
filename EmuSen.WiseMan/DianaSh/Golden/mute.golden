@@ -75,8 +75,8 @@ status 1
 action none
 end
 
-case on venus
-target venus
+case on venusrt
+target venusrt
 covers 1
 $ mute 0 on
 out 16
@@ -84,21 +84,14 @@ Channel 0 muted.
 status 0
 action none
 $ channels
-out 1311
-[0] Voice0   active=False level=  0 muted=False Srcn=0x00 Pitch=0x0000 VolL=0 VolR=0 Stage=Off ADSR1=0x00 ADSR2=0x00 GAIN=0x00 Ended=False KeyOns=0 LastKeyOn=never
-[1] Voice1   active=False level=  0 muted=False Srcn=0x00 Pitch=0x0000 VolL=0 VolR=0 Stage=Off ADSR1=0x00 ADSR2=0x00 GAIN=0x00 Ended=False KeyOns=0 LastKeyOn=never
-[2] Voice2   active=False level=  0 muted=False Srcn=0x00 Pitch=0x0000 VolL=0 VolR=0 Stage=Off ADSR1=0x00 ADSR2=0x00 GAIN=0x00 Ended=False KeyOns=0 LastKeyOn=never
-[3] Voice3   active=False level=  0 muted=False Srcn=0x00 Pitch=0x0000 VolL=0 VolR=0 Stage=Off ADSR1=0x00 ADSR2=0x00 GAIN=0x00 Ended=False KeyOns=0 LastKeyOn=never
-[4] Voice4   active=False level=  0 muted=False Srcn=0x00 Pitch=0x0000 VolL=0 VolR=0 Stage=Off ADSR1=0x00 ADSR2=0x00 GAIN=0x00 Ended=False KeyOns=0 LastKeyOn=never
-[5] Voice5   active=False level=  0 muted=False Srcn=0x00 Pitch=0x0000 VolL=0 VolR=0 Stage=Off ADSR1=0x00 ADSR2=0x00 GAIN=0x00 Ended=False KeyOns=0 LastKeyOn=never
-[6] Voice6   active=False level=  0 muted=False Srcn=0x00 Pitch=0x0000 VolL=0 VolR=0 Stage=Off ADSR1=0x00 ADSR2=0x00 GAIN=0x00 Ended=False KeyOns=0 LastKeyOn=never
-[7] Voice7   active=False level=  0 muted=False Srcn=0x00 Pitch=0x0000 VolL=0 VolR=0 Stage=Off ADSR1=0x00 ADSR2=0x00 GAIN=0x00 Ended=False KeyOns=0 LastKeyOn=never
+out 37
+(this core reports no audio channels)
 status 0
 action none
 end
 
-case on moon
-target moon
+case on moonrt
+target moonrt
 covers 1
 $ mute 0 on
 out 16

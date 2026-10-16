@@ -1,5 +1,7 @@
 # Moon (NES) — APU
 
+*Historical since 2026-10-16: Moon (C#), the C# core this page describes, was deleted when MoonRT became the NES's only engine (`Moon_Native.md` §9.5). MoonRT implements the same machine field for field and is held to the goldens recorded from it, so the hardware described here stands; the file, class and member names are the C# core's, and the code is in git history before the retirement.*
+
 *This revision: the 2A03 synthesizes. All five channels, a cycle-accurate frame sequencer, the non-linear DAC and the console's output filters.*
 
 *Previous revision: register surface and frame-counter IRQ only, no sound.*

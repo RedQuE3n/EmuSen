@@ -1,3 +1,5 @@
+using EmuSen.Cores;
+using EmuSen.Crystal.Debugger;
 using System.Collections.Generic;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
@@ -12,7 +14,7 @@ namespace EmuSen.WiseMan.DianaSh
     // CoreCommand's own validation logic (unknown core name, missing
     // file, wrong extension) - pure string/file-existence checking, same
     // as EmuSen.Shell/Program.cs's own TryResolveCoreCommand, so it's
-    // directly testable with no window/VenusCore needed. Content of the
+    // directly testable with no window/ICore needed. Content of the
     // "ROM" file doesn't matter here - CoreCommand only ever checks
     // File.Exists and the extension, never opens it.
     public class CoreCommandTests

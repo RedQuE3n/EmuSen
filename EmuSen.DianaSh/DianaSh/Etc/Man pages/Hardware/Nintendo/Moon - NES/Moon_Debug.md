@@ -1,5 +1,7 @@
 # Moon (NES) — `IDebugTarget`
 
+*Historical since 2026-10-16: Moon (C#), the C# core this page describes, was deleted when MoonRT became the NES's only engine (`Moon_Native.md` §9.5). MoonRT implements the same machine field for field and is held to the goldens recorded from it, so the hardware described here stands; the file, class and member names are the C# core's, and the code is in git history before the retirement.*
+
 Covers `Cores/Nintendo/Moon - NES/Debug/MoonDebugTarget.cs` and the disassembler at `Cpu/Disassembler/Nes6502Disassembler.cs`.
 
 **This is the second implementation `IDebugTarget` has ever had**, and the thing `EmuSen_Core_Gameplan.md` §7 calls the point of the whole architecture. §6 records what that actually proved.

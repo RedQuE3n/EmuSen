@@ -1467,6 +1467,20 @@ reference, kept for now. *Decided by the tester 2026-10-05* (`VenusRT_Native.md`
   so they run VenusRT for the SNES as well unless graphics.json names Venus (C#). The factory asked for no engine
   still builds Venus (C#), the reference.
 
+*Since 2026-10-16 the SNES has one engine* (`VenusRT_Native.md` §68.5). C# Venus was deleted at the tester's word, and
+the row above is gone with it:
+- **No Engine row.** `CoreCatalog.EngineFor("SNES")` is null, as for any console with one engine, and the metadata
+  editor offers an SNES game no alternative emulator. VenusRT is the console's one discovered engine
+  (`CoreCatalog.SoleDiscoveredEngine`): the factory opens it through the generic v1 branch whatever engine name a
+  caller passes, so `RunsOnV1Engine` stays true for an SNES game.
+- **A stored Venus (C#)** is one of `CoreCatalog`'s retired engines beside Mars (C#) and Mercury (C#): it is read as
+  VenusRT (Rust), with no notice on the status line and one line on the log a process.
+- **Without the library**, or with one that is refused, an SNES game does not load: the factory says `This build has
+  no SNES core: VenusRT (Rust) is missing (<the reason>).`, and Mistress shows it after `Failed to load <game>: `.
+- **What a player keeps.** Battery saves, which VenusRT read and wrote in Venus (C#)'s format; a Venus (C#) save state
+  is refused in words naming its engine, as before, and an old `.resume.state` boots the game cold (`VenusRT_Plan.md`
+  §9, Q7).
+
 ### 4.45 Every window from the pad, and Game Mode's one window (2026-09-24)
 
 §4.29 made the library and a menu over the game work from a controller, and drove every other window through the keys
@@ -4343,7 +4357,8 @@ the per-game choice alone (UG "Other settings", "Metadata editor"). In Mistress 
 Graphics Settings' **Engine** row for the consoles with two implementations (§4.44: Mars (C#) or MarsRT (Rust) for the
 N64, Mercury (C#) or MercuryRT (Rust) for the Game Boy and Game Boy Color, until C# Mercury was deleted on 2026-10-16:
 the Game Boy has one engine since, no Engine row and no alternative emulator, and a stored choice of Mercury (C#) runs
-the game on MercuryRT with one line on the log, `Mercury_Native.md` §15.4). The metadata editor gains ES-DE's
+the game on MercuryRT with one line on the log, `Mercury_Native.md` §15.4; the NES's Moon (C#) went the same way the
+same day, a stored choice of it running on MoonRT, `Moon_Native.md` §9.5). The metadata editor gains ES-DE's
 **Alternative emulator** field, after Controller:
 
 - For a game of a console with two engines it offers *None (the console's engine)* and the console's two engines; for
@@ -7243,6 +7258,11 @@ the first that reads a save.
 
 ### 4.86 The NES's engine: Moon (C#) or MoonRT (Rust) (2026-09-30)
 
+*Historical since 2026-10-16: Moon (C#) was deleted and MoonRT is the NES's only engine (`Moon_Native.md` §9.5). The
+NES tab has no Engine row; a stored choice of Moon (C#), the console's or a game's, runs the game on MoonRT with one
+line on the log a process, and a build without MoonRT's library loads no NES game and says "This build has no NES
+core". The section below records the row while both engines existed.*
+
 Graphics Settings' NES tab now begins, after the screen filter, with **Engine**, a dropdown of *Moon (C#)* and *MoonRT
 (Rust)*. It is stored in `graphics.json` as `Consoles.NES.Engine`, and is resolved as §4.44's rows are, by
 `CoreCatalog.EngineChosen`. **The default is Moon (C#)**, listed first, so a player who never opens the row plays as
@@ -7937,6 +7957,7 @@ on (the stored choice, else the row's default, §4.44):
 - **Otherwise the reference core** (the engine chosen, or the fallback where the discovered engine's library is not
   beside its sidecar): what the C# core itself asks the firmware library for. Venus (C#) asks for the seven NEC DSP
   images and has no replacement for any, so each reads "No open version yet". The other three ask for none.
+  *Since 2026-10-16 the SNES's rows are always VenusRT's, or none where its library is missing; Venus (C#) was deleted.*
 - **Any other system a discovered core runs** follows the catalog's consoles, by the name its info gives it.
 - **A core in development is left out**, by its sidecar's `development` mark, even in a session where discovery lists
   such cores (`EMUSEN_DEVELOPMENT_CORES=1`). *Amended 2026-10-07:* Nephrite is no longer marked (§4.94), so its

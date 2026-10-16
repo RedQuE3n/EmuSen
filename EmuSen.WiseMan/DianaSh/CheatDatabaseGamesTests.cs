@@ -1,3 +1,5 @@
+using EmuSen.Cores;
+using EmuSen.Crystal.Debugger;
 using System;
 using System.IO;
 using System.Linq;
@@ -47,7 +49,7 @@ namespace EmuSen.WiseMan.DianaSh
         private CheatDatabase Db() => new(_dbDir);
 
         private static EmuSen.Crystal.Cheats.ICheatCodeCodec Codec() =>
-            EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.ActionReplay();
+            EmuSen.Crystal.Systems.Snes.SnesSystem.ProActionReplay();
 
         [Fact]
         public void Games_returns_only_the_named_systems_files_in_name_order()

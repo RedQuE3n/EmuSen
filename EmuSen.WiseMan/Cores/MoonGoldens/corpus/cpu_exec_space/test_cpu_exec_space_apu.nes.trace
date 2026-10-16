@@ -1,0 +1,17 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/cpu_exec_space/test_cpu_exec_space_apu.nes
+rom 9036B3D64B7F4E0AC7D44ED85EAFB4B2F93FFD2CA2DDECC19F1E0D2BEC3574FE
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 F766E9EAC987C2C3
+120 14D9DC7944F64A55
+180 B66CB47A147E2C42
+240 8D07C030FF47D2B5
+279 121351B134FEAD6E
+resets 0
+text [0;37mTEST: test_cpu_exec_space_apu\n [0;33mThis program verifies that the\nCPU can execute code from any\npossible location that it can\naddress, including I/O space.\n\nIn this test, it is also\nverified that not only all\nwrite-only APU I/O ports\nreturn the open bus, but\nalso the unallocated I/O\nspace in $4018..$40FF.\n\n [0;37m [1;34m0022      4000      4001      4002      4003      4004      4005      4006      4007      4008      4009      400A      400B      400C      400D      400E      400F      4010      4011      4012      4013      4014           4016      4017      4018      4019      401A      401B      401C      401D      401E      401F      4020      4021      4022      4023      4024      4025      4026      4027      4028      4029      402A      402B      402C      402D      402E      402F      4030      4031      4032      4033      4034      4035      4036      4037      4038      4039      403A      403B      403C      403D      403E      403F      4040      4041      4042      4043      4044
+verdict Passed 279

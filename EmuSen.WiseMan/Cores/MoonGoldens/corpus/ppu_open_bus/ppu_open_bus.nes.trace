@@ -1,0 +1,17 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/ppu_open_bus/ppu_open_bus.nes
+rom D4208A3FF6340532DD0FCED7F9D408D5B6585853A0DDC9C1F64EE1722EF08E67
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 1D237FB09D02D3AD
+120 BEB58542F7CD894C
+180 3E33E371891AF9E6
+240 E513EA1C9F00D062
+250 A9449854F89A1942
+resets 0
+text ppu_open_bus\n\nPassed
+verdict Passed 250

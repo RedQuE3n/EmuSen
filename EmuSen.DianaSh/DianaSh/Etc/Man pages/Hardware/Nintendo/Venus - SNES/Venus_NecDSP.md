@@ -1,5 +1,12 @@
 # Venus (SNES) — NEC DSP (DSP-1/1B/2/3/4, ST010/ST011)
 
+*Historical since 2026-10-16.* This page describes C# Venus, which was deleted from the source on 2026-10-16 at the
+tester's word (`VenusRT_Native.md` §68). Its content is kept as the record of that core. VenusRT, the SNES's only engine
+since, is a clean-room rewrite that was written without reading this page's algorithm sections (`VenusRT_Plan.md` §1.2),
+so nothing here describes VenusRT; the file, class and member names are C# Venus's, and the code it cites is in the
+repository's history and in the releases that carried it. The NEC DSPs run on VenusRT, with the player's own
+images or its open programs (`VenusRT_Native.md` §24, `VenusRT_DspHle.md`).
+
 Covers everything under `Cores/Nintendo/Venus - SNES/Coprocessors/NecDsp/`, plus `CoprocessorOverlayMapper` and the detection code in `Cartridge`. This is the third coprocessor family this core implements, after the SA-1 (`Venus_SA1.md`) and the SuperFX (`Venus_SuperFX.md`).
 
 > **Status: complete and verified against real firmware.** The interpreter, the memory map, the host handshake, and save states are all implemented and tested. All seven firmwares boot to their idle loop, and the DSP-1B computes the documented answer for its multiply command across a range of operands — see `NecDspRealFirmwareTests`. The chip cannot run without a firmware dump, which this project does not and will not ship; §2 says where to put one. Without it the cartridge falls back to a plain LoROM/HiROM map and the game runs with the coprocessor absent (which for most DSP-1 games means the 3D maths never answers).

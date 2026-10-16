@@ -1,3 +1,4 @@
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -54,7 +55,7 @@ namespace EmuSen.WiseMan.Cores
             using MercuryRig rust = MercuryRig.Create(rom);
             rust.RunFrame();
             Assert.Equal(committed, rust.Core.Machine.Core.Layout());
-            Assert.Equal(MercuryLayouts.FileName(MercuryLayouts.Board(rom[0x147]), listing.Contains("-gbc-"), MercuryStateLayout.FromText(listing, committed)["Cart.Ram"].Length), listing);
+            Assert.Equal(MercuryLayouts.FileName(MercuryLayouts.Board(rom[0x147]), listing.Contains("-gbc-"), StateLayout.FromText(listing, committed)["Cart.Ram"].Length), listing);
             Assert.Same(MercuryLayouts.Load(Path.Combine(MercuryLayouts.Directory(), listing)), MercuryLayouts.For(rom, rust.State()));
         }
 

@@ -1,0 +1,23 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/apu_mixer/triangle.nes
+rom 3756D4BE75126AB51B40E013E60A125E0F6F198307DCFB9612CD4477F6762279
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 D8F40453A1A7B1B3
+120 D1CBBA20D7978784
+180 11EE5901A2360C30
+240 5AB03E12614FA9C4
+300 7CDDE4F23EFCB915
+360 CEB817CC21655205
+420 D816AAA3438B7F89
+480 D09F180D788E34F9
+540 459FF38166C6E5C0
+600 20D85B72F096166D
+610 15D52111F3F6FB4C
+resets 0
+text triangle channel mixing test\n\n1. Should play short tone.\n\n2. Should be nearly silent.\n\n3. Should play short tone.\n\nSome clicking might occur between the two tones.Also, a faint tone might be audible through headphones.
+verdict Passed 610

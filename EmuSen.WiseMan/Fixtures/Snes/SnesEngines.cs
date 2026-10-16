@@ -52,55 +52,6 @@ namespace EmuSen.WiseMan.Fixtures.Snes
         internal static readonly PadButton[] Buttons = Enumerable.Range(0, 12).Select(i => (PadButton)i).ToArray();
     }
 
-    // An engine behind ICore and its debug target, as a black box - C# Venus for the baseline.
-    public sealed class ICoreSnesEngine : ISnesEngine
-    {
-        private readonly Func<string, CoreBundle> _load;
-
-        public ICoreSnesEngine(string name, Func<string, CoreBundle> load)
-        {
-            Name = name;
-            _load = load;
-        }
-
-        public string Name { get; }
-
-        public static ICoreSnesEngine Venus() => new("Venus (C#)", rom => CoreFactory.Load(rom, headless: true));
-
-        public SnesRun Run(string rom, IReadOnlyList<int> frames, IReadOnlyList<SnesPress>? presses = null, bool audio = false)
-        {
-            var bundle = _load(rom);
-            var core = bundle.Core;
-            var spaces = bundle.DebugTarget.GetMemorySpaces().ToDictionary(s => s.Name.ToLowerInvariant());
-            var shots = new List<SnesSnapshot>();
-            var sound = new List<short>();
-            int frame = 0;
-            foreach (int target in frames.Order())
-            {
-                while (frame < target)
-                {
-                    foreach (var b in SnesEngine.Buttons) core.SetButton(0, b, SnesEngine.Held(presses, b, frame));
-                    core.RunFrame();
-                    short[] s = core.DequeueAudioSamples(int.MaxValue);
-                    if (audio) sound.AddRange(s);
-                    frame++;
-                }
-                var mem = new Dictionary<string, byte[]>();
-                foreach (string name in SnesEngine.Spaces)
-                {
-                    if (!spaces.TryGetValue(name, out var space)) continue;
-                    var bytes = new byte[space.Size];
-                    for (int i = 0; i < bytes.Length; i++) bytes[i] = space.Read(i);
-                    mem[name] = bytes;
-                }
-                shots.Add(new SnesSnapshot(target, mem, SnesPicture.FromRgba(core.GetFrameBufferRgba(), core.ScreenWidth, core.ScreenHeight)));
-            }
-            int rate = core.AudioSampleRate;
-            (core as IDisposable)?.Dispose();
-            return new SnesRun(Name, shots, rate, sound.ToArray());
-        }
-    }
-
     // VenusRT through the common interface, with the DSP image found and the core's own boot program unless told otherwise - see VenusRT_Native.md §41.1.
     public sealed class VenusRtSnesEngine : ISnesEngine
     {

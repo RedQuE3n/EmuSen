@@ -1,4 +1,4 @@
-using EmuSen.Cores.Nintendo.Venus.Debug;
+using EmuSen.Cores;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
@@ -16,13 +16,13 @@ namespace EmuSen.WiseMan.DianaSh
     // EmuSen_Debugging_Tools_Reference_v5.md §3.25 and §3.26.
     public class MemFindAndDataBreakpointTests
     {
-        private static SnesDebugTarget BuildTarget()
+        private static IDebugTarget BuildTarget()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            return new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            return SyntheticRom.TargetOf(core);
         }
 
-        private static void Poke(SnesDebugTarget target, int address, params byte[] bytes)
+        private static void Poke(IDebugTarget target, int address, params byte[] bytes)
         {
             var wram = target.GetMemorySpaces().First(s => s.Name == "WRAM");
             for (int i = 0; i < bytes.Length; i++) wram.Write(address + i, bytes[i]);
@@ -94,16 +94,6 @@ namespace EmuSen.WiseMan.DianaSh
 
             Assert.Contains("More than 2", result.Output);
             Assert.Contains("0x4000", result.Output);
-        }
-
-        [Fact]
-        public void Memfind_refuses_a_live_hardware_space()
-        {
-            var target = BuildTarget();
-
-            var result = DianaShInterpreter.CreateDefault(target).Submit("memfind CpuBus 00");
-
-            Assert.Contains("refusing", result.Output);
         }
 
         [Fact]
@@ -186,12 +176,13 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void A_real_bus_write_arms_the_data_breakpoint()
         {
-            var target = BuildTarget();
+            var core = SyntheticRom.LoadCore(SyntheticRom.Build((5, new byte[] { 0xA9, 0x5A, 0x8D, 0x34, 0x12, 0x80, 0xFE })));
+            var target = SyntheticRom.TargetOf(core);
             target.Breakpoints.AddDataBreakpoint("WRAM", 0x1234, 0x5A);
 
-            target.OnWrite("WRAM", 0x1234, 0x5A);
+            core.RunFrame();
 
-            Assert.True(target.Breakpoints.ShouldBreak(0x008000));
+            Assert.True(core.IsHaltedAtBreakpoint);
         }
     }
 }

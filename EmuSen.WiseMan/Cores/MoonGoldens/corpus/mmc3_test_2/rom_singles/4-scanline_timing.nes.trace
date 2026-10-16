@@ -1,0 +1,14 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/mmc3_test_2/rom_singles/4-scanline_timing.nes
+rom 14A220B9D1272ACC7A820AB38E9762A7CDF2D54C65E753BE87F23DFCAF1BB845
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 96F387B14178A80C
+84 D6E4DC86427CB356
+resets 0
+text Scanline 0 IRQ should occur sooner when $2000=$08\n\n4-scanline_timing\n\nFailed #3
+verdict Failed(3) 84

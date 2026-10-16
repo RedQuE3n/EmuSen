@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 emusen-native = { path = "../../Shared/emusen-native" }
 
+# A build of seconds, not minutes, depends on the CPU's bus cycle staying out of line - see Moon_Native.md §8.6.
 [profile.release]
 panic = "abort"
 opt-level = 3

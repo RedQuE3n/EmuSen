@@ -548,7 +548,7 @@ impl<'a> Session<'a> {
 fn reads_a_record(op: u32, args: &[u8]) -> bool {
     use abi::cheat::*;
     match op {
-        LIST | EXPORT | DECODE | DB_SYSTEMS | DB_GAMES | DB_FIND => true,
+        LIST | EXPORT | DECODE | DB_SYSTEMS | DB_GAMES | DB_FIND | CLAIMS | CHT_PARSE | CHT_EXPORT | FILES | FILE_READ | DB_STATUS | DB_PARSE | DB_PRUNE | DB_UPDATE => true,
         MASTER => !String::from_utf8_lossy(args).contains("\"enabled\""),
         _ => false,
     }

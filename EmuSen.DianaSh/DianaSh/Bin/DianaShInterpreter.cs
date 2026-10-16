@@ -249,6 +249,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 ExplicitCodec = cheatExplicitCodec,
                 Trace = cpuTraceSwitch,
                 CheatSystems = supportedCheatSystems,
+                CheatDatabaseFolder = () => global::EmuSen.Galaxia.Library.SettingFolders.Cheats(global::EmuSen.Galaxia.Models.AppSettings.Load()),
             }));
             shell.AddHost(session, HostManifest(shell, session, prototype, extras), new HostCommandFactory(target, Build, prototype));
             var facade = new DianaShInterpreter(shell, session);

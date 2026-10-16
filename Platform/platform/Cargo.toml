@@ -21,6 +21,7 @@ dianash-module = { path = "../dianash-module" }
 emusen-debug = { path = "../emusen-debug" }
 emusen-trace = { path = "../emusen-trace" }
 emusen-session = { path = "../emusen-session" }
+emusen-cheat = { path = "../emusen-cheat" }
 emusen-endymion = { path = "../endymion" }
 emusen-galaxia = { path = "../galaxia" }
 emusen-native = { path = "../../EmuSen/Cores/Shared/emusen-native" }

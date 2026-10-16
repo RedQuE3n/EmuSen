@@ -1,7 +1,7 @@
 # The platform above the cores: Galaxia, Endymion and Serenity's Vulkan half, linked into one library, emusen_platform. See EmuSen_RustPlatform.md §2.
 [workspace]
 resolver = "3"
-members = ["dianash", "dianash-module", "dianash-program", "dianash-text", "dotnet", "emusen-debug", "emusen-session", "emusen-trace", "endymion", "galaxia", "platform", "serenity", "session-service"]
+members = ["dianash", "dianash-module", "dianash-program", "dianash-text", "dotnet", "emusen-cheat", "emusen-debug", "emusen-session", "emusen-trace", "endymion", "galaxia", "platform", "serenity", "session-service"]
 
 [workspace.package]
 version = "0.1.0"

@@ -24,7 +24,7 @@ namespace EmuSen.WiseMan.DianaSh
                 Assert.Equal(expected, which, ignoreCase: true);
             if (shell.NativeShellOf is not { } native) return;
             var kinds = native.Commands(shell.NativeSessionId).ToDictionary(c => c.Name, c => c.Kind);
-            foreach (string name in new[] { "mem", "disasm", "label", "bp", "watch", "step", "cov", "summary", "grep" })
+            foreach (string name in new[] { "mem", "disasm", "label", "bp", "watch", "step", "cov", "summary", "cheat", "grep" })
                 Assert.Equal("module", kinds[name]);
         }
 

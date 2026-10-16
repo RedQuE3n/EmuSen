@@ -90,6 +90,16 @@ namespace EmuSen.Crystal.Session
         public const uint CheatDbSystems = 12u;
         public const uint CheatDbGames = 13u;
         public const uint CheatDbFind = 14u;
+        public const uint CheatClaims = 15u;
+        public const uint CheatChtParse = 16u;
+        public const uint CheatChtExport = 17u;
+        public const uint CheatFiles = 18u;
+        public const uint CheatFileRead = 19u;
+        public const uint CheatFileWrite = 20u;
+        public const uint CheatDbStatus = 21u;
+        public const uint CheatDbParse = 22u;
+        public const uint CheatDbPrune = 23u;
+        public const uint CheatDbUpdate = 24u;
         public const uint TelemetryCpu = 0u;
         public const uint TelemetryVideo = 1u;
         public const uint TelemetryApu = 2u;

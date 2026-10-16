@@ -168,10 +168,22 @@ extern "C" {
 #define EMUSEN_SESSION_CHEAT_MASTER         8u  /* {} reads -> {"enabled"}; {"enabled":b} changes */
 #define EMUSEN_SESSION_CHEAT_EXPORT         9u  /* -> the cheat file's JSON, as Galaxia's CheatFile */
 #define EMUSEN_SESSION_CHEAT_IMPORT         10u /* args: a cheat file's JSON -> the number loaded, the rest skipped; changes */
-#define EMUSEN_SESSION_CHEAT_DECODE         11u /* {"code","codec":"auto"|"explicit"} -> {"codec","kind","space","address","value","compare","writes"} */
+#define EMUSEN_SESSION_CHEAT_DECODE         11u /* {"code","codec":"auto"|"explicit","unchecked"} -> {"codec","kind","space","address","value","compare","writes"};
+                                                * "unchecked" (@since 1.1) decodes without asking the codec first, its own words refusing */
 #define EMUSEN_SESSION_CHEAT_DB_SYSTEMS     12u /* -> [{"system","count"}]; NOT_SUPPORTED without a database */
 #define EMUSEN_SESSION_CHEAT_DB_GAMES       13u /* {"system","filter"} -> [{"system","game","path"}] */
 #define EMUSEN_SESSION_CHEAT_DB_FIND        14u /* {"text","limit"} -> [{"system","game","path"}] */
+/* @since 1.1: what the cheat command needs beyond 1.0, the files and the database being the session's to reach. */
+#define EMUSEN_SESSION_CHEAT_CLAIMS         15u /* {"code"} -> {"auto","explicit"}: whether each codec claims it, null with no codec */
+#define EMUSEN_SESSION_CHEAT_CHT_PARSE      16u /* {"text"} -> {"game":null,"cheats":[{"kind","description","enabled","writes"}],"skipped"} */
+#define EMUSEN_SESSION_CHEAT_CHT_EXPORT     17u /* -> {"text","exported","rom_patches","conditional"}: the RAM pokes as a .cht file */
+#define EMUSEN_SESSION_CHEAT_FILES          18u /* -> {"directory","names"}: the saved cheat lists */
+#define EMUSEN_SESSION_CHEAT_FILE_READ      19u /* {"name"} -> {"path","file"}: a list as IMPORT takes it, null where unreadable */
+#define EMUSEN_SESSION_CHEAT_FILE_WRITE     20u /* {"name"} -> the number saved; BAD_ARGUMENT for a name no file may have */
+#define EMUSEN_SESSION_CHEAT_DB_STATUS      21u /* -> {"directory","exists"} */
+#define EMUSEN_SESSION_CHEAT_DB_PARSE       22u /* {"game"} -> CHT_PARSE's record for the best match, "game" its name or null */
+#define EMUSEN_SESSION_CHEAT_DB_PRUNE       23u /* {"apply"} -> {"can_apply","reason","removing":[{"system","files","bytes"}],"keeping","pruned","failed"} */
+#define EMUSEN_SESSION_CHEAT_DB_UPDATE      24u /* -> {"installed","directory","attribution"}: downloads and installs the database */
 
 /* telemetry's kind. Registers are [{"name","value","bits"}]; the rest as sprites, palettes and audio_channels give them. */
 #define EMUSEN_SESSION_TELEMETRY_CPU            0u
@@ -373,7 +385,8 @@ typedef struct emusen_session_v1 {
                        uint8_t *out, size_t len);
 
     /* -- Cheats ------------------------------------------------------------------------------------------------ */
-    /* EMUSEN_SESSION_CHEAT_*. */
+    /* EMUSEN_SESSION_CHEAT_*. DB_PRUNE with "apply" and DB_UPDATE change the database on disk and answer with a record:
+     * the first call applies, and the record is kept until a buffer takes it, as events_drain keeps its events. */
     int64_t (*cheat_op)(void *ctx, uint32_t session, uint32_t op, const uint8_t *args, size_t args_len,
                         uint8_t *out, size_t len);
     /* reads. {"auto":codec|null,"explicit":codec|null,"systems":[name]}, a codec being {"name","kind","space"}. */

@@ -135,6 +135,16 @@ pub mod cheat {
     pub const DB_SYSTEMS: u32 = 12;
     pub const DB_GAMES: u32 = 13;
     pub const DB_FIND: u32 = 14;
+    pub const CLAIMS: u32 = 15;
+    pub const CHT_PARSE: u32 = 16;
+    pub const CHT_EXPORT: u32 = 17;
+    pub const FILES: u32 = 18;
+    pub const FILE_READ: u32 = 19;
+    pub const FILE_WRITE: u32 = 20;
+    pub const DB_STATUS: u32 = 21;
+    pub const DB_PARSE: u32 = 22;
+    pub const DB_PRUNE: u32 = 23;
+    pub const DB_UPDATE: u32 = 24;
 }
 
 pub mod telemetry {

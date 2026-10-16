@@ -73,6 +73,7 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
     ("rm", false, "  rm [-r] <path>                SUSPENDED - delete a file (-r: delete a directory and everything in it)"),
     ("cat", true, "  cat <path>...                 print one or more files' contents"),
     ("head", true, "  head [-n N] [path]            first N lines (default 10) of stdin or a file"),
+    ("tail", true, "  tail [-n N] [path]            last N lines (default 10) of stdin or a file"),
 
 ];
 

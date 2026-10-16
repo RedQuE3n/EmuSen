@@ -193,7 +193,8 @@ impl Cpu {
         self.set_nmi_line(nmi);
     }
 
-    #[inline(always)]
+    /// One bus cycle, out of line: inlined at every call it made the build take minutes - see Moon_Native.md §8.6.
+    #[inline(never)]
     fn read<B: CpuBus>(&mut self, bus: &mut B, address: u16) -> u8 {
         if bus.dma_pending() {
             self.run_dma(bus, address);
@@ -205,7 +206,8 @@ impl Cpu {
         value
     }
 
-    #[inline(always)]
+    /// One bus cycle, out of line as `read` is.
+    #[inline(never)]
     fn write<B: CpuBus>(&mut self, bus: &mut B, address: u16, data: u8) {
         self.begin_cycle(bus);
         if let Some(irq) = bus.store(address, data, self.cycles) {

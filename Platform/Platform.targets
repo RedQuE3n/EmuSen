@@ -17,6 +17,10 @@
     <_EmuSenPlatformSuffix Condition="'$(_EmuSenPlatformSuffix)' == ''">.so</_EmuSenPlatformSuffix>
     <_EmuSenPlatformFile>$(_EmuSenPlatformPrefix)$(EmuSenPlatformLibraryName)$(_EmuSenPlatformSuffix)</_EmuSenPlatformFile>
     <_EmuSenPlatformBuilt>$(EmuSenPlatformTargetDir)/$(EmuSenNativeProfile)/$(_EmuSenPlatformFile)</_EmuSenPlatformBuilt>
+    <!-- nano, the program the shell ships beside it, built from the same workspace into dianash/ (EmuSen_DianaSh.md §7, §13.11). -->
+    <_EmuSenNanoFile>nano</_EmuSenNanoFile>
+    <_EmuSenNanoFile Condition="$([MSBuild]::IsOSPlatform('Windows'))">nano.exe</_EmuSenNanoFile>
+    <_EmuSenNanoBuilt>$(EmuSenPlatformTargetDir)/$(EmuSenNativeProfile)/$(_EmuSenNanoFile)</_EmuSenNanoBuilt>
     <!-- A library built elsewhere for this machine, for one without Rust: <dir>/<rid>/<file>, the layout a publish for another platform takes. -->
     <_EmuSenPlatformPrebuilt Condition="'$(EmuSenNativePrebuilt)' != ''">$(EmuSenNativePrebuilt)/$(NETCoreSdkPortableRuntimeIdentifier)/$(_EmuSenPlatformFile)</_EmuSenPlatformPrebuilt>
   </PropertyGroup>
@@ -38,9 +42,11 @@
 
   <Target Name="BuildPlatformLibrary" BeforeTargets="BeforeBuild" DependsOnTargets="FindCargoForPlatform" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
     <!-- A failed cargo step fails the build, so an old library is never left in place of the one the sources describe. -->
-    <Exec Condition="'$(_EmuSenPlatformCargoFound)' == 'true'" WorkingDirectory="$(MSBuildThisFileDirectory)" Command="$(EmuSenCargo) build --profile $(EmuSenNativeProfile) --manifest-path &quot;$(MSBuildThisFileDirectory)Cargo.toml&quot; -p emusen-platform --target-dir &quot;$(EmuSenPlatformTargetDir)&quot;" StandardOutputImportance="low" />
+    <Exec Condition="'$(_EmuSenPlatformCargoFound)' == 'true'" WorkingDirectory="$(MSBuildThisFileDirectory)" Command="$(EmuSenCargo) build --profile $(EmuSenNativeProfile) --manifest-path &quot;$(MSBuildThisFileDirectory)Cargo.toml&quot; -p emusen-platform -p dianash --target-dir &quot;$(EmuSenPlatformTargetDir)&quot;" StandardOutputImportance="low" />
     <ItemGroup>
       <None Include="$(_EmuSenPlatformSource)" Condition="'$(_EmuSenPlatformSource)' != '' And Exists('$(_EmuSenPlatformSource)')" Link="$(_EmuSenPlatformFile)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <None Include="$(_EmuSenNanoBuilt)" Condition="'$(_EmuSenPlatformCargoFound)' == 'true' And Exists('$(_EmuSenNanoBuilt)')" Link="dianash/$(_EmuSenNanoFile)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <None Include="$(MSBuildThisFileDirectory)dianash-program/nano.dianash.json" Condition="'$(_EmuSenPlatformCargoFound)' == 'true' And Exists('$(_EmuSenNanoBuilt)')" Link="dianash/nano.dianash.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
   </Target>
 </Project>

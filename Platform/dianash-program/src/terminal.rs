@@ -73,6 +73,17 @@ mod system {
     }
 
     pub fn utf8_console() {}
+
+    /// Whether standard output is a terminal too, as a full-screen program needs.
+    pub fn output_is_terminal() -> bool {
+        std::io::stdout().is_terminal()
+    }
+
+    /// The terminal's columns and rows, where it says.
+    pub fn size() -> Option<(usize, usize)> {
+        let mut size: libc::winsize = unsafe { std::mem::zeroed() };
+        (unsafe { libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut size) } == 0 && size.ws_col > 0).then_some((usize::from(size.ws_col), usize::from(size.ws_row)))
+    }
 }
 
 #[cfg(windows)]
@@ -156,9 +167,45 @@ mod system {
             SetConsoleOutputCP(CP_UTF8);
         }
     }
+
+    const STD_OUTPUT_HANDLE: u32 = -11i32 as u32;
+    const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x4;
+
+    #[repr(C)]
+    struct ScreenBufferInfo {
+        size: [i16; 2],
+        cursor: [i16; 2],
+        attributes: u16,
+        window: [i16; 4],
+        maximum: [i16; 2],
+    }
+
+    unsafe extern "system" {
+        fn GetConsoleScreenBufferInfo(handle: *mut c_void, info: *mut ScreenBufferInfo) -> i32;
+    }
+
+    /// Whether standard output is a console too, as a full-screen program needs; it then reads escape sequences.
+    pub fn output_is_terminal() -> bool {
+        if !std::io::stdout().is_terminal() {
+            return false;
+        }
+        let output = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
+        let mut mode = 0;
+        unsafe { GetConsoleMode(output, &mut mode) != 0 && SetConsoleMode(output, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0 }
+    }
+
+    /// The console window's columns and rows.
+    pub fn size() -> Option<(usize, usize)> {
+        let mut info: ScreenBufferInfo = unsafe { std::mem::zeroed() };
+        if unsafe { GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &mut info) } == 0 {
+            return None;
+        }
+        let [left, top, right, bottom] = info.window;
+        Some(((right - left + 1).max(1) as usize, (bottom - top + 1).max(1) as usize))
+    }
 }
 
-pub use system::{byte_waiting, is_terminal, read_byte, Raw};
+pub use system::{byte_waiting, is_terminal, output_is_terminal, read_byte, size, Raw};
 
 fn interrupt() {
     if let Some(cancel) = CANCEL.get() {

@@ -15,6 +15,8 @@ pub enum Kind {
     Host(usize),
     /// A command of a module linked into the program, by the module's index.
     Module(usize),
+    /// A program shipped beside the shell, run as a process, by its index (§7).
+    Program(usize),
 }
 
 #[derive(Clone, Debug)]

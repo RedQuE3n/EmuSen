@@ -259,7 +259,7 @@ fn callee(claimant: Kind) -> Callee {
     match claimant {
         Kind::Module(index) => Callee::Module(index),
         Kind::Host(registration) => Callee::Host(registration),
-        Kind::Builtin(_) => unreachable!("a builtin claims no jobs"),
+        Kind::Builtin(_) | Kind::Program(_) => unreachable!("only a host or a module claims jobs"),
     }
 }
 

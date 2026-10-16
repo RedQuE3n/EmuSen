@@ -1,0 +1,1 @@
+{"manifest":1,"id":"dianash.nano","version":"0.1.0","abi":"1.0","kind":"program","file":"nano","commands":[{"name":"nano","usage":"  nano <path>                   simple full-screen text editor (Ctrl+O save, Ctrl+X exit - interactive terminal only)","read_only":false,"man":"man/nano.1"}]}

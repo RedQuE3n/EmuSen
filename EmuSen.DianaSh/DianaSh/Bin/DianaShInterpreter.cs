@@ -261,7 +261,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
         // The host's manifest: each C# command but those the shell answers itself or by a module, a host's own always, and the listing's order - see EmuSen_DianaSh.md §13.7.
         private static string HostManifest(NativeShell shell, uint session, IReadOnlyList<IDianaShCommand> commands, IEnumerable<IDianaShCommand> extras)
         {
-            var builtins = new HashSet<string>(shell.Commands(session).Where(c => c.Kind is "builtin" or "module").Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
+            var builtins = new HashSet<string>(shell.Commands(session).Where(c => c.Kind is "builtin" or "module" or "program").Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
             var own = new HashSet<string>(extras.Select(e => e.Name), StringComparer.OrdinalIgnoreCase);
             using var buffer = new System.IO.MemoryStream();
             using (var json = new Utf8JsonWriter(buffer))

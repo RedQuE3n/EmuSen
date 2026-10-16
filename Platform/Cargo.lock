@@ -129,6 +129,7 @@ version = "0.1.0"
 dependencies = [
  "dianash-text",
  "emusen-dianash",
+ "emusen-dotnet",
  "emusen-galaxia",
  "libc",
 ]

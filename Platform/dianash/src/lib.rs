@@ -14,6 +14,7 @@ mod interp;
 pub mod lexer;
 pub mod man;
 pub mod parser;
+pub mod program;
 pub mod sandbox;
 pub mod shell;
 pub mod table;

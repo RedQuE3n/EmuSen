@@ -157,6 +157,8 @@ pub(crate) struct World {
     pub shown_cwd: Option<String>,
     /// The modules linked into the program, by index.
     pub modules: Vec<&'static dyn Module>,
+    /// The programs shipped beside the shell, by index (§7).
+    pub programs: Vec<crate::program::Program>,
     /// The table a new session starts from: the builtins and the linked modules' commands.
     pub base: Arc<Table>,
     /// The host's services for every session, copied into every call, never read (§9.8).
@@ -288,9 +290,15 @@ impl Shell {
             cancel: Arc::new(AtomicBool::new(false)),
             services: Services::default(),
             modules: Vec::new(),
+            programs: crate::program::shipped().to_vec(),
             base: Table::builtins(),
             shown_cwd: None,
         };
+        let programs: Vec<Entry> = world.programs.iter().enumerate().map(|(i, p)| Entry { name: p.name.clone(), usage: p.usage.clone(), read_only: p.read_only, kind: Kind::Program(i) }).collect();
+        let base = Arc::make_mut(&mut world.base);
+        for entry in programs {
+            base.add(entry);
+        }
         let mut interps = HashMap::new();
         if !world.config.sessions {
             // A shell with no manager is one session, current and never listed.
@@ -441,6 +449,7 @@ impl Shell {
                     Kind::Builtin(_) => "builtin",
                     Kind::Host(_) => "host",
                     Kind::Module(_) => "module",
+                    Kind::Program(_) => "program",
                 };
                 format!(r#"{{"name":{},"kind":"{kind}","usage":{},"read_only":{}}}"#, json_string(&e.name), json_string(&e.usage), e.read_only)
             })

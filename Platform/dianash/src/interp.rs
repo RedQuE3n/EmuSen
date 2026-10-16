@@ -432,6 +432,10 @@ impl Interp {
             Kind::Builtin(builtin) => builtins::run(builtin, self, world, args, stdin.as_deref()),
             Kind::Host(registration) => host::run(self, world, registration, &canonical, args, stdin.as_deref()),
             Kind::Module(index) => host::run_module(self, world, index, &canonical, args, stdin.as_deref()),
+            Kind::Program(index) => {
+                let program = world.programs[index].clone();
+                crate::program::run(self, world, &program, args, stdin.as_deref())
+            }
         };
         // A malformed command must read as failure to `&&` and `if`, never take the console down.
         Ok(outcome.unwrap_or_else(|words| Outcome::fail(format!("Error: {words}"))))

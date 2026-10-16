@@ -531,6 +531,21 @@ black with its music (D-54); saves move between the open BIOS and the player's i
 not offered to games. *Recommended:* keep the Sega CD's in-development mark until D-54 and D-55 are settled, since a
 black film in the system's best-known game and a cartridge games cannot reach are what a player would meet first; the
 backup RAM itself no longer stands in the way. The decision is the tester's.
+*Decided 2026-10-16 by the tester:* the Sega CD is offered to players (`Nephrite_Plan.md` §7), D-54, D-55 and §16
+open.
+
+**Routing, once offered.** The Sega CD takes `.iso`, `.cue` and `.chd` beside the PlayStation. `SegaCdRoutingTests`
+route the tester's library as it lists it, read only and with no development cores asked for: the 20 PlayStation
+sheets and lone tracks under `psx`, Mega Man Legends 2's `(Track 1).bin` among them, to Diamond; the five Sega CD
+sheets under `SCD` to Nephrite's `mcd`; the 946 cartridge `.bin` files under `genesis` to Nephrite's `md`; the Sega CD's
+shelf is listed. A sheet's own tracks were left out, as the library lists them under their sheet: opened alone,
+Rayman's 50 audio tracks go to the Genesis, an audio track holding neither a PlayStation licence nor a disc's sync,
+which the cartridge's recogniser takes; this is as before the decision, since the Sega CD does not take `.bin`. The
+library holds no `.chd`. A CHD cannot be told apart by content:
+the probe reads its first bytes, the CHD's own compressed container, which neither console's recogniser reads, so a
+CHD goes by its folder's ES-DE name, `psx` to Diamond and `segacd` to Nephrite, and in any other folder (the library's
+`SCD` among them) it opens nowhere and the words say why. Before the decision every `.chd` went to the PlayStation,
+the only system then offered for it.
 
 ## 16. The empty drive (2026-10-16)
 

@@ -4561,3 +4561,6 @@ SaveMedia and routing tests, 98.
   no document describes) and the cartridge is unreachable (D-55). The replacement's words lose their backup RAM clause.
 - **Measured**: the crate's 192 tests (9 new for `_BURAM`), 190 and 144 without each attachment; `beryl-m68k`'s 26;
   WiseMan's in the blast radius (`Nephrite_OpenBios.md` §15).
+- **Offered** (`Nephrite_Plan.md` §7, decided 2026-10-16): the `mcd` system's development mark is removed from the
+  core's info; `SegaCdRoutingTests` route the tester's library, PlayStation discs to Diamond, Sega CD discs to
+  Nephrite, cartridges to the Genesis, a CHD by its folder's name (`Nephrite_OpenBios.md` §15).

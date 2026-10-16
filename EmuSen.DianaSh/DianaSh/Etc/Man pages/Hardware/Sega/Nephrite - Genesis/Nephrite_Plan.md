@@ -695,6 +695,19 @@ and reports what breaks. The gates still measure the Genesis, and those not yet 
 *The Genesis's gates as of 2026-10-07* are tabled in `Nephrite_Native.md` §40: G1, G3 and G9 met with named
 exceptions, G2 and G4 met, G6 met in part, G5 and G7 not met, G8 decided as above. Since the Genesis is offered, the
 gates not met are its follow-up list there.
+
+*Decided 2026-10-16 by the tester:* the Sega CD is offered to players. The development mark is removed from the
+`mcd` system in Nephrite's core info, so its sidecar no longer marks it and a player's build lists its shelf, routes
+its discs and lists its firmware; the 32X stays marked in development. **Met at the decision** (`Nephrite_OpenBios.md`
+§15, `Nephrite_Native.md` §63): G2's mcd-verificator, 18 of 18 in mode 2 and in mode 1; G4's kit on the Sega CD's
+discs, its battery files' round trips through games in both directions, between the open BIOS and the player's; G9,
+every disc tried running on the open BIOS with no firmware folder, its machine info naming the replacement, and on the
+player's image when given; the Genesis unchanged, its 71 digests equal. **Still open**: Sonic CD's opening film is
+black on the open BIOS, two boot ROM routines no document describes (D-54); the RAM cartridge cannot be reached on the
+open BIOS, `_mburam`'s address being in no document (D-55); and the empty-drive start-up question, the player's BIOS
+staying on its first picture with no disc in Nephrite's drive (`Nephrite_OpenBios.md` §16). The Sega CD's discs share
+`.cue`, `.iso` and `.chd` with the PlayStation: a sheet or an image routes by its content, a CHD by its folder's ES-DE
+name alone (`psx`, `segacd`), since neither recogniser reads inside the compressed container (§15 there).
 - **G9, firmware.** Every game the replacement is claimed to run runs with no firmware folder, and its machine info
   names the replacement; with the player's image, the same game runs on it.
 

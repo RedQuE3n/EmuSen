@@ -1,6 +1,5 @@
 using EmuSen.Cores.Debug;
 using EmuSen.Cores.Nintendo.Moon.Debug;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 
 namespace EmuSen.Pharaoh
 {
@@ -28,12 +27,12 @@ namespace EmuSen.Pharaoh
 
             try
             {
-                return leftKind switch
+                if (leftKind != "APU")
                 {
-                    "GSU" => RunGsu(leftBlob, rightBlob, leftPath, rightPath),
-                    "APU" => RunApu(leftBlob, rightBlob, leftPath, rightPath),
-                    _ => RunCpu(leftBlob, rightBlob, leftPath, rightPath),
-                };
+                    Console.WriteLine("[ERROR] Neither file is an APU write log; the S-CPU and GSU traces left with Venus (C#) on 2026-10-16.");
+                    return 1;
+                }
+                return RunApu(leftBlob, rightBlob, leftPath, rightPath);
             }
             catch (InvalidDataException ex)
             {
@@ -45,9 +44,7 @@ namespace EmuSen.Pharaoh
         // The magic picks the record layout, so a trace pair is never read by the wrong parser.
         private static string KindOf(byte[] blob)
         {
-            if (Matches(blob, GsuBinaryTrace.Magic)) return "GSU";
-            if (Matches(blob, ApuWriteTrace.Magic)) return "APU";
-            return "CPU";
+            return Matches(blob, ApuWriteTrace.Magic) ? "APU" : "unknown";
         }
 
         private static bool Matches(byte[] blob, byte[] magic)
@@ -59,29 +56,7 @@ namespace EmuSen.Pharaoh
             return true;
         }
 
-        private static int RunCpu(byte[] leftBlob, byte[] rightBlob, string leftPath, string rightPath)
-        {
-            var left = CpuTraceDiff.Parse(leftBlob);
-            var right = CpuTraceDiff.Parse(rightBlob);
-            if (Empty(left.Length, right.Length)) return 1;
-
-            var result = CpuTraceDiff.Compare(left, right);
-            Console.Write(CpuTraceDiff.Report(result, leftPath, rightPath));
-            return result.Findings.Count == 0 ? 0 : 1;
-        }
-
-        private static int RunGsu(byte[] leftBlob, byte[] rightBlob, string leftPath, string rightPath)
-        {
-            var left = GsuTraceDiff.Parse(leftBlob);
-            var right = GsuTraceDiff.Parse(rightBlob);
-            if (Empty(left.Length, right.Length)) return 1;
-
-            var result = GsuTraceDiff.Compare(left, right);
-            Console.Write(GsuTraceDiff.Report(result, leftPath, rightPath));
-            return result.Findings.Count == 0 ? 0 : 1;
-        }
-
-        // The NES counterpart, scoped to $4000-$4017 rather than every instruction,
+        // The NES's register writes, scoped to $4000-$4017 rather than every instruction,
         // which is enough to answer "is the sound engine even running" - see §3.46.
         private static int RunApu(byte[] leftBlob, byte[] rightBlob, string leftPath, string rightPath)
         {

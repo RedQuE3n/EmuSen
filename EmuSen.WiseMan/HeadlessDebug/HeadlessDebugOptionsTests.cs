@@ -122,36 +122,20 @@ namespace EmuSen.WiseMan.HeadlessDebug
         [InlineData("-1", -1)]
         public void Int_flag_accepts_decimal_and_either_hex_form(string spec, int expected)
         {
-            var (options, _, error) = HeadlessDebugOptions.Parse(
-                new[] { "rom.sfc", "600", "--flag", $"SuperFxRamWriteTraceAddr={spec}" });
-
-            Assert.Null(error);
             Assert.True(HeadlessDebugOptions.TryConvertFlagValue(
                 spec, typeof(int), out object? value, out _));
             Assert.Equal(expected, value);
-            Assert.Contains(options!.FlagsToEnable, f => f.EndsWith(spec));
         }
 
         [Fact]
         public void Unparseable_flag_value_is_an_error_rather_than_an_exception_out_of_Main()
         {
             var (options, _, error) = HeadlessDebugOptions.Parse(
-                new[] { "rom.sfc", "600", "--flag", "SuperFxRamWriteTraceAddr=zzz" });
+                new[] { "rom.sfc", "600", "--flag", "MasterLoggingEnabled=zzz" });
 
             Assert.Null(options);
             Assert.NotNull(error);
-            Assert.Contains("SuperFxRamWriteTraceAddr=zzz", error);
-        }
-
-        // Used to reach SetValue with a boxed true and throw - see §3.15.
-        [Fact]
-        public void Bare_flag_on_a_non_bool_member_is_an_error_not_a_boxed_true()
-        {
-            var (options, _, error) = HeadlessDebugOptions.Parse(
-                new[] { "rom.sfc", "600", "--flag", "SuperFxTraceCountdown" });
-
-            Assert.Null(options);
-            Assert.Contains("explicit value", error!);
+            Assert.Contains("MasterLoggingEnabled=zzz", error);
         }
 
         [Fact]
@@ -176,14 +160,6 @@ namespace EmuSen.WiseMan.HeadlessDebug
         {
             var (options, _, _) = HeadlessDebugOptions.Parse(new[] { "rom.sfc", "600", "--verbose" });
             Assert.True(options!.Verbose);
-        }
-
-        [Fact]
-        public void CpuLog_range_is_parsed()
-        {
-            var (options, _, _) = HeadlessDebugOptions.Parse(new[] { "rom.sfc", "600", "--cpulog", "100:200" });
-            Assert.Equal(100, options!.CpuLogStart);
-            Assert.Equal(200, options.CpuLogEnd);
         }
     }
 }

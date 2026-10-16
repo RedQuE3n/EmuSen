@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Debug;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
@@ -34,8 +33,6 @@ namespace EmuSen.Hotaru
 
             CoreFactory.LoadInto(core, romPath);
             if (CoreFactory.EngineNotice(romPath, engine, core) is { } notice) Console.WriteLine($"[core] {notice}");
-            DebugSettings.CpuVerboseLogging = true;
-            DebugSettings.Spc700VerboseLogging = true;
 
             // Built once here; GameWindow rebuilds the interpreter around them after a `core` swap - see EmuSen_Frontend_Driver.md §1.
             IDianaShCommand[] extraCommands =

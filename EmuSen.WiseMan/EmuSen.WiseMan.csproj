@@ -42,7 +42,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The emulation core (VenusCore/ICore, SnesDebugTarget). -->
+    <!-- The cores' host: ICore, the factory and the catalog. -->
     <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
     <!-- DianaShInterpreter and the shell's commands - its own project as
          of the standalone-shell packaging work, no longer bundled inside

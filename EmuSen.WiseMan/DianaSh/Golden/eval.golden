@@ -184,47 +184,6 @@ status 0
 action none
 end
 
-case on venus
-target venus
-covers 1-2
-$ eval symbols
-out 185
-  a
-  x
-  y
-  s
-  sp
-  d
-  dp
-  pc
-  pb
-  pbr
-  db
-  dbr
-  p
-  e
-  flag.c
-  flag.z
-  flag.i
-  flag.d
-  flag.x
-  flag.m
-  flag.v
-  flag.n
-  frame
-  scanline
-  cycle
-  opaddr
-  stackdepth
-status 0
-action none
-$ eval 1+1
-out 17
-2  $2  %0000 0010
-status 0
-action none
-end
-
 case on venusrt
 target venusrt
 covers 1-2

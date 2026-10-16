@@ -46,8 +46,8 @@ status 1
 action none
 end
 
-case on venus
-target venus
+case on venusrt
+target venusrt
 covers 1-3
 $ readers 2100
 out 67

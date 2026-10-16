@@ -6,7 +6,6 @@ using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
-using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 
@@ -192,15 +191,24 @@ namespace EmuSen.WiseMan.Cores
             File.WriteAllBytes(rom, SyntheticRom.Build((0x7FD8, new byte[] { 0x03 })));
             File.WriteAllBytes(Beside(rom), Pattern(6));
 
-            var core = new VenusCore(headless: true);
-            core.LoadRom(rom);
+            using var core = Snes(rom);
             Assert.False(File.Exists(SaveLibrary.SramPathFor(rom, BatterySave.Snes)));
             Assert.Equal(Pattern(6), File.ReadAllBytes(Beside(rom)));
         }
 
-        private const uint SramAddress = 0x700000;
+        // An SNES game on its one engine, VenusRT, as a frontend loads it; the battery switch is read at the load.
+        private static EmuSen.Cores.Native.CoreEngine Snes(string rom, bool battery = true)
+        {
+            bool was = CoreOptions.BatteryRamDisabled;
+            CoreOptions.BatteryRamDisabled = !battery;
+            try { return Assert.IsType<EmuSen.Cores.Native.CoreEngine>(CoreFactory.Loaded(rom)); }
+            finally { CoreOptions.BatteryRamDisabled = was; }
+        }
 
-        private static byte[] SnesImage() => SyntheticRom.Build((0x7FD8, new byte[] { 0x03 }));
+        private static byte Sram(ICore core, int offset) => ((EmuSen.Cores.Native.CoreEngine)core).ReadSpace("SRAM", offset);
+
+        // 8 KiB of SRAM, and a program that stores <value> at its byte $21 ($70:0021) once a frame, as a game saving would.
+        private static byte[] SnesImage(byte value = 0xAF) => SyntheticRom.Build((0x7FD8, new byte[] { 0x03 }), (5, new byte[] { 0xA9, value, 0x8F, 0x21, 0x00, 0x70, 0x80, 0xF8 }));
 
         private static string Flat(string rom) => SaveLibrary.FlatSramPathFor(rom);
 
@@ -232,7 +240,11 @@ namespace EmuSen.WiseMan.Cores
 
             string snes = Path.Combine(_library, "Same.smc");
             File.WriteAllBytes(snes, SnesImage());
-            new EmuSen.Cores.Nintendo.Venus.Memory.Cartridge(snes, batteryRamDisabled: false).SaveSram();
+            using (var venusRt = Snes(snes))
+            {
+                venusRt.RunFrame();
+                venusRt.SaveSram();
+            }
 
             string n64 = Path.Combine(_library, "Same.z64");
             File.WriteAllBytes(n64, SyntheticN64System.Build());
@@ -281,19 +293,21 @@ namespace EmuSen.WiseMan.Cores
         public void A_flat_folder_snes_save_is_copied_and_still_found()
         {
             string rom = Path.Combine(_library, "Flat.smc");
-            File.WriteAllBytes(rom, SnesImage());
+            File.WriteAllBytes(rom, SnesImage((byte)~Pattern(7)[0x21]));
             PutFlat(rom, Pattern(7));
             var before = Snapshot(Flat(rom));
 
-            var cart = new EmuSen.Cores.Nintendo.Venus.Memory.Cartridge(rom, batteryRamDisabled: false);
-            Assert.Equal(Pattern(7)[0x21], cart.Read8(SramAddress + 0x21));
-            Assert.Equal(Pattern(7), File.ReadAllBytes(SaveLibrary.SramPathFor(rom, BatterySave.Snes)));
-            cart.Write8(SramAddress + 0x21, (byte)~Pattern(7)[0x21]);
-            cart.SaveSram();
+            using (var cart = Snes(rom))
+            {
+                Assert.Equal(Pattern(7)[0x21], Sram(cart, 0x21));
+                Assert.Equal(Pattern(7), File.ReadAllBytes(SaveLibrary.SramPathFor(rom, BatterySave.Snes)));
+                cart.RunFrame();
+                cart.SaveSram();
+            }
 
             AssertUnchanged(before, Flat(rom));
             Assert.Equal((byte)~Pattern(7)[0x21], File.ReadAllBytes(SaveLibrary.SramPathFor(rom, BatterySave.Snes))[0x21]);
-            Assert.Equal((byte)~Pattern(7)[0x21], new EmuSen.Cores.Nintendo.Venus.Memory.Cartridge(rom, batteryRamDisabled: false).Read8(SramAddress + 0x21));
+            using (var again = Snes(rom)) Assert.Equal((byte)~Pattern(7)[0x21], Sram(again, 0x21));
         }
 
         // The N64's chip save and its Controller Pak both come across from the flat folder.
@@ -340,8 +354,7 @@ namespace EmuSen.WiseMan.Cores
             Play(core, 10);
             Done(core);
 
-            var cart = new EmuSen.Cores.Nintendo.Venus.Memory.Cartridge(snes, batteryRamDisabled: false);
-            Assert.Equal(Pattern(10)[0x40], cart.Read8(SramAddress + 0x40));
+            using (var cart = Snes(snes)) Assert.Equal(Pattern(10)[0x40], Sram(cart, 0x40));
             AssertUnchanged(before, Flat(snes));
             Assert.Equal(Pattern(10), File.ReadAllBytes(SaveLibrary.SramPathFor(snes, BatterySave.Snes)));
             Assert.NotEqual(Pattern(10), File.ReadAllBytes(SaveOf(engine, nes)));
@@ -360,9 +373,11 @@ namespace EmuSen.WiseMan.Cores
             File.WriteAllBytes(SaveLibrary.SramPathFor(rom, BatterySave.Snes), Pattern(12));
             var before = Snapshot(Flat(rom));
 
-            var cart = new EmuSen.Cores.Nintendo.Venus.Memory.Cartridge(rom, batteryRamDisabled: false);
-            Assert.Equal(Pattern(12)[3], cart.Read8(SramAddress + 3));
-            cart.SaveSram();
+            using (var cart = Snes(rom))
+            {
+                Assert.Equal(Pattern(12)[3], Sram(cart, 3));
+                cart.SaveSram();
+            }
             AssertUnchanged(before, Flat(rom));
         }
 
@@ -377,9 +392,11 @@ namespace EmuSen.WiseMan.Cores
             File.WriteAllBytes(n64, SyntheticN64System.Build());
             var before = Snapshot(Flat(rom));
 
-            var cart = new EmuSen.Cores.Nintendo.Venus.Memory.Cartridge(rom, batteryRamDisabled: true);
-            Assert.NotEqual(Pattern(13)[5], cart.Read8(SramAddress + 5));
-            cart.SaveSram();
+            using (var cart = Snes(rom, battery: false))
+            {
+                Assert.NotEqual(Pattern(13)[5], Sram(cart, 5));
+                cart.SaveSram();
+            }
             Assert.True(MarsRtCore.Available, MarsNative.Report);
             using (var mars = new MarsRtCore(batteryRamDisabled: true))
             {
@@ -389,33 +406,6 @@ namespace EmuSen.WiseMan.Cores
 
             Assert.Equal(new[] { Path.GetFileName(Flat(rom)) }, Directory.EnumerateFileSystemEntries(DataStore.Saves).Select(Path.GetFileName).ToArray());
             AssertUnchanged(before, Flat(rom));
-        }
-
-        // A Venus state carries the saving game's save path and --nobattery latch, which used to steer the loader's save.
-        [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public void A_venus_state_from_another_game_leaves_the_save_where_this_game_opened_it(bool saverWithoutBattery)
-        {
-            string a = Path.Combine(_library, "A.smc"), b = Path.Combine(_library, "B.smc");
-            File.WriteAllBytes(a, SyntheticRom.Build((0x7FD8, new byte[] { 0x03 })));
-            File.WriteAllBytes(b, SyntheticRom.Build((0x7FD8, new byte[] { 0x03 })));
-
-            CoreOptions.BatteryRamDisabled = saverWithoutBattery;
-            var saver = new VenusCore(headless: true);
-            saver.LoadRom(a);
-            saver.RunFrame();
-            using var state = new MemoryStream();
-            saver.SaveState(state);
-
-            CoreOptions.BatteryRamDisabled = false;
-            var loader = new VenusCore(headless: true);
-            loader.LoadRom(b);
-            loader.LoadState(new MemoryStream(state.ToArray()));
-            loader.SaveSram();
-
-            Assert.True(File.Exists(SaveLibrary.SramPathFor(b, BatterySave.Snes)), "the loader did not write its own game's save");
-            Assert.False(File.Exists(SaveLibrary.SramPathFor(a, BatterySave.Snes)), "the loader wrote the saving game's save");
         }
 
         private static byte ReadRam(ICore core, string engine, int address) => engine switch

@@ -1,5 +1,5 @@
+using EmuSen.Cores;
 using System.Linq;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.Crystal.Debugger;
@@ -192,45 +192,5 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Equal(42, flow.Tail(1)[0].FrameNumber);
         }
 
-        [Fact]
-        public void Copflow_reports_that_logging_is_off_before_it_is_armed()
-        {
-            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
-
-            string output = DianaShInterpreter.CreateDefault(target).Submit("copflow tail").Output;
-
-            Assert.Contains("off", output);
-        }
-
-        [Fact]
-        public void Copflow_poll_explains_a_long_run_through_the_shell()
-        {
-            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
-            var shell = DianaShInterpreter.CreateDefault(target);
-            shell.Submit("copflow on");
-            for (int i = 0; i < 500; i++) target.RegisterFlow!.Note(0x30, 0x00, isWrite: false, "cpu");
-
-            string output = shell.Submit("copflow poll").Output;
-
-            Assert.Contains("500", output);
-            Assert.Contains("$0030", output);
-        }
-
-        [Fact]
-        public void Copflow_stats_lists_a_touched_register()
-        {
-            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
-            var shell = DianaShInterpreter.CreateDefault(target);
-            shell.Submit("copflow on");
-            target.RegisterFlow!.Note(0x3E, 0x7F, isWrite: true, "cpu");
-
-            string output = shell.Submit("copflow stats").Output;
-
-            Assert.Contains("$003E", output);
-            Assert.Contains("0x7F", output);
-        }
     }
 }

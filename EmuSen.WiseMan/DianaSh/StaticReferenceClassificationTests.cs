@@ -1,4 +1,4 @@
-using EmuSen.Cores.Nintendo.Venus.Debug;
+using EmuSen.Cores;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
@@ -9,7 +9,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.DianaSh
 {
-    // IDebugTarget.ClassifyStaticReference (SnesDebugTarget's 65816 opcode
+    // IDebugTarget.ClassifyStaticReference (IDebugTarget's 65816 opcode
     // table) and the callers/writers/readers shell commands built on top
     // of it - see IDebugTarget.cs's own comment for why this exists: these
     // three commands used to hardcode this exact opcode-byte switch
@@ -20,7 +20,7 @@ namespace EmuSen.WiseMan.DianaSh
         // $008034: STA $0200 (absolute write)
         // $008037: LDA $0200 (absolute read)
         // $00803A: STA $12   (direct page - must NOT resolve, no static target)
-        private static SnesDebugTarget BuildTarget()
+        private static IDebugTarget BuildTarget()
         {
             byte[] rom = SyntheticRom.Build(
                 (0x0000, new byte[] { 0x20, 0x34, 0x80 }),
@@ -29,7 +29,7 @@ namespace EmuSen.WiseMan.DianaSh
                 (0x003A, new byte[] { 0x85, 0x12 }));
 
             var core = SyntheticRom.LoadCore(rom);
-            return new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            return SyntheticRom.TargetOf(core);
         }
 
         [Fact]

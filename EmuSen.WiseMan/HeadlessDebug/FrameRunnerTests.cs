@@ -11,11 +11,10 @@ namespace EmuSen.WiseMan.HeadlessDebug
     [Collection(TestCollections.ProcessGlobals)]
     public class FrameRunnerTests
     {
-        private static (EmuSen.Cores.Nintendo.Venus.VenusCore Core, List<string> Log) NewCoreAndLog()
-        {
-            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            return (core, new List<string>());
-        }
+        private static (ICore Core, List<string> Log) NewCoreAndLog() => (SyntheticRom.LoadCore(SyntheticRom.BuildPadReader()), new List<string>());
+
+        // A pad's latched word as the program last copied it, without running a frame.
+        private static ushort Latched(ICore core, int pad = 0) => pad == 0 ? SyntheticRom.Pads(core, frames: 0).One : SyntheticRom.Pads(core, frames: 0).Two;
 
         [Fact]
         public void RunFrames_advances_CurrentFrame_by_the_requested_count()
@@ -86,10 +85,9 @@ namespace EmuSen.WiseMan.HeadlessDebug
             var runner = new FrameRunner(core, frameCap: 100, log.Add);
 
             runner.Hold(PadButton.Start);
-            runner.RunFrames(1);
+            runner.RunFrames(2);
 
-            ushort latched = (ushort)((core.Bus!.Input.ReadJoy1High() << 8) | core.Bus.Input.ReadJoy1Low());
-            Assert.NotEqual(0, latched & 0x1000); // Start's bit
+            Assert.NotEqual(0, Latched(core) & 0x1000); // Start's bit
         }
 
         [Fact]
@@ -99,12 +97,12 @@ namespace EmuSen.WiseMan.HeadlessDebug
             var runner = new FrameRunner(core, frameCap: 100, log.Add);
 
             runner.Hold(PadButton.Start);
-            runner.RunFrames(1);
+            runner.RunFrames(2);
+            Assert.NotEqual(0, Latched(core) & 0x1000);
             runner.Release(PadButton.Start);
-            runner.RunFrames(1);
+            runner.RunFrames(2);
 
-            ushort latched = (ushort)((core.Bus!.Input.ReadJoy1High() << 8) | core.Bus.Input.ReadJoy1Low());
-            Assert.Equal(0, latched & 0x1000);
+            Assert.Equal(0, Latched(core) & 0x1000);
         }
 
         [Fact]
@@ -116,15 +114,9 @@ namespace EmuSen.WiseMan.HeadlessDebug
             runner.Tap(PadButton.A, controller: 1, duration: 4);
             Assert.Equal(4, runner.CurrentFrame);
 
-            // Release() updates the live register immediately, but the
-            // *latched* register (what ReadJoy1Low/High and a real game's
-            // $4218/$4219 reads actually see) only updates on the next
-            // auto-joypad-read - i.e. the next frame's vblank - matching
-            // real hardware. One more frame with nothing held makes that
-            // release observable.
-            runner.RunFrames(1);
-            ushort latched = (ushort)((core.Bus!.Input.ReadJoy1High() << 8) | core.Bus.Input.ReadJoy1Low());
-            Assert.Equal(0, latched & 0x0080); // A's bit, released after the tap
+            // The latched word a game reads updates at the next auto-joypad read, so two more frames make the release observable.
+            runner.RunFrames(2);
+            Assert.Equal(0, Latched(core) & 0x0080); // A's bit, released after the tap
         }
 
         [Fact]
@@ -159,9 +151,9 @@ namespace EmuSen.WiseMan.HeadlessDebug
             var (core, log) = NewCoreAndLog();
             var runner = new FrameRunner(core, frameCap: 100, log.Add);
             runner.Hold(PadButton.Start, 2);
-            core.Bus!.Input.LatchAutoJoypad();
-            Assert.Equal(0x10, core.Bus.Input.ReadJoy2High());
-            Assert.Equal(0, core.Bus.Input.ReadJoy1High());
+            runner.RunFrames(2);
+            Assert.Equal(0x1000, Latched(core, pad: 1));
+            Assert.Equal(0, Latched(core));
         }
     }
 }

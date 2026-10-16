@@ -170,10 +170,9 @@ catalog.console-for-system[gbc] = GB
 catalog.console-for-system[n64] = N64
 catalog.console-for-system[tst] = <null>
 catalog.console-for-system[] = <null>
-built.engine-row[SNES][Engine] = Engine | Choice | default VenusRT (Rust) | 0..0 | [VenusRT (Rust), Venus (C#)]
-built.engine-row[SNES][Engine].hint = Which implementation runs the console. VenusRT (Rust) is the default. Venus (C#) is the reference, kept for now, and runs instead where VenusRT's library is missing. A save state made by Venus (C#) does not load in VenusRT, though battery saves cross between the two. Takes effect when a game is next loaded.
+built.engine-row[SNES] = <null>
 built.engine-row[SNES].discovered = [VenusRT (Rust)]
-built.engine-row[SNES].chosen-default = VenusRT (Rust)
+built.engine-row[SNES].chosen-default = <null>
 built.engine-row[SNES].chosen-stored = Stored
 built.engine-row[NES][Engine] = Engine | Choice | default Moon (C#) | 0..0 | [Moon (C#), MoonRT (Rust)]
 built.engine-row[NES][Engine].hint = Which implementation runs the console. Moon (C#) is the reference. MoonRT (Rust) is exact against it in state, picture and sound, reads the same save states and battery saves, and takes the same cheats; its debugger view is refreshed from its state, and it stops at breakpoints, steps, runs to a frame or an interrupt, and records coverage, watches, the profile and the call stack as Moon does. Takes effect when a game is next loaded.
@@ -211,141 +210,116 @@ built.discovered[moonrt] = MoonRT (Rust) systems=[nes] opens=True
 built.discovered[nephrite] = Nephrite systems=[md, mcd, 32x] opens=True
 built.discovered[venusrt] = VenusRT (Rust) systems=[snes] opens=True
 built.factory[SNES plain <null>].supported = True
-built.factory[SNES plain <null>].probe = VenusCore
-built.factory[SNES plain <null>].core = VenusCore
+built.factory[SNES plain <null>].probe = CoreEngine
+built.factory[SNES plain <null>].firmware = VenusRT | SNES sound chip start-up | spc700.rom | 64 | optional | [] | [[spc700.rom]]
+built.factory[SNES plain <null>].core = CoreEngine
 built.factory[SNES plain <null>].notice = <null>
-built.factory[SNES plain <null>].debug-target = SnesDebugTarget
-built.factory[SNES plain <null>].trace-switch = VenusCpuTraceSwitch
-built.factory[SNES plain <null>].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
+built.factory[SNES plain <null>].debug-target = CoreDebugTarget
+built.factory[SNES plain <null>].trace-switch = <null>
+built.factory[SNES plain <null>].codec-auto = Pro Action Replay | RamPoke | CpuBus
 built.factory[SNES plain <null>].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[SNES plain <null>].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
+built.factory[SNES plain <null>].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
 built.factory[SNES plain <null>].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
 built.factory[SNES plain <null>].axes = []
-built.factory[SNES plain <null>].state-version = 3
+built.factory[SNES plain <null>].state-version = 22
 built.factory[SNES plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[SNES plain <null>].setting[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | [1, 4, 16] | now 1
 built.factory[SNES plain <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[SNES plain <null>].file = Home/Saves/SNES/Game.srm 131072 5c76bf7a4ca90d0b
+built.factory[SNES plain <null>].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
 built.factory[SNES plain <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
-built.factory[SNES plain VenusRT (Rust)].supported = True
-built.factory[SNES plain VenusRT (Rust)].probe = CoreEngine
-built.factory[SNES plain VenusRT (Rust)].firmware = VenusRT | SNES sound chip start-up | spc700.rom | 64 | optional | [] | [[spc700.rom]]
-built.factory[SNES plain VenusRT (Rust)].core = CoreEngine
-built.factory[SNES plain VenusRT (Rust)].notice = <null>
-built.factory[SNES plain VenusRT (Rust)].debug-target = CoreDebugTarget
-built.factory[SNES plain VenusRT (Rust)].trace-switch = <null>
-built.factory[SNES plain VenusRT (Rust)].codec-auto = Pro Action Replay | RamPoke | CpuBus
-built.factory[SNES plain VenusRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[SNES plain VenusRT (Rust)].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
-built.factory[SNES plain VenusRT (Rust)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
-built.factory[SNES plain VenusRT (Rust)].axes = []
-built.factory[SNES plain VenusRT (Rust)].state-version = 22
-built.factory[SNES plain VenusRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-built.factory[SNES plain VenusRT (Rust)].setting[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | [1, 4, 16] | now 1
-built.factory[SNES plain VenusRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[SNES plain VenusRT (Rust)].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
-built.factory[SNES plain VenusRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
-built.factory[SNES plain Venus (C#)].supported = True
-built.factory[SNES plain Venus (C#)].probe = VenusCore
-built.factory[SNES plain Venus (C#)].core = VenusCore
-built.factory[SNES plain Venus (C#)].notice = <null>
-built.factory[SNES plain Venus (C#)].debug-target = SnesDebugTarget
-built.factory[SNES plain Venus (C#)].trace-switch = VenusCpuTraceSwitch
-built.factory[SNES plain Venus (C#)].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
-built.factory[SNES plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[SNES plain Venus (C#)].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
-built.factory[SNES plain Venus (C#)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
-built.factory[SNES plain Venus (C#)].axes = []
-built.factory[SNES plain Venus (C#)].state-version = 3
-built.factory[SNES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-built.factory[SNES plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[SNES plain Venus (C#)].file = Home/Saves/SNES/Game.srm 131072 5c76bf7a4ca90d0b
-built.factory[SNES plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[SNES plain Nope].supported = True
-built.factory[SNES plain Nope].probe = VenusCore
-built.factory[SNES plain Nope].core = VenusCore
-built.factory[SNES plain Nope].notice = No engine is named "Nope"; Venus (C#) is running.
-built.factory[SNES plain Nope].debug-target = SnesDebugTarget
-built.factory[SNES plain Nope].trace-switch = VenusCpuTraceSwitch
-built.factory[SNES plain Nope].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
+built.factory[SNES plain Nope].probe = CoreEngine
+built.factory[SNES plain Nope].firmware = VenusRT | SNES sound chip start-up | spc700.rom | 64 | optional | [] | [[spc700.rom]]
+built.factory[SNES plain Nope].core = CoreEngine
+built.factory[SNES plain Nope].notice = <null>
+built.factory[SNES plain Nope].debug-target = CoreDebugTarget
+built.factory[SNES plain Nope].trace-switch = <null>
+built.factory[SNES plain Nope].codec-auto = Pro Action Replay | RamPoke | CpuBus
 built.factory[SNES plain Nope].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[SNES plain Nope].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
+built.factory[SNES plain Nope].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
 built.factory[SNES plain Nope].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
 built.factory[SNES plain Nope].axes = []
-built.factory[SNES plain Nope].state-version = 3
+built.factory[SNES plain Nope].state-version = 22
 built.factory[SNES plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[SNES plain Nope].setting[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | [1, 4, 16] | now 1
 built.factory[SNES plain Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[SNES plain Nope].file = Home/Saves/SNES/Game.srm 131072 5c76bf7a4ca90d0b
+built.factory[SNES plain Nope].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
 built.factory[SNES plain Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
+built.factory[SNES plain Venus (C#)].supported = True
+built.factory[SNES plain Venus (C#)].probe = CoreEngine
+built.factory[SNES plain Venus (C#)].firmware = VenusRT | SNES sound chip start-up | spc700.rom | 64 | optional | [] | [[spc700.rom]]
+built.factory[SNES plain Venus (C#)].core = CoreEngine
+built.factory[SNES plain Venus (C#)].notice = <null>
+built.factory[SNES plain Venus (C#)].debug-target = CoreDebugTarget
+built.factory[SNES plain Venus (C#)].trace-switch = <null>
+built.factory[SNES plain Venus (C#)].codec-auto = Pro Action Replay | RamPoke | CpuBus
+built.factory[SNES plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
+built.factory[SNES plain Venus (C#)].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
+built.factory[SNES plain Venus (C#)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
+built.factory[SNES plain Venus (C#)].axes = []
+built.factory[SNES plain Venus (C#)].state-version = 22
+built.factory[SNES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[SNES plain Venus (C#)].setting[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | [1, 4, 16] | now 1
+built.factory[SNES plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+built.factory[SNES plain Venus (C#)].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
+built.factory[SNES plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[SNES battery <null>].supported = True
-built.factory[SNES battery <null>].probe = VenusCore
-built.factory[SNES battery <null>].core = VenusCore
+built.factory[SNES battery <null>].probe = CoreEngine
+built.factory[SNES battery <null>].firmware = VenusRT | SNES sound chip start-up | spc700.rom | 64 | optional | [] | [[spc700.rom]]
+built.factory[SNES battery <null>].core = CoreEngine
 built.factory[SNES battery <null>].notice = <null>
-built.factory[SNES battery <null>].debug-target = SnesDebugTarget
-built.factory[SNES battery <null>].trace-switch = VenusCpuTraceSwitch
-built.factory[SNES battery <null>].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
+built.factory[SNES battery <null>].debug-target = CoreDebugTarget
+built.factory[SNES battery <null>].trace-switch = <null>
+built.factory[SNES battery <null>].codec-auto = Pro Action Replay | RamPoke | CpuBus
 built.factory[SNES battery <null>].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[SNES battery <null>].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
+built.factory[SNES battery <null>].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
 built.factory[SNES battery <null>].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
 built.factory[SNES battery <null>].axes = []
-built.factory[SNES battery <null>].state-version = 3
+built.factory[SNES battery <null>].state-version = 22
 built.factory[SNES battery <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[SNES battery <null>].setting[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | [1, 4, 16] | now 1
 built.factory[SNES battery <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[SNES battery <null>].file = Home/Saves/SNES/Game.srm 2048 d54dc5131301af96
+built.factory[SNES battery <null>].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
 built.factory[SNES battery <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
-built.factory[SNES battery VenusRT (Rust)].supported = True
-built.factory[SNES battery VenusRT (Rust)].probe = CoreEngine
-built.factory[SNES battery VenusRT (Rust)].firmware = VenusRT | SNES sound chip start-up | spc700.rom | 64 | optional | [] | [[spc700.rom]]
-built.factory[SNES battery VenusRT (Rust)].core = CoreEngine
-built.factory[SNES battery VenusRT (Rust)].notice = <null>
-built.factory[SNES battery VenusRT (Rust)].debug-target = CoreDebugTarget
-built.factory[SNES battery VenusRT (Rust)].trace-switch = <null>
-built.factory[SNES battery VenusRT (Rust)].codec-auto = Pro Action Replay | RamPoke | CpuBus
-built.factory[SNES battery VenusRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[SNES battery VenusRT (Rust)].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
-built.factory[SNES battery VenusRT (Rust)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
-built.factory[SNES battery VenusRT (Rust)].axes = []
-built.factory[SNES battery VenusRT (Rust)].state-version = 22
-built.factory[SNES battery VenusRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-built.factory[SNES battery VenusRT (Rust)].setting[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | [1, 4, 16] | now 1
-built.factory[SNES battery VenusRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[SNES battery VenusRT (Rust)].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
-built.factory[SNES battery VenusRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
-built.factory[SNES battery Venus (C#)].supported = True
-built.factory[SNES battery Venus (C#)].probe = VenusCore
-built.factory[SNES battery Venus (C#)].core = VenusCore
-built.factory[SNES battery Venus (C#)].notice = <null>
-built.factory[SNES battery Venus (C#)].debug-target = SnesDebugTarget
-built.factory[SNES battery Venus (C#)].trace-switch = VenusCpuTraceSwitch
-built.factory[SNES battery Venus (C#)].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
-built.factory[SNES battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[SNES battery Venus (C#)].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
-built.factory[SNES battery Venus (C#)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
-built.factory[SNES battery Venus (C#)].axes = []
-built.factory[SNES battery Venus (C#)].state-version = 3
-built.factory[SNES battery Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-built.factory[SNES battery Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[SNES battery Venus (C#)].file = Home/Saves/SNES/Game.srm 2048 d54dc5131301af96
-built.factory[SNES battery Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[SNES battery Nope].supported = True
-built.factory[SNES battery Nope].probe = VenusCore
-built.factory[SNES battery Nope].core = VenusCore
-built.factory[SNES battery Nope].notice = No engine is named "Nope"; Venus (C#) is running.
-built.factory[SNES battery Nope].debug-target = SnesDebugTarget
-built.factory[SNES battery Nope].trace-switch = VenusCpuTraceSwitch
-built.factory[SNES battery Nope].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
+built.factory[SNES battery Nope].probe = CoreEngine
+built.factory[SNES battery Nope].firmware = VenusRT | SNES sound chip start-up | spc700.rom | 64 | optional | [] | [[spc700.rom]]
+built.factory[SNES battery Nope].core = CoreEngine
+built.factory[SNES battery Nope].notice = <null>
+built.factory[SNES battery Nope].debug-target = CoreDebugTarget
+built.factory[SNES battery Nope].trace-switch = <null>
+built.factory[SNES battery Nope].codec-auto = Pro Action Replay | RamPoke | CpuBus
 built.factory[SNES battery Nope].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[SNES battery Nope].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
+built.factory[SNES battery Nope].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
 built.factory[SNES battery Nope].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
 built.factory[SNES battery Nope].axes = []
-built.factory[SNES battery Nope].state-version = 3
+built.factory[SNES battery Nope].state-version = 22
 built.factory[SNES battery Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[SNES battery Nope].setting[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | [1, 4, 16] | now 1
 built.factory[SNES battery Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[SNES battery Nope].file = Home/Saves/SNES/Game.srm 2048 d54dc5131301af96
+built.factory[SNES battery Nope].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
 built.factory[SNES battery Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
-built.configured[SNES nothing stored] = VenusRT (Rust)
-built.configured[SNES VenusRT (Rust)] = VenusRT (Rust)
-built.configured[SNES Venus (C#)] = Venus (C#)
+built.factory[SNES battery Venus (C#)].supported = True
+built.factory[SNES battery Venus (C#)].probe = CoreEngine
+built.factory[SNES battery Venus (C#)].firmware = VenusRT | SNES sound chip start-up | spc700.rom | 64 | optional | [] | [[spc700.rom]]
+built.factory[SNES battery Venus (C#)].core = CoreEngine
+built.factory[SNES battery Venus (C#)].notice = <null>
+built.factory[SNES battery Venus (C#)].debug-target = CoreDebugTarget
+built.factory[SNES battery Venus (C#)].trace-switch = <null>
+built.factory[SNES battery Venus (C#)].codec-auto = Pro Action Replay | RamPoke | CpuBus
+built.factory[SNES battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
+built.factory[SNES battery Venus (C#)].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
+built.factory[SNES battery Venus (C#)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
+built.factory[SNES battery Venus (C#)].axes = []
+built.factory[SNES battery Venus (C#)].state-version = 22
+built.factory[SNES battery Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[SNES battery Venus (C#)].setting[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | [1, 4, 16] | now 1
+built.factory[SNES battery Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+built.factory[SNES battery Venus (C#)].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
+built.factory[SNES battery Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
+built.configured[SNES nothing stored] = <null>
 built.configured[SNES Nope] = Nope
+built.configured[SNES Venus (C#)] = VenusRT (Rust)
 built.factory[NES plain <null>].supported = True
 built.factory[NES plain <null>].probe = MoonCore
 built.factory[NES plain <null>].core = MoonCore
@@ -505,7 +479,7 @@ built.configured[NES nothing stored] = Moon (C#)
 built.configured[NES Moon (C#)] = Moon (C#)
 built.configured[NES MoonRT (Rust)] = MoonRT (Rust)
 built.configured[NES Nope] = Nope
-built.configured[NES Venus (C#)] = Venus (C#)
+built.configured[NES Venus (C#)] = VenusRT (Rust)
 built.factory[GB plain <null>].supported = True
 built.factory[GB plain <null>].probe = MercuryRtCore
 built.factory[GB plain <null>].core = MercuryRtCore
@@ -708,7 +682,7 @@ built.factory[GB colour-battery Mercury (C#)].file = Home/Saves/Game.srm 64 cc73
 built.factory[GB colour-battery Mercury (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.configured[GB nothing stored] = <null>
 built.configured[GB Nope] = Nope
-built.configured[GB Venus (C#)] = Venus (C#)
+built.configured[GB Venus (C#)] = VenusRT (Rust)
 built.configured[GB Mercury (C#)] = MercuryRT (Rust)
 built.factory[N64 plain <null>].supported = True
 built.factory[N64 plain <null>].probe = MarsRtCore
@@ -1088,13 +1062,8 @@ built.factory[N64 byteswapped Mars (C#)].file = Roms/Game.srm 64 cc7321cce5e4409
 built.configured[N64 nothing stored] = <null>
 built.configured[N64 MarsRT (Rust)] = MarsRT (Rust)
 built.configured[N64 Nope] = Nope
-built.configured[N64 Venus (C#)] = Venus (C#)
+built.configured[N64 Venus (C#)] = VenusRT (Rust)
 built.configured[N64 Mars (C#)] = MarsRT (Rust)
-settings[SNES VenusRT (Rust)].core = CoreEngine
-settings[SNES VenusRT (Rust)].row[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | 0..0 | [1, 4, 16]
-settings[SNES VenusRT (Rust)].row[sa1_catch_up].hint = How often the SA-1, the second processor in Super Mario RPG, Kirby Super Star and other SA-1 games, is brought level with the console's own CPU while that CPU works outside the cartridge. Whenever the CPU touches the cartridge it is brought level at once, whatever this says. The SA-1 can fall up to 4 or 16 instructions of the console's CPU behind it. Its interrupt to that CPU can arrive that much later, and the two processors' contention for ROM and BW-RAM inside that span is timed differently from the console's. Some games' internal state then differs from the exact setting's at some frames, though the pictures measured were the same. It saves about 3% of the time of Super Mario RPG's heaviest scene, and nothing in games without an SA-1.
-settings[SNES VenusRT (Rust)].row[sa1_catch_up].note-at-defaults = <null>
-settings[SNES Venus (C#)].core = VenusCore
 settings[NES Moon (C#)].core = MoonCore
 settings[NES MoonRT (Rust)].core = MoonRtCore
 settings[N64 MarsRT (Rust)].core = MarsRtCore
@@ -1117,22 +1086,22 @@ settings[N64 MarsRT (Rust)].row[ExpansionPak] = Expansion Pak | Switch | default
 settings[N64 MarsRT (Rust)].row[ExpansionPak].hint = The memory accessory that doubles the console's 4MB. A few games refuse to start without it and more use it when it is there. Takes effect when a game is next loaded; a save state resumes with the memory it was made with.
 settings[N64 MarsRT (Rust)].row[Recompiler] = Compile the processor's code | Switch | default true | 0..0 | []
 settings[N64 MarsRT (Rust)].row[Recompiler].hint = The processor's code is compiled to the host's machine code in blocks, each compared with memory before it runs, on a thread of its own. Exact: frame for frame the interpreter, which is what off leaves running, slower.
-codecs.default = Pro Action Replay/Game Wizard | RamPoke | CpuBus / Game Genie | RomPatch | <null>
-codecs.for[<null>] = Pro Action Replay/Game Wizard | RamPoke | CpuBus / Game Genie | RomPatch | <null>
-codecs.for[] = Pro Action Replay/Game Wizard | RamPoke | CpuBus / Game Genie | RomPatch | <null>
-codecs.for[SNES] = Pro Action Replay/Game Wizard | RamPoke | CpuBus / Game Genie | RomPatch | <null>
-codecs.for[SNES (Venus)] = Pro Action Replay/Game Wizard | RamPoke | CpuBus / Game Genie | RomPatch | <null>
+codecs.default = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
+codecs.for[<null>] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
+codecs.for[] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
+codecs.for[SNES] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
+codecs.for[SNES (Venus)] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
 codecs.for[NES] = NES address:value | RamPoke | CPUBUS / Game Genie | RomPatch | <null>
 codecs.for[NES (Moon)] = NES address:value | RamPoke | CPUBUS / Game Genie | RomPatch | <null>
 codecs.for[GB] = GameShark | RamPoke | CPUBUS / Game Genie | RomPatch | <null>
-codecs.for[GBC] = Pro Action Replay/Game Wizard | RamPoke | CpuBus / Game Genie | RomPatch | <null>
+codecs.for[GBC] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
 codecs.for[Game Boy (Mercury)] = GameShark | RamPoke | CPUBUS / Game Genie | RomPatch | <null>
-codecs.for[Game Boy Color (Mercury)] = Pro Action Replay/Game Wizard | RamPoke | CpuBus / Game Genie | RomPatch | <null>
+codecs.for[Game Boy Color (Mercury)] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
 codecs.for[N64] = GameShark | RamPoke | RDRAM / <null>
 codecs.for[Nintendo 64 (Mars)] = GameShark | RamPoke | RDRAM / <null>
-codecs.for[Nope] = Pro Action Replay/Game Wizard | RamPoke | CpuBus / Game Genie | RomPatch | <null>
-codecs.decode[Game Genie RomPatch ][7E0DBE09] = (7423501, 63) compare=- writes=[]
-codecs.decode[Game Genie RomPatch ][7E000000] = (1130817, 63) compare=- writes=[]
+codecs.for[Nope] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
+codecs.decode[Game Genie RomPatch ][7E0DBE09] = no
+codecs.decode[Game Genie RomPatch ][7E000000] = no
 codecs.decode[Game Genie RomPatch ][DD62-6DAD] = (33491, 0) compare=- writes=[]
 codecs.decode[Game Genie RomPatch ][C2A3-DFA4] = (51431, 173) compare=- writes=[]
 codecs.decode[Game Genie RomPatch ][SXIOPO] = no
@@ -1140,10 +1109,10 @@ codecs.decode[Game Genie RomPatch ][AAEAULPA] = no
 codecs.decode[Game Genie RomPatch ][GZSXSSVK] = no
 codecs.decode[Game Genie RomPatch ][00A-17B-C49] = no
 codecs.decode[Game Genie RomPatch ][091-17B-C49] = no
-codecs.decode[Game Genie RomPatch ][010A2BC0] = (6898630, 70) compare=- writes=[]
+codecs.decode[Game Genie RomPatch ][010A2BC0] = no
 codecs.decode[Game Genie RomPatch ][8033B152 0003] = no
 codecs.decode[Game Genie RomPatch ][D0033B15 0003] = no
-codecs.decode[Game Genie RomPatch ][800D7E6F] = (15746062, 180) compare=- writes=[]
+codecs.decode[Game Genie RomPatch ][800D7E6F] = no
 codecs.decode[Game Genie RomPatch ][0012:AB] = no
 codecs.decode[Game Genie RomPatch ][12AB:34] = no
 codecs.decode[Game Genie RomPatch ][FFFF] = no
@@ -1203,24 +1172,24 @@ codecs.decode[NES address:value RamPoke CPUBUS][12AB:34] = (4779, 52) compare=- 
 codecs.decode[NES address:value RamPoke CPUBUS][FFFF] = no
 codecs.decode[NES address:value RamPoke CPUBUS][] = no
 codecs.decode[NES address:value RamPoke CPUBUS][ZZZZZZZZ] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][7E0DBE09] = (8261054, 9) compare=- writes=[]
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][7E000000] = (8257536, 0) compare=- writes=[]
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][DD62-6DAD] = (14508653, 173) compare=- writes=[]
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][C2A3-DFA4] = (12755935, 164) compare=- writes=[]
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][SXIOPO] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][AAEAULPA] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][GZSXSSVK] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][00A-17B-C49] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][091-17B-C49] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][010A2BC0] = (68139, 192) compare=- writes=[]
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][8033B152 0003] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][D0033B15 0003] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][800D7E6F] = (8392062, 111) compare=- writes=[]
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][0012:AB] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][12AB:34] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][FFFF] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][ZZZZZZZZ] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][7E0DBE09] = (8261054, 9) compare=- writes=[WRAM:DBE=9]
+codecs.decode[Pro Action Replay RamPoke CpuBus][7E000000] = (8257536, 0) compare=- writes=[]
+codecs.decode[Pro Action Replay RamPoke CpuBus][DD62-6DAD] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][C2A3-DFA4] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][SXIOPO] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][AAEAULPA] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][GZSXSSVK] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][00A-17B-C49] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][091-17B-C49] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][010A2BC0] = (68139, 192) compare=- writes=[CpuBus:10A2B=C0]
+codecs.decode[Pro Action Replay RamPoke CpuBus][8033B152 0003] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][D0033B15 0003] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][800D7E6F] = (8392062, 111) compare=- writes=[CpuBus:800D7E=6F]
+codecs.decode[Pro Action Replay RamPoke CpuBus][0012:AB] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][12AB:34] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][FFFF] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][ZZZZZZZZ] = no
 nothing-discovered.engine-row[SNES] = <null>
 nothing-discovered.engine-row[SNES].discovered = []
 nothing-discovered.engine-row[SNES].chosen-default = <null>
@@ -1255,44 +1224,14 @@ nothing-discovered.registered[Nope] = False
 nothing-discovered.registered[<null>] = False
 nothing-discovered.available = MoonRT=True MercuryRT=True MarsRT=True
 nothing-discovered.factory[SNES plain <null>].supported = True
-nothing-discovered.factory[SNES plain <null>].probe = VenusCore
-nothing-discovered.factory[SNES plain <null>].core = VenusCore
-nothing-discovered.factory[SNES plain <null>].notice = <null>
-nothing-discovered.factory[SNES plain <null>].debug-target = SnesDebugTarget
-nothing-discovered.factory[SNES plain <null>].trace-switch = VenusCpuTraceSwitch
-nothing-discovered.factory[SNES plain <null>].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
-nothing-discovered.factory[SNES plain <null>].codec-explicit = Game Genie | RomPatch | <null>
-nothing-discovered.factory[SNES plain <null>].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
-nothing-discovered.factory[SNES plain <null>].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
-nothing-discovered.factory[SNES plain <null>].axes = []
-nothing-discovered.factory[SNES plain <null>].state-version = 3
-nothing-discovered.factory[SNES plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+nothing-discovered.factory[SNES plain <null>].probe = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (no sidecar for it was found beside the program).
+nothing-discovered.factory[SNES plain <null>].load = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (no sidecar for it was found beside the program).
 nothing-discovered.factory[SNES plain Nope].supported = True
-nothing-discovered.factory[SNES plain Nope].probe = VenusCore
-nothing-discovered.factory[SNES plain Nope].core = VenusCore
-nothing-discovered.factory[SNES plain Nope].notice = <null>
-nothing-discovered.factory[SNES plain Nope].debug-target = SnesDebugTarget
-nothing-discovered.factory[SNES plain Nope].trace-switch = VenusCpuTraceSwitch
-nothing-discovered.factory[SNES plain Nope].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
-nothing-discovered.factory[SNES plain Nope].codec-explicit = Game Genie | RomPatch | <null>
-nothing-discovered.factory[SNES plain Nope].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
-nothing-discovered.factory[SNES plain Nope].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
-nothing-discovered.factory[SNES plain Nope].axes = []
-nothing-discovered.factory[SNES plain Nope].state-version = 3
-nothing-discovered.factory[SNES plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+nothing-discovered.factory[SNES plain Nope].probe = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (no sidecar for it was found beside the program).
+nothing-discovered.factory[SNES plain Nope].load = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (no sidecar for it was found beside the program).
 nothing-discovered.factory[SNES plain Venus (C#)].supported = True
-nothing-discovered.factory[SNES plain Venus (C#)].probe = VenusCore
-nothing-discovered.factory[SNES plain Venus (C#)].core = VenusCore
-nothing-discovered.factory[SNES plain Venus (C#)].notice = <null>
-nothing-discovered.factory[SNES plain Venus (C#)].debug-target = SnesDebugTarget
-nothing-discovered.factory[SNES plain Venus (C#)].trace-switch = VenusCpuTraceSwitch
-nothing-discovered.factory[SNES plain Venus (C#)].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
-nothing-discovered.factory[SNES plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
-nothing-discovered.factory[SNES plain Venus (C#)].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
-nothing-discovered.factory[SNES plain Venus (C#)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
-nothing-discovered.factory[SNES plain Venus (C#)].axes = []
-nothing-discovered.factory[SNES plain Venus (C#)].state-version = 3
-nothing-discovered.factory[SNES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+nothing-discovered.factory[SNES plain Venus (C#)].probe = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (no sidecar for it was found beside the program).
+nothing-discovered.factory[SNES plain Venus (C#)].load = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (no sidecar for it was found beside the program).
 nothing-discovered.factory[NES plain <null>].supported = True
 nothing-discovered.factory[NES plain <null>].probe = MoonCore
 nothing-discovered.factory[NES plain <null>].core = MoonCore
@@ -1524,10 +1463,9 @@ nothing-discovered.factory[N64 plain Mars (C#)].setting[Antialiasing] = Antialia
 nothing-discovered.factory[N64 plain Mars (C#)].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
 nothing-discovered.factory[N64 plain Mars (C#)].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
 nothing-discovered.factory[N64 plain Mars (C#)].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
-refused-discovered.engine-row[SNES][Engine] = Engine | Choice | default VenusRT (Rust) | 0..0 | [VenusRT (Rust), Venus (C#)]
-refused-discovered.engine-row[SNES][Engine].hint = Which implementation runs the console. VenusRT (Rust) is the default. Venus (C#) is the reference, kept for now, and runs instead where VenusRT's library is missing. A save state made by Venus (C#) does not load in VenusRT, though battery saves cross between the two. Takes effect when a game is next loaded.
+refused-discovered.engine-row[SNES] = <null>
 refused-discovered.engine-row[SNES].discovered = [VenusRT (Rust)]
-refused-discovered.engine-row[SNES].chosen-default = VenusRT (Rust)
+refused-discovered.engine-row[SNES].chosen-default = <null>
 refused-discovered.engine-row[SNES].chosen-stored = Stored
 refused-discovered.engine-row[NES][Engine] = Engine | Choice | default Moon (C#) | 0..0 | [Moon (C#), MoonRT (Rust)]
 refused-discovered.engine-row[NES][Engine].hint = Which implementation runs the console. Moon (C#) is the reference. MoonRT (Rust) is exact against it in state, picture and sound, reads the same save states and battery saves, and takes the same cheats; its debugger view is refreshed from its state, and it stops at breakpoints, steps, runs to a frame or an interrupt, and records coverage, watches, the profile and the call stack as Moon does. Takes effect when a game is next loaded.
@@ -1565,57 +1503,14 @@ refused-discovered.discovered[moonrt] = MoonRT (Rust) systems=[nes] opens=False 
 refused-discovered.discovered[nephrite] = Nephrite systems=[md, mcd, 32x] opens=False report=libnephrite.so is not the library its sidecar describes (its SHA-256 differs); it was not loaded
 refused-discovered.discovered[venusrt] = VenusRT (Rust) systems=[snes] opens=False report=<lib venusrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded
 refused-discovered.factory[SNES plain <null>].supported = True
-refused-discovered.factory[SNES plain <null>].probe = VenusCore
-refused-discovered.factory[SNES plain <null>].core = VenusCore
-refused-discovered.factory[SNES plain <null>].notice = <null>
-refused-discovered.factory[SNES plain <null>].debug-target = SnesDebugTarget
-refused-discovered.factory[SNES plain <null>].trace-switch = VenusCpuTraceSwitch
-refused-discovered.factory[SNES plain <null>].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
-refused-discovered.factory[SNES plain <null>].codec-explicit = Game Genie | RomPatch | <null>
-refused-discovered.factory[SNES plain <null>].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
-refused-discovered.factory[SNES plain <null>].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
-refused-discovered.factory[SNES plain <null>].axes = []
-refused-discovered.factory[SNES plain <null>].state-version = 3
-refused-discovered.factory[SNES plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-refused-discovered.factory[SNES plain VenusRT (Rust)].supported = True
-refused-discovered.factory[SNES plain VenusRT (Rust)].probe = VenusCore
-refused-discovered.factory[SNES plain VenusRT (Rust)].core = VenusCore
-refused-discovered.factory[SNES plain VenusRT (Rust)].notice = VenusRT (Rust) is not available (<lib venusrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded); Venus (C#) is running.
-refused-discovered.factory[SNES plain VenusRT (Rust)].debug-target = SnesDebugTarget
-refused-discovered.factory[SNES plain VenusRT (Rust)].trace-switch = VenusCpuTraceSwitch
-refused-discovered.factory[SNES plain VenusRT (Rust)].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
-refused-discovered.factory[SNES plain VenusRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-refused-discovered.factory[SNES plain VenusRT (Rust)].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
-refused-discovered.factory[SNES plain VenusRT (Rust)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
-refused-discovered.factory[SNES plain VenusRT (Rust)].axes = []
-refused-discovered.factory[SNES plain VenusRT (Rust)].state-version = 3
-refused-discovered.factory[SNES plain VenusRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-refused-discovered.factory[SNES plain Venus (C#)].supported = True
-refused-discovered.factory[SNES plain Venus (C#)].probe = VenusCore
-refused-discovered.factory[SNES plain Venus (C#)].core = VenusCore
-refused-discovered.factory[SNES plain Venus (C#)].notice = <null>
-refused-discovered.factory[SNES plain Venus (C#)].debug-target = SnesDebugTarget
-refused-discovered.factory[SNES plain Venus (C#)].trace-switch = VenusCpuTraceSwitch
-refused-discovered.factory[SNES plain Venus (C#)].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
-refused-discovered.factory[SNES plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
-refused-discovered.factory[SNES plain Venus (C#)].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
-refused-discovered.factory[SNES plain Venus (C#)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
-refused-discovered.factory[SNES plain Venus (C#)].axes = []
-refused-discovered.factory[SNES plain Venus (C#)].state-version = 3
-refused-discovered.factory[SNES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+refused-discovered.factory[SNES plain <null>].probe = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (<lib venusrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
+refused-discovered.factory[SNES plain <null>].load = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (<lib venusrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
 refused-discovered.factory[SNES plain Nope].supported = True
-refused-discovered.factory[SNES plain Nope].probe = VenusCore
-refused-discovered.factory[SNES plain Nope].core = VenusCore
-refused-discovered.factory[SNES plain Nope].notice = No engine is named "Nope"; Venus (C#) is running.
-refused-discovered.factory[SNES plain Nope].debug-target = SnesDebugTarget
-refused-discovered.factory[SNES plain Nope].trace-switch = VenusCpuTraceSwitch
-refused-discovered.factory[SNES plain Nope].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
-refused-discovered.factory[SNES plain Nope].codec-explicit = Game Genie | RomPatch | <null>
-refused-discovered.factory[SNES plain Nope].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
-refused-discovered.factory[SNES plain Nope].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
-refused-discovered.factory[SNES plain Nope].axes = []
-refused-discovered.factory[SNES plain Nope].state-version = 3
-refused-discovered.factory[SNES plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+refused-discovered.factory[SNES plain Nope].probe = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (<lib venusrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
+refused-discovered.factory[SNES plain Nope].load = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (<lib venusrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
+refused-discovered.factory[SNES plain Venus (C#)].supported = True
+refused-discovered.factory[SNES plain Venus (C#)].probe = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (<lib venusrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
+refused-discovered.factory[SNES plain Venus (C#)].load = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (<lib venusrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
 refused-discovered.factory[NES plain <null>].supported = True
 refused-discovered.factory[NES plain <null>].probe = MoonCore
 refused-discovered.factory[NES plain <null>].core = MoonCore
@@ -2019,10 +1914,9 @@ catalog.console-for-system[gbc] = GB
 catalog.console-for-system[n64] = N64
 catalog.console-for-system[tst] = <null>
 catalog.console-for-system[] = <null>
-off.engine-row[SNES][Engine] = Engine | Choice | default VenusRT (Rust) | 0..0 | [VenusRT (Rust), Venus (C#)]
-off.engine-row[SNES][Engine].hint = Which implementation runs the console. VenusRT (Rust) is the default. Venus (C#) is the reference, kept for now, and runs instead where VenusRT's library is missing. A save state made by Venus (C#) does not load in VenusRT, though battery saves cross between the two. Takes effect when a game is next loaded.
+off.engine-row[SNES] = <null>
 off.engine-row[SNES].discovered = [VenusRT (Rust)]
-off.engine-row[SNES].chosen-default = VenusRT (Rust)
+off.engine-row[SNES].chosen-default = <null>
 off.engine-row[SNES].chosen-stored = Stored
 off.engine-row[NES][Engine] = Engine | Choice | default Moon (C#) | 0..0 | [Moon (C#), MoonRT (Rust)]
 off.engine-row[NES][Engine].hint = Which implementation runs the console. Moon (C#) is the reference. MoonRT (Rust) is exact against it in state, picture and sound, reads the same save states and battery saves, and takes the same cheats; its debugger view is refreshed from its state, and it stops at breakpoints, steps, runs to a frame or an interrupt, and records coverage, watches, the profile and the call stack as Moon does. Takes effect when a game is next loaded.
@@ -2060,141 +1954,116 @@ off.discovered[moonrt] = MoonRT (Rust) systems=[nes] opens=True
 off.discovered[nephrite] = Nephrite systems=[md, mcd, 32x] opens=True
 off.discovered[venusrt] = VenusRT (Rust) systems=[snes] opens=True
 off.factory[SNES plain <null>].supported = True
-off.factory[SNES plain <null>].probe = VenusCore
-off.factory[SNES plain <null>].core = VenusCore
+off.factory[SNES plain <null>].probe = CoreEngine
+off.factory[SNES plain <null>].firmware = VenusRT | SNES sound chip start-up | spc700.rom | 64 | optional | [] | [[spc700.rom]]
+off.factory[SNES plain <null>].core = CoreEngine
 off.factory[SNES plain <null>].notice = <null>
-off.factory[SNES plain <null>].debug-target = SnesDebugTarget
-off.factory[SNES plain <null>].trace-switch = VenusCpuTraceSwitch
-off.factory[SNES plain <null>].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
+off.factory[SNES plain <null>].debug-target = CoreDebugTarget
+off.factory[SNES plain <null>].trace-switch = <null>
+off.factory[SNES plain <null>].codec-auto = Pro Action Replay | RamPoke | CpuBus
 off.factory[SNES plain <null>].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[SNES plain <null>].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
+off.factory[SNES plain <null>].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
 off.factory[SNES plain <null>].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
 off.factory[SNES plain <null>].axes = []
-off.factory[SNES plain <null>].state-version = 3
+off.factory[SNES plain <null>].state-version = 22
 off.factory[SNES plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[SNES plain <null>].setting[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | [1, 4, 16] | now 1
 off.factory[SNES plain <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[SNES plain <null>].file = Home/Saves/SNES/Game.srm 131072 5c76bf7a4ca90d0b
+off.factory[SNES plain <null>].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
 off.factory[SNES plain <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
-off.factory[SNES plain VenusRT (Rust)].supported = True
-off.factory[SNES plain VenusRT (Rust)].probe = CoreEngine
-off.factory[SNES plain VenusRT (Rust)].firmware = VenusRT | SNES sound chip start-up | spc700.rom | 64 | optional | [] | [[spc700.rom]]
-off.factory[SNES plain VenusRT (Rust)].core = CoreEngine
-off.factory[SNES plain VenusRT (Rust)].notice = <null>
-off.factory[SNES plain VenusRT (Rust)].debug-target = CoreDebugTarget
-off.factory[SNES plain VenusRT (Rust)].trace-switch = <null>
-off.factory[SNES plain VenusRT (Rust)].codec-auto = Pro Action Replay | RamPoke | CpuBus
-off.factory[SNES plain VenusRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[SNES plain VenusRT (Rust)].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
-off.factory[SNES plain VenusRT (Rust)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
-off.factory[SNES plain VenusRT (Rust)].axes = []
-off.factory[SNES plain VenusRT (Rust)].state-version = 22
-off.factory[SNES plain VenusRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[SNES plain VenusRT (Rust)].setting[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | [1, 4, 16] | now 1
-off.factory[SNES plain VenusRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[SNES plain VenusRT (Rust)].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
-off.factory[SNES plain VenusRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
-off.factory[SNES plain Venus (C#)].supported = True
-off.factory[SNES plain Venus (C#)].probe = VenusCore
-off.factory[SNES plain Venus (C#)].core = VenusCore
-off.factory[SNES plain Venus (C#)].notice = <null>
-off.factory[SNES plain Venus (C#)].debug-target = SnesDebugTarget
-off.factory[SNES plain Venus (C#)].trace-switch = VenusCpuTraceSwitch
-off.factory[SNES plain Venus (C#)].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
-off.factory[SNES plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[SNES plain Venus (C#)].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
-off.factory[SNES plain Venus (C#)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
-off.factory[SNES plain Venus (C#)].axes = []
-off.factory[SNES plain Venus (C#)].state-version = 3
-off.factory[SNES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[SNES plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[SNES plain Venus (C#)].file = Home/Saves/SNES/Game.srm 131072 5c76bf7a4ca90d0b
-off.factory[SNES plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[SNES plain Nope].supported = True
-off.factory[SNES plain Nope].probe = VenusCore
-off.factory[SNES plain Nope].core = VenusCore
-off.factory[SNES plain Nope].notice = No engine is named "Nope"; Venus (C#) is running.
-off.factory[SNES plain Nope].debug-target = SnesDebugTarget
-off.factory[SNES plain Nope].trace-switch = VenusCpuTraceSwitch
-off.factory[SNES plain Nope].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
+off.factory[SNES plain Nope].probe = CoreEngine
+off.factory[SNES plain Nope].firmware = VenusRT | SNES sound chip start-up | spc700.rom | 64 | optional | [] | [[spc700.rom]]
+off.factory[SNES plain Nope].core = CoreEngine
+off.factory[SNES plain Nope].notice = <null>
+off.factory[SNES plain Nope].debug-target = CoreDebugTarget
+off.factory[SNES plain Nope].trace-switch = <null>
+off.factory[SNES plain Nope].codec-auto = Pro Action Replay | RamPoke | CpuBus
 off.factory[SNES plain Nope].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[SNES plain Nope].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
+off.factory[SNES plain Nope].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
 off.factory[SNES plain Nope].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
 off.factory[SNES plain Nope].axes = []
-off.factory[SNES plain Nope].state-version = 3
+off.factory[SNES plain Nope].state-version = 22
 off.factory[SNES plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[SNES plain Nope].setting[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | [1, 4, 16] | now 1
 off.factory[SNES plain Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[SNES plain Nope].file = Home/Saves/SNES/Game.srm 131072 5c76bf7a4ca90d0b
+off.factory[SNES plain Nope].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
 off.factory[SNES plain Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[SNES plain Venus (C#)].supported = True
+off.factory[SNES plain Venus (C#)].probe = CoreEngine
+off.factory[SNES plain Venus (C#)].firmware = VenusRT | SNES sound chip start-up | spc700.rom | 64 | optional | [] | [[spc700.rom]]
+off.factory[SNES plain Venus (C#)].core = CoreEngine
+off.factory[SNES plain Venus (C#)].notice = <null>
+off.factory[SNES plain Venus (C#)].debug-target = CoreDebugTarget
+off.factory[SNES plain Venus (C#)].trace-switch = <null>
+off.factory[SNES plain Venus (C#)].codec-auto = Pro Action Replay | RamPoke | CpuBus
+off.factory[SNES plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
+off.factory[SNES plain Venus (C#)].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
+off.factory[SNES plain Venus (C#)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
+off.factory[SNES plain Venus (C#)].axes = []
+off.factory[SNES plain Venus (C#)].state-version = 22
+off.factory[SNES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[SNES plain Venus (C#)].setting[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | [1, 4, 16] | now 1
+off.factory[SNES plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[SNES plain Venus (C#)].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
+off.factory[SNES plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[SNES battery <null>].supported = True
-off.factory[SNES battery <null>].probe = VenusCore
-off.factory[SNES battery <null>].core = VenusCore
+off.factory[SNES battery <null>].probe = CoreEngine
+off.factory[SNES battery <null>].firmware = VenusRT | SNES sound chip start-up | spc700.rom | 64 | optional | [] | [[spc700.rom]]
+off.factory[SNES battery <null>].core = CoreEngine
 off.factory[SNES battery <null>].notice = <null>
-off.factory[SNES battery <null>].debug-target = SnesDebugTarget
-off.factory[SNES battery <null>].trace-switch = VenusCpuTraceSwitch
-off.factory[SNES battery <null>].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
+off.factory[SNES battery <null>].debug-target = CoreDebugTarget
+off.factory[SNES battery <null>].trace-switch = <null>
+off.factory[SNES battery <null>].codec-auto = Pro Action Replay | RamPoke | CpuBus
 off.factory[SNES battery <null>].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[SNES battery <null>].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
+off.factory[SNES battery <null>].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
 off.factory[SNES battery <null>].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
 off.factory[SNES battery <null>].axes = []
-off.factory[SNES battery <null>].state-version = 3
+off.factory[SNES battery <null>].state-version = 22
 off.factory[SNES battery <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[SNES battery <null>].setting[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | [1, 4, 16] | now 1
 off.factory[SNES battery <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[SNES battery <null>].file = Home/Saves/SNES/Game.srm 2048 d54dc5131301af96
+off.factory[SNES battery <null>].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
 off.factory[SNES battery <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
-off.factory[SNES battery VenusRT (Rust)].supported = True
-off.factory[SNES battery VenusRT (Rust)].probe = CoreEngine
-off.factory[SNES battery VenusRT (Rust)].firmware = VenusRT | SNES sound chip start-up | spc700.rom | 64 | optional | [] | [[spc700.rom]]
-off.factory[SNES battery VenusRT (Rust)].core = CoreEngine
-off.factory[SNES battery VenusRT (Rust)].notice = <null>
-off.factory[SNES battery VenusRT (Rust)].debug-target = CoreDebugTarget
-off.factory[SNES battery VenusRT (Rust)].trace-switch = <null>
-off.factory[SNES battery VenusRT (Rust)].codec-auto = Pro Action Replay | RamPoke | CpuBus
-off.factory[SNES battery VenusRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[SNES battery VenusRT (Rust)].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
-off.factory[SNES battery VenusRT (Rust)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
-off.factory[SNES battery VenusRT (Rust)].axes = []
-off.factory[SNES battery VenusRT (Rust)].state-version = 22
-off.factory[SNES battery VenusRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[SNES battery VenusRT (Rust)].setting[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | [1, 4, 16] | now 1
-off.factory[SNES battery VenusRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[SNES battery VenusRT (Rust)].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
-off.factory[SNES battery VenusRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
-off.factory[SNES battery Venus (C#)].supported = True
-off.factory[SNES battery Venus (C#)].probe = VenusCore
-off.factory[SNES battery Venus (C#)].core = VenusCore
-off.factory[SNES battery Venus (C#)].notice = <null>
-off.factory[SNES battery Venus (C#)].debug-target = SnesDebugTarget
-off.factory[SNES battery Venus (C#)].trace-switch = VenusCpuTraceSwitch
-off.factory[SNES battery Venus (C#)].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
-off.factory[SNES battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[SNES battery Venus (C#)].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
-off.factory[SNES battery Venus (C#)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
-off.factory[SNES battery Venus (C#)].axes = []
-off.factory[SNES battery Venus (C#)].state-version = 3
-off.factory[SNES battery Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[SNES battery Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[SNES battery Venus (C#)].file = Home/Saves/SNES/Game.srm 2048 d54dc5131301af96
-off.factory[SNES battery Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[SNES battery Nope].supported = True
-off.factory[SNES battery Nope].probe = VenusCore
-off.factory[SNES battery Nope].core = VenusCore
-off.factory[SNES battery Nope].notice = No engine is named "Nope"; Venus (C#) is running.
-off.factory[SNES battery Nope].debug-target = SnesDebugTarget
-off.factory[SNES battery Nope].trace-switch = VenusCpuTraceSwitch
-off.factory[SNES battery Nope].codec-auto = Pro Action Replay/Game Wizard | RamPoke | CpuBus
+off.factory[SNES battery Nope].probe = CoreEngine
+off.factory[SNES battery Nope].firmware = VenusRT | SNES sound chip start-up | spc700.rom | 64 | optional | [] | [[spc700.rom]]
+off.factory[SNES battery Nope].core = CoreEngine
+off.factory[SNES battery Nope].notice = <null>
+off.factory[SNES battery Nope].debug-target = CoreDebugTarget
+off.factory[SNES battery Nope].trace-switch = <null>
+off.factory[SNES battery Nope].codec-auto = Pro Action Replay | RamPoke | CpuBus
 off.factory[SNES battery Nope].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[SNES battery Nope].identity = SNES 256x224 60.09847552103154 Hz 32000 loaded=True frames=0
+off.factory[SNES battery Nope].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
 off.factory[SNES battery Nope].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
 off.factory[SNES battery Nope].axes = []
-off.factory[SNES battery Nope].state-version = 3
+off.factory[SNES battery Nope].state-version = 22
 off.factory[SNES battery Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[SNES battery Nope].setting[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | [1, 4, 16] | now 1
 off.factory[SNES battery Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[SNES battery Nope].file = Home/Saves/SNES/Game.srm 2048 d54dc5131301af96
+off.factory[SNES battery Nope].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
 off.factory[SNES battery Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
-off.configured[SNES nothing stored] = VenusRT (Rust)
-off.configured[SNES VenusRT (Rust)] = VenusRT (Rust)
-off.configured[SNES Venus (C#)] = Venus (C#)
+off.factory[SNES battery Venus (C#)].supported = True
+off.factory[SNES battery Venus (C#)].probe = CoreEngine
+off.factory[SNES battery Venus (C#)].firmware = VenusRT | SNES sound chip start-up | spc700.rom | 64 | optional | [] | [[spc700.rom]]
+off.factory[SNES battery Venus (C#)].core = CoreEngine
+off.factory[SNES battery Venus (C#)].notice = <null>
+off.factory[SNES battery Venus (C#)].debug-target = CoreDebugTarget
+off.factory[SNES battery Venus (C#)].trace-switch = <null>
+off.factory[SNES battery Venus (C#)].codec-auto = Pro Action Replay | RamPoke | CpuBus
+off.factory[SNES battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
+off.factory[SNES battery Venus (C#)].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
+off.factory[SNES battery Venus (C#)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
+off.factory[SNES battery Venus (C#)].axes = []
+off.factory[SNES battery Venus (C#)].state-version = 22
+off.factory[SNES battery Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[SNES battery Venus (C#)].setting[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | [1, 4, 16] | now 1
+off.factory[SNES battery Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[SNES battery Venus (C#)].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
+off.factory[SNES battery Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.configured[SNES nothing stored] = <null>
 off.configured[SNES Nope] = Nope
+off.configured[SNES Venus (C#)] = VenusRT (Rust)
 off.factory[NES plain <null>].supported = True
 off.factory[NES plain <null>].probe = MoonCore
 off.factory[NES plain <null>].core = MoonCore
@@ -2354,7 +2223,7 @@ off.configured[NES nothing stored] = Moon (C#)
 off.configured[NES Moon (C#)] = Moon (C#)
 off.configured[NES MoonRT (Rust)] = MoonRT (Rust)
 off.configured[NES Nope] = Nope
-off.configured[NES Venus (C#)] = Venus (C#)
+off.configured[NES Venus (C#)] = VenusRT (Rust)
 off.factory[GB plain <null>].supported = True
 off.factory[GB plain <null>].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB plain <null>].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
@@ -2393,7 +2262,7 @@ off.factory[GB colour-battery Mercury (C#)].probe = NotSupportedException: This 
 off.factory[GB colour-battery Mercury (C#)].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.configured[GB nothing stored] = <null>
 off.configured[GB Nope] = Nope
-off.configured[GB Venus (C#)] = Venus (C#)
+off.configured[GB Venus (C#)] = VenusRT (Rust)
 off.configured[GB Mercury (C#)] = MercuryRT (Rust)
 off.factory[N64 plain <null>].supported = True
 off.factory[N64 plain <null>].probe = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
@@ -2443,32 +2312,27 @@ off.factory[N64 byteswapped Mars (C#)].load = NotSupportedException: The N64 cor
 off.configured[N64 nothing stored] = <null>
 off.configured[N64 MarsRT (Rust)] = MarsRT (Rust)
 off.configured[N64 Nope] = Nope
-off.configured[N64 Venus (C#)] = Venus (C#)
+off.configured[N64 Venus (C#)] = VenusRT (Rust)
 off.configured[N64 Mars (C#)] = MarsRT (Rust)
-settings[SNES VenusRT (Rust)].core = CoreEngine
-settings[SNES VenusRT (Rust)].row[sa1_catch_up] = SA-1 catch-up | Choice | default 1 | 0..0 | [1, 4, 16]
-settings[SNES VenusRT (Rust)].row[sa1_catch_up].hint = How often the SA-1, the second processor in Super Mario RPG, Kirby Super Star and other SA-1 games, is brought level with the console's own CPU while that CPU works outside the cartridge. Whenever the CPU touches the cartridge it is brought level at once, whatever this says. The SA-1 can fall up to 4 or 16 instructions of the console's CPU behind it. Its interrupt to that CPU can arrive that much later, and the two processors' contention for ROM and BW-RAM inside that span is timed differently from the console's. Some games' internal state then differs from the exact setting's at some frames, though the pictures measured were the same. It saves about 3% of the time of Super Mario RPG's heaviest scene, and nothing in games without an SA-1.
-settings[SNES VenusRT (Rust)].row[sa1_catch_up].note-at-defaults = <null>
-settings[SNES Venus (C#)].core = VenusCore
 settings[NES Moon (C#)].core = MoonCore
 settings[NES MoonRT (Rust)].core = MoonCore
 settings[N64 MarsRT (Rust)].core = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
-codecs.default = Pro Action Replay/Game Wizard | RamPoke | CpuBus / Game Genie | RomPatch | <null>
-codecs.for[<null>] = Pro Action Replay/Game Wizard | RamPoke | CpuBus / Game Genie | RomPatch | <null>
-codecs.for[] = Pro Action Replay/Game Wizard | RamPoke | CpuBus / Game Genie | RomPatch | <null>
-codecs.for[SNES] = Pro Action Replay/Game Wizard | RamPoke | CpuBus / Game Genie | RomPatch | <null>
-codecs.for[SNES (Venus)] = Pro Action Replay/Game Wizard | RamPoke | CpuBus / Game Genie | RomPatch | <null>
+codecs.default = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
+codecs.for[<null>] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
+codecs.for[] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
+codecs.for[SNES] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
+codecs.for[SNES (Venus)] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
 codecs.for[NES] = NES address:value | RamPoke | CPUBUS / Game Genie | RomPatch | <null>
 codecs.for[NES (Moon)] = NES address:value | RamPoke | CPUBUS / Game Genie | RomPatch | <null>
 codecs.for[GB] = GameShark | RamPoke | CPUBUS / Game Genie | RomPatch | <null>
-codecs.for[GBC] = Pro Action Replay/Game Wizard | RamPoke | CpuBus / Game Genie | RomPatch | <null>
+codecs.for[GBC] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
 codecs.for[Game Boy (Mercury)] = GameShark | RamPoke | CPUBUS / Game Genie | RomPatch | <null>
-codecs.for[Game Boy Color (Mercury)] = Pro Action Replay/Game Wizard | RamPoke | CpuBus / Game Genie | RomPatch | <null>
+codecs.for[Game Boy Color (Mercury)] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
 codecs.for[N64] = GameShark | RamPoke | RDRAM / <null>
 codecs.for[Nintendo 64 (Mars)] = GameShark | RamPoke | RDRAM / <null>
-codecs.for[Nope] = Pro Action Replay/Game Wizard | RamPoke | CpuBus / Game Genie | RomPatch | <null>
-codecs.decode[Game Genie RomPatch ][7E0DBE09] = (7423501, 63) compare=- writes=[]
-codecs.decode[Game Genie RomPatch ][7E000000] = (1130817, 63) compare=- writes=[]
+codecs.for[Nope] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
+codecs.decode[Game Genie RomPatch ][7E0DBE09] = no
+codecs.decode[Game Genie RomPatch ][7E000000] = no
 codecs.decode[Game Genie RomPatch ][DD62-6DAD] = (33491, 0) compare=- writes=[]
 codecs.decode[Game Genie RomPatch ][C2A3-DFA4] = (51431, 173) compare=- writes=[]
 codecs.decode[Game Genie RomPatch ][SXIOPO] = no
@@ -2476,10 +2340,10 @@ codecs.decode[Game Genie RomPatch ][AAEAULPA] = no
 codecs.decode[Game Genie RomPatch ][GZSXSSVK] = no
 codecs.decode[Game Genie RomPatch ][00A-17B-C49] = no
 codecs.decode[Game Genie RomPatch ][091-17B-C49] = no
-codecs.decode[Game Genie RomPatch ][010A2BC0] = (6898630, 70) compare=- writes=[]
+codecs.decode[Game Genie RomPatch ][010A2BC0] = no
 codecs.decode[Game Genie RomPatch ][8033B152 0003] = no
 codecs.decode[Game Genie RomPatch ][D0033B15 0003] = no
-codecs.decode[Game Genie RomPatch ][800D7E6F] = (15746062, 180) compare=- writes=[]
+codecs.decode[Game Genie RomPatch ][800D7E6F] = no
 codecs.decode[Game Genie RomPatch ][0012:AB] = no
 codecs.decode[Game Genie RomPatch ][12AB:34] = no
 codecs.decode[Game Genie RomPatch ][FFFF] = no
@@ -2539,21 +2403,21 @@ codecs.decode[NES address:value RamPoke CPUBUS][12AB:34] = (4779, 52) compare=- 
 codecs.decode[NES address:value RamPoke CPUBUS][FFFF] = no
 codecs.decode[NES address:value RamPoke CPUBUS][] = no
 codecs.decode[NES address:value RamPoke CPUBUS][ZZZZZZZZ] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][7E0DBE09] = (8261054, 9) compare=- writes=[]
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][7E000000] = (8257536, 0) compare=- writes=[]
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][DD62-6DAD] = (14508653, 173) compare=- writes=[]
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][C2A3-DFA4] = (12755935, 164) compare=- writes=[]
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][SXIOPO] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][AAEAULPA] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][GZSXSSVK] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][00A-17B-C49] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][091-17B-C49] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][010A2BC0] = (68139, 192) compare=- writes=[]
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][8033B152 0003] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][D0033B15 0003] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][800D7E6F] = (8392062, 111) compare=- writes=[]
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][0012:AB] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][12AB:34] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][FFFF] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][] = no
-codecs.decode[Pro Action Replay/Game Wizard RamPoke CpuBus][ZZZZZZZZ] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][7E0DBE09] = (8261054, 9) compare=- writes=[WRAM:DBE=9]
+codecs.decode[Pro Action Replay RamPoke CpuBus][7E000000] = (8257536, 0) compare=- writes=[]
+codecs.decode[Pro Action Replay RamPoke CpuBus][DD62-6DAD] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][C2A3-DFA4] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][SXIOPO] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][AAEAULPA] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][GZSXSSVK] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][00A-17B-C49] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][091-17B-C49] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][010A2BC0] = (68139, 192) compare=- writes=[CpuBus:10A2B=C0]
+codecs.decode[Pro Action Replay RamPoke CpuBus][8033B152 0003] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][D0033B15 0003] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][800D7E6F] = (8392062, 111) compare=- writes=[CpuBus:800D7E=6F]
+codecs.decode[Pro Action Replay RamPoke CpuBus][0012:AB] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][12AB:34] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][FFFF] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][] = no
+codecs.decode[Pro Action Replay RamPoke CpuBus][ZZZZZZZZ] = no

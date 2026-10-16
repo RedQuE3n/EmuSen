@@ -86,26 +86,6 @@ status 0
 action none
 end
 
-case on venus
-target venus
-covers 1,3
-$ bt
-out 64
-Call stack empty - nothing has been called since the last reset.
-status 0
-action none
-$ bt 2
-out 64
-Call stack empty - nothing has been called since the last reset.
-status 0
-action none
-$ bt cop
-out 61
-This cartridge has no coprocessor to report a call stack for.
-status 1
-action none
-end
-
 case on venusrt
 target venusrt
 covers 1,3

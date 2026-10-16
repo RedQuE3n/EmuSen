@@ -1,7 +1,8 @@
+using EmuSen.Cores;
+using EmuSen.Crystal.Debugger;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.Galaxia;
@@ -40,10 +41,10 @@ namespace EmuSen.WiseMan.DianaSh
         private static DianaShInterpreter NewShell()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            var target = SyntheticRom.TargetOf(core);
             return DianaShInterpreter.CreateDefault(target, null,
-                EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.ActionReplay(),
-                EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.GameGenie(),
+                EmuSen.Crystal.Systems.Snes.SnesSystem.ProActionReplay(),
+                EmuSen.Crystal.Systems.Snes.SnesSystem.GameGenie(),
                 supportedCheatSystems: () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems);
         }
 
@@ -92,7 +93,7 @@ namespace EmuSen.WiseMan.DianaSh
             WriteSystem("Sony - PlayStation Portable", 3);
 
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            var target = SyntheticRom.TargetOf(core);
             string output = DianaShInterpreter.CreateDefault(target).Execute("cheat db prune");
 
             Assert.Contains("Nothing to prune", output);

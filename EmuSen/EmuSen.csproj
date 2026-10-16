@@ -1,9 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Pure library now - no Main, no window ownership, and since 2026-08-05
-       no rendering framework either: Venus composites into its own
-       internal Rgba32 struct, not Raylib_cs.Color - see Venus_PPU.md §15.1.
-       The console frontend's Main/hotkey loop lives in EmuSen.Hotaru instead,
+       no rendering framework either. The console frontend's Main/hotkey loop lives in EmuSen.Hotaru instead,
        so this project and EmuSen.Mistress (Avalonia) are true sibling
        consumers of the emulation core, neither depending on the other's
        frontend-specific code. See EmuSen_Project_Overview_v2.md. -->

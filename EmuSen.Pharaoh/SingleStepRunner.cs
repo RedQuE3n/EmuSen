@@ -1,5 +1,4 @@
 using EmuSen.Cores.Nintendo.Moon.Validation;
-using EmuSen.Cores.Nintendo.Venus.Validation;
 using EmuSen.Validation;
 
 namespace EmuSen.Pharaoh
@@ -10,8 +9,6 @@ namespace EmuSen.Pharaoh
         // Adding a core's CPU is one line here plus an ISingleStepTarget and a loader - see §3.16.
         private static readonly Dictionary<string, (Func<ISingleStepTarget> CreateTarget, Func<string, List<SingleStepTest>> LoadTests)> Targets = new()
         {
-            ["65816"] = (() => new Cpu65816SingleStepTarget(), Cpu65816TestLoader.Load),
-            ["spc700"] = (() => new Spc700SingleStepTarget(), Spc700TestLoader.Load),
             ["nes6502"] = (() => new Cpu6502SingleStepTarget(), Cpu6502TestLoader.Load),
         };
 

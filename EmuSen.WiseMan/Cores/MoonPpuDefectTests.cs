@@ -100,7 +100,6 @@ namespace EmuSen.WiseMan.Cores
             int centre = (120 * 256 + 128) * 4;
             Assert.Equal((0x16, 0xA8 >> 5, 255), (raw[centre], raw[centre + 1], raw[centre + 3]));
             Assert.Equal((rgb[centre], rgb[centre + 1], rgb[centre + 2]), (EmuSen.Cores.Nintendo.Moon.Video.Ppu.NesPalette[0x16 * 3], EmuSen.Cores.Nintendo.Moon.Video.Ppu.NesPalette[0x16 * 3 + 1], EmuSen.Cores.Nintendo.Moon.Video.Ppu.NesPalette[0x16 * 3 + 2]));
-            Assert.Null(((ICore)new EmuSen.Cores.Nintendo.Venus.VenusCore()).RawPicture);
         }
     }
 }

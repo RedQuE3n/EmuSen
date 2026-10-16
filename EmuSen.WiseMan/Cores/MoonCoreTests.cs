@@ -344,7 +344,7 @@ namespace EmuSen.WiseMan.Cores
             using var stream = new MemoryStream();
             using (var w = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true))
             {
-                w.Write(EmuSen.Cores.Nintendo.Venus.VenusCore.StateMagic);
+                w.Write("VNRT"u8.ToArray());
                 w.Write(1);
             }
 

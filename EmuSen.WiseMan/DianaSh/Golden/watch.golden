@@ -145,8 +145,8 @@ status 1
 action none
 end
 
-case on venus
-target venus
+case on venusrt
+target venusrt
 covers 1-4
 $ watch add WRAM 0 100 both
 out 36

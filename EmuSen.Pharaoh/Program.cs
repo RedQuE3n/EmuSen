@@ -1,8 +1,6 @@
 using EmuSen.Common.Imaging;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Moon.Validation;
-using EmuSen.Cores.Nintendo.Venus;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Pharaoh;
 using EmuSen.Pharaoh.Cli;
 using EmuSen.Pharaoh.Reference;
@@ -12,7 +10,7 @@ using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Dev;
 
 // Headless script-driven debugging harness - loads a ROM, runs the
-// real VenusCore for a fixed number of frames with no window/audio/human
+// configured engine for a fixed number of frames with no window/audio/human
 // involved, then feeds a script of the exact same debug commands the F4
 // prompt accepts and writes the results to a plain log file. Full
 // reference for every flag, both frame-loop modes (classic and
@@ -149,7 +147,7 @@ class Program
         // Off by default (matches DebugSettings.MasterLoggingEnabled's own
         // default) - only flip it on when explicitly asked, since it turns
         // on every individually-enabled *Logging flag's live console spam
-        // (DmaSourceAddrLogging etc.), useful for a short, targeted run but
+        // (the NES's PPU write log), useful for a short, targeted run but
         // far too noisy over a long one.
         if (options.Verbose) EmuSen.Debug.DebugSettings.MasterLoggingEnabled = true;
 
@@ -226,7 +224,7 @@ class Program
             Emit($"[STATE] Loaded: {options.LoadStatePath}");
         }
 
-        // See SnesDebugTarget's own constructor comment - feeds
+        // Feeds
         // `coretop`'s hardware-load bars (not that this headless entry
         // point has any interactive use for them today, but there's no
         // reason for it to report less than the other two frontends do).
@@ -287,10 +285,6 @@ class Program
             // not whatever was live at debugTarget's construction.
             var runner = new FrameRunner(core, options.FrameCount, Emit, n => { debugTarget.RefreshProviders(); CheckAutoshot(n); })
             {
-                CpuLogStart = options.CpuLogStart,
-                CpuLogEnd = options.CpuLogEnd,
-                CpuTraceEnd = options.CpuTraceEnd,
-                CpuTracePath = options.CpuTracePath,
                 ApuLogEnd = options.ApuLogEnd,
                 ApuLogPath = options.ApuLogPath,
                 Verbose = options.Verbose,
@@ -317,10 +311,6 @@ class Program
         // see the --commands runner's own comment above.
         var classicRunner = new FrameRunner(core, options.FrameCount, Emit, n => { debugTarget.RefreshProviders(); CheckAutoshot(n - 1); })
         {
-            CpuLogStart = options.CpuLogStart,
-            CpuLogEnd = options.CpuLogEnd,
-            CpuTraceEnd = options.CpuTraceEnd,
-            CpuTracePath = options.CpuTracePath,
             ApuLogEnd = options.ApuLogEnd,
             ApuLogPath = options.ApuLogPath,
             Verbose = options.Verbose,
@@ -390,7 +380,6 @@ class Program
 
     private static void FinishRun(ICore core, Action<string> emit)
     {
-        (core as ITraceFlushable)?.FlushVerboseTrace();
         emit($"[RUN] Done, {core.TotalFrames} total frames executed.");
     }
 

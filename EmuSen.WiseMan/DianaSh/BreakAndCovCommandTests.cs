@@ -1,5 +1,5 @@
+using EmuSen.Cores;
 using System.Linq;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
@@ -11,13 +11,13 @@ namespace EmuSen.WiseMan.DianaSh
     // The command surface of the range/read/uninit/depth/forbid and cov-map work - see `man bp`, `man cov`.
     public class BreakAndCovCommandTests
     {
-        private static SnesDebugTarget BuildTarget()
+        private static IDebugTarget BuildTarget()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            return new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            return SyntheticRom.TargetOf(core);
         }
 
-        private static DianaShInterpreter Shell(SnesDebugTarget target) => DianaShInterpreter.CreateDefault(target);
+        private static DianaShInterpreter Shell(IDebugTarget target) => DianaShInterpreter.CreateDefault(target);
 
         [Fact]
         public void Bp_add_accepts_a_range_and_reports_it()
@@ -151,36 +151,6 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Contains("read", output);
             Assert.Contains("uninit", output);
             Assert.Contains("forbid", output);
-        }
-
-        [Fact]
-        public void A_logpoint_renders_real_expressions_as_name_equals_value()
-        {
-            var target = BuildTarget();
-            var shell = Shell(target);
-            shell.Submit("setreg a 1234");
-            shell.Submit("setreg x 0056");
-            shell.Submit("bp add 808000 log \"a, x\"");
-
-            Assert.False(target.Breakpoints.ShouldBreak(0x808000));
-
-            string logged = shell.Submit("bp log").Output;
-            Assert.Contains("a=0x1234", logged);
-            Assert.Contains("x=0x56", logged);
-        }
-
-        [Fact]
-        public void A_logpoint_expression_can_read_memory()
-        {
-            var target = BuildTarget();
-            var shell = Shell(target);
-            var wram = target.GetMemorySpaces().Single(s => s.Name == "WRAM");
-            wram.Write(0x0DB3, 0x7F);
-            shell.Submit("bp add 808000 log [$7E0DB3]");
-
-            target.Breakpoints.ShouldBreak(0x808000);
-
-            Assert.Contains("0x7F", shell.Submit("bp log").Output);
         }
 
         [Fact]

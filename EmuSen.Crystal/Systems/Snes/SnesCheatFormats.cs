@@ -36,13 +36,18 @@ namespace EmuSen.Crystal.Systems.Snes
             return ((int)(word >> 8), (byte)word);
         }
 
-        // WRAM is written at 7E0000-7FFFFF, which is the only form the device accepts for it; any other address is the CPU bus's, where the device patches cartridge memory.
+        // WRAM is written at 7E0000-7FFFFF, which is the only form the device accepts for it; any other address is the CPU bus's; codes joined with '+' are one cheat, as the libretro database writes them.
         public static IReadOnlyList<CheatWrite>? ProActionReplayWrites(string code)
         {
-            var (address, value) = DecodeProActionReplay(code);
-            if (((uint)address << 8 | value) == DoNothing) return Array.Empty<CheatWrite>();
-            bool wram = address is >= 0x7E0000 and <= 0x7FFFFF;
-            return new[] { new CheatWrite { Space = wram ? SnesSystem.Wram : SnesSystem.CpuBus, Address = wram ? address - 0x7E0000 : address, Value = value, Width = 1 } };
+            var writes = new List<CheatWrite>();
+            foreach (string part in code.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var (address, value) = DecodeProActionReplay(part);
+                if (((uint)address << 8 | value) == DoNothing) continue;
+                bool wram = address is >= 0x7E0000 and <= 0x7FFFFF;
+                writes.Add(new CheatWrite { Space = wram ? SnesSystem.Wram : SnesSystem.CpuBus, Address = wram ? address - 0x7E0000 : address, Value = value, Width = 1 });
+            }
+            return writes;
         }
 
         // ---- Game Genie: DDAA-AAAA, enciphered digits, the address's bits shuffled -----------------------------------

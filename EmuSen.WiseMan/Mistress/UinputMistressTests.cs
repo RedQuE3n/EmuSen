@@ -10,7 +10,6 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Endymion.Input;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
@@ -47,9 +46,6 @@ namespace EmuSen.WiseMan.Mistress
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             CoreOptions.BatteryRamDisabled = true;
-            GraphicsConfig config = GraphicsConfig.Load();
-            config.SetValue("SNES", CoreCatalog.EngineKey, CoreCatalog.VenusEngine);
-            config.Save();
         }
 
         public void Dispose()
@@ -91,9 +87,7 @@ namespace EmuSen.WiseMan.Mistress
         private static ushort SnesPlayer1(MainWindow w)
         {
             var session = (EmulatorSession)typeof(MainWindow).GetField("_session", Hidden)!.GetValue(w)!;
-            var venus = Assert.IsType<VenusCore>(session.Core);
-            venus.Bus!.Input.LatchAutoJoypad();
-            return (ushort)(venus.Bus.Input.ReadJoy1Low() | venus.Bus.Input.ReadJoy1High() << 8);
+            return SyntheticRom.Pads(session.Core!).One;
         }
 
         public static TheoryData<string> Screens => new() { "library", "big picture", "game" };
@@ -101,7 +95,7 @@ namespace EmuSen.WiseMan.Mistress
         [UinputTheory, MemberData(nameof(Screens))]
         public Task A_pad_pulled_and_plugged_back_is_player_1_again_and_steers(string screen) => Session.Dispatch(() =>
         {
-            for (int i = 0; i < 3; i++) File.WriteAllBytes(Path.Combine(_romDir, $"Game {i}.sfc"), SyntheticRom.BuildBlank());
+            for (int i = 0; i < 3; i++) File.WriteAllBytes(Path.Combine(_romDir, $"Game {i}.sfc"), SyntheticRom.BuildPadReader());
             new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = screen == "big picture" }.Save();
 
             var pad = new UinputPad("EmuSen uinput pad");

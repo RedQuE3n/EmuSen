@@ -1,9 +1,10 @@
+using EmuSen.Cores;
+using EmuSen.Crystal.Debugger;
 using System;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
@@ -54,13 +55,13 @@ namespace EmuSen.WiseMan.DianaSh
             File.WriteAllText(Path.Combine(dir, game + ".cht"), contents);
         }
 
-        private static DianaShInterpreter NewShell(out SnesDebugTarget target)
+        private static DianaShInterpreter NewShell(out IDebugTarget target)
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            target = SyntheticRom.TargetOf(core);
             return DianaShInterpreter.CreateDefault(target, null,
-                EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.ActionReplay(),
-                EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.GameGenie());
+                EmuSen.Crystal.Systems.Snes.SnesSystem.ProActionReplay(),
+                EmuSen.Crystal.Systems.Snes.SnesSystem.GameGenie());
         }
 
         // --- Option 1: a tree the player already has ---
@@ -120,7 +121,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void The_shell_finds_and_loads_a_game_from_the_database()
         {
             WriteChtFile("Nintendo - Super Nintendo Entertainment System", "Super Mario World (USA)");
-            DianaShInterpreter shell = NewShell(out SnesDebugTarget target);
+            DianaShInterpreter shell = NewShell(out IDebugTarget target);
 
             Assert.Contains("Super Mario World (USA)", shell.Submit("cheat db find mario").Output);
 
@@ -132,7 +133,7 @@ namespace EmuSen.WiseMan.DianaSh
             CheatInfo cheat = Assert.Single(target.Cheats.GetCheats());
             Assert.Equal("Infinite Maximum Coins", cheat.Description);
             Assert.False(cheat.Enabled);
-            Assert.Equal(0x7E0DBF, cheat.Writes[0].Address);
+            Assert.Equal(("WRAM", 0x0DBF), (cheat.Writes[0].Space, cheat.Writes[0].Address));
         }
 
         [Fact]

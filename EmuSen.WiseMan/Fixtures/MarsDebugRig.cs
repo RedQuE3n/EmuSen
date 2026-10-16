@@ -1,12 +1,8 @@
 using System;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mars;
-using EmuSen.Cores.Nintendo.Mars.Debug;
-using EmuSen.Cores.Nintendo.Mars.Memory;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.Crystal.Debugger;
-using VideoInterface = EmuSen.Cores.Nintendo.Mars.Vi.Vi;
 
 namespace EmuSen.WiseMan.Fixtures
 {
@@ -53,79 +49,17 @@ namespace EmuSen.WiseMan.Fixtures
 
         public abstract void Dispose();
 
-        // MarsDebugTests' VI: a field of 0x20 half-lines at 0x40 cycles each, so a frame is a few thousand instructions.
+        // VI_V_SYNC and VI_H_SYNC - see Mars_Video.md §1.
+        private const uint ViVerticalSync = 0x0440_0018, ViHorizontalSync = 0x0440_001C;
+
+        // The claims' VI: a field of 0x20 half-lines at 0x40 cycles each, so a frame is a few thousand instructions.
         protected void ProgramVideo()
         {
-            WriteBus32(MemoryMap.ViBase + VideoInterface.VerticalSync, 0x20);
-            WriteBus32(MemoryMap.ViBase + VideoInterface.HorizontalSync, 0x40);
+            WriteBus32(ViVerticalSync, 0x20);
+            WriteBus32(ViHorizontalSync, 0x40);
         }
-
-        public static MarsDebugRig Mars(string rom) => new MarsRig(rom);
 
         public static MarsDebugRig MarsRt(string rom) => new MarsRtRig(rom);
-
-        private sealed class MarsRig : MarsDebugRig
-        {
-            private readonly string _rom;
-            private readonly MarsCore _core;
-            private readonly MarsDebugTarget _target;
-
-            public MarsRig(string rom)
-            {
-                _rom = rom;
-                _core = new MarsCore(batteryRamDisabled: true) { SkipRendering = true };
-                _core.LoadRom(rom);
-                ProgramVideo();
-                _target = new MarsDebugTarget(_core);
-            }
-
-            public override ICore Core => _core;
-            public override IDebugTarget Target => _target;
-            public override BreakpointRegistry Breakpoints => _core.Breakpoints;
-            public override CoverageRegistry Coverage => _core.Coverage;
-            public override CoverageRegistry RspCoverage => _core.RspCoverage;
-            public override CallStackRegistry CallStack => _core.CallStack;
-            public override WatchRegistry Watches => _core.Watches;
-            public override FrameLogRegistry FrameLog => _core.FrameLog;
-            public override bool IsHaltedAtBreakpoint => _core.IsHaltedAtBreakpoint;
-            public override int HaltedAddress => _core.HaltedAddress;
-            public override long TotalFrames => _core.TotalFrames;
-            public override long Instructions => _core.Cpu!.Instructions;
-            public override bool Listening => _target.Listening;
-            public override string? Engine => null;
-            public override Type CoreType => typeof(MarsCore);
-
-            public override void Reload()
-            {
-                _core.LoadRom(_rom);
-                ProgramVideo();
-            }
-
-            public override uint ReadRdram32(uint address) => _core.Bus!.Read32(address);
-            public override byte ReadRdram8(uint address) => _core.Bus!.Rdram[address];
-            public override void WriteRdram8(uint address, byte value) => _core.Bus!.Rdram[address] = value;
-            public override void WriteBus32(uint physical, uint value) => _core.Bus!.Write32(physical, value);
-            public override uint ReadBus32(uint physical) => _core.Bus!.Read32(physical);
-            public override void SetStatus(ulong value) => _core.Cpu!.Cop0[EmuSen.Cores.Nintendo.Mars.Cpu.Core.Cpu.StatusRegister] = value;
-
-            public override void RaiseVideoInterrupt()
-            {
-                _core.Bus!.Mi.Mask = MiInterrupt.VideoInterface;
-                _core.Bus.Mi.Raise(MiInterrupt.VideoInterface);
-            }
-
-            public override void StartRsp(uint pc) => _core.Bus!.Sp.Processor.Start(pc);
-
-            public override void StepRsp(int steps)
-            {
-                for (int i = 0; i < steps; i++) _core.Bus!.Sp.Processor.Step();
-            }
-
-            public override void WriteImem(int offset, byte value) => _core.Bus!.SpImem[offset] = value;
-            public override PhysicalAddress? ResolvePhysical(int address) => _target.ResolvePhysical(address);
-            public override (BreakpointRegistry, CoverageRegistry, WatchRegistry) RegistriesOf(ICore core) => (((MarsCore)core).Breakpoints, ((MarsCore)core).Coverage, ((MarsCore)core).Watches);
-            public override void Dispose() { }
-        }
 
         private sealed class MarsRtRig : MarsDebugRig
         {

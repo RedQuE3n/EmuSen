@@ -297,33 +297,6 @@ status 0
 action none
 end
 
-case on mars
-target mars
-covers 2-3
-$ disasm cpu
-out 288
-  A4000040: 10 00 FF FF b 0xA4000040
-  A4000044: 00 00 00 00 nop
-  A4000048: 00 00 00 00 nop
-  A400004C: 00 00 00 00 nop
-  A4000050: 00 00 00 00 nop
-  A4000054: 00 00 00 00 nop
-  A4000058: 00 00 00 00 nop
-  A400005C: 00 00 00 00 nop
-  A4000060: 00 00 00 00 nop
-  A4000064: 00 00 00 00 nop
-status 0
-action none
-$ disasm cpu 0 4
-out 103
-  000000: 00 00 00 00 nop
-  000004: 00 00 00 00 nop
-  000008: 00 00 00 00 nop
-  00000C: 00 00 00 00 nop
-status 0
-action none
-end
-
 case on marsrt
 target marsrt
 covers 2-3

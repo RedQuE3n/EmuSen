@@ -1,5 +1,7 @@
 # Mars — the construction plan for the Nintendo 64 core
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Pinned 2026-09-15. **Nothing is built.** This is the plan written before the first
 line of code, which makes it a different document from `Mercury_Gameplan.md` — that
 one was pinned mid-construction and reached its "no phases left" state by being

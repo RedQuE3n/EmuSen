@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
+using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
@@ -235,14 +236,18 @@ namespace EmuSen.WiseMan.Cores
 
             string n64 = Path.Combine(_library, "Same.z64");
             File.WriteAllBytes(n64, SyntheticN64System.Build());
-            var mars = new EmuSen.Cores.Nintendo.Mars.MarsCore(batteryRamDisabled: false);
-            mars.LoadRom(n64);
-            mars.Bus!.Si.Controllers[0].Pak!.Dirty = true;
-            mars.SaveSram();
+            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            using (var mars = new MarsRtCore(batteryRamDisabled: false))
+            {
+                mars.LoadRom(n64);
+                for (int frame = 0; frame < 40; frame++) mars.RunFrame();
+                mars.SaveSram();
+            }
 
             foreach (string folder in new[] { "NES", "GB", "GBC", "SNES" })
                 Assert.True(File.Exists(Path.Combine(DataStore.Saves, folder, "Same.srm")), $"no save in Saves/{folder}");
-            Assert.True(File.Exists(Path.Combine(DataStore.Saves, "N64", "Same" + EmuSen.Cores.Nintendo.Mars.MarsCore.PakExtension)), "no pak in Saves/N64");
+            Assert.Equal(Path.Combine(DataStore.Saves, "N64"), Path.GetDirectoryName(SaveLibrary.SramPathFor(n64, BatterySave.N64)));
+            Assert.True(File.Exists(SaveLibrary.SramPathFor(n64, BatterySave.N64)), "no chip save in Saves/N64");
             Assert.False(File.Exists(Path.Combine(DataStore.Saves, "Same.srm")), "a save was written to the flat folder");
         }
 
@@ -300,18 +305,19 @@ namespace EmuSen.WiseMan.Cores
             var eeprom = new byte[512];
             new Random(8).NextBytes(eeprom);
             PutFlat(rom, eeprom);
-            string flatPak = Path.ChangeExtension(Flat(rom), EmuSen.Cores.Nintendo.Mars.MarsCore.PakExtension);
+            string flatPak = Path.ChangeExtension(Flat(rom), N64Console.PakExtension);
             var pak = new byte[32768];
             new Random(9).NextBytes(pak);
             File.WriteAllBytes(flatPak, pak);
             var before = (Snapshot(Flat(rom)), Snapshot(flatPak));
 
-            var mars = new EmuSen.Cores.Nintendo.Mars.MarsCore(batteryRamDisabled: false);
+            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            using var mars = new MarsRtCore(batteryRamDisabled: false);
             mars.LoadRom(rom);
-            Assert.Equal(eeprom, mars.Bus!.Save.Contents![..eeprom.Length]);
+            Assert.Equal(eeprom, mars.BatteryContents![..eeprom.Length]);
             string save = SaveLibrary.SramPathFor(rom, BatterySave.N64);
             Assert.Equal(eeprom, File.ReadAllBytes(save));
-            Assert.Equal(pak, File.ReadAllBytes(Path.ChangeExtension(save, EmuSen.Cores.Nintendo.Mars.MarsCore.PakExtension)));
+            Assert.Equal(pak, File.ReadAllBytes(Path.ChangeExtension(save, N64Console.PakExtension)));
             AssertUnchanged(before.Item1, Flat(rom));
             AssertUnchanged(before.Item2, flatPak);
         }
@@ -374,9 +380,12 @@ namespace EmuSen.WiseMan.Cores
             var cart = new EmuSen.Cores.Nintendo.Venus.Memory.Cartridge(rom, batteryRamDisabled: true);
             Assert.NotEqual(Pattern(13)[5], cart.Read8(SramAddress + 5));
             cart.SaveSram();
-            var mars = new EmuSen.Cores.Nintendo.Mars.MarsCore(batteryRamDisabled: true);
-            mars.LoadRom(n64);
-            mars.SaveSram();
+            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            using (var mars = new MarsRtCore(batteryRamDisabled: true))
+            {
+                mars.LoadRom(n64);
+                mars.SaveSram();
+            }
 
             Assert.Equal(new[] { Path.GetFileName(Flat(rom)) }, Directory.EnumerateFileSystemEntries(DataStore.Saves).Select(Path.GetFileName).ToArray());
             AssertUnchanged(before, Flat(rom));

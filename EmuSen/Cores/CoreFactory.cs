@@ -2,10 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using EmuSen.Cores.Nintendo.Mars;
-using EmuSen.Cores.Nintendo.Mars.Cheats;
-using EmuSen.Cores.Nintendo.Mars.Debug;
-using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Crystal.Systems.GameBoy;
 using EmuSen.Cores.Nintendo.MercuryRT;
@@ -45,7 +41,8 @@ namespace EmuSen.Cores
             ".smc" or ".sfc" => new VenusCore(headless),
             ".nes" => engine == CoreCatalog.MoonRtEngine && MoonRtCore.Available ? new MoonRtCore() : new MoonCore(),
             ".gb" or ".gbc" => GameBoy(),
-            ".z64" or ".n64" or ".v64" => engine == CoreCatalog.MarsRtEngine && MarsRtCore.Available ? new MarsRtCore(expansionPak: true) { Media = StoredMedia(romPath, MarsNative.Library.Library!) } : new MarsCore(expansionPak: true),
+            ".z64" or ".n64" or ".v64" => MarsRtCore.Available ? new MarsRtCore(expansionPak: true) { Media = StoredMedia(romPath, MarsNative.Library.Library!) }
+                : throw new NotSupportedException($"The N64 core is not in this build ({MarsNative.Report})."),
             var other => throw new NotSupportedException(
                 $"No core in this build handles '{other}' - see CoreCatalog for what is registered."),
         };
@@ -120,18 +117,11 @@ namespace EmuSen.Cores
         public static string? ConfiguredEngine(string romPath) =>
             CoreCatalog.ConsoleForRom(romPath) is { } console ? CoreCatalog.EngineChosen(console, GraphicsConfig.Load().Value(console, CoreCatalog.EngineKey)) : null;
 
-        // Why the engine asked for is not running, or null when it is; an unavailable MarsRT says what MarsNative found - see Mars_Native.md §5.5.
+        // Why the engine asked for is not running, or null when it is - see EmuSen_Settings_Reference.md §4.44.
         public static string? EngineNotice(string romPath, string? engine, ICore core)
         {
-            // A stored engine this build retired is no notice: its console's engine runs the game, and the log says so once a load - see Mercury_Native.md §15.4.
-            if (CoreCatalog.IsRetiredEngine(engine))
-            {
-                Console.WriteLine($"[core] {engine} is no longer in this build; {Running(core)} runs the game.");
-                return null;
-            }
             if (engine is null || CoreCatalog.EngineFor(CoreCatalog.ConsoleForRom(romPath) ?? "") is not { } choice) return null;
             if (choice.Choices?.Contains(engine) != true) return $"No {choice.Label.ToLowerInvariant()} is named \"{engine}\"; {Running(core)} is running.";
-            if (engine == CoreCatalog.MarsRtEngine && core is not MarsRtCore) return $"{CoreCatalog.MarsRtEngine} is not available ({MarsNative.Report}); {CoreCatalog.MarsEngine} is running.";
             if (engine == CoreCatalog.MoonRtEngine && core is not MoonRtCore) return $"{CoreCatalog.MoonRtEngine} is not available ({MoonNative.Report}); {CoreCatalog.MoonEngine} is running.";
             if (!CoreCatalog.IsRegisteredEngine(engine) && Native.CoreDiscovery.ByEngineName(engine) is { } v1 && (core is not Native.CoreEngine running || running.Info.Id != v1.Info.Id))
                 return $"{engine} is not available ({v1.Report}); {Running(core)} is running.";
@@ -142,7 +132,6 @@ namespace EmuSen.Cores
         public static string Running(ICore core) => core switch
         {
             MarsRtCore => CoreCatalog.MarsRtEngine,
-            MarsCore => CoreCatalog.MarsEngine,
             MercuryRtCore => CoreCatalog.MercuryRtEngine,
             MoonRtCore => CoreCatalog.MoonRtEngine,
             MoonCore => CoreCatalog.MoonEngine,
@@ -196,11 +185,7 @@ namespace EmuSen.Cores
                         GameBoyCheatCodecs.GameGenie(),
                         null);
 
-                // The GameShark pokes; no N64 format patches ROM, so the explicit slot stays empty - see Mars_Cheats.md §1.
-                case MarsCore mars:
-                    return new CoreBundle(mars, new MarsDebugTarget(mars, cheats), MarsCheatCodecs.GameShark(), null, null);
-
-                // The same codec, and a target whose hooks are tables in the Rust loop - see Mars_Native.md §6.5.
+                // The GameShark pokes, and no N64 format patches ROM; the target's hooks are tables in the Rust loop - see Mars_Cheats.md §1, Mars_Native.md §6.5.
                 case MarsRtCore marsRt:
                     return new CoreBundle(marsRt, new MarsRtDebugTarget(marsRt, cheats), MarsCheatCodecs.GameShark(), null, null);
 

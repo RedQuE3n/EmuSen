@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Crystal.Debugger;
 using EmuSen.WiseMan.Fixtures;
@@ -10,7 +9,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // MarsRT under the debugger's claims, held to the C# core's transcripts, and the proofs that the hooks change nothing the machine computes - see Mars_Native.md §6.5.
+    // MarsRT under the debugger's claims, and the proofs that the hooks change nothing the machine computes - see Mars_Native.md §6.5.
     public class MarsRtDebugTests : MarsDebugClaims
     {
         private readonly ITestOutputHelper _output;
@@ -38,7 +37,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0, core.CallStack.UnmatchedReturns);
         }
 
-        // The plain frame keeps no stack: what the C# core's A_jump_through_another_register_does_not_return sees on every frame, MarsRT sees only while observed.
+        // The plain frame keeps no stack: a jump through another register leaves its call open, which MarsRT sees only while observed.
         [Fact]
         public void A_plain_frame_leaves_the_stack_where_the_last_observed_frame_left_it()
         {
@@ -49,7 +48,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0, core.CallStack.Depth);
         }
 
-        // MarsRT's counterpart of the C# bus's rule: stores are logged only while a watch or a data breakpoint exists, and none is lost or invented.
+        // Stores are logged only while a watch or a data breakpoint exists, and none is lost or invented.
         [Fact]
         public void A_store_is_reported_only_while_the_target_listens()
         {

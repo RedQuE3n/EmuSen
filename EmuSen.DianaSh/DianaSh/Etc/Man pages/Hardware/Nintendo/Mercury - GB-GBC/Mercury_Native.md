@@ -3670,16 +3670,19 @@ them, moved first (§15.2).
 
 **One engine, no row.** With one implementation the Game Boy has no Engine row (`CoreCatalog.EngineFor("GB")` is
 null, as for any console with one engine), and the metadata editor offers a Game Boy game no alternative emulator.
-MercuryRT stays an engine the build constructs through its own shim even though no row names it: `IsRegisteredEngine`
-now also answers for the shim engines, so discovery's sidecar for `mercuryrt` is never opened as a generic v1 engine in
-the shim's place. A `.gb` or `.gbc` file is built on MercuryRT whatever engine name a caller passes.
+MercuryRT stays an engine the build constructs through its own shim even though no row names it: it is one of
+`CoreCatalog`'s sole engines, the list the N64's retirement introduced the same day for MarsRT, so discovery's sidecar
+for `mercuryrt` is never opened as a generic v1 engine in the shim's place. A `.gb` or `.gbc` file is built on
+MercuryRT whatever engine name a caller passes.
 
 **A stored choice of the C# core.** A player's `graphics.json` may still hold `Engine = Mercury (C#)` for the GB tab,
-and a game's metadata may name it as its alternative emulator. The per-game name is already ignored, since the
-console offers no such engine. The console's stored name reaches the factory, which builds MercuryRT; the engine
-notice, which Mistress shows on its status line, says nothing (`CoreCatalog.IsRetiredEngine`), and the log gets one
-line a load: `[core] Mercury (C#) is no longer in this build; MercuryRT (Rust) runs the game.` The registration golden
-holds the factory's answers for that name on each Game Boy image.
+and a game's metadata may name it as its alternative emulator. The per-game name is ignored, since the console offers
+no such engine. The console's stored name is read as its replacement: `Mercury (C#)` is one of `CoreCatalog`'s retired
+engines beside `Mars (C#)`, so `EngineChosen` answers `MercuryRT (Rust)`, the engine notice on Mistress's status line
+says nothing, and the error log gets one line a process: `Mercury (C#) was retired; MercuryRT (Rust) runs its games
+instead.` (Stage 10 first logged a line of its own from the engine notice; when the N64's retirement landed the same
+day, the Game Boy took its mechanism, so the two retirements have one owner.) The registration golden holds the factory's answers for that name on each
+Game Boy image.
 
 **A build without the library** says so rather than running nothing: the factory throws
 `This build has no Game Boy core: MercuryRT (Rust) is missing (<the loader's report>).`, and Mistress, which catches a

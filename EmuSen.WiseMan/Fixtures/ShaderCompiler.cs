@@ -2,26 +2,45 @@ using System;
 using System.IO;
 using System.Text;
 using Silk.NET.Shaderc;
+using Silk.NET.Vulkan;
 
 namespace EmuSen.WiseMan.Fixtures
 {
-    // Which devices the GPU tests run on: the machine's first choice, or every one when asked - see Mars_Gpu.md §3.
-    public static class GpuTestDevices
+    // Whether this machine has a Vulkan device with a compute queue, for a test that otherwise stands down.
+    public static unsafe class VulkanDevices
     {
-        public const string AllVariable = "EMUSEN_MARS_GPU_TEST_DEVICES";
-
-        public static string[] Names
+        public static bool Any()
         {
-            get
+            try
             {
-                string[] names = System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Distinct(EmuSen.Cores.Nintendo.Mars.Rdp.Gpu.GpuDevice.DeviceNames()));
-                if (names.Length == 0) return new[] { "" };
-                return Environment.GetEnvironmentVariable(AllVariable) == "all" ? names : new[] { names[0] };
+                Vk vk = Vk.GetApi();
+                var application = new ApplicationInfo { SType = StructureType.ApplicationInfo, ApiVersion = Vk.Version11 };
+                var create = new InstanceCreateInfo { SType = StructureType.InstanceCreateInfo, PApplicationInfo = &application };
+                Instance instance;
+                if (vk.CreateInstance(&create, null, &instance) != Result.Success) return false;
+                try
+                {
+                    uint count = 0;
+                    vk.EnumeratePhysicalDevices(instance, &count, null);
+                    var devices = new PhysicalDevice[count];
+                    fixed (PhysicalDevice* p = devices) vk.EnumeratePhysicalDevices(instance, &count, p);
+                    foreach (PhysicalDevice device in devices)
+                    {
+                        uint families = 0;
+                        vk.GetPhysicalDeviceQueueFamilyProperties(device, &families, null);
+                        var queues = new QueueFamilyProperties[families];
+                        fixed (QueueFamilyProperties* q = queues) vk.GetPhysicalDeviceQueueFamilyProperties(device, &families, q);
+                        if (Array.Exists(queues, q => (q.QueueFlags & QueueFlags.ComputeBit) != 0)) return true;
+                    }
+                    return false;
+                }
+                finally { vk.DestroyInstance(instance, null); }
             }
+            catch (Exception) { return false; }
         }
     }
 
-    // GLSL compute source to SPIR-V, for Mars's and Diamond's shaders; the product ships the result and never this - see Mars_Gpu.md §2.
+    // GLSL compute source to SPIR-V, for MarsRT's and Diamond's shaders; the product ships the result and never this - see Mars_Gpu.md §2.
     public static unsafe class ShaderCompiler
     {
         public const string RecordVariable = "EMUSEN_GPU_SHADERS_RECORD";
@@ -37,7 +56,8 @@ namespace EmuSen.WiseMan.Fixtures
             }
         }
 
-        public static string ShaderDirectory => Path.Combine(RepositoryRoot, "EmuSen", "Cores", "Nintendo", "Mars - N64", "Rdp", "Gpu", "Shaders");
+        // MarsRT's shaders, which its crate embeds - see Mars_Gpu.md §2.
+        public static string MarsRtShaderDirectory => Path.Combine(RepositoryRoot, "EmuSen", "Cores", "Nintendo", "MarsRT - N64", "shaders");
 
         // Diamond's renderer's shaders, which its crate embeds - see Diamond_Enhancements.md §14.5.
         public static string DiamondShaderDirectory => Path.Combine(RepositoryRoot, "EmuSen", "Cores", "Sony", "Diamond - PlayStation", "renderer", "shaders");

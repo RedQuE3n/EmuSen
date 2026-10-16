@@ -259,7 +259,7 @@ namespace EmuSen.WiseMan.Mistress
         private static ActiveCheatsWindow OpenN64(CheatRegistry registry)
         {
             var window = new ActiveCheatsWindow(registry,
-                EmuSen.Cores.Nintendo.Mars.Cheats.MarsCheatCodecs.GameShark(), null, console: "N64");
+                EmuSen.Cores.Nintendo.MarsRT.MarsCheatCodecs.GameShark(), null, console: "N64");
             window.Show();
             return window;
         }

@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Threading;
-using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Mistress;
 using EmuSen.Serenity;

@@ -6,7 +6,6 @@ using System.Linq;
 using System.Security.Cryptography;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;

@@ -4,9 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.Mars;
-using EmuSen.Cores.Nintendo.Mars.Debug;
-using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
@@ -16,7 +13,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
     // The memories the library reads and writes by number; Cpu is the processor's kernel view of a virtual address - see Mars_Native.md §5.5.
     public enum MarsRtSpace : uint { Rdram = 0, Dmem = 1, Imem = 2, PifRam = 3, Rom = 4, Cpu = 5 }
 
-    // MarsRT, the N64 core in Rust, through the generic v1 adapter with Mars's own frame end, settings and debugger kept - see Mars_Native.md §7.2.
+    // MarsRT, the N64 core in Rust, through the generic v1 adapter with its own frame end, settings and debugger - see Mars_Native.md §7.2.
     public sealed unsafe partial class MarsRtCore : CoreEngine, ICore, IFrameProfiler
     {
         private static nint X(string name) => MarsNative.Export(name);
@@ -43,7 +40,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
 
         public static bool Available => MarsNative.Available;
 
-        // A stock console unless asked, as MarsCore; null defers to --nobattery.
+        // A stock console unless asked; null defers to --nobattery.
         public MarsRtCore(bool expansionPak = false, bool? batteryRamDisabled = null)
             : base(MarsNative.Library.Library ?? throw new InvalidOperationException($"MarsRT is not in use: {MarsNative.Report}"),
                 new Dictionary<string, string> { [Key.ExpansionPak] = expansionPak ? "true" : "false" })
@@ -52,7 +49,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             WireRegistries();
         }
 
-        // The schema's keys, MarsCore's names for the same facts and MarsRT's own - see Mars_Native.md §7.2.
+        // The schema's keys, the console's settings and MarsRT's own - see Mars_Native.md §7.2.
         private static class Key
         {
             public const string ExpansionPak = "ExpansionPak", Boot = "Boot", ThreadedRdp = "ThreadedRdp", RdpWorkers = "RdpWorkers", DeferredPresentation = "DeferredPresentation";
@@ -65,7 +62,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private int Number(string key) => int.Parse(base.Get(key));
         private void Number(string key, int value) => base.Set(key, value.ToString());
 
-        // The Pak the next load builds; before the first frame a change rebuilds the machine at once, as MarsCore's does.
+        // The Pak the next load builds; before the first frame a change rebuilds the machine at once.
         public bool ExpansionPak
         {
             get => Flag(Key.ExpansionPak);
@@ -78,29 +75,29 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         }
 
         public override string CoreName => "N64";
-        public override int ScreenWidth => IsRomLoaded ? base.ScreenWidth : MarsCore.ScreenWidthPixels;
-        public override int ScreenHeight => IsRomLoaded ? base.ScreenHeight : MarsCore.DefaultScreenHeight;
+        public override int ScreenWidth => IsRomLoaded ? base.ScreenWidth : N64Console.ScreenWidthPixels;
+        public override int ScreenHeight => IsRomLoaded ? base.ScreenHeight : N64Console.DefaultScreenHeight;
         // The screen's shape: a television's 4:3 at every VI width and in PAL - see EmuSen_Serenity.md §2.9.
         public override double DisplayAspect => EmuSen.Serenity.DisplayShape.Television;
 
-        public int DisplayLines => MarsCore.LinesOf(ScreenWidth, ScreenHeight);
+        public int DisplayLines => N64Console.LinesOf(ScreenWidth, ScreenHeight);
 
-        public override double FrameRateHz => MarsCore.ProcessorClockHz / (double)(IsRomLoaded ? Counter(2) : MarsCore.CycleCap);
+        public override double FrameRateHz => N64Console.ProcessorClockHz / (double)(IsRomLoaded ? Counter(2) : N64Console.CycleCap);
         public long Cycles => Counter(0);
         public long Instructions => Counter(3);
         public long IdleTurnsPassed => Counter(4);
-        public override int StateVersion => MarsCore.StateVersion;
+        public override int StateVersion => MarsMachine.StateKind;
 
-        public int ControllerPorts => MarsCore.Ports;
+        public int ControllerPorts => N64Console.Ports;
 
-        // The idle loop passed in one piece, as C#'s Cpu.SkipIdle; exact either way.
+        // The idle loop passed in one piece; exact either way - see Mars_Recompiler.md.
         public bool IdleSkip
         {
             get => Flag(Key.IdleSkip);
             set => Flag(Key.IdleSkip, value);
         }
 
-        // A running signal processor run to its next event inside the idle loop, as C#'s RunBlocks; exact either way.
+        // A running signal processor run to its next event inside the idle loop; exact either way.
         public bool RspWhole
         {
             get => Flag(Key.RspWhole);
@@ -125,7 +122,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             }
         }
 
-        public int EffectiveAntialiasing => MarsCore.EffectiveAntialiasingOf(RenderScale, Antialiasing);
+        public int EffectiveAntialiasing => N64Console.EffectiveAntialiasingOf(RenderScale, Antialiasing);
 
         // Mars's Gpu: asked of the library, which reports what it got - see Mars_Native.md §6.4.
         public bool Gpu
@@ -163,7 +160,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             set => Flag(Key.SkipRepeatedScans, value);
         }
 
-        // Mars's UseBlocks: the processor's code compiled in blocks, validated against memory on entry - see Mars_Native.md §5.8.
+        // The recompiler: the processor's code compiled in blocks, validated against memory on entry - see Mars_Native.md §5.8.
         public bool UseBlocks
         {
             get => Flag(Key.Recompiler);
@@ -184,7 +181,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             set => Number(Key.BlockTier, Math.Clamp(value, 0, 15));
         }
 
-        // Every byte the display processor's thread touches checked against the marks, as Mars's EMUSEN_MARS_VERIFY_RDP; for tests.
+        // Every byte the display processor's thread touches checked against the marks; for tests.
         public bool VerifyRdp
         {
             get => Flag(Key.VerifyRdp);
@@ -197,38 +194,25 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         // The thread's counters: running, its words, starts and time, the waits, bystanders, reads, repeated scans, and by site.
         public long[] ThreadCounterValues() => Longs(ThreadCounters);
 
-        // Declared before VideoSettings, whose initializer reads it; static fields initialise in textual order.
-        private static readonly string[] Honoured = { Key.ExpansionPak, Key.ThreadedRdp, Key.RdpWorkers, Key.DeferredPresentation, Key.SkipRepeatedScans, Key.RenderScale, Key.Antialiasing, Key.Gpu };
-
-        // MarsRT's own key for Mars's UseBlocks, which is no setting of Mars's; before VideoSettings for the same reason - see Mars_Native.md §5.8.
+        // MarsRT's own key, which the console's list does not offer; declared before VideoSettings, whose initializer reads it - see Mars_Native.md §5.8.
         private static readonly CoreSetting Recompiler = new(Key.Recompiler, "Compile the processor's code", "The processor's code is compiled to the host's machine code in blocks, each compared with memory before it runs, on a thread of its own. Exact: frame for frame the interpreter, which is what off leaves running, slower.", CoreSettingKind.Switch, "true");
 
-        // Mars's keys, so one graphics tab serves either engine, every one honoured since stage D - see Mars_Native.md §5.5, §5.6 and §6.4.
-        public static readonly IReadOnlyList<CoreSetting> VideoSettings =
-            MarsCore.VideoSettings.Select(s => Honoured.Contains(s.Key) ? Threads(s) : s with { Hint = IgnoredHint + s.Hint }).Append(Recompiler).ToArray();
+        // The console's keys, every one honoured since stage D, with the threads' hints in MarsRT's words - see Mars_Native.md §5.5, §5.6 and §6.4.
+        public static readonly IReadOnlyList<CoreSetting> VideoSettings = N64Console.VideoSettings.Select(Threads).Append(Recompiler).ToArray();
 
         private static CoreSetting Threads(CoreSetting s) => s.Key switch
         {
             Key.ThreadedRdp => s with { Hint = "The display processor runs its lists on a thread of its own, behind marks on the memory it reaches. Exact: frame for frame the machine on one thread." },
-            Key.RdpWorkers => s with { Hint = "How many processors share each list when it runs on a thread of its own, each shading every Nth row. Exact at any count: frame for frame the machine on one thread. One per three cores is the default, as on Mars." },
+            Key.RdpWorkers => s with { Hint = "How many processors share each list when it runs on a thread of its own, each shading every Nth row. Exact at any count: frame for frame the machine on one thread. One per three cores is the default." },
             Key.DeferredPresentation => s with { Hint = "The picture is finished on another thread while the machine runs the next frame, so it reaches the screen one frame late, exactly the picture it would have been." },
             _ => s,
         };
 
-        private const string IgnoredHint = "MarsRT does not implement this yet and ignores it. On Mars (C#): ";
-
-        private readonly Dictionary<string, string> _ignored = new();
-
         public override IReadOnlyList<CoreSetting> Settings => VideoSettings;
 
-        public override string Get(string key) => key switch
-        {
-            Key.Antialiasing => base.Get(key),
-            _ when Honoured.Contains(key) || key == Key.Recompiler => base.Get(key),
-            _ => _ignored.TryGetValue(Setting(key).Key, out string? value) ? value : Setting(key).Default,
-        };
+        public override string Get(string key) => base.Get(Setting(key).Key);
 
-        // Checked as its kind says, as MarsCore refuses text that is no value, a count clamped, and kept; the Expansion Pak acts - see Mars_Native.md §5.5 and §5.6.
+        // Checked as its kind says, text that is no value refused and a count clamped; the Expansion Pak acts - see Mars_Native.md §5.5 and §5.6.
         public override void Set(string key, string value)
         {
             CoreSetting setting = Setting(key);
@@ -239,14 +223,13 @@ namespace EmuSen.Cores.Nintendo.MarsRT
                 _ => setting.Choices?.Contains(value) == true ? value : throw new ArgumentException($"{value} is not a choice of {setting.Label}."),
             };
             if (key == Key.ExpansionPak) ExpansionPak = accepted == "true";
-            else if (Honoured.Contains(key) || key == Key.Recompiler) base.Set(key, accepted);
-            else _ignored[key] = accepted;
+            else base.Set(key, accepted);
         }
 
         private static CoreSetting Setting(string key) =>
             VideoSettings.FirstOrDefault(s => s.Key == key) ?? throw new ArgumentException($"MarsRT has no setting named {key}.", nameof(key));
 
-        // Past the end reads zero and a write there is dropped, as MarsCore's are - see Mars_Cheats.md §3.1.
+        // Past the end reads zero and a write there is dropped - see Mars_Cheats.md §3.1.
         private byte ReadForCheat(string spaceName, int address) => CheatSpace(spaceName) is { } space ? Peek(space, (uint)address) : (byte)0;
 
         private void WriteForCheat(string spaceName, int address, byte value)
@@ -331,7 +314,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         // The save chip's bytes as the game left them, or null for a cartridge with none.
         public byte[]? BatteryContents => Machine.Battery(0).Data is { Length: > 0 } data ? data : null;
 
-        // The game's save chip and first pak, as MarsCore opens them; none while booting as the corpus boots.
+        // The game's save chip and first pak; none while booting as the corpus boots.
         protected override BatterySave BatteryFile(string path, string console, uint which, string suffix) =>
             _booting ? BatterySave.None : BatterySave.Open(path, BatterySave.N64, disabled: _batteryRamDisabled, extension: suffix);
 
@@ -362,10 +345,10 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         // A library built before the export answers for the first controller alone, as it always did.
         public void SetControllerConnected(int port, bool connected)
         {
-            if (IsRomLoaded && port >= 0 && port < MarsCore.Ports) SetPresent(Machine.Handle, (uint)port, connected ? 1u : 0);
+            if (IsRomLoaded && port >= 0 && port < N64Console.Ports) SetPresent(Machine.Handle, (uint)port, connected ? 1u : 0);
         }
 
-        // MarsCore.RunFrame's order after the frame: the cheats, the frame log, the periodic save - see Mars_Native.md §5.5 and §6.5.
+        // After the frame: the cheats, the frame log, the periodic save - see Mars_Native.md §5.5 and §6.5.
         protected override void EndFrame(CoreMachine m)
         {
             if ((Cop0(StatusRegister) & 1) != 0) Cheats.ApplyAll(ReadForCheat, WriteForCheat);
@@ -375,7 +358,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             if (BatterySave.IsFlushFrame(TotalFrames)) SaveSram();
         }
 
-        // Through the observed loop when anything can halt or record, as MarsCore takes RunFrame's loop; else the plain frame.
+        // Through the observed loop when anything can halt or record; else the plain frame.
         protected override bool AdvanceFrame(CoreMachine m)
         {
             bool resuming = IsHaltedAtBreakpoint;
@@ -385,7 +368,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             return true;
         }
 
-        // The library's phases for the frame just run, read into one array as MarsCore keeps them - see Mars_Native.md §6.6.2.
+        // The library's phases for the frame just run, read into one array - see Mars_Native.md §6.6.2.
         public new IReadOnlyList<(string Name, double Milliseconds)> LastFramePhases
         {
             get
@@ -403,10 +386,10 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             ("machine", 0), ("machine/rdp-wait", 0), ("present", 0), ("present/rdp-wait", 0), ("present/walk-join", 0),
         };
 
-        // The samples not yet drained, left for the frontend's drain, as Mars's Ai.Peek - see Mars_Native.md §6.6.2.
+        // The samples not yet drained, left for the frontend's drain - see Mars_Native.md §6.6.2.
         public short[] PeekAudioSamples() => IsRomLoaded ? Machine.PeekAudio() : Array.Empty<short>();
 
-        // The interpreter's steps, the given number, as MarsCorpusTests steps the C# core, with the buttons held now; through the blocks when they are on.
+        // The interpreter's steps, the given number, with the buttons held now; through the blocks when they are on.
         public void RunSteps(ulong steps)
         {
             CoreMachine m = Machine;
@@ -417,7 +400,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
 
         public string IsViewerTranscript => Text(IsViewerText);
 
-        // A state of the other memory size rebuilds the machine, and the Pak follows it, as MarsCore's does.
+        // A state of the other memory size rebuilds the machine, and the Pak follows it.
         public override void LoadState(Stream stream)
         {
             if (!IsRomLoaded) throw new InvalidOperationException("LoadState() called before LoadRom().");
@@ -428,7 +411,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             if (after != before) Flag(Key.ExpansionPak, after == ExpandedRdram);
         }
 
-        // The C# Mars's format byte for byte, from bytes held in place.
+        // A state from bytes held in place - see Mars_SaveStates.md §1.
         public void LoadState(ReadOnlySpan<byte> state)
         {
             fixed (byte* data = state)
@@ -446,7 +429,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             return state;
         }
 
-        // The CPU's fields alone, as StateSerializer writes a Cpu, for a comparison made every few instructions.
+        // The CPU's fields alone, in the state's order, for a comparison made every few instructions.
         public byte[] SaveProcessor()
         {
             nint handle = Handle;

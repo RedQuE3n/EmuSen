@@ -107,16 +107,6 @@ status 0
 action none
 end
 
-case on mars
-target mars
-covers 1
-$ sprites | head -n 8
-out 19
-0 active sprite(s):
-status 0
-action none
-end
-
 case on marsrt
 target marsrt
 covers 1

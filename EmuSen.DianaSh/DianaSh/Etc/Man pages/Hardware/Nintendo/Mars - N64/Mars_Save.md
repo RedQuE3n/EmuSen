@@ -1,5 +1,7 @@
 # Mars — the save chips, the Controller Pak, and how a cartridge's chip is named
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Phase E's save slice, landed 2026-09-18. `EmuSen/Cores/Nintendo/Mars - N64/Memory/` — `SaveChip.cs`, `Eeprom.cs`,
 `Sram.cs`, `FlashRam.cs`, `ControllerPak.cs` — with the title table in `Rom/SaveTypes.cs` and the files in `MarsCore.cs`.
 Tests in `MarsSaveTests` and `MarsSaveFileTests`; the games through the probe (`Mars_GameProbe.md`).*

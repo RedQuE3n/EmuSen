@@ -1,5 +1,7 @@
 # Mars — the address map, the debug port, and the one counter
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Phase A's first slice, landed 2026-09-15. There is still no CPU: this is what a CPU
 will be able to reach, plus the clock it will advance.
 `EmuSen/Cores/Nintendo/Mars - N64/Memory/`, tested by `MarsBusTests`.*

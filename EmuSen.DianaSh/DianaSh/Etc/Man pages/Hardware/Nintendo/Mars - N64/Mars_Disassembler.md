@@ -1,5 +1,7 @@
 # Mars — the two disassemblers
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Not a slice: an instrument, landed 2026-09-18. Two pure decoders — one word and its address in, text and a static
 reference out — for the VR4300 (`Cpu/Disassembler/Vr4300Disassembler.cs`, which also holds the shared
 `MarsInstruction`) and for the RSP (`Rsp/RspDisassembler.cs`). Tests in `MarsDisassemblerTests`. Neither is wired into

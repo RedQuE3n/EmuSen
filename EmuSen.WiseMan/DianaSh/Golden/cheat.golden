@@ -732,36 +732,6 @@ status 0
 action none
 end
 
-case on mars, with its codecs
-target mars
-covers 1-14,24
-$ cheat add SXIOPO
-out 124
-Error: 'SXIOPO' isn't an N64 GameShark code - expected lines of 8 and 4 hex digits (TTAAAAAA VVVV), joined by '+' or spaces.
-status 1
-action none
-$ cheat add 01FF19D0
-out 126
-Error: '01FF19D0' isn't an N64 GameShark code - expected lines of 8 and 4 hex digits (TTAAAAAA VVVV), joined by '+' or spaces.
-status 1
-action none
-$ cheat add 8001A9F0 4
-out 126
-Error: '8001A9F0' isn't an N64 GameShark code - expected lines of 8 and 4 hex digits (TTAAAAAA VVVV), joined by '+' or spaces.
-status 1
-action none
-$ cheat gg AAAA-AAAA
-out 62
-No Game Genie-style cheat codec is registered for this target.
-status 0
-action none
-$ cheat list
-out 16
-No cheats added.
-status 0
-action none
-end
-
 case on nephrite, with its codecs
 target nephrite
 covers 1-14,24

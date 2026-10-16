@@ -10,7 +10,7 @@ using Avalonia.VisualTree;
 using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.Mars;
+using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
@@ -79,6 +79,18 @@ namespace EmuSen.WiseMan.Mistress
         private static EmulatorSession SessionOf(MainWindow w) => (EmulatorSession)typeof(MainWindow).GetField("_session", Hidden)!.GetValue(w)!;
 
         private static void Poll(MainWindow w) => typeof(MainWindow).GetMethod("PollGamepad", Hidden)!.Invoke(w, null);
+
+        // Each N64 port as MarsRT's state holds it, found by the state layout's names - see Mars_Serial.md §3.
+        private static (bool Present, ushort Buttons, sbyte StickX)[] N64Ports(MarsRtCore core)
+        {
+            byte[] state = core.Save(snapshot: false);
+            string[][] fields = core.Machine.Layout().Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Split(' '))
+                .Where(f => f.Length >= 4 && f[3].Contains("Controllers")).ToArray();
+            int[] At(string name) => fields.Where(f => f[3].EndsWith(name, StringComparison.Ordinal)).Select(f => int.Parse(f[0])).ToArray();
+            int[] present = At("Present"), buttons = At("Buttons"), stick = At("StickX");
+            Assert.Equal(4, present.Length);
+            return Enumerable.Range(0, 4).Select(i => (state[present[i]] != 0, BitConverter.ToUInt16(state, buttons[i]), (sbyte)state[stick[i]])).ToArray();
+        }
 
         // The SNES auto-read's two words, as the game would read them at $4218 and $421A.
         private static (ushort One, ushort Two) SnesPads(MainWindow w)
@@ -162,24 +174,21 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Four_pads_play_the_n64s_four_ports_in_a_big_screen_session() => Session.Dispatch(() =>
         {
-            GraphicsConfig graphics = GraphicsConfig.Load();
-            graphics.SetValue("N64", CoreCatalog.EngineKey, CoreCatalog.MarsEngine);
-            graphics.Save();
             (MainWindow window, PadDriver first) = Playing("Four.z64", SyntheticN64Rom.Build(patches: (0, new byte[] { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 })), bigScreen: true);
-            var mars = Assert.IsType<MarsCore>(SessionOf(window).Core);
-            var ports = mars.Bus!.Si.Controllers;
+            var mars = Assert.IsType<MarsRtCore>(SessionOf(window).Core);
             Poll(window);
-            Assert.Equal(new[] { true, false, false, false }, ports.Select(p => p.Present));
+            Assert.Equal(new[] { true, false, false, false }, N64Ports(mars).Select(p => p.Present));
 
             PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4"), first.Plug("Pad 5") };
             Poll(window);
-            Assert.Equal(new[] { true, true, true, true }, ports.Select(p => p.Present));
+            Assert.Equal(new[] { true, true, true, true }, N64Ports(mars).Select(p => p.Present));
 
             for (int i = 0; i < others.Length; i++) others[i].Pad.Press(SDL.GamepadButton.East);
             others[2].Pad.SetAxis(SDL.GamepadAxis.LeftX, 1);
             Poll(window);
-            Assert.Equal(new ushort[] { 0, 0x8000, 0x8000, 0x8000 }, ports.Select(p => p.Buttons));
-            Assert.Equal(new sbyte[] { 0, 0, 0, 127 }, ports.Select(p => p.StickX));
+            mars.RunFrame();
+            Assert.Equal(new ushort[] { 0, 0x8000, 0x8000, 0x8000 }, N64Ports(mars).Select(p => p.Buttons));
+            Assert.Equal(new sbyte[] { 0, 0, 0, 127 }, N64Ports(mars).Select(p => p.StickX));
             Assert.Equal(5, first.Gamepad.Players.PlayerOf(first.Gamepad.Pads[4]));
             window.Close();
         }, default);

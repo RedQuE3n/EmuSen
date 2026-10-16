@@ -135,22 +135,6 @@ status 0
 action none
 end
 
-case on mars
-target mars
-covers 1
-$ spaces
-out 218
-N64 memory spaces:
-  RDRAM       8388608 bytes  R/W
-  DMEM           4096 bytes  R/W
-  IMEM           4096 bytes  R/W
-  PIFRAM           64 bytes  R/W
-  ROM            4096 bytes  R/O
-  CPU        2147483647 bytes  R/W
-status 0
-action none
-end
-
 case on marsrt
 target marsrt
 covers 1

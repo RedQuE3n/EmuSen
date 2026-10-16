@@ -35,14 +35,15 @@ namespace EmuSen.WiseMan.Mistress
         public void A_game_s_engines_are_its_console_s_and_one_its_console_lacks_is_ignored()
         {
             MetadataField field = GameMetadata.Fields.Single(f => f.Key == GameMetadata.AltEmulator);
-            Assert.Equal(new[] { "", CoreCatalog.MarsRtEngine, CoreCatalog.MarsEngine }, GameMetadata.ChoicesFor(field, "/r/Game.z64").Select(c => c.Value));
+            Assert.Equal(new[] { "" }, GameMetadata.ChoicesFor(field, "/r/Game.z64").Select(c => c.Value));
             Assert.Equal(new[] { "", CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine }, GameMetadata.ChoicesFor(field, "/r/Game.nes").Select(c => c.Value));
             Assert.Equal(new[] { "" }, GameMetadata.ChoicesFor(field, "/r/Game.gbc").Select(c => c.Value));
             Assert.Equal(new[] { "" }.Concat(CoreCatalog.EngineFor("SNES")?.Choices ?? Array.Empty<string>()), GameMetadata.ChoicesFor(field, "/r/Game.sfc").Select(c => c.Value));
-            Assert.Equal(CoreCatalog.MarsEngine, GameMetadata.EngineFor("/r/Game.z64", CoreCatalog.MarsEngine));
-            Assert.Null(GameMetadata.EngineFor("/r/Game.z64", CoreCatalog.MercuryRtEngine));
+            Assert.Equal(CoreCatalog.MoonRtEngine, GameMetadata.EngineFor("/r/Game.nes", CoreCatalog.MoonRtEngine));
+            Assert.Null(GameMetadata.EngineFor("/r/Game.z64", "Mars (C#)"));
             Assert.Null(GameMetadata.EngineFor("/r/Game.gb", "Mercury (C#)"));
-            Assert.Null(GameMetadata.EngineFor("/r/Game.sfc", CoreCatalog.MarsEngine));
+            Assert.Null(GameMetadata.EngineFor("/r/Game.gb", CoreCatalog.MercuryRtEngine));
+            Assert.Null(GameMetadata.EngineFor("/r/Game.sfc", CoreCatalog.MarsRtEngine));
             Assert.Null(GameMetadata.EngineFor("/r/Game.z64", ""));
         }
 
@@ -79,25 +80,27 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(BadgeKind.AltEmulator, badge.Kind);
         }, default);
 
-        // The game's own engine runs it, over the console's choice in Graphics Settings; with none, the console's runs it.
+        // A game or a console whose stored engine is the retired Mars (C#) runs on MarsRT, the N64's one engine - see Mars_Native.md §6.7.
         [Fact]
-        public Task A_game_s_own_engine_runs_it_over_the_console_s() => Session.Dispatch(() =>
+        public Task An_n64_game_that_names_the_retired_csharp_core_runs_on_MarsRT() => Session.Dispatch(() =>
         {
             string root = Path.Combine(Path.GetTempPath(), "EmuSenGameEngine", Guid.NewGuid().ToString("N"));
             string roms = Path.Combine(root, "Roms");
             Directory.CreateDirectory(roms);
             ConfigStore.OverrideDirectory = Path.Combine(root, "Config");
             DataStore.OverrideDirectory = Path.Combine(root, "Home");
+            string? logsWere = ErrorLog.DirectoryOverride;
+            ErrorLog.DirectoryOverride = Path.Combine(root, "Logs");
             try
             {
                 string rom = Path.Combine(roms, "System.z64");
                 File.WriteAllBytes(rom, SyntheticN64System.Build(rsp: true));
                 new AppSettings { RomDirectory = roms, ResumeOnLaunch = AppSettings.ResumeNever, StateDirectory = Path.Combine(root, "States") }.Save();
                 GraphicsConfig config = GraphicsConfig.Load();
-                config.SetValue("N64", CoreCatalog.EngineKey, CoreCatalog.MarsRtEngine);
+                config.SetValue("N64", CoreCatalog.EngineKey, "Mars (C#)");
                 config.Save();
                 using (GameRecords records = GameRecords.Open(GameRecords.DefaultPath))
-                    records.SaveEdits(rom, new Dictionary<string, string?> { [GameMetadata.AltEmulator] = CoreCatalog.MarsEngine }, DateTime.Now);
+                    records.SaveEdits(rom, new Dictionary<string, string?> { [GameMetadata.AltEmulator] = "Mars (C#)" }, DateTime.Now);
 
                 string Engine()
                 {
@@ -110,7 +113,7 @@ namespace EmuSen.WiseMan.Mistress
                     return engine;
                 }
 
-                Assert.Equal(CoreCatalog.MarsEngine, Engine());
+                Assert.Equal(CoreCatalog.MarsRtEngine, Engine());
                 using (GameRecords records = GameRecords.Open(GameRecords.DefaultPath))
                     records.SaveEdits(rom, new Dictionary<string, string?> { [GameMetadata.AltEmulator] = null }, DateTime.Now);
                 Assert.Equal(CoreCatalog.MarsRtEngine, Engine());
@@ -122,6 +125,7 @@ namespace EmuSen.WiseMan.Mistress
             {
                 ConfigStore.OverrideDirectory = null;
                 DataStore.OverrideDirectory = null;
+                ErrorLog.DirectoryOverride = logsWere;
                 try { Directory.Delete(root, true); } catch { }
             }
         }, default);

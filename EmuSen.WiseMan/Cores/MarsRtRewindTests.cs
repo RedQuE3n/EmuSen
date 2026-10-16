@@ -6,8 +6,6 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using EmuSen.Common;
-using EmuSen.Cores.Nintendo.Mars.Memory;
-using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.WiseMan.Fixtures;
@@ -80,7 +78,7 @@ namespace EmuSen.WiseMan.Cores
 
         private bool NoDevice(bool device)
         {
-            if (!device || EmuSen.Cores.Nintendo.Mars.Rdp.Gpu.GpuDevice.DeviceNames().Count > 0) return false;
+            if (!device || VulkanDevices.Any()) return false;
             _output.WriteLine("no Vulkan device: not run");
             return true;
         }
@@ -99,13 +97,13 @@ namespace EmuSen.WiseMan.Cores
         private static readonly System.Reflection.FieldInfo Newest = typeof(RewindBuffer).GetField("_newest", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
 
         // The words unrun in the snapshot the buffer holds newest: after a capture the one just taken, after a step the one landed on.
-        private static int Unrun(RewindBuffer rewind) => Newest.GetValue(rewind) is byte[] state ? BitConverter.ToInt32(state, state.Length - 4 - 8 * DpInterface.SnapshotWords) : 0;
+        private static int Unrun(RewindBuffer rewind) => Newest.GetValue(rewind) is byte[] state ? BitConverter.ToInt32(state, state.Length - 4 - 8 * MarsMachine.SnapshotWords) : 0;
 
         // The display processor's command numbers among the words the snapshot the buffer holds newest left unrun.
         private static void Tally(RewindBuffer rewind, SortedDictionary<int, int> commands)
         {
             if (Newest.GetValue(rewind) is not byte[] state) return;
-            int tail = state.Length - 4 - 8 * DpInterface.SnapshotWords, count = BitConverter.ToInt32(state, tail);
+            int tail = state.Length - 4 - 8 * MarsMachine.SnapshotWords, count = BitConverter.ToInt32(state, tail);
             for (int i = 0; i < count; i++)
             {
                 int command = (int)(BitConverter.ToUInt64(state, tail + 4 + 8 * i) >> 56) & 0x3F;
@@ -314,7 +312,7 @@ namespace EmuSen.WiseMan.Cores
             var random = new Random(romName.Length * 7919 ^ 0x5EED);
             void Count(byte[] snapshot)
             {
-                if (tail < 0) tail = snapshot.Length - 4 - 8 * DpInterface.SnapshotWords;
+                if (tail < 0) tail = snapshot.Length - 4 - 8 * MarsMachine.SnapshotWords;
                 int pending = BitConverter.ToInt32(snapshot, tail);
                 snapshots++;
                 withWords += pending > 0 ? 1 : 0;

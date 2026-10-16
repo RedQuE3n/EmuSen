@@ -2,10 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using EmuSen.Cores.Nintendo.Mars;
-using EmuSen.Cores.Nintendo.Mars.Cheats;
-using EmuSen.Cores.Nintendo.Mars.Debug;
-using EmuSen.Cores.Nintendo.Mars.Memory;
+using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.Crystal.Cheats;
@@ -13,7 +10,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // The N64 GameShark codec, and its codes reaching a running Mars - see Mars_Cheats.md.
+    // The N64 GameShark codec, and its codes reaching a running MarsRT - see Mars_Cheats.md.
     public class MarsCheatTests : IDisposable
     {
         // beq zero, zero, -1 and its empty delay slot, so the processor never touches RDRAM.
@@ -23,31 +20,59 @@ namespace EmuSen.WiseMan.Cores
         private const byte Original = 0xCE;
         private const int RomOffset = 0x1040;
 
+        // The cartridge's physical address, where the processor reads it.
+        private const uint CartDomain1Address2 = 0x1000_0000;
+
+        // PI_DRAM_ADDR, PI_CART_ADDR and PI_WR_LEN, the cartridge-to-RDRAM transfer's registers - see Mars_Memory.md §6.
+        private const uint PiDramAddress = 0x0460_0000, PiCartAddress = 0x0460_0004, PiWriteLength = 0x0460_000C;
+
         private readonly List<string> _temporaryFiles = new();
+        private readonly List<MarsRtCore> _cores = new();
 
         public void Dispose()
         {
+            foreach (MarsRtCore core in _cores) core.Dispose();
             foreach (string path in _temporaryFiles)
             {
                 try { File.Delete(path); } catch { }
             }
         }
 
-        private MarsCore Load(bool expansionPak = false)
+        private MarsRtCore Load(bool expansionPak = false)
         {
             string path = SyntheticN64Rom.WriteTemp(SyntheticN64Rom.Build(
                 length: 0x2000,
                 patches: new[] { (0, SpinForever), (RomOffset - 0x40, new byte[] { Original, 0x11, 0x22, 0x33 }) }));
             _temporaryFiles.Add(path);
+            return Started(path, expansionPak);
+        }
 
-            var core = new MarsCore(expansionPak, batteryRamDisabled: true);
+        private MarsRtCore Started(string path, bool expansionPak = false)
+        {
+            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            var core = new MarsRtCore(expansionPak, batteryRamDisabled: true);
+            _cores.Add(core);
             core.LoadRom(path);
             return core;
         }
 
+        // RDRAM by byte and by range, read and written through the library's memory space.
+        private sealed class Memory(MarsRtCore core)
+        {
+            public byte this[int address]
+            {
+                get => core.Peek(MarsRtSpace.Rdram, (uint)address);
+                set => core.Poke(MarsRtSpace.Rdram, (uint)address, value);
+            }
+
+            public byte[] this[Range range] => core.ReadSpace(MarsRtSpace.Rdram, (uint)range.Start.Value, range.End.Value - range.Start.Value);
+        }
+
+        private static Memory Rdram(MarsRtCore core) => new(core);
+
         private static CheatWrite Only(string code) => Assert.Single(N64GameSharkCodec.DecodeWrites(code));
 
-        private static void Apply(MarsCore core, string code)
+        private static void Apply(MarsRtCore core, string code)
         {
             core.Cheats.AddCheat(CheatKind.RamPoke, N64GameSharkCodec.DecodeWrites(code), null, code);
             core.ApplyCheats();
@@ -237,73 +262,73 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_16_bit_write_lands_high_byte_first_as_the_processor_reads_it()
         {
-            MarsCore core = Load();
+            MarsRtCore core = Load();
 
             Apply(core, "81000100 1234");
 
-            Assert.Equal(0x12, core.Bus!.Rdram[0x100]);
-            Assert.Equal(0x34, core.Bus.Rdram[0x101]);
-            Assert.Equal(0x0000, core.Bus.Rdram[0x102] | core.Bus.Rdram[0x103]);
-            Assert.Equal(0x1234_0000u, core.Bus.Read32(0x100));
+            Assert.Equal(0x12, Rdram(core)[0x100]);
+            Assert.Equal(0x34, Rdram(core)[0x101]);
+            Assert.Equal(0x0000, Rdram(core)[0x102] | Rdram(core)[0x103]);
+            Assert.Equal(0x1234_0000u, core.ReadBus32(0x100));
         }
 
         [Fact]
         public void An_8_bit_write_lands_on_its_own_byte()
         {
-            MarsCore core = Load();
+            MarsRtCore core = Load();
 
             Apply(core, "80000101 FF42");
 
-            Assert.Equal(new byte[] { 0x00, 0x42, 0x00, 0x00 }, core.Bus!.Rdram[0x100..0x104]);
+            Assert.Equal(new byte[] { 0x00, 0x42, 0x00, 0x00 }, Rdram(core)[0x100..0x104]);
         }
 
         [Fact]
         public void An_equal_test_guards_only_the_next_write()
         {
-            MarsCore core = Load();
-            core.Bus!.Rdram[0x200] = 0x06;
+            MarsRtCore core = Load();
+            Rdram(core)[0x200] = 0x06;
 
             Apply(core, "D0000200 0005+80000100 0001+80000101 0002");
 
-            Assert.Equal(0x00, core.Bus.Rdram[0x100]);
-            Assert.Equal(0x02, core.Bus.Rdram[0x101]);
+            Assert.Equal(0x00, Rdram(core)[0x100]);
+            Assert.Equal(0x02, Rdram(core)[0x101]);
 
-            core.Bus.Rdram[0x200] = 0x05;
+            Rdram(core)[0x200] = 0x05;
             core.ApplyCheats();
 
-            Assert.Equal(0x01, core.Bus.Rdram[0x100]);
+            Assert.Equal(0x01, Rdram(core)[0x100]);
         }
 
         [Fact]
         public void A_16_bit_test_compares_in_rdram_byte_order()
         {
-            MarsCore core = Load();
-            core.Bus!.Rdram[0x200] = 0x34;
-            core.Bus.Rdram[0x201] = 0x12;
+            MarsRtCore core = Load();
+            Rdram(core)[0x200] = 0x34;
+            Rdram(core)[0x201] = 0x12;
 
             Apply(core, "D1000200 1234+80000100 0001");
-            Assert.Equal(0x00, core.Bus.Rdram[0x100]);
+            Assert.Equal(0x00, Rdram(core)[0x100]);
 
-            core.Bus.Rdram[0x200] = 0x12;
-            core.Bus.Rdram[0x201] = 0x34;
+            Rdram(core)[0x200] = 0x12;
+            Rdram(core)[0x201] = 0x34;
             core.ApplyCheats();
-            Assert.Equal(0x01, core.Bus.Rdram[0x100]);
+            Assert.Equal(0x01, Rdram(core)[0x100]);
         }
 
         [Fact]
         public void The_not_equal_tests_pass_where_the_equal_ones_fail()
         {
-            MarsCore core = Load();
-            core.Bus!.Rdram[0x200] = 0x05;
-            core.Bus.Rdram[0x202] = 0x12;
-            core.Bus.Rdram[0x203] = 0x34;
+            MarsRtCore core = Load();
+            Rdram(core)[0x200] = 0x05;
+            Rdram(core)[0x202] = 0x12;
+            Rdram(core)[0x203] = 0x34;
 
             Apply(core, "D2000200 0005+80000100 0001");
             Apply(core, "D2000200 0006+80000101 0002");
             Apply(core, "D3000202 1234+80000102 0003");
             Apply(core, "D3000202 3412+80000103 0004");
 
-            Assert.Equal(new byte[] { 0x00, 0x02, 0x00, 0x04 }, core.Bus.Rdram[0x100..0x104]);
+            Assert.Equal(new byte[] { 0x00, 0x02, 0x00, 0x04 }, Rdram(core)[0x100..0x104]);
         }
 
         // Both references make a run of tests an AND: a failed one is not undone by the next passing - see Mars_Cheats.md §2.2.
@@ -313,44 +338,44 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(0x05, 0x06, 0x00)]
         public void A_run_of_tests_must_all_pass(byte first, byte second, byte expected)
         {
-            MarsCore core = Load();
-            core.Bus!.Rdram[0x200] = first;
-            core.Bus.Rdram[0x201] = second;
+            MarsRtCore core = Load();
+            Rdram(core)[0x200] = first;
+            Rdram(core)[0x201] = second;
 
             Apply(core, "D0000200 0005+D0000201 0007+80000100 0009");
 
-            Assert.Equal(expected, core.Bus.Rdram[0x100]);
+            Assert.Equal(expected, Rdram(core)[0x100]);
         }
 
         [Fact]
         public void A_repeater_steps_its_address_and_its_value()
         {
-            MarsCore core = Load();
+            MarsRtCore core = Load();
 
             Apply(core, "50000302 0001+80000100 0010");
 
-            Assert.Equal(new byte[] { 0x10, 0x00, 0x11, 0x00, 0x12, 0x00, 0x00 }, core.Bus!.Rdram[0x100..0x107]);
+            Assert.Equal(new byte[] { 0x10, 0x00, 0x11, 0x00, 0x12, 0x00, 0x00 }, Rdram(core)[0x100..0x107]);
         }
 
         [Fact]
         public void A_16_bit_repeater_steps_in_halfwords_high_byte_first()
         {
-            MarsCore core = Load();
+            MarsRtCore core = Load();
 
             Apply(core, "50000204 0101+81000100 1234");
 
-            Assert.Equal(new byte[] { 0x12, 0x34, 0x00, 0x00, 0x13, 0x35, 0x00, 0x00 }, core.Bus!.Rdram[0x100..0x108]);
+            Assert.Equal(new byte[] { 0x12, 0x34, 0x00, 0x00, 0x13, 0x35, 0x00, 0x00 }, Rdram(core)[0x100..0x108]);
         }
 
         // An 8-bit repetition keeps the low byte of a value that carries past it.
         [Fact]
         public void An_8_bit_repeater_wraps_its_value_at_a_byte()
         {
-            MarsCore core = Load();
+            MarsRtCore core = Load();
 
             Apply(core, "50000201 0001+800001FF 00FF");
 
-            Assert.Equal(new byte[] { 0xFF, 0x00 }, core.Bus!.Rdram[0x1FF..0x201]);
+            Assert.Equal(new byte[] { 0xFF, 0x00 }, Rdram(core)[0x1FF..0x201]);
         }
 
         // Project64 guards the whole run, mupen64plus only its first write; Mars follows Project64 - see Mars_Cheats.md §2.3.
@@ -359,53 +384,53 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(0x00, 0x00)]
         public void A_test_before_a_repeater_guards_every_repetition(byte flag, byte expected)
         {
-            MarsCore core = Load();
-            core.Bus!.Rdram[0x200] = flag;
+            MarsRtCore core = Load();
+            Rdram(core)[0x200] = flag;
 
             Apply(core, "D0000200 0001+50000301 0000+80000100 0007");
 
-            Assert.Equal(new[] { expected, expected, expected }, core.Bus.Rdram[0x100..0x103]);
+            Assert.Equal(new[] { expected, expected, expected }, Rdram(core)[0x100..0x103]);
         }
 
         // A stock console's RDRAM ends at 4MB; past it a write is dropped and a test reads zero - see Mars_Cheats.md §3.1.
         [Fact]
         public void Past_installed_rdram_a_write_is_dropped_and_a_test_reads_zero()
         {
-            MarsCore core = Load();
+            MarsRtCore core = Load();
 
             Apply(core, "80500000 0001");
             Apply(core, "D0500000 0000+80000100 0007");
             Apply(core, "D2500000 0000+80000101 0008");
 
-            Assert.Equal(0x40_0000, core.Bus!.Rdram.Length);
-            Assert.Equal(0x07, core.Bus.Rdram[0x100]);
-            Assert.Equal(0x00, core.Bus.Rdram[0x101]);
-            Assert.Equal(0u, core.Bus.Read32(0x50_0000));
+            Assert.Equal(0x40_0000, core.SpaceSize(MarsRtSpace.Rdram));
+            Assert.Equal(0x07, Rdram(core)[0x100]);
+            Assert.Equal(0x00, Rdram(core)[0x101]);
+            Assert.Equal(0u, core.ReadBus32(0x50_0000));
         }
 
         [Fact]
         public void With_the_expansion_pak_the_same_write_lands()
         {
-            MarsCore core = Load(expansionPak: true);
+            MarsRtCore core = Load(expansionPak: true);
 
             Apply(core, "80500000 0001");
 
-            Assert.Equal(0x01, core.Bus!.Rdram[0x50_0000]);
+            Assert.Equal(0x01, Rdram(core)[0x50_0000]);
         }
 
         [Fact]
         public void The_other_writable_spaces_take_a_poke_and_an_unknown_one_is_ignored()
         {
-            MarsCore core = Load();
+            MarsRtCore core = Load();
 
             core.Cheats.AddRamPoke("dmem", 0x10, 0x5A, "dmem");
             core.Cheats.AddRamPoke("PIFRAM", 0x3F, 0x5B, "pif");
             core.Cheats.AddRamPoke("CPUBUS", 0x10, 0x5C, "not a space here");
             core.ApplyCheats();
 
-            Assert.Equal(0x5A, core.Bus!.SpDmem[0x10]);
-            Assert.Equal(0x5B, core.Bus.PifRam[0x3F]);
-            Assert.Equal(0x00, core.Bus.Rdram[0x10]);
+            Assert.Equal(0x5A, core.Peek(MarsRtSpace.Dmem, 0x10));
+            Assert.Equal(0x5B, core.Peek(MarsRtSpace.PifRam, 0x3F));
+            Assert.Equal(0x00, Rdram(core)[0x10]);
         }
 
         // --- When the frame boundary applies them ---
@@ -417,14 +442,13 @@ namespace EmuSen.WiseMan.Cores
             0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00,
         };
 
-        private MarsCore LoadRunning(byte[] program)
+        private MarsRtCore LoadRunning(byte[] program)
         {
             string path = SyntheticN64Rom.WriteTemp(SyntheticN64Rom.Build(patches: (0, program)));
             _temporaryFiles.Add(path);
 
-            var core = new MarsCore(batteryRamDisabled: true);
-            core.LoadRom(path);
-            core.Cheats.AddRamPoke(MarsCore.SpaceRdram, 0x100, 0x42, "poke");
+            MarsRtCore core = Started(path);
+            core.Cheats.AddRamPoke(MarsDebugSpaces.Rdram, 0x100, 0x42, "poke");
             return core;
         }
 
@@ -432,22 +456,22 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_frame_end_applies_nothing_while_interrupts_are_disabled()
         {
-            MarsCore booting = LoadRunning(SpinForever);
+            MarsRtCore booting = LoadRunning(SpinForever);
             booting.RunFrame();
-            Assert.Equal(0x00, booting.Bus!.Rdram[0x100]);
+            Assert.Equal(0x00, Rdram(booting)[0x100]);
 
-            MarsCore running = LoadRunning(EnableInterruptsThenSpin);
+            MarsRtCore running = LoadRunning(EnableInterruptsThenSpin);
             running.RunFrame();
-            Assert.Equal(0x42, running.Bus!.Rdram[0x100]);
+            Assert.Equal(0x42, Rdram(running)[0x100]);
         }
 
         // An explicit Apply is the player's own instruction and is not held back - see Mars_Cheats.md §5.1.
         [Fact]
         public void An_explicit_apply_does_not_wait_for_interrupts()
         {
-            MarsCore booting = LoadRunning(SpinForever);
+            MarsRtCore booting = LoadRunning(SpinForever);
             booting.ApplyCheats();
-            Assert.Equal(0x42, booting.Bus!.Rdram[0x100]);
+            Assert.Equal(0x42, Rdram(booting)[0x100]);
         }
 
         // Project64's own Infinite Lives for this game, on from power-on: applied mid-checksum it hung the boot - see Mars_Cheats.md §5.1.
@@ -457,14 +481,13 @@ namespace EmuSen.WiseMan.Cores
             string path = Path.Combine(N64TestRomLibrary.Root, "Super Mario 64 (Europe) (En,Fr,De).z64");
             if (!File.Exists(path)) return;
 
-            var core = new MarsCore(batteryRamDisabled: true);
-            core.LoadRom(path);
+            MarsRtCore core = Started(path);
             core.Cheats.AddCheat(CheatKind.RamPoke, N64GameSharkCodec.DecodeWrites("803094DD 0064"), null, "Infinite lives");
 
             for (int frame = 0; frame < 4; frame++) core.RunFrame();
 
-            Assert.True(core.Bus!.Vi.Fields > 0, $"the game never programmed the VI; the processor is at {(uint)core.Cpu!.CurrentPc:X8}");
-            Assert.Equal(0x64, core.Bus.Rdram[0x3094DD]);
+            Assert.True(core.ViRegisters()[0] != 0, $"the game never programmed the VI; the processor is at {(uint)core.Pc:X8}");
+            Assert.Equal(0x64, Rdram(core)[0x3094DD]);
         }
 
         // --- The cartridge ---
@@ -472,85 +495,87 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_rom_patch_reaches_a_processor_load_by_rom_offset()
         {
-            MarsCore core = Load();
-            uint physical = MemoryMap.CartDomain1Address2 + RomOffset;
+            MarsRtCore core = Load();
+            uint physical = CartDomain1Address2 + RomOffset;
 
-            Assert.Equal(Original, core.Bus!.Read8(physical));
+            Assert.Equal(Original, (byte)(core.ReadBus32(physical) >> 24));
 
             core.Cheats.AddRomPatch(RomOffset, 0xAD, null, "patch");
+            core.ApplyCheats();
 
-            Assert.Equal(0xAD, core.Bus.Read8(physical));
-            Assert.Equal(0xAD11_2233u, core.Bus.Read32(physical));
-            Assert.Equal(Original, core.Rom!.Rom[RomOffset]);
+            Assert.Equal(0xAD11_2233u, core.ReadBus32(physical));
         }
 
         // Games copy their code out of the cartridge, so the transfer engine has to see the patch too - see Mars_Cheats.md §6.
         [Fact]
         public void A_rom_patch_reaches_a_transfer_into_rdram()
         {
-            MarsCore core = Load();
+            MarsRtCore core = Load();
             core.Cheats.AddRomPatch(RomOffset + 1, 0xEE, null, "patch");
+            core.ApplyCheats();
 
-            core.Bus!.Write32(MemoryMap.PiBase + PiInterface.DramAddress, 0x1000);
-            core.Bus.Write32(MemoryMap.PiBase + PiInterface.CartAddress, MemoryMap.CartDomain1Address2 + RomOffset);
-            core.Bus.Write32(MemoryMap.PiBase + PiInterface.WriteLength, 4 - 1);
+            core.WriteBus32(PiDramAddress, 0x1000);
+            core.WriteBus32(PiCartAddress, CartDomain1Address2 + RomOffset);
+            core.WriteBus32(PiWriteLength, 4 - 1);
 
-            Assert.Equal(new byte[] { Original, 0xEE, 0x22, 0x33 }, core.Bus.Rdram[0x1000..0x1004]);
+            Assert.Equal(new byte[] { Original, 0xEE, 0x22, 0x33 }, Rdram(core)[0x1000..0x1004]);
         }
 
         [Fact]
         public void A_disabled_rom_patch_gives_the_cartridge_byte_back()
         {
-            MarsCore core = Load();
-            uint physical = MemoryMap.CartDomain1Address2 + RomOffset;
+            MarsRtCore core = Load();
+            uint physical = CartDomain1Address2 + RomOffset;
 
             int id = core.Cheats.AddRomPatch(RomOffset, 0xAD, null, "patch");
             core.Cheats.SetEnabled(id, false);
+            core.ApplyCheats();
 
-            Assert.Equal(Original, core.Bus!.Read8(physical));
+            Assert.Equal(Original, (byte)(core.ReadBus32(physical) >> 24));
         }
 
         // The patcher follows the registry a frontend hands over after the ROM is loaded - see EmuSen_Cheats.md §6.
         [Fact]
         public void A_handed_over_registry_patches_the_already_loaded_cartridge()
         {
-            MarsCore core = Load();
+            MarsRtCore core = Load();
             var handed = new CheatRegistry();
             core.Cheats = handed;
 
             handed.AddRomPatch(RomOffset, 0xAD, null, "patch");
+            core.ApplyCheats();
 
-            Assert.Equal(0xAD, core.Bus!.Read8(MemoryMap.CartDomain1Address2 + RomOffset));
+            Assert.Equal(0xADu, core.ReadBus32(CartDomain1Address2 + RomOffset) >> 24);
         }
 
         // --- Through the shell ---
 
-        private DianaShInterpreter Shell(out MarsCore core)
+        private DianaShInterpreter Shell(out MarsRtCore core)
         {
             core = Load();
-            var target = new MarsDebugTarget(core);
+            var target = new MarsRtDebugTarget(core);
             return DianaShInterpreter.CreateDefault(target, null, MarsCheatCodecs.GameShark(), null);
         }
 
         [Fact]
         public void Cheat_add_takes_a_multi_line_code_whole()
         {
-            DianaShInterpreter shell = Shell(out MarsCore core);
-            core.Bus!.Rdram[0x200] = 0x05;
+            DianaShInterpreter shell = Shell(out MarsRtCore core);
+            Rdram(core)[0x200] = 0x05;
 
             string output = shell.Submit("cheat add D00002000005+800001000001 lives").Output;
             core.ApplyCheats();
 
             Assert.Contains("GameShark", output);
             Assert.Contains("2 writes", output);
-            Assert.Equal(0x01, core.Bus.Rdram[0x100]);
+            Assert.Equal(0x01, Rdram(core)[0x100]);
             Assert.Equal(2, core.Cheats.GetCheats().Single().Writes.Count);
         }
 
         [Fact]
         public void Cheat_add_says_why_it_refuses_a_code()
         {
-            DianaShInterpreter shell = Shell(out MarsCore core);
+            DianaShInterpreter shell = Shell(out MarsRtCore core);
 
             string output = shell.Submit("cheat add 880001000001").Output;
 

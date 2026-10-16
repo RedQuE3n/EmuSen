@@ -1,5 +1,7 @@
 # Mars — the half line, and the interrupt a game waits for
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Landed 2026-09-17. Phase E's fourth slice, and the first thing in the video interface that runs without
 anyone asking it to. The code is `Vi/Vi.Timing.cs` and two lines elsewhere — a call in `MemoryBus.Tick` and a
 clear in `Vi.Write32`; the grading is `MarsViTimingTests` and a prediction an earlier slice wrote down.*

@@ -1,5 +1,7 @@
 # Mars — the serial interface, and the block the PIF runs for it
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Landed 2026-09-17. Phase E's fifth slice, and the first thing in Mars a player could touch. The code is
 `Memory/SiInterface.cs`, `Memory/Joybus.cs` and `Memory/Controller.cs`, plus one predicate widened in
 `Memory/MemoryBus.cs`; the grading is `MarsSerialTests`, the hardware corpus, and the second half of a

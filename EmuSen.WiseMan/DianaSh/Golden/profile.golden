@@ -188,21 +188,6 @@ status 0
 action none
 end
 
-case on mars
-target mars
-covers 1,4
-$ profile on
-out 35
-Profiling instructions per routine.
-status 0
-action none
-$ profile top
-out 21
-Nothing profiled yet.
-status 0
-action none
-end
-
 case on marsrt
 target marsrt
 covers 1,4

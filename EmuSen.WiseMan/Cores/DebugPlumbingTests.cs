@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 using EmuSen.WiseMan.Fixtures;
-using EmuSen.Cores.Nintendo.Mars.Debug;
+using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.Crystal.Debugger;
 

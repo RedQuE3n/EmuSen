@@ -1,5 +1,7 @@
 # Mars — what the Nintendo 64 is documented to do, and what it is not
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Written 2026-09-15 from a literature survey. `Mars_Gameplan.md` §8 said that its
 hardware claims came from general knowledge rather than citation and should be
 checked against primary documentation as each phase opens. This is that

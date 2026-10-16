@@ -1,5 +1,7 @@
 # Mars — the copy mode: four texels a step, written as bytes
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Landed 2026-09-17. Phase D's tenth slice, and the last of its cycle types: the mode that reads four texels
 at a time and writes them to the colour image as bytes, with no combiner, no blender and no depth. The code
 is `Rdp/Rdp.Copy.cs` (the walk, the texel read, the alpha mask and the write), `Rdp/Rdp.Lod.cs` (the tile it

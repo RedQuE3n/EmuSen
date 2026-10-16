@@ -5,7 +5,6 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Moon;
@@ -40,7 +39,6 @@ namespace EmuSen.WiseMan.Cores
             ("MercuryRT", ".gb", 900, () => new MercuryRtCore()),
             ("MercuryRT", ".gbc", 900, () => new MercuryRtCore()),
             ("Venus", ".smc", 600, () => new VenusCore(headless: true)),
-            ("Mars", ".z64", 500, () => new MarsCore(expansionPak: true, batteryRamDisabled: true)),
             ("MarsRT", ".z64", 500, () => new MarsRtCore(expansionPak: true, batteryRamDisabled: true)),
         };
 

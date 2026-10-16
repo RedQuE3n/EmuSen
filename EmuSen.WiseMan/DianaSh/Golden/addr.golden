@@ -156,26 +156,6 @@ status 0
 action none
 end
 
-case on mars
-target mars
-covers 1
-$ addr 0
-out 62
-N64 does not report an address decode, or $000000 is unmapped.
-status 0
-action none
-$ addr 8000
-out 62
-N64 does not report an address decode, or $008000 is unmapped.
-status 0
-action none
-$ addr FFFC
-out 62
-N64 does not report an address decode, or $00FFFC is unmapped.
-status 0
-action none
-end
-
 case on nephrite
 target nephrite
 covers 1

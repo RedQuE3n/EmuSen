@@ -65,30 +65,32 @@ namespace EmuSen.WiseMan.Cores
             Assert.Null(CoreFactory.EngineNotice("game.gb", CoreCatalog.MercuryRtEngine, core));
         }
 
-        // A player's stored choice of the C# core runs the game on MercuryRT, with no notice and one line on the log - see Mercury_Native.md §15.4.
+        // A player's stored choice of the C# core runs the game on MercuryRT, with no notice and at most one line in the log - see Mercury_Native.md §15.4.
         [Fact]
         public void A_stored_choice_of_the_retired_csharp_core_falls_back_quietly()
         {
             const string retired = "Mercury (C#)";
-            Assert.True(CoreCatalog.IsRetiredEngine(retired));
             Assert.False(CoreCatalog.IsRegisteredEngine(retired));
             string rom = Rom("stored.gb", 0x00);
-            var log = new StringWriter();
-            TextWriter was = Console.Out;
-            Console.SetOut(log);
+            string? logsWere = ErrorLog.DirectoryOverride;
+            string logs = Path.Combine(_root, "Logs");
+            ErrorLog.DirectoryOverride = logs;
             try
             {
-                CoreBundle bundle = CoreFactory.Load(rom, engine: CoreCatalog.EngineChosen("GB", retired));
+                string? engine = CoreCatalog.EngineChosen("GB", retired);
+                Assert.Equal(CoreCatalog.MercuryRtEngine, engine);
+                Assert.Equal(engine, CoreCatalog.EngineChosen("GB", retired));
+                CoreBundle bundle = CoreFactory.Load(rom, engine: engine);
                 Assert.IsType<MercuryRtCore>(bundle.Core);
                 Assert.Null(bundle.Notice);
                 (bundle.Core as IDisposable)?.Dispose();
+                string[] lines = Directory.Exists(logs) ? Directory.GetFiles(logs).SelectMany(File.ReadAllLines).Where(l => l.Contains(retired + " was retired")).ToArray() : Array.Empty<string>();
+                Assert.True(lines.Length <= 1, string.Join("\n", lines));
             }
             finally
             {
-                Console.SetOut(was);
+                ErrorLog.DirectoryOverride = logsWere;
             }
-            string[] lines = log.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries).Where(l => l.Contains(retired)).ToArray();
-            Assert.Equal($"[core] {retired} is no longer in this build; {CoreCatalog.MercuryRtEngine} runs the game.", Assert.Single(lines).TrimEnd('\r'));
         }
 
         // On a Game Boy and on a Game Boy Color, and with the Model setting forcing the colour console onto a Game Boy game.

@@ -1,13 +1,23 @@
 using System;
 using System.Collections.Generic;
-using EmuSen.Cores.Nintendo.Mars;
-using EmuSen.Cores.Nintendo.Mars.Debug;
-using EmuSen.Cores.Nintendo.Mars.Memory;
 using EmuSen.Cores.Native;
 using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.Cores.Nintendo.MarsRT
 {
+    // The MI's six interrupt sources, by their bits in MI_INTR - see Mars_Memory.md §8.
+    [Flags]
+    public enum MiInterrupt
+    {
+        None = 0,
+        SignalProcessor = 1 << 0,
+        SerialInterface = 1 << 1,
+        AudioInterface = 1 << 2,
+        VideoInterface = 1 << 3,
+        PeripheralInterface = 1 << 4,
+        DisplayProcessor = 1 << 5,
+    }
+
     // The debugger's hooks: the registries pushed down as tables, a frame that stops with its reasons, and the logs drained into them - see Mars_Native.md §6.5.
     public sealed unsafe partial class MarsRtCore
     {
@@ -25,7 +35,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         // emusen_core_debug_run_frame's reasons; zero is the field's end.
         private const uint StoppedAtInterrupt = 16;
 
-        // Owned here rather than by the debug target, as MarsCore owns its own, so a breakpoint or a label outlives any one prompt - see Mars_Debug.md §1.
+        // Owned here rather than by the debug target, so a breakpoint or a label outlives any one prompt - see Mars_Debug.md §1.
         public override WatchRegistry Watches { get; } = new();
         public override FrameLogRegistry FrameLog { get; } = new();
         public override BreakpointRegistry Breakpoints { get; } = new();
@@ -45,7 +55,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         // The mirror's registries stay MarsRT's own; the adapter's bridge is never attached - see Mars_Native.md §7.3.
         protected override void AttachDebugger(CoreMachine machine) { }
 
-        // MarsCore's seams, wired the same way - see Mars_Debug.md §2.
+        // The registries' seams - see Mars_Debug.md §2.
         private void WireRegistries()
         {
             Breakpoints.CallStack = CallStack;
@@ -53,13 +63,13 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             CallStack.EntryPointObserver = Coverage.RecordEntryPoint;
         }
 
-        // MarsCore's StoresWatched: a store is reported while a watch, a data breakpoint or the uninitialised-read check exists.
+        // A store is reported while a watch, a data breakpoint or the uninitialised-read check exists.
         public bool Listening => Watches.HasWatches || Breakpoints.WatchesWrites;
 
-        // MarsCore takes RunFrame's loop instead of RunQuietly under the same conditions, and the same loop in Rust follows the same rule - see Mars_Native.md §6.5.
+        // The observed loop runs while anything can halt or record - see Mars_Native.md §6.5.
         private bool Observed => !Breakpoints.IsQuiet || Coverage.IsArmed || RspCoverage.IsArmed || CallStack.IsProfiling || Listening;
 
-        // MarsCore's loop, with the instructions between the checks run in Rust: false when the frame halted before its end.
+        // The observed loop, with the instructions between the checks run in Rust: false when the frame halted before its end.
         private bool RunObserved(nint handle, bool resuming)
         {
             _eventFrame = TotalFrames;
@@ -249,7 +259,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             return mapped;
         }
 
-        // MarsDebugSpaces.Resolve: which memory a physical address names, or the register block it falls in, not addressable.
+        // Which memory a physical address names, or the register block it falls in, not addressable.
         public PhysicalAddress? Resolve(uint physical) => !IsRomLoaded ? null : MarsDebugSpaces.Resolve(physical, SpaceSize(MarsRtSpace.Rdram));
 
         // A test's way to a device register, MemoryBus.Write32 and Read32 at a physical address, side effects and all.

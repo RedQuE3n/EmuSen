@@ -1,13 +1,14 @@
 using System;
-using System.Reflection;
-using EmuSen.Cores.Nintendo.Mars.Native;
-using VideoInterface = EmuSen.Cores.Nintendo.Mars.Vi.Vi;
+using EmuSen.Cores.Nintendo.MarsRT;
 
 namespace EmuSen.WiseMan.Fixtures
 {
-    // MarsRT's scan-out behind its test export, fed a C# VI's registers and memory - see Mars_Native.md §5.4.
+    // MarsRT's scan-out behind its test export, fed the VI's registers and memory - see Mars_Native.md §5.4.
     public sealed unsafe class MarsRTViScan : IDisposable
     {
+        // The raster's lines, a PAL field's - see Mars_Video.md §2.
+        public const int RasterHeight = 625;
+
         private static readonly delegate* unmanaged<nint> NewExport = (delegate* unmanaged<nint>)MarsNative.Export("mars_vi_scan_new");
         private static readonly delegate* unmanaged<nint, void> FreeExport = (delegate* unmanaged<nint, void>)MarsNative.Export("mars_vi_scan_free");
         private static readonly delegate* unmanaged<nint, uint*, int*, uint, int> SetExport = (delegate* unmanaged<nint, uint*, int*, uint, int>)MarsNative.Export("mars_vi_scan_set");
@@ -35,12 +36,12 @@ namespace EmuSen.WiseMan.Fixtures
         // The registers alone, or with the held lines and blank flag a scan reads and writes.
         public void Set(uint[] registers, int[]? held = null, bool wasBlank = false)
         {
-            if (registers.Length != 14 || held is { Length: not VideoInterface.RasterHeight }) throw new ArgumentException("14 registers and 625 held lines.");
+            if (registers.Length != 14 || held is { Length: not RasterHeight }) throw new ArgumentException("14 registers and 625 held lines.");
             fixed (uint* r = registers)
             fixed (int* h = held) SetExport(_handle, r, h, wasBlank ? 1u : 0u);
         }
 
-        // True when a walk ran, as the C# Scan() returns; the frame is composed either way.
+        // True when a walk ran; the frame is composed either way.
         public bool Scan(byte[] rdram, byte[] hidden)
         {
             int result;
@@ -51,7 +52,7 @@ namespace EmuSen.WiseMan.Fixtures
 
         public (int[] Held, bool WasBlank) Held()
         {
-            var held = new int[VideoInterface.RasterHeight];
+            var held = new int[RasterHeight];
             int blank;
             fixed (int* h = held) blank = HeldExport(_handle, h);
             return (held, blank != 0);
@@ -87,19 +88,5 @@ namespace EmuSen.WiseMan.Fixtures
         {
             if (_handle != 0) FreeExport(_handle);
         }
-
-        // The C# VI's private scan state, read and written the way the serializer reaches it.
-        public static uint[] RegistersOf(VideoInterface vi) => (uint[])Field("_registers").GetValue(vi)!;
-
-        public static int[] HeldLinesOf(VideoInterface vi) => (int[])Field("_held").GetValue(vi)!;
-
-        public static bool WasBlankOf(VideoInterface vi) => (bool)Field("_wasBlank").GetValue(vi)!;
-
-        public static void SetWasBlank(VideoInterface vi, bool value) => Field("_wasBlank").SetValue(vi, value);
-
-        public static byte[] RasterOf(VideoInterface vi) => (byte[])Field("_raster").GetValue(vi)!;
-
-        private static FieldInfo Field(string name) =>
-            typeof(VideoInterface).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic) ?? throw new MissingFieldException(nameof(VideoInterface), name);
     }
 }

@@ -1,5 +1,7 @@
 # Mars — the core behind `ICore`, and what it stands in for
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Landed 2026-09-18. Not a Phase E slice: the wrapper that lets a frontend load a Nintendo 64 ROM at all. The
 code is `MarsCore.cs` and `Debug/MarsDebugTarget.cs`, a route in `CoreFactory` and a descriptor in
 `CoreCatalog`, one counter added to `Vi/Vi.Timing.cs`, one property made public in `Vi/Vi.cs`, and one guard in

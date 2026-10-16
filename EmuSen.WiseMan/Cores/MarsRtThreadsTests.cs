@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using EmuSen.Cores.Nintendo.Mars;
-using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.WiseMan.Fixtures;
@@ -18,17 +16,11 @@ namespace EmuSen.WiseMan.Cores
     {
         private readonly ITestOutputHelper _output;
         private readonly List<string> _temporary = new();
-        private readonly bool _nativeWas = EmuSen.Cores.Nintendo.Mars.Rsp.Rsp.UseNative;
 
-        public MarsRtThreadsTests(ITestOutputHelper output)
-        {
-            _output = output;
-            EmuSen.Cores.Nintendo.Mars.Rsp.Rsp.UseNative = false;
-        }
+        public MarsRtThreadsTests(ITestOutputHelper output) => _output = output;
 
         public void Dispose()
         {
-            EmuSen.Cores.Nintendo.Mars.Rsp.Rsp.UseNative = _nativeWas;
             foreach (string path in _temporary)
             {
                 try { File.Delete(path); } catch (IOException) { }

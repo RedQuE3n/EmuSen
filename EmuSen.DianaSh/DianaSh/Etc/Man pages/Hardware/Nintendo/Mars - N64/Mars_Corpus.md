@@ -1,5 +1,7 @@
 # Mars — the corpus run, and what its tally is a measurement of
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Landed 2026-09-16. This page owns the hardware corpus as a running instrument: how far
 it gets, what stops it, what its numbers mean and what they do not. The protocol is
 `Mars_TestOracle.md`; the first time it spoke is `Mars_Fpu.md` §9. The harness is

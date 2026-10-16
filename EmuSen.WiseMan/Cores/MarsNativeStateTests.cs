@@ -1,7 +1,5 @@
 using System;
 using System.IO;
-using EmuSen.Cores.Nintendo.Mars.Memory;
-using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
 using Xunit.Abstractions;
 
@@ -13,6 +11,9 @@ namespace EmuSen.WiseMan.Cores
     {
         // Where copies of real game states are looked for; absent, those cases pass without running.
         public const string StatesVariable = "EMUSEN_MARSRT_STATES";
+
+        // A stock console's 4 MB of RDRAM.
+        private const int Rdram = 4 * 1024 * 1024;
 
         private readonly ITestOutputHelper _output;
 
@@ -34,7 +35,7 @@ namespace EmuSen.WiseMan.Cores
 
             Assert.True(MarsMachine.Available, MarsNative.Report);
             byte[] state = File.ReadAllBytes(path);
-            using var machine = new MarsMachine(MemoryBus.RdramSize);
+            using var machine = new MarsMachine(Rdram);
             machine.Load(state);
             bool snapshot = machine.LoadedKind == MarsMachine.SnapshotKind;
             AssertSameBytes(state, machine.Save(snapshot));
@@ -46,9 +47,9 @@ namespace EmuSen.WiseMan.Cores
         {
             Assert.True(MarsMachine.Available, MarsNative.Report);
             byte[] state;
-            using (var source = new MarsMachine(MemoryBus.RdramSize)) state = source.Save(snapshot: false);
+            using (var source = new MarsMachine(Rdram)) state = source.Save(snapshot: false);
 
-            using var machine = new MarsMachine(MemoryBus.RdramSize);
+            using var machine = new MarsMachine(Rdram);
             machine.Load(state);
             Assert.Throws<InvalidDataException>(() => machine.Load(state.AsSpan(0, state.Length - 1)));
             Assert.Throws<InvalidDataException>(() => machine.Load(new byte[] { 0x4D, 0x41, 0x52, 0x54, 1, 0, 0, 0 }));

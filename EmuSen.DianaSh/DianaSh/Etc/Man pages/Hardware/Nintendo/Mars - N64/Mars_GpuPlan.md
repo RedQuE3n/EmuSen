@@ -1,5 +1,7 @@
 # Mars: a plan for drawing the multiple on the GPU
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Drafted 2026-09-20; go-ahead given and phase 0 carried out 2026-09-21, recorded in `Mars_Gpu.md`. A plan, not a record. It follows `Mars_Rdp.md` §11 (the picture at a
 multiple), `Mars_Video.md` §2.10 (antialiasing) and `Mars_Performance.md` §37 (what frame pacing measured), and it
 should be retired into those pages, phase by phase, as it is carried out or abandoned.*

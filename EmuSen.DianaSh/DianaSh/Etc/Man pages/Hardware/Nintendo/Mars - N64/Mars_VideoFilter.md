@@ -1,5 +1,7 @@
 # Mars — the anti-aliasing filter: coverage, six neighbours and two runners-up
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Landed 2026-09-17. Phase E's second slice, and the first thing in Mars to read a coverage back out of memory
 rather than write one into it. The code is `Vi/Vi.Filter.cs` (the filter) and `Vi/Vi.Scanout.cs` (the fetch
 that now carries a coverage, and the fetch bug); the grading is `MarsViDifferentialTests`.*

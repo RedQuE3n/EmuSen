@@ -191,6 +191,8 @@ The comparison below renamed the cores, dropped blank lines and braces, and comp
   would sit on this interface.
 - **The C# cores.** Venus, Moon, Mercury and Mars keep their own `ICore` implementations. Registration covers them.
   The ABI does not, because they have none.
+  *Since 2026-10-16 Mars (C#) is deleted (`Mars_Native.md` §6.7): the N64 runs on MarsRT alone, its shim registered by
+  hand, and the C# cores are Venus, Moon and Mercury.*
 - **A stable ABI for third parties.** The libraries ship beside the assemblies that load them. The version check
   guards a mismatched prebuilt library, not an ecosystem.
   *Superseded 2026-10-01: a stable ABI for third parties is now a goal, decided that day; `EmuSen_CoreAPI.md` §4.8
@@ -644,7 +646,8 @@ sends every changed pair of a frame boundary in one text, and the core applies t
 before and after, and takes a new picture if it moved, which is today's rule.
 
 Where the settings list lives is §9's Q4. It stays C# for now (`MarsCore.VideoSettings`, `MercuryCore.ModelSettings`),
-because `CoreCatalog.SettingsFor` must answer before any library is loaded.
+because `CoreCatalog.SettingsFor` must answer before any library is loaded. *Since 2026-10-16 the N64's list is `N64Console.VideoSettings`,
+beside MarsRT's shim, since `MarsCore` is deleted.*
 *Superseded 2026-10-01 by `EmuSen_CoreAPI.md` §6.13: the core exports its settings schema, read at discovery from a
 sidecar without loading the library (§7.1 there), so the list can answer before any library is loaded and still
 have one source per engine.*
@@ -970,7 +973,8 @@ to build the crate (`RustCores.props:9`–`:26`).
 running engine's feature, and the reason they give ("not kept for Mars (C#)") comes from the registration's own text.
 *Built 2026-09-28, ahead of the records: `EngineFeatures` and the `IEngineFeatures` an engine implements to declare it
 live in `CoreCapabilities.cs`, `MarsCore` declares the withheld rewind and its text, and Mistress's two sites read it
-(`EmuSen_Settings_Reference.md` §4.85.4). The registration reads the same declaration when it is built.*
+(`EmuSen_Settings_Reference.md` §4.85.4). The registration reads the same declaration when it is built.* *Since 2026-10-16, with Mars (C#) deleted,
+no engine withholds rewind; the declaration stays as the surface an engine would use.*
 Anything later that is a property of an engine rather than a capability of a core goes in the same place. A property
 of an engine is a policy decision about an implementation that does support the interface.
 

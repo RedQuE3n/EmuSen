@@ -541,7 +541,7 @@ change what shipped code does. The seven `*_NATIVE` switches are a documented in
 (`EMUSEN_SYNC_MARGIN_MS`, `MainWindow.axaml.cs:1246`; `EMUSEN_MARS_NOINLINEJUMPS`; `EMUSEN_MARSRT_PERFMAP`, which writes
 `/tmp/perf-<pid>.map`). One knob is read by two cores, `EMUSEN_MARS_GPU_DEVICE` (`Mars - N64/Rdp/Gpu/GpuDevice.cs:101`,
 `MarsRT - N64/src/rdp/gpu/device.rs:195`); *since 2026-10-13 it is `EMUSEN_GPU_DEVICE`, read by the C# class and by
-`emusen-gpu`, the shared crate MarsRT's device moved into (`EmuSen_Gpu.md` §4)*. **No shipped component sets a variable another reads** (0 found); every
+`emusen-gpu`, the shared crate MarsRT's device moved into (`EmuSen_Gpu.md` §4); since 2026-10-16 the crate alone reads it, the C# class deleted with Mars (C#)*. **No shipped component sets a variable another reads** (0 found); every
 set-here-read-there pair is a test driving a child process. This is weaker coupling than it looks, and ranks low.
 
 **Files.** Four contracts cross components with no shared type:

@@ -1422,6 +1422,28 @@ present but not on the ABI, or lacks what the engine calls, is reported in the v
 *"libmarsrt.so: has no emusen_core_abi_version; it is not on the core ABI"*), and a library that has crashed leaves
 `marsrt_crash_<pid>.txt` where it left `native_crash_<pid>.txt`.
 
+**The C# core retired (2026-10-16).** Mars (C#) is deleted (`Mars_Native.md` §6.7), and everything above that
+offers it, falls back to it or compares with it is history. What a player sees now:
+
+- **No Engine row on the N64 tab.** MarsRT is the N64's one engine, so the tab begins with the screen filter and the
+  rows below it are the same eight, their keys, words and defaults unchanged; MarsRT's own Recompiler row stays off the
+  tab, as before. `CoreCatalog.EngineFor("N64")` is null, and the factory builds MarsRT for every N64 file whatever
+  engine it is asked for.
+- **A stored choice of Mars (C#)** in `graphics.json`, or as a game's alternative emulator (§4.66), runs MarsRT. The
+  first time a run reads it, the log gains one warning, *"Mars (C#) was retired; MarsRT (Rust) runs its games
+  instead."*, and nothing is shown to the player. The stored value is left in the file.
+- **A build without MarsRT's library** (a foreign or partial publish, or `EMUSEN_MARS_NATIVE=0`) runs no N64 game.
+  Loading one fails in the frontend's usual way, with *"The N64 core is not in this build"* and what the library loader
+  found, for example *"Failed to load Game.z64: The N64 core is not in this build (turned off by
+  EMUSEN_MARS_NATIVE=0)."*; Mistress returns to the library, and the firmware prompt before it asks for nothing.
+- **Rewind is on for every N64 game**, since the engine that withheld it is gone (§4.85.4).
+- **States and battery saves** are unchanged: MarsRT reads the states and the `.srm` and `.mpk` files Mars (C#) wrote.
+
+*Tests:* `MarsRtEngineTests` now holds the tab without a row, a game on MarsRT with rewind both with nothing stored and
+with Mars (C#) stored, and, in a child process with the library off, the failed load's words.
+`MarsRtFrontendTests` holds the factory building MarsRT for every engine name and the one log line;
+`GameEngineAndPlayTimeTests` holds a game whose own choice is Mars (C#).
+
 **The SNES's engine, VenusRT (Rust) by default since 2026-10-05.** The SNES tab has the same Engine row, stored as
 `Consoles.SNES.Engine`. Its choices are *VenusRT (Rust)*, listed first and the default, and *Venus (C#)*, the
 reference, kept for now. *Decided by the tester 2026-10-05* (`VenusRT_Native.md` §65).
@@ -6813,6 +6835,8 @@ caller passes a negative count.
 build waits for a retrain (§4.84, `Mars_Native.md` §6.17), and an export for the limit would change the library. It is
 given the setting when it moves to the common interface (`EmuSen_NativeCores.md` §7, step 5), which retrains the profile
 anyway. Until then the Nintendo 64 honours the setting on Mars (C#) and not on MarsRT, the default engine.
+*Since MarsRT moved to the core ABI v1 (2026-10-15) the adapter hands it the setting like every v1 engine, and since
+2026-10-16 `AudioBufferLimitTests` holds MarsRT to it in place of Mars (C#), which is deleted (§4.44).*
 
 #### 4.85.3 The Rust NES and Game Boy shims close their picture lending
 
@@ -6843,6 +6867,10 @@ has `EngineFeatures.All`. `MarsCore` declares `RewindCapture: false` with the re
 the menu showed before. Both Mistress sites read `EngineFeatures.Of(core)`. This is the `EngineFeatures` of
 `EmuSen_NativeCores.md` §5.2, built ahead of the registration records: when those are built, an
 `EngineRegistration.Features` is read from the same declaration, and Mistress does not change again.
+
+*Since 2026-10-16 no engine withholds rewind: `MarsCore` was deleted with Mars (C#) (`Mars_Native.md` §6.7), and
+`EngineFeaturesTests` holds every remaining engine to `EngineFeatures.All`. The declaration stays, as the surface an
+engine would use.*
 
 **Behaviour is unchanged, and tested.** `EngineFeaturesTests` pins Mars (C#) withholding rewind with that reason and
 every other engine (MarsRT, Moon, MoonRT, Mercury, MercuryRT, Venus) keeping it. `MarsRtEngineTests` already ran a game
@@ -8762,6 +8790,7 @@ the variable unset and with it 0.
 - **The cartridge's own save**, `<game>.srm`, is the game's and has no mode.
 - **The import offered once**: the first N64 game started under the default while per-game `.mpk` files exist and
   `Pak 1` does not is preceded by §4.115's question, which copies every game's notes onto `Pak 1`.
-- **On Mars (C#)** none of this applies: the C# core keeps its one pak per game, as before.
+- **On Mars (C#)** none of this applies: the C# core keeps its one pak per game, as before. *Retired 2026-10-16 with
+  the C# core (§4.44).*
 - **The Memory Cards window** has an N64 tab listing each pak's notes (game code, publisher and name) and pages free,
   with copy, move, delete, new pak and import, as for the PlayStation's cards.

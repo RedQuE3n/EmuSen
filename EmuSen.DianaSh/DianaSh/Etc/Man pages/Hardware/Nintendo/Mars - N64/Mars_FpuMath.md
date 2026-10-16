@@ -1,5 +1,7 @@
 # Mars — floating point in software, and what the part refuses to compute
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Phase B's body, landed 2026-09-16. Arithmetic, square root, conversions, compares and
 the coprocessor branches, on a software float rather than the host's.
 `Cpu/Fpu/SoftFloat.cs`, `SoftFloatMath.cs`, `SoftFloatConvert.cs` and

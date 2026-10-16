@@ -45,6 +45,7 @@ namespace EmuSen.Crystal.Debugger
         private readonly IExpressionContext _context;
         private List<Token> _tokens = new();
         private int _at;
+        private bool _checking;
 
         public ExpressionEvaluator(IExpressionContext context) => _context = context;
 
@@ -55,6 +56,20 @@ namespace EmuSen.Crystal.Debugger
             long value = ParseBinary(0, live: true);
             if (Current.Kind != TokenKind.End) throw new ExpressionException($"Unexpected '{Current.Text}' in expression.");
             return value;
+        }
+
+        // Parses without evaluating or reading memory, refusing a syntax error or an unknown symbol before anything runs - see `man bp`.
+        public void Check(string expression)
+        {
+            _tokens = Tokenize(expression);
+            _at = 0;
+            _checking = true;
+            try
+            {
+                ParseBinary(0, live: false);
+                if (Current.Kind != TokenKind.End) throw new ExpressionException($"Unexpected '{Current.Text}' in expression.");
+            }
+            finally { _checking = false; }
         }
 
         // Anything nonzero is true - see `man eval`.
@@ -248,7 +263,7 @@ namespace EmuSen.Crystal.Debugger
                 _at++;
                 if (!_context.TryGetSymbol(token.Text, out long value))
                 {
-                    if (!live) return 0;
+                    if (!live && !_checking) return 0;
                     throw new ExpressionException($"Unknown symbol '{token.Text}'. Try `eval symbols` for the full list.");
                 }
                 return value;

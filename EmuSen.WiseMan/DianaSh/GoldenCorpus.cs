@@ -26,6 +26,9 @@ namespace EmuSen.WiseMan.DianaSh
         public int Status;
         public bool NeedsMore;
         public string Action = "none";
+
+        // Frames the host runs on the case's core before this line, stopping at a halt.
+        public int RunBefore;
     }
 
     public sealed class GoldenCase
@@ -61,6 +64,7 @@ namespace EmuSen.WiseMan.DianaSh
             int at = 0;
             GoldenCase? current = null;
             GoldenStep? step = null;
+            int run = 0;
             string Line()
             {
                 int end = Array.IndexOf(bytes, (byte)'\n', at);
@@ -106,7 +110,8 @@ namespace EmuSen.WiseMan.DianaSh
                         int cut = rest.LastIndexOf(' ');
                         current!.Files.Add((rest[..cut], Block(int.Parse(rest[(cut + 1)..]))));
                         break;
-                    case "$": step = new GoldenStep { Input = rest }; current!.Steps.Add(step); break;
+                    case "run": run = int.Parse(rest); break;
+                    case "$": step = new GoldenStep { Input = rest, RunBefore = run }; current!.Steps.Add(step); run = 0; break;
                     case "out": step!.Output = Block(int.Parse(rest)); break;
                     case "match": step!.Pattern = Encoding.UTF8.GetString(Block(int.Parse(rest))); break;
                     case "status":
@@ -170,6 +175,7 @@ namespace EmuSen.WiseMan.DianaSh
                 foreach (var (path, bytes) in c.Files) Block($"file {path}", bytes);
                 foreach (GoldenStep s in c.Steps)
                 {
+                    if (s.RunBefore > 0) Text($"run {s.RunBefore}\n");
                     Text($"$ {s.Input}\n");
                     if (s.Pattern is not null) Block("match", Encoding.UTF8.GetBytes(s.Pattern));
                     else if (s.Output is not null) Block("out", s.Output);
@@ -311,11 +317,13 @@ namespace EmuSen.WiseMan.DianaSh
             {
                 // A case that reaches such a line is the file system's from there on, and is left uncompared, as the crate-alone runner leaves it.
                 if (AsksTheSystemsCase(s.Input)) { SystemsCase = true; break; }
+                if (s.RunBefore > 0) RunFrames(b?.Core ?? throw new InvalidDataException($"'run {s.RunBefore}' needs a core, and case '{c.Title}' has none"), s.RunBefore);
                 DianaShInterpreter shell = alone ?? sessions!.Current!.Interpreter;
                 var (needsMore, output, action) = shell.Submit(s.Input);
                 steps.Add(new GoldenStep
                 {
                     Input = s.Input,
+                    RunBefore = s.RunBefore,
                     Output = Encoding.UTF8.GetBytes(Normalise(output)),
                     Status = int.Parse(shell.LastExitStatus),
                     NeedsMore = needsMore,
@@ -325,10 +333,20 @@ namespace EmuSen.WiseMan.DianaSh
             return steps;
         }
 
+        // As a frontend's loop runs them: a halted core resumes, and a halt ends the run.
+        private static void RunFrames(ICore core, int frames)
+        {
+            for (int f = 0; f < frames; f++)
+            {
+                core.RunFrame();
+                if (core.IsHaltedAtBreakpoint) return;
+            }
+        }
+
         // What the case would be recorded as: literal bytes, or a pattern where its numbers vary.
         public static GoldenStep Recorded(GoldenStep run, GoldenStep? existing, bool varyNumbers)
         {
-            var step = new GoldenStep { Input = run.Input, Status = run.Status, NeedsMore = run.NeedsMore, Action = run.Action };
+            var step = new GoldenStep { Input = run.Input, RunBefore = run.RunBefore, Status = run.Status, NeedsMore = run.NeedsMore, Action = run.Action };
             string text = Encoding.UTF8.GetString(run.Output!);
             if (existing?.Pattern is { } kept && Regex.IsMatch(text, kept, RegexOptions.Singleline)) step.Pattern = kept;
             else if (varyNumbers) step.Pattern = "^" + Regex.Replace(Regex.Escape(text), @"\d+(\\\.\d+)?", @"\d+(\.\d+)?") + "$";

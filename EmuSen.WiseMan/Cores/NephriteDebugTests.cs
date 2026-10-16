@@ -49,7 +49,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // A 68000 that starts a Z80 loop and calls a counting routine with the vertical interrupt on - see Nephrite_Native.md §43.
-        private static byte[] CallsRom(bool interrupt)
+        internal static byte[] CallsRom(bool interrupt)
         {
             var r = SyntheticMdRom.Cartridge();
             Put(r, 0, 0x00FF, 0xFE00, 0x0000, 0x0200);
@@ -163,6 +163,51 @@ namespace EmuSen.WiseMan.Cores
                 int first = at.IndexOf(0);
                 Assert.Equal(new[] { 0, 1, 4 }, at.Skip(first).Take(3));
                 Assert.Contains("Stepping 3", DianaShInterpreter.CreateDefault(t).Submit("step z80 3").Output);
+            }
+        }
+
+        // A condition or logpoint typed at the shell reads its own processor's registers as they are at the hit - see `man bp`.
+        [Fact]
+        public void Conditions_and_logpoints_read_each_processors_own_registers_at_the_hit()
+        {
+            var (engine, t) = Load(interrupt: false);
+            using (engine)
+            {
+                var shell = DianaShInterpreter.CreateDefault(t);
+                Assert.StartsWith("Error: Condition 'A==5' refused: Unknown symbol 'A'.", shell.Submit("bp add 302 if A==5").Output);
+                shell.Submit("bp add 302 if D2==0");
+                engine.RunFrame();
+                engine.RunFrame();
+                Assert.False(engine.IsHaltedAtBreakpoint);
+                ClearBreakpoints(t.Breakpoints);
+
+                Assert.Contains("added at", shell.Submit("bp z80 add 1 if \"AF>>8==5\"").Output);
+                for (int f = 0; f < 3 && !engine.IsHaltedAtBreakpoint; f++) engine.RunFrame();
+                Assert.True(engine.IsHaltedAtBreakpoint && engine.HaltedProcessor == 1);
+                Assert.Equal(1, engine.HaltedAddress);
+                t.RefreshProviders();
+                Assert.Equal(5ul, Cpu(t, "z80").Registers!.Current.Single(r => r.Name == "AF").Value >> 8);
+                ClearBreakpoints(Cpu(t, "z80").Breakpoints);
+            }
+
+            (engine, t) = Load(interrupt: false);
+            using (engine)
+            {
+                var shell = DianaShInterpreter.CreateDefault(t);
+                shell.Submit("bp add 302 if D2==3");
+                Assert.Contains("logging at", shell.Submit("bp z80 add 1 log \"AF>>8\"").Output);
+                engine.RunFrame();
+                Assert.True(engine.IsHaltedAtBreakpoint);
+                Assert.Equal((0x302, 0u), (engine.HaltedAddress, engine.HaltedProcessor));
+                t.RefreshProviders();
+                Assert.Equal(3ul, t.CpuRegisters.Current.Single(r => r.Name == "D2").Value);
+                ClearBreakpoints(t.Breakpoints);
+                engine.RunFrame();
+                Assert.False(engine.IsHaltedAtBreakpoint);
+                var logged = Cpu(t, "z80").Breakpoints.LogTail(int.MaxValue).Select(e => e.Text).ToList();
+                Assert.True(logged.Count >= 2, $"{logged.Count} logged");
+                long first = Convert.ToInt64(logged[0]["AF>>8=0x".Length..], 16);
+                Assert.Equal($"AF>>8=0x{(first + 1) & 0xFF:X}", logged[1]);
             }
         }
 

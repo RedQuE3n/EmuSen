@@ -9,10 +9,11 @@ namespace EmuSen.Crystal.Session
     {
         internal long BpAdd(uint session, uint processor, JsonElement spec)
         {
-            BreakpointRegistry bp = Breakpoints(Target(session), processor);
+            IDebugTarget t = Target(session);
+            BreakpointRegistry bp = Breakpoints(t, processor);
             int address = Address(spec, "address");
             int end = OptionalAddress(spec, "end") ?? address;
-            return bp.AddBreakpoint(address, end, OptionalString(spec, "condition"), OptionalString(spec, "log"));
+            return Parsed(() => BreakpointExpressions.Add(t, bp, address, end, OptionalString(spec, "condition"), OptionalString(spec, "log")));
         }
 
         internal long BpAddData(uint session, uint processor, JsonElement spec)
@@ -23,8 +24,15 @@ namespace EmuSen.Crystal.Session
             int address = Address(spec, "address");
             int end = OptionalAddress(spec, "end") ?? address;
             int value = Int32(OptionalInt(spec, "value") ?? -1, "value");
-            return bp.AddDataBreakpoint(space, address, end, value, OptionalBool(spec, "on_read") ?? false, OptionalBool(spec, "changed_only") ?? false,
-                OptionalString(spec, "condition"), OptionalString(spec, "log"));
+            return Parsed(() => BreakpointExpressions.AddData(t, bp, space, address, end, value, OptionalBool(spec, "on_read") ?? false, OptionalBool(spec, "changed_only") ?? false,
+                OptionalString(spec, "condition"), OptionalString(spec, "log")));
+        }
+
+        // A condition or log expression that does not parse is refused with eval's status, nothing added (@since 1.2).
+        private static long Parsed(Func<int> add)
+        {
+            try { return add(); }
+            catch (ExpressionException e) { throw new SessionException(SessionAbi.Parse, e.Message); }
         }
 
         internal void BpSetEnabled(uint session, uint processor, uint id, bool enabled)

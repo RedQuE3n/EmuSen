@@ -328,7 +328,7 @@ out 1
 status 0
 action none
 $ man BP
-out 13364
+out 15475
 NAME
     bp - manage execution breakpoints
 
@@ -348,22 +348,44 @@ SYNOPSIS
 
 CONDITIONS
     An 'if <expr>' suffix turns a breakpoint into a conditional one: the
-    address (or the write) still has to match, and then <expr> has to
+    address (or the access) still has to match, and then <expr> has to
     evaluate nonzero before execution actually halts. This is what makes a
     breakpoint usable on a routine that runs thousands of times a frame -
     'bp add 80A31C if x == 7' stops on the one iteration that matters
     instead of the first. See 'man eval' for the expression language; every
     symbol and memory form it documents works here unchanged.
 
-    Conditions are evaluated on the emulation thread, once per matching
-    hit, so an expensive one costs real frame time. Reading an I/O register
-    in a condition reads it for real, with whatever side effect that has on
-    hardware - 'man eval' covers which reads are and aren't safe.
+    A condition reads what 'eval' reads at the same scope. An unscoped
+    'bp add' reads the session's context, as an unscoped 'eval' does, and
+    'bp <cpu> add' reads that processor's, as 'eval <cpu>' does; 'eval
+    symbols' and 'eval <cpu> symbols' list the names each has. The
+    registers are read as they stand at the hit, not as the last frame
+    left them. This holds on every core, through either shell.
 
-    A condition that fails to evaluate (a typo, an unknown symbol, an
-    unreadable address) is DROPPED rather than left to fire on every
-    instruction forever: the breakpoint halts once, keeps its address, and
-    loses its condition. The error text is reported once at that halt.
+    The condition is checked when the breakpoint is set. One that does not
+    parse, or that names a symbol its scope does not have, is refused
+    there with status 1 and nothing is added:
+
+        $ bp add 8008 if "a =="
+        Error: Condition 'a ==' refused: Unexpected '<end>' in expression.
+        Nothing was added.
+
+    Conditions are evaluated on the emulation thread, once per matching
+    hit, so an expensive one costs real frame time: each hit leaves the
+    core's frame and re-enters it, and a condition that names a register
+    first refreshes the debugger's view of the machine. Measured on
+    2026-10-16, that is a third of a microsecond a hit for a condition of
+    literals and about one to nine for one naming a register, depending on
+    the core; the Debugging Tools Reference, section 3.67, has the
+    numbers. A breakpoint without a condition costs nothing more than it
+    did. Reading an I/O register in a condition reads it for real, with
+    whatever side effect that has on hardware - 'man eval' covers which
+    reads are and aren't safe.
+
+    A condition that passes the check can still fail when it is evaluated:
+    a division by zero, or an address its space cannot read. Such a
+    condition is DROPPED rather than left to fail on every hit: the
+    breakpoint halts once, keeps its address, and loses its condition.
     Re-add the breakpoint once the expression is fixed.
 
     Quote a condition containing '&&', '||', '<', '>' or '|' - those are
@@ -467,8 +489,15 @@ UNINITIALIZED READS
 HARDWARE CONDITIONS
     'bp when <condition>' halts when the machine does something it should
     not, rather than when it reaches an address. 'bp when' with no argument
-    lists what this core can detect, with each one's current state. On the
-    SNES that is:
+    lists what this core can detect, with each one's current state. Which
+    conditions exist is each core's to publish, and since the C# SNES core
+    was retired on 2026-10-16 no core publishes any: 'bp when' answers
+    'This core reports no hardware conditions to break on.', status 1, on
+    every core. Conditional breakpoints do not stand in for it - they test
+    an expression where an address is reached, and a hardware condition is
+    detected by the core wherever it happens. What the C# SNES core
+    published, and what a core that publishes conditions again would be
+    expected to offer, was:
 
         stp         the 65816 executed STP and is stopped until reset
         wdm         the 65816 executed WDM, a reserved opcode
@@ -537,10 +566,13 @@ LOGPOINTS
     rather than one arbitrary call being inspected in isolation.
 
     <expr> is a comma-separated list, and each part is rendered as 'expr=value'
-    so a line names what it is showing. 'uote it - commas are fine unquoted
+    so a line names what it is showing. Quote it - commas are fine unquoted
     but the shell eats the brackets and operators that make it worth logging.
     Every symbol 'man eval' documents works, evaluated against the chip the
-    breakpoint belongs to.
+    breakpoint belongs to, at the scope and with the registers a condition
+    reads (see CONDITIONS). Each part is checked when the logpoint is set,
+    as a condition is, and one that does not parse or names an unknown
+    symbol refuses the whole logpoint.
 
     A logpoint still honors 'if ', so the two compose: match the address,
     check the condition, then record instead of halting. A logpoint that
@@ -559,7 +591,7 @@ EXAMPLES
     bp add 8000
     bp add 80A31C if x == 7
     bp add 80A31C log "a, x"
-    bp write WRAM 0DB3 log "a, [$7E0100]" if a > 4
+    bp write WRAM 0DB3 log "a, [$7E0100]" if "a > 4"
     bp log 100
     bp add 818000-818FFF
     bp add 808000 if "[$7E0020] != 0 && a > 16"
@@ -573,14 +605,16 @@ EXAMPLES
     bp off 1
     bp list
     bp sa1 add 0082D7
-    bp gsu add 0A80E9 if r14 > $100
+    bp gsu add 0A80E9 if "r14 > $100"
 
 OTHER PROCESSORS
     A scope word puts the breakpoint on another chip - see 'cpus' for the
     names. Each chip keeps its own breakpoint list, because each runs
     different code at the same addresses, and a condition attached to one
-    is evaluated against THAT chip's registers: 'bp gsu add X if r14 > 0'
-    reads the GSU's R14, not anything on the main CPU.
+    is evaluated against THAT chip's registers: 'bp gsu add X if "r14 > 0"'
+    reads the GSU's R14, not anything on the main CPU, and 'bp z80 add 1
+    if "AF>>8 == 5"' on the Genesis reads the Z80's A, where the same
+    condition unscoped is refused because the 68000 has no AF.
 
     A chip the core cannot halt takes no breakpoints and says so rather
     than accepting one that would never fire.
@@ -590,7 +624,7 @@ SEE ALSO
 status 0
 action none
 $ man Bp
-out 13364
+out 15475
 NAME
     bp - manage execution breakpoints
 
@@ -610,22 +644,44 @@ SYNOPSIS
 
 CONDITIONS
     An 'if <expr>' suffix turns a breakpoint into a conditional one: the
-    address (or the write) still has to match, and then <expr> has to
+    address (or the access) still has to match, and then <expr> has to
     evaluate nonzero before execution actually halts. This is what makes a
     breakpoint usable on a routine that runs thousands of times a frame -
     'bp add 80A31C if x == 7' stops on the one iteration that matters
     instead of the first. See 'man eval' for the expression language; every
     symbol and memory form it documents works here unchanged.
 
-    Conditions are evaluated on the emulation thread, once per matching
-    hit, so an expensive one costs real frame time. Reading an I/O register
-    in a condition reads it for real, with whatever side effect that has on
-    hardware - 'man eval' covers which reads are and aren't safe.
+    A condition reads what 'eval' reads at the same scope. An unscoped
+    'bp add' reads the session's context, as an unscoped 'eval' does, and
+    'bp <cpu> add' reads that processor's, as 'eval <cpu>' does; 'eval
+    symbols' and 'eval <cpu> symbols' list the names each has. The
+    registers are read as they stand at the hit, not as the last frame
+    left them. This holds on every core, through either shell.
 
-    A condition that fails to evaluate (a typo, an unknown symbol, an
-    unreadable address) is DROPPED rather than left to fire on every
-    instruction forever: the breakpoint halts once, keeps its address, and
-    loses its condition. The error text is reported once at that halt.
+    The condition is checked when the breakpoint is set. One that does not
+    parse, or that names a symbol its scope does not have, is refused
+    there with status 1 and nothing is added:
+
+        $ bp add 8008 if "a =="
+        Error: Condition 'a ==' refused: Unexpected '<end>' in expression.
+        Nothing was added.
+
+    Conditions are evaluated on the emulation thread, once per matching
+    hit, so an expensive one costs real frame time: each hit leaves the
+    core's frame and re-enters it, and a condition that names a register
+    first refreshes the debugger's view of the machine. Measured on
+    2026-10-16, that is a third of a microsecond a hit for a condition of
+    literals and about one to nine for one naming a register, depending on
+    the core; the Debugging Tools Reference, section 3.67, has the
+    numbers. A breakpoint without a condition costs nothing more than it
+    did. Reading an I/O register in a condition reads it for real, with
+    whatever side effect that has on hardware - 'man eval' covers which
+    reads are and aren't safe.
+
+    A condition that passes the check can still fail when it is evaluated:
+    a division by zero, or an address its space cannot read. Such a
+    condition is DROPPED rather than left to fail on every hit: the
+    breakpoint halts once, keeps its address, and loses its condition.
     Re-add the breakpoint once the expression is fixed.
 
     Quote a condition containing '&&', '||', '<', '>' or '|' - those are
@@ -729,8 +785,15 @@ UNINITIALIZED READS
 HARDWARE CONDITIONS
     'bp when <condition>' halts when the machine does something it should
     not, rather than when it reaches an address. 'bp when' with no argument
-    lists what this core can detect, with each one's current state. On the
-    SNES that is:
+    lists what this core can detect, with each one's current state. Which
+    conditions exist is each core's to publish, and since the C# SNES core
+    was retired on 2026-10-16 no core publishes any: 'bp when' answers
+    'This core reports no hardware conditions to break on.', status 1, on
+    every core. Conditional breakpoints do not stand in for it - they test
+    an expression where an address is reached, and a hardware condition is
+    detected by the core wherever it happens. What the C# SNES core
+    published, and what a core that publishes conditions again would be
+    expected to offer, was:
 
         stp         the 65816 executed STP and is stopped until reset
         wdm         the 65816 executed WDM, a reserved opcode
@@ -799,10 +862,13 @@ LOGPOINTS
     rather than one arbitrary call being inspected in isolation.
 
     <expr> is a comma-separated list, and each part is rendered as 'expr=value'
-    so a line names what it is showing. 'uote it - commas are fine unquoted
+    so a line names what it is showing. Quote it - commas are fine unquoted
     but the shell eats the brackets and operators that make it worth logging.
     Every symbol 'man eval' documents works, evaluated against the chip the
-    breakpoint belongs to.
+    breakpoint belongs to, at the scope and with the registers a condition
+    reads (see CONDITIONS). Each part is checked when the logpoint is set,
+    as a condition is, and one that does not parse or names an unknown
+    symbol refuses the whole logpoint.
 
     A logpoint still honors 'if ', so the two compose: match the address,
     check the condition, then record instead of halting. A logpoint that
@@ -821,7 +887,7 @@ EXAMPLES
     bp add 8000
     bp add 80A31C if x == 7
     bp add 80A31C log "a, x"
-    bp write WRAM 0DB3 log "a, [$7E0100]" if a > 4
+    bp write WRAM 0DB3 log "a, [$7E0100]" if "a > 4"
     bp log 100
     bp add 818000-818FFF
     bp add 808000 if "[$7E0020] != 0 && a > 16"
@@ -835,14 +901,16 @@ EXAMPLES
     bp off 1
     bp list
     bp sa1 add 0082D7
-    bp gsu add 0A80E9 if r14 > $100
+    bp gsu add 0A80E9 if "r14 > $100"
 
 OTHER PROCESSORS
     A scope word puts the breakpoint on another chip - see 'cpus' for the
     names. Each chip keeps its own breakpoint list, because each runs
     different code at the same addresses, and a condition attached to one
-    is evaluated against THAT chip's registers: 'bp gsu add X if r14 > 0'
-    reads the GSU's R14, not anything on the main CPU.
+    is evaluated against THAT chip's registers: 'bp gsu add X if "r14 > 0"'
+    reads the GSU's R14, not anything on the main CPU, and 'bp z80 add 1
+    if "AF>>8 == 5"' on the Genesis reads the Z80's A, where the same
+    condition unscoped is refused because the 68000 has no AF.
 
     A chip the core cannot halt takes no breakpoints and says so rather
     than accepting one that would never fire.
@@ -1395,7 +1463,7 @@ case the page for bp
 target none
 covers 1
 $ man bp
-out 13364
+out 15475
 NAME
     bp - manage execution breakpoints
 
@@ -1415,22 +1483,44 @@ SYNOPSIS
 
 CONDITIONS
     An 'if <expr>' suffix turns a breakpoint into a conditional one: the
-    address (or the write) still has to match, and then <expr> has to
+    address (or the access) still has to match, and then <expr> has to
     evaluate nonzero before execution actually halts. This is what makes a
     breakpoint usable on a routine that runs thousands of times a frame -
     'bp add 80A31C if x == 7' stops on the one iteration that matters
     instead of the first. See 'man eval' for the expression language; every
     symbol and memory form it documents works here unchanged.
 
-    Conditions are evaluated on the emulation thread, once per matching
-    hit, so an expensive one costs real frame time. Reading an I/O register
-    in a condition reads it for real, with whatever side effect that has on
-    hardware - 'man eval' covers which reads are and aren't safe.
+    A condition reads what 'eval' reads at the same scope. An unscoped
+    'bp add' reads the session's context, as an unscoped 'eval' does, and
+    'bp <cpu> add' reads that processor's, as 'eval <cpu>' does; 'eval
+    symbols' and 'eval <cpu> symbols' list the names each has. The
+    registers are read as they stand at the hit, not as the last frame
+    left them. This holds on every core, through either shell.
 
-    A condition that fails to evaluate (a typo, an unknown symbol, an
-    unreadable address) is DROPPED rather than left to fire on every
-    instruction forever: the breakpoint halts once, keeps its address, and
-    loses its condition. The error text is reported once at that halt.
+    The condition is checked when the breakpoint is set. One that does not
+    parse, or that names a symbol its scope does not have, is refused
+    there with status 1 and nothing is added:
+
+        $ bp add 8008 if "a =="
+        Error: Condition 'a ==' refused: Unexpected '<end>' in expression.
+        Nothing was added.
+
+    Conditions are evaluated on the emulation thread, once per matching
+    hit, so an expensive one costs real frame time: each hit leaves the
+    core's frame and re-enters it, and a condition that names a register
+    first refreshes the debugger's view of the machine. Measured on
+    2026-10-16, that is a third of a microsecond a hit for a condition of
+    literals and about one to nine for one naming a register, depending on
+    the core; the Debugging Tools Reference, section 3.67, has the
+    numbers. A breakpoint without a condition costs nothing more than it
+    did. Reading an I/O register in a condition reads it for real, with
+    whatever side effect that has on hardware - 'man eval' covers which
+    reads are and aren't safe.
+
+    A condition that passes the check can still fail when it is evaluated:
+    a division by zero, or an address its space cannot read. Such a
+    condition is DROPPED rather than left to fail on every hit: the
+    breakpoint halts once, keeps its address, and loses its condition.
     Re-add the breakpoint once the expression is fixed.
 
     Quote a condition containing '&&', '||', '<', '>' or '|' - those are
@@ -1534,8 +1624,15 @@ UNINITIALIZED READS
 HARDWARE CONDITIONS
     'bp when <condition>' halts when the machine does something it should
     not, rather than when it reaches an address. 'bp when' with no argument
-    lists what this core can detect, with each one's current state. On the
-    SNES that is:
+    lists what this core can detect, with each one's current state. Which
+    conditions exist is each core's to publish, and since the C# SNES core
+    was retired on 2026-10-16 no core publishes any: 'bp when' answers
+    'This core reports no hardware conditions to break on.', status 1, on
+    every core. Conditional breakpoints do not stand in for it - they test
+    an expression where an address is reached, and a hardware condition is
+    detected by the core wherever it happens. What the C# SNES core
+    published, and what a core that publishes conditions again would be
+    expected to offer, was:
 
         stp         the 65816 executed STP and is stopped until reset
         wdm         the 65816 executed WDM, a reserved opcode
@@ -1604,10 +1701,13 @@ LOGPOINTS
     rather than one arbitrary call being inspected in isolation.
 
     <expr> is a comma-separated list, and each part is rendered as 'expr=value'
-    so a line names what it is showing. 'uote it - commas are fine unquoted
+    so a line names what it is showing. Quote it - commas are fine unquoted
     but the shell eats the brackets and operators that make it worth logging.
     Every symbol 'man eval' documents works, evaluated against the chip the
-    breakpoint belongs to.
+    breakpoint belongs to, at the scope and with the registers a condition
+    reads (see CONDITIONS). Each part is checked when the logpoint is set,
+    as a condition is, and one that does not parse or names an unknown
+    symbol refuses the whole logpoint.
 
     A logpoint still honors 'if ', so the two compose: match the address,
     check the condition, then record instead of halting. A logpoint that
@@ -1626,7 +1726,7 @@ EXAMPLES
     bp add 8000
     bp add 80A31C if x == 7
     bp add 80A31C log "a, x"
-    bp write WRAM 0DB3 log "a, [$7E0100]" if a > 4
+    bp write WRAM 0DB3 log "a, [$7E0100]" if "a > 4"
     bp log 100
     bp add 818000-818FFF
     bp add 808000 if "[$7E0020] != 0 && a > 16"
@@ -1640,14 +1740,16 @@ EXAMPLES
     bp off 1
     bp list
     bp sa1 add 0082D7
-    bp gsu add 0A80E9 if r14 > $100
+    bp gsu add 0A80E9 if "r14 > $100"
 
 OTHER PROCESSORS
     A scope word puts the breakpoint on another chip - see 'cpus' for the
     names. Each chip keeps its own breakpoint list, because each runs
     different code at the same addresses, and a condition attached to one
-    is evaluated against THAT chip's registers: 'bp gsu add X if r14 > 0'
-    reads the GSU's R14, not anything on the main CPU.
+    is evaluated against THAT chip's registers: 'bp gsu add X if "r14 > 0"'
+    reads the GSU's R14, not anything on the main CPU, and 'bp z80 add 1
+    if "AF>>8 == 5"' on the Genesis reads the Z80's A, where the same
+    condition unscoped is refused because the 68000 has no AF.
 
     A chip the core cannot halt takes no breakpoints and says so rather
     than accepting one that would never fire.

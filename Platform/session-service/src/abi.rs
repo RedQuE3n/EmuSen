@@ -7,7 +7,7 @@
 use std::ffi::c_void;
 
 pub const MAJOR: u32 = 1;
-pub const MINOR: u32 = 1;
+pub const MINOR: u32 = 2;
 pub const VERSION: u32 = (MAJOR << 16) | MINOR;
 
 /// A processor argument naming none: the session's own registries, as a command that names no processor reaches

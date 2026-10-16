@@ -1264,7 +1264,7 @@ Three decisions worth recording because the obvious alternatives are wrong:
 
 - **Short-circuiting genuinely skips, it does not just discard.** `ParseBinary` threads a `live` flag: a skipped branch is still *parsed* (tokens have to be consumed) but nothing in it is evaluated. That matters beyond `100 / [$7E0000]` not dividing by zero — an unevaluated `[...]` must not *read the bus*, because reading a hardware register has side effects (`RDNMI` clears the pending-NMI flag). A first cut of this evaluated both sides and threw the result away, which the short-circuit tests caught.
 - **WRAM reads bypass the bus.** In `SnesExpressionContext.TryReadMemory`, a CPU address landing in WRAM (banks `$7E`/`$7F`, or the `$00-$3F`/`$80-$BF` low-RAM mirror) is served straight from `bus.Ram` rather than through `Read8`. It's faster on a path that runs per-instruction, and it makes the overwhelmingly common condition form (`[$7E0020] == 3`) side-effect-free by construction. Anything not resolving to WRAM still goes through the live bus, with whatever consequence that carries — `man eval` says so explicitly rather than pretending otherwise.
-- **A condition that won't evaluate is dropped, not retried.** A typo'd symbol would otherwise fail on every single instruction the address is reached at, forever. `ConditionHolds` halts once, records the error in `LastConditionError`, and clears that breakpoint's condition — the breakpoint survives, its condition doesn't. A core with no `ConditionEvaluator` wired treats conditions as always-true, so the address still works.
+- **A condition that won't evaluate is dropped, not retried.** A typo'd symbol would otherwise fail on every single instruction the address is reached at, forever. `ConditionHolds` halts once, records the error in `LastConditionError`, and clears that breakpoint's condition — the breakpoint survives, its condition doesn't. A core with no `ConditionEvaluator` wired treats conditions as always-true, so the address still works. *Changed 2026-10-16* (§3.67): a condition that does not parse, or names a symbol its scope lacks, is refused when it is set, so the drop is left to failures only evaluation can find (a division by zero, an address a space cannot read); and no registry a shell reaches lacks the evaluators any longer, since they are set where a condition enters one.
 
 `%` is both the binary-literal prefix (`%1010`) and modulo. It's read as a literal only when the next character is `0` or `1`; everywhere else it's the operator. Found by a test, not by inspection.
 
@@ -3021,6 +3021,26 @@ A tenth of one percent of a frame. `ReadSpritesLive` walks all 128 OAM entries u
 Gating would also have cost more than the plumbing. DianaSh's whole "Diana always live" model rests on read-only lines running immediately **on whatever thread submitted them** (`DianaShInterpreterScheduler`, `TryGetReadOnlyFastPath`), which is safe precisely because reading `Current` never touches the core. A dormant provider breaks that: a one-shot `regs` or `sprites` has no safe way to refresh from the console thread, and reclassifying those commands as emulation-thread work would make them hang whenever the loop is not ticking — paused, halted at a breakpoint, no ROM loaded. That is exactly when you most want to read registers.
 
 So the unconditional refresh is not a debt. It is the price of the property that makes the read-only fast path safe, and it costs 0.1% of a frame.
+
+### 3.67 Conditions and logpoints on every core, after the C# cores (`Crystal/Debugger/BreakpointExpressions.cs`)
+
+*Built 2026-10-16.* §3.27 and §3.37 describe conditions and logpoints as C# Venus had them, its target setting each registry's evaluators. When the C# cores were retired that target went, and on every Rust core a condition counted as true and a logpoint recorded its own text. `EmuSen_DianaSh.md` §13.12 is the full record: the defect shown first, the decision, the goldens and the tests. What a reader of this reference needs from it:
+
+- **One owner, at the add.** Crystal's `BreakpointExpressions.Add` and `AddData` are what both shells' `bp` (the C# command and the session service's `bp_add`/`bp_add_data`, which the Rust module calls) use to add a breakpoint. They check the condition and each log part, then set the registry's `ConditionEvaluator` and `LogEvaluator` for that target and registry, then add. Not a target's constructor: four target classes exist (`CoreDebugTarget` and the MarsRT, MercuryRT and MoonRT shims), and a registry outlives the target it was reached through.
+- **Checked when set.** `ExpressionEvaluator.Check` parses without evaluating, resolves every symbol, those in a branch short-circuiting would skip included, and reads no memory, so checking has no side effect on the machine. A refusal is `Error: Condition '<expr>' refused: <the evaluator's words> Nothing was added.`, status 1, in both shells; the session service answers it with `EMUSEN_SVC_PARSE`, its minor 1.2.
+- **`eval`'s scope, read at the hit.** The main processor's registry reads `DebugExpressions.For(target)`, another processor's `DebugExpressions.For(target, cpu)`, as `eval` and `eval <cpu>` do. The first symbol an evaluation names refreshes the target's providers, once per evaluation, so registers are those at the hit rather than at the last frame's end; literals and memory reads alone refresh nothing.
+- **`bp when` is a different mechanism** (a core detecting an event and naming it) and is not restored; `EmuSen_DianaSh.md` §16.3's Q29 proposes how.
+
+**Cost** (*measured on 2026-10-16*, Release, `BreakpointConditionCostBench` with `EMUSEN_BP_BENCH=1`, per hit on each core's debug-test loop, over a breakpoint never reached):
+
+| Core | `if 0` | A register condition | A register logpoint |
+|---|---|---|---|
+| MoonRT | 0.36 µs | 9.08 µs | 8.97 µs |
+| MercuryRT | 0.34 µs | 6.84 µs | 6.93 µs |
+| MarsRT | 0.32 µs | 1.12 µs | 2.06 µs |
+| Nephrite | 0.67 µs | 1.88 µs | 1.83 µs |
+
+A breakpoint without a condition is unchanged, its path untouched and its numbers equal before and after within noise. The floor of a condition, `if 0`, is leaving the core's frame and re-entering it with the expression parsed. A register costs the refresh: about a microsecond where the core exports its registers, 7 to 9 on MoonRT and MercuryRT, whose shims retake a whole-state snapshot because neither core exports `DEBUG_REGISTERS` (Q28 there). As §3.27 warned in general, a condition on the hottest loop a core runs is real frame time: on MercuryRT's 2,926 hits a frame it is 20 ms.
 
 ## 8. A note on the 2026-08-06 commit, for whoever runs `git log` and wonders
 

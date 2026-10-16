@@ -67,7 +67,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
                     if (addrArg.Length == 0) return "Usage: bp add <addr>[-<end>] [if <expr>]";
                     var (start, end) = ParseRange(addrArg);
                     var (condition, log) = TakeClauses(parts, at + 2);
-                    int id = breakpoints.AddBreakpoint(start, end, condition, log);
+                    int id = BreakpointExpressions.Add(target, breakpoints, start, end, condition, log);
                     return $"{scope} #{id} {(log == null ? "added at" : "logging at")} {Range(start, end)}{Clauses(condition, log)}.";
                 }
                 case "read":
@@ -89,7 +89,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
                     var (condition, log) = TakeClauses(parts, i);
                     if (changedOnly && sub == "read") return "'changed' only applies to writes - a read never changes the value.";
 
-                    int id = breakpoints.AddDataBreakpoint(space.Name, start, end, value, onRead: sub == "read", changedOnly, condition, log);
+                    int id = BreakpointExpressions.AddData(target, breakpoints, space.Name, start, end, value, onRead: sub == "read", changedOnly, condition, log);
                     string valueText = value < 0 ? string.Empty : $" = 0x{value:X2}";
                     string changedText = changedOnly ? " (only when it changes)" : string.Empty;
                     string verb = log == null ? "added on" : "logging on";

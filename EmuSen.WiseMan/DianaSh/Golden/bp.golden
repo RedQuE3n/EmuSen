@@ -710,3 +710,115 @@ out 485
 status 0
 action none
 end
+
+case a false condition beside a logpoint on moonrt
+target moonrt
+$ bp add 8000 if A==1
+out 39
+Breakpoint #1 added at $008000 if A==1.
+status 0
+action none
+$ bp add 8000 log "A, S"
+out 42
+Breakpoint #2 logging at $008000 log A, S.
+status 0
+action none
+run 6
+$ bp list
+out 83
+  #1: $008000 if A==1 (enabled, hit 0x)
+  #2: $008000 log A, S (enabled, logged 6x)
+status 0
+action none
+$ bp log
+out 167
+  #2 $008000  A=0x0  S=0xF7
+  #2 $008000  A=0x0  S=0xF4
+  #2 $008000  A=0x0  S=0xF1
+  #2 $008000  A=0x0  S=0xEE
+  #2 $008000  A=0x0  S=0xEB
+  #2 $008000  A=0x0  S=0xE8
+status 0
+action none
+end
+
+case a true condition read at the hit on moonrt
+target moonrt
+$ bp add 8000 if "A==0 && S==0xF4"
+out 50
+Breakpoint #1 added at $008000 if A==0 && S==0xF4.
+status 0
+action none
+run 10
+$ cpus
+out 188
+NES debug processors:
+  cpu   PC=$008000  2A03
+        supports: bp, cov, bt, disasm   code space: CPUBUS
+Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
+status 0
+action none
+$ bp list
+out 50
+  #1: $008000 if A==0 && S==0xF4 (enabled, hit 1x)
+status 0
+action none
+end
+
+case malformed expressions are refused when set, on moonrt
+target moonrt
+$ bp add 8000 if "A =="
+out 85
+Error: Condition 'A ==' refused: Unexpected '<end>' in expression. Nothing was added.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ bp add 8000 if nosuch==1
+out 119
+Error: Condition 'nosuch==1' refused: Unknown symbol 'nosuch'. Try `eval symbols` for the full list. Nothing was added.
+status 1
+action none
+$ bp add 8000 log "A, (S"
+out 89
+Error: Log expression 'A, (S' refused: Expected ')' but found '<end>'. Nothing was added.
+status 1
+action none
+$ bp cpu add 8000 if "S > > 1"
+out 84
+Error: Condition 'S > > 1' refused: Unexpected '>' in expression. Nothing was added.
+status 1
+action none
+$ bp list
+out 22
+No active breakpoints.
+status 0
+action none
+end
+
+case malformed expressions on data breakpoints are refused when set
+target fake
+$ bp write RAM 42 if "X >"
+out 84
+Error: Condition 'X >' refused: Unexpected '<end>' in expression. Nothing was added.
+status 1
+action none
+$ bp read RAM 42 log "A, nope"
+out 120
+Error: Log expression 'A, nope' refused: Unknown symbol 'nope'. Try `eval symbols` for the full list. Nothing was added.
+status 1
+action none
+$ bp write RAM 42 if X==1 log A
+out 58
+Breakpoint #1 logging on writes of RAM 0x42 if X==1 log A.
+status 0
+action none
+$ bp list
+out 55
+  #1: write RAM 0x42 if X==1 log A (enabled, logged 0x)
+status 0
+action none
+end

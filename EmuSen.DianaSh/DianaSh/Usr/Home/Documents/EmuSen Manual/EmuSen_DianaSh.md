@@ -1,6 +1,8 @@
 # EmuSen — DianaSh: a standalone shell, its command modules, and the surfaces around it
 
-*This revision: the tenth, 2026-10-16: S5 built, EmuSen's four command modules in Rust over the session service,
+*This revision: the eleventh, 2026-10-16: breakpoint conditions and logpoints restored on every core, checked when
+they are set and read at the hit, with the session service at 1.2 for the refusal (§13.12); Q28 and Q29 (§16.3). The
+tenth, the same day: S5 built, EmuSen's four command modules in Rust over the session service,
 which went to version 1.1 for what they needed, the host API to 1.1 for a service per session, `nano` as the first
 program the shell runs, and two defects the port found shown and fixed in both shells, a root reached through a link
 and a trace of no instructions (§13.11); Q25 to Q27 (§16.2). The ninth, the same day: S6's state 2 reached ahead of S5, by decision, the Rust shell the default and
@@ -2258,13 +2260,14 @@ modules (below).
 retirement of all four C# cores (Mars `9b5a56ee`, Mercury `250430d1`, Moon `d40b8b81`, Venus `f1f47969`), and with
 them went the only targets that answered part of what the debug and trace modules carry. Every core is now reached
 through `CoreDebugTarget`, which leaves `IDebugTarget`'s `AccessCounters`, `RegisterFlow`, `BreakConditions`, `DmaLog`
-and `ResolvePhysical` at their defaults, sets no `RegisterWriter` on any processor and no `ConditionEvaluator` on any
-breakpoint registry, and no core's bundle carries an `ICpuTraceSwitch`. The moved commands therefore refuse, answer that
-the core reports nothing, or do less than they say, on every core today, through the Rust modules and the C# classes alike:
+and `ResolvePhysical` at their defaults, sets no `RegisterWriter` on any processor, and no core's bundle carries an
+`ICpuTraceSwitch`. The moved commands therefore refuse, answer that the core reports nothing, or do less than they say, on
+every core today, through the Rust modules and the C# classes alike. A tenth row, `bp add … if` and `bp add … log`, stood
+here until the same day: no breakpoint registry had a `ConditionEvaluator`, so a condition counted as true and a logpoint
+recorded its expression's text. Those now answer on every core (§13.12).
 
 | Command | What every core answers, as the corpus records it on the Rust targets |
 |---|---|
-| `bp add … if`, `bp add … log`, `bp log` | accepted and listed, but no registry has an evaluator, so a condition counts as true and the breakpoint halts every time, and a logpoint records its expression's text rather than its value (`VenusRT_Native.md` §68.5 and §68.7 propose the evaluators in `CoreDebugTarget`) |
 | `bp when` | "This core reports no hardware conditions to break on.", status 1, on all five |
 | `setreg` | a register the processor names is refused as one the core cannot write; the corpus's only case on a core is a name that does not exist |
 | `counters` | "This core does not report access counters.", status 1 |
@@ -2358,6 +2361,115 @@ crossed the bridge, and both crossings are of the size §13.10 measured.
 4. *The standalone `dianash` does not link EmuSen's modules.* With no session service their commands would answer "No
    ROM loaded", as §8.2 says; linking them in is a choice of what one file carries, left for the release that ships it.
 
+### 13.12 Breakpoint conditions and logpoints on every core, and the session service's 1.2
+
+*Built 2026-10-16, the day the tester agreed to restore them.*
+
+**The defect, shown first.** Until the C# cores were retired, the only owner that set `BreakpointRegistry`'s
+`ConditionEvaluator` and `LogEvaluator` was C# Venus's `SnesDebugTarget`. The registry reads a missing evaluator as a
+condition that holds and a logpoint as its expression's text, so after `f1f47969` every core answered `bp add … if` by
+halting at every hit and `bp add … log` by recording the words typed (§13.11's table, `VenusRT_Native.md` §68.5).
+`BreakpointConditionTests` showed it before anything changed, through whichever shell ran and on MoonRT, MercuryRT and
+MarsRT: `bp add 8008 if A==0x99` halted MoonRT at `$8008` where A is 7, `bp add 0153 if HL==0x1234` halted MercuryRT
+where HL is `$C000`, a logpoint recorded `HL` rather than `HL=0xC000`, and a condition ending in `&&` was accepted. Six
+of its eight cases failed on the Rust shell and the same six with `EMUSEN_DIANASH_NATIVE=0`.
+
+**Where the one owner sits.** In Crystal, as `BreakpointExpressions`, beside `DebugExpressions`, which already chose the
+expression context for `eval` and for the session service. Two calls put a condition or a logpoint into a registry: the
+C# `bp` command, and the service's `bp_add` and `bp_add_data`, which the Rust module calls. Both now go through
+`BreakpointExpressions.Add` or `AddData`, which (1) checks the condition and each comma-separated part of the log with
+`ExpressionEvaluator.Check`, a parse that resolves every symbol, those in a branch short-circuiting would skip included,
+and reads no memory; (2) on a failure throws, adding nothing; (3) points the registry's two evaluators at this target
+and this registry; and (4) adds the breakpoint.
+
+The evaluators are set where a condition enters a registry, not in a target's constructor as §68.5 of
+`VenusRT_Native.md` proposed for `CoreDebugTarget`. Two facts decided it. Four classes are debug targets today, not
+one: `CoreDebugTarget` for every engine of the core ABI (VenusRT, Nephrite, Diamond) and the shims' own targets for
+MarsRT, MercuryRT and MoonRT; setting the evaluators in each constructor would make four owners of one rule. And a
+registry outlives the target it was reached through: `CoreFactory.Bundle` makes a new target on each call over the
+engine's one registry, so an evaluator captured by an older target would be the one a later breakpoint ran under. The
+place every core passes through, whichever target and whichever shell, is the add. The cost is that a caller adding a
+condition to a registry directly, bypassing both, gets the registry's old reading; the only such callers are the
+registry's own unit tests, which set their evaluators themselves.
+
+**The scope.** A condition reads what `eval` reads at the same scope. The registry `IDebugTarget.Breakpoints` names,
+the main processor's, reads `DebugExpressions.For(target)`, as an unscoped `eval` does; another processor's registry
+reads `DebugExpressions.For(target, cpu)`, as `eval <cpu>` does. That is the rule C# Venus kept, now held on every
+core. On the Genesis it has a visible consequence, held by `NephriteDebugTests`: `bp add 302 if A==5` is refused,
+since the 68000 has no register named A, while `bp z80 add 1 if "AF>>8==5"` halts the Z80 with A equal to 5.
+
+**Read at the hit.** Every target's context reads its register providers' `Current`, which a host refreshes once a
+frame (`EmuSen_Debugging_Tools_Reference_v5.md` §3.66.5). A hit falls inside a frame, so the context refreshes the
+target's providers when an evaluation first names a symbol, once per evaluation, on the emulation thread, which is the
+thread §3.66.5 requires. An expression of literals and memory reads alone refreshes nothing, the memory spaces reading
+the live core. Refreshing every provider rather than the registers alone is forced by two shims: MoonRT and MercuryRT
+read their registers out of a state snapshot that only `RefreshProviders` retakes, because neither core exports the
+ABI's `DEBUG_REGISTERS`. The golden case "a true condition read at the hit" shows the reading is live: `S==0xF4` passes
+over the hit at which S is `$F7` and halts at the next.
+
+**The session service's 1.2.** `bp_add` and `bp_add_data` now evaluate the condition and log that 1.1 stored unread,
+and refuse with `EMUSEN_SVC_PARSE`, the evaluator's words following, a condition or a log part that does not parse or
+names an unknown symbol, adding nothing, as `eval` already refused such an expression. Nothing else changed: the
+table's layout and every other call are 1.1's, so the minor is raised without an appended function, and a module
+built against 1.0 or 1.1 needs nothing, the refusal arriving as any other. `EMUSEN_SESSION_MINOR`, `SessionAbi.Minor`
+and the Rust client's `abi::MINOR` are 2. Both shells print a refusal alike, `Error: <words>` with status 1: the C#
+class's exception through its dispatcher's catch, the Rust module's refusal through `Answer::fault`.
+
+**`bp when` is not the same mechanism, and was left.** A condition is an expression tested where an address is
+reached; a hardware condition is an event the core detects wherever it happens and reports by name
+(`BreakpointRegistry.NoteCondition`), from a list it publishes (`IDebugTarget.BreakConditions`). No core publishes
+one, and the core ABI carries no event for a named condition. One part is nearly there: the debug bridge already turns
+the call kinds BRK (4) and COP (5) into `NoteInterrupt`, which fires the `brk` and `cop` conditions when they are armed,
+so a target publishing those two names would answer them on a core that reports such interrupts. The rest of C# Venus's
+list (`stp`, `wdm`, `ppuaccess`, `autojoy`) needs the core to report them, an extension of the debug surface (a debug
+event kind, a minor version of the core ABI), proposed in §16.3 (Q29) and not built.
+
+**The goldens.** No recorded case held the always-true behaviour, because the corpus never ran a core after a case's
+first line, so no breakpoint was ever reached. The runner gained a line, `run <frames>`, placed before a `$` line: the
+host runs up to that many frames on the case's core first, stopping at a halt and resuming one, as a frontend's loop
+runs them. The crate-alone runner of the Rust tests passes over the word, its cases having no core. §13.11's third
+finding asked for a directive of this kind to record coverage; this one serves it too, though that case is not
+written. `bp.golden` gained four cases: on MoonRT, a false condition beside a logpoint at the same address (the
+condition hit 0 times, the logpoint 6, recording `A=0x0  S=0xF7` and on), a true condition read at the hit (halted at
+`$8000` on its second hit), and four malformed expressions refused (a condition, an unknown symbol, a log part, and a
+condition on a scoped processor) with `bp list` empty after them; and on the fake target, a condition and a log part on
+data breakpoints refused and a valid pair accepted. `man.golden`'s three recordings of `man bp` were recorded again for
+the page's new text, and each difference is the page's. All were recorded from the C# shell and are printed byte for
+byte by the Rust shell; no other file of the corpus changed.
+
+**What it costs.** *Measured on 2026-10-16*, Release, by `BreakpointConditionCostBench` (opt-in, `EMUSEN_BP_BENCH=1`):
+on each core's debug-test loop, one address hit every frame many times, the median of 300 frames after 30 of warm-up,
+and per hit the frame's time over a breakpoint that is never reached, divided by the hits. "Before" is the same bench
+on the tree with the two add paths reverted to the registry's own calls:
+
+| Core (its target) | Hits a frame | A plain breakpoint, resume to next halt, before / after | A breakpoint never reached, a frame, before / after | `if 0`, a hit | A register condition, a hit | A register logpoint, a hit (before: its text) |
+|---|---|---|---|---|---|---|
+| MoonRT (shim) | 1,103 | 0.90 / 0.90 µs | 580.4 / 582.4 µs | 0.36 µs | 9.08 µs | 8.97 µs (0.26) |
+| MercuryRT (shim) | 2,926 | 0.50 / 0.50 µs | 407.7 / 408.8 µs | 0.34 µs | 6.84 µs | 6.93 µs (0.96) |
+| MarsRT (shim) | 394 | 0.70 / 0.50 µs | 19.4 / 16.1 µs | 0.32 µs | 1.12 µs | 2.06 µs (0.50) |
+| Nephrite (`CoreDebugTarget`) | 1,800 | 0.90 / 0.90 µs | 754.2 / 752.1 µs | 0.67 µs | 1.88 µs | 1.83 µs (0.47) |
+
+A breakpoint without a condition costs what it did: no line of the path it takes changed, and the two columns agree
+within the bench's noise. `if 0` is the floor of a condition, leaving the core's frame and entering it again with the
+expression parsed, a third to two thirds of a microsecond. Naming a register adds the refresh, about a microsecond
+where the core exports its registers, and 6.8 to 9.1 microseconds on MercuryRT and MoonRT, where the refresh retakes
+the whole state snapshot and rebuilds every provider. That is real frame time on the hottest loop a core runs: 2,926
+hits a frame on MercuryRT come to 20 ms a frame, over the 16.7 ms a frame lasts, so a register condition on an
+instruction that runs every few microseconds slows such a game below full speed. The lever is in the two cores, not
+here (`DEBUG_REGISTERS` exported, and the shims' registers read from it), a per-core change proposed in §16.3 (Q28)
+rather than built.
+
+**Tests.** *Measured on 2026-10-16*: `BreakpointConditionTests` (MoonRT, MercuryRT and MarsRT, a false condition, a
+true one, a logpoint and the refusals) and `NephriteDebugTests`' case on both processors, which failed before the
+change as above and pass after it; `ExpressionEvaluatorTests`' cases of `Check`; `SessionServiceParityTests`, whose
+breakpoint walk on every processor of every target now adds `frame >= 0` (a symbol every context has) and asserts the
+two `PARSE` refusals; and `BreakAndCovCommandTests`, whose case of a bad logpoint now expects the refusal at the add
+and the error of one that fails at the hit (`1 / 0`). Over the filter of the DianaSh classes, the session service's
+tests and every core's debug tests (Diamond, Nephrite, MarsRT, MercuryRT, MoonRT, VenusRT and the generic view): 1,174
+tests, all passed, on the Rust shell with `EMUSEN_DIANASH_EXPECT=rust` and again with `EMUSEN_DIANASH_NATIVE=0` (the
+cost bench's four rows among them, which return at once without their variable). `cargo test --release` in
+`Platform/`: 202 passed, 1 ignored, none failed.
+
 ---
 
 ## 14. How it is tested
@@ -2445,6 +2557,13 @@ in a commit of its own (§13.9); Q22, Q23 and Q24 need nothing until the steps t
 | **Q25** | `core` and `state` stay each host's command (§13.11): a module's `core` needs the frontend service, and `state` the save and load each host hands its own command today. Build `emusen.frontend@1`'s `games` and `open_game`, and have the hosts give the provider their save and load, so that both move to the session module before S7? | Yes, before S7: until then the C# `CoreCommand` and `StateCommand` are the only `core` and `state` there are, and S7 cannot delete them. The frontend service is small (§9.9) and its first two calls are these |
 | **Q26** | The session service's 1.1 (§13.11) gives the cheat lists and the cheat database to the provider, which §13.6 had kept with the command, and lets two changes answer with a record that waits for a buffer. Keep that shape? | Keep it: the files' rules are Galaxia's and the database Crystal's, and a second copy in a module would make two owners of each. The waiting record is `events_drain`'s rule, already in the header |
 | **Q27** | The DianaSh steps of CI's WiseMan job report and do not gate (§13.11), as every platform step does (`EmuSen_RustPlatform.md` §10.6). Make the Rust shell's step a gate on all three systems once it has passed there? | Yes, once two consecutive runs pass on all three: it is the evidence S7 rests on, and a step that cannot fail cannot hold it |
+
+### 16.3 Questions from §13.12 (2026-10-16)
+
+| | Question | Recommendation |
+|---|---|---|
+| **Q28** | A condition or logpoint naming a register costs 6.8 to 9.1 µs a hit on MercuryRT and MoonRT against about 1 µs elsewhere, because their shims read registers out of a whole-state snapshot that only `RefreshProviders` retakes, neither core exporting `DEBUG_REGISTERS` (§13.12). Export it from both cores and read the shims' processor registers from it? | Yes, in each core's own work rather than in the shared layer: the capability is already an optional one of the core ABI v1, so it changes no surface, and the shared layer needs nothing. Until then a register condition on the hottest loop of a Game Boy game can cost more than a frame |
+| **Q29** | `bp when` answers nothing on any core (§13.12). Restore it in two parts: the `brk` and `cop` conditions published by the targets, which the debug bridge already fires from the call kinds a core reports; and the rest (`stp`, `wdm`, `ppuaccess`, `autojoy` and each console's own) as a debug event kind added to the core ABI? | The first part now, as a small extension of the shared layer (one list beside `CoreDebugTarget`'s and the shims'), proposed before it is built. The second as an extension of the debug surface, an optional capability and a minor version of the core ABI, only when a core's own work wants a condition reported |
 
 ---
 

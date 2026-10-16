@@ -191,6 +191,7 @@ impl Machine {
         machine.bus.sp.trace = std::mem::take(&mut self.bus.sp.trace);
         machine.bus.sp.decoded = std::mem::take(&mut self.bus.sp.decoded);
         machine.bus.sp.processor.simd = self.bus.sp.processor.simd;
+        machine.bus.ai.limit = self.bus.ai.limit;
         if machine.rdram_bytes() != self.rdram_bytes() {
             machine.blocks.clear();
         }
@@ -264,6 +265,16 @@ impl Machine {
         machine.bus.save = SaveChip::with_saved(kind, saved.map(Arc::new));
         machine.bus.si.controllers[0].pak = Some(ControllerPak::new(pak.as_deref()));
         machine
+    }
+
+    /// The Controller Paks of ports 2 to 4, each from its file, or a formatted one where `every_port` asks for one with no file;
+    /// a port neither names is left empty, as C# Mars leaves it (Mars_Native.md §7.7).
+    pub fn insert_paks(&mut self, files: [Option<&[u8]>; 3], every_port: bool) {
+        for (port, file) in self.bus.si.controllers[1..].iter_mut().zip(files) {
+            if file.is_some() || every_port {
+                port.pak = Some(ControllerPak::new(file));
+            }
+        }
     }
 
     /// `Settle`, which a C# save runs before it writes.
@@ -433,16 +444,12 @@ impl Machine {
         out.join()
     }
 
-    /// What `MemoryBus.ReadState` and `LoadState` run after the fields: marks, drops, rebases, replays, `Cop0Written`.
+    /// What `MemoryBus.ReadState` and `LoadState` run after the fields: drops, rebases, replays, `Cop0Written`. The battery files'
+    /// `Dirty` stay as the state says; that the files need writing after a load is the host's to know, kept outside the state
+    /// (Mars_Native.md §7.4).
     fn derive_after_load(&mut self) {
         let bus = &mut self.bus;
         *bus.written += 1;
-        bus.save.set_dirty(true);
-        for port in &mut bus.si.controllers {
-            if let Some(pak) = &mut port.pak {
-                pak.dirty = true;
-            }
-        }
         bus.ai.drop_undrained();
         bus.vi_rebase();
         bus.ai_rebase();

@@ -1050,6 +1050,12 @@ them loosely.
 | **5a** | **MarsRT's PGO profile retrained** | `pgo/train.sh` (about 55 minutes, `Mars_Native.md` §6.17.8); the build's verdict `matched`; no function without data under `-pgo-warn-missing-function` on the CI flavour (§6.17.7) | an hour and a half |
 | **5b** | **MarsRT timed** | Interleaved builds before and after, the order swapped each round, on Super Mario 64, Ocarina of Time, the Dam and DK64's title, as §6.17.6 timed them (P3) | 2 hours |
 
+*Step 5 done 2026-10-15, onto the core ABI v1 alone rather than this interface, which every other Rust core had left by
+then (`Mars_Native.md` §7, `EmuSen_CoreAPI.md` §13.1). Its oracles above held; the comparisons against C# Mars among them
+were retired on 2026-10-16, MarsRT's oracles being its own digests, the corpus and the kit (`Mars_Native.md` §7.5), whose
+19 cases it passes since a load stopped setting the `Dirty` bytes (§7.4 there). Step 5a stays
+deferred (decided 2026-09-30: profile work is batched after every core is ported). Step 5b is §7.5 there.*
+
 *Step 1's registration-equivalence test was not built with step 1. It was built on 2026-10-04, ahead of the move to
 DianaSh that it now guards (`EmuSen_CoreAPI.md` §25).*
 
@@ -1486,3 +1492,26 @@ conformance kit's C8 checks through the audio digest across a save and load.
 
 **Cost.** A change costs 64 multiply-adds. On the Genesis that is about 53,000 changes a second from the YM2612 and
 a few thousand from the PSG; Nephrite's frame cost rose by about 1% with both in place (`Nephrite_Native.md` §18).
+
+### 12.7 Step 5: MarsRT, onto the core ABI v1 alone (2026-10-15)
+
+`Mars_Native.md` §7 is the record. In outline, against §12.5's list of what was left for it:
+
+- **The hooks** are the shared crate's `debug::Hooks`, with the profile its `BTreeMap` and the flags its numbering;
+  MarsRT keeps beside them only its delay-slot return and its observed frame's clock, and moves its signal processor's
+  trace into the hooks' second bitmap when the host drains it.
+- **`LegacyNativeMachine` is deleted** with its last user, and `NativeCoreLibrary`'s per-core constructor with it.
+- **`rust-cores.yml`'s `symbol`** for MarsRT is `emusen_core_`.
+- **The exports** are not this page's common set but the core ABI v1's, as `EmuSen_CoreAPI.md` §13.1 has it: 48 of
+  them, 21 extensions and the 21 components, 90 in all. P6 and P7 of §8.1 were estimates for this page's interface,
+  which MarsRT never took, and are retired unmeasured.
+- **The status codes**: −10 and −11 are now the shared −257 and −258; −9 and −12 to −14 stay in the core's band.
+- **The crash log** is `marsrt_crash_<pid>.txt`, the v1 loader's name.
+- **P1** held for MarsRT: every state the digests take, of both engines and both RDRAM sizes, loads and runs on as
+  before. **P8** held but for call sites: the corpus's `Boot` now takes the image's path, and three tests of the old
+  loader's shape were rewritten for the v1 handle (`NativeHostTests`, `MarsNativeTests`).
+- **R3**, a state saved with a button held, is tested against MarsRT's own run that went on (`MarsRtCoreAbiTests`),
+  C# Mars having been retired as its oracle (`Mars_Native.md` §7.5), and **R4** is why
+  `CoreEngine.EndFrame` became overridable: Mars's frame end is not the runtime's.
+- **The PGO retrain (5a)** stays deferred; §7.5 of `Mars_Native.md` times the step with the build unguided on both sides.
+

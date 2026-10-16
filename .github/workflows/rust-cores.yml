@@ -220,7 +220,7 @@ jobs:
         crate:
           - name: marsrt
             dir: 'EmuSen/Cores/Nintendo/MarsRT - N64'
-            symbol: mars_
+            symbol: emusen_core_
           - name: mercuryrt
             dir: 'EmuSen/Cores/Nintendo/MercuryRT - GB'
             symbol: emusen_native_

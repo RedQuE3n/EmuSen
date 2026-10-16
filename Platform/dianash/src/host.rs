@@ -167,7 +167,14 @@ impl Callee {
 /// Builds a call over `args` for one callee and hands it to `with`, which calls the callee's function.
 fn call<R>(interp: &Interp, world: &mut World, callee: Callee, command: &str, args: &[String], stdin: Option<&str>, with: impl FnOnce(*mut c_void, &dianash_call) -> R) -> (R, CallContext) {
     let session = interp.session;
-    let cwd = world.sandbox.display(&dotnet::current_directory());
+    let cwd = match &world.shown_cwd {
+        Some(shown) => shown.clone(),
+        None => {
+            let shown = world.sandbox.display(&dotnet::current_directory());
+            world.shown_cwd = Some(shown.clone());
+            shown
+        }
+    };
     let user = world.session(session).map(|s| s.user.clone()).unwrap_or_default();
     let environment = interp.exported_variables();
     let slots: *mut HashMap<usize, Slot> = match world.session_mut(session) {

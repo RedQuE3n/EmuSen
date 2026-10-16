@@ -3,6 +3,7 @@
 
 use crate::builtins::Builtin;
 use crate::dotnet;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Who answers a name.
@@ -34,6 +35,8 @@ pub struct Table {
     claims: Vec<(String, usize)>,
     /// Lines a host adds to `help`'s notes.
     notes: Vec<String>,
+    /// Each entry's place by its name folded as `OrdinalIgnoreCase` folds it, rebuilt when the entries change.
+    index: HashMap<String, usize>,
 }
 
 impl Table {
@@ -41,7 +44,9 @@ impl Table {
     pub fn builtins() -> Arc<Table> {
         let entries = Builtin::ALL.iter().map(|b| Entry { name: b.name().to_string(), usage: b.usage().to_string(), read_only: b.read_only(), kind: Kind::Builtin(*b) }).collect();
         let aliases = vec![("quit".to_string(), "shutdown".to_string()), ("jobs".to_string(), "ps".to_string()), ("exit".to_string(), "shutdown".to_string())];
-        Arc::new(Table { entries, aliases, claims: Vec::new(), notes: Vec::new() })
+        let mut table = Table { entries, aliases, claims: Vec::new(), notes: Vec::new(), index: HashMap::new() };
+        table.reindex();
+        Arc::new(table)
     }
 
     pub fn entries(&self) -> &[Entry] {
@@ -49,7 +54,11 @@ impl Table {
     }
 
     pub fn find(&self, name: &str) -> Option<&Entry> {
-        self.entries.iter().find(|e| dotnet::same(&e.name, name))
+        self.index.get(&dotnet::fold(name)).map(|&at| &self.entries[at])
+    }
+
+    fn reindex(&mut self) {
+        self.index = self.entries.iter().enumerate().map(|(at, e)| (dotnet::fold(&e.name), at)).collect();
     }
 
     /// A name lower-cased, then mapped through the aliases.
@@ -86,6 +95,7 @@ impl Table {
     pub fn add(&mut self, entry: Entry) {
         self.entries.retain(|e| !dotnet::same(&e.name, &entry.name));
         self.entries.push(entry);
+        self.reindex();
     }
 
     pub fn alias(&mut self, alias: &str, command: &str) {
@@ -102,6 +112,7 @@ impl Table {
     pub fn order(&mut self, names: &[String]) {
         let rank = |e: &Entry| names.iter().position(|n| dotnet::same(n, &e.name)).unwrap_or(usize::MAX);
         self.entries.sort_by_key(rank);
+        self.reindex();
     }
 }
 

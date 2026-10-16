@@ -131,7 +131,14 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
             int status = WithUtf8(line, (p, l) => DianaShNative.Submit(_handle, session, (byte*)p, l));
             if (status < 0) return (status, $"Error: {LastError()}", new List<NativeRequest>());
             string output = Text((o, l) => OutputTake(_handle, (byte*)o, l));
-            using JsonDocument json = JsonDocument.Parse(Bytes((o, l) => RequestsDrain(_handle, (byte*)o, l)));
+            byte[] drained = Bytes((o, l) => RequestsDrain(_handle, (byte*)o, l));
+            // Most lines ask nothing of the host, and "[]" needs no parser.
+            if (drained.Length == 2)
+            {
+                GC.KeepAlive(this);
+                return (status, output, new List<NativeRequest>());
+            }
+            using JsonDocument json = JsonDocument.Parse(drained);
             var requests = json.RootElement.EnumerateArray().Select(e => new NativeRequest(
                 e.GetProperty("kind").GetString()!,
                 e.TryGetProperty("name", out JsonElement name) ? name.GetString()! : "",

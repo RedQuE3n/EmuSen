@@ -2809,10 +2809,8 @@ interface 11):
 | Serenity's slang half on its C# | 73 | 0 | 0 |
 | Serenity's slang half on the platform library | 112 | 0 | 0 |
 
-The job as a whole still fails, on the cores' comparison step (eleven tests of Nephrite, Diamond and core
-discovery on Windows), which is not the platform's. On Linux the Serenity steps fail because the runner cannot load
-Shaderc ("Could not load from any of the possible library names"), and on macOS §27.4's four remain; neither is
-Windows', and both are left to a pass of their own.
+The job as a whole still failed then, on the cores' comparison step (eleven tests of Nephrite, Diamond and core
+discovery on Windows) and on macOS's four of §27.4, which §27.6 takes up; its last run is recorded there.
 
 **The publish carries the library.** `RustCoresPublish.targets` already took `emusen_platform.dll` from
 `EmuSenNativePrebuilt/win-x64/` (§2.6), and it has no sidecar, not being a core; 0.9.0 lacked it only because the
@@ -2822,6 +2820,11 @@ with 0.9.0's own core libraries and the library from run 38845515166. Its tree h
 `87480a9631be88c041debe935befddce094ce9a77c15a163a0a228848da23a27`, byte for byte the CI artefact). Of the rest,
 the manual's pages differ and the managed assemblies differ, `EmuSen.Serenity.dll` by §27.4's change and the others
 by the folder they were built in, which .NET writes into an assembly; nothing was uploaded to the release.
+
+A second publish was made from the branch as it ends, merged with `WiseMan` (§26's DianaSh among it), with every
+library of run 38861419247: 589 files, its `emusen_platform.dll` 2,375,168 bytes with DianaSh's host API in it,
+SHA-256 `53aa863e46ad2b248b093153401dd34e250c497671114bddae66b4a433456733`, byte for byte that run's artefact. The
+first publish is 0.9.0 with the library; the second is what a 0.9.1 cut from this branch would carry.
 
 ### 27.6 The rest of the WiseMan job, on all three systems (2026-10-16)
 
@@ -2848,9 +2851,15 @@ sidecars', were fixed here.
   know, so only characters the runtime's tables assign are compared; and APFS refuses a name holding U+FFFF, which the
   ordering case no longer writes there.
 - **Linux's Shaderc (not fixed here).** On the ubuntu-24.04 runner Silk.NET cannot load Shaderc's library at all,
-  which fails Serenity's compiler, cache and parity cases and Diamond's shader case. The workflow now prints which of
-  the library's dependencies the runner lacks, which is where the fix starts; the program's own Linux builds are not
-  affected on the machines it has run on.
+  which fails Serenity's compiler, cache and parity cases and Diamond's shader case, in 0.9.0's run as in this
+  branch's. The file is there, at `runtimes/linux-x64/native/libshaderc_shared.so`, and `ldd` finds every library it
+  needs; on this project's Fedora machine the same test host loads that very file (traced with `LD_DEBUG`). The
+  workflow now also prints the system's own words for loading it, which is where the cause will be read.
+
+**The last run, 38861419247.** The WiseMan job passed on win-x64 and on osx-arm64, every step: the cores'
+comparison 1,282 of 1,282 on each, and the platform's six steps as §27.5's table on Windows. On linux-x64 it failed on
+the Shaderc cases above alone (one of the cores' step, eleven and forty-eight of Serenity's two). Every crate's job
+passed, the four `emusen_platform` jobs among them, with DianaSh's crates.
 
 ### 27.7 What is left to decide
 

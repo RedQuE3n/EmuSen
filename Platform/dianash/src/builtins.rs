@@ -277,7 +277,7 @@ fn test_outcome(result: bool) -> Outcome {
     if result { Outcome::ok("") } else { Outcome::fail("") }
 }
 
-fn cd(world: &World, args: &[String]) -> Outcome {
+fn cd(world: &mut World, args: &[String]) -> Outcome {
     let dir = if args.len() >= 2 { joined(args, 1) } else { "/".to_string() };
     let (inside, resolved) = world.sandbox.resolve(&dir);
     if !inside {
@@ -286,6 +286,7 @@ fn cd(world: &World, args: &[String]) -> Outcome {
     if !tree::directory_exists(&resolved) {
         return Outcome::fail(format!("cd: no such directory: {dir}"));
     }
+    world.shown_cwd = None;
     match std::env::set_current_dir(&resolved) {
         Ok(()) => Outcome::ok(""),
         Err(e) => Outcome::fail(format!("cd: {}", dotnet::io_message(&e, &resolved))),

@@ -30,6 +30,8 @@ namespace EmuSen.WiseMan.Cores
 
             public byte PendingInterrupts => (byte)(Memory[0xFFFF] & Memory[0xFF0F] & 0x1F);
 
+            public void SetHalted(bool halted) => Trace.Add($"H:{(halted ? 1 : 0)}");
+
             public int Ticked
             {
                 get
@@ -197,6 +199,18 @@ namespace EmuSen.WiseMan.Cores
 
             Assert.Equal(4, cycles);
             Assert.Equal(new[] { "T:4" }, bus.Trace);
+        }
+
+        // HALT tells the bus once it has fetched, and the wake tells it before anything else runs - see Mercury_Native.md §14.2.
+        [Fact]
+        public void Halt_and_its_wake_are_told_to_the_bus()
+        {
+            var (cpu, bus) = Machine(0x76, 0x00);
+            cpu.Step(0, 0, out _);
+            cpu.Step(0, 0, out _);
+            cpu.Step(0x01, 0x01, out _);
+
+            Assert.Equal(new[] { "T:4", "R:0100", "H:1", "T:4", "H:0", "T:4", "R:0101" }, bus.Trace);
         }
     }
 }

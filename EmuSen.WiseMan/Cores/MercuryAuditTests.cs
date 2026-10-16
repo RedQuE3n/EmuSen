@@ -1,4 +1,3 @@
-using EmuSen.Cores.Nintendo.Mercury.Video;
 using EmuSen.Galaxia.Input;
 using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.WiseMan.Fixtures;
@@ -25,6 +24,17 @@ namespace EmuSen.WiseMan.Cores
         }
 
         private static IEnumerable<int> Range(int first, int last) => Enumerable.Range(first, last - first + 1);
+
+        // The PPU's modes as the state numbers them.
+        private enum Mode { HBlank = 0, VBlank = 1, OamScan = 2, Drawing = 3 }
+
+        // The CPU T-cycles an HDMA has charged and the frame loop not yet taken, taken.
+        private static long TakeStall(MercuryRig rig)
+        {
+            long stall = rig.Field("Bus._stallCycles");
+            rig.SetField("Bus._stallCycles", 0);
+            return stall;
+        }
 
         // Every model's gaps among the timer, interrupt and sound registers - see Mercury_Native.md §13.1.
         private static readonly int[] SharedGaps = new[] { 0xFF03 }.Concat(Range(0xFF08, 0xFF0E)).Concat(new[] { 0xFF15, 0xFF1F }).Concat(Range(0xFF27, 0xFF2F)).ToArray();
@@ -232,9 +242,9 @@ namespace EmuSen.WiseMan.Cores
             var rig = Load();
             rig.Write(0xFFFF, ie);
             rig.Write(0xFF0F, iflags);
-            rig.Cpu.PC = 0x0234;
-            rig.Cpu.SP = sp;
-            rig.Cpu.Ime = true;
+            rig.SetField("Cpu.PC", 0x0234);
+            rig.SetField("Cpu.SP", sp);
+            rig.SetField("Cpu.Ime", 1);
             rig.Step();
             return rig;
         }
@@ -244,9 +254,9 @@ namespace EmuSen.WiseMan.Cores
         public void A_push_that_clears_ie_before_the_vector_is_chosen_cancels_the_dispatch()
         {
             var rig = Dispatching(ie: 0x04, iflags: 0x04, sp: 0x0000);
-            Assert.Equal(0x0000, rig.Cpu.PC);
+            Assert.Equal(0x0000, rig.Field("Cpu.PC"));
             Assert.Equal(0x04, rig.Read(0xFF0F) & 0x1F);
-            Assert.False(rig.Cpu.Ime);
+            Assert.False(rig.Flag("Cpu.Ime"));
             Assert.Equal(0x02, rig.Read(0xFFFF));
         }
 
@@ -255,7 +265,7 @@ namespace EmuSen.WiseMan.Cores
         public void A_push_that_changes_ie_before_the_vector_is_chosen_redirects_the_dispatch()
         {
             var rig = Dispatching(ie: 0x03, iflags: 0x03, sp: 0x0000);
-            Assert.Equal(0x0048, rig.Cpu.PC);
+            Assert.Equal(0x0048, rig.Field("Cpu.PC"));
             Assert.Equal(0x01, rig.Read(0xFF0F) & 0x1F);
         }
 
@@ -264,7 +274,7 @@ namespace EmuSen.WiseMan.Cores
         public void A_push_of_the_low_byte_onto_ie_is_too_late_to_cancel()
         {
             var rig = Dispatching(ie: 0x08, iflags: 0x08, sp: 0x0001);
-            Assert.Equal(0x0058, rig.Cpu.PC);
+            Assert.Equal(0x0058, rig.Field("Cpu.PC"));
             Assert.Equal(0x00, rig.Read(0xFF0F) & 0x1F);
             Assert.Equal(0x34, rig.Read(0xFFFF));
         }
@@ -274,15 +284,15 @@ namespace EmuSen.WiseMan.Cores
         public void Ei_ei_before_a_dispatch_leaves_ime_clear_in_the_handler()
         {
             var rig = Load(patches: (0, new byte[] { 0xFB, 0xFB, 0x00 }));
-            rig.Cpu.PC = SyntheticGbRom.EntryPoint;
+            rig.SetField("Cpu.PC", SyntheticGbRom.EntryPoint);
             rig.Write(0xFFFF, 0x01);
             rig.Write(0xFF0F, 0x01);
             rig.Step();
             rig.Step();
             rig.Step();
-            Assert.Equal(0x0040, rig.Cpu.PC);
+            Assert.Equal(0x0040, rig.Field("Cpu.PC"));
             rig.Step();
-            Assert.False(rig.Cpu.Ime);
+            Assert.False(rig.Flag("Cpu.Ime"));
         }
 
         // C, the referee's §2.14: STOP fetches two bytes, so its step reports the eight T-cycles it ran.
@@ -290,11 +300,11 @@ namespace EmuSen.WiseMan.Cores
         public void Stop_reports_the_cycles_of_its_two_fetches()
         {
             var rig = Load(patches: (0, new byte[] { 0x10, 0x00 }));
-            rig.Cpu.PC = SyntheticGbRom.EntryPoint;
-            long before = rig.Cpu.Cycles;
+            rig.SetField("Cpu.PC", SyntheticGbRom.EntryPoint);
+            long before = rig.Field("Cpu.<Cycles>k__BackingField");
             Assert.Equal(8, rig.Step());
-            Assert.Equal(before + 8, rig.Cpu.Cycles);
-            Assert.Equal(SyntheticGbRom.EntryPoint + 2, rig.Cpu.PC);
+            Assert.Equal(before + 8, rig.Field("Cpu.<Cycles>k__BackingField"));
+            Assert.Equal(SyntheticGbRom.EntryPoint + 2, rig.Field("Cpu.PC"));
         }
 
         // D: the LCD off, so only DMA closes OAM; OAM holds $12 and the pages at $C000 and $C100 hold $34 and $56.
@@ -370,7 +380,7 @@ namespace EmuSen.WiseMan.Cores
             rig.Tick(4 * 10);
             rig.Write(0xFF46, 0xC1);
             byte[] now = rig.State();
-            Assert.Equal(MercuryCore.StateVersion, BitConverter.ToInt32(now, 4));
+            Assert.Equal(MercuryStateLayout.StateVersion, BitConverter.ToInt32(now, 4));
             Assert.Equal(5, BitConverter.ToInt32(now, now.Length - 6));
 
             rig.LoadState(new MemoryStream(AsVersion(now, 8)));
@@ -388,7 +398,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var rig = SweepTriggered(0x09);
             byte[] state = rig.State();
-            rig.LoadState(new MemoryStream(version == MercuryCore.StateVersion ? state : AsVersion(state, version)));
+            rig.LoadState(new MemoryStream(version == MercuryStateLayout.StateVersion ? state : AsVersion(state, version)));
             rig.Write(0xFF10, 0x01);
             Assert.Equal(channelOneAfter, rig.Read(0xFF26) & 0x01);
         }
@@ -519,10 +529,10 @@ namespace EmuSen.WiseMan.Cores
             Assert.False(JoypadRequested(rig));
         }
 
-        private static void TickUntil(MercuryRig rig, PpuMode mode)
+        private static void TickUntil(MercuryRig rig, Mode mode)
         {
-            for (int i = 0; i < 456 * 2 && rig.Bus.Ppu.Mode != mode; i++) rig.Tick(1);
-            Assert.Equal(mode, rig.Bus.Ppu.Mode);
+            for (int i = 0; i < 456 * 2 && rig.Field("Bus.Ppu.Mode") != (int)mode; i++) rig.Tick(1);
+            Assert.Equal((int)mode, rig.Field("Bus.Ppu.Mode"));
         }
 
         // H, Pan Docs Palettes.md: in mode 3 "writes are ignored, and reads return $FF", and the index still increments after a failed write.
@@ -533,17 +543,17 @@ namespace EmuSen.WiseMan.Cores
         {
             var rig = Load(cgbFlag: 0xC0);
             int dataPort = indexPort + 1;
-            TickUntil(rig, PpuMode.HBlank);
+            TickUntil(rig, Mode.HBlank);
             rig.Write(indexPort, 0x80);
             rig.Write(dataPort, 0x34);
             rig.Write(indexPort, 0x80);
 
-            TickUntil(rig, PpuMode.Drawing);
+            TickUntil(rig, Mode.Drawing);
             Assert.Equal(0xFF, rig.Read(dataPort));
             rig.Write(dataPort, 0x12);
             Assert.Equal(0xC1, rig.Read(indexPort));
 
-            TickUntil(rig, PpuMode.HBlank);
+            TickUntil(rig, Mode.HBlank);
             rig.Write(indexPort, 0x00);
             Assert.Equal(0x34, rig.Read(dataPort));
         }
@@ -583,11 +593,11 @@ namespace EmuSen.WiseMan.Cores
             {
                 rig.Write(0xFF4D, 0x01);
                 rig.Stop();
-                Assert.True(rig.Bus.DoubleSpeed);
+                Assert.True(rig.Flag("Bus.DoubleSpeed"));
             }
-            rig.Bus.TakePendingStall();
+            TakeStall(rig);
             rig.Write(0xFF55, 0x03);
-            Assert.Equal(4 * cpuCyclesPerBlock, rig.Bus.TakePendingStall());
+            Assert.Equal(4 * cpuCyclesPerBlock, TakeStall(rig));
         }
 
         // I, Pan Docs: after an hblank transfer is stopped, $FF55 reads the blocks that remained, minus one, with bit 7 set.
@@ -597,15 +607,15 @@ namespace EmuSen.WiseMan.Cores
             var rig = HdmaReady(0x8000);
             rig.Write(0xFF55, 0x83);
             Assert.Equal(0x03, rig.Read(0xFF55));
-            TickUntil(rig, PpuMode.Drawing);
-            TickUntil(rig, PpuMode.HBlank);
+            TickUntil(rig, Mode.Drawing);
+            TickUntil(rig, Mode.HBlank);
             Assert.Equal(0x02, rig.Read(0xFF55));
             rig.Write(0xFF55, 0x00);
             Assert.Equal(0x82, rig.Read(0xFF55));
-            TickUntil(rig, PpuMode.Drawing);
-            TickUntil(rig, PpuMode.HBlank);
+            TickUntil(rig, Mode.Drawing);
+            TickUntil(rig, Mode.HBlank);
             Assert.Equal(0x82, rig.Read(0xFF55));
-            Assert.Equal(0x00, rig.Bus.Vram[0x10]);
+            Assert.Equal(0x00, rig.FieldByte("Bus.Vram", 0x10));
         }
 
         // I, Pan Docs: "If the transfer's destination address overflows, the transfer stops prematurely."
@@ -614,10 +624,73 @@ namespace EmuSen.WiseMan.Cores
         {
             var rig = HdmaReady(0x9FF0);
             rig.Write(0xFF55, 0x01);
-            Assert.Equal(0xA0, rig.Bus.Vram[0x1FF0]);
-            Assert.Equal(0x00, rig.Bus.Vram[0x0000]);
+            Assert.Equal(0xA0, rig.FieldByte("Bus.Vram", 0x1FF0));
+            Assert.Equal(0x00, rig.FieldByte("Bus.Vram", 0x0000));
             Assert.Equal(0xFF, rig.Read(0xFF55));
-            Assert.Equal(32, rig.Bus.TakePendingStall());
+            Assert.Equal(32, TakeStall(rig));
+        }
+
+        // I, the HALT rule: IE vblank alone, a four-block hblank transfer started, then HALT, or a NOP in its place for the control.
+        private MercuryRig HdmaThenHalt(bool halt)
+        {
+            var rig = HdmaReady(0x8000);
+            byte[] program = { 0x3E, 0x01, 0xE0, 0xFF, 0xAF, 0xE0, 0x0F, 0x3E, 0x83, 0xE0, 0x55, (byte)(halt ? 0x76 : 0x00), 0x00, 0x18, 0xFE };
+            for (int i = 0; i < program.Length; i++) rig.Write(0xC100 + i, program[i]);
+            rig.SetField("Cpu.PC", 0xC100);
+            for (int i = 0; i < 6; i++) rig.Step();
+            Assert.Equal(0x03, rig.Read(0xFF55));
+            rig.Step();
+            return rig;
+        }
+
+        private static void StepToLine(MercuryRig rig, int line)
+        {
+            for (int i = 0; i < 70224 && rig.Read(0xFF44) != line; i++) rig.Step();
+            Assert.Equal(line, rig.Read(0xFF44));
+        }
+
+        // I, Pan Docs CGB_Registers.md: "Upon halting the CPU ... the transfer will also be halted and will be resumed only when the CPU resumes execution."
+        [Fact]
+        public void An_hblank_hdma_moves_nothing_while_the_cpu_is_halted_and_resumes_after()
+        {
+            var rig = HdmaThenHalt(halt: true);
+            Assert.True(rig.Flag("Cpu.Halted"));
+            StepToLine(rig, 144);
+            rig.Step();
+            Assert.False(rig.Flag("Cpu.Halted"));
+            Assert.Equal(0x03, rig.Read(0xFF55));
+            Assert.Equal(0x00, rig.Read(0x8000));
+            StepToLine(rig, 4);
+            Assert.Equal(0xFF, rig.Read(0xFF55));
+            StepToLine(rig, 144);
+            for (int i = 0; i < 0x40; i++) Assert.Equal(0xA0 + i, rig.Read(0x8000 + i));
+        }
+
+        // I, the HALT rule across a load: the bus's copy of HALT is not in the state, so a fresh machine takes it from the CPU's.
+        [Fact]
+        public void A_state_saved_in_halt_keeps_the_hblank_hdma_paused_after_a_load()
+        {
+            var rig = HdmaThenHalt(halt: true);
+            byte[] state = rig.State();
+            rig.Reload();
+            rig.LoadState(new MemoryStream(state));
+            StepToLine(rig, 144);
+            rig.Step();
+            Assert.Equal(0x03, rig.Read(0xFF55));
+            StepToLine(rig, 4);
+            Assert.Equal(0xFF, rig.Read(0xFF55));
+        }
+
+        // I, the HALT rule's control: the same transfer with the CPU running is done by line 4.
+        [Fact]
+        public void An_hblank_hdma_beside_a_running_cpu_moves_a_block_each_line()
+        {
+            var rig = HdmaThenHalt(halt: false);
+            Assert.False(rig.Flag("Cpu.Halted"));
+            StepToLine(rig, 4);
+            Assert.Equal(0xFF, rig.Read(0xFF55));
+            StepToLine(rig, 144);
+            for (int i = 0; i < 0x40; i++) Assert.Equal(0xA0 + i, rig.Read(0x8000 + i));
         }
 
         // J: the APU on, channel 1's DAC on and its length 2 with length disabled, the frame sequencer's next step as given.
@@ -627,7 +700,7 @@ namespace EmuSen.WiseMan.Cores
             rig.Write(0xFF26, 0x80);
             rig.Write(0xFF12, 0xF0);
             rig.Write(0xFF11, 0x3E);
-            rig.Bus.Apu.SequencerStep = nextSequencerStep;
+            rig.SetField("Bus.Apu.SequencerStep", nextSequencerStep);
             return rig;
         }
 
@@ -641,7 +714,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var rig = LengthTwo(nextSequencerStep);
             rig.Write(0xFF14, 0x40);
-            Assert.Equal(after, rig.Bus.Apu.Pulse1.Length.Counter);
+            Assert.Equal(after, rig.Field("Bus.Apu.Pulse1.Length.Counter"));
         }
 
         // J, 03-trigger #4, for mutant J5: writing the enable bit again, or clearing it, clocks nothing.
@@ -650,11 +723,11 @@ namespace EmuSen.WiseMan.Cores
         {
             var rig = LengthTwo(0);
             rig.Write(0xFF14, 0x40);
-            rig.Bus.Apu.SequencerStep = 1;
+            rig.SetField("Bus.Apu.SequencerStep", 1);
             rig.Write(0xFF14, 0x40);
             rig.Write(0xFF14, 0x00);
             rig.Write(0xFF14, 0x00);
-            Assert.Equal(2, rig.Bus.Apu.Pulse1.Length.Counter);
+            Assert.Equal(2, rig.Field("Bus.Apu.Pulse1.Length.Counter"));
         }
 
         // J, 03-trigger #5: an extra clock that empties the counter, with no trigger, silences the channel.
@@ -665,7 +738,7 @@ namespace EmuSen.WiseMan.Cores
             rig.Write(0xFF14, 0x80);
             rig.Write(0xFF11, 0x3F);
             rig.Write(0xFF14, 0x40);
-            Assert.Equal(0, rig.Bus.Apu.Pulse1.Length.Counter);
+            Assert.Equal(0, rig.Field("Bus.Apu.Pulse1.Length.Counter"));
             Assert.Equal(0, rig.Read(0xFF26) & 0x01);
         }
 
@@ -676,7 +749,7 @@ namespace EmuSen.WiseMan.Cores
             var rig = LengthTwo(1);
             rig.Write(0xFF11, 0x3F);
             rig.Write(0xFF14, 0xC0);
-            Assert.Equal(63, rig.Bus.Apu.Pulse1.Length.Counter);
+            Assert.Equal(63, rig.Field("Bus.Apu.Pulse1.Length.Counter"));
             Assert.Equal(0x01, rig.Read(0xFF26) & 0x01);
         }
 
@@ -694,7 +767,7 @@ namespace EmuSen.WiseMan.Cores
             rig.Write(0xFF26, 0x80);
             rig.Write(0xFF21, 0xF0);
             rig.Write(0xFF23, 0x80);
-            Assert.Equal(lengthAfterTrigger, rig.Bus.Apu.Noise.Length.Counter);
+            Assert.Equal(lengthAfterTrigger, rig.Field("Bus.Apu.Noise.Length.Counter"));
             Assert.Equal(nr11, rig.Read(0xFF11));
         }
 
@@ -711,7 +784,7 @@ namespace EmuSen.WiseMan.Cores
             rig.Write(0xFF26, 0x80);
             rig.Write(0xFF21, 0xF0);
             rig.Write(0xFF23, 0x80);
-            Assert.Equal(lengthAfterTrigger, rig.Bus.Apu.Noise.Length.Counter);
+            Assert.Equal(lengthAfterTrigger, rig.Field("Bus.Apu.Noise.Length.Counter"));
         }
 
         // J: channel 1 triggered with sweep as given, the APU on, its DAC on.
@@ -759,8 +832,8 @@ namespace EmuSen.WiseMan.Cores
         // K: whole lines at a time to line 143, which a line's 456 cycles reach exactly.
         private static void TickToLine143(MercuryRig rig)
         {
-            for (int i = 0; i < 154 && rig.Bus.Ppu.Ly != 143; i++) rig.Tick(456);
-            Assert.Equal(143, rig.Bus.Ppu.Ly);
+            for (int i = 0; i < 154 && rig.Field("Bus.Ppu.Ly") != 143; i++) rig.Tick(456);
+            Assert.Equal(143, rig.Field("Bus.Ppu.Ly"));
         }
 
         // K: the LCD on and LY at 144, the start of vblank, with STAT's sources as given and IF clear.
@@ -770,7 +843,7 @@ namespace EmuSen.WiseMan.Cores
             rig.Write(0xFF41, stat);
             rig.Write(0xFF45, lyc);
             TickToLine143(rig);
-            TickUntil(rig, PpuMode.VBlank);
+            TickUntil(rig, Mode.VBlank);
             rig.Write(0xFF0F, 0x00);
             return rig;
         }
@@ -830,9 +903,9 @@ namespace EmuSen.WiseMan.Cores
             var rig = Load(cgbFlag: cgbFlag);
             rig.Write(0xFF41, 0x20);
             TickToLine143(rig);
-            TickUntil(rig, PpuMode.HBlank);
+            TickUntil(rig, Mode.HBlank);
             rig.Write(0xFF0F, 0x00);
-            TickUntil(rig, PpuMode.VBlank);
+            TickUntil(rig, Mode.VBlank);
             Assert.Equal(interrupts, rig.Read(0xFF0F) & 0x03);
         }
 
@@ -845,7 +918,7 @@ namespace EmuSen.WiseMan.Cores
             var rig = AtLine144(0x00, 144);
             rig.Write(0xFF40, 0x00);
             byte[] state = rig.State();
-            rig.LoadState(new MemoryStream(version == MercuryCore.StateVersion ? state : AsVersion(state, version)));
+            rig.LoadState(new MemoryStream(version == MercuryStateLayout.StateVersion ? state : AsVersion(state, version)));
             Assert.Equal(bit, rig.Read(0xFF41) & 0x04);
         }
 
@@ -858,9 +931,9 @@ namespace EmuSen.WiseMan.Cores
             var rig = Load(cgbFlag: cgbFlag);
             rig.Write(0xFF41, 0x20);
             TickToLine143(rig);
-            TickUntil(rig, PpuMode.HBlank);
+            TickUntil(rig, Mode.HBlank);
             rig.Write(0xFF0F, 0x00);
-            while (rig.Bus.Ppu.Dot < 451) rig.Tick(1);
+            while (rig.Field("Bus.Ppu.Dot") < 451) rig.Tick(1);
             Assert.Equal(0x00, rig.Read(0xFF0F) & 0x03);
             rig.Tick(1);
             Assert.Equal(interruptsBefore, rig.Read(0xFF0F) & 0x03);

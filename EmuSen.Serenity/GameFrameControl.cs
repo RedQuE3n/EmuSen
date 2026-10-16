@@ -433,14 +433,13 @@ namespace EmuSen.Serenity
             return builder;
         }
 
-        // The picture handed to the compositor on the device only when EMUSEN_DEVICE_PICTURE=1, Skia drawing it otherwise, since it froze the handheld's picture - see EmuSen_DevicePicture.md §4 and §18.
-        public static bool DevicePictureAllowed { get; set; } = Environment.GetEnvironmentVariable("EMUSEN_DEVICE_PICTURE") == "1";
+        // The picture handed to the compositor on the device where it can be, Skia drawing it otherwise; EMUSEN_DEVICE_PICTURE=0 keeps Skia's - see EmuSen_DevicePicture.md §4 and §18.
+        public static bool DevicePictureAllowed { get; set; } = Environment.GetEnvironmentVariable("EMUSEN_DEVICE_PICTURE") != "0";
 
         // Why the picture is not handed over on the device, said once per window; null when it is.
         public event Action<string>? DevicePictureReport;
 
         private DevicePresenter? _presenter;
-        private bool _saidOff;
         private System.Threading.Tasks.Task? _presenterStart;
         private Slang.SlangRunner? _deviceRunner, _deviceRunnerNext;
         private long _deviceVersion = -1;
@@ -610,7 +609,6 @@ namespace EmuSen.Serenity
             base.OnAttachedToVisualTree(e);
             lock (_cacheLock) if (_activeFilter is not null && _chain is null && _nextChain is null) Rechain();
             if (DevicePictureAllowed && _presenterStart is null) _presenterStart = StartPresenterAsync();
-            else if (!DevicePictureAllowed && !_saidOff) { _saidOff = true; DevicePictureReport?.Invoke("The picture is read back: the device path is off unless EMUSEN_DEVICE_PICTURE=1, since it froze the picture on the Ryzen Z1 Extreme (EmuSen_DevicePicture.md §18)"); }
         }
 
         public override void Render(DrawingContext context)

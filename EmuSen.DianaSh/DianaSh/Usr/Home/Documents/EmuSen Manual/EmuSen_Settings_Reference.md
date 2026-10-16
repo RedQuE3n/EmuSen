@@ -8680,17 +8680,18 @@ preset choices are read as before.
 Where the compositor cannot take the image (no import offered, another GPU, Windows' ANGLE, macOS) the picture is drawn
 as before, and Mistress writes the reason to its log once (`picture: ...`).
 
-**Off by default since 2026-10-15** (`EmuSen_DevicePicture.md` §18): on the handheld (Ryzen Z1 Extreme) the device path
-froze the window's picture within a few frames, under gamescope and under KWin alike, every PlayStation game loading to a
-black screen. The picture is drawn as before unless **`EMUSEN_DEVICE_PICTURE=1`** is in the environment, and Mistress
-says so once in its log. With it on, a device path that shows nothing for a second while frames are offered is given up
-for the readback, said once in the log; on the handheld that did not bring the picture back, the window's own drawing
-having stopped with it.
+**The handheld's black screen (2026-10-15)** (`EmuSen_DevicePicture.md` §18): on the handheld's Mesa (26.1.2) the
+device path froze the window's picture within a few frames. Mesa destroyed the window's GLX drawable whenever Avalonia
+bound its pbuffer for an image's import, and a stale present completion then left the next swap waiting for ever.
+Mistress now sets `keep_native_window_glx_drawable=true` in its environment at start (unless it is already set), and the
+launcher does too, so Mesa keeps the drawable; the device path is on by default again, and **`EMUSEN_DEVICE_PICTURE=0`**
+keeps the earlier path. A device path that shows nothing for a second while frames are offered is given up for the
+readback, said once in the log.
 
 **A core's picture on the same card.** Where the picture is presented on the device and a core can draw on a device it
 is lent (core ABI 1.9; Diamond's enhancements today), Mistress lends the core that device when the game is loaded, and
 the core's picture goes from the core to the filter on the card without being copied out: the PlayStation's enhanced
-picture is then shown the frame it is drawn rather than a frame later (`EmuSen_DevicePicture.md` §17). Only with the device path on. Rewind's
+picture is then shown the frame it is drawn rather than a frame later (`EmuSen_DevicePicture.md` §17). Rewind's
 pictures and screenshots still read it back when they are taken. **`EMUSEN_DEVICE_LEND=0`** lends nothing, the
 picture then read back as before.
 

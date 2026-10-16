@@ -86,10 +86,14 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
         public const int Busy = -267, Absent = -268, Exists = -269, NoSuchSession = -270, LastSession = -271;
         public const uint ConfigSessions = 1, ConfigInteractive = 2;
 
+        private static readonly Lazy<string?> Attached = new(Attach);
         private static readonly Lazy<bool> Chosen = new(Choose);
 
         // State 1: the C# unless the variable is 1 and the library, its host API and Galaxia's tree are all there - see EmuSen_RustPlatform.md §3.9.
         public static bool Active => Chosen.Value;
+
+        // The Rust shell usable, whichever the switch chose: what a parity test asks before making one.
+        public static bool Ready => Attached.Value is null;
 
         internal static delegate* unmanaged[Cdecl]<uint> AbiVersion;
         internal static delegate* unmanaged[Cdecl]<byte*, nuint, long> LastErrorFn;
@@ -125,7 +129,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
         private static bool Choose()
         {
             if (Environment.GetEnvironmentVariable(Variable) != "1") return false;
-            string? refused = Attach();
+            string? refused = Attached.Value;
             if (refused is null) return true;
             PlatformSwitch.Announce($"DianaSh's Rust shell is not in use ({refused}); the shell runs on its C# implementation.");
             return false;

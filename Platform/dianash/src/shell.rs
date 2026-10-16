@@ -8,6 +8,7 @@ use crate::dotnet;
 use crate::interp::Interp;
 use crate::sandbox::Sandbox;
 use crate::table::{Entry, Kind, Table};
+use dianash_module::Module;
 use emusen_galaxia::json::{self, Value};
 use std::collections::HashMap;
 use std::ffi::c_void;
@@ -122,6 +123,10 @@ pub(crate) struct World {
     pub hosts: Vec<Host>,
     pub requests: Vec<Request>,
     pub cancel: Arc<AtomicBool>,
+    /// The modules linked into the program, by index.
+    pub modules: Vec<&'static dyn Module>,
+    /// The table a new session starts from: the builtins and the linked modules' commands.
+    pub base: Arc<Table>,
     /// The host's services, copied into every call, never read (§9.8); the names they point at are `service_names`.
     pub services: Vec<abi::dianash_service>,
     pub service_names: Vec<Box<[u8]>>,
@@ -240,11 +245,13 @@ impl Shell {
             cancel: Arc::new(AtomicBool::new(false)),
             services: Vec::new(),
             service_names: Vec::new(),
+            modules: Vec::new(),
+            base: Table::builtins(),
         };
         let mut interps = HashMap::new();
         if !world.config.sessions {
             // A shell with no manager is one session, current and never listed.
-            let id = world.new_session(Table::builtins(), "root".to_string());
+            let id = world.new_session(world.base.clone(), "root".to_string());
             world.current = Some(id);
             interps.insert(id, Interp::new(id));
         }
@@ -389,6 +396,7 @@ impl Shell {
                 let kind = match e.kind {
                     Kind::Builtin(_) => "builtin",
                     Kind::Host(_) => "host",
+                    Kind::Module(_) => "module",
                 };
                 format!(r#"{{"name":{},"kind":"{kind}","usage":{},"read_only":{}}}"#, json_string(&e.name), json_string(&e.usage), e.read_only)
             })
@@ -396,9 +404,29 @@ impl Shell {
         Ok(format!("[{}]", items.join(",")))
     }
 
-    /// The names the shell answers itself, in `help`'s order.
-    pub fn builtin_names(&self) -> Vec<String> {
-        Table::builtins().entries().iter().map(|e| e.name.clone()).collect()
+    /// The names the shell answers itself, its builtins' and its modules', in `help`'s order.
+    pub fn own_names(&self) -> Vec<String> {
+        self.world.base.entries().iter().map(|e| e.name.clone()).collect()
+    }
+
+    /// A module linked into the program: its commands, from its manifest, join every session's table, after what is there.
+    pub fn add_module(&mut self, module: &'static dyn Module) -> Result<(), String> {
+        let manifest = Manifest::read(module.manifest())?;
+        let index = self.world.modules.len();
+        self.world.modules.push(module);
+        let add = |table: &mut Table| {
+            for command in &manifest.commands {
+                table.add(Entry { name: command.name.clone(), usage: command.usage.clone(), read_only: command.read_only, kind: Kind::Module(index) });
+            }
+            for (alias, command) in &manifest.aliases {
+                table.alias(alias, command);
+            }
+        };
+        add(Arc::make_mut(&mut self.world.base));
+        for session in &mut self.world.sessions {
+            add(Arc::make_mut(&mut session.table));
+        }
+        Ok(())
     }
 
     /// The listed sessions: `[{"id","name","user","current"}]`.
@@ -424,7 +452,7 @@ impl Shell {
         if !self.world.config.sessions {
             return Err(status::NOT_SUPPORTED);
         }
-        let id = self.world.new_session(Table::builtins(), "root".to_string());
+        let id = self.world.new_session(self.world.base.clone(), "root".to_string());
         self.interps.insert(id, Interp::new(id));
         Ok(id)
     }

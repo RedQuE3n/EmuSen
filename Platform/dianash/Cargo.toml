@@ -10,16 +10,17 @@ publish.workspace = true
 [lib]
 name = "emusen_dianash"
 
-# The standalone shell of EmuSen_DianaSh.md §10.4: this crate, Galaxia's tree and a line editor, in one file.
-[[bin]]
-name = "dianash"
-path = "src/bin/dianash/main.rs"
-
 [dependencies]
+# The module ABI's types, which the shell calls modules and a host's commands through.
+dianash-module = { path = "../dianash-module" }
+# .NET's rules, which the C# shell's words rest on.
+emusen-dotnet = { path = "../dotnet" }
 emusen-galaxia = { path = "../galaxia" }
 # passwd's stored hash, as DianaShUserRegistry computes it.
 sha2 = "0.11"
 
-# The terminal's raw mode for the line editor (termios).
-[target.'cfg(unix)'.dependencies]
-libc = "0.2"
+# The golden corpus is run with the text tools' module linked in, as the programs link it.
+[dev-dependencies]
+dianash-text = { path = "../dianash-text" }
+# The corpus's patterns, for the cases that print a time.
+regex = "1"

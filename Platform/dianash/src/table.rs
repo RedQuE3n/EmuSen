@@ -12,6 +12,8 @@ pub enum Kind {
     Builtin(Builtin),
     /// A host's command, served by the registration with this index.
     Host(usize),
+    /// A command of a module linked into the program, by the module's index.
+    Module(usize),
 }
 
 #[derive(Clone, Debug)]

@@ -24,24 +24,25 @@ pub(crate) enum Flow {
 
 pub(crate) type Exec<T> = Result<T, Flow>;
 
-/// A command's answer: what it printed, its status, and a request for the host it raised.
+/// A command's answer: its standard output, its standard error, its status, and a request for the host it raised.
 pub(crate) struct Outcome {
     pub output: String,
+    pub errors: String,
     pub status: i32,
     pub request: Option<Request>,
 }
 
 impl Outcome {
     pub fn ok(output: impl Into<String>) -> Outcome {
-        Outcome { output: output.into(), status: 0, request: None }
+        Outcome { output: output.into(), errors: String::new(), status: 0, request: None }
     }
 
     pub fn fail(output: impl Into<String>) -> Outcome {
-        Outcome { output: output.into(), status: 1, request: None }
+        Outcome { output: output.into(), errors: String::new(), status: 1, request: None }
     }
 
     pub fn with(output: impl Into<String>, request: Request) -> Outcome {
-        Outcome { output: output.into(), status: 0, request: Some(request) }
+        Outcome { output: output.into(), errors: String::new(), status: 0, request: Some(request) }
     }
 }
 
@@ -314,7 +315,15 @@ impl Interp {
         let mut stage_output = String::new();
         let mut code = 0;
         for stage in &pipeline.stages {
-            (stage_output, code) = self.simple_command(world, stage, stdin.take())?;
+            let errors;
+            (stage_output, errors, code) = self.simple_command(world, stage, stdin.take())?;
+            // Standard error goes where the output goes, as the stage ends; no pipe and no redirection takes it (§4.3, Q10).
+            if !errors.is_empty() {
+                output.push_str(&errors);
+                if !errors.ends_with('\n') {
+                    output.push('\n');
+                }
+            }
             stdin = Some(stage_output.clone());
         }
         if pipeline.negate {
@@ -328,20 +337,20 @@ impl Interp {
         Ok(code)
     }
 
-    fn simple_command(&mut self, world: &mut World, command: &SimpleCommand, stdin: Option<String>) -> Exec<(String, i32)> {
+    fn simple_command(&mut self, world: &mut World, command: &SimpleCommand, stdin: Option<String>) -> Exec<(String, String, i32)> {
         for assignment in &command.assignments {
             let value = self.expand_word_single(world, &assignment.value)?;
             self.variables.insert(assignment.name.clone(), value);
         }
         if command.words.is_empty() {
-            return Ok((String::new(), 0));
+            return Ok((String::new(), String::new(), 0));
         }
         let mut args = Vec::new();
         for word in &command.words {
             args.extend(self.expand_word(world, word)?);
         }
         if args.is_empty() {
-            return Ok((String::new(), 0));
+            return Ok((String::new(), String::new(), 0));
         }
         let mut stdin = stdin;
         let mut redirect: Option<(String, bool)> = None;
@@ -368,7 +377,7 @@ impl Interp {
             dotnet::write_all_text(&path, &content, append).map_err(Flow::Error)?;
             visible.clear();
         }
-        Ok((visible, outcome.status))
+        Ok((visible, outcome.errors, outcome.status))
     }
 
     /// The language's own five run here, then the table: a builtin of the shell's, or a host's command.
@@ -411,6 +420,7 @@ impl Interp {
         let outcome = match entry.kind {
             Kind::Builtin(builtin) => builtins::run(builtin, self, world, args, stdin.as_deref()),
             Kind::Host(registration) => host::run(self, world, registration, &canonical, args, stdin.as_deref()),
+            Kind::Module(index) => host::run_module(self, world, index, &canonical, args, stdin.as_deref()),
         };
         // A malformed command must read as failure to `&&` and `if`, never take the console down.
         Ok(outcome.unwrap_or_else(|words| Outcome::fail(format!("Error: {words}"))))
@@ -467,7 +477,7 @@ impl Interp {
         if out.ends_with('\n') {
             out.pop();
         }
-        Outcome { output: out, status: 0, request }
+        Outcome { output: out, errors: String::new(), status: 0, request }
     }
 
     /// Quoted spans survive splitting; an unquoted word that expands to nothing vanishes.

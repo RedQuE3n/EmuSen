@@ -75,6 +75,13 @@ fn parse(bytes: &[u8]) -> Vec<Case> {
     cases
 }
 
+/// A shell with the modules a program links, as the platform library and `dianash` build it.
+fn shell_with_modules(config: Config) -> Shell {
+    let mut shell = Shell::new(config);
+    shell.add_module(&dianash_text::MODULE).unwrap();
+    shell
+}
+
 fn corpus() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../EmuSen.WiseMan/DianaSh/Golden")
 }
@@ -92,13 +99,28 @@ fn action(request: Option<Request>) -> String {
 
 enum Outcome {
     Passed,
-    NeedsHost,
+    NeedsHost(String),
     Failed(String),
 }
 
-/// Whether a line or what it printed names a command only a host has, which the Rust shell alone cannot reproduce.
-fn names_a_host_command(text: &str, host: &[String]) -> bool {
-    text.contains("No ROM loaded") || text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).any(|word| host.iter().any(|h| h == word))
+/// Whether a line runs a command only a host has (a word in command position: first, or after `|`, `;`, `&&`, `||`,
+/// `$(`, `if`, `then`, `do` and the like), or what it printed was a host's (a suggestion of one, no ROM loaded).
+fn names_a_host_command(input: &str, recorded: &str, host: &[String]) -> bool {
+    let keywords = ["if", "then", "else", "elif", "do", "while", "until", "!"];
+    let mut command_position = true;
+    let spaced = input.replace("$(", " ; ").replace(['|', ';', '&', '(', ')', '`'], " ; ");
+    for word in spaced.split_whitespace() {
+        if word == ";" {
+            command_position = true;
+            continue;
+        }
+        let bare = word.trim_matches(|c| c == '"' || c == '\'');
+        if command_position && host.iter().any(|h| h == &bare.to_lowercase()) {
+            return true;
+        }
+        command_position = keywords.contains(&bare);
+    }
+    recorded.contains("No ROM loaded") || host.iter().any(|h| recorded.contains(&format!("'{h}'")))
 }
 
 /// One case in a fresh home, as `GoldenRunner` runs it: the skeleton's folders, the case's files, the home as `/` and as the working directory.
@@ -116,7 +138,7 @@ fn run(case: &Case, temp: &Path, host: &[String]) -> Outcome {
     std::env::set_current_dir(&home).unwrap();
     let root = home.to_string_lossy().into_owned();
     let normalise = |text: &str| text.replace(&root, "<ROOT>").replace(&*temp.to_string_lossy(), "<TEMP>");
-    let mut shell = Shell::new(Config { sessions: !case.no_sessions, root: Some(root.clone()), ..Config::default() });
+    let mut shell = shell_with_modules(Config { sessions: !case.no_sessions, root: Some(root.clone()), ..Config::default() });
     if !case.no_sessions {
         let id = shell.session_new().unwrap();
         shell.session_attach(id, Some("main")).unwrap();
@@ -128,19 +150,26 @@ fn run(case: &Case, temp: &Path, host: &[String]) -> Outcome {
         let status = shell.last_status(0).unwrap();
         let recorded = step.output.as_deref().map(|o| String::from_utf8_lossy(o).into_owned());
         if output.contains("Unknown command '") && !recorded.as_deref().unwrap_or("").contains("Unknown command '") {
-            return Outcome::NeedsHost;
+            return Outcome::NeedsHost(format!("{} answers Unknown command", step.input));
         }
         let where_ = format!("'{}', line {} ($ {})", case.title, i + 1, step.input);
         if let Some(recorded) = &recorded {
-            if &output != recorded && (names_a_host_command(&step.input, host) || names_a_host_command(recorded, host)) {
-                return Outcome::NeedsHost;
+            if &output != recorded && names_a_host_command(&step.input, recorded, host) {
+                return Outcome::NeedsHost(format!("{} runs a host's command", step.input));
             }
             if &output != recorded {
                 return Outcome::Failed(format!("{where_}: printed\n{output}\n-- recorded\n{recorded}"));
             }
         }
-        if step.pattern.is_some() {
-            return Outcome::NeedsHost;
+        if let Some(pattern) = &step.pattern {
+            // The recorder's patterns are .NET's, matched with Singleline; the ones it writes are plain enough to read alike here.
+            let regex = regex::Regex::new(&format!("(?s){pattern}")).unwrap();
+            if !regex.is_match(&output) {
+                if names_a_host_command(&step.input, "", host) {
+                    return Outcome::NeedsHost(format!("{} runs a host's command", step.input));
+                }
+                return Outcome::Failed(format!("'{}', line {} ($ {}): printed\n{output}\n-- does not match\n{pattern}", case.title, i + 1, step.input));
+            }
         }
         if status != step.status || (submitted == Submitted::NeedsMore) != step.more || action(request.clone()) != step.action {
             return Outcome::Failed(format!("{where_}: status {status} more {:?} action {} - recorded {} {} {}", submitted, action(request), step.status, step.more, step.action));
@@ -156,7 +185,7 @@ fn every_case_the_rust_shell_can_run_alone_prints_its_recording() {
     let mut files: Vec<PathBuf> = std::fs::read_dir(corpus()).unwrap().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "golden")).collect();
     files.sort();
     // Every command the corpus records that the Rust shell does not answer itself: a host's, through the bridge.
-    let own: Vec<String> = Shell::new(Config::default()).builtin_names();
+    let own: Vec<String> = shell_with_modules(Config::default()).own_names();
     let host: Vec<String> = files
         .iter()
         .map(|f| f.file_stem().unwrap().to_string_lossy().into_owned())
@@ -172,7 +201,12 @@ fn every_case_the_rust_shell_can_run_alone_prints_its_recording() {
         for case in parse(&std::fs::read(&file).unwrap()).iter().filter(|c| c.target == "none") {
             match run(case, &temp, &host) {
                 Outcome::Passed => passed += 1,
-                Outcome::NeedsHost => needs_host += 1,
+                Outcome::NeedsHost(why) => {
+                    needs_host += 1;
+                    if std::env::var_os("DIANASH_GOLDEN_VERBOSE").is_some() {
+                        eprintln!("needs a host: {name} '{}': {why}", case.title);
+                    }
+                }
                 Outcome::Failed(why) => failures.push(format!("{name}: {why}")),
             }
         }

@@ -1,5 +1,5 @@
 //! The shell knows no emulator noun (EmuSen_DianaSh.md §2, §11.4): no identifier `emusen_session.h` declares appears
-//! in the crate, and the crate depends on no crate of the emulator's but Galaxia's.
+//! in the crate, and the crate depends on no crate of the emulator's but Galaxia's and the .NET rules split from it.
 
 use std::path::Path;
 
@@ -49,7 +49,7 @@ fn the_crate_depends_on_no_emulator_crate_but_galaxia() {
     for line in manifest.lines().map(str::trim) {
         if let Some((name, _)) = line.split_once(" = ") {
             if name.starts_with("emusen-") {
-                assert_eq!(name, "emusen-galaxia", "the shell's crate depends on {name}");
+                assert!(["emusen-galaxia", "emusen-dotnet"].contains(&name), "the shell's crate depends on {name}");
             }
         }
     }

@@ -109,7 +109,11 @@ pub unsafe extern "C" fn dianash_new(config: *const dianash_config) -> *mut Dian
             settings.budget = Duration::from_millis(u64::from(given.budget_ms));
         }
     }
-    let shell = Shell::new(settings);
+    let mut shell = Shell::new(settings);
+    if let Err(words) = shell.add_module(&dianash_text::MODULE) {
+        fail(status::BAD_MANIFEST, words);
+        return std::ptr::null_mut();
+    }
     let cancel = shell.cancel_flag();
     Box::into_raw(Box::new(DianashShell { shell: Mutex::new(shell), cancel }))
 }

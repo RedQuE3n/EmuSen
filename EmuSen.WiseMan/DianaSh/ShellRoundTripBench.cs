@@ -19,13 +19,14 @@ namespace EmuSen.WiseMan.DianaSh
 
         public ShellRoundTripBench(ITestOutputHelper output) => _output = output;
 
-        // §7.5's four lines, the ones the C# shell was measured on before anything moved.
+        // §7.5's four lines, the ones the C# shell was measured on before anything moved, and one C# command, which the Rust shell reaches through the bridge.
         private static readonly string[] Lines =
         {
             "true",
             "echo hello",
             "echo a b c | grep b | wc -l",
             "for i in 0 1 2 3 4 5 6 7 8 9; do echo $i | grep 1; done",
+            "spaces",
         };
 
         [Fact]
@@ -33,7 +34,7 @@ namespace EmuSen.WiseMan.DianaSh
         {
             if (Environment.GetEnvironmentVariable(BenchVariable) != "1") return;
             DianaShInterpreter shell = DianaShInterpreter.CreateDefault(null);
-            string mode = Environment.GetEnvironmentVariable("EMUSEN_DIANASH_NATIVE") == "1" ? "Rust shell, C# commands through the bridge" : "C# shell";
+            string mode = Environment.GetEnvironmentVariable("EMUSEN_DIANASH_NATIVE") == "1" ? "Rust shell (its builtins and dianash.text in Rust, the other commands through the bridge)" : "C# shell";
             _output.WriteLine($"{mode}; 2,000 runs after 200 of warm-up, median (95th percentile) in microseconds");
             foreach (string line in Lines)
             {

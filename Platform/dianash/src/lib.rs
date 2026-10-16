@@ -5,7 +5,6 @@
 //! The language and every builtin print what the C# shell printed, byte for byte, held by the golden corpus
 //! (§13.1); where that meant reproducing .NET's own rules they are in `dotnet`.
 
-pub mod abi;
 pub mod accounts;
 pub mod ast;
 pub mod builtins;
@@ -18,6 +17,9 @@ pub mod parser;
 pub mod sandbox;
 pub mod shell;
 pub mod table;
+
+/// The module ABI's types, owned by the crate a module is written with.
+pub use dianash_module::abi;
 
 pub use shell::{Config, Request, Shell, Submitted};
 

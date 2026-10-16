@@ -36,6 +36,12 @@ impl CallContext {
         }
         String::from_utf8_lossy(&bytes).into_owned()
     }
+
+    /// One stream alone: standard error, or standard output.
+    fn stream(&self, err: bool) -> String {
+        let bytes: Vec<u8> = self.written.iter().filter(|(is_err, _)| *is_err == err).flat_map(|(_, piece)| piece.iter().copied()).collect();
+        String::from_utf8_lossy(&bytes).into_owned()
+    }
 }
 
 unsafe fn context<'a>(ctx: *mut c_void) -> &'a mut CallContext {
@@ -142,8 +148,24 @@ unsafe extern "C" fn io_terminal(ctx: *mut c_void, out: *mut dianash_terminal) -
     status::OK
 }
 
-/// Builds a call over `args` for one host registration and hands it to `with`, which calls the host's function.
-fn call<R>(interp: &Interp, world: &mut World, registration: usize, command: &str, args: &[String], stdin: Option<&str>, with: impl FnOnce(*mut c_void, &dianash_call) -> R) -> (R, CallContext) {
+/// Whom a call is for: a host's registration, or a linked module. Their per-shell slots are kept apart by their keys.
+#[derive(Clone, Copy)]
+enum Callee {
+    Host(usize),
+    Module(usize),
+}
+
+impl Callee {
+    fn slot_key(self) -> usize {
+        match self {
+            Callee::Host(index) => index,
+            Callee::Module(index) => (1 << 32) + index,
+        }
+    }
+}
+
+/// Builds a call over `args` for one callee and hands it to `with`, which calls the callee's function.
+fn call<R>(interp: &Interp, world: &mut World, callee: Callee, command: &str, args: &[String], stdin: Option<&str>, with: impl FnOnce(*mut c_void, &dianash_call) -> R) -> (R, CallContext) {
     let session = interp.session;
     let cwd = world.sandbox.display(&dotnet::current_directory());
     let user = world.session(session).map(|s| s.user.clone()).unwrap_or_default();
@@ -156,14 +178,17 @@ fn call<R>(interp: &Interp, world: &mut World, registration: usize, command: &st
         written: Vec::new(),
         sandbox: world.sandbox.clone(),
         slots,
-        registration,
+        registration: callee.slot_key(),
         cancel: &*world.cancel,
         started: interp.started(),
         budget: world.config.budget,
         environment,
         interactive: world.config.interactive,
     };
-    let host_ctx = world.hosts[registration].ctx;
+    let host_ctx = match callee {
+        Callee::Host(index) => world.hosts[index].ctx,
+        Callee::Module(_) => std::ptr::null_mut(),
+    };
     let ctx = &mut context as *mut CallContext as *mut c_void;
     let io = dianash_io {
         size: std::mem::size_of::<dianash_io>() as u32,
@@ -201,7 +226,7 @@ fn new_result() -> dianash_host_result {
 }
 
 fn outcome(context: &CallContext, result: &dianash_host_result) -> Outcome {
-    Outcome { output: context.output(true), status: result.exit_status, request: (result.request != 0).then_some(Request::Host(result.request)) }
+    Outcome { output: context.stream(false), errors: context.stream(true), status: result.exit_status, request: (result.request != 0).then_some(Request::Host(result.request)) }
 }
 
 fn failed(context: &CallContext, what: &str, code: i32) -> String {
@@ -213,7 +238,7 @@ fn failed(context: &CallContext, what: &str, code: i32) -> String {
 pub(crate) fn run(interp: &mut Interp, world: &mut World, registration: usize, command: &str, args: &[String], stdin: Option<&str>) -> Result<Outcome, String> {
     let run = world.hosts[registration].run;
     let mut result = new_result();
-    let (code, context) = call(interp, world, registration, command, args, stdin, |ctx, call| unsafe { run(ctx, call, &mut result as *mut dianash_host_result as *mut dianash_result) });
+    let (code, context) = call(interp, world, Callee::Host(registration), command, args, stdin, |ctx, call| unsafe { run(ctx, call, &mut result as *mut dianash_host_result as *mut dianash_result) });
     if code < 0 {
         return Err(failed(&context, command, code));
     }
@@ -224,7 +249,7 @@ pub(crate) fn run(interp: &mut Interp, world: &mut World, registration: usize, c
 pub(crate) fn jobs(interp: &mut Interp, world: &mut World, registration: usize) -> Result<String, String> {
     let Some(jobs) = world.hosts[registration].jobs else { return Ok(String::new()) };
     let args = ["ps".to_string()];
-    let (code, context) = call(interp, world, registration, "ps", &args, None, |ctx, call| unsafe { jobs(ctx, call) });
+    let (code, context) = call(interp, world, Callee::Host(registration), "ps", &args, None, |ctx, call| unsafe { jobs(ctx, call) });
     if code < 0 {
         return Err(failed(&context, "jobs", code));
     }
@@ -236,7 +261,7 @@ pub(crate) fn kill(interp: &mut Interp, world: &mut World, registration: usize, 
     let Some(kill) = world.hosts[registration].kill else { return Ok(None) };
     let args = ["kill".to_string(), id.to_string()];
     let mut result = new_result();
-    let (code, context) = call(interp, world, registration, "kill", &args, None, |ctx, call| unsafe {
+    let (code, context) = call(interp, world, Callee::Host(registration), "kill", &args, None, |ctx, call| unsafe {
         kill(ctx, call, id.as_ptr(), id.len(), &mut result as *mut dianash_host_result as *mut dianash_result)
     });
     match code {
@@ -244,4 +269,15 @@ pub(crate) fn kill(interp: &mut Interp, world: &mut World, registration: usize, 
         code if code < 0 => Err(failed(&context, "kill", code)),
         _ => Ok(Some(outcome(&context, &result))),
     }
+}
+
+/// Runs a command of a module linked into the program, through the same call a module built as a library is given.
+pub(crate) fn run_module(interp: &mut Interp, world: &mut World, index: usize, command: &str, args: &[String], stdin: Option<&str>) -> Result<Outcome, String> {
+    let module = world.modules[index];
+    let mut result = dianash_result { size: std::mem::size_of::<dianash_result>() as u32, exit_status: 0 };
+    let (code, context) = call(interp, world, Callee::Module(index), command, args, stdin, |_, call| unsafe { dianash_module::run_module(module, call, &mut result) });
+    if code < 0 {
+        return Err(failed(&context, command, code));
+    }
+    Ok(Outcome { output: context.stream(false), errors: context.stream(true), status: result.exit_status, request: None })
 }

@@ -1,6 +1,6 @@
 //! The structs and numbers of `dianash_module.h`, the command module ABI, and those of `dianash.h`, the host API,
-//! as Rust lays them out. The headers in `include/` are normative and `tests/abi.rs` holds these to
-//! them. See EmuSen_DianaSh.md §6 and §10.3.
+//! as Rust lays them out. The headers in the shell's `include/` are normative, and the platform library's
+//! `tests/dianash_abi.rs` holds these to them. See EmuSen_DianaSh.md §6 and §10.3.
 
 #![allow(non_camel_case_types)]
 

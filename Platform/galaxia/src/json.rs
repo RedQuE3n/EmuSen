@@ -515,28 +515,8 @@ pub fn write_compact(out: &mut String, value: &Value) {
     }
 }
 
-/// A file's bytes as `File.ReadAllText` gives them: a byte-order mark chooses UTF-8, UTF-16 or UTF-32 and is dropped, and what is not valid becomes U+FFFD.
-pub fn decode(bytes: &[u8]) -> String {
-    fn utf16(bytes: &[u8], unit: fn([u8; 2]) -> u16) -> String {
-        let whole: Vec<u16> = bytes.as_chunks::<2>().0.iter().map(|pair| unit(*pair)).collect();
-        let mut text: String = char::decode_utf16(whole).map(|c| c.unwrap_or('\u{FFFD}')).collect();
-        if bytes.len() % 2 == 1 {
-            text.push('\u{FFFD}');
-        }
-        text
-    }
-    fn utf32(bytes: &[u8], unit: fn([u8; 4]) -> u32) -> String {
-        bytes.chunks(4).map(|four| <[u8; 4]>::try_from(four).ok().and_then(|four| char::from_u32(unit(four))).unwrap_or('\u{FFFD}')).collect()
-    }
-    match bytes {
-        [0xFE, 0xFF, rest @ ..] => utf16(rest, u16::from_be_bytes),
-        [0xFF, 0xFE, 0, 0, rest @ ..] => utf32(rest, u32::from_le_bytes),
-        [0xFF, 0xFE, rest @ ..] => utf16(rest, u16::from_le_bytes),
-        [0xEF, 0xBB, 0xBF, rest @ ..] => String::from_utf8_lossy(rest).into_owned(),
-        [0, 0, 0xFE, 0xFF, rest @ ..] => utf32(rest, u32::from_be_bytes),
-        _ => String::from_utf8_lossy(bytes).into_owned(),
-    }
-}
+/// A file's bytes as `File.ReadAllText` gives them, owned by `emusen-dotnet`.
+pub use emusen_dotnet::file::decode;
 
 #[cfg(test)]
 mod tests {

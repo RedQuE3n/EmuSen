@@ -13,6 +13,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # DianaSh's shell core, whose host API this library exports (EmuSen_DianaSh.md §10).
 emusen-dianash = { path = "../dianash" }
+# dianash.text, the text tools' module every shell this library makes has linked in (§8.2).
+dianash-text = { path = "../dianash-text" }
 emusen-endymion = { path = "../endymion" }
 emusen-galaxia = { path = "../galaxia" }
 emusen-native = { path = "../../EmuSen/Cores/Shared/emusen-native" }

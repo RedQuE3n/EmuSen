@@ -121,8 +121,33 @@ namespace EmuSen.DianaSh.DianaSh.Etc
         private static readonly StringComparison PathCase =
             OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
+        // The root as spelled, or as the system resolves its links, since a working directory reached through one reads resolved - see EmuSen_DianaSh.md §13.11.
         private static bool IsInsideRoot(string candidate, string root) =>
+            IsUnder(candidate, root) || (Resolved(root) is { } real && IsUnder(candidate, real));
+
+        private static bool IsUnder(string candidate, string root) =>
             candidate.Equals(root, PathCase)
                 || candidate.StartsWith(root + Path.DirectorySeparatorChar, PathCase);
+
+        // The root with every link along it followed, or null where that is the root as spelled or it cannot be read.
+        private static string? Resolved(string root)
+        {
+            try
+            {
+                string real = Canonical(Path.GetFullPath(root));
+                return real.Equals(root, PathCase) ? null : real;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
+        }
+
+        // Each component's link followed to its final target, from the file system's root down.
+        private static string Canonical(string full)
+        {
+            string? parent = Path.GetDirectoryName(full);
+            if (parent is null) return full;
+            string current = Path.Combine(Canonical(parent), Path.GetFileName(full));
+            var info = new DirectoryInfo(current);
+            return info.LinkTarget is not null && info.ResolveLinkTarget(returnFinalTarget: true) is { } target ? Canonical(target.FullName) : current;
+        }
     }
 }

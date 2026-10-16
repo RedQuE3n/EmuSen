@@ -101,6 +101,7 @@ fn dianash_session_attach int32_t (dianash_shell *, uint32_t, const uint8_t *, s
 fn dianash_session_kill int32_t (dianash_shell *, uint32_t) @1.0
 fn dianash_session_new int64_t (dianash_shell *) @1.0
 fn dianash_session_replace int32_t (dianash_shell *, uint32_t, uint32_t) @1.0
+fn dianash_session_set_services int32_t (dianash_shell *, uint32_t, const dianash_service *, size_t) @1.1
 fn dianash_session_switch int32_t (dianash_shell *, uint32_t) @1.0
 fn dianash_sessions int64_t (dianash_shell *, uint8_t *, size_t) @1.0
 fn dianash_set_services int32_t (dianash_shell *, const dianash_service *, size_t) @1.0

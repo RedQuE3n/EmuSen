@@ -208,6 +208,7 @@ version = "0.1.0"
 name = "emusen-platform"
 version = "0.1.0"
 dependencies = [
+ "dianash-module",
  "dianash-text",
  "emusen-dianash",
  "emusen-disc",
@@ -225,6 +226,13 @@ dependencies = [
  "emusen-galaxia",
  "libloading",
  "sha2",
+]
+
+[[package]]
+name = "emusen-session-service"
+version = "0.1.0"
+dependencies = [
+ "emusen-dotnet",
 ]
 
 [[package]]

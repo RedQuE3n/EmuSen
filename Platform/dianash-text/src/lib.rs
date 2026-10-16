@@ -9,26 +9,7 @@ mod pattern;
 
 use dianash_module::{Call, Module};
 
-/// What a command gives back: its standard output, its standard error and its exit status.
-pub(crate) struct Answer {
-    pub out: String,
-    pub err: String,
-    pub status: i32,
-}
-
-impl Answer {
-    pub fn ok(out: impl Into<String>) -> Answer {
-        Answer { out: out.into(), err: String::new(), status: 0 }
-    }
-
-    pub fn with(out: impl Into<String>, status: i32) -> Answer {
-        Answer { out: out.into(), err: String::new(), status }
-    }
-
-    pub fn fail(err: impl Into<String>) -> Answer {
-        Answer { out: String::new(), err: err.into(), status: 1 }
-    }
-}
+pub(crate) use dianash_module::Answer;
 
 /// A failure the C# shell's dispatcher caught as an exception and worded `Error: <message>`.
 pub(crate) type Run = Result<Answer, String>;
@@ -133,14 +114,7 @@ impl Module for Text {
             "awk" => lines::awk(call, &args, stdin),
             other => Err(format!("dianash.text has no command '{other}'")),
         };
-        let answer = answer.unwrap_or_else(|words| Answer::fail(format!("Error: {words}")));
-        if !answer.out.is_empty() {
-            call.out(&answer.out);
-        }
-        if !answer.err.is_empty() {
-            call.err(&answer.err);
-        }
-        answer.status
+        call.answer(answer.unwrap_or_else(Answer::fault))
     }
 }
 

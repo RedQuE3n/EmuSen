@@ -4,7 +4,7 @@ namespace EmuSen.Crystal.Session
     public static class SessionAbi
     {
         public const uint Major = 1u;
-        public const uint Minor = 0u;
+        public const uint Minor = 1u;
         public const int Null = -1;
         public const int BadString = -5;
         public const int NoSession = -1100;
@@ -16,6 +16,7 @@ namespace EmuSen.Crystal.Session
         public const int Parse = -1106;
         public const int Absent = -1107;
         public const int Fault = -1108;
+        public const uint ProcessorSession = 4294967295u;
         public const uint RunPause = 0u;
         public const uint RunResume = 1u;
         public const uint RunStep = 2u;
@@ -52,6 +53,7 @@ namespace EmuSen.Crystal.Session
         public const uint ProfileClear = 2u;
         public const uint ProfileStatus = 3u;
         public const uint ProfileHottest = 4u;
+        public const uint ProfileResetStack = 5u;
         public const uint CountersArm = 0u;
         public const uint CountersDisarm = 1u;
         public const uint CountersClear = 2u;

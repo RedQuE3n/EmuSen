@@ -36,7 +36,8 @@ namespace EmuSen.Crystal.Session
 
         internal byte[] DmaLogOp(uint session, uint op, ReadOnlySpan<byte> args, bool readOnly)
         {
-            DmaLogRegistry log = Need(Target(session).DmaLog, "This core does not record DMA transfers.");
+            IDebugTarget t = Target(session);
+            DmaLogRegistry log = Need(t.DmaLog, "This core does not record DMA transfers.");
             if (op > SessionAbi.DmaLogDestinations) throw NotSupported($"no DMA log op {op}");
             if (readOnly && op <= SessionAbi.DmaLogClear) throw new SessionException(SessionAbi.ReadOnly, "refused: this is a read-only context, and the call changes the session");
             JsonElement a = Parse(args);
@@ -71,6 +72,7 @@ namespace EmuSen.Crystal.Session
                         w.WriteString("kind", x.Kind == DmaTransferKind.Hdma ? "hdma" : "general");
                         w.WriteNumber("control", x.Control);
                         w.WriteNumber("destination", x.DestinationRegister);
+                        NullableString(w, "destination_name", t.NameDmaDestination(x.DestinationRegister));
                         w.WriteNumber("source", U(x.SourceAddress));
                         w.WriteNumber("length", x.Length);
                         w.WriteEndObject();
@@ -91,6 +93,7 @@ namespace EmuSen.Crystal.Session
                     {
                         w.WriteStartObject();
                         w.WriteNumber("destination", x.DestinationRegister);
+                        NullableString(w, "destination_name", t.NameDmaDestination(x.DestinationRegister));
                         w.WriteNumber("transfers", x.Transfers);
                         w.WriteNumber("bytes", x.Bytes);
                         w.WriteNumber("channel_mask", x.ChannelMask);
@@ -273,7 +276,8 @@ namespace EmuSen.Crystal.Session
 
         internal byte[] AudioChannels(uint session) => Array(Target(session).AudioChannels.Current, Channel);
 
-        internal void SetChannelMuted(uint session, uint channel, bool muted) => Target(session).SetChannelMuted(Int32(channel, "channel"), muted);
+        // A channel crosses as a 32-bit pattern, as an address does, so a command's own index reaches the core as typed.
+        internal void SetChannelMuted(uint session, uint channel, bool muted) => Target(session).SetChannelMuted(Addr(channel), muted);
 
         internal byte[] Evaluate(uint session, uint processor, string? text)
         {
@@ -606,7 +610,7 @@ namespace EmuSen.Crystal.Session
         // Takes the waiting events of the kinds asked, only when the buffer holds them all.
         internal byte[] EventsPeek(uint session, uint kinds, out int taken)
         {
-            Target(session);
+            if (_target is not null || session != 0) Target(session);
             if ((kinds & ~SessionAbi.EventRun) != 0) throw NotSupported($"unknown event kinds 0x{kinds:X}");
             List<SessionEvent> chosen;
             lock (_eventsGate) chosen = _events.Where(e => kinds == 0 || (kinds & SessionAbi.EventRun) != 0 && e.Kind == "run").ToList();

@@ -25,5 +25,5 @@ pub use shell::{Config, Request, Shell, Submitted};
 
 /// The host API's version: a major expected never to change, a minor grown by addition (§11).
 pub const HOST_ABI_MAJOR: u32 = 1;
-pub const HOST_ABI_MINOR: u32 = 0;
+pub const HOST_ABI_MINOR: u32 = 1;
 pub const HOST_ABI_VERSION: u32 = (HOST_ABI_MAJOR << 16) | HOST_ABI_MINOR;

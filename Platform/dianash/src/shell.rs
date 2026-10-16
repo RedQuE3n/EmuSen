@@ -92,6 +92,34 @@ impl Drop for Slot {
     }
 }
 
+/// Services a host provides, copied into calls and never read (§9.8): each entry, and the name it points at.
+#[derive(Default)]
+pub(crate) struct Services {
+    pub entries: Vec<abi::dianash_service>,
+    names: Vec<Box<[u8]>>,
+}
+
+impl Services {
+    pub fn from(services: &[abi::dianash_service]) -> Result<Services, i32> {
+        let mut kept = Services::default();
+        for service in services {
+            let name: Box<[u8]> = unsafe { service.name.slice() }.ok_or(status::NULL)?.into();
+            kept.entries.push(abi::dianash_service { size: std::mem::size_of::<abi::dianash_service>() as u32, name: abi::dianash_bytes::of(&name), major: service.major, minor: service.minor, table: service.table });
+            kept.names.push(name);
+        }
+        Ok(kept)
+    }
+
+    fn named(&self, name: &[u8]) -> bool {
+        self.names.iter().any(|n| &**n == name)
+    }
+
+    /// A copy whose names point at boxes of its own.
+    pub fn copy(&self) -> Services {
+        Services::from(&self.entries).unwrap_or_default()
+    }
+}
+
 pub(crate) struct Session {
     pub id: u32,
     /// None until a host lists it under a name.
@@ -100,6 +128,8 @@ pub(crate) struct Session {
     pub history: History,
     pub table: Arc<Table>,
     pub slots: HashMap<usize, Slot>,
+    /// The session's own services, which take the place of the shell's of the same name in its calls.
+    pub services: Services,
 }
 
 /// A host's registration: the functions that serve its commands, and the context they are given.
@@ -129,9 +159,8 @@ pub(crate) struct World {
     pub modules: Vec<&'static dyn Module>,
     /// The table a new session starts from: the builtins and the linked modules' commands.
     pub base: Arc<Table>,
-    /// The host's services, copied into every call, never read (§9.8); the names they point at are `service_names`.
-    pub services: Vec<abi::dianash_service>,
-    pub service_names: Vec<Box<[u8]>>,
+    /// The host's services for every session, copied into every call, never read (§9.8).
+    pub services: Services,
 }
 
 impl World {
@@ -141,6 +170,18 @@ impl World {
 
     pub fn session_mut(&mut self, id: u32) -> Option<&mut Session> {
         self.sessions.iter_mut().find(|s| s.id == id)
+    }
+
+    /// The services a call in a session is handed: the session's own, then the shell's it does not name itself.
+    pub fn services_for(&self, id: u32) -> Vec<abi::dianash_service> {
+        let own = self.session(id).map(|s| &s.services);
+        let mut entries: Vec<abi::dianash_service> = own.map(|s| s.entries.clone()).unwrap_or_default();
+        for (entry, name) in self.services.entries.iter().zip(&self.services.names) {
+            if !own.is_some_and(|s| s.named(name)) {
+                entries.push(*entry);
+            }
+        }
+        entries
     }
 
     /// The sessions a host has listed, in order.
@@ -160,7 +201,7 @@ impl World {
     pub fn new_session(&mut self, table: Arc<Table>, user: String) -> u32 {
         let id = self.next_id;
         self.next_id += 1;
-        self.sessions.push(Session { id, name: None, user, history: History::default(), table, slots: HashMap::new() });
+        self.sessions.push(Session { id, name: None, user, history: History::default(), table, slots: HashMap::new(), services: Services::default() });
         id
     }
 
@@ -245,8 +286,7 @@ impl Shell {
             hosts: Vec::new(),
             requests: Vec::new(),
             cancel: Arc::new(AtomicBool::new(false)),
-            services: Vec::new(),
-            service_names: Vec::new(),
+            services: Services::default(),
             modules: Vec::new(),
             base: Table::builtins(),
             shown_cwd: None,
@@ -425,6 +465,9 @@ impl Shell {
             for (alias, command) in &manifest.aliases {
                 table.alias(alias, command);
             }
+            for prefix in &manifest.jobs {
+                table.claim(prefix, Kind::Module(index));
+            }
         };
         add(Arc::make_mut(&mut self.world.base));
         for session in &mut self.world.sessions {
@@ -498,17 +541,17 @@ impl Shell {
         Ok(())
     }
 
-    /// The services the host provides, kept for every call until the next set (§10.3).
+    /// The services the host provides to every session, kept for every call until the next set (§10.3).
     pub fn set_services(&mut self, services: &[abi::dianash_service]) -> Result<(), i32> {
-        let mut names = Vec::new();
-        let mut kept = Vec::new();
-        for service in services {
-            let name: Box<[u8]> = unsafe { service.name.slice() }.ok_or(status::NULL)?.into();
-            kept.push(abi::dianash_service { size: std::mem::size_of::<abi::dianash_service>() as u32, name: abi::dianash_bytes::of(&name), major: service.major, minor: service.minor, table: service.table });
-            names.push(name);
-        }
-        self.world.services = kept;
-        self.world.service_names = names;
+        self.world.services = Services::from(services)?;
+        Ok(())
+    }
+
+    /// The services one session's calls are handed in place of the shell's of the same name, until the next set.
+    pub fn set_session_services(&mut self, session: u32, services: &[abi::dianash_service]) -> Result<(), i32> {
+        let id = self.resolve(session).ok_or(status::NO_SUCH_SESSION)?;
+        let kept = Services::from(services)?;
+        self.world.session_mut(id).ok_or(status::NO_SUCH_SESSION)?.services = kept;
         Ok(())
     }
 
@@ -530,7 +573,7 @@ impl Shell {
             table.alias(&alias, &command);
         }
         for prefix in parsed.jobs {
-            table.claim(&prefix, registration);
+            table.claim(&prefix, Kind::Host(registration));
         }
         for line in parsed.notes {
             table.note(&line);

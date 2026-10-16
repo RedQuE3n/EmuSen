@@ -179,6 +179,11 @@ pub fn trim(text: &str) -> &str {
     text.trim_matches(is_white_space)
 }
 
+/// `string.TrimEnd()`.
+pub fn trim_end(text: &str) -> &str {
+    text.trim_end_matches(is_white_space)
+}
+
 /// `string.TrimStart()`.
 pub fn trim_start(text: &str) -> &str {
     text.trim_start_matches(is_white_space)

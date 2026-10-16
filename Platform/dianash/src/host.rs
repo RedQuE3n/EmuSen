@@ -7,6 +7,7 @@ use crate::dotnet;
 use crate::interp::{Interp, Outcome};
 use crate::sandbox::Sandbox;
 use crate::shell::{Request, Slot, World};
+use crate::table::Kind;
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -210,6 +211,7 @@ fn call<R>(interp: &Interp, world: &mut World, callee: Callee, command: &str, ar
         terminal: io_terminal,
     };
     let argv: Vec<dianash_bytes> = args.iter().map(|a| dianash_bytes::of(a.as_bytes())).collect();
+    let services = world.services_for(session);
     let call = dianash_call {
         size: std::mem::size_of::<dianash_call>() as u32,
         command: dianash_bytes::of(command.as_bytes()),
@@ -221,8 +223,8 @@ fn call<R>(interp: &Interp, world: &mut World, callee: Callee, command: &str, ar
         cwd: dianash_bytes::of(cwd.as_bytes()),
         user: dianash_bytes::of(user.as_bytes()),
         io: &io,
-        services: world.services.as_ptr(),
-        service_count: world.services.len(),
+        services: services.as_ptr(),
+        service_count: services.len(),
     };
     let answer = with(host_ctx, &call);
     (answer, context)
@@ -252,25 +254,55 @@ pub(crate) fn run(interp: &mut Interp, world: &mut World, registration: usize, c
     Ok(outcome(&context, &result))
 }
 
-/// The jobs a host lists for `ps`, one line each.
-pub(crate) fn jobs(interp: &mut Interp, world: &mut World, registration: usize) -> Result<String, String> {
-    let Some(jobs) = world.hosts[registration].jobs else { return Ok(String::new()) };
+/// Whom a claim names, as a call is made to it.
+fn callee(claimant: Kind) -> Callee {
+    match claimant {
+        Kind::Module(index) => Callee::Module(index),
+        Kind::Host(registration) => Callee::Host(registration),
+        Kind::Builtin(_) => unreachable!("a builtin claims no jobs"),
+    }
+}
+
+/// The jobs a host or a module lists for `ps`, one line each.
+pub(crate) fn jobs(interp: &mut Interp, world: &mut World, claimant: Kind) -> Result<String, String> {
     let args = ["ps".to_string()];
-    let (code, context) = call(interp, world, Callee::Host(registration), "ps", &args, None, |ctx, call| unsafe { jobs(ctx, call) });
+    let code_and_context = match claimant {
+        Kind::Module(index) => {
+            let module = world.modules[index];
+            call(interp, world, callee(claimant), "ps", &args, None, |_, call| unsafe { dianash_module::jobs_module(module, call) })
+        }
+        _ => {
+            let Kind::Host(registration) = claimant else { return Ok(String::new()) };
+            let Some(jobs) = world.hosts[registration].jobs else { return Ok(String::new()) };
+            call(interp, world, callee(claimant), "ps", &args, None, |ctx, call| unsafe { jobs(ctx, call) })
+        }
+    };
+    let (code, context) = code_and_context;
     if code < 0 {
         return Err(failed(&context, "jobs", code));
     }
     Ok(context.output(false))
 }
 
-/// A job removed by the host that claims its id; none when the host says the id is not one of its.
-pub(crate) fn kill(interp: &mut Interp, world: &mut World, registration: usize, id: &str) -> Result<Option<Outcome>, String> {
-    let Some(kill) = world.hosts[registration].kill else { return Ok(None) };
+/// A job removed by the host or module that claims its id; none when it says the id is not one of its.
+pub(crate) fn kill(interp: &mut Interp, world: &mut World, claimant: Kind, id: &str) -> Result<Option<Outcome>, String> {
     let args = ["kill".to_string(), id.to_string()];
     let mut result = new_result();
-    let (code, context) = call(interp, world, Callee::Host(registration), "kill", &args, None, |ctx, call| unsafe {
-        kill(ctx, call, id.as_ptr(), id.len(), &mut result as *mut dianash_host_result as *mut dianash_result)
-    });
+    let (code, context) = match claimant {
+        Kind::Module(index) => {
+            let module = world.modules[index];
+            call(interp, world, callee(claimant), "kill", &args, None, |_, call| unsafe {
+                dianash_module::kill_module(module, call, id.as_ptr(), id.len(), &mut result as *mut dianash_host_result as *mut dianash_result)
+            })
+        }
+        _ => {
+            let Kind::Host(registration) = claimant else { return Ok(None) };
+            let Some(kill) = world.hosts[registration].kill else { return Ok(None) };
+            call(interp, world, callee(claimant), "kill", &args, None, |ctx, call| unsafe {
+                kill(ctx, call, id.as_ptr(), id.len(), &mut result as *mut dianash_host_result as *mut dianash_result)
+            })
+        }
+    };
     match code {
         status::ABSENT => Ok(None),
         code if code < 0 => Err(failed(&context, "kill", code)),

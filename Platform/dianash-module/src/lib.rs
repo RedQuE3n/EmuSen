@@ -10,6 +10,80 @@ use abi::*;
 use std::ffi::c_void;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
+/// What a command gives back: its standard output, its standard error and its exit status. A C# command's returned
+/// text is `ok`, its `DianaShResult.Fail` is `fail`, and an exception the dispatcher caught is `fault`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Answer {
+    pub out: String,
+    pub err: String,
+    pub status: i32,
+}
+
+impl Answer {
+    pub fn ok(out: impl Into<String>) -> Answer {
+        Answer { out: out.into(), err: String::new(), status: 0 }
+    }
+
+    pub fn with(out: impl Into<String>, status: i32) -> Answer {
+        Answer { out: out.into(), err: String::new(), status }
+    }
+
+    pub fn fail(err: impl Into<String>) -> Answer {
+        Answer { out: String::new(), err: err.into(), status: 1 }
+    }
+
+    /// An exception the C# dispatcher caught, in its words: `Error: <message>`, status 1.
+    pub fn fault(words: impl std::fmt::Display) -> Answer {
+        Answer::fail(format!("Error: {words}"))
+    }
+}
+
+/// A string as a JSON value, for a manifest.
+fn json_string(text: &str) -> String {
+    let mut out = String::from("\"");
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// What a module's manifest says of it (§5.3): each command as `(name, read_only, usage)`, the services it asks for as
+/// `(name, major, least minor, required)`, its aliases and the job prefixes it claims.
+pub struct Manifest<'a> {
+    pub id: &'a str,
+    pub version: &'a str,
+    pub services: &'a [(&'a str, u32, u32, bool)],
+    pub commands: &'a [(&'a str, bool, &'a str)],
+    pub aliases: &'a [(&'a str, &'a str)],
+    pub jobs: &'a [&'a str],
+}
+
+impl Manifest<'_> {
+    /// The manifest as JSON, each command's page `man/<name>.1`.
+    pub fn json(&self) -> String {
+        let services: Vec<String> = self.services.iter().map(|(name, major, minor, required)| format!("{{\"name\":{},\"major\":{major},\"minor\":{minor},\"required\":{required}}}", json_string(name))).collect();
+        let commands: Vec<String> = self.commands.iter().map(|(name, read_only, usage)| format!("{{\"name\":{},\"usage\":{},\"read_only\":{read_only},\"man\":{}}}", json_string(name), json_string(usage), json_string(&format!("man/{name}.1")))).collect();
+        let aliases: Vec<String> = self.aliases.iter().map(|(alias, command)| format!("{}:{}", json_string(alias), json_string(command))).collect();
+        let jobs: Vec<String> = self.jobs.iter().map(|prefix| json_string(prefix)).collect();
+        format!(
+            "{{\"manifest\":1,\"id\":{},\"version\":{},\"abi\":\"1.0\",\"kind\":\"module\",\"services\":[{}],\"commands\":[{}],\"aliases\":{{{}}},\"jobs\":[{}]}}",
+            json_string(self.id),
+            json_string(self.version),
+            services.join(","),
+            commands.join(","),
+            aliases.join(","),
+            jobs.join(",")
+        )
+    }
+}
+
 /// A module: its manifest, and the one function that runs every command it names.
 pub trait Module: Sync {
     /// The manifest of §5.3, as JSON.
@@ -17,6 +91,14 @@ pub trait Module: Sync {
 
     /// Runs the command `call` names; the exit status, `$?`. What it prints goes through the call.
     fn run(&self, call: &Call) -> i32;
+
+    /// `ps`'s rows for the id prefixes the manifest's `jobs` claims, each line ended by a newline, through the call.
+    fn jobs(&self, _call: &Call) {}
+
+    /// Removes the job `id` names: its exit status, or none when the id is not one of this module's.
+    fn kill(&self, _call: &Call, _id: &str) -> Option<i32> {
+        None
+    }
 }
 
 /// A call as a module sees it, good until `run` returns.
@@ -83,6 +165,17 @@ impl<'a> Call<'a> {
         String::from_utf8_lossy(unsafe { text(self.raw.user) }.unwrap_or_default()).into_owned()
     }
 
+    /// Prints an answer, its output then its errors, and gives its exit status.
+    pub fn answer(&self, answer: Answer) -> i32 {
+        if !answer.out.is_empty() {
+            self.out(&answer.out);
+        }
+        if !answer.err.is_empty() {
+            self.err(&answer.err);
+        }
+        answer.status
+    }
+
     /// Appends to standard output.
     pub fn out(&self, text: &str) {
         unsafe { (self.io().out)(self.io().ctx, text.as_ptr(), text.len()) };
@@ -111,6 +204,20 @@ impl<'a> Call<'a> {
     /// Whether the player cancelled or the line's budget is spent, for a loop that may run long.
     pub fn cancelled(&self) -> bool {
         unsafe { (self.io().cancelled)(self.io().ctx) != 0 }
+    }
+
+    /// The table of a service the host provides under `name` at major `major`, which the shell copied in unread (§6.3).
+    pub fn service(&self, name: &str, major: u32) -> Option<*const c_void> {
+        if self.raw.services.is_null() {
+            return None;
+        }
+        let services = unsafe { std::slice::from_raw_parts(self.raw.services, self.raw.service_count) };
+        services.iter().find(|s| s.major == major && unsafe { s.name.slice() } == Some(name.as_bytes())).map(|s| s.table).filter(|t| !t.is_null())
+    }
+
+    /// Whether the call runs where a change must not be made: a read-only line on a thread that may not wait (§6.5).
+    pub fn read_only_context(&self) -> bool {
+        self.raw.flags & CALL_READ_ONLY_CONTEXT != 0
     }
 
     /// An exported variable, or none.
@@ -152,14 +259,56 @@ pub unsafe fn run_module(module: &dyn Module, call: *const dianash_call, result:
             status::OK
         }
         Err(fault) => {
-            let words = fault.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| fault.downcast_ref::<String>().cloned()).unwrap_or_else(|| "the command faulted".to_string());
-            view.err(&words);
+            view.err(&fault_words(fault));
             status::FAULT
         }
     }
 }
 
-/// Exports a module as a library: `dianash_module_abi_version`, `dianash_module_manifest` and `dianash_module_run`.
+fn fault_words(fault: Box<dyn std::any::Any + Send>) -> String {
+    fault.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| fault.downcast_ref::<String>().cloned()).unwrap_or_else(|| "the command faulted".to_string())
+}
+
+/// A module's `ps` rows, with the same fault boundary.
+///
+/// # Safety
+/// `call` must be what the shell passed.
+pub unsafe fn jobs_module(module: &dyn Module, call: *const dianash_call) -> i32 {
+    let Some(view) = (unsafe { Call::from_raw(call) }) else { return status::BAD_STRUCT };
+    match catch_unwind(AssertUnwindSafe(|| module.jobs(&view))) {
+        Ok(()) => status::OK,
+        Err(fault) => {
+            view.err(&fault_words(fault));
+            status::FAULT
+        }
+    }
+}
+
+/// A module's `kill` of one job: `ABSENT` for an id not its own, with the same fault boundary.
+///
+/// # Safety
+/// `call`, `id` and `result` must be what the shell passed.
+pub unsafe fn kill_module(module: &dyn Module, call: *const dianash_call, id: *const u8, id_len: usize, result: *mut dianash_result) -> i32 {
+    if result.is_null() || id.is_null() {
+        return status::NULL;
+    }
+    let Some(view) = (unsafe { Call::from_raw(call) }) else { return status::BAD_STRUCT };
+    let id = String::from_utf8_lossy(unsafe { std::slice::from_raw_parts(id, id_len) }).into_owned();
+    match catch_unwind(AssertUnwindSafe(|| module.kill(&view, &id))) {
+        Ok(Some(exit)) => {
+            unsafe { (*result).exit_status = exit };
+            status::OK
+        }
+        Ok(None) => status::ABSENT,
+        Err(fault) => {
+            view.err(&fault_words(fault));
+            status::FAULT
+        }
+    }
+}
+
+/// Exports a module as a library: `dianash_module_abi_version`, `dianash_module_manifest`, `dianash_module_run`,
+/// and the optional `dianash_module_jobs` and `dianash_module_kill`.
 #[macro_export]
 macro_rules! module_exports {
     ($module:expr) => {
@@ -184,6 +333,20 @@ macro_rules! module_exports {
         #[unsafe(no_mangle)]
         pub unsafe extern "C" fn dianash_module_run(call: *const $crate::abi::dianash_call, result: *mut $crate::abi::dianash_result) -> i32 {
             unsafe { $crate::run_module(&$module, call, result) }
+        }
+
+        /// # Safety
+        /// `call` must be the shell's.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn dianash_module_jobs(call: *const $crate::abi::dianash_call) -> i32 {
+            unsafe { $crate::jobs_module(&$module, call) }
+        }
+
+        /// # Safety
+        /// `call`, `id` and `result` must be the shell's.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn dianash_module_kill(call: *const $crate::abi::dianash_call, id: *const u8, id_len: usize, result: *mut $crate::abi::dianash_result) -> i32 {
+            unsafe { $crate::kill_module(&$module, call, id, id_len, result) }
         }
     };
 }

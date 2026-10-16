@@ -110,9 +110,12 @@ pub unsafe extern "C" fn dianash_new(config: *const dianash_config) -> *mut Dian
         }
     }
     let mut shell = Shell::new(settings);
-    if let Err(words) = shell.add_module(&dianash_text::MODULE) {
-        fail(status::BAD_MANIFEST, words);
-        return std::ptr::null_mut();
+    let modules: [&'static dyn dianash_module::Module; 1] = [&dianash_text::MODULE];
+    for module in modules {
+        if let Err(words) = shell.add_module(module) {
+            fail(status::BAD_MANIFEST, words);
+            return std::ptr::null_mut();
+        }
     }
     let cancel = shell.cancel_flag();
     Box::into_raw(Box::new(DianashShell { shell: Mutex::new(shell), cancel }))
@@ -176,6 +179,30 @@ pub unsafe extern "C" fn dianash_set_services(sh: *mut DianashShell, services: *
     };
     match shell.set_services(given) {
         Ok(()) => status::OK,
+        Err(code) => fail(code, "a service has no name"),
+    }
+}
+
+/// The services one session's calls are handed in place of the shell's of the same name (since 1.1).
+///
+/// # Safety
+/// `services` must be valid for `count` entries, or null with zero; each table must outlive the session.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dianash_session_set_services(sh: *mut DianashShell, session: u32, services: *const dianash_service, count: usize) -> i32 {
+    let mut shell = match unsafe { lock(sh) } {
+        Ok(shell) => shell,
+        Err(code) => return code,
+    };
+    let given = if count == 0 {
+        &[][..]
+    } else if services.is_null() {
+        return fail(status::NULL, "the services are null");
+    } else {
+        unsafe { std::slice::from_raw_parts(services, count) }
+    };
+    match shell.set_session_services(session, given) {
+        Ok(()) => status::OK,
+        Err(status::NO_SUCH_SESSION) => session_fail(status::NO_SUCH_SESSION),
         Err(code) => fail(code, "a service has no name"),
     }
 }

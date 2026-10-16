@@ -84,7 +84,7 @@ namespace EmuSen.WiseMan.Serenity
             Assert.Equal(SlangWrap.ClampToBorder, p.Passes[2].Wrap);
 
             Assert.Equal(new[] { "MASK", "NOISE" }, p.Textures.Select(t => t.Name));
-            Assert.Equal(Path.Combine(_root, "crt/luts/mask.png"), p.Textures[0].Path);
+            Assert.Equal(Path.GetFullPath(Path.Combine(_root, "crt/luts/mask.png")), p.Textures[0].Path);
             Assert.True(p.Textures[0].Linear && p.Textures[0].Mipmap);
             Assert.Equal(SlangWrap.Repeat, p.Textures[0].Wrap);
             Assert.False(p.Textures[1].Linear);

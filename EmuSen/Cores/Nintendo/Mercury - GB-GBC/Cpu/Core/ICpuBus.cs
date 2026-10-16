@@ -15,5 +15,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
 
         // IE & IF's five live bits, which a dispatch reads again after its first push - see Mercury_Native.md §13.3.
         byte PendingInterrupts { get; }
+
+        // The CPU entering or leaving HALT, during which an hblank HDMA moves nothing - see Mercury_Native.md §14.2.
+        void SetHalted(bool halted);
     }
 }

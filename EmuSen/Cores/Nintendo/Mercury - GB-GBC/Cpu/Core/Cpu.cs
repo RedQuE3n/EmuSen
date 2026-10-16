@@ -114,6 +114,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
             {
                 if (!pending) return Advance(4);
                 Halted = false;
+                _bus.SetHalted(false);
             }
 
             if (Ime && pending) return Advance(ServiceInterrupt(out servicedBit));

@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
@@ -26,7 +25,6 @@ namespace EmuSen.WiseMan.Cores
             yield return new object[] { "MarsRT" };
             yield return new object[] { "Moon" };
             yield return new object[] { "MoonRT" };
-            yield return new object[] { "Mercury" };
             yield return new object[] { "MercuryRT" };
             yield return new object[] { "Venus" };
         }
@@ -40,7 +38,6 @@ namespace EmuSen.WiseMan.Cores
                 "MarsRT" => new MarsRtCore(),
                 "Moon" => new MoonCore(),
                 "MoonRT" => new MoonRtCore(),
-                "Mercury" => new MercuryCore(),
                 "MercuryRT" => new MercuryRtCore(),
                 _ => new VenusCore(headless: true),
             };

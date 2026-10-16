@@ -5,7 +5,6 @@ using EmuSen.Cores;
 using EmuSen.Cores.Native;
 using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
@@ -169,14 +168,11 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void The_game_boys_one_port_is_all_either_engine_reads()
+        public void The_game_boys_one_port_is_all_its_engine_reads()
         {
-            Assert.Equal(1, ((ICore)new MercuryCore()).ControllerPorts);
-            if (MercuryRtCore.Available)
-            {
-                using var rt = new MercuryRtCore();
-                Assert.Equal(1, ((ICore)rt).ControllerPorts);
-            }
+            Assert.True(MercuryRtCore.Available, MercuryNative.Report);
+            using var rt = new MercuryRtCore();
+            Assert.Equal(1, ((ICore)rt).ControllerPorts);
         }
     }
 }

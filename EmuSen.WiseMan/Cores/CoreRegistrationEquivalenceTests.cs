@@ -276,7 +276,7 @@ namespace EmuSen.WiseMan.Cores
 
         private static IEnumerable<string> EngineNames() =>
             Consoles.SelectMany(c => CoreCatalog.EngineFor(c)?.Choices ?? Array.Empty<string>()).Concat(new[] { CoreCatalog.VenusEngine, CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine,
-                CoreCatalog.MercuryEngine, CoreCatalog.MercuryRtEngine, CoreCatalog.MarsEngine, CoreCatalog.MarsRtEngine, "VenusRT (Rust)" }).Distinct().Order(StringComparer.Ordinal);
+                "Mercury (C#)", CoreCatalog.MercuryRtEngine, CoreCatalog.MarsEngine, CoreCatalog.MarsRtEngine, "VenusRT (Rust)" }).Distinct().Order(StringComparer.Ordinal);
 
         // Synthetic images per console: what each is called, its extension and bytes.
         private static IEnumerable<(string Label, byte[] Image)> SampleImages(string console) => RomsFor(console).Select(r => (r.Label, r.Image));
@@ -299,7 +299,8 @@ namespace EmuSen.WiseMan.Cores
         {
             foreach (string console in Consoles.Where(c => RomsFor(c).Any()))
             {
-                string?[] engines = new string?[] { null }.Concat(CoreCatalog.EngineFor(console)?.Choices ?? Array.Empty<string>()).Append("Nope").Append(CoreCatalog.VenusEngine).Distinct().ToArray();
+                string?[] engines = new string?[] { null }.Concat(CoreCatalog.EngineFor(console)?.Choices ?? Array.Empty<string>()).Append("Nope").Append(CoreCatalog.VenusEngine)
+                    .Concat(console == "GB" ? new[] { "Mercury (C#)" } : Array.Empty<string>()).Distinct().ToArray();
                 foreach (var (label, ext, image) in RomsFor(console))
                 {
                     if (!withBattery && label != "plain") continue;
@@ -312,11 +313,16 @@ namespace EmuSen.WiseMan.Cores
                         File.WriteAllBytes(rom, image);
                         if (withBattery) PlacePreviousSaves(rom);
                         Add(k + ".supported", CoreFactory.IsSupported(rom));
-                        ICore probe = CoreFactory.ForFirmwareProbe(rom, engine);
-                        Add(k + ".probe", probe.GetType().Name);
-                        foreach (FirmwareRequest f in probe.GetFirmwareRequirements(rom))
-                            Add(k + ".firmware", $"{f.CoreName} | {f.ChipName} | {f.FileName} | {f.Size} | {f.Purpose} | {List(f.AlternateNames)} | {List(f.Parts.Select(p => List(p)))}");
-                        (probe as IDisposable)?.Dispose();
+                        ICore? probe = null;
+                        try { probe = CoreFactory.ForFirmwareProbe(rom, engine); }
+                        catch (NotSupportedException e) { Add(k + ".probe", $"{e.GetType().Name}: {e.Message}"); }
+                        if (probe is not null)
+                        {
+                            Add(k + ".probe", probe.GetType().Name);
+                            foreach (FirmwareRequest f in probe.GetFirmwareRequirements(rom))
+                                Add(k + ".firmware", $"{f.CoreName} | {f.ChipName} | {f.FileName} | {f.Size} | {f.Purpose} | {List(f.AlternateNames)} | {List(f.Parts.Select(p => List(p)))}");
+                            (probe as IDisposable)?.Dispose();
+                        }
                         CoreBundle bundle;
                         try { bundle = CoreFactory.Load(rom, engine: engine); }
                         catch (Exception e) { Add(k + ".load", $"{e.GetType().Name}: {e.Message}"); continue; }

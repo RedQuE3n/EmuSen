@@ -10,7 +10,7 @@ namespace EmuSen.WiseMan.Fixtures
     public sealed class GoldenTargets(string directory)
     {
         // Every core the corpus names, on the images the tests build.
-        public static readonly IReadOnlyList<string> Cores = new[] { "venus", "venus-sa1", "venus-gsu", "venusrt", "moon", "moonrt", "mercury", "mercuryrt", "mars", "marsrt", "nephrite" };
+        public static readonly IReadOnlyList<string> Cores = new[] { "venus", "venus-sa1", "venus-gsu", "venusrt", "moon", "moonrt", "mercuryrt", "mars", "marsrt", "nephrite" };
 
         private readonly Dictionary<string, string> _images = new();
 
@@ -47,7 +47,7 @@ namespace EmuSen.WiseMan.Fixtures
                 "venus-sa1" => (".sfc", SyntheticRom.BuildSa1()),
                 "venus-gsu" => (".sfc", SyntheticRom.BuildSuperFx()),
                 "moon" or "moonrt" => (".nes", SyntheticNesRom.Build()),
-                "mercury" or "mercuryrt" => (".gb", SyntheticGbRom.Build()),
+                "mercuryrt" => (".gb", SyntheticGbRom.Build()),
                 "mars" or "marsrt" => (".z64", SyntheticN64Rom.Build(patches: (0, new byte[] { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 }))),
                 "nephrite" => (".md", SyntheticMdRom.Cartridge()),
                 _ => throw new ArgumentException($"no golden target '{engine}'"),

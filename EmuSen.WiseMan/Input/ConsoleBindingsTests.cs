@@ -192,7 +192,7 @@ namespace EmuSen.WiseMan.Input
         {
             Assert.Equal(new EmuSen.Cores.Nintendo.Moon.MoonCore().SupportedButtons, CoreCatalog.ButtonsFor("NES"));
             Assert.Equal(new EmuSen.Cores.Nintendo.Venus.VenusCore().SupportedButtons, CoreCatalog.ButtonsFor("SNES"));
-            Assert.Equal(new EmuSen.Cores.Nintendo.Mercury.MercuryCore().SupportedButtons, CoreCatalog.ButtonsFor("GB"));
+            using (var gameBoy = new EmuSen.Cores.Nintendo.MercuryRT.MercuryRtCore()) Assert.Equal(gameBoy.SupportedButtons.Order(), CoreCatalog.ButtonsFor("GB").Order());
             Assert.Equal(new EmuSen.Cores.Nintendo.Mars.MarsCore().SupportedButtons, CoreCatalog.ButtonsFor("N64"));
         }
 

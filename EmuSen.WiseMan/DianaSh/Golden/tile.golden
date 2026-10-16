@@ -142,8 +142,8 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
+case on mercuryrt
+target mercuryrt
 covers 1
 $ tile VRAM 0 2
 out 173

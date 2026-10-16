@@ -2,7 +2,7 @@ using EmuSen.Cores.Native;
 
 namespace EmuSen.Cores.Nintendo.MercuryRT
 {
-    // MercuryRT's Rust library, loaded once through each interface: the v1 one its engine runs on and the pre-stable one its machine tests use; absent, refused or turned off, the Game Boy runs on the C# Mercury - see Mercury_Native.md §8.7, EmuSen_CoreAPI.md §26.
+    // MercuryRT's Rust library, loaded once through each interface: the v1 one its engine runs on and the pre-stable one its machine tests use; absent, refused or turned off, the build has no Game Boy core - see Mercury_Native.md §8.7, §15.4, EmuSen_CoreAPI.md §26.
     public static class MercuryNative
     {
         // MercuryRT's half of the interface version: 5, the first on the common interface; 1 to 4 were its own mercury_interface_version.

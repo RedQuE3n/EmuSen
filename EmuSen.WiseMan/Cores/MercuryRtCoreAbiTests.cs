@@ -54,12 +54,12 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void The_shim_stays_mercuryrts_loader_and_mercuryrt_is_the_default()
+        public void The_shim_stays_mercuryrts_loader_and_the_game_boy_has_no_engine_row()
         {
             _ = Discovered;
-            var row = CoreCatalog.EngineFor("GB")!;
-            Assert.Equal(new[] { CoreCatalog.MercuryRtEngine, CoreCatalog.MercuryEngine }, row.Choices);
-            Assert.Equal(CoreCatalog.MercuryRtEngine, row.Default);
+            Assert.Null(CoreCatalog.EngineFor("GB"));
+            Assert.True(CoreCatalog.IsRegisteredEngine(CoreCatalog.MercuryRtEngine));
+            Assert.IsType<MercuryRtCore>(CoreFactory.Create("game.gb"));
             ICore core = CoreFactory.Create("game.gb", engine: CoreCatalog.MercuryRtEngine);
             Assert.IsType<MercuryRtCore>(core);
             Assert.Null(CoreFactory.EngineNotice("game.gb", CoreCatalog.MercuryRtEngine, core));

@@ -180,10 +180,9 @@ built.engine-row[NES][Engine].hint = Which implementation runs the console. Moon
 built.engine-row[NES].discovered = [MoonRT (Rust)]
 built.engine-row[NES].chosen-default = Moon (C#)
 built.engine-row[NES].chosen-stored = Stored
-built.engine-row[GB][Engine] = Engine | Choice | default Mercury (C#) | 0..0 | [Mercury (C#), MercuryRT (Rust)]
-built.engine-row[GB][Engine].hint = Which implementation runs the console. Mercury (C#) is the reference. MercuryRT (Rust) is exact against it in state, picture and sound and reads the same save states and battery saves; its debugger view is refreshed from its state, and it stops at breakpoints, steps and records coverage, watches and the call stack as Mercury does. Takes effect when a game is next loaded.
+built.engine-row[GB] = <null>
 built.engine-row[GB].discovered = [MercuryRT (Rust)]
-built.engine-row[GB].chosen-default = Mercury (C#)
+built.engine-row[GB].chosen-default = <null>
 built.engine-row[GB].chosen-stored = Stored
 built.engine-row[N64][Engine] = Engine | Choice | default MarsRT (Rust) | 0..0 | [MarsRT (Rust), Mars (C#)]
 built.engine-row[N64][Engine].hint = Which implementation runs the console. MarsRT (Rust) is the default: exact against Mars (C#) in state, picture and sound, reading the same save states and battery saves, and honouring every setting below, the resolution multiple, antialiasing and the graphics card included. Mars (C#) is the reference it is graded against, and runs instead where MarsRT's library is missing. Takes effect when a game is next loaded.
@@ -196,7 +195,7 @@ built.engine-row[Atari 2600].chosen-default = <null>
 built.engine-row[Atari 2600].chosen-stored = Stored
 built.registered[Mars (C#)] = True
 built.registered[MarsRT (Rust)] = True
-built.registered[Mercury (C#)] = True
+built.registered[Mercury (C#)] = False
 built.registered[MercuryRT (Rust)] = True
 built.registered[Moon (C#)] = True
 built.registered[MoonRT (Rust)] = True
@@ -509,10 +508,10 @@ built.configured[NES MoonRT (Rust)] = MoonRT (Rust)
 built.configured[NES Nope] = Nope
 built.configured[NES Venus (C#)] = Venus (C#)
 built.factory[GB plain <null>].supported = True
-built.factory[GB plain <null>].probe = MercuryCore
-built.factory[GB plain <null>].core = MercuryCore
+built.factory[GB plain <null>].probe = MercuryRtCore
+built.factory[GB plain <null>].core = MercuryRtCore
 built.factory[GB plain <null>].notice = <null>
-built.factory[GB plain <null>].debug-target = MercuryDebugTarget
+built.factory[GB plain <null>].debug-target = MercuryRtDebugTarget
 built.factory[GB plain <null>].trace-switch = <null>
 built.factory[GB plain <null>].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB plain <null>].codec-explicit = Game Genie | RomPatch | <null>
@@ -524,43 +523,11 @@ built.factory[GB plain <null>].features = EngineFeatures { RewindCapture = True,
 built.factory[GB plain <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 built.factory[GB plain <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB plain <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
-built.factory[GB plain Mercury (C#)].supported = True
-built.factory[GB plain Mercury (C#)].probe = MercuryCore
-built.factory[GB plain Mercury (C#)].core = MercuryCore
-built.factory[GB plain Mercury (C#)].notice = <null>
-built.factory[GB plain Mercury (C#)].debug-target = MercuryDebugTarget
-built.factory[GB plain Mercury (C#)].trace-switch = <null>
-built.factory[GB plain Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
-built.factory[GB plain Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB plain Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-built.factory[GB plain Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-built.factory[GB plain Mercury (C#)].axes = []
-built.factory[GB plain Mercury (C#)].state-version = 11
-built.factory[GB plain Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-built.factory[GB plain Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-built.factory[GB plain Mercury (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[GB plain Mercury (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
-built.factory[GB plain MercuryRT (Rust)].supported = True
-built.factory[GB plain MercuryRT (Rust)].probe = MercuryRtCore
-built.factory[GB plain MercuryRT (Rust)].core = MercuryRtCore
-built.factory[GB plain MercuryRT (Rust)].notice = <null>
-built.factory[GB plain MercuryRT (Rust)].debug-target = MercuryRtDebugTarget
-built.factory[GB plain MercuryRT (Rust)].trace-switch = <null>
-built.factory[GB plain MercuryRT (Rust)].codec-auto = GameShark | RamPoke | CPUBUS
-built.factory[GB plain MercuryRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB plain MercuryRT (Rust)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-built.factory[GB plain MercuryRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-built.factory[GB plain MercuryRT (Rust)].axes = []
-built.factory[GB plain MercuryRT (Rust)].state-version = 11
-built.factory[GB plain MercuryRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-built.factory[GB plain MercuryRT (Rust)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-built.factory[GB plain MercuryRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[GB plain MercuryRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB plain Nope].supported = True
-built.factory[GB plain Nope].probe = MercuryCore
-built.factory[GB plain Nope].core = MercuryCore
-built.factory[GB plain Nope].notice = No engine is named "Nope"; Mercury (C#) is running.
-built.factory[GB plain Nope].debug-target = MercuryDebugTarget
+built.factory[GB plain Nope].probe = MercuryRtCore
+built.factory[GB plain Nope].core = MercuryRtCore
+built.factory[GB plain Nope].notice = <null>
+built.factory[GB plain Nope].debug-target = MercuryRtDebugTarget
 built.factory[GB plain Nope].trace-switch = <null>
 built.factory[GB plain Nope].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB plain Nope].codec-explicit = Game Genie | RomPatch | <null>
@@ -573,10 +540,10 @@ built.factory[GB plain Nope].setting[Model] = Model | Choice | default Auto | [A
 built.factory[GB plain Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB plain Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB plain Venus (C#)].supported = True
-built.factory[GB plain Venus (C#)].probe = MercuryCore
-built.factory[GB plain Venus (C#)].core = MercuryCore
-built.factory[GB plain Venus (C#)].notice = No engine is named "Venus (C#)"; Mercury (C#) is running.
-built.factory[GB plain Venus (C#)].debug-target = MercuryDebugTarget
+built.factory[GB plain Venus (C#)].probe = MercuryRtCore
+built.factory[GB plain Venus (C#)].core = MercuryRtCore
+built.factory[GB plain Venus (C#)].notice = <null>
+built.factory[GB plain Venus (C#)].debug-target = MercuryRtDebugTarget
 built.factory[GB plain Venus (C#)].trace-switch = <null>
 built.factory[GB plain Venus (C#)].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
@@ -588,11 +555,27 @@ built.factory[GB plain Venus (C#)].features = EngineFeatures { RewindCapture = T
 built.factory[GB plain Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 built.factory[GB plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
+built.factory[GB plain Mercury (C#)].supported = True
+built.factory[GB plain Mercury (C#)].probe = MercuryRtCore
+built.factory[GB plain Mercury (C#)].core = MercuryRtCore
+built.factory[GB plain Mercury (C#)].notice = <null>
+built.factory[GB plain Mercury (C#)].debug-target = MercuryRtDebugTarget
+built.factory[GB plain Mercury (C#)].trace-switch = <null>
+built.factory[GB plain Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
+built.factory[GB plain Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
+built.factory[GB plain Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+built.factory[GB plain Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
+built.factory[GB plain Mercury (C#)].axes = []
+built.factory[GB plain Mercury (C#)].state-version = 11
+built.factory[GB plain Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[GB plain Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
+built.factory[GB plain Mercury (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+built.factory[GB plain Mercury (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB battery <null>].supported = True
-built.factory[GB battery <null>].probe = MercuryCore
-built.factory[GB battery <null>].core = MercuryCore
+built.factory[GB battery <null>].probe = MercuryRtCore
+built.factory[GB battery <null>].core = MercuryRtCore
 built.factory[GB battery <null>].notice = <null>
-built.factory[GB battery <null>].debug-target = MercuryDebugTarget
+built.factory[GB battery <null>].debug-target = MercuryRtDebugTarget
 built.factory[GB battery <null>].trace-switch = <null>
 built.factory[GB battery <null>].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB battery <null>].codec-explicit = Game Genie | RomPatch | <null>
@@ -605,45 +588,11 @@ built.factory[GB battery <null>].setting[Model] = Model | Choice | default Auto 
 built.factory[GB battery <null>].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
 built.factory[GB battery <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB battery <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
-built.factory[GB battery Mercury (C#)].supported = True
-built.factory[GB battery Mercury (C#)].probe = MercuryCore
-built.factory[GB battery Mercury (C#)].core = MercuryCore
-built.factory[GB battery Mercury (C#)].notice = <null>
-built.factory[GB battery Mercury (C#)].debug-target = MercuryDebugTarget
-built.factory[GB battery Mercury (C#)].trace-switch = <null>
-built.factory[GB battery Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
-built.factory[GB battery Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB battery Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-built.factory[GB battery Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-built.factory[GB battery Mercury (C#)].axes = []
-built.factory[GB battery Mercury (C#)].state-version = 11
-built.factory[GB battery Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-built.factory[GB battery Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-built.factory[GB battery Mercury (C#)].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
-built.factory[GB battery Mercury (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[GB battery Mercury (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
-built.factory[GB battery MercuryRT (Rust)].supported = True
-built.factory[GB battery MercuryRT (Rust)].probe = MercuryRtCore
-built.factory[GB battery MercuryRT (Rust)].core = MercuryRtCore
-built.factory[GB battery MercuryRT (Rust)].notice = <null>
-built.factory[GB battery MercuryRT (Rust)].debug-target = MercuryRtDebugTarget
-built.factory[GB battery MercuryRT (Rust)].trace-switch = <null>
-built.factory[GB battery MercuryRT (Rust)].codec-auto = GameShark | RamPoke | CPUBUS
-built.factory[GB battery MercuryRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB battery MercuryRT (Rust)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-built.factory[GB battery MercuryRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-built.factory[GB battery MercuryRT (Rust)].axes = []
-built.factory[GB battery MercuryRT (Rust)].state-version = 11
-built.factory[GB battery MercuryRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-built.factory[GB battery MercuryRT (Rust)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-built.factory[GB battery MercuryRT (Rust)].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
-built.factory[GB battery MercuryRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[GB battery MercuryRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB battery Nope].supported = True
-built.factory[GB battery Nope].probe = MercuryCore
-built.factory[GB battery Nope].core = MercuryCore
-built.factory[GB battery Nope].notice = No engine is named "Nope"; Mercury (C#) is running.
-built.factory[GB battery Nope].debug-target = MercuryDebugTarget
+built.factory[GB battery Nope].probe = MercuryRtCore
+built.factory[GB battery Nope].core = MercuryRtCore
+built.factory[GB battery Nope].notice = <null>
+built.factory[GB battery Nope].debug-target = MercuryRtDebugTarget
 built.factory[GB battery Nope].trace-switch = <null>
 built.factory[GB battery Nope].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB battery Nope].codec-explicit = Game Genie | RomPatch | <null>
@@ -657,10 +606,10 @@ built.factory[GB battery Nope].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc0
 built.factory[GB battery Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB battery Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB battery Venus (C#)].supported = True
-built.factory[GB battery Venus (C#)].probe = MercuryCore
-built.factory[GB battery Venus (C#)].core = MercuryCore
-built.factory[GB battery Venus (C#)].notice = No engine is named "Venus (C#)"; Mercury (C#) is running.
-built.factory[GB battery Venus (C#)].debug-target = MercuryDebugTarget
+built.factory[GB battery Venus (C#)].probe = MercuryRtCore
+built.factory[GB battery Venus (C#)].core = MercuryRtCore
+built.factory[GB battery Venus (C#)].notice = <null>
+built.factory[GB battery Venus (C#)].debug-target = MercuryRtDebugTarget
 built.factory[GB battery Venus (C#)].trace-switch = <null>
 built.factory[GB battery Venus (C#)].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
@@ -673,11 +622,28 @@ built.factory[GB battery Venus (C#)].setting[Model] = Model | Choice | default A
 built.factory[GB battery Venus (C#)].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
 built.factory[GB battery Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB battery Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
+built.factory[GB battery Mercury (C#)].supported = True
+built.factory[GB battery Mercury (C#)].probe = MercuryRtCore
+built.factory[GB battery Mercury (C#)].core = MercuryRtCore
+built.factory[GB battery Mercury (C#)].notice = <null>
+built.factory[GB battery Mercury (C#)].debug-target = MercuryRtDebugTarget
+built.factory[GB battery Mercury (C#)].trace-switch = <null>
+built.factory[GB battery Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
+built.factory[GB battery Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
+built.factory[GB battery Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+built.factory[GB battery Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
+built.factory[GB battery Mercury (C#)].axes = []
+built.factory[GB battery Mercury (C#)].state-version = 11
+built.factory[GB battery Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[GB battery Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
+built.factory[GB battery Mercury (C#)].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
+built.factory[GB battery Mercury (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+built.factory[GB battery Mercury (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB colour-battery <null>].supported = True
-built.factory[GB colour-battery <null>].probe = MercuryCore
-built.factory[GB colour-battery <null>].core = MercuryCore
+built.factory[GB colour-battery <null>].probe = MercuryRtCore
+built.factory[GB colour-battery <null>].core = MercuryRtCore
 built.factory[GB colour-battery <null>].notice = <null>
-built.factory[GB colour-battery <null>].debug-target = MercuryDebugTarget
+built.factory[GB colour-battery <null>].debug-target = MercuryRtDebugTarget
 built.factory[GB colour-battery <null>].trace-switch = <null>
 built.factory[GB colour-battery <null>].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB colour-battery <null>].codec-explicit = Game Genie | RomPatch | <null>
@@ -690,45 +656,11 @@ built.factory[GB colour-battery <null>].setting[Model] = Model | Choice | defaul
 built.factory[GB colour-battery <null>].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
 built.factory[GB colour-battery <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB colour-battery <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
-built.factory[GB colour-battery Mercury (C#)].supported = True
-built.factory[GB colour-battery Mercury (C#)].probe = MercuryCore
-built.factory[GB colour-battery Mercury (C#)].core = MercuryCore
-built.factory[GB colour-battery Mercury (C#)].notice = <null>
-built.factory[GB colour-battery Mercury (C#)].debug-target = MercuryDebugTarget
-built.factory[GB colour-battery Mercury (C#)].trace-switch = <null>
-built.factory[GB colour-battery Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
-built.factory[GB colour-battery Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB colour-battery Mercury (C#)].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-built.factory[GB colour-battery Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-built.factory[GB colour-battery Mercury (C#)].axes = []
-built.factory[GB colour-battery Mercury (C#)].state-version = 11
-built.factory[GB colour-battery Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-built.factory[GB colour-battery Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-built.factory[GB colour-battery Mercury (C#)].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
-built.factory[GB colour-battery Mercury (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[GB colour-battery Mercury (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
-built.factory[GB colour-battery MercuryRT (Rust)].supported = True
-built.factory[GB colour-battery MercuryRT (Rust)].probe = MercuryRtCore
-built.factory[GB colour-battery MercuryRT (Rust)].core = MercuryRtCore
-built.factory[GB colour-battery MercuryRT (Rust)].notice = <null>
-built.factory[GB colour-battery MercuryRT (Rust)].debug-target = MercuryRtDebugTarget
-built.factory[GB colour-battery MercuryRT (Rust)].trace-switch = <null>
-built.factory[GB colour-battery MercuryRT (Rust)].codec-auto = GameShark | RamPoke | CPUBUS
-built.factory[GB colour-battery MercuryRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB colour-battery MercuryRT (Rust)].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-built.factory[GB colour-battery MercuryRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-built.factory[GB colour-battery MercuryRT (Rust)].axes = []
-built.factory[GB colour-battery MercuryRT (Rust)].state-version = 11
-built.factory[GB colour-battery MercuryRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-built.factory[GB colour-battery MercuryRT (Rust)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-built.factory[GB colour-battery MercuryRT (Rust)].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
-built.factory[GB colour-battery MercuryRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[GB colour-battery MercuryRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB colour-battery Nope].supported = True
-built.factory[GB colour-battery Nope].probe = MercuryCore
-built.factory[GB colour-battery Nope].core = MercuryCore
-built.factory[GB colour-battery Nope].notice = No engine is named "Nope"; Mercury (C#) is running.
-built.factory[GB colour-battery Nope].debug-target = MercuryDebugTarget
+built.factory[GB colour-battery Nope].probe = MercuryRtCore
+built.factory[GB colour-battery Nope].core = MercuryRtCore
+built.factory[GB colour-battery Nope].notice = <null>
+built.factory[GB colour-battery Nope].debug-target = MercuryRtDebugTarget
 built.factory[GB colour-battery Nope].trace-switch = <null>
 built.factory[GB colour-battery Nope].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB colour-battery Nope].codec-explicit = Game Genie | RomPatch | <null>
@@ -742,10 +674,10 @@ built.factory[GB colour-battery Nope].file = Home/Saves/GBC/Game.srm 8192 17b645
 built.factory[GB colour-battery Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB colour-battery Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB colour-battery Venus (C#)].supported = True
-built.factory[GB colour-battery Venus (C#)].probe = MercuryCore
-built.factory[GB colour-battery Venus (C#)].core = MercuryCore
-built.factory[GB colour-battery Venus (C#)].notice = No engine is named "Venus (C#)"; Mercury (C#) is running.
-built.factory[GB colour-battery Venus (C#)].debug-target = MercuryDebugTarget
+built.factory[GB colour-battery Venus (C#)].probe = MercuryRtCore
+built.factory[GB colour-battery Venus (C#)].core = MercuryRtCore
+built.factory[GB colour-battery Venus (C#)].notice = <null>
+built.factory[GB colour-battery Venus (C#)].debug-target = MercuryRtDebugTarget
 built.factory[GB colour-battery Venus (C#)].trace-switch = <null>
 built.factory[GB colour-battery Venus (C#)].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB colour-battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
@@ -758,11 +690,27 @@ built.factory[GB colour-battery Venus (C#)].setting[Model] = Model | Choice | de
 built.factory[GB colour-battery Venus (C#)].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
 built.factory[GB colour-battery Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB colour-battery Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
-built.configured[GB nothing stored] = Mercury (C#)
-built.configured[GB Mercury (C#)] = Mercury (C#)
-built.configured[GB MercuryRT (Rust)] = MercuryRT (Rust)
+built.factory[GB colour-battery Mercury (C#)].supported = True
+built.factory[GB colour-battery Mercury (C#)].probe = MercuryRtCore
+built.factory[GB colour-battery Mercury (C#)].core = MercuryRtCore
+built.factory[GB colour-battery Mercury (C#)].notice = <null>
+built.factory[GB colour-battery Mercury (C#)].debug-target = MercuryRtDebugTarget
+built.factory[GB colour-battery Mercury (C#)].trace-switch = <null>
+built.factory[GB colour-battery Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
+built.factory[GB colour-battery Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
+built.factory[GB colour-battery Mercury (C#)].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+built.factory[GB colour-battery Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
+built.factory[GB colour-battery Mercury (C#)].axes = []
+built.factory[GB colour-battery Mercury (C#)].state-version = 11
+built.factory[GB colour-battery Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[GB colour-battery Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
+built.factory[GB colour-battery Mercury (C#)].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
+built.factory[GB colour-battery Mercury (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+built.factory[GB colour-battery Mercury (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
+built.configured[GB nothing stored] = <null>
 built.configured[GB Nope] = Nope
 built.configured[GB Venus (C#)] = Venus (C#)
+built.configured[GB Mercury (C#)] = Mercury (C#)
 built.factory[N64 plain <null>].supported = True
 built.factory[N64 plain <null>].probe = MarsCore
 built.factory[N64 plain <null>].core = MarsCore
@@ -1138,12 +1086,6 @@ settings[SNES VenusRT (Rust)].row[sa1_catch_up].note-at-defaults = <null>
 settings[SNES Venus (C#)].core = VenusCore
 settings[NES Moon (C#)].core = MoonCore
 settings[NES MoonRT (Rust)].core = MoonRtCore
-settings[GB Mercury (C#)].core = MercuryCore
-settings[GB Mercury (C#)].row[Model] = Model | Choice | default Auto | 0..0 | [Auto, Game Boy, Game Boy Color]
-settings[GB Mercury (C#)].row[Model].hint = Which console a game runs on. Auto follows the cartridge: a Game Boy Color game on a Game Boy Color, the rest on a Game Boy. Game Boy runs every game on a Game Boy: a colour game in its own monochrome mode, and a game made only for the Color shows whatever that game shows a Game Boy. Game Boy Color runs every game on a Game Boy Color: a Game Boy game in the colours the Color's start-up picks for it from its title. Takes effect when a game is next loaded; a save state resumes on the console it was made on.
-settings[GB MercuryRT (Rust)].core = MercuryRtCore
-settings[GB MercuryRT (Rust)].row[Model] = Model | Choice | default Auto | 0..0 | [Auto, Game Boy, Game Boy Color]
-settings[GB MercuryRT (Rust)].row[Model].hint = Which console a game runs on. Auto follows the cartridge: a Game Boy Color game on a Game Boy Color, the rest on a Game Boy. Game Boy runs every game on a Game Boy: a colour game in its own monochrome mode, and a game made only for the Color shows whatever that game shows a Game Boy. Game Boy Color runs every game on a Game Boy Color: a Game Boy game in the colours the Color's start-up picks for it from its title. Takes effect when a game is next loaded; a save state resumes on the console it was made on.
 settings[N64 MarsRT (Rust)].core = MarsRtCore
 settings[N64 MarsRT (Rust)].row[ThreadedRdp] = Draw on a separate thread | Switch | default true | 0..0 | []
 settings[N64 MarsRT (Rust)].row[ThreadedRdp].hint = The display processor runs its lists on a thread of its own, behind marks on the memory it reaches. Exact: frame for frame the machine on one thread.
@@ -1295,10 +1237,9 @@ nothing-discovered.engine-row[NES][Engine].hint = Which implementation runs the 
 nothing-discovered.engine-row[NES].discovered = []
 nothing-discovered.engine-row[NES].chosen-default = Moon (C#)
 nothing-discovered.engine-row[NES].chosen-stored = Stored
-nothing-discovered.engine-row[GB][Engine] = Engine | Choice | default Mercury (C#) | 0..0 | [Mercury (C#), MercuryRT (Rust)]
-nothing-discovered.engine-row[GB][Engine].hint = Which implementation runs the console. Mercury (C#) is the reference. MercuryRT (Rust) is exact against it in state, picture and sound and reads the same save states and battery saves; its debugger view is refreshed from its state, and it stops at breakpoints, steps and records coverage, watches and the call stack as Mercury does. Takes effect when a game is next loaded.
+nothing-discovered.engine-row[GB] = <null>
 nothing-discovered.engine-row[GB].discovered = []
-nothing-discovered.engine-row[GB].chosen-default = Mercury (C#)
+nothing-discovered.engine-row[GB].chosen-default = <null>
 nothing-discovered.engine-row[GB].chosen-stored = Stored
 nothing-discovered.engine-row[N64][Engine] = Engine | Choice | default MarsRT (Rust) | 0..0 | [MarsRT (Rust), Mars (C#)]
 nothing-discovered.engine-row[N64][Engine].hint = Which implementation runs the console. MarsRT (Rust) is the default: exact against Mars (C#) in state, picture and sound, reading the same save states and battery saves, and honouring every setting below, the resolution multiple, antialiasing and the graphics card included. Mars (C#) is the reference it is graded against, and runs instead where MarsRT's library is missing. Takes effect when a game is next loaded.
@@ -1311,7 +1252,7 @@ nothing-discovered.engine-row[Atari 2600].chosen-default = <null>
 nothing-discovered.engine-row[Atari 2600].chosen-stored = Stored
 nothing-discovered.registered[Mars (C#)] = True
 nothing-discovered.registered[MarsRT (Rust)] = True
-nothing-discovered.registered[Mercury (C#)] = True
+nothing-discovered.registered[Mercury (C#)] = False
 nothing-discovered.registered[MercuryRT (Rust)] = True
 nothing-discovered.registered[Moon (C#)] = True
 nothing-discovered.registered[MoonRT (Rust)] = True
@@ -1426,10 +1367,10 @@ nothing-discovered.factory[NES plain Venus (C#)].axes = []
 nothing-discovered.factory[NES plain Venus (C#)].state-version = 6
 nothing-discovered.factory[NES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 nothing-discovered.factory[GB plain <null>].supported = True
-nothing-discovered.factory[GB plain <null>].probe = MercuryCore
-nothing-discovered.factory[GB plain <null>].core = MercuryCore
+nothing-discovered.factory[GB plain <null>].probe = MercuryRtCore
+nothing-discovered.factory[GB plain <null>].core = MercuryRtCore
 nothing-discovered.factory[GB plain <null>].notice = <null>
-nothing-discovered.factory[GB plain <null>].debug-target = MercuryDebugTarget
+nothing-discovered.factory[GB plain <null>].debug-target = MercuryRtDebugTarget
 nothing-discovered.factory[GB plain <null>].trace-switch = <null>
 nothing-discovered.factory[GB plain <null>].codec-auto = GameShark | RamPoke | CPUBUS
 nothing-discovered.factory[GB plain <null>].codec-explicit = Game Genie | RomPatch | <null>
@@ -1439,39 +1380,11 @@ nothing-discovered.factory[GB plain <null>].axes = []
 nothing-discovered.factory[GB plain <null>].state-version = 11
 nothing-discovered.factory[GB plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 nothing-discovered.factory[GB plain <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-nothing-discovered.factory[GB plain Mercury (C#)].supported = True
-nothing-discovered.factory[GB plain Mercury (C#)].probe = MercuryCore
-nothing-discovered.factory[GB plain Mercury (C#)].core = MercuryCore
-nothing-discovered.factory[GB plain Mercury (C#)].notice = <null>
-nothing-discovered.factory[GB plain Mercury (C#)].debug-target = MercuryDebugTarget
-nothing-discovered.factory[GB plain Mercury (C#)].trace-switch = <null>
-nothing-discovered.factory[GB plain Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
-nothing-discovered.factory[GB plain Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
-nothing-discovered.factory[GB plain Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-nothing-discovered.factory[GB plain Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-nothing-discovered.factory[GB plain Mercury (C#)].axes = []
-nothing-discovered.factory[GB plain Mercury (C#)].state-version = 11
-nothing-discovered.factory[GB plain Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-nothing-discovered.factory[GB plain Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-nothing-discovered.factory[GB plain MercuryRT (Rust)].supported = True
-nothing-discovered.factory[GB plain MercuryRT (Rust)].probe = MercuryRtCore
-nothing-discovered.factory[GB plain MercuryRT (Rust)].core = MercuryRtCore
-nothing-discovered.factory[GB plain MercuryRT (Rust)].notice = <null>
-nothing-discovered.factory[GB plain MercuryRT (Rust)].debug-target = MercuryRtDebugTarget
-nothing-discovered.factory[GB plain MercuryRT (Rust)].trace-switch = <null>
-nothing-discovered.factory[GB plain MercuryRT (Rust)].codec-auto = GameShark | RamPoke | CPUBUS
-nothing-discovered.factory[GB plain MercuryRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-nothing-discovered.factory[GB plain MercuryRT (Rust)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-nothing-discovered.factory[GB plain MercuryRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-nothing-discovered.factory[GB plain MercuryRT (Rust)].axes = []
-nothing-discovered.factory[GB plain MercuryRT (Rust)].state-version = 11
-nothing-discovered.factory[GB plain MercuryRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-nothing-discovered.factory[GB plain MercuryRT (Rust)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 nothing-discovered.factory[GB plain Nope].supported = True
-nothing-discovered.factory[GB plain Nope].probe = MercuryCore
-nothing-discovered.factory[GB plain Nope].core = MercuryCore
-nothing-discovered.factory[GB plain Nope].notice = No engine is named "Nope"; Mercury (C#) is running.
-nothing-discovered.factory[GB plain Nope].debug-target = MercuryDebugTarget
+nothing-discovered.factory[GB plain Nope].probe = MercuryRtCore
+nothing-discovered.factory[GB plain Nope].core = MercuryRtCore
+nothing-discovered.factory[GB plain Nope].notice = <null>
+nothing-discovered.factory[GB plain Nope].debug-target = MercuryRtDebugTarget
 nothing-discovered.factory[GB plain Nope].trace-switch = <null>
 nothing-discovered.factory[GB plain Nope].codec-auto = GameShark | RamPoke | CPUBUS
 nothing-discovered.factory[GB plain Nope].codec-explicit = Game Genie | RomPatch | <null>
@@ -1482,10 +1395,10 @@ nothing-discovered.factory[GB plain Nope].state-version = 11
 nothing-discovered.factory[GB plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 nothing-discovered.factory[GB plain Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 nothing-discovered.factory[GB plain Venus (C#)].supported = True
-nothing-discovered.factory[GB plain Venus (C#)].probe = MercuryCore
-nothing-discovered.factory[GB plain Venus (C#)].core = MercuryCore
-nothing-discovered.factory[GB plain Venus (C#)].notice = No engine is named "Venus (C#)"; Mercury (C#) is running.
-nothing-discovered.factory[GB plain Venus (C#)].debug-target = MercuryDebugTarget
+nothing-discovered.factory[GB plain Venus (C#)].probe = MercuryRtCore
+nothing-discovered.factory[GB plain Venus (C#)].core = MercuryRtCore
+nothing-discovered.factory[GB plain Venus (C#)].notice = <null>
+nothing-discovered.factory[GB plain Venus (C#)].debug-target = MercuryRtDebugTarget
 nothing-discovered.factory[GB plain Venus (C#)].trace-switch = <null>
 nothing-discovered.factory[GB plain Venus (C#)].codec-auto = GameShark | RamPoke | CPUBUS
 nothing-discovered.factory[GB plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
@@ -1495,6 +1408,20 @@ nothing-discovered.factory[GB plain Venus (C#)].axes = []
 nothing-discovered.factory[GB plain Venus (C#)].state-version = 11
 nothing-discovered.factory[GB plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 nothing-discovered.factory[GB plain Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
+nothing-discovered.factory[GB plain Mercury (C#)].supported = True
+nothing-discovered.factory[GB plain Mercury (C#)].probe = MercuryRtCore
+nothing-discovered.factory[GB plain Mercury (C#)].core = MercuryRtCore
+nothing-discovered.factory[GB plain Mercury (C#)].notice = <null>
+nothing-discovered.factory[GB plain Mercury (C#)].debug-target = MercuryRtDebugTarget
+nothing-discovered.factory[GB plain Mercury (C#)].trace-switch = <null>
+nothing-discovered.factory[GB plain Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
+nothing-discovered.factory[GB plain Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
+nothing-discovered.factory[GB plain Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+nothing-discovered.factory[GB plain Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
+nothing-discovered.factory[GB plain Mercury (C#)].axes = []
+nothing-discovered.factory[GB plain Mercury (C#)].state-version = 11
+nothing-discovered.factory[GB plain Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+nothing-discovered.factory[GB plain Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 nothing-discovered.factory[N64 plain <null>].supported = True
 nothing-discovered.factory[N64 plain <null>].probe = MarsCore
 nothing-discovered.factory[N64 plain <null>].core = MarsCore
@@ -1611,10 +1538,9 @@ refused-discovered.engine-row[NES][Engine].hint = Which implementation runs the 
 refused-discovered.engine-row[NES].discovered = [MoonRT (Rust)]
 refused-discovered.engine-row[NES].chosen-default = Moon (C#)
 refused-discovered.engine-row[NES].chosen-stored = Stored
-refused-discovered.engine-row[GB][Engine] = Engine | Choice | default Mercury (C#) | 0..0 | [Mercury (C#), MercuryRT (Rust)]
-refused-discovered.engine-row[GB][Engine].hint = Which implementation runs the console. Mercury (C#) is the reference. MercuryRT (Rust) is exact against it in state, picture and sound and reads the same save states and battery saves; its debugger view is refreshed from its state, and it stops at breakpoints, steps and records coverage, watches and the call stack as Mercury does. Takes effect when a game is next loaded.
+refused-discovered.engine-row[GB] = <null>
 refused-discovered.engine-row[GB].discovered = [MercuryRT (Rust)]
-refused-discovered.engine-row[GB].chosen-default = Mercury (C#)
+refused-discovered.engine-row[GB].chosen-default = <null>
 refused-discovered.engine-row[GB].chosen-stored = Stored
 refused-discovered.engine-row[N64][Engine] = Engine | Choice | default MarsRT (Rust) | 0..0 | [MarsRT (Rust), Mars (C#)]
 refused-discovered.engine-row[N64][Engine].hint = Which implementation runs the console. MarsRT (Rust) is the default: exact against Mars (C#) in state, picture and sound, reading the same save states and battery saves, and honouring every setting below, the resolution multiple, antialiasing and the graphics card included. Mars (C#) is the reference it is graded against, and runs instead where MarsRT's library is missing. Takes effect when a game is next loaded.
@@ -1627,7 +1553,7 @@ refused-discovered.engine-row[Atari 2600].chosen-default = <null>
 refused-discovered.engine-row[Atari 2600].chosen-stored = Stored
 refused-discovered.registered[Mars (C#)] = True
 refused-discovered.registered[MarsRT (Rust)] = True
-refused-discovered.registered[Mercury (C#)] = True
+refused-discovered.registered[Mercury (C#)] = False
 refused-discovered.registered[MercuryRT (Rust)] = True
 refused-discovered.registered[Moon (C#)] = True
 refused-discovered.registered[MoonRT (Rust)] = True
@@ -1761,10 +1687,10 @@ refused-discovered.factory[NES plain Venus (C#)].axes = []
 refused-discovered.factory[NES plain Venus (C#)].state-version = 6
 refused-discovered.factory[NES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 refused-discovered.factory[GB plain <null>].supported = True
-refused-discovered.factory[GB plain <null>].probe = MercuryCore
-refused-discovered.factory[GB plain <null>].core = MercuryCore
+refused-discovered.factory[GB plain <null>].probe = MercuryRtCore
+refused-discovered.factory[GB plain <null>].core = MercuryRtCore
 refused-discovered.factory[GB plain <null>].notice = <null>
-refused-discovered.factory[GB plain <null>].debug-target = MercuryDebugTarget
+refused-discovered.factory[GB plain <null>].debug-target = MercuryRtDebugTarget
 refused-discovered.factory[GB plain <null>].trace-switch = <null>
 refused-discovered.factory[GB plain <null>].codec-auto = GameShark | RamPoke | CPUBUS
 refused-discovered.factory[GB plain <null>].codec-explicit = Game Genie | RomPatch | <null>
@@ -1774,39 +1700,11 @@ refused-discovered.factory[GB plain <null>].axes = []
 refused-discovered.factory[GB plain <null>].state-version = 11
 refused-discovered.factory[GB plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 refused-discovered.factory[GB plain <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-refused-discovered.factory[GB plain Mercury (C#)].supported = True
-refused-discovered.factory[GB plain Mercury (C#)].probe = MercuryCore
-refused-discovered.factory[GB plain Mercury (C#)].core = MercuryCore
-refused-discovered.factory[GB plain Mercury (C#)].notice = <null>
-refused-discovered.factory[GB plain Mercury (C#)].debug-target = MercuryDebugTarget
-refused-discovered.factory[GB plain Mercury (C#)].trace-switch = <null>
-refused-discovered.factory[GB plain Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
-refused-discovered.factory[GB plain Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
-refused-discovered.factory[GB plain Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-refused-discovered.factory[GB plain Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-refused-discovered.factory[GB plain Mercury (C#)].axes = []
-refused-discovered.factory[GB plain Mercury (C#)].state-version = 11
-refused-discovered.factory[GB plain Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-refused-discovered.factory[GB plain Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-refused-discovered.factory[GB plain MercuryRT (Rust)].supported = True
-refused-discovered.factory[GB plain MercuryRT (Rust)].probe = MercuryRtCore
-refused-discovered.factory[GB plain MercuryRT (Rust)].core = MercuryRtCore
-refused-discovered.factory[GB plain MercuryRT (Rust)].notice = <null>
-refused-discovered.factory[GB plain MercuryRT (Rust)].debug-target = MercuryRtDebugTarget
-refused-discovered.factory[GB plain MercuryRT (Rust)].trace-switch = <null>
-refused-discovered.factory[GB plain MercuryRT (Rust)].codec-auto = GameShark | RamPoke | CPUBUS
-refused-discovered.factory[GB plain MercuryRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-refused-discovered.factory[GB plain MercuryRT (Rust)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-refused-discovered.factory[GB plain MercuryRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-refused-discovered.factory[GB plain MercuryRT (Rust)].axes = []
-refused-discovered.factory[GB plain MercuryRT (Rust)].state-version = 11
-refused-discovered.factory[GB plain MercuryRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-refused-discovered.factory[GB plain MercuryRT (Rust)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 refused-discovered.factory[GB plain Nope].supported = True
-refused-discovered.factory[GB plain Nope].probe = MercuryCore
-refused-discovered.factory[GB plain Nope].core = MercuryCore
-refused-discovered.factory[GB plain Nope].notice = No engine is named "Nope"; Mercury (C#) is running.
-refused-discovered.factory[GB plain Nope].debug-target = MercuryDebugTarget
+refused-discovered.factory[GB plain Nope].probe = MercuryRtCore
+refused-discovered.factory[GB plain Nope].core = MercuryRtCore
+refused-discovered.factory[GB plain Nope].notice = <null>
+refused-discovered.factory[GB plain Nope].debug-target = MercuryRtDebugTarget
 refused-discovered.factory[GB plain Nope].trace-switch = <null>
 refused-discovered.factory[GB plain Nope].codec-auto = GameShark | RamPoke | CPUBUS
 refused-discovered.factory[GB plain Nope].codec-explicit = Game Genie | RomPatch | <null>
@@ -1817,10 +1715,10 @@ refused-discovered.factory[GB plain Nope].state-version = 11
 refused-discovered.factory[GB plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 refused-discovered.factory[GB plain Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 refused-discovered.factory[GB plain Venus (C#)].supported = True
-refused-discovered.factory[GB plain Venus (C#)].probe = MercuryCore
-refused-discovered.factory[GB plain Venus (C#)].core = MercuryCore
-refused-discovered.factory[GB plain Venus (C#)].notice = No engine is named "Venus (C#)"; Mercury (C#) is running.
-refused-discovered.factory[GB plain Venus (C#)].debug-target = MercuryDebugTarget
+refused-discovered.factory[GB plain Venus (C#)].probe = MercuryRtCore
+refused-discovered.factory[GB plain Venus (C#)].core = MercuryRtCore
+refused-discovered.factory[GB plain Venus (C#)].notice = <null>
+refused-discovered.factory[GB plain Venus (C#)].debug-target = MercuryRtDebugTarget
 refused-discovered.factory[GB plain Venus (C#)].trace-switch = <null>
 refused-discovered.factory[GB plain Venus (C#)].codec-auto = GameShark | RamPoke | CPUBUS
 refused-discovered.factory[GB plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
@@ -1830,6 +1728,20 @@ refused-discovered.factory[GB plain Venus (C#)].axes = []
 refused-discovered.factory[GB plain Venus (C#)].state-version = 11
 refused-discovered.factory[GB plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 refused-discovered.factory[GB plain Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
+refused-discovered.factory[GB plain Mercury (C#)].supported = True
+refused-discovered.factory[GB plain Mercury (C#)].probe = MercuryRtCore
+refused-discovered.factory[GB plain Mercury (C#)].core = MercuryRtCore
+refused-discovered.factory[GB plain Mercury (C#)].notice = <null>
+refused-discovered.factory[GB plain Mercury (C#)].debug-target = MercuryRtDebugTarget
+refused-discovered.factory[GB plain Mercury (C#)].trace-switch = <null>
+refused-discovered.factory[GB plain Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
+refused-discovered.factory[GB plain Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
+refused-discovered.factory[GB plain Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+refused-discovered.factory[GB plain Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
+refused-discovered.factory[GB plain Mercury (C#)].axes = []
+refused-discovered.factory[GB plain Mercury (C#)].state-version = 11
+refused-discovered.factory[GB plain Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+refused-discovered.factory[GB plain Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 refused-discovered.factory[N64 plain <null>].supported = True
 refused-discovered.factory[N64 plain <null>].probe = MarsCore
 refused-discovered.factory[N64 plain <null>].core = MarsCore
@@ -2118,10 +2030,9 @@ off.engine-row[NES][Engine].hint = Which implementation runs the console. Moon (
 off.engine-row[NES].discovered = [MoonRT (Rust)]
 off.engine-row[NES].chosen-default = Moon (C#)
 off.engine-row[NES].chosen-stored = Stored
-off.engine-row[GB][Engine] = Engine | Choice | default Mercury (C#) | 0..0 | [Mercury (C#), MercuryRT (Rust)]
-off.engine-row[GB][Engine].hint = Which implementation runs the console. Mercury (C#) is the reference. MercuryRT (Rust) is exact against it in state, picture and sound and reads the same save states and battery saves; its debugger view is refreshed from its state, and it stops at breakpoints, steps and records coverage, watches and the call stack as Mercury does. Takes effect when a game is next loaded.
+off.engine-row[GB] = <null>
 off.engine-row[GB].discovered = [MercuryRT (Rust)]
-off.engine-row[GB].chosen-default = Mercury (C#)
+off.engine-row[GB].chosen-default = <null>
 off.engine-row[GB].chosen-stored = Stored
 off.engine-row[N64][Engine] = Engine | Choice | default MarsRT (Rust) | 0..0 | [MarsRT (Rust), Mars (C#)]
 off.engine-row[N64][Engine].hint = Which implementation runs the console. MarsRT (Rust) is the default: exact against Mars (C#) in state, picture and sound, reading the same save states and battery saves, and honouring every setting below, the resolution multiple, antialiasing and the graphics card included. Mars (C#) is the reference it is graded against, and runs instead where MarsRT's library is missing. Takes effect when a game is next loaded.
@@ -2134,7 +2045,7 @@ off.engine-row[Atari 2600].chosen-default = <null>
 off.engine-row[Atari 2600].chosen-stored = Stored
 off.registered[Mars (C#)] = True
 off.registered[MarsRT (Rust)] = True
-off.registered[Mercury (C#)] = True
+off.registered[Mercury (C#)] = False
 off.registered[MercuryRT (Rust)] = True
 off.registered[Moon (C#)] = True
 off.registered[MoonRT (Rust)] = True
@@ -2447,260 +2358,45 @@ off.configured[NES MoonRT (Rust)] = MoonRT (Rust)
 off.configured[NES Nope] = Nope
 off.configured[NES Venus (C#)] = Venus (C#)
 off.factory[GB plain <null>].supported = True
-off.factory[GB plain <null>].probe = MercuryCore
-off.factory[GB plain <null>].core = MercuryCore
-off.factory[GB plain <null>].notice = <null>
-off.factory[GB plain <null>].debug-target = MercuryDebugTarget
-off.factory[GB plain <null>].trace-switch = <null>
-off.factory[GB plain <null>].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB plain <null>].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB plain <null>].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB plain <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB plain <null>].axes = []
-off.factory[GB plain <null>].state-version = 11
-off.factory[GB plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB plain <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB plain <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB plain <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
-off.factory[GB plain Mercury (C#)].supported = True
-off.factory[GB plain Mercury (C#)].probe = MercuryCore
-off.factory[GB plain Mercury (C#)].core = MercuryCore
-off.factory[GB plain Mercury (C#)].notice = <null>
-off.factory[GB plain Mercury (C#)].debug-target = MercuryDebugTarget
-off.factory[GB plain Mercury (C#)].trace-switch = <null>
-off.factory[GB plain Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB plain Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB plain Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB plain Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB plain Mercury (C#)].axes = []
-off.factory[GB plain Mercury (C#)].state-version = 11
-off.factory[GB plain Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB plain Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB plain Mercury (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB plain Mercury (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
-off.factory[GB plain MercuryRT (Rust)].supported = True
-off.factory[GB plain MercuryRT (Rust)].probe = MercuryCore
-off.factory[GB plain MercuryRT (Rust)].core = MercuryCore
-off.factory[GB plain MercuryRT (Rust)].notice = MercuryRT (Rust) is not available (turned off by EMUSEN_MERCURY_NATIVE=0); Mercury (C#) is running.
-off.factory[GB plain MercuryRT (Rust)].debug-target = MercuryDebugTarget
-off.factory[GB plain MercuryRT (Rust)].trace-switch = <null>
-off.factory[GB plain MercuryRT (Rust)].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB plain MercuryRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB plain MercuryRT (Rust)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB plain MercuryRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB plain MercuryRT (Rust)].axes = []
-off.factory[GB plain MercuryRT (Rust)].state-version = 11
-off.factory[GB plain MercuryRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB plain MercuryRT (Rust)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB plain MercuryRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB plain MercuryRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB plain <null>].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB plain <null>].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB plain Nope].supported = True
-off.factory[GB plain Nope].probe = MercuryCore
-off.factory[GB plain Nope].core = MercuryCore
-off.factory[GB plain Nope].notice = No engine is named "Nope"; Mercury (C#) is running.
-off.factory[GB plain Nope].debug-target = MercuryDebugTarget
-off.factory[GB plain Nope].trace-switch = <null>
-off.factory[GB plain Nope].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB plain Nope].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB plain Nope].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB plain Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB plain Nope].axes = []
-off.factory[GB plain Nope].state-version = 11
-off.factory[GB plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB plain Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB plain Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB plain Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB plain Nope].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB plain Nope].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB plain Venus (C#)].supported = True
-off.factory[GB plain Venus (C#)].probe = MercuryCore
-off.factory[GB plain Venus (C#)].core = MercuryCore
-off.factory[GB plain Venus (C#)].notice = No engine is named "Venus (C#)"; Mercury (C#) is running.
-off.factory[GB plain Venus (C#)].debug-target = MercuryDebugTarget
-off.factory[GB plain Venus (C#)].trace-switch = <null>
-off.factory[GB plain Venus (C#)].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB plain Venus (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB plain Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB plain Venus (C#)].axes = []
-off.factory[GB plain Venus (C#)].state-version = 11
-off.factory[GB plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB plain Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB plain Venus (C#)].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB plain Venus (C#)].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB plain Mercury (C#)].supported = True
+off.factory[GB plain Mercury (C#)].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB plain Mercury (C#)].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB battery <null>].supported = True
-off.factory[GB battery <null>].probe = MercuryCore
-off.factory[GB battery <null>].core = MercuryCore
-off.factory[GB battery <null>].notice = <null>
-off.factory[GB battery <null>].debug-target = MercuryDebugTarget
-off.factory[GB battery <null>].trace-switch = <null>
-off.factory[GB battery <null>].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB battery <null>].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB battery <null>].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB battery <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB battery <null>].axes = []
-off.factory[GB battery <null>].state-version = 11
-off.factory[GB battery <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB battery <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB battery <null>].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB battery <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB battery <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
-off.factory[GB battery Mercury (C#)].supported = True
-off.factory[GB battery Mercury (C#)].probe = MercuryCore
-off.factory[GB battery Mercury (C#)].core = MercuryCore
-off.factory[GB battery Mercury (C#)].notice = <null>
-off.factory[GB battery Mercury (C#)].debug-target = MercuryDebugTarget
-off.factory[GB battery Mercury (C#)].trace-switch = <null>
-off.factory[GB battery Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB battery Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB battery Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB battery Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB battery Mercury (C#)].axes = []
-off.factory[GB battery Mercury (C#)].state-version = 11
-off.factory[GB battery Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB battery Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB battery Mercury (C#)].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB battery Mercury (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB battery Mercury (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
-off.factory[GB battery MercuryRT (Rust)].supported = True
-off.factory[GB battery MercuryRT (Rust)].probe = MercuryCore
-off.factory[GB battery MercuryRT (Rust)].core = MercuryCore
-off.factory[GB battery MercuryRT (Rust)].notice = MercuryRT (Rust) is not available (turned off by EMUSEN_MERCURY_NATIVE=0); Mercury (C#) is running.
-off.factory[GB battery MercuryRT (Rust)].debug-target = MercuryDebugTarget
-off.factory[GB battery MercuryRT (Rust)].trace-switch = <null>
-off.factory[GB battery MercuryRT (Rust)].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB battery MercuryRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB battery MercuryRT (Rust)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB battery MercuryRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB battery MercuryRT (Rust)].axes = []
-off.factory[GB battery MercuryRT (Rust)].state-version = 11
-off.factory[GB battery MercuryRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB battery MercuryRT (Rust)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB battery MercuryRT (Rust)].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB battery MercuryRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB battery MercuryRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB battery <null>].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB battery <null>].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB battery Nope].supported = True
-off.factory[GB battery Nope].probe = MercuryCore
-off.factory[GB battery Nope].core = MercuryCore
-off.factory[GB battery Nope].notice = No engine is named "Nope"; Mercury (C#) is running.
-off.factory[GB battery Nope].debug-target = MercuryDebugTarget
-off.factory[GB battery Nope].trace-switch = <null>
-off.factory[GB battery Nope].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB battery Nope].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB battery Nope].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB battery Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB battery Nope].axes = []
-off.factory[GB battery Nope].state-version = 11
-off.factory[GB battery Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB battery Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB battery Nope].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB battery Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB battery Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB battery Nope].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB battery Nope].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB battery Venus (C#)].supported = True
-off.factory[GB battery Venus (C#)].probe = MercuryCore
-off.factory[GB battery Venus (C#)].core = MercuryCore
-off.factory[GB battery Venus (C#)].notice = No engine is named "Venus (C#)"; Mercury (C#) is running.
-off.factory[GB battery Venus (C#)].debug-target = MercuryDebugTarget
-off.factory[GB battery Venus (C#)].trace-switch = <null>
-off.factory[GB battery Venus (C#)].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB battery Venus (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB battery Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB battery Venus (C#)].axes = []
-off.factory[GB battery Venus (C#)].state-version = 11
-off.factory[GB battery Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB battery Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB battery Venus (C#)].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB battery Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB battery Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB battery Venus (C#)].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB battery Venus (C#)].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB battery Mercury (C#)].supported = True
+off.factory[GB battery Mercury (C#)].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB battery Mercury (C#)].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB colour-battery <null>].supported = True
-off.factory[GB colour-battery <null>].probe = MercuryCore
-off.factory[GB colour-battery <null>].core = MercuryCore
-off.factory[GB colour-battery <null>].notice = <null>
-off.factory[GB colour-battery <null>].debug-target = MercuryDebugTarget
-off.factory[GB colour-battery <null>].trace-switch = <null>
-off.factory[GB colour-battery <null>].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB colour-battery <null>].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB colour-battery <null>].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB colour-battery <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB colour-battery <null>].axes = []
-off.factory[GB colour-battery <null>].state-version = 11
-off.factory[GB colour-battery <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB colour-battery <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB colour-battery <null>].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB colour-battery <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB colour-battery <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
-off.factory[GB colour-battery Mercury (C#)].supported = True
-off.factory[GB colour-battery Mercury (C#)].probe = MercuryCore
-off.factory[GB colour-battery Mercury (C#)].core = MercuryCore
-off.factory[GB colour-battery Mercury (C#)].notice = <null>
-off.factory[GB colour-battery Mercury (C#)].debug-target = MercuryDebugTarget
-off.factory[GB colour-battery Mercury (C#)].trace-switch = <null>
-off.factory[GB colour-battery Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB colour-battery Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB colour-battery Mercury (C#)].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB colour-battery Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB colour-battery Mercury (C#)].axes = []
-off.factory[GB colour-battery Mercury (C#)].state-version = 11
-off.factory[GB colour-battery Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB colour-battery Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB colour-battery Mercury (C#)].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB colour-battery Mercury (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB colour-battery Mercury (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
-off.factory[GB colour-battery MercuryRT (Rust)].supported = True
-off.factory[GB colour-battery MercuryRT (Rust)].probe = MercuryCore
-off.factory[GB colour-battery MercuryRT (Rust)].core = MercuryCore
-off.factory[GB colour-battery MercuryRT (Rust)].notice = MercuryRT (Rust) is not available (turned off by EMUSEN_MERCURY_NATIVE=0); Mercury (C#) is running.
-off.factory[GB colour-battery MercuryRT (Rust)].debug-target = MercuryDebugTarget
-off.factory[GB colour-battery MercuryRT (Rust)].trace-switch = <null>
-off.factory[GB colour-battery MercuryRT (Rust)].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB colour-battery MercuryRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB colour-battery MercuryRT (Rust)].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB colour-battery MercuryRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB colour-battery MercuryRT (Rust)].axes = []
-off.factory[GB colour-battery MercuryRT (Rust)].state-version = 11
-off.factory[GB colour-battery MercuryRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB colour-battery MercuryRT (Rust)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB colour-battery MercuryRT (Rust)].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB colour-battery MercuryRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB colour-battery MercuryRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB colour-battery <null>].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB colour-battery <null>].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB colour-battery Nope].supported = True
-off.factory[GB colour-battery Nope].probe = MercuryCore
-off.factory[GB colour-battery Nope].core = MercuryCore
-off.factory[GB colour-battery Nope].notice = No engine is named "Nope"; Mercury (C#) is running.
-off.factory[GB colour-battery Nope].debug-target = MercuryDebugTarget
-off.factory[GB colour-battery Nope].trace-switch = <null>
-off.factory[GB colour-battery Nope].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB colour-battery Nope].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB colour-battery Nope].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB colour-battery Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB colour-battery Nope].axes = []
-off.factory[GB colour-battery Nope].state-version = 11
-off.factory[GB colour-battery Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB colour-battery Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB colour-battery Nope].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB colour-battery Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB colour-battery Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB colour-battery Nope].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB colour-battery Nope].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB colour-battery Venus (C#)].supported = True
-off.factory[GB colour-battery Venus (C#)].probe = MercuryCore
-off.factory[GB colour-battery Venus (C#)].core = MercuryCore
-off.factory[GB colour-battery Venus (C#)].notice = No engine is named "Venus (C#)"; Mercury (C#) is running.
-off.factory[GB colour-battery Venus (C#)].debug-target = MercuryDebugTarget
-off.factory[GB colour-battery Venus (C#)].trace-switch = <null>
-off.factory[GB colour-battery Venus (C#)].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB colour-battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB colour-battery Venus (C#)].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB colour-battery Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB colour-battery Venus (C#)].axes = []
-off.factory[GB colour-battery Venus (C#)].state-version = 11
-off.factory[GB colour-battery Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB colour-battery Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB colour-battery Venus (C#)].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB colour-battery Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB colour-battery Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
-off.configured[GB nothing stored] = Mercury (C#)
-off.configured[GB Mercury (C#)] = Mercury (C#)
-off.configured[GB MercuryRT (Rust)] = MercuryRT (Rust)
+off.factory[GB colour-battery Venus (C#)].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB colour-battery Venus (C#)].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB colour-battery Mercury (C#)].supported = True
+off.factory[GB colour-battery Mercury (C#)].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB colour-battery Mercury (C#)].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.configured[GB nothing stored] = <null>
 off.configured[GB Nope] = Nope
 off.configured[GB Venus (C#)] = Venus (C#)
+off.configured[GB Mercury (C#)] = Mercury (C#)
 off.factory[N64 plain <null>].supported = True
 off.factory[N64 plain <null>].probe = MarsCore
 off.factory[N64 plain <null>].core = MarsCore
@@ -3073,12 +2769,6 @@ settings[SNES VenusRT (Rust)].row[sa1_catch_up].note-at-defaults = <null>
 settings[SNES Venus (C#)].core = VenusCore
 settings[NES Moon (C#)].core = MoonCore
 settings[NES MoonRT (Rust)].core = MoonCore
-settings[GB Mercury (C#)].core = MercuryCore
-settings[GB Mercury (C#)].row[Model] = Model | Choice | default Auto | 0..0 | [Auto, Game Boy, Game Boy Color]
-settings[GB Mercury (C#)].row[Model].hint = Which console a game runs on. Auto follows the cartridge: a Game Boy Color game on a Game Boy Color, the rest on a Game Boy. Game Boy runs every game on a Game Boy: a colour game in its own monochrome mode, and a game made only for the Color shows whatever that game shows a Game Boy. Game Boy Color runs every game on a Game Boy Color: a Game Boy game in the colours the Color's start-up picks for it from its title. Takes effect when a game is next loaded; a save state resumes on the console it was made on.
-settings[GB MercuryRT (Rust)].core = MercuryCore
-settings[GB MercuryRT (Rust)].row[Model] = Model | Choice | default Auto | 0..0 | [Auto, Game Boy, Game Boy Color]
-settings[GB MercuryRT (Rust)].row[Model].hint = Which console a game runs on. Auto follows the cartridge: a Game Boy Color game on a Game Boy Color, the rest on a Game Boy. Game Boy runs every game on a Game Boy: a colour game in its own monochrome mode, and a game made only for the Color shows whatever that game shows a Game Boy. Game Boy Color runs every game on a Game Boy Color: a Game Boy game in the colours the Color's start-up picks for it from its title. Takes effect when a game is next loaded; a save state resumes on the console it was made on.
 settings[N64 MarsRT (Rust)].core = MarsCore
 settings[N64 MarsRT (Rust)].row[ThreadedRdp] = Draw on a separate thread | Switch | default true | 0..0 | []
 settings[N64 MarsRT (Rust)].row[ThreadedRdp].hint = The display processor runs its lists on a thread of its own, behind marks on the memory it reaches. Exact; faster on any machine with two cores to spare.

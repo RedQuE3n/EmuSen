@@ -145,8 +145,8 @@ status 0
 action none
 end
 
-case recording on mercury
-target mercury
+case recording on mercuryrt
+target mercuryrt
 covers 1-2,4
 $ framelog add WRAM 0
 out 38

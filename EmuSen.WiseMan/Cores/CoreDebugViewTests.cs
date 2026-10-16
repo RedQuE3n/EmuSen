@@ -71,22 +71,6 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        [Fact]
-        public void MercuryRT_shows_the_frame_and_registers_Mercury_shows()
-        {
-            string rom = Image("game.gb", SyntheticGbRom.Build());
-            var (mercury, mercuryView) = Run(rom, null);
-            var (rust, rustView) = Run(rom, CoreCatalog.MercuryRtEngine);
-            using (mercury as IDisposable) using (rust as IDisposable)
-            {
-                Assert.StartsWith("GB (Mercury) - frame 2,", mercuryView.GetSummaryText());
-                string expected = mercuryView.GetSummaryText().Replace("(Mercury)", "(MercuryRT)");
-                // The audio line counts what each engine has buffered, which differs by design.
-                Assert.Equal(expected.Split('\n')[..^1], rustView.GetSummaryText().Split('\n')[..^1]);
-                Assert.Equal(Regs(mercuryView), Regs(rustView));
-            }
-        }
-
         // A v1 core's registers, read when its target is made, as every C# target reads its own.
         [Fact]
         public void A_v1_target_made_after_two_frames_shows_their_registers()

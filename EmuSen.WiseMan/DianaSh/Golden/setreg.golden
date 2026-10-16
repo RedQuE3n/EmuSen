@@ -194,37 +194,6 @@ status 1
 action none
 end
 
-case on mercury
-target mercury
-covers 1
-$ regs cpu
-out 337
-SM83 registers:
-  A         = 0x01
-  F         = 0xB0
-  BC        = 0x0013
-  DE        = 0x00D8
-  HL        = 0x014D
-  SP        = 0xFFFC
-  PC        = 0x0AF2
-  Z         = 0x1
-  N         = 0x0
-  H         = 0x1
-  C         = 0x1
-  IME       = 0x0
-  HALT      = 0x0
-  IE        = 0x00
-  IF        = 0x01
-  Cycles    = 0x00000000000224A0
-status 0
-action none
-$ setreg NOPE 0
-out 109
-cpu has no register named 'NOPE'. Available: A, F, BC, DE, HL, SP, PC, Z, N, H, C, IME, HALT, IE, IF, Cycles.
-status 1
-action none
-end
-
 case on mercuryrt
 target mercuryrt
 covers 1

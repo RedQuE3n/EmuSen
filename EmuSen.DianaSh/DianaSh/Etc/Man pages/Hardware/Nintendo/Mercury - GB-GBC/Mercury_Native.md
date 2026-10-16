@@ -3658,3 +3658,24 @@ nothing in the repository can write one now, so `D3_version_5_states_the_unmodif
 left with the C# core. MercuryRT still reads version 5 (`OldestReadableVersion`), and the real games' version-5
 states, kept outside the tree under `EMUSEN_MERCURY_V5_STATES`, are still graded by
 `D3_real_games_version_5_states_resume_where_the_unmodified_build_went` on MercuryRT alone.
+
+
+### 15.4 The C# core deleted, and what a player keeps
+
+**Deleted**: `EmuSen/Cores/Nintendo/Mercury - GB-GBC/` (28 files, 4,904 lines with its README; the codecs and the
+disassembler had moved out at §15.2), the Engine row for the Game Boy with its `Mercury (C#)` choice,
+`ReferenceEngineByConsole["GB"]`, the factory's C# arm, `Running`'s and `Bundle`'s C# cases, the C# notice, and the
+`<Fallback>` in `RustCores.props`. The C#-only debug and cheat pieces went with the folder or, where MercuryRT used
+them, moved first (§15.2).
+
+**One engine, no row.** With one implementation the Game Boy has no Engine row (`CoreCatalog.EngineFor("GB")` is
+null, as for any console with one engine), and the metadata editor offers a Game Boy game no alternative emulator.
+MercuryRT stays an engine the build constructs through its own shim even though no row names it: `IsRegisteredEngine`
+now also answers for the shim engines, so discovery's sidecar for `mercuryrt` is never opened as a generic v1 engine in
+the shim's place. A `.gb` or `.gbc` file is built on MercuryRT whatever engine name a caller passes.
+
+**A build without the library** says so rather than running nothing: the factory throws
+`This build has no Game Boy core: MercuryRT (Rust) is missing (<the loader's report>).`, and Mistress, which catches a
+failed load, returns to the library with `Failed to load <game>: ` and that sentence on its status line.
+`MercuryRtFallbackTests` holds it in a child process started with `EMUSEN_MERCURY_NATIVE=0`. The firmware probe that
+runs before a load already treats that exception as "nothing to ask for".

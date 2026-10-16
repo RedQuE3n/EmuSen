@@ -202,8 +202,8 @@ status 0
 action none
 end
 
-case counting on mercury
-target mercury
+case counting on mercuryrt
+target mercuryrt
 covers 1-6
 $ counters on WRAM
 out 42

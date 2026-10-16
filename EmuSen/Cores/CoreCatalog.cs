@@ -370,8 +370,10 @@ namespace EmuSen.Cores
         public const string MarsEngine = "Mars (C#)";
         public const string MarsRtEngine = "MarsRT (Rust)";
 
-        public const string MercuryEngine = "Mercury (C#)";
         public const string MercuryRtEngine = "MercuryRT (Rust)";
+
+        // Engines built through their own shims though no row offers a choice of them: a console's only engine - see Mercury_Native.md §15.4.
+        private static readonly string[] ShimEngines = { MercuryRtEngine };
 
         public const string MoonEngine = "Moon (C#)";
         public const string MoonRtEngine = "MoonRT (Rust)";
@@ -382,9 +384,6 @@ namespace EmuSen.Cores
             ["N64"] = new(EngineKey, "Engine",
                 "Which implementation runs the console. MarsRT (Rust) is the default: exact against Mars (C#) in state, picture and sound, reading the same save states and battery saves, and honouring every setting below, the resolution multiple, antialiasing and the graphics card included. Mars (C#) is the reference it is graded against, and runs instead where MarsRT's library is missing. Takes effect when a game is next loaded.",
                 CoreSettingKind.Choice, MarsRtEngine, Choices: new[] { MarsRtEngine, MarsEngine }),
-            ["GB"] = new(EngineKey, "Engine",
-                "Which implementation runs the console. MercuryRT (Rust) is the default: exact against Mercury (C#) in state, picture and sound, reading the same save states and battery saves, and stopping at breakpoints, stepping and recording coverage, watches and the call stack as Mercury does. Mercury (C#) is the reference its goldens were recorded from, and runs instead where MercuryRT's library is missing. Takes effect when a game is next loaded.",
-                CoreSettingKind.Choice, MercuryRtEngine, Choices: new[] { MercuryRtEngine, MercuryEngine }),
             ["NES"] = new(EngineKey, "Engine",
                 "Which implementation runs the console. Moon (C#) is the reference. MoonRT (Rust) is exact against it in state, picture and sound, reads the same save states and battery saves, and takes the same cheats; its debugger view is refreshed from its state, and it stops at breakpoints, steps, runs to a frame or an interrupt, and records coverage, watches, the profile and the call stack as Moon does. Takes effect when a game is next loaded.",
                 CoreSettingKind.Choice, MoonEngine, Choices: new[] { MoonEngine, MoonRtEngine }),
@@ -418,7 +417,6 @@ namespace EmuSen.Cores
         {
             ["SNES"] = VenusEngine,
             ["NES"] = MoonEngine,
-            ["GB"] = MercuryEngine,
             ["N64"] = MarsEngine,
         };
 
@@ -429,7 +427,7 @@ namespace EmuSen.Cores
             SystemIdsFor(console).SelectMany(Native.CoreDiscovery.ForSystem).Select(c => c.EngineName).Distinct().ToArray();
 
         // An engine this build registers by hand, whose own branch runs it even when discovery also lists its library - see EmuSen_CoreAPI.md §22.
-        public static bool IsRegisteredEngine(string? name) => name is not null && EngineByConsole.Values.Any(row => row.Choices?.Contains(name) == true);
+        public static bool IsRegisteredEngine(string? name) => name is not null && (ShimEngines.Contains(name) || EngineByConsole.Values.Any(row => row.Choices?.Contains(name) == true));
 
         // Null for a console with one implementation; a v1 engine found by discovery is appended to the row, which it creates for a console that had none.
         public static CoreSetting? EngineFor(string console)

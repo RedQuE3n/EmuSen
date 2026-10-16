@@ -1,0 +1,67 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command command
+usage 1   command [-v] <name> [args]    run <name> as itself, not as an alias; -v prints the names that would run
+
+case as itself and asked
+target none
+covers 1
+$ command echo hi
+out 2
+hi
+status 0
+action none
+$ command ECHO hi
+out 2
+hi
+status 0
+action none
+$ command quit
+out 47
+Unknown command 'quit'. Type 'help' for a list.
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ command -v echo grep cd
+out 12
+echo
+grep
+cd
+status 0
+action none
+$ echo $?
+out 1
+0
+status 0
+action none
+$ command -v echo nosuch
+out 4
+echo
+status 1
+action none
+$ echo $?
+out 1
+1
+status 0
+action none
+$ command
+out 45
+command: usage: command [-v] <name> [args...]
+status 1
+action none
+$ command -v
+out 45
+command: usage: command [-v] <name> [args...]
+status 1
+action none
+$ command help | head -n 1
+out 19
+Available commands:
+status 0
+action none
+end

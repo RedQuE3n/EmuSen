@@ -98,10 +98,13 @@ namespace EmuSen.Crystal.Debugger
 
         public void Disarm() => IsArmed = false;
 
+        // Empties the log whether or not the window is armed, and leaves it as armed as it was - see EmuSen_DianaSh.md §16 Q19.
         public void Clear()
         {
-            if (!IsArmed) return;
+            if (_reads is null) return;
+            bool armed = IsArmed;
             Arm(WindowName, WindowSize, Capacity);
+            IsArmed = armed;
         }
 
         // Must stay cheap when disarmed - that is the whole cost on a normal run.

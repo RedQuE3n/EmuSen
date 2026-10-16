@@ -23,24 +23,27 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.Unix
         public bool IsReadOnly => true;
         public string Usage => "  ps | jobs                     list active breakpoints/watches/sessions as one table - see `kill`";
 
+        // The breakpoints' and watches' rows, which the Rust shell's ps asks the host for - see EmuSen_DianaSh.md §13.7.
+        public static IEnumerable<string> JobLines(IDebugTarget? target)
+        {
+            if (target == null) yield break;
+
+            foreach (var bp in target.Breakpoints.GetBreakpoints())
+            {
+                string id = $"bp{bp.Id}";
+                yield return $"  {id,-10} breakpoint  ${bp.Address:X6} ({(bp.Enabled ? "enabled" : "disabled")}, hit {bp.HitCount}x)";
+            }
+
+            foreach (var w in target.Watches.GetWatches())
+            {
+                string id = $"watch{w.Id}";
+                yield return $"  {id,-10} watch       {w.SpaceName} 0x{w.StartAddress:X}-0x{w.StartAddress + w.Length - 1:X} ({w.Kind.ToString().ToLowerInvariant()})";
+            }
+        }
+
         public DianaShResult Execute(IDebugTarget? target, string[] args, string? stdin)
         {
-            var lines = new List<string>();
-
-            if (target != null)
-            {
-                foreach (var bp in target.Breakpoints.GetBreakpoints())
-                {
-                    string id = $"bp{bp.Id}";
-                    lines.Add($"  {id,-10} breakpoint  ${bp.Address:X6} ({(bp.Enabled ? "enabled" : "disabled")}, hit {bp.HitCount}x)");
-                }
-
-                foreach (var w in target.Watches.GetWatches())
-                {
-                    string id = $"watch{w.Id}";
-                    lines.Add($"  {id,-10} watch       {w.SpaceName} 0x{w.StartAddress:X}-0x{w.StartAddress + w.Length - 1:X} ({w.Kind.ToString().ToLowerInvariant()})");
-                }
-            }
+            var lines = new List<string>(JobLines(target));
 
             if (_sessions != null)
             {

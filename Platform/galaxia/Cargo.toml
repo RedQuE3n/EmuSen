@@ -10,6 +10,8 @@ publish.workspace = true
 name = "emusen_galaxia"
 
 [dependencies]
+# .NET's text rules and File.ReadAllText's decoding, which the shell's command modules share without linking Galaxia.
+emusen-dotnet = { path = "../dotnet" }
 md-5 = "0.11"
 # A file mapped read-only, on every system the project builds for (mapped.rs).
 memmap2 = "0.9"

@@ -95,15 +95,16 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.NotEqual(Path.Combine(install, Path.GetFileName(requested)), resolved);
         }
 
-        // An absolute path pointing at the install is re-rooted under home rather
-        // than honored - the chroot rule, which is what keeps it in.
+        // An absolute path pointing at the install is never honored: re-rooted under home (the chroot rule), or on Windows, where a drive's path is not the shell's root, refused.
         [Fact]
         public void An_absolute_install_path_is_re_rooted_not_honored()
         {
             string outside = Path.Combine(DianaShSandbox.InstallDirectory, "EmuSen.sln");
 
-            DianaShSandbox.TryResolve(outside, out string resolved);
+            bool resolves = DianaShSandbox.TryResolve(outside, out string resolved);
 
+            if (OperatingSystem.IsWindows() && !resolves) return;
+            Assert.True(resolves);
             Assert.NotEqual(outside, resolved);
             Assert.StartsWith(DianaShSandbox.RootDirectory, resolved);
         }

@@ -640,7 +640,11 @@ namespace EmuSen.WiseMan.Galaxia
                 Put(Path.Combine(folder, "notes.txt"), "x");
                 Put(Path.Combine(folder, "upper.JSON"), "x");
                 Directory.CreateDirectory(Path.Combine(folder, "a folder.json"));
-                if (Links.Allowed) File.CreateSymbolicLink(Path.Combine(folder, "dangling.json"), At("nowhere"));
+                if (Links.Allowed)
+                {
+                    File.CreateSymbolicLink(Path.Combine(folder, "dangling.json"), At("nowhere"));
+                    Directory.CreateSymbolicLink(Path.Combine(folder, "folder-link.json"), At("nowhere"));
+                }
             }
             Side("managed-names");
             IReadOnlyList<string> managed = CheatFile.Managed.ListNames();
@@ -648,6 +652,8 @@ namespace EmuSen.WiseMan.Galaxia
             IReadOnlyList<string> native = CheatFile.ListNamesNative();
             Assert.Equal(managed, native);
             Assert.Contains("dangling", native);
+            // A dangling link made for a folder: a file to Unix's listing, a folder to Windows'.
+            if (Links.Allowed) Assert.Equal(!OperatingSystem.IsWindows(), native.Contains("folder-link"));
             Assert.DoesNotContain("a folder", native);
             Assert.True(native.Count >= names.Length - 2, string.Join(",", native));
 

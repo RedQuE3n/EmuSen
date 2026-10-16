@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 
@@ -22,6 +23,32 @@ namespace EmuSen.WiseMan.Galaxia
 
         // Windows makes a symbolic link only with its privilege or in developer mode, which a CI runner has and a desktop may not.
         public static bool Allowed => Probe.Value;
+
+        // A folder and all under it, its links removed first and each alone: Directory.Delete refuses a junction inside a recursive delete on Windows.
+        public static void DeleteTree(string root)
+        {
+            if (!Directory.Exists(root)) return;
+            if (!OperatingSystem.IsWindows())
+            {
+                Directory.Delete(root, recursive: true);
+                return;
+            }
+            var folders = new Stack<string>(new[] { root });
+            while (folders.Count > 0)
+            {
+                foreach (string entry in Directory.GetFileSystemEntries(folders.Pop()))
+                {
+                    FileAttributes attributes = File.GetAttributes(entry);
+                    if ((attributes & FileAttributes.ReparsePoint) == 0)
+                    {
+                        if ((attributes & FileAttributes.Directory) != 0) folders.Push(entry);
+                    }
+                    else if ((attributes & FileAttributes.Directory) != 0) Directory.Delete(entry);
+                    else File.Delete(entry);
+                }
+            }
+            Directory.Delete(root, recursive: true);
+        }
 
         // A Windows junction, which needs no privilege, made as mklink makes one.
         public static void Junction(string link, string target)

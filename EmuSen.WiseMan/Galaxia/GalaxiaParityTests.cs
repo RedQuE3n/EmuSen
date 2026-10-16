@@ -35,8 +35,11 @@ namespace EmuSen.WiseMan.Galaxia
             DataStore.OverrideDirectory = null;
             ErrorLog.DirectoryOverride = _logOverride;
             ErrorLog.Redactor = _redactor;
-            if (Directory.Exists(_temp)) Directory.Delete(_temp, recursive: true);
+            Links.DeleteTree(_temp);
         }
+
+        // What .NET refuses as no path at all: the empty string, and on Windows one of spaces only.
+        private static bool EffectivelyEmpty(string path) => path.Length == 0 || (OperatingSystem.IsWindows() && path.All(c => c == ' '));
 
         private string At(params string[] parts) => Path.Combine(parts.Prepend(_temp).ToArray());
 
@@ -107,19 +110,24 @@ namespace EmuSen.WiseMan.Galaxia
         public void Every_path_rule_gives_the_string_dotnet_gives()
         {
             string[] paths = Paths(3000, seed: 20261007).ToArray();
+            var different = new List<string>();
+            void Same(string? dotnet, string? library, string what) { if (dotnet != library) different.Add($"{what}: .NET [{dotnet}], the library [{library}]"); }
             for (int i = 0; i < paths.Length; i++)
             {
                 string a = paths[i], b = paths[(i * 7 + 3) % paths.Length];
-                Assert.Equal(Path.Combine(a, b), GalaxiaNative.PathRule(GalaxiaPathRule.Combine, a, b));
-                Assert.Equal(Path.GetFileName(a), GalaxiaNative.PathRule(GalaxiaPathRule.FileName, a));
-                Assert.Equal(Path.GetFileNameWithoutExtension(a), GalaxiaNative.PathRule(GalaxiaPathRule.FileNameWithoutExtension, a));
-                Assert.Equal(Path.ChangeExtension(a, ".png"), GalaxiaNative.PathRule(GalaxiaPathRule.ChangeExtension, a, ".png"));
-                Assert.Equal(Path.ChangeExtension(a, "png"), GalaxiaNative.PathRule(GalaxiaPathRule.ChangeExtension, a, "png"));
-                Assert.Equal(Path.ChangeExtension(a, ""), GalaxiaNative.PathRule(GalaxiaPathRule.ChangeExtension, a, ""));
-                Assert.Equal(Path.GetDirectoryName(a), GalaxiaNative.PathRule(GalaxiaPathRule.DirectoryName, a));
-                Assert.Equal(Path.TrimEndingDirectorySeparator(a), GalaxiaNative.PathRule(GalaxiaPathRule.TrimEndingSeparator, a));
-                if (a.Length > 0) Assert.Equal(Path.GetFullPath(a), GalaxiaNative.PathRule(GalaxiaPathRule.FullPath, a));
+                Same(Path.Combine(a, b), GalaxiaNative.PathRule(GalaxiaPathRule.Combine, a, b), $"Combine([{a}], [{b}])");
+                Same(Path.GetFileName(a), GalaxiaNative.PathRule(GalaxiaPathRule.FileName, a), $"GetFileName([{a}])");
+                Same(Path.GetFileNameWithoutExtension(a), GalaxiaNative.PathRule(GalaxiaPathRule.FileNameWithoutExtension, a), $"GetFileNameWithoutExtension([{a}])");
+                foreach (string extension in new[] { ".png", "png", "" })
+                    Same(Path.ChangeExtension(a, extension), GalaxiaNative.PathRule(GalaxiaPathRule.ChangeExtension, a, extension), $"ChangeExtension([{a}], [{extension}])");
+                Same(Path.GetDirectoryName(a), GalaxiaNative.PathRule(GalaxiaPathRule.DirectoryName, a), $"GetDirectoryName([{a}])");
+                Same(Path.TrimEndingDirectorySeparator(a), GalaxiaNative.PathRule(GalaxiaPathRule.TrimEndingSeparator, a), $"TrimEndingDirectorySeparator([{a}])");
+                // .NET refuses what is no path, and on Windows a UNC root with no share; no caller asks the library either.
+                string? full = null;
+                try { if (!EffectivelyEmpty(a)) full = Path.GetFullPath(a); } catch (ArgumentException) { }
+                if (full is not null) Same(full, GalaxiaNative.PathRule(GalaxiaPathRule.FullPath, a), $"GetFullPath([{a}])");
             }
+            Assert.True(different.Count == 0, $"{different.Count} differ:\n{string.Join("\n", different.Take(40))}");
         }
 
         [Fact]
@@ -214,19 +222,28 @@ namespace EmuSen.WiseMan.Galaxia
                 At("x.APP", "contents", "macos"), At("checkout", "out", "EmuSen.app", "Contents"), Path.GetPathRoot(_temp)!, "relative", ".",
                 old, At("old", "lib", "EmuSen"), oldBare, bothBare,
             };
-            bases.AddRange(Paths(300, seed: 7).Where(p => p.Length > 0));
+            bases.AddRange(Paths(300, seed: 7).Where(p => !EffectivelyEmpty(p)));
 
+            var different = new List<string>();
+            void Same(Func<string?> dotnet, string? library, string what)
+            {
+                // A base .NET refuses (on Windows, a UNC root with no share) is one no host is started from.
+                string? expected;
+                try { expected = dotnet(); } catch (ArgumentException) { return; }
+                if (expected != library) different.Add($"{what}: .NET [{expected}], the library [{library}]");
+            }
             foreach (string from in bases)
             {
                 foreach (bool macOS in new[] { false, true })
                 {
-                    Assert.Equal(ConfigRoot.Managed.ComputeFor(from, macOS, home), GalaxiaNative.RootFor(from, macOS, home));
-                    Assert.Equal(ConfigRoot.Managed.SeedDirectoryFor(from, macOS), GalaxiaNative.SeedDirectoryFor(from, macOS));
+                    Same(() => ConfigRoot.Managed.ComputeFor(from, macOS, home), GalaxiaNative.RootFor(from, macOS, home), $"root for [{from}], macOS {macOS}");
+                    Same(() => ConfigRoot.Managed.SeedDirectoryFor(from, macOS), GalaxiaNative.SeedDirectoryFor(from, macOS), $"seed for [{from}], macOS {macOS}");
                 }
-                Assert.Equal(ConfigRoot.Managed.BundleContentsFor(from), GalaxiaNative.BundleContentsFor(from));
-                Assert.Equal(ConfigRoot.Managed.MacDataDirectoryFor(from), GalaxiaNative.MacDataDirectoryFor(from));
-                Assert.Equal(DataMigration.Managed.LegacyRootFor(from), GalaxiaNative.LegacyRootFor(from));
+                Same(() => ConfigRoot.Managed.BundleContentsFor(from), GalaxiaNative.BundleContentsFor(from), $"bundle for [{from}]");
+                Same(() => ConfigRoot.Managed.MacDataDirectoryFor(from), GalaxiaNative.MacDataDirectoryFor(from), $"Mac data for [{from}]");
+                Same(() => DataMigration.Managed.LegacyRootFor(from), GalaxiaNative.LegacyRootFor(from), $"legacy root for [{from}]");
             }
+            Assert.True(different.Count == 0, $"{different.Count} differ:\n{string.Join("\n", different.Take(40))}");
 
             // The cases are not vacuous: each branch of the rule is among them.
             Assert.Equal(marked, GalaxiaNative.RootFor(nine, false, home));

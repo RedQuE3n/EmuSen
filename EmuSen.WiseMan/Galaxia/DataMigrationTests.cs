@@ -25,7 +25,7 @@ namespace EmuSen.WiseMan.Galaxia
 
         public void Dispose()
         {
-            if (Directory.Exists(_root + "-links")) Directory.Delete(_root + "-links", recursive: true);
+            Links.DeleteTree(_root + "-links");
             if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
         }
 

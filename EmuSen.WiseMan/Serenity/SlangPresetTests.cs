@@ -69,7 +69,7 @@ namespace EmuSen.WiseMan.Serenity
             SlangPreset p = SlangPreset.Load(preset);
 
             Assert.Equal(3, p.Passes.Count);
-            Assert.Equal(Path.Combine(_root, "crt/shaders/first.slang"), p.Passes[0].ShaderPath);
+            Assert.Equal(Path.GetFullPath(Path.Combine(_root, "crt/shaders/first.slang")), p.Passes[0].ShaderPath);
             Assert.Equal("LINEAR", p.Passes[0].Alias);
             Assert.True(p.Passes[0].FilterLinear);
             Assert.Equal((SlangScaleType.Source, SlangScaleType.Source, 2f, 2f), (p.Passes[0].ScaleTypeX, p.Passes[0].ScaleTypeY, p.Passes[0].ScaleX, p.Passes[0].ScaleY));
@@ -113,7 +113,7 @@ namespace EmuSen.WiseMan.Serenity
 
             SlangPreset p = SlangPreset.Load(top);
 
-            Assert.Equal(Path.Combine(_root, "base/shaders/crt.slang"), p.Passes[0].ShaderPath);
+            Assert.Equal(Path.GetFullPath(Path.Combine(_root, "base/shaders/crt.slang")), p.Passes[0].ShaderPath);
             Assert.Equal(-4f, p.Parameters["hardScan"]);
             Assert.Equal(0.3f, p.Parameters["maskDark"]);
         }

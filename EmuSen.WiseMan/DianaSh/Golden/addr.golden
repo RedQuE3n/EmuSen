@@ -112,8 +112,8 @@ status 0
 action none
 end
 
-case on moon
-target moon
+case on moonrt
+target moonrt
 covers 1
 $ addr 0
 out 33

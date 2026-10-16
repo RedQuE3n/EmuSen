@@ -345,29 +345,24 @@ namespace EmuSen.Cores
         public const string MarsRtEngine = "MarsRT (Rust)";
 
         // An engine a console runs through its own shim, with no choice beside it, so it has no row - see EmuSen_Settings_Reference.md §4.44.
-        private static readonly string[] SoleEngines = { MarsRtEngine, MercuryRtEngine };
+        private static readonly string[] SoleEngines = { MarsRtEngine, MercuryRtEngine, MoonRtEngine };
 
         // A retired engine's name a player's settings may still hold, and the engine that runs instead - see Mars_Native.md §6.7.
         private static readonly Dictionary<string, string> RetiredEngines = new(StringComparer.Ordinal)
         {
             ["Mars (C#)"] = MarsRtEngine,
             ["Mercury (C#)"] = MercuryRtEngine,
+            ["Moon (C#)"] = MoonRtEngine,
         };
 
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> RetiredLogged = new(StringComparer.Ordinal);
 
         public const string MercuryRtEngine = "MercuryRT (Rust)";
 
-        public const string MoonEngine = "Moon (C#)";
         public const string MoonRtEngine = "MoonRT (Rust)";
 
         // Which implementation runs a console, for the consoles that have more than one; the first is the default - see EmuSen_Settings_Reference.md §4.44.
-        private static readonly Dictionary<string, CoreSetting> EngineByConsole = new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["NES"] = new(EngineKey, "Engine",
-                "Which implementation runs the console. MoonRT (Rust) is the default, graded by its own recorded goldens, the NES test-ROM corpus and the conformance kit. Moon (C#) is the core it was ported from, kept until it is deleted, and runs instead where MoonRT's library is missing. Takes effect when a game is next loaded.",
-                CoreSettingKind.Choice, MoonRtEngine, Choices: new[] { MoonRtEngine, MoonEngine }),
-        };
+        private static readonly Dictionary<string, CoreSetting> EngineByConsole = new(StringComparer.OrdinalIgnoreCase);
 
         public const string VenusEngine = "Venus (C#)";
         public const string VenusRtEngine = "VenusRT (Rust)";
@@ -396,7 +391,6 @@ namespace EmuSen.Cores
         private static readonly Dictionary<string, string> ReferenceEngineByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
             ["SNES"] = VenusEngine,
-            ["NES"] = MoonEngine,
         };
 
         public static string? ReferenceEngine(string console) => ReferenceEngineByConsole.GetValueOrDefault(console);

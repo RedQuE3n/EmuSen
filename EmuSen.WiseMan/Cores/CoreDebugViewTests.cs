@@ -57,17 +57,16 @@ namespace EmuSen.WiseMan.Cores
 
         private static string Regs(IDebugTarget target) => DianaShInterpreter.CreateDefault(target).Submit("regs").Output;
 
+        // MoonRT's own target shows the frame, the board and the registers, and names its engine.
         [Fact]
-        public void MoonRT_shows_the_frame_and_registers_Moon_shows_and_names_itself()
+        public void MoonRT_shows_the_frame_and_registers_and_names_itself()
         {
-            string rom = Image("game.nes", SyntheticNesRom.Build());
-            var (moon, moonView) = Run(rom, null);
-            var (rust, rustView) = Run(rom, CoreCatalog.MoonRtEngine);
-            using (moon as IDisposable) using (rust as IDisposable)
+            var (rust, rustView) = Run(Image("game.nes", SyntheticNesRom.Build()), null);
+            using (rust as IDisposable)
             {
-                Assert.StartsWith("NES (Moon) - frame 2,", moonView.GetSummaryText());
-                Assert.Equal(moonView.GetSummaryText().Replace("(Moon)", "(MoonRT)"), rustView.GetSummaryText());
-                Assert.Equal(Regs(moonView), Regs(rustView));
+                Assert.StartsWith("NES (MoonRT) - frame 2, scanline ", rustView.GetSummaryText());
+                Assert.Contains("Mapper 0 (NROM)", rustView.GetSummaryText());
+                Assert.Contains("PC", Regs(rustView));
             }
         }
 

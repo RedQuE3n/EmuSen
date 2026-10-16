@@ -4,7 +4,6 @@ using System.IO;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
-using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.WiseMan.Fixtures;
 
@@ -40,8 +39,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(MoonRtCore.Available, MoonNative.Report);
             using var core = new MoonRtCore();
             core.LoadRom(Keep(SyntheticNesRom.WriteTemp(SyntheticNesRom.Build())));
-            Assert.Equal((MoonCore.StateMagic, MoonCore.StateVersion), Header(core));
-            Assert.Equal(MoonCore.StateVersion, ((IStateFormat)core).StateVersion);
+            Assert.Equal((MoonRtCore.StateMagic, MoonRtCore.CurrentStateVersion), Header(core));
+            Assert.Equal(MoonRtCore.CurrentStateVersion, ((IStateFormat)core).StateVersion);
         }
 
         [Fact]

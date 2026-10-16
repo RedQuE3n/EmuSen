@@ -1,6 +1,5 @@
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Crystal.Systems.GameBoy;
-using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Crystal.Systems.Nes;
 using EmuSen.Cores.Nintendo.Venus.Cheats;
 using EmuSen.Crystal.Cheats;
@@ -13,7 +12,7 @@ namespace EmuSen.WiseMan.Cores
     {
         public static TheoryData<string, string, CheatCodeKind, string?> Formats => new()
         {
-            { "NES raw", "NES address:value", CheatCodeKind.RamPoke, MoonCore.SpaceCpuBus },
+            { "NES raw", "NES address:value", CheatCodeKind.RamPoke, NesSystem.CpuBus },
             { "NES Game Genie", "Game Genie", CheatCodeKind.RomPatch, null },
             { "GB GameShark", "GameShark", CheatCodeKind.RamPoke, MercuryRtCore.SpaceCpuBus },
             { "GB Game Genie", "Game Genie", CheatCodeKind.RomPatch, null },

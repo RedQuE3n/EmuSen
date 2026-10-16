@@ -10,7 +10,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // MoonRT on the core ABI v1 beside its pre-stable exports: its sidecar from the build, the shim still its loader, and the v1 adapter running it exactly as the shim does - see EmuSen_CoreAPI.md §22.
+    // MoonRT on the core ABI v1 beside its pre-stable exports: its sidecar from the build, the shim its loader, and the v1 adapter running it exactly as the shim does - see EmuSen_CoreAPI.md §22.
     [Collection(TestCollections.ProcessGlobals)]
     public class MoonRtCoreAbiTests : IDisposable
     {
@@ -46,24 +46,27 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(MoonNative.Available, MoonNative.Report);
         }
 
+        // Discovery lists the library, yet the shim is its loader and the NES has no Engine row, MoonRT being its only engine.
         [Fact]
-        public void The_shim_stays_moonrts_loader_and_moonrt_is_the_default()
+        public void The_shim_stays_moonrts_loader_and_the_nes_has_no_engine_row()
         {
             _ = Discovered;
-            var row = CoreCatalog.EngineFor("NES")!;
-            Assert.Equal(new[] { CoreCatalog.MoonRtEngine, CoreCatalog.MoonEngine }, row.Choices);
-            Assert.Equal(CoreCatalog.MoonRtEngine, row.Default);
-            ICore core = CoreFactory.Create("game.nes", engine: CoreCatalog.MoonRtEngine);
-            Assert.IsType<MoonRtCore>(core);
-            Assert.Null(CoreFactory.EngineNotice("game.nes", CoreCatalog.MoonRtEngine, core));
-            Assert.IsNotType<MoonRtCore>(CoreFactory.Create("game.nes"));
+            Assert.Null(CoreCatalog.EngineFor("NES"));
+            Assert.True(CoreCatalog.IsRegisteredEngine(CoreCatalog.MoonRtEngine));
+            foreach (string? engine in new[] { null, CoreCatalog.MoonRtEngine })
+            {
+                ICore core = CoreFactory.Create("game.nes", engine: engine);
+                Assert.IsType<MoonRtCore>(core);
+                Assert.Null(CoreFactory.EngineNotice("game.nes", engine, core));
+                ((IDisposable)core).Dispose();
+            }
         }
 
         [Fact]
         public void The_v1_adapter_over_moonrt_runs_a_game_exactly_as_the_shim()
         {
             string rom = Path.Combine(_root, "busy.nes");
-            File.WriteAllBytes(rom, MoonRtStateTests.Rom(4, 8, (0, MoonRtStateTests.Busy)));
+            File.WriteAllBytes(rom, MoonPrograms.Rom(4, 8, (0, MoonPrograms.Busy)));
             using var shim = new MoonRtCore();
             using var adapter = new CoreEngine(Discovered.Open()!);
             shim.LoadRom(rom);

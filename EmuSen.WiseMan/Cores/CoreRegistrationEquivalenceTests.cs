@@ -133,7 +133,7 @@ namespace EmuSen.WiseMan.Cores
         private static readonly string[] Consoles = { "SNES", "NES", "GB", "N64", "Atari 2600" };
 
         // The retired C# N64 core's name, which a player's settings may still hold - see Mars_Native.md §6.7.
-        private const string RetiredMars = "Mars (C#)", RetiredMercury = "Mercury (C#)";
+        private const string RetiredMars = "Mars (C#)", RetiredMercury = "Mercury (C#)", RetiredMoon = "Moon (C#)";
 
         // A console's engines: its row's choices, or the one engine a console without a row runs by hand.
         private static IReadOnlyList<string> EnginesOf(string console) =>
@@ -283,7 +283,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         private static IEnumerable<string> EngineNames() =>
-            Consoles.SelectMany(c => CoreCatalog.EngineFor(c)?.Choices ?? Array.Empty<string>()).Concat(new[] { CoreCatalog.VenusEngine, CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine,
+            Consoles.SelectMany(c => CoreCatalog.EngineFor(c)?.Choices ?? Array.Empty<string>()).Concat(new[] { CoreCatalog.VenusEngine, RetiredMoon, CoreCatalog.MoonRtEngine,
                 RetiredMercury, CoreCatalog.MercuryRtEngine, RetiredMars, CoreCatalog.MarsRtEngine, "VenusRT (Rust)" }).Distinct().Order(StringComparer.Ordinal);
 
         // Synthetic images per console: what each is called, its extension and bytes.
@@ -308,7 +308,7 @@ namespace EmuSen.WiseMan.Cores
             foreach (string console in Consoles.Where(c => RomsFor(c).Any()))
             {
                 string?[] engines = new string?[] { null }.Concat(EnginesOf(console)).Append("Nope").Append(CoreCatalog.VenusEngine)
-                    .Concat(console == "N64" ? new[] { RetiredMars } : console == "GB" ? new[] { RetiredMercury } : Array.Empty<string>()).Distinct().ToArray();
+                    .Concat(console == "N64" ? new[] { RetiredMars } : console == "GB" ? new[] { RetiredMercury } : console == "NES" ? new[] { RetiredMoon } : Array.Empty<string>()).Distinct().ToArray();
                 foreach (var (label, ext, image) in RomsFor(console))
                 {
                     if (!withBattery && label != "plain") continue;

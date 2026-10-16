@@ -49,7 +49,11 @@ namespace EmuSen.Crystal.Systems.Nes
                 chr |= (image[9] & 0xF0) << 4;
             }
             var mirroring = (image[6] & 0x08) != 0 ? NesMirroring.FourScreen : (image[6] & 0x01) != 0 ? NesMirroring.Vertical : NesMirroring.Horizontal;
-            return new NesHeader(mapper, prg, chr, (image[6] & 0x02) != 0, (image[6] & 0x04) != 0, nes20, trust, mirroring);
+            bool trainer = (image[6] & 0x04) != 0;
+            int offset = Size + (trainer ? TrainerSize : 0);
+            if (offset + (long)prg * PrgBankSize > image.Length)
+                throw new InvalidDataException($"Header claims {prg} PRG bank(s) ({prg * PrgBankSize} bytes) but the file holds {image.Length - offset}.");
+            return new NesHeader(mapper, prg, chr, (image[6] & 0x02) != 0, trainer, nes20, trust, mirroring);
         }
     }
 }

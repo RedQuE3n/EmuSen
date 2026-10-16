@@ -4,7 +4,7 @@ using System.Linq;
 using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.Moon;
+using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Crystal.Cheats;
 using EmuSen.WiseMan.Fixtures;
 using EmuSen.Cores.Nintendo.MercuryRT;
@@ -78,13 +78,13 @@ namespace EmuSen.WiseMan.Cores
         {
             var cheats = new CheatRegistry();
             CoreBundle bundle = CoreFactory.Load(_nes, headless: true, cheats);
-            var core = (MoonCore)bundle.Core;
+            var core = (MoonRtCore)bundle.Core;
 
-            Assert.Equal(Original, core.Bus!.Read(0x8000));
+            Assert.Equal(Original, core.ReadSpace("CPUBUS", 0x8000));
 
             cheats.AddRomPatch(0x8000, 0xAD, null, "patch");
 
-            Assert.Equal(0xAD, core.Bus!.Read(0x8000));
+            Assert.Equal(0xAD, core.ReadSpace("CPUBUS", 0x8000));
         }
 
         // Mistress's Apply button, pressed while the emulation thread is parked - see EmuSen_Cheats.md §6.
@@ -106,12 +106,12 @@ namespace EmuSen.WiseMan.Cores
         {
             var cheats = new CheatRegistry();
             CoreBundle bundle = CoreFactory.Load(_nes, headless: true, cheats);
-            var core = (MoonCore)bundle.Core;
+            var core = (MoonRtCore)bundle.Core;
 
-            cheats.AddRamPoke(MoonCore.SpaceRam, 0x0000, 0x42, "poke");
+            cheats.AddRamPoke("RAM", 0x0000, 0x42, "poke");
             bundle.DebugTarget.ApplyCheats();
 
-            Assert.Equal(0x42, core.ReadSpace(MoonCore.SpaceRam, 0x0000));
+            Assert.Equal(0x42, core.ReadSpace("RAM", 0x0000));
         }
 
         // The path Mistress actually takes: the window's registry, through the session - see EmuSen_Cheats.md §6.

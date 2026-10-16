@@ -670,8 +670,8 @@ status 0
 action none
 end
 
-case on moon, with its codecs
-target moon
+case on moonrt, with its codecs
+target moonrt
 covers 1-14,24
 $ cheat add SXIOPO
 out 73

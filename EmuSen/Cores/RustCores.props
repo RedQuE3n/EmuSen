@@ -37,7 +37,7 @@
       <Dir>$(MSBuildThisFileDirectory)Nintendo\MoonRT - NES\</Dir>
       <Core>MoonRT</Core>
       <Console>the NES</Console>
-      <Fallback>Moon (C#)</Fallback>
+      <Fallback></Fallback>
       <CoreAbi>1</CoreAbi>
     </EmuSenRustCrate>
     <EmuSenRustCrate Include="nephrite">

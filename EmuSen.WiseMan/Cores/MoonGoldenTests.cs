@@ -42,14 +42,14 @@ namespace EmuSen.WiseMan.Cores
             CoreOptions.BatteryRamDisabled = true;
         }
 
-        private static IEnumerable<(int Mapper, int Chr)> BoardList => MoonRtStateTests.Boards.Select(row => ((int)row[0], (int)row[1]));
+        private static IEnumerable<(int Mapper, int Chr)> BoardList => MoonPrograms.Boards.Select(row => ((int)row[0], (int)row[1]));
 
         // The synthetic programs by frames: the busy loop and the board program on every board, RAMBO-1's cycle IRQ, the mask cycle, rendering skipped, and two resets.
         public static IEnumerable<MoonGoldenRun> FrameRuns()
         {
             foreach (var (m, c) in BoardList)
             {
-                yield return new($"programs/busy-{m:D2}-{c}", () => MoonRtStateTests.Rom(m, c, (0, MoonRtStateTests.Busy)), Frames: 600);
+                yield return new($"programs/busy-{m:D2}-{c}", () => MoonPrograms.Rom(m, c, (0, MoonPrograms.Busy)), Frames: 600);
                 yield return new($"programs/board-{m:D2}-{c}", () => BoardPrograms.Build(m, c, cycleIrq: false), Input: "pads", Frames: 600);
             }
             yield return new("programs/rambo1-cycle-irq", () => BoardPrograms.Build(64, 8, cycleIrq: true), Input: "pads", Frames: 600);
@@ -69,7 +69,7 @@ namespace EmuSen.WiseMan.Cores
         public static byte[] RandomRom(int mapper, int chr, int seed)
         {
             var noise = new Random(seed * 131 + mapper * 7 + chr);
-            byte[] rom = MoonRtStateTests.Rom(mapper, chr);
+            byte[] rom = MoonPrograms.Rom(mapper, chr);
             noise.NextBytes(rom.AsSpan(16, rom.Length - 16));
             if (seed >= 4)
                 for (int i = 16; i < 16 + 8 * SyntheticNesRom.PrgBankSize; i++)
@@ -90,6 +90,14 @@ namespace EmuSen.WiseMan.Cores
             "library" => AppSettings.Load().RomDirectory,
             var dir => dir,
         };
+
+        // One of the catalogue's games by its hash prefix, or null where the folder lacks it.
+        public static byte[]? Game(string sha)
+        {
+            if (GamesRoot is not { } root || !Directory.Exists(root) || Games.FirstOrDefault(g => g.Sha == sha) is not { Size: > 0 } game) return null;
+            return Directory.EnumerateFiles(root, "*.nes", SearchOption.AllDirectories).Where(f => new FileInfo(f).Length == game.Size).Select(File.ReadAllBytes)
+                .FirstOrDefault(b => Convert.ToHexString(SHA256.HashData(b)).StartsWith(sha, StringComparison.Ordinal));
+        }
 
         // The catalogue's games found under the folder by size, then hash; named by hash alone.
         public static IEnumerable<MoonGoldenRun> GameRuns()
@@ -114,7 +122,7 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        public static TheoryData<int, int> Boards => MoonRtStateTests.Boards;
+        public static TheoryData<int, int> Boards => MoonPrograms.Boards;
 
         [Theory]
         [MemberData(nameof(NamedRuns))]

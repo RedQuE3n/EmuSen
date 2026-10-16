@@ -1,13 +1,13 @@
-using EmuSen.Cores.Nintendo.Moon.Memory;
-using EmuSen.Cores.Nintendo.Moon.Validation;
+using EmuSen.Crystal.Systems.Nes;
+using EmuSen.Pharaoh;
 
 namespace EmuSen.WiseMan.Fixtures
 {
     // Builds a synthetic iNES image - never real game data. The NES counterpart of SyntheticRom.
     public static class SyntheticNesRom
     {
-        public const int PrgBankSize = Cartridge.PrgBankSize;
-        public const int ChrBankSize = Cartridge.ChrBankSize;
+        public const int PrgBankSize = NesHeader.PrgBankSize;
+        public const int ChrBankSize = NesHeader.ChrBankSize;
 
         // NOP fill, not zero: zero decodes as BRK, which vectors and misaligns a linear disassembly.
         public const byte Filler = 0xEA;
@@ -17,14 +17,14 @@ namespace EmuSen.WiseMan.Fixtures
             int prgBanks = 1,
             int chrBanks = 1,
             int mapper = 0,
-            Mirroring mirroring = Mirroring.Horizontal,
+            NesMirroring mirroring = NesMirroring.Horizontal,
             bool battery = false,
             params (int Offset, byte[] Bytes)[] patches)
         {
             int prgLength = prgBanks * PrgBankSize;
             int chrLength = chrBanks * ChrBankSize;
 
-            var image = new byte[Cartridge.HeaderSize + prgLength + chrLength];
+            var image = new byte[NesHeader.Size + prgLength + chrLength];
 
             image[0] = (byte)'N';
             image[1] = (byte)'E';
@@ -34,13 +34,13 @@ namespace EmuSen.WiseMan.Fixtures
             image[5] = (byte)chrBanks;
 
             byte flags6 = (byte)((mapper & 0x0F) << 4);
-            if (mirroring == Mirroring.Vertical) flags6 |= 0x01;
-            if (mirroring == Mirroring.FourScreen) flags6 |= 0x08;
+            if (mirroring == NesMirroring.Vertical) flags6 |= 0x01;
+            if (mirroring == NesMirroring.FourScreen) flags6 |= 0x08;
             if (battery) flags6 |= 0x02;
             image[6] = flags6;
             image[7] = (byte)(mapper & 0xF0);
 
-            var prg = new System.Span<byte>(image, Cartridge.HeaderSize, prgLength);
+            var prg = new System.Span<byte>(image, NesHeader.Size, prgLength);
             prg.Fill(Filler);
 
             foreach (var (offset, bytes) in patches)
@@ -64,27 +64,24 @@ namespace EmuSen.WiseMan.Fixtures
             prg[offset + 1] = (byte)(target >> 8);
         }
 
-        public static Cartridge LoadCartridge(params (int Offset, byte[] Bytes)[] patches) =>
-            Cartridge.FromImage(Build(patches: patches));
-
         // Speaks the blargg $6000 protocol, so the test-ROM runner is provable with no third-party data.
         public static byte[] BuildProtocolRom(byte resultCode, string message = "OK")
         {
             var code = new Assembler();
 
-            code.Store(NesTestRomRunner.SignatureAddress, NesTestRomRunner.Signature[0]);
-            code.Store(NesTestRomRunner.SignatureAddress + 1, NesTestRomRunner.Signature[1]);
-            code.Store(NesTestRomRunner.SignatureAddress + 2, NesTestRomRunner.Signature[2]);
-            code.Store(NesTestRomRunner.StatusAddress, NesTestRomRunner.StatusRunning);
+            code.Store(NesTestRomProtocol.SignatureAddress, NesTestRomProtocol.Signature[0]);
+            code.Store(NesTestRomProtocol.SignatureAddress + 1, NesTestRomProtocol.Signature[1]);
+            code.Store(NesTestRomProtocol.SignatureAddress + 2, NesTestRomProtocol.Signature[2]);
+            code.Store(NesTestRomProtocol.StatusAddress, NesTestRomProtocol.StatusRunning);
 
             for (int i = 0; i < message.Length; i++)
             {
-                code.Store(NesTestRomRunner.TextAddress + i, (byte)message[i]);
+                code.Store(NesTestRomProtocol.TextAddress + i, (byte)message[i]);
             }
-            code.Store(NesTestRomRunner.TextAddress + message.Length, 0x00);
+            code.Store(NesTestRomProtocol.TextAddress + message.Length, 0x00);
 
             code.Delay();
-            code.Store(NesTestRomRunner.StatusAddress, resultCode);
+            code.Store(NesTestRomProtocol.StatusAddress, resultCode);
             code.Spin();
 
             return Build(patches: (0, code.Bytes));
@@ -99,22 +96,22 @@ namespace EmuSen.WiseMan.Fixtures
             code.LoadAbsolute(MarkerAddress);
             int branch = code.BranchIfNotZero();
 
-            code.Store(NesTestRomRunner.SignatureAddress, NesTestRomRunner.Signature[0]);
-            code.Store(NesTestRomRunner.SignatureAddress + 1, NesTestRomRunner.Signature[1]);
-            code.Store(NesTestRomRunner.SignatureAddress + 2, NesTestRomRunner.Signature[2]);
+            code.Store(NesTestRomProtocol.SignatureAddress, NesTestRomProtocol.Signature[0]);
+            code.Store(NesTestRomProtocol.SignatureAddress + 1, NesTestRomProtocol.Signature[1]);
+            code.Store(NesTestRomProtocol.SignatureAddress + 2, NesTestRomProtocol.Signature[2]);
 
             // Real ROMs hold the running status before asking, and the runner requires it - see §2.2.
-            code.Store(NesTestRomRunner.StatusAddress, NesTestRomRunner.StatusRunning);
+            code.Store(NesTestRomProtocol.StatusAddress, NesTestRomProtocol.StatusRunning);
             code.Delay();
             code.Store(MarkerAddress, 0x01);
-            code.Store(NesTestRomRunner.StatusAddress, NesTestRomRunner.StatusNeedsReset);
+            code.Store(NesTestRomProtocol.StatusAddress, NesTestRomProtocol.StatusNeedsReset);
             code.Spin();
 
             // The reset leaves $81 in PRG RAM, so this half must republish $80 before its verdict.
             code.PatchBranch(branch);
-            code.Store(NesTestRomRunner.StatusAddress, NesTestRomRunner.StatusRunning);
+            code.Store(NesTestRomProtocol.StatusAddress, NesTestRomProtocol.StatusRunning);
             code.Delay();
-            code.Store(NesTestRomRunner.StatusAddress, 0x00);
+            code.Store(NesTestRomProtocol.StatusAddress, 0x00);
             code.Spin();
 
             return Build(patches: (0, code.Bytes));
@@ -179,7 +176,7 @@ namespace EmuSen.WiseMan.Fixtures
             }
         }
 
-        // MoonCore.LoadRom takes a path, so a test that needs a whole core needs a real file.
+        // A core loads a ROM from a path, so a test that needs a whole core needs a real file.
         public static string WriteTemp(byte[] image)
         {
             string path = Path.Combine(Path.GetTempPath(), $"moon-{Guid.NewGuid():N}.nes");

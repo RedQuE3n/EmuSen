@@ -2866,6 +2866,11 @@ made `\n`, as the engines print it. On all three systems `ConsoleBindingsTests.T
 expects the catalogue without the Sega CD, which the merge added to it; that expectation is the Sega CD's to
 update and is left to it.
 
+**Run 38891224338, the branch's last.** With the layouts read so, the WiseMan job's steps on win-x64 and osx-arm64
+pass but for that one catalogue case, in Endymion's two steps: the cores' comparison 1,292 of 1,292 on each, Galaxia
+196 and 249, Serenity 73 and 112, Endymion 166 and 185 of their 167 and 186. On linux-x64 the Shaderc cases above and
+the catalogue case fail, and nothing else. Every crate's job passed, the four `emusen_platform` jobs among them.
+
 **Run 38861419247, before that merge.** The WiseMan job passed on win-x64 and on osx-arm64, every step: the cores'
 comparison 1,282 of 1,282 on each, and the platform's six steps as §27.5's table on Windows. On linux-x64 it failed on
 the Shaderc cases above alone (one of the cores' step, eleven and forty-eight of Serenity's two). Every crate's job

@@ -2902,6 +2902,9 @@ Run 38861419247 (branch `windows-platform`, 2026-10-16) is the reference:
 - **The critical path.** The three WiseMan jobs, which wait on every library job, started 54.5 minutes in. They
   waited for MoonRT's osx-arm64 job, which had queued 24 minutes for a macOS runner and then ran for 30.6. The
   macOS jobs started anywhere from 5 to 40 minutes in, so the account's macOS runners, not the work, set the pace.
+- **The platforms.** Decided 2026-10-16: the libraries are built for Linux, Windows and macOS on Apple Silicon
+  only. The osx-x64 leg is gone, with its Rosetta step, so a run has 21 libraries rather than 28. Seven
+  jobs fewer reach the macOS queue that set the pace above.
 - **The part §28's rule removes.** MoonRT's build cost is the subject of `Moon_Native.md` §8.6. That part is the
   rebuilding of libraries whose inputs had not changed.
 
@@ -2912,7 +2915,7 @@ are taken.**
 
 - **Main, tags and a dispatch with `full` build every library**, whatever earlier runs hold.
 - **A taken library is uploaded into the run** under the name the run would have given it (`<crate>-<rid>`).
-  Every run therefore carries all 28 artefacts, and the WiseMan job and a publish read them as they did before.
+  Every run therefore carries all 21 artefacts, and the WiseMan job and a publish read them as they did before.
 - **The other jobs are unchanged.** `shared`, `abi-guard`, `diamond-kernel` and the WiseMan job run as before.
 
 The workflow had no step that compared commits. Such a comparison would be the wrong basis anyway:
@@ -3004,7 +3007,7 @@ lookup can only lead to a build, never to a missing library.
 - **It is scoped by branch.** A branch reads only its own entries and the default branch's. Main lags `WiseMan`,
   so a branch cut from `WiseMan` would find almost nothing.
 - **A hit cannot be checked before the jobs are laid out.** The library job's matrix has to be fixed when the
-  workflow starts. With the cache, every one of the 28 jobs would have to start, macOS ones included, only to
+  workflow starts. With the cache, every one of the 21 jobs would have to start, macOS ones included, only to
   restore and finish.
 
 Artefacts are repository-wide and named by their key. They are kept for the repository's retention period, 90

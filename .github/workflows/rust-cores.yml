@@ -240,13 +240,12 @@ jobs:
               {"name": "diamond", "dir": "EmuSen/Cores/Sony/Diamond - PlayStation/v1", "symbol": "emusen_core_"},
               {"name": "emusen_platform", "dir": "Platform", "symbol": "emusen_galaxia_"}
             ]
-          # ubuntu-22.04 for its glibc (2.35), so the library loads on older distributions than the one that built it; osx-x64 is built on the arm64 runner with Apple's toolchain, which links x86_64, and its tests run under Rosetta and may not.
+          # ubuntu-22.04 for its glibc (2.35), so the library loads on older distributions than the one that built it; macOS is Apple Silicon only, as Intel Macs are not a target.
           PLATFORMS: |
             [
               {"rid": "linux-x64", "os": "ubuntu-22.04", "target": "x86_64-unknown-linux-gnu", "prefix": "lib", "suffix": ".so", "test": true},
               {"rid": "win-x64", "os": "windows-latest", "target": "x86_64-pc-windows-msvc", "prefix": "", "suffix": ".dll", "test": true},
-              {"rid": "osx-arm64", "os": "macos-latest", "target": "aarch64-apple-darwin", "prefix": "lib", "suffix": ".dylib", "test": true},
-              {"rid": "osx-x64", "os": "macos-latest", "target": "x86_64-apple-darwin", "prefix": "lib", "suffix": ".dylib", "test": "rosetta"}
+              {"rid": "osx-arm64", "os": "macos-latest", "target": "aarch64-apple-darwin", "prefix": "lib", "suffix": ".dylib", "test": true}
             ]
         run: python3 .github/scripts/library_key.py plan
 
@@ -312,12 +311,6 @@ jobs:
         if: matrix.platform.test == true
         run: cargo test --release --target ${{ matrix.platform.target }}
 
-      - name: Test under Rosetta
-        id: rosetta
-        if: matrix.platform.test == 'rosetta'
-        continue-on-error: true
-        run: cargo test --release --target ${{ matrix.platform.target }}
-
       # Diamond's machine and its two layers beside its library, each its own crate with its own suite; the renderer's tests stand down without a Vulkan device.
       - name: Test Diamond's machine and layers
         if: matrix.crate.name == 'diamond' && matrix.platform.test == true
@@ -349,7 +342,7 @@ jobs:
             echo "::notice title=${{ matrix.crate.name }} ${{ matrix.platform.rid }}::profile-guided ($(sed -n 's/^state = //p' "$status"))"
           fi
 
-      # A library on version 1: its exports against the baseline and its capability bits (EmuSen_CoreAPI.md §5.4 item 5); a pre-stable one is skipped by it and still counted below. Not on osx-x64, whose library this runner's Python cannot load.
+      # A library on version 1: its exports against the baseline and its capability bits (EmuSen_CoreAPI.md §5.4 item 5); a pre-stable one is skipped by it and still counted below.
       - name: Exports
         shell: bash
         run: |
@@ -365,7 +358,7 @@ jobs:
           esac
           ls -la "$file"
 
-      # A library on the core ABI v1 gets its sidecar from the kit's runner, as the local build writes it (EmuSen_CoreAPI.md §22); not on osx-x64, whose library this runner cannot load.
+      # A library on the core ABI v1 gets its sidecar from the kit's runner, as the local build writes it (EmuSen_CoreAPI.md §22).
       - name: The sidecar
         if: matrix.platform.test == true
         shell: bash
@@ -386,9 +379,9 @@ jobs:
             ${{ matrix.crate.dir }}/target/${{ matrix.platform.target }}/dist/${{ env.LIBRARY }}.core.json
           if-no-files-found: error
 
-      # The same files under the input key, which a later run's plan looks up; none without a key, with an undeclared input, or after a failed Rosetta run.
+      # The same files under the input key, which a later run's plan looks up; none without a key or with an undeclared input.
       - uses: actions/upload-artifact@v4
-        if: steps.key.outputs.key != '' && steps.key.outputs.key != 'undeclared' && steps.rosetta.outcome != 'failure'
+        if: steps.key.outputs.key != '' && steps.key.outputs.key != 'undeclared'
         with:
           name: ${{ matrix.crate.name }}-${{ matrix.platform.rid }}-key-${{ steps.key.outputs.key }}
           path: |
@@ -424,7 +417,7 @@ jobs:
           path: library/
           if-no-files-found: error
 
-  # WiseMan's tests of the Rust cores against the C# cores, run on each platform against the libraries the job above ships; osx-x64 is left out, its runner being arm64.
+  # WiseMan's tests of the Rust cores against the C# cores, run on each platform against the libraries the job above ships.
   wiseman:
     name: WiseMan ${{ matrix.rid }}
     needs: [plan, library, reuse, shared]

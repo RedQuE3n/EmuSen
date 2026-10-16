@@ -64,6 +64,10 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
         "                                patterns: /regex/, NR==N (also !=,<,<=,>,>=), BEGIN, END\n",
         "                                actions: {print $0|$N|$NF|NR|NF|\"lit\"[, ...][; print ...]}"
     )),
+    ("ls", true, concat!(
+        "  ls [-a] [-l] [path]           list directory entries (default: current directory);\n",
+        "                                -a include dotfiles, -l show type/size/modified-time"
+    )),
 
 ];
 

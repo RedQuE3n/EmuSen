@@ -39,19 +39,20 @@ namespace EmuSen.WiseMan.Serenity
             return (y, CrtFilter.PpuChromaGain * u, CrtFilter.PpuChromaGain * v);
         }
 
-        private static byte[] RawField(int width, int height, Func<int, int, (int Colour, int Emphasis)> at)
+        // A picture before the palette in the core ABI's nes.ppu: the colour number in bits 0-5 and the emphasis bits in 6-8 - see EmuSen_CoreAPI.md §6.30.
+        internal static RawPicture RawField(int width, int height, Func<int, int, (int Colour, int Emphasis)> at)
         {
-            var raw = new byte[width * height * 4];
+            var values = new byte[width * height * 2];
             for (int yy = 0; yy < height; yy++) for (int xx = 0; xx < width; xx++)
             {
                 var (c, e) = at(xx, yy);
-                int i = (yy * width + xx) * 4;
-                (raw[i], raw[i + 1], raw[i + 2], raw[i + 3]) = ((byte)c, (byte)e, 0, 255);
+                int i = (yy * width + xx) * 2, v = c | e << 6;
+                (values[i], values[i + 1]) = ((byte)v, (byte)(v >> 8));
             }
-            return raw;
+            return new RawPicture(RawEncodings.NesPpu, width, height, 2, width * 2, values);
         }
 
-        private static Crt? DrawNes(byte[] rgb, byte[]? raw, int windowWidth, int windowHeight, params (string Id, float Value)[] set)
+        private static Crt? DrawNes(byte[] rgb, RawPicture? raw, int windowWidth, int windowHeight, params (string Id, float Value)[] set)
         {
             if (CrtDevice.Value is not { } device) return null;
             var control = new GameFrameControl { FilterConsole = "NES", ShaderParameters = Values(Reference.Concat(set)), ActiveFilter = CrtFilter.Filter };
@@ -95,7 +96,7 @@ namespace EmuSen.WiseMan.Serenity
             foreach (int emphasis in new[] { 0, 1, 2, 4, 7 })
             {
                 // 64 bands across, one colour each, wide enough that the chroma channel settles in each.
-                byte[] raw = RawField(256, 240, (x, y) => (y / 30 * 8 + x / 32, emphasis));
+                RawPicture raw = RawField(256, 240, (x, y) => (y / 30 * 8 + x / 32, emphasis));
                 if (DrawNes(blank, raw, 1440, 1080, With(set, ("signal", 2f))) is not { } composite) return;
                 if (DrawNes(blank, raw, 1440, 1080, With(set, ("signal", 1f))) is not { } svideo) return;
                 for (int band = 0; band < 64; band++)
@@ -115,7 +116,7 @@ namespace EmuSen.WiseMan.Serenity
         public Task From_its_own_signal_the_nes_s_artifacts_keep_their_three_line_and_two_frame_pattern() => Session.Dispatch(() =>
         {
             byte[] blank = Grey(256, 240, 0);
-            byte[] raw = RawField(256, 240, (x, _) => (x % 2 == 0 ? 0x20 : 0x0F, 0));
+            RawPicture raw = RawField(256, 240, (x, _) => (x % 2 == 0 ? 0x20 : 0x0F, 0));
             (string, float)[] set = With(Plain, ("mask", 1f), ("subpixels", 0f), ("signal", 2f));
             if (CrtDevice.Value is not { } device) return;
             double[] Line(byte[] picture, int line) => Enumerable.Range(480, 480).Select(x => { double s = 0; for (int yy = (int)(line * 4.5); yy < (int)((line + 1) * 4.5); yy++) s += picture[(yy * 1440 + x) * 4] - picture[(yy * 1440 + x) * 4 + 1]; return s; }).ToArray();
@@ -128,6 +129,53 @@ namespace EmuSen.WiseMan.Serenity
             Assert.True(Corr(Line(first, 120), Line(first, 121)) < 0.0, "the next line, different");
             Assert.True(Corr(Line(first, 120), Line(next, 120)) < 0.0, "the next frame, different");
         }, default);
+
+        // MoonRT's picture before the palette, through the core ABI and the host to the filter: an emphasis write in the middle of the frame darkens the lines after it, which the RGB frame cannot show - see EmuSen_CoreAPI.md §6.30.
+        [Fact]
+        public Task MoonRt_s_emphasis_written_in_the_middle_of_a_frame_reaches_the_screen_through_the_raw_picture() => Session.Dispatch(() =>
+        {
+            if (CrtDevice.Value is not { } device) return;
+            Assert.True(EmuSen.Cores.Nintendo.MoonRT.MoonRtCore.Available, EmuSen.Cores.Nintendo.MoonRT.MoonNative.Report);
+            string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"emusen-raw-crt-{Environment.ProcessId}.nes");
+            System.IO.File.WriteAllBytes(path, EmphasisMidFrame());
+            using var core = new EmuSen.Cores.Nintendo.MoonRT.MoonRtCore();
+            try { core.LoadRom(path); } finally { System.IO.File.Delete(path); }
+            core.RawEncoding = RawEncodings.NesPpu;
+            for (int f = 0; f < 8; f++) core.RunFrame();
+            RawPicture raw = core.RawPicture!.Value;
+            byte[] rgb = core.GetFrameBufferRgba();
+            int first = Enumerable.Range(0, 240).First(y => (raw.Values[y * 512] | raw.Values[y * 512 + 1] << 8) >> 6 == 7);
+            Assert.InRange(first, 60, 180);
+            (string, float)[] set = With(Plain, ("mask", 1f), ("subpixels", 0f), ("signal", 2f));
+            Crt viaRaw = DrawNes(rgb, raw, 1440, 1080, set)!, viaRgb = DrawNes(rgb, null, 1440, 1080, set)!;
+            double Light(Crt c, int fromLine, int toLine) => c.Mean(480, fromLine * 4.5, 480, (toLine - fromLine) * 4.5).Sum();
+            (double above, double below) = (Light(viaRaw, first - 50, first - 10), Light(viaRaw, first + 10, first + 50));
+            (double rgbAbove, double rgbBelow) = (Light(viaRgb, first - 50, first - 10), Light(viaRgb, first + 10, first + 50));
+            Assert.True(below < 0.9 * above, $"from its raw picture, the lines after the write at {below:F3} against {above:F3} before it");
+            Assert.True(Math.Abs(rgbBelow - rgbAbove) < 0.02 * rgbAbove, $"from its RGB frame, {rgbBelow:F3} against {rgbAbove:F3}: the same colour either side");
+            Console.WriteLine($"emphasis from line {first}: through the raw picture {above:F3} above and {below:F3} below, through RGB {rgbAbove:F3} and {rgbBelow:F3}");
+        }, default);
+
+        // Colour $16 at the top of each frame and all three emphasis bits written from the NMI, about 124 lines later: MoonRT's own test program (Moon_Native.md §9.7).
+        private static byte[] EmphasisMidFrame()
+        {
+            byte[] reset =
+            {
+                0x78, 0xD8, 0xA2, 0xFF, 0x9A, 0x2C, 0x02, 0x20, 0x10, 0xFB, 0x2C, 0x02, 0x20, 0x10, 0xFB,
+                0xA9, 0x3F, 0x8D, 0x06, 0x20, 0xA9, 0x00, 0x8D, 0x06, 0x20, 0xA9, 0x16, 0x8D, 0x07, 0x20,
+                0xA9, 0x00, 0x8D, 0x06, 0x20, 0x8D, 0x06, 0x20, 0x8D, 0x05, 0x20, 0x8D, 0x05, 0x20,
+                0xA9, 0x00, 0x8D, 0x01, 0x20, 0xA9, 0x80, 0x8D, 0x00, 0x20, 0x4C, 0x36, 0xC0,
+            };
+            byte[] nmi =
+            {
+                0x48, 0x8A, 0x48, 0x98, 0x48, 0xA9, 0x00, 0x8D, 0x01, 0x20,
+                0xA0, 0x0B, 0xA2, 0xFF, 0xCA, 0xD0, 0xFD, 0x88, 0xD0, 0xF8,
+                0xA9, 0xE0, 0x8D, 0x01, 0x20, 0x68, 0xA8, 0x68, 0xAA, 0x68, 0x40,
+            };
+            byte[] rom = EmuSen.WiseMan.Fixtures.SyntheticNesRom.Build(prgBanks: 1, chrBanks: 1, patches: new[] { (0, reset), (0x100, nmi) });
+            rom[16 + 0x3FFA] = 0x00; rom[16 + 0x3FFB] = 0xC1;
+            return rom;
+        }
 
         // Without a raw frame the NES is encoded from its RGB picture as before: drawn as the SNES is, whose timing it shares, to a code value where the shader compiles differently.
         [Fact]
@@ -150,7 +198,7 @@ namespace EmuSen.WiseMan.Serenity
         public Task At_performance_the_nes_s_colours_are_the_ppu_s_closed_form() => Session.Dispatch(() =>
         {
             byte[] blank = Grey(256, 240, 0);
-            byte[] raw = RawField(256, 240, (x, y) => (y / 30 * 8 + x / 32, 0));
+            RawPicture raw = RawField(256, 240, (x, y) => (y / 30 * 8 + x / 32, 0));
             (string, float)[] set = With(Plain, ("mask", 1f), ("subpixels", 0f), ("spotGrowth", 0f), ("displayNits", 1000f), ("signal", 1f));
             if (DrawNes(blank, raw, 1440, 1080, With(set, ("quality", 0f))) is not { } performance) return;
             if (DrawNes(blank, raw, 1440, 1080, With(set, ("quality", 1f))) is not { } balanced) return;

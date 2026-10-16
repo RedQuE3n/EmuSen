@@ -1,6 +1,6 @@
 //! C#'s `Ppu`: the 2C02's registers, its VRAM bus and its state. See Moon_PPU.md.
 
-mod render;
+pub mod render;
 mod timing;
 
 use crate::Skip;
@@ -18,6 +18,18 @@ pub const OAM_SIZE: usize = 256;
 pub const SPRITES_PER_LINE: usize = 8;
 pub const OPEN_BUS_DECAY_FRAMES: u8 = 36;
 pub const FRAME_BYTES: usize = SCREEN_WIDTH * SCREEN_HEIGHT * 4;
+/// The picture before the palette, `nes.ppu`: two bytes a pixel (EmuSen_CoreAPI.md §6.30).
+pub const RAW_BYTES: usize = SCREEN_WIDTH * SCREEN_HEIGHT * 2;
+
+/// The picture before the palette, kept while `on`; `whole` while it has been since the frame began, and `kept` while
+/// `values` is the frame `frame_rgba` holds (EmuSen_CoreAPI.md §6.30).
+#[derive(Clone, Debug, PartialEq)]
+pub struct RawPicture {
+    pub values: Vec<u8>,
+    pub on: bool,
+    pub whole: bool,
+    pub kept: bool,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Ppu {
@@ -45,6 +57,8 @@ pub struct Ppu {
     pub write_toggle: bool,
 
     pub frame_rgba: Skip<Vec<u8>>,
+    /// `nes.ppu` beside `frame_rgba`, made the first time it is asked for (Moon_Native.md §9.7).
+    pub raw: Skip<Option<Box<RawPicture>>>,
     pub skip_rendering: Skip<bool>,
     pub bg_line: Skip<[u8; SCREEN_WIDTH]>,
     pub sprite_indices: Skip<[i32; SPRITES_PER_LINE]>,
@@ -80,6 +94,7 @@ impl Default for Ppu {
             v: 0,
             write_toggle: false,
             frame_rgba: Skip(vec![0; FRAME_BYTES]),
+            raw: Skip(None),
             skip_rendering: Skip(false),
             bg_line: Skip([0; SCREEN_WIDTH]),
             sprite_indices: Skip([0; SPRITES_PER_LINE]),
@@ -177,6 +192,39 @@ impl Ppu {
         self.palette_ram.fill(0);
         self.oam.fill(0);
         self.frame_rgba.fill(0);
+    }
+
+    /// `nes.ppu` kept from the next frame drawn, or let go.
+    pub fn select_raw(&mut self, on: bool) {
+        if on && self.raw.is_none() {
+            *self.raw = Some(Box::new(RawPicture { values: vec![0; RAW_BYTES], on, whole: false, kept: false }));
+        }
+        if let Some(r) = self.raw.as_deref_mut() {
+            (r.on, r.whole) = (on, r.whole && on);
+        }
+    }
+
+    /// Before a frame is run, `fresh` unless it resumes one a stop left open: a frame drawn without `nes.ppu` leaves the
+    /// raw picture another frame's.
+    pub fn begin_raw(&mut self, fresh: bool) {
+        let skip = *self.skip_rendering;
+        if let Some(r) = self.raw.as_deref_mut().filter(|_| !skip) {
+            r.whole = if fresh { r.on } else { r.whole };
+            r.kept &= r.on;
+        }
+    }
+
+    /// A frame drawn to its end with `nes.ppu` kept from its start: the raw picture is the frame's.
+    pub fn end_raw(&mut self) {
+        let skip = *self.skip_rendering;
+        if let Some(r) = self.raw.as_deref_mut().filter(|_| !skip) {
+            r.kept |= r.whole;
+        }
+    }
+
+    /// The raw picture of the frame `frame_rgba` holds, if `nes.ppu` was kept for it.
+    pub fn raw_picture(&self) -> Option<&[u8]> {
+        self.raw.as_deref().filter(|r| r.kept).map(|r| &r.values[..])
     }
 
     /// What the RESET line clears - see Moon_Core.md §6.

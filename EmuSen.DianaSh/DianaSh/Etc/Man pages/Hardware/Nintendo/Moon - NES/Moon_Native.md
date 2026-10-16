@@ -2417,10 +2417,79 @@ alone:
 
 ### 9.6 What is not done
 
-- **MoonRT's pre-palette picture** for the CRT filter's composite path (§9.5).
+- ~~**MoonRT's pre-palette picture** for the CRT filter's composite path (§9.5).~~ Done 2026-10-16 as the core ABI's
+  minor 1.10, §9.7.
 - **A single-step interface for MoonRT's CPU**, for `nes6502/v1` (§3.6).
-- **The NES system pack's palette and MoonRT's** are two statements of the 64 colours; the debugger's views and the
+- ~~**The NES system pack's palette and MoonRT's** are two statements of the 64 colours; the debugger's views and the
   Python analysis scripts read the pack's, the picture MoonRT's. A test that holds the two equal is owed; they are equal
-  today by inspection.
+  today by inspection.~~ Done 2026-10-16: MoonRT declares its palette in machine info (§9.7), and
+  `MoonRtRawPictureTests` holds all 512 of its entries to the pack's `NesDebugViews.MasterPalette`.
 - **`MercuryGoldenTrace`** is the same format as the shared `GoldenTrace`; folding it in is left to the Game Boy's
   side.
+
+### 9.7 The picture before the palette, on the core ABI (2026-10-16)
+
+§9.6's first item, built as the core ABI's minor 1.10 (`EmuSen_CoreAPI.md` §6.30), which defines the surface for any
+core; this section records MoonRT's side of it. MoonRT claims `RAW_PICTURE` and lists one encoding, `nes.ppu`: two
+bytes a pixel, the colour number in bits 0–5 and PPUMASK's bits 5–7 in bits 6–8, 256 × 240, the rectangle of its RGB
+frame. Machine info declares the palette its RGB frame draws each value with: 512 entries, the 64 colours of
+`NES_PALETTE` repeated for each emphasis setting, since MoonRT's RGB frame, like C# Moon's, applies no emphasis.
+
+**The mechanism.** A line is composed in one pass at dot 256 (§2.5), so palette RAM and PPUMASK stand still while it
+is, and each pixel's value is the colour number the RGB path already looks up, with PPUMASK's top three bits. The
+composition is generic over whether it keeps the value. The form without is the code as it was. The form with writes
+each value into a 512-byte line on the stack and copies the line into the frame's raw buffer at its end; it lives in a
+function of its own, `composite_keeping_raw`, chosen once per line. The buffer, 120 KiB, is made the first time the
+encoding is asked for, behind one field of `Ppu` that holds it, whether it is asked for, whether it has been since the
+frame began, and whether it holds the frame `frame_rgba` holds. A frame drawn to its end with the encoding kept from its
+start is kept; a frame drawn without it lets the last one go; a frame whose rendering is skipped leaves both pictures
+as they were; a debugger's stop part-way through a frame decides nothing until the frame ends. Neither picture is in
+the state, so a load leaves both as they stand, which is §6.30's rule.
+
+**Proof.**
+
+- **The crate.** An emphasis write timed from the NMI, about 124 lines into the frame, is in the raw picture from line
+  103 on, the same line in every frame checked, every line one value throughout, while the RGB frame, without
+  emphasis, cannot show it; every value is its RGB pixel through the declared palette. A picture of tiles, colours and
+  sprites is its RGB frame through the palette pixel for pixel over 30 frames, and a machine keeping the encoding has
+  the same pictures and the same state as one keeping none.
+- **WiseMan** (`MoonRtRawPictureTests`). Every frame of the 67 golden runs that draw (§9.2's two synthetic programs on
+  each of the 32 board forms, RAMBO-1's cycle IRQ, the mask cycle and the resets), run with `nes.ppu` asked for
+  through the host:
+  each frame's raw picture through the NES system pack's palette (`NesDebugViews.MasterPalette`) is MoonRT's RGB frame,
+  every pixel, and every trace is still its golden, state, picture and sound. The mask cycle's frames carry all eight
+  emphasis settings. The same holds for the seven games of §9.2's catalogue, read from the library in place, 3,600
+  frames each (none of them sets an emphasis bit in that run). The 512 entries MoonRT declares equal the pack's 64 colours, which discharges §9.6's third item.
+  The host hands nothing until asked, nothing for a name the core does not list, and nothing for a frame drawn after
+  the encoding was let go; a skipped frame keeps the picture before it.
+- **The kit.** C21 on Super Mario Bros. (a copy; the library is read only): 120 of 120 frames handed, each its frame
+  through the declared palette, none unasked, and the run the same as one keeping none (`EmuSen_CoreAPI.md` §28.13).
+- **The goldens** (`MoonGoldenTests`) pass unchanged: nothing of the run moves.
+
+**Cost (measured).** A program of the bench's kind (`nesbench`'s schedule, §8.6.4: Start and A in turn, the picture
+read after every frame) ran 3,000 frames of each of four games, copies of the library's, on one pinned core under the
+timing lock, seven rounds interleaved by game and by build: the build before this change, this one asking for nothing,
+and this one keeping `nes.ppu` and copying it out every frame as a host does. Medians, ms a frame; the load average
+was 1.2–3.0:
+
+| Game | Before | Nothing asked for | Change | `nes.ppu` kept | Change |
+|---|---|---|---|---|---|
+| Super Mario Bros. | 0.870 | 0.865 | −0.7% | 0.947 | +8.8% |
+| Zelda | 0.881 | 0.882 | +0.2% | 0.939 | +6.7% |
+| Super Mario Bros. 3 | 1.083 | 1.084 | +0.0% | 1.217 | +12.3% |
+| Punch-Out!! | 1.029 | 1.032 | +0.3% | 1.096 | +6.5% |
+
+The geometric mean is −0.02% asking for nothing, which is no difference: in 14 of the 28 paired runs that build was at
+or below the one before. Keeping the encoding costs +8.5%, paid only while a filter that reads it is chosen.
+
+**A retired prediction, and why the first measurements misled.** The first form tested a flag in the pixel loop, on
+the prediction that a branch the predictor always gets right costs nothing measurable. It cost +11% asking for
+nothing on Super Mario Bros. Two controls that add no work showed what was measured instead. Marking `composite`
+`#[inline(never)]`, or `#[inline(always)]`, with no other change, cost +8%. Adding three `bool` fields to `Ppu`,
+unused, grew it from 688 bytes to 696 and cost +2.5%. Since §8.6 the PPU's dot logic is inlined into each of the CPU's
+two out-of-line bus-cycle functions, so a change to a function the dot reaches, or to the struct it reads, moves
+the code and data of the hottest path in the library; on this build that alone is several per cent. The form kept
+leaves the loop without the encoding the same code, and puts the encoding's state behind one pointer field; `Ppu`
+still grows by those 8 bytes, and that is in the measurement above. The finding does not generalise to "a
+flag in a loop is expensive"; it says that on this library an A/B of a hot path needs a control that changes placement
+and adds no work before a cost is attributed. That is put to the tester as a rule for the project's benches.

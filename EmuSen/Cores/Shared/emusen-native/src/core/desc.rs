@@ -198,6 +198,22 @@ pub struct Video {
     pub formats: Vec<u32>,
 }
 
+/// Machine info's `video.raw[n]`, since 1.10 (`RAW_PICTURE`): one encoding of the picture before the core's palette,
+/// named as EmuSen_CoreAPI.md §6.30 registers it, or beginning `x-` for a core's own.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RawEncoding {
+    pub encoding: String,
+    /// Bytes per value: 1, 2, 4 or 8, little-endian.
+    pub element: u32,
+    pub max_width: u32,
+    pub max_height: u32,
+    /// Where the frame is a function of the value alone, the RGB it draws for each value as `0xRRGGBB`; empty for none.
+    pub palette: Vec<u32>,
+}
+
+/// The longest palette `video.raw[n].palette` may list (EmuSen_CoreAPI.md §6.30).
+pub const RAW_PALETTE_MAX: usize = 65_536;
+
 #[derive(Clone, Debug, Default)]
 pub struct Audio {
     pub rate: i32,
@@ -558,6 +574,8 @@ pub struct Measured<'a> {
     pub capabilities: u64,
     /// `Core::picture_settles`, written as `state.picture_settles` when it is not 0 (since 1.5).
     pub picture_settles: u32,
+    /// `Core::raw_encodings` of a core claiming `RAW_PICTURE`, written as `video.raw` when there are any (since 1.10).
+    pub raw: &'a [RawEncoding],
 }
 
 /// The most frames `state.picture_settles` may name: ten seconds at 60 frames a second (EmuSen_CoreAPI.md §6.9).
@@ -583,7 +601,24 @@ pub fn machine_info_json(m: &MachineInfo, measured: &Measured<'_>, drives: &[Dri
     for &f in &v.formats {
         j.uint(f as u64);
     }
-    j.end_array().end_object();
+    j.end_array();
+    if !measured.raw.is_empty() {
+        j.key("raw").begin_array();
+        for r in measured.raw {
+            j.begin_object().field_str("encoding", &r.encoding).field_uint("element", r.element as u64);
+            j.field_uint("max_width", r.max_width as u64).field_uint("max_height", r.max_height as u64);
+            if !r.palette.is_empty() {
+                j.key("palette").begin_array();
+                for &c in &r.palette {
+                    j.uint(c as u64);
+                }
+                j.end_array();
+            }
+            j.end_object();
+        }
+        j.end_array();
+    }
+    j.end_object();
     j.key("audio").begin_object().field_int("rate", m.audio.rate as i64).field_strs("channels", &m.audio.channels).end_object();
     j.key("ports").begin_array();
     for p in &m.ports {

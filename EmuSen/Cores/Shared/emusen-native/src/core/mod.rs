@@ -21,7 +21,7 @@ pub use crate::ffi::StateMachine;
 pub use desc::*;
 pub use lend::{Kept, keep};
 pub use outbox::{Level, SEEK_SPAN, detail, emit, log, seek};
-pub use sys::{DeviceFrame, DeviceLend, FrameInfo, caps, event, flags, kind, pixel, status};
+pub use sys::{DeviceFrame, DeviceLend, FrameInfo, RawFrame, caps, event, flags, kind, pixel, status};
 
 /// What `create` receives: the image, the settings resolved against the schema with every key present, the files,
 /// and the pixel formats the host accepts (bit 0, RGBA8888, always set). Every slice is the host's and valid for the
@@ -252,6 +252,24 @@ pub trait Core: Sized + StateMachine {
         Err(status::NOT_SUPPORTED)
     }
 
+    /// `RAW_PICTURE`, since 1.10: machine info's `video.raw`, the encodings of the picture before the palette this
+    /// machine can hand, numbered by their place (EmuSen_CoreAPI.md §6.30).
+    fn raw_encodings(&self) -> Vec<RawEncoding> {
+        Vec::new()
+    }
+
+    /// `RAW_PICTURE`: keep the encodings whose bits `mask` sets for every frame drawn from the next `advance` on; the
+    /// crate has refused a bit past `raw_encodings`.
+    fn raw_select(&mut self, _mask: u64) -> Result<(), i32> {
+        Err(status::NOT_SUPPORTED)
+    }
+
+    /// `RAW_PICTURE`: the raw picture in encoding `raw` of the frame `frame` holds, its shape and values, or `None`
+    /// when that frame has none; `NOT_SUPPORTED` for an encoding past the list. The crate writes `bytes`.
+    fn raw_frame(&self, _raw: u32) -> Result<Option<(RawFrame, &[u8])>, i32> {
+        Err(status::NOT_SUPPORTED)
+    }
+
     /// Clears whatever the core records between calls, after every call that changes the machine.
     fn end_call() {}
 }
@@ -273,7 +291,8 @@ pub const EXPORTING: u64 = caps::RESET
     | caps::DEBUG_DISASSEMBLE
     | caps::MEDIA
     | caps::DEBUG_READS
-    | caps::DEVICE_PICTURE;
+    | caps::DEVICE_PICTURE
+    | caps::RAW_PICTURE;
 
 /// `core_exports!`'s compile-time check: the groups named are exactly the claimed bits that have exports.
 #[doc(hidden)]
@@ -304,6 +323,7 @@ macro_rules! __core_capability {
     (media) => { $crate::core::caps::MEDIA };
     (debug_reads) => { $crate::core::caps::DEBUG_READS };
     (device_picture) => { $crate::core::caps::DEVICE_PICTURE };
+    (raw_picture) => { $crate::core::caps::RAW_PICTURE };
 }
 
 /// One export: the C signature, forwarding to the generic body of the same name in `core::exports`.
@@ -374,6 +394,11 @@ macro_rules! __core_optional {
     };
     ($t:ty, device_picture) => {
         $crate::__core_export!($t, emusen_core_frame_device => frame_device(machine: *mut $crate::core::sys::Machine, out: *mut $crate::core::sys::DeviceFrame) -> i32);
+    };
+    ($t:ty, raw_picture) => {
+        $crate::__core_export!($t, emusen_core_raw_select => raw_select(machine: *mut $crate::core::sys::Machine, mask: u64) -> i32);
+        $crate::__core_export!($t, emusen_core_raw_info => raw_info(machine: *const $crate::core::sys::Machine, raw: u32, out: *mut $crate::core::sys::RawFrame) -> i32);
+        $crate::__core_export!($t, emusen_core_raw_copy => raw_copy(machine: *const $crate::core::sys::Machine, raw: u32, out: *mut u8, len: usize) -> i64);
     };
     ($t:ty, debug) => {
         $crate::__core_export!($t, emusen_core_debug_set => debug_set(machine: *mut $crate::core::sys::Machine, flags: u32, depth_target: i32, depth_guard: i32) -> i32);

@@ -89,9 +89,9 @@ fn every_descriptor_validates_against_its_committed_schema() {
         assert_eq!(schema::validate(s, doc), Vec::<String>::new(), "{doc}");
     }
     let v = crate::json::parse(info.as_bytes()).unwrap();
-    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.9"));
+    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.10"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
-    assert_eq!(names.len(), 22);
+    assert_eq!(names.len(), 23);
     assert!(
         info.contains(r#""battery":[{"which":0,"suffix":".srm"},{"which":1,"suffix":".card","kind":"removable","medium":"test.card","label":"Card slot"},{"which":2,"suffix":".mem","kind":"console","medium":"test.memory","label":"Inside the console"}]"#),
         "core info lists the system's battery files since 1.3, a removable one's kind since 1.7, a console one's and each slot's medium and label since 1.8, and nothing unset: {info}"
@@ -117,7 +117,7 @@ fn a_replacement_and_a_firmware_source_are_written_as_the_schemas_say() {
     assert!(doc.contains(r#""replacement":{"effect":"accuracy","cost":"slower"}"#), "{doc}");
     assert!(doc.contains(r#""effect":"none""#) && doc.matches("replacement").count() == 2, "{doc}");
     let m = MachineInfo { firmware: vec![(2, FirmwareSource::Replacement), (3, FirmwareSource::File)], ..MachineInfo::default() };
-    let measured = super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0, picture_settles: 0 };
+    let measured = super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0, picture_settles: 0, raw: &[] };
     let mi = super::desc::machine_info_json(&m, &measured, &[]);
     assert!(mi.contains(r#""firmware":[{"which":2,"source":"replacement"},{"which":3,"source":"file"}]"#), "{mi}");
     assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
@@ -128,7 +128,7 @@ fn a_replacement_and_a_firmware_source_are_written_as_the_schemas_say() {
 fn a_picture_settling_bound_is_written_under_the_state_only_when_declared() {
     use super::desc::{MachineInfo, PICTURE_SETTLES_MAX};
     let m = MachineInfo::default();
-    let of = |n: u32| super::desc::machine_info_json(&m, &super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0, picture_settles: n }, &[]);
+    let of = |n: u32| super::desc::machine_info_json(&m, &super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0, picture_settles: n, raw: &[] }, &[]);
     assert!(!of(0).contains("picture_settles"), "{}", of(0));
     assert!(of(240).contains(r#""loads_from":[],"picture_settles":240}"#), "{}", of(240));
     assert_eq!(schema::validate(schema::MACHINE_INFO, &of(PICTURE_SETTLES_MAX)), Vec::<String>::new());
@@ -140,7 +140,7 @@ fn a_picture_settling_bound_is_written_under_the_state_only_when_declared() {
 fn a_view_is_a_flag_of_its_space() {
     use super::desc::{MachineInfo, Space};
     let m = MachineInfo { spaces: vec![Space { read_only: true, view: true, ..Space::new(0, "CPUBUS") }, Space::new(1, "WRAM")], ..MachineInfo::default() };
-    let measured = super::desc::Measured { space_size: &|id| Some(if id == 0 { 1 << 24 } else { 1 << 16 }), battery_len: &|_| None, capabilities: 0, picture_settles: 0 };
+    let measured = super::desc::Measured { space_size: &|id| Some(if id == 0 { 1 << 24 } else { 1 << 16 }), battery_len: &|_| None, capabilities: 0, picture_settles: 0, raw: &[] };
     let mi = super::desc::machine_info_json(&m, &measured, &[]);
     assert!(mi.contains(r#"{"id":0,"name":"CPUBUS","size":16777216,"flags":["read_only","view"]}"#), "{mi}");
     assert!(mi.contains(r#"{"id":1,"name":"WRAM","size":65536,"flags":[]}"#), "{mi}");
@@ -496,8 +496,9 @@ fn read_ranges_reach_a_core_that_claims_them_and_an_unknown_kind_is_refused() {
 
 #[test]
 fn the_crates_constants_are_the_headers_own_numbers() {
-    assert_eq!(ABI_VERSION, 0x0001_0009);
+    assert_eq!(ABI_VERSION, 0x0001_000A);
     assert_eq!(caps::DEVICE_PICTURE, 1 << 21, "since 1.9");
+    assert_eq!((caps::RAW_PICTURE, caps::UNASSIGNED & caps::RAW_PICTURE, std::mem::size_of::<RawFrame>(), std::mem::offset_of!(RawFrame, bytes)), (1 << 22, 0, 32, 24), "since 1.10");
     assert_eq!(flags::CREATE_SHARED_REMOVABLE, 2, "since 1.7, beside CREATE_LENT");
     assert_eq!(flags::CREATE_SHARED_CONSOLE, 4, "since 1.8, beside CREATE_SHARED_REMOVABLE");
     assert_eq!((event::MEDIA_SEEK, flags::FILE_IMAGE, crate::core::SEEK_SPAN), (8, 0xFFFF_FFFF, 1 << 20));
@@ -505,9 +506,9 @@ fn the_crates_constants_are_the_headers_own_numbers() {
     assert_eq!((CreateParams::SIZE_1_0, std::mem::offset_of!(CreateParams, device), std::mem::size_of::<CreateParams>()), (88, 96, 104), "the device lent at 1.9 follows 1.3's flags and their padding");
     assert_eq!((status::BAD_STRUCT, status::BAD_IMAGE, status::STATE_VERSION), (-263, -264, -4));
     assert_eq!((status::LID_CLOSED, status::WRONG_MEDIA, status::NO_SUCH_DRIVE, flags::FILE_MEDIA, flags::MEDIA_RESTORE), (-265, -266, -267, 65_536, 1));
-    assert_eq!(EXPORTS.len(), 59);
+    assert_eq!(EXPORTS.len(), 62);
     assert_eq!(EXPORTS.iter().filter(|e| e.1 == 0).count(), 32);
-    assert_eq!(CAPABILITY_NAMES.len(), 22);
+    assert_eq!(CAPABILITY_NAMES.len(), 23);
     assert_eq!((caps::MEDIA, caps::DEBUG_READS, caps::UNASSIGNED & (caps::MEDIA | caps::DEBUG_READS)), (1 << 18, 1 << 19, 0));
     assert_eq!(super::EXPORTING & !(caps::SNAPSHOT | caps::FRAME_SERIAL | caps::ROW_REPEAT | caps::BATTERY_DIRTY), super::EXPORTING);
 }
@@ -707,4 +708,45 @@ fn a_slots_medium_label_and_port_are_written_only_where_set() {
     assert_eq!(schema::validate(include_str!("../../abi/v1/info.schema.json"), &text), Vec::<String>::new());
     let bad = info_json(&info, 0, &|_| Some(vec![Battery::console(0, ".brm").medium("Sega CD")]));
     assert!(!schema::validate(include_str!("../../abi/v1/info.schema.json"), &bad).is_empty(), "a medium outside [a-z0-9.]+ is refused by the schema");
+}
+
+fn raw_info(m: *mut Machine, raw: u32) -> (i32, RawFrame) {
+    let mut f = RawFrame { size: std::mem::size_of::<RawFrame>() as u32, element: 99, ..RawFrame::default() };
+    let r = unsafe { emusen_core_raw_info(m, raw, &mut f) };
+    (r, f)
+}
+
+// §6.30, since 1.10: an encoding is kept only once selected, is the frame's own picture through its palette, and an
+// encoding or a bit past machine info's list is refused with nothing changed.
+#[test]
+fn a_raw_picture_is_kept_only_when_selected_and_draws_the_frame_through_its_palette() {
+    let m = make("");
+    let mi = crate::json::parse(text(|o, l| unsafe { emusen_core_machine_info(m, o, l) }).as_bytes()).unwrap();
+    let listed = mi.get("video").unwrap().get("raw").unwrap().as_array().unwrap();
+    assert_eq!((listed.len(), listed[0].get("encoding").and_then(|e| e.as_str()), listed[0].get("element").and_then(|e| e.as_i64())), (1, Some(RAW_ENCODING), Some(1)));
+    let palette: Vec<i64> = listed[0].get("palette").unwrap().as_array().unwrap().iter().filter_map(|v| v.as_i64()).collect();
+    advance(m);
+    assert_eq!(raw_info(m, 0), (0, RawFrame { size: 32, ..RawFrame::default() }), "nothing kept before a select, every field but size zero");
+    assert_eq!(unsafe { emusen_core_raw_copy(m, 0, null_mut(), 0) }, 0);
+    assert_eq!(unsafe { emusen_core_raw_select(m, 0b10) }, status::NOT_SUPPORTED, "a bit past the list");
+    advance(m);
+    assert_eq!(raw_info(m, 0).0, 0, "the refused select kept nothing");
+    assert_eq!(unsafe { emusen_core_raw_select(m, 1) }, 0);
+    assert_eq!(raw_info(m, 0).0, 0, "kept from the next advance, not for the frame already drawn");
+    advance(m);
+    let (r, f) = raw_info(m, 0);
+    assert_eq!((r, f.element, f.width, f.height, f.stride, f.bytes), (1, 1, 8, 4, 8, 32));
+    let raw = bytes(|o, l| unsafe { emusen_core_raw_copy(m, 0, o, l) });
+    let frame = bytes(|o, l| unsafe { emusen_core_frame_copy(m, o, l) });
+    for (v, p) in raw.iter().zip(frame.chunks_exact(4)) {
+        assert_eq!(palette[*v as usize], (p[0] as i64) << 16 | (p[1] as i64) << 8 | p[2] as i64);
+    }
+    assert_eq!((raw_info(m, 1).0, unsafe { emusen_core_raw_copy(m, 1, null_mut(), 0) }), (status::NOT_SUPPORTED, status::NOT_SUPPORTED as i64));
+    let mut short = RawFrame { size: 16, ..RawFrame::default() };
+    assert_eq!(unsafe { emusen_core_raw_info(m, 0, &mut short) }, status::BAD_STRUCT);
+    assert_eq!(unsafe { emusen_core_raw_info(null(), 0, &mut short) }, status::NULL);
+    assert_eq!(unsafe { emusen_core_raw_select(m, 0) }, 0);
+    advance(m);
+    assert_eq!(raw_info(m, 0).0, 0, "a frame drawn after the encoding was let go has none");
+    unsafe { emusen_core_free(m) };
 }

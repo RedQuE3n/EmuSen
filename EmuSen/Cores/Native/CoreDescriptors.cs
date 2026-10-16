@@ -73,6 +73,9 @@ namespace EmuSen.Cores.Native
     // A drive of a machine claiming MEDIA: its number, words, kind, lid and whether it holds a disc - see EmuSen_CoreAPI.md §6.23.
     public sealed record CoreDrive(uint Drive, string Label, string Kind, bool LidOpen, bool Loaded);
 
+    // One encoding of the picture before the core's palette, machine info's video.raw[n]; Palette is 0xRRGGBB by value, empty for none - see EmuSen_CoreAPI.md §6.30.
+    public sealed record CoreRawEncoding(string Encoding, int Element, int MaxWidth, int MaxHeight, IReadOnlyList<int> Palette);
+
     // A machine's descriptor for its game; every field has the default EmuSen_CoreAPI.md §6.4 states for an older core that omits it.
     public sealed record CoreMachineInfo(string System, string? Region, ulong FrameRateNum, ulong FrameRateDen, int BaseWidth, int BaseHeight, int MaxWidth, int MaxHeight,
         uint AspectNum, uint AspectDen, int AudioRate, IReadOnlyList<string> Channels, IReadOnlyList<CorePort> Ports, IReadOnlyList<CoreSpace> Spaces,
@@ -88,6 +91,9 @@ namespace EmuSen.Cores.Native
 
         // Since 1.5: the frames after a load whose pictures may differ from the saving machine's; 0 for an older core - see EmuSen_CoreAPI.md §6.9.
         public int PictureSettles { get; init; }
+
+        // Since 1.10, RAW_PICTURE: the encodings of the picture before the palette, by index; none for an older core - see EmuSen_CoreAPI.md §6.30.
+        public IReadOnlyList<CoreRawEncoding> Raw { get; init; } = Array.Empty<CoreRawEncoding>();
     }
 
     // One setting of a v1 core's schema, its words and trade-off kept for presentation - see EmuSen_CoreAPI.md §6.13.
@@ -201,6 +207,8 @@ namespace EmuSen.Cores.Native
                 Firmware = Arr(r, "firmware").Select(f => new CoreFirmwareSource((uint)Long(f, "which"), Str(f, "source", "absent"))).ToArray(),
                 Drives = Arr(r, "drives").Select(d => new CoreDrive((uint)Long(d, "drive"), Str(d, "label"), Str(d, "kind"), Str(d, "lid") == "open", Bool(d, "loaded"))).ToArray(),
                 PictureSettles = (int)Long(state, "picture_settles"),
+                Raw = Arr(video, "raw").Select(e => new CoreRawEncoding(Str(e, "encoding"), (int)Long(e, "element"), (int)Long(e, "max_width"), (int)Long(e, "max_height"),
+                    Arr(e, "palette").Select(c => (int)c.GetInt64()).ToArray())).ToArray(),
             };
         }
 

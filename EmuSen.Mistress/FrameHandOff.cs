@@ -18,7 +18,7 @@ namespace EmuSen.Mistress
             public long Sequence;
             public double Aspect;
             public int Lines;
-            public byte[]? Raw;
+            public EmuSen.Serenity.RawPicture? Raw;
             public EmuSen.Serenity.Slang.SlangLend? Lend;
             public int State;
         }
@@ -35,7 +35,7 @@ namespace EmuSen.Mistress
             public void Cut() => Volatile.Write(ref _pool, null);
         }
 
-        public delegate void PresentFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence, double aspect, int lines, byte[]? raw, EmuSen.Serenity.Slang.SlangLend? lend);
+        public delegate void PresentFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence, double aspect, int lines, EmuSen.Serenity.RawPicture? raw, EmuSen.Serenity.Slang.SlangLend? lend);
 
         private readonly Latest<Frame> _latest;
         private readonly PresentFrame _present;
@@ -60,7 +60,7 @@ namespace EmuSen.Mistress
 
         // Any one thread at a time: the frame this replaces goes back now if the UI thread never took it.
         // lend is a core's picture on the device in place of the pixels - see EmuSen_DevicePicture.md §17.
-        public void Offer(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, byte[]? raw = null, EmuSen.Serenity.Slang.SlangLend? lend = null)
+        public void Offer(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, EmuSen.Serenity.RawPicture? raw = null, EmuSen.Serenity.Slang.SlangLend? lend = null)
         {
             var frame = new Frame { Pixels = pixels, Width = width, Height = height, RowRepeat = rowRepeat, Release = release, Sequence = sequence, Aspect = aspect, Lines = lines, Raw = raw, Lend = lend };
             Drop(Interlocked.Exchange(ref _newest, frame));
@@ -80,7 +80,9 @@ namespace EmuSen.Mistress
         // Whoever moves a frame out of Waiting owns its array: the UI thread by presenting it, the producer by dropping it.
         private static void Drop(Frame? frame)
         {
-            if (frame is not null && Interlocked.CompareExchange(ref frame.State, Dropped, Waiting) == Waiting) frame.Release?.Invoke(frame.Pixels);
+            if (frame is null || Interlocked.CompareExchange(ref frame.State, Dropped, Waiting) != Waiting) return;
+            frame.Release?.Invoke(frame.Pixels);
+            if (frame.Raw is { } raw) frame.Release?.Invoke(raw.Values);
         }
 
         private void Present(Frame frame)

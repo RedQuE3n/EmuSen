@@ -1,7 +1,7 @@
-//! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C19 on a library loaded through the core
+//! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C21 on a library loaded through the core
 //! ABI v1 alone, and a library's sidecar (§7.1). Each case reports its verdict and its evidence; §21 and §24 record what each
 //! checks and how, §28 the corpus form, which runs the checks that do not depend on the image once, §6.24 C17 and
-//! §6.25 C18, §6.27 and §6.28 C19.
+//! §6.25 C18, §6.27 and §6.28 C19, §6.29 C20, §6.30 C21.
 
 pub mod api;
 mod lender;
@@ -468,6 +468,7 @@ pub fn run(path: &Path, opts: &Options) -> Report {
     report.cases.push(c18(&mut s));
     report.cases.push(c19(&mut s));
     report.cases.push(c20(&mut s));
+    report.cases.push(c21(&mut s));
     report
 }
 
@@ -522,6 +523,7 @@ pub(crate) fn image_cases(lib: &Lib, path: &Path, opts: &Options) -> (Vec<Case>,
     cases.push(c18(&mut s));
     cases.push(c19(&mut s));
     cases.push(c20(&mut s));
+    cases.push(c21(&mut s));
     (cases, s.statuses)
 }
 
@@ -2017,6 +2019,182 @@ fn c20(s: &mut Session<'_>) -> Case {
     }
     s.lib.set_host(was.0, was.1);
     c.done("C20", "the picture on the device")
+}
+
+/// The frames C21 runs on each machine, or the session's where they are fewer.
+const RAW_FRAMES: u64 = 120;
+
+/// The encodings EmuSen_CoreAPI.md §6.30 registers: each name's element width and its largest value.
+const RAW_REGISTER: &[(&str, u64, u64)] = &[("nes.ppu", 2, 0x1FF)];
+
+/// Machine info's `video.raw[n]` as C21 reads it.
+struct RawEntry {
+    encoding: String,
+    element: u64,
+    max: (i64, i64),
+    palette: Vec<i64>,
+}
+
+/// Whether `name` is an encoding's name as §6.30 spells one: lower-case letters, digits, `.`, `_` and `-`, a dot in it.
+fn raw_name(name: &str) -> bool {
+    name.contains('.') && name.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"._-".contains(&b))
+}
+
+/// Every value of a raw picture, little-endian, `element` bytes each, row by row.
+fn raw_values(bytes: &[u8], f: &emusen_native::core::sys::RawFrame) -> Vec<u64> {
+    let (e, w, stride) = (f.element as usize, f.width.max(0) as usize, f.stride.max(0) as usize);
+    let mut out = Vec::with_capacity(w * f.height.max(0) as usize);
+    for y in 0..f.height.max(0) as usize {
+        for x in 0..w {
+            let at = y * stride + x * e;
+            out.push(bytes.get(at..at + e).map_or(u64::MAX, |v| v.iter().rev().fold(0u64, |a, &b| a << 8 | b as u64)));
+        }
+    }
+    out
+}
+
+/// Where a raw picture disagrees with the frame through its palette: each raw value against the frame's pixel at the
+/// centre of the rectangle it covers (§6.30's rule), the first difference named.
+fn raw_against_frame(values: &[u64], f: &emusen_native::core::sys::RawFrame, palette: &[i64], fi: &FrameInfo, frame: &[u8]) -> Option<String> {
+    let (w, h) = (f.width as i64, f.height as i64);
+    let repeat = fi.row_repeat.max(1) as i64;
+    let (fw, shown) = (fi.width as i64, fi.height as i64 * repeat);
+    for y in 0..h {
+        for x in 0..w {
+            let v = values[(y * w + x) as usize];
+            let Some(&rgb) = palette.get(v as usize) else { return Some(format!("value {v:#x} at ({x}, {y}) is past the palette's {} entries", palette.len())) };
+            let (px, py) = (((2 * x + 1) * fw) / (2 * w), ((2 * y + 1) * shown) / (2 * h) / repeat);
+            let at = (py * fi.stride as i64 + px * 4) as usize;
+            let Some(p) = frame.get(at..at + 3) else { return Some(format!("the frame has no pixel at ({px}, {py})")) };
+            let drawn = (p[0] as i64) << 16 | (p[1] as i64) << 8 | p[2] as i64;
+            if drawn != rgb {
+                return Some(format!("value {v:#x} at ({x}, {y}) is {rgb:#08x} by the palette and the frame's pixel ({px}, {py}) is {drawn:#08x}"));
+            }
+        }
+    }
+    None
+}
+
+/// C21, the raw picture (since 1.10, EmuSen_CoreAPI.md §6.30). Where `RAW_PICTURE` is claimed: machine info's encodings
+/// are well formed, and a registered one has its registered width; a bit or an encoding past the list and a short
+/// struct are refused; a machine that selects nothing is handed no raw picture; one that selects every encoding is
+/// handed one for every frame, within its bounds, its values within the register's and, where a palette is declared,
+/// each value drawn as the frame's pixel; the two machines' runs are the same, the selection being no part of the
+/// machine; and through a state load the raw picture stays the frame's. Where it is not claimed, no encoding is listed.
+fn c21(s: &mut Session<'_>) -> Case {
+    let mut c = Check::new();
+    let frames = s.opts.frames.min(RAW_FRAMES);
+    let body = |s: &mut Session<'_>, c: &mut Check| -> Result<(), String> {
+        let settings = s.opts.settings.clone();
+        let plain = s.machine(&settings)?;
+        let info = plain.machine_info().map_err(|r| format!("machine_info answered {r}"))?;
+        let listed = parse(&info).and_then(|i| i.get("video")?.get("raw")?.as_array().map(|a| a.to_vec()));
+        if !s.lib.claims(caps::RAW_PICTURE) {
+            c.that(listed.is_none(), || "machine info lists video.raw, and RAW_PICTURE is not claimed".to_owned());
+            c.note("RAW_PICTURE is not claimed, and no encoding is listed");
+            return Ok(());
+        }
+        let entries: Vec<RawEntry> = listed
+            .unwrap_or_default()
+            .iter()
+            .map(|e| RawEntry {
+                encoding: e.get("encoding").and_then(Value::as_str).unwrap_or("").to_owned(),
+                element: e.get("element").and_then(Value::as_i64).unwrap_or(0) as u64,
+                max: (e.get("max_width").and_then(Value::as_i64).unwrap_or(0), e.get("max_height").and_then(Value::as_i64).unwrap_or(0)),
+                palette: e.get("palette").and_then(Value::as_array).map(|p| p.iter().map(|v| v.as_i64().unwrap_or(-1)).collect()).unwrap_or_default(),
+            })
+            .collect();
+        if entries.is_empty() {
+            c.note("RAW_PICTURE is claimed and this machine lists no encoding");
+        }
+        for e in &entries {
+            c.that(raw_name(&e.encoding), || format!("encoding {:?} is not a name as section 6.30 spells one", e.encoding));
+            c.that(matches!(e.element, 1 | 2 | 4 | 8), || format!("{}: an element of {} bytes", e.encoding, e.element));
+            c.that(e.max.0 > 0 && e.max.1 > 0, || format!("{}: a largest size of {}x{}", e.encoding, e.max.0, e.max.1));
+            c.that(e.palette.len() <= emusen_native::core::RAW_PALETTE_MAX && e.palette.iter().all(|&v| (0..=0xFF_FFFF).contains(&v)), || format!("{}: a palette of {} entries, or one not 0xRRGGBB", e.encoding, e.palette.len()));
+            if let Some(&(_, element, _)) = RAW_REGISTER.iter().find(|r| r.0 == e.encoding) {
+                c.that(e.element == element, || format!("{}: an element of {} bytes, which the register gives as {element}", e.encoding, e.element));
+            }
+        }
+        let n = entries.len() as u32;
+        c.that(plain.raw_select(1u64 << n.min(63)) == status::NOT_SUPPORTED, || format!("raw_select of bit {n}, past the {n} encodings listed, was not refused"));
+        c.that(plain.raw_info(n).0 == status::NOT_SUPPORTED, || format!("raw_info of encoding {n}, past the list, was not refused"));
+        c.that(plain.raw_info_sized(0, 16).0 == status::BAD_STRUCT, || "raw_info with a struct of 16 bytes was not refused with BAD_STRUCT".to_owned());
+
+        let kept = s.machine(&settings)?;
+        let all = if n >= 64 { u64::MAX } else { (1u64 << n) - 1 };
+        c.that(kept.raw_select(all) == 0, || format!("raw_select of every encoding listed, {all:#x}, was refused"));
+        let mut handed = 0u64;
+        let check = |m: &Machine<'_>, f: String, c: &mut Check, must: bool| -> Result<bool, String> {
+            let mut any = false;
+            for (i, e) in entries.iter().enumerate() {
+                let (r, shape) = m.raw_info(i as u32);
+                if r == 0 {
+                    c.that(!must, || format!("{f}: no raw picture in {}, which was selected", e.encoding));
+                    c.that(shape == emusen_native::core::sys::RawFrame { size: shape.size, ..Default::default() }, || format!("{f}: raw_info answered none in {} and left fields set", e.encoding));
+                    continue;
+                }
+                c.that(r == 1, || format!("{f}: raw_info of {} answered {r}", e.encoding));
+                if r != 1 {
+                    continue;
+                }
+                any = true;
+                let bytes = m.raw_copy(i as u32).map_err(|r| format!("{f}: raw_copy of {} answered {r}", e.encoding))?;
+                let fits = shape.element as u64 == e.element && shape.width > 0 && shape.height > 0 && shape.width as i64 <= e.max.0 && shape.height as i64 <= e.max.1
+                    && shape.stride as i64 >= shape.width as i64 * e.element as i64 && shape.bytes == bytes.len() as i64
+                    && shape.bytes >= shape.stride as i64 * (shape.height as i64 - 1) + shape.width as i64 * e.element as i64;
+                c.that(fits, || format!("{f}: {}'s {}x{} of {}-byte values, stride {}, {} bytes ({} copied), against an element of {} and at most {}x{}", e.encoding, shape.width, shape.height, shape.element, shape.stride, shape.bytes, bytes.len(), e.element, e.max.0, e.max.1));
+                if !fits {
+                    continue;
+                }
+                let values = raw_values(&bytes, &shape);
+                if let Some(&(_, _, most)) = RAW_REGISTER.iter().find(|r| r.0 == e.encoding) {
+                    c.that(values.iter().all(|&v| v <= most), || format!("{f}: a value of {} past the register's {most:#x}", e.encoding));
+                }
+                if !e.palette.is_empty() {
+                    let fi = m.frame_info().map_err(|r| format!("{f}: frame_info answered {r}"))?;
+                    if let Some(why) = raw_against_frame(&values, &shape, &e.palette, &fi, &m.frame()) {
+                        c.that(false, || format!("{f}: {} does not draw the frame through its palette: {why}", e.encoding));
+                    }
+                }
+            }
+            Ok(any)
+        };
+        let step = |m: &Machine<'_>| -> Result<(), String> {
+            m.advance().map_err(|r| format!("advance answered {r}"))?;
+            m.present();
+            Ok(())
+        };
+        let mut state = None;
+        for f in 0..frames {
+            step(&plain)?;
+            step(&kept)?;
+            for i in 0..n {
+                c.that(plain.raw_info(i).0 == 0, || format!("frame {f}: a raw picture handed in encoding {i}, which nobody selected"));
+            }
+            if check(&kept, format!("frame {f}"), c, true)? {
+                handed += 1;
+            }
+            c.that(plain.frame() == kept.frame(), || format!("frame {f}: the picture of the machine keeping its raw pictures differs from the one keeping none"));
+            if f == frames / 2 {
+                state = Some(kept.save(0).map_err(|r| format!("state_save answered {r}"))?);
+            }
+        }
+        c.that(plain.save(0).ok() == kept.save(0).ok(), || "after the run, the state of the machine keeping its raw pictures differs from the one keeping none".to_owned());
+        if let Some(state) = state {
+            let r = kept.load(&state);
+            c.that(r == 0, || format!("state_load answered {r}"));
+            check(&kept, "after a state load".to_owned(), c, false)?;
+            step(&kept)?;
+            check(&kept, "the frame after a state load".to_owned(), c, true)?;
+        }
+        c.note(format!("{} encoding(s) listed ({}); {handed} of {frames} frames handed in every one selected, each within its bounds{}; none handed unasked, and the run the same as one keeping none", n, entries.iter().map(|e| e.encoding.as_str()).collect::<Vec<_>>().join(", "), if entries.iter().any(|e| !e.palette.is_empty()) { " and drawn as the frame through its palette" } else { "" }));
+        Ok(())
+    };
+    if let Err(e) = body(s, &mut c) {
+        c.that(false, || e);
+    }
+    c.done("C21", "the raw picture")
 }
 
 fn c15(s: &mut Session<'_>) -> Case {

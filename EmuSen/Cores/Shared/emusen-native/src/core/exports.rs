@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use super::lend::{self, Lend, Loan};
 use super::outbox::{Inner, Outbox, Route, library_log};
-use super::sys::{CreateParams, DeviceFrame, DeviceLend, Event, FileEntry, FrameInfo, Machine, caps, event, flags, kind, status};
+use super::sys::{CreateParams, DeviceFrame, DeviceLend, Event, FileEntry, FrameInfo, Machine, RawFrame, caps, event, flags, kind, status};
 use super::{Core, Create, File, Insert, Settings, SettingKind, desc};
 use crate::debug;
 use crate::ffi::{Status, copy_text, input};
@@ -407,6 +407,7 @@ pub unsafe fn machine_info<T: Core>(machine: *const Machine, out: *mut u8, len: 
         battery_len: &|which| core.battery(which).ok().map(|(d, _)| d.len() as i64),
         capabilities: T::CAPABILITIES,
         picture_settles: core.picture_settles(),
+        raw: &if T::CAPABILITIES & caps::RAW_PICTURE != 0 { core.raw_encodings() } else { Vec::new() },
     };
     let drives = if T::CAPABILITIES & caps::MEDIA != 0 { core.drives() } else { Vec::new() };
     let text = desc::machine_info_json(&core.machine_info(), &measured, &drives);
@@ -514,6 +515,45 @@ pub unsafe fn frame_device<T: Core>(machine: *mut Machine, out: *mut DeviceFrame
         }
         Ok(None) => 0,
         Err(code) => code,
+    }
+}
+
+/// Keeps the encodings of `mask` from the next advance (since 1.10, `RAW_PICTURE`); a bit past the list changes nothing.
+pub unsafe fn raw_select<T: Core>(machine: *mut Machine, mask: u64) -> i32 {
+    let Some(inst) = (unsafe { mutable::<T>(machine) }) else { return NULL };
+    let listed = inst.core.raw_encodings().len();
+    if listed < 64 && mask >> listed != 0 {
+        return status::NOT_SUPPORTED;
+    }
+    status_of(call(inst, |c| c.raw_select(mask)))
+}
+
+/// 1 with the shape of the frame's raw picture in encoding `raw`, 0 when the frame has none (since 1.10).
+pub unsafe fn raw_info<T: Core>(machine: *const Machine, raw: u32, out: *mut RawFrame) -> i32 {
+    let Some(inst) = (unsafe { shared::<T>(machine) }) else { return NULL };
+    if out.is_null() {
+        return NULL;
+    }
+    if (unsafe { std::ptr::read_unaligned(out as *const u32) } as usize) < size_of::<RawFrame>() {
+        return status::BAD_STRUCT;
+    }
+    let (f, answer) = match inst.core.raw_frame(raw) {
+        Ok(Some((f, values))) => (RawFrame { bytes: values.len() as i64, ..f }, 1),
+        Ok(None) => (RawFrame::default(), 0),
+        Err(code) => return code,
+    };
+    // Everything after `size`, which stays the host's.
+    unsafe { std::ptr::copy_nonoverlapping((&f as *const RawFrame as *const u8).add(4), (out as *mut u8).add(4), size_of::<RawFrame>() - 4) };
+    answer
+}
+
+/// The frame's raw picture in encoding `raw`, copied out; 0 bytes when it has none (since 1.10).
+pub unsafe fn raw_copy<T: Core>(machine: *const Machine, raw: u32, out: *mut u8, len: usize) -> i64 {
+    let Some(inst) = (unsafe { shared::<T>(machine) }) else { return NULL as i64 };
+    match inst.core.raw_frame(raw) {
+        Ok(Some((_, values))) => unsafe { copy_values(values, out, len) },
+        Ok(None) => 0,
+        Err(code) => code as i64,
     }
 }
 

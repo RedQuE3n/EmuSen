@@ -42,7 +42,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { ".nes" }, Discovered.Info.Systems.Single().Extensions);
             var library = Discovered.Open();
             Assert.True(library is { Available: true }, Discovered.Report);
-            Assert.Equal(CoreInterface.CapReset | CoreInterface.CapMutes | CoreInterface.CapRomPatches | CoreInterface.CapDebug | CoreInterface.CapDebugStack, library!.Capabilities);
+            Assert.Equal(CoreInterface.CapReset | CoreInterface.CapMutes | CoreInterface.CapRomPatches | CoreInterface.CapDebug | CoreInterface.CapDebugStack | CoreInterface.CapRawPicture, library!.Capabilities);
             Assert.True(MoonNative.Available, MoonNative.Report);
         }
 

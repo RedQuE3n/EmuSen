@@ -70,7 +70,8 @@ namespace EmuSen.WiseMan.Fixtures
             return $"{input} {GoldenTrace.Hash(masks)}";
         }
 
-        public static GoldenTrace Run(MoonGoldenRun run, byte[]? resumeFrom = null, int resumeAt = 0, Action<int, byte[]>? interval = null)
+        // setup runs once the ROM is loaded and frame after each frame is graded, for a test that looks at more than the trace.
+        public static GoldenTrace Run(MoonGoldenRun run, byte[]? resumeFrom = null, int resumeAt = 0, Action<int, byte[]>? interval = null, Action<MoonRtCore>? setup = null, Action<int, MoonRtCore>? frame = null)
         {
             Assert.True(MoonRtCore.Available, MoonNative.Report);
             byte[] rom = run.Rom();
@@ -84,7 +85,7 @@ namespace EmuSen.WiseMan.Fixtures
                 Unit = run.Steps > 0 ? "step" : run.Corpus ? "chain" : "frame",
             };
             if (run.Steps > 0) Steps(rom, run, trace);
-            else Frames(rom, run, trace, resumeFrom, resumeAt, interval);
+            else Frames(rom, run, trace, resumeFrom, resumeAt, interval, setup, frame);
             return trace;
         }
 
@@ -97,7 +98,7 @@ namespace EmuSen.WiseMan.Fixtures
             return path;
         }
 
-        private static void Frames(byte[] rom, MoonGoldenRun run, GoldenTrace trace, byte[]? resumeFrom, int resumeAt, Action<int, byte[]>? interval)
+        private static void Frames(byte[] rom, MoonGoldenRun run, GoldenTrace trace, byte[]? resumeFrom, int resumeAt, Action<int, byte[]>? interval, Action<MoonRtCore>? setup, Action<int, MoonRtCore>? frame)
         {
             trace.Input = ScriptName(run.Input, run.Frames);
             CoreOptions.BatteryRamDisabled = true;
@@ -109,6 +110,7 @@ namespace EmuSen.WiseMan.Fixtures
                 return;
             }
             core.SkipRendering = run.SkipRendering;
+            setup?.Invoke(core);
             if (resumeFrom is not null) core.LoadState(new MemoryStream(resumeFrom, writable: false));
             var protocol = run.Corpus ? new NesTestRomProtocol(a => core.ReadSpace("PRGRAM", a), core.Reset) : null;
             var chain = new byte[8];
@@ -139,6 +141,7 @@ namespace EmuSen.WiseMan.Fixtures
                 byte[] state = State(core);
                 string s = GoldenTrace.Hash(state), p = GoldenTrace.Hash(core.GetFrameBufferRgba()), a = GoldenTrace.Hash(MemoryMarshal.AsBytes(samples.AsSpan()));
                 if ((f + 1) % IntervalFrames == 0) interval?.Invoke(f + 1, state);
+                frame?.Invoke(f + 1, core);
                 if (!run.Corpus) trace.Rows.Add(new[] { (f + 1).ToString(CultureInfo.InvariantCulture), s, p, a });
                 else
                 {

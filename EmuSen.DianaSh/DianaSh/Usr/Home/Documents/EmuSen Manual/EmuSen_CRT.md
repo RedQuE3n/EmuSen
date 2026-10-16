@@ -2329,7 +2329,8 @@ weighed, as the code-design rules ask:
   that it shares the RGBA frame's size, rows and crop with no new geometry. Chosen.
 - **A capability on the core ABI v1**, for the Rust cores. Not built: MoonRT is not the default NES engine, and its
   frames fall back to the RGB path. When it becomes the default, the same surface is an optional capability and a
-  minor version of the ABI, the form `EmuSen_CoreAPI.md` gives extensions.
+  minor version of the ABI, the form `EmuSen_CoreAPI.md` gives extensions. *(Built 2026-10-16 as the minor 1.10,
+  once MoonRT had become the NES's only engine; the surface above is now that capability's host side, §22.8.)*
 
 The picture travels the way `lines` does (§16): `EmulatorSession.RawPicture`, a `raw` argument on Mistress's
 `FrameHandOff` and on `GameFrameControl.UpdateFrame`, and in `FilterChain` a child named `raw` and a uniform named
@@ -2453,8 +2454,9 @@ size of each bit's effect differs by 0.1 between the models and rests on how eac
 the burst that demodulates it finely) and six tests: the burst and the hue steps on the CPU; composite against the
 closed form for every entry; the artifacts' three-line, two-frame pattern from the PPU's signal; the NES without a raw
 frame drawn as before; Performance against Balanced; and each hue and emphasis bit decoded on the GPU (red is red,
-$30 neutral, each bit sparing its own hue). `MoonPpuDefectTests` checks that Moon's raw picture carries each pixel's
-colour number and the emphasis bits. Eight mutants, all caught:
+$30 neutral, each bit sparing its own hue). `MoonPpuDefectTests` checked that Moon's raw picture carried each pixel's
+colour number and the emphasis bits; it left with the C# core, and §22.8's tests hold MoonRT to the same. Eight
+mutants, all caught:
 
 | Mutant | Caught by |
 |---|---|
@@ -2472,10 +2474,72 @@ colour number and the emphasis bits. Eight mutants, all caught:
 - **The PPU's output impedance.** Its output is a resistor ladder, and the wave's edges slew by an RC that depends on
   the level; the documentation describes it without figures a model could use. The wave's edges are sharp here, up to
   each signal sample's average.
-- **MoonRT**, which keeps the RGB path until the surface reaches the core ABI (§22.1).
+- ~~**MoonRT**, which keeps the RGB path until the surface reaches the core ABI (§22.1).~~ Done 2026-10-16, §22.8.
 - **The 2C02E's differential phase**, −2.5° per row; a setting when a player asks for the earlier revision.
 - **PAL's 2C07**, whose wave differs (its phase alternates per line); §23's PAL model is the place for it.
 
+
+### 22.8 On the core ABI (2026-10-16)
+
+C# Moon's deletion (`Moon_Native.md` §9.5) took the only core that handed the raw picture, and from that merge the NES
+reached this filter as RGB. The picture before the palette is now the core ABI's minor 1.10 (`EmuSen_CoreAPI.md`
+§6.30): an optional capability, `RAW_PICTURE`, by which a core lists the encodings of its picture before its palette
+by registered name, and a host asks for the ones it reads. The NES's is `nes.ppu`, two bytes a pixel, the colour number
+in bits 0–5 and PPUMASK's bits 5–7 in bits 6–8, defined from §22.2's sources. MoonRT hands it (`Moon_Native.md` §9.7).
+
+**What changed here, and what did not.** The passes are the same text: they read the child `raw` as before, red the
+colour number and green the emphasis bits, and `rawSize` (0, 0) where none came. What changed is how they are given
+it:
+
+- **The encoding is named.** `ICore.RawPicture` was an RGBA-laid array that the filter took to be the NES's because
+  only Moon set it. It is now a `RawPicture` (Serenity) carrying its encoding, size, element width and row stride. A
+  filter states the encoding its `raw` child reads (`ScreenFilter.RawEncoding`; the CRT filter's is `nes.ppu`), and a
+  picture of another encoding, or none, binds `raw` to the frame itself with `rawSize` (0, 0), as before. So a later
+  encoding of another console reaches this filter only when a pass is written for it.
+- **One owner of the conversion.** `RawEncodings.ToImage` turns `nes.ppu` into the image the passes sample, once per
+  offered frame and only while the running chain reads `raw`, for the Skia path and the device path alike.
+- **Asked for, not always kept.** C# Moon filled its array every frame. Now the frame control says which encoding the
+  chosen filter reads on this console (`GameFrameControl.RawEncoding`, from `ScreenFilter.ReadsRaw`), Mistress passes
+  it to the session before each frame, and the engine selects it on the machine only when it changes. A frame drawn
+  with any other filter keeps no raw picture, and MoonRT pays nothing for it (`Moon_Native.md` §9.7).
+- **Lent, not shared.** The values are copied out into an array lent as the RGB frame is, and given back with the
+  frame's own, so the emulation thread never rewrites a picture the render thread is converting; C# Moon's array was
+  the PPU's own and was rewritten in place.
+
+**Tests.** §22.6's six tests now hand the filter `nes.ppu` pictures, so they run through the conversion as well as
+the passes, and pass with their thresholds unchanged. A seventh draws MoonRT's own picture end to end, through the ABI,
+the engine and the frame control: a program sets colour $16 and, from its NMI, writes all three emphasis bits about
+124 lines into the frame (from line 103 on MoonRT). Through the raw picture the lines after the write are darker than
+the lines before it; through the RGB frame, which MoonRT draws from its palette without emphasis, the two are the same
+colour. An eighth hands a `nes.ppu` picture to the device's chain, as the frame control does on the device path, and
+holds what it draws to what Skia draws (`DeviceFilterMatchTests`); before this the device path's raw input had no
+test. The measurements are in §22.8.1.
+
+#### 22.8.1 Measured (2026-10-16)
+
+| Check | Result |
+|---|---|
+| §22.6's six tests, and PAL's NES case, handed `nes.ppu` pictures | pass, thresholds unchanged |
+| MoonRT's emphasis written in the middle of the frame, through the raw picture | from line 103; the lines after it 0.40 of the lines before (0.055 against 0.137, mean light) |
+| The same frame through its RGB frame | 0.101 either side |
+| The device's chain against Skia on a `nes.ppu` picture of all 64 colours and the eight emphasis settings, every quality and signal (1440 × 1080) | within `EmuSen_DevicePicture.md` §3.3's tolerance in all nine: at most 2 of 4,665,600 channels beyond one in each, all at ties but one channel in one variant |
+
+**Against C# Moon's raw path.** §22.4's game figures were taken without their conditions recorded. They were found by
+trying the likely ones: MoonRT's frame 900 with no input, the filter at Accurate on composite with every other value
+its default, in a 1440 × 1080 window, mean of every channel over the window. Taken that way now (copies of the games;
+the library read only):
+
+| Game | §22.4, palette | Now, palette | §22.4, PPU's signal | Now, PPU's signal | Signal over palette, then and now |
+|---|---|---|---|---|---|
+| Super Mario Bros. 3 | 97.6, 87.2, 70.1 | 98.6, 88.3, 71.1 | 126.5, 115.0, 103.0 | 128.1, 116.7, 104.4 | 1.296, 1.319, 1.469 and 1.299, 1.322, 1.468 |
+| Mega Man 2 | 26.4, 21.6, 36.6 | 27.3, 22.5, 37.4 | 36.8, 30.4, 44.5 | 38.3, 31.9, 45.8 | 1.394, 1.407, 1.216 and 1.403, 1.418, 1.225 |
+
+Both paths are about 1% brighter than on 2026-10-10, and by the same factor: the ratio of the PPU's signal to the
+palette is the same to within 0.003 on Super Mario Bros. 3 and 0.011 on Mega Man 2. A drift common to both paths is the
+filter's, changed since §22.4 was measured (§23 and §24 came after it), and not the raw picture's, which reaches the
+passes only on the signal path. The window, the frame and the defaults are an inference from the match, not a record;
+they are written here so that the next comparison need not infer them. Other windows tried, for the record: 640 × 480,
+1280 × 960 and 1920 × 1080, and the tests' reference values (`level` 1, `maskLimit` 0), none of which comes near.
 
 ## 23. PAL as a model of its own (2026-10-10)
 

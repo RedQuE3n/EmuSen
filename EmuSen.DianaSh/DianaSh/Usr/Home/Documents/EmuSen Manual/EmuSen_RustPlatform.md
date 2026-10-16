@@ -3048,3 +3048,37 @@ cheaper.
 **Why the sidecar tool is an input.** Leaving it out was considered and rejected. The sidecar is part of what ships.
 A change to the tool that writes it can change it. And a sidecar cannot be regenerated on another system's runner,
 because writing it means loading the library.
+
+### 28.8 The runs (measured 2026-10-16, branch `ci-speed`)
+
+Each run below was pushed only after the one before it had finished. "Library minutes" sums the library jobs and
+the reuse jobs. "Libraries ready" is when the last of them finished, counted from the push.
+
+| Run | What the push changed | Built | Taken | Library minutes | Libraries ready |
+|---|---|---|---|---|---|
+| 38861419247 (`windows-platform`, before §28 and `Moon_Native.md` §8.6) | — | 28 | — | 187.7 | 54.5 min |
+| 38921031260 | the workflow, which changes every key | 21 | 0 | 72.8 | 22.3 min |
+| 38928103614 | MoonRT's `Cargo.toml` | 3, MoonRT's | 18 | 5.8 | 5.2 min |
+| 38933024285 | `RustCores.props`, an input of no library | 0 | 21 | 2.1 | 4.3 min |
+
+- **What each run built.** The plan built exactly what the change reached. A change to MoonRT built MoonRT on
+  its three platforms and nothing else. A change outside every library's inputs built nothing.
+- **What each part costs.** The plan job takes 0.5–0.8 minutes, and a reuse job about 6 seconds.
+- **The two keys agree.** The key a library job computed on its own runner, Linux or Windows, matched the plan's
+  for every library. The first run of the workflow, 38898739867, which still built osx-x64, checked this: its
+  keyed artefacts' names equal the keys computed from the same tree off the runners.
+- **The WiseMan jobs ran on every one of the three runs**, on libraries built, taken, or both, and gave the same
+  result each time:
+
+  | Platform | Result |
+  |---|---|
+  | win-x64 | passed |
+  | osx-arm64 | passed; the cores' step 908 of 908 |
+  | linux-x64 | the cores' step 907 passed and 1 failed |
+
+  The one failure is `DiamondShaderTests.Every_compiled_shader_of_the_renderer_is_the_compilation_of_its_source`.
+  It fails the same way on `WiseMan`'s own run 38897939664, so it predates this change. In 38933024285 the macOS
+  `shared` job first failed the conformance kit's `the_seeded_faults_fail_the_same_cases_in_a_corpus`, the
+  intermittent case §27.3 records, and passed when that job was run again. The WiseMan jobs ran after it.
+- **The tests are now the critical path.** With nothing to build, a run still takes about 30 minutes, almost all of
+  it the WiseMan jobs' 24–32 minutes of tests. That is the next place to look.

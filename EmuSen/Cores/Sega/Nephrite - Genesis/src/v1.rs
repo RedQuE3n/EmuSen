@@ -379,9 +379,8 @@ impl Core for Machine {
         }
         #[cfg(feature = "mcd")]
         let beneath = request.settings.get(BENEATH_KEY) == Some(BENEATH_VALUE);
-        #[cfg(not(feature = "mcd"))]
-        let beneath = false;
-        if let Some(f) = request.files.iter().find(|f| f.which > SK_PATCH && f.which < MEDIA_FILE && !(beneath && f.which == MODE1_BRAM)) {
+        // File 11, the backup RAM of a Sega CD beneath, is core info's for every cartridge, and read only with one.
+        if let Some(f) = request.files.iter().find(|f| f.which > SK_PATCH && f.which < MEDIA_FILE && f.which != MODE1_BRAM) {
             detail(&format!("file {} is not one Nephrite names", f.which));
             return Err(status::BAD_FILE);
         }
@@ -1219,7 +1218,7 @@ mod tests {
         let mut plain = made(b"", vec![]).unwrap();
         assert!(plain.mcd().is_none());
         assert_eq!(plain.load_state(&state[..n]), Err(crate::state::StateError::OtherSystem(3)));
-        assert!(made(b"", vec![emusen_native::abi::File { which: MODE1_BRAM, data: &brm }]).is_err(), "file 11 without the Sega CD beneath");
+        assert!(made(b"", vec![emusen_native::abi::File { which: MODE1_BRAM, data: &brm }]).unwrap().mcd().is_none(), "file 11 without the Sega CD beneath, taken and unused");
         assert_eq!(Machine::battery_files("md").unwrap().iter().map(|b| b.which).collect::<Vec<_>>(), [0, MODE1_BRAM]);
     }
 }

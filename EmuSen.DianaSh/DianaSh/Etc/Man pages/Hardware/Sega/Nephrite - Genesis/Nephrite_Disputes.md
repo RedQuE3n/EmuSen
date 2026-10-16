@@ -1700,8 +1700,14 @@ CPUs' disputes in their own record pages.
   (`$80`), CDBSTAT (`$81`, the table read at its BP12-BP14), CDCSTOP (`$89`), CDCSTAT (`$8A`), CDCREAD (`$8B`),
   CDCTRN (`$8C`, a0 and a1) and CDCACK (`$8D`), each with the parameters BM's reference gives that call; its user calls
   are found through its header and placed at `$5F28`-`$5F3A`, and run. Its menu is reached (`Nephrite_OpenBios.md` §8).
+  *Added 2026-10-15:* the five commercial discs and the suite's sound test, each run on the open BIOS, called besides
+  MSCSTOP (`$02`, the suite), MSCPAUSEON (`$03`, Mickey Mania), ROMPAUSEON (`$08`, Lunar), ROMPAUSEOFF (`$09`, Chuck
+  Rock II), MSCPLAY1 (`$12`, the suite and Sonic CD), MSCPLAYR (`$13`, Mickey Mania), ROMREAD (`$17`, Lunar), ROMSEEK
+  (`$18`, Chuck Rock II), CDBTOCREAD (`$83`, Mickey Mania), CDBPAUSE (`$84`), FDRSET (`$85`) and FDRCHG (`$86`, Sonic
+  CD and Mickey Mania), each game going on as a game whose call was answered goes on: the sound test's CD-DA plays at the
+  level and from the moment it plays on the player's BIOS (`Nephrite_OpenBios.md` §12), Sonic CD's title music plays.
 - Referee: none.
-- Conclusion: the numbers and slots as the include file gives them. Those nine numbers and the entries `_CDBIOS`,
+- Conclusion: the numbers and slots as the include file gives them. Those nine numbers, the twelve added, and the entries `_CDBIOS`,
   `_USERCALL0`, `_USERCALL1`, `_LEVEL2`, `_LEVEL4` and `_LEVEL5` are measured by the suite; every other number and slot is
   argued until a program calls it, each added here as one does.
 - Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu`.

@@ -356,6 +356,40 @@ CDC FLAGS, CDC DMA2, CDC DMA3 and CDC DMA1 all "OK", "Diagnostics complete." at 
 (`mcd_verificator_runs_in_mode_1_on_the_open_bios`). Its mode 2 run is unchanged at eighteen of eighteen. The crate's
 182 tests pass, and those of the builds without each attachment.
 
+## 12. The discs on the open BIOS against the player's BIOS, the Genesis unchanged, and the kit (2026-10-15)
+
+**The comparison.** Each disc run in Nephrite for 6,000 frames, once on the player's BIOS (a model 1 American one, a
+model 1 European one for Sonic CD's European disc) and once on the open BIOS, both with the same blank backup RAM made
+by §10's footer rules and no pad pressed. Only the game was looked at: a picture was kept only from frame 1,500 on and
+only while the main CPU ran outside the boot ROM, the sound's level only from there. The two boots differ in length,
+so the games are compared by what they show, not frame by frame.
+
+| Disc | On the player's BIOS | On the open BIOS |
+|---|---|---|
+| The 240p Test Suite | its main menu at frames 2,100 and 2,400 | the same menu, the two pictures equal byte for byte at both frames |
+| The suite's sound test, CD-DA | track 3 plays, peaks 832, 760, 1,355, 1,399 a hundred frames apart | the same peaks in the same order, from about a hundred frames earlier |
+| Chuck Rock II | its intro story, a landscape, then Chuck and the dinosaur, with sound | the same story with sound, further on at each frame |
+| Lunar - Eternal Blue | its intro, a blue planet beside a moon, with music | its message that its save data was destroyed (a backup RAM call the open BIOS does not yet answer) |
+| Mickey Mania | its opening, then its demonstration, Mickey and Pluto in the forest, with sound | the same: the Disney logo, then the forest with Mickey and Pluto, with sound |
+| Sonic CD (USA) | the title, "Press Start", with its music | "Internal RAM is full. Game will start without save option.", then, START pressed, the title with its music |
+| Sonic CD (Europe) | its opening film from frame 4,000 | the "RAM is full" message |
+
+What differs is the backup RAM's directory, which waits for §5 Q2's specification. **Found by the comparison**: Sonic
+CD's title asked for track 26 and heard nothing (§11's conversion).
+
+**The Genesis unchanged.** The 71 digests of `Nephrite_Attachments.md` §11.1 (the kit's sample, the bench's games, the
+240p disc with mcd-verificator as its image and its sheet, and without a boot ROM) equal the baseline's byte for byte.
+
+**The kit** (`emusen-core-conform`, core ABI 1.9): the Genesis sample 64 of 64 with the core's cases; the 240p disc with
+mcd-verificator as file 2 compliant; the 240p sheet and the five discs with no firmware file, on the open BIOS, 600
+frames each, compliant. Two failures on the way, each fixed:
+
+- **C14 on every cartridge**: core info lists file 11 for `md` (§11), and create refused it on a cartridge with no
+  Sega CD beneath. A cartridge's machine now takes file 11 and uses it only with one.
+- **C7 on Chuck Rock II**: a state saved during a seek's first exchanges loaded its travel count as 1 where it was 0,
+  the load's "at least 1" guard meant for the travel that follows; save, load, save differed. The guard now applies
+  only once the busy exchanges are over, where the count divides; the format is unchanged.
+
 ## 9. Reading log (stage 10)
 
 Opened and read: `Nephrite_Plan.md` whole; `Nephrite_Native.md` §49–§52, §53.1–§53.3, §53.5, §54.1, §54.2, §54.3 from

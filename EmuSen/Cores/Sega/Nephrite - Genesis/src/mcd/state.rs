@@ -57,7 +57,8 @@ fn mode_from(w: [u32; 7]) -> Mode {
         1 => Mode::Spinning(w[1]),
         2 => Mode::ReadingToc(w[1]),
         3 => Mode::Stopped(w[1] as u8),
-        4 => Mode::Seeking { target: w[1], play: w[2] != 0, busy: w[3], left: w[4], total: w[5].max(1), from: w[6] },
+        // The travel count divides only once the busy exchanges are over; before, it is 0 and kept so (Nephrite_OpenBios.md §12).
+        4 => Mode::Seeking { target: w[1], play: w[2] != 0, busy: w[3], left: w[4], total: if w[3] == 0 { w[5].max(1) } else { w[5] }, from: w[6] },
         5 => Mode::Approach { target: w[1], play: w[2] != 0, status: w[3] as u8 },
         6 => Mode::Playing,
         7 => Mode::Paused { low: w[1], high: w[2], gap: w[3] != 0 },

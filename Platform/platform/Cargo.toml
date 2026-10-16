@@ -17,6 +17,8 @@ emusen-dianash = { path = "../dianash" }
 dianash-text = { path = "../dianash-text" }
 # The module ABI's trait, by which the linked modules are handed to each shell.
 dianash-module = { path = "../dianash-module" }
+# EmuSen's command modules over the session service, linked in beside it for the C# frontends' shells (§8.1, §13.11).
+emusen-debug = { path = "../emusen-debug" }
 emusen-endymion = { path = "../endymion" }
 emusen-galaxia = { path = "../galaxia" }
 emusen-native = { path = "../../EmuSen/Cores/Shared/emusen-native" }

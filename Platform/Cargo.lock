@@ -160,6 +160,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-debug"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
+ "emusen-session-service",
+]
+
+[[package]]
 name = "emusen-dianash"
 version = "0.1.0"
 dependencies = [
@@ -210,6 +219,7 @@ version = "0.1.0"
 dependencies = [
  "dianash-module",
  "dianash-text",
+ "emusen-debug",
  "emusen-dianash",
  "emusen-disc",
  "emusen-endymion",

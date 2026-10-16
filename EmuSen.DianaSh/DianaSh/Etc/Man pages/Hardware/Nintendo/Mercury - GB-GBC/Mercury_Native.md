@@ -3686,3 +3686,44 @@ holds the factory's answers for that name on each Game Boy image.
 failed load, returns to the library with `Failed to load <game>: ` and that sentence on its status line.
 `MercuryRtFallbackTests` holds it in a child process started with `EMUSEN_MERCURY_NATIVE=0`. The firmware probe that
 runs before a load already treats that exception as "nothing to ask for".
+
+### 15.5 The record of the change, measured on 2026-10-16
+
+- **The corpus**: under each model the 173 ROMs gave the baseline's verdicts, which stand at Auto 126 passed, 42
+  failed and 5 without a verdict, and 124, 44 and 5 on each forced console, as stage 9 left them.
+- **The goldens**: every trace reproduced, the 36 frame runs and 3 step programs, the 176 random programs, the 173
+  corpus traces and the four games, with the deliberately broken trace caught in each column.
+- **The blast radius**, built from the deletion's tree: the Mercury and MercuryRT classes, CoreRegistration,
+  CoreCatalog, CoreDiscovery, CoreFactory, the Game Boy's cheat codecs and wiring, the memory cards and save media,
+  battery saves, the DianaSh golden corpus, the session service's parity run, Mistress's graphics settings, game
+  engine and Model windows, the window-fit audit, and the tests that named the C# core (audio limit, controller
+  ports, engine features, rewind, state headers, display aspect, bindings); 1,366 cases, of which three failed
+  first and were then mended: a debug-view case that compared the two engines' summaries (deleted), and the DianaSh
+  goldens' `mercury` target, now MercuryRT. The target is gone: of its 29 cases, the 17 in commands that had a
+  `mercuryrt` case as well were deleted, and the 12 that were a command's only Game Boy case were retargeted to
+  `mercuryrt` with their recordings unchanged.
+- **The debugger**: the DianaSh golden corpus runs 29 of the Debugging Tools Reference's commands on MercuryRT's
+  target (`addr`, `bp`, `bt`, `callers`, `channels`, `cheat`, `counters`, `cov`, `cpus`, `disasm`, `dma`, `eval`,
+  `framelog`, `mem`, `mute`, `pal`, `profile`, `readers`, `regs`, `setreg`, `spaces`, `sprites`, `summary`, `tile`,
+  `tilemap`, `trace`, `vectors`, `watch` and `writers`), each as recorded but `summary`'s sound line (§15.2); the
+  coverage map and the profile are held by the armed-against-plain runs as well (§15.3).
+- **The registration golden** was recorded again for the removed choice alone: the Game Boy's engine row and its
+  default are null, the factory builds MercuryRT for every engine name a Game Boy image is asked for, and so a name
+  that is no engine draws no notice on the Game Boy, as on any console with one engine; the per-engine rows of
+  `Mercury (C#)` and `MercuryRT (Rust)` are gone and the retired name's are new. Every other console's answers are
+  unchanged.
+- **The crate's tests**: 38 cases in five binaries, all passing; the crate itself did not change at this stage.
+- **The whole solution** builds.
+- **Recording** a golden or a listing now writes from MercuryRT: `EMUSEN_MERCURY_GOLDEN_RECORD=1` replaces
+  `=Mercury`, and the commit that does so is a re-baseline under §3.7's second rule.
+  `EMUSEN_MERCURY_PALETTES_RECORD` left with the C# table it wrote from.
+
+### 15.6 What is not done
+
+- **The pre-stable interface.** `MercuryMachine` and the `mercuryrt_*` exports it calls stay, for the native host's
+  tests and the platform digests, until that interface retires (`EmuSen_CoreAPI.md` §13.5).
+- **The version-5 states of the synthetic programs** have no writer left (§15.3); only the real games' kept states
+  still prove the read.
+- **MoonRT and MarsRT** keep `PortEngine`'s and their own mirrors until their C# cores leave.
+- **Stage 9's open items** stand: the corpus's two forced-console columns graded by verdict alone, the PPU's line
+  boundary as the next piece of work and its re-baseline, MagenTests' HDMA case, and the handheld.

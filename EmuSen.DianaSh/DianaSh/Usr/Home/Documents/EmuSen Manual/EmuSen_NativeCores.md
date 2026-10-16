@@ -190,7 +190,8 @@ The comparison below renamed the cores, dropped blank lines and braces, and comp
 - **Libretro itself.** §6 compares; `EmuSen_Libretro.md` remains the plan for a libretro build, and §6.3 says how it
   would sit on this interface.
 - **The C# cores.** Venus, Moon, Mercury and Mars keep their own `ICore` implementations. Registration covers them.
-  The ABI does not, because they have none.
+  The ABI does not, because they have none. *Since 2026-10-16 C# Mercury is deleted (`Mercury_Native.md` §15):
+  MercuryRT is the Game Boy's only engine, a port with no mirror, and `PortEngine`'s mirror became optional for it.*
 - **A stable ABI for third parties.** The libraries ship beside the assemblies that load them. The version check
   guards a mismatched prebuilt library, not an ecosystem.
   *Superseded 2026-10-01: a stable ABI for third parties is now a goal, decided that day; `EmuSen_CoreAPI.md` §4.8
@@ -1409,6 +1410,8 @@ measured and not kept.
 - A digest over the picture, the sound and the state matches pre-move MercuryRT on 24 runs. That is 7 games in the
   three models from boot and from a state, and 3 library resume states.
 - The fallback to Mercury (C#), with `EMUSEN_MERCURY_NATIVE=0` and without the library, is tested in a child process.
+  *Since 2026-10-16 there is no fallback: without the library a Game Boy game does not load, and the status line says
+  why (`Mercury_Native.md` §15.4).*
 
 **P4 held for the plain path, and was not enough.** The symbol diff found one inlining regression, and once it was
 removed every function of the plain path had its old size. The functions that still differ are all cold, though not

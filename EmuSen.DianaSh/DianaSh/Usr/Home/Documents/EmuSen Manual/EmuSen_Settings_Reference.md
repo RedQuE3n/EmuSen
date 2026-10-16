@@ -1816,7 +1816,7 @@ loaded, as the Engine row's choice does (§4.44).
 as `MercuryCore.ModelSettings` and returned by `CoreCatalog.SettingsFor("GB")`, as the N64 declares its video settings.
 Both engines honour it:
 
-- `MercuryCore` and `MercuryRtCore` each read it at load;
+- `MercuryCore` and `MercuryRtCore` each read it at load (*since 2026-10-16 `MercuryRtCore` alone, which declares the row as `MercuryRtCore.ModelSettings`: C# Mercury was deleted, `Mercury_Native.md` §15*);
 - a change before a game's first frame loads the game again at once, as the Expansion Pak row does.
 
 Mistress does nothing model-specific. It hands the core its console's settings after the load and before the first
@@ -4319,7 +4319,9 @@ ES-DE lets a player choose "alternative emulators to use per game system" and, i
 the game's choice "will take precedence and override the system-wide emulator selection"; its `altemulator` badge shows
 the per-game choice alone (UG "Other settings", "Metadata editor"). In Mistress the system-wide choice already exists:
 Graphics Settings' **Engine** row for the consoles with two implementations (§4.44: Mars (C#) or MarsRT (Rust) for the
-N64, Mercury (C#) or MercuryRT (Rust) for the Game Boy and Game Boy Color). The metadata editor gains ES-DE's
+N64, Mercury (C#) or MercuryRT (Rust) for the Game Boy and Game Boy Color, until C# Mercury was deleted on 2026-10-16:
+the Game Boy has one engine since, no Engine row and no alternative emulator, and a stored choice of Mercury (C#) runs
+the game on MercuryRT with one line on the log, `Mercury_Native.md` §15.4). The metadata editor gains ES-DE's
 **Alternative emulator** field, after Controller:
 
 - For a game of a console with two engines it offers *None (the console's engine)* and the console's two engines; for

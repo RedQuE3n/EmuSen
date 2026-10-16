@@ -41,6 +41,13 @@ against it, as §5 of `Mars_Native.md` was. The method carries over unchanged: t
 state the format, a shim implements its interfaces, and the port is proven frame for frame before it is offered. The
 paragraph above, "2D consoles' cores are C#", is retired by this one, and "the cores are C#, permanently" with it.
 
+*Revised 2026-10-16, by decision:* **a C# core is not kept as an oracle once its Rust core replaces it.** The C#
+core and the tests that need it are deleted together, and the Rust core's oracles are the goldens recorded from the
+C# core before it left, the console's own test corpus and the conformance kit. The method of the paragraph above
+holds up to that point and no further: the C# core is the oracle while the port is proven, and the goldens are its
+record afterwards. MercuryRT was the first port to reach this (`Mercury_Native.md` §15): the Game Boy has one engine,
+in Rust, and C# Mercury is gone.
+
 **The one arguable case is `EmuSen.Endymion/AudioPlayer.cs`,** the only `unsafe` in the tree — a thin SDL3 binding on the audio submit path. It stays C#. Moving it to Rust would *add* an FFI boundary rather than remove one: today there is one hop (C# → SDL3), and a Rust sink would make it two with no accuracy or safety gained. Recorded here so the next reader does not have to re-derive it from the `unsafe` keyword alone.
 
 *Retired 2026-10-07, by decision (`EmuSen_RustPlatform.md` §9, Q12): Endymion's device half is to be ported to Rust

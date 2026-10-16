@@ -2853,8 +2853,10 @@ sidecars', were fixed here.
 - **Linux's Shaderc (not fixed here).** On the ubuntu-24.04 runner Silk.NET cannot load Shaderc's library at all,
   which fails Serenity's compiler, cache and parity cases and Diamond's shader case, in 0.9.0's run as in this
   branch's. The file is there, at `runtimes/linux-x64/native/libshaderc_shared.so`, and `ldd` finds every library it
-  needs; on this project's Fedora machine the same test host loads that very file (traced with `LD_DEBUG`). The
-  workflow now also prints the system's own words for loading it, which is where the cause will be read.
+  needs; on this project's Fedora machine the same test host loads that very file (traced with `LD_DEBUG`). Run
+  38869334249 had the runner load it with Python's `ctypes`, and it loads: the system can load the library, and what
+  fails is Silk.NET's search for it in the test host's folder on that runner. That is where the next step starts
+  (the loader's trace in CI, or the path the binding is given); it is left open here, as it is not Windows'.
 
 **The last run, 38861419247.** The WiseMan job passed on win-x64 and on osx-arm64, every step: the cores'
 comparison 1,282 of 1,282 on each, and the platform's six steps as §27.5's table on Windows. On linux-x64 it failed on

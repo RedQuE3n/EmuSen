@@ -345,7 +345,7 @@ is what the surfaces forbid. `SystemPack` gains `Media`, the console's `SaveMedi
   16×16 4-bit frames. `Delete` marks a file's frames A1h–A3h and keeps its blocks, as the BIOS does, so that an undelete
   stays possible; `Copy` takes the lowest free frames and writes the chain with its checksums; `Format` writes the
   directory block as psx-spx lists a formatted card's.
-- **`n64.pak`, built 2026-10-16** (§11.7), as designed here: 32 KiB of 256-byte pages; the module will read its ID area, its index table and its note
+- **`n64.pak`, built 2026-10-16** (§11.8), as designed here: 32 KiB of 256-byte pages; the module will read its ID area, its index table and its note
   table from N64brew's public "Controller Pak" pages, its unit the page (123 free on a formatted pak), a note's id its
   game code, publisher code and name. Written when MarsRT joins the ABI (§7.2).
 - **`mcd.ramcart` and `mcd.backup`, designed**: one module for both, the BIOS's backup RAM directory, read from Sega's
@@ -428,7 +428,7 @@ changes. A multitap's further slots, when Diamond offers them as files, are furt
 
 ### 7.2 The N64's Controller Pak: how MarsRT joins
 
-*Built 2026-10-16 (§11.7, `Mars_Native.md` §7.7). As built, the cartridge's save keeps the name C# Mars and MarsRT
+*Built 2026-10-16 (§11.8, `Mars_Native.md` §7.7). As built, the cartridge's save keeps the name C# Mars and MarsRT
 have always written, `<game>.srm`, whatever the chip; the suffixes below were this section's guess.* MarsRT is not on
 the core ABI v1 yet, and this page does not move it. When it moves, it lists its cartridge's save
 (`.eep`, `.sra`, `.fla`) as `game`, and four paks as `removable`, `medium: "n64.pak"`, `port` 0 to 3, labels
@@ -577,7 +577,7 @@ unchanged: with no file it starts from zeros, as the kit and the digests expect.
 (`Diamond_Cards.md` §10.3's three, reproduced by Diamond's unedited tests). The kit on the sample's nine discs at 1,800
 frames passes the core's cases and 9 of 9 images, C19 among them, in 275.3 s at core ABI 1.8.
 
-### 11.7 The N64's Controller Paks (2026-10-16)
+### 11.8 The N64's Controller Paks (2026-10-16)
 
 **The core.** MarsRT, now on the core ABI v1 (`Mars_Native.md` §7), declares file 0 (`.srm`) the cartridge's, `game`,
 and files 1 to 4 the paks of ports 1 to 4, `removable`, medium `n64.pak`, labels `Controller 1` to `Controller 4`,

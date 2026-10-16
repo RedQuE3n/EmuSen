@@ -6676,7 +6676,7 @@ fails on file 1, the mutant killed. A load marks the cartridge's save unsaved (�
 was, so the files a host writes after a load are the game's alone.
 
 **The format module** is `EmuSen.Crystal/Systems/N64/N64PakFormat.cs`, read from N64brew's *Controller Pak/Filesystem*
-page (`EmuSen_SaveMedia.md` §11.6 records it). The N64 has no system pack yet, its facts being its catalog core's while
+page (`EmuSen_SaveMedia.md` §11.8 records it). The N64 has no system pack yet, its facts being its catalog core's while
 C# Mars is its reference, so its medium is named beside the packs' (`SaveMediumFormats`), and `MemoryCards` reads a
 catalog console's media from its v1 engine's info as it reads a discovered console's from its own
 (`CoreCatalog.EngineSystem`).

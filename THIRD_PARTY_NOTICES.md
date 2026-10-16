@@ -175,13 +175,14 @@ beside the program and is not sold by itself, as the licence requires.
 
 | Project | Licence | Copyright | In |
 |---|---|---|---|
-| [Mesen 2](https://github.com/SourMesen/Mesen2) | GNU General Public License, version 3 (the same licence as EmuSen's, [`LICENSE`](LICENSE)) | Copyright (C) 2014-2025 Sour | Venus (C#), `EmuSen/Cores/Nintendo/Venus - SNES/` |
+| [Mesen 2](https://github.com/SourMesen/Mesen2) | GNU General Public License, version 3 (the same licence as EmuSen's, [`LICENSE`](LICENSE)) | Copyright (C) 2014-2025 Sour | Venus (C#), `EmuSen/Cores/Nintendo/Venus - SNES/`, removed from the source on 2026-10-16 and kept in the history and the releases before it |
 
 Venus, EmuSen's first SNES core, took parts of Mesen 2 during its early development, and which of its rules came from
-there can no longer be told apart (`VenusRT_Plan.md` §1.1). The whole of Venus (C#) is therefore credited here. It ships
-in every build as the SNES's reference engine and the fallback where VenusRT's library is missing. VenusRT, the SNES's
-default engine, is a separate rewrite that takes nothing from Mesen or from Venus (C#); Venus (C#) is to move to a
-legacy branch once VenusRT's retirement gate passes, and this entry goes with it.
+there can no longer be told apart (`VenusRT_Plan.md` §1.1). The whole of Venus (C#) is therefore credited here. It
+shipped in every build up to its removal as the SNES's reference engine and the fallback where VenusRT's library was
+missing. VenusRT, the SNES's engine, is a separate rewrite that takes nothing from Mesen or from Venus (C#).
+Venus (C#) was removed from the source on 2026-10-16, and this credit stands for the repository's history and for the
+releases that carry it, 0.9.1 among them (`VenusRT_Native.md` §68).
 
 ## 2. Downloaded only at the player's request, never shipped
 

@@ -4,7 +4,7 @@
 /// `EMUSEN_CORE_ABI_MAJOR`.
 pub const ABI_MAJOR: u32 = 1;
 /// `EMUSEN_CORE_ABI_MINOR`.
-pub const ABI_MINOR: u32 = 9;
+pub const ABI_MINOR: u32 = 10;
 /// `EMUSEN_CORE_ABI_VERSION`.
 pub const ABI_VERSION: u32 = (ABI_MAJOR << 16) | ABI_MINOR;
 
@@ -133,6 +133,27 @@ impl FrameInfo {
     }
 }
 
+/// `emusen_raw_frame`, since 1.10: the shape of a frame's raw picture in one encoding (EmuSen_CoreAPI.md §6.30). A core
+/// fills everything but `size`.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RawFrame {
+    pub size: u32,
+    pub element: u32,
+    pub width: i32,
+    pub height: i32,
+    pub stride: i32,
+    pub reserved: u32,
+    pub bytes: i64,
+}
+
+impl RawFrame {
+    /// `width` by `height` values of `element` bytes, rows packed; `bytes` is the crate's to fill.
+    pub fn packed(element: u32, width: i32, height: i32) -> RawFrame {
+        RawFrame { size: std::mem::size_of::<RawFrame>() as u32, element, width, height, stride: width * element as i32, ..RawFrame::default() }
+    }
+}
+
 /// `emusen_event`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -170,8 +191,10 @@ pub mod caps {
     pub const BORROW: u64 = 1 << 20;
     /// Since 1.9: the core draws on a device the host lends and hands its picture there (`frame_device`).
     pub const DEVICE_PICTURE: u64 = 1 << 21;
-    /// Bits 22-47, for later minors; a core may not claim them.
-    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 22) - 1);
+    /// Since 1.10: the core hands the picture before its palette in the encodings machine info lists (`raw_*`).
+    pub const RAW_PICTURE: u64 = 1 << 22;
+    /// Bits 23-47, for later minors; a core may not claim them.
+    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 23) - 1);
 }
 
 /// `EMUSEN_OPTION_*`, `EMUSEN_FRAME_*`, `EMUSEN_BATTERY_*`, `EMUSEN_FILE_BATTERY`, `EMUSEN_NO_COMPARE`.
@@ -284,6 +307,9 @@ pub const EXPORTS: &[(&str, u64)] = &[
     ("emusen_core_media_insert", caps::MEDIA),
     ("emusen_core_debug_reads", caps::DEBUG_READS),
     ("emusen_core_frame_device", caps::DEVICE_PICTURE),
+    ("emusen_core_raw_select", caps::RAW_PICTURE),
+    ("emusen_core_raw_info", caps::RAW_PICTURE),
+    ("emusen_core_raw_copy", caps::RAW_PICTURE),
 ];
 
 /// Each assigned bit's name, as core info's `capabilities` lists it.
@@ -310,4 +336,5 @@ pub const CAPABILITY_NAMES: &[(u64, &str)] = &[
     (caps::DEBUG_READS, "DEBUG_READS"),
     (caps::BORROW, "BORROW"),
     (caps::DEVICE_PICTURE, "DEVICE_PICTURE"),
+    (caps::RAW_PICTURE, "RAW_PICTURE"),
 ];

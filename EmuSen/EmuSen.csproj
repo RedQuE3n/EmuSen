@@ -1,9 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Pure library now - no Main, no window ownership, and since 2026-08-05
-       no rendering framework either: Venus composites into its own
-       internal Rgba32 struct, not Raylib_cs.Color - see Venus_PPU.md §15.1.
-       The console frontend's Main/hotkey loop lives in EmuSen.Hotaru instead,
+       no rendering framework either. The console frontend's Main/hotkey loop lives in EmuSen.Hotaru instead,
        so this project and EmuSen.Mistress (Avalonia) are true sibling
        consumers of the emulation core, neither depending on the other's
        frontend-specific code. See EmuSen_Project_Overview_v2.md. -->
@@ -11,7 +9,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- Vulkan's binding is pointers throughout; only Mars's Rdp/Gpu uses them - see Mars_Gpu.md §1. -->
+    <!-- The Rust cores' shims call their libraries through function pointers - see EmuSen_CoreAPI.md. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
@@ -23,13 +21,6 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
     <PackageReference Include="SkiaSharp" Version="3.119.4" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
-    <!-- Managed binding only: the loader and the driver are the system's, and their absence is the CPU path - see Mars_Gpu.md §1. -->
-    <PackageReference Include="Silk.NET.Vulkan" Version="2.23.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- Compiled from the .comp beside each by WiseMan, which also holds them equal - see Mars_Gpu.md §2. -->
-    <EmbeddedResource Include="Cores\Nintendo\Mars - N64\Rdp\Gpu\Shaders\*.spv" LogicalName="Mars.Gpu.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
@@ -46,7 +37,7 @@
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
   </ItemGroup>
 
-  <!-- The Rust cores, built by cargo for this machine when it is installed and copied beside the assemblies; without one its console runs on the C# core - see Mars_Native.md §1, Mercury_Native.md §8.6. A publish for another platform swaps the libraries in RustCoresPublish.targets. -->
+  <!-- The Rust cores, built by cargo for this machine when it is installed and copied beside the assemblies; without one its console runs on its C# core where one remains, else not at all - see Mars_Native.md §1, Mercury_Native.md §8.6. A publish for another platform swaps the libraries in RustCoresPublish.targets. -->
   <Import Project="Cores\RustCores.props" />
 
   <PropertyGroup>

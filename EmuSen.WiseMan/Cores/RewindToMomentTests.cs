@@ -6,11 +6,10 @@ using System.Linq;
 using System.Security.Cryptography;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
+using EmuSen.Cores.Nintendo.MercuryRT;
 
 namespace EmuSen.WiseMan.Cores
 {
@@ -134,7 +133,7 @@ namespace EmuSen.WiseMan.Cores
 
         private static ICore GameBoy()
         {
-            var core = new MercuryCore();
+            var core = new MercuryRtCore();
             core.LoadRom(SyntheticGbRom.WriteTemp(GbRom));
             return core;
         }
@@ -167,29 +166,16 @@ namespace EmuSen.WiseMan.Cores
             return core;
         }
 
-        // The one byte a fresh machine's first load changes: the pak's dirty flag, which only tells the frontend to write the pak file.
+        // A fresh machine's first load changes nothing of its state, the pak's Dirty included, which a load leaves as the state says - see Mars_Native.md §7.4.
         [Fact]
-        public void On_a_fresh_MarsRT_the_first_load_changes_the_pak_s_dirty_flag_alone()
+        public void On_a_fresh_MarsRT_a_load_of_its_own_state_changes_nothing_of_it()
         {
             using var core = new MarsRtCore(expansionPak: true, batteryRamDisabled: true) { ThreadedRdp = false, DeferredPresentation = false, SkipRendering = false };
             core.LoadRom(SyntheticN64Rom.WriteTemp(SyntheticN64System.Build(rsp: true)));
             for (int f = 0; f < 4; f++) core.RunFrame();
             byte[] before = core.Save(false);
             core.LoadState(before);
-            byte[] after = core.Save(false);
-            core.LoadState(after);
-
-            using var machine = new MarsMachine(before.Length > 8 << 20 ? 8 << 20 : 4 << 20);
-            machine.Load(before);
-            string[] layout = machine.Layout(false).Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            var changed = new List<string>();
-            for (int i = 0; i < before.Length; i++)
-            {
-                if (before[i] == after[i]) continue;
-                changed.Add(layout.First(line => { string[] f = line.Split(' '); long at = long.Parse(f[0]); return at <= i && i < at + long.Parse(f[1]); }));
-            }
-            Assert.Equal(new[] { "Bus.Si.Controllers[0].Pak.Dirty" }, changed.Select(line => line.Split(' ')[^1]));
-            Assert.Equal(after, core.Save(false));
+            Assert.Equal(before, core.Save(false));
         }
 
         [Fact]

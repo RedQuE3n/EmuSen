@@ -28,6 +28,9 @@ namespace EmuSen.Shell
 
         static void Main(string[] args)
         {
+            // Before Avalonia's GLX screen exists, which reads it - see EmuSen_DevicePicture.md §18.
+            EmuSen.Serenity.DevicePictureEnvironment.Prepare();
+
             // A config file that won't parse falls back to defaults either way; this stops it doing so silently - see §6.2.
             EmuSen.Galaxia.ConfigDiagnostics.Sink = m =>
             {
@@ -57,9 +60,6 @@ namespace EmuSen.Shell
             void FlushAndDispose()
             {
                 if (Interlocked.Exchange(ref shutdownGuard, 1) != 0) return;
-
-                // The trace first, while Console.Out still routes through the log writer - see EmuSen_Frontend_Driver.md §0.2.
-                (core as ITraceFlushable)?.FlushVerboseTrace();
 
                 Console.SetOut(originalOut);
                 logWriter?.Dispose();

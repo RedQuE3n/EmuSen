@@ -190,10 +190,14 @@ fn normalize_separators(style: Style, path: &str) -> String {
     String::from_utf8(out).expect("only separators were dropped or replaced")
 }
 
+/// `PathInternal.IsEffectivelyEmpty`: empty everywhere, and all spaces on Windows, where the system drops them.
+pub fn is_effectively_empty(style: Style, path: &str) -> bool {
+    path.is_empty() || (style == Style::Windows && path.bytes().all(|b| b == b' '))
+}
+
 /// `Path.GetDirectoryName`: none for an empty path or a root.
 pub fn directory_name(style: Style, path: &str) -> Option<String> {
-    // PathInternal.IsEffectivelyEmpty: empty everywhere, and all spaces on Windows.
-    if path.is_empty() || (style == Style::Windows && path.bytes().all(|b| b == b' ')) {
+    if is_effectively_empty(style, path) {
         return None;
     }
     let bytes = path.as_bytes();
@@ -296,45 +300,8 @@ pub fn full_path(path: &str) -> String {
     }
 }
 
-/// `char.IsWhiteSpace`, which is Unicode's White_Space and so Rust's own; U+001C to U+001F are not in it, whatever .NET's page says.
-pub fn is_white_space(c: char) -> bool {
-    c.is_whitespace()
-}
-
-/// `string.IsNullOrWhiteSpace`.
-pub fn is_blank(text: Option<&str>) -> bool {
-    text.is_none_or(|t| t.chars().all(is_white_space))
-}
-
-/// One character's upper case as .NET's ordinal comparison sees it: Unicode's simple mapping, one character to one, less the two that would turn a letter outside ASCII into one inside it.
-pub(crate) fn simple_upper(c: char) -> char {
-    match c {
-        // The dotless i and the long s keep themselves, where Unicode sends them to I and S.
-        '\u{131}' | '\u{17F}' => c,
-        // Greek with a subscript iota: the standard library gives the two-letter full mapping, and the simple one is the capital beside it.
-        '\u{1F80}'..='\u{1F87}' | '\u{1F90}'..='\u{1F97}' | '\u{1FA0}'..='\u{1FA7}' => char::from_u32(c as u32 + 8).unwrap_or(c),
-        '\u{1FB3}' | '\u{1FC3}' | '\u{1FF3}' => char::from_u32(c as u32 + 9).unwrap_or(c),
-        _ => {
-            let mut upper = c.to_uppercase();
-            match (upper.next(), upper.next()) {
-                (Some(one), None) => one,
-                // A character whose only upper case is several characters has no simple one.
-                _ => c,
-            }
-        }
-    }
-}
-
-/// `string.Equals(a, b, StringComparison.OrdinalIgnoreCase)`.
-pub fn equals_ignore_case(a: &str, b: &str) -> bool {
-    a.chars().map(simple_upper).eq(b.chars().map(simple_upper))
-}
-
-/// `a.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)`.
-pub fn ends_with_ignore_case(a: &str, suffix: &str) -> bool {
-    let (a, suffix): (Vec<char>, Vec<char>) = (a.chars().map(simple_upper).collect(), suffix.chars().map(simple_upper).collect());
-    a.ends_with(&suffix)
-}
+/// `char.IsWhiteSpace`, `string.IsNullOrWhiteSpace` and the ordinal comparisons ignoring case, owned by `emusen-dotnet`.
+pub use emusen_dotnet::text::{ends_with_ignore_case, equals_ignore_case, is_blank, is_white_space, simple_upper};
 
 #[cfg(test)]
 mod tests {

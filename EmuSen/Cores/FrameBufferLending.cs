@@ -54,6 +54,15 @@ namespace EmuSen.Cores
             return buffer;
         }
 
+        // Whether the array is one this lends and has not had back.
+        public bool Holds(byte[] buffer)
+        {
+            lock (_lock)
+                foreach (byte[]? lent in _lent)
+                    if (ReferenceEquals(lent, buffer)) return true;
+            return false;
+        }
+
         // Taken back only if lent, still at the size lent and there is room; a second return of the same lend finds nothing and is dropped.
         public void Return(byte[] buffer)
         {

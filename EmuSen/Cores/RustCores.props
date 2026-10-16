@@ -1,5 +1,5 @@
 <Project>
-  <!-- The Rust cores: one row per crate, read by EmuSen.csproj's cargo build and by RustCoresPublish.targets - see Mercury_Native.md §8.6. -->
+  <!-- The Rust cores: one row per crate, read by EmuSen.csproj's cargo build and by RustCoresPublish.targets, and repeated in rust-cores.yml's plan - see Mercury_Native.md §8.6 and EmuSen_RustPlatform.md §28. -->
   <PropertyGroup>
     <EmuSenRustCoresImported>true</EmuSenRustCoresImported>
   </PropertyGroup>
@@ -23,20 +23,21 @@
       <Dir>$(MSBuildThisFileDirectory)Nintendo\MarsRT - N64\</Dir>
       <Core>MarsRT</Core>
       <Console>the N64</Console>
-      <Fallback>Mars (C#)</Fallback>
+      <Fallback></Fallback>
+      <CoreAbi>1</CoreAbi>
     </EmuSenRustCrate>
     <EmuSenRustCrate Include="mercuryrt">
       <Dir>$(MSBuildThisFileDirectory)Nintendo\MercuryRT - GB\</Dir>
       <Core>MercuryRT</Core>
       <Console>the Game Boy</Console>
-      <Fallback>Mercury (C#)</Fallback>
+      <Fallback></Fallback>
       <CoreAbi>1</CoreAbi>
     </EmuSenRustCrate>
     <EmuSenRustCrate Include="moonrt">
       <Dir>$(MSBuildThisFileDirectory)Nintendo\MoonRT - NES\</Dir>
       <Core>MoonRT</Core>
       <Console>the NES</Console>
-      <Fallback>Moon (C#)</Fallback>
+      <Fallback></Fallback>
       <CoreAbi>1</CoreAbi>
     </EmuSenRustCrate>
     <EmuSenRustCrate Include="nephrite">
@@ -50,7 +51,7 @@
       <Dir>$(MSBuildThisFileDirectory)Nintendo\VenusRT - SNES\</Dir>
       <Core>VenusRT</Core>
       <Console>the SNES</Console>
-      <Fallback>Venus (C#)</Fallback>
+      <Fallback></Fallback>
       <CoreAbi>1</CoreAbi>
     </EmuSenRustCrate>
   </ItemGroup>

@@ -26,8 +26,8 @@ namespace EmuSen.Mistress.Input
             _ => ControllerLayout.Gamepad,
         };
 
-        // The Genesis and its two attachments share the console's pads.
-        public static bool IsGenesis(string console) => console.ToUpperInvariant() is "GENESIS" or "SEGA CD" or "32X";
+        // The Genesis and its attachments, which plug into it and share its pads - see EmuSen_Serenity.md §3.12.
+        public static bool IsGenesis(string console) => string.Equals(EmuSen.Cores.CoreCatalog.HostOf(console), EmuSen.Crystal.Systems.Genesis.GenesisSystems.MegaDrive.Console, StringComparison.OrdinalIgnoreCase);
 
         // The Genesis pad's buttons by the RetroPad controls the core gives them: A on Y, C on A, X on L, Y on X, Z on R and Mode on Select - see Nephrite_Plan.md §4.2.
         private static readonly Dictionary<PadControl, string> Genesis = new()
@@ -79,7 +79,7 @@ namespace EmuSen.Mistress.Input
             return null;
         }
 
-        // Past this share of its travel a stick direction counts as held; Mars reads its C buttons at the same share (MarsCore.CButtonThreshold).
+        // Past this share of its travel a stick direction counts as held; the N64 reads its C buttons at the same share (N64Console.CButtonThreshold).
         public const double DirectionThreshold = 0.5;
     }
 }

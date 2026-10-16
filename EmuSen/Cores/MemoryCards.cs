@@ -61,6 +61,8 @@ namespace EmuSen.Cores
         private readonly List<MediumLock> _locks = new();
 
         public Dictionary<uint, BatterySave> Files { get; } = new();
+        // The console media's slots a new machine finds formatted where no file exists yet - see EmuSen_SaveMedia.md §10 Q2.
+        public Dictionary<uint, ISaveMediumFormat> Fresh { get; } = new();
         public bool RemovableApart { get; internal set; }
         public bool ConsoleApart { get; internal set; }
         public List<string> Notices { get; } = new();
@@ -90,7 +92,7 @@ namespace EmuSen.Cores
 
         // The removable files of a console's engine, as its core info lists them; empty for a console with none.
         public static IReadOnlyList<CoreBatteryFile> RemovableFor(string console) =>
-            CoreCatalog.DiscoveredSystem(console)?.Battery?.Where(b => b.Removable).ToArray() ?? Array.Empty<CoreBatteryFile>();
+            CoreCatalog.EngineSystem(console)?.Battery?.Where(b => b.Removable).ToArray() ?? Array.Empty<CoreBatteryFile>();
 
         public static bool OfferedFor(string console) => MediaFor(console).Count > 0;
 
@@ -98,7 +100,7 @@ namespace EmuSen.Cores
         public static string ExtensionOf(string suffix) => Path.GetExtension(suffix) is { Length: > 1 } e ? e : suffix;
 
         // A console's media, as its engine's core info lists them.
-        public static IReadOnlyList<SaveMedium> MediaFor(string console) => MediaOf(console, CoreCatalog.DiscoveredSystem(console));
+        public static IReadOnlyList<SaveMedium> MediaFor(string console) => MediaOf(console, CoreCatalog.EngineSystem(console));
 
         // The removable and console slots of a system grouped by medium, a core of 1.7's by kind and extension - see EmuSen_SaveMedia.md §3.2.
         public static IReadOnlyList<SaveMedium> MediaOf(string console, CoreSystem? system)
@@ -118,8 +120,8 @@ namespace EmuSen.Cores
             return media;
         }
 
-        // The mode a medium has when nothing is stored: Shared for a removable medium whose format module gives it the import, Per game otherwise - see EmuSen_SaveMedia.md §9.
-        public static string DefaultMode(SaveMedium? medium) => medium is { Kind: CoreBatteryKind.Removable, Entry.Format: not null } ? Shared : PerGame;
+        // The mode a medium has when nothing is stored: Shared where a format module gives it the import, Per game otherwise - see EmuSen_SaveMedia.md §9, §10 Q2.
+        public static string DefaultMode(SaveMedium? medium) => medium is { Kind: CoreBatteryKind.Removable or CoreBatteryKind.Console, Entry.Format: not null } ? Shared : PerGame;
 
         // The key recording that the import was offered for a medium, beside its mode's.
         public static string OfferedKey(SaveMedium medium) => medium.ModeKey + "Offered";
@@ -186,7 +188,7 @@ namespace EmuSen.Cores
         public static (CoreSetting Mode, IReadOnlyList<CoreSetting> Slots) RowsFor(SaveMedium medium)
         {
             var names = medium.Names();
-            string noun = medium.Noun.ToLowerInvariant();
+            string noun = MediumWords.InText(medium.Noun);
             var mode = new CoreSetting(medium.ModeKey, medium.Title,
                 $"Per game: each game keeps its own, as before. Shared: one {noun} in each slot, used by every game, as a console with it always there. Named: a drawer of them, each a file of the save folder, and you choose which is in each slot. A save state never rolls a shared or named {noun} back. Changing this moves, copies and deletes nothing: each game's own are used again when Per game is chosen again. Takes effect when a game is next loaded.",
                 CoreSettingKind.Choice, DefaultMode(medium), Choices: new[] { PerGame, Shared, Named }, ChoiceLabels: new[] { "Per game", "Shared", "Named" });
@@ -203,7 +205,7 @@ namespace EmuSen.Cores
         // Said under a slot's row when an earlier slot names the same file, which cannot be in two slots at once.
         private static string? SameNameNote(SaveMedium medium, int slot, Func<string, string> value) =>
             value(medium.ModeKey) == Named && Enumerable.Range(0, slot).Any(s => string.Equals(value(medium.SlotKey(s)), value(medium.SlotKey(slot)), StringComparison.OrdinalIgnoreCase))
-                ? $"The same {medium.Noun.ToLowerInvariant()} cannot be in two slots: this slot keeps the game's own while they match." : null;
+                ? $"The same {MediumWords.InText(medium.Noun)} cannot be in two slots: this slot keeps the game's own while they match." : null;
 
         // Each slot's file at a load: under Shared or Named its medium's file, locked for holder, else own(slot) - see EmuSen_SaveMedia.md §3.3, §3.5.
         public static MediaPlacement Place(string console, CoreSystem? system, IReadOnlyDictionary<string, CardChoice> choices, string holder, Func<CoreBatteryFile, BatterySave> own)
@@ -216,6 +218,7 @@ namespace EmuSen.Cores
                 for (int slot = 0; slot < medium.Slots.Count; slot++)
                 {
                     CoreBatteryFile file = medium.Slots[slot];
+                    if (medium.IsConsole && medium.Entry?.Format is { } format) placed.Fresh[file.Which] = format;
                     BatterySave? apart = choice.Apart ? Apart(console, medium, medium.NameFor(choice, slot), slot, holder, taken, placed) : null;
                     if (apart is not null)
                     {
@@ -238,13 +241,13 @@ namespace EmuSen.Cores
             string key = medium.PathOf(name);
             if (!taken.Add(key))
             {
-                Note(placed, $"{name} is already in another slot; {medium.SlotLabel(slot)} keeps the game's own {medium.Noun.ToLowerInvariant()}.");
+                Note(placed, $"{name} is already in another slot; {medium.SlotLabel(slot)} keeps the game's own {MediumWords.InText(medium.Noun)}.");
                 return null;
             }
             if (save.Path is null) return save;
             if (MediumLock.TryTake(save.Path, holder, shared: true) is not { } held)
             {
-                Note(placed, $"{name} is in use by {MediumLock.HolderOf(save.Path) ?? "another program"}; {medium.SlotLabel(slot)} keeps the game's own {medium.Noun.ToLowerInvariant()} until it is free.");
+                Note(placed, $"{name} is in use by {MediumLock.HolderOf(save.Path) ?? "another program"}; {medium.SlotLabel(slot)} keeps the game's own {MediumWords.InText(medium.Noun)} until it is free.");
                 return null;
             }
             placed.Hold(held);

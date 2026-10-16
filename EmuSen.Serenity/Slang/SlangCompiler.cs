@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using EmuSen.Serenity.Native;
@@ -69,8 +70,9 @@ namespace EmuSen.Serenity.Slang
                     fixed (byte* p = text) result = Api.CompileIntoSpv(compiler, p, (nuint)text.Length, kind, name, Entry, options);
                     try
                     {
+                        // Shaderc's words are UTF-8, which the binding's string would read as the system's code page on Windows.
                         if (Api.ResultGetCompilationStatus(result) != CompilationStatus.Success)
-                            throw new SlangCompileException($"{name} ({stage}) does not compile:\n{Api.ResultGetErrorMessageS(result)}");
+                            throw new SlangCompileException($"{name} ({stage}) does not compile:\n{Marshal.PtrToStringUTF8((nint)Api.ResultGetErrorMessage(result))}");
                         return new ReadOnlySpan<byte>(Api.ResultGetBytes(result), (int)Api.ResultGetLength(result)).ToArray();
                     }
                     finally
@@ -103,7 +105,30 @@ namespace EmuSen.Serenity.Slang
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception)
                 {
                 }
-                return null;
+                return OperatingSystem.IsWindows() ? null : FileOfFunction();
+            }
+
+            [StructLayout(LayoutKind.Sequential)]
+            private struct DlInfo
+            {
+                public nint FileName, FileBase, SymbolName, SymbolAddress;
+            }
+
+            [DllImport("libc", EntryPoint = "dladdr")]
+            private static extern int DlAddress(nint address, out DlInfo info);
+
+            // dladdr's file for one of Shaderc's functions: macOS lists none of a process's libraries to .NET - see EmuSen_RustPlatform.md §27.6.
+            private static string? FileOfFunction()
+            {
+                try
+                {
+                    nint function = Api.Context.GetProcAddress("shaderc_compiler_initialize");
+                    return function != 0 && DlAddress(function, out DlInfo info) != 0 && info.FileName != 0 ? Marshal.PtrToStringUTF8(info.FileName) : null;
+                }
+                catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException or InvalidOperationException)
+                {
+                    return null;
+                }
             }
 
             // The loaded Shaderc library's SHA-256, or its absence said, when the process cannot name the file it came from.
@@ -111,18 +136,14 @@ namespace EmuSen.Serenity.Slang
             {
                 try
                 {
-                    foreach (ProcessModule module in Process.GetCurrentProcess().Modules)
-                    {
-                        if (!Path.GetFileName(module.FileName).Contains("shaderc", StringComparison.OrdinalIgnoreCase)) continue;
-                        using FileStream file = File.OpenRead(module.FileName);
-                        return Convert.ToHexString(SHA256.HashData(file));
-                    }
+                    if (NativePath() is not { } path) return "unfound";
+                    using FileStream file = File.OpenRead(path);
+                    return Convert.ToHexString(SHA256.HashData(file));
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception)
                 {
                     return $"unread ({e.GetType().Name})";
                 }
-                return "unfound";
             }
         }
     }

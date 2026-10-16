@@ -1,5 +1,7 @@
 # Mars — triangles, and the edge walker that turns their words into spans
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Landed 2026-09-17. Phase D's third slice: the part of the display processor that decides which
 pixels a primitive covers — its edge walker — built for triangles and drawn in the fill cycle,
 the one mode that needs no combiner or blender. Fill rectangles now go through the same walker.

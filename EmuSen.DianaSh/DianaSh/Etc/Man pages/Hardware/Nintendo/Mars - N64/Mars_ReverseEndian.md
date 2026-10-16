@@ -1,5 +1,7 @@
 # Mars — the bit that turns the machine little-endian, and the one rule behind it
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Landed 2026-09-16. `Status.RE`, which mirrors every user-mode access inside its own
 doubleword. The mirror and the access/fault split are in `Cpu.cs`; the call sites are the
 loads, the stores, the merging family, the coprocessor-1 transfers and the instruction

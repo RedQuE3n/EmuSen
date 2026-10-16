@@ -1,0 +1,15 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/instr_misc/rom_singles/04-dummy_reads_apu.nes
+rom 3E4E974A57B82247861576BC855B589FA6D00291EC159F79795C9E3F50C39FEF
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 1C452A596BE1D5BB
+120 9C9CEB7E9821FCCF
+141 55975C10FE641BA5
+resets 0
+text 04-dummy_reads_apu\n\nPassed
+verdict Passed 141

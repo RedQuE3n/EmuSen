@@ -38,9 +38,9 @@ namespace EmuSen.Cores
         // The C# cores' own counts, which every engine of the console shares; a console this build does not know reads one.
         public static int ForConsole(string? console) => console?.ToUpperInvariant() switch
         {
-            "NES" => Nintendo.Moon.MoonCore.Ports,
-            "SNES" => Nintendo.Venus.VenusCore.Ports,
-            "N64" => Nintendo.Mars.MarsCore.Ports,
+            "NES" => Crystal.Systems.Nes.NesSystem.Ports,
+            "SNES" => Crystal.Systems.Snes.SnesSystem.Ports,
+            "N64" => Nintendo.MarsRT.N64Console.Ports,
             _ when console is not null && CoreCatalog.DiscoveredSystem(console) is { } system => Math.Max(1, system.Controllers.SelectMany(c => c.Ports).Select(p => (int)p + 1).DefaultIfEmpty(0).Max()),
             _ => 1,
         };

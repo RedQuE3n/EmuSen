@@ -1,8 +1,5 @@
 using EmuSen.Common.Imaging;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Moon.Validation;
-using EmuSen.Cores.Nintendo.Venus;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Pharaoh;
 using EmuSen.Pharaoh.Cli;
 using EmuSen.Pharaoh.Reference;
@@ -12,7 +9,7 @@ using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Dev;
 
 // Headless script-driven debugging harness - loads a ROM, runs the
-// real VenusCore for a fixed number of frames with no window/audio/human
+// configured engine for a fixed number of frames with no window/audio/human
 // involved, then feeds a script of the exact same debug commands the F4
 // prompt accepts and writes the results to a plain log file. Full
 // reference for every flag, both frame-loop modes (classic and
@@ -23,7 +20,6 @@ using EmuSen.DianaSh.DianaSh.Dev;
 //   dotnet run -- <rom> <frames> [--watch space:addr:len[:kind]]... [--script path] [--out path] [--tap frame:button[:duration]]... [--tap2 frame:button[:duration]]... [--loadstate path] [--savestate path] [--screenshot frame:path]...
 //   dotnet run -- <rom> <maxframes> --commands path [other flags above except --tap/--tap2/--screenshot/--script]
 //   dotnet run -- --diffshot <bmp1> <bmp2> <outpath>
-//   dotnet run -- --singlestep <target> <test-dir> [max-examples-per-file]
 //   dotnet run -- --testroms <dir|rom> [frame-budget]
 //
 // Internally this is now just dispatch: HeadlessDebugOptions.Parse turns
@@ -87,34 +83,6 @@ class Program
             return ProbeRunner.Run(args);
         }
 
-        // Also standalone: two --cputrace blobs, no ROM needed - see §3.40.
-        if (args.Length >= 1 && args[0] == "--tracediff")
-        {
-            if (args.Length < 3)
-            {
-                Console.WriteLine("Usage: dotnet run -- --tracediff <left.bin> <right.bin>");
-                return 1;
-            }
-            return TraceDiffRunner.Run(args[1], args[2]);
-        }
-
-        // Also standalone: third-party opcode vectors, no ROM needed - see §3.16.
-        if (args.Length >= 1 && args[0] == "--singlestep")
-        {
-            if (args.Length < 3)
-            {
-                Console.WriteLine("Usage: dotnet run -- --singlestep <target> <test-dir> [max-examples-per-file]");
-                Console.WriteLine($"Available targets: {SingleStepRunner.TargetNames}");
-                return 1;
-            }
-            if (args.Length >= 4 && !int.TryParse(args[3], out _))
-            {
-                Console.WriteLine($"[ERROR] max-examples-per-file must be a number, got '{args[3]}'");
-                return 1;
-            }
-            return SingleStepRunner.Run(args[1], args[2], args.Length >= 4 ? int.Parse(args[3]) : 3);
-        }
-
         // Also standalone: third-party NES test ROMs, which report through PRG RAM - see Moon_TestRoms.md.
         if (args.Length >= 1 && args[0] == "--testroms")
         {
@@ -149,7 +117,7 @@ class Program
         // Off by default (matches DebugSettings.MasterLoggingEnabled's own
         // default) - only flip it on when explicitly asked, since it turns
         // on every individually-enabled *Logging flag's live console spam
-        // (DmaSourceAddrLogging etc.), useful for a short, targeted run but
+        // (the NES's PPU write log), useful for a short, targeted run but
         // far too noisy over a long one.
         if (options.Verbose) EmuSen.Debug.DebugSettings.MasterLoggingEnabled = true;
 
@@ -226,7 +194,7 @@ class Program
             Emit($"[STATE] Loaded: {options.LoadStatePath}");
         }
 
-        // See SnesDebugTarget's own constructor comment - feeds
+        // Feeds
         // `coretop`'s hardware-load bars (not that this headless entry
         // point has any interactive use for them today, but there's no
         // reason for it to report less than the other two frontends do).
@@ -287,12 +255,6 @@ class Program
             // not whatever was live at debugTarget's construction.
             var runner = new FrameRunner(core, options.FrameCount, Emit, n => { debugTarget.RefreshProviders(); CheckAutoshot(n); })
             {
-                CpuLogStart = options.CpuLogStart,
-                CpuLogEnd = options.CpuLogEnd,
-                CpuTraceEnd = options.CpuTraceEnd,
-                CpuTracePath = options.CpuTracePath,
-                ApuLogEnd = options.ApuLogEnd,
-                ApuLogPath = options.ApuLogPath,
                 Verbose = options.Verbose,
                 OnHalted = debugTarget.RefreshProviders,
             };
@@ -317,12 +279,6 @@ class Program
         // see the --commands runner's own comment above.
         var classicRunner = new FrameRunner(core, options.FrameCount, Emit, n => { debugTarget.RefreshProviders(); CheckAutoshot(n - 1); })
         {
-            CpuLogStart = options.CpuLogStart,
-            CpuLogEnd = options.CpuLogEnd,
-            CpuTraceEnd = options.CpuTraceEnd,
-            CpuTracePath = options.CpuTracePath,
-            ApuLogEnd = options.ApuLogEnd,
-            ApuLogPath = options.ApuLogPath,
             Verbose = options.Verbose,
             OnHalted = debugTarget.RefreshProviders,
         };
@@ -390,7 +346,6 @@ class Program
 
     private static void FinishRun(ICore core, Action<string> emit)
     {
-        (core as ITraceFlushable)?.FlushVerboseTrace();
         emit($"[RUN] Done, {core.TotalFrames} total frames executed.");
     }
 

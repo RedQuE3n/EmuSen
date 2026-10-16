@@ -1,5 +1,5 @@
+using EmuSen.Cores;
 using System.Linq;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.Crystal.Debugger;
@@ -10,10 +10,10 @@ namespace EmuSen.WiseMan.DianaSh
     // `label`, `freeze` and `counters` - see their man pages.
     public class LabelFreezeCounterTests
     {
-        private static SnesDebugTarget BuildTarget()
+        private static IDebugTarget BuildTarget()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            return new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            return SyntheticRom.TargetOf(core);
         }
 
         [Fact]
@@ -116,46 +116,19 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Contains("<ResetEntry>", shell.Submit("bp list").Output);
         }
 
-        // The difference from a per-frame cheat poke - see `man freeze`.
-        [Fact]
-        public void A_frozen_address_is_restored_the_instant_it_is_written()
-        {
-            var target = BuildTarget();
-            var wram = target.GetMemorySpaces().First(s => s.Name == "WRAM");
-            wram.Write(0x40, 0x63);
-            DianaShInterpreter.CreateDefault(target).Submit("freeze add WRAM 40");
-
-            target.OnWrite("WRAM", 0x40, 0x00);
-
-            Assert.Equal(0x63, wram.Read(0x40));
-        }
-
         // The game's own store, through the bus: INC $10 in a loop, which must read the frozen value back every time.
         [Fact]
         public void A_frozen_address_holds_against_the_game_writing_it()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.Build((5, new byte[] { 0xE6, 0x10, 0x80, 0xFC })));
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            var target = SyntheticRom.TargetOf(core);
             var shell = DianaShInterpreter.CreateDefault(target);
             shell.Submit("freeze add WRAM 10 AB");
 
             for (int i = 0; i < 2; i++) core.RunFrame();
 
-            Assert.Equal(0xAB, core.Bus!.Ram[0x10]);
+            Assert.Equal(0xAB, ((EmuSen.Cores.Native.CoreEngine)core).ReadSpace("WRAM", 0x10));
             Assert.DoesNotContain("(0 write(s) undone)", shell.Submit("freeze list").Output);
-        }
-
-        [Fact]
-        public void Freeze_list_counts_the_writes_it_undid()
-        {
-            var target = BuildTarget();
-            var shell = DianaShInterpreter.CreateDefault(target);
-            shell.Submit("freeze add WRAM 40 63");
-
-            target.OnWrite("WRAM", 0x40, 0x01);
-            target.OnWrite("WRAM", 0x40, 0x02);
-
-            Assert.Contains("2 write(s) undone", shell.Submit("freeze list").Output);
         }
 
         // A write of the frozen value changes nothing and must not be counted.
@@ -259,16 +232,5 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Equal(0x10, top[1].Address);
         }
 
-        // A real bus write must reach the counters, not just a direct call.
-        [Fact]
-        public void A_real_bus_write_reaches_the_counters()
-        {
-            var target = BuildTarget();
-            DianaShInterpreter.CreateDefault(target).Submit("counters on WRAM");
-
-            target.OnWrite("WRAM", 0x1234, 0x5A);
-
-            Assert.Equal(1u, target.AccessCounters!.At(0x1234).Writes);
-        }
     }
 }

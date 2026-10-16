@@ -36,7 +36,7 @@ namespace EmuSen.Crystal.Systems.Genesis
             "Sega CD",
             "Sega",
             1991,
-            new[] { ".iso" },
+            new[] { ".iso", ".cue", ".chd" },
             new[] { "Sega - Mega-CD - Sega CD" },
             new[] { "SCD" },
             file => file,
@@ -44,7 +44,9 @@ namespace EmuSen.Crystal.Systems.Genesis
             "segacd",
             "Sega CD",
             SelfDelimitingImages: false,
-            Recognise: probe => IsSegaCd(probe.Read(0x40)) ? new Recognition(MegaCdId) : null);
+            // A sheet is read by its first track, which the PlayStation's pack also takes; a CHD by its folder's name - see Nephrite_OpenBios.md §11.
+            Recognise: probe => IsSegaCd(probe.Read(0x40)) ? new Recognition(MegaCdId) : null,
+            AttachedTo: MegaDrive.Console);
 
         public static readonly SystemEntry S32x = new(
             S32xId,
@@ -59,7 +61,8 @@ namespace EmuSen.Crystal.Systems.Genesis
             0.7,
             "sega32x",
             "Sega Mega Drive 32X",
-            SelfDelimitingImages: false);
+            SelfDelimitingImages: false,
+            AttachedTo: MegaDrive.Console);
 
         private static readonly byte[] Sync = { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 };
 
@@ -81,8 +84,9 @@ namespace EmuSen.Crystal.Systems.Genesis
             GenesisCheatFormats.IsPatch, GenesisCheatFormats.DecodePatch, decodeWrites: GenesisCheatFormats.PatchWrites);
 
         public static readonly SystemPack MegaDrivePack = new(MegaDrive, ActionReplay, GameGenie, PlayerControllers);
-        // The Sega CD's backup RAM inside the unit and its RAM cartridge, named and read by no format module until Nephrite's stage 10 - see EmuSen_SaveMedia.md §6.2, §7.3.
-        public static readonly SaveMedia.SaveMediumEntry BackupRam = new("mcd.backup", "Internal Backup RAM", "Backup RAM", ".brm"), RamCartridge = new("mcd.ramcart", "Backup RAM Cartridge", "Cartridge", ".crm");
+        // The Sega CD's backup RAM inside the unit and its RAM cartridge, one format read by SegaCdBramFormat - see EmuSen_SaveMedia.md §6.2, §7.3.
+        public static readonly SaveMedia.SaveMediumEntry BackupRam = new("mcd.backup", "Internal Backup RAM", "Backup RAM", ".brm", SegaCdBramFormat.BackupRam),
+            RamCartridge = new("mcd.ramcart", "Backup RAM Cartridge", "Cartridge", ".crm", SegaCdBramFormat.RamCartridge);
 
         public static readonly SystemPack MegaCdPack = new(MegaCd, ActionReplay, GameGenie, PlayerControllers, Media: new[] { RamCartridge, BackupRam });
         public static readonly SystemPack S32xPack = new(S32x, ActionReplay, GameGenie, PlayerControllers);

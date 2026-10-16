@@ -1,15 +1,13 @@
-using EmuSen.Cores.Nintendo.Mercury;
-using EmuSen.Cores.Nintendo.Mercury.Memory;
+using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // The link port as a one-way sink, and the verdict reader built on it - see Mercury_Memory.md §10; Mercury and MercuryRT are held to the same claims - see Mercury_Native.md §12.
-    public abstract class MercurySerialClaims : IDisposable
+    // The link port as a one-way sink, and the verdict reader built on it - see Mercury_Memory.md §10; held on MercuryRT - see Mercury_Native.md §12, §15.
+    public sealed class MercuryRtSerialTests : IDisposable
     {
         private readonly List<MercuryRig> _rigs = new();
 
-        protected abstract MercuryEngine Engine { get; }
 
         public void Dispose()
         {
@@ -18,7 +16,7 @@ namespace EmuSen.WiseMan.Cores
 
         private MercuryRig Load(byte cgbFlag = 0x00, params (int Offset, byte[] Bytes)[] patches)
         {
-            var core = MercuryRig.Create(Engine, SyntheticGbRom.Build(cgbFlag: cgbFlag, patches: patches));
+            var core = MercuryRig.Create(SyntheticGbRom.Build(cgbFlag: cgbFlag, patches: patches));
             _rigs.Add(core);
             return core;
         }
@@ -61,7 +59,7 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF01, 0x41);
             core.Write(0xFF02, 0x81);
 
-            Assert.Equal(1 << (int)Interrupt.Serial, core.Bus.InterruptFlags & (1 << (int)Interrupt.Serial));
+            Assert.Equal(1 << MercuryRig.Serial, core.Field("Bus.InterruptFlags") & (1 << MercuryRig.Serial));
         }
 
         // The half that is deliberately not implemented: with no cable there is no external clock.
@@ -78,7 +76,7 @@ namespace EmuSen.WiseMan.Cores
             // Still pending, and still holding the byte the ROM put there.
             Assert.Equal(0x80, core.Read(0xFF02) & 0x80);
             Assert.Equal(0x41, core.Read(0xFF01));
-            Assert.Equal(0, core.Bus.InterruptFlags & (1 << (int)Interrupt.Serial));
+            Assert.Equal(0, core.Field("Bus.InterruptFlags") & (1 << MercuryRig.Serial));
         }
 
         [Fact]
@@ -162,11 +160,9 @@ namespace EmuSen.WiseMan.Cores
         }
     }
 
-    // With the verdict reader's own cases, which run on no engine.
-    public sealed class MercurySerialTests : MercurySerialClaims
+    // The verdict reader's own cases, which run on no engine.
+    public sealed class MercurySerialTests
     {
-        protected override MercuryEngine Engine => MercuryEngine.Mercury;
-
         [Theory]
         [InlineData(new byte[0], TestRomVerdict.NoVerdict)]
         [InlineData(new byte[] { 3, 5, 8, 13, 21, 34 }, TestRomVerdict.Passed)]
@@ -184,10 +180,5 @@ namespace EmuSen.WiseMan.Cores
             byte[] serial = System.Text.Encoding.ASCII.GetBytes("01:ok  02:Passed  03:Failed\n");
             Assert.Equal(TestRomVerdict.Failed, HardwareTestRomLibrary.ReadVerdict(serial));
         }
-    }
-
-    public sealed class MercuryRtSerialTests : MercurySerialClaims
-    {
-        protected override MercuryEngine Engine => MercuryEngine.MercuryRt;
     }
 }

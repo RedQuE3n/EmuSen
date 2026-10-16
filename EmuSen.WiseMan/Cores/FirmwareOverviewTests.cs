@@ -4,7 +4,6 @@ using System.Linq;
 using EmuSen.Common.Firmware;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -46,8 +45,8 @@ namespace EmuSen.WiseMan.Cores
         public void The_rows_are_what_the_engine_in_use_declares_and_every_shipped_system_is_listed()
         {
             var systems = FirmwareOverview.Build(new GraphicsConfig());
-            Assert.Equal(["Nintendo Entertainment System", "Game Boy and Game Boy Color", "Super Nintendo", "Nintendo 64", "Sony PlayStation", "Sega Genesis / Mega Drive"], systems.Select(s => s.Name));
-            Assert.All(systems.Where(s => s.Name is not ("Super Nintendo" or "Sega Genesis / Mega Drive" or "Sony PlayStation")), s => Assert.Empty(s.Items));
+            Assert.Equal(["Nintendo Entertainment System", "Game Boy and Game Boy Color", "Super Nintendo", "Nintendo 64", "Sony PlayStation", "Sega Genesis / Mega Drive", "Sega CD / Mega-CD"], systems.Select(s => s.Name));
+            Assert.All(systems.Where(s => s.Name is not ("Super Nintendo" or "Sega Genesis / Mega Drive" or "Sony PlayStation" or "Sega CD / Mega-CD")), s => Assert.Empty(s.Items));
 
             FirmwareSystem snes = Snes();
             CoreSystem declared = VenusRt.Info.Systems.Single(s => s.Id == "snes");
@@ -106,20 +105,20 @@ namespace EmuSen.WiseMan.Cores
             Assert.Null(FirmwareItem.FirstSentence(" "));
         }
 
+        // A stored choice of the retired Venus (C#) shows VenusRT's rows; with VenusRT's library gone the SNES lists nothing to use - see VenusRT_Native.md §68.5.
         [Fact]
-        public void With_venus_chosen_or_venusrt_s_library_gone_the_rows_are_the_reference_core_s_own_requests()
+        public void With_venus_stored_the_rows_are_venusrt_s_and_with_its_library_gone_there_are_none()
         {
             var config = new GraphicsConfig();
-            config.SetValue("SNES", CoreCatalog.EngineKey, CoreCatalog.VenusEngine);
+            config.SetValue("SNES", CoreCatalog.EngineKey, "Venus (C#)");
             FirmwareSystem snes = Snes(config);
-            Assert.Equal(CoreCatalog.VenusEngine, snes.Engine);
-            Assert.Equal(Enum.GetValues<NecDspVariant>().Select(v => NecDspFirmware.RequestFor(v).FileName).Distinct(), snes.Items.Select(i => i.FileName));
-            Assert.All(snes.Items, i => Assert.Equal((FirmwareItem.NoVersion, FirmwareItem.NeedsFile), (i.InUse, i.Change)));
+            Assert.Equal(CoreCatalog.VenusRtEngine, snes.Engine);
+            Assert.Equal(Snes().Items.Select(i => i.FileName), snes.Items.Select(i => i.FileName));
 
             CoreDiscovery.UseDirectories([Path.Combine(_root, "NoCores")]);
             try
             {
-                Assert.Equal(CoreCatalog.VenusEngine, Snes().Engine);
+                Assert.Empty(Snes().Items);
             }
             finally
             {
@@ -152,15 +151,16 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // Decided 2026-10-07: the Genesis is offered, so its row is listed; the Sega CD and the 32X, marked in development in the core's info, are not - see EmuSen_CoreAPI.md §27.4.
+        // The Genesis (decided 2026-10-07) and the Sega CD (2026-10-16) are offered, so their rows are listed; the 32X, marked in development in the core's info, is not - see EmuSen_CoreAPI.md §27.4.
         [Fact]
-        public void The_genesis_is_listed_and_its_attachments_are_not()
+        public void The_genesis_and_the_sega_cd_are_listed_and_the_32x_is_not()
         {
             var systems = FirmwareOverview.Build(new GraphicsConfig());
             FirmwareSystem genesis = systems.Single(s => s.Name == "Sega Genesis / Mega Drive");
             Assert.Equal(CoreDiscovery.Found.Single(c => c.Info.Id == "nephrite").EngineName, genesis.Engine);
             Assert.Equal(["bios_MD.bin"], genesis.Items.Select(i => i.FileName));
-            Assert.DoesNotContain(systems, s => s.Name is "Sega CD / Mega-CD" or "Sega 32X");
+            Assert.Contains("bios_CD_U.bin", systems.Single(s => s.Name == "Sega CD / Mega-CD").Items.Select(i => i.FileName));
+            Assert.DoesNotContain(systems, s => s.Name == "Sega 32X");
         }
     }
 }

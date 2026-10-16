@@ -1,4 +1,4 @@
-using EmuSen.Cores.Nintendo.Venus.Debug;
+using EmuSen.Cores;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
@@ -9,17 +9,17 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.DianaSh
 {
-    // IDebugTarget.DecodeTilePixels (SnesDebugTarget's planar bitplane
+    // IDebugTarget.DecodeTilePixels (IDebugTarget's planar bitplane
     // decode) and the `tile` shell command built on top of it - see
     // IDebugTarget.cs's own comment for why this exists: `tile` used to
     // hardcode this exact SNES bitplane layout directly in the
     // "core-agnostic" shell layer.
     public class TilePixelDecodeTests
     {
-        private static SnesDebugTarget BuildTarget()
+        private static IDebugTarget BuildTarget()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            return new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            return SyntheticRom.TargetOf(core);
         }
 
         [Fact]

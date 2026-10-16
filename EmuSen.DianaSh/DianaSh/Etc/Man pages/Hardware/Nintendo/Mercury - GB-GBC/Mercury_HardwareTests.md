@@ -1,5 +1,10 @@
 # Mercury — the hardware test corpus as an oracle
 
+*Historical since 2026-10-16.* This page describes C# Mercury, which was deleted at stage 10 of the Rust port
+(`Mercury_Native.md` §15). MercuryRT implements the same machine field for field and is held to the goldens recorded
+from it, so the hardware described here stands; the file, class and member names are the C# core's, and a claim of the
+form "Mercury does" is now a claim about MercuryRT only where its goldens or its corpus baseline hold it.
+
 *Written 2026-08-09, alongside the serial sink (`Mercury_Memory.md` §10). This page
 is about where Mercury's correctness evidence comes from, and why for the Game Boy
 it does not come from another emulator.*

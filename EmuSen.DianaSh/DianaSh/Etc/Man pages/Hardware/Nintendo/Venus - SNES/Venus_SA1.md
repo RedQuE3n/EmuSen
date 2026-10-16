@@ -1,5 +1,12 @@
 # Venus (SNES) — SA-1
 
+*Historical since 2026-10-16.* This page describes C# Venus, which was deleted from the source on 2026-10-16 at the
+tester's word (`VenusRT_Native.md` §68). Its content is kept as the record of that core. VenusRT, the SNES's only engine
+since, is a clean-room rewrite that was written without reading this page's algorithm sections (`VenusRT_Plan.md` §1.2),
+so nothing here describes VenusRT; the file, class and member names are C# Venus's, and the code it cites is in the
+repository's history and in the releases that carried it. The SA-1 runs on VenusRT as built at its stage 5
+(`VenusRT_Native.md` §25).
+
 Covers everything under `Cores/Nintendo/Venus - SNES/Coprocessors/Sa1/`, plus the `Sa1Mapper` that hangs off `ICartridgeMapper`. The SA-1 is the first coprocessor this core implements, so this page also documents the general seam the *next* one should reuse (§2.1).
 
 ---

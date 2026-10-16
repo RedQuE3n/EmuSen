@@ -577,11 +577,11 @@ fn the_device_is_never_given_the_machine_s_own_picture() {
     assert!(!processor.scaled());
 }
 
-/// The five binaries are the C# path's files on disk, byte for byte: a rebuilt shader there is a rebuild here, and nothing else can change one.
+/// The five binaries are the files on disk, byte for byte: a rebuilt shader there is a rebuild here, and nothing else can change one.
 #[test]
 fn the_shaders_are_the_csharp_path_s_files_byte_for_byte() {
     use crate::rdp::gpu::shaders;
-    let folder = concat!(env!("CARGO_MANIFEST_DIR"), "/../Mars - N64/Rdp/Gpu/Shaders");
+    let folder = concat!(env!("CARGO_MANIFEST_DIR"), "/shaders");
     for (name, bytes) in [("shade", shaders::SHADE), ("scan", shaders::SCAN), ("clear", shaders::CLEAR), ("average", shaders::AVERAGE), ("add", shaders::ADD)] {
         let on_disk = std::fs::read(format!("{folder}/{name}.spv")).unwrap_or_else(|e| panic!("{name}.spv: {e}"));
         assert!(on_disk == bytes, "{name}.spv differs from the binary this library carries");

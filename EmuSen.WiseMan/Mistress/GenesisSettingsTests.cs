@@ -50,11 +50,11 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void The_packs_name_the_consoles_only_the_discovered_engine_runs_and_its_systems_in_development_have_no_tab()
         {
-            Assert.Equal(new[] { "Genesis", "PlayStation" }, CoreCatalog.DiscoveredConsoles);
+            Assert.Equal(new[] { "Genesis", "Sega CD", "PlayStation" }, CoreCatalog.DiscoveredConsoles);
             Assert.Equal(("Genesis", "Sega CD", "32X"), (CoreCatalog.DiscoveredConsoleForSystem("md"), CoreCatalog.DiscoveredConsoleForSystem("mcd"), CoreCatalog.DiscoveredConsoleForSystem("32x")));
             Assert.Null(CoreCatalog.DiscoveredConsoleForSystem("snes"));
             CoreDiscovery.UseDevelopment(true);
-            Assert.Equal(new[] { "Genesis", "PlayStation" }, CoreCatalog.DiscoveredConsoles);
+            Assert.Equal(new[] { "Genesis", "Sega CD", "PlayStation" }, CoreCatalog.DiscoveredConsoles);
         }
 
         [Fact]

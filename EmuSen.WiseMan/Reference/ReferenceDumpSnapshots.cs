@@ -1,10 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Moon;
-using EmuSen.Cores.Nintendo.Moon.Debug;
-using EmuSen.Cores.Nintendo.Venus;
-using EmuSen.Cores.Nintendo.Venus.Debug;
+using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.Crystal.Debugger;
 using EmuSen.WiseMan.Fixtures;
@@ -27,8 +24,8 @@ namespace EmuSen.WiseMan.Reference
         // The probe's space names on the left, ours on the right.
         private static readonly (string Dump, string Ours)[] NesSpaces =
         {
-            ("ram", MoonCore.SpaceRam), ("nametable", MoonCore.SpaceCiram), ("oam", MoonCore.SpaceOam),
-            ("palette", MoonCore.SpacePalette), ("chr", MoonCore.SpaceChr), ("work", MoonCore.SpacePrgRam),
+            ("ram", "RAM"), ("nametable", "CIRAM"), ("oam", "OAM"),
+            ("palette", "PALETTE"), ("chr", "CHR"), ("work", "PRGRAM"),
         };
 
         private static readonly string[] SnesSpaces = { "VRAM", "CGRAM", "OAM", "GSURAM" };
@@ -154,9 +151,9 @@ namespace EmuSen.WiseMan.Reference
 
             if (system == "nes")
             {
-                var core = new MoonCore();
+                using var core = new MoonRtCore();
                 core.LoadRom(romPath);
-                var target = new MoonDebugTarget(core);
+                var target = core.CreateDebugTarget();
 
                 long ran = 0;
                 foreach (long frame in frames)
@@ -175,9 +172,8 @@ namespace EmuSen.WiseMan.Reference
 
             if (system == "snes")
             {
-                var core = new VenusCore(headless: true);
-                core.LoadRom(romPath);
-                var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+                ICore core = CoreFactory.Loaded(romPath);
+                var target = CoreFactory.Bundle(core).DebugTarget;
 
                 long ran = 0;
                 foreach (long frame in frames)

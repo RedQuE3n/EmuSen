@@ -3,13 +3,9 @@ using System.IO;
 using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.MercuryRT;
-using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
-using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
@@ -79,30 +75,21 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(2, ControllerPorts.Of(CoreFactory.Load(nes).Core));
             Assert.Equal(2, ControllerPorts.Of(CoreFactory.Load(snes).Core));
             Assert.Equal(1, ControllerPorts.Of(CoreFactory.Load(gb).Core));
-            Assert.Equal(4, ControllerPorts.Of(new MarsCore()));
             Assert.Equal((2, 2, 1, 4, 1), (ControllerPorts.ForConsole("NES"), ControllerPorts.ForConsole("SNES"), ControllerPorts.ForConsole("GB"), ControllerPorts.ForConsole("N64"), ControllerPorts.ForConsole("Lynx")));
             Assert.Equal(0, ControllerPorts.Of(null));
 
-            if (MoonRtCore.Available) Assert.Equal(2, ControllerPorts.Of(CoreFactory.Load(nes, engine: CoreCatalog.MoonRtEngine).Core));
             if (MercuryRtCore.Available) Assert.Equal(1, ControllerPorts.Of(CoreFactory.Load(gb, engine: CoreCatalog.MercuryRtEngine).Core));
             if (MarsRtCore.Available) Assert.Equal(4, ControllerPorts.Of(new MarsRtCore()));
-            if (CoreDiscovery.Found.SingleOrDefault(c => c.Info.Id == "venusrt") is { } venusrt)
-            {
-                using var engine = Assert.IsType<CoreEngine>(CoreFactory.Load(snes, engine: venusrt.EngineName).Core);
-                Assert.Equal(2, ControllerPorts.Of(engine));
-            }
         }
 
-        // Port 1 is controller 2; ports 2 and 3 used to land on controller 2 as well, in both engines.
-        [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public void The_nes_second_pad_reads_port_1_alone(bool rust)
+        // Port 1 is controller 2; ports 2 and 3 used to land on controller 2 as well.
+        [Fact]
+        public void The_nes_second_pad_reads_port_1_alone()
         {
-            if (rust && !MoonRtCore.Available) return;
+            Assert.True(MoonRtCore.Available, MoonNative.Report);
             string nes = Rom(SyntheticNesRom.Build(patches: (0, ReadSecondNesPad)), "pads.nes");
-            ICore core = CoreFactory.Load(nes, engine: rust ? CoreCatalog.MoonRtEngine : null).Core;
-            Func<int, byte> ram = a => core is MoonCore moon ? moon.ReadSpace(MoonCore.SpaceRam, a) : ((MoonRtCore)core).ReadSpace(MoonCore.SpaceRam, a);
+            var core = (MoonRtCore)CoreFactory.Load(nes).Core;
+            Func<int, byte> ram = a => core.ReadSpace("RAM", a);
             byte[] Bits() { core.RunFrame(); core.RunFrame(); return Enumerable.Range(0x300, 8).Select(ram).ToArray(); }
 
             core.SetButton(2, PadButton.A, true);
@@ -117,16 +104,12 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // Pad 2 is the auto-read's second word; ports 2 and 3, which reached it through the console's 1-based index, now reach nothing.
-        [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public void The_snes_second_pad_reads_port_1_alone(bool rust)
+        [Fact]
+        public void The_snes_second_pad_reads_port_1_alone()
         {
             string snes = Rom(SyntheticRom.Build((5, ReadSnesPads)), "pads.sfc");
-            DiscoveredCore? venusrt = CoreDiscovery.Found.SingleOrDefault(c => c.Info.Id == "venusrt");
-            if (rust && venusrt is null) return;
-            ICore core = CoreFactory.Load(snes, engine: rust ? venusrt!.EngineName : null).Core;
-            Func<int, byte> wram = a => core is VenusCore venus ? venus.Bus!.Ram[a] : ((CoreEngine)core).ReadSpace("WRAM", a);
+            ICore core = CoreFactory.Load(snes).Core;
+            Func<int, byte> wram = a => ((CoreEngine)core).ReadSpace("WRAM", a);
             byte[] Pads() { for (int i = 0; i < 3; i++) core.RunFrame(); return Enumerable.Range(0, 4).Select(wram).ToArray(); }
 
             // Pad 3's register is not a pad without a multitap, so its byte is whatever the bus gives, before and after.
@@ -143,67 +126,12 @@ namespace EmuSen.WiseMan.Cores
             (core as IDisposable)?.Dispose();
         }
 
-        // The joybus answers a port only while a controller is in it; ports 2-4 start empty, so a one-player game's machine is as before.
         [Fact]
-        public void The_n64s_other_ports_answer_once_a_controller_is_plugged_in()
+        public void The_game_boys_one_port_is_all_its_engine_reads()
         {
-            var core = new MarsCore();
-            core.LoadRom(Rom(SyntheticN64Rom.Build(patches: (0, new byte[] { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 })), "pads.z64"));
-            var ports = core.Bus!.Si.Controllers;
-            Assert.Equal(new[] { true, false, false, false }, ports.Select(p => p.Present));
-
-            for (int port = 1; port < 4; port++)
-            {
-                core.SetControllerConnected(port, true);
-                core.SetButton(port, PadButton.A, true);
-                core.SetAxis(port, PadAxis.LeftX, 1);
-            }
-            core.SetButton(7, PadButton.B, true);
-            core.SetControllerConnected(9, true);
-            Assert.All(ports, p => Assert.True(p.Present));
-            Assert.Equal(new ushort[] { 0, 0x8000, 0x8000, 0x8000 }, ports.Select(p => p.Buttons));
-            Assert.Equal(new sbyte[] { 0, 127, 127, 127 }, ports.Select(p => p.StickX));
-
-            core.SetControllerConnected(3, false);
-            Assert.False(ports[3].Present);
-        }
-
-        // MarsRT's ports, by its state against the C# core's after the same plugging and presses on every port.
-        [Fact]
-        public void Marsrts_ports_take_a_controller_and_its_buttons_as_the_csharp_cores_do()
-        {
-            if (!MarsRtCore.Available) return;
-            string rom = Rom(SyntheticN64Rom.Build(patches: (0, new byte[] { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 })), "pads.z64");
-            MarsCore oracle = MarsRtTests.Oracle();
-            using MarsRtCore twin = MarsRtTests.Twin();
-            oracle.LoadRom(rom);
-            twin.LoadRom(rom);
-            byte[] before = twin.Save(false);
-            foreach (ICore core in new ICore[] { oracle, twin })
-            {
-                core.SetControllerConnected(2, true);
-                core.SetButton(2, PadButton.Start, true);
-                core.SetAxis(2, PadAxis.LeftY, -1);
-                core.SetControllerConnected(3, true);
-                core.SetButton(3, PadButton.B, true);
-            }
-
-            using var stream = new MemoryStream();
-            oracle.SaveState(stream);
-            byte[] after = twin.Save(false);
-            Assert.False(before.AsSpan().SequenceEqual(after), "MarsRT's state did not change");
-            Assert.True(stream.ToArray().AsSpan().SequenceEqual(after), "MarsRT's ports differ from the C# core's");
-        }
-
-        [Fact]
-        public void The_game_boys_one_port_is_all_either_engine_reads()
-        {
-            Assert.Equal(1, ((ICore)new MercuryCore()).ControllerPorts);
-            if (MercuryRtCore.Available)
-            {
-                using var rt = new MercuryRtCore();
-                Assert.Equal(1, ((ICore)rt).ControllerPorts);
-            }
+            Assert.True(MercuryRtCore.Available, MercuryNative.Report);
+            using var rt = new MercuryRtCore();
+            Assert.Equal(1, ((ICore)rt).ControllerPorts);
         }
     }
 }

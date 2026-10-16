@@ -44,8 +44,8 @@ memcard: Blue.mcr already exists
 status 1
 action none
 $ memcard new "Saves/Sega CD/Cards/Cartridge 1.crm"
-out 95
-Cartridge 1.crm is named; with no file yet it is a new, blank cartridge, which the game formats
+out 54
+Cartridge 1.crm made, a formatted backup RAM cartridge
 status 0
 action none
 end
@@ -141,8 +141,8 @@ memcard: '/../x.mcr' is outside the project sandbox (<ROOT>)
 status 1
 action none
 $ memcard ls notes.txt
-out 126
-memcard: notes.txt is no card: the media known are .crm (Backup RAM Cartridge), .brm (Internal Backup RAM), .mcr (Memory Card)
+out 149
+memcard: notes.txt is no card: the media known are .crm (Backup RAM Cartridge), .brm (Internal Backup RAM), .mcr (Memory Card), .mpk (Controller Pak)
 status 1
 action none
 $ memcard cp notes.txt Saves/PlayStation/Cards/Blue.mcr

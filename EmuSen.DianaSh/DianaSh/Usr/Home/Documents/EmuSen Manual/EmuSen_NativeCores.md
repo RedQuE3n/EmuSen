@@ -155,7 +155,8 @@ The comparison below renamed the cores, dropped blank lines and braces, and comp
   `MainWindow.axaml.cs:1331`, `is EmuSen.Cores.Nintendo.Mars.MarsCore`. The reason is recorded (`Mars_Native.md`
   §6.6.3): the C# core's snapshot can deadlock with several workers. It is a property of an engine, found by its type.
 - **Venus's hotkeys.** Hotaru reaches Venus with `_core as VenusCore` (`GameWindow.axaml.cs:47`), for three
-  debug hotkeys. `EmuSen_Multicore.md` §5 records these as legitimate. Nothing here changes them.
+  debug hotkeys. `EmuSen_Multicore.md` §5 records these as legitimate. Nothing here changes them. *Removed with C# Venus
+  on 2026-10-16, with the factory's `venusFrameTimings` parameter (`VenusRT_Native.md` §68.5).*
 - **The factory.** `CoreFactory` takes a Venus-only parameter, `venusFrameTimings`, in `Load` and `Bundle`. It names
   the Rust engines in `Create` (`CoreFactory.cs:44`–`:45`), `EngineNotice` (`:68`–`:69`) and `Running` (`:74`), and has
   a type switch in `Bundle` (`:84`).
@@ -191,6 +192,13 @@ The comparison below renamed the cores, dropped blank lines and braces, and comp
   would sit on this interface.
 - **The C# cores.** Venus, Moon, Mercury and Mars keep their own `ICore` implementations. Registration covers them.
   The ABI does not, because they have none.
+  *Since 2026-10-16 Mars (C#) is deleted (`Mars_Native.md` §6.7): the N64 runs on MarsRT alone, its shim registered by
+  hand. C# Mercury is deleted the same day (`Mercury_Native.md` §15): MercuryRT is the Game Boy's only engine, a port
+  with no mirror, for which `PortEngine`'s mirror became optional. Moon (C#) is deleted the same day (`Moon_Native.md`
+  §9.5): MoonRT is the NES's only engine, its shim registered by hand as the other two. C# Venus is deleted the same
+  day too (`VenusRT_Native.md` §68): the SNES runs on VenusRT alone, through the generic v1 branch as before, now as
+  the console's one discovered engine (`CoreCatalog.SoleDiscoveredEngine`), so it has no Engine row and any engine name
+  a caller passes builds it. No C# core remains.*
 - **A stable ABI for third parties.** The libraries ship beside the assemblies that load them. The version check
   guards a mismatched prebuilt library, not an ecosystem.
   *Superseded 2026-10-01: a stable ABI for third parties is now a goal, decided that day; `EmuSen_CoreAPI.md` §4.8
@@ -471,7 +479,8 @@ of that one contract:
   (`MercuryMachine.cs:84`–`:91`, `Mercury_Native.md` §3.3). That is a console rule. It stays an extension,
   `mercuryrt_set_sample_rate`, and the core reports 44,100 through the common call.
 - **Venus follows a setting**, `AudioSettings.SampleRate` (`VenusCore.cs:377`). Venus is C# and has no native engine. A
-  future one would take the output rate as a setting key and report it here.
+  future one would take the output rate as a setting key and report it here. *C# Venus was deleted on 2026-10-16;
+  VenusRT reports the S-DSP's 32 kHz and the host resamples.*
 - **Mars reports the rate the game programmed into the DAC**: the video clock over the period, rounded to even, and
   44,100 until the game sets it (`ai.rs:67`, `:81`–`:83`). It changes during play.
 
@@ -644,7 +653,8 @@ sends every changed pair of a frame boundary in one text, and the core applies t
 before and after, and takes a new picture if it moved, which is today's rule.
 
 Where the settings list lives is §9's Q4. It stays C# for now (`MarsCore.VideoSettings`, `MercuryCore.ModelSettings`),
-because `CoreCatalog.SettingsFor` must answer before any library is loaded.
+because `CoreCatalog.SettingsFor` must answer before any library is loaded. *Since 2026-10-16 the N64's list is `N64Console.VideoSettings`,
+beside MarsRT's shim, since `MarsCore` is deleted.*
 *Superseded 2026-10-01 by `EmuSen_CoreAPI.md` §6.13: the core exports its settings schema, read at discovery from a
 sidecar without loading the library (§7.1 there), so the list can answer before any library is loaded and still
 have one source per engine.*
@@ -716,6 +726,29 @@ the change removes the last instantiation of std's hasher (measured by `grep`; t
 **`set_stack` for MarsRT is an opportunity, not part of the move.** `Mars_Native.md` §6.5.6 lists "the stack in a
 plain frame" as not done. Honouring `DEBUG_STACK` would be one way to do it, and it would be a behaviour change with
 its own oracle. It is left out of the migration.
+
+#### 3.14.1 A port without a mirror (2026-10-16)
+
+Until its C# core was deleted, each port's shim (`PortEngine`) read the debugger's registers and views from a hidden C#
+core, the *mirror*, loaded from the Rust machine's state before each read, and its registries were the mirror's. With
+the C# core gone the mirror is optional: `PortEngine` keeps its own cheat, call-stack and coverage registries when a
+shim names no mirror, and the bridge feeds them exactly as it fed the mirror's. MercuryRT and MoonRT are the ports
+without one (`Mercury_Native.md` §15, `Moon_Native.md` §9.4).
+
+What replaces the mirror's fields is the state's own listing. Every port's state writer already records a layout, one
+line per field, `offset length type path`, which the core ABI v1 publishes through `state_layout` (`EmuSen_CoreAPI.md`
+§6). `StateLayout` (`EmuSen/Cores/Native/StateLayout.cs`) parses that listing once per loaded game, and a shim reads any
+scalar, array element or byte run of a saved state by its path, `Cpu.PC` or `Apu.Pulse1.TimerPeriod`. The paths are
+the core's own names, so this couples the shim to its own crate and to nothing else, and both sit in one component.
+The cost is one state save per debugger refresh: 25 KB for an NROM cartridge, 279 KB for one whose state carries
+256 KB of CHR (measured 2026-10-16 on the goldens' kept states), at the debugger's polling rate; nothing on the frame
+path changes.
+
+The listing is the right source because it is already proven: stage 1 of each port held it to the C# reflection walk
+of the same objects, field for field, and the bisection of every golden failure names fields through it. Values the
+C# debugger *derived* from fields, such as a pulse channel's silencing by its sweep target or a board's current
+nametable arrangement, are derived in the shim from the same fields by the same rules, and are written down beside the
+board table that owns them.
 
 ### 3.15 Extension exports
 
@@ -970,7 +1003,8 @@ to build the crate (`RustCores.props:9`–`:26`).
 running engine's feature, and the reason they give ("not kept for Mars (C#)") comes from the registration's own text.
 *Built 2026-09-28, ahead of the records: `EngineFeatures` and the `IEngineFeatures` an engine implements to declare it
 live in `CoreCapabilities.cs`, `MarsCore` declares the withheld rewind and its text, and Mistress's two sites read it
-(`EmuSen_Settings_Reference.md` §4.85.4). The registration reads the same declaration when it is built.*
+(`EmuSen_Settings_Reference.md` §4.85.4). The registration reads the same declaration when it is built.* *Since 2026-10-16, with Mars (C#) deleted,
+no engine withholds rewind; the declaration stays as the surface an engine would use.*
 Anything later that is a property of an engine rather than a capability of a core goes in the same place. A property
 of an engine is a policy decision about an implementation that does support the interface.
 
@@ -1049,6 +1083,12 @@ them loosely.
 | **5** | **MarsRT.** Its exports are regenerated and its extensions renamed; `MarsRtCore` goes over the base; its hooks move to the shared crate, with the profile a `BTreeMap`; its flags are renumbered; −10 and −11 become −257 and −258; the crash log is renamed | The 57 test methods in `MarsRt*Tests` and `MarsRTViTests`. The rewind tests' state and picture per landing (`Mars_Native.md` §6.6.3). `pacebench`'s state hash. The three gameplay states' hashes in `examples/threads`. The probe on Super Mario 64 and Ocarina of Time only. v1 states and v2 snapshots from both engines, of both RDRAM sizes, load | 1–2 days |
 | **5a** | **MarsRT's PGO profile retrained** | `pgo/train.sh` (about 55 minutes, `Mars_Native.md` §6.17.8); the build's verdict `matched`; no function without data under `-pgo-warn-missing-function` on the CI flavour (§6.17.7) | an hour and a half |
 | **5b** | **MarsRT timed** | Interleaved builds before and after, the order swapped each round, on Super Mario 64, Ocarina of Time, the Dam and DK64's title, as §6.17.6 timed them (P3) | 2 hours |
+
+*Step 5 done 2026-10-15, onto the core ABI v1 alone rather than this interface, which every other Rust core had left by
+then (`Mars_Native.md` §7, `EmuSen_CoreAPI.md` §13.1). Its oracles above held; the comparisons against C# Mars among them
+were retired on 2026-10-16, MarsRT's oracles being its own digests, the corpus and the kit (`Mars_Native.md` §7.5), whose
+19 cases it passes since a load stopped setting the `Dirty` bytes (§7.4 there). Step 5a stays
+deferred (decided 2026-09-30: profile work is batched after every core is ported). Step 5b is §7.5 there.*
 
 *Step 1's registration-equivalence test was not built with step 1. It was built on 2026-10-04, ahead of the move to
 DianaSh that it now guards (`EmuSen_CoreAPI.md` §25).*
@@ -1403,6 +1443,8 @@ measured and not kept.
 - A digest over the picture, the sound and the state matches pre-move MercuryRT on 24 runs. That is 7 games in the
   three models from boot and from a state, and 3 library resume states.
 - The fallback to Mercury (C#), with `EMUSEN_MERCURY_NATIVE=0` and without the library, is tested in a child process.
+  *Since 2026-10-16 there is no fallback: without the library a Game Boy game does not load, and the status line says
+  why (`Mercury_Native.md` §15.4).*
 
 **P4 held for the plain path, and was not enough.** The symbol diff found one inlining regression, and once it was
 removed every function of the plain path had its old size. The functions that still differ are all cold, though not
@@ -1486,3 +1528,26 @@ conformance kit's C8 checks through the audio digest across a save and load.
 
 **Cost.** A change costs 64 multiply-adds. On the Genesis that is about 53,000 changes a second from the YM2612 and
 a few thousand from the PSG; Nephrite's frame cost rose by about 1% with both in place (`Nephrite_Native.md` §18).
+
+### 12.7 Step 5: MarsRT, onto the core ABI v1 alone (2026-10-15)
+
+`Mars_Native.md` §7 is the record. In outline, against §12.5's list of what was left for it:
+
+- **The hooks** are the shared crate's `debug::Hooks`, with the profile its `BTreeMap` and the flags its numbering;
+  MarsRT keeps beside them only its delay-slot return and its observed frame's clock, and moves its signal processor's
+  trace into the hooks' second bitmap when the host drains it.
+- **`LegacyNativeMachine` is deleted** with its last user, and `NativeCoreLibrary`'s per-core constructor with it.
+- **`rust-cores.yml`'s `symbol`** for MarsRT is `emusen_core_`.
+- **The exports** are not this page's common set but the core ABI v1's, as `EmuSen_CoreAPI.md` §13.1 has it: 48 of
+  them, 21 extensions and the 21 components, 90 in all. P6 and P7 of §8.1 were estimates for this page's interface,
+  which MarsRT never took, and are retired unmeasured.
+- **The status codes**: −10 and −11 are now the shared −257 and −258; −9 and −12 to −14 stay in the core's band.
+- **The crash log** is `marsrt_crash_<pid>.txt`, the v1 loader's name.
+- **P1** held for MarsRT: every state the digests take, of both engines and both RDRAM sizes, loads and runs on as
+  before. **P8** held but for call sites: the corpus's `Boot` now takes the image's path, and three tests of the old
+  loader's shape were rewritten for the v1 handle (`NativeHostTests`, `MarsNativeTests`).
+- **R3**, a state saved with a button held, is tested against MarsRT's own run that went on (`MarsRtCoreAbiTests`),
+  C# Mars having been retired as its oracle (`Mars_Native.md` §7.5), and **R4** is why
+  `CoreEngine.EndFrame` became overridable: Mars's frame end is not the runtime's.
+- **The PGO retrain (5a)** stays deferred; §7.5 of `Mars_Native.md` times the step with the build unguided on both sides.
+

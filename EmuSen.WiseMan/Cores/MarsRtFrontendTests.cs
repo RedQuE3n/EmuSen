@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mars;
-using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Crystal.Cheats;
@@ -57,63 +55,69 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(".z64")]
         [InlineData(".n64")]
         [InlineData(".v64")]
-        public void The_factory_builds_MarsRT_only_when_its_engine_is_asked_for(string extension)
+        public void The_factory_builds_MarsRT_whatever_engine_is_asked_for(string extension)
         {
             Assert.True(MarsRtCore.Available, MarsNative.Report);
             string rom = Rom(SyntheticN64Rom.Build(patches: (0, InterruptsOffSpin)), extension);
 
-            CoreBundle mars = CoreFactory.Load(rom);
-            Assert.IsType<MarsCore>(mars.Core);
-            Assert.Null(mars.Notice);
+            foreach (string? engine in new[] { null, CoreCatalog.MarsRtEngine, "Mars (C#)", "MarsJS" })
+            {
+                CoreBundle bundle = CoreFactory.Load(rom, engine: engine);
+                Assert.IsType<MarsRtCore>(bundle.Core);
+                Assert.IsType<MarsRtDebugTarget>(bundle.DebugTarget);
+                Assert.Equal(("GameShark", MarsDebugSpaces.Rdram), (bundle.CheatAutoDetectCodec!.Name, bundle.CheatAutoDetectCodec.SpaceName));
+                Assert.Null(bundle.Notice);
+                Assert.True(((MarsRtCore)bundle.Core).ExpansionPak);
+                (bundle.Core as IDisposable)?.Dispose();
+            }
+        }
 
-            CoreBundle marsRt = CoreFactory.Load(rom, engine: CoreCatalog.MarsRtEngine);
-            Assert.IsType<MarsRtCore>(marsRt.Core);
-            Assert.IsType<MarsRtDebugTarget>(marsRt.DebugTarget);
-            Assert.Equal(("GameShark", MarsCore.SpaceRdram), (marsRt.CheatAutoDetectCodec!.Name, marsRt.CheatAutoDetectCodec.SpaceName));
-            Assert.Null(marsRt.Notice);
-            Assert.True(((MarsRtCore)marsRt.Core).ExpansionPak);
-
-            CoreBundle unknown = CoreFactory.Load(rom, engine: "MarsJS");
-            Assert.IsType<MarsCore>(unknown.Core);
-            Assert.Contains("MarsJS", unknown.Notice);
-            Assert.EndsWith($"{CoreCatalog.MarsEngine} is running.", unknown.Notice);
-            Assert.Null(CoreFactory.Load(rom, engine: CoreCatalog.MarsEngine).Notice);
+        // Mars (C#) was retired: a player's stored choice of it runs MarsRT, with one line in the log - see Mars_Native.md §6.7.
+        [Fact]
+        public void A_stored_choice_of_the_retired_csharp_core_runs_MarsRT()
+        {
+            string? logsWere = ErrorLog.DirectoryOverride;
+            string logs = Path.Combine(Path.GetTempPath(), $"wiseman_{Guid.NewGuid():N}");
+            ErrorLog.DirectoryOverride = logs;
+            try
+            {
+                Assert.Equal(CoreCatalog.MarsRtEngine, CoreCatalog.EngineChosen("N64", "Mars (C#)"));
+                Assert.Equal(CoreCatalog.MarsRtEngine, CoreCatalog.EngineChosen("N64", "Mars (C#)"));
+                string[] lines = Directory.Exists(logs) ? Directory.GetFiles(logs).SelectMany(File.ReadAllLines).Where(l => l.Contains("Mars (C#) was retired")).ToArray() : Array.Empty<string>();
+                Assert.True(lines.Length <= 1, string.Join("\n", lines));
+            }
+            finally
+            {
+                ErrorLog.DirectoryOverride = logsWere;
+                try { Directory.Delete(logs, recursive: true); } catch (IOException) { }
+            }
         }
 
         [Fact]
-        public void The_N64_defaults_to_MarsRT_and_the_Game_Boy_to_its_csharp_core()
+        public void The_N64_defaults_to_MarsRT_and_the_Game_Boy_has_one_engine()
         {
-            CoreSetting engine = CoreCatalog.EngineFor("N64")!;
-            Assert.Equal(CoreCatalog.EngineKey, engine.Key);
-            Assert.Equal(CoreCatalog.MarsRtEngine, engine.Default);
-            Assert.Equal(new[] { CoreCatalog.MarsRtEngine, CoreCatalog.MarsEngine }, engine.Choices);
-            Assert.Equal(CoreCatalog.MarsRtEngine, CoreCatalog.EngineChosen("N64", null));
-            Assert.Equal(CoreCatalog.MarsEngine, CoreCatalog.EngineChosen("N64", CoreCatalog.MarsEngine));
-            Assert.Equal(CoreCatalog.MercuryEngine, CoreCatalog.EngineChosen("GB", null));
-            Assert.Equal(CoreCatalog.EngineFor("SNES")?.Default, CoreCatalog.EngineChosen("SNES", null));
-            Assert.True(CoreCatalog.EngineFor("SNES") is null or { Default: CoreCatalog.VenusRtEngine, Choices: [CoreCatalog.VenusRtEngine, CoreCatalog.VenusEngine, ..] });
-            Assert.Equal(CoreCatalog.VenusEngine, CoreCatalog.EngineChosen("SNES", CoreCatalog.VenusEngine));
-            CoreSetting nes = CoreCatalog.EngineFor("NES")!;
-            Assert.Equal(CoreCatalog.MoonEngine, nes.Default);
-            Assert.Equal(new[] { CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine }, nes.Choices);
-            CoreSetting gameBoy = CoreCatalog.EngineFor("GB")!;
-            Assert.Equal(CoreCatalog.MercuryEngine, gameBoy.Default);
-            Assert.Equal(new[] { CoreCatalog.MercuryEngine, CoreCatalog.MercuryRtEngine }, gameBoy.Choices);
+            Assert.Null(CoreCatalog.EngineFor("N64"));
+            Assert.True(CoreCatalog.IsRegisteredEngine(CoreCatalog.MarsRtEngine));
+            Assert.Null(CoreCatalog.EngineChosen("N64", null));
+            Assert.Equal(CoreCatalog.MarsRtEngine, CoreCatalog.EngineChosen("N64", CoreCatalog.MarsRtEngine));
+            Assert.Null(CoreCatalog.EngineChosen("GB", null));
+            Assert.Null(CoreCatalog.EngineFor("SNES"));
+            Assert.Null(CoreCatalog.EngineChosen("SNES", null));
+            Assert.Equal(CoreCatalog.VenusRtEngine, CoreCatalog.EngineChosen("SNES", "Venus (C#)"));
+            Assert.Null(CoreCatalog.EngineFor("NES"));
+            Assert.Null(CoreCatalog.EngineFor("GB"));
             Assert.DoesNotContain(CoreCatalog.SettingsFor("N64"), s => s.Key == CoreCatalog.EngineKey);
         }
 
         [Fact]
-        public void MarsRT_offers_Mars_s_keys_and_each_hint_says_whether_it_is_honoured()
+        public void MarsRT_offers_the_console_s_keys_and_its_own()
         {
             using var core = new MarsRtCore();
             ICoreSettings settings = core;
 
-            Assert.Equal(MarsCore.VideoSettings.Select(s => s.Key).Append("Recompiler"), settings.Settings.Select(s => s.Key));
-            foreach (CoreSetting setting in settings.Settings)
-            {
-                if (setting.Key is "ExpansionPak" or "SkipRepeatedScans" or "RenderScale" or "Antialiasing" or "Gpu") Assert.Equal(MarsCore.VideoSettings.Single(s => s.Key == setting.Key).Hint, setting.Hint);
-                else Assert.DoesNotContain("ignores it", setting.Hint);
-            }
+            Assert.Equal(N64Console.VideoSettings.Select(s => s.Key).Append("Recompiler"), settings.Settings.Select(s => s.Key));
+            foreach (CoreSetting setting in settings.Settings.Where(s => s.Key is "ExpansionPak" or "SkipRepeatedScans" or "RenderScale" or "Antialiasing" or "Gpu"))
+                Assert.Equal(N64Console.VideoSettings.Single(s => s.Key == setting.Key).Hint, setting.Hint);
         }
 
         [Fact]
@@ -168,7 +172,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(4 << 20, core.SpaceSize(MarsRtSpace.Rdram));
         }
 
-        // A state of the other size rebuilds the machine, and the Pak follows the state, as MarsCore's does - see Mars_SaveStates.md §1.
+        // A state of the other size rebuilds the machine, and the Pak follows the state - see Mars_SaveStates.md §1.
         [Fact]
         public void A_state_of_the_other_memory_size_carries_the_pak_with_it()
         {
@@ -206,23 +210,17 @@ namespace EmuSen.WiseMan.Cores
 
         // Held while interrupts are off, or a cheat lands in the boot code's checksum; Apply from a paused frontend is not held - see Mars_Cheats.md §5.1.
         [Fact]
-        public void While_interrupts_are_off_MarsRT_holds_a_cheat_as_Mars_does()
+        public void While_interrupts_are_off_MarsRT_holds_a_cheat()
         {
             string rom = Rom(SyntheticN64Rom.Build(patches: (0, InterruptsOffSpin)));
             var cheats = new CheatRegistry();
-            cheats.AddRamPoke(MarsCore.SpaceRdram, 0x100, 0x42, "poke");
+            cheats.AddRamPoke(MarsDebugSpaces.Rdram, 0x100, 0x42, "poke");
             CoreBundle marsRt = CoreFactory.Load(rom, cheats: cheats, engine: CoreCatalog.MarsRtEngine);
-            CoreBundle mars = CoreFactory.Load(rom, cheats: cheats);
             var core = (MarsRtCore)marsRt.Core;
 
-            for (int frame = 0; frame < 3; frame++)
-            {
-                mars.Core.RunFrame();
-                core.RunFrame();
-            }
+            for (int frame = 0; frame < 3; frame++) core.RunFrame();
 
             Assert.Equal(0UL, core.Cop0(12) & 1);
-            Assert.Equal(0, ((MarsCore)mars.Core).Bus!.Rdram[0x100]);
             Assert.Equal(0, core.Peek(MarsRtSpace.Rdram, 0x100));
 
             marsRt.DebugTarget.ApplyCheats();
@@ -248,89 +246,6 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x33, core.Peek(MarsRtSpace.PifRam, 0x3F));
             Assert.Equal(0, core.Peek(MarsRtSpace.Rdram, 8 << 20));
             Assert.NotEqual(0x55, core.Peek(MarsRtSpace.Rom, 0x40));
-        }
-
-        // The cheat writes into the frame buffer, so where it lands against the scan is seen in the picture as well as the state - see Mars_Native.md §5.5.
-        [Fact]
-        public void With_a_cheat_on_MarsRT_leaves_the_state_and_the_picture_Mars_leaves()
-        {
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
-            string rom = Rom(SyntheticN64System.Build(rsp: true));
-            var cheats = new CheatRegistry();
-            cheats.AddCheat(CheatKind.RamPoke, EmuSen.Cores.Nintendo.Mars.Cheats.MarsCheatCodecs.GameShark().DecodeWrites("8110FB40 FFFF+8110FB42 F801+80001003 0000")!, null, "stripe");
-
-            MarsCore oracle = MarsRtTests.Oracle();
-            using MarsRtCore twin = MarsRtTests.Twin();
-            oracle.SkipRendering = twin.SkipRendering = false;
-            oracle.Cheats = twin.Cheats = cheats;
-            oracle.LoadRom(rom);
-            twin.LoadRom(rom);
-
-            bool drew = false;
-            for (int frame = 1; frame <= 60; frame++)
-            {
-                oracle.RunFrame();
-                twin.RunFrame();
-                Assert.True(State(oracle).AsSpan().SequenceEqual(twin.Save(false)), $"frame {frame}: the states differ");
-                byte[] want = oracle.GetFrameBufferRgba(), got = twin.GetFrameBufferRgba();
-                Assert.True(want.AsSpan().SequenceEqual(got), $"frame {frame}: the pictures differ from byte {want.AsSpan().CommonPrefixLength(got)}");
-                drew |= want.Where((b, i) => i % 4 != 3).Any(b => b != 0);
-            }
-
-            Assert.Equal(0, twin.Peek(MarsRtSpace.Rdram, 0x1003));
-            Assert.Equal(0xFF, twin.Peek(MarsRtSpace.Rdram, 0x10FB40));
-            Assert.True(drew, "no frame showed anything, so the picture compared nothing");
-        }
-
-        // ROM patches on the program the boot copies out, the data a transfer reads each field and the bytes the processor loads, changed between frames - see Mars_Native.md §6.6.1.
-        [Fact]
-        public void With_rom_patches_MarsRT_leaves_the_state_and_the_picture_Mars_leaves_frame_by_frame()
-        {
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
-            byte[] image = SyntheticN64System.Build(rsp: true);
-            int origin = OnlyWord(image, 0x3C09_0010, SyntheticN64System.ImageAt, SyntheticN64System.ImageLength);
-            const int Data = SyntheticN64System.DataAt;
-            string rom = Rom(image);
-
-            var cheats = new CheatRegistry();
-            cheats.AddRomPatch(origin + 3, 0x00, null, "the picture's origin to zero");
-            int run = cheats.AddCheat(CheatKind.RomPatch, new[] { new CheatWrite { Address = Data + 0x10, Value = 0xF00D, Width = 2, BigEndian = true, RepeatCount = 16, RepeatAddAddress = 0x100, RepeatAddValue = 0x11 } }, null, "a run through every transfer");
-            cheats.AddRomPatch(Data + 3, 0x5C, image[Data + 3], "the byte load, compared true");
-            cheats.AddRomPatch(Data + 6, 0x5D, (byte)(image[Data + 6] ^ 0xFF), "the halfword load, compared false");
-            cheats.AddRomPatch(0x1005, 0xA5, null, "the word load past the latch");
-
-            MarsCore oracle = MarsRtTests.Oracle();
-            using MarsRtCore twin = MarsRtTests.Twin(), plain = MarsRtTests.Twin();
-            oracle.SkipRendering = twin.SkipRendering = plain.SkipRendering = false;
-            oracle.Cheats = twin.Cheats = cheats;
-            oracle.LoadRom(rom);
-            twin.LoadRom(rom);
-            plain.LoadRom(rom);
-
-            int statesApart = 0, picturesApart = 0;
-            for (int frame = 1; frame <= 80; frame++)
-            {
-                if (frame == 25) cheats.SetEnabled(run, false);
-                if (frame == 40) cheats.MasterEnabled = false;
-                if (frame == 50)
-                {
-                    cheats.MasterEnabled = true;
-                    cheats.AddRomPatch(Data + 0x210, 0x77, null, "added while running");
-                }
-                oracle.RunFrame();
-                twin.RunFrame();
-                plain.RunFrame();
-                byte[] state = twin.Save(false);
-                Assert.True(State(oracle).AsSpan().SequenceEqual(state), $"frame {frame}: the states differ");
-                byte[] want = oracle.GetFrameBufferRgba(), got = twin.GetFrameBufferRgba();
-                Assert.True(want.AsSpan().SequenceEqual(got), $"frame {frame}: the pictures differ from byte {want.AsSpan().CommonPrefixLength(got)}");
-                statesApart += state.AsSpan().SequenceEqual(plain.Save(false)) ? 0 : 1;
-                picturesApart += got.AsSpan().SequenceEqual(plain.GetFrameBufferRgba()) ? 0 : 1;
-            }
-
-            output.WriteLine($"80 frames identical to Mars; {statesApart} states and {picturesApart} pictures differ from MarsRT unpatched");
-            Assert.Equal(image[origin + 3], twin.Peek(MarsRtSpace.Rom, (uint)origin + 3));
-            Assert.True(statesApart > 60 && picturesApart > 60, $"the patches changed {statesApart} states and {picturesApart} pictures of 80, so the comparison tested little");
         }
 
         // The phases are the frame's own: a frame not presented reports no presentation, and none reports more than the frame took - see Mars_Native.md §6.6.2.
@@ -380,42 +295,6 @@ namespace EmuSen.WiseMan.Cores
             output.WriteLine($"{presented} frames presented and {skipped} not; the machine {slow / skipped:F3} ms a frame with the idle loop run instruction by instruction and {fast / skipped:F3} ms the frame after it");
             // A report one frame late puts slow below fast; 1.5 leaves room for a noisy runner (Windows CI measured 1.99 against the old 2) - see Mars_Native.md §6.3.
             Assert.True(slow > 1.5 * fast, "the frames with the idle loop run were not slow enough to catch a report of the frame before");
-        }
-
-        // The dashboard's peek is the undrained queue, oldest first, and leaves it for the drain, on both engines - see Mars_Native.md §6.6.2.
-        [Fact]
-        public void The_audio_peek_is_what_Mars_s_peek_is_and_the_drain_still_takes_it()
-        {
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
-            string rom = Rom(SyntheticN64System.Build(rsp: true));
-            MarsCore oracle = MarsRtTests.Oracle();
-            using MarsRtCore twin = MarsRtTests.Twin();
-            oracle.LoadRom(rom);
-            twin.LoadRom(rom);
-            var want = new EmuSen.Cores.Nintendo.Mars.Debug.MarsDebugTarget(oracle);
-            var got = new MarsRtDebugTarget(twin);
-
-            long peeked = 0, drained = 0;
-            for (int frame = 1; frame <= 90; frame++)
-            {
-                oracle.RunFrame();
-                twin.RunFrame();
-                var (a, rateA) = want.GetAudioSamples();
-                var (b, rateB) = got.GetAudioSamples();
-                Assert.Equal(rateA, rateB);
-                Assert.True(a.AsSpan().SequenceEqual(b), $"frame {frame}: Mars peeked {a.Length} samples and MarsRT {b.Length}, differing from {a.AsSpan().CommonPrefixLength(b)}");
-                Assert.True(b.AsSpan().SequenceEqual(got.GetAudioSamples().Samples), $"frame {frame}: a second peek saw something else");
-                peeked += b.Length;
-                if (frame % 4 != 0) continue;
-
-                short[] fromMars = oracle.DequeueAudioSamples(int.MaxValue), fromTwin = twin.DequeueAudioSamples(int.MaxValue);
-                Assert.True(fromMars.AsSpan().SequenceEqual(a) && fromTwin.AsSpan().SequenceEqual(b), $"frame {frame}: the drain took {fromTwin.Length} samples after a peek of {b.Length}");
-                Assert.Empty(got.GetAudioSamples().Samples);
-                drained += fromTwin.Length;
-            }
-
-            output.WriteLine($"{peeked} samples peeked and {drained} drained over 90 frames, identical to Mars's");
-            Assert.True(drained > 1000, $"only {drained} samples were drained, so the peek compared little");
         }
 
         // The one offset in a stretch of the image where a big-endian word stands.
@@ -474,7 +353,7 @@ namespace EmuSen.WiseMan.Cores
         {
             string? folder = Environment.GetEnvironmentVariable(MarsRtTests.StatesVariable);
             if (folder is null || !File.Exists(Path.Combine(folder, "sm64.z64")) || !File.Exists(Path.Combine(folder, "sm64.state"))) { output.WriteLine("sm64 absent, not run"); return; }
-            if (EmuSen.Cores.Nintendo.Mars.Rdp.Gpu.GpuDevice.DeviceNames().Count == 0) { output.WriteLine("no Vulkan device: not run"); return; }
+            if (!VulkanDevices.Any()) { output.WriteLine("no Vulkan device: not run"); return; }
             using var core = new MarsRtCore(expansionPak: true, batteryRamDisabled: true) { ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true, SkipRendering = false };
             ((ICoreSettings)core).Set("RenderScale", "2");
             ((ICoreSettings)core).Set("Gpu", "true");
@@ -484,7 +363,7 @@ namespace EmuSen.WiseMan.Cores
 
             byte[] shown = core.GetFrameBufferRgba();
             byte[] kept = (byte[])shown.Clone();
-            Assert.Equal(MarsCore.ScreenWidthPixels * 2, core.ScreenWidth);
+            Assert.Equal(N64Console.ScreenWidthPixels * 2, core.ScreenWidth);
             long made = core.FrameBuffers.Made;
             int changed = 0;
             byte[] last = kept;
@@ -539,39 +418,9 @@ namespace EmuSen.WiseMan.Cores
             Assert.Contains("MarsRT", target.GetSummaryText());
         }
 
-        // The synthetic system maps user space's first page pair onto physical 1MB and stores its field count there; Mars's own target is the oracle.
-        [Fact]
-        public void The_processor_s_view_follows_the_TLB_the_game_set_as_Mars_s_does()
-        {
-            string rom = Rom(SyntheticN64System.Build(rsp: false));
-            MarsCore oracle = MarsRtTests.Oracle();
-            using MarsRtCore twin = MarsRtTests.Twin();
-            oracle.LoadRom(rom);
-            twin.LoadRom(rom);
-            for (int frame = 0; frame < 5; frame++)
-            {
-                oracle.RunFrame();
-                twin.RunFrame();
-            }
-
-            IDebugMemorySpace want = new EmuSen.Cores.Nintendo.Mars.Debug.MarsDebugTarget(oracle).GetMemorySpaces().Single(s => s.Name == "CPU");
-            IDebugMemorySpace got = new MarsRtDebugTarget(twin).GetMemorySpaces().Single(s => s.Name == "CPU");
-            foreach (uint address in new uint[] { 0x0000_0000, 0x0000_0010, 0x0000_1FFC, 0x0000_2000, 0x8000_0400, 0xA400_0040, 0xBFC0_07C0 })
-                for (int i = 0; i < 4; i++) Assert.Equal(want.Read(unchecked((int)address) + i), got.Read(unchecked((int)address) + i));
-
-            Assert.NotEqual(0, twin.Peek(MarsRtSpace.Cpu, 0x13));
-            Assert.Equal(twin.Peek(MarsRtSpace.Rdram, 0x10_0013), twin.Peek(MarsRtSpace.Cpu, 0x13));
-        }
-
-        private static byte[] State(MarsCore core)
-        {
-            using var stream = new MemoryStream();
-            core.SaveState(stream);
-            return stream.ToArray();
-        }
     }
 
-    // MarsRT's battery saves through the same files and switch as MarsCore's - see Mars_Save.md §7 and Mars_Native.md §5.5.
+    // MarsRT's battery saves through the library's save files and the battery switch - see Mars_Save.md §7 and Mars_Native.md §5.5.
     [Collection(TestCollections.ProcessGlobals)]
     public class MarsRtSaveFileTests : IDisposable
     {
@@ -579,6 +428,10 @@ namespace EmuSen.WiseMan.Cores
 
         // Block 5 of a 4 Kbit EEPROM, which the synthetic system never writes; it writes block 2.
         private const int Marked = 5 * 8, Written = 2 * 8;
+
+        // The largest EEPROM a cartridge carries, 16 kilobits - see Mars_Save.md §2.
+        private const int EepromSize = 0x800;
+
         private static readonly byte[] Marker = "MARSRT!!"u8.ToArray();
 
         public MarsRtSaveFileTests()
@@ -602,7 +455,7 @@ namespace EmuSen.WiseMan.Cores
 
         private static byte[] MarkedSave()
         {
-            byte[] save = Enumerable.Repeat((byte)0xFF, EmuSen.Cores.Nintendo.Mars.Memory.Eeprom.Size).ToArray();
+            byte[] save = Enumerable.Repeat((byte)0xFF, EepromSize).ToArray();
             Marker.CopyTo(save, Marked);
             return save;
         }
@@ -611,32 +464,6 @@ namespace EmuSen.WiseMan.Cores
         {
             Directory.CreateDirectory(Path.GetDirectoryName(SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64))!);
             File.WriteAllBytes(SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64), save);
-        }
-
-        [Fact]
-        public void A_save_is_read_at_load_and_what_the_game_wrote_is_written_back_for_either_engine_to_read()
-        {
-            string rom = WriteRom("Eeprom");
-            Place(rom, MarkedSave());
-
-            using var first = new MarsRtCore(batteryRamDisabled: false);
-            first.LoadRom(rom);
-            Assert.Equal(Marker, first.BatteryContents![Marked..(Marked + 8)]);
-            for (int frame = 0; frame < 40; frame++) first.RunFrame();
-            first.SaveSram();
-
-            byte[] file = File.ReadAllBytes(SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64));
-            Assert.Equal(EmuSen.Cores.Nintendo.Mars.Memory.Eeprom.Size, file.Length);
-            Assert.Equal(Marker, file[Marked..(Marked + 8)]);
-            Assert.NotEqual(Enumerable.Repeat((byte)0xFF, 8), file[Written..(Written + 8)]);
-
-            using var second = new MarsRtCore(batteryRamDisabled: false);
-            second.LoadRom(rom);
-            Assert.Equal(file, second.BatteryContents);
-
-            var mars = new MarsCore(batteryRamDisabled: false);
-            mars.LoadRom(rom);
-            Assert.Equal(file, mars.Bus!.Save.Contents);
         }
 
         [Fact]
@@ -651,7 +478,7 @@ namespace EmuSen.WiseMan.Cores
             core.SaveSram();
 
             Assert.False(File.Exists(SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64)));
-            Assert.False(File.Exists(Path.ChangeExtension(SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64), MarsCore.PakExtension)));
+            Assert.False(File.Exists(Path.ChangeExtension(SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64), N64Console.PakExtension)));
         }
 
         [Fact]
@@ -675,7 +502,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(File.Exists(save));
         }
 
-        // Three hundred frames, as MarsCore's own autosave counts them - see Mars_Save.md §7.
+        // Three hundred frames, as the battery autosave counts them - see Mars_Save.md §7.
         [Fact]
         public void A_changed_chip_is_written_on_the_three_hundredth_frame_without_being_asked()
         {
@@ -724,23 +551,13 @@ namespace EmuSen.WiseMan.Cores
             CheatImport.FromChtFile(cheats, cht, bundle.CheatAutoDetectCodec, replace: true);
             CheatInfo lives = cheats.GetCheats().Single(c => c.Description == "Unlimited Lives");
             cheats.SetEnabled(lives.Id, true);
-            MarsCore oracle = MarsRtTests.Oracle(expansionPak: true);
-            oracle.Cheats = cheats;
-            oracle.LoadRom(rom);
             core.SkipRendering = true;
-            foreach (EmuSen.Cores.ICore each in new EmuSen.Cores.ICore[] { core, oracle }) each.LoadState(Path.Combine(folder, "sm64.state"));
+            core.LoadState(Path.Combine(folder, "sm64.state"));
             Assert.NotEqual(0x64, core.Peek(MarsRtSpace.Rdram, 0x3094DD));
 
-            for (int frame = 0; frame < 120; frame++)
-            {
-                core.RunFrame();
-                oracle.RunFrame();
-            }
+            for (int frame = 0; frame < 120; frame++) core.RunFrame();
 
             Assert.Equal(0x64, core.Peek(MarsRtSpace.Rdram, 0x3094DD));
-            using var state = new MemoryStream();
-            oracle.SaveState(state);
-            Assert.True(state.ToArray().AsSpan().SequenceEqual(core.Save(false)), "with the cheat on, MarsRT and Mars left different states");
         }
     }
 }

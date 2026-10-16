@@ -56,6 +56,9 @@ Explicitly *not* remapping X onto A or L onto B. A binding for a button the cons
 
 ## 3. Why the names match `SnesButton` exactly
 
+*Since 2026-10-16* `SnesButton` and its cast left with C# Venus (`VenusRT_Native.md` §68.4); the SNES pad is the pack's
+`SnesSystem.PadButtons`, still `PadButton`'s first twelve, and the section below is the record of why.
+
 `PadButton`'s members are declared in the same order, with the same names, as `Venus/Input/Input.cs`'s `SnesButton`. That is deliberate and it bought two things:
 
 **Nobody lost their bindings.** `EmuSen.Galaxia` persists enums **by name**, not by ordinal (see `EmuSen_Config_Reference.md`). An existing `keybindings.json` holding `{"Up": "Up", "B": "Z", ...}` deserialises into `Dictionary<PadButton, Key>` unchanged, because every key string still resolves. Retyping the whole binding stack needed **zero** config migration code and no version bump on either file. Had the names differed by even one member, this refactor would have shipped a migration step and a "your bindings were reset" notice.
@@ -283,11 +286,10 @@ the count with no game loaded, for the bindings window.
 
 | Console | Engine | Ports | Source of the count | Players 2-4 reach the game |
 |---|---|---|---|---|
-| NES | Moon (C#) | 2 | `MoonCore.Ports` | player 2 |
-| NES | MoonRT (Rust) | 2 | `MoonCore.Ports`, the shim | player 2 |
-| SNES | Venus (C#) | 2 | `VenusCore.Ports` | player 2 |
+| NES | MoonRT (Rust); Moon (C#) until it was deleted on 2026-10-16 | 2 | `NesSystem.Ports`, the NES system pack | player 2 |
+| SNES | VenusRT (Rust); Venus (C#) until it was deleted on 2026-10-16 | 2 | `SnesSystem.Ports`, the SNES system pack | player 2 |
 | SNES | VenusRT (Rust, ABI v1) | 2 | machine info's `ports` (`EmuSen_CoreAPI.md` §6.4) | player 2 |
-| Game Boy | Mercury (C#), MercuryRT (Rust) | 1 | the console | none, by the hardware |
+| Game Boy | MercuryRT (Rust); Mercury (C#) until it was deleted on 2026-10-16 | 1 | the console | none, by the hardware |
 | N64 | Mars (C#), MarsRT (Rust) | 4 | `MarsCore.Ports` | players 2, 3 and 4 |
 | Genesis | Nephrite (Rust, ABI v1) | 2 to 8, by its two port settings, and two more on a J-Cart | machine info's `ports`; with no game loaded, the console's pack (§8.11) | players 2 to 8 *(added 2026-10-07)* |
 

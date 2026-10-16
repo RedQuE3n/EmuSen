@@ -1,5 +1,7 @@
 # Moon (NES) — Memory, cartridge and mappers
 
+*Historical since 2026-10-16: Moon (C#), the C# core this page describes, was deleted when MoonRT became the NES's only engine (`Moon_Native.md` §9.5). MoonRT implements the same machine field for field and is held to the goldens recorded from it, so the hardware described here stands; the file, class and member names are the C# core's, and the code is in git history before the retirement.*
+
 Covers `Cores/Nintendo/Moon - NES/Memory/`: the CPU address decode (`MemoryBus.cs`), the iNES image (`Cartridge.cs`), the board contract (`IMapper.cs`) and the five boards under `Mappers/`. Input lives in `Input/Controller.cs` and is documented in §5.2 because it is reached through this decode.
 
 ---

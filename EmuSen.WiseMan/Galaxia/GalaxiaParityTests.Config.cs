@@ -640,7 +640,11 @@ namespace EmuSen.WiseMan.Galaxia
                 Put(Path.Combine(folder, "notes.txt"), "x");
                 Put(Path.Combine(folder, "upper.JSON"), "x");
                 Directory.CreateDirectory(Path.Combine(folder, "a folder.json"));
-                if (!OperatingSystem.IsWindows()) File.CreateSymbolicLink(Path.Combine(folder, "dangling.json"), At("nowhere"));
+                if (Links.Allowed)
+                {
+                    File.CreateSymbolicLink(Path.Combine(folder, "dangling.json"), At("nowhere"));
+                    Directory.CreateSymbolicLink(Path.Combine(folder, "folder-link.json"), At("nowhere"));
+                }
             }
             Side("managed-names");
             IReadOnlyList<string> managed = CheatFile.Managed.ListNames();
@@ -648,6 +652,8 @@ namespace EmuSen.WiseMan.Galaxia
             IReadOnlyList<string> native = CheatFile.ListNamesNative();
             Assert.Equal(managed, native);
             Assert.Contains("dangling", native);
+            // A dangling link made for a folder: a file to Unix's listing, a folder to Windows'.
+            if (Links.Allowed) Assert.Equal(!OperatingSystem.IsWindows(), native.Contains("folder-link"));
             Assert.DoesNotContain("a folder", native);
             Assert.True(native.Count >= names.Length - 2, string.Join(",", native));
 
@@ -768,7 +774,7 @@ namespace EmuSen.WiseMan.Galaxia
                     File.SetLastWriteTime(Path.Combine(folder, file), now.AddDays(-days).AddMinutes(days == 14 ? 30 : 0));
                 }
                 Directory.CreateDirectory(Path.Combine(folder, "emusen_folder.log"));
-                if (OperatingSystem.IsWindows()) return;
+                if (!Links.Allowed) return;
                 File.CreateSymbolicLink(Path.Combine(folder, "emusen_dangling.log"), At("nowhere"));
                 // A new link to an old file, and an old file's link: which of the two times decides.
                 string target = Path.Combine(Path.GetDirectoryName(folder)!, "target.log");
@@ -865,7 +871,9 @@ namespace EmuSen.WiseMan.Galaxia
         [Fact]
         public void Names_are_ordered_as_OrdinalIgnoreCase_orders_them()
         {
-            string[] alphabet = { "a", "A", "b", "B", "z", "Z", "_", "[", "@", "`", "0", "9", " ", "é", "É", "ß", "ı", "I", "i", "日", "😀", "\ud801\udc00", "\ud801\udc28", "\ue000", "\uffff", "~" };
+            // APFS refuses a name holding a noncharacter, so macOS is not asked to make one.
+            string[] alphabet = new[] { "a", "A", "b", "B", "z", "Z", "_", "[", "@", "`", "0", "9", " ", "é", "É", "ß", "ı", "I", "i", "日", "😀", "\ud801\udc00", "\ud801\udc28", "\ue000", "\uffff", "~" }
+                .Where(c => !(OperatingSystem.IsMacOS() && c == "\uffff")).ToArray();
             var random = new Random(5);
             var different = new List<string>();
             foreach (string side in new[] { "managed", "native" }) Directory.CreateDirectory(At(side + "-order", "etc", CheatFile.CategoryDirName));

@@ -1,0 +1,10 @@
+# A golden trace of MercuryRT, recorded from the engine named below; re-recorded only deliberately - see Mercury_Native.md §14.4.
+golden 1
+name programs/mbc3-latch
+rom D5BA46A909DDD5A215B39DB5518B14FEA6F44E25E81E489158F35F3F152751B6
+model Auto
+input none
+rendering on
+recorded Mercury
+1 E15B58682562174D FC7BC70FA8DE6EB7 7DF491C5F0816AEF
+2 D65F8F2E0C7203A7 = =

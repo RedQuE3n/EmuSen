@@ -10,7 +10,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.Unix
     {
         public string Name => "shutdown";
         public bool IsReadOnly => false;
-        public string Usage => "  shutdown | quit               terminate the process";
+        public string Usage => "  shutdown | quit | exit        terminate the process";
 
         public DianaShResult Execute(IDebugTarget? target, string[] args, string? stdin)
             => DianaShResult.Ok("Shutting down.", new HostAction.Shutdown());

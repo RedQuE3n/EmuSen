@@ -164,7 +164,8 @@ namespace EmuSen.Serenity
             {
                 if (_slots[i] is { } old)
                 {
-                    if (old.Update is { } pending) pending.ContinueWith(_ => old.Dispose(), TaskScheduler.Default);
+                    // The compositor's imports are let go of on the UI thread, which owns them.
+                    if (old.Update is { IsCompleted: false } pending) pending.ContinueWith(_ => Avalonia.Threading.Dispatcher.UIThread.Post(old.Dispose), TaskScheduler.Default);
                     else old.Dispose();
                     _slots[i] = null;
                 }

@@ -117,8 +117,41 @@ namespace EmuSen.DianaSh.DianaSh.Etc
             return TryResolve(requestedPath, out resolvedPath);
         }
 
+        // Case is ignored only where the file system ignores it, or a sibling spelled as the root in another case is let in - see EmuSen_DianaSh.md §16 Q15.
+        private static readonly StringComparison PathCase =
+            OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+        // The root as spelled, or as the system resolves its links, since a working directory reached through one reads resolved - see EmuSen_DianaSh.md §13.11.
         private static bool IsInsideRoot(string candidate, string root) =>
-            candidate.Equals(root, StringComparison.OrdinalIgnoreCase)
-                || candidate.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            IsUnder(candidate, root) || (Resolved(root) is { } real && IsUnder(candidate, real));
+
+        // The root as a path inside it spells it: as given, or with its links followed where the path was reached through them.
+        public static string RootOf(string path) =>
+            !IsUnder(path, RootDirectory) && Resolved(RootDirectory) is { } real && IsUnder(path, real) ? real : RootDirectory;
+
+        private static bool IsUnder(string candidate, string root) =>
+            candidate.Equals(root, PathCase)
+                || candidate.StartsWith(root + Path.DirectorySeparatorChar, PathCase);
+
+        // The root with every link along it followed, or null where that is the root as spelled or it cannot be read.
+        private static string? Resolved(string root)
+        {
+            try
+            {
+                string real = Canonical(Path.GetFullPath(root));
+                return real.Equals(root, PathCase) ? null : real;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
+        }
+
+        // Each component's link followed to its final target, from the file system's root down.
+        private static string Canonical(string full)
+        {
+            string? parent = Path.GetDirectoryName(full);
+            if (parent is null) return full;
+            string current = Path.Combine(Canonical(parent), Path.GetFileName(full));
+            var info = new DirectoryInfo(current);
+            return info.LinkTarget is not null && info.ResolveLinkTarget(returnFinalTarget: true) is { } target ? Canonical(target.FullName) : current;
+        }
     }
 }

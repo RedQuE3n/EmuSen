@@ -116,6 +116,15 @@ impl MemoryBus {
         Ok(())
     }
 
+    /// What decides the state's length beyond its fixed fields: the save chip, the registers written and the paks present; a
+    /// change of it is a change of the state's size, which the host is told of (Mars_Native.md §7.2).
+    pub fn state_shape(&self) -> StateShape {
+        let si = [SI_DUE_LOW, SI_DUE_HIGH, SI_READ_TO].iter().filter(|k| self.registers.contains_key(k)).count();
+        let registers = self.registers.len() - si + if self.si.due != i64::MAX { 2 } else { 0 } + usize::from(self.si.pending_read >= 0);
+        let paks = self.si.controllers.iter().enumerate().fold(0u8, |mask, (i, c)| mask | (u8::from(c.pak.is_some()) << i));
+        StateShape { rdram: self.rdram.len(), save: (self.save.kind, self.save.contents().map_or(0, <[u8]>::len)), registers, paks }
+    }
+
     /// The registers with the SI's transfer encoded among them, as `WriteStateBody` leaves `_registers`.
     pub fn registers_with_si(&self) -> BTreeMap<u32, u32> {
         let mut registers = self.registers.clone();
@@ -181,6 +190,15 @@ impl MemoryBus {
         }
         Ok(())
     }
+}
+
+/// What the state's length depends on beyond its fixed fields; each register written takes eight bytes, a key and a value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StateShape {
+    pub rdram: usize,
+    pub save: (i32, usize),
+    pub registers: usize,
+    pub paks: u8,
 }
 
 impl State for MemoryBus {

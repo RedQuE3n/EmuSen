@@ -215,10 +215,14 @@ namespace EmuSen.Serenity.Shaders
                 new(PalActiveMicroseconds, PalActiveMicroseconds * PalSubcarrierMegahertz, PalCyclesPerLine % 1, 0, 0.25, true)),
         };
 
-        public static ScreenFilter Filter { get; } = new(Name, Array.Empty<FilterPass>(), new[] { "NES", "SNES", "Genesis", "N64", "PlayStation" },
+        // The consoles that drove a television, which every filter of a tube is offered for; an attachment is offered its host's - see EmuSen_Serenity.md §3.12.
+        public static IReadOnlyList<string> TelevisionConsoles { get; } = new[] { "NES", "SNES", "Genesis", "N64", "PlayStation" };
+
+        public static ScreenFilter Filter { get; } = new(Name, Array.Empty<FilterPass>(), TelevisionConsoles,
             "EmuSen's own, from the physics and measurements cited in EmuSen_CRT.md", Parameters)
         {
             Build = Passes,
+            RawEncoding = RawEncodings.NesPpu,
             Structural = Structural,
             ConsoleDefaults = ConsoleTiming,
             Aspect = DisplayShape.Television,

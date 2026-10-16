@@ -59,11 +59,11 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.Equal(value, SettingFolders.Roms(settings));
         }
 
-        // The library's listing of states and the half that names a new one must be the same folder, on either half.
+        // The library's listing of states and the half that names a new one must be the same folder, on either half; on Windows GetDirectoryName writes its "/" as the system's separator.
         [Theory]
         [MemberData(nameof(Values))]
         public void The_states_folder_is_the_one_save_library_writes_into(string? value) =>
-            Assert.Equal(SettingFolders.States(new AppSettings { StateDirectory = value }), Path.GetDirectoryName(SaveLibrary.StatePathFor("/r/Game.sfc", 1, value)));
+            Assert.Equal(SettingFolders.States(new AppSettings { StateDirectory = value }).Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar), Path.GetDirectoryName(SaveLibrary.StatePathFor("/r/Game.sfc", 1, value)));
 
         // Measured on 2026-10-10: the shell alone read a whitespace RomDirectory as set, a library at <working folder>/<spaces>.
         [Theory]

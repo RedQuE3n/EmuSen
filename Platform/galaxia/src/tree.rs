@@ -19,20 +19,50 @@ pub const HOME_DIR_NAME: &str = "home";
 pub const CONFIG_DIR_NAME: &str = "etc";
 pub const PROGRAM_DIR_NAME: &str = "EmuSen";
 
-/// `File.Exists`: there and not a directory, with a link judged by what it names and a dangling link counted as a file; never a path that ends in a separator.
+/// `FILE_ATTRIBUTE_DIRECTORY`, which a directory, and a link or junction made for one, carries.
+#[cfg(windows)]
+const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
+
+/// Whether a path names a directory as .NET answers on this system: none for nothing there. On Unix a link is what it
+/// names and a dangling one a file; on Windows, where .NET reads the entry's own attributes, a link or junction made
+/// for a directory is one whether or not anything is behind it (EmuSen_RustPlatform.md §27.4).
+fn is_directory(path: impl AsRef<std::path::Path>) -> Option<bool> {
+    let path = path.as_ref();
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        std::fs::symlink_metadata(path).ok().map(|entry| entry.file_attributes() & FILE_ATTRIBUTE_DIRECTORY != 0)
+    }
+    #[cfg(not(windows))]
+    {
+        match std::fs::metadata(path) {
+            Ok(metadata) => Some(metadata.is_dir()),
+            Err(_) => std::fs::symlink_metadata(path).ok().filter(|link| link.file_type().is_symlink()).map(|_| false),
+        }
+    }
+}
+
+/// Whether an entry of a listing is a directory by `is_directory`'s rule; on Windows from the listing's own attributes.
+pub(crate) fn listed_as_directory(entry: &std::fs::DirEntry) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        entry.metadata().is_ok_and(|metadata| metadata.file_attributes() & FILE_ATTRIBUTE_DIRECTORY != 0)
+    }
+    #[cfg(not(windows))]
+    {
+        is_directory(entry.path()) == Some(true)
+    }
+}
+
+/// `File.Exists`: there and not a directory, by `is_directory`'s rule; never a path that ends in a separator.
 pub fn file_exists(file: &str) -> bool {
-    if file.is_empty() || path::ends_in_separator(Style::HOST, file) {
-        return false;
-    }
-    match std::fs::metadata(file) {
-        Ok(metadata) => !metadata.is_dir(),
-        Err(_) => std::fs::symlink_metadata(file).is_ok_and(|link| link.file_type().is_symlink()),
-    }
+    !file.is_empty() && !path::ends_in_separator(Style::HOST, file) && is_directory(file) == Some(false)
 }
 
 /// `Directory.Exists`.
 pub fn directory_exists(path: &str) -> bool {
-    !path.is_empty() && std::fs::metadata(path).is_ok_and(|m| m.is_dir())
+    !path.is_empty() && is_directory(path) == Some(true)
 }
 
 /// `ConfigRoot.MacDataDirectoryFor`.
@@ -279,11 +309,51 @@ pub fn user_home() -> String {
     std::env::home_dir().map(|h| h.to_string_lossy().into_owned()).unwrap_or_default()
 }
 
-/// .NET's `SpecialFolder.ApplicationData` when the host passes none: `$XDG_CONFIG_HOME` or `~/.config`, `%APPDATA%` on Windows.
+/// .NET's `SpecialFolder.ApplicationData` when the host passes none: `$XDG_CONFIG_HOME` or `~/.config`, and on Windows the known folder the system keeps, not `%APPDATA%`.
 pub fn application_data() -> String {
-    if cfg!(windows) {
-        return std::env::var("APPDATA").unwrap_or_default();
+    #[cfg(windows)]
+    {
+        roaming_application_data()
     }
+    #[cfg(not(windows))]
+    {
+        unix_application_data()
+    }
+}
+
+/// `SHGetKnownFolderPath` for `FOLDERID_RoamingAppData` with `KF_FLAG_DONT_VERIFY`, as .NET asks it; empty where the system has none.
+#[cfg(windows)]
+fn roaming_application_data() -> String {
+    use std::os::windows::ffi::OsStringExt;
+    #[repr(C)]
+    struct Guid(u32, u16, u16, [u8; 8]);
+    const ROAMING_APP_DATA: Guid = Guid(0x3EB685DB, 0x65F9, 0x4CF6, [0xA0, 0x3A, 0xE3, 0xEF, 0x65, 0x72, 0x9F, 0x3D]);
+    const DONT_VERIFY: u32 = 0x4000;
+    #[link(name = "shell32")]
+    unsafe extern "system" {
+        fn SHGetKnownFolderPath(folder: *const Guid, flags: u32, token: *mut std::ffi::c_void, path: *mut *mut u16) -> i32;
+    }
+    #[link(name = "ole32")]
+    unsafe extern "system" {
+        fn CoTaskMemFree(memory: *mut std::ffi::c_void);
+    }
+    let mut path = std::ptr::null_mut();
+    // SAFETY: the folder's id and the out pointer live for the call; what the system allocates is read up to its NUL and freed once, even on failure, as its documentation asks.
+    unsafe {
+        let found = SHGetKnownFolderPath(&ROAMING_APP_DATA, DONT_VERIFY, std::ptr::null_mut(), &mut path);
+        let text = if found >= 0 && !path.is_null() {
+            let length = (0..).take_while(|&i| *path.add(i) != 0).count();
+            std::ffi::OsString::from_wide(std::slice::from_raw_parts(path, length)).to_string_lossy().into_owned()
+        } else {
+            String::new()
+        };
+        CoTaskMemFree(path.cast());
+        text
+    }
+}
+
+#[cfg(not(windows))]
+fn unix_application_data() -> String {
     let home = user_home();
     if cfg!(target_os = "macos") {
         return path::combine_all(Style::HOST, &[&home, "Library", "Application Support"]);
@@ -301,6 +371,19 @@ static TREE: OnceLock<RwLock<Tree>> = OnceLock::new();
 /// Names the program's directory, which a managed host knows and `current_exe` does not; the first call stands. False when it came too late.
 pub fn init(base_directory: &str, application_data: Option<&str>) -> bool {
     HOST.set((base_directory.to_string(), application_data.map(str::to_string))).is_ok()
+}
+
+/// `ConfigRoot.ShellModulesDirName`: the folder beside the program that holds the shell's shipped command modules and their manuals.
+pub const SHELL_MODULES_DIR_NAME: &str = "dianash";
+
+/// The program's directory: what the host named, else the executable's own (`AppContext.BaseDirectory`).
+pub fn base_directory() -> String {
+    HOST.get_or_init(|| (own_directory(), None)).0.clone()
+}
+
+/// `ConfigRoot.ShellModulesDirectory`, outside the shell's sandbox as the program's own files are. See EmuSen_DianaSh.md §12.4.
+pub fn shell_modules_directory() -> String {
+    path::combine(Style::HOST, &base_directory(), SHELL_MODULES_DIR_NAME)
 }
 
 fn own_directory() -> String {
@@ -335,6 +418,7 @@ mod tests {
     use super::*;
     use crate::test_support::TempDir;
 
+    #[cfg(unix)]
     fn tree_at(root: &str) -> Tree {
         Tree { root: root.to_string(), application_data: "/appdata".to_string(), ..Tree::default() }
     }
@@ -407,9 +491,9 @@ mod tests {
 
         let unmarked = TempDir::new("legacy-bare");
         let bare = unmarked.join("bare");
-        std::fs::create_dir_all(bare.clone() + "/" + LEGACY_PUBLISHED_ROOT_DIR_NAME).unwrap();
+        std::fs::create_dir_all(path::combine(Style::HOST, &bare, LEGACY_PUBLISHED_ROOT_DIR_NAME)).unwrap();
         assert_eq!(root_for(&bare, false, "unused"), path::combine(Style::HOST, &bare, LEGACY_PUBLISHED_ROOT_DIR_NAME));
-        std::fs::create_dir_all(bare.clone() + "/" + PUBLISHED_ROOT_DIR_NAME).unwrap();
+        std::fs::create_dir_all(path::combine(Style::HOST, &bare, PUBLISHED_ROOT_DIR_NAME)).unwrap();
         assert_eq!(root_for(&bare, false, "unused"), path::combine(Style::HOST, &bare, PUBLISHED_ROOT_DIR_NAME));
     }
 
@@ -443,6 +527,53 @@ mod tests {
         assert!(directory_exists(&temp.join("to-directory")));
         assert!(directory_exists(&format!("{}/", temp.path())));
         assert!(!directory_exists(&file));
+    }
+
+    /// .NET's `SpecialFolder.ApplicationData` is the system's known folder on Windows and does not read the
+    /// environment; a host that passes none still finds it with `APPDATA` unset. The test runs itself again without it.
+    #[cfg(windows)]
+    #[test]
+    fn the_application_data_folder_does_not_depend_on_the_environment() {
+        const ASKED: &str = "EMUSEN_GALAXIA_TEST_APPLICATION_DATA";
+        if std::env::var_os(ASKED).is_some() {
+            println!("<<{}>>", application_data());
+            return;
+        }
+        let name = "tree::tests::the_application_data_folder_does_not_depend_on_the_environment";
+        let child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([name, "--exact", "--nocapture", "--test-threads=1"])
+            .env(ASKED, "1")
+            .env_remove("APPDATA")
+            .output()
+            .unwrap();
+        let said = String::from_utf8_lossy(&child.stdout);
+        let without = said.split_once("<<").and_then(|(_, rest)| rest.split_once(">>")).map(|(folder, _)| folder.to_string());
+        assert_eq!(without.as_deref(), Some(application_data().as_str()), "{said}");
+        assert!(path::is_rooted(Style::Windows, &application_data()) && application_data() == std::env::var("APPDATA").unwrap());
+    }
+
+    /// On Windows a link or junction made for a directory is a directory whether or not anything is behind it, and one
+    /// made for a file is a file, as .NET reads the entry's own attributes there.
+    #[cfg(windows)]
+    #[test]
+    fn a_link_is_what_it_was_made_for_on_windows() {
+        let temp = TempDir::new("exists-windows");
+        let (target, gone) = (temp.join("target"), temp.join("gone"));
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::create_dir_all(&gone).unwrap();
+        for (link, to) in [("junction", &target), ("dangling-junction", &gone)] {
+            let made = std::process::Command::new("cmd").args(["/C", "mklink", "/J", &temp.join(link), to]).output().unwrap();
+            assert!(made.status.success(), "{made:?}");
+        }
+        std::fs::remove_dir(&gone).unwrap();
+        for link in ["junction", "dangling-junction"] {
+            assert!(directory_exists(&temp.join(link)) && !file_exists(&temp.join(link)), "{link}");
+        }
+        if std::os::windows::fs::symlink_file(&target, temp.join("file-link-to-directory")).is_ok() {
+            std::os::windows::fs::symlink_dir(temp.join("nowhere"), temp.join("dangling-directory")).unwrap();
+            assert!(file_exists(&temp.join("file-link-to-directory")) && !directory_exists(&temp.join("file-link-to-directory")));
+            assert!(directory_exists(&temp.join("dangling-directory")) && !file_exists(&temp.join("dangling-directory")));
+        }
     }
 
     #[test]

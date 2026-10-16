@@ -1,0 +1,18 @@
+[package]
+name = "emusen-trace"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# emusen.trace, what arms the debugger and controls a run, as a command module (EmuSen_DianaSh.md §8.1): the same
+# commands, and the same words, as the C# classes they replace, held by the golden corpus. It reaches a running core
+# only through the session service, asks its loop to run through run control, and lists `ps`'s bp and watch jobs
+# (§6.8, §13.11).
+[lib]
+name = "emusen_trace"
+
+[dependencies]
+dianash-module = { path = "../dianash-module" }
+emusen-dotnet = { path = "../dotnet" }
+emusen-session-service = { path = "../session-service" }

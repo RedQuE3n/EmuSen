@@ -11,6 +11,17 @@ name = "emusen_platform"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+# DianaSh's shell core, whose host API this library exports (EmuSen_DianaSh.md §10).
+emusen-dianash = { path = "../dianash" }
+# dianash.text, the text tools' module every shell this library makes has linked in (§8.2).
+dianash-text = { path = "../dianash-text" }
+# The module ABI's trait, by which the linked modules are handed to each shell.
+dianash-module = { path = "../dianash-module" }
+# EmuSen's command modules over the session service, linked in beside it for the C# frontends' shells (§8.1, §13.11).
+emusen-debug = { path = "../emusen-debug" }
+emusen-trace = { path = "../emusen-trace" }
+emusen-session = { path = "../emusen-session" }
+emusen-cheat = { path = "../emusen-cheat" }
 emusen-endymion = { path = "../endymion" }
 emusen-galaxia = { path = "../galaxia" }
 emusen-native = { path = "../../EmuSen/Cores/Shared/emusen-native" }

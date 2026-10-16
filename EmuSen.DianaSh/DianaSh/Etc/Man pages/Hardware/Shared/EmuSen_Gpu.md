@@ -133,7 +133,8 @@ created with `UPDATE_AFTER_BIND` need a feature the crate does not ask for.
 
 The variable was `EMUSEN_MARS_GPU_DEVICE`. It is now **`EMUSEN_GPU_DEVICE`**, in this crate and in C#'s `GpuDevice.cs`,
 so that the one knob read by both N64 cores (`EmuSen_Surfaces.md` §4.10) stays one knob under a name that is not one
-console's.
+console's. *Since 2026-10-16 `GpuDevice.cs` is deleted with Mars (C#) (`Mars_Native.md` §6.7), and this crate is
+the variable's one reader.*
 
 **Where the old name was set or read** [R, searched 2026-10-13 over the repository and `~/.cache/emusen/probe`, every
 text file outside build output]: read in two places, `Mars - N64/Rdp/Gpu/GpuDevice.cs` and MarsRT's `device.rs`;

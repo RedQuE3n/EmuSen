@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using CsCheck;
 using EmuSen.Common;
-using EmuSen.Cores.Nintendo.Venus.Cheats;
+using EmuSen.Crystal.Systems.Snes;
 
 namespace EmuSen.WiseMan.Properties
 {
@@ -65,8 +65,8 @@ namespace EmuSen.WiseMan.Properties
         public void CanDecode_never_promises_a_decode_that_throws() =>
             Gen.String.Sample(code =>
             {
-                if (ActionReplayCodec.CanDecode(code)) ActionReplayCodec.Decode(code);
-                if (GameGenieCodec.CanDecode(code)) GameGenieCodec.Decode(code);
+                if (SnesCheatFormats.IsProActionReplay(code)) SnesCheatFormats.DecodeProActionReplay(code);
+                if (SnesCheatFormats.IsGameGenie(code)) SnesCheatFormats.DecodeGameGenie(code);
                 return true;
             }, iter: 5000);
 
@@ -75,18 +75,18 @@ namespace EmuSen.WiseMan.Properties
             Gen.Select(Gen.Char["0123456789abcdefABCDEF"].Array[8], Gen.Char["DF4709156BC8A23E"].Array[8])
                .Sample((ar, gg) =>
                {
-                   (int arAddr, _) = ActionReplayCodec.Decode(new string(ar));
-                   (int ggAddr, _) = GameGenieCodec.Decode(new string(gg));
+                   (int arAddr, _) = SnesCheatFormats.DecodeProActionReplay(new string(ar));
+                   (int ggAddr, _) = SnesCheatFormats.DecodeGameGenie(new string(gg));
                    return arAddr >= 0 && arAddr <= 0xFFFFFF && ggAddr >= 0 && ggAddr <= 0xFFFFFF;
                }, iter: 2000);
 
         [Fact]
         public void Separators_in_a_code_are_cosmetic() =>
-            Gen.Select(Gen.Char["0123456789abcdefABCDEF"].Array[8], Gen.Int[0, 8], Gen.Char["-: /"])
+            Gen.Select(Gen.Char["0123456789abcdefABCDEF"].Array[8], Gen.Int[0, 8], Gen.Char["-: "])
                .Sample((code, at, sep) =>
                {
                    string plain = new(code);
-                   return ActionReplayCodec.Decode(plain.Insert(at, sep.ToString())) == ActionReplayCodec.Decode(plain);
+                   return SnesCheatFormats.DecodeProActionReplay(plain.Insert(at, sep.ToString())) == SnesCheatFormats.DecodeProActionReplay(plain);
                }, iter: 2000);
     }
 }

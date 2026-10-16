@@ -54,29 +54,28 @@ namespace EmuSen.Galaxia.Media
             return CompanionNames(File.ReadAllText(sheetPath), Path.GetFileName(sheetPath)).Select(n => Beside(dir, n)).ToArray();
         }
 
-        // A name as written where it exists, else the folder's one entry per part that matches it ignoring case, either slash separating parts - see Diamond_Players.md §12.
+        // A name as the folder holds it: each part matched exactly, else by the one entry matching it ignoring case, either slash separating parts; failing that, as written - see Diamond_Players.md §12.
         private static string Beside(string dir, string name)
         {
-            string written = Path.Combine(dir, name);
-            if (File.Exists(written)) return written;
-            string at = dir;
+            string written = Path.Combine(dir, name), at = dir;
+            if (Path.IsPathRooted(name)) return written;
             foreach (string part in name.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries))
             {
-                string exact = Path.Combine(at, part);
-                if (File.Exists(exact) || Directory.Exists(exact)) { at = exact; continue; }
+                if (part is "." or "..") { at = Path.Combine(at, part); continue; }
                 if (!Directory.Exists(at)) return written;
-                var found = Directory.EnumerateFileSystemEntries(at).Where(e => string.Equals(Path.GetFileName(e), part, StringComparison.OrdinalIgnoreCase)).Take(2).ToArray();
-                if (found.Length != 1) return written;
-                at = found[0];
+                string[] found = Directory.EnumerateFileSystemEntries(at).Select(e => Path.GetFileName(e)).Where(e => string.Equals(e, part, StringComparison.OrdinalIgnoreCase)).ToArray();
+                string? held = found.Contains(part, StringComparer.Ordinal) ? part : found.Length == 1 ? found[0] : null;
+                if (held is null) return written;
+                at = Path.Combine(at, held);
             }
             return at;
         }
 
-        // The discs an .m3u lists, as paths beside it.
+        // The discs an .m3u lists, as paths beside it, found as a sheet's tracks are.
         public static IReadOnlyList<string> Discs(string listPath)
         {
             string dir = Path.GetDirectoryName(Path.GetFullPath(listPath)) ?? ".";
-            return Call(Exports.Value.Playlist, File.ReadAllText(listPath), $"The list {Path.GetFileName(listPath)}").Select(n => Path.Combine(dir, n)).ToArray();
+            return Call(Exports.Value.Playlist, File.ReadAllText(listPath), $"The list {Path.GetFileName(listPath)}").Select(n => Beside(dir, n)).ToArray();
         }
 
         // Where an image's LibCrypt patches are looked for.

@@ -1,11 +1,10 @@
 using EmuSen.Crystal.Debugger;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // The NES debug target's cases through IDebugTarget alone, run once per engine by the two classes below - see Moon_Native.md §8.4.
+    // The NES debug target's cases through IDebugTarget alone, run on MoonRT by the class below - see Moon_Native.md §8.4.
     public abstract class MoonDebugTargetContract : IDisposable
     {
         private readonly List<string> _files = new();
@@ -279,11 +278,6 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x12u, registers.First(r => r.Name == "A").Value);
             Assert.Equal(0x34u, registers.First(r => r.Name == "X").Value);
         }
-    }
-
-    public sealed class MoonDebugTargetContractOnMoon : MoonDebugTargetContract
-    {
-        protected override string Engine => NesDebugRig.Moon;
     }
 
     public sealed class MoonDebugTargetContractOnMoonRt : MoonDebugTargetContract

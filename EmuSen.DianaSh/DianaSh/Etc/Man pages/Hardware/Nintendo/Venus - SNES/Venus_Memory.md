@@ -1,5 +1,11 @@
 # Venus (SNES) — Memory & Bus
 
+*Historical since 2026-10-16.* This page describes C# Venus, which was deleted from the source on 2026-10-16 at the
+tester's word (`VenusRT_Native.md` §68). Its content is kept as the record of that core. VenusRT, the SNES's only engine
+since, is a clean-room rewrite that was written without reading this page's algorithm sections (`VenusRT_Plan.md` §1.2),
+so nothing here describes VenusRT; the file, class and member names are C# Venus's, and the code it cites is in the
+repository's history and in the releases that carried it.
+
 Covers everything under `Cores/Nintendo/Venus - SNES/Memory/`: the CPU-side address bus, cartridge (LoROM) mapping, DMA/HDMA, the NMI/IRQ subsystem, and the hardware multiply/divide unit. This is the first page in a new per-hardware-component documentation set (see `Man pages/Hardware/README.md` for why this set exists and how it relates to the rest of `Man pages/`).
 
 ---

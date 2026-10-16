@@ -17,6 +17,10 @@ beryl-sh2 = { path = "../Beryl-HW/beryl-sh2" }
 beryl-sn76489 = { path = "../Beryl-HW/beryl-sn76489" }
 emusen-disc = { path = "../../Shared/emusen-disc", optional = true }
 
+# The open Sega CD BIOS is assembled at build time (Nephrite_OpenBios.md).
+[build-dependencies]
+beryl-m68k = { path = "../Beryl-HW/beryl-m68k", features = ["asm"] }
+
 # The attachments, both built by default; each off is a check of the boundary, never a shipped library
 # (Nephrite_Attachments.md §5.4).
 [features]
@@ -34,6 +38,10 @@ required-features = ["mcd"]
 
 [[example]]
 name = "disc"
+required-features = ["mcd"]
+
+[[example]]
+name = "waits"
 required-features = ["mcd"]
 
 [profile.release]

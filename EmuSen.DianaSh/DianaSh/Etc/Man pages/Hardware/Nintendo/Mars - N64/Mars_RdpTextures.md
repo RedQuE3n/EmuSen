@@ -1,5 +1,7 @@
 # Mars — textures: texture memory, loads and point sampling
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Landed 2026-09-17. Phase D's sixth slice: the display processor's own texture memory, the two
 commands that fill it from RDRAM, and a point-sampled texel read back from it in the one-cycle mode,
 for textured triangles and texture rectangles. The code is `Rdp/Rdp.TextureMemory.cs` (the tiles and

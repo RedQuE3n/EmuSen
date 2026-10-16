@@ -89,31 +89,8 @@ status 0
 action none
 end
 
-case on venus
-target venus
-covers 1
-$ addr 0
-out 35
-$000000 -> WRAM 0x0
-  mem WRAM 0 10
-status 0
-action none
-$ addr 8000
-out 33
-$008000 -> ROM 0x0
-  mem ROM 0 10
-status 0
-action none
-$ addr FFFC
-out 39
-$00FFFC -> ROM 0x7FFC
-  mem ROM 7FFC 10
-status 0
-action none
-end
-
-case on moon
-target moon
+case on moonrt
+target moonrt
 covers 1
 $ addr 0
 out 33
@@ -133,8 +110,8 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
+case on mercuryrt
+target mercuryrt
 covers 1
 $ addr 0
 out 33
@@ -152,26 +129,6 @@ $ addr FFFC
 out 37
 $00FFFC -> HRAM 0x7C
   mem HRAM 7C 10
-status 0
-action none
-end
-
-case on mars
-target mars
-covers 1
-$ addr 0
-out 62
-N64 does not report an address decode, or $000000 is unmapped.
-status 0
-action none
-$ addr 8000
-out 62
-N64 does not report an address decode, or $008000 is unmapped.
-status 0
-action none
-$ addr FFFC
-out 62
-N64 does not report an address decode, or $00FFFC is unmapped.
 status 0
 action none
 end

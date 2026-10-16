@@ -1,16 +1,14 @@
-using EmuSen.Cores.Nintendo.Mercury;
-using EmuSen.Cores.Nintendo.Mercury.Memory;
 using EmuSen.Galaxia.Input;
+using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
     // A Game Boy engine's ICore surface, the same claims on Mercury and MercuryRT - see Mercury_Core.md, Mercury_Native.md §12.
-    public abstract class MercuryCoreClaims : IDisposable
+    public sealed class MercuryRtCoreSurfaceTests : IDisposable
     {
         private readonly List<MercuryRig> _rigs = new();
 
-        protected abstract MercuryEngine Engine { get; }
 
         public void Dispose()
         {
@@ -19,10 +17,13 @@ namespace EmuSen.WiseMan.Cores
 
         private MercuryRig Load(params (int Offset, byte[] Bytes)[] patches)
         {
-            var core = MercuryRig.Create(Engine, SyntheticGbRom.Build(patches: patches));
+            var core = MercuryRig.Create(SyntheticGbRom.Build(patches: patches));
             _rigs.Add(core);
             return core;
         }
+
+        // A transfer is running from its first machine cycle to its last: 160 bytes and the cycle the last lands in - see Mercury_Native.md §13.4.
+        private static bool OamDmaActive(MercuryRig core) => core.Field("Bus._oamDmaCyclesLeft") is > 0 and < (0xA0 + 1) * 4;
 
         [Fact]
         public void The_core_reports_the_real_screen_and_refresh_rate()
@@ -44,7 +45,7 @@ namespace EmuSen.WiseMan.Cores
             for (int i = 0; i < 3; i++) core.RunFrame();
 
             Assert.Equal(3, core.TotalFrames);
-            Assert.True(core.Cpu.Cycles >= 3 * MercuryCore.CyclesPerFrame);
+            Assert.True(core.Field("Cpu.<Cycles>k__BackingField") >= 3 * MercuryRtCore.CyclesPerFrame);
         }
 
         [Fact]
@@ -89,7 +90,7 @@ namespace EmuSen.WiseMan.Cores
 
             core.Tick(64);
 
-            Assert.NotEqual(0, core.Bus.InterruptFlags & (1 << (int)Interrupt.Timer));
+            Assert.NotEqual(0, core.Field("Bus.InterruptFlags") & (1 << MercuryRig.Timer));
         }
 
         // Writing DIV zeroes the whole internal counter, not just the visible byte.
@@ -99,10 +100,10 @@ namespace EmuSen.WiseMan.Cores
             var core = Load();
 
             core.Tick(1024);
-            Assert.NotEqual(0, core.Bus.Div);
+            Assert.NotEqual(0, (core.Field("Bus._divCounter") >> 8));
 
             core.Write(0xFF04, 0x00);
-            Assert.Equal(0, core.Bus.Div);
+            Assert.Equal(0, (core.Field("Bus._divCounter") >> 8));
         }
 
         [Fact]
@@ -116,7 +117,7 @@ namespace EmuSen.WiseMan.Cores
             // 160 machine cycles from the second after the write, not an instant copy - see Mercury_Memory.md §6, Mercury_Native.md §13.4.
             core.Tick((0xA0 + 1) * 4);
 
-            for (int i = 0; i < 0xA0; i++) Assert.Equal((byte)(i ^ 0x5A), core.Bus.Oam[i]);
+            for (int i = 0; i < 0xA0; i++) Assert.Equal((byte)(i ^ 0x5A), core.FieldByte("Bus.Oam", i));
         }
 
         // The transfer occupies the bus for a real duration, which is the whole point of it taking cycles.
@@ -130,23 +131,23 @@ namespace EmuSen.WiseMan.Cores
 
             // The transfer starts on the second machine cycle after the write - see Mercury_Native.md §13.4.
             core.Tick(4);
-            Assert.False(core.Bus.OamDmaActive);
+            Assert.False(OamDmaActive(core));
 
             core.Tick(0x50 * 4);
 
-            Assert.True(core.Bus.OamDmaActive);
-            Assert.Equal((byte)(0x00 ^ 0x5A), core.Bus.Oam[0x00]);
+            Assert.True(OamDmaActive(core));
+            Assert.Equal((byte)(0x00 ^ 0x5A), core.FieldByte("Bus.Oam", 0x00));
 
             // The far end of the page has not been reached yet.
-            Assert.Equal(0x00, core.Bus.Oam[0x9F]);
+            Assert.Equal(0x00, core.FieldByte("Bus.Oam", 0x9F));
 
             core.Tick(0x50 * 4);
 
-            Assert.True(core.Bus.OamDmaActive);
-            Assert.Equal((byte)(0x9F ^ 0x5A), core.Bus.Oam[0x9F]);
+            Assert.True(OamDmaActive(core));
+            Assert.Equal((byte)(0x9F ^ 0x5A), core.FieldByte("Bus.Oam", 0x9F));
 
             core.Tick(4);
-            Assert.False(core.Bus.OamDmaActive);
+            Assert.False(OamDmaActive(core));
         }
 
         // The LCD is off so only the DMA's own OAM lock can be answering - see Mercury_Ppu.md §7.
@@ -212,17 +213,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Running_before_a_rom_is_loaded_is_an_error_rather_than_a_crash()
         {
-            Assert.Throws<InvalidOperationException>(() => MercuryRig.Unloaded(Engine).RunFrame());
+            Assert.Throws<InvalidOperationException>(() => { using var core = new MercuryRtCore(); core.RunFrame(); });
         }
-    }
-
-    public sealed class MercuryCoreTests : MercuryCoreClaims
-    {
-        protected override MercuryEngine Engine => MercuryEngine.Mercury;
-    }
-
-    public sealed class MercuryRtCoreSurfaceTests : MercuryCoreClaims
-    {
-        protected override MercuryEngine Engine => MercuryEngine.MercuryRt;
     }
 }

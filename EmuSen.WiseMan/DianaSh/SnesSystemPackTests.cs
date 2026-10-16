@@ -60,6 +60,15 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Equal((0x7E0DBE, (byte)9), par.Decode("7E0DBE09"));
         }
 
+        // The libretro database joins a cheat's codes with '+'; the pack read only the first form until 2026-10-16 - see VenusRT_Native.md §68.4.
+        [Fact]
+        public void Action_replay_codes_joined_with_a_plus_are_one_cheat()
+        {
+            var writes = SnesSystem.ProActionReplay().DecodeWrites("7E0DBF63+7E000000+00808001")!;
+            Assert.Equal(new[] { ("WRAM", 0x0DBF, 0x63u), ("CpuBus", 0x008080, 1u) }, writes.Select(w => (w.Space, w.Address, w.Value)));
+            Assert.Throws<FormatException>(() => SnesSystem.ProActionReplay().DecodeWrites("7E0DBF63+7E00"));
+        }
+
         [Theory]
         [InlineData("7E0DBE09", true, false)]
         [InlineData("C2B5-ED0D", false, true)]

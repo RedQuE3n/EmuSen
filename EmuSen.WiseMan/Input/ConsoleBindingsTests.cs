@@ -172,9 +172,9 @@ namespace EmuSen.WiseMan.Input
         {
             var catalogNames = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToHashSet();
 
-            Assert.Contains(new EmuSen.Cores.Nintendo.Moon.MoonCore().CoreName, catalogNames);
-            Assert.Contains(new EmuSen.Cores.Nintendo.Venus.VenusCore().CoreName, catalogNames);
-            Assert.Contains(new EmuSen.Cores.Nintendo.Mars.MarsCore().CoreName, catalogNames);
+            using (var moonRt = new EmuSen.Cores.Nintendo.MoonRT.MoonRtCore()) Assert.Contains(moonRt.CoreName, catalogNames);
+            using var marsRt = new EmuSen.Cores.Nintendo.MarsRT.MarsRtCore();
+            Assert.Contains(marsRt.CoreName, catalogNames);
         }
 
         [Fact]
@@ -182,7 +182,7 @@ namespace EmuSen.WiseMan.Input
         {
             string[] order = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToArray();
 
-            Assert.Equal(new[] { "NES", "GB", "SNES", "N64", "Genesis", "PlayStation" }, order);
+            Assert.Equal(new[] { "NES", "GB", "SNES", "N64", "Genesis", "Sega CD", "PlayStation" }, order);
         }
 
         // The rebind window lists a console's pad with no ROM loaded, so this must
@@ -190,10 +190,11 @@ namespace EmuSen.WiseMan.Input
         [Fact]
         public void The_catalogs_button_list_is_the_cores_own()
         {
-            Assert.Equal(new EmuSen.Cores.Nintendo.Moon.MoonCore().SupportedButtons, CoreCatalog.ButtonsFor("NES"));
-            Assert.Equal(new EmuSen.Cores.Nintendo.Venus.VenusCore().SupportedButtons, CoreCatalog.ButtonsFor("SNES"));
-            Assert.Equal(new EmuSen.Cores.Nintendo.Mercury.MercuryCore().SupportedButtons, CoreCatalog.ButtonsFor("GB"));
-            Assert.Equal(new EmuSen.Cores.Nintendo.Mars.MarsCore().SupportedButtons, CoreCatalog.ButtonsFor("N64"));
+            using (var moonRt = new EmuSen.Cores.Nintendo.MoonRT.MoonRtCore()) Assert.Equal(moonRt.SupportedButtons, CoreCatalog.ButtonsFor("NES"));
+            Assert.Equal(EmuSen.Crystal.Systems.Snes.SnesSystem.PadButtons, CoreCatalog.ButtonsFor("SNES"));
+            using (var gameBoy = new EmuSen.Cores.Nintendo.MercuryRT.MercuryRtCore()) Assert.Equal(gameBoy.SupportedButtons.Order(), CoreCatalog.ButtonsFor("GB").Order());
+            using var marsRt = new EmuSen.Cores.Nintendo.MarsRT.MarsRtCore();
+            Assert.Equal(marsRt.SupportedButtons, CoreCatalog.ButtonsFor("N64"));
         }
 
         [Fact]

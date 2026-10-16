@@ -15,14 +15,14 @@ namespace EmuSen.Serenity
     public sealed class GameFrameControl : Control
     {
         // One offered picture, its rows' repeat (§2.7) and who can still read its array - see EmuSen_Serenity.md §2.8.
-        internal sealed class Offer(byte[] rgba, int width, int height, int rowRepeat, long version, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, byte[]? raw = null, Slang.SlangLend? lend = null)
+        internal sealed class Offer(byte[] rgba, int width, int height, int rowRepeat, long version, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, RawPicture? raw = null, Slang.SlangLend? lend = null)
         {
             public readonly byte[] Rgba = rgba;
             // A core's picture on the device, taken through this lend, in place of the pixels - see EmuSen_DevicePicture.md §17.
             public readonly Slang.SlangLend? Lend = lend;
             public readonly double Aspect = aspect;
             public readonly int Lines = lines;
-            public readonly byte[]? Raw = raw;
+            public readonly RawPicture? Raw = raw;
             public readonly long Sequence = sequence;
             public readonly int Width = width, Height = height, RowRepeat = rowRepeat;
             public readonly long Version = version;
@@ -50,9 +50,31 @@ namespace EmuSen.Serenity
         private readonly object _cacheLock = new();
         private SKImage? _cachedImage;
 
-        // The raw frame of the offer last copied, made only while the running filter reads one.
+        // The raw frame of the offer last copied, made only while the running filter reads one; the render thread's and the device path's, under the cache lock.
         private SKImage? _cachedRaw;
         private long _rawVersion = -1;
+        private byte[] _rawImage = Array.Empty<byte>();
+        private long _rawImageVersion = -1;
+
+        // The offer's picture before the palette as the image the filter's passes read, made once per offer; null where the filter reads none, or not this encoding.
+        private byte[]? RawImage(Offer source, ScreenFilter? filter)
+        {
+            if (source.Raw is not { } raw || filter?.RawEncoding is not { } encoding || raw.Encoding != encoding || raw.Width != source.Width || raw.Height != source.Height) return null;
+            if (_rawImageVersion == source.Version) return _rawImage;
+            if (_rawImage.Length != raw.Width * raw.Height * 4) _rawImage = new byte[raw.Width * raw.Height * 4];
+            if (!Shaders.RawEncodings.ToImage(raw, _rawImage)) return null;
+            _rawImageVersion = source.Version;
+            return _rawImage;
+        }
+
+        private string? _rawEncoding;
+
+        // The encoding of the picture before the palette the chosen filter reads on this console, or null: what a frontend asks its core to keep - see EmuSen_CoreAPI.md §6.30.
+        public string? RawEncoding => System.Threading.Volatile.Read(ref _rawEncoding);
+
+        // Under the cache lock, whenever the filter, its console or its values change.
+        private void NoteRawEncoding() =>
+            System.Threading.Volatile.Write(ref _rawEncoding, _activeFilter is { RawEncoding: { } e } f && f.ReadsRaw(_filterConsole, _shaderParameters) ? e : null);
 
         private readonly Dictionary<ShaderEffect, SKRuntimeEffect> _effects = new();
 
@@ -72,6 +94,7 @@ namespace EmuSen.Serenity
         // Starts the chain for the filter now chosen, on a pool thread; called under the lock.
         private void Rechain()
         {
+            NoteRawEncoding();
             _nextChain?.Dispose();
             _nextChain = _activeFilter is { } filter ? new FilterChain(filter, _filterConsole, _shaderParameters, background: true) { DrawInSoftware = _drawInSoftware } : null;
             if (_nextChain is null)
@@ -165,6 +188,7 @@ namespace EmuSen.Serenity
                 lock (_cacheLock)
                 {
                     _shaderParameters = value is null ? null : new Dictionary<string, float>(value, StringComparer.Ordinal);
+                    NoteRawEncoding();
                     _chain?.SetParameters(_shaderParameters);
                     _nextChain?.SetParameters(_shaderParameters);
                     _slang?.SetParameters(_shaderParameters);
@@ -253,6 +277,36 @@ namespace EmuSen.Serenity
             System.Threading.Volatile.Write(ref _gpu, gpu ? 1 : 0);
             System.Threading.Interlocked.Exchange(ref _shape, (long)width << 32 | (uint)height);
             System.Threading.Interlocked.Increment(ref _presented);
+            System.Threading.Volatile.Write(ref _lastShown, System.Diagnostics.Stopwatch.GetTimestamp());
+            System.Threading.Interlocked.Exchange(ref _offersUnshown, 0);
+        }
+
+        // The device path watched: offers it never shows for StallSeconds give it up for the readback - see EmuSen_DevicePicture.md §18.
+        private long _lastShown;
+        private int _offersUnshown, _deviceGivenUp;
+        internal const double StallSeconds = 1.0;
+        internal const int StallOffers = 30;
+
+        private void WatchDevicePath()
+        {
+            if (System.Threading.Volatile.Read(ref _presenter) is null || System.Threading.Volatile.Read(ref _deviceGivenUp) != 0) return;
+            if (System.Threading.Interlocked.Increment(ref _offersUnshown) < StallOffers) return;
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(System.Threading.Volatile.Read(ref _lastShown)).TotalSeconds < StallSeconds) return;
+            if (System.Threading.Interlocked.Exchange(ref _deviceGivenUp, 1) != 0) return;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => GiveUpDevicePath($"nothing was shown for {StallSeconds:0.#} s while {StallOffers} or more frames were offered"));
+        }
+
+        // On the UI thread: the presenter let go of and the picture drawn by Skia from now on, said once.
+        internal void GiveUpDevicePath(string why)
+        {
+            DevicePresenter? presenter;
+            lock (_cacheLock) { presenter = _presenter; _presenter = null; }
+            if (presenter is null) return;
+            System.Threading.Volatile.Write(ref _deviceGivenUp, 1);
+            Avalonia.Rendering.Composition.ElementComposition.SetElementChildVisual(this, null);
+            presenter.Dispose();
+            DevicePictureReport?.Invoke($"The picture is read back from now on: {why}");
+            InvalidateVisual();
         }
 
         // Stores the frame and asks for a repaint; release, if given, is called once with the array when nothing here can read it again - see EmuSen_Serenity.md §2.8.
@@ -260,8 +314,9 @@ namespace EmuSen.Serenity
         // lines is the console's own count in a frame drawn at a multiple of its picture, 0 for the frame's rows - see EmuSen_CRT.md §16.
         // raw is the frame before the console's palette, where its core keeps one, for a filter that models the console's own signal - see EmuSen_CRT.md §22.
         // lend is a core's picture on the device in place of rgba, which the device path alone draws - see EmuSen_DevicePicture.md §17.
-        public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null, long sequence = 0, double aspect = 0, int lines = 0, byte[]? raw = null, Slang.SlangLend? lend = null)
+        public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null, long sequence = 0, double aspect = 0, int lines = 0, RawPicture? raw = null, Slang.SlangLend? lend = null)
         {
+            WatchDevicePath();
             if (RenderFps > 0 && GraphicsSettings.SyncToDisplay) HoldRenderRate();
             lock (_offerLock)
             {
@@ -283,6 +338,7 @@ namespace EmuSen.Serenity
             if (offer.Readers > 0 && offer.Version > _copiedVersion) return false;
             offer.Released = true;
             if (offer.Release is { } release && !StillOffered(offer)) release(offer.Rgba);
+            if (offer.Release is { } giveBack && offer.Raw is { } raw) giveBack(raw.Values);
             return true;
         }
 
@@ -402,7 +458,7 @@ namespace EmuSen.Serenity
             return builder;
         }
 
-        // The picture handed to the compositor on the device where it can be, Skia drawing it otherwise; EMUSEN_DEVICE_PICTURE=0 keeps Skia's - see EmuSen_DevicePicture.md §4.
+        // The picture handed to the compositor on the device where it can be, Skia drawing it otherwise; EMUSEN_DEVICE_PICTURE=0 keeps Skia's - see EmuSen_DevicePicture.md §4 and §18.
         public static bool DevicePictureAllowed { get; set; } = Environment.GetEnvironmentVariable("EMUSEN_DEVICE_PICTURE") != "0";
 
         // Why the picture is not handed over on the device, said once per window; null when it is.
@@ -451,6 +507,7 @@ namespace EmuSen.Serenity
             if (presenter is null) { DevicePictureReport?.Invoke($"The picture is read back: {problem}"); return; }
             if (VisualRoot is null) { presenter.Dispose(); return; }
             presenter.Visible = false;
+            System.Threading.Volatile.Write(ref _lastShown, System.Diagnostics.Stopwatch.GetTimestamp());
             lock (_cacheLock) _presenter = presenter;
             InvalidateVisual();
         }
@@ -513,7 +570,8 @@ namespace EmuSen.Serenity
             if (filter is not null)
             {
                 Point origin = TopLevel.GetTopLevel(this) is { } top && this.TranslatePoint(snapped.Position, top) is { } p ? new Point(p.X * scaling, p.Y * scaling) : snapped.Position;
-                var key = (filter, _shaderParameters, _filterConsole, origin, cropsItself ? _crop : PictureCrop.None, offer.Raw is null ? 0 : offer.Width, offer.Raw is null ? 0 : offer.Height);
+                bool raw = RawImage(offer, filter) is not null;
+                var key = (filter, _shaderParameters, _filterConsole, origin, cropsItself ? _crop : PictureCrop.None, raw ? offer.Width : 0, raw ? offer.Height : 0);
                 if (key != _valuesKey || !ReferenceEquals(runner, _valuesRunner))
                 {
                     var values = new Dictionary<string, float>(StringComparer.Ordinal);
@@ -531,7 +589,7 @@ namespace EmuSen.Serenity
             bool newFrame = offer.Version != _deviceVersion;
             int repeat = filter is { RowsOnce: false } ? offer.RowRepeat : 1;
             if (offer.Lend is { } lend && !ReferenceEquals(lend.Owner, presenter.Device)) return false;
-            if (!runner.Present(presenter, offer.Rgba, offer.Width, offer.Height, repeat, newFrame, (int)Math.Round(snapped.Width * scaling), (int)Math.Round(snapped.Height * scaling), offer.Raw, offer.Lend)) return false;
+            if (!runner.Present(presenter, offer.Rgba, offer.Width, offer.Height, repeat, newFrame, (int)Math.Round(snapped.Width * scaling), (int)Math.Round(snapped.Height * scaling), RawImage(offer, filter), offer.Lend)) return false;
             _deviceVersion = offer.Version;
             presenter.Place(snapped, cropsItself ? null : shown);
             presenter.Visible = true;
@@ -754,7 +812,7 @@ namespace EmuSen.Serenity
             // The offer's raw frame as an image, copied once per offer and only for a chain that reads it.
             private SKImage? RawOf(FilterChain chain, Offer source)
             {
-                if (!chain.ReadsRaw || source.Raw is not { } raw || raw.Length != source.Width * source.Height * 4) return null;
+                if (!chain.ReadsRaw || _owner.RawImage(source, chain.Filter) is not { } raw) return null;
                 if (_owner._rawVersion != source.Version || _owner._cachedRaw is null)
                 {
                     _owner._cachedRaw?.Dispose();

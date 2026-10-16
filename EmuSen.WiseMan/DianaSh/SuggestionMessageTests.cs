@@ -1,4 +1,5 @@
-using EmuSen.Cores.Nintendo.Venus.Debug;
+using EmuSen.Cores;
+using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.DianaSh.DianaSh.Lib;
@@ -13,7 +14,7 @@ namespace EmuSen.WiseMan.DianaSh
         private static DianaShInterpreter Shell()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            return DianaShInterpreter.CreateDefault(new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!));
+            return DianaShInterpreter.CreateDefault(SyntheticRom.TargetOf(core));
         }
 
         private static string Submit(string line)
@@ -53,10 +54,10 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.DoesNotContain("Did you mean", output);
         }
 
-        private static SnesDebugTarget Target()
+        private static IDebugTarget Target()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            return new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            return SyntheticRom.TargetOf(core);
         }
 
         [Fact]

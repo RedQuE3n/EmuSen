@@ -1,0 +1,15 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/cpu_reset/ram_after_reset.nes
+rom F1802A5618AAAA0C4D592CAA45B0B13C54082AF93FC311BDA0C27BCEACBC7C7F
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 32B183B60B734425
+120 7598218F4F8D8E33
+157 2960940B5FFDC77F
+resets 1
+text ram_after_reset\n\nPassed
+verdict Passed 157

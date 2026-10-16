@@ -1,0 +1,34 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/ppu_read_buffer/test_ppu_read_buffer.nes
+rom 230A52FC557C098EBA163801D1B6BBF9F57FE8C5FF79A3F968C804DEDB1290BA
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 F1163FA6E270D2F9
+120 78C7C2B6439FD5A4
+180 82C4DD7FEB67247C
+240 1D48D4FC0FE2DDC7
+300 153FE4EF32297FEE
+360 52ED9FA61C9A51B2
+420 97DD3AB2FA5CCB38
+480 E1AF50696E04DF94
+540 C59791C0BACC4B9A
+600 64C3B740D9FE8D47
+660 3862DE5E99CC81C4
+720 232DDF253BC53046
+780 0839F701A2675F20
+840 154D0094EAAD28A4
+900 115C397D4AD49998
+960 29721DADE2CFDD85
+1020 C0D36BA02C597E4D
+1080 5A27026E78DC6207
+1140 5B7B0C19EC3B42FB
+1200 858CC8862636FCEC
+1260 98441E7C9383993E
+1275 91B0C2A3896716CC
+resets 0
+text [0;37mTEST:test_ppu_read_buffer\n-----------------------------\nTesting basic PPU memory I/O.\n [0;37mPerforming tests that combine\nsprite 0 hit flag, $4014 DMA\nand the RAM mirroring...\n [0;33mGraphical artifacts during\nthis test are OK and expected.\n\n [0;37m              Hi   No-Hi\n [0;37mDirect poke   [0;33m OK   [0;33m OK  \n [0;37mDMA with ROM   [0;33m OK   [0;33m OK  \n [0;37mDMA + PPU bus [0;33m OK   [0;33m OK  \n [0;37mDMA with RAM  \n\n [0;37m-----------------------------\n This next test wil take a while.\n In order to distract you with\n entertainment, art is provided.\n Contemplate on the art while\n the test is in progress.\n\n\n\n [0;37m\nPassed
+verdict Passed 1275

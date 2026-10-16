@@ -1,0 +1,14 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/cpu_interrupts_v2/rom_singles/4-irq_and_dma.nes
+rom 6D7B4C1947ADA64679AF56CF0C227286B2408AFE1747DFAA4DC7363D57FF87F6
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 7DE692045BC474E1
+71 EE8EE64D8E4C956C
+resets 0
+text 0 +0\n1 +1\n1 +2\n2 +3\n2 +4\n4 +5\n4 +6\n7 +7\n7 +8\n7 +9\n7 +10\n8 +11\n8 +12\n8 +13\n...\n8 +524\n8 +525\n8 +526\n9 +527\n\n4-irq_and_dma\n\nPassed
+verdict Passed 71

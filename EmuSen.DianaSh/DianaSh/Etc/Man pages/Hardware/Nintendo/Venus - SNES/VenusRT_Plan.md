@@ -14,6 +14,9 @@ The page keeps three things apart:
   here.
 - **Predicted** means a claim numbered P1–P7 (§11) so that a later stage can retire it.
 
+*Historical since 2026-10-16.* C# Venus was deleted from the source on 2026-10-16 and VenusRT is the SNES's only
+engine; `VenusRT_Native.md` §68 records the retirement. The plan is kept as written, with its corrections dated in place.
+
 Where this page describes the old core, it describes only what can be seen from outside it: its `ICore` members,
 the interfaces it declares, its save files, its debugger surface, and what it does when run over test ROMs (§4, §3.5).
 It says nothing about how Venus works inside, and the failures in §3.5 are recorded without explanation on purpose.
@@ -30,6 +33,9 @@ EmuSen's rule was Mesen's to begin with. Venus cannot be made independent by edi
 of its rules survived from the copied code. *Decided 2026-09-30:* Venus is replaced by a clean rewrite, VenusRT, and
 C# Venus keeps running SNES games in Mistress until VenusRT reaches parity (§7). Then it moves to a legacy branch
 (§9, Q9).
+*Corrected 2026-10-16: the four-week gate and the legacy branch were proposed by this plan and never decided by the tester, whose instruction of 2026-09-30 was to ditch the C# core; the C# core was retired on 2026-10-16 at the tester's word.* The tester's words that day were "I was thinking of making it a clean rewrite actually. lets do that. Ditch the
+original C# core." The rewrite and the exclusion of Venus as an oracle are that instruction; a move to a legacy branch is
+not in it.
 
 ### 1.2 Who may read what
 
@@ -560,7 +566,8 @@ exceptions, five not met, so the default does not flip; its §41.10 lists what b
 flipped, was done on 2026-10-05, decided by the tester that day ("You may make venus the default"), with G6's run on
 the handheld on battery still owed and recorded as owed (`VenusRT_Native.md` §65). C# Venus stays a choice and the
 fallback. It is removed or moved only after §7's four weeks of play as the default with no open regression against
-it.*
+it.* *Corrected 2026-10-16: the four-week gate and the legacy branch were proposed by this plan and never decided by the tester, whose instruction of 2026-09-30 was to ditch the C# core; the C# core was retired on 2026-10-16 at the tester's word.* Stage 9's second half was done that day: the goldens were recorded from VenusRT and the corpus graded
+against §3.5's baseline, then C# Venus, its engine choice and its fallback were deleted (`VenusRT_Native.md` §68).
 
 About 44 steps, or 130–160 hours (P3). Stage 6 can run after stage 4, before the coprocessors, so that the player gets
 the engine for ordinary cartridges early; games with a chip then fall back to Venus with a notice until stage 5 lands.
@@ -596,6 +603,11 @@ Two gates: one to make VenusRT Mistress's SNES default, and one to remove C# Ven
 **To remove C# Venus:** VenusRT has been the default for four weeks of play with no open regression against Venus
 (each report either fixed or shown to be Venus's behaviour, not hardware's). It then moves to a legacy branch (§9, Q9).
 
+*Corrected 2026-10-16: the four-week gate and the legacy branch were proposed by this plan and never decided by the tester, whose instruction of 2026-09-30 was to ditch the C# core; the C# core was retired on 2026-10-16 at the tester's word.* The paragraph above is the plan's proposal, kept as it was written. What removed C# Venus was the tester's
+decision of 2026-10-16 ("Yes, retire it"), under the standing rule recorded that day in `EmuSen_Stack.md` that a C# core
+is not kept as an oracle once its Rust core replaces it. The removal was gated instead on VenusRT's own goldens and on
+the corpus graded against §3.5's baseline, no verdict worse than C# Venus's (`VenusRT_Native.md` §68.2, §68.3).
+
 ---
 
 ## 8. Reuse, and what the framework should gain
@@ -630,6 +642,13 @@ console part as §4.5 of `EmuSen_NativeCores.md` lays out for the other three.
 ## 9. Questions, decided 2026-09-30
 
 Each question as it was put, and its decision. Every recommendation this page made was accepted as written.
+*Qualified 2026-10-16:* that sentence is the page's own summary, written when §9 was recorded at stage 0 (commit
+`301ca07c`, "the plan's §9 decided: every recommendation accepted"). Neither this page nor the repository's history
+records an answer of the tester's to Q1–Q10 one by one; what the record shows in the tester's words is the instruction of
+2026-09-30 quoted in §1.1, which settles the rewrite and Venus's exclusion as an oracle (Q4 and the premise of Q5 and Q9),
+and the later decisions dated where they are cited (Q2's supersession by `EmuSen_Firmware.md` §0 of 2026-10-03, Q5's
+move to the system pack under `EmuSen_CoreAPI.md` §15, Q14, itself recorded there as "each as recommended"). The other
+answers below are the plan's recommendations as recorded, and Q9's is corrected in place.
 
 1. **Q1, may the SNES Development Manual be used as a source?** It is Nintendo's, circulated without permission, the
    only first-party register description, and parts of the public documents already rest on it. Decided: it is not a
@@ -657,6 +676,9 @@ Each question as it was put, and its decision. Every recommendation this page ma
    the mouse, the Super Scope and the multitap. Decided: only after retirement, one at a time, each with its oracle.
 9. **Q9, is C# Venus deleted or moved to a legacy branch?** Decided: moved to a legacy branch, as was decided for the
    other C# cores, so that §3.5's baseline stays reproducible (§7).
+   *Corrected 2026-10-16: the four-week gate and the legacy branch were proposed by this plan and never decided by the tester, whose instruction of 2026-09-30 was to ditch the C# core; the C# core was retired on 2026-10-16 at the tester's word.* No legacy branch was made: C# Venus was deleted from `main`, and stays in the repository's history and in
+   the releases that carried it (0.9.1 among them). §3.5's baseline stays as recorded in `VenusRtBaseline.tsv`, whose
+   C# columns are frozen (`VenusRT_Native.md` §68.3).
 10. **Q10, which of §5.1's named losses must be modelled?** Decided: none before the default flips, unless a game in
     the goldens needs one. Each is then its own stage, with its undisbeliever ROM as the oracle (§5.1, §7's G3).
 

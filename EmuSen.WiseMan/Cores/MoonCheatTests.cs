@@ -1,15 +1,14 @@
 using System;
 using System.IO;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Moon;
-using EmuSen.Cores.Nintendo.Moon.Cheats;
+using EmuSen.Cores.Nintendo.MoonRT;
+using EmuSen.Crystal.Systems.Nes;
 using EmuSen.Crystal.Cheats;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // Cheats reaching a running NES core - the decode itself is pinned separately
-    // in NesGameGenieCodecTests. See Moon_Cheats.md §3.
+    // Cheats reaching MoonRT - the decode itself is pinned separately in NesGameGenieCodecTests. See Moon_Cheats.md §3.
     public class MoonCheatTests : IDisposable
     {
         // A recognisable byte at PRG offset 0, which a 16K NROM maps to both $8000 and $C000.
@@ -17,7 +16,7 @@ namespace EmuSen.WiseMan.Cores
         private const int Address = 0x8000;
 
         private readonly string _romPath;
-        private readonly MoonCore _core = new();
+        private readonly MoonRtCore _core = new();
 
         public MoonCheatTests()
         {
@@ -28,10 +27,11 @@ namespace EmuSen.WiseMan.Cores
 
         public void Dispose()
         {
+            _core.Dispose();
             try { File.Delete(_romPath); } catch { }
         }
 
-        private byte Read() => _core.Bus!.Read(Address);
+        private byte Read() => _core.ReadSpace("CPUBUS", Address);
 
         [Fact]
         public void An_unpatched_read_returns_the_cartridge_byte()
@@ -90,17 +90,17 @@ namespace EmuSen.WiseMan.Cores
 
             _core.RunFrame();
 
-            Assert.Equal(0x09, _core.Bus!.Ram[0x0075]);
+            Assert.Equal(0x09, _core.ReadSpace("RAM", 0x0075));
         }
 
         // Nothing below the cartridge window reaches a Game Genie, so a patch there must be inert.
         [Fact]
         public void A_rom_patch_never_intercepts_a_ram_read()
         {
-            _core.Bus!.Ram[0x0075] = 0x11;
+            _core.WriteSpace("RAM", 0x0075, 0x11);
             _core.Cheats.AddRomPatch(0x0075, 0xAD, null, "out of reach");
 
-            Assert.Equal(0x11, _core.Bus.Read(0x0075));
+            Assert.Equal(0x11, _core.ReadSpace("CPUBUS", 0x0075));
         }
 
         [Fact]
@@ -108,7 +108,7 @@ namespace EmuSen.WiseMan.Cores
         {
             CoreBundle bundle = CoreFactory.Load(_romPath);
 
-            Assert.Equal(("NES address:value", MoonCore.SpaceCpuBus), (bundle.CheatAutoDetectCodec!.Name, bundle.CheatAutoDetectCodec.SpaceName));
+            Assert.Equal(("NES address:value", NesSystem.CpuBus), (bundle.CheatAutoDetectCodec!.Name, bundle.CheatAutoDetectCodec.SpaceName));
             Assert.Equal(("Game Genie", CheatCodeKind.RomPatch), (bundle.CheatExplicitCodec!.Name, bundle.CheatExplicitCodec.Kind));
         }
 
@@ -116,7 +116,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_game_genie_code_decodes_and_patches_end_to_end()
         {
-            ICheatCodeCodec codec = MoonCheatCodecs.GameGenie();
+            ICheatCodeCodec codec = NesSystem.GameGenie();
             // Decodes to $91D9, so this fixture patches the byte the code names rather than the one it has.
             (int address, byte value) = codec.Decode("SXIOPO");
             Assert.Equal(0x91D9, address);
@@ -124,7 +124,7 @@ namespace EmuSen.WiseMan.Cores
 
             _core.Cheats.AddRomPatch(address, value, codec.DecodeCompare("SXIOPO"), "SXIOPO");
 
-            Assert.Equal(0xAD, _core.Bus!.Read((ushort)address));
+            Assert.Equal(0xAD, _core.ReadSpace("CPUBUS", address));
         }
     }
 }

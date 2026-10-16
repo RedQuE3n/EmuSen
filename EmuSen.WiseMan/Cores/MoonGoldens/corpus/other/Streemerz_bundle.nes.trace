@@ -1,0 +1,10 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/other/Streemerz_bundle.nes
+rom A942A3CD2FDB0DAD94BD539E83C0CB06060BB6C339DFE9F13C024A2320A432FE
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+verdict Unsupported NotSupportedException

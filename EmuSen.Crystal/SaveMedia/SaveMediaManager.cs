@@ -117,8 +117,8 @@ namespace EmuSen.Crystal.SaveMedia
         {
             if (MediumOf(path) is not { } medium) return MediaOutcome.No($"{Show(path)} is of no medium a system pack names");
             if (File.Exists(path)) return MediaOutcome.No($"{Show(path)} already exists");
-            if (medium.Format?.Format() is not { } blank) return MediaOutcome.Ok($"{Show(path)} is named; with no file yet it is a new, blank {medium.Noun.ToLowerInvariant()}, which the game formats");
-            return Write(path, blank, $"{Show(path)} made, a formatted {medium.Title.ToLowerInvariant()}");
+            if (medium.Format?.Format() is not { } blank) return MediaOutcome.Ok($"{Show(path)} is named; with no file yet it is a new, blank {MediumWords.InText(medium.Noun)}, which the game formats");
+            return Write(path, blank, $"{Show(path)} made, a formatted {MediumWords.InText(medium.Title)}");
         }
 
         // A whole card to a new name, read as bytes, which needs no module.

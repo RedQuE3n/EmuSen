@@ -1,5 +1,7 @@
 # Mars — the ROM container and its header
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Phase 0, landed 2026-09-15. This is the first Mars code, and it emulates nothing:
 it turns a file on disk into a normalised image and reads the 64 bytes at the front.
 `EmuSen/Cores/Nintendo/Mars - N64/Rom/RomImage.cs`, with `SyntheticN64Rom` and

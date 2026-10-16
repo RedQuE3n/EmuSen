@@ -16,6 +16,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             ["s"] = "step",
             ["jobs"] = "ps",
             ["hexdump"] = "xxd",
+            ["exit"] = "shutdown",
         };
 
         private readonly Dictionary<string, IDianaShCommand> _byName;
@@ -37,6 +38,9 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             string lower = name.ToLowerInvariant();
             return Aliases.TryGetValue(lower, out string? command) ? command : lower;
         }
+
+        // The command an alias names, or null - see `man which`.
+        public static string? AliasOf(string lower) => Aliases.TryGetValue(lower, out string? command) ? command : null;
 
         public bool TryFind(string canonicalName, [MaybeNullWhen(false)] out IDianaShCommand command) => _byName.TryGetValue(canonicalName, out command);
 

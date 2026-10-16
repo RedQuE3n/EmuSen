@@ -36,46 +36,12 @@ status 1
 action none
 end
 
-case on venus
-target venus
-covers 1
-$ sprites | head -n 8
-out 476
-128 active sprite(s):
-  #0: x=0 y=0 8x8 tile=0x000 pal=8 pri=0 flipX=False flipY=False
-  #1: x=0 y=0 8x8 tile=0x000 pal=8 pri=0 flipX=False flipY=False
-  #2: x=0 y=0 8x8 tile=0x000 pal=8 pri=0 flipX=False flipY=False
-  #3: x=0 y=0 8x8 tile=0x000 pal=8 pri=0 flipX=False flipY=False
-  #4: x=0 y=0 8x8 tile=0x000 pal=8 pri=0 flipX=False flipY=False
-  #5: x=0 y=0 8x8 tile=0x000 pal=8 pri=0 flipX=False flipY=False
-  #6: x=0 y=0 8x8 tile=0x000 pal=8 pri=0 flipX=False flipY=False
-status 0
-action none
-end
-
 case on venusrt
 target venusrt
 covers 1
 $ sprites | head -n 8
 out 19
 0 active sprite(s):
-status 0
-action none
-end
-
-case on moon
-target moon
-covers 1
-$ sprites | head -n 8
-out 475
-64 active sprite(s):
-  #0: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
-  #1: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
-  #2: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
-  #3: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
-  #4: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
-  #5: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
-  #6: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
 status 0
 action none
 end
@@ -97,28 +63,8 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
-covers 1
-$ sprites | head -n 8
-out 19
-0 active sprite(s):
-status 0
-action none
-end
-
 case on mercuryrt
 target mercuryrt
-covers 1
-$ sprites | head -n 8
-out 19
-0 active sprite(s):
-status 0
-action none
-end
-
-case on mars
-target mars
 covers 1
 $ sprites | head -n 8
 out 19

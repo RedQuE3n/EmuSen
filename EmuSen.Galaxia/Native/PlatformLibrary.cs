@@ -24,6 +24,9 @@ namespace EmuSen.Galaxia.Native
         public static nint Export(string name) =>
             Available && NativeLibrary.TryGetExport(Library.Value.Handle, name, out nint export) ? export : 0;
 
+        // Whether Galaxia's own switch chose the library, which a component reading the tree through it needs - see EmuSen_DianaSh.md §13.7.
+        public static bool GalaxiaActive => GalaxiaNative.Active;
+
         public static string FileName =>
             OperatingSystem.IsWindows() ? $"{Name}.dll" : OperatingSystem.IsMacOS() ? $"lib{Name}.dylib" : $"lib{Name}.so";
 

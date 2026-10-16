@@ -1,5 +1,7 @@
 # Mars — performance: the profile, and what each change bought
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Phase G, opened 2026-09-18. The probe is `EmuSen.WiseMan/Cores/MarsPerformanceProbeTests.cs`; the profile was taken
 with `dotnet-trace` against a scratch harness outside the repository. The phase's remit is `Mars_Gameplan.md` §4.7:
 "opens with a profile, not a plan".*

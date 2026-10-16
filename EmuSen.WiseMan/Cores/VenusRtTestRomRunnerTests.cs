@@ -222,7 +222,7 @@ namespace EmuSen.WiseMan.Cores
             foreach (string rom in roms.Where(r => File.Exists(Path.Combine(root, r))))
             {
                 string path = Path.Combine(root, rom);
-                var a = ICoreSnesEngine.Venus().Run(path, new[] { 1800, 3600 });
+                var a = new VenusRtSnesEngine().Run(path, new[] { 1800, 3600 });
                 var b = mesen.Run(path, new[] { 1800, 3600 });
                 var scores = Enumerable.Range(0, 16).Select(o => SnesDifferential.Pictures(a.Snapshots[1].Picture, b.Snapshots[1].Picture, o)).ToList();
                 int at = scores.Select((s, o) => (s.Differing, o)).Min().o;
@@ -265,7 +265,7 @@ namespace EmuSen.WiseMan.Cores
             if (Environment.GetEnvironmentVariable(ReportVariable) is { } report) File.WriteAllLines(report, table);
         }
 
-        // The corpus over C# Venus and Mesen, graded by each suite's protocol, against the committed baseline table.
+        // The corpus over VenusRT and Mesen, graded by each suite's protocol, against the committed baseline; C# Venus's columns are frozen there since it was deleted - see VenusRT_Native.md §68.3.
         [Fact]
         public void The_corpus_reproduces_the_recorded_baseline()
         {
@@ -277,27 +277,26 @@ namespace EmuSen.WiseMan.Cores
             }
             CoreOptions.BatteryRamDisabled = true;
             bool mesen = MesenProbeSnesEngine.Available && Environment.GetEnvironmentVariable("EMUSEN_VENUSRT_NO_MESEN") != "1";
-            var engines = new List<ISnesEngine> { ICoreSnesEngine.Venus() };
-            if (mesen) engines.Add(new MesenProbeSnesEngine(Path.Combine(root, "runs", "mesen")));
+            var reference = mesen ? new MesenProbeSnesEngine(Path.Combine(root, "runs", "mesen")) : null;
             int threads = int.TryParse(Environment.GetEnvironmentVariable("EMUSEN_VENUSRT_THREADS"), out int t) ? t : 4;
-            // VenusRT as a third column when asked for; its verdicts are reported, not compared with the baseline.
-            bool venusRt = Environment.GetEnvironmentVariable("EMUSEN_VENUSRT_ENGINE") == "1";
+            string baseline = Path.Combine(AppContext.BaseDirectory, "Cores", "VenusRtBaseline.tsv");
+            var want = File.ReadAllLines(baseline).Skip(1).Select(l => l.Split('\t')).ToDictionary(c => c[0]);
 
             var roms = SnesTestRomCorpus.Unique(root);
-            var rows = new ConcurrentDictionary<string, string>();
+            var rows = new ConcurrentDictionary<string, string[]>();
             Parallel.ForEach(roms, new ParallelOptions { MaxDegreeOfParallelism = threads }, rom =>
             {
                 string path = Path.Combine(root, rom.Path);
                 var frames = SnesTestRomCorpus.Frames(rom.Path);
-                var cells = new List<string> { rom.Md5, rom.Path, SnesTestRomCorpus.Suite(rom.Path) };
-                var runs = new List<SnesRun>();
-                foreach (var engine in engines)
+                string[] frozen = want.TryGetValue(rom.Md5, out var w) ? w : new string[15];
+                var cells = new List<string> { rom.Md5, rom.Path, SnesTestRomCorpus.Suite(rom.Path), frozen[3] ?? "", frozen[4] ?? "" };
+                SnesRun? theirs = null;
+                if (reference is not null)
                 {
                     try
                     {
-                        var run = engine.Run(path, frames);
-                        runs.Add(run);
-                        var v = SnesTestRomGrader.Grade(path, run);
+                        theirs = reference.Run(path, frames);
+                        var v = SnesTestRomGrader.Grade(path, theirs);
                         cells.Add(v.Outcome.ToString());
                         cells.Add(v.SelfGraded || v.Outcome == SnesOutcome.Done ? $"{v.Protocol} {v.Detail}".Trim() : "");
                     }
@@ -306,52 +305,40 @@ namespace EmuSen.WiseMan.Cores
                         cells.Add("Threw");
                         cells.Add(e.GetType().Name);
                     }
-                }
-                if (runs.Count == 2)
-                {
-                    var d = SnesDifferential.Compare(runs[0], runs[1], SnesDifferential.MesenRowOffset);
-                    var last = d.LastOrDefault();
-                    cells.Add(last is null ? "n/a" : last.SpaceBytes.GetValueOrDefault("vram") == 0 ? "same" : $"{last.SpaceBytes["vram"]}B");
-                    var mesenRun = runs[1];
-                    bool steady = mesenRun.Snapshots.Count == 2 && mesenRun.Snapshots[0].Spaces["vram"].AsSpan().SequenceEqual(mesenRun.Snapshots[1].Spaces["vram"]);
+                    cells.Add(frozen[7] ?? "");
+                    bool steady = theirs is { Snapshots.Count: 2 } && theirs.Snapshots[0].Spaces["vram"].AsSpan().SequenceEqual(theirs.Snapshots[1].Spaces["vram"]);
                     cells.Add(steady ? "steady" : "moving");
                 }
-                if (venusRt)
+                else cells.AddRange(new[] { frozen[5] ?? "", frozen[6] ?? "", frozen[7] ?? "", frozen[8] ?? "" });
+                try
                 {
-                    try
-                    {
-                        var run = new VenusRtSnesEngine().Run(path, frames);
-                        var v = SnesTestRomGrader.Grade(path, run);
-                        cells.Add(v.Outcome.ToString());
-                        cells.Add(v.SelfGraded || v.Outcome == SnesOutcome.Done ? $"{v.Protocol} {v.Detail}".Trim() : "");
-                        var against = runs.Count == 2 ? SnesDifferential.Compare(run, runs[1], SnesDifferential.MesenRowOffset).LastOrDefault() : null;
-                        foreach (string space in new[] { "vram", "cgram", "oam" })
-                            cells.Add(against is null ? "n/a" : against.SpaceBytes.GetValueOrDefault(space) == 0 ? "same" : $"{against.SpaceBytes[space]}B");
-                        cells.Add(against is null || against.PixelsCompared == 0 ? "n/a" : against.PixelsDiffering == 0 ? "same" : $"{against.PixelsDiffering}px");
-                    }
-                    catch (Exception e)
-                    {
-                        cells.Add("Threw");
-                        cells.Add(e.GetType().Name);
-                        cells.AddRange(new[] { "n/a", "n/a", "n/a", "n/a" });
-                    }
+                    var run = new VenusRtSnesEngine().Run(path, frames);
+                    var v = SnesTestRomGrader.Grade(path, run);
+                    cells.Add(v.Outcome.ToString());
+                    cells.Add(v.SelfGraded || v.Outcome == SnesOutcome.Done ? $"{v.Protocol} {v.Detail}".Trim() : "");
+                    var against = theirs is null ? null : SnesDifferential.Compare(run, theirs, SnesDifferential.MesenRowOffset).LastOrDefault();
+                    foreach (string space in new[] { "vram", "cgram", "oam" })
+                        cells.Add(against is null ? frozen[11 + Array.IndexOf(new[] { "vram", "cgram", "oam" }, space)] ?? "n/a" : against.SpaceBytes.GetValueOrDefault(space) == 0 ? "same" : $"{against.SpaceBytes[space]}B");
+                    cells.Add(against is null ? frozen[14] ?? "n/a" : against.PixelsCompared == 0 ? "n/a" : against.PixelsDiffering == 0 ? "same" : $"{against.PixelsDiffering}px");
                 }
-                rows[rom.Md5] = string.Join('\t', cells);
+                catch (Exception e)
+                {
+                    cells.Add("Threw");
+                    cells.Add(e.GetType().Name);
+                    cells.AddRange(new[] { "n/a", "n/a", "n/a", "n/a" });
+                }
+                rows[rom.Md5] = cells.ToArray();
             });
 
-            string header = "md5\trom\tsuite\tvenus\tvenus_detail" + (mesen ? "\tmesen\tmesen_detail\tvram_last\tmesen_vram" : "") + (venusRt ? "\tvenusrt\tvenusrt_detail\tvenusrt_vram\tvenusrt_cgram\tvenusrt_oam\tvenusrt_picture" : "");
-            string table = header + "\n" + string.Join("\n", roms.Select(r => rows[r.Md5])) + "\n";
-            if (Environment.GetEnvironmentVariable(ReportVariable) is { } report) File.WriteAllText(report, table);
-
-            var lines = table.Split('\n', StringSplitOptions.RemoveEmptyEntries).Skip(1).Select(l => l.Split('\t')).ToList();
+            string header = "md5\trom\tsuite\tvenus\tvenus_detail\tmesen\tmesen_detail\tvram_last\tmesen_vram\tvenusrt\tvenusrt_detail\tvenusrt_vram\tvenusrt_cgram\tvenusrt_oam\tvenusrt_picture";
+            var lines = roms.Select(r => rows[r.Md5]).ToList();
+            if (Environment.GetEnvironmentVariable(ReportVariable) is { } report) File.WriteAllText(report, header + "\n" + string.Join("\n", lines.Select(c => string.Join('\t', c))) + "\n");
             foreach (var g in lines.GroupBy(c => c[2]).OrderBy(g => g.Key, StringComparer.Ordinal))
-                _output.WriteLine($"{g.Key}: {g.Count()} ROMs, Venus {g.Count(c => c[3] == "Passed")} passed" + (mesen ? $", Mesen {g.Count(c => c[5] == "Passed")}" : ""));
+                _output.WriteLine($"{g.Key}: {g.Count()} ROMs, VenusRT {g.Count(c => c[9] == "Passed")} passed, Mesen {g.Count(c => c[5] == "Passed")}, C# Venus {g.Count(c => c[3] == "Passed")} (frozen)");
 
-            string baseline = Path.Combine(AppContext.BaseDirectory, "Cores", "VenusRtBaseline.tsv");
-            if (!mesen || !File.Exists(baseline)) return;
-            var want = File.ReadAllLines(baseline).Skip(1).Select(l => l.Split('\t')).ToDictionary(c => c[0]);
-            var differences = lines.Where(c => !want.TryGetValue(c[0], out var w) || w[3] != c[3] || w[5] != c[5] || (c[3] != "Visual" && w[4] != c[4]) || (c[5] != "Visual" && w[6] != c[6]))
-                .Select(c => $"{c[1]}: {c[3]}/{c[5]}").ToList();
+            var differences = lines.Where(c => !want.TryGetValue(c[0], out var w) || w[9] != c[9] || (c[9] != "Visual" && w[10] != c[10])
+                    || (mesen && (w[5] != c[5] || (c[5] != "Visual" && w[6] != c[6]))))
+                .Select(c => $"{c[1]}: VenusRT {c[9]}, Mesen {c[5]}").ToList();
             Assert.True(differences.Count == 0, string.Join("\n", differences));
         }
     }

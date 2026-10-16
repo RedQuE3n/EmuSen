@@ -4,21 +4,19 @@ using System.Text;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Crystal.Telemetry;
-using EmuSen.Cores.Nintendo.Mars;
-using EmuSen.Cores.Nintendo.Mars.Cpu.Disassembler;
-using EmuSen.Cores.Nintendo.Mars.Debug;
-using EmuSen.Cores.Nintendo.Mars.Memory;
-using EmuSen.Cores.Nintendo.Mars.Rsp;
 
 namespace EmuSen.Cores.Nintendo.MarsRT
 {
     // The debugger's view of MarsRT: Mars's memories, both processors and the core's registries, the hooks in the Rust loop - see Mars_Native.md §6.5.
-    public sealed class MarsRtDebugTarget : IDebugTarget, IWriteObserver
+    public sealed class MarsRtDebugTarget : IDebugTarget
     {
-        private static readonly string[] RegisterNames = MarsDebugTarget.RegisterNames;
+        private static readonly string[] RegisterNames = MarsOperands.Gpr;
 
-        // Mars's names in Mars's order, the order MarsRT's register export returns them.
-        private static readonly string[] VideoRegisterNames = Array.ConvertAll(MarsDebugTarget.VideoRegisterNames, r => r.Name);
+        // The VI's fourteen registers by their libultra names, in the order MarsRT's register export returns them.
+        private static readonly string[] VideoRegisterNames =
+        {
+            "CONTROL", "ORIGIN", "WIDTH", "V_INTR", "V_CURRENT", "BURST", "V_SYNC", "H_SYNC", "LEAP", "H_START", "V_START", "V_BURST", "X_SCALE", "Y_SCALE",
+        };
 
         private readonly MarsRtCore _core;
         private readonly List<IDebugMemorySpace> _spaces = new();
@@ -61,7 +59,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         public long FrameCount => _core.TotalFrames;
         public int MaxSprites => 0;
 
-        // The core's own, as MarsCore hands its out, so a breakpoint or a label outlives any one prompt - see Mars_Debug.md §1.
+        // The core's own, so a breakpoint or a label outlives any one prompt - see Mars_Debug.md §1.
         public WatchRegistry Watches => _core.Watches;
         public FrameLogRegistry FrameLog => _core.FrameLog;
         public BreakpointRegistry Breakpoints => _core.Breakpoints;
@@ -90,14 +88,8 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             },
         };
 
-        // A processor store, reported in the space it landed in, drained from the Rust loop's log into the core's registries - see Mars_Native.md §6.5.
+        // Whether a processor store is reported, drained from the Rust loop's log into the core's registries - see Mars_Native.md §6.5.
         public bool Listening => _core.Listening;
-
-        public void OnWrite(string spaceName, int address, byte value)
-        {
-            Watches.RecordWrite(spaceName, address, value, () => $"PC={(uint)_core.Pc:X8}");
-            Breakpoints.NoteWrite(spaceName, address, value);
-        }
 
         // The processor's view of an address, or null where the TLB has no entry for it - see `man addr`.
         public PhysicalAddress? ResolvePhysical(int cpuAddress) => _core.TryPhysical((uint)cpuAddress, out uint physical) ? _core.Resolve(physical) : null;
@@ -158,7 +150,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
 
         private string _lastSpace = MarsDebugSpaces.Cpu;
 
-        // Words read big-endian from the space and decoded by the processor that runs code there, as MarsDebugTarget does.
+        // Words read big-endian from the space and decoded by the processor that runs code there.
         public IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count)
         {
             _lastSpace = Canonical(spaceName);
@@ -229,7 +221,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             ulong[] cpu = _core.CpuRegisters();
             uint[] vi = _core.ViRegisters();
             var text = new StringBuilder();
-            text.AppendLine($"N64 (MarsRT) - frame {_core.TotalFrames}, {_core.Cycles / (double)MarsCore.ProcessorClockHz:F2}s of console time, {_core.SpaceSize(MarsRtSpace.Rdram) / (1024 * 1024)}MB RDRAM");
+            text.AppendLine($"N64 (MarsRT) - frame {_core.TotalFrames}, {_core.Cycles / (double)N64Console.ProcessorClockHz:F2}s of console time, {_core.SpaceSize(MarsRtSpace.Rdram) / (1024 * 1024)}MB RDRAM");
             text.AppendLine($"CPU  PC={cpu[0]:X16} SP={cpu[30]:X16} RA={cpu[32]:X16}");
             text.Append($"VI   ORIGIN={vi[1]:X8} WIDTH={vi[2]} V_SYNC={vi[6]} {_core.ScreenWidth}x{_core.ScreenHeight}");
             return text.ToString();

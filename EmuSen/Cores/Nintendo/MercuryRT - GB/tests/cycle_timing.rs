@@ -5,7 +5,7 @@
 
 use mercuryrt::cpu::{Cpu, CpuBus};
 
-/// Every access and every tick in order, as `R:`, `W:` and `T:` lines, over 64K of flat memory.
+/// Every access, tick and halt in order, as `R:`, `W:`, `T:` and `H:` lines, over 64K of flat memory.
 struct RecordingBus {
     trace: Vec<String>,
     memory: Vec<u8>,
@@ -30,6 +30,10 @@ impl CpuBus for RecordingBus {
 
     fn pending_interrupts(&self) -> u8 {
         self.memory[0xFFFF] & self.memory[0xFF0F] & 0x1F
+    }
+
+    fn set_halted(&mut self, halted: bool) {
+        self.trace.push(format!("H:{}", halted as u8));
     }
 }
 
@@ -151,4 +155,14 @@ fn a_halted_cpu_still_advances_the_bus() {
     let (cycles, _) = cpu.step(&mut bus, 0, 0).unwrap();
     assert_eq!(cycles, 4);
     assert_eq!(bus.trace, ["T:4"]);
+}
+
+/// HALT tells the bus once it has fetched, and the wake tells it before anything else runs (Mercury_Native.md §14.2).
+#[test]
+fn halt_and_its_wake_are_told_to_the_bus() {
+    let (mut cpu, mut bus) = machine(&[0x76, 0x00]);
+    cpu.step(&mut bus, 0, 0).unwrap();
+    cpu.step(&mut bus, 0, 0).unwrap();
+    cpu.step(&mut bus, 0x01, 0x01).unwrap();
+    assert_eq!(bus.trace, ["T:4", "R:0100", "H:1", "T:4", "H:0", "T:4", "R:0101"]);
 }

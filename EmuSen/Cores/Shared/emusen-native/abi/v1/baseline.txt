@@ -25,6 +25,7 @@ const EMUSEN_CAP_MEDIA 0x40000 @1.1
 const EMUSEN_CAP_MUTES 0x20 @1.0
 const EMUSEN_CAP_PHASES 0x80 @1.0
 const EMUSEN_CAP_PRESENT 0x2 @1.0
+const EMUSEN_CAP_RAW_PICTURE 0x400000 @1.10
 const EMUSEN_CAP_RESET 0x1 @1.0
 const EMUSEN_CAP_ROM_PATCHES 0x800 @1.0
 const EMUSEN_CAP_ROW_REPEAT 0x200 @1.0
@@ -32,8 +33,8 @@ const EMUSEN_CAP_SETTINGS 0x40 @1.0
 const EMUSEN_CAP_SETTING_NOTES 0x8000 @1.0
 const EMUSEN_CAP_SNAPSHOT 0x4 @1.0
 const EMUSEN_CORE_ABI_MAJOR 0x1 @1.0
-const EMUSEN_CORE_ABI_MINOR 0x9 @1.9
-const EMUSEN_CORE_ABI_VERSION 0x10009 @1.9
+const EMUSEN_CORE_ABI_MINOR 0xa @1.10
+const EMUSEN_CORE_ABI_VERSION 0x1000a @1.10
 const EMUSEN_CREATE_LENT 0x1 @1.3
 const EMUSEN_CREATE_SHARED_CONSOLE 0x4 @1.8
 const EMUSEN_CREATE_SHARED_REMOVABLE 0x2 @1.7
@@ -138,6 +139,9 @@ export emusen_core_media_insert optional EMUSEN_CAP_MEDIA @1.1
 export emusen_core_media_lid optional EMUSEN_CAP_MEDIA @1.1
 export emusen_core_phases optional EMUSEN_CAP_PHASES @1.0
 export emusen_core_present optional EMUSEN_CAP_PRESENT @1.0
+export emusen_core_raw_copy optional EMUSEN_CAP_RAW_PICTURE @1.10
+export emusen_core_raw_info optional EMUSEN_CAP_RAW_PICTURE @1.10
+export emusen_core_raw_select optional EMUSEN_CAP_RAW_PICTURE @1.10
 export emusen_core_reset optional EMUSEN_CAP_RESET @1.0
 export emusen_core_set_audio_limit required @1.0
 export emusen_core_set_axis optional EMUSEN_CAP_AXES @1.0
@@ -220,6 +224,13 @@ field emusen_media.flags offset 4 type uint32_t @1.1
 field emusen_media.image offset 8 type const uint8_t* @1.1
 field emusen_media.image_len offset 16 type size_t @1.1
 field emusen_media.size offset 0 type uint32_t @1.1
+field emusen_raw_frame.bytes offset 24 type int64_t @1.10
+field emusen_raw_frame.element offset 4 type uint32_t @1.10
+field emusen_raw_frame.height offset 12 type int32_t @1.10
+field emusen_raw_frame.reserved offset 20 type uint32_t @1.10
+field emusen_raw_frame.size offset 0 type uint32_t @1.10
+field emusen_raw_frame.stride offset 16 type int32_t @1.10
+field emusen_raw_frame.width offset 8 type int32_t @1.10
 fn emusen_core_abi_version () -> uint32_t @1.0
 fn emusen_core_advance (emusen_machine*, uint64_t*) -> int32_t @1.0
 fn emusen_core_audio_buffered (const emusen_machine*) -> int64_t @1.0
@@ -259,6 +270,9 @@ fn emusen_core_media_insert (emusen_machine*, uint32_t, const emusen_media*) -> 
 fn emusen_core_media_lid (emusen_machine*, uint32_t, uint32_t) -> int32_t @1.1
 fn emusen_core_phases (const emusen_machine*, int64_t*, size_t) -> int64_t @1.0
 fn emusen_core_present (emusen_machine*) -> int32_t @1.0
+fn emusen_core_raw_copy (const emusen_machine*, uint32_t, uint8_t*, size_t) -> int64_t @1.10
+fn emusen_core_raw_info (const emusen_machine*, uint32_t, emusen_raw_frame*) -> int32_t @1.10
+fn emusen_core_raw_select (emusen_machine*, uint64_t) -> int32_t @1.10
 fn emusen_core_reset (emusen_machine*) -> int32_t @1.0
 fn emusen_core_set_audio_limit (emusen_machine*, uint64_t) -> int32_t @1.0
 fn emusen_core_set_axis (emusen_machine*, uint32_t, uint32_t, double) -> int32_t @1.0
@@ -409,6 +423,12 @@ json machine_info.video.base_width integer required @1.0
 json machine_info.video.formats array<integer> required @1.0
 json machine_info.video.max_height integer required @1.0
 json machine_info.video.max_width integer required @1.0
+json machine_info.video.raw array<object> optional @1.10
+json machine_info.video.raw[].element integer required @1.10
+json machine_info.video.raw[].encoding string required @1.10
+json machine_info.video.raw[].max_height integer required @1.10
+json machine_info.video.raw[].max_width integer required @1.10
+json machine_info.video.raw[].palette array<integer> optional @1.10
 json setting_notes object @1.0
 json setting_notes{} string optional @1.0
 json settings array<object> @1.0
@@ -461,3 +481,4 @@ struct emusen_event size 24 align 8 @1.0
 struct emusen_file size 24 align 8 @1.0
 struct emusen_frame_info size 56 align 8 @1.0
 struct emusen_media size 48 align 8 @1.1
+struct emusen_raw_frame size 32 align 8 @1.10

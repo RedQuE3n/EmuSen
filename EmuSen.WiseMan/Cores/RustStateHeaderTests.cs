@@ -2,12 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.Mars.Native;
-using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.MercuryRT;
-using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.WiseMan.Fixtures;
 
@@ -43,8 +39,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(MoonRtCore.Available, MoonNative.Report);
             using var core = new MoonRtCore();
             core.LoadRom(Keep(SyntheticNesRom.WriteTemp(SyntheticNesRom.Build())));
-            Assert.Equal((MoonCore.StateMagic, MoonCore.StateVersion), Header(core));
-            Assert.Equal(MoonCore.StateVersion, ((IStateFormat)core).StateVersion);
+            Assert.Equal((MoonRtCore.StateMagic, MoonRtCore.CurrentStateVersion), Header(core));
+            Assert.Equal(MoonRtCore.CurrentStateVersion, ((IStateFormat)core).StateVersion);
         }
 
         [Fact]
@@ -53,8 +49,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(MercuryRtCore.Available, MercuryNative.Report);
             using var core = new MercuryRtCore();
             core.LoadRom(Keep(SyntheticGbRom.WriteTemp(SyntheticGbRom.Build())));
-            Assert.Equal((MercuryCore.StateMagic, MercuryCore.StateVersion), Header(core));
-            Assert.Equal(MercuryCore.StateVersion, ((IStateFormat)core).StateVersion);
+            Assert.Equal((MercuryRtCore.StateMagic, MercuryRtCore.StateFormatVersion), Header(core));
+            Assert.Equal(MercuryRtCore.StateFormatVersion, ((IStateFormat)core).StateVersion);
         }
 
         [Fact]
@@ -65,13 +61,13 @@ namespace EmuSen.WiseMan.Cores
             string rom = Keep(Path.Combine(Path.GetTempPath(), $"mars-header-{Guid.NewGuid():N}.z64"));
             File.WriteAllBytes(rom, SyntheticN64System.Build());
             core.LoadRom(rom);
-            Assert.Equal((MarsCore.StateMagic, MarsCore.StateVersion), Header(core));
-            Assert.Equal(MarsCore.StateVersion, core.StateVersion);
+            Assert.Equal((MarsMachine.StateMagic, MarsMachine.StateKind), Header(core));
+            Assert.Equal(MarsMachine.StateKind, core.StateVersion);
 
             using var snapshot = new MemoryStream();
             core.SaveSnapshot(snapshot);
-            Assert.Equal(MarsCore.StateMagic, BitConverter.ToUInt32(snapshot.ToArray(), 0));
-            Assert.Equal(MarsCore.SnapshotVersion, BitConverter.ToInt32(snapshot.ToArray(), 4));
+            Assert.Equal(MarsMachine.StateMagic, BitConverter.ToUInt32(snapshot.ToArray(), 0));
+            Assert.Equal(MarsMachine.SnapshotKind, BitConverter.ToInt32(snapshot.ToArray(), 4));
         }
     }
 }

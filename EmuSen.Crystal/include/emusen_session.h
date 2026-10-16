@@ -1,4 +1,4 @@
-/* emusen_session.h - the session service, emusen.session@1, version 1.0. Owned by Crystal.
+/* emusen_session.h - the session service, emusen.session@1, version 1.1. Owned by Crystal.
  *
  * What a command module calls to reach a running core, and what a frontend's own windows call for the same thing: one
  * C function table, emusen_session_v1, provided by Crystal and handed to a module by the shell, which never reads it.
@@ -6,7 +6,7 @@
  * and where the two disagree the page wins and the header is in error. Section 13.6 there records version 1.0 as
  * built, and the C# provider that serves it until Crystal is written in Rust.
  *
- * Everything here is @since 1.0 unless marked otherwise. Names: the table emusen_session_v1, constants
+ * Everything here is @since 1.0 unless marked otherwise; section 13.11 there records what 1.1 added. Names: the table emusen_session_v1, constants
  * EMUSEN_SESSION_* and, for statuses, EMUSEN_SVC_*; nothing here collides with emusen_core.h or emusen_platform.h, so a
  * module may include all three.
  *
@@ -51,7 +51,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_SESSION_MAJOR 1u
-#define EMUSEN_SESSION_MINOR 0u
+#define EMUSEN_SESSION_MINOR 1u
 #define EMUSEN_SESSION_VERSION ((EMUSEN_SESSION_MAJOR << 16) | EMUSEN_SESSION_MINOR)
 
 /* The name a module asks the shell for, with the major after an @. */
@@ -75,6 +75,10 @@ extern "C" {
 #define EMUSEN_SVC_FAULT          (-1108) /* the session failed inside the call; the words say how */
 
 /* ---- Open enumerations --------------------------------------------------------------------------------- */
+
+/* A processor argument naming none (@since 1.1): the session's own registries, registers and expression context, as a
+ * command that names no processor reaches them, which on a session listing processors need not be processor 0's. */
+#define EMUSEN_SESSION_PROCESSOR_SESSION 4294967295u
 
 /* run_control's op. A processor is an index of `processors`; 0 is the main one. */
 #define EMUSEN_SESSION_RUN_PAUSE            0u
@@ -123,6 +127,7 @@ extern "C" {
 #define EMUSEN_SESSION_PROFILE_CLEAR        2u  /* changes */
 #define EMUSEN_SESSION_PROFILE_STATUS       3u  /* {"profiling","instructions","unmatched_returns","depth"} */
 #define EMUSEN_SESSION_PROFILE_HOTTEST      4u  /* {"limit"} -> [{"address","instructions","calls","percent"}] */
+#define EMUSEN_SESSION_PROFILE_RESET_STACK  5u  /* changes; forgets the live call chain (@since 1.1) */
 
 /* counters_op's op. */
 #define EMUSEN_SESSION_COUNTERS_ARM         0u  /* {"space","size"}; changes */
@@ -141,7 +146,7 @@ extern "C" {
 #define EMUSEN_SESSION_DMA_LOG_STATUS       3u  /* {"armed","capacity","transfers","bytes","first_frame","last_frame"} */
 #define EMUSEN_SESSION_DMA_LOG_TAIL         4u  /* {"count"} -> [transfer] */
 #define EMUSEN_SESSION_DMA_LOG_CHANNELS     5u  /* -> [{"channel","general_transfers","general_bytes","hdma_transfers","hdma_bytes"}] */
-#define EMUSEN_SESSION_DMA_LOG_DESTINATIONS 6u  /* -> [{"destination","transfers","bytes","channel_mask"}] */
+#define EMUSEN_SESSION_DMA_LOG_DESTINATIONS 6u  /* -> [{"destination","destination_name","transfers","bytes","channel_mask"}] */
 
 /* register_flow_op's op. */
 #define EMUSEN_SESSION_FLOW_ARM             0u  /* {"window","size","capacity"}; changes */
@@ -163,10 +168,22 @@ extern "C" {
 #define EMUSEN_SESSION_CHEAT_MASTER         8u  /* {} reads -> {"enabled"}; {"enabled":b} changes */
 #define EMUSEN_SESSION_CHEAT_EXPORT         9u  /* -> the cheat file's JSON, as Galaxia's CheatFile */
 #define EMUSEN_SESSION_CHEAT_IMPORT         10u /* args: a cheat file's JSON -> the number loaded, the rest skipped; changes */
-#define EMUSEN_SESSION_CHEAT_DECODE         11u /* {"code","codec":"auto"|"explicit"} -> {"codec","kind","space","address","value","compare","writes"} */
+#define EMUSEN_SESSION_CHEAT_DECODE         11u /* {"code","codec":"auto"|"explicit","unchecked"} -> {"codec","kind","space","address","value","compare","writes"};
+                                                * "unchecked" (@since 1.1) decodes without asking the codec first, its own words refusing */
 #define EMUSEN_SESSION_CHEAT_DB_SYSTEMS     12u /* -> [{"system","count"}]; NOT_SUPPORTED without a database */
 #define EMUSEN_SESSION_CHEAT_DB_GAMES       13u /* {"system","filter"} -> [{"system","game","path"}] */
 #define EMUSEN_SESSION_CHEAT_DB_FIND        14u /* {"text","limit"} -> [{"system","game","path"}] */
+/* @since 1.1: what the cheat command needs beyond 1.0, the files and the database being the session's to reach. */
+#define EMUSEN_SESSION_CHEAT_CLAIMS         15u /* {"code"} -> {"auto","explicit"}: whether each codec claims it, null with no codec */
+#define EMUSEN_SESSION_CHEAT_CHT_PARSE      16u /* {"text"} -> {"game":null,"cheats":[{"kind","description","enabled","writes"}],"skipped"} */
+#define EMUSEN_SESSION_CHEAT_CHT_EXPORT     17u /* -> {"text","exported","rom_patches","conditional"}: the RAM pokes as a .cht file */
+#define EMUSEN_SESSION_CHEAT_FILES          18u /* -> {"directory","names"}: the saved cheat lists */
+#define EMUSEN_SESSION_CHEAT_FILE_READ      19u /* {"name"} -> {"path","file"}: a list as IMPORT takes it, null where unreadable */
+#define EMUSEN_SESSION_CHEAT_FILE_WRITE     20u /* {"name"} -> the number saved; BAD_ARGUMENT for a name no file may have */
+#define EMUSEN_SESSION_CHEAT_DB_STATUS      21u /* -> {"directory","exists"} */
+#define EMUSEN_SESSION_CHEAT_DB_PARSE       22u /* {"game"} -> CHT_PARSE's record for the best match, "game" its name or null */
+#define EMUSEN_SESSION_CHEAT_DB_PRUNE       23u /* {"apply"} -> {"can_apply","reason","removing":[{"system","files","bytes"}],"keeping","pruned","failed"} */
+#define EMUSEN_SESSION_CHEAT_DB_UPDATE      24u /* -> {"installed","directory","attribution"}: downloads and installs the database */
 
 /* telemetry's kind. Registers are [{"name","value","bits"}]; the rest as sprites, palettes and audio_channels give them. */
 #define EMUSEN_SESSION_TELEMETRY_CPU            0u
@@ -199,7 +216,8 @@ typedef struct emusen_session_v1 {
     int64_t (*summary)(void *ctx, uint32_t session, uint8_t *out, size_t len);
 
     /* -- Run control ------------------------------------------------------------------------------------- */
-    /* changes. EMUSEN_SESSION_RUN_*; returns 0, or RUN_TO_ADDRESS's breakpoint id. */
+    /* changes. EMUSEN_SESSION_RUN_*; returns 0, or RUN_TO_ADDRESS's breakpoint id. RESUME asks the host's loop to run
+     * and is answered with no session running (@since 1.1), as events_drain then is for session 0. */
     int64_t (*run_control)(void *ctx, uint32_t session, uint32_t op, uint32_t processor, int64_t argument);
     /* reads. {"requested","last_break","last_data_break","last_event_break","single_step","step_depth","pending"}. */
     int64_t (*halt_state)(void *ctx, uint32_t session, uint32_t processor, uint8_t *out, size_t len);
@@ -217,8 +235,9 @@ typedef struct emusen_session_v1 {
     int64_t (*resolve_physical)(void *ctx, uint32_t session, uint32_t address, uint8_t *out, size_t len);
 
     /* -- Processors and registers ------------------------------------------------------------------------ */
-    /* reads. [{"index","name","description","can_halt","code_space","coverage","call_stack","registers","writable_registers"}];
-     * empty for a session that names none, which has processor 0 and, where it reports one, a coprocessor as 1. */
+    /* reads. [{"index","name","description","can_halt","code_space","coverage","call_stack","registers","writable_registers",
+     * "pc"}], "pc" (@since 1.1) where the processor is executing, null where the core does not say; empty for a session
+     * that names none, which has processor 0 and, where it reports one, a coprocessor as 1. */
     int64_t (*processors)(void *ctx, uint32_t session, uint8_t *out, size_t len);
     /* reads. [{"name","value","bits"}]. */
     int64_t (*registers)(void *ctx, uint32_t session, uint32_t processor, uint8_t *out, size_t len);
@@ -330,7 +349,9 @@ typedef struct emusen_session_v1 {
     /* reads. [{"index","general","hdma","control","destination","destination_name","source","size","hdma_active",
      * "table","line_counter","indirect"}]. */
     int64_t (*dma_channels)(void *ctx, uint32_t session, uint8_t *out, size_t len);
-    /* EMUSEN_SESSION_DMA_LOG_*. A transfer is {"sequence","frame","scanline","channel","kind","control","destination","source","length"}. */
+    /* EMUSEN_SESSION_DMA_LOG_*. A transfer is {"sequence","frame","scanline","channel","kind","control","destination",
+     * "destination_name","source","length"}; "destination_name" (@since 1.1, here and in DESTINATIONS) is the core's own
+     * name for the register, null where it gives none. */
     int64_t (*dma_log_op)(void *ctx, uint32_t session, uint32_t op, const uint8_t *args, size_t args_len,
                           uint8_t *out, size_t len);
     /* EMUSEN_SESSION_FLOW_*. */
@@ -352,7 +373,7 @@ typedef struct emusen_session_v1 {
     int64_t (*palettes)(void *ctx, uint32_t session, uint8_t *out, size_t len);
     /* reads. [{"index","name","active","level","muted","info"}]. */
     int64_t (*audio_channels)(void *ctx, uint32_t session, uint8_t *out, size_t len);
-    /* changes. */
+    /* changes. The channel is a 32-bit pattern, read as the core's signed index (@since 1.1; 1.0 refused one above 2^31 - 1). */
     int32_t (*set_channel_muted)(void *ctx, uint32_t session, uint32_t channel, uint32_t muted);
 
     /* -- Expressions --------------------------------------------------------------------------------------- */
@@ -364,7 +385,8 @@ typedef struct emusen_session_v1 {
                        uint8_t *out, size_t len);
 
     /* -- Cheats ------------------------------------------------------------------------------------------------ */
-    /* EMUSEN_SESSION_CHEAT_*. */
+    /* EMUSEN_SESSION_CHEAT_*. DB_PRUNE with "apply" and DB_UPDATE change the database on disk and answer with a record:
+     * the first call applies, and the record is kept until a buffer takes it, as events_drain keeps its events. */
     int64_t (*cheat_op)(void *ctx, uint32_t session, uint32_t op, const uint8_t *args, size_t args_len,
                         uint8_t *out, size_t len);
     /* reads. {"auto":codec|null,"explicit":codec|null,"systems":[name]}, a codec being {"name","kind","space"}. */

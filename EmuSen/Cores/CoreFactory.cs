@@ -2,23 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using EmuSen.Cores.Nintendo.Mars;
-using EmuSen.Cores.Nintendo.Mars.Cheats;
-using EmuSen.Cores.Nintendo.Mars.Debug;
-using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.Mercury;
-using EmuSen.Cores.Nintendo.Mercury.Cheats;
-using EmuSen.Cores.Nintendo.Mercury.Debug;
+using EmuSen.Crystal.Systems.GameBoy;
 using EmuSen.Cores.Nintendo.MercuryRT;
-using EmuSen.Cores.Nintendo.Moon;
-using EmuSen.Cores.Nintendo.Moon.Cheats;
-using EmuSen.Cores.Nintendo.Moon.Debug;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia.Models;
-using EmuSen.Cores.Nintendo.Venus;
-using EmuSen.Cores.Nintendo.Venus.Cheats;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Crystal.Systems;
@@ -44,13 +32,26 @@ namespace EmuSen.Cores
         public static ICore Create(string romPath, bool headless = true, string? engine = null) =>
             V1Library(romPath, engine) is { } v1 ? new Native.CoreEngine(v1, StoredSettings(romPath, v1)) { Media = StoredMedia(romPath, v1) } : Extension(romPath) switch
         {
-            ".smc" or ".sfc" => new VenusCore(headless),
-            ".nes" => engine == CoreCatalog.MoonRtEngine && MoonRtCore.Available ? new MoonRtCore() : new MoonCore(),
-            ".gb" or ".gbc" => engine == CoreCatalog.MercuryRtEngine && MercuryRtCore.Available ? new MercuryRtCore() : new MercuryCore(),
-            ".z64" or ".n64" or ".v64" => engine == CoreCatalog.MarsRtEngine && MarsRtCore.Available ? new MarsRtCore(expansionPak: true) : new MarsCore(expansionPak: true),
+            ".smc" or ".sfc" => throw Missing("SNES", CoreCatalog.VenusRtEngine),
+            ".nes" => Nes(),
+            ".gb" or ".gbc" => GameBoy(),
+            ".z64" or ".n64" or ".v64" => MarsRtCore.Available ? new MarsRtCore(expansionPak: true) { Media = StoredMedia(romPath, MarsNative.Library.Library!) }
+                : throw new NotSupportedException($"The N64 core is not in this build ({MarsNative.Report})."),
             var other => throw new NotSupportedException(
                 $"No core in this build handles '{other}' - see CoreCatalog for what is registered."),
         };
+
+        // A console's sole discovered engine when its library is missing or refused, in the player's words - see VenusRT_Native.md §68.5.
+        private static NotSupportedException Missing(string console, string engine) =>
+            new($"This build has no {console} core: {engine} is missing ({Native.CoreDiscovery.ByEngineName(engine)?.Report ?? "no sidecar for it was found beside the program"}).");
+
+        // MoonRT, the NES's one engine; a build without its library says so rather than running nothing - see Moon_Native.md §9.5.
+        private static ICore Nes() => MoonRtCore.Available ? new MoonRtCore()
+            : throw new NotSupportedException($"This build has no NES core: {CoreCatalog.MoonRtEngine} is missing ({MoonNative.Report}).");
+
+        // MercuryRT, the Game Boy's one engine; a build without its library says so rather than running nothing - see Mercury_Native.md §15.4.
+        private static ICore GameBoy() => MercuryRtCore.Available ? new MercuryRtCore()
+            : throw new NotSupportedException($"This build has no Game Boy core: {CoreCatalog.MercuryRtEngine} is missing ({MercuryNative.Report}).");
 
         // What graphics.json holds for the console the file runs as, so a setting read only at create reaches the machine - see EmuSen_Settings_Reference.md §4.90.
         private static IReadOnlyDictionary<string, string> StoredSettings(string romPath, Native.CoreLibrary library)
@@ -78,19 +79,23 @@ namespace EmuSen.Cores
             var (core, decision) = CoreCatalog.Route(romPath);
             if (engine is null && core is null && decision is { System: null, Reason: { } why }) throw new NotSupportedException(why);
             var routed = decision?.System?.Id ?? (core is not null && CoreCatalog.IsDiscovered(core) ? Crystal.Systems.SystemPacks.All.FirstOrDefault(p => p.Entry.Console == core.Console)?.Entry.Id : null);
-            var found = engine is not null ? Native.CoreDiscovery.ForExtension(extension).FirstOrDefault(c => c.EngineName == engine)
+            // A console with one discovered engine runs it whatever name is asked for, as a retired engine's stored name is read.
+            string? sole = core is not null ? CoreCatalog.SoleDiscoveredEngine(core.Console) : null;
+            var found = (engine is not null ? Native.CoreDiscovery.ForExtension(extension).FirstOrDefault(c => c.EngineName == engine) : null)
+                ?? (sole is not null ? Native.CoreDiscovery.ForExtension(extension).FirstOrDefault(c => c.EngineName == sole)
+                : engine is not null ? null
                 : CoreCatalog.IsCatalogExtension(extension) ? null
                 : routed is not null ? Native.CoreDiscovery.ForSystem(routed).FirstOrDefault(c => !CoreCatalog.IsRegisteredEngine(c.EngineName))
-                : Native.CoreDiscovery.ForExtension(extension).FirstOrDefault();
+                : Native.CoreDiscovery.ForExtension(extension).FirstOrDefault());
             return found is null || CoreCatalog.IsRegisteredEngine(found.EngineName) ? null : found.Open();
         }
 
         // Loads the ROM too, because a debug target needs the core's hardware to already exist.
         public static CoreBundle Load(string romPath, bool headless = true, CheatRegistry? cheats = null,
-            Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? venusFrameTimings = null, string? engine = null, Func<EmuSen.Serenity.Slang.SlangLend?>? lender = null)
+            string? engine = null, Func<EmuSen.Serenity.Slang.SlangLend?>? lender = null)
         {
             ICore core = Loaded(romPath, headless, engine, lender);
-            return Bundle(core, cheats, venusFrameTimings) with { Notice = EngineNotice(romPath, engine, core) };
+            return Bundle(core, cheats) with { Notice = EngineNotice(romPath, engine, core) };
         }
 
         // The core made and the file loaded into it, Load without its wiring, for a caller that loads off its own thread.
@@ -118,14 +123,11 @@ namespace EmuSen.Cores
         public static string? ConfiguredEngine(string romPath) =>
             CoreCatalog.ConsoleForRom(romPath) is { } console ? CoreCatalog.EngineChosen(console, GraphicsConfig.Load().Value(console, CoreCatalog.EngineKey)) : null;
 
-        // Why the engine asked for is not running, or null when it is; an unavailable MarsRT says what MarsNative found - see Mars_Native.md §5.5.
+        // Why the engine asked for is not running, or null when it is - see EmuSen_Settings_Reference.md §4.44.
         public static string? EngineNotice(string romPath, string? engine, ICore core)
         {
             if (engine is null || CoreCatalog.EngineFor(CoreCatalog.ConsoleForRom(romPath) ?? "") is not { } choice) return null;
             if (choice.Choices?.Contains(engine) != true) return $"No {choice.Label.ToLowerInvariant()} is named \"{engine}\"; {Running(core)} is running.";
-            if (engine == CoreCatalog.MarsRtEngine && core is not MarsRtCore) return $"{CoreCatalog.MarsRtEngine} is not available ({MarsNative.Report}); {CoreCatalog.MarsEngine} is running.";
-            if (engine == CoreCatalog.MercuryRtEngine && core is not MercuryRtCore) return $"{CoreCatalog.MercuryRtEngine} is not available ({MercuryNative.Report}); {CoreCatalog.MercuryEngine} is running.";
-            if (engine == CoreCatalog.MoonRtEngine && core is not MoonRtCore) return $"{CoreCatalog.MoonRtEngine} is not available ({MoonNative.Report}); {CoreCatalog.MoonEngine} is running.";
             if (!CoreCatalog.IsRegisteredEngine(engine) && Native.CoreDiscovery.ByEngineName(engine) is { } v1 && (core is not Native.CoreEngine running || running.Info.Id != v1.Info.Id))
                 return $"{engine} is not available ({v1.Report}); {Running(core)} is running.";
             return null;
@@ -135,74 +137,39 @@ namespace EmuSen.Cores
         public static string Running(ICore core) => core switch
         {
             MarsRtCore => CoreCatalog.MarsRtEngine,
-            MarsCore => CoreCatalog.MarsEngine,
             MercuryRtCore => CoreCatalog.MercuryRtEngine,
-            MercuryCore => CoreCatalog.MercuryEngine,
             MoonRtCore => CoreCatalog.MoonRtEngine,
-            MoonCore => CoreCatalog.MoonEngine,
-            VenusCore => CoreCatalog.VenusEngine,
             Native.CoreEngine v1 => v1.Info.DisplayName,
             _ => core.CoreName,
         };
 
         // Split out so a caller that loaded the core itself can still get the rest of the wiring.
-        public static CoreBundle Bundle(ICore core, CheatRegistry? cheats = null,
-            Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? venusFrameTimings = null)
+        public static CoreBundle Bundle(ICore core, CheatRegistry? cheats = null)
         {
             // A core owning its registry takes the caller's, so both sides edit one object - see EmuSen_Cheats.md §6.
             if (cheats is not null && core is ICheatRegistryHost host) host.Cheats = cheats;
 
             switch (core)
             {
-                case VenusCore venus:
-                    return new CoreBundle(
-                        venus,
-                        new SnesDebugTarget(venus.Cpu!, venus.Bus!, venus.Renderer!,
-                            venusFrameTimings ?? (() => (venus.LastFrameCpuSpc700Ms, venus.LastFramePpuMs, venus.LastFrameHdmaMs)),
-                            cheats),
-                        VenusCheatCodecs.ActionReplay(),
-                        VenusCheatCodecs.GameGenie(),
-                        new VenusCpuTraceSwitch());
-
-                case MoonCore moon:
-                    return new CoreBundle(
-                        moon,
-                        new MoonDebugTarget(moon),
-                        MoonCheatCodecs.Raw(),
-                        MoonCheatCodecs.GameGenie(),
-                        null);
-
-                // The same codecs, and MoonRT's target: a mirror for what it shows; its hooks are stage 5's - see Moon_Native.md §8.3.
+                // The NES pack's codecs, and MoonRT's own target, reading its state by its listing - see Moon_Native.md §9.4.
                 case MoonRtCore moonRt:
                     return new CoreBundle(
                         moonRt,
                         moonRt.CreateDebugTarget(),
-                        MoonCheatCodecs.Raw(),
-                        MoonCheatCodecs.GameGenie(),
+                        Crystal.Systems.Nes.NesSystem.Raw(),
+                        Crystal.Systems.Nes.NesSystem.GameGenie(),
                         null);
 
-                case MercuryCore mercury:
-                    return new CoreBundle(
-                        mercury,
-                        new MercuryDebugTarget(mercury),
-                        MercuryCheatCodecs.GameShark(),
-                        MercuryCheatCodecs.GameGenie(),
-                        null);
-
-                // The same codecs, and MercuryRT's target: a mirror for what it shows, the core's hooks for what halts - see Mercury_Native.md §8.5.
+                // The Game Boy's codecs, and MercuryRT's target: its state through the layout listing for what it shows, the core's hooks for what halts - see Mercury_Native.md §15.2.
                 case MercuryRtCore mercuryRt:
                     return new CoreBundle(
                         mercuryRt,
                         mercuryRt.CreateDebugTarget(),
-                        MercuryCheatCodecs.GameShark(),
-                        MercuryCheatCodecs.GameGenie(),
+                        GameBoyCheatCodecs.GameShark(),
+                        GameBoyCheatCodecs.GameGenie(),
                         null);
 
-                // The GameShark pokes; no N64 format patches ROM, so the explicit slot stays empty - see Mars_Cheats.md §1.
-                case MarsCore mars:
-                    return new CoreBundle(mars, new MarsDebugTarget(mars, cheats), MarsCheatCodecs.GameShark(), null, null);
-
-                // The same codec, and a target whose hooks are tables in the Rust loop - see Mars_Native.md §6.5.
+                // The GameShark pokes, and no N64 format patches ROM; the target's hooks are tables in the Rust loop - see Mars_Cheats.md §1, Mars_Native.md §6.5.
                 case MarsRtCore marsRt:
                     return new CoreBundle(marsRt, new MarsRtDebugTarget(marsRt, cheats), MarsCheatCodecs.GameShark(), null, null);
 
@@ -226,7 +193,7 @@ namespace EmuSen.Cores
         public static ICore ForFirmwareProbe(string romPath, string? engine = null) => Create(romPath, headless: true, engine);
 
         // What a cheat window opened before any ROM is parses with - see EmuSen_Multicore.md §4.
-        public static (ICheatCodeCodec AutoDetect, ICheatCodeCodec Explicit) DefaultCheatCodecs => VenusCheatCodecs.Pair();
+        public static (ICheatCodeCodec AutoDetect, ICheatCodeCodec Explicit) DefaultCheatCodecs => (Crystal.Systems.Snes.SnesSystem.ProActionReplay(), Crystal.Systems.Snes.SnesSystem.GameGenie());
 
         // The codecs for a console picked in the UI rather than loaded from a ROM - see EmuSen_Multicore.md §10.
         public static (ICheatCodeCodec? AutoDetect, ICheatCodeCodec? Explicit) CheatCodecsFor(string? coreName)
@@ -237,9 +204,9 @@ namespace EmuSen.Cores
             if (core is null) return DefaultCheatCodecs;
 
             // Dispatched on extension for the same reason Create is - no new public surface on the catalog.
-            if (core.SupportsExtension(".sfc")) return VenusCheatCodecs.Pair();
-            if (core.SupportsExtension(".nes")) return MoonCheatCodecs.Pair();
-            if (core.SupportsExtension(".gb")) return MercuryCheatCodecs.Pair();
+            if (core.SupportsExtension(".sfc")) return DefaultCheatCodecs;
+            if (core.SupportsExtension(".nes")) return Crystal.Systems.Nes.NesSystem.Pair();
+            if (core.SupportsExtension(".gb")) return GameBoyCheatCodecs.Pair();
             if (core.SupportsExtension(".z64")) return MarsCheatCodecs.Pair();
             // A console discovery added has its system pack's codecs, as a game of it running does.
             if (CoreCatalog.IsDiscovered(core) && Crystal.Systems.SystemPacks.All.FirstOrDefault(p => p.Entry.Console == core.Console) is { } pack)

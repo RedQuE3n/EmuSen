@@ -1,16 +1,10 @@
 using System.Collections.Generic;
-using EmuSen.Cores.Nintendo.Mars.Cpu.Core;
-using EmuSen.Cores.Nintendo.Mars.Memory;
 
 namespace EmuSen.WiseMan.Fixtures
 {
     // Emits MIPS III words so instruction tests read as assembly rather than hex - see Mars_Cpu.md §10.
     public sealed class MipsAssembler
     {
-        // Where a test program is assembled, and the cached window the CPU fetches it through.
-        public const uint LoadAddress = 0x0000_0000;
-        public const ulong EntryPoint = 0xFFFF_FFFF_8000_0000;
-
         private readonly List<uint> _words = new();
 
         public MipsAssembler Word(uint word)
@@ -174,24 +168,6 @@ namespace EmuSen.WiseMan.Fixtures
         public MipsAssembler Cop0SubOpcode(int rs) => Word((0x10u << 26) | ((uint)rs << 21));
 
         public uint[] ToArray() => _words.ToArray();
-
-        public MemoryBus LoadInto(MemoryBus bus)
-        {
-            for (int i = 0; i < _words.Count; i++) bus.Write32(LoadAddress + (uint)(i * 4), _words[i]);
-            return bus;
-        }
-
-        // A machine with this program in memory and the program counter already on it.
-        public Cpu Build(MemoryBus? existing = null) =>
-            new(LoadInto(existing ?? new MemoryBus())) { Pc = EntryPoint, NextPc = EntryPoint + 4 };
-
-        public Cpu Run(int steps, MemoryBus? existing = null)
-        {
-            var cpu = Build(existing);
-
-            cpu.Run(steps);
-            return cpu;
-        }
 
         private MipsAssembler I(uint op, int rs, int rt, short immediate) =>
             Word((op << 26) | ((uint)rs << 21) | ((uint)rt << 16) | (ushort)immediate);

@@ -162,33 +162,6 @@ status 1
 action none
 end
 
-case on venus
-target venus
-covers 2-3
-$ disasm cpu
-out 239
-  00ED3E: EA        NOP
-  00ED3F: EA        NOP
-  00ED40: EA        NOP
-  00ED41: EA        NOP
-  00ED42: EA        NOP
-  00ED43: EA        NOP
-  00ED44: EA        NOP
-  00ED45: EA        NOP
-  00ED46: EA        NOP
-  00ED47: EA        NOP
-status 0
-action none
-$ disasm cpu 0 4
-out 115
-  000000: 00 00     BRK #$00
-  000002: 00 00     BRK #$00
-  000004: 00 00     BRK #$00
-  000006: 00 00     BRK #$00
-status 0
-action none
-end
-
 case on venusrt
 target venusrt
 covers 2-3
@@ -212,33 +185,6 @@ out 115
   000002: 00 00     BRK #$00
   000004: 00 00     BRK #$00
   000006: 00 00     BRK #$00
-status 0
-action none
-end
-
-case on moon
-target moon
-covers 2-3
-$ disasm cpu
-out 239
-  00B454: EA        NOP
-  00B455: EA        NOP
-  00B456: EA        NOP
-  00B457: EA        NOP
-  00B458: EA        NOP
-  00B459: EA        NOP
-  00B45A: EA        NOP
-  00B45B: EA        NOP
-  00B45C: EA        NOP
-  00B45D: EA        NOP
-status 0
-action none
-$ disasm cpu 0 4
-out 95
-  000000: 00        BRK
-  000001: 00        BRK
-  000002: 00        BRK
-  000003: 00        BRK
 status 0
 action none
 end
@@ -270,33 +216,6 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
-covers 2-3
-$ disasm cpu
-out 239
-  000AF2: 00        NOP
-  000AF3: 00        NOP
-  000AF4: 00        NOP
-  000AF5: 00        NOP
-  000AF6: 00        NOP
-  000AF7: 00        NOP
-  000AF8: 00        NOP
-  000AF9: 00        NOP
-  000AFA: 00        NOP
-  000AFB: 00        NOP
-status 0
-action none
-$ disasm cpu 0 4
-out 95
-  000000: 00        NOP
-  000001: 00        NOP
-  000002: 00        NOP
-  000003: 00        NOP
-status 0
-action none
-end
-
 case on mercuryrt
 target mercuryrt
 covers 2-3
@@ -320,33 +239,6 @@ out 95
   000001: 00        NOP
   000002: 00        NOP
   000003: 00        NOP
-status 0
-action none
-end
-
-case on mars
-target mars
-covers 2-3
-$ disasm cpu
-out 288
-  A4000040: 10 00 FF FF b 0xA4000040
-  A4000044: 00 00 00 00 nop
-  A4000048: 00 00 00 00 nop
-  A400004C: 00 00 00 00 nop
-  A4000050: 00 00 00 00 nop
-  A4000054: 00 00 00 00 nop
-  A4000058: 00 00 00 00 nop
-  A400005C: 00 00 00 00 nop
-  A4000060: 00 00 00 00 nop
-  A4000064: 00 00 00 00 nop
-status 0
-action none
-$ disasm cpu 0 4
-out 103
-  000000: 00 00 00 00 nop
-  000004: 00 00 00 00 nop
-  000008: 00 00 00 00 nop
-  00000C: 00 00 00 00 nop
 status 0
 action none
 end
@@ -405,25 +297,3 @@ status 0
 action none
 end
 
-case on venus with width hints
-target venus
-covers 2,4
-$ disasm cpu 8000 4 m16 x16
-out 133
-  ; decoding with m16 x16
-  008000: A9 01 8D  LDA #$8D01
-  008003: 00 42     BRK #$42
-  008005: EA        NOP
-  008006: EA        NOP
-status 0
-action none
-$ disasm cpu 8000 4 m8 x8
-out 130
-  ; decoding with m8 x8
-  008000: A9 01     LDA #$01
-  008002: 8D 00 42  STA $4200
-  008005: EA        NOP
-  008006: EA        NOP
-status 0
-action none
-end

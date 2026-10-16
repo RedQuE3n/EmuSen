@@ -204,16 +204,15 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void The_n64_s_cores_report_the_console_s_lines_from_the_frame_s_width()
         {
-            Assert.Equal(240, EmuSen.Cores.Nintendo.Mars.MarsCore.LinesOf(640, 240));
-            Assert.Equal(240, EmuSen.Cores.Nintendo.Mars.MarsCore.LinesOf(2560, 960));
-            Assert.Equal(288, EmuSen.Cores.Nintendo.Mars.MarsCore.LinesOf(1920, 864));
-            Assert.Equal(480, EmuSen.Cores.Nintendo.Mars.MarsCore.LinesOf(1280, 960));
-            Assert.Equal(0, EmuSen.Cores.Nintendo.Mars.MarsCore.LinesOf(320, 240));
-            Assert.Equal(0, ((EmuSen.Cores.ICore)new EmuSen.Cores.Nintendo.Moon.MoonCore()).DisplayLines);
+            Assert.Equal(240, EmuSen.Cores.Nintendo.MarsRT.N64Console.LinesOf(640, 240));
+            Assert.Equal(240, EmuSen.Cores.Nintendo.MarsRT.N64Console.LinesOf(2560, 960));
+            Assert.Equal(288, EmuSen.Cores.Nintendo.MarsRT.N64Console.LinesOf(1920, 864));
+            Assert.Equal(480, EmuSen.Cores.Nintendo.MarsRT.N64Console.LinesOf(1280, 960));
+            Assert.Equal(0, EmuSen.Cores.Nintendo.MarsRT.N64Console.LinesOf(320, 240));
+            using (var moonRt = new EmuSen.Cores.Nintendo.MoonRT.MoonRtCore()) Assert.Equal(0, ((EmuSen.Cores.ICore)moonRt).DisplayLines);
 
-            // Before a game is loaded each engine's frame is 640 by 480, both fields of a picture at the console's own size.
-            Assert.Equal(480, ((EmuSen.Cores.ICore)new EmuSen.Cores.Nintendo.Mars.MarsCore()).DisplayLines);
-            if (!EmuSen.Cores.Nintendo.MarsRT.MarsRtCore.Available) return;
+            // Before a game is loaded the engine's frame is 640 by 480, both fields of a picture at the console's own size.
+            Assert.True(EmuSen.Cores.Nintendo.MarsRT.MarsRtCore.Available, EmuSen.Cores.Nintendo.MarsRT.MarsNative.Report);
             using var native = new EmuSen.Cores.Nintendo.MarsRT.MarsRtCore();
             Assert.Equal(480, ((EmuSen.Cores.ICore)native).DisplayLines);
         }

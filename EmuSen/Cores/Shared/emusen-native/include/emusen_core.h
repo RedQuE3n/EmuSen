@@ -1,4 +1,4 @@
-/* emusen_core.h - the EmuSen core ABI, version 1.9.
+/* emusen_core.h - the EmuSen core ABI, version 1.10.
  *
  * A core is a shared library exporting the functions below, C calling convention. The normative text is
  * EmuSen_CoreAPI.md in the EmuSen manual; this header is its machine-checked half, and where the two disagree the
@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CORE_ABI_MAJOR 1u
-#define EMUSEN_CORE_ABI_MINOR 9u
+#define EMUSEN_CORE_ABI_MINOR 10u
 #define EMUSEN_CORE_ABI_VERSION ((EMUSEN_CORE_ABI_MAJOR << 16) | EMUSEN_CORE_ABI_MINOR)
 
 /* An opaque machine. Several may exist at once, from one library. */
@@ -89,7 +89,8 @@ typedef struct emusen_machine emusen_machine;
 #define EMUSEN_CAP_DEBUG_READS       (1ull << 19)  /* @since 1.2, with DEBUG: emusen_core_debug_reads, range kinds 2 and 3 */
 #define EMUSEN_CAP_BORROW            (1ull << 20)  /* @since 1.3: the core keeps pointers into an image and media files lent to it */
 #define EMUSEN_CAP_DEVICE_PICTURE    (1ull << 21)  /* @since 1.9: the core draws on a device the host lends, emusen_core_frame_device */
-/* Bits 21..47 are for later minors; 48..63 are never assigned, for a core's private use in tests. */
+#define EMUSEN_CAP_RAW_PICTURE       (1ull << 22)  /* @since 1.10: emusen_core_raw_select, emusen_core_raw_info, emusen_core_raw_copy */
+/* Bits 23..47 are for later minors; 48..63 are never assigned, for a core's private use in tests. */
 
 /* ---- Flags and small constants ------------------------------------------------------------------ */
 #define EMUSEN_OPTION_SKIP_RENDERING 1u  /* set_options bit 0; every other bit is reserved and ignored */
@@ -272,6 +273,19 @@ typedef struct emusen_frame_info {  /* 56 bytes */
     int64_t bytes;                  /* frame_copy's whole length */
 } emusen_frame_info;
 
+/* @since 1.10, RAW_PICTURE (section 6.30): the picture of the frame frame_copy holds, before the core's palette, in the
+ * encoding machine info's video.raw[n] names. It covers the frame's rectangle at its own sampling; `height` rows of
+ * `stride` bytes, each value `element` bytes, little-endian. A core fills everything but `size`. 32 bytes. */
+typedef struct emusen_raw_frame {
+    uint32_t size;
+    uint32_t element;               /* bytes per value, as video.raw[n].element */
+    int32_t width;                  /* values per row */
+    int32_t height;                 /* rows */
+    int32_t stride;                 /* bytes per row in raw_copy's output */
+    uint32_t reserved;
+    int64_t bytes;                  /* raw_copy's whole length */
+} emusen_raw_frame;
+
 typedef struct emusen_event {       /* 24 bytes */
     uint32_t size;
     uint32_t kind;                  /* enum emusen_event_kind */
@@ -336,6 +350,15 @@ int64_t emusen_core_frame_copy(const emusen_machine *machine, uint8_t *out, size
  * 0 when this frame's picture is not there and frame_copy has it, or a status. frame_copy still answers on a frame
  * whose picture is on the device, waiting for it. */
 int32_t emusen_core_frame_device(emusen_machine *machine, emusen_device_frame *out);
+/* @since 1.10, RAW_PICTURE: bit n keeps machine info's video.raw[n] for every frame drawn from the next advance on; zero,
+ * the state at create, keeps none. A bit past the list is refused with EMUSEN_NOT_SUPPORTED and nothing changes. The
+ * selection is the host's: no part of a state, kept across reset and state_load. */
+int32_t emusen_core_raw_select(emusen_machine *machine, uint64_t mask);
+/* @since 1.10, RAW_PICTURE: 1 with the shape of the raw picture in encoding `raw` of the frame frame_copy holds, 0 when that
+ * frame has none (every field but `size` then zero), EMUSEN_NOT_SUPPORTED for a `raw` past machine info's list. */
+int32_t emusen_core_raw_info(const emusen_machine *machine, uint32_t raw, emusen_raw_frame *out);
+/* @since 1.10, RAW_PICTURE: its values, copied out; 0 bytes when the frame has none. */
+int64_t emusen_core_raw_copy(const emusen_machine *machine, uint32_t raw, uint8_t *out, size_t len);
 
 /* ---- Sound: interleaved stereo int16 --------------------------------------------------- */
 int32_t emusen_core_audio_rate(const emusen_machine *machine);           /* the rate of the next sample drained */
@@ -479,6 +502,9 @@ typedef int32_t (*emusen_core_media_lid_fn)(emusen_machine *, uint32_t, uint32_t
 typedef int32_t (*emusen_core_media_insert_fn)(emusen_machine *, uint32_t, const emusen_media *);
 typedef int64_t (*emusen_core_debug_reads_fn)(emusen_machine *, uint32_t *, size_t);
 typedef int32_t (*emusen_core_frame_device_fn)(emusen_machine *, emusen_device_frame *);
+typedef int32_t (*emusen_core_raw_select_fn)(emusen_machine *, uint64_t);
+typedef int32_t (*emusen_core_raw_info_fn)(const emusen_machine *, uint32_t, emusen_raw_frame *);
+typedef int64_t (*emusen_core_raw_copy_fn)(const emusen_machine *, uint32_t, uint8_t *, size_t);
 
 #ifdef __cplusplus
 }

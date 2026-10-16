@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using EmuSen.Galaxia.Input;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Systems;
 
@@ -11,6 +13,17 @@ namespace EmuSen.Crystal.Systems.Snes
 
         // The space names the SNES's engines share, so a cheat means the same memory on each.
         public const string CpuBus = "CpuBus", Wram = "WRAM";
+
+        // The two ports on the console's front; a multitap is not modelled - see EmuSen_Input.md §8.1.
+        public const int Ports = 2;
+
+        // The twelve buttons of the SNES pad, PadButton's first twelve in the pad's own order - see EmuSen_Input.md §3.
+        public static readonly IReadOnlyList<PadButton> PadButtons = new[]
+        {
+            PadButton.B, PadButton.Y, PadButton.Select, PadButton.Start,
+            PadButton.Up, PadButton.Down, PadButton.Left, PadButton.Right,
+            PadButton.A, PadButton.X, PadButton.L, PadButton.R,
+        };
 
         public static readonly SystemEntry Entry = new(
             Id,

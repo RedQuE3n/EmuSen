@@ -1,50 +1,48 @@
 using System;
 using System.Collections.Generic;
-using EmuSen.Cores.Nintendo.Mars;
-using EmuSen.Cores.Nintendo.Mars.Debug;
-using EmuSen.Cores.Nintendo.Mars.Memory;
-using EmuSen.Cores.Nintendo.Mars.Native;
+using EmuSen.Cores.Native;
 using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.Cores.Nintendo.MarsRT
 {
+    // The MI's six interrupt sources, by their bits in MI_INTR - see Mars_Memory.md §8.
+    [Flags]
+    public enum MiInterrupt
+    {
+        None = 0,
+        SignalProcessor = 1 << 0,
+        SerialInterface = 1 << 1,
+        AudioInterface = 1 << 2,
+        VideoInterface = 1 << 3,
+        PeripheralInterface = 1 << 4,
+        DisplayProcessor = 1 << 5,
+    }
+
     // The debugger's hooks: the registries pushed down as tables, a frame that stops with its reasons, and the logs drained into them - see Mars_Native.md §6.5.
     public sealed unsafe partial class MarsRtCore
     {
-        private static readonly delegate* unmanaged<nint, uint, int, int, void> DebugSet = (delegate* unmanaged<nint, uint, int, int, void>)MarsNative.Export("mars_debug_set");
-        private static readonly delegate* unmanaged<nint, int*, nuint, void> DebugSetBreakpoints = (delegate* unmanaged<nint, int*, nuint, void>)MarsNative.Export("mars_debug_set_breakpoints");
-        private static readonly delegate* unmanaged<nint, uint, uint*, nuint, void> DebugSetRanges = (delegate* unmanaged<nint, uint, uint*, nuint, void>)MarsNative.Export("mars_debug_set_ranges");
-        private static readonly delegate* unmanaged<nint, uint, ulong*, uint> DebugRunFrame = (delegate* unmanaged<nint, uint, ulong*, uint>)MarsNative.Export("mars_debug_run_frame");
-        private static readonly delegate* unmanaged<nint, uint*, nuint, long> DebugWrites = (delegate* unmanaged<nint, uint*, nuint, long>)MarsNative.Export("mars_debug_writes");
-        private static readonly delegate* unmanaged<nint, uint*, nuint, long> DebugCalls = (delegate* unmanaged<nint, uint*, nuint, long>)MarsNative.Export("mars_debug_calls");
-        private static readonly delegate* unmanaged<nint, long*, nuint, long> DebugProfile = (delegate* unmanaged<nint, long*, nuint, long>)MarsNative.Export("mars_debug_profile");
-        private static readonly delegate* unmanaged<nint, uint, byte*, nuint, long*, long> DebugCoverage = (delegate* unmanaged<nint, uint, byte*, nuint, long*, long>)MarsNative.Export("mars_debug_coverage");
-        private static readonly delegate* unmanaged<nint, long*, void> DebugCounters = (delegate* unmanaged<nint, long*, void>)MarsNative.Export("mars_debug_counters");
-        private static readonly delegate* unmanaged<nint, ulong> PcExport = (delegate* unmanaged<nint, ulong>)MarsNative.Export("mars_machine_pc");
-        private static readonly delegate* unmanaged<nint, uint, uint*, uint> PhysicalExport = (delegate* unmanaged<nint, uint, uint*, uint>)MarsNative.Export("mars_machine_physical");
-        private static readonly delegate* unmanaged<nint, uint, uint, void> BusWrite32 = (delegate* unmanaged<nint, uint, uint, void>)MarsNative.Export("mars_machine_bus_write32");
-        private static readonly delegate* unmanaged<nint, uint, uint> BusRead32 = (delegate* unmanaged<nint, uint, uint>)MarsNative.Export("mars_machine_bus_read32");
-        private static readonly delegate* unmanaged<nint, uint, ulong, void> SetCop0Export = (delegate* unmanaged<nint, uint, ulong, void>)MarsNative.Export("mars_machine_set_cop0");
-        private static readonly delegate* unmanaged<nint, uint, void> MiRaise = (delegate* unmanaged<nint, uint, void>)MarsNative.Export("mars_machine_mi_raise");
-        private static readonly delegate* unmanaged<nint, uint, uint, uint, void> RspStep = (delegate* unmanaged<nint, uint, uint, uint, void>)MarsNative.Export("mars_machine_rsp_step");
+        private static readonly delegate* unmanaged<nint, uint, uint*, uint> PhysicalExport = (delegate* unmanaged<nint, uint, uint*, uint>)X("marsrt_core_physical");
+        private static readonly delegate* unmanaged<nint, uint, uint, int> BusWrite32 = (delegate* unmanaged<nint, uint, uint, int>)X("marsrt_core_bus_write32");
+        private static readonly delegate* unmanaged<nint, uint, uint> BusRead32 = (delegate* unmanaged<nint, uint, uint>)X("marsrt_core_bus_read32");
+        private static readonly delegate* unmanaged<nint, uint, ulong, int> SetCop0Export = (delegate* unmanaged<nint, uint, ulong, int>)X("marsrt_core_set_cop0");
+        private static readonly delegate* unmanaged<nint, uint, int> MiRaise = (delegate* unmanaged<nint, uint, int>)X("marsrt_core_mi_raise");
+        private static readonly delegate* unmanaged<nint, uint, uint, uint, int> RspStep = (delegate* unmanaged<nint, uint, uint, uint, int>)X("marsrt_core_rsp_step");
+        private static readonly delegate* unmanaged<nint, long*, nuint, long> DebugCounters = (delegate* unmanaged<nint, long*, nuint, long>)X("marsrt_core_debug_counters");
 
-        // mars_debug_set's flags.
-        private const uint FlagCalls = 1, FlagWrites = 2, FlagInterrupts = 4, FlagEach = 8, FlagCoverage = 16, FlagRspCoverage = 32, FlagProfiling = 64;
+        // emusen_core_debug_set's flags, the shared hooks' (emusen-native's debug::flag); coverage of processor n is bit 8 + n.
+        private const uint FlagCalls = 1, FlagWrites = 2, FlagInterrupts = 4, FlagEach = 8, FlagProfiling = 16, FlagCoverage = 1 << 8, FlagRspCoverage = 1 << 9;
 
-        // mars_debug_run_frame's reasons; zero is the field's end.
+        // emusen_core_debug_run_frame's reasons; zero is the field's end.
         private const uint StoppedAtInterrupt = 16;
 
-        // Owned here rather than by the debug target, as MarsCore owns its own, so a breakpoint or a label outlives any one prompt - see Mars_Debug.md §1.
-        public WatchRegistry Watches { get; } = new();
-        public FrameLogRegistry FrameLog { get; } = new();
-        public BreakpointRegistry Breakpoints { get; } = new();
+        // Owned here rather than by the debug target, so a breakpoint or a label outlives any one prompt - see Mars_Debug.md §1.
+        public override WatchRegistry Watches { get; } = new();
+        public override FrameLogRegistry FrameLog { get; } = new();
+        public override BreakpointRegistry Breakpoints { get; } = new();
         public CoverageRegistry Coverage { get; } = new();
         public CoverageRegistry RspCoverage { get; } = new();
         public CallStackRegistry CallStack { get; } = new();
         public LabelRegistry Labels { get; } = new();
-
-        public bool IsHaltedAtBreakpoint { get; private set; }
-        public int HaltedAddress { get; private set; }
 
         // The frame the calls being drained were made in, which the registry stamps on each push.
         private long _eventFrame;
@@ -54,7 +52,10 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private byte[]? _coverageBits;
         private readonly byte[] _rspCoverageBits = new byte[512];
 
-        // MarsCore's seams, wired the same way - see Mars_Debug.md §2.
+        // The mirror's registries stay MarsRT's own; the adapter's bridge is never attached - see Mars_Native.md §7.3.
+        protected override void AttachDebugger(CoreMachine machine) { }
+
+        // The registries' seams - see Mars_Debug.md §2.
         private void WireRegistries()
         {
             Breakpoints.CallStack = CallStack;
@@ -62,13 +63,13 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             CallStack.EntryPointObserver = Coverage.RecordEntryPoint;
         }
 
-        // MarsCore's StoresWatched: a store is reported while a watch, a data breakpoint or the uninitialised-read check exists.
+        // A store is reported while a watch, a data breakpoint or the uninitialised-read check exists.
         public bool Listening => Watches.HasWatches || Breakpoints.WatchesWrites;
 
-        // MarsCore takes RunFrame's loop instead of RunQuietly under the same conditions, and the same loop in Rust follows the same rule - see Mars_Native.md §6.5.
+        // The observed loop runs while anything can halt or record - see Mars_Native.md §6.5.
         private bool Observed => !Breakpoints.IsQuiet || Coverage.IsArmed || RspCoverage.IsArmed || CallStack.IsProfiling || Listening;
 
-        // MarsCore's loop, with the instructions between the checks run in Rust: false when the frame halted before its end.
+        // The observed loop, with the instructions between the checks run in Rust: false when the frame halted before its end.
         private bool RunObserved(nint handle, bool resuming)
         {
             _eventFrame = TotalFrames;
@@ -80,7 +81,11 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             {
                 PushTables(handle);
                 ulong pc;
-                uint reasons = DebugRunFrame(handle, flags, &pc);
+                uint processor;
+                ulong detail;
+                int status = Library.Api.DebugRunFrame(handle, flags, &processor, &pc, &detail);
+                if (status < 0) throw new CoreRefusedException(status, $"MarsRT stopped: {Machine.Words(status)}.") { Detail = detail };
+                uint reasons = (uint)status;
                 flags = 3;
                 Drain(handle);
                 if ((reasons & StoppedAtInterrupt) != 0) Breakpoints.NoteInterrupt(CallFrameKind.Irq);
@@ -98,13 +103,14 @@ namespace EmuSen.Cores.Nintendo.MarsRT
 
         private void PushTables(nint handle)
         {
+            var api = Library.Api;
             uint flags = FlagCalls | FlagInterrupts;
             if (Listening) flags |= FlagWrites;
             if (Breakpoints.IsSingleStepArmed || Breakpoints.HasPendingBreak) flags |= FlagEach;
             if (Coverage.IsArmed) flags |= FlagCoverage;
             if (RspCoverage.IsArmed) flags |= FlagRspCoverage;
             if (CallStack.IsProfiling) flags |= FlagProfiling;
-            DebugSet(handle, flags, Breakpoints.StepDepthTarget ?? int.MinValue, Breakpoints.DepthGuard);
+            api.DebugSet(handle, flags, Breakpoints.StepDepthTarget ?? int.MinValue, Breakpoints.DepthGuard);
 
             var pairs = new List<int>();
             foreach (var bp in Breakpoints.GetBreakpoints())
@@ -114,7 +120,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
                 pairs.Add(bp.EndAddress);
             }
             int[] breakpoints = pairs.ToArray();
-            fixed (int* data = breakpoints) DebugSetBreakpoints(handle, data, (nuint)(breakpoints.Length / 2));
+            fixed (int* data = breakpoints) api.DebugSetBreakpoints(handle, 0, data, (nuint)(breakpoints.Length / 2));
 
             var watches = new List<uint>();
             foreach (var w in Watches.GetWatches())
@@ -133,18 +139,19 @@ namespace EmuSen.Cores.Nintendo.MarsRT
                 breaks.Add((uint)bp.EndAddress);
             }
             uint[] watched = watches.ToArray(), broken = breaks.ToArray();
-            fixed (uint* data = watched) DebugSetRanges(handle, 0, data, (nuint)(watched.Length / 3));
-            fixed (uint* data = broken) DebugSetRanges(handle, 1, data, (nuint)(broken.Length / 3));
+            fixed (uint* data = watched) api.DebugSetRanges(handle, 0, data, (nuint)(watched.Length / 3));
+            fixed (uint* data = broken) api.DebugSetRanges(handle, 1, data, (nuint)(broken.Length / 3));
         }
 
         // The logs into the registries, in the order the observers would have been called: stores, then calls and returns, then the counts.
         private void Drain(nint handle)
         {
-            long writes = DebugWrites(handle, null, 0);
+            var api = Library.Api;
+            long writes = api.DebugWrites(handle, null, 0);
             if (writes > 0)
             {
                 Grow(ref _events, checked((int)(writes * 4)));
-                fixed (uint* data = _events) DebugWrites(handle, data, (nuint)_events.Length);
+                fixed (uint* data = _events) api.DebugWrites(handle, data, (nuint)_events.Length);
                 for (int i = 0; i < writes; i++)
                 {
                     string space = SpaceName(_events[4 * i]);
@@ -156,11 +163,11 @@ namespace EmuSen.Cores.Nintendo.MarsRT
                 }
             }
 
-            long calls = DebugCalls(handle, null, 0);
+            long calls = api.DebugCalls(handle, null, 0);
             if (calls > 0)
             {
                 Grow(ref _events, checked((int)(calls * 3)));
-                fixed (uint* data = _events) DebugCalls(handle, data, (nuint)_events.Length);
+                fixed (uint* data = _events) api.DebugCalls(handle, data, (nuint)_events.Length);
                 for (int i = 0; i < calls; i++)
                 {
                     if (_events[3 * i] == 1) CallStack.NotePush((int)_events[3 * i + 1], (int)_events[3 * i + 2], CallFrameKind.Call);
@@ -168,26 +175,26 @@ namespace EmuSen.Cores.Nintendo.MarsRT
                 }
             }
 
-            long runs = DebugProfile(handle, null, 0);
+            long runs = api.DebugProfile(handle, null, 0);
             if (runs > 0)
             {
                 Grow(ref _profile, checked((int)(runs * 2)));
-                fixed (long* data = _profile) DebugProfile(handle, data, (nuint)_profile.Length);
+                fixed (long* data = _profile) api.DebugProfile(handle, data, (nuint)_profile.Length);
                 for (int i = 0; i < runs; i++) CallStack.NoteInstructions((int)_profile[2 * i], _profile[2 * i + 1]);
             }
 
             if (Coverage.IsArmed)
             {
                 long recorded;
-                _coverageBits ??= new byte[DebugCoverage(handle, 0, null, 0, null)];
-                fixed (byte* data = _coverageBits) DebugCoverage(handle, 0, data, (nuint)_coverageBits.Length, &recorded);
+                _coverageBits ??= new byte[api.DebugCoverage(handle, 0, null, 0, null)];
+                fixed (byte* data = _coverageBits) api.DebugCoverage(handle, 0, data, (nuint)_coverageBits.Length, &recorded);
                 Coverage.Merge(_coverageBits, recorded);
             }
 
             if (RspCoverage.IsArmed)
             {
                 long recorded;
-                fixed (byte* data = _rspCoverageBits) DebugCoverage(handle, 1, data, (nuint)_rspCoverageBits.Length, &recorded);
+                fixed (byte* data = _rspCoverageBits) api.DebugCoverage(handle, 1, data, (nuint)_rspCoverageBits.Length, &recorded);
                 RspCoverage.Merge(_rspCoverageBits, recorded);
             }
         }
@@ -230,21 +237,30 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         }
 
         // The instruction the processor is about to run, as a 32-bit virtual address in an int, as the registry compares it.
-        public int Pc => _handle == 0 ? 0 : (int)(uint)PcExport(_handle);
+        public int Pc
+        {
+            get
+            {
+                if (!IsRomLoaded) return 0;
+                ulong pc;
+                Library.Api.DebugPc(Machine.Handle, 0, &pc);
+                return (int)(uint)pc;
+            }
+        }
 
         // Kernel mode's view of a 32-bit virtual address, the TLB consulted and never faulted - see Mars_Debug.md §4.
         public bool TryPhysical(uint address, out uint physical)
         {
             physical = 0;
-            if (_handle == 0) return false;
+            if (!IsRomLoaded) return false;
             uint found;
-            bool mapped = PhysicalExport(_handle, address, &found) != 0;
+            bool mapped = PhysicalExport(Machine.Handle, address, &found) != 0;
             physical = found;
             return mapped;
         }
 
-        // MarsDebugSpaces.Resolve: which memory a physical address names, or the register block it falls in, not addressable.
-        public PhysicalAddress? Resolve(uint physical) => _handle == 0 ? null : MarsDebugSpaces.Resolve(physical, SpaceSize(MarsRtSpace.Rdram));
+        // Which memory a physical address names, or the register block it falls in, not addressable.
+        public PhysicalAddress? Resolve(uint physical) => !IsRomLoaded ? null : MarsDebugSpaces.Resolve(physical, SpaceSize(MarsRtSpace.Rdram));
 
         // A test's way to a device register, MemoryBus.Write32 and Read32 at a physical address, side effects and all.
         public void WriteBus32(uint physical, uint value) => BusWrite32(Handle, physical, value);
@@ -270,7 +286,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         public long[] DebugCounterValues()
         {
             long* values = stackalloc long[3];
-            DebugCounters(Handle, values);
+            DebugCounters(Handle, values, 3);
             return new[] { values[0], values[1], values[2] };
         }
     }

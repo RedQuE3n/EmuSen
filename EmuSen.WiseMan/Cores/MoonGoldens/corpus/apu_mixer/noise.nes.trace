@@ -1,0 +1,32 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/apu_mixer/noise.nes
+rom 47B637CC911DC4416F55891C67976780E0985B6729B339A3F1DB277EF6BD4910
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 D8C07DCAFFF86AD4
+120 DE63D8C0124CACF7
+180 F0EBB3B356384DD4
+240 68A86F540C15E099
+300 8E6F88224E1B90EA
+360 03AEC97772CD9732
+420 17F3844FB3AB28E3
+480 B78C22DB98182133
+540 9015753AEA5741A4
+600 22EBBDB5B57097B6
+660 DED741F4ACCE6574
+720 7D784B6FEFA36B66
+780 32E9B7AF2AB21BD3
+840 61462A65FC4412AB
+900 921780E99C284C5A
+960 B0F3596457005E9E
+1020 09559DB7CA34B068
+1080 3BE1BDD921F87DFE
+1140 482EAB0B3B563F1A
+1161 288DB725B2F24B06
+resets 0
+text noise channel mixing test\n\n1. Should play short tone.\n\n2. Should fade noise in,\nand out, without any tone.\n\n3. Should play short tone.\n\nSome clicking might occur between the two tones.Also, a faint tone might be audible through headphones.
+verdict Passed 1161

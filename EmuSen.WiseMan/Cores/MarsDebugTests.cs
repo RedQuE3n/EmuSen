@@ -3,18 +3,19 @@ using System.IO;
 using System.Linq;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mars;
-using EmuSen.Cores.Nintendo.Mars.Memory;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Crystal.Debugger;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // The debugger's claims on an N64 engine, each driven by a few instructions at the boot entry; the C# core and MarsRT are held to the same transcripts - see Mars_Debug.md and Mars_Native.md §6.5.
+    // The debugger's claims on an N64 engine, each driven by a few instructions at the boot entry; MarsRtDebugTests runs them on MarsRT - see Mars_Debug.md and Mars_Native.md §6.5.
     public abstract class MarsDebugClaims : IDisposable
     {
         protected const int Entry = unchecked((int)0xA400_0040);
+
+        // The RSP's register block, whose eighth word is its semaphore - see Mars_Rsp.md §2.
+        protected const uint SpRegistersBase = 0x0404_0000;
 
         // lui a0,0xA010 / lw t0,0(a0) / addiu t0,t0,1 / sw t0,0(a0) / b the lw / nop
         protected static readonly byte[] CountForever =
@@ -315,9 +316,9 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x5A, cpu.Read(unchecked((int)0xA010_0002)));
             Assert.Equal(0x3C, cpu.Read(Entry));
 
-            core.WriteBus32(MemoryMap.SpRegistersBase + 0x1C, 0);
+            core.WriteBus32(SpRegistersBase + 0x1C, 0);
             Assert.Equal(0, cpu.Read(unchecked((int)0xA404_001F)));
-            Assert.Equal(0u, core.ReadBus32(MemoryMap.SpRegistersBase + 0x1C));
+            Assert.Equal(0u, core.ReadBus32(SpRegistersBase + 0x1C));
 
             cpu.Write(unchecked((int)0x8010_0010), 0x77);
             Assert.Equal(0x77, core.ReadRdram8(0x0010_0010));
@@ -441,46 +442,6 @@ namespace EmuSen.WiseMan.Cores
         {
             PhysicalAddress where = core.ResolvePhysical(unchecked((int)address))!.Value;
             return (where.Space, where.Offset, where.IsAddressable);
-        }
-    }
-
-    // The C# core under the claims, with the two that are the C# core's own - see Mars_Debug.md.
-    public class MarsDebugTests : MarsDebugClaims
-    {
-        protected override MarsDebugRig Rig(string rom) => MarsDebugRig.Mars(rom);
-
-        // A jr through any register but ra is a jump, not a return, so the call it left is still open; the C# core tracks the stack on every frame.
-        [Fact]
-        public void A_jump_through_another_register_does_not_return()
-        {
-            MarsDebugRig core = Load(CallThenLeave);
-
-            core.RunFrame();
-
-            Assert.Equal(1, core.CallStack.Depth);
-        }
-
-        // The report costs about what the store does, so the bus asks the observer first - see Mars_Performance.md §16.
-        [Fact]
-        public void A_store_is_reported_only_while_the_observer_listens()
-        {
-            var bus = new MemoryBus();
-            var observer = new CountingObserver();
-            bus.WriteObserver = observer;
-
-            bus.Store(0x1000, 0x1122_3344, 4);
-            Assert.Equal(0, observer.Bytes);
-
-            observer.Listening = true;
-            bus.Store(0x1000, 0x1122_3344, 4);
-            Assert.Equal(4, observer.Bytes);
-        }
-
-        private sealed class CountingObserver : IWriteObserver
-        {
-            public int Bytes;
-            public bool Listening { get; set; }
-            public void OnWrite(string spaceName, int address, byte value) => Bytes++;
         }
     }
 }

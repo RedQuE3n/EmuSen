@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using EmuSen.Common.Catalogue;
-using EmuSen.Cores.Nintendo.Moon.Memory;
+using EmuSen.Cores.Nintendo.MoonRT;
+using EmuSen.Crystal.Systems.Nes;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Library.Catalogue;
 using EmuSen.Galaxia.Models;
@@ -77,19 +78,19 @@ namespace EmuSen.Pharaoh.Reference
             // Described rather than loaded: an unimplemented board must still be
             // catalogued with its number, since "which images use mapper 5" is the
             // query the catalogue exists to answer.
-            Cartridge cart = Cartridge.Describe(File.ReadAllBytes(path));
-            bool playable = Cartridge.IsBoardImplemented(cart.MapperNumber);
+            NesHeader cart = NesHeader.Read(File.ReadAllBytes(path));
+            bool playable = MoonBoards.IsImplemented(cart.Mapper);
 
             return new RomEntry(
                 path, name, system, info.Length, null,
-                cart.MapperNumber.ToString(CultureInfo.InvariantCulture),
+                cart.Mapper.ToString(CultureInfo.InvariantCulture),
                 cart.Trust switch
                 {
-                    HeaderTrust.Archaic => "archaic",
-                    HeaderTrust.Unverifiable => "unverifiable",
+                    NesHeaderTrust.Archaic => "archaic",
+                    NesHeaderTrust.Unverifiable => "unverifiable",
                     _ => "clean",
                 },
-                null, cart.PrgRom.Length, cart.Chr.Length, playable, null);
+                null, cart.PrgBanks * NesHeader.PrgBankSize, cart.ChrIsRam ? NesHeader.ChrBankSize : cart.ChrBanks * NesHeader.ChrBankSize, playable, null);
         }
 
         private static string SystemFor(string extension) => extension switch

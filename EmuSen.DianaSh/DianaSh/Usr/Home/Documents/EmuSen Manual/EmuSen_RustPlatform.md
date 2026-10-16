@@ -93,6 +93,11 @@ Platform/                      a Cargo workspace; no .csproj
   platform/                    emusen-platform, the cdylib: the C layer of all three, and nothing else
 ```
 
+*Added 2026-10-15 (§26):* `dotnet/` (`emusen-dotnet`, .NET's text, number and file rules, split from Galaxia's crate),
+`dianash/` (`emusen-dianash`, DianaSh's shell core, with its two headers and baseline), `dianash-module/` (what a
+command module is written with), `dianash-text/` (the `dianash.text` module) and `dianash-program/` (the `dianash`
+program); the library exports DianaSh's host API besides the platform's interface.
+
 **Not `EmuSen/Cores/Shared/`.** That folder holds the crates cores link (`emusen-native`, the ABI check, the
 conformance kit). A core does no file I/O and calls nothing above it (`EmuSen_CoreAPI.md` §3's table), so a platform
 crate beside them would be one `path =` away from a core depending on the platform, which the layering forbids.
@@ -187,6 +192,9 @@ much as the cores':
   `emusen_galaxia_`;
 - the `wiseman` job downloads the artifact beside the cores';
 - the path filters gain `Platform/**`.
+
+Since 2026-10-16 a run builds only the libraries whose inputs no earlier build had, and takes the rest from that
+earlier build (§28).
 
 ### 2.8 Native libraries the platform loads, and the one it brings
 
@@ -1619,7 +1627,9 @@ Kept here so that none is lost between steps; each names where it was found.
 - **Q23:** device layers the library does not know, at state 3 (§14.7).
 - **P2** is not measured: whether any frontend asks Galaxia for a path once a frame (§8).
 - **Windows and macOS:** nothing of the platform has run on either (§10.7, §11.7, §12.4, §14.4); CI's steps there
-  report and do not gate (Q14, Q22).
+  report and do not gate (Q14, Q22). *Partly closed 2026-10-15:* the crates' tests and every platform step of the
+  WiseMan job now run on win-x64 and osx-arm64, and on Windows they pass (§27); the four macOS failures left are
+  listed in §27.4. The steps still report rather than gate.
 - **A second `Dispose` of a player** lets go of SDL's audio twice; reproduced, not run (§14.3).
 - **A Rust program with no C# beside it** will need a SQLite of its own (Q25); what decodes lookup images then is
   decided at Serenity's retirement (Q27).
@@ -2611,3 +2621,472 @@ the queues, one queue lent to a core and one the host takes the core's pictures 
 `_settle` (the core's picture copied into a ring of three device buffers once its `ready` is reached, `done` then
 signalled) and `emusen_serenity_chain_advance_lent` (the newest copy as a chain's frame, read on the device by its next
 render or present). The C# facade is `SlangLend` and `SlangChain.AdvanceLent`.
+
+## 26. DianaSh in the workspace, 2026-10-15: the shell core, its host API, and .NET's rules split from Galaxia
+
+DianaSh's migration step S3 (`EmuSen_DianaSh.md` §13.7) put the shell in this workspace, where §2.1 and Q11 there had
+placed it, and S4 (§13.8 there) its text tools. What that changed here:
+
+- **Five crates.** `emusen-dianash` (`Platform/dianash/`), the shell core, an rlib with no dependency of the
+  emulator's but Galaxia's; `dianash-module`, what a command module is written with, depending on nothing;
+  `dianash-text`, the text tools' module; `dianash` (`Platform/dianash-program/`), the standalone program; and
+  `emusen-dotnet`, below.
+- **The library exports a second interface.** `emusen_platform` exports DianaSh's host API, `dianash_*`, from
+  `platform/src/dianash.rs` over the shell core, with the text module linked in. Unlike this page's interface, which
+  is matched exactly because its only client is built from the same commit (§3.2), the host API is stable and
+  versioned as the core ABI is, `(MAJOR << 16) | MINOR`, because an outside frontend or the conformance kit may embed
+  the shell (`EmuSen_DianaSh.md` §16 Q17); this paragraph is the place §3.2's "where this does not generalise" names.
+  Its headers are `Platform/dianash/include/dianash.h` and `dianash_module.h`, and its baseline
+  `Platform/dianash/abi/v1/baseline.txt`, held by `platform/tests/dianash_abi.rs` and the core ABI's guard job.
+  Adding it moved this interface's own number not at all: no `emusen_*` export changed, and DianaSh's facade checks
+  `dianash_abi_version`'s major itself.
+- **.NET's rules left Galaxia's crate.** A shell's command module may not link Galaxia, which holds the process's
+  tree and overrides (Q11 there), but the text tools need the rules Galaxia had reproduced: casing, the ordinal
+  comparisons, white space, lengths in UTF-16 units, and `File.ReadAllText`'s decoding. They moved, with their tests,
+  to `emusen-dotnet` (`Platform/dotnet/`), a crate of pure functions with no dependency; `galaxia/src/dotnet_text.rs`,
+  the five ignore-case and white-space functions of `dotnet_path.rs` and `json::decode` now re-export them, so no
+  user of Galaxia's crate changed. The crate also holds what the shell added: `int`, `long` and `double.TryParse`, the
+  text file's lines and writes, and the words of .NET's file exceptions.
+- **Galaxia's crate gained** `tree::base_directory` and `tree::shell_modules_directory` (`ConfigRoot.ShellModulesDirectory`,
+  where `man` reads its pages) and made `simple_upper` public; and `PlatformLibrary` answers `GalaxiaActive`, since the
+  Rust shell reads the tree through the library's Galaxia and is not used while Galaxia runs on its C#.
+- **CI**: the platform job compiles `dianash.h` as C99 and C++17 beside `emusen_platform.h`, and the core ABI's guard
+  job runs DianaSh's ABI test with the base branch's baseline.
+
+`cargo test --release` in `Platform/` passed on 2026-10-15 with every crate's tests, the new ones included.
+
+*S5, 2026-10-16* (`EmuSen_DianaSh.md` §13.11) added six crates and moved two modules: `emusen-session-service`, the
+session service from a caller's side, held to Crystal's `emusen_session.h` by a C compiler; the four EmuSen command
+modules, `emusen-debug`, `emusen-trace`, `emusen-cheat` and `emusen-session`, linked into the library beside
+`dianash.text`; and in the `dianash` package a second program, `nano`, which `Platform.targets` builds with the library
+and copies into `dianash/`, and which the platform library's CI artefact now carries. Galaxia's `json` and `suggestion`
+moved to `emusen-dotnet`, which a module may link, with Galaxia re-exporting them; the library exports
+`dianash_session_set_services`, the host API's minor 1.1. The workspace's tests passed on 2026-10-16, 202 of them.
+
+## 27. Windows, 2026-10-15: the library shipped on win-x64
+
+Release 0.9.0 went out for Windows without `emusen_platform.dll`, so Galaxia, Endymion and Serenity's slang half ran
+on their C# there: the `emusen_platform win-x64` job of `rust-cores.yml` failed three of the Galaxia crate's tests
+(run 38813315159), so the job built and uploaded nothing, and the publish's message of §2.6 said so. The tester
+treated the library's absence on Windows as a defect to be fixed before the next Windows build. This section records
+what each failure was, what a review of the workspace for Windows assumptions found beside them, and what CI shows.
+
+### 27.1 The three failures: two in the tests, one in the code
+
+Each was decided by asking which side broke a contract the other was right to hold, and then shown on the runner.
+
+1. **`mapped::…a_missing_one_is_the_systems_error`: the code.** `Mapped::open` opened the path and then refused a
+   directory as `IsADirectory`. Unix opens a directory for reading, so the refusal was reached; Windows refuses to
+   open one at all (`ERROR_ACCESS_DENIED`, Rust's `PermissionDenied`), so it was not, and a frontend was handed
+   "Access is denied" for a folder. The status a C# caller sees was right on both systems, since `fail_io` maps both
+   kinds to `ACCESS` and the facade throws `UnauthorizedAccessException`, as .NET does; the words were not. A failed
+   open of a path that is a directory is now the same `IsADirectory`, so the words are "is a directory" everywhere,
+   and the C layer's test reads them back through `emusen_platform_last_error`. The test's assertion was kept as it
+   was: it now holds on every platform, which is the contract it stated.
+2. **`migration::…whatever_the_spelling`: the test, and not the migration.** The test made `x/../home` beside the
+   tree. Its temporary folder came from `std::fs::canonicalize`, which on Windows answers in the extended form
+   `\\?\C:\…`, under which the system resolves neither `..` nor `/`: the spelling named a folder `x` and a child
+   `..`, and the migration, told to copy into it, made `x` before the system refused `..`. That is the caller's
+   spelling obeyed, not the tree touched. `TempDir` now strips the prefix from a drive path, keeping the long names
+   canonicalising found, so the tests' paths are spelled as a player's are.
+3. **`tree::…published_under_the_old_names_is_still_found`: the test.** It joined `bare + "/" + name` onto the same
+   extended path, an invalid name there (`os error 123`). The temporary folder's fix removes the cause; the join now
+   uses `Path.Combine`'s rule besides.
+
+**Whether a tree is ever migrated onto itself.** The second failure looked like a defect of the kind that would touch
+a player's tree on a file system that ignores case, so the rule's whole logic was examined rather than the one
+assertion. `run` compares the two roots' full paths without regard to case, as `DataMigration.Run` does, and stops
+when they are one; Windows' full path (`GetFullPathNameW`, which both .NET and `std::path::absolute` call) already
+unifies `/` with `\`, `..`, doubled separators and trailing dots and spaces. What the comparison of text cannot see
+(the `\\?\` form, an 8.3 name, a junction or a link, a trailing separator, and on macOS a decomposed character) it
+does not need to: the walk that follows copies only where the destination lacks the file, and every file of a tree
+finds itself. `migration::tests::a_tree_spelled_any_way_the_system_reads_as_itself_is_left_alone` holds that, both
+ways, for every spelling the runner's file system reads as the tree: a trailing separator, `x/../`, two cases, a
+symbolic link, and on Windows `/`, `\\?\`, a lower-case drive, `.`, ` ` and `. .` appended, the 8.3 name and a
+junction, and on macOS `e` with a combining acute for `é`; the tree's bytes and times and its parent's entries are
+unchanged. `DataMigrationTests` asks the same of each half through the switch, and the C# and the library agree on
+every case (§27.4). Nothing was changed in the migration.
+
+### 27.2 What a review of the workspace found besides
+
+Every crate was read for the assumptions Windows breaks: separators and case, a file open elsewhere, a rename over
+a file, long paths, links and junctions, line ends, the environment's folders, and names the C runtime exports.
+
+- **A held mapping refused nothing (fixed).** `EmuSen_Galaxia.md` §3.8 says that on Windows a mapped file cannot be
+  written, renamed or deleted while a game runs. The C# half makes that true by holding its `FileStream`, opened with
+  `FileShare.Read`, for the mapping's life. The crate closed its file once the view was made, and a view holds no
+  share mode, so another program's writer was let in and its writes reached the bytes a core was reading.
+  `mapped::tests::a_mapped_file_is_read_and_not_written_renamed_or_deleted_while_held` failed on win-x64 (run
+  38824787186: the writer opened) before the change; `Mapped` now holds its file, opened on Windows with
+  `FILE_SHARE_READ` alone, which is .NET's `FileShare.Read`, and an empty file holds nothing, as in the C#.
+- **The application-data folder came from the environment (fixed).** .NET's `SpecialFolder.ApplicationData` asks the
+  system for the known folder and does not read `%APPDATA%`; the crate read the variable and answered an empty string
+  without it, which makes the legacy config folder the relative path `EmuSen`. The C# host passes its own folder, so
+  only a Rust host without C# would meet it. The test runs itself again without the variable and failed before the
+  change (the child answered `""`); the crate now asks `SHGetKnownFolderPath` for `FOLDERID_RoamingAppData` with
+  `KF_FLAG_DONT_VERIFY`, as .NET does. The home folder needs no change: `std::env::home_dir` falls back from
+  `%USERPROFILE%` to the system's profile folder, and the tree uses it only on macOS.
+- **Found sound, and left as they are.** `atomic::write` renames over the live file with `std::fs::rename`, which on
+  Windows replaces an existing file as `File.Move(…, overwrite: true)` does; a reader elsewhere that holds the live
+  file without sharing deletion makes the rename fail in either half alike, and the live file is then unchanged, as
+  §10.4 promises. Rust opens files sharing reading, writing and deletion by default, so the library's own reads never
+  block a rename; .NET's do, and that is the C#'s behaviour, unchanged. Long paths need nothing: the standard library
+  passes an absolute path past `MAX_PATH` in the extended form itself. Every path is built by `dotnet_path`, which
+  takes the platform's style as a value, and no test or code joins with a literal `/` any more. The text the crates
+  read from the checkout (`emusen_platform.h`, the cache's schema) is matched within a line, so the CRLF that a
+  Windows checkout gives it changes nothing. The libraries the platform loads are named per system (`vulkan-1.dll`)
+  or lent by the host's handle; the exports are all `emusen_*`, and the one declaration of a C runtime name, the
+  Vulkan device's `close`, was already linked as MSVC's `_close` by the release (it is reached only where a driver
+  exports descriptors, which no Windows driver does, since Windows exports handles).
+- **Found and not changed.** A cheat list's name is checked against .NET's `GetInvalidFileNameChars` in both halves,
+  which lets through Windows' reserved device names (`CON`, `NUL`, `COM1`), so a list named `CON` is written to
+  `CON.json`, a device on Windows 10 and an ordinary file on Windows 11. It is the C#'s rule as much as the
+  library's, the parity class holds the two together, and changing what a player may type is a decision of its own.
+
+### 27.3 What CI could not show before, and the one change to the workflow
+
+The WiseMan job's platform steps (Galaxia, Endymion and Serenity's slang half, each on its C# and on the library)
+followed the step that compares the Rust cores with the C# cores, and a failing step stops those after it unless
+they say otherwise. That step had failed on every system for days over cores' tests (run 38829214351: Nephrite's,
+Diamond's and core discovery's), so none of the platform's WiseMan tests had run on Windows, or on macOS, or in CI
+at all, and the library's absence from 0.9.0 was not the only thing hiding them. Each platform step now runs unless
+the run was cancelled (`if: !cancelled()`), and still reports without stopping the job. Two tests that are not the
+platform's failed in some runs and passed in others, and since the WiseMan job waits on every crate's job, each
+failure kept it from running: the conformance kit's `the_seeded_faults_fail_the_same_cases_in_a_corpus` on macOS
+and Windows (C19 failing where the test expects it to pass; run 38829214351 was run again for it) and MarsRT's
+`a_snapshot_taken_while_workers_wait_at_barriers_is_answered_and_loads` on macOS (run 38823650539).
+
+### 27.4 What the parity class found on Windows, once it ran there
+
+The parity class had made no symbolic link on Windows, so the library's rules for links had never been held to
+.NET's there. It now asks the system once whether the process may make one (a runner may; a desktop without
+developer mode may not) and makes its links wherever it may, and on Windows also junctions, which need no
+privilege. Run 38834563430 was the first to run it on Windows, and it found these, each fixed and then held:
+
+- **A link is what it was made for (the library, fixed).** .NET answers `File.Exists` and `Directory.Exists` on
+  Windows from the entry's own attributes (`GetFileAttributesEx`, which does not follow a link), and its listings
+  read the same attributes. A dangling directory link, a directory link to a file and a dangling junction were
+  directories to .NET, (file, directory) = (False, True), and files to the library, (True, False), which followed the
+  link and, finding nothing, counted the link as a file, as .NET does on Unix. A file link to a directory agreed, by
+  accident: Windows will not open a directory through a file link, so the library's fallback reached the same answer.
+  The crate now has one rule, `tree::is_directory`: on Windows the entry's own `FILE_ATTRIBUTE_DIRECTORY`, on Unix the
+  followed answer with a dangling link a file; `listed_as_directory` gives the migration's walk and the cheat lists'
+  listing the same rule from the listing.
+- **A pattern ignores case where the system's listing does (the library, fixed).** The error log prunes the files
+  matching `emusen_*.log`, which .NET's enumeration matches without regard to case on Windows and macOS. The crate
+  matched the extension so but the prefix exactly, and left `EMUSEN_upper.log`, thirty days old, where the C# removed
+  it; the same difference showed on macOS. `begins_as` matches the prefix as `ends_as` matches the extension.
+- **An empty path in Windows' words (the library, fixed).** .NET on Windows refuses an empty or all-space path to
+  `Path.GetFullPath` as "The path is empty.", where Unix calls an empty one "The value cannot be an empty string.";
+  Serenity's `full` gave Unix's words on every system, so a preset or a cache named so was refused in different
+  words. `dotnet_path::is_effectively_empty` states the rule once, for both.
+- **Shaderc's words (the C#, fixed).** A pass named `broken é.slang` that does not compile was reported by the C# as
+  `broken Ã©.slang:9: error: …` and by the library as named. Shaderc writes its message in UTF-8, the binding's
+  string read it in the system's code page, which on Linux and macOS is UTF-8 already; the C# now decodes it as
+  UTF-8. The device's name, which `SlangVulkan` reads the same way, is ASCII on every device seen and was left.
+- **A held mapping, and a tree spelled as itself (agreeing).** Both halves let a reader in and refuse a writer, a
+  rename and a deletion of a mapped file on Windows, once the library held its file (§27.2), and both migrate
+  nothing onto a tree under any of §27.1's spellings.
+- **What the tests asked of Unix (the tests, fixed).** Tests failed in both halves alike, each over an assumption
+  of its own: a recursive `Directory.Delete` refuses a junction on Windows, so links are removed first;
+  the parity class handed .NET an all-space path and a UNC root with no share, which it refuses on Windows, and
+  these are skipped as the empty path already was (no caller hands the library either), the path and root cases now
+  listing every difference before failing; `"/srv/States"` is the folder `GetDirectoryName` writes `"\srv\States"`; the
+  log folder of a home with no `.config` is a Linux question, since Windows and macOS do not take .NET's
+  application-data folder from the home; the sandbox refuses an install's drive path on Windows rather than
+  re-rooting it, which is still not honouring it; a preset's shader path is the full path the loader makes; and a
+  preset that cannot be built on a machine without Vulkan says the device is missing.
+
+**Left on macOS.** The same runs show four failures there that are not Windows': the sandbox's two fallback tests
+expect a temporary folder where macOS's rule gives Application Support, .NET's caseless comparison on macOS pairs
+fifty letters from U+16EA0 that the crate's tables, Rust's, do not yet, and APFS refuses a
+file name holding U+FFFF that the ordering case writes. *All four were taken up in §27.6.*
+
+### 27.5 What CI shows now, and the publish
+
+**CI, run 38845515166** (the branch merged with `WiseMan`): the four `emusen_platform` jobs pass, win-x64 among
+them, with the workspace's 159 tests there (25 Endymion's, 78 the Galaxia crate's, 25 the C layer's and 31
+Serenity's; Linux runs 86 of the Galaxia crate's, its Unix-only cases among them), and its artefact is
+the library the WiseMan job loads. On win-x64 every platform step passes, each half chosen as its variable says (the
+`The_switch_is_what_the_variable_says` cases of Galaxia, Endymion and Serenity, which assert the library's report of
+interface 11):
+
+| WiseMan step on win-x64 | Passed | Skipped | Failed |
+|---|---|---|---|
+| Galaxia on its C# | 196 | 8 | 0 |
+| Galaxia on the platform library | 249 | 8 | 0 |
+| Endymion on its C# | 167 | 7 | 0 |
+| Endymion on the platform library | 186 | 7 | 0 |
+| Serenity's slang half on its C# | 73 | 0 | 0 |
+| Serenity's slang half on the platform library | 112 | 0 | 0 |
+
+The job as a whole still failed then, on the cores' comparison step (eleven tests of Nephrite, Diamond and core
+discovery on Windows) and on macOS's four of §27.4, which §27.6 takes up; its last run is recorded there.
+
+**The publish carries the library.** `RustCoresPublish.targets` already took `emusen_platform.dll` from
+`EmuSenNativePrebuilt/win-x64/` (§2.6), and it has no sidecar, not being a core; 0.9.0 lacked it only because the
+job that makes it had failed. A win-x64 publish of Mistress was made from 0.9.0's tree with this section's changes,
+with 0.9.0's own core libraries and the library from run 38845515166. Its tree holds 584 files where 0.9.0's holds
+583, the one more being `lib/EmuSen/emusen_platform.dll` (919,040 bytes, SHA-256
+`87480a9631be88c041debe935befddce094ce9a77c15a163a0a228848da23a27`, byte for byte the CI artefact). Of the rest,
+the manual's pages differ and the managed assemblies differ, `EmuSen.Serenity.dll` by §27.4's change and the others
+by the folder they were built in, which .NET writes into an assembly; nothing was uploaded to the release.
+
+A second publish was made from the branch as it ends, merged with `WiseMan` (§26's DianaSh among it), with every
+library of run 38881098100: 589 files, its `emusen_platform.dll` 2,387,456 bytes with DianaSh's host API in it,
+SHA-256 `327cd85abe2f7552548a223eeda6b81ccb1882e9aee6d6f75cc173c20592d3f5`, byte for byte that run's artefact. The
+first publish is 0.9.0 with the library; the second is what a 0.9.1 cut from this branch would carry.
+
+### 27.6 The rest of the WiseMan job, on all three systems (2026-10-16)
+
+With the platform's steps passing on Windows, the job itself was still red everywhere, on the cores' comparison step
+and, on macOS and Linux, on some platform steps. Each failure was read against 0.9.0's own run (38820622827, at the
+tag, before any change of this section): every one was there already, none came from this work or from the merge
+with `WiseMan` that brought Nephrite's stage 10, and those in the platform's reach, or in discovery's and the
+sidecars', were fixed here.
+
+- **A sheet's tracks shelved as games on Windows and macOS (the code, fixed).** `ImageSets.Beside` took a `FILE` name as
+  written wherever that file existed, which on a file system that ignores case keeps the sheet's spelling, so the
+  shelf, comparing paths as the folder holds them, hid nothing (`Diamond_Players.md` §12, amended). Each part is now
+  matched exactly, else by the one entry matching it ignoring case, and an `.m3u`'s discs are found the same way.
+- **Shaderc's file unnamed on macOS (the code, fixed).** .NET's `Process.Modules` lists no loaded library on macOS, so
+  the compiler identity was `shaderc unfound` in both halves and a changed Shaderc would have kept the cache's
+  shaders. The file is now asked of `dladdr` for one of Shaderc's functions where the module list does not name it.
+- **Windows' rules for open files (the tests, fixed).** Seven discovery cases and Nephrite's shipped-core case delete
+  a library they loaded, which Windows refuses as access denied; the teardown now leaves it to the temporary folder.
+  The two armed-debugger cases wrote their program twice to one path while the first engine held it mapped, which
+  Windows refuses a writer (§27.2); each load now writes into a folder of its own.
+- **macOS's rules (the tests, fixed).** The sandbox's root without a marker is Application Support on macOS
+  (`EmuSen_Galaxia.md` §3.4), which two tests did not expect; caseless equality outside the BMP is answered from the
+  system's ICU, which on macOS pairs fifty letters from U+16EA0 that the runtime's own tables, and the crate's, do not
+  know, so only characters the runtime's tables assign are compared; and APFS refuses a name holding U+FFFF, which the
+  ordering case no longer writes there.
+- **Linux's Shaderc (not fixed here).** On the ubuntu-24.04 runner Silk.NET cannot load Shaderc's library at all,
+  which fails Serenity's compiler, cache and parity cases and Diamond's shader case, in 0.9.0's run as in this
+  branch's. The file is there, at `runtimes/linux-x64/native/libshaderc_shared.so`, and `ldd` finds every library it
+  needs; on this project's Fedora machine the same test host loads that very file (traced with `LD_DEBUG`). Run
+  38869334249 had the runner load it with Python's `ctypes`, and it loads: the system can load the library, and what
+  fails is Silk.NET's search for it in the test host's folder on that runner. That is where the next step starts
+  (the loader's trace in CI, or the path the binding is given); it is left open here, as it is not Windows'.
+
+**After the second merge with `WiseMan`, run 38881098100.** Merging MercuryRT's stage 9 and the Sega CD's player
+brought two failures of their own. On Windows 128 of MercuryRT's cases failed with "MercuryCore has no member
+Magic": the committed state layouts (`EmuSen.WiseMan/Cores/MercuryGoldens/layouts/`) are split at `\n`, and a Windows
+checkout gives them CRLF ends, so every field's path kept a `\r`; the fixture now reads a listing with its line ends
+made `\n`, as the engines print it. On all three systems `ConsoleBindingsTests.The_catalog_lists_consoles_by_manufacturer_then_release`
+expects the catalogue without the Sega CD, which the merge added to it; that expectation is the Sega CD's to
+update and is left to it.
+
+**Run 38891224338, the branch's last.** With the layouts read so, the WiseMan job's steps on win-x64 and osx-arm64
+pass but for that one catalogue case, in Endymion's two steps: the cores' comparison 1,292 of 1,292 on each, Galaxia
+196 and 249, Serenity 73 and 112, Endymion 166 and 185 of their 167 and 186. On linux-x64 the Shaderc cases above and
+the catalogue case fail, and nothing else. Every crate's job passed, the four `emusen_platform` jobs among them.
+
+**Run 38861419247, before that merge.** The WiseMan job passed on win-x64 and on osx-arm64, every step: the cores'
+comparison 1,282 of 1,282 on each, and the platform's six steps as §27.5's table on Windows. On linux-x64 it failed on
+the Shaderc cases above alone (one of the cores' step, eleven and forty-eight of Serenity's two). Every crate's job
+passed, the four `emusen_platform` jobs among them, with DianaSh's crates.
+
+### 27.7 What is left to decide
+
+Whether this build replaces 0.9.0's Windows asset or is released as 0.9.1 is the tester's decision. In favour of
+replacing: the program is 0.9.0's in every other respect, and 0.9.0's notes already say the library was left out of
+the Windows build. In favour of 0.9.1: an asset under a published tag would change its bytes and its checksum, and
+the build also carries the C# compiler's change of §27.4. The platform's WiseMan steps still report rather than gate
+(§10.6); making them a gate on Windows is a decision of its own, now that they pass there.
+
+## 28. CI builds only what changed, 2026-10-16
+
+Before this change, every push that matched `rust-cores.yml`'s path filters rebuilt and retested all 28 libraries
+(seven crates on four platforms), although most commits touch one core or none. This section records what a run
+cost, the rule that replaced the full rebuild, the inputs a library's key is made of, and the runs that show it
+working.
+
+### 28.1 What a run cost (measured)
+
+Run 38861419247 (branch `windows-platform`, 2026-10-16) is the reference:
+
+- **Size.** It had 33 jobs and used 173 job-minutes. It took 56 minutes from push to its last job.
+- **The critical path.** The three WiseMan jobs, which wait on every library job, started 54.5 minutes in. They
+  waited for MoonRT's osx-arm64 job, which had queued 24 minutes for a macOS runner and then ran for 30.6. The
+  macOS jobs started anywhere from 5 to 40 minutes in, so the account's macOS runners, not the work, set the pace.
+- **The platforms.** Decided 2026-10-16: the libraries are built for Linux, Windows and macOS on Apple Silicon
+  only. The osx-x64 leg is gone, with its Rosetta step, so a run has 21 libraries rather than 28. Seven
+  jobs fewer reach the macOS queue that set the pace above.
+- **The part §28's rule removes.** MoonRT's build cost is the subject of `Moon_Native.md` §8.6. That part is the
+  rebuilding of libraries whose inputs had not changed.
+
+### 28.2 The rule
+
+**A library is built when no earlier successful build of exactly its inputs exists. Otherwise that build's files
+are taken.**
+
+- **Main, tags and a dispatch with `full` build every library**, whatever earlier runs hold.
+- **A taken library is uploaded into the run** under the name the run would have given it (`<crate>-<rid>`).
+  Every run therefore carries all 21 artefacts, and the WiseMan job and a publish read them as they did before.
+- **The other jobs are unchanged.** `shared`, `abi-guard`, `diamond-kernel` and the WiseMan job run as before.
+
+The workflow had no step that compared commits. Such a comparison would be the wrong basis anyway:
+
+- **What "changed" means is unclear.** A push of several commits, a force-push, a revert or a branch's first push
+  each make the previous commit the wrong reference.
+- **It cannot tell which build to take.** A content key answers both questions at once: two trees with the same
+  key hold the same inputs, wherever and whenever they were built.
+
+### 28.3 The key
+
+`.github/scripts/library_key.py key <crate folder> <name> <target>` prints the key. It is the first 24 hex digits
+of the SHA-256 of these lines:
+
+1. **A version.** The script's own key version, raised to retire every earlier build at once.
+2. **The library's name and target triple.**
+3. **The toolchain, as `rustc +<spec> -V` names itself.** The spec is the one the PGO step chooses: the version a
+   target's `pgo/<name>.<target>.pgo` pins, or `stable`. A new stable release therefore changes every key that
+   builds on stable.
+4. **The git object id of each input folder and file**, which is a hash of its content:
+   - **The crate's folder.** It holds the crate's `Cargo.lock` and its PGO profiles.
+   - **Every folder its path dependencies reach, transitively.** Every `Cargo.toml` inside each folder is read, so
+     a workspace's members and a folder's nested crates count too.
+   - **The sidecar tool.** Every library job runs `emusen-core-conform --sidecar`, which writes the `.core.json`
+     the artefact carries. So that crate and its own dependencies are inputs of every library: `emusen-disc`,
+     `Platform/galaxia` and `Platform/dotnet`.
+   - **The declared extras of §28.4.**
+   - **`rust-cores.yml` and `library_key.py` themselves.**
+
+The plan job computes every key. Each library job computes its own key again on its own runner, after installing
+the toolchain it builds with, and names its keyed artefact by that. If a stable release falls between the two, the
+build is filed under the toolchain that actually built it.
+
+**What the key does not cover:**
+
+- **The runner image.** A new image is not an input. Its C toolchain links the Windows and macOS libraries, and
+  `ubuntu-22.04`'s glibc sets the Linux library's floor. A full build on main or a tag rebuilds everything on the
+  current images. A branch may take a library its image no longer matches, built from identical sources and the
+  same rustc.
+- **Third-party actions.** Their versions are not inputs, beyond their tags in the workflow file.
+
+### 28.4 Inputs outside the path dependencies: declared, and checked
+
+Reading the crates found sources that name files outside their path dependencies. `EXTRA` in `library_key.py`
+declares them, by the folder that reads them:
+
+| Read by | Input |
+|---|---|
+| MarsRT (`include_bytes!` in its GPU module, and a test) | `EmuSen/Cores/Nintendo/Mars - N64/Rdp/Gpu/Shaders` |
+| VenusRT's tests | `EmuSen.WiseMan/Reference/analysis/dsp1_tables.py`, `st010_tables.py` |
+| Diamond's tests | `EmuSen.WiseMan/Reference/analysis/psxplay` |
+| Diamond's kernel harness (in Diamond's folder) | `Diamond_OpenKernel.md` |
+| `Platform/serenity` (`include_str!`) | `EmuSen.Serenity/Slang/spirv-cache-schema.sql` |
+| `Platform/dianash`'s tests | `EmuSen.WiseMan/DianaSh/Golden`, `EmuSen.Crystal/include/emusen_session.h` |
+
+**The check.** The list will go stale as code changes, so the plan checks it on every run:
+
+- It reads every tracked `.rs` file of each library's folders for string literals that begin with `../`.
+- It resolves each one from the file's folder and from its crate's manifest folder.
+- A literal that names an existing path outside the declared inputs makes that library build, whatever earlier
+  runs hold, with a warning that names the file and the path. Such a library uploads no keyed artefact, so it
+  cannot be taken until the input is declared.
+
+**The check's limits.** It sees literal relative paths, which is how every one of the inputs above is named. It
+does not see a path assembled at run time from pieces, or one read from an environment variable. A test that reads
+a game or a corpus through an environment variable reads nothing on a runner, so that gap costs nothing today.
+
+### 28.5 Where builds are kept, and why artefacts rather than the cache
+
+**Keeping a build.** Each library job uploads its files twice: as `<crate>-<rid>`, as before, and as
+`<crate>-<rid>-key-<key>`.
+
+**Finding one.** For each library, the plan asks the API for the newest unexpired artefact of that keyed name.
+It refuses an artefact whose run came from a fork, which is judged by the run's head repository. It then
+downloads the artefact and opens it, and takes it only if all of these hold:
+
+- the library is present and not empty;
+- nothing else is in it but the sidecar;
+- the sidecar, if present, parses as JSON;
+- the archive passes its own check.
+
+Anything else, from a missing artefact to an expired or unreadable one, makes the library build. A failure of the
+lookup can only lead to a build, never to a missing library.
+
+**Taking one.** A `reuse` job copies the artefact into the run under `<crate>-<rid>`.
+
+**Why not `actions/cache`.** The cache was the other candidate, and two of its properties rule it out here:
+
+- **It is scoped by branch.** A branch reads only its own entries and the default branch's. Main lags `WiseMan`,
+  so a branch cut from `WiseMan` would find almost nothing.
+- **A hit cannot be checked before the jobs are laid out.** The library job's matrix has to be fixed when the
+  workflow starts. With the cache, every one of the 21 jobs would have to start, macOS ones included, only to
+  restore and finish.
+
+Artefacts are repository-wide and named by their key. They are kept for the repository's retention period, 90
+days by default. When one expires, the next run builds the library again.
+
+**Trust.** An artefact can be uploaded only by a run of this repository. Anyone who can push to the repository
+could therefore place a library under a key. That is the same trust as pushing code that CI builds and ships. The
+fork check keeps pull requests from forks out.
+
+### 28.6 Releases
+
+Main and tags always build every library on its own runner, and the plan takes nothing for them. A branch's run
+may take earlier builds of identical inputs. The plan's job summary lists, for each library, whether it was built
+or taken, the run it was taken from, and its key. Release assets come from main or a tag, so they are always built
+in the run that publishes them.
+
+### 28.7 What still runs every time, and what triggers a full rebuild
+
+**What still runs every time:**
+
+- the plan job;
+- the `shared` crates on three systems, which build the v1 test cores the WiseMan job needs;
+- `abi-guard` and `diamond-kernel`;
+- the WiseMan jobs.
+
+**What triggers a full rebuild.** A change to an input every library shares rebuilds them all:
+
+- `emusen-native`;
+- the sidecar tool and what it depends on (`emusen-disc`, `Platform/galaxia`, `Platform/dotnet`);
+- `rust-cores.yml`;
+- `library_key.py`;
+- a new stable release.
+
+In the fourteen days to 2026-10-16, on `WiseMan`, `emusen-native` changed in 32 commits, `emusen-core-conform` in
+23 and `rust-cores.yml` in 28. So a full rebuild stays common, and §8.6 of `Moon_Native.md` is what makes it
+cheaper.
+
+**Why the sidecar tool is an input.** Leaving it out was considered and rejected. The sidecar is part of what ships.
+A change to the tool that writes it can change it. And a sidecar cannot be regenerated on another system's runner,
+because writing it means loading the library.
+
+### 28.8 The runs (measured 2026-10-16, branch `ci-speed`)
+
+Each run below was pushed only after the one before it had finished. "Library minutes" sums the library jobs and
+the reuse jobs. "Libraries ready" is when the last of them finished, counted from the push.
+
+| Run | What the push changed | Built | Taken | Library minutes | Libraries ready |
+|---|---|---|---|---|---|
+| 38861419247 (`windows-platform`, before §28 and `Moon_Native.md` §8.6) | — | 28 | — | 187.7 | 54.5 min |
+| 38921031260 | the workflow, which changes every key | 21 | 0 | 72.8 | 22.3 min |
+| 38928103614 | MoonRT's `Cargo.toml` | 3, MoonRT's | 18 | 5.8 | 5.2 min |
+| 38933024285 | `RustCores.props`, an input of no library | 0 | 21 | 2.1 | 4.3 min |
+
+- **What each run built.** The plan built exactly what the change reached. A change to MoonRT built MoonRT on
+  its three platforms and nothing else. A change outside every library's inputs built nothing.
+- **What each part costs.** The plan job takes 0.5–0.8 minutes, and a reuse job about 6 seconds.
+- **The two keys agree.** The key a library job computed on its own runner, Linux or Windows, matched the plan's
+  for every library. The first run of the workflow, 38898739867, which still built osx-x64, checked this: its
+  keyed artefacts' names equal the keys computed from the same tree off the runners.
+- **The WiseMan jobs ran on every one of the three runs**, on libraries built, taken, or both, and gave the same
+  result each time:
+
+  | Platform | Result |
+  |---|---|
+  | win-x64 | passed |
+  | osx-arm64 | passed; the cores' step 908 of 908 |
+  | linux-x64 | the cores' step 907 passed and 1 failed |
+
+  The one failure is `DiamondShaderTests.Every_compiled_shader_of_the_renderer_is_the_compilation_of_its_source`.
+  It fails the same way on `WiseMan`'s own run 38897939664, so it predates this change. In 38933024285 the macOS
+  `shared` job first failed the conformance kit's `the_seeded_faults_fail_the_same_cases_in_a_corpus`, the
+  intermittent case §27.3 records, and passed when that job was run again. The WiseMan jobs ran after it.
+- **The tests are now the critical path.** With nothing to build, a run still takes about 30 minutes, almost all of
+  it the WiseMan jobs' 24–32 minutes of tests. That is the next place to look.

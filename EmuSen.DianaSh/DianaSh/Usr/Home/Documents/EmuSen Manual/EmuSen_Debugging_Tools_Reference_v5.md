@@ -16,6 +16,8 @@ Earlier: `EmuSen.Hotaru` moved off Raylib entirely, onto Avalonia (window, rende
 
 ## 1. Console hotkeys (`EmuSen.Hotaru/Views/GameWindow.axaml.cs`)
 
+*Since 2026-10-16* Hotaru's three C# Venus hotkeys (F2's OAM dump, O's backdrop dump, P's BG scroll trace) are gone with that core (`VenusRT_Native.md` §68.5); the table below keeps them as the record.
+
 These all live in `GameWindow`'s per-frame hotkey dispatch, consumed once per frame inside the background emulation thread's `EmulationLoop`, after the frame is handed off for presentation — see `EmuSen_Frontend_Driver.md` §1/§2.
 
 | Key | Does |
@@ -39,6 +41,8 @@ These all live in `GameWindow`'s per-frame hotkey dispatch, consumed once per fr
 ---
 
 ## 2. `DebugSettings.cs` — every logging toggle
+
+*Since 2026-10-16* `DebugSettings` holds the master switch alone: every other flag below was read only by C# Venus and left with it (`VenusRT_Native.md` §68.5), and the NES's PPU write log, the last, left with C# Moon the same day; Mistress's Debug Logging window keeps the master switch, which the shell's watches and `log` still read. The section is kept as the record.
 
 One central static class (`Settings/DebugSettings.cs`), grouped by which file each flag affects. Flip these instead of hunting through individual files. All of them are **on/off switches for logging that already runs continuously** — none of them change emulation behavior, only whether/what gets printed.
 
@@ -142,6 +146,8 @@ The core-agnostic contract. Any emulated console implements this to plug into th
 **`HasSideEffects` exists for one caller and one refusal.** A space routed through a live hardware bus can have a real side effect on read — the SNES's `RDNMI` clears the pending-NMI flag, `OPHCT`/`OPVCT` toggle a byte-order latch — unlike a plain in-memory array. `search` (§3.9) reads every address in a space, so it needs to refuse a space where scanning would silently disturb running emulation rather than assume every `Read` is free. A core with no such space returns false everywhere. Muting via `SetChannelMuted` is the mirror-image case: the channel's playback and envelope state keep advancing exactly as real hardware muting does (`Venus_APU.md` §3.4), and only the final mix excludes it, so isolating a suspected-broken instrument needs no separate solo-rendering path.
 
 ### 3.2 `SnesDebugTarget` (`Cores/Nintendo/Venus - SNES/Debug/SnesDebugTarget.cs`)
+
+*Historical since 2026-10-16.* `SnesDebugTarget` was deleted with C# Venus (`VenusRT_Native.md` §68.5). The SNES's debugger is the generic `CoreDebugTarget` over VenusRT, with the SNES pack's views. Of the shell features this target alone answered, these have no SNES implementation now: `setreg`, `addr`'s decode, `counters`, `copflow`, `cophist`, `bp when`'s conditions, the `dma` log and stats, the per-voice `channels` view, `disasm`'s width hints, and the evaluation of breakpoint conditions and logpoint expressions, which no target in the tree sets since (a conditional breakpoint halts as a plain one).
 
 The SNES implementation. Almost entirely a *reshaping* of already-existing, already-verified logic (the same OAM size/high-table decoding `DumpActiveOam` always used, the same register fields `StateDump` already read) into the structured shapes `IDebugTarget` asks for — not new emulation logic.
 
@@ -719,13 +725,15 @@ This is the single biggest change to how expensive an investigation is. Driving 
 
 ### 3.16 `--singlestep` — ground-truth single-step validation
 
+*Since 2026-10-16* the `65816` and `spc700` targets are gone with C# Venus (`VenusRT_Native.md` §68.5), and the `nes6502` target with C# Moon the same day, so `--singlestep` is gone, with `EmuSen/Validation/`, which nothing else read. VenusRT's single-step harness is its crate's own (`cargo test`, `VenusRT_Native.md` §2.3).
+
 Not part of the `IDebugTarget` toolchain above (it doesn't run a full emulation session at all) — a separate, permanent harness that validates one CPU's opcode/addressing-mode/flag behavior in isolation against third-party ground-truth test vectors, independent of whatever a real ROM happens to exercise.
 
 ```
 dotnet run --project EmuSen.Pharaoh -- --singlestep <target> <test-dir> [max-examples-per-file]
 ```
 
-`<target>` is a registered `ISingleStepTarget` name (currently `65816`, `spc700` and `nes6502`); `<test-dir>` holds the target's JSON test files (one per opcode, from [TomHarte/ProcessorTests](https://github.com/TomHarte/ProcessorTests) — not vendored into this repo, fetch separately). Each test sets up initial registers/memory, single-steps the real emulation code exactly once via the target's `ISingleStepTarget` adapter, and compares final registers/memory byte-for-byte against the vector's expected result. Output is one `[PASS]`/`[FAIL] <file>: <pass>/<total>` line per file, a grand total, then up to `[max-examples-per-file]` (default 3) concrete failure examples per failing file — enough to see the shape of a failure without drowning in 10,000 near-identical ones. Exit code is 0 only if every file passed.
+`<target>` is a registered `ISingleStepTarget` name (currently `65816` and `spc700`; `nes6502` drove the C# Moon's 6502 and left with that core on 2026-10-16, `Moon_Native.md` §9.5); `<test-dir>` holds the target's JSON test files (one per opcode, from [TomHarte/ProcessorTests](https://github.com/TomHarte/ProcessorTests) — not vendored into this repo, fetch separately). Each test sets up initial registers/memory, single-steps the real emulation code exactly once via the target's `ISingleStepTarget` adapter, and compares final registers/memory byte-for-byte against the vector's expected result. Output is one `[PASS]`/`[FAIL] <file>: <pass>/<total>` line per file, a grand total, then up to `[max-examples-per-file]` (default 3) concrete failure examples per failing file — enough to see the shape of a failure without drowning in 10,000 near-identical ones. Exit code is 0 only if every file passed.
 
 **Why this is a `--singlestep` verb on `EmuSen.Pharaoh` and not its own project.** It began as two throwaway scratchpad tools — one for the 65816, one for the SPC700 — built ad hoc during the same investigation that found and fixed real bugs in both, then generalized into a permanent tool so the next core (or the next bug hunt in an existing one) wouldn't rebuild the same harness from scratch. That permanent home was its own project, `EmuSen.Tomoe`, for a while; it was folded in here once it was clear the project was a 124-line `Main` wrapping a three-entry dictionary, while all the actual machinery already lived in `EmuSen/Validation/` and each core's own `Validation/` folder. It sits alongside `--diffshot` (§3.15) and `--tracediff` (§3.40) as a third standalone verb dispatched before any ROM or option parsing happens — same shape, same reason: a real tool in this toolchain that happens to need no emulation session. Retiring the project also released the `Tomoe` codename back to the pool in `EmuSen_Core_Naming_Scheme.md`, where Professor Tomoe is listed as a natural pull for a future core.
 
@@ -972,6 +980,8 @@ Covered: an open quote or `$(...)` waiting then completing; `if`/`for`/`while` b
 ---
 
 ### 3.19 Layer isolation and per-scanline registers (`layers`, `ScanlineRegisterDumpLine`)
+
+*Historical since 2026-10-16:* the `layers` and `scanregs` verbs and their two flags were C# Venus's renderer's and left with it (`VenusRT_Native.md` §68.5).
 
 Two diagnostics added for the Super Metroid landing-site investigation, both aimed at the same blind spot: **`regs` only ever shows end-of-frame state**, which is useless for any SNES scene driven by HDMA — and most interesting scenes are. A game can change BGMODE, TM/TS, CGWSEL/CGADSUB, scroll and windows on every single scanline, then leave the registers holding whatever the last line set. Reading `regs` there tells you about vblank, not about the picture.
 
@@ -1544,6 +1554,8 @@ Taps the button (4 frames held, then released — a held button reads as one pre
 
 ### 3.40 Differential *control flow* — the S-CPU trace differ (`--cputrace`, `--tracediff`)
 
+*Historical since 2026-10-16:* `--cputrace`, `--cpulog` and the S-CPU and GSU kinds of `--tracediff` read C# Venus's traces and left with it (`VenusRT_Native.md` §68.5); the APU write log left with C# Moon the same day, so `--tracediff` is gone, with `EmuSen/Cores/Debug/TraceDiff.cs`. VenusRT's CPU trace is its crate's `cpu_trace` example.
+
 **Why this exists.** §3.39 compares memory contents at a frame boundary. That is only valid when both machines are at the same point in the program, and on Yoshi's Island they are not — EmuSen ran roughly a frame off the game's own `$0030` counter, and Mesen randomises power-on RAM. Every measurement in the §10.7 investigation paid for that: "317 diverged bytes" that were almost entirely random fill, a 4-run mask to erase it, a frame-offset hunt that *minimised* but never eliminated the difference, and `gsudiff.py` desyncing on a boot block only Mesen runs. Those were not four problems. They were one problem four times — **diffing snapshots of two clocks that are out of phase, where the noise scales with the skew.**
 
 Control flow has no such coupling. If EmuSen simply runs a frame later but executes the same instructions, the two instruction streams align perfectly and the diff is empty until something real happens. Uninitialised RAM is never read at all, so the random fill cannot lie to you.
@@ -1618,6 +1630,8 @@ Used in anger: `--pressuntil A:1E1A:01F0:12000:40` walks Yoshi's Island's file s
 ---
 
 ### 3.41 The same differ, pointed at the GSU (`gsutrace`, `--after`, `--nobattery`)
+
+*Historical since 2026-10-16:* the `gsutrace` verb and `gsudiff.py` left with C# Venus (`VenusRT_Native.md` §68.5); `--nobattery` stands.
 
 **What it is.** §3.40's machinery, generalised. `TraceDiff` is now generic over "a stream of steps with an address, an opcode, a cost and some registers" (`ITraceStep<T>`); `CpuTraceDiff` and `GsuTraceDiff` are just the two record layouts plus their parsers. `--tracediff` picks which one by the file's magic, so the same command reads either pair and refuses a mismatched one.
 
@@ -1719,6 +1733,8 @@ systemd-run --user --scope -p CPUQuota=33% -p CPUQuotaPeriodSec=5ms -- <self> <a
 **The worked result.** SMB3 (MMC3) was carried as a known audio failure on the strength of a no-input harness run in which it never wrote `$4000-$400F`. The probe reproduced that exactly — Mesen is *also* silent through frame 1200 on the title screen, writing only `$4015` once at boot and then `$4010`/`$4017` as per-frame housekeeping. With Start tapped at frames 400/500/620 the engine starts on frame 501 in both, and the register log fills in with the full channel set. Frame-aligned, EmuSen's frame 900 is **pixel-identical to Mesen's frame 897** — 0 of 61 440 pixels differ — the three-frame offset being how long each took to accept the press, not a rendering difference. Every remaining byte-level difference at a fixed frame number (palette entry 3 blinking `3C`↔`36`, sprite slots rotating for flicker, one-pixel sprite positions) is animation phase from that same offset. See `Moon_APU.md` §6.
 
 ### 3.44 `--testroms` — third-party NES test suites, reporting through PRG RAM
+
+> **Since 2026-10-16** the runner drives MoonRT, the NES's only engine, and reads the protocol through `EmuSen.Pharaoh/NesTestRomProtocol.cs`, which MoonRT's corpus goldens share (`Moon_Native.md` §9.2); the rules below are unchanged.
 
 The fourth standalone verb, alongside `--diffshot` (§3.15), `--singlestep` (§3.16) and `--tracediff` (§3.40): a real tool in this toolchain that needs no debug session, no window and no human.
 
@@ -1854,6 +1870,8 @@ This leaves a real off-by-one between backends: Mesen's first observable frame i
 ---
 
 ### 3.46 `apudiff` — the NES register-write differ, and what it says about SMB3
+
+> **Retired 2026-10-16.** `--apulog` recorded the C# Moon's APU writes through `ApuWriteTrace`, and both left with that core (`Moon_Native.md` §9.5); `--apulog` now refuses with that reason, and `tracediff` reads CPU and GSU traces only. The record below stands as history.
 
 §3.43 documented `apudiff` as the consumer for `mesen_apulog_*.bin`. It did not exist; nothing in the repo implemented it, and our side emitted no APU log to compare against, so the logs sat unread for two days. Both halves are now built.
 

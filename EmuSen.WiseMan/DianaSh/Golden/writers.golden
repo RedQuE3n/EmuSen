@@ -46,8 +46,8 @@ status 1
 action none
 end
 
-case on venus
-target venus
+case on venusrt
+target venusrt
 covers 1-3
 $ writers 2100
 out 68
@@ -61,8 +61,8 @@ status 0
 action none
 end
 
-case on moon
-target moon
+case on moonrt
+target moonrt
 covers 1-3
 $ writers 2100
 out 68
@@ -76,8 +76,8 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
+case on mercuryrt
+target mercuryrt
 covers 1-3
 $ writers 2100
 out 68

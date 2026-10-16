@@ -250,6 +250,31 @@ namespace EmuSen.Cores.Native
             return status == 1 ? frame : null;
         }
 
+        // RAW_PICTURE: the encodings of machine info's video.raw whose bits are set kept from the next advance - see EmuSen_CoreAPI.md §6.30.
+        public void RawSelect(ulong mask)
+        {
+            if (_api.RawSelect == null || !Has(CoreInterface.CapRawPicture)) return;
+            lock (_gate) Ok(_api.RawSelect(Handle, mask), "keep its picture before the palette");
+        }
+
+        // The shape of the frame's picture in encoding raw, or null when the frame has none.
+        public CoreInterface.RawFrame? RawInfo(uint raw)
+        {
+            if (_api.RawInfo == null || !Has(CoreInterface.CapRawPicture)) return null;
+            var frame = new CoreInterface.RawFrame { Size = (uint)sizeof(CoreInterface.RawFrame) };
+            int status;
+            lock (_gate) status = _api.RawInfo(Handle, raw, &frame);
+            if (status < 0) throw new CoreRefusedException(status, $"{Library.Info.DisplayName} could not describe its picture before the palette: {Library.Words(status)}.");
+            return status == 1 ? frame : null;
+        }
+
+        public long CopyRaw(uint raw, byte[] into)
+        {
+            if (_api.RawCopy == null || !Has(CoreInterface.CapRawPicture)) return 0;
+            lock (_gate)
+                fixed (byte* data = into) return _api.RawCopy(Handle, raw, data, (nuint)into.Length);
+        }
+
         public long CopyFrame(byte[] into)
         {
             lock (_gate)

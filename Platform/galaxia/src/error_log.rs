@@ -5,7 +5,7 @@
 //! separators the machine uses, and this owns the rest: the entry's shape, the file's name, the fourteen days kept
 //! and the eight megabytes a day may hold. A log that cannot be written is never a second fault.
 
-use crate::cheats::{ends_as, files_in};
+use crate::cheats::{begins_as, ends_as, files_in};
 use crate::config;
 use crate::dotnet_path::{self as path, Style, is_blank};
 use crate::dotnet_text::{replace_line_endings, utf16_len};
@@ -76,7 +76,8 @@ fn prune(root: &str, now: SystemTime) -> std::io::Result<()> {
     }
     let cutoff = now.checked_sub(Duration::from_secs(KEEP_DAYS * 24 * 60 * 60));
     for name in files_in(root)? {
-        if !name.starts_with(PREFIX) || !ends_as(&name[PREFIX.len()..], ".log") {
+        // The pattern `emusen_*.log`, which .NET matches without regard to case on Windows and macOS.
+        if !begins_as(&name, PREFIX) || !ends_as(&name[PREFIX.len()..], ".log") {
             continue;
         }
         let file = path::combine(Style::HOST, root, &name);

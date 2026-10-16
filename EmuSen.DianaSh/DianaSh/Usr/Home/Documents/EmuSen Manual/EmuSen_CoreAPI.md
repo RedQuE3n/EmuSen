@@ -5,7 +5,7 @@ and §13.2's items 1 and 2 built: the header, the `core` module with `core_expor
 the points of §4–§6 that building them made precise); then items 3 and 4, the host adapter and discovery (§19); item 5, the SNES's system pack (§20); and item 6, the
 conformance kit's core suite (§21); and MoonRT's and MercuryRT's exports onto v1 beside their pre-stable ones (§22,
 §23). Since then, 2026-10-04: the registration-equivalence test, D1's oracle (§25), and MoonRT's and MercuryRT's
-shims as subclasses of the adapter (§26); 2026-10-07, the kit's corpus form (§28) and the `view` flag of a space (§29). 2026-10-10: §0.2 item 2, §8.1, §8.2 and §15 Q13 revised by `EmuSen_DianaSh.md` §16 Q1: the runtime is a component of its own, and DianaSh a shell that is its client (§17.2 there). 2026-10-15: the kit's C7 at several points (§28.13, §28.14). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
+shims as subclasses of the adapter (§26); 2026-10-07, the kit's corpus form (§28) and the `view` flag of a space (§29). 2026-10-10: §0.2 item 2, §8.1, §8.2 and §15 Q13 revised by `EmuSen_DianaSh.md` §16 Q1: the runtime is a component of its own, and DianaSh a shell that is its client (§17.2 there). 2026-10-15: the kit's C7 at several points (§28.14, §28.15). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
 three prototype checks recorded in §5.1 to §5.3. It supersedes parts of `EmuSen_NativeCores.md`, listed in §0.3 and
 marked in place there. Every claim about the code is cited to a file, read on `WiseMan` at `f69c94a4`. Claims marked
 **measured** were measured on 2026-10-01; claims marked **argued** are reasoning that a later step must prove, and
@@ -343,8 +343,8 @@ uint32_t emusen_core_abi_version(void);     // (MAJOR << 16) | MINOR, as built
   never undefined behaviour. A host given an event kind or a descriptor field it does not know skips it.
 - **Descriptors are JSON documents** (§6.3); a reader ignores fields it does not know, and a field a host requires is
   never removed within major 1.
-- **Reserved space**: status codes in the interface's band not yet assigned; capability bits 21–47 (18 to 20 assigned
-  since, by 1.1 to 1.3); event kinds (8 assigned by 1.4, 7 kept for outputs); JSON field names beginning `x-` for a core's private use, never assigned by the
+- **Reserved space**: status codes in the interface's band not yet assigned; capability bits 23–47 (18 to 22 assigned
+  since, by 1.1 to 1.3, 1.9 and 1.10); event kinds (8 assigned by 1.4, 7 kept for outputs); JSON field names beginning `x-` for a core's private use, never assigned by the
   specification.
 - **A struct grows only at its end, and 1.3's `emusen_create_params.flags` is the first to.** The callee copies
   `min(size, its own)` bytes into a struct of its own size zeroed beforehand, so a field a shorter struct lacks reads
@@ -707,7 +707,7 @@ What depends on the game, read after create:
 |---|---|
 | **`system`**, `region` | which system entry and region the game runs as |
 | **`frame_rate`** | `{ "num": 21477272, "den": 357366 }`: the pacing rate, exact; `ICore.FrameRateHz` today |
-| **`video`** | `base_width`, `base_height`, `max_width`, `max_height`, `aspect` as a ratio, `formats` the core can produce |
+| **`video`** | `base_width`, `base_height`, `max_width`, `max_height`, `aspect` as a ratio, `formats` the core can produce; since 1.10, `raw`, the encodings of the picture before the palette a core claiming `RAW_PICTURE` can hand (§6.30) |
 | **`audio`** | `rate` at start; `channels`: the names `set_mutes`' bits stand for |
 | **`ports`** | which controller each port holds |
 | **`spaces`** | `{ id, name, size, flags }`; `flags` an array of the strings `read_only`, `side_effects`, `reports_stores`, `cheats`, since 2026-10-07 `view` (§29) and, since 1.2, `reports_loads` (§6.14.1) (open, as any enumerated string). `size` and `battery`'s `length` are written by the crate from `space_size` and `battery`, and `state.kinds` from `SNAPSHOT`, so they cannot disagree with the exports (C14). The names are the C# oracle's where there is one (`MoonMachine.cs:17`), so the cheats and the debugger key on them as now |
@@ -1432,6 +1432,120 @@ A host of 1.9 with no device to lend passes null, and `frame_device` answers 0.
 `frame_device` answers 0; its seeded fault `FAULT_DEVICE_PICTURE_UNLENT` (1 << 23), a picture answered on a device
 nobody lent, fails C20 alone.
 
+### 6.30 The raw picture: `RAW_PICTURE` (1.10, 2026-10-16)
+
+*Decided 2026-10-16, the tester's words: "yes, lets add the raw picture to the abi and do so agnostically if there is
+going to be other cores that function the same."* Until C# Moon was deleted (`Moon_Native.md` §9.5) the CRT filter's
+NES mode read `ICore.RawPicture`, each pixel's colour number and PPUMASK's emphasis bits, and built the PPU's own
+composite wave from them (`EmuSen_CRT.md` §22). MoonRT had no surface for it, so from that merge the NES under the
+filter was encoded from RGB again. This minor is that surface, made for any core whose video hardware has a native form
+before RGB, and an optional capability on the picture's existing surface, as §4.4 allows.
+
+**What it carries, and why in this form.**
+
+- **An encoding, named by a string** in machine info: `video.raw[n].encoding`. A string, not a registered number, for
+  three reasons. The project's other open vocabularies across this boundary are strings (controller ids such as
+  `nes.pad`, settings values such as `md.model1`, battery media), so a reader already handles them. A string needs no
+  central allocation for a core outside the project: `x-` begins a core's own name, as it begins a private JSON field
+  (§4.2), and is never registered. And the cost of a string is paid once, when the host reads machine info; the frame's
+  calls name an encoding by its index `n` in that list, so nothing on the hot path compares text (§2.5). A name is
+  lower-case ASCII letters, digits, `.`, `_` and `-`, the system's id first: `nes.ppu`.
+- **The element width**, `video.raw[n].element`, in bytes: 1, 2, 4 or 8, each value little-endian. It is fixed by the
+  encoding's entry in the register below, and is stated beside the name so that a host which does not know the
+  encoding can still size, copy, store or show the values (a debugger's view, a recording) without guessing.
+- **The size, per frame.** `max_width` and `max_height` in machine info, from which a host allocates once, as for the
+  RGB frame (§6.6); and each frame's `width`, `height` and row `stride` in `emusen_raw_frame`. **The raw picture covers
+  the same rectangle of the screen as the frame `frame_copy` holds**, at its own sampling: raw column *x* lies over the
+  frame's columns from *x*·*W*/*w* to (*x*+1)·*W*/*w*, and rows likewise, where *W* × *H* is the frame as shown (its
+  height times `row_repeat`) and *w* × *h* the raw picture's. A console whose native form holds more than the frame
+  shows (an overscan border the core crops) crops it the same way, since what lies outside the frame is never drawn.
+  A console whose native form is finer than the frame, or coarser (a hi-res mode drawn into a frame of the low one, or
+  the reverse), says so by the two sizes and the rule above, with no field of its own.
+- **Side data: none at 1.10.** The case named for it, a write to the emphasis bits or a palette in the middle of a
+  frame, is already covered when each pixel's value holds what was in force when that pixel was output; `nes.ppu` is
+  so defined. A per-line or per-frame word would be needed only by an encoding whose meaning depends on something no
+  pixel carries. None is known yet; `emusen_raw_frame.reserved` is the place a later minor gives one, and an encoding
+  may meanwhile define its own rows of side data inside its values, which its entry would then say.
+- **An optional palette**, `video.raw[n].palette`: where the core's RGB frame is a function of the value alone, the
+  RGB it draws for each value, as integers `0xRRGGBB` indexed by the value. It is how a core states that its two
+  pictures agree, and how the kit checks it (C21, §28.13). An encoding whose RGB is not a function of the value alone,
+  or whose table would be too long to list (more than 65,536 entries), gives none.
+
+**The surface.**
+
+- **`EMUSEN_CAP_RAW_PICTURE`**, bit 22, and three exports, present if and only if it is claimed:
+  - `int32_t emusen_core_raw_select(emusen_machine *m, uint64_t mask)`: bit *n* asks the core to keep `video.raw[n]`
+    for every frame drawn from the next `advance` on; zero, the state at create, keeps none. A bit past the list is
+    refused with `EMUSEN_NOT_SUPPORTED` and nothing changes. The selection is the host's, like `set_options`: no part
+    of a state, kept across `reset` and `state_load`.
+  - `int32_t emusen_core_raw_info(const emusen_machine *m, uint32_t n, emusen_raw_frame *out)`: 1 with the shape of the
+    raw picture in encoding *n* of the frame `frame_copy` holds; 0 when that frame has none (the encoding was not kept
+    when it was drawn, or no frame has been drawn); `EMUSEN_NOT_SUPPORTED` for an *n* past the list; `BAD_STRUCT` for a
+    struct shorter than 32 bytes. On 0 the core writes the struct's fields as zero, `size` excepted.
+  - `int64_t emusen_core_raw_copy(const emusen_machine *m, uint32_t n, uint8_t *out, size_t len)`: the values, by the
+    copy-out rule of §6.0, `height` rows of `stride` bytes; 0 bytes when the frame has none.
+- **`emusen_raw_frame`** (32 bytes, beginning with `size`, which stays the host's): `element`, `width`, `height`,
+  `stride`, a reserved word and `bytes`, the whole length `raw_copy` answers.
+- **Machine info's `video.raw`**: an array of `{ encoding, element, max_width, max_height, palette }`, `palette`
+  optional, written only for a core that claims the bit. Absent, a host reads no encoding.
+- **`emusen-native`**: `RawEncoding` and `Core::raw_encodings`, `Core::raw_select` and `Core::raw_frame`, with the
+  defaults of a core without the bit; the three exports by `core_exports!(…; raw_picture)`; the crate refuses a bit
+  past the list before the core sees it.
+
+**The rules.**
+
+- **The raw picture is always of the frame `frame_copy` holds.** It is drawn beside the RGB frame from the same
+  machine state, or not at all: a frame drawn while the encoding was not kept has none, and a frame whose rendering was
+  skipped leaves both pictures as they were. So a host that reads both after an `advance` reads one frame twice.
+- **Cost.** A core keeps an encoding only while it is selected, so a host that asks for none pays nothing, which is the
+  state of every machine at create. The values are copied out as the RGB frame is; nothing points into the core.
+- **States, rewind and run-ahead.** Neither picture is part of a state (§6.9). A state load leaves the raw picture as
+  it leaves `frame_copy`'s, whatever that is for the core, and the rule above holds through it: a core whose picture
+  is rebuilt by the next frame has a raw picture rebuilt by the same frame. Rewind and run-ahead therefore need nothing:
+  a frame they show is a frame some `advance` drew, with its raw picture if the encoding was kept for that `advance`.
+- **The device picture (§6.29).** `RAW_PICTURE` is independent of `DEVICE_PICTURE`: the raw picture is always copied
+  out, never handed on the device, and is of the frame `frame_copy` holds, which on a lent device may be a frame sooner
+  than a lendless machine's. A filter that reads both on the device uploads the raw values itself; they are small (a
+  NES frame is 120 KiB).
+- **Several encodings** may be listed and kept at once; a host asks for those it can use, and ignores names it does
+  not know. A core may list none on a machine whose console has no such form, as a `MEDIA` core may list no drive
+  (§6.26).
+
+**The register.** An encoding's entry is part of this page, added by the change that first has a core to hand it and
+a consumer to read it. A name once registered keeps its meaning for the life of major 1.
+
+| Encoding | Element | Values | Size | Defined from |
+|---|---|---|---|---|
+| `nes.ppu` | 2 | bits 0–5: the colour the 2C02 output for the pixel, palette RAM's entry after PPUMASK's greyscale (bit 0) has cleared its low four bits; bits 6–8: PPUMASK bits 5–7 in force when the pixel was output, as written to the register; bits 9–15 zero | 256 × 240, the frame's | `EmuSen_CRT.md` §22.2, the nesdev wiki's *NTSC video* and *PPU registers* pages |
+
+The emphasis bits are recorded as written, not as colours, because the 2C07 of PAL consoles wires its bits 5 and 6 to
+green and red where the 2C02 wires them to red and green: which colour a bit dims is the decoder's knowledge of the
+chip, and the encoding stays one for both. When in a line a write takes effect is the core's resolution, the same for
+both pictures: MoonRT composes a line at its dot 256 and takes PPUMASK there.
+
+**Skew.** A host of 1.9 never calls the exports and reads no `video.raw`; the core keeps nothing, as at create. A core
+of 1.9 claims no bit and lists nothing; a host of 1.10 asks it for nothing and draws from RGB, as before this minor.
+
+**Which cores have such a form.** Surveyed 2026-10-16, against the question of whether the console's video is
+generated from something other than RGB that a filter would read, and whether a consumer reads it now:
+
+| Core | Native form before RGB | Verdict |
+|---|---|---|
+| MoonRT (NES) | the PPU's colour number and emphasis bits; the 2C02 has no RGB stage and generates its composite wave from them directly | **built**, `nes.ppu`; the CRT filter's composite path reads it (`EmuSen_CRT.md` §22) |
+| Nephrite (Genesis, Sega CD, 32X) | CRAM's 9-bit colour with the shadow and highlight state, through the VDP's DAC ladder (Nephrite applies the measured levels) | not built: the VDP drives analog RGB and the console's composite is made from that RGB by a separate encoder chip, so the filter's RGB path is already the hardware's path; the 32X mixes its own 15-bit RGB with the VDP's in the analog domain, the same argument. Useful only if a filter is to model the DAC ladder itself |
+| Diamond (PlayStation) | 15- or 24-bit RGB in VRAM | none: the GPU's native form is RGB, and composite comes from an encoder fed RGB |
+| VenusRT (SNES) | 15-bit colour, master brightness ($2100) and the hi-res and pseudo-hires halves | not built: the S-PPU outputs analog RGB and the S-ENC encodes from it, so RGB is first-hand; VenusRT's 512-wide frame already carries the halves. A `snes.ppu` (colour and brightness) would serve only a filter modelling the brightness DAC, which none does |
+| MarsRT (N64) | the RDRAM framebuffer, RGBA 5551 or 8888, before the VI's filters | none: the VI's output is digital RGB to a DAC and encoder, and the VI is part of the core |
+| MercuryRT (Game Boy, Game Boy Color) | the DMG's 2-bit shades; the GBC's 15-bit colour | not built: neither loses anything in the RGB frame. MercuryRT draws the four shades as four distinct greys, which the DMG LCD filter already maps back to shades by luminance (`HandheldFilters.cs`), and expands each 5-bit channel by a one-to-one map; a raw form would add a surface and give a filter nothing it lacks |
+
+The NES is unusual among the consoles the project emulates in having no RGB stage at all; that is why it alone needs
+the surface today. Recommended, not built: an encoding for the Genesis's DAC levels if the CRT filter is ever to model
+the ladder's nonlinearity in the signal rather than in the palette, registered as `md.vdp` when a filter reads it.
+
+**The kit.** C21 (§28.13) where the bit is claimed. The test core claims it with an encoding of its own, `x-test.red`,
+and its seeded fault `FAULT_RAW_DISAGREES` (1 << 24), a raw value that its palette does not draw as the frame's pixel,
+fails C21 alone.
+
 ## 7. Core discovery and trust
 
 ### 7.1 Where cores are found
@@ -1811,7 +1925,7 @@ supplies. The cases:
 | **C4, create and refusal** | **a malformed image never harms the core** (decided 2026-10-03): each of an empty, a garbage and a truncated image is either refused with null, a documented status and an error text, leaving nothing to free, or accepted and run for the kit's frames without crashing, hanging or corrupting the host. Refusal is required only where the system pack declares its image format self-delimiting (it records its own length, or a checksum the core must verify); the report says of each image whether it was refused or accepted and ran; **a machine created with no settings equals one created with every default stated, over N frames** |
 | **C5, capability honesty** | every claimed capability works on a running machine; every unclaimed one is refused with `NOT_SUPPORTED` or absent; an unknown kind, space, port, axis, format or option bit is refused or ignored as the header says |
 | **C6, the frame** | N frames run; `frame_info` agrees with `frame_copy`'s length and the format is one offered; a size change is preceded by `GEOMETRY`; samples drain at the rates the drain reports, with an `AUDIO_RATE` event at each change |
-| **C7, state** | save, load, save is byte-identical; a kind's size is constant over N frames except after a `STATE_SIZE` event; a truncated, foreign or random state is refused and the machine's state hash is unchanged; a state saved on machine A and loaded on machine B makes B continue exactly as A; the snapshot kind, if claimed, loads; *since 2026-10-15* the state saved at each of eight points and one near the end, each loaded on a machine just made and held to A, which never loads, until the next (§28.13) |
+| **C7, state** | save, load, save is byte-identical; a kind's size is constant over N frames except after a `STATE_SIZE` event; a truncated, foreign or random state is refused and the machine's state hash is unchanged; a state saved on machine A and loaded on machine B makes B continue exactly as A; the snapshot kind, if claimed, loads; *since 2026-10-15* the state saved at each of eight points and one near the end, each loaded on a machine just made and held to A, which never loads, until the next (§28.14) |
 | **C8, determinism** | two machines fed the same image, settings, files and scripted input give identical picture, sound and state digests over N frames; again across a save and load at frame N/2; and, where `skip_rendering_state_neutral` is claimed, with rendering skipped on alternate frames |
 | **C9, exact settings** | for every setting with `effect: exact`, every value (each choice; a count's bounds and middle) gives digests identical to the default's |
 | **C10, isolation** | two machines on two threads, interleaved, each equal to its solo run; one freed while the other runs |
@@ -1901,6 +2015,10 @@ know and reads only what was written. WiseMan runs both against the v1 adapter o
 | **MercuryRT** | the pre-stable set, `0x0001_0005` | the same; `Model` becomes a create-time schema key, the six `mercuryrt_*` extensions stay | the 586 WiseMan tests §12.5 there names; its digest over 24 runs; the kit; the plain frame timed interleaved, aligned build kept | 1 day |
 | **MarsRT** | its legacy ABI, interface 10 | **directly onto v1 at its step 5**, skipping the pre-stable set: the snapshot, `PRESENT`, `PHASES`, `AXES`, `SETTINGS`, `FRAME_SERIAL`, `ROW_REPEAT`, `BATTERY_DIRTY`, `CHEAT_POKES`; its settings from the schema; its extensions renamed | step 5's list (`EmuSen_NativeCores.md` §7: the 57 test methods, rewind per landing, `pacebench`'s hash, the three gameplay states, the probe on Super Mario 64 and Ocarina of Time), R3's held-button state test, the kit; then 5a (PGO retrained) and 5b (timed) | 2–3 days, plus 5a and 5b; **deferred with its retrain until the port is finished** |
 
+*MarsRT's row done 2026-10-15 (`Mars_Native.md` §7): on v1 alone, 48 exports and 21 `marsrt_core_*` extensions, the
+shim a subclass of the adapter; the kit's 19 cases pass, once a load left the `Dirty` bytes as the state says (§7.4
+there); 5a deferred.*
+
 ### 13.2 What must land before VenusRT's stage 6
 
 Stage 6 is "Frontends on the common interface" (`VenusRT_Plan.md` §6), planned as `VenusRtCore : NativeRtCore<VenusMachine>`
@@ -1959,7 +2077,7 @@ away). The DianaSh moves (D1–D5), MoonRT's and MercuryRT's moves and MarsRT's 
 ### 13.5 The legacy paths retire
 
 - **MarsRT's legacy ABI** (`LegacyNativeMachine`, `LegacyNativeExports`, `NativeCoreLibrary`'s per-core constructor) is
-  deleted at MarsRT's step 5, its last user, as `EmuSen_NativeCores.md` §12.5 already plans.
+  deleted at MarsRT's step 5, its last user, as `EmuSen_NativeCores.md` §12.5 already plans. *Deleted 2026-10-15 (`Mars_Native.md` §7.2).*
 - **The pre-stable `emusen_native_*` set** (`NativeCoreLibrary.Common`, `NativeInterface`, `NativeMachine`,
   `NativeRtCore`, the `abi` module's macro) is deleted when MoonRT, MercuryRT and VenusRT are on v1. Nothing outside the
   repository calls it, so it needs no deprecation period. The `debug` module's `Hooks` stay; they are data the v1 macro
@@ -2200,9 +2318,21 @@ where the picture is presented on it (`EmuSen_DevicePicture.md` §17); kit case
 C20 is added, with the kit's own lender; Diamond claims the bit (`EmuSen_DevicePicture.md` §16). Its reasons are
 `EmuSen_DevicePicture.md` §5.
 
+**v1.10, 2026-10-16** (§6.30), the tester's go to put the picture before the palette on the ABI, console-agnostic, after
+C# Moon's deletion took the NES's `ICore.RawPicture` with it (`Moon_Native.md` §9.5): `EMUSEN_CAP_RAW_PICTURE` (bit 22),
+`emusen_raw_frame` (32 bytes), `emusen_core_raw_select`, `emusen_core_raw_info` and `emusen_core_raw_copy`, and machine
+info's `video.raw`, each encoding a registered name (`nes.ppu` the first), its element width, its largest size and an
+optional palette from value to the RGB the frame draws. Baseline 481 facts, `--check` and `--against` 1.9 passing.
+`emusen-native` gains `RawEncoding`, `RawFrame`, `Core::raw_encodings`, `Core::raw_select` and `Core::raw_frame` and the
+group `raw_picture`; the guard's checker learns the struct; the C# host reads the surface (`CoreInterface`, held to the
+header by `CoreAbiTests`), reads `video.raw` as `CoreMachineInfo.Raw`, and asks for an encoding by name through
+`ICore.RawEncoding`, handing the picture as `ICore.RawPicture`, a `RawPicture` of Serenity's that names its encoding.
+Kit case C21 is added; the test core claims the bit with `x-test.red`. MoonRT claims it with `nes.ppu`
+(`Moon_Native.md` §9.7), and the CRT filter's NES mode reads it again (`EmuSen_CRT.md` §22.8). Its reasons are §6.30.
+
 **Kit, 2026-10-15**, no change to the ABI: C7 saves at every eighth of the run and once near its end, each state
 loaded by a machine just made and held to a machine that never loads, in place of once at the middle against a machine
-that had loaded its own state (§28.13). Its question and its words for a passing core are kept but for the list of
+that had loaded its own state (§28.14). Its question and its words for a passing core are kept but for the list of
 points; a core's state that is wrong away from the middle, or in a part a machine's own load keeps, now fails it.
 
 **Host, 2026-10-12**, no change to the ABI: the reference host keeps §6.16 itself, input latched to the frame's start
@@ -2538,7 +2668,7 @@ as the library wrote them, for the build step §7.1 asks for. (*The corpus form,
 | C4 | an empty, a garbage and a half-length image each refused with a negative status that `status_text` names and an error text, or, unless `--self-delimiting` is given, accepted and run for up to 300 frames on a thread of its own within 60 seconds (a frame refused with a status is a clean stop); each image's outcome in the report as `refused`, `accepted and ran`, `accepted and stopped` or `hung`; a machine with no settings equal to one with every default stated, frames, sound and state, over up to 300 frames; each firmware entry's `replacement.effect` one of `exact`, `accuracy`, `none`, with a `cost` unless `exact`, and an image whose entries are all `required: false` created with no files |
 | C5 | each claimed capability answers on a running machine without `NOT_SUPPORTED`; an unclaimed snapshot and state kind 77 refused; an unlisted space refused; reserved option bits ignored; port 99 ignored or `NO_SUCH_PORT`; an unknown pixel-format bit accepted with RGBA8888 produced |
 | C6 | over N frames: `frame_info`'s length is `frame_copy`'s, the format the one offered, the size within its stride; a size change preceded by `GEOMETRY`; each change of the drained rate met by an `AUDIO_RATE` of that rate in its frame or the next |
-| C7 | the state's size constant until a `STATE_SIZE`; save, load, save byte-identical; a truncated, a foreign and an empty state refused with the machine unchanged; machine B loaded with A's state continuing as A; a claimed snapshot loading and restoring the state it was taken from. *Since 2026-10-15* at every eighth of the run and near its end, A never loading (§28.13) |
+| C7 | the state's size constant until a `STATE_SIZE`; save, load, save byte-identical; a truncated, a foreign and an empty state refused with the machine unchanged; machine B loaded with A's state continuing as A; a claimed snapshot loading and restoring the state it was taken from. *Since 2026-10-15* at every eighth of the run and near its end, A never loading (§28.14) |
 | C8 | two machines alike giving identical digests in both halves and the same end state; a machine loaded with the state at N/2 continuing identically; where skipping is declared state-neutral, rendering skipped on odd frames leaving the same end state |
 | C10 | two machines on two threads, each equal to the solo run, with a third created and freed while they run |
 | C11 | every machine export with a null machine answering `EMUSEN_NULL`, and create with null params; the length query with a one-byte buffer; `create_params` of 80 bytes, a 16-byte file element, a 48-byte `frame_info` and 16-byte events each `BAD_STRUCT`; `status_text` answering for every code the core returned in the run |
@@ -2678,7 +2808,8 @@ undone. MoonRT is v1-compliant on the four games. P1's timing is still to be mea
   `MERC`, version 8, read from 5; the patch range 0000h–7FFFh; the frame rate 4,194,304 / 70,224; the four channels;
   and `status_text` in the shim's words. **The Model setting** is the schema's one entry, a create-time choice whose
   values are C# Mercury's own words (`Auto`, `Game Boy`, `Game Boy Color`), the values frontends already store.
-- **The shim stays the loader**, and Mercury (C#) the default, by §22.1's rule; `RustCores.props` marks MercuryRT
+- **The shim stays the loader**, and Mercury (C#) the default, by §22.1's rule (*the default moved to MercuryRT and the
+  C# core was deleted on 2026-10-16, `Mercury_Native.md` §15*); `RustCores.props` marks MercuryRT
   `CoreAbi 1`, so the build writes its sidecar.
 - **A defect of the adapter, found by this core and fixed.** The adapter chose a game's battery folder from the
   catalogue's console, under which a `.gbc` game is `GB`. The shim and C# Mercury file a `.gbc` game's save under `GBC`
@@ -3293,7 +3424,30 @@ Diamond at 2× (`animated-triangle.exe`, 200 frames): 120 of 120 pictures handed
 `frame_copy` and the lendless machine's a frame later; with `PictureOut`'s wait for `done` removed, C20 fails with
 "the picture of frame 60, held until now, was written over" (`EmuSen_DevicePicture.md` §16).
 
-### 28.13 C7 at several points (2026-10-15)
+### 28.13 C21, the raw picture (1.10, 2026-10-16)
+
+Where `RAW_PICTURE` is claimed (§6.30), C21 reads machine info's `video.raw` and checks each entry: a name as §6.30
+spells one, an element of 1, 2, 4 or 8 bytes, a largest size above zero, a palette of at most 65,536 entries each
+`0xRRGGBB`, and, for a registered name, the register's element width. It then checks the refusals: a `raw_select` bit
+past the list and a `raw_info` encoding past it are refused with `NOT_SUPPORTED`, and a struct of 16 bytes with
+`BAD_STRUCT`. Two machines run the image for up to 120 frames, one selecting every encoding listed and one selecting
+none:
+
+- the one selecting none is handed no raw picture on any frame;
+- the one selecting all is handed one in every encoding on every frame, its shape within the entry's bounds and the
+  bytes `raw_copy` answers its `bytes`, every value within the register's for a registered name, and, where a palette
+  is declared, each value drawn as the frame's pixel at the centre of the rectangle it covers;
+- the two runs' `frame_copy`s are equal frame by frame and their states at the end, the selection being no part of
+  the machine;
+- the state of the middle frame is loaded at the end, and the raw picture then answered, if any, is still the frame's
+  through its palette, as is the next frame's, which must have one.
+
+Where the bit is not claimed, C21 checks that no `video.raw` is listed. The test core passes with `x-test.red`;
+`FAULT_RAW_DISAGREES` fails C21 alone (`each_fault_of_c9_and_c12_to_c18_alone_fails_its_case_alone`). Every other
+v1 core passes it unclaimed, and MoonRT claims it: on Super Mario Bros. (a copy, the library read only), 120 of 120
+frames handed, each its frame through the declared palette (§6.30, `Moon_Native.md` §9.7).
+
+### 28.14 C7 at several points (2026-10-15)
 
 *Proposed 2026-10-12 after Diamond's interlaced picture (`Diamond_Native.md` §23.7); decided 2026-10-15: C7 saves at
 several points, each a full round trip.* The case's question is unchanged: a state saved by one machine and loaded by
@@ -3341,13 +3495,13 @@ another makes the second continue exactly as the first. What changes is where it
 **Why eight, and why a point near the end** [C]. The frames C7 runs do not depend on the number of points: A runs N
 and the loaded machines together run N less the first point, since each runs only to the next. What grows with the
 points is a create, five loads (three of them refused) and seven saves each: on four of the five cores measured a
-fraction of a frame or a few frames, on Diamond a create of about 70 frames' time (§28.14). Eight puts a point in any
+fraction of a frame or a few frames, on Diamond a create of about 70 frames' time (§28.15). Eight puts a point in any
 stretch longer than an eighth of the run, 75 frames at the default 600, and makes the default catch Diamond's defect (below). The evenly spaced points
 leave the run's last eighth without a save; the point `picture_settles + 8` frames from the end covers it, with eight
 frames past the settling bound to compare. A defect that shows only in the last eight frames of a run, or only between
 two points and gone by the next, is still not seen; a longer run, or another script, moves the points.
 
-**The cost** [C, from the design; measured in §28.14]. C7's frames for a run of N go from 1.5 N (A's N, B's N/2) to
+**The cost** [C, from the design; measured in §28.15]. C7's frames for a run of N go from 1.5 N (A's N, B's N/2) to
 1.875 N (A's N, the loaded machines' 7N/8), two more for a snapshot in either; its creates from 2 to 9 at most. In the
 corpus form at 600 frames C7 runs 1,125 frames in place of 900. An image's cases run about 6,400 frames there on a
 cartridge (C4's half image 300, C6 600, C7 900, C8 1,500, C16 90 where `MEDIA` is claimed, C17's three runs 1,800 and
@@ -3371,11 +3525,13 @@ unsettled now fail C7 as well as C8 and C12: they were faults of the round trip 
 a machine that never loaded. A core that passed C7 before and fails it now has a state that does not round-trip at
 the point named; nothing that passes now would have failed before.
 
-**The proof: a seeded fault.** Fault `1 << 24` of the test core (`FAULT_STATE_LOST_LATE`, in `kit_faulty_full_core`):
-from frame 90 on, each picture's blue channel shows the frame count of the frame before, a byte no state holds, as a
-woven picture's other field is VRAM of a field ago. A machine given a state at frame 90 or later by another shows 0
-there for one frame; a machine that loads its own state, or a state saved before frame 90, shows nothing wrong. With
-the fault alone, on the test image [M]:
+**The proof: a seeded fault.** Fault `1 << 25` of the test core (`FAULT_STATE_LOST_LATE`, in `kit_settling_core`, whose
+faults are all of the state's round trip): from frame 90 on, each picture's red adds the frame count of the frame
+before, a byte no state holds, as a woven picture's other field is VRAM of a field ago. A machine given a state at
+frame 90 or later by another adds 0 there for one frame; a machine that loads its own state, or a state saved before
+frame 90, shows nothing wrong. It was first seeded as `1 << 24` in the blue channel and moved when the raw picture
+took that bit and draws its palette from red alone (§28.13); the two forms fail the same cases. With the fault alone,
+on the test image [M]:
 
 | Kit | 120 frames | 240 frames |
 |---|---|---|
@@ -3384,9 +3540,9 @@ the fault alone, on the test image [M]:
 
 The faults seeded before are unchanged in what they fail but for the three settling ones above: the first faulty
 build fails C4, C7, C8, C9, C10, C12, C13, C17 and C18 as before; each fault of the full one alone fails the cases it
-failed, the new one C7 and C12; `FAULT_TAKES_TRUNCATED_STATE` still fails C7 at every point by the refused-load check.
+failed; `FAULT_TAKES_TRUNCATED_STATE` still fails C7 at every point by the refused-load check.
 
-### 28.14 Measured on the samples (2026-10-15)
+### 28.15 Measured on the samples (2026-10-15)
 
 On the development desktop (16 processors) under other work: the load average was 12 to 58 over the runs, so wall
 times are given with the processor time the run used (user and system, `/usr/bin/time`), which moves less with the
@@ -3410,8 +3566,8 @@ with the points built from the same tree, on copies of the images in the probe's
 - **MarsRT is not run.** On WiseMan its library defines no `emusen_core_` export (`RustCores.props` gives it no
   `CoreAbi`), so C1 cannot load it; it waits for its move onto the core ABI.
 - **The cost.** On the Genesis sample the processor time rose by 5 per cent in both pairs, against the 3.5 per cent
-  of frames §28.13 predicts for an image; the rest is the creates, loads and saves. What a point adds besides frames was timed
-  on one image of each core after 600 frames, the median of five [M, a probe in the cache]: Diamond's create 216 ms
+  of frames §28.14 predicts for an image; the rest is the creates, loads and saves. What a point adds besides frames
+  was timed on one image of each core after 600 frames, the median of five [M, a probe in the cache]: Diamond's create 216 ms
   (its frame 3.1 ms, so about 70 frames) and a point's five loads and seven saves 16 ms over its 5,398,770-byte state;
   VenusRT's create 10 ms and the loads and saves 1.4 ms; Nephrite's 2.6 ms and 0.4 ms; MoonRT's and MercuryRT's under
   0.2 ms. Diamond's seven creates more an image are thus about 1.5 s, which is why its run at 600 frames rose by 12

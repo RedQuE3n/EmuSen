@@ -102,12 +102,6 @@ namespace EmuSen.Common
         // Why a slot of the game runs on the game's own file, or null - see CoreEngine.MediaNotice.
         public string? MediaNotice => (_core as Cores.Native.CoreEngine)?.MediaNotice;
 
-        // Before the caller's log writer is disposed, or a still-open trace loop never reaches the log.
-        public void FlushVerboseLogs()
-        {
-            (_core as ITraceFlushable)?.FlushVerboseTrace();
-        }
-
         public void SaveState(string path)
         {
             if (_core is null) throw new InvalidOperationException("SaveState() called before LoadRom().");
@@ -141,7 +135,14 @@ namespace EmuSen.Common
 
         public int DisplayLines => _core?.DisplayLines ?? 0;
 
-        public byte[]? RawPicture => _core?.RawPicture;
+        public EmuSen.Serenity.RawPicture? RawPicture => _core?.RawPicture;
+
+        // What the frame control's filter reads, passed to the core before each frame - see EmuSen_CoreAPI.md §6.30.
+        public string? RawEncoding
+        {
+            get => _core?.RawEncoding;
+            set { if (_core is { } core) core.RawEncoding = value; }
+        }
 
         public byte[] GetFrameBufferRgba()
         {

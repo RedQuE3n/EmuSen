@@ -6,6 +6,7 @@ using System.Linq;
 using EmuSen.Common.Firmware;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
+using EmuSen.Crystal.SaveMedia;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Media;
 
@@ -19,6 +20,10 @@ namespace EmuSen.Cores.Native
         private byte[] _frame = Array.Empty<byte>();
         private CoreInterface.FrameInfo _shape;
         private readonly FrameBufferLending _lending = new();
+        private readonly FrameBufferLending _rawLending = new();
+        private string? _rawWanted, _rawAsked;
+        private bool _rawCurrent;
+        private int _rawIndex = -1;
         private readonly Dictionary<string, string> _values = new(StringComparer.Ordinal);
         private readonly List<(uint Which, BatterySave Save)> _battery = new();
         private readonly List<string> _log = new();
@@ -30,7 +35,7 @@ namespace EmuSen.Cores.Native
         private int _audioRate;
         private bool _skipRendering;
         private double _lastFrameMs;
-        private byte[] _stateBuffer = Array.Empty<byte>();
+        private byte[] _stateBuffer = Array.Empty<byte>(), _loadBuffer = Array.Empty<byte>();
         private IReadOnlyDictionary<string, string> _notes = new Dictionary<string, string>();
         private DiscSet? _set;
         private IReadOnlyList<string> _discs = Array.Empty<string>();
@@ -132,6 +137,9 @@ namespace EmuSen.Cores.Native
         // A shim's own pad routing into the same latch: the bits of changed take mask's values at the next frame.
         protected void HoldButtons(int port, uint mask, uint changed) => _input.Hold(port, mask, changed);
 
+        // The latch sent now rather than as the next frame starts, for a shim that runs the machine by instructions between frames.
+        protected void SendInput(CoreMachine m) => _input.Send(m);
+
         public bool SkipRendering
         {
             get => _skipRendering;
@@ -185,6 +193,17 @@ namespace EmuSen.Cores.Native
             }
             return null;
         }
+
+        // Which firmware the machine runs on, one line each for the session's log: the player's file or the core's own - see EmuSen_Firmware.md §3.1.
+        public static IEnumerable<string> FirmwareLines(string core, IReadOnlyList<CoreFirmwareSource> used, IReadOnlyList<CoreFirmware> wanted) =>
+            used.Select(u => (u.Source, F: wanted.FirstOrDefault(f => f.Which == u.Which)))
+                .Where(u => u.F is not null)
+                .Select(u => $"[Firmware] {u.F!.Label}: " + u.Source switch
+                {
+                    "file" => $"the player's {u.F.Name}",
+                    "replacement" => $"{core}'s own replacement",
+                    _ => "absent",
+                });
 
         // The discs of the game: an .m3u's, else the one image; each unpacked where it is an archive - see EmuSen_Galaxia.md §3.8.
         public static IReadOnlyList<string> DiscsOf(string path) => DiscSet.Of(path, CoreCatalog.IsImageExtension).Images;
@@ -260,6 +279,7 @@ namespace EmuSen.Cores.Native
             _machine?.Dispose();
             _machine = machine;
             FirmwareNotice = NoticeFor(machine, asked);
+            foreach (string line in FirmwareLines(Info.DisplayName, machine.Info.Firmware, asked)) System.Console.WriteLine(line);
             IsHaltedAtBreakpoint = false;
             AttachDebugger(machine);
             _battery.Clear();
@@ -269,6 +289,7 @@ namespace EmuSen.Cores.Native
             _input.Reset(Math.Max(2, machine.Info.Ports.Count), AxesOf(machine));
             _cheatVersion = -1;
             _audioLimitSent = -1;
+            (_rawCurrent, _rawIndex) = (false, -1);
             _log.Clear();
             machine.SetOptions(_skipRendering);
             _audioRate = machine.AudioSampleRate;
@@ -301,7 +322,7 @@ namespace EmuSen.Cores.Native
         {
             var files = new List<(uint, byte[])>(firmware);
             foreach (var (which, save) in saves)
-                if (save.Read() is { } saved) files.Add((which, saved));
+                if ((save.Read() ?? (placement.Fresh.TryGetValue(which, out ISaveMediumFormat? fresh) ? fresh.Format() : null)) is { } saved) files.Add((which, saved));
             var lend = Library.Has(CoreInterface.CapDevicePicture) ? DeviceLender?.Invoke() : null;
             return new CoreMachine(Library, Held(disc.Image), MediaOf(disc), SettingsText(createScope: true), files, Lends ? disc : null, sharedRemovable: placement.RemovableApart, sharedConsole: placement.ConsoleApart, device: lend);
         }
@@ -360,6 +381,7 @@ namespace EmuSen.Cores.Native
             RefreshCheats(m);
             SyncAudioLimit(m);
             _input.Send(m);
+            SyncRaw(m);
             long start = Stopwatch.GetTimestamp();
             if (!AdvanceFrame(m))
             {
@@ -391,7 +413,8 @@ namespace EmuSen.Cores.Native
             return false;
         }
 
-        private void EndFrame(CoreMachine m)
+        // The frame-end work in the runtime's order; a port whose oracle's order differs overrides it - see EmuSen_NativeCores.md §8.2's R4.
+        protected virtual void EndFrame(CoreMachine m)
         {
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
             if (_machine is not null) _hostCheats.ApplyAll(ReadSpace, WriteSpace);
@@ -416,6 +439,7 @@ namespace EmuSen.Cores.Native
                     case CoreInterface.EventMachineInfo:
                         m.ReadInfo();
                         _shape = m.FrameInfo;
+                        _rawCurrent = false;
                         // A port added while the game runs, as by an adapter plugged in, has its buttons held from now.
                         _input.Grow(m.Info.Ports.Count);
                         break;
@@ -456,7 +480,42 @@ namespace EmuSen.Cores.Native
             return buffer;
         }
 
-        public void ReturnFrameBuffer(byte[] buffer) => _lending.Return(buffer);
+        public void ReturnFrameBuffer(byte[] buffer)
+        {
+            if (_rawLending.Holds(buffer)) _rawLending.Return(buffer);
+            else _lending.Return(buffer);
+        }
+
+        // The encoding of the picture before the palette a filter reads, kept by the core from the next frame where it offers it; null keeps none - see EmuSen_CoreAPI.md §6.30.
+        public string? RawEncoding
+        {
+            get => System.Threading.Volatile.Read(ref _rawWanted);
+            set => System.Threading.Volatile.Write(ref _rawWanted, value);
+        }
+
+        // The choice sent to the machine before a frame, and only when it changed; an encoding the machine does not list keeps nothing.
+        private void SyncRaw(CoreMachine m)
+        {
+            string? wanted = RawEncoding;
+            if (_rawCurrent && string.Equals(wanted, _rawAsked, StringComparison.Ordinal)) return;
+            int index = -1;
+            for (int i = 0; i < Math.Min(64, m.Info.Raw.Count) && wanted is not null; i++)
+                if (m.Info.Raw[i].Encoding == wanted) { index = i; break; }
+            m.RawSelect(index < 0 ? 0 : 1UL << index);
+            (_rawAsked, _rawCurrent, _rawIndex) = (wanted, true, index);
+        }
+
+        // The last frame's picture before the palette in RawEncoding, copied into an array lent as the RGBA frame is; null where the core kept none.
+        public EmuSen.Serenity.RawPicture? RawPicture
+        {
+            get
+            {
+                if (_machine is not { } m || _rawIndex < 0 || _rawAsked is not { } encoding || m.RawInfo((uint)_rawIndex) is not { } f) return null;
+                byte[] values = _rawLending.Lend((int)f.Bytes);
+                m.CopyRaw((uint)_rawIndex, values);
+                return new EmuSen.Serenity.RawPicture(encoding, f.Width, f.Height, (int)f.Element, f.Stride, values);
+            }
+        }
 
         public Func<EmuSen.Serenity.Slang.SlangLend?>? DeviceLender { get; set; }
 
@@ -526,12 +585,23 @@ namespace EmuSen.Cores.Native
             stream.Write(_stateBuffer);
         }
 
+        // A stream that can say its length is read into an array kept for the purpose, so a step of rewind allocates no state - see Mars_Native.md §7.2.
         public virtual void LoadState(Stream stream)
         {
             CoreMachine m = _machine ?? throw new InvalidOperationException("LoadState() called before LoadRom().");
-            using var copy = new MemoryStream();
-            stream.CopyTo(copy);
-            LoadOverItsDisc(m, copy.ToArray());
+            if (stream.CanSeek)
+            {
+                int length = checked((int)(stream.Length - stream.Position));
+                if (_loadBuffer.Length < length) _loadBuffer = new byte[length];
+                stream.ReadExactly(_loadBuffer, 0, length);
+                LoadOverItsDisc(m, _loadBuffer.AsSpan(0, length));
+            }
+            else
+            {
+                using var copy = new MemoryStream();
+                stream.CopyTo(copy);
+                LoadOverItsDisc(m, copy.ToArray());
+            }
             if (Library.Has(CoreInterface.CapMedia)) m.ReadInfo();
             _cheatVersion = -1;
             IsHaltedAtBreakpoint = false;
@@ -539,7 +609,7 @@ namespace EmuSen.Cores.Native
         }
 
         // A state made over another disc of the set loads with that disc put back first; with none of the set, the drive is left as it was - see EmuSen_CoreAPI.md §6.23.
-        private void LoadOverItsDisc(CoreMachine m, byte[] state)
+        private void LoadOverItsDisc(CoreMachine m, ReadOnlySpan<byte> state)
         {
             try
             {
@@ -691,6 +761,7 @@ namespace EmuSen.Cores.Native
             _machine?.Dispose();
             _machine = null;
             _lending.Close();
+            _rawLending.Close();
         }
     }
 }

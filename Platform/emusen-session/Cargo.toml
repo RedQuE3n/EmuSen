@@ -1,0 +1,16 @@
+[package]
+name = "emusen-session"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# emusen.session, the session as a whole as a command module (EmuSen_DianaSh.md §8.1): `summary` and `coretop`, with
+# the same words as the C# classes they replace. `core` and `state` stay each host's own until the frontend service
+# (§9.9) opens games and the session service saves states for every host (§13.11).
+[lib]
+name = "emusen_session"
+
+[dependencies]
+dianash-module = { path = "../dianash-module" }
+emusen-session-service = { path = "../session-service" }

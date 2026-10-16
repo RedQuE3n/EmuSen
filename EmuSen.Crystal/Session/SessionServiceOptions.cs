@@ -11,6 +11,9 @@ namespace EmuSen.Crystal.Session
         public ICpuTraceSwitch? Trace { get; init; }
         public Func<IReadOnlyCollection<string>>? CheatSystems { get; init; }
         public string? CheatDatabaseDirectory { get; init; }
+
+        // The folder asked for each call, as the cheat command read the player's setting each time, where no fixed folder is given.
+        public Func<string>? CheatDatabaseFolder { get; init; }
         public Action<string>? SaveState { get; init; }
         public Action<string>? LoadState { get; init; }
         public Func<string>? DefaultStatePath { get; init; }

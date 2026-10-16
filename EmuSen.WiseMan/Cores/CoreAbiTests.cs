@@ -25,6 +25,7 @@ namespace EmuSen.WiseMan.Cores
             ["emusen_media"] = typeof(CoreInterface.Media),
             ["emusen_device_lend"] = typeof(CoreInterface.DeviceLend),
             ["emusen_device_frame"] = typeof(CoreInterface.DeviceFrame),
+            ["emusen_raw_frame"] = typeof(CoreInterface.RawFrame),
         };
 
         // A C type as the baseline spells it, as the C# a host must declare it with.
@@ -83,7 +84,7 @@ namespace EmuSen.WiseMan.Cores
         public void Every_export_of_the_baseline_has_its_field_with_the_headers_signature()
         {
             var functions = Lines("fn").ToList();
-            Assert.Equal(59, functions.Count);
+            Assert.Equal(62, functions.Count);
             Assert.Empty(Compare(typeof(CoreInterface), functions));
             var fields = typeof(CoreInterface).GetFields().Where(f => !f.IsLiteral && f.FieldType.IsFunctionPointer).Select(f => f.Name).ToHashSet();
             Assert.Equal(functions.Select(w => CoreInterface.FieldFor(w[1])).ToHashSet(), fields);

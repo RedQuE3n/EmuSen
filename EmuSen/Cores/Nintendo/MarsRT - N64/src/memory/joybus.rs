@@ -74,7 +74,12 @@ fn answered(ram: &mut [u8; 64], port: &mut Controller, id: u8, command: usize, s
     match id {
         INFO | RESET => {
             *wrote = 3;
-            let pak = if port.pak.is_some() { 0x01 } else { 0x02 };
+            let pak = match (port.pak.is_some(), *port.inserted) {
+                (true, true) => 0x03,
+                (true, false) => 0x01,
+                (false, _) => 0x02,
+            };
+            *port.inserted = false;
             reply(ram, command + send, receive, &[0x05, 0x00, pak]);
             true
         }

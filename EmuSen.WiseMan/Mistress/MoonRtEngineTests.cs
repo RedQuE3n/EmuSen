@@ -11,7 +11,6 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
@@ -23,7 +22,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // MoonRT chosen in the graphics window and played in Mistress: frames, rewind, a state the C# Moon reads, and the fallback - see Moon_Native.md §8.3.
+    // MoonRT, the NES's one engine, played in Mistress: frames, rewind and states, a stored Moon (C#) running there quietly, and a build without the library - see Moon_Native.md §9.5.
     [Collection(TestCollections.ProcessGlobals)]
     public class MoonRtEngineTests : IDisposable
     {
@@ -63,36 +62,23 @@ namespace EmuSen.WiseMan.Mistress
             config.Save();
         }
 
+        // The NES has one engine, so its tab offers no choice of engine.
         [Fact]
-        public Task The_NES_tab_offers_the_engine_with_Moon_the_default_and_a_choice_is_stored() => Session.Dispatch(() =>
+        public Task The_NES_tab_offers_no_engine_choice() => Session.Dispatch(() =>
         {
-            var config = new GraphicsConfig();
-            string? told = null;
-            var window = new GraphicsSettingsWindow(config, console => told = console, "NES");
+            var window = new GraphicsSettingsWindow(new GraphicsConfig(), _ => { }, "NES");
             window.Show();
-
-            Dropdown engine = window.GetLogicalDescendants().OfType<Dropdown>().Where(d => d.Name == $"NES.{CoreCatalog.EngineKey}").Distinct().Single();
-            Assert.Equal(new[] { CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine }, engine.Items.Cast<object>().Select(o => o.ToString()));
-            Assert.Equal(CoreCatalog.MoonEngine, engine.SelectedItem);
-
-            engine.SelectedItem = CoreCatalog.MoonRtEngine;
-            Dispatcher.UIThread.RunJobs();
-
-            Assert.Equal("NES", told);
-            Assert.Equal(CoreCatalog.MoonRtEngine, GraphicsConfig.Load().Value("NES", CoreCatalog.EngineKey));
+            Assert.Empty(window.GetLogicalDescendants().OfType<Dropdown>().Where(d => d.Name == $"NES.{CoreCatalog.EngineKey}"));
             window.Close();
         }, default);
 
+        // A stored Moon (C#) runs the game on MoonRT with no notice; frames, rewind and a state saved and loaded all work there.
         [Fact]
-        public Task A_game_runs_on_Moon_until_MoonRT_is_chosen_and_then_on_MoonRT_with_rewind_and_its_states_Moons() => Session.Dispatch(() =>
+        public Task A_stored_csharp_choice_plays_on_MoonRT_with_rewind_and_its_states() => Session.Dispatch(() =>
         {
-            MainWindow window = Start();
-            Assert.IsType<MoonCore>(Game(window).Core);
-            window.Close();
-
             Assert.True(MoonRtCore.Available, MoonNative.Report);
-            Choose(CoreCatalog.MoonRtEngine);
-            window = Start();
+            Choose("Moon (C#)");
+            MainWindow window = Start();
             EmulatorSession game = Game(window);
             Assert.IsType<MoonRtCore>(game.Core);
             Assert.Null(game.EngineNotice);
@@ -102,16 +88,16 @@ namespace EmuSen.WiseMan.Mistress
             Status(window).Text = "";
             Invoke(window, "SaveState");
             WaitFor(() => Status(window).Text?.StartsWith("State saved") == true);
-            var moon = new MoonCore();
-            moon.LoadRom(_rom);
-            moon.LoadState(StatePath(window));
-            Assert.True(moon.TotalFrames > 60);
+            using var reader = new MoonRtCore();
+            reader.LoadRom(_rom);
+            reader.LoadState(StatePath(window));
+            Assert.True(reader.TotalFrames > 60);
             window.Close();
         }, default);
 
         // The library is loaded once per process, so a process started with it off is the only honest test of the fallback - see Mars_Native.md §5.5.
         [Fact]
-        public void With_the_library_turned_off_a_game_asking_for_MoonRT_runs_on_Moon_and_says_why()
+        public void With_the_library_turned_off_an_nes_game_does_not_load_and_the_status_says_why()
         {
             string mark = Path.Combine(_root, "fallback.txt");
             var start = new ProcessStartInfo("dotnet")
@@ -133,9 +119,9 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(File.Exists(mark), "the child ran nothing:\n" + output.Result);
 
             string[] found = File.ReadAllLines(mark);
-            Assert.Equal(nameof(MoonCore), found[0]);
+            Assert.Equal("no core", found[0]);
             Assert.Contains("turned off by EMUSEN_MOON_NATIVE=0", found[1]);
-            Assert.Contains(CoreCatalog.MoonRtEngine + " is not available", found[2]);
+            Assert.Contains("This build has no NES core: " + CoreCatalog.MoonRtEngine + " is missing (turned off by EMUSEN_MOON_NATIVE=0)", found[2]);
         }
 
         // Run only by the test above, in its own process; it asserts nothing unless that process has the library off.
@@ -146,18 +132,14 @@ namespace EmuSen.WiseMan.Mistress
 
             Assert.False(MoonNative.Available);
             Assert.False(MoonRtCore.Available);
-            Choose(CoreCatalog.MoonRtEngine);
             var window = new MainWindow();
             window.Show();
             Invoke(window, "LoadRom", _rom, "Program.nes");
-            string? status = Status(window).Text;
-            EmulatorSession game = Game(window);
-            WaitFor(() => game.TotalFrames > 20);
+            string status = Status(window).Text ?? "";
 
-            Assert.IsType<MoonCore>(game.Core);
-            Assert.Contains("turned off by EMUSEN_MOON_NATIVE=0", game.EngineNotice);
-            Assert.Contains(game.EngineNotice!, status);
-            File.WriteAllLines(mark, new[] { game.Core!.GetType().Name, MoonNative.Report, game.EngineNotice! });
+            Assert.Null(typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
+            Assert.StartsWith("Failed to load Program.nes: ", status);
+            File.WriteAllLines(mark, new[] { "no core", MoonNative.Report, status });
             window.Close();
         }, default);
 

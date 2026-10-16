@@ -2095,3 +2095,401 @@ the exhaustive patch test. The pre-stable exports and `MoonMachine` stay for the
 pre-stable set is deleted. The oracle and the timing are `EmuSen_CoreAPI.md` §26.3–§26.4: every MoonRT test unchanged,
 the bench's four state hashes unchanged, the kit's fifteen cases on the four games, and the plain frame −0.99% to
 +1.98% across the four games on a loaded machine.
+
+### 8.6 The bus cycle out of line: a seven-minute build (2026-10-16)
+
+MoonRT took longer to build than any other library in `rust-cores.yml`, although the NES is the simplest console the
+project emulates. This section records the cause, measured before anything was changed, and the change that removed
+it.
+
+#### 8.6.1 What CI showed
+
+In run 38861419247 (branch `windows-platform`, 2026-10-16), MoonRT's four jobs were the four slowest of the 28
+library jobs:
+
+| Platform | Job | `cargo test --release` | `cargo build --profile dist` |
+|---|---|---|---|
+| win-x64 | 37.4 min | 20.5 min | 15.6 min |
+| osx-arm64 | 30.6 min | 16.9 min | 12.9 min |
+| osx-x64 | 16.0 min | 9.2 min (under Rosetta) | 6.2 min |
+| linux-x64 | 11.2 min | 5.7 min | 4.8 min |
+
+No other library's dist build took more than 2.1 minutes (MarsRT's on linux-x64, with its PGO toolchain), and
+most took under half a minute. `libmoonrt.so` was 7.3 MB, near MarsRT's 8.3 MB, which carries Cranelift.
+
+#### 8.6.2 Where the time went (measured)
+
+Measured on the 7700X with Fedora's rustc 1.99.0, the toolchain the desktop builds with, in a target folder of its
+own:
+
+- **The build.** `cargo build --profile dist --timings` took 7 min 42 s. Of that, 460.7 s was the `moonrt` unit
+  and 1.9 s `emusen-native`.
+- **The library.** `.text` was 6,854,835 bytes. Two functions held 80.6% of it: `Cpu::dispatch::<Plain>` at
+  2,761,746 bytes and `Cpu::dispatch::<Observed>` at 2,762,526. The next largest MoonRT function,
+  `Cpu::run_oam_dma`, was 24,865 bytes.
+- **The compiler.** `-Ztime-passes -Ztime-llvm-passes` were run on the same rustc, through `RUSTC_BOOTSTRAP=1`, for
+  this measurement only. Of 438.6 s, 438.0 s were LLVM's passes, and the front end took under a second. The
+  passes that dominate are the ones whose cost grows faster than a function's size: CodeGenPrepare took 211.6 s
+  (48.5%), GVN 64.8 s (14.9%), MachineCSE 28.0 s, LoopRotate 17.6 s and LICM 17.6 s.
+
+**The mechanism (read from the code).** `Cpu::read` and `Cpu::write` were `#[inline(always)]`, and so was each
+function under them:
+
+- `begin_cycle` and `MemoryBus::tick`, which run the PPU's first two dots, the APU's step, the board's CPU-cycle
+  clock and the pad strobe;
+- `end_cycle`, which runs the third dot;
+- `Ppu::step`, `run_dot`, `run_visible_dot` and the fetches;
+- `Apu::step` with its channels and its mixer.
+
+Every bus access the opcodes make in `dispatch` therefore carried three copies of the PPU's dot logic and one of the
+APU's step. Once out of line, one `read` is 5,358 bytes. Each `dispatch` was about 515 times that, so about 515
+bus cycles had been inlined into it.
+
+#### 8.6.3 The change
+
+`Cpu::read` and `Cpu::write` are `#[inline(never)]`. Nothing else changed: the clock, the bus and the opcodes keep
+their attributes, so a bus cycle is one call with its whole clock inside it.
+
+A second form was measured beside it, with the clock (`MemoryBus::tick` and `MemoryBus::end_cycle`) out of line and
+the access inlined. It built in 13.5 s and gave a 1.55 MB library, with each `dispatch` at 384 KB. Its frame was
+2.5% slower than the chosen form's (geometric mean of the medians, §8.6.5). The chosen form is also the smaller
+change, made at the natural seam of one bus cycle, and it builds faster.
+
+| | Before | Clock out of line | Bus cycle out of line (chosen) |
+|---|---|---|---|
+| `cargo build --profile dist`, clean | 462 s | 13.5 s | 3.9 s |
+| `cargo test --release`, clean | 478.8 s | — | 16.6 s |
+| `libmoonrt.so` | 7,334,768 B | 1,554,032 B | 813,568 B |
+| `dispatch`, each | 2.76 MB | 384 KB | 13,922 B |
+
+Windows and macOS could not be measured here. CI measured them in run 38896556802, the first with the change
+(branch `ci-speed`, 2026-10-16), against run 38861419247 before it:
+
+| Platform | Job before | Job after | Test step after | Build step after |
+|---|---|---|---|---|
+| win-x64 | 37.4 min | 1.8 min | 0.4 min | 0.1 min |
+| osx-arm64 | 30.6 min | 0.9 min | 0.2 min | 0.1 min |
+| osx-x64 | 16.0 min | 1.1 min | 0.4 min (under Rosetta) | 0.1 min |
+| linux-x64 | 11.2 min | 0.7 min | 0.2 min | 0.1 min |
+
+The 28 library jobs together took 85.3 job-minutes in that run, against 187.7 before, and MoonRT's four took 4.5
+of them.
+
+#### 8.6.4 Same output, byte for byte
+
+- **The library's exports, frame by frame.** A small program (`nesbench`, in `~/.cache/emusen/probe/ci-speed/bench/`)
+  loads the dist library through its native exports and runs `moonbench`'s schedule (§1.1). That is 900 frames with
+  Start and A pressed in turn, then 3,000 more, with the picture copied and the audio drained after every frame. It
+  folds every frame's picture, every frame's samples and every frame's saved state into three FNV-1a digests.
+
+  It was run on 25 ROMs: the bench's four games, Castlevania, Kirby's Adventure, Mega Man 2, the two synthetic ROMs,
+  and the sixteen board ROMs (mappers 0, 1, 2, 3, 4, 7, 9, 11, 64, 65, 66, 67, 68, 69, 71 and 79). For all 25, the
+  three digests and the final state are identical across the library before the change, the chosen form and the
+  other form.
+- **The crate's tests.** All 6 pass before and after.
+- **WiseMan, with the new library beside the tests.** Every Moon-filtered class that holds MoonRT to C# Moon was
+  run: the state, machine, random-program, board, sound-and-picture, game, frontend, armed-equals-plain,
+  debug-target, sprite 0, AccuracyCoin and core ABI classes, and the Mistress engine tests. That is 260 cases, and
+  all pass. They include the bench games and the eleven library states run frame by frame against C#, and
+  AccuracyCoin scoring as C# does. The core ABI classes need the sidecar beside the library, as CI ships it, so it
+  was written with `emusen-core-conform --sidecar` first.
+- **The corpus.** `MoonRtCorpusTests` ran on both engines: 255 ROMs run, 8 refused by both, 363,935 frames
+  identical in state, and 114 verdicts with 105 passed. That is §3.14's transcript, unchanged.
+
+#### 8.6.5 Speed (measured)
+
+The comparison used `nesbench`'s timed 3,000 frames, through the library's exports. There were five rounds,
+interleaved by game and by library, under the timing lock. The load average was 3.5–5.0, since other work was
+running, so medians are reported.
+
+| Game | Before, median ms/frame | Chosen form | Change | Clock out of line | Change |
+|---|---|---|---|---|---|
+| Super Mario Bros. | 1.067 | 0.920 | −13.8% | 0.946 | −11.4% |
+| Zelda | 0.953 | 0.907 | −4.8% | 0.925 | −2.9% |
+| Super Mario Bros. 3 | 1.420 | 1.138 | −19.9% | 1.181 | −16.8% |
+| Punch-Out!! | 1.254 | 1.090 | −13.1% | 1.106 | −11.7% |
+
+The geometric mean of the medians is −13.0% for the chosen form and −10.9% for the other. In 18 of the 20 paired
+runs the chosen form was faster. Its two slower runs were 1.324 and 1.347 ms, against its other runs of 0.91–1.10
+ms on those games, and they read as interference.
+
+A second session repeated the comparison with the library as committed, before against after only, in five more
+rounds. The load average rose from 1.5 to 5.1 during it. The medians moved by −12.2% on Super Mario Bros., −1.1% on
+Zelda, −18.5% on Super Mario Bros. 3 and −13.7% on Punch-Out!!, a geometric mean of −11.6%.
+
+**The argued explanation.** The change adds a call per bus cycle and still makes the frame faster. The likely
+reason is the instruction cache. Each `dispatch` was 2.7 MB, and the 7700X has 1 MB of L2 per core, so the hot path
+cannot stay in L2. Now the PPU's and APU's code is one copy of 5 KB that every opcode shares. No counter was read
+to show this: the desktop has no `perf`. It stays argued.
+
+**Why this is not a rule about `#[inline(always)]`.** The attribute was right for the small pieces. It is the
+composition that went wrong: a per-cycle clock forced into every one of the ~515 bus cycles of a decode switch. A
+core whose bus access is cheap, or whose decode is a table of functions, does not meet this. A core that
+inlines a per-cycle clock into a large switch does. §8.6.6 records that no other library shows the sign.
+
+#### 8.6.6 The other libraries
+
+CI's step times for run 38861419247, and the largest functions of each core's dist library as built on 2026-10-15,
+show nothing similar:
+
+- **MercuryRT.** Its largest functions are `Cpu::execute`, at 114 KB for each bus view, and its build steps took
+  0.1–0.2 min.
+- **VenusRT.** Its largest functions are under 28 KB.
+- **Nephrite.** Its largest functions are the 68000's `execute`, under 20 KB each.
+- **Diamond.** Its largest function is `Machine::write`, at 54 KB.
+- **MarsRT.** Its 8.3 MB is mostly Cranelift (one generated simplifier of 308 KB) and two tables of 128 KB and 256
+  KB, which is a dependency's size rather than a composition's.
+
+MarsRT's long CI test steps (3.9–7.5 min) are its suites' running time, not its build.
+
+## 9. Stage 8: the goldens, and the C# core's retirement (2026-10-16)
+
+*Decided 2026-10-16 by the tester:* MoonRT is no longer compared against C# Moon. A C# core is not kept as an oracle
+once it is replaced; it is deleted with the tests that need it. A Rust core's oracles are its own recorded goldens and
+digests, the hardware test-ROM corpora and the conformance kit. This section is stage 8's record, and the record of
+the move that §3.6 planned, in the order the work was done.
+
+### 9.1 What changed in §3.6's plan
+
+§3.6 planned three layers on `Mercury_Native.md` §3.7's model: traces recorded from the C# core before it left,
+interval states kept locally, and a live differential on a legacy branch. The decision above removes the third layer,
+and it changes where the first is recorded from: the traces are recorded **from MoonRT itself**. The argument for
+that is the record of stages 1–5 and §3.8–§3.14: from stage 2 on, every comparison the project ran found the two
+engines identical in state, picture and sound, on the synthetic programs of every board, on random programs
+instruction by instruction, on the corpus frame by frame and on the bench games. A trace recorded from MoonRT is
+therefore a trace of the machine the C# core described, and §9.3 checks that claim once more against the corpus,
+the one oracle that is independent of both engines. What the recording does not carry is any authority beyond
+that: a defect the two engines shared is in the goldens too, and only a hardware test ROM can find it.
+
+### 9.2 The goldens
+
+**The form** is `Mercury_Native.md` §14.4's, in a shared reader (`EmuSen.WiseMan/Fixtures/GoldenTrace.cs`). A trace
+is a text file under `EmuSen.WiseMan/Cores/MoonGoldens/`. Its header names the run, the ROM's full SHA-256, the input
+script with a fingerprint of the masks it presses, whether rendering is skipped, the unit of its rows, the engine it
+was recorded from and the reason it was last recorded. Three units are used:
+
+- `frame`: a row per frame, `frame state picture sound`, each the first eight bytes of SHA-256 over the save state,
+  the RGBA frame and the drained samples; a value equal to the one above is written `=`.
+- `step`: an instruction run, each instruction's state hash folded into a chain,
+  `chain = SHA-256(chain ‖ state)[0..8]`, written every 100 instructions and at the end.
+- `chain`: the same fold over frames, the link being the hash of the frame's three hashes, written every 60 frames and
+  at the end. The corpus uses it, since 141 of its ROMs never give a verdict and run the whole 2,400 frames; a row per
+  frame would have cost about 16 MB for the corpus alone. A difference then names a 60-frame window, and the
+  interval states narrow it.
+
+A corpus run follows blargg's `$6000` protocol exactly as the runner does (`EmuSen.Pharaoh/NesTestRomProtocol.cs`,
+`Moon_TestRoms.md` §2), resets included, and ends at its verdict; its transcript holds the verdict and its frame, the
+number of resets and the `$6004` text.
+
+**The catalogue** (`MoonGoldenTests`), recorded 2026-10-16 at `ec9810f4`:
+
+| Runs | Files | What | Rows |
+|---|---|---|---|
+| `programs/busy-MM-C`, `programs/board-MM-C` | 64 | the busy loop and §3.5's board program on each of the sixteen boards with CHR ROM and CHR RAM, 600 frames; the board program with both pads changing every seventh frame | 38,400 |
+| `programs/rambo1-cycle-irq`, `mask-cycle`, `board-04-8-skipped`, `resets-01-0` | 4 | RAMBO-1's CPU-clocked IRQ; a palette entry and `$2001`'s grayscale and emphasis bits rewritten each frame; rendering skipped; the RESET button at frames 100 and 200 | 1,800 |
+| `steps/board-MM` | 4 | the board program on MMC3, MMC2, RAMBO-1 and FME-7, 60,000 instructions each | 2,400 |
+| `steps/random-MM-C-S` | 256 | eight random programs on each board, 4,000 instructions; from the fifth seed on the `JAM` opcodes are `NOP`s | 10,240 |
+| `corpus/…` | 263 | every ROM of `christopherpow/nes-test-roms` to its verdict or 2,400 frames, rendering skipped, with its transcript | 6,050 |
+| `games/<sha>` | 7 | seven commercial games from boot with the bench's Start and A presses, 3,600 frames | 25,200 |
+
+598 files and 3.2 MB of text. The games are named by the first sixteen digits of their SHA-256 and found in the ROM
+library by size, then hash (`EMUSEN_MOONRT_ROMS=library`, or a folder); they bring NROM, UxROM, MMC1 twice, MMC3 twice
+and MMC2. No ROM is committed, and nothing in a trace names a game.
+
+**Interval states.** While recording, every frame run keeps its state at every 300th frame under
+`~/.cache/emusen/moonrt-goldens/<run>/` (`EMUSEN_MOONRT_GOLDEN_STATES` moves it): 1,397 states, 52 MB, outside the
+tree. Where a machine holds them, a frame run that passes is graded a second time from the state of an early interval
+frame loaded into a fresh core, and a failure is bisected to the first byte and field, named by MoonRT's own layout
+listing, in which the engine's state differs from the recorded one.
+
+**Re-baselining** is deliberate and states its reason:
+
+```
+EMUSEN_MOONRT_GOLDEN_RECORD=1 EMUSEN_MOONRT_GOLDEN_REASON="<why>" EMUSEN_MOONRT_CORPUS=<corpus> \
+  EMUSEN_MOONRT_ROMS=library dotnet test EmuSen.WiseMan --filter "FullyQualifiedName~MoonGoldenTests"
+```
+
+A recording run without a reason fails. Only a trace whose content changed is rewritten, and its `reason` line is
+replaced, so each file says why it last moved, and the history of the directory is the list of intended departures.
+
+**The broken-trace check.** `A_deliberately_broken_trace_is_caught` changes one digit of frame 300 of
+`programs/board-04-8` in memory, once each in the state, picture and sound column, and the grader names the frame and
+the part; `A_deliberately_broken_step_chain_is_caught` does the same to a step chain. The same was done once to a
+committed file: frame 300's state of `programs/busy-04-8.trace` was changed from `A9CCF33A5C0FC781` to `…780`, and the
+case failed with "frame 300: the state differs (recorded A9CCF33A5C0FC780, now A9CCF33A5C0FC781); at frame 300 the
+state equals the recorded one byte for byte, so the trace moved and not the engine". The file was restored.
+
+**The result.** All 112 cases of `MoonGoldenTests` pass in 5.0 minutes with the corpus and the games present: every
+trace reproduced, and the frame runs reproduced again from their recorded interval states.
+
+### 9.3 The corpus against the C# core's baseline
+
+Before anything was recorded, the C# core's transcript was taken once more at `ec9810f4` with its own runner
+(`NesTestRomRunner`, 2,400 frames). It is the transcript of §3.14 line for line: 263 ROMs, every verdict, frame,
+reset count and text hash as on 2026-10-04. MoonRT's goldens give, against it:
+
+| | Passed | Failed | No verdict | No board |
+|---|---|---|---|---|
+| C# Moon, 2026-10-16 | 105 | 9 | 141 | 8 |
+| MoonRT, its goldens | 105 | 9 | 141 | 8 |
+
+Every ROM has the same verdict, on the same frame, after the same number of resets, with the same `$6004` text. The
+only lines that differ are the eight ROMs no board runs, whose C# "text" was the refusal's message and whose MoonRT
+transcript has none. **No verdict is worse**, so nothing was papered over. The two columns are committed as
+`EmuSen.WiseMan/Cores/MoonCorpusBaseline.tsv`; the C# column is frozen there, since it cannot be produced again, and
+`No_corpus_verdict_is_worse_than_the_csharp_baseline` holds every committed corpus trace to the MoonRT column and to a
+standing no lower than the C# one.
+
+### 9.4 MoonRT the default, and what its shim took from the C# core
+
+*Decided 2026-10-16 by the tester: MoonRT is the default and the C# core is deleted.*
+
+The Engine row's default was switched first, with both engines still present and the corpus and goldens as the
+proof (§9.2, §9.3). Before the C# core could go, what MoonRT's shim borrowed from it was given one owner each:
+
+| Borrowed | Was | Now |
+|---|---|---|
+| The debugger's view: the CPU, PPU and APU registers, the sprites, the five channels, the summary | `MoonDebugTarget` over a hidden `MoonCore`, loaded from MoonRT's state before each read (§8.3) | `MoonRtDebugTarget` in the shim, reading MoonRT's saved state by its own layout listing (`StateLayout`, `EmuSen_NativeCores.md` §3.14.1); no C# machine is built |
+| The palettes, the swatch, the tile sheet, the nametable and tile decoders, the three vectors, the master palette | `MoonDebugTarget` and `Ppu.NesPalette` | the NES system pack's `NesDebugViews` (`EmuSen.Crystal/Systems/Nes/`), which any NES engine's spaces feed |
+| The 6502 disassembler | `Nes6502Disassembler` beside the C# CPU's opcode table | the pack, with its own mnemonic table |
+| Game Genie and `address:value` codecs | `Moon/Cheats` | the pack (`NesSystem.GameGenie`, `NesSystem.Raw`), as the SNES pack carries its two |
+| The pad's buttons, the two ports, the systems-table facts | `MoonCore.PadButtons`, `MoonCore.Ports`, the catalogue's own row | the pack's `NesSystem` |
+| The header read, and the battery rule | `Cartridge.FromImage`, which also built a board | the pack's `NesHeader`, which builds none; a battery file is opened only for a board MoonRT builds |
+| The board names, each board's registers for `regs`, and its nametable arrangement for the summary | each C# board's `Name`, `DebugState` and `Mirroring` | the shim's `MoonBoards`, a table of state paths and the arrangement rule per board |
+| The state's magic and versions, the frame rate, the screen's size | `MoonCore` constants | the shim's constants |
+| The debugger's registries: breakpoints, watches, coverage, the call stack, labels, cheats | the mirror's | the shim's own, wired as the C# core wired them (`PortEngine`'s mirror is now optional) |
+
+**What the shim derives, and why it is written down here.** Three values the C# debugger read off computed properties
+are derived in the shim from the state's fields by the same rule: a pulse channel's silencing (a period under 8, or a
+sweep target past `$7FF`), an envelope's output (the volume when constant, else the decay counter), and the DMC's
+activity (bytes remaining). The board table holds the nametable arrangement rule for each of the sixteen boards, as
+`Moon_Memory.md` §3–§4 states them. These are the only facts with a second statement outside the crate; each is a
+display rule, and none feeds the machine.
+
+**Proof.** The DianaSh golden corpus's `moonrt` cases, written while the mirror drove the debugger, are reproduced by
+the new target unchanged: the registers, the sprites, the channels, the summary, the disassembly, coverage, the call
+stack and the breakpoints. Only the `moon` cases were removed (§9.5).
+
+### 9.5 The C# core deleted, and what left with it
+
+**What was deleted.** `EmuSen/Cores/Nintendo/Moon - NES/`, 52 files and 6,942 lines: the machine, its debug target,
+its APU write trace, its validation adapters and the cheat codecs, which had moved to the pack first. With it went
+the Engine row's choice, the factory's C# arm (`.nes` now opens MoonRT or says plainly that this build has no NES
+core), the `<Fallback>` in `RustCores.props`, and the NES's line in the reference-engine table. The NES joins the N64
+and the Game Boy as a console whose one engine is its port's shim, registered by hand (`SoleEngines`), and a stored
+choice of `Moon (C#)`, in the console's settings or a game's, runs the game on MoonRT with one log line a process
+(`RetiredEngines`, the mechanism the other two retirements put in place).
+
+**The tests.** Every WiseMan test that ran C# Moon or compared MoonRT against it was deleted or turned onto MoonRT
+alone:
+
+- deleted, as comparisons: `MoonRtMachineTests` with its random-program and corpus classes, `MoonRtStateTests`,
+  `MoonRtSoundAndPictureTests`, and the lock-step cases of the debugger, frontend, sprite 0 and battery classes; their
+  programs moved to `Fixtures/MoonPrograms.cs` and are the goldens' (§9.2);
+- deleted, as claims about the C# machine's internals: `MoonCoreTests`, `MoonApuTests`, `MoonMapperTests`, the three
+  defect classes' cases that poke C# objects, `MoonDebugTargetTests` and `Nes6502CpuTests`;
+- turned onto MoonRT: the debug contract and the engine's debugger cases, `runto frame`, the cheats, the sprite 0
+  split and SMB's slivers, blargg's 2005 sprite-hit set, the NMI and vblank ROMs, the protocol harness, AccuracyCoin
+  against its recorded result block, battery saves, the controller ports, the pad, the state header, and the Mistress
+  engine cases, which now hold that the NES offers no engine choice and that a build without the library loads no NES
+  game and says why;
+- in the DianaSh golden corpus, the `moon` cases with a `moonrt` twin were removed, and the eleven commands covered on
+  `moon` alone (`addr`, `callers`, `cheat`, `counters`, `framelog`, `mute`, `readers`, `tile`, `tilemap`, `watch`,
+  `writers`) were pointed at `moonrt`, whose output for them is the same text.
+
+**What is lost, and is written down here.**
+
+- **The pre-palette picture.** C# Moon handed the CRT filter each pixel's colour number and PPUMASK's emphasis
+  (`ICore.RawPicture`, `EmuSen_CRT.md` §22), from which the filter builds the NES's own composite signal. MoonRT does not
+  publish one, so since MoonRT became the default the NES is drawn from its RGB frame, as every other console is. MoonRT
+  would need a second buffer written beside the pixel writes and a way to hand it over; that is a change to the crate
+  and to the core ABI's surface, and is left as the first item of §9.6.
+- **The 6502's single-step vectors.** `nes6502/v1`, 2.56 million cases with bus traces, graded the C# CPU through
+  Pharaoh's `--singlestep nes6502`; MoonRT's CPU has no single-step surface, so the target left with the C# CPU. §3.6
+  proposed the test interface that would bring them back; MoonRT's CPU is held meanwhile by the corpus's CPU suites,
+  AccuracyCoin's CPU pages and the step goldens.
+- **The C# machine's unit claims.** The defect classes of §3.8–§3.12 held their rules on C# objects. Each rule was
+  carried into MoonRT and proved there by the comparisons of those stages; the rules now stand on the goldens, the
+  corpus ROMs that witness them, and AccuracyCoin, and no longer on a test of their own.
+- **`--apulog` and `apudiff`.** The `$4000`–`$4017` write log was the C# core's (`EmuSen_Debugging_Tools_Reference_v5.md`
+  §3.46); the option now refuses with this reason.
+- **Board register names in `regs`.** Kept: the shim's board table names each board's registers as the C# boards did.
+
+### 9.6 What is not done
+
+- ~~**MoonRT's pre-palette picture** for the CRT filter's composite path (§9.5).~~ Done 2026-10-16 as the core ABI's
+  minor 1.10, §9.7.
+- **A single-step interface for MoonRT's CPU**, for `nes6502/v1` (§3.6).
+- ~~**The NES system pack's palette and MoonRT's** are two statements of the 64 colours; the debugger's views and the
+  Python analysis scripts read the pack's, the picture MoonRT's. A test that holds the two equal is owed; they are equal
+  today by inspection.~~ Done 2026-10-16: MoonRT declares its palette in machine info (§9.7), and
+  `MoonRtRawPictureTests` holds all 512 of its entries to the pack's `NesDebugViews.MasterPalette`.
+- **`MercuryGoldenTrace`** is the same format as the shared `GoldenTrace`; folding it in is left to the Game Boy's
+  side.
+
+### 9.7 The picture before the palette, on the core ABI (2026-10-16)
+
+§9.6's first item, built as the core ABI's minor 1.10 (`EmuSen_CoreAPI.md` §6.30), which defines the surface for any
+core; this section records MoonRT's side of it. MoonRT claims `RAW_PICTURE` and lists one encoding, `nes.ppu`: two
+bytes a pixel, the colour number in bits 0–5 and PPUMASK's bits 5–7 in bits 6–8, 256 × 240, the rectangle of its RGB
+frame. Machine info declares the palette its RGB frame draws each value with: 512 entries, the 64 colours of
+`NES_PALETTE` repeated for each emphasis setting, since MoonRT's RGB frame, like C# Moon's, applies no emphasis.
+
+**The mechanism.** A line is composed in one pass at dot 256 (§2.5), so palette RAM and PPUMASK stand still while it
+is, and each pixel's value is the colour number the RGB path already looks up, with PPUMASK's top three bits. The
+composition is generic over whether it keeps the value. The form without is the code as it was. The form with writes
+each value into a 512-byte line on the stack and copies the line into the frame's raw buffer at its end; it lives in a
+function of its own, `composite_keeping_raw`, chosen once per line. The buffer, 120 KiB, is made the first time the
+encoding is asked for, behind one field of `Ppu` that holds it, whether it is asked for, whether it has been since the
+frame began, and whether it holds the frame `frame_rgba` holds. A frame drawn to its end with the encoding kept from its
+start is kept; a frame drawn without it lets the last one go; a frame whose rendering is skipped leaves both pictures
+as they were; a debugger's stop part-way through a frame decides nothing until the frame ends. Neither picture is in
+the state, so a load leaves both as they stand, which is §6.30's rule.
+
+**Proof.**
+
+- **The crate.** An emphasis write timed from the NMI, about 124 lines into the frame, is in the raw picture from line
+  103 on, the same line in every frame checked, every line one value throughout, while the RGB frame, without
+  emphasis, cannot show it; every value is its RGB pixel through the declared palette. A picture of tiles, colours and
+  sprites is its RGB frame through the palette pixel for pixel over 30 frames, and a machine keeping the encoding has
+  the same pictures and the same state as one keeping none.
+- **WiseMan** (`MoonRtRawPictureTests`). Every frame of the 67 golden runs that draw (§9.2's two synthetic programs on
+  each of the 32 board forms, RAMBO-1's cycle IRQ, the mask cycle and the resets), run with `nes.ppu` asked for
+  through the host:
+  each frame's raw picture through the NES system pack's palette (`NesDebugViews.MasterPalette`) is MoonRT's RGB frame,
+  every pixel, and every trace is still its golden, state, picture and sound. The mask cycle's frames carry all eight
+  emphasis settings. The same holds for the seven games of §9.2's catalogue, read from the library in place, 3,600
+  frames each (none of them sets an emphasis bit in that run). The 512 entries MoonRT declares equal the pack's 64 colours, which discharges §9.6's third item.
+  The host hands nothing until asked, nothing for a name the core does not list, and nothing for a frame drawn after
+  the encoding was let go; a skipped frame keeps the picture before it.
+- **The kit.** C21 on Super Mario Bros. (a copy; the library is read only): 120 of 120 frames handed, each its frame
+  through the declared palette, none unasked, and the run the same as one keeping none (`EmuSen_CoreAPI.md` §28.13).
+- **The goldens** (`MoonGoldenTests`) pass unchanged: nothing of the run moves.
+
+**Cost (measured).** A program of the bench's kind (`nesbench`'s schedule, §8.6.4: Start and A in turn, the picture
+read after every frame) ran 3,000 frames of each of four games, copies of the library's, on one pinned core under the
+timing lock, seven rounds interleaved by game and by build: the build before this change, this one asking for nothing,
+and this one keeping `nes.ppu` and copying it out every frame as a host does. Medians, ms a frame; the load average
+was 1.2–3.0:
+
+| Game | Before | Nothing asked for | Change | `nes.ppu` kept | Change |
+|---|---|---|---|---|---|
+| Super Mario Bros. | 0.870 | 0.865 | −0.7% | 0.947 | +8.8% |
+| Zelda | 0.881 | 0.882 | +0.2% | 0.939 | +6.7% |
+| Super Mario Bros. 3 | 1.083 | 1.084 | +0.0% | 1.217 | +12.3% |
+| Punch-Out!! | 1.029 | 1.032 | +0.3% | 1.096 | +6.5% |
+
+The geometric mean is −0.02% asking for nothing, which is no difference: in 14 of the 28 paired runs that build was at
+or below the one before. Keeping the encoding costs +8.5%, paid only while a filter that reads it is chosen.
+
+**A retired prediction, and why the first measurements misled.** The first form tested a flag in the pixel loop, on
+the prediction that a branch the predictor always gets right costs nothing measurable. It cost +11% asking for
+nothing on Super Mario Bros. Two controls that add no work showed what was measured instead. Marking `composite`
+`#[inline(never)]`, or `#[inline(always)]`, with no other change, cost +8%. Adding three `bool` fields to `Ppu`,
+unused, grew it from 688 bytes to 696 and cost +2.5%. Since §8.6 the PPU's dot logic is inlined into each of the CPU's
+two out-of-line bus-cycle functions, so a change to a function the dot reaches, or to the struct it reads, moves
+the code and data of the hottest path in the library; on this build that alone is several per cent. The form kept
+leaves the loop without the encoding the same code, and puts the encoding's state behind one pointer field; `Ppu`
+still grows by those 8 bytes, and that is in the measurement above. The finding does not generalise to "a
+flag in a loop is expensive"; it says that on this library an A/B of a hot path needs a control that changes placement
+and adds no work before a cost is attributed. That is put to the tester as a rule for the project's benches.

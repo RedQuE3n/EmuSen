@@ -1,0 +1,26 @@
+[package]
+name = "emusen-dianash"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# DianaSh's shell core: the language, its builtins, sessions, accounts, the sandbox, command lookup and the host
+# commands' calling convention. It names no emulator type; Galaxia's crate gives it the tree. See EmuSen_DianaSh.md §4.
+[lib]
+name = "emusen_dianash"
+
+[dependencies]
+# The module ABI's types, which the shell calls modules and a host's commands through.
+dianash-module = { path = "../dianash-module" }
+# .NET's rules, which the C# shell's words rest on.
+emusen-dotnet = { path = "../dotnet" }
+emusen-galaxia = { path = "../galaxia" }
+# passwd's stored hash, as DianaShUserRegistry computes it.
+sha2 = "0.11"
+
+# The golden corpus is run with the text tools' module linked in, as the programs link it.
+[dev-dependencies]
+dianash-text = { path = "../dianash-text" }
+# The corpus's patterns, for the cases that print a time.
+regex = "1"

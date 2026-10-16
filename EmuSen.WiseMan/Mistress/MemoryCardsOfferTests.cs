@@ -66,9 +66,9 @@ namespace EmuSen.WiseMan.Mistress
         private static Task Offer(MainWindow window, string rom) =>
             (Task)typeof(MainWindow).GetMethod("OfferCardImportAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { rom })!;
 
-        // The PlayStation's card, read by its module, is Shared by default; the Sega CD's media, which no module reads yet, stay Per game.
+        // The PlayStation's card and the Sega CD's two media, each read by its module, are Shared by default; a choice stored is kept.
         [Fact]
-        public void A_medium_with_an_import_is_shared_by_default_and_one_without_is_per_game()
+        public void A_medium_with_an_import_is_shared_by_default()
         {
             var card = MemoryCards.MediaFor("PlayStation").Single();
             Assert.Equal(MemoryCards.Shared, MemoryCards.Read(_ => null, card).Mode);
@@ -76,7 +76,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(MemoryCards.PerGame, MemoryCards.Read(key => key == MemoryCards.ModeKey ? MemoryCards.PerGame : null, card).Mode);
             Assert.Equal(MemoryCards.PerGame, MemoryCards.Read(key => key == MemoryCards.ModeKey ? "nonsense" : null, card).Mode);
             var segaCd = MemoryCards.MediaOf("Sega CD", CoreLibrary.Open(NephriteTests.LibraryPath).Info.Systems.Single(s => s.Id == "mcd"));
-            Assert.All(segaCd, m => Assert.Equal(MemoryCards.PerGame, MemoryCards.DefaultMode(m)));
+            Assert.All(segaCd, m => Assert.Equal(MemoryCards.Shared, MemoryCards.DefaultMode(m)));
         }
 
         // Accepted once: every game's saves copied onto Card 1, the games' cards unchanged, the offer recorded and not made again.

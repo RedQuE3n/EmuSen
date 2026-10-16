@@ -15,7 +15,6 @@ using Avalonia.VisualTree;
 using EmuSen.Common;
 using EmuSen.Common.Firmware;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Endymion;
 using EmuSen.Endymion.Input;
 using EmuSen.Serenity;
@@ -451,7 +450,7 @@ namespace EmuSen.Mistress.Views
             GameFrame.ShaderParameters = ShaderParameterValues(console, stored ?? choice.Name);
             GameFrame.ActiveEffect = choice.Effect;
             // Before the filter, whose chain starts from this console's defaults and constants - see EmuSen_Serenity.md §3.9.
-            GameFrame.FilterConsole = console;
+            GameFrame.FilterConsole = EmuSen.Cores.CoreCatalog.HostOf(console);
             GameFrame.SquarePixels = _graphics.Value(console, GraphicsSettingsWindow.PictureShapeKey) == GraphicsSettingsWindow.SquarePixels;
             GameFrame.Crop = RunningCrop(console);
             GameFrame.ActiveFilter = choice.Filter;
@@ -919,8 +918,6 @@ namespace EmuSen.Mistress.Views
                 RecordPlayTime();
                 KeepCheatList();
             }
-            // On the OLD session: StartLogging's own StopLogging would take the new one - see §4.22.
-            _session?.FlushVerboseLogs();
             _session?.ReleaseMedia();
         }
 
@@ -1327,6 +1324,7 @@ namespace EmuSen.Mistress.Views
                 }
 
                 session.SkipRendering = !_speed.ShouldRender(session.TotalFrames);
+                session.RawEncoding = GameFrame.RawEncoding;
 
                 try
                 {
@@ -1357,7 +1355,7 @@ namespace EmuSen.Mistress.Views
                     requestsTicks += afterRequests - afterRun;
 
                     // Right after RunFrame, which is what produces new samples to drain.
-                    // Off for an engine that withholds it, which is Mars (C#) alone - see EmuSen_Settings_Reference.md §4.85.4.
+                    // Off for an engine that withholds it - see EmuSen_Settings_Reference.md §4.85.4.
                     bool captured = session.Core is not null && EmuSen.Cores.EngineFeatures.Of(session.Core).RewindCapture && _rewind.OnFrameCompleted(session.Core);
 
                     // Drained every frame either way, so a muted stretch cannot back the buffer up - see EmuSen_Audio_Sync.md §4.
@@ -1494,7 +1492,7 @@ namespace EmuSen.Mistress.Views
         }
 
         // Called from the emulation thread; newest wins - see EmuSen_Serenity.md §4.
-        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, byte[]? raw = null)
+        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, EmuSen.Serenity.RawPicture? raw = null)
         {
             _frames.Offer(pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw);
         }
@@ -1529,9 +1527,6 @@ namespace EmuSen.Mistress.Views
         private void StopLogging()
         {
             if (_activeLogWriter is null) return;
-
-            // Before Console.SetOut/Dispose - see EmuSen_Settings_Reference.md §4.22.
-            _session?.FlushVerboseLogs();
 
             Console.SetOut(_originalConsoleOut);
             _activeLogWriter.Dispose();

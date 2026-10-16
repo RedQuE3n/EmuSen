@@ -5,13 +5,9 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.MercuryRT;
-using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
-using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
@@ -27,7 +23,7 @@ namespace EmuSen.WiseMan.Cores
         public const string StatesFromVariable = "EMUSEN_CORE_HASH_STATES_FROM";
         public const string OnlyVariable = "EMUSEN_CORE_HASH_ONLY";
 
-        // One fixed home, since a Venus state carries its battery save's full path and so differs by directory.
+        // One fixed home, so a state that names a battery save's path is the same from run to run.
         private static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache", "emusen", "probe", "core-hash-home");
 
         public CoreOutputHashProbe() => DataStore.OverrideDirectory = Home;
@@ -36,14 +32,9 @@ namespace EmuSen.WiseMan.Cores
 
         private static readonly (string Core, string Extension, int Frames, Func<ICore> Create)[] Cores =
         {
-            ("Moon", ".nes", 900, () => new MoonCore()),
             ("MoonRT", ".nes", 900, () => new MoonRtCore()),
-            ("Mercury", ".gb", 900, () => new MercuryCore()),
             ("MercuryRT", ".gb", 900, () => new MercuryRtCore()),
-            ("Mercury", ".gbc", 900, () => new MercuryCore()),
             ("MercuryRT", ".gbc", 900, () => new MercuryRtCore()),
-            ("Venus", ".smc", 600, () => new VenusCore(headless: true)),
-            ("Mars", ".z64", 500, () => new MarsCore(expansionPak: true, batteryRamDisabled: true)),
             ("MarsRT", ".z64", 500, () => new MarsRtCore(expansionPak: true, batteryRamDisabled: true)),
         };
 
@@ -116,17 +107,17 @@ namespace EmuSen.WiseMan.Cores
                     byte[] original = File.ReadAllBytes(beside);
                     DateTime written = File.GetLastWriteTimeUtc(beside);
                     bool nes = Path.GetExtension(rom) == ".nes";
-                    foreach (string engine in nes ? new[] { "Moon", "MoonRT" } : new[] { "Mercury", "MercuryRT" })
+                    foreach (string engine in nes ? new[] { "MoonRT" } : new[] { "MercuryRT" })
                     {
                         DataStore.OverrideDirectory = Path.Combine(Home, "migrate-" + engine);
                         if (Directory.Exists(DataStore.OverrideDirectory)) Directory.Delete(DataStore.OverrideDirectory, recursive: true);
-                        ICore core = engine switch { "Moon" => new MoonCore(), "MoonRT" => new MoonRtCore(), "Mercury" => new MercuryCore(), _ => new MercuryRtCore() };
+                        ICore core = engine switch { "MoonRT" => new MoonRtCore(), _ => new MercuryRtCore() };
                         core.LoadRom(rom);
-                        string space = nes ? MoonCore.SpacePrgRam : MercuryCore.SpaceCartRam;
+                        string space = nes ? "PRGRAM" : MercuryRtCore.SpaceCartRam;
                         int matching = 0;
                         for (int i = 0; i < original.Length; i++)
                         {
-                            byte b = core switch { MoonCore m => m.ReadSpace(space, i), MoonRtCore m => m.ReadSpace(space, i), MercuryCore m => m.ReadSpace(space, i), MercuryRtCore m => m.ReadSpace(space, i), _ => 0 };
+                            byte b = core switch { MoonRtCore m => m.ReadSpace(space, i), MercuryRtCore m => m.ReadSpace(space, i), _ => 0 };
                             if (b == original[i]) matching++;
                         }
                         (core as IDisposable)?.Dispose();

@@ -6,15 +6,15 @@ namespace EmuSen.WiseMan.Cores
     // One theory per class, so xUnit runs the seven classes' emulation concurrently - see §3.56.
     public class MercuryCommercialRomBootTests
     {
-        public static TheoryData<string, MercuryEngine> Cartridges => Roms;
+        public static TheoryData<string> Cartridges => Roms;
 
         [Theory]
         [MemberData(nameof(Cartridges))]
-        public void A_real_cartridge_boots_and_reaches_a_title_screen(string path, MercuryEngine engine)
+        public void A_real_cartridge_boots_and_reaches_a_title_screen(string path)
         {
             if (path.Length == 0) return;
 
-            using var core = Load(path, engine);
+            using var core = Load(path);
             RunTo(core, BootFrames);
 
             Assert.Equal(BootFrames, core.TotalFrames);

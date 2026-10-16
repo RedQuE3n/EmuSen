@@ -1,4 +1,5 @@
-using EmuSen.Cores.Nintendo.Venus.Debug;
+using EmuSen.Cores;
+using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
@@ -16,10 +17,10 @@ namespace EmuSen.WiseMan.DianaSh
     // expected id shape, then `kill` that exact id and confirm it's gone.
     public class PsKillCommandTests
     {
-        private static SnesDebugTarget BuildTarget()
+        private static IDebugTarget BuildTarget()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            return new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            return SyntheticRom.TargetOf(core);
         }
 
         [Fact]

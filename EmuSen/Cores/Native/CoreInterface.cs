@@ -7,7 +7,7 @@ namespace EmuSen.Cores.Native
     public sealed unsafe class CoreInterface
     {
         public const uint Major = 1;
-        public const uint Minor = 9;
+        public const uint Minor = 10;
         public const uint Version = (Major << 16) | Minor;
 
         // The capability bits, numbered as emusen_core.h's EMUSEN_CAP_*.
@@ -15,7 +15,7 @@ namespace EmuSen.Cores.Native
         public const ulong CapSettings = 1UL << 6, CapPhases = 1UL << 7, CapFrameSerial = 1UL << 8, CapRowRepeat = 1UL << 9, CapBatteryDirty = 1UL << 10;
         public const ulong CapRomPatches = 1UL << 11, CapDebug = 1UL << 12, CapDebugStack = 1UL << 13, CapCheatPokes = 1UL << 14, CapSettingNotes = 1UL << 15;
         public const ulong CapDebugRegisters = 1UL << 16, CapDebugDisassemble = 1UL << 17, CapMedia = 1UL << 18, CapDebugReads = 1UL << 19;
-        public const ulong CapBorrow = 1UL << 20, CapDevicePicture = 1UL << 21;
+        public const ulong CapBorrow = 1UL << 20, CapDevicePicture = 1UL << 21, CapRawPicture = 1UL << 22;
 
         // Each bit's name, as core info lists it.
         public static readonly IReadOnlyList<(ulong Bit, string Name)> CapabilityNames = new[]
@@ -24,7 +24,7 @@ namespace EmuSen.Cores.Native
             (CapSettings, "SETTINGS"), (CapPhases, "PHASES"), (CapFrameSerial, "FRAME_SERIAL"), (CapRowRepeat, "ROW_REPEAT"), (CapBatteryDirty, "BATTERY_DIRTY"),
             (CapRomPatches, "ROM_PATCHES"), (CapDebug, "DEBUG"), (CapDebugStack, "DEBUG_STACK"), (CapCheatPokes, "CHEAT_POKES"), (CapSettingNotes, "SETTING_NOTES"),
             (CapDebugRegisters, "DEBUG_REGISTERS"), (CapDebugDisassemble, "DEBUG_DISASSEMBLE"), (CapMedia, "MEDIA"), (CapDebugReads, "DEBUG_READS"),
-            (CapBorrow, "BORROW"), (CapDevicePicture, "DEVICE_PICTURE"),
+            (CapBorrow, "BORROW"), (CapDevicePicture, "DEVICE_PICTURE"), (CapRawPicture, "RAW_PICTURE"),
         };
 
         // Every export, and the bit that claims it; zero for a required one.
@@ -47,6 +47,7 @@ namespace EmuSen.Cores.Native
             ("emusen_core_debug_registers", CapDebugRegisters), ("emusen_core_debug_disassemble", CapDebugDisassemble),
             ("emusen_core_media_lid", CapMedia), ("emusen_core_media_insert", CapMedia),
             ("emusen_core_debug_reads", CapDebugReads), ("emusen_core_frame_device", CapDevicePicture),
+            ("emusen_core_raw_select", CapRawPicture), ("emusen_core_raw_info", CapRawPicture), ("emusen_core_raw_copy", CapRawPicture),
         };
 
         // The host obligations this host meets, for a core's host_requires - see EmuSen_CoreAPI.md §4.6.
@@ -133,6 +134,19 @@ namespace EmuSen.Cores.Native
             public uint Reserved;
             public ulong Ready;
             public ulong Value;
+        }
+
+        // emusen_raw_frame, since 1.10: the shape of a frame's picture before the core's palette - see EmuSen_CoreAPI.md §6.30.
+        [StructLayout(LayoutKind.Sequential)]
+        public struct RawFrame
+        {
+            public uint Size;
+            public uint Element;
+            public int Width;
+            public int Height;
+            public int Stride;
+            public uint Reserved;
+            public long Bytes;
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -232,6 +246,9 @@ namespace EmuSen.Cores.Native
         public readonly delegate* unmanaged<nint, uint, Media*, int> MediaInsert;
         public readonly delegate* unmanaged<nint, uint*, nuint, long> DebugReads;
         public readonly delegate* unmanaged<nint, DeviceFrame*, int> FrameDevice;
+        public readonly delegate* unmanaged<nint, ulong, int> RawSelect;
+        public readonly delegate* unmanaged<nint, uint, RawFrame*, int> RawInfo;
+        public readonly delegate* unmanaged<nint, uint, byte*, nuint, long> RawCopy;
 
         // Each export resolved from a loaded library by name; zero where the library lacks it.
         public CoreInterface(nint library)
@@ -296,6 +313,9 @@ namespace EmuSen.Cores.Native
             MediaInsert = (delegate* unmanaged<nint, uint, Media*, int>)E("media_insert");
             DebugReads = (delegate* unmanaged<nint, uint*, nuint, long>)E("debug_reads");
             FrameDevice = (delegate* unmanaged<nint, DeviceFrame*, int>)E("frame_device");
+            RawSelect = (delegate* unmanaged<nint, ulong, int>)E("raw_select");
+            RawInfo = (delegate* unmanaged<nint, uint, RawFrame*, int>)E("raw_info");
+            RawCopy = (delegate* unmanaged<nint, uint, byte*, nuint, long>)E("raw_copy");
         }
 
         // The C# field that holds an export: its suffix in PascalCase, and FrameInfoOf where that names the struct.

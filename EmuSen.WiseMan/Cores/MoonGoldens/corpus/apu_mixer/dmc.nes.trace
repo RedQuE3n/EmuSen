@@ -1,0 +1,25 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/apu_mixer/dmc.nes
+rom 036E7A3222F56E7A823B693BAE0243E6C8C7AE032DEFBBD15C8631DA468D6EA7
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 640A244DE6F4CF8D
+120 DCBCFD44C1C430A9
+180 D0CB26C61AA0FE91
+240 2341604573278787
+300 49B64450EA796BF8
+360 0B8FD4D7560E4B3D
+420 6FBA4CBB18F4A8FA
+480 FC35405ECE2CA5E0
+540 A6645B08713941C8
+600 EE8E430025898279
+660 C4F17758EA77DD35
+720 29C06D8859DDE69F
+721 4FC85DB24766295B
+resets 0
+text dmc channel mixing test\n\n1. Should play short tone.\n\n2. Should be nearly silent.\n\n3. Should play short tone.\n\nSome clicking might occur between the two tones.Also, a faint tone might be audible through headphones.
+verdict Passed 721

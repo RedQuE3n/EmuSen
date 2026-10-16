@@ -221,18 +221,18 @@ fn an_interrupt_stops_at_the_handler() {
 fn coverage_records_what_the_processor_ran_only_while_armed_and_the_profiler_counts_every_instruction() {
     let mut m = load(&COUNT_FOREVER);
     m.run_frame();
-    assert!(m.cpu.hooks.coverage.is_none());
+    assert!(m.cpu.hooks.coverage[0].is_none());
 
     m.cpu.hooks.configure(false, false, false, false, true, true);
     let before = m.cpu.instructions;
     assert_eq!(m.run_frame_debug(false, false), stop::FRAME);
     let ran = m.cpu.instructions - before;
-    let bits = m.cpu.hooks.coverage.as_deref().unwrap();
+    let bits = &m.cpu.hooks.coverage[0].as_ref().unwrap().bits[..];
     let executed = |address: u32| bits[(address & 0xFF_FFFF) as usize >> 3] & (1 << (address & 7)) != 0;
     assert!(executed(ENTRY + 4));
     assert!(executed(ENTRY + 20));
     assert!(!executed(ENTRY + 24));
-    assert_eq!(m.cpu.hooks.covered, ran);
+    assert_eq!(m.cpu.hooks.coverage[0].as_ref().unwrap().covered, ran);
     assert_eq!(m.cpu.hooks.profile.values().sum::<i64>(), ran);
     assert_eq!(m.cpu.hooks.profile[&0], ran);
 
@@ -240,7 +240,7 @@ fn coverage_records_what_the_processor_ran_only_while_armed_and_the_profiler_cou
     let before = m.cpu.instructions;
     assert_eq!(m.run_frame_debug(false, false), stop::FRAME);
     assert!(m.cpu.instructions > before);
-    assert!(m.cpu.hooks.coverage.is_none());
+    assert!(m.cpu.hooks.coverage[0].is_none());
     assert_eq!(m.cpu.hooks.profile[&0], ran);
 }
 
@@ -269,7 +269,7 @@ fn the_rsp_records_its_own_coverage_and_the_processor_does_not() {
     assert!(executed(0x014));
     assert!(!executed(0x018));
     assert_eq!(trace.recorded, 2);
-    assert!(m.cpu.hooks.coverage.as_deref().unwrap().iter().all(|&b| b == 0));
+    assert!(&m.cpu.hooks.coverage[0].as_ref().unwrap().bits[..].iter().all(|&b| b == 0));
 }
 
 /// The program in RDRAM rather than at the boot entry, since the idle loop is passed whole only there (`try_idle`).
@@ -351,7 +351,7 @@ fn an_observed_frame_computes_what_a_plain_frame_computes_with_and_without_the_b
             observed.cpu.hooks.writes_log.clear();
             assert_eq!(plain.save_state_vec(false).unwrap(), observed.save_state_vec(false).unwrap(), "blocks {blocks}: the states part at frame {frame}");
         }
-        assert_eq!(observed.cpu.hooks.covered, observed.cpu.instructions);
+        assert_eq!(observed.cpu.hooks.coverage[0].as_ref().unwrap().covered, observed.cpu.instructions);
     }
 }
 

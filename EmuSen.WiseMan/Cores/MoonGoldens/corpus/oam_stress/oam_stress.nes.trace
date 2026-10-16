@@ -1,0 +1,41 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/oam_stress/oam_stress.nes
+rom 95882D72A7ACABE928FD277E3B3E0372F21EF3D41E36D7D8FB17FC017A356F70
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 FF8BA1CAC58ED68A
+120 BECF3E54B4DBB737
+180 E6D74E5ED8F9D5ED
+240 5EC8ECE1C35D893E
+300 04F3CE3905B57AAC
+360 F9BF6A4010B65840
+420 50A4E591B296B8AE
+480 175D4ED51700BF93
+540 BFE47E502A14924E
+600 F4B452C74349F226
+660 FDD0102F64534BD8
+720 580FBCE3AFE80368
+780 3C5F6337564823C1
+840 DE0346777877DE21
+900 A6771511514F67E3
+960 D425208F0CBF9021
+1020 825AEF39AEA20782
+1080 DDC55C4F94348CFE
+1140 EEAEBBC9749768F2
+1200 54A3204071E7605D
+1260 805E4118D442698F
+1320 562FE9761CB431E9
+1380 CE55D4E264093D4F
+1440 FD1C175E7DBAF177
+1500 DAC40A2C07FEAF16
+1560 C8A02BA08B4CBCF7
+1620 9C1D0CE5AC9300AE
+1680 62E1187929A0757A
+1705 3B648A98B8E046DD
+resets 0
+text ----------------\n----------------\n----------------\n----------------\n----------------\n----------------\n----------------\n----------------\n----------------\n----------------\n----------------\n----------------\n----------------\n----------------\n----------------\n----------------\n\noam_stress\n\nPassed
+verdict Passed 1705

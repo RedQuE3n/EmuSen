@@ -6,16 +6,16 @@ namespace EmuSen.WiseMan.Cores
 {
     public class MercuryCommercialRomAudioTests
     {
-        public static TheoryData<string, MercuryEngine> Cartridges => Roms;
+        public static TheoryData<string> Cartridges => Roms;
 
         // Real music, Start tapped because some title screens never call their sound driver - see Mercury_RealCartridges.md §4.
         [Theory]
         [MemberData(nameof(Cartridges))]
-        public void A_real_cartridge_plays_music_rather_than_holding_one_note(string path, MercuryEngine engine)
+        public void A_real_cartridge_plays_music_rather_than_holding_one_note(string path)
         {
             if (path.Length == 0) return;
 
-            using var core = Load(path, engine);
+            using var core = Load(path);
             var samples = new List<short>();
 
             // The note must change, since a stuck boot-time note is not silent either - see Mercury_RealCartridges.md §4.1.
@@ -30,11 +30,13 @@ namespace EmuSen.WiseMan.Cores
                 core.RunFrame();
                 samples.AddRange(core.DequeueAudioSamples(4096));
 
-                var apu = core.Bus.Apu;
-                notes.Add((apu.Pulse1.Frequency, apu.Pulse2.Frequency, apu.Wave.Frequency, apu.Noise.ClockShift));
+                byte[] state = core.State();
+                notes.Add(((int)Note(state, "Bus.Apu.Pulse1.Frequency"), (int)Note(state, "Bus.Apu.Pulse2.Frequency"), (int)Note(state, "Bus.Apu.Wave.Frequency"), (int)Note(state, "Bus.Apu.Noise.ClockShift")));
             }
 
             string name = Path.GetFileName(path);
+
+            long Note(byte[] state, string field) => MercuryLayouts.For(core.Rom, state).Get(state, field);
 
             // Opt-in, so the suite writes nothing by default - see Mercury_HardwareTests.md §6.
             if (AudioCapture.DumpDirectory is string folder)

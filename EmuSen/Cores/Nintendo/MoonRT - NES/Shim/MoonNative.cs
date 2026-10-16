@@ -2,7 +2,7 @@ using EmuSen.Cores.Native;
 
 namespace EmuSen.Cores.Nintendo.MoonRT
 {
-    // MoonRT's Rust library, loaded once through each interface: the v1 one its engine runs on and the pre-stable one its machine tests use; absent, refused or turned off, the NES runs on the C# Moon - see Moon_Native.md §8.3, EmuSen_CoreAPI.md §26.
+    // MoonRT's Rust library, loaded once through each interface: the v1 one its engine runs on and the pre-stable one its machine tests use; absent, refused or turned off, the build has no NES core - see Moon_Native.md §9.5, EmuSen_CoreAPI.md §26.
     public static class MoonNative
     {
         // MoonRT's half of the interface version: 4 with the debug exports, 3 before them; 1 and 2 were its own moon_interface_version.

@@ -104,17 +104,14 @@ half4 main(float2 coord) {
         // Values by id over the filter's defaults; an id it does not declare is ignored, one left out is its default - see EmuSen_Serenity.md §3.7.
         public void SetParameters(IReadOnlyDictionary<string, float>? values)
         {
-            bool rebuild = false;
-            foreach (Slang.SlangParameter parameter in Filter.Parameters ?? Array.Empty<Slang.SlangParameter>())
-            {
-                float value = values is not null && values.TryGetValue(parameter.Id, out float given) ? given : Filter.DefaultFor(parameter, Console);
-                bool structural = Filter.Structural is { } ids && ids.Contains(parameter.Id);
-                if (structural && (!_values.TryGetValue(parameter.Id, out float held) || held != value)) rebuild = true;
-                _values[parameter.Id] = value;
-            }
-
             // A console's values for ids that are not parameters are its constants: no player sets them, and passes read them as any other value.
-            if (Filter.DefaultsFor(Console) is { } constants) foreach (var (id, value) in constants) _values.TryAdd(id, value);
+            bool rebuild = false;
+            foreach (var (id, value) in Filter.ValuesFor(Console, values))
+            {
+                bool structural = Filter.Structural is { } ids && ids.Contains(id);
+                if (structural && (!_values.TryGetValue(id, out float held) || held != value)) rebuild = true;
+                _values[id] = value;
+            }
             if (rebuild && (_built || _pending is not null)) Request();
         }
 

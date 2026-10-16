@@ -37,8 +37,8 @@ from collections import Counter
 WIDTH = 256
 HEIGHT = 240
 
-# The 64 NTSC colours as RGB triples. Checked against EmuSen.Cores.Nintendo.Moon
-# .Video.Ppu.NesPalette by a C# test - see the module docstring.
+# The 64 NTSC colours as RGB triples. Checked against the NES system pack's
+# NesDebugViews.MasterPalette by a C# test - see the module docstring.
 NES_PALETTE = bytes((
     84, 84, 84,     0, 30, 116,     8, 16, 144,    48, 0, 136,
     68, 0, 100,     92, 0, 48,      84, 4, 0,      60, 24, 0,

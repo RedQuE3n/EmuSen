@@ -1,5 +1,7 @@
 # Moon (NES) — PPU (2C02)
 
+*Historical since 2026-10-16: Moon (C#), the C# core this page describes, was deleted when MoonRT became the NES's only engine (`Moon_Native.md` §9.5). MoonRT implements the same machine field for field and is held to the goldens recorded from it, so the hardware described here stands; the file, class and member names are the C# core's, and the code is in git history before the retirement.*
+
 Covers `Cores/Nintendo/Moon - NES/Ppu/`: `Ppu.cs` (state, registers, the VRAM bus) and `Ppu.Render.cs` (scroll advance and scanline composition).
 
 ---

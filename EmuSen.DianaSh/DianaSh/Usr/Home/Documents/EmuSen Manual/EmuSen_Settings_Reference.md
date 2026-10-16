@@ -1415,6 +1415,35 @@ asserts rewind empty on Mars and filling on MarsRT, and `Holding_rewind_on_MarsR
 holds the hotkey; the ROM patches, the phases and rewind have their evidence and mutants in `Mars_Native.md` §6.6.1 to
 §6.6.3.*
 
+**MarsRT on the core ABI v1 (2026-10-15).** MarsRT is loaded through the core ABI v1 since this date
+(`Mars_Native.md` §7); nothing a player sets changes. The rows keep their keys, words and values, the switch is still
+`EMUSEN_MARS_NATIVE=0`, and C# Mars's own native components go with it. What reads differently: a library that is
+present but not on the ABI, or lacks what the engine calls, is reported in the v1 loader's words (for example
+*"libmarsrt.so: has no emusen_core_abi_version; it is not on the core ABI"*), and a library that has crashed leaves
+`marsrt_crash_<pid>.txt` where it left `native_crash_<pid>.txt`.
+
+**The C# core retired (2026-10-16).** Mars (C#) is deleted (`Mars_Native.md` §6.7), and everything above that
+offers it, falls back to it or compares with it is history. What a player sees now:
+
+- **No Engine row on the N64 tab.** MarsRT is the N64's one engine, so the tab begins with the screen filter and the
+  rows below it are the same eight, their keys, words and defaults unchanged; MarsRT's own Recompiler row stays off the
+  tab, as before. `CoreCatalog.EngineFor("N64")` is null, and the factory builds MarsRT for every N64 file whatever
+  engine it is asked for.
+- **A stored choice of Mars (C#)** in `graphics.json`, or as a game's alternative emulator (§4.66), runs MarsRT. The
+  first time a run reads it, the log gains one warning, *"Mars (C#) was retired; MarsRT (Rust) runs its games
+  instead."*, and nothing is shown to the player. The stored value is left in the file.
+- **A build without MarsRT's library** (a foreign or partial publish, or `EMUSEN_MARS_NATIVE=0`) runs no N64 game.
+  Loading one fails in the frontend's usual way, with *"The N64 core is not in this build"* and what the library loader
+  found, for example *"Failed to load Game.z64: The N64 core is not in this build (turned off by
+  EMUSEN_MARS_NATIVE=0)."*; Mistress returns to the library, and the firmware prompt before it asks for nothing.
+- **Rewind is on for every N64 game**, since the engine that withheld it is gone (§4.85.4).
+- **States and battery saves** are unchanged: MarsRT reads the states and the `.srm` and `.mpk` files Mars (C#) wrote.
+
+*Tests:* `MarsRtEngineTests` now holds the tab without a row, a game on MarsRT with rewind both with nothing stored and
+with Mars (C#) stored, and, in a child process with the library off, the failed load's words.
+`MarsRtFrontendTests` holds the factory building MarsRT for every engine name and the one log line;
+`GameEngineAndPlayTimeTests` holds a game whose own choice is Mars (C#).
+
 **The SNES's engine, VenusRT (Rust) by default since 2026-10-05.** The SNES tab has the same Engine row, stored as
 `Consoles.SNES.Engine`. Its choices are *VenusRT (Rust)*, listed first and the default, and *Venus (C#)*, the
 reference, kept for now. *Decided by the tester 2026-10-05* (`VenusRT_Native.md` §65).
@@ -1437,6 +1466,20 @@ reference, kept for now. *Decided by the tester 2026-10-05* (`VenusRT_Native.md`
 - **The other frontends.** Hotaru, Pharaoh and the probe read the same value through `CoreFactory.ConfiguredEngine`,
   so they run VenusRT for the SNES as well unless graphics.json names Venus (C#). The factory asked for no engine
   still builds Venus (C#), the reference.
+
+*Since 2026-10-16 the SNES has one engine* (`VenusRT_Native.md` §68.5). C# Venus was deleted at the tester's word, and
+the row above is gone with it:
+- **No Engine row.** `CoreCatalog.EngineFor("SNES")` is null, as for any console with one engine, and the metadata
+  editor offers an SNES game no alternative emulator. VenusRT is the console's one discovered engine
+  (`CoreCatalog.SoleDiscoveredEngine`): the factory opens it through the generic v1 branch whatever engine name a
+  caller passes, so `RunsOnV1Engine` stays true for an SNES game.
+- **A stored Venus (C#)** is one of `CoreCatalog`'s retired engines beside Mars (C#) and Mercury (C#): it is read as
+  VenusRT (Rust), with no notice on the status line and one line on the log a process.
+- **Without the library**, or with one that is refused, an SNES game does not load: the factory says `This build has
+  no SNES core: VenusRT (Rust) is missing (<the reason>).`, and Mistress shows it after `Failed to load <game>: `.
+- **What a player keeps.** Battery saves, which VenusRT read and wrote in Venus (C#)'s format; a Venus (C#) save state
+  is refused in words naming its engine, as before, and an old `.resume.state` boots the game cold (`VenusRT_Plan.md`
+  §9, Q7).
 
 ### 4.45 Every window from the pad, and Game Mode's one window (2026-09-24)
 
@@ -1809,7 +1852,7 @@ loaded, as the Engine row's choice does (§4.44).
 as `MercuryCore.ModelSettings` and returned by `CoreCatalog.SettingsFor("GB")`, as the N64 declares its video settings.
 Both engines honour it:
 
-- `MercuryCore` and `MercuryRtCore` each read it at load;
+- `MercuryCore` and `MercuryRtCore` each read it at load (*since 2026-10-16 `MercuryRtCore` alone, which declares the row as `MercuryRtCore.ModelSettings`: C# Mercury was deleted, `Mercury_Native.md` §15*);
 - a change before a game's first frame loads the game again at once, as the Expansion Pak row does.
 
 Mistress does nothing model-specific. It hands the core its console's settings after the load and before the first
@@ -4312,7 +4355,10 @@ ES-DE lets a player choose "alternative emulators to use per game system" and, i
 the game's choice "will take precedence and override the system-wide emulator selection"; its `altemulator` badge shows
 the per-game choice alone (UG "Other settings", "Metadata editor"). In Mistress the system-wide choice already exists:
 Graphics Settings' **Engine** row for the consoles with two implementations (§4.44: Mars (C#) or MarsRT (Rust) for the
-N64, Mercury (C#) or MercuryRT (Rust) for the Game Boy and Game Boy Color). The metadata editor gains ES-DE's
+N64, Mercury (C#) or MercuryRT (Rust) for the Game Boy and Game Boy Color, until C# Mercury was deleted on 2026-10-16:
+the Game Boy has one engine since, no Engine row and no alternative emulator, and a stored choice of Mercury (C#) runs
+the game on MercuryRT with one line on the log, `Mercury_Native.md` §15.4; the NES's Moon (C#) went the same way the
+same day, a stored choice of it running on MoonRT, `Moon_Native.md` §9.5). The metadata editor gains ES-DE's
 **Alternative emulator** field, after Controller:
 
 - For a game of a console with two engines it offers *None (the console's engine)* and the console's two engines; for
@@ -4621,8 +4667,8 @@ in `~/.config/EmuSen/Logs` or in the configured folder.
 - The other 27 of Mistress's 56 `catch (Exception …)` blocks write nothing. They are best-effort paths that report
   nothing to the player either: a status bar that cannot be read, a picture that cannot be decoded for a preview.
   They are left until one of them hides a real fault.
-- DianaSh commands and the cores do not write to it. The Rust cores' native crash files (`native_crash_*`,
-  `mercuryrt_crash_*`) stay under the data home's `Logs`, not this folder.
+- DianaSh commands and the cores do not write to it. The Rust cores' native crash files (`marsrt_crash_*`, once
+  `native_crash_*`, `mercuryrt_crash_*`) stay under the data home's `Logs`, not this folder.
 - There is no viewer inside Mistress. The file is meant for `cat`, a text editor, or a bug report.
 
 ### 4.69 Big picture: the Start menu and a game's options in ES-DE's layout (2026-09-27)
@@ -6806,6 +6852,8 @@ caller passes a negative count.
 build waits for a retrain (§4.84, `Mars_Native.md` §6.17), and an export for the limit would change the library. It is
 given the setting when it moves to the common interface (`EmuSen_NativeCores.md` §7, step 5), which retrains the profile
 anyway. Until then the Nintendo 64 honours the setting on Mars (C#) and not on MarsRT, the default engine.
+*Since MarsRT moved to the core ABI v1 (2026-10-15) the adapter hands it the setting like every v1 engine, and since
+2026-10-16 `AudioBufferLimitTests` holds MarsRT to it in place of Mars (C#), which is deleted (§4.44).*
 
 #### 4.85.3 The Rust NES and Game Boy shims close their picture lending
 
@@ -6836,6 +6884,10 @@ has `EngineFeatures.All`. `MarsCore` declares `RewindCapture: false` with the re
 the menu showed before. Both Mistress sites read `EngineFeatures.Of(core)`. This is the `EngineFeatures` of
 `EmuSen_NativeCores.md` §5.2, built ahead of the registration records: when those are built, an
 `EngineRegistration.Features` is read from the same declaration, and Mistress does not change again.
+
+*Since 2026-10-16 no engine withholds rewind: `MarsCore` was deleted with Mars (C#) (`Mars_Native.md` §6.7), and
+`EngineFeaturesTests` holds every remaining engine to `EngineFeatures.All`. The declaration stays, as the surface an
+engine would use.*
 
 **Behaviour is unchanged, and tested.** `EngineFeaturesTests` pins Mars (C#) withholding rewind with that reason and
 every other engine (MarsRT, Moon, MoonRT, Mercury, MercuryRT, Venus) keeping it. `MarsRtEngineTests` already ran a game
@@ -6977,7 +7029,7 @@ was), the load, the exact version check, the crash log, `Available`, `Report` an
 classes stay as facades of a few lines, since the shims' static tables, the tests and C# Mars's own native components (`Rsp.Native.cs`) read
 `MarsNative.Export` and its peers, which keep working unchanged. The crash logs keep their names, `moonrt_crash_<pid>`,
 `mercuryrt_crash_<pid>` and MarsRT's `native_crash_<pid>`; the rename to `marsrt_crash_<pid>` belongs to MarsRT's move
-(§4.1, §9's Q6). `Report`'s texts are the old ones word for word, and `NativeHostTests` pins the switches, the log
+(§4.1, §9's Q6). *Renamed 2026-10-15 with that move (`Mars_Native.md` §7.2).* `Report`'s texts are the old ones word for word, and `NativeHostTests` pins the switches, the log
 names, a library turned off and a version refused.
 
 **`NativeMachine`, the handle (§4.2).** `MoonMachine` and `MercuryMachine` shared most of their 190 and 200 lines; they are 78 and 87 now, and `MarsMachine` 65 of 93. The
@@ -7205,6 +7257,11 @@ player can delete them. A game loaded once under `--nobattery` and again without
 the first that reads a save.
 
 ### 4.86 The NES's engine: Moon (C#) or MoonRT (Rust) (2026-09-30)
+
+*Historical since 2026-10-16: Moon (C#) was deleted and MoonRT is the NES's only engine (`Moon_Native.md` §9.5). The
+NES tab has no Engine row; a stored choice of Moon (C#), the console's or a game's, runs the game on MoonRT with one
+line on the log a process, and a build without MoonRT's library loads no NES game and says "This build has no NES
+core". The section below records the row while both engines existed.*
 
 Graphics Settings' NES tab now begins, after the screen filter, with **Engine**, a dropdown of *Moon (C#)* and *MoonRT
 (Rust)*. It is stored in `graphics.json` as `Consoles.NES.Engine`, and is resolved as §4.44's rows are, by
@@ -7900,6 +7957,7 @@ on (the stored choice, else the row's default, §4.44):
 - **Otherwise the reference core** (the engine chosen, or the fallback where the discovered engine's library is not
   beside its sidecar): what the C# core itself asks the firmware library for. Venus (C#) asks for the seven NEC DSP
   images and has no replacement for any, so each reads "No open version yet". The other three ask for none.
+  *Since 2026-10-16 the SNES's rows are always VenusRT's, or none where its library is missing; Venus (C#) was deleted.*
 - **Any other system a discovered core runs** follows the catalog's consoles, by the name its info gives it.
 - **A core in development is left out**, by its sidecar's `development` mark, even in a session where discovery lists
   such cores (`EMUSEN_DEVELOPMENT_CORES=1`). *Amended 2026-10-07:* Nephrite is no longer marked (§4.94), so its
@@ -8407,6 +8465,9 @@ example:
 <time> WARN [platform] libemusen_platform.so is not in use (libemusen_platform.so not found beside the assemblies); Endymion runs on its C# implementation.
 ```
 
+*Added 2026-10-16:* a fourth, `EMUSEN_DIANASH_NATIVE`, for DianaSh's shell, read the same way; §4.117 says what it
+covers and on which systems it has been proven.
+
 No component fails to start because of the library. SDL3, Shaderc and SQLite are the libraries the program already
 ships; the platform library is lent the copies the C# loaded, so a fallback changes nothing about them, and audio,
 pads and shaders work on the C# as before. The compiled-shader cache keeps the two implementations' shaders apart,
@@ -8641,7 +8702,8 @@ group: a mode row titled by the medium (*Memory Card*, *Internal Backup RAM*, *B
 medium keeps the keys above (`Cards`, `Card<n>`), the console's own memory takes `ConsoleMemory` and
 `ConsoleMemory<n>`, and any further medium `Media.<id>` and `Media.<id>.<n>`. Shared and named files are in `Cards` for a
 removable medium and in `Console` for the console's own. **The PlayStation's card is *Shared* by default** since its
-import exists (§4.115); a medium no format module reads stays *Per game*.
+import exists (§4.115); a medium no format module reads stays *Per game*. *Since 2026-10-16* the Sega CD's two media are *Shared* by default too, their module
+built (`EmuSen_SaveMedia.md` §11.7), and a new machine's backup RAM with no file starts formatted.
 
 ### 4.115 Memory Cards: the window, and the import offered once (2026-10-15)
 
@@ -8678,8 +8740,15 @@ to the chain and matched to their Skia pictures on real frames (§12 there). Not
 preset choices are read as before.
 
 Where the compositor cannot take the image (no import offered, another GPU, Windows' ANGLE, macOS) the picture is drawn
-as before, and Mistress writes the reason to its log once (`picture: ...`). **`EMUSEN_DEVICE_PICTURE=0`** in the
-environment keeps the earlier path everywhere, for comparing the two.
+as before, and Mistress writes the reason to its log once (`picture: ...`).
+
+**The handheld's black screen (2026-10-15)** (`EmuSen_DevicePicture.md` §18): on the handheld's Mesa (26.1.2) the
+device path froze the window's picture within a few frames. Mesa destroyed the window's GLX drawable whenever Avalonia
+bound its pbuffer for an image's import, and a stale present completion then left the next swap waiting for ever.
+Mistress now sets `keep_native_window_glx_drawable=true` in its environment at start (unless it is already set), and the
+launcher does too, so Mesa keeps the drawable; the device path is on by default again, and **`EMUSEN_DEVICE_PICTURE=0`**
+keeps the earlier path. A device path that shows nothing for a second while frames are offered is given up for the
+readback, said once in the log.
 
 **A core's picture on the same card.** Where the picture is presented on the device and a core can draw on a device it
 is lent (core ABI 1.9; Diamond's enhancements today), Mistress lends the core that device when the game is loaded, and
@@ -8691,3 +8760,60 @@ picture then read back as before.
 **Tests.** `DevicePresenterTests` (each refusal alone, the device's identity, the shown image); `DeviceFilterMatchTests`
 (each built-in family against its Skia picture on real frames, with `EMUSEN_GPU_FRAMES`); the real-window proof of
 §13.3 there.
+
+### 4.117 DianaSh's shell on the platform library: `EMUSEN_DIANASH_NATIVE` (2026-10-16)
+
+*Decided 2026-10-16 by the tester:* the shell every console window and terminal opens runs on its Rust implementation
+by default, and the C# shell is kept as the failover until the Rust one has been tested on Windows and macOS
+(`EmuSen_DianaSh.md` §13.10).
+
+| `EMUSEN_DIANASH_NATIVE` | The shell |
+|---|---|
+| unset, or any value but `0` | the Rust shell in `libemusen_platform`, when the library attaches; otherwise the C# shell, with one line in the error log saying why |
+| `0` | the C# shell |
+
+Before 2026-10-16 the variable selected the Rust shell only when it was `1`, and the C# shell otherwise; a script or
+a launcher that sets it to `1` still gets the Rust shell, and one that leaves it unset now gets it too. The variable is
+read once, the first time a shell is made.
+
+What it covers: the shell's language, its builtins, its sessions and accounts, and the text tools (`grep`, `sed`,
+`awk`, `ls` and the others of `dianash.text`). The debugger's, the cheats' and the session's commands are the C#'s
+under either shell until S5, reached by the Rust shell through a bridge. What a player sees is the same under both:
+the golden corpus holds every command's output byte for byte both ways.
+
+The library falls back to the C# shell, with one line, when it is missing, when its DianaSh exports or their major
+version are not the ones this build speaks, or when it cannot make a shell:
+
+```
+<time> WARN [platform] libemusen_platform.so is not in use (libemusen_platform.so not found beside the assemblies); DianaSh runs on its C# implementation.
+```
+
+| System | Default | Proven |
+|---|---|---|
+| Linux | the Rust shell | yes: the gate both ways, 2026-10-16 (`EmuSen_DianaSh.md` §13.10) |
+| Windows | the Rust shell where the published tree carries the library; the C# where it does not (release 0.9.0 ships none) | no: the Rust shell has not been run on Windows, and the C# is kept as its failover until it has |
+| macOS | the Rust shell where the bundle carries the library | no: not run on a Mac yet; the C# is kept likewise |
+
+**Tests.** `DianaShSwitchTests` (each fallback: no library, another major, a missing export, no shell made; the
+library chosen unless the variable is 0); `NativeSwitchTests`; the golden corpus and WiseMan's DianaSh tests, run with
+the variable unset and with it 0.
+
+### 4.118 The N64's Controller Paks: the pak mode (2026-10-16)
+
+*Decided 2026-10-15 by the tester (`EmuSen_SaveMedia.md` §10's Q3); built with MarsRT's move onto the core ABI v1
+(`Mars_Native.md` §7.7).* The N64's tab in Graphics Settings gains **Controller Pak**, the runtime's mode row of
+§4.114, stored under the N64 as `Cards`, and under *Named* four slot rows, **Controller Pak: Controller 1** to
+**Controller 4** (`Card1` to `Card4`), each a dropdown of `Pak 1` to `Pak 8` and every pak already in the drawer.
+
+- **The default is *Shared*** (`EmuSen_SaveMedia.md` §9), since the pak's format module and import exist: `Pak 1` to
+  `Pak 4` in `Saves/N64/Cards/`, `.mpk`, one per controller port, used by every N64 game. A mode a player chose is kept.
+- **Per game** keeps the names C# Mars and MarsRT have always written: `Saves/N64/<game>.mpk` for the first port and
+  `<game>.2.mpk` to `<game>.4.mpk` for the others. Per game, the first port always holds a pak and another port only
+  once its file exists.
+- **The cartridge's own save**, `<game>.srm`, is the game's and has no mode.
+- **The import offered once**: the first N64 game started under the default while per-game `.mpk` files exist and
+  `Pak 1` does not is preceded by §4.115's question, which copies every game's notes onto `Pak 1`.
+- **On Mars (C#)** none of this applies: the C# core keeps its one pak per game, as before. *Retired 2026-10-16 with
+  the C# core (§4.44).*
+- **The Memory Cards window** has an N64 tab listing each pak's notes (game code, publisher and name) and pages free,
+  with copy, move, delete, new pak and import, as for the PlayStation's cards.

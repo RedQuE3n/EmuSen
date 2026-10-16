@@ -3,7 +3,8 @@
 Not a console: one Rust crate per chip that more than one Sega core can use, so that each can be used alone. The
 first were the processors.
 
-- `beryl-m68k` — the Motorola 68000: Nephrite's Genesis and Sega CD, and later any core with a 68000.
+- `beryl-m68k` — the Motorola 68000: Nephrite's Genesis and Sega CD, and later any core with a 68000. Its assembler, a
+  development tool behind the `asm` feature, builds the open firmware at compile time (`Beryl_M68k.md` §8).
 - `beryl-z80` — the Zilog Z80: Nephrite's sound CPU, and later Endou (Master System) and Jadeite (Game Gear).
 - `beryl-sh2` — the Hitachi SH-2 (SH7604): Nephrite's 32X, and later Zoisite (Saturn).
 - `beryl-sn76489` — the Texas Instruments SN76489 and Sega's copy of it in the VDP: the Genesis's PSG, and later

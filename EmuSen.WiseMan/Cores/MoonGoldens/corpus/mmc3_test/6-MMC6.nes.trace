@@ -1,0 +1,13 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/mmc3_test/6-MMC6.nes
+rom E6BDBADF46CC4BF7B26E496ECAB44E60A8B1279C1B9CF16DF090C9832ADF6943
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+30 87A0F2591FEFA691
+resets 0
+text IRQ shouldn't occur when reloading after counter normally reaches 0\n\n6-MMC6\n\nFailed #3
+verdict Failed(3) 30

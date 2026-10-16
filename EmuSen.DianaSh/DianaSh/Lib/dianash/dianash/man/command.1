@@ -1,0 +1,20 @@
+NAME
+    command - run a command as itself, or say whether it exists
+
+SYNOPSIS
+    command <name> [args...]
+    command -v <name>...
+
+DESCRIPTION
+    'command <name>' runs <name> with its arguments without mapping it
+    through the shell's aliases: 'command quit' is refused as an unknown
+    command where 'quit' alone shuts the shell down. The language's own
+    names still mean themselves.
+
+    'command -v' prints each name that would run, one to a line, and
+    nothing for one that would not; the exit status is 1 when any would
+    not, so it serves as a test in an 'if'.
+
+EXAMPLES
+    command echo hello
+    if command -v grep; then echo found; fi

@@ -1,0 +1,24 @@
+[package]
+name = "dianash-text"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# dianash.text, the shell's text tools as a command module (EmuSen_DianaSh.md §8.1): the same commands, and the
+# same words, as the C# classes they replace, held by the golden corpus. Linked into the dianash program and the
+# platform library; it reaches files only through the call's resolve, and links nothing of Galaxia's (§16 Q11).
+[lib]
+name = "dianash_text"
+
+[dependencies]
+dianash-module = { path = "../dianash-module" }
+emusen-dotnet = { path = "../dotnet" }
+# grep, sed and awk's patterns, translated from .NET's syntax where the two differ (§13.8).
+regex = "1"
+# The parser's own errors, to word a refusal as .NET words it.
+regex-syntax = "0.8"
+
+# ls -l's local time.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

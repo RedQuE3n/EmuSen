@@ -31,7 +31,7 @@ namespace EmuSen.WiseMan.DianaSh
         private static readonly (string File, string Prefix)[] Builtins =
         {
             ("help", "  help "), ("man", "  man "), ("summary", "  summary "), ("export", "  export "),
-            ("unset", "  unset "), ("source", "  source "), ("shell", "  if/then/"),
+            ("unset", "  unset "), ("source", "  source "), ("which", "  which "), ("command", "  command "), ("trust", "  trust "), ("shell", "  if/then/"),
         };
 
         public static string FileName(string command) => command == "[" ? "bracket" : command;

@@ -114,6 +114,8 @@ jobs:
             *)
               cc -std=c99 -Wall -Wextra -pedantic -Werror -fsyntax-only -x c Platform/include/emusen_platform.h
               c++ -std=c++17 -Wall -Wextra -pedantic -Werror -fsyntax-only -x c++ Platform/include/emusen_platform.h
+              cc -std=c99 -Wall -Wextra -pedantic -Werror -fsyntax-only -I Platform/dianash/include -x c Platform/dianash/include/dianash.h
+              c++ -std=c++17 -Wall -Wextra -pedantic -Werror -fsyntax-only -I Platform/dianash/include -x c++ Platform/dianash/include/dianash.h
               ;;
           esac
 
@@ -189,6 +191,17 @@ jobs:
         run: |
           cargo test --release
           cargo run --release -- --check $AGAINST
+      # DianaSh's host API and module ABI, stable from S3: the headers against the Rust, the facts against their baseline, and the base branch's baseline against this one (EmuSen_DianaSh.md §11.4, §13.7).
+      - name: DianaSh's surfaces
+        shell: bash
+        run: |
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          path=Platform/dianash/abi/v1/baseline.txt
+          if [ -n "$base" ] && git cat-file -e "$base:$path" 2>/dev/null; then
+            git show "$base:$path" > "$RUNNER_TEMP/dianash-base-baseline.txt"
+            export DIANASH_ABI_AGAINST="$RUNNER_TEMP/dianash-base-baseline.txt"
+          fi
+          cd Platform && cargo test --release -p emusen-platform --test dianash_abi
 
   library:
     name: ${{ matrix.crate.name }} ${{ matrix.platform.rid }}
@@ -447,7 +460,8 @@ jobs:
         shell: bash
         run: |
           out=EmuSen-Project/EmuSen.WiseMan/bin/Release/net10.0
-          cp native/* "$out/"
+          # The test cores' artefact keeps its two crates' folders, since it holds the kit's runner too; every file goes beside the tests.
+          find native -type f -exec cp {} "$out/" \;
           chmod +x "$out"/emusen-core-conform* || true
           ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*nephrite* "$out"/*diamond* "$out"/*v1_test_core* "$out"/*v1_plain_core*
           ls -la "$out"/*emusen_platform* || echo "no platform library: Galaxia runs on its C#"

@@ -1687,3 +1687,250 @@ CPUs' disputes in their own record pages.
   GX's 840, the same lead as on the American disc (`Nephrite_Native.md` §60.2).
 - Pinned by: `a_toc_request_after_a_stop_finds_the_drive_ready`.
 - Implemented in: stage 9 step 4's commit.
+
+### D-41. The open BIOS's interface constants: the sub CPU's entries from `$5F0A` and the function numbers are those of the 240p Test Suite's `cdbios.asm`, each confirmed by a program's call
+- Opened: 2026-10-15, at stage 10, by `Nephrite_OpenBios.md` §2.2's G1 and G2: the Mega-CD BIOS Manual names every call
+  but leaves its number to `CDBIOS.I` (BM p. 6, p. 11) and the jump table's slots to `cabios.i` (BM §5-1).
+- Documents read: the Mega-CD BIOS Manual, every page; the 240p Test Suite's Sega CD include file
+  (`segacdfiles/LukeProjectCD/_boot/_inc/cdbios.asm`, GPL-2.0), cleared whole for the writer on 2026-10-15 by a screener
+  who neither writes nor reviews the BIOS: constants, call macros and register comments, no BIOS code.
+- Test program: the 240p Test Suite's Sega CD build on the open BIOS, the functions its programs call recorded by the
+  sub CPU's program as they come (a bit a function, cleared at the hand-over). On the way to its menu its system
+  program reaches `_CDBIOS` at `$5F22` with DRVINIT (`$10`, the table `$01,$FF`), ROMREADN (`$20`, two longs), CDBCHK
+  (`$80`), CDBSTAT (`$81`, the table read at its BP12-BP14), CDCSTOP (`$89`), CDCSTAT (`$8A`), CDCREAD (`$8B`),
+  CDCTRN (`$8C`, a0 and a1) and CDCACK (`$8D`), each with the parameters BM's reference gives that call; its user calls
+  are found through its header and placed at `$5F28`-`$5F3A`, and run. Its menu is reached (`Nephrite_OpenBios.md` §8).
+  *Added 2026-10-15:* the five commercial discs and the suite's sound test, each run on the open BIOS, called besides
+  MSCSTOP (`$02`, the suite), MSCPAUSEON (`$03`, Mickey Mania), ROMPAUSEON (`$08`, Lunar), ROMPAUSEOFF (`$09`, Chuck
+  Rock II), MSCPLAY1 (`$12`, the suite and Sonic CD), MSCPLAYR (`$13`, Mickey Mania), ROMREAD (`$17`, Lunar), ROMSEEK
+  (`$18`, Chuck Rock II), CDBTOCREAD (`$83`, Mickey Mania), CDBPAUSE (`$84`), FDRSET (`$85`) and FDRCHG (`$86`, Sonic
+  CD and Mickey Mania), each game going on as a game whose call was answered goes on: the sound test's CD-DA plays at the
+  level and from the moment it plays on the player's BIOS (`Nephrite_OpenBios.md` §12), Sonic CD's title music plays.
+- Referee: none.
+- Conclusion: the numbers and slots as the include file gives them. Those nine numbers, the twelve added, and the entries `_CDBIOS`,
+  `_USERCALL0`, `_USERCALL1`, `_LEVEL2`, `_LEVEL4` and `_LEVEL5` are measured by the suite; every other number and slot is
+  argued until a program calls it, each added here as one does.
+- Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu`.
+- Implemented in: stage 10's commit "the open BIOS boots a disc".
+
+### D-42. The main CPU's boot ROM at `$0368`: a1 a V-INT handler, set in `_mlevel6` and V-INT enabled
+- Opened: 2026-10-15, at stage 10: the 240p Test Suite's main program stood with its picture black, its V-INT never
+  taken.
+- Documents read: the Technical Bulletins' "The status after booting is completed" (p. 15: "Subroutine in the boot ROM
+  may also be used (please see mainent.i, rom_util.doc)", neither in the corpus); the 240p Test Suite's start-up source
+  (`segacdfiles/segacd.s`, a test program's source), which comments the call "Enable VBlank" and passes its V-INT
+  handler in a1 before `jsr 0x0368`.
+- Test program: the suite on the open BIOS: with an RTS at `$0368` its V-INT is never installed; with the routine, its
+  menu runs.
+- Referee: none.
+- Conclusion: `$0368` takes a1 as the V-INT handler, stores it at `_mlevel6 + 2` (`$FFFD08`) and sets V-INT's enable in
+  the VDP's register 1, keeping every register. Measured by the suite; whether the BIOS's routine does more (the
+  display, the other interrupts) no document says.
+- Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu`.
+- Implemented in: stage 10's commit "the open BIOS boots a disc".
+
+### D-43. The main CPU's boot ROM at `$0364`: called by every disc's initial program at its first instruction; here it returns at once
+- Opened: 2026-10-15, at stage 10: the main CPU, started at `$FF0000`, called `$0364` within its first eight bytes
+  (the return address stacked was `$FF0008`), which lay inside the open BIOS's own code and restarted its boot.
+- Documents read: none describes the routine. The first bytes of every initial program are Sega's security block
+  (the Technical Bulletins' "The U.S. BIOS" and "PAL conversion" §IV), which a disc carries and the BIOS checks; the
+  call is that block's.
+- Test program: the 240p Test Suite on the open BIOS, the call caught by a breakpoint over the boot ROM's range after
+  the hand-over. Of the block itself only its first eight bytes were seen, in a search of Sonic CD's program in work
+  RAM for its calls into the boot ROM: a `LEA` of a1 ten bytes on, `JSR $0364`, and a branch past the block. Nothing
+  further of it was read; that a1 is passed suggests the routine takes an address, as `$0368` does (D-42).
+- Referee: none.
+- Conclusion: the open BIOS fills `$0200`-`$1FFF` with RTS, but for `$0368` (D-42), so that a routine no document
+  describes returns at once; with that, the block goes on to the program it heads. What a player's BIOS shows meanwhile
+  (its logo and sound, by the bulletin) the open BIOS does not. Open: what `$0364` does.
+- Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu`.
+- Implemented in: stage 10's commit "the open BIOS boots a disc".
+
+### D-44. CDCREAD and CDCTRN once each a sector: a second CDCREAD before CDCACK fails, and so does a second CDCTRN after its transfer
+- Opened: 2026-10-15, at stage 10. BM §3-C says CDCREAD prepares one sector and CDCTRN reads one, without saying what
+  a second call before CDCACK returns.
+- Documents read: BM §3-C; the load sample of BM p. 44-45 (one CDCREAD, one CDCTRN, one CDCACK a sector).
+- Test program: the 240p Test Suite's system program (`_boot/sp.asm`, `ReadCD`), which calls CDCREAD again while it
+  returns carry clear and CDCTRN again while it returns carry clear, so that each must fail the second time for a
+  read to end.
+- Referee: none.
+- Conclusion: CDCREAD succeeds once a sector until CDCACK, and CDCTRN once a sector after its CDCREAD. Measured by the
+  suite's loads; argued as the BIOS's behaviour, the suite having been made on consoles.
+- Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu`.
+- Implemented in: stage 10's commit "the open BIOS boots a disc".
+
+### D-45. The hand-over: the initial program starts with the interrupt mask at 0, V-INT on, and every communication word 0
+- Opened: 2026-10-15, at stage 10. Sonic CD's initial program sets its own V-INT handler (one that raises the sub
+  CPU's level 2) and then waits on a command its system program answers only after level 2, without ever lowering the
+  mask; started with the mask at 7, it waited for ever. Started while the boot's own state code still stood in the sub
+  CPU's first status word, it took that word for its command's answer and jumped into Word RAM before its program was
+  there.
+- Documents read: BM §4-2 and §5-3 (the user calls wait for level 2); the Technical Bulletins p. 18 (the main CPU must
+  raise level 2 every 16 ms while the system program loads). Neither says what the status register or the
+  communication words hold at the hand-over.
+- Test program: Sonic CD (USA and Europe) on the open BIOS: with the mask at 0 and the words cleared, its program goes on
+  to its own screens.
+- Referee: none.
+- Conclusion: the main CPU starts the initial program with the status register at `$2000` and the VDP's V-INT on, the
+  boot's V-INT raising level 2 until the program sets its own; the boot's last exchange (the main CPU's `$FFFF` in its
+  first command word, the sub CPU's statuses cleared, then the main CPU's commands cleared) leaves every communication
+  word 0 before the program's first instruction. Measured by the game; argued as the BIOS's, the game having been made
+  on consoles.
+- Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu`; the discs' runs (`Nephrite_OpenBios.md` §8).
+- Implemented in: stage 10's commit "the discs after the hand-over".
+
+### D-46. The hand-over: the Z80 out of reset, running a DI and a HALT, its bus released
+- Opened: 2026-10-15, at stage 10. Sonic CD's program asks for the Z80's bus and waits for the grant; the open BIOS had
+  left the Z80 held in reset, which never grants it.
+- Documents read: plutiedev, "Using the Z80" (the Z80's RAM cannot be reached while the Z80 is held in reset; the bus
+  is asked for and the grant read back).
+- Test program: Sonic CD on the open BIOS: with the Z80 running a DI and a HALT and its bus free, the program takes the
+  bus and goes on.
+- Referee: none.
+- Conclusion: the BIOS loads `DI`, `HALT` at the Z80's `$0000`, resets it as plutiedev's sequence does, and releases
+  both its reset and its bus. Measured by the game; what a player's BIOS leaves in the Z80 no document says.
+- Pinned by: the discs' runs (`Nephrite_OpenBios.md` §8).
+- Implemented in: stage 10's commit "the discs after the hand-over".
+
+### D-47. Mode 1: the Sega CD's boot ROM at `$400000` reads the H-INT vector at `$400070`-`$400073`, as mode 2's does at `$000070`
+- Opened: 2026-10-15, at stage 10, by mcd-verificator in mode 1: its REG 2006 reads the vector through the boot ROM's
+  `$70` wherever the ROM is mapped, and answered "ERROR: 02" with the override limited to mode 2.
+- Documents read: the Hardware Manual §4-1 (the H-INT vector register, read at `$000070` in mode 2); mcd-verificator's
+  `test_std.c`, `test2006` (the vector read at the boot ROM's `$70`, `0xFFFF1234` expected, in either mode).
+- Test program: mcd-verificator V1.02 as a cartridge with the Sega CD beneath it, the open BIOS at `$400000`.
+- Referee: none.
+- Conclusion: the override is the boot ROM's, so in mode 1 `$400070` reads `$FFFF` and `$400072` the register.
+  Measured by the program, whose author tested it on a console.
+- Pinned by: `mcd_verificator_runs_in_mode_1_on_the_open_bios`.
+- Implemented in: stage 10's commit "mode 1".
+
+### D-48. The PCM chip's samples reach the mix once each: a sample left waiting for a later frame is in master clocks and is not converted again
+- Opened: 2026-10-15, at stage 10, by Mickey Mania on the open BIOS: the frame's cost rose from 1.7 ms to 13 ms over
+  6,000 frames and the process's memory by about 8 KiB a frame. Every one of the PCM chip's samples since about frame
+  1,000 was still waiting for the mix, behind a first whose time had grown past `10^18`.
+- Documents read: none; a defect of stage 9's mix (`Sub::sound_to`), not a rule of the hardware.
+- Test program: the disc on the open BIOS, the waiting samples counted every 100 frames; and
+  `a_pcm_sample_left_for_a_later_frame_is_mixed_then`, which fails on the old conversion and passes on the new.
+- Referee: none.
+- Conclusion: a sample made by a register access at a sub CPU clock ahead of the mix's present waits for the next frame,
+  already converted to master clocks; the mix converted every waiting sample each frame, so such a sample was multiplied
+  by the clocks' ratio again each frame, never came due, and held every later sample back, silencing the PCM chip.
+  Only the samples made since the last mix are converted now. Measured: the cost stays at 1.3 to 2.7 ms a frame, the
+  memory flat; the 71 digests unchanged.
+- Pinned by: `a_pcm_sample_left_for_a_later_frame_is_mixed_then`.
+- Implemented in: stage 10's commit "the PCM's waiting samples".
+
+### D-49. `_BURAM`'s returns where the specification records none: BRMINIT's identifier to `a1`, BRMSTAT's `-1` for a volume not Sega's, the footer's first row not checked
+- Opened: 2026-10-16, at stage 10's step 10.4, by `Nephrite_Bram.md` §10 items 3 and 9: no register value was
+  observed, and 14 of the footer's first 16 bytes were not tested for being checked.
+- Documents read: BM §7-1 (BRMINIT's `a1`, "pointer to display strings", 12 bytes; BRMSTAT's "when the number of blocks
+  and files are negative ... formatting is needed"); `Nephrite_Bram.md` §3 (the identifier the memory manager prints
+  after "FORMAT IS:"; the checks it observed), §9 (EM's `d0` of 2 and its `a0` of `$FE0080`).
+- Test program: the crate's `init_and_stat_read_the_footer_as_the_page_says` and `files_are_placed_counted_found_and_read`.
+- Referee: none.
+- Conclusion: BRMINIT copies the footer's identifier, 12 bytes, to `a1` for a volume of Sega's format or another
+  (none when `a1` is 0); `d0.w` is the size in `$1000` bytes; BRMSTAT gives `-1` and `-1` with carry set for a volume
+  not Sega's; BRMSERCH's `a0` is the even address of the file's first block. Only the checks §3 observed are made.
+  Argued; a game that reads another register would show it.
+- Pinned by: the two tests above.
+- Implemented in: stage 10's commit "the backup RAM's directory".
+
+### D-50. BRMWRITE onto a name already there: in place with the same blocks and flag, else deleted and written anew
+- Opened: 2026-10-16, by `Nephrite_Bram.md` §10 item 1: no game saved twice in the frames observed, and the memory
+  manager refuses to copy onto a name by itself.
+- Documents read: BM §7-1 (BRMWRITE: "cannot write in the file" is its only error); TB #2 item 2 (a file of 256 blocks
+  or more may not be deleted correctly, "normal writing may then succeed only once").
+- Test program: `a_name_written_again_replaces_its_file` (crate).
+- Referee: none.
+- Conclusion: refusing would leave a game unable to update its save, which games do; a write of the same size and flag
+  over the same blocks changes nothing else of the volume, so it is done in place; any other is the delete of §7.3
+  followed by the write of §7.2, the free count deciding as for a new file. No limit is placed at 256 blocks, which TB
+  #2 states as the real BIOS's defect, not a rule. Argued.
+- Pinned by: the test above.
+- Implemented in: stage 10's commit "the backup RAM's directory".
+
+### D-51. The read side: one symbol a codeword corrected, the low bits and the CRC unused, a protected block past correcting fails BRMREAD
+- Opened: 2026-10-16, by `Nephrite_Bram.md` §10 items 4 and 12: §6.7 observed the memory manager's listing, not the
+  calls' returns.
+- Documents read: `Nephrite_Bram.md` §6.3 (the codewords' roots 1 and `alpha`), §6.7 (one error a codeword corrected,
+  the low bits ignored, the CRC not checked, nothing written back); BM §7-1 (BRMREAD's "OK/ERROR").
+- Test program: `protected_files_are_corrected_as_the_page_observed` (crate), `A_block_decodes_with_one_error_a_codeword_corrected` (WiseMan).
+- Referee: none.
+- Conclusion: the decoder corrects as §6.7 observed and writes nothing back; a directory entry is used as decoded,
+  corrected or not, as the listing showed it; BRMREAD returns carry set when a protected data block holds a codeword
+  past correcting, its data still copied, since BM gives it an error return and a game told nothing would use damaged
+  data as good. Argued for the return.
+- Pinned by: the two tests above.
+- Implemented in: stage 10's commit "the backup RAM's directory".
+
+### D-52. BRMDIR: each matching entry's 16 stored bytes into the buffer, `*` matching the rest of the name
+- Opened: 2026-10-16, by `Nephrite_Bram.md` §10 item 6: "the buffer's layout is not documented and was not observed".
+- Documents read: BM §7-1 (BRMDIR: `d1.l` files to skip and the buffer's size in files, a template of `0`-`9`, `A`-`Z`,
+  `_` and `*`, carry set when the buffer is full).
+- Test program: `the_directory_lists_by_template` (crate).
+- Referee: none.
+- Conclusion: the simplest buffer that carries what a directory holds: the entry as stored, its name, flag, first block
+  and size, 16 bytes a file; `*` ends the comparison; carry set only when a further match finds the buffer full.
+  Argued; no game seen calls it.
+- Pinned by: the test above.
+- Implemented in: stage 10's commit "the backup RAM's directory".
+
+### D-53. CDCREAD for the sub CPU's read: the sector's header first, then its data, as CDCTRN's header buffer implies
+- Opened: 2026-10-16, by Lunar - Eternal Blue on the open BIOS: once its save was found it asked for sector `$1E53C`
+  again and again, its screen black and silent; on the player's BIOS its intro plays.
+- Documents read: BM §3-C (CDCTRN: `a0` the data buffer, `a1` "pointer to header buffer (size: 4 bytes)", reading "one
+  frame worth of data with the SUB-CPU"; CDCREAD: "be sure to set the CDC mode (device destination)").
+- Test program: the disc; the game's own read routine in its PRG-RAM (`$F048`-`$F1E2`) sets the destination to the sub
+  CPU's read, calls CDCREAD, reads two words from the host data port as the header, then the data to the PCM chip, and
+  asks again when the header's frame is not the one it wanted.
+- Referee: none.
+- Conclusion: with the destination the sub CPU's read, CDCREAD sets the transfer from the sector's header, 2,052 bytes
+  in mode 1 and 2,340 in mode 2, and CDCTRN reads the header into `a1` and then the data into `a0`; the DMA
+  destinations keep the data alone, which the games that run take. CDCTRN waits for DSR once and reads on, as Lunar's
+  routine does. Measured: Lunar plays its intro with music; the 240p suite, mcd-verificator and the kit's discs pass.
+- Pinned by: `the_open_bios_boots_the_240p_suite_to_its_menu` for the reads that stayed; the gate's Lunar run.
+- Implemented in: stage 10's commit "the backup RAM's directory".
+
+### D-54. Sonic CD's opening film calls the boot ROM at `$02B0` and `$02D4`: routines no document describes, so the film is black
+- Opened: 2026-10-16, by Sonic CD (USA) on the open BIOS: its opening film plays its sound over a black screen for its
+  whole length; on the player's BIOS the film shows.
+- Documents read: none describes either routine (§5 Q4's rule); the Technical Bulletins' main CPU jump table (p. 15-16)
+  lists neither address.
+- Test program: the disc; a search of the game's work RAM for calls below `$2000` finds `jsr $02B0` once, with `a1`
+  a table, before the film's set-up, and `jsr $02D4` twice in its V-INT, with `d0`, `d1` and `d2` loaded from a
+  queue of transfers; both land on the open BIOS's RTS field (D-43). The sub CPU streams the film's sectors at 75 a
+  second throughout, so the reads are not at fault.
+- Referee: none.
+- Conclusion: open. Writing the two routines needs a document; the caller's registers suggest a table of VDP
+  registers and a DMA to the VDP, which is reasoning from a game and not a description. Recorded as §5 Q4 decided.
+- Pinned by: nothing yet.
+- Implemented in: nothing.
+
+### D-55. The cartridge's `_mburam`: its address is in no document the writer may read
+- Opened: 2026-10-16, at step 10.4.
+- Documents read: TB #1, "How to access Back-Up Ram Cartridge" ("Make the BIOS ENTRY for Back-Up RAM ... mburam ...
+  For _mburam, see MEM_MAP ASS."); the corpus searched by text for `mburam`, finding only the bulletin.
+- Test program: none.
+- Referee: none.
+- Conclusion: not placed. `bios/bram.s` takes its volume in registers, so the main CPU's program can include it over
+  the cartridge's `$600001`, its size from the ID at `$400001` and its write latch at `$700001` (SM), once the address
+  is known. Until then a game cannot reach a RAM cartridge on the open BIOS, which the replacement's words say.
+- Pinned by: `the_file_system_runs_on_a_cartridge_sized_volume` for the code a cartridge would use.
+- Implemented in: nothing.
+
+### D-56. The rest of the specification's open points: block 0 left alone, an unused directory slot zeros, BRMVERIFY by blocks, flag and data, names unchecked, the BIOS's own buffers
+- Opened: 2026-10-16, by `Nephrite_Bram.md` §10 items 2, 5, 6 and 8, §7.4 and §5.5.
+- Documents read: `Nephrite_Bram.md` §5.5 (zeros in the unused slot in every case but one, which it argues is a buffer's
+  leftover), §7.4 (block 0 rewritten under both games, writer unknown), §10; BM §7-1 (BRMINIT's scratch "Do not
+  destroy the scratch RAM during the BRMXXX functions"; BRMVERIFY's `-1` and `0`; names of `0`-`9`, `A`-`Z`, `_`); TB #2
+  (a name with `-`).
+- Test program: `a_delete_moves_the_later_files_down`, `files_are_placed_counted_found_and_read` (crate);
+  `Copies_place_and_count_as_the_bios_writes` (WiseMan).
+- Referee: none.
+- Conclusion: the open BIOS never writes block 0, since nothing says what writes it; a new directory block's second
+  slot, and a slot left past the files by a delete, are zeros; BRMVERIFY answers "matches" only when the entry's
+  blocks and flag are those given and the data read back equals the data given; names are taken as given, TB #2's
+  own example lying outside BM's set; the calls' buffers are the BIOS's own (`$5650`-`$570D`), BRMINIT's scratch left to
+  the game, which the manual's caution allows. All argued.
+- Pinned by: the tests above.
+- Implemented in: stage 10's commit "the backup RAM's directory".

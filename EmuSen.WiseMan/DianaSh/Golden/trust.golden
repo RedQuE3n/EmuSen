@@ -1,0 +1,51 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command trust
+usage 1   trust <path>                  approve a module file you added, by its hash (typed at the prompt only)
+
+case at the prompt and not by a script
+target none
+covers 1
+file m.so 2
+x
+
+file t.sh 11
+trust m.so
+
+$ trust m.so
+out 94
+trust: approved m.so (sha256 73cb3858a687a8494ca3323053016282f3dad39d42cf62ca4e79dda2aac7d9ac)
+status 0
+action none
+$ cat /etc/EmuSen/dianash/trusted
+out 77
+73cb3858a687a8494ca3323053016282f3dad39d42cf62ca4e79dda2aac7d9ac  <ROOT>/m.so
+status 0
+action none
+$ trust
+out 26
+trust: usage: trust <path>
+status 1
+action none
+$ trust nosuch
+out 27
+trust: no such file: nosuch
+status 1
+action none
+$ trust /../x
+out 54
+trust: '/../x' is outside the project sandbox (<ROOT>)
+status 1
+action none
+$ source t.sh
+out 58
+trust: a module is approved at the prompt, not by a script
+status 0
+action none
+$ echo $(trust m.so)
+out 58
+trust: a module is approved at the prompt, not by a script
+status 0
+action none
+end

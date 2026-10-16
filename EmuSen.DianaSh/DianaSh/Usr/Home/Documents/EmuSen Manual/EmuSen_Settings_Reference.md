@@ -8648,7 +8648,8 @@ group: a mode row titled by the medium (*Memory Card*, *Internal Backup RAM*, *B
 medium keeps the keys above (`Cards`, `Card<n>`), the console's own memory takes `ConsoleMemory` and
 `ConsoleMemory<n>`, and any further medium `Media.<id>` and `Media.<id>.<n>`. Shared and named files are in `Cards` for a
 removable medium and in `Console` for the console's own. **The PlayStation's card is *Shared* by default** since its
-import exists (§4.115); a medium no format module reads stays *Per game*.
+import exists (§4.115); a medium no format module reads stays *Per game*. *Since 2026-10-16* the Sega CD's two media are *Shared* by default too, their module
+built (`EmuSen_SaveMedia.md` §11.7), and a new machine's backup RAM with no file starts formatted.
 
 ### 4.115 Memory Cards: the window, and the import offered once (2026-10-15)
 
@@ -8685,8 +8686,15 @@ to the chain and matched to their Skia pictures on real frames (§12 there). Not
 preset choices are read as before.
 
 Where the compositor cannot take the image (no import offered, another GPU, Windows' ANGLE, macOS) the picture is drawn
-as before, and Mistress writes the reason to its log once (`picture: ...`). **`EMUSEN_DEVICE_PICTURE=0`** in the
-environment keeps the earlier path everywhere, for comparing the two.
+as before, and Mistress writes the reason to its log once (`picture: ...`).
+
+**The handheld's black screen (2026-10-15)** (`EmuSen_DevicePicture.md` §18): on the handheld's Mesa (26.1.2) the
+device path froze the window's picture within a few frames. Mesa destroyed the window's GLX drawable whenever Avalonia
+bound its pbuffer for an image's import, and a stale present completion then left the next swap waiting for ever.
+Mistress now sets `keep_native_window_glx_drawable=true` in its environment at start (unless it is already set), and the
+launcher does too, so Mesa keeps the drawable; the device path is on by default again, and **`EMUSEN_DEVICE_PICTURE=0`**
+keeps the earlier path. A device path that shows nothing for a second while frames are offered is given up for the
+readback, said once in the log.
 
 **A core's picture on the same card.** Where the picture is presented on the device and a core can draw on a device it
 is lent (core ABI 1.9; Diamond's enhancements today), Mistress lends the core that device when the game is loaded, and

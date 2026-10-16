@@ -173,9 +173,9 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // A console only a discovered engine runs has its shelf, in the sidebar and in big picture's systems, with no development switch since the Genesis is offered; the Sega CD and the 32X, marked in development in the core's info, have none - see EmuSen_Settings_Reference.md §4.92, §4.94.
+        // A console only a discovered engine runs has its shelf, in the sidebar and in big picture's systems, with no development switch: the Genesis and the Sega CD, offered; the 32X, marked in development in the core's info, has none - see EmuSen_Settings_Reference.md §4.92, §4.94.
         [Fact]
-        public Task The_genesis_has_a_shelf_and_its_attachments_have_none() => Session.Dispatch(() =>
+        public Task The_genesis_and_the_sega_cd_have_shelves_and_the_32x_has_none() => Session.Dispatch(() =>
         {
             Rom("Alpha.sfc");
             File.WriteAllBytes(Path.Combine(_romDir, "Harbor.md"), SyntheticMdRom.Cartridge());
@@ -189,7 +189,9 @@ namespace EmuSen.WiseMan.Mistress
                 int genesis = Array.IndexOf(rows, "Genesis");
                 Assert.True(genesis >= 0, string.Join(" | ", rows));
                 Assert.Equal("1", rows[genesis + 1]);
-                Assert.DoesNotContain("Sega CD", rows);
+                int segaCd = Array.IndexOf(rows, "Sega CD");
+                Assert.True(segaCd >= 0, string.Join(" | ", rows));
+                Assert.Equal("1", rows[segaCd + 1]);
                 Assert.DoesNotContain("32X", rows);
                 UiTest.Dump("library-genesis-sidebar", UiTest.Capture(window));
                 Choose(window, MainWindow.ConsoleKeyPrefix + "Genesis (Nephrite)");
@@ -197,7 +199,8 @@ namespace EmuSen.WiseMan.Mistress
                 var shelves = (System.Collections.IEnumerable)typeof(MainWindow).GetMethod("ThemedShelves", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null)!;
                 string[] systems = shelves.Cast<object>().Select(s => s.ToString()!).ToArray();
                 Assert.Contains(systems, s => s.Contains("genesis", StringComparison.Ordinal));
-                Assert.DoesNotContain(systems, s => s.Contains("segacd", StringComparison.Ordinal) || s.Contains("sega32x", StringComparison.Ordinal));
+                Assert.Contains(systems, s => s.Contains("segacd", StringComparison.Ordinal));
+                Assert.DoesNotContain(systems, s => s.Contains("sega32x", StringComparison.Ordinal));
                 window.Close();
             }
             finally

@@ -351,6 +351,9 @@ is what the surfaces forbid. `SystemPack` gains `Media`, the console's `SaveMedi
 - **`mcd.ramcart` and `mcd.backup`, designed**: one module for both, the BIOS's backup RAM directory, read from Sega's
   *Mega-CD BIOS Manual* at Nephrite's stage 10, whose BIOS replacement must write the same format; until then the two
   media have entries with no `Format`, so they offer §6.1's three whole-medium operations.
+  *Built 2026-10-16* (`SegaCdBramFormat`, §11.7): one module for both, from `Nephrite_Bram.md`, the format observed on
+  the player's BIOS by the two-person method of `Nephrite_OpenBios.md` §5 Q2, which the open BIOS writes too; its unit
+  the 64-byte block (125 free on a formatted internal RAM, 2,045 on Sega's cartridge).
 
 ### 6.3 The generic tool
 
@@ -441,7 +444,8 @@ Nephrite's two files gain kinds and labels: the internal backup RAM, file 0 `.br
 label `Inside the console`; the RAM cartridge, file 10 `.crm`, `removable`, medium `mcd.ramcart`, label `Cartridge
 slot`. Under the flags, a load leaves each as it stands. Whether the BIOS sees a changed cartridge needs nothing of the
 core: the BIOS's backup RAM calls read the directory from the RAM itself (to be confirmed against the manual at stage
-10 [A]). The Genesis's cartridge SRAM (`.srm`) stays `game`.
+10 [A]). *Confirmed 2026-10-16*: every call of the open BIOS reads the footer and the directory from the RAM
+at each call (`Nephrite_OpenBios.md` §14). The Genesis's cartridge SRAM (`.srm`) stays `game`.
 
 ### 7.4 Later
 
@@ -474,7 +478,9 @@ there is argued.
 When the import exists (§6.6), **a removable medium whose format module reads it defaults to *Shared***, the
 PlayStation's card first; a medium with no module, and every console medium, stays *Per game* by default until its
 module exists, since without a module the import could only copy one game's whole card, which would hide every other
-game's [C]. A mode the player chose is kept: only a console with nothing stored changes.
+game's [C]. A mode the player chose is kept: only a console with nothing stored changes. *Since 2026-10-16* (§10 Q2) a console
+medium whose module exists defaults to *Shared* as well, the Sega CD's internal backup RAM first, and a new machine's
+console memory with no file yet is given the module's formatted blank (§11.7).
 
 **The import offered once.** The first time a game of such a console is started under the default *Shared* while
 per-game cards of that medium exist and the shared card does not, Mistress asks, after the firmware question and
@@ -496,6 +502,7 @@ window, `memcard import`, and *Per game* in Graphics Settings, under which each 
 2. **Q2, console memory's default.** Built: *Per game*, as today, until the Sega CD's format module exists. On the
    hardware the internal memory is shared, so *Shared* is the faithful default. *Recommended:* make *Shared* its
    default with stage 10's module and its import, as §9 does for the PlayStation.
+   *Built 2026-10-16* with `SegaCdBramFormat` (§11.7).
 3. **Q3, the N64 when MarsRT joins.** *Recommended:* four paks, one per port, `.mpk` keeping port 1's present name
    (§7.2); and *Shared* by default once the pak's module and import exist.
 
@@ -553,6 +560,16 @@ most. Two tests were edited for the new default, each argued: `DiamondCardsTests
 and its per-game case now chooses *Per game* as a player would; `DiamondPlayersTests`' card round trip, whose subject is
 the per-game file, chooses *Per game*, and the class now redirects the configuration folder, which it read from the
 player's before.
+
+### 11.7 The Sega CD's module, and console memory Shared (2026-10-16)
+
+[M] `SegaCdBramFormat` (`EmuSen.Crystal/Systems/Genesis`) is the `Format` of both Sega CD entries. `SegaCdBramFormatTests`
+check it against `Nephrite_Bram.md`: the block code's four vectors, one symbol error a codeword corrected, a format's
+footer, Lunar's four files placed and counted as the BIOS writes them, §7.3's delete. `MemoryCards.DefaultMode` now
+gives *Shared* to a console medium with a module; `MemoryCardsOfferTests` asserts it for the Sega CD's two media.
+`MediaPlacement.Fresh` names each console slot's module and `CoreEngine` gives a slot with no file the module's
+`Format()`; `NephriteMediaTests.A_new_machines_backup_ram_is_formatted` checks it per game and shared. The core is
+unchanged: with no file it starts from zeros, as the kit and the digests expect.
 
 ### 11.6 The PlayStation, unchanged per game
 

@@ -178,3 +178,28 @@ Coprocessor register flow logging off.
 status 0
 action none
 end
+
+case a clear after off
+target fake
+covers 1-4
+$ copflow on
+out 69
+Coprocessor register flow logging on (4096 registers, 4096 retained).
+status 0
+action none
+$ copflow off
+out 38
+Coprocessor register flow logging off.
+status 0
+action none
+$ copflow clear
+out 38
+Coprocessor register flow log cleared.
+status 0
+action none
+$ copflow tail
+out 71
+Coprocessor register flow logging is off. Turn it on with `copflow on`.
+status 0
+action none
+end

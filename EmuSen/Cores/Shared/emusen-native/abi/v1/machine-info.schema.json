@@ -17,7 +17,21 @@
         "max_width": { "type": "integer", "minimum": 0 },
         "max_height": { "type": "integer", "minimum": 0 },
         "aspect": { "$ref": "#/$defs/ratio" },
-        "formats": { "type": "array", "items": { "type": "integer", "minimum": 0 } }
+        "formats": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+        "raw": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["encoding", "element", "max_width", "max_height"],
+            "properties": {
+              "encoding": { "type": "string" },
+              "element": { "type": "integer", "minimum": 1 },
+              "max_width": { "type": "integer", "minimum": 0 },
+              "max_height": { "type": "integer", "minimum": 0 },
+              "palette": { "type": "array", "items": { "type": "integer", "minimum": 0 } }
+            }
+          }
+        }
       }
     },
     "audio": {

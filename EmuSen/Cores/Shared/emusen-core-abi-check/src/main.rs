@@ -273,7 +273,7 @@ mod tests {
         let committed = base(&read(&baseline_path()).unwrap());
         check(&facts, &committed, None, &mut problems);
         assert_eq!(problems, Vec::<String>::new());
-        assert_eq!(facts.keys().filter(|k| k.starts_with("fn ")).count(), 59);
+        assert_eq!(facts.keys().filter(|k| k.starts_with("fn ")).count(), 62);
         assert_eq!(facts.get("struct emusen_media").map(String::as_str), Some("size 48 align 8"));
         assert_eq!(facts.get("struct emusen_create_params").map(String::as_str), Some("size 104 align 8"), "grown at 1.3 and 1.9");
         assert_eq!(committed.get("struct emusen_create_params"), Some(&("size 88 align 8".to_owned(), "1.0".to_owned())), "its 1.0 line stands");

@@ -1,4 +1,4 @@
-//! A minimal core on the v1 ABI that claims every capability, so that `core_exports!` generates all 59 exports:
+//! A minimal core on the v1 ABI that claims every capability, so that `core_exports!` generates all 62 exports:
 //! the crate's tests drive it in-process, `emusen-core-abi-check` checks its signatures against the header, and
 //! CI's export check runs on its library. Its machine is a counter; nothing in it is a console.
 
@@ -25,10 +25,11 @@ pub const TEST_CAPABILITIES: u64 = emusen_native::core::caps::RESET
     | emusen_native::core::caps::MEDIA
     | emusen_native::core::caps::DEBUG_READS
     | emusen_native::core::caps::BORROW
-    | emusen_native::core::caps::DEVICE_PICTURE;
+    | emusen_native::core::caps::DEVICE_PICTURE
+    | emusen_native::core::caps::RAW_PICTURE;
 
 pub const TEST_FAULTS: u32 = 0;
 
 include!("common/test_core.rs");
 
-emusen_native::core_exports!(TestCore; reset, present, phases, audio_peek, mutes, axes, settings, setting_notes, rom_patches, cheat_pokes, debug, debug_stack, debug_registers, debug_disassemble, debug_reads, media, device_picture);
+emusen_native::core_exports!(TestCore; reset, present, phases, audio_peek, mutes, axes, settings, setting_notes, rom_patches, cheat_pokes, debug, debug_stack, debug_registers, debug_disassemble, debug_reads, media, device_picture, raw_picture);

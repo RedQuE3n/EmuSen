@@ -18,7 +18,7 @@ impl bindgen::callbacks::ParseCallbacks for Macros {
     }
 }
 
-const STRUCTS: [(&str, &str); 8] = [
+const STRUCTS: [(&str, &str); 9] = [
     ("emusen_machine", "Machine"),
     ("emusen_create_params", "CreateParams"),
     ("emusen_file", "FileEntry"),
@@ -27,6 +27,7 @@ const STRUCTS: [(&str, &str); 8] = [
     ("emusen_media", "Media"),
     ("emusen_device_lend", "DeviceLend"),
     ("emusen_device_frame", "DeviceFrame"),
+    ("emusen_raw_frame", "RawFrame"),
 ];
 
 fn main() {

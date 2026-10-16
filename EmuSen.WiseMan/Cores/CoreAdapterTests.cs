@@ -55,9 +55,9 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(Full.Available, Full.Report);
             Assert.True(Plain.Available, Plain.Report);
             Assert.Same(Full, CoreLibrary.Open(LibraryPath("v1_test_core")));
-            Assert.Equal(("v1-test-core", 0x3FFFFFUL, 0x10009u, 4), (Full.Info.Id, Full.Capabilities, Full.AbiVersion, Full.Settings.Count));
+            Assert.Equal(("v1-test-core", 0x7FFFFFUL, 0x1000Au, 4), (Full.Info.Id, Full.Capabilities, Full.AbiVersion, Full.Settings.Count));
             Assert.Equal(("v1-plain-core", 0UL), (Plain.Info.Id, Plain.Capabilities));
-            Assert.EndsWith("core ABI 1.9", Full.Report);
+            Assert.EndsWith("core ABI 1.10", Full.Report);
             Assert.Equal(new[] { ".tst" }, Full.Info.Systems.Single().Extensions);
             Assert.Equal("the image is empty", Full.Words(-9));
 

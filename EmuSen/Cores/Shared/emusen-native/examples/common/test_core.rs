@@ -82,6 +82,9 @@ pub const FAULT_DRIVELESS_NAMES_PLACES: u32 = 524288;
 /// the host would then read from a buffer that does not exist (EmuSen_CoreAPI.md §6.29). Without it the test core,
 /// which draws on no device, answers that every picture is in `frame_copy`.
 pub const FAULT_DEVICE_PICTURE_UNLENT: u32 = 1 << 23;
+/// Seeded fault for the kit's C21 (since 1.10): the raw picture's first value one more than the frame's pixel, so that
+/// the palette the core declares no longer draws its own frame (EmuSen_CoreAPI.md §6.30).
+pub const FAULT_RAW_DISAGREES: u32 = 1 << 24;
 /// The included faults, narrowed to the bits of `EMUSEN_TEST_CORE_FAULTS` when that is set, so each can be shown alone.
 fn faults() -> u32 {
     static MASK: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
@@ -164,7 +167,14 @@ pub struct TestCore {
     shared_console: bool,
     /// Whether the host lent a device, which this core keeps but draws nothing on (since 1.9).
     lent: bool,
+    /// `RAW_PICTURE` (since 1.10): the encodings kept, and the red byte of each pixel of the last frame drawn while
+    /// `x-test.red` was, or `None` for a frame drawn without it.
+    raw_mask: u64,
+    raw: Option<Vec<u8>>,
 }
+
+/// The test core's one encoding of its picture before the palette: each pixel's red byte (EmuSen_CoreAPI.md §6.30).
+pub const RAW_ENCODING: &str = "x-test.red";
 
 /// Where each frame's byte of the kept image lands in RAM, so that the state and its digests follow what was read.
 const ROM_BYTE: usize = 254;
@@ -195,6 +205,11 @@ impl TestCore {
         let n = (self.width() * 4) as usize;
         let green = if self.settling > 0 { 0x80 } else { 0 };
         self.picture = (0..n).flat_map(|i| [(self.frames as u8).wrapping_add(i as u8), green, 0, 255]).collect();
+        self.raw = (self.raw_mask & 1 != 0).then(|| {
+            let mut red: Vec<u8> = self.picture.chunks_exact(4).map(|p| p[0]).collect();
+            red[0] = red[0].wrapping_add((faults() & FAULT_RAW_DISAGREES != 0) as u8);
+            red
+        });
     }
 }
 
@@ -383,6 +398,8 @@ impl Core for TestCore {
             memory_dirty: false,
             shared_console: r.shared_console,
             lent: r.device.is_some(),
+            raw_mask: 0,
+            raw: None,
         };
         m.draw();
         Ok(m)
@@ -505,6 +522,22 @@ impl Core for TestCore {
             return Ok(Some(DeviceFrame { format: pixel::RGBA8888, buffer: 0xDEAD, width: self.width(), height: 4, stride: self.width() * 4, ready: 0xBEEF, value: self.frames as u64, ..DeviceFrame::default() }));
         }
         Ok(None)
+    }
+
+    fn raw_encodings(&self) -> Vec<RawEncoding> {
+        vec![RawEncoding { encoding: RAW_ENCODING.into(), element: 1, max_width: 16, max_height: 4, palette: (0..256).map(|v| v << 16).collect() }]
+    }
+
+    fn raw_select(&mut self, mask: u64) -> Result<(), i32> {
+        self.raw_mask = mask;
+        Ok(())
+    }
+
+    fn raw_frame(&self, raw: u32) -> Result<Option<(RawFrame, &[u8])>, i32> {
+        if raw != 0 {
+            return Err(status::NOT_SUPPORTED);
+        }
+        Ok(self.raw.as_deref().map(|v| (RawFrame::packed(1, self.width(), 4), v)))
     }
 
     fn audio_rate(&self) -> i32 {

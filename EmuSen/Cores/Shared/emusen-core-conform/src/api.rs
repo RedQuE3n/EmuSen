@@ -4,7 +4,7 @@ use std::ffi::c_char;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 
-use emusen_native::core::sys::{CreateParams, DeviceFrame, DeviceLend, Event, FileEntry, FrameInfo, Machine as RawMachine, Media, caps, status};
+use emusen_native::core::sys::{CreateParams, DeviceFrame, DeviceLend, Event, FileEntry, FrameInfo, Machine as RawMachine, Media, RawFrame, caps, status};
 
 type M = *mut RawMachine;
 type C = *const RawMachine;
@@ -93,6 +93,9 @@ table! {
         media_insert: fn(M, u32, *const Media) -> i32,
         debug_reads: fn(M, *mut u32, usize) -> i64,
         frame_device: fn(M, *mut DeviceFrame) -> i32,
+        raw_select: fn(M, u64) -> i32,
+        raw_info: fn(C, u32, *mut RawFrame) -> i32,
+        raw_copy: fn(C, u32, *mut u8, usize) -> i64,
     }
 }
 
@@ -302,6 +305,38 @@ impl Machine<'_> {
             0 => Ok(None),
             e => Err(e),
         })
+    }
+
+    /// `raw_select` (since 1.10): `NOT_SUPPORTED` where the library lacks it.
+    pub fn raw_select(&self, mask: u64) -> i32 {
+        self.lib.f.raw_select.map_or(status::NOT_SUPPORTED, |f| unsafe { f(self.h, mask) })
+    }
+
+    /// `raw_info` with a struct of `size` bytes: its answer and the shape, the struct's fields past `size` zeroed first.
+    pub fn raw_info_sized(&self, raw: u32, size: u32) -> (i32, RawFrame) {
+        let Some(f) = self.lib.f.raw_info else { return (status::NOT_SUPPORTED, RawFrame::default()) };
+        let mut out = RawFrame { size, ..RawFrame::default() };
+        let r = unsafe { f(self.h, raw, &mut out) };
+        (r, out)
+    }
+
+    pub fn raw_info(&self, raw: u32) -> (i32, RawFrame) {
+        self.raw_info_sized(raw, std::mem::size_of::<RawFrame>() as u32)
+    }
+
+    /// `raw_copy`'s values by the length-query idiom, or its status.
+    pub fn raw_copy(&self, raw: u32) -> Result<Vec<u8>, i64> {
+        let Some(f) = self.lib.f.raw_copy else { return Err(status::NOT_SUPPORTED as i64) };
+        let n = unsafe { f(self.h, raw, std::ptr::null_mut(), 0) };
+        if n < 0 {
+            return Err(n);
+        }
+        let mut buf = vec![0u8; n as usize];
+        let m = unsafe { f(self.h, raw, buf.as_mut_ptr(), buf.len()) };
+        if m != n {
+            return Err(m.min(-1));
+        }
+        Ok(buf)
     }
 
     pub fn frame(&self) -> Vec<u8> {

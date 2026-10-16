@@ -343,8 +343,8 @@ uint32_t emusen_core_abi_version(void);     // (MAJOR << 16) | MINOR, as built
   never undefined behaviour. A host given an event kind or a descriptor field it does not know skips it.
 - **Descriptors are JSON documents** (§6.3); a reader ignores fields it does not know, and a field a host requires is
   never removed within major 1.
-- **Reserved space**: status codes in the interface's band not yet assigned; capability bits 21–47 (18 to 20 assigned
-  since, by 1.1 to 1.3); event kinds (8 assigned by 1.4, 7 kept for outputs); JSON field names beginning `x-` for a core's private use, never assigned by the
+- **Reserved space**: status codes in the interface's band not yet assigned; capability bits 23–47 (18 to 22 assigned
+  since, by 1.1 to 1.3, 1.9 and 1.10); event kinds (8 assigned by 1.4, 7 kept for outputs); JSON field names beginning `x-` for a core's private use, never assigned by the
   specification.
 - **A struct grows only at its end, and 1.3's `emusen_create_params.flags` is the first to.** The callee copies
   `min(size, its own)` bytes into a struct of its own size zeroed beforehand, so a field a shorter struct lacks reads
@@ -707,7 +707,7 @@ What depends on the game, read after create:
 |---|---|
 | **`system`**, `region` | which system entry and region the game runs as |
 | **`frame_rate`** | `{ "num": 21477272, "den": 357366 }`: the pacing rate, exact; `ICore.FrameRateHz` today |
-| **`video`** | `base_width`, `base_height`, `max_width`, `max_height`, `aspect` as a ratio, `formats` the core can produce |
+| **`video`** | `base_width`, `base_height`, `max_width`, `max_height`, `aspect` as a ratio, `formats` the core can produce; since 1.10, `raw`, the encodings of the picture before the palette a core claiming `RAW_PICTURE` can hand (§6.30) |
 | **`audio`** | `rate` at start; `channels`: the names `set_mutes`' bits stand for |
 | **`ports`** | which controller each port holds |
 | **`spaces`** | `{ id, name, size, flags }`; `flags` an array of the strings `read_only`, `side_effects`, `reports_stores`, `cheats`, since 2026-10-07 `view` (§29) and, since 1.2, `reports_loads` (§6.14.1) (open, as any enumerated string). `size` and `battery`'s `length` are written by the crate from `space_size` and `battery`, and `state.kinds` from `SNAPSHOT`, so they cannot disagree with the exports (C14). The names are the C# oracle's where there is one (`MoonMachine.cs:17`), so the cheats and the debugger key on them as now |
@@ -1431,6 +1431,120 @@ A host of 1.9 with no device to lend passes null, and `frame_device` answers 0.
 **The kit.** C20 (§28.12) where the bit is claimed. The test core claims it, keeps a lend and draws on nothing, so
 `frame_device` answers 0; its seeded fault `FAULT_DEVICE_PICTURE_UNLENT` (1 << 23), a picture answered on a device
 nobody lent, fails C20 alone.
+
+### 6.30 The raw picture: `RAW_PICTURE` (1.10, 2026-10-16)
+
+*Decided 2026-10-16, the tester's words: "yes, lets add the raw picture to the abi and do so agnostically if there is
+going to be other cores that function the same."* Until C# Moon was deleted (`Moon_Native.md` §9.5) the CRT filter's
+NES mode read `ICore.RawPicture`, each pixel's colour number and PPUMASK's emphasis bits, and built the PPU's own
+composite wave from them (`EmuSen_CRT.md` §22). MoonRT had no surface for it, so from that merge the NES under the
+filter was encoded from RGB again. This minor is that surface, made for any core whose video hardware has a native form
+before RGB, and an optional capability on the picture's existing surface, as §4.4 allows.
+
+**What it carries, and why in this form.**
+
+- **An encoding, named by a string** in machine info: `video.raw[n].encoding`. A string, not a registered number, for
+  three reasons. The project's other open vocabularies across this boundary are strings (controller ids such as
+  `nes.pad`, settings values such as `md.model1`, battery media), so a reader already handles them. A string needs no
+  central allocation for a core outside the project: `x-` begins a core's own name, as it begins a private JSON field
+  (§4.2), and is never registered. And the cost of a string is paid once, when the host reads machine info; the frame's
+  calls name an encoding by its index `n` in that list, so nothing on the hot path compares text (§2.5). A name is
+  lower-case ASCII letters, digits, `.`, `_` and `-`, the system's id first: `nes.ppu`.
+- **The element width**, `video.raw[n].element`, in bytes: 1, 2, 4 or 8, each value little-endian. It is fixed by the
+  encoding's entry in the register below, and is stated beside the name so that a host which does not know the
+  encoding can still size, copy, store or show the values (a debugger's view, a recording) without guessing.
+- **The size, per frame.** `max_width` and `max_height` in machine info, from which a host allocates once, as for the
+  RGB frame (§6.6); and each frame's `width`, `height` and row `stride` in `emusen_raw_frame`. **The raw picture covers
+  the same rectangle of the screen as the frame `frame_copy` holds**, at its own sampling: raw column *x* lies over the
+  frame's columns from *x*·*W*/*w* to (*x*+1)·*W*/*w*, and rows likewise, where *W* × *H* is the frame as shown (its
+  height times `row_repeat`) and *w* × *h* the raw picture's. A console whose native form holds more than the frame
+  shows (an overscan border the core crops) crops it the same way, since what lies outside the frame is never drawn.
+  A console whose native form is finer than the frame, or coarser (a hi-res mode drawn into a frame of the low one, or
+  the reverse), says so by the two sizes and the rule above, with no field of its own.
+- **Side data: none at 1.10.** The case named for it, a write to the emphasis bits or a palette in the middle of a
+  frame, is already covered when each pixel's value holds what was in force when that pixel was output; `nes.ppu` is
+  so defined. A per-line or per-frame word would be needed only by an encoding whose meaning depends on something no
+  pixel carries. None is known yet; `emusen_raw_frame.reserved` is the place a later minor gives one, and an encoding
+  may meanwhile define its own rows of side data inside its values, which its entry would then say.
+- **An optional palette**, `video.raw[n].palette`: where the core's RGB frame is a function of the value alone, the
+  RGB it draws for each value, as integers `0xRRGGBB` indexed by the value. It is how a core states that its two
+  pictures agree, and how the kit checks it (C21, §28.13). An encoding whose RGB is not a function of the value alone,
+  or whose table would be too long to list (more than 65,536 entries), gives none.
+
+**The surface.**
+
+- **`EMUSEN_CAP_RAW_PICTURE`**, bit 22, and three exports, present if and only if it is claimed:
+  - `int32_t emusen_core_raw_select(emusen_machine *m, uint64_t mask)`: bit *n* asks the core to keep `video.raw[n]`
+    for every frame drawn from the next `advance` on; zero, the state at create, keeps none. A bit past the list is
+    refused with `EMUSEN_NOT_SUPPORTED` and nothing changes. The selection is the host's, like `set_options`: no part
+    of a state, kept across `reset` and `state_load`.
+  - `int32_t emusen_core_raw_info(const emusen_machine *m, uint32_t n, emusen_raw_frame *out)`: 1 with the shape of the
+    raw picture in encoding *n* of the frame `frame_copy` holds; 0 when that frame has none (the encoding was not kept
+    when it was drawn, or no frame has been drawn); `EMUSEN_NOT_SUPPORTED` for an *n* past the list; `BAD_STRUCT` for a
+    struct shorter than 32 bytes. On 0 the core writes the struct's fields as zero, `size` excepted.
+  - `int64_t emusen_core_raw_copy(const emusen_machine *m, uint32_t n, uint8_t *out, size_t len)`: the values, by the
+    copy-out rule of §6.0, `height` rows of `stride` bytes; 0 bytes when the frame has none.
+- **`emusen_raw_frame`** (32 bytes, beginning with `size`, which stays the host's): `element`, `width`, `height`,
+  `stride`, a reserved word and `bytes`, the whole length `raw_copy` answers.
+- **Machine info's `video.raw`**: an array of `{ encoding, element, max_width, max_height, palette }`, `palette`
+  optional, written only for a core that claims the bit. Absent, a host reads no encoding.
+- **`emusen-native`**: `RawEncoding` and `Core::raw_encodings`, `Core::raw_select` and `Core::raw_frame`, with the
+  defaults of a core without the bit; the three exports by `core_exports!(…; raw_picture)`; the crate refuses a bit
+  past the list before the core sees it.
+
+**The rules.**
+
+- **The raw picture is always of the frame `frame_copy` holds.** It is drawn beside the RGB frame from the same
+  machine state, or not at all: a frame drawn while the encoding was not kept has none, and a frame whose rendering was
+  skipped leaves both pictures as they were. So a host that reads both after an `advance` reads one frame twice.
+- **Cost.** A core keeps an encoding only while it is selected, so a host that asks for none pays nothing, which is the
+  state of every machine at create. The values are copied out as the RGB frame is; nothing points into the core.
+- **States, rewind and run-ahead.** Neither picture is part of a state (§6.9). A state load leaves the raw picture as
+  it leaves `frame_copy`'s, whatever that is for the core, and the rule above holds through it: a core whose picture
+  is rebuilt by the next frame has a raw picture rebuilt by the same frame. Rewind and run-ahead therefore need nothing:
+  a frame they show is a frame some `advance` drew, with its raw picture if the encoding was kept for that `advance`.
+- **The device picture (§6.29).** `RAW_PICTURE` is independent of `DEVICE_PICTURE`: the raw picture is always copied
+  out, never handed on the device, and is of the frame `frame_copy` holds, which on a lent device may be a frame sooner
+  than a lendless machine's. A filter that reads both on the device uploads the raw values itself; they are small (a
+  NES frame is 120 KiB).
+- **Several encodings** may be listed and kept at once; a host asks for those it can use, and ignores names it does
+  not know. A core may list none on a machine whose console has no such form, as a `MEDIA` core may list no drive
+  (§6.26).
+
+**The register.** An encoding's entry is part of this page, added by the change that first has a core to hand it and
+a consumer to read it. A name once registered keeps its meaning for the life of major 1.
+
+| Encoding | Element | Values | Size | Defined from |
+|---|---|---|---|---|
+| `nes.ppu` | 2 | bits 0–5: the colour the 2C02 output for the pixel, palette RAM's entry after PPUMASK's greyscale (bit 0) has cleared its low four bits; bits 6–8: PPUMASK bits 5–7 in force when the pixel was output, as written to the register; bits 9–15 zero | 256 × 240, the frame's | `EmuSen_CRT.md` §22.2, the nesdev wiki's *NTSC video* and *PPU registers* pages |
+
+The emphasis bits are recorded as written, not as colours, because the 2C07 of PAL consoles wires its bits 5 and 6 to
+green and red where the 2C02 wires them to red and green: which colour a bit dims is the decoder's knowledge of the
+chip, and the encoding stays one for both. When in a line a write takes effect is the core's resolution, the same for
+both pictures: MoonRT composes a line at its dot 256 and takes PPUMASK there.
+
+**Skew.** A host of 1.9 never calls the exports and reads no `video.raw`; the core keeps nothing, as at create. A core
+of 1.9 claims no bit and lists nothing; a host of 1.10 asks it for nothing and draws from RGB, as before this minor.
+
+**Which cores have such a form.** Surveyed 2026-10-16, against the question of whether the console's video is
+generated from something other than RGB that a filter would read, and whether a consumer reads it now:
+
+| Core | Native form before RGB | Verdict |
+|---|---|---|
+| MoonRT (NES) | the PPU's colour number and emphasis bits; the 2C02 has no RGB stage and generates its composite wave from them directly | **built**, `nes.ppu`; the CRT filter's composite path reads it (`EmuSen_CRT.md` §22) |
+| Nephrite (Genesis, Sega CD, 32X) | CRAM's 9-bit colour with the shadow and highlight state, through the VDP's DAC ladder (Nephrite applies the measured levels) | not built: the VDP drives analog RGB and the console's composite is made from that RGB by a separate encoder chip, so the filter's RGB path is already the hardware's path; the 32X mixes its own 15-bit RGB with the VDP's in the analog domain, the same argument. Useful only if a filter is to model the DAC ladder itself |
+| Diamond (PlayStation) | 15- or 24-bit RGB in VRAM | none: the GPU's native form is RGB, and composite comes from an encoder fed RGB |
+| VenusRT (SNES) | 15-bit colour, master brightness ($2100) and the hi-res and pseudo-hires halves | not built: the S-PPU outputs analog RGB and the S-ENC encodes from it, so RGB is first-hand; VenusRT's 512-wide frame already carries the halves. A `snes.ppu` (colour and brightness) would serve only a filter modelling the brightness DAC, which none does |
+| MarsRT (N64) | the RDRAM framebuffer, RGBA 5551 or 8888, before the VI's filters | none: the VI's output is digital RGB to a DAC and encoder, and the VI is part of the core |
+| MercuryRT (Game Boy, Game Boy Color) | the DMG's 2-bit shades; the GBC's 15-bit colour | not built: neither loses anything in the RGB frame. MercuryRT draws the four shades as four distinct greys, which the DMG LCD filter already maps back to shades by luminance (`HandheldFilters.cs`), and expands each 5-bit channel by a one-to-one map; a raw form would add a surface and give a filter nothing it lacks |
+
+The NES is unusual among the consoles the project emulates in having no RGB stage at all; that is why it alone needs
+the surface today. Recommended, not built: an encoding for the Genesis's DAC levels if the CRT filter is ever to model
+the ladder's nonlinearity in the signal rather than in the palette, registered as `md.vdp` when a filter reads it.
+
+**The kit.** C21 (§28.13) where the bit is claimed. The test core claims it with an encoding of its own, `x-test.red`,
+and its seeded fault `FAULT_RAW_DISAGREES` (1 << 24), a raw value that its palette does not draw as the frame's pixel,
+fails C21 alone.
 
 ## 7. Core discovery and trust
 
@@ -2203,6 +2317,18 @@ hands its picture on it with a timeline semaphore instead of reading it back. `e
 where the picture is presented on it (`EmuSen_DevicePicture.md` §17); kit case
 C20 is added, with the kit's own lender; Diamond claims the bit (`EmuSen_DevicePicture.md` §16). Its reasons are
 `EmuSen_DevicePicture.md` §5.
+
+**v1.10, 2026-10-16** (§6.30), the tester's go to put the picture before the palette on the ABI, console-agnostic, after
+C# Moon's deletion took the NES's `ICore.RawPicture` with it (`Moon_Native.md` §9.5): `EMUSEN_CAP_RAW_PICTURE` (bit 22),
+`emusen_raw_frame` (32 bytes), `emusen_core_raw_select`, `emusen_core_raw_info` and `emusen_core_raw_copy`, and machine
+info's `video.raw`, each encoding a registered name (`nes.ppu` the first), its element width, its largest size and an
+optional palette from value to the RGB the frame draws. Baseline 481 facts, `--check` and `--against` 1.9 passing.
+`emusen-native` gains `RawEncoding`, `RawFrame`, `Core::raw_encodings`, `Core::raw_select` and `Core::raw_frame` and the
+group `raw_picture`; the guard's checker learns the struct; the C# host reads the surface (`CoreInterface`, held to the
+header by `CoreAbiTests`), reads `video.raw` as `CoreMachineInfo.Raw`, and asks for an encoding by name through
+`ICore.RawEncoding`, handing the picture as `ICore.RawPicture`, a `RawPicture` of Serenity's that names its encoding.
+Kit case C21 is added; the test core claims the bit with `x-test.red`. MoonRT claims it with `nes.ppu`
+(`Moon_Native.md` §9.7), and the CRT filter's NES mode reads it again (`EmuSen_CRT.md` §22.8). Its reasons are §6.30.
 
 **Host, 2026-10-12**, no change to the ABI: the reference host keeps §6.16 itself, input latched to the frame's start
 and every machine call behind a per-machine gate, after a pad timer's `set_axis` met a frame's call on the handheld
@@ -3292,6 +3418,29 @@ only a host of 1.0 fails it with C12, C17 and C18 (`each_fault_of_c9_and_c12_to_
 Diamond at 2× (`animated-triangle.exe`, 200 frames): 120 of 120 pictures handed on the device, each the machine's own
 `frame_copy` and the lendless machine's a frame later; with `PictureOut`'s wait for `done` removed, C20 fails with
 "the picture of frame 60, held until now, was written over" (`EmuSen_DevicePicture.md` §16).
+
+### 28.13 C21, the raw picture (1.10, 2026-10-16)
+
+Where `RAW_PICTURE` is claimed (§6.30), C21 reads machine info's `video.raw` and checks each entry: a name as §6.30
+spells one, an element of 1, 2, 4 or 8 bytes, a largest size above zero, a palette of at most 65,536 entries each
+`0xRRGGBB`, and, for a registered name, the register's element width. It then checks the refusals: a `raw_select` bit
+past the list and a `raw_info` encoding past it are refused with `NOT_SUPPORTED`, and a struct of 16 bytes with
+`BAD_STRUCT`. Two machines run the image for up to 120 frames, one selecting every encoding listed and one selecting
+none:
+
+- the one selecting none is handed no raw picture on any frame;
+- the one selecting all is handed one in every encoding on every frame, its shape within the entry's bounds and the
+  bytes `raw_copy` answers its `bytes`, every value within the register's for a registered name, and, where a palette
+  is declared, each value drawn as the frame's pixel at the centre of the rectangle it covers;
+- the two runs' `frame_copy`s are equal frame by frame and their states at the end, the selection being no part of
+  the machine;
+- the state of the middle frame is loaded at the end, and the raw picture then answered, if any, is still the frame's
+  through its palette, as is the next frame's, which must have one.
+
+Where the bit is not claimed, C21 checks that no `video.raw` is listed. The test core passes with `x-test.red`;
+`FAULT_RAW_DISAGREES` fails C21 alone (`each_fault_of_c9_and_c12_to_c18_alone_fails_its_case_alone`). Every other
+v1 core passes it unclaimed, and MoonRT claims it: on Super Mario Bros. (a copy, the library read only), 120 of 120
+frames handed, each its frame through the declared palette (§6.30, `Moon_Native.md` §9.7).
 
 ## 29. A space that is a view, 2026-10-07
 

@@ -238,7 +238,11 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
         private int Halt()
         {
             if (!Ime && _interruptPending) _haltBug = true;
-            else Halted = true;
+            else
+            {
+                Halted = true;
+                _bus.SetHalted(true);
+            }
 
             return 4;
         }

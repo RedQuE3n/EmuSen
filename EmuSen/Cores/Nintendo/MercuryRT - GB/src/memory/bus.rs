@@ -57,6 +57,8 @@ pub struct MemoryBus {
     pub tima: u8,
     pub tima_reload_delay: i32,
     pub tma: u8,
+    /// The CPU's HALT, told by the CPU and set again from its state on a load; an hblank HDMA waits it out (Mercury_Native.md §14.2).
+    pub cpu_halted: Skip<bool>,
     /// Colour mode, a Game Boy Color running a cartridge made for it; decided once, as C#'s readonly `Cgb` is (Mercury_Model.md §2).
     pub cgb: Skip<bool>,
     /// The console itself, which stays a Game Boy Color while it runs a Game Boy cartridge.
@@ -116,6 +118,7 @@ impl MemoryBus {
             tima: 0,
             tima_reload_delay: 0,
             tma: 0,
+            cpu_halted: Skip(false),
             cgb: Skip(cgb),
             cgb_hardware: Skip(cgb_hardware),
             dmg_compat: Skip(compat),
@@ -167,6 +170,7 @@ impl MemoryBus {
         self.hdma_destination = 0;
         self.hdma_blocks_left = 0;
         self.hdma_is_h_blank_driven = false;
+        *self.cpu_halted = false;
     }
 
     /// The bus's fields in C#'s ordinal order; version 6 no longer writes the cartridge's `_cart` copy (Mercury_Native.md §9.3).
@@ -590,7 +594,7 @@ impl MemoryBus {
     }
 
     fn on_h_blank_started(&mut self) {
-        if self.hdma_is_h_blank_driven && self.hdma_blocks_left > 0 {
+        if self.hdma_is_h_blank_driven && self.hdma_blocks_left > 0 && !*self.cpu_halted {
             self.transfer_hdma_block();
         }
     }
@@ -751,5 +755,9 @@ impl crate::cpu::CpuBus for MemoryBus {
     #[inline(always)]
     fn pending_interrupts(&self) -> u8 {
         self.interrupt_enable & self.interrupt_flags & 0x1F
+    }
+
+    fn set_halted(&mut self, halted: bool) {
+        *self.cpu_halted = halted;
     }
 }

@@ -1,3 +1,5 @@
+using EmuSen.Common;
+
 namespace EmuSen.Cores.Nintendo.Mercury.Memory
 {
     // The registers a DMG does not have: VRAM/WRAM banking, KEY1 and HDMA - see Mercury_Cgb.md.
@@ -212,8 +214,13 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         // Called by the PPU when a visible line enters mode 0 - see Mercury_Cgb.md §4.
         public void OnHBlankStarted()
         {
-            if (HdmaIsHBlankDriven && HdmaBlocksLeft > 0) TransferHdmaBlock();
+            if (HdmaIsHBlankDriven && HdmaBlocksLeft > 0 && !_cpuHalted) TransferHdmaBlock();
         }
+
+        // The CPU's HALT, told by the CPU and set again from its state on a load; an hblank transfer waits it out - see Mercury_Native.md §14.2.
+        [SkipInState] private bool _cpuHalted;
+
+        public void SetHalted(bool halted) => _cpuHalted = halted;
 
         // About 8 µs a block at either speed: 8 machine cycles, or 16 in double speed - see Mercury_Cgb.md §4.1, Mercury_Native.md §13.9.
         private void ChargeHdmaBlock() => _stallCycles += DoubleSpeed ? 64 : 32;
@@ -247,6 +254,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             HdmaDestination = 0;
             HdmaBlocksLeft = 0;
             HdmaIsHBlankDriven = false;
+            _cpuHalted = false;
         }
     }
 }

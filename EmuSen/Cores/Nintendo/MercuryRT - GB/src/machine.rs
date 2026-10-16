@@ -279,6 +279,7 @@ impl Machine {
         }
         // Fields an older version lacks start clear: no DMA start pending, no subtraction made.
         self.bus.read_tail(r, version)?;
+        *self.bus.cpu_halted = self.cpu.halted;
         Ok(())
     }
 

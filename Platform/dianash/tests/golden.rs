@@ -160,10 +160,12 @@ fn run(case: &Case, temp: &Path, host: &[String]) -> Outcome {
         }
         let where_ = format!("'{}', line {} ($ {})", case.title, i + 1, step.input);
         if let Some(recorded) = &recorded {
-            if &output != recorded && names_a_host_command(&step.input, recorded, host) {
+            // The recordings are Linux's; on Windows a path is printed with the system's separator, as the C# shell prints it.
+            let same = &output == recorded || (cfg!(windows) && output.replace('\\', "/") == recorded.replace('\\', "/"));
+            if !same && names_a_host_command(&step.input, recorded, host) {
                 return Outcome::NeedsHost(format!("{} runs a host's command", step.input));
             }
-            if &output != recorded {
+            if !same {
                 return Outcome::Failed(format!("{where_}: printed\n{output}\n-- recorded\n{recorded}"));
             }
         }
@@ -184,10 +186,21 @@ fn run(case: &Case, temp: &Path, host: &[String]) -> Outcome {
     Outcome::Passed
 }
 
+/// Windows' canonical spelling without its extended `\\?\` prefix, which the shell's paths do not carry.
+fn ordinary(canonical: PathBuf) -> PathBuf {
+    match canonical.to_string_lossy().strip_prefix(r"\\?\") {
+        Some(rest) if rest.as_bytes().get(1) == Some(&b':') => PathBuf::from(rest),
+        _ => canonical,
+    }
+}
+
 #[test]
 fn every_case_the_rust_shell_can_run_alone_prints_its_recording() {
     let temp = std::env::temp_dir().join(format!("dianash-golden-{}", std::process::id()));
     std::fs::create_dir_all(&temp).unwrap();
+    // The folder as the system names the working directory set in it: macOS's temporary folder is reached through the
+    // link /var, which the working directory reports as /private/var, and Windows' may be given by its 8.3 name.
+    let temp = ordinary(std::fs::canonicalize(&temp).unwrap());
     let mut files: Vec<PathBuf> = std::fs::read_dir(corpus()).unwrap().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "golden")).collect();
     files.sort();
     // Every command the corpus records that the Rust shell does not answer itself: a host's, through the bridge.

@@ -1,5 +1,7 @@
 # Moon (NES) — CPU (2A03 / 6502)
 
+*Historical since 2026-10-16: Moon (C#), the C# core this page describes, was deleted when MoonRT became the NES's only engine (`Moon_Native.md` §9.5). MoonRT implements the same machine field for field and is held to the goldens recorded from it, so the hardware described here stands; the file, class and member names are the C# core's, and the code is in git history before the retirement.*
+
 Covers `Cores/Nintendo/Moon - NES/Cpu/`: the 6502 core (`Cpu.cs`), the bus contract (`ICpuBus.cs`), addressing modes (`Cpu.AddressModes.cs`), the 256-case dispatch (`Cpu.OpcodeTable.cs`), and the operation bodies (nine `Cpu.Opcodes.*.cs` files). See `Man pages/Hardware/README.md` for what this doc set is.
 
 This is the first component of the second core, and the first real test of whether the toolchain built around `IDebugTarget`/`ISingleStepTarget` is genuinely core-agnostic or only asserted to be. §7 records what that test has actually shown so far — which, as of this writing, is the CPU and nothing else. There is no PPU, no APU, no mapper and no `ICore` implementation yet.

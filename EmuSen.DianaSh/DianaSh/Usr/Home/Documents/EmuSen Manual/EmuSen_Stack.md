@@ -45,8 +45,10 @@ paragraph above, "2D consoles' cores are C#", is retired by this one, and "the c
 and the tests that need it are deleted, and the Rust core is graded on its own recorded digests, its console's
 hardware test corpus and the conformance kit. "The C# core is the oracle" above holds while a port is under way and
 ends with it. Mars (C#) and Mercury (C#) were the first deleted, the same day (`Mars_Native.md` §6.7,
-`Mercury_Native.md` §15): MercuryRT's oracle is the goldens recorded from C# Mercury before it left. The C# cores that
-remain are Venus and Moon, each until its port replaces it.
+`Mercury_Native.md` §15): MercuryRT's oracle is the goldens recorded from C# Mercury before it left. Moon (C#) followed
+the same day (`Moon_Native.md` §9.5): MoonRT's goldens were recorded from MoonRT itself, after its corpus transcript
+was shown to equal the C# core's line for line (§9.3 there). The C# core that remains is Venus, until its port
+replaces it.
 
 **The one arguable case is `EmuSen.Endymion/AudioPlayer.cs`,** the only `unsafe` in the tree — a thin SDL3 binding on the audio submit path. It stays C#. Moving it to Rust would *add* an FFI boundary rather than remove one: today there is one hop (C# → SDL3), and a Rust sink would make it two with no accuracy or safety gained. Recorded here so the next reader does not have to re-derive it from the `unsafe` keyword alone.
 

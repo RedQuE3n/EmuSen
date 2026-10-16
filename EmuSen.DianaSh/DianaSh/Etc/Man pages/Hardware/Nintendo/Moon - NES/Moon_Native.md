@@ -2223,3 +2223,58 @@ display rule, and none feeds the machine.
 **Proof.** The DianaSh golden corpus's `moonrt` cases, written while the mirror drove the debugger, are reproduced by
 the new target unchanged: the registers, the sprites, the channels, the summary, the disassembly, coverage, the call
 stack and the breakpoints. Only the `moon` cases were removed (§9.5).
+
+### 9.5 The C# core deleted, and what left with it
+
+**What was deleted.** `EmuSen/Cores/Nintendo/Moon - NES/`, 52 files and 6,942 lines: the machine, its debug target,
+its APU write trace, its validation adapters and the cheat codecs, which had moved to the pack first. With it went
+the Engine row's choice, the factory's C# arm (`.nes` now opens MoonRT or says plainly that this build has no NES
+core), the `<Fallback>` in `RustCores.props`, and the NES's line in the reference-engine table. The NES joins the N64
+and the Game Boy as a console whose one engine is its port's shim, registered by hand (`SoleEngines`), and a stored
+choice of `Moon (C#)`, in the console's settings or a game's, runs the game on MoonRT with one log line a process
+(`RetiredEngines`, the mechanism the other two retirements put in place).
+
+**The tests.** Every WiseMan test that ran C# Moon or compared MoonRT against it was deleted or turned onto MoonRT
+alone:
+
+- deleted, as comparisons: `MoonRtMachineTests` with its random-program and corpus classes, `MoonRtStateTests`,
+  `MoonRtSoundAndPictureTests`, and the lock-step cases of the debugger, frontend, sprite 0 and battery classes; their
+  programs moved to `Fixtures/MoonPrograms.cs` and are the goldens' (§9.2);
+- deleted, as claims about the C# machine's internals: `MoonCoreTests`, `MoonApuTests`, `MoonMapperTests`, the three
+  defect classes' cases that poke C# objects, `MoonDebugTargetTests` and `Nes6502CpuTests`;
+- turned onto MoonRT: the debug contract and the engine's debugger cases, `runto frame`, the cheats, the sprite 0
+  split and SMB's slivers, blargg's 2005 sprite-hit set, the NMI and vblank ROMs, the protocol harness, AccuracyCoin
+  against its recorded result block, battery saves, the controller ports, the pad, the state header, and the Mistress
+  engine cases, which now hold that the NES offers no engine choice and that a build without the library loads no NES
+  game and says why;
+- in the DianaSh golden corpus, the `moon` cases with a `moonrt` twin were removed, and the eleven commands covered on
+  `moon` alone (`addr`, `callers`, `cheat`, `counters`, `framelog`, `mute`, `readers`, `tile`, `tilemap`, `watch`,
+  `writers`) were pointed at `moonrt`, whose output for them is the same text.
+
+**What is lost, and is written down here.**
+
+- **The pre-palette picture.** C# Moon handed the CRT filter each pixel's colour number and PPUMASK's emphasis
+  (`ICore.RawPicture`, `EmuSen_CRT.md` §22), from which the filter builds the NES's own composite signal. MoonRT does not
+  publish one, so since MoonRT became the default the NES is drawn from its RGB frame, as every other console is. MoonRT
+  would need a second buffer written beside the pixel writes and a way to hand it over; that is a change to the crate
+  and to the core ABI's surface, and is left as the first item of §9.6.
+- **The 6502's single-step vectors.** `nes6502/v1`, 2.56 million cases with bus traces, graded the C# CPU through
+  Pharaoh's `--singlestep nes6502`; MoonRT's CPU has no single-step surface, so the target left with the C# CPU. §3.6
+  proposed the test interface that would bring them back; MoonRT's CPU is held meanwhile by the corpus's CPU suites,
+  AccuracyCoin's CPU pages and the step goldens.
+- **The C# machine's unit claims.** The defect classes of §3.8–§3.12 held their rules on C# objects. Each rule was
+  carried into MoonRT and proved there by the comparisons of those stages; the rules now stand on the goldens, the
+  corpus ROMs that witness them, and AccuracyCoin, and no longer on a test of their own.
+- **`--apulog` and `apudiff`.** The `$4000`–`$4017` write log was the C# core's (`EmuSen_Debugging_Tools_Reference_v5.md`
+  §3.46); the option now refuses with this reason.
+- **Board register names in `regs`.** Kept: the shim's board table names each board's registers as the C# boards did.
+
+### 9.6 What is not done
+
+- **MoonRT's pre-palette picture** for the CRT filter's composite path (§9.5).
+- **A single-step interface for MoonRT's CPU**, for `nes6502/v1` (§3.6).
+- **The NES system pack's palette and MoonRT's** are two statements of the 64 colours; the debugger's views and the
+  Python analysis scripts read the pack's, the picture MoonRT's. A test that holds the two equal is owed; they are equal
+  today by inspection.
+- **`MercuryGoldenTrace`** is the same format as the shared `GoldenTrace`; folding it in is left to the Game Boy's
+  side.

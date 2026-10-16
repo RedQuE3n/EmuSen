@@ -193,7 +193,9 @@ The comparison below renamed the cores, dropped blank lines and braces, and comp
   The ABI does not, because they have none.
   *Since 2026-10-16 Mars (C#) is deleted (`Mars_Native.md` §6.7): the N64 runs on MarsRT alone, its shim registered by
   hand. C# Mercury is deleted the same day (`Mercury_Native.md` §15): MercuryRT is the Game Boy's only engine, a port
-  with no mirror, for which `PortEngine`'s mirror became optional. The C# cores that remain are Venus and Moon.*
+  with no mirror, for which `PortEngine`'s mirror became optional. Moon (C#) is deleted the same day (`Moon_Native.md`
+  §9.5): MoonRT is the NES's only engine, its shim registered by hand as the other two. The C# core that remains is
+  Venus.*
 - **A stable ABI for third parties.** The libraries ship beside the assemblies that load them. The version check
   guards a mismatched prebuilt library, not an ecosystem.
   *Superseded 2026-10-01: a stable ABI for third parties is now a goal, decided that day; `EmuSen_CoreAPI.md` §4.8
@@ -726,8 +728,8 @@ its own oracle. It is left out of the migration.
 Until its C# core was deleted, each port's shim (`PortEngine`) read the debugger's registers and views from a hidden C#
 core, the *mirror*, loaded from the Rust machine's state before each read, and its registries were the mirror's. With
 the C# core gone the mirror is optional: `PortEngine` keeps its own cheat, call-stack and coverage registries when a
-shim names no mirror, and the bridge feeds them exactly as it fed the mirror's. MoonRT is the first port without one
-(`Moon_Native.md` §9.4).
+shim names no mirror, and the bridge feeds them exactly as it fed the mirror's. MercuryRT and MoonRT are the ports
+without one (`Mercury_Native.md` §15, `Moon_Native.md` §9.4).
 
 What replaces the mirror's fields is the state's own listing. Every port's state writer already records a layout, one
 line per field, `offset length type path`, which the core ABI v1 publishes through `state_layout` (`EmuSen_CoreAPI.md`

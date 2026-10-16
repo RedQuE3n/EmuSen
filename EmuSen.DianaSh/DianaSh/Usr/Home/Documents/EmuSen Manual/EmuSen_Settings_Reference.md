@@ -4343,7 +4343,8 @@ the per-game choice alone (UG "Other settings", "Metadata editor"). In Mistress 
 Graphics Settings' **Engine** row for the consoles with two implementations (§4.44: Mars (C#) or MarsRT (Rust) for the
 N64, Mercury (C#) or MercuryRT (Rust) for the Game Boy and Game Boy Color, until C# Mercury was deleted on 2026-10-16:
 the Game Boy has one engine since, no Engine row and no alternative emulator, and a stored choice of Mercury (C#) runs
-the game on MercuryRT with one line on the log, `Mercury_Native.md` §15.4). The metadata editor gains ES-DE's
+the game on MercuryRT with one line on the log, `Mercury_Native.md` §15.4; the NES's Moon (C#) went the same way the
+same day, a stored choice of it running on MoonRT, `Moon_Native.md` §9.5). The metadata editor gains ES-DE's
 **Alternative emulator** field, after Controller:
 
 - For a game of a console with two engines it offers *None (the console's engine)* and the console's two engines; for
@@ -7242,6 +7243,11 @@ player can delete them. A game loaded once under `--nobattery` and again without
 the first that reads a save.
 
 ### 4.86 The NES's engine: Moon (C#) or MoonRT (Rust) (2026-09-30)
+
+*Historical since 2026-10-16: Moon (C#) was deleted and MoonRT is the NES's only engine (`Moon_Native.md` §9.5). The
+NES tab has no Engine row; a stored choice of Moon (C#), the console's or a game's, runs the game on MoonRT with one
+line on the log a process, and a build without MoonRT's library loads no NES game and says "This build has no NES
+core". The section below records the row while both engines existed.*
 
 Graphics Settings' NES tab now begins, after the screen filter, with **Engine**, a dropdown of *Moon (C#)* and *MoonRT
 (Rust)*. It is stored in `graphics.json` as `Consoles.NES.Engine`, and is resolved as §4.44's rows are, by

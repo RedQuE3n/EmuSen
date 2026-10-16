@@ -15,6 +15,8 @@
          has to produce assets for every publish target plus the build
          machine's own - see `man hier`. -->
     <RuntimeIdentifiers>win-x64;linux-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
+    <!-- The Rust shell's host API is called through function pointers - see EmuSen_DianaSh.md §13.7. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>

@@ -127,6 +127,19 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Equal(AfterCall, core.HaltedAddress);
         }
 
+        // The golden corpus's fake target has a call stack its breakpoints were never told of - see EmuSen_DianaSh.md §16 Q18.
+        [Fact]
+        public void Step_over_refuses_when_the_breakpoints_were_never_told_the_call_stack()
+        {
+            var target = new GoldenDebugTarget();
+
+            var result = DianaShInterpreter.CreateDefault(target).Submit("step over");
+
+            Assert.Null(target.Breakpoints.StepDepthTarget);
+            Assert.Contains("cannot be armed", result.Output);
+            Assert.Null(result.Action);
+        }
+
         [Fact]
         public void Step_out_refuses_when_the_call_stack_is_already_empty()
         {

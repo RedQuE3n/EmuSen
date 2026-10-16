@@ -1,0 +1,22 @@
+NAME
+    which - say what answers a name
+
+SYNOPSIS
+    which <name>...
+
+DESCRIPTION
+    For each name, one line saying what runs when it is typed: 'shell
+    builtin' for a name the shell answers itself (the language's, such as
+    'source' and 'man', and the shell's own commands, such as 'cd' and
+    'tmux'), 'alias for <command>' for one of the shell's aliases, and
+    'command' for any other command it has. A name nothing answers prints
+    'which: no <name>', and makes the exit status 1. Case is ignored, as
+    it is when a command is run.
+
+    A host's command that takes the place of a shell builtin of the same
+    name is a builtin to the C# shell and a command to the Rust one; that
+    is the one place the two answer differently.
+
+EXAMPLES
+    which cd grep quit
+    which nosuch || echo missing

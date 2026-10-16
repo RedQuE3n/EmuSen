@@ -116,7 +116,7 @@ namespace EmuSen.WiseMan.Cores
             (core as IDisposable)?.Dispose();
         }
 
-        // The Sega CD and the 32X are marked in development in the core's own info, so a shipped Nephrite would offer the Genesis alone; a developer asking for development cores can still open their files - see EmuSen_CoreAPI.md §27.4.
+        // The 32X is marked in development in the core's own info, so a shipped Nephrite offers the Genesis and the Sega CD; a developer asking for development cores can still open a 32X file - see EmuSen_CoreAPI.md §27.4.
         [Fact]
         public void A_shipped_core_offers_only_the_systems_its_info_says_run()
         {
@@ -130,16 +130,16 @@ namespace EmuSen.WiseMan.Cores
             {
                 CoreDiscovery.UseDevelopment(false);
                 var info = CoreDiscovery.Found.Single().Info;
-                Assert.Equal(new[] { false, true, true }, info.Systems.Select(s => s.Development));
-                Assert.True(CoreFactory.IsSupported("game.md"));
-                Assert.False(CoreFactory.IsSupported("game.iso") || CoreFactory.IsSupported("game.32x"));
-                Assert.Equal(new[] { "Genesis" }, CoreCatalog.DiscoveredConsoles);
+                Assert.Equal(new[] { false, false, true }, info.Systems.Select(s => s.Development));
+                Assert.True(CoreFactory.IsSupported("game.md") && CoreFactory.IsSupported("game.iso"));
+                Assert.False(CoreFactory.IsSupported("game.32x"));
+                Assert.Equal(new[] { "Genesis", "Sega CD" }, CoreCatalog.DiscoveredConsoles);
                 Assert.Equal(new[] { "model", "region", "pad1", "pad2" }, CoreCatalog.SettingsFor("Genesis").Select(s => s.Key));
-                Assert.Empty(CoreCatalog.SettingsFor("Sega CD"));
+                Assert.Equal(CoreCatalog.SettingsFor("Genesis").Select(s => s.Key), CoreCatalog.SettingsFor("Sega CD").Select(s => s.Key));
 
                 CoreDiscovery.UseDevelopment(true);
-                Assert.True(CoreFactory.IsSupported("game.iso") && CoreFactory.IsSupported("game.32x"));
-                Assert.Equal(new[] { "Genesis" }, CoreCatalog.DiscoveredConsoles);
+                Assert.True(CoreFactory.IsSupported("game.32x"));
+                Assert.Equal(new[] { "Genesis", "Sega CD" }, CoreCatalog.DiscoveredConsoles);
             }
             finally
             {
@@ -147,9 +147,9 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // Decided 2026-10-07: the Genesis is offered to players; the Sega CD and the 32X stay marked in development in the core's info - see EmuSen_CoreAPI.md §27.4.
+        // Decided 2026-10-07: the Genesis is offered to players; 2026-10-16: the Sega CD too; the 32X stays marked in development in the core's info - see EmuSen_CoreAPI.md §27.4, Nephrite_Plan.md §7.
         [Fact]
-        public void A_player_is_offered_the_genesis_and_not_the_sega_cd_or_the_32x()
+        public void A_player_is_offered_the_genesis_and_the_sega_cd_and_not_the_32x()
         {
             var sidecar = CoreSidecar.Read(CoreSidecar.PathFor(LibraryPath))!;
             Assert.False(sidecar.Development);
@@ -163,17 +163,19 @@ namespace EmuSen.WiseMan.Cores
             }
             Assert.False(CoreFactory.IsSupported("game.32x"));
             Assert.DoesNotContain(".32x", EmuSen.Mistress.Library.RomLibrary.Extensions);
-            // Since Diamond's stage 11 the PlayStation takes .iso, and the Sega CD, in development, still does not.
-            Assert.Equal("PlayStation", CoreCatalog.ConsoleForRom("game.iso"));
+            // The PlayStation and the Sega CD both take .iso, so a disc's content decides.
+            Assert.Equal("Sega CD", CoreCatalog.ConsoleForRom(Write("disc.iso", SyntheticMdRom.Disc())));
             Assert.IsType<CoreEngine>(CoreFactory.Create(Write("game.gen", SyntheticMdRom.Cartridge())));
-            Assert.Equal(new[] { "Genesis", "PlayStation" }, CoreCatalog.DiscoveredConsoles);
+            Assert.Equal(new[] { "Genesis", "Sega CD", "PlayStation" }, CoreCatalog.DiscoveredConsoles);
             Assert.Contains(CoreCatalog.ShelvesInReleaseOrder, s => s.Name == "Genesis (Nephrite)" && s.EsdeSystem == "genesis");
-            Assert.DoesNotContain(CoreCatalog.ShelvesInReleaseOrder, s => s.EsdeSystem is "segacd" or "sega32x");
+            Assert.Contains(CoreCatalog.ShelvesInReleaseOrder, s => s.Name == "Sega CD (Nephrite)" && s.EsdeSystem == "segacd");
+            Assert.DoesNotContain(CoreCatalog.ShelvesInReleaseOrder, s => s.EsdeSystem is "sega32x");
             Assert.Equal(new[] { "model", "region", "pad1", "pad2" }, CoreCatalog.SettingsFor("Genesis").Select(s => s.Key));
             Assert.Equal(12, CoreCatalog.ButtonsFor("Genesis").Count);
             var firmware = FirmwareOverview.Build(new EmuSen.Galaxia.Models.GraphicsConfig());
             Assert.Contains(firmware, f => f.Name == "Sega Genesis / Mega Drive");
-            Assert.DoesNotContain(firmware, f => f.Name is "Sega CD / Mega-CD" or "Sega 32X");
+            Assert.Contains(firmware, f => f.Name == "Sega CD / Mega-CD");
+            Assert.DoesNotContain(firmware, f => f.Name == "Sega 32X");
         }
 
         [Fact]

@@ -7,6 +7,7 @@
 
 use std::cell::RefCell;
 
+pub mod dianash;
 pub mod disc;
 pub mod endymion;
 pub mod endymion_devices;

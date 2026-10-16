@@ -4502,6 +4502,8 @@ which adds `peek` and the `Watch` to the interface.
 record, written before its code; this section is its summary. The stage stands open at step 10.4: the backup RAM's
 directory waits for a specification made by a separate observer (that page's §5 Q2), and with it the gate's `_BURAM`
 round trips and a new machine's formatted memory.
+*Since 2026-10-16* the directory is built from the observer's `Nephrite_Bram.md` and the gate is passed but for two
+open disputes (§63.5).
 
 ### 63.1 What was built
 
@@ -4545,3 +4547,20 @@ digest.
 The crate's 183 tests (with `EMUSEN_NEPHRITE_ROMS` and `EMUSEN_NEPHRITE_DISCS`), and those of the builds without each
 attachment; `beryl-m68k`'s 26 with its `asm` feature and 21 without; WiseMan's Nephrite, Genesis, Registration,
 SaveMedia and routing tests, 98.
+
+### 63.5 Step 10.4 and the gate (2026-10-16)
+
+- **`_BURAM`** (`bios/bram.s`) from `Nephrite_Bram.md` alone: all nine calls, the block code, the footer's checks, the
+  directory's placement, counts and compression; the choices where the specification is open are D-49 to D-52 and
+  D-56 (`Nephrite_OpenBios.md` §14). `_mburam` is not placed: its address is in no document the writer may read (D-55).
+- **The format module** `SegaCdBramFormat` in the Genesis system pack for `mcd.backup` and `mcd.ramcart`; the Sega CD's
+  media now default to *Shared*, and a new machine's backup RAM with no file is given the module's formatted blank.
+- **The gate**: the round trips pass in both directions with Sonic CD and Lunar, judged by the games; Lunar reaches its
+  intro (after D-53: a sub CPU read now carries the sector's header first) and Sonic CD saves; the 71 digests equal the
+  baseline's; the kit compliant on the sample and the discs. Open: Sonic CD's film is black (D-54, two boot ROM routines
+  no document describes) and the cartridge is unreachable (D-55). The replacement's words lose their backup RAM clause.
+- **Measured**: the crate's 192 tests (9 new for `_BURAM`), 190 and 144 without each attachment; `beryl-m68k`'s 26;
+  WiseMan's in the blast radius (`Nephrite_OpenBios.md` §15).
+- **Offered** (`Nephrite_Plan.md` §7, decided 2026-10-16): the `mcd` system's development mark is removed from the
+  core's info; `SegaCdRoutingTests` route the tester's library, PlayStation discs to Diamond, Sega CD discs to
+  Nephrite, cartridges to the Genesis, a CHD by its folder's name (`Nephrite_OpenBios.md` §15).

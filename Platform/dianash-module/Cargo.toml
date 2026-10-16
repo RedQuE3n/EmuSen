@@ -1,0 +1,12 @@
+[package]
+name = "dianash-module"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# What a command module is written with: the module ABI's types (include/dianash_module.h in the shell's crate), a
+# safe view of a call, the Module trait and the macro that exports a module as a library. No dependency, and never
+# Galaxia's (§16 Q11). See EmuSen_DianaSh.md §6.10.
+[lib]
+name = "dianash_module"

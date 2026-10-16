@@ -578,7 +578,7 @@ ran. **The effort is predicted** (P3). A stage's oracle must be met, or its miss
 | 7 | The debugger: processors `M68K` and `Z80` through the Beryl observers; registers; disassembly; breakpoints, stepping, coverage, the call stack | Each claim a test; every table armed gives the plain run's digests (C15) | 3 (closed 2026-10-07 after 3, `Nephrite_Native.md` §41-§43) |
 | 8 | Sega CD hardware: the sub CPU, gate array, PRG-RAM, Word RAM modes, comm registers, interrupts and timer, backup RAM and cartridge, the CDC and CDD, CD-DA, disc images (§5.8) | mcd-verificator (self-grading, no BIOS) | 6 (closed 2026-10-14 after 4, `Nephrite_Native.md` §49-§54: mcd-verificator 18 of 18) |
 | 9 | Sega CD, the rest: the graphics ASIC, the RF5C164, the fader and mix | Sega CD tests with the player's BIOS against Genesis Plus GX; mcd-verificator | 4 (split, `Nephrite_Native.md` §49.4; closed 2026-10-15 after 5, §55-§60: the player's BIOS boots the five discs and the 240p suite, mcd-verificator's PCM tests pass, the mix fitted to recordings of Sega CDs) |
-| 10 | The Sega CD BIOS replacement (§5.6) | The 240p Sega CD suite; mcd-verificator in mode 1; games against the same games on the player's BIOS | 6 (split, `Nephrite_Native.md` §49.5; open at step 10.4 on 2026-10-15, §63: the assembler, the boot, the drive's and data calls and mode 1 built, the backup RAM's directory waiting for its specification) |
+| 10 | The Sega CD BIOS replacement (§5.6) | The 240p Sega CD suite; mcd-verificator in mode 1; games against the same games on the player's BIOS | 6 (split, `Nephrite_Native.md` §49.5; §63: the assembler, the boot, the drive's and data calls and mode 1 built 2026-10-15; the backup RAM's directory from `Nephrite_Bram.md` and the gate 2026-10-16, open on D-54 and D-55) |
 | 11 | Beryl SH-2: the interpreter, delay slots, the cache, the SH7604's modules; the disassembler and assembler; its test programs | The manual's pseudocode as test programs; the SH-4 suite's shared instructions | 6 |
 | 12 | The 32X: system registers, comm ports, the FIFO, SDRAM, the frame buffers and VDP modes, the palette and the overlay, PWM, interrupts, the boot ROM replacements; CD32X | 240p 32X and homebrew against PicoDrive; S32X_MiSTer in disputes; CD32X: Doom CD32X Fusion, a homebrew disc that needs both attachments, booting and played with its CD audio (named 2026-10-15) | 6 |
 | 13 | Speed (§5.5): the exact levers for the 32X, measured on the bench and the handheld | §5.5's budget | 3 |
@@ -695,6 +695,19 @@ and reports what breaks. The gates still measure the Genesis, and those not yet 
 *The Genesis's gates as of 2026-10-07* are tabled in `Nephrite_Native.md` §40: G1, G3 and G9 met with named
 exceptions, G2 and G4 met, G6 met in part, G5 and G7 not met, G8 decided as above. Since the Genesis is offered, the
 gates not met are its follow-up list there.
+
+*Decided 2026-10-16 by the tester:* the Sega CD is offered to players. The development mark is removed from the
+`mcd` system in Nephrite's core info, so its sidecar no longer marks it and a player's build lists its shelf, routes
+its discs and lists its firmware; the 32X stays marked in development. **Met at the decision** (`Nephrite_OpenBios.md`
+§15, `Nephrite_Native.md` §63): G2's mcd-verificator, 18 of 18 in mode 2 and in mode 1; G4's kit on the Sega CD's
+discs, its battery files' round trips through games in both directions, between the open BIOS and the player's; G9,
+every disc tried running on the open BIOS with no firmware folder, its machine info naming the replacement, and on the
+player's image when given; the Genesis unchanged, its 71 digests equal. **Still open**: Sonic CD's opening film is
+black on the open BIOS, two boot ROM routines no document describes (D-54); the RAM cartridge cannot be reached on the
+open BIOS, `_mburam`'s address being in no document (D-55); and the empty-drive start-up question, the player's BIOS
+staying on its first picture with no disc in Nephrite's drive (`Nephrite_OpenBios.md` §16). The Sega CD's discs share
+`.cue`, `.iso` and `.chd` with the PlayStation: a sheet or an image routes by its content, a CHD by its folder's ES-DE
+name alone (`psx`, `segacd`), since neither recogniser reads inside the compressed container (§15 there).
 - **G9, firmware.** Every game the replacement is claimed to run runs with no firmware folder, and its machine info
   names the replacement; with the player's image, the same game runs on it.
 

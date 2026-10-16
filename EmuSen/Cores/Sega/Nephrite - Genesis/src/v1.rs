@@ -297,7 +297,7 @@ fn systems() -> Vec<emusen_native::core::System> {
     #[allow(unused_mut)]
     let mut v = vec![system("md", "Sega Genesis / Mega Drive", &MD_EXTENSIONS, vec![tmss()], false)];
     #[cfg(feature = "mcd")]
-    v.push(system("mcd", "Sega CD / Mega-CD", &MCD_EXTENSIONS, vec![tmss(), cd_bios('U'), cd_bios('E'), cd_bios('J')], true));
+    v.push(system("mcd", "Sega CD / Mega-CD", &MCD_EXTENSIONS, vec![tmss(), cd_bios('U'), cd_bios('E'), cd_bios('J')], false));
     #[cfg(feature = "s32x")]
     v.push(system("32x", "Sega 32X", &S32X_EXTENSIONS, [vec![tmss()], s32x_boot()].concat(), true));
     v

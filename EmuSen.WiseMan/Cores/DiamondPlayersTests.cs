@@ -71,7 +71,7 @@ namespace EmuSen.WiseMan.Cores
             string bin = Write("Ruby Lantern (Europe).bin", disc.DataTrack), md = Write("Granite Choir.bin", SyntheticMdRom.Cartridge());
             Assert.Equal(("PlayStation", "Genesis"), (CoreCatalog.ConsoleForRom(bin), CoreCatalog.ConsoleForRom(md)));
             Assert.Equal("PlayStation", CoreCatalog.ConsoleForRom(Write("Ruby Lantern.iso", disc.Iso)));
-            // Where development cores are shown, the Sega CD, in development, takes .iso too, and each disc goes to its own console.
+            // The Sega CD takes .iso too, and each disc goes to its own console.
             CoreDiscovery.UseDevelopment(true);
             string segacd = Write("Sapphire Coast.iso", SyntheticMdRom.Disc());
             Assert.Equal(("Sega CD", "PlayStation"), (CoreCatalog.Route(segacd).Routed?.System?.Console, CoreCatalog.ConsoleForRom(Write("Ruby Lantern 2.iso", disc.Iso))));

@@ -225,6 +225,7 @@ public description stay unopened by the writer.
    allocation, the protected encoding) comes by a two-person method: an observer who does not write the BIOS runs games
    on the player's BIOS as a black box, examines only the backup RAM images the games leave, and writes the format in
    plain words; `_BURAM` is built from that specification alone.
+   *Decided 2026-10-15 by the tester:* images built from the format already observed may be given to the player's BIOS as inputs, its handling of them being black-box evidence like the images games leave; the BIOS's code is still never read or watched.
 
 3. **Q3, the security check (G5).** *Recommended:* none; every disc with `SEGADISCSYSTEM` boots, which §4's words
    state. The alternative, checking the disc ID's region letters against the console's, would refuse discs the real
@@ -330,6 +331,9 @@ the cartridge's `_mburam` waits for its address.
 Lunar to a message that its save data was destroyed (its search finding nothing a game can read), each the game's
 answer to a directory call that fails. A new machine's RAM stays unformatted until the round trips pass (§5 Q2).
 
+*Since 2026-10-16* the directory's calls are built from the observer's specification (§14); BRMFORMAT now writes the
+footer alone, as the specification observed (`Nephrite_Bram.md` §4), and a new machine's RAM is formatted (§14.4).
+
 ## 11. Mode 1, the system pack's discs, and a conversion's high half (2026-10-15)
 
 - **Mode 1** (the plan's Q4 of `Nephrite_Native.md` §49.6, `Nephrite_Attachments.md` §3.12 and Q8): the Create setting
@@ -407,6 +411,165 @@ BIOS costs what the player's does, within the plan's 2.5 ms for the Sega CD but 
 Sonic CD's on either. **Found on the way**: on the open BIOS Mickey Mania's cost first rose without end, a defect of
 stage 9's mix that the open BIOS's timing exposed and the player's had not (D-48); fixed, with its test.
 
+## 14. Step 10.4: `_BURAM` from the observer's specification (2026-10-16)
+
+The source is `Nephrite_Bram.md` alone, the observer's page of §5 Q2's two-person method, with BM §7-1 and TB #1, #2 and
+p. 9 for the calls' registers. None of the observer's images, runs or tools was seen (§9).
+
+### 14.1 What was built
+
+- **The file system** (`bios/bram.s`), written once for any volume: its size in `d7`, its first byte at `a5`, one byte
+  every second address, its buffers past `a6`. `sub.s` includes it for `_BURAM` on the internal RAM (`$FE0001`, 8 KiB),
+  its buffers at `$5650`-`$570D` of the BIOS's work area. Its calls, by `Nephrite_Bram.md`'s sections:
+  - **BRMINIT** by §3's checks: `RAM_CARTRIDGE___` needs one of its first three longwords whole, then `SEGA_CD_ROM` and
+    its zero exactly; another identifier of `0`-`9`, `A`-`Z` and `_` is another format (`d1.w` 2), anything else
+    unformatted (`d1.w` 1). A volume of either format gives its identifier's 12 bytes to `a1`'s buffer (D-49).
+  - **BRMSTAT**: the footer's counts, each the value three or four of its copies hold, else 0 (§3; read, not
+    recomputed); `-1` and `-1` for a volume not Sega's (BM: negative counts mean formatting is needed).
+  - **BRMSERCH**: `d0.w` the blocks, `d1.b` 0 or `-1`, `a0` the even address of the file's first block, `$FE0080` for
+    block 1 as EM reports (§9).
+  - **BRMREAD**: a normal file's blocks 64 bytes each; a protected file's blocks decoded, 32 bytes each (§7.1, §9).
+  - **BRMWRITE**: §7.2: after the last file, the data first, then the directory block holding the new entry, coded
+    whole, then both counts four times; refused when the blocks and any directory block the entry adds (§5.4) exceed
+    the free count, or the data would reach the directory. A name already there: D-50.
+  - **BRMDEL**: §7.3: the later files' data moved down over it, their entries one earlier with their first blocks
+    lowered, the directory blocks from the deleted entry's rewritten, the vacated blocks and any directory block past
+    the files left as they were, the counts as §5.4 gives them.
+  - **BRMFORMAT**: §4: the footer alone, `S/64 - 3` free.
+  - **BRMDIR** and **BRMVERIFY**: D-52, D-56.
+- **The block code** (§6): the encoder from §6.1-§6.4's words; the decoder corrects one symbol error in each codeword,
+  uses neither the low bits nor the CRC (§6.7), and reports a codeword past correcting (D-51).
+- **`BRMSEEN`** (`$5710`), a bit for each function `_BURAM` is called with, as CALLSEEN records `_CDBIOS`'s.
+- **The format module** (`EmuSen.Crystal/Systems/Genesis/SegaCdBramFormat.cs`), pure functions for both media,
+  `mcd.backup` (8 KiB) and `mcd.ramcart` (Sega's 128 KiB; any power of two from 8 KiB to 512 KiB is read, §8): `Read`
+  lists the entries, a save damaged where its directory block cannot be corrected or its blocks lie outside the data;
+  `Copy` places a save as BRMWRITE does, its stored blocks copied as they are, which §7.2 observed of the BIOS's own
+  copies; `Delete` as BRMDEL; `Format` as §4. The Memory Cards window and `memcard` now list and manage Sega CD saves.
+- **Not built: `_mburam`.** TB #1 sends the reader to `MEM_MAP.ASS` for its address, and no document the writer may
+  read gives it (D-55). `bram.s` takes its volume in registers so that the main CPU's program can include it over the
+  cartridge's `$600001` once the address is known.
+
+### 14.2 Where the specification is open
+
+`Nephrite_Bram.md` §10 lists twelve points the evidence left open. Each is treated as unknown; the simplest or the
+documented behaviour is chosen and recorded:
+
+| §10 | Choice | Dispute |
+|---|---|---|
+| 1, writing an existing name | the same blocks and flag: written over in place; otherwise deleted, then written anew | D-50 |
+| 2, block 0's pattern | the open BIOS never writes block 0 | D-56 |
+| 3, register returns | BM's registers; the values §14.1 states | D-49 |
+| 4, the read path's errors | a protected block past correcting fails BRMREAD; a directory entry is used as decoded | D-51 |
+| 5, the unused directory slot | zeros, in a new block and after a delete | D-56 |
+| 6, BRMDIR's buffer, BRMVERIFY's comparison | the entry's 16 stored bytes each; the blocks, the flag and the data compared | D-52, D-56 |
+| 7, full RAM and large files | refused when the free count is short; no limit at 256 blocks | D-50 |
+| 8, names | not checked | D-56 |
+| 9, the footer's `5F...40` row | not checked | D-49 |
+| 10, 11, other BIOS versions and cartridge sizes | one format for every size, as §8 found | — |
+| 12, protected files | written and read as §6; no game was seen to write one | D-51 |
+
+### 14.3 Measured (2026-10-16)
+
+The crate's `openbram` tests run the sub CPU's program on a bare 68000 and call `_BURAM` as a game does: the four
+vectors of §6.5 come out of the open BIOS's own BRMWRITE byte for byte (Sonic CD's and Lunar's directory blocks, the
+protected block of zeros and the fox); a format leaves an image of `$A5` as it was below the footer, on 8 KiB and on a
+128 KiB volume; BRMINIT and BRMSTAT decide each of §3's cases as the page records them; Lunar's four files land at
+blocks 1, 15, 29 and 43 with 111, 96, 82 and 67 free, and are found at `$FE0080` onwards, read and verified; §7.3's
+delete gives its result block for block; a protected file reads back through one corrupted symbol in every codeword
+and flipped low bits, and fails with two in one codeword; BRMDIR lists by template, skips and reports a full buffer; a
+121-block file on a 128 KiB volume leaves 1,924 free. WiseMan's `SegaCdBramFormatTests` check the C# module against the
+same vectors and observations, independently written.
+
+### 14.4 Shared by default, and a new machine formatted
+
+As §5 Q2 and `EmuSen_SaveMedia.md` §10 Q2 decided: a console medium read by a format module now defaults to *Shared*
+(`MemoryCards.DefaultMode`), so the Sega CD's internal backup RAM is one file every game uses, as on the console, and
+Mistress offers once to import each game's own as it does for the PlayStation. A new machine's console memory with no
+file yet is given the module's `Format()` (`MediaPlacement.Fresh`, read by `CoreEngine`), so a game meets a formatted
+RAM though the open BIOS has no memory manager in which a player could format one. The core itself is unchanged: with
+no file it still starts from zeros, which the kit and the digests rely on.
+
+## 15. The gate (2026-10-16)
+
+**The `_BURAM` round trips.** Each disc for 6,000 frames with no pad pressed, the player's BIOS a model 1 American one,
+judged by the game alone: its pictures from frame 1,500 while the main CPU runs outside the boot ROM, its sound, and on
+the open BIOS the `_BURAM` functions it called. No image the player's BIOS wrote was opened; each went straight from
+one run into the next.
+
+| Saved on | Loaded on | Sonic CD (USA) | Lunar - Eternal Blue |
+|---|---|---|---|
+| the open BIOS, from a formatted RAM | the open BIOS | its file written (BRMINIT, STAT, SERCH, READ, WRITE, VERIFY); the second boot reads it (INIT, STAT, SERCH, READ) and writes nothing | its four files written; the intro with music; the second boot reads them (INIT, STAT, SERCH, READ) and leaves the image as it was |
+| the player's BIOS, from a formatted RAM | the open BIOS | INIT, STAT, SERCH and READ only: the file found and read, nothing written; the title with its music | the same four calls only; the intro, the blue planet and the moon, with music |
+| the open BIOS, from a formatted RAM | the player's BIOS | the title with its music, then its opening film, as from a formatted RAM | the intro with music, as from a formatted RAM |
+
+**Lunar reaches its intro** on the open BIOS, and **Sonic CD saves** on it: the RAM-full message of §10 is gone.
+**Found by Lunar**: its intro streams with CDCREAD and reads the sector's header from the host data port before the
+data, and the open BIOS sent the data alone, so the game asked for the same sector again and again; CDCTRN's header
+buffer (BM §3-C) places the header first in a sub CPU read (D-53). CDCTRN now waits for DSR once and reads on without
+polling, as the games themselves read the port. **Found by Sonic CD**: its opening film, which plays on the player's
+BIOS, is black on the open one while its sound plays: the film's V-INT calls the boot ROM at `$02D4`, and its start
+`$02B0`, routines no document describes (D-54, §5 Q4).
+
+**The Genesis unchanged**: the 71 digests equal the baseline's. **The kit** (core ABI 1.9): the Genesis sample 64 of 64
+with the core's cases; the 240p disc with mcd-verificator as file 2, the 240p sheet and the five discs on the open BIOS
+at 600 frames, compliant. **mcd-verificator** in mode 1 and the 240p suite's boot pass as before (the crate's tests).
+
+**Cost** on the open BIOS, the mean of each 500 frames, one core, under the timing lock: Lunar 1.36 to 2.13 ms,
+Sonic CD 1.47 to 2.14 ms, now that both save and go on (§13's ranges for the others stand).
+
+**The replacement's words** lose their last clause and say what the backup RAM does:
+
+"Nephrite's own Sega CD BIOS, written from Sega's manuals: the documented calls answer as the manuals describe, saves
+keep the console's own backup RAM format, and discs boot. A game that calls a routine no manual names, reads the
+BIOS's code or depends on the exact timing of its loops may run differently; discs of every region start, since the
+security check is not made; games cannot yet reach a backup RAM cartridge; the screen without a disc is Nephrite's
+own, with no CD player or memory manager."
+
+**What a player sees** with no BIOS of their own: a disc boots through Nephrite's screen into the game; Chuck Rock II,
+Mickey Mania, the 240p suite and Lunar play, Lunar from its intro; Sonic CD saves and plays, but its opening film is
+black with its music (D-54); saves move between the open BIOS and the player's in both directions; a RAM cartridge is
+not offered to games. *Recommended:* keep the Sega CD's in-development mark until D-54 and D-55 are settled, since a
+black film in the system's best-known game and a cartridge games cannot reach are what a player would meet first; the
+backup RAM itself no longer stands in the way. The decision is the tester's.
+*Decided 2026-10-16 by the tester:* the Sega CD is offered to players (`Nephrite_Plan.md` §7), D-54, D-55 and §16
+open.
+
+**Routing, once offered.** The Sega CD takes `.iso`, `.cue` and `.chd` beside the PlayStation. `SegaCdRoutingTests`
+route the tester's library as it lists it, read only and with no development cores asked for: the 20 PlayStation
+sheets and lone tracks under `psx`, Mega Man Legends 2's `(Track 1).bin` among them, to Diamond; the five Sega CD
+sheets under `SCD` to Nephrite's `mcd`; the 946 cartridge `.bin` files under `genesis` to Nephrite's `md`; the Sega CD's
+shelf is listed. A sheet's own tracks were left out, as the library lists them under their sheet: opened alone,
+Rayman's 50 audio tracks go to the Genesis, an audio track holding neither a PlayStation licence nor a disc's sync,
+which the cartridge's recogniser takes; this is as before the decision, since the Sega CD does not take `.bin`. The
+library holds no `.chd`. A CHD cannot be told apart by content:
+the probe reads its first bytes, the CHD's own compressed container, which neither console's recogniser reads, so a
+CHD goes by its folder's ES-DE name, `psx` to Diamond and `segacd` to Nephrite, and in any other folder (the library's
+`SCD` among them) it opens nowhere and the words say why. Before the decision every `.chd` went to the PlayStation,
+the only system then offered for it.
+
+## 16. The empty drive (2026-10-16)
+
+`Nephrite_Bram.md` §11 records that the player's BIOS, with no disc from power-on, stays on its first picture and
+ignores Start, and asks whether that is the drive. Answered from the drive's side only; the BIOS was not run without a
+disc, since with no disc there is no game to observe.
+
+- **The Mega-CD manuals** say nothing of what the drive answers with no disc. The Hardware Manual's CDD registers
+  (§3-6) are marked "direct access ... is prohibited" and give no status codes; the BIOS Manual gives only the BIOS's
+  own view: `bios_status` `$1xxx` "no disk" (§3-B, CDBSTAT) and the LED mode "CD ready & no disc" (LEDSET).
+- **The public notes** the drive was built from (`Nephrite_Native.md` §51.2), krikzz's `cdd-cmd-info.txt` and `random
+  notes.txt`, measured on a console: status `B` is "no disk", and report `F` is "busy: no disk or tray open or command
+  in process".
+- **Nephrite's drive** answers that way: from the host clock's first rise with no disc, every exchange reports status
+  `B` with report `F` and flags 1; a report request (command 2) is taken but answered the same, since there is no TOC
+  to report; opening and closing the tray gives `5`, then `B` again. The LL logs it was timed on were all made with a
+  disc, so nothing measured covers an empty drive's answers beyond the notes' two lines.
+
+So the drive answers as the only documents that speak of it say, and the stall is not explained by them. What they do
+not settle, and a BIOS might wait on, is whether an empty drive ever answers a report request with that report's
+number (Nephrite's answers `F` for ever), and the flags it gives. *Recommended:* the observer, who may watch the
+player's BIOS, runs it with a probe build whose empty drive echoes a report request's number with zero data; if it then
+passes its first picture, the question becomes one for a console. The open BIOS shows its own no-disc screen either way.
+
 ## 9. Reading log (stage 10)
 
 Opened and read: `Nephrite_Plan.md` whole; `Nephrite_Native.md` §49–§52, §53.1–§53.3, §53.5, §54.1, §54.2, §54.3 from
@@ -454,3 +617,17 @@ layout alone); the player's BIOS (`sysdir/scd/`), which was never read, and was 
 watch was run only with the open BIOS, never with a player's. *As of 2026-10-15, after the screening:*
 `spritesmind/t458_*` and `t3218_*` are cleared and not yet opened; `t1018_*` is cleared but for named posts, and not yet
 opened; `t3020_*` and `t2061_p001.html` stay closed.
+
+*2026-10-16, step 10.4:* `Nephrite_Bram.md` whole, the only source of the format; the BIOS Manual's §7-1 and §3-C
+pages and the Technical Bulletins' "How to access Back-Up Ram Cartridge" through their text layers; the Hardware
+Manual's CDD register pages (§3-6) and krikzz's `cdd-cmd-info.txt` and `random notes.txt` for §16; `Nephrite_Native.md`
+§51 by its exact boundaries; the games' own code in their RAM, disassembled with Beryl's disassembler, where they
+stalled (Lunar's sub CPU at `$F000`-`$F1F0`, Sonic CD's sub CPU at `$7B20`-`$7C46` and `$300C0`-`$3024C`, Sonic CD's
+main CPU at `$FF20E0`-`$FF2146`, `$FF2340`-`$FF23B4` and `$FF2500`-`$FF26E2`, and a search of its work RAM for calls
+into the boot ROM). The player's BIOS was run as a black box with Sonic CD and Lunar, for the round trips and once to
+10,000 frames to see Sonic CD's film: the games' pictures from frame 1,500 while the main CPU ran outside the boot ROM,
+their sound's level; its backup RAM images went from one run into the next unopened, and were deleted afterwards.
+
+**Not opened, added by the observer's method:** the observer's folder `~/.cache/emusen/probe/mcd-bram/` in any part
+(its images, runs, tools and probe crate), and every backup RAM image the player's BIOS wrote, the observer's or the
+round trips' own. Nothing on the excluded lists was opened at step 10.4.

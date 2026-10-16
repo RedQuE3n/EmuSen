@@ -179,9 +179,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-dotnet"
+version = "0.1.0"
+
+[[package]]
 name = "emusen-galaxia"
 version = "0.1.0"
 dependencies = [
+ "emusen-dotnet",
  "md-5",
  "memmap2",
 ]

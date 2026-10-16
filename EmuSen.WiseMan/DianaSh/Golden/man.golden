@@ -1944,7 +1944,7 @@ case the page for memcard
 target none
 covers 1
 $ man memcard
-out 3334
+out 3400
 NAME
     memcard - manage memory cards, paks and a console's save memory
 
@@ -2003,7 +2003,8 @@ THE LOCK
 FORMATS
     A medium's saves are read by its format module, pure functions over
     the card's bytes: the PlayStation's (psx-spx, "Memory Card Data
-    Format"). A medium with no module yet (the Sega CD's, the N64's) lists
+    Format") and the Sega CD's, its backup RAM and RAM cartridge alike
+    (Nephrite_Bram.md). A medium with no module yet (the N64's) lists
     its size, and offers only new, dup and rename.
 
 EXAMPLES

@@ -6,6 +6,7 @@ using System.Linq;
 using EmuSen.Common.Firmware;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
+using EmuSen.Crystal.SaveMedia;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Media;
 
@@ -301,7 +302,7 @@ namespace EmuSen.Cores.Native
         {
             var files = new List<(uint, byte[])>(firmware);
             foreach (var (which, save) in saves)
-                if (save.Read() is { } saved) files.Add((which, saved));
+                if ((save.Read() ?? (placement.Fresh.TryGetValue(which, out ISaveMediumFormat? fresh) ? fresh.Format() : null)) is { } saved) files.Add((which, saved));
             var lend = Library.Has(CoreInterface.CapDevicePicture) ? DeviceLender?.Invoke() : null;
             return new CoreMachine(Library, Held(disc.Image), MediaOf(disc), SettingsText(createScope: true), files, Lends ? disc : null, sharedRemovable: placement.RemovableApart, sharedConsole: placement.ConsoleApart, device: lend);
         }

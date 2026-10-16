@@ -7315,7 +7315,8 @@ already debugged an SNES game on VenusRT's target. What only C# Venus's `SnesDeb
   that holds, and only `SnesDebugTarget` set one; no target in the tree does now, so a conditional breakpoint halts as
   a plain one and a logpoint logs its expression unrendered. A fix is small and generic (set the evaluators in
   `CoreDebugTarget` from `DebugCpuExpressionContext` for each processor, as the C# target did), and it would reach every
-  v1 engine; it is proposed here rather than built, as a change to a shared surface.
+  v1 engine; it is proposed here rather than built, as a change to a shared surface. *Built 2026-10-16*, for every core
+  rather than every v1 engine, and not in `CoreDebugTarget`: §68.7 records where it went and why.
 
 ### 68.6 The tests
 
@@ -7362,8 +7363,14 @@ its Mesen columns reproduced, its C# columns frozen.
 
 ### 68.7 What is not done
 
-- **The debugger's C#-only features** of §68.5, the breakpoint conditions and logpoints first among them, which a small
-  change to `CoreDebugTarget` would restore for every v1 engine; proposed, not built.
+- **The debugger's C#-only features** of §68.5 other than conditions and logpoints: `setreg`, `addr`'s decode,
+  `counters`, `copflow`, `cophist`, `bp when`, the DMA log and `disasm`'s width hints.
+- ~~**Breakpoint conditions and logpoints.**~~ *Done 2026-10-16* (`EmuSen_DianaSh.md` §13.12). They were restored on
+  every core, VenusRT, Nephrite, Diamond, MarsRT, MercuryRT and MoonRT alike, not by §68.5's change to
+  `CoreDebugTarget`: three of the six cores reach the debugger through shims of their own, and a breakpoint registry
+  outlives the target it was reached through, so the evaluators are set where a condition enters a registry, by
+  Crystal's `BreakpointExpressions`, which both shells' `bp` and the session service's `bp_add` call. A condition reads
+  what `eval` reads at the same scope, refreshed at the hit, and one that does not parse is refused when it is set.
 - **Per-instruction goldens.** VenusRT exposes instruction stepping only through the debug bridge, so its goldens are
   per frame and per chained frame; a difference is found to the frame and, where interval states are kept, to the state
   field, but not to the instruction. MoonRT's and MercuryRT's step traces have no counterpart here yet.

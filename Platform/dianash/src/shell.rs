@@ -114,8 +114,6 @@ pub(crate) struct World {
     pub config: Config,
     pub sandbox: Sandbox,
     pub sessions: Vec<Session>,
-    /// Sessions killed by the line still running in one of them, kept until it ends.
-    pub killed: Vec<Session>,
     pub current: Option<u32>,
     pub next_id: u32,
     /// `tmux new`'s next default name, `session-N`.
@@ -131,11 +129,11 @@ pub(crate) struct World {
 
 impl World {
     pub fn session(&self, id: u32) -> Option<&Session> {
-        self.sessions.iter().chain(self.killed.iter()).find(|s| s.id == id)
+        self.sessions.iter().find(|s| s.id == id)
     }
 
     pub fn session_mut(&mut self, id: u32) -> Option<&mut Session> {
-        self.sessions.iter_mut().chain(self.killed.iter_mut()).find(|s| s.id == id)
+        self.sessions.iter_mut().find(|s| s.id == id)
     }
 
     /// The sessions a host has listed, in order.
@@ -185,19 +183,22 @@ impl World {
         Ok(name)
     }
 
-    /// `TryKill`: never the last listed session; a current one hands over to the first that remains.
-    pub fn kill(&mut self, id: u32, running: Option<u32>) -> Result<(), (i32, String)> {
+    /// `TryKill`: never the last listed session; a current one hands over to the first that remains. A listed session
+    /// killed is only unlisted, since a host may still hold it and the C# interpreter it stands for went on answering;
+    /// an unlisted one ends.
+    pub fn kill(&mut self, id: u32) -> Result<(), (i32, String)> {
         let at = self.sessions.iter().position(|s| s.id == id).ok_or((status::NO_SUCH_SESSION, format!("no session {id}")))?;
-        if self.sessions[at].name.is_some() && self.listed().count() == 1 {
+        if self.sessions[at].name.is_none() {
+            self.sessions.remove(at);
+            return Ok(());
+        }
+        if self.listed().count() == 1 {
             return Err((status::LAST_SESSION, "can't kill the only remaining session".to_string()));
         }
-        let session = self.sessions.remove(at);
+        self.sessions[at].name = None;
         if self.current == Some(id) {
             let first = self.listed().next().map(|s| s.id);
             self.current = first;
-        }
-        if running == Some(id) {
-            self.killed.push(session);
         }
         Ok(())
     }
@@ -230,7 +231,6 @@ impl Shell {
             config,
             sandbox,
             sessions: Vec::new(),
-            killed: Vec::new(),
             current: None,
             next_id: 1,
             next_default: 1,
@@ -273,7 +273,6 @@ impl Shell {
         self.busy = true;
         let (needs_more, output, request) = interp.submit_core(&mut self.world, line, true);
         self.busy = false;
-        self.world.killed.clear();
         if self.world.sessions.iter().any(|s| s.id == id) {
             self.interps.insert(id, interp);
         }
@@ -445,10 +444,10 @@ impl Shell {
         Ok(())
     }
 
-    /// Kills a session: a listed one as `tmux kill` does, an unlisted one always.
+    /// Kills a session: a listed one as `tmux kill` does, which unlists it; an unlisted one ends.
     pub fn session_kill(&mut self, id: u32) -> Result<(), (i32, String)> {
-        self.world.kill(id, None)?;
-        self.interps.remove(&id);
+        self.world.kill(id)?;
+        self.interps.retain(|id, _| self.world.sessions.iter().any(|s| s.id == *id));
         Ok(())
     }
 

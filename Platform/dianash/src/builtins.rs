@@ -397,7 +397,7 @@ fn tmux(world: &mut World, session: u32, args: &[String]) -> Outcome {
                 return Outcome::ok("Usage: tmux kill <name>");
             }
             let name = joined(args, 2);
-            match kill_session(world, session, &name) {
+            match kill_session(world, &name) {
                 Err(words) => Outcome::fail(format!("tmux: {words}")),
                 Ok(Some((id, current))) => Outcome::with(format!("[tmux] Killed '{name}'; switched to '{current}'."), Request::Session { id, name: current }),
                 Ok(None) => Outcome::ok(format!("[tmux] Killed '{name}'.")),
@@ -411,10 +411,10 @@ fn tmux(world: &mut World, session: u32, args: &[String]) -> Outcome {
 }
 
 /// `TryKill` by name; when the current session went, the one that is current now.
-fn kill_session(world: &mut World, running: u32, name: &str) -> Result<Option<(u32, String)>, String> {
+fn kill_session(world: &mut World, name: &str) -> Result<Option<(u32, String)>, String> {
     let was_current = world.current_listed().is_some_and(|s| s.name.as_deref().is_some_and(|n| dotnet::same(n, name)));
     let Some(id) = world.find_listed(name) else { return Err(format!("no such session: {name}")) };
-    world.kill(id, Some(running)).map_err(|(_, words)| words)?;
+    world.kill(id).map_err(|(_, words)| words)?;
     if !was_current {
         return Ok(None);
     }
@@ -464,7 +464,7 @@ fn kill(interp: &mut Interp, world: &mut World, args: &[String]) -> Result<Outco
     if !world.config.sessions {
         return Ok(Outcome::fail(format!("kill: no session manager is registered for this host, and '{id}' isn't a bp<N>/watch<N> id.")));
     }
-    Ok(match kill_session(world, interp.session, &id) {
+    Ok(match kill_session(world, &id) {
         Err(words) => Outcome::fail(format!("kill: {words}")),
         Ok(Some((session, current))) => Outcome::with(format!("[kill] Killed session '{id}'; switched to '{current}'."), Request::Session { id: session, name: current }),
         Ok(None) => Outcome::ok(format!("Session '{id}' removed.")),

@@ -296,7 +296,7 @@ namespace EmuSen.Cores.Native
 
         public void SyncMutes()
         {
-            if (!IsRomLoaded || !MirrorLoaded) return;
+            if (!IsRomLoaded || MirrorCore is not null && !MirrorLoaded) return;
             base.Machine.SetMutes(MuteMask());
         }
     }

@@ -701,8 +701,8 @@ status 0
 action none
 end
 
-case on mercury, with its codecs
-target mercury
+case on mercuryrt, with its codecs
+target mercuryrt
 covers 1-14,24
 $ cheat add SXIOPO
 out 89
@@ -728,36 +728,6 @@ $ cheat list
 out 88
   #1: [on ] RAM  CPUBUS 0xD019 = 0xFF  01FF19D0
   #2: [on ] RAM  CPUBUS 0xF0A9 = 0x01  4
-status 0
-action none
-end
-
-case on mars, with its codecs
-target mars
-covers 1-14,24
-$ cheat add SXIOPO
-out 124
-Error: 'SXIOPO' isn't an N64 GameShark code - expected lines of 8 and 4 hex digits (TTAAAAAA VVVV), joined by '+' or spaces.
-status 1
-action none
-$ cheat add 01FF19D0
-out 126
-Error: '01FF19D0' isn't an N64 GameShark code - expected lines of 8 and 4 hex digits (TTAAAAAA VVVV), joined by '+' or spaces.
-status 1
-action none
-$ cheat add 8001A9F0 4
-out 126
-Error: '8001A9F0' isn't an N64 GameShark code - expected lines of 8 and 4 hex digits (TTAAAAAA VVVV), joined by '+' or spaces.
-status 1
-action none
-$ cheat gg AAAA-AAAA
-out 62
-No Game Genie-style cheat codec is registered for this target.
-status 0
-action none
-$ cheat list
-out 16
-No cheats added.
 status 0
 action none
 end

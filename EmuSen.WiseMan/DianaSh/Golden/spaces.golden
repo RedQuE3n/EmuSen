@@ -118,23 +118,6 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
-covers 1
-$ spaces
-out 248
-GB memory spaces:
-  ROM           32768 bytes  R/O
-  VRAM           8192 bytes  R/W
-  CARTRAM           0 bytes  R/W
-  WRAM           8192 bytes  R/W
-  OAM             160 bytes  R/W
-  HRAM            127 bytes  R/W
-  CPUBUS        65536 bytes  R/W
-status 0
-action none
-end
-
 case on mercuryrt
 target mercuryrt
 covers 1
@@ -148,22 +131,6 @@ GB memory spaces:
   OAM             160 bytes  R/W
   HRAM            127 bytes  R/W
   CPUBUS        65536 bytes  R/W
-status 0
-action none
-end
-
-case on mars
-target mars
-covers 1
-$ spaces
-out 218
-N64 memory spaces:
-  RDRAM       8388608 bytes  R/W
-  DMEM           4096 bytes  R/W
-  IMEM           4096 bytes  R/W
-  PIFRAM           64 bytes  R/W
-  ROM            4096 bytes  R/O
-  CPU        2147483647 bytes  R/W
 status 0
 action none
 end

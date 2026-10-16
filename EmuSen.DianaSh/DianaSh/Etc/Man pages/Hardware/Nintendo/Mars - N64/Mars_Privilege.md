@@ -1,5 +1,7 @@
 # Mars — three modes, and an address map that is a function of which one you are in
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Landed 2026-09-16. The VR4300's kernel, supervisor and user modes: how the mode is
 derived, the virtual address map each one sees, and the two things the other two modes
 may not do. `Memory/Segments.cs`, with the mode derivation and the two gates in

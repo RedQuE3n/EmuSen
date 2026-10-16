@@ -1,5 +1,7 @@
 # Mars — filtering and palettes: four texels, the bilinear filter and palette lookup
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Landed 2026-09-17. Phase D's seventh slice: the texel the one-cycle mode reads when filtering or a
 palette asks for more than one texel, the three-point filter and its mid-texel exception, palette lookup,
 and the palette load. The code is `Rdp/Rdp.Filter.cs` (the four texels, the filter and the palette),

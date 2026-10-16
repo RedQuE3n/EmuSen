@@ -1,5 +1,12 @@
 # Mercury — the debug target
 
+*Historical since 2026-10-16.* This page describes C# Mercury, which was deleted at stage 10 of the Rust port
+(`Mercury_Native.md` §15). MercuryRT implements the same machine field for field and is held to the goldens recorded
+from it, so the hardware described here stands; the file, class and member names are the C# core's, and a claim of the
+form "Mercury does" is now a claim about MercuryRT only where its goldens or its corpus baseline hold it. The debugger
+over MercuryRT is `MercuryRtDebugTarget`, which reads the machine's state through its layout listing
+(`Mercury_Native.md` §15.2); the SM83 disassembler moved into MercuryRT's shim unchanged.
+
 *Written 2026-08-08, Phase B of the Mercury gameplan. This is the third
 `IDebugTarget` implementation the interface has had, after Venus and Moon, and
 the first one written when the interface was already stable.*

@@ -33,6 +33,11 @@ tester. §12 lists the sources.
    one-way data flow for an application's own state (§4.2). Existing paradigms are used where they make the work
    easier; this one was chosen among them.
 
+*Narrowed by the tester, 2026-10-16:* item 2's platforms are, for now, Linux, Windows and macOS on Apple Silicon.
+macOS on Intel, Android and iOS are off the table until the tester reopens them, so the gates of §9.3 that serve
+them (K1 (c) and (d)) are deferred rather than failed, and §10's risks R2, R3, R5 and R6 no longer bound the plan.
+The Rust backend is to be finished before the frontend's move is planned in detail.
+
 ### 0.2 The plan in one paragraph
 
 LunaP is rebuilt as a family of Rust crates, each with one job, layered as GTK sits on Wayland, Cairo, Pango and

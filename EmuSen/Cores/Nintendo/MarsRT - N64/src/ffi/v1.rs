@@ -423,7 +423,7 @@ impl v1::Core for Core {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("A Rust port of Mars, the project's Nintendo 64 core, exact against it in state, picture and sound, with a recompiler and the display processor on threads of its own.".into()),
+            description: Some("The project's Nintendo 64 core, a Rust port of the retired C# Mars, with a recompiler and the display processor on threads of its own.".into()),
             systems: vec![System {
                 id: "n64".into(),
                 name: "Nintendo 64".into(),
@@ -434,7 +434,7 @@ impl v1::Core for Core {
                 development: false,
             }],
             deterministic: true,
-            accuracy: Some(Accuracy { measured_with: "defaults".into(), suite: "Mars (C#), the reference it is graded against".into(), notes: String::new() }),
+            accuracy: Some(Accuracy { measured_with: "defaults".into(), suite: "its recorded digests, the N64 test ROM corpus and the conformance kit".into(), notes: String::new() }),
             ..Info::default()
         }
     }

@@ -1,5 +1,7 @@
 # Mars — the level of detail: mipmap tiles and the fraction
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Landed 2026-09-17. Phase D's eighth slice: how far a pixel's texture coordinates move, the mipmap tile
 that movement picks, and the level-of-detail fraction the combiner reads, in the one-cycle mode. The code
 is `Rdp/Rdp.Lod.cs` (the measurement, the level, the tile and the fraction), `Rdp/Rdp.OneCycle.cs` (where

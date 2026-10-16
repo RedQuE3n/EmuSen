@@ -1,15 +1,13 @@
 using System;
 using System.IO;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mercury;
-using EmuSen.Cores.Nintendo.Mercury.Debug;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.WiseMan.Fixtures
 {
-    // One Game Boy engine under the debugger's claims: the core, its target and registries, and the pokes the claims make - see Mercury_Native.md §8.5.
+    // The Game Boy's engine under the debugger's claims: the core, its target and registries, and the pokes the claims make - see Mercury_Native.md §8.5.
     public abstract class MercuryDebugRig : IDisposable
     {
         protected MercuryDebugRig(string rom) => Rom = rom;
@@ -20,7 +18,7 @@ namespace EmuSen.WiseMan.Fixtures
         public abstract Type TargetType { get; }
         public abstract Type CoreType { get; }
 
-        // The engine's name for CoreFactory; null is the C# core.
+        // The engine's name for CoreFactory.
         public abstract string? Engine { get; }
 
         public abstract int Pc { get; }
@@ -49,31 +47,7 @@ namespace EmuSen.WiseMan.Fixtures
 
         public abstract void Dispose();
 
-        public static MercuryDebugRig Mercury(string rom) => new MercuryRig(rom);
-
         public static MercuryDebugRig MercuryRt(string rom) => new MercuryRtRig(rom);
-
-        private sealed class MercuryRig : MercuryDebugRig
-        {
-            private readonly MercuryCore _core = new();
-            private readonly MercuryDebugTarget _target;
-
-            public MercuryRig(string rom) : base(rom)
-            {
-                _core.LoadRom(rom);
-                _target = new MercuryDebugTarget(_core);
-            }
-
-            public override ICore Core => _core;
-            public override IDebugTarget Target => _target;
-            public override Type TargetType => typeof(MercuryDebugTarget);
-            public override Type CoreType => typeof(MercuryCore);
-            public override string? Engine => null;
-            public override int Pc => _core.Cpu!.PC;
-            public override byte ReadSpace(string space, int address) => _core.ReadSpace(space, address);
-            public override void WriteSpace(string space, int address, byte value) => _core.WriteSpace(space, address, value);
-            public override void Dispose() { }
-        }
 
         private sealed class MercuryRtRig : MercuryDebugRig
         {

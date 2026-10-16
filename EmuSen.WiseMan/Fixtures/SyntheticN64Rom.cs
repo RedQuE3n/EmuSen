@@ -1,17 +1,33 @@
 using System;
 using System.IO;
-using EmuSen.Cores.Nintendo.Mars.Rom;
+using EmuSen.Crystal.Systems.N64;
 
 namespace EmuSen.WiseMan.Fixtures
 {
+    // What the ED64 homebrew convention declares; a commercial cartridge declares nothing - see Mars_Rom.md §3.
+    public enum N64SaveType
+    {
+        Unknown,
+        None,
+        Eeprom4k,
+        Eeprom16k,
+        Sram256k,
+        SramBanked768k,
+        FlashRam,
+        Sram1M,
+    }
+
     // Builds a synthetic Nintendo 64 image - never real game data. The Mars counterpart of SyntheticGbRom.
     public static class SyntheticN64Rom
     {
+        // The header, then IPL3, the least a bootable image can be; the title's place in the header - see Mars_Rom.md §2.
+        private const int HeaderLength = 0x40, MinimumLength = HeaderLength + 0xFC0, TitleOffset = 0x20, TitleLength = 20;
+
         // Where IPL3 would hand control over, and where <patches> offset 0 lands - see Mars_Rom.md §2.
         public const uint DefaultEntryPoint = 0x80000400;
 
         public static byte[] Build(
-            int length = RomImage.MinimumLength,
+            int length = MinimumLength,
             uint entryPoint = DefaultEntryPoint,
             string title = "WISEMAN",
             string uniqueCode = "WM",
@@ -20,9 +36,9 @@ namespace EmuSen.WiseMan.Fixtures
             byte version = 0x00,
             params (int Offset, byte[] Bytes)[] patches)
         {
-            var image = new byte[Math.Max(RomImage.MinimumLength, length)];
+            var image = new byte[Math.Max(MinimumLength, length)];
 
-            WriteUInt32(image, 0x00, RomImage.Magic);
+            WriteUInt32(image, 0x00, N64ImageOrder.Magic);
             WriteUInt32(image, 0x04, 0x0000000F);
             WriteUInt32(image, 0x08, entryPoint);
             WriteUInt32(image, 0x0C, 0x0000144C);
@@ -31,10 +47,10 @@ namespace EmuSen.WiseMan.Fixtures
             WriteUInt32(image, 0x10, 0xDEADBEEF);
             WriteUInt32(image, 0x14, 0xFEEDFACE);
 
-            for (int i = 0; i < RomImage.TitleLength; i++) image[RomImage.TitleOffset + i] = (byte)' ';
-            for (int i = 0; i < title.Length && i < RomImage.TitleLength; i++)
+            for (int i = 0; i < TitleLength; i++) image[TitleOffset + i] = (byte)' ';
+            for (int i = 0; i < title.Length && i < TitleLength; i++)
             {
-                image[RomImage.TitleOffset + i] = (byte)title[i];
+                image[TitleOffset + i] = (byte)title[i];
             }
 
             image[0x3B] = (byte)categoryCode;
@@ -43,7 +59,7 @@ namespace EmuSen.WiseMan.Fixtures
             image[0x3E] = (byte)destinationCode;
             image[0x3F] = version;
 
-            foreach (var (offset, bytes) in patches) bytes.CopyTo(image, RomImage.HeaderLength + offset);
+            foreach (var (offset, bytes) in patches) bytes.CopyTo(image, HeaderLength + offset);
             return image;
         }
 

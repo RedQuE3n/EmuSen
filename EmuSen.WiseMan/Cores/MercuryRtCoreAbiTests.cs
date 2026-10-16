@@ -38,7 +38,7 @@ namespace EmuSen.WiseMan.Cores
         private string Rom(string name, byte cgb, byte kind = 0x13)
         {
             string path = Path.Combine(_root, name);
-            File.WriteAllBytes(path, SyntheticGbRom.Build(romBanks: 4, cartridgeType: kind, ramSizeCode: 0x03, cgbFlag: cgb, patches: (0, MercuryRtMachineTests.Busy)));
+            File.WriteAllBytes(path, SyntheticGbRom.Build(romBanks: 4, cartridgeType: kind, ramSizeCode: 0x03, cgbFlag: cgb, patches: (0, MercuryPrograms.Busy)));
             return path;
         }
 
@@ -54,15 +54,43 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void The_shim_stays_mercuryrts_loader_and_mercury_stays_the_default()
+        public void The_shim_stays_mercuryrts_loader_and_the_game_boy_has_no_engine_row()
         {
             _ = Discovered;
-            var row = CoreCatalog.EngineFor("GB")!;
-            Assert.Equal(new[] { CoreCatalog.MercuryEngine, CoreCatalog.MercuryRtEngine }, row.Choices);
-            Assert.Equal(CoreCatalog.MercuryEngine, row.Default);
+            Assert.Null(CoreCatalog.EngineFor("GB"));
+            Assert.True(CoreCatalog.IsRegisteredEngine(CoreCatalog.MercuryRtEngine));
+            Assert.IsType<MercuryRtCore>(CoreFactory.Create("game.gb"));
             ICore core = CoreFactory.Create("game.gb", engine: CoreCatalog.MercuryRtEngine);
             Assert.IsType<MercuryRtCore>(core);
             Assert.Null(CoreFactory.EngineNotice("game.gb", CoreCatalog.MercuryRtEngine, core));
+        }
+
+        // A player's stored choice of the C# core runs the game on MercuryRT, with no notice and at most one line in the log - see Mercury_Native.md §15.4.
+        [Fact]
+        public void A_stored_choice_of_the_retired_csharp_core_falls_back_quietly()
+        {
+            const string retired = "Mercury (C#)";
+            Assert.False(CoreCatalog.IsRegisteredEngine(retired));
+            string rom = Rom("stored.gb", 0x00);
+            string? logsWere = ErrorLog.DirectoryOverride;
+            string logs = Path.Combine(_root, "Logs");
+            ErrorLog.DirectoryOverride = logs;
+            try
+            {
+                string? engine = CoreCatalog.EngineChosen("GB", retired);
+                Assert.Equal(CoreCatalog.MercuryRtEngine, engine);
+                Assert.Equal(engine, CoreCatalog.EngineChosen("GB", retired));
+                CoreBundle bundle = CoreFactory.Load(rom, engine: engine);
+                Assert.IsType<MercuryRtCore>(bundle.Core);
+                Assert.Null(bundle.Notice);
+                (bundle.Core as IDisposable)?.Dispose();
+                string[] lines = Directory.Exists(logs) ? Directory.GetFiles(logs).SelectMany(File.ReadAllLines).Where(l => l.Contains(retired + " was retired")).ToArray() : Array.Empty<string>();
+                Assert.True(lines.Length <= 1, string.Join("\n", lines));
+            }
+            finally
+            {
+                ErrorLog.DirectoryOverride = logsWere;
+            }
         }
 
         // On a Game Boy and on a Game Boy Color, and with the Model setting forcing the colour console onto a Game Boy game.

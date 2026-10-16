@@ -315,7 +315,7 @@ rdp)
     cp "$WORK/target/release/rdp-reference" "$WORK/rdp-reference"
     echo
     echo "Built: $WORK/rdp-reference, $WORK/rdp-validate-dump and $WORK/vi-conformance"
-    echo "MarsRdpDifferentialTests finds them there."
+    echo "MarsViDifferentialTests finds them there."
     exit 0
     ;;
 libretro-core)

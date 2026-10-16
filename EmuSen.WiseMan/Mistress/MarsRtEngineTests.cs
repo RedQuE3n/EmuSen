@@ -11,8 +11,6 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mars;
-using EmuSen.Cores.Nintendo.Mars.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Galaxia;
@@ -24,7 +22,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // MarsRT chosen in the graphics window and played in Mistress: frames, states, the battery save, cheats, rewind, and the fallback - see EmuSen_Settings_Reference.md §4.44.
+    // MarsRT, the N64's one engine, played in Mistress: frames, states, the battery save, cheats, rewind, and a build without its library - see EmuSen_Settings_Reference.md §4.44.
     [Collection(TestCollections.ProcessGlobals)]
     public class MarsRtEngineTests : IDisposable
     {
@@ -35,6 +33,9 @@ namespace EmuSen.WiseMan.Mistress
 
         // Block 5 of the 4 Kbit EEPROM, which the synthetic system never writes; it writes block 2.
         private const int Marked = 5 * 8, Written = 2 * 8;
+
+        // The largest EEPROM a cartridge carries, 16 kilobits - see Mars_Save.md §2.
+        private const int EepromSize = 0x800;
         private static readonly byte[] Marker = "MARSRT!!"u8.ToArray();
 
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenMarsRtEngineTests", Guid.NewGuid().ToString("N"));
@@ -49,7 +50,7 @@ namespace EmuSen.WiseMan.Mistress
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             _rom = Path.Combine(roms, "System.z64");
             File.WriteAllBytes(_rom, SyntheticN64System.Build(rsp: true));
-            new AppSettings { RomDirectory = roms, ResumeOnLaunch = AppSettings.ResumeNever, StateDirectory = Path.Combine(_root, "States") }.Save();
+            new AppSettings { RomDirectory = roms, ResumeOnLaunch = AppSettings.ResumeNever, StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs") }.Save();
 
             // This collection runs alone, so the process-wide switch can be held off here and put back.
             CoreOptions.BatteryRamDisabled = false;
@@ -70,29 +71,20 @@ namespace EmuSen.WiseMan.Mistress
             config.Save();
         }
 
+        // The N64 has one engine since Mars (C#) was retired, so its tab offers no choice of one - see Mars_Native.md §6.7.
         [Fact]
-        public Task The_N64_tab_offers_the_engine_and_a_choice_is_stored_for_the_next_game() => Session.Dispatch(() =>
+        public Task The_N64_tab_offers_no_engine() => Session.Dispatch(() =>
         {
-            var config = new GraphicsConfig();
-            string? told = null;
-            var window = new GraphicsSettingsWindow(config, console => told = console, "N64");
+            var window = new GraphicsSettingsWindow(new GraphicsConfig(), _ => { }, "N64");
             window.Show();
 
-            Dropdown engine = window.GetLogicalDescendants().OfType<Dropdown>().Where(d => d.Name == $"N64.{CoreCatalog.EngineKey}").Distinct().Single();
-            Assert.Equal(new[] { CoreCatalog.MarsRtEngine, CoreCatalog.MarsEngine }, engine.Items.Cast<object>().Select(o => o.ToString()));
-            Assert.Equal(CoreCatalog.MarsRtEngine, engine.SelectedItem);
-            Assert.DoesNotContain(window.GetLogicalDescendants().OfType<Control>(), c => c.Name is string name && name.EndsWith("." + CoreCatalog.EngineKey) && name != $"N64.{CoreCatalog.EngineKey}" && name != $"GB.{CoreCatalog.EngineKey}" && name != $"NES.{CoreCatalog.EngineKey}" && name != $"SNES.{CoreCatalog.EngineKey}");
-
-            engine.SelectedItem = CoreCatalog.MarsEngine;
-            Dispatcher.UIThread.RunJobs();
-
-            Assert.Equal("N64", told);
-            Assert.Equal(CoreCatalog.MarsEngine, GraphicsConfig.Load().Value("N64", CoreCatalog.EngineKey));
+            Assert.DoesNotContain(window.GetLogicalDescendants().OfType<Control>(), c => c.Name == $"N64.{CoreCatalog.EngineKey}");
+            Assert.DoesNotContain(window.GetLogicalDescendants().OfType<Control>(), c => c.Name is string name && name.EndsWith("." + CoreCatalog.EngineKey) && name != $"GB.{CoreCatalog.EngineKey}" && name != $"NES.{CoreCatalog.EngineKey}" && name != $"SNES.{CoreCatalog.EngineKey}");
             window.Close();
         }, default);
 
         [Fact]
-        public Task A_game_runs_on_MarsRT_until_Mars_is_chosen_and_then_on_Mars_with_rewind_on_for_MarsRT_alone() => Session.Dispatch(() =>
+        public Task A_game_runs_on_MarsRT_with_rewind_and_still_does_when_the_retired_Mars_is_stored() => Session.Dispatch(() =>
         {
             Assert.True(MarsRtCore.Available, MarsNative.Report);
             MainWindow window = Start();
@@ -107,13 +99,11 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal("true", ((ICoreSettings)game.Core!).Get("ExpansionPak"));
             window.Close();
 
-            Choose(CoreCatalog.MarsEngine);
+            Choose("Mars (C#)");
             window = Start();
-            Assert.IsType<MarsCore>(Game(window).Core);
+            Assert.IsType<MarsRtCore>(Game(window).Core);
             Assert.Null(Game(window).EngineNotice);
-            WaitFor(() => Game(window).TotalFrames > 60);
-            Assert.Equal(0, Rewind(window).Depth);
-            Assert.Equal("Rewind  (not kept for Mars (C#))", typeof(MainWindow).GetMethod("RewindMenuText", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null));
+            WaitFor(() => Game(window).TotalFrames > 60 && Rewind(window).Depth > 0);
             window.Close();
         }, default);
 
@@ -171,7 +161,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             Choose(CoreCatalog.MarsRtEngine);
             string save = SaveLibrary.SramPathFor(_rom, EmuSen.Cores.BatterySave.N64);
-            byte[] original = Enumerable.Repeat((byte)0xFF, EmuSen.Cores.Nintendo.Mars.Memory.Eeprom.Size).ToArray();
+            byte[] original = Enumerable.Repeat((byte)0xFF, EepromSize).ToArray();
             Marker.CopyTo(original, Marked);
             Directory.CreateDirectory(Path.GetDirectoryName(save)!);
             File.WriteAllBytes(save, original);
@@ -205,9 +195,9 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // The library is loaded once per process, so a process started with it off is the only honest test of the fallback - see Mars_Native.md §5.5.
+        // The library is loaded once per process, so a process started with it off is the only honest test of a build without it - see Mars_Native.md §6.7.
         [Fact]
-        public void With_the_library_turned_off_a_game_asking_for_MarsRT_runs_on_Mars_and_says_why()
+        public void With_the_library_turned_off_an_n64_game_says_the_core_is_not_in_this_build()
         {
             string mark = Path.Combine(_root, "fallback.txt");
             var start = new ProcessStartInfo("dotnet")
@@ -229,9 +219,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(File.Exists(mark), "the child ran nothing:\n" + output.Result);
 
             string[] found = File.ReadAllLines(mark);
-            Assert.Equal(nameof(MarsCore), found[0]);
-            Assert.Contains("turned off by EMUSEN_MARS_NATIVE=0", found[1]);
-            Assert.Contains(CoreCatalog.MarsRtEngine + " is not available", found[2]);
+            Assert.Contains("The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0)", found[0]);
         }
 
         // Run only by the test above, in its own process; it asserts nothing unless that process has the library off.
@@ -242,18 +230,14 @@ namespace EmuSen.WiseMan.Mistress
 
             Assert.False(MarsNative.Available);
             Assert.False(MarsRtCore.Available);
-            Choose(CoreCatalog.MarsRtEngine);
             var window = new MainWindow();
             window.Show();
             Invoke(window, "LoadRom", _rom, "System.z64");
             string? status = Status(window).Text;
-            EmulatorSession game = Game(window);
-            WaitFor(() => game.TotalFrames > 20);
 
-            Assert.IsType<MarsCore>(game.Core);
-            Assert.Contains("turned off by EMUSEN_MARS_NATIVE=0", game.EngineNotice);
-            Assert.Contains(game.EngineNotice!, status);
-            File.WriteAllLines(mark, new[] { game.Core!.GetType().Name, MarsNative.Report, game.EngineNotice! });
+            Assert.Null(typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
+            Assert.StartsWith("Failed to load System.z64: ", status);
+            File.WriteAllLines(mark, new[] { status! });
             window.Close();
         }, default);
 

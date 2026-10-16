@@ -287,7 +287,7 @@ the count with no game loaded, for the bindings window.
 | NES | MoonRT (Rust) | 2 | `MoonCore.Ports`, the shim | player 2 |
 | SNES | Venus (C#) | 2 | `VenusCore.Ports` | player 2 |
 | SNES | VenusRT (Rust, ABI v1) | 2 | machine info's `ports` (`EmuSen_CoreAPI.md` §6.4) | player 2 |
-| Game Boy | Mercury (C#), MercuryRT (Rust) | 1 | the console | none, by the hardware |
+| Game Boy | MercuryRT (Rust); Mercury (C#) until it was deleted on 2026-10-16 | 1 | the console | none, by the hardware |
 | N64 | Mars (C#), MarsRT (Rust) | 4 | `MarsCore.Ports` | players 2, 3 and 4 |
 | Genesis | Nephrite (Rust, ABI v1) | 2 to 8, by its two port settings, and two more on a J-Cart | machine info's `ports`; with no game loaded, the console's pack (§8.11) | players 2 to 8 *(added 2026-10-07)* |
 

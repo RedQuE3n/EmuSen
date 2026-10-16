@@ -102,8 +102,8 @@ status 1
 action none
 end
 
-case on mercury
-target mercury
+case on mercuryrt
+target mercuryrt
 covers 1
 $ tilemap VRAM 0 4 2
 out 31

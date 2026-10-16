@@ -1,5 +1,7 @@
 # Mars — cheat codes: the N64 GameShark, and where its writes land
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Landed 2026-09-18. Not a Phase E slice: the cheat seam `Mars_Core.md` §8 left as a stub, which its §0 table
 described as "no codec applies anything". The code is `Cheats/N64GameSharkCodec.cs` and `Cheats/MarsCheatCodecs.cs`,
 `MarsCore.Cheats.cs`, one line in each of `MarsCore.LoadRom` and `MarsCore.RunFrame`, and a read intercept in

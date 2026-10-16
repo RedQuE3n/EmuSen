@@ -3,9 +3,7 @@ using System.IO;
 using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
@@ -79,7 +77,6 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(2, ControllerPorts.Of(CoreFactory.Load(nes).Core));
             Assert.Equal(2, ControllerPorts.Of(CoreFactory.Load(snes).Core));
             Assert.Equal(1, ControllerPorts.Of(CoreFactory.Load(gb).Core));
-            Assert.Equal(4, ControllerPorts.Of(new MarsCore()));
             Assert.Equal((2, 2, 1, 4, 1), (ControllerPorts.ForConsole("NES"), ControllerPorts.ForConsole("SNES"), ControllerPorts.ForConsole("GB"), ControllerPorts.ForConsole("N64"), ControllerPorts.ForConsole("Lynx")));
             Assert.Equal(0, ControllerPorts.Of(null));
 
@@ -143,40 +140,12 @@ namespace EmuSen.WiseMan.Cores
             (core as IDisposable)?.Dispose();
         }
 
-        // The joybus answers a port only while a controller is in it; ports 2-4 start empty, so a one-player game's machine is as before.
         [Fact]
-        public void The_n64s_other_ports_answer_once_a_controller_is_plugged_in()
+        public void The_game_boys_one_port_is_all_its_engine_reads()
         {
-            var core = new MarsCore();
-            core.LoadRom(Rom(SyntheticN64Rom.Build(patches: (0, new byte[] { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 })), "pads.z64"));
-            var ports = core.Bus!.Si.Controllers;
-            Assert.Equal(new[] { true, false, false, false }, ports.Select(p => p.Present));
-
-            for (int port = 1; port < 4; port++)
-            {
-                core.SetControllerConnected(port, true);
-                core.SetButton(port, PadButton.A, true);
-                core.SetAxis(port, PadAxis.LeftX, 1);
-            }
-            core.SetButton(7, PadButton.B, true);
-            core.SetControllerConnected(9, true);
-            Assert.All(ports, p => Assert.True(p.Present));
-            Assert.Equal(new ushort[] { 0, 0x8000, 0x8000, 0x8000 }, ports.Select(p => p.Buttons));
-            Assert.Equal(new sbyte[] { 0, 127, 127, 127 }, ports.Select(p => p.StickX));
-
-            core.SetControllerConnected(3, false);
-            Assert.False(ports[3].Present);
-        }
-
-        [Fact]
-        public void The_game_boys_one_port_is_all_either_engine_reads()
-        {
-            Assert.Equal(1, ((ICore)new MercuryCore()).ControllerPorts);
-            if (MercuryRtCore.Available)
-            {
-                using var rt = new MercuryRtCore();
-                Assert.Equal(1, ((ICore)rt).ControllerPorts);
-            }
+            Assert.True(MercuryRtCore.Available, MercuryNative.Report);
+            using var rt = new MercuryRtCore();
+            Assert.Equal(1, ((ICore)rt).ControllerPorts);
         }
     }
 }

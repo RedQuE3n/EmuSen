@@ -1,5 +1,7 @@
 # Mars — the debugger's hooks
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Phase F's third slice, landed 2026-09-18. `MarsCore.cs` (the registries and the per-instruction checks),
 `Debug/MarsDebugTarget.cs`, `Debug/MarsDebugSpaces.cs`, the call and interrupt seams in `Cpu/`, the store report in
 `Memory/MemoryBus.cs`, and `CouldBreak` in the shared `BreakpointRegistry`. Tests in `MarsDebugTests` and

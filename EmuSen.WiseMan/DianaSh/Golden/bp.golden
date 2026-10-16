@@ -624,48 +624,8 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
-covers 9-10,15
-$ bp when
-out 53
-This core reports no hardware conditions to break on.
-status 1
-action none
-$ bp add 8000
-out 31
-Breakpoint #1 added at $008000.
-status 0
-action none
-$ bp list
-out 31
-  #1: $008000 (enabled, hit 0x)
-status 0
-action none
-end
-
 case on mercuryrt
 target mercuryrt
-covers 9-10,15
-$ bp when
-out 53
-This core reports no hardware conditions to break on.
-status 1
-action none
-$ bp add 8000
-out 31
-Breakpoint #1 added at $008000.
-status 0
-action none
-$ bp list
-out 31
-  #1: $008000 (enabled, hit 0x)
-status 0
-action none
-end
-
-case on mars
-target mars
 covers 9-10,15
 $ bp when
 out 53

@@ -178,35 +178,35 @@ namespace EmuSen.WiseMan.Mistress
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
             Choose(window, pad, "Graphics");
             TabTo(window, pad, "N64");
-            var engine = (Dropdown)Reach(window, pad, e => e is Dropdown { Name: "N64.Engine" });
-            ScrollViewer page = engine.FindAncestorOfType<ScrollViewer>()!;
+            var scale = (Dropdown)Reach(window, pad, e => e is Dropdown { Name: "N64.RenderScale" });
+            ScrollViewer page = scale.FindAncestorOfType<ScrollViewer>()!;
             Vector scrolled = page.Offset;
-            int was = engine.SelectedIndex;
-            Assert.True(engine.ItemCount >= 2);
+            int was = scale.SelectedIndex;
+            Assert.True(scale.ItemCount >= 2);
 
             pad.A();
-            Assert.True(engine.IsDropDownOpen);
-            Assert.True(engine.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.Popup>().Single().ShouldUseOverlayLayer);
-            Assert.Same(engine.ContainerFromIndex(was), Focused(window));
+            Assert.True(scale.IsDropDownOpen);
+            Assert.True(scale.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.Popup>().Single().ShouldUseOverlayLayer);
+            Assert.Same(scale.ContainerFromIndex(was), Focused(window));
             pad.Down();
-            Assert.Same(engine.ContainerFromIndex(was + 1), Focused(window));
-            pad.Down(engine.ItemCount);
-            Assert.Same(engine.ContainerFromIndex(engine.ItemCount - 1), Focused(window));
-            Assert.Equal(was, engine.SelectedIndex);
+            Assert.Same(scale.ContainerFromIndex(was + 1), Focused(window));
+            pad.Down(scale.ItemCount);
+            Assert.Same(scale.ContainerFromIndex(scale.ItemCount - 1), Focused(window));
+            Assert.Equal(was, scale.SelectedIndex);
             Assert.Equal(scrolled, page.Offset);
             Picture(window, "dropdown-in-window");
 
             pad.B();
-            Assert.False(engine.IsDropDownOpen);
-            Assert.Equal(was, engine.SelectedIndex);
-            Assert.Same(engine, Focused(window));
+            Assert.False(scale.IsDropDownOpen);
+            Assert.Equal(was, scale.SelectedIndex);
+            Assert.Same(scale, Focused(window));
 
             pad.A();
             pad.Down();
             pad.A();
-            Assert.False(engine.IsDropDownOpen);
-            Assert.Equal(was + 1, engine.SelectedIndex);
-            Assert.Equal(engine.SelectedItem as string, Stored("N64", "Engine"));
+            Assert.False(scale.IsDropDownOpen);
+            Assert.Equal(was + 1, scale.SelectedIndex);
+            Assert.Equal(scale.SelectedItem as string, Stored("N64", "RenderScale"));
             Assert.Equal(scrolled, page.Offset);
             Stop(window);
             window.Close();
@@ -221,33 +221,33 @@ namespace EmuSen.WiseMan.Mistress
             Picture(window, "graphics-snes");
 
             TabTo(window, pad, "N64");
-            var engine = (Dropdown)Reach(window, pad, e => e is Dropdown { Name: "N64.Engine" });
-            int was = engine.SelectedIndex;
+            var scale = (Dropdown)Reach(window, pad, e => e is Dropdown { Name: "N64.RenderScale" });
+            int was = scale.SelectedIndex;
             pad.Right();
-            Assert.Equal(was + 1, engine.SelectedIndex);
-            Assert.Equal(engine.SelectedItem as string, Stored("N64", "Engine"));
+            Assert.Equal(was + 1, scale.SelectedIndex);
+            Assert.Equal(scale.SelectedItem as string, Stored("N64", "RenderScale"));
             pad.Left();
-            Assert.Equal(was, engine.SelectedIndex);
+            Assert.Equal(was, scale.SelectedIndex);
 
             // Open, move, commit: the highlight moves the focus, and only A chooses.
             pad.A();
-            Assert.True(engine.IsDropDownOpen);
+            Assert.True(scale.IsDropDownOpen);
             Picture(window, "graphics-n64-dropdown");
             pad.Down();
-            Assert.Equal(was, engine.SelectedIndex);
+            Assert.Equal(was, scale.SelectedIndex);
             pad.A();
-            Assert.False(engine.IsDropDownOpen);
-            Assert.Equal(was + 1, engine.SelectedIndex);
-            Assert.Equal(engine.SelectedItem as string, Stored("N64", "Engine"));
+            Assert.False(scale.IsDropDownOpen);
+            Assert.Equal(was + 1, scale.SelectedIndex);
+            Assert.Equal(scale.SelectedItem as string, Stored("N64", "RenderScale"));
 
             // Open, move, back out: nothing chosen, and the sheet stays.
             pad.A();
             pad.Up();
             pad.B();
-            Assert.False(engine.IsDropDownOpen);
-            Assert.Equal(was + 1, engine.SelectedIndex);
+            Assert.False(scale.IsDropDownOpen);
+            Assert.Equal(was + 1, scale.SelectedIndex);
             Assert.True(Sheets(window).IsPresenting);
-            Assert.Same(engine, Focused(window));
+            Assert.Same(scale, Focused(window));
 
             var toggle = (LunaSwitch)Reach(window, pad, e => e is LunaSwitch);
             string key = toggle.Name!["N64.".Length..];
@@ -260,7 +260,7 @@ namespace EmuSen.WiseMan.Mistress
             Reach(window, pad, e => e is Button { Content: "Reset This Console" });
             pad.A();
             Assert.Null(Stored("N64", key));
-            Assert.Null(Stored("N64", "Engine"));
+            Assert.Null(Stored("N64", "RenderScale"));
 
             pad.B();
             Assert.False(Sheets(window).IsPresenting);

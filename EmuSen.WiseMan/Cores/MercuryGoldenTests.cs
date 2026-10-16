@@ -8,17 +8,17 @@ using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mercury;
+using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // Stage 9's goldens: every run recorded from C# Mercury, each engine graded against the recording frame by frame - see Mercury_Native.md §14.4.
+    // Stage 9's goldens: every run recorded from C# Mercury before it left, MercuryRT graded against the recording frame by frame - see Mercury_Native.md §14.4, §15.
     public class MercuryGoldenTests
     {
         // A directory of commercial Game Boy images, the goldens of which hold hashes only; absent, those cases pass without running.
-        public const string GamesVariable = MercuryRtStateTests.RomsVariable;
+        public const string GamesVariable = "EMUSEN_MERCURYRT_ROMS";
 
         public const int GameFrames = 3600;
 
@@ -80,47 +80,43 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        private static TheoryData<string, MercuryEngine> OnEngines(IEnumerable<string> names)
-        {
-            var data = new TheoryData<string, MercuryEngine>();
-            foreach (string name in names)
-                foreach (MercuryEngine engine in Enum.GetValues<MercuryEngine>()) data.Add(name, engine);
-            return data;
-        }
-
-        public static TheoryData<string, MercuryEngine> FrameRunNames => OnEngines(FrameRuns().Concat(StepRuns()).Select(r => r.Name));
-
-        public static TheoryData<byte, byte, byte, MercuryEngine> RandomBoards
+        public static TheoryData<string> FrameRunNames
         {
             get
             {
-                var data = new TheoryData<byte, byte, byte, MercuryEngine>();
-                foreach (var (k, r, c) in MercuryPrograms.Boards)
-                    foreach (MercuryEngine engine in Enum.GetValues<MercuryEngine>()) data.Add(k, r, c, engine);
+                var data = new TheoryData<string>();
+                foreach (MercuryGoldenRun run in FrameRuns().Concat(StepRuns())) data.Add(run.Name);
                 return data;
             }
         }
 
-        public static TheoryData<MercuryEngine> Engines => new() { MercuryEngine.Mercury, MercuryEngine.MercuryRt };
+        public static TheoryData<byte, byte, byte> RandomBoards
+        {
+            get
+            {
+                var data = new TheoryData<byte, byte, byte>();
+                foreach (var (k, r, c) in MercuryPrograms.Boards) data.Add(k, r, c);
+                return data;
+            }
+        }
 
         [Theory]
         [MemberData(nameof(FrameRunNames))]
-        public void A_synthetic_program_runs_as_its_golden_recorded(string name, MercuryEngine engine)
+        public void A_synthetic_program_runs_as_its_golden_recorded(string name)
         {
             MercuryGoldenRun run = FrameRuns().Concat(StepRuns()).Single(r => r.Name == name);
-            _output.WriteLine(Check(run, engine));
+            _output.WriteLine(Check(run));
         }
 
         [Theory]
         [MemberData(nameof(RandomBoards))]
-        public void Random_programs_step_as_their_goldens_recorded(byte kind, byte ram, byte cgb, MercuryEngine engine)
+        public void Random_programs_step_as_their_goldens_recorded(byte kind, byte ram, byte cgb)
         {
-            foreach (MercuryGoldenRun run in RandomRuns(kind, ram, cgb)) _output.WriteLine(Check(run, engine));
+            foreach (MercuryGoldenRun run in RandomRuns(kind, ram, cgb)) _output.WriteLine(Check(run));
         }
 
-        [Theory]
-        [MemberData(nameof(Engines))]
-        public void The_corpus_runs_as_its_goldens_recorded(MercuryEngine engine)
+        [Fact]
+        public void The_corpus_runs_as_its_goldens_recorded()
         {
             var runs = CorpusRuns().ToList();
             if (runs.Count == 0)
@@ -131,22 +127,21 @@ namespace EmuSen.WiseMan.Cores
             var failures = new ConcurrentBag<string>();
             Parallel.ForEach(runs, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 4) }, run =>
             {
-                try { Check(run, engine); }
+                try { Check(run); }
                 catch (Exception e) { failures.Add($"{run.Name}: {e.Message}"); }
             });
             var recorded = Traces("corpus").Except(runs.Select(r => r.Name)).ToList();
             foreach (string orphan in recorded) failures.Add($"{orphan}: recorded, not in this corpus");
             Assert.True(failures.IsEmpty, $"{failures.Count} of {runs.Count} corpus runs differ from their goldens:\n" + string.Join("\n", failures.Order(StringComparer.Ordinal)));
-            _output.WriteLine($"{runs.Count} corpus ROMs as recorded on {engine}");
+            _output.WriteLine($"{runs.Count} corpus ROMs as recorded");
         }
 
-        [Theory]
-        [MemberData(nameof(Engines))]
-        public void The_games_run_as_their_goldens_recorded(MercuryEngine engine)
+        [Fact]
+        public void The_games_run_as_their_goldens_recorded()
         {
             var runs = GameRuns().ToList();
             if (runs.Count == 0) _output.WriteLine($"{GamesVariable} unset, not run");
-            foreach (MercuryGoldenRun run in runs) _output.WriteLine(Check(run, engine));
+            foreach (MercuryGoldenRun run in runs) _output.WriteLine(Check(run));
         }
 
         // Every trace in the tree is a run the catalogue names, so none is left ungraded; corpus and game traces are checked where their ROMs are.
@@ -171,7 +166,7 @@ namespace EmuSen.WiseMan.Cores
             string[] row = golden.Rows[299];
             row[column] = row[column][..15] + (row[column][15] == '0' ? '1' : '0');
             var broken = MercuryGoldenTrace.Parse(golden.Text);
-            string? difference = broken.FirstDifference(MercuryGolden.Run(MercuryEngine.MercuryRt, run));
+            string? difference = broken.FirstDifference(MercuryGolden.Run(run));
             Assert.Equal($"frame 300: the {part} differs", difference?.Split(" (")[0]);
             _output.WriteLine(difference);
         }
@@ -184,45 +179,44 @@ namespace EmuSen.WiseMan.Cores
                 : Enumerable.Empty<string>();
         }
 
-        // Records when asked and this is the recording engine; otherwise grades from boot, then from a recorded interval state where this machine keeps one.
-        private string Check(MercuryGoldenRun run, MercuryEngine engine)
+        // Records when asked, a deliberate re-baseline; otherwise grades from boot, then from a recorded interval state where this machine keeps one.
+        private string Check(MercuryGoldenRun run)
         {
             string path = MercuryGolden.TracePath(run.Name);
-            if (MercuryGolden.Recording is { } recorder)
+            if (MercuryGolden.Recording)
             {
-                if (engine != recorder) return $"{run.Name}: recording from {recorder}, {engine} not graded";
-                MercuryGoldenTrace trace = MercuryGolden.Run(engine, run, interval: (f, s) => MercuryGolden.SaveState(run.Name, f, s));
+                MercuryGoldenTrace trace = MercuryGolden.Run(run, interval: (f, s) => MercuryGolden.SaveState(run.Name, f, s));
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 File.WriteAllText(path, trace.Text);
-                return $"{run.Name}: recorded from {engine}, {trace.Rows.Count} rows";
+                return $"{run.Name}: recorded, {trace.Rows.Count} rows";
             }
 
-            Assert.True(File.Exists(path), $"{run.Name} has no golden; record one with {MercuryGolden.RecordVariable}=Mercury.");
+            Assert.True(File.Exists(path), $"{run.Name} has no golden; record one with {MercuryGolden.RecordVariable}=1.");
             var golden = MercuryGoldenTrace.Parse(File.ReadAllText(path));
-            MercuryGoldenTrace now = MercuryGolden.Run(engine, run);
-            if (golden.FirstDifference(now) is { } difference) Assert.Fail($"{run.Name} on {engine}: {difference}{Bisect(run, engine, difference)}");
+            MercuryGoldenTrace now = MercuryGolden.Run(run);
+            if (golden.FirstDifference(now) is { } difference) Assert.Fail($"{run.Name}: {difference}{Bisect(run, difference)}");
             if (run.Steps > 0 || run.Corpus) return $"{run.Name}: {now.Rows.Count} rows as recorded";
 
             int resumeAt = MercuryGolden.IntervalFrames * Math.Max(1, run.Frames / 4 / MercuryGolden.IntervalFrames);
             if (resumeAt >= run.Frames || MercuryGolden.CachedState(run.Name, resumeAt) is not { } cached || cached.Frame != resumeAt)
                 return $"{run.Name}: {now.Rows.Count} frames as recorded";
-            MercuryGoldenTrace resumed = MercuryGolden.Run(engine, run, cached.State, resumeAt);
+            MercuryGoldenTrace resumed = MercuryGolden.Run(run, cached.State, resumeAt);
             var tail = MercuryGoldenTrace.Parse(golden.Text);
             tail.Rows.RemoveRange(0, resumeAt);
-            if (tail.FirstDifference(resumed) is { } after) Assert.Fail($"{run.Name} on {engine}, resumed from the recorded state of frame {resumeAt}: {after}");
+            if (tail.FirstDifference(resumed) is { } after) Assert.Fail($"{run.Name}, resumed from the recorded state of frame {resumeAt}: {after}");
             return $"{run.Name}: {now.Rows.Count} frames as recorded, and again from the recorded state of frame {resumeAt}";
         }
 
-        // The first recorded interval state at or after a failing frame, and the fields this engine's state differs from it in.
-        private static string Bisect(MercuryGoldenRun run, MercuryEngine engine, string difference)
+        // The first recorded interval state at or after a failing frame, and the fields the engine's state differs from it in.
+        private static string Bisect(MercuryGoldenRun run, string difference)
         {
             Match m = Regex.Match(difference, @"^frame (\d+):");
             if (!m.Success || MercuryGolden.CachedState(run.Name, int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)) is not { } cached) return "";
             byte[]? mine = null;
-            MercuryGolden.Run(engine, run with { Frames = cached.Frame }, interval: (f, s) => { if (f == cached.Frame) mine = s; });
+            MercuryGolden.Run(run with { Frames = cached.Frame }, interval: (f, s) => { if (f == cached.Frame) mine = s; });
             if (mine is null || mine.Length != cached.State.Length) return $"; at frame {cached.Frame} the states differ in length";
             MercuryStateLayout layout;
-            try { layout = MercuryStateLayout.For(run.Rom(), cached.State); }
+            try { layout = MercuryLayouts.For(run.Rom(), cached.State); }
             catch (InvalidDataException e) { return $"; at frame {cached.Frame} the states differ, and {e.Message}"; }
             var fields = layout.Differences(cached.State, mine).Take(12).ToList();
             return fields.Count == 0

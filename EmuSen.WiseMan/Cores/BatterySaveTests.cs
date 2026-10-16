@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mercury;
+using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
@@ -35,7 +35,7 @@ namespace EmuSen.WiseMan.Cores
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
         }
 
-        public static TheoryData<string> Engines => new() { "Moon", "MoonRT", "Mercury", "MercuryRT" };
+        public static TheoryData<string> Engines => new() { "Moon", "MoonRT", "MercuryRT" };
 
         private static bool Nes(string engine) => engine.StartsWith("Moon", StringComparison.Ordinal);
 
@@ -43,11 +43,10 @@ namespace EmuSen.WiseMan.Cores
         {
             "Moon" => new MoonCore(),
             "MoonRT" => new MoonRtCore(),
-            "Mercury" => new MercuryCore(),
             _ => new MercuryRtCore(),
         };
 
-        private static string RamSpace(string engine) => Nes(engine) ? MoonCore.SpacePrgRam : MercuryCore.SpaceCartRam;
+        private static string RamSpace(string engine) => Nes(engine) ? MoonCore.SpacePrgRam : MercuryRtCore.SpaceCartRam;
 
         // A cartridge with battery-backed RAM whose program never touches it, so what a load put there stays.
         private string Rom(string engine, string stem, bool withRam = true)
@@ -168,12 +167,11 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { Path.GetFileName(rom), Path.GetFileName(Beside(rom)) }.OrderBy(n => n), Directory.GetFiles(_library).Select(Path.GetFileName).OrderBy(n => n));
         }
 
-        // A battery with no RAM behind it (MBC3 with a clock and nothing else) is neither read, copied nor written, on both Game Boy engines.
-        [Theory]
-        [InlineData("Mercury")]
-        [InlineData("MercuryRT")]
-        public void A_cartridge_without_ram_has_no_save_at_all(string engine)
+        // A battery with no RAM behind it (MBC3 with a clock and nothing else) is neither read, copied nor written.
+        [Fact]
+        public void A_cartridge_without_ram_has_no_save_at_all()
         {
+            const string engine = "MercuryRT";
             string rom = Rom(engine, $"NoRam {engine}", withRam: false);
             File.WriteAllBytes(Beside(rom), Pattern(5));
 
@@ -217,7 +215,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Each_consoles_save_lands_in_its_own_folder()
         {
-            foreach (var (engine, stem) in new[] { ("Moon", "Same"), ("Mercury", "Same") })
+            foreach (var (engine, stem) in new[] { ("Moon", "Same"), ("MercuryRT", "Same") })
             {
                 ICore core = Make(engine);
                 core.LoadRom(Rom(engine, stem));
@@ -225,10 +223,12 @@ namespace EmuSen.WiseMan.Cores
                 Done(core);
             }
             string gbc = Path.Combine(_library, "Same.gbc");
-            File.Copy(Rom("Mercury", "Colour"), gbc);
-            var colour = new MercuryCore();
-            colour.LoadRom(gbc);
-            colour.SaveSram();
+            File.Copy(Rom("MercuryRT", "Colour"), gbc);
+            using (var colour = new MercuryRtCore())
+            {
+                colour.LoadRom(gbc);
+                colour.SaveSram();
+            }
 
             string snes = Path.Combine(_library, "Same.smc");
             File.WriteAllBytes(snes, SnesImage());
@@ -236,14 +236,18 @@ namespace EmuSen.WiseMan.Cores
 
             string n64 = Path.Combine(_library, "Same.z64");
             File.WriteAllBytes(n64, SyntheticN64System.Build());
-            var mars = new EmuSen.Cores.Nintendo.Mars.MarsCore(batteryRamDisabled: false);
-            mars.LoadRom(n64);
-            mars.Bus!.Si.Controllers[0].Pak!.Dirty = true;
-            mars.SaveSram();
+            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            using (var mars = new MarsRtCore(batteryRamDisabled: false))
+            {
+                mars.LoadRom(n64);
+                for (int frame = 0; frame < 40; frame++) mars.RunFrame();
+                mars.SaveSram();
+            }
 
             foreach (string folder in new[] { "NES", "GB", "GBC", "SNES" })
                 Assert.True(File.Exists(Path.Combine(DataStore.Saves, folder, "Same.srm")), $"no save in Saves/{folder}");
-            Assert.True(File.Exists(Path.Combine(DataStore.Saves, "N64", "Same" + EmuSen.Cores.Nintendo.Mars.MarsCore.PakExtension)), "no pak in Saves/N64");
+            Assert.Equal(Path.Combine(DataStore.Saves, "N64"), Path.GetDirectoryName(SaveLibrary.SramPathFor(n64, BatterySave.N64)));
+            Assert.True(File.Exists(SaveLibrary.SramPathFor(n64, BatterySave.N64)), "no chip save in Saves/N64");
             Assert.False(File.Exists(Path.Combine(DataStore.Saves, "Same.srm")), "a save was written to the flat folder");
         }
 
@@ -251,16 +255,18 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_gb_game_played_as_a_colour_console_keeps_its_save_in_gb()
         {
-            string rom = Rom("Mercury", "Played as Colour");
-            var core = new MercuryCore { Model = EmuSen.Cores.Nintendo.Mercury.GbModel.GameBoyColor };
-            core.LoadRom(rom);
-            core.SaveSram();
+            string rom = Rom("MercuryRT", "Played as Colour");
+            using (var core = new MercuryRtCore { Model = GbModel.GameBoyColor })
+            {
+                core.LoadRom(rom);
+                core.SaveSram();
+            }
             Assert.True(File.Exists(SaveLibrary.SramPathFor(rom, BatterySave.GameBoy)));
 
             // A .gb image whose header asks for the Color, as seventeen in the library do: filed with the .gb images, as the library files it.
             string dual = Path.Combine(_library, "Dual.gb");
             File.WriteAllBytes(dual, SyntheticGbRom.Build(cartridgeType: 0x03, ramSizeCode: 0x02, cgbFlag: 0x80, patches: (0, new byte[] { 0x18, 0xFE })));
-            foreach (ICore core2 in new ICore[] { new MercuryCore(), new MercuryRtCore() })
+            foreach (ICore core2 in new ICore[] { new MercuryRtCore() })
             {
                 core2.LoadRom(dual);
                 core2.SaveSram();
@@ -299,18 +305,19 @@ namespace EmuSen.WiseMan.Cores
             var eeprom = new byte[512];
             new Random(8).NextBytes(eeprom);
             PutFlat(rom, eeprom);
-            string flatPak = Path.ChangeExtension(Flat(rom), EmuSen.Cores.Nintendo.Mars.MarsCore.PakExtension);
+            string flatPak = Path.ChangeExtension(Flat(rom), N64Console.PakExtension);
             var pak = new byte[32768];
             new Random(9).NextBytes(pak);
             File.WriteAllBytes(flatPak, pak);
             var before = (Snapshot(Flat(rom)), Snapshot(flatPak));
 
-            var mars = new EmuSen.Cores.Nintendo.Mars.MarsCore(batteryRamDisabled: false);
+            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            using var mars = new MarsRtCore(batteryRamDisabled: false);
             mars.LoadRom(rom);
-            Assert.Equal(eeprom, mars.Bus!.Save.Contents![..eeprom.Length]);
+            Assert.Equal(eeprom, mars.BatteryContents![..eeprom.Length]);
             string save = SaveLibrary.SramPathFor(rom, BatterySave.N64);
             Assert.Equal(eeprom, File.ReadAllBytes(save));
-            Assert.Equal(pak, File.ReadAllBytes(Path.ChangeExtension(save, EmuSen.Cores.Nintendo.Mars.MarsCore.PakExtension)));
+            Assert.Equal(pak, File.ReadAllBytes(Path.ChangeExtension(save, N64Console.PakExtension)));
             AssertUnchanged(before.Item1, Flat(rom));
             AssertUnchanged(before.Item2, flatPak);
         }
@@ -373,9 +380,12 @@ namespace EmuSen.WiseMan.Cores
             var cart = new EmuSen.Cores.Nintendo.Venus.Memory.Cartridge(rom, batteryRamDisabled: true);
             Assert.NotEqual(Pattern(13)[5], cart.Read8(SramAddress + 5));
             cart.SaveSram();
-            var mars = new EmuSen.Cores.Nintendo.Mars.MarsCore(batteryRamDisabled: true);
-            mars.LoadRom(n64);
-            mars.SaveSram();
+            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            using (var mars = new MarsRtCore(batteryRamDisabled: true))
+            {
+                mars.LoadRom(n64);
+                mars.SaveSram();
+            }
 
             Assert.Equal(new[] { Path.GetFileName(Flat(rom)) }, Directory.EnumerateFileSystemEntries(DataStore.Saves).Select(Path.GetFileName).ToArray());
             AssertUnchanged(before, Flat(rom));
@@ -412,7 +422,6 @@ namespace EmuSen.WiseMan.Cores
         {
             "Moon" => ((MoonCore)core).ReadSpace(RamSpace(engine), address),
             "MoonRT" => ((MoonRtCore)core).ReadSpace(RamSpace(engine), address),
-            "Mercury" => ((MercuryCore)core).ReadSpace(RamSpace(engine), address),
             _ => ((MercuryRtCore)core).ReadSpace(RamSpace(engine), address),
         };
 
@@ -422,7 +431,6 @@ namespace EmuSen.WiseMan.Cores
             {
                 case "Moon": ((MoonCore)core).WriteSpace(RamSpace(engine), address, value); break;
                 case "MoonRT": ((MoonRtCore)core).WriteSpace(RamSpace(engine), address, value); break;
-                case "Mercury": ((MercuryCore)core).WriteSpace(RamSpace(engine), address, value); break;
                 default: ((MercuryRtCore)core).WriteSpace(RamSpace(engine), address, value); break;
             }
         }

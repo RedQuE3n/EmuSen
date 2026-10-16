@@ -1,5 +1,10 @@
 # Mercury (Game Boy) — the core
 
+*Historical since 2026-10-16.* This page describes C# Mercury, which was deleted at stage 10 of the Rust port
+(`Mercury_Native.md` §15). MercuryRT implements the same machine field for field and is held to the goldens recorded
+from it, so the hardware described here stands; the file, class and member names are the C# core's, and a claim of the
+form "Mercury does" is now a claim about MercuryRT only where its goldens or its corpus baseline hold it.
+
 *Started 2026-08-04, feature-complete 2026-08-08: CPU, memory, cartridge, the LCD
 controller, the Game Boy Color extensions, the debug target and the sound
 hardware. §5 is now a list of gaps rather than a list of absences.*

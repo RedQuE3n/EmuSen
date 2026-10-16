@@ -131,20 +131,6 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
-covers 1
-$ vectors
-out 169
-  VBlank       $000040 -> $000000
-  LCD STAT     $000048 -> $000000
-  Timer        $000050 -> $000000
-  Serial       $000058 -> $000000
-  Joypad       $000060 -> $000000
-status 0
-action none
-end
-
 case on mercuryrt
 target mercuryrt
 covers 1
@@ -155,16 +141,6 @@ out 169
   Timer        $000050 -> $000000
   Serial       $000058 -> $000000
   Joypad       $000060 -> $000000
-status 0
-action none
-end
-
-case on mars
-target mars
-covers 1
-$ vectors
-out 46
-N64 does not report an interrupt vector table.
 status 0
 action none
 end

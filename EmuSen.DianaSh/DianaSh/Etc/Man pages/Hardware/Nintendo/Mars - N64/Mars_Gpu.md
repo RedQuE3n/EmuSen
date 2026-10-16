@@ -1,5 +1,7 @@
 # Mars: the GPU under the picture at a multiple
 
+*Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
+
 *Begun 2026-09-21. A record, where `Mars_GpuPlan.md` is the plan: each phase of that page is retired into this one as
 it is carried out, with what was measured and what was not. Read the plan's §0 first: this is for the picture at a
 multiple and nothing else, and the software rasteriser stays the machine's.*

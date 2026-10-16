@@ -3508,6 +3508,8 @@ is likely to cost a few milliseconds one frame in four. Mistress has no switch t
 
 ### 6.7 Stage G: the C# core
 
+*Retired 2026-10-16: the C# core deleted; its record stays as history.*
+
 **The decision**, which is the project's and not this page's, has criteria this page can state. The C# core can be
 retired from the Engine row when:
 
@@ -3526,6 +3528,59 @@ that removed its own reference would have to be graded against something else, a
 exact to the frame.
 
 *Decided 2026-10-16 by the tester:* the C# core is not kept as an oracle; once criteria 1 to 3 hold it is deleted with the tests that need it.
+
+#### 6.7.1 The retirement (2026-10-16)
+
+**Why the criteria held.** MarsRT is the default on every published platform and has been since 2026-09-24 (§6.2,
+§6.3); the debugger and the coverage recorder run on it (§6.5, and the merge that put the last of them on the core
+ABI v1); and the weeks since the default changed brought no fault that was MarsRT's alone. The recommendation above, to
+keep the C# core as an oracle indefinitely, was declined: what replaces it as MarsRT's grade is MarsRT's own recorded
+digests (`MarsRtDigestProbe`, the crate's `pgo_digest.rs`), the N64 test ROM corpus (`MarsRtTests` and the crate's
+corpus test, each holding the summary *Failed 46 of 4637 tests* that the two cores reached together), and the
+conformance kit. A defect found from now on is argued from hardware evidence and the references of `Mars_References.md`,
+as it would be for a core that never had a twin.
+
+**What was deleted.** `EmuSen/Cores/Nintendo/Mars - N64/` whole: the interpreter, its blocks and the software float,
+the bus and every device, the RSP and its vector unit, the RDP with its device path (`Rdp/Gpu`, and with it
+`Silk.NET.Vulkan` from `EmuSen.csproj`, which nothing else there used), the VI, `MarsCore` and `MarsDebugTarget`. In the
+catalog and the factory: the `MarsEngine` choice and with it the N64's Engine row, `ReferenceEngineByConsole["N64"]`,
+the factory's C# arm and the notice that named the fallback, and `<Fallback>Mars (C#)</Fallback>` in `RustCores.props`.
+In WiseMan: every test that ran the C# core or compared MarsRT with it, the C# half of the debugger rig, the two
+fixtures only those tests used (`PrivilegeFixture`, `GpuTestDevices`), and the DianaSh golden corpus's `mars` target,
+whose 21 cases recorded the C# core; the `marsrt` cases stay. Where a deleted test's claim is MarsRT's as much as it
+was the C# core's, the test was moved to MarsRT rather than dropped: the GameShark codes on the machine, the eight
+settings, the battery save's folders, the save-state hotkeys, the four ports, the cheat wiring and the audio limit.
+
+**What moved, one owner each.** Beside the shim, in `MarsRT - N64/Shim/`: `MarsNative`, the library's loader;
+`MarsDebugSpaces`, the space names and the physical map's `Resolve`, without the C# reads; the two disassemblers
+(`Disassembler/`), which MarsRT's debug target already decoded with; the GameShark codec and `MarsCheatCodecs`
+(`Cheats/`); `MiInterrupt`, into `MarsRtCore.Debug.cs`; the register names, into `MarsRtDebugTarget`; and
+`N64Console`, the facts a frontend reads with no library loaded (the clock, the screen, the ports, the pad and its
+axes, the Pak's extension, the eight settings of the graphics tab and the antialiasing rule). The state's magic and
+version numbers went to `MarsMachine`. The image's container orders, which the OpenVGDB hash needs and no engine owns,
+went to the N64 system pack as `EmuSen.Crystal/Systems/N64/N64ImageOrder.cs`. The five compute shaders and their GLSL
+went to `MarsRT - N64/shaders/`, where the crate embeds them; `MarsRtShaderTests` holds each `.spv` to the compilation
+of its `.comp`, as the deleted device test did. `IWriteObserver` was not kept: since §6.5 stores are drained from the
+Rust loop into the registries, nothing reported through it, and the debug target's implementation of it was
+unreachable.
+
+**MarsRT unchanged, measured on 2026-10-16.** The only edits to the crate are the shaders' include paths, the test
+that holds them to their files, and the two sentences of its info that named the C# core. `MarsRtDigestProbe`'s 26
+files (§7.1's runs, without the four that loaded C# Mars's own state and snapshot) are byte for byte the ones recorded after the move
+to the core ABI v1, and the crate's 498 tests pass.
+
+**What a player sees** is `EmuSen_Settings_Reference.md` §4.44's last part: the N64 tab has no Engine row; a stored
+choice of Mars (C#), in `graphics.json` or as a game's alternative emulator, runs MarsRT and puts one warning in the
+log; and a build without MarsRT's library refuses an N64 game with *"The N64 core is not in this build"* and what the
+loader found, where it used to fall back.
+
+**What was lost, and is not replaced.** The display processor's differential against angrylion, primitive by primitive
+(`Mars_RdpDifferential.md`), drove the C# `Rdp` through a C# `MemoryBus`, and went with them. The video interface's
+differential (`MarsViDifferentialTests`) already graded MarsRT beside the C# VI and now grades MarsRT alone, so the
+reference tool and the `RdpReference` fixture stay. MarsRT's display processor can be run alone through the test
+exports of `ffi_rdp.rs`, which is the way to bring the RDP's differential back; the deleted twin tests loaded that
+processor from the C# processor's serialized state, so a port needs its starting state from MarsRT itself. The crate's tests that replay command streams and states the C# core
+recorded (`rdp/replay.rs`) read files recorded before the retirement and keep running wherever those files are.
 
 ### 6.8 What this plan does not cover
 

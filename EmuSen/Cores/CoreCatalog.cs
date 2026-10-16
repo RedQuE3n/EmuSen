@@ -38,22 +38,8 @@ namespace EmuSen.Cores
         // All three container orders, because the magic word decides and the extension does not - see Mars_Rom.md §1.1.
         private static readonly CoreDescriptor Mars =
             new("Nintendo 64 (Mars)", new[] { ".z64", ".n64", ".v64" }, N64CheatSystems, "N64", "Nintendo", 1996, CoverAspect: 0.7,
-                OpenVgdbSystems: new[] { "N64" }, OpenVgdbBytes: InByteSwappedOrder);
+                OpenVgdbSystems: new[] { "N64" }, OpenVgdbBytes: Crystal.Systems.N64.N64ImageOrder.ToByteSwapped);
 
-        // Measured on this library: its N64 hashes are of the halfword-swapped .v64 order, whatever order the file is in.
-        private static byte[] InByteSwappedOrder(byte[] file)
-        {
-            try
-            {
-                var order = Nintendo.Mars.Rom.RomImage.DetectByteOrder(file);
-                byte[] big = Nintendo.Mars.Rom.RomImage.Normalize(file, order);
-                return Nintendo.Mars.Rom.RomImage.Normalize(big, Nintendo.Mars.Rom.RomByteOrder.ByteSwapped);
-            }
-            catch (System.IO.InvalidDataException)
-            {
-                return file;
-            }
-        }
 
         // Keyed by what a user would type - the internal codename and the console name both reach the same core; a discovered console's are its name and its engine's - see EmuSen_CoreAPI.md §30.5.
         public static IReadOnlyDictionary<string, CoreDescriptor> Registry => Lists.Registry;
@@ -78,7 +64,7 @@ namespace EmuSen.Cores
         public static IReadOnlyCollection<string> SupportedCheatSystems =>
             CoreDescriptor.SupportedCheatSystems(Registry.Values.Concat(Lists.Discovered));
 
-        // The C# cores this build registers by hand.
+        // The cores this build registers by hand: the C# cores, and the N64's, which MarsRT's shim runs.
         private static readonly CoreDescriptor[] CatalogCores = { Venus, Moon, Mercury, Mars };
 
         // One entry per real core, not per alias - what a "which console?" list shows; a console only a discovered engine runs follows the catalog's - see EmuSen_Settings_Reference.md §4.92.
@@ -229,8 +215,8 @@ namespace EmuSen.Cores
             {
                 [Venus.Console] = Nintendo.Venus.VenusCore.PadButtons,
                 [Moon.Console] = Crystal.Systems.Nes.NesSystem.PadButtons,
-                [Mercury.Console] = Nintendo.Mercury.MercuryCore.PadButtons,
-                [Mars.Console] = Nintendo.Mars.MarsCore.PadButtons,
+                [Mercury.Console] = Nintendo.MercuryRT.MercuryRtCore.PadButtons,
+                [Mars.Console] = Nintendo.MarsRT.N64Console.PadButtons,
             };
 
         // The console's pad with no ROM loaded, or every button for a console this build does not know.
@@ -269,7 +255,7 @@ namespace EmuSen.Cores
         private static readonly Dictionary<string, IReadOnlyList<Galaxia.Input.PadAxis>> AxesByConsole =
             new(StringComparer.OrdinalIgnoreCase)
             {
-                [Mars.Console] = Nintendo.Mars.MarsCore.PadAxes,
+                [Mars.Console] = Nintendo.MarsRT.N64Console.PadAxes,
             };
 
         public static IReadOnlyList<Galaxia.Input.PadAxis> AxesFor(string console) =>
@@ -310,8 +296,8 @@ namespace EmuSen.Cores
         // The settings each console's core offers a frontend, by console, empty for one that offers none - see EmuSen_Multicore.md §13.
         private static readonly Dictionary<string, IReadOnlyList<CoreSetting>> SettingsByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["N64"] = Nintendo.Mars.MarsCore.VideoSettings,
-            ["GB"] = Nintendo.Mercury.MercuryCore.ModelSettings,
+            ["N64"] = Nintendo.MarsRT.N64Console.VideoSettings,
+            ["GB"] = Nintendo.MercuryRT.MercuryRtCore.ModelSettings,
         };
 
         public static IReadOnlyList<CoreSetting> SettingsFor(string console) =>
@@ -356,10 +342,20 @@ namespace EmuSen.Cores
         // The graphics.json key a console's engine is stored under; no core declares it, so no core is handed it - see EmuSen_Settings_Reference.md §4.44.
         public const string EngineKey = "Engine";
 
-        public const string MarsEngine = "Mars (C#)";
         public const string MarsRtEngine = "MarsRT (Rust)";
 
-        public const string MercuryEngine = "Mercury (C#)";
+        // An engine a console runs through its own shim, with no choice beside it, so it has no row - see EmuSen_Settings_Reference.md §4.44.
+        private static readonly string[] SoleEngines = { MarsRtEngine, MercuryRtEngine };
+
+        // A retired engine's name a player's settings may still hold, and the engine that runs instead - see Mars_Native.md §6.7.
+        private static readonly Dictionary<string, string> RetiredEngines = new(StringComparer.Ordinal)
+        {
+            ["Mars (C#)"] = MarsRtEngine,
+            ["Mercury (C#)"] = MercuryRtEngine,
+        };
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> RetiredLogged = new(StringComparer.Ordinal);
+
         public const string MercuryRtEngine = "MercuryRT (Rust)";
 
         public const string MoonEngine = "Moon (C#)";
@@ -368,12 +364,6 @@ namespace EmuSen.Cores
         // Which implementation runs a console, for the consoles that have more than one; the first is the default - see EmuSen_Settings_Reference.md §4.44.
         private static readonly Dictionary<string, CoreSetting> EngineByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["N64"] = new(EngineKey, "Engine",
-                "Which implementation runs the console. MarsRT (Rust) is the default: exact against Mars (C#) in state, picture and sound, reading the same save states and battery saves, and honouring every setting below, the resolution multiple, antialiasing and the graphics card included. Mars (C#) is the reference it is graded against, and runs instead where MarsRT's library is missing. Takes effect when a game is next loaded.",
-                CoreSettingKind.Choice, MarsRtEngine, Choices: new[] { MarsRtEngine, MarsEngine }),
-            ["GB"] = new(EngineKey, "Engine",
-                "Which implementation runs the console. Mercury (C#) is the reference. MercuryRT (Rust) is exact against it in state, picture and sound and reads the same save states and battery saves; its debugger view is refreshed from its state, and it stops at breakpoints, steps and records coverage, watches and the call stack as Mercury does. Takes effect when a game is next loaded.",
-                CoreSettingKind.Choice, MercuryEngine, Choices: new[] { MercuryEngine, MercuryRtEngine }),
             ["NES"] = new(EngineKey, "Engine",
                 "Which implementation runs the console. MoonRT (Rust) is the default, graded by its own recorded goldens, the NES test-ROM corpus and the conformance kit. Moon (C#) is the core it was ported from, kept until it is deleted, and runs instead where MoonRT's library is missing. Takes effect when a game is next loaded.",
                 CoreSettingKind.Choice, MoonRtEngine, Choices: new[] { MoonRtEngine, MoonEngine }),
@@ -407,8 +397,6 @@ namespace EmuSen.Cores
         {
             ["SNES"] = VenusEngine,
             ["NES"] = MoonEngine,
-            ["GB"] = MercuryEngine,
-            ["N64"] = MarsEngine,
         };
 
         public static string? ReferenceEngine(string console) => ReferenceEngineByConsole.GetValueOrDefault(console);
@@ -418,13 +406,13 @@ namespace EmuSen.Cores
             SystemIdsFor(console).SelectMany(Native.CoreDiscovery.ForSystem).Select(c => c.EngineName).Distinct().ToArray();
 
         // An engine this build registers by hand, whose own branch runs it even when discovery also lists its library - see EmuSen_CoreAPI.md §22.
-        public static bool IsRegisteredEngine(string? name) => name is not null && EngineByConsole.Values.Any(row => row.Choices?.Contains(name) == true);
+        public static bool IsRegisteredEngine(string? name) => name is not null && (SoleEngines.Contains(name) || EngineByConsole.Values.Any(row => row.Choices?.Contains(name) == true));
 
         // Null for a console with one implementation; a v1 engine found by discovery is appended to the row, which it creates for a console that had none.
         public static CoreSetting? EngineFor(string console)
         {
             EngineByConsole.TryGetValue(console, out var row);
-            string[] found = DiscoveredEngines(console).Where(n => row?.Choices?.Contains(n) != true).ToArray();
+            string[] found = DiscoveredEngines(console).Where(n => row?.Choices?.Contains(n) != true && !SoleEngines.Contains(n)).ToArray();
             if (found.Length == 0) return row;
             if (row is null)
             {
@@ -440,7 +428,15 @@ namespace EmuSen.Cores
         }
 
         // The engine a frontend runs for a console: the stored choice, else the row's default; null for a console with one - see EmuSen_Settings_Reference.md §4.44.
-        public static string? EngineChosen(string console, string? stored) => stored ?? EngineFor(console)?.Default;
+        public static string? EngineChosen(string console, string? stored) => Current(stored) ?? EngineFor(console)?.Default;
+
+        // A retired engine's name read as the engine that replaced it, logged once a process; any other name as it is.
+        private static string? Current(string? stored)
+        {
+            if (stored is null || !RetiredEngines.TryGetValue(stored, out string? replacement)) return stored;
+            if (RetiredLogged.TryAdd(stored, true)) Galaxia.Library.ErrorLog.Warning("engine", $"{stored} was retired; {replacement} runs its games instead.");
+            return replacement;
+        }
 
         public static IReadOnlyList<string> FilterChoices => Lists.Filters;
     }

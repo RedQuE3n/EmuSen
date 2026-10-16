@@ -116,8 +116,8 @@ status 0
 action none
 end
 
-case on mercury
-target mercury
+case on mercuryrt
+target mercuryrt
 covers 1
 $ mute 0 on
 out 16

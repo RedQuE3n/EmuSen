@@ -1,6 +1,5 @@
 using System;
-using EmuSen.Cores.Nintendo.Mars.Cpu.Disassembler;
-using EmuSen.Cores.Nintendo.Mars.Rsp;
+using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.WiseMan.Cores

@@ -4,8 +4,7 @@ using System.IO;
 using EmuSen.Audio;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mars.Memory;
-using EmuSen.Cores.Nintendo.Mercury;
+using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
@@ -71,9 +70,6 @@ namespace EmuSen.WiseMan.Audio
         }
 
         [Fact]
-        public void Mercury_keeps_no_more_than_the_setting() => Assert.Equal(Limit, Undrained(new MercuryCore(), Gb()).Length);
-
-        [Fact]
         public void MercuryRT_keeps_no_more_than_the_setting()
         {
             Assert.True(MercuryRtCore.Available, MercuryNative.Report);
@@ -89,22 +85,17 @@ namespace EmuSen.WiseMan.Audio
             Assert.Equal(Limit, core.DequeueAudioSamples(int.MaxValue).Length);
         }
 
-        // The audio interface played past the limit, as MarsAudioTests plays it.
+        // The synthetic system's audio interface, slower than the other consoles' sound, left undrained past the limit.
         [Fact]
-        public void Mars_keeps_no_more_than_the_setting()
+        public void MarsRT_keeps_no_more_than_the_setting()
         {
-            var bus = new MemoryBus();
-            bus.Write32(MemoryMap.AiBase + AiInterface.DacRate, 0);
-            bus.Write32(MemoryMap.AiBase + AiInterface.Control, 1);
-            bus.Write32(MemoryMap.AiBase + AiInterface.DramAddress, 0x0010_0000);
-            bus.Write32(MemoryMap.AiBase + AiInterface.Length, 0x3_FFF8);
-
-            long samples = Limit / 2 + 10;
-            long period = Math.Max(1, AiInterface.ShortestPeriod);
-            bus.Tick((samples * period * 93_750_000 + bus.Vi.VideoClock - 1) / bus.Vi.VideoClock);
-
-            Assert.Equal(samples, bus.Ai.SamplesPlayed);
-            Assert.Equal(Limit, bus.Ai.BufferedSamples);
+            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            string path = SyntheticN64Rom.WriteTemp(SyntheticN64System.Build(rsp: false));
+            _files.Add(path);
+            using var core = new MarsRtCore(batteryRamDisabled: true);
+            core.LoadRom(path);
+            for (int i = 0; i < 120; i++) core.RunFrame();
+            Assert.Equal(Limit, core.DequeueAudioSamples(int.MaxValue).Length);
         }
 
         // A lowered limit takes hold at the next pair; one raised leaves what is queued alone.

@@ -1,5 +1,10 @@
 # Mercury — where this stands, and what comes next
 
+*Historical since 2026-10-16.* This page describes C# Mercury, which was deleted at stage 10 of the Rust port
+(`Mercury_Native.md` §15). MercuryRT implements the same machine field for field and is held to the goldens recorded
+from it, so the hardware described here stands; the file, class and member names are the C# core's, and a claim of the
+form "Mercury does" is now a claim about MercuryRT only where its goldens or its corpus baseline hold it.
+
 *Pinned 2026-08-04. **All four phases landed 2026-08-08**, and on 2026-08-09 the core ran commercial cartridges for the first time (`Mercury_RealCartridges.md`). §3 is a list of conditions rather than phases. This is the "what should I work on next" doc for Mercury, the same role `EmuSen_Core_Gameplan.md` plays for Venus. It stays a living document: what belongs in §3 from here is whatever a real cartridge turns out to need, not a plan written in advance.*
 
 ---

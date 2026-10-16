@@ -72,6 +72,7 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
     ("cp", false, "  cp [-r] <src> <dst>           copy a file (-r: copy a directory and everything in it; dst may be an existing directory)"),
     ("rm", false, "  rm [-r] <path>                SUSPENDED - delete a file (-r: delete a directory and everything in it)"),
     ("cat", true, "  cat <path>...                 print one or more files' contents"),
+    ("head", true, "  head [-n N] [path]            first N lines (default 10) of stdin or a file"),
 
 ];
 

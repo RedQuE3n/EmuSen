@@ -206,15 +206,23 @@ pub fn default_jobs() -> usize {
     processors.min(by_memory).max(1)
 }
 
-/// One image's cases on `lib`, the image and its companions read here so that a corpus is never held in memory whole.
-fn one_image(lib: &Lib, library: &Path, base: &Options, name: &str, file: &Path, heading: &Report) -> (ImageResult, BTreeSet<i32>) {
+/// One image's cases on a `Lib` of their own, the image and its companions read here so a corpus is never held whole.
+fn one_image(library: &Path, base: &Options, name: &str, file: &Path, heading: &Report) -> (ImageResult, BTreeSet<i32>) {
     let started = Instant::now();
     let mut report = Report { library: heading.library.clone(), image: Some(name.to_owned()), abi: heading.abi.clone(), id: heading.id.clone(), version: heading.version.clone(), frames: heading.frames, cases: Vec::new() };
+    // The host a case plays is the Lib's, so images run at once never share one (EmuSen_CoreAPI.md §28.16).
+    let lib = match Lib::open(library) {
+        Ok(lib) => lib,
+        Err(why) => {
+            report.cases.push(Case { id: "C1", name: "loading", passed: false, evidence: vec![why], images: Vec::new() });
+            return (ImageResult { name: name.to_owned(), report, seconds: started.elapsed().as_secs_f64() }, BTreeSet::new());
+        }
+    };
     let statuses = match crate::media::open(file) {
         Ok((image, companions)) => {
             let mut files = base.files.clone();
             files.extend(companions);
-            let (cases, statuses) = image_cases(lib, library, &Options { image, files, on_disk: crate::media::on_disk(file).ok(), ..base.clone() });
+            let (cases, statuses) = image_cases(&lib, library, &Options { image, files, on_disk: crate::media::on_disk(file).ok(), ..base.clone() });
             report.cases = cases;
             statuses
         }
@@ -250,7 +258,7 @@ pub fn run_with(library: &Path, opts: &Options, base: &Options, reference: &str,
         let (library, opts) = (library.to_owned(), opts.clone());
         std::thread::spawn(move || core_cases(&library, &opts))
     };
-    // Leaked on purpose, as C4's is: a hung image's thread keeps the library, which a host never unloads (§6.16).
+    // Leaked on purpose, as C4's is: it keeps the library loaded under each image's own Lib, as a host does (§6.16).
     let shared: Option<&'static Lib> = Lib::open(library).ok().map(|l| &*Box::leak(Box::new(l)));
     let heading = Arc::new(crate::heading(library, shared, opts.frames));
     let mut results: Vec<Option<ImageResult>> = images.iter().map(|_| None).collect();
@@ -275,7 +283,7 @@ pub fn run_with(library: &Path, opts: &Options, base: &Options, reference: &str,
                         budget.release(need);
                         break;
                     }
-                    let (result, statuses) = one_image(lib, &library, &base, &images[i].0, &images[i].1, &heading);
+                    let (result, statuses) = one_image(&library, &base, &images[i].0, &images[i].1, &heading);
                     progress::watch(None);
                     budget.release(need);
                     if tx.send(Message::Done(i, result, statuses)).is_err() {

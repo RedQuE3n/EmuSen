@@ -3219,7 +3219,8 @@ emusen-core-conform --core LIB --images DIR|LIST [--from DIR] [--image FILE] [--
   C10 and C13 already require a core to allow. Without `--jobs`, one for each processor, and no more than the memory
   allowed holds at 256 MiB an image: the tightest `memory.max` of the process's control groups, or the memory
   available. The core's own cases run beside them on a library handle of their own, since C12's skewed host is a
-  property of the handle. The image is read by the thread that runs it, so a corpus is never held whole.
+  property of the handle; since 2026-10-16 each image's cases do too, for C17 to C20's hosts (§28.16). The image is
+  read by the thread that runs it, so a corpus is never held whole.
 - **A hang**: an image whose cases have advanced no frame for 600 seconds is reported as failing C6 with those words
   (until 2026-10-14, one whose cases had not ended in 600 seconds; §28.10), its thread left and another started in its place, as C4 leaves a malformed image that hangs (§21.4). A crash ends the
   process, which is itself the failure, and takes the images running beside it: the single-image form on the image
@@ -3441,6 +3442,53 @@ Where the bit is not claimed, C21 checks that no `video.raw` is listed. The test
 `FAULT_RAW_DISAGREES` fails C21 alone (`each_fault_of_c9_and_c12_to_c18_alone_fails_its_case_alone`). Every other
 v1 core passes it unclaimed, and MoonRT claims it: on Super Mario Bros. (a copy, the library read only), 120 of 120
 frames handed, each its frame through the declared palette (§6.30, `Moon_Native.md` §9.7).
+
+### 28.16 Each image's cases on a handle of their own (2026-10-16)
+
+**The defect.** The host a create passes, its minor and the bytes its structs carry past 1.0, is a field of the
+library handle, `Lib` in `api.rs`, which a case sets and then restores. §28.4 gave the core's cases a handle of their
+own for that reason, C12 being then the only case to play a host. From 1.3 the image cases play hosts as well: C17
+one of minor 3 and C18 one of minor 4 around a create each, C19 one of minor 8 around its two, and C20 one of 1.9
+across its whole body. The corpus form nevertheless ran every image on one handle shared by its threads. Two images
+run at once therefore interleave their hosts in two ways. An image's create can pass the minor another image's case
+has just set. And the restore is a read followed by a write (`was = host(); set_host(n); ...; set_host(was)`), not
+atomic across threads, so two cases that overlap can leave the handle at a minor neither meant to restore, for every
+create that follows on any image.
+
+**Consequence.** A core's verdict in the corpus form depended on how its threads were scheduled. A core is touched
+wherever its create reads the host's minor: one that refuses a minor, or one that reads `flags` (1.3) or `device`
+(1.9) only from a host whose struct has the field, whose lent leg is then made without `CREATE_LENT` from time to
+time. The single-image form runs on one thread and was not touched, nor were the core's cases, on their own handle.
+
+**Evidence.** `the_seeded_faults_fail_the_same_cases_in_a_corpus` runs `kit_faulty_full_core`, whose
+`FAULT_ONLY_HOST_1_0` refuses any host but 1.0, over three images two at a time. It failed in CI three times on
+2026-10-16 (macOS twice, Windows once), each time on image 0 with C19 failing beside the five cases expected. Measured
+on 2026-10-16 on the 16-processor development machine, release build, the test alone unless said:
+
+| Conditions | Before | After |
+|---|---|---|
+| unconfined | 26 of 200; 17 of 200 | 0 of 200; 0 of 1,000 |
+| confined to 4 processors | 64 of 300 | 0 of 300 |
+| 32 busy loops beside it | 3 of 200 | 0 of 200 |
+| the whole kit suite on 3 processors | 5 of 40 | 0 of 40 |
+| confined to 2 processors | 0 of 1,000 | 0 of 1,000 |
+
+The rate falls with fewer processors because the two image threads then rarely run at the same instant; the CI
+runners have three and four. A probe printing the evidence of each unexpected failure found the same words every
+time, "create refused the image: status -256 (this core runs only on a host of core ABI 1.0)": usually C19 on image 0
+or 1, its `s.machine` made while the other image was in C17, C18 or C20; once C6, C7, C8, C16 and C19 on image 2,
+which ran after both and found the handle left at another minor by two overlapping restores. C19 is the case most
+often caught because it makes a machine at the default host while the other image is likely to be in the cases that
+play one; C16 can be caught alike, and C17, C18, C20 and C21 fail on this core in any event.
+
+**Fix.** Each image's cases open a handle of their own (`one_image` in `corpus.rs`), as the single-image form, the
+core's cases, C11 and C4's malformed images already did, and it closes when the image ends. The handle the threads
+shared remains, leaked, for the reports' heading and to keep the library loaded beneath the images' handles, as a
+host keeps it (§6.16). The other field a handle carries, the count of canaries broken, is read by C12 alone, on the
+core's handle. A lock around each case's host was set aside: C20 holds its host across up to 120 frames on three
+machines, and every other image would wait on it. So was a host held per thread, which the threads some cases start
+(C10's, C13's) would not see. One handle for each run of cases is the rule the kit already followed elsewhere, and
+the test needed no change.
 
 ## 29. A space that is a view, 2026-10-07
 

@@ -2822,8 +2822,8 @@ the manual's pages differ and the managed assemblies differ, `EmuSen.Serenity.dl
 by the folder they were built in, which .NET writes into an assembly; nothing was uploaded to the release.
 
 A second publish was made from the branch as it ends, merged with `WiseMan` (§26's DianaSh among it), with every
-library of run 38861419247: 589 files, its `emusen_platform.dll` 2,375,168 bytes with DianaSh's host API in it,
-SHA-256 `53aa863e46ad2b248b093153401dd34e250c497671114bddae66b4a433456733`, byte for byte that run's artefact. The
+library of run 38881098100: 589 files, its `emusen_platform.dll` 2,387,456 bytes with DianaSh's host API in it,
+SHA-256 `327cd85abe2f7552548a223eeda6b81ccb1882e9aee6d6f75cc173c20592d3f5`, byte for byte that run's artefact. The
 first publish is 0.9.0 with the library; the second is what a 0.9.1 cut from this branch would carry.
 
 ### 27.6 The rest of the WiseMan job, on all three systems (2026-10-16)
@@ -2858,7 +2858,15 @@ sidecars', were fixed here.
   fails is Silk.NET's search for it in the test host's folder on that runner. That is where the next step starts
   (the loader's trace in CI, or the path the binding is given); it is left open here, as it is not Windows'.
 
-**The last run, 38861419247.** The WiseMan job passed on win-x64 and on osx-arm64, every step: the cores'
+**After the second merge with `WiseMan`, run 38881098100.** Merging MercuryRT's stage 9 and the Sega CD's player
+brought two failures of their own. On Windows 128 of MercuryRT's cases failed with "MercuryCore has no member
+Magic": the committed state layouts (`EmuSen.WiseMan/Cores/MercuryGoldens/layouts/`) are split at `\n`, and a Windows
+checkout gives them CRLF ends, so every field's path kept a `\r`; the fixture now reads a listing with its line ends
+made `\n`, as the engines print it. On all three systems `ConsoleBindingsTests.The_catalog_lists_consoles_by_manufacturer_then_release`
+expects the catalogue without the Sega CD, which the merge added to it; that expectation is the Sega CD's to
+update and is left to it.
+
+**Run 38861419247, before that merge.** The WiseMan job passed on win-x64 and on osx-arm64, every step: the cores'
 comparison 1,282 of 1,282 on each, and the platform's six steps as §27.5's table on Windows. On linux-x64 it failed on
 the Shaderc cases above alone (one of the cores' step, eleven and forty-eight of Serenity's two). Every crate's job
 passed, the four `emusen_platform` jobs among them, with DianaSh's crates.

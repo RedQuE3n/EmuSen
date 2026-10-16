@@ -55,10 +55,17 @@ impl Sandbox {
     }
 }
 
-/// `IsInsideRoot`: the root itself or below it, compared ignoring case as the C# does (§16 Q15, kept through S3).
+/// Whether paths that differ only by case name one file: the file systems Windows and macOS make by default; not Linux's.
+pub const IGNORES_CASE: bool = cfg!(any(windows, target_os = "macos"));
+
+/// `IsInsideRoot`: the root itself or below it, ignoring case only where the file system does (§16 Q15).
 pub fn inside(candidate: &str, root: &str) -> bool {
-    let separator = Style::HOST.separator();
-    dotnet::same(candidate, root) || dotnet::starts_with_ignore_case(candidate, &format!("{root}{separator}"))
+    let below = format!("{root}{}", Style::HOST.separator());
+    if IGNORES_CASE {
+        dotnet::same(candidate, root) || dotnet::starts_with_ignore_case(candidate, &below)
+    } else {
+        candidate == root || candidate.starts_with(&below)
+    }
 }
 
 #[cfg(all(test, unix))]
@@ -77,8 +84,14 @@ mod tests {
     }
 
     #[test]
-    fn the_comparison_ignores_case_as_the_csharp_does() {
-        assert!(inside("/r/HOME/x", "/r/home"));
+    fn a_sibling_differing_from_the_root_only_by_case_is_outside_it() {
+        assert_eq!(inside("/r/HOME/x", "/r/home"), IGNORES_CASE);
+        assert_eq!(inside("/r/HOME", "/r/home"), IGNORES_CASE);
+        assert!(inside("/r/home/x", "/r/home"));
         assert!(!inside("/r/homex", "/r/home"));
+        // Refused as it is, the path is read chroot-style, inside the root, and never reaches the sibling.
+        let sandbox = Sandbox { root: Some("/r/home".to_string()) };
+        let expected = if IGNORES_CASE { "/r/HOME/secret" } else { "/r/home/r/HOME/secret" };
+        assert_eq!(sandbox.resolve("/r/HOME/secret"), (true, expected.to_string()));
     }
 }

@@ -117,8 +117,12 @@ namespace EmuSen.DianaSh.DianaSh.Etc
             return TryResolve(requestedPath, out resolvedPath);
         }
 
+        // Case is ignored only where the file system ignores it, or a sibling spelled as the root in another case is let in - see EmuSen_DianaSh.md §16 Q15.
+        private static readonly StringComparison PathCase =
+            OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
         private static bool IsInsideRoot(string candidate, string root) =>
-            candidate.Equals(root, StringComparison.OrdinalIgnoreCase)
-                || candidate.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            candidate.Equals(root, PathCase)
+                || candidate.StartsWith(root + Path.DirectorySeparatorChar, PathCase);
     }
 }

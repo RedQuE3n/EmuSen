@@ -16,7 +16,7 @@
           AfterTargets="ComputeResolvedFilesToPublishList"
           Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForeign)' == 'true'">
     <PropertyGroup>
-      <_EmuSenHostLibraryNames>;@(EmuSenRustCrate->'lib%(Identity).so;%(Identity).dll;lib%(Identity).dylib');lib$(EmuSenPlatformLibraryName).so;$(EmuSenPlatformLibraryName).dll;lib$(EmuSenPlatformLibraryName).dylib;</_EmuSenHostLibraryNames>
+      <_EmuSenHostLibraryNames>;@(EmuSenRustCrate->'lib%(Identity).so;%(Identity).dll;lib%(Identity).dylib;lib%(Identity).so.core.json;%(Identity).dll.core.json;lib%(Identity).dylib.core.json');lib$(EmuSenPlatformLibraryName).so;$(EmuSenPlatformLibraryName).dll;lib$(EmuSenPlatformLibraryName).dylib;</_EmuSenHostLibraryNames>
       <_EmuSenPlatformPublishFile>$(EmuSenPublishLibraryPrefix)$(EmuSenPlatformLibraryName)$(EmuSenPublishLibrarySuffix)</_EmuSenPlatformPublishFile>
       <_EmuSenPlatformForeign Condition="'$(EmuSenNativePrebuilt)' != ''">$(EmuSenNativePrebuilt)/$(RuntimeIdentifier)/$(_EmuSenPlatformPublishFile)</_EmuSenPlatformForeign>
       <_EmuSenPlatformForeignFound Condition="'$(_EmuSenPlatformForeign)' != '' And Exists('$(_EmuSenPlatformForeign)')">true</_EmuSenPlatformForeignFound>
@@ -45,6 +45,10 @@
     <ItemGroup>
       <_EmuSenForeignPrebuilt Include="@(_EmuSenForeignLibrary->'%(Prebuilt)')" Condition="'%(_EmuSenForeignLibrary.Prebuilt)' != '' And Exists('%(_EmuSenForeignLibrary.Prebuilt)')" />
       <ResolvedFileToPublish Include="@(_EmuSenForeignPrebuilt)" RelativePath="%(_EmuSenForeignPrebuilt.PublishFile)" CopyToPublishDirectory="PreserveNewest" AssetType="native" />
+      <!-- A core ABI v1 library's sidecar, <library>.core.json, beside it in the prebuilt folder as the workflow uploads it; discovery lists a v1 core by it alone - see EmuSen_CoreAPI.md §7.1. -->
+      <_EmuSenForeignSidecarCandidate Include="@(_EmuSenForeignPrebuilt->'%(Identity).core.json')" />
+      <_EmuSenForeignSidecar Include="@(_EmuSenForeignSidecarCandidate)" Condition="Exists('%(_EmuSenForeignSidecarCandidate.Identity)')" />
+      <ResolvedFileToPublish Include="@(_EmuSenForeignSidecar)" RelativePath="%(_EmuSenForeignSidecar.PublishFile).core.json" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
   </Target>
 </Project>

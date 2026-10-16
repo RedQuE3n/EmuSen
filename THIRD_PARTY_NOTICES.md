@@ -171,6 +171,18 @@ The file is unmodified, as Google Fonts distributes it; its copyright notice and
 [`licenses/BarlowCondensed-OFL-1.1.txt`](licenses/BarlowCondensed-OFL-1.1.txt). The font is shipped as a separate file
 beside the program and is not sold by itself, as the licence requires.
 
+### 1.6 Code taken from another emulator
+
+| Project | Licence | Copyright | In |
+|---|---|---|---|
+| [Mesen 2](https://github.com/SourMesen/Mesen2) | GNU General Public License, version 3 (the same licence as EmuSen's, [`LICENSE`](LICENSE)) | Copyright (C) 2014-2025 Sour | Venus (C#), `EmuSen/Cores/Nintendo/Venus - SNES/` |
+
+Venus, EmuSen's first SNES core, took parts of Mesen 2 during its early development, and which of its rules came from
+there can no longer be told apart (`VenusRT_Plan.md` §1.1). The whole of Venus (C#) is therefore credited here. It ships
+in every build as the SNES's reference engine and the fallback where VenusRT's library is missing. VenusRT, the SNES's
+default engine, is a separate rewrite that takes nothing from Mesen or from Venus (C#); Venus (C#) is to move to a
+legacy branch once VenusRT's retirement gate passes, and this entry goes with it.
+
 ## 2. Downloaded only at the player's request, never shipped
 
 Mistress can fetch the following when the player asks it to. None of it is in this repository or in a build, and each

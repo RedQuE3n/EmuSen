@@ -1,0 +1,18 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/cpu_dummy_writes/cpu_dummy_writes_oam.nes
+rom 7C1D71A38B2E873D0874ADD8B823FF39B99151BB29F50096D8021787020C566C
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 3EB37CB577C007C1
+120 D875659715FCEA1D
+180 F50F9F9D1CDE7F70
+240 70F6B92B1C5A3FF8
+300 A8916C7EDBDCB364
+313 049ACBE73DD88411
+resets 0
+text [0;37mTEST: cpu_dummy_writes_oam\n [0;33mThis program verifies that the\nCPU does 2x writes properly.\nAny read-modify-write opcode\nshould first write the origi-\nnal value; then the calculated\nvalue exactly 1 cycle later.\n\nRequirement: OAM memory reads\nMUST be reliable. This is\noften the case on emulators,\nbut NOT on the real NES.\nNevertheless, this test can be\nused to see if the CPU in the\nemulator is built properly.\n\n [0;37m [0;37mTesting OAM.  The screen will go blank for a moment now.\n [0;37mOK;  [0;37mVerifying opcodes...\n [1;34m0E [1;34m2E [1;34m4E [1;34m6E [1;34mCE [1;34mEE  [1;34m1E [1;34m3E [1;34m5E [1;34m7E [1;34mDE [1;34mFE \n [1;34m0F [1;34m2F [1;34m4F [1;34m6F [1;34mCF [1;34mEF  [1;34m1F [1;34m3F [1;34m5F [1;34m7F [1;34mDF [1;34mFF \n [1;34m03 [1;34m23 [1;34m43 [1;34m63 [1;34mC3 [1;34mE3  [1;34m13 [1;34m33 [1;34m53 [1;34m73 [1;34mD3 [1;34mF3 \n [1;34m1B [1;34m3B [1;34m5B [1;34m7B [1;34mDB [1;34mFB              \n [0;37m\nPassed
+verdict Passed 313

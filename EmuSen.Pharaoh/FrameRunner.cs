@@ -3,7 +3,6 @@ using EmuSen.Common.Imaging;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Cores.Nintendo.Venus.Debug;
-using EmuSen.Cores.Nintendo.Moon.Debug;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Pharaoh
@@ -32,11 +31,6 @@ namespace EmuSen.Pharaoh
         public string? CpuTracePath { get; set; }
         private bool _cpuTraceWritten;
 
-        // --apulog: the NES 2A03 register-write log, the same shape - see §3.46.
-        public long ApuLogEnd { get; set; } = -1;
-        public string? ApuLogPath { get; set; }
-        private bool _apuLogWritten;
-        private bool _apuLogArmed;
 
         private readonly Action<string> emit;
         private readonly Action<long>? onFrameAdvanced;
@@ -92,26 +86,6 @@ namespace EmuSen.Pharaoh
 
         private bool _cpuTraceArmed;
 
-        private void EnsureApuLogArmed()
-        {
-            if (ApuLogPath == null || _apuLogArmed) return;
-            _apuLogArmed = true;
-            ApuWriteTrace.Start();
-        }
-
-        private void WriteApuLogIfDue()
-        {
-            if (ApuLogPath == null || _apuLogWritten || CurrentFrame < ApuLogEnd) return;
-            _apuLogWritten = true;
-            ApuWriteTrace.Stop();
-            ApuWriteTrace.WriteTo(ApuLogPath);
-            emit($"[APULOG] {ApuWriteTrace.Count} writes through frame {CurrentFrame} -> {ApuLogPath}");
-            if (ApuWriteTrace.Overflowed)
-            {
-                emit("[WARN] The log buffer filled and recording stopped early - lower --apulog's frame.");
-            }
-        }
-
         private void WriteCpuTraceIfDue()
         {
             if (CpuTracePath == null || _cpuTraceWritten || CurrentFrame < CpuTraceEnd) return;
@@ -128,7 +102,6 @@ namespace EmuSen.Pharaoh
         public void RunFrames(long count)
         {
             EnsureCpuTraceArmed();
-            EnsureApuLogArmed();
             for (long i = 0; i < count; i++)
             {
                 if (CurrentFrame >= FrameCap)
@@ -173,7 +146,6 @@ namespace EmuSen.Pharaoh
 
                 CurrentFrame++;
                 WriteCpuTraceIfDue();
-                WriteApuLogIfDue();
                 Rewind.OnFrameCompleted(Core);
                 onFrameAdvanced?.Invoke(CurrentFrame);
                 AfterFrame?.Invoke();

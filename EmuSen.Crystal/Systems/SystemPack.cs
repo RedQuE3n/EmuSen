@@ -44,7 +44,7 @@ namespace EmuSen.Crystal.Systems
     // The packs by system id; a system without one is shown by its engine's own name and has no codecs.
     public static class SystemPacks
     {
-        public static IReadOnlyList<SystemPack> All { get; } = new[] { Snes.SnesSystem.Pack, Genesis.GenesisSystems.MegaDrivePack, Genesis.GenesisSystems.MegaCdPack, Genesis.GenesisSystems.S32xPack, Psx.PsxSystem.Pack };
+        public static IReadOnlyList<SystemPack> All { get; } = new[] { Nes.NesSystem.Pack, Snes.SnesSystem.Pack, Genesis.GenesisSystems.MegaDrivePack, Genesis.GenesisSystems.MegaCdPack, Genesis.GenesisSystems.S32xPack, Psx.PsxSystem.Pack };
 
         public static SystemPack? For(string? systemId) => All.FirstOrDefault(p => p.Entry.Id == systemId);
     }

@@ -1,6 +1,5 @@
 using EmuSen.Common.Imaging;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Moon.Validation;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Pharaoh;
@@ -291,8 +290,6 @@ class Program
                 CpuLogEnd = options.CpuLogEnd,
                 CpuTraceEnd = options.CpuTraceEnd,
                 CpuTracePath = options.CpuTracePath,
-                ApuLogEnd = options.ApuLogEnd,
-                ApuLogPath = options.ApuLogPath,
                 Verbose = options.Verbose,
                 OnHalted = debugTarget.RefreshProviders,
             };
@@ -321,8 +318,6 @@ class Program
             CpuLogEnd = options.CpuLogEnd,
             CpuTraceEnd = options.CpuTraceEnd,
             CpuTracePath = options.CpuTracePath,
-            ApuLogEnd = options.ApuLogEnd,
-            ApuLogPath = options.ApuLogPath,
             Verbose = options.Verbose,
             OnHalted = debugTarget.RefreshProviders,
         };

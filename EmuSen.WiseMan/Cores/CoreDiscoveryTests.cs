@@ -171,7 +171,7 @@ namespace EmuSen.WiseMan.Cores
             var row = CoreCatalog.EngineFor("SNES")!;
             Assert.Equal(new[] { CoreCatalog.VenusEngine, "V1TestCore (test)" }, row.Choices);
             Assert.Equal(CoreCatalog.VenusEngine, row.Default);
-            Assert.Equal(new[] { CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine }, CoreCatalog.EngineFor("NES")!.Choices);
+            Assert.Null(CoreCatalog.EngineFor("NES"));
             Assert.IsType<VenusCore>(CoreFactory.Create("game.sfc"));
 
             ICore core = CoreFactory.Create("game.sfc", engine: "V1TestCore (test)");

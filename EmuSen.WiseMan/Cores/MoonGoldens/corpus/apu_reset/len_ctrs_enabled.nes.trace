@@ -1,0 +1,13 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/apu_reset/len_ctrs_enabled.nes
+rom E05546CBFAA1414D9193B0212084B324EA6B13130AF5F171A34C9E574F5AC373
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+42 921D867B885D83E6
+resets 1
+text len_ctrs_enabled\n\nPassed
+verdict Passed 42

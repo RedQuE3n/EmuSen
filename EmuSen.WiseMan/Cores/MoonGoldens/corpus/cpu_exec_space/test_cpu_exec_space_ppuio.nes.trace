@@ -1,0 +1,13 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/cpu_exec_space/test_cpu_exec_space_ppuio.nes
+rom 9F7F24D420033E032F5DA0E1EB721CCE1D843E032B31973ACDDB0255EF479251
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+40 7D9765259291A579
+resets 0
+text [0;37mTEST:test_cpu_exec_space_ppuio\n [0;33mThis program verifies that the\nCPU can execute code from any\npossible location that it can\naddress, including I/O space.\n\nIn addition, it will be tested\nthat an RTS instruction does a\ndummy read of the byte that\nimmediately follows the\ninstructions.\n\n [0;37m [1;34mJSR+RTS TEST OK\nJMP+RTS TEST OK\nRTS+RTS TEST OK\nJMP+RTI TEST OK\nJMP+BRK TEST OK\n [0;37m\nPassed
+verdict Passed 40

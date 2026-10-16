@@ -50,9 +50,10 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void Moon_reports_only_the_eight_buttons_an_NES_pad_has()
+        public void MoonRT_reports_only_the_eight_buttons_an_NES_pad_has()
         {
-            var moon = new EmuSen.Cores.Nintendo.Moon.MoonCore();
+            using var moon = new EmuSen.Cores.Nintendo.MoonRT.MoonRtCore();
+            moon.LoadRom(Fixtures.SyntheticNesRom.WriteTemp(Fixtures.SyntheticNesRom.Build()));
 
             Assert.Equal(8, moon.SupportedButtons.Count);
             Assert.DoesNotContain(PadButton.X, moon.SupportedButtons);
@@ -79,43 +80,6 @@ namespace EmuSen.WiseMan.Cores
             venus.Bus!.Input.LatchAutoJoypad();
 
             Assert.Equal(0, venus.Bus.Input.ReadJoy1Low() | venus.Bus.Input.ReadJoy1High());
-        }
-
-        // A button the console lacks is dropped, never folded onto one it has.
-        [Fact]
-        public void Moon_ignores_a_button_the_NES_pad_does_not_have()
-        {
-            var moon = new EmuSen.Cores.Nintendo.Moon.MoonCore();
-            moon.LoadRom(Fixtures.SyntheticNesRom.WriteTemp(Fixtures.SyntheticNesRom.Build()));
-
-            moon.SetButton(0, PadButton.X, pressed: true);
-            moon.SetButton(0, PadButton.L, pressed: true);
-
-            Assert.Equal(0, moon.Bus!.Controller1.State);
-        }
-
-        [Fact]
-        public void Moon_routes_a_button_the_NES_pad_does_have()
-        {
-            var moon = new EmuSen.Cores.Nintendo.Moon.MoonCore();
-            moon.LoadRom(Fixtures.SyntheticNesRom.WriteTemp(Fixtures.SyntheticNesRom.Build()));
-
-            moon.SetButton(0, PadButton.Start, pressed: true);
-
-            Assert.NotEqual(0, moon.Bus!.Controller1.State);
-        }
-
-        // 0-based here, 1-based inside Venus - see EmuSen_Input.md §2.
-        [Fact]
-        public void Port_zero_is_player_one_on_both_cores()
-        {
-            var moon = new EmuSen.Cores.Nintendo.Moon.MoonCore();
-            moon.LoadRom(Fixtures.SyntheticNesRom.WriteTemp(Fixtures.SyntheticNesRom.Build()));
-
-            moon.SetButton(0, PadButton.A, pressed: true);
-
-            Assert.NotEqual(0, moon.Bus!.Controller1.State);
-            Assert.Equal(0, moon.Bus!.Controller2.State);
         }
     }
 }

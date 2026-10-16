@@ -725,7 +725,7 @@ Not part of the `IDebugTarget` toolchain above (it doesn't run a full emulation 
 dotnet run --project EmuSen.Pharaoh -- --singlestep <target> <test-dir> [max-examples-per-file]
 ```
 
-`<target>` is a registered `ISingleStepTarget` name (currently `65816`, `spc700` and `nes6502`); `<test-dir>` holds the target's JSON test files (one per opcode, from [TomHarte/ProcessorTests](https://github.com/TomHarte/ProcessorTests) — not vendored into this repo, fetch separately). Each test sets up initial registers/memory, single-steps the real emulation code exactly once via the target's `ISingleStepTarget` adapter, and compares final registers/memory byte-for-byte against the vector's expected result. Output is one `[PASS]`/`[FAIL] <file>: <pass>/<total>` line per file, a grand total, then up to `[max-examples-per-file]` (default 3) concrete failure examples per failing file — enough to see the shape of a failure without drowning in 10,000 near-identical ones. Exit code is 0 only if every file passed.
+`<target>` is a registered `ISingleStepTarget` name (currently `65816` and `spc700`; `nes6502` drove the C# Moon's 6502 and left with that core on 2026-10-16, `Moon_Native.md` §9.5); `<test-dir>` holds the target's JSON test files (one per opcode, from [TomHarte/ProcessorTests](https://github.com/TomHarte/ProcessorTests) — not vendored into this repo, fetch separately). Each test sets up initial registers/memory, single-steps the real emulation code exactly once via the target's `ISingleStepTarget` adapter, and compares final registers/memory byte-for-byte against the vector's expected result. Output is one `[PASS]`/`[FAIL] <file>: <pass>/<total>` line per file, a grand total, then up to `[max-examples-per-file]` (default 3) concrete failure examples per failing file — enough to see the shape of a failure without drowning in 10,000 near-identical ones. Exit code is 0 only if every file passed.
 
 **Why this is a `--singlestep` verb on `EmuSen.Pharaoh` and not its own project.** It began as two throwaway scratchpad tools — one for the 65816, one for the SPC700 — built ad hoc during the same investigation that found and fixed real bugs in both, then generalized into a permanent tool so the next core (or the next bug hunt in an existing one) wouldn't rebuild the same harness from scratch. That permanent home was its own project, `EmuSen.Tomoe`, for a while; it was folded in here once it was clear the project was a 124-line `Main` wrapping a three-entry dictionary, while all the actual machinery already lived in `EmuSen/Validation/` and each core's own `Validation/` folder. It sits alongside `--diffshot` (§3.15) and `--tracediff` (§3.40) as a third standalone verb dispatched before any ROM or option parsing happens — same shape, same reason: a real tool in this toolchain that happens to need no emulation session. Retiring the project also released the `Tomoe` codename back to the pool in `EmuSen_Core_Naming_Scheme.md`, where Professor Tomoe is listed as a natural pull for a future core.
 
@@ -1720,6 +1720,8 @@ systemd-run --user --scope -p CPUQuota=33% -p CPUQuotaPeriodSec=5ms -- <self> <a
 
 ### 3.44 `--testroms` — third-party NES test suites, reporting through PRG RAM
 
+> **Since 2026-10-16** the runner drives MoonRT, the NES's only engine, and reads the protocol through `EmuSen.Pharaoh/NesTestRomProtocol.cs`, which MoonRT's corpus goldens share (`Moon_Native.md` §9.2); the rules below are unchanged.
+
 The fourth standalone verb, alongside `--diffshot` (§3.15), `--singlestep` (§3.16) and `--tracediff` (§3.40): a real tool in this toolchain that needs no debug session, no window and no human.
 
 ```
@@ -1854,6 +1856,8 @@ This leaves a real off-by-one between backends: Mesen's first observable frame i
 ---
 
 ### 3.46 `apudiff` — the NES register-write differ, and what it says about SMB3
+
+> **Retired 2026-10-16.** `--apulog` recorded the C# Moon's APU writes through `ApuWriteTrace`, and both left with that core (`Moon_Native.md` §9.5); `--apulog` now refuses with that reason, and `tracediff` reads CPU and GSU traces only. The record below stands as history.
 
 §3.43 documented `apudiff` as the consumer for `mesen_apulog_*.bin`. It did not exist; nothing in the repo implemented it, and our side emitted no APU log to compare against, so the logs sat unread for two days. Both halves are now built.
 

@@ -107,18 +107,6 @@ status 0
 action none
 end
 
-case on moon
-target moon
-covers 1
-$ vectors
-out 101
-  NMI          $00FFFA -> $008000
-  RESET        $00FFFC -> $008000
-  IRQ/BRK      $00FFFE -> $008000
-status 0
-action none
-end
-
 case on moonrt
 target moonrt
 covers 1

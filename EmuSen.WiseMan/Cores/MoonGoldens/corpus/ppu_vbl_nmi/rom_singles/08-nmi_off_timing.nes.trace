@@ -1,0 +1,16 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/ppu_vbl_nmi/rom_singles/08-nmi_off_timing.nes
+rom 1D2A4093091C8E58A7F99D6A3531BBC6346B52CFC59BCB17CA04C1F2376CF2FC
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 B23084C3518F4B2F
+120 C44D973861D5E98A
+180 86A84C75FBC93DCB
+219 CAB82F8845267FEB
+resets 0
+text 03 -\n04 -\n05 -\n06 -\n07 N\n08 N\n09 N\n0A N\n0B N\n0C N\n\n08-nmi_off_timing\n\nPassed
+verdict Passed 219

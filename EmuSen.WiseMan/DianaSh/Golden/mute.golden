@@ -97,8 +97,8 @@ status 0
 action none
 end
 
-case on moon
-target moon
+case on moonrt
+target moonrt
 covers 1
 $ mute 0 on
 out 16

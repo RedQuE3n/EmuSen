@@ -84,19 +84,6 @@ status 0
 action none
 end
 
-case on moon
-target moon
-covers 1
-$ cpus
-out 188
-NES debug processors:
-  cpu   PC=$00B454  2A03
-        supports: bp, cov, bt, disasm   code space: CPUBUS
-Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
-status 0
-action none
-end
-
 case on moonrt
 target moonrt
 covers 1

@@ -20,7 +20,7 @@ Folder: `Cores/Nintendo/`
 
 | Console | Codename | Folder | Status |
 |---|---|---|---|
-| NES | **Moon** | `Cores/Nintendo/Moon - NES/` | Active development — `EmuSen.Cores.Nintendo.Moon.*`. CPU validated against SingleStepTests `nes6502/v1` (2,560,000 cases, traces included); PPU, memory, five mappers, `ICore` and `IDebugTarget` all implemented. No audio synthesis, no PAL, scanline-granularity PPU. See `Man pages/Hardware/Nintendo/Moon - NES/` |
+| NES | **Moon** | `Cores/Nintendo/MoonRT - NES/` | MoonRT, the Rust port, is the NES's only engine since 2026-10-16; the C# core that stood at `Cores/Nintendo/Moon - NES/` was deleted (`Moon_Native.md` §9). See `Man pages/Hardware/Nintendo/Moon - NES/` |
 | SNES | **Venus** | `Cores/Nintendo/Venus - SNES/` | Active development — `EmuSen.Cores.Nintendo.Venus.*` (see §8) |
 | Game Boy / Game Boy Color | **Mercury** | `Cores/Nintendo/Mercury - GB-GBC/` | Active development — `EmuSen.Cores.Nintendo.Mercury.*`. Started 2026-08-04. Full SM83 instruction set, interrupts, timer, joypad, five cartridge boards, save states. No PPU, no APU, no `IDebugTarget`, so not registered in `CoreFactory` yet. **The GB-vs-GBC question is settled: one core, DMG first, colour as an additive mode** — see `Man pages/Hardware/Nintendo/Mercury - GB-GBC/Mercury_Core.md` §1 |
 | Game Boy Advance | **Jupiter** | `Cores/Nintendo/Jupiter - GBA/` | Not started — reserved |

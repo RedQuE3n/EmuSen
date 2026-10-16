@@ -164,21 +164,6 @@ status 1
 action none
 end
 
-case on moon
-target moon
-covers 1
-$ regs cpu
-out 38
-cpu reports no registers on this core.
-status 0
-action none
-$ setreg NOPE 0
-out 52
-cpu has no register named 'NOPE'. Available: (none).
-status 1
-action none
-end
-
 case on moonrt
 target moonrt
 covers 1

@@ -1,0 +1,13 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/instr_misc/rom_singles/02-branch_wrap.nes
+rom 2E535F572A16AB0E27BF6E076DE6AAA2A9885C9AE1B02ACDA7853810529B24C5
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+13 A2CD209098D8CACA
+resets 0
+text 02-branch_wrap\n\nPassed
+verdict Passed 13

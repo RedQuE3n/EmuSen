@@ -1,3 +1,4 @@
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -32,13 +33,13 @@ namespace EmuSen.WiseMan.Fixtures
         public static string FileName(string board, bool colourConsole, int ramLength) => $"{board}-{(colourConsole ? "gbc" : "gb")}-ram{ramLength}.layout";
 
         // The listing a state of this cartridge follows: the board from the header, the console from the state's own header, the RAM size from its length.
-        public static MercuryStateLayout For(byte[] rom, ReadOnlySpan<byte> state)
+        public static StateLayout For(byte[] rom, ReadOnlySpan<byte> state)
         {
             string board = Board(rom[0x147]);
             bool colour = state[8] != 0;
             string prefix = $"{board}-{(colour ? "gbc" : "gb")}-";
             lock (Chosen)
-                if (Chosen.TryGetValue((prefix, state.Length), out MercuryStateLayout? known)) return known;
+                if (Chosen.TryGetValue((prefix, state.Length), out StateLayout? known)) return known;
             string dir = Directory();
             foreach (string path in System.IO.Directory.Exists(dir) ? System.IO.Directory.GetFiles(dir, prefix + "*.layout") : Array.Empty<string>())
             {
@@ -50,15 +51,15 @@ namespace EmuSen.WiseMan.Fixtures
             throw new InvalidDataException($"No committed layout for a {board} board on the {(colour ? "Game Boy Color" : "Game Boy")} with a {state.Length}-byte state; record one with {RecordVariable}=1.");
         }
 
-        private static readonly Dictionary<string, MercuryStateLayout> Loaded = new(StringComparer.Ordinal);
-        private static readonly Dictionary<(string, int), MercuryStateLayout> Chosen = new();
+        private static readonly Dictionary<string, StateLayout> Loaded = new(StringComparer.Ordinal);
+        private static readonly Dictionary<(string, int), StateLayout> Chosen = new();
 
-        public static MercuryStateLayout Load(string path)
+        public static StateLayout Load(string path)
         {
             lock (Loaded)
             {
-                if (!Loaded.TryGetValue(path, out MercuryStateLayout? layout))
-                    Loaded[path] = layout = MercuryStateLayout.FromText(Path.GetFileName(path), ReadListing(path));
+                if (!Loaded.TryGetValue(path, out StateLayout? layout))
+                    Loaded[path] = layout = StateLayout.FromText(Path.GetFileName(path), ReadListing(path));
                 return layout;
             }
         }
@@ -69,9 +70,9 @@ namespace EmuSen.WiseMan.Fixtures
         // A listing written from the engine's state_layout, named for its board, console and RAM size; the commit that adds it says why.
         public static string Record(byte cartridgeType, string text)
         {
-            var layout = MercuryStateLayout.FromText("", text);
-            MercuryStateLayout.Field ram = layout["Cart.Ram"];
-            MercuryStateLayout.Field console = layout["Console"];
+            var layout = StateLayout.FromText("", text);
+            StateLayout.Field ram = layout["Cart.Ram"];
+            StateLayout.Field console = layout["Console"];
             Assert.True(console.Length == 1, "a listing without the console byte");
             string name = FileName(Board(cartridgeType), text.Contains("u8[16384] Bus.Vram", StringComparison.Ordinal), ram.Length);
             System.IO.Directory.CreateDirectory(Directory());

@@ -1,0 +1,14 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/cpu_interrupts_v2/rom_singles/2-nmi_and_brk.nes
+rom 6E6BF6205930AFCFEBDC213C583DF53986A688A8B36F8856B805EF4C1853E6EB
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 23699E5AA3A1C6E1
+112 C58A335B359F3474
+resets 0
+text NMI BRK 00\n27  36  00 \n26  36  00 \n26  36  00 \n36  00  00 \n36  00  00 \n36  00  00 \n36  00  00 \n36  00  00 \n27  36  00 \n27  36  00 \n\n2-nmi_and_brk\n\nPassed
+verdict Passed 112

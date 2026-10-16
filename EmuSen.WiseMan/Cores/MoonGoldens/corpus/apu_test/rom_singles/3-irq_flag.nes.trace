@@ -1,0 +1,13 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/apu_test/rom_singles/3-irq_flag.nes
+rom DD888551665937391A2D691B1F96D1858316DBFCE4951306146E9E396367F079
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+21 668FA6CC1686499F
+resets 0
+text 3-irq_flag\n\nPassed
+verdict Passed 21

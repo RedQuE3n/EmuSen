@@ -1,0 +1,14 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/ppu_vbl_nmi/rom_singles/09-even_odd_frames.nes
+rom 1AC04283021DDD9294CC74EE709C55E20A350DC4815C15A8A93B3654837E858D
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 DAAA5F935C92355A
+75 49616FB68F047900
+resets 0
+text 00 01 01 02 \n09-even_odd_frames\n\nPassed
+verdict Passed 75

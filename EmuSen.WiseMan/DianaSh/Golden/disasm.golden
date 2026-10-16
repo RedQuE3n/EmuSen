@@ -216,33 +216,6 @@ status 0
 action none
 end
 
-case on moon
-target moon
-covers 2-3
-$ disasm cpu
-out 239
-  00B454: EA        NOP
-  00B455: EA        NOP
-  00B456: EA        NOP
-  00B457: EA        NOP
-  00B458: EA        NOP
-  00B459: EA        NOP
-  00B45A: EA        NOP
-  00B45B: EA        NOP
-  00B45C: EA        NOP
-  00B45D: EA        NOP
-status 0
-action none
-$ disasm cpu 0 4
-out 95
-  000000: 00        BRK
-  000001: 00        BRK
-  000002: 00        BRK
-  000003: 00        BRK
-status 0
-action none
-end
-
 case on moonrt
 target moonrt
 covers 2-3

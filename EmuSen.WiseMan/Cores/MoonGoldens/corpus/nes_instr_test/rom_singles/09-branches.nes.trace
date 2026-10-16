@@ -1,0 +1,13 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/nes_instr_test/rom_singles/09-branches.nes
+rom 6D675CAA8F29A9C695F616B82B6C7CB968FC7E2CA6282035E7255FE42085C8FF
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+33 5C08BDB23E1016C0
+resets 0
+text 09-branches\n\nPassed
+verdict Passed 33

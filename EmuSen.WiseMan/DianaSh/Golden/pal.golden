@@ -75,16 +75,6 @@ status 0
 action none
 end
 
-case on moon
-target moon
-covers 1
-$ pal 0
-out 35
-pal  0: 545454 545454 545454 545454
-status 0
-action none
-end
-
 case on moonrt
 target moonrt
 covers 1

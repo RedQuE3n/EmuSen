@@ -433,8 +433,7 @@ namespace EmuSen.Serenity
             return builder;
         }
 
-        // The picture handed to the compositor on the device where it can be, Skia drawing it otherwise; EMUSEN_DEVICE_PICTURE=0 keeps Skia's - see EmuSen_DevicePicture.md §4.
-        // Off unless EMUSEN_DEVICE_PICTURE=1 since it froze the picture on the handheld - see EmuSen_DevicePicture.md §18.
+        // The picture handed to the compositor on the device only when EMUSEN_DEVICE_PICTURE=1, Skia drawing it otherwise, since it froze the handheld's picture - see EmuSen_DevicePicture.md §4 and §18.
         public static bool DevicePictureAllowed { get; set; } = Environment.GetEnvironmentVariable("EMUSEN_DEVICE_PICTURE") == "1";
 
         // Why the picture is not handed over on the device, said once per window; null when it is.

@@ -227,6 +227,7 @@ impl AttachmentState for MegaCd {
         self.cpu = s.cpu;
         let h = &mut self.hw;
         (h.clock, h.g, h.parked, h.owed, h.pcm, h.fader, h.cdc, h.cdda, h.asic) = (s.clock, s.g, s.parked, s.owed, s.pcm, s.fader, s.cdc, s.cdda, s.asic);
+        h.pcm_master = h.pcm.out.len();
         let wr = &mut h.word;
         (wr.one_m, wr.sub_owns, wr.ret, wr.request, wr.priority) = (s.word[0] != 0, s.word[1] != 0, s.word[2] != 0, s.word[3] != 0, s.word[4] & 3);
         let c = &mut h.cdd;

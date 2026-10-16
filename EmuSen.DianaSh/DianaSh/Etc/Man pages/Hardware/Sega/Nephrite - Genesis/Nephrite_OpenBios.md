@@ -390,6 +390,23 @@ frames each, compliant. Two failures on the way, each fixed:
   the load's "at least 1" guard meant for the travel that follows; save, load, save differed. The guard now applies
   only once the busy exchanges are over, where the count divides; the format is unchanged.
 
+## 13. The cost, and a defect of the mix it found (2026-10-15)
+
+Each disc for 6,000 frames with no pad pressed, the mean of each 500 frames in milliseconds, the picture drawn, on one
+core under the timing lock (load 4 to 6), the same blank backup RAM on both BIOSes:
+
+| Disc | Open BIOS | Player's BIOS |
+|---|---|---|
+| Chuck Rock II | 1.65 to 2.00 | 1.75 to 2.27 |
+| Lunar - Eternal Blue | 1.34 to 2.29 | 1.37 to 2.46 |
+| Mickey Mania | 1.25 to 2.73 | 1.87 to 2.41 |
+| Sonic CD (USA) | 1.62 to 2.09 | 1.96 to 3.97 |
+
+The two BIOSes' games are at different points at each frame (§12), so the ranges, not the columns, compare: the open
+BIOS costs what the player's does, within the plan's 2.5 ms for the Sega CD but for a few windows of Mickey Mania's and
+Sonic CD's on either. **Found on the way**: on the open BIOS Mickey Mania's cost first rose without end, a defect of
+stage 9's mix that the open BIOS's timing exposed and the player's had not (D-48); fixed, with its test.
+
 ## 9. Reading log (stage 10)
 
 Opened and read: `Nephrite_Plan.md` whole; `Nephrite_Native.md` §49–§52, §53.1–§53.3, §53.5, §54.1, §54.2, §54.3 from

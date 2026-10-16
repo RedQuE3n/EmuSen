@@ -122,6 +122,9 @@ pub struct Sub {
     pub(in crate::mcd) pcm_ram: Vec<u8>,
     /// The RF5C164.
     pub(in crate::mcd) pcm: pcm::Pcm,
+    /// How many of the PCM chip's samples waiting for the mix are already in master clocks; those after are in sub
+    /// clocks. Not state: a state is taken after the frame's mix, when every one waiting is converted.
+    pub(in crate::mcd) pcm_master: usize,
     pub g: Gate,
     /// The sub CPU waits for Word RAM the main CPU holds: its writes owed, done when the RAM is its again.
     pub(in crate::mcd) parked: bool,
@@ -228,6 +231,7 @@ impl MegaCd {
             bram: vec![0; BRAM_SIZE],
             pcm_ram: vec![0; PCM_RAM_SIZE],
             pcm: pcm::Pcm::default(),
+            pcm_master: 0,
             // `$A12000` reads `$0002` at power-on: the sub CPU held in reset with its bus requested (§2, the initial values).
             g: Gate { reset_held: true, busreq: true, hivect: 0xFFFF, ..Gate::default() },
             parked: false,
@@ -945,10 +949,12 @@ impl Sub {
         let now = self.to_sub(master).min(self.clock);
         self.pcm.run(now, &self.pcm_ram);
         let (num, den) = self.ratio;
-        for e in self.pcm.out.iter_mut() {
+        // Only the samples made since the last mix: one left waiting for a later frame is in master clocks already.
+        for e in self.pcm.out[self.pcm_master..].iter_mut() {
             e.0 = (e.0 as u128 * den as u128).div_ceil(num as u128) as u64;
         }
         self.cdda.feed(master, &mut self.pcm.out);
+        self.pcm_master = self.pcm.out.len();
     }
 }
 
@@ -990,6 +996,20 @@ impl Bus for SubBus<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // A PCM sample made ahead of the mix's present waits for a later frame in master clocks, and is mixed then; converted twice, it once stood for ever before every later one (Nephrite_OpenBios.md §13).
+    #[test]
+    fn a_pcm_sample_left_for_a_later_frame_is_mixed_then() {
+        let board = Board { master_hz: (4_725_000_000, 88), pal: false, start: 0, rate: 48_000 };
+        let mut m = MegaCd::new(board, vec![0u8; BIOS_SIZE], None);
+        let (num, den) = m.hw.ratio;
+        let at = (1_000u128 * den as u128).div_ceil(num as u128) as u64;
+        m.hw.pcm.out.push((1_000, [5, 5]));
+        m.hw.sound_to(at - 1);
+        assert_eq!(m.hw.pcm.out, [(at, [5, 5])], "left for later, in master clocks");
+        m.hw.sound_to(at);
+        assert!(m.hw.pcm.out.is_empty(), "mixed at its time");
+    }
 
     // A transfer from Word RAM reads the word before the one addressed, which a source set a word later corrects; the main CPU reads it in time (Nephrite_Native.md §57).
     #[test]

@@ -1801,3 +1801,19 @@ CPUs' disputes in their own record pages.
   Measured by the program, whose author tested it on a console.
 - Pinned by: `mcd_verificator_runs_in_mode_1_on_the_open_bios`.
 - Implemented in: stage 10's commit "mode 1".
+
+### D-48. The PCM chip's samples reach the mix once each: a sample left waiting for a later frame is in master clocks and is not converted again
+- Opened: 2026-10-15, at stage 10, by Mickey Mania on the open BIOS: the frame's cost rose from 1.7 ms to 13 ms over
+  6,000 frames and the process's memory by about 8 KiB a frame. Every one of the PCM chip's samples since about frame
+  1,000 was still waiting for the mix, behind a first whose time had grown past `10^18`.
+- Documents read: none; a defect of stage 9's mix (`Sub::sound_to`), not a rule of the hardware.
+- Test program: the disc on the open BIOS, the waiting samples counted every 100 frames; and
+  `a_pcm_sample_left_for_a_later_frame_is_mixed_then`, which fails on the old conversion and passes on the new.
+- Referee: none.
+- Conclusion: a sample made by a register access at a sub CPU clock ahead of the mix's present waits for the next frame,
+  already converted to master clocks; the mix converted every waiting sample each frame, so such a sample was multiplied
+  by the clocks' ratio again each frame, never came due, and held every later sample back, silencing the PCM chip.
+  Only the samples made since the last mix are converted now. Measured: the cost stays at 1.3 to 2.7 ms a frame, the
+  memory flat; the 71 digests unchanged.
+- Pinned by: `a_pcm_sample_left_for_a_later_frame_is_mixed_then`.
+- Implemented in: stage 10's commit "the PCM's waiting samples".

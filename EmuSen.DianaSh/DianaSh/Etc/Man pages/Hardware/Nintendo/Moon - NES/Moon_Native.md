@@ -2162,7 +2162,18 @@ change, made at the natural seam of one bus cycle, and it builds faster.
 | `libmoonrt.so` | 7,334,768 B | 1,554,032 B | 813,568 B |
 | `dispatch`, each | 2.76 MB | 384 KB | 13,922 B |
 
-Windows and macOS could not be measured here. CI's next run measures them (§8.6.6).
+Windows and macOS could not be measured here. CI measured them in run 38896556802, the first with the change
+(branch `ci-speed`, 2026-10-16), against run 38861419247 before it:
+
+| Platform | Job before | Job after | Test step after | Build step after |
+|---|---|---|---|---|
+| win-x64 | 37.4 min | 1.8 min | 0.4 min | 0.1 min |
+| osx-arm64 | 30.6 min | 0.9 min | 0.2 min | 0.1 min |
+| osx-x64 | 16.0 min | 1.1 min | 0.4 min (under Rosetta) | 0.1 min |
+| linux-x64 | 11.2 min | 0.7 min | 0.2 min | 0.1 min |
+
+The 28 library jobs together took 85.3 job-minutes in that run, against 187.7 before, and MoonRT's four took 4.5
+of them.
 
 #### 8.6.4 Same output, byte for byte
 

@@ -4,6 +4,11 @@ name: Rust cores
 
 on:
   workflow_dispatch:
+    inputs:
+      full:
+        description: Build every library, taking none from an earlier run
+        type: boolean
+        default: false
   push:
     paths:
       - 'EmuSen/Cores/Nintendo/MarsRT - N64/**'
@@ -42,6 +47,7 @@ on:
       - 'EmuSen.WiseMan/Cores/CoreDiscovery*'
       - 'EmuSen/Cores/Native/**'
       - '.github/workflows/rust-cores.yml'
+      - '.github/scripts/library_key.py'
   # The core ABI's guard must see every pull request that could change version 1 (EmuSen_CoreAPI.md §5.4).
   pull_request:
     paths:
@@ -81,6 +87,7 @@ on:
       - 'EmuSen.WiseMan/Cores/CoreDiscovery*'
       - 'EmuSen/Cores/Native/**'
       - '.github/workflows/rust-cores.yml'
+      - '.github/scripts/library_key.py'
 
 jobs:
   # The crates every core builds with (EmuSen/Cores/Shared/), Beryl's (the Sega cores' shared CPUs and chips) and BlackMoon's (the Sony cores'), tested on their own; no library of theirs ships.
@@ -203,8 +210,50 @@ jobs:
           fi
           cd Platform && cargo test --release -p emusen-platform --test dianash_abi
 
+  # Which libraries this run builds, and which it takes from an earlier run's build of the same inputs; main, tags and a dispatch asking for it build every one (EmuSen_RustPlatform.md §28).
+  plan:
+    name: Plan
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      reuse: ${{ steps.plan.outputs.reuse }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The plan
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FULL: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') || inputs.full == true }}
+          # The crates of RustCores.props, repeated because YAML cannot read it; symbol is the prefix of the exports the shim looks up.
+          # Diamond's published library is v1/'s, which holds the machine with its enhancements (Diamond_Enhancements.md §24.1); emusen_platform is not a core but the platform library, built from its workspace and shipped the same way.
+          CRATES: |
+            [
+              {"name": "marsrt", "dir": "EmuSen/Cores/Nintendo/MarsRT - N64", "symbol": "emusen_core_"},
+              {"name": "mercuryrt", "dir": "EmuSen/Cores/Nintendo/MercuryRT - GB", "symbol": "emusen_native_"},
+              {"name": "moonrt", "dir": "EmuSen/Cores/Nintendo/MoonRT - NES", "symbol": "emusen_native_"},
+              {"name": "venusrt", "dir": "EmuSen/Cores/Nintendo/VenusRT - SNES", "symbol": "emusen_native_"},
+              {"name": "nephrite", "dir": "EmuSen/Cores/Sega/Nephrite - Genesis", "symbol": "emusen_core_"},
+              {"name": "diamond", "dir": "EmuSen/Cores/Sony/Diamond - PlayStation/v1", "symbol": "emusen_core_"},
+              {"name": "emusen_platform", "dir": "Platform", "symbol": "emusen_galaxia_"}
+            ]
+          # ubuntu-22.04 for its glibc (2.35), so the library loads on older distributions than the one that built it; osx-x64 is built on the arm64 runner with Apple's toolchain, which links x86_64, and its tests run under Rosetta and may not.
+          PLATFORMS: |
+            [
+              {"rid": "linux-x64", "os": "ubuntu-22.04", "target": "x86_64-unknown-linux-gnu", "prefix": "lib", "suffix": ".so", "test": true},
+              {"rid": "win-x64", "os": "windows-latest", "target": "x86_64-pc-windows-msvc", "prefix": "", "suffix": ".dll", "test": true},
+              {"rid": "osx-arm64", "os": "macos-latest", "target": "aarch64-apple-darwin", "prefix": "lib", "suffix": ".dylib", "test": true},
+              {"rid": "osx-x64", "os": "macos-latest", "target": "x86_64-apple-darwin", "prefix": "lib", "suffix": ".dylib", "test": "rosetta"}
+            ]
+        run: python3 .github/scripts/library_key.py plan
+
   library:
     name: ${{ matrix.crate.name }} ${{ matrix.platform.rid }}
+    needs: plan
+    if: needs.plan.outputs.build != '[]'
     runs-on: ${{ matrix.platform.os }}
     # The platform library is optional while every component in it has its C# behind it, so its failure does not stop the cores' jobs (EmuSen_RustPlatform.md §10.6).
     continue-on-error: ${{ matrix.crate.name == 'emusen_platform' }}
@@ -216,58 +265,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The crates of RustCores.props, repeated because YAML cannot read it; symbol is the prefix of the exports the shim looks up.
-        crate:
-          - name: marsrt
-            dir: 'EmuSen/Cores/Nintendo/MarsRT - N64'
-            symbol: emusen_core_
-          - name: mercuryrt
-            dir: 'EmuSen/Cores/Nintendo/MercuryRT - GB'
-            symbol: emusen_native_
-          - name: moonrt
-            dir: 'EmuSen/Cores/Nintendo/MoonRT - NES'
-            symbol: emusen_native_
-          - name: venusrt
-            dir: 'EmuSen/Cores/Nintendo/VenusRT - SNES'
-            symbol: emusen_native_
-          - name: nephrite
-            dir: 'EmuSen/Cores/Sega/Nephrite - Genesis'
-            symbol: emusen_core_
-          # The published library is v1/'s, which holds the machine with its enhancements (Diamond_Enhancements.md §24.1).
-          - name: diamond
-            dir: 'EmuSen/Cores/Sony/Diamond - PlayStation/v1'
-            symbol: emusen_core_
-          # Not a core: the platform library, built from its workspace and shipped the same way.
-          - name: emusen_platform
-            dir: 'Platform'
-            symbol: emusen_galaxia_
-        platform:
-          # ubuntu-22.04 for its glibc (2.35), so the library loads on older distributions than the one that built it.
-          - rid: linux-x64
-            os: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            prefix: lib
-            suffix: .so
-            test: true
-          - rid: win-x64
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-            prefix: ''
-            suffix: .dll
-            test: true
-          - rid: osx-arm64
-            os: macos-latest
-            target: aarch64-apple-darwin
-            prefix: lib
-            suffix: .dylib
-            test: true
-          # Built on the arm64 runner with Apple's toolchain, which links x86_64; its tests run under Rosetta and may not.
-          - rid: osx-x64
-            os: macos-latest
-            target: x86_64-apple-darwin
-            prefix: lib
-            suffix: .dylib
-            test: rosetta
+        include: ${{ fromJSON(needs.plan.outputs.build) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -294,6 +292,16 @@ jobs:
           toolchain: ${{ steps.pgo.outputs.toolchain }}
           targets: ${{ matrix.platform.target }}
 
+      # The key of this build's inputs, as the plan computes it, under which a later run may take its library.
+      - name: The input key
+        id: key
+        continue-on-error: true
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: |
+          py=$(command -v python3 || command -v python)
+          printf 'key=%s\n' "$("$py" .github/scripts/library_key.py key "${{ matrix.crate.dir }}" ${{ matrix.crate.name }} ${{ matrix.platform.target }})" >> "$GITHUB_OUTPUT"
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: '${{ matrix.crate.dir }} -> target'
@@ -305,6 +313,7 @@ jobs:
         run: cargo test --release --target ${{ matrix.platform.target }}
 
       - name: Test under Rosetta
+        id: rosetta
         if: matrix.platform.test == 'rosetta'
         continue-on-error: true
         run: cargo test --release --target ${{ matrix.platform.target }}
@@ -377,10 +386,50 @@ jobs:
             ${{ matrix.crate.dir }}/target/${{ matrix.platform.target }}/dist/${{ env.LIBRARY }}.core.json
           if-no-files-found: error
 
+      # The same files under the input key, which a later run's plan looks up; none without a key, with an undeclared input, or after a failed Rosetta run.
+      - uses: actions/upload-artifact@v4
+        if: steps.key.outputs.key != '' && steps.key.outputs.key != 'undeclared' && steps.rosetta.outcome != 'failure'
+        with:
+          name: ${{ matrix.crate.name }}-${{ matrix.platform.rid }}-key-${{ steps.key.outputs.key }}
+          path: |
+            ${{ matrix.crate.dir }}/target/${{ matrix.platform.target }}/dist/${{ env.LIBRARY }}
+            ${{ matrix.crate.dir }}/target/${{ matrix.platform.target }}/dist/${{ env.LIBRARY }}.core.json
+          if-no-files-found: error
+
+  # A library an earlier run built from the same inputs, which the plan has opened and checked, uploaded under this run's name.
+  reuse:
+    name: ${{ matrix.name }} ${{ matrix.rid }} (reused)
+    needs: plan
+    if: needs.plan.outputs.reuse != '[]'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.reuse) }}
+    steps:
+      - name: The earlier build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "/repos/${{ github.repository }}/actions/artifacts/${{ matrix.artifact }}/zip" > library.zip
+          mkdir library && unzip -q library.zip -d library
+          test -s "library/${{ matrix.library }}"
+          ls -la library
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-${{ matrix.rid }}
+          path: library/
+          if-no-files-found: error
+
   # WiseMan's tests of the Rust cores against the C# cores, run on each platform against the libraries the job above ships; osx-x64 is left out, its runner being arm64.
   wiseman:
     name: WiseMan ${{ matrix.rid }}
-    needs: [library, shared]
+    needs: [plan, library, reuse, shared]
+    # A library job or a reuse job with nothing to do is skipped, and every library is still there (EmuSen_RustPlatform.md §28).
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.shared.result == 'success' && needs.library.result != 'failure' && needs.reuse.result != 'failure' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

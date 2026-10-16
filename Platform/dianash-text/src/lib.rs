@@ -59,6 +59,11 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
         "  uniq [-c]                     collapse adjacent duplicate lines (-c prefixes each with its\n",
         "                                repeat count) - sort first for global dedup, not just adjacent"
     )),
+    ("awk", true, concat!(
+        "  awk [-F sep] 'prog' [path]   run a small AWK subset over stdin or <path>, line by line\n",
+        "                                patterns: /regex/, NR==N (also !=,<,<=,>,>=), BEGIN, END\n",
+        "                                actions: {print $0|$N|$NF|NR|NF|\"lit\"[, ...][; print ...]}"
+    )),
 
 ];
 

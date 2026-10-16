@@ -235,6 +235,16 @@ namespace EmuSen.WiseMan.DianaSh
             return info.LinkTarget is not null && info.ResolveLinkTarget(returnFinalTarget: true) is { } target ? Resolved(target.FullName) : current;
         }
 
+        // Whether a line names an entry of the home only in another case, as `cd /LOGS` names `Logs`: the file system's question where it ignores case, which Linux's recording does not answer.
+        public bool AsksTheSystemsCase(string input)
+        {
+            if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS()) return false;
+            string[] entries = Directory.Exists(Home) ? Directory.EnumerateFileSystemEntries(Home).Select(Path.GetFileName).OfType<string>().ToArray() : [];
+            return input.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Select(w => w.Trim('\'', '"').TrimStart('/').Split('/')[0])
+                .Any(first => first.Length > 0 && !entries.Contains(first, StringComparer.Ordinal) && entries.Contains(first, StringComparer.OrdinalIgnoreCase));
+        }
+
         // The recordings are Linux's: on Windows a path is printed with the system's separator and a line may end as the system ends it.
         public static bool SameOnThisSystem(string recorded, string now) =>
             recorded == now || (OperatingSystem.IsWindows() && recorded.Replace('\\', '/').Replace("\r\n", "\n") == now.Replace('\\', '/').Replace("\r\n", "\n"));
@@ -270,8 +280,12 @@ namespace EmuSen.WiseMan.DianaSh
             if (Path.GetFileName(rom).StartsWith("broken", StringComparison.Ordinal)) throw new InvalidOperationException("unsupported mapper");
         }
 
+        // Set by the last Run that stopped at a line asking the file system's case.
+        public bool SystemsCase { get; private set; }
+
         public List<GoldenStep> Run(GoldenCase c)
         {
+            SystemsCase = false;
             FreshHome();
             foreach (var (relative, bytes) in c.Files)
             {
@@ -295,6 +309,8 @@ namespace EmuSen.WiseMan.DianaSh
             var steps = new List<GoldenStep>();
             foreach (GoldenStep s in c.Steps)
             {
+                // A case that reaches such a line is the file system's from there on, and is left uncompared, as the crate-alone runner leaves it.
+                if (AsksTheSystemsCase(s.Input)) { SystemsCase = true; break; }
                 DianaShInterpreter shell = alone ?? sessions!.Current!.Interpreter;
                 var (needsMore, output, action) = shell.Submit(s.Input);
                 steps.Add(new GoldenStep

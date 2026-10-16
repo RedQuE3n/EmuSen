@@ -116,7 +116,7 @@ namespace EmuSen.WiseMan.DianaSh
         {
             using var runner = new GoldenRunner();
             string library = Outside(runner, "library");
-            string settings = $"{{\"RomDirectory\": \"{library}\"}}";
+            string settings = $"{{\"RomDirectory\": {System.Text.Json.JsonSerializer.Serialize(library)}}}";
             var steps = Run(runner, "none", [("etc/EmuSen/appsettings.json", settings), ("../library/game.sfc", "x")],
                 $"core SNES '{library}/game.sfc'", $"core SNES '{library}/../outside.sfc'");
             Assert.Equal(0, steps[0].Status);

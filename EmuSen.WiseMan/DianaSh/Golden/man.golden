@@ -3112,6 +3112,51 @@ status 0
 action none
 end
 
+case the page for dianash
+target none
+covers 1
+$ man dianash
+out 1609
+NAME
+    dianash - the standalone DianaSh shell, with no emulator in it
+
+SYNOPSIS
+    dianash
+    dianash -c <line>...
+
+DESCRIPTION
+    The program a terminal runs to get DianaSh on its own: the shell's
+    language and builtins, its sessions and accounts, and the sandbox
+    rooted at the tree's home, in one file, with a line editor. It knows
+    no core and provides no service, so a debugger command answers there
+    as it does with no ROM loaded; a frontend's console is the place to
+    reach a running game.
+
+    With no argument it prints its banner and reads lines at a prompt,
+    'DianaSh #: ' (with the session's name once 'tmux new' has made a
+    second), or '> ' while a block, a quote or a $(...) is still open.
+    The editor is the C# shell's: Up and Down walk the history, Left,
+    Right, Home and End move along the line, Backspace and Delete remove a
+    character, and Escape clears the line. Ctrl-C discards the line being
+    typed, and stops a line that is running at its next check; Ctrl-D on
+    an empty line ends the shell, as 'shutdown' does. When standard input
+    is not a terminal, lines are read as they come and nothing is echoed.
+
+    With -c, each argument is run as one line typed at the prompt, in
+    order, and the program exits with the last line's $?.
+
+    The shell starts in its home, the '/' every path is resolved against
+    (see 'man hier'), creating it if it is not there. Its manual pages are
+    those beside the program, in dianash/man.
+
+EXAMPLES
+    dianash
+    dianash -c 'echo hello | cat'
+    dianash -c 'for i in 1 2 3; do echo $i; done' 'echo $?'
+status 0
+action none
+end
+
 case the page for theme
 target none
 covers 1

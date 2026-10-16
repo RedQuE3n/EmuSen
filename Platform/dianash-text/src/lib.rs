@@ -74,6 +74,7 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
     ("cat", true, "  cat <path>...                 print one or more files' contents"),
     ("head", true, "  head [-n N] [path]            first N lines (default 10) of stdin or a file"),
     ("tail", true, "  tail [-n N] [path]            last N lines (default 10) of stdin or a file"),
+    ("touch", false, "  touch <path>                  create an empty file, or update an existing one's modified time"),
 
 ];
 

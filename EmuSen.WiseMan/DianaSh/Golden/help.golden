@@ -8,7 +8,7 @@ case the listing, with a target and without
 target none
 covers 1
 $ help
-out 23473
+out 23782
 Available commands:
   help                          this text - every command, one line each, with a brief explanation
   man [command]                 with no argument, same as 'help'; with a command name, its full manual page
@@ -280,7 +280,7 @@ Available commands:
   history clear                 forget all recorded history
   !N / !!                       re-run history entry N / the last command (typed at the prompt)
   resume | continue | c         resume emulation after an interactive halt (F4/breakpoint/single-step)
-  shutdown | quit               terminate the process
+  shutdown | quit | exit        terminate the process
   step | s [<count>]            single-step one CPU instruction (or <count> of them)
   step over                     run the call at the current instruction to completion, then halt
   step out                      run until the current routine returns to its caller
@@ -294,6 +294,9 @@ Available commands:
                                 kept for script compatibility with real bash habits)
   unset NAME                    remove a shell variable
   source <path> (alias: .)      run a script file's lines in this same shell (variables/history scope)
+  which <name>...               say what answers each name: an alias, a shell builtin or a command
+  command [-v] <name> [args]    run <name> as itself, not as an alias; -v prints the names that would run
+  trust <path>                  approve a module file you added, by its hash (typed at the prompt only)
   if/then/elif/else/fi, for/in/do/done, while|until/do/done, break, continue
                                 control flow - see the reference doc for the full grammar
 
@@ -304,7 +307,7 @@ EmuSen_Debugging_Tools_Reference_v5.md for the full writeup and what's NOT suppo
 status 0
 action none
 $ help extra words are ignored
-out 23473
+out 23782
 Available commands:
   help                          this text - every command, one line each, with a brief explanation
   man [command]                 with no argument, same as 'help'; with a command name, its full manual page
@@ -576,7 +579,7 @@ Available commands:
   history clear                 forget all recorded history
   !N / !!                       re-run history entry N / the last command (typed at the prompt)
   resume | continue | c         resume emulation after an interactive halt (F4/breakpoint/single-step)
-  shutdown | quit               terminate the process
+  shutdown | quit | exit        terminate the process
   step | s [<count>]            single-step one CPU instruction (or <count> of them)
   step over                     run the call at the current instruction to completion, then halt
   step out                      run until the current routine returns to its caller
@@ -590,6 +593,9 @@ Available commands:
                                 kept for script compatibility with real bash habits)
   unset NAME                    remove a shell variable
   source <path> (alias: .)      run a script file's lines in this same shell (variables/history scope)
+  which <name>...               say what answers each name: an alias, a shell builtin or a command
+  command [-v] <name> [args]    run <name> as itself, not as an alias; -v prints the names that would run
+  trust <path>                  approve a module file you added, by its hash (typed at the prompt only)
   if/then/elif/else/fi, for/in/do/done, while|until/do/done, break, continue
                                 control flow - see the reference doc for the full grammar
 
@@ -613,7 +619,7 @@ status 0
 action none
 $ help | wc -l
 out 3
-292
+295
 status 0
 action none
 end

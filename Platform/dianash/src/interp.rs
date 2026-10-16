@@ -48,6 +48,9 @@ impl Outcome {
 
 const MAX_SOURCE_DEPTH: u32 = 20;
 
+/// The names the language answers before any table, which nothing takes the place of.
+const LANGUAGE: [&str; 9] = ["help", "man", "export", "unset", "source", ".", "which", "command", "trust"];
+
 pub(crate) struct Interp {
     /// The session this interpreter is, or for a subshell the one it was made in: whose account and history its commands see.
     pub session: u32,
@@ -382,6 +385,11 @@ impl Interp {
 
     /// The language's own five run here, then the table: a builtin of the shell's, or a host's command.
     fn dispatch(&mut self, world: &mut World, name: &str, args: &[String], stdin: Option<String>) -> Exec<Outcome> {
+        self.dispatch_as(world, name, args, stdin, false)
+    }
+
+    /// The language's own run here, then the table, through the aliases unless the name is to run as itself.
+    fn dispatch_as(&mut self, world: &mut World, name: &str, args: &[String], stdin: Option<String>, as_itself: bool) -> Exec<Outcome> {
         let lower = dotnet::to_lower(name);
         let table = self.table(world);
         match lower.as_str() {
@@ -410,9 +418,12 @@ impl Interp {
                 return Ok(Outcome::ok(""));
             }
             "source" | "." => return Ok(self.run_script(world, args)),
+            "which" => return Ok(self.which(&table, args)),
+            "command" => return self.run_as_itself(world, &table, args, stdin),
+            "trust" => return Ok(self.trust(world, args)),
             _ => {}
         }
-        let canonical = table.canonical(&lower);
+        let canonical = if as_itself { lower.clone() } else { table.canonical(&lower) };
         let Some(entry) = table.find(&canonical) else {
             let names: Vec<&str> = table.entries().iter().map(|e| e.name.as_str()).collect();
             return Ok(Outcome::fail(format!("Unknown command '{canonical}'.{} Type 'help' for a list.", suggestion::hint(&canonical, &names, 2))));
@@ -424,6 +435,87 @@ impl Interp {
         };
         // A malformed command must read as failure to `&&` and `if`, never take the console down.
         Ok(outcome.unwrap_or_else(|words| Outcome::fail(format!("Error: {words}"))))
+    }
+
+    /// Whether the shell answers a name itself: the language's names, and its builtins unless a host took one's place.
+    fn answered_by_shell(table: &Table, lower: &str) -> bool {
+        LANGUAGE.contains(&lower) || table.find(lower).is_some_and(|e| matches!(e.kind, Kind::Builtin(_)))
+    }
+
+    /// `which`: what answers each name, as `man which` says.
+    fn which(&self, table: &Table, args: &[String]) -> Outcome {
+        if args.len() < 2 {
+            return Outcome::fail("which: usage: which <name>...");
+        }
+        let mut lines = Vec::new();
+        let mut status = 0;
+        for name in &args[1..] {
+            let lower = dotnet::to_lower(name);
+            if Self::answered_by_shell(table, &lower) {
+                lines.push(format!("{name}: shell builtin"));
+            } else if let Some(target) = table.alias_of(&lower) {
+                lines.push(format!("{name}: alias for {target}"));
+            } else if table.find(&lower).is_some() {
+                lines.push(format!("{name}: command"));
+            } else {
+                lines.push(format!("which: no {name}"));
+                status = 1;
+            }
+        }
+        Outcome { output: lines.join("\n"), errors: String::new(), status, request: None }
+    }
+
+    /// `command`: a name run as itself, not mapped through the aliases; `-v` prints the names that would run.
+    fn run_as_itself(&mut self, world: &mut World, table: &Table, args: &[String], stdin: Option<String>) -> Exec<Outcome> {
+        const USAGE: &str = "command: usage: command [-v] <name> [args...]";
+        if args.len() < 2 {
+            return Ok(Outcome::fail(USAGE));
+        }
+        if args[1] != "-v" {
+            return self.dispatch_as(world, &args[1], &args[1..], stdin, true);
+        }
+        if args.len() < 3 {
+            return Ok(Outcome::fail(USAGE));
+        }
+        let found: Vec<&String> = args[2..]
+            .iter()
+            .filter(|n| {
+                let lower = dotnet::to_lower(n);
+                Self::answered_by_shell(table, &lower) || table.alias_of(&lower).is_some() || table.find(&lower).is_some()
+            })
+            .collect();
+        let status = if found.len() == args.len() - 2 { 0 } else { 1 };
+        Ok(Outcome { output: found.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n"), errors: String::new(), status, request: None })
+    }
+
+    /// `trust`: a module file approved by its hash, typed at the prompt and never by a script (§5.4, Q13).
+    fn trust(&self, world: &World, args: &[String]) -> Outcome {
+        if args.len() < 2 {
+            return Outcome::fail("trust: usage: trust <path>");
+        }
+        if self.source_depth > 0 || !self.is_root {
+            return Outcome::fail("trust: a module is approved at the prompt, not by a script");
+        }
+        let (inside, resolved) = world.sandbox.resolve(&args[1]);
+        if !inside {
+            return Outcome::fail(format!("trust: {}", world.sandbox.outside(&args[1])));
+        }
+        if !emusen_galaxia::tree::file_exists(&resolved) {
+            return Outcome::fail(format!("trust: no such file: {}", args[1]));
+        }
+        let bytes = match std::fs::read(&resolved) {
+            Ok(bytes) => bytes,
+            Err(e) => return Outcome::fail(format!("Error: {}", dotnet::io_message(&e, &resolved))),
+        };
+        use sha2::{Digest, Sha256};
+        let hash: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
+        let store = emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &emusen_galaxia::tree::tree().config(), "dianash");
+        let _ = std::fs::create_dir_all(&store);
+        let file = emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &store, "trusted");
+        if let Err(words) = dotnet::write_all_text(&file, &format!("{hash}  {resolved}\n"), true) {
+            return Outcome::fail(format!("Error: {words}"));
+        }
+        Outcome::ok(format!("trust: approved {} (sha256 {hash})", args[1]))
     }
 
     /// `RunScript`: a file's lines fed back through this interpreter's own submit.

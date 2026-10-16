@@ -753,7 +753,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             }
 
             // These five need interpreter-internal state that IDianaShCommand does not expose - see §3.17.
-            private DianaShResult Dispatch(string name, string[] args, string? stdin)
+            private DianaShResult Dispatch(string name, string[] args, string? stdin, bool asItself = false)
             {
                 string cmd = name.ToLowerInvariant();
 
@@ -782,8 +782,13 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 // Runs in THIS interpreter's scope, which is why it cannot be an ordinary command - see §3.17.
                 if (cmd == "source" || cmd == ".") return RunScript(args);
 
+                // Which kind answers a name, a command run as itself, and a player's module approved - see `man which`, `man command`, `man trust`.
+                if (cmd == "which") return Which(args);
+                if (cmd == "command") return RunAsItself(args, stdin);
+                if (cmd == "trust") return Trust(args);
+
                 // Mapped then dropped through to the ordinary lookup; deliberately not `continue` - see §3.17a.
-                cmd = CommandTable.Canonical(cmd);
+                if (!asItself) cmd = CommandTable.Canonical(cmd);
 
                 if (!_table.TryFind(cmd, out IDianaShCommand? command))
                 {
@@ -800,6 +805,53 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                     // A malformed command must read as failure to `&&`/`if`, never take the console down.
                     return DianaShResult.Fail($"Error: {ex.Message}");
                 }
+            }
+
+            // The names the shell answers itself: the language's, and the builtins of EmuSen_DianaSh.md §4.2 - see `man which`.
+            private static readonly HashSet<string> ShellBuiltins = new(StringComparer.Ordinal)
+            {
+                "help", "man", "export", "unset", "source", ".", "which", "command", "trust",
+                "echo", "cd", "pwd", "tmux", "ps", "kill", "whoami", "who", "su", "useradd", "userdel", "passwd",
+                "true", "false", "test", "[", "history", "shutdown",
+            };
+
+            private DianaShResult Which(string[] args)
+            {
+                if (args.Length < 2) return DianaShResult.Fail("which: usage: which <name>...");
+                var lines = new List<string>();
+                int status = 0;
+                foreach (string name in args.Skip(1))
+                {
+                    string lower = name.ToLowerInvariant();
+                    if (ShellBuiltins.Contains(lower)) lines.Add($"{name}: shell builtin");
+                    else if (CommandTable.AliasOf(lower) is { } target) lines.Add($"{name}: alias for {target}");
+                    else if (_table.TryFind(lower, out _)) lines.Add($"{name}: command");
+                    else { lines.Add($"which: no {name}"); status = 1; }
+                }
+                return new DianaShResult(string.Join('\n', lines), status);
+            }
+
+            private DianaShResult RunAsItself(string[] args, string? stdin)
+            {
+                if (args.Length < 2) return DianaShResult.Fail("command: usage: command [-v] <name> [args...]");
+                if (args[1] != "-v") return Dispatch(args[1], args[1..], stdin, asItself: true);
+                if (args.Length < 3) return DianaShResult.Fail("command: usage: command [-v] <name> [args...]");
+                var found = args.Skip(2).Where(n => ShellBuiltins.Contains(n.ToLowerInvariant()) || CommandTable.AliasOf(n.ToLowerInvariant()) is not null || _table.TryFind(n.ToLowerInvariant(), out _)).ToList();
+                return new DianaShResult(string.Join('\n', found), found.Count == args.Length - 2 ? 0 : 1);
+            }
+
+            private DianaShResult Trust(string[] args)
+            {
+                if (args.Length < 2) return DianaShResult.Fail("trust: usage: trust <path>");
+                if (_sourceDepth > 0 || !_isRoot) return DianaShResult.Fail("trust: a module is approved at the prompt, not by a script");
+                if (!DianaShSandbox.TryResolve(args[1], out string resolved))
+                    return DianaShResult.Fail($"trust: '{args[1]}' is outside the project sandbox ({DianaShSandbox.RootDirectory})");
+                if (!File.Exists(resolved)) return DianaShResult.Fail($"trust: no such file: {args[1]}");
+                string hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(resolved))).ToLowerInvariant();
+                string store = Path.Combine(EmuSen.Galaxia.ConfigStore.Directory, "dianash");
+                Directory.CreateDirectory(store);
+                File.AppendAllText(Path.Combine(store, "trusted"), $"{hash}  {resolved}\n");
+                return $"trust: approved {args[1]} (sha256 {hash})";
             }
 
             // Feeds lines back through this interpreter's own SubmitCore - see §3.17.
@@ -892,6 +944,9 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 lines.Add("                                kept for script compatibility with real bash habits)");
                 lines.Add("  unset NAME                    remove a shell variable");
                 lines.Add("  source <path> (alias: .)      run a script file's lines in this same shell (variables/history scope)");
+                lines.Add("  which <name>...               say what answers each name: an alias, a shell builtin or a command");
+                lines.Add("  command [-v] <name> [args]    run <name> as itself, not as an alias; -v prints the names that would run");
+                lines.Add("  trust <path>                  approve a module file you added, by its hash (typed at the prompt only)");
                 lines.Add("  if/then/elif/else/fi, for/in/do/done, while|until/do/done, break, continue");
                 lines.Add("                                control flow - see the reference doc for the full grammar");
                 lines.Add("");

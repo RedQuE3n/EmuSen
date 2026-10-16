@@ -8,7 +8,7 @@ case with no argument it is help
 target none
 covers 1
 $ man
-out 23473
+out 23782
 Available commands:
   help                          this text - every command, one line each, with a brief explanation
   man [command]                 with no argument, same as 'help'; with a command name, its full manual page
@@ -280,7 +280,7 @@ Available commands:
   history clear                 forget all recorded history
   !N / !!                       re-run history entry N / the last command (typed at the prompt)
   resume | continue | c         resume emulation after an interactive halt (F4/breakpoint/single-step)
-  shutdown | quit               terminate the process
+  shutdown | quit | exit        terminate the process
   step | s [<count>]            single-step one CPU instruction (or <count> of them)
   step over                     run the call at the current instruction to completion, then halt
   step out                      run until the current routine returns to its caller
@@ -294,6 +294,9 @@ Available commands:
                                 kept for script compatibility with real bash habits)
   unset NAME                    remove a shell variable
   source <path> (alias: .)      run a script file's lines in this same shell (variables/history scope)
+  which <name>...               say what answers each name: an alias, a shell builtin or a command
+  command [-v] <name> [args]    run <name> as itself, not as an alias; -v prints the names that would run
+  trust <path>                  approve a module file you added, by its hash (typed at the prompt only)
   if/then/elif/else/fi, for/in/do/done, while|until/do/done, break, continue
                                 control flow - see the reference doc for the full grammar
 
@@ -3158,6 +3161,97 @@ status 0
 action none
 end
 
+case the page for which
+target none
+covers 1
+$ man which
+out 812
+NAME
+    which - say what answers a name
+
+SYNOPSIS
+    which <name>...
+
+DESCRIPTION
+    For each name, one line saying what runs when it is typed: 'shell
+    builtin' for a name the shell answers itself (the language's, such as
+    'source' and 'man', and the shell's own commands, such as 'cd' and
+    'tmux'), 'alias for <command>' for one of the shell's aliases, and
+    'command' for any other command it has. A name nothing answers prints
+    'which: no <name>', and makes the exit status 1. Case is ignored, as
+    it is when a command is run.
+
+    A host's command that takes the place of a shell builtin of the same
+    name is a builtin to the C# shell and a command to the Rust one; that
+    is the one place the two answer differently.
+
+EXAMPLES
+    which cd grep quit
+    which nosuch || echo missing
+status 0
+action none
+end
+
+case the page for command
+target none
+covers 1
+$ man command
+out 657
+NAME
+    command - run a command as itself, or say whether it exists
+
+SYNOPSIS
+    command <name> [args...]
+    command -v <name>...
+
+DESCRIPTION
+    'command <name>' runs <name> with its arguments without mapping it
+    through the shell's aliases: 'command quit' is refused as an unknown
+    command where 'quit' alone shuts the shell down. The language's own
+    names still mean themselves.
+
+    'command -v' prints each name that would run, one to a line, and
+    nothing for one that would not; the exit status is 1 when any would
+    not, so it serves as a test in an 'if'.
+
+EXAMPLES
+    command echo hello
+    if command -v grep; then echo found; fi
+status 0
+action none
+end
+
+case the page for trust
+target none
+covers 1
+$ man trust
+out 862
+NAME
+    trust - approve a module file you added, by its hash
+
+SYNOPSIS
+    trust <path>
+
+DESCRIPTION
+    Records a file's SHA-256 hash as approved, so that a command module
+    you added to the shell can be loaded once loading one is supported:
+    a module runs inside the program with your full permissions, and is
+    approved once, by you, at the prompt. A changed file has another hash
+    and must be approved again.
+
+    The approval is given only at the prompt: 'trust' refuses inside a
+    script run with 'source' and inside $(...), so a script cannot approve
+    a file on your behalf. The path is resolved through the sandbox, as
+    every path is (see 'man hier'). Approvals are kept, one hash and path
+    to a line, in the 'trusted' file of the 'dianash' folder beside the
+    program's configuration.
+
+EXAMPLES
+    trust /lib/dianash/mymodule.so
+status 0
+action none
+end
+
 case the page for theme
 target none
 covers 1
@@ -4079,22 +4173,24 @@ case the page for shutdown
 target none
 covers 1
 $ man shutdown
-out 310
+out 339
 NAME
     shutdown - terminate the process
 
 SYNOPSIS
     shutdown
     quit
+    exit
 
 DESCRIPTION
-    Terminates the whole process - 'quit' is recognized as a plain alias,
-    not a separate command. Works the same whether typed at the initial
-    no-ROM shell or the in-game debug prompt.
+    Terminates the whole process - 'quit' and 'exit' are recognized as
+    plain aliases, not separate commands. Works the same whether typed at
+    the initial no-ROM shell or the in-game debug prompt.
 
 EXAMPLES
     shutdown
     quit
+    exit
 status 0
 action none
 end

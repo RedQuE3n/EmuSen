@@ -114,7 +114,7 @@ impl Builtin {
                 "  history clear                 forget all recorded history\n",
                 "  !N / !!                       re-run history entry N / the last command (typed at the prompt)"
             ),
-            Builtin::Shutdown => "  shutdown | quit               terminate the process",
+            Builtin::Shutdown => "  shutdown | quit | exit        terminate the process",
         }
     }
 
@@ -137,6 +137,9 @@ pub fn help(table: &Table) -> String {
             "                                kept for script compatibility with real bash habits)",
             "  unset NAME                    remove a shell variable",
             "  source <path> (alias: .)      run a script file's lines in this same shell (variables/history scope)",
+            "  which <name>...               say what answers each name: an alias, a shell builtin or a command",
+            "  command [-v] <name> [args]    run <name> as itself, not as an alias; -v prints the names that would run",
+            "  trust <path>                  approve a module file you added, by its hash (typed at the prompt only)",
             "  if/then/elif/else/fi, for/in/do/done, while|until/do/done, break, continue",
             "                                control flow - see the reference doc for the full grammar",
             "",

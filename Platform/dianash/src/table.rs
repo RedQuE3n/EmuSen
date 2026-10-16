@@ -40,7 +40,7 @@ impl Table {
     /// The shell's own commands, in the order the C# shell has always listed them.
     pub fn builtins() -> Arc<Table> {
         let entries = Builtin::ALL.iter().map(|b| Entry { name: b.name().to_string(), usage: b.usage().to_string(), read_only: b.read_only(), kind: Kind::Builtin(*b) }).collect();
-        let aliases = vec![("quit".to_string(), "shutdown".to_string()), ("jobs".to_string(), "ps".to_string())];
+        let aliases = vec![("quit".to_string(), "shutdown".to_string()), ("jobs".to_string(), "ps".to_string()), ("exit".to_string(), "shutdown".to_string())];
         Arc::new(Table { entries, aliases, claims: Vec::new(), notes: Vec::new() })
     }
 
@@ -59,6 +59,11 @@ impl Table {
             Some((_, command)) => command.clone(),
             None => lower,
         }
+    }
+
+    /// The command an alias names.
+    pub fn alias_of(&self, lower: &str) -> Option<&str> {
+        self.aliases.iter().find(|(alias, _)| alias == lower).map(|(_, command)| command.as_str())
     }
 
     pub fn is_read_only(&self, name: &str) -> bool {

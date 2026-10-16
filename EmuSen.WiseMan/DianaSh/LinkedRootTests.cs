@@ -32,8 +32,8 @@ namespace EmuSen.WiseMan.DianaSh
                 string root = Path.Combine(link, "home");
                 DataStore.OverrideDirectory = root;
                 Environment.CurrentDirectory = root;
-                // The precondition the defect needs: the system names the working directory by its resolved path.
-                Assert.NotEqual(root, Environment.CurrentDirectory);
+                // The precondition the defect needs: Linux and macOS name the working directory by its resolved path; Windows keeps the link's.
+                if (!OperatingSystem.IsWindows()) Assert.NotEqual(root, Environment.CurrentDirectory);
 
                 var shell = DianaShInterpreter.CreateDefault(null);
                 Assert.Equal("inside", shell.Submit("cat a.txt").Output);

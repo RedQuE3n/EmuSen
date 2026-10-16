@@ -125,6 +125,10 @@ namespace EmuSen.DianaSh.DianaSh.Etc
         private static bool IsInsideRoot(string candidate, string root) =>
             IsUnder(candidate, root) || (Resolved(root) is { } real && IsUnder(candidate, real));
 
+        // The root as a path inside it spells it: as given, or with its links followed where the path was reached through them.
+        public static string RootOf(string path) =>
+            !IsUnder(path, RootDirectory) && Resolved(RootDirectory) is { } real && IsUnder(path, real) ? real : RootDirectory;
+
         private static bool IsUnder(string candidate, string root) =>
             candidate.Equals(root, PathCase)
                 || candidate.StartsWith(root + Path.DirectorySeparatorChar, PathCase);

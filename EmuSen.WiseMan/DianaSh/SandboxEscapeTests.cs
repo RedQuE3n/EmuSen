@@ -20,7 +20,10 @@ namespace EmuSen.WiseMan.DianaSh
             return runner.Run(c);
         }
 
-        private static string Text(GoldenStep step) => Encoding.UTF8.GetString(step.Output!);
+        // On Windows a path is printed with the system's separator; the expectations are written with Linux's.
+        private static string Text(GoldenStep step) => Slashes(Encoding.UTF8.GetString(step.Output!));
+
+        private static string Slashes(string text) => OperatingSystem.IsWindows() ? text.Replace('\\', '/') : text;
 
         private static string Outside(GoldenRunner runner, string name) => Path.GetFullPath(Path.Combine(runner.Home, "..", name));
 
@@ -55,15 +58,22 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Contains("is outside the project sandbox", Text(steps[0]));
         }
 
+        // On Windows a drive's path is not a path in the shell's tree, so it is refused rather than read inside the root - see EmuSen_RustPlatform.md §27.4.
         [Theory]
-        [InlineData("dump RAM 0 4 {0}")]
-        [InlineData("cov save {0}")]
+        [InlineData("dump RAM 0 4 '{0}'")]
+        [InlineData("cov save '{0}'")]
         public void An_absolute_log_file_name_is_read_inside_the_root(string line)
         {
             using var runner = new GoldenRunner();
             string real = Outside(runner, "absolute.bin");
             var steps = Run(runner, "fake", [], string.Format(line, real));
             Assert.False(File.Exists(real), Text(steps[0]));
+            if (OperatingSystem.IsWindows())
+            {
+                Assert.Equal(1, steps[0].Status);
+                Assert.Contains("is outside the project sandbox", Text(steps[0]));
+                return;
+            }
             Assert.Equal(0, steps[0].Status);
             Assert.True(File.Exists(runner.Home + real), Text(steps[0]));
         }
@@ -84,7 +94,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void A_rom_outside_the_root_and_the_library_is_refused()
         {
             using var runner = new GoldenRunner();
-            var steps = Run(runner, "none", [("../outside.sfc", "x")], "core SNES ../outside.sfc", $"core SNES {Outside(runner, "outside.sfc")}");
+            var steps = Run(runner, "none", [("../outside.sfc", "x")], "core SNES ../outside.sfc", $"core SNES '{Outside(runner, "outside.sfc")}'");
             foreach (GoldenStep step in steps)
             {
                 Assert.Equal(1, step.Status);
@@ -97,8 +107,8 @@ namespace EmuSen.WiseMan.DianaSh
         {
             using var runner = new GoldenRunner();
             var steps = Run(runner, "none", [("Games/a.sfc", "x")], "cd Logs", "core SNES ../Games/a.sfc", "core SNES /Games/a.sfc");
-            Assert.Equal("LoadCore { CoreName = SNES, RomPath = <ROOT>/Games/a.sfc }", steps[1].Action);
-            Assert.Equal("LoadCore { CoreName = SNES, RomPath = <ROOT>/Games/a.sfc }", steps[2].Action);
+            Assert.Equal("LoadCore { CoreName = SNES, RomPath = <ROOT>/Games/a.sfc }", Slashes(steps[1].Action));
+            Assert.Equal("LoadCore { CoreName = SNES, RomPath = <ROOT>/Games/a.sfc }", Slashes(steps[2].Action));
         }
 
         [Fact]
@@ -108,9 +118,9 @@ namespace EmuSen.WiseMan.DianaSh
             string library = Outside(runner, "library");
             string settings = $"{{\"RomDirectory\": \"{library}\"}}";
             var steps = Run(runner, "none", [("etc/EmuSen/appsettings.json", settings), ("../library/game.sfc", "x")],
-                $"core SNES {library}/game.sfc", $"core SNES {library}/../outside.sfc");
+                $"core SNES '{library}/game.sfc'", $"core SNES '{library}/../outside.sfc'");
             Assert.Equal(0, steps[0].Status);
-            Assert.Equal($"LoadCore {{ CoreName = SNES, RomPath = {library.Replace(Path.GetFullPath(Path.Combine(runner.Home, "..")), "<TEMP>")}/game.sfc }}", steps[0].Action);
+            Assert.Equal(Slashes($"LoadCore {{ CoreName = SNES, RomPath = {library.Replace(Path.GetFullPath(Path.Combine(runner.Home, "..")), "<TEMP>")}/game.sfc }}"), Slashes(steps[0].Action));
             Assert.Equal(1, steps[1].Status);
         }
 
@@ -123,8 +133,10 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Null(EmuSen.Shell.Program.TryResolveCoreCommand("core snes ../outside.sfc", said.Add));
             Assert.Null(EmuSen.Shell.Program.TryResolveCoreCommand($"core snes {Outside(runner, "outside.sfc")}", said.Add));
             Assert.Contains("is outside the project sandbox", said[0]);
-            Assert.Contains("ROM not found", said[1]);
-            Assert.Equal(Path.Combine(runner.Home, "Games", "a.sfc"), EmuSen.Shell.Program.TryResolveCoreCommand("core snes Games/a.sfc", said.Add));
+            // A Unix path from the root is read inside it, chroot-style; a Windows drive's path is refused (EmuSen_RustPlatform.md §27.4).
+            Assert.Contains(OperatingSystem.IsWindows() ? "is outside the project sandbox" : "ROM not found", said[1]);
+            string resolved = EmuSen.Shell.Program.TryResolveCoreCommand("core snes Games/a.sfc", said.Add)!;
+            Assert.Equal(Path.Combine(runner.Home, "Games", "a.sfc"), runner.Normalise(resolved).Replace("<ROOT>", runner.Home));
         }
 
         [Fact]
@@ -154,7 +166,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Test_answers_for_the_sandbox_and_not_for_the_machine()
         {
             using var runner = new GoldenRunner();
-            var steps = Run(runner, "none", [("../outside.txt", "x")], "test -f ../outside.txt", $"test -f {Outside(runner, "outside.txt")}", "cd Logs", "test -d /etc/EmuSen", "[ -f ../../outside.txt ]");
+            var steps = Run(runner, "none", [("../outside.txt", "x")], "test -f ../outside.txt", $"test -f '{Outside(runner, "outside.txt")}'", "cd Logs", "test -d /etc/EmuSen", "[ -f ../../outside.txt ]");
             Assert.Equal(1, steps[0].Status);
             Assert.Equal(1, steps[1].Status);
             Assert.Equal(0, steps[3].Status);

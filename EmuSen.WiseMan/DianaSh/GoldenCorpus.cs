@@ -215,13 +215,29 @@ namespace EmuSen.WiseMan.DianaSh
             try { Directory.Delete(_temp, recursive: true); } catch (IOException) { }
         }
 
-        // The machine's own paths, written as the patterns the file's header names.
+        // The machine's own paths, written as the patterns the file's header names, each also as the system resolves its links (macOS's /var is /private/var).
         public string Normalise(string text)
         {
-            foreach (var (real, token) in new[] { (Home, "<ROOT>"), (_temp, "<TEMP>"), (DianaShSandbox.InstallDirectory, "<INSTALL>") }.OrderByDescending(p => p.Item1.Length))
+            var paths = new[] { (Home, "<ROOT>"), (_temp, "<TEMP>"), (DianaShSandbox.InstallDirectory, "<INSTALL>") };
+            foreach (var (real, token) in paths.Concat(paths.Select(p => (Resolved(p.Item1), p.Item2))).Where(p => p.Item1.Length > 0).OrderByDescending(p => p.Item1.Length))
                 text = text.Replace(real, token);
             return text;
         }
+
+        // A path with each component's link followed, as the system names a directory entered through one.
+        private static string Resolved(string path)
+        {
+            string full = Path.GetFullPath(path);
+            string? parent = Path.GetDirectoryName(full);
+            if (parent is null) return full;
+            string current = Path.Combine(Resolved(parent), Path.GetFileName(full));
+            var info = new DirectoryInfo(current);
+            return info.LinkTarget is not null && info.ResolveLinkTarget(returnFinalTarget: true) is { } target ? Resolved(target.FullName) : current;
+        }
+
+        // The recordings are Linux's: on Windows a path is printed with the system's separator and a line may end as the system ends it.
+        public static bool SameOnThisSystem(string recorded, string now) =>
+            recorded == now || (OperatingSystem.IsWindows() && recorded.Replace('\\', '/').Replace("\r\n", "\n") == now.Replace('\\', '/').Replace("\r\n", "\n"));
 
         // A home as a fresh shell first sees it: the skeleton's folders and nothing else.
         private void FreshHome()
@@ -317,7 +333,7 @@ namespace EmuSen.WiseMan.DianaSh
                     string text = Encoding.UTF8.GetString(got.Output!);
                     if (!Regex.IsMatch(text, pattern, RegexOptions.Singleline)) return $"{where}: the output does not match its pattern:\n{text}";
                 }
-                else
+                else if (!SameOnThisSystem(Encoding.UTF8.GetString(want.Output ?? Array.Empty<byte>()), Encoding.UTF8.GetString(got.Output!)))
                 {
                     byte[] w = want.Output ?? Array.Empty<byte>(), g = got.Output!;
                     int n = 0;
@@ -328,7 +344,7 @@ namespace EmuSen.WiseMan.DianaSh
                 }
                 if (want.Status != got.Status) return $"{where}: status recorded {want.Status}, now {got.Status}";
                 if (want.NeedsMore != got.NeedsMore) return $"{where}: continuation recorded {want.NeedsMore}, now {got.NeedsMore}";
-                if (want.Action != got.Action) return $"{where}: action recorded '{want.Action}', now '{got.Action}'";
+                if (!SameOnThisSystem(want.Action, got.Action)) return $"{where}: action recorded '{want.Action}', now '{got.Action}'";
             }
             return null;
         }

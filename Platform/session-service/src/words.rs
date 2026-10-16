@@ -58,7 +58,9 @@ pub fn describe(session: &Session, address: i32) -> String {
 /// `TryResolveFrom(Logs/<CoreName>, file)`: a bare name from the core's log folder, a rooted one as the shell takes
 /// it, through the call's `resolve`; the refusal in `<command>: '<file>' is outside the project sandbox (<root>)`.
 pub fn in_logs(resolve: impl Fn(&str) -> Result<String, String>, core: &str, file: &str, command: &str) -> Result<String, String> {
-    let shell_path = if file.starts_with('/') || file.starts_with('\\') { file.to_string() } else { format!("/Logs/{core}/{file}") };
+    // A drive's path on Windows is taken as it is, as Path.GetFullPath(file, base) takes it, and so refused above the root.
+    let drive = cfg!(windows) && file.len() >= 2 && file.as_bytes()[1] == b':' && file.as_bytes()[0].is_ascii_alphabetic();
+    let shell_path = if drive || file.starts_with('/') || file.starts_with('\\') { file.to_string() } else { format!("/Logs/{core}/{file}") };
     resolve(&shell_path).map_err(|_| format!("{command}: '{file}' is outside the project sandbox ({})", resolve("/").unwrap_or_default()))
 }
 

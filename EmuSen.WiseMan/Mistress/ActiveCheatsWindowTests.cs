@@ -443,7 +443,7 @@ namespace EmuSen.WiseMan.Mistress
 
             var tabs = window.GetControl<TabControl>("Tabs");
             var headers = tabs.Items.OfType<TabItem>().Select(t => (string)t.Header!).ToArray();
-            Assert.Equal(new[] { "General", "NES", "GB", "SNES", "N64", "Genesis", "PlayStation" }, headers);
+            Assert.Equal(new[] { "General", "NES", "GB", "SNES", "N64", "Genesis", "Sega CD", "PlayStation" }, headers);
 
             foreach (TabItem item in tabs.Items.OfType<TabItem>().Skip(1))
             {

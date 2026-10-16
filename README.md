@@ -25,7 +25,7 @@ Windows build lacked the platform library. 0.9.1 replaces it with both fixed. Th
 
 | Console | Engines | Where it stands |
 |---|---|---|
-| Nintendo 64 | **MarsRT** (Rust), the default; **Mars** (C#), the reference | Super Mario 64, Ocarina of Time, GoldenEye 007, Donkey Kong 64 and Perfect Dark run, along with many others that haven't had full testing. Up to 4× internal resolution, antialiasing, an optional Vulkan renderer for the display processor, and a Cranelift recompiler. Donkey Kong 64 runs at full speed at 3× on a Legion Go S |
+| Nintendo 64 | **MarsRT** (Rust); the C# core it replaced was retired on 2026-10-16 | Super Mario 64, Ocarina of Time, GoldenEye 007, Donkey Kong 64 and Perfect Dark run, along with many others that haven't had full testing. Up to 4× internal resolution, antialiasing, an optional Vulkan renderer for the display processor, and a Cranelift recompiler. Donkey Kong 64 runs at full speed at 3× on a Legion Go S |
 | SNES | **VenusRT** (Rust), the default; **Venus** (C#), the fallback | VenusRT is a new SNES core written from scratch, the default since 2026-10-05. It runs SA-1, SuperFX, NEC DSP and OBC1 cartridges; Cx4, S-DD1, SPC7110 and the other special chips are not supported. Several games play well; none has a verified playthrough |
 | Game Boy / Color | **Mercury** (C#), the default; **MercuryRT** (Rust), a choice | Everything but the boot ROM, the link cable and the Super Game Boy. 126 of the 173 blargg and mooneye hardware test ROMs pass under the Auto model, on both engines |
 | NES | **Moon** (C#), the default; **MoonRT** (Rust), a choice | CPU, PPU, full APU and sixteen mapper boards. 127 of AccuracyCoin's 144 tests pass. Plays Super Mario Bros. 3 and others, with far less play-testing than the SNES |

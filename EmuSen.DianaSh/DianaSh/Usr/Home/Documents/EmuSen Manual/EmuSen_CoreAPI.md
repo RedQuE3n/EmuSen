@@ -3563,8 +3563,8 @@ with the points built from the same tree, on copies of the images in the probe's
   (576 of 576 on the Genesis sample twice, 81 of 81 on the discs at each length, 32, 32 and 16 on the others); C7's
   note now lists its points. The samples are those the kit's pages record: Nephrite's and Diamond's lists, and the
   images of §24.3 for the three cores before them.
-- **MarsRT is not run.** On WiseMan its library defines no `emusen_core_` export (`RustCores.props` gives it no
-  `CoreAbi`), so C1 cannot load it; it waits for its move onto the core ABI.
+- **MarsRT was not run on 2026-10-15**: its library then defined no `emusen_core_` export, so C1 could not load it.
+  It moved onto the core ABI on 2026-10-16 (`Mars_Native.md` §7) and was run then (below).
 - **The cost.** On the Genesis sample the processor time rose by 5 per cent in both pairs, against the 3.5 per cent
   of frames §28.14 predicts for an image; the rest is the creates, loads and saves. What a point adds besides frames
   was timed on one image of each core after 600 frames, the median of five [M, a probe in the cache]: Diamond's create 216 ms
@@ -3587,10 +3587,18 @@ and a fifth, MediEvil, which that record's scan did not include, fails from fram
 disc passes at 600 and at 1,800 frames (the table above). Three of the five fail only at the point near the end, 592:
 the points at every eighth alone would have found two.
 
+**Every v1 core again, at core ABI 1.10** (WiseMan `de03d1a6`, 2026-10-16, merged; the kit with C21 and the points,
+every library built from that tree) [M]. All pass every case, C7 at every point included: Nephrite 64 of 64 (113.9 s,
+1,173 s of processor), Diamond 9 of 9 at 1,800 frames (289.2 s, 1,237 s), VenusRT 2 of 2, MoonRT 4 of 4, MercuryRT 4
+of 4, and MarsRT on copies of Super Mario 64 and Ocarina of Time, the images its own record runs the kit on, at 600
+frames: 2 of 2, C7's states 12,724,733 and 12,722,683 bytes. On MarsRT the kit as it was took 80.4 s and 566 s of
+processor and the kit with the points 85.6 s and 595 s, 5 per cent more, every case but C7 with the same verdict and
+evidence. No core has a state defect that the points find.
+
 **Tests** [M]: `emusen-core-conform`, 8 and 24 (one new in each: `c7_saves_at_every_eighth_and_near_the_end` and
-`a_state_wrong_only_late_in_the_run_fails_c7_at_its_points_where_one_middle_misses_it`); `emusen-native`, 75. WiseMan
-was not run: no C# expectation of the kit changed, the C# tests that run the runner counting passing cases and reading
-a sidecar.
+`a_state_wrong_only_late_in_the_run_fails_c7_at_its_points_where_one_middle_misses_it`); `emusen-native`, 76. WiseMan's
+three cases that run the runner, which count its passing cases (`DiamondTests`' and `MarsRtCoreAbiTests`' kit cases at
+120 frames on synthetic images, among them Diamond's woven picture, and `CoreDiscoveryTests`' sidecar): 3 of 3.
 
 ## 29. A space that is a view, 2026-10-07
 

@@ -11,6 +11,7 @@ using EmuSen.DianaSh.DianaSh.Bin.Commands.Unix;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
+using EmuSen.Crystal.Session;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.DianaSh.DianaSh.Var.Shell;
@@ -57,6 +58,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             }
             List<IDianaShCommand> given = commands.ToList();
             _shell = new NativeShell(keepsSessions: false);
+            _shell.SetSessionService(0, new SessionService(target));
             _shell.AddHost(0, HostManifest(_shell, 0, given, given), new HostCommandFactory(target, () => given, given));
             History = new CommandHistory(() => Native.History(_session));
         }
@@ -240,6 +242,15 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             // The commands that reach the shell's own state are the Rust shell's builtins, so none here is given the manager or the facade.
             IReadOnlyList<IDianaShCommand> Build() => DefaultCommands(target, extras, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, null, supportedCheatSystems, Unreachable, new CommandHistory());
             IReadOnlyList<IDianaShCommand> prototype = Build();
+            // The session's own provider over its target, which the Rust command modules call - see EmuSen_DianaSh.md §13.11.
+            shell.SetSessionService(session, new SessionService(target, new SessionServiceOptions
+            {
+                AutoDetectCodec = cheatAutoDetectCodec,
+                ExplicitCodec = cheatExplicitCodec,
+                Trace = cpuTraceSwitch,
+                CheatSystems = supportedCheatSystems,
+                CheatDatabaseFolder = () => global::EmuSen.Galaxia.Library.SettingFolders.Cheats(global::EmuSen.Galaxia.Models.AppSettings.Load()),
+            }));
             shell.AddHost(session, HostManifest(shell, session, prototype, extras), new HostCommandFactory(target, Build, prototype));
             var facade = new DianaShInterpreter(shell, session);
             shell.Remember(session, facade);
@@ -251,7 +262,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
         // The host's manifest: each C# command but those the shell answers itself or by a module, a host's own always, and the listing's order - see EmuSen_DianaSh.md §13.7.
         private static string HostManifest(NativeShell shell, uint session, IReadOnlyList<IDianaShCommand> commands, IEnumerable<IDianaShCommand> extras)
         {
-            var builtins = new HashSet<string>(shell.Commands(session).Where(c => c.Kind is "builtin" or "module").Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
+            var builtins = new HashSet<string>(shell.Commands(session).Where(c => c.Kind is "builtin" or "module" or "program").Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
             var own = new HashSet<string>(extras.Select(e => e.Name), StringComparer.OrdinalIgnoreCase);
             using var buffer = new System.IO.MemoryStream();
             using (var json = new Utf8JsonWriter(buffer))
@@ -277,9 +288,10 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 json.WriteString("s", "step");
                 json.WriteString("hexdump", "xxd");
                 json.WriteEndObject();
+                // A prefix is claimed with the command that makes its jobs, so a module's bp and watch list their own.
                 json.WriteStartArray("jobs");
-                json.WriteStringValue("bp");
-                json.WriteStringValue("watch");
+                foreach (string prefix in new[] { "bp", "watch" })
+                    if (!builtins.Contains(prefix) || own.Contains(prefix)) json.WriteStringValue(prefix);
                 json.WriteEndArray();
                 json.WriteStartArray("order");
                 foreach (IDianaShCommand c in commands) json.WriteStringValue(c.Name);
@@ -311,6 +323,14 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                     _ => action,
                 };
             }
+            // Run control's requests, made by a Rust module through the session service, stand for Step and Resume - see EmuSen_DianaSh.md §13.11.
+            string? run = Native.DrainRunRequest();
+            action ??= run switch
+            {
+                "step" => new HostAction.Step(),
+                "resume" => new HostAction.Resume(),
+                _ => null,
+            };
             return (status == DianaShNative.NeedsMore, output, action);
         }
 

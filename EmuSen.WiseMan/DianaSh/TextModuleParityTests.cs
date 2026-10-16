@@ -87,8 +87,14 @@ namespace EmuSen.WiseMan.DianaSh
                 foreach (string[] argv in Lines)
                 {
                     DianaShResult expected;
+                    // The C# read the machine's culture where the Rust reads en-US's, the recording machine's (EmuSen_DianaSh.md §13.8).
+                    var culture = System.Globalization.CultureInfo.CurrentCulture;
+                    System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
                     try { expected = Command(argv[0]).Execute(null, argv, stdin); }
                     catch (Exception ex) { expected = DianaShResult.Fail($"Error: {ex.Message}"); }
+                    finally { System.Globalization.CultureInfo.CurrentCulture = culture; }
+                    // The C#'s xxd ended its lines with the system's line end, the Rust's with \n everywhere (§13.8).
+                    if (argv[0] == "xxd" && OperatingSystem.IsWindows()) expected = new DianaShResult(expected.Output.Replace("\r\n", "\n"), expected.ExitCode);
                     string line = argv[0] + string.Concat(argv.Skip(1).Select(a => " '" + a + "'")) + " < in.txt";
                     var (_, output, _) = rust.Submit(0, line);
                     int status = rust.LastStatus(0);

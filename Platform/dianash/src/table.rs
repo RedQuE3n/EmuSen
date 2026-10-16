@@ -15,6 +15,8 @@ pub enum Kind {
     Host(usize),
     /// A command of a module linked into the program, by the module's index.
     Module(usize),
+    /// A program shipped beside the shell, run as a process, by its index (§7).
+    Program(usize),
 }
 
 #[derive(Clone, Debug)]
@@ -31,8 +33,8 @@ pub struct Table {
     entries: Vec<Entry>,
     /// Name to command, as typed in lower case.
     aliases: Vec<(String, String)>,
-    /// `ps` and `kill`'s id prefixes, each with the host registration that lists and removes them.
-    claims: Vec<(String, usize)>,
+    /// `ps` and `kill`'s id prefixes, each with the host's registration or the module that lists and removes them.
+    claims: Vec<(String, Kind)>,
     /// Lines a host adds to `help`'s notes.
     notes: Vec<String>,
     /// Each entry's place by its name folded as `OrdinalIgnoreCase` folds it, rebuilt when the entries change.
@@ -79,7 +81,7 @@ impl Table {
         self.find(&self.canonical(name)).is_some_and(|e| e.read_only)
     }
 
-    pub fn claims(&self) -> &[(String, usize)] {
+    pub fn claims(&self) -> &[(String, Kind)] {
         &self.claims
     }
 
@@ -104,8 +106,10 @@ impl Table {
         self.aliases.push((alias, dotnet::to_lower(command)));
     }
 
-    pub fn claim(&mut self, prefix: &str, registration: usize) {
-        self.claims.push((prefix.to_string(), registration));
+    /// A prefix claimed again is the later claimant's, as a host's command takes the place of a module's.
+    pub fn claim(&mut self, prefix: &str, claimant: Kind) {
+        self.claims.retain(|(p, _)| !dotnet::same(p, prefix));
+        self.claims.push((prefix.to_string(), claimant));
     }
 
     /// The listing's order as a host gives it; a name it does not give keeps its place after the ones it does.

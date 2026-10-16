@@ -1,0 +1,17 @@
+[package]
+name = "emusen-session-service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The session service, emusen.session@1, from its caller's side: Crystal's table (EmuSen.Crystal/include/emusen_session.h)
+# as Rust lays it out, a client that calls it by the header's rules, and the words and rules every EmuSen command
+# module shares over it. A module's side only: it links nothing of the shell's and nothing of Galaxia's (§16 Q11).
+# See EmuSen_DianaSh.md §9 and §13.11.
+[lib]
+name = "emusen_session_service"
+
+[dependencies]
+# JSON as System.Text.Json writes it, .NET's number and case rules, and the C# Suggestion.
+emusen-dotnet = { path = "../dotnet" }

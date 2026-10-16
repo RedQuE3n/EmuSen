@@ -22,7 +22,7 @@ impl Sandbox {
         let looks_rooted = requested.starts_with('/') || requested.starts_with('\\');
         if looks_rooted {
             let as_is = path::full_path(requested);
-            if inside(&as_is, &root) {
+            if self.within(&as_is, &root).is_some() {
                 return (true, as_is);
             }
         }
@@ -32,21 +32,39 @@ impl Sandbox {
             effective = ".";
         }
         let candidate = path::full_path_from(Style::HOST, effective, &base);
-        let ok = inside(&candidate, &root);
+        let ok = self.within(&candidate, &root).is_some();
         (ok, candidate)
+    }
+
+    /// The root with every link along it followed, where that differs from the root as spelled (§13.11).
+    fn resolved(root: &str) -> Option<String> {
+        let real = std::fs::canonicalize(root).ok()?.to_string_lossy().into_owned();
+        // Windows answers in the extended form, which no path the shell compares carries.
+        let real = match real.strip_prefix(r"\\?\") {
+            Some(rest) if rest.as_bytes().get(1) == Some(&b':') => rest.to_string(),
+            _ => real,
+        };
+        (real != root).then_some(real)
+    }
+
+    /// Whether a real path lies under the root as spelled, or as the system resolves its links: a working directory
+    /// reached through a link reads resolved (`/var` is `/private/var` on macOS), and is the same directory.
+    fn within(&self, candidate: &str, root: &str) -> Option<String> {
+        if inside(candidate, root) {
+            return Some(root.to_string());
+        }
+        Self::resolved(root).filter(|real| inside(candidate, real))
     }
 
     /// A real path back to the shell's `/` form; one outside the root is given as it is.
     pub fn display(&self, real: &str) -> String {
         let root = self.root();
+        let Some(root) = self.within(real, &root) else { return real.to_string() };
         if dotnet::same(real, &root) {
             return "/".to_string();
         }
-        if inside(real, &root) {
-            let rest: String = real.chars().skip(root.chars().count() + 1).collect();
-            return format!("/{}", rest.replace(Style::HOST.separator(), "/"));
-        }
-        real.to_string()
+        let rest: String = real.chars().skip(root.chars().count() + 1).collect();
+        format!("/{}", rest.replace(Style::HOST.separator(), "/"))
     }
 
     /// The words a path above the root is refused with.
@@ -71,6 +89,26 @@ pub fn inside(candidate: &str, root: &str) -> bool {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_working_directory_reached_through_a_link_to_the_root_is_inside_it() {
+        let temp = std::env::temp_dir().join(format!("dianash-link-root-{}", std::process::id()));
+        let real = temp.join("real");
+        std::fs::create_dir_all(real.join("home/sub")).unwrap();
+        std::os::unix::fs::symlink(&real, temp.join("link")).unwrap();
+        let spelled = temp.join("link/home").to_string_lossy().into_owned();
+        let resolved = std::fs::canonicalize(real.join("home")).unwrap().to_string_lossy().into_owned();
+        let sandbox = Sandbox { root: Some(spelled.clone()) };
+        // The system names a directory entered through the link by its resolved path, as getcwd does.
+        assert_eq!(sandbox.resolve(&format!("{resolved}/sub/a.txt")), (true, format!("{resolved}/sub/a.txt")));
+        assert_eq!(sandbox.display(&format!("{resolved}/sub")), "/sub");
+        assert_eq!(sandbox.display(&resolved), "/");
+        assert_eq!(sandbox.resolve(&format!("{spelled}/sub")), (true, format!("{spelled}/sub")));
+        // A sibling of the resolved root is still outside.
+        let sibling = std::fs::canonicalize(&real).unwrap().join("other").to_string_lossy().into_owned();
+        assert!(!sandbox.within(&sibling, &spelled).is_some());
+        let _ = std::fs::remove_dir_all(&temp);
+    }
 
     #[test]
     fn a_rooted_path_is_the_sandbox_root_unless_it_is_already_inside() {

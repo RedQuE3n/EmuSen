@@ -712,7 +712,9 @@ namespace EmuSen.Crystal.Session
             try
             {
                 var (record, value) = B(ctx).Service.CheatOp(s, op, Bytes(args, args_len), B(ctx).ReadOnly);
-                return record is null ? value : Copy(record, o, n);
+                if (record is null) return value;
+                if (o != null && n >= (nuint)record.Length) B(ctx).Service.TakePending(op);
+                return Copy(record, o, n);
             }
             catch (Exception e) { return Fail(e); }
         }

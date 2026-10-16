@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using EmuSen.Crystal.Session;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.DianaSh.DianaSh.Var.Shell;
 using static EmuSen.DianaSh.DianaSh.Bin.Native.DianaShNative;
@@ -24,6 +25,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
         private readonly List<GCHandle> _weak = new();
         private readonly Dictionary<uint, DianaShInterpreter> _facades = new();
         private readonly Dictionary<uint, DianaShSession> _sessions = new();
+        private readonly List<SessionService> _services = new();
         private readonly object _gate = new();
 
         public bool KeepsSessions { get; }
@@ -44,6 +46,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
             if (_handle != 0) Free(_handle);
             _handle = 0;
             foreach (GCHandle handle in _weak) handle.Free();
+            foreach (SessionService service in _services) service.Dispose();
         }
 
         public static int Check(int status) => status >= 0 ? status : throw new InvalidOperationException($"DianaSh: {LastError()} (status {status})");
@@ -74,6 +77,36 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
                 };
                 Check(AddCommands(_handle, session, &commands));
             }
+        }
+
+        // A session's own emusen.session@1, the provider over its target, kept as long as this shell - see EmuSen_DianaSh.md §13.11.
+        public void SetSessionService(uint session, SessionService service)
+        {
+            lock (_gate) _services.Add(service);
+            byte[] name = Encoding.UTF8.GetBytes("emusen.session");
+            fixed (byte* n = name)
+            {
+                var entry = new DianashService
+                {
+                    Size = (uint)sizeof(DianashService),
+                    Name = new DianashBytes { Data = n, Len = (nuint)name.Length },
+                    Major = SessionAbi.Major,
+                    Minor = SessionAbi.Minor,
+                    Table = service.Table,
+                };
+                Check(SessionSetServices(_handle, session, &entry, 1));
+            }
+        }
+
+        // What the last line asked the loop to run, from every session service this shell provides: step or resume.
+        public string? DrainRunRequest()
+        {
+            string? last = null;
+            List<SessionService> services;
+            lock (_gate) services = new List<SessionService>(_services);
+            foreach (SessionService service in services)
+                foreach (string op in service.DrainRunRequests()) last = op;
+            return last;
         }
 
         // The rows of dianash_commands: name, kind, usage, read_only.

@@ -85,6 +85,16 @@ pub fn write_all_text(path: &str, text: &str, append: bool) -> Result<(), String
     file.write_all(text.as_bytes()).map_err(|e| io_message(&e, path))
 }
 
+/// `File.WriteAllBytes`: the file made or truncated, with .NET's words for a refusal.
+pub fn write_all_bytes(path: &str, bytes: &[u8]) -> Result<(), String> {
+    std::fs::write(path, bytes).map_err(|e| io_message(&e, path))
+}
+
+/// `File.ReadAllBytes`, with .NET's words for a refusal.
+pub fn read_all_bytes(path: &str) -> Result<Vec<u8>, String> {
+    std::fs::read(path).map_err(|e| io_message(&e, path))
+}
+
 /// `Environment.CurrentDirectory`.
 pub fn current_directory() -> String {
     std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default()

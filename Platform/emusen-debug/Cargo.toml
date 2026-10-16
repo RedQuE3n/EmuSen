@@ -1,0 +1,17 @@
+[package]
+name = "emusen-debug"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# emusen.debug, the inspection and editing of a machine's state as a command module (EmuSen_DianaSh.md §8.1): the
+# same commands, and the same words, as the C# classes they replace, held by the golden corpus. It reaches a running
+# core only through the session service and a file only through the call's resolve (§6.3, §13.11).
+[lib]
+name = "emusen_debug"
+
+[dependencies]
+dianash-module = { path = "../dianash-module" }
+emusen-dotnet = { path = "../dotnet" }
+emusen-session-service = { path = "../session-service" }

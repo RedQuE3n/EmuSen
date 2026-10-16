@@ -77,6 +77,9 @@ namespace EmuSen.Crystal.Session
 
         private static Processor ProcessorOf(IDebugTarget target, uint processor)
         {
+            // No processor named: the session's own, as a command that names none reaches them.
+            if (processor == SessionAbi.ProcessorSession)
+                return new Processor(null, target.Breakpoints, target.Coverage, target.CallStack, target.CpuRegisters, DebugExpressions.For(target), null);
             var cpus = target.DebugCpus;
             if (cpus.Count > 0)
             {
@@ -117,6 +120,17 @@ namespace EmuSen.Crystal.Session
             {
                 _events.Add(e);
                 _lastRequest = e.Op;
+            }
+        }
+
+        // Run control's requests since the last drain, oldest first, for a host that reads them as its loop's - see EmuSen_DianaSh.md §13.11.
+        public IReadOnlyList<string> DrainRunRequests()
+        {
+            lock (_eventsGate)
+            {
+                var ops = _events.Where(e => e.Kind == "run").Select(e => e.Op).ToList();
+                _events.RemoveAll(e => e.Kind == "run");
+                return ops;
             }
         }
     }

@@ -129,6 +129,7 @@ version = "0.1.0"
 dependencies = [
  "dianash-text",
  "emusen-dianash",
+ "emusen-dotnet",
  "emusen-galaxia",
  "libc",
 ]
@@ -157,6 +158,24 @@ dependencies = [
  "block-buffer",
  "const-oid",
  "crypto-common",
+]
+
+[[package]]
+name = "emusen-cheat"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
+ "emusen-session-service",
+]
+
+[[package]]
+name = "emusen-debug"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
+ "emusen-session-service",
 ]
 
 [[package]]
@@ -208,13 +227,18 @@ version = "0.1.0"
 name = "emusen-platform"
 version = "0.1.0"
 dependencies = [
+ "dianash-module",
  "dianash-text",
+ "emusen-cheat",
+ "emusen-debug",
  "emusen-dianash",
  "emusen-disc",
  "emusen-endymion",
  "emusen-galaxia",
  "emusen-native",
  "emusen-serenity",
+ "emusen-session",
+ "emusen-trace",
 ]
 
 [[package]]
@@ -225,6 +249,30 @@ dependencies = [
  "emusen-galaxia",
  "libloading",
  "sha2",
+]
+
+[[package]]
+name = "emusen-session"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-session-service",
+]
+
+[[package]]
+name = "emusen-session-service"
+version = "0.1.0"
+dependencies = [
+ "emusen-dotnet",
+]
+
+[[package]]
+name = "emusen-trace"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
+ "emusen-session-service",
 ]
 
 [[package]]

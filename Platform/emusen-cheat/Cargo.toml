@@ -1,0 +1,17 @@
+[package]
+name = "emusen-cheat"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# emusen.cheat, every cheat mechanism under one command (EmuSen_DianaSh.md §8.1): the same words as the C# class it
+# replaces, held by the golden corpus. The codecs, the cheat lists' files and the cheat database are the session's,
+# reached through the session service; a .cht file the player names is reached through the call's resolve (§13.11).
+[lib]
+name = "emusen_cheat"
+
+[dependencies]
+dianash-module = { path = "../dianash-module" }
+emusen-dotnet = { path = "../dotnet" }
+emusen-session-service = { path = "../session-service" }

@@ -6,7 +6,7 @@ use crate::host;
 use crate::interp::{Interp, Outcome};
 use crate::man;
 use crate::shell::{Request, World};
-use crate::table::Table;
+use crate::table::{Kind, Table};
 use emusen_galaxia::suggestion;
 use emusen_galaxia::tree;
 
@@ -377,7 +377,11 @@ fn tmux(world: &mut World, session: u32, args: &[String]) -> Outcome {
                 return Outcome::fail(format!("tmux: a session named '{name}' already exists"));
             }
             let table = world.session(session).map(|s| s.table.clone()).unwrap_or_else(Table::builtins);
+            let services = world.session(session).map(|s| s.services.copy()).unwrap_or_default();
             let id = world.new_session(table, creating_user);
+            if let Some(created) = world.session_mut(id) {
+                created.services = services;
+            }
             if let Err((_, words)) = world.attach(id, Some(&name)) {
                 return Outcome::fail(format!("tmux: {words}"));
             }
@@ -429,13 +433,13 @@ fn kill_session(world: &mut World, name: &str) -> Result<Option<(u32, String)>, 
 fn ps(interp: &mut Interp, world: &mut World) -> Result<Outcome, String> {
     let mut lines: Vec<String> = Vec::new();
     let table = world.session(interp.session).map(|s| s.table.clone()).unwrap_or_else(Table::builtins);
-    let mut asked: Vec<usize> = Vec::new();
-    for (_, registration) in table.claims() {
-        if asked.contains(registration) {
+    let mut asked: Vec<Kind> = Vec::new();
+    for (_, claimant) in table.claims() {
+        if asked.contains(claimant) {
             continue;
         }
-        asked.push(*registration);
-        let listed = host::jobs(interp, world, *registration)?;
+        asked.push(*claimant);
+        let listed = host::jobs(interp, world, *claimant)?;
         lines.extend(listed.lines().map(str::to_string));
     }
     if world.config.sessions {
@@ -458,9 +462,9 @@ fn kill(interp: &mut Interp, world: &mut World, args: &[String]) -> Result<Outco
     }
     let id = joined(args, 1);
     let table = world.session(interp.session).map(|s| s.table.clone()).unwrap_or_else(Table::builtins);
-    for (prefix, registration) in table.claims() {
+    for (prefix, claimant) in table.claims() {
         if dotnet::starts_with_ignore_case(&id, prefix) {
-            if let Some(outcome) = host::kill(interp, world, *registration, &id)? {
+            if let Some(outcome) = host::kill(interp, world, *claimant, &id)? {
                 return Ok(outcome);
             }
         }

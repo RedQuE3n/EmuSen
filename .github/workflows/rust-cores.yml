@@ -32,6 +32,10 @@ on:
       - 'EmuSen.WiseMan/Serenity/SerenityParity*'
       - 'EmuSen.WiseMan/Serenity/SerenityChainParity*'
       - 'EmuSen.WiseMan/Serenity/SerenitySwitch*'
+      - 'EmuSen.DianaSh/**'
+      - 'EmuSen.Crystal/**'
+      - 'EmuSen.WiseMan/DianaSh/**'
+      - 'EmuSen.WiseMan/Crystal/**'
       - 'EmuSen/Cores/RustCores.props'
       - 'EmuSen/Cores/RustCoresPublish.targets'
       - 'EmuSen/EmuSen.csproj'
@@ -72,6 +76,10 @@ on:
       - 'EmuSen.WiseMan/Serenity/SerenityParity*'
       - 'EmuSen.WiseMan/Serenity/SerenityChainParity*'
       - 'EmuSen.WiseMan/Serenity/SerenitySwitch*'
+      - 'EmuSen.DianaSh/**'
+      - 'EmuSen.Crystal/**'
+      - 'EmuSen.WiseMan/DianaSh/**'
+      - 'EmuSen.WiseMan/Crystal/**'
       - 'EmuSen/Cores/RustCores.props'
       - 'EmuSen/Cores/RustCoresPublish.targets'
       - 'EmuSen/EmuSen.csproj'
@@ -325,6 +333,12 @@ jobs:
           CARGO_BUILD_RUSTFLAGS: ${{ steps.pgo.outputs.rustflags }}
         run: cargo build --profile dist --target ${{ matrix.platform.target }}
 
+      # nano, the program the shell ships, beside the platform library with its manifest (EmuSen_DianaSh.md §7, §13.11).
+      - name: The shell's program
+        if: matrix.crate.name == 'emusen_platform'
+        shell: bash
+        run: cp dianash-program/nano.dianash.json "target/${{ matrix.platform.target }}/dist/"
+
       # The build script's verdict on the profile: guided, stale (a notice), or not trained for this toolchain's flavour (a warning: CI pins the toolchain so that it is).
       - name: The PGO verdict
         if: steps.pgo.outputs.rustflags != ''
@@ -377,6 +391,7 @@ jobs:
           path: |
             ${{ matrix.crate.dir }}/target/${{ matrix.platform.target }}/dist/${{ env.LIBRARY }}
             ${{ matrix.crate.dir }}/target/${{ matrix.platform.target }}/dist/${{ env.LIBRARY }}.core.json
+            ${{ matrix.crate.dir }}/target/${{ matrix.platform.target }}/dist/nano*
           if-no-files-found: error
 
       # The same files under the input key, which a later run's plan looks up; none without a key or with an undeclared input.
@@ -505,6 +520,10 @@ jobs:
           # The test cores' artefact keeps its two crates' folders, since it holds the kit's runner too; every file goes beside the tests.
           find native -type f -exec cp {} "$out/" \;
           chmod +x "$out"/emusen-core-conform* || true
+          # The shell's shipped program goes where the shell looks for it, dianash/ beside the tests (EmuSen_DianaSh.md §7).
+          mkdir -p "$out/dianash"
+          for f in native/nano native/nano.exe native/nano.dianash.json; do if [ -f "$f" ]; then mv "$f" "$out/dianash/"; rm -f "$out/$(basename "$f")"; fi; done
+          chmod +x "$out/dianash/nano" 2>/dev/null || true
           ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*nephrite* "$out"/*diamond* "$out"/*v1_test_core* "$out"/*v1_plain_core*
           ls -la "$out"/*emusen_platform* || echo "no platform library: Galaxia runs on its C#"
           # What the runner lacks of what Shaderc's library needs, and the system's own words for loading it.
@@ -567,6 +586,27 @@ jobs:
         working-directory: EmuSen-Project
         continue-on-error: true
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Serenity.Slang|FullyQualifiedName~EmuSen.WiseMan.Serenity.Spirv|FullyQualifiedName~SerenityParityTests|FullyQualifiedName~SerenityChainParityTests|FullyQualifiedName~SerenitySwitchTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=serenity-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+
+      # DianaSh on the Rust shell, its default since S6's state 2, with the text tools and EmuSen's command modules linked
+      # into the platform library: the golden corpus, the shell's tests and the session service's, on each system. The
+      # switch test says in the log which shell ran and fails if it was not the Rust one (EmuSen_DianaSh.md §13.10, §13.11).
+      - name: Test DianaSh on the Rust shell
+        if: ${{ !cancelled() }}
+        working-directory: EmuSen-Project
+        continue-on-error: true
+        env:
+          EMUSEN_DIANASH_EXPECT: rust
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.DianaSh.|FullyQualifiedName~SessionServiceParityTests|FullyQualifiedName~SessionHeaderTests" --logger "console;verbosity=detailed" --logger "trx;LogFileName=dianash-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+
+      # The same on the C# shell, the failover EMUSEN_DIANASH_NATIVE=0 selects until S7; reported beside the Rust shell's.
+      - name: Test DianaSh on its C#
+        if: ${{ !cancelled() }}
+        working-directory: EmuSen-Project
+        continue-on-error: true
+        env:
+          EMUSEN_DIANASH_NATIVE: '0'
+          EMUSEN_DIANASH_EXPECT: 'c#'
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.DianaSh.|FullyQualifiedName~SessionServiceParityTests|FullyQualifiedName~SessionHeaderTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=dianash-csharp-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       - uses: actions/upload-artifact@v4
         if: always()

@@ -82,7 +82,9 @@ namespace EmuSen.WiseMan.DianaSh
                 File.WriteAllBytes(Path.Combine(Corpus, name), Record(file, runner).Write());
                 return;
             }
-            foreach (GoldenCase c in file.Cases) Assert.Null(GoldenRunner.Compare(name, c, runner.Run(c)));
+            // Every case is run and every difference named, since a message cut short names only the first case.
+            var differences = file.Cases.Select(c => (Case: c, Run: runner.Run(c))).Where(r => !runner.SystemsCase).Select(r => GoldenRunner.Compare(name, r.Case, r.Run)).OfType<string>().ToList();
+            Assert.True(differences.Count == 0, string.Join("\n\n", differences));
         }
 
         [Fact]

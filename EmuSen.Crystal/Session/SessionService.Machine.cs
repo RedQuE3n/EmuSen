@@ -67,6 +67,12 @@ namespace EmuSen.Crystal.Session
         // Arms what today's step, runto and resume arm, and raises the run request their host action carried - see `man step`.
         internal long RunControl(uint session, uint op, uint processor, long argument)
         {
+            // Resume is the host loop's to answer, with or without a session, as today's `resume` asks it - see EmuSen_DianaSh.md §13.11.
+            if (op == SessionAbi.RunResume && _target is null && session == 0)
+            {
+                Raise(new SessionEvent("run", "resume"));
+                return 0;
+            }
             IDebugTarget t = Target(session);
             string request = "step";
             long result = 0;
@@ -196,6 +202,7 @@ namespace EmuSen.Crystal.Session
                     w.WriteBoolean("call_stack", c.CallStack is not null);
                     w.WriteBoolean("registers", c.Registers is not null);
                     w.WriteBoolean("writable_registers", c.RegisterWriter is not null);
+                    NullableNumber(w, "pc", c.ProgramCounter is { } pc ? U(pc()) : null);
                     w.WriteEndObject();
                 }
                 w.WriteEndArray();

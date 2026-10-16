@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.IO;
 using System.Text.Json;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
@@ -36,7 +37,8 @@ namespace EmuSen.Crystal.Session
 
         internal byte[] DmaLogOp(uint session, uint op, ReadOnlySpan<byte> args, bool readOnly)
         {
-            DmaLogRegistry log = Need(Target(session).DmaLog, "This core does not record DMA transfers.");
+            IDebugTarget t = Target(session);
+            DmaLogRegistry log = Need(t.DmaLog, "This core does not record DMA transfers.");
             if (op > SessionAbi.DmaLogDestinations) throw NotSupported($"no DMA log op {op}");
             if (readOnly && op <= SessionAbi.DmaLogClear) throw new SessionException(SessionAbi.ReadOnly, "refused: this is a read-only context, and the call changes the session");
             JsonElement a = Parse(args);
@@ -71,6 +73,7 @@ namespace EmuSen.Crystal.Session
                         w.WriteString("kind", x.Kind == DmaTransferKind.Hdma ? "hdma" : "general");
                         w.WriteNumber("control", x.Control);
                         w.WriteNumber("destination", x.DestinationRegister);
+                        NullableString(w, "destination_name", t.NameDmaDestination(x.DestinationRegister));
                         w.WriteNumber("source", U(x.SourceAddress));
                         w.WriteNumber("length", x.Length);
                         w.WriteEndObject();
@@ -91,6 +94,7 @@ namespace EmuSen.Crystal.Session
                     {
                         w.WriteStartObject();
                         w.WriteNumber("destination", x.DestinationRegister);
+                        NullableString(w, "destination_name", t.NameDmaDestination(x.DestinationRegister));
                         w.WriteNumber("transfers", x.Transfers);
                         w.WriteNumber("bytes", x.Bytes);
                         w.WriteNumber("channel_mask", x.ChannelMask);
@@ -273,7 +277,8 @@ namespace EmuSen.Crystal.Session
 
         internal byte[] AudioChannels(uint session) => Array(Target(session).AudioChannels.Current, Channel);
 
-        internal void SetChannelMuted(uint session, uint channel, bool muted) => Target(session).SetChannelMuted(Int32(channel, "channel"), muted);
+        // A channel crosses as a 32-bit pattern, as an address does, so a command's own index reaches the core as typed.
+        internal void SetChannelMuted(uint session, uint channel, bool muted) => Target(session).SetChannelMuted(Addr(channel), muted);
 
         internal byte[] Evaluate(uint session, uint processor, string? text)
         {
@@ -301,9 +306,10 @@ namespace EmuSen.Crystal.Session
         {
             IDebugTarget t = Target(session);
             CheatRegistry cheats = t.Cheats;
-            if (op > SessionAbi.CheatDbFind) throw NotSupported($"no cheat op {op}");
+            if (op > SessionAbi.CheatDbUpdate) throw NotSupported($"no cheat op {op}");
             JsonElement a = Parse(args);
-            bool changes = CheatChanges.Contains(op) || (op == SessionAbi.CheatMaster && OptionalBool(a, "enabled") is not null);
+            bool changes = CheatChanges.Contains(op) || (op == SessionAbi.CheatMaster && OptionalBool(a, "enabled") is not null)
+                || (op == SessionAbi.CheatDbPrune && OptionalBool(a, "apply") == true) || op == SessionAbi.CheatDbUpdate;
             if (readOnly && changes) throw new SessionException(SessionAbi.ReadOnly, "refused: this is a read-only context, and the call changes the session");
             switch (op)
             {
@@ -382,7 +388,7 @@ namespace EmuSen.Crystal.Session
                     catch (JsonException e) { throw new SessionException(SessionAbi.Parse, $"That is not a cheat file: {e.Message}"); }
                     return (null, cheats.LoadFrom(file).loaded);
                 }
-                case SessionAbi.CheatDecode: return (Decode(String(a, "code"), OptionalString(a, "codec") ?? "auto"), 0);
+                case SessionAbi.CheatDecode: return (Decode(String(a, "code"), OptionalString(a, "codec") ?? "auto", OptionalBool(a, "unchecked") ?? false), 0);
                 case SessionAbi.CheatDbSystems:
                     return (Array(Database().Systems(), (w, s) =>
                     {
@@ -392,8 +398,174 @@ namespace EmuSen.Crystal.Session
                         w.WriteEndObject();
                     }), 0);
                 case SessionAbi.CheatDbGames: return (Entries(Database().Games(String(a, "system"), OptionalString(a, "filter"))), 0);
-                default: return (Entries(Database().Find(String(a, "text"), Int32(OptionalInt(a, "limit") ?? 20, "limit"))), 0);
+                case SessionAbi.CheatDbFind: return (Entries(Database().Find(String(a, "text"), Int32(OptionalInt(a, "limit") ?? 20, "limit"))), 0);
+                case SessionAbi.CheatClaims:
+                {
+                    string code = String(a, "code");
+                    return (Write(w =>
+                    {
+                        w.WriteStartObject();
+                        if (_options.AutoDetectCodec is { } auto) w.WriteBoolean("auto", auto.CanDecode(code)); else w.WriteNull("auto");
+                        if (_options.ExplicitCodec is { } exp) w.WriteBoolean("explicit", exp.CanDecode(code)); else w.WriteNull("explicit");
+                        w.WriteEndObject();
+                    }), 0);
+                }
+                case SessionAbi.CheatChtParse:
+                    return (Parsed(ChtFile.Parse(String(a, "text"), _options.AutoDetectCodec, _options.AutoDetectCodec?.SpaceName ?? CheatImport.DefaultSpaceName, _options.ExplicitCodec), null), 0);
+                case SessionAbi.CheatChtExport: return (ChtExport(cheats), 0);
+                case SessionAbi.CheatFiles:
+                    return (Write(w =>
+                    {
+                        w.WriteStartObject();
+                        w.WriteString("directory", CheatFile.DirectoryPath);
+                        w.WriteStartArray("names");
+                        foreach (string n in CheatFile.ListNames()) w.WriteStringValue(n);
+                        w.WriteEndArray();
+                        w.WriteEndObject();
+                    }), 0);
+                case SessionAbi.CheatFileRead:
+                {
+                    var file = CheatFile.For(ValidName(String(a, "name")));
+                    CheatFile? loaded = file.Load();
+                    return (Write(w =>
+                    {
+                        w.WriteStartObject();
+                        w.WriteString("path", file.Path);
+                        w.WritePropertyName("file");
+                        if (loaded is null) w.WriteNullValue(); else JsonSerializer.Serialize(w, loaded, ConfigJson.Options);
+                        w.WriteEndObject();
+                    }), 0);
+                }
+                case SessionAbi.CheatFileWrite:
+                {
+                    var file = CheatFile.For(ValidName(String(a, "name")));
+                    if (!file.Save(cheats.ToCheatFile())) throw new SessionException(SessionAbi.Fault, $"couldn't write {file.Path}");
+                    return (null, cheats.GetCheats().Count);
+                }
+                case SessionAbi.CheatDbStatus:
+                {
+                    CheatDatabase db = Database();
+                    return (Write(w => { w.WriteStartObject(); w.WriteString("directory", db.Directory); w.WriteBoolean("exists", db.Exists); w.WriteEndObject(); }), 0);
+                }
+                case SessionAbi.CheatDbParse:
+                {
+                    CheatDatabaseEntry? match = Database().BestMatch(String(a, "game"));
+                    if (match is not { } m) return (Parsed(new ChtParseResult { Cheats = System.Array.Empty<ChtCheat>(), Skipped = 0 }, null), 0);
+                    var parsed = ChtFile.Parse(File.ReadAllText(m.Path), _options.AutoDetectCodec, _options.AutoDetectCodec?.SpaceName ?? CheatImport.DefaultSpaceName, _options.ExplicitCodec);
+                    return (Parsed(parsed, m.Game), 0);
+                }
+                case SessionAbi.CheatDbPrune:
+                    return (OptionalBool(a, "apply") == true ? Pending(op, () => Prune(apply: true)) : Prune(apply: false), 0);
+                default:
+                    return (Pending(op, () =>
+                    {
+                        CheatDatabase db = Database();
+                        CheatDatabaseInstallResult result;
+                        using (Stream zip = CheatDatabaseInstaller.Fetch(CheatDatabaseInstaller.LibretroCheatsUrl)) result = CheatDatabaseInstaller.Install(zip, db.Directory);
+                        return Write(w =>
+                        {
+                            w.WriteStartObject();
+                            w.WriteNumber("installed", result.Installed);
+                            w.WriteString("directory", db.Directory);
+                            w.WriteString("attribution", CheatDatabaseInstaller.Attribution);
+                            w.WriteEndObject();
+                        });
+                    }), 0);
             }
+        }
+
+        // A change whose record a short buffer cannot take is kept until one can, as events_drain keeps its events - see emusen_session.h.
+        private readonly Dictionary<uint, byte[]> _pendingRecords = new();
+
+        private byte[] Pending(uint op, Func<byte[]> apply)
+        {
+            lock (_pendingRecords)
+            {
+                if (_pendingRecords.TryGetValue(op, out byte[]? kept)) return kept;
+                byte[] record = apply();
+                _pendingRecords[op] = record;
+                return record;
+            }
+        }
+
+        // Taken by the export once a buffer holds it.
+        internal void TakePending(uint op)
+        {
+            lock (_pendingRecords) _pendingRecords.Remove(op);
+        }
+
+        private static string ValidName(string name)
+            => CheatFile.IsValidName(name) ? name : throw new SessionException(SessionAbi.BadArgument, $"'{name}' is not a usable file name.");
+
+        private static byte[] Parsed(ChtParseResult parsed, string? game) => Write(w =>
+        {
+            w.WriteStartObject();
+            NullableString(w, "game", game);
+            w.WriteStartArray("cheats");
+            foreach (ChtCheat c in parsed.Cheats)
+            {
+                w.WriteStartObject();
+                w.WriteString("kind", c.Kind == CheatKind.RomPatch ? "rom" : "ram");
+                w.WriteString("description", c.Description);
+                w.WriteBoolean("enabled", c.Enabled);
+                w.WritePropertyName("writes");
+                Writes(w, c.Writes);
+                w.WriteEndObject();
+            }
+            w.WriteEndArray();
+            w.WriteNumber("skipped", parsed.Skipped);
+            w.WriteEndObject();
+        });
+
+        // A RAM poke without a test is all a .cht entry can hold - see `man cheat`.
+        private static byte[] ChtExport(CheatRegistry cheats)
+        {
+            var all = cheats.GetCheats();
+            int romPatches = all.Count(c => c.Kind != CheatKind.RamPoke);
+            int conditional = all.Count(c => c.Kind == CheatKind.RamPoke && c.Writes.Any(x => x.IsTest));
+            var exportable = all.Where(c => c.Kind == CheatKind.RamPoke && !c.Writes.Any(x => x.IsTest))
+                .Select(c => new ChtCheat { Description = c.Description, Enabled = c.Enabled, Writes = c.Writes }).ToList();
+            string text = ChtFile.Write(exportable);
+            return Write(w =>
+            {
+                w.WriteStartObject();
+                w.WriteString("text", text);
+                w.WriteNumber("exported", exportable.Count);
+                w.WriteNumber("rom_patches", romPatches);
+                w.WriteNumber("conditional", conditional);
+                w.WriteEndObject();
+            });
+        }
+
+        private byte[] Prune(bool apply)
+        {
+            CheatDatabase db = Database();
+            CheatPrunePlan plan = CheatDatabasePruner.Plan(db, _options.CheatSystems?.Invoke() ?? System.Array.Empty<string>());
+            var (pruned, failed) = apply ? CheatDatabasePruner.Apply(db, plan) : (0, (IReadOnlyList<string>)System.Array.Empty<string>());
+            return Write(w =>
+            {
+                w.WriteStartObject();
+                w.WriteBoolean("can_apply", plan.CanApply);
+                NullableString(w, "reason", plan.Reason);
+                w.WriteStartArray("removing");
+                foreach (PrunedSystem r in plan.Removing)
+                {
+                    w.WriteStartObject();
+                    w.WriteString("system", r.System);
+                    w.WriteNumber("files", r.Files);
+                    w.WriteNumber("bytes", r.Bytes);
+                    w.WriteEndObject();
+                }
+                w.WriteEndArray();
+                w.WriteStartArray("keeping");
+                foreach (string k in plan.Keeping) w.WriteStringValue(k);
+                w.WriteEndArray();
+                w.WriteNumber("pruned", pruned);
+                w.WriteStartArray("failed");
+                foreach (string f in failed) w.WriteStringValue(f);
+                w.WriteEndArray();
+                w.WriteEndObject();
+            });
         }
 
         private static byte? CompareOf(JsonElement a)
@@ -448,7 +620,7 @@ namespace EmuSen.Crystal.Session
             };
         }
 
-        private byte[] Decode(string code, string which)
+        private byte[] Decode(string code, string which, bool unchecked_)
         {
             ICheatCodeCodec codec = which switch
             {
@@ -456,12 +628,31 @@ namespace EmuSen.Crystal.Session
                 "explicit" => _options.ExplicitCodec ?? throw NotSupported("No Game Genie-style cheat codec is registered for this target."),
                 _ => throw NotSupported($"no codec '{which}'"),
             };
-            if (!codec.CanDecode(code)) throw new SessionException(SessionAbi.Parse, $"'{code}' is not a {codec.Name} code.");
-            (int address, byte value) decoded;
-            try { decoded = codec.Decode(code); }
-            catch (Exception e) { throw new SessionException(SessionAbi.Parse, e.Message); }
-            byte? compare = codec.DecodeCompare(code);
-            var writes = codec.DecodeWrites(code);
+            if (!unchecked_ && !codec.CanDecode(code)) throw new SessionException(SessionAbi.Parse, $"'{code}' is not a {codec.Name} code.");
+            (int address, byte value) decoded = default;
+            byte? compare = null;
+            IReadOnlyList<CheatWrite>? writes = null;
+            if (unchecked_)
+            {
+                // As the cheat command decoded a code: its writes first, the single write only where there are none.
+                try
+                {
+                    writes = codec.DecodeWrites(code);
+                    if (writes is null)
+                    {
+                        decoded = codec.Decode(code);
+                        compare = codec.DecodeCompare(code);
+                    }
+                }
+                catch (Exception e) { throw new SessionException(SessionAbi.Parse, e.Message); }
+            }
+            else
+            {
+                try { decoded = codec.Decode(code); }
+                catch (Exception e) { throw new SessionException(SessionAbi.Parse, e.Message); }
+                compare = codec.DecodeCompare(code);
+                writes = codec.DecodeWrites(code);
+            }
             return Write(w =>
             {
                 w.WriteStartObject();
@@ -478,7 +669,7 @@ namespace EmuSen.Crystal.Session
         }
 
         private CheatDatabase Database()
-            => _options.CheatDatabaseDirectory is { } dir ? new CheatDatabase(dir) : throw NotSupported("No cheat database is configured for this session.");
+            => (_options.CheatDatabaseDirectory ?? _options.CheatDatabaseFolder?.Invoke()) is { } dir ? new CheatDatabase(dir) : throw NotSupported("No cheat database is configured for this session.");
 
         private static byte[] Entries(IEnumerable<CheatDatabaseEntry> entries) => Array(entries, (w, e) =>
         {
@@ -606,7 +797,7 @@ namespace EmuSen.Crystal.Session
         // Takes the waiting events of the kinds asked, only when the buffer holds them all.
         internal byte[] EventsPeek(uint session, uint kinds, out int taken)
         {
-            Target(session);
+            if (_target is not null || session != 0) Target(session);
             if ((kinds & ~SessionAbi.EventRun) != 0) throw NotSupported($"unknown event kinds 0x{kinds:X}");
             List<SessionEvent> chosen;
             lock (_eventsGate) chosen = _events.Where(e => kinds == 0 || (kinds & SessionAbi.EventRun) != 0 && e.Kind == "run").ToList();

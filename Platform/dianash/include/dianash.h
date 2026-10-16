@@ -1,4 +1,4 @@
-/* dianash.h - DianaSh's host API, version 1.0: how a program embeds the shell, feeds it lines, takes what they
+/* dianash.h - DianaSh's host API, version 1.1: how a program embeds the shell, feeds it lines, takes what they
  * printed and asked, keeps its sessions, and provides its own commands. Exported by emusen_platform. See
  * EmuSen_DianaSh.md §10, §11 and §13.7.
  *
@@ -19,7 +19,7 @@ extern "C" {
 #endif
 
 #define DIANASH_ABI_MAJOR 1u
-#define DIANASH_ABI_MINOR 0u
+#define DIANASH_ABI_MINOR 1u
 #define DIANASH_ABI_VERSION ((DIANASH_ABI_MAJOR << 16) | DIANASH_ABI_MINOR)
 
 /* What dianash_submit answers when the line ran. */
@@ -75,6 +75,9 @@ int32_t dianash_free(dianash_shell *sh);
 int32_t dianash_add_commands(dianash_shell *sh, uint32_t session, const dianash_host_commands *commands);
 /* The services copied into every call; each table must outlive the shell. */
 int32_t dianash_set_services(dianash_shell *sh, const dianash_service *services, size_t count);
+/* @since 1.1. The services one session's calls are handed in place of the shell's of the same name, as a host whose
+ * sessions each reach their own running game provides them; each table must outlive the session (§13.11). */
+int32_t dianash_session_set_services(dianash_shell *sh, uint32_t session, const dianash_service *services, size_t count);
 
 /* DIANASH_DONE, DIANASH_NEEDS_MORE or DIANASH_EXIT; never blocks on input. */
 int32_t dianash_submit(dianash_shell *sh, uint32_t session, const uint8_t *line, size_t len);

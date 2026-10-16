@@ -83,11 +83,13 @@ namespace EmuSen.WiseMan.DianaSh
 
             Assert.Equal(new[] { "EmuSen.app" }, Directory.EnumerateFileSystemEntries(dir).Select(Path.GetFileName));
             string contents = Path.Combine(dir, "EmuSen.app", "Contents");
-            Assert.Equal(new[] { "Info.plist", "MacOS", "Resources" }, Directory.EnumerateFileSystemEntries(contents).Select(Path.GetFileName).Order());
+            // On a Mac the bundle is signed, which adds the signature's folder.
+            string[] expected = OperatingSystem.IsMacOS() ? ["Info.plist", "MacOS", "Resources", "_CodeSignature"] : ["Info.plist", "MacOS", "Resources"];
+            Assert.Equal(expected.Order(StringComparer.Ordinal), Directory.EnumerateFileSystemEntries(contents).Select(Path.GetFileName).Order(StringComparer.Ordinal));
 
             string apphost = Path.Combine(contents, "MacOS", "Probe");
             Assert.True(File.Exists(apphost));
-            Assert.True(File.GetUnixFileMode(apphost).HasFlag(UnixFileMode.UserExecute));
+            if (!OperatingSystem.IsWindows()) Assert.True(File.GetUnixFileMode(apphost).HasFlag(UnixFileMode.UserExecute));
             Assert.True(File.Exists(Path.Combine(contents, "MacOS", "Probe.dll")));
             Assert.True(File.Exists(Path.Combine(contents, "MacOS", "Probe.runtimeconfig.json")));
 
@@ -152,12 +154,16 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.False(File.Exists(Path.Combine(dir, "bin", "Probe")), "the launcher of the earlier publish is left behind");
             Assert.False(File.Exists(Path.Combine(dir, "lib", "EmuSen", "Probe")), "the apphost of the earlier publish is left behind");
 
-            var start = new ProcessStartInfo(Path.Combine(dir, "bin", "Named")) { RedirectStandardOutput = true, UseShellExecute = false };
-            using Process child = Process.Start(start)!;
-            string said = child.StandardOutput.ReadToEnd();
-            Assert.True(child.WaitForExit(60_000));
-            Assert.Equal(0, child.ExitCode);
-            Assert.Equal("probe", said.Trim());
+            // A linux-x64 tree runs only where linux-x64 programs run.
+            if (OperatingSystem.IsLinux() && System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.X64)
+            {
+                var start = new ProcessStartInfo(Path.Combine(dir, "bin", "Named")) { RedirectStandardOutput = true, UseShellExecute = false };
+                using Process child = Process.Start(start)!;
+                string said = child.StandardOutput.ReadToEnd();
+                Assert.True(child.WaitForExit(60_000));
+                Assert.Equal(0, child.ExitCode);
+                Assert.Equal("probe", said.Trim());
+            }
 
             (exit, log, dir) = Publish("osx-arm64", "-p:DianaShExecutableName=Named");
             Assert.True(exit == 0, log);

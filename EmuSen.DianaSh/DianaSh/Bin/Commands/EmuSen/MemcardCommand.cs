@@ -77,7 +77,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
             return Card(given[..colon], out path);
         }
 
-        private static string Shown(string path) => Path.GetRelativePath(DianaShSandbox.RootDirectory, path).Replace('\\', '/');
+        private static string Shown(string path) => Path.GetRelativePath(DianaShSandbox.RootOf(path), path).Replace('\\', '/');
 
         private static DianaShResult ListAll()
         {

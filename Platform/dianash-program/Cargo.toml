@@ -6,13 +6,19 @@ license.workspace = true
 publish.workspace = true
 
 # The standalone shell of EmuSen_DianaSh.md §8.2 and §10.4: the shell core, Galaxia's tree, a line editor and the
-# text tools' module, in one file.
+# text tools' module, in one file; and nano, the one program the shell ships beside it (§7, §8.1), with the terminal
+# code the two share.
 [[bin]]
 name = "dianash"
 path = "src/main.rs"
 
+[[bin]]
+name = "nano"
+path = "src/nano.rs"
+
 [dependencies]
 dianash-text = { path = "../dianash-text" }
+emusen-dotnet = { path = "../dotnet" }
 emusen-dianash = { path = "../dianash" }
 emusen-galaxia = { path = "../galaxia" }
 

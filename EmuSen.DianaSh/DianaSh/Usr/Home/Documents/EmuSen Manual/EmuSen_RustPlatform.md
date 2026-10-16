@@ -2655,6 +2655,14 @@ placed it, and S4 (§13.8 there) its text tools. What that changed here:
 
 `cargo test --release` in `Platform/` passed on 2026-10-15 with every crate's tests, the new ones included.
 
+*S5, 2026-10-16* (`EmuSen_DianaSh.md` §13.11) added six crates and moved two modules: `emusen-session-service`, the
+session service from a caller's side, held to Crystal's `emusen_session.h` by a C compiler; the four EmuSen command
+modules, `emusen-debug`, `emusen-trace`, `emusen-cheat` and `emusen-session`, linked into the library beside
+`dianash.text`; and in the `dianash` package a second program, `nano`, which `Platform.targets` builds with the library
+and copies into `dianash/`, and which the platform library's CI artefact now carries. Galaxia's `json` and `suggestion`
+moved to `emusen-dotnet`, which a module may link, with Galaxia re-exporting them; the library exports
+`dianash_session_set_services`, the host API's minor 1.1. The workspace's tests passed on 2026-10-16, 202 of them.
+
 ## 27. Windows, 2026-10-15: the library shipped on win-x64
 
 Release 0.9.0 went out for Windows without `emusen_platform.dll`, so Galaxia, Endymion and Serenity's slang half ran

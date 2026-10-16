@@ -3,6 +3,7 @@
 //! See EmuSen_DianaSh.md §8.2 and §10.4.
 
 mod editor;
+#[allow(dead_code, unused_imports)]
 mod terminal;
 
 use emusen_dianash::shell::{self, Config, Shell, Submitted};

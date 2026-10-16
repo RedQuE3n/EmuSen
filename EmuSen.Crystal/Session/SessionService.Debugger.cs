@@ -360,10 +360,11 @@ namespace EmuSen.Crystal.Session
         internal byte[] ProfileOp(uint session, uint processor, uint op, ReadOnlySpan<byte> args, bool readOnly)
         {
             CallStackRegistry stack = ProcessorOf(Target(session), processor).CallStack ?? throw NotSupported("This core does not report a call stack, so it cannot be profiled.");
-            if (op > SessionAbi.ProfileHottest) throw NotSupported($"no profile op {op}");
-            if (readOnly && op <= SessionAbi.ProfileClear) throw new SessionException(SessionAbi.ReadOnly, "refused: this is a read-only context, and the call changes the session");
+            if (op > SessionAbi.ProfileResetStack) throw NotSupported($"no profile op {op}");
+            if (readOnly && (op <= SessionAbi.ProfileClear || op == SessionAbi.ProfileResetStack)) throw new SessionException(SessionAbi.ReadOnly, "refused: this is a read-only context, and the call changes the session");
             switch (op)
             {
+                case SessionAbi.ProfileResetStack: stack.Reset(); return [];
                 case SessionAbi.ProfileArm: stack.ArmProfiler(); return [];
                 case SessionAbi.ProfileDisarm: stack.DisarmProfiler(); return [];
                 case SessionAbi.ProfileClear: stack.ClearProfile(); return [];

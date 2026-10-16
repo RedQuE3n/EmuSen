@@ -54,7 +54,7 @@ namespace EmuSen.WiseMan.DianaSh
 
             DianaShInterpreter shell = NewShell(out IDebugTarget target);
 
-            string imported = shell.Submit($"cheat import {path}").Output;
+            string imported = shell.Submit($"cheat import '{path}'").Output;
             Assert.Contains("Imported 2 cheat(s)", imported);
             Assert.Contains("all disabled", imported);
 
@@ -86,7 +86,7 @@ namespace EmuSen.WiseMan.DianaSh
                 """);
 
             DianaShInterpreter shell = NewShell(out IDebugTarget target, out ICore core);
-            shell.Submit($"cheat import {path}");
+            shell.Submit($"cheat import '{path}'");
 
             var space = target.GetMemorySpaces().Single(s => s.Name == "CpuBus");
 
@@ -107,14 +107,14 @@ namespace EmuSen.WiseMan.DianaSh
             shell.Submit("cheat poke CpuBus 7E0DBF 04 coins");
 
             string path = Path.Combine(DianaShSandbox.RootDirectory, "tmp", "exported.cht");
-            string exported = shell.Submit($"cheat export {path}").Output;
+            string exported = shell.Submit($"cheat export '{path}'").Output;
             Assert.Contains("Exported 2 cheat(s)", exported);
             Assert.True(File.Exists(path));
 
             shell.Submit("cheat clear");
             Assert.Empty(target.Cheats.GetCheats());
 
-            shell.Submit($"cheat import {path}");
+            shell.Submit($"cheat import '{path}'");
 
             var reloaded = target.Cheats.GetCheats();
             Assert.Equal(2, reloaded.Count);
@@ -131,7 +131,7 @@ namespace EmuSen.WiseMan.DianaSh
             shell.Submit("cheat rompatch 00C05F EA - a patch");
 
             string path = Path.Combine(DianaShSandbox.RootDirectory, "tmp", "mixed.cht");
-            string output = shell.Submit($"cheat export {path}").Output;
+            string output = shell.Submit($"cheat export '{path}'").Output;
 
             Assert.Contains("Exported 1 cheat(s)", output);
             Assert.Contains("1 ROM patch(es) skipped", output);

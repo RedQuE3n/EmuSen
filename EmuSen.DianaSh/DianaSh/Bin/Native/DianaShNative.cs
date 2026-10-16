@@ -47,6 +47,16 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    internal unsafe struct DianashService
+    {
+        public uint Size;
+        public DianashBytes Name;
+        public uint Major;
+        public uint Minor;
+        public void* Table;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     internal struct DianashHostResult
     {
         public uint Size;
@@ -119,6 +129,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
         internal static delegate* unmanaged[Cdecl]<nint, uint, int> SessionSwitch;
         internal static delegate* unmanaged[Cdecl]<nint, uint, int> SessionKill;
         internal static delegate* unmanaged[Cdecl]<nint, uint, uint, int> SessionReplace;
+        internal static delegate* unmanaged[Cdecl]<nint, uint, DianashService*, nuint, int> SessionSetServices;
 
         // Every export the facade calls, in the order Attach takes them; a missing one refuses the library.
         internal static readonly string[] Exports =
@@ -127,6 +138,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
             "dianash_output_take", "dianash_requests_drain", "dianash_last_status", "dianash_is_read_only", "dianash_awaiting",
             "dianash_history", "dianash_commands", "dianash_user", "dianash_set_user", "dianash_sessions", "dianash_session_new",
             "dianash_session_attach", "dianash_session_switch", "dianash_session_kill", "dianash_session_replace",
+            "dianash_session_set_services",
         };
 
         // Null when every export resolves, the major is this facade's and a shell can be made and freed; otherwise why not - see EmuSen_DianaSh.md §13.10.
@@ -172,6 +184,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
             SessionSwitch = (delegate* unmanaged[Cdecl]<nint, uint, int>)found[next++];
             SessionKill = (delegate* unmanaged[Cdecl]<nint, uint, int>)found[next++];
             SessionReplace = (delegate* unmanaged[Cdecl]<nint, uint, uint, int>)found[next++];
+            SessionSetServices = (delegate* unmanaged[Cdecl]<nint, uint, DianashService*, nuint, int>)found[next++];
             return null;
         }
 

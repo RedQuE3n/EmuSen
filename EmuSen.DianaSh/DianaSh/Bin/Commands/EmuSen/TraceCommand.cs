@@ -38,6 +38,8 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
             }
 
             int count = ParseHex(parts[1]);
+            // A switch armed with no instructions never ends, as Venus's counts down only from above 0 - see EmuSen_DianaSh.md §13.11.
+            if (count < 1) return DianaShResult.Fail("Trace count must be at least 1.");
             _traceSwitch.Arm(count);
             return $"Trace armed for the next {count} instructions.";
         }

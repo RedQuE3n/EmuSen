@@ -10,8 +10,10 @@ DESCRIPTION
     instructions, counted from whenever this command runs (not from
     power-on) - so a trace can be aimed at a specific moment in a play
     session instead of burning its whole budget during boot. 'trace off'
-    cancels an in-progress trace early. Not available for a core with no
-    equivalent trace mechanism, or a standalone launch with no core loaded.
+    cancels an in-progress trace early. <count> is at least 1: a trace of
+    no instructions is refused, since a core's trace armed with 0 never ends.
+    Not available for a core with no equivalent trace mechanism, or a
+    standalone launch with no core loaded.
 
 EXAMPLES
     trace 500

@@ -219,9 +219,9 @@ Trace armed for the next 16 instructions.
 status 0
 action none
 $ trace 0
-out 40
-Trace armed for the next 0 instructions.
-status 0
+out 31
+Trace count must be at least 1.
+status 1
 action none
 $ trace -1
 out 64

@@ -15,7 +15,6 @@ using Avalonia.VisualTree;
 using EmuSen.Common;
 using EmuSen.Common.Firmware;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Endymion;
 using EmuSen.Endymion.Input;
 using EmuSen.Serenity;
@@ -919,8 +918,6 @@ namespace EmuSen.Mistress.Views
                 RecordPlayTime();
                 KeepCheatList();
             }
-            // On the OLD session: StartLogging's own StopLogging would take the new one - see §4.22.
-            _session?.FlushVerboseLogs();
             _session?.ReleaseMedia();
         }
 
@@ -1529,9 +1526,6 @@ namespace EmuSen.Mistress.Views
         private void StopLogging()
         {
             if (_activeLogWriter is null) return;
-
-            // Before Console.SetOut/Dispose - see EmuSen_Settings_Reference.md §4.22.
-            _session?.FlushVerboseLogs();
 
             Console.SetOut(_originalConsoleOut);
             _activeLogWriter.Dispose();

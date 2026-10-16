@@ -1,5 +1,12 @@
 # Venus (SNES) — OBC1
 
+*Historical since 2026-10-16.* This page describes C# Venus, which was deleted from the source on 2026-10-16 at the
+tester's word (`VenusRT_Native.md` §68). Its content is kept as the record of that core. VenusRT, the SNES's only engine
+since, is a clean-room rewrite that was written without reading this page's algorithm sections (`VenusRT_Plan.md` §1.2),
+so nothing here describes VenusRT; the file, class and member names are C# Venus's, and the code it cites is in the
+repository's history and in the releases that carried it. The OBC1 runs on VenusRT as built at its stage 5
+(`VenusRT_Native.md` §27).
+
 Covers `Cores/Nintendo/Venus - SNES/Coprocessors/Obc1/Obc1.cs`. The smallest enhancement chip this core implements, and the only one that isn't a processor.
 
 > **Status: complete.** There is nothing left to build. One game uses this chip.

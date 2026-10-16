@@ -1,5 +1,11 @@
 # Venus (SNES) — APU (SPC700 + S-DSP)
 
+*Historical since 2026-10-16.* This page describes C# Venus, which was deleted from the source on 2026-10-16 at the
+tester's word (`VenusRT_Native.md` §68). Its content is kept as the record of that core. VenusRT, the SNES's only engine
+since, is a clean-room rewrite that was written without reading this page's algorithm sections (`VenusRT_Plan.md` §1.2),
+so nothing here describes VenusRT; the file, class and member names are C# Venus's, and the code it cites is in the
+repository's history and in the releases that carried it.
+
 Covers `Cores/Nintendo/Venus - SNES/Apu/`: the SPC700 core (`Spc700.cs`, addressing modes, opcode table, opcodes) and the S-DSP sound chip (`SDsp.cs`, `DspVoice.cs`, `BrrDecoder.cs`). See `Man pages/Hardware/README.md` for what this doc set is.
 
 The SNES APU is a genuinely separate computer: its own CPU (SPC700), its own 64KB RAM, its own sound chip (S-DSP), talking to the main CPU only through 4 shared I/O ports (`$2140-$2143` on the CPU side — see `Venus_Memory.md` §1.2). Everything in this page lives entirely on the APU side of that boundary.

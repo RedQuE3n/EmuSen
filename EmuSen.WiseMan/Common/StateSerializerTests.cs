@@ -45,18 +45,18 @@ namespace EmuSen.WiseMan.Common
             public char Letter;
         }
 
-        // The palette Venus decodes from CGRAM, which a load had read into boxed copies and dropped - see EmuSen_Save_States.md §5.
+        // A uint array, which a load had once read into boxed copies and dropped - see EmuSen_Save_States.md §5.
         [Fact]
         public void A_uint_array_is_restored_by_a_read()
         {
-            var ppu = new EmuSen.Cores.Nintendo.Venus.Video.Ppu();
-            ppu.Palette[5] = 0x1122_3344;
-            byte[] bytes = Write(ppu);
+            var wide = new Wide();
+            wide.Words[2] = 0x1122_3344;
+            byte[] bytes = Write(wide);
 
-            ppu.Palette[5] = 0;
-            Read(bytes, ppu, includeAliases: false);
+            wide.Words[2] = 0;
+            Read(bytes, wide, includeAliases: false);
 
-            Assert.Equal(0x1122_3344u, ppu.Palette[5]);
+            Assert.Equal(0x1122_3344u, wide.Words[2]);
         }
 
         private sealed class Arrays

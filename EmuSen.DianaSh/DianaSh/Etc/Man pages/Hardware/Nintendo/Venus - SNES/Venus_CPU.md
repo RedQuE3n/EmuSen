@@ -1,5 +1,11 @@
 # Venus (SNES) — CPU (65816)
 
+*Historical since 2026-10-16.* This page describes C# Venus, which was deleted from the source on 2026-10-16 at the
+tester's word (`VenusRT_Native.md` §68). Its content is kept as the record of that core. VenusRT, the SNES's only engine
+since, is a clean-room rewrite that was written without reading this page's algorithm sections (`VenusRT_Plan.md` §1.2),
+so nothing here describes VenusRT; the file, class and member names are C# Venus's, and the code it cites is in the
+repository's history and in the releases that carried it.
+
 Covers `Cores/Nintendo/Venus - SNES/Cpu/`: the 65816 core (`Cpu.cs`), addressing modes (`Cpu.AddressModes.cs`), the execution opcode table (`Cpu.OpcodeTable.cs`), opcode implementations (eight `Cpu.Opcodes.*.cs` files, one per instruction category — §1), and the standalone disassembler. See `Man pages/Hardware/README.md` for what this doc set is and how it relates to the rest of `Man pages/`.
 
 The disassembler's own quirks and caveats are documented in depth in `Man pages/EmuSen_Debugging_Tools_Reference_v5.md` §3.7 (it's a debug-tooling consumer as much as a CPU component) — this page only covers what's specific to it as a *second, independent* opcode table living alongside the execution one.

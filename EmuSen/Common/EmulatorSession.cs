@@ -102,12 +102,6 @@ namespace EmuSen.Common
         // Why a slot of the game runs on the game's own file, or null - see CoreEngine.MediaNotice.
         public string? MediaNotice => (_core as Cores.Native.CoreEngine)?.MediaNotice;
 
-        // Before the caller's log writer is disposed, or a still-open trace loop never reaches the log.
-        public void FlushVerboseLogs()
-        {
-            (_core as ITraceFlushable)?.FlushVerboseTrace();
-        }
-
         public void SaveState(string path)
         {
             if (_core is null) throw new InvalidOperationException("SaveState() called before LoadRom().");

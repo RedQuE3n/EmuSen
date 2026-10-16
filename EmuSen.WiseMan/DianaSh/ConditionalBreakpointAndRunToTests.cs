@@ -1,5 +1,5 @@
+using EmuSen.Cores;
 using System.Linq;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.Crystal.Debugger;
@@ -11,10 +11,10 @@ namespace EmuSen.WiseMan.DianaSh
     [Collection(TestCollections.ProcessGlobals)]
     public class ConditionalBreakpointAndRunToTests
     {
-        private static SnesDebugTarget BuildTarget()
+        private static IDebugTarget BuildTarget()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            return new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            return SyntheticRom.TargetOf(core);
         }
 
         private static BreakpointRegistry WithCondition(bool result)
@@ -130,37 +130,6 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Contains("if a == 5", listing);
         }
 
-        // End to end: the condition reads the CPU's live A, not a snapshot.
-        [Fact]
-        public void A_real_conditional_breakpoint_evaluates_against_live_registers()
-        {
-            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
-            target.Breakpoints.AddBreakpoint(0x008000, "a == $BEEF");
-
-            core.Cpu!.A = 0x1234;
-            Assert.False(target.Breakpoints.ShouldBreak(0x008000));
-
-            core.Cpu.A = 0xBEEF;
-            Assert.True(target.Breakpoints.ShouldBreak(0x008000));
-        }
-
-        // Reading WRAM in a condition is the common case and must work.
-        [Fact]
-        public void A_condition_can_read_memory()
-        {
-            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
-            var wram = target.GetMemorySpaces().First(s => s.Name == "WRAM");
-            target.Breakpoints.AddBreakpoint(0x008000, "[$7E0040] == $5A");
-
-            wram.Write(0x40, 0x00);
-            Assert.False(target.Breakpoints.ShouldBreak(0x008000));
-
-            wram.Write(0x40, 0x5A);
-            Assert.True(target.Breakpoints.ShouldBreak(0x008000));
-        }
-
         [Fact]
         public void Bp_off_and_on_toggle_without_losing_the_breakpoint()
         {
@@ -273,17 +242,5 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Contains("nmi", result.Output);
         }
 
-        // A scanline notification must reach the registry from the real core.
-        [Fact]
-        public void The_core_reports_scanlines_to_the_breakpoint_registry()
-        {
-            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
-            target.Breakpoints.ArmRunToScanline(3);
-
-            core.RunFrame();
-
-            Assert.True(core.IsHaltedAtBreakpoint);
-        }
     }
 }

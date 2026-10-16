@@ -8,7 +8,6 @@ using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.MoonRT;
-using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
@@ -24,7 +23,7 @@ namespace EmuSen.WiseMan.Cores
         public const string StatesFromVariable = "EMUSEN_CORE_HASH_STATES_FROM";
         public const string OnlyVariable = "EMUSEN_CORE_HASH_ONLY";
 
-        // One fixed home, since a Venus state carries its battery save's full path and so differs by directory.
+        // One fixed home, so a state that names a battery save's path is the same from run to run.
         private static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache", "emusen", "probe", "core-hash-home");
 
         public CoreOutputHashProbe() => DataStore.OverrideDirectory = Home;
@@ -36,7 +35,6 @@ namespace EmuSen.WiseMan.Cores
             ("MoonRT", ".nes", 900, () => new MoonRtCore()),
             ("MercuryRT", ".gb", 900, () => new MercuryRtCore()),
             ("MercuryRT", ".gbc", 900, () => new MercuryRtCore()),
-            ("Venus", ".smc", 600, () => new VenusCore(headless: true)),
             ("MarsRT", ".z64", 500, () => new MarsRtCore(expansionPak: true, batteryRamDisabled: true)),
         };
 

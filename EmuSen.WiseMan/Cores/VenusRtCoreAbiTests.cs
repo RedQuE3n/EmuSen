@@ -6,7 +6,6 @@ using System.Text.Json.Nodes;
 using EmuSen.Common.Firmware;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.VenusRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
@@ -16,12 +15,11 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // VenusRT on the core ABI v1 through discovery: the SNES row, the factory and its fallback, the generic adapter against the shim, and battery saves both ways with C# Venus - see VenusRT_Native.md §33.
+    // VenusRT on the core ABI v1 through discovery: the SNES's one engine, the factory and its refusal without the library, the generic adapter against the shim - see VenusRT_Native.md §33, §68.5.
     [Collection(TestCollections.ProcessGlobals)]
     public class VenusRtCoreAbiTests : IDisposable
     {
         public const string Engine = "VenusRT (Rust)";
-        public const string BatteryGamesVariable = "EMUSEN_VENUSRT_BATTERY_GAMES";
 
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenVenusRtV1_" + Guid.NewGuid().ToString("N"));
         private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
@@ -83,31 +81,31 @@ namespace EmuSen.WiseMan.Cores
                 | CoreInterface.CapSettings | CoreInterface.CapDebug | CoreInterface.CapDebugStack | CoreInterface.CapDebugRegisters | CoreInterface.CapDebugDisassemble, library!.Capabilities);
         }
 
+        // Since 2026-10-16 the SNES has one engine and no row; any name asked for, the retired Venus (C#) among them, builds VenusRT.
         [Fact]
-        public void The_snes_row_offers_venusrt_through_discovery_as_the_default_with_venus_a_choice()
+        public void The_snes_has_one_engine_and_the_factory_builds_venusrt_whatever_name_is_asked_for()
         {
             if (Discovered is null) return;
             Assert.False(CoreCatalog.IsRegisteredEngine(Engine));
-            var row = CoreCatalog.EngineFor("SNES")!;
-            Assert.Equal(new[] { Engine, CoreCatalog.VenusEngine }, row.Choices);
-            Assert.Equal(Engine, row.Default);
-            Assert.Equal(Engine, CoreCatalog.EngineChosen("SNES", null));
-            Assert.Equal(CoreCatalog.VenusEngine, CoreCatalog.EngineChosen("SNES", CoreCatalog.VenusEngine));
-            Assert.IsType<VenusCore>(CoreFactory.Create("game.sfc"));
-            Assert.IsType<VenusCore>(CoreFactory.Create("game.sfc", engine: CoreCatalog.VenusEngine));
-            using var engine = Assert.IsType<CoreEngine>(CoreFactory.Create("game.sfc", engine: Engine));
-            Assert.Equal("venusrt", engine.Info.Id);
-            Assert.Null(CoreFactory.EngineNotice("game.sfc", Engine, engine));
+            Assert.Null(CoreCatalog.EngineFor("SNES"));
+            Assert.Null(CoreCatalog.EngineChosen("SNES", null));
+            Assert.Equal(Engine, CoreCatalog.EngineChosen("SNES", "Venus (C#)"));
+            foreach (string? name in new[] { null, Engine, "Venus (C#)", "Nope" })
+            {
+                using var engine = Assert.IsType<CoreEngine>(CoreFactory.Create("game.sfc", engine: name));
+                Assert.Equal("venusrt", engine.Info.Id);
+                Assert.Null(CoreFactory.EngineNotice("game.sfc", name, engine));
+            }
         }
 
         [Fact]
-        public void Without_its_library_or_with_another_one_venusrt_falls_back_to_venus_with_a_notice()
+        public void Without_its_library_or_with_another_one_an_snes_game_is_refused_in_words()
         {
             if (Discovered is not { } found) return;
             CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "nothing") });
             Assert.Null(CoreCatalog.EngineFor("SNES"));
-            ICore missing = CoreFactory.Create("game.sfc", engine: Engine);
-            Assert.IsType<VenusCore>(missing);
+            Assert.Equal("This build has no SNES core: VenusRT (Rust) is missing (no sidecar for it was found beside the program).",
+                Assert.Throws<NotSupportedException>(() => CoreFactory.Create("game.sfc", engine: Engine)).Message);
 
             string dir = Path.Combine(_root, "swapped");
             Directory.CreateDirectory(dir);
@@ -115,13 +113,10 @@ namespace EmuSen.WiseMan.Cores
             File.WriteAllBytes(library, File.ReadAllBytes(found.Sidecar.LibraryPath).Concat(new byte[] { 0 }).ToArray());
             File.Copy(CoreSidecar.PathFor(found.Sidecar.LibraryPath), CoreSidecar.PathFor(library));
             CoreDiscovery.UseDirectories(new[] { dir });
-            Assert.Equal(new[] { Engine, CoreCatalog.VenusEngine }, CoreCatalog.EngineFor("SNES")!.Choices);
-            ICore swapped = CoreFactory.Create("game.sfc", engine: Engine);
-            Assert.IsType<VenusCore>(swapped);
-            string notice = CoreFactory.EngineNotice("game.sfc", Engine, swapped)!;
-            Assert.StartsWith($"{Engine} is not available (", notice);
-            Assert.Contains("its SHA-256 differs", notice);
-            Assert.EndsWith("Venus (C#) is running.", notice);
+            Assert.Null(CoreCatalog.EngineFor("SNES"));
+            string refused = Assert.Throws<NotSupportedException>(() => CoreFactory.Create("game.sfc")).Message;
+            Assert.StartsWith($"This build has no SNES core: {Engine} is missing (", refused);
+            Assert.Contains("its SHA-256 differs", refused);
             Assert.False(CoreLibrary.IsOpen(library));
         }
 
@@ -177,25 +172,21 @@ namespace EmuSen.WiseMan.Cores
             Assert.Empty(EmuSen.Common.EmulatorSession.MissingFirmwareFor(rom, Engine));
         }
 
-        // VenusRT_Plan.md §4.5: a state C# Venus wrote is refused in words naming Venus (C#), and the machine is unchanged.
+        // VenusRT_Plan.md §4.5: a state C# Venus wrote, known by its magic "SNES", is refused in words naming Venus (C#), and the machine is unchanged.
         [Fact]
         public void A_venus_state_is_refused_naming_the_engine_that_made_it()
         {
             if (Discovered is not { } found) return;
             string rom = Path.Combine(_root, "plain.sfc");
             File.WriteAllBytes(rom, SyntheticRom.Build());
-            ICore venus = CoreFactory.Create(rom);
-            venus.LoadRom(rom);
-            for (int i = 0; i < 30; i++) venus.RunFrame();
-            using var state = new MemoryStream();
-            venus.SaveState(state);
-            (venus as IDisposable)?.Dispose();
+            byte[] venusState = new byte[4096];
+            "SNES"u8.CopyTo(venusState);
             using var engine = new CoreEngine(found.Open()!);
             engine.LoadRom(rom);
             for (int i = 0; i < 30; i++) engine.RunFrame();
             using var before = new MemoryStream();
             engine.SaveState(before);
-            var refused = Assert.Throws<InvalidDataException>(() => engine.LoadState(new MemoryStream(state.ToArray())));
+            var refused = Assert.Throws<InvalidDataException>(() => engine.LoadState(new MemoryStream(venusState)));
             Assert.Equal("VenusRT (Rust) refused the state: it was saved by Venus (C#), the C# SNES engine, whose states VenusRT cannot read.", refused.Message);
             using var after = new MemoryStream();
             engine.SaveState(after);
@@ -305,55 +296,6 @@ namespace EmuSen.WiseMan.Cores
                 Assert.True(lit > 0, $"{Path.GetFileName(rom)} shows nothing in 600 frames");
                 _output.WriteLine($"{Path.GetFileName(rom)}: 600 frames equal, {lit} with a picture");
             }
-        }
-
-        // Opt-in: for each game in EMUSEN_VENUSRT_BATTERY_GAMES, the .srm Venus (C#) writes read whole by VenusRT, and the one VenusRT writes read whole by Venus.
-        [Fact]
-        public void A_battery_save_crosses_between_venus_and_venusrt_both_ways()
-        {
-            string? dir = Environment.GetEnvironmentVariable(BatteryGamesVariable);
-            if (dir is null || Discovered is null) return;
-            InstallFirmware();
-            CoreOptions.BatteryRamDisabled = false;
-            foreach (string source in Directory.GetFiles(dir).Order(StringComparer.Ordinal))
-            {
-                string rom = Path.Combine(_root, Path.GetFileName(source));
-                File.Copy(source, rom, overwrite: true);
-                string save = BatterySave.Open(rom, BatterySave.Snes).Path!;
-                Directory.CreateDirectory(Path.GetDirectoryName(save)!);
-                File.Delete(save);
-
-                byte[] venusFresh = VenusWrites(rom, save);
-                byte[] pattern = Enumerable.Range(0, venusFresh.Length).Select(i => (byte)(i * 7 + 3)).ToArray();
-                using (var fresh = (CoreEngine)CoreFactory.Load(rom, engine: Engine).Core) Assert.Equal(venusFresh.Length, fresh.Machine.Battery(0).Data.Length);
-
-                File.WriteAllBytes(save, pattern);
-                Assert.Equal(pattern, VenusWrites(rom, save));
-                byte[] written;
-                using (var venusRt = (CoreEngine)CoreFactory.Load(rom, engine: Engine).Core)
-                {
-                    Assert.Equal(pattern, venusRt.Machine.Battery(0).Data);
-                    foreach (int at in new[] { 0, pattern.Length / 2, pattern.Length - 1 }) venusRt.WriteSpace("SRAM", at, (byte)~pattern[at]);
-                    venusRt.RunFrame();
-                    venusRt.SaveSram();
-                    written = File.ReadAllBytes(save);
-                    Assert.Equal(venusRt.Machine.Battery(0).Data, written);
-                }
-                Assert.NotEqual(pattern, written);
-                Assert.Equal(written, VenusWrites(rom, save));
-                _output.WriteLine($"{Path.GetFileName(rom)}: {pattern.Length} bytes both ways");
-            }
-        }
-
-        // What Venus (C#) writes from the save it loaded: the file removed after the load, so the bytes are its own.
-        private static byte[] VenusWrites(string rom, string save)
-        {
-            ICore venus = CoreFactory.Load(rom).Core;
-            Assert.IsType<VenusCore>(venus);
-            File.Delete(save);
-            venus.SaveSram();
-            (venus as IDisposable)?.Dispose();
-            return File.ReadAllBytes(save);
         }
     }
 }

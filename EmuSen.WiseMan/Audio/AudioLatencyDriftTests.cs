@@ -108,7 +108,7 @@ namespace EmuSen.WiseMan.Audio
 
         private static double BacklogMs(EmulatorSession session)
         {
-            int frames = ((EmuSen.Cores.Nintendo.Venus.VenusCore)session.Core!).Bus!.Spc700.Dsp.AudioBuffer.Count / 2;
+            int frames = ((EmuSen.Cores.Native.CoreEngine)session.Core!).Machine.BufferedSamples / 2;
             return frames * 1000.0 / session.AudioSampleRate;
         }
 

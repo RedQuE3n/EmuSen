@@ -23,8 +23,8 @@ namespace EmuSen.WiseMan.Mistress
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(ActiveCheatsWindowTests).GetTypeInfo().Assembly);
 
-        private static ICheatCodeCodec Poke() => EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.ActionReplay();
-        private static ICheatCodeCodec Patch() => EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.GameGenie();
+        private static ICheatCodeCodec Poke() => EmuSen.Crystal.Systems.Snes.SnesSystem.ProActionReplay();
+        private static ICheatCodeCodec Patch() => EmuSen.Crystal.Systems.Snes.SnesSystem.GameGenie();
 
         private static ActiveCheatsWindow Open(CheatRegistry registry)
         {

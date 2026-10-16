@@ -80,15 +80,11 @@ namespace EmuSen.WiseMan.Audio
         {
             using var player = new AudioPlayer();
             var session = SyntheticRom.LoadSession(SyntheticRom.BuildBlank());
-            var buffer = ((EmuSen.Cores.Nintendo.Venus.VenusCore)session.Core!).Bus!.Spc700.Dsp.AudioBuffer;
-            for (int i = 0; i < 2000; i++)
-            {
-                buffer.Enqueue((short)i, (short)-i);
-            } // 2000 frames - under AudioPlayer's 4096-frame per-pump cap
+            for (int i = 0; i < 3; i++) session.RunFrame(); // about 1,600 frames of sound, under AudioPlayer's 4096-frame per-pump cap
 
             player.Submit(session.DequeueAudioSamples(int.MaxValue), session.AudioSampleRate);
 
-            Assert.Equal(0, buffer.Count); // fully drained in one call
+            Assert.Empty(session.DequeueAudioSamples(int.MaxValue)); // fully drained in one call
         }
 
         [Fact]

@@ -1,5 +1,5 @@
+using EmuSen.Cores;
 using System.Collections.Generic;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Lib;
@@ -170,7 +170,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void The_generic_fallback_context_resolves_registers_a_target_already_reports()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            var target = SyntheticRom.TargetOf(core);
             var generic = new DebugTargetExpressionContext(target);
 
             Assert.NotEmpty(generic.SymbolNames);
@@ -182,7 +182,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Eval_prints_a_value_three_ways_through_the_shell()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            var target = SyntheticRom.TargetOf(core);
 
             string output = DianaShInterpreter.CreateDefault(target).Submit("eval $2A").Output;
 
@@ -194,7 +194,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Eval_symbols_lists_this_cores_register_names()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            var target = SyntheticRom.TargetOf(core);
 
             string output = DianaShInterpreter.CreateDefault(target).Submit("eval symbols flag").Output;
 
@@ -207,7 +207,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Eval_rejoins_an_unquoted_multi_word_expression()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            var target = SyntheticRom.TargetOf(core);
 
             Assert.Contains("3", DianaShInterpreter.CreateDefault(target).Submit("eval 1 + 2").Output);
         }
@@ -216,7 +216,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Eval_reports_a_bad_expression_with_a_nonzero_exit_code()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            var target = SyntheticRom.TargetOf(core);
             var shell = DianaShInterpreter.CreateDefault(target);
 
             shell.Submit("eval 1 +");
@@ -228,7 +228,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void A_label_becomes_usable_as_a_symbol()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            var target = SyntheticRom.TargetOf(core);
             var shell = DianaShInterpreter.CreateDefault(target);
             shell.Submit("label add 00A3B2 NmiHandler");
 

@@ -81,8 +81,8 @@ status 1
 action none
 end
 
-case on venus
-target venus
+case on venusrt
+target venusrt
 covers 1
 $ tilemap VRAM 0 4 2
 out 63

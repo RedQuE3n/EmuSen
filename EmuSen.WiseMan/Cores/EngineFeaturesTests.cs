@@ -3,7 +3,6 @@ using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.MoonRT;
-using EmuSen.Cores.Nintendo.Venus;
 
 namespace EmuSen.WiseMan.Cores
 {
@@ -15,7 +14,7 @@ namespace EmuSen.WiseMan.Cores
             yield return new object[] { "MarsRT" };
             yield return new object[] { "MoonRT" };
             yield return new object[] { "MercuryRT" };
-            yield return new object[] { "Venus" };
+            yield return new object[] { "VenusRT" };
         }
 
         [Theory]
@@ -27,7 +26,7 @@ namespace EmuSen.WiseMan.Cores
                 "MarsRT" => new MarsRtCore(),
                 "MoonRT" => new MoonRtCore(),
                 "MercuryRT" => new MercuryRtCore(),
-                _ => new VenusCore(headless: true),
+                _ => CoreFactory.Create("game.sfc"),
             };
             Assert.Same(EngineFeatures.All, EngineFeatures.Of(core));
             Assert.True(EngineFeatures.Of(core).RewindCapture);

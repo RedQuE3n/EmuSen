@@ -1,4 +1,4 @@
-using EmuSen.Cores.Nintendo.Venus.Debug;
+using EmuSen.Cores;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
@@ -21,10 +21,10 @@ namespace EmuSen.WiseMan.DianaSh
     // rendering isn't (both need a real display/terminal).
     public class CoretopWindowFlagTests
     {
-        private static SnesDebugTarget BuildTarget()
+        private static IDebugTarget BuildTarget()
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            return new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            return SyntheticRom.TargetOf(core);
         }
 
         [Fact]

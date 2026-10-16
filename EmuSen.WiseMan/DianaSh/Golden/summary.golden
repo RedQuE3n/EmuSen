@@ -39,22 +39,6 @@ status 0
 action none
 end
 
-case on venus
-target venus
-covers 1
-$ summary
-out 431
-[STATE] CPU  PC=00:ED3E  A=0001 X=0000 Y=0000 S=01F3 D=0000 DB=00  P=34 [nv-BdIzc]  E=1
-[STATE] PPU  BGMODE=00  INIDISP=00  TM=00  TS=00
-[STATE] PPU  CGWSEL=00  CGADSUB=00  MOSAIC=00 (anchor=0)  SETINI=00
-[STATE] PPU  BG1 SC=00 X=0 Y=0   BG2 SC=00 X=0 Y=0
-[STATE] PPU  BG3 SC=00 X=0 Y=0   BG4 SC=00 X=0 Y=0
-[STATE] PPU  BG12NBA=00  BG34NBA=00  OBSEL=00
-[STATE] PPU  M7SEL=00  M7A=0 M7B=0 M7C=0 M7D=0  M7X=0 M7Y=0  M7HOFS=0 M7VOFS=0
-status 0
-action none
-end
-
 case on venusrt
 target venusrt
 covers 1

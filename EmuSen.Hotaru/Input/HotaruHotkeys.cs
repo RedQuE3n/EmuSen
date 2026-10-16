@@ -7,7 +7,6 @@ namespace EmuSen.Hotaru.Input
     public enum HotaruHotkey
     {
         Summary,
-        DumpOam,
         Screenshot,
         DebugPrompt,
         SaveState,
@@ -15,8 +14,6 @@ namespace EmuSen.Hotaru.Input
         MirrorToggle,
         CycleShader,
         LoadState,
-        DumpBackdrop,
-        StartBgScrollTrace,
         ShowHotkeys,
         FastForward,
         Rewind,
@@ -31,7 +28,6 @@ namespace EmuSen.Hotaru.Input
         public static readonly IReadOnlyList<Entry> All = new[]
         {
             new Entry(HotaruHotkey.Summary, Key.F1, "Print a frame summary", ""),
-            new Entry(HotaruHotkey.DumpOam, Key.F2, "Dump OAM", ""),
             new Entry(HotaruHotkey.Screenshot, Key.F3, "Save a screenshot", ""),
             new Entry(HotaruHotkey.DebugPrompt, Key.F4, "Open the debug prompt", ""),
             new Entry(HotaruHotkey.SaveState, Key.F5, "Save state", ""),
@@ -39,8 +35,6 @@ namespace EmuSen.Hotaru.Input
             new Entry(HotaruHotkey.MirrorToggle, Key.F7, "Mirror player 1 to player 2", ""),
             new Entry(HotaruHotkey.CycleShader, Key.F8, "Cycle the shader effect", ""),
             new Entry(HotaruHotkey.LoadState, Key.F9, "Load state", ""),
-            new Entry(HotaruHotkey.DumpBackdrop, Key.O, "Dump the backdrop", ""),
-            new Entry(HotaruHotkey.StartBgScrollTrace, Key.P, "Start a BG scroll trace", ""),
             new Entry(HotaruHotkey.ShowHotkeys, Key.F12, "Show this list", ""),
             new Entry(HotaruHotkey.FastForward, Key.Tab, "Fast forward", "held"),
             new Entry(HotaruHotkey.Rewind, Key.Back, "Rewind", "held"),

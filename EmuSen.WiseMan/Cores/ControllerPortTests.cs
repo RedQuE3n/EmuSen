@@ -6,7 +6,6 @@ using EmuSen.Cores.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.MoonRT;
-using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
@@ -81,11 +80,6 @@ namespace EmuSen.WiseMan.Cores
 
             if (MercuryRtCore.Available) Assert.Equal(1, ControllerPorts.Of(CoreFactory.Load(gb, engine: CoreCatalog.MercuryRtEngine).Core));
             if (MarsRtCore.Available) Assert.Equal(4, ControllerPorts.Of(new MarsRtCore()));
-            if (CoreDiscovery.Found.SingleOrDefault(c => c.Info.Id == "venusrt") is { } venusrt)
-            {
-                using var engine = Assert.IsType<CoreEngine>(CoreFactory.Load(snes, engine: venusrt.EngineName).Core);
-                Assert.Equal(2, ControllerPorts.Of(engine));
-            }
         }
 
         // Port 1 is controller 2; ports 2 and 3 used to land on controller 2 as well.
@@ -110,16 +104,12 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // Pad 2 is the auto-read's second word; ports 2 and 3, which reached it through the console's 1-based index, now reach nothing.
-        [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public void The_snes_second_pad_reads_port_1_alone(bool rust)
+        [Fact]
+        public void The_snes_second_pad_reads_port_1_alone()
         {
             string snes = Rom(SyntheticRom.Build((5, ReadSnesPads)), "pads.sfc");
-            DiscoveredCore? venusrt = CoreDiscovery.Found.SingleOrDefault(c => c.Info.Id == "venusrt");
-            if (rust && venusrt is null) return;
-            ICore core = CoreFactory.Load(snes, engine: rust ? venusrt!.EngineName : null).Core;
-            Func<int, byte> wram = a => core is VenusCore venus ? venus.Bus!.Ram[a] : ((CoreEngine)core).ReadSpace("WRAM", a);
+            ICore core = CoreFactory.Load(snes).Core;
+            Func<int, byte> wram = a => ((CoreEngine)core).ReadSpace("WRAM", a);
             byte[] Pads() { for (int i = 0; i < 3; i++) core.RunFrame(); return Enumerable.Range(0, 4).Select(wram).ToArray(); }
 
             // Pad 3's register is not a pad without a multitap, so its byte is whatever the bus gives, before and after.

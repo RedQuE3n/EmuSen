@@ -1,57 +1,39 @@
+using System;
+using EmuSen.Cores;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Audio
 {
-    // ICore.AudioSampleRate / DequeueAudioSamples (VenusCore's
-    // implementation) and EmulatorSession's pass-through - the audio
-    // counterpart to GetFrameBufferRgba(), added so a frontend can drain
-    // synthesized audio without reaching into Spc700.Dsp.AudioBuffer (a
-    // real SNES-specific type) directly. See ICore.cs's own comment.
+    // ICore.AudioSampleRate and DequeueAudioSamples on the SNES's engine, and EmulatorSession's pass-through - see ICore.cs.
     public class AudioDrainTests
     {
+        // VenusRT gives the S-DSP's own 32 kHz, and the host resamples - see VenusRT_Native.md §22.
         [Fact]
-        public void AudioSampleRate_matches_AudioSettings()
+        public void AudioSampleRate_is_the_engines_own()
         {
-            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            Assert.Equal(EmuSen.Audio.AudioSettings.SampleRate, core.AudioSampleRate);
+            using var core = (IDisposable)SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
+            Assert.Equal(32000, ((ICore)core).AudioSampleRate);
         }
 
         [Fact]
         public void Dequeue_with_nothing_queued_returns_empty()
         {
-            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            Assert.Empty(core.DequeueAudioSamples(100));
+            using var core = (IDisposable)SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
+            Assert.Empty(((ICore)core).DequeueAudioSamples(100));
         }
 
         [Fact]
-        public void Dequeue_respects_cap_and_drains_in_fifo_order()
+        public void Dequeue_respects_its_cap_in_whole_frames_and_leaves_the_rest()
         {
-            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var buffer = core.Spc700!.Dsp.AudioBuffer;
-            for (int i = 0; i < 10; i++)
-            {
-                buffer.Enqueue((short)(1000 + i), (short)(-1000 - i));
-            }
+            ICore core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
+            core.RunFrame();
 
-            short[] capped = core.DequeueAudioSamples(4);
-
-            Assert.Equal(8, capped.Length); // 4 frames = 8 shorts
-            Assert.Equal(new short[] { 1000, -1000, 1001, -1001, 1002, -1002, 1003, -1003 }, capped);
-            Assert.Equal(12, buffer.Count); // 6 frames left
-        }
-
-        [Fact]
-        public void Dequeue_asking_for_more_than_available_returns_only_whats_queued()
-        {
-            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            var buffer = core.Spc700!.Dsp.AudioBuffer;
-            buffer.Enqueue(1, 2);
-            buffer.Enqueue(3, 4); // 2 frames
-
-            short[] result = core.DequeueAudioSamples(1000);
-
-            Assert.Equal(new short[] { 1, 2, 3, 4 }, result);
-            Assert.Equal(0, buffer.Count);
+            Assert.Equal(8, core.DequeueAudioSamples(4).Length); // 4 frames = 8 shorts
+            short[] rest = core.DequeueAudioSamples(int.MaxValue);
+            Assert.NotEmpty(rest);
+            Assert.Equal(0, rest.Length % 2);
+            Assert.Empty(core.DequeueAudioSamples(int.MaxValue));
+            (core as IDisposable)?.Dispose();
         }
 
         [Fact]
@@ -66,11 +48,10 @@ namespace EmuSen.WiseMan.Audio
         public void EmulatorSession_drains_through_to_the_real_core()
         {
             var session = SyntheticRom.LoadSession(SyntheticRom.BuildBlank());
-            ((EmuSen.Cores.Nintendo.Venus.VenusCore)session.Core!).Bus!.Spc700.Dsp.AudioBuffer.Enqueue(42, -42);
+            session.RunFrame();
 
-            short[] result = session.DequeueAudioSamples(10);
-
-            Assert.Equal(new short[] { 42, -42 }, result);
+            Assert.NotEmpty(session.DequeueAudioSamples(int.MaxValue));
+            Assert.Empty(session.DequeueAudioSamples(int.MaxValue));
         }
     }
 }

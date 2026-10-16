@@ -19,22 +19,6 @@ namespace EmuSen.Cores
         string HaltedProcessorName { get; }
     }
 
-    // Cumulative since power-on; <PerFrameBudget> is what a full-rate frame would allow.
-    public readonly record struct CoprocessorClocks(string Name, long Executed, long Offered, long PerFrameBudget);
-
-    // A core whose extra processors run on a clock budget worth reporting - see EmuSen_Multicore.md §5.
-    public interface ICoprocessorLoad
-    {
-        // Empty when the loaded cartridge has no such chip.
-        IReadOnlyList<CoprocessorClocks> CoprocessorClocks { get; }
-    }
-
-    // A core buffering verbose instruction traces that must reach the log before it closes.
-    public interface ITraceFlushable
-    {
-        void FlushVerboseTrace();
-    }
-
     // What kind of value a setting takes: on or off, a count within a range, or one name of several - see EmuSen_Multicore.md §13.
     public enum CoreSettingKind { Switch, Count, Choice }
 

@@ -6582,7 +6582,8 @@ image at 33 ms. The truncated game writes registers at random, and C#'s `_regist
 carries, grows by thousands each frame (the state reaches 128 MB); every frame's change of shape had the machine
 measure both state sizes for `STATE_SIZE`, half a second each. A change of the registers written alone now moves the
 sizes told by eight bytes a register, which needs no measuring, and the sizes so carried equal the measured ones after
-300 frames of it (128,295,963 and 128,558,111). The 300 frames then take 9.3 s, as without the event.
+300 frames of it (128,295,963 and 128,558,111). The 300 frames then take 9.3 s, as without the event, and the kit passes
+all 19 cases on Ocarina of Time too.
 
 ### 7.5 C# Mars retired as MarsRT's oracle
 
@@ -6610,3 +6611,32 @@ oracle was C# Mars running alongside MarsRT were removed:
 - `MarsRtEngineTests`: the state saved by the hotkeys read back by Mars, and the battery file read by Mars.
 - `MarsRtCoreAbiTests`: R3 against C# Mars, which is now R3 against MarsRT's own continuous run.
 - `MarsRtDigestProbe`: the runs from C# Mars's state and snapshot.
+
+### 7.6 Timed (step 5b), with the profile unguided on both sides
+
+**The builds.** The committed driver (`pgo/driver`, `mistress=1 warmup=120`, §6.17.5) published with `dotnet publish -r
+linux-x64`, as a publish of Mistress builds the library (`dist`), once from `80b0dfed` ("before") and once from this
+step's commit ("after"), each with its own cargo target root. **The PGO verdict is `none` on both**: the checked-in
+profile was trained for Fedora's `rustc 1.98.1`, and these builds used the toolchain the project's other Rust work
+used that day, `rustc 1.101.0-nightly (2026-09-30)`, whose names the profile does not hold (§6.17.6's rule 1). Fedora's
+own compiler had moved to 1.99.0 since the training, so even a build with it would have been unguided. The numbers
+are therefore an unguided library against an unguided library; step 5a, the retrain, stays deferred with the rest of
+the profile work (decided 2026-09-30), and §6.17.6's rule 3 says a quoted speed waits for it.
+
+**The runs.** Super Mario 64 and Ocarina of Time from their measurement states, 120 frames of warm-up and 600 timed,
+production's settings, eight rounds with the two builds interleaved and their order swapped each round, under the
+shared timing lock and a quiet gate of three busy processors at most (the machine carried other work: a load average of
+4.3 to 5.5 when the rounds began, and 1.1 to 2.5 busy processors at the gate). `EMUSEN_MARS_PERF_GAMES` was not
+widened.
+
+| game | before, median (range), ms a frame | after, median (range) | paired change | ranges overlap |
+|---|---|---|---|---|
+| Super Mario 64, the loop | 3.868 (3.660–3.965) | 3.888 (3.676–4.976) | +0.9% | yes |
+| Ocarina of Time, the loop | 4.965 (4.709–5.716) | 4.915 (4.723–5.325) | −0.5% | yes |
+| Super Mario 64, `RunFrame` alone | 3.685 (3.478–3.771) | 3.687 (3.492–4.694) | +0.5% | yes |
+| Ocarina of Time, `RunFrame` alone | 4.782 (4.536–5.509) | 4.728 (4.538–5.117) | −0.8% | yes |
+
+**P3 of `EmuSen_NativeCores.md` §8.1** (the plain frame within ±1% of the frame before the move, interleaved) **holds
+for the two graded games**, unguided against unguided; it asked for both builds retrained, which waits for 5a. The
+state each run ends on is one hash a game in each build, and the two builds' hashes differ by design: the runs begin by
+loading a state, and §7.4 made a load leave the paks' `Dirty` as the state says.

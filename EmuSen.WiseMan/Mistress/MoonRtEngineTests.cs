@@ -64,7 +64,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         [Fact]
-        public Task The_NES_tab_offers_the_engine_with_Moon_the_default_and_a_choice_is_stored() => Session.Dispatch(() =>
+        public Task The_NES_tab_offers_the_engine_with_MoonRT_the_default_and_a_choice_is_stored() => Session.Dispatch(() =>
         {
             var config = new GraphicsConfig();
             string? told = null;
@@ -72,20 +72,21 @@ namespace EmuSen.WiseMan.Mistress
             window.Show();
 
             Dropdown engine = window.GetLogicalDescendants().OfType<Dropdown>().Where(d => d.Name == $"NES.{CoreCatalog.EngineKey}").Distinct().Single();
-            Assert.Equal(new[] { CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine }, engine.Items.Cast<object>().Select(o => o.ToString()));
-            Assert.Equal(CoreCatalog.MoonEngine, engine.SelectedItem);
+            Assert.Equal(new[] { CoreCatalog.MoonRtEngine, CoreCatalog.MoonEngine }, engine.Items.Cast<object>().Select(o => o.ToString()));
+            Assert.Equal(CoreCatalog.MoonRtEngine, engine.SelectedItem);
 
-            engine.SelectedItem = CoreCatalog.MoonRtEngine;
+            engine.SelectedItem = CoreCatalog.MoonEngine;
             Dispatcher.UIThread.RunJobs();
 
             Assert.Equal("NES", told);
-            Assert.Equal(CoreCatalog.MoonRtEngine, GraphicsConfig.Load().Value("NES", CoreCatalog.EngineKey));
+            Assert.Equal(CoreCatalog.MoonEngine, GraphicsConfig.Load().Value("NES", CoreCatalog.EngineKey));
             window.Close();
         }, default);
 
         [Fact]
-        public Task A_game_runs_on_Moon_until_MoonRT_is_chosen_and_then_on_MoonRT_with_rewind_and_its_states_Moons() => Session.Dispatch(() =>
+        public Task A_game_runs_on_the_engine_chosen_and_on_MoonRT_with_rewind_and_its_states_Moons() => Session.Dispatch(() =>
         {
+            Choose(CoreCatalog.MoonEngine);
             MainWindow window = Start();
             Assert.IsType<MoonCore>(Game(window).Core);
             window.Close();

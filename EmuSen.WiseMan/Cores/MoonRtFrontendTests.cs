@@ -80,12 +80,12 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void The_NES_row_offers_MoonRT_with_Moon_the_default_and_the_factory_honours_it()
+        public void The_NES_row_offers_MoonRT_as_the_default_and_the_factory_honours_it()
         {
             CoreSetting engine = CoreCatalog.EngineFor("NES")!;
-            Assert.Equal(CoreCatalog.MoonEngine, engine.Default);
-            Assert.Equal(new[] { CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine }, engine.Choices);
-            Assert.Equal(CoreCatalog.MoonEngine, CoreCatalog.EngineChosen("NES", null));
+            Assert.Equal(CoreCatalog.MoonRtEngine, engine.Default);
+            Assert.Equal(new[] { CoreCatalog.MoonRtEngine, CoreCatalog.MoonEngine }, engine.Choices);
+            Assert.Equal(CoreCatalog.MoonRtEngine, CoreCatalog.EngineChosen("NES", null));
 
             string rom = Rom(Program());
             CoreBundle reference = CoreFactory.Load(rom);

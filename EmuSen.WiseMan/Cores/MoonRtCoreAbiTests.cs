@@ -47,12 +47,12 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void The_shim_stays_moonrts_loader_and_moon_stays_the_default()
+        public void The_shim_stays_moonrts_loader_and_moonrt_is_the_default()
         {
             _ = Discovered;
             var row = CoreCatalog.EngineFor("NES")!;
-            Assert.Equal(new[] { CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine }, row.Choices);
-            Assert.Equal(CoreCatalog.MoonEngine, row.Default);
+            Assert.Equal(new[] { CoreCatalog.MoonRtEngine, CoreCatalog.MoonEngine }, row.Choices);
+            Assert.Equal(CoreCatalog.MoonRtEngine, row.Default);
             ICore core = CoreFactory.Create("game.nes", engine: CoreCatalog.MoonRtEngine);
             Assert.IsType<MoonRtCore>(core);
             Assert.Null(CoreFactory.EngineNotice("game.nes", CoreCatalog.MoonRtEngine, core));

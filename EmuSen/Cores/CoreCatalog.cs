@@ -386,8 +386,8 @@ namespace EmuSen.Cores
                 "Which implementation runs the console. Mercury (C#) is the reference. MercuryRT (Rust) is exact against it in state, picture and sound and reads the same save states and battery saves; its debugger view is refreshed from its state, and it stops at breakpoints, steps and records coverage, watches and the call stack as Mercury does. Takes effect when a game is next loaded.",
                 CoreSettingKind.Choice, MercuryEngine, Choices: new[] { MercuryEngine, MercuryRtEngine }),
             ["NES"] = new(EngineKey, "Engine",
-                "Which implementation runs the console. Moon (C#) is the reference. MoonRT (Rust) is exact against it in state, picture and sound, reads the same save states and battery saves, and takes the same cheats; its debugger view is refreshed from its state, and it stops at breakpoints, steps, runs to a frame or an interrupt, and records coverage, watches, the profile and the call stack as Moon does. Takes effect when a game is next loaded.",
-                CoreSettingKind.Choice, MoonEngine, Choices: new[] { MoonEngine, MoonRtEngine }),
+                "Which implementation runs the console. MoonRT (Rust) is the default, graded by its own recorded goldens, the NES test-ROM corpus and the conformance kit. Moon (C#) is the core it was ported from, kept until it is deleted, and runs instead where MoonRT's library is missing. Takes effect when a game is next loaded.",
+                CoreSettingKind.Choice, MoonRtEngine, Choices: new[] { MoonRtEngine, MoonEngine }),
         };
 
         public const string VenusEngine = "Venus (C#)";

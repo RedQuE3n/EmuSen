@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 
-namespace EmuSen.Cores.Nintendo.Mercury.Cheats
+namespace EmuSen.Crystal.Systems.GameBoy
 {
     // The Game Boy Game Genie: a ROM-read intercept, nine hex digits with a compare byte or six without - see Mercury_Cheats.md §2.
     public static class GbGameGenieCodec

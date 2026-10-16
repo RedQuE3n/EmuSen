@@ -11,7 +11,7 @@ namespace EmuSen.WiseMan.Fixtures
             (0x1B, 0x03, 0x80), (0x1E, 0x04, 0x00), (0x19, 0x00, 0xC0),
         };
 
-        // Counts in WRAM, copies the count to cart RAM, keys a pulse note and scrolls - MercuryRtStateTests' program.
+        // Counts in WRAM, copies the count to cart RAM, keys a pulse note and scrolls, the state tests' program.
         public static readonly byte[] Busy =
         {
             0x3E, 0x0A, 0xEA, 0x00, 0x00, 0x3E, 0xF0, 0xE0, 0x12, 0x3E, 0x87, 0xE0, 0x14,

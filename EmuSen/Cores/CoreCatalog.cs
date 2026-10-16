@@ -240,7 +240,7 @@ namespace EmuSen.Cores
             {
                 [Venus.Console] = Nintendo.Venus.VenusCore.PadButtons,
                 [Moon.Console] = Nintendo.Moon.MoonCore.PadButtons,
-                [Mercury.Console] = Nintendo.Mercury.MercuryCore.PadButtons,
+                [Mercury.Console] = Nintendo.MercuryRT.MercuryRtCore.PadButtons,
                 [Mars.Console] = Nintendo.Mars.MarsCore.PadButtons,
             };
 
@@ -322,7 +322,7 @@ namespace EmuSen.Cores
         private static readonly Dictionary<string, IReadOnlyList<CoreSetting>> SettingsByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
             ["N64"] = Nintendo.Mars.MarsCore.VideoSettings,
-            ["GB"] = Nintendo.Mercury.MercuryCore.ModelSettings,
+            ["GB"] = Nintendo.MercuryRT.MercuryRtCore.ModelSettings,
         };
 
         public static IReadOnlyList<CoreSetting> SettingsFor(string console) =>

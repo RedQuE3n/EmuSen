@@ -5,18 +5,18 @@ namespace EmuSen.WiseMan.Cores
 {
     public class MercuryCommercialRomSaveStateTests
     {
-        public static TheoryData<string, MercuryEngine> Cartridges => Roms;
+        public static TheoryData<string> Cartridges => Roms;
 
         // The strongest check available without a reference: state that is not saved shows up here.
         [Theory]
         [MemberData(nameof(Cartridges))]
-        public void A_save_state_taken_mid_game_resumes_into_the_same_future(string path, MercuryEngine engine)
+        public void A_save_state_taken_mid_game_resumes_into_the_same_future(string path)
         {
             if (path.Length == 0) return;
 
             const int resumeFrames = 120;
 
-            using var core = Load(path, engine);
+            using var core = Load(path);
             RunTo(core, BootFrames);
 
             using var stream = new MemoryStream();

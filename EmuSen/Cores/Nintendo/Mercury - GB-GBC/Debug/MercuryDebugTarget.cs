@@ -5,7 +5,7 @@ using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Crystal.Telemetry;
 using EmuSen.Cores.Nintendo.Mercury.Audio;
-using EmuSen.Cores.Nintendo.Mercury.Cpu.Disassembler;
+using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Mercury.Memory;
 using EmuSen.Cores.Nintendo.Mercury.Video;
 

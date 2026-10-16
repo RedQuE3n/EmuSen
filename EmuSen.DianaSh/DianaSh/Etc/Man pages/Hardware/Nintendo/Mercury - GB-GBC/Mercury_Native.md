@@ -3595,3 +3595,66 @@ C# core, measured on 2026-10-16 from the build of the switch:
 - **The goldens**: the 36 frame runs and 3 step programs, the 176 random programs, the 173 corpus traces and the four
   games (3,600 frames each with the bench's input) all reproduced, and the deliberately broken trace was caught in
   each of its three columns.
+
+### 15.2 The shim without the C# core
+
+§14.8 listed what MercuryRtCore took from C# Mercury. Each now has one owner outside it:
+
+| What | Was | Now |
+|---|---|---|
+| `GbModel`, the Model setting's key, values, row and parse | `MercuryCore.Model.cs` | `MercuryRtCore` (the enum beside it in the shim) |
+| the header's refusals, battery and RAM size | `Cartridge.FromImage` | `GbCartridge`, a header read of 40 lines in the shim that refuses as the board did, with the same messages |
+| the mixer's seed | `Apu.HighPassSeed` | `MercuryRtCore.HighPassSeed` |
+| the clock, frame, screen, state magic and versions, space names, pad | `MercuryCore` constants | `MercuryRtCore` constants; `MercuryMachine.SpaceNames` is the same array |
+| the GameShark and Game Genie codecs | `Cheats/` in the C# core | `EmuSen.Crystal/Systems/GameBoy/`, as the SNES's and the Genesis's formats are kept: a console's facts, no engine's |
+| the SM83 disassembler | `Cpu/Disassembler/` | the shim, unchanged but for its namespace |
+| the debugger's registries (breakpoints, watches, frame log, coverage, labels, call stack, cheats) | the hidden mirror's | `MercuryRtCore`'s own, wired as the mirror wired them: the breakpoints' call stack, coverage's entry points, a reset at each load |
+| the debugger's view | `MercuryDebugTarget` over the mirror, refreshed by a state round trip | `MercuryRtDebugTarget`, which reads the same state through the listing `state_layout` prints (§14.5) |
+
+**The layout reader moved into the shim.** `MercuryStateLayout` (the parser and the field access of §14.5) is now
+production code: the debugger takes a snapshot at each refresh (`MercuryRtCore.Snapshot`, the state and the listing
+the library prints for it, asked for again only when the state's length moves, as a load from the other console moves
+it) and reads every register, sprite, palette and channel field by its path. WiseMan keeps only the choice of a
+committed listing (`MercuryLayouts`), so the committed files and the running library are read by one parser. What the
+CPU would read rather than what the state holds (STAT, the sound registers `$FF10`–`$FF26`, BCPS and OCPS) is read
+through the `CPUBUS` space, which is what the C# target's `ReadStat`, `ReadRegister` and palette-index reads were on
+its own bus. The mirror's cost per refresh was a state save and a C# load; the snapshot's is the save alone.
+
+**One reading moved, deliberately.** The mirror's sound queue was in no state and stayed empty, so MercuryRT's
+`summary` always printed `buffered=0 frames`. The target now prints the machine's own queue, as the C# core's summary
+did, and the DianaSh golden of `summary` on `mercuryrt` was re-recorded for that line alone.
+
+**`PortEngine`** keeps its mirror for MoonRT: `MirrorCore` and `MirrorLoaded` became virtual with no mirror as the
+default, and a port without a mirror sends its channel mutes as soon as a game is loaded. The mutes are the core's own
+now, cleared by a load as the mirror's fresh bus cleared them.
+
+### 15.3 The tests, held on MercuryRT alone
+
+The claims classes ran each test on both engines through `MercuryRig`. With one engine the rig loses its C# half, its
+view (`rig.Bus`, `rig.Cpu`, `rig.Cart`) and `MercuryStateAgreement`; every read of the view became a path in the
+listing (`rig.Field("Bus.Ppu.Mode")`), every array write a write to the named space (`rig.WriteSpace("VRAM", …)`)
+and every field edit a state round trip (`rig.SetField`). About 230 lines across the PPU, CGB, APU, CPU, core,
+serial, access-blocking, cartridge and audit claims changed this way, with the claims themselves unchanged. A
+checker run over the converted files found every path in a committed listing.
+
+Some C# members were not state. Each was either computed from the state as the C# property computed it, or dropped:
+
+- **Computed in the test**: a pulse channel's output (its duty waveform at its step times its volume), the wave
+  channel's sample and its output through the volume shift, DIV (the top byte of the divider), OAM DMA's running
+  flag (its counter between the first and the last machine cycle), the WRAM bank mapped at `$D000`, and
+  `TakePendingStall` (the stall field, read and cleared).
+- **Dropped**: the header's title and checksum validity, which MercuryRT does not read; C#'s palette-number lookup,
+  whose palettes stay held by the frozen file (§14.6); and the C#-only cases of the debugger claims.
+
+The lock-step classes (`MercuryRtMachineTests`, `MercuryRtStateTests`, `MercuryCycleTimingTests`) and every case
+whose only assertion was "the engines agree" left: the goldens hold those comparisons now (§14.7). Where a lock-step
+case also asserted a hardware fact (the boot registers on each console, the colour palettes, the clock in double
+speed, a state resuming on the console it was made on, the debugger's palettes), the fact was kept and asserted on
+MercuryRT alone. The armed-against-plain debugger cases compare MercuryRT with every table armed against MercuryRT
+plain, which is the claim they were written for (§8.5.4). The corpus baseline lost its three C# columns.
+
+**What could not move.** The version-5 states of §9.3 were written by a reflection walk over the C# classes;
+nothing in the repository can write one now, so `D3_version_5_states_the_unmodified_build_wrote_load_on_both_engines`
+left with the C# core. MercuryRT still reads version 5 (`OldestReadableVersion`), and the real games' version-5
+states, kept outside the tree under `EMUSEN_MERCURY_V5_STATES`, are still graded by
+`D3_real_games_version_5_states_resume_where_the_unmodified_build_went` on MercuryRT alone.

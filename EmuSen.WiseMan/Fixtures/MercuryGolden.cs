@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
-using EmuSen.Cores.Nintendo.Mercury;
+using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.WiseMan.Fixtures
@@ -108,10 +108,10 @@ namespace EmuSen.WiseMan.Fixtures
         }
     }
 
-    // Recording and replaying golden runs on either engine through the rig - see Mercury_Native.md §14.4.
+    // Recording and replaying golden runs on MercuryRT through the rig - see Mercury_Native.md §14.4, §15.
     public static class MercuryGolden
     {
-        // Set to the engine to record from (Mercury, the C# engine, while it is on main) to write traces instead of grading them.
+        // Set to 1 to write traces from MercuryRT instead of grading them: a deliberate re-baseline, whose commit states its reason (§3.7's second rule).
         public const string RecordVariable = "EMUSEN_MERCURY_GOLDEN_RECORD";
 
         // Where the full states every IntervalFrames frames go, outside the tree; ~/.cache/emusen/mercury-goldens by default.
@@ -127,7 +127,7 @@ namespace EmuSen.WiseMan.Fixtures
         public static string StateCache => Environment.GetEnvironmentVariable(StatesVariable) is { Length: > 0 } dir ? dir
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache", "emusen", "mercury-goldens");
 
-        public static MercuryEngine? Recording => Environment.GetEnvironmentVariable(RecordVariable) is { Length: > 0 } v ? Enum.Parse<MercuryEngine>(v == "1" ? nameof(MercuryEngine.Mercury) : v) : null;
+        public static bool Recording => Environment.GetEnvironmentVariable(RecordVariable) is { Length: > 0 };
 
         public static string TracePath(string name) => Path.Combine(Directory(), name + ".trace");
 
@@ -150,13 +150,13 @@ namespace EmuSen.WiseMan.Fixtures
             return $"{input} {Hash(masks)}";
         }
 
-        // The order of a mask's bits: MercuryCore.PadButtons in the C ABI's order.
+        // The order of a mask's bits: the pad's buttons in the C ABI's order.
         public static readonly PadButton[] MaskOrder = { PadButton.Right, PadButton.Left, PadButton.Up, PadButton.Down, PadButton.A, PadButton.B, PadButton.Select, PadButton.Start };
 
-        public static MercuryGoldenTrace Run(MercuryEngine engine, MercuryGoldenRun run, byte[]? resumeFrom = null, int resumeAt = 0, Action<int, byte[]>? interval = null)
+        public static MercuryGoldenTrace Run(MercuryGoldenRun run, byte[]? resumeFrom = null, int resumeAt = 0, Action<int, byte[]>? interval = null)
         {
             byte[] rom = run.Rom();
-            using MercuryRig rig = MercuryRig.Create(engine, rom, run.Model);
+            using MercuryRig rig = MercuryRig.Create(rom, run.Model);
             rig.SkipRendering = run.SkipRendering;
             var trace = new MercuryGoldenTrace
             {
@@ -164,7 +164,7 @@ namespace EmuSen.WiseMan.Fixtures
                 Rom = Convert.ToHexString(SHA256.HashData(rom)),
                 Model = run.Model.ToString(),
                 Rendering = run.SkipRendering ? "skipped" : "on",
-                RecordedBy = engine.ToString(),
+                RecordedBy = "MercuryRt",
             };
             if (run.Steps > 0) Steps(rig, run, trace);
             else Frames(rig, run, trace, resumeFrom, resumeAt, interval);
@@ -204,12 +204,12 @@ namespace EmuSen.WiseMan.Fixtures
             if (!run.Corpus) return;
             trace.Transcript.TryAdd("verdict", $"NoVerdict {run.Frames}");
             trace.Transcript["serial"] = Convert.ToHexString(rig.SerialLog.ToArray());
-            if (HardwareTestRomLibrary.ReadCartRamStatus(i => rig.ReadSpace(MercuryCore.SpaceCartRam, i)) is not null)
+            if (HardwareTestRomLibrary.ReadCartRamStatus(i => rig.ReadSpace(MercuryRtCore.SpaceCartRam, i)) is not null)
             {
                 var text = new List<byte>();
                 for (int i = 4; i < 0x2000; i++)
                 {
-                    byte b = rig.ReadSpace(MercuryCore.SpaceCartRam, i);
+                    byte b = rig.ReadSpace(MercuryRtCore.SpaceCartRam, i);
                     if (b == 0) break;
                     text.Add(b);
                 }
@@ -222,7 +222,7 @@ namespace EmuSen.WiseMan.Fixtures
         {
             TestRomVerdict serial = HardwareTestRomLibrary.ReadVerdict(rig.SerialLog);
             if (serial != TestRomVerdict.NoVerdict) return serial.ToString();
-            return HardwareTestRomLibrary.ReadCartRamStatus(i => rig.ReadSpace(MercuryCore.SpaceCartRam, i)) is int status ? (status == 0 ? "Passed" : $"Failed({status})") : null;
+            return HardwareTestRomLibrary.ReadCartRamStatus(i => rig.ReadSpace(MercuryRtCore.SpaceCartRam, i)) is int status ? (status == 0 ? "Passed" : $"Failed({status})") : null;
         }
 
         // Each instruction's state hashed into a chain, written every StepRow instructions and at the end; an illegal opcode ends the run.

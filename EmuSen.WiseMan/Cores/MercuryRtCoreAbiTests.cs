@@ -38,7 +38,7 @@ namespace EmuSen.WiseMan.Cores
         private string Rom(string name, byte cgb, byte kind = 0x13)
         {
             string path = Path.Combine(_root, name);
-            File.WriteAllBytes(path, SyntheticGbRom.Build(romBanks: 4, cartridgeType: kind, ramSizeCode: 0x03, cgbFlag: cgb, patches: (0, MercuryRtMachineTests.Busy)));
+            File.WriteAllBytes(path, SyntheticGbRom.Build(romBanks: 4, cartridgeType: kind, ramSizeCode: 0x03, cgbFlag: cgb, patches: (0, MercuryPrograms.Busy)));
             return path;
         }
 
@@ -54,12 +54,12 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void The_shim_stays_mercuryrts_loader_and_mercury_stays_the_default()
+        public void The_shim_stays_mercuryrts_loader_and_mercuryrt_is_the_default()
         {
             _ = Discovered;
             var row = CoreCatalog.EngineFor("GB")!;
-            Assert.Equal(new[] { CoreCatalog.MercuryEngine, CoreCatalog.MercuryRtEngine }, row.Choices);
-            Assert.Equal(CoreCatalog.MercuryEngine, row.Default);
+            Assert.Equal(new[] { CoreCatalog.MercuryRtEngine, CoreCatalog.MercuryEngine }, row.Choices);
+            Assert.Equal(CoreCatalog.MercuryRtEngine, row.Default);
             ICore core = CoreFactory.Create("game.gb", engine: CoreCatalog.MercuryRtEngine);
             Assert.IsType<MercuryRtCore>(core);
             Assert.Null(CoreFactory.EngineNotice("game.gb", CoreCatalog.MercuryRtEngine, core));

@@ -10,7 +10,6 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
@@ -21,7 +20,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // The GB tab's Model row, and a game loaded in Mistress on the console it names, on either engine - see EmuSen_Settings_Reference.md §4.47.
+    // The GB tab's Model row, and a game loaded in Mistress on the console it names - see EmuSen_Settings_Reference.md §4.47.
     [Collection(TestCollections.ProcessGlobals)]
     public class MercuryModelSettingTests : IDisposable
     {
@@ -54,30 +53,27 @@ namespace EmuSen.WiseMan.Mistress
             var window = new GraphicsSettingsWindow(config, console => told = console, "GB");
             window.Show();
 
-            Dropdown model = window.GetLogicalDescendants().OfType<Dropdown>().Where(d => d.Name == $"GB.{MercuryCore.ModelKey}").Distinct().Single();
-            Assert.Equal(new[] { MercuryCore.ModelAuto, MercuryCore.ModelGameBoy, MercuryCore.ModelGameBoyColor }, model.Items.Cast<object>().Select(o => o.ToString()));
-            Assert.Equal(MercuryCore.ModelAuto, model.SelectedItem);
+            Dropdown model = window.GetLogicalDescendants().OfType<Dropdown>().Where(d => d.Name == $"GB.{MercuryRtCore.ModelKey}").Distinct().Single();
+            Assert.Equal(new[] { MercuryRtCore.ModelAuto, MercuryRtCore.ModelGameBoy, MercuryRtCore.ModelGameBoyColor }, model.Items.Cast<object>().Select(o => o.ToString()));
+            Assert.Equal(MercuryRtCore.ModelAuto, model.SelectedItem);
             UiTest.AssertLaidOut(window, "graphics-gb-model");
 
-            model.SelectedItem = MercuryCore.ModelGameBoyColor;
+            model.SelectedItem = MercuryRtCore.ModelGameBoyColor;
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("GB", told);
-            Assert.Equal(MercuryCore.ModelGameBoyColor, GraphicsConfig.Load().Value("GB", MercuryCore.ModelKey));
+            Assert.Equal(MercuryRtCore.ModelGameBoyColor, GraphicsConfig.Load().Value("GB", MercuryRtCore.ModelKey));
             UiTest.AssertLaidOut(window, "graphics-gb-model-color");
             window.Close();
         });
 
-        // The stored choice reaches the core before the first frame, whichever engine runs it, and a colour cartridge's GB tab is the same tab.
+        // The stored choice reaches the core before the first frame, and a colour cartridge's GB tab is the same tab.
         [Theory]
-        [InlineData(CoreCatalog.MercuryEngine, (byte)0x00, MercuryCore.ModelGameBoyColor, "GBC")]
-        [InlineData(CoreCatalog.MercuryRtEngine, (byte)0x00, MercuryCore.ModelGameBoyColor, "GBC")]
-        [InlineData(CoreCatalog.MercuryEngine, (byte)0x80, MercuryCore.ModelGameBoy, "GB")]
-        [InlineData(CoreCatalog.MercuryRtEngine, (byte)0x80, MercuryCore.ModelGameBoy, "GB")]
-        public Task A_game_runs_on_the_console_the_gb_tab_names(string engine, byte cgb, string model, string runsAs) => UiTest.Run(() =>
+        [InlineData((byte)0x00, MercuryRtCore.ModelGameBoyColor, "GBC")]
+        [InlineData((byte)0x80, MercuryRtCore.ModelGameBoy, "GB")]
+        public Task A_game_runs_on_the_console_the_gb_tab_names(byte cgb, string model, string runsAs) => UiTest.Run(() =>
         {
             GraphicsConfig config = GraphicsConfig.Load();
-            config.SetValue("GB", CoreCatalog.EngineKey, engine);
-            config.SetValue("GB", MercuryCore.ModelKey, model);
+            config.SetValue("GB", MercuryRtCore.ModelKey, model);
             config.Save();
             File.WriteAllBytes(_rom, SyntheticGbRom.Build(cgbFlag: cgb, patches: (0, new byte[] { 0x18, 0xFE })));
 
@@ -87,9 +83,9 @@ namespace EmuSen.WiseMan.Mistress
             WaitFor(() => Game(window).TotalFrames > 20);
 
             EmulatorSession game = Game(window);
-            Assert.IsType(engine == CoreCatalog.MercuryEngine ? typeof(MercuryCore) : typeof(MercuryRtCore), game.Core);
+            Assert.IsType<MercuryRtCore>(game.Core);
             Assert.Equal(runsAs, game.CoreName);
-            Assert.Equal(model, ((ICoreSettings)game.Core!).Get(MercuryCore.ModelKey));
+            Assert.Equal(model, ((ICoreSettings)game.Core!).Get(MercuryRtCore.ModelKey));
             Assert.Equal("GB", (string)typeof(MainWindow).GetField("_activeConsole", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!);
             window.Close();
         });

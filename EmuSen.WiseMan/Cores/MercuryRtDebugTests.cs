@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mercury;
-using EmuSen.Cores.Nintendo.Mercury.Debug;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Galaxia.Input;
@@ -13,7 +11,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // MercuryRT under the debugger's claims, held to the C# core's transcripts, and the proofs that the hooks change nothing the machine computes - see Mercury_Native.md §8.5.
+    // MercuryRT under the debugger's claims, and the proofs that the hooks change nothing the machine computes - see Mercury_Native.md §8.5, §15.
     [Collection(TestCollections.ProcessGlobals)]
     public class MercuryRtDebugTests : MercuryDebugClaims
     {
@@ -41,7 +39,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(1, core.CallStack!.Depth);
         }
 
-        // The plain frame keeps no stack: what the C# core's A_call_made_in_a_frame_nothing_observes_is_on_the_stack sees, MercuryRT sees only while observed.
+        // The plain frame keeps no stack: the stack is tracked only while a frame is observed - see Mercury_Native.md §8.5.
         [Fact]
         public void A_plain_frame_leaves_the_stack_where_the_last_observed_frame_left_it()
         {
@@ -69,42 +67,36 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0, rt.NativeDepth);
         }
 
-        // C#'s bus reports stores only to a target that observes it; MercuryRT's core logs none until one exists, and none that no range covers.
+        // The core logs no store until a target listens, and none that no range covers.
         [Fact]
         public void A_store_is_reported_only_while_a_target_listens()
         {
             string rom = Temporary(CountForever);
-            var cs = new MercuryCore();
-            cs.LoadRom(rom);
             using var rt = new MercuryRtCore();
             rt.LoadRom(rom);
-            int a = cs.Watches.AddWatch("WRAM", 0, 1), b = rt.Watches.AddWatch("WRAM", 0, 1);
-            cs.RunFrame();
+            int b = rt.Watches.AddWatch("WRAM", 0, 1);
             rt.RunFrame();
-            Assert.Empty(cs.Watches.GetEvents(a));
             Assert.Empty(rt.Watches.GetEvents(b));
             Assert.False(rt.Listening);
 
-            _ = new MercuryDebugTarget(cs);
             _ = rt.CreateDebugTarget();
             Assert.True(rt.Listening);
-            cs.RunFrame();
             rt.RunFrame();
-            Assert.Equal(cs.Watches.GetEventCounts(a), rt.Watches.GetEventCounts(b));
-            Assert.Equal(Events(cs.Watches, a), Events(rt.Watches, b));
+            Assert.NotEmpty(rt.Watches.GetEvents(b));
+            Assert.All(Events(rt.Watches, b), e => Assert.Equal(0, e.Item2));
 
             rt.Watches.RemoveWatch(b);
             Assert.False(rt.Listening);
         }
 
-        // Every table armed, and every stop one the registry refuses, against the C# core armed the same and the C# core plain.
+        // Every table armed, and every stop one the registry refuses, against the same program run plain.
         [Fact]
         public void Synthetic_programs_with_every_table_armed_are_the_programs_run_plain()
         {
             foreach (var (name, program) in new[] { ("interrupts", Interrupts), ("count", CountForever), ("call", CallOnce), ("vram", StoresAcross(0x80, 0x6C)), ("oam", StoresAcross(0xFE, 0x7D)) })
                 Armed(Temporary(program), name, 300);
             // HDMA in double speed, and an hblank transfer held back by HALT, which the observed step passes on to the bus - see Mercury_Native.md §14.2.
-            string colour = SyntheticGbRom.WriteTemp(MercuryRtMachineTests.ColourRom());
+            string colour = SyntheticGbRom.WriteTemp(MercuryPrograms.ColourRom());
             try { Armed(colour, "colour", 300); }
             finally { File.Delete(colour); }
         }
@@ -122,17 +114,14 @@ namespace EmuSen.WiseMan.Cores
                 Armed(path, Path.GetFileName(path), 600);
         }
 
-        // A breakpoint at the vblank vector on every third frame, halted at and resumed, on both engines: the halted states compared, and each frame's end against the plain run.
+        // A breakpoint at the vblank vector on every third frame, halted at and resumed: each frame's end against the plain run.
         [Fact]
         public void A_game_halted_at_breakpoints_and_resumed_is_the_game_run_through()
         {
             foreach (string path in Games().Prepend(Temporary(Interrupts)))
             {
-                var plain = new MercuryCore();
+                using var plain = new MercuryRtCore();
                 plain.LoadRom(path);
-                var cs = new MercuryCore();
-                cs.LoadRom(path);
-                var csTarget = new MercuryDebugTarget(cs);
                 using var rt = new MercuryRtCore();
                 rt.LoadRom(path);
                 MercuryRtDebugTarget rtTarget = rt.CreateDebugTarget();
@@ -140,108 +129,67 @@ namespace EmuSen.WiseMan.Cores
                 int halts = 0;
                 for (int f = 0; f < 900; f++)
                 {
-                    Press(f, plain, cs, rt);
+                    Press(f, plain, rt);
                     plain.RunFrame();
-                    int? a = f % 3 == 0 ? cs.Breakpoints.AddBreakpoint(0x40) : null, b = f % 3 == 0 ? rt.Breakpoints.AddBreakpoint(0x40) : null;
-                    cs.RunFrame();
+                    int? b = f % 3 == 0 ? rt.Breakpoints.AddBreakpoint(0x40) : null;
                     rt.RunFrame();
-                    Assert.Equal(cs.IsHaltedAtBreakpoint, rt.IsHaltedAtBreakpoint);
-                    if (a is { } ida && b is { } idb)
-                    {
-                        cs.Breakpoints.RemoveBreakpoint(ida);
-                        rt.Breakpoints.RemoveBreakpoint(idb);
-                    }
-                    if (cs.IsHaltedAtBreakpoint)
+                    if (b is { } idb) rt.Breakpoints.RemoveBreakpoint(idb);
+                    if (rt.IsHaltedAtBreakpoint)
                     {
                         halts++;
-                        Assert.Equal(cs.HaltedAddress, rt.HaltedAddress);
-                        AssertSame(State(cs), State(rt), $"{Path.GetFileName(path)}, halted in frame {f}");
-                        cs.RunFrame();
+                        Assert.Equal(0x40, rt.HaltedAddress);
                         rt.RunFrame();
                     }
                     AssertSame(State(plain), State(rt), $"{Path.GetFileName(path)}, frame {f}");
-                    AssertSame(State(plain), State(cs), $"{Path.GetFileName(path)}, frame {f} (C#)");
                     Assert.True(plain.GetFrameBufferRgba().AsSpan().SequenceEqual(rt.GetFrameBufferRgba()), $"frame {f}: pictures differ");
                     Assert.True(plain.DequeueAudioSamples(int.MaxValue).AsSpan().SequenceEqual(rt.DequeueAudioSamples(int.MaxValue)), $"frame {f}: sound differs");
-                    cs.DequeueAudioSamples(int.MaxValue);
                 }
                 _output.WriteLine($"{Path.GetFileName(path)}: {halts} halts at $0040 in 900 frames, every halted state and every frame identical");
                 Assert.True(halts > 0, "no halts");
             }
         }
 
-        // The armed run: C# armed and MercuryRT armed against C# plain, every frame, and the registries' transcripts compared at the end.
+        // The armed run: MercuryRT with every table armed against MercuryRT plain, every frame, and the registries shown to have recorded.
         private void Armed(string path, string name, int frames)
         {
-            var plain = new MercuryCore();
+            using var plain = new MercuryRtCore();
             plain.LoadRom(path);
-            var cs = new MercuryCore();
-            cs.LoadRom(path);
-            _ = new MercuryDebugTarget(cs);
             using var rt = new MercuryRtCore();
             rt.LoadRom(path);
             _ = rt.CreateDebugTarget();
-            var watches = new (int Cs, int Rt)[5];
-            foreach (var (bp, watch, cov, stack, i) in new[] { (cs.Breakpoints, cs.Watches, cs.Coverage, cs.CallStack, 0), (rt.Breakpoints, rt.Watches, rt.Coverage, rt.CallStack, 1) })
-            {
-                bp.AddBreakpoint(0xFEFF);
-                bp.AddBreakpoint(0x40, 0x40, null, "vblank");
-                bp.AddBreakpoint(0x48, 0x5F, null, null);
-                bp.AddForbidRange(0x48, 0x5F);
-                bp.AddDataBreakpoint("WRAM", 0, 0xFF, 0x100, onRead: false, changedOnly: false, condition: null);
-                bp.AddDataBreakpoint("HRAM", 0, 0x7E, 0x100, onRead: false, changedOnly: false, condition: null);
-                bp.ArmDepthGuard(512);
-                cov.Arm();
-                stack.ArmProfiler();
-                int[] ids = { watch.AddWatch("WRAM", 0, 0x1000), watch.AddWatch("HRAM", 0, 0x7F), watch.AddWatch("OAM", 0, 0xA0), watch.AddWatch("VRAM", 0, 0x2000), watch.AddWatch("cartram", 0, 0x2000) };
-                for (int k = 0; k < ids.Length; k++)
-                {
-                    if (i == 0) watches[k].Cs = ids[k];
-                    else watches[k].Rt = ids[k];
-                }
-            }
+            BreakpointRegistry bp = rt.Breakpoints;
+            bp.AddBreakpoint(0xFEFF);
+            bp.AddBreakpoint(0x40, 0x40, null, "vblank");
+            bp.AddBreakpoint(0x48, 0x5F, null, null);
+            bp.AddForbidRange(0x48, 0x5F);
+            bp.AddDataBreakpoint("WRAM", 0, 0xFF, 0x100, onRead: false, changedOnly: false, condition: null);
+            bp.AddDataBreakpoint("HRAM", 0, 0x7E, 0x100, onRead: false, changedOnly: false, condition: null);
+            bp.ArmDepthGuard(512);
+            rt.Coverage.Arm();
+            rt.CallStack.ArmProfiler();
+            int[] watches = { rt.Watches.AddWatch("WRAM", 0, 0x1000), rt.Watches.AddWatch("HRAM", 0, 0x7F), rt.Watches.AddWatch("OAM", 0, 0xA0), rt.Watches.AddWatch("VRAM", 0, 0x2000), rt.Watches.AddWatch("cartram", 0, 0x2000) };
 
             for (int f = 0; f < frames; f++)
             {
-                Press(f, plain, cs, rt);
+                Press(f, plain, rt);
                 plain.RunFrame();
-                cs.RunFrame();
                 rt.RunFrame();
-                Assert.False(cs.IsHaltedAtBreakpoint || rt.IsHaltedAtBreakpoint, $"{name}, frame {f}: halted");
-                byte[] want = State(plain);
-                AssertSame(want, State(rt), $"{name}, frame {f}");
-                AssertSame(want, State(cs), $"{name}, frame {f} (C# armed)");
+                Assert.False(rt.IsHaltedAtBreakpoint, $"{name}, frame {f}: halted");
+                AssertSame(State(plain), State(rt), $"{name}, frame {f}");
                 Assert.True(plain.GetFrameBufferRgba().AsSpan().SequenceEqual(rt.GetFrameBufferRgba()), $"{name}, frame {f}: pictures differ");
-                short[] sound = plain.DequeueAudioSamples(int.MaxValue);
-                Assert.True(sound.AsSpan().SequenceEqual(rt.DequeueAudioSamples(int.MaxValue)), $"{name}, frame {f}: sound differs");
-                Assert.True(sound.AsSpan().SequenceEqual(cs.DequeueAudioSamples(int.MaxValue)), $"{name}, frame {f}: C# armed sound differs");
+                Assert.True(plain.DequeueAudioSamples(int.MaxValue).AsSpan().SequenceEqual(rt.DequeueAudioSamples(int.MaxValue)), $"{name}, frame {f}: sound differs");
             }
 
-            Assert.Equal(Bps(cs.Breakpoints), Bps(rt.Breakpoints));
-            Assert.Equal(cs.Breakpoints.LogEntriesRecorded, rt.Breakpoints.LogEntriesRecorded);
-            Assert.Equal(cs.Coverage.InstructionsRecorded, rt.Coverage.InstructionsRecorded);
-            Assert.True(cs.Coverage.Export().AsSpan().SequenceEqual(rt.Coverage.Export()), $"{name}: coverage maps differ");
-            Assert.Equal(cs.CallStack.ProfiledInstructions, rt.CallStack.ProfiledInstructions);
-            // Hottest breaks ties in the order routines were first charged, which a drained run need not share, so the whole profile is compared by address.
-            Assert.Equal(cs.CallStack.Hottest(int.MaxValue).OrderBy(h => h.Address), rt.CallStack.Hottest(int.MaxValue).OrderBy(h => h.Address));
-            Assert.Equal(cs.CallStack.Backtrace(), rt.CallStack.Backtrace());
-            Assert.Equal(cs.CallStack.UnmatchedReturns, rt.CallStack.UnmatchedReturns);
-            Assert.Equal(cs.Coverage.EntryPoints(1000), rt.Coverage.EntryPoints(1000));
-            long stored = 0;
-            foreach (var (a, b) in watches)
-            {
-                Assert.Equal(cs.Watches.GetEventCounts(a), rt.Watches.GetEventCounts(b));
-                Assert.Equal(cs.Watches.GetSiteHits(a), rt.Watches.GetSiteHits(b));
-                Assert.Equal(Events(cs.Watches, a), Events(rt.Watches, b));
-                stored += cs.Watches.GetEventCounts(a).Total;
-            }
-            _output.WriteLine($"{name}: {frames} frames armed, identical; {cs.Coverage.InstructionsRecorded} steps recorded and charged, {stored} stores watched, " +
-                              $"{cs.Breakpoints.LogEntriesRecorded} logpoint passes, {cs.Coverage.EntryPointCount} entry points, depth {cs.CallStack.Depth}, {cs.CallStack.UnmatchedReturns} unmatched returns");
+            Assert.True(rt.Coverage.InstructionsRecorded > 0, $"{name}: nothing recorded");
+            Assert.Equal(rt.Coverage.InstructionsRecorded, rt.CallStack.ProfiledInstructions);
+            long stored = watches.Sum(w => rt.Watches.GetEventCounts(w).Total);
+            _output.WriteLine($"{name}: {frames} frames armed, identical to plain; {rt.Coverage.InstructionsRecorded} steps recorded and charged, {stored} stores watched, " +
+                              $"{rt.Breakpoints.LogEntriesRecorded} logpoint passes, {rt.Coverage.EntryPointCount} entry points, depth {rt.CallStack.Depth}, {rt.CallStack.UnmatchedReturns} unmatched returns");
         }
 
         private static IEnumerable<string> Games()
         {
-            string? folder = Environment.GetEnvironmentVariable(MercuryRtStateTests.RomsVariable);
+            string? folder = Environment.GetEnvironmentVariable(MercuryGoldenTests.GamesVariable);
             if (folder is null || !Directory.Exists(folder)) return Array.Empty<string>();
             return Directory.GetFiles(folder, "*.gb*").Order(StringComparer.Ordinal);
         }
@@ -268,10 +216,6 @@ namespace EmuSen.WiseMan.Cores
             int same = want.AsSpan().CommonPrefixLength(got);
             Assert.True(same == want.Length && want.Length == got.Length, $"{what}: states differ at byte {same}");
         }
-
-        private static string Bps(BreakpointRegistry registry) =>
-            string.Join(";", registry.GetBreakpoints().Select(b => $"{b.Id}:{b.HitCount}:{b.Condition}")) + "|" +
-            string.Join(";", registry.GetDataBreakpoints().Select(b => $"{b.Id}:{b.HitCount}"));
 
         private static IEnumerable<(long, int, byte, string)> Events(WatchRegistry watches, int id) =>
             watches.GetEvents(id, 500).Select(e => (e.Sequence, e.Address, e.Value, e.Context));

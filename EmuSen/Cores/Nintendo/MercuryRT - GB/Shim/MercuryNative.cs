@@ -19,7 +19,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         // The pre-stable machine's library, which MercuryMachine and its tests still load until that interface retires - see EmuSen_CoreAPI.md §13.5.
         public static bool Available => Library.Available && Api.Complete;
 
-        // The library through the core ABI v1, which MercuryRtCore runs on, with the extension that takes C#'s mixer coefficients - see EmuSen_CoreAPI.md §26.
+        // The library through the core ABI v1, which MercuryRtCore runs on, with the extension that takes the mixer's coefficients - see EmuSen_CoreAPI.md §26.
         public static readonly PortLibrary Engine = new("mercuryrt", Variable, CoreInterface.CapMutes | CoreInterface.CapRomPatches | CoreInterface.CapDebug | CoreInterface.CapDebugStack, MercuryRtCore.SampleRateExport);
 
         // Why the engine's library is or is not in use, for the engine notice, a log line or a test's message.

@@ -1,19 +1,16 @@
-using EmuSen.Cores.Nintendo.Mercury;
-using EmuSen.Cores.Nintendo.Mercury.Audio;
-using GbApu = EmuSen.Cores.Nintendo.Mercury.Audio.Apu;
+using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // Mercury's four sound channels and the mixer under them - see Mercury_Apu.md; Mercury and MercuryRT are held to the same claims - see Mercury_Native.md §12.
-    public abstract class MercuryApuClaims : IDisposable
+    // Mercury's four sound channels and the mixer under them - see Mercury_Apu.md; held on MercuryRT - see Mercury_Native.md §12, §15.
+    public sealed class MercuryRtApuTests : IDisposable
     {
         // One turn of the frame sequencer's DIV bit, in T-cycles: 512 Hz off a 4.19 MHz clock.
         private const int SequencerPeriod = 8192;
 
         private readonly List<MercuryRig> _rigs = new();
 
-        protected abstract MercuryEngine Engine { get; }
 
         public void Dispose()
         {
@@ -22,7 +19,7 @@ namespace EmuSen.WiseMan.Cores
 
         private MercuryRig Load(byte cgbFlag = 0x00)
         {
-            var core = MercuryRig.Create(Engine, SyntheticGbRom.Build(cgbFlag: cgbFlag));
+            var core = MercuryRig.Create(SyntheticGbRom.Build(cgbFlag: cgbFlag));
             _rigs.Add(core);
             return core;
         }
@@ -39,12 +36,10 @@ namespace EmuSen.WiseMan.Cores
         public void The_apu_powers_up_where_the_boot_rom_leaves_it()
         {
             var core = Load();
-            var apu = core.Bus.Apu;
-
-            Assert.True(apu.PoweredOn);
-            Assert.Equal(7, apu.LeftVolume);
-            Assert.Equal(7, apu.RightVolume);
-            Assert.Equal(0xF3, apu.Panning);
+            Assert.True(core.Flag("Bus.Apu.PoweredOn"));
+            Assert.Equal(7, core.Field("Bus.Apu.LeftVolume"));
+            Assert.Equal(7, core.Field("Bus.Apu.RightVolume"));
+            Assert.Equal(0xF3, core.Field("Bus.Apu.Panning"));
         }
 
         [Fact]
@@ -56,7 +51,7 @@ namespace EmuSen.WiseMan.Cores
 
             StartPulse(core, 0xFF10, 0x400);
 
-            Assert.True(core.Bus.Apu.Pulse1.Enabled);
+            Assert.True(core.Flag("Bus.Apu.Pulse1.Enabled"));
             Assert.Equal(0x01, core.Read(0xFF26) & 0x01);
         }
 
@@ -69,11 +64,11 @@ namespace EmuSen.WiseMan.Cores
 
             core.Write(0xFF12, 0x00);
 
-            Assert.False(core.Bus.Apu.Pulse1.DacEnabled);
-            Assert.False(core.Bus.Apu.Pulse1.Enabled);
+            Assert.False(core.Flag("Bus.Apu.Pulse1.DacEnabled"));
+            Assert.False(core.Flag("Bus.Apu.Pulse1.Enabled"));
 
             core.Write(0xFF14, 0x80);
-            Assert.False(core.Bus.Apu.Pulse1.Enabled);
+            Assert.False(core.Flag("Bus.Apu.Pulse1.Enabled"));
         }
 
         [Fact]
@@ -84,17 +79,42 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF11, 0x80);   // 50% duty
             StartPulse(core, 0xFF10, 0x7FF); // the shortest period there is: 4 T-cycles a step
 
-            var seen = new HashSet<int>();
+            var seen = new HashSet<long>();
 
             for (int i = 0; i < 8; i++)
             {
-                seen.Add(core.Bus.Apu.Pulse1.Output);
+                seen.Add(PulseOutput(core));
                 core.Tick(4);
             }
 
             // A 50% duty must produce both a loud and a silent half within one period.
-            Assert.Contains(0, seen);
-            Assert.Contains(15, seen);
+            Assert.Contains(0L, seen);
+            Assert.Contains(15L, seen);
+        }
+
+        // Pan Docs' duty waveforms, eight steps each.
+        private static readonly byte[][] DutyPatterns =
+        {
+            new byte[] { 0, 0, 0, 0, 0, 0, 0, 1 },
+            new byte[] { 1, 0, 0, 0, 0, 0, 0, 1 },
+            new byte[] { 1, 0, 0, 0, 0, 1, 1, 1 },
+            new byte[] { 0, 1, 1, 1, 1, 1, 1, 0 },
+        };
+
+        // The first pulse channel's level now: its envelope's volume while its duty step is high, else nothing.
+        private static long PulseOutput(MercuryRig core)
+        {
+            const string p = "Bus.Apu.Pulse1.";
+            bool high = DutyPatterns[core.Field(p + "Duty")][core.Field(p + "Step")] != 0;
+            return core.Flag(p + "Enabled") && core.Flag(p + "DacEnabled") && high ? core.Field(p + "Envelope.Volume") : 0;
+        }
+
+        // The wave channel's sample at its position: the high nibble of the RAM byte first.
+        private static long WaveSample(MercuryRig core)
+        {
+            long position = core.Field("Bus.Apu.Wave.Position");
+            byte b = core.FieldByte("Bus.Apu.Wave.Ram", (int)(position >> 1));
+            return (position & 1) == 0 ? b >> 4 : b & 0x0F;
         }
 
         [Fact]
@@ -106,16 +126,16 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF12, 0xF0);
             core.Write(0xFF14, 0xC0);    // trigger with the length counter enabled
 
-            Assert.True(core.Bus.Apu.Pulse1.Enabled);
+            Assert.True(core.Flag("Bus.Apu.Pulse1.Enabled"));
 
             core.Tick(SequencerPeriod * 2);
-            Assert.False(core.Bus.Apu.Pulse1.Enabled);
+            Assert.False(core.Flag("Bus.Apu.Pulse1.Enabled"));
 
             // With the counter disabled the same wait leaves the channel running.
             core.Write(0xFF11, 0x3F);
             core.Write(0xFF14, 0x80);
             core.Tick(SequencerPeriod * 4);
-            Assert.True(core.Bus.Apu.Pulse1.Enabled);
+            Assert.True(core.Flag("Bus.Apu.Pulse1.Enabled"));
         }
 
         // Step 7 of the eight is the only one that moves the envelope.
@@ -127,13 +147,13 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF12, 0xF1);   // volume 15, decreasing, period 1
             core.Write(0xFF14, 0x80);
 
-            Assert.Equal(15, core.Bus.Apu.Pulse1.Envelope.Volume);
+            Assert.Equal(15, core.Field("Bus.Apu.Pulse1.Envelope.Volume"));
 
             core.Tick(SequencerPeriod * 8);
-            Assert.Equal(14, core.Bus.Apu.Pulse1.Envelope.Volume);
+            Assert.Equal(14, core.Field("Bus.Apu.Pulse1.Envelope.Volume"));
 
             core.Tick(SequencerPeriod * 8);
-            Assert.Equal(13, core.Bus.Apu.Pulse1.Envelope.Volume);
+            Assert.Equal(13, core.Field("Bus.Apu.Pulse1.Envelope.Volume"));
         }
 
         [Fact]
@@ -145,7 +165,7 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF14, 0x80);
 
             core.Tick(SequencerPeriod * 32);
-            Assert.Equal(15, core.Bus.Apu.Pulse1.Envelope.Volume);
+            Assert.Equal(15, core.Field("Bus.Apu.Pulse1.Envelope.Volume"));
         }
 
         [Fact]
@@ -157,9 +177,9 @@ namespace EmuSen.WiseMan.Cores
             StartPulse(core, 0xFF10, 0x0400);
 
             core.Tick(SequencerPeriod * 3);
-            Assert.Equal(0x0600, core.Bus.Apu.Pulse1.Frequency);
+            Assert.Equal(0x0600, core.Field("Bus.Apu.Pulse1.Frequency"));
 
-            Assert.False(core.Bus.Apu.Pulse2.HasSweep);
+            Assert.False(core.Flag("Bus.Apu.Pulse2.HasSweep"));
         }
 
         // Overflowing eleven bits disables the channel; it does not wrap and it does not clamp.
@@ -172,7 +192,7 @@ namespace EmuSen.WiseMan.Cores
             StartPulse(core, 0xFF10, 0x07C0);
 
             core.Tick(SequencerPeriod * 16);
-            Assert.False(core.Bus.Apu.Pulse1.Enabled);
+            Assert.False(core.Flag("Bus.Apu.Pulse1.Enabled"));
         }
 
         [Fact]
@@ -186,10 +206,10 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF1D, 0xFF);
             core.Write(0xFF1E, 0x87);    // trigger, frequency $7FF, two T-cycles a step
 
-            Assert.Equal(0x0F, core.Bus.Apu.Wave.Sample);
+            Assert.Equal(0x0F, WaveSample(core));
 
             core.Tick(2);
-            Assert.Equal(0x00, core.Bus.Apu.Wave.Sample);
+            Assert.Equal(0x00, WaveSample(core));
         }
 
         [Fact]
@@ -201,17 +221,23 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF1A, 0x80);
             core.Write(0xFF1E, 0x80);
 
+            long Output()
+            {
+                long code = core.Field("Bus.Apu.Wave.VolumeCode");
+                return core.Flag("Bus.Apu.Wave.Enabled") && core.Flag("Bus.Apu.Wave.DacEnabled") && code != 0 ? WaveSample(core) >> (int)(code - 1) : 0;
+            }
+
             core.Write(0xFF1C, 0x00);
-            Assert.Equal(0, core.Bus.Apu.Wave.Output);
+            Assert.Equal(0, Output());
 
             core.Write(0xFF1C, 0x20);
-            Assert.Equal(15, core.Bus.Apu.Wave.Output);
+            Assert.Equal(15, Output());
 
             core.Write(0xFF1C, 0x40);
-            Assert.Equal(7, core.Bus.Apu.Wave.Output);
+            Assert.Equal(7, Output());
 
             core.Write(0xFF1C, 0x60);
-            Assert.Equal(3, core.Bus.Apu.Wave.Output);
+            Assert.Equal(3, Output());
         }
 
         [Fact]
@@ -223,12 +249,12 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF22, 0x00);    // divisor 8, shift 0
             core.Write(0xFF23, 0x80);
 
-            Assert.Equal(0x7FFF, core.Bus.Apu.Noise.Lfsr);
+            Assert.Equal(0x7FFF, core.Field("Bus.Apu.Noise.Lfsr"));
 
             core.Tick(8);
 
             // 15 ones XOR to zero feedback, so the top bit goes low and the register halves.
-            Assert.Equal(0x3FFF, core.Bus.Apu.Noise.Lfsr);
+            Assert.Equal(0x3FFF, core.Field("Bus.Apu.Noise.Lfsr"));
         }
 
         // Short mode also feeds bit 6, which is what shortens the period from 32767 to 127.
@@ -241,15 +267,15 @@ namespace EmuSen.WiseMan.Cores
             core.Write(0xFF22, 0x08);    // divisor 8, shift 0, short mode
             core.Write(0xFF23, 0x80);
 
-            var seen = new List<int>();
+            var seen = new List<long>();
             for (int i = 0; i < 127; i++)
             {
-                seen.Add(core.Bus.Apu.Noise.Lfsr & 0x7F);
+                seen.Add(core.Field("Bus.Apu.Noise.Lfsr") & 0x7F);
                 core.Tick(8);
             }
 
             Assert.Equal(127, seen.Distinct().Count());
-            Assert.Equal(seen[0], core.Bus.Apu.Noise.Lfsr & 0x7F);
+            Assert.Equal(seen[0], core.Field("Bus.Apu.Noise.Lfsr") & 0x7F);
         }
 
         [Fact]
@@ -262,17 +288,17 @@ namespace EmuSen.WiseMan.Cores
 
             core.Write(0xFF26, 0x00);
 
-            Assert.False(core.Bus.Apu.PoweredOn);
-            Assert.False(core.Bus.Apu.Pulse1.Enabled);
-            Assert.Equal(0, core.Bus.Apu.LeftVolume);
+            Assert.False(core.Flag("Bus.Apu.PoweredOn"));
+            Assert.False(core.Flag("Bus.Apu.Pulse1.Enabled"));
+            Assert.Equal(0, core.Field("Bus.Apu.LeftVolume"));
             Assert.Equal(0xAB, core.Read(0xFF30));
 
             // Every register but NR52 ignores a write while the power is off.
             core.Write(0xFF12, 0xF0);
-            Assert.False(core.Bus.Apu.Pulse1.DacEnabled);
+            Assert.False(core.Flag("Bus.Apu.Pulse1.DacEnabled"));
 
             core.Write(0xFF26, 0x80);
-            Assert.True(core.Bus.Apu.PoweredOn);
+            Assert.True(core.Flag("Bus.Apu.PoweredOn"));
         }
 
         [Fact]
@@ -364,7 +390,7 @@ namespace EmuSen.WiseMan.Cores
             core.SetChannelMuted(0, true);
             core.RunFrame();
 
-            Assert.True(core.Bus.Apu.Pulse1.Enabled);
+            Assert.True(core.Flag("Bus.Apu.Pulse1.Enabled"));
             Assert.True(core.IsChannelMuted(0));
         }
 
@@ -384,7 +410,7 @@ namespace EmuSen.WiseMan.Cores
             fast.RunFrame();
             int fastSamples = fast.DequeueAudioSamples(8192).Length;
 
-            Assert.True(fast.Bus.DoubleSpeed);
+            Assert.True(fast.Flag("Bus.DoubleSpeed"));
             Assert.InRange(fastSamples, normalSamples - 4, normalSamples + 4);
         }
 
@@ -399,14 +425,14 @@ namespace EmuSen.WiseMan.Cores
             core.SaveState(stream);
 
             core.Write(0xFF26, 0x00);
-            Assert.False(core.Bus.Apu.PoweredOn);
+            Assert.False(core.Flag("Bus.Apu.PoweredOn"));
 
             stream.Position = 0;
             core.LoadState(stream);
 
-            Assert.True(core.Bus.Apu.PoweredOn);
-            Assert.Equal(0x123, core.Bus.Apu.Pulse1.Frequency);
-            Assert.Equal(8, core.Bus.Apu.Pulse1.Envelope.InitialVolume);
+            Assert.True(core.Flag("Bus.Apu.PoweredOn"));
+            Assert.Equal(0x123, core.Field("Bus.Apu.Pulse1.Frequency"));
+            Assert.Equal(8, core.Field("Bus.Apu.Pulse1.Envelope.InitialVolume"));
         }
 
         [Fact]
@@ -419,7 +445,7 @@ namespace EmuSen.WiseMan.Cores
             core.RunFrame();
             target.RefreshProviders();
 
-            Assert.Equal(GbApu.ChannelCount, target.AudioChannels.Current.Count);
+            Assert.Equal(4, target.AudioChannels.Current.Count);
             Assert.True(target.AudioChannels.Current[0].Active);
             Assert.Equal(new[] { "Pulse 1", "Pulse 2", "Wave", "Noise" },
                 target.AudioChannels.Current.Select(c => c.Name));
@@ -431,15 +457,5 @@ namespace EmuSen.WiseMan.Cores
             // The peek is not a drain: what it showed is still there to play.
             Assert.NotEmpty(core.DequeueAudioSamples(4096));
         }
-    }
-
-    public sealed class MercuryApuTests : MercuryApuClaims
-    {
-        protected override MercuryEngine Engine => MercuryEngine.Mercury;
-    }
-
-    public sealed class MercuryRtApuTests : MercuryApuClaims
-    {
-        protected override MercuryEngine Engine => MercuryEngine.MercuryRt;
     }
 }

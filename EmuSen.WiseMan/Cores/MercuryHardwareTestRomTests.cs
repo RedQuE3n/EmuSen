@@ -7,13 +7,13 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.Mercury;
+using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // blargg and mooneye judged by their own reports, each ROM's verdict on each engine and console held to a recorded baseline in either direction - see Mercury_Native.md §12.2.
+    // blargg and mooneye judged by their own reports, each ROM's verdict on each console held to a recorded baseline in either direction - see Mercury_Native.md §12.2.
     public class MercuryHardwareTestRomTests
     {
         // blargg's combined cpu_instrs is the longest of these at roughly half a minute of emulated time.
@@ -24,26 +24,26 @@ namespace EmuSen.WiseMan.Cores
 
         public const string BaselineName = "MercuryCorpusBaseline.tsv";
 
-        private static readonly (MercuryEngine Engine, GbModel Model)[] Columns =
-            Enum.GetValues<MercuryEngine>().SelectMany(e => Enum.GetValues<GbModel>().Select(m => (e, m))).ToArray();
+        // The baseline's columns, one per console; the engine's name stays in the header, as the file has always named its columns.
+        private static readonly GbModel[] Columns = Enum.GetValues<GbModel>();
 
         private readonly ITestOutputHelper _output;
 
         public MercuryHardwareTestRomTests(ITestOutputHelper output) => _output = output;
 
-        public static TheoryData<MercuryEngine, GbModel> Runs
+        public static TheoryData<GbModel> Runs
         {
             get
             {
-                var data = new TheoryData<MercuryEngine, GbModel>();
-                foreach (var (engine, model) in Columns) data.Add(engine, model);
+                var data = new TheoryData<GbModel>();
+                foreach (GbModel model in Columns) data.Add(model);
                 return data;
             }
         }
 
         [Theory]
         [MemberData(nameof(Runs))]
-        public void Each_hardware_test_rom_says_what_the_baseline_recorded(MercuryEngine engine, GbModel model)
+        public void Each_hardware_test_rom_says_what_the_baseline_recorded(GbModel model)
         {
             IReadOnlyList<string> roms = HardwareTestRomLibrary.Find();
             if (roms.Count == 0)
@@ -58,11 +58,11 @@ namespace EmuSen.WiseMan.Cores
             {
                 string name = Path.GetRelativePath(HardwareTestRomLibrary.Root, path).Replace('\\', '/');
                 string sha = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)))[..16];
-                var (verdict, frame) = Run(engine, model, path);
+                var (verdict, frame) = Run(model, path);
                 verdicts[name] = (name, sha, verdict, frame);
             });
 
-            string column = Column(engine, model);
+            string column = Column(model);
             var counts = verdicts.Values.GroupBy(v => v.Verdict.Split('(')[0]).OrderBy(g => g.Key, StringComparer.Ordinal).Select(g => $"{g.Key} {g.Count()}");
             _output.WriteLine($"{column}: {roms.Count} ROMs, {string.Join(", ", counts)}");
 
@@ -94,9 +94,9 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // Runs to a verdict or the cap; serial verdicts are Passed, Failed or NoVerdict, cart-RAM ones Passed or Failed(status).
-        public static (string Verdict, int Frame) Run(MercuryEngine engine, GbModel model, string path)
+        public static (string Verdict, int Frame) Run(GbModel model, string path)
         {
-            using MercuryRig core = MercuryRig.Open(engine, path, model);
+            using MercuryRig core = MercuryRig.Open(path, model);
             core.SkipRendering = true;
             for (int frame = 1; frame <= FrameCap; frame++)
             {
@@ -106,13 +106,13 @@ namespace EmuSen.WiseMan.Cores
                 TestRomVerdict serial = HardwareTestRomLibrary.ReadVerdict(core.SerialLog);
                 if (serial != TestRomVerdict.NoVerdict) return (serial.ToString(), frame);
 
-                if (HardwareTestRomLibrary.ReadCartRamStatus(i => core.ReadSpace(MercuryCore.SpaceCartRam, i)) is int status)
+                if (HardwareTestRomLibrary.ReadCartRamStatus(i => core.ReadSpace(MercuryRtCore.SpaceCartRam, i)) is int status)
                     return (status == 0 ? "Passed" : $"Failed({status})", frame);
             }
             return (TestRomVerdict.NoVerdict.ToString(), FrameCap);
         }
 
-        public static string Column(MercuryEngine engine, GbModel model) => $"{engine}/{model}";
+        public static string Column(GbModel model) => $"MercuryRt/{model}";
 
         private static string SourceBaseline([CallerFilePath] string here = "") => Path.Combine(Path.GetDirectoryName(here)!, BaselineName);
 
@@ -126,7 +126,7 @@ namespace EmuSen.WiseMan.Cores
         // One column replaced, the others kept; a ROM new to the corpus gets "-" in the columns not yet recorded.
         private static void Record(string path, string column, IEnumerable<(string Rom, string Sha, string Verdict, int Frame)> verdicts)
         {
-            string[] header = new[] { "rom", "sha256" }.Concat(Columns.Select(c => Column(c.Engine, c.Model))).ToArray();
+            string[] header = new[] { "rom", "sha256" }.Concat(Columns.Select(Column)).ToArray();
             var rows = new SortedDictionary<string, string[]>(StringComparer.Ordinal);
             if (File.Exists(path))
             {
@@ -144,7 +144,7 @@ namespace EmuSen.WiseMan.Cores
             }
             var text = new List<string>
             {
-                "# blargg and mooneye verdicts per engine and console, the first 3,600 frames; re-recorded only with " + RecordVariable + "=1 - see Mercury_Native.md §12.2.",
+                "# blargg and mooneye verdicts on MercuryRT per console, the first 3,600 frames; re-recorded only with " + RecordVariable + "=1 - see Mercury_Native.md §12.2.",
                 string.Join('\t', header),
             };
             text.AddRange(rows.Values.Select(r => string.Join('\t', r)));

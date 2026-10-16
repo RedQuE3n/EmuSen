@@ -1,14 +1,13 @@
-using EmuSen.Cores.Nintendo.Mercury.Memory;
+using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // The boards the header selects, driven through the CPU's bus on Mercury and MercuryRT alike - see Mercury_Memory.md §2, Mercury_Native.md §12.
-    public abstract class MercuryCartridgeClaims : IDisposable
+    // The boards the header selects, driven through MercuryRT's CPU bus - see Mercury_Memory.md §2, Mercury_Native.md §12.
+    public sealed class MercuryRtCartridgeTests : IDisposable
     {
         private readonly List<MercuryRig> _rigs = new();
 
-        protected abstract MercuryEngine Engine { get; }
 
         public void Dispose()
         {
@@ -17,7 +16,7 @@ namespace EmuSen.WiseMan.Cores
 
         private MercuryRig Load(byte[] image)
         {
-            var core = MercuryRig.Create(Engine, image);
+            var core = MercuryRig.Create(image);
             _rigs.Add(core);
             return core;
         }
@@ -26,9 +25,9 @@ namespace EmuSen.WiseMan.Cores
         public void Mbc1_banks_the_high_window_and_leaves_the_low_one_alone()
         {
             var image = SyntheticGbRom.Build(romBanks: 4, cartridgeType: 0x01);
-            image[0 * Cartridge.RomBankSize + 0x20] = 0xA0;
-            image[1 * Cartridge.RomBankSize + 0x20] = 0xA1;
-            image[3 * Cartridge.RomBankSize + 0x20] = 0xA3;
+            image[0 * MercuryRig.RomBankSize + 0x20] = 0xA0;
+            image[1 * MercuryRig.RomBankSize + 0x20] = 0xA1;
+            image[3 * MercuryRig.RomBankSize + 0x20] = 0xA3;
 
             var core = Load(image);
 
@@ -45,7 +44,7 @@ namespace EmuSen.WiseMan.Cores
         public void Mbc1_turns_a_requested_bank_zero_into_bank_one()
         {
             var image = SyntheticGbRom.Build(romBanks: 4, cartridgeType: 0x01);
-            image[1 * Cartridge.RomBankSize + 0x20] = 0xA1;
+            image[1 * MercuryRig.RomBankSize + 0x20] = 0xA1;
 
             var core = Load(image);
             core.Write(0x2000, 0x00);
@@ -58,8 +57,8 @@ namespace EmuSen.WiseMan.Cores
         public void Mbc5_can_select_bank_zero()
         {
             var image = SyntheticGbRom.Build(romBanks: 4, cartridgeType: 0x19);
-            image[0 * Cartridge.RomBankSize + 0x20] = 0xA0;
-            image[1 * Cartridge.RomBankSize + 0x20] = 0xA1;
+            image[0 * MercuryRig.RomBankSize + 0x20] = 0xA0;
+            image[1 * MercuryRig.RomBankSize + 0x20] = 0xA1;
 
             var core = Load(image);
             core.Write(0x2000, 0x00);
@@ -81,68 +80,49 @@ namespace EmuSen.WiseMan.Cores
         }
     }
 
-    // With the header parse's own cases, which are C#'s Cartridge on both engines (MercuryRtCore parses the header with it).
-    public sealed class MercuryCartridgeTests : MercuryCartridgeClaims
+    // The header's facts as the shim reads them before the library sees the image - see Mercury_Memory.md §2.
+    public sealed class MercuryCartridgeTests
     {
-        protected override MercuryEngine Engine => MercuryEngine.Mercury;
-
         [Fact]
-        public void The_header_names_the_game_and_its_board()
+        public void The_header_names_the_board_its_battery_and_its_ram()
         {
-            var cart = Cartridge.FromImage(SyntheticGbRom.Build(cartridgeType: 0x13, ramSizeCode: 0x03, title: "ZELDA"));
+            var cart = GbCartridge.Read(SyntheticGbRom.Build(cartridgeType: 0x13, ramSizeCode: 0x03, title: "ZELDA"));
 
-            Assert.Equal("ZELDA", cart.Title);
-            Assert.Equal("MBC3", cart.Mapper.Name);
+            Assert.Equal("MBC3", cart.Board);
             Assert.True(cart.HasBattery);
-            Assert.Equal(32 * 1024, cart.Ram.Length);
-        }
-
-        [Fact]
-        public void The_header_checksum_is_computed_the_way_the_boot_rom_does()
-        {
-            var image = SyntheticGbRom.Build();
-            Assert.True(Cartridge.FromImage(image).HeaderChecksumValid);
-
-            // Any byte inside $0134-$014C is covered, so touching one must invalidate it.
-            image[0x0140] ^= 0xFF;
-            Assert.False(Cartridge.FromImage(image).HeaderChecksumValid);
+            Assert.False(cart.HasTimer);
+            Assert.Equal(32 * 1024, cart.RamLength);
         }
 
         [Theory]
-        [InlineData(0x00, CgbSupport.None)]
-        [InlineData(0x80, CgbSupport.Enhanced)]
-        [InlineData(0xC0, CgbSupport.Required)]
-        public void The_colour_flag_is_read_from_its_own_byte(byte flag, CgbSupport expected)
+        [InlineData(0x00, false)]
+        [InlineData(0x80, true)]
+        [InlineData(0xC0, true)]
+        public void The_colour_flag_is_read_from_its_own_byte(byte flag, bool colour)
         {
-            Assert.Equal(expected, Cartridge.FromImage(SyntheticGbRom.Build(cgbFlag: flag)).Cgb);
-        }
-
-        // A colour cart spends the last five title bytes on a manufacturer code.
-        [Fact]
-        public void A_colour_cart_reads_a_shorter_title()
-        {
-            var cart = Cartridge.FromImage(SyntheticGbRom.Build(cgbFlag: 0xC0, title: "ABCDEFGHIJK"));
-            Assert.Equal(11, cart.Title.Length);
+            Assert.Equal(colour, GbCartridge.Read(SyntheticGbRom.Build(cgbFlag: flag)).ColourGame);
         }
 
         [Fact]
         public void Mbc2_carries_its_own_ram_with_no_size_byte()
         {
-            var cart = Cartridge.FromImage(SyntheticGbRom.Build(cartridgeType: 0x06, ramSizeCode: 0x00));
+            var cart = GbCartridge.Read(SyntheticGbRom.Build(cartridgeType: 0x06, ramSizeCode: 0x00));
 
-            Assert.Equal("MBC2", cart.Mapper.Name);
-            Assert.Equal(512, cart.Ram.Length);
+            Assert.Equal("MBC2", cart.Board);
+            Assert.Equal(512, cart.RamLength);
         }
 
         [Fact]
         public void An_image_too_short_to_hold_a_header_is_rejected()
         {
-            Assert.Throws<System.IO.InvalidDataException>(() => Cartridge.FromImage(new byte[0x100]));
+            Assert.Throws<System.IO.InvalidDataException>(() => GbCartridge.Read(new byte[0x100]));
         }
-    }
 
-    public sealed class MercuryRtCartridgeTests : MercuryCartridgeClaims
-    {
-        protected override MercuryEngine Engine => MercuryEngine.MercuryRt;
+        [Fact]
+        public void A_type_no_board_implements_is_refused_with_its_number()
+        {
+            var e = Assert.Throws<NotSupportedException>(() => GbCartridge.Read(SyntheticGbRom.Build(cartridgeType: 0x22)));
+            Assert.Contains("$22", e.Message);
+        }
     }
 }

@@ -5,7 +5,6 @@ using EmuSen.Cores;
 using EmuSen.Cores.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
-using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
@@ -79,21 +78,18 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal((2, 2, 1, 4, 1), (ControllerPorts.ForConsole("NES"), ControllerPorts.ForConsole("SNES"), ControllerPorts.ForConsole("GB"), ControllerPorts.ForConsole("N64"), ControllerPorts.ForConsole("Lynx")));
             Assert.Equal(0, ControllerPorts.Of(null));
 
-            if (MoonRtCore.Available) Assert.Equal(2, ControllerPorts.Of(CoreFactory.Load(nes, engine: CoreCatalog.MoonRtEngine).Core));
             if (MercuryRtCore.Available) Assert.Equal(1, ControllerPorts.Of(CoreFactory.Load(gb, engine: CoreCatalog.MercuryRtEngine).Core));
             if (MarsRtCore.Available) Assert.Equal(4, ControllerPorts.Of(new MarsRtCore()));
         }
 
-        // Port 1 is controller 2; ports 2 and 3 used to land on controller 2 as well, in both engines.
-        [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public void The_nes_second_pad_reads_port_1_alone(bool rust)
+        // Port 1 is controller 2; ports 2 and 3 used to land on controller 2 as well.
+        [Fact]
+        public void The_nes_second_pad_reads_port_1_alone()
         {
-            if (rust && !MoonRtCore.Available) return;
+            Assert.True(MoonRtCore.Available, MoonNative.Report);
             string nes = Rom(SyntheticNesRom.Build(patches: (0, ReadSecondNesPad)), "pads.nes");
-            ICore core = CoreFactory.Load(nes, engine: rust ? CoreCatalog.MoonRtEngine : null).Core;
-            Func<int, byte> ram = a => core is MoonCore moon ? moon.ReadSpace(MoonCore.SpaceRam, a) : ((MoonRtCore)core).ReadSpace(MoonCore.SpaceRam, a);
+            var core = (MoonRtCore)CoreFactory.Load(nes).Core;
+            Func<int, byte> ram = a => core.ReadSpace("RAM", a);
             byte[] Bits() { core.RunFrame(); core.RunFrame(); return Enumerable.Range(0x300, 8).Select(ram).ToArray(); }
 
             core.SetButton(2, PadButton.A, true);

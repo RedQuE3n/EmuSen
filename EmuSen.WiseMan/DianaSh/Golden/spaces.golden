@@ -64,24 +64,6 @@ status 0
 action none
 end
 
-case on moon
-target moon
-covers 1
-$ spaces
-out 282
-NES memory spaces:
-  RAM            2048 bytes  R/W
-  PRGROM        16384 bytes  R/O
-  PRGRAM         8192 bytes  R/W
-  CHR            8192 bytes  R/W
-  CIRAM          4096 bytes  R/W
-  OAM             256 bytes  R/W
-  PALETTE          32 bytes  R/W
-  CPUBUS        65536 bytes  R/W
-status 0
-action none
-end
-
 case on moonrt
 target moonrt
 covers 1

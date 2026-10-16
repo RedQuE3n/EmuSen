@@ -174,10 +174,9 @@ built.engine-row[SNES] = <null>
 built.engine-row[SNES].discovered = [VenusRT (Rust)]
 built.engine-row[SNES].chosen-default = <null>
 built.engine-row[SNES].chosen-stored = Stored
-built.engine-row[NES][Engine] = Engine | Choice | default Moon (C#) | 0..0 | [Moon (C#), MoonRT (Rust)]
-built.engine-row[NES][Engine].hint = Which implementation runs the console. Moon (C#) is the reference. MoonRT (Rust) is exact against it in state, picture and sound, reads the same save states and battery saves, and takes the same cheats; its debugger view is refreshed from its state, and it stops at breakpoints, steps, runs to a frame or an interrupt, and records coverage, watches, the profile and the call stack as Moon does. Takes effect when a game is next loaded.
+built.engine-row[NES] = <null>
 built.engine-row[NES].discovered = [MoonRT (Rust)]
-built.engine-row[NES].chosen-default = Moon (C#)
+built.engine-row[NES].chosen-default = <null>
 built.engine-row[NES].chosen-stored = Stored
 built.engine-row[GB] = <null>
 built.engine-row[GB].discovered = [MercuryRT (Rust)]
@@ -195,7 +194,7 @@ built.registered[Mars (C#)] = False
 built.registered[MarsRT (Rust)] = True
 built.registered[Mercury (C#)] = False
 built.registered[MercuryRT (Rust)] = True
-built.registered[Moon (C#)] = True
+built.registered[Moon (C#)] = False
 built.registered[MoonRT (Rust)] = True
 built.registered[Venus (C#)] = False
 built.registered[VenusRT (Rust)] = False
@@ -321,10 +320,10 @@ built.configured[SNES nothing stored] = <null>
 built.configured[SNES Nope] = Nope
 built.configured[SNES Venus (C#)] = VenusRT (Rust)
 built.factory[NES plain <null>].supported = True
-built.factory[NES plain <null>].probe = MoonCore
-built.factory[NES plain <null>].core = MoonCore
+built.factory[NES plain <null>].probe = MoonRtCore
+built.factory[NES plain <null>].core = MoonRtCore
 built.factory[NES plain <null>].notice = <null>
-built.factory[NES plain <null>].debug-target = MoonDebugTarget
+built.factory[NES plain <null>].debug-target = MoonRtDebugTarget
 built.factory[NES plain <null>].trace-switch = <null>
 built.factory[NES plain <null>].codec-auto = NES address:value | RamPoke | CPUBUS
 built.factory[NES plain <null>].codec-explicit = Game Genie | RomPatch | <null>
@@ -335,41 +334,11 @@ built.factory[NES plain <null>].state-version = 6
 built.factory[NES plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[NES plain <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
-built.factory[NES plain Moon (C#)].supported = True
-built.factory[NES plain Moon (C#)].probe = MoonCore
-built.factory[NES plain Moon (C#)].core = MoonCore
-built.factory[NES plain Moon (C#)].notice = <null>
-built.factory[NES plain Moon (C#)].debug-target = MoonDebugTarget
-built.factory[NES plain Moon (C#)].trace-switch = <null>
-built.factory[NES plain Moon (C#)].codec-auto = NES address:value | RamPoke | CPUBUS
-built.factory[NES plain Moon (C#)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[NES plain Moon (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-built.factory[NES plain Moon (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-built.factory[NES plain Moon (C#)].axes = []
-built.factory[NES plain Moon (C#)].state-version = 6
-built.factory[NES plain Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-built.factory[NES plain Moon (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[NES plain Moon (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
-built.factory[NES plain MoonRT (Rust)].supported = True
-built.factory[NES plain MoonRT (Rust)].probe = MoonRtCore
-built.factory[NES plain MoonRT (Rust)].core = MoonRtCore
-built.factory[NES plain MoonRT (Rust)].notice = <null>
-built.factory[NES plain MoonRT (Rust)].debug-target = MoonDebugTarget
-built.factory[NES plain MoonRT (Rust)].trace-switch = <null>
-built.factory[NES plain MoonRT (Rust)].codec-auto = NES address:value | RamPoke | CPUBUS
-built.factory[NES plain MoonRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[NES plain MoonRT (Rust)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-built.factory[NES plain MoonRT (Rust)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-built.factory[NES plain MoonRT (Rust)].axes = []
-built.factory[NES plain MoonRT (Rust)].state-version = 6
-built.factory[NES plain MoonRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-built.factory[NES plain MoonRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[NES plain MoonRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Nope].supported = True
-built.factory[NES plain Nope].probe = MoonCore
-built.factory[NES plain Nope].core = MoonCore
-built.factory[NES plain Nope].notice = No engine is named "Nope"; Moon (C#) is running.
-built.factory[NES plain Nope].debug-target = MoonDebugTarget
+built.factory[NES plain Nope].probe = MoonRtCore
+built.factory[NES plain Nope].core = MoonRtCore
+built.factory[NES plain Nope].notice = <null>
+built.factory[NES plain Nope].debug-target = MoonRtDebugTarget
 built.factory[NES plain Nope].trace-switch = <null>
 built.factory[NES plain Nope].codec-auto = NES address:value | RamPoke | CPUBUS
 built.factory[NES plain Nope].codec-explicit = Game Genie | RomPatch | <null>
@@ -381,10 +350,10 @@ built.factory[NES plain Nope].features = EngineFeatures { RewindCapture = True, 
 built.factory[NES plain Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Venus (C#)].supported = True
-built.factory[NES plain Venus (C#)].probe = MoonCore
-built.factory[NES plain Venus (C#)].core = MoonCore
-built.factory[NES plain Venus (C#)].notice = No engine is named "Venus (C#)"; Moon (C#) is running.
-built.factory[NES plain Venus (C#)].debug-target = MoonDebugTarget
+built.factory[NES plain Venus (C#)].probe = MoonRtCore
+built.factory[NES plain Venus (C#)].core = MoonRtCore
+built.factory[NES plain Venus (C#)].notice = <null>
+built.factory[NES plain Venus (C#)].debug-target = MoonRtDebugTarget
 built.factory[NES plain Venus (C#)].trace-switch = <null>
 built.factory[NES plain Venus (C#)].codec-auto = NES address:value | RamPoke | CPUBUS
 built.factory[NES plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
@@ -395,11 +364,26 @@ built.factory[NES plain Venus (C#)].state-version = 6
 built.factory[NES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[NES plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
+built.factory[NES plain Moon (C#)].supported = True
+built.factory[NES plain Moon (C#)].probe = MoonRtCore
+built.factory[NES plain Moon (C#)].core = MoonRtCore
+built.factory[NES plain Moon (C#)].notice = <null>
+built.factory[NES plain Moon (C#)].debug-target = MoonRtDebugTarget
+built.factory[NES plain Moon (C#)].trace-switch = <null>
+built.factory[NES plain Moon (C#)].codec-auto = NES address:value | RamPoke | CPUBUS
+built.factory[NES plain Moon (C#)].codec-explicit = Game Genie | RomPatch | <null>
+built.factory[NES plain Moon (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
+built.factory[NES plain Moon (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
+built.factory[NES plain Moon (C#)].axes = []
+built.factory[NES plain Moon (C#)].state-version = 6
+built.factory[NES plain Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[NES plain Moon (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+built.factory[NES plain Moon (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[NES battery <null>].supported = True
-built.factory[NES battery <null>].probe = MoonCore
-built.factory[NES battery <null>].core = MoonCore
+built.factory[NES battery <null>].probe = MoonRtCore
+built.factory[NES battery <null>].core = MoonRtCore
 built.factory[NES battery <null>].notice = <null>
-built.factory[NES battery <null>].debug-target = MoonDebugTarget
+built.factory[NES battery <null>].debug-target = MoonRtDebugTarget
 built.factory[NES battery <null>].trace-switch = <null>
 built.factory[NES battery <null>].codec-auto = NES address:value | RamPoke | CPUBUS
 built.factory[NES battery <null>].codec-explicit = Game Genie | RomPatch | <null>
@@ -411,43 +395,11 @@ built.factory[NES battery <null>].features = EngineFeatures { RewindCapture = Tr
 built.factory[NES battery <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES battery <null>].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
 built.factory[NES battery <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
-built.factory[NES battery Moon (C#)].supported = True
-built.factory[NES battery Moon (C#)].probe = MoonCore
-built.factory[NES battery Moon (C#)].core = MoonCore
-built.factory[NES battery Moon (C#)].notice = <null>
-built.factory[NES battery Moon (C#)].debug-target = MoonDebugTarget
-built.factory[NES battery Moon (C#)].trace-switch = <null>
-built.factory[NES battery Moon (C#)].codec-auto = NES address:value | RamPoke | CPUBUS
-built.factory[NES battery Moon (C#)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[NES battery Moon (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-built.factory[NES battery Moon (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-built.factory[NES battery Moon (C#)].axes = []
-built.factory[NES battery Moon (C#)].state-version = 6
-built.factory[NES battery Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-built.factory[NES battery Moon (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[NES battery Moon (C#)].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
-built.factory[NES battery Moon (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
-built.factory[NES battery MoonRT (Rust)].supported = True
-built.factory[NES battery MoonRT (Rust)].probe = MoonRtCore
-built.factory[NES battery MoonRT (Rust)].core = MoonRtCore
-built.factory[NES battery MoonRT (Rust)].notice = <null>
-built.factory[NES battery MoonRT (Rust)].debug-target = MoonDebugTarget
-built.factory[NES battery MoonRT (Rust)].trace-switch = <null>
-built.factory[NES battery MoonRT (Rust)].codec-auto = NES address:value | RamPoke | CPUBUS
-built.factory[NES battery MoonRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[NES battery MoonRT (Rust)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-built.factory[NES battery MoonRT (Rust)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-built.factory[NES battery MoonRT (Rust)].axes = []
-built.factory[NES battery MoonRT (Rust)].state-version = 6
-built.factory[NES battery MoonRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-built.factory[NES battery MoonRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-built.factory[NES battery MoonRT (Rust)].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
-built.factory[NES battery MoonRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[NES battery Nope].supported = True
-built.factory[NES battery Nope].probe = MoonCore
-built.factory[NES battery Nope].core = MoonCore
-built.factory[NES battery Nope].notice = No engine is named "Nope"; Moon (C#) is running.
-built.factory[NES battery Nope].debug-target = MoonDebugTarget
+built.factory[NES battery Nope].probe = MoonRtCore
+built.factory[NES battery Nope].core = MoonRtCore
+built.factory[NES battery Nope].notice = <null>
+built.factory[NES battery Nope].debug-target = MoonRtDebugTarget
 built.factory[NES battery Nope].trace-switch = <null>
 built.factory[NES battery Nope].codec-auto = NES address:value | RamPoke | CPUBUS
 built.factory[NES battery Nope].codec-explicit = Game Genie | RomPatch | <null>
@@ -460,10 +412,10 @@ built.factory[NES battery Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES battery Nope].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
 built.factory[NES battery Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[NES battery Venus (C#)].supported = True
-built.factory[NES battery Venus (C#)].probe = MoonCore
-built.factory[NES battery Venus (C#)].core = MoonCore
-built.factory[NES battery Venus (C#)].notice = No engine is named "Venus (C#)"; Moon (C#) is running.
-built.factory[NES battery Venus (C#)].debug-target = MoonDebugTarget
+built.factory[NES battery Venus (C#)].probe = MoonRtCore
+built.factory[NES battery Venus (C#)].core = MoonRtCore
+built.factory[NES battery Venus (C#)].notice = <null>
+built.factory[NES battery Venus (C#)].debug-target = MoonRtDebugTarget
 built.factory[NES battery Venus (C#)].trace-switch = <null>
 built.factory[NES battery Venus (C#)].codec-auto = NES address:value | RamPoke | CPUBUS
 built.factory[NES battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
@@ -475,11 +427,26 @@ built.factory[NES battery Venus (C#)].features = EngineFeatures { RewindCapture 
 built.factory[NES battery Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES battery Venus (C#)].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
 built.factory[NES battery Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
-built.configured[NES nothing stored] = Moon (C#)
-built.configured[NES Moon (C#)] = Moon (C#)
-built.configured[NES MoonRT (Rust)] = MoonRT (Rust)
+built.factory[NES battery Moon (C#)].supported = True
+built.factory[NES battery Moon (C#)].probe = MoonRtCore
+built.factory[NES battery Moon (C#)].core = MoonRtCore
+built.factory[NES battery Moon (C#)].notice = <null>
+built.factory[NES battery Moon (C#)].debug-target = MoonRtDebugTarget
+built.factory[NES battery Moon (C#)].trace-switch = <null>
+built.factory[NES battery Moon (C#)].codec-auto = NES address:value | RamPoke | CPUBUS
+built.factory[NES battery Moon (C#)].codec-explicit = Game Genie | RomPatch | <null>
+built.factory[NES battery Moon (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
+built.factory[NES battery Moon (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
+built.factory[NES battery Moon (C#)].axes = []
+built.factory[NES battery Moon (C#)].state-version = 6
+built.factory[NES battery Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[NES battery Moon (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+built.factory[NES battery Moon (C#)].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
+built.factory[NES battery Moon (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
+built.configured[NES nothing stored] = <null>
 built.configured[NES Nope] = Nope
 built.configured[NES Venus (C#)] = VenusRT (Rust)
+built.configured[NES Moon (C#)] = MoonRT (Rust)
 built.factory[GB plain <null>].supported = True
 built.factory[GB plain <null>].probe = MercuryRtCore
 built.factory[GB plain <null>].core = MercuryRtCore
@@ -1064,8 +1031,6 @@ built.configured[N64 MarsRT (Rust)] = MarsRT (Rust)
 built.configured[N64 Nope] = Nope
 built.configured[N64 Venus (C#)] = VenusRT (Rust)
 built.configured[N64 Mars (C#)] = MarsRT (Rust)
-settings[NES Moon (C#)].core = MoonCore
-settings[NES MoonRT (Rust)].core = MoonRtCore
 settings[N64 MarsRT (Rust)].core = MarsRtCore
 settings[N64 MarsRT (Rust)].row[ThreadedRdp] = Draw on a separate thread | Switch | default true | 0..0 | []
 settings[N64 MarsRT (Rust)].row[ThreadedRdp].hint = The display processor runs its lists on a thread of its own, behind marks on the memory it reaches. Exact: frame for frame the machine on one thread.
@@ -1194,10 +1159,9 @@ nothing-discovered.engine-row[SNES] = <null>
 nothing-discovered.engine-row[SNES].discovered = []
 nothing-discovered.engine-row[SNES].chosen-default = <null>
 nothing-discovered.engine-row[SNES].chosen-stored = Stored
-nothing-discovered.engine-row[NES][Engine] = Engine | Choice | default Moon (C#) | 0..0 | [Moon (C#), MoonRT (Rust)]
-nothing-discovered.engine-row[NES][Engine].hint = Which implementation runs the console. Moon (C#) is the reference. MoonRT (Rust) is exact against it in state, picture and sound, reads the same save states and battery saves, and takes the same cheats; its debugger view is refreshed from its state, and it stops at breakpoints, steps, runs to a frame or an interrupt, and records coverage, watches, the profile and the call stack as Moon does. Takes effect when a game is next loaded.
+nothing-discovered.engine-row[NES] = <null>
 nothing-discovered.engine-row[NES].discovered = []
-nothing-discovered.engine-row[NES].chosen-default = Moon (C#)
+nothing-discovered.engine-row[NES].chosen-default = <null>
 nothing-discovered.engine-row[NES].chosen-stored = Stored
 nothing-discovered.engine-row[GB] = <null>
 nothing-discovered.engine-row[GB].discovered = []
@@ -1215,7 +1179,7 @@ nothing-discovered.registered[Mars (C#)] = False
 nothing-discovered.registered[MarsRT (Rust)] = True
 nothing-discovered.registered[Mercury (C#)] = False
 nothing-discovered.registered[MercuryRT (Rust)] = True
-nothing-discovered.registered[Moon (C#)] = True
+nothing-discovered.registered[Moon (C#)] = False
 nothing-discovered.registered[MoonRT (Rust)] = True
 nothing-discovered.registered[Venus (C#)] = False
 nothing-discovered.registered[VenusRT (Rust)] = False
@@ -1233,10 +1197,10 @@ nothing-discovered.factory[SNES plain Venus (C#)].supported = True
 nothing-discovered.factory[SNES plain Venus (C#)].probe = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (no sidecar for it was found beside the program).
 nothing-discovered.factory[SNES plain Venus (C#)].load = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (no sidecar for it was found beside the program).
 nothing-discovered.factory[NES plain <null>].supported = True
-nothing-discovered.factory[NES plain <null>].probe = MoonCore
-nothing-discovered.factory[NES plain <null>].core = MoonCore
+nothing-discovered.factory[NES plain <null>].probe = MoonRtCore
+nothing-discovered.factory[NES plain <null>].core = MoonRtCore
 nothing-discovered.factory[NES plain <null>].notice = <null>
-nothing-discovered.factory[NES plain <null>].debug-target = MoonDebugTarget
+nothing-discovered.factory[NES plain <null>].debug-target = MoonRtDebugTarget
 nothing-discovered.factory[NES plain <null>].trace-switch = <null>
 nothing-discovered.factory[NES plain <null>].codec-auto = NES address:value | RamPoke | CPUBUS
 nothing-discovered.factory[NES plain <null>].codec-explicit = Game Genie | RomPatch | <null>
@@ -1245,37 +1209,11 @@ nothing-discovered.factory[NES plain <null>].buttons = [Up, Down, Left, Right, S
 nothing-discovered.factory[NES plain <null>].axes = []
 nothing-discovered.factory[NES plain <null>].state-version = 6
 nothing-discovered.factory[NES plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-nothing-discovered.factory[NES plain Moon (C#)].supported = True
-nothing-discovered.factory[NES plain Moon (C#)].probe = MoonCore
-nothing-discovered.factory[NES plain Moon (C#)].core = MoonCore
-nothing-discovered.factory[NES plain Moon (C#)].notice = <null>
-nothing-discovered.factory[NES plain Moon (C#)].debug-target = MoonDebugTarget
-nothing-discovered.factory[NES plain Moon (C#)].trace-switch = <null>
-nothing-discovered.factory[NES plain Moon (C#)].codec-auto = NES address:value | RamPoke | CPUBUS
-nothing-discovered.factory[NES plain Moon (C#)].codec-explicit = Game Genie | RomPatch | <null>
-nothing-discovered.factory[NES plain Moon (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-nothing-discovered.factory[NES plain Moon (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-nothing-discovered.factory[NES plain Moon (C#)].axes = []
-nothing-discovered.factory[NES plain Moon (C#)].state-version = 6
-nothing-discovered.factory[NES plain Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-nothing-discovered.factory[NES plain MoonRT (Rust)].supported = True
-nothing-discovered.factory[NES plain MoonRT (Rust)].probe = MoonRtCore
-nothing-discovered.factory[NES plain MoonRT (Rust)].core = MoonRtCore
-nothing-discovered.factory[NES plain MoonRT (Rust)].notice = <null>
-nothing-discovered.factory[NES plain MoonRT (Rust)].debug-target = MoonDebugTarget
-nothing-discovered.factory[NES plain MoonRT (Rust)].trace-switch = <null>
-nothing-discovered.factory[NES plain MoonRT (Rust)].codec-auto = NES address:value | RamPoke | CPUBUS
-nothing-discovered.factory[NES plain MoonRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-nothing-discovered.factory[NES plain MoonRT (Rust)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-nothing-discovered.factory[NES plain MoonRT (Rust)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-nothing-discovered.factory[NES plain MoonRT (Rust)].axes = []
-nothing-discovered.factory[NES plain MoonRT (Rust)].state-version = 6
-nothing-discovered.factory[NES plain MoonRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 nothing-discovered.factory[NES plain Nope].supported = True
-nothing-discovered.factory[NES plain Nope].probe = MoonCore
-nothing-discovered.factory[NES plain Nope].core = MoonCore
-nothing-discovered.factory[NES plain Nope].notice = No engine is named "Nope"; Moon (C#) is running.
-nothing-discovered.factory[NES plain Nope].debug-target = MoonDebugTarget
+nothing-discovered.factory[NES plain Nope].probe = MoonRtCore
+nothing-discovered.factory[NES plain Nope].core = MoonRtCore
+nothing-discovered.factory[NES plain Nope].notice = <null>
+nothing-discovered.factory[NES plain Nope].debug-target = MoonRtDebugTarget
 nothing-discovered.factory[NES plain Nope].trace-switch = <null>
 nothing-discovered.factory[NES plain Nope].codec-auto = NES address:value | RamPoke | CPUBUS
 nothing-discovered.factory[NES plain Nope].codec-explicit = Game Genie | RomPatch | <null>
@@ -1285,10 +1223,10 @@ nothing-discovered.factory[NES plain Nope].axes = []
 nothing-discovered.factory[NES plain Nope].state-version = 6
 nothing-discovered.factory[NES plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 nothing-discovered.factory[NES plain Venus (C#)].supported = True
-nothing-discovered.factory[NES plain Venus (C#)].probe = MoonCore
-nothing-discovered.factory[NES plain Venus (C#)].core = MoonCore
-nothing-discovered.factory[NES plain Venus (C#)].notice = No engine is named "Venus (C#)"; Moon (C#) is running.
-nothing-discovered.factory[NES plain Venus (C#)].debug-target = MoonDebugTarget
+nothing-discovered.factory[NES plain Venus (C#)].probe = MoonRtCore
+nothing-discovered.factory[NES plain Venus (C#)].core = MoonRtCore
+nothing-discovered.factory[NES plain Venus (C#)].notice = <null>
+nothing-discovered.factory[NES plain Venus (C#)].debug-target = MoonRtDebugTarget
 nothing-discovered.factory[NES plain Venus (C#)].trace-switch = <null>
 nothing-discovered.factory[NES plain Venus (C#)].codec-auto = NES address:value | RamPoke | CPUBUS
 nothing-discovered.factory[NES plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
@@ -1297,6 +1235,19 @@ nothing-discovered.factory[NES plain Venus (C#)].buttons = [Up, Down, Left, Righ
 nothing-discovered.factory[NES plain Venus (C#)].axes = []
 nothing-discovered.factory[NES plain Venus (C#)].state-version = 6
 nothing-discovered.factory[NES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+nothing-discovered.factory[NES plain Moon (C#)].supported = True
+nothing-discovered.factory[NES plain Moon (C#)].probe = MoonRtCore
+nothing-discovered.factory[NES plain Moon (C#)].core = MoonRtCore
+nothing-discovered.factory[NES plain Moon (C#)].notice = <null>
+nothing-discovered.factory[NES plain Moon (C#)].debug-target = MoonRtDebugTarget
+nothing-discovered.factory[NES plain Moon (C#)].trace-switch = <null>
+nothing-discovered.factory[NES plain Moon (C#)].codec-auto = NES address:value | RamPoke | CPUBUS
+nothing-discovered.factory[NES plain Moon (C#)].codec-explicit = Game Genie | RomPatch | <null>
+nothing-discovered.factory[NES plain Moon (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
+nothing-discovered.factory[NES plain Moon (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
+nothing-discovered.factory[NES plain Moon (C#)].axes = []
+nothing-discovered.factory[NES plain Moon (C#)].state-version = 6
+nothing-discovered.factory[NES plain Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 nothing-discovered.factory[GB plain <null>].supported = True
 nothing-discovered.factory[GB plain <null>].probe = MercuryRtCore
 nothing-discovered.factory[GB plain <null>].core = MercuryRtCore
@@ -1467,10 +1418,9 @@ refused-discovered.engine-row[SNES] = <null>
 refused-discovered.engine-row[SNES].discovered = [VenusRT (Rust)]
 refused-discovered.engine-row[SNES].chosen-default = <null>
 refused-discovered.engine-row[SNES].chosen-stored = Stored
-refused-discovered.engine-row[NES][Engine] = Engine | Choice | default Moon (C#) | 0..0 | [Moon (C#), MoonRT (Rust)]
-refused-discovered.engine-row[NES][Engine].hint = Which implementation runs the console. Moon (C#) is the reference. MoonRT (Rust) is exact against it in state, picture and sound, reads the same save states and battery saves, and takes the same cheats; its debugger view is refreshed from its state, and it stops at breakpoints, steps, runs to a frame or an interrupt, and records coverage, watches, the profile and the call stack as Moon does. Takes effect when a game is next loaded.
+refused-discovered.engine-row[NES] = <null>
 refused-discovered.engine-row[NES].discovered = [MoonRT (Rust)]
-refused-discovered.engine-row[NES].chosen-default = Moon (C#)
+refused-discovered.engine-row[NES].chosen-default = <null>
 refused-discovered.engine-row[NES].chosen-stored = Stored
 refused-discovered.engine-row[GB] = <null>
 refused-discovered.engine-row[GB].discovered = [MercuryRT (Rust)]
@@ -1488,7 +1438,7 @@ refused-discovered.registered[Mars (C#)] = False
 refused-discovered.registered[MarsRT (Rust)] = True
 refused-discovered.registered[Mercury (C#)] = False
 refused-discovered.registered[MercuryRT (Rust)] = True
-refused-discovered.registered[Moon (C#)] = True
+refused-discovered.registered[Moon (C#)] = False
 refused-discovered.registered[MoonRT (Rust)] = True
 refused-discovered.registered[Venus (C#)] = False
 refused-discovered.registered[VenusRT (Rust)] = False
@@ -1512,10 +1462,10 @@ refused-discovered.factory[SNES plain Venus (C#)].supported = True
 refused-discovered.factory[SNES plain Venus (C#)].probe = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (<lib venusrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
 refused-discovered.factory[SNES plain Venus (C#)].load = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (<lib venusrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
 refused-discovered.factory[NES plain <null>].supported = True
-refused-discovered.factory[NES plain <null>].probe = MoonCore
-refused-discovered.factory[NES plain <null>].core = MoonCore
+refused-discovered.factory[NES plain <null>].probe = MoonRtCore
+refused-discovered.factory[NES plain <null>].core = MoonRtCore
 refused-discovered.factory[NES plain <null>].notice = <null>
-refused-discovered.factory[NES plain <null>].debug-target = MoonDebugTarget
+refused-discovered.factory[NES plain <null>].debug-target = MoonRtDebugTarget
 refused-discovered.factory[NES plain <null>].trace-switch = <null>
 refused-discovered.factory[NES plain <null>].codec-auto = NES address:value | RamPoke | CPUBUS
 refused-discovered.factory[NES plain <null>].codec-explicit = Game Genie | RomPatch | <null>
@@ -1524,37 +1474,11 @@ refused-discovered.factory[NES plain <null>].buttons = [Up, Down, Left, Right, S
 refused-discovered.factory[NES plain <null>].axes = []
 refused-discovered.factory[NES plain <null>].state-version = 6
 refused-discovered.factory[NES plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-refused-discovered.factory[NES plain Moon (C#)].supported = True
-refused-discovered.factory[NES plain Moon (C#)].probe = MoonCore
-refused-discovered.factory[NES plain Moon (C#)].core = MoonCore
-refused-discovered.factory[NES plain Moon (C#)].notice = <null>
-refused-discovered.factory[NES plain Moon (C#)].debug-target = MoonDebugTarget
-refused-discovered.factory[NES plain Moon (C#)].trace-switch = <null>
-refused-discovered.factory[NES plain Moon (C#)].codec-auto = NES address:value | RamPoke | CPUBUS
-refused-discovered.factory[NES plain Moon (C#)].codec-explicit = Game Genie | RomPatch | <null>
-refused-discovered.factory[NES plain Moon (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-refused-discovered.factory[NES plain Moon (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-refused-discovered.factory[NES plain Moon (C#)].axes = []
-refused-discovered.factory[NES plain Moon (C#)].state-version = 6
-refused-discovered.factory[NES plain Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-refused-discovered.factory[NES plain MoonRT (Rust)].supported = True
-refused-discovered.factory[NES plain MoonRT (Rust)].probe = MoonRtCore
-refused-discovered.factory[NES plain MoonRT (Rust)].core = MoonRtCore
-refused-discovered.factory[NES plain MoonRT (Rust)].notice = <null>
-refused-discovered.factory[NES plain MoonRT (Rust)].debug-target = MoonDebugTarget
-refused-discovered.factory[NES plain MoonRT (Rust)].trace-switch = <null>
-refused-discovered.factory[NES plain MoonRT (Rust)].codec-auto = NES address:value | RamPoke | CPUBUS
-refused-discovered.factory[NES plain MoonRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-refused-discovered.factory[NES plain MoonRT (Rust)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-refused-discovered.factory[NES plain MoonRT (Rust)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-refused-discovered.factory[NES plain MoonRT (Rust)].axes = []
-refused-discovered.factory[NES plain MoonRT (Rust)].state-version = 6
-refused-discovered.factory[NES plain MoonRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 refused-discovered.factory[NES plain Nope].supported = True
-refused-discovered.factory[NES plain Nope].probe = MoonCore
-refused-discovered.factory[NES plain Nope].core = MoonCore
-refused-discovered.factory[NES plain Nope].notice = No engine is named "Nope"; Moon (C#) is running.
-refused-discovered.factory[NES plain Nope].debug-target = MoonDebugTarget
+refused-discovered.factory[NES plain Nope].probe = MoonRtCore
+refused-discovered.factory[NES plain Nope].core = MoonRtCore
+refused-discovered.factory[NES plain Nope].notice = <null>
+refused-discovered.factory[NES plain Nope].debug-target = MoonRtDebugTarget
 refused-discovered.factory[NES plain Nope].trace-switch = <null>
 refused-discovered.factory[NES plain Nope].codec-auto = NES address:value | RamPoke | CPUBUS
 refused-discovered.factory[NES plain Nope].codec-explicit = Game Genie | RomPatch | <null>
@@ -1564,10 +1488,10 @@ refused-discovered.factory[NES plain Nope].axes = []
 refused-discovered.factory[NES plain Nope].state-version = 6
 refused-discovered.factory[NES plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 refused-discovered.factory[NES plain Venus (C#)].supported = True
-refused-discovered.factory[NES plain Venus (C#)].probe = MoonCore
-refused-discovered.factory[NES plain Venus (C#)].core = MoonCore
-refused-discovered.factory[NES plain Venus (C#)].notice = No engine is named "Venus (C#)"; Moon (C#) is running.
-refused-discovered.factory[NES plain Venus (C#)].debug-target = MoonDebugTarget
+refused-discovered.factory[NES plain Venus (C#)].probe = MoonRtCore
+refused-discovered.factory[NES plain Venus (C#)].core = MoonRtCore
+refused-discovered.factory[NES plain Venus (C#)].notice = <null>
+refused-discovered.factory[NES plain Venus (C#)].debug-target = MoonRtDebugTarget
 refused-discovered.factory[NES plain Venus (C#)].trace-switch = <null>
 refused-discovered.factory[NES plain Venus (C#)].codec-auto = NES address:value | RamPoke | CPUBUS
 refused-discovered.factory[NES plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
@@ -1576,6 +1500,19 @@ refused-discovered.factory[NES plain Venus (C#)].buttons = [Up, Down, Left, Righ
 refused-discovered.factory[NES plain Venus (C#)].axes = []
 refused-discovered.factory[NES plain Venus (C#)].state-version = 6
 refused-discovered.factory[NES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+refused-discovered.factory[NES plain Moon (C#)].supported = True
+refused-discovered.factory[NES plain Moon (C#)].probe = MoonRtCore
+refused-discovered.factory[NES plain Moon (C#)].core = MoonRtCore
+refused-discovered.factory[NES plain Moon (C#)].notice = <null>
+refused-discovered.factory[NES plain Moon (C#)].debug-target = MoonRtDebugTarget
+refused-discovered.factory[NES plain Moon (C#)].trace-switch = <null>
+refused-discovered.factory[NES plain Moon (C#)].codec-auto = NES address:value | RamPoke | CPUBUS
+refused-discovered.factory[NES plain Moon (C#)].codec-explicit = Game Genie | RomPatch | <null>
+refused-discovered.factory[NES plain Moon (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
+refused-discovered.factory[NES plain Moon (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
+refused-discovered.factory[NES plain Moon (C#)].axes = []
+refused-discovered.factory[NES plain Moon (C#)].state-version = 6
+refused-discovered.factory[NES plain Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 refused-discovered.factory[GB plain <null>].supported = True
 refused-discovered.factory[GB plain <null>].probe = MercuryRtCore
 refused-discovered.factory[GB plain <null>].core = MercuryRtCore
@@ -1918,10 +1855,9 @@ off.engine-row[SNES] = <null>
 off.engine-row[SNES].discovered = [VenusRT (Rust)]
 off.engine-row[SNES].chosen-default = <null>
 off.engine-row[SNES].chosen-stored = Stored
-off.engine-row[NES][Engine] = Engine | Choice | default Moon (C#) | 0..0 | [Moon (C#), MoonRT (Rust)]
-off.engine-row[NES][Engine].hint = Which implementation runs the console. Moon (C#) is the reference. MoonRT (Rust) is exact against it in state, picture and sound, reads the same save states and battery saves, and takes the same cheats; its debugger view is refreshed from its state, and it stops at breakpoints, steps, runs to a frame or an interrupt, and records coverage, watches, the profile and the call stack as Moon does. Takes effect when a game is next loaded.
+off.engine-row[NES] = <null>
 off.engine-row[NES].discovered = [MoonRT (Rust)]
-off.engine-row[NES].chosen-default = Moon (C#)
+off.engine-row[NES].chosen-default = <null>
 off.engine-row[NES].chosen-stored = Stored
 off.engine-row[GB] = <null>
 off.engine-row[GB].discovered = [MercuryRT (Rust)]
@@ -1939,7 +1875,7 @@ off.registered[Mars (C#)] = False
 off.registered[MarsRT (Rust)] = True
 off.registered[Mercury (C#)] = False
 off.registered[MercuryRT (Rust)] = True
-off.registered[Moon (C#)] = True
+off.registered[Moon (C#)] = False
 off.registered[MoonRT (Rust)] = True
 off.registered[Venus (C#)] = False
 off.registered[VenusRT (Rust)] = False
@@ -2065,165 +2001,33 @@ off.configured[SNES nothing stored] = <null>
 off.configured[SNES Nope] = Nope
 off.configured[SNES Venus (C#)] = VenusRT (Rust)
 off.factory[NES plain <null>].supported = True
-off.factory[NES plain <null>].probe = MoonCore
-off.factory[NES plain <null>].core = MoonCore
-off.factory[NES plain <null>].notice = <null>
-off.factory[NES plain <null>].debug-target = MoonDebugTarget
-off.factory[NES plain <null>].trace-switch = <null>
-off.factory[NES plain <null>].codec-auto = NES address:value | RamPoke | CPUBUS
-off.factory[NES plain <null>].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[NES plain <null>].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-off.factory[NES plain <null>].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-off.factory[NES plain <null>].axes = []
-off.factory[NES plain <null>].state-version = 6
-off.factory[NES plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[NES plain <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[NES plain <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
-off.factory[NES plain Moon (C#)].supported = True
-off.factory[NES plain Moon (C#)].probe = MoonCore
-off.factory[NES plain Moon (C#)].core = MoonCore
-off.factory[NES plain Moon (C#)].notice = <null>
-off.factory[NES plain Moon (C#)].debug-target = MoonDebugTarget
-off.factory[NES plain Moon (C#)].trace-switch = <null>
-off.factory[NES plain Moon (C#)].codec-auto = NES address:value | RamPoke | CPUBUS
-off.factory[NES plain Moon (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[NES plain Moon (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-off.factory[NES plain Moon (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-off.factory[NES plain Moon (C#)].axes = []
-off.factory[NES plain Moon (C#)].state-version = 6
-off.factory[NES plain Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[NES plain Moon (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[NES plain Moon (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
-off.factory[NES plain MoonRT (Rust)].supported = True
-off.factory[NES plain MoonRT (Rust)].probe = MoonCore
-off.factory[NES plain MoonRT (Rust)].core = MoonCore
-off.factory[NES plain MoonRT (Rust)].notice = MoonRT (Rust) is not available (turned off by EMUSEN_MOON_NATIVE=0); Moon (C#) is running.
-off.factory[NES plain MoonRT (Rust)].debug-target = MoonDebugTarget
-off.factory[NES plain MoonRT (Rust)].trace-switch = <null>
-off.factory[NES plain MoonRT (Rust)].codec-auto = NES address:value | RamPoke | CPUBUS
-off.factory[NES plain MoonRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[NES plain MoonRT (Rust)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-off.factory[NES plain MoonRT (Rust)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-off.factory[NES plain MoonRT (Rust)].axes = []
-off.factory[NES plain MoonRT (Rust)].state-version = 6
-off.factory[NES plain MoonRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[NES plain MoonRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[NES plain MoonRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[NES plain <null>].probe = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (turned off by EMUSEN_MOON_NATIVE=0).
+off.factory[NES plain <null>].load = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (turned off by EMUSEN_MOON_NATIVE=0).
 off.factory[NES plain Nope].supported = True
-off.factory[NES plain Nope].probe = MoonCore
-off.factory[NES plain Nope].core = MoonCore
-off.factory[NES plain Nope].notice = No engine is named "Nope"; Moon (C#) is running.
-off.factory[NES plain Nope].debug-target = MoonDebugTarget
-off.factory[NES plain Nope].trace-switch = <null>
-off.factory[NES plain Nope].codec-auto = NES address:value | RamPoke | CPUBUS
-off.factory[NES plain Nope].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[NES plain Nope].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-off.factory[NES plain Nope].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-off.factory[NES plain Nope].axes = []
-off.factory[NES plain Nope].state-version = 6
-off.factory[NES plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[NES plain Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[NES plain Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[NES plain Nope].probe = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (turned off by EMUSEN_MOON_NATIVE=0).
+off.factory[NES plain Nope].load = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (turned off by EMUSEN_MOON_NATIVE=0).
 off.factory[NES plain Venus (C#)].supported = True
-off.factory[NES plain Venus (C#)].probe = MoonCore
-off.factory[NES plain Venus (C#)].core = MoonCore
-off.factory[NES plain Venus (C#)].notice = No engine is named "Venus (C#)"; Moon (C#) is running.
-off.factory[NES plain Venus (C#)].debug-target = MoonDebugTarget
-off.factory[NES plain Venus (C#)].trace-switch = <null>
-off.factory[NES plain Venus (C#)].codec-auto = NES address:value | RamPoke | CPUBUS
-off.factory[NES plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[NES plain Venus (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-off.factory[NES plain Venus (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-off.factory[NES plain Venus (C#)].axes = []
-off.factory[NES plain Venus (C#)].state-version = 6
-off.factory[NES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[NES plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[NES plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[NES plain Venus (C#)].probe = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (turned off by EMUSEN_MOON_NATIVE=0).
+off.factory[NES plain Venus (C#)].load = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (turned off by EMUSEN_MOON_NATIVE=0).
+off.factory[NES plain Moon (C#)].supported = True
+off.factory[NES plain Moon (C#)].probe = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (turned off by EMUSEN_MOON_NATIVE=0).
+off.factory[NES plain Moon (C#)].load = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (turned off by EMUSEN_MOON_NATIVE=0).
 off.factory[NES battery <null>].supported = True
-off.factory[NES battery <null>].probe = MoonCore
-off.factory[NES battery <null>].core = MoonCore
-off.factory[NES battery <null>].notice = <null>
-off.factory[NES battery <null>].debug-target = MoonDebugTarget
-off.factory[NES battery <null>].trace-switch = <null>
-off.factory[NES battery <null>].codec-auto = NES address:value | RamPoke | CPUBUS
-off.factory[NES battery <null>].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[NES battery <null>].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-off.factory[NES battery <null>].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-off.factory[NES battery <null>].axes = []
-off.factory[NES battery <null>].state-version = 6
-off.factory[NES battery <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[NES battery <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[NES battery <null>].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
-off.factory[NES battery <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
-off.factory[NES battery Moon (C#)].supported = True
-off.factory[NES battery Moon (C#)].probe = MoonCore
-off.factory[NES battery Moon (C#)].core = MoonCore
-off.factory[NES battery Moon (C#)].notice = <null>
-off.factory[NES battery Moon (C#)].debug-target = MoonDebugTarget
-off.factory[NES battery Moon (C#)].trace-switch = <null>
-off.factory[NES battery Moon (C#)].codec-auto = NES address:value | RamPoke | CPUBUS
-off.factory[NES battery Moon (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[NES battery Moon (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-off.factory[NES battery Moon (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-off.factory[NES battery Moon (C#)].axes = []
-off.factory[NES battery Moon (C#)].state-version = 6
-off.factory[NES battery Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[NES battery Moon (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[NES battery Moon (C#)].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
-off.factory[NES battery Moon (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
-off.factory[NES battery MoonRT (Rust)].supported = True
-off.factory[NES battery MoonRT (Rust)].probe = MoonCore
-off.factory[NES battery MoonRT (Rust)].core = MoonCore
-off.factory[NES battery MoonRT (Rust)].notice = MoonRT (Rust) is not available (turned off by EMUSEN_MOON_NATIVE=0); Moon (C#) is running.
-off.factory[NES battery MoonRT (Rust)].debug-target = MoonDebugTarget
-off.factory[NES battery MoonRT (Rust)].trace-switch = <null>
-off.factory[NES battery MoonRT (Rust)].codec-auto = NES address:value | RamPoke | CPUBUS
-off.factory[NES battery MoonRT (Rust)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[NES battery MoonRT (Rust)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-off.factory[NES battery MoonRT (Rust)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-off.factory[NES battery MoonRT (Rust)].axes = []
-off.factory[NES battery MoonRT (Rust)].state-version = 6
-off.factory[NES battery MoonRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[NES battery MoonRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[NES battery MoonRT (Rust)].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
-off.factory[NES battery MoonRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[NES battery <null>].probe = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (turned off by EMUSEN_MOON_NATIVE=0).
+off.factory[NES battery <null>].load = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (turned off by EMUSEN_MOON_NATIVE=0).
 off.factory[NES battery Nope].supported = True
-off.factory[NES battery Nope].probe = MoonCore
-off.factory[NES battery Nope].core = MoonCore
-off.factory[NES battery Nope].notice = No engine is named "Nope"; Moon (C#) is running.
-off.factory[NES battery Nope].debug-target = MoonDebugTarget
-off.factory[NES battery Nope].trace-switch = <null>
-off.factory[NES battery Nope].codec-auto = NES address:value | RamPoke | CPUBUS
-off.factory[NES battery Nope].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[NES battery Nope].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-off.factory[NES battery Nope].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-off.factory[NES battery Nope].axes = []
-off.factory[NES battery Nope].state-version = 6
-off.factory[NES battery Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[NES battery Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[NES battery Nope].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
-off.factory[NES battery Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[NES battery Nope].probe = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (turned off by EMUSEN_MOON_NATIVE=0).
+off.factory[NES battery Nope].load = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (turned off by EMUSEN_MOON_NATIVE=0).
 off.factory[NES battery Venus (C#)].supported = True
-off.factory[NES battery Venus (C#)].probe = MoonCore
-off.factory[NES battery Venus (C#)].core = MoonCore
-off.factory[NES battery Venus (C#)].notice = No engine is named "Venus (C#)"; Moon (C#) is running.
-off.factory[NES battery Venus (C#)].debug-target = MoonDebugTarget
-off.factory[NES battery Venus (C#)].trace-switch = <null>
-off.factory[NES battery Venus (C#)].codec-auto = NES address:value | RamPoke | CPUBUS
-off.factory[NES battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[NES battery Venus (C#)].identity = NES 256x240 60.09847552103154 Hz 44100 loaded=True frames=0
-off.factory[NES battery Venus (C#)].buttons = [Up, Down, Left, Right, Select, Start, B, A]
-off.factory[NES battery Venus (C#)].axes = []
-off.factory[NES battery Venus (C#)].state-version = 6
-off.factory[NES battery Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[NES battery Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[NES battery Venus (C#)].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
-off.factory[NES battery Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
-off.configured[NES nothing stored] = Moon (C#)
-off.configured[NES Moon (C#)] = Moon (C#)
-off.configured[NES MoonRT (Rust)] = MoonRT (Rust)
+off.factory[NES battery Venus (C#)].probe = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (turned off by EMUSEN_MOON_NATIVE=0).
+off.factory[NES battery Venus (C#)].load = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (turned off by EMUSEN_MOON_NATIVE=0).
+off.factory[NES battery Moon (C#)].supported = True
+off.factory[NES battery Moon (C#)].probe = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (turned off by EMUSEN_MOON_NATIVE=0).
+off.factory[NES battery Moon (C#)].load = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (turned off by EMUSEN_MOON_NATIVE=0).
+off.configured[NES nothing stored] = <null>
 off.configured[NES Nope] = Nope
 off.configured[NES Venus (C#)] = VenusRT (Rust)
+off.configured[NES Moon (C#)] = MoonRT (Rust)
 off.factory[GB plain <null>].supported = True
 off.factory[GB plain <null>].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB plain <null>].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
@@ -2314,8 +2118,6 @@ off.configured[N64 MarsRT (Rust)] = MarsRT (Rust)
 off.configured[N64 Nope] = Nope
 off.configured[N64 Venus (C#)] = VenusRT (Rust)
 off.configured[N64 Mars (C#)] = MarsRT (Rust)
-settings[NES Moon (C#)].core = MoonCore
-settings[NES MoonRT (Rust)].core = MoonCore
 settings[N64 MarsRT (Rust)].core = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
 codecs.default = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
 codecs.for[<null>] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>

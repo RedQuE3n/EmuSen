@@ -169,7 +169,7 @@ namespace EmuSen.WiseMan.Cores
             CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "snes") });
 
             Assert.Null(CoreCatalog.EngineFor("SNES"));
-            Assert.Equal(new[] { CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine }, CoreCatalog.EngineFor("NES")!.Choices);
+            Assert.Null(CoreCatalog.EngineFor("NES"));
             const string missing = "This build has no SNES core: VenusRT (Rust) is missing (no sidecar for it was found beside the program).";
             Assert.Equal(missing, Assert.Throws<NotSupportedException>(() => CoreFactory.Create("game.sfc")).Message);
             Assert.Equal(missing, Assert.Throws<NotSupportedException>(() => CoreFactory.Create("game.sfc", engine: "V1TestCore (test)")).Message);

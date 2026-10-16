@@ -1,0 +1,19 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/instr_test-v5/rom_singles/07-abs_xy.nes
+rom 9FF58D77D8D384CC918FCD3ED877898C5E7330CD475ED2DAFB11CBE80FF32EFF
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 F31C2C151232EF69
+120 6E30861964C86B26
+180 94590E24A88FB299
+240 9287C4A99135E379
+300 E4E86E7BE046FC36
+360 9CFBF29DB648B2D8
+365 02B8C6ED6A8E2F44
+resets 0
+text 07-abs_xy\n\nPassed
+verdict Passed 365

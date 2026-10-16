@@ -7372,3 +7372,17 @@ its Mesen columns reproduced, its C# columns frozen.
 - **G6's battery run on the handheld**, owed since §65, is still owed.
 - **The pre-stable interface.** `VenusMachine` and `VenusNative` stay for the runner and the native host's tests until
   that interface retires (`EmuSen_CoreAPI.md` §13.5).
+
+### 68.8 Beside the NES's retirement
+
+C# Moon was retired the same day (`Moon_Native.md` §9.5), and the two retirements were merged together. Each kept its
+own: `RetiredEngines` holds Mars (C#), Mercury (C#), Moon (C#) and Venus (C#); `SoleEngines` the three shims, MarsRT,
+MercuryRT and MoonRT; `SoleDiscoveredEngines` VenusRT alone. `ReferenceEngineByConsole` is now empty, and no console has
+an Engine row. Two of Pharaoh's modes had one target each left after the other retirement and none after both:
+`--singlestep` (the NES's 6502, the SNES's 65816 and SPC700) and `--tracediff` (the NES's APU log, the SNES's S-CPU and
+GSU traces). Both are gone, with `EmuSen/Validation/` and `EmuSen/Cores/Debug/TraceDiff.cs`, which nothing else read.
+The registration golden was recorded again on the merged tree; against the NES's retirement alone it differs only in
+the SNES's rows and the retired name's, as in §68.6.
+
+**Measured on 2026-10-16 on the merged tree**: the whole solution builds; the blast radius of §68.6 with every Moon
+class and the whole window-fit audit added, 2,394 cases, 2,386 passed and 8 opt-in skipped.

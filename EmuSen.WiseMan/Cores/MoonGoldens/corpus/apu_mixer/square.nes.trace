@@ -1,0 +1,29 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/apu_mixer/square.nes
+rom B16E333A2D3698201FC45C21375507A80981928562D3B10F865E23DA3922696A
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 B52F406215E6A2A2
+120 69D4D703C3AF72BF
+180 BD65DECFF1646D06
+240 1604D76D6A392F98
+300 9FCC1F43A7E0FABE
+360 F1886C3612DD24C7
+420 906B03232FD005D3
+480 859059D401C11E5E
+540 F60A85D8DF1F92E3
+600 BC5B724DCD5B4B04
+660 60A20D1F67BEFFC9
+720 93D98D60B68EE595
+780 F18314E48F4F7108
+840 53AC6429DAD145C0
+900 D35152B1AF89FC5C
+960 E434703E27CED047
+971 6C883526F4C8990D
+resets 0
+text square channel mixing test\n\n1. Should play short tone.\n\n2. Should be nearly silent.\n\n3. Should play short tone.\n\nSome clicking might occur between the two tones.Also, a faint tone might be audible through headphones.
+verdict Passed 971

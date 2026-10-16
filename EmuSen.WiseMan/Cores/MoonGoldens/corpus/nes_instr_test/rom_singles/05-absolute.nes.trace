@@ -1,0 +1,14 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/nes_instr_test/rom_singles/05-absolute.nes
+rom D72284F5E2A0B495F50A6207B424BD59B5A1D7BC651AC48A04C761E85442DFB0
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+60 010125FE719629E6
+71 AC3FF6E16DB3FCF5
+resets 0
+text 05-absolute\n\nPassed
+verdict Passed 71

@@ -36,10 +36,11 @@ namespace EmuSen.WiseMan.Mistress
         {
             MetadataField field = GameMetadata.Fields.Single(f => f.Key == GameMetadata.AltEmulator);
             Assert.Equal(new[] { "" }, GameMetadata.ChoicesFor(field, "/r/Game.z64").Select(c => c.Value));
-            Assert.Equal(new[] { "", CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine }, GameMetadata.ChoicesFor(field, "/r/Game.nes").Select(c => c.Value));
+            Assert.Equal(new[] { "" }, GameMetadata.ChoicesFor(field, "/r/Game.nes").Select(c => c.Value));
             Assert.Equal(new[] { "" }, GameMetadata.ChoicesFor(field, "/r/Game.gbc").Select(c => c.Value));
             Assert.Equal(new[] { "" }.Concat(CoreCatalog.EngineFor("SNES")?.Choices ?? Array.Empty<string>()), GameMetadata.ChoicesFor(field, "/r/Game.sfc").Select(c => c.Value));
-            Assert.Equal(CoreCatalog.MoonRtEngine, GameMetadata.EngineFor("/r/Game.nes", CoreCatalog.MoonRtEngine));
+            Assert.Null(GameMetadata.EngineFor("/r/Game.nes", CoreCatalog.MoonRtEngine));
+            Assert.Null(GameMetadata.EngineFor("/r/Game.nes", "Moon (C#)"));
             Assert.Null(GameMetadata.EngineFor("/r/Game.z64", "Mars (C#)"));
             Assert.Null(GameMetadata.EngineFor("/r/Game.gb", "Mercury (C#)"));
             Assert.Null(GameMetadata.EngineFor("/r/Game.gb", CoreCatalog.MercuryRtEngine));
@@ -47,35 +48,38 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Null(GameMetadata.EngineFor("/r/Game.z64", ""));
         }
 
-        // The editor offers an NES game its two engines, a Game Boy game none, and a Super Nintendo game its engines when discovery found a second; the choice is an edit, and the badge shows it.
+        // The editor offers a Game Boy or an NES game no engine, and a Super Nintendo game its engines when discovery found a second; the choice is an edit, and the badge shows it.
         [Fact]
         public Task The_editor_sets_a_game_s_engine_and_the_alternative_emulator_badge_shows_it() => Session.Dispatch(() =>
         {
             const string badges = "<badges name=\"badges\"><pos>0.55 0.8</pos><size>0.3 0.1</size><slots>altemulator</slots><lines>1</lines><itemsPerLine>4</itemsPerLine></badges>";
             using var s = new ThemedSession(extraGamelist: badges, status: ThemedSwitchesTests.Device);
+            foreach (string console in new[] { "gb", "nes" })
+            {
+                ThemedLibraryPadTests.Enter(s, console);
+                MetadataEditorWindow single = ThemedGameOptionsTests.OpenEditor(s);
+                Assert.False(((Dropdown)single.EditorOf(GameMetadata.AltEmulator)).IsEnabled, $"{console} has one engine");
+                single.Close();
+                s.Settle();
+                s.Pad.B();
+            }
             ThemedLibraryPadTests.Enter(s, "snes");
-            MetadataEditorWindow snes = ThemedGameOptionsTests.OpenEditor(s);
-            Assert.Equal(CoreCatalog.EngineFor("SNES") is not null, ((Dropdown)snes.EditorOf(GameMetadata.AltEmulator)).IsEnabled);
-            snes.Close();
-            s.Settle();
-            s.Pad.B();
-            ThemedLibraryPadTests.Enter(s, "gb");
-            MetadataEditorWindow gb = ThemedGameOptionsTests.OpenEditor(s);
-            Assert.False(((Dropdown)gb.EditorOf(GameMetadata.AltEmulator)).IsEnabled);
-            gb.Close();
-            s.Settle();
-            s.Pad.B();
-            ThemedLibraryPadTests.Enter(s, "nes");
             Assert.Empty(s.Themed.Stage!.Current.Scene.Entries.Select(e => e.Control).OfType<BadgeStrip>().Single().Entries!);
-            MetadataEditorWindow nes = ThemedGameOptionsTests.OpenEditor(s);
-            var engine = (Dropdown)nes.EditorOf(GameMetadata.AltEmulator);
+            MetadataEditorWindow snes = ThemedGameOptionsTests.OpenEditor(s);
+            var engine = (Dropdown)snes.EditorOf(GameMetadata.AltEmulator);
+            if (CoreCatalog.EngineFor("SNES") is not { } row)
+            {
+                Assert.False(engine.IsEnabled);
+                return;
+            }
             Assert.True(engine.IsEnabled);
-            Assert.Equal(new[] { "None (the console's engine)", CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine }, ((System.Collections.IEnumerable)engine.ItemsSource!).Cast<string>());
-            engine.SelectedItem = CoreCatalog.MoonRtEngine;
+            Assert.Equal(new[] { "None (the console's engine)" }.Concat(row.Choices!), ((System.Collections.IEnumerable)engine.ItemsSource!).Cast<string>());
+            string chosen = row.Choices!.Last();
+            engine.SelectedItem = chosen;
             ThemedGameOptionsTests.Reach(s, "MetadataSave");
             s.Pad.A();
             s.Settle();
-            Assert.Equal(CoreCatalog.MoonRtEngine, ThemedGameOptionsTests.StoredEdits(s, ThemedSession.NesGames[0] + ".nes")[GameMetadata.AltEmulator]);
+            Assert.Equal(chosen, ThemedGameOptionsTests.StoredEdits(s, ThemedSession.SnesGames[0] + ".sfc")[GameMetadata.AltEmulator]);
             BadgeEntry badge = Assert.Single(s.Themed.Stage!.Current.Scene.Entries.Select(e => e.Control).OfType<BadgeStrip>().Single().Entries!);
             Assert.Equal(BadgeKind.AltEmulator, badge.Kind);
         }, default);

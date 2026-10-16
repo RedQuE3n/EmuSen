@@ -156,8 +156,8 @@ status 0
 action none
 end
 
-case counting on moon
-target moon
+case counting on moonrt
+target moonrt
 covers 1-6
 $ counters on RAM
 out 42

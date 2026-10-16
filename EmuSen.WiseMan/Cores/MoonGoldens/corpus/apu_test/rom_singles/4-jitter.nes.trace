@@ -1,0 +1,13 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/apu_test/rom_singles/4-jitter.nes
+rom BFF573D72D0F134FE307F0BB8B968B8D2FFDB85E8AADAD9C152839068D6DB32A
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+20 C4641486D0FE7AAB
+resets 0
+text 4-jitter\n\nPassed
+verdict Passed 20

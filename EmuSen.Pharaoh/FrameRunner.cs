@@ -1,6 +1,5 @@
 using EmuSen.Cores;
 using EmuSen.Common.Imaging;
-using EmuSen.Cores.Nintendo.Moon.Debug;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Pharaoh
@@ -22,11 +21,6 @@ namespace EmuSen.Pharaoh
 
         public bool Verbose { get; set; }
 
-        // --apulog: the NES 2A03 register-write log, the same shape - see §3.46.
-        public long ApuLogEnd { get; set; } = -1;
-        public string? ApuLogPath { get; set; }
-        private bool _apuLogWritten;
-        private bool _apuLogArmed;
 
         private readonly Action<string> emit;
         private readonly Action<long>? onFrameAdvanced;
@@ -72,29 +66,8 @@ namespace EmuSen.Pharaoh
             Release(button, controller);
         }
 
-        private void EnsureApuLogArmed()
-        {
-            if (ApuLogPath == null || _apuLogArmed) return;
-            _apuLogArmed = true;
-            ApuWriteTrace.Start();
-        }
-
-        private void WriteApuLogIfDue()
-        {
-            if (ApuLogPath == null || _apuLogWritten || CurrentFrame < ApuLogEnd) return;
-            _apuLogWritten = true;
-            ApuWriteTrace.Stop();
-            ApuWriteTrace.WriteTo(ApuLogPath);
-            emit($"[APULOG] {ApuWriteTrace.Count} writes through frame {CurrentFrame} -> {ApuLogPath}");
-            if (ApuWriteTrace.Overflowed)
-            {
-                emit("[WARN] The log buffer filled and recording stopped early - lower --apulog's frame.");
-            }
-        }
-
         public void RunFrames(long count)
         {
-            EnsureApuLogArmed();
             for (long i = 0; i < count; i++)
             {
                 if (CurrentFrame >= FrameCap)
@@ -128,7 +101,6 @@ namespace EmuSen.Pharaoh
                 }
 
                 CurrentFrame++;
-                WriteApuLogIfDue();
                 Rewind.OnFrameCompleted(Core);
                 onFrameAdvanced?.Invoke(CurrentFrame);
                 AfterFrame?.Invoke();

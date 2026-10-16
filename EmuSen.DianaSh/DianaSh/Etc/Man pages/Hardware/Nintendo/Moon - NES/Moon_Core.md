@@ -1,5 +1,7 @@
 # Moon (NES) — Core, timing and address spaces
 
+*Historical since 2026-10-16: Moon (C#), the C# core this page describes, was deleted when MoonRT became the NES's only engine (`Moon_Native.md` §9.5). MoonRT implements the same machine field for field and is held to the goldens recorded from it, so the hardware described here stands; the file, class and member names are the C# core's, and the code is in git history before the retirement.*
+
 Covers `Cores/Nintendo/Moon - NES/MoonCore*.cs`: the `ICore` implementation, the core's own timeline, save states, and the named address spaces everything else reads through. See `Moon_CPU.md` for the processor, `Moon_PPU.md` for video, `Moon_Memory.md` for the bus and cartridge, and `Moon_Debug.md` for `IDebugTarget`.
 
 ---

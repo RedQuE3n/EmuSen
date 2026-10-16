@@ -15,15 +15,8 @@ namespace EmuSen.Cores
             new(displayName, e.Extensions.ToArray(), e.CheatSystems.ToArray(), e.Console, e.Manufacturer, e.ReleaseYear, CoverAspect: e.CoverAspect,
                 OpenVgdbSystems: e.OpenVgdbSystems.ToArray(), OpenVgdbBytes: e.OpenVgdbBytes);
 
-        // The libretro folder name for the NES; Famicom Disk System is different hardware and is not claimed.
-        private static readonly string[] NesCheatSystems =
-        {
-            "Nintendo - Nintendo Entertainment System",
-        };
-
-        private static readonly CoreDescriptor Moon =
-            new("NES (Moon)", new[] { ".nes" }, NesCheatSystems, "NES", "Nintendo", 1983, CoverAspect: 1.43,
-                OpenVgdbSystems: new[] { "NES" }, OpenVgdbBytes: WithoutInesHeader);
+        // The NES's facts are its system pack's, as the SNES's are; Famicom Disk System is different hardware and is not claimed.
+        private static readonly CoreDescriptor Moon = FromSystem("NES (Moon)", Crystal.Systems.Nes.NesSystem.Entry);
 
         // Two libretro folders for one core, the same way Venus claims Satellaview - see Mercury_Core.md §1.
         private static readonly string[] GameBoyCheatSystems =
@@ -47,9 +40,6 @@ namespace EmuSen.Cores
             new("Nintendo 64 (Mars)", new[] { ".z64", ".n64", ".v64" }, N64CheatSystems, "N64", "Nintendo", 1996, CoverAspect: 0.7,
                 OpenVgdbSystems: new[] { "N64" }, OpenVgdbBytes: Crystal.Systems.N64.N64ImageOrder.ToByteSwapped);
 
-        // Its SYSTEMS row gives the NES a 16-byte header to skip, which is the iNES header when the file has one.
-        private static byte[] WithoutInesHeader(byte[] file) =>
-            file.Length > 16 && file[0] == (byte)'N' && file[1] == (byte)'E' && file[2] == (byte)'S' && file[3] == 0x1A ? file[16..] : file;
 
         // Keyed by what a user would type - the internal codename and the console name both reach the same core; a discovered console's are its name and its engine's - see EmuSen_CoreAPI.md §30.5.
         public static IReadOnlyDictionary<string, CoreDescriptor> Registry => Lists.Registry;
@@ -136,7 +126,7 @@ namespace EmuSen.Cores
 
         private static readonly Dictionary<string, (string System, string FullName)> EsdeNames = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["NES"] = ("nes", "Nintendo Entertainment System"),
+            [Moon.Console] = (Crystal.Systems.Nes.NesSystem.Entry.EsdeSystem, Crystal.Systems.Nes.NesSystem.Entry.EsdeFullName),
             [Venus.Console] = (Crystal.Systems.Snes.SnesSystem.Entry.EsdeSystem, Crystal.Systems.Snes.SnesSystem.Entry.EsdeFullName),
             ["N64"] = ("n64", "Nintendo 64"),
             ["GB"] = ("gb", "Game Boy"),
@@ -224,7 +214,7 @@ namespace EmuSen.Cores
             new(StringComparer.OrdinalIgnoreCase)
             {
                 [Venus.Console] = Crystal.Systems.Snes.SnesSystem.PadButtons,
-                [Moon.Console] = Nintendo.Moon.MoonCore.PadButtons,
+                [Moon.Console] = Crystal.Systems.Nes.NesSystem.PadButtons,
                 [Mercury.Console] = Nintendo.MercuryRT.MercuryRtCore.PadButtons,
                 [Mars.Console] = Nintendo.MarsRT.N64Console.PadButtons,
             };
@@ -355,7 +345,7 @@ namespace EmuSen.Cores
         public const string MarsRtEngine = "MarsRT (Rust)";
 
         // An engine a console runs through its own shim, with no choice beside it, so it has no row - see EmuSen_Settings_Reference.md §4.44.
-        private static readonly string[] SoleEngines = { MarsRtEngine, MercuryRtEngine };
+        private static readonly string[] SoleEngines = { MarsRtEngine, MercuryRtEngine, MoonRtEngine };
 
         // A console whose one engine is a discovered v1 engine, opened by the generic branch whatever name is asked for - see VenusRT_Native.md §68.5.
         private static readonly Dictionary<string, string> SoleDiscoveredEngines = new(StringComparer.OrdinalIgnoreCase)
@@ -370,6 +360,7 @@ namespace EmuSen.Cores
         {
             ["Mars (C#)"] = MarsRtEngine,
             ["Mercury (C#)"] = MercuryRtEngine,
+            ["Moon (C#)"] = MoonRtEngine,
             ["Venus (C#)"] = VenusRtEngine,
         };
 
@@ -377,16 +368,10 @@ namespace EmuSen.Cores
 
         public const string MercuryRtEngine = "MercuryRT (Rust)";
 
-        public const string MoonEngine = "Moon (C#)";
         public const string MoonRtEngine = "MoonRT (Rust)";
 
         // Which implementation runs a console, for the consoles that have more than one; the first is the default - see EmuSen_Settings_Reference.md §4.44.
-        private static readonly Dictionary<string, CoreSetting> EngineByConsole = new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["NES"] = new(EngineKey, "Engine",
-                "Which implementation runs the console. Moon (C#) is the reference. MoonRT (Rust) is exact against it in state, picture and sound, reads the same save states and battery saves, and takes the same cheats; its debugger view is refreshed from its state, and it stops at breakpoints, steps, runs to a frame or an interrupt, and records coverage, watches, the profile and the call stack as Moon does. Takes effect when a game is next loaded.",
-                CoreSettingKind.Choice, MoonEngine, Choices: new[] { MoonEngine, MoonRtEngine }),
-        };
+        private static readonly Dictionary<string, CoreSetting> EngineByConsole = new(StringComparer.OrdinalIgnoreCase);
 
         public const string VenusRtEngine = "VenusRT (Rust)";
 
@@ -394,7 +379,7 @@ namespace EmuSen.Cores
         private static readonly Dictionary<string, string[]> SystemIdsByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
             ["SNES"] = new[] { Crystal.Systems.Snes.SnesSystem.Id },
-            ["NES"] = new[] { "nes" },
+            ["NES"] = new[] { Crystal.Systems.Nes.NesSystem.Id },
             ["GB"] = new[] { "gb", "gbc" },
             ["N64"] = new[] { "n64" },
         };
@@ -406,7 +391,6 @@ namespace EmuSen.Cores
         // The C# core each console's engines are graded against, the default of a row discovery adds.
         private static readonly Dictionary<string, string> ReferenceEngineByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["NES"] = MoonEngine,
         };
 
         public static string? ReferenceEngine(string console) => ReferenceEngineByConsole.GetValueOrDefault(console);

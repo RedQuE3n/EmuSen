@@ -725,7 +725,7 @@ This is the single biggest change to how expensive an investigation is. Driving 
 
 ### 3.16 `--singlestep` — ground-truth single-step validation
 
-*Since 2026-10-16* the `65816` and `spc700` targets are gone with C# Venus (`VenusRT_Native.md` §68.5); VenusRT's single-step harness is its crate's own (`cargo test`, `VenusRT_Native.md` §2.3).
+*Since 2026-10-16* the `65816` and `spc700` targets are gone with C# Venus (`VenusRT_Native.md` §68.5), and the `nes6502` target with C# Moon the same day, so `--singlestep` is gone, with `EmuSen/Validation/`, which nothing else read. VenusRT's single-step harness is its crate's own (`cargo test`, `VenusRT_Native.md` §2.3).
 
 Not part of the `IDebugTarget` toolchain above (it doesn't run a full emulation session at all) — a separate, permanent harness that validates one CPU's opcode/addressing-mode/flag behavior in isolation against third-party ground-truth test vectors, independent of whatever a real ROM happens to exercise.
 
@@ -733,7 +733,7 @@ Not part of the `IDebugTarget` toolchain above (it doesn't run a full emulation 
 dotnet run --project EmuSen.Pharaoh -- --singlestep <target> <test-dir> [max-examples-per-file]
 ```
 
-`<target>` is a registered `ISingleStepTarget` name (currently `65816`, `spc700` and `nes6502`); `<test-dir>` holds the target's JSON test files (one per opcode, from [TomHarte/ProcessorTests](https://github.com/TomHarte/ProcessorTests) — not vendored into this repo, fetch separately). Each test sets up initial registers/memory, single-steps the real emulation code exactly once via the target's `ISingleStepTarget` adapter, and compares final registers/memory byte-for-byte against the vector's expected result. Output is one `[PASS]`/`[FAIL] <file>: <pass>/<total>` line per file, a grand total, then up to `[max-examples-per-file]` (default 3) concrete failure examples per failing file — enough to see the shape of a failure without drowning in 10,000 near-identical ones. Exit code is 0 only if every file passed.
+`<target>` is a registered `ISingleStepTarget` name (currently `65816` and `spc700`; `nes6502` drove the C# Moon's 6502 and left with that core on 2026-10-16, `Moon_Native.md` §9.5); `<test-dir>` holds the target's JSON test files (one per opcode, from [TomHarte/ProcessorTests](https://github.com/TomHarte/ProcessorTests) — not vendored into this repo, fetch separately). Each test sets up initial registers/memory, single-steps the real emulation code exactly once via the target's `ISingleStepTarget` adapter, and compares final registers/memory byte-for-byte against the vector's expected result. Output is one `[PASS]`/`[FAIL] <file>: <pass>/<total>` line per file, a grand total, then up to `[max-examples-per-file]` (default 3) concrete failure examples per failing file — enough to see the shape of a failure without drowning in 10,000 near-identical ones. Exit code is 0 only if every file passed.
 
 **Why this is a `--singlestep` verb on `EmuSen.Pharaoh` and not its own project.** It began as two throwaway scratchpad tools — one for the 65816, one for the SPC700 — built ad hoc during the same investigation that found and fixed real bugs in both, then generalized into a permanent tool so the next core (or the next bug hunt in an existing one) wouldn't rebuild the same harness from scratch. That permanent home was its own project, `EmuSen.Tomoe`, for a while; it was folded in here once it was clear the project was a 124-line `Main` wrapping a three-entry dictionary, while all the actual machinery already lived in `EmuSen/Validation/` and each core's own `Validation/` folder. It sits alongside `--diffshot` (§3.15) and `--tracediff` (§3.40) as a third standalone verb dispatched before any ROM or option parsing happens — same shape, same reason: a real tool in this toolchain that happens to need no emulation session. Retiring the project also released the `Tomoe` codename back to the pool in `EmuSen_Core_Naming_Scheme.md`, where Professor Tomoe is listed as a natural pull for a future core.
 
@@ -1554,7 +1554,7 @@ Taps the button (4 frames held, then released — a held button reads as one pre
 
 ### 3.40 Differential *control flow* — the S-CPU trace differ (`--cputrace`, `--tracediff`)
 
-*Historical since 2026-10-16:* `--cputrace`, `--cpulog` and the S-CPU and GSU kinds of `--tracediff` read C# Venus's traces and left with it (`VenusRT_Native.md` §68.5); `--tracediff` keeps the NES's APU write logs. VenusRT's CPU trace is its crate's `cpu_trace` example.
+*Historical since 2026-10-16:* `--cputrace`, `--cpulog` and the S-CPU and GSU kinds of `--tracediff` read C# Venus's traces and left with it (`VenusRT_Native.md` §68.5); the APU write log left with C# Moon the same day, so `--tracediff` is gone, with `EmuSen/Cores/Debug/TraceDiff.cs`. VenusRT's CPU trace is its crate's `cpu_trace` example.
 
 **Why this exists.** §3.39 compares memory contents at a frame boundary. That is only valid when both machines are at the same point in the program, and on Yoshi's Island they are not — EmuSen ran roughly a frame off the game's own `$0030` counter, and Mesen randomises power-on RAM. Every measurement in the §10.7 investigation paid for that: "317 diverged bytes" that were almost entirely random fill, a 4-run mask to erase it, a frame-offset hunt that *minimised* but never eliminated the difference, and `gsudiff.py` desyncing on a boot block only Mesen runs. Those were not four problems. They were one problem four times — **diffing snapshots of two clocks that are out of phase, where the noise scales with the skew.**
 
@@ -1734,6 +1734,8 @@ systemd-run --user --scope -p CPUQuota=33% -p CPUQuotaPeriodSec=5ms -- <self> <a
 
 ### 3.44 `--testroms` — third-party NES test suites, reporting through PRG RAM
 
+> **Since 2026-10-16** the runner drives MoonRT, the NES's only engine, and reads the protocol through `EmuSen.Pharaoh/NesTestRomProtocol.cs`, which MoonRT's corpus goldens share (`Moon_Native.md` §9.2); the rules below are unchanged.
+
 The fourth standalone verb, alongside `--diffshot` (§3.15), `--singlestep` (§3.16) and `--tracediff` (§3.40): a real tool in this toolchain that needs no debug session, no window and no human.
 
 ```
@@ -1868,6 +1870,8 @@ This leaves a real off-by-one between backends: Mesen's first observable frame i
 ---
 
 ### 3.46 `apudiff` — the NES register-write differ, and what it says about SMB3
+
+> **Retired 2026-10-16.** `--apulog` recorded the C# Moon's APU writes through `ApuWriteTrace`, and both left with that core (`Moon_Native.md` §9.5); `--apulog` now refuses with that reason, and `tracediff` reads CPU and GSU traces only. The record below stands as history.
 
 §3.43 documented `apudiff` as the consumer for `mesen_apulog_*.bin`. It did not exist; nothing in the repo implemented it, and our side emitted no APU log to compare against, so the logs sat unread for two days. Both halves are now built.
 

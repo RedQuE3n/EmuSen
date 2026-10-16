@@ -60,20 +60,6 @@ status 0
 action none
 end
 
-case on moon
-target moon
-covers 1
-$ channels
-out 425
-[0] Pulse 1  active=False level=  0 muted=False Duty=0 Period=0 Vol=0 Len=0 Sweep=False
-[1] Pulse 2  active=False level=  0 muted=False Duty=0 Period=0 Vol=0 Len=0 Sweep=False
-[2] Triangle active=False level=  0 muted=False Period=0 Len=0 Halt=False
-[3] Noise    active=False level=  0 muted=False PeriodIndex=0 Vol=0 Len=0 Short=False
-[4] DMC      active=False level=  0 muted=False Rate=0 Out=0 Addr=0xC000 Len=0 Loop=False
-status 0
-action none
-end
-
 case on moonrt
 target moonrt
 covers 1

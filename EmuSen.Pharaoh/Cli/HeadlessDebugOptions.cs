@@ -22,9 +22,6 @@ namespace EmuSen.Pharaoh.Cli
         public string? SaveStatePath { get; init; }
         public bool Verbose { get; init; }
         public bool NoBattery { get; init; }
-        // --apulog <frame>:<path>, the NES 2A03's register writes - see §3.46.
-        public long ApuLogEnd { get; init; } = -1;
-        public string? ApuLogPath { get; init; }
         public List<string> FlagsToEnable { get; init; } = new();
         public List<(long Start, long End, PadButton Button, int Controller)> Taps { get; init; } = new();
         public List<(long Frame, string Path)> Screenshots { get; init; } = new();
@@ -100,8 +97,6 @@ namespace EmuSen.Pharaoh.Cli
             string? saveStatePath = null;
             bool verbose = false;
             bool noBattery = false;
-            long apuLogEnd = -1;
-            string? apuLogPath = null;
             var flagsToEnable = new List<string>();
             var taps = new List<(long Start, long End, PadButton Button, int Controller)>();
             var screenshots = new List<(long Frame, string Path)>();
@@ -118,15 +113,9 @@ namespace EmuSen.Pharaoh.Cli
                     // member's actual type is.
                     flagsToEnable.Add(args[++i]);
                 }
-                else if (args[i] == "--apulog" && i + 1 < args.Length)
+                else if (args[i] == "--apulog")
                 {
-                    // <frame>:<path>, the same shape as --screenshot - see §3.46.
-                    string[] p = args[++i].Split(new[] { ':' }, 2);
-                    if (p.Length < 2 || !long.TryParse(p[0], out apuLogEnd) || p[1].Length == 0)
-                    {
-                        return (null, warnings, $"[ERROR] --apulog wants <frame>:<path>, got '{args[i]}'.");
-                    }
-                    apuLogPath = p[1];
+                    return (null, warnings, "[ERROR] --apulog logged the C# NES core's APU writes and was retired with that core - see Moon_Native.md §9.5.");
                 }
                 else if (args[i] == "--watch" && i + 1 < args.Length) extraWatches.Add(args[++i]);
                 else if (args[i] == "--script" && i + 1 < args.Length) scriptPath = args[++i];
@@ -204,8 +193,6 @@ namespace EmuSen.Pharaoh.Cli
                 SaveStatePath = saveStatePath,
                 Verbose = verbose,
                 NoBattery = noBattery,
-                ApuLogEnd = apuLogEnd,
-                ApuLogPath = apuLogPath,
                 FlagsToEnable = flagsToEnable,
                 Taps = taps,
                 Screenshots = screenshots,

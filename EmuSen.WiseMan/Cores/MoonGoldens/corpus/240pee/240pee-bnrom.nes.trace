@@ -1,0 +1,10 @@
+# A golden trace of MoonRT, recorded from MoonRT itself; re-recorded only deliberately, with the reason below - see Moon_Native.md §9.2.
+golden 1
+name corpus/240pee/240pee-bnrom.nes
+rom 21F3E85683B32D2A6CEA7ADC134B7811DC94285C1CEF5522DF13A186995FB71E
+input none
+rendering skipped
+unit chain
+recorded MoonRT
+reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
+verdict Unsupported NotSupportedException

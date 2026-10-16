@@ -1,7 +1,6 @@
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Crystal.Systems.GameBoy;
-using EmuSen.Cores.Nintendo.Moon;
-using EmuSen.Cores.Nintendo.Moon.Cheats;
+using EmuSen.Crystal.Systems.Nes;
 using EmuSen.Crystal.Systems.Snes;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Cores.Nintendo.MercuryRT;
@@ -13,7 +12,7 @@ namespace EmuSen.WiseMan.Cores
     {
         public static TheoryData<string, string, CheatCodeKind, string?> Formats => new()
         {
-            { "NES raw", "NES address:value", CheatCodeKind.RamPoke, MoonCore.SpaceCpuBus },
+            { "NES raw", "NES address:value", CheatCodeKind.RamPoke, NesSystem.CpuBus },
             { "NES Game Genie", "Game Genie", CheatCodeKind.RomPatch, null },
             { "GB GameShark", "GameShark", CheatCodeKind.RamPoke, MercuryRtCore.SpaceCpuBus },
             { "GB Game Genie", "Game Genie", CheatCodeKind.RomPatch, null },
@@ -24,8 +23,8 @@ namespace EmuSen.WiseMan.Cores
 
         private static ICheatCodeCodec Codec(string format) => format switch
         {
-            "NES raw" => MoonCheatCodecs.Raw(),
-            "NES Game Genie" => MoonCheatCodecs.GameGenie(),
+            "NES raw" => NesSystem.Raw(),
+            "NES Game Genie" => NesSystem.GameGenie(),
             "GB GameShark" => GameBoyCheatCodecs.GameShark(),
             "GB Game Genie" => GameBoyCheatCodecs.GameGenie(),
             "N64 GameShark" => MarsCheatCodecs.GameShark(),
@@ -45,11 +44,11 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Compares_and_wide_writes_are_forwarded_where_a_format_has_them()
         {
-            Assert.Equal(NesGameGenieCodec.DecodeCompare("SXIOPOVK"), MoonCheatCodecs.GameGenie().DecodeCompare("SXIOPOVK"));
-            Assert.NotNull(MoonCheatCodecs.GameGenie().DecodeCompare("SXIOPOVK"));
+            Assert.Equal(NesGameGenieCodec.DecodeCompare("SXIOPOVK"), NesSystem.GameGenie().DecodeCompare("SXIOPOVK"));
+            Assert.NotNull(NesSystem.GameGenie().DecodeCompare("SXIOPOVK"));
             Assert.Null(SnesSystem.GameGenie().DecodeCompare("DD62-6DAD"));
             Assert.Equal(3, MarsCheatCodecs.GameShark().DecodeWrites("8110FB40 FFFF+8110FB42 F801+80001003 0000")!.Count);
-            Assert.Null(MoonCheatCodecs.Raw().DecodeWrites("0x0042:99"));
+            Assert.Null(NesSystem.Raw().DecodeWrites("0x0042:99"));
         }
     }
 }

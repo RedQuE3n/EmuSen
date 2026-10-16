@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
-using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
 
 namespace EmuSen.WiseMan.Cores
@@ -13,7 +12,6 @@ namespace EmuSen.WiseMan.Cores
         public static IEnumerable<object[]> EveryEngine()
         {
             yield return new object[] { "MarsRT" };
-            yield return new object[] { "Moon" };
             yield return new object[] { "MoonRT" };
             yield return new object[] { "MercuryRT" };
             yield return new object[] { "VenusRT" };
@@ -26,7 +24,6 @@ namespace EmuSen.WiseMan.Cores
             ICore core = engine switch
             {
                 "MarsRT" => new MarsRtCore(),
-                "Moon" => new MoonCore(),
                 "MoonRT" => new MoonRtCore(),
                 "MercuryRT" => new MercuryRtCore(),
                 _ => CoreFactory.Create("game.sfc"),

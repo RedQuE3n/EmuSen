@@ -7,7 +7,6 @@ using System.Security.Cryptography;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
-using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
@@ -33,7 +32,6 @@ namespace EmuSen.WiseMan.Cores
 
         private static readonly (string Core, string Extension, int Frames, Func<ICore> Create)[] Cores =
         {
-            ("Moon", ".nes", 900, () => new MoonCore()),
             ("MoonRT", ".nes", 900, () => new MoonRtCore()),
             ("MercuryRT", ".gb", 900, () => new MercuryRtCore()),
             ("MercuryRT", ".gbc", 900, () => new MercuryRtCore()),
@@ -109,17 +107,17 @@ namespace EmuSen.WiseMan.Cores
                     byte[] original = File.ReadAllBytes(beside);
                     DateTime written = File.GetLastWriteTimeUtc(beside);
                     bool nes = Path.GetExtension(rom) == ".nes";
-                    foreach (string engine in nes ? new[] { "Moon", "MoonRT" } : new[] { "MercuryRT" })
+                    foreach (string engine in nes ? new[] { "MoonRT" } : new[] { "MercuryRT" })
                     {
                         DataStore.OverrideDirectory = Path.Combine(Home, "migrate-" + engine);
                         if (Directory.Exists(DataStore.OverrideDirectory)) Directory.Delete(DataStore.OverrideDirectory, recursive: true);
-                        ICore core = engine switch { "Moon" => new MoonCore(), "MoonRT" => new MoonRtCore(), _ => new MercuryRtCore() };
+                        ICore core = engine switch { "MoonRT" => new MoonRtCore(), _ => new MercuryRtCore() };
                         core.LoadRom(rom);
-                        string space = nes ? MoonCore.SpacePrgRam : MercuryRtCore.SpaceCartRam;
+                        string space = nes ? "PRGRAM" : MercuryRtCore.SpaceCartRam;
                         int matching = 0;
                         for (int i = 0; i < original.Length; i++)
                         {
-                            byte b = core switch { MoonCore m => m.ReadSpace(space, i), MoonRtCore m => m.ReadSpace(space, i), MercuryRtCore m => m.ReadSpace(space, i), _ => 0 };
+                            byte b = core switch { MoonRtCore m => m.ReadSpace(space, i), MercuryRtCore m => m.ReadSpace(space, i), _ => 0 };
                             if (b == original[i]) matching++;
                         }
                         (core as IDisposable)?.Dispose();

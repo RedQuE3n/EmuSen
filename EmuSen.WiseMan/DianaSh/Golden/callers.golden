@@ -76,8 +76,8 @@ status 0
 action none
 end
 
-case on moon
-target moon
+case on moonrt
+target moonrt
 covers 1-3
 $ callers 8000
 out 67

@@ -5,9 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.Moon;
-using EmuSen.Cores.Nintendo.Moon.Cheats;
-using EmuSen.Cores.Nintendo.Moon.Memory;
+using EmuSen.Crystal.Systems.Nes;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Galaxia.Input;
@@ -17,7 +15,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // Stage 4: MoonRT through ICore on the common native host, against the C# Moon through the same factory - see Moon_Native.md §8.3.
+    // MoonRT through ICore as the frontends reach it: the factory, the library, battery saves and cheats - see Moon_Native.md §8.3, §9.5.
     [Collection(TestCollections.ProcessGlobals)]
     public class MoonRtFrontendTests : IDisposable
     {
@@ -47,8 +45,6 @@ namespace EmuSen.WiseMan.Cores
             return path;
         }
 
-        private static byte Peek(ICore core, string space, int address) => core is MoonCore moon ? moon.ReadSpace(space, address) : ((MoonRtCore)core).ReadSpace(space, address);
-
         private static byte[] Program() => BoardPrograms.Build(1, 8, cycleIrq: false);
 
         private static byte[] State(ICore core)
@@ -58,51 +54,30 @@ namespace EmuSen.WiseMan.Cores
             return stream.ToArray();
         }
 
-        // Picture, sound and state after each frame, compared; the bench's Start and A presses, the same on both.
-        private static void RunAlike(ICore csharp, ICore rust, int frames, int from = 0)
+        // The NES has one engine and no Engine row; a stored Moon (C#) runs on MoonRT with no notice.
+        [Fact]
+        public void The_NES_runs_on_MoonRT_alone_and_a_stored_csharp_choice_runs_there_quietly()
         {
-            for (int f = from; f < from + frames; f++)
+            Assert.Null(CoreCatalog.EngineFor("NES"));
+            Assert.Null(CoreCatalog.ReferenceEngine("NES"));
+            Assert.Equal(CoreCatalog.MoonRtEngine, CoreCatalog.EngineChosen("NES", "Moon (C#)"));
+
+            string rom = Rom(Program());
+            foreach (string? engine in new[] { null, CoreCatalog.MoonRtEngine, "Moon (C#)" })
             {
-                int p = f % 90;
-                foreach (ICore core in new[] { csharp, rust })
-                {
-                    core.SetButton(0, PadButton.Start, p < 5);
-                    core.SetButton(0, PadButton.A, p >= 45 && p < 50);
-                    core.RunFrame();
-                }
-                short[] a = csharp.DequeueAudioSamples(int.MaxValue), b = rust.DequeueAudioSamples(int.MaxValue);
-                Assert.True(a.AsSpan().SequenceEqual(b), $"frame {f}: the sound differs ({a.Length} and {b.Length} samples)");
-                byte[] pa = csharp.GetFrameBufferRgba(), pb = rust.GetFrameBufferRgba();
-                Assert.True(pa.AsSpan().SequenceEqual(pb), $"frame {f}: the pictures differ");
-                if (rust is IFrameBufferPool pool) pool.ReturnFrameBuffer(pb);
-                Assert.True(State(csharp).AsSpan().SequenceEqual(State(rust)), $"frame {f}: the states differ");
+                CoreBundle bundle = CoreFactory.Load(rom, engine: engine);
+                var core = Assert.IsType<MoonRtCore>(bundle.Core);
+                Assert.Null(bundle.Notice);
+                Assert.IsType<MoonRtDebugTarget>(bundle.DebugTarget);
+                Assert.Equal(("NES address:value", NesSystem.CpuBus), (bundle.CheatAutoDetectCodec!.Name, bundle.CheatAutoDetectCodec.SpaceName));
+                Assert.Equal("Game Genie", bundle.CheatExplicitCodec!.Name);
+                Assert.True(EngineFeatures.Of(core).RewindCapture);
+                Assert.Equal(CoreCatalog.MoonRtEngine, CoreFactory.Running(core));
+                core.Dispose();
             }
         }
 
-        [Fact]
-        public void The_NES_row_offers_MoonRT_with_Moon_the_default_and_the_factory_honours_it()
-        {
-            CoreSetting engine = CoreCatalog.EngineFor("NES")!;
-            Assert.Equal(CoreCatalog.MoonEngine, engine.Default);
-            Assert.Equal(new[] { CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine }, engine.Choices);
-            Assert.Equal(CoreCatalog.MoonEngine, CoreCatalog.EngineChosen("NES", null));
-
-            string rom = Rom(Program());
-            CoreBundle reference = CoreFactory.Load(rom);
-            Assert.IsType<MoonCore>(reference.Core);
-            CoreBundle rt = CoreFactory.Load(rom, engine: CoreCatalog.MoonRtEngine);
-            var core = Assert.IsType<MoonRtCore>(rt.Core);
-            Assert.Null(rt.Notice);
-            Assert.NotNull(rt.DebugTarget);
-            Assert.Equal(reference.CheatExplicitCodec!.GetType(), rt.CheatExplicitCodec!.GetType());
-            Assert.Equal(reference.CheatAutoDetectCodec!.GetType(), rt.CheatAutoDetectCodec!.GetType());
-            Assert.True(EngineFeatures.Of(core).RewindCapture);
-            Assert.Contains("\"Nope\"", CoreFactory.EngineNotice(rom, "Nope", core));
-            Assert.Contains("MoonRT (Rust) is running", CoreFactory.EngineNotice(rom, "Nope", core));
-            core.Dispose();
-        }
-
-        // The loader refuses a library that is not there with the words the notice carries; the factory's fallback is the same Available.
+        // The loader refuses a library that is not there with the words a build without it reports.
         [Fact]
         public void A_missing_library_is_reported_and_not_used()
         {
@@ -127,134 +102,65 @@ namespace EmuSen.WiseMan.Cores
             Assert.False(NativeLibrary.TryGetExport(handle, "moon_machine_new", out _), "the old moon_* exports are retired");
         }
 
+        // The program counts into $6000 every loop; a battery save starts the machine, is written back, and a board without one opens none.
         [Fact]
-        public void The_bench_games_and_the_library_states_run_alike_through_ICore()
-        {
-            string? folder = Environment.GetEnvironmentVariable(MoonRtStateTests.RomsVariable);
-            if (folder is null || !Directory.Exists(folder))
-            {
-                _output.WriteLine($"{MoonRtStateTests.RomsVariable} unset, not run");
-                return;
-            }
-            foreach (string path in Directory.GetFiles(folder, "*.nes").Order(StringComparer.Ordinal))
-            {
-                ICore csharp = CoreFactory.Load(path).Core, rust = CoreFactory.Load(path, engine: CoreCatalog.MoonRtEngine).Core;
-                Assert.IsType<MoonRtCore>(rust);
-                RunAlike(csharp, rust, 1500);
-                int size = ((MoonRtCore)rust).Machine.StateSize;
-                RunAlike(csharp, rust, 300, from: 1500);
-                Assert.Equal(size, ((MoonRtCore)rust).Machine.StateSize);
-                ((IDisposable)rust).Dispose();
-                _output.WriteLine($"{Path.GetFileName(path)}: 1,800 frames alike");
-            }
-
-            string? states = Environment.GetEnvironmentVariable(MoonRtSoundAndPictureTests.StatesVariable);
-            if (states is null || !Directory.Exists(states)) return;
-            int runs = 0;
-            foreach (string path in Directory.GetFiles(states, "*.nes").Order(StringComparer.Ordinal))
-                foreach (string state in Directory.GetFiles(states, Path.GetFileNameWithoutExtension(path) + ".*state").Order(StringComparer.Ordinal))
-                {
-                    ICore csharp = CoreFactory.Load(path).Core, rust = CoreFactory.Load(path, engine: CoreCatalog.MoonRtEngine).Core;
-                    csharp.LoadState(state);
-                    rust.LoadState(state);
-                    Assert.True(State(csharp).AsSpan().SequenceEqual(State(rust)), $"{Path.GetFileName(state)}: the states differ after the load");
-                    RunAlike(csharp, rust, 600);
-                    ((IDisposable)rust).Dispose();
-                    runs++;
-                }
-            _output.WriteLine($"{runs} library states, 600 frames each, alike");
-        }
-
-        [Fact]
-        public void A_state_crosses_from_Moon_to_MoonRT_and_back()
-        {
-            string rom = Rom(Program());
-            ICore csharp = CoreFactory.Load(rom).Core;
-            for (int f = 0; f < 200; f++) csharp.RunFrame();
-            byte[] fromCsharp = State(csharp);
-
-            // The mixer is in no state, so each engine takes the state onto a fresh instance and the two are compared from there.
-            ICore rust = CoreFactory.Load(rom, engine: CoreCatalog.MoonRtEngine).Core, again = CoreFactory.Load(rom).Core;
-            rust.LoadState(new MemoryStream(fromCsharp));
-            again.LoadState(new MemoryStream(fromCsharp));
-            Assert.Equal(fromCsharp, State(rust));
-            RunAlike(again, rust, 200, from: 200);
-            byte[] fromRust = State(rust);
-            ((IDisposable)rust).Dispose();
-
-            ICore laterCsharp = CoreFactory.Load(rom).Core, laterRust = CoreFactory.Load(rom, engine: CoreCatalog.MoonRtEngine).Core;
-            laterCsharp.LoadState(new MemoryStream(fromRust));
-            laterRust.LoadState(new MemoryStream(fromRust));
-            Assert.Equal(fromRust, State(laterCsharp));
-            RunAlike(laterCsharp, laterRust, 200, from: 400);
-            ((IDisposable)laterRust).Dispose();
-        }
-
-        // The program counts into $6000 every loop; each engine's battery save starts the other, and the machines agree straight after the load.
-        [Fact]
-        public void A_battery_save_made_on_one_engine_loads_on_the_other()
+        public void A_battery_save_loads_is_written_back_and_is_absent_without_a_battery()
         {
             CoreOptions.BatteryRamDisabled = false;
             string rom = Rom(Program(), "Battery.nes");
             string save = Path.ChangeExtension(SaveLibrary.SramPathFor(rom, BatterySave.Nes), SaveLibrary.SramExtension);
-            byte[] marked = new byte[0x2000];
+            byte[] marked = new byte[NesHeader.PrgRamSize];
             "MOONRT!!"u8.CopyTo(marked.AsSpan(0x1000));
             Directory.CreateDirectory(Path.GetDirectoryName(save)!);
             File.WriteAllBytes(save, marked);
 
-            var rust = (MoonRtCore)CoreFactory.Load(rom, engine: CoreCatalog.MoonRtEngine).Core;
-            Assert.Equal(new MoonCore().Let(c => c.LoadRom(rom)).Cart!.PrgRam.Length, rust.Machine.Battery(0).Data.Length);
+            var rust = (MoonRtCore)CoreFactory.Load(rom).Core;
+            Assert.Equal(NesHeader.PrgRamSize, rust.Machine.Battery(0).Data.Length);
+            Assert.Equal(marked[0x1000..0x1008], Enumerable.Range(0x1000, 8).Select(i => rust.ReadSpace(NesSystem.PrgRam, i)).ToArray());
             for (int f = 0; f < 301; f++) rust.RunFrame();
             byte[] written = File.ReadAllBytes(save);
             Assert.Equal(marked[0x1000..0x1008], written[0x1000..0x1008]);
             Assert.NotEqual(marked[..4], written[..4]);
             rust.Dispose();
 
-            ICore csharp = CoreFactory.Load(rom).Core, again = CoreFactory.Load(rom, engine: CoreCatalog.MoonRtEngine).Core;
-            Assert.True(State(csharp).AsSpan().SequenceEqual(State(again)), "the machines differ straight after a load with a battery save");
-            Assert.Equal(written, Enumerable.Range(0, written.Length).Select(i => Peek(csharp, MoonCore.SpacePrgRam, i)).ToArray());
-            RunAlike(csharp, again, 100);
-            ((IDisposable)again).Dispose();
-            for (int f = 100; f < 301; f++) csharp.RunFrame();
-            byte[] fromCsharp = File.ReadAllBytes(save);
-            Assert.Equal(marked[0x1000..0x1008], fromCsharp[0x1000..0x1008]);
+            var again = (MoonRtCore)CoreFactory.Load(rom).Core;
+            Assert.Equal(written, Enumerable.Range(0, written.Length).Select(i => again.ReadSpace(NesSystem.PrgRam, i)).ToArray());
+            again.Dispose();
 
-            var third = (MoonRtCore)CoreFactory.Load(rom, engine: CoreCatalog.MoonRtEngine).Core;
-            Assert.Equal(fromCsharp, Enumerable.Range(0, fromCsharp.Length).Select(i => third.ReadSpace(MoonCore.SpacePrgRam, i)).ToArray());
-            third.Dispose();
-
-            var none = (MoonRtCore)CoreFactory.Load(Rom(BoardPrograms.Build(4, 8, cycleIrq: false).Let(i => i[6] &= 0xFD), "NoBattery.nes"), engine: CoreCatalog.MoonRtEngine).Core;
+            byte[] image = BoardPrograms.Build(4, 8, cycleIrq: false);
+            image[6] &= 0xFD;
+            var none = (MoonRtCore)CoreFactory.Load(Rom(image, "NoBattery.nes")).Core;
             Assert.Empty(none.Machine.Battery(0).Data);
             none.Dispose();
         }
 
-        // Game Genie's SXIOPO on Super Mario Bros.: the same effect on both engines, and an effect.
+        // Game Genie's SXIOPO on Super Mario Bros. changes the byte the CPU reads and the machine's course.
         [Fact]
-        public void A_Game_Genie_code_does_the_same_on_both_engines()
+        public void A_Game_Genie_code_takes_effect()
         {
-            string? folder = Environment.GetEnvironmentVariable(MoonRtStateTests.RomsVariable);
-            string? smb = folder is null ? null : Path.Combine(folder, "smb.nes");
-            if (smb is null || !File.Exists(smb))
+            if (MoonGoldenTests.Game("F61548FDF1670CFF") is not { } image)
             {
-                _output.WriteLine($"{MoonRtStateTests.RomsVariable} unset, not run");
+                _output.WriteLine($"{MoonGoldenTests.GamesVariable} unset or without the game, not run");
                 return;
             }
-            CheatRegistry Code()
-            {
-                var cheats = new CheatRegistry();
-                var (address, value) = NesGameGenieCodec.Decode("SXIOPO");
-                cheats.AddRomPatch(address, value, NesGameGenieCodec.DecodeCompare("SXIOPO"), "infinite lives");
-                return cheats;
-            }
-            ICore csharp = CoreFactory.Load(smb, cheats: Code()).Core, rust = CoreFactory.Load(smb, cheats: Code(), engine: CoreCatalog.MoonRtEngine).Core;
-            ICore plain = CoreFactory.Load(smb).Core;
-            RunAlike(csharp, rust, 900);
-            for (int f = 0; f < 900; f++) plain.RunFrame();
-            int address = NesGameGenieCodec.Decode("SXIOPO").Address;
-            Assert.Equal(Peek(csharp, MoonCore.SpaceCpuBus, address), Peek(rust, MoonCore.SpaceCpuBus, address));
-            Assert.NotEqual(Peek(plain, MoonCore.SpaceCpuBus, address), Peek(rust, MoonCore.SpaceCpuBus, address));
-            Assert.False(State(plain).AsSpan().SequenceEqual(State(rust)), "the code changed nothing in 900 frames");
-            ((IDisposable)rust).Dispose();
+            string smb = Rom(image, "Smb.nes");
+            var cheats = new CheatRegistry();
+            var (address, value) = NesGameGenieCodec.Decode("SXIOPO");
+            cheats.AddRomPatch(address, value, NesGameGenieCodec.DecodeCompare("SXIOPO"), "infinite lives");
+            var coded = (MoonRtCore)CoreFactory.Load(smb, cheats: cheats).Core;
+            var plain = (MoonRtCore)CoreFactory.Load(smb).Core;
+            for (int f = 0; f < 900; f++)
+                foreach (MoonRtCore core in new[] { coded, plain })
+                {
+                    core.SetButton(0, PadButton.Start, f % 90 < 5);
+                    core.SetButton(0, PadButton.A, f % 90 is >= 45 and < 50);
+                    core.RunFrame();
+                }
+            Assert.Equal(value, coded.ReadSpace(NesSystem.CpuBus, address));
+            Assert.NotEqual(plain.ReadSpace(NesSystem.CpuBus, address), coded.ReadSpace(NesSystem.CpuBus, address));
+            Assert.False(State(plain).AsSpan().SequenceEqual(State(coded)), "the code changed nothing in 900 frames");
+            coded.Dispose();
+            plain.Dispose();
         }
 
         // The triples against TryPatchRom for every address and every byte, over mixed compares, repeats and an overlap (EmuSen_NativeCores.md §3.12).
@@ -274,7 +180,7 @@ namespace EmuSen.WiseMan.Cores
             int disabled = cheats.AddRomPatch(0x9200, 0x77, null, "off");
             cheats.SetEnabled(disabled, false);
 
-            var core = (MoonRtCore)CoreFactory.Load(Rom(Program()), cheats: cheats, engine: CoreCatalog.MoonRtEngine).Core;
+            var core = (MoonRtCore)CoreFactory.Load(Rom(Program()), cheats: cheats).Core;
             core.RunFrame();
             var touched = new HashSet<int> { 0x9123, 0x9124, 0xFFFF, 0x4020, 0x3FFF, gg, 0x9200 };
             for (int address = 0x4020; address <= 0xFFFF; address++)
@@ -290,45 +196,32 @@ namespace EmuSen.WiseMan.Cores
             core.Dispose();
         }
 
-        // A cheat added between frames is on the CPU's bus at once, as the C# core's reads consult the registry (§9 Q11).
+        // A cheat added between frames is on the CPU's bus at once, before the next frame (§9 Q11).
         [Fact]
-        public void A_bus_read_after_a_new_cheat_answers_as_the_csharp_core()
+        public void A_bus_read_after_a_new_cheat_sees_it()
         {
-            string rom = Rom(Program());
             var cheats = new CheatRegistry();
-            ICore csharp = CoreFactory.Load(rom, cheats: cheats).Core;
-            var rust = (MoonRtCore)CoreFactory.Load(rom, cheats: cheats, engine: CoreCatalog.MoonRtEngine).Core;
-            csharp.RunFrame();
+            var rust = (MoonRtCore)CoreFactory.Load(Rom(Program()), cheats: cheats).Core;
             rust.RunFrame();
-            byte before = Peek(rust, MoonCore.SpaceCpuBus, 0xC001);
+            byte before = rust.ReadSpace(NesSystem.CpuBus, 0xC001);
             cheats.AddRomPatch(0xC001, (byte)(before ^ 0x5A), null, "new");
-            Assert.Equal(Peek(csharp, MoonCore.SpaceCpuBus, 0xC001), Peek(rust, MoonCore.SpaceCpuBus, 0xC001));
-            Assert.Equal((byte)(before ^ 0x5A), Peek(rust, MoonCore.SpaceCpuBus, 0xC001));
+            Assert.Equal((byte)(before ^ 0x5A), rust.ReadSpace(NesSystem.CpuBus, 0xC001));
             rust.Dispose();
         }
 
-        // A reproduced C# exception keeps its type through the host: D4's image without PRG, as MoonCore.LoadRom throws.
+        // An image with no PRG is refused at the load, with the exception the status stands for - see Moon_Native.md §6.2, D4.
         [Fact]
-        public void A_reproduced_exception_is_the_csharp_type()
+        public void An_image_without_prg_is_refused()
         {
             byte[] image = SyntheticNesRom.Build(mapper: 1);
             byte[] empty = image.AsSpan(0, 16).ToArray().Concat(image.AsSpan(16 + SyntheticNesRom.PrgBankSize).ToArray()).ToArray();
             empty[4] = 0;
-            string rom = Rom(empty, "NoPrg.nes");
-            Exception csharp = Assert.ThrowsAny<Exception>(() => new MoonCore().LoadRom(rom));
-            Exception rust = Assert.ThrowsAny<Exception>(() => new MoonRtCore().LoadRom(rom));
-            Assert.Equal(csharp.GetType(), rust.GetType());
+            using var core = new MoonRtCore();
+            Exception refused = Assert.ThrowsAny<Exception>(() => core.LoadRom(Rom(empty, "NoPrg.nes")));
+            _output.WriteLine(refused.GetType().Name + ": " + refused.Message);
+            Assert.False(core.IsRomLoaded);
             Assert.Equal(typeof(DivideByZeroException), MoonMachine.Refusal(NativeInterface.FaultBase - 2).GetType());
             Assert.Equal(typeof(ArgumentOutOfRangeException), MoonMachine.Refusal(NativeInterface.FaultBase - 3).GetType());
-        }
-    }
-
-    internal static class LetExtension
-    {
-        public static T Let<T>(this T value, Action<T> action)
-        {
-            action(value);
-            return value;
         }
     }
 }

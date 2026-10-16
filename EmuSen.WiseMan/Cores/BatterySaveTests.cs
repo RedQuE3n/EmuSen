@@ -4,7 +4,6 @@ using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
-using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
@@ -34,18 +33,17 @@ namespace EmuSen.WiseMan.Cores
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
         }
 
-        public static TheoryData<string> Engines => new() { "Moon", "MoonRT", "MercuryRT" };
+        public static TheoryData<string> Engines => new() { "MoonRT", "MercuryRT" };
 
         private static bool Nes(string engine) => engine.StartsWith("Moon", StringComparison.Ordinal);
 
         private static ICore Make(string engine) => engine switch
         {
-            "Moon" => new MoonCore(),
             "MoonRT" => new MoonRtCore(),
             _ => new MercuryRtCore(),
         };
 
-        private static string RamSpace(string engine) => Nes(engine) ? MoonCore.SpacePrgRam : MercuryRtCore.SpaceCartRam;
+        private static string RamSpace(string engine) => Nes(engine) ? "PRGRAM" : MercuryRtCore.SpaceCartRam;
 
         // A cartridge with battery-backed RAM whose program never touches it, so what a load put there stays.
         private string Rom(string engine, string stem, bool withRam = true)
@@ -223,7 +221,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Each_consoles_save_lands_in_its_own_folder()
         {
-            foreach (var (engine, stem) in new[] { ("Moon", "Same"), ("MercuryRT", "Same") })
+            foreach (var (engine, stem) in new[] { ("MoonRT", "Same"), ("MercuryRT", "Same") })
             {
                 ICore core = Make(engine);
                 core.LoadRom(Rom(engine, stem));
@@ -360,7 +358,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.NotEqual(Pattern(10), File.ReadAllBytes(SaveOf(engine, nes)));
         }
 
-        public static TheoryData<string> NesEngines => new() { "Moon", "MoonRT" };
+        public static TheoryData<string> NesEngines => new() { "MoonRT" };
 
         // A save already in the console's folder wins over the flat one, which is then not read.
         [Fact]
@@ -410,7 +408,6 @@ namespace EmuSen.WiseMan.Cores
 
         private static byte ReadRam(ICore core, string engine, int address) => engine switch
         {
-            "Moon" => ((MoonCore)core).ReadSpace(RamSpace(engine), address),
             "MoonRT" => ((MoonRtCore)core).ReadSpace(RamSpace(engine), address),
             _ => ((MercuryRtCore)core).ReadSpace(RamSpace(engine), address),
         };
@@ -419,7 +416,6 @@ namespace EmuSen.WiseMan.Cores
         {
             switch (engine)
             {
-                case "Moon": ((MoonCore)core).WriteSpace(RamSpace(engine), address, value); break;
                 case "MoonRT": ((MoonRtCore)core).WriteSpace(RamSpace(engine), address, value); break;
                 default: ((MercuryRtCore)core).WriteSpace(RamSpace(engine), address, value); break;
             }

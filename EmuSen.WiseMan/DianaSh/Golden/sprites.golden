@@ -46,23 +46,6 @@ status 0
 action none
 end
 
-case on moon
-target moon
-covers 1
-$ sprites | head -n 8
-out 475
-64 active sprite(s):
-  #0: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
-  #1: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
-  #2: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
-  #3: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
-  #4: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
-  #5: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
-  #6: x=0 y=1 8x8 tile=0x000 pal=0 pri=1 flipX=False flipY=False
-status 0
-action none
-end
-
 case on moonrt
 target moonrt
 covers 1

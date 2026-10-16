@@ -1,5 +1,7 @@
 # Moon (NES) — Test ROMs
 
+*Historical since 2026-10-16: Moon (C#), the C# core this page describes, was deleted when MoonRT became the NES's only engine (`Moon_Native.md` §9.5). MoonRT implements the same machine field for field and is held to the goldens recorded from it, so the hardware described here stands; the file, class and member names are the C# core's, and the code is in git history before the retirement.*
+
 ## 1. Why this exists
 
 The 2A03 is the only part of this core validated against ground truth: `nes6502/v1`, 2,560,000 cases, final state *and* per-cycle bus traces (`Moon_CPU.md` §7). Everything else — the PPU, the APU, ten mapper boards — rests on synthetic fixtures in `EmuSen.WiseMan` and four commercial ROMs that were watched by eye.

@@ -55,6 +55,10 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
         "  sort [-n] [-r]                sort input lines (numeric with -n, reversed with -r) -\n",
         "                                reads piped stdin, or trailing literal text"
     )),
+    ("uniq", true, concat!(
+        "  uniq [-c]                     collapse adjacent duplicate lines (-c prefixes each with its\n",
+        "                                repeat count) - sort first for global dedup, not just adjacent"
+    )),
 
 ];
 

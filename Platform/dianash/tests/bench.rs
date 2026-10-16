@@ -21,7 +21,9 @@ fn with_host_commands(shell: &mut Shell) {
 #[test]
 #[ignore]
 fn a_lines_round_trip_is_measured() {
-    let mut shell = Shell::new(Config { sessions: false, root: Some(std::env::temp_dir().to_string_lossy().into_owned()), ..Config::default() });
+    // DIANASH_BENCH_TREE takes the root from Galaxia's tree, as a host's shell does, rather than naming it.
+    let root = std::env::var_os("DIANASH_BENCH_TREE").is_none().then(|| std::env::temp_dir().to_string_lossy().into_owned());
+    let mut shell = Shell::new(Config { sessions: false, root, ..Config::default() });
     shell.add_module(&dianash_text::MODULE).unwrap();
     let hosted = std::env::var_os("DIANASH_BENCH_HOSTED").is_some();
     if hosted {

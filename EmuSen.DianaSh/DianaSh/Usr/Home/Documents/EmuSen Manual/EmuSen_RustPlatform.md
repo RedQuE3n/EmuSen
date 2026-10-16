@@ -93,6 +93,11 @@ Platform/                      a Cargo workspace; no .csproj
   platform/                    emusen-platform, the cdylib: the C layer of all three, and nothing else
 ```
 
+*Added 2026-10-15 (§26):* `dotnet/` (`emusen-dotnet`, .NET's text, number and file rules, split from Galaxia's crate),
+`dianash/` (`emusen-dianash`, DianaSh's shell core, with its two headers and baseline), `dianash-module/` (what a
+command module is written with), `dianash-text/` (the `dianash.text` module) and `dianash-program/` (the `dianash`
+program); the library exports DianaSh's host API besides the platform's interface.
+
 **Not `EmuSen/Cores/Shared/`.** That folder holds the crates cores link (`emusen-native`, the ABI check, the
 conformance kit). A core does no file I/O and calls nothing above it (`EmuSen_CoreAPI.md` §3's table), so a platform
 crate beside them would be one `path =` away from a core depending on the platform, which the layering forbids.
@@ -2611,3 +2616,37 @@ the queues, one queue lent to a core and one the host takes the core's pictures 
 `_settle` (the core's picture copied into a ring of three device buffers once its `ready` is reached, `done` then
 signalled) and `emusen_serenity_chain_advance_lent` (the newest copy as a chain's frame, read on the device by its next
 render or present). The C# facade is `SlangLend` and `SlangChain.AdvanceLent`.
+
+## 26. DianaSh in the workspace, 2026-10-15: the shell core, its host API, and .NET's rules split from Galaxia
+
+DianaSh's migration step S3 (`EmuSen_DianaSh.md` §13.7) put the shell in this workspace, where §2.1 and Q11 there had
+placed it, and S4 (§13.8 there) its text tools. What that changed here:
+
+- **Five crates.** `emusen-dianash` (`Platform/dianash/`), the shell core, an rlib with no dependency of the
+  emulator's but Galaxia's; `dianash-module`, what a command module is written with, depending on nothing;
+  `dianash-text`, the text tools' module; `dianash` (`Platform/dianash-program/`), the standalone program; and
+  `emusen-dotnet`, below.
+- **The library exports a second interface.** `emusen_platform` exports DianaSh's host API, `dianash_*`, from
+  `platform/src/dianash.rs` over the shell core, with the text module linked in. Unlike this page's interface, which
+  is matched exactly because its only client is built from the same commit (§3.2), the host API is stable and
+  versioned as the core ABI is, `(MAJOR << 16) | MINOR`, because an outside frontend or the conformance kit may embed
+  the shell (`EmuSen_DianaSh.md` §16 Q17); this paragraph is the place §3.2's "where this does not generalise" names.
+  Its headers are `Platform/dianash/include/dianash.h` and `dianash_module.h`, and its baseline
+  `Platform/dianash/abi/v1/baseline.txt`, held by `platform/tests/dianash_abi.rs` and the core ABI's guard job.
+  Adding it moved this interface's own number not at all: no `emusen_*` export changed, and DianaSh's facade checks
+  `dianash_abi_version`'s major itself.
+- **.NET's rules left Galaxia's crate.** A shell's command module may not link Galaxia, which holds the process's
+  tree and overrides (Q11 there), but the text tools need the rules Galaxia had reproduced: casing, the ordinal
+  comparisons, white space, lengths in UTF-16 units, and `File.ReadAllText`'s decoding. They moved, with their tests,
+  to `emusen-dotnet` (`Platform/dotnet/`), a crate of pure functions with no dependency; `galaxia/src/dotnet_text.rs`,
+  the five ignore-case and white-space functions of `dotnet_path.rs` and `json::decode` now re-export them, so no
+  user of Galaxia's crate changed. The crate also holds what the shell added: `int`, `long` and `double.TryParse`, the
+  text file's lines and writes, and the words of .NET's file exceptions.
+- **Galaxia's crate gained** `tree::base_directory` and `tree::shell_modules_directory` (`ConfigRoot.ShellModulesDirectory`,
+  where `man` reads its pages) and made `simple_upper` public; and `PlatformLibrary` answers `GalaxiaActive`, since the
+  Rust shell reads the tree through the library's Galaxia and is not used while Galaxia runs on its C#.
+- **CI**: the platform job compiles `dianash.h` as C99 and C++17 beside `emusen_platform.h`, and the core ABI's guard
+  job runs DianaSh's ABI test with the base branch's baseline.
+
+`cargo test --release` in `Platform/` passed on 2026-10-15 with every crate's tests, the new ones included.
+

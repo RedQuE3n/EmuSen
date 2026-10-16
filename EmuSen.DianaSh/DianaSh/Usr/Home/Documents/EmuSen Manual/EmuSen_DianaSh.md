@@ -1,6 +1,9 @@
 # EmuSen — DianaSh: a standalone shell, its command modules, and the surfaces around it
 
-*This revision: the ninth, 2026-10-16: S6's state 2 reached ahead of S5, by decision, the Rust shell the default and
+*This revision: the tenth, 2026-10-16: S5 built, EmuSen's four command modules in Rust over the session service,
+which went to version 1.1 for what they needed, the host API to 1.1 for a service per session, `nano` as the first
+program the shell runs, and two defects the port found shown and fixed in both shells, a root reached through a link
+and a trace of no instructions (§13.11); Q25 to Q27 (§16.2). The ninth, the same day: S6's state 2 reached ahead of S5, by decision, the Rust shell the default and
 the C# its failover until Windows and macOS are proven, with the facade's cost sampled and cut (§13.10). The eighth,
 2026-10-16: Q18 to Q24 decided as recommended, and Q18, Q19, Q20's page and Q21 built
 in both shells (§13.9). The seventh, 2026-10-15: S3 built, the Rust shell core in `Platform/dianash/` with its builtins,
@@ -1162,8 +1165,8 @@ No step leaves a broken shell; each has its gate, and each is its own commit or 
 | **S2** *(done 2026-10-11, §13.6)* | The service API's header, `emusen_session.h`, and a C# provider over today's `IDebugTarget` and registries, exposing the table through `[UnmanagedCallersOnly]` functions; the registries, the cheat engine, `IDebugTarget`, the telemetry contracts and the system packs moved out of `EmuSen.DianaSh` into Crystal's assembly, `EmuSen.Crystal`, beneath the shell and beside the cores (§16 Q1), which `EmuSen.DianaSh` and the cores reference | a parity class calling every service function and the C# member it maps (§9.3) on the fake target and each core, equal; the golden corpus |
 | **S3** *(done 2026-10-15, §13.7)* | The Rust shell core, `Platform/dianash/`, with its builtins, lookup, manifests, the host API in the platform library and the `dianash` program; every C# command still runs, registered with the Rust shell as host commands through `dianash_add_commands` by a C# bridge that calls each `IDianaShCommand.Execute`; the C# frontends choose the C# interpreter or the Rust one by `EMUSEN_DIANASH_NATIVE` (§13.3) | the golden corpus, with the variable unset (the C# interpreter) and `1` (the Rust shell with C# commands); the language's 645 cases both ways |
 | **S4** *(done 2026-10-15, §13.8)* | `dianash.text` in Rust, command by command, each replacing its C# bridge entry when its golden file passes | that command's golden file and its WiseMan cases both ways; the same corpus run on Windows and macOS CI runners for the text module, since it must behave identically there |
-| **S5** | The four EmuSen modules in Rust over the session service, module by module, each command replacing its bridge entry when its golden file passes; `nano` as a program | that command's golden file both ways, on the fake provider and on each core; seeded faults in the module, as each platform step had (`EmuSen_RustPlatform.md` §6.5) |
-| **S6** *(state 2 reached 2026-10-16 ahead of S5, by decision, §13.10; Windows and macOS not yet proven)* | The shell to state 2, as `EmuSen_RustPlatform.md` §3.9 defines it: the Rust shell by default, `EMUSEN_DIANASH_NATIVE=0` selecting the C#, a missing library falling back with one line in the error log | a full WiseMan run with the variable set; the tester's word |
+| **S5** *(done 2026-10-16, §13.11)* | The four EmuSen modules in Rust over the session service, module by module, each command replacing its bridge entry when its golden file passes; `nano` as a program | that command's golden file both ways, on the fake provider and on each core; seeded faults in the module, as each platform step had (`EmuSen_RustPlatform.md` §6.5) |
+| **S6** *(state 2 reached 2026-10-16 ahead of S5, by decision, §13.10; the shell as a library green on Windows and macOS CI the same day, §13.11; the standalone program there not yet run)* | The shell to state 2, as `EmuSen_RustPlatform.md` §3.9 defines it: the Rust shell by default, `EMUSEN_DIANASH_NATIVE=0` selecting the C#, a missing library falling back with one line in the error log | a full WiseMan run with the variable set; the tester's word |
 | **S7** | State 3: the C# interpreter and the C# commands deleted | below |
 
 **When C# command code may be deleted.** Only at S7, and only when all of these hold: the golden corpus passes with
@@ -2115,6 +2118,246 @@ reach a console (`FeedWindowTests`, `CoretopWindowTests`, `AccessibilityTests`, 
 own skips. `DianaShSwitchTests`' five cases and `NativeSwitchTests` are among them; the crate-alone corpus runner
 passes its 59 cases.
 
+### 13.11 S5 as built: EmuSen's four command modules in Rust, and `nano` as a program
+
+*Built 2026-10-16, in a commit for the ground the modules stand on, one for each of two defects shown first, one for
+each module, and one for the shell's programs with `nano`.*
+
+S5's row asks for four modules over the session service, each command replacing its bridge entry when its golden
+file passes, `nano` as a program, and a gate of each command's golden file both ways, on the fake provider and on
+each core, with seeded faults in the modules. What was built is taken in the order a call meets it: how a module is
+handed the session, the client it calls it through, what the service lacked and gained, the modules themselves, the
+two defects the port found, the programs, the gate, and what remains.
+
+**The session, handed to each session.** §9.1 has the host provide `emusen.session@1` and the shell copy it into
+calls unread. The C# facade now makes a provider over each shell session's target, with the codecs, the trace switch,
+the supported cheat systems and the cheat database's folder that `CreateDefault` is given, and hands its table to that
+session alone. The host API's `dianash_set_services` gives one set to every session of a shell, and the C# hosts hold
+one target per session: Mistress's rebuild after a core change makes new sessions over the new target while the old
+ones still answer. A second call was therefore added, `dianash_session_set_services`, the services one session's calls
+are handed in place of the shell's of the same name; it is the host API's minor 1.1, recorded in the baseline as
+`@1.1`, and `tmux new` copies the creating session's services into the session it makes. The provider keeps no
+pointer of the shell's and the shell reads nothing of the table, as §9.8 requires; the facade keeps each provider
+alive as long as its shell.
+
+**Run control, read back as host actions.** §6.2 retires `HostAction` from a module's result: a module asks the
+session's loop to run through `run_control`, and the host learns of it from the session's events. After each line the
+facade drains the run requests of every provider its shell holds and, where the line raised no request of the shell's
+own, gives the last as `HostAction.Step` or `HostAction.Resume`, so Hotaru's loop and the corpus's recorded actions
+are unchanged. Two cases differ from the C# by construction and occur in no case of the corpus: a `$(step)` arms a
+step that the C#'s subshell dropped the action of, and a line mixing `tmux switch` with `step` gives the shell's
+request rather than the later of the two.
+
+**The client.** `Platform/session-service`, crate `emusen-session-service`, is the service from a caller's side:
+`emusen_session_v1` as Rust lays it out, held to `emusen_session.h` by a test that has a C compiler print every
+field's offset and the table's size and compares them, and every number the header defines; a client that calls the
+table by the header's rules (the length query, a change never asked twice, the words of a refusal read from
+`last_error` on the same thread); and what every EmuSen module shares over it: `FindSpace`'s rule and words,
+`ParseHex` and `ParseRange` over .NET's `Convert.ToInt32(text, 16)` with its words as measured on .NET 10, the scope
+words of `DebugCpus`, a label's description, and the bare name of a core's log folder resolved through the call.
+.NET's JSON and the C# `Suggestion` moved from Galaxia's crate to `emusen-dotnet`, which a module may link, Galaxia
+re-exporting both, as the text rules moved at S4 (§13.8). The module crate gained what the four needed and the text
+module now shares: a call's services, `ps`'s jobs and `kill` with the fault boundary of §6.7 and their exports, an
+`Answer` (a C# command's returned text as standard output, its `Fail` as standard error with status 1, an exception
+the dispatcher caught as `Error: <message>`), and a manifest writer.
+
+**What the service gained: version 1.1.** Each addition was forced by a command whose C# reached something the
+version 1.0 table could not, and each is an addition a 1.0 caller never meets (§11.2):
+
+| Addition | Forced by |
+|---|---|
+| `"pc"` in `processors` | `cpus` prints each processor's program counter, and `disasm <cpu>` with no address starts there |
+| `EMUSEN_SESSION_PROCESSOR_SESSION`, a processor argument naming none | a command that names no processor reaches the target's own registries, call stack and expression context, which on a session listing processors need not be processor 0's: `eval` on Nephrite or VenusRT reads the system pack's flags through the target's context and not through the first processor's |
+| `run_control(RESUME)` and `events_drain` answered with no session running | `resume` with no game loaded still returned `HostAction.Resume` (`resume.golden`) |
+| a channel as a 32-bit pattern | `mute -1 on` reached the core as typed (`mute.golden`) |
+| `EMUSEN_SESSION_PROFILE_RESET_STACK` | `bt reset` |
+| `"destination_name"` in the DMA log's transfers and destinations | `dma log` and `dma stats` name each destination as the core names it |
+| `CHEAT_DECODE` with `"unchecked"`, and `CHEAT_CLAIMS` to `CHEAT_DB_UPDATE` | `cheat add` asks each codec whether it claims a code and then decodes with the codec's own words, writes first; the cheat lists' files, their names and their reading are Galaxia's `CheatFile`, and the database's folder, its matching, pruning and download are Crystal's cheat engine, none of which a module may link (§16 Q11) |
+
+§13.6 had kept the cheat files with the command, a module reaching files only through the shell. That held for a file
+the player names, and `cheat import` and `cheat export` still read and write theirs through the call's `resolve`; it
+does not hold for the cheat lists, whose location, legal names and lenient reading are Galaxia's rules, which a second
+copy in a module would make two owners of. `cheat save`, `load` and `files` therefore ask the provider by name. Two of
+the new operations change the disk and answer with a record, `CHEAT_DB_PRUNE` with `"apply"` and `CHEAT_DB_UPDATE`;
+their first call applies and the record waits until a buffer takes it, as `events_drain` keeps its events, so the
+length query never applies them twice.
+
+**The modules.** Each was written from its C# classes, as S4's commands were, and is linked into the platform library
+beside `dianash.text`; the facade leaves every module command out of its host manifest, so a C# command class runs
+only under `EMUSEN_DIANASH_NATIVE=0`, and stops claiming `bp` and `watch` for `ps` once the trace module claims them.
+
+| Module | Commands | Kept in the call's per-shell slot |
+|---|---|---|
+| `emusen.debug` (`Platform/emusen-debug`) | the 26 of §8.1 | `search`'s candidates; the snapshots `snapshot` takes and `diff` compares, in the order .NET's `Dictionary` enumerates them, a removed entry's place taken by the next |
+| `emusen.trace` (`Platform/emusen-trace`) | the 16 of §8.1, with `c` and `s` | nothing; `ps` lists its breakpoints and watches and `kill` removes them |
+| `emusen.cheat` (`Platform/emusen-cheat`) | `cheat` | nothing |
+| `emusen.session` (`Platform/emusen-session`) | `summary`, `coretop` | nothing |
+
+`core` and `state`, which §8.1 also gives the session module, stay each host's own command: every host registers both
+already, `core` with its core registry and `state` with the save and load of its own window, and a module's `core`
+needs the frontend service's `games` and `open_game` (§9.9), which no host provides yet. `coretop` refuses as the C#
+refused in a console window; its live dashboard is not ported, because a call's output reaches the player only when the
+call returns (§4.3), and redrawing a terminal four times a second is the terminal host's panes mode (§18), not a
+command's.
+
+**Two defects, shown and fixed first.** *`trace 0` armed a trace that never ended* (`c6244ff8`): Venus's switch counts
+down only from above 0, so a count of 0, or one above `0x7FFFFFFF` read as negative, left verbose tracing on for good
+while the command printed "Trace armed for the next 0 instructions." The session service had refused such a count
+from the start, so the module could not reproduce the C#'s answer without arming the same defect. `TraceCountTests`
+showed it on the C# shell; both shells now refuse, status 1, in the service's words, and `trace.golden`'s case and
+`man trace` were re-recorded in that commit. *A root reached through a link was outside itself* (`ab00917c`): macOS
+spells its temporary folder under `/var`, a link to `/private/var`, and a working directory set inside a home there
+reads back resolved, as `getcwd` answers, so both shells refused every file in it. This is the question §27.6 of
+`EmuSen_RustPlatform.md` left to DianaSh, and it is decided so: a path is inside the sandbox when it lies under the
+root as spelled or under the root with every link along it followed. Only the root is resolved. Resolving the path
+too, as "canonicalise both sides" would, was rejected for two reasons: a path that does not exist yet, a file about to
+be written, has no canonical form, and following links inside the home would change what finding 10 of §13.4 left
+deliberately as text (`man hier`). The C# had compared text alone, as .NET does; it follows each component's link as
+.NET reads it, the Rust asks the system's canonical path. `LinkedRootTests` showed the refusal on the C# shell and the
+sandbox's Rust test the wrong chroot-style answer before the change, and both pass after it on Linux, where the test
+makes its own link; on macOS CI the golden corpus itself runs in a home under `/var`. Since the C# Venus was retired
+(`f1f47969`), no core registers a trace switch, `trace.golden`'s cases run on VenusRT and print that none is registered
+whatever the count, and the refusal is held by `TraceCountTests` over a switch that records what it is told, the
+golden file listing it as unreachable.
+
+**`nano` as a program.** The Rust shell had no programs (§7). It now finds those shipped beside it, each described by
+a manifest `<name>.dianash.json` of kind `program` in the `dianash` folder, read without running anything, and runs
+one as a process when it is named: argv as typed, the previous stage's output as its input, the real directory behind
+the shell's working directory, the environment with every exported variable and `DIANASH_ROOT`, `DIANASH_USER` and
+`DIANASH_SHELL`, its exit status as `$?`, 128 and the signal where one ended it, and the terminal itself when the shell
+runs at one and the program stands alone. A program the player cancels, or one past the line's budget, is ended; the
+graded sequence of §7.3 (an interrupt, then a terminate, then a kill) is not built, and the end is immediate. `nano` is
+the C# editor rewritten in the `dianash` package beside the standalone shell, sharing its terminal code; it reads the
+sandbox's root from `DIANASH_ROOT` and refuses in the C#'s words. `Platform.targets` builds it with the library and
+copies it and its manifest into `dianash/`; CI ships both in the platform library's artefact. The trust rules of §5.4
+(a shipped program listed with its hash in the release's manifest) are not built; a program is found by its manifest
+alone.
+
+**The gate.** *Measured on 2026-10-16*, over §13.10's filter with the session service's tests (`SessionServiceParityTests`,
+`SessionHeaderTests`): with every module in, 1,360 tests, 1,352 passed and 8 skipped, none failed, with the variable
+unset (the Rust shell) and with `EMUSEN_DIANASH_NATIVE=0`, run with the debug and trace modules, again with `nano`, and
+again with the cheat module; after the merge of `WiseMan` that retired the C# Mars and Mercury (`ed089b07`), whose
+two cores left the corpus's targets, 1,358 tests, 1,350 passed and 8 skipped, both ways; after the merge that
+retired the C# Moon and Venus (`fa3f4561`), 1,303 tests, 1,295 passed and 8 skipped, both ways, once `trace.golden`
+listed the count's refusal as one no target of the corpus reaches. The 8 are
+`SettingPathsOpenTests`' own skips. Every golden file of every moved command passes, on the fake targets and on every
+core of the corpus, with the C# class of each command unregistered; the C# shell passes the same files with the
+classes it still has. `NativeSwitchTests` now prints which shell a run used and, under `EMUSEN_DIANASH_EXPECT`, fails
+a run that fell back; it also holds that the modules answer their commands. `cargo test --release` in `Platform/`
+passes, the session client's header test among it; the crate-alone corpus runner passes its 59 cases. 
+
+**Seeded faults.** Ten faults were seeded one at a time across the four modules and their shared client, each a
+change a port could plausibly make (a bound off by one, a comparison loosened, a word or a space changed, a digit
+count), and the corpus run on the Rust shell after each: eight failed it, each in the file of the command seeded. Two
+passed: `mem` showing `~` (0x7E) as `.`, since no case dumps that byte, and `cov <addr>` printing ` ...` after a list it
+showed whole, since no case of the corpus has any executed byte at all: the runner runs a core's frames before a
+case's first line, so coverage armed by the case never sees an instruction. Both are gaps in the corpus, not in the
+modules (below).
+
+**What answers on no core since the C# cores were retired.** The merge of `WiseMan` at `fa3f4561` brought the
+retirement of all four C# cores (Mars `9b5a56ee`, Mercury `250430d1`, Moon `d40b8b81`, Venus `f1f47969`), and with
+them went the only targets that answered part of what the debug and trace modules carry. Every core is now reached
+through `CoreDebugTarget`, which leaves `IDebugTarget`'s `AccessCounters`, `RegisterFlow`, `BreakConditions`, `DmaLog`
+and `ResolvePhysical` at their defaults, sets no `RegisterWriter` on any processor and no `ConditionEvaluator` on any
+breakpoint registry, and no core's bundle carries an `ICpuTraceSwitch`. The moved commands therefore refuse, answer that
+the core reports nothing, or do less than they say, on every core today, through the Rust modules and the C# classes alike:
+
+| Command | What every core answers, as the corpus records it on the Rust targets |
+|---|---|
+| `bp add … if`, `bp add … log`, `bp log` | accepted and listed, but no registry has an evaluator, so a condition counts as true and the breakpoint halts every time, and a logpoint records its expression's text rather than its value (`VenusRT_Native.md` §68.5 and §68.7 propose the evaluators in `CoreDebugTarget`) |
+| `bp when` | "This core reports no hardware conditions to break on.", status 1, on all five |
+| `setreg` | a register the processor names is refused as one the core cannot write; the corpus's only case on a core is a name that does not exist |
+| `counters` | "This core does not report access counters.", status 1 |
+| `copflow`, `cophist` | no register-window traffic and "This core does not keep coprocessor register history." (VenusRT, the one core with a coprocessor case) |
+| `dma log`, `dma stats` | "\<core\> records no DMA history.", status 1; `dma` itself lists VenusRT's channels |
+| `addr` | no decode from any core; MercuryRT's and MoonRT's answers are the memory spaces' own mapping, and Nephrite's and the rest's "does not report an address decode" |
+| `channels` | per-channel rows from MoonRT and MercuryRT; "(this core reports no audio channels)" from VenusRT, MarsRT and Nephrite, so the SNES's eight voices have no view |
+| `disasm … m8 m16 x8 x16` | the width hints reach the service and no disassembler reads them |
+| `trace` | "No CPU trace switch is registered for this target." |
+
+None of this is the modules': each answer is the provider's, and each command answers as before on the fake target the
+corpus grades it against. Which of them a core should answer is a decision for each core's own work, not S5's.
+
+**On Windows and macOS.** The WiseMan job of `rust-cores.yml` gained two steps, the DianaSh tests (the golden
+corpus, the shell's tests and the session service's, 1,077 to 1,079 of them) on the Rust shell, with
+`EMUSEN_DIANASH_EXPECT=rust` so that a fallback to the C# fails the run, and on the C#; the shell loads the platform
+library each system's own job built, with `nano` beside it. Three runs:
+
+| Run | Linux, Rust / C# | macOS (osx-arm64), Rust / C# | Windows (win-x64), Rust / C# |
+|---|---|---|---|
+| 38932922787 (modules, before the fixes) | 1,078 / 1,078 of 1,079 | 1,063 / 1,063 | 1,050 / 1,030 |
+| 38943963900 (attempt 2) | 1,077 / 1,077 of 1,077 | 1,076 / 1,076 | 1,075 / 1,070 |
+| 38964112111 (after the merge retiring the C# Moon and Venus, `cc3f37d5`) | to be recorded | to be recorded | to be recorded |
+
+Each run's log says `DianaSh in this run: the Rust shell` with the system's identifier on all three. The first run's
+failures were read one by one (`beecdd43`): on macOS every one was a path through `/private/var`, the resolved spelling
+of the home the shell now accepts, which the test's patterns did not name; on Windows a path's separator, a line's end,
+a Windows path unquoted in a shell line, a drive's path refused where the test expected a Unix path's chroot-style
+reading, and the publish tests' Linux host; on Linux the text parity class's culture. Two were the shell's: `memcard`
+showing a path reached through the resolved root as `../../../private/…`, and the debug module's log files taking a
+drive's path otherwise than `Path.GetFullPath`. The second run left `cd /LOGS`, which finds `Logs` on the two systems
+that ignore case, and a test's unescaped JSON. The C# shell's further failures on Windows are its commands' own: their
+`AppendLine` ends lines with `\r\n` there, and `TrimEnd('\n')` then leaves a `\r` at the end of `channels`, `label`,
+`mute`, `sprites` and `tilemap`, which the Rust modules do not print.
+
+**What S7 would delete, counted 2026-10-16.** S7 is not begun: the tester's condition is that Windows and macOS are
+confirmed first (§13.10), and §13.2's conditions add a release played in state 2. When it comes, it would delete:
+
+- *the C# interpreter*: `DianaShInterpreter`'s nested `Managed` class (659 lines), `Lib/Lexer.cs`, `Lib/Parser.cs`,
+  `Lib/Ast.cs`, `Bin/CommandTable.cs`, `Etc/DianaShUserRegistry.cs`, `Etc/DianaShCommandSuspensions.cs` and the C#
+  standalone `Bin/Program.cs`, 865 lines besides `Managed`, and the facade's switch with its fallback, so that
+  `EMUSEN_DIANASH_NATIVE=0` is refused as state 3 has it (`EmuSen_RustPlatform.md` §3.9);
+- *the C# command classes the Rust shell answers*: 34 of `Bin/Commands/Unix/`'s 36 files and 45 of
+  `Bin/Commands/EmuSen/`'s 50 (`SnapshotStore` among them), about 5,800 lines;
+- *the tests that construct those classes directly*, which become tests of the Rust commands through the shell, and
+  the C# half of `TextModuleParityTests`.
+
+It would not delete, because something still uses them: `CoreCommand` and `StateCommand` (Q25), `MemcardCommand`
+(the `emusen.memcard` module, added after §8.1, is not ported), `CoretopCommand` (Hotaru registers it with its window
+opener), `ClearCommand` and `VstopCommand` (a host's, §8.1 and Q14), with `DebugCommandHelpers`, which `coretop`
+still calls, and `HostBridge`, `IDianaShCommand` and `DianaShResult` under them; `DianaShInterpreterScheduler`, which Mistress's and Hotaru's console windows still drive;
+`ConsoleLineReader`, which Hotaru's terminal still reads lines with; `HostAction`, which the frontends still read; and
+`DianaShSandbox`, which `core`, `state`, `memcard` and Hotaru's launch prompt still resolve paths through.
+
+**What remains unproven.** The CI runs above prove the shell as a library inside WiseMan's test host on the three
+systems. They do not prove:
+
+1. *the standalone `dianash` program on Windows or a Mac*: its raw-mode line editor (termios, and the Windows
+   console's virtual-terminal input), Ctrl-C's handler, Ctrl-D, the code page set to UTF-8, and `ls -l`'s local time
+   from the system's time zone (the C library's on Unix, the system's on Windows, `dianash.text`'s `clock.rs`). The
+   Windows half was type-checked at S3 and has never run;
+2. *`nano` at a terminal on any system*: CI runs its three refusals, not its editor;
+3. *a program run by the shell at a terminal*, owning it while it runs, on any system;
+4. *the frontends' own windows on Windows and macOS with the Rust shell*: Mistress's console, Hotaru's terminal and
+   F4 prompt, `emusen-shell`, each over a running game (WiseMan's window tests run headless, and on Linux);
+5. *a published tree*: a win-x64 or osx-arm64 publish carrying `nano` beside the library, and a signed bundle
+   loading it.
+
+The proposal: a CI job per system that builds `dianash` and `nano` and drives them through a pseudo-terminal, a Rust
+test in the `dianash` package over the `portable-pty` crate, which opens a ConPTY on Windows and a pty on Unix: type
+lines with the editor's keys and compare the screen, run `ls -l` against a file of a known time under a fixed `TZ`, end
+a running loop with Ctrl-C, edit and save a file with `nano` and compare it. Items 4 and 5 want a person's hands: a
+publish of the branch played for an hour on the Mac mini and on a Windows machine, the console opened and a debugger
+session run in each, written down here before S7.
+
+**What it costs.** Nothing was measured beyond the gate's own time, which is unchanged within its noise (1 minute 9
+seconds for 1,352 tests before the merge); a debugger command now crosses the module ABI and the session service's table where it
+crossed the bridge, and both crossings are of the size §13.10 measured.
+
+**Found while building it, and left.** Each is outside S5's row or a change to what a recorded case prints.
+
+1. *`watch add` and `framelog add` print the space as typed but store it as the provider names it*, where the C#
+   stored it as typed, so a later `watch list` shows `RAM` for a watch added on `ram`. No case of the corpus types a
+   space in another case.
+2. *A negative count reaches some operations as a refusal*: `disasm`, `tile`'s bpp and `bp log` take their counts as
+   `uint32_t`, and the provider refuses one above `2^31 - 1` where the C# passed the negative number on. No case meets
+   it.
+3. *Two gaps in the corpus*, found by the seeded faults: no `mem` dump holds `~`, and no case records an executed
+   byte, so `cov`'s listing of them, `cov new`'s and `cov funcs`' are unrecorded. The first is a case in `mem.golden`;
+   the second needs the runner to arm coverage before a core's frames, a directive beside `frames`.
+4. *The standalone `dianash` does not link EmuSen's modules.* With no session service their commands would answer "No
+   ROM loaded", as §8.2 says; linking them in is a choice of what one file carries, left for the release that ships it.
+
 ---
 
 ## 14. How it is tested
@@ -2194,6 +2437,14 @@ in a commit of its own (§13.9); Q22, Q23 and Q24 need nothing until the steps t
 | **Q22** | `ps`'s answer with nothing to list ("No active breakpoints, watches, or sessions.") and `kill`'s refusal without a session manager ("isn't a bp<N>/watch<N> id") name the debugger's jobs, though they are now the shell's words (§13.7). Reword them? | Not before S7: the corpus holds them, and both shells must print them alike until the C# goes. Then: "No active jobs or sessions." and a refusal naming the claimed prefixes, read from the manifests *Decided 2026-10-16 by the tester: as recommended.* |
 | **Q23** | The platform library aborts on a panic, so `dianash.text`, linked into it, gets the crash log and not §6.7's `Error:` and status −320 if it ever panics (§13.8). Keep the library's abort, or build it to unwind? | Keep the abort: one crash log per process is the library's rule (`EmuSen_RustPlatform.md` §3.5), and the text module has no path that panics on input. A module shipped as a library of its own is built to unwind and gets the boundary, as §6.7 says *Decided 2026-10-16 by the tester: as recommended.* |
 | **Q24** | Q10's stderr changes what a pipeline prints when a text command in it fails (`cat nosuch \| wc -l`: the C# printed 1, the Rust shell prints the words and 0), and no recorded case shows it, since a recorded case must read alike in both shells (§13.8). Record a case for it now in a file of its own that only the Rust shell runs, or at S6? | At S6, when the Rust shell becomes the default and the corpus may hold its answers: a case in `shell.golden`, re-recorded that day with the reason *Decided 2026-10-16 by the tester: as recommended.* |
+
+### 16.2 Questions from S5 (2026-10-16)
+
+| | Question | Recommendation |
+|---|---|---|
+| **Q25** | `core` and `state` stay each host's command (§13.11): a module's `core` needs the frontend service, and `state` the save and load each host hands its own command today. Build `emusen.frontend@1`'s `games` and `open_game`, and have the hosts give the provider their save and load, so that both move to the session module before S7? | Yes, before S7: until then the C# `CoreCommand` and `StateCommand` are the only `core` and `state` there are, and S7 cannot delete them. The frontend service is small (§9.9) and its first two calls are these |
+| **Q26** | The session service's 1.1 (§13.11) gives the cheat lists and the cheat database to the provider, which §13.6 had kept with the command, and lets two changes answer with a record that waits for a buffer. Keep that shape? | Keep it: the files' rules are Galaxia's and the database Crystal's, and a second copy in a module would make two owners of each. The waiting record is `events_drain`'s rule, already in the header |
+| **Q27** | The DianaSh steps of CI's WiseMan job report and do not gate (§13.11), as every platform step does (`EmuSen_RustPlatform.md` §10.6). Make the Rust shell's step a gate on all three systems once it has passed there? | Yes, once two consecutive runs pass on all three: it is the evidence S7 rests on, and a step that cannot fail cannot hold it |
 
 ---
 

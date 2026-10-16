@@ -63,6 +63,15 @@ impl Ppu {
             return false;
         }
         self.dot += 1;
+        if self.dot < CYCLES_PER_SCANLINE - 4 && self.dot != OAM_SCAN_CYCLES && self.dot != self.drawing_end {
+            return false;
+        }
+        self.dot_event(iflags, vram, oam, cgb)
+    }
+
+    /// The dots where something happens, a few a line: kept out of the copies of the dot loop the CPU's bus inlines (Mercury_Native.md §14.1).
+    #[inline(never)]
+    fn dot_event(&mut self, iflags: &mut u8, vram: &[u8], oam: &[u8], cgb: bool) -> bool {
         // The line's last machine cycle, where a CGB's line-144 mode-2 interrupt comes early, shares the test for the line's end.
         if self.dot >= CYCLES_PER_SCANLINE - 4 {
             if self.dot >= CYCLES_PER_SCANLINE {

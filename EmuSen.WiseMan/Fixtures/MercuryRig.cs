@@ -29,9 +29,13 @@ namespace EmuSen.WiseMan.Fixtures
         {
             _rom = rom;
             _temporary = temporary;
+            Rom = File.ReadAllBytes(rom);
         }
 
         protected string RomPath => _rom;
+
+        // The cartridge image, whose header picks the layout listing a state follows.
+        public byte[] Rom { get; }
 
         // An image written to a temporary file the rig deletes.
         public static MercuryRig Create(MercuryEngine engine, byte[] rom, GbModel model = GbModel.Auto) => Open(engine, SyntheticGbRom.WriteTemp(rom), model, temporary: true);
@@ -107,6 +111,54 @@ namespace EmuSen.WiseMan.Fixtures
             return stream.ToArray();
         }
 
+        // A field of the engine's state by its listing path, read through the committed layout with no C# machine - see Mercury_Native.md §14.5.
+        public long Field(string path)
+        {
+            byte[] state = State();
+            return Listed(state).Get(state, path);
+        }
+
+        public bool Flag(string path) => Field(path) != 0;
+
+        public byte FieldByte(string path, int index)
+        {
+            byte[] state = State();
+            return Listed(state).Bytes(state, path)[index];
+        }
+
+        public byte[] FieldBytes(string path)
+        {
+            byte[] state = State();
+            return Listed(state).Bytes(state, path).ToArray();
+        }
+
+        // A field edit as a state round trip: the engine's state, the field rewritten through the listing, loaded back.
+        public void SetField(string path, long value)
+        {
+            byte[] state = State();
+            Listed(state).Set(state, path, value);
+            LoadState(new MemoryStream(state));
+        }
+
+        public void SetFieldByte(string path, int index, byte value)
+        {
+            byte[] state = State();
+            Listed(state).Bytes(state, path)[index] = value;
+            LoadState(new MemoryStream(state));
+        }
+
+        // The listing for this state; while C# Mercury is on main its own classes read the state too, and the two readings must agree.
+        protected MercuryStateLayout Listed(byte[] state)
+        {
+            MercuryStateLayout layout = Listing(state);
+            Agree(state, layout);
+            return layout;
+        }
+
+        protected virtual MercuryStateLayout Listing(byte[] state) => MercuryStateLayout.For(Rom, state);
+
+        protected abstract void Agree(byte[] state, MercuryStateLayout layout);
+
         public virtual void Dispose()
         {
             if (_temporary) try { File.Delete(_rom); } catch (IOException) { }
@@ -136,6 +188,9 @@ namespace EmuSen.WiseMan.Fixtures
             public override BreakpointRegistry Breakpoints => _core.Breakpoints;
             public override IDebugTarget CreateDebugTarget() => new EmuSen.Cores.Nintendo.Mercury.Debug.MercuryDebugTarget(_core);
             public override void SaveSram() => _core.SaveSram();
+
+            // The live core is the state it has just saved.
+            protected override void Agree(byte[] state, MercuryStateLayout layout) => MercuryStateAgreement.Check(_core, state, layout);
 
             public override int Step()
             {
@@ -192,6 +247,7 @@ namespace EmuSen.WiseMan.Fixtures
                         _pulled = _core.Machine.Save();
                         _view.LoadState(new MemoryStream(_pulled, writable: false));
                         _stale = false;
+                        MercuryStateAgreement.Check(_view, _pulled, Listing(_pulled));
                     }
                     _touched = true;
                     return _view;
@@ -209,6 +265,26 @@ namespace EmuSen.WiseMan.Fixtures
                 if (state.AsSpan().SequenceEqual(_pulled)) return;
                 _core.Machine.Core.Load(state);
                 _pulled = state;
+            }
+
+            // The listing for this state, written from MercuryRT's own state_layout when recording and none is committed.
+            protected override MercuryStateLayout Listing(byte[] state)
+            {
+                try { return base.Listing(state); }
+                catch (InvalidDataException) when (Environment.GetEnvironmentVariable(MercuryStateLayout.RecordVariable) == "1")
+                {
+                    MercuryStateLayout.Record(Rom[0x147], _core.Machine.Core.Layout());
+                    return base.Listing(state);
+                }
+            }
+
+            // A state read through the listing is read into the view as well, which is then current.
+            protected override void Agree(byte[] state, MercuryStateLayout layout)
+            {
+                _view.LoadState(new MemoryStream(state, writable: false));
+                _pulled = state;
+                _stale = false;
+                MercuryStateAgreement.Check(_view, state, layout);
             }
 
             private T Run<T>(Func<nint, T> call)

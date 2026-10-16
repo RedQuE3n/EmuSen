@@ -73,6 +73,7 @@ impl Cpu {
                     self.halt_bug = true;
                 } else {
                     self.halted = true;
+                    bus.set_halted(true);
                 }
                 4
             }

@@ -22,6 +22,8 @@ pub trait CpuBus {
     fn stop(&mut self);
     /// IE & IF's five live bits, which a dispatch reads again after its first push (Mercury_Native.md §13.3).
     fn pending_interrupts(&self) -> u8;
+    /// The CPU entering or leaving HALT, during which an hblank HDMA moves nothing (Mercury_Native.md §14.2).
+    fn set_halted(&mut self, halted: bool);
     /// A call, a restart or an interrupt dispatch has pushed its return and jumped; the debugger's seam, empty on the plain bus.
     #[inline(always)]
     fn note_call(&mut self, _source: u16, _target: u16, _kind: u32) {}
@@ -131,6 +133,7 @@ impl Cpu {
                 return Ok((self.advance(bus, 4), -1));
             }
             self.halted = false;
+            bus.set_halted(false);
         }
 
         if self.ime && pending {

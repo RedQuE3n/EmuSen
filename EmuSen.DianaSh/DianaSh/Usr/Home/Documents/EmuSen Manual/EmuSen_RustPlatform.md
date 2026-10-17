@@ -3121,3 +3121,14 @@ to GitHub's machines, and deleting the variable brings them back.
 **One runner, one job at a time.** GitHub ran the Apple Silicon jobs side by side; this machine runs them one after
 another. Since §28, a push builds only the libraries it changed, which keeps the queue short; a second runner on the
 same machine is the next step if it is not short enough.
+
+## 30. Interface 13, 2026-10-17: the systems table
+
+With the backend's step B1 (`EmuSen_Backend.md` §12), the workspace gained a crate, `emusen-systems`
+(`Platform/systems/`), depending on `emusen-dotnet` alone: nine embedded data files, one per system, read and checked
+once. The library gained one export over it, `emusen_systems_table` (`Platform/platform/src/systems.rs`), the table as
+one compact JSON array by the length-query idiom, and the header-against-exports test reads the new module. The C#
+facade is the runtime's `Crystal/Systems/SystemTable.cs`, which takes the export through `PlatformLibrary.Export` as
+`ImageSets` does, and which, unlike `ImageSets`, has a C# half: the packs' literals, chosen by `EMUSEN_SYSTEMS_NATIVE`
+through `PlatformSwitch`, in state 2 (§3.9). `SystemTableParityTests` holds the two halves equal. The interface's number
+went from 12 to 13 in `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together.

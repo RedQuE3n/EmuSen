@@ -14,7 +14,8 @@ namespace EmuSen.Crystal.Systems.Genesis
         // The space names the Genesis's engines share, so a cheat means the same memory on each.
         public const string Wram = "WRAM";
 
-        public static readonly SystemEntry MegaDrive = new(
+        // The C# literals, the failover; each entry is the systems table's row with its literal's code - see EmuSen_Backend.md §12.
+        public static readonly SystemEntry MegaDriveLiteral = new(
             MegaDriveId,
             "Sega Genesis / Mega Drive",
             "Genesis",
@@ -28,9 +29,10 @@ namespace EmuSen.Crystal.Systems.Genesis
             "genesis",
             "Sega Genesis",
             SelfDelimitingImages: false,
-            Recognise: probe => IsCompactDisc(probe.Read(0x8010)) ? null : new Recognition(MegaDriveId));
+            Recognise: probe => IsCompactDisc(probe.Read(0x8010)) ? null : new Recognition(MegaDriveId),
+            ScreenScraperSystem: 1);
 
-        public static readonly SystemEntry MegaCd = new(
+        public static readonly SystemEntry MegaCdLiteral = new(
             MegaCdId,
             "Sega CD / Mega-CD",
             "Sega CD",
@@ -46,9 +48,10 @@ namespace EmuSen.Crystal.Systems.Genesis
             SelfDelimitingImages: false,
             // A sheet is read by its first track, which the PlayStation's pack also takes; a CHD by its folder's name - see Nephrite_OpenBios.md §11.
             Recognise: probe => IsSegaCd(probe.Read(0x40)) ? new Recognition(MegaCdId) : null,
-            AttachedTo: MegaDrive.Console);
+            AttachedTo: MegaDriveLiteral.Console,
+            ScreenScraperSystem: 20);
 
-        public static readonly SystemEntry S32x = new(
+        public static readonly SystemEntry S32xLiteral = new(
             S32xId,
             "Sega 32X",
             "32X",
@@ -62,7 +65,10 @@ namespace EmuSen.Crystal.Systems.Genesis
             "sega32x",
             "Sega Mega Drive 32X",
             SelfDelimitingImages: false,
-            AttachedTo: MegaDrive.Console);
+            AttachedTo: MegaDriveLiteral.Console,
+            ScreenScraperSystem: 19);
+
+        public static readonly SystemEntry MegaDrive = SystemTable.Entry(MegaDriveLiteral), MegaCd = SystemTable.Entry(MegaCdLiteral), S32x = SystemTable.Entry(S32xLiteral);
 
         private static readonly byte[] Sync = { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 };
 

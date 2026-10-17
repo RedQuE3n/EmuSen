@@ -1,0 +1,16 @@
+{
+  "id": "32x",
+  "name": "Sega 32X",
+  "console": "32X",
+  "manufacturer": "Sega",
+  "release_year": 1994,
+  "extensions": [".32x"],
+  "cheat_systems": ["Sega - 32X"],
+  "openvgdb_systems": ["32X"],
+  "cover_aspect": 0.7,
+  "esde_system": "sega32x",
+  "esde_full_name": "Sega Mega Drive 32X",
+  "self_delimiting_images": false,
+  "attached_to": "Genesis",
+  "screenscraper_system": 19
+}

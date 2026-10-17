@@ -1,0 +1,16 @@
+{
+  "id": "n64",
+  "name": "Nintendo 64",
+  "console": "N64",
+  "manufacturer": "Nintendo",
+  "release_year": 1996,
+  "extensions": [".z64", ".n64", ".v64"],
+  "cheat_systems": ["Nintendo - Nintendo 64"],
+  "openvgdb_systems": ["N64"],
+  "cover_aspect": 0.7,
+  "esde_system": "n64",
+  "esde_full_name": "Nintendo 64",
+  "self_delimiting_images": false,
+  "attached_to": null,
+  "screenscraper_system": 14
+}

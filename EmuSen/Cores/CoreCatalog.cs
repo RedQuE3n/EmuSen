@@ -8,37 +8,21 @@ namespace EmuSen.Cores
     // Every core this build actually implements, in one place - see EmuSen_Settings_Reference.md §4.16.
     public static class CoreCatalog
     {
-        // The SNES's facts are its system pack's, so every SNES engine and this row read one source - see EmuSen_CoreAPI.md §20.
-        private static readonly CoreDescriptor Venus = FromSystem("SNES (Venus)", Crystal.Systems.Snes.SnesSystem.Entry);
+        // A catalog core: its row, the systems it was made from, and a shelf name for each, so a console's facts are its packs' alone - see EmuSen_Backend.md §12.
+        private sealed record CatalogRow(CoreDescriptor Core, IReadOnlyList<Crystal.Systems.SystemEntry> Systems, IReadOnlyList<string> ShelfNames);
 
-        private static CoreDescriptor FromSystem(string displayName, Crystal.Systems.SystemEntry e) =>
-            new(displayName, e.Extensions.ToArray(), e.CheatSystems.ToArray(), e.Console, e.Manufacturer, e.ReleaseYear, CoverAspect: e.CoverAspect,
-                OpenVgdbSystems: e.OpenVgdbSystems.ToArray(), OpenVgdbBytes: e.OpenVgdbBytes);
+        private static CatalogRow Row(string[] shelfNames, params Crystal.Systems.SystemEntry[] systems) => new(CoreDescriptor.Of(shelfNames[0], systems), systems, shelfNames);
 
-        // The NES's facts are its system pack's, as the SNES's are; Famicom Disk System is different hardware and is not claimed.
-        private static readonly CoreDescriptor Moon = FromSystem("NES (Moon)", Crystal.Systems.Nes.NesSystem.Entry);
-
-        // Two libretro folders for one core, the same way Venus claims Satellaview - see Mercury_Core.md §1.
-        private static readonly string[] GameBoyCheatSystems =
+        // One core with two shelves, the Game Boy's games and the Color's, whose libretro folders it claims both of - see Mercury_Core.md §1, EmuSen_Settings_Reference.md §4.46.
+        private static readonly CatalogRow[] CatalogRows =
         {
-            "Nintendo - Game Boy",
-            "Nintendo - Game Boy Color",
+            Row(new[] { "SNES (Venus)" }, Crystal.Systems.Snes.SnesSystem.Entry),
+            Row(new[] { "NES (Moon)" }, Crystal.Systems.Nes.NesSystem.Entry),
+            Row(new[] { "Game Boy (Mercury)", GameBoyColorShelf }, Crystal.Systems.GameBoy.GameBoySystems.GameBoy, Crystal.Systems.GameBoy.GameBoySystems.GameBoyColor),
+            Row(new[] { "Nintendo 64 (Mars)" }, Crystal.Systems.N64.N64System.Entry),
         };
 
-        private static readonly CoreDescriptor Mercury =
-            new("Game Boy (Mercury)", new[] { ".gb", ".gbc" }, GameBoyCheatSystems, "GB", "Nintendo", 1989, CoverAspect: 1.0,
-                OpenVgdbSystems: new[] { "GB", "GBC" }, OpenVgdbBytes: file => file);
-
-        // Claimed so `cheat db prune` keeps it, though Mars applies no cheats yet - see Mars_Core.md §8.
-        private static readonly string[] N64CheatSystems =
-        {
-            "Nintendo - Nintendo 64",
-        };
-
-        // All three container orders, because the magic word decides and the extension does not - see Mars_Rom.md §1.1.
-        private static readonly CoreDescriptor Mars =
-            new("Nintendo 64 (Mars)", new[] { ".z64", ".n64", ".v64" }, N64CheatSystems, "N64", "Nintendo", 1996, CoverAspect: 0.7,
-                OpenVgdbSystems: new[] { "N64" }, OpenVgdbBytes: Crystal.Systems.N64.N64ImageOrder.ToByteSwapped);
+        private static readonly CoreDescriptor Venus = CatalogRows[0].Core, Moon = CatalogRows[1].Core, Mercury = CatalogRows[2].Core, Mars = CatalogRows[3].Core;
 
 
         // Keyed by what a user would type - the internal codename and the console name both reach the same core; a discovered console's are its name and its engine's - see EmuSen_CoreAPI.md §30.5.
@@ -65,7 +49,7 @@ namespace EmuSen.Cores
             CoreDescriptor.SupportedCheatSystems(Registry.Values.Concat(Lists.Discovered));
 
         // The consoles this build registers by hand, whichever engine runs each: a C# core, a shim, or the SNES's discovered VenusRT.
-        private static readonly CoreDescriptor[] CatalogCores = { Venus, Moon, Mercury, Mars };
+        private static readonly CoreDescriptor[] CatalogCores = CatalogRows.Select(r => r.Core).ToArray();
 
         // One entry per real core, not per alias - what a "which console?" list shows; a console only a discovered engine runs follows the catalog's - see EmuSen_Settings_Reference.md §4.92.
         public static IReadOnlyList<CoreDescriptor> Cores => Lists.Cores;
@@ -99,7 +83,7 @@ namespace EmuSen.Cores
                 var consoles = cores.OrderBy(c => c.Manufacturer, StringComparer.OrdinalIgnoreCase).ThenBy(c => c.ReleaseYear).ThenBy(c => c.Console, StringComparer.OrdinalIgnoreCase).ToArray();
                 var shelves = consoles.SelectMany(Shelves).ToArray();
                 var extensions = cores.SelectMany(c => c.Extensions).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-                var filters = new[] { AllConsoles }.Concat(cores.SelectMany(c => ReferenceEquals(c, Mercury) ? new[] { c.DisplayName, GameBoyColorShelf } : new[] { c.DisplayName })).ToArray();
+                var filters = new[] { AllConsoles }.Concat(cores.SelectMany(c => RowOf(c)?.ShelfNames ?? new[] { c.DisplayName })).ToArray();
                 return _lists = new CatalogLists(found, discovered, cores, consoles, shelves, extensions, filters, RegistryOf(discovered));
             }
         }
@@ -112,7 +96,7 @@ namespace EmuSen.Cores
             Crystal.Systems.SystemPacks.All.Select(p => p.Entry).FirstOrDefault(e => string.Equals(e.Console, console, StringComparison.OrdinalIgnoreCase) && ConsoleForSystem(e.Id) is null);
 
         // "Genesis (Nephrite)": the pack's console and the engine that runs it, as "SNES (Venus)" is.
-        private static CoreDescriptor DiscoveredRow(string console) => FromSystem($"{console} ({DiscoveredFor(console)?.EngineName ?? console})", PackOf(console)!);
+        private static CoreDescriptor DiscoveredRow(string console) => CoreDescriptor.Of($"{console} ({DiscoveredFor(console)?.EngineName ?? console})", PackOf(console)!);
 
         // What the library's console filter and sidebar list: one shelf per core, but two for the Game Boy's, whose games a player knows as two consoles - see EmuSen_Settings_Reference.md §4.46.
         public sealed record LibraryShelf(string Name, string Label, CoreDescriptor Core)
@@ -124,23 +108,17 @@ namespace EmuSen.Cores
 
         public const string GameBoyColorShelf = "Game Boy Color (Mercury)";
 
-        private static readonly Dictionary<string, (string System, string FullName)> EsdeNames = new(StringComparer.OrdinalIgnoreCase)
-        {
-            [Moon.Console] = (Crystal.Systems.Nes.NesSystem.Entry.EsdeSystem, Crystal.Systems.Nes.NesSystem.Entry.EsdeFullName),
-            [Venus.Console] = (Crystal.Systems.Snes.SnesSystem.Entry.EsdeSystem, Crystal.Systems.Snes.SnesSystem.Entry.EsdeFullName),
-            ["N64"] = ("n64", "Nintendo 64"),
-            ["GB"] = ("gb", "Game Boy"),
-        };
-
         public static IReadOnlyList<LibraryShelf> ShelvesInReleaseOrder => Lists.Shelves;
 
-        // A console's shelves; a discovered console's ES-DE names are its pack's.
+        private static CatalogRow? RowOf(CoreDescriptor c) => CatalogRows.FirstOrDefault(r => ReferenceEquals(r.Core, c));
+
+        // A console's shelves, one per system its row was made from, each labelled and named for ES-DE by its pack.
         private static IEnumerable<LibraryShelf> Shelves(CoreDescriptor c)
         {
-            if (ReferenceEquals(c, Mercury))
-                return new[] { new LibraryShelf(c.DisplayName, c.Console, c) { EsdeSystem = "gb", EsdeFullName = "Game Boy" }, new LibraryShelf(GameBoyColorShelf, "GBC", c) { EsdeSystem = "gbc", EsdeFullName = "Game Boy Color" } };
-            var (system, fullName) = EsdeNames.TryGetValue(c.Console, out var names) ? names : (PackOf(c.Console)!.EsdeSystem, PackOf(c.Console)!.EsdeFullName);
-            return new[] { new LibraryShelf(c.DisplayName, c.Console, c) { EsdeSystem = system, EsdeFullName = fullName } };
+            var row = RowOf(c);
+            var systems = row?.Systems ?? new[] { PackOf(c.Console)! };
+            var names = row?.ShelfNames ?? new[] { c.DisplayName };
+            return systems.Select((s, i) => new LibraryShelf(names[i], s.Console, c) { EsdeSystem = s.EsdeSystem, EsdeFullName = s.EsdeFullName });
         }
 
 
@@ -195,7 +173,7 @@ namespace EmuSen.Cores
         public static bool IsGameBoyColor(string romPath) =>
             ColorByPath.GetOrAdd(romPath, path =>
             {
-                if (string.Equals(System.IO.Path.GetExtension(path), ".gbc", StringComparison.OrdinalIgnoreCase)) return true;
+                if (Crystal.Systems.GameBoy.GameBoySystems.GameBoyColor.Extensions.Contains(System.IO.Path.GetExtension(path), StringComparer.OrdinalIgnoreCase)) return true;
                 try
                 {
                     using var file = System.IO.File.OpenRead(path);
@@ -388,14 +366,9 @@ namespace EmuSen.Cores
 
         public const string VenusRtEngine = "VenusRT (Rust)";
 
-        // The system ids of EmuSen_CoreAPI.md §6.3 each console answers to, so a v1 core's info is matched to it.
-        private static readonly Dictionary<string, string[]> SystemIdsByConsole = new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["SNES"] = new[] { Crystal.Systems.Snes.SnesSystem.Id },
-            ["NES"] = new[] { Crystal.Systems.Nes.NesSystem.Id },
-            ["GB"] = new[] { "gb", "gbc" },
-            ["N64"] = new[] { "n64" },
-        };
+        // The system ids of EmuSen_CoreAPI.md §6.3 each catalog console answers to, its row's systems', so a v1 core's info is matched to it.
+        private static readonly Dictionary<string, string[]> SystemIdsByConsole =
+            CatalogRows.ToDictionary(r => r.Core.Console, r => r.Systems.Select(s => s.Id).ToArray(), StringComparer.OrdinalIgnoreCase);
 
         public static IReadOnlyList<string> SystemIdsFor(string console) => SystemIdsByConsole.TryGetValue(console, out var ids) ? ids : Array.Empty<string>();
 

@@ -1,0 +1,16 @@
+{
+  "id": "psx",
+  "name": "Sony PlayStation",
+  "console": "PlayStation",
+  "manufacturer": "Sony",
+  "release_year": 1994,
+  "extensions": [".psexe", ".psx", ".cue", ".bin", ".iso", ".chd", ".m3u"],
+  "cheat_systems": ["Sony - PlayStation"],
+  "openvgdb_systems": ["PSX"],
+  "cover_aspect": 1.0,
+  "esde_system": "psx",
+  "esde_full_name": "Sony PlayStation",
+  "self_delimiting_images": false,
+  "attached_to": null,
+  "screenscraper_system": 57
+}

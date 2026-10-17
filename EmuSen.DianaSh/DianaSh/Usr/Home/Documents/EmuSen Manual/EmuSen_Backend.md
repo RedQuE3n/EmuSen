@@ -1,6 +1,6 @@
 # EmuSen — the backend in Rust: the line, the frontend API, the system packs and the services
 
-*This revision: the first, 2026-10-17. A design, with nothing built. It answers the tester's goal of 2026-10-16, "to
+*This revision: the first, 2026-10-17. A design; B1 has since been built (§12, 2026-10-17). It answers the tester's goal of 2026-10-16, "to
 get the entire backend ported to rust", after which the frontend's move is planned, and the request of 2026-10-17 to
 design two things: one frontend API by which every frontend drives the cores, and the system packs and the remaining C#
 platform services in Rust. Every claim about the code was read on `WiseMan` at `165e60b4`. Claims are marked as
@@ -63,7 +63,7 @@ field that both carry today is given one owner (§5.3).
 
 **The order (§6).** Eleven steps, B0 to B10, each with a gate, a failover and a proof. **The smallest first step that
 gives value is B1: the systems table as data, read by a Rust crate**, with the Game Boy and the Nintendo 64 given packs
-of their own, about 1,350 lines; `CoreCatalog`'s hand-written rows and the second record type for a console go. The
+of their own, about 1,350 lines (*built 2026-10-17 in about 690 of Rust, data and C# facade, §12*); `CoreCatalog`'s hand-written rows and the second record type for a console go. The
 step of greatest value is B2: the frontend API, its binding and a C# implementation of it consolidated from today's
 three loops, with Pharaoh, emusen-shell and Mistress moved onto it, so that the frontends move once and the Rust Crystal
 of B7 is switched in behind the binding as each platform component was.
@@ -83,7 +83,7 @@ unported. B7, Crystal itself, is the largest at 18,000 to 27,000, and is switche
 | Part | Where | Surface | State |
 |---|---|---|---|
 | Every core: MarsRT, MercuryRT, MoonRT, VenusRT, Nephrite, Diamond | `EmuSen/Cores/…` | the core ABI v1, now 1.11 (`EmuSen_CoreAPI.md` §6.31) [R] | no C# core remains (`EmuSen_Stack.md` §2.1, revised 2026-10-16) [R] |
-| Galaxia, Endymion, Serenity's Vulkan and shader half | `Platform/` | `emusen_platform.h`, interface 12, exact match [M] | state 2: Rust by default, C# one variable away (`EmuSen_RustPlatform.md` §3.9) [R] |
+| Galaxia, Endymion, Serenity's Vulkan and shader half | `Platform/` | `emusen_platform.h`, interface 12, exact match [M]; *13 since B1 (§12)* | state 2: Rust by default, C# one variable away (`EmuSen_RustPlatform.md` §3.9) [R] |
 | DianaSh's shell core, its text module, EmuSen's four command modules, `nano` | `Platform/dianash*`, `Platform/emusen-*` | `dianash.h` and `dianash_module.h`, stable | state 2 since 2026-10-16 (`EmuSen_DianaSh.md` §13.10) [R] |
 | The session service from a caller's side | `Platform/session-service` (1,312 lines of Rust [M]) | `emusen_session.h` 1.2, 79 functions [M] | **implemented by the C# host**: `EmuSen.Crystal/Session/`, 3,117 lines of C# [M] |
 | The conformance kit, a host of the core ABI | `EmuSen/Cores/Shared/emusen-core-conform` (4,017 lines [M]) | its own loader, `api.rs` and `sidecar.rs` | a second host of the core ABI beside the C# one (§4.3, F15) |
@@ -507,7 +507,7 @@ retirement or port. `StateSerializer` (189) is named by no shipped file, only by
 `CheatRomPatcher` (16) and `TeeTextWriter` (26) by none at all [M]; all three are dead and are deleted in B4, not
 ported. Inside `CoreCatalog`, `ReferenceEngineByConsole` is an empty dictionary and `EngineByConsole` is never written
 (`CoreCatalog.cs:387, 405–407`) [M], so the engine-choice rows around them are reachable only through discovery; they go
-with B1 and B7. Mistress's `ShaderCatalog`,
+with B7. *Corrected by B1 (§12.4): this said "B1 and B7", but they are engine rows, not console facts.* Mistress's `ShaderCatalog`,
 `SlangPackDownload` and `ThemeRecords` (`themes.db`) are frontend.
 
 ### 4.2 The totals
@@ -605,8 +605,9 @@ id** [C, D6].
 - **The data file**, `Platform/systems/data/<id>.json`: `id`, `name`, `console`, `manufacturer`, `release_year`,
   `extensions` (what the console's games come as, including those the runtime expands, such as `.m3u`), `cheat_systems`,
   `openvgdb_systems`, `cover_aspect`, `esde_system`, `esde_full_name`, `self_delimiting_images`, `attached_to`,
-  `screenscraper_system`, `save_folder`, `cheat_space`, `media` (each save medium's id, title and noun), and the player-controller defaults by setting key. It is
-  JSON because it is read once at start and is the kind of text a person reviews (`EmuSen_Stack.md` §4.1) [R]. It is
+  `screenscraper_system`, `save_folder`, `cheat_space`, `media` (each save medium's id, title and noun), and the player-controller defaults by setting key.
+  *As built by B1 (§12.1), the data files carry the first fourteen of these, the part with a C# answer today; the rest
+  arrive with the code that reads them at B3.* It is JSON because it is read once at start and is the kind of text a person reviews (`EmuSen_Stack.md` §4.1) [R]. It is
   embedded in the library when built, so there is no installed file to go missing, and printed by `systems` (§3.5) for
   a person or a script.
 - **The code**, one module per console family (`nes`, `snes`, `genesis`, `psx`, `n64`, `gb`), each implementing what it
@@ -715,7 +716,7 @@ what it consolidates. Each step reports its real figure beside this one, as the 
 | Step | C# replaced or written | Rust, central (range) | Other new | C# removed at state 3 |
 |---|---:|---:|---:|---:|
 | B0 | about 300 changed | — | — | about 150 net |
-| B1 | about 450 of entries | 1,100 (900–1,400) | 320 of data; 200 of C# facade | 450 |
+| B1 | about 450 of entries | 1,100 (900–1,400); *built: 438, §12.2* | 320 of data; 200 of C# facade; *built: 144 and 103* | 450 |
 | B2 | 3,600 of EmulatorSession, CoreFactory and the three loops' frame-end code | — | header and baseline 1,100; C# contract and binding 1,900; managed implementation 2,500; tests 2,000 | about 1,600 from the frontends at once |
 | B3 | about 2,950 | 7,400 (5,900–8,900) | 300 of C# facade | 2,950 |
 | B4 | about 5,480 deleted unported | 1,500–3,000 in the cores' own exports | 300 in the generic C# adapter | 5,480 |
@@ -762,7 +763,8 @@ about 5,480 lines are deleted unported and 3,117 are replaced by the table Cryst
   §13.12 measured conditions. Retired at B7(b).
 - **P5.** No `games.db` row differs between the two scans of B8 except in columns that record a time. Retired at B8.
 - **P6.** B1's data files reproduce every field of every C# entry with no field the C# computes rather than states,
-  except `OpenVgdbBytes`, which is code (B3). Retired at B1.
+  except `OpenVgdbBytes`, which is code (B3). Retired at B1. *Retired 2026-10-17 (§12.3), with one correction:
+  `Recognise` is code as well, and both are kept from the literal.*
 
 ---
 
@@ -861,3 +863,147 @@ exception for shims is closed by SR8 once B4 is through.
 - **D14. A save medium's file system, twice** (F21): the pack's format modules written at B3 as crates without the
   standard library, which Diamond's and Nephrite's open firmware may build on, each core deciding for itself, and a round
   trip holding the two equal until then? *Recommended: yes*: one layout, two jobs, and the reuse rule asks for one owner.
+
+---
+
+## 12. What was built, 2026-10-17: B1, the systems table as data
+
+*Measured on 2026-10-17 on branch `b1-systems`, from `WiseMan` at `69974969`. The step of §6's B1 row, with the
+decisions of §11 that bear on it: D6 (one crate, embedded data files, no data file from outside), D9 (`starts_empty`
+stays core info's), SR7 (the C# as failover through `EMUSEN_SYSTEMS_NATIVE`), SR11 (JSON) and D4 (in `Platform/`,
+exported from `emusen_platform`).*
+
+### 12.1 The artefacts
+
+- **The crate `emusen-systems`** (`Platform/systems/`), an rlib depending on `emusen-dotnet` alone, for its JSON reader
+  and .NET's way of writing a double. Nine data files, `data/<id>.json`: `nes`, `snes`, `md`, `mcd`, `32x`, `psx`,
+  `gb`, `gbc` and `n64`, embedded with `include_str!`, so no file is installed and none from outside is read. The crate
+  reads each file into a `System`, refusing a file with a key it does not know, a key missing or given twice, a value
+  of the wrong kind, a blank word, an empty or repeated list, an extension that is not a dot and lower-case letters, or
+  an id other than the one the file is named for; it refuses a table with an id or a console twice, or an attachment
+  whose host is not a console of its own in the table. `table()`, `find(id)` and `table_json()` answer from one
+  reading made on first use. The packs' code (recognisers, codecs, card formats, debugger views, the OpenVGDB byte
+  transform) is not in it: that is B3.
+- **The fields** are `SystemEntry`'s data fields and one more: `id`, `name`, `console`, `manufacturer`, `release_year`,
+  `extensions`, `cheat_systems`, `openvgdb_systems`, `cover_aspect`, `esde_system`, `esde_full_name`,
+  `self_delimiting_images`, `attached_to` and `screenscraper_system`. Each is a fact of the console on every engine, so
+  the pack's by §5.3. Not among them, by the same table: the extensions an engine receives, firmware, `starts_empty`
+  (D9), controllers, settings, save media's slots, and **the display's shape, which §5.3 gives to machine info**.
+  §5.2's other fields (`save_folder`, `cheat_space`, `media`, the player-controller defaults) arrive with the code that
+  reads them, at B3, so that no field enters the table before something holds it to a C# answer.
+- **The C interface, minor addition, interface 13.** One export, `emusen_systems_table(out, len)`, the table as one
+  compact JSON array in the table's order with each object's keys in a fixed order, by the length-query idiom
+  (`Platform/platform/src/systems.rs`). The number went from 12 to 13 in `emusen_platform.h`, `lib.rs` and
+  `PlatformLibrary.InterfaceVersion` together, as `EmuSen_RustPlatform.md` §3.2's exact rule requires (§30 there).
+- **The facade, `SystemTable`** (`EmuSen.Crystal/Systems/SystemTable.cs`), behind `EMUSEN_SYSTEMS_NATIVE` through
+  Galaxia's `PlatformSwitch`, in state 2 of `EmuSen_RustPlatform.md` §3.9: the table unless the variable is `0`; a
+  library absent, of another interface, without the export or giving text the facade cannot read leaves the literals,
+  with one line in the log. `SystemTable.Entry(literal)` is the table's row for the literal's id with the literal's
+  two code parts, `OpenVgdbBytes` and `Recognise`, or the literal itself. Each pack's public entry (`NesSystem.Entry`,
+  `GenesisSystems.MegaCd` and the rest) is now that call over the pack's `Literal`, so every reader of an entry, and
+  every comparison by reference, reads one object, and the C# recognisers and codecs are kept.
+- **The literals stay**, as the failover and the parity class's oracle, listed in `SystemPacks.Literals` in the table's
+  order. `SystemEntry` gained `ScreenScraperSystem`, an optional last parameter, and each literal its value.
+- **The Game Boy, the Game Boy Color and the N64 are packs**: `GameBoySystems` (two entries, the Game Boy's two codecs
+  on both) and `N64System` (its entry and the Controller Pak, which `SaveMediumFormats` had listed beside the packs as
+  "a console with no system pack yet"; that list is gone). The N64's codecs stay in the MarsRT shim until B3, so its
+  pack has none. They are appended to `SystemPacks.All`, so every lookup that took the first match keeps its answer.
+- **`CoreDescriptor` is derived.** `CoreDescriptor.Of(displayName, systems)` makes a core's row from the entries of the
+  systems it runs: the first system's console and facts, every system's extensions, cheat folders and OpenVGDB names.
+  `CoreCatalog`'s four hand rows became four `CatalogRow`s, each a display name per shelf and the systems' entries;
+  Mercury's row is the `gb` and `gbc` entries with two shelves. The shelves' labels and ES-DE names, the hand table
+  `EsdeNames`, `SystemIdsByConsole` and the `.gbc` test in `IsGameBoyColor` are read from the rows' entries. Shipped
+  code builds a `CoreDescriptor` nowhere else; two WiseMan classes build small ones as fixtures, which is a test's
+  business.
+- **Two tables outside the packs went**: Mistress's `Scraper.SystemIds` is built from the packs'
+  `ScreenScraperSystem` by `esde_system`, and Big Picture's `SystemsOrder.FirstRelease` from their `ReleaseYear`.
+
+Of §4.3's facts, this removes **F13** (the console's record is the pack's entry, the descriptor derived from it),
+**F16** (the year: the pack's alone), **F17** (the ScreenScraper id and the ES-DE names: the pack's alone) and the
+Game Boy's and the N64's half of **F1** (`CoreCatalog`'s hand rows). F1's other owners, `CoreFactory`'s switch on
+extensions and `BatterySave.cs:27`, are dispatch to the shims and a save folder, and go with B4 and F18.
+
+### 12.2 Sizes, against §7
+
+| | §7's estimate | Built |
+|---|---:|---:|
+| Rust, with in-crate tests and the C layer | 1,100 (900–1,400) | 438 (`systems` 391 with 112 of tests, its manifest 14, the C layer 33) |
+| Data | 320 | 144 (nine files of 16 lines) |
+| C# facade | 200 | 103 |
+| C# packs added (Game Boy, N64) | — | 76 |
+| The parity class | — | 126 |
+
+§7 estimated the Rust as the C# entries times the platform steps' ratio, as though the entries were ported as code. They
+were not: the facts became data, and the Rust is a reader and a validator of that data. The ratio does not apply to a
+step whose substance moves into data files, and B3's estimate, which ports code, is not affected by this.
+
+### 12.3 The gates
+
+| Gate | Result |
+|---|---|
+| `cargo test --release -p emusen-systems -p emusen-platform` | 9 pass in the crate; 26 in the library (one new, the table through the C layer, and the header-against-exports test now reading `systems.rs`); 4 in `dianash_abi` |
+| `cargo build --workspace --release` in `Platform/`; `dotnet build EmuSen.sln` | clean |
+| `emusen_platform.h` as C99 and C++17, `-Wall -Wextra -pedantic -Werror` | clean |
+| `CoreRegistrationEquivalenceTests` and `CoreRegistrationGolden.txt` | 3 pass, the golden not re-recorded and unchanged |
+| `SystemTableParityTests` | 7 pass |
+| The blast radius, one run each with `EMUSEN_SYSTEMS_NATIVE` unset and `0` | 670 pass, 670 pass |
+
+The blast radius was the parity class, the registration golden, the catalog's and the factory's classes
+(`CoreDiscoveryTests`, `CoreCommandTests`, `CoreFactoryCheatWiringTests`, `ConsoleStartTests`, `ControllerPortTests`),
+the library's (`LibraryScreenTests`, `RomLibraryTests`, `PlayStationLibraryTests`, `LibraryArtworkAndMediaTests`,
+`GameMetadataTests`), the packs' and routing's (`SnesSystemPackTests`, `GenesisCheatFormatsTests`,
+`PsxCheatFormatsTests`, `DiamondTests`, `DiamondPlayersTests`, `NephriteTests`, `NephritePlayersTests`,
+`SegaCdRoutingTests`, `MercuryModelTests`, `MercuryRtFallbackTests`, `MarsRtFrontendTests`, `MoonRtFrontendTests`), the
+interface's (`GalaxiaParityTests`, `EndymionParityTests`, the three halves' export tests, `SessionHeaderTests`, the
+three switch classes, `LeafAssemblyTests`), the cheats' and cards' (`CheatDatabasePrunerTests`,
+`CheatPruneCommandTests`, `CheatCodecAdapterTests`, `MoonCheatTests`, `SaveMediaTests`, `SaveMediaManagerTests`,
+`N64PakFormatTests`), Mistress's readers of the two moved tables (`ScraperTests`, `ScrapeExtrasTests`,
+`ThemedSwitchesTests`) and `GoldenCorpusTests`. No DianaSh output was expected to change and none did.
+
+**The parity class** reads the library's table whichever the switch chose, and holds: every literal equal to its data
+file in each of `SystemEntry`'s sixteen properties (a list by its sequence, a number exactly, the two code parts by
+reference to the literal's); the table, the literals and the packs naming the same nine systems in one order; every
+data property of `SystemEntry` having a key and every key of each row a property, in the header's order (the schema
+check of `EmuSen_RustPlatform.md` §6.4); each pack holding the entry the switch chose; the header declaring the one
+export. One case holds the comparison itself to seeing a change in any one of the sixteen fields, since a comparison
+that saw nothing would pass the rest.
+
+**Seeded faults** (`EmuSen_RustPlatform.md` §6.5), each made in a data file, built, run and reverted:
+
+| Fault | Parity class | Registration golden | The crate's tests |
+|---|---|---|---|
+| `snes.json`'s `cover_aspect` 0.73 to 0.74 | caught (2 cases) | caught (`[built]` and `[off]`, one line each) | caught (2 cases) |
+| `psx.json`'s `screenscraper_system` 57 to 58 | caught (2 cases) | not caught | not caught |
+
+The second is the reason for the parity class: the golden records what `CoreCatalog` and `CoreFactory` answer, and
+nothing there reads a ScreenScraper id, so a wrong one would have reached the scraper unseen.
+
+**The fallback, seen by accident.** The first run had the library at interface 13 and `PlatformLibrary` still at 12.
+The library was refused ("speaks interface 13, this build 12"), the parity class failed on `Ready` with those words,
+and the registration golden passed on the literals: state 2's fallback behaves as §3.9 of `EmuSen_RustPlatform.md`
+says, and the C# entries alone reproduce the golden.
+
+### 12.4 What the design page had wrong, corrected in place
+
+- **§7's B1 sizes** were the ratio applied to data (§12.2). Corrected in §7 by a note.
+- **§9's P6** named `OpenVgdbBytes` as the one field the C# computes rather than states; `Recognise` is code too, and
+  both are kept from the literal. P6 is otherwise retired: every data field of every C# entry is reproduced by its data
+  file, as the parity class shows, and no entry states a field the C# computes. Corrected in §9.
+- **§4.1** said `ReferenceEngineByConsole` and `EngineByConsole` "go with B1 and B7". They are engine-choice rows, not
+  console facts, so B1 by its own row does not reach them; they go with B7's settings schema. Corrected in §4.1.
+- **§5.2's field list** is the whole pack; B1 carries the part that has a C# answer today (§12.1). Noted in §5.2.
+- **An inconsistency left to B0**: §6's B0 row moves "the display shapes to the systems table", while §5.3 and F26 give
+  the display's shape to machine info. B1 followed §5.3 and put no display shape in the data.
+
+Every other figure this step relied on was checked against the code at `69974969` and held: `CoreCatalog.cs:28–41`
+for the hand rows (the page says 28–40), `:14–16` for `FromSystem`, `:127` for `EsdeNames`, `Scraper.cs:32–35`,
+`SystemsOrder.cs:21`, `NesSystem.cs:22`, `CoreFactory.cs:33–41`, `BatterySave.cs:27`, `CoreCatalog.cs:198`, the six
+packs of §5.1 and the 2,539 lines of `Crystal/Systems/`.
+
+### 12.5 Left for later steps
+
+- State 3, the literals deleted, is the tester's word after goldens (§6, B10); until then a change to a console fact is
+  made in its data file and its literal together, and the parity class fails on one alone.
+- No program yet reads the table without the C#: `emusen_crystal_systems` (§3.5) is B2's, and the Rust Crystal B7's.
+- `CatalogKeys`, `ButtonsByConsole`, `SettingsByConsole` and `AxesByConsole` (F18) remain `CoreCatalog`'s; controls and
+  settings are core info's (§5.3) and go with B4 and B7.

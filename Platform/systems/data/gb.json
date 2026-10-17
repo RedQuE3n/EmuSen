@@ -1,0 +1,16 @@
+{
+  "id": "gb",
+  "name": "Game Boy",
+  "console": "GB",
+  "manufacturer": "Nintendo",
+  "release_year": 1989,
+  "extensions": [".gb"],
+  "cheat_systems": ["Nintendo - Game Boy"],
+  "openvgdb_systems": ["GB"],
+  "cover_aspect": 1.0,
+  "esde_system": "gb",
+  "esde_full_name": "Game Boy",
+  "self_delimiting_images": false,
+  "attached_to": null,
+  "screenscraper_system": 9
+}

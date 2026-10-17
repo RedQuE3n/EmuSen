@@ -573,7 +573,8 @@ so such a code has nothing to apply to; that is the medium, not a gap. The Firmw
 CD's three BIOS (`FirmwareOverviewTests`). Big picture has its own year, ScreenScraper id and ES-DE name (`segacd`,
 whose artwork Art Book Next carries); those are the console's own and stay so. Its saves keep their own folder,
 "Sega CD", by design (`EmuSen_SaveMedia.md` §7.3). `SystemsOrder.FirstRelease` repeats each pack's `ReleaseYear`; it
-agrees for the Sega CD and is left for its own change.
+agrees for the Sega CD and is left for its own change. *Since 2026-10-17 it is built from the packs' years, and the
+ScreenScraper id is the pack's too (`EmuSen_Backend.md` §12).*
 
 **Tests.** `SegaCdScreenTests`: `HostOf` for the attachments and for consoles of their own; the Sega CD's Shaders
 window lists the CRT and Lottes, the same list as the Genesis's; a Sega CD game started with the CRT chosen for the

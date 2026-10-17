@@ -152,6 +152,8 @@ namespace EmuSen.Common
 
         public CoreRawPicture? RawPicture => _core?.RawPicture;
 
+        public string? TelevisionStandard => _core?.TelevisionStandard;
+
         // What the frame control's filter reads, passed to the core before each frame - see EmuSen_CoreAPI.md §6.30.
         public string? RawEncoding
         {

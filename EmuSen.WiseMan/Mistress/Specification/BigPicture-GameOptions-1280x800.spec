@@ -14,8 +14,8 @@ tree
   0 ContentControl at=0,0,1280,800 by=panel limit=0,0,1280,800 paints=#FFFFFFFF role=none
     1 MenuPanel at=0,0,1280,800 by=clip heard="Gamelist Options" limit=0,0,1280,800 name=GameOptionsMenu role=menu
       2 HintBar at=244,742,792,48 by=clip heard="View Close (Cancel), A Select, B Close (Apply), D-pad left and right Change Value, D-pad up and down Choose" limit=0,0,1280,800 role=group
-      3 ScrollViewer at=220,158,840,540 by=clip limit=0,0,1280,800 overflow=58 paints=#FFFFFFFF role=scrollviewer viewport=220,158,840,540
-        4 StackPanel at=220,158,840,598 by=scroll in=3 limit=220,158,840,540 paints=#55555AFF,#9C9CA0FF role=none seen=220,158,840,540
+      3 ScrollViewer at=220,158,840,540 by=clip limit=0,0,1280,800 overflow=112 paints=#FFFFFFFF role=scrollviewer viewport=220,158,840,540
+        4 StackPanel at=220,158,840,652 by=scroll in=3 limit=220,158,840,540 paints=#55555AFF,#9C9CA0FF role=none seen=220,158,840,540
           5 Dropdown at=220,158,840,54 by=scroll drawn focus heard="Jump To..." in=3 limit=220,158,840,540 name=GamelistJumpTo op paints=#55555AFF,#9C9CA0FF role=combobox sideways
           6 Dropdown at=220,212,840,54 by=scroll drawn focus heard="Sort Games By" in=3 limit=220,158,840,540 name=GamelistSortBy op paints=#55555AFF,#9C9CA0FF role=combobox sideways
           7 Button at=220,266,840,54 by=scroll drawn focus heard="Filter Gamelist" in=3 limit=220,158,840,540 name=GamelistFilterButton op paints=#55555AFF,#9C9CA0FF role=button text="Filter Gamelist"
@@ -23,9 +23,9 @@ tree
           9 Button at=220,374,840,54 by=scroll drawn focus heard="Add to Favourites" in=3 limit=220,158,840,540 name=GameOption_AddtoFavourites op paints=#55555AFF,#9C9CA0FF role=button text="Add to Favourites"
           10 Button at=220,428,840,54 by=scroll drawn focus heard="Edit This Game's Metadata" in=3 limit=220,158,840,540 name=GameOption_EditThisGamesMetadata op paints=#55555AFF,#9C9CA0FF role=button text="Edit This Game's Metadata"
           11 Button at=220,482,840,54 by=scroll drawn focus heard="Crop This Game..." in=3 limit=220,158,840,540 name=GameOption_CropThisGame op paints=#55555AFF,#9C9CA0FF role=button text="Crop This Game..."
-          12 Button at=220,536,840,54 by=scroll drawn focus heard="Use Another Game's Cover..." in=3 limit=220,158,840,540 name=GameOption_UseAnotherGamesCover op paints=#55555AFF,#9C9CA0FF role=button text="Use Another Game's Cover..."
-          13 Button at=220,590,840,54 by=scroll drawn focus heard="Scrape This Game..." in=3 limit=220,158,840,540 name=GameOption_ScrapeThisGame op paints=#55555AFF,#9C9CA0FF role=button text="Scrape This Game..."
-          14 Button at=220,644,840,54 by=scroll drawn focus heard="Find by Name..." in=3 limit=220,158,840,540 name=GameOption_FindbyName op paints=#55555AFF,#9C9CA0FF role=button text="Find by Name..."
+          12 Dropdown at=220,536,840,54 by=scroll drawn focus heard="Television Standard" in=3 limit=220,158,840,540 name=GameTelevisionStandard op paints=#55555AFF,#9C9CA0FF role=combobox sideways
+          13 Button at=220,590,840,54 by=scroll drawn focus heard="Use Another Game's Cover..." in=3 limit=220,158,840,540 name=GameOption_UseAnotherGamesCover op paints=#55555AFF,#9C9CA0FF role=button text="Use Another Game's Cover..."
+          14 Button at=220,644,840,54 by=scroll drawn focus heard="Scrape This Game..." in=3 limit=220,158,840,540 name=GameOption_ScrapeThisGame op paints=#55555AFF,#9C9CA0FF role=button text="Scrape This Game..."
 focus 5
 edge 5 up same
 edge 5 down 6
@@ -53,14 +53,12 @@ edge 11 left same
 edge 11 right same
 edge 12 up 11
 edge 12 down 13
-edge 12 left same
-edge 12 right same
 edge 13 up 12
 edge 13 down 14
 edge 13 left same
 edge 13 right same
 edge 14 up 13
-edge 14 down path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/10/0
+edge 14 down path:0/3/0/0/2/3/0/0/0/0/1/0/0/0/10
 edge 14 left same
 edge 14 right same
 press pageup focus="Dropdown GamelistJumpTo (Jump To...)" top=GameOptionsWindow

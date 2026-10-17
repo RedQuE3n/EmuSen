@@ -115,7 +115,7 @@ namespace EmuSen.Serenity.Shaders
         {
             Choice("quality", "Quality", (int)Quality.Balanced, "Performance", "Balanced", "Accurate"),
             Choice("signal", "Signal", (int)Signal.Composite, "RGB", "S-Video", "Composite"),
-            Choice("standard", "Television standard", 0, "NTSC", "PAL"),
+            Choice(TelevisionStandards.Parameter, "Television standard", (int)TelevisionStandards.FollowsGame, "NTSC", "PAL", "The game's"),
             Choice("palDecoder", "PAL colour decoding", 0, "Delay line", "Simple"),
             Choice("screen", "Screen", DefaultScreen, Screens.Select(s => s.Label).ToArray()),
             Choice("colour", "Colour", 0, Colours.Select(c => c.Label).ToArray()),
@@ -133,8 +133,8 @@ namespace EmuSen.Serenity.Shaders
             Choice("decoder", "Luma and chroma separation", 0, "The screen's own", "Notch", "Comb"),
             Choice("axes", "Colour demodulator", 0, Demodulators.Select(d => d.Label).ToArray()),
             new("chroma", "Chroma bandwidth, relative to the screen's", 1f, 0.5f, 3f, 0.1f),
-            new("glare", "Glare in the glass", 1f, 0f, 3f, 0.1f),
-            new("persistence", "Phosphor persistence", 1f, 0f, 6f, 0.1f),
+            new("glare", "Glare in the glass", 0.1f, 0f, 3f, 0.1f),
+            new("persistence", "Phosphor persistence", 0.1f, 0f, 6f, 0.1f),
             new("convergence", "Convergence error", 1f, 0f, 3f, 0.1f),
             new("tubeNits", "Tube white, cd/m²", 100f, 50f, 300f, 5f),
             new("gamma", "Tube gamma", 2.4f, 2.0f, 2.8f, 0.05f),
@@ -255,7 +255,7 @@ namespace EmuSen.Serenity.Shaders
             var quality = (Quality)At(values, "quality", 3);
             int mask = At(values, "mask", 5), decoder = At(values, "decoder", 3);
             double megahertz = screen.ChromaMegahertz * values["chroma"];
-            bool pal = values.TryGetValue("standard", out float standard) && standard > 0.5;
+            bool pal = values.TryGetValue(TelevisionStandards.Parameter, out float standard) && TelevisionStandards.IsPal(standard);
             LineTiming line = LineOf(values, pal);
 
             // A two-line comb has nothing to subtract when a console repeats its phase every line, and a set with one falls back to its notch; PAL's comb is not modelled - see EmuSen_CRT.md §11.3 and §23.
@@ -278,9 +278,9 @@ namespace EmuSen.Serenity.Shaders
         public static IReadOnlyList<FilterPass> Passes(IReadOnlyDictionary<string, float> values)
         {
             Resolved r = Resolve(values);
-            bool ppu = values.TryGetValue("ppuSignal", out float signalled) && signalled > 0.5 && !r.Pal;
+            bool ppu = values.TryGetValue("ppuSignal", out float signalled) && signalled > 0.5;
             // On a console whose core can hand over its picture before the palette, its colours come from the video chip's own levels - see EmuSen_CRT.md §22.
-            FilterPass? colours = ppu ? new FilterPass(PpuColours, PassScale.Source) { Name = "colours", Float = true } : null;
+            FilterPass? colours = ppu ? new FilterPass(PpuColours(r), PassScale.Source) { Name = "colours", Float = true } : null;
             if (r.Quality == Quality.Performance)
                 return new[]
                 {
@@ -372,10 +372,16 @@ float palSwitch(float row) {
         // A receiver's colour control holds the burst at 20 IRE: the PPU's square burst has a fundamental of 2/pi of its swing - see EmuSen_CRT.md §22.
         public static double PpuChromaGain => 0.2 / (2 / Math.PI * (PpuBurstHigh - PpuBurstLow) / PpuIre100);
 
+        // A PAL receiver holds the burst at 3/7 of white peak to peak (ITU-R BT.470-6, Table 2 item 2.15), the 2C07's square burst the 2C02's - see EmuSen_CRT.md §27.
+        public static double PpuChromaGainPal => 3.0 / 14.0 / (2 / Math.PI * (PpuBurstHigh - PpuBurstLow) / PpuIre100);
+
+        // The 2C07's oscillators where -U lies, half a step from the 2C02's 8, so that its burst pair 7 and A sits at 135 and 225 degrees - see EmuSen_CRT.md §27.
+        public const double PpuPalAxisStep = 9.5;
+
         private static double PpuLevel(double volts) => (volts - PpuBlack) / PpuIre100;
 
         // The PPU's signal at a phase step, and its colour averaged over a whole cycle, from the frame before the palette - see EmuSen_CRT.md §22.
-        private static string Ppu => @"
+        private static string Ppu(bool pal) => @"
 uniform shader raw;
 uniform float2 rawSize;
 float2 ppuLevels(float row, float hue) {
@@ -387,55 +393,63 @@ float2 ppuLevels(float row, float hue) {
     return float2(lo, hi);
 }
 bool inPhase(float hue, float p) { return mod(hue + p, 12.0) < 6.0; }
-float ppuAt(float colour, float emphasis, float p) {
+" + (pal ? @"// The 2C07 makes PAL's switch by pairing its oscillators, k with 5 - k, on the lines whose V is inverted; its red and green bits change places.
+float osc(float k, float s) { return s < 0.0 ? mod(5.0 - k, 12.0) : k; }
+float ppuAt(float colour, float emphasis, float p, float s) {
+    float hue = mod(colour, 16.0);
+    float row = floor(colour / 16.0);
+    float2 levels = ppuLevels(row, hue);
+    float v = inPhase(hue > 0.5 && hue < 12.5 ? osc(hue, s) : hue, p) ? levels.y : levels.x;
+    bool dim = (mod(floor(emphasis / 2.0), 2.0) > 0.5 && inPhase(osc(0.0, s), p)) || (mod(emphasis, 2.0) > 0.5 && inPhase(osc(4.0, s), p)) || (emphasis > 3.5 && inPhase(osc(8.0, s), p));
+" : @"float ppuAt(float colour, float emphasis, float p) {
     float hue = mod(colour, 16.0);
     float row = floor(colour / 16.0);
     float2 levels = ppuLevels(row, hue);
     float v = inPhase(hue, p) ? levels.y : levels.x;
     bool dim = (mod(emphasis, 2.0) > 0.5 && inPhase(0.0, p)) || (mod(floor(emphasis / 2.0), 2.0) > 0.5 && inPhase(4.0, p)) || (emphasis > 3.5 && inPhase(8.0, p));
-    return dim ? (" + N(PpuAttenuation) + " * (v * " + N(PpuIre100) + " + " + N(PpuBlack) + ") - " + N(PpuBlack) + ") / " + N(PpuIre100) + @" : v;
+") + @"    return dim ? (" + N(PpuAttenuation) + " * (v * " + N(PpuIre100) + " + " + N(PpuBlack) + ") - " + N(PpuBlack) + ") / " + N(PpuIre100) + @" : v;
 }
 float2 ppuPixel(float2 at) {
     half4 c = raw.eval(at);
     return float2(floor(c.r * 255.0 + 0.5), floor(c.g * 255.0 + 0.5));
 }
-float3 ppuRgb(float2 pixel) {
+float3 ppuRgb(float2 pixel" + (pal ? ", float s" : "") + @") {
     float y = 0.0;
     float u = 0.0;
     float v = 0.0;
     for (int i = 0; i < 12; i++) {
         float p = float(i);
-        float level = ppuAt(pixel.x, pixel.y, p);
-        float a = 6.2831853 * (p - 10.0) / 12.0;
-        float b = 6.2831853 * (p - 9.0) / 12.0;
+        float level = ppuAt(pixel.x, pixel.y, p" + (pal ? ", 1.0" : "") + @");
+        float a = 6.2831853 * (p - " + (pal ? N(PpuPalAxisStep) : "10.0") + @") / 12.0;
+        float b = 6.2831853 * (p - " + (pal ? N(PpuPalAxisStep - 1) : "9.0") + @") / 12.0;
         y += level / 12.0;
         u += level * (cos(a) - cos(b)) / 3.14159265;
         v += level * (sin(b) - sin(a)) / 3.14159265;
     }
-    float skew = " + N(PpuRowSkewDegrees * Math.PI / 180) + @" * floor(pixel.x / 16.0);
-    float2 uv = " + N(PpuChromaGain) + @" * float2(u * cos(skew) - v * sin(skew), u * sin(skew) + v * cos(skew));
+    float skew = " + N(PpuRowSkewDegrees * Math.PI / 180) + @" * floor(pixel.x / 16.0)" + (pal ? " * s" : "") + @";
+    float2 uv = " + N(pal ? PpuChromaGainPal : PpuChromaGain) + @" * float2(u * cos(skew) - v * sin(skew), u * sin(skew) + v * cos(skew));
     float ry = uv.y / 0.877;
     float by = uv.x / 0.492;
     return float3(y + ry, y - (0.299 * ry + 0.114 * by) / 0.587, y + by);
 }
 ";
 
-        // Looks at the PPU's wave across one signal sample: twelve to each of the steps a sample spans on the NES.
-        private static int PpuLooks(Resolved r) => 12 * Math.Max(1, (int)Math.Round(12 * 256 * 2.0 / 3.0 / r.Samples));
+        // Looks at the PPU's wave across one signal sample: twelve to each of the steps a sample spans on the NES, on either standard.
+        private static int PpuLooks(Resolved r) => Math.Max(12, (int)Math.Round(144 * r.Line.CyclesAcross / r.Samples));
 
-        // Each pixel's colour from the PPU's levels where the raw frame is handed over, the frame's own otherwise.
-        private static string PpuColours => @"
+        // Each pixel's colour from the PPU's levels where the raw frame is handed over, the frame's own otherwise; on PAL the row's skew turns each line the way its switch decodes it.
+        private static string PpuColours(Resolved r) => @"
 uniform shader original;
-" + Ppu + @"
+" + Ppu(r.Pal) + (r.Pal ? Constants(r) + Phase : "") + @"
 half4 main(float2 coord) {
     if (rawSize.x < 0.5) return original.eval(coord);
-    return half4(ppuRgb(ppuPixel(coord)), 1.0);
+    return half4(ppuRgb(ppuPixel(coord)" + (r.Pal ? ", palSwitch(floor(coord.y))" : "") + @"), 1.0);
 }";
 
         // The console's picture through its encoder's band limits, each pixel a box in time under a Gaussian - see EmuSen_CRT.md §11.3.
         private static string Encode(Resolved r, bool ppu) => (@"
 uniform shader original;
-" + (ppu ? "uniform shader colours;\n" + (r.Signal == Signal.Composite ? Ppu : "uniform float2 rawSize;\n") : "") + @"
+" + (ppu ? "uniform shader colours;\n" + (r.Signal == Signal.Composite ? Ppu(r.Pal) : "uniform float2 rawSize;\n") : "") + @"
 uniform float2 originalSize;
 uniform float2 outputSize;
 " + Constants(r) + Functions + (r.Signal == Signal.Rgb ? Transfer : Phase) + @"
@@ -451,8 +465,8 @@ half4 main(float2 coord) {
         for (int j = 0; j < " + PpuLooks(r) + @"; j++) {
             float at = x0 + (float(j) + 0.5) / " + PpuLooks(r) + @".0 * dx;
             float2 pixel = ppuPixel(float2(floor(at) + 0.5, row));
-            float q = 12.0 * (at * cyclesAcross / width + fract(floor(coord.y) * phaseLine) + mod(frameCount, 2.0) * phaseFrame) + 10.0 + floor(pixel.x / 16.0) * " + N(PpuRowSkewDegrees / 30) + @";
-            level += ppuAt(pixel.x, pixel.y, floor(mod(q, 12.0))) / " + PpuLooks(r) + @".0;
+            float q = 12.0 * (at * cyclesAcross / width + fract(floor(coord.y) * phaseLine) + mod(frameCount, 2.0) * phaseFrame) + " + (r.Pal ? N(PpuPalAxisStep) : "10.0") + " + floor(pixel.x / 16.0) * " + N(PpuRowSkewDegrees / 30) + @";
+            level += ppuAt(pixel.x, pixel.y, floor(mod(q, 12.0))" + (r.Pal ? ", palSwitch(floor(coord.y))" : "") + ") / " + PpuLooks(r) + @".0;
         }
         return half4(level, 0.0, 0.0, 1.0);
     }
@@ -529,7 +543,7 @@ half4 main(float2 coord) {
         notch += wn * v * axes;
         notchSum += wn;
 " : "") + @"    }
-    chroma *= 2.0 / max(chromaSum, 0.0001)" + (ppu && r.Signal == Signal.Composite ? " * (rawSize.x > 0.5 ? " + N(PpuChromaGain) + " : 1.0)" : "") + @";
+    chroma *= 2.0 / max(chromaSum, 0.0001)" + (ppu && r.Signal == Signal.Composite ? " * (rawSize.x > 0.5 ? " + N(r.Pal ? PpuChromaGainPal : PpuChromaGain) + " : 1.0)" : "") + @";
     notch *= 2.0 / max(notchSum, 0.0001);
 " + (r.Pal ? "    chroma.y *= palSwitch(row);\n" : "") + @"" + (comb ? @"
     chroma = float2(" + N(fr / gain) + " * chroma.x + " + N(fi / gain) + " * chroma.y, " + N(fr / gain) + " * chroma.y - " + N(fi / gain) + @" * chroma.x);
@@ -617,7 +631,8 @@ half4 main(float2 coord) {
         float y = dot(rgb, float3(0.299, 0.587, 0.114));
         wide.x += wy * y;
         narrow += wc * float2(rgb.b - y, rgb.r - y);
-" + (r.DelayLine ? @"        float3 above = original.eval(float2(k + 0.5, max(row - 1.0, 0.5))).rgb;
+" + (r.DelayLine ? (ppu ? @"        float2 up = float2(k + 0.5, max(row - 1.0, 0.5));
+        float3 above = (rawSize.x > 0.5 ? colours.eval(up) : original.eval(up)).rgb;" : @"        float3 above = original.eval(float2(k + 0.5, max(row - 1.0, 0.5))).rgb;") + @"
         narrow += wc * float2(above.b, above.r) - wc * dot(above, float3(0.299, 0.587, 0.114));
 " : "") + @"    }
 " + (r.DelayLine ? "    narrow *= 0.5;\n" : "") + @"    return half4(light(wide.x + " + Demodulate(r, "narrow.x", "narrow.y") + @"), 1.0);

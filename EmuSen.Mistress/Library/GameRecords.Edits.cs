@@ -59,12 +59,18 @@ namespace EmuSen.Mistress.Library
             step.Commit();
         }
 
-        // The editor's Clear; a cover borrowed from another game is the player's cover, not metadata, and stays (§4.65).
-        public void ClearEdits(string path) => Write(path, $"DELETE FROM game_edit WHERE path = $path AND field <> '{GameMetadata.CoverFrom}'");
+        // The editor's Clear; a cover borrowed from another game (§4.65) and a television standard chosen are the player's choices, not metadata, and stay.
+        public void ClearEdits(string path) => Write(path, $"DELETE FROM game_edit WHERE path = $path AND field NOT IN ('{GameMetadata.CoverFrom}', '{GameMetadata.TelevisionStandard}')");
 
         // Q45: the game whose cover this one shows, or null to show its own again; nothing on disk but games.db changes.
         public void SetCoverChoice(string path, string? from, DateTime now) =>
             SaveEdits(path, new Dictionary<string, string?> { [GameMetadata.CoverFrom] = from == path ? null : from }, now);
+
+        // The standard the player chose for this game's picture, or null where it follows the game - see EmuSen_CRT.md §26.
+        public string? StandardChoice(string path) => Edits(path).TryGetValue(GameMetadata.TelevisionStandard, out string? standard) && standard.Length > 0 ? standard : null;
+
+        public void SetStandardChoice(string path, string? standard, DateTime now) =>
+            SaveEdits(path, new Dictionary<string, string?> { [GameMetadata.TelevisionStandard] = standard }, now);
 
         public string? CoverChoice(string path) => Edits(path).TryGetValue(GameMetadata.CoverFrom, out string? from) && from.Length > 0 ? from : null;
 

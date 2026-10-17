@@ -839,7 +839,8 @@ Each was put as a question on 2026-10-07 with a recommendation; the answers are 
 6. **Region.** **Decided 2026-10-07: North America by default (SMPTE C, D65, set-up); a 9300 K white is shown as
    it was only when Japan is chosen. The game's region is taken from the frontend where it already knows it, and
    no plumbing is added for it in this effort.**
-7. **Persistence** (§3.5). **Decided 2026-10-07: at its measured strength by default, with a slider.**
+7. **Persistence** (§3.5). **Decided 2026-10-07: at its measured strength by default, with a slider.** *(Default
+   changed 2026-10-17 to a tenth of it, §25.)*
 8. **Interlace.** **Decided 2026-10-07: woven by default; fields is a setting.**
 9. **Measurements on other machines.** C1 to C3's handheld and laptop columns have nothing under them.
    **Decided 2026-10-07: to be asked for when the tiers exist; the tester runs the handheld's.**
@@ -1048,6 +1049,7 @@ zinc sulphide like P22's green and blue. The filter keeps the fitted shape, whic
 measurement for, and scales its strength so that **a sustained white leaves 4% of its green in the first dark
 frame** (`TailScale` 0.1606), 3.5% of its blue and none of its red. A single frame's flash then leaves 0.8% in
 the next frame. The Persistence setting is a multiplier on that, to 6, where 6.2 would be §3.5's extrapolation.
+*(Since 2026-10-17 the setting's default is 0.1, a tenth of this strength; 1 restores it. §25.)*
 
 **Confidence.** Low, and stated: the 4% is a figure quoted in a review for a different zinc-sulphide phosphor,
 "as large as"; the shape is one monitor's, extrapolated. Decision 7 was for the measured strength by default,
@@ -1112,6 +1114,7 @@ light past the edge lost, and added in the face pass as `w` of the light with th
 It is applied after the mask, since the glass is in front of it. **Measured on the build**: 209:1 and 76:1,
 against 219 and 75. The black squares are read from a second render three times as bright, since at the
 default headroom a black square is under four code values.
+*(Since 2026-10-17 the Glare setting's default is 0.1, a tenth of this weight; 1 restores it. §25.)*
 
 ### 11.7 The mask
 
@@ -1338,7 +1341,8 @@ misses one. It was not moved off the thread.
 
 1. **Persistence's default** (§11.4). The strength called measured in step 1 was an extrapolation that the
    built model shows to be unphysical. **Decided 2026-10-07: 4% of a held white in the first dark frame, the
-   García-Pérez and Peli figure, is the default, with the slider.**
+   García-Pérez and Peli figure, is the default, with the slider.** *(Superseded 2026-10-17: the default is now a
+   tenth of it, §25.)*
 2. **The default brightness** (§11.8). A 100 cd/m² tube on a 300 cd/m² display is a picture a third as bright
    as the display's peak. **Decided 2026-10-07 by the tester: brighter by default, using most of the display's
    brightness, with the mask at full depth in dark and mid tones and easing off only in the brightest areas;
@@ -2146,7 +2150,8 @@ become ⁸⁄₁₅ and ⁴⁄₁₅ for NTSC and ⅚ for PAL, as `Diamond_Plan.
 constants. The 368-wide mode needs nothing of its own: the row is in microseconds and cycles, and every width fills
 the same 2,560 clocks. The console's video encoder and its filters were not looked for; the standard's limits stand in,
 as for the SNES. **Coverage**: `ScreenFilterRenderTests.The_playstations_line_is_its_video_clocks_over_the_subcarrier`,
-and the compile test over every variant for every console, the PlayStation among them.
+and the compile test over every variant for every console, the PlayStation among them. *(Checked 2026-10-17 against
+Diamond as built and D-0's referee step, §28: the line settled at 3,412.5 and 3,405, and the row stands.)*
 
 ### 20.7 Questions for the tester
 
@@ -2555,7 +2560,7 @@ section builds all four.
 A new setting, **Television standard** (NTSC or PAL), selects the model; a second, **PAL colour decoding** (Delay line
 or Simple), selects the receiver. Both decide which passes are built and what is written into them, so both are
 structural. The standard is the player's choice for now. Choosing it from the game's region is a question for the
-tester (§23.7), and nothing selects it automatically.
+tester (§23.7), and nothing selects it automatically. *(Since 2026-10-17 it follows the game by default, §26.)*
 
 The console's line on each standard lives in the same console constants as before (`ConsoleTiming`), the PAL figures
 under the prefix `pal.`. The filter writes the line of the chosen standard into each pass as SkSL constants where it
@@ -2594,6 +2599,7 @@ lines of 3182 and 3183 that add half a cycle a field on average). The right-hand
   8 and 9), its burst is at 120° rather than 135°, its red and green emphasis bits are swapped, and the same page
   describes an "additional temporary −3 clocks every second line" that this reading does not reconcile with the hue
   pairs. On PAL the NES is drawn from its RGB picture, as every other console is, until that is settled (§23.7).
+  *(Settled and built 2026-10-17, §27: the pairs are PAL's switch, read against the capture.)*
 
 ### 23.3 The encoder and the receiver
 
@@ -2639,7 +2645,7 @@ strength (`TailScale`, §11.4) is a property of the phosphor and is kept.
 | The Genesis's H40 dither, artifact colour along a line | NTSC 0.0020; PAL 0.0002 through the delay line, 0.0004 without |
 | A colour edge in S-Video, 10% to 90%, in microseconds | PAL within 8% of NTSC (the channel rounds to six cycles on PAL and five on NTSC, 0.53 and 0.52 MHz) |
 | The Genesis's fringes without the delay line | alternate between frames, the same two frames on |
-| The NES on PAL, with a raw frame and without | identical |
+| The NES on PAL, with a raw frame and without | identical *(until §27, which draws the 2C07)* |
 
 The Genesis's PAL artifacts are a tenth of its NTSC ones: the dither at H40 lands at three quarters of the
 subcarrier on both standards, which is 1.11 MHz below it on PAL and 0.89 MHz on NTSC, further down the same 0.5 MHz
@@ -2842,3 +2848,343 @@ Below 1.5 MHz the trap keeps 0.96 or more, so composite luma at 1 MHz alone coul
    patchy-ntsc above 2 MHz. Open: put without a recommendation.
 3. **The consumer sets' default demodulator**: the standard's matrix, as now, or the CXA2025AS's US axis. Open: put
    without a recommendation.
+
+## 25. Persistence and glare default to a tenth of the model (2026-10-17)
+
+**Decided 2026-10-17 by the tester: persistence and glare default to 0.1, as the modelled amounts were too intense on a
+real display.** In the tester's words: "It is very intense at its normal settings. I had to lower it."
+
+**What 1 means.** Both settings are multipliers on a modelled physical amount, and 1 is that amount:
+
+- **Phosphor persistence** (`persistence`): at 1, a sustained white leaves 4% of its green in the first dark frame,
+  3.5% of its blue and none of its red (`TailScale` 0.1606 on §11.4's two fitted tails), the strength decided in
+  §11.12's first question from García-Pérez and Peli's figure. At the new default of 0.1 the first dark frame keeps
+  0.4% of the green.
+- **Glare in the glass** (`glare`): at 1, a share `GlareWeight` = 0.0299 of the picture's light is spread by a Gaussian
+  6.68% of the picture's width (§11.6), the pair solved from DisplayMate's two checkerboard contrasts on the
+  PVM-20L5. At 0.1 the share is 0.3%.
+
+So the default picture now carries a tenth of each modelled effect, and **setting either to 1 restores the model**. The
+ranges and steps are unchanged (persistence 0 to 6, glare 0 to 3, both in steps of 0.1), and so are the shape of the
+tails, the glare's width and every other constant.
+
+**Where the defaults live.** The two parameters' initial values in `CrtFilter.Parameters`; every other copy is derived
+from them: `ScreenFilter.DefaultFor` for the Shaders window's rows and their "default" marks, and
+`BuiltInPreset.ValuesFor` for the slang preset the device path draws (`EmuSen_DevicePicture.md` §3), which is written
+from the same values, so the SkSL and slang pictures stay matched without a second edit. **A value a player has stored
+keeps winning**: stored parameters are passed over the defaults (`ScreenFilter.ValuesFor`), so a console whose
+`graphics.json` already names `persistence` or `glare` draws as before, and only a console that never set them changes.
+
+**Tests.** The two cases that measure the modelled amounts, the checkerboards' contrast (§11.6) and the tail left after
+a held white (§11.4), took the old defaults by leaving the parameter out of their otherwise-off set; they now set it to
+1 explicitly, and measure the model as before. Every other CRT case either turns both off or does not depend on them.
+
+## 26. The television standard follows the game (2026-10-17)
+
+§23.7's first question was decided on 2026-10-11: the standard follows the game's region, and a player's choice is
+kept per game when it is set. This section answers where the game's standard comes from, how it reaches a filter,
+how a filter says it can use it, what wins over what, and what form the feature takes; then records what was built.
+Before it, one check that round three asked for first.
+
+### 26.1 The NES's raw picture still arrives through the core ABI
+
+C# Moon's retirement could have left the filter's NES signal silently falling back to RGB (§22.8). It did not: the
+path is the ABI's. MoonRT lists `nes.ppu` in machine info's `video.raw` and hands it under `RAW_PICTURE`
+(`MoonRT - NES/src/ffi/v1.rs:160–174`); the host asks for the encoding the chosen filter reads and copies the
+picture out (`EmuSen/Cores/Native/CoreEngine.cs`, `RawEncoding` and `RawPicture`); `MoonRtCore` is a `PortEngine`,
+which is a `CoreEngine`, so the test that runs it is on the path Mistress runs; and Mistress hands the encoding to the
+session and the picture to the frame control with each frame (`MainWindow.axaml.cs`, `SubmitFrame`). Measured
+2026-10-17 on the RX 6800: the end-to-end case draws the emphasis written at line 103, 0.137 of peak above it and
+0.055 below through the raw picture against 0.101 either side through RGB, §22.8.1's figures to the digit; and
+`MoonRtRawPictureTests` passes all its golden runs. Nothing needed fixing.
+
+### 26.2 What already crosses the core ABI
+
+**(a) The region is already in machine info, since version 1.0.** No member is missing, and §23.7's note that one
+was needed was written without reading the ABI.
+
+- `EmuSen_CoreAPI.md` §6.4 lists machine info's `system` and `region`, "which system entry and region the game runs
+  as" (line 711), beside `frame_rate`, exact, as a ratio (line 712); core info's systems list the `regions` a system
+  can run (line 680). Machine info is JSON (`emusen_core.h:333`), so the field is in no struct of the header.
+- The core kit's type is `Region { Ntsc, Pal }`, "the television standard a machine runs to"
+  (`emusen-native/src/abi.rs:65–71`); `MachineInfo.region` is optional (`core/desc.rs:173`) and written as `"ntsc"`
+  or `"pal"` (`core/desc.rs:58–63`, `592–593`).
+- The host reads it into `CoreMachineInfo.Region` (`EmuSen/Cores/Native/CoreDescriptors.cs:83`, `195`). Until this
+  section nothing read it further.
+
+Which cores fill it:
+
+| Core | `region` in machine info | Decided by | Frame rate given |
+|---|---|---|---|
+| VenusRT (SNES) | NTSC or PAL (`VenusRT - SNES/src/v1.rs:289`) | the header's country byte (`cart.rs:34`) | 50 or 60 Hz timing (`v1.rs:290`) |
+| Nephrite (Genesis, Sega CD, 32X) | NTSC or PAL (`Nephrite - Genesis/src/v1.rs:454`) | the model, from the cartridge or the core's Region setting (`v1.rs:88`, `409`) | `v1.rs:455` |
+| MarsRT (N64) | NTSC or PAL (`MarsRT - N64/src/ffi/v1.rs:496`) | the cartridge (`v1.rs:492`) | 50 or 60000/1001 (`v1.rs:497`) |
+| Diamond (PlayStation) | NTSC or PAL (`Diamond - PlayStation/src/v1.rs:311`) | the disc's licence text or the core's Region setting (`v1.rs:95`, `173`) | `v1.rs:312` |
+| MoonRT (NES) | always NTSC (`MoonRT - NES/src/ffi/v1.rs:112`) | MoonRT runs every cartridge as a 2C02 NES; it has no PAL timing | NTSC |
+| MercuryRT (Game Boy) | none (`MercuryRT - GB/src/ffi/v1.rs:126`) | a handheld has no standard | the LCD's |
+
+So four of the six cores already say PAL when they run PAL. The NES does not because MoonRT emulates no PAL console,
+which is MoonRT's own missing feature, not a surface: when it runs a 2C07's timing it will say `"pal"` through the same
+field. PAL-M and SECAM are not values of `Region`; no core here emulates a PAL-M console (the Brazilian SNES and Mega
+Drive), and SECAM consoles output RGB or PAL. Adding either would be a new value of an open string, recorded here for
+when a core needs it, not built.
+
+**(e) The form, therefore: none of the three new ones.** The data already crosses a stable surface; nothing in the
+core ABI, the host's descriptor or any other versioned surface changes. What is added is the frontend's reading of a
+field it already parses, one small owner in Serenity for the standard's names, and a per-game choice in Mistress's
+own records. It is neither a module nor a component.
+
+**(f) The layering** (`EmuSen_Backend.md` §2.1). The standard a machine runs to is the machine's, so it is backend:
+the core reports it and every frontend reads the same answer from machine info. What a picture is drawn as is a
+presentation preference, so it is frontend: the filter's parameter, the player's per-console value in
+`graphics.json`'s shader parameters (frontend, §2.3 of that page), and the per-game choice, which is presentation
+stored by the library as a game's crop is (§2.3, "A game's crop"). The per-game core region that Nephrite and Diamond
+offer as a core setting is a different thing, what the console *is*; it lives where core settings live (SR10, the
+file per game, once built; `graphics.json`'s `Consoles` today, to move to `consoles.json` under SR12), and the
+picture follows it through machine info without any further wiring.
+
+### 26.3 How a filter is told, and how it says it can listen
+
+**(c) A parameter, by name.** A filter models PAL when it declares a parameter the frontend knows to mean the
+television standard. The plainest form is the one the filters already use: no capability flag, no description field,
+only a parameter id with fixed values.
+
+- **The built-in filters**: `standard`, 0 for NTSC and 1 for PAL, as since §23.1, with a third value, **2, "The
+  game's"**, now the CRT's default. One owner holds the id and its values: `TelevisionStandards` in Serenity.
+- **RetroArch presets**: no name is shared. In the pack (read 2026-10-17 from the downloaded copy), PAL is `PAL` in
+  Scanline Classic's encoders (`bezel/scanline-classic/.../sys-encode.inc`, "Phase alternating line (off, on)"),
+  `uModePAL` in crt-consumer's NTSC module, `u_pal` in ntsc-simple, each 0 or 1; mudlord's VHS shader has
+  `PALSignal`, which defaults to on and models a tape, and `pal` in retro-palettes is a palette count. So a generic
+  name such as "pal" cannot be trusted, and the frontend sets only a short list of ids known to mean PAL on and off
+  (`TelevisionStandards.PresetSwitches`: `PAL`, `uModePAL`, `u_pal`). An id a preset does not declare is ignored by the
+  chain (`EmuSen_Serenity.md` §7.6), so the list costs a preset that lacks it nothing.
+
+**Why 2 and not "no value".** The Shaders window forgets a value equal to its default
+(`ShaderSettingsWindow.Changed`), so with NTSC as the default a player could not store "NTSC" for a console at all:
+choosing it would erase the choice and the game would be followed again. With "The game's" as the default, NTSC
+and PAL are both choices that are stored. Stored values keep their meaning, 0 NTSC and 1 PAL, so a console a player
+set to PAL before this change stays PAL. A filter drawn with no frontend (a test, the bench) and given 2 draws NTSC.
+
+### 26.4 What wins
+
+**(d) Precedence**, highest first:
+
+1. **The player's choice for the game**: Television Standard in the game's options (the gamelist's Select menu in
+   Big Picture, the context menu on the desktop): The game's, NTSC or PAL. Stored in `games.db`'s `game_edit` under
+   `tvstandard`, beside the edits as the borrowed cover is, not a field of the metadata editor, and kept by the
+   editor's Clear, since it is the player's choice and not metadata. It follows the game when it is renamed or moved,
+   as every edit does.
+2. **The player's choice for the console**: the filter's own Television standard setting, NTSC or PAL, stored per
+   console in `graphics.json` as every shader parameter is.
+3. **The game's standard, from the core**: machine info's `region`, read once the game is loaded.
+4. **NTSC**, where the core says nothing.
+
+A European player who wants every SNES game drawn PAL sets the console; a player who wants one PAL game drawn as an
+NTSC set would show it sets the game. Only the picture changes: the console still runs at the core's rate.
+
+**Where it lives under the settings decisions.** The per-game choice is a presentation preference, so SR10's file per
+game, which holds a game's core settings and is the runtime's (SR5: a frontend never writes the runtime's settings
+file), is not its place; it sits with the game's crop in the library's records, which `EmuSen_Backend.md` §2.3 already
+places as "presentation; stored by the library, meant by the frontend". SR12 moves `graphics.json`'s `Consoles` to
+`consoles.json`; the shader parameters stay in `graphics.json`, so the per-console choice does not move.
+
+### 26.5 What each tier changes on PAL
+
+**(b)** Every item below was built in §23 and is chosen now by the game; nothing in the model changes here.
+
+| What changes on PAL | Source | Performance | Balanced | Accurate |
+|---|---|---|---|---|
+| Subcarrier 4.43361875 MHz, the console's own cycles a line and phase per line and frame | ITU-R BT.470-6 Table 2; §23.2's clocks | the notch's band and the chroma blur scaled to it | the encode and decode at 4 samples a cycle | at 2048 samples a line |
+| V switched every line, and between frames on an odd line count | BT.470-6; §23.3 | none (no subcarrier) | encoder and decoder | encoder and decoder |
+| The delay line, or the simple decoder | §23.3 (Telefunken; nesdev's *PAL video*) | colour averaged with the row above | U and V averaged with the line above | the same |
+| 625/50: the field of 20 ms for the phosphors' decay | §23.4 | no tails | the tails' ratios on a 20 ms field | the same |
+| Lines and visible area (288 and 576) | the console's frame; §15 | the console's picture fills the tube | the same | the same |
+
+The scan timing's visible effects are all in the subcarrier's relation to the console's pixels, which the table's
+first row carries per console; the line count is the frame the core hands over, which fills the same tube (§14, §15),
+so no tier needs the standard's line count of its own.
+
+### 26.6 Built
+
+- `ICore.TelevisionStandard`, machine info's `region` through the host (`CoreEngine`), and
+  `EmulatorSession.TelevisionStandard` for the frontends.
+- `TelevisionStandards` (Serenity): the names, the built-in parameter and its follow value, the presets' switches, and
+  `Apply`, which lays a standard over a filter's values: over every value when it is the player's choice for the game,
+  and otherwise only where the player has stored none, or has stored "The game's".
+- The CRT's Television standard: NTSC, PAL, **The game's** (default).
+- Mistress: `ApplyScreenFilter` draws with the precedence of §26.4; Television Standard in the game's options of a
+  game of a console that drove a television.
+- **A defect found on the way, and fixed.** A game was loaded, its filter applied, and only then was it recorded as the
+  running game (`_currentRomPath`), so anything the filter takes from the running game was the previous game's or
+  none on the first frame. The game's own crop (`EmuSen_Settings_Reference.md` §4.100) was therefore not drawn when a
+  game started, only once its options were opened while it ran. Both the crop and the standard are now taken after the
+  game is recorded.
+
+**Tests** (`Mistress/GameStandardTests.cs`, headless): a Japanese header draws NTSC and a European one PAL with nothing
+chosen; a console's stored NTSC is kept over a PAL game's own, and "The game's" stored for the console follows it; the
+game's NTSC wins over the console's PAL from the first frame, and with it removed the console's wins again; and a
+game's own crop is drawn from its first frame. Before the load-order fix the last two failed (expected 0, drawn 1;
+the console's crop drawn).
+
+The game's options gained a row, so their recorded specifications at 1280 × 800 and 1920 × 1200 were recorded again:
+the menu scrolls 54 pixels further at the smaller size, as it already scrolled, and every rule of the fit audit holds.
+Run 2026-10-17 for this step: those four cases, the game options' desktop and Big Picture tests, the collections'
+sheet, the crop's, the records', the emulation menu's, the console start's, the Shaders window's, every
+`ScreenFilterRenderTests` and `DeviceFilterMatchTests` case and the whole fit audit, 813 cases, of which four failed
+on the new row (three expected lists and the two recordings, one test asserting the desktop menu had no row at all,
+now that it has a game's row) and pass with those updated.
+
+## 27. The PAL NES's 2C07 (2026-10-17)
+
+§23.7's second question was decided on 2026-10-11: the 2C07 is modelled, read against nesdev's PAL capture first.
+Until now a PAL NES was drawn from its RGB picture even when the raw picture came (§23.2). It is now drawn from the
+2C07's own signal on every tier, through the same `nes.ppu` picture as the 2C02's (§22.8), since the encoding is the
+PPU's colour numbers and PPUMASK bits, which the two chips share; what differs is the wave the chip makes of them.
+
+### 27.1 What the documentation says
+
+Read on 2026-10-17 from the nesdev wiki **[S]**: *PAL video* (its source), *NTSC video* and *PPU registers*.
+
+- **Same design, PAL's clocks.** "The 2C07 and 6538 still use the same design of 12 oscillators", with a master clock of
+  26.6017125 MHz, six times the subcarrier, five master clocks a pixel and 284⅙ cycles a line (§23.2's row, unchanged).
+  The page gives no levels of its own, so the 2C02's (§22.2) stand for the 2C07's.
+- **The switch is made by pairing oscillators.** "There isn't a direct mapping of 'encoded color in palette RAM' to
+  'specific square wave'. PAL colorburst (pure shade −U+V) is the same phase as phase 7. The same two square wave
+  oscillators are used for pairs of hues: 3 and 2, 4 and 1, 5 and C, 6 and B, 7 and A, 8 and 9."
+- **The emphasis bits.** "Emphasize red (green on PAL/Dendy)", "Emphasize green (red on PAL/Dendy)" (*PPU registers*);
+  "on the Dendy and PAL NES, the green and red bits swap meaning" (*NTSC video*).
+- **Two statements that do not fit the pairs.** *PAL video* says the PAL NES "outputs a somewhat nonstandard 120 degree
+  color burst", and *NTSC video* describes the alternation as "an additional temporary −3 clocks every second line".
+  §23.2 recorded both as unreconciled.
+
+### 27.2 The reading, and what follows from it **[D]**
+
+Each pair sums to 5 or 17, so the pairing is the map *k* → (5 − *k*) mod 12 on the lines whose V is inverted. On the
+twelve phases 30° apart, that map is a reflection about the axis through phase 2.5 and phase 8.5. PAL's switch is a
+reflection about the U axis (U kept, V negated), so the pairs are PAL's switch **if −U lies at phase 8.5**, half a step
+from the 2C02's −U at phase 8 (§22.3). The burst then follows: phase 7 is 30° below 8.5, so the burst on a normal line
+is at 180° − 45° = 135°, −U+V, as the page says, and its pair A on the next line at 225°, −U−V: a standard ±45°
+burst. The half step is also the 15° the page gives for PAL's hue shift against NTSC. So three statements of the page,
+the pairs, "phase 7 is −U+V" and "a 15 degree shift", are one fact, and the model rests on it:
+
+- the decoder's −U at oscillator 9.5 in the filter's counting (`PpuPalAxisStep`, where the 2C02's is 10);
+- on a switched line, every oscillator the chip uses, hue and emphasis alike, replaced by its pair;
+- PPUMASK's bits 5 and 6 changed over before they choose their oscillators;
+- the receiver's colour control holding the burst at PAL's level, 3/7 of white peak to peak, ITU-R BT.470-6 Table 2
+  item 2.15 **[P]** (4/10 for NTSC), so the gain is 0.5986 × (3/14) / 0.2 = 0.6413 (`PpuChromaGainPal`);
+- the row's differential phase, a delay of the wave in time, the same on both lines, so that once V is turned back it
+  turns the two lines opposite ways: Hanover bars with the simple decoder, a hue kept and saturation lost through the
+  delay line, which is what *PAL video* says of differential phase on PAL.
+
+### 27.3 Against the capture
+
+The page offers "a signal captured from a 6538 to test the decoder", resampled to 53.2 MHz, twelve samples a
+subcarrier cycle and ten an NES pixel: one field of 312 lines of 3,410 samples (`PAL signal 6538 53.2MHz.png`, read as
+data, nothing of it kept in the repository). It is a famiclone's PPU, not a 2C07; the page treats the two as one
+design, and it is the only capture there is. Measured on it 2026-10-17, with each line's phase taken against the
+sample's absolute index, so that the 2 samples a line advances (3,410 mod 12) are the chip's 284⅙ cycles:
+
+| Question | Measured | Pairing reading | "−3 clocks every second line" |
+|---|---|---|---|
+| Burst phase, one line against the next (308 lines) | **84.8°** apart, s.d. 3.0°, 79° to 90° | 90° | 90° |
+| Chroma of the same colour on consecutive lines, 6,480 segments of 60 samples with burst-referred phases θ | θₙ + θₙ₊₁ constant to a circular s.d. of **12.0°** (mean 11°); θₙ₊₁ − θₙ spread over the circle (s.d. 168°) | the sum constant (a reflection) | the difference constant (a rotation) |
+| Burst peak to peak against blanking above sync | 1.35 | 2C02: 1.42 | |
+
+The capture rejects a rotation between lines and is a reflection to 12°: the pairs are right and the "−3 clocks" is
+not a description of the colour (it may describe where the pixels fall against the carrier, which the 2 samples a line
+already give). The bursts are 85° apart, not 120°; the model's 90° is 5° from the capture and 35° from the page's
+figure, which no reading of the pairs supports. The 11° offset of the sums is twice a mean delay of 5.5°, the size of
+the 2C02G's differential phase per row (§22.2), which the model applies; it was not fitted. The capture's levels are
+5% from the 2C02's on the burst and its white clips in the capture, so it cannot test the levels, and the 2C02's stand.
+
+### 27.4 What each tier draws
+
+| Tier | 2C07 |
+|---|---|
+| Performance | the closed form per pixel (`colours`): the wave's mean and first harmonic against −U at 9.5, the row's skew turned by the line's switch, PAL's gain; then the delay line or not, as for any PAL picture |
+| Balanced, Accurate, composite | the wave itself, generated at twelve looks a phase step (36 a sample at Balanced, 15 at Accurate, where 2,048 samples hold 2,560 steps), the switched lines' oscillators paired; then PAL's receiver |
+| S-Video, RGB | the closed form, as on NTSC |
+
+`PpuLooks` is now counted from the line's own cycles, which gives the same 36 and 12 on NTSC as before.
+
+**A defect met on the way.** Performance's delay line averaged each pixel's colour with the row above's read from the
+frame's RGB picture, even where its own came from the PPU's `colours`; on a PAL NES with a raw picture the row above
+was therefore the black RGB frame, and the bars were halved instead of removed (0.0344 simple, 0.0185 through the
+delay line, measured before the fix). It now reads the same image for both rows. No picture drawn before could reach
+it, since a PAL NES was drawn from RGB until this section, and the pass is unchanged byte for byte for every other
+console.
+
+### 27.5 Measured
+
+**NTSC unchanged, by text.** Every pass of every variant (five consoles, both standards, three qualities, three
+signals, 90 in all) was built at this commit and at the one before it and hashed: the 81 that are not the PAL NES are
+identical byte for byte; the nine PAL NES variants differ, as intended.
+
+| Check | Result |
+|---|---|
+| The burst pair, on the CPU | 135.000° and 225.000°; its size after the colour control 3/14 |
+| Each hue of row 0 on the two lines, on the CPU | the same within 0.01°, 15.000° short of the 2C02's, its saturation the 2C02's × 3/(14 × 0.2) |
+| Row 3's two lines (the skew) | 30.00° apart, their mean the hue |
+| The emphasis bits | the 2C07's bit 6 dims exactly where the 2C02's bit 5 does, and the converse, for all 64 colours and 12 phases |
+| Composite from the generated wave against the closed form, all 64 colours, emphasis 0, 1, 2, 4, 7, delay line | worst 0.0047 of peak ($22, blue emphasis), under §22.4's 0.006 for the 2C02 |
+| $36's line-to-line colour (simple decoder against delay line) | by S-Video, where composite's own six-line artifacts cannot stand in for bars: 0.035 simple, 0.0001 through the delay line, at each of the three tiers |
+| With and without the raw picture | different over the whole picture; without it, the PAL SNES's picture within one code value |
+| The device's chain against Skia, `nes.ppu` on PAL, every quality and signal | within `EmuSen_DevicePicture.md` §3.3's tolerance in all nine: every channel beyond one at a tie, at most 6 of 4,665,600 (Performance by RGB) |
+
+**What it costs** (measured 2026-10-17 on the RX 6800, §8.1 of `EmuSen_Serenity.md`'s bench and §12.5's protocol:
+1920 × 1080, 60 frames of warm-up and 300 measured, three rounds interleaved, the median of each run's median; the
+bench now hands the CRT a `nes.ppu` picture of moving bands of every colour with `raw=nes`). GPU milliseconds a frame:
+
+| Case | Performance | Balanced | Accurate |
+|---|---|---|---|
+| NES, 2C02 (NTSC), paced | 0.50 | 0.86 | 1.81 |
+| NES, 2C07 (PAL), paced | 0.52 | 0.88 | 1.85 |
+| NES, 2C02, flat out | 0.24 | 0.57 | 1.32 |
+| NES, 2C07, flat out | 0.24 | 0.63 | 1.27 |
+| SNES by RGB frame, paced, the same run (§12.5: 0.49, 0.71, 1.77) | 0.51 | 0.76 | 1.78 |
+
+The 2C07 costs what the 2C02 does within the bench's spread (2 to 5% paced, −4 to +12% flat out, with no consistent
+sign), although Accurate's PAL wave takes 15 looks a sample against 12: the looks are a small part of the encode pass,
+and the encode a small part of the frame. The render thread's time is 0.28 to 0.51 ms in every case. Each case's
+three hashed pictures were the same in all three rounds. The SNES row reproduces §12.5's within 7%.
+
+### 27.6 Not done, and the core's part
+
+**No PAL NES reaches it from a game yet.** MoonRT runs every cartridge as a 2C02 NES and says NTSC in machine info
+(§26.2), so a PAL NES game is drawn as NTSC by default, and the 2C07 is drawn when the player chooses PAL for the
+console or the game (§26.4). A PAL timing mode is MoonRT's to build (312 lines, 26.6 MHz, the 2C07's border and its
+emphasis order in the picture it draws from its palette); when it reports `"pal"`, §26's path selects the 2C07 with
+nothing changed here. The 2C07's black border (the top line and two pixels at each side, *PAL video*) is the core's
+picture and not the filter's.
+
+Also not modelled: a 6538 or Dendy as such (the capture's chip), and the levels of a 2C07, which no source gives.
+
+## 28. The PlayStation's row, against Diamond as built (2026-10-17)
+
+§20.6 wrote `ConsoleTiming["PlayStation"]` at Diamond's stage 11 with the clock settled and the line's length
+provisional, and said the phases would change with the core's constants if D-0 settled the other way. It settled
+this way. Read on 2026-10-17:
+
+- **The core.** `Diamond - PlayStation/src/video.rs:5–14`: the video clock is 53.693175 MHz in NTSC and 53.203425 MHz
+  in PAL (as half clocks a CPU cycle, `NTSC_CLOCK` and `PAL_CLOCK`); a line is 3,412.5 video clocks in NTSC mode and
+  3,405 in PAL (`NTSC_LINE`, `PAL_LINE`, in half clocks, still commented "provisional on D-0"); 263 and 314 lines a
+  field, and interlaced 263 and 262, or 313 and 312, alternately (`lines_of_field`, `video.rs:91–95`). The display
+  range a game sets by default is 2,560 video clocks across (`video.rs:57–58`), the widths 256 to 640 its dividers 10,
+  8, 7, 5 and 4 (`dot_divider`, `video.rs:98`).
+- **The dispute.** `Diamond_Disputes.md` D-0, its referee step: "the line is 3,412.5 video clocks in NTSC mode and
+  3,405 in PAL", witnessed; still open only how the half clock is spread over lines, "which no referee output shows".
+  The code's comment predates that conclusion.
+
+**The row against them.** NTSC: 2,560 clocks of 53.693175 MHz, 47.68 µs, and 2,560 / 15 = 170⅔ cycles across; a
+line of 3,412.5 clocks is 227½ cycles, so half a cycle a line, and 263 lines leave half a cycle a frame. PAL: 2,560
+clocks of 53.203425 MHz, 48.12 µs, 213⅓ cycles; 3,405 clocks is 283¾ cycles, three quarters a line; 314 lines leave
+half a cycle a frame, crawling over two, and 314 is even, so V's switch keeps its lines from frame to frame. Every
+figure is the row as written (`CrtFilter.ConsoleTiming`), so **nothing changes**; the existing case
+`The_playstations_line_is_its_video_clocks_over_the_subcarrier` holds it, and the compile test covers every variant.
+
+**What the row cannot say.** A field of 480i PAL is 313 or 312 lines, not 314: an odd field turns the switch over for
+the next and adds a quarter cycle, an even one does not. `ConsoleTiming` holds one line per standard and console, and
+the filter draws a woven 576-line frame as two fields of one timing (§11.1), so the alternation of 313 and 312 is not
+drawn; nor is how the half clock of an NTSC line is spread (alternate lines of 3,412 and 3,413 would put the phase a
+line at ⁷⁄₁₅ and ⁸⁄₁₅ in place of ½), which Diamond itself has not settled. Both are recorded, not built: the first
+would need a timing per field, which no other console's row needs, and the second waits on D-0's last question.

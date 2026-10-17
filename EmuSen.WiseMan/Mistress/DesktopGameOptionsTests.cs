@@ -135,7 +135,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(ThemedSession.SnesGames[2], Named<TextBlock>(options, "GameOptionsTitle").Text);
             // The themed gamelist's jump, sort, filter and search rows are big picture's; the desktop has its own (§4.63).
             Assert.Equal(GameEntries, options.Entries.Select(b => b.Content as string));
-            Assert.DoesNotContain(options.Options, o => o.Row is not null || o.Apply is not null);
+            Assert.DoesNotContain(options.Options, o => (o.Row is not null || o.Apply is not null) && o.Label != MainWindow.StandardRow);
 
             Click(s, options.Entries.Single(b => (string?)b.Content == "Edit This Game's Metadata"));
             Assert.Null(s.Window.GameOptionsShown);

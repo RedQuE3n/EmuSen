@@ -245,13 +245,20 @@ namespace EmuSen.WiseMan.Serenity
         // The NES's own signal on the device: a nes.ppu picture of every colour under each emphasis setting, drawn by the chain as Skia draws it - see EmuSen_CRT.md §22.8.
         [Theory]
         [MemberData(nameof(CrtVariants))]
-        public void The_crt_on_the_chain_draws_the_nes_s_raw_picture_as_skia_does(int quality, int signal)
+        public void The_crt_on_the_chain_draws_the_nes_s_raw_picture_as_skia_does(int quality, int signal) => RawNes(quality, signal, pal: false);
+
+        // The same on PAL, where the 2C07's signal is drawn - see EmuSen_CRT.md §27.
+        [Theory]
+        [MemberData(nameof(CrtVariants))]
+        public void The_crt_on_the_chain_draws_the_pal_nes_s_raw_picture_as_skia_does(int quality, int signal) => RawNes(quality, signal, pal: true);
+
+        private void RawNes(int quality, int signal, bool pal)
         {
-            var chosen = new Dictionary<string, float> { ["quality"] = quality, ["signal"] = signal };
+            var chosen = new Dictionary<string, float> { ["quality"] = quality, ["signal"] = signal, ["standard"] = pal ? 1 : 0 };
             RawPicture raw = ScreenFilterRenderTests.RawField(256, 240, (x, y) => (y / 30 * 8 + x / 32, y / 30 % 8));
             byte[] blank = new byte[256 * 240 * 4];
             for (int i = 3; i < blank.Length; i += 4) blank[i] = 255;
-            string name = $"CRT q{quality} s{signal} NES from nes.ppu";
+            string name = $"CRT q{quality} s{signal} {(pal ? "PAL " : "")}NES from nes.ppu";
             if (Match(name, CrtFilter.Filter, "NES", chosen, new[] { blank, blank }, 256, 240, 1, 1440, 1080, raw: raw) is not { } d) return;
             Assert.True(WithinTolerance(d), $"{name}: {d}");
         }

@@ -49,6 +49,9 @@ namespace EmuSen.Mistress.Library
         // Q45: another game whose cover this one shows, the player's choice kept beside the edits but not a field of the editor - see EmuSen_Settings_Reference.md §4.65.
         public const string CoverFrom = "coverfrom";
 
+        // The television standard the player chose for one game's picture, "ntsc" or "pal", kept beside the edits but not a field of the editor - see EmuSen_CRT.md §26.
+        public const string TelevisionStandard = "tvstandard";
+
         // ES-DE's folder link, kept on the folder's own path as the file's path below it - see EmuSen_Settings_Reference.md §4.67.
         public const string FolderLink = "folderlink";
 

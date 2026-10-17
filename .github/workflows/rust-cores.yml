@@ -557,8 +557,6 @@ jobs:
           chmod +x "$out/dianash/nano" 2>/dev/null || true
           ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*nephrite* "$out"/*diamond* "$out"/*v1_test_core* "$out"/*v1_plain_core*
           ls -la "$out"/*emusen_platform* || echo "no platform library: Galaxia runs on its C#"
-          # What the runner lacks of what Shaderc's library needs, and the system's own words for loading it.
-          if [ "$RUNNER_OS" = Linux ]; then find "$out" -name 'libshaderc_shared.so*' -exec sh -c 'echo "$1"; ldd "$1" | grep "not found" || echo "every dependency found"; python3 -c "import ctypes, sys; ctypes.CDLL(sys.argv[1]); print(\"loads\")" "$1" || true' _ {} \; ; fi
 
       # Printed in full, so each platform's digests can be read off the log.
       - name: Test the platform digests

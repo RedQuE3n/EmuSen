@@ -48,7 +48,7 @@ namespace EmuSen.Serenity.Slang
         // The C# compiler: the default, and what the library's is held to - see EmuSen_RustPlatform.md §16.
         internal static class Managed
         {
-            internal static readonly Shaderc Api = Shaderc.GetApi();
+            internal static readonly Shaderc Api = ShadercLibrary.Load();
 
             private static readonly Lazy<string> LazyIdentity = new(ReadIdentity);
 

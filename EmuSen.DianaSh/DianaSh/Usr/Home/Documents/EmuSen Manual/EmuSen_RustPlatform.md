@@ -2867,7 +2867,7 @@ sidecars', were fixed here.
   needs; on this project's Fedora machine the same test host loads that very file (traced with `LD_DEBUG`). Run
   38869334249 had the runner load it with Python's `ctypes`, and it loads: the system can load the library, and what
   fails is Silk.NET's search for it in the test host's folder on that runner. That is where the next step starts
-  (the loader's trace in CI, or the path the binding is given); it is left open here, as it is not Windows'.
+  (the loader's trace in CI, or the path the binding is given); it is left open here, as it is not Windows'. *Found and fixed in §32: Silk.NET's resolver reaches `linux-x64` only from a fixed list of distributions, which has no Ubuntu.*
 
 **After the second merge with `WiseMan`, run 38881098100.** Merging MercuryRT's stage 9 and the Sega CD's player
 brought two failures of their own. On Windows 128 of MercuryRT's cases failed with "MercuryCore has no member
@@ -3156,3 +3156,53 @@ is run on the other two then: `EmuSen_Backend.md` B7's state 2 per program and S
 client, `EmuSen_DianaSh.md` S7's hour of play on Windows and macOS, and the state-3 gates of this page. Portable
 means what §2 has always meant: a platform's own calls stay behind the platform library and Galaxia, never in a core,
 a pack or Crystal.
+
+## 32. Shaderc found where .NET found it, 2026-10-17
+
+§27.6 left Linux's Shaderc open: on the ubuntu-24.04 runner `Silk.NET.Shaderc` could not load its library, which failed
+the cores' step (`DiamondShaderTests`, `MarsRtShaderTests`, the job's gate since §31) and Serenity's compiler, cache and
+parity cases in the two Serenity steps, while the same build passed on this project's Fedora machine.
+
+**The cause, read from the sources.** `Shaderc.GetApi()` hands the one name `libshaderc_shared.so` to Silk.NET's
+`DefaultPathResolver` (2.23.0, decompiled), which tries in order: the bare name, given to `NativeLibrary.TryLoad`
+without an assembly, which is `dlopen` and searches only the system's directories; the program's folder; and
+`runtimes/<rid>/native/` for each RID in a list it builds itself. That list starts from
+`Microsoft.DotNet.PlatformAbstractions`' identifier, made from `/etc/os-release` (`ID` and `VERSION_ID`, or
+`DOTNET_RUNTIME_ID` when set), and extends it from the deps file's runtime graph, which a .NET 10 build's
+`EmuSen.WiseMan.deps.json` leaves empty, or else by a guess that reaches `linux-x64` only for an ID in a fixed list of
+fifteen: alpine, android, arch, centos, debian, exherbo, fedora, freebsd, gentoo, linux, opensuse, rhel, sles, tizen,
+pop. Fedora is in it and Ubuntu is not, so on the runner the list is `ubuntu.24.04-x64` alone and
+`runtimes/linux-x64/native/libshaderc_shared.so`, where a build without a RID puts the file, is never tried. Linux Mint
+(`linuxmint`) and SteamOS (`steamos`) are not in it either.
+
+**How the desktop passed.** Not through the system's Shaderc: Fedora's `libshaderc` package installs only
+`libshaderc_shared.so.1`, and the bare name misses it. `LD_DEBUG=libs` on one run of the two tests shows `dlopen` trying
+`/lib64/libshaderc_shared.so` and `/usr/lib64/libshaderc_shared.so` and finding neither, then loading
+`bin/Release/net10.0/runtimes/linux-x64/native/libshaderc_shared.so`, the file found through `fedora.44-x64`'s guess.
+With `DOTNET_RUNTIME_ID=ubuntu.24.04-x64` the same two tests fail on that machine with the runner's words, and so does a
+small program under `bwrap` with `/etc/os-release` reading `ID=ubuntu` and the system's file made unreadable (measured
+2026-10-17).
+
+**The product had it too.** Serenity's compiler, `SlangCompiler.Managed`, loaded Shaderc through the same `GetApi()`.
+A published build is not affected by the list: its native files sit beside the program, and the resolver's second
+candidate finds them. Two paths were: any build without a RID (a `dotnet run` of Mistress, the tests) on a distribution
+outside the list, which could not compile a slang preset at all; and a published build on a machine where a Shaderc is
+reachable by the bare name, as a development package's unversioned link makes it, which loaded the system's Shaderc
+before the one it ships, contrary to §2.8 and §16.2. With a link of that name on the loader's path, the published
+probe loaded `/usr/lib64/libshaderc_shared.so.1` through `GetApi()` (measured 2026-10-17); the compiler identity
+carries that file's digest, so the cache stayed correct, but the SPIR-V was another library's.
+
+**The fix.** `EmuSen.Serenity/Slang/ShadercLibrary.cs` builds the binding over a `LibraryLoader` of its own whose load is
+`NativeLibrary.TryLoad(name, assembly, null)`: the probing .NET gives a `DllImport` of Serenity's assembly, which tries
+the host's `NATIVE_DLL_SEARCH_DIRECTORIES` first. The host fills those from the deps file for the RID it was built for
+(`runtimes/linux-x64/native/` in a build without a RID, the program's folder in a published one), not from
+`/etc/os-release`, so the file is the shipped copy on every distribution, and the system's is reached only when no copy
+ships. Silk.NET's resolver still supplies the names tried, so nothing it found before is lost. `SlangCompiler.Managed`
+and the tests' `ShaderCompiler` both load through it; the handle Serenity lends the library (§16.2) is unchanged, a
+`DefaultNativeContext`'s. No package is installed on the runner: the dependency is the program's, not the runner's.
+
+**What holds it.** `SlangShadercLoadTests` starts a child test run with `DOTNET_RUNTIME_ID=ubuntu.24.04-x64`, the input
+Silk.NET's list is keyed on, compiles a fragment stage through Serenity and a compute shader through the tests'
+compiler, and requires the loaded file to be under the program's folder. It failed before the change with the runner's
+`FileNotFoundException` and passes after it. Under `bwrap` as above, with the system's file unreadable, the two cores'
+cases, `SlangCompileTests` and the new class pass, and `LD_DEBUG` shows the shipped copy loaded.

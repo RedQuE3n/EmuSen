@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
+using EmuSen.Serenity.Slang;
 using Silk.NET.Shaderc;
 using Silk.NET.Vulkan;
 
@@ -64,7 +65,7 @@ namespace EmuSen.WiseMan.Fixtures
 
         public static byte[] Compile(string source, string name)
         {
-            Shaderc api = Shaderc.GetApi();
+            Shaderc api = ShadercLibrary.Load();
             Compiler* compiler = api.CompilerInitialize();
             CompileOptions* options = api.CompileOptionsInitialize();
 

@@ -101,7 +101,8 @@ jobs:
   # The crates every core builds with (EmuSen/Cores/Shared/), Beryl's (the Sega cores' shared CPUs and chips) and BlackMoon's (the Sony cores'), tested on their own; no library of theirs ships.
   shared:
     name: Shared crates ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    # Apple Silicon jobs of a working branch run on the project's Mac mini; main, tags and EMUSEN_MAC_RUNNER=off take GitHub's (EmuSen_RustPlatform.md §29).
+    runs-on: ${{ matrix.os == 'macos-latest' && vars.EMUSEN_MAC_RUNNER != 'off' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') && fromJSON('["self-hosted", "macOS", "ARM64", "emusen-mac"]') || matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -261,7 +262,8 @@ jobs:
     name: ${{ matrix.crate.name }} ${{ matrix.platform.rid }}
     needs: plan
     if: needs.plan.outputs.build != '[]'
-    runs-on: ${{ matrix.platform.os }}
+    # Apple Silicon jobs of a working branch run on the project's Mac mini; main, tags and EMUSEN_MAC_RUNNER=off take GitHub's (EmuSen_RustPlatform.md §29).
+    runs-on: ${{ matrix.platform.os == 'macos-latest' && vars.EMUSEN_MAC_RUNNER != 'off' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') && fromJSON('["self-hosted", "macOS", "ARM64", "emusen-mac"]') || matrix.platform.os }}
     # The platform library is optional while every component in it has its C# behind it, so its failure does not stop the cores' jobs (EmuSen_RustPlatform.md §10.6).
     continue-on-error: ${{ matrix.crate.name == 'emusen_platform' }}
     defaults:
@@ -438,7 +440,8 @@ jobs:
     needs: [plan, library, reuse, shared]
     # A library job or a reuse job with nothing to do is skipped, and every library is still there (EmuSen_RustPlatform.md §28).
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.shared.result == 'success' && needs.library.result != 'failure' && needs.reuse.result != 'failure' }}
-    runs-on: ${{ matrix.os }}
+    # Apple Silicon jobs of a working branch run on the project's Mac mini; main, tags and EMUSEN_MAC_RUNNER=off take GitHub's (EmuSen_RustPlatform.md §29).
+    runs-on: ${{ matrix.os == 'macos-latest' && vars.EMUSEN_MAC_RUNNER != 'off' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') && fromJSON('["self-hosted", "macOS", "ARM64", "emusen-mac"]') || matrix.os }}
     strategy:
       fail-fast: false
       matrix:

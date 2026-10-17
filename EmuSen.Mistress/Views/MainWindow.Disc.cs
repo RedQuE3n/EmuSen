@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Avalonia.Threading;
 using EmuSen.Cores.Native;
@@ -46,7 +47,7 @@ namespace EmuSen.Mistress.Views
         private IEnumerable<PadMenuEntry> DiscRows()
         {
             if (DiscEngine is not { } e) yield break;
-            if (_discChoice >= e.Discs.Count) _discChoice = e.DiscIndex;
+            if (_discChoice >= e.Discs.Count || _discChoice < 0) _discChoice = Math.Max(0, e.DiscIndex);
             yield return new PadMenuEntry(() => $"Change Disc      <  {DiscValue()}  >", ChangeDisc, StepDisc) { Label = () => "Change Disc", Value = DiscValue };
         }
     }

@@ -101,7 +101,7 @@ namespace EmuSen.WiseMan.Cores
                 Assert.True(Marshal.SizeOf(s) >= int.Parse(w[3]), $"{w[1]} is {Marshal.SizeOf(s)} bytes, less than the {w[3]} the header recorded");
                 Assert.True(Marshal.SizeOf(s) == (end + align - 1) / align * align, $"{w[1]} is {Marshal.SizeOf(s)} bytes, its fields end at {end}");
             }
-            Assert.Equal(104, Marshal.SizeOf<CoreInterface.CreateParams>());
+            Assert.Equal(112, Marshal.SizeOf<CoreInterface.CreateParams>());
             int checkedFields = 0;
             foreach (var w in Lines("field"))
             {

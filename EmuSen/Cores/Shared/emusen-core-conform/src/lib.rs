@@ -1,7 +1,7 @@
-//! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C21 on a library loaded through the core
+//! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C22 on a library loaded through the core
 //! ABI v1 alone, and a library's sidecar (§7.1). Each case reports its verdict and its evidence; §21 and §24 record what each
 //! checks and how, §28 the corpus form, which runs the checks that do not depend on the image once, §6.24 C17 and
-//! §6.25 C18, §6.27 and §6.28 C19, §6.29 C20, §6.30 C21.
+//! §6.25 C18, §6.27 and §6.28 C19, §6.29 C20, §6.30 C21, §6.31 C22.
 
 pub mod api;
 mod lender;
@@ -482,6 +482,7 @@ pub fn run(path: &Path, opts: &Options) -> Report {
     report.cases.push(c19(&mut s));
     report.cases.push(c20(&mut s));
     report.cases.push(c21(&mut s));
+    report.cases.push(c22(&mut s));
     report
 }
 
@@ -510,6 +511,7 @@ pub(crate) fn core_cases(path: &Path, opts: &Options) -> (Report, BTreeSet<i32>)
     report.cases.push(c12(&mut s));
     report.cases.push(c13(&mut s));
     report.cases.push(c15(&mut s));
+    report.cases.push(c22(&mut s));
     (report, s.statuses)
 }
 
@@ -1131,6 +1133,7 @@ fn c11(s: &mut Session<'_>) -> Case {
             error_len: 0,
             flags: 0,
             device: std::ptr::null(),
+            system: std::ptr::null(),
         };
         let mut code = 0;
         let h = unsafe { (s.lib.f.create)(&p, &mut code) };
@@ -2071,6 +2074,89 @@ fn c20(s: &mut Session<'_>) -> Case {
 
 /// The frames C21 runs on each machine, or the session's where they are fewer.
 const RAW_FRAMES: u64 = 120;
+/// The frames C22 runs a console started empty, or the session's where they are fewer.
+const EMPTY_FRAMES: u64 = 240;
+
+/// C22 (since 1.11, EmuSen_CoreAPI.md §6.31): each system whose core info says `starts_empty` is created with an image of
+/// no bytes and its id; two such machines run alike frame for frame, sample for sample and state for state; a state
+/// round trip holds, its states equal 60 frames on (pictures after a load are C7's); a drive listed is empty and `MEDIA` claimed. Every other system, an unknown one, and an empty
+/// image naming none are refused with `EMUSEN_BAD_IMAGE`. A library older than 1.11 is judged by none of it.
+fn c22(s: &mut Session<'_>) -> Case {
+    let mut c = Check::new();
+    let minor = unsafe { (s.lib.f.abi_version)() } & 0xFFFF;
+    if minor < 11 {
+        c.note(format!("the library is of core ABI 1.{minor}, before a console could start empty"));
+        return c.done("C22", "a console started empty");
+    }
+    let systems: Vec<(String, bool)> = s
+        .lib
+        .info()
+        .ok()
+        .and_then(|t| parse(&t))
+        .and_then(|v| v.get("systems")?.as_array().map(<[Value]>::to_vec))
+        .unwrap_or_default()
+        .iter()
+        .map(|v| (v.get("id").and_then(Value::as_str).unwrap_or("").to_owned(), v.get("starts_empty") == Some(&Value::Bool(true))))
+        .collect();
+    let files: Vec<(u32, Vec<u8>)> = s.opts.files.iter().filter(|f| f.0 < FILE_MEDIA).cloned().collect();
+    let files: Vec<(u32, &[u8])> = files.iter().map(|(w, d)| (*w, d.as_slice())).collect();
+    let settings = s.opts.settings.clone();
+    let refused = |s: &mut Session<'_>, id: &str| -> Option<i32> {
+        let name = std::ffi::CString::new(id).ok()?;
+        match s.lib.create_empty(&name, &settings, &files) {
+            Ok(_) => None,
+            Err((code, _)) => {
+                s.statuses.insert(code);
+                Some(code)
+            }
+        }
+    };
+    for id in systems.iter().filter(|x| !x.1).map(|x| x.0.clone()).chain(["x-no-such-system".to_owned()]) {
+        let r = refused(s, &id);
+        c.that(r == Some(status::BAD_IMAGE), || format!("an empty start of {id}, which does not start empty, answered {r:?}, not EMUSEN_BAD_IMAGE"));
+    }
+    let none = s.lib.create(&[], &settings, &s.opts.files.iter().filter(|f| f.0 < FILE_MEDIA).cloned().collect::<Vec<_>>(), 1).err().map(|e| e.0);
+    c.that(none == Some(status::BAD_IMAGE), || format!("an empty image naming no system answered {none:?}, not EMUSEN_BAD_IMAGE"));
+    let frames = s.opts.frames.min(EMPTY_FRAMES);
+    let starting: Vec<String> = systems.iter().filter(|x| x.1).map(|x| x.0.clone()).collect();
+    if starting.is_empty() {
+        c.note("no system starts empty; the refusals only");
+        return c.done("C22", "a console started empty");
+    }
+    for id in &starting {
+        let body = |s: &mut Session<'_>, c: &mut Check| -> Result<(), String> {
+            let name = std::ffi::CString::new(id.as_str()).map_err(|_| format!("{id} holds a NUL"))?;
+            let lib = s.lib;
+            let make = || lib.create_empty(&name, &settings, &files).map_err(|(code, text)| format!("an empty start of {id} was refused: status {code} ({text})"));
+            let (one, two) = (make()?, make()?);
+            let drives = one.machine_info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("drives")?.as_array().map(<[Value]>::to_vec)).unwrap_or_default();
+            for d in &drives {
+                c.that(d.get("loaded") == Some(&Value::Bool(false)), || format!("{id} started empty lists drive {:?} loaded", d.get("drive")));
+            }
+            c.that(drives.is_empty() || s.lib.claims(caps::MEDIA), || format!("{id} starts empty with a drive, and MEDIA is not claimed, so no disc could ever go in"));
+            let a = s.play(&one, 0, frames, false)?;
+            let b = s.play(&two, 0, frames, false)?;
+            c.that(a.digests == b.digests, || format!("two machines of {id} started empty differ over {frames} frames"));
+            c.that(a.problems.is_empty(), || format!("{id} started empty: {}", a.problems.join("; ")));
+            let (sa, sb) = (s.state_digest(&one)?, s.state_digest(&two)?);
+            c.that(sa == sb, || format!("two machines of {id} started empty end in different states"));
+            let state = one.save(0).map_err(|e| format!("state_save of {id} started empty failed with {e}"))?;
+            let three = make()?;
+            let r = three.load(&state);
+            c.that(r == 0, || format!("a state of {id} started empty did not load into another: {r}"));
+            c.that(s.state_digest(&three)? == sa, || format!("{id}: the machine given the state saves another"));
+            s.play(&one, frames, 60, false)?;
+            s.play(&three, frames, 60, false)?;
+            c.that(s.state_digest(&three)? == s.state_digest(&one)?, || format!("{id}: 60 frames after the load the machine given the state is in another state than its source"));
+            c.note(format!("{id} started empty: {} drive(s) empty, two machines alike over {frames} frames, a state carried to a third", drives.len()));
+            Ok(())
+        };
+        if let Err(e) = body(s, &mut c) {
+            c.that(false, || e);
+        }
+    }
+    c.done("C22", "a console started empty")
+}
 
 /// The encodings EmuSen_CoreAPI.md §6.30 registers: each name's element width and its largest value.
 const RAW_REGISTER: &[(&str, u64, u64)] = &[("nes.ppu", 2, 0x1FF)];

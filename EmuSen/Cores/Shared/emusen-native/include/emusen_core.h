@@ -1,4 +1,4 @@
-/* emusen_core.h - the EmuSen core ABI, version 1.10.
+/* emusen_core.h - the EmuSen core ABI, version 1.11.
  *
  * A core is a shared library exporting the functions below, C calling convention. The normative text is
  * EmuSen_CoreAPI.md in the EmuSen manual; this header is its machine-checked half, and where the two disagree the
@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CORE_ABI_MAJOR 1u
-#define EMUSEN_CORE_ABI_MINOR 10u
+#define EMUSEN_CORE_ABI_MINOR 11u
 #define EMUSEN_CORE_ABI_VERSION ((EMUSEN_CORE_ABI_MAJOR << 16) | EMUSEN_CORE_ABI_MINOR)
 
 /* An opaque machine. Several may exist at once, from one library. */
@@ -204,7 +204,7 @@ typedef struct emusen_file {        /* a file the host read for this game (secti
     size_t len;
 } emusen_file;
 
-typedef struct emusen_create_params { /* 104 bytes; 88 at 1.0, the least a core accepts */
+typedef struct emusen_create_params { /* 112 bytes; 88 at 1.0, the least a core accepts */
     uint32_t size;
     uint32_t host_abi_version;      /* EMUSEN_CORE_ABI_VERSION the host was built with */
     const uint8_t *image;           /* the game file's bytes; the core parses it */
@@ -219,6 +219,7 @@ typedef struct emusen_create_params { /* 104 bytes; 88 at 1.0, the least a core 
     size_t error_len;
     uint32_t flags;                 /* @since 1.3: EMUSEN_CREATE_LENT; absent from a shorter struct, which reads as zero */
     const struct emusen_device_lend *device; /* @since 1.9, DEVICE_PICTURE: the host's device lent, or null; 104 bytes with it */
+    const char *system;             /* @since 1.11: with a null image, the system to start empty (core info's starts_empty) */
 } emusen_create_params;
 
 /* @since 1.9, DEVICE_PICTURE (section 6.29): the host's Vulkan device, lent to a core that claims the bit. Handles are
@@ -320,7 +321,9 @@ int64_t  emusen_core_log_drain(emusen_machine *machine, uint8_t *out, size_t len
 
 /* ---- Lifecycle ------------------------------------------------------------------------- */
 /* The machine for params' image; null on refusal with the reason in `status` and the detail in params' error.
- * A failed create leaves nothing to free. Nothing in params is kept past the call, but for what EMUSEN_CREATE_LENT
+ * Since 1.11 a null image with `system` naming a system whose core info says starts_empty makes that console with
+ * nothing in it (section 6.31); another system, or none, is refused with EMUSEN_BAD_IMAGE. A failed create leaves
+ * nothing to free. Nothing in params is kept past the call, but for what EMUSEN_CREATE_LENT
  * lends. */
 emusen_machine *emusen_core_create(const emusen_create_params *params, int32_t *status);
 /* From any thread, provided no other call on that machine is in flight; every thread of the machine has stopped

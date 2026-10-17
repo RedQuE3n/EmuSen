@@ -53,6 +53,26 @@ namespace EmuSen.WiseMan.DianaSh
             }
         }
 
+        // `core <name> --console` asks the host to start the console empty, where the host says it can - see `man core`.
+        [Fact]
+        public void Console_flag_signals_StartConsole_only_for_a_console_that_starts_empty()
+        {
+            var registry = new Dictionary<string, CoreDescriptor>(System.StringComparer.OrdinalIgnoreCase)
+            {
+                ["playstation"] = new CoreDescriptor("PlayStation", new[] { ".cue" }),
+                ["venus"] = new CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
+            };
+            var command = new CoreCommand(registry, console => console == "PlayStation");
+
+            var start = Assert.IsType<HostAction.StartConsole>(command.Execute(null, new[] { "core", "playstation", "--console" }, null).Action);
+            Assert.Equal(("playstation", "PlayStation"), (start.CoreName, start.Console));
+
+            DianaShResult refused = command.Execute(null, new[] { "core", "venus", "--console" }, null);
+            Assert.Null(refused.Action);
+            Assert.Contains("no core in this build starts the SNES (Venus) with nothing in it", refused.Output);
+            Assert.Null(new CoreCommand(registry).Execute(null, new[] { "core", "playstation", "--console" }, null).Action);
+        }
+
         [Fact]
         public void Wrong_argument_count_reports_usage_and_no_action()
         {

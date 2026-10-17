@@ -76,6 +76,18 @@ pub trait Core: Sized + StateMachine {
 
     fn create(request: &Create<'_>) -> Result<Self, i32>;
 
+    /// Since 1.11: whether a machine of `system` can be made with no image, the console with nothing in it; core info's
+    /// `starts_empty` (EmuSen_CoreAPI.md §6.31).
+    fn starts_empty(_system: &str) -> bool {
+        false
+    }
+
+    /// Since 1.11: the console `system`, for which `starts_empty` holds, made with nothing in it; `request.image` is
+    /// empty. Reached only through `create`'s export, which refuses every other system before the core sees it.
+    fn create_empty(_system: &str, _request: &Create<'_>) -> Result<Self, i32> {
+        Err(status::BAD_IMAGE)
+    }
+
     fn machine_info(&self) -> MachineInfo;
 
     /// `RESET`.

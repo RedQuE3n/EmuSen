@@ -8862,3 +8862,26 @@ before. Hotaru has no settings and plays with both on.
 swap), `ControllersTests.The_controller_settings_persist`, `UinputHotplugTests` (Steam's virtual pads, opt-in), and the
 Preferences fit audit, `WindowFitAuditTests.The_players_rows_in_preferences_are_whole_at_both_sizes`, which draws the two
 new rows on the desktop and in a big screen at 1280 by 800 and 1920 by 1200.
+
+### 4.120 A console started with nothing in it, and a disc put in afterwards (2026-10-17)
+
+*Built at `Diamond_Shell.md`'s step S2, the tester's go of 2026-10-17; the design and its reasons are that page's §1.5
+and §9.* A console whose engine says in its core info that it starts empty (core ABI 1.11, `EmuSen_CoreAPI.md` §6.31)
+is offered to start with no game: today the PlayStation, whose open kernel then shows its screen with no disc and its
+memory card manager, or whose player's BIOS shows its own.
+
+- **Where it is offered.** File → *Start Console* ▸ *Start PlayStation*; the library's toolbar shows *Start
+  PlayStation* while the sidebar shows the PlayStation; in big picture the gamelist's *Gamelist Options* opens with
+  *Start PlayStation With No Disc*, and the pad menu's *Library* has *Start a Console*. The list is read from the
+  engines' info (`CoreCatalog.ConsolesThatStartEmpty`), never from a list of consoles. No pseudo-game is added to a
+  gamelist.
+- **The session.** It runs as *PlayStation (no disc)*. Its save states are filed under that name; it is not recorded in
+  Continue Playing or play time and offers no resume on leaving; the cards in its slots are the shared ones whatever the
+  card mode, since there is no game whose own to use (§9 Q5 of the design). Restart starts the console again.
+- **The disc.** In a running session whose machine has a drive, Emulation → *Insert Disc...* and *Eject Disc*, and the
+  game's pad menu's *Insert Disc...* and *Eject Disc*. *Insert Disc...* opens a chooser of the console's games in the
+  library, with *Browse...* for any file on the desktop, framed as a menu in big picture; the disc goes in as on a
+  console, the lid opened, the disc in and the lid closed a second later, and the core judges it. A disc refused leaves
+  the lid open and the session's discs as they were. *Change Disc* lists the discs put in as well as a set's.
+- **Tests.** `ConsoleStartTests` (the entries, the session's name, its states and its rows), `DiamondShellTests` (the
+  host's start, insert, eject and states), and the fit audit's `InsertDiscPlayStation` and `InsertDiscEmpty`.

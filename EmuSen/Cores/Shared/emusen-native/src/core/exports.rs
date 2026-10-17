@@ -238,7 +238,7 @@ pub unsafe fn capabilities<T: Core>() -> u64 {
 }
 
 pub unsafe fn info<T: Core>(out: *mut u8, len: usize) -> i64 {
-    unsafe { copy_text(&desc::info_json(&T::info(), T::CAPABILITIES, &T::battery_files), out, len) }
+    unsafe { copy_text(&desc::info_json(&T::info(), T::CAPABILITIES, &T::battery_files, &T::starts_empty), out, len) }
 }
 
 pub unsafe fn settings_schema<T: Core>(out: *mut u8, len: usize) -> i64 {
@@ -315,6 +315,26 @@ unsafe fn file_list<'a>(files: *const FileEntry, count: usize, size: usize) -> V
 
 // ---- Lifecycle ----------------------------------------------------------------------------------------------
 
+/// Since 1.11: the system an image of no bytes asks for, which core info must say starts empty; else `BAD_IMAGE`.
+unsafe fn empty_system<T: Core>(system: *const std::ffi::c_char) -> Result<String, i32> {
+    let refuse = |why: String| {
+        super::detail(&why);
+        status::BAD_IMAGE
+    };
+    if system.is_null() {
+        return Err(refuse("the image is empty and no system was named to start empty".into()));
+    }
+    // SAFETY: the host passes a NUL-terminated string valid for the call.
+    let id = unsafe { std::ffi::CStr::from_ptr(system) }.to_str().map_err(|_| refuse("the system's id is not UTF-8".into()))?;
+    if !T::info().systems.iter().any(|s| s.id == id) {
+        return Err(refuse(format!("the image is empty and {id} is not a system of this core")));
+    }
+    if !T::starts_empty(id) {
+        return Err(refuse(format!("the image is empty and {id} does not start with nothing in it")));
+    }
+    Ok(id.to_owned())
+}
+
 pub unsafe fn create<T: Core>(params: *const CreateParams, status_out: *mut i32) -> *mut Machine {
     let outbox = Outbox::default();
     let mut error: (*mut u8, usize) = (std::ptr::null_mut(), 0);
@@ -340,8 +360,15 @@ pub unsafe fn create<T: Core>(params: *const CreateParams, status_out: *mut i32)
                 _ => None,
             };
             let request = Create { image: unsafe { input(p.image, p.image_len) }, settings, files, pixel_formats: p.pixel_formats | 1, host_abi_version: p.host_abi_version, shared_removable: p.flags & flags::CREATE_SHARED_REMOVABLE != 0, shared_console: p.flags & flags::CREATE_SHARED_CONSOLE != 0, device };
-            let lend = lent::<T>(p.flags & flags::CREATE_LENT != 0, request.image, &request.files);
-            let made = T::create(&request);
+            let empty = match request.image.is_empty() {
+                true => Some(unsafe { empty_system::<T>(p.system) }?),
+                false => None,
+            };
+            let lend = lent::<T>(p.flags & flags::CREATE_LENT != 0 && empty.is_none(), request.image, &request.files);
+            let made = match &empty {
+                Some(system) => T::create_empty(system, &request),
+                None => T::create(&request),
+            };
             let loan = lend.map(Lend::close);
             match (made, loan) {
                 (Ok(core), loan) => Ok((core, loan)),

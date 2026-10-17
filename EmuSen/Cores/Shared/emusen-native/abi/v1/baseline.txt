@@ -33,8 +33,8 @@ const EMUSEN_CAP_SETTINGS 0x40 @1.0
 const EMUSEN_CAP_SETTING_NOTES 0x8000 @1.0
 const EMUSEN_CAP_SNAPSHOT 0x4 @1.0
 const EMUSEN_CORE_ABI_MAJOR 0x1 @1.0
-const EMUSEN_CORE_ABI_MINOR 0xa @1.10
-const EMUSEN_CORE_ABI_VERSION 0x1000a @1.10
+const EMUSEN_CORE_ABI_MINOR 0xb @1.11
+const EMUSEN_CORE_ABI_VERSION 0x1000b @1.11
 const EMUSEN_CREATE_LENT 0x1 @1.3
 const EMUSEN_CREATE_SHARED_CONSOLE 0x4 @1.8
 const EMUSEN_CREATE_SHARED_REMOVABLE 0x2 @1.7
@@ -176,6 +176,7 @@ field emusen_create_params.pixel_formats offset 64 type uint64_t @1.0
 field emusen_create_params.settings offset 24 type const uint8_t* @1.0
 field emusen_create_params.settings_len offset 32 type size_t @1.0
 field emusen_create_params.size offset 0 type uint32_t @1.0
+field emusen_create_params.system offset 104 type const char* @1.11
 field emusen_device_frame.buffer offset 8 type uint64_t @1.9
 field emusen_device_frame.format offset 4 type uint32_t @1.9
 field emusen_device_frame.height offset 28 type int32_t @1.9
@@ -362,6 +363,7 @@ json info.systems[].firmware[].which integer required @1.0
 json info.systems[].id string required @1.0
 json info.systems[].name string required @1.0
 json info.systems[].regions array<string> optional @1.0
+json info.systems[].starts_empty boolean optional @1.11
 json info.url string optional @1.0
 json info.version string required @1.0
 json machine_info object @1.0

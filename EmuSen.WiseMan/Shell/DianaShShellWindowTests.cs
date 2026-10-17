@@ -58,8 +58,8 @@ namespace EmuSen.WiseMan.Shell
         {
             string? launched = null;
             var window = new DianaShShellWindow(
-                romPath => { launched = romPath; return new Window(); },
-                line => "/roms/resolved.smc",
+                launch => { launched = launch.RomPath; return new Window(); },
+                line => EmuSen.Hotaru.HotaruLaunch.Rom("/roms/resolved.smc"),
                 null);
             window.Show();
 
@@ -89,7 +89,7 @@ namespace EmuSen.WiseMan.Shell
         {
             var window = new DianaShShellWindow(
                 _ => throw new InvalidOperationException("unsupported mapper"),
-                _ => "/roms/broken.smc",
+                _ => EmuSen.Hotaru.HotaruLaunch.Rom("/roms/broken.smc"),
                 null);
             bool closed = false;
             window.Closed += (_, _) => closed = true;
@@ -107,7 +107,7 @@ namespace EmuSen.WiseMan.Shell
         {
             string rom = ScratchRom();
             string? launched = null;
-            var window = new DianaShShellWindow(romPath => { launched = romPath; return new Window(); }, _ => null, null);
+            var window = new DianaShShellWindow(launch => { launched = launch.RomPath; return new Window(); }, _ => null, null);
             window.Show();
 
             Type(window, $"hotaru --output window \"{rom}\"");

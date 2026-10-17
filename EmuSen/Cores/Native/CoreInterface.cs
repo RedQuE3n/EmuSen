@@ -7,7 +7,7 @@ namespace EmuSen.Cores.Native
     public sealed unsafe class CoreInterface
     {
         public const uint Major = 1;
-        public const uint Minor = 10;
+        public const uint Minor = 11;
         public const uint Version = (Major << 16) | Minor;
 
         // The capability bits, numbered as emusen_core.h's EMUSEN_CAP_*.
@@ -101,6 +101,7 @@ namespace EmuSen.Cores.Native
             public nuint ErrorLen;
             public uint Flags;
             public DeviceLend* Device;
+            public byte* System;
         }
 
         // emusen_device_lend, since 1.9: the host's Vulkan device lent to a core, with a queue the core alone submits to - see EmuSen_CoreAPI.md §6.29.

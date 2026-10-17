@@ -198,8 +198,29 @@ impl Lib {
     /// `create_from` with a device lent (since 1.9, `DEVICE_PICTURE`), passed by a host of 1.9 or later; an earlier one
     /// has no such field and passes the struct it knew.
     pub fn create_lending(&self, image: &[u8], settings: &str, files: &[(u32, &[u8])], pixel_formats: u64, flags: u32, device: *const DeviceLend) -> Result<Machine<'_>, (i32, String)> {
+        self.create_full(image, settings, files, pixel_formats, flags, device, None)
+    }
+
+    /// The console `system` started with nothing in it (since 1.11, core info's `starts_empty`): an image of no bytes
+    /// and the system named, passed by a host of 1.11 or later; an earlier one has no such field.
+    pub fn create_empty(&self, system: &std::ffi::CStr, settings: &str, files: &[(u32, &[u8])]) -> Result<Machine<'_>, (i32, String)> {
+        self.create_full(&[], settings, files, 1, 0, std::ptr::null(), Some(system))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn create_full(&self, image: &[u8], settings: &str, files: &[(u32, &[u8])], pixel_formats: u64, flags: u32, device: *const DeviceLend, system: Option<&std::ffi::CStr>) -> Result<Machine<'_>, (i32, String)> {
+        // A host that names a system to start empty knows 1.11, whichever older host the kit otherwise plays.
         let (minor, pad) = self.host();
-        let known = if minor >= 9 { std::mem::size_of::<CreateParams>() } else if minor >= 3 { std::mem::offset_of!(CreateParams, device) } else { CreateParams::SIZE_1_0 };
+        let minor = if system.is_some() { minor.max(11) } else { minor };
+        let known = if minor >= 11 {
+            std::mem::size_of::<CreateParams>()
+        } else if minor >= 9 {
+            std::mem::offset_of!(CreateParams, system)
+        } else if minor >= 3 {
+            std::mem::offset_of!(CreateParams, device)
+        } else {
+            CreateParams::SIZE_1_0
+        };
         let element = std::mem::size_of::<FileEntry>() + pad;
         let mut entries = vec![CANARY; element * files.len()];
         for (i, (w, d)) in files.iter().enumerate() {
@@ -223,6 +244,7 @@ impl Lib {
             error_len: error.len(),
             flags,
             device,
+            system: system.map_or(std::ptr::null(), |s| s.as_ptr()),
         };
         // SAFETY: `params` holds at least `known` bytes, and `known` is no more than the struct.
         unsafe { std::ptr::copy_nonoverlapping(&p as *const CreateParams as *const u8, params.as_mut_ptr(), known) };

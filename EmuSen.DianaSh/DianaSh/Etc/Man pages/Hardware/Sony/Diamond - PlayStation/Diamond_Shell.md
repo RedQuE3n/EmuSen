@@ -2,8 +2,9 @@
 
 *Written 2026-10-17, before any code, at the tester's request of the same day: "Let's add the ability to Diamond to boot
 into the PlayStation with no game and be able to go to its memory card manager. Make it so that if later we want to add
-the ability to play music cds and use the visualizer, we can."* This page is a design awaiting the tester's approval.
-Nothing in it is built. §1 gives the form of each part and why, §2 the empty drive as the documents describe it, §3 the
+the ability to play music cds and use the visualizer, we can."* This page was written as a design for the tester's
+approval. *Decided 2026-10-17 by the tester: Q1–Q13 and P1–P4, each as recommended* (§9): S5 is built, the visualizer's
+home is decided when the player is planned, and P1–P4 are standing rules for this work. §1 gives the form of each part and why, §2 the empty drive as the documents describe it, §3 the
 memory card manager's scope, §4 how the shell is written and tested without a window, §5 the seams the audio CD player
 and its visualizer will use, §6 the phasing, §7 the risks, §8 the choices where the documents are silent, §9 the
 questions for the tester, and §10 the reading log.
@@ -520,6 +521,8 @@ S1 and S2 touch the framework. S3 and S4 touch only Diamond's guest programs. S2
 
 ## 9. Questions for the tester
 
+*Decided 2026-10-17 by the tester: Q1–Q13 and P1–P4, each as recommended.*
+
 1. **Q1, the ABI's form.** Core ABI 1.11: `starts_empty` per system in core info, a null image in `create` for such a
    system, and `create_params.system` appended (§1.1). *Recommended*: yes. The alternatives are a library bit (wrong
    for Nephrite's two systems), a second create export, or an undeclared convention.
@@ -622,3 +625,109 @@ No machine was run.
   - `CoreEngine.cs` lines 200–376;
   - Mistress's `MainWindow.axaml.cs` lines 920–990;
   - a search of `PsxCardFormat.cs`.
+
+---
+
+## 11. Build record
+
+### 11.1 S1: core ABI 1.11 and Diamond's empty start (2026-10-17)
+
+**Built.** `EmuSen_CoreAPI.md` §6.31 is the normative text, §28.17 the kit's case and its changelog the summary. The
+header's `emusen_create_params.system` (offset 104, 112 bytes), core info's `systems[].starts_empty`, the baseline
+regenerated to 483 facts with `--check` and `--against` 1.10 passing, `emusen-native`'s check in the create export, the
+guard's checker, the C# host's `CoreInterface.CreateParams.System`, `CoreSystem.StartsEmpty` and `CoreMachine`'s
+`system`, kit case C22, the test core's empty start and `FAULT_EMPTY_LOADED`.
+
+**One departure from §1.1, argued.** §1.1 proposed `Create.image: Option<&[u8]>` and `Create.system: Option<&str>` on
+the Rust side. Both are fields of a struct every core builds in its tests by a literal, so either would have changed
+six cores' code for a feature one of them uses. The surface became two defaulted trait functions instead,
+`Core::starts_empty(system)` and `Core::create_empty(system, request)`, beside `battery_files(system)`, which is how
+per-system facts already reach core info. A core that does not opt in compiles and behaves as before. The C ABI is as
+§1.1 gave it.
+
+**Diamond.** `starts_empty("psx")`; `create_empty` makes the machine of `Media { kind: Empty, market }` through the same
+`Machine::make` a disc's create now calls, so files, settings, kernels, cards and multitaps are checked and placed by one
+path. The market is that of the first player's BIOS given of the Americas, Europe and Japan, else the Americas, and the
+Region setting overrules it (§9 Q4). With no kind to side-load, the machine starts at the reset vector on its kernel.
+`the_console_starts_empty_and_its_market_comes_from_the_bios_given`: the drive is listed empty with its lid closed;
+machine info names the Americas and the open kernel; after 420 frames VRAM holds the open kernel's screen with no disc;
+a Japanese, a European-and-Japanese and all three BIOS files give Japan, Europe and the Americas, each named `File`;
+`region=psx.us` beside a European BIOS gives the Americas on the open kernel; an unnamed file is refused.
+
+**Nephrite** does not claim the field. With a player's BIOS its Sega CD stays on its first picture with an empty
+drive (`Nephrite_Bram.md` §11, `Nephrite_OpenBios.md` §16), so it does not yet start empty correctly. That is
+Nephrite's follow-up, not built here: an empty start for `mcd`, once the stall is explained.
+
+**Measured (2026-10-17).**
+- `emusen-native`: 77 tests, one new.
+- The guard: its 6 tests.
+- The kit: its 24 tests and 8 unit tests.
+- Diamond: its 174 unit tests, and `diamond-v1`'s 4.
+- The kit on Diamond's library with Crash Bandicoot's disc at 600 frames: C1–C22 pass, 71 s.
+
+### 11.2 S2: the host's launch with no file, and Mistress's entries (2026-10-17)
+
+**The runtime.**
+- `CoreCatalog.ConsolesThatStartEmpty` lists the pack consoles whose discovered engine's info says `starts_empty`,
+  read from the engines and never from a list of consoles.
+- `CoreFactory.CreateConsole(console, engine)` opens such an engine with the console's stored settings and card modes.
+- `CoreEngine.StartConsole(system)` makes the machine with an empty image:
+  - every firmware file of the system's core-info list that the player has is passed;
+  - the save media are placed with *Per game* read as *Shared* (§9 Q5) and locked under `ConsoleSession.NameOf`,
+    "PlayStation (no disc)";
+  - the new machine is adopted by the same `Adopt` a game's load now ends in.
+- `CoreEngine.StartedEmpty` names the system; `RomPath` is empty and `DiscIndex` -1.
+- `InsertDisc(path)` opens any file as Galaxia's `DiscSet`, adds it to the session's discs and changes to it through
+  the lid. A disc the core refuses is taken off the list again and leaves the lid open.
+- `EjectDisc()` is the same change to index -1, the empty drive.
+- A state refused with `WRONG_MEDIA` is now tried over the session's discs and then over the empty drive, so a state of
+  the empty console loads over a disc and the reverse.
+- `EmulatorSession.StartConsole(console)` wraps it with the debugger and the cheat codecs.
+
+**The readers of `RomPath` (§7 risk 1).**
+- Mistress keeps `_currentRomPath` as the game's path, null in a console session, and adds `_consoleSession`.
+- Every reader that keys on a game's file is therefore off in a console session by construction: identity and MD5,
+  covers, the game's crop, the heads-up bar's game, Continue Playing, play time, the resume state, and the scraper.
+- Only the save states read the session instead: `StateKey` is the game's path or the session's name, so a state is
+  `PlayStation (no disc).state`. Its record names the console and no game's MD5, and the refusal check takes the
+  session's console rather than routing the name.
+- The loading of a game and of a console now share `WireSession` and `RunSession`.
+- Restart starts the console again.
+
+**The entries.**
+- File → *Start Console* ▸ *Start PlayStation*.
+- The library toolbar's *Start PlayStation*, shown while the sidebar shows the PlayStation.
+- In big picture, *Start PlayStation With No Disc* as the first row of *Gamelist Options*.
+- The pad menu's *Library* → *Start a Console*.
+- In a session with a drive: Emulation → *Insert Disc...* and *Eject Disc*, and the same two rows in the game's pad menu.
+- *Insert Disc...* opens `InsertDiscWindow`, built with LunaP and framed as a menu in big picture. It lists the console's
+  library games, with *Browse...* on the desktop only.
+- `EmuSen_Settings_Reference.md` §4.120 is the player-facing summary.
+
+**DianaSh.**
+- `core <corename> --console` returns `HostAction.StartConsole` where the host says the console starts empty
+  (`CoreCommand`'s new predicate). Its page is `core.1`.
+- Both of Hotaru's prompts take it. The terminal's and the windowed launch prompt resolve it to a `HotaruLaunch` of the
+  console, and `HotaruSession.Build` starts it.
+- Hotaru's in-session `core` starts it in place where the running engine is the console's, and otherwise says to start
+  it from the launch prompt.
+
+**Measured (2026-10-17), WiseMan under the test lock.**
+- `DiamondShellTests`, 4. The console is offered by Diamond's info alone. Started empty under *Per game*:
+  - the drive is empty and the shared Card 1 is locked under the session's name;
+  - after 420 frames the frame shows the open kernel's screen with no disc;
+  - a synthetic disc put in is booted by the kernel (its program's SIO replies in RAM);
+  - Eject empties the drive.
+  
+  A state of the empty console and one with the disc load over each other. A file that is no disc is refused and not
+  kept.
+- `ConsoleStartTests`, 2: the entries, the toolbar button by shelf, the session's name, its state's file name, and the
+  drive's rows.
+- `CoreCommandTests`' console case; `DianaShShellWindowTests` and `SandboxEscapeTests` on the launch type.
+- The fit audit's `InsertDiscPlayStation` and `InsertDiscEmpty` at 1280 × 800 and 1920 × 1200, with their specifications
+  recorded.
+- `PadMenuTests`' two Library lists, which gain *Start a Console*.
+- Every Mistress and Shell test: 2,201 of 2,207 passing before the two `PadMenuTests` lists were updated. The other
+  four failures are not this step's. The themed startup list's count, 9 against 8, and the players' ports, seven
+  consoles against six, both count the Sega CD, offered on 2026-10-16 after the two tests were written
+  (`e525b9b8`, 2026-10-15).

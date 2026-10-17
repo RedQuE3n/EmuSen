@@ -20,8 +20,8 @@ namespace EmuSen.Shell.Views
     // The shell a windowed launch gets in place of the terminal - see EmuSen_Frontend_Driver.md §3c.
     public class DianaShShellWindow : ToolWindow
     {
-        private readonly Func<string, Window>? _launchRom;
-        private readonly Func<string, string?>? _resolveCoreCommand;
+        private readonly Func<HotaruLaunch, Window>? _launchRom;
+        private readonly Func<string, HotaruLaunch?>? _resolveCoreCommand;
 
         private readonly ConsolePane _console = new() { Prompt = "DianaSh #: " };
 
@@ -33,8 +33,8 @@ namespace EmuSen.Shell.Views
         public DianaShShellWindow() : this(null, null, null) { }
 
         public DianaShShellWindow(
-            Func<string, Window>? launchRom,
-            Func<string, string?>? resolveCoreCommand,
+            Func<HotaruLaunch, Window>? launchRom,
+            Func<string, HotaruLaunch?>? resolveCoreCommand,
             IEnumerable<string>? supportedCores)
         {
             _launchRom = launchRom;
@@ -64,7 +64,7 @@ namespace EmuSen.Shell.Views
                 supportedCheatSystems: () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems);
 
         // `hotaru`'s window, from this window's own prompt; a ROM that will not load comes back as the command's failure.
-        private void OpenGame(string romPath, HotaruOutput output) => _launchRom!(romPath).Show();
+        private void OpenGame(string romPath, HotaruOutput output) => _launchRom!(HotaruLaunch.Rom(romPath)).Show();
 
         // Reports a ROM that could not be loaded back into the window that asked for it.
         public void ReportLaunchFailure(string message)
@@ -126,13 +126,13 @@ namespace EmuSen.Shell.Views
         {
             if (_resolveCoreCommand is null || _launchRom is null) return;
 
-            string? romPath = _resolveCoreCommand(trimmed);
-            if (romPath is null) return; // the resolver already appended why
+            HotaruLaunch? launch = _resolveCoreCommand(trimmed);
+            if (launch is null) return; // the resolver already appended why
 
             // A ROM that will not load must land back at the prompt, not take the window down with it.
             try
             {
-                Window game = _launchRom(romPath);
+                Window game = _launchRom(launch);
                 game.Show();
             }
             catch (Exception ex)

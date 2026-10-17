@@ -275,7 +275,7 @@ mod tests {
         assert_eq!(problems, Vec::<String>::new());
         assert_eq!(facts.keys().filter(|k| k.starts_with("fn ")).count(), 62);
         assert_eq!(facts.get("struct emusen_media").map(String::as_str), Some("size 48 align 8"));
-        assert_eq!(facts.get("struct emusen_create_params").map(String::as_str), Some("size 104 align 8"), "grown at 1.3 and 1.9");
+        assert_eq!(facts.get("struct emusen_create_params").map(String::as_str), Some("size 112 align 8"), "grown at 1.3, 1.9 and 1.11");
         assert_eq!(committed.get("struct emusen_create_params"), Some(&("size 88 align 8".to_owned(), "1.0".to_owned())), "its 1.0 line stands");
         assert_eq!(committed.get("field emusen_create_params.flags"), Some(&("offset 88 type uint32_t".to_owned(), "1.3".to_owned())));
         assert_eq!(facts.get("const EMUSEN_CAP_BORROW").map(String::as_str), Some("0x100000"));

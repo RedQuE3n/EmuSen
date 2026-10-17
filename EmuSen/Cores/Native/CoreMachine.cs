@@ -57,14 +57,14 @@ namespace EmuSen.Cores.Native
         // The same from bytes the host holds in place, the media files among them; with a loan they are lent, and the loan is released when the machine is freed or its drive takes another disc.
         // sharedRemovable and sharedConsole ask the core to leave those kinds of battery file out of what a state load restores - see EmuSen_CoreAPI.md §6.27, §6.28.
         // device is the host's Vulkan device lent to a core that claims DEVICE_PICTURE, the machine's from then on - see EmuSen_CoreAPI.md §6.29.
-        public CoreMachine(CoreLibrary library, CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, IDisposable? loan = null, bool sharedRemovable = false, bool sharedConsole = false, EmuSen.Serenity.Slang.SlangLend? device = null)
+        public CoreMachine(CoreLibrary library, CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, IDisposable? loan = null, bool sharedRemovable = false, bool sharedConsole = false, EmuSen.Serenity.Slang.SlangLend? device = null, string? system = null)
         {
             Lend = device is not null && library.Has(CoreInterface.CapDevicePicture) ? device : null;
             if (Lend is null) device?.Dispose();
             if (!library.Available) throw new InvalidOperationException($"{library.Info?.DisplayName ?? library.Path} is not in use: {library.Report}");
             Library = library;
             _api = library.Api;
-            try { _handle = Create(image, media, settings, files, lent: loan is not null, sharedRemovable, sharedConsole, Lend is { } l ? LendOf(l) : null); }
+            try { _handle = Create(image, media, settings, files, lent: loan is not null, sharedRemovable, sharedConsole, Lend is { } l ? LendOf(l) : null, system); }
             catch
             {
                 // A refused create lends nothing.
@@ -90,8 +90,9 @@ namespace EmuSen.Cores.Native
             return entries;
         }
 
-        private nint Create(CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, bool lent, bool sharedRemovable, bool sharedConsole, CoreInterface.DeviceLend? device = null)
+        private nint Create(CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, bool lent, bool sharedRemovable, bool sharedConsole, CoreInterface.DeviceLend? device = null, string? system = null)
         {
+            byte[] systemId = system is null ? Array.Empty<byte>() : Encoding.UTF8.GetBytes(system + "\0");
             CoreInterface.DeviceLend lend = device ?? default;
             lend.Size = (uint)sizeof(CoreInterface.DeviceLend);
             byte[] text = Encoding.UTF8.GetBytes(settings);
@@ -105,6 +106,7 @@ namespace EmuSen.Cores.Native
                 fixed (byte* s = text)
                 fixed (CoreInterface.File* f = entries)
                 fixed (byte* e = error)
+                fixed (byte* id = systemId)
                 {
                     var p = new CoreInterface.CreateParams
                     {
@@ -122,6 +124,7 @@ namespace EmuSen.Cores.Native
                         ErrorLen = (nuint)error.Length,
                         Flags = (lent ? CoreInterface.CreateLent : 0) | (sharedRemovable ? CoreInterface.CreateSharedRemovable : 0) | (sharedConsole ? CoreInterface.CreateSharedConsole : 0),
                         Device = device is not null && Library.Has(CoreInterface.CapDevicePicture) ? &lend : null,
+                        System = system is null ? null : id,
                     };
                     handle = _api.Create(&p, &status);
                 }

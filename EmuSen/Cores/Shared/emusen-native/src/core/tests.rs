@@ -42,6 +42,7 @@ fn params(image: &[u8], settings: &str, files: &[FileEntry]) -> CreateParams {
         error_len: 0,
         flags: 0,
         device: std::ptr::null(),
+        system: std::ptr::null(),
     }
 }
 
@@ -89,7 +90,7 @@ fn every_descriptor_validates_against_its_committed_schema() {
         assert_eq!(schema::validate(s, doc), Vec::<String>::new(), "{doc}");
     }
     let v = crate::json::parse(info.as_bytes()).unwrap();
-    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.10"));
+    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.11"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
     assert_eq!(names.len(), 23);
     assert!(
@@ -191,7 +192,7 @@ fn create_refuses_with_a_status_and_nul_terminated_words() {
     let mut p = params(&[], "", &[]);
     (p.error, p.error_len) = (err.as_mut_ptr(), err.len());
     assert!(unsafe { emusen_core_create(&p, &mut code) }.is_null());
-    assert_eq!(code, STATUS_EMPTY_IMAGE);
+    assert_eq!(code, status::BAD_IMAGE, "since 1.11 an empty image names a system to start empty, or is refused before the core");
     assert_eq!(&err, b"the image i\0");
     assert!(unsafe { emusen_core_create(null(), &mut code) }.is_null());
     assert_eq!(code, status::NULL);
@@ -496,14 +497,15 @@ fn read_ranges_reach_a_core_that_claims_them_and_an_unknown_kind_is_refused() {
 
 #[test]
 fn the_crates_constants_are_the_headers_own_numbers() {
-    assert_eq!(ABI_VERSION, 0x0001_000A);
+    assert_eq!(ABI_VERSION, 0x0001_000B);
+    assert_eq!((std::mem::size_of::<CreateParams>(), std::mem::offset_of!(CreateParams, system)), (112, 104), "since 1.11");
     assert_eq!(caps::DEVICE_PICTURE, 1 << 21, "since 1.9");
     assert_eq!((caps::RAW_PICTURE, caps::UNASSIGNED & caps::RAW_PICTURE, std::mem::size_of::<RawFrame>(), std::mem::offset_of!(RawFrame, bytes)), (1 << 22, 0, 32, 24), "since 1.10");
     assert_eq!(flags::CREATE_SHARED_REMOVABLE, 2, "since 1.7, beside CREATE_LENT");
     assert_eq!(flags::CREATE_SHARED_CONSOLE, 4, "since 1.8, beside CREATE_SHARED_REMOVABLE");
     assert_eq!((event::MEDIA_SEEK, flags::FILE_IMAGE, crate::core::SEEK_SPAN), (8, 0xFFFF_FFFF, 1 << 20));
     assert_eq!((caps::BORROW, caps::UNASSIGNED & caps::BORROW, flags::CREATE_LENT, flags::MEDIA_LENT), (1 << 20, 0, 1, 2));
-    assert_eq!((CreateParams::SIZE_1_0, std::mem::offset_of!(CreateParams, device), std::mem::size_of::<CreateParams>()), (88, 96, 104), "the device lent at 1.9 follows 1.3's flags and their padding");
+    assert_eq!((CreateParams::SIZE_1_0, std::mem::offset_of!(CreateParams, device), std::mem::size_of::<CreateParams>()), (88, 96, 112), "the device lent at 1.9 follows 1.3's flags and their padding, and 1.11's system follows it");
     assert_eq!((status::BAD_STRUCT, status::BAD_IMAGE, status::STATE_VERSION), (-263, -264, -4));
     assert_eq!((status::LID_CLOSED, status::WRONG_MEDIA, status::NO_SUCH_DRIVE, flags::FILE_MEDIA, flags::MEDIA_RESTORE), (-265, -266, -267, 65_536, 1));
     assert_eq!(EXPORTS.len(), 62);
@@ -703,10 +705,10 @@ fn a_lent_disc_is_let_go_when_its_drive_takes_another() {
 fn a_slots_medium_label_and_port_are_written_only_where_set() {
     use super::desc::{Battery, Info, System, info_json};
     let info = Info { id: "x".into(), systems: vec![System { id: "n64".into(), ..Default::default() }], ..Default::default() };
-    let text = info_json(&info, 0, &|_| Some(vec![Battery::game(0, ".eep"), Battery::removable(1, ".2.mpk").medium("n64.pak").label("Controller 2").port(1)]));
+    let text = info_json(&info, 0, &|_| Some(vec![Battery::game(0, ".eep"), Battery::removable(1, ".2.mpk").medium("n64.pak").label("Controller 2").port(1)]), &|_| false);
     assert!(text.contains(r#""battery":[{"which":0,"suffix":".eep"},{"which":1,"suffix":".2.mpk","kind":"removable","medium":"n64.pak","label":"Controller 2","port":1}]"#), "{text}");
     assert_eq!(schema::validate(include_str!("../../abi/v1/info.schema.json"), &text), Vec::<String>::new());
-    let bad = info_json(&info, 0, &|_| Some(vec![Battery::console(0, ".brm").medium("Sega CD")]));
+    let bad = info_json(&info, 0, &|_| Some(vec![Battery::console(0, ".brm").medium("Sega CD")]), &|_| false);
     assert!(!schema::validate(include_str!("../../abi/v1/info.schema.json"), &bad).is_empty(), "a medium outside [a-z0-9.]+ is refused by the schema");
 }
 
@@ -749,4 +751,36 @@ fn a_raw_picture_is_kept_only_when_selected_and_draws_the_frame_through_its_pale
     advance(m);
     assert_eq!(raw_info(m, 0).0, 0, "a frame drawn after the encoding was let go has none");
     unsafe { emusen_core_free(m) };
+}
+
+/// Since 1.11 (EmuSen_CoreAPI.md §6.31): an empty image with a system that starts empty makes the console with nothing
+/// in its drive; any other system, an unknown one or none is refused with BAD_IMAGE and words, before the core sees it.
+#[test]
+fn an_empty_image_starts_a_system_that_starts_empty_and_nothing_else() {
+    let info = text(|o, l| unsafe { emusen_core_info(o, l) });
+    assert!(info.contains(r#""starts_empty":true"#), "{info}");
+    assert_eq!(schema::validate(include_str!("../../abi/v1/info.schema.json"), &info), Vec::<String>::new());
+    let mut code = 1;
+    let p = CreateParams { system: c"test".as_ptr(), ..params(&[], "", &[]) };
+    let m = unsafe { emusen_core_create(&p, &mut code) };
+    assert_eq!(code, 0);
+    let mi = text(|o, l| unsafe { emusen_core_machine_info(m, o, l) });
+    assert!(mi.contains(r#""loaded":false"#), "{mi}");
+    assert_eq!(unsafe { emusen_core_free(m) }, 0);
+    let mut words = [0u8; 96];
+    for (system, says) in [(c"nope", "nope is not a system of this core")] {
+        let mut p = CreateParams { system: system.as_ptr(), ..params(&[], "", &[]) };
+        (p.error, p.error_len) = (words.as_mut_ptr(), words.len());
+        assert!(unsafe { emusen_core_create(&p, &mut code) }.is_null());
+        assert_eq!(code, status::BAD_IMAGE);
+        assert!(std::ffi::CStr::from_bytes_until_nul(&words).unwrap().to_str().unwrap().contains(says));
+    }
+    let img = image(&[1]);
+    let named = CreateParams { system: c"nope".as_ptr(), ..params(&img, "", &[]) };
+    let m = unsafe { emusen_core_create(&named, &mut code) };
+    assert_eq!(code, 0, "a system named beside an image is ignored");
+    assert_eq!(unsafe { emusen_core_free(m) }, 0);
+    let short = CreateParams { size: 104, system: c"test".as_ptr(), ..params(&[], "", &[]) };
+    assert!(unsafe { emusen_core_create(&short, &mut code) }.is_null(), "a struct of 1.10 carries no system");
+    assert_eq!(code, status::BAD_IMAGE);
 }

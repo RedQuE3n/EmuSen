@@ -38,7 +38,7 @@ namespace EmuSen.Cores.Native
         private byte[] _stateBuffer = Array.Empty<byte>(), _loadBuffer = Array.Empty<byte>();
         private IReadOnlyDictionary<string, string> _notes = new Dictionary<string, string>();
         private DiscSet? _set;
-        private IReadOnlyList<string> _discs = Array.Empty<string>();
+        private List<string> _discs = new();
         private long _closeLidAt = -1;
 
         // Each save medium's mode the frontend stored for the console, by medium id, read at each load; Per game where absent - see EmuSen_SaveMedia.md §3.3.
@@ -269,12 +269,52 @@ namespace EmuSen.Cores.Native
                 // A core that copies has its copy by now; one that borrows holds the files through its machine.
                 if (!kept) disc.Dispose();
             }
-            _placement = placement!;
+            Adopt(machine, placement!, asked, wanted, set, path, console, null);
+        }
+
+        // The console of systemId with nothing in it, its firmware and save media placed as Diamond_Shell.md §11.2 gives.
+        public virtual void StartConsole(string systemId)
+        {
+            CoreSystem system = Info.Systems.FirstOrDefault(s => s.Id == systemId && s.StartsEmpty)
+                ?? throw new NotSupportedException($"{Info.DisplayName} does not start {systemId} with nothing in it.");
+            string console = CoreCatalog.DiscoveredConsoleForSystem(systemId) ?? CoreCatalog.ConsoleForSystem(systemId) ?? systemId.ToUpperInvariant();
+            var firmware = new List<(uint, byte[])>();
+            foreach (var f in system.Firmware)
+            {
+                if (FirmwareLibrary.TryLoad(Request(f)) is { } data) firmware.Add((f.Which, data));
+                else if (FirmwareLibrary.TryLoadParts(Request(f)) is { } parts) firmware.AddRange(parts.Select((p, n) => (f.Which + (uint)n, p)));
+            }
+            ReleaseMedia();
+            var choices = MemoryCards.MediaOf(console, system).ToDictionary(m => m.Id, m => Media.TryGetValue(m.Id, out CardChoice? c) && c.Apart ? c : new CardChoice(MemoryCards.Shared, c?.Names ?? Array.Empty<string>()));
+            MediaPlacement placement = MemoryCards.Place(console, system, choices, ConsoleSession.NameOf(console), _ => BatterySave.None);
+            List<(uint Which, BatterySave Save)> saves;
+            CoreMachine machine;
+            try
+            {
+                saves = (system.Battery ?? Array.Empty<CoreBatteryFile>()).Select(b => (b.Which, Save: placement.Files.TryGetValue(b.Which, out BatterySave? placed) ? placed : BatterySave.None)).ToList();
+                machine = new CoreMachine(Library, default, Array.Empty<(uint, CoreBytes)>(), SettingsText(createScope: true), FilesFor(firmware, saves, placement), null, placement.RemovableApart, placement.ConsoleApart, Library.Has(CoreInterface.CapDevicePicture) ? DeviceLender?.Invoke() : null, system: systemId);
+            }
+            catch
+            {
+                placement.Dispose();
+                throw;
+            }
+            Adopt(machine, placement, system.Firmware, saves, null, "", console, systemId);
+        }
+
+        // The system a console session was started as, or null for a game's - see Diamond_Shell.md §1.5.
+        public string? StartedEmpty { get; private set; }
+
+        // The new machine in place of the last, with its media, discs, firmware words, debugger, input and frame.
+        private void Adopt(CoreMachine machine, MediaPlacement placement, IReadOnlyList<CoreFirmware> asked, List<(uint Which, BatterySave Save)> wanted, DiscSet? set, string path, string console, string? emptySystem)
+        {
+            _placement = placement;
             MediaNotice = placement.Notices.Count == 0 ? null : string.Join(" ", placement.Notices);
             _set = set;
-            _discs = set.Images;
-            DiscIndex = 0;
+            _discs = set?.Images.ToList() ?? new List<string>();
+            DiscIndex = set is null ? -1 : 0;
             _closeLidAt = -1;
+            StartedEmpty = emptySystem;
 
             _machine?.Dispose();
             _machine = machine;
@@ -320,11 +360,17 @@ namespace EmuSen.Cores.Native
         // The machine for a disc: lent where the core borrows, when the machine takes the files' keeping, else read by the core within the call.
         private CoreMachine Create(DiscFiles disc, List<(uint, byte[])> firmware, List<(uint Which, BatterySave Save)> saves, MediaPlacement placement)
         {
+            var lend = Library.Has(CoreInterface.CapDevicePicture) ? DeviceLender?.Invoke() : null;
+            return new CoreMachine(Library, Held(disc.Image), MediaOf(disc), SettingsText(createScope: true), FilesFor(firmware, saves, placement), Lends ? disc : null, sharedRemovable: placement.RemovableApart, sharedConsole: placement.ConsoleApart, device: lend);
+        }
+
+        // The firmware, then each battery file that holds bytes or a console medium's formatted blank.
+        private static List<(uint, byte[])> FilesFor(List<(uint, byte[])> firmware, List<(uint Which, BatterySave Save)> saves, MediaPlacement placement)
+        {
             var files = new List<(uint, byte[])>(firmware);
             foreach (var (which, save) in saves)
                 if ((save.Read() ?? (placement.Fresh.TryGetValue(which, out ISaveMediumFormat? fresh) ? fresh.Format() : null)) is { } saved) files.Add((which, saved));
-            var lend = Library.Has(CoreInterface.CapDevicePicture) ? DeviceLender?.Invoke() : null;
-            return new CoreMachine(Library, Held(disc.Image), MediaOf(disc), SettingsText(createScope: true), files, Lends ? disc : null, sharedRemovable: placement.RemovableApart, sharedConsole: placement.ConsoleApart, device: lend);
+            return files;
         }
 
         // Every value as key=value lines: create-time and run-time keys at create, run-time keys only after it.
@@ -351,19 +397,46 @@ namespace EmuSen.Cores.Native
             _closeLidAt = -1;
         }
 
-        // Disc index of the set into the drive, its lid open, or for a state about to load with restore.
+        // Disc index of the session's discs into the drive, or -1 to empty it, its lid open, or for a state about to load with restore.
         public void InsertDisc(int index, bool restore = false)
         {
             if (!CanChangeDisc) throw new InvalidOperationException($"{Info.DisplayName} cannot change discs.");
-            if (index < 0 || index >= _discs.Count || _set is null) throw new ArgumentOutOfRangeException(nameof(index), $"the game has {_discs.Count} disc(s)");
-            DiscFiles disc = _set.Open(index);
-            try { Machine.MediaInsert(Machine.Info.Drives[0].Drive, Held(disc.Image), MediaOf(disc), restore, Lends ? disc : null); }
+            if (index < -1 || index >= _discs.Count) throw new ArgumentOutOfRangeException(nameof(index), $"the session has {_discs.Count} disc(s)");
+            uint drive = Machine.Info.Drives[0].Drive;
+            if (index < 0)
+            {
+                Machine.MediaInsert(drive, null, Array.Empty<(uint, byte[])>(), restore);
+                DiscIndex = -1;
+                return;
+            }
+            DiscFiles disc = _set is not null && index < _set.Images.Count ? _set.Open(index) : DiscSet.Of(_discs[index], CoreCatalog.IsImageExtension).Open(0);
+            try { Machine.MediaInsert(drive, Held(disc.Image), MediaOf(disc), restore, Lends ? disc : null); }
             finally
             {
                 if (!Lends) disc.Dispose();
             }
             DiscIndex = index;
         }
+
+        // Any disc file put in as a player would, the lid opened and closed LidOpenSeconds later; the core judges it, and a refused disc leaves the lid open - see Diamond_Shell.md §1.5.
+        public void InsertDisc(string path)
+        {
+            int index = _discs.FindIndex(d => string.Equals(d, path, StringComparison.Ordinal));
+            if (index < 0)
+            {
+                _discs.Add(path);
+                index = _discs.Count - 1;
+            }
+            try { ChangeDisc(index); }
+            catch
+            {
+                if (index == _discs.Count - 1 && index != DiscIndex && (_set is null || index >= _set.Images.Count)) _discs.RemoveAt(index);
+                throw;
+            }
+        }
+
+        // The drive emptied as a player would: the lid opened, the disc taken out, the lid closed LidOpenSeconds later.
+        public void EjectDisc() => ChangeDisc(-1);
 
         // Change disc as one action: the lid opened, disc index in, the lid closed after LidOpenSeconds of the game's own time.
         public void ChangeDisc(int index)
@@ -619,7 +692,7 @@ namespace EmuSen.Cores.Native
             catch (InvalidDataException e) when (CoreMachine.StatusOf(e) == CoreInterface.StatusWrongMedia && CanChangeDisc)
             {
                 int was = DiscIndex;
-                foreach (int i in Enumerable.Range(0, _discs.Count).Where(i => i != was))
+                foreach (int i in Enumerable.Range(0, _discs.Count).Append(-1).Where(i => i != was))
                 {
                     InsertDisc(i, restore: true);
                     try

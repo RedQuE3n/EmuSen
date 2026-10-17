@@ -106,7 +106,7 @@ macro_rules! layouts {
 
 layouts! {
     sys::FileEntry = emusen_file { size, which, data, len } [];
-    sys::CreateParams = emusen_create_params { size, host_abi_version, image, image_len, settings, settings_len, file_count, file_size, pixel_formats, error, error_len, flags } [files, device];
+    sys::CreateParams = emusen_create_params { size, host_abi_version, image, image_len, settings, settings_len, file_count, file_size, pixel_formats, error, error_len, flags } [files, device, system];
     sys::FrameInfo = emusen_frame_info { size, format, width, height, stride, row_repeat, flags, aspect_num, aspect_den, reserved, serial, bytes } [];
     sys::Event = emusen_event { size, kind, a, b } [];
     sys::Media = emusen_media { size, flags, image, image_len, file_count, file_size } [files];

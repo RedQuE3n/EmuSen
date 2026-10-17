@@ -4,7 +4,7 @@
 /// `EMUSEN_CORE_ABI_MAJOR`.
 pub const ABI_MAJOR: u32 = 1;
 /// `EMUSEN_CORE_ABI_MINOR`.
-pub const ABI_MINOR: u32 = 10;
+pub const ABI_MINOR: u32 = 11;
 /// `EMUSEN_CORE_ABI_VERSION`.
 pub const ABI_VERSION: u32 = (ABI_MAJOR << 16) | ABI_MINOR;
 
@@ -44,6 +44,8 @@ pub struct CreateParams {
     pub flags: u32,
     /// Since 1.9, `DEVICE_PICTURE`: the host's device lent, or null; absent from a shorter struct.
     pub device: *const DeviceLend,
+    /// Since 1.11: with an image of no bytes, the NUL-terminated id of the system to start empty; absent from a shorter struct.
+    pub system: *const std::ffi::c_char,
 }
 
 impl CreateParams {

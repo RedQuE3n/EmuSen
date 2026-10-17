@@ -639,9 +639,12 @@ namespace EmuSen.Mistress.Views
 
         // Slot 1 is the plain <rom>.state every other frontend writes - see §4.13.
         private string? StatePathForSlot(int slot) =>
-            _currentRomPath is null
+            StateKey is not string key
                 ? null
-                : SaveLibrary.StatePathFor(_currentRomPath, slot, _appSettings.StateDirectory);
+                : SaveLibrary.StatePathFor(key, slot, _appSettings.StateDirectory);
+
+        // What a state is filed under: the game's path, or a console session's name - see Diamond_Shell.md §9 Q8.
+        private string? StateKey => _currentRomPath ?? (_consoleSession is string console ? EmuSen.Cores.ConsoleSession.NameOf(console) : null);
 
         private void SaveState()
         {
@@ -652,7 +655,7 @@ namespace EmuSen.Mistress.Views
             }
 
             int slot = _stateSlot;
-            string rom = _currentRomPath!;
+            string rom = StateKey!;
             RequestOnEmulationThread(session =>
             {
                 string status;
@@ -680,7 +683,7 @@ namespace EmuSen.Mistress.Views
         // Runs straight through to the request unless the state's record gives a reason to stop or to ask - see EmuSen_Settings_Reference.md §4.37.
         private async Task LoadStateAsync()
         {
-            if (_session is not { IsRomLoaded: true } || CurrentStatePath is not string path || _currentRomPath is not string rom)
+            if (_session is not { IsRomLoaded: true } || CurrentStatePath is not string path || StateKey is not string rom)
             {
                 StatusText.Text = "Load State: no ROM loaded";
                 return;
@@ -693,7 +696,7 @@ namespace EmuSen.Mistress.Views
             }
 
             StateRecord? record = _fileRecords.ReadState(path);
-            if (Refusal(record, rom, _session) is string refused)
+            if (Refusal(record, rom, _session, _consoleSession) is string refused)
             {
                 StatusText.Text = $"Load State: {refused}";
                 Notify("State not loaded");
@@ -750,6 +753,7 @@ namespace EmuSen.Mistress.Views
                 new LunaMenu("_File",
                     new LunaAction("_Open ROM...", () => _ = OpenRomAsync()),
                     new LunaAction("_Browse ROMs...", () => _ = BrowseRomsAsync()),
+                    StartConsoleMenuItems(),
                     LunaAction.Separator(),
                     new LunaAction("Game _Library", ShowLibrary),
                     _newCollection,
@@ -760,7 +764,9 @@ namespace EmuSen.Mistress.Views
                     LunaAction.Separator(),
                     _speedMenu,
                     LunaAction.Separator(),
-                    _saveState, _loadState, _slotMenu, _rewindReel),
+                    _saveState, _loadState, _slotMenu, _rewindReel,
+                    LunaAction.Separator(),
+                    DriveMenuItems()[0], DriveMenuItems()[1]),
                 new LunaMenu("_View", _asGrid!, _asList!,
                     new LunaAction("_Larger Covers", () => TileScale.Value = Math.Min(MaximumTileScale, TileScale.Value + 0.25)),
                     new LunaAction("S_maller Covers", () => TileScale.Value = Math.Max(MinimumTileScale, TileScale.Value - 0.25)),
@@ -813,6 +819,7 @@ namespace EmuSen.Mistress.Views
             _slotMenu.IsEnabled = running;
             _rewindReel.IsEnabled = running;
             _pause.IsChecked = running && IsPaused;
+            SyncDriveMenu();
 
             // Checking a member unchecks its siblings and runs no handler; ActionGroup.Checked is read-only.
             _speeds.Members[SpeedIndex(_baseSpeedPercent)].IsChecked = true;
@@ -907,6 +914,13 @@ namespace EmuSen.Mistress.Views
         private void ResetEmulation()
         {
             if (_session is not { IsRomLoaded: true }) return;
+            if (_consoleSession is string console)
+            {
+                ResumeEmulation();
+                StartConsole(console, reset: true);
+                if (_session is { IsRomLoaded: true }) StatusText.Text = $"Reset: {_currentDisplayName}";
+                return;
+            }
             if (_currentRomPath is not string path || _currentDisplayName is not string displayName) return;
 
             ResumeEmulation(); // a reset always comes back running, however it was paused
@@ -968,47 +982,12 @@ namespace EmuSen.Mistress.Views
                     StatusText.Text = resumeFailure;
                     return;
                 }
-                _gamepad.Bindings = _gamepadBindings.For(_activeConsole);
-                string bindingsConsole = _activeConsole;
-                _gamepad.PlayerBindings = player => _gamepadBindings.For(bindingsConsole, player);
-                _gamepad.LeftStickIsAnalog = _session.SupportedAxes.Contains(PadAxis.LeftX);
-                _ports.Reset(_session.ControllerPorts, _session.SupportedAxes);
-                // A new game is claimed again by the first press; a restart keeps its players - see EmuSen_Input.md §8.13.
-                if (!reset) _gamepad.BeginClaims();
-
-                _rewind.Clear(); // a discontinuous jump - see §1.4
-                _rewind.IntervalFrames = RewindIntervalFor(_session.FrameRateHz);
-                _audioPlayer.RateControl.Reset();
-
-                // Built by CoreFactory alongside the core, so this window names no concrete target.
-                _debugTarget = _session.DebugTarget;
-                _consoleWindow.Current?.UpdateTarget(_debugTarget, displayName,
-                    _session.CheatAutoDetectCodec, _session.CheatExplicitCodec, _session.CpuTraceSwitch);
-                _coretopWindow.Current?.UpdateTarget(_debugTarget);
-
-                GameFrame.IsVisible = true;
-                LibraryView.IsVisible = false;
-
-                StatusText.Text = restoredCheats > 0
-                    ? $"Running: {displayName}  ({restoredCheats} saved cheat(s) restored)"
-                    : $"Running: {displayName}";
-                if (_session.EngineNotice is { } notice) StatusText.Text += $"  ({notice})";
-                if (_session.FirmwareNotice is { } firmware) StatusText.Text += $"  ({firmware})";
-                if (_session.MediaNotice is { } media) StatusText.Text += $"  ({media})";
+                WireSession(_session, displayName, restoredCheats, newGame: !reset);
                 _currentRomPath = path;
+                _consoleSession = null;
                 _currentDisplayName = displayName;
                 if (!reset) RecordStart(path);
-
-                // Gamepad polling only; emulation is _emuThread's - see §4.21.
-                _timer = new DispatcherTimer { Interval = FrameInterval };
-                _timer.Tick += (_, _) => PollGamepad();
-                _timer.Start();
-
-                // The frame control stretches repeated rows on the GPU, so a core that can is asked to send each once - see EmuSen_Multicore.md §15.
-                if (_session.Core is EmuSen.Cores.IRepeatedRows repeated) repeated.RepeatRows = false;
-
-                StartEmulationThread();
-                SyncMenuState();
+                RunSession(_session);
             }
             catch (Exception ex)
             {
@@ -1018,6 +997,53 @@ namespace EmuSen.Mistress.Views
                 ErrorLog.Error("launch", $"Failed to load {displayName}", ex);
                 StatusText.Text = $"Failed to load {displayName}: {ex.Message}";
             }
+        }
+
+        // A loaded session's pad, ports, rewind, debugger and screen, and the status line naming it.
+        private void WireSession(EmulatorSession session, string displayName, int restoredCheats, bool newGame)
+        {
+            _gamepad.Bindings = _gamepadBindings.For(_activeConsole);
+            string bindingsConsole = _activeConsole;
+            _gamepad.PlayerBindings = player => _gamepadBindings.For(bindingsConsole, player);
+            _gamepad.LeftStickIsAnalog = session.SupportedAxes.Contains(PadAxis.LeftX);
+            _ports.Reset(session.ControllerPorts, session.SupportedAxes);
+            // A new game is claimed again by the first press; a restart keeps its players - see EmuSen_Input.md §8.13.
+            if (newGame) _gamepad.BeginClaims();
+
+            _rewind.Clear(); // a discontinuous jump - see §1.4
+            _rewind.IntervalFrames = RewindIntervalFor(session.FrameRateHz);
+            _audioPlayer.RateControl.Reset();
+
+            // Built by CoreFactory alongside the core, so this window names no concrete target.
+            _debugTarget = session.DebugTarget;
+            _consoleWindow.Current?.UpdateTarget(_debugTarget, displayName,
+                session.CheatAutoDetectCodec, session.CheatExplicitCodec, session.CpuTraceSwitch);
+            _coretopWindow.Current?.UpdateTarget(_debugTarget);
+
+            GameFrame.IsVisible = true;
+            LibraryView.IsVisible = false;
+
+            StatusText.Text = restoredCheats > 0
+                ? $"Running: {displayName}  ({restoredCheats} saved cheat(s) restored)"
+                : $"Running: {displayName}";
+            if (session.EngineNotice is { } notice) StatusText.Text += $"  ({notice})";
+            if (session.FirmwareNotice is { } firmware) StatusText.Text += $"  ({firmware})";
+            if (session.MediaNotice is { } media) StatusText.Text += $"  ({media})";
+        }
+
+        // The wired session started: the pad polled and the emulation thread running.
+        private void RunSession(EmulatorSession session)
+        {
+            // Gamepad polling only; emulation is _emuThread's - see §4.21.
+            _timer = new DispatcherTimer { Interval = FrameInterval };
+            _timer.Tick += (_, _) => PollGamepad();
+            _timer.Start();
+
+            // The frame control stretches repeated rows on the GPU, so a core that can is asked to send each once - see EmuSen_Multicore.md §15.
+            if (session.Core is EmuSen.Cores.IRepeatedRows repeated) repeated.RepeatRows = false;
+
+            StartEmulationThread();
+            SyncMenuState();
         }
 
         // Steps out of a game without unloading it, unlike ShowLibrary - see EmuSen_Settings_Reference.md §4.18.
@@ -1047,6 +1073,7 @@ namespace EmuSen.Mistress.Views
             StopLogging(); // this ROM's log files have no next writer - see §4.12
             _session = null;
             _currentRomPath = null;
+            _consoleSession = null;
             _currentDisplayName = null;
             _rewind.Clear();
 
@@ -1124,6 +1151,7 @@ namespace EmuSen.Mistress.Views
 
         private void ShowLibraryEntries()
         {
+            UpdateStartConsoleButton();
             string search = LibraryFilter.SearchText;
             _recordSnapshot = _records.All();
             _editSnapshot = _records.AllEdits();

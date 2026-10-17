@@ -90,6 +90,8 @@ pub const FAULT_RAW_DISAGREES: u32 = 1 << 24;
 /// state there by another shows it wrong, for one frame; a machine loading its own state does not see it.
 pub const FAULT_STATE_LOST_LATE: u32 = 1 << 25;
 pub const STATE_LOST_FROM: i64 = 90;
+/// Seeded fault for the kit's C22 (since 1.11): a machine started empty reports a disc in its drive.
+pub const FAULT_EMPTY_LOADED: u32 = 1 << 26;
 /// The included faults, narrowed to the bits of `EMUSEN_TEST_CORE_FAULTS` when that is set, so each can be shown alone.
 fn faults() -> u32 {
     static MASK: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
@@ -195,6 +197,94 @@ fn fingerprint(payload: &[u8]) -> u32 {
 }
 
 impl TestCore {
+    /// The machine for `body`, or with nothing in its drive when `empty` (since 1.11, `starts_empty`).
+    fn make(r: &Create<'_>, body: &[u8], empty: bool) -> Result<TestCore, i32> {
+        if faults() & FAULT_ONLY_HOST_1_0 != 0 && r.host_abi_version != 1 << 16 {
+            detail("this core runs only on a host of core ABI 1.0");
+            return Err(status::NOT_SUPPORTED);
+        }
+        let mut ram = [0u8; 256];
+        ram[0] = r.settings.get("Ram").and_then(|v| v.parse().ok()).unwrap_or(0);
+        ram[1..].iter_mut().zip(body).for_each(|(d, s)| *d = *s);
+        if faults() & FAULT_MACHINES_DIFFER != 0 {
+            ram[255] = MADE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        let mut sram = [0u8; 16];
+        let mut card = (body.first() == Some(&CARD)).then_some([0u8; 16]);
+        let mut memory = (body.first() == Some(&CONSOLE_MEMORY)).then_some([0u8; 16]);
+        for f in &r.files {
+            match f.which {
+                0 => sram.iter_mut().zip(f.data).for_each(|(d, s)| *d = *s),
+                1 => card.iter_mut().for_each(|c| c.iter_mut().zip(f.data).for_each(|(d, s)| *d = *s)),
+                2 => memory.iter_mut().for_each(|c| c.iter_mut().zip(f.data).for_each(|(d, s)| *d = *s)),
+                16 => {}
+                _ => {
+                    detail(&format!("file {} is not this core's", f.which));
+                    return Err(status::BAD_FILE);
+                }
+            }
+        }
+        log(Level::Info, "test", &format!("created with {} bytes", body.len()));
+        let mut m = TestCore {
+            frames: 0,
+            ram,
+            sram,
+            sram_dirty: false,
+            pads: [0; 2],
+            axis: 0.0,
+            wide: r.settings.get("Wide") == Some("true"),
+            rate: 32000,
+            pending_rate: 32000,
+            old: 0,
+            old_rate: 32000,
+            samples: Vec::new(),
+            limit: 1 << 16,
+            picture: Vec::new(),
+            skip: false,
+            mutes: 0,
+            patches: Vec::new(),
+            pokes: Vec::new(),
+            hooks: Hooks::new(&[8]),
+            threads: r.settings.get("Threads").and_then(|v| v.parse().ok()).unwrap_or(1),
+            disc: if empty && faults() & FAULT_EMPTY_LOADED == 0 { 0 } else { fingerprint(body) },
+            lid_open: false,
+            cartridge: body.first() == Some(&CARTRIDGE),
+            rom: keep(r.image),
+            settling: 0,
+            card,
+            card_dirty: false,
+            shared_removable: r.shared_removable,
+            memory,
+            memory_dirty: false,
+            shared_console: r.shared_console,
+            lent: r.device.is_some(),
+            raw_mask: 0,
+            raw: None,
+            held: 0,
+        };
+        m.draw();
+        Ok(m)
+    }
+
+    fn info_of(&self) -> MachineInfo {
+        MachineInfo {
+            system: "test".into(),
+            region: Some(Region::Ntsc),
+            frame_rate: (60, 1),
+            video: Video { base_width: 8, base_height: 4, max_width: 16, max_height: 4, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
+            audio: Audio { rate: self.rate, channels: vec!["Tone".into()] },
+            ports: vec![Port { port: 0, controller: Some("test.pad".into()) }, Port { port: 1, controller: None }],
+            spaces: vec![Space { cheats: true, ..Space::new(0, "RAM") }, Space { read_only: true, ..Space::new(1, "ROM") }],
+            processors: vec![Processor { id: 0, name: "Counter".into(), pc_bits: 8, registers: vec![("F".into(), 64)], code_space: None }],
+            battery: std::iter::once(Battery::game(0, ".srm")).chain(self.card.map(|_| Battery::removable(1, ".card"))).chain(self.memory.map(|_| Battery::console(2, ".mem"))).collect(),
+            state: StateFormat { format: "TST1".into(), version: 1, loads_from: vec![1] },
+            phases: vec!["count".into()],
+            patches: Some((0, 0xFF)),
+            skip_rendering_state_neutral: true,
+            firmware: Vec::new(),
+        }
+    }
+
     /// Drive 0 is the one drive, which a cartridge's machine lacks; the faults answer otherwise for it.
     fn has_drive(&self, drive: u32) -> Result<(), i32> {
         match drive {
@@ -346,91 +436,19 @@ impl Core for TestCore {
     }
 
     fn create(r: &Create<'_>) -> Result<Self, i32> {
-        if faults() & FAULT_ONLY_HOST_1_0 != 0 && r.host_abi_version != 1 << 16 {
-            detail("this core runs only on a host of core ABI 1.0");
-            return Err(status::NOT_SUPPORTED);
-        }
-        let body = payload(r.image)?;
-        let mut ram = [0u8; 256];
-        ram[0] = r.settings.get("Ram").and_then(|v| v.parse().ok()).unwrap_or(0);
-        ram[1..].iter_mut().zip(body).for_each(|(d, s)| *d = *s);
-        if faults() & FAULT_MACHINES_DIFFER != 0 {
-            ram[255] = MADE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        }
-        let mut sram = [0u8; 16];
-        let mut card = (body.first() == Some(&CARD)).then_some([0u8; 16]);
-        let mut memory = (body.first() == Some(&CONSOLE_MEMORY)).then_some([0u8; 16]);
-        for f in &r.files {
-            match f.which {
-                0 => sram.iter_mut().zip(f.data).for_each(|(d, s)| *d = *s),
-                1 => card.iter_mut().for_each(|c| c.iter_mut().zip(f.data).for_each(|(d, s)| *d = *s)),
-                2 => memory.iter_mut().for_each(|c| c.iter_mut().zip(f.data).for_each(|(d, s)| *d = *s)),
-                16 => {}
-                _ => {
-                    detail(&format!("file {} is not this core's", f.which));
-                    return Err(status::BAD_FILE);
-                }
-            }
-        }
-        log(Level::Info, "test", &format!("created with {} bytes", body.len()));
-        let mut m = TestCore {
-            frames: 0,
-            ram,
-            sram,
-            sram_dirty: false,
-            pads: [0; 2],
-            axis: 0.0,
-            wide: r.settings.get("Wide") == Some("true"),
-            rate: 32000,
-            pending_rate: 32000,
-            old: 0,
-            old_rate: 32000,
-            samples: Vec::new(),
-            limit: 1 << 16,
-            picture: Vec::new(),
-            skip: false,
-            mutes: 0,
-            patches: Vec::new(),
-            pokes: Vec::new(),
-            hooks: Hooks::new(&[8]),
-            threads: r.settings.get("Threads").and_then(|v| v.parse().ok()).unwrap_or(1),
-            disc: fingerprint(body),
-            lid_open: false,
-            cartridge: body.first() == Some(&CARTRIDGE),
-            rom: keep(r.image),
-            settling: 0,
-            card,
-            card_dirty: false,
-            shared_removable: r.shared_removable,
-            memory,
-            memory_dirty: false,
-            shared_console: r.shared_console,
-            lent: r.device.is_some(),
-            raw_mask: 0,
-            raw: None,
-            held: 0,
-        };
-        m.draw();
-        Ok(m)
+        TestCore::make(r, payload(r.image)?, false)
+    }
+
+    fn starts_empty(system: &str) -> bool {
+        system == "test"
+    }
+
+    fn create_empty(_system: &str, r: &Create<'_>) -> Result<Self, i32> {
+        TestCore::make(r, &[], true)
     }
 
     fn machine_info(&self) -> MachineInfo {
-        MachineInfo {
-            system: "test".into(),
-            region: Some(Region::Ntsc),
-            frame_rate: (60, 1),
-            video: Video { base_width: 8, base_height: 4, max_width: 16, max_height: 4, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
-            audio: Audio { rate: self.rate, channels: vec!["Tone".into()] },
-            ports: vec![Port { port: 0, controller: Some("test.pad".into()) }, Port { port: 1, controller: None }],
-            spaces: vec![Space { cheats: true, ..Space::new(0, "RAM") }, Space { read_only: true, ..Space::new(1, "ROM") }],
-            processors: vec![Processor { id: 0, name: "Counter".into(), pc_bits: 8, registers: vec![("F".into(), 64)], code_space: None }],
-            battery: std::iter::once(Battery::game(0, ".srm")).chain(self.card.map(|_| Battery::removable(1, ".card"))).chain(self.memory.map(|_| Battery::console(2, ".mem"))).collect(),
-            state: StateFormat { format: "TST1".into(), version: 1, loads_from: vec![1] },
-            phases: vec!["count".into()],
-            patches: Some((0, 0xFF)),
-            skip_rendering_state_neutral: true,
-            firmware: Vec::new(),
-        }
+        self.info_of()
     }
 
     fn reset(&mut self) -> Result<(), i32> {

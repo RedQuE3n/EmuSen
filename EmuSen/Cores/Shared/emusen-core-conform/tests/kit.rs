@@ -34,9 +34,9 @@ fn verdicts(name: &str) -> Vec<(&'static str, bool)> {
 
 const ALL: [&str; 15] = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13", "C14", "C15"];
 
-/// The cases a core is run through: the fifteen, C16 where it claims MEDIA, and C17 to C21.
+/// The cases a core is run through: the fifteen, C16 where it claims MEDIA, and C17 to C22.
 fn cases(media: bool) -> Vec<&'static str> {
-    ALL.iter().chain(media.then_some(&"C16")).chain(&["C17", "C18", "C19", "C20", "C21"]).copied().collect()
+    ALL.iter().chain(media.then_some(&"C16")).chain(&["C17", "C18", "C19", "C20", "C21", "C22"]).copied().collect()
 }
 
 #[test]
@@ -88,7 +88,7 @@ fn c18_checks_every_place_a_drive_names_and_runs_the_same_whether_the_host_acts(
 // comparisons with a solo run, C12's rerun of C6-C8 and C17's and C18's of one run with another.
 #[test]
 fn the_seeded_faults_fail_the_cases_they_break_and_no_others() {
-    let failing = ["C4", "C7", "C8", "C9", "C10", "C12", "C13", "C17", "C18"];
+    let failing = ["C4", "C7", "C8", "C9", "C10", "C12", "C13", "C17", "C18", "C22"];
     assert_eq!(verdicts("kit_faulty_core"), cases(false).into_iter().map(|c| (c, !failing.contains(&c))).collect::<Vec<_>>());
 }
 
@@ -98,7 +98,7 @@ fn the_seeded_faults_fail_the_cases_they_break_and_no_others() {
 // raw picture its palette does not draw as the frame C21.
 #[test]
 fn the_faults_of_c9_and_c12_to_c18_fail_those_cases_and_no_others() {
-    let failing = ["C9", "C12", "C13", "C14", "C15", "C17", "C18", "C20", "C21"];
+    let failing = ["C9", "C12", "C13", "C14", "C15", "C17", "C18", "C20", "C21", "C22"];
     assert_eq!(verdicts("kit_faulty_full_core"), cases(true).into_iter().map(|c| (c, !failing.contains(&c))).collect::<Vec<_>>());
 }
 
@@ -108,7 +108,7 @@ fn the_faults_of_c9_and_c12_to_c18_fail_those_cases_and_no_others() {
 fn each_fault_of_c9_and_c12_to_c18_alone_fails_its_case_alone() {
     let file = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("kit-faulty-full.v1tc");
     std::fs::write(&file, image(&[1, 2, 3, 0x20, 0x41])).unwrap();
-    for (fault, cases) in [(8, vec!["C9"]), (16, vec!["C12", "C17", "C18", "C20"]), (32, vec!["C13"]), (64, vec!["C14"]), (128, vec!["C15"]), (256, vec!["C17"]), (512, vec!["C18"]), (1 << 22, vec!["C14"]), (1 << 23, vec!["C20"]), (1 << 24, vec!["C21"])] {
+    for (fault, cases) in [(8, vec!["C9"]), (16, vec!["C12", "C17", "C18", "C20", "C22"]), (32, vec!["C13"]), (64, vec!["C14"]), (128, vec!["C15"]), (256, vec!["C17"]), (512, vec!["C18"]), (1 << 22, vec!["C14"]), (1 << 23, vec!["C20"]), (1 << 24, vec!["C21"]), (1 << 26, vec!["C22"])] {
         let out = std::process::Command::new(env!("CARGO_BIN_EXE_emusen-core-conform"))
             .args(["--self-delimiting", "--frames", "120", "--core"])
             .arg(library("kit_faulty_full_core"))
@@ -198,7 +198,7 @@ fn a_report_says_what_was_run_and_a_missing_library_fails_c1() {
     let v = json::parse(report.json().as_bytes()).unwrap();
     assert_eq!(v.get("passed"), Some(&Value::Bool(true)));
     assert_eq!(v.get("id").and_then(Value::as_str), Some("v1-test-core"));
-    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(21));
+    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(22));
     let none = run(&library("no_such_core"), &options());
     assert!(!none.passed());
     assert_eq!(none.cases[0].id, "C1");
@@ -223,7 +223,7 @@ fn a_sidecar_carries_the_librarys_own_descriptors_and_hash() {
     assert_eq!(v.get("sidecar").and_then(Value::as_i64), Some(1));
     assert_eq!(v.get("library").and_then(Value::as_str), lib.file_name().and_then(|n| n.to_str()));
     assert_eq!(v.get("sha256").and_then(Value::as_str), Some(digest::sha256_hex(&std::fs::read(&lib).unwrap()).as_str()));
-    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.10"));
+    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.11"));
     assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0x7FFFFF));
     assert_eq!(v.get("info").and_then(|i| i.get("id")).and_then(Value::as_str), Some("v1-test-core"));
     assert_eq!(v.get("settings").and_then(Value::as_array).map(|a| a.len()), Some(4));
@@ -284,7 +284,7 @@ fn a_corpus_runs_the_cores_cases_once_and_the_images_cases_for_every_image() {
         }
         assert!(c.passed());
         let all: std::collections::BTreeSet<&str> = corpus::CORE_CASES.iter().chain(corpus::IMAGE_CASES.iter()).copied().collect();
-        assert_eq!(all, ALL.iter().chain(&["C16", "C17", "C18", "C19", "C20", "C21"]).copied().collect());
+        assert_eq!(all, ALL.iter().chain(&["C16", "C17", "C18", "C19", "C20", "C21", "C22"]).copied().collect());
     }
 }
 
@@ -328,7 +328,7 @@ fn a_corpus_says_of_each_image_what_the_single_image_form_says() {
 #[test]
 fn the_seeded_faults_fail_the_same_cases_in_a_corpus() {
     let (_, list) = corpus_files("faults");
-    for (name, core, per_image) in [("kit_faulty_core", vec!["C4", "C9", "C10", "C12", "C13"], vec!["C7", "C8", "C17", "C18"]), ("kit_faulty_full_core", vec!["C9", "C12", "C13", "C15"], vec!["C14", "C17", "C18", "C20", "C21"])] {
+    for (name, core, per_image) in [("kit_faulty_core", vec!["C4", "C9", "C10", "C12", "C13", "C22"], vec!["C7", "C8", "C17", "C18"]), ("kit_faulty_full_core", vec!["C9", "C12", "C13", "C15", "C22"], vec!["C14", "C17", "C18", "C20", "C21"])] {
         let c = run_corpus(name, &list, 2);
         assert_eq!(c.core.cases.iter().filter(|x| !x.passed).map(|x| x.id).collect::<Vec<_>>(), core, "{name}");
         for i in &c.images {
@@ -361,7 +361,7 @@ fn the_runner_takes_a_directory_or_a_list_and_writes_a_report_for_each_image() {
         let failing = images_listed.iter().filter(|i| i.get("passed") != Some(&Value::Bool(true))).count();
         assert_eq!(failing, if count == 4 { 1 } else { 0 }, "{text}");
         assert_eq!(out.status.code(), Some(if failing == 0 { 0 } else { 1 }), "{text}");
-        assert_eq!(summary.get("core").and_then(|c| c.get("cases")).and_then(Value::as_array).map(|a| a.len()), Some(11));
+        assert_eq!(summary.get("core").and_then(|c| c.get("cases")).and_then(Value::as_array).map(|a| a.len()), Some(12));
         for i in images_listed {
             let file = i.get("report").and_then(Value::as_str).unwrap();
             let report = json::parse(&std::fs::read(reports.join(file)).unwrap()).unwrap();

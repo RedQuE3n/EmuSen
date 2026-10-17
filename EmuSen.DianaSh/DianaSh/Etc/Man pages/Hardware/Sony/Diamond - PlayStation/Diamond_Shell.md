@@ -2,8 +2,9 @@
 
 *Written 2026-10-17, before any code, at the tester's request of the same day: "Let's add the ability to Diamond to boot
 into the PlayStation with no game and be able to go to its memory card manager. Make it so that if later we want to add
-the ability to play music cds and use the visualizer, we can."* This page is a design awaiting the tester's approval.
-Nothing in it is built. §1 gives the form of each part and why, §2 the empty drive as the documents describe it, §3 the
+the ability to play music cds and use the visualizer, we can."* This page was written as a design for the tester's
+approval. *Decided 2026-10-17 by the tester: Q1–Q13 and P1–P4, each as recommended* (§9): S5 is built, the visualizer's
+home is decided when the player is planned, and P1–P4 are standing rules for this work. §1 gives the form of each part and why, §2 the empty drive as the documents describe it, §3 the
 memory card manager's scope, §4 how the shell is written and tested without a window, §5 the seams the audio CD player
 and its visualizer will use, §6 the phasing, §7 the risks, §8 the choices where the documents are silent, §9 the
 questions for the tester, and §10 the reading log.
@@ -520,6 +521,8 @@ S1 and S2 touch the framework. S3 and S4 touch only Diamond's guest programs. S2
 
 ## 9. Questions for the tester
 
+*Decided 2026-10-17 by the tester: Q1–Q13 and P1–P4, each as recommended.*
+
 1. **Q1, the ABI's form.** Core ABI 1.11: `starts_empty` per system in core info, a null image in `create` for such a
    system, and `create_params.system` appended (§1.1). *Recommended*: yes. The alternatives are a library bit (wrong
    for Nephrite's two systems), a second create export, or an undeclared convention.
@@ -622,3 +625,42 @@ No machine was run.
   - `CoreEngine.cs` lines 200–376;
   - Mistress's `MainWindow.axaml.cs` lines 920–990;
   - a search of `PsxCardFormat.cs`.
+
+---
+
+## 11. Build record
+
+### 11.1 S1: core ABI 1.11 and Diamond's empty start (2026-10-17)
+
+**Built.** `EmuSen_CoreAPI.md` §6.31 is the normative text, §28.17 the kit's case and its changelog the summary. The
+header's `emusen_create_params.system` (offset 104, 112 bytes), core info's `systems[].starts_empty`, the baseline
+regenerated to 483 facts with `--check` and `--against` 1.10 passing, `emusen-native`'s check in the create export, the
+guard's checker, the C# host's `CoreInterface.CreateParams.System`, `CoreSystem.StartsEmpty` and `CoreMachine`'s
+`system`, kit case C22, the test core's empty start and `FAULT_EMPTY_LOADED`.
+
+**One departure from §1.1, argued.** §1.1 proposed `Create.image: Option<&[u8]>` and `Create.system: Option<&str>` on
+the Rust side. Both are fields of a struct every core builds in its tests by a literal, so either would have changed
+six cores' code for a feature one of them uses. The surface became two defaulted trait functions instead,
+`Core::starts_empty(system)` and `Core::create_empty(system, request)`, beside `battery_files(system)`, which is how
+per-system facts already reach core info. A core that does not opt in compiles and behaves as before. The C ABI is as
+§1.1 gave it.
+
+**Diamond.** `starts_empty("psx")`; `create_empty` makes the machine of `Media { kind: Empty, market }` through the same
+`Machine::make` a disc's create now calls, so files, settings, kernels, cards and multitaps are checked and placed by one
+path. The market is that of the first player's BIOS given of the Americas, Europe and Japan, else the Americas, and the
+Region setting overrules it (§9 Q4). With no kind to side-load, the machine starts at the reset vector on its kernel.
+`the_console_starts_empty_and_its_market_comes_from_the_bios_given`: the drive is listed empty with its lid closed;
+machine info names the Americas and the open kernel; after 420 frames VRAM holds the open kernel's screen with no disc;
+a Japanese, a European-and-Japanese and all three BIOS files give Japan, Europe and the Americas, each named `File`;
+`region=psx.us` beside a European BIOS gives the Americas on the open kernel; an unnamed file is refused.
+
+**Nephrite** does not claim the field. With a player's BIOS its Sega CD stays on its first picture with an empty
+drive (`Nephrite_Bram.md` §11, `Nephrite_OpenBios.md` §16), so it does not yet start empty correctly. That is
+Nephrite's follow-up, not built here: an empty start for `mcd`, once the stall is explained.
+
+**Measured (2026-10-17).**
+- `emusen-native`: 77 tests, one new.
+- The guard: its 6 tests.
+- The kit: its 24 tests and 8 unit tests.
+- Diamond: its 174 unit tests, and `diamond-v1`'s 4.
+- The kit on Diamond's library with Crash Bandicoot's disc at 600 frames: C1–C22 pass, 71 s.

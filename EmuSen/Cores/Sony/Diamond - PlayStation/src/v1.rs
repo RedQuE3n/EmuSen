@@ -282,40 +282,20 @@ impl Core for Machine {
             (crate::medium::Opened::Program, m) => (m, None),
             (crate::medium::Opened::Disc(d, _), m) => (m, Some(d)),
         };
-        let request_files: Vec<_> = request.files.iter().filter(|f| f.which < MEDIA_FILE).collect();
-        if let Some(f) = request_files.iter().find(|f| f.which > BIOS_EUROPE && !CARD_FILES.contains(&f.which)) {
-            detail(&format!("file {} is not one Diamond names", f.which));
-            return Err(status::BAD_FILE);
-        }
-        if let Some(f) = request_files.iter().find(|f| !CARD_FILES.contains(&f.which) && f.data.len() != BIOS_BYTES) {
-            detail(&format!("file {} is {} bytes; a BIOS is {BIOS_BYTES}", f.which, f.data.len()));
-            return Err(status::BAD_FILE);
-        }
-        if let Some(f) = request_files.iter().find(|f| CARD_FILES.contains(&f.which) && !f.data.is_empty() && f.data.len() != CARD_BYTES) {
-            detail(&format!("file {} is {} bytes; a memory card is {CARD_BYTES}", f.which, f.data.len()));
-            return Err(status::BAD_FILE);
-        }
-        let s = &request.settings;
-        let config = Config { market: market_of(&media, s.get(REGION_KEY)), gpu: GPUS.iter().find(|g| Some(g.0) == s.get(GPU_KEY)).map_or(Gpu::Pin208, |g| g.2) };
-        let port = |key: &str| PLUGS.iter().find(|p| p.0 == s.get(key).unwrap_or(DUALSHOCK) && p.0 != "none").map(|p| p.0);
-        let players = request.files.iter().find(|f| f.which == bios(config.market).which).map(|f| (f.data, Kernel::Player));
-        let rom = players.or_else(|| kernel::open_kernel().map(|k| (k, Kernel::Open)));
-        let mut m = Machine::new(media, config, [port(PAD_KEYS[0]), port(PAD_KEYS[1])], request.image, rom);
-        m.firmware = request_files.iter().filter(|f| !CARD_FILES.contains(&f.which)).map(|f| f.which).collect();
-        m.cards_apart = request.shared_removable;
-        if let Some(d) = disc {
-            m.insert_disc(*d);
-        }
-        for n in 0..2 {
-            if s.get(CARD_KEYS[n]).unwrap_or(if n == 0 { CARD } else { "none" }) == CARD {
-                let data = request.files.iter().find(|f| f.which == CARD_FILES[n] && !f.data.is_empty()).map(|f| f.data);
-                m.insert_card(n, data);
-            }
-            if s.get(TAP_KEYS[n]) == Some(MULTITAP) {
-                m.plug_multitap(n);
-            }
-        }
-        Ok(m)
+        Machine::make(request, media, disc)
+    }
+
+    /// Diamond_Shell.md §1.2: the console powers on with an empty drive and its kernel finds no disc.
+    fn starts_empty(system: &str) -> bool {
+        system == "psx"
+    }
+
+    /// With no disc to name the market, the player's BIOS that was given names it (the Americas', then Europe's, then
+    /// Japan's), else the Americas; the Region setting overrules either (Diamond_Shell.md §1.2).
+    fn create_empty(_system: &str, request: &Create<'_>) -> Result<Self, i32> {
+        let given = |m: Market| request.files.iter().any(|f| f.which == bios(m).which && f.data.len() == BIOS_BYTES);
+        let market = [Market::Americas, Market::Europe, Market::Japan].into_iter().find(|&m| given(m));
+        Machine::make(request, Media { kind: crate::media::Kind::Empty, market }, None)
     }
 
     fn machine_info(&self) -> MachineInfo {
@@ -551,6 +531,45 @@ impl Core for Machine {
 }
 
 impl Machine {
+    /// The machine for `media`, with `disc` in its drive or none: the files checked, the settings read, the kernel
+    /// chosen (the player's BIOS of the market where given, else the open kernel), the cards and the multitaps.
+    fn make(request: &Create<'_>, media: Media, disc: Option<Box<crate::medium::Disc>>) -> Result<Machine, i32> {
+        let request_files: Vec<_> = request.files.iter().filter(|f| f.which < MEDIA_FILE).collect();
+        if let Some(f) = request_files.iter().find(|f| f.which > BIOS_EUROPE && !CARD_FILES.contains(&f.which)) {
+            detail(&format!("file {} is not one Diamond names", f.which));
+            return Err(status::BAD_FILE);
+        }
+        if let Some(f) = request_files.iter().find(|f| !CARD_FILES.contains(&f.which) && f.data.len() != BIOS_BYTES) {
+            detail(&format!("file {} is {} bytes; a BIOS is {BIOS_BYTES}", f.which, f.data.len()));
+            return Err(status::BAD_FILE);
+        }
+        if let Some(f) = request_files.iter().find(|f| CARD_FILES.contains(&f.which) && !f.data.is_empty() && f.data.len() != CARD_BYTES) {
+            detail(&format!("file {} is {} bytes; a memory card is {CARD_BYTES}", f.which, f.data.len()));
+            return Err(status::BAD_FILE);
+        }
+        let s = &request.settings;
+        let config = Config { market: market_of(&media, s.get(REGION_KEY)), gpu: GPUS.iter().find(|g| Some(g.0) == s.get(GPU_KEY)).map_or(Gpu::Pin208, |g| g.2) };
+        let port = |key: &str| PLUGS.iter().find(|p| p.0 == s.get(key).unwrap_or(DUALSHOCK) && p.0 != "none").map(|p| p.0);
+        let players = request.files.iter().find(|f| f.which == bios(config.market).which).map(|f| (f.data, Kernel::Player));
+        let rom = players.or_else(|| kernel::open_kernel().map(|k| (k, Kernel::Open)));
+        let mut m = Machine::new(media, config, [port(PAD_KEYS[0]), port(PAD_KEYS[1])], request.image, rom);
+        m.firmware = request_files.iter().filter(|f| !CARD_FILES.contains(&f.which)).map(|f| f.which).collect();
+        m.cards_apart = request.shared_removable;
+        if let Some(d) = disc {
+            m.insert_disc(*d);
+        }
+        for n in 0..2 {
+            if s.get(CARD_KEYS[n]).unwrap_or(if n == 0 { CARD } else { "none" }) == CARD {
+                let data = request.files.iter().find(|f| f.which == CARD_FILES[n] && !f.data.is_empty()).map(|f| f.data);
+                m.insert_card(n, data);
+            }
+            if s.get(TAP_KEYS[n]) == Some(MULTITAP) {
+                m.plug_multitap(n);
+            }
+        }
+        Ok(m)
+    }
+
     /// A changed card reported to the host once until it saves it, after each whole frame.
     fn report_cards(&mut self) {
         for (n, &which) in CARD_FILES.iter().enumerate() {
@@ -572,6 +591,39 @@ mod tests {
     fn create(image: &[u8], settings: &[(&str, &str)], files: Vec<emusen_native::abi::File<'_>>) -> Result<Machine, i32> {
         let settings = Settings::from_pairs(settings.iter().map(|&(k, v)| (k.to_owned(), v.to_owned())).collect());
         Machine::create(&Create { image, settings, files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None })
+    }
+
+    fn create_empty(settings: &[(&str, &str)], files: Vec<emusen_native::abi::File<'_>>) -> Result<Machine, i32> {
+        let settings = Settings::from_pairs(settings.iter().map(|&(k, v)| (k.to_owned(), v.to_owned())).collect());
+        Machine::create_empty("psx", &Create { image: &[], settings, files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None })
+    }
+
+    /// Diamond_Shell.md §1.2: started empty, the drive is listed empty with its lid closed, the open kernel finds no
+    /// disc and draws its screen; with no disc the player's BIOS that was given names the market, the Americas' first,
+    /// and the Region setting overrules it.
+    #[test]
+    fn the_console_starts_empty_and_its_market_comes_from_the_bios_given() {
+        assert!(Machine::starts_empty("psx") && !Machine::starts_empty("x"));
+        let mut m = create_empty(&[], Vec::new()).unwrap();
+        assert_eq!(m.drives(), vec![Drive { drive: DRIVE, label: "CD-ROM drive".into(), kind: "cd".into(), lid_open: false, loaded: false }]);
+        let info = m.machine_info();
+        assert_eq!((info.region, info.firmware), (Some(Region::Ntsc), vec![(BIOS_AMERICAS, FirmwareSource::Replacement)]));
+        for _ in 0..420 {
+            m.advance();
+        }
+        let at = |x: usize, y: usize| u16::from_le_bytes([m.board.gpu.vram.bytes[2 * (y * 1024 + x)], m.board.gpu.vram.bytes[2 * (y * 1024 + x) + 1]]);
+        assert_eq!(at(2, 120), 2 | 3 << 5 | 5 << 10, "the open kernel's screen with no disc");
+        let image = vec![0x42u8; BIOS_BYTES];
+        let file = |which| emusen_native::abi::File { which, data: &image };
+        let market = |settings: &[(&str, &str)], files| {
+            let m = create_empty(settings, files).unwrap();
+            (m.config.market, m.machine_info().firmware)
+        };
+        assert_eq!(market(&[], vec![file(BIOS_JAPAN)]), (Market::Japan, vec![(BIOS_JAPAN, FirmwareSource::File)]));
+        assert_eq!(market(&[], vec![file(BIOS_EUROPE), file(BIOS_JAPAN)]), (Market::Europe, vec![(BIOS_EUROPE, FirmwareSource::File)]));
+        assert_eq!(market(&[], vec![file(BIOS_JAPAN), file(BIOS_AMERICAS), file(BIOS_EUROPE)]).0, Market::Americas);
+        assert_eq!(market(&[(REGION_KEY, "psx.us")], vec![file(BIOS_EUROPE)]), (Market::Americas, vec![(BIOS_AMERICAS, FirmwareSource::Replacement)]));
+        assert!(create_empty(&[], vec![file(9)]).is_err(), "a file Diamond does not name is refused as at any create");
     }
 
     #[test]

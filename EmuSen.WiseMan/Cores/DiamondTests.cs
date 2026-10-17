@@ -180,7 +180,7 @@ namespace EmuSen.WiseMan.Cores
                 process.WaitForExit();
                 _output.WriteLine($"{name}:\n{output}{stderr.Result}");
                 Assert.True(process.ExitCode == 0, output + stderr.Result);
-                Assert.Equal(21, output.Split('\n').Count(l => l.StartsWith("pass C")));
+                Assert.Equal(22, output.Split('\n').Count(l => l.StartsWith("pass C")));
             }
         }
 

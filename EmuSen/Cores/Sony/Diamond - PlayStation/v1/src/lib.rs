@@ -216,6 +216,15 @@ impl StateMachine for Diamond {
     }
 }
 
+impl Diamond {
+    /// The machine as the host sees it, its enhancements chosen from the create's settings.
+    fn over(machine: Machine, request: &Create<'_>) -> Result<Diamond, i32> {
+        let mut d = Diamond { machine, chosen: Chosen::default(), note: None, lend: request.device };
+        d.choose(Chosen::default().with(&request.settings));
+        Ok(d)
+    }
+}
+
 impl Core for Diamond {
     const CAPABILITIES: u64 = <Machine as Core>::CAPABILITIES | caps::SETTINGS | caps::SETTING_NOTES | caps::DEVICE_PICTURE;
 
@@ -238,9 +247,15 @@ impl Core for Diamond {
     }
 
     fn create(request: &Create<'_>) -> Result<Self, i32> {
-        let mut d = Diamond { machine: Machine::create(request)?, chosen: Chosen::default(), note: None, lend: request.device };
-        d.choose(Chosen::default().with(&request.settings));
-        Ok(d)
+        Diamond::over(Machine::create(request)?, request)
+    }
+
+    fn starts_empty(system: &str) -> bool {
+        Machine::starts_empty(system)
+    }
+
+    fn create_empty(system: &str, request: &Create<'_>) -> Result<Self, i32> {
+        Diamond::over(Machine::create_empty(system, request)?, request)
     }
 
     /// The machine's, with the largest picture the largest internal resolution makes, which a host may size its buffer

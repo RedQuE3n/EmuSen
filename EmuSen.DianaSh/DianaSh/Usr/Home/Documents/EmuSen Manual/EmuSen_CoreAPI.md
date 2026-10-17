@@ -1546,6 +1546,48 @@ the ladder's nonlinearity in the signal rather than in the palette, registered a
 and its seeded fault `FAULT_RAW_DISAGREES` (1 << 24), a raw value that its palette does not draw as the frame's pixel,
 fails C21 alone.
 
+### 6.31 A console started with nothing in it: `starts_empty` (1.11, 2026-10-17)
+
+*Decided 2026-10-17 by the tester, as `Diamond_Shell.md` §1.1 weighed it (a library bit, a second create export and an
+undeclared empty image rejected). This section is the normative text; that page has the design and its reasons.* A
+player starts a console with no game to reach what its firmware offers with an empty drive: the PlayStation's memory card
+manager, the Sega CD's backup RAM manager and CD player, and the like on later disc consoles.
+
+- **Core info.** A system entry gains `starts_empty`, true when a machine of the system can be made with no image and
+  runs as the console does when powered on with nothing in it. Absent is false, so no earlier core info changes by a
+  byte. It is a fact of the system, not of the library, for the reason §6.26 gives: one library may run a system that
+  can start empty (the Sega CD) and one that cannot (the Genesis).
+- **`create`.** `emusen_create_params` gains `const char *system` at offset 104 (112 bytes), a NUL-terminated system
+  id as core info names it. An image of no bytes with `system` naming a system whose entry says `starts_empty` makes
+  that console: every drive empty with its lid closed, each slot as the settings and files make it, the firmware chosen
+  as the core chooses it with no game. An image of no bytes with `system` missing, unknown, or naming a system without
+  the field, or in a struct too short to hold it, is refused with `EMUSEN_BAD_IMAGE` (−264) and words, before the core
+  sees it where the core is built on `emusen-native`. A host sets `system` only with an image of no bytes, and a core
+  ignores it beside an image. No status code, flag or export is added.
+- **Firmware.** `firmware_for` takes an image and there is none, so a host does not call it: it passes every file of
+  the system's `firmware` list (§6.3) that the player has. The core chooses among them as with a game.
+- **The drive afterwards** is `MEDIA`'s (§6.23): lid open, insert, lid closed. A system that starts empty and lists a
+  drive belongs to a core that claims `MEDIA`, or no disc could ever go in; one with no drive is allowed (a console
+  starting into its firmware with an empty cartridge slot, a computer). Machine info lists the drive `loaded: false`.
+- **States** are unchanged: a state holds its disc's fingerprint as the core chooses, an empty drive's included, and
+  `WRONG_MEDIA` refuses it over another disc; a host may restore an empty drive with `EMUSEN_MEDIA_RESTORE` and a null
+  image.
+- **Older and newer peers.** An older host never reads `starts_empty`, so it never asks for an empty start; an older
+  core never lists it, so a newer host never asks one. A newer host's 112 bytes are read by an older core as the prefix
+  it knows. A core built on `emusen-native` 1.11 refuses an image of no bytes with `BAD_IMAGE` where an older one gave
+  its own status; both are refusals, and §6.15 promises nothing finer. The minor gates nothing in a host (§4.1).
+- **The Rust side.** `Core::starts_empty(system) -> bool` and `Core::create_empty(system, request)`, both defaulted to
+  false and to `BAD_IMAGE`, so a core that does not opt in is unchanged in its code. The export checks the system
+  against `Core::info()` and `starts_empty` before it calls `create_empty`, and lends nothing on such a call.
+- **The host** (`CoreEngine`): `CoreSystem.StartsEmpty` is read from core info; `CoreMachine` passes `system` with an
+  empty image; the launch without a file is built at `Diamond_Shell.md`'s step S2.
+- **The kit.** C22 (§28.17).
+
+The first core to claim it is Diamond (`Diamond_Shell.md` §1.2): the open kernel's screen with no disc, or a player's
+BIOS's own, from power-on with an empty drive. Nephrite's Sega CD waits for its own step: with a player's BIOS it stays
+on its first picture with an empty drive (`Nephrite_Bram.md` §11, `Nephrite_OpenBios.md` §16), so it does not yet start
+empty correctly and does not claim the field.
+
 ## 7. Core discovery and trust
 
 ### 7.1 Where cores are found
@@ -2329,6 +2371,14 @@ header by `CoreAbiTests`), reads `video.raw` as `CoreMachineInfo.Raw`, and asks 
 `ICore.RawEncoding`, handing the picture as `ICore.RawPicture`, a `RawPicture` of Serenity's that names its encoding.
 Kit case C21 is added; the test core claims the bit with `x-test.red`. MoonRT claims it with `nes.ppu`
 (`Moon_Native.md` §9.7), and the CRT filter's NES mode reads it again (`EmuSen_CRT.md` §22.8). Its reasons are §6.30.
+
+**v1.11, 2026-10-17** (§6.31), the tester's go to start a console with nothing in it (`Diamond_Shell.md`): core info's
+`systems[].starts_empty`, and `emusen_create_params.system` appended (112 bytes), an image of no bytes naming a system
+that starts empty making that console and any other refused with `EMUSEN_BAD_IMAGE`. Baseline 483 facts, `--check` and
+`--against` 1.10 passing. `emusen-native` gains `Core::starts_empty` and `Core::create_empty`, defaulted, and the
+export's check; the guard's checker learns the field; the C# host reads `CoreSystem.StartsEmpty` and passes the system
+(`CoreMachine`). Kit case C22 is added; the test core starts empty, and `FAULT_EMPTY_LOADED` (1 << 26) fails C22 alone.
+Diamond claims it for `psx`.
 
 **Kit, 2026-10-15**, no change to the ABI: C7 saves at every eighth of the run and once near its end, each state
 loaded by a machine just made and held to a machine that never loads, in place of once at the middle against a machine
@@ -3647,6 +3697,25 @@ core's handle. A lock around each case's host was set aside: C20 holds its host 
 machines, and every other image would wait on it. So was a host held per thread, which the threads some cases start
 (C10's, C13's) would not see. One handle for each run of cases is the rule the kit already followed elsewhere, and
 the test needed no change.
+
+### 28.17 C22, a console started empty (1.11, 2026-10-17)
+
+C22 runs once a library, among the core's cases, and judges nothing of a library older than 1.11. It reads core info's
+systems and checks the refusals first: an empty start of every system without `starts_empty`, and of an id no system
+has, answers `BAD_IMAGE`, and so does an image of no bytes naming no system. Then, for each system that starts empty,
+with the session's settings and its files below `EMUSEN_FILE_MEDIA`:
+
+- every drive machine info lists is `loaded: false`, and a drive listed means `MEDIA` is claimed;
+- two such machines run the session's script for up to 240 frames with equal digests, frame for frame and sample for
+  sample, no frame problem, and equal states at the end;
+- the first's state loads into a third such machine, which then saves the same state, and 60 frames on the third's
+  state is still the first's. Pictures after a load are C7's to judge, so they are not compared here.
+
+The test cores pass, `kit_test_core` starting empty and `kit_plain_core` too, its drive unlisted without `MEDIA`.
+`FAULT_EMPTY_LOADED` (a machine started empty reports a disc) fails C22 alone; a core whose machines differ, and one
+that takes only a host of 1.0, fail it among their other cases. Diamond passes it on its library with Crash
+Bandicoot's disc given for the other cases: "psx started empty: 1 drive(s) empty, two machines alike over 240 frames, a
+state carried to a third" (measured on 2026-10-17, 600 frames, 71 s for the whole run).
 
 ## 29. A space that is a view, 2026-10-07
 

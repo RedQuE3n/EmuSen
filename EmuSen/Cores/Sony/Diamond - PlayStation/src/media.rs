@@ -29,6 +29,8 @@ pub enum Kind {
     Exe { pc: u32, load: u32, size: u32 },
     /// A disc's first data track, of 2,048-byte user sectors or of raw 2,352-byte ones.
     Disc { raw: bool },
+    /// Nothing: the console started with an empty drive (core ABI 1.11, Diamond_Shell.md §1.2).
+    Empty,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

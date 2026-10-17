@@ -31,6 +31,9 @@ namespace EmuSen.Cores.Native
         // The core builds the system but does not run its games yet; absent is false - see EmuSen_CoreAPI.md §27.4.
         public bool Development { get; init; }
 
+        // A machine of the system can be made with no image, the console with nothing in it - see EmuSen_CoreAPI.md §6.31.
+        public bool StartsEmpty { get; init; }
+
         // Every battery file a machine of the system can name, by number and suffix, so they are passed at the first create; null for a core that lists none - see EmuSen_CoreAPI.md §6.3.
         public IReadOnlyList<CoreBatteryFile>? Battery { get; init; }
     }
@@ -163,6 +166,7 @@ namespace EmuSen.Cores.Native
                 Arr(s, "firmware").Select(Firmware).ToArray())
             {
                 Development = Bool(s, "development", false),
+                StartsEmpty = Bool(s, "starts_empty", false),
                 Battery = s.TryGetProperty("battery", out var battery) && battery.ValueKind == JsonValueKind.Array ? battery.EnumerateArray().Select(b => new CoreBatteryFile((uint)Long(b, "which"), Str(b, "suffix"), 0, CoreBatteryFile.KindNamed(OptStr(b, "kind")), OptStr(b, "medium"), OptStr(b, "label"), b.TryGetProperty("port", out var port) && port.ValueKind == JsonValueKind.Number ? (int)port.GetInt64() : null)).ToArray() : null,
             }).ToArray();
             string name = Str(r, "name");

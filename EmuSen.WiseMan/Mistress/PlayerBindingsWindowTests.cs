@@ -76,8 +76,8 @@ namespace EmuSen.WiseMan.Mistress
             }
             // The Genesis's two pads as its port rows stand by default; an adapter set there adds its players.
             Assert.Equal(Consoles.Select(c => ControllerPorts.ForConsole(c, _ => null)), counts);
-            // The PlayStation's two ports last, offered since 2026-10-11 - see EmuSen_InterfaceSpec.md §6.3.5.
-            Assert.Equal(new[] { 2, 1, 2, 4, 2, 2 }, counts);
+            // The PlayStation's two ports since 2026-10-11 (EmuSen_InterfaceSpec.md §6.3.5), then the Sega CD's, the Genesis's two pads, since 2026-10-16.
+            Assert.Equal(new[] { 2, 1, 2, 4, 2, 2, 2 }, counts);
             tabs.SelectedIndex = 0;
             Assert.False(bar.IsVisible);
             tabs.SelectedIndex = Array.IndexOf(Consoles, "SNES") + 1;

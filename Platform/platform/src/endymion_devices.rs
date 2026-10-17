@@ -146,6 +146,7 @@ pub unsafe extern "C" fn emusen_endymion_sim_pad_text(pad: *const SimPad, which:
 
 pub const PAD_PLAYER_INDEX: u32 = 0;
 pub const PAD_KIND: u32 = 1;
+pub const PAD_VENDOR_PRODUCT: u32 = 2;
 
 /// # Safety
 /// `pad` live.
@@ -155,6 +156,7 @@ pub unsafe extern "C" fn emusen_endymion_sim_pad_set(pad: *const SimPad, which: 
     match which {
         PAD_PLAYER_INDEX => pad.player_index = value,
         PAD_KIND => pad.kind = value,
+        PAD_VENDOR_PRODUCT => pad.vendor_product = value as u32,
         _ => return fail(status::BAD_ARGUMENT, "no such number"),
     }
     0
@@ -170,6 +172,7 @@ pub unsafe extern "C" fn emusen_endymion_sim_pad_get(pad: *const SimPad, which: 
     let value = match which {
         PAD_PLAYER_INDEX => pad.player_index,
         PAD_KIND => pad.kind,
+        PAD_VENDOR_PRODUCT => pad.vendor_product as i32,
         _ => return fail(status::BAD_ARGUMENT, "no such number"),
     };
     match unsafe { out.as_mut() } {
@@ -312,6 +315,7 @@ pub const DEVICE_AXIS: u32 = 8;
 pub const DEVICE_KIND: u32 = 9;
 pub const DEVICE_LABEL: u32 = 10;
 pub const DEVICE_SET_PLAYER_INDEX: u32 = 11;
+pub const DEVICE_VENDOR_PRODUCT: u32 = 12;
 
 /// One of the set's device calls, as a manager makes it: `handle` is the opened pad's, `arg` the id, button, axis or index.
 ///
@@ -343,6 +347,7 @@ pub unsafe extern "C" fn emusen_endymion_sim_set_call(set: *const SimSet, op: u3
             set.set_player_index(pad, arg);
             0
         }
+        DEVICE_VENDOR_PRODUCT => set.vendor_product(pad) as i64,
         _ => fail(status::BAD_ARGUMENT, "no such device call") as i64,
     }
 }
@@ -564,6 +569,7 @@ pub const PADS_FRONTEND_COUNT: u32 = 6;
 pub const PADS_STARTED: u32 = 7;
 pub const PADS_ANY_PRESSED: u32 = 8;
 pub const PADS_LAST_RESCAN: u32 = 9;
+pub const PADS_VENDOR_PRODUCT: u32 = 10;
 
 /// A number about a pad (`key`, with `arg` its button or axis) or about them all: the label is 0 for none, and the
 /// button held first is -1 for none.
@@ -585,6 +591,7 @@ pub unsafe extern "C" fn emusen_endymion_pads_get(h: *const PadsHandle, key: u64
         PADS_STARTED => pads.started() as i64,
         PADS_ANY_PRESSED => pads.any_pressed().unwrap_or(-1) as i64,
         PADS_LAST_RESCAN => pads.last_rescan(),
+        PADS_VENDOR_PRODUCT => pads.vendor_product(key).map_or(fail(status::ABSENT, "no such pad") as i64, |both| both as i64),
         _ => fail(status::BAD_ARGUMENT, "no such number") as i64,
     }
 }

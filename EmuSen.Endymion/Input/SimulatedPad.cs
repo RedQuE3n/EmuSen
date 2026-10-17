@@ -66,6 +66,19 @@ namespace EmuSen.Endymion.Input
             set { if (_managed is not null) _managed.Type = value; else SetNumber(DeviceNative.PadKind, (int)value); }
         }
 
+        // The USB vendor and product SDL would report, by which a handheld's own controls are known - see EmuSen_Input.md §8.13.
+        public ushort Vendor
+        {
+            get => _managed is not null ? _managed.Vendor : (ushort)((uint)GetNumber(DeviceNative.PadVendorProduct) >> 16);
+            set { if (_managed is not null) _managed.Vendor = value; else SetNumber(DeviceNative.PadVendorProduct, (int)((uint)value << 16 | Product)); }
+        }
+
+        public ushort Product
+        {
+            get => _managed is not null ? _managed.Product : (ushort)GetNumber(DeviceNative.PadVendorProduct);
+            set { if (_managed is not null) _managed.Product = value; else SetNumber(DeviceNative.PadVendorProduct, (int)((uint)Vendor << 16 | value)); }
+        }
+
         public void Press(SDL.GamepadButton button)
         {
             if (_managed is not null) _managed.Press(button);
@@ -163,6 +176,10 @@ namespace EmuSen.Endymion.Input
             public int PlayerIndex { get; set; } = -1;
 
             public SDL.GamepadType Type { get; set; } = SDL.GamepadType.Unknown;
+
+            public ushort Vendor { get; set; }
+
+            public ushort Product { get; set; }
 
             public void Press(SDL.GamepadButton button) => _held.Add(button);
 

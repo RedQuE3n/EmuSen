@@ -122,12 +122,12 @@ namespace EmuSen.WiseMan.Mistress
                 pad.Dispose();
                 Assert.True(TickUntil(window, () => Open(window, pad) is null), "the pull");
                 _output.WriteLine($"{screen}, pulled: {Notice(window)}");
-                Assert.Equal("Controller disconnected: Xbox 360 Controller (Player 1)", Notice(window));
+                Assert.Equal("Xbox 360 Controller disconnected: player 1 is kept for it", Notice(window));
 
                 pad = new UinputPad("EmuSen uinput pad");
                 Assert.True(TickUntil(window, () => Open(window, pad) is not null), "the pad plugged back");
                 _output.WriteLine($"{screen}, plugged back: {Notice(window)}");
-                Assert.Equal("Controller connected: Xbox 360 Controller (Player 1)", Notice(window));
+                Assert.Equal("Xbox 360 Controller: player 1", Notice(window));
                 Assert.Equal(1, Gamepad(window).Players.PlayerOf(Open(window, pad)!));
 
                 if (screen == "game")

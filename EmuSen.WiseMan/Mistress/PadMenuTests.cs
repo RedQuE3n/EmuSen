@@ -172,6 +172,41 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal("Back", PadMenu.Big(s.Window).Hints![2].Label);
         }, default);
 
+        // With a second pad, Game Settings begins with Swap Players, reached by pad; it trades players 1 and 2 and names both, and the page fits - see EmuSen_Input.md §8.13.
+        [Theory]
+        [InlineData(false, 1280, 800)]
+        [InlineData(true, 1280, 800)]
+        [InlineData(true, 1920, 1200)]
+        public Task Swap_players_under_game_settings_trades_players_1_and_2(bool bigScreen, int width, int height) => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = Playing(bigScreen, width, height);
+            pad.Pad.Name = "Legion Go S";
+            PadDriver xbox = pad.Plug("Xbox Wireless Controller");
+            pad.Tick();
+            Assert.Equal(1, pad.Gamepad.Players.PlayerOf(pad.Gamepad.Pads[0]));
+            Chord(pad);
+            Enter(window, pad, MainWindow.GameSettingsMenu);
+            Assert.Equal([MainWindow.SwapPlayersRow, .. GameSettings], PadMenu.Lines(window));
+            Assert.Equal(0, PadMenu.Selected(window));
+            WindowFitAuditTests.Settle(window);
+            Control panel = bigScreen ? PadMenu.Big(window) : window.GetControl<Control>("PadMenuDesk");
+            // The desktop menu keeps the desktop's text sizes, as the window audit allows it (EmuSen_Input.md §8.9).
+            List<string> faults = bigScreen ? FitAudit.Check(panel) : FitAudit.Check(panel, smallest: 0);
+            Assert.True(faults.Count == 0, string.Join("\n", faults));
+
+            pad.A();
+            Assert.False(PadMenu.IsOpen(window));
+            Assert.Equal((2, 1), (pad.Gamepad.Players.PlayerOf(pad.Gamepad.Pads[0]), pad.Gamepad.Players.PlayerOf(pad.Gamepad.Pads[1])));
+            Assert.Equal("Xbox Wireless Controller: player 1 · Legion Go S: player 2", window.GetControl<NoticeLayer>("PadNotice").Current);
+
+            // The seats are the player's own now: a press on the built-in pad claims nothing for the rest of the game.
+            pad.Gamepad.ClaimPressed();
+            Assert.True(pad.Gamepad.PlayerOneClaimed);
+            xbox.Unplug();
+            pad.Tick();
+            Done(window);
+        }, default);
+
         [Theory]
         [InlineData(false)]
         [InlineData(true)]

@@ -10,6 +10,7 @@ namespace EmuSen.Endymion.Input
         private readonly IPadDevices? _devices;
         private string? _closedName;
         private SDL.GamepadType _closedType;
+        private uint _closedVendorProduct;
 
         // The library's pads and this pad's key in them, when the library's manager opened it - see EmuSen_RustPlatform.md §14.2.
         private readonly NativeHandle? _pads;
@@ -42,6 +43,15 @@ namespace EmuSen.Endymion.Input
         public string Guid { get; }
         public string? Path { get; }
 
+        // SDL's vendor and product, read while open and kept once closed; under Steam Input, the controller behind the virtual pad - see EmuSen_Input.md §8.13.2.
+        public ushort Vendor => (ushort)(VendorProduct >> 16);
+        public ushort Product => (ushort)VendorProduct;
+
+        private uint VendorProduct => _pads is not null ? (uint)Get(DeviceNative.PadsVendorProduct) : IsOpen ? _devices!.VendorProduct(Handle) : _closedVendorProduct;
+
+        // A handheld's own controls, known by their vendor and product - see EmuSen_Input.md §8.13.
+        public bool IsBuiltIn => BuiltInControls.Contains(Vendor, Product);
+
         internal IntPtr Handle { get; private set; }
 
         public bool IsOpen => _pads is not null ? Get(DeviceNative.PadsIsOpen) != 0 : Handle != IntPtr.Zero;
@@ -50,6 +60,14 @@ namespace EmuSen.Endymion.Input
 
         // SDL's own reading of what the pad is, from its vendor and product - see EmuSen_Settings_Reference.md §4.52.
         public SDL.GamepadType Type => _pads is not null ? (SDL.GamepadType)Get(DeviceNative.PadsKind) : IsOpen ? _devices!.Type(Handle) : _closedType;
+
+        // Any button held, or a trigger past half its travel: what claims a player and lights a row - see EmuSen_Input.md §8.13.
+        public bool AnyPressed()
+        {
+            for (var b = SDL.GamepadButton.South; b < SDL.GamepadButton.Count; b++)
+                if (IsRawPressed(b)) return true;
+            return RawAxis(SDL.GamepadAxis.LeftTrigger) > 0.5 || RawAxis(SDL.GamepadAxis.RightTrigger) > 0.5;
+        }
 
         public bool IsRawPressed(SDL.GamepadButton button) => _pads is not null ? Get(DeviceNative.PadsRawPressed, (int)button) != 0 : IsOpen && _devices!.Button(Handle, button);
 
@@ -70,6 +88,7 @@ namespace EmuSen.Endymion.Input
             if (!IsOpen) return;
             _closedName = Name;
             _closedType = Type;
+            _closedVendorProduct = VendorProduct;
             _devices!.Close(Handle);
             Handle = IntPtr.Zero;
         }

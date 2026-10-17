@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 11u
+#define EMUSEN_PLATFORM_ABI_VERSION 12u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -580,6 +580,7 @@ int64_t emusen_endymion_sim_pad_text(const emusen_endymion_sim_pad *pad, uint32_
 
 #define EMUSEN_ENDYMION_SIM_PAD_PLAYER_INDEX 0u /* the player number SDL was last asked to light, or -1 */
 #define EMUSEN_ENDYMION_SIM_PAD_KIND 1u         /* SDL_GamepadType */
+#define EMUSEN_ENDYMION_SIM_PAD_VENDOR_PRODUCT 2u /* the USB vendor in the high sixteen bits, the product in the low; 0 for none */
 
 int32_t emusen_endymion_sim_pad_set(const emusen_endymion_sim_pad *pad, uint32_t which, int32_t value);
 int32_t emusen_endymion_sim_pad_get(const emusen_endymion_sim_pad *pad, uint32_t which, int32_t *out);
@@ -620,6 +621,7 @@ int64_t emusen_endymion_sim_set_attached(const emusen_endymion_sim_set *set, uin
 #define EMUSEN_ENDYMION_DEVICE_KIND 9u
 #define EMUSEN_ENDYMION_DEVICE_LABEL 10u
 #define EMUSEN_ENDYMION_DEVICE_SET_PLAYER_INDEX 11u
+#define EMUSEN_ENDYMION_DEVICE_VENDOR_PRODUCT 12u /* as SIM_PAD_VENDOR_PRODUCT */
 
 int64_t emusen_endymion_sim_set_call(const emusen_endymion_sim_set *set, uint32_t op, uint64_t handle, int32_t arg);
 
@@ -678,6 +680,7 @@ int64_t emusen_endymion_pads_open(const emusen_endymion_pads *pads, uint64_t *ou
 #define EMUSEN_ENDYMION_PADS_STARTED 7u
 #define EMUSEN_ENDYMION_PADS_ANY_PRESSED 8u  /* the first SDL button held on a pad the interface reads, -1 for none */
 #define EMUSEN_ENDYMION_PADS_LAST_RESCAN 9u  /* .NET ticks since the handle was made */
+#define EMUSEN_ENDYMION_PADS_VENDOR_PRODUCT 10u /* as SIM_PAD_VENDOR_PRODUCT; read while open, the last reading once closed; under Steam Input, the controller behind the virtual pad */
 
 int64_t emusen_endymion_pads_get(const emusen_endymion_pads *pads, uint64_t key, uint32_t which, int32_t arg);
 

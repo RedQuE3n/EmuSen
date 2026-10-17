@@ -113,6 +113,8 @@ pub static APP_SETTINGS: Schema = Schema {
         flag("SwapPadButtons", false),
         flag("FirstControllerOnly", false),
         flag("ControllerNotifications", true),
+        flag("ClaimPlayersByPress", true),
+        flag("ExternalControllerFirst", true),
         text("OnScreenKeyboard", "Automatic"),
         flag("BigScreen", false),
         flag("ShowStatusBar", true),
@@ -333,7 +335,7 @@ mod tests {
     fn app_settings_has_every_property_and_skips_the_retired_key_while_it_is_null() {
         let new = APP_SETTINGS.new_instance();
         let text = format(&APP_SETTINGS, &new).unwrap();
-        assert_eq!(APP_SETTINGS.fields.len(), 58);
+        assert_eq!(APP_SETTINGS.fields.len(), 60);
         assert!(text.contains("\"SelectedCore\": \"All consoles\","));
         assert!(text.contains("\"BigPicture\": {},"));
         assert!(text.contains("\"NavigationVolume\": 70,"));

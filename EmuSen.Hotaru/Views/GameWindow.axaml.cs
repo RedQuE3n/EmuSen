@@ -137,6 +137,9 @@ namespace EmuSen.Hotaru.Views
             {
                 LeftStickIsAnalog = core.SupportedAxes.Contains(PadAxis.LeftX),
                 PlayerBindings = player => _gamepadBindings.For(_core.CoreName, player),
+                // Mistress's defaults, as Hotaru has no settings - see EmuSen_Input.md §8.13.
+                ClaimPlayersByPress = true,
+                ExternalControllerFirst = true,
             };
             // The keyboard is player 1's here; Hotaru has no setting to move it - see EmuSen_Input.md §8.5.
             _ports = new PortRouter(_gamepad, (p, b, held) => _core.SetButton(p, b, held), (p, a, v) => _core.SetAxis(p, a, v), (p, on) => _core.SetControllerConnected(p, on))
@@ -144,6 +147,7 @@ namespace EmuSen.Hotaru.Views
                 KeyboardHeld = c => _keyboardHeld[(int)c],
             };
             _ports.Reset(EmuSen.Cores.ControllerPorts.Of(core), core.SupportedAxes);
+            _gamepad.BeginClaims();
             _gamepadTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.0 / 60.0) };
             _gamepadTimer.Tick += (_, _) => PollGamepad();
             _gamepadTimer.Start();
@@ -361,7 +365,11 @@ namespace EmuSen.Hotaru.Views
             // On the thread that polls, which a swap on the emulation thread would otherwise race.
             int ports = EmuSen.Cores.ControllerPorts.Of(_core);
             IReadOnlyList<PadAxis> axes = _core.SupportedAxes;
-            Dispatcher.UIThread.Post(() => _ports.Reset(ports, axes));
+            Dispatcher.UIThread.Post(() =>
+            {
+                _ports.Reset(ports, axes);
+                _gamepad.BeginClaims();
+            });
             _rewind.Clear(); // a discontinuous jump - see §1.4
             _audioPlayer.RateControl.Reset();
             RebuildDebugTargetAndCommands();

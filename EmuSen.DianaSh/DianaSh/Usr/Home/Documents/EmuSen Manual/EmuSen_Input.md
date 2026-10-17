@@ -320,9 +320,12 @@ only guard.
 Stated as a player would be told it:
 
 1. **Pads take players 1, 2, 3, 4 in the order they connect.** The pads present when Mistress starts are seated in the
-   order SDL lists them.
+   order SDL lists them. *(2026-10-17: in a game, the first pad pressed then takes player 1 and the others follow in
+   the order they are used; on a handheld an external pad is seated ahead of the built-in controls. Both are §8.13,
+   and both leave this rule as the order before anyone presses.)*
 2. **A pad that is unplugged keeps its number.** Nobody moves up into it, and the other players keep theirs. A notice
-   says "Controller disconnected: *name* (Player 2)", and the game is not paused.
+   says "Controller disconnected: *name* (Player 2)", and the game is not paused. *(Worded "*name* disconnected:
+   player 2 is kept for it" since 2026-10-17, §8.13.5.)*
 3. **A pad that comes back gets its number back.** It is recognised by SDL's GUID for the device (vendor, product,
    version and bus, sixteen bytes) and by its device path. *(2026-10-14: the GUID also carries a CRC of the device's
    name, which is what tells Steam Input's virtual pads apart, §8.12.4. Until that day the rule was never reached on
@@ -744,3 +747,258 @@ hundredth of a per cent of a 60 Hz frame. Against the old code in the state a se
 a press between polls, the old pair took 69.1 µs a poll once the queue had filled (each `SDL_HasEvents` walking 65,535
 entries) and the new pair 3.9 µs, both including the press written to the device. Neither call allocates:
 `UinputHotplugTests.The_pump_and_the_flush_allocate_nothing` holds 1,000 polls with presses between them to zero bytes.
+
+### 8.13 Who is player 1: the first pad pressed, and a handheld's own controls (2026-10-17)
+
+#### 8.13.1 The report, and the defect demonstrated
+
+**The report.** On 2026-10-17 the tester found that every PlayStation game on the Legion Go S, in SteamOS's Game Mode,
+ignored the Xbox Wireless Controller, and found the reason: the controller was player 2. The handheld's built-in
+controls had been seated first, so they were player 1, and a one-player game hears player 1. Nothing on the screen
+said so: the pads present when Mistress starts are not announced (`EmuSen_Settings_Reference.md` §4.61), and the
+Xbox pad, connected before Mistress started or reconnected beside controls that never went away, was never told
+anything but its number in Preferences.
+
+**Nothing was broken in the sense of §8.2.** Rule 1 seats pads in the order they connect, and the order on the
+handheld is the order Steam makes its virtual pads, which is the order Steam opened the controllers: the built-in
+controls at boot, the Xbox pad when it connects. The rule was followed. What it does not do is ask which pad the
+player is holding. On a desktop the question rarely arises, because the pad plugged in is the pad in the hand. On a
+handheld a second set of controls is always connected, and it is first.
+
+**Demonstrated before anything changed.** `MultiplayerTests.The_pad_pressed_first_in_a_game_is_player_1_whichever_connected_first`
+starts an SNES test cartridge from one pad, plugs in "Xbox Wireless Controller" beside it, presses Start on the Xbox
+pad and reads the two pad words the game copies from `$4218` and `$421A`. On WiseMan at 6cc427b3, measured
+2026-10-17, it failed with `(0, 4096)` where `(4096, 0)` was expected: the press reached port 2, and port 1 heard
+nothing, which is the report. It passes with this section's rules. The test deliberately gives the first pad no
+vendor or product, so it is not known as built-in: it shows the press rule working where §8.13.2's recognition cannot.
+
+#### 8.13.2 How the built-in controls are recognised, and the evidence
+
+**What was read on the handheld**, on 2026-10-17 with EmuSen closed, by read-only commands and a listing program
+(`~/padprobe/padprobe.py`, SDL's `ForID` queries through `ctypes`, no pad opened):
+
+- The kernel lists the built-in controls as **"Legion Go S", USB `1a86:e310`**, version `0043`, whose event node
+  (`/dev/input/event2`) has mode `000`: SteamOS hides it from every program. Six HID interfaces of the same device
+  are "wch.cn Legion Go S", and a seventh HID device, **"Legion Go S Controller", `28de:12ff`**, is the one Steam
+  drives. Steam's two virtual pads are "Microsoft X-Box 360 pad 0" and "pad 1", `28de:11ff`, version `0001`; the
+  Xbox pad is a Bluetooth device, `045e:0b13`.
+- The system's SDL, 3.4.12, run outside Steam, lists the Xbox pad alone (through HIDAPI). The built-in controls are
+  not in its list at all. With `SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD=1` it lists the two virtual pads as well,
+  both named "Steam Virtual Gamepad", both `28de:11ff`, type `standard`, told apart only by their GUIDs
+  (`030079f6de28…` and `0300b836de28…`, §8.12.4).
+- Steam's controller log (`~/.steam/steam/logs/controller.txt`, 107,324 lines back to January) records the built-in
+  controls as "Legion Go S Controller" `28de:12ff` on a `hidraw` node 269 times and as "Legion Go S" `1a86:e310`
+  through SDL 49 times; after the boot of 02:08 that morning, as `28de:12ff`. The Xbox pads are `045e:0b13` and
+  `045e:02e0`.
+
+So **outside Steam's own bookkeeping, nothing a program sees under Steam Input tells the built-in controls from the
+Xbox pad**: the same virtual vendor and product, the same type, the same mapping name, and a GUID that encodes only the
+slot. The connection state is no help either: SDL 3.4.2's Linux joystick driver never assigns it (there is no
+assignment of `connection_state` in `src/joystick/linux/SDL_sysjoystick.c`), so for a virtual pad, which is an evdev
+device made through uinput, it is SDL's unknown for every slot.
+
+**Steam's bookkeeping does reach SDL, through a file.** Steam passes each program it launches the environment variable
+`SteamVirtualGamepadInfo`, the path of a file with one section per virtual pad. The client libraries on the handheld
+(`steamclient.so`, both widths) contain the variable's name and the format strings `[slot %d]`, `name=%s`,
+`VID=0x%.4x`, `PID=0x%.4x` and `type=%s`. SDL 3.4.2 reads exactly that format
+(`src/joystick/SDL_steam_virtual_gamepad.c`), keys it by the slot it reads from the virtual pad's name, and then
+answers `SDL_GetGamepadVendor`, `SDL_GetGamepadProduct`, `SDL_GetGamepadType` and `SDL_GetJoystickName` with the
+section's values, that is, with the controller behind the virtual pad (`SDL_GetJoystickVendor` and its relatives in
+`SDL_joystick.c`). The listing program confirmed the mechanism on the handheld's own SDL: with a file of one section
+naming slot 0 as `1a86:e310`, slot 0's vendor, product, type and joystick name became the file's.
+
+**The rule built on it.** `BuiltInControls` (Endymion) is a table of the vendor and product pairs that are a
+handheld's own controls, and `ConnectedPad.IsBuiltIn` asks it with what SDL reports for the pad. Each entry has its
+evidence:
+
+| Vendor:product | What it is | Evidence |
+|---|---|---|
+| `1a86:e310` | the Legion Go S's controls, as the kernel and SDL name them | `/proc/bus/input/devices` and Steam's log on the tester's handheld, 2026-10-17 |
+| `28de:12ff` | the same controls as SteamOS presents them to Steam ("Legion Go S Controller") | the `hidraw` device's `HID_ID` and Steam's log, same day |
+| `28de:1205` | the Steam Deck's controls | SDL 3's built-in mapping `03000000de2800000512…,Steam Deck Controller` in the shipped `libSDL3.so`; not measured on a Deck |
+
+Under Steam Input a virtual pad is known as built-in when Steam's file names the built-in controls behind it, and
+outside Steam (the desktop session, or SDL listing the device itself) when SDL reports the device's own identity. The
+table holds no other handheld: the ROG Ally, the Legion Go and the rest are absent until one is measured, and on them
+the setting of §8.13.3 does nothing, while the press rule still applies.
+
+**Where this cannot work, said plainly.** If Steam does not write the file (a Steam that predates it, Steam Input off
+for the shortcut so that SDL sees raw devices it may not be able to open, or a program launched outside Steam in Game
+Mode), every virtual pad reports `28de:11ff` and none is built-in. The handheld setting then has nothing to act on.
+That is why the press rule, which needs no recognition at all, is the primary fix and the handheld setting the
+convenience; neither depends on the other.
+
+**The file is read after the pad, sometimes.** SDL reads Steam's file when its joystick subsystem starts and again,
+at most every three seconds, when the file's time changes. A controller connected mid-session is a new virtual pad
+made by Steam at about the moment Steam rewrites the file, so SDL may open the pad before it reads the new section.
+`ConnectedPad.Vendor` and `Product` are therefore read while the pad is open, not once at opening, and kept when it
+closes, as its name and type always were; the pad's row and the notices know it once SDL does. The seat it took
+when it opened is not revisited. Measured on the desktop with uinput pads of Steam's identity, the section was read
+before the pads opened in every run. A second detail of the same code matters only to tests: SDL keeps the time of
+the file it last read, and when it last looked, across a stop of its joysticks, so a second file written within the
+same second or the same three seconds is not read. `UinputHotplugTests` dates each file it writes apart and waits out
+the three seconds between its runs.
+
+**The names.** Under Steam Input SDL names every virtual pad by its mapping, "Steam Virtual Gamepad", so the notices
+and the Preferences rows named both pads alike. SDL's `SDL_GetGamepadName` would return the controller's name only
+when the pad has a Steam handle, and Steam's file carries none (no `handle=` format in the client libraries). For a pad
+whose GUID is Steam's virtual pad's and whose reported vendor and product are not `28de:11ff`, which is to say a
+virtual pad Steam's file describes, `SdlPadDevices.Name` and the library's `SdlPads::name` now return
+`SDL_GetJoystickName`, the controller's name from the file. Measured with uinput pads and a file in Steam's format
+before and after: "Steam Virtual Gamepad" twice, then "Legion Go S Controller" and "Xbox Wireless Controller".
+
+#### 8.13.3 The rules
+
+Stated as a player would be told them:
+
+1. **In a game, the first pad a button is pressed on is player 1.** The next pad pressed is player 2, and so on. A
+   press is any button held, or a trigger past half its travel, as the Preferences rows light a pad
+   (`ConnectedPad.AnyPressed`, one definition for both). A pad that becomes player 1 this way trades seats with the pad
+   that was player 1, by §8.2 rule 6's trade, so nobody is left without a seat.
+2. **The players then hold for the rest of the game.** A pad that has claimed its player keeps it. A restart
+   (Restart Game) keeps the players; a new game, or the same game started again from the library, asks again.
+3. **A player is changed mid-game only on purpose:** *Swap Players 1 and 2* in the pad menu's Game Settings, or a
+   choice in Preferences ▸ Controllers. Either fixes every seat for the rest of the game, so a later press moves
+   nobody.
+4. **On a handheld, an external pad goes ahead of the built-in controls** (`ExternalControllerFirst`, on by default).
+   A pad that is not built-in, seated after a built-in pad, trades seats with the lowest built-in pad before it, so
+   the built-in controls move to the next player. It applies as pads connect, at start and later, and when the
+   setting is turned on; it does nothing where no built-in controls are connected, and never takes a seat a press
+   already claimed in the running game.
+5. **The notice names the player first:** "Xbox Wireless Controller: player 1". When a pad lands on a player other
+   than 1 while player 1 has no controller, or while player 1 is built-in controls nobody has pressed in the game, it
+   says so and what to do: "…: player 2, and player 1 is the built-in controls. Press a button on it first in a game
+   to take player 1." (or, with the press rule off or player 1 already claimed, "Swap Players under Game Settings makes
+   it player 1.").
+
+**One owner.** `GamepadManager` (Endymion), which already owned the seats, owns both rules
+(`GamepadManager.Claims.cs`): `ClaimPlayersByPress`, `ExternalControllerFirst`, `BeginClaims`, `ClaimPressed`,
+`SwapPlayers` and the `Claimed` event. `PortRouter.PollPads` asks for the claims before it reads the players, so the
+press that claims player 1 is heard as player 1 in the same poll. The frontends only say when a game starts
+(`BeginClaims`, not on a restart) and pass the two settings; Mistress and Hotaru cannot disagree. The rules are C# on
+both halves: they are built from `PlayerSlots.Move`, which both halves already implement and the parity tests hold
+alike, so the library's interface gained only the pad's vendor and product (§8.13.6). Both are off in a
+`GamepadManager` until a frontend turns them on, which keeps every test of the seating rule and the routing as it was.
+
+**Decided, and why.**
+
+- *A slot's bindings belong to the slot.* A pad that becomes player 1 plays with player 1's map (§8.4). The
+  alternative, bindings following the pad, would make "player 2's map" mean whichever pad was pressed second, and
+  §8.4's file is keyed by player.
+- *Nothing sticks when pads trade mid-game.* The router sends a button to a port when the port's state changes
+  (§8.5), and a port's state is read from whichever pad is that player's, so on the poll of a claim or a swap each port
+  is sent the difference between the old pad's buttons and the new pad's. A button held on the pad that moved away is
+  released on its old port in that same poll.
+- *Two pads pressed in one poll* take players in the order they connected (the order of `GamepadManager.Pads`). Polls
+  are 16 ms apart; a tie is a coin toss to the players, and the connection order is the only order both halves agree
+  on without a clock.
+- *First Controller* (`FirstControllerOnly`) keeps its meaning for the game, "the game hears player 1 alone", and the
+  press decides who player 1 is. For the twin of a pad that registers twice (§8.3) this is the better outcome: the twin
+  is pressed in the same poll, connected later, and so becomes player 2, whom the game does not hear. The interface's
+  "first controller" is still the first pad opened, as ES-DE defines it; the two can differ, and on a handheld with
+  the handheld setting on they do not.
+- *Mirror Player 1 to Player 2* is routing below the seats and is unchanged: it mirrors whoever player 1 is.
+- *The keyboard* is not a pad and claims nothing; it stays the player `KeyboardPlayer` names, beside that player's pad.
+- *A pad set to None* in Preferences stays out of the game when pressed: None is a choice, and a press does not undo
+  a choice. A ninth pad, which has no seat, likewise.
+- *A pad that reconnects* returns to its seat by §8.2 rule 3, so a claimed player 1 that drops and comes back is
+  player 1 again, and a pad that claimed nothing meanwhile does not move up. While it is gone, its seat is kept, and
+  rule 4's reading (a new pad takes the lowest seat with no pad connected) still lets a spare pad take it.
+- *The press rule is a setting* (`ClaimPlayersByPress`, on by default), because a player who arranges the seats in
+  Preferences before a game would otherwise have them rearranged by whoever presses first. Turned off, §8.2's order
+  holds and only an explicit choice changes it.
+- *The handheld setting defaults on* and has no effect without built-in controls, so it needs no detection of "a
+  handheld" beyond the pads themselves; Preferences says when no built-in controls are connected.
+- *The swap trades players 1 and 2* rather than offering a list. The report is a two-pad problem, and a pad menu row
+  that names two players is one press; any other arrangement is Preferences' rows, which the menu opens from the row
+  below it. The row is shown while player 2 has a pad, connected or kept. It is in Game Settings, beside Players &
+  Controllers, rather than on the menu's first page, which already has ten rows (§4.69.8 of the settings reference).
+- *Claims last until the next game starts*, not until the game ends; after a game they no longer matter except that
+  the handheld setting will not displace a pad that claimed player 1 in the last game, until the next one starts.
+
+**Rejected:** remembering the player's preferred controller between sessions by its GUID or name. It was the fallback
+proposed for the case where the built-in controls cannot be told apart, and the press rule makes it unnecessary for
+the report; it would also need §8.2's "nothing is remembered about a pad" reopened, with a place in Mistress's
+database. It remains the way to go if a player wants a pad to be player 1 before any press, and is a question for the
+tester rather than built.
+
+#### 8.13.4 What the player sees
+
+**Preferences ▸ Controllers** gains two rows after the players: *Player 1* ("The first controller pressed"), the press
+rule's switch, and *External Controller* ("Ahead of the built-in controls"), the handheld setting's, whose hint adds
+that it does not apply while no built-in controls are connected. The pad menu's **Game Settings** begins with **Swap
+Players 1 and 2** while player 2 has a pad; choosing it closes the menu, trades the two and shows "*name*: player 1 ·
+*name*: player 2". The settings are in `EmuSen_Settings_Reference.md` §4.119.
+
+#### 8.13.5 The notices
+
+| When | Words |
+|---|---|
+| a pad connects as player 1 | "Xbox Wireless Controller: player 1" |
+| a pad connects as player 2 or later | "*name*: player 2" |
+| … while player 1 has no controller, or is built-in controls not pressed in the game | "*name*: player 2, and player 1 is the built-in controls. Press a button on it first in a game to take player 1." (or "…has no controller…"; "Swap Players under Game Settings makes it player 1." where the press rule is off or player 1 is claimed) |
+| a pad connects with every seat taken | "*name*: no player" |
+| a press moves a pad to another player | "*name*: player 1" |
+| a pad disconnects | "*name* disconnected: player 2 is kept for it" |
+| Swap Players | "*name*: player 1 · *name*: player 2" |
+
+The words before were "Controller connected: *name* (Player 2)" (§8.2). The player's number now comes right after the
+name, which is what the tester asked for, and the notice of a claim is new: it is the only notice a player gets for
+pads that were present when Mistress started, since those are not announced.
+
+#### 8.13.6 The library's part: a pad's vendor and product
+
+The pad's vendor and product reach `ConnectedPad` on both halves: `IPadDevices.VendorProduct` in the C#, the
+`PadDevices::vendor_product` trait method in `Platform/endymion` (with `SDL_GetGamepadVendor`, `SDL_GetGamepadProduct`
+and `SDL_GetJoystickName` added to the functions it loads), and in `emusen_platform.h` the numbers
+`EMUSEN_ENDYMION_PADS_VENDOR_PRODUCT`, `EMUSEN_ENDYMION_SIM_PAD_VENDOR_PRODUCT` and
+`EMUSEN_ENDYMION_DEVICE_VENDOR_PRODUCT`, the vendor in the high sixteen bits and the product in the low. The interface's
+version is 12 (`EmuSen_RustPlatform.md` §3.2: matched exactly). A simulated pad has a vendor and a product a test sets,
+and the device parity tests compare both halves' readings of them.
+
+#### 8.13.7 Tests
+
+| Test | What it shows |
+|---|---|
+| `MultiplayerTests.The_pad_pressed_first_in_a_game_is_player_1_whichever_connected_first` | the report: failed on 6cc427b3 (`(0, 4096)`), passes; the first pad not known as built-in |
+| `MultiplayerTests.On_a_handheld_the_notice_names_the_player_an_external_pad_took` (3 cases) | through Mistress's poll: the handheld setting on seats the Xbox pad as player 1 as it connects; off, the notice's two remedies, and the game's ports with the press rule on and off |
+| `PlayerClaimsTests` (15 cases) | recognition by vendor and product; both halves reading them at opening and keeping them; the built-in pad first and the external pad's first press player 1; the rule off; the handheld setting on and off, at start and hot-plugged, turned on later, and never over a claimed player; a claimed pad reconnecting; two pads pressed together; the swap and the claims it ends until the next game; one pad cannot be swapped; None and First Controller; the keyboard |
+| `PadMenuTests.Swap_players_under_game_settings_trades_players_1_and_2` (3 cases) | the row reached by pad in a desktop session and a big screen at 1280 by 800 and 1920 by 1200, the page fit-audited, the trade and its notice |
+| `UinputHotplugTests.Steams_virtual_pads_report_the_controllers_behind_them_and_the_external_one_is_player_1` (2, opt-in) | under each manager on the real SDL layer: Steam's two virtual pads made through uinput with a file in Steam's format; the vendors, products and names of the controllers behind them; the Xbox pad player 1 and the built-in controls player 2, each heard as its player alone |
+| `ControllersTests.The_controller_settings_persist` | the two switches saved, reaching the pads on the next poll, and their defaults |
+| `EndymionDeviceParityTests` | the vendor and product added to the simulated pads' and the managers' compared states |
+| `PlayerBindingsWindowTests.Each_console_offers_as_many_players_as_it_has_ports` | corrected, not changed in behaviour: it had failed on WiseMan since the Sega CD was offered on 2026-10-16, its expected list one console short |
+
+The existing multiplayer cases about the seating order and the routing (`Player_1s_pad_going…`, the N64's four pads,
+the J-Cart and the Team Player) run with the press rule off, since they press other players' pads before player 1's
+and are about §8.2 and §8.5, not about this section; their expectations are unchanged.
+
+**Cost.** Measured on the desktop on 2026-10-17, best of five rounds of 100,000 calls in a Release build:
+`ClaimPressed` with one pad still unclaimed (the case of a player who never presses the built-in controls, every poll
+of the game) took 0.70 µs through the library and 0.27 µs in the C#, and allocated nothing. Once every seated pad has
+claimed, it returns after one comparison per pad. Mistress claims once per game poll, so the cost is under a
+microsecond a frame.
+
+**Predictions recorded before the tests were first run**, and how they fared:
+
+- *The Mistress-level test fails on WiseMan with the press on port 2* — confirmed (`(0, 4096)`).
+- *Settings set in a test's `appsettings.json` reach the window* — **retired** on the first run: both new settings
+  were dropped on loading, because the platform library's model of `AppSettings` (`Platform/galaxia/src/models.rs`)
+  lists every property and drops a key it does not know. They were added there, which is the step any new setting of
+  that file needs.
+- *SDL reports the controller behind a virtual pad from a file in Steam's format* — confirmed on the desktop with
+  uinput pads, and on the handheld's SDL with the listing program.
+- *The virtual pads keep SDL's mapping name* — confirmed ("Steam Virtual Gamepad" for both), which led to the names
+  of §8.13.2.
+
+**What the tester should check on the handheld**, with this build published there:
+
+1. In Game Mode, with the Xbox Wireless Controller on, start Mistress. Open Preferences ▸ Controllers: the built-in
+   controls and the Xbox pad should be named as such, not "Steam Virtual Gamepad", and the Xbox pad should be player 1.
+2. Start a PlayStation game and press a button on the Xbox pad: the game should respond.
+3. Turn *External Controller* off, quit to the library, turn the Xbox pad off and on: the notice should say it is
+   player 2 behind the built-in controls; in the next game, its first press should make it player 1, with a notice.
+4. With two pads in a game, open the pad menu, Game Settings, Swap Players 1 and 2.
+5. If the names in step 1 are still "Steam Virtual Gamepad", Steam did not give Mistress its file:
+   `tr '\0' '\n' < /proc/$(pidof EmuSen)/environ | grep SteamVirtualGamepadInfo` shows whether the variable is set,
+   and the file it names shows the sections. The press rule works either way.

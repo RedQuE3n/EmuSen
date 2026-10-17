@@ -123,6 +123,8 @@ namespace EmuSen.Endymion.Input
 
         public string? Path(IntPtr pad) => _managed is not null ? _managed.Path(pad) : Text(DeviceNative.DevicePath, pad);
 
+        public uint VendorProduct(IntPtr pad) => _managed?.VendorProduct(pad) ?? (uint)Call(DeviceNative.DeviceVendorProduct, pad);
+
         public void SetPlayerIndex(IntPtr pad, int index)
         {
             if (_managed is not null) _managed.SetPlayerIndex(pad, index);
@@ -226,6 +228,8 @@ namespace EmuSen.Endymion.Input
             public string Guid(IntPtr pad) => Pad(pad) is { } p ? p.Guid ?? Convert.ToHexString(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(p.Name))).ToLowerInvariant() : "";
 
             public string? Path(IntPtr pad) => Pad(pad)?.Path;
+
+            public uint VendorProduct(IntPtr pad) => Pad(pad) is { } p ? (uint)p.Vendor << 16 | p.Product : 0;
 
             public void SetPlayerIndex(IntPtr pad, int index)
             {

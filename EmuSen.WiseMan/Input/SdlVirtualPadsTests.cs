@@ -31,6 +31,7 @@ namespace EmuSen.WiseMan.Input
             public SDL.GamepadButtonLabel Label(IntPtr pad, SDL.GamepadButton button) => sdl.Label(pad, button);
             public string Guid(IntPtr pad) => sdl.Guid(pad);
             public string? Path(IntPtr pad) => sdl.Path(pad);
+            public uint VendorProduct(IntPtr pad) => sdl.VendorProduct(pad);
             public void SetPlayerIndex(IntPtr pad, int index) => sdl.SetPlayerIndex(pad, index);
         }
 

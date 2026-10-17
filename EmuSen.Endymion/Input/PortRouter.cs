@@ -88,9 +88,10 @@ namespace EmuSen.Endymion.Input
             Apply(room, made);
         }
 
-        // Reads the pad of each player a port hears, then sends what changed and every axis.
+        // A pad pressed for the first time claims its player, then the pad of each player a port hears is read and what changed sent with every axis.
         public unsafe void PollPads()
         {
+            _pads.ClaimPressed();
             if (_managed is not null)
             {
                 _managed.PollPads();

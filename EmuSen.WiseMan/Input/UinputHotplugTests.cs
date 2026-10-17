@@ -58,6 +58,7 @@ namespace EmuSen.WiseMan.Input
             public SDL.GamepadButtonLabel Label(IntPtr pad, SDL.GamepadButton button) => sdl.Label(pad, button);
             public string Guid(IntPtr pad) => sdl.Guid(pad);
             public string? Path(IntPtr pad) => sdl.Path(pad);
+            public uint VendorProduct(IntPtr pad) => sdl.VendorProduct(pad);
             public void SetPlayerIndex(IntPtr pad, int index) => sdl.SetPlayerIndex(pad, index);
         }
 
@@ -279,6 +280,44 @@ namespace EmuSen.WiseMan.Input
             rig.Heard(xbox, 2);
         }
 
+        // Steam's file names the controller behind each virtual pad; SDL reports its vendor and product, so the built-in controls are known and the external pad is player 1 - see EmuSen_Input.md §8.13.2.
+        [UinputTheory, InlineData(false), InlineData(true)]
+        public void Steams_virtual_pads_report_the_controllers_behind_them_and_the_external_one_is_player_1(bool native)
+        {
+            AllowSteamVirtualPads();
+            // SDL reads the file at most every three seconds and skips one whose time it read last, neither forgotten when its joysticks stop.
+            if (SinceSteamInfo.IsRunning && SinceSteamInfo.Elapsed < TimeSpan.FromSeconds(3.2)) Thread.Sleep(TimeSpan.FromSeconds(3.2) - SinceSteamInfo.Elapsed);
+            string info = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"EmuSenSteamVirtualGamepadInfo{Guid.NewGuid():N}.txt");
+            // Steam's own format, as steamclient.so writes it: "[slot %d]", "name=%s", "VID=0x%.4x", "PID=0x%.4x", "type=%s".
+            System.IO.File.WriteAllText(info, "[slot 0]\nname=Legion Go S Controller\nVID=0x28de\nPID=0x12ff\ntype=xbox360\n[slot 1]\nname=Xbox Wireless Controller\nVID=0x045e\nPID=0x0b13\ntype=xboxone\n");
+            System.IO.File.SetLastWriteTimeUtc(info, DateTime.UtcNow.AddSeconds(-10 * Interlocked.Increment(ref _steamInfoFiles)));
+            setenv("SteamVirtualGamepadInfo", info, 1);
+            try
+            {
+                using var rig = new Rig(Native(native), output);
+                rig.Manager.ExternalControllerFirst = true;
+                UinputPad builtIn = rig.Make("Microsoft X-Box 360 pad 0", UinputPad.SteamVendor, UinputPad.SteamVirtualProduct);
+                rig.Expect(1, "slot 0");
+                UinputPad xbox = rig.Make("Microsoft X-Box 360 pad 1", UinputPad.SteamVendor, UinputPad.SteamVirtualProduct);
+                rig.Expect(2, "slot 1");
+                ConnectedPad Open(UinputPad pad) => rig.Manager.Pads.Single(p => p.Path == pad.EventPath);
+                foreach (UinputPad pad in new[] { builtIn, xbox })
+                    rig.Say($"'{pad.Name}': name '{Open(pad).Name}', vendor {Open(pad).Vendor:x4}, product {Open(pad).Product:x4}, type {Open(pad).Type}, guid {Open(pad).Guid}");
+                Assert.Equal((0x28DE, 0x12FF, true), (Open(builtIn).Vendor, Open(builtIn).Product, Open(builtIn).IsBuiltIn));
+                Assert.Equal((0x045E, 0x0B13, false), (Open(xbox).Vendor, Open(xbox).Product, Open(xbox).IsBuiltIn));
+                Assert.Equal(("Legion Go S Controller", "Xbox Wireless Controller"), (Open(builtIn).Name, Open(xbox).Name));
+                Assert.Equal((2, 1), (rig.PlayerAt(builtIn), rig.PlayerAt(xbox)));
+                rig.Heard(xbox, 1);
+                rig.Heard(builtIn, 2);
+            }
+            finally
+            {
+                setenv("SteamVirtualGamepadInfo", "", 1);
+                System.IO.File.Delete(info);
+                SinceSteamInfo.Restart();
+            }
+        }
+
         // The pump and the flush on the poll's path allocate nothing, with a pad open and pressed between the calls.
         [UinputFact]
         public void The_pump_and_the_flush_allocate_nothing()
@@ -311,6 +350,9 @@ namespace EmuSen.WiseMan.Input
                 sdl.Quit();
             }
         }
+
+        private static readonly Stopwatch SinceSteamInfo = new();
+        private static int _steamInfoFiles;
 
         // SDL hides Steam's virtual pads unless told it runs under Steam, which Steam tells it through this variable; SDL reads the C environment.
         private static void AllowSteamVirtualPads() => setenv("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "1", 1);

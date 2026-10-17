@@ -44,6 +44,10 @@ namespace EmuSen.Galaxia.Models
         public bool FirstControllerOnly { get; set; } = false;
         public bool ControllerNotifications { get; set; } = true;
 
+        // Player 1 is the first pad pressed in a game, and on a handheld an external pad goes ahead of the built-in controls - see EmuSen_Settings_Reference.md §4.119.
+        public bool ClaimPlayersByPress { get; set; } = true;
+        public bool ExternalControllerFirst { get; set; } = true;
+
         // What types into a big-screen text row: Automatic, Steam's keyboard, or Mistress's own - see EmuSen_Settings_Reference.md §4.79.
         public string OnScreenKeyboard { get; set; } = OnScreenKeyboardAutomatic;
         public const string OnScreenKeyboardAutomatic = "Automatic", OnScreenKeyboardSteam = "Steam", OnScreenKeyboardEmuSen = "EmuSen";

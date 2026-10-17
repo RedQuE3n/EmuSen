@@ -175,11 +175,11 @@ namespace EmuSen.WiseMan.Mistress
 
             PadDriver second = first.Plug("Second Pad");
             first.Tick();
-            Assert.Equal("Controller connected: Second Pad (Player 2)", Notice(window).Current);
+            Assert.Equal("Second Pad: player 2", Notice(window).Current);
 
             second.Unplug();
             first.Tick();
-            Assert.Equal("Controller disconnected: Second Pad (Player 2)", Notice(window).Current);
+            Assert.Equal("Second Pad disconnected: player 2 is kept for it", Notice(window).Current);
 
             Wait(TimeSpan.FromSeconds(4.5));
             Assert.Null(Notice(window).Current);
@@ -293,12 +293,18 @@ namespace EmuSen.WiseMan.Mistress
             Named<LunaSwitch>(window, "SwapPadButtonsSwitch").IsChecked = true;
             Named<LunaSwitch>(window, "FirstControllerOnlySwitch").IsChecked = true;
             Named<LunaSwitch>(window, "ControllerNotificationsSwitch").IsChecked = false;
+            Named<LunaSwitch>(window, "ClaimPlayersByPressSwitch").IsChecked = false;
+            Named<LunaSwitch>(window, "ExternalControllerFirstSwitch").IsChecked = false;
+            // Each reaches the pads at once, as the others do (EmuSen_Input.md §8.13).
+            first.Tick();
+            Assert.Equal((false, false), (first.Gamepad.ClaimPlayersByPress, first.Gamepad.ExternalControllerFirst));
             window.Close();
 
             AppSettings saved = AppSettings.Load();
             Assert.Equal(("Nintendo", true, true, false), (saved.ControllerType, saved.SwapPadButtons, saved.FirstControllerOnly, saved.ControllerNotifications));
-            Assert.Equal((AppSettings.ControllerTypeAutomatic, false, false, true),
-                (new AppSettings().ControllerType, new AppSettings().SwapPadButtons, new AppSettings().FirstControllerOnly, new AppSettings().ControllerNotifications));
+            Assert.Equal((false, false), (saved.ClaimPlayersByPress, saved.ExternalControllerFirst));
+            Assert.Equal((AppSettings.ControllerTypeAutomatic, false, false, true, true, true),
+                (new AppSettings().ControllerType, new AppSettings().SwapPadButtons, new AppSettings().FirstControllerOnly, new AppSettings().ControllerNotifications, new AppSettings().ClaimPlayersByPress, new AppSettings().ExternalControllerFirst));
         }, default);
 
         // Plan §15.14's rule for pads: every SDL handle is let go when its pad goes and when the window closes.

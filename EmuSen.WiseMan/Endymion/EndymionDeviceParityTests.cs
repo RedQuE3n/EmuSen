@@ -49,13 +49,14 @@ namespace EmuSen.WiseMan.Endymion
 
         // A pad's whole state as a test can read it.
         private static string State(SimulatedPad pad) =>
-            $"{pad.Name}|{pad.Guid ?? "null"}|{pad.Path ?? "null"}|{pad.PlayerIndex}|{pad.Type}|{string.Concat(SdlButtons.Select(b => pad.IsHeld(b) ? '1' : '0'))}|{string.Join(",", SdlAxes.Select(pad.Axis))}";
+            $"{pad.Name}|{pad.Guid ?? "null"}|{pad.Path ?? "null"}|{pad.PlayerIndex}|{pad.Type}|{pad.Vendor:X4}:{pad.Product:X4}|{string.Concat(SdlButtons.Select(b => pad.IsHeld(b) ? '1' : '0'))}|{string.Join(",", SdlAxes.Select(pad.Axis))}";
 
         // One random thing done to a pad and its twin.
         private static string Touch(Random random, SimulatedPad a, SimulatedPad b)
         {
-            switch (random.Next(9))
+            switch (random.Next(10))
             {
+                case 8: (ushort v, ushort p) = new (ushort, ushort)[] { (0, 0), (0x1A86, 0xE310), (0x045E, 0x0B13), (0xFFFF, 0xFFFF) }[random.Next(4)]; a.Vendor = v; b.Vendor = v; a.Product = p; b.Product = p; return $"model {v:X4}:{p:X4}";
                 case 0: SDL.GamepadButton press = SdlButtons[random.Next(SdlButtons.Length)]; a.Press(press); b.Press(press); return $"press {press}";
                 case 1: SDL.GamepadButton release = SdlButtons[random.Next(SdlButtons.Length)]; a.Release(release); b.Release(release); return $"release {release}";
                 case 2:
@@ -98,7 +99,7 @@ namespace EmuSen.WiseMan.Endymion
         // The set as a device layer answers: everything a manager could ask of every handle it was ever given.
         private static string Asked(SimulatedPads set, List<IntPtr> handles, List<SimulatedPad> twins) =>
             $"first {twins.IndexOf(set.First!)} open {set.OpenHandles} opens {set.Opens} closes {set.Closes} init {set.Initialized} attached [{string.Join(",", set.Attached())}] " +
-            string.Join(" ", handles.Select(h => $"{h:X}:{set.IsAttached(h)},{set.Name(h) ?? "null"},{set.Guid(h)},{set.Path(h) ?? "null"},{set.Type(h)},{set.Label(h, SDL.GamepadButton.South)},{set.Button(h, SDL.GamepadButton.South)},{set.Axis(h, SDL.GamepadAxis.LeftX)}"));
+            string.Join(" ", handles.Select(h => $"{h:X}:{set.IsAttached(h)},{set.Name(h) ?? "null"},{set.Guid(h)},{set.Path(h) ?? "null"},{set.VendorProduct(h):X8},{set.Type(h)},{set.Label(h, SDL.GamepadButton.South)},{set.Button(h, SDL.GamepadButton.South)},{set.Axis(h, SDL.GamepadAxis.LeftX)}"));
 
         [Fact]
         public void A_simulated_set_is_the_same_device_layer_to_a_manager_that_asks_it()
@@ -214,7 +215,7 @@ namespace EmuSen.WiseMan.Endymion
                 var text = new System.Text.StringBuilder();
                 text.Append($"started {m.Started} connected {m.IsConnected} front {m.FrontendPadCount} name {m.ControllerName ?? "null"} type {m.ControllerType} any {m.GetAnyPressedButton()?.ToString() ?? "null"} label {m.ButtonLabel(SDL.GamepadButton.South) ?? "null"} ");
                 text.Append($"first {m.FirstControllerOnly} dpad {m.AnalogStickAsDpad} {Bits(m.StickDeadzone)} analog {m.LeftStickIsAnalog} {Bits(m.AnalogDeadzone)} simulated {Twins.IndexOf(m.Simulated!)} polls {Polls}\n");
-                text.Append("pads " + string.Join(" ", m.Pads.Select(p => $"{Index(p)}:{p.Id},{p.Name},{p.Guid},{p.Path ?? "null"},{p.IsOpen},{p.Type},{m.Players.PlayerOf(p)}")) + "\n");
+                text.Append("pads " + string.Join(" ", m.Pads.Select(p => $"{Index(p)}:{p.Id},{p.Name},{p.Guid},{p.Path ?? "null"},{p.Vendor:X4}:{p.Product:X4},{p.IsOpen},{p.Type},{m.Players.PlayerOf(p)}")) + "\n");
                 text.Append("pool " + string.Join(" ", Pool.Select(p => $"{p.Name},{p.IsOpen},{p.Type},{p.IsRawPressed(SDL.GamepadButton.South)},{Bits(p.RawAxis(SDL.GamepadAxis.LeftX))},{p.ButtonLabel(SDL.GamepadButton.East) ?? "null"}")) + "\n");
                 text.Append("seats " + string.Join(" ", Enumerable.Range(1, PlayerSlots.MaxPlayers).Select(p => m.Players.SeatOf(p) is { } pad ? $"{Index(pad)}" : "-")) + $" highest {m.Players.Highest}\n");
                 for (int player = 0; player <= PlayerSlots.MaxPlayers + 1; player++)
@@ -249,7 +250,8 @@ namespace EmuSen.WiseMan.Endymion
                             string? guid = random.Next(4) == 0 ? (random.Next(2) == 0 ? "shared" : "") : null;
                             string path = $"/dev/input/run{run}step{(random.Next(3) == 0 ? 0 : step)}";
                             var type = (SDL.GamepadType)random.Next(0, 8);
-                            Both(s => { SimulatedPad pad = s.Add(); pad.Name = name; pad.Guid = guid; pad.Path = path; pad.Type = type; s.Set.Connect(pad); });
+                            ushort product = random.Next(3) == 0 ? (ushort)0xE310 : (ushort)random.Next(0x10000);
+                            Both(s => { SimulatedPad pad = s.Add(); pad.Name = name; pad.Guid = guid; pad.Path = path; pad.Type = type; pad.Vendor = 0x1A86; pad.Product = product; s.Set.Connect(pad); });
                             what = $"connect {name} {guid} {path}";
                             break;
                         case 1 when managed.Twins.Count > 0:
@@ -408,6 +410,7 @@ namespace EmuSen.WiseMan.Endymion
             public SDL.GamepadButtonLabel Label(IntPtr pad, SDL.GamepadButton button) => inner.Label(pad, button);
             public string Guid(IntPtr pad) => inner.Guid(pad);
             public string? Path(IntPtr pad) => inner.Path(pad);
+            public uint VendorProduct(IntPtr pad) => inner.VendorProduct(pad);
             public void SetPlayerIndex(IntPtr pad, int index) => inner.SetPlayerIndex(pad, index);
         }
 
@@ -495,7 +498,7 @@ namespace EmuSen.WiseMan.Endymion
                     foreach (ConnectedPad pad in manager.Pads)
                         if (!order.Contains(pad)) order.Add(pad);
                     // An id is SDL's own count of every joystick the process has attached, so a pad is told by its place and not its id.
-                    log.Add("pads " + string.Join(" ", manager.Pads.Select(p => $"{order.IndexOf(p)}:{p.Name},{p.Guid},{p.Path ?? "null"},{p.Type},{p.IsOpen},{manager.Players.PlayerOf(p)},{p.ButtonLabel(SDL.GamepadButton.South) ?? "null"}")));
+                    log.Add("pads " + string.Join(" ", manager.Pads.Select(p => $"{order.IndexOf(p)}:{p.Name},{p.Guid},{p.Path ?? "null"},{p.Vendor:X4}:{p.Product:X4},{p.Type},{p.IsOpen},{manager.Players.PlayerOf(p)},{p.ButtonLabel(SDL.GamepadButton.South) ?? "null"}")));
                     log.Add("held " + string.Join(" ", Enumerable.Range(1, 4).Select(p => string.Concat(Buttons.Select(btn => manager.IsPressed(btn, p) ? '1' : '0')) + ":" + string.Join(",", Axes.Select(ax => Bits(manager.Axis(ax, p)))))));
                     log.Add($"any {manager.GetAnyPressedButton()?.ToString() ?? "null"} name {manager.ControllerName} type {manager.ControllerType} seats {string.Join(",", Enumerable.Range(1, 4).Select(p => manager.Players.SeatOf(p) is { } s ? $"{order.IndexOf(s)}{(s.IsOpen ? "" : "x")}" : "-"))}");
                 }
@@ -548,6 +551,7 @@ namespace EmuSen.WiseMan.Endymion
             public SDL.GamepadButtonLabel Label(IntPtr pad, SDL.GamepadButton button) => sdl.Label(pad, button);
             public string Guid(IntPtr pad) => sdl.Guid(pad);
             public string? Path(IntPtr pad) => sdl.Path(pad);
+            public uint VendorProduct(IntPtr pad) => sdl.VendorProduct(pad);
             public void SetPlayerIndex(IntPtr pad, int index) => sdl.SetPlayerIndex(pad, index);
         }
 

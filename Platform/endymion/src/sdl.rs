@@ -88,7 +88,10 @@ functions! {
     get_gamepad_button_label = "SDL_GetGamepadButtonLabel": fn(*mut c_void, c_int) -> c_int;
     get_gamepad_joystick = "SDL_GetGamepadJoystick": fn(*mut c_void) -> *mut c_void;
     get_joystick_guid = "SDL_GetJoystickGUID": fn(*mut c_void) -> Guid;
+    get_joystick_name = "SDL_GetJoystickName": fn(*mut c_void) -> *const c_char;
     get_gamepad_path = "SDL_GetGamepadPath": fn(*mut c_void) -> *const c_char;
+    get_gamepad_vendor = "SDL_GetGamepadVendor": fn(*mut c_void) -> u16;
+    get_gamepad_product = "SDL_GetGamepadProduct": fn(*mut c_void) -> u16;
     set_gamepad_player_index = "SDL_SetGamepadPlayerIndex": fn(*mut c_void, c_int) -> bool;
 }
 

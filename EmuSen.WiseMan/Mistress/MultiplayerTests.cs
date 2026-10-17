@@ -71,6 +71,9 @@ namespace EmuSen.WiseMan.Mistress
             return (window, first);
         }
 
+        // The seats as the pads connected, for the cases about the slot rule and the routing rather than the first press - see EmuSen_Input.md §8.13.
+        private static void ByConnection(AppSettings app) => app.ClaimPlayersByPress = false;
+
         private static EmulatorSession SessionOf(MainWindow w) => (EmulatorSession)typeof(MainWindow).GetField("_session", Hidden)!.GetValue(w)!;
 
         private static void Poll(MainWindow w) => typeof(MainWindow).GetMethod("PollGamepad", Hidden)!.Invoke(w, null);
@@ -101,7 +104,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(2, SessionOf(window).ControllerPorts);
             PadDriver second = first.Plug("Second Pad");
             Poll(window);
-            Assert.Equal("Controller connected: Second Pad (Player 2)", Notice(window));
+            Assert.Equal("Second Pad: player 2", Notice(window));
 
             second.Pad.Press(SDL.GamepadButton.South);
             first.Pad.Press(SDL.GamepadButton.East);
@@ -112,14 +115,65 @@ namespace EmuSen.WiseMan.Mistress
             second.Unplug();
             Poll(window);
             Assert.Equal((SnesA, (ushort)0), SnesPads(window));
-            Assert.Equal("Controller disconnected: Second Pad (Player 2)", Notice(window));
+            Assert.Equal("Second Pad disconnected: player 2 is kept for it", Notice(window));
             Assert.False(window.IsPaused);
             Assert.False(first.Gamepad.Players.SeatOf(2)!.IsOpen);
 
             second.Replug();
             Poll(window);
-            Assert.Equal("Controller connected: Second Pad (Player 2)", Notice(window));
+            Assert.Equal("Second Pad: player 2", Notice(window));
             Assert.Equal((SnesA, SnesB), SnesPads(window));
+            window.Close();
+        }, default);
+
+        // The handheld's report of 2026-10-17: its built-in controls opened first, the Xbox pad second, and a one-player game heard nothing from the Xbox pad; here the first pad is not known as built-in, as under Steam Input without Steam's file - see EmuSen_Input.md §8.13.
+        [Fact]
+        public Task The_pad_pressed_first_in_a_game_is_player_1_whichever_connected_first() => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver builtIn) = Playing("Claim.sfc", SyntheticRom.BuildPadReader());
+            PadDriver xbox = builtIn.Plug("Xbox Wireless Controller", SDL.GamepadType.XboxOne);
+            Poll(window);
+
+            xbox.Pad.Press(SDL.GamepadButton.Start);
+            Poll(window);
+            Assert.Equal((SnesStart, (ushort)0), SnesPads(window));
+            Assert.Equal(1, builtIn.Gamepad.Players.PlayerOf(builtIn.Gamepad.Pads[1]));
+            Assert.Equal("Xbox Wireless Controller: player 1", Notice(window));
+
+            // The built-in controls follow as player 2, and pressing them later moves nobody.
+            builtIn.Pad.Press(SDL.GamepadButton.East);
+            Poll(window);
+            Assert.Equal((SnesStart, SnesA), SnesPads(window));
+            Assert.Equal(2, builtIn.Gamepad.Players.PlayerOf(builtIn.Gamepad.Pads[0]));
+            window.Close();
+        }, default);
+
+        // The built-in controls known by their vendor and product: the setting seats the Xbox pad as player 1 as it connects; with it off the notice says how to take player 1.
+        [Theory]
+        [InlineData(true, true, "Xbox Wireless Controller: player 1")]
+        [InlineData(false, true, "Xbox Wireless Controller: player 2, and player 1 is the built-in controls. Press a button on it first in a game to take player 1.")]
+        [InlineData(false, false, "Xbox Wireless Controller: player 2, and player 1 is the built-in controls. Swap Players under Game Settings makes it player 1.")]
+        public Task On_a_handheld_the_notice_names_the_player_an_external_pad_took(bool externalFirst, bool claim, string notice) => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver first) = Playing("Handheld.sfc", SyntheticRom.BuildPadReader(), a => { a.ExternalControllerFirst = externalFirst; a.ClaimPlayersByPress = claim; });
+            first.Unplug();
+            Poll(window);
+            first.Gamepad.Players.Forget(1);
+            PadDriver builtIn = first.Plug("Legion Go S", SDL.GamepadType.Xbox360, 0x1A86, 0xE310);
+            Poll(window);
+            Assert.Equal("Legion Go S: player 1", Notice(window));
+
+            PadDriver xbox = first.Plug("Xbox Wireless Controller", SDL.GamepadType.XboxOne, 0x045E, 0x0B13);
+            Poll(window);
+            Assert.Equal(notice, Notice(window));
+            Assert.Equal(externalFirst ? 1 : 2, first.Gamepad.Players.PlayerOf(first.Gamepad.Pads[^1]));
+
+            xbox.Pad.Press(SDL.GamepadButton.Start);
+            Poll(window);
+            Assert.Equal(claim || externalFirst ? (SnesStart, (ushort)0) : ((ushort)0, SnesStart), SnesPads(window));
+            builtIn.Pad.Press(SDL.GamepadButton.East);
+            Poll(window);
+            Assert.Equal(claim || externalFirst ? (SnesStart, SnesA) : (SnesA, SnesStart), SnesPads(window));
             window.Close();
         }, default);
 
@@ -127,7 +181,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Player_1s_pad_going_moves_nobody_up_and_a_spare_takes_its_seat() => Session.Dispatch(() =>
         {
-            (MainWindow window, PadDriver first) = Playing("Spare.sfc", SyntheticRom.BuildPadReader());
+            (MainWindow window, PadDriver first) = Playing("Spare.sfc", SyntheticRom.BuildPadReader(), ByConnection);
             PadDriver second = first.Plug("Second Pad");
             Poll(window);
             first.Unplug();
@@ -139,7 +193,7 @@ namespace EmuSen.WiseMan.Mistress
 
             PadDriver spare = first.Plug("Spare Pad");
             Poll(window);
-            Assert.Equal("Controller connected: Spare Pad (Player 1)", Notice(window));
+            Assert.Equal("Spare Pad: player 1", Notice(window));
             spare.Pad.Press(SDL.GamepadButton.Start);
             Poll(window);
             Assert.Equal((SnesStart, SnesStart), SnesPads(window));
@@ -164,7 +218,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Four_pads_play_the_n64s_four_ports_in_a_big_screen_session() => Session.Dispatch(() =>
         {
-            (MainWindow window, PadDriver first) = Playing("Four.z64", SyntheticN64Rom.Build(patches: (0, new byte[] { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 })), bigScreen: true);
+            (MainWindow window, PadDriver first) = Playing("Four.z64", SyntheticN64Rom.Build(patches: (0, new byte[] { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 })), ByConnection, bigScreen: true);
             var mars = Assert.IsType<MarsRtCore>(SessionOf(window).Core);
             Poll(window);
             Assert.Equal(new[] { true, false, false, false }, N64Ports(mars).Select(p => p.Present));
@@ -194,7 +248,7 @@ namespace EmuSen.WiseMan.Mistress
                 GraphicsConfig graphics = GraphicsConfig.Load();
                 graphics.SetValue("Genesis", "pad1", "md.pad6");
                 graphics.Save();
-                (MainWindow window, PadDriver first) = Playing("JCart.md", NephritePlayersTests.JCartReader(), bigScreen: true);
+                (MainWindow window, PadDriver first) = Playing("JCart.md", NephritePlayersTests.JCartReader(), ByConnection, bigScreen: true);
                 var core = Assert.IsType<CoreEngine>(SessionOf(window).Core);
                 Assert.Equal(4, SessionOf(window).ControllerPorts);
                 PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4") };
@@ -234,7 +288,7 @@ namespace EmuSen.WiseMan.Mistress
             CoreDiscovery.UseDevelopment(false);
             try
             {
-                (MainWindow window, PadDriver first) = Playing("Four.md", NephritePlayersTests.TeamPlayerReader());
+                (MainWindow window, PadDriver first) = Playing("Four.md", NephritePlayersTests.TeamPlayerReader(), ByConnection);
                 var core = Assert.IsType<CoreEngine>(SessionOf(window).Core);
                 PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4") };
                 first.Pad.Press(SDL.GamepadButton.DPadUp);

@@ -8,7 +8,7 @@ using EmuSen.Galaxia.Input;
 namespace EmuSen.Endymion.Input
 {
     // Polls every connected SDL3 gamepad and seats each as a player - see EmuSen_Input.md §4 and §8, and EmuSen_Settings_Reference.md §4.61.
-    public class GamepadManager : IDisposable
+    public partial class GamepadManager : IDisposable
     {
         // Swapped when a ROM for a different console loads - see EmuSen_Input.md §5.1.
         public GamepadBindingMap Bindings { get; set; }
@@ -112,6 +112,12 @@ namespace EmuSen.Endymion.Input
         public void Assign(ConnectedPad pad, int player)
         {
             Players.Move(pad, player);
+            _arranged = true;
+            LightPlayers();
+        }
+
+        private void LightPlayers()
+        {
             if (_managed is not null) _managed.LightPlayers();
             else _native!.LightPlayers();
         }
@@ -281,7 +287,7 @@ namespace EmuSen.Endymion.Input
                     {
                         var pad = new ConnectedPad(_handle, change.Key);
                         _pads.Add(pad);
-                        int player = _owner.Players.Seat(pad);
+                        int player = _owner.SeatAhead(pad, _owner.Players.Seat(pad));
                         LightPlayers();
                         if (change.Announce != 0) _owner.PadChanged?.Invoke(new PadConnection(pad, Connected: true) { Player = player });
                     }
@@ -429,7 +435,7 @@ namespace EmuSen.Endymion.Input
                     if (handle == IntPtr.Zero) continue;
                     var pad = new ConnectedPad(_devices, id, handle);
                     _pads.Add(pad);
-                    int player = _owner.Players.Seat(pad);
+                    int player = _owner.SeatAhead(pad, _owner.Players.Seat(pad));
                     LightPlayers();
                     if (announce) _owner.PadChanged?.Invoke(new PadConnection(pad, Connected: true) { Player = player });
                 }

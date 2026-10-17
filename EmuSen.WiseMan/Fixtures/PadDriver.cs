@@ -42,9 +42,9 @@ namespace EmuSen.WiseMan.Fixtures
         }
 
         // Another pad plugged in beside this one; the window sees it at its next poll.
-        public PadDriver Plug(string name, SDL.GamepadType type = SDL.GamepadType.Unknown)
+        public PadDriver Plug(string name, SDL.GamepadType type = SDL.GamepadType.Unknown, ushort vendor = 0, ushort product = 0)
         {
-            var pad = new SimulatedPad { Name = name, Type = type };
+            var pad = new SimulatedPad { Name = name, Type = type, Vendor = vendor, Product = product };
             Devices.Connect(pad);
             return new PadDriver(this, pad);
         }

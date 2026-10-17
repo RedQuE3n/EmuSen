@@ -10,7 +10,6 @@ using EmuSen.Endymion.Input;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
-using SDL3;
 
 namespace EmuSen.Mistress.Views
 {
@@ -163,7 +162,7 @@ namespace EmuSen.Mistress.Views
         {
             foreach (var (pad, (row, choice)) in _padRows)
             {
-                bool held = Held(pad);
+                bool held = pad.AnyPressed();
                 if (held == _lit.Contains(pad)) continue;
                 if (held) _lit.Add(pad); else _lit.Remove(pad);
                 Mark(choice, held);
@@ -171,13 +170,6 @@ namespace EmuSen.Mistress.Views
         }
 
         public bool IsLit(ConnectedPad pad) => _lit.Contains(pad);
-
-        private static bool Held(ConnectedPad pad)
-        {
-            foreach (SDL.GamepadButton b in Enum.GetValues<SDL.GamepadButton>())
-                if (b is not (SDL.GamepadButton.Invalid or SDL.GamepadButton.Count) && pad.IsRawPressed(b)) return true;
-            return Math.Abs(pad.RawAxis(SDL.GamepadAxis.LeftTrigger)) > 0.5 || Math.Abs(pad.RawAxis(SDL.GamepadAxis.RightTrigger)) > 0.5;
-        }
 
         private static void Mark(Dropdown choice, bool lit)
         {

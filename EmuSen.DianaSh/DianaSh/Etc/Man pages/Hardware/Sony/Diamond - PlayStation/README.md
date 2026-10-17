@@ -55,6 +55,13 @@ open kernel's second phase, the gate with the tester's games booting with no fir
   inserted; rewind and states across modes; per-game states unchanged byte for byte; and, since the card mode became
   every console's the same day (`EmuSen_SaveMedia.md`), the PlayStation's part only: its slots of `psx.card`, its
   default *Shared* with the import offered once, and the card's format module, `PsxCardFormat`.
+- [`Diamond_Shell.md`](Diamond_Shell.md) — the console with no game, written 2026-10-17 as a design awaiting the
+  tester's approval, nothing built: starting any console with nothing in it as the core ABI's minor 1.11 (a system's
+  `starts_empty` and a null image at create), Diamond's empty drive as psx-spx describes it, the open kernel's shell as
+  a program of its own started by `Exec` and reaching the kernel only through its call tables, the memory card manager's
+  scope (save icons, copy, delete and format with confirmation, EmuSen's button grammar), Mistress's entries and
+  *Insert Disc…*, headless tests by WiseMan, synthetic cards and the kit's C22, the seams of the audio CD player and its
+  visualizer, the phasing, the risks and the questions.
 - [`Diamond_Speed.md`](Diamond_Speed.md) — the exact levers, written 2026-10-12 at stage 13: the bench of the seven copied
   discs on the open kernel and the link's placement as a source of error, the profile that put idle skipping before the
   plan's other levers, the skipper's proof, window, skip and verifier with the loop forms of `programs/idle.s`, the

@@ -1,4 +1,5 @@
-//! `diamond-kernel image` rebuilds the kernel with the pinned toolchain and writes diamond-kernel.bin and its SHA-256;
+//! `diamond-kernel image` rebuilds the shell and then the kernel over it with the pinned toolchain and writes
+//! diamond-shell.exe and diamond-kernel.bin with their SHA-256s;
 //! `diamond-kernel calls` prints the call table for Diamond_OpenKernel.md §5; `diamond-kernel digest <elf>` prints
 //! the SHA-256 of an ELF's flattened image, to compare a build made elsewhere, and `diamond-kernel flatten <elf> <out>`
 //! writes that image, to run the suite against it through DIAMOND_KERNEL_IMAGE.
@@ -8,6 +9,22 @@ use diamond_kernel_harness::{calls, image, sha256};
 fn main() {
     match std::env::args().nth(1).as_deref() {
         Some("image") => {
+            let shell = match image::rebuild_shell() {
+                None => {
+                    eprintln!("the pinned toolchain ({}) is not installed", image::channel());
+                    std::process::exit(2);
+                }
+                Some(Err(e)) => {
+                    eprintln!("{e}");
+                    std::process::exit(1);
+                }
+                Some(Ok(b)) => b,
+            };
+            let dir = image::shell_dir();
+            std::fs::write(dir.join(image::SHELL_EXE), &shell).unwrap();
+            let digest = sha256::hex(&shell);
+            std::fs::write(dir.join(format!("{}.sha256", image::SHELL_EXE)), format!("{digest}  {}\n", image::SHELL_EXE)).unwrap();
+            println!("{digest}  {} ({} bytes)", image::SHELL_EXE, shell.len());
             let bytes = match image::rebuild() {
                 None => {
                     eprintln!("the pinned toolchain ({}) is not installed", image::channel());

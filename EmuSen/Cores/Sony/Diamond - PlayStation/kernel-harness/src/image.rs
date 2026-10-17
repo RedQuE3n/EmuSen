@@ -11,6 +11,56 @@ pub fn kernel_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../kernel")
 }
 
+/// The shell's crate, whose PS-EXE the kernel carries (Diamond_Shell.md §1.3).
+pub fn shell_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../kernel-shell")
+}
+
+pub const SHELL_EXE: &str = "diamond-shell.exe";
+
+/// The shell's committed PS-EXE.
+pub fn committed_shell() -> Vec<u8> {
+    std::fs::read(shell_dir().join(SHELL_EXE)).expect("the shell's PS-EXE")
+}
+
+pub fn committed_shell_digest() -> String {
+    let text = std::fs::read_to_string(shell_dir().join(format!("{SHELL_EXE}.sha256"))).expect("diamond-shell.exe.sha256");
+    text.split_whitespace().next().unwrap_or("").to_string()
+}
+
+/// Where the shell's stack starts, its own in user RAM; the kernel's shell stack is left to the kernel.
+pub const SHELL_STACK: u32 = 0x801F_FF00;
+
+/// A PS-EXE from the shell's ELF (psx-spx "CDROM File Playstation EXE and SYSTEM.CNF"): its one loadable segment's
+/// bytes as the body at the segment's address, padded to 800h, the entry as PC, GP 0, the variables from __bss_start to
+/// __bss_end as the region Exec zeroes, and the shell's own stack.
+pub fn psexe(elf: &[u8]) -> Result<Vec<u8>, String> {
+    if elf.len() < 52 || &elf[..4] != b"\x7FELF" || elf[4] != 1 || elf[5] != 1 {
+        return Err("not a 32-bit little-endian ELF".into());
+    }
+    let (phoff, phentsize, phnum) = (u32_at(elf, 28) as usize, u16_at(elf, 42), u16_at(elf, 44));
+    let loads: Vec<usize> = (0..phnum).map(|i| phoff + i * phentsize).filter(|&p| u32_at(elf, p) == 1 && u32_at(elf, p + 16) > 0).collect();
+    let [p] = loads[..] else { return Err(format!("{} loadable segments with bytes, not one", loads.len())) };
+    let (offset, vaddr, filesz) = (u32_at(elf, p + 4) as usize, u32_at(elf, p + 8), u32_at(elf, p + 16) as usize);
+    let size = filesz.div_ceil(0x800) * 0x800;
+    let (bss, end) = (symbol(elf, "__bss_start").ok_or("no __bss_start")?, symbol(elf, "__bss_end").ok_or("no __bss_end")?);
+    let mut exe = vec![0u8; 0x800 + size];
+    exe[..8].copy_from_slice(b"PS-X EXE");
+    let mut put = |at: usize, v: u32| exe[at..at + 4].copy_from_slice(&v.to_le_bytes());
+    put(0x10, u32_at(elf, 24));
+    put(0x14, 0);
+    put(0x18, vaddr);
+    put(0x1C, size as u32);
+    put(0x28, bss);
+    put(0x2C, end - bss);
+    put(0x30, SHELL_STACK);
+    put(0x34, 0);
+    let marker = b"Diamond open kernel shell";
+    exe[0x4C..0x4C + marker.len()].copy_from_slice(marker);
+    exe[0x800..0x800 + filesz].copy_from_slice(&elf[offset..offset + filesz]);
+    Ok(exe)
+}
+
 /// The committed image, or the one DIAMOND_KERNEL_IMAGE names, for running the suite against a spoiled kernel.
 pub fn committed() -> Vec<u8> {
     let path =
@@ -105,19 +155,33 @@ pub fn rebuild() -> Option<Result<Vec<u8>, String>> {
     Some(rebuild_elf()?.and_then(|elf| flatten(&elf)))
 }
 
-/// The kernel's ELF as the pinned toolchain links it; None when that toolchain is absent.
+/// The kernel's ELF as the pinned toolchain links it, over the committed shell; None when that toolchain is absent.
 pub fn rebuild_elf() -> Option<Result<Vec<u8>, String>> {
+    build(&kernel_dir(), "kernel-rebuild", "diamond-kernel")
+}
+
+/// The shell's ELF as the pinned toolchain links it; None when that toolchain is absent.
+pub fn rebuild_shell_elf() -> Option<Result<Vec<u8>, String>> {
+    build(&shell_dir(), "shell-rebuild", "diamond-shell")
+}
+
+/// The shell's PS-EXE rebuilt; None when the toolchain is absent.
+pub fn rebuild_shell() -> Option<Result<Vec<u8>, String>> {
+    Some(rebuild_shell_elf()?.and_then(|elf| psexe(&elf)))
+}
+
+fn build(dir: &Path, target_name: &str, binary: &str) -> Option<Result<Vec<u8>, String>> {
     let mut cargo = cargo()?;
-    let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/kernel-rebuild");
+    let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("target").join(target_name);
     let output = cargo
-        .current_dir(kernel_dir())
+        .current_dir(dir)
         .args(["build", "--release", "-Z", "build-std=core", "--target", "mipsel-sony-psx", "--target-dir"])
         .arg(&target)
         .output();
     Some(match output {
         Err(e) => Err(format!("cargo did not run: {e}")),
         Ok(o) if !o.status.success() => Err(String::from_utf8_lossy(&o.stderr).into_owned()),
-        Ok(_) => std::fs::read(target.join("mipsel-sony-psx/release/diamond-kernel.exe")).map_err(|e| e.to_string()),
+        Ok(_) => std::fs::read(target.join(format!("mipsel-sony-psx/release/{binary}.exe"))).map_err(|e| e.to_string()),
     })
 }
 

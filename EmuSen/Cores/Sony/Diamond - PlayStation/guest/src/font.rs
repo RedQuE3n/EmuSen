@@ -1,5 +1,5 @@
-//! An 8x8 cell font drawn for the open kernel's screen: 5x8 glyphs, ASCII 20h-7Fh, each row a 5-bit pattern with bit 4
-//! the leftmost pixel. Diamond_OpenKernel_Phase2.md §16.
+//! An 8x8 cell font drawn for the open kernel and its shell: 5x8 glyphs, ASCII 20h-7Fh, each row a 5-bit pattern with
+//! bit 4 the leftmost pixel. Diamond_OpenKernel_Phase2.md §16.
 
 pub const FIRST: u32 = 0x20;
 

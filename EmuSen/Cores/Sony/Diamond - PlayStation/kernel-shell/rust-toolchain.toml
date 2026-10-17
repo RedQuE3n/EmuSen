@@ -1,0 +1,5 @@
+# The shell is built with the kernel and carried in its image, so its toolchain is the kernel's (Diamond_OpenKernel.md §6).
+[toolchain]
+channel = "nightly-2026-10-01"
+components = ["rust-src"]
+profile = "minimal"

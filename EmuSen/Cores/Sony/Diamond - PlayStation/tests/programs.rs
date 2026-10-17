@@ -1192,6 +1192,25 @@ fn the_screen_with_no_disc_formats_a_card_and_boots_a_disc_put_in() {
     assert_eq!(m.board.ram_word(0x10_0000 + 4 * 8), 0, "and its calls kept the saved registers");
 }
 
+/// Diamond_Shell.md §4.2 case 5: the shell side-loaded as a PS-EXE on the open kernel, which then never runs its own
+/// shell code, formats a card and draws its screen all the same: it reaches the kernel through the call tables alone.
+#[test]
+fn the_shell_runs_as_a_program_side_loaded_on_the_open_kernel() {
+    let image = include_bytes!("../kernel-shell/diamond-shell.exe");
+    let media = Media::read(image).unwrap();
+    let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], image, kernel::open_kernel().map(|k| (k, Kernel::Open)));
+    m.insert_card(0, None);
+    let square = 1 << 15;
+    for _ in 0..1200 {
+        let f = m.frames;
+        m.board.sio0.set_buttons(0, if (400..406).contains(&f) || (420..426).contains(&f) { square } else { 0 });
+        m.advance();
+    }
+    assert_eq!(&m.card_in(0).unwrap().data[..2], b"MC", "formatted by the side-loaded shell");
+    let at = |x: usize, y: usize| u16::from_le_bytes([m.board.gpu.vram.bytes[2 * (y * 1024 + x)], m.board.gpu.vram.bytes[2 * (y * 1024 + x) + 1]]);
+    assert_eq!(at(2, 120), 2 | 3 << 5 | 5 << 10, "the shell's background");
+}
+
 /// `card-write-race.s` on a machine with blank cards in both slots, the port it writes poked first, run to the B0h entry
 /// of its `_card_write` call; the machine and the instructions stepped so far.
 fn card_write_call(port: u32) -> Machine {

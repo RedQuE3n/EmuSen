@@ -1,0 +1,28 @@
+[package]
+name = "diamond-shell"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The open kernel's shell: a PS-EXE for mipsel-sony-psx, carried in the kernel's image and started by Exec when no disc
+# boots, reaching the kernel only through its call tables. Committed as diamond-shell.exe with its hash and rebuilt to
+# the same bytes. See Diamond_Shell.md §1.3.
+[[bin]]
+name = "diamond-shell"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+diamond-guest = { path = "../guest" }
+
+# Its own root: no host workspace builds it.
+[workspace]
+
+[profile.release]
+panic = "abort"
+opt-level = 2
+lto = "fat"
+codegen-units = 1
+debug = false
+incremental = false

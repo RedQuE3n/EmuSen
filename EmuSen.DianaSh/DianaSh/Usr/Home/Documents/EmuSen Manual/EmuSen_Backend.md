@@ -1237,6 +1237,12 @@ The blast radius was the three parity classes of this step and the table's, `Dis
 
 ### 13.4 Where the step stopped, and why: part (d) waits on three questions
 
+*Decided 2026-10-17 by the tester, each as recommended: the views read memory in rounds, with a whole-space snapshot
+for the two tile sheets of spaces with no side effects, behind a reader trait B7 implements; `MoonBoards` is split, its
+board names to the NES pack and the rest to MoonRT's own exports at B4; `emusen-mips` gains MIPS III with the spelling a
+field of `Dialect`, so neither golden changes; and a Sega CD backup RAM whose footer counts 255 or 256 files is listed
+as damaged, its readable saves shown and writes refused, rather than thrown on.*
+
 Part (d), the debugger views and the disassemblers with the shims' remaining console code, was not built. Reading it
 before building showed three design questions the page does not answer, and the rule for this step is to stop at the
 last graded part and ask rather than choose:

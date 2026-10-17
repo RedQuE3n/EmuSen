@@ -3159,6 +3159,10 @@ picture and not the filter's.
 
 Also not modelled: a 6538 or Dendy as such (the capture's chip), and the levels of a 2C07, which no source gives.
 
+*Decided 2026-10-17 by the tester, on round 3's questions: MoonRT gains a PAL timing mode as work of its own, after
+which it says `"pal"` through the existing field; the per-game choice stays in `games.db`'s `game_edit`, a presentation
+choice beside the borrowed cover. The 2C07's levels stay the 2C02's until a source gives them.*
+
 ## 28. The PlayStation's row, against Diamond as built (2026-10-17)
 
 §20.6 wrote `ConsoleTiming["PlayStation"]` at Diamond's stage 11 with the clock settled and the line's length

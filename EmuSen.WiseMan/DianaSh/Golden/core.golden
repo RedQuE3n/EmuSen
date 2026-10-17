@@ -3,6 +3,7 @@
 # a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
 command core
 usage 1   core <corename> <path>        load or swap the running ROM (validated against the known core registry)
+usage 2   core <corename> --console     start that core's console with nothing in it, where it can
 
 case the registry and its refusals
 target none
@@ -14,18 +15,18 @@ x
 file Games/noext 1
 x
 $ core
-out 36
-Usage: core <corename> <path-to-rom>
+out 64
+Usage: core <corename> <path-to-rom> | core <corename> --console
 status 1
 action none
 $ core snes
-out 36
-Usage: core <corename> <path-to-rom>
+out 64
+Usage: core <corename> <path-to-rom> | core <corename> --console
 status 1
 action none
 $ core a b c
-out 36
-Usage: core <corename> <path-to-rom>
+out 64
+Usage: core <corename> <path-to-rom> | core <corename> --console
 status 1
 action none
 $ core nosuch x.sfc
@@ -73,6 +74,103 @@ x
 $ core SNES ../outside.sfc
 out 62
 core: '../outside.sfc' is outside the project sandbox (<ROOT>)
+status 1
+action none
+end
+
+case the console with nothing in it, where an engine starts it empty
+target none
+covers 2
+$ core playstation --console
+out 50
+[CORE] Starting the PlayStation with nothing in it
+status 0
+action StartConsole { CoreName = playstation, Console = PlayStation }
+$ core diamond --console
+out 50
+[CORE] Starting the PlayStation with nothing in it
+status 0
+action StartConsole { CoreName = diamond, Console = PlayStation }
+$ core PlayStation --console
+out 50
+[CORE] Starting the PlayStation with nothing in it
+status 0
+action StartConsole { CoreName = PlayStation, Console = PlayStation }
+end
+
+case a console no engine starts empty
+target none
+covers 2
+$ core snes --console
+out 62
+core: no core in this build starts the SNES with nothing in it
+status 1
+action none
+$ core nephrite --console
+out 65
+core: no core in this build starts the Genesis with nothing in it
+status 1
+action none
+$ core genesis --console
+out 65
+core: no core in this build starts the Genesis with nothing in it
+status 1
+action none
+$ core n64 --console
+out 61
+core: no core in this build starts the N64 with nothing in it
+status 1
+action none
+end
+
+case --console and its refusals
+target none
+covers 2
+file Games/a.cue 1
+x
+$ core nosuch --console
+out 132
+core: unknown core 'nosuch'. Supported: diamond, gb, gbc, genesis, mars, mercury, moon, n64, nephrite, nes, playstation, snes, venus
+status 1
+action none
+$ core --console playstation
+out 135
+core: unknown core '--console'. Supported: diamond, gb, gbc, genesis, mars, mercury, moon, n64, nephrite, nes, playstation, snes, venus
+status 1
+action none
+$ core playstation --console Games/a.cue
+out 64
+Usage: core <corename> <path-to-rom> | core <corename> --console
+status 1
+action none
+$ core playstation Games/a.cue --console
+out 64
+Usage: core <corename> <path-to-rom> | core <corename> --console
+status 1
+action none
+$ core --console
+out 64
+Usage: core <corename> <path-to-rom> | core <corename> --console
+status 1
+action none
+$ core playstation --CONSOLE
+out 30
+core: ROM not found: --CONSOLE
+status 1
+action none
+end
+
+case --console from a running session
+target venusrt
+covers 2
+$ core playstation --console
+out 50
+[CORE] Starting the PlayStation with nothing in it
+status 0
+action StartConsole { CoreName = playstation, Console = PlayStation }
+$ core snes --console
+out 62
+core: no core in this build starts the SNES with nothing in it
 status 1
 action none
 end

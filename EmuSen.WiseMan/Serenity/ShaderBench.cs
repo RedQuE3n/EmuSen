@@ -18,7 +18,7 @@ namespace EmuSen.WiseMan.Serenity
     // What one shaded frame costs on the render thread, stage by stage, on a real GL context and the slang device - see EmuSen_Serenity.md §8.1.
     public static unsafe class ShaderBench
     {
-        public sealed record Case(string Kind, string Shader, int SourceWidth, int SourceHeight, int RowRepeat, int WindowWidth, int WindowHeight, int Frames, int Warmup, double Pace, string Cache = "", int Builders = 0, string Console = "", string Set = "");
+        public sealed record Case(string Kind, string Shader, int SourceWidth, int SourceHeight, int RowRepeat, int WindowWidth, int WindowHeight, int Frames, int Warmup, double Pace, string Cache = "", int Builders = 0, string Console = "", string Set = "", string Raw = "");
 
         // A new frame every this many draws; the draws between redraw the same frame, as a paused or repeating game gives.
         public static int Every = Math.Max(1, int.Parse(Environment.GetEnvironmentVariable("EMUSEN_BENCH_EVERY") ?? "1"));
@@ -32,7 +32,8 @@ namespace EmuSen.WiseMan.Serenity
             return new Case(d.GetValueOrDefault("kind", "none"), d.GetValueOrDefault("shader", ""), sw, sh, int.Parse(d.GetValueOrDefault("repeat", "1")),
                 ww, wh, int.Parse(d.GetValueOrDefault("frames", "600")), int.Parse(d.GetValueOrDefault("warmup", "60")),
                 double.Parse(d.GetValueOrDefault("pace", "60"), CultureInfo.InvariantCulture),
-                d.GetValueOrDefault("cache", ""), int.Parse(d.GetValueOrDefault("builders", "0")), d.GetValueOrDefault("console", ""), d.GetValueOrDefault("set", ""));
+                d.GetValueOrDefault("cache", ""), int.Parse(d.GetValueOrDefault("builders", "0")), d.GetValueOrDefault("console", ""), d.GetValueOrDefault("set", ""),
+                d.GetValueOrDefault("raw", ""));
         }
 
         // A preset's build, whole and in parts, after a small preset has warmed the compiler and the device.
@@ -110,6 +111,8 @@ namespace EmuSen.WiseMan.Serenity
             control.WaitForFilter();
             double? shape = control.ActiveFilter?.Aspect;
             var frames = Enumerable.Range(0, 8).Select(k => Pattern(c.SourceWidth, c.SourceHeight, k)).ToArray();
+            // raw=nes hands each frame a nes.ppu picture beside it, as MoonRT does, so the CRT draws the PPU's own signal.
+            RawPicture?[] raws = Enumerable.Range(0, 8).Select(k => c.Raw == "nes" ? NesRaw(c.SourceWidth, c.SourceHeight, k) : (RawPicture?)null).ToArray();
             var probe = new Probe();
             var size = new Size(c.WindowWidth, c.WindowHeight);
 
@@ -139,7 +142,7 @@ namespace EmuSen.WiseMan.Serenity
                 }
                 bool measured = i >= c.Warmup;
                 if (i == c.Warmup) { allocated = GC.GetTotalAllocatedBytes(true); gen0 = GC.CollectionCount(0); gen1 = GC.CollectionCount(1); gen2 = GC.CollectionCount(2); pause = GC.GetTotalPauseDuration(); }
-                if (i % Every == 0) control.UpdateFrame(frames[i / Every % frames.Length], c.SourceWidth, c.SourceHeight, c.RowRepeat);
+                if (i % Every == 0) control.UpdateFrame(frames[i / Every % frames.Length], c.SourceWidth, c.SourceHeight, c.RowRepeat, raw: raws[i / Every % frames.Length]);
                 using var op = control.CaptureDrawOp(size) ?? throw new InvalidOperationException("no draw operation");
                 probe.Begin();
                 gl.BeginQuery(glQuery);
@@ -168,7 +171,7 @@ namespace EmuSen.WiseMan.Serenity
             for (int i = 0; i < 3; i++)
             {
                 int n = c.Warmup + c.Frames + i;
-                control.UpdateFrame(frames[n % frames.Length], c.SourceWidth, c.SourceHeight, c.RowRepeat);
+                control.UpdateFrame(frames[n % frames.Length], c.SourceWidth, c.SourceHeight, c.RowRepeat, raw: raws[n % frames.Length]);
                 using (var op = control.CaptureDrawOp(size)!) op.RenderTo(target.Canvas, context);
                 context.Flush();
                 gl.Finish();
@@ -181,7 +184,7 @@ namespace EmuSen.WiseMan.Serenity
 
             var stats = GameFrameControlStatistics(control);
             var keys = rows.SelectMany(r => r.Keys).Distinct().ToList();
-            var line = new StringBuilder($"pace={c.Pace} kind={c.Kind} shader={Path.GetFileNameWithoutExtension(c.Shader).Replace(' ', '_')} console={(c.Console == "" ? "-" : c.Console)} set={(c.Set == "" ? "-" : c.Set)} src={c.SourceWidth}x{c.SourceHeight}x{c.RowRepeat} window={c.WindowWidth}x{c.WindowHeight} out={Letterbox(c, shape)} shown={stats}");
+            var line = new StringBuilder($"pace={c.Pace} kind={c.Kind} shader={Path.GetFileNameWithoutExtension(c.Shader).Replace(' ', '_')} console={(c.Console == "" ? "-" : c.Console)} set={(c.Set == "" ? "-" : c.Set)} raw={(c.Raw == "" ? "-" : c.Raw)} src={c.SourceWidth}x{c.SourceHeight}x{c.RowRepeat} window={c.WindowWidth}x{c.WindowHeight} out={Letterbox(c, shape)} shown={stats}");
             log($"{"stage",-22} {"median",8} {"mean",8} {"p95",8}   (ms, {rows.Count} frames)");
             foreach (string key in keys)
             {
@@ -242,6 +245,19 @@ namespace EmuSen.WiseMan.Serenity
             var field = typeof(SlangRunner).GetField("Shared", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
             var lazy = (Lazy<(SlangVulkan? Device, string Report)>)field.GetValue(null)!;
             return lazy.Value.Device;
+        }
+
+        // Every colour number in moving bands, with the emphasis bits stepping down the picture, in the core ABI's nes.ppu.
+        public static RawPicture NesRaw(int w, int h, int k)
+        {
+            var values = new byte[w * h * 2];
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    int v = ((x + k) / 4 + y / 30 * 8) % 64 | (y / 30 % 8) << 6, o = (y * w + x) * 2;
+                    (values[o], values[o + 1]) = ((byte)v, (byte)(v >> 8));
+                }
+            return new RawPicture(RawEncodings.NesPpu, w, h, 2, w * 2, values);
         }
 
         // A picture that changes every frame, so no stage can skip work: a gradient under a moving checker.

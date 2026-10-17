@@ -2598,6 +2598,7 @@ lines of 3182 and 3183 that add half a cycle a field on average). The right-hand
   8 and 9), its burst is at 120° rather than 135°, its red and green emphasis bits are swapped, and the same page
   describes an "additional temporary −3 clocks every second line" that this reading does not reconcile with the hue
   pairs. On PAL the NES is drawn from its RGB picture, as every other console is, until that is settled (§23.7).
+  *(Settled and built 2026-10-17, §27: the pairs are PAL's switch, read against the capture.)*
 
 ### 23.3 The encoder and the receiver
 
@@ -2643,7 +2644,7 @@ strength (`TailScale`, §11.4) is a property of the phosphor and is kept.
 | The Genesis's H40 dither, artifact colour along a line | NTSC 0.0020; PAL 0.0002 through the delay line, 0.0004 without |
 | A colour edge in S-Video, 10% to 90%, in microseconds | PAL within 8% of NTSC (the channel rounds to six cycles on PAL and five on NTSC, 0.53 and 0.52 MHz) |
 | The Genesis's fringes without the delay line | alternate between frames, the same two frames on |
-| The NES on PAL, with a raw frame and without | identical |
+| The NES on PAL, with a raw frame and without | identical *(until §27, which draws the 2C07)* |
 
 The Genesis's PAL artifacts are a tenth of its NTSC ones: the dither at H40 lands at three quarters of the
 subcarrier on both standards, which is 1.11 MHz below it on PAL and 0.89 MHz on NTSC, further down the same 0.5 MHz
@@ -3032,3 +3033,110 @@ sheet, the crop's, the records', the emulation menu's, the console start's, the 
 on the new row (three expected lists and the two recordings, one test asserting the desktop menu had no row at all,
 now that it has a game's row) and pass with those updated.
 
+## 27. The PAL NES's 2C07 (2026-10-17)
+
+§23.7's second question was decided on 2026-10-11: the 2C07 is modelled, read against nesdev's PAL capture first.
+Until now a PAL NES was drawn from its RGB picture even when the raw picture came (§23.2). It is now drawn from the
+2C07's own signal on every tier, through the same `nes.ppu` picture as the 2C02's (§22.8), since the encoding is the
+PPU's colour numbers and PPUMASK bits, which the two chips share; what differs is the wave the chip makes of them.
+
+### 27.1 What the documentation says
+
+Read on 2026-10-17 from the nesdev wiki **[S]**: *PAL video* (its source), *NTSC video* and *PPU registers*.
+
+- **Same design, PAL's clocks.** "The 2C07 and 6538 still use the same design of 12 oscillators", with a master clock of
+  26.6017125 MHz, six times the subcarrier, five master clocks a pixel and 284⅙ cycles a line (§23.2's row, unchanged).
+  The page gives no levels of its own, so the 2C02's (§22.2) stand for the 2C07's.
+- **The switch is made by pairing oscillators.** "There isn't a direct mapping of 'encoded color in palette RAM' to
+  'specific square wave'. PAL colorburst (pure shade −U+V) is the same phase as phase 7. The same two square wave
+  oscillators are used for pairs of hues: 3 and 2, 4 and 1, 5 and C, 6 and B, 7 and A, 8 and 9."
+- **The emphasis bits.** "Emphasize red (green on PAL/Dendy)", "Emphasize green (red on PAL/Dendy)" (*PPU registers*);
+  "on the Dendy and PAL NES, the green and red bits swap meaning" (*NTSC video*).
+- **Two statements that do not fit the pairs.** *PAL video* says the PAL NES "outputs a somewhat nonstandard 120 degree
+  color burst", and *NTSC video* describes the alternation as "an additional temporary −3 clocks every second line".
+  §23.2 recorded both as unreconciled.
+
+### 27.2 The reading, and what follows from it **[D]**
+
+Each pair sums to 5 or 17, so the pairing is the map *k* → (5 − *k*) mod 12 on the lines whose V is inverted. On the
+twelve phases 30° apart, that map is a reflection about the axis through phase 2.5 and phase 8.5. PAL's switch is a
+reflection about the U axis (U kept, V negated), so the pairs are PAL's switch **if −U lies at phase 8.5**, half a step
+from the 2C02's −U at phase 8 (§22.3). The burst then follows: phase 7 is 30° below 8.5, so the burst on a normal line
+is at 180° − 45° = 135°, −U+V, as the page says, and its pair A on the next line at 225°, −U−V: a standard ±45°
+burst. The half step is also the 15° the page gives for PAL's hue shift against NTSC. So three statements of the page,
+the pairs, "phase 7 is −U+V" and "a 15 degree shift", are one fact, and the model rests on it:
+
+- the decoder's −U at oscillator 9.5 in the filter's counting (`PpuPalAxisStep`, where the 2C02's is 10);
+- on a switched line, every oscillator the chip uses, hue and emphasis alike, replaced by its pair;
+- PPUMASK's bits 5 and 6 changed over before they choose their oscillators;
+- the receiver's colour control holding the burst at PAL's level, 3/7 of white peak to peak, ITU-R BT.470-6 Table 2
+  item 2.15 **[P]** (4/10 for NTSC), so the gain is 0.5986 × (3/14) / 0.2 = 0.6413 (`PpuChromaGainPal`);
+- the row's differential phase, a delay of the wave in time, the same on both lines, so that once V is turned back it
+  turns the two lines opposite ways: Hanover bars with the simple decoder, a hue kept and saturation lost through the
+  delay line, which is what *PAL video* says of differential phase on PAL.
+
+### 27.3 Against the capture
+
+The page offers "a signal captured from a 6538 to test the decoder", resampled to 53.2 MHz, twelve samples a
+subcarrier cycle and ten an NES pixel: one field of 312 lines of 3,410 samples (`PAL signal 6538 53.2MHz.png`, read as
+data, nothing of it kept in the repository). It is a famiclone's PPU, not a 2C07; the page treats the two as one
+design, and it is the only capture there is. Measured on it 2026-10-17, with each line's phase taken against the
+sample's absolute index, so that the 2 samples a line advances (3,410 mod 12) are the chip's 284⅙ cycles:
+
+| Question | Measured | Pairing reading | "−3 clocks every second line" |
+|---|---|---|---|
+| Burst phase, one line against the next (308 lines) | **84.8°** apart, s.d. 3.0°, 79° to 90° | 90° | 90° |
+| Chroma of the same colour on consecutive lines, 6,480 segments of 60 samples with burst-referred phases θ | θₙ + θₙ₊₁ constant to a circular s.d. of **12.0°** (mean 11°); θₙ₊₁ − θₙ spread over the circle (s.d. 168°) | the sum constant (a reflection) | the difference constant (a rotation) |
+| Burst peak to peak against blanking above sync | 1.35 | 2C02: 1.42 | |
+
+The capture rejects a rotation between lines and is a reflection to 12°: the pairs are right and the "−3 clocks" is
+not a description of the colour (it may describe where the pixels fall against the carrier, which the 2 samples a line
+already give). The bursts are 85° apart, not 120°; the model's 90° is 5° from the capture and 35° from the page's
+figure, which no reading of the pairs supports. The 11° offset of the sums is twice a mean delay of 5.5°, the size of
+the 2C02G's differential phase per row (§22.2), which the model applies; it was not fitted. The capture's levels are
+5% from the 2C02's on the burst and its white clips in the capture, so it cannot test the levels, and the 2C02's stand.
+
+### 27.4 What each tier draws
+
+| Tier | 2C07 |
+|---|---|
+| Performance | the closed form per pixel (`colours`): the wave's mean and first harmonic against −U at 9.5, the row's skew turned by the line's switch, PAL's gain; then the delay line or not, as for any PAL picture |
+| Balanced, Accurate, composite | the wave itself, generated at twelve looks a phase step (36 a sample at Balanced, 15 at Accurate, where 2,048 samples hold 2,560 steps), the switched lines' oscillators paired; then PAL's receiver |
+| S-Video, RGB | the closed form, as on NTSC |
+
+`PpuLooks` is now counted from the line's own cycles, which gives the same 36 and 12 on NTSC as before.
+
+**A defect met on the way.** Performance's delay line averaged each pixel's colour with the row above's read from the
+frame's RGB picture, even where its own came from the PPU's `colours`; on a PAL NES with a raw picture the row above
+was therefore the black RGB frame, and the bars were halved instead of removed (0.0344 simple, 0.0185 through the
+delay line, measured before the fix). It now reads the same image for both rows. No picture drawn before could reach
+it, since a PAL NES was drawn from RGB until this section, and the pass is unchanged byte for byte for every other
+console.
+
+### 27.5 Measured
+
+**NTSC unchanged, by text.** Every pass of every variant (five consoles, both standards, three qualities, three
+signals, 90 in all) was built at this commit and at the one before it and hashed: the 81 that are not the PAL NES are
+identical byte for byte; the nine PAL NES variants differ, as intended.
+
+| Check | Result |
+|---|---|
+| The burst pair, on the CPU | 135.000° and 225.000°; its size after the colour control 3/14 |
+| Each hue of row 0 on the two lines, on the CPU | the same within 0.01°, 15.000° short of the 2C02's, its saturation the 2C02's × 3/(14 × 0.2) |
+| Row 3's two lines (the skew) | 30.00° apart, their mean the hue |
+| The emphasis bits | the 2C07's bit 6 dims exactly where the 2C02's bit 5 does, and the converse, for all 64 colours and 12 phases |
+| Composite from the generated wave against the closed form, all 64 colours, emphasis 0, 1, 2, 4, 7, delay line | worst 0.0047 of peak ($22, blue emphasis), under §22.4's 0.006 for the 2C02 |
+| $36's line-to-line colour (simple decoder against delay line) | by S-Video, where composite's own six-line artifacts cannot stand in for bars: 0.035 simple, 0.0001 through the delay line, at each of the three tiers |
+| With and without the raw picture | different over the whole picture; without it, the PAL SNES's picture within one code value |
+| The device's chain against Skia, `nes.ppu` on PAL, every quality and signal | within `EmuSen_DevicePicture.md` §3.3's tolerance in all nine: every channel beyond one at a tie, at most 6 of 4,665,600 (Performance by RGB) |
+
+### 27.6 Not done, and the core's part
+
+**No PAL NES reaches it from a game yet.** MoonRT runs every cartridge as a 2C02 NES and says NTSC in machine info
+(§26.2), so a PAL NES game is drawn as NTSC by default, and the 2C07 is drawn when the player chooses PAL for the
+console or the game (§26.4). A PAL timing mode is MoonRT's to build (312 lines, 26.6 MHz, the 2C07's border and its
+emphasis order in the picture it draws from its palette); when it reports `"pal"`, §26's path selects the 2C07 with
+nothing changed here. The 2C07's black border (the top line and two pixels at each side, *PAL video*) is the core's
+picture and not the filter's.
+
+Also not modelled: a 6538 or Dendy as such (the capture's chip), and the levels of a 2C07, which no source gives.

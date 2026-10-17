@@ -185,18 +185,5 @@ namespace EmuSen.WiseMan.Serenity
             double ntsc = Microseconds(set, CrtFilter.ConsoleTiming["SNES"]["activeUs"]), pal = Microseconds(With(set, Pal), CrtFilter.ConsoleTiming["SNES"]["pal.activeUs"]);
             Assert.True(Math.Abs(pal - ntsc) < 0.08 * ntsc, $"a colour edge takes {pal:F3} µs on PAL and {ntsc:F3} µs on NTSC");
         }, default);
-
-        // PAL's NES has its own video chip, the 2C07, which is not modelled: on PAL the NES is drawn from its RGB picture whether or not a raw frame comes with it.
-        [Fact]
-        public Task On_pal_the_nes_is_drawn_from_its_rgb_picture() => Session.Dispatch(() =>
-        {
-            byte[] frame = Paint(256, 240, (x, y) => (x / 255.0, y / 239.0, (x ^ y) % 7 / 6.0));
-            RawPicture raw = RawField(256, 240, (x, y) => ((x + y) % 64, 0));
-            if (DrawNes(frame, raw, 640, 480, Pal) is not { } with) return;
-            Crt without = DrawNes(frame, null, 640, 480, Pal)!;
-            int worst = 0;
-            for (int y = 0; y < 480; y++) for (int x = 0; x < 640; x++) for (int c = 0; c < 3; c++) worst = Math.Max(worst, Math.Abs(with.Code(x, y, c) - without.Code(x, y, c)));
-            Assert.True(worst == 0, $"the raw frame changed the PAL picture by {worst} code values");
-        }, default);
     }
 }

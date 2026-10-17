@@ -3130,6 +3130,23 @@ identical byte for byte; the nine PAL NES variants differ, as intended.
 | With and without the raw picture | different over the whole picture; without it, the PAL SNES's picture within one code value |
 | The device's chain against Skia, `nes.ppu` on PAL, every quality and signal | within `EmuSen_DevicePicture.md` §3.3's tolerance in all nine: every channel beyond one at a tie, at most 6 of 4,665,600 (Performance by RGB) |
 
+**What it costs** (measured 2026-10-17 on the RX 6800, §8.1 of `EmuSen_Serenity.md`'s bench and §12.5's protocol:
+1920 × 1080, 60 frames of warm-up and 300 measured, three rounds interleaved, the median of each run's median; the
+bench now hands the CRT a `nes.ppu` picture of moving bands of every colour with `raw=nes`). GPU milliseconds a frame:
+
+| Case | Performance | Balanced | Accurate |
+|---|---|---|---|
+| NES, 2C02 (NTSC), paced | 0.50 | 0.86 | 1.81 |
+| NES, 2C07 (PAL), paced | 0.52 | 0.88 | 1.85 |
+| NES, 2C02, flat out | 0.24 | 0.57 | 1.32 |
+| NES, 2C07, flat out | 0.24 | 0.63 | 1.27 |
+| SNES by RGB frame, paced, the same run (§12.5: 0.49, 0.71, 1.77) | 0.51 | 0.76 | 1.78 |
+
+The 2C07 costs what the 2C02 does within the bench's spread (2 to 5% paced, −4 to +12% flat out, with no consistent
+sign), although Accurate's PAL wave takes 15 looks a sample against 12: the looks are a small part of the encode pass,
+and the encode a small part of the frame. The render thread's time is 0.28 to 0.51 ms in every case. Each case's
+three hashed pictures were the same in all three rounds. The SNES row reproduces §12.5's within 7%.
+
 ### 27.6 Not done, and the core's part
 
 **No PAL NES reaches it from a game yet.** MoonRT runs every cartridge as a 2C02 NES and says NTSC in machine info

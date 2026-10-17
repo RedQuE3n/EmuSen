@@ -250,7 +250,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.True(status.IsVisible);
             Assert.Equal("Finished: 3 of 3 games", TextOf(status, "ScrapeStatusHeading"));
             Assert.Equal("Found 1 · Not found 1 · Failed 1 · Skipped 0 · Filled by OpenEmu 0", TextOf(status, "ScrapeStatusTallies"));
-            Assert.StartsWith("Last failure: BadRequest", TextOf(status, "ScrapeStatusFailure"));
+            Assert.StartsWith("Last failure: ScreenScraper refused the request", TextOf(status, "ScrapeStatusFailure"));
             Assert.Equal("No member account: EmuSen's developer credentials alone, with their limits.", TextOf(status, "ScrapeStatusMember"));
             QuotaSnapshot q = ((IScrapeHost)window).Quota!;
             Assert.Equal($"{q.RequestsToday:N0} of 20,000 requests used today · {20000 - q.RequestsToday:N0} left", TextOf(status, "ScrapeStatusRequests"));

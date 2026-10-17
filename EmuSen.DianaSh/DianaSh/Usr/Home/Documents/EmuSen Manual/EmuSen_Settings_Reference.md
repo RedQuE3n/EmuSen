@@ -3535,6 +3535,14 @@ in flight cancelled.
 that queue instead of adding to it. **Scrape This Game** asks ScreenScraper again even about a game it once did not
 know, and asks the failover again too; a wider run does not re-ask what has been answered.
 
+**Disc games and large files** (*added 2026-10-16*, `EmuSen_BigPicture.md` §46). ScreenScraper is asked about the file
+the library lists, whatever its size: a game kept as a cue sheet is asked about by the sheet, a lone `.bin`, `.iso` or
+`.chd` by the image, an `.m3u` by the list, as ScreenScraper itself lists them. A large image is read once to hash it,
+which takes some seconds from slow storage, and is not read again until it changes. Before this, any file over 384 MiB,
+most PlayStation images among them, failed with "the file is too large to hash" and nothing was asked. A game that
+fails is now recorded with its reason, logged in the error log under `[scraping]`, and counted in the line a run ends
+with ("…, 1 failed. Last failure: …").
+
 **From the pad.** In a big-screen session (Game Mode), Start or Guide opens the pad menu; **Scrape This Game...** and
 **Scrape Games...** are there outside a game; the shoulders move between Preferences' tabs. Every row, the console
 list, the switch and the Scrape, Resume and Cancel buttons are reached by the d-pad (`PadAudit`, §4.45.3) and pressed

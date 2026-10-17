@@ -723,6 +723,9 @@ a KO.
   bad dumps. ScreenScraper also lists many hacks.
 - **N64 byte order.** OpenVGDB's N64 hashes needed the byte-swapped order (§4.39). Which order ScreenScraper's
   `rommd5` uses for N64 is unknown and is measured at stage (d).
+- **Disc images and large files** (*added 2026-10-16*). Step (1) hashes the file the library lists, whole and at any
+  size: a cue sheet, a lone track, a `.chd`, an `.m3u` or an archive. §46 is the record, with what ScreenScraper was
+  measured to list.
 
 ### 5.3 System IDs (cited from `ScreenScraper.cpp`'s `screenscraper_platformid_map`, which cites `systemesListe.php`)
 
@@ -11207,3 +11210,185 @@ breadcrumb wraps under a long title, and the question's sentence sits under its 
 - No aspect ratio but 16:10 was audited. On a 4:3 screen the card's room beside the panel falls below its 150-pixel floor
   and it is not shown. That follows from the constants and was not measured.
 - The card's caption is drawn in the desktop face (§4.69.8).
+
+## 46. Disc and large games: what ScreenScraper is asked about them, and failures made visible (2026-10-16)
+
+*Built on branch `scrape-discs`, from WiseMan at `227dc34a`.* The tester reported on 2026-10-16 that scraping
+PlayStation games ended in an error on the handheld (WiseMan `d6944c2d`), and asked for art scraping to work for the
+PlayStation and for every console with large games. This section is the record: the cause, what ScreenScraper and ES-DE
+say about identifying a disc, what was measured against ScreenScraper itself, the rule adopted, and the tests.
+
+### 46.1 The cause
+
+`Scraper.ProcessAsync` refused any file larger than `CoverFetcher.HashLimitBytes` (384 MiB) before asking anything, with
+the outcome *Error* and the detail "the file is too large to hash". The ceiling belonged to the OpenVGDB lookup, which
+reads a file into memory to transform it (§5.2 step 2, settings reference §4.39), and is ES-DE's default for its own
+hash setting (§46.2). Three things then hid the failure:
+
+- **Nothing was recorded.** The refusal reached `Final` with no hashes, and `Final` writes a `scrape_game` row only when
+  it has them, so `media.db` kept no trace; the game was dequeued.
+- **Nothing was logged.** No path of the scraper wrote to the error log for an *Error* outcome.
+- **The run's last line left it out.** The status window listed the game as "failed: the file is too large to hash"
+  and showed "Last failure: …", but the status line at the end read "Scraped *n* of *m*: *f* found, *u* unknown", with no
+  count of failures.
+
+A PlayStation disc is usually one data track of 430 to 700 MB. In the development library's PlayStation folder, 21 of
+the 37 files the library lists are over 384 MiB: 15 lone `.bin` images and 6 `.zip` archives. Every one of them failed
+without a request. A cue sheet is a few hundred bytes to a few kilobytes, so a game listed by its sheet was never
+refused. A Sega CD game is refused only as a `.chd` or `.iso` over the ceiling, and no cartridge comes near it (the
+largest N64 cartridge is 64 MB).
+
+**The handheld's own database agrees** (a copy of its `media.db`, read 2026-10-16). Three PlayStation games are *Found*
+(system 57), each fetched on 2026-10-12 within 47 seconds of the others: `Rayman (USA).cue` (5,439 bytes), `Ape Escape
+(USA).cue` (82 bytes) and `Chocobo Racing (USA).bin` (364,955,136 bytes). All three are under the ceiling. No
+PlayStation file over it has a row, as the refusal predicts, and that day's quota row holds 11 requests. So PlayStation
+scraping worked wherever the file was small enough, and the error the tester saw is the refusal above.
+
+**The developer credentials are not the cause.** ScreenScraper answers 403 to wrong developer credentials and the
+scraper then stops (§5.1), so the 185 *Found* rows on the handheld, the three PlayStation rows among them, could not have
+been written without accepted credentials. The published builds carry them: the scrambled resource of the 0.9.1
+`EmuSen.Mistress.dll` (linux-x64) and of `out/linux-x64/Mistress` decodes, by `DeveloperCredentials.Decode`'s format
+(`~/.cache/emusen/probe/scrape-discs/embedded.py`), to the same three values as the developer file. That is a check of the builds on this machine. The handheld's own
+binary was not inspected.
+
+### 46.2 What the sources say (cited)
+
+**ScreenScraper, `webapi2.php`, read 2026-10-16.** `jeuInfos.php` takes `crc`, `md5` and `sha1`, each the hash "du
+fichier rom/iso/dossier existant en local". Unless the software has a dispensation, a request must send at least one of
+them, "le mieux serait les 3", and the size (`romtaille`). `romtype` is one of a single ROM file, a single ISO file or a
+folder, and `romnom` is "nom du fichier (avec extension) ou nom du dossier". For a folder, the ROM fields of the answer
+say the hashes are those of the folder's largest file and the size is the folder's total. The page states no size limit,
+and it names no disc format: nothing is said of cue sheets, track files, `.chd` or `.m3u`.
+
+**ES-DE, master at `a529a9d3`, read 2026-10-16** (`GuiScraperSearch.cpp`, `ScreenScraper.cpp`, `Settings.cpp`,
+`USERGUIDE.md`). ES-DE hashes the file the gamelist lists (`params.game->getPath()`), whatever it is, with MD5 alone,
+and only when that file is no larger than `ScraperSearchFileHashMaxSize`, 384 MiB by default and settable from 32 to
+800. A larger file is asked by name alone: `romnom` is the cleaned game name, and no hash or size is sent. ES-DE sends no
+`romtype`, `crc` or `sha1`. Its guide says a hash search "will not work for … .m3u files", and that a file larger than the
+setting falls back to the name search.
+
+### 46.3 What ScreenScraper lists (measured)
+
+Twelve live lookups with EmuSen's developer credentials alone, on 2026-10-16, against files of the development
+library (read only). The first eight were sent by a probe written for this section
+(`~/.cache/emusen/probe/scrape-discs/ask.py`, outside the tree); the last four are §46.6's run of the scraper itself. *Same*
+means the answer's matched ROM has the MD5 the request sent.
+
+| # | Request | Game | Matched ROM | Same |
+|---|---|---|---|---|
+| 1 | `Rayman (USA).cue`, multi-track sheet, its own hashes | 19275 Rayman | `Rayman (USA).cue`, 5,439 bytes | yes |
+| 2 | `Rayman (USA) (Track 01).bin`, the data track | 19275 Rayman | `Rayman (USA).chd`, 701,528,688 bytes | no |
+| 3 | `Chocobo Racing (USA).bin`, lone, 365 MB | 19700 Chocobo Racing | `Chocobo Racing (USA).bin` | yes |
+| 4 | `Spyro the Dragon (USA).bin`, name and size only, no hash | 19288 Spyro the Dragon | `Spyro the Dragon.PBP`, 732,391,632 bytes | no |
+| 5 | the same file, hashed whole (662 MB) | 19288 | `Spyro the Dragon (USA).chd`, 661,547,040 bytes | yes |
+| 6 | `Sonic CD (US)`'s sheet, Sega CD (system 20) | 12702 Sonic CD | `Sonic CD (USA).cue`, 3,820 bytes | yes |
+| 7 | an `.m3u` written for the test, its own hashes | 214640 Resident Evil 2 | `Resident Evil 2 - Dual Shock Ver. (USA).m3u`, 280 bytes | no |
+| 8 | that list's first disc, a lone 669 MB `.bin` | 214640 | the same `.m3u` | no |
+| 9–12 | §46.6: Spyro, Crash Bandicoot, Rayman, Lunar - Eternal Blue | §46.6 | §46.6 | all yes |
+
+What the table establishes:
+
+- **ScreenScraper keys a disc by the file a player's library lists**, whichever file that is. Its ROM lists hold Redump
+  cue sheets under their own hashes (rows 1, 6, 12), lone track files (row 3), `.m3u` lists (rows 7 and 8 name one),
+  `.PBP` images, archives (`Rayman.zip` in row 1's list) and `.chd` files. The `.chd` entries are of three kinds: real CHD
+  sizes (`Sonic CD (USA).chd`, 450,035,486 bytes), the size and hash of a data track (row 5), and the size and hash of a
+  cue sheet (row 12 matched `Lunar - Eternal Blue (USA) (RE).chd`, 380 bytes, by the sheet's MD5). The last two show
+  scrapers that send a sheet's or a track's hashes under a `.chd` name. The lists are what scrapers have contributed, and
+  ES-DE, which hashes the listed file (§46.2), is one of the largest contributors.
+- **A data track found by its sheet is not found by itself.** Row 2's track has no entry of its own, while row 1's sheet
+  does. The hypothesis the investigation started from, that the data track should be hashed instead of the sheet, is
+  retired by this row: it would have turned a hash match into a name match.
+- **The name falls back.** Rows 2, 4, 7 and 8 found the right game with no hash match: ScreenScraper matches `romnom`
+  when the hashes find nothing, as ES-DE's guide describes. A name match is not a ROM match, though. Row 4 matched a
+  `.PBP` of unstated region where row 5, the same file hashed, matched its exact entry.
+
+### 46.4 The rule adopted
+
+The file the library lists is hashed whole at any size: `crc`, `md5`, `sha1` and `romtaille` of that file,
+`romnom` its name with its extension, and `romtype` `rom`, which rows 1 to 12 all used. Per kind of file:
+
+| The library lists | What is hashed and named | Evidence |
+|---|---|---|
+| a cue sheet, one track or many | the sheet | rows 1, 6, 11, 12 |
+| a lone `.bin` or `.iso` | the file | rows 3, 5, 9, 10 |
+| a `.chd` | the file | ScreenScraper lists `.chd` files by their own size (row 6's list); not measured live, since the library has none |
+| an `.m3u` | the list | ScreenScraper lists `.m3u` files (row 7); a list matches only where another player's list was byte for byte the same, and otherwise falls back to its name |
+| an archive | the archive | as before; ScreenScraper lists archives (row 1's list) |
+| a cartridge image | the file | as before (§5.2) |
+
+**Why the listed file, and not ImageSets' companions.** `ImageSets` remains the one owner of what a sheet or a list
+brings with it, and it already decides what the library lists (`Shelved`), so a sheet's tracks and a list's discs are
+never queued as games of their own. Identification needs nothing more from it: what ScreenScraper keys a disc by is the
+listed file itself (§46.3), and resolving a sheet to its tracks would ask about a file ScreenScraper does not hold.
+
+**Why the whole file, and not the name and size above a ceiling.** Rows 4 and 5 are the argument. The API documents
+the hashes as required and states no limit. Without them the answer is a name match, which reached the right game in
+every row measured here but not the right ROM, and §5.2 records that an automatic name match is how the wrong game's box
+art arrives. The cost is one read of the file, once: `scrape_file` keeps its MD5 by path, size and modification time, so
+a file is not read again until it changes (test 2, §46.7). Measured on the desktop with the file in the page cache,
+`RomHashes.Of` takes 1.8 s for the 662 MB Spyro image (370 MB/s; the CRC-32's byte table is 1.0 s of it, MD5 0.6 s).
+From an SD card the read itself dominates; at a typical 90 MB/s it would be about 7 s a game, not measured on the
+handheld. The CRC-32 is the first lever if that matters. A name-only mode for slow storage would be a speed setting the
+player opts into, not a default, and it has not been built.
+
+**Two smaller changes.** `RomHashes.Of` takes the run's cancellation token and checks it every 64 KiB, so cancelling
+during a large file's read stops it. The second identification step, which reads a file into memory to transform it
+(§5.2), is now taken only for files within the 384 MiB ceiling. The transforms are the NES, SNES and N64 cartridges', and
+for a disc image the step read up to 700 MB only to find the bytes unchanged.
+
+### 46.5 Failures made visible
+
+- **Recorded.** `Final` now always has the file's hashes, so every *Error* and *Unknown* is a `scrape_game` row with its
+  reason in `detail`, and the library's outcomes by path show it.
+- **Logged.** One `WARN [scraping]` line in the error log for each game that ends in *Error*, with the file as its
+  context; one for each retry after an answer ScreenScraper could not give; and one when a run stops for the quota or
+  the credentials, with the reason. Retries after a read or network fault were already logged.
+- **Shown.** The reason is in the player's words: "ScreenScraper refused the request", "ScreenScraper's answer could not
+  be read" or "ScreenScraper could not be reached", followed by what the server said. The status line at the end of a
+  run counts failures and gives the last one: "Scraped 1 of 1: 0 found, 0 unknown, 1 failed. Last failure: …". It is
+  trimmed with an ellipsis and its whole text is the tooltip (settings reference §4.83.6).
+
+### 46.6 The live run of the scraper
+
+`ScrapeLiveTool.Named_files` (gated by `EMUSEN_SCRAPE_LIVE=1`; the files by `EMUSEN_SCRAPE_FILES`), on 2026-10-16
+with the developer credentials alone, covers only, on one thread. Eight requests: four lookups and four covers.
+
+| File | Size | Game | Matched ROM | Cover |
+|---|---|---|---|---|
+| `psx/Spyro the Dragon (USA).bin` | 661,547,040 | 19288 Spyro the Dragon | `Spyro the Dragon (USA).chd`, same MD5 | kept |
+| `psx/Crash Bandicoot (USA).bin` | 632,083,536 | 19282 Crash Bandicoot | `Crash Bandicoot (USA).chd`, same MD5 | kept |
+| `psx/Rayman (USA)/Rayman (USA).cue` | 5,439 | 19275 Rayman | `Rayman (USA).cue`, same MD5 | kept |
+| `SCD/Lunar - Eternal Blue (US)/Lunar - Eternal Blue (US).cue` | 380 | 12781 Lunar: Eternal Blue | `Lunar - Eternal Blue (USA) (RE).chd`, same MD5 | kept |
+
+All four matched by their hashes. The first two were refused before this change. The run took 38 s, the two large
+images about 10 to 15 s each, including the read, the lookup and the cover. No file the run wrote holds a developer
+credential.
+
+### 46.7 Tests
+
+`ScrapeDiscImageTests`, five cases against the fake server (§17), each with synthetic files; the two large ones are
+sparse files of 384 MiB and 37,632 bytes, so they cost no disk:
+
+| # | Case | Before | After |
+|---|---|---|---|
+| 1 | a two-track cue sheet in its own folder is asked by the sheet's hashes, size and name, and its cover is kept under the sheet's name and folder | passed | passed |
+| 2 | a lone `.bin` past 384 MiB is hashed whole and found; changed in place with its size and time kept, its next turn uses the cached hash and asks nothing | **failed** (*Error*, no request) | passed |
+| 3 | a Sega CD `.chd` past 384 MiB is hashed whole and found | **failed** (*Error*, no request) | passed |
+| 4 | an `.m3u` is asked by the list's hashes, size and name | passed | passed |
+| 5 | a refused request is a `scrape_game` *Error* row with its reason, one `WARN [scraping]` line naming the file, and the run's last line counts and names it | **failed** (the old reason "BadRequest: …", no log line) | passed |
+
+Cases 1 and 4 passed before as well, because what they pin did not change: §46.3 shows the sheet and the list were
+already the right files to ask about. `ScrapeStatusWindowTests`' last-failure line was updated for the new wording. The
+blast radius, every test under `EmuSen.WiseMan.Mistress.Scraping` with `WindowFitScrapeAudit` and `OnlineCoverTests`,
+passed: 270 tests, 265 passed and 5 skipped (the gated picture and live tools).
+
+### 46.8 Not done
+
+- **Nothing ran on the handheld.** Its read speed from the SD card, and so the cost of the first scrape of a large
+  library there, is estimated, not measured.
+- **No `.chd` was asked about live**; the library has none, and making one from a commercial image would not reproduce
+  the bytes another player contributed.
+- **A larger image than a CD** (a DVD-sized file) is handled by the same streamed read but has not been tried.
+- **The cache keeps the MD5 alone.** A file hashed by a run that then stopped before its lookup is read again for its
+  CRC-32 and SHA-1 on the next run. Keeping all three would need a migration of `scrape_file`; it was not judged worth
+  one for a case that costs one more read.

@@ -89,7 +89,7 @@ After discussion, the tester chose two things in place of the container:
    - zip is read everywhere, and is chosen per package;
    - 7z is slower to decompress on weak machines;
    - a compressed ROM loses the zero-copy borrow, so the host decompresses it first;
-   - scraping and achievements hash the ROM inside an archive, never the archive itself.
+   - scraping and achievements hash the ROM inside an archive, never the archive itself. *Corrected 2026-10-16:* this holds for RetroAchievements, which hashes contents; ScreenScraper lists archives under their own hashes and keys a game by whichever file the library names (`EmuSen_BigPicture.md` §46.4), so for ScreenScraper the archive's own hash is a valid identity.
 
 ### 1.3 Why a container of EmuSen's own was not chosen
 
@@ -391,7 +391,7 @@ replace" the whole-file one [R].
 |---|---|---|
 | EmuSen's own identity (`games.db`, `StateRecord`) | the whole file, header included (`EmuSen_Galaxia.md` §5.4) | `dump.file`, or `patched` for a state made on a patched image (§5.5) |
 | ScreenScraper | the file's CRC32, MD5 and SHA-1 with its size, then the transformed form after a 404 (`EmuSen_BigPicture.md` §5.2) | `dump.file`, then `dump.transformed` |
-| ScreenScraper, discs | **being decided on the branch `scrape-discs`**: not merged when this page was written, with nothing committed on it [M, `git log`] | `dump.tracks` and `dump.sheet` hold every candidate; `container` holds the CHD file's own |
+| ScreenScraper, discs | the file the library names, whole, at any size: the sheet for a cue game, the image for a lone `.bin` or `.iso`, the file itself for a `.chd`, the list for an `.m3u` (`EmuSen_BigPicture.md` §46.4, measured on 2026-10-16) | `dump.sheet` for a cue game, `dump.file` for a lone image, `container` for a CHD |
 | RetroAchievements | a per-console form: the NES file without its header, the SNES file without a 512-byte header, the big-endian N64 image, the whole file for the Game Boy, Genesis and 32X; for the PlayStation the boot executable named by `SYSTEM.CNF` with its path, for the Sega CD the first 512 bytes of track 0 [R, "Game Identification"] | the cartridge forms are `dump.transformed`; the disc forms are computed from sectors, so they do not depend on the container (§5.5) |
 | Redump | each track file as dumped (2,352-byte raw sectors) with the sheet [R, Redump's published datfiles; their wiki's page on the format could not be reached on 2026-10-16, so its field list is to be read again at stage 1's gate] | `dump.tracks`, `dump.sheet` |
 | No-Intro | cartridge contents; community reports conflict on whether the NES datfiles are headered [R, the libretro forum threads cited in §10] | both `dump.file` and `dump.transformed` are kept, so either can be compared |

@@ -664,3 +664,70 @@ Nephrite's follow-up, not built here: an empty start for `mcd`, once the stall i
 - The kit: its 24 tests and 8 unit tests.
 - Diamond: its 174 unit tests, and `diamond-v1`'s 4.
 - The kit on Diamond's library with Crash Bandicoot's disc at 600 frames: C1–C22 pass, 71 s.
+
+### 11.2 S2: the host's launch with no file, and Mistress's entries (2026-10-17)
+
+**The runtime.**
+- `CoreCatalog.ConsolesThatStartEmpty` lists the pack consoles whose discovered engine's info says `starts_empty`,
+  read from the engines and never from a list of consoles.
+- `CoreFactory.CreateConsole(console, engine)` opens such an engine with the console's stored settings and card modes.
+- `CoreEngine.StartConsole(system)` makes the machine with an empty image:
+  - every firmware file of the system's core-info list that the player has is passed;
+  - the save media are placed with *Per game* read as *Shared* (§9 Q5) and locked under `ConsoleSession.NameOf`,
+    "PlayStation (no disc)";
+  - the new machine is adopted by the same `Adopt` a game's load now ends in.
+- `CoreEngine.StartedEmpty` names the system; `RomPath` is empty and `DiscIndex` -1.
+- `InsertDisc(path)` opens any file as Galaxia's `DiscSet`, adds it to the session's discs and changes to it through
+  the lid. A disc the core refuses is taken off the list again and leaves the lid open.
+- `EjectDisc()` is the same change to index -1, the empty drive.
+- A state refused with `WRONG_MEDIA` is now tried over the session's discs and then over the empty drive, so a state of
+  the empty console loads over a disc and the reverse.
+- `EmulatorSession.StartConsole(console)` wraps it with the debugger and the cheat codecs.
+
+**The readers of `RomPath` (§7 risk 1).**
+- Mistress keeps `_currentRomPath` as the game's path, null in a console session, and adds `_consoleSession`.
+- Every reader that keys on a game's file is therefore off in a console session by construction: identity and MD5,
+  covers, the game's crop, the heads-up bar's game, Continue Playing, play time, the resume state, and the scraper.
+- Only the save states read the session instead: `StateKey` is the game's path or the session's name, so a state is
+  `PlayStation (no disc).state`. Its record names the console and no game's MD5, and the refusal check takes the
+  session's console rather than routing the name.
+- The loading of a game and of a console now share `WireSession` and `RunSession`.
+- Restart starts the console again.
+
+**The entries.**
+- File → *Start Console* ▸ *Start PlayStation*.
+- The library toolbar's *Start PlayStation*, shown while the sidebar shows the PlayStation.
+- In big picture, *Start PlayStation With No Disc* as the first row of *Gamelist Options*.
+- The pad menu's *Library* → *Start a Console*.
+- In a session with a drive: Emulation → *Insert Disc...* and *Eject Disc*, and the same two rows in the game's pad menu.
+- *Insert Disc...* opens `InsertDiscWindow`, built with LunaP and framed as a menu in big picture. It lists the console's
+  library games, with *Browse...* on the desktop only.
+- `EmuSen_Settings_Reference.md` §4.119 is the player-facing summary.
+
+**DianaSh.**
+- `core <corename> --console` returns `HostAction.StartConsole` where the host says the console starts empty
+  (`CoreCommand`'s new predicate). Its page is `core.1`.
+- Both of Hotaru's prompts take it. The terminal's and the windowed launch prompt resolve it to a `HotaruLaunch` of the
+  console, and `HotaruSession.Build` starts it.
+- Hotaru's in-session `core` starts it in place where the running engine is the console's, and otherwise says to start
+  it from the launch prompt.
+
+**Measured (2026-10-17), WiseMan under the test lock.**
+- `DiamondShellTests`, 4. The console is offered by Diamond's info alone. Started empty under *Per game*:
+  - the drive is empty and the shared Card 1 is locked under the session's name;
+  - after 420 frames the frame shows the open kernel's screen with no disc;
+  - a synthetic disc put in is booted by the kernel (its program's SIO replies in RAM);
+  - Eject empties the drive.
+  
+  A state of the empty console and one with the disc load over each other. A file that is no disc is refused and not
+  kept.
+- `ConsoleStartTests`, 2: the entries, the toolbar button by shelf, the session's name, its state's file name, and the
+  drive's rows.
+- `CoreCommandTests`' console case; `DianaShShellWindowTests` and `SandboxEscapeTests` on the launch type.
+- The fit audit's `InsertDiscPlayStation` and `InsertDiscEmpty` at 1280 × 800 and 1920 × 1200, with their specifications
+  recorded.
+- `PadMenuTests`' two Library lists, which gain *Start a Console*.
+- Every Mistress and Shell test: 2,201 of 2,207 passing before the two `PadMenuTests` lists were updated. The other
+  four failures are not this step's. The themed startup list's count, 9 against 8, and the players' ports, seven
+  consoles against six, both count the Sega CD, offered on 2026-10-16 after the two tests were written
+  (`e525b9b8`, 2026-10-15).

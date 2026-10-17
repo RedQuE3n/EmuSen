@@ -90,6 +90,27 @@ namespace EmuSen.Cores
             return found is null || CoreCatalog.IsRegisteredEngine(found.EngineName) ? null : found.Open();
         }
 
+        // A console started with nothing in it, on the engine asked for where it starts the console empty, else the first that does - see Diamond_Shell.md §1.5.
+        public static ICore CreateConsole(string console, string? engine = null, Func<EmuSen.Serenity.Slang.SlangLend?>? lender = null)
+        {
+            var start = CoreCatalog.EmptyStartFor(console) ?? throw new NotSupportedException($"No core in this build starts the {console} with nothing in it.");
+            bool Starts(Native.DiscoveredCore c) => c.Info.Systems.Any(s => s.Id == start.SystemId && s.StartsEmpty);
+            var found = Native.CoreDiscovery.ForSystem(start.SystemId).Where(Starts).OrderBy(c => c.EngineName == engine ? 0 : 1).FirstOrDefault()
+                ?? throw new NotSupportedException($"No core in this build starts the {console} with nothing in it.");
+            var library = found.Open() ?? throw new NotSupportedException($"{found.EngineName} is not in use: {found.Report}");
+            var config = GraphicsConfig.Load();
+            var settings = library.Settings.Select(s => (s.Key, Value: config.Value(console, s.Key))).Where(p => p.Value is not null).ToDictionary(p => p.Key, p => p.Value!);
+            var system = library.Info.Systems.First(s => s.Id == start.SystemId);
+            var media = MemoryCards.Stored(MemoryCards.MediaOf(console, system), key => config.Value(console, key));
+            var engineCore = new Native.CoreEngine(library, settings) { Media = media, DeviceLender = lender };
+            engineCore.StartConsole(start.SystemId);
+            return engineCore;
+        }
+
+        // CreateConsole with its debugger and cheat codecs, as Load gives a game's.
+        public static CoreBundle LoadConsole(string console, CheatRegistry? cheats = null, string? engine = null, Func<EmuSen.Serenity.Slang.SlangLend?>? lender = null) =>
+            Bundle(CreateConsole(console, engine, lender), cheats);
+
         // Loads the ROM too, because a debug target needs the core's hardware to already exist.
         public static CoreBundle Load(string romPath, bool headless = true, CheatRegistry? cheats = null,
             string? engine = null, Func<EmuSen.Serenity.Slang.SlangLend?>? lender = null)

@@ -87,6 +87,18 @@ namespace EmuSen.Common
             CpuTraceSwitch = bundle.CpuTraceSwitch;
         }
 
+        // The console started with nothing in it, on Engine where it can - see Diamond_Shell.md §1.5.
+        public void StartConsole(string console)
+        {
+            var bundle = CoreFactory.LoadConsole(console, Cheats, Engine, DeviceLender);
+            _core = bundle.Core;
+            EngineNotice = null;
+            DebugTarget = bundle.DebugTarget;
+            CheatAutoDetectCodec = bundle.CheatAutoDetectCodec;
+            CheatExplicitCodec = bundle.CheatExplicitCodec;
+            CpuTraceSwitch = bundle.CpuTraceSwitch;
+        }
+
         // The periodic SRAM autosave lives inside RunFrame now, not scheduled here.
         public void RunFrame()
         {

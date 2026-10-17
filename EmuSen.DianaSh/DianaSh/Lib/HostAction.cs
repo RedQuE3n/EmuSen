@@ -20,6 +20,9 @@ namespace EmuSen.DianaSh.DianaSh.Lib
         // Raw strings, because validating them was the issuing command's job - see §3.3b.
         public sealed record LoadCore(string CoreName, string RomPath) : HostAction;
 
+        // 'core <name> --console' - the console started with nothing in it; see `man core`.
+        public sealed record StartConsole(string CoreName, string Console) : HostAction;
+
         // 'tmux new/switch/kill' - see `man tmux`.
         public sealed record SwitchSession(string Name) : HostAction;
     }

@@ -66,6 +66,7 @@ namespace EmuSen.Mistress.Views
             new(() => $"Load State      <  {SlotValue()}  >", LoadState, StepStateSlot) { Label = () => "Load State", Value = SlotValue, ShowsSlot = true },
             new(() => $"Speed      <  {DescribeSpeed(_baseSpeedPercent)}  >", () => StepSpeed(1), StepSpeed, closes: false) { Label = () => "Speed", Value = () => DescribeSpeed(_baseSpeedPercent) },
             .. DiscRows(),
+            .. DriveRows(),
             Ask("Restart Game...", "Restart Game?", "The game starts again from the beginning. Progress since your last save is lost.", ResetEmulation),
             Submenu(GameSettingsMenu, GameSettingsRows, startsSection: true),
             new(() => "Back to Library", ToggleLibrary) { StartsSection = true },
@@ -108,6 +109,7 @@ namespace EmuSen.Mistress.Views
         private List<PadMenuEntry> LibraryRows()
         {
             var rows = new List<PadMenuEntry>();
+            if (StartableConsoles.Count > 0) rows.Add(Submenu(StartConsoleMenu, StartConsoleRows));
             AddCollectionMenuEntries(rows);
             rows.Add(new(() => ScrapeRunning ? $"Scraping ({_scrapeRun!.Done} of {_scrapeRun.Total})..." : "Scrape Games...", () => { if (ScrapeRunning) ShowScrapeStatus(); else ShowPreferencesAt(PreferencesWindow.ScrapingTab); }) { Opens = true });
             if (_bigScreen) rows.Add(Opens("Theme Settings", ShowThemeSettings));

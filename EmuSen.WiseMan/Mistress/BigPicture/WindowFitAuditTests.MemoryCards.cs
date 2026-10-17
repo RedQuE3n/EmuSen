@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Avalonia.Controls;
@@ -49,6 +50,22 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             SelectTab(window, console);
             var shown = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<TextBlock>().ToList();
             Assert.Contains(shown, t => t.Name?.StartsWith(console + ".", StringComparison.Ordinal) == true && t.Name.EndsWith(".About", StringComparison.Ordinal) && t.IsEffectivelyVisible);
+        }
+
+        // The PlayStation's Insert Disc chooser over a running console: its library games, one with a long title, or none - see Diamond_Shell.md §1.5.
+        internal static void ShowInsertDisc(MainWindow window, bool empty)
+        {
+            IReadOnlyList<(string Title, string Path)> discs = empty ? [] :
+            [
+                ("Amber Saga", "/games/Amber Saga.cue"),
+                ("Basalt Run - The Long Way Round Through the Mountains of the North (Disc 2 of 3)", "/games/Basalt Run (Disc 2).cue"),
+                ("Cobalt Harbor", "/games/Cobalt Harbor.chd"),
+            ];
+            Call(window, "PresentInsertDisc", "PlayStation", discs, false);
+            Settle(window);
+            var shown = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>().ToList();
+            Assert.Contains(shown, c => c.Name == (empty ? "InsertDiscAbout" : "InsertDisc1") && c.IsEffectivelyVisible);
+            Assert.DoesNotContain(shown, c => c.Name == "InsertDiscBrowse");
         }
 
         // The N64's tab: four Controller Paks, a shared pak with two notes, one with a long name, and a game's own beside it - see EmuSen_SaveMedia.md §7.2.

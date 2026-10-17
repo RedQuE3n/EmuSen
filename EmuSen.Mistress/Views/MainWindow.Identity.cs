@@ -127,22 +127,22 @@ namespace EmuSen.Mistress.Views
             if (session.Core is not { } core || core is not IStateFormat format) return;
             _fileRecords.WriteState(statePath, new StateRecord
             {
-                Console = CoreCatalog.ConsoleForRom(romPath) ?? session.CoreName,
+                Console = _consoleSession ?? CoreCatalog.ConsoleForRom(romPath) ?? session.CoreName,
                 Core = CoreFactory.Running(core),
                 StateVersion = format.StateVersion,
                 Build = BuildName,
                 SavedAt = DateTime.Now,
                 RomFile = Path.GetFileName(romPath),
-                RomMd5 = _currentRomMd5,
-                RomBytes = _currentRomBytes,
+                RomMd5 = _consoleSession is null ? _currentRomMd5 : null,
+                RomBytes = _consoleSession is null ? _currentRomBytes : 0,
             });
         }
 
         // Why a state must not reach this game's core, or null; a version older than the core's is the core's to judge.
-        private static string? Refusal(StateRecord? record, string romPath, EmulatorSession? session)
+        private static string? Refusal(StateRecord? record, string romPath, EmulatorSession? session, string? sessionConsole = null)
         {
             if (record is null) return null;
-            string? console = CoreCatalog.ConsoleForRom(romPath);
+            string? console = sessionConsole ?? CoreCatalog.ConsoleForRom(romPath);
             if (console is not null && record.Console != console)
                 return $"That state was saved by the {record.Console} core, and {Path.GetFileName(romPath)} runs on the {console} core.";
             // Another engine's version numbers are not this one's - see EmuSen_Galaxia.md §5.3b.

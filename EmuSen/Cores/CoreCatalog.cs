@@ -311,6 +311,19 @@ namespace EmuSen.Cores
                 .OrderBy(e => e.Manufacturer, StringComparer.OrdinalIgnoreCase).ThenBy(e => e.ReleaseYear)
                 .Select(e => e.Console).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
+        // A console an engine of this build can start with nothing in it, by its pack's system - see Diamond_Shell.md §1.5.
+        public sealed record EmptyStart(string Console, string SystemId);
+
+        // Every such console, in release order, read from the engines' info and never from a list of consoles.
+        public static IReadOnlyList<EmptyStart> ConsolesThatStartEmpty =>
+            Crystal.Systems.SystemPacks.All.Select(p => p.Entry)
+                .Where(e => Native.CoreDiscovery.ForSystem(e.Id).Any(c => c.Info.Systems.Any(s => s.Id == e.Id && s.StartsEmpty)))
+                .OrderBy(e => e.Manufacturer, StringComparer.OrdinalIgnoreCase).ThenBy(e => e.ReleaseYear)
+                .Select(e => new EmptyStart(e.Console, e.Id)).ToArray();
+
+        public static EmptyStart? EmptyStartFor(string? console) =>
+            ConsolesThatStartEmpty.FirstOrDefault(c => string.Equals(c.Console, console, StringComparison.OrdinalIgnoreCase));
+
         // The pack console of a system only a discovered engine serves, or null for a catalog console's or an unknown system.
         public static string? DiscoveredConsoleForSystem(string? systemId) =>
             systemId is not null && ConsoleForSystem(systemId) is null && Crystal.Systems.SystemPacks.For(systemId) is { } pack ? pack.Entry.Console : null;

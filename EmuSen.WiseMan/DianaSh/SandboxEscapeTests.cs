@@ -135,7 +135,7 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Contains("is outside the project sandbox", said[0]);
             // A Unix path from the root is read inside it, chroot-style; a Windows drive's path is refused (EmuSen_RustPlatform.md §27.4).
             Assert.Contains(OperatingSystem.IsWindows() ? "is outside the project sandbox" : "ROM not found", said[1]);
-            string resolved = EmuSen.Shell.Program.TryResolveCoreCommand("core snes Games/a.sfc", said.Add)!;
+            string resolved = EmuSen.Shell.Program.TryResolveCoreCommand("core snes Games/a.sfc", said.Add)!.RomPath!;
             Assert.Equal(Path.Combine(runner.Home, "Games", "a.sfc"), runner.Normalise(resolved).Replace("<ROOT>", runner.Home));
         }
 

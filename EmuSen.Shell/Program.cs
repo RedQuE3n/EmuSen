@@ -97,12 +97,12 @@ namespace EmuSen.Shell
             }
 
             // The shell is all a launch shows until a ROM resolves; null means it ended with none - see EmuSen_Frontend_Driver.md §3.
-            string? romPath = RunStandaloneShell(initialRomPath);
-            if (romPath is null) return;
+            HotaruLaunch? launch = RunStandaloneShell(initialRomPath);
+            if (launch is null) return;
 
             try
             {
-                HotaruSession session = HotaruSession.Build(romPath, originalOut);
+                HotaruSession session = HotaruSession.Build(launch, originalOut);
                 core = session.Core;
                 logWriter = session.LogWriter;
 
@@ -127,9 +127,9 @@ namespace EmuSen.Shell
         {
             DianaShShellWindow? shell = null;
 
-            Window LaunchGame(string romPath)
+            Window LaunchGame(HotaruLaunch launch)
             {
-                HotaruSession session = HotaruSession.Build(romPath, originalOut);
+                HotaruSession session = HotaruSession.Build(launch, originalOut);
                 onCore(session.Core);
                 onLogWriter(session.LogWriter);
 
@@ -155,7 +155,7 @@ namespace EmuSen.Shell
         }
 
         // A ROM on the command line is `hotaru <rom>` typed for the player, in this shell as in the terminal's - see `man hotaru`.
-        private static void StartInitialRom(DianaShShellWindow shell, string initialRomPath, Func<string, Window> launchGame)
+        private static void StartInitialRom(DianaShShellWindow shell, string initialRomPath, Func<HotaruLaunch, Window> launchGame)
         {
             if (HotaruCommand.Refusal(initialRomPath, sandboxed: false, out _) is { } refused)
             {
@@ -166,7 +166,7 @@ namespace EmuSen.Shell
             shell.AppendLine($"[ROM] Loading: {initialRomPath}");
             shell.Opened += (_, _) =>
             {
-                try { launchGame(initialRomPath).Show(); }
+                try { launchGame(HotaruLaunch.Rom(initialRomPath)).Show(); }
                 catch (Exception ex) { shell.ReportLaunchFailure($"[CPU HALT] {ex.Message}"); }
             };
         }
@@ -176,7 +176,7 @@ namespace EmuSen.Shell
             LunaApp.Configure(() => new App(mainWindow));
 
         // The terminal's launch prompt: DianaSh with no target until `hotaru` or `core` names a ROM - see EmuSen_Frontend_Driver.md §3.
-        private static string? RunStandaloneShell(string? initialRomPath)
+        private static HotaruLaunch? RunStandaloneShell(string? initialRomPath)
         {
             string? requested = null;
             DianaShInterpreter shell = DianaShInterpreter.CreateDefault(null,
@@ -190,7 +190,7 @@ namespace EmuSen.Shell
                 if (HotaruCommand.Refusal(initialRomPath, sandboxed: false, out _) is null)
                 {
                     Console.WriteLine($"[ROM] Loading: {initialRomPath}");
-                    return initialRomPath;
+                    return HotaruLaunch.Rom(initialRomPath);
                 }
                 Console.WriteLine($"[ERROR] ROM not found: {initialRomPath}");
             }
@@ -204,8 +204,8 @@ namespace EmuSen.Shell
 
                 if (!shell.IsAwaitingMoreInput && trimmed.StartsWith("core ", StringComparison.OrdinalIgnoreCase))
                 {
-                    string? validatedRomPath = TryResolveCoreCommand(trimmed);
-                    if (validatedRomPath != null) return validatedRomPath;
+                    HotaruLaunch? validated = TryResolveCoreCommand(trimmed);
+                    if (validated != null) return validated;
                     continue; // TryResolveCoreCommand already printed why it failed
                 }
 
@@ -213,24 +213,33 @@ namespace EmuSen.Shell
                 (_, string output, HostAction? action) = shell.Submit(line);
                 if (output.Length > 0) Console.WriteLine(output);
                 if (action is HostAction.Shutdown) return null;
-                if (requested != null) return requested;
+                if (requested != null) return HotaruLaunch.Rom(requested);
             }
         }
 
         // The launch prompt's `core <name> <path>`, refused and reported, or the ROM to launch - see EmuSen_Frontend_Driver.md §3.
-        internal static string? TryResolveCoreCommand(string trimmedLine, Action<string>? report = null)
+        internal static HotaruLaunch? TryResolveCoreCommand(string trimmedLine, Action<string>? report = null)
         {
             report ??= Console.WriteLine;
 
             string[] parts = trimmedLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length != 3)
             {
-                report("Usage: core <corename> <path-to-rom>");
+                report("Usage: core <corename> <path-to-rom> | core <corename> --console");
                 return null;
             }
 
             string coreName = parts[1];
             string romPath = parts[2];
+            if (romPath == CoreCommand.ConsoleFlag)
+            {
+                if (CoreCommand.ConsoleRefusal(_coreRegistry, HotaruSession.StartsEmpty, coreName, out string console) is { } no)
+                {
+                    report(no.Output);
+                    return null;
+                }
+                return HotaruLaunch.Empty(console);
+            }
 
             if (CoreCommand.Refusal(_coreRegistry, coreName, romPath, out string resolved) is { } refused)
             {
@@ -238,7 +247,7 @@ namespace EmuSen.Shell
                 return null;
             }
 
-            return resolved;
+            return HotaruLaunch.Rom(resolved);
         }
     }
 }

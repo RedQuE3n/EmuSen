@@ -73,6 +73,7 @@ namespace EmuSen.Mistress.Views
             if (_gameOptions is not null || _metadataEditor is not null || _folderEditor is not null) return;
             var options = new List<GameOption>();
             AddGamelistOptions(game, options);
+            AddStartConsoleOption(options);
             AddCollectionOptions(game, options);
             // A grouped collection's entry is no game: it has the list's rows and nothing of a game's (§4.58).
             if (game is { Folder: true, IsCollection: false }) AddFolderEntries(game, options);

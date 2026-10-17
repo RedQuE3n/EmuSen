@@ -228,6 +228,7 @@ namespace EmuSen.Hotaru.Views
 
                 if (action is HostAction.Shutdown) return true;
                 if (action is HostAction.LoadCore loadCore) { SwapCore(loadCore.RomPath); continue; }
+                if (action is HostAction.StartConsole start) { StartConsoleInPlace(start.Console); continue; }
                 if (action is HostAction.SwitchSession) SyncSchedulersToSessions();
                 // Resume with nothing halted is a no-op, and StepCommand already armed its own step.
             }
@@ -368,6 +369,25 @@ namespace EmuSen.Hotaru.Views
             // An open dashboard has a refresh timer, not a swap notification - see EmuSen_Frontend_Driver.md §3f.
             DebugWindows.UpdateCoretopWindowTargetIfOpen(_debugTarget);
             Console.WriteLine($"[CORE] Loaded: {romPath}");
+        }
+
+        // `core <name> --console`: the running engine starts the console empty where it is that console's; one core, in place, as SwapCore - see Diamond_Shell.md §1.5.
+        private void StartConsoleInPlace(string console)
+        {
+            if (CoreCatalog.EmptyStartFor(console) is not { } start || _core is not EmuSen.Cores.Native.CoreEngine engine || !engine.Info.Systems.Any(s => s.Id == start.SystemId && s.StartsEmpty))
+            {
+                Console.WriteLine($"[CORE] The running core does not start the {console}; start it from the launch prompt with `core <name> --console`.");
+                return;
+            }
+            engine.StartConsole(start.SystemId);
+            int ports = EmuSen.Cores.ControllerPorts.Of(_core);
+            IReadOnlyList<PadAxis> axes = _core.SupportedAxes;
+            Dispatcher.UIThread.Post(() => _ports.Reset(ports, axes));
+            _rewind.Clear();
+            _audioPlayer.RateControl.Reset();
+            RebuildDebugTargetAndCommands();
+            DebugWindows.UpdateCoretopWindowTargetIfOpen(_debugTarget);
+            Console.WriteLine($"[CORE] Started: {ConsoleSession.NameOf(console)}");
         }
 
         // Runs entirely off the UI thread - see EmuSen_Frontend_Driver.md §1.
@@ -627,6 +647,7 @@ namespace EmuSen.Hotaru.Views
                     }
                     if (action is HostAction.Resume or HostAction.Step) break;
                     if (action is HostAction.LoadCore loadCore) { SwapCore(loadCore.RomPath); break; }
+                    if (action is HostAction.StartConsole start) { StartConsoleInPlace(start.Console); break; }
                 }
                 Console.WriteLine("--- Resuming ---");
                 return false;

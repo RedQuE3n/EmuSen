@@ -790,6 +790,11 @@ The standing rules and policies this design proposes are asked first, **each on 
 as decided by an answer given to another. The design choices follow, each with a recommendation. Nothing in this page is
 decided by it.
 
+**Decided 2026-10-17 by the tester.** Each standing rule SR1 to SR12 was asked and answered on its own, every one as
+recommended (SR10: the file per game). The design choices D1 to D14 were then accepted together, each as recommended.
+The order begins with B0 and B1, which are independent (§6). `EmuSen_CoreAPI.md` §8.4 is revised by SR6 and §2.4's
+exception for shims is closed by SR8 once B4 is through.
+
 ### 11.1 Standing rules and policies
 
 - **SR1. The line as a rule.** Should "a thing is backend if two frontends must give the same answer about it or a

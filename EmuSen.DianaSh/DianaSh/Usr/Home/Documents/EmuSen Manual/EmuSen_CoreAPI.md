@@ -250,6 +250,9 @@ anything a player can do in Mistress, a shell user or a script can do through Di
 
 ### 2.4 No per-core code above the ABI
 
+*Decided 2026-10-17 (`EmuSen_Backend.md` SR8): the exception for shims below closes once step B4 is through, and no
+per-core C# or Rust survives in the host after it.*
+
 A frontend, the runtime and the shell present a new core from its descriptors alone: its name and consoles in the
 library and the engine row, its controllers on the bindings screen, its settings in the settings window with labels,
 help and trade-off notes, its memory in `spaces` and `mem`, its processors in `regs` and `step`. Per-core C# survives
@@ -1728,6 +1731,9 @@ What is bus-like is the event stream, which carries what clients need to *hear a
 carries what they ask. §15 Q5 decided that "bus" means this, not a literal message bus.
 
 ### 8.4 The frame loop and pacing
+
+*Revised 2026-10-17 (`EmuSen_Backend.md` SR6): the client owns the frame thread and the pacer, and one frame call performs
+the whole frame-end order; the first bullet below is superseded.*
 
 - **The runtime owns the loop and the emulation thread.** Today Mistress (`MainWindow`'s emulation thread and
   `FramePacer.cs`), Hotaru (`GameWindow`) and Pharaoh (`FrameRunner`) each have their own, with their own frame-end

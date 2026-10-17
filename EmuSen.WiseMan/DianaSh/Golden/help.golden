@@ -8,7 +8,7 @@ case the listing, with a target and without
 target none
 covers 1
 $ help
-out 23782
+out 23873
 Available commands:
   help                          this text - every command, one line each, with a brief explanation
   man [command]                 with no argument, same as 'help'; with a command name, its full manual page
@@ -286,6 +286,7 @@ Available commands:
   step out                      run until the current routine returns to its caller
   step <cpu> [<count>|over|out] same, stepping another processor - `cpus` lists them
   core <corename> <path>        load or swap the running ROM (validated against the known core registry)
+  core <corename> --console     start that core's console with nothing in it, where it can
   state save|load [path]        save/load emulator state (defaults to this frontend's own save-state path if omitted)
   hotaru [--output window] <rom>  play <rom> in Hotaru's game window, with its hotkeys, feed and
                                 debug windows; the shell keeps its prompt
@@ -307,7 +308,7 @@ EmuSen_Debugging_Tools_Reference_v5.md for the full writeup and what's NOT suppo
 status 0
 action none
 $ help extra words are ignored
-out 23782
+out 23873
 Available commands:
   help                          this text - every command, one line each, with a brief explanation
   man [command]                 with no argument, same as 'help'; with a command name, its full manual page
@@ -585,6 +586,7 @@ Available commands:
   step out                      run until the current routine returns to its caller
   step <cpu> [<count>|over|out] same, stepping another processor - `cpus` lists them
   core <corename> <path>        load or swap the running ROM (validated against the known core registry)
+  core <corename> --console     start that core's console with nothing in it, where it can
   state save|load [path]        save/load emulator state (defaults to this frontend's own save-state path if omitted)
   hotaru [--output window] <rom>  play <rom> in Hotaru's game window, with its hotkeys, feed and
                                 debug windows; the shell keeps its prompt
@@ -619,7 +621,7 @@ status 0
 action none
 $ help | wc -l
 out 3
-295
+296
 status 0
 action none
 end

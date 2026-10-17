@@ -1239,9 +1239,10 @@ folder that `DataStore` and `ConfigStore` are pointed at, the legacy configurati
 the test runs on is read; it is given the skeleton the shell itself creates, then the case's files, and the working
 directory is its root. Accounts other than `root` are removed, since the account registry is process-wide, and the
 logging switch is set to its default, off. The shell is `CreateDefault` with what a host adds to it: `core` over
-`CoreCatalog.Registry`; `state` over a save and a load that write and read a file, defaulting to a fixed path in the
-home's save-state folder; the bundle's two cheat codecs and trace switch; a session manager unless the case says
-otherwise; and the build's supported cheat systems.
+`CoreCatalog.Registry`, with the hosts' answer to which consoles an engine starts empty (since 2026-10-17, §13.13);
+`state` over a save and a load that write and read a file, defaulting to a fixed path in the home's save-state folder;
+the bundle's two cheat codecs and trace switch; a session manager unless the case says otherwise; and the build's
+supported cheat systems.
 
 **How the status is read.** `$?` lives in the interpreter's variables, which nothing public reads. `EmuSen.DianaSh`
 grants WiseMan friend access (`InternalsVisibleTo`), and the interpreter answers the harness through two `internal`
@@ -2469,6 +2470,36 @@ tests and every core's debug tests (Diamond, Nephrite, MarsRT, MercuryRT, MoonRT
 tests, all passed, on the Rust shell with `EMUSEN_DIANASH_EXPECT=rust` and again with `EMUSEN_DIANASH_NATIVE=0` (the
 cost bench's four rows among them, which return at once without their variable). `cargo test --release` in
 `Platform/`: 202 passed, 1 ignored, none failed.
+
+### 13.13 `core <corename> --console` in the corpus (2026-10-17)
+
+The Diamond console-menu work (`Diamond_Shell.md` S2) gave `core` a second usage line, `core <corename> --console`,
+a longer usage refusal and a refusal for a console no engine starts empty, and changed `man core`. The corpus was not
+re-recorded with it, so on WiseMan five tests of the gate failed: the cases of `core.golden`, `man.golden` and
+`help.golden`, the usage gate (the recorded usage lines were not the live ones) and the failure gate (three fragments
+of `CoreCommand.cs` no case printed: the new usage text, and the two halves of "no core in this build starts the …
+with nothing in it").
+
+**The runner.** `GoldenRunner` built `core` over the registry alone, so every console would have been refused. A host
+builds it with `HotaruSession.StartsEmpty`, which asks `CoreCatalog.EmptyStartFor`, read from the engines' core info
+(core ABI 1.11's `starts_empty`); the runner now does the same, so the corpus records what a host's shell prints. The
+recording therefore depends on the build discovering Diamond's engine, as `DiamondShellTests` already does.
+
+**The cases added to `core.golden`**, each covering usage line 2: the PlayStation started empty by three names
+(`playstation`, `diamond`, `PlayStation`), each returning `StartConsole`; consoles no engine starts empty (`snes`,
+`nephrite` and `genesis`, which both name the Genesis, and `n64`), each refused; `--console`'s refusals: an unknown
+core, the flag in the core's place, the flag with a file after it or before it (both the usage refusal), the flag
+alone, and `--CONSOLE`, which is not the flag and is read as a path; and the same two lines on a shell attached to
+VenusRT, which print what they print at a launch prompt, since what a running session does with `StartConsole` is the
+host's.
+
+**What the re-recording moved.** `core.golden`: the new usage line, the three usage refusals' new text, and the four
+new cases. `help.golden` and the listing in `man.golden`: the new line of `help`, so the listing grows by 91 bytes and
+`help | wc -l` goes from 295 to 296. The page for `core` in `man.golden`: its NAME line, which now names the console
+started empty, the second SYNOPSIS line, the section *The console with nothing in it* and the example
+`core playstation --console`. No other file or case moved; `man hier`, re-recorded with the firmware folder, already
+held. The gate passes on the Rust shell and with `EMUSEN_DIANASH_NATIVE=0`: `core` is a host command, run by the same
+C# class under both.
 
 ---
 

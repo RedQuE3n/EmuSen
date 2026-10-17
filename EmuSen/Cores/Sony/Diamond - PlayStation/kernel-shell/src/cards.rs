@@ -130,8 +130,11 @@ pub fn changed(card: usize) -> bool {
     was != State::Absent
 }
 
+/// The font's box, drawn for a character it does not carry (Diamond_Shell.md §3.1, §9 Q12).
+const BOX: u8 = 0x7F;
+
 /// A title frame's Shift-JIS title as ASCII: the full-width letters, digits and punctuation as their ASCII forms,
-/// single bytes 20h-7Eh as they are, anything else "?" (psx-spx "Shift-JIS Character Set").
+/// single bytes 20h-7Eh as they are, anything else the box (psx-spx "Shift-JIS Character Set").
 fn ascii(frame: &[u8], out: &mut [u8; 33]) {
     out.fill(0);
     let (mut i, mut n) = (4, 0);
@@ -140,10 +143,10 @@ fn ascii(frame: &[u8], out: &mut [u8; 33]) {
         let c = if sjis::lead(a) && i + 1 < 0x44 {
             let b = frame[i + 1];
             i += 2;
-            sjis::ascii((a as u32) << 8 | b as u32).unwrap_or(b'?')
+            sjis::ascii((a as u32) << 8 | b as u32).unwrap_or(BOX)
         } else {
             i += 1;
-            if (0x20..0x7F).contains(&a) { a } else { b'?' }
+            if (0x20..0x7F).contains(&a) { a } else { BOX }
         };
         out[n] = c;
         n += 1;
@@ -204,8 +207,9 @@ pub enum Refusal {
     Unwritable,
 }
 
-/// The save copied to the other card: read whole into user RAM, a file of its blocks created there and written.
-pub fn copy(from: usize, s: &Save) -> Result<(), Refusal> {
+/// The save copied to the other card a block at a time through user RAM into a file of its blocks created there,
+/// `progress` told each block done.
+pub fn copy(from: usize, s: &Save, mut progress: impl FnMut(u32, u32)) -> Result<(), Refusal> {
     let to = 1 - from;
     let target = &cards()[to];
     if target.state != State::Ready {
@@ -217,21 +221,33 @@ pub fn copy(from: usize, s: &Save) -> Result<(), Refusal> {
     if target.free < s.blocks {
         return Err(Refusal::TooFull);
     }
-    let size = s.blocks * BLOCK;
-    let fd = unsafe { bios::open(path(from, &s.name), 1) };
-    let ok = fd != u32::MAX && unsafe { bios::read(fd, BUFFER, size) } == size;
-    if fd != u32::MAX {
-        unsafe { bios::close(fd) };
-    }
-    if !ok {
+    let source = unsafe { bios::open(path(from, &s.name), 1) };
+    if source == u32::MAX {
         return Err(Refusal::Unreadable);
     }
-    let fd = unsafe { bios::open(path(to, &s.name), 0x200 | 2 | s.blocks << 16) };
-    let ok = fd != u32::MAX && unsafe { bios::write(fd, BUFFER, size) } == size;
-    if fd != u32::MAX {
-        unsafe { bios::close(fd) };
+    let target = unsafe { bios::open(path(to, &s.name), 0x200 | 2 | s.blocks << 16) };
+    if target == u32::MAX {
+        unsafe { bios::close(source) };
+        return Err(Refusal::Unwritable);
     }
-    if ok { Ok(()) } else { Err(Refusal::Unwritable) }
+    let mut r = Ok(());
+    progress(0, s.blocks);
+    for b in 0..s.blocks {
+        if unsafe { bios::read(source, BUFFER, BLOCK) } != BLOCK {
+            r = Err(Refusal::Unreadable);
+            break;
+        }
+        if unsafe { bios::write(target, BUFFER, BLOCK) } != BLOCK {
+            r = Err(Refusal::Unwritable);
+            break;
+        }
+        progress(b + 1, s.blocks);
+    }
+    unsafe {
+        bios::close(source);
+        bios::close(target);
+    }
+    r
 }
 
 pub fn erase(card: usize, name: &[u8]) -> bool {

@@ -9,9 +9,11 @@ mod bios;
 mod cards;
 mod clock;
 mod drive;
-mod manager;
+mod icons;
 mod pads;
+mod screens;
 mod tty;
+mod ui;
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -23,7 +25,6 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
 #[unsafe(no_mangle)]
 #[unsafe(link_section = ".text.shell_start")]
 pub extern "C" fn shell_start(_one: u32, reason: u32) -> u32 {
-    let _ = drive::Held::from_reason(reason);
-    manager::run();
+    screens::run(drive::Held::from_reason(reason));
     0
 }

@@ -64,8 +64,11 @@ fn pause(frames: u32) {
     }
 }
 
-/// The shell program (`kernel-shell`), a PS-EXE carried in the ROM; Diamond_Shell.md §1.3.
-static SHELL: &[u8] = include_bytes!("../../kernel-shell/diamond-shell.exe");
+/// The shell program (`kernel-shell`), a PS-EXE carried in the ROM at 1FC60000h in a section of its own, so that its
+/// size moves nothing else of the image; Diamond_Shell.md §1.3, §11.4.
+const SHELL_LEN: usize = include_bytes!("../../kernel-shell/diamond-shell.exe").len();
+#[unsafe(link_section = ".shell")]
+static SHELL: [u8; SHELL_LEN] = *include_bytes!("../../kernel-shell/diamond-shell.exe");
 static mut SHELL_HEADER: [u32; 15] = [0; 15];
 
 /// Hand-over v1: the shell copied to the RAM its header names and started by Exec(header, 1, reason); it returns 0 when

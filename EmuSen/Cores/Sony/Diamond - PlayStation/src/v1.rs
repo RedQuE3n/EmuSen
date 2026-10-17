@@ -612,7 +612,7 @@ mod tests {
             m.advance();
         }
         let at = |x: usize, y: usize| u16::from_le_bytes([m.board.gpu.vram.bytes[2 * (y * 1024 + x)], m.board.gpu.vram.bytes[2 * (y * 1024 + x) + 1]]);
-        assert_eq!(at(2, 120), 2 | 3 << 5 | 5 << 10, "the open kernel's screen with no disc");
+        assert_eq!(at(2, 120), 1 | 1 << 5 | 2 << 10, "the open kernel's shell, its background");
         let image = vec![0x42u8; BIOS_BYTES];
         let file = |which| emusen_native::abi::File { which, data: &image };
         let market = |settings: &[(&str, &str)], files| {

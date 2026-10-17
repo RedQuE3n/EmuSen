@@ -16,7 +16,6 @@ macro_rules! calls {
 }
 
 calls! {
-    "0xA0" "0x44" flush_cache() -> u32;
     "0xA0" "0x55" bu_init() -> u32;
     "0xA0" "0xAB" card_info(port: u32) -> u32;
     "0xA0" "0xAC" card_load(port: u32) -> u32;

@@ -795,3 +795,72 @@ Nephrite's follow-up, not built here: an empty start for `mcd`, once the stall i
 - WiseMan's Diamond tests under the test lock with `EMUSEN_DIAMOND_PS1TESTS`: 68 of 68. Among them are ps1-tests'
   verdicts against the console's logs and pictures, unchanged by the 24 cycles.
 - `firmwarecheck.py` on this image is run apart, as each time the image changes (§9 P3).
+
+### 11.4 S4: the memory card manager (2026-10-17)
+
+**Built**, in `kernel-shell/src/`. Stage 10's `manager.rs` is replaced by:
+- **`screens.rs`**: Home and Memory Cards, with a sheet over the list for a save's actions (*Copy to Slot n*, *Delete*,
+  *Cancel*), for a card's (*Format*, *Cancel*), and for the confirmation of a delete or a format. The confirmation names
+  the save or the slot and starts on *Cancel*. Each action writes its TTY line (§3.3): `shell: card n ready|blank|absent`,
+  `shell: copy n NAME m ok|not-ready|same-name|too-full|unreadable|unwritable`, `shell: delete n NAME ok|failed`,
+  `shell: format n ok|failed`, `shell: boot`. A product code is shown under the title where the file name carries one
+  (psx-spx "Filename Notes").
+- **`icons.rs`**: icons as §3.1 gives them, each save's CLUT at (960, 256 + k) and its frames at (896 + 4f, 16k) in
+  4-bit texture page 14, drawn as raw textured rectangles (GP0(65h)), and animated at 16 and 11 of the console's frames.
+  A title frame whose flag is not 11h–13h is listed as *Damaged save*.
+- **`ui.rs`**: the look of §3.2. LunaP's menu palette reduced to 15 bits, the header with EmuSen's name and the drive's
+  state, eight rows of twenty pixels that scroll through fifteen, the status line and the hints.
+- **`pads.rs`'s `Repeat`**: the grammar's repeat, the directions and shoulders again after 24 frames and every 5 after.
+- **`cards.rs`**: the copy goes a block at a time, through 8 KiB of user RAM, with a progress bar. A character the font
+  lacks is the box, now the font's 7Fh glyph in `diamond-guest` (§9 Q12).
+
+**The shell's place in the image.** S3 included the shell among the kernel's read-only data. Its size then moved the
+data after it. Pointers into that data survive as dead words below the kernel's boot stack, at 801FFDD1h to
+801FFE3Dh, measured by comparing RAM after `cpu/cop` on both images. A program that never overwrites them carries them
+into its state. So the S4 shell, twice the size, moved the state of every ps1-tests program again, and of two disc
+anchors, with nothing else moved.
+
+The shell now has a section of its own at 1FC60000h (`kernel.ld`, at most 128 KiB). The kernel's own bytes end at
+88,072, and nothing of the kernel depends on the shell's size. To prove it, the shell's Home words were changed, the
+image rebuilt, and the goldens checked: they held (below).
+
+**Two departures from §4.1, argued.**
+- The screens' logic was not split into a host-testable library. Every behaviour it has is observable on the emulated
+  machine through the TTY and the cards' bytes, and is tested there (below). A second build of the logic for the host
+  would test the same code under a different compiler and target, at the cost of a crate split.
+- The slot 2 card is the player's setting. Diamond's "Memory card in slot 2" is *None* by default, and a console
+  session keeps it as the player set it, since the host does not set a core's own keys. So a copy between cards needs
+  that setting on; the shell says "The card in Slot 2 is not ready" otherwise.
+
+**Tests.**
+- `tests/shell.rs`, 8, on cards built from psx-spx's layout (`tests/support/card.rs`):
+  - a save copied whole, its chain and blocks equal to the source's, the source unchanged;
+  - the three refusals, nothing written;
+  - a delete that asks first, Cancel deleting nothing and Delete marking the frames A1h and A3h;
+  - a format that asks first;
+  - a damaged save listed and deleted in slot 2, reached with R1, and Circle and L1;
+  - the repeat: Down held 40 frames reaching the fifth save;
+  - the icons' CLUT and texels in VRAM;
+  - a disc put in ending the shell (`shell: boot`) and booted by the kernel.
+- **The negative control** of §4.2 case 6: a build whose Delete skips its confirmation fails the delete test.
+- Stage 10's screen test and the side-loaded case now format through the new controls, Triangle, Format, then Format
+  in the confirmation.
+- WiseMan's `DiamondShellTests` gains the host's judgement (§4.3). The console is started with the shared Card 1 holding
+  two saves made by `SaveMediaManagerTests.WithSave` and an empty Card 2. The shell copies one to Card 2 and deletes the
+  other. `PsxCardFormat` then reads Card 1 holding only the copied save and Card 2 holding it whole, 13 blocks free on
+  each.
+
+**Measured (2026-10-17).**
+- The shell: 32,768 bytes, SHA-256 `96885defb6f7e385e93bcc884794ebda70a2c401025193199e85002b98ff97d1`.
+- The kernel image: 524,288 bytes, the kernel's own 88,072 and the shell at 60000h, SHA-256
+  `92dad42f277f4a8fd64e6404219da5de4c97d999ea479ce16c0429ce89388012`. Both rebuild to the same bytes with
+  `DIAMOND_KERNEL_REBUILD=require`.
+- `kernel-harness`: 61 tests.
+- Diamond's crate with both corpora: 296 tests, `tests/shell.rs`'s 9 among them (the 8 above and the pictures' tool,
+  which writes nothing unless asked).
+- WiseMan's Diamond and console tests under the test lock with `EMUSEN_DIAMOND_PS1TESTS`: 71 of 71.
+- **The goldens**, re-recorded in a commit of their own (`Diamond_Enhancements.md` §6.2). Against S3's, the state alone
+  moved: all 48 of `ps1-tests.txt` and 10 of 80 disc anchors, by the dead pointers above as the shell's section moved
+  the kernel's read-only data once more. `programs.txt` is unchanged, and no picture, sound, TTY or VRAM moved.
+- The proof that the section holds. The shell's Home words were changed, giving a shell of SHA-256 `86f78386…` and an
+  image of `d1731ca4…`. All three golden files then held, and the committed shell was restored.

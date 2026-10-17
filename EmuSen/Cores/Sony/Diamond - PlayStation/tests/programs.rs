@@ -1160,23 +1160,18 @@ fn the_kernels_cd_functions_read_a_disc_on_the_open_kernel() {
     assert_eq!(&m.board.ram[0x11_0000..0x11_0800], &pvd[24..2072]);
 }
 
-/// The screen with no disc (§16): an empty drive and a blank card, which the card manager formats on Square pressed
-/// twice; then a disc put in, which the shell finds within its two-second poll and boots by its SYSTEM.CNF.
+/// The screen with no disc (§16): an empty drive and a blank card, which the shell formats from Memory Cards' card
+/// actions and their confirmation (Diamond_Shell.md §3.2, since S4); then a disc put in, which the shell finds within its
+/// two-second poll and the kernel boots by its SYSTEM.CNF.
 #[test]
 fn the_screen_with_no_disc_formats_a_card_and_boots_a_disc_put_in() {
     let mut m = open_machine(None);
     m.insert_card(0, None);
-    let square = 1 << 15;
-    for _ in 0..1200 {
-        let f = m.frames;
-        m.board.sio0.set_buttons(0, if (400..406).contains(&f) || (420..426).contains(&f) { square } else { 0 });
-        m.advance();
-    }
+    format_from_the_shell(&mut m);
     let card = &m.card_in(0).unwrap().data;
     assert_eq!(&card[..2], b"MC", "formatted from the manager");
     assert_eq!(&card[128..132], [0xA0, 0, 0, 0], "block 1 free");
-    let at = |x: usize, y: usize| u16::from_le_bytes([m.board.gpu.vram.bytes[2 * (y * 1024 + x)], m.board.gpu.vram.bytes[2 * (y * 1024 + x) + 1]]);
-    assert_eq!(at(2, 120), 2 | 3 << 5 | 5 << 10, "the manager's background");
+    assert_eq!(background(&m), SHELL_BACKGROUND, "the manager's background");
     m.set_lid(true, None);
     for _ in 0..30 {
         m.advance();
@@ -1200,15 +1195,41 @@ fn the_shell_runs_as_a_program_side_loaded_on_the_open_kernel() {
     let media = Media::read(image).unwrap();
     let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.dualshock"), None], image, kernel::open_kernel().map(|k| (k, Kernel::Open)));
     m.insert_card(0, None);
-    let square = 1 << 15;
-    for _ in 0..1200 {
-        let f = m.frames;
-        m.board.sio0.set_buttons(0, if (400..406).contains(&f) || (420..426).contains(&f) { square } else { 0 });
+    format_from_the_shell(&mut m);
+    assert_eq!(&m.card_in(0).unwrap().data[..2], b"MC", "formatted by the side-loaded shell");
+    assert_eq!(background(&m), SHELL_BACKGROUND, "the shell's background");
+}
+
+/// The shell's background, LunaP's menu void at 15 bits (Diamond_Shell.md §3.2).
+const SHELL_BACKGROUND: u16 = 1 | 1 << 5 | 2 << 10;
+
+fn background(m: &Machine) -> u16 {
+    let (x, y) = (2, 120);
+    u16::from_le_bytes([m.board.gpu.vram.bytes[2 * (y * 1024 + x)], m.board.gpu.vram.bytes[2 * (y * 1024 + x) + 1]])
+}
+
+/// The card in slot 1 formatted from the shell once it has read the cards: Memory Cards, Triangle, Format, then the
+/// confirmation's Format, the cursor starting on Cancel.
+fn format_from_the_shell(m: &mut Machine) {
+    while !String::from_utf8_lossy(&m.board.tty.text).contains("shell: card 2") {
         m.advance();
     }
-    assert_eq!(&m.card_in(0).unwrap().data[..2], b"MC", "formatted by the side-loaded shell");
-    let at = |x: usize, y: usize| u16::from_le_bytes([m.board.gpu.vram.bytes[2 * (y * 1024 + x)], m.board.gpu.vram.bytes[2 * (y * 1024 + x) + 1]]);
-    assert_eq!(at(2, 120), 2 | 3 << 5 | 5 << 10, "the shell's background");
+    for bits in [1u32 << 14, 1 << 12, 1 << 14, 1 << 4, 1 << 14] {
+        m.board.sio0.set_buttons(0, bits);
+        for _ in 0..4 {
+            m.advance();
+        }
+        m.board.sio0.set_buttons(0, 0);
+        for _ in 0..4 {
+            m.advance();
+        }
+    }
+    while !String::from_utf8_lossy(&m.board.tty.text).contains("shell: format 1") {
+        m.advance();
+    }
+    for _ in 0..60 {
+        m.advance();
+    }
 }
 
 /// `card-write-race.s` on a machine with blank cards in both slots, the port it writes poked first, run to the B0h entry

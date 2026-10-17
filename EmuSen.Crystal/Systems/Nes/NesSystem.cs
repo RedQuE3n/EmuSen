@@ -44,11 +44,16 @@ namespace EmuSen.Crystal.Systems.Nes
             file.Length > 16 && file[0] == (byte)'N' && file[1] == (byte)'E' && file[2] == (byte)'S' && file[3] == 0x1A ? file[16..] : file;
 
         // "Game Genie", not "NES Game Genie", so the detected-format message reads as it always has.
-        public static ICheatCodeCodec GameGenie() =>
+        public static ICheatCodeCodec ManagedGameGenie() =>
             new DelegateCheatCodec("Game Genie", CheatCodeKind.RomPatch, null, NesGameGenieCodec.CanDecode, NesGameGenieCodec.Decode, NesGameGenieCodec.DecodeCompare);
 
-        public static ICheatCodeCodec Raw() =>
+        public static ICheatCodeCodec GameGenie() => SystemCode.Codec("nes.gg", ManagedGameGenie());
+
+        public static ICheatCodeCodec ManagedRaw() =>
             new DelegateCheatCodec("NES address:value", CheatCodeKind.RamPoke, CpuBus, NesRawCodec.CanDecode, NesRawCodec.Decode);
+
+        // Each codec is emusen-systems' under its id, its Managed twin the C# - see EmuSen_Backend.md §13.
+        public static ICheatCodeCodec Raw() => SystemCode.Codec("nes.raw", ManagedRaw());
 
         // The pair a loaded NES game and a console chosen in the UI both get: detected, then explicit.
         public static (ICheatCodeCodec AutoDetect, ICheatCodeCodec Explicit) Pair() => (Raw(), GameGenie());

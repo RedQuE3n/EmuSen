@@ -126,5 +126,23 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Equal(Entry("CCCC_______", 4, 4).Concat(Entry("AAAA_______", 1, 3)), u);
             Assert.NotNull(Bram.Delete(gone, "BBBB_______").Refusal);
         }
+
+        // A name's bytes past 7Fh read as '?' but are copied and kept as stored: a copy, and a delete that rewrites the entries after it, change no other name.
+        [Fact]
+        public void A_name_outside_ascii_is_copied_and_kept_byte_for_byte()
+        {
+            byte[] odd = WithOne("ODD________", 2, 0x0D);
+            byte[] u = new byte[32];
+            SegaCdBramFormat.BlockCode.Decode(odd.AsSpan(0x1F80, 64), u);
+            u[16 + 3] = 0xC1;
+            Code(u).CopyTo(odd, 0x1F80);
+            Assert.Equal("ODD?_______", Bram.Read(odd).Saves.Single().Id);
+            byte[] image = Bram.Copy(WithOne("AAAA_______", 1, 0xAA), "AAAA_______", Bram.Format()).Image!;
+            image = Bram.Copy(odd, "ODD?_______", image).Image!;
+            image = Bram.Copy(WithOne("CCCC_______", 1, 0xCC), "CCCC_______", image).Image!;
+            image = Bram.Delete(image, "AAAA_______").Image!;
+            SegaCdBramFormat.BlockCode.Decode(image.AsSpan(0x1F80, 64), u);
+            Assert.Equal(0xC1, u[16 + 3]);
+        }
     }
 }

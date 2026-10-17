@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores.Nintendo.MarsRT;
+using EmuSen.Crystal.Systems.N64;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.Crystal.Cheats;

@@ -192,7 +192,7 @@ namespace EmuSen.Cores
 
                 // The GameShark pokes, and no N64 format patches ROM; the target's hooks are tables in the Rust loop - see Mars_Cheats.md §1, Mars_Native.md §6.5.
                 case MarsRtCore marsRt:
-                    return new CoreBundle(marsRt, new MarsRtDebugTarget(marsRt, cheats), MarsCheatCodecs.GameShark(), null, null);
+                    return new CoreBundle(marsRt, new MarsRtDebugTarget(marsRt, cheats), Crystal.Systems.N64.N64System.GameShark(), null, null);
 
                 // Any v1 engine: the generic target, and the codecs of its system's pack - see EmuSen_CoreAPI.md §19.
                 case Native.CoreEngine v1:
@@ -224,13 +224,8 @@ namespace EmuSen.Cores
             // No console chosen means no console to be wrong about, so the historical pair stands in.
             if (core is null) return DefaultCheatCodecs;
 
-            // Dispatched on extension for the same reason Create is - no new public surface on the catalog.
-            if (core.SupportsExtension(".sfc")) return DefaultCheatCodecs;
-            if (core.SupportsExtension(".nes")) return Crystal.Systems.Nes.NesSystem.Pair();
-            if (core.SupportsExtension(".gb")) return GameBoyCheatCodecs.Pair();
-            if (core.SupportsExtension(".z64")) return MarsCheatCodecs.Pair();
-            // A console discovery added has its system pack's codecs, as a game of it running does.
-            if (CoreCatalog.IsDiscovered(core) && Crystal.Systems.SystemPacks.All.FirstOrDefault(p => p.Entry.Console == core.Console) is { } pack)
+            // A console's codecs are its system pack's, whichever engine runs it, as a game of it running has - see EmuSen_Backend.md F7.
+            if (Crystal.Systems.SystemPacks.All.FirstOrDefault(p => p.Entry.Console == core.Console) is { } pack)
                 return (pack.AutoDetectCodec?.Invoke(), pack.ExplicitCodec?.Invoke());
 
             return (null, null);

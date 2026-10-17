@@ -5,6 +5,7 @@ using System.Text;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Crystal.Telemetry;
+using EmuSen.Crystal.Systems.GameBoy;
 
 namespace EmuSen.Cores.Nintendo.MercuryRT
 {

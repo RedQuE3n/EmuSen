@@ -20,7 +20,7 @@ namespace EmuSen.Crystal.Systems.Nes
         Archaic,
     }
 
-    // An iNES or NES 2.0 header read without building a board; PRG RAM is 8 KB on every board - see Moon_Memory.md §2.
+    // An iNES or NES 2.0 header read without building a board; PRG RAM is 8 KB on every board; emusen-systems' reader unless EMUSEN_SYSTEMS_NATIVE=0 - see Moon_Memory.md §2, EmuSen_Backend.md §13.3.
     public sealed record NesHeader(int Mapper, int PrgBanks, int ChrBanks, bool HasBattery, bool HasTrainer, bool IsNes20, NesHeaderTrust Trust, NesMirroring Mirroring)
     {
         public const int Size = 16;
@@ -31,7 +31,10 @@ namespace EmuSen.Crystal.Systems.Nes
 
         public bool ChrIsRam => ChrBanks == 0;
 
-        public static NesHeader Read(byte[] image)
+        public static NesHeader Read(byte[] image) => SystemCode.Active ? SystemCode.NesHeader(image) : ReadManaged(image);
+
+        // The C# reader alone, the failover and the parity class's oracle.
+        public static NesHeader ReadManaged(byte[] image)
         {
             if (image.Length < Size || image[0] != 'N' || image[1] != 'E' || image[2] != 'S' || image[3] != 0x1A)
                 throw new InvalidDataException("Not an iNES image: missing the \"NES\\x1A\" magic.");

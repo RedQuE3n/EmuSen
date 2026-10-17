@@ -220,6 +220,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-mcd-bram"
+version = "0.1.0"
+
+[[package]]
+name = "emusen-n64-pak"
+version = "0.1.0"
+
+[[package]]
 name = "emusen-native"
 version = "0.1.0"
 
@@ -233,6 +241,7 @@ dependencies = [
  "emusen-debug",
  "emusen-dianash",
  "emusen-disc",
+ "emusen-dotnet",
  "emusen-endymion",
  "emusen-galaxia",
  "emusen-native",
@@ -241,6 +250,10 @@ dependencies = [
  "emusen-systems",
  "emusen-trace",
 ]
+
+[[package]]
+name = "emusen-psx-card"
+version = "0.1.0"
 
 [[package]]
 name = "emusen-serenity"
@@ -272,6 +285,9 @@ name = "emusen-systems"
 version = "0.1.0"
 dependencies = [
  "emusen-dotnet",
+ "emusen-mcd-bram",
+ "emusen-n64-pak",
+ "emusen-psx-card",
 ]
 
 [[package]]

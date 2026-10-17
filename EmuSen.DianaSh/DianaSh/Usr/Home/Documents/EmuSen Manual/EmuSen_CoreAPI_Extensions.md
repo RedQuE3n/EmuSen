@@ -697,6 +697,11 @@ estimate stays near 256 MiB, and the processor count still bounds the jobs [A]. 
 All internal to the runtime (Crystal, which takes the system packs at `EmuSen_DianaSh.md` §13.2's step S2 [R]); none
 at the core ABI.
 
+*Since 2026-10-17 the recognisers, the decision among candidates, the disc's sectors and its ISO 9660 lookup are
+`emusen-systems`' (`probe`, `genesis`, `psx::disc`), reached through the platform library unless
+`EMUSEN_SYSTEMS_NATIVE=0`; a recogniser asks the host for the bytes it reads, so the file is read in C# as before
+(`EmuSen_Backend.md` §13.3).*
+
 - **`SystemEntry` gains a recogniser** [C]: `Func<IMediaProbe, Recognition?> Recognise`. A function in the entry is
   the pattern already used for OpenVGDB's hashing rule (`OpenVgdbBytes`, `Sys/Systems/SystemPack.cs:18`) [M].
   `IMediaProbe` offers the file's first bytes, and for a disc a 2,048-byte sector by its address, reading `.iso`, a raw

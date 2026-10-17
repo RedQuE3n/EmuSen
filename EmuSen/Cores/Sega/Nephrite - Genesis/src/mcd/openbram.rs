@@ -434,3 +434,41 @@ fn the_file_system_runs_on_a_cartridge_sized_volume() {
     assert_eq!(rig.get(BACK, data.len()), data);
     assert_eq!(rig.cart_call(INIT, 0, 0).d0 as u16, 0x20);
 }
+
+// EmuSen_Backend.md F21, D14: the open BIOS's volume read by the host's format crate, and a file the crate copies in read back by the BIOS.
+#[test]
+fn the_hosts_format_crate_reads_what_the_bios_writes_and_the_bios_what_it_copies() {
+    let mut rig = Rig::new(0x2000);
+    assert!(!rig.buram(FORMAT, 0, 0, 0).carry);
+    let mut blank = vec![0u8; 0x2000];
+    emusen_mcd_bram::format(&mut blank);
+    assert_eq!(rig.bram, blank, "the BIOS's format of zeros is the crate's");
+    assert!(!rig.write("SONICCD____", 0, &pattern(11 * 64, 1)).carry);
+    assert!(!rig.write("WD_LUNAR2_3", 0, &pattern(3 * 64, 2)).carry);
+    assert!(!rig.write("PROTECTED__", 0xFF, &pattern(2 * 32, 3)).carry);
+    let entries: Vec<emusen_mcd_bram::Entry> = emusen_mcd_bram::entries(&rig.bram).map(Option::unwrap).collect();
+    let shown: Vec<(&[u8], bool, usize, usize, bool)> = entries.iter().map(|e| (&e.name[..], e.protected, e.start, e.blocks, e.damaged)).collect();
+    assert_eq!(shown, [(&b"SONICCD____"[..], false, 1, 11, false), (&b"WD_LUNAR2_3"[..], false, 12, 3, false), (&b"PROTECTED__"[..], true, 15, 2, false)]);
+    assert_eq!(emusen_mcd_bram::counts(&rig.bram), (rig.stat().0 as usize, 3));
+    assert_eq!(rig.bram[64..12 * 64], pattern(11 * 64, 1)[..]);
+
+    let mut other = Rig::formatted();
+    assert!(!other.write("FIRST______", 0, &pattern(2 * 64, 4)).carry);
+    let from = rig.bram.clone();
+    emusen_mcd_bram::copy(&from, 2, &mut other.bram).unwrap();
+    emusen_mcd_bram::copy(&from, 3, &mut other.bram).unwrap();
+    let (out, data) = other.read("WD_LUNAR2_3");
+    assert!(!out.carry);
+    assert_eq!(data, pattern(3 * 64, 2));
+    assert_eq!(other.stat(), (emusen_mcd_bram::counts(&other.bram).0 as u16, 3));
+    let t = other.table("PROTECTED__", 0, 0);
+    let out = other.buram(SERCH, 0, t, 0);
+    assert!(!out.carry && out.d1 as u8 == 0xFF, "the protected file found as protected");
+
+    let before = other.bram.clone();
+    let mut edited = before.clone();
+    emusen_mcd_bram::delete(&before, 2, &mut edited).unwrap();
+    let t = other.table("WD_LUNAR2_3", 0, 0);
+    assert!(!other.buram(DEL, 0, t, 0).carry);
+    assert_eq!(other.bram, edited, "a delete by the crate is the BIOS's, byte for byte");
+}

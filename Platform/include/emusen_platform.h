@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 13u
+#define EMUSEN_PLATFORM_ABI_VERSION 14u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -50,6 +50,7 @@ extern "C" {
 #define EMUSEN_PLATFORM_NOT_FOUND (-1031)    /* a file or directory that had to exist does not */
 #define EMUSEN_PLATFORM_ACCESS (-1032)       /* the system refused access */
 #define EMUSEN_PLATFORM_BAD_ARGUMENT (-1033) /* a kind, an operation or a number the call does not know */
+#define EMUSEN_PLATFORM_REFUSED (-1034)      /* an operation the rules refuse; an answer, with words for the player */
 
 /* ---- The library ---- */
 
@@ -392,16 +393,89 @@ int64_t emusen_disc_playlist(const uint8_t *list, size_t list_len, uint8_t *out,
 /* The .sbi a disc's LibCrypt patches are looked for in beside an image: the image's stem with .sbi. */
 int64_t emusen_disc_sbi_beside(const uint8_t *image, size_t image_len, uint8_t *out, size_t len);
 
-/* ---- The systems table: emusen-systems (EmuSen_Backend.md, sections 5 and 12) ---- */
+/* ---- The systems table and the packs' code: emusen-systems (EmuSen_Backend.md, sections 5, 12 and 13) ---- */
 
 /*
  * Every system's facts as one compact JSON array, one object a system in the table's order, each with the keys id,
  * name, console, manufacturer, release_year, extensions, cheat_systems, openvgdb_systems, cover_aspect, esde_system,
- * esde_full_name, self_delimiting_images, attached_to (a console or null) and screenscraper_system (a number or null),
- * in that order. By the length-query idiom. EMUSEN_PLATFORM_PARSE with words only for a library built from a broken
- * data file.
+ * esde_full_name, self_delimiting_images, attached_to (a console or null), screenscraper_system (a number or null),
+ * cheat_space (a memory space or null) and media (a list of objects with the keys id, title and noun), in that order. By the length-query idiom.
+ * EMUSEN_PLATFORM_PARSE with words only for a library built from a broken data file.
  */
 int64_t emusen_systems_table(uint8_t *out, size_t len);
+
+/*
+ * The save media's format modules. A medium is named by its id in the table's media; one no module reads is ABSENT.
+ * Images are the caller's for the call; a null image with no length is an empty one. Each answer is by the
+ * length-query idiom, and an edited image is as long as the one it was made from, so a buffer of that length takes it
+ * in one call. A refusal is EMUSEN_PLATFORM_REFUSED with the words for the player; a damaged directory that reaches
+ * outside the image is BAD_ARGUMENT, where the C# module threw.
+ */
+
+/* Every medium's module as a JSON array of objects with the keys id, length (the file's), capacity and unit (the medium's own: block, page). */
+int64_t emusen_systems_media(uint8_t *out, size_t len);
+
+/* A medium's listing as a JSON object with the keys formatted, saves (each id, title, units, game or null, damaged), free and problem (words or null). */
+int64_t emusen_systems_media_read(const uint8_t *id, size_t id_len, const uint8_t *image, size_t image_len, uint8_t *out, size_t len);
+
+/* `to` with the save named `save` on `from` copied onto it. */
+int64_t emusen_systems_media_copy(const uint8_t *id, size_t id_len, const uint8_t *from, size_t from_len, const uint8_t *save, size_t save_len,
+                                  const uint8_t *to, size_t to_len, uint8_t *out, size_t len);
+
+/* `image` with the save named `save` deleted as the console's own manager deletes. */
+int64_t emusen_systems_media_delete(const uint8_t *id, size_t id_len, const uint8_t *image, size_t image_len, const uint8_t *save, size_t save_len,
+                                    uint8_t *out, size_t len);
+
+/* A formatted blank of the medium. */
+int64_t emusen_systems_media_format(const uint8_t *id, size_t id_len, uint8_t *out, size_t len);
+
+/*
+ * The cheat codecs, by codec id. Every codec and each system's pair as a JSON object: codecs (each id, name, kind
+ * RamPoke or RomPatch, space or null) and systems (each id, auto and explicit, a codec's id or null).
+ */
+int64_t emusen_systems_cheat_codecs(uint8_t *out, size_t len);
+
+/*
+ * A code's answers from one codec as a JSON object: can (whether the code is the codec's), then decode (address and
+ * value), compare (a byte or null) and writes (a list of objects with the keys space, address, value, width, type as
+ * CheatWriteType's number, bit or null, big_endian, repeat, repeat_address and repeat_value, or null), each of those
+ * three an object with the key format (the codec's words) or range where it refused. ABSENT for a codec there is not.
+ */
+int64_t emusen_systems_cheat_decode(const uint8_t *codec, size_t codec_len, const uint8_t *code, size_t code_len, uint8_t *out, size_t len);
+
+/* The Game Genie code that patches `value` at `address`, for snes.gg and md.gg; ABSENT for a codec with no encoder. */
+int64_t emusen_systems_cheat_encode(const uint8_t *codec, size_t codec_len, int32_t address, uint32_t value, uint8_t *out, size_t len);
+
+/* Each system's code as a JSON array in the table's order: id, and whether it has a recogniser (recognises), an OpenVGDB rule (openvgdb) and a header reader (header). */
+int64_t emusen_systems_code(uint8_t *out, size_t len);
+
+/*
+ * A system's recogniser over the first bytes of a file, the host having asked for `asked` of them (`head` is shorter
+ * where the file is): its claim as a JSON object with the keys system, serial and region (each a word or null), or
+ * null. Where it must read more first, it returns 0 with `need` set to the bytes it reads from the file's start, which
+ * the host reads and asks again; otherwise `need` is 0. ABSENT for a system not in the table.
+ */
+int64_t emusen_systems_recognise(const uint8_t *system, size_t system_len, const uint8_t *head, size_t head_len, uint64_t asked, uint64_t *need,
+                                 uint8_t *out, size_t len);
+
+/*
+ * The decision among the systems that take a file's extension. The request is a JSON object: file (its name), folder
+ * (the name of the folder it is in, or null), candidates (each id, name and esde) and claims (each at, the candidate's
+ * place, with system, serial and region). The answer is a JSON object: system (an id or null), recognition and reason
+ * (words or null). PARSE for a request that is not one.
+ */
+int64_t emusen_systems_route(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+
+/* The bytes of a file OpenVGDB hashed for the system; ABSENT where they are the file's own. */
+int64_t emusen_systems_openvgdb(const uint8_t *system, size_t system_len, const uint8_t *file, size_t file_len, uint8_t *out, size_t len);
+
+/*
+ * A cartridge's header as a JSON object, from the first bytes of an image of `length` bytes (a reader reads within the
+ * first 4 KiB): the NES's mapper, prg_banks, chr_banks, battery, trainer, nes20, trust and mirroring, or the Game Boy's
+ * type, board, rom_banks, ram_length, battery, timer, rumble and cgb_flag; or refused (invalid or unsupported) with
+ * words. ABSENT for a system with no header reader.
+ */
+int64_t emusen_systems_header(const uint8_t *system, size_t system_len, const uint8_t *head, size_t head_len, uint64_t length, uint8_t *out, size_t len);
 
 /* ---- Endymion: the logic half (EmuSen_Audio_Sync.md, sections 1 to 3; EmuSen_Input.md, sections 7 and 8) ---- */
 

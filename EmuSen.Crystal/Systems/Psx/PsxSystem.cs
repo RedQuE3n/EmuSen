@@ -61,7 +61,8 @@ namespace EmuSen.Crystal.Systems.Psx
             byte[] head = probe.Read(12 * 1024);
             if (!IsDisc(head)) return null;
             var sectors = new DiscSectors(probe.Read(160 * 1024));
-            string line2 = Encoding.ASCII.GetString(sectors.Sector(4).Slice(32, Math.Min(38, sectors.Sector(4).Length - 32)));
+            var four = sectors.Sector(4);
+            string line2 = four.Length <= 32 ? "" : Encoding.ASCII.GetString(four.Slice(32, Math.Min(38, four.Length - 32)));
             string region = line2.Contains("Amer") ? "Americas" : line2.Contains("Euro") ? "Europe" : "Japan";
             return new Recognition(Id, SerialOf(sectors.RootFile("SYSTEM.CNF")), region);
         }
@@ -104,14 +105,19 @@ namespace EmuSen.Crystal.Systems.Psx
         }
 
         // A code told GameShark or Xploder by its types' first digits, psx-spx's table, as a cheat file's or a player's code is.
-        public static ICheatCodeCodec GameShark() => new DelegateCheatCodec("GameShark or Xploder", CheatCodeKind.RamPoke, Ram,
+        public static ICheatCodeCodec ManagedGameShark() => new DelegateCheatCodec("GameShark or Xploder", CheatCodeKind.RamPoke, Ram,
             PsxCheatFormats.IsEither, c => PsxCheatFormats.OneByte(PsxCheatFormats.EitherWrites(c), c), decodeWrites: PsxCheatFormats.EitherWrites);
 
-        public static ICheatCodeCodec Xploder() => new DelegateCheatCodec("Xploder", CheatCodeKind.RamPoke, Ram,
+        public static ICheatCodeCodec ManagedXploder() => new DelegateCheatCodec("Xploder", CheatCodeKind.RamPoke, Ram,
             PsxCheatFormats.IsXploder, c => PsxCheatFormats.OneByte(PsxCheatFormats.XploderWrites(c), c), decodeWrites: PsxCheatFormats.XploderWrites);
 
-        // The memory card, its two slots the core's files 0 and 4 - see EmuSen_SaveMedia.md §7.1.
-        public static readonly SaveMedia.SaveMediumEntry Card = new("psx.card", "Memory Card", "Card", ".mcr", PsxCardFormat.Instance);
+        // Each codec is emusen-systems' under its id, its Managed twin the C# - see EmuSen_Backend.md §13.
+        public static ICheatCodeCodec GameShark() => SystemCode.Codec("psx.gs", ManagedGameShark());
+
+        public static ICheatCodeCodec Xploder() => SystemCode.Codec("psx.xp", ManagedXploder());
+
+        // The memory card, its two slots the core's files 0 and 4; Card is the table's words with this literal's extension and module - see EmuSen_SaveMedia.md §7.1, EmuSen_Backend.md §13.
+        public static readonly SaveMedia.SaveMediumEntry CardLiteral = new("psx.card", "Memory Card", "Card", ".mcr", PsxCardFormat.Instance), Card = SystemTable.Medium(CardLiteral);
 
         public static readonly SystemPack Pack = new(Entry, GameShark, Xploder, PlayerControllers, Media: new[] { Card });
     }

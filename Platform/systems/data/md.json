@@ -12,5 +12,7 @@
   "esde_full_name": "Sega Genesis",
   "self_delimiting_images": false,
   "attached_to": null,
-  "screenscraper_system": 1
+  "screenscraper_system": 1,
+  "cheat_space": "WRAM",
+  "media": []
 }

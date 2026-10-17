@@ -6,6 +6,7 @@
 
 pub mod file;
 pub mod json;
+mod letter_or_digit;
 pub mod number;
 pub mod suggestion;
 pub mod text;

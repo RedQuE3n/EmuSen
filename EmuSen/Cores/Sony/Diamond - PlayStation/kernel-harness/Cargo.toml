@@ -17,5 +17,9 @@ path = "src/tool.rs"
 blackmoon-r3000 = { path = "../../BlackMoon-HW/blackmoon-r3000" }
 emusen-mips = { path = "../../../Shared/emusen-mips" }
 
+# The host's memory card file system, against which a card the kernel writes is read (EmuSen_Backend.md F21, D14).
+[dev-dependencies]
+emusen-psx-card = { path = "../../../Shared/emusen-psx-card" }
+
 # Its own root, beside the kernel's.
 [workspace]

@@ -12,3 +12,7 @@ name = "emusen_systems"
 [dependencies]
 # JSON as the C# reads it, and .NET's way of writing a double, so the table means the same to both halves.
 emusen-dotnet = { path = "../dotnet" }
+# Each save medium's file system, a crate with no standard library that an open firmware may also build on (EmuSen_Backend.md D14).
+emusen-psx-card = { path = "../../EmuSen/Cores/Shared/emusen-psx-card" }
+emusen-n64-pak = { path = "../../EmuSen/Cores/Shared/emusen-n64-pak" }
+emusen-mcd-bram = { path = "../../EmuSen/Cores/Shared/emusen-mcd-bram" }

@@ -12,5 +12,7 @@
   "esde_full_name": "Nintendo Entertainment System",
   "self_delimiting_images": false,
   "attached_to": null,
-  "screenscraper_system": 3
+  "screenscraper_system": 3,
+  "cheat_space": "CPUBUS",
+  "media": []
 }

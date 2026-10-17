@@ -83,16 +83,22 @@ namespace EmuSen.Crystal.Systems.Genesis
             return head.Length >= data + 14 && head.Slice(data, 14).SequenceEqual("SEGADISCSYSTEM"u8);
         }
 
-        public static ICheatCodeCodec ActionReplay() => new DelegateCheatCodec("Action Replay", CheatCodeKind.RamPoke, Wram,
+        public static ICheatCodeCodec ManagedActionReplay() => new DelegateCheatCodec("Action Replay", CheatCodeKind.RamPoke, Wram,
             GenesisCheatFormats.IsActionReplay, GenesisCheatFormats.DecodeActionReplay, decodeWrites: GenesisCheatFormats.ActionReplayWrites);
 
-        public static ICheatCodeCodec GameGenie() => new DelegateCheatCodec("Game Genie", CheatCodeKind.RomPatch, null,
+        public static ICheatCodeCodec ManagedGameGenie() => new DelegateCheatCodec("Game Genie", CheatCodeKind.RomPatch, null,
             GenesisCheatFormats.IsPatch, GenesisCheatFormats.DecodePatch, decodeWrites: GenesisCheatFormats.PatchWrites);
 
+        // Each codec is emusen-systems' under its id, its Managed twin the C# - see EmuSen_Backend.md §13.
+        public static ICheatCodeCodec ActionReplay() => SystemCode.Codec("md.ar", ManagedActionReplay());
+
+        public static ICheatCodeCodec GameGenie() => SystemCode.Codec("md.gg", ManagedGameGenie());
+
         public static readonly SystemPack MegaDrivePack = new(MegaDrive, ActionReplay, GameGenie, PlayerControllers);
-        // The Sega CD's backup RAM inside the unit and its RAM cartridge, one format read by SegaCdBramFormat - see EmuSen_SaveMedia.md §6.2, §7.3.
-        public static readonly SaveMedia.SaveMediumEntry BackupRam = new("mcd.backup", "Internal Backup RAM", "Backup RAM", ".brm", SegaCdBramFormat.BackupRam),
-            RamCartridge = new("mcd.ramcart", "Backup RAM Cartridge", "Cartridge", ".crm", SegaCdBramFormat.RamCartridge);
+        // The Sega CD's backup RAM inside the unit and its RAM cartridge, one format read by SegaCdBramFormat; each the table's words with its literal's extension and module - see EmuSen_SaveMedia.md §6.2, §7.3.
+        public static readonly SaveMedia.SaveMediumEntry BackupRamLiteral = new("mcd.backup", "Internal Backup RAM", "Backup RAM", ".brm", SegaCdBramFormat.BackupRam),
+            RamCartridgeLiteral = new("mcd.ramcart", "Backup RAM Cartridge", "Cartridge", ".crm", SegaCdBramFormat.RamCartridge),
+            BackupRam = SystemTable.Medium(BackupRamLiteral), RamCartridge = SystemTable.Medium(RamCartridgeLiteral);
 
         public static readonly SystemPack MegaCdPack = new(MegaCd, ActionReplay, GameGenie, PlayerControllers, Media: new[] { RamCartridge, BackupRam });
         public static readonly SystemPack S32xPack = new(S32x, ActionReplay, GameGenie, PlayerControllers);

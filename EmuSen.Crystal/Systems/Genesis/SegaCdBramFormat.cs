@@ -6,7 +6,7 @@ using EmuSen.Crystal.SaveMedia;
 
 namespace EmuSen.Crystal.Systems.Genesis
 {
-    // The Sega CD's backup RAM file system, the internal RAM's and the RAM cartridge's alike, as Nephrite_Bram.md states it - see Nephrite_OpenBios.md §14, EmuSen_SaveMedia.md §6.2.
+    // The Sega CD's backup RAM file system, the internal RAM's and the RAM cartridge's alike, as Nephrite_Bram.md states it; emusen-systems' module unless EMUSEN_SYSTEMS_NATIVE=0 - see Nephrite_OpenBios.md §14, EmuSen_SaveMedia.md §6.2, EmuSen_Backend.md §13.
     public sealed class SegaCdBramFormat : ISaveMediumFormat
     {
         public const int BlockLength = 64, MinLength = 0x2000, MaxLength = 0x8_0000;
@@ -15,16 +15,31 @@ namespace EmuSen.Crystal.Systems.Genesis
 
         private static readonly byte[] Identifier = "SEGA_CD_ROM\0"u8.ToArray(), Cartridge = "RAM_CARTRIDGE___"u8.ToArray();
 
-        private SegaCdBramFormat(string medium, int length) => (Medium, Length) = (medium, length);
+        private SegaCdBramFormat(string medium, int length, bool managed = false)
+        {
+            (Medium, _length) = (medium, length);
+            Managed = managed ? this : new SegaCdBramFormat(medium, length, managed: true);
+        }
+
+        private readonly int _length;
+
+        // The C# module alone, the failover and the parity class's oracle.
+        public SegaCdBramFormat Managed { get; }
+
+        private bool Native => Managed != this && SystemCode.Active;
 
         public string Medium { get; }
-        public int Length { get; }
-        public int Capacity => Length / BlockLength - 3;
-        public string Unit => "block";
+        public int Length => Native ? SystemCode.Module(Medium).Length : _length;
+        public int Capacity => Native ? SystemCode.Module(Medium).Capacity : _length / BlockLength - 3;
+        public string Unit => Native ? SystemCode.Module(Medium).Unit : "block";
 
         private enum Kind { Sega, Unformatted, Other }
 
-        private sealed record Entry(string Name, bool Protected, int Start, int Blocks, bool Damaged);
+        // Raw is the name as stored, which a rewrite of the entry keeps; Name is how it reads.
+        private sealed record Entry(byte[] Raw, bool Protected, int Start, int Blocks, bool Damaged)
+        {
+            public string Name => Encoding.ASCII.GetString(Raw);
+        }
 
         // §3: RAM_CARTRIDGE___ needs one of its first three longwords whole; then the identifier exactly, or another name of 0-9, A-Z and _.
         private static Kind KindOf(ReadOnlySpan<byte> image)
@@ -82,7 +97,7 @@ namespace EmuSen.Crystal.Systems.Genesis
             ReadOnlySpan<byte> e = u.AsSpan(index % 2 == 1 ? 16 : 0, 16);
             int start = BinaryPrimitives.ReadUInt16BigEndian(e[12..]), blocks = BinaryPrimitives.ReadUInt16BigEndian(e[14..]);
             bool inside = start >= 1 && (start + blocks) * BlockLength <= DirectoryAt(image.Length, 0);
-            return new Entry(Encoding.ASCII.GetString(e[..11]), e[11] != 0, start, blocks, !whole || !inside);
+            return new Entry(e[..11].ToArray(), e[11] != 0, start, blocks, !whole || !inside);
         }
 
         private static List<Entry> Entries(ReadOnlySpan<byte> image)
@@ -95,7 +110,7 @@ namespace EmuSen.Crystal.Systems.Genesis
         private static byte[] EntryBytes(Entry e)
         {
             byte[] b = new byte[16];
-            Encoding.ASCII.GetBytes(e.Name.PadRight(11).AsSpan(0, 11), b);
+            e.Raw.CopyTo(b, 0);
             b[11] = e.Protected ? (byte)0xFF : (byte)0;
             BinaryPrimitives.WriteUInt16BigEndian(b.AsSpan(12), (ushort)e.Start);
             BinaryPrimitives.WriteUInt16BigEndian(b.AsSpan(14), (ushort)e.Blocks);
@@ -113,7 +128,9 @@ namespace EmuSen.Crystal.Systems.Genesis
 
         private static bool SizeOk(int length) => length >= MinLength && length <= MaxLength && (length & (length - 1)) == 0;
 
-        public MediumListing Read(ReadOnlySpan<byte> image)
+        public MediumListing Read(ReadOnlySpan<byte> image) => Native ? SystemCode.MediaRead(Medium, image) : ReadManaged(image);
+
+        private static MediumListing ReadManaged(ReadOnlySpan<byte> image)
         {
             if (!SizeOk(image.Length)) return MediumListing.Unreadable($"a Sega CD backup RAM is 8 KiB to 512 KiB, a power of two; this file is {image.Length} bytes");
             switch (KindOf(image))
@@ -128,7 +145,9 @@ namespace EmuSen.Crystal.Systems.Genesis
         }
 
         // As BRMWRITE places a file (§7.2): after the last file, its blocks as they were stored, which a copy keeps (§7.2's copies).
-        public MediumEdit Copy(ReadOnlySpan<byte> from, string save, ReadOnlySpan<byte> to)
+        public MediumEdit Copy(ReadOnlySpan<byte> from, string save, ReadOnlySpan<byte> to) => Native && SystemCode.Takes(save) ? SystemCode.MediaCopy(Medium, from, save, to) : CopyManaged(from, save, to);
+
+        private static MediumEdit CopyManaged(ReadOnlySpan<byte> from, string save, ReadOnlySpan<byte> to)
         {
             if (!SizeOk(from.Length) || KindOf(from) != Kind.Sega) return MediumEdit.Refused("the backup RAM copied from is not a formatted Sega CD backup RAM");
             if (!SizeOk(to.Length) || KindOf(to) != Kind.Sega) return MediumEdit.Refused("the backup RAM copied to is not formatted");
@@ -151,7 +170,9 @@ namespace EmuSen.Crystal.Systems.Genesis
         }
 
         // As BRMDEL (§7.3): the later files moved down over it, their entries one earlier, the vacated blocks left as they were.
-        public MediumEdit Delete(ReadOnlySpan<byte> image, string save)
+        public MediumEdit Delete(ReadOnlySpan<byte> image, string save) => Native && SystemCode.Takes(save) ? SystemCode.MediaDelete(Medium, image, save) : DeleteManaged(image, save);
+
+        private static MediumEdit DeleteManaged(ReadOnlySpan<byte> image, string save)
         {
             if (!SizeOk(image.Length) || KindOf(image) != Kind.Sega) return MediumEdit.Refused("the backup RAM is not formatted");
             var entries = Entries(image);
@@ -170,16 +191,18 @@ namespace EmuSen.Crystal.Systems.Genesis
         }
 
         // §4: zeros, then the footer with S/64 - 3 blocks free, as the BIOS formats a RAM of zeros.
-        public byte[] Format()
+        public byte[] Format() => Native ? SystemCode.MediaFormat(Medium)! : FormatManaged();
+
+        private byte[] FormatManaged()
         {
-            byte[] image = new byte[Length];
-            Span<byte> f = image.AsSpan(Length - 0x40);
+            byte[] image = new byte[_length];
+            Span<byte> f = image.AsSpan(_length - 0x40);
             f[..11].Fill(0x5F);
             f[15] = 0x40;
             Identifier.CopyTo(f[0x20..]);
             f[0x2C] = 1;
             Cartridge.CopyTo(f[0x30..]);
-            SetCounts(image, Capacity, 0);
+            SetCounts(image, _length / BlockLength - 3, 0);
             return image;
         }
 

@@ -3603,7 +3603,7 @@ C# core, measured on 2026-10-16 from the build of the switch:
 | What | Was | Now |
 |---|---|---|
 | `GbModel`, the Model setting's key, values, row and parse | `MercuryCore.Model.cs` | `MercuryRtCore` (the enum beside it in the shim) |
-| the header's refusals, battery and RAM size | `Cartridge.FromImage` | `GbCartridge`, a header read of 40 lines in the shim that refuses as the board did, with the same messages |
+| the header's refusals, battery and RAM size | `Cartridge.FromImage` | `GbCartridge`, a header read of 40 lines in the shim that refuses as the board did, with the same messages; *since 2026-10-17 the Game Boy pack's, in Rust with this C# as its failover (`EmuSen_Backend.md` §13.3)* |
 | the mixer's seed | `Apu.HighPassSeed` | `MercuryRtCore.HighPassSeed` |
 | the clock, frame, screen, state magic and versions, space names, pad | `MercuryCore` constants | `MercuryRtCore` constants; `MercuryMachine.SpaceNames` is the same array |
 | the GameShark and Game Genie codecs | `Cheats/` in the C# core | `EmuSen.Crystal/Systems/GameBoy/`, as the SNES's and the Genesis's formats are kept: a console's facts, no engine's |

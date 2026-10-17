@@ -16,6 +16,7 @@ version = "0.1.0"
 dependencies = [
  "blackmoon-r3000",
  "emusen-mips",
+ "emusen-psx-card",
 ]
 
 [[package]]
@@ -24,4 +25,8 @@ version = "0.1.0"
 
 [[package]]
 name = "emusen-native"
+version = "0.1.0"
+
+[[package]]
+name = "emusen-psx-card"
 version = "0.1.0"

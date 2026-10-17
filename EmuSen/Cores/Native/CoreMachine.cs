@@ -57,7 +57,6 @@ namespace EmuSen.Cores.Native
         // The same from bytes the host holds in place, the media files among them; with a loan they are lent, and the loan is released when the machine is freed or its drive takes another disc.
         // sharedRemovable and sharedConsole ask the core to leave those kinds of battery file out of what a state load restores - see EmuSen_CoreAPI.md §6.27, §6.28.
         // device is the host's Vulkan device lent to a core that claims DEVICE_PICTURE, the machine's from then on - see EmuSen_CoreAPI.md §6.29.
-        // system, with an empty image, names the console to start with nothing in it - see EmuSen_CoreAPI.md §6.31.
         public CoreMachine(CoreLibrary library, CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, IDisposable? loan = null, bool sharedRemovable = false, bool sharedConsole = false, EmuSen.Serenity.Slang.SlangLend? device = null, string? system = null)
         {
             Lend = device is not null && library.Has(CoreInterface.CapDevicePicture) ? device : null;

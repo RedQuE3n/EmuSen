@@ -272,8 +272,7 @@ namespace EmuSen.Cores.Native
             Adopt(machine, placement!, asked, wanted, set, path, console, null);
         }
 
-        // The console of systemId with nothing in it: every firmware file the system lists that the player has, and its save
-        // media placed with Per game read as Shared, there being no game whose own to use - see Diamond_Shell.md §1.5, §9 Q5.
+        // The console of systemId with nothing in it, its firmware and save media placed as Diamond_Shell.md §11.2 gives.
         public virtual void StartConsole(string systemId)
         {
             CoreSystem system = Info.Systems.FirstOrDefault(s => s.Id == systemId && s.StartsEmpty)

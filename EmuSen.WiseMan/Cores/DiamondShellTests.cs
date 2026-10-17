@@ -65,8 +65,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Throws<NotSupportedException>(() => CoreFactory.CreateConsole("SNES"));
         }
 
-        // §1.5 and §9 Q5: started empty under Per game, the drive listed empty, the shared cards in the slots and locked under
-        // the session's name, the open kernel's screen with no disc drawn, and a disc put in through the lid booted by the kernel.
+        // Started empty, shown, given a disc and emptied - see Diamond_Shell.md §11.2.
         [Fact]
         public void A_console_started_empty_shows_its_screen_with_no_disc_and_boots_a_disc_put_in()
         {
@@ -94,8 +93,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal((-1, false, false), (core.DiscIndex, core.LidOpen, core.Machine.Info.Drives[0].Loaded));
         }
 
-        // §9 Q8: a state of the empty console loads over a disc and empties the drive again; one made with the disc in finds
-        // the disc among the session's own when the drive is empty.
+        // A state carries the drive empty or with its disc - see Diamond_Shell.md §11.2.
         [Fact]
         public void A_state_carries_the_drive_as_it_was_empty_or_with_its_disc()
         {

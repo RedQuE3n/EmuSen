@@ -1330,3 +1330,67 @@ only on the open kernel.
 - Listings of the probe's cache showed by name the folders this step may not enter (`sysdir`, `realbios`, `mml`,
   `kernel5`, the `fwcheck-` folders, the referees' folder under `play`); none was entered or listed.
 - No search printed a line of an excluded passage.
+
+## 28. The check of the image with the shell in its own section, 2026-10-17
+
+Run apart, as each time the image changes, by a tester who wrote neither the kernel nor the shell and read neither's
+source. The image is `kernel/diamond-kernel.bin` at d044d51b, 524,288 bytes, SHA-256
+`92dad42f277f4a8fd64e6404219da5de4c97d999ea479ce16c0429ce89388012` [M]. Its layout, measured on its own bytes [M]: the
+kernel's bytes end at 88,072; zeros to 60000h; at 60000h the shell's PS-EXE, 32,768 bytes, equal to
+`kernel-shell/diamond-shell.exe` (SHA-256 `96885def...`); zeros to the end.
+
+**The method.** `firmwarecheck.py` by `EmuSen_Firmware.md` §0's rule of 2026-10-11, as its reruns ran it:
+`--ignore-fill 8 --min-run 9 --control CONTROL --explained firmware/diamond-explained.txt`, against each of the 18
+images in the firmware folder, each compared whole, the core's three declared files and fifteen others. Each control is
+`firmware/diamond-control.py` on ps1-tests' release folder (the one that rebuilds §27's control byte for byte), cut to
+the size of the part measured. Three parts:
+
+- **the whole image**, with a control of 120,840 bytes, the kernel's 88,072 and the shell section's 32,768;
+- **the kernel**, a scratch copy of offsets 0-88,071, with a control of 88,072 bytes;
+- **the shell**, a scratch copy of its 32,768 bytes, with a control of 32,768 bytes.
+
+The earlier controls matched the image's bytes before its last non-zero byte, which then held no gap. Here that offset is
+425,984, mostly the gap that `--ignore-fill` leaves out, so the control matches the bytes the two programs hold. A
+longer control can only add common runs to the control's count and lengthen its longest, so the verdicts below do not
+rest on that choice [A]. No listing stopped at the tool's pair budget. The tool's printed numbers only [M]:
+
+| Part | Original | Equal at the same offset | Shared runs of 9+ bytes (control's) | Longest common run (control's) | Past the control's longest, unexplained | Verdict |
+|---|---|---|---|---|---|---|
+| whole | the declared Japanese file | 18,128 of 114,629 (15.8%); control 11.6% | 17,000 (30,591) | 41 bytes at 671 (33) | 24, 0 | PASS |
+| whole | the declared American file | 19,805 (17.3%); control 10.4% | 7,023 (12,853) | 41 at 671 (32) | 20, 0 | PASS |
+| whole | the declared European file | 19,805 (17.3%); control 11.6% | 14,347 (26,268) | 41 at 671 (33) | 24, 0 | PASS |
+| whole | the fifteen others | 12.7% to 18.6%; control 10.4% to 11.7% | 7,005 to 17,881 (12,836 to 31,512) | 41 at 671 (32 to 33) | 20 to 27, 0 | PASS, all |
+| kernel | the declared Japanese file | 12,737 of 83,882 (15.2%); control 11.4% | 16,323 (23,400) | 41 at 671 (33) | 24, 0 | PASS |
+| kernel | the declared American file | 12,740 (15.2%); control 11.4% | 6,800 (9,905) | 41 at 671 (32) | 20, 0 | PASS |
+| kernel | the declared European file | 12,740 (15.2%); control 11.4% | 13,764 (20,214) | 41 at 671 (33) | 24, 0 | PASS |
+| kernel | the fifteen others | 13.8% to 15.2%; control 11.1% to 11.4% | 6,782 to 17,155 (9,890 to 24,226) | 41 at 671 (32 to 33) | 20 to 27, 0 | PASS, all |
+| shell | the declared Japanese file | 3,721 of 30,747 (12.1%); control 11.3% | 677 (10,809) | 26 at 25,878 (32) | 0 | PASS |
+| shell | the declared American file | 3,724 (12.1%); control 11.3% | 223 (4,658) | 26 at 25,880 (32) | 0 | PASS |
+| shell | the declared European file | 3,724 (12.1%); control 11.3% | 583 (9,305) | 26 at 25,880 (32) | 0 | PASS |
+| shell | the fifteen others | 12.1% to 12.5%; control 11.3% | 223 to 745 (4,651 to 11,267) | 26 at 25,878 or 25,880 (32) | 0 | PASS, all |
+
+The fill left out is 409,659 bytes of the whole image, 4,190 of the kernel's copy and 2,021 of the shell's. Every run
+longer than the control's longest lies in the kernel: the counts past it are the same for the whole image as for the
+kernel's copy on every original, and the shell has none. The tool finds each inside a pattern of `diamond-explained.txt`,
+the documented `setjmp` and `longjmp` order and the compiler's register save and restore. The shell's longest common
+run, 26 bytes at its offset 25,878 or 25,880 (ROM offset 419,094 or 419,096), is shorter than the control's longest, so
+the rule asks for no explanation of it. The shell shares 223 to 745 runs of 9 bytes or more with an image, against the
+control's 4,651 to 11,267 at the same size.
+
+**One measure outside the rule.** The shell's equal share above compares its bytes with each original's offsets 0 to
+32,767, since the scratch copy starts at 0. To place it at its own offsets, a further scratch copy held the shell at
+60000h and zeros elsewhere, which `--ignore-fill` leaves out, and was run the same way [M]. Its runs are the same as the
+shell's copy (223 to 745, the longest 26 bytes, none past the control's 32). Its share equal at the same offset is
+9.6% to 23.0% on seventeen images and **27.9% (8,591 of 30,747) on one of the fifteen others**, over the 25% limit. The
+tool's verdict for that copy against that image is therefore FAIL, and PASS on the other seventeen. The longest aligned
+run in it is 6 bytes, so the equal offsets are scattered, not a stretch. The shell's own compared bytes are 30.8% zero
+outside fill [M, the replacement's bytes only]. A zero byte in its code meeting zeros in the original at those offsets
+would give a share of that size, but the tool does not print what the original holds there, and this check does not
+look [A]. The same offsets count in the whole image's measure: on that image its 21,331 equal offsets are the kernel's
+12,740 plus these 8,591, 18.6% of 114,629.
+
+**The verdict.** By `EmuSen_Firmware.md` §0's rule as its reruns apply it, to the image compared whole: **PASS on all
+18**. The kernel's copy and the shell's copy each also pass on all 18. The rule does not say whether a part measured
+alone, at its own offsets, must meet the 25% limit by itself. That is the one unclear point: the shell placed at 60000h
+exceeds it against one image, while the whole image, which holds the same bytes at the same offsets, does not. It is
+left to the tester to decide.

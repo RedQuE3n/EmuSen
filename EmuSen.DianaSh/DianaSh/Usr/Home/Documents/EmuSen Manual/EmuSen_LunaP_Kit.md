@@ -34,6 +34,8 @@ tester. §12 lists the sources.
    easier; this one was chosen among them.
 
 *Narrowed by the tester, 2026-10-16:* item 2's platforms are, for now, Linux, Windows and macOS on Apple Silicon.
+*Paused by the tester, 2026-10-17:* the Windows and macOS work waits until Linux is finished, the code kept portable
+meanwhile (`EmuSen_RustPlatform.md` §31).
 macOS on Intel, Android and iOS are off the table until the tester reopens them, so the gates of §9.3 that serve
 them (K1 (c) and (d)) are deferred rather than failed, and §10's risks R2, R3, R5 and R6 no longer bound the plan.
 The Rust backend is to be finished before the frontend's move is planned in detail.

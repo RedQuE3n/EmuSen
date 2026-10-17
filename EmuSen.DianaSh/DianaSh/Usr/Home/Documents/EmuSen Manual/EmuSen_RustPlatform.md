@@ -3132,3 +3132,27 @@ facade is the runtime's `Crystal/Systems/SystemTable.cs`, which takes the export
 `ImageSets` does, and which, unlike `ImageSets`, has a C# half: the packs' literals, chosen by `EMUSEN_SYSTEMS_NATIVE`
 through `PlatformSwitch`, in state 2 (§3.9). `SystemTableParityTests` holds the two halves equal. The interface's number
 went from 12 to 13 in `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together.
+
+## 31. Windows and macOS paused while Linux is finished, 2026-10-17
+
+*Decided 2026-10-17 by the tester:* the Windows and macOS builds are paused until the backend and the frontend are
+finished on Linux, and ported to afterwards, on the condition that the code stays modular, portable and efficient in
+the meantime. Linux, Windows and macOS on Apple Silicon remain the targets (`EmuSen_LunaP_Kit.md` §0.1); only the
+work on the last two waits.
+
+**What runs.** `rust-cores.yml` tests, builds and ships `linux-x64` alone. The shared crates' job, the plan's
+platforms and WiseMan's matrix each read the repository variable `EMUSEN_ALL_PLATFORMS`; set to `on`, all three
+systems run as before, including §29's Mac mini, which stays registered and idle meanwhile.
+
+**What keeps the code portable.** A job of its own, `portable`, runs on Linux whenever the other two systems are
+paused and compiles every crate (the cores, the shared, Beryl and BlackMoon crates, and the platform workspace) for
+`x86_64-pc-windows-msvc` and `aarch64-apple-darwin` with `cargo check --all-targets`, so code that would not build
+there fails the run the day it is written. It links nothing and runs nothing: a fault that shows only at run time
+(the Metal keyword of `EmuSen_Serenity.md` §3.11 is the example) waits for the port. The C# needs no job of its own,
+because the Linux build already compiles its Windows and macOS branches; only its native assets differ by RID.
+
+**What it means for the gates.** A gate written "on the three systems" reads "on Linux" until the port resumes, and
+is run on the other two then: `EmuSen_Backend.md` B7's state 2 per program and SR9's measured choice of an HTTP
+client, `EmuSen_DianaSh.md` S7's hour of play on Windows and macOS, and the state-3 gates of this page. Portable
+means what §2 has always meant: a platform's own calls stay behind the platform library and Galaxia, never in a core,
+a pack or Crystal.

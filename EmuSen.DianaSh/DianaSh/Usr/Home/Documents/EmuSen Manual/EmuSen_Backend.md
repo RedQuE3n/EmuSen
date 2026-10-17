@@ -795,7 +795,8 @@ decided by it.
 **Decided 2026-10-17 by the tester.** Each standing rule SR1 to SR12 was asked and answered on its own, every one as
 recommended (SR10: the file per game). The design choices D1 to D14 were then accepted together, each as recommended.
 The order begins with B0 and B1, which are independent (§6). `EmuSen_CoreAPI.md` §8.4 is revised by SR6 and §2.4's
-exception for shims is closed by SR8 once B4 is through.
+exception for shims is closed by SR8 once B4 is through. Since the same day, Windows and macOS are paused while Linux is
+finished (`EmuSen_RustPlatform.md` §31), so a gate here written for the three systems runs on Linux until the port.
 
 ### 11.1 Standing rules and policies
 

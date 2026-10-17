@@ -106,7 +106,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-latest, macos-latest]
+        # Windows and macOS are paused while Linux is finished; EMUSEN_ALL_PLATFORMS=on brings them back (EmuSen_RustPlatform.md §31).
+        os: ${{ fromJSON(vars.EMUSEN_ALL_PLATFORMS == 'on' && '["ubuntu-22.04", "windows-latest", "macos-latest"]' || '["ubuntu-22.04"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -219,6 +220,32 @@ jobs:
           fi
           cd Platform && cargo test --release -p emusen-platform --test dianash_abi
 
+  # While Windows and macOS are paused, every crate is still compiled for them here, so their code cannot break unseen (EmuSen_RustPlatform.md §31).
+  portable:
+    name: Compiles for ${{ matrix.target }}
+    if: vars.EMUSEN_ALL_PLATFORMS != 'on'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_64-pc-windows-msvc, aarch64-apple-darwin]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Check every crate
+        shell: bash
+        run: |
+          status=0
+          for dir in "EmuSen/Cores/Nintendo/MarsRT - N64" "EmuSen/Cores/Nintendo/MercuryRT - GB" "EmuSen/Cores/Nintendo/MoonRT - NES" "EmuSen/Cores/Nintendo/VenusRT - SNES" "EmuSen/Cores/Sega/Nephrite - Genesis" "EmuSen/Cores/Sony/Diamond - PlayStation/v1" Platform EmuSen/Cores/Shared/*/ "EmuSen/Cores/Sega/Beryl-HW"/*/ "EmuSen/Cores/Sony/BlackMoon-HW"/*/; do
+            case "$dir" in *emusen-core-abi-check/) continue ;; esac
+            echo "::group::$dir"
+            (cd "$dir" && cargo check --release --all-targets --target ${{ matrix.target }}) || { echo "::error::$dir does not compile for ${{ matrix.target }}"; status=1; }
+            echo "::endgroup::"
+          done
+          exit $status
+
   # Which libraries this run builds, and which it takes from an earlier run's build of the same inputs; main, tags and a dispatch asking for it build every one (EmuSen_RustPlatform.md §28).
   plan:
     name: Plan
@@ -256,7 +283,14 @@ jobs:
               {"rid": "win-x64", "os": "windows-latest", "target": "x86_64-pc-windows-msvc", "prefix": "", "suffix": ".dll", "test": true},
               {"rid": "osx-arm64", "os": "macos-latest", "target": "aarch64-apple-darwin", "prefix": "lib", "suffix": ".dylib", "test": true}
             ]
-        run: python3 .github/scripts/library_key.py plan
+          ALL_PLATFORMS: ${{ vars.EMUSEN_ALL_PLATFORMS }}
+        # Windows and macOS are paused while Linux is finished, so only linux-x64 is planned unless EMUSEN_ALL_PLATFORMS=on (EmuSen_RustPlatform.md §31).
+        run: |
+          if [ "$ALL_PLATFORMS" != on ]; then
+            PLATFORMS=$(python3 -c 'import json, os; print(json.dumps([p for p in json.loads(os.environ["PLATFORMS"]) if p["rid"] == "linux-x64"]))')
+            export PLATFORMS
+          fi
+          python3 .github/scripts/library_key.py plan
 
   library:
     name: ${{ matrix.crate.name }} ${{ matrix.platform.rid }}
@@ -445,14 +479,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - rid: linux-x64
-            # 24.04, not the library job's 22.04: the tests load SDL3's prebuilt native library, which needs glibc 2.38 (22.04 has 2.35).
-            os: ubuntu-24.04
-          - rid: win-x64
-            os: windows-latest
-          - rid: osx-arm64
-            os: macos-latest
+        # linux-x64 on 24.04, not the library job's 22.04: the tests load SDL3's prebuilt native library, which needs glibc 2.38 (22.04 has 2.35). Windows and macOS only with EMUSEN_ALL_PLATFORMS=on (EmuSen_RustPlatform.md §31).
+        include: ${{ fromJSON(vars.EMUSEN_ALL_PLATFORMS == 'on' && '[{"rid": "linux-x64", "os": "ubuntu-24.04"}, {"rid": "win-x64", "os": "windows-latest"}, {"rid": "osx-arm64", "os": "macos-latest"}]' || '[{"rid": "linux-x64", "os": "ubuntu-24.04"}]') }}
     steps:
       # LunaP.props takes the toolkit from the sibling checkout, so both are checked out side by side.
       - uses: actions/checkout@v4

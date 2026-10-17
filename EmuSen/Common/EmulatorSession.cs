@@ -66,6 +66,9 @@ namespace EmuSen.Common
         // Set by the frontend before LoadRom: the device a core may draw its picture on - see EmuSen_DevicePicture.md §17.
         public Func<IDeviceLend?>? DeviceLender { get; set; }
 
+        // Set by the frontend before LoadRom: what each core this session makes is made with.
+        public CoreOptions Options { get; set; } = CoreOptions.Default;
+
         // Why the engine asked for is not the one running, or null - see CoreFactory.EngineNotice.
         public string? EngineNotice { get; private set; }
 
@@ -77,7 +80,7 @@ namespace EmuSen.Common
         // <loaded> is CoreFactory.Loaded's core of <path> on <Engine>, made off this thread; null loads it here.
         public void LoadRom(string path, ICore? loaded)
         {
-            var bundle = loaded is null ? CoreFactory.Load(path, headless: true, Cheats, engine: Engine, lender: DeviceLender)
+            var bundle = loaded is null ? CoreFactory.Load(path, headless: true, Cheats, engine: Engine, lender: DeviceLender, options: Options)
                 : CoreFactory.Bundle(loaded, Cheats) with { Notice = CoreFactory.EngineNotice(path, Engine, loaded) };
             _core = bundle.Core;
             EngineNotice = bundle.Notice;
@@ -90,7 +93,7 @@ namespace EmuSen.Common
         // The console started with nothing in it, on Engine where it can - see Diamond_Shell.md §1.5.
         public void StartConsole(string console)
         {
-            var bundle = CoreFactory.LoadConsole(console, Cheats, Engine, DeviceLender);
+            var bundle = CoreFactory.LoadConsole(console, Cheats, Engine, DeviceLender, Options);
             _core = bundle.Core;
             EngineNotice = null;
             DebugTarget = bundle.DebugTarget;
@@ -162,8 +165,8 @@ namespace EmuSen.Common
             return _core.GetFrameBufferRgba();
         }
 
-        // AudioSampleRate falls back to the same AudioSettings default CoreName above falls back to "SNES".
-        public int AudioSampleRate => _core?.AudioSampleRate ?? EmuSen.Audio.AudioSettings.SampleRate;
+        // With no core there are no samples, and the rate is audio.json's default.
+        public int AudioSampleRate => _core?.AudioSampleRate ?? Galaxia.Models.AudioConfig.DefaultSampleRate;
 
         // Straight pass-through to ICore.DequeueAudioSamples() - see that method's own comment.
         public short[] DequeueAudioSamples(int maxFrames) => _core?.DequeueAudioSamples(maxFrames) ?? Array.Empty<short>();

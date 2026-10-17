@@ -147,11 +147,10 @@ namespace EmuSen.WiseMan.Reference
 
             // A .srm beside an SRAM cartridge would feed a previous run's state into a reference
             // comparison, which is the failure that cost three days of measurements - see §3.55.
-            CoreOptions.BatteryRamDisabled = true;
 
             if (system == "nes")
             {
-                using var core = new MoonRtCore();
+                using var core = new MoonRtCore() { Options = TestCores.NoBattery };
                 core.LoadRom(romPath);
                 var target = core.CreateDebugTarget();
 
@@ -172,7 +171,7 @@ namespace EmuSen.WiseMan.Reference
 
             if (system == "snes")
             {
-                ICore core = CoreFactory.Loaded(romPath);
+                ICore core = CoreFactory.Loaded(romPath, options: TestCores.NoBattery);
                 var target = CoreFactory.Bundle(core).DebugTarget;
 
                 long ran = 0;

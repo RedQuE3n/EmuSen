@@ -22,7 +22,6 @@ namespace EmuSen.WiseMan.Cores
         public const string Engine = "VenusRT (Rust)";
 
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenVenusRtV1_" + Guid.NewGuid().ToString("N"));
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
         private readonly ITestOutputHelper _output;
 
         public VenusRtCoreAbiTests(ITestOutputHelper output)
@@ -32,13 +31,11 @@ namespace EmuSen.WiseMan.Cores
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             FirmwareLibrary.Directory = Path.Combine(_root, "Firmware");
             Directory.CreateDirectory(FirmwareLibrary.Directory);
-            CoreOptions.BatteryRamDisabled = true;
             CoreDiscovery.UseDirectories(null);
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             DataStore.OverrideDirectory = null;
             FirmwareLibrary.ResetDirectory();
             CoreDiscovery.UseDirectories(null);
@@ -92,7 +89,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(Engine, CoreCatalog.EngineChosen("SNES", "Venus (C#)"));
             foreach (string? name in new[] { null, Engine, "Venus (C#)", "Nope" })
             {
-                using var engine = Assert.IsType<CoreEngine>(CoreFactory.Create("game.sfc", engine: name));
+                using var engine = Assert.IsType<CoreEngine>(CoreFactory.Create("game.sfc", engine: name, options: TestCores.NoBattery));
                 Assert.Equal("venusrt", engine.Info.Id);
                 Assert.Null(CoreFactory.EngineNotice("game.sfc", name, engine));
             }
@@ -105,7 +102,7 @@ namespace EmuSen.WiseMan.Cores
             CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "nothing") });
             Assert.Null(CoreCatalog.EngineFor("SNES"));
             Assert.Equal("This build has no SNES core: VenusRT (Rust) is missing (no sidecar for it was found beside the program).",
-                Assert.Throws<NotSupportedException>(() => CoreFactory.Create("game.sfc", engine: Engine)).Message);
+                Assert.Throws<NotSupportedException>(() => CoreFactory.Create("game.sfc", engine: Engine, options: TestCores.NoBattery)).Message);
 
             string dir = Path.Combine(_root, "swapped");
             Directory.CreateDirectory(dir);
@@ -114,7 +111,7 @@ namespace EmuSen.WiseMan.Cores
             File.Copy(CoreSidecar.PathFor(found.Sidecar.LibraryPath), CoreSidecar.PathFor(library));
             CoreDiscovery.UseDirectories(new[] { dir });
             Assert.Null(CoreCatalog.EngineFor("SNES"));
-            string refused = Assert.Throws<NotSupportedException>(() => CoreFactory.Create("game.sfc")).Message;
+            string refused = Assert.Throws<NotSupportedException>(() => CoreFactory.Create("game.sfc", options: TestCores.NoBattery)).Message;
             Assert.StartsWith($"This build has no SNES core: {Engine} is missing (", refused);
             Assert.Contains("its SHA-256 differs", refused);
             Assert.False(CoreLibrary.IsOpen(library));
@@ -129,7 +126,7 @@ namespace EmuSen.WiseMan.Cores
             File.WriteAllBytes(rom, SyntheticRom.BuildNecDsp("SUPER MARIO KART"));
             Assert.Empty(Directory.GetFiles(FirmwareLibrary.Directory).Where(f => f.EndsWith(".rom")));
             Assert.Empty(EmuSen.Common.EmulatorSession.MissingFirmwareFor(rom, Engine));
-            using var engine = new CoreEngine(found.Open()!);
+            using var engine = new CoreEngine(found.Open()!) { Options = TestCores.NoBattery };
             engine.LoadRom(rom);
             Assert.Equal(new[] { new CoreFirmwareSource(1, "replacement"), new CoreFirmwareSource(2, "replacement") }, engine.Machine.Info.Firmware);
             Assert.DoesNotContain(engine.Machine.Info.Processors, p => p.Name == "DSP");
@@ -156,7 +153,7 @@ namespace EmuSen.WiseMan.Cores
             if (Discovered is not { } found) return;
             string rom = Path.Combine(_root, "plain.sfc");
             File.WriteAllBytes(rom, SyntheticRom.BuildNecDsp("PLAIN", cartType: 0x00));
-            using var engine = new CoreEngine(found.Open()!);
+            using var engine = new CoreEngine(found.Open()!) { Options = TestCores.NoBattery };
             var request = engine.GetFirmwareRequirements(rom).Single();
             Assert.Equal(("spc700.rom", 64, false, "accuracy"), (request.FileName, request.Size, request.Required, request.ReplacementEffect));
             engine.LoadRom(rom);
@@ -181,7 +178,7 @@ namespace EmuSen.WiseMan.Cores
             File.WriteAllBytes(rom, SyntheticRom.Build());
             byte[] venusState = new byte[4096];
             "SNES"u8.CopyTo(venusState);
-            using var engine = new CoreEngine(found.Open()!);
+            using var engine = new CoreEngine(found.Open()!) { Options = TestCores.NoBattery };
             engine.LoadRom(rom);
             for (int i = 0; i < 30; i++) engine.RunFrame();
             using var before = new MemoryStream();
@@ -209,12 +206,12 @@ namespace EmuSen.WiseMan.Cores
             string whole = Path.Combine(FirmwareLibrary.Directory, "dsp1.rom");
             int StateSize()
             {
-                using var engine = new CoreEngine(found.Open()!);
+                using var engine = new CoreEngine(found.Open()!) { Options = TestCores.NoBattery };
                 engine.LoadRom(rom);
                 return engine.Machine.StateSize(0);
             }
 
-            var request = new CoreEngine(found.Open()!).GetFirmwareRequirements(rom).Single(r => r.FileName == "dsp1.rom");
+            var request = new CoreEngine(found.Open()!) { Options = TestCores.NoBattery }.GetFirmwareRequirements(rom).Single(r => r.FileName == "dsp1.rom");
             Assert.Equal(8192, request.Size);
             Assert.False(request.Required);
             Assert.Equal("accuracy", request.ReplacementEffect);
@@ -244,7 +241,7 @@ namespace EmuSen.WiseMan.Cores
             if (Discovered is not { } found) return;
             string rom = Path.Combine(_root, "adapter.sfc");
             File.WriteAllBytes(rom, PadToBackdropRom());
-            using var adapter = new CoreEngine(found.Open()!);
+            using var adapter = new CoreEngine(found.Open()!) { Options = TestCores.NoBattery };
             adapter.LoadRom(rom);
             using var shim = new VenusMachine(File.ReadAllBytes(rom));
             Assert.True(Compare(adapter, shim, 240) > 0);
@@ -289,7 +286,7 @@ namespace EmuSen.WiseMan.Cores
             {
                 string rom = Path.Combine(_root, Path.GetFileName(source));
                 File.Copy(source, rom, overwrite: true);
-                using var adapter = new CoreEngine(found.Open()!);
+                using var adapter = new CoreEngine(found.Open()!) { Options = TestCores.NoBattery };
                 adapter.LoadRom(rom);
                 using var shim = new VenusMachine(File.ReadAllBytes(rom), dspFirmware: VenusRtSnesEngine.DspFirmware(rom));
                 int lit = Compare(adapter, shim, 600);

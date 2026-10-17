@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using EmuSen.Audio;
 using EmuSen.Common;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.Endymion;
@@ -97,12 +96,12 @@ namespace EmuSen.WiseMan.Audio
             // authority. This is the assertion the output queue's own reading
             // used to stand in for - see EmuSen_Settings_Reference.md §4.10.
             Assert.True(produced > 0, $"the core produced no audio during recovery; got {report}");
-            Assert.True(shedFraction >= AudioSettings.RateControlMaxDeviation * 0.5,
+            Assert.True(shedFraction >= player.RateControl.MaxDeviation * 0.5,
                 $"rate control should be withholding audio to drain the queue; got {report}");
 
             // And the queue must not be running away while it does - anything
             // near the shedding entry point means the drain never took.
-            Assert.True(player.QueuedFrames < AudioSettings.OutputTargetFrames * player.RateControl.SheddingEntryFactor,
+            Assert.True(player.QueuedFrames < player.RateControl.TargetQueuedFrames * player.RateControl.SheddingEntryFactor,
                 $"output queue climbed toward the shedding end stop; got {report}");
         }
 

@@ -23,8 +23,7 @@ namespace EmuSen.WiseMan.Fixtures
         // To find a sixth, ask "does this class assign a static" - grep answers it, judgement does not.
         // §3.57 is why that is the question.
         //
-        // Not here on purpose: CoreOptions.BatteryRamDisabled. Cartridge latches it at construction and
-        // nothing in the suite ever assigns it false, so concurrent writes are all the same value.
+        // Not here, and no longer a static: --nobattery is a create option (CoreOptions) since 2026-10-17.
         public const string ProcessGlobals = "Process globals";
     }
 

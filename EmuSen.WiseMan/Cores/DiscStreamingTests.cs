@@ -16,19 +16,16 @@ namespace EmuSen.WiseMan.Cores
     public class DiscStreamingTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenDiscStreaming_" + Guid.NewGuid().ToString("N"));
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public DiscStreamingTests()
         {
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             CoreDiscovery.UseDevelopment(false);
-            CoreOptions.BatteryRamDisabled = true;
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             CoreDiscovery.UseDevelopment(null);
             DataStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
@@ -102,7 +99,7 @@ namespace EmuSen.WiseMan.Cores
             var disc = SyntheticPsxDisc.Build();
             string sheet = disc.WriteSet(_root, "Held Set");
             string track = Path.Combine(_root, "Held Set (Track 1).bin");
-            var engine = new CoreEngine(Diamond);
+            var engine = new CoreEngine(Diamond) { Options = TestCores.NoBattery };
             engine.LoadRom(sheet);
             engine.RunFrame();
             Assert.True(Mapped(track), "the track is read where it is while the game runs");
@@ -111,10 +108,10 @@ namespace EmuSen.WiseMan.Cores
 
             string tst = Path.Combine(_root, "plain.tst");
             File.WriteAllBytes(tst, CoreAdapterTests.Image(1, 2, 3));
-            using var plain = new CoreEngine(CoreAdapterTests.Plain);
+            using var plain = new CoreEngine(CoreAdapterTests.Plain) { Options = TestCores.NoBattery };
             plain.LoadRom(tst);
             Assert.False(Mapped(tst), "a core without BORROW has its copy, and the file is let go at once");
-            using var full = new CoreEngine(CoreAdapterTests.Full);
+            using var full = new CoreEngine(CoreAdapterTests.Full) { Options = TestCores.NoBattery };
             full.LoadRom(tst);
             Assert.True(Mapped(tst));
         }
@@ -131,7 +128,7 @@ namespace EmuSen.WiseMan.Cores
             string list = Path.Combine(_root, "Twin.m3u");
             File.WriteAllText(list, "Twin (Disc 1).cue\nTwin (Disc 2).cue\n");
             string first = Path.Combine(_root, "Twin (Disc 1) (Track 1).bin"), second = Path.Combine(_root, "Twin (Disc 2) (Track 1).bin");
-            using var engine = new CoreEngine(Diamond);
+            using var engine = new CoreEngine(Diamond) { Options = TestCores.NoBattery };
             engine.LoadRom(list);
             engine.RunFrame();
             Assert.Equal((true, false), (Mapped(first), Mapped(second)));
@@ -231,7 +228,7 @@ namespace EmuSen.WiseMan.Cores
             bool advises = acted.Companions[0].Advise(0, 1);
             Assert.Equal(advises, Acted(acted));
 
-            using var engine = new CoreEngine(Diamond);
+            using var engine = new CoreEngine(Diamond) { Options = TestCores.NoBattery };
             engine.LoadRom(sheet);
             for (int f = 0; f < 600; f++) engine.RunFrame();
             var held = Assert.IsType<DiscFiles>(engine.Machine.LoanOf(0));

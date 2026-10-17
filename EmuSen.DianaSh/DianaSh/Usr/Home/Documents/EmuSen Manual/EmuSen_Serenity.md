@@ -7,7 +7,8 @@ How a core's finished frame gets on screen. Core-agnostic: nothing in this proje
 | `GameFrameControl` | `EmuSen.Serenity/GameFrameControl.cs` | Avalonia, Skia, and a pixel buffer |
 | `ShaderEffect` / `FramePresenter` | `EmuSen.Serenity/FramePresenter.cs` | a `Window` and the control above |
 | `BuiltInShaders` | `EmuSen.Serenity/Shaders/BuiltInShaders.cs` | nothing — two SkSL strings |
-| `GraphicsSettings` | `EmuSen.Serenity/GraphicsSettings.cs` | `Galaxia.Models.GraphicsConfig` |
+| `FrameScheduler` / `PacingDecision` *(since 2026-10-17)* | `EmuSen.Serenity/FrameScheduler.cs` | `DisplayClock`'s readings |
+| ~~`GraphicsSettings`~~ *(deleted 2026-10-17, §5)* | — | — |
 
 ---
 
@@ -230,7 +231,7 @@ compositor's order of rendering and disposing was not instrumented; the rules do
 - **v1 engines** (`CoreEngine`): the frame's own `AspectNum`/`AspectDen` when the core fills them, else its machine information's, else 0. VenusRT and MoonRT fill the frame's with 4:3 and MercuryRT with 10:9; Nephrite gives 4:3 in its machine information only, which is what the fall-back is for.
 - **The C# cores and the MarsRT shim** returned a constant: `DisplayShape.Television` (4:3) for Venus, Moon, Mars and MarsRT, `DisplayShape.GameBoy` (10:9, the LCD's 160 × 144 square pixels) for Mercury. With the C# cores deleted, the shims of MoonRT, MarsRT and MercuryRT return the same constants (`MoonRtCore.cs:45`, `MarsRtCore.cs:81`, `MercuryRtCore.cs:117`), the Game Boy's for MercuryRT.
 - The constant is right in every mode because the mode changes the frame and not the screen: the SNES's 512-wide and interlaced frames, the Genesis's 256 and 320 widths, and the N64's VI widths and its PAL field all scan the same tube.
-- `DisplayShape` holds the two constants, and **the CRT filter's tube is the same one** (`CrtFilter.Filter.Aspect` is `DisplayShape.Television`), so the filter and the unfiltered picture cannot disagree about a television's shape. It was Serenity's until 2026-10-17 and is now the systems table's, `EmuSen.Crystal/Systems/DisplayShape.cs`, which both the cores and Serenity reference, so that the core assembly no longer references the presentation layer for two constants (`EmuSen_Surfaces.md` §4.2, §7 S1); the PlayStation pack's `PsxSystem.DisplayAspect` is defined as `DisplayShape.Television`, so the shape has one owner.
+- `DisplayShape` holds the two constants, and **the CRT filter's tube is the same one** (`CrtFilter.Filter.Aspect` is `DisplayShape.Television`), so the filter and the unfiltered picture cannot disagree about a television's shape. It was Serenity's until 2026-10-17 and is now `EmuSen.Crystal/DisplayShape.cs`, in Crystal's assembly, which both the cores and Serenity reference, so that the core assembly no longer references the presentation layer for two constants (`EmuSen_Surfaces.md` §4.2, §7.1). It is not the systems table's: the shape's owner is the core's machine info, per frame (`EmuSen_Backend.md` §5.3, F26), and the constants stay only for what the shims answer before a machine exists and for the filter's tube, until the shims retire (B4 there).
 
 **How it reaches the screen.** `GameFrameControl.UpdateFrame` takes the shape with the frame (`aspect`, 0 for none), and each offered frame keeps its own. The rectangle is decided in one place, `DrawOp.Destination`:
 
@@ -609,6 +610,13 @@ It was found by generalising the mechanism into a toolkit rather than by anythin
 ---
 
 ## 5. `GraphicsSettings`
+
+*Deleted 2026-10-17 (`EmuSen_Surfaces.md` §7 S3).* The presentation layer reads no settings static: `GameFrameControl`
+has `BilinearFiltering` and `SyncToDisplay` properties, the second a volatile field because the frontend's emulation
+thread reads it each frame, and `FramePresenter` forwards those two and the window's `WindowTitle`, `WindowWidth`,
+`WindowHeight` and `WindowResizable`. The frontend sets them from `GraphicsConfig`. This keeps `EmuSen_Multicore.md`
+§9's rule for a device layer, "every knob is a parameter", which Serenity had broken. The rest of this section is the
+class as it was.
 
 Window size, title, vsync, target frame rate and texture filtering, mapped to and from `etc/EmuSen/graphics.json`. **Every field is documented in `EmuSen_Settings_Reference.md` §3**, including which are wired to nothing and which three were dropped with the Raylib overlay; `EmuSen_Config_Reference.md` §3.3 covers the file, the clamping and the first-run seeding.
 

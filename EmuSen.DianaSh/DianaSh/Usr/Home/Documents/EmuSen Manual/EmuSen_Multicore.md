@@ -122,6 +122,19 @@ This is the pattern for any future switch that is a *property of the run* rather
 
 **"Before `LoadRom`" is now enforced rather than assumed.** Mercury and Moon always honoured it — each reads the flag once in `LoadSram()` during `LoadRom` and latches the result. Venus did not: it re-read the static on every save and every load, so a switch flipped after a cartridge existed still reached it. `Cartridge` now takes a copy at construction, with an optional `bool? batteryRamDisabled` parameter for a caller that wants to name the value instead of inheriting it. Nothing in the project assigns the switch after a cartridge exists, so this changes no behaviour any frontend can observe — what it changes is that a *second* run in the same process can no longer disturb the first, which is what let the test suite stop serializing every cartridge test. `EmuSen_Debugging_Tools_Reference_v5.md` §3.56 has the measurement and the guard test.
 
+### 6.1 A create option, not a static (2026-10-17)
+
+`EmuSen_Surfaces.md` §7 S3 finished what the latch began: `CoreOptions` is no longer a static class but an immutable
+record of what a frontend decides about a core **when it makes it**, `BatteryRamDisabled` and, since the same step,
+`AudioBufferMaxSamples`, which the deleted `AudioSettings` used to carry. A core holds its own (`CoreEngine.Options`,
+set before `LoadRom`), `CoreFactory`'s `Create`, `Load`, `Loaded`, `CreateConsole` and `LoadConsole` take one, and
+`EmulatorSession.Options` hands it to every core the session makes. "Before `LoadRom`" is now a property of the object
+rather than a rule about when a global is written: two cores in one process can run with different switches, which is
+what a session holding its own settings needs (`EmuSen_CoreAPI.md` §8.2). Pharaoh's `--nobattery` and `--testroms`
+make their cores with it; Mistress and Hotaru make theirs with `audio.json`'s limit (`CoreOptions.From`); the test
+suite's cores take `TestCores.NoBattery` where a class used to set the static. MarsRT's constructor parameter
+`batteryRamDisabled` went with the static, since the option says the same thing once.
+
 ---
 
 ## 7. What is still core-specific, on purpose
@@ -155,7 +168,7 @@ Three assemblies sit below everything else and are **not allowed to know a core 
 
 Serenity is the model the others were held to. Its contract is `UpdateFrame(byte[] rgba, int width, int height)` — payload plus the metadata to read it, and nothing else. Endymion's `Submit(short[] pcm, int sampleRate)` is the same contract for audio.
 
-The rule that keeps them leaves: **a device layer is handed what it needs and reaches for nothing.** Not a core, not a session wrapper, not a global settings static. Every knob is a parameter. That is why `AudioPlayer` takes its sample rate, latency target and deviation band as constructor arguments instead of reading `AudioSettings`, which lives in `EmuSen` because the Venus DSP needs it.
+The rule that keeps them leaves: **a device layer is handed what it needs and reaches for nothing.** Not a core, not a session wrapper, not a global settings static. Every knob is a parameter. That is why `AudioPlayer` takes its sample rate, latency target and deviation band as constructor arguments instead of reading `AudioSettings`, which lived in `EmuSen` because the Venus DSP needed it (deleted 2026-10-17; the frontends read `audio.json` themselves, §6.1). Serenity keeps the rule too since that date: `GameFrameControl` takes its filtering and display sync as properties (`EmuSen_Serenity.md` §5).
 
 `EmuSen.WiseMan/Common/LeafAssemblyTests.cs` asserts each of these reference sets against the actual compiled metadata. What it catches is a leaf *using* a type from the core assembly; what it does not catch is an unused `ProjectReference` sitting in a `.csproj`, because the compiler drops references nothing consumes.
 
@@ -214,7 +227,7 @@ Both directories were removed on 2026-08-09 after confirming they contained no h
 assembly, references `EmuSen.Crystal` and `EmuSen.Galaxia` and nothing else, and `LeafAssemblyTests` pins that set.
 Until then it referenced Serenity for the pacer, two display-shape constants, the device lend and the raw picture, so
 that every headless consumer of the cores, Pharaoh first, took Avalonia with it. The pacer is Serenity's now, the
-shapes the systems table's, and the lend and the raw picture cross in forms the core assembly owns, which a frontend
+two display-shape constants Crystal's (the shape itself is the core's machine info's), and the lend and the raw picture cross in forms the core assembly owns, which a frontend
 converts. The rule mirrors §9's own from the other side: a leaf is not allowed to know a core exists, and a core is
 not allowed to know a window does.
 

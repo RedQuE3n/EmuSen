@@ -2,6 +2,8 @@
 
 Covers three static, plain-field "central hub" classes the rest of the codebase reads instead of hardcoding constants or scattering `Console.WriteLine` gates through individual files: `DebugSettings.cs` and `AudioSettings.cs` (both `EmuSen/Settings/`), and `GraphicsSettings.cs`, which lives in `EmuSen.Serenity/` instead — it moved there alongside `FramePresenter`/`BuiltInShaders` since it's presentation-layer config any frontend can share, not something coupled to the emulation core the way `DebugSettings`/`AudioSettings` are. Same reorganization as `Man pages/Hardware/` (see that folder's `README.md` for the full rationale): the long inline WHY-comments that used to live next to each flag now live here, and code comments stay short.
 
+*Revised 2026-10-17 (`EmuSen_Surfaces.md` §7 S3, built as step B0 of `EmuSen_Backend.md`): `AudioSettings` and `GraphicsSettings` are deleted. Their keys stay in `audio.json` and `graphics.json`, read through Galaxia's `AudioConfig` and `GraphicsConfig`; each consumer is handed the values it needs, as §2 and §3 now say. `DebugSettings` remains a static class until `EmuSen_DianaSh.md` decides it (§6.3 item 5 of the Surfaces page).*
+
 Unlike `Man pages/Hardware/`, these aren't hardware-abstraction notes — none of `DebugSettings`/`AudioSettings`/`GraphicsSettings` model real SNES hardware; they're this emulator's own configuration surface. That's why this page sits directly under `Man pages/` rather than under `Hardware/`.
 
 ---
@@ -58,6 +60,13 @@ These flags predate — and still coexist with — the core-agnostic `DianaSh/` 
 
 ## 2. `AudioSettings.cs` — audio output configuration
 
+*Deleted 2026-10-17.* What follows describes each key of `audio.json`, which the class mirrored. Since then the frontends
+read the file once at start (`AudioConfig.Load().Bounded()`, which holds every value within the ranges `LoadFromDisk`
+clamped to) and hand `SampleRate`, `OutputTargetLatencyMs` and `RateControlMaxDeviation` to `AudioPlayer`, and
+`AudioBufferMaxSamples` to the cores as a create option (`CoreOptions.From(audio)`). Pharaoh, which never loaded the
+file, keeps the default limit. `MasterVolume`, `Muted` and `AudioEnabled` were read by nothing once C# Venus was
+deleted; they stay in the file and in `AudioConfig`. The first run's seed is `AudioConfig.SeedIfMissing()`.
+
 `SDsp.cs` generates real audio (BRR-decoded voices, ADSR/GAIN envelopes, MVOL-scaled mixing — see `Venus_APU.md` §§3-5), though echo/noise/pitch-modulation aren't implemented yet. Both `EmuSen.Hotaru` and `EmuSen.Mistress` play `AudioBuffer`'s contents to a real output device via their own `Audio/AudioPlayer.cs` (SDL's queue-based API, no callback) — these settings configure both generation and the buffer that sits between generation and playback.
 
 - **`SampleRate`** (default 32000 Hz) — the DSP output rate. A real hardware fact, not a preference, but named here rather than left as a bare `32000` (or the derived "32 cycles per sample" at the SPC700's ~1.024MHz clock) scattered inside `SDsp.cs`.
@@ -76,6 +85,15 @@ These flags predate — and still coexist with — the core-agnostic `DianaSh/` 
 ---
 
 ## 3. `GraphicsSettings.cs` — display/presentation configuration
+
+*Deleted 2026-10-17.* The keys below are `graphics.json`'s. The presenter takes them as properties the frontend sets
+from `GraphicsConfig`: `GameFrameControl.BilinearFiltering` and `GameFrameControl.SyncToDisplay`, and on
+`FramePresenter` the window's title, size and resizing as well. Hotaru's window reads `GraphicsConfig.WindowSize()`
+(the clamp to 256–16384 by 224–16384 that `LoadFromDisk` applied) and `WindowResizable`; its title is the window's
+own, "EmuSen", which is all `WindowTitle` ever held. `TargetFps` and `VSyncEnabled`, read by nothing, stay as keys in
+the file and lose their static fields (`EmuSen_Surfaces.md` §8 Q6). `SyncToDisplay` has one owner at run time, the
+picture's control: Mistress sets it from `graphics.json` at start and again when Preferences turns it, and its
+emulation thread reads it there each frame, through a volatile field (§4.87.7).
 
 Window size, title, vsync, target frame rate, and texture filtering. **None of this affects emulation correctness** — that's `DebugSettings`'s domain. This is purely "how the output window looks." Lives in `EmuSen.Serenity/GraphicsSettings.cs` (namespace stays `EmuSen.Graphics`) and feeds `EmuSen.Hotaru`'s `GameWindow` (`Title`/`Width`/`Height`/`CanResize`) and `GameFrameControl`'s `BilinearFiltering`-driven `SKSamplingOptions` — Avalonia/Skia now, not Raylib. See `EmuSen_Frontend_Driver.md`'s own top-of-file revision note for the Raylib→Avalonia migration this doc reflects.
 
@@ -7566,7 +7584,10 @@ the render tick drifts against the vblank. `Margin` is a property for that measu
 
 **Preferences, Gameplay, Smooth Motion: "Sync to display"**, on by default. It is stored as `SyncToDisplay` in
 `graphics.json`, beside `VSyncEnabled` and `BilinearFiltering`, and read each frame, so it takes effect while a game
-runs. Hotaru reads the same value. In big picture it is a row of the Gameplay menu, and the fit audit passes on that
+runs. Hotaru reads the same value. *Since 2026-10-17* the value read each frame is `GameFrameControl.SyncToDisplay`, a
+volatile field the frontend sets from `graphics.json` at start and, in Mistress, again when the switch turns
+(`PreferencesWindow.SyncToDisplayChanged`): the UI thread writes it and the emulation thread reads it, and the static
+`GraphicsSettings.SyncToDisplay`, which the switch had to write by hand beside the file, is gone. In big picture it is a row of the Gameplay menu, and the fit audit passes on that
 menu at 1280 by 800 and 1920 by 1200.
 
 The frame rate's tooltip ends with the pacing in use, and the `[fps]` log line carries it too:

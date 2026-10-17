@@ -15,19 +15,16 @@ namespace EmuSen.WiseMan.Cores
     public class MoonRtCoreAbiTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenMoonRtV1_" + Guid.NewGuid().ToString("N"));
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public MoonRtCoreAbiTests()
         {
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreOptions.BatteryRamDisabled = true;
             CoreDiscovery.UseDirectories(null);
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             DataStore.OverrideDirectory = null;
             CoreDiscovery.UseDirectories(null);
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
@@ -55,7 +52,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(CoreCatalog.IsRegisteredEngine(CoreCatalog.MoonRtEngine));
             foreach (string? engine in new[] { null, CoreCatalog.MoonRtEngine })
             {
-                ICore core = CoreFactory.Create("game.nes", engine: engine);
+                ICore core = CoreFactory.Create("game.nes", engine: engine, options: TestCores.NoBattery);
                 Assert.IsType<MoonRtCore>(core);
                 Assert.Null(CoreFactory.EngineNotice("game.nes", engine, core));
                 ((IDisposable)core).Dispose();
@@ -67,8 +64,8 @@ namespace EmuSen.WiseMan.Cores
         {
             string rom = Path.Combine(_root, "busy.nes");
             File.WriteAllBytes(rom, MoonPrograms.Rom(4, 8, (0, MoonPrograms.Busy)));
-            using var shim = new MoonRtCore();
-            using var adapter = new CoreEngine(Discovered.Open()!);
+            using var shim = new MoonRtCore() { Options = TestCores.NoBattery };
+            using var adapter = new CoreEngine(Discovered.Open()!) { Options = TestCores.NoBattery };
             shim.LoadRom(rom);
             adapter.LoadRom(rom);
             Assert.Equal((shim.ScreenWidth, shim.ScreenHeight, shim.StateVersion), (adapter.ScreenWidth, adapter.ScreenHeight, adapter.StateVersion));

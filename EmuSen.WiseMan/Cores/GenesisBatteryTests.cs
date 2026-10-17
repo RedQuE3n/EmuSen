@@ -11,7 +11,6 @@ namespace EmuSen.WiseMan.Cores
     public class GenesisBatteryTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenGenesisBattery_" + Guid.NewGuid().ToString("N"));
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
         private readonly ITestOutputHelper _output;
 
         public GenesisBatteryTests(ITestOutputHelper output)
@@ -20,12 +19,10 @@ namespace EmuSen.WiseMan.Cores
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             CoreDiscovery.UseDevelopment(false);
-            CoreOptions.BatteryRamDisabled = false;
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             CoreDiscovery.UseDevelopment(null);
             DataStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
@@ -46,7 +43,7 @@ namespace EmuSen.WiseMan.Cores
             return rom;
         }
 
-        private static CoreEngine Load(string rom) => Assert.IsType<CoreEngine>(CoreFactory.Load(rom).Core);
+        private static CoreEngine Load(string rom, CoreOptions? options = null) => Assert.IsType<CoreEngine>(CoreFactory.Load(rom, options: options).Core);
 
         private static byte[] Space(CoreEngine core, int length) => Enumerable.Range(0, length).Select(i => core.ReadSpace("SRAM", i)).ToArray();
 
@@ -153,8 +150,7 @@ namespace EmuSen.WiseMan.Cores
             string path = SaveLibrary.SramPathFor(rom, BatterySave.Genesis);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllBytes(path, Enumerable.Repeat((byte)0x42, 512).ToArray());
-            CoreOptions.BatteryRamDisabled = true;
-            using var core = Load(rom);
+            using var core = Load(rom, TestCores.NoBattery);
             Assert.DoesNotContain(Space(core, 512), b => b == 0x42);
             core.WriteSpace("SRAM", 0, 0x99);
             core.SaveSram();

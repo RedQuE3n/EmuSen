@@ -20,9 +20,8 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Rendering_returns_oamaddr_to_zero()
         {
-            CoreOptions.BatteryRamDisabled = true;
             string path = SyntheticNesRom.WriteTemp(SyntheticNesRom.Build(mapper: 0));
-            using var core = new MoonRtCore();
+            using var core = new MoonRtCore() { Options = TestCores.NoBattery };
             core.LoadRom(path);
             File.Delete(path);
             core.WriteSpace("CPUBUS", 0x2003, 0x05);
@@ -41,7 +40,6 @@ namespace EmuSen.WiseMan.Cores
                 _output.WriteLine($"{MoonGoldenTests.CorpusVariable} unset, not run");
                 return;
             }
-            CoreOptions.BatteryRamDisabled = true;
             string[] roms =
             {
                 "ppu_vbl_nmi/rom_singles/05-nmi_timing.nes", "ppu_vbl_nmi/rom_singles/06-suppression.nes",

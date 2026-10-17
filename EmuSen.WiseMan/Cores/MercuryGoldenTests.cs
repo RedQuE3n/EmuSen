@@ -28,7 +28,7 @@ namespace EmuSen.WiseMan.Cores
         public MercuryGoldenTests(ITestOutputHelper output)
         {
             _output = output;
-            CoreOptions.BatteryRamDisabled = true;
+
         }
 
         // The synthetic programs, run by frames: busy and interrupts on every board, HDMA halting and running, four channels, and the small lock-step programs.

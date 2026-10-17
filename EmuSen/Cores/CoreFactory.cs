@@ -29,13 +29,13 @@ namespace EmuSen.Cores
         public static bool IsSupported(string romPath) => CoreCatalog.IsImageExtension(Extension(romPath));
 
         // <headless> only means anything to a core that owns a window-ish resource; <engine> is a CoreCatalog.EngineFor name, and null is the reference core, not the player's default - see EmuSen_Settings_Reference.md §4.44.
-        public static ICore Create(string romPath, bool headless = true, string? engine = null) =>
-            V1Library(romPath, engine) is { } v1 ? new Native.CoreEngine(v1, StoredSettings(romPath, v1)) { Media = StoredMedia(romPath, v1) } : Extension(romPath) switch
+        public static ICore Create(string romPath, bool headless = true, string? engine = null, CoreOptions? options = null) =>
+            V1Library(romPath, engine) is { } v1 ? new Native.CoreEngine(v1, StoredSettings(romPath, v1)) { Media = StoredMedia(romPath, v1), Options = options ?? CoreOptions.Default } : Extension(romPath) switch
         {
             ".smc" or ".sfc" => throw Missing("SNES", CoreCatalog.VenusRtEngine),
-            ".nes" => Nes(),
-            ".gb" or ".gbc" => GameBoy(),
-            ".z64" or ".n64" or ".v64" => MarsRtCore.Available ? new MarsRtCore(expansionPak: true) { Media = StoredMedia(romPath, MarsNative.Library.Library!) }
+            ".nes" => Nes(options ?? CoreOptions.Default),
+            ".gb" or ".gbc" => GameBoy(options ?? CoreOptions.Default),
+            ".z64" or ".n64" or ".v64" => MarsRtCore.Available ? new MarsRtCore(expansionPak: true) { Media = StoredMedia(romPath, MarsNative.Library.Library!), Options = options ?? CoreOptions.Default }
                 : throw new NotSupportedException($"The N64 core is not in this build ({MarsNative.Report})."),
             var other => throw new NotSupportedException(
                 $"No core in this build handles '{other}' - see CoreCatalog for what is registered."),
@@ -46,11 +46,11 @@ namespace EmuSen.Cores
             new($"This build has no {console} core: {engine} is missing ({Native.CoreDiscovery.ByEngineName(engine)?.Report ?? "no sidecar for it was found beside the program"}).");
 
         // MoonRT, the NES's one engine; a build without its library says so rather than running nothing - see Moon_Native.md §9.5.
-        private static ICore Nes() => MoonRtCore.Available ? new MoonRtCore()
+        private static ICore Nes(CoreOptions options) => MoonRtCore.Available ? new MoonRtCore { Options = options }
             : throw new NotSupportedException($"This build has no NES core: {CoreCatalog.MoonRtEngine} is missing ({MoonNative.Report}).");
 
         // MercuryRT, the Game Boy's one engine; a build without its library says so rather than running nothing - see Mercury_Native.md §15.4.
-        private static ICore GameBoy() => MercuryRtCore.Available ? new MercuryRtCore()
+        private static ICore GameBoy(CoreOptions options) => MercuryRtCore.Available ? new MercuryRtCore { Options = options }
             : throw new NotSupportedException($"This build has no Game Boy core: {CoreCatalog.MercuryRtEngine} is missing ({MercuryNative.Report}).");
 
         // What graphics.json holds for the console the file runs as, so a setting read only at create reaches the machine - see EmuSen_Settings_Reference.md §4.90.
@@ -91,7 +91,7 @@ namespace EmuSen.Cores
         }
 
         // A console started with nothing in it, on the engine asked for where it starts the console empty, else the first that does - see Diamond_Shell.md §1.5.
-        public static ICore CreateConsole(string console, string? engine = null, Func<IDeviceLend?>? lender = null)
+        public static ICore CreateConsole(string console, string? engine = null, Func<IDeviceLend?>? lender = null, CoreOptions? options = null)
         {
             var start = CoreCatalog.EmptyStartFor(console) ?? throw new NotSupportedException($"No core in this build starts the {console} with nothing in it.");
             bool Starts(Native.DiscoveredCore c) => c.Info.Systems.Any(s => s.Id == start.SystemId && s.StartsEmpty);
@@ -102,28 +102,28 @@ namespace EmuSen.Cores
             var settings = library.Settings.Select(s => (s.Key, Value: config.Value(console, s.Key))).Where(p => p.Value is not null).ToDictionary(p => p.Key, p => p.Value!);
             var system = library.Info.Systems.First(s => s.Id == start.SystemId);
             var media = MemoryCards.Stored(MemoryCards.MediaOf(console, system), key => config.Value(console, key));
-            var engineCore = new Native.CoreEngine(library, settings) { Media = media, DeviceLender = lender };
+            var engineCore = new Native.CoreEngine(library, settings) { Media = media, DeviceLender = lender, Options = options ?? CoreOptions.Default };
             engineCore.StartConsole(start.SystemId);
             return engineCore;
         }
 
         // CreateConsole with its debugger and cheat codecs, as Load gives a game's.
-        public static CoreBundle LoadConsole(string console, CheatRegistry? cheats = null, string? engine = null, Func<IDeviceLend?>? lender = null) =>
-            Bundle(CreateConsole(console, engine, lender), cheats);
+        public static CoreBundle LoadConsole(string console, CheatRegistry? cheats = null, string? engine = null, Func<IDeviceLend?>? lender = null, CoreOptions? options = null) =>
+            Bundle(CreateConsole(console, engine, lender, options), cheats);
 
         // Loads the ROM too, because a debug target needs the core's hardware to already exist.
         public static CoreBundle Load(string romPath, bool headless = true, CheatRegistry? cheats = null,
-            string? engine = null, Func<IDeviceLend?>? lender = null)
+            string? engine = null, Func<IDeviceLend?>? lender = null, CoreOptions? options = null)
         {
-            ICore core = Loaded(romPath, headless, engine, lender);
+            ICore core = Loaded(romPath, headless, engine, lender, options);
             return Bundle(core, cheats) with { Notice = EngineNotice(romPath, engine, core) };
         }
 
         // The core made and the file loaded into it, Load without its wiring, for a caller that loads off its own thread.
         // lender is asked for the device to lend a core whose picture can lie on it - see EmuSen_DevicePicture.md §17.
-        public static ICore Loaded(string romPath, bool headless = true, string? engine = null, Func<IDeviceLend?>? lender = null)
+        public static ICore Loaded(string romPath, bool headless = true, string? engine = null, Func<IDeviceLend?>? lender = null, CoreOptions? options = null)
         {
-            ICore core = Create(romPath, headless, engine);
+            ICore core = Create(romPath, headless, engine, options);
             if (core is IDevicePicture picture) picture.DeviceLender = lender;
             LoadInto(core, romPath);
             return core;

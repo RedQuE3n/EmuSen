@@ -132,7 +132,7 @@ namespace EmuSen.WiseMan.Mistress
 
         private MarsRtCore Load(string path)
         {
-            var core = new MarsRtCore(batteryRamDisabled: true);
+            var core = new MarsRtCore() { Options = TestCores.NoBattery };
             core.LoadRom(_romPath);
             core.LoadState(path);
             return core;

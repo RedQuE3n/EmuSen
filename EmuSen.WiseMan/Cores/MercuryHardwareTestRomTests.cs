@@ -52,7 +52,6 @@ namespace EmuSen.WiseMan.Cores
                 return;
             }
 
-            CoreOptions.BatteryRamDisabled = true;
             var verdicts = new ConcurrentDictionary<string, (string Rom, string Sha, string Verdict, int Frame)>();
             Parallel.ForEach(roms, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 4) }, path =>
             {

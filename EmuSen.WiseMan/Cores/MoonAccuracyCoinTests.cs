@@ -54,8 +54,7 @@ namespace EmuSen.WiseMan.Cores
                 return;
             }
             Assert.True(MoonRtCore.Available, "MoonRT is not built");
-            CoreOptions.BatteryRamDisabled = true;
-            using var core = new MoonRtCore();
+            using var core = new MoonRtCore() { Options = TestCores.NoBattery };
             core.LoadRom(path);
             var run = AccuracyCoinRun.Run(core.RunFrame, a => core.ReadSpace("RAM", a), down => core.SetButton(0, PadButton.Start, down));
             _output.WriteLine($"menu at frame {run.MenuFrame}, table at {run.TableFrame}: {run.PassedTally} of {run.Tested} passed");

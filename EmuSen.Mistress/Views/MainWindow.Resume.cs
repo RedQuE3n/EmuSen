@@ -61,7 +61,8 @@ namespace EmuSen.Mistress.Views
             if (!EmuSen.Cores.CoreFactory.RunsOnV1Engine(path, engine)) return null;
             // The default load is lent the device the picture is presented on; a test's own loader is run as it is given.
             Func<EmuSen.Cores.IDeviceLend?> lender = LendDevice;
-            return ReferenceEquals(load, DefaultEarlyLoader) ? Task.Run(() => EmuSen.Cores.CoreFactory.Loaded(path, headless: true, engine, lender)) : Task.Run(() => load(path, engine));
+            EmuSen.Cores.CoreOptions options = CoreOptions;
+            return ReferenceEquals(load, DefaultEarlyLoader) ? Task.Run(() => EmuSen.Cores.CoreFactory.Loaded(path, headless: true, engine, lender, options)) : Task.Run(() => load(path, engine));
         }
 
         // What loads a game's core under the launch screen; a test gives one it can hold back, or none where its clock is stepped.

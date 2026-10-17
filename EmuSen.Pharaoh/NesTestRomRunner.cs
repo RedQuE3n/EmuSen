@@ -14,7 +14,8 @@ namespace EmuSen.Pharaoh
         {
             string name = Path.GetFileNameWithoutExtension(romPath);
             if (!MoonRtCore.Available) return new NesTestRomResult(name, NesTestRomOutcome.Error, -1, $"the NES core is missing: {MoonNative.Report}", 0, 0);
-            using var core = new MoonRtCore();
+            // Third-party ROMs are read-only fixtures; nothing here should leave an .srm beside them.
+            using var core = new MoonRtCore { Options = new CoreOptions { BatteryRamDisabled = true } };
             try
             {
                 core.LoadRom(romPath);

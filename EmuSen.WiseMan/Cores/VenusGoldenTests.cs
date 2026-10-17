@@ -37,7 +37,6 @@ namespace EmuSen.WiseMan.Cores
         public VenusGoldenTests(ITestOutputHelper output)
         {
             _output = output;
-            CoreOptions.BatteryRamDisabled = true;
             FirmwareLibrary.Directory = VenusGolden.NoFirmware;
             CoreDiscovery.UseDirectories(null);
         }

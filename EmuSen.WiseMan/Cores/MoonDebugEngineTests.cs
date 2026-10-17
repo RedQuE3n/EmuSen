@@ -31,7 +31,7 @@ namespace EmuSen.WiseMan.Cores
         public static NesDebugRig Load(string engine, string path, CheatRegistry? cheats = null)
         {
             Assert.True(MoonRtCore.Available, MoonNative.Report);
-            CoreBundle bundle = CoreFactory.Load(path, cheats: cheats);
+            CoreBundle bundle = CoreFactory.Load(path, cheats: cheats, options: TestCores.NoBattery);
             Assert.IsType<MoonRtCore>(bundle.Core);
             return new NesDebugRig(bundle.Core, bundle.DebugTarget);
         }
@@ -66,7 +66,7 @@ namespace EmuSen.WiseMan.Cores
         public MoonDebugEngineTests(ITestOutputHelper output)
         {
             _output = output;
-            CoreOptions.BatteryRamDisabled = true;
+
         }
 
         public void Dispose()
@@ -283,7 +283,6 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_bench_games_armed_run_as_they_run_plain()
         {
-            CoreOptions.BatteryRamDisabled = true;
             var runs = MoonGoldenTests.Games.Take(4).Select(g => MoonGoldenTests.Game(g.Sha)).OfType<byte[]>().ToList();
             if (runs.Count == 0)
             {
@@ -293,8 +292,8 @@ namespace EmuSen.WiseMan.Cores
             foreach (byte[] image in runs)
             {
                 string rom = SyntheticNesRom.WriteTemp(image);
-                using var plain = new MoonRtCore();
-                using var armed = new MoonRtCore();
+                using var plain = new MoonRtCore() { Options = TestCores.NoBattery };
+                using var armed = new MoonRtCore() { Options = TestCores.NoBattery };
                 plain.LoadRom(rom);
                 armed.LoadRom(rom);
                 File.Delete(rom);

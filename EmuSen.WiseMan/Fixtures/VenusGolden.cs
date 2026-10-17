@@ -94,8 +94,7 @@ namespace EmuSen.WiseMan.Fixtures
                 RecordedBy = "VenusRT",
                 Unit = run.Corpus ? "chain" : "frame",
             };
-            CoreOptions.BatteryRamDisabled = true;
-            using var core = new CoreEngine(Discovered!.Open()!);
+            using var core = new CoreEngine(Discovered!.Open()!) { Options = TestCores.NoBattery };
             core.LoadRom(RomFile(rom, run.CorpusPath));
             core.SkipRendering = run.SkipRendering;
             if (resumeFrom is not null) core.LoadState(new MemoryStream(resumeFrom, writable: false));
@@ -197,7 +196,7 @@ namespace EmuSen.WiseMan.Fixtures
         // The machine's state layout for an image, for naming the field a bisection finds.
         public static string Layout(byte[] rom)
         {
-            using var core = new CoreEngine(Discovered!.Open()!);
+            using var core = new CoreEngine(Discovered!.Open()!) { Options = TestCores.NoBattery };
             core.LoadRom(RomFile(rom, null));
             return core.Machine.Layout();
         }

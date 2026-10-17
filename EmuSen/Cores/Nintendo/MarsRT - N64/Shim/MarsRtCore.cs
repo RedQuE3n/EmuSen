@@ -35,17 +35,15 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private const int ExpandedRdram = 8 * 1024 * 1024;
         private const int NotARom = -9;
 
-        private readonly bool? _batteryRamDisabled;
         private bool _booting;
 
         public static bool Available => MarsNative.Available;
 
-        // A stock console unless asked; null defers to --nobattery.
-        public MarsRtCore(bool expansionPak = false, bool? batteryRamDisabled = null)
+        // A stock console unless asked.
+        public MarsRtCore(bool expansionPak = false)
             : base(MarsNative.Library.Library ?? throw new InvalidOperationException($"MarsRT is not in use: {MarsNative.Report}"),
                 new Dictionary<string, string> { [Key.ExpansionPak] = expansionPak ? "true" : "false" })
         {
-            _batteryRamDisabled = batteryRamDisabled;
             WireRegistries();
         }
 
@@ -78,7 +76,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         public override int ScreenWidth => IsRomLoaded ? base.ScreenWidth : N64Console.ScreenWidthPixels;
         public override int ScreenHeight => IsRomLoaded ? base.ScreenHeight : N64Console.DefaultScreenHeight;
         // The screen's shape: a television's 4:3 at every VI width and in PAL - see EmuSen_Serenity.md §2.9.
-        public override double DisplayAspect => EmuSen.Crystal.Systems.DisplayShape.Television;
+        public override double DisplayAspect => EmuSen.Crystal.DisplayShape.Television;
 
         public int DisplayLines => N64Console.LinesOf(ScreenWidth, ScreenHeight);
 
@@ -316,7 +314,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
 
         // The game's save chip and first pak; none while booting as the corpus boots.
         protected override BatterySave BatteryFile(string path, string console, uint which, string suffix) =>
-            _booting ? BatterySave.None : BatterySave.Open(path, BatterySave.N64, disabled: _batteryRamDisabled, extension: suffix);
+            _booting ? BatterySave.None : BatterySave.Open(path, BatterySave.N64, disabled: Options.BatteryRamDisabled, extension: suffix);
 
         public override void LoadRom(string path)
         {

@@ -11,7 +11,6 @@ namespace EmuSen.WiseMan.Cores
     public class NephriteMediaTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenNephriteMedia_" + Guid.NewGuid().ToString("N"));
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public NephriteMediaTests()
         {
@@ -19,12 +18,10 @@ namespace EmuSen.WiseMan.Cores
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             CoreDiscovery.UseDevelopment(true);
-            CoreOptions.BatteryRamDisabled = false;
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             CoreDiscovery.UseDevelopment(null);
             DataStore.OverrideDirectory = null;
             ConfigStore.OverrideDirectory = null;

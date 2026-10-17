@@ -50,7 +50,7 @@ namespace EmuSen.WiseMan.Cores
         private MarsRtCore Started(string path, bool expansionPak = false)
         {
             Assert.True(MarsRtCore.Available, MarsNative.Report);
-            var core = new MarsRtCore(expansionPak, batteryRamDisabled: true);
+            var core = new MarsRtCore(expansionPak) { Options = TestCores.NoBattery };
             _cores.Add(core);
             core.LoadRom(path);
             return core;

@@ -34,7 +34,6 @@ namespace EmuSen.WiseMan.Mistress
 
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenMultiplayerTests", Guid.NewGuid().ToString("N"));
         private readonly string _romDir;
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public MultiplayerTests()
         {
@@ -42,12 +41,10 @@ namespace EmuSen.WiseMan.Mistress
             Directory.CreateDirectory(_romDir);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreOptions.BatteryRamDisabled = true;
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
@@ -61,7 +58,7 @@ namespace EmuSen.WiseMan.Mistress
             settings?.Invoke(app);
             app.Save();
 
-            var window = new MainWindow { Width = 1280, Height = 800 };
+            var window = new MainWindow { Width = 1280, Height = 800 }.WithoutBattery();
             window.Show();
             var first = new PadDriver(window) { Pad = { Name = "First Pad" } };
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;

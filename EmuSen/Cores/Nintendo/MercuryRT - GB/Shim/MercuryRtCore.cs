@@ -114,7 +114,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         public override double FrameRateHz => CpuClockHz / (double)CyclesPerFrame;
 
         // The LCD's 160 by 144 square pixels, a game loaded or not - see EmuSen_Serenity.md §2.9.
-        public override double DisplayAspect => EmuSen.Crystal.Systems.DisplayShape.GameBoy;
+        public override double DisplayAspect => EmuSen.Crystal.DisplayShape.GameBoy;
         public override int StateVersion => StateFormatVersion;
 
         // The console the next load builds, sent as the create-time setting Model; a change before the first frame loads the game again at once.
@@ -164,7 +164,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             _cartridgeType = image.Length > 0x147 ? image[0x147] : (byte)0;
             GbCartridge header = GbCartridge.Read(image);
             Cartridge = header;
-            return BatterySave.Open(path, BatterySave.GameBoyFolder(path), hasRam: header.HasBattery && header.RamLength > 0);
+            return BatterySave.Open(path, BatterySave.GameBoyFolder(path), hasRam: header.HasBattery && header.RamLength > 0, disabled: Options.BatteryRamDisabled);
         }
 
         // The mixer's coefficients, the division and Math.Pow both evaluated here and sent down - see Mercury_Native.md §3.3 and §9.1.

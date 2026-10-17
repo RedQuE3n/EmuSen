@@ -200,8 +200,9 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // Production's configuration, as MarsRtThreadsTests.Bench builds it, or the same on one thread.
-        private static MarsRtCore Production(bool threaded) => new(expansionPak: true, batteryRamDisabled: true)
+        private static MarsRtCore Production(bool threaded) => new(expansionPak: true)
         {
+            Options = TestCores.NoBattery,
             SkipRendering = false,
             UseBlocks = true,
             ThreadedRdp = threaded,

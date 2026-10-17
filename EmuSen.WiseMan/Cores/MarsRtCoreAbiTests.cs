@@ -17,7 +17,6 @@ namespace EmuSen.WiseMan.Cores
     public class MarsRtCoreAbiTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenMarsRtV1_" + Guid.NewGuid().ToString("N"));
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
         private readonly ITestOutputHelper _output;
 
         public MarsRtCoreAbiTests(ITestOutputHelper output)
@@ -25,13 +24,11 @@ namespace EmuSen.WiseMan.Cores
             _output = output;
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreOptions.BatteryRamDisabled = true;
             CoreDiscovery.UseDirectories(null);
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             DataStore.OverrideDirectory = null;
             CoreDiscovery.UseDirectories(null);
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
@@ -57,7 +54,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0, MarsNative.Export("mars_machine_load_rom"));
             Assert.Equal(0, MarsNative.Export("emusen_native_interface_version"));
             Assert.Equal(MarsRtCore.VideoSettings.Select(s => s.Key).Order(), library.Settings.Where(s => !s.Hidden).Select(s => s.Key).Order());
-            ICore core = CoreFactory.Create("game.z64", engine: CoreCatalog.MarsRtEngine);
+            ICore core = CoreFactory.Create("game.z64", engine: CoreCatalog.MarsRtEngine, options: TestCores.NoBattery);
             Assert.IsType<MarsRtCore>(core);
             Assert.Null(CoreFactory.EngineNotice("game.z64", CoreCatalog.MarsRtEngine, core));
         }
@@ -68,8 +65,8 @@ namespace EmuSen.WiseMan.Cores
         {
             string rom = Rom(SyntheticN64Rom.BuildHomebrew(N64SaveType.Eeprom4k));
             var settings = new System.Collections.Generic.Dictionary<string, string> { ["ExpansionPak"] = "true" };
-            using var shim = new MarsRtCore(expansionPak: true, batteryRamDisabled: true);
-            using var adapter = new CoreEngine(MarsNative.Library.Library!, settings);
+            using var shim = new MarsRtCore(expansionPak: true) { Options = TestCores.NoBattery };
+            using var adapter = new CoreEngine(MarsNative.Library.Library!, settings) { Options = TestCores.NoBattery };
             shim.LoadRom(rom);
             adapter.LoadRom(rom);
             Assert.Equal((shim.ScreenWidth, shim.ScreenHeight, shim.StateVersion), (adapter.ScreenWidth, adapter.ScreenHeight, adapter.StateVersion));
@@ -103,7 +100,7 @@ namespace EmuSen.WiseMan.Cores
         public void A_state_saved_with_a_button_held_runs_on_as_the_run_that_went_on()
         {
             string rom = Rom(SyntheticN64Rom.BuildHomebrew(N64SaveType.Eeprom4k));
-            using var through = new MarsRtCore(expansionPak: true, batteryRamDisabled: true);
+            using var through = new MarsRtCore(expansionPak: true) { Options = TestCores.NoBattery };
             through.LoadRom(rom);
             for (int f = 0; f < 120; f++)
             {
@@ -113,7 +110,7 @@ namespace EmuSen.WiseMan.Cores
                 through.RunFrame();
             }
             byte[] held = State(through);
-            using var loaded = new MarsRtCore(expansionPak: true, batteryRamDisabled: true);
+            using var loaded = new MarsRtCore(expansionPak: true) { Options = TestCores.NoBattery };
             loaded.LoadRom(rom);
             loaded.LoadState(held);
             Assert.Equal(held, State(loaded));

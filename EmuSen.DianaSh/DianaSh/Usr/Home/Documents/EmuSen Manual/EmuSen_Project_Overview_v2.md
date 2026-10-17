@@ -312,8 +312,7 @@ EmuSen Project/
 │   │                                           #   move above - namespace EmuSen.Audio, same namespace
 │   │                                           #   Settings/AudioSettings.cs already uses despite living
 │   │                                           #   in a different folder
-│   └── Settings/
-│       ├── AudioSettings.cs
+│   └── Settings/                         # AudioSettings.cs deleted 2026-10-17 - see EmuSen_Surfaces.md §7.1.
 │       ├── DebugSettings.cs                  # Every logging toggle - see EmuSen_Settings_Reference.md.
 │       │                                      #   Every *Logging flag is a property, not a plain field,
 │       │                                      #   ANDed against MasterLoggingEnabled in its getter - one
@@ -323,7 +322,6 @@ EmuSen Project/
 │       │                                      #   already just read e.g. DebugSettings.CpuVerboseLogging.
 │       │                                      #   Toggle live from the F4 prompt via the `log` command
 │       │                                      #   (DianaSh/Commands/LogCommand.cs).
-│       └── AudioSettings.cs
 │                                              # InputBindings.cs (used to live here) is deleted -
 │                                              #   EmuSen.Hotaru/Input/HotaruKeyMap.cs is its Avalonia-
 │                                              #   Key port. No Frontend/ here anymore - EmuSen.csproj
@@ -390,9 +388,8 @@ EmuSen Project/
 │   │                                     #   available for a simpler future consumer (or
 │   │                                     #   EmuSen.Mistress, which still presents via its own
 │   │                                     #   CPU-side WriteableBitmap and hasn't adopted this yet).
-│   ├── GraphicsSettings.cs              # Moved out of EmuSen/Settings/ - see EmuSen_Settings_Reference.md §3.
-│   │                                     #   Dropped ShowDebugPanels/PanelBackgroundColor/
-│   │                                     #   LetterboxColor along with the on-window debug overlay.
+│   ├── FrameScheduler.cs                # The pacer, moved from EmuSen/Common/ beside DisplayClock (2026-10-17);
+│   │                                     #   GraphicsSettings.cs deleted the same day - see EmuSen_Surfaces.md §7.1.
 │   └── Shaders/
 │       └── BuiltInShaders.cs            # Skia SkSL (SKRuntimeEffect), not GLSL - a faithful port of
 │                                         #   the same Scanlines/Crt darken-factor and vignette math
@@ -469,8 +466,8 @@ EmuSen Project/
 │   └── Models/
 │       ├── AppSettings.cs               # Was EmuSen.Mistress/Settings/ - holds no frontend
 │       │                                 #   types, so it was never frontend-specific.
-│       ├── AudioConfig.cs               # On-disk mirror of the static AudioSettings hub.
-│       ├── GraphicsConfig.cs            # Same, for GraphicsSettings.
+│       ├── AudioConfig.cs               # audio.json, which the frontends read for the device and the cores.
+│       ├── GraphicsConfig.cs            # graphics.json, for the presenter, the window and each console.
 │       └── CheatFile.cs                 # `cheat save`/`load` - hex-text addresses, so the
 │                                         #   file is readable with `cat`.
 │

@@ -392,7 +392,6 @@ namespace EmuSen.WiseMan.Serenity
         {
             await Session.Dispatch(() =>
             {
-                bool bilinear = EmuSen.Graphics.GraphicsSettings.BilinearFiltering;
                 (Window window, GameFrameControl control) = NewWindow(16, 16);
                 try
                 {
@@ -408,11 +407,11 @@ namespace EmuSen.WiseMan.Serenity
                         return ToRgbaBytes(captured);
                     }
 
-                    EmuSen.Graphics.GraphicsSettings.BilinearFiltering = false;
+                    control.BilinearFiltering = false;
                     Assert.Equal(Drawn(full, 8, 1), Drawn(half, 4, 2));
 
                     // Bilinear blends a row with the next where repeating would not; how much is recorded, not held.
-                    EmuSen.Graphics.GraphicsSettings.BilinearFiltering = true;
+                    control.BilinearFiltering = true;
                     byte[] repeatedRows = Drawn(full, 8, 1), stretchedRows = Drawn(half, 4, 2);
                     int differs = 0, most = 0;
                     for (int i = 0; i < repeatedRows.Length; i++) { int d = Math.Abs(repeatedRows[i] - stretchedRows[i]); if (d > 0) differs++; most = Math.Max(most, d); }
@@ -420,7 +419,6 @@ namespace EmuSen.WiseMan.Serenity
                 }
                 finally
                 {
-                    EmuSen.Graphics.GraphicsSettings.BilinearFiltering = bilinear;
                     window.Close();
                 }
             }, default);

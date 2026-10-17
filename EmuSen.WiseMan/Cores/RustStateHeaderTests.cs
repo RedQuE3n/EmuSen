@@ -57,7 +57,7 @@ namespace EmuSen.WiseMan.Cores
         public void MarsRT_writes_Mars_header_for_a_state_and_a_snapshot()
         {
             Assert.True(MarsRtCore.Available, MarsNative.Report);
-            using var core = new MarsRtCore(batteryRamDisabled: true);
+            using var core = new MarsRtCore() { Options = TestCores.NoBattery };
             string rom = Keep(Path.Combine(Path.GetTempPath(), $"mars-header-{Guid.NewGuid():N}.z64"));
             File.WriteAllBytes(rom, SyntheticN64System.Build());
             core.LoadRom(rom);

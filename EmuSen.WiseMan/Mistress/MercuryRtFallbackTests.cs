@@ -33,7 +33,6 @@ namespace EmuSen.WiseMan.Mistress
 
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenMercuryRtFallbackTests", Guid.NewGuid().ToString("N"));
         private readonly string _rom;
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public MercuryRtFallbackTests()
         {
@@ -44,12 +43,10 @@ namespace EmuSen.WiseMan.Mistress
             _rom = Path.Combine(roms, "Loop.gb");
             File.WriteAllBytes(_rom, SyntheticGbRom.Build(patches: (0, new byte[] { 0x18, 0xFE })));
             new AppSettings { RomDirectory = roms, ResumeOnLaunch = AppSettings.ResumeNever, StateDirectory = Path.Combine(_root, "States") }.Save();
-            CoreOptions.BatteryRamDisabled = false;
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }

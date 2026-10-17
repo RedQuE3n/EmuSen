@@ -32,10 +32,10 @@ namespace EmuSen.WiseMan.Cores
 
         private static readonly (string Core, string Extension, int Frames, Func<ICore> Create)[] Cores =
         {
-            ("MoonRT", ".nes", 900, () => new MoonRtCore()),
-            ("MercuryRT", ".gb", 900, () => new MercuryRtCore()),
-            ("MercuryRT", ".gbc", 900, () => new MercuryRtCore()),
-            ("MarsRT", ".z64", 500, () => new MarsRtCore(expansionPak: true, batteryRamDisabled: true)),
+            ("MoonRT", ".nes", 900, () => new MoonRtCore { Options = TestCores.NoBattery }),
+            ("MercuryRT", ".gb", 900, () => new MercuryRtCore { Options = TestCores.NoBattery }),
+            ("MercuryRT", ".gbc", 900, () => new MercuryRtCore { Options = TestCores.NoBattery }),
+            ("MarsRT", ".z64", 500, () => new MarsRtCore(expansionPak: true) { Options = TestCores.NoBattery }),
         };
 
         [Fact]
@@ -47,7 +47,6 @@ namespace EmuSen.WiseMan.Cores
             string? statesFrom = Environment.GetEnvironmentVariable(StatesFromVariable);
             string? only = Environment.GetEnvironmentVariable(OnlyVariable);
 
-            CoreOptions.BatteryRamDisabled = true;
             string states = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(output))!, Path.GetFileNameWithoutExtension(output) + "-states");
             Directory.CreateDirectory(states);
             var lines = new List<string>();
@@ -97,7 +96,6 @@ namespace EmuSen.WiseMan.Cores
             string? output = Environment.GetEnvironmentVariable(OutVariable);
             if (string.IsNullOrWhiteSpace(directory) || string.IsNullOrWhiteSpace(output)) return;
 
-            CoreOptions.BatteryRamDisabled = false;
             var lines = new List<string>();
             try
             {
@@ -129,7 +127,6 @@ namespace EmuSen.WiseMan.Cores
             }
             finally
             {
-                CoreOptions.BatteryRamDisabled = true;
                 DataStore.OverrideDirectory = Home;
             }
             File.WriteAllLines(output, lines);

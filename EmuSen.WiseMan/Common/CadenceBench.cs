@@ -37,7 +37,7 @@ namespace EmuSen.WiseMan.Common
 
         public static Result Run(Options o)
         {
-            var session = new EmulatorSession { Engine = o.Engine };
+            var session = new EmulatorSession { Options = TestCores.NoBattery, Engine = o.Engine };
             session.LoadRom(o.Rom);
 
             AudioPlayer? player = null;
@@ -151,7 +151,6 @@ namespace EmuSen.WiseMan.Common
             string? rom = Environment.GetEnvironmentVariable("EMUSEN_CADENCE_ROM");
             if (string.IsNullOrEmpty(rom)) return;
             string Env(string name, string fallback) => Environment.GetEnvironmentVariable(name) is { Length: > 0 } v ? v : fallback;
-            CoreOptions.BatteryRamDisabled = true;
             var result = CadenceBench.Run(new CadenceBench.Options
             {
                 Rom = rom,

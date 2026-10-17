@@ -41,7 +41,6 @@ namespace EmuSen.WiseMan.Cores
             string? games = Environment.GetEnvironmentVariable(GamesVariable);
             if (string.IsNullOrWhiteSpace(output) || string.IsNullOrWhiteSpace(games)) return;
             Assert.True(MarsRtCore.Available, MarsNative.Report);
-            CoreOptions.BatteryRamDisabled = true;
             Directory.CreateDirectory(output);
             string scratch = Path.Combine(output, "states");
             Directory.CreateDirectory(scratch);
@@ -106,7 +105,7 @@ namespace EmuSen.WiseMan.Cores
             public Run(string path, (string Key, string Value)[] settings, bool expansionPak = true)
             {
                 _out = new StreamWriter(path);
-                _core = new MarsRtCore(expansionPak, batteryRamDisabled: true);
+                _core = new MarsRtCore(expansionPak) { Options = TestCores.NoBattery };
                 foreach (var (key, value) in settings) ((ICoreSettings)_core).Set(key, value);
             }
 

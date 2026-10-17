@@ -36,7 +36,6 @@ namespace EmuSen.WiseMan.Mistress
         private readonly ITestOutputHelper _output;
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenUinputMistressTests", Guid.NewGuid().ToString("N"));
         private readonly string _romDir;
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public UinputMistressTests(ITestOutputHelper output)
         {
@@ -45,12 +44,10 @@ namespace EmuSen.WiseMan.Mistress
             Directory.CreateDirectory(_romDir);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreOptions.BatteryRamDisabled = true;
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
@@ -102,7 +99,7 @@ namespace EmuSen.WiseMan.Mistress
             MainWindow? window = null;
             try
             {
-                window = new MainWindow { Width = 1280, Height = 800 };
+                window = new MainWindow { Width = 1280, Height = 800 }.WithoutBattery();
                 window.Show();
                 ((DispatcherTimer?)typeof(MainWindow).GetField("_padTimer", Hidden)!.GetValue(window))?.Stop();
                 Gamepad(window).Start();

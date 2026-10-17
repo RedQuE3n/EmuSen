@@ -185,7 +185,7 @@ namespace EmuSen.WiseMan.Mistress
             {
                 await Session.Dispatch(() =>
                 {
-                    using var core = new MarsRtCore(batteryRamDisabled: true) { DeferredPresentation = false };
+                    using var core = new MarsRtCore() { Options = TestCores.NoBattery, DeferredPresentation = false };
                     core.LoadRom(rom);
                     var control = new GameFrameControl();
                     var copies = new Dictionary<byte[], byte[]>(ReferenceEqualityComparer.Instance);
@@ -269,7 +269,7 @@ namespace EmuSen.WiseMan.Mistress
             {
                 await Session.Dispatch(() =>
                 {
-                    using var core = new MarsRtCore(batteryRamDisabled: true) { ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true };
+                    using var core = new MarsRtCore() { Options = TestCores.NoBattery, ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true };
                     core.LoadRom(rom);
                     var rewind = new EmuSen.Common.RewindBuffer { Enabled = true, IntervalFrames = 1 };
                     var control = new GameFrameControl();
@@ -353,7 +353,7 @@ namespace EmuSen.WiseMan.Mistress
             {
                 await Session.Dispatch(() =>
                 {
-                    using var core = new MarsRtCore(batteryRamDisabled: true) { DeferredPresentation = false };
+                    using var core = new MarsRtCore() { Options = TestCores.NoBattery, DeferredPresentation = false };
                     core.LoadRom(rom);
                     var control = new GameFrameControl();
                     var handOff = new FrameHandOff((pixels, width, height, rowRepeat, release, _, _, _, _, _) => control.UpdateFrame(pixels, width, height, rowRepeat, release));

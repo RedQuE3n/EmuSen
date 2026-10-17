@@ -244,8 +244,6 @@ namespace EmuSen.WiseMan.Common
         public void The_state_after_n_frames_is_the_same_locked_and_content_paced()
         {
             string rom = Path.Combine(Path.GetTempPath(), $"EmuSenPacing_{Guid.NewGuid():N}.nes");
-            bool battery = CoreOptions.BatteryRamDisabled;
-            CoreOptions.BatteryRamDisabled = true;
             try
             {
                 File.WriteAllBytes(rom, BoardPrograms.Build(1, 8, cycleIrq: false));
@@ -259,7 +257,6 @@ namespace EmuSen.WiseMan.Common
             }
             finally
             {
-                CoreOptions.BatteryRamDisabled = battery;
                 try { File.Delete(rom); } catch { }
             }
         }

@@ -34,19 +34,16 @@ namespace EmuSen.WiseMan.Cores
         public static readonly string[] OffVariables = { MoonNative.Variable, MercuryNative.Variable, MarsNative.Variable, "EMUSEN_VENUS_NATIVE" };
 
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenRegistration_" + Guid.NewGuid().ToString("N"));
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
         private readonly string? _logsWere = ErrorLog.DirectoryOverride;
 
         public CoreRegistrationEquivalenceTests()
         {
             Directory.CreateDirectory(_root);
-            CoreOptions.BatteryRamDisabled = false;
             ErrorLog.DirectoryOverride = Path.Combine(_root, "Logs");
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             ErrorLog.DirectoryOverride = _logsWere;
             CoreDiscovery.UseDirectories(null);
             ConfigStore.OverrideDirectory = null;

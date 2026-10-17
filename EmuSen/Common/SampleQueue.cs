@@ -1,20 +1,19 @@
 using System;
 using System.Collections.Generic;
-using EmuSen.Audio;
 
 namespace EmuSen.Common
 {
-    // A core's undrained stereo samples, the oldest pair dropped past AudioSettings.AudioBufferMaxSamples - see EmuSen_Settings_Reference.md §4.85.2.
+    // A core's undrained stereo samples, the oldest pair dropped past the limit - see EmuSen_Settings_Reference.md §4.85.2.
     public sealed class SampleQueue
     {
         public const int DefaultLimit = 128000;
 
         private readonly Queue<short> _samples = new();
 
-        // Null follows AudioSettings.AudioBufferMaxSamples, read at every pair; a number is a test's or a core's own.
+        // Null keeps DefaultLimit; read at every pair, so a changed limit takes hold at the next.
         public int? Limit { get; set; }
 
-        public int MaxSamples => Limit ?? AudioSettings.AudioBufferMaxSamples;
+        public int MaxSamples => Limit ?? DefaultLimit;
 
         public int Count => _samples.Count;
 

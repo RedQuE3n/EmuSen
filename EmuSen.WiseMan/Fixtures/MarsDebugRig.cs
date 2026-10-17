@@ -70,7 +70,7 @@ namespace EmuSen.WiseMan.Fixtures
             public MarsRtRig(string rom)
             {
                 _rom = rom;
-                _core = new MarsRtCore(batteryRamDisabled: true) { SkipRendering = true };
+                _core = new MarsRtCore() { Options = TestCores.NoBattery, SkipRendering = true };
                 _core.LoadRom(rom);
                 ProgramVideo();
                 _target = new MarsRtDebugTarget(_core);

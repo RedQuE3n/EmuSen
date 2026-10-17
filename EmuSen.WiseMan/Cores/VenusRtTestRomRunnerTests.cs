@@ -215,7 +215,6 @@ namespace EmuSen.WiseMan.Cores
                 _output.WriteLine($"{SnesTestRomCorpus.Variable} unset or no probe, not run");
                 return;
             }
-            CoreOptions.BatteryRamDisabled = true;
             var mesen = new MesenProbeSnesEngine(Path.Combine(root, "runs", "mesen"));
             var roms = new[] { "roms/240pSuite-SNES-1.03/240pSuite.sfc", "roms/gilyon-snes-tests-v1.4/spctest/spctest.sfc", "src/higan-snes-test-roms/PeterLemon/SNES-CPUTest-CPU/ADC/CPUADC.sfc" };
             var best = new List<int>();
@@ -275,7 +274,6 @@ namespace EmuSen.WiseMan.Cores
                 _output.WriteLine($"{SnesTestRomCorpus.Variable} unset, not run");
                 return;
             }
-            CoreOptions.BatteryRamDisabled = true;
             bool mesen = MesenProbeSnesEngine.Available && Environment.GetEnvironmentVariable("EMUSEN_VENUSRT_NO_MESEN") != "1";
             var reference = mesen ? new MesenProbeSnesEngine(Path.Combine(root, "runs", "mesen")) : null;
             int threads = int.TryParse(Environment.GetEnvironmentVariable("EMUSEN_VENUSRT_THREADS"), out int t) ? t : 4;

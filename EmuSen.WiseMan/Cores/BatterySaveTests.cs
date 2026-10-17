@@ -16,19 +16,16 @@ namespace EmuSen.WiseMan.Cores
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenBatterySave_" + Guid.NewGuid().ToString("N"));
         private readonly string _library;
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public BatterySaveTests()
         {
             _library = Path.Combine(_root, "Library");
             Directory.CreateDirectory(_library);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreOptions.BatteryRamDisabled = false;
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             DataStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
         }
@@ -37,10 +34,10 @@ namespace EmuSen.WiseMan.Cores
 
         private static bool Nes(string engine) => engine.StartsWith("Moon", StringComparison.Ordinal);
 
-        private static ICore Make(string engine) => engine switch
+        private static ICore Make(string engine, CoreOptions? options = null) => engine switch
         {
-            "MoonRT" => new MoonRtCore(),
-            _ => new MercuryRtCore(),
+            "MoonRT" => new MoonRtCore { Options = options ?? CoreOptions.Default },
+            _ => new MercuryRtCore { Options = options ?? CoreOptions.Default },
         };
 
         private static string RamSpace(string engine) => Nes(engine) ? "PRGRAM" : MercuryRtCore.SpaceCartRam;
@@ -152,8 +149,7 @@ namespace EmuSen.WiseMan.Cores
             File.WriteAllBytes(Beside(rom), Pattern(4));
             var before = Snapshot(Beside(rom));
 
-            CoreOptions.BatteryRamDisabled = true;
-            ICore core = Make(engine);
+            ICore core = Make(engine, TestCores.NoBattery);
             core.LoadRom(rom);
             Assert.NotEqual(Pattern(4)[0x55], ReadRam(core, engine, 0x55));
             Play(core, BatterySave.FlushEveryNFrames + 1);
@@ -194,14 +190,9 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(Pattern(6), File.ReadAllBytes(Beside(rom)));
         }
 
-        // An SNES game on its one engine, VenusRT, as a frontend loads it; the battery switch is read at the load.
-        private static EmuSen.Cores.Native.CoreEngine Snes(string rom, bool battery = true)
-        {
-            bool was = CoreOptions.BatteryRamDisabled;
-            CoreOptions.BatteryRamDisabled = !battery;
-            try { return Assert.IsType<EmuSen.Cores.Native.CoreEngine>(CoreFactory.Loaded(rom)); }
-            finally { CoreOptions.BatteryRamDisabled = was; }
-        }
+        // An SNES game on its one engine, VenusRT, as a frontend loads it; the battery switch is a create option, read at the load.
+        private static EmuSen.Cores.Native.CoreEngine Snes(string rom, bool battery = true) =>
+            Assert.IsType<EmuSen.Cores.Native.CoreEngine>(CoreFactory.Loaded(rom, options: new CoreOptions { BatteryRamDisabled = !battery }));
 
         private static byte Sram(ICore core, int offset) => ((EmuSen.Cores.Native.CoreEngine)core).ReadSpace("SRAM", offset);
 
@@ -247,7 +238,7 @@ namespace EmuSen.WiseMan.Cores
             string n64 = Path.Combine(_library, "Same.z64");
             File.WriteAllBytes(n64, SyntheticN64System.Build());
             Assert.True(MarsRtCore.Available, MarsNative.Report);
-            using (var mars = new MarsRtCore(batteryRamDisabled: false))
+            using (var mars = new MarsRtCore())
             {
                 mars.LoadRom(n64);
                 for (int frame = 0; frame < 40; frame++) mars.RunFrame();
@@ -324,7 +315,7 @@ namespace EmuSen.WiseMan.Cores
             var before = (Snapshot(Flat(rom)), Snapshot(flatPak));
 
             Assert.True(MarsRtCore.Available, MarsNative.Report);
-            using var mars = new MarsRtCore(batteryRamDisabled: false);
+            using var mars = new MarsRtCore();
             mars.LoadRom(rom);
             Assert.Equal(eeprom, mars.BatteryContents![..eeprom.Length]);
             string save = SaveLibrary.SramPathFor(rom, BatterySave.N64);
@@ -396,7 +387,7 @@ namespace EmuSen.WiseMan.Cores
                 cart.SaveSram();
             }
             Assert.True(MarsRtCore.Available, MarsNative.Report);
-            using (var mars = new MarsRtCore(batteryRamDisabled: true))
+            using (var mars = new MarsRtCore() { Options = TestCores.NoBattery })
             {
                 mars.LoadRom(n64);
                 mars.SaveSram();

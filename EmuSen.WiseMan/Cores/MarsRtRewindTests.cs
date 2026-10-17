@@ -53,9 +53,9 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // Mistress's settings for MarsRT: four workers, the picture deferred, the recompiler on.
-        private static MarsRtCore Production(bool device = false) => AtTwoOnTheDevice(new(expansionPak: true, batteryRamDisabled: true) { ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true, SkipRendering = false }, device);
+        private static MarsRtCore Production(bool device = false) => AtTwoOnTheDevice(new(expansionPak: true) { Options = TestCores.NoBattery, ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true, SkipRendering = false }, device);
 
-        private static MarsRtCore OneThread(bool device = false) => AtTwoOnTheDevice(new(expansionPak: true, batteryRamDisabled: true) { ThreadedRdp = false, DeferredPresentation = false, SkipRendering = false, UseBlocks = false }, device);
+        private static MarsRtCore OneThread(bool device = false) => AtTwoOnTheDevice(new(expansionPak: true) { Options = TestCores.NoBattery, ThreadedRdp = false, DeferredPresentation = false, SkipRendering = false, UseBlocks = false }, device);
 
         // At two on the device, whose scans the drain's leader runs, when asked - see Mars_Native.md §6.15.
         private static MarsRtCore AtTwoOnTheDevice(MarsRtCore core, bool device)

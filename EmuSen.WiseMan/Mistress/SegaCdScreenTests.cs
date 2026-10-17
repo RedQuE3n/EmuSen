@@ -31,7 +31,6 @@ namespace EmuSen.WiseMan.Mistress
 
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenSegaCdScreen", Guid.NewGuid().ToString("N"));
         private readonly string _disc;
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public SegaCdScreenTests()
         {
@@ -40,7 +39,6 @@ namespace EmuSen.WiseMan.Mistress
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             CoreDiscovery.UseDevelopment(false);
-            CoreOptions.BatteryRamDisabled = true;
             _disc = Path.Combine(roms, "Game.iso");
             File.WriteAllBytes(_disc, SyntheticMdRom.Disc("U"));
             new AppSettings { RomDirectory = roms, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
@@ -48,7 +46,6 @@ namespace EmuSen.WiseMan.Mistress
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             CoreDiscovery.UseDevelopment(null);
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
@@ -90,7 +87,7 @@ namespace EmuSen.WiseMan.Mistress
             var config = new GraphicsConfig();
             config.SetValue(SegaCd, GraphicsSettingsWindow.ScreenFilterKey, CrtFilter.Name);
             config.Save();
-            var window = new MainWindow();
+            var window = new MainWindow().WithoutBattery();
             window.Show();
             typeof(MainWindow).GetMethod("LoadRom", BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { typeof(string), typeof(string) }, null)!
                 .Invoke(window, new object[] { _disc, "Game.iso" });
@@ -99,7 +96,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(Genesis, frame.FilterConsole);
             window.Close();
 
-            using var core = Assert.IsType<CoreEngine>(CoreFactory.Load(_disc).Core);
+            using var core = Assert.IsType<CoreEngine>(CoreFactory.Load(_disc, options: TestCores.NoBattery).Core);
             for (int f = 0; f < 120; f++) core.RunFrame();
             byte[] picture = core.GetFrameBufferRgba().ToArray();
             (int width, int height) = (core.ScreenWidth, core.ScreenHeight);

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using EmuSen.Audio;
 using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MarsRT;
@@ -12,23 +11,21 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Audio
 {
-    // AudioSettings.AudioBufferMaxSamples on every core that queues its own sound, which only Venus honoured - see EmuSen_Settings_Reference.md §4.85.2.
+    // CoreOptions.AudioBufferMaxSamples on every core that queues its own sound - see EmuSen_Settings_Reference.md §4.85.2.
     [Collection(TestCollections.ProcessGlobals)]
     public class AudioBufferLimitTests : IDisposable
     {
         private const int Limit = 4096;
-        private readonly int _before = AudioSettings.AudioBufferMaxSamples;
+        private static readonly CoreOptions Limited = new() { AudioBufferMaxSamples = Limit };
         private readonly List<string> _files = new();
 
         public AudioBufferLimitTests()
         {
-            AudioSettings.AudioBufferMaxSamples = Limit;
             DataStore.OverrideDirectory = Path.Combine(Path.GetTempPath(), "EmuSenAudioLimit_" + Guid.NewGuid().ToString("N"));
         }
 
         public void Dispose()
         {
-            AudioSettings.AudioBufferMaxSamples = _before;
             try { Directory.Delete(DataStore.OverrideDirectory!, recursive: true); } catch (IOException) { }
             DataStore.OverrideDirectory = null;
             foreach (string path in _files) try { File.Delete(path); } catch (IOException) { }
@@ -62,21 +59,21 @@ namespace EmuSen.WiseMan.Audio
         public void MoonRT_keeps_no_more_than_the_setting()
         {
             Assert.True(MoonRtCore.Available, MoonNative.Report);
-            Assert.Equal(Limit, Undrained(new MoonRtCore(), Nes()).Length);
+            Assert.Equal(Limit, Undrained(new MoonRtCore { Options = Limited }, Nes()).Length);
         }
 
         [Fact]
         public void MercuryRT_keeps_no_more_than_the_setting()
         {
             Assert.True(MercuryRtCore.Available, MercuryNative.Report);
-            Assert.Equal(Limit, Undrained(new MercuryRtCore(), Gb()).Length);
+            Assert.Equal(Limit, Undrained(new MercuryRtCore { Options = Limited }, Gb()).Length);
         }
 
         // Venus honoured it before this pass; kept so all five are held to one rule.
         [Fact]
         public void Venus_keeps_no_more_than_the_setting()
         {
-            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
+            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank(), Limited);
             for (int i = 0; i < 30; i++) core.RunFrame();
             Assert.Equal(Limit, core.DequeueAudioSamples(int.MaxValue).Length);
         }
@@ -88,7 +85,7 @@ namespace EmuSen.WiseMan.Audio
             Assert.True(MarsRtCore.Available, MarsNative.Report);
             string path = SyntheticN64Rom.WriteTemp(SyntheticN64System.Build(rsp: false));
             _files.Add(path);
-            using var core = new MarsRtCore(batteryRamDisabled: true);
+            using var core = new MarsRtCore { Options = Limited with { BatteryRamDisabled = true } };
             core.LoadRom(path);
             for (int i = 0; i < 120; i++) core.RunFrame();
             Assert.Equal(Limit, core.DequeueAudioSamples(int.MaxValue).Length);
@@ -113,15 +110,13 @@ namespace EmuSen.WiseMan.Audio
             Assert.Equal(new short[] { 16, -16 }, queue.Drain(1));
         }
 
-        // Null follows the setting, read at every pair.
+        // Null keeps the default, which the options' limit starts at.
         [Fact]
-        public void A_queue_without_a_limit_of_its_own_follows_the_setting()
+        public void A_queue_without_a_limit_of_its_own_keeps_the_default()
         {
             var queue = new SampleQueue();
-            Assert.Equal(Limit, queue.MaxSamples);
-            AudioSettings.AudioBufferMaxSamples = 6;
-            for (short i = 0; i < 5; i++) queue.Enqueue(i, i);
-            Assert.Equal(6, queue.Count);
+            Assert.Equal(SampleQueue.DefaultLimit, queue.MaxSamples);
+            Assert.Equal(SampleQueue.DefaultLimit, CoreOptions.Default.AudioBufferMaxSamples);
         }
     }
 }

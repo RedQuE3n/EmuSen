@@ -44,6 +44,9 @@ namespace EmuSen.Cores.Native
         // Each save medium's mode the frontend stored for the console, by medium id, read at each load; Per game where absent - see EmuSen_SaveMedia.md §3.3.
         public IReadOnlyDictionary<string, CardChoice> Media { get; set; } = new Dictionary<string, CardChoice>();
 
+        // Set before LoadRom or StartConsole: what the frontend made this core with - see EmuSen_Multicore.md §6.
+        public CoreOptions Options { get; set; } = CoreOptions.Default;
+
         // Why a slot runs on the game's own file this load, or null: its shared file is in another slot or another program - see EmuSen_SaveMedia.md §3.5.
         public string? MediaNotice { get; private set; }
 
@@ -254,7 +257,7 @@ namespace EmuSen.Cores.Native
                 asked = Library.FirmwareFor(Held(disc.Image));
                 firmware = FirmwareFiles(asked);
                 ReleaseMedia();
-                placement = MemoryCards.Place(console, system, Media, System.IO.Path.GetFileNameWithoutExtension(path), b => BatteryFile(path, console, b.Which, b.Suffix));
+                placement = MemoryCards.Place(console, system, Media, System.IO.Path.GetFileNameWithoutExtension(path), b => BatteryFile(path, console, b.Which, b.Suffix), Options.BatteryRamDisabled);
                 BatterySave SaveFor(CoreBatteryFile b) => placement!.Files.TryGetValue(b.Which, out BatterySave? placed) ? placed : BatteryFile(path, console, b.Which, b.Suffix);
                 var saves = system?.Battery is { } listed
                     ? listed.Select(b => (b.Which, Save: SaveFor(b))).ToList()
@@ -294,7 +297,7 @@ namespace EmuSen.Cores.Native
             List<(uint, byte[])> firmware = FirmwareFiles(system.Firmware);
             ReleaseMedia();
             var choices = MemoryCards.MediaOf(console, system).ToDictionary(m => m.Id, m => Media.TryGetValue(m.Id, out CardChoice? c) && c.Apart ? c : new CardChoice(MemoryCards.Shared, c?.Names ?? Array.Empty<string>()));
-            MediaPlacement placement = MemoryCards.Place(console, system, choices, ConsoleSession.NameOf(console), _ => BatterySave.None);
+            MediaPlacement placement = MemoryCards.Place(console, system, choices, ConsoleSession.NameOf(console), _ => BatterySave.None, Options.BatteryRamDisabled);
             List<(uint Which, BatterySave Save)> saves;
             CoreMachine machine;
             try
@@ -356,7 +359,7 @@ namespace EmuSen.Cores.Native
         protected virtual void AttachDebugger(CoreMachine machine) => Debug.Attach(machine);
 
         // Battery file <which> of a game, by the runtime's path rule; a port's shim opens it as its oracle does.
-        protected virtual BatterySave BatteryFile(string path, string console, uint which, string suffix) => BatterySave.Open(path, console, extension: suffix);
+        protected virtual BatterySave BatteryFile(string path, string console, uint which, string suffix) => BatterySave.Open(path, console, disabled: Options.BatteryRamDisabled, extension: suffix);
 
         // Lets go of the locks on the game's save media, which a frontend calls when it leaves the game; a load takes them again - see EmuSen_SaveMedia.md §3.5.
         public void ReleaseMedia()
@@ -621,7 +624,7 @@ namespace EmuSen.Cores.Native
 
         private void SyncAudioLimit(CoreMachine m)
         {
-            int limit = EmuSen.Audio.AudioSettings.AudioBufferMaxSamples;
+            int limit = Options.AudioBufferMaxSamples;
             if (_audioLimitSent == limit) return;
             m.SetAudioLimit(limit);
             _audioLimitSent = limit;

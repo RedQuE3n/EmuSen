@@ -21,7 +21,7 @@ namespace EmuSen.WiseMan.Cores
         {
             _output = output;
             Assert.True(MercuryRtCore.Available, MercuryNative.Report);
-            CoreOptions.BatteryRamDisabled = true;
+
         }
 
         protected override MercuryDebugRig Rig(string rom) => MercuryDebugRig.MercuryRt(rom);

@@ -140,15 +140,15 @@ The class name and the file name are unchanged, so existing files load as-is.
 
 ### 3.2 `audio.json` — `AudioConfig`
 
-`EmuSen.Audio.AudioSettings` is a static hub of mutable fields, which `System.Text.Json` cannot serialize. `AudioConfig` is its on-disk mirror; `AudioSettings.LoadFromDisk()`/`SaveToDisk()` own the mapping in both directions.
+*Revised 2026-10-17 (`EmuSen_Surfaces.md` §7 S3): the static hub `EmuSen.Audio.AudioSettings`, which this file mirrored, is deleted. The frontends read `AudioConfig` itself and hand its values to the audio device and, for the buffer limit, to the cores as a create option (`EmuSen_Settings_Reference.md` §2).*
 
-`LoadFromDisk` **clamps** every value it applies. That is not defensive habit — it follows from §2.1. This file exists to be hand-edited, and `AudioSettings.OutputTargetFrames` divides by `SampleRate`, so a typed-in `0` would be a crash rather than a bad setting.
+`AudioConfig.Bounded()` **clamps** every value the programs take, into a copy, leaving the file as it was typed. That is not defensive habit — it follows from §2.1. This file exists to be hand-edited, and the audio device's target is the latency times `SampleRate`, so a typed-in `0` would be a broken device rather than a bad setting. The ranges are the ones `AudioSettings.LoadFromDisk` clamped to: rate 8,000–192,000, buffer limit at least 1,024, latency 16–2,000 ms, deviation 0–0.5, volume 0–1.
 
-On first run, when no file exists, `LoadFromDisk` seeds one from the current defaults so there is something to open. A file that already exists is never rewritten behind the player's back.
+On first run, when no file exists, `AudioConfig.SeedIfMissing()`, which both GUI programs call at start, writes one from the defaults so there is something to open. A file that already exists is never rewritten behind the player's back.
 
 ### 3.3 `graphics.json` — `GraphicsConfig`
 
-The same arrangement for `EmuSen.Graphics.GraphicsSettings`: window size, target FPS, VSync, resizability, bilinear filtering. Clamped and seeded exactly as audio is.
+Window size, target FPS, VSync, resizability, bilinear filtering and sync to display. *Since 2026-10-17* there is no static mirror (`EmuSen.Graphics.GraphicsSettings` is deleted): the presenter and Hotaru's window take the values as properties from `GraphicsConfig` (`EmuSen_Settings_Reference.md` §3). `GraphicsConfig.WindowSize()` clamps the size as the static did, and `GraphicsConfig.SeedIfMissing()` seeds the file as audio's is seeded.
 
 `WindowTitle` is deliberately **not** persisted. It is branding rather than a preference, and a corrupt config blanking the application's title is a worse outcome than not being able to change it from a file.
 
@@ -283,7 +283,7 @@ key** (`EmuSen_Input.md` §7.4). A user's own choice of a key always wins over a
 
 ## 4. Wiring
 
-`AudioSettings.LoadFromDisk()` and `GraphicsSettings.LoadFromDisk()` are called from `Main` in both GUI frontends (`EmuSen.Mistress/Program.cs`, `EmuSen.Hotaru/Program.cs`), before any window exists — graphics config decides the window's size, so it has to be applied first.
+`AudioConfig.SeedIfMissing()` and `GraphicsConfig.SeedIfMissing()` are called from `Main` in both GUI programs (`EmuSen.Mistress/Program.cs`, `EmuSen.Shell/Program.cs`, which hosts Hotaru), before any window exists. Each window then reads what it needs as it is made: Mistress's `MainWindow` and Hotaru's `GameWindow` read `audio.json` for the audio device and the cores' options and `graphics.json` for the picture's filtering and display sync, Hotaru's window its size too. *Until 2026-10-17 this was `AudioSettings.LoadFromDisk()` and `GraphicsSettings.LoadFromDisk()`, filling two static hubs (`EmuSen_Surfaces.md` §7 S3).*
 
 `EmuSen.Pharaoh` does not load either. It is a headless CLI tool with no window and no audio device; window size and master volume mean nothing there.
 

@@ -217,7 +217,7 @@ Rate control stays *inside* the sink, which is correct: it steers the device's o
 new AudioPlayer(AudioSettings.SampleRate, AudioSettings.OutputTargetLatencyMs, AudioSettings.RateControlMaxDeviation)
 ```
 
-The frontend, which already owns settings, passes them in. This is the same principle as `Submit` itself, applied to configuration: **the sink is handed what it needs and reaches for nothing.**
+The frontend, which already owns settings, passes them in. This is the same principle as `Submit` itself, applied to configuration: **the sink is handed what it needs and reaches for nothing.** *Since 2026-10-17 the frontend reads them from `audio.json` itself, `AudioConfig.Load().Bounded()`, and `AudioSettings` is deleted (`EmuSen_Surfaces.md` §7 S3): `new AudioPlayer(audio.SampleRate, audio.OutputTargetLatencyMs, audio.RateControlMaxDeviation)`.*
 
 **What this bought Nehellania, and how that ended.** With audio gone, `EmuSen.Nehellania` became gamepad-only, and its own reference to `EmuSen` went with it — the last user was `PadButton`, which moved to `EmuSen.Galaxia.Input` (`EmuSen_Input.md` §3). Nehellania then referenced Galaxia alone, exactly like Serenity, and the asymmetry this section opened with was gone.
 

@@ -40,7 +40,6 @@ namespace EmuSen.WiseMan.Mistress
 
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenMarsRtEngineTests", Guid.NewGuid().ToString("N"));
         private readonly string _rom;
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public MarsRtEngineTests()
         {
@@ -53,12 +52,10 @@ namespace EmuSen.WiseMan.Mistress
             new AppSettings { RomDirectory = roms, ResumeOnLaunch = AppSettings.ResumeNever, StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs") }.Save();
 
             // This collection runs alone, so the process-wide switch can be held off here and put back.
-            CoreOptions.BatteryRamDisabled = false;
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }

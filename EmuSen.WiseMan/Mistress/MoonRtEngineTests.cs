@@ -33,7 +33,6 @@ namespace EmuSen.WiseMan.Mistress
 
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenMoonRtEngineTests", Guid.NewGuid().ToString("N"));
         private readonly string _rom;
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public MoonRtEngineTests()
         {
@@ -44,12 +43,10 @@ namespace EmuSen.WiseMan.Mistress
             _rom = Path.Combine(roms, "Program.nes");
             File.WriteAllBytes(_rom, BoardPrograms.Build(1, 8, cycleIrq: false));
             new AppSettings { RomDirectory = roms, ResumeOnLaunch = AppSettings.ResumeNever, StateDirectory = Path.Combine(_root, "States") }.Save();
-            CoreOptions.BatteryRamDisabled = false;
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }

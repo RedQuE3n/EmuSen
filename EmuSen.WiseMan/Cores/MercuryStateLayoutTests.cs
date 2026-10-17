@@ -51,7 +51,6 @@ namespace EmuSen.WiseMan.Cores
         {
             string committed = MercuryLayouts.ReadListing(Path.Combine(MercuryLayouts.Directory(), listing));
             byte[] rom = RomFor(listing);
-            CoreOptions.BatteryRamDisabled = true;
             using MercuryRig rust = MercuryRig.Create(rom);
             rust.RunFrame();
             Assert.Equal(committed, rust.Core.Machine.Core.Layout());
@@ -75,7 +74,6 @@ namespace EmuSen.WiseMan.Cores
         [MemberData(nameof(BoardsOnConsoles))]
         public void Every_board_on_every_console_has_a_committed_listing(byte kind, byte ram, byte cgb, GbModel model)
         {
-            CoreOptions.BatteryRamDisabled = true;
             using MercuryRig rust = MercuryRig.Create(SyntheticGbRom.Build(romBanks: 4, cartridgeType: kind, ramSizeCode: ram, cgbFlag: cgb), model);
             rust.RunFrame();
             Assert.Equal(MercuryLayouts.StateVersion, rust.Field("Version"));

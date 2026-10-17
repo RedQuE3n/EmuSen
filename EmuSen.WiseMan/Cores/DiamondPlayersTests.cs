@@ -30,14 +30,11 @@ namespace EmuSen.WiseMan.Cores
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             CoreDiscovery.UseDevelopment(false);
-            CoreOptions.BatteryRamDisabled = false;
         }
 
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             CoreDiscovery.UseDevelopment(null);
             DataStore.OverrideDirectory = null;
             ConfigStore.OverrideDirectory = null;

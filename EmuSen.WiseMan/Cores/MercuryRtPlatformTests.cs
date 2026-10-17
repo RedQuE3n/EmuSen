@@ -44,7 +44,6 @@ namespace EmuSen.WiseMan.Cores
         public void Sound_picture_and_state_match_linuxs(string program, string sound, string picture, string state, string stateVersion7)
         {
             Assert.True(MercuryMachine.Available, MercuryNative.Report);
-            CoreOptions.BatteryRamDisabled = true;
             using var rust = new MercuryMachine(Program(program));
 
             var digests = new Digests();

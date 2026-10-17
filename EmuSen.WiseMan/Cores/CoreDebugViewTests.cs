@@ -19,20 +19,17 @@ namespace EmuSen.WiseMan.Cores
     public class CoreDebugViewTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenDebugView_" + Guid.NewGuid().ToString("N"));
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public CoreDebugViewTests()
         {
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreOptions.BatteryRamDisabled = true;
             CoreDiscovery.UseDirectories(null);
             CoreDiscovery.UseDevelopment(false);
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             DataStore.OverrideDirectory = null;
             CoreDiscovery.UseDirectories(null);
             CoreDiscovery.UseDevelopment(null);
@@ -49,7 +46,7 @@ namespace EmuSen.WiseMan.Cores
         // Built, run and attached as the corpus and a frontend do: the target is made after the frames.
         private static (ICore Core, IDebugTarget Target) Run(string path, string? engine, int frames = 2)
         {
-            ICore core = CoreFactory.Create(path, headless: true, engine);
+            ICore core = CoreFactory.Create(path, headless: true, engine, options: TestCores.NoBattery);
             core.LoadRom(path);
             for (int i = 0; i < frames; i++) core.RunFrame();
             return (core, CoreFactory.Bundle(core).DebugTarget);

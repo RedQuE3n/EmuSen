@@ -29,11 +29,10 @@ namespace EmuSen.WiseMan.Cores
 
         private static MoonRtCore Load(byte[] image)
         {
-            CoreOptions.BatteryRamDisabled = true;
             string path = SyntheticNesRom.WriteTemp(image);
             try
             {
-                var core = new MoonRtCore();
+                var core = new MoonRtCore() { Options = TestCores.NoBattery };
                 core.LoadRom(path);
                 return core;
             }
@@ -95,9 +94,8 @@ namespace EmuSen.WiseMan.Cores
                 _output.WriteLine($"{MoonGoldenTests.CorpusVariable} unset, not run");
                 return;
             }
-            CoreOptions.BatteryRamDisabled = true;
             Assert.True(MoonRtCore.Available, "MoonRT is not built");
-            using var native = new MoonRtCore();
+            using var native = new MoonRtCore() { Options = TestCores.NoBattery };
             native.LoadRom(path);
             for (int f = 0; f < 120; f++) native.RunFrame();
             Assert.Equal(1, native.ReadSpace(NesSystem.Ram, 0xF8));

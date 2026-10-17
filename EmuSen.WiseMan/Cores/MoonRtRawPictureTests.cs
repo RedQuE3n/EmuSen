@@ -17,7 +17,7 @@ namespace EmuSen.WiseMan.Cores
         public MoonRtRawPictureTests(ITestOutputHelper output)
         {
             _output = output;
-            CoreOptions.BatteryRamDisabled = true;
+
         }
 
         public static TheoryData<string> DrawnRuns
@@ -79,7 +79,7 @@ namespace EmuSen.WiseMan.Cores
             File.WriteAllBytes(path, rom);
             try
             {
-                using var core = new MoonRtCore();
+                using var core = new MoonRtCore() { Options = TestCores.NoBattery };
                 core.LoadRom(path);
                 Assert.Equal(new[] { RawEncodings.NesPpu }, ((EmuSen.Cores.Native.CoreEngine)core).Machine.Info.Raw.Select(r => r.Encoding));
                 // The palette MoonRT declares is the NES system pack's, all 64 colours, whatever the emphasis bits (Moon_Native.md §9.6).

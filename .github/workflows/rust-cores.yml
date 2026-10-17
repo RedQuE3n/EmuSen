@@ -480,7 +480,7 @@ jobs:
       fail-fast: false
       matrix:
         # linux-x64 on 24.04, not the library job's 22.04: the tests load SDL3's prebuilt native library, which needs glibc 2.38 (22.04 has 2.35). Windows and macOS only with EMUSEN_ALL_PLATFORMS=on (EmuSen_RustPlatform.md §31).
-        include: ${{ fromJSON(vars.EMUSEN_ALL_PLATFORMS == 'on' && '[{"rid": "linux-x64", "os": "ubuntu-24.04"}, {"rid": "win-x64", "os": "windows-latest"}, {"rid": "osx-arm64", "os": "macos-latest"}]' || '[{"rid": "linux-x64", "os": "ubuntu-24.04"}]') }}
+        include: ${{ fromJSON(vars.EMUSEN_ALL_PLATFORMS == 'on' && '[{"rid":"linux-x64","os":"ubuntu-24.04"},{"rid":"win-x64","os":"windows-latest"},{"rid":"osx-arm64","os":"macos-latest"}]' || '[{"rid":"linux-x64","os":"ubuntu-24.04"}]') }}
     steps:
       # LunaP.props takes the toolkit from the sibling checkout, so both are checked out side by side.
       - uses: actions/checkout@v4

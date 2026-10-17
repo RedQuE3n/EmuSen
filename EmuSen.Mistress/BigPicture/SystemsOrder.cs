@@ -15,11 +15,9 @@ namespace EmuSen.Mistress.BigPicture
             (BigPictureInterface.SortReleaseYear, "Release year"),
         ];
 
-        // Each system's first release, which was Japan's for all nine.
-        public static readonly IReadOnlyDictionary<string, int> FirstRelease = new Dictionary<string, int>(StringComparer.Ordinal)
-        {
-            ["nes"] = 1983, ["genesis"] = 1988, ["gb"] = 1989, ["snes"] = 1990, ["segacd"] = 1991, ["sega32x"] = 1994, ["psx"] = 1994, ["n64"] = 1996, ["gbc"] = 1998,
-        };
+        // Each system's first release by its ES-DE name, the systems table's year - see EmuSen_Backend.md §12.
+        public static readonly IReadOnlyDictionary<string, int> FirstRelease =
+            EmuSen.Crystal.Systems.SystemPacks.All.ToDictionary(p => p.Entry.EsdeSystem, p => p.Entry.ReleaseYear, StringComparer.Ordinal);
 
         // The shelves in the chosen order; a system with no known year goes last, and ties keep the order given.
         public static IReadOnlyList<T> Sort<T>(IReadOnlyList<T> shelves, string sorting, Func<T, string> system, Func<T, string> fullName) => sorting switch

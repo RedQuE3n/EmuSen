@@ -1,0 +1,16 @@
+{
+  "id": "nes",
+  "name": "Nintendo Entertainment System",
+  "console": "NES",
+  "manufacturer": "Nintendo",
+  "release_year": 1983,
+  "extensions": [".nes"],
+  "cheat_systems": ["Nintendo - Nintendo Entertainment System"],
+  "openvgdb_systems": ["NES"],
+  "cover_aspect": 1.43,
+  "esde_system": "nes",
+  "esde_full_name": "Nintendo Entertainment System",
+  "self_delimiting_images": false,
+  "attached_to": null,
+  "screenscraper_system": 3
+}

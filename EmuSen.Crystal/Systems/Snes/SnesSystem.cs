@@ -25,7 +25,8 @@ namespace EmuSen.Crystal.Systems.Snes
             PadButton.A, PadButton.X, PadButton.L, PadButton.R,
         };
 
-        public static readonly SystemEntry Entry = new(
+        // The C# literal, the failover; Entry is the systems table's row with this literal's code - see EmuSen_Backend.md §12.
+        public static readonly SystemEntry Literal = new(
             Id,
             "Super Nintendo Entertainment System",
             "SNES",
@@ -38,7 +39,10 @@ namespace EmuSen.Crystal.Systems.Snes
             0.73,
             "snes",
             "Super Nintendo",
-            SelfDelimitingImages: false);
+            SelfDelimitingImages: false,
+            ScreenScraperSystem: 4);
+
+        public static readonly SystemEntry Entry = SystemTable.Entry(Literal);
 
         // OpenVGDB hashes an image without the 512-byte copier header some dumps carry, as No-Intro does - see EmuSen_Settings_Reference.md §4.39.
         public static byte[] WithoutCopierHeader(byte[] file) => file.Length % 1024 == 512 ? file[512..] : file;

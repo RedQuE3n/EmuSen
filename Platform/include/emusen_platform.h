@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 12u
+#define EMUSEN_PLATFORM_ABI_VERSION 13u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -391,6 +391,17 @@ int64_t emusen_disc_playlist(const uint8_t *list, size_t list_len, uint8_t *out,
 
 /* The .sbi a disc's LibCrypt patches are looked for in beside an image: the image's stem with .sbi. */
 int64_t emusen_disc_sbi_beside(const uint8_t *image, size_t image_len, uint8_t *out, size_t len);
+
+/* ---- The systems table: emusen-systems (EmuSen_Backend.md, sections 5 and 12) ---- */
+
+/*
+ * Every system's facts as one compact JSON array, one object a system in the table's order, each with the keys id,
+ * name, console, manufacturer, release_year, extensions, cheat_systems, openvgdb_systems, cover_aspect, esde_system,
+ * esde_full_name, self_delimiting_images, attached_to (a console or null) and screenscraper_system (a number or null),
+ * in that order. By the length-query idiom. EMUSEN_PLATFORM_PARSE with words only for a library built from a broken
+ * data file.
+ */
+int64_t emusen_systems_table(uint8_t *out, size_t len);
 
 /* ---- Endymion: the logic half (EmuSen_Audio_Sync.md, sections 1 to 3; EmuSen_Input.md, sections 7 and 8) ---- */
 

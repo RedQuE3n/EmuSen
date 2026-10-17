@@ -15,7 +15,8 @@ namespace EmuSen.Crystal.Systems.Psx
         // The space name the PlayStation's engines share, so a cheat means the same memory on each.
         public const string Ram = "RAM";
 
-        public static readonly SystemEntry Entry = new(
+        // The C# literal, the failover; Entry is the systems table's row with this literal's code - see EmuSen_Backend.md §12.
+        public static readonly SystemEntry Literal = new(
             Id,
             "Sony PlayStation",
             "PlayStation",
@@ -29,7 +30,10 @@ namespace EmuSen.Crystal.Systems.Psx
             "psx",
             "Sony PlayStation",
             SelfDelimitingImages: false,
-            Recognise: Recognise);
+            Recognise: Recognise,
+            ScreenScraperSystem: 57);
+
+        public static readonly SystemEntry Entry = SystemTable.Entry(Literal);
 
         // A disc's format named and not opened yet: unencrypted .pbp, a later step - see Diamond_CDROM.md §8.2.
         public static readonly IReadOnlyList<string> DiscExtensions = new[] { ".pbp" };

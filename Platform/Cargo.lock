@@ -238,6 +238,7 @@ dependencies = [
  "emusen-native",
  "emusen-serenity",
  "emusen-session",
+ "emusen-systems",
  "emusen-trace",
 ]
 
@@ -261,6 +262,13 @@ dependencies = [
 
 [[package]]
 name = "emusen-session-service"
+version = "0.1.0"
+dependencies = [
+ "emusen-dotnet",
+]
+
+[[package]]
+name = "emusen-systems"
 version = "0.1.0"
 dependencies = [
  "emusen-dotnet",

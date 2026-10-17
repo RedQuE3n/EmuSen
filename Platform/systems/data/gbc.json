@@ -1,0 +1,16 @@
+{
+  "id": "gbc",
+  "name": "Game Boy Color",
+  "console": "GBC",
+  "manufacturer": "Nintendo",
+  "release_year": 1998,
+  "extensions": [".gbc"],
+  "cheat_systems": ["Nintendo - Game Boy Color"],
+  "openvgdb_systems": ["GBC"],
+  "cover_aspect": 1.0,
+  "esde_system": "gbc",
+  "esde_full_name": "Game Boy Color",
+  "self_delimiting_images": false,
+  "attached_to": null,
+  "screenscraper_system": 10
+}

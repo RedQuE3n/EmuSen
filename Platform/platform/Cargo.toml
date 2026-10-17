@@ -28,3 +28,5 @@ emusen-native = { path = "../../EmuSen/Cores/Shared/emusen-native" }
 # The set module, which reads a sheet's companions and an .m3u for the runtime (EmuSen_CoreAPI_Extensions.md §2.3).
 emusen-disc = { path = "../../EmuSen/Cores/Shared/emusen-disc" }
 emusen-serenity = { path = "../serenity" }
+# The systems table, what each console is (EmuSen_Backend.md §5, §12).
+emusen-systems = { path = "../systems" }

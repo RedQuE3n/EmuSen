@@ -230,12 +230,4 @@ namespace EmuSen.Crystal.Systems.N64
             return image;
         }
     }
-
-    // The N64's save media, named here until the console has a system pack of its own; the facts beside them are still its catalog core's - see EmuSen_SaveMedia.md §7.2.
-    public static class N64Media
-    {
-        public const string SystemId = "n64";
-
-        public static readonly SaveMediumEntry Pak = new(N64PakFormat.Id, "Controller Pak", "Pak", ".mpk", N64PakFormat.Instance);
-    }
 }

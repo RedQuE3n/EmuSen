@@ -53,16 +53,12 @@ namespace EmuSen.Crystal.SaveMedia
     // The media every system pack names, by id or by extension.
     public static class SaveMediumFormats
     {
-        // The media of a console with no system pack yet, its facts still its catalog core's, by system id - see EmuSen_SaveMedia.md §7.2.
-        private static readonly (string System, SaveMediumEntry Entry)[] Unpacked = { (Systems.N64.N64Media.SystemId, Systems.N64.N64Media.Pak) };
-
-        public static IEnumerable<SaveMediumEntry> All => SystemPacks.All.SelectMany(p => p.Media ?? Array.Empty<SaveMediumEntry>()).Concat(Unpacked.Select(u => u.Entry));
+        public static IEnumerable<SaveMediumEntry> All => SystemPacks.All.SelectMany(p => p.Media ?? Array.Empty<SaveMediumEntry>());
 
         public static SaveMediumEntry? Entry(string? id) => id is null ? null : All.FirstOrDefault(e => e.Id == id);
 
-        // A system's media, its pack's or those named before it has one.
-        public static IEnumerable<SaveMediumEntry> Of(string systemId) =>
-            SystemPacks.For(systemId)?.Media ?? Unpacked.Where(u => u.System == systemId).Select(u => u.Entry);
+        // A system's media, its pack's.
+        public static IEnumerable<SaveMediumEntry> Of(string systemId) => SystemPacks.For(systemId)?.Media ?? Array.Empty<SaveMediumEntry>();
 
         // A system's medium of this extension, or any pack's where no system is given.
         public static SaveMediumEntry? ForExtension(string extension, string? systemId = null) =>

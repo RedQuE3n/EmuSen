@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace EmuSen.Crystal.Systems
 {
@@ -21,6 +22,12 @@ namespace EmuSen.Crystal.Systems
             Array.Exists(Extensions, e => e.Equals(extension, StringComparison.OrdinalIgnoreCase));
 
         public IReadOnlyList<string> CheatSystemNames => CheatSystems ?? Array.Empty<string>();
+
+        // A core's row made from the systems it runs, never written by hand: the first system's console and facts, every system's extensions and folders - see EmuSen_Backend.md §12.
+        public static CoreDescriptor Of(string displayName, params SystemEntry[] systems) =>
+            new(displayName, systems.SelectMany(s => s.Extensions).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(), systems.SelectMany(s => s.CheatSystems).Distinct().ToArray(),
+                systems[0].Console, systems[0].Manufacturer, systems[0].ReleaseYear, CoverAspect: systems[0].CoverAspect,
+                OpenVgdbSystems: systems.SelectMany(s => s.OpenVgdbSystems).Distinct().ToArray(), OpenVgdbBytes: systems[0].OpenVgdbBytes);
 
         // One core under several aliases must not count its folders twice.
         public static IReadOnlyCollection<string> SupportedCheatSystems(IEnumerable<CoreDescriptor> registry)

@@ -603,7 +603,8 @@ writes the blank pak the page describes, which is byte for byte the pak MarsRT f
 **Where it is named.** The N64 has no system pack yet: its facts are its catalog core's while C# Mars runs it. Its
 medium is listed beside the packs' in `SaveMediumFormats` until it has one, and `MemoryCards` takes a catalog
 console's media from its v1 engine's info (`CoreCatalog.EngineSystem`), as it takes a discovered console's from its
-own; the PlayStation's and the Sega CD's answers are unchanged.
+own; the PlayStation's and the Sega CD's answers are unchanged. *Since 2026-10-17 the N64 has a system pack,
+`N64System`, which names the Controller Pak; the list beside the packs is gone (`EmuSen_Backend.md` §12).*
 
 **The default.** With the module and the import, the N64's paks are *Shared* by default (§9), and Mistress offers the
 import once before an N64 game starts where per-game `.mpk` files exist and `Pak 1` does not; nothing of that was

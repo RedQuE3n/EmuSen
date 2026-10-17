@@ -1,0 +1,16 @@
+{
+  "id": "snes",
+  "name": "Super Nintendo Entertainment System",
+  "console": "SNES",
+  "manufacturer": "Nintendo",
+  "release_year": 1990,
+  "extensions": [".smc", ".sfc"],
+  "cheat_systems": ["Nintendo - Super Nintendo Entertainment System", "Nintendo - Satellaview"],
+  "openvgdb_systems": ["SNES"],
+  "cover_aspect": 0.73,
+  "esde_system": "snes",
+  "esde_full_name": "Super Nintendo",
+  "self_delimiting_images": false,
+  "attached_to": null,
+  "screenscraper_system": 4
+}

@@ -14,7 +14,8 @@ namespace EmuSen.Crystal.Systems.Nes
 
         public const int Ports = 2;
 
-        public static readonly SystemEntry Entry = new(
+        // The C# literal, the failover, Entry being the systems table's row with this literal's code; Famicom Disk System is other hardware and is not claimed - see EmuSen_Backend.md §12.
+        public static readonly SystemEntry Literal = new(
             Id,
             "Nintendo Entertainment System",
             "NES",
@@ -26,7 +27,10 @@ namespace EmuSen.Crystal.Systems.Nes
             WithoutInesHeader,
             1.43,
             "nes",
-            "Nintendo Entertainment System");
+            "Nintendo Entertainment System",
+            ScreenScraperSystem: 3);
+
+        public static readonly SystemEntry Entry = SystemTable.Entry(Literal);
 
         // The pad in the order a bindings screen lists it.
         public static readonly IReadOnlyList<PadButton> PadButtons = new[]

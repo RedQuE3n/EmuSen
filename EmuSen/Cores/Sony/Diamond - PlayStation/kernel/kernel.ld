@@ -1,6 +1,7 @@
 /* The open kernel's image: 512 KiB at physical 1FC00000h, code run through KSEG0 (9FC00200h on), the reset entry
    and the header at their KSEG1 addresses; the exception path's code (.ramtext) and the variables in the kernel's RAM
-   from 80000500h, copied there at boot. Diamond_OpenKernel.md §2, Diamond_OpenKernel_Phase2.md §25.3. */
+   from 80000500h, copied there at boot; the shell's PS-EXE at 1FC60000h. Diamond_OpenKernel.md §2,
+   Diamond_OpenKernel_Phase2.md §25.3, Diamond_Shell.md §11.4. */
 OUTPUT_FORMAT("elf32-tradlittlemips")
 OUTPUT_ARCH(mips)
 ENTRY(reset)
@@ -14,6 +15,7 @@ PHDRS
   bev_general PT_LOAD;
   text PT_LOAD;
   data PT_LOAD;
+  shell PT_LOAD;
 }
 
 SECTIONS
@@ -43,9 +45,11 @@ SECTIONS
     . = ALIGN(8);
   } :data
   __bss_end = ADDR(.bss) + SIZEOF(.bss);
+  .shell 0x9FC60000 : AT(0x1FC60000) { KEEP(*(.shell)) } :shell
   /DISCARD/ : { *(.MIPS.abiflags) *(.reginfo) *(.mdebug*) *(.pdr) *(.comment) *(.gnu.attributes) *(.note*) }
 }
 ASSERT(SIZEOF(.reset) <= 0x100, "the reset entry runs into the header")
 ASSERT(SIZEOF(.header) <= 0x40, "the header runs into the debug vector")
 ASSERT(__bss_end <= 0x8000DF80, "the kernel's variables reach the area games patch")
-ASSERT(LOADADDR(.data) + SIZEOF(.data) <= 0x1FC80000, "the image is larger than 512 KiB")
+ASSERT(LOADADDR(.data) + SIZEOF(.data) <= 0x1FC60000, "the kernel reaches the shell's place")
+ASSERT(SIZEOF(.shell) <= 0x20000, "the shell is larger than its 128 KiB")

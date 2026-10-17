@@ -195,7 +195,8 @@ the sheet's nth file at 65,536 + n, then an `.sbi` found beside the image, told 
 `EmuSen_CoreAPI_Extensions.md` §2.4, decided 2026-10-11) [C]. **The number is defined in Diamond's `v1.rs` until it is
 added to `emusen_core.h` and `emusen-native`**, which is the framework's step (§8.4). Every disc is CD-XA to the
 crate (`IsoForm::Mode2Form1`). The market is the licence's second line in sector 4, as `media.rs` reads a raw image's;
-a disc without the licence text is refused. Refusals: −9 not a PlayStation image, −10 a short PS-EXE, −11 a sheet's
+a disc without the licence text is refused. *Since 2026-10-17* (`Diamond_Shell.md` §11.5) a disc whose every track is audio is
+opened as such, refused at create and taken by `media_insert`. Refusals: −9 not a PlayStation image, −10 a short PS-EXE, −11 a sheet's
 tracks missing ("the cue sheet names 2 track files and 1 were given"), −12 a sheet or image the crate cannot read, each
 with words.
 

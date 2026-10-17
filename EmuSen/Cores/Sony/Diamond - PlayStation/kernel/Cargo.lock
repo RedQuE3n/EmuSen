@@ -3,5 +3,12 @@
 version = 4
 
 [[package]]
+name = "diamond-guest"
+version = "0.1.0"
+
+[[package]]
 name = "diamond-kernel"
 version = "0.1.0"
+dependencies = [
+ "diamond-guest",
+]

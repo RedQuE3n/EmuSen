@@ -731,3 +731,164 @@ Nephrite's follow-up, not built here: an empty start for `mcd`, once the stall i
   four failures are not this step's. The themed startup list's count, 9 against 8, and the players' ports, seven
   consoles against six, both count the Sega CD, offered on 2026-10-16 after the two tests were written
   (`e525b9b8`, 2026-10-15).
+
+### 11.3 S3: the shell as a program of its own (2026-10-17)
+
+**Built.**
+- **`guest/`**, the crate `diamond-guest`, `no_std` with no dependencies, holds what the kernel and the shell share:
+  - `mem`, volatile access;
+  - `font`, the 5x8 glyphs, moved from the kernel;
+  - `sjis`, the full-width codes' ASCII forms, moved from the kernel's `charset.rs`, whose Krom2RawAdd now reads them
+    from it;
+  - `gpu`, the display set-up, the fill, the font's upload and the text, moved from the kernel's `screen.rs`, and a
+    rectangle's upload for S4's icons.
+- **`kernel-shell/`**, the crate `diamond-shell`, is a PS-EXE built for `mipsel-sony-psx` on the kernel's pinned
+  toolchain and linked at 80010000h:
+  - its entry `shell_start(1, reason)` is the PS-EXE's PC;
+  - `bios.rs` is its only way to the kernel: 23 A and B calls, each a stub that loads t1 with the number and jumps to
+    A0h or B0h (psx-spx "BIOS Function Summary");
+  - `clock.rs` waits for vblank by the kernel's root counter 3 event (F2000003h, spec 2);
+  - `pads.rs` reads the pads through InitPAD2's buffers;
+  - `cards.rs` reads a card's state by `_card_load`'s events (F4000001h: 4, 100h, 2000h, 8000h), notices a card changed
+    by `_card_info`'s, and lists, reads, copies, erases and formats through the file calls;
+  - `drive.rs` asks GetID at the controller's ports with IRQ2 masked and reads its flags by bit;
+  - `tty.rs` writes through B(3Dh);
+  - `manager.rs` is stage 10's manager moved over unchanged in what it shows and does.
+  The free blocks are now 15 less the blocks of the files `firstfile2` lists, as a program can count them, where the
+  kernel's manager read the directory's states.
+- **The kernel**: `manager.rs` and `screen.rs` are deleted, and `shell.rs` gains hand-over v1 (§1.3).
+  - `disc()` reads GetID's flags by bit and answers empty, audio, refused or data.
+  - The shell's PS-EXE, included from `kernel-shell/diamond-shell.exe`, is copied to the RAM its header names, the cache
+    flushed, I_MASK and I_STAT cleared, and `Exec(header, 1, reason)` called. On its return I_MASK is cleared and the
+    boot begins again from `_96_init`.
+  - The kernel's variables end at 9AF0h, 2,080 bytes below A310h.
+- **The image** (P4): `diamond-kernel image` in `kernel-harness/` builds the shell, writes `diamond-shell.exe` and its
+  SHA-256, then builds the kernel over it. The harness's `psexe` writes the header from the ELF:
+  - the PC from its entry, GP 0;
+  - the body from its one loadable segment, padded to 800h;
+  - `__bss_start` to `__bss_end` as the region Exec zeroes;
+  - the stack at 801FFF00h.
+  `the_shell_rebuilds_to_its_committed_bytes` holds it beside the kernel's own rebuild test.
+
+**Measured (2026-10-17).**
+- The shell: 16,384 bytes, SHA-256 `22678994c010264451c14c2c425317a794ce65addf34ff78deafa6861bc882a0`.
+- The kernel image: 524,288 bytes, 104,456 of them before the last non-zero byte, SHA-256
+  `9d5728103abb7458cac5228d88080c7d0434003081dd98133f08ba379caae92c`. Both rebuild to the same bytes with
+  `DIAMOND_KERNEL_REBUILD=require`.
+- `kernel-harness`: 61 tests.
+- Diamond: stage 10's `the_screen_with_no_disc_formats_a_card_and_boots_a_disc_put_in` passes on the moved shell
+  unedited. `the_shell_runs_as_a_program_side_loaded_on_the_open_kernel`, case 5 of §4.2, formats a card and draws the
+  background with the shell side-loaded over the kernel's own entry.
+- **Why the goldens move.** The open kernel now reaches 80030000h at cycle 287,820, where the earlier image reached it
+  at 287,844 (measured by stepping both to the address). Every program side-loaded there therefore starts 24 cycles
+  sooner, and a state holds the kernel's RAM, which the change rearranged.
+  - With the earlier image swapped back in, the unit test of per-game states (`Diamond_Cards.md` §10.3) gives its
+    2026-10-15 digests again; with this image it gives others.
+  - The re-recording follows `Diamond_Enhancements.md` §6.2, in a commit of its own.
+  - `programs.txt`: 8 of 49 lines, the state alone, the eight programs run on the open kernel.
+  - `discs.txt`: 10 of 80 anchors, the state alone; no picture or sound of a game moved.
+  - `ps1-tests.txt`: all 48 lines, the state of each. The pictures of 20 programs moved, the TTY of 7 and the sound of
+    1, every one a program that measures time or draws over frames from its start: `timers`, `timer-dump`,
+    `cdrom/timing`, `cpu/io-access-bitwidth`, `dma/chain-looping`, `dma/chopping`, `gpu/bandwidth`, the GPU drawing
+    programs, the MDEC frame and movie programs, and `spu/stereo`. VRAM at the end moved for none of them.
+- Diamond's crate with `EMUSEN_DIAMOND_PS1TESTS` and `EMUSEN_DIAMOND_DISCS`, after the re-recording: 287 tests.
+- WiseMan's Diamond tests under the test lock with `EMUSEN_DIAMOND_PS1TESTS`: 68 of 68. Among them are ps1-tests'
+  verdicts against the console's logs and pictures, unchanged by the 24 cycles.
+- `firmwarecheck.py` on this image is run apart, as each time the image changes (§9 P3).
+
+### 11.4 S4: the memory card manager (2026-10-17)
+
+**Built**, in `kernel-shell/src/`. Stage 10's `manager.rs` is replaced by:
+- **`screens.rs`**: Home and Memory Cards, with a sheet over the list for a save's actions (*Copy to Slot n*, *Delete*,
+  *Cancel*), for a card's (*Format*, *Cancel*), and for the confirmation of a delete or a format. The confirmation names
+  the save or the slot and starts on *Cancel*. Each action writes its TTY line (§3.3): `shell: card n ready|blank|absent`,
+  `shell: copy n NAME m ok|not-ready|same-name|too-full|unreadable|unwritable`, `shell: delete n NAME ok|failed`,
+  `shell: format n ok|failed`, `shell: boot`. A product code is shown under the title where the file name carries one
+  (psx-spx "Filename Notes").
+- **`icons.rs`**: icons as §3.1 gives them, each save's CLUT at (960, 256 + k) and its frames at (896 + 4f, 16k) in
+  4-bit texture page 14, drawn as raw textured rectangles (GP0(65h)), and animated at 16 and 11 of the console's frames.
+  A title frame whose flag is not 11h–13h is listed as *Damaged save*.
+- **`ui.rs`**: the look of §3.2. LunaP's menu palette reduced to 15 bits, the header with EmuSen's name and the drive's
+  state, eight rows of twenty pixels that scroll through fifteen, the status line and the hints.
+- **`pads.rs`'s `Repeat`**: the grammar's repeat, the directions and shoulders again after 24 frames and every 5 after.
+- **`cards.rs`**: the copy goes a block at a time, through 8 KiB of user RAM, with a progress bar. A character the font
+  lacks is the box, now the font's 7Fh glyph in `diamond-guest` (§9 Q12).
+
+**The shell's place in the image.** S3 included the shell among the kernel's read-only data. Its size then moved the
+data after it. Pointers into that data survive as dead words below the kernel's boot stack, at 801FFDD1h to
+801FFE3Dh, measured by comparing RAM after `cpu/cop` on both images. A program that never overwrites them carries them
+into its state. So the S4 shell, twice the size, moved the state of every ps1-tests program again, and of two disc
+anchors, with nothing else moved.
+
+The shell now has a section of its own at 1FC60000h (`kernel.ld`, at most 128 KiB). The kernel's own bytes end at
+88,072, and nothing of the kernel depends on the shell's size. To prove it, the shell's Home words were changed, the
+image rebuilt, and the goldens checked: they held (below).
+
+**Two departures from §4.1, argued.**
+- The screens' logic was not split into a host-testable library. Every behaviour it has is observable on the emulated
+  machine through the TTY and the cards' bytes, and is tested there (below). A second build of the logic for the host
+  would test the same code under a different compiler and target, at the cost of a crate split.
+- The slot 2 card is the player's setting. Diamond's "Memory card in slot 2" is *None* by default, and a console
+  session keeps it as the player set it, since the host does not set a core's own keys. So a copy between cards needs
+  that setting on; the shell says "The card in Slot 2 is not ready" otherwise.
+
+**Tests.**
+- `tests/shell.rs`, 8, on cards built from psx-spx's layout (`tests/support/card.rs`):
+  - a save copied whole, its chain and blocks equal to the source's, the source unchanged;
+  - the three refusals, nothing written;
+  - a delete that asks first, Cancel deleting nothing and Delete marking the frames A1h and A3h;
+  - a format that asks first;
+  - a damaged save listed and deleted in slot 2, reached with R1, and Circle and L1;
+  - the repeat: Down held 40 frames reaching the fifth save;
+  - the icons' CLUT and texels in VRAM;
+  - a disc put in ending the shell (`shell: boot`) and booted by the kernel.
+- **The negative control** of §4.2 case 6: a build whose Delete skips its confirmation fails the delete test.
+- Stage 10's screen test and the side-loaded case now format through the new controls, Triangle, Format, then Format
+  in the confirmation.
+- WiseMan's `DiamondShellTests` gains the host's judgement (§4.3). The console is started with the shared Card 1 holding
+  two saves made by `SaveMediaManagerTests.WithSave` and an empty Card 2. The shell copies one to Card 2 and deletes the
+  other. `PsxCardFormat` then reads Card 1 holding only the copied save and Card 2 holding it whole, 13 blocks free on
+  each.
+
+**Measured (2026-10-17).**
+- The shell: 32,768 bytes, SHA-256 `96885defb6f7e385e93bcc884794ebda70a2c401025193199e85002b98ff97d1`.
+- The kernel image: 524,288 bytes, the kernel's own 88,072 and the shell at 60000h, SHA-256
+  `92dad42f277f4a8fd64e6404219da5de4c97d999ea479ce16c0429ce89388012`. Both rebuild to the same bytes with
+  `DIAMOND_KERNEL_REBUILD=require`.
+- `kernel-harness`: 61 tests.
+- Diamond's crate with both corpora: 296 tests, `tests/shell.rs`'s 9 among them (the 8 above and the pictures' tool,
+  which writes nothing unless asked).
+- WiseMan's Diamond and console tests under the test lock with `EMUSEN_DIAMOND_PS1TESTS`: 71 of 71.
+- **The goldens**, re-recorded in a commit of their own (`Diamond_Enhancements.md` §6.2). Against S3's, the state alone
+  moved: all 48 of `ps1-tests.txt` and 10 of 80 disc anchors, by the dead pointers above as the shell's section moved
+  the kernel's read-only data once more. `programs.txt` is unchanged, and no picture, sound, TTY or VRAM moved.
+- The proof that the section holds. The shell's Home words were changed, giving a shell of SHA-256 `86f78386…` and an
+  image of `d1731ca4…`. All three golden files then held, and the committed shell was restored.
+
+### 11.5 S5: a disc of music in the drive (2026-10-17)
+
+**Built.**
+- `medium::open` gains a third outcome, `Opened::Audio`, for a disc every track of which is audio, taken before the
+  licence is looked for. `emusen-disc` opens such a sheet as any other, which answers §5.1's open question.
+- Diamond's `create` refuses it with `STATUS_NOT_PLAYSTATION` and the words "an audio disc is no game: start the
+  PlayStation with no disc and put it in the drive".
+- `media_insert` puts it in the drive as any disc. Its fingerprint is taken over the same sectors as a data disc's.
+- A disc of data without the licence text is still refused.
+- Nothing else changed. The controller already answered GetID for an audio disc as psx-spx's table does (INT5, flags
+  90h), and the kernel's `disc()` and the shell's `drive.rs` read those flags by bit since S3. The kernel image is S4's.
+
+**What a player meets.**
+- On the open kernel, *Insert Disc...* with a music sheet makes the shell's header read "Audio CD" and its TTY say
+  `shell: drive audio`. Nothing boots, and the CD player is not built (§5.2).
+- With a player's BIOS, that BIOS's own CD player has its disc. Its behaviour is the other writer's to observe (§9 P1).
+
+**Tests.**
+- Diamond's `an_audio_disc_goes_in_the_drive_and_is_no_game`: refused at create, taken through the lid, printed; the
+  unlicensed data disc refused.
+- `tests/shell.rs`'s `an_audio_disc_is_named_by_the_shell_and_not_booted`: from power-on through the hand-over's reason,
+  and put in later through the shell's own asking; nothing boots.
+- WiseMan's `DiamondShellTests.An_audio_disc_goes_in_the_drive`: a sheet and its track inserted by the host's
+  `InsertDisc`.
+- **Measured (2026-10-17):**
+  - Diamond: 175 unit tests, `tests/shell.rs`'s 10 and `diamond-v1`'s 4.
+  - WiseMan's `DiamondShellTests`, `DiamondTests` and `DiamondPlayersTests`: 40 of 40.

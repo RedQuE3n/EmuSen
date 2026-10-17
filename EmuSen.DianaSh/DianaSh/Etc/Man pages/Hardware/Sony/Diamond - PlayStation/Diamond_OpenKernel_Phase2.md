@@ -195,6 +195,11 @@ attempted, since psx-spx describes it as faulting at 6F726463h and then locking 
 
 ## 16. The screen with no disc
 
+*Since 2026-10-17 (`Diamond_Shell.md` §1.3, §11.3) the screen and the manager are not the kernel's: they are the shell,
+a PS-EXE of its own (`kernel-shell/`) that the kernel carries in its ROM and starts by Exec under hand-over v1, reaching
+the kernel only through its call tables; the font and the GPU's primitives are the shared crate `diamond-guest`. What
+this section describes, the shell does unchanged until its step S4.*
+
 `screen.rs`, `font.rs` and `manager.rs`. A plain screen and a minimal card manager, written for this kernel, with no
 text, logo, layout or sound of Sony's shell (the plan's §5.9 item 6). The GPU is set as psx-spx's "GPU Display Control
 Commands" give it [R]: GP1 reset, 320x240 NTSC at 15 bits, the display range X 600-3160 ("NTSC 320") and Y 10h-100h

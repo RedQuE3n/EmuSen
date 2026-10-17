@@ -57,3 +57,16 @@ fn every_jump_lands_in_the_part_of_the_kernel_it_lies_in() {
     }
     assert!(jumps > 500, "{jumps} jumps checked");
 }
+
+/// The shell's committed PS-EXE matches its digest and a rebuild by the pinned toolchain (Diamond_Shell.md §1.3, P4).
+#[test]
+fn the_shell_rebuilds_to_its_committed_bytes() {
+    assert_eq!(sha256::hex(&image::committed_shell()), image::committed_shell_digest());
+    let required = std::env::var("DIAMOND_KERNEL_REBUILD").is_ok_and(|v| v == "require");
+    match image::rebuild_shell() {
+        None if required => panic!("the pinned toolchain {} is required and absent", image::channel()),
+        None => eprintln!("skipped: the pinned toolchain {} is not installed", image::channel()),
+        Some(Err(e)) => panic!("the shell did not build: {e}"),
+        Some(Ok(bytes)) => assert!(bytes == image::committed_shell(), "the rebuild differs from diamond-shell.exe; run `cargo run --release --bin diamond-kernel -- image`"),
+    }
+}

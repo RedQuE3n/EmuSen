@@ -1,11 +1,11 @@
 //! What runs at 80030000h once the kernel is set up: the CD boot of psx-spx's "CDROM File Playstation EXE and
 //! SYSTEM.CNF" (BOOT, TCB, EVENT and STACK, PSX.EXE without the file, the argument at 180h, _96_init, the program
-//! loaded and run by Exec with SYSTEM.CNF's stack), the warm boot of A(A0h), and the screen when no disc boots.
-//! Diamond_OpenKernel_Phase2.md §15.
+//! loaded and run by Exec with SYSTEM.CNF's stack), the warm boot of A(A0h), and the shell program started when no
+//! disc boots, under hand-over v1. Diamond_OpenKernel_Phase2.md §15, Diamond_Shell.md §1.3.
 
 use crate::layout::{self, A_TABLE, SCRATCH};
 use crate::mem::{call, rd, rd8, wr, wr8};
-use crate::{blocks, cdrom, entry, exec, file, screen};
+use crate::{blocks, cdrom, entry, exec, file};
 
 /// The shell's stack, 1800h bytes in the kernel's RAM, so that a program loaded high cannot overwrite it.
 #[unsafe(no_mangle)]
@@ -31,22 +31,63 @@ static mut SETTINGS: Settings = Settings { name: [0; NAME_MAX as usize], threads
 static mut TEXT: [u32; 0x200] = [0; 0x200];
 static mut HEADER: [u32; 15] = [0; 15];
 
-#[derive(PartialEq, Eq)]
+/// What the drive holds, as the shell's hand-over names it in Exec's second parameter (Diamond_Shell.md §1.3).
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Disc {
-    Data,
-    Other,
+    Empty = 0,
+    Audio = 1,
+    Refused = 2,
+    Data = 3,
 }
 
-/// The drive asked by GetID until it answers, through the spin-up: a licensed data disc, or anything else.
+/// The drive asked by GetID until it answers, through the spin-up, its second response's flags read by bit as psx-spx's
+/// GetID table gives them: missing (40h), audio (10h), denied (80h) with the ID error; a licensed data disc boots.
 pub fn disc() -> Disc {
     for _ in 0..40 {
         match cdrom::get_id() {
             Ok(_) => return Disc::Data,
-            Err([s, 0x80]) if s & 0x10 == 0 => screen::pause(4),
-            Err(_) => return Disc::Other,
+            Err([s, 0x80]) if s & 0x10 == 0 => pause(4),
+            Err([_, f]) if f & 0x40 != 0 => return Disc::Empty,
+            Err([_, f]) if f & 0x10 != 0 => return Disc::Audio,
+            Err([s, 0x80]) if s & 0x08 != 0 => return Disc::Refused,
+            Err(_) => return Disc::Empty,
         }
     }
-    Disc::Other
+    Disc::Empty
+}
+
+/// `frames` vblanks waited on I_STAT's bit, vblank being masked while the kernel's shell code runs.
+fn pause(frames: u32) {
+    for _ in 0..frames {
+        wr(layout::io::I_STAT, !1);
+        while rd(layout::io::I_STAT) & 1 == 0 {}
+    }
+}
+
+/// The shell program (`kernel-shell`), a PS-EXE carried in the ROM at 1FC60000h in a section of its own, so that its
+/// size moves nothing else of the image; Diamond_Shell.md §1.3, §11.4.
+const SHELL_LEN: usize = include_bytes!("../../kernel-shell/diamond-shell.exe").len();
+#[unsafe(link_section = ".shell")]
+static SHELL: [u8; SHELL_LEN] = *include_bytes!("../../kernel-shell/diamond-shell.exe");
+static mut SHELL_HEADER: [u32; 15] = [0; 15];
+
+/// Hand-over v1: the shell copied to the RAM its header names and started by Exec(header, 1, reason); it returns 0 when
+/// the drive holds a disc to boot, having stopped its pads and cards and masked vblank.
+fn run_shell(reason: Disc) {
+    let header = &raw mut SHELL_HEADER as u32;
+    let rom = SHELL.as_ptr() as u32;
+    for i in 0..0x3C {
+        wr8(header + i, rd8(rom + 0x10 + i));
+    }
+    let (address, size) = (rd(header + 0x08), rd(header + 0x0C));
+    for i in (0..size.min(SHELL.len() as u32 - 0x800)).step_by(4) {
+        wr(address + i, rd(rom + 0x800 + i));
+    }
+    unsafe { entry::flush_cache() };
+    wr(layout::io::I_MASK, 0);
+    wr(layout::io::I_STAT, 0);
+    unsafe { entry::exec(header, 1, reason as u32) };
+    wr(layout::io::I_MASK, 0);
 }
 
 fn upper(c: u32) -> u32 {
@@ -174,10 +215,10 @@ extern "C" fn shell_main(k1: u32) -> ! {
     }
     loop {
         cdrom::init_96();
-        if disc() == Disc::Data {
-            start(settings());
+        match disc() {
+            Disc::Data => start(settings()),
+            other => run_shell(other),
         }
-        screen::no_disc();
     }
 }
 

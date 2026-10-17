@@ -13,6 +13,7 @@ test = false
 bench = false
 
 [dependencies]
+diamond-guest = { path = "../guest" }
 
 # Its own root: no host workspace builds it.
 [workspace]

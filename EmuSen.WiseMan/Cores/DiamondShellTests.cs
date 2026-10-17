@@ -79,7 +79,7 @@ namespace EmuSen.WiseMan.Cores
             Run(core, 420);
             byte[] frame = core.GetFrameBufferRgba();
             int at = (120 * core.ScreenWidth + 2) * 4;
-            Assert.Equal(new byte[] { 16, 24, 41 }, frame[at..(at + 3)]);
+            Assert.Equal(new byte[] { 8, 8, 16 }, frame[at..(at + 3)]);
 
             string cue = Disc("Amber Saga");
             core.InsertDisc(cue);
@@ -117,6 +117,62 @@ namespace EmuSen.WiseMan.Cores
             core.LoadState(empty);
             Assert.Equal(-1, core.DiscIndex);
             Assert.False(core.Machine.Info.Drives[0].Loaded);
+        }
+
+        private static void Press(CoreEngine core, EmuSen.Galaxia.Input.PadButton button)
+        {
+            core.SetButton(0, button, true);
+            Run(core, 4);
+            core.SetButton(0, button, false);
+            Run(core, 4);
+        }
+
+        // The shell's copy and delete read back by the host's own reader of the format - see Diamond_Shell.md §4.3.
+        [Fact]
+        public void The_shells_copy_and_delete_are_read_back_by_the_hosts_format_module()
+        {
+            Mode(MemoryCards.Shared);
+            var config = GraphicsConfig.Load();
+            config.SetValue("PlayStation", "card2", "card");
+            config.Save();
+            var format = EmuSen.Crystal.Systems.Psx.PsxCardFormat.Instance;
+            byte[] one = EmuSen.WiseMan.Crystal.SaveMediaManagerTests.WithSave(EmuSen.WiseMan.Crystal.SaveMediaManagerTests.WithSave(format.Format(), "BASLUS-00001AMBER", "Amber Saga", new[] { 0 }, 0xA1), "BASLUS-00002BASALT", "Basalt Run", new[] { 1, 2 }, 0xB2);
+            string card1 = SaveLibrary.CardPathFor("PlayStation", "Card 1", ".mcr"), card2 = SaveLibrary.CardPathFor("PlayStation", "Card 2", ".mcr");
+            Directory.CreateDirectory(Path.GetDirectoryName(card1)!);
+            File.WriteAllBytes(card1, one);
+            File.WriteAllBytes(card2, format.Format());
+            using (var core = (CoreEngine)CoreFactory.CreateConsole("PlayStation"))
+            {
+                Run(core, 900);
+                foreach (var b in new[] { EmuSen.Galaxia.Input.PadButton.B, EmuSen.Galaxia.Input.PadButton.Down, EmuSen.Galaxia.Input.PadButton.B, EmuSen.Galaxia.Input.PadButton.B })
+                    Press(core, b);
+                Run(core, 900);
+                foreach (var b in new[] { EmuSen.Galaxia.Input.PadButton.Up, EmuSen.Galaxia.Input.PadButton.B, EmuSen.Galaxia.Input.PadButton.Down, EmuSen.Galaxia.Input.PadButton.B, EmuSen.Galaxia.Input.PadButton.Up, EmuSen.Galaxia.Input.PadButton.B })
+                    Press(core, b);
+                Run(core, 300);
+                core.SaveSram();
+            }
+            var first = format.Read(File.ReadAllBytes(card1));
+            var second = format.Read(File.ReadAllBytes(card2));
+            Assert.Equal(new[] { ("BASLUS-00002BASALT", 2) }, first.Saves.Select(s => (s.Id, s.Units)));
+            Assert.Equal(new[] { ("BASLUS-00002BASALT", "Basalt Run", 2) }, second.Saves.Select(s => (s.Id, s.Title, s.Units)));
+            Assert.Equal((13, 13), (first.FreeUnits, second.FreeUnits));
+        }
+
+        // A disc of music alone goes in the drive through Insert Disc - see Diamond_Shell.md §5.1.
+        [Fact]
+        public void An_audio_disc_goes_in_the_drive()
+        {
+            string dir = Path.Combine(_root, "Music");
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, "Tones.bin"), Enumerable.Range(0, 300 * 2352).Select(i => (byte)(i / 4 % 64)).ToArray());
+            string cue = Path.Combine(dir, "Tones.cue");
+            File.WriteAllText(cue, "FILE \"Tones.bin\" BINARY\n  TRACK 01 AUDIO\n    INDEX 01 00:00:00\n");
+            using var core = (CoreEngine)CoreFactory.CreateConsole("PlayStation");
+            Run(core, 60);
+            core.InsertDisc(cue);
+            Run(core, 90);
+            Assert.Equal((0, false, true), (core.DiscIndex, core.LidOpen, core.Machine.Info.Drives[0].Loaded));
         }
 
         // A file the core refuses goes into no drive: the lid stays open, the session's discs are as they were.

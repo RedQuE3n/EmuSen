@@ -81,17 +81,18 @@ namespace EmuSen.WiseMan.Crystal
                 Assert.Equal(SystemTable.Keys.Select(k => k.Key).Concat(SystemTable.PackKeys).ToArray(), row.EnumerateObject().Select(m => m.Name).ToArray());
         }
 
+        // The library's code in place of the literal's where the switch chose the table, and a recogniser only where the literal has one - see EmuSen_Backend.md §13.3.
         [Fact]
-        public void Each_pack_holds_the_entry_the_switch_chose_with_its_literals_code()
+        public void Each_pack_holds_the_entry_the_switch_chose_with_the_code_it_chose()
         {
             foreach (var (pack, literal) in SystemPacks.All.Zip(SystemPacks.Literals))
             {
                 if (SystemTable.Active)
                 {
                     Assert.NotSame(literal, pack.Entry);
-                    Assert.Empty(Differences(literal, pack.Entry));
-                    Assert.Same(literal.OpenVgdbBytes, pack.Entry.OpenVgdbBytes);
-                    Assert.Same(literal.Recognise, pack.Entry.Recognise);
+                    Assert.Equal(new[] { $"{literal.Id}.OpenVgdbBytes", $"{literal.Id}.Recognise" }.Take(literal.Recognise is null ? 1 : 2),
+                        Differences(literal, pack.Entry).Select(d => d[..d.IndexOf(':')]));
+                    Assert.Equal(literal.Recognise is null, pack.Entry.Recognise is null);
                 }
                 else Assert.Same(literal, pack.Entry);
             }

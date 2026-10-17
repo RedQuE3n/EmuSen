@@ -19,6 +19,7 @@ namespace EmuSen.Crystal.Systems
         {
             "emusen_systems_media", "emusen_systems_media_read", "emusen_systems_media_copy", "emusen_systems_media_delete", "emusen_systems_media_format",
             "emusen_systems_cheat_codecs", "emusen_systems_cheat_decode", "emusen_systems_cheat_encode",
+            "emusen_systems_code", "emusen_systems_recognise", "emusen_systems_route", "emusen_systems_openvgdb", "emusen_systems_header",
         };
 
         // The library's code is in use: the switch chose the table.
@@ -126,6 +127,153 @@ namespace EmuSen.Crystal.Systems
                 nuint il = (nuint)id.Length;
                 return Encoding.UTF8.GetString(Guard(() => Bytes((o, l) => encode(ip, il, address, value, o, l), 16)));
             }
+        }
+
+        // Which systems have code of each kind, as the library states it.
+        public sealed record SystemCodeFacts(string Id, bool Recognises, bool OpenVgdb, bool Header);
+
+        private static readonly Lazy<IReadOnlyList<SystemCodeFacts>> CodeTable = new(() =>
+        {
+            var code = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)Export("emusen_systems_code");
+            using var document = JsonDocument.Parse(Bytes((o, l) => code(o, l), 1024));
+            return document.RootElement.EnumerateArray().Select(c => new SystemCodeFacts(c.GetProperty("id").GetString()!, c.GetProperty("recognises").GetBoolean(),
+                c.GetProperty("openvgdb").GetBoolean(), c.GetProperty("header").GetBoolean())).ToArray();
+        });
+
+        public static IReadOnlyList<SystemCodeFacts> Code => CodeTable.Value;
+
+        private static Recognition? RecognitionOf(JsonElement r) => r.ValueKind == JsonValueKind.Null ? null
+            : new Recognition(r.GetProperty("system").GetString()!, r.GetProperty("serial").GetString(), r.GetProperty("region").GetString());
+
+        // A system's recogniser over a probe, reading as many of the file's first bytes as the recogniser asks for, as the C# recognisers read them.
+        public static Recognition? Recognise(string system, IMediaProbe probe)
+        {
+            byte[] id = Encoding.UTF8.GetBytes(system), head = Array.Empty<byte>();
+            var recognise = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, ulong, ulong*, byte*, nuint, long>)Export("emusen_systems_recognise");
+            ulong asked = 0;
+            while (true)
+            {
+                ulong need = 0;
+                byte[] answer;
+                fixed (byte* i = id)
+                fixed (byte* h = head)
+                {
+                    byte* ip = i, hp = h;
+                    nuint il = (nuint)id.Length, hl = (nuint)head.Length;
+                    ulong a = asked;
+                    ulong* n = &need;
+                    answer = Guard(() => Bytes((o, l) => recognise(ip, il, hp, hl, a, n, o, l), 256));
+                }
+                if (need == 0)
+                {
+                    using var document = JsonDocument.Parse(answer);
+                    return RecognitionOf(document.RootElement);
+                }
+                if (need <= asked || need > int.MaxValue) throw new InvalidOperationException($"{PlatformLibrary.FileName}: the recogniser of {system} asked for {need} bytes after {asked}");
+                head = probe.Read((int)need);
+                asked = need;
+            }
+        }
+
+        // The decision among candidates, each claim by the candidate's place; null where a text cannot cross, for the C# to decide.
+        public static Routed? Route(string fileName, string? folder, IReadOnlyList<SystemEntry> candidates, IReadOnlyList<(int At, Recognition Claim)> claims)
+        {
+            if (!Takes(fileName) || !Takes(folder) || candidates.Any(c => !Takes(c.Id) || !Takes(c.Name) || !Takes(c.EsdeSystem))) return null;
+            var stream = new System.IO.MemoryStream();
+            using (var w = new Utf8JsonWriter(stream))
+            {
+                w.WriteStartObject();
+                w.WriteString("file", fileName);
+                if (folder is null) w.WriteNull("folder"); else w.WriteString("folder", folder);
+                w.WriteStartArray("candidates");
+                foreach (SystemEntry c in candidates) { w.WriteStartObject(); w.WriteString("id", c.Id); w.WriteString("name", c.Name); w.WriteString("esde", c.EsdeSystem); w.WriteEndObject(); }
+                w.WriteEndArray();
+                w.WriteStartArray("claims");
+                foreach (var (at, claim) in claims)
+                {
+                    w.WriteStartObject();
+                    w.WriteNumber("at", at);
+                    w.WriteString("system", claim.SystemId);
+                    if (claim.Serial is null) w.WriteNull("serial"); else w.WriteString("serial", claim.Serial);
+                    if (claim.Region is null) w.WriteNull("region"); else w.WriteString("region", claim.Region);
+                    w.WriteEndObject();
+                }
+                w.WriteEndArray();
+                w.WriteEndObject();
+            }
+            byte[] request = stream.ToArray();
+            var route = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long>)Export("emusen_systems_route");
+            byte[] answer;
+            fixed (byte* r = request)
+            {
+                byte* rp = r;
+                nuint rl = (nuint)request.Length;
+                answer = Guard(() => Bytes((o, l) => route(rp, rl, o, l), 1024));
+            }
+            using var document = JsonDocument.Parse(answer);
+            JsonElement d = document.RootElement;
+            string? system = d.GetProperty("system").GetString();
+            return new Routed(system is null ? null : candidates.First(c => c.Id == system), RecognitionOf(d.GetProperty("recognition")), d.GetProperty("reason").GetString());
+        }
+
+        // The bytes OpenVGDB hashed for the system's file; the file itself where they are its own.
+        public static byte[] OpenVgdbBytes(string system, byte[] file)
+        {
+            byte[] id = Encoding.UTF8.GetBytes(system);
+            var openvgdb = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long>)Export("emusen_systems_openvgdb");
+            fixed (byte* i = id)
+            fixed (byte* f = file)
+            {
+                byte* ip = i, fp = f;
+                nuint il = (nuint)id.Length, fl = (nuint)file.Length;
+                int size = Math.Max(1, file.Length);
+                return Guard(() =>
+                {
+                    try { return Bytes((o, l) => openvgdb(ip, il, fp, fl, o, l), size); }
+                    catch (SystemCodeFault fault) when (fault.Status == Absent) { return file; }
+                });
+            }
+        }
+
+        // A header reader's answer from the image's first 4 KiB and its length.
+        private static JsonDocument Header(string system, byte[] image)
+        {
+            byte[] id = Encoding.UTF8.GetBytes(system);
+            var header = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, ulong, byte*, nuint, long>)Export("emusen_systems_header");
+            fixed (byte* i = id)
+            fixed (byte* h = image)
+            {
+                byte* ip = i, hp = h;
+                nuint il = (nuint)id.Length, hl = (nuint)Math.Min(image.Length, 4096);
+                ulong length = (ulong)image.Length;
+                return JsonDocument.Parse(Guard(() => Bytes((o, l) => header(ip, il, hp, hl, length, o, l), 512)));
+            }
+        }
+
+        // A refusal as the C# reader threw it.
+        private static void HeaderRefused(JsonElement r)
+        {
+            if (!r.TryGetProperty("refused", out JsonElement kind)) return;
+            string words = r.GetProperty("words").GetString()!;
+            throw kind.GetString() == "unsupported" ? new NotSupportedException(words) : new System.IO.InvalidDataException(words);
+        }
+
+        public static Nes.NesHeader NesHeader(byte[] image)
+        {
+            using JsonDocument document = Header("nes", image);
+            JsonElement r = document.RootElement;
+            HeaderRefused(r);
+            return new Nes.NesHeader(r.GetProperty("mapper").GetInt32(), r.GetProperty("prg_banks").GetInt32(), r.GetProperty("chr_banks").GetInt32(), r.GetProperty("battery").GetBoolean(),
+                r.GetProperty("trainer").GetBoolean(), r.GetProperty("nes20").GetBoolean(), (Nes.NesHeaderTrust)r.GetProperty("trust").GetInt32(), (Nes.NesMirroring)r.GetProperty("mirroring").GetInt32());
+        }
+
+        public static GameBoy.GbCartridge GbHeader(byte[] image)
+        {
+            using JsonDocument document = Header("gb", image);
+            JsonElement r = document.RootElement;
+            HeaderRefused(r);
+            return new GameBoy.GbCartridge(r.GetProperty("type").GetByte(), r.GetProperty("board").GetString()!, r.GetProperty("rom_banks").GetInt32(), r.GetProperty("ram_length").GetInt32(),
+                r.GetProperty("battery").GetBoolean(), r.GetProperty("timer").GetBoolean(), r.GetProperty("rumble").GetBoolean(), r.GetProperty("cgb_flag").GetByte());
         }
 
         public static MediumListing MediaRead(string medium, ReadOnlySpan<byte> image)

@@ -1,5 +1,6 @@
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
+using EmuSen.Crystal.Systems.GameBoy;
 
 namespace EmuSen.WiseMan.Cores
 {

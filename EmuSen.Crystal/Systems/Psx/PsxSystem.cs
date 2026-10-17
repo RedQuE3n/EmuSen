@@ -61,7 +61,8 @@ namespace EmuSen.Crystal.Systems.Psx
             byte[] head = probe.Read(12 * 1024);
             if (!IsDisc(head)) return null;
             var sectors = new DiscSectors(probe.Read(160 * 1024));
-            string line2 = Encoding.ASCII.GetString(sectors.Sector(4).Slice(32, Math.Min(38, sectors.Sector(4).Length - 32)));
+            var four = sectors.Sector(4);
+            string line2 = four.Length <= 32 ? "" : Encoding.ASCII.GetString(four.Slice(32, Math.Min(38, four.Length - 32)));
             string region = line2.Contains("Amer") ? "Americas" : line2.Contains("Euro") ? "Europe" : "Japan";
             return new Recognition(Id, SerialOf(sectors.RootFile("SYSTEM.CNF")), region);
         }

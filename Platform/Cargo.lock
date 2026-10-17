@@ -241,6 +241,7 @@ dependencies = [
  "emusen-debug",
  "emusen-dianash",
  "emusen-disc",
+ "emusen-dotnet",
  "emusen-endymion",
  "emusen-galaxia",
  "emusen-native",

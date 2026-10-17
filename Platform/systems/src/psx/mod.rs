@@ -3,4 +3,5 @@
 pub mod cheats;
 pub mod card;
 mod cp932;
+pub mod disc;
 pub mod shift_jis;

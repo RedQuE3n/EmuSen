@@ -60,8 +60,10 @@ namespace EmuSen.Crystal.Systems
         // The text the library gave, for a test that reads it as a person would.
         public static string? Json => Loaded.Value.Json;
 
-        // A pack's entry: the table's row for the literal's id with the literal's code, or the literal itself under the switch's 0 or with no such row.
-        public static SystemEntry Entry(SystemEntry literal) => Active && FromTable(literal) is { } row ? row : literal;
+        // A pack's entry: the table's row for the literal's id with the library's code where the literal has code of that kind, or the literal itself under the switch's 0 or with no such row.
+        public static SystemEntry Entry(SystemEntry literal) => Active && FromTable(literal) is { } row
+            ? row with { OpenVgdbBytes = file => SystemCode.OpenVgdbBytes(literal.Id, file), Recognise = literal.Recognise is null ? null : probe => SystemCode.Recognise(literal.Id, probe) }
+            : literal;
 
         // The table's row for the literal's id with its recogniser and OpenVGDB bytes, whichever the switch chose; null where there is none.
         public static SystemEntry? FromTable(SystemEntry literal) =>

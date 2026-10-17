@@ -1,16 +1,19 @@
 using System;
 using System.IO;
 
-namespace EmuSen.Cores.Nintendo.MercuryRT
+namespace EmuSen.Crystal.Systems.GameBoy
 {
-    // What a Game Boy image's header says about its board, read before the image reaches the library, with the two refusals the board makes - see Mercury_Memory.md §2.
+    // What a Game Boy image's header says about its board, read before the image reaches the library, with the two refusals the board makes; emusen-systems' reader unless EMUSEN_SYSTEMS_NATIVE=0 - see Mercury_Memory.md §2, EmuSen_Backend.md §13.3.
     public readonly record struct GbCartridge(byte Type, string Board, int RomBanks, int RamLength, bool HasBattery, bool HasTimer, bool HasRumble, byte CgbFlag)
     {
         public const int HeaderLength = 0x0150;
         public const int RomBankSize = 0x4000;
 
         // The header's facts; an image shorter than the header, or of a type no board implements, is refused as the core refuses it.
-        public static GbCartridge Read(byte[] image)
+        public static GbCartridge Read(byte[] image) => SystemCode.Active ? SystemCode.GbHeader(image) : ReadManaged(image);
+
+        // The C# reader alone, the failover and the parity class's oracle.
+        public static GbCartridge ReadManaged(byte[] image)
         {
             if (image.Length < HeaderLength) throw new InvalidDataException($"Not a Game Boy image: {image.Length} bytes is shorter than the 336-byte header.");
             byte type = image[0x0147];

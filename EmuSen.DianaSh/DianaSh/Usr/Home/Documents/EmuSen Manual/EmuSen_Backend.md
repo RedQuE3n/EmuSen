@@ -718,7 +718,7 @@ what it consolidates. Each step reports its real figure beside this one, as the 
 | B0 | about 300 changed | — | — | about 150 net |
 | B1 | about 450 of entries | 1,100 (900–1,400); *built: 438, §12.2* | 320 of data; 200 of C# facade; *built: 144 and 103* | 450 |
 | B2 | 3,600 of EmulatorSession, CoreFactory and the three loops' frame-end code | — | header and baseline 1,100; C# contract and binding 1,900; managed implementation 2,500; tests 2,000 | about 1,600 from the frontends at once |
-| B3 | about 2,950 | 7,400 (5,900–8,900) | 300 of C# facade | 2,950 |
+| B3 | about 2,950 | 7,400 (5,900–8,900); *parts (a) to (c) built: about 4,000 for about 1,860 replaced, §13.5* | 300 of C# facade; *built: about 630* | 2,950 |
 | B4 | about 5,480 deleted unported | 1,500–3,000 in the cores' own exports | 300 in the generic C# adapter | 5,480 |
 | B5 | 1,250 | 3,100 (2,500–3,750) | 300 of C# facade | 1,250 |
 | B6 | 1,735 in C#, 704 in the kit | 3,600 (3,000–4,300), net of what the kit brings | — | (with B7) |
@@ -1155,4 +1155,142 @@ apply cheats (`MercuryRtCoreTests`, `DiamondTests`, `NephriteTests`, `MarsRtFron
 The codecs' own WiseMan classes caught none of the faults in the Rust, because they call the C# decoders' static
 methods directly; only a codec handed out by a pack goes through the facade. They remain the C#'s tests, and the parity
 class is the Rust's.
+
+*On 2026-10-17, after part (b), the branch was rebased onto `WiseMan` at `628bc821`, which carries B0. B0 left the
+platform library's interface at 13, so 14 stayed this step's; the rebase met one conflict, in
+`EmuSen_RustPlatform.md`, where B0 had taken §31 (Windows and macOS paused) and this step's interface moved to §32.
+Parts (a) and (b)'s blast radius was run again on the rebased tree: 647 pass with the switch unset and 647 with it
+`0`.*
+
+### 13.3 Part (c): the recognisers, routing, header readers and the OpenVGDB rules
+
+- **Routing by content in `emusen-systems`**: `probe` holds what a recogniser is shown (a head of the file, asked for
+  by length: `Head`, and `Need` where a recogniser must read more), the data track's sectors and the ISO 9660 lookup
+  (`DiscSectors`, `Crystal/Media/DiscSectors.cs` ported; `emusen-disc` deliberately has no file system, so the lookup
+  stays a pack's), and `route`, the decision among the systems that take an extension. The recognisers are the
+  Genesis family's (`genesis::recognise`, a cartridge against a disc, the Sega CD's system name) and the
+  PlayStation's (`psx::disc`: the licence text, its market and SYSTEM.CNF's serial).
+- **The file is still read by the C#.** A recogniser that needs more than it was given answers with the length it
+  reads, and the facade reads that much through the probe and asks again (`emusen_systems_recognise`), so the reads
+  are the C# recognisers' reads, length for length, which the parity class checks: no callback crosses the C layer
+  (`EmuSen_RustPlatform.md` §3.7), and `MediaProbe` stays Galaxia's archives, sheets and lists. The cache of decisions
+  and the folder's name stay `SystemRouting`'s; the decision itself is the library's, with the C# kept as
+  `SystemRouting.DecideManaged`.
+- **The header readers**: `nes::header` (`NesHeader`) and `gb::cartridge` (`GbCartridge`, moved from the MercuryRT
+  shim to `Crystal/Systems/GameBoy/` as its failover). Each reads within an image's first 4 KiB and its length, so a
+  ROM is not copied to be read. `GbCartridge`'s refusal of a type no board implements is MercuryRT's statement more
+  than the console's; it is kept as the C# made it and belongs with core info when the shim goes (B4).
+- **The OpenVGDB rules** (`openvgdb`): the NES's header, the SNES's copier header, the N64's byte order
+  (`n64::byte_swapped`, `N64ImageOrder` ported); a file another system hashes as it is crosses back as `ABSENT`, so it
+  is not copied.
+- **Interface 14 gained** `emusen_systems_code` (which systems have each kind of code), `_recognise`, `_route`,
+  `_openvgdb` and `_header`. Each pack's entry now carries the library's delegates where the switch chose the table,
+  and a recogniser only where its literal has one; `SystemTableParityTests` holds that.
+- **Four defects, shown and fixed in both halves.** The C# disc lookup threw on a malformed volume or directory,
+  which routing's catch does not take, so one crafted disc in a library would have stopped a scan: a directory
+  record running past its sector (`ArgumentOutOfRangeException`), a root directory before sector 0 (the same), a file
+  of negative length (`OverflowException`), and a root directory claiming close to 2 GiB, whose `int` loop overflowed
+  and never ended. Shown on 2026-10-17 by `DiscProbeTests`, all four failing on the C# (the last by its five-second
+  bound); now a record past its sector ends that sector's scan, a sector before the first is none, a negative length
+  is no file, the loop counts in `long`, and a file's sectors are found before its bytes are allocated. The
+  PlayStation recogniser's market line read past an absent sector 4 in the same way, and reads as empty instead.
+
+| Part (c) | Lines |
+|---|---:|
+| C# replaced (the disc probe's sectors and lookup, the decision, two header readers, the byte order, the recognisers, the OpenVGDB rules) | about 290 |
+| Rust, `emusen-systems` | 458 |
+| Rust, the C layer | about 250 |
+| C# facade (`SystemCode`'s part, the entries' delegates, `SystemRouting`, the two readers) | about 200 |
+| The parity class `SystemCodeParityTests` and the defects' `DiscProbeTests` | 213 and 84 |
+
+| Gate | Result |
+|---|---|
+| `cargo test --release -p emusen-systems -p emusen-platform` | 19, 27 and 4 pass |
+| `emusen_platform.h` as C99 and C++17 | clean |
+| `SystemCodeParityTests` | 6 pass: each system's code where its literal has; every recogniser on about 480 generated images (the synthetic PlayStation discs of each market and mode as `.iso` and raw tracks, nine SYSTEM.CNF variants, Sega CD discs and raw sectors, Genesis cartridges, each cut at every length a read straddles and with noise written over parts, and noise), the answer and the lengths read alike; 4,000 routing decisions over random candidates, claims and folders; every OpenVGDB rule on generated files; 6,000 NES headers and every Game Boy cartridge type at five lengths |
+| `DiscProbeTests` | 4 pass, after failing on the C# before its fix |
+| The blast radius, with `EMUSEN_SYSTEMS_NATIVE` unset and `0` | 518 pass, 518 pass |
+
+The blast radius was the three parity classes of this step and the table's, `DiscProbeTests`,
+`SegaCdRoutingTests`, the Diamond classes that route and boot discs (`DiamondTests`, `DiamondPlayersTests`,
+`DiamondLaunchTimeTests`), `NephriteTests`, the Mercury classes that read a cartridge (`MercuryCartridgeTests`,
+`MercuryRtCoreTests`, `MercuryModelTests`, `MercuryRtFallbackTests`, `MercuryDebugTargetTests`),
+`MoonRtFrontendTests`, `SnesSystemPackTests`, `CoreRegistrationEquivalenceTests`, `CoreDiscoveryTests`,
+`ConsoleStartTests`, `CoreFactoryCheatWiringTests`, the library's and the scraper's classes that hash or route
+(`PlayStationLibraryTests`, `LibraryScreenTests`, `RomLibraryTests`, `LibraryArtworkAndMediaTests`,
+`GameMetadataTests`, `OnlineCoverTests`, `OnlineCoverWindowTests`, `ScrapeDiscImageTests`, `ScrapeExtrasTests`,
+`ScraperTests`, `ScrapeWindowTests`), `MainWindowLogDirectoryTests` and `GoldenCorpusTests`.
+
+**Seeded faults**, each made, built, run and reverted:
+
+| Fault | Caught by |
+|---|---|
+| a serial's underscore left in place of the dash | the parity class, `DiamondPlayersTests` |
+| the PlayStation recogniser reading 128 KiB where the C# read 160 | the parity class (the lengths read) |
+| a mode 2 Sega CD sector's data taken at 16 | the parity class |
+| a folder's name compared with its case | the parity class (routing) |
+| the SNES copier header taken from files of a whole number of KiB | the run's end: the library panicked on a file shorter than 512 bytes and the test host aborted |
+| an NES header with a clean byte 7 called unverifiable | the parity class (headers) |
+| MBC3's timer on type 0Fh alone | the parity class (headers) |
+| a raw mode 1 sector's data taken at 24 | the parity class (recognisers) |
+| the facade dropping a recognition's market | the parity class (2 cases), `DiscProbeTests` (4), `DiamondPlayersTests` |
+
+### 13.4 Where the step stopped, and why: part (d) waits on three questions
+
+Part (d), the debugger views and the disassemblers with the shims' remaining console code, was not built. Reading it
+before building showed three design questions the page does not answer, and the rule for this step is to stop at the
+last graded part and ask rather than choose:
+
+1. **How a view reaches memory.** Every view reads the engine's spaces through `IDebugMemorySpace.Read`, one byte at a
+   time, and some spaces may disturb state when read (`HasSideEffects`). The C layer takes no callback (§3.7 of
+   `EmuSen_RustPlatform.md`), so a view in Rust must either be handed whole spaces (a snapshot, which reads bytes the
+   C# view never read, the SNES tile sheet's 64 KiB of VRAM or an IO space's registers among them) or ask in rounds
+   for the bytes it reads, as the recognisers ask for a file's head (which keeps the C# reads, at the cost of a
+   protocol whose read order the C# interleaves byte by byte for the NES's tile sheet). The page's `_debug_view` names
+   neither. *Recommended:* rounds for the views that read registers or small regions (palettes, a tile, a tilemap
+   entry, the DMA channels) and a snapshot for the two tile sheets, the snapshot allowed only of a space that states no
+   side effects; and since Crystal in Rust (B7) will read a core's memory through the core ABI directly, the views'
+   Rust takes a reader trait that both the facade's protocol and B7 implement.
+2. **`MoonBoards` is MoonRT's, not the NES's.** The page lists it among the shims' console code for the packs. It is
+   the table of the sixteen boards MoonRT builds, each with the paths of its registers *in MoonRT's state*
+   (`Mapper._control`) and a mirroring rule that reads them; Pharaoh and the battery rule read it for which mappers
+   MoonRT implements. Only a mapper's number and its board's name are facts of the console; the rest is what one engine
+   does, which §5.3 gives to core info. *Recommended:* the board names move to the NES pack as data; the paths, the
+   mirroring rule and the list of mappers implemented go with B4 into MoonRT's own debug registers capability and its
+   info.
+3. **The VR4300's disassembler onto `emusen-mips` (F8)** needs a choice of spelling. `emusen-mips` decodes MIPS I as the
+   R3000 does and writes Appendix A's text (register 30 as `fp`, no folded forms), which Diamond's `disasm` output and
+   its golden corpus hold; the MarsRT shim's `Vr4300Disassembler` decodes MIPS III with the FPU and writes
+   `Mars_Disassembler.md`'s text (`s8`, `beqz` and `b` folded from `beq`, `.word` for what it does not decode, its own
+   hex). One crate for both processors either carries two spellings, a dialect's option, or makes one console's
+   debugger output change. *Recommended:* `emusen-mips` gains MIPS III's decode and the VR4300's coprocessor tables, and
+   the spelling becomes a field of `Dialect` with the R3000's and the VR4300's each kept, so neither golden changes;
+   decided by the tester before it is built.
+
+The SM83 and 6502 disassemblers, the NES and SNES views' pure parts (vectors, symbols, a summary line, the B bus's
+names) and `Nes6502Disassembler` raise none of these and wait only on the same part.
+
+### 13.5 Sizes, against §7, and what is left
+
+| | §7's estimate | Built, parts (a) to (c) |
+|---|---:|---:|
+| C# replaced | about 2,950 | about 1,860 (718, 848 and about 290) |
+| Rust, hand-written, with in-crate tests and the C layer | 7,400 (5,900–8,900) | about 4,000 |
+| Rust, generated from .NET (code page 932, the letter-or-digit ranges) | — | 1,645 |
+| C# facade | 300 | about 630 |
+| The parity classes | — | 822, with `DiscProbeTests` 84 |
+
+The Rust ran at about 2.2 times the C# it replaced for parts (a) to (c), against §7's 2.5: the format crates came in
+larger (their in-place, allocation-free surface and their own tests), the codecs and routing smaller. The facade is
+twice §7's figure because each part has its own call shapes; it is deleted whole at state 3. Part (d) would replace
+about 1,140 lines more (the two views 401, the three disassemblers 741).
+
+**Left for later:**
+
+- Part (d), on the tester's answers to §13.4.
+- State 3, the C# formats, codecs, recognisers and readers deleted, at the tester's word after goldens (§6, B10). Until
+  then a change to a module is made in both halves, and the parity classes fail on one alone.
+- F27's test of `cheat_space` against a core's machine info (§13.2), with B7.
+- The two backup RAM behaviours of §13.1 that throw, which are the tester's to decide.
+- `PsxSystem.Bios` and `DisplayAspect`, which §5.3 says go, are untouched: neither is code this step moved.
 

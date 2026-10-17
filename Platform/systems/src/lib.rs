@@ -12,6 +12,8 @@ pub mod genesis;
 pub mod media;
 pub mod n64;
 pub mod nes;
+pub mod openvgdb;
+pub mod probe;
 pub mod psx;
 pub mod snes;
 

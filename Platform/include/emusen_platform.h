@@ -446,6 +446,37 @@ int64_t emusen_systems_cheat_decode(const uint8_t *codec, size_t codec_len, cons
 /* The Game Genie code that patches `value` at `address`, for snes.gg and md.gg; ABSENT for a codec with no encoder. */
 int64_t emusen_systems_cheat_encode(const uint8_t *codec, size_t codec_len, int32_t address, uint32_t value, uint8_t *out, size_t len);
 
+/* Each system's code as a JSON array in the table's order: id, and whether it has a recogniser (recognises), an OpenVGDB rule (openvgdb) and a header reader (header). */
+int64_t emusen_systems_code(uint8_t *out, size_t len);
+
+/*
+ * A system's recogniser over the first bytes of a file, the host having asked for `asked` of them (`head` is shorter
+ * where the file is): its claim as a JSON object with the keys system, serial and region (each a word or null), or
+ * null. Where it must read more first, it returns 0 with `need` set to the bytes it reads from the file's start, which
+ * the host reads and asks again; otherwise `need` is 0. ABSENT for a system not in the table.
+ */
+int64_t emusen_systems_recognise(const uint8_t *system, size_t system_len, const uint8_t *head, size_t head_len, uint64_t asked, uint64_t *need,
+                                 uint8_t *out, size_t len);
+
+/*
+ * The decision among the systems that take a file's extension. The request is a JSON object: file (its name), folder
+ * (the name of the folder it is in, or null), candidates (each id, name and esde) and claims (each at, the candidate's
+ * place, with system, serial and region). The answer is a JSON object: system (an id or null), recognition and reason
+ * (words or null). PARSE for a request that is not one.
+ */
+int64_t emusen_systems_route(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+
+/* The bytes of a file OpenVGDB hashed for the system; ABSENT where they are the file's own. */
+int64_t emusen_systems_openvgdb(const uint8_t *system, size_t system_len, const uint8_t *file, size_t file_len, uint8_t *out, size_t len);
+
+/*
+ * A cartridge's header as a JSON object, from the first bytes of an image of `length` bytes (a reader reads within the
+ * first 4 KiB): the NES's mapper, prg_banks, chr_banks, battery, trainer, nes20, trust and mirroring, or the Game Boy's
+ * type, board, rom_banks, ram_length, battery, timer, rumble and cgb_flag; or refused (invalid or unsupported) with
+ * words. ABSENT for a system with no header reader.
+ */
+int64_t emusen_systems_header(const uint8_t *system, size_t system_len, const uint8_t *head, size_t head_len, uint64_t length, uint8_t *out, size_t len);
+
 /* ---- Endymion: the logic half (EmuSen_Audio_Sync.md, sections 1 to 3; EmuSen_Input.md, sections 7 and 8) ---- */
 
 /*

@@ -5,6 +5,7 @@ using EmuSen.Cores.Native;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Galaxia.Input;
+using EmuSen.Crystal.Systems.GameBoy;
 
 namespace EmuSen.Cores.Nintendo.MercuryRT
 {

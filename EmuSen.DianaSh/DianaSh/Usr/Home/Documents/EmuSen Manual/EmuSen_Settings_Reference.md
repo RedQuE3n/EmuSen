@@ -7958,7 +7958,9 @@ One row for each firmware file a system's engine can use:
   folder and point nowhere.*
   - The button makes the folder if it is not there and hands its path to the platform's opener (`xdg-open` on Linux,
     the shell elsewhere). It opens nothing else.
-  - The page has no other button, no link, no picker and no download.
+  - The page has no other button, no link, no picker and no download. *Amended 2026-10-17 (§4.121): the page now
+    opens with the player's own firmware folder, a path row with Browse… and Clear, above EmuSen's folder; it still
+    has no link and no download, and nothing on it asks for a file.*
 
 #### 4.89.3 The rows come from the cores
 
@@ -7995,7 +7997,8 @@ and cost, where it had one entry for all seven, and every cost opens on a senten
 #### 4.89.5 As a big-screen menu
 
 - **Read only.** No row changes or opens anything, and there is no Open Folder: a Game Mode session has no file
-  manager to open. The folder's path is a row's footer, so a player can find it later from a desktop.
+  manager to open. *Amended 2026-10-17 (§4.121): the one exception is the player's firmware folder, a text row typed
+  into with the on-screen keyboard; while it has the focus the hints add Select.* The folder's path is a row's footer, so a player can find it later from a desktop.
 - **Every fact is a row a pad lands on.** A line nobody can land on scrolls out of reach in a list this long, so
   each row is one of the menu's action rows, with the sentence in the footer while the row has the focus. A file's
   row reads "SNES sound chip start-up: Open version" on the left, in the look's case, and `spc700.rom` on the right.
@@ -8885,3 +8888,69 @@ memory card manager, or whose player's BIOS shows its own.
   the lid open and the session's discs as they were. *Change Disc* lists the discs put in as well as a set's.
 - **Tests.** `ConsoleStartTests` (the entries, the session's name, its states and its rows), `DiamondShellTests` (the
   host's start, insert, eject and states), and the fit audit's `InsertDiscPlayStation` and `InsertDiscEmpty`.
+
+### 4.121 Your firmware folder: `FirmwareDirectory` (2026-10-17)
+
+*Requested by the tester 2026-10-17:* "the ability to choose a firmware folder in Mistress". A player who already keeps
+firmware dumps in one folder can name it, and EmuSen reads it where it is. The lookup order and why the chosen folder
+comes first are `EmuSen_Firmware.md` §2.3; the folder rules are `EmuSen_Config_Reference.md` §7.7.
+
+#### 4.121.1 The setting
+
+| | |
+|---|---|
+| Key | `FirmwareDirectory` in `appsettings.json` |
+| Default | blank: firmware is looked for in `home/Firmware` alone, as before this date |
+| Set | the folder is searched first, then `home/Firmware`; on a tie of name and size the folder's file is used |
+| Accepted | an absolute path; `~` or `~/…`, read as the home; a folder that does not exist yet, which is said |
+| Refused | a relative path (`genesis`, `./BIOS`, `~name/BIOS`) and the path of a file; the stored value is left as it was |
+| Written by EmuSen | never: nothing in the folder is written, renamed or deleted, and an absent folder is not made |
+
+A value already in the file that the rules refuse (a hand edit, or a file copied from another machine) is read as
+unset: `home/Firmware` alone is searched, the Firmware page says why, and `ConfigDiagnostics` reports it once per
+value, into the error log where the host sends its reports.
+
+#### 4.121.2 Where it is set
+
+- **Desktop:** Preferences ▸ **Firmware**, the first row: *Your Firmware Folder*, a path row with Browse…, Clear and a
+  box a path can be typed into (committed on Enter or on leaving the box, §4.45.6). Its hint: "Searched before
+  EmuSen's folder, so a file in both comes from yours. EmuSen only reads it, never writes to it. Leave it blank for
+  EmuSen's folder alone." Clear returns the setting to blank; so does erasing the box. A message under the row says
+  when a typed path was refused, or when the stored folder does not exist. The second row is *EmuSen's Firmware
+  Folder*, `home/Firmware`, with Open Folder, as §4.89.2 describes.
+- **Big picture:** the pad menu's Settings ▸ **Firmware**, the second row, a text row typed into with the on-screen
+  keyboard as the Library tab's folder rows are (§4.45.6); its footer is the hint, or the message when there is one,
+  in the path's own case. Erasing the text and confirming clears the setting. Browse… and Clear are left out, as on
+  every path row there. The rest of the page stays read only, so its hints are Back and Choose; while the folder's row
+  has the focus Select joins them (`BigMenuForm.TakesChoice`).
+- **Not in Library's folder rows.** The setting sits with the firmware it governs rather than with ROMs, covers, states
+  and logs on the Library tab: a player looking for firmware looks on the Firmware page, and the page then shows the
+  folder and its effect on each file together.
+- No dialog at launch, no notice of missing firmware and no prompt follow from the setting (`EmuSen_Firmware.md` §0).
+
+The row is a LunaP `PathPickerRow` with `IsClearable`, a capability added for this setting in LunaP's §201 (branch
+`firmware-folder` of the LunaP repository), which is the blank-means-unset extension `EmuSen_Config_Reference.md`
+§7.5 question 4 chose.
+
+#### 4.121.3 What the list says
+
+Each file's row says where the file in use was found: "Found in your folder." or "Found in EmuSen's folder." on the
+desktop as a line of its own, and at the end of the footer on the big screen. A file whose name is in a folder at the
+wrong size, with no folder holding the right one, reads "Not used: the file in your folder is not 53,248 bytes." (or
+"in EmuSen's folder"); before this date it read "The file here is not … bytes, so it is not used.", which named no
+folder and was the same length. A file not found reads as §4.89.2 says, the open version or none. The folder's words
+are short on purpose: the full paths are the two folder rows', and a footer of two lines has no room for a path.
+
+The words about a player's own files now say "in a firmware folder" for "in the firmware folder", one character
+shorter, since there may be two.
+
+#### 4.121.4 Tests (measured 2026-10-17)
+
+| Test | What it holds |
+|---|---|
+| `FirmwareFolderTests` (22) | blank (null, empty, spaces, a tab) searches `home/Firmware` alone; a file in the chosen folder found, the folder searched first; a tie of name and size broken by the chosen folder, and a wrong size no tie; a split form taken from one folder only; four relative values refused and reported once; `~`, `~/` and `~/…` the home; a file refused; a missing folder reported, still searched and not made; `home/Firmware` chosen searched once; a test's override the only folder; Install writing to `home/Firmware` and never the chosen folder; the list's words |
+| `NephriteFirmwareTests.A_bios_in_the_chosen_folder_boots_the_log_names_the_folder_and_the_folder_is_never_written` | through `CoreFactory` and the Genesis core: the chosen folder's BIOS boots on a tie, the session's line names the folder, the folder's entries, lengths and times are unchanged after two sessions, and cleared the setting leaves `home/Firmware`'s file |
+| `FirmwarePageTests` (4) | the folder row's label, hint, placeholder and clearable box; a relative path and a file refused with the row put back and the message shown; a missing folder and `~/…` kept with the folder named; a real folder used and its file's row "Found in your folder."; Clear back to blank; the folder holding only what the test put there; Open Folder the page's one button besides the row's own |
+| `WindowFitAuditTests.The_firmware_page_in_preferences_is_whole_at_both_sizes` (4) | with a chosen folder holding one file and `home/Firmware` another and one of the wrong size: nothing cut or overlapping at 1280 × 800 and 1920 × 1200 on both looks; on the desktop the folder row's box, Browse and Clear reached by the pad; on the big screen every row's footer whole, the folder's row a text row with Select in its hints and the others without |
+| `EsdeSettingsMenusTests.The_firmware_page_under_a_theme_is_a_menu_of_rows_the_pad_reads` (2) | under a theme, the folder's row a text row whose A opens the text popup and whose B puts it away with nothing kept |
+| LunaP `PathPickerTypingTests` (2 new) | Clear and a committed blank box picking the empty string; no Clear on a row that is not clearable |

@@ -3061,7 +3061,7 @@ case the page for hier
 target none
 covers 1
 $ man hier
-out 8788
+out 8941
 NAME
     hier - this shell's own filesystem layout
 
@@ -3088,7 +3088,9 @@ DESCRIPTION
                       Save states no longer get a .json file beside them;
                       old ones are read into records.db and left in place
     /Shaders          shader packs downloaded on request
-    /Firmware         coprocessor dumps you supply
+    /Firmware         firmware files you supply. A folder of your own, set
+                      as FirmwareDirectory on Preferences > Firmware, is
+                      searched first and only ever read
     /Cheats           your own .cht tree - see 'man cheat'
     /Logs             'dump'/'load'/screenshot/recording output
     /etc/EmuSen       every config file the emulator keeps: appsettings.json,

@@ -504,7 +504,7 @@ namespace EmuSen.WiseMan.Serenity
             foreach (var (squares, width, height, measured) in new[] { (4, 256, 224, 219.0), (9, 288, 216, 75.0) })
             {
                 byte[][] board = Twice(Paint(width, height, (x, y) => (x * squares / width + y * squares / height) % 2 == 0 ? (1.0, 1.0, 1.0) : (0.0, 0.0, 0.0)));
-                (string, float)[] set = With(Plain.Where(p => p.Item1 != "glare").ToArray(), ("mask", 1f), ("signal", 0f), ("screen", 4f));
+                (string, float)[] set = With(Plain, ("glare", 1f), ("mask", 1f), ("signal", 0f), ("screen", 4f));
                 if (Draw("SNES", width, height, 1440, 1080, board, set) is not { } lit) return;
 
                 // The black squares are read from a picture three times as bright, where 8 bits resolve them; the white ones clip there.
@@ -518,7 +518,7 @@ namespace EmuSen.WiseMan.Serenity
         public Task A_white_that_goes_dark_leaves_green_and_blue_behind_for_frames_and_no_red() => Session.Dispatch(() =>
         {
             byte[] white = Grey(256, 224, 1), black = Grey(256, 224, 0);
-            (string, float)[] set = With(Plain.Where(p => p.Item1 != "persistence").ToArray(), ("mask", 1f), ("signal", 0f), ("subpixels", 0f), ("gamut", 0f), ("displayNits", 100f));
+            (string, float)[] set = With(Plain, ("persistence", 1f), ("mask", 1f), ("signal", 0f), ("subpixels", 0f), ("gamut", 0f), ("displayNits", 100f));
             double[] After(int dark)
             {
                 Crt picture = Draw("SNES", 256, 224, 640, 480, Enumerable.Repeat(white, 150).Concat(Enumerable.Repeat(black, dark)).ToArray(), set)!;

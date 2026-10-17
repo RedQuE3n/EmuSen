@@ -839,7 +839,8 @@ Each was put as a question on 2026-10-07 with a recommendation; the answers are 
 6. **Region.** **Decided 2026-10-07: North America by default (SMPTE C, D65, set-up); a 9300 K white is shown as
    it was only when Japan is chosen. The game's region is taken from the frontend where it already knows it, and
    no plumbing is added for it in this effort.**
-7. **Persistence** (§3.5). **Decided 2026-10-07: at its measured strength by default, with a slider.**
+7. **Persistence** (§3.5). **Decided 2026-10-07: at its measured strength by default, with a slider.** *(Default
+   changed 2026-10-17 to a tenth of it, §25.)*
 8. **Interlace.** **Decided 2026-10-07: woven by default; fields is a setting.**
 9. **Measurements on other machines.** C1 to C3's handheld and laptop columns have nothing under them.
    **Decided 2026-10-07: to be asked for when the tiers exist; the tester runs the handheld's.**
@@ -1048,6 +1049,7 @@ zinc sulphide like P22's green and blue. The filter keeps the fitted shape, whic
 measurement for, and scales its strength so that **a sustained white leaves 4% of its green in the first dark
 frame** (`TailScale` 0.1606), 3.5% of its blue and none of its red. A single frame's flash then leaves 0.8% in
 the next frame. The Persistence setting is a multiplier on that, to 6, where 6.2 would be §3.5's extrapolation.
+*(Since 2026-10-17 the setting's default is 0.1, a tenth of this strength; 1 restores it. §25.)*
 
 **Confidence.** Low, and stated: the 4% is a figure quoted in a review for a different zinc-sulphide phosphor,
 "as large as"; the shape is one monitor's, extrapolated. Decision 7 was for the measured strength by default,
@@ -1112,6 +1114,7 @@ light past the edge lost, and added in the face pass as `w` of the light with th
 It is applied after the mask, since the glass is in front of it. **Measured on the build**: 209:1 and 76:1,
 against 219 and 75. The black squares are read from a second render three times as bright, since at the
 default headroom a black square is under four code values.
+*(Since 2026-10-17 the Glare setting's default is 0.1, a tenth of this weight; 1 restores it. §25.)*
 
 ### 11.7 The mask
 
@@ -1338,7 +1341,8 @@ misses one. It was not moved off the thread.
 
 1. **Persistence's default** (§11.4). The strength called measured in step 1 was an extrapolation that the
    built model shows to be unphysical. **Decided 2026-10-07: 4% of a held white in the first dark frame, the
-   García-Pérez and Peli figure, is the default, with the slider.**
+   García-Pérez and Peli figure, is the default, with the slider.** *(Superseded 2026-10-17: the default is now a
+   tenth of it, §25.)*
 2. **The default brightness** (§11.8). A 100 cd/m² tube on a 300 cd/m² display is a picture a third as bright
    as the display's peak. **Decided 2026-10-07 by the tester: brighter by default, using most of the display's
    brightness, with the mask at full depth in dark and mid tones and easing off only in the brightest areas;
@@ -2842,3 +2846,34 @@ Below 1.5 MHz the trap keeps 0.96 or more, so composite luma at 1 MHz alone coul
    patchy-ntsc above 2 MHz. Open: put without a recommendation.
 3. **The consumer sets' default demodulator**: the standard's matrix, as now, or the CXA2025AS's US axis. Open: put
    without a recommendation.
+
+## 25. Persistence and glare default to a tenth of the model (2026-10-17)
+
+**Decided 2026-10-17 by the tester: persistence and glare default to 0.1, as the modelled amounts were too intense on a
+real display.** In the tester's words: "It is very intense at its normal settings. I had to lower it."
+
+**What 1 means.** Both settings are multipliers on a modelled physical amount, and 1 is that amount:
+
+- **Phosphor persistence** (`persistence`): at 1, a sustained white leaves 4% of its green in the first dark frame,
+  3.5% of its blue and none of its red (`TailScale` 0.1606 on §11.4's two fitted tails), the strength decided in
+  §11.12's first question from García-Pérez and Peli's figure. At the new default of 0.1 the first dark frame keeps
+  0.4% of the green.
+- **Glare in the glass** (`glare`): at 1, a share `GlareWeight` = 0.0299 of the picture's light is spread by a Gaussian
+  6.68% of the picture's width (§11.6), the pair solved from DisplayMate's two checkerboard contrasts on the
+  PVM-20L5. At 0.1 the share is 0.3%.
+
+So the default picture now carries a tenth of each modelled effect, and **setting either to 1 restores the model**. The
+ranges and steps are unchanged (persistence 0 to 6, glare 0 to 3, both in steps of 0.1), and so are the shape of the
+tails, the glare's width and every other constant.
+
+**Where the defaults live.** The two parameters' initial values in `CrtFilter.Parameters`; every other copy is derived
+from them: `ScreenFilter.DefaultFor` for the Shaders window's rows and their "default" marks, and
+`BuiltInPreset.ValuesFor` for the slang preset the device path draws (`EmuSen_DevicePicture.md` §3), which is written
+from the same values, so the SkSL and slang pictures stay matched without a second edit. **A value a player has stored
+keeps winning**: stored parameters are passed over the defaults (`ScreenFilter.ValuesFor`), so a console whose
+`graphics.json` already names `persistence` or `glare` draws as before, and only a console that never set them changes.
+
+**Tests.** The two cases that measure the modelled amounts, the checkerboards' contrast (§11.6) and the tail left after
+a held white (§11.4), took the old defaults by leaving the parameter out of their otherwise-off set; they now set it to
+1 explicitly, and measure the model as before. Every other CRT case either turns both off or does not depend on them.
+

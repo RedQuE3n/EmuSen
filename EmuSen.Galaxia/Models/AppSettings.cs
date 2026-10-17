@@ -110,6 +110,9 @@ namespace EmuSen.Galaxia.Models
         // Box art the library shows, read and never written except by Add Cover Art - see EmuSen_Settings_Reference.md §4.33.
         public string? ArtworkDirectory { get; set; }
 
+        // The player's own firmware folder, searched before home/Firmware and never written - see EmuSen_Settings_Reference.md §4.121.
+        public string? FirmwareDirectory { get; set; }
+
         // A big-screen session's library: Mistress's own, or an ES-DE theme's view when one is found - see EmuSen_Settings_Reference.md §4.52.
         public string LibraryStyle { get; set; } = LibraryStyleTheme;
         public const string LibraryStyleMistress = "Mistress";

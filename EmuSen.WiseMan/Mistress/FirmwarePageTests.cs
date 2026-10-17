@@ -58,6 +58,20 @@ namespace EmuSen.WiseMan.Mistress
             return window;
         }
 
+        private static HintText Problem(PreferencesWindow w) => w.GetVisualDescendants().OfType<HintText>().Single(t => t.Name == "FirmwareDirectoryProblem");
+
+        private static PathPickerRow Picker(PreferencesWindow w) => w.GetVisualDescendants().OfType<PathPickerRow>().Single(p => p.Name == "FirmwareDirectoryBox");
+
+        // A path typed into the folder row and committed by leaving the box, as a keyboard or Game Mode's on-screen keyboard does.
+        private static void Type(PreferencesWindow w, string text)
+        {
+            TextBox box = Picker(w).GetVisualDescendants().OfType<TextBox>().Single();
+            box.Focus();
+            box.Text = text;
+            Picker(w).GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PART_Browse").Focus();
+            Dispatcher.UIThread.RunJobs();
+        }
+
         private static FieldRow RowOf(PreferencesWindow w, string label) => w.GetVisualDescendants().OfType<FieldRow>().Single(r => r.Label == label);
 
         // A file's row: which version runs, then what the open one changes, then any note.
@@ -78,16 +92,21 @@ namespace EmuSen.WiseMan.Mistress
                 Assert.Equal(systems.Count(s => s.Items.Any(i => i.Title == item.Title)), rows.Count);
                 Assert.All(rows, row =>
                 {
-                    Assert.Equal(item.Note is { } note ? [item.InUse, item.Change, note] : [item.InUse, item.Change], Words(row));
+                    Assert.Equal(new[] { item.InUse, item.Change, item.Where, item.Note }.Where(w => w is not null), Words(row));
                     Assert.Equal(item.Cost, (ToolTip.GetTip(row) as TextBlock)?.Text);
                 });
             }
-            FieldRow folder = RowOf(window, FirmwarePane.FolderLabel);
+            FieldRow folder = RowOf(window, FirmwarePane.FolderRowLabel);
             Assert.Equal(FirmwareOverview.Optional, folder.Hint);
             Assert.Contains("never downloads", folder.Hint);
             Assert.DoesNotContain("below", folder.Hint);
             Assert.DoesNotContain("above", folder.Hint);
             Assert.Equal(FirmwareLibrary.Directory, window.GetVisualDescendants().OfType<MonoText>().Single(t => t.Name == "FirmwareFolderText").Text);
+            FieldRow chosen = RowOf(window, FirmwarePane.ChosenLabel);
+            Assert.Equal(FirmwarePane.ChosenHint, chosen.Hint);
+            PathPickerRow picker = chosen.GetVisualDescendants().OfType<PathPickerRow>().Single();
+            Assert.Equal(("", FirmwarePane.ChosenPlaceholder, true, true), (picker.Path, picker.Placeholder, picker.IsEditable, picker.IsClearable));
+            Assert.False(Problem(window).IsVisible);
             window.Close();
         }, default);
 
@@ -96,7 +115,8 @@ namespace EmuSen.WiseMan.Mistress
         {
             PreferencesWindow window = Open();
             var pane = (Control)window.GetVisualDescendants().OfType<Tabs>().Single().SelectedContent!;
-            Button open = Assert.Single(pane.GetVisualDescendants().OfType<Button>().Where(b => b.FindAncestorOfType<ScrollBar>() is null));
+            // Besides the folder row's own Browse and Clear, Open Folder is the page's one button.
+            Button open = Assert.Single(pane.GetVisualDescendants().OfType<Button>().Where(b => b.FindAncestorOfType<ScrollBar>() is null && b.FindAncestorOfType<PathPickerRow>() is null));
             Assert.Equal((FirmwarePane.OpenFolder, "FirmwareOpenFolderButton"), (open.Content, open.Name));
             Assert.False(Directory.Exists(FirmwareLibrary.Directory));
             open.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -121,20 +141,67 @@ namespace EmuSen.WiseMan.Mistress
             File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, file), new byte[size]);
             Assert.True(window.RefreshFirmware());
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal([FirmwareItem.OwnFile, FirmwareItem.AsTheConsole], Words(RowOf(window, title)));
+            Assert.Equal([FirmwareItem.OwnFile, FirmwareItem.AsTheConsole, "Found in EmuSen's folder."], Words(RowOf(window, title)));
 
             // One byte short is not the file: the open version runs and the row says why.
             File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, file), new byte[size - 1]);
             Assert.True(window.RefreshFirmware());
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(3, Words(RowOf(window, title)).Length);
-            Assert.Equal($"The file here is not {size:N0} bytes, so it is not used.", Words(RowOf(window, title))[2]);
+            Assert.Equal($"Not used: the file in EmuSen's folder is not {size:N0} bytes.", Words(RowOf(window, title))[2]);
             window.Close();
 
             File.Delete(Path.Combine(FirmwareLibrary.Directory, file));
             window = Open();
             Assert.Equal(2, Words(RowOf(window, title)).Length);
             Assert.NotEqual(FirmwareItem.OwnFile, Words(RowOf(window, title))[0]);
+            window.Close();
+        }, default);
+
+        // The folder row by the setting's rules: a relative path or a file refused and the row put back, a missing folder kept and said, ~ expanded, a real folder used, Clear back to blank.
+        [Fact]
+        public Task The_folder_row_keeps_a_folder_refuses_a_relative_path_or_a_file_and_clears() => Session.Dispatch(() =>
+        {
+            FirmwareItem first = FirmwareOverview.Build().SelectMany(s => s.Items).First();
+            string chosen = Path.Combine(_root, "BIOS");
+            Directory.CreateDirectory(chosen);
+            File.WriteAllBytes(Path.Combine(chosen, first.FileName), new byte[first.Size]);
+            PreferencesWindow window = Open();
+
+            Type(window, "genesis");
+            Assert.Null(AppSettings.Load().FirmwareDirectory);
+            Assert.Equal("", Picker(window).Path);
+            Assert.True(Problem(window).IsVisible);
+            Assert.Equal(SettingFolders.Checked("genesis").Problem, Problem(window).Text);
+
+            string file = Path.Combine(chosen, first.FileName);
+            Type(window, file);
+            Assert.Null(AppSettings.Load().FirmwareDirectory);
+            Assert.Equal($"\"{file}\" is a file, not a folder, so it is not used.", Problem(window).Text);
+
+            string missing = Path.Combine(_root, "Unplugged");
+            Type(window, missing);
+            Assert.Equal(missing, AppSettings.Load().FirmwareDirectory);
+            Assert.Equal($"The folder {missing} does not exist.", Problem(window).Text);
+            Assert.False(Directory.Exists(missing));
+
+            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            Type(window, "~/EmuSenNoSuchFirmwareFolder");
+            Assert.Equal("~/EmuSenNoSuchFirmwareFolder", AppSettings.Load().FirmwareDirectory);
+            Assert.Equal($"The folder {Path.Join(home, "EmuSenNoSuchFirmwareFolder")} does not exist.", Problem(window).Text);
+
+            Type(window, chosen);
+            Assert.Equal(chosen, AppSettings.Load().FirmwareDirectory);
+            Assert.False(Problem(window).IsVisible);
+            Assert.Equal([FirmwareItem.OwnFile, FirmwareItem.AsTheConsole, "Found in your folder."], Words(RowOf(window, first.Title)));
+
+            Button clear = Picker(window).GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PART_Clear");
+            clear.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(AppSettings.Load().FirmwareDirectory);
+            Assert.Equal("", Picker(window).Path);
+            Assert.NotEqual(FirmwareItem.OwnFile, Words(RowOf(window, first.Title))[0]);
+            Assert.Equal([first.FileName], Directory.GetFileSystemEntries(chosen).Select(Path.GetFileName));
             window.Close();
         }, default);
     }

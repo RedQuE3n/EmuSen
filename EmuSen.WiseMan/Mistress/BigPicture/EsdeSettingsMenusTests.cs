@@ -174,20 +174,36 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             WindowFitAuditTests.SavePicture(s.Window, $"PreferencesFirmware-Themed-{width}x{height}");
             Control[] rows = Rows(s);
             var systems = EmuSen.Cores.FirmwareOverview.Build();
-            Assert.Equal(new[] { FirmwarePane.FolderLabel, FirmwarePane.FolderRowLabel }.Concat(systems.SelectMany(y => y.Items.Count == 0 ? [y.Name] : y.Items.Select(FirmwarePane.MenuLabel))), rows.Select(LabelOf));
-            Assert.All(rows, r => Assert.Equal(MenuRowKind.Action, MenuRows.GetKind(r)));
-            Assert.Equal(new[] { "Optional", "Firmware" }.Concat(systems.SelectMany(y => y.Items.Count == 0 ? ["None needed"] : y.Items.Select(i => i.FileName))), rows.Select(r => RowOf(r).Value));
+            // The second row is the player's folder, a text row; every other row is a fact's.
+            var folder = Assert.IsType<PathPickerRow>(rows[1]);
+            Control[] facts = rows.Where(r => r != folder).ToArray();
+            Assert.Equal(FirmwarePane.ChosenLabel, MenuRows.GetLabel(folder.GetVisualDescendants().OfType<TextBox>().Single()));
+            Assert.Equal(new[] { FirmwarePane.FolderLabel, FirmwarePane.FolderRowLabel }.Concat(systems.SelectMany(y => y.Items.Count == 0 ? [y.Name] : y.Items.Select(FirmwarePane.MenuLabel))), facts.Select(LabelOf));
+            Assert.All(facts, r => Assert.Equal(MenuRowKind.Action, MenuRows.GetKind(r)));
+            Assert.Equal(new[] { "Optional", "Firmware" }.Concat(systems.SelectMany(y => y.Items.Count == 0 ? ["None needed"] : y.Items.Select(i => i.FileName))), facts.Select(r => RowOf(r).Value));
             // The file names are drawn as they are spelt, under a look that draws everything else in capitals.
-            Assert.All(rows.Where(r => r == rows[1] || (RowOf(r).Value?.EndsWith(".rom", StringComparison.Ordinal) ?? false)), r => Assert.Equal(EmuSen.LunaP.Media.LetterCase.None, RowOf(r).ValueLetterCase));
+            Assert.All(facts.Where(r => r == facts[1] || (RowOf(r).Value?.EndsWith(".rom", StringComparison.Ordinal) ?? false)), r => Assert.Equal(EmuSen.LunaP.Media.LetterCase.None, RowOf(r).ValueLetterCase));
             Assert.Equal(["Back", "Choose"], sheet.Form.Menu.Hints!.Select(h => h.Label));
             foreach (Control row in rows)
             {
-                Assert.Same(row, TopLevel.GetTopLevel(s.Window)!.FocusManager!.GetFocusedElement());
+                var focused = (Control)TopLevel.GetTopLevel(s.Window)!.FocusManager!.GetFocusedElement()!;
+                Assert.True(ReferenceEquals(row, focused) || focused.FindAncestorOfType<PathPickerRow>() == row);
                 Assert.False(string.IsNullOrEmpty(sheet.Form.Menu.Footer));
                 Assert.False(sheet.Form.Menu.IsFooterCut, sheet.Form.Menu.Footer);
                 Assert.Empty(FitAudit.Check(Sheet(s), WindowAllowances.For(sheet)));
-                // A on a row changes nothing and opens nothing.
-                s.Pad.A();
+                Assert.Equal(row == folder ? ["Select", "Back", "Choose"] : ["Back", "Choose"], sheet.Form.Menu.Hints!.Select(h => h.Label));
+                if (row == folder)
+                {
+                    // A on the folder's row opens the text popup, and B puts it away with nothing kept.
+                    s.Pad.A();
+                    Assert.NotNull(OnScreenKeyboard.OpenOver(s.Window));
+                    s.Pad.B();
+                    s.Settle();
+                    Assert.Null(OnScreenKeyboard.OpenOver(s.Window));
+                    Assert.Null(EmuSen.Galaxia.Models.AppSettings.Load().FirmwareDirectory);
+                }
+                // A on any other row changes nothing and opens nothing.
+                else s.Pad.A();
                 Assert.Same(sheet, Sheets(s).Current);
                 Assert.Equal(PreferencesWindow.FirmwareTab, sheet.Form.Menu.Title);
                 s.Pad.Down();

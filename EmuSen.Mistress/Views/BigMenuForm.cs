@@ -25,6 +25,9 @@ namespace EmuSen.Mistress.Views
         // Set on a page whose rows take no choice: its hints are only moving and going back, since A and the sides do nothing there.
         public static readonly AttachedProperty<bool> ReadOnlyPageProperty = AvaloniaProperty.RegisterAttached<Control, bool>("ReadOnlyPage", typeof(BigMenuForm));
 
+        // Set on a field of a read-only page that does take a choice, as the firmware folder's row: while it has the focus the hints add Select.
+        public static readonly AttachedProperty<bool> TakesChoiceProperty = AvaloniaProperty.RegisterAttached<FieldRow, bool>("TakesChoice", typeof(BigMenuForm));
+
         // One screen of the form: its title, what its rows are made from each time it is shown, and whether it takes no choice.
         private sealed record Page(string Title, Func<IReadOnlyList<Control>> Rows, bool ReadOnly = false);
 
@@ -40,12 +43,13 @@ namespace EmuSen.Mistress.Views
         private readonly Dictionary<Control, List<Control>> _converted = new();
         private readonly Dictionary<Control, string> _hints = new();
         private readonly HashSet<Control> _verbatim = new();
+        private readonly HashSet<Control> _choosing = new();
         private readonly Dictionary<Control, List<Control>> _extras = new();
         private List<Control> _pending = new();
         private readonly Dictionary<int, Button> _pageRows = new();
         private readonly HashSet<Panel> _watched = new();
         private readonly Button _back;
-        private readonly IReadOnlyList<HintEntry> _choiceHints = Hints(), _readOnlyHints = Hints(readOnly: true);
+        private readonly IReadOnlyList<HintEntry> _choiceHints = Hints(), _readOnlyHints = Hints(readOnly: true), _selectHints = Hints(readOnly: true, select: true);
         private bool _rebuildQueued;
 
         // The window's pages, the first shown inline above the others' submenu rows when firstInline, as ES-DE's UI settings put the theme's options above its submenus.
@@ -72,7 +76,7 @@ namespace EmuSen.Mistress.Views
                 Buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Children = { _back } },
             };
             _rows.AddHandler(InputElement.GotFocusEvent, (_, e) => ShowHint(e.Source as Control), handledEventsToo: true);
-            _back.GotFocus += (_, _) => Menu.Footer = null;
+            _back.GotFocus += (_, _) => { Menu.Footer = null; ReadOnlyRowHints(null); };
 
             // The window's own model controls stay in the tree, unseen, so what reads them still finds them.
             var host = new Grid();
@@ -108,12 +112,19 @@ namespace EmuSen.Mistress.Views
 
         public string? HintOf(Control row) => _hints.GetValueOrDefault(row);
 
-        private static IReadOnlyList<HintEntry> Hints(bool readOnly = false) => readOnly
-            ?
-            [
-                new("Back") { Button = PadHints.Glyph(PadGlyphButton.East) },
-                new("Choose") { Button = PadGlyphButton.DPadUpDown },
-            ]
+        private static IReadOnlyList<HintEntry> Hints(bool readOnly = false, bool select = false) => readOnly
+            ? select
+                ?
+                [
+                    new("Select") { Button = PadHints.Glyph(PadGlyphButton.South) },
+                    new("Back") { Button = PadHints.Glyph(PadGlyphButton.East) },
+                    new("Choose") { Button = PadGlyphButton.DPadUpDown },
+                ]
+                :
+                [
+                    new("Back") { Button = PadHints.Glyph(PadGlyphButton.East) },
+                    new("Choose") { Button = PadGlyphButton.DPadUpDown },
+                ]
             :
             [
                 new("Select") { Button = PadHints.Glyph(PadGlyphButton.South) },
@@ -219,11 +230,19 @@ namespace EmuSen.Mistress.Views
             for (Control? c = source; c is not null && !ReferenceEquals(c, _rows); c = c.Parent as Control)
                 if (_hints.TryGetValue(c, out string? hint))
                 {
+                    ReadOnlyRowHints(c);
                     Menu.FooterLetterCase = _verbatim.Contains(c) ? EmuSen.LunaP.Media.LetterCase.None : null;
                     Menu.Footer = hint.Length > 0 ? hint : null;
                     return;
                 }
             Menu.Footer = null;
+            ReadOnlyRowHints(null);
+        }
+
+        // On a read-only page, Select joins the hints only while a row that takes a choice has the focus.
+        private void ReadOnlyRowHints(Control? row)
+        {
+            if (_stack.Count > 0 && _stack.Peek().ReadOnly) Menu.Hints = row is not null && _choosing.Contains(row) ? _selectHints : _readOnlyHints;
         }
 
         // A source page's rows, each field row turned into menu rows once, rebuilt only for what the page's own code replaced.
@@ -303,6 +322,7 @@ namespace EmuSen.Mistress.Views
                     foreach (Control row in Content(content, field.Label ?? "", field.Hint ?? ""))
                     {
                         if (field.GetValue(VerbatimHintProperty)) _verbatim.Add(row);
+                        if (field.GetValue(TakesChoiceProperty)) _choosing.Add(row);
                         yield return row;
                     }
                     yield break;

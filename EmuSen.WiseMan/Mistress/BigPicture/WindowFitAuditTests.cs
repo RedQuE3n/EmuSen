@@ -139,7 +139,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return faults;
         }
 
-        private (MainWindow Window, PadDriver Pad) InGame(int w, int h, bool resumeAsk = false, string game = "Cobalt Harbor (Synthetic)", bool bigScreen = true)
+        private (MainWindow Window, PadDriver Pad) InGame(int w, int h, bool resumeAsk = false, string game = "Cobalt Harbor (Synthetic)", bool bigScreen = true, Action<AppSettings>? more = null)
         {
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
@@ -152,6 +152,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 CheatDatabaseDirectory = Path.Combine(_root, "Cheats"),
             };
             app.BigPictureInterface.MenuOpeningEffect = BigPictureInterface.OpeningNone;
+            more?.Invoke(app);
             app.Save();
             var window = new MainWindow { Width = w, Height = h };
             window.Show();

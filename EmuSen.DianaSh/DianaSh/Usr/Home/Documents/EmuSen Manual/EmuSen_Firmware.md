@@ -14,7 +14,10 @@ For every emulator the project builds, present and future:
    (a boot ROM, a BIOS, a coprocessor's program), the core carries its own replacement, written from public
    documentation of what that code does. Every game the core supports then runs with no firmware folder.
 2. **The player's own firmware, if they have it.** An image placed in `home/Firmware` is used in place of the
-   replacement, as the exact path. It is offered, never required, and no frontend prompts for it.
+   replacement, as the exact path. It is offered, never required, and no frontend prompts for it. *Since
+   2026-10-17* a player may also name a folder of their own in Preferences (`FirmwareDirectory`, §2.3), searched
+   before `home/Firmware`. The setting is consistent with this policy: it is optional and blank by default, nothing
+   asks for it at launch or says that firmware is missing, and EmuSen only reads the folder.
 3. **Nothing copyrighted ships or is fetched.** No firmware is committed, bundled or downloaded on the player's behalf
    (§5); the unofficial BIOS collections hosted online are unauthorised copies and are not a source.
 
@@ -50,17 +53,20 @@ Answering before loading is the whole point. Once `LoadRom` has run, the core ha
 
 ## 2. The library
 
-`FirmwareLibrary` is `home/Firmware/` treated as a store, and it knows nothing about any console.
+`FirmwareLibrary` is `home/Firmware/` treated as a store, with the player's chosen folder searched before it (§2.3), and it knows nothing about any console.
 
 | Call | Meaning |
 |---|---|
+| `Folders` | the folders searched, first to last (§2.3) |
+| `Find(request)` | the first folder holding the image, whole or as a split form, with its bytes; or null |
 | `TryLoad(request)` | the bytes, or null |
 | `IsInstalled(request)` | as above, as a bool |
 | `MissingFrom(requests)` | filters a batch down to what's absent |
-| `Install(request, sourcePath)` | copies a file the player picked in, under the canonical name |
-| `PathFor(request)` | where it belongs, for an error message |
+| `Install(request, sourcePath)` | copies a file the player picked into `home/Firmware`, under the canonical name |
+| `PathFor(request)` | where it belongs in `home/Firmware`, for an error message |
 
-`Directory` is settable, and `ResetDirectory()` puts it back. That exists so tests can point at a temp folder — without it every test's result would depend on which dumps happen to be on the machine, which is a bug this project has already been bitten by once (see §6).
+`Directory` is settable, and `ResetDirectory()` puts it back. While it is set it is the only folder searched, and the
+player's setting is not read. That exists so tests can point at a temp folder — without it every test's result would depend on which dumps happen to be on the machine, which is a bug this project has already been bitten by once (see §6).
 
 ### 2.1 Size is the only validation
 
@@ -71,6 +77,55 @@ Checksums would be stricter still, and `FirmwareRequest` has room for them later
 ### 2.2 Canonical names and alternates
 
 `AlternateNames` lists other filenames the same dump circulates under. They are checked after the canonical name and **never written to**: an install always lands under `FileName`, so the next launch finds it first and the store converges on one layout no matter what the player picked.
+
+### 2.3 The player's firmware folder (2026-10-17)
+
+*Requested by the tester 2026-10-17:* a player can choose a firmware folder in Mistress. Many players already keep
+their dumps in one folder (`~/Documents/BIOS`, or the `system` folder of another emulator) and should not have to
+copy them into the sandbox.
+
+**The setting.** `AppSettings.FirmwareDirectory`, blank by default, set on Preferences ▸ Firmware
+(`EmuSen_Settings_Reference.md` §4.121). It is in the platform library's model of `appsettings.json` as well
+(`Platform/galaxia/src/models.rs`), since that model drops a field it does not list and a library-side save would
+otherwise erase the choice. Its value is read by the folder rules of `EmuSen_Config_Reference.md` §7.7: blank is
+unset, `~` and `~/` are the home, a relative path or a file is refused, and a folder that does not exist is said.
+
+**The order.** `SettingFolders.Firmware(settings)` in Galaxia is the one owner of the lookup order, and
+`FirmwareLibrary.Folders` asks it; the cores' hand-over (`CoreEngine.LoadRom` and `StartConsole`), the question
+before a launch (`EmulatorSession.MissingFirmwareFor`) and the Firmware page (`FirmwareOverview.Build`) all search
+those folders, through `FirmwareLibrary.Find`, and no other code builds a firmware path to read.
+
+1. The chosen folder, when the setting names one that the rules accept. A folder that does not exist is still
+   searched, and holds nothing; a drive mounted later then makes it real without a second visit to Preferences.
+2. `home/Firmware`, always. When the chosen folder is `home/Firmware` itself it is searched once.
+
+Within a folder the order of §2.2 holds (the canonical name, then the alternates, then each split form), and a
+split form is taken only when all of its parts are in the same folder; parts are never gathered from two folders,
+since two halves of different dumps would pass the size test and run as garbage. The first folder that holds a
+usable form wins, so on a tie of name and size the chosen folder's file is the one used.
+
+*Why the chosen folder first.* The order matters only when both folders hold a file that passes the size test, and
+then the question is which of two plausible files the player meant. `home/Firmware` is filled by EmuSen's own
+install path (`Install`, §3) and by whatever an older build or another session left there; the chosen folder is a
+choice made today, in Preferences, for exactly this purpose. Taking the explicit choice over the implicit one is the
+rule a player can predict without reading this page, and it is the order a search path has elsewhere (a user's
+directory ahead of the system's). The opposite order would make the setting do nothing for every file the sandbox
+already holds, which is the case a player sets it to fix. A file of the wrong size is not a tie (§2.1): it is not
+the image, and the search continues to `home/Firmware`.
+
+**Read only.** EmuSen never writes, renames or deletes anything in the chosen folder, the same rule as the ROM
+library (`EmuSen_Galaxia.md` §3.3a). `Install` writes only to `home/Firmware`; the page's Open Folder makes and opens
+only `home/Firmware`; nothing makes the chosen folder when it is absent. Tested by
+`NephriteFirmwareTests.A_bios_in_the_chosen_folder_boots_the_log_names_the_folder_and_the_folder_is_never_written`,
+which compares the folder's entries, lengths and modification times, and the folder's own, before and after two
+sessions, and by `FirmwareFolderTests.Install_writes_into_home_firmware_and_never_into_the_chosen_folder`.
+
+**What it costs.** `FirmwareLibrary.Folders` reads `appsettings.json` once per load, per launch question and per
+build of the page, not once per file; the folders are passed down from there.
+
+**Not covered.** A Hotaru or Pharaoh session reads the same setting through the same library, but neither has a
+place to set it; a hand edit of `appsettings.json` is the way there. No DianaSh command shows or sets folder
+settings (`EmuSen_Config_Reference.md` §7.2), so none was given this one; `man hier` names it beside `/Firmware`.
 
 ---
 
@@ -116,7 +171,7 @@ and nothing in the session could settle it. `CoreEngine.LoadRom` now writes one 
 info reports, after the machine is made:
 
 ```
-[Firmware] The American Sega CD's BIOS (131,072 bytes): the player's bios_CD_U.bin
+[Firmware] The American Sega CD's BIOS (131,072 bytes): the player's bios_CD_U.bin, in /home/player/Documents/BIOS
 [Firmware] The American Sega CD's BIOS (131,072 bytes): Nephrite's own replacement
 ```
 
@@ -125,6 +180,10 @@ host's account of what it passed: a file the host handed over that the core did 
 as running. The line is generic over cores, the label and the file name being the core's firmware entry. In Mistress
 it lands in the game's `general.log` under the log directory (`EmuSen_Settings_Reference.md` §4.22), since logging
 starts before the load. Tested by `NephriteFirmwareTests`.
+
+*Since 2026-10-17* a line for the player's file ends with the folder it was read from (§2.3), the chosen folder or
+`home/Firmware`, since with two folders searched the file name alone no longer says which copy ran. The folder is the
+host's record of where `Find` took the file it passed; the source word is still the core's.
 
 ---
 
@@ -154,5 +213,6 @@ EmuSen is GPL-3.0, which obliges us to grant downstream recipients rights we wou
 
 1. **The picker never appears.** `GetFirmwareRequirements` returned nothing. Either the ROM carries its firmware appended (which is correct — nothing is needed), or header detection didn't recognise the chip. Check `Cartridge.FirmwareRequirements` before suspecting the dialog.
 2. **The player picks the right file and it still isn't found.** Size mismatch — §2.1. Check the expected `Size` against the file; the MAME and bsnes DSP layouts differ in length, see `Venus_NecDSP.md` §2.3.
-3. **A test passes locally and fails on another machine, or vice versa.** It is reading the real firmware directory instead of overriding `FirmwareLibrary.Directory`. Two tests were written this way once and only passed because the machine happened to have no dumps installed; they broke the moment one did. Any test whose outcome depends on what's installed must set `Directory` to a temp folder and `ResetDirectory()` after.
-4. **A firmware-gated test silently passes without testing anything.** That is by design — `NecDspRealFirmwareTests` returns early when no dump is present. It is the only way to keep real-firmware verification in a repo that cannot contain firmware.
+3. **A test passes locally and fails on another machine, or vice versa.** It is reading the real firmware directory, or a `FirmwareDirectory` set in the real `appsettings.json`, instead of overriding `FirmwareLibrary.Directory` (which also stops the setting being read). Two tests were written this way once and only passed because the machine happened to have no dumps installed; they broke the moment one did. Any test whose outcome depends on what's installed must set `Directory` to a temp folder and `ResetDirectory()` after.
+4. **A player's file is in their folder and the open version still runs.** Read the session's `[Firmware]` line (§3.1), then Preferences ▸ Firmware: a message under the folder row says when the setting is refused or the folder is absent, and a file's row names the folder it was found in. A file of the wrong size in the chosen folder is passed over for one in `home/Firmware` (§2.3).
+5. **A firmware-gated test silently passes without testing anything.** That is by design — `NecDspRealFirmwareTests` returns early when no dump is present. It is the only way to keep real-firmware verification in a repo that cannot contain firmware.

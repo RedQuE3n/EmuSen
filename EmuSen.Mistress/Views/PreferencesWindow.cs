@@ -227,7 +227,7 @@ namespace EmuSen.Mistress.Views
             Closed += (_, _) => controllers.Dispose();
             tabs.Add(ControllersTab, Pane(controllers.Rows()));
             // Read again when the window comes back to the front, as after a file is dropped in the folder; a big-screen sheet reads it when it opens.
-            _firmware = new FirmwarePane(menu is not null);
+            _firmware = new FirmwarePane(settings, menu is not null) { Chosen = () => RefreshFirmware() };
             var firmwarePane = (ScrollViewer)Pane(_firmware.Rows());
             FirmwarePane.MarkReadOnly(firmwarePane);
             _firmwareRows = (Panel)firmwarePane.Content!;

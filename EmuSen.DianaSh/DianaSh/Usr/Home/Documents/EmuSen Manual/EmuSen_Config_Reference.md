@@ -132,6 +132,10 @@ Moved here from `EmuSen.Mistress/Settings/`; it holds no frontend types, so ther
 
 `BigScreen` (default `false`) starts Mistress full screen with no menu bar and larger library text, for a handheld or a television. It is read once at start; `--bigscreen` and a Steam Deck session's `SteamDeck=1` ask for the same thing without it. See `EmuSen_Settings_Reference.md` §4.29.
 
+`FirmwareDirectory` (default blank) is the player's own firmware folder, searched before `home/Firmware` and never
+written; it is the first folder setting held to the rules of §7.7. See `EmuSen_Firmware.md` §2.3 and
+`EmuSen_Settings_Reference.md` §4.121.
+
 The class name and the file name are unchanged, so existing files load as-is.
 
 ### 3.2 `audio.json` — `AudioConfig`
@@ -368,7 +372,8 @@ and when to remove it is the tester's decision and is not part of this work.
 
 ### 7.2 The settings and their readers
 
-Eight settings name a folder: seven in `AppSettings` and one in `BigPictureInterface`. No setting in `audio.json`,
+Eight settings name a folder: seven in `AppSettings` and one in `BigPictureInterface`. *A ninth, `FirmwareDirectory`,
+was added on 2026-10-17 and follows §7.7's rules rather than this section's measurements.* No setting in `audio.json`,
 `graphics.json` or the binding files names a folder; `graphics.json`'s `slang:` filter is a path inside the shader
 pack, relative to the pack by design (`EmuSen_Settings_Reference.md` §4.41), and the shader pack's own folder is
 `DataStore.Shaders`, not a setting. Two settings cross into the platform library: `LogDirectory`, which the library's
@@ -495,3 +500,44 @@ below is built.
 - `SettingPathsOpenTests`: §7.3's measurement in a child process whose home and working folder belong to the test, and
   the eight open cases of §7.5's questions 1 and 2, skipped unless `EMUSEN_SETTING_PATHS_OPEN=1`. The child runs on
   the half its parent runs on, and the report it writes names the half.
+- `FirmwareFolderTests` (`EmuSen.WiseMan/Common/`) and `FirmwarePageTests`: §7.7's rules for `FirmwareDirectory`, at
+  the reader and at the row.
+
+### 7.7 `FirmwareDirectory`: the decided rules, applied to one setting (2026-10-17)
+
+`FirmwareDirectory` (`EmuSen_Firmware.md` §2.3) arrived after §7.5 was decided and before the rules were built for the
+eight settings of §7.2. A ninth setting with the old behaviour would have added one more case to undo, so it was made
+the first to follow them. The other eight keep the behaviour §7.3 measured until the queued work that applies §7.5 to
+all of them runs; none of them changed in the same work.
+
+**The rules, as built.** `SettingFolders.Checked(value)` gives a `FolderValue`: a state, the full path it names, and the
+value as written, trimmed.
+
+| Value | State | Searched | Said |
+|---|---|---|---|
+| null, empty, whitespace (§7.4's blank) | `Unset` | no; the default folder alone | nothing |
+| `~`, `~/x` (and `~\x` on Windows) | as the expanded path is | the home, or `x` under it | as the expanded path is |
+| a path `Path.IsPathFullyQualified` rejects: `genesis`, `./x`, `~name/x`, and on Windows `\x` or `C:x` | `Relative` | no | "… is not a full path, so it is not used. Type a full path, or one starting with ~." |
+| the path of an existing file | `File` | no | "… is a file, not a folder, so it is not used." |
+| an absolute path to nothing | `Missing` | yes, and finds nothing | "The folder … does not exist." |
+| an absolute path to a folder | `Usable` | yes | nothing |
+
+- **At entry** (the Firmware page's row, desktop or Game Mode) a `Relative` or `File` value is refused: the setting is
+  not saved, the row goes back to the stored value, and the message is shown under the row (the footer in Game Mode).
+  A `Missing` value is kept and said, since a folder on a drive not yet mounted is a reasonable choice. A blank value
+  clears the setting (§7.5 question 4): the row is a `PathPickerRow` with LunaP's `IsClearable` (LunaP §201), so Clear
+  and an erased box both pick the empty string, stored as null.
+- **At read** a stored `Relative` or `File` value is unset, as §7.5 question 1(a) decided, and is reported through
+  `ConfigDiagnostics` once for each value it takes, beginning `appsettings.json: FirmwareDirectory:`. A `Missing` value
+  is reported the same way, and still searched.
+- **What is stored** is the value as written, trimmed (`~/Documents/BIOS` stays `~/Documents/BIOS`), so a settings
+  file moved to another account means that account's home. Every reader goes through `Checked`, so no reader sees the
+  unexpanded form.
+- **Why `Path.IsPathFullyQualified`, not `IsPathRooted`.** On Windows `\BIOS` is rooted but names a different folder
+  on each drive the process's working folder is on, and `C:BIOS` is relative to that drive's working folder; both are
+  the class of value §7.1 was about. On Linux and macOS the two tests agree.
+- **`~` with no home.** When the home is empty (an environment with neither `HOME` nor a profile) `~/x` expands to `x`,
+  which is relative and refused; it never becomes a path under the working folder.
+
+No Rust change was needed beyond the field in the library's model: the setting is read only by C#.
+

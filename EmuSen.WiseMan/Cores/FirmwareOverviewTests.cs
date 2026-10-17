@@ -68,7 +68,7 @@ namespace EmuSen.WiseMan.Cores
             Put("spc700.rom", 63);
             boot = Snes().Items.Single(i => i.FileName == "spc700.rom");
             Assert.Equal((false, true, FirmwareItem.OpenVersion), (boot.Present, boot.WrongSize, boot.InUse));
-            Assert.Equal(("Games may start a fraction of a second later.", "The file here is not 64 bytes, so it is not used."), (boot.Change, boot.Note));
+            Assert.Equal(("Games may start a fraction of a second later.", "Not used: the file in EmuSen's folder is not 64 bytes."), (boot.Change, boot.Note));
 
             Put("spc700.rom", 64);
             boot = Snes().Items.Single(i => i.FileName == "spc700.rom");

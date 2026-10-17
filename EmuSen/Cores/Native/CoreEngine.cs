@@ -194,13 +194,31 @@ namespace EmuSen.Cores.Native
             return null;
         }
 
-        // Which firmware the machine runs on, one line each for the session's log: the player's file or the core's own - see EmuSen_Firmware.md §3.1.
-        public static IEnumerable<string> FirmwareLines(string core, IReadOnlyList<CoreFirmwareSource> used, IReadOnlyList<CoreFirmware> wanted) =>
-            used.Select(u => (u.Source, F: wanted.FirstOrDefault(f => f.Which == u.Which)))
+        // The folder each entry passed to the last machine came from, by its Which, for the session's log.
+        private readonly Dictionary<uint, string> _firmwareFolders = new();
+
+        // Each entry whole by its name and size, else its first split form, from the first folder holding it; part n as file Which + n - see EmuSen_CoreAPI.md §6.2 and EmuSen_Firmware.md §2.3.
+        private List<(uint, byte[])> FirmwareFiles(IEnumerable<CoreFirmware> entries)
+        {
+            IReadOnlyList<string> folders = FirmwareLibrary.Folders;
+            var firmware = new List<(uint, byte[])>();
+            _firmwareFolders.Clear();
+            foreach (var f in entries)
+            {
+                if (FirmwareLibrary.Find(Request(f), folders) is not { } found) continue;
+                firmware.AddRange(found.Parts.Select((p, n) => (f.Which + (uint)n, p)));
+                _firmwareFolders[f.Which] = found.Folder;
+            }
+            return firmware;
+        }
+
+        // Which firmware the machine runs on, one line each for the session's log: the player's file and its folder, or the core's own - see EmuSen_Firmware.md §3.1.
+        public static IEnumerable<string> FirmwareLines(string core, IReadOnlyList<CoreFirmwareSource> used, IReadOnlyList<CoreFirmware> wanted, IReadOnlyDictionary<uint, string>? folders = null) =>
+            used.Select(u => (u.Source, u.Which, F: wanted.FirstOrDefault(f => f.Which == u.Which)))
                 .Where(u => u.F is not null)
                 .Select(u => $"[Firmware] {u.F!.Label}: " + u.Source switch
                 {
-                    "file" => $"the player's {u.F.Name}",
+                    "file" => $"the player's {u.F.Name}" + (folders?.GetValueOrDefault(u.Which) is { } folder ? $", in {folder}" : ""),
                     "replacement" => $"{core}'s own replacement",
                     _ => "absent",
                 });
@@ -223,7 +241,7 @@ namespace EmuSen.Cores.Native
             // The battery folder is the system's, as the library files it: a .gbc game's saves are under GBC, not the shelf's GB; a system only discovery runs, its pack's console's.
             CoreSystem? system = CoreCatalog.SystemOfFile(path, Info);
             string console = CoreCatalog.DiscoveredConsoleForSystem(system?.Id) ?? system?.Id?.ToUpperInvariant() ?? CoreCatalog.ConsoleForRom(path) ?? Info.Id;
-            var firmware = new List<(uint, byte[])>();
+            List<(uint, byte[])> firmware;
             IReadOnlyList<CoreFirmware> asked;
             CoreMachine machine;
             List<(uint Which, BatterySave Save)> wanted;
@@ -234,12 +252,7 @@ namespace EmuSen.Cores.Native
             try
             {
                 asked = Library.FirmwareFor(Held(disc.Image));
-                // Each file whole by its name and size, else its first split form found, part n as file Which + n - see EmuSen_CoreAPI.md §6.2.
-                foreach (var f in asked)
-                {
-                    if (FirmwareLibrary.TryLoad(Request(f)) is { } data) firmware.Add((f.Which, data));
-                    else if (FirmwareLibrary.TryLoadParts(Request(f)) is { } parts) firmware.AddRange(parts.Select((p, n) => (f.Which + (uint)n, p)));
-                }
+                firmware = FirmwareFiles(asked);
                 ReleaseMedia();
                 placement = MemoryCards.Place(console, system, Media, System.IO.Path.GetFileNameWithoutExtension(path), b => BatteryFile(path, console, b.Which, b.Suffix));
                 BatterySave SaveFor(CoreBatteryFile b) => placement!.Files.TryGetValue(b.Which, out BatterySave? placed) ? placed : BatteryFile(path, console, b.Which, b.Suffix);
@@ -278,12 +291,7 @@ namespace EmuSen.Cores.Native
             CoreSystem system = Info.Systems.FirstOrDefault(s => s.Id == systemId && s.StartsEmpty)
                 ?? throw new NotSupportedException($"{Info.DisplayName} does not start {systemId} with nothing in it.");
             string console = CoreCatalog.DiscoveredConsoleForSystem(systemId) ?? CoreCatalog.ConsoleForSystem(systemId) ?? systemId.ToUpperInvariant();
-            var firmware = new List<(uint, byte[])>();
-            foreach (var f in system.Firmware)
-            {
-                if (FirmwareLibrary.TryLoad(Request(f)) is { } data) firmware.Add((f.Which, data));
-                else if (FirmwareLibrary.TryLoadParts(Request(f)) is { } parts) firmware.AddRange(parts.Select((p, n) => (f.Which + (uint)n, p)));
-            }
+            List<(uint, byte[])> firmware = FirmwareFiles(system.Firmware);
             ReleaseMedia();
             var choices = MemoryCards.MediaOf(console, system).ToDictionary(m => m.Id, m => Media.TryGetValue(m.Id, out CardChoice? c) && c.Apart ? c : new CardChoice(MemoryCards.Shared, c?.Names ?? Array.Empty<string>()));
             MediaPlacement placement = MemoryCards.Place(console, system, choices, ConsoleSession.NameOf(console), _ => BatterySave.None);
@@ -319,7 +327,7 @@ namespace EmuSen.Cores.Native
             _machine?.Dispose();
             _machine = machine;
             FirmwareNotice = NoticeFor(machine, asked);
-            foreach (string line in FirmwareLines(Info.DisplayName, machine.Info.Firmware, asked)) System.Console.WriteLine(line);
+            foreach (string line in FirmwareLines(Info.DisplayName, machine.Info.Firmware, asked, _firmwareFolders)) System.Console.WriteLine(line);
             IsHaltedAtBreakpoint = false;
             AttachDebugger(machine);
             _battery.Clear();

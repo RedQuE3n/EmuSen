@@ -159,6 +159,22 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal((13, 13), (first.FreeUnits, second.FreeUnits));
         }
 
+        // A disc of music alone goes in the drive through Insert Disc - see Diamond_Shell.md §5.1.
+        [Fact]
+        public void An_audio_disc_goes_in_the_drive()
+        {
+            string dir = Path.Combine(_root, "Music");
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, "Tones.bin"), Enumerable.Range(0, 300 * 2352).Select(i => (byte)(i / 4 % 64)).ToArray());
+            string cue = Path.Combine(dir, "Tones.cue");
+            File.WriteAllText(cue, "FILE \"Tones.bin\" BINARY\n  TRACK 01 AUDIO\n    INDEX 01 00:00:00\n");
+            using var core = (CoreEngine)CoreFactory.CreateConsole("PlayStation");
+            Run(core, 60);
+            core.InsertDisc(cue);
+            Run(core, 90);
+            Assert.Equal((0, false, true), (core.DiscIndex, core.LidOpen, core.Machine.Info.Drives[0].Loaded));
+        }
+
         // A file the core refuses goes into no drive: the lid stays open, the session's discs are as they were.
         [Fact]
         public void A_disc_the_core_refuses_is_not_kept()

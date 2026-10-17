@@ -275,3 +275,34 @@ fn look() {
     presses(&mut m, &[CIRCLE, R1]);
     save(&m, "slot2.ppm");
 }
+
+/// A disc of music alone as a sheet and its track, opened as Diamond's media insert opens it (Diamond_Shell.md §5.1).
+fn audio_disc() -> diamond::medium::Disc {
+    let cue = b"FILE \"music.bin\" BINARY\n  TRACK 01 AUDIO\n    INDEX 01 00:00:00\n".to_vec();
+    let bin: Vec<u8> = (0..300 * 2352).map(|i| ((i / 4) % 64) as u8).collect();
+    let Ok(diamond::medium::Opened::Audio(d)) = diamond::medium::open(emusen_native::core::Kept::from(cue), vec![emusen_native::core::Kept::from(bin)]) else { panic!("an audio disc") };
+    *d
+}
+
+/// §2 and §5.1 (S5): GetID's answer for a disc of music reaches the shell by its flags, from power-on through the
+/// hand-over's reason and later through the shell's own asking; nothing boots.
+#[test]
+fn an_audio_disc_is_named_by_the_shell_and_not_booted() {
+    let media = Media { kind: diamond::media::Kind::Empty, market: Some(Market::Americas) };
+    let mut m = Machine::new(media, Config { market: Market::Americas, gpu: Gpu::Pin208 }, [Some("psx.pad"), None], &[], kernel::open_kernel().map(|k| (k, Kernel::Open)));
+    m.insert_disc(audio_disc());
+    until(&mut m, "shell: card 2", 2000);
+    assert!(tty(&m).contains("shell: drive audio"), "{}", tty(&m));
+
+    let mut m = shell(Some(&card::formatted()), None);
+    m.set_lid(true, None);
+    for _ in 0..30 {
+        m.advance();
+    }
+    m.set_lid(false, Some(audio_disc()));
+    until(&mut m, "shell: drive audio", 600);
+    for _ in 0..300 {
+        m.advance();
+    }
+    assert!(!tty(&m).contains("shell: boot"), "{}", tty(&m));
+}

@@ -864,3 +864,31 @@ image rebuilt, and the goldens checked: they held (below).
   the kernel's read-only data once more. `programs.txt` is unchanged, and no picture, sound, TTY or VRAM moved.
 - The proof that the section holds. The shell's Home words were changed, giving a shell of SHA-256 `86f78386…` and an
   image of `d1731ca4…`. All three golden files then held, and the committed shell was restored.
+
+### 11.5 S5: a disc of music in the drive (2026-10-17)
+
+**Built.**
+- `medium::open` gains a third outcome, `Opened::Audio`, for a disc every track of which is audio, taken before the
+  licence is looked for. `emusen-disc` opens such a sheet as any other, which answers §5.1's open question.
+- Diamond's `create` refuses it with `STATUS_NOT_PLAYSTATION` and the words "an audio disc is no game: start the
+  PlayStation with no disc and put it in the drive".
+- `media_insert` puts it in the drive as any disc. Its fingerprint is taken over the same sectors as a data disc's.
+- A disc of data without the licence text is still refused.
+- Nothing else changed. The controller already answered GetID for an audio disc as psx-spx's table does (INT5, flags
+  90h), and the kernel's `disc()` and the shell's `drive.rs` read those flags by bit since S3. The kernel image is S4's.
+
+**What a player meets.**
+- On the open kernel, *Insert Disc...* with a music sheet makes the shell's header read "Audio CD" and its TTY say
+  `shell: drive audio`. Nothing boots, and the CD player is not built (§5.2).
+- With a player's BIOS, that BIOS's own CD player has its disc. Its behaviour is the other writer's to observe (§9 P1).
+
+**Tests.**
+- Diamond's `an_audio_disc_goes_in_the_drive_and_is_no_game`: refused at create, taken through the lid, printed; the
+  unlicensed data disc refused.
+- `tests/shell.rs`'s `an_audio_disc_is_named_by_the_shell_and_not_booted`: from power-on through the hand-over's reason,
+  and put in later through the shell's own asking; nothing boots.
+- WiseMan's `DiamondShellTests.An_audio_disc_goes_in_the_drive`: a sheet and its track inserted by the host's
+  `InsertDisc`.
+- **Measured (2026-10-17):**
+  - Diamond: 175 unit tests, `tests/shell.rs`'s 10 and `diamond-v1`'s 4.
+  - WiseMan's `DiamondShellTests`, `DiamondTests` and `DiamondPlayersTests`: 40 of 40.

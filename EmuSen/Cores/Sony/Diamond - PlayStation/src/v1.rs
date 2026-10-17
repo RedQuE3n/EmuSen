@@ -196,6 +196,7 @@ fn open_disc(image: &[u8], files: &[emusen_native::abi::File<'_>]) -> Result<(cr
     match crate::medium::open(kept, companions) {
         Ok(crate::medium::Opened::Program) => Ok((crate::medium::Opened::Program, Media::read(image).map_err(|_| STATUS_NOT_PLAYSTATION)?)),
         Ok(crate::medium::Opened::Disc(d, m)) => Ok((crate::medium::Opened::Disc(d, m.clone()), m)),
+        Ok(crate::medium::Opened::Audio(d)) => Ok((crate::medium::Opened::Audio(d), Media { kind: crate::media::Kind::Disc { raw: true }, market: None })),
         Err(crate::medium::DiscRefusal::Media(Refusal::Truncated { needs, has })) => {
             detail(&format!("the PS-EXE is {has} bytes; its header and the size it states take {needs}"));
             Err(STATUS_EXE_TRUNCATED)
@@ -281,6 +282,10 @@ impl Core for Machine {
         let (media, disc) = match open_disc(request.image, &request.files)? {
             (crate::medium::Opened::Program, m) => (m, None),
             (crate::medium::Opened::Disc(d, _), m) => (m, Some(d)),
+            (crate::medium::Opened::Audio(_), _) => {
+                detail("an audio disc is no game: start the PlayStation with no disc and put it in the drive");
+                return Err(STATUS_NOT_PLAYSTATION);
+            }
         };
         Machine::make(request, media, disc)
     }
@@ -506,7 +511,7 @@ impl Core for Machine {
         let disc = match insert.image {
             None => None,
             Some(image) => match open_disc(image, &insert.files)? {
-                (crate::medium::Opened::Disc(d, _), _) => Some(*d),
+                (crate::medium::Opened::Disc(d, _), _) | (crate::medium::Opened::Audio(d), _) => Some(*d),
                 (crate::medium::Opened::Program, _) => {
                     detail("a PS-EXE is a program, not a disc; it goes in no drive");
                     return Err(STATUS_NOT_PLAYSTATION);
@@ -587,6 +592,7 @@ mod tests {
     use super::*;
     use crate::machine::{BIOS_ID, CYCLES_PER_SAMPLE, standard_rate};
     use crate::media::sample::{disc, exe};
+    use crate::media::{LICENCE_SECTOR, RAW_SECTOR};
 
     fn create(image: &[u8], settings: &[(&str, &str)], files: Vec<emusen_native::abi::File<'_>>) -> Result<Machine, i32> {
         let settings = Settings::from_pairs(settings.iter().map(|&(k, v)| (k.to_owned(), v.to_owned())).collect());
@@ -882,6 +888,31 @@ mod tests {
         // A state holds the kernel's RAM: the open kernel of Diamond_Shell.md S3 moved it, and the values of 2026-10-15
         // (8861_35FF_EF13_5A26 twice, 55CD_ED3F_58B6_961E) are still the earlier image's.
         assert_eq!(got, [0x9AD6_40C9_3A24_5911, 0x9AD6_40C9_3A24_5911, 0x4AC8_04C6_8D09_3A71], "re-recorded on the shell's kernel, 2026-10-17");
+    }
+
+    /// A disc of music alone as a sheet and its track: 300 sectors of a tone.
+    pub(crate) fn audio_disc() -> (Vec<u8>, Vec<u8>) {
+        let cue = b"FILE \"music.bin\" BINARY\n  TRACK 01 AUDIO\n    INDEX 01 00:00:00\n".to_vec();
+        let bin: Vec<u8> = (0..300 * 2352).map(|i| ((i / 4) % 64) as u8).collect();
+        (cue, bin)
+    }
+
+    /// Diamond_Shell.md §5.1 (S5): a disc of music alone is no game, refused at create with words, and goes in the drive
+    /// through the lid as any disc does; a disc of data without the licence is still refused.
+    #[test]
+    fn an_audio_disc_goes_in_the_drive_and_is_no_game() {
+        let (cue, bin) = audio_disc();
+        let files = || vec![File { which: MEDIA_FILE, data: &bin }];
+        assert_eq!(create(&cue, &[], files()).err(), Some(STATUS_NOT_PLAYSTATION));
+        let mut m = create_empty(&[], Vec::new()).unwrap();
+        m.media_lid(DRIVE, true).unwrap();
+        assert_eq!(m.media_insert(DRIVE, &Insert { image: Some(&cue), files: files(), restore: false }), Ok(()));
+        m.media_lid(DRIVE, false).unwrap();
+        assert!(m.drives()[0].loaded && m.disc_print != 0, "the disc is in the drive and printed");
+        let mut unlicensed = disc(Market::Americas, Some(2));
+        unlicensed[LICENCE_SECTOR * RAW_SECTOR + 24] = b'X';
+        m.media_lid(DRIVE, true).unwrap();
+        assert_eq!(m.media_insert(DRIVE, &Insert { image: Some(&unlicensed), files: Vec::new(), restore: false }), Err(STATUS_NOT_PLAYSTATION));
     }
 
     /// MEDIA (EmuSen_CoreAPI.md §6.23): a disc changes only through the open lid, or for a state about to load; the

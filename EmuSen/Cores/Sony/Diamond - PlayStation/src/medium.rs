@@ -13,10 +13,12 @@ pub type Disc = emusen_disc::Disc<Kept>;
 
 pub use emusen_disc::is_sheet;
 
-/// What opening found: no disc (a PS-EXE), or the disc and what it is.
+/// What opening found: no disc (a PS-EXE), a PlayStation disc and what it is, or a disc of music alone, which goes in the
+/// drive and is no game (Diamond_Shell.md §5.1).
 pub enum Opened<B: AsRef<[u8]>> {
     Program,
     Disc(Box<emusen_disc::Disc<B>>, Media),
+    Audio(Box<emusen_disc::Disc<B>>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -50,6 +52,9 @@ pub fn open<B: AsRef<[u8]>>(image: B, companions: Vec<B>) -> Result<Opened<B>, D
         Err(emusen_disc::Refusal::Image(_)) if !sheet => return Err(DiscRefusal::Media(Refusal::NotPlayStation)),
         Err(e) => return Err(DiscRefusal::Bad(e.to_string())),
     };
+    if disc.tracks().iter().all(|t| t.audio) {
+        return Ok(Opened::Audio(Box::new(disc)));
+    }
     let mut raw = [0u8; ecma130::RAW];
     let start = disc.tracks()[0].start;
     disc.read(start + 4, &mut raw);

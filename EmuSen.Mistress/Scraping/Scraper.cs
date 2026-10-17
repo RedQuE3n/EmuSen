@@ -214,6 +214,11 @@ namespace EmuSen.Mistress.Scraping
             {
                 bool last;
                 lock (_workers) last = --_live == 0;
+                if (last && !stop.IsCancellationRequested && _stoppedByQuota)
+                {
+                    _quota.Check(out _, out string? why);
+                    ErrorLog.Warning("scraping", $"A scrape run stopped: {ScrapeRedactor.Redact(why ?? "stopped")}");
+                }
                 if (last) Finished?.Invoke(stop.IsCancellationRequested ? ScrapeRunEnd.Cancelled : _stoppedByQuota ? ScrapeRunEnd.Stopped : ScrapeRunEnd.Done);
             }
         }
@@ -238,8 +243,8 @@ namespace EmuSen.Mistress.Scraping
             string? md5 = _store.CachedMd5(path, info.Length, modified);
             if (md5 is null)
             {
-                if (info.Length > Library.CoverFetcher.HashLimitBytes) return Final(item, ScrapeState.Error, "the file is too large to hash", null, null);
-                hashes = RomHashes.Of(path);
+                // The file the library lists is hashed whole at any size, as ScreenScraper lists it (§46).
+                hashes = RomHashes.Of(path, stop);
                 md5 = hashes.Md5;
                 _store.RememberFile(path, info.Length, modified, md5);
             }
@@ -272,14 +277,14 @@ namespace EmuSen.Mistress.Scraping
             bool byName = known is { State: ScrapeState.Found, MatchedBy: "name", GameId: not null };
 
             if (!await TurnAsync(stop)) return Stopped(item);
-            hashes ??= RomHashes.Of(path);
+            hashes ??= RomHashes.Of(path, stop);
             Activity?.Invoke(new ScrapeActivity(path, item.System, ScrapeStep.LookingUp));
             string fileName = Path.GetFileName(path);
             JeuInfosAnswer answer = await AskAsync(path, systemId, hashes, fileName, stop, byName ? known!.GameId : null);
             string matchedBy = byName ? "name" : "file";
 
-            // Step (2) of §5.2: only after a 404, and only when the core's transform changes the bytes.
-            if (answer.Status == ScrapeStatus.NotFound && _transform(path) is { } transform)
+            // Step (2) of §5.2: only after a 404, only for a file small enough to hold in memory, and only when the core's transform changes the bytes.
+            if (answer.Status == ScrapeStatus.NotFound && info.Length <= Library.CoverFetcher.HashLimitBytes && _transform(path) is { } transform)
             {
                 byte[] bytes = await File.ReadAllBytesAsync(path, stop);
                 byte[] changed = transform(bytes);
@@ -311,9 +316,10 @@ namespace EmuSen.Mistress.Scraping
                     return Stopped(item);
                 default:
                     if (item.Attempts + 1 >= MaxAttempts || answer.Status == ScrapeStatus.BadRequest)
-                        return Final(item, ScrapeState.Error, $"{answer.Status}: {answer.Detail}", md5, info.Length);
+                        return Final(item, ScrapeState.Error, Reason(answer), md5, info.Length);
                     _store.Retry(path, _clock.Now + Backoff(item.Attempts), countAttempt: true);
-                    return new ScrapeResult(path, item.System, ScrapeOutcome.Retry, false, [], $"{answer.Status}: {answer.Detail}");
+                    ErrorLog.Warning("scraping", $"ScreenScraper could not answer; queued to retry: {ScrapeRedactor.Redact(Reason(answer))}", path);
+                    return new ScrapeResult(path, item.System, ScrapeOutcome.Retry, false, [], Reason(answer));
             }
         }
 
@@ -334,12 +340,27 @@ namespace EmuSen.Mistress.Scraping
             return new ScrapeResult(item.Path, item.System, ScrapeOutcome.Stopped, false, [], why ?? "stopped");
         }
 
-        private ScrapeResult Final(QueuedGame item, ScrapeState state, string detail, string? md5, long? bytes)
+        // A game's last word: recorded against its hashes with the reason, and an error also logged, so no failure goes unrecorded.
+        private ScrapeResult Final(QueuedGame item, ScrapeState state, string detail, string md5, long bytes)
         {
-            if (md5 is not null && bytes is long b)
-                _store.Record(new ScrapedRecord(md5, b, state) { Detail = ScrapeRedactor.Redact(detail), FetchedAt = _clock.Now.UtcDateTime });
+            string reason = ScrapeRedactor.Redact(detail);
+            _store.Record(new ScrapedRecord(md5, bytes, state) { Detail = reason, FetchedAt = _clock.Now.UtcDateTime });
+            if (state == ScrapeState.Error) ErrorLog.Warning("scraping", $"ScreenScraper could not identify the game: {reason}", item.Path);
             _store.Dequeue(item.Path);
-            return new ScrapeResult(item.Path, item.System, state == ScrapeState.Unknown ? ScrapeOutcome.Unknown : ScrapeOutcome.Error, false, [], ScrapeRedactor.Redact(detail));
+            return new ScrapeResult(item.Path, item.System, state == ScrapeState.Unknown ? ScrapeOutcome.Unknown : ScrapeOutcome.Error, false, [], reason);
+        }
+
+        // An answer's status in the player's words, with what the server said.
+        private static string Reason(JeuInfosAnswer answer)
+        {
+            string what = answer.Status switch
+            {
+                ScrapeStatus.BadRequest => "ScreenScraper refused the request",
+                ScrapeStatus.Malformed => "ScreenScraper's answer could not be read",
+                ScrapeStatus.Failed => "ScreenScraper could not be reached",
+                _ => $"ScreenScraper answered {answer.Status}",
+            };
+            return answer.Detail is { Length: > 0 } said ? $"{what}: {said}" : what;
         }
 
         // The text of §3.7's variants and the media of each wanted kind, by the region and language rules of §5.4.

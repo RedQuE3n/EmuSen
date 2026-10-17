@@ -255,7 +255,8 @@ namespace EmuSen.Mistress.Scraping
         {
             ScrapeRunState.Running when IsPaused => $"Scraping paused at {Done:N0} of {Total:N0}.",
             ScrapeRunState.Running => $"Scraping: {Done:N0} of {Total:N0}" + (FailoverAsked > 0 ? $", {FailoverAsked} asked of OpenEmu's sources" : "") + ".",
-            ScrapeRunState.Done => $"Scraped {Done:N0} of {Total:N0}: {Found:N0} found, {Unknown:N0} unknown" + (FailoverFound > 0 ? $", {FailoverFound} covers from OpenEmu's sources" : "") + ".",
+            ScrapeRunState.Done => $"Scraped {Done:N0} of {Total:N0}: {Found:N0} found, {Unknown:N0} unknown" + (Failed > 0 ? $", {Failed:N0} failed" : "")
+                + (FailoverFound > 0 ? $", {FailoverFound} covers from OpenEmu's sources" : "") + "." + (LastFailure is { } why ? $" Last failure: {why}" : ""),
             ScrapeRunState.Stopped => $"Stopped after {Done:N0} of {Total:N0}: {Why}. Resume when the quota allows.",
             _ => $"Cancelled after {Done:N0} of {Total:N0}. Resume goes on from there.",
         };

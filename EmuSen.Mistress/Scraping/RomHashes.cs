@@ -1,13 +1,14 @@
 using System;
 using System.IO;
 using System.Security.Cryptography;
+using System.Threading;
 
 namespace EmuSen.Mistress.Scraping
 {
-    // The three hashes jeuInfos asks for, from one read; Md5 is RomHash's value when the bytes are the whole file - see EmuSen_BigPicture.md §5.2.
+    // The three hashes jeuInfos asks for, from one streamed read of any size; Md5 is RomHash's value when the bytes are the whole file - see EmuSen_BigPicture.md §5.2 and §46.
     public sealed record RomHashes(string Md5, string Crc32, string Sha1, long Size)
     {
-        public static RomHashes Of(string path)
+        public static RomHashes Of(string path, CancellationToken stop = default)
         {
             using var md5 = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
             using var sha1 = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
@@ -17,6 +18,7 @@ namespace EmuSen.Mistress.Scraping
             using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan);
             for (int read; (read = stream.Read(buffer, 0, buffer.Length)) > 0; size += read)
             {
+                stop.ThrowIfCancellationRequested();
                 md5.AppendData(buffer, 0, read);
                 sha1.AppendData(buffer, 0, read);
                 crc.Append(buffer.AsSpan(0, read));

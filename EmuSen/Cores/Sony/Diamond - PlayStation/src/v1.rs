@@ -879,7 +879,9 @@ mod tests {
             Core::advance(&mut n, &mut 0).unwrap();
         }
         let got = [fnv(&s), loaded, digest(&n)];
-        assert_eq!(got, [0x8861_35FF_EF13_5A26, 0x8861_35FF_EF13_5A26, 0x55CD_ED3F_58B6_961E], "measured on the code before the card mode, 2026-10-15");
+        // A state holds the kernel's RAM: the open kernel of Diamond_Shell.md S3 moved it, and the values of 2026-10-15
+        // (8861_35FF_EF13_5A26 twice, 55CD_ED3F_58B6_961E) are still the earlier image's.
+        assert_eq!(got, [0x9AD6_40C9_3A24_5911, 0x9AD6_40C9_3A24_5911, 0x4AC8_04C6_8D09_3A71], "re-recorded on the shell's kernel, 2026-10-17");
     }
 
     /// MEDIA (EmuSen_CoreAPI.md §6.23): a disc changes only through the open lid, or for a state about to load; the

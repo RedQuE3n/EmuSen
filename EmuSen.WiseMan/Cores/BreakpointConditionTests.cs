@@ -12,13 +12,9 @@ namespace EmuSen.WiseMan.Cores
     public class BreakpointConditionTests : IDisposable
     {
         private readonly List<string> _files = new();
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
-
-        public BreakpointConditionTests() => CoreOptions.BatteryRamDisabled = true;
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             foreach (string path in _files) try { File.Delete(path); } catch (IOException) { }
         }
 
@@ -46,7 +42,7 @@ namespace EmuSen.WiseMan.Cores
             }
             string path = name == "moonrt" ? NesRom() : SyntheticGbRom.WriteTemp(SyntheticGbRom.Build(patches: new (int, byte[])[] { (0, new byte[] { 0x21, 0x00, 0xC0, 0x34, 0x18, 0xFD }) }));
             _files.Add(path);
-            CoreBundle bundle = CoreFactory.Load(path);
+            CoreBundle bundle = CoreFactory.Load(path, options: TestCores.NoBattery);
             return (bundle.Core, DianaShInterpreter.CreateDefault(bundle.DebugTarget));
         }
 

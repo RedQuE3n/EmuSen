@@ -1,27 +1,19 @@
 using System;
 using System.IO;
-using EmuSen.Audio;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
-using EmuSen.Graphics;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Galaxia
 {
-    // The static settings hubs against their on-disk mirrors - see
-    // EmuSen_Config_Reference.md §3.2 and §3.3. Both hubs are process-global
-    // mutable state, so every value touched here is restored on the way out.
+    // audio.json and graphics.json through their models, their ranges and the first run's seed; serial for the config override - see EmuSen_Config_Reference.md §3.2, §3.3.
     [Collection(TestCollections.ProcessGlobals)]
     public class SettingsPersistenceTests : IDisposable
     {
         private readonly string _dir;
-        private readonly AudioConfig _audioBefore;
-        private readonly GraphicsConfig _graphicsBefore;
 
         public SettingsPersistenceTests()
         {
-            _audioBefore = CaptureAudio();
-            _graphicsBefore = CaptureGraphics();
             _dir = Path.Combine(Path.GetTempPath(), "EmuSenSettings_" + Guid.NewGuid().ToString("N"));
             ConfigStore.OverrideDirectory = _dir;
         }
@@ -29,69 +21,19 @@ namespace EmuSen.WiseMan.Galaxia
         public void Dispose()
         {
             ConfigStore.OverrideDirectory = null;
-            RestoreAudio(_audioBefore);
-            RestoreGraphics(_graphicsBefore);
             try { Directory.Delete(_dir, recursive: true); } catch { }
         }
 
-        private static AudioConfig CaptureAudio() => new()
-        {
-            SampleRate = AudioSettings.SampleRate,
-            AudioBufferMaxSamples = AudioSettings.AudioBufferMaxSamples,
-            OutputTargetLatencyMs = AudioSettings.OutputTargetLatencyMs,
-            RateControlMaxDeviation = AudioSettings.RateControlMaxDeviation,
-            MasterVolume = AudioSettings.MasterVolume,
-            Muted = AudioSettings.Muted,
-            AudioEnabled = AudioSettings.AudioEnabled,
-        };
-
-        private static void RestoreAudio(AudioConfig c)
-        {
-            AudioSettings.SampleRate = c.SampleRate;
-            AudioSettings.AudioBufferMaxSamples = c.AudioBufferMaxSamples;
-            AudioSettings.OutputTargetLatencyMs = c.OutputTargetLatencyMs;
-            AudioSettings.RateControlMaxDeviation = c.RateControlMaxDeviation;
-            AudioSettings.MasterVolume = c.MasterVolume;
-            AudioSettings.Muted = c.Muted;
-            AudioSettings.AudioEnabled = c.AudioEnabled;
-        }
-
-        private static GraphicsConfig CaptureGraphics() => new()
-        {
-            WindowWidth = GraphicsSettings.WindowWidth,
-            WindowHeight = GraphicsSettings.WindowHeight,
-            TargetFps = GraphicsSettings.TargetFps,
-            VSyncEnabled = GraphicsSettings.VSyncEnabled,
-            WindowResizable = GraphicsSettings.WindowResizable,
-            BilinearFiltering = GraphicsSettings.BilinearFiltering,
-        };
-
-        private static void RestoreGraphics(GraphicsConfig c)
-        {
-            GraphicsSettings.WindowWidth = c.WindowWidth;
-            GraphicsSettings.WindowHeight = c.WindowHeight;
-            GraphicsSettings.TargetFps = c.TargetFps;
-            GraphicsSettings.VSyncEnabled = c.VSyncEnabled;
-            GraphicsSettings.WindowResizable = c.WindowResizable;
-            GraphicsSettings.BilinearFiltering = c.BilinearFiltering;
-        }
-
         [Fact]
-        public void Audio_settings_round_trip_through_the_hub()
+        public void Audio_settings_round_trip_through_the_file()
         {
-            AudioSettings.MasterVolume = 0.25f;
-            AudioSettings.Muted = true;
-            AudioSettings.OutputTargetLatencyMs = 128;
-            Assert.True(AudioSettings.SaveToDisk());
+            Assert.True(new AudioConfig { MasterVolume = 0.25f, Muted = true, OutputTargetLatencyMs = 128 }.Save());
 
-            AudioSettings.MasterVolume = 1.0f;
-            AudioSettings.Muted = false;
-            AudioSettings.OutputTargetLatencyMs = 256;
-            AudioSettings.LoadFromDisk();
+            AudioConfig read = AudioConfig.Load();
 
-            Assert.Equal(0.25f, AudioSettings.MasterVolume);
-            Assert.True(AudioSettings.Muted);
-            Assert.Equal(128, AudioSettings.OutputTargetLatencyMs);
+            Assert.Equal(0.25f, read.MasterVolume);
+            Assert.True(read.Muted);
+            Assert.Equal(128, read.OutputTargetLatencyMs);
         }
 
         // A console's settings by key, in their text form, survive a save and a load beside the window fields - see EmuSen_Config_Reference.md §3.3.
@@ -117,33 +59,30 @@ namespace EmuSen.WiseMan.Galaxia
         }
 
         [Fact]
-        public void Graphics_settings_round_trip_through_the_hub()
+        public void Graphics_settings_round_trip_through_the_file()
         {
-            GraphicsSettings.WindowWidth = 1600;
-            GraphicsSettings.BilinearFiltering = false;
-            Assert.True(GraphicsSettings.SaveToDisk());
+            Assert.True(new GraphicsConfig { WindowWidth = 1600, BilinearFiltering = false, SyncToDisplay = false }.Save());
 
-            GraphicsSettings.WindowWidth = 1060;
-            GraphicsSettings.BilinearFiltering = true;
-            GraphicsSettings.LoadFromDisk();
+            GraphicsConfig read = GraphicsConfig.Load();
 
-            Assert.Equal(1600, GraphicsSettings.WindowWidth);
-            Assert.False(GraphicsSettings.BilinearFiltering);
+            Assert.Equal(1600, read.WindowWidth);
+            Assert.False(read.BilinearFiltering);
+            Assert.False(read.SyncToDisplay);
         }
 
-        // The file exists to be hand-edited, so a typed-in zero must not reach
-        // OutputTargetFrames, which divides by SampleRate.
+        // A typed-in zero must not reach the audio device, whose target is latency times rate; the file keeps what was typed.
         [Fact]
         public void A_hand_edited_zero_sample_rate_is_clamped_rather_than_applied()
         {
             Directory.CreateDirectory(_dir);
             File.WriteAllText(Path.Combine(_dir, "audio.json"), """{"sampleRate":0,"masterVolume":9.0}""");
 
-            AudioSettings.LoadFromDisk();
+            AudioConfig bounded = AudioConfig.Load().Bounded();
 
-            Assert.True(AudioSettings.SampleRate >= 8000);
-            Assert.Equal(1.0f, AudioSettings.MasterVolume);
-            Assert.True(AudioSettings.OutputTargetFrames > 0);
+            Assert.True(bounded.SampleRate >= 8000);
+            Assert.Equal(1.0f, bounded.MasterVolume);
+            Assert.True(bounded.OutputTargetLatencyMs * bounded.SampleRate / 1000 > 0);
+            Assert.Contains("\"sampleRate\":0", File.ReadAllText(Path.Combine(_dir, "audio.json")));
         }
 
         [Fact]
@@ -152,11 +91,10 @@ namespace EmuSen.WiseMan.Galaxia
             Directory.CreateDirectory(_dir);
             File.WriteAllText(Path.Combine(_dir, "graphics.json"), """{"windowWidth":0,"windowHeight":0,"targetFps":0}""");
 
-            GraphicsSettings.LoadFromDisk();
+            (int width, int height) = GraphicsConfig.Load().WindowSize();
 
-            Assert.True(GraphicsSettings.WindowWidth >= 256);
-            Assert.True(GraphicsSettings.WindowHeight >= 224);
-            Assert.True(GraphicsSettings.TargetFps >= 1);
+            Assert.True(width >= 256);
+            Assert.True(height >= 224);
         }
 
         // Seeded on first run so there is something to open and edit; a file
@@ -167,11 +105,23 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.False(AudioConfig.Exists);
             Assert.False(GraphicsConfig.Exists);
 
-            AudioSettings.LoadFromDisk();
-            GraphicsSettings.LoadFromDisk();
+            AudioConfig.SeedIfMissing();
+            GraphicsConfig.SeedIfMissing();
 
             Assert.True(AudioConfig.Exists);
             Assert.True(GraphicsConfig.Exists);
+            Assert.Equal(new AudioConfig().OutputTargetLatencyMs, AudioConfig.Load().OutputTargetLatencyMs);
+            Assert.True(GraphicsConfig.Load().SyncToDisplay);
+        }
+
+        [Fact]
+        public void A_seed_leaves_an_existing_file_as_it_is()
+        {
+            Assert.True(new AudioConfig { OutputTargetLatencyMs = 99 }.Save());
+
+            AudioConfig.SeedIfMissing();
+
+            Assert.Equal(99, AudioConfig.Load().OutputTargetLatencyMs);
         }
 
         [Fact]
@@ -181,7 +131,8 @@ namespace EmuSen.WiseMan.Galaxia
             string path = Path.Combine(_dir, "audio.json");
             File.WriteAllText(path, "{ not json at all");
 
-            AudioSettings.LoadFromDisk();
+            AudioConfig.SeedIfMissing();
+            AudioConfig.Load();
 
             Assert.Equal("{ not json at all", File.ReadAllText(path));
         }

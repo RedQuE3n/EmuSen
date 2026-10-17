@@ -41,7 +41,7 @@ namespace EmuSen.WiseMan.Fixtures
             Rom = File.ReadAllBytes(rom);
             Assert.True(MercuryRtCore.Available, MercuryNative.Engine.Report);
             Assert.True(StepOf != null && TickOf != null && StopOf != null && SerialOf != null, "libmercuryrt lacks the rig's extensions");
-            _core = new MercuryRtCore { Model = model };
+            _core = new MercuryRtCore { Options = TestCores.NoBattery, Model = model };
             _core.LoadRom(rom);
         }
 

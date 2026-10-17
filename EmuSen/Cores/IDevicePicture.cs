@@ -1,5 +1,4 @@
 using System;
-using EmuSen.Serenity.Slang;
 
 namespace EmuSen.Cores
 {
@@ -7,10 +6,10 @@ namespace EmuSen.Cores
     public interface IDevicePicture
     {
         // Set before the game is loaded: asked once for each machine made, null for none.
-        Func<SlangLend?>? DeviceLender { get; set; }
+        Func<IDeviceLend?>? DeviceLender { get; set; }
 
         // The running machine's lend, and whether the last frame's picture was taken on it.
-        SlangLend? Lend { get; }
+        IDeviceLend? Lend { get; }
         bool PictureOnDevice { get; }
     }
 }

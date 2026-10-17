@@ -6,7 +6,6 @@ using Avalonia.Media;
 using Avalonia.Rendering.SceneGraph;
 using Avalonia.Skia;
 using SkiaSharp;
-using EmuSen.Graphics;
 using EmuSen.Serenity.Shaders;
 
 namespace EmuSen.Serenity
@@ -83,6 +82,22 @@ namespace EmuSen.Serenity
 
         // Not "Effect" - Avalonia's Visual already has an unrelated one - see EmuSen_Serenity.md §2.4.
         public ShaderEffect ActiveEffect { get; set; } = ShaderEffect.None;
+
+        private volatile bool _bilinearFiltering = true, _syncToDisplay = true;
+
+        // graphics.json's filtering, which the frontend sets; read on the render thread - see EmuSen_Settings_Reference.md §3.
+        public bool BilinearFiltering
+        {
+            get => _bilinearFiltering;
+            set => _bilinearFiltering = value;
+        }
+
+        // graphics.json's display sync, which the frontend sets and its emulation thread's pacer reads each frame - see EmuSen_Settings_Reference.md §4.87.
+        public bool SyncToDisplay
+        {
+            get => _syncToDisplay;
+            set => _syncToDisplay = value;
+        }
 
         // A multi-pass filter, drawn instead of ActiveEffect when set; its chain is built on the render thread - see EmuSen_Serenity.md §3.2.
         private ScreenFilter? _activeFilter;
@@ -245,7 +260,7 @@ namespace EmuSen.Serenity
         private static long _lastHeldPicture;
         private static int _platformFps;
 
-        private static void HoldRenderRate()
+        private void HoldRenderRate()
         {
             _lastHeldPicture = System.Diagnostics.Stopwatch.GetTimestamp();
             if (_renderHoldTimer is null)
@@ -256,7 +271,7 @@ namespace EmuSen.Serenity
                 _renderHoldTimer = new Avalonia.Threading.DispatcherTimer { Interval = RenderHoldIdle };
                 _renderHoldTimer.Tick += (_, _) =>
                 {
-                    if (System.Diagnostics.Stopwatch.GetElapsedTime(_lastHeldPicture) < RenderHoldIdle && GraphicsSettings.SyncToDisplay) return;
+                    if (System.Diagnostics.Stopwatch.GetElapsedTime(_lastHeldPicture) < RenderHoldIdle && SyncToDisplay) return;
                     _renderHoldTimer!.Stop();
                     _renderHoldTimer = null;
                     RenderTimerRate.Hold(_platformFps);
@@ -317,7 +332,7 @@ namespace EmuSen.Serenity
         public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null, long sequence = 0, double aspect = 0, int lines = 0, RawPicture? raw = null, Slang.SlangLend? lend = null)
         {
             WatchDevicePath();
-            if (RenderFps > 0 && GraphicsSettings.SyncToDisplay) HoldRenderRate();
+            if (RenderFps > 0 && SyncToDisplay) HoldRenderRate();
             lock (_offerLock)
             {
                 Offer? previous = _current;
@@ -521,9 +536,9 @@ namespace EmuSen.Serenity
             ScreenFilter? filter = _activeFilter;
             int by = filter is not null && filter.RowsOnce && filter.History == 0 && offer.Lines > 0 && offer.Height > offer.Lines && offer.Height % offer.Lines == 0
                 && offer.Height / offer.Lines <= FilterChain.MostRowsToALine && offer.Width % (offer.Height / offer.Lines) == 0 ? offer.Height / offer.Lines : 1;
-            var key = (filter, filter is null ? null : _filterConsole, filter is null ? null : _shaderParameters, by, ActiveEffect, GraphicsSettings.BilinearFiltering);
+            var key = (filter, filter is null ? null : _filterConsole, filter is null ? null : _shaderParameters, by, ActiveEffect, BilinearFiltering);
             if (_presetPath is not null && key == _presetKey) return _presetPath;
-            _presetPath = filter is not null ? Shaders.BuiltInPreset.Write(filter, _filterConsole, _shaderParameters, by) : Shaders.BuiltInPreset.Write(BuiltInShaders.AsFilter(ActiveEffect, GraphicsSettings.BilinearFiltering), null);
+            _presetPath = filter is not null ? Shaders.BuiltInPreset.Write(filter, _filterConsole, _shaderParameters, by) : Shaders.BuiltInPreset.Write(BuiltInShaders.AsFilter(ActiveEffect, BilinearFiltering), null);
             _presetKey = key;
             return _presetPath;
         }
@@ -537,7 +552,7 @@ namespace EmuSen.Serenity
         {
             if (_presenter is not { } presenter) return false;
             Slang.SlangRunner? runner = _slang;
-            ScreenFilter? filter = runner is null ? _activeFilter ?? BuiltInShaders.AsFilter(ActiveEffect, GraphicsSettings.BilinearFiltering) : null;
+            ScreenFilter? filter = runner is null ? _activeFilter ?? BuiltInShaders.AsFilter(ActiveEffect, BilinearFiltering) : null;
             if (runner is null)
             {
                 string path;
@@ -877,8 +892,8 @@ namespace EmuSen.Serenity
 
             private void Draw(SKCanvas canvas, SKImage sourceImage, Offer source)
             {
-                // GraphicsSettings.BilinearFiltering - see EmuSen_Settings_Reference.md §3.
-                SKSamplingOptions sampling = GraphicsSettings.BilinearFiltering
+                // The control's BilinearFiltering - see EmuSen_Settings_Reference.md §3.
+                SKSamplingOptions sampling = _owner.BilinearFiltering
                     ? new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None)
                     : new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None);
 

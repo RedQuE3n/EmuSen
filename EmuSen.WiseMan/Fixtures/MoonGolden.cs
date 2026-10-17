@@ -101,8 +101,7 @@ namespace EmuSen.WiseMan.Fixtures
         private static void Frames(byte[] rom, MoonGoldenRun run, GoldenTrace trace, byte[]? resumeFrom, int resumeAt, Action<int, byte[]>? interval, Action<MoonRtCore>? setup, Action<int, MoonRtCore>? frame)
         {
             trace.Input = ScriptName(run.Input, run.Frames);
-            CoreOptions.BatteryRamDisabled = true;
-            using var core = new MoonRtCore();
+            using var core = new MoonRtCore() { Options = TestCores.NoBattery };
             try { core.LoadRom(RomFile(rom)); }
             catch (Exception e) when (e is NotSupportedException or InvalidDataException)
             {

@@ -295,10 +295,13 @@ namespace EmuSen.Cores.Native
             _machine.SetMutes(MuteMask());
         }
 
-        // AudioSettings.AudioBufferMaxSamples, sent when it differs from what this machine was last told.
+        // Set before LoadRom: what the frontend made this core with - see EmuSen_Multicore.md §6.
+        public CoreOptions Options { get; set; } = CoreOptions.Default;
+
+        // The options' audio limit, sent when it differs from what this machine was last told.
         private void SyncAudioLimit()
         {
-            int limit = EmuSen.Audio.AudioSettings.AudioBufferMaxSamples;
+            int limit = Options.AudioBufferMaxSamples;
             if (_machine is null || (_audioLimitSent == limit && ReferenceEquals(_audioLimitMachine, _machine))) return;
             _machine.SetAudioLimit(limit);
             _audioLimitSent = limit;

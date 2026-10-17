@@ -400,7 +400,7 @@ queue submissions are synchronised by the application **[S]**.
   everywhere, which is also what a television without VRR needs (the jitter of 2026-10-10), with immediate as the
   low-latency option where a display can tear.
 - **Pacing is the kit's job, not the frontend's**: one clock per surface, from the present timings the driver reports
-  (present wait), so EmuSen's "sync to display" (`EmuSen/Common/FrameScheduler.cs`) reads it instead of inferring it.
+  (present wait), so EmuSen's "sync to display" (`EmuSen.Serenity/FrameScheduler.cs`) reads it instead of inferring it.
 - **No GPU**: lavapipe, Mesa's Vulkan on the CPU, so a machine without one still runs the same code path.
 
 ### 5.4 HDR, accurately

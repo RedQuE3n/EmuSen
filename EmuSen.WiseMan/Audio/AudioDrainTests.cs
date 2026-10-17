@@ -40,7 +40,7 @@ namespace EmuSen.WiseMan.Audio
         public void EmulatorSession_before_LoadRom_falls_back_instead_of_throwing()
         {
             var session = new EmuSen.Common.EmulatorSession();
-            Assert.Equal(EmuSen.Audio.AudioSettings.SampleRate, session.AudioSampleRate);
+            Assert.Equal(EmuSen.Galaxia.Models.AudioConfig.DefaultSampleRate, session.AudioSampleRate);
             Assert.Empty(session.DequeueAudioSamples(10));
         }
 

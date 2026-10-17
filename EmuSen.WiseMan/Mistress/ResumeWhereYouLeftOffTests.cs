@@ -223,7 +223,7 @@ namespace EmuSen.WiseMan.Mistress
 
         private long SavedFrames()
         {
-            using var core = new MarsRtCore(batteryRamDisabled: true);
+            using var core = new MarsRtCore() { Options = TestCores.NoBattery };
             core.LoadRom(_romPath);
             core.LoadState(ResumeState);
             return core.TotalFrames;

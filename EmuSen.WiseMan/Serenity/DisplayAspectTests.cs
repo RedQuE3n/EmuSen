@@ -13,6 +13,7 @@ using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
+using EmuSen.Crystal;
 using EmuSen.Serenity;
 using EmuSen.Serenity.Shaders;
 using EmuSen.WiseMan.Fixtures;

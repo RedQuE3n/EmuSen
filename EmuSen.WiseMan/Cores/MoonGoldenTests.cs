@@ -39,7 +39,7 @@ namespace EmuSen.WiseMan.Cores
         public MoonGoldenTests(ITestOutputHelper output)
         {
             _output = output;
-            CoreOptions.BatteryRamDisabled = true;
+
         }
 
         private static IEnumerable<(int Mapper, int Chr)> BoardList => MoonPrograms.Boards.Select(row => ((int)row[0], (int)row[1]));

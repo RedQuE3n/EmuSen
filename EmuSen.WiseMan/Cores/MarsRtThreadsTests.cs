@@ -52,7 +52,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         private static MarsRtCore Twin(bool threaded, bool deferred, int workers = 1, int tier = 0, bool blocks = false) =>
-            new(expansionPak: true, batteryRamDisabled: true) { ThreadedRdp = threaded, RdpWorkers = workers, DeferredPresentation = deferred, SkipRendering = false, UseBlocks = blocks, BlockTier = tier };
+            new(expansionPak: true) { Options = TestCores.NoBattery, ThreadedRdp = threaded, RdpWorkers = workers, DeferredPresentation = deferred, SkipRendering = false, UseBlocks = blocks, BlockTier = tier };
 
         // MarsRT on a thread, its state compared every frame (which joins) or every sixtieth (which leaves the thread running across frames), picture and sound every frame.
         [Theory]

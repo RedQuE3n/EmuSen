@@ -96,7 +96,7 @@ namespace EmuSen.WiseMan.Fixtures
         }
 
         // The image on the SNES's engine, VenusRT, from a temp file of its own, so concurrent tests never share one.
-        public static ICore LoadCore(byte[] rom) => CoreFactory.Loaded(WriteTempFile(rom));
+        public static ICore LoadCore(byte[] rom, CoreOptions? options = null) => CoreFactory.Loaded(WriteTempFile(rom), options: options);
 
         // The engine's debug target, as a frontend's bundle gives it.
         public static IDebugTarget TargetOf(ICore core) => CoreFactory.Bundle(core).DebugTarget;
@@ -120,9 +120,9 @@ namespace EmuSen.WiseMan.Fixtures
             return (Word(0), Word(2));
         }
 
-        public static EmulatorSession LoadSession(byte[] rom)
+        public static EmulatorSession LoadSession(byte[] rom, CoreOptions? options = null)
         {
-            var session = new EmulatorSession();
+            var session = new EmulatorSession { Options = options ?? CoreOptions.Default };
             session.LoadRom(WriteTempFile(rom));
             return session;
         }

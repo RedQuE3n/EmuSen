@@ -36,9 +36,9 @@ namespace EmuSen.Mistress
             EmuSen.LunaP.Settings.LunaSettings.Diagnostics = EmuSen.Galaxia.ConfigDiagnostics.Report;
 
 
-            // Before any window exists, since GraphicsSettings decides its size.
-            EmuSen.Audio.AudioSettings.LoadFromDisk();
-            EmuSen.Graphics.GraphicsSettings.LoadFromDisk();
+            // On the first run, so there is something to hand-edit; the windows and the cores read them as they are made - see EmuSen_Config_Reference.md §3.2, §3.3.
+            EmuSen.Galaxia.Models.AudioConfig.SeedIfMissing();
+            EmuSen.Galaxia.Models.GraphicsConfig.SeedIfMissing();
 
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }

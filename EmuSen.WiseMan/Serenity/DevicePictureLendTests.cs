@@ -60,7 +60,7 @@ namespace EmuSen.WiseMan.Serenity
                     if (probe is null) { _output.WriteLine($"not run: {why}"); return; }
                 int lends = 0;
                 using var plain = (CoreEngine)CoreFactory.Loaded(path);
-                using var lent = (CoreEngine)CoreFactory.Loaded(path, lender: () => { lends++; return SlangLend.TryCreate(device, out _); });
+                using var lent = (CoreEngine)CoreFactory.Loaded(path, lender: () => { lends++; return EmuSen.Mistress.SlangDeviceLend.Of(SlangLend.TryCreate(device, out _)); });
                 Assert.Equal(1, lends);
                 Assert.NotNull(lent.Lend);
                 using var chain = new SlangChain(device, SlangPreset.Load(EmuSen.Serenity.Shaders.BuiltInPreset.Write(EmuSen.Serenity.Shaders.BuiltInShaders.AsFilter(ShaderEffect.None, false), null)));
@@ -77,8 +77,8 @@ namespace EmuSen.WiseMan.Serenity
                     lentCopies.Add(Digest(copy));
                     plainCopies.Add(Digest(plain.GetFrameBufferRgba()));
                     if (!lent.PictureOnDevice) continue;
-                    Assert.True(chain.AdvanceLent(lent.Lend!), $"frame {f}: no picture was taken");
-                    Assert.False(chain.AdvanceLent(lent.Lend!), $"frame {f}: a picture taken twice");
+                    Assert.True(chain.AdvanceLent(((EmuSen.Mistress.SlangDeviceLend)lent.Lend!).Slang), $"frame {f}: no picture was taken");
+                    Assert.False(chain.AdvanceLent(((EmuSen.Mistress.SlangDeviceLend)lent.Lend!).Slang), $"frame {f}: a picture taken twice");
                     byte[] read = chain.Render(lent.ScreenWidth, lent.ScreenHeight);
                     Assert.Equal(lent.ScreenWidth * lent.ScreenHeight * 4, copy.Length);
                     Assert.True(read.AsSpan().SequenceEqual(copy), $"frame {f}: the picture read on the device differs from frame_copy in {read.Zip(copy).Count(p => p.First != p.Second)} bytes");

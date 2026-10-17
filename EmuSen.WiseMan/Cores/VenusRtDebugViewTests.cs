@@ -17,20 +17,17 @@ namespace EmuSen.WiseMan.Cores
     public class VenusRtDebugViewTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenVenusRtView_" + Guid.NewGuid().ToString("N"));
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public VenusRtDebugViewTests()
         {
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreOptions.BatteryRamDisabled = true;
             CoreDiscovery.UseDirectories(null);
             CoreDiscovery.UseDevelopment(false);
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             DataStore.OverrideDirectory = null;
             CoreDiscovery.UseDirectories(null);
             CoreDiscovery.UseDevelopment(null);
@@ -111,7 +108,7 @@ namespace EmuSen.WiseMan.Cores
         // Built and run as the corpus and a frontend do, the target made after the frames; <before> runs on the target first, for what must be armed.
         private static (ICore Core, IDebugTarget Target) Run(string path, string? engine, int frames, Action<IDebugTarget>? before = null)
         {
-            ICore core = CoreFactory.Create(path, headless: true, engine);
+            ICore core = CoreFactory.Create(path, headless: true, engine, options: TestCores.NoBattery);
             core.LoadRom(path);
             if (before is not null)
             {

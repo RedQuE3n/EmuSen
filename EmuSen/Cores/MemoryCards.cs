@@ -207,8 +207,8 @@ namespace EmuSen.Cores
             value(medium.ModeKey) == Named && Enumerable.Range(0, slot).Any(s => string.Equals(value(medium.SlotKey(s)), value(medium.SlotKey(slot)), StringComparison.OrdinalIgnoreCase))
                 ? $"The same {MediumWords.InText(medium.Noun)} cannot be in two slots: this slot keeps the game's own while they match." : null;
 
-        // Each slot's file at a load: under Shared or Named its medium's file, locked for holder, else own(slot) - see EmuSen_SaveMedia.md §3.3, §3.5.
-        public static MediaPlacement Place(string console, CoreSystem? system, IReadOnlyDictionary<string, CardChoice> choices, string holder, Func<CoreBatteryFile, BatterySave> own)
+        // Each slot's file at a load: under Shared or Named its medium's file, locked for holder, else own(slot); none under --nobattery - see EmuSen_SaveMedia.md §3.3, §3.5.
+        public static MediaPlacement Place(string console, CoreSystem? system, IReadOnlyDictionary<string, CardChoice> choices, string holder, Func<CoreBatteryFile, BatterySave> own, bool batteryDisabled = false)
         {
             var placed = new MediaPlacement();
             var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -219,7 +219,7 @@ namespace EmuSen.Cores
                 {
                     CoreBatteryFile file = medium.Slots[slot];
                     if (medium.IsConsole && medium.Entry?.Format is { } format) placed.Fresh[file.Which] = format;
-                    BatterySave? apart = choice.Apart ? Apart(console, medium, medium.NameFor(choice, slot), slot, holder, taken, placed) : null;
+                    BatterySave? apart = choice.Apart ? Apart(console, medium, medium.NameFor(choice, slot), slot, holder, taken, placed, batteryDisabled) : null;
                     if (apart is not null)
                     {
                         placed.Files[file.Which] = apart;
@@ -235,9 +235,9 @@ namespace EmuSen.Cores
         }
 
         // The medium's file named name for a slot, locked; null, with the reason noted, where an earlier slot or another program has it.
-        private static BatterySave? Apart(string console, SaveMedium medium, string name, int slot, string holder, HashSet<string> taken, MediaPlacement placed)
+        private static BatterySave? Apart(string console, SaveMedium medium, string name, int slot, string holder, HashSet<string> taken, MediaPlacement placed, bool batteryDisabled)
         {
-            BatterySave save = BatterySave.Medium(console, medium.IsConsole, name, medium.Extension);
+            BatterySave save = BatterySave.Medium(console, medium.IsConsole, name, medium.Extension, batteryDisabled);
             string key = medium.PathOf(name);
             if (!taken.Add(key))
             {

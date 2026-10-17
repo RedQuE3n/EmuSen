@@ -57,7 +57,7 @@ namespace EmuSen.Cores.Native
         // The same from bytes the host holds in place, the media files among them; with a loan they are lent, and the loan is released when the machine is freed or its drive takes another disc.
         // sharedRemovable and sharedConsole ask the core to leave those kinds of battery file out of what a state load restores - see EmuSen_CoreAPI.md §6.27, §6.28.
         // device is the host's Vulkan device lent to a core that claims DEVICE_PICTURE, the machine's from then on - see EmuSen_CoreAPI.md §6.29.
-        public CoreMachine(CoreLibrary library, CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, IDisposable? loan = null, bool sharedRemovable = false, bool sharedConsole = false, EmuSen.Serenity.Slang.SlangLend? device = null, string? system = null)
+        public CoreMachine(CoreLibrary library, CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, IDisposable? loan = null, bool sharedRemovable = false, bool sharedConsole = false, IDeviceLend? device = null, string? system = null)
         {
             Lend = device is not null && library.Has(CoreInterface.CapDevicePicture) ? device : null;
             if (Lend is null) device?.Dispose();
@@ -226,19 +226,20 @@ namespace EmuSen.Cores.Native
         }
 
         // The device lent to this machine, which takes its pictures; null when nothing is lent.
-        public EmuSen.Serenity.Slang.SlangLend? Lend { get; }
+        public IDeviceLend? Lend { get; }
 
-        private static CoreInterface.DeviceLend LendOf(EmuSen.Serenity.Slang.SlangLend l) => new()
+        private static CoreInterface.DeviceLend LendOf(IDeviceLend l)
         {
-            Size = (uint)sizeof(CoreInterface.DeviceLend), ApiVersion = l.ApiVersion, GetInstanceProcAddr = (nint)l.GetInstanceProcAddr, Instance = l.Instance,
-            PhysicalDevice = l.PhysicalDevice, Device = l.Device, QueueFamily = l.QueueFamily, QueueIndex = l.QueueIndex, HostQueueFamily = l.HostQueueFamily, Done = l.Done,
-        };
+            CoreInterface.DeviceLend device = l.Device;
+            device.Size = (uint)sizeof(CoreInterface.DeviceLend);
+            return device;
+        }
 
         // After advance and present: the frame's picture taken on the lent device, true when it is there and frame_copy need not be read - see EmuSen_DevicePicture.md §17.
         public bool TakeDeviceFrame()
         {
             if (Lend is not { } lend || FrameDevice() is not { } f) return false;
-            lend.Take(f.Buffer, f.Offset, f.Width, f.Height, f.Stride, f.Ready, f.Value);
+            lend.Take(f);
             return true;
         }
 

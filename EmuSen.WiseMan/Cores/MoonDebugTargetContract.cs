@@ -12,8 +12,6 @@ namespace EmuSen.WiseMan.Cores
 
         protected abstract string Engine { get; }
 
-        protected MoonDebugTargetContract() => CoreOptions.BatteryRamDisabled = true;
-
         public void Dispose()
         {
             foreach (NesDebugRig rig in _rigs) rig.Dispose();

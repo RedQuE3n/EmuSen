@@ -44,6 +44,9 @@ namespace EmuSen.Mistress.Views
         // The graphics settings the main window holds, which Sync to display is saved into.
         public GraphicsConfig? Graphics { get; set; }
 
+        // Told the switch's new state, which the main window hands its picture and pacer - see EmuSen_Settings_Reference.md §4.87.7.
+        public Action<bool>? SyncToDisplayChanged { get; set; }
+
         // Opens the theme's settings sheet; set by the main window, which owns the themed view.
         public Action? OpenThemeSettings { get; set; }
 
@@ -268,13 +271,14 @@ namespace EmuSen.Mistress.Views
                 BigPictureLooks.Choose(_settings, _looks[i]);
                 ThemeChosen?.Invoke();
             };
-            _syncToDisplay.IsChecked = EmuSen.Graphics.GraphicsSettings.SyncToDisplay;
+            _syncToDisplay.IsChecked = (Graphics ?? GraphicsConfig.Load()).SyncToDisplay;
             _syncToDisplay.IsCheckedChanged += (_, _) =>
             {
                 // Into the object the graphics window saves, or one of the two would write the other's keys away - see EmuSen_Config_Reference.md §3.3.
                 GraphicsConfig config = Graphics ?? GraphicsConfig.Load();
-                EmuSen.Graphics.GraphicsSettings.SyncToDisplay = config.SyncToDisplay = _syncToDisplay.IsChecked == true;
+                config.SyncToDisplay = _syncToDisplay.IsChecked == true;
                 config.Save();
+                SyncToDisplayChanged?.Invoke(config.SyncToDisplay);
             };
             _pauseInBackground.IsChecked = _settings.PauseInBackground;
             _pauseInBackground.IsCheckedChanged += (_, _) => { _settings.PauseInBackground = _pauseInBackground.IsChecked == true; _settings.Save(); };

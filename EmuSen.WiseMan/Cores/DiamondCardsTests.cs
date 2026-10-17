@@ -15,7 +15,6 @@ namespace EmuSen.WiseMan.Cores
         private readonly ITestOutputHelper _output;
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenDiamondCards_" + Guid.NewGuid().ToString("N"));
         private readonly string _library;
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public DiamondCardsTests(ITestOutputHelper output)
         {
@@ -25,12 +24,10 @@ namespace EmuSen.WiseMan.Cores
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             CoreDiscovery.UseDevelopment(false);
-            CoreOptions.BatteryRamDisabled = false;
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             CoreDiscovery.UseDevelopment(null);
             DataStore.OverrideDirectory = null;
             ConfigStore.OverrideDirectory = null;

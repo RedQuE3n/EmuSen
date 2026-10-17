@@ -15,19 +15,16 @@ namespace EmuSen.WiseMan.Cores
     public class MercuryRtCoreAbiTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenMercuryRtV1_" + Guid.NewGuid().ToString("N"));
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public MercuryRtCoreAbiTests()
         {
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreOptions.BatteryRamDisabled = true;
             CoreDiscovery.UseDirectories(null);
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             DataStore.OverrideDirectory = null;
             CoreDiscovery.UseDirectories(null);
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
@@ -59,8 +56,8 @@ namespace EmuSen.WiseMan.Cores
             _ = Discovered;
             Assert.Null(CoreCatalog.EngineFor("GB"));
             Assert.True(CoreCatalog.IsRegisteredEngine(CoreCatalog.MercuryRtEngine));
-            Assert.IsType<MercuryRtCore>(CoreFactory.Create("game.gb"));
-            ICore core = CoreFactory.Create("game.gb", engine: CoreCatalog.MercuryRtEngine);
+            Assert.IsType<MercuryRtCore>(CoreFactory.Create("game.gb", options: TestCores.NoBattery));
+            ICore core = CoreFactory.Create("game.gb", engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery);
             Assert.IsType<MercuryRtCore>(core);
             Assert.Null(CoreFactory.EngineNotice("game.gb", CoreCatalog.MercuryRtEngine, core));
         }
@@ -80,7 +77,7 @@ namespace EmuSen.WiseMan.Cores
                 string? engine = CoreCatalog.EngineChosen("GB", retired);
                 Assert.Equal(CoreCatalog.MercuryRtEngine, engine);
                 Assert.Equal(engine, CoreCatalog.EngineChosen("GB", retired));
-                CoreBundle bundle = CoreFactory.Load(rom, engine: engine);
+                CoreBundle bundle = CoreFactory.Load(rom, engine: engine, options: TestCores.NoBattery);
                 Assert.IsType<MercuryRtCore>(bundle.Core);
                 Assert.Null(bundle.Notice);
                 (bundle.Core as IDisposable)?.Dispose();
@@ -101,8 +98,8 @@ namespace EmuSen.WiseMan.Cores
         public void The_v1_adapter_over_mercuryrt_runs_a_game_exactly_as_the_shim(byte cgb, string model)
         {
             string rom = Rom("busy.gb", cgb);
-            using var shim = new MercuryRtCore();
-            using var adapter = new CoreEngine(Discovered.Open()!, new System.Collections.Generic.Dictionary<string, string> { ["Model"] = model });
+            using var shim = new MercuryRtCore() { Options = TestCores.NoBattery };
+            using var adapter = new CoreEngine(Discovered.Open()!, new System.Collections.Generic.Dictionary<string, string> { ["Model"] = model }) { Options = TestCores.NoBattery };
             ((ICoreSettings)shim).Set("Model", model);
             shim.LoadRom(rom);
             adapter.LoadRom(rom);
@@ -133,8 +130,8 @@ namespace EmuSen.WiseMan.Cores
         public void A_state_from_the_other_console_tells_the_host_its_machine_info_changed()
         {
             string rom = Rom("busy.gb", 0x00);
-            using var colour = new CoreEngine(Discovered.Open()!, new System.Collections.Generic.Dictionary<string, string> { ["Model"] = "Game Boy Color" });
-            using var mono = new CoreEngine(Discovered.Open()!);
+            using var colour = new CoreEngine(Discovered.Open()!, new System.Collections.Generic.Dictionary<string, string> { ["Model"] = "Game Boy Color" }) { Options = TestCores.NoBattery };
+            using var mono = new CoreEngine(Discovered.Open()!) { Options = TestCores.NoBattery };
             colour.LoadRom(rom);
             mono.LoadRom(rom);
             for (int f = 0; f < 30; f++)
@@ -148,7 +145,7 @@ namespace EmuSen.WiseMan.Cores
             mono.LoadState(new MemoryStream(state.ToArray()));
             Assert.Equal("gbc", mono.Machine.Info.System);
             state.SetLength(0);
-            using var other = new CoreEngine(Discovered.Open()!);
+            using var other = new CoreEngine(Discovered.Open()!) { Options = TestCores.NoBattery };
             other.LoadRom(rom);
             other.SaveState(state);
             colour.LoadState(new MemoryStream(state.ToArray()));
@@ -159,7 +156,6 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_colour_games_battery_save_goes_to_its_systems_folder()
         {
-            CoreOptions.BatteryRamDisabled = false;
             string rom = Rom("colour.gbc", 0x80);
             using (var adapter = new CoreEngine(Discovered.Open()!))
             {

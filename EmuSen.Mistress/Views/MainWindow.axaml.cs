@@ -34,7 +34,6 @@ using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Dev;
 using EmuSen.Galaxia.Input;
-using EmuSen.Audio;
 
 namespace EmuSen.Mistress.Views
 {
@@ -191,9 +190,13 @@ namespace EmuSen.Mistress.Views
             Opened += (_, _) => RequestAnimationFrame(_ => Dispatcher.UIThread.Post(_gamepad.Start, DispatcherPriority.Background));
             // `--play <rom>` starts a game straight away, which the cadence measurement of §4.87.1 launches with.
             Opened += (_, _) => { if (PlayArgument(Environment.GetCommandLineArgs()) is { } rom) Dispatcher.UIThread.Post(() => LoadRom(rom, Path.GetFileNameWithoutExtension(rom)), DispatcherPriority.Background); };
-            // Endymion is a leaf and reads no globals, so the settings come from here - see EmuSen_Audio_Sync.md §7.1.
-            _audioPlayer = new AudioPlayer(
-                AudioSettings.SampleRate, AudioSettings.OutputTargetLatencyMs, AudioSettings.RateControlMaxDeviation);
+            // Endymion is a leaf and reads no globals, so audio.json's settings come from here, the cores' with them - see EmuSen_Audio_Sync.md §7.1.
+            AudioConfig audio = AudioConfig.Load().Bounded();
+            _audioPlayer = new AudioPlayer(audio.SampleRate, audio.OutputTargetLatencyMs, audio.RateControlMaxDeviation);
+            CoreOptions = EmuSen.Cores.CoreOptions.From(audio);
+            // graphics.json's filtering and display sync, which the picture and the pacer read - see EmuSen_Settings_Reference.md §3, §4.87.
+            GameFrame.BilinearFiltering = _graphics.BilinearFiltering;
+            GameFrame.SyncToDisplay = _graphics.SyncToDisplay;
             // On GameFrame, not the window: a window-level flag cannot say that - see §4.20.
             _idleCursor = new IdleCursor(GameFrame);
             SetUpHud();
@@ -512,7 +515,7 @@ namespace EmuSen.Mistress.Views
         private void ShowPreferencesAt(string? tab)
         {
             // Non-modal, so re-scan on close rather than leaving a stale library behind it.
-            var window = new PreferencesWindow(_appSettings, this, _bigScreen ? HelpFamily : null, _gamepad, () => _session?.ControllerPorts ?? 0) { OpenThemeSettings = ShowThemeSettings, Graphics = _graphics };
+            var window = new PreferencesWindow(_appSettings, this, _bigScreen ? HelpFamily : null, _gamepad, () => _session?.ControllerPorts ?? 0) { OpenThemeSettings = ShowThemeSettings, Graphics = _graphics, SyncToDisplayChanged = on => GameFrame.SyncToDisplay = on };
             WatchPreferences(window);
             if (tab is not null) window.ShowTab(tab);
             window.StatusBarChanged += ApplyStatusBar;
@@ -963,7 +966,7 @@ namespace EmuSen.Mistress.Views
             {
                 // Off the path, not the session: no core exists yet to ask - see EmuSen_Multicore.md §12.
                 string console = EmuSen.Cores.CoreCatalog.ConsoleForRom(path) ?? "Unknown";
-                _session = new EmulatorSession { Cheats = _cheats, Engine = EngineChosenFor(path), DeviceLender = GameFrame.TryLend };
+                _session = new EmulatorSession { Cheats = _cheats, Engine = EngineChosenFor(path), DeviceLender = LendDevice, Options = CoreOptions };
                 StartLogging(console);
                 _session.LoadRom(path, loading?.GetAwaiter().GetResult());
                 if (_session.EngineNotice is { } engineNotice) Console.WriteLine("[core] " + engineNotice);
@@ -1339,8 +1342,8 @@ namespace EmuSen.Mistress.Views
 
                 // Held turbo wins over the menu's base speed - see EmuSen_Settings_Reference.md §4.13.
                 _speed.SpeedPercent = _turboHeld ? _speed.TurboPercent : _baseSpeedPercent;
-                scheduler.SyncToDisplay = EmuSen.Graphics.GraphicsSettings.SyncToDisplay;
-                nextTick = scheduler.Next(nextTick, session.FrameRateHz, _speed);
+                scheduler.SyncToDisplay = GameFrame.SyncToDisplay;
+                nextTick = scheduler.Next(nextTick, session.FrameRateHz, _speed.IsNormalSpeed, _speed.FrameInterval(session.FrameRateHz));
 
                 // Takes over the frame entirely - see EmuSen_Rewind_And_FastForward.md §4.
                 if (_rewindHeld && session.Core is not null)
@@ -1431,7 +1434,7 @@ namespace EmuSen.Mistress.Views
                     if (!session.SkipRendering && (serial is null || serial != offeredSerial))
                     {
                         // A picture on the device goes to the chain there, its pixels read back only for a rewind's picture - see EmuSen_DevicePicture.md §17.
-                        if (session.Core is EmuSen.Cores.IDevicePicture { PictureOnDevice: true, Lend: { } lend } && GameFrame.PresentsOnDevice)
+                        if (session.Core is EmuSen.Cores.IDevicePicture { PictureOnDevice: true, Lend: SlangDeviceLend { Slang: var lend } } && GameFrame.PresentsOnDevice)
                         {
                             if (captured) PictureUnchanged(session, serial);
                             _frames.Offer(Array.Empty<byte>(), session.ScreenWidth, session.ScreenHeight, 1, null, session.TotalFrames, session.DisplayAspect, session.DisplayLines, null, lend);
@@ -1517,7 +1520,7 @@ namespace EmuSen.Mistress.Views
                 else
                 {
                     // Owed rather than forgotten, up to a cap, or a game whose drawing frames overrun runs slow - see §4.28.
-                    nextTick = FramePacer.Settle(nextTick, clock.Elapsed, scheduler.Interval(session.FrameRateHz, _speed));
+                    nextTick = FramePacer.Settle(nextTick, clock.Elapsed, scheduler.Interval(_speed.FrameInterval(session.FrameRateHz)));
                 }
             }
         }
@@ -1532,10 +1535,16 @@ namespace EmuSen.Mistress.Views
         }
 
         // Called from the emulation thread; newest wins - see EmuSen_Serenity.md §4.
-        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, EmuSen.Serenity.RawPicture? raw = null)
+        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, CoreRawPicture? raw = null)
         {
-            _frames.Offer(pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw);
+            _frames.Offer(pixels, width, height, rowRepeat, release, sequence, aspect, lines, CorePictures.ForPresenter(raw));
         }
+
+        // What each core is made with: audio.json's limit, and for a test no battery - see EmuSen_Multicore.md §6.
+        internal CoreOptions CoreOptions { get; set; } = EmuSen.Cores.CoreOptions.Default;
+
+        // The device the picture is presented on, lent to a core machine; null when none is - see EmuSen_DevicePicture.md §17.
+        private IDeviceLend? LendDevice() => SlangDeviceLend.Of(GameFrame.TryLend());
 
         private void OnExitClick(object? sender, RoutedEventArgs e)
         {

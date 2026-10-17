@@ -2374,7 +2374,7 @@ optional palette from value to the RGB the frame draws. Baseline 481 facts, `--c
 `emusen-native` gains `RawEncoding`, `RawFrame`, `Core::raw_encodings`, `Core::raw_select` and `Core::raw_frame` and the
 group `raw_picture`; the guard's checker learns the struct; the C# host reads the surface (`CoreInterface`, held to the
 header by `CoreAbiTests`), reads `video.raw` as `CoreMachineInfo.Raw`, and asks for an encoding by name through
-`ICore.RawEncoding`, handing the picture as `ICore.RawPicture`, a `RawPicture` of Serenity's that names its encoding.
+`ICore.RawEncoding`, handing the picture as `ICore.RawPicture`, a `RawPicture` of Serenity's that names its encoding (since 2026-10-17 a `CoreRawPicture` of the core assembly's own, with the same fields: `EmuSen_Surfaces.md` §7 S1).
 Kit case C21 is added; the test core claims the bit with `x-test.red`. MoonRT claims it with `nes.ppu`
 (`Moon_Native.md` §9.7), and the CRT filter's NES mode reads it again (`EmuSen_CRT.md` §22.8). Its reasons are §6.30.
 

@@ -17,19 +17,16 @@ namespace EmuSen.WiseMan.Cores
     public class ControllerPortTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenControllerPorts_" + Guid.NewGuid().ToString("N"));
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public ControllerPortTests()
         {
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreOptions.BatteryRamDisabled = true;
             CoreDiscovery.UseDirectories(null);
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             DataStore.OverrideDirectory = null;
             CoreDiscovery.UseDirectories(null);
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
@@ -72,14 +69,14 @@ namespace EmuSen.WiseMan.Cores
             string snes = Rom(SyntheticRom.Build((5, ReadSnesPads)), "pads.sfc");
             string gb = Rom(SyntheticGbRom.Build(), "pads.gb");
 
-            Assert.Equal(2, ControllerPorts.Of(CoreFactory.Load(nes).Core));
-            Assert.Equal(2, ControllerPorts.Of(CoreFactory.Load(snes).Core));
-            Assert.Equal(1, ControllerPorts.Of(CoreFactory.Load(gb).Core));
+            Assert.Equal(2, ControllerPorts.Of(CoreFactory.Load(nes, options: TestCores.NoBattery).Core));
+            Assert.Equal(2, ControllerPorts.Of(CoreFactory.Load(snes, options: TestCores.NoBattery).Core));
+            Assert.Equal(1, ControllerPorts.Of(CoreFactory.Load(gb, options: TestCores.NoBattery).Core));
             Assert.Equal((2, 2, 1, 4, 1), (ControllerPorts.ForConsole("NES"), ControllerPorts.ForConsole("SNES"), ControllerPorts.ForConsole("GB"), ControllerPorts.ForConsole("N64"), ControllerPorts.ForConsole("Lynx")));
             Assert.Equal(0, ControllerPorts.Of(null));
 
-            if (MercuryRtCore.Available) Assert.Equal(1, ControllerPorts.Of(CoreFactory.Load(gb, engine: CoreCatalog.MercuryRtEngine).Core));
-            if (MarsRtCore.Available) Assert.Equal(4, ControllerPorts.Of(new MarsRtCore()));
+            if (MercuryRtCore.Available) Assert.Equal(1, ControllerPorts.Of(CoreFactory.Load(gb, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core));
+            if (MarsRtCore.Available) Assert.Equal(4, ControllerPorts.Of(new MarsRtCore() { Options = TestCores.NoBattery }));
         }
 
         // Port 1 is controller 2; ports 2 and 3 used to land on controller 2 as well.
@@ -88,7 +85,7 @@ namespace EmuSen.WiseMan.Cores
         {
             Assert.True(MoonRtCore.Available, MoonNative.Report);
             string nes = Rom(SyntheticNesRom.Build(patches: (0, ReadSecondNesPad)), "pads.nes");
-            var core = (MoonRtCore)CoreFactory.Load(nes).Core;
+            var core = (MoonRtCore)CoreFactory.Load(nes, options: TestCores.NoBattery).Core;
             Func<int, byte> ram = a => core.ReadSpace("RAM", a);
             byte[] Bits() { core.RunFrame(); core.RunFrame(); return Enumerable.Range(0x300, 8).Select(ram).ToArray(); }
 
@@ -108,7 +105,7 @@ namespace EmuSen.WiseMan.Cores
         public void The_snes_second_pad_reads_port_1_alone()
         {
             string snes = Rom(SyntheticRom.Build((5, ReadSnesPads)), "pads.sfc");
-            ICore core = CoreFactory.Load(snes).Core;
+            ICore core = CoreFactory.Load(snes, options: TestCores.NoBattery).Core;
             Func<int, byte> wram = a => ((CoreEngine)core).ReadSpace("WRAM", a);
             byte[] Pads() { for (int i = 0; i < 3; i++) core.RunFrame(); return Enumerable.Range(0, 4).Select(wram).ToArray(); }
 
@@ -130,7 +127,7 @@ namespace EmuSen.WiseMan.Cores
         public void The_game_boys_one_port_is_all_its_engine_reads()
         {
             Assert.True(MercuryRtCore.Available, MercuryNative.Report);
-            using var rt = new MercuryRtCore();
+            using var rt = new MercuryRtCore() { Options = TestCores.NoBattery };
             Assert.Equal(1, ((ICore)rt).ControllerPorts);
         }
     }

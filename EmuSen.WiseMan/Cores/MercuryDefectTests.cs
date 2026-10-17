@@ -27,14 +27,13 @@ namespace EmuSen.WiseMan.Cores
         public void Dispose()
         {
             DataStore.OverrideDirectory = null;
-            CoreOptions.BatteryRamDisabled = true;
             try { Directory.Delete(_dir, recursive: true); } catch (IOException) { }
         }
 
-        private static MercuryRtCore Make()
+        private static MercuryRtCore Make(bool battery = false)
         {
             Assert.True(MercuryRtCore.Available, MercuryNative.Report);
-            return new MercuryRtCore();
+            return new MercuryRtCore { Options = battery ? CoreOptions.Default : TestCores.NoBattery };
         }
 
         private string Rom(string name, byte[] image)
@@ -50,7 +49,6 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void D1_the_mixer_makes_its_labelled_rate_of_samples_a_second()
         {
-            CoreOptions.BatteryRamDisabled = true;
             using MercuryRtCore core = Make();
             core.LoadRom(Rom("rate", SyntheticGbRom.Build(patches: (0, new byte[] { 0x18, 0xFE }))));
             const int frames = 600;
@@ -84,7 +82,6 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(true)]
         public void D2_the_mbc3_clock_keeps_console_time_in_double_speed(bool doubleSpeed)
         {
-            CoreOptions.BatteryRamDisabled = true;
             using MercuryRtCore core = Make();
             core.LoadRom(Rom($"clock-{doubleSpeed}", ClockRom(doubleSpeed)));
             for (int f = 0; f < 1200; f++) core.RunFrame();
@@ -114,15 +111,13 @@ namespace EmuSen.WiseMan.Cores
             string stray = Path.Combine(Environment.CurrentDirectory, ".tmp");
             bool strayBefore = File.Exists(stray);
 
-            CoreOptions.BatteryRamDisabled = saverWithoutBattery;
-            using MercuryRtCore saver = Make();
+            using MercuryRtCore saver = Make(battery: !saverWithoutBattery);
             saver.LoadRom(a);
             for (int f = 0; f < 10; f++) saver.RunFrame();
             using var state = new MemoryStream();
             saver.SaveState(state);
 
-            CoreOptions.BatteryRamDisabled = loaderWithoutBattery;
-            using MercuryRtCore loader = Make();
+            using MercuryRtCore loader = Make(battery: !loaderWithoutBattery);
             loader.LoadRom(b);
             loader.LoadState(new MemoryStream(state.ToArray()));
             while (loader.TotalFrames < 300) loader.RunFrame();
@@ -157,7 +152,6 @@ namespace EmuSen.WiseMan.Cores
                 _output.WriteLine("EMUSEN_MERCURYRT_ROMS or EMUSEN_MERCURY_V5_STATES unset, not run");
                 return;
             }
-            CoreOptions.BatteryRamDisabled = true;
             foreach (string path in Directory.GetFiles(roms, "*.gb*").Order(StringComparer.Ordinal))
             {
                 string name = Path.GetFileNameWithoutExtension(path);

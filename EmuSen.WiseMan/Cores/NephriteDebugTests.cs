@@ -18,20 +18,17 @@ namespace EmuSen.WiseMan.Cores
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenNephriteDebug_" + Guid.NewGuid().ToString("N"));
         private int _loads;
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public NephriteDebugTests()
         {
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreOptions.BatteryRamDisabled = true;
             CoreDiscovery.UseDirectories(null);
             CoreDiscovery.UseDevelopment(false);
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             DataStore.OverrideDirectory = null;
             CoreDiscovery.UseDirectories(null);
             CoreDiscovery.UseDevelopment(null);
@@ -74,7 +71,7 @@ namespace EmuSen.WiseMan.Cores
             // A folder per load: an engine holds its image mapped, and Windows refuses to write a file mapped elsewhere (EmuSen_Galaxia.md §3.8).
             string rom = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, $"load{++_loads}")).FullName, "calls.md");
             File.WriteAllBytes(rom, CallsRom(interrupt));
-            var engine = new CoreEngine(found.Open()!);
+            var engine = new CoreEngine(found.Open()!) { Options = TestCores.NoBattery };
             engine.LoadRom(rom);
             return (engine, engine.CreateDebugTarget());
         }

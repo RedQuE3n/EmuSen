@@ -26,21 +26,21 @@ namespace EmuSen.Cores
         public static string GameBoyFolder(string romPath) =>
             string.Equals(System.IO.Path.GetExtension(romPath), ".gbc", StringComparison.OrdinalIgnoreCase) ? GameBoyColor : GameBoy;
 
-        // disabled null defers to CoreOptions.BatteryRamDisabled, read here and latched; a save made before 2026-09-28 is copied in at the first load.
-        public static BatterySave Open(string? romPath, string console, bool hasRam = true, bool? disabled = null, string extension = SaveLibrary.SramExtension)
+        // disabled is the core's CoreOptions.BatteryRamDisabled, latched here; a save made before 2026-09-28 is copied in at the first load.
+        public static BatterySave Open(string? romPath, string console, bool hasRam = true, bool disabled = false, string extension = SaveLibrary.SramExtension)
         {
-            if ((disabled ?? CoreOptions.BatteryRamDisabled) || !hasRam || string.IsNullOrEmpty(romPath)) return None;
+            if (disabled || !hasRam || string.IsNullOrEmpty(romPath)) return None;
             string path = System.IO.Path.ChangeExtension(SaveLibrary.SramPathFor(romPath, console), extension);
             if (!File.Exists(path) && PreviousHome(romPath, console, extension) is { } previous) CopyIn(previous, path);
             return new BatterySave(path);
         }
 
         // A card shared between games, by its own path rather than a game's; --nobattery holds for it as for any save - see Diamond_Cards.md §9.2.
-        public static BatterySave Card(string console, string name, string extension, bool? disabled = null) => Medium(console, false, name, extension, disabled);
+        public static BatterySave Card(string console, string name, string extension, bool disabled = false) => Medium(console, false, name, extension, disabled);
 
         // A shared or named medium's file of either kind - see EmuSen_SaveMedia.md §3.3.
-        public static BatterySave Medium(string console, bool consoleKind, string name, string extension, bool? disabled = null) =>
-            (disabled ?? CoreOptions.BatteryRamDisabled) ? None : new BatterySave(SaveLibrary.MediumPathFor(console, consoleKind, name, extension));
+        public static BatterySave Medium(string console, bool consoleKind, string name, string extension, bool disabled = false) =>
+            disabled ? None : new BatterySave(SaveLibrary.MediumPathFor(console, consoleKind, name, extension));
 
         // The one place each console's saves were kept before: the flat Saves folder for the SNES and N64, beside the ROM for the NES and Game Boy.
         public static string? PreviousHome(string romPath, string console, string extension = SaveLibrary.SramExtension) => console switch

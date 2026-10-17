@@ -22,7 +22,6 @@ namespace EmuSen.WiseMan.Cores
     public class VenusRtDebugTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenVenusRtDebug_" + Guid.NewGuid().ToString("N"));
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
         private readonly ITestOutputHelper _output;
 
         public VenusRtDebugTests(ITestOutputHelper output)
@@ -32,13 +31,11 @@ namespace EmuSen.WiseMan.Cores
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             FirmwareLibrary.Directory = Path.Combine(_root, "Firmware");
             Directory.CreateDirectory(FirmwareLibrary.Directory);
-            CoreOptions.BatteryRamDisabled = true;
             CoreDiscovery.UseDirectories(null);
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             DataStore.OverrideDirectory = null;
             FirmwareLibrary.ResetDirectory();
             CoreDiscovery.UseDirectories(null);
@@ -55,7 +52,7 @@ namespace EmuSen.WiseMan.Cores
             if (Discovered is not { } found) return null;
             string rom = Path.Combine(_root, name);
             File.WriteAllBytes(rom, image);
-            var engine = new CoreEngine(found.Open()!);
+            var engine = new CoreEngine(found.Open()!) { Options = TestCores.NoBattery };
             engine.LoadRom(rom);
             return (engine, engine.CreateDebugTarget());
         }
@@ -434,8 +431,8 @@ namespace EmuSen.WiseMan.Cores
             {
                 string rom = Path.Combine(_root, Path.GetFileName(source));
                 File.Copy(source, rom, overwrite: true);
-                using var plain = new CoreEngine(found.Open()!);
-                using var armed = new CoreEngine(found.Open()!);
+                using var plain = new CoreEngine(found.Open()!) { Options = TestCores.NoBattery };
+                using var armed = new CoreEngine(found.Open()!) { Options = TestCores.NoBattery };
                 plain.LoadRom(rom);
                 armed.LoadRom(rom);
                 var target = armed.CreateDebugTarget();
@@ -470,7 +467,7 @@ namespace EmuSen.WiseMan.Cores
                 if (target.DebugCpus.Count > 2)
                 {
                     // On an engine of its own, 120 frames in with no input, then up to 600 more for a chip that starts later (Yoshi's Island's GSU).
-                    using var halting = new CoreEngine(found.Open()!);
+                    using var halting = new CoreEngine(found.Open()!) { Options = TestCores.NoBattery };
                     halting.LoadRom(rom);
                     for (int n = 0; n < 120; n++) halting.RunFrame();
                     var cop = halting.CreateDebugTarget().DebugCpus[2];

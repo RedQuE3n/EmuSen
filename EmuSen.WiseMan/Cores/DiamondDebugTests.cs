@@ -17,7 +17,6 @@ namespace EmuSen.WiseMan.Cores
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenDiamondDebug_" + Guid.NewGuid().ToString("N"));
         private int _loads;
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         // The program's addresses: the loop's JAL, its delay slot, the J back, the routine and its store, and the counter in RAM.
         private const uint Loop = 0x8001_001C, Slot = 0x8001_0020, Back = 0x8001_0024, Routine = 0x8001_0100, Store = 0x8001_010C, Count = 0x2_0000;
@@ -26,14 +25,12 @@ namespace EmuSen.WiseMan.Cores
         {
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreOptions.BatteryRamDisabled = true;
             CoreDiscovery.UseDirectories(null);
             CoreDiscovery.UseDevelopment(true);
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             DataStore.OverrideDirectory = null;
             CoreDiscovery.UseDirectories(null);
             CoreDiscovery.UseDevelopment(null);
@@ -99,7 +96,7 @@ namespace EmuSen.WiseMan.Cores
             // A folder per load: an engine holds its image mapped, and Windows refuses to write a file mapped elsewhere (EmuSen_Galaxia.md §3.8).
             string exe = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, $"load{++_loads}")).FullName, loads ? "loads.psexe" : "calls.psexe");
             File.WriteAllBytes(exe, loads ? LoadsProgram() : CallsProgram());
-            var engine = new CoreEngine(found.Open()!);
+            var engine = new CoreEngine(found.Open()!) { Options = TestCores.NoBattery };
             engine.LoadRom(exe);
             for (int i = 0; i < frames; i++) engine.RunFrame();
             return (engine, engine.CreateDebugTarget());
@@ -374,7 +371,7 @@ namespace EmuSen.WiseMan.Cores
         {
             string exe = Path.Combine(_root, "calls.psexe");
             File.WriteAllBytes(exe, CallsProgram());
-            ICore core = CoreFactory.Create(exe, headless: true, null);
+            ICore core = CoreFactory.Create(exe, headless: true, null, options: TestCores.NoBattery);
             core.LoadRom(exe);
             for (int i = 0; i < 10; i++) core.RunFrame();
             using (core as IDisposable)

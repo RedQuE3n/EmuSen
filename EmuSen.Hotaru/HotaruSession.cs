@@ -37,7 +37,8 @@ namespace EmuSen.Hotaru
             string statePath = SaveLibrary.StatePathFor(launch.RomPath ?? ConsoleSession.NameOf(launch.Console!));
 
             string? engine = launch.Console is { } console ? CoreCatalog.EngineChosen(console, GraphicsConfig.Load().Value(console, CoreCatalog.EngineKey)) : CoreFactory.ConfiguredEngine(romPath);
-            ICore core = launch.Console is { } empty ? CoreFactory.CreateConsole(empty, engine) : CoreFactory.Create(romPath, headless: false, engine);
+            CoreOptions options = CoreOptions.From(AudioConfig.Load());
+            ICore core = launch.Console is { } empty ? CoreFactory.CreateConsole(empty, engine, options: options) : CoreFactory.Create(romPath, headless: false, engine, options);
 
             // Needs core.CoreName, so it cannot be built any earlier - see EmuSen_Frontend_Driver.md §1 step 3.
             string logDir = Path.Combine(DianaShSandbox.LogsDirectory, core.CoreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");

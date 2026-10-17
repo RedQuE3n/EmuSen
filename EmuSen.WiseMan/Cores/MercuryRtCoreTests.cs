@@ -31,7 +31,6 @@ namespace EmuSen.WiseMan.Cores
         public void Dispose()
         {
             DataStore.OverrideDirectory = null;
-            CoreOptions.BatteryRamDisabled = true;
             try { Directory.Delete(_dir, recursive: true); } catch (IOException) { }
         }
 
@@ -79,7 +78,6 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Cheats_of_both_kinds_act()
         {
-            CoreOptions.BatteryRamDisabled = true;
             string rom = Rom("cheats", CountingRom(0x03));
             byte plain = CountAfter(rom, 300);
             Assert.NotEqual(0, plain);
@@ -87,7 +85,7 @@ namespace EmuSen.WiseMan.Cores
             var cheats = new CheatRegistry();
             cheats.AddRomPatch(0x0300, 0x03, compare: 0x01, "count by three");
             cheats.AddRamPoke(MercuryRtCore.SpaceCpuBus, 0xC010, 0x5A, "a poke");
-            using var core = (MercuryRtCore)CoreFactory.Load(rom, cheats: cheats, engine: CoreCatalog.MercuryRtEngine).Core;
+            using var core = (MercuryRtCore)CoreFactory.Load(rom, cheats: cheats, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core;
             for (int f = 0; f < 300; f++) core.RunFrame();
             Assert.Equal((byte)(plain * 3), core.ReadSpace(MercuryRtCore.SpaceWram, 0));
             Assert.Equal(0x5A, core.ReadSpace(MercuryRtCore.SpaceWram, 0x10));
@@ -103,7 +101,6 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_battery_save_loads_and_is_written_back()
         {
-            CoreOptions.BatteryRamDisabled = false;
             string rom = Rom("battery", CountingRom(0x03)), srm = SaveLibrary.SramPathFor(rom, BatterySave.GameBoy);
             Directory.CreateDirectory(Path.GetDirectoryName(srm)!);
             var saved = new byte[8192];
@@ -123,9 +120,8 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_state_saved_resumes_into_the_same_future()
         {
-            CoreOptions.BatteryRamDisabled = true;
             string rom = Rom("states", CountingRom(0x1B));
-            using var rt = (MercuryRtCore)CoreFactory.Load(rom, engine: CoreCatalog.MercuryRtEngine).Core;
+            using var rt = (MercuryRtCore)CoreFactory.Load(rom, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core;
             for (int f = 0; f < 120; f++) rt.RunFrame();
 
             string path = Path.Combine(_dir, "rt.state");
@@ -138,7 +134,7 @@ namespace EmuSen.WiseMan.Cores
 
             Assert.Throws<InvalidDataException>(() => rt.LoadState(new MemoryStream(new byte[] { 0x4D, 0x41, 0x52, 0x54, 5, 0, 0, 0 })));
             Assert.Throws<InvalidDataException>(() => rt.LoadState(new MemoryStream(new byte[] { 0x4D, 0x45, 0x52, 0x43, 4, 0, 0, 0 })));
-            Assert.Throws<InvalidOperationException>(() => { using var unloaded = new MercuryRtCore(); unloaded.RunFrame(); });
+            Assert.Throws<InvalidOperationException>(() => { using var unloaded = new MercuryRtCore() { Options = TestCores.NoBattery }; unloaded.RunFrame(); });
         }
 
         private static byte[] State(ICore core)
@@ -152,7 +148,6 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_patch_triples_answer_as_TryPatchRom_everywhere()
         {
-            CoreOptions.BatteryRamDisabled = true;
             var cheats = new CheatRegistry();
             cheats.AddRomPatch(0x1123, 0x42, 0x07, "compared");
             cheats.AddRomPatch(0x1123, 0x55, null, "later, unconditional");
@@ -168,7 +163,7 @@ namespace EmuSen.WiseMan.Cores
             int disabled = cheats.AddRomPatch(0x2200, 0x77, null, "off");
             cheats.SetEnabled(disabled, false);
 
-            var core = (MercuryRtCore)CoreFactory.Load(Rom("patches", CountingRom(0x03)), cheats: cheats, engine: CoreCatalog.MercuryRtEngine).Core;
+            var core = (MercuryRtCore)CoreFactory.Load(Rom("patches", CountingRom(0x03)), cheats: cheats, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core;
             core.RunFrame();
             var touched = new HashSet<int> { 0x1123, 0x1124, 0x7FFF, 0x0000, gg, 0x2200 };
             for (int address = 0; address <= 0x7FFF; address++)
@@ -189,9 +184,8 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_second_ports_buttons_are_ignored()
         {
-            CoreOptions.BatteryRamDisabled = true;
             string rom = Rom("ports", CountingRom(0x03));
-            using var rt = (MercuryRtCore)CoreFactory.Load(rom, engine: CoreCatalog.MercuryRtEngine).Core;
+            using var rt = (MercuryRtCore)CoreFactory.Load(rom, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core;
             rt.SetButton(1, PadButton.A, true);
             rt.SetButton(0, PadButton.B, true);
             // A v1 engine hands a press to its machine as the next frame starts - see Diamond_Players.md §12.7.
@@ -206,9 +200,8 @@ namespace EmuSen.WiseMan.Cores
         [InlineData((byte)0x03, (byte)0x02, 0x2000)]
         public void Every_space_has_its_size(byte kind, byte ramCode, int ram)
         {
-            CoreOptions.BatteryRamDisabled = true;
             byte[] image = SyntheticGbRom.Build(cartridgeType: kind, ramSizeCode: ramCode, patches: (0, new byte[] { 0x18, 0xFE }));
-            using var rt = (MercuryRtCore)CoreFactory.Load(Rom($"spaces-{kind}", image), engine: CoreCatalog.MercuryRtEngine).Core;
+            using var rt = (MercuryRtCore)CoreFactory.Load(Rom($"spaces-{kind}", image), engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core;
             for (int i = 0; i < 5; i++) rt.RunFrame();
             var sizes = new Dictionary<string, int> { ["ROM"] = image.Length, ["VRAM"] = 0x2000, ["CARTRAM"] = ram, ["WRAM"] = 0x2000, ["OAM"] = 0xA0, ["HRAM"] = 0x7F, ["CPUBUS"] = 0x10000, ["NOSUCH"] = 0 };
             foreach (var (space, size) in sizes) Assert.True(size == rt.SpaceSize(space), $"{space}: {rt.SpaceSize(space)}, not {size}");
@@ -219,9 +212,8 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_debug_target_shows_mercuryrts_machine_and_writes_reach_it()
         {
-            CoreOptions.BatteryRamDisabled = true;
             string rom = Rom("debug", CountingRom(0x03));
-            CoreBundle rt = CoreFactory.Load(rom, engine: CoreCatalog.MercuryRtEngine);
+            CoreBundle rt = CoreFactory.Load(rom, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery);
             var core = (MercuryRtCore)rt.Core;
             for (int i = 0; i < 200; i++) core.RunFrame();
             rt.DebugTarget.RefreshProviders();

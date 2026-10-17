@@ -13,7 +13,6 @@ namespace EmuSen.WiseMan.Cores
     public class NephriteFirmwareTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenNephriteFirmware_" + Guid.NewGuid().ToString("N"));
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public NephriteFirmwareTests()
         {
@@ -22,12 +21,10 @@ namespace EmuSen.WiseMan.Cores
             FirmwareLibrary.Directory = Path.Combine(_root, "Firmware");
             Directory.CreateDirectory(FirmwareLibrary.Directory);
             CoreDiscovery.UseDevelopment(false);
-            CoreOptions.BatteryRamDisabled = true;
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             CoreDiscovery.UseDevelopment(null);
             FirmwareLibrary.ResetDirectory();
             DataStore.OverrideDirectory = null;
@@ -53,7 +50,7 @@ namespace EmuSen.WiseMan.Cores
             Console.SetOut(text);
             try
             {
-                using var core = Assert.IsType<CoreEngine>(CoreFactory.Load(path).Core);
+                using var core = Assert.IsType<CoreEngine>(CoreFactory.Load(path, options: TestCores.NoBattery).Core);
             }
             finally
             {

@@ -77,7 +77,7 @@ Output is one line per ROM:
 - `[SKIP]` — the board is not implemented (`Moon_Memory.md` §4). Not counted as a failure; it is a tracked gap, not a regression.
 - `[ERR ]` — a malformed image, or the core threw mid-run.
 
-The exit code is 1 if anything failed, errored or produced no verdict. `--testroms` sets `CoreOptions.BatteryRamDisabled` for the whole run, so a suite directory is never written to; the same `.srm` reproducibility trap that bit the SuperFX work applies here and is worse, because these ROMs are shared fixtures.
+The exit code is 1 if anything failed, errored or produced no verdict. `--testroms` makes every core with `CoreOptions.BatteryRamDisabled` (since 2026-10-17 a create option `NesTestRomRunner` passes to each core it makes, `EmuSen_Multicore.md` §6.1), so a suite directory is never written to; the same `.srm` reproducibility trap that bit the SuperFX work applies here and is worse, because these ROMs are shared fixtures.
 
 `SkipRendering` is on. It drops framebuffer writes only — sprite evaluation, sprite 0 and every flag still run (`Moon_PPU.md` §3.5), so a PPU test is not silently exempted from the thing it is testing.
 

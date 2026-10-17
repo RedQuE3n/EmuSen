@@ -21,7 +21,6 @@ namespace EmuSen.WiseMan.Cores
         public const string BenchVariable = "EMUSEN_CALLCOST_BENCH";
 
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenCallCost_" + Guid.NewGuid().ToString("N"));
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
         private readonly ITestOutputHelper _output;
 
         public CallRecordingCostBench(ITestOutputHelper output)
@@ -31,14 +30,12 @@ namespace EmuSen.WiseMan.Cores
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             FirmwareLibrary.Directory = Path.Combine(_root, "Firmware");
             Directory.CreateDirectory(FirmwareLibrary.Directory);
-            CoreOptions.BatteryRamDisabled = true;
             CoreDiscovery.UseDirectories(null);
             CoreDiscovery.UseDevelopment(true);
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             DataStore.OverrideDirectory = null;
             FirmwareLibrary.ResetDirectory();
             CoreDiscovery.UseDirectories(null);
@@ -181,7 +178,7 @@ namespace EmuSen.WiseMan.Cores
             {
                 CoreLibrary library = CoreLibrary.Open(run.Library);
                 Assert.True(library.Available, library.Report);
-                using var engine = new BenchEngine(library, run.Mode);
+                using var engine = new BenchEngine(library, run.Mode) { Options = TestCores.NoBattery };
                 engine.LoadRom(run.Path);
                 void Input(int f)
                 {

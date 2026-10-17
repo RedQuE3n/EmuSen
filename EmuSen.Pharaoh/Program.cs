@@ -155,8 +155,8 @@ class Program
             EmuSen.Debug.DebugSettings.MasterLoggingEnabled = true;
         }
 
-        // Before LoadRom, which is what reads the .srm - see §3.15's --nobattery entry.
-        EmuSen.Cores.CoreOptions.BatteryRamDisabled = options.NoBattery;
+        // A create option, latched at LoadRom, which is what reads the .srm - see §3.15's --nobattery entry.
+        var coreOptions = new CoreOptions { BatteryRamDisabled = options.NoBattery };
         if (options.NoBattery) Emit("[ROM] --nobattery: the cartridge save is neither read nor written.");
 
         // So a throttled measurement says so in its own log, not just on the parent's console - see §3.42.
@@ -167,7 +167,7 @@ class Program
         try
         {
             string? engine = CoreFactory.ConfiguredEngine(options.RomPath);
-            core = CoreFactory.Create(options.RomPath, headless: true, engine);
+            core = CoreFactory.Create(options.RomPath, headless: true, engine, coreOptions);
             CoreFactory.LoadInto(core, options.RomPath);
             if (CoreFactory.EngineNotice(options.RomPath, engine, core) is { } notice) Emit($"[core] {notice}");
         }

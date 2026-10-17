@@ -18,11 +18,9 @@ namespace EmuSen.WiseMan.Cores
     public class BreakpointConditionCostBench(ITestOutputHelper output) : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenBpBench_" + Guid.NewGuid().ToString("N"));
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             DataStore.OverrideDirectory = null;
             CoreDiscovery.UseDirectories(null);
             CoreDiscovery.UseDevelopment(null);
@@ -35,7 +33,6 @@ namespace EmuSen.WiseMan.Cores
         private (ICore Core, IDebugTarget Target) Load(string core)
         {
             Directory.CreateDirectory(_root);
-            CoreOptions.BatteryRamDisabled = true;
             if (core == "moonrt")
             {
                 byte[] image = SyntheticNesRom.Build(patches: new (int, byte[])[] { (0, MoonDebugEngineTests.Program), (0x20, new byte[] { 0xEE, 0x43, 0x00, 0x40 }) });
@@ -43,14 +40,14 @@ namespace EmuSen.WiseMan.Cores
                 image[16 + 0x3FFB] = 0x80;
                 string path = Path.Combine(_root, $"bench{Guid.NewGuid():N}.nes");
                 File.WriteAllBytes(path, image);
-                CoreBundle bundle = CoreFactory.Load(path);
+                CoreBundle bundle = CoreFactory.Load(path, options: TestCores.NoBattery);
                 return (bundle.Core, bundle.DebugTarget);
             }
             if (core == "mercuryrt")
             {
                 string path = Path.Combine(_root, $"bench{Guid.NewGuid():N}.gb");
                 File.WriteAllBytes(path, SyntheticGbRom.Build(patches: new (int, byte[])[] { (0, new byte[] { 0x21, 0x00, 0xC0, 0x34, 0x18, 0xFD }) }));
-                CoreBundle bundle = CoreFactory.Load(path);
+                CoreBundle bundle = CoreFactory.Load(path, options: TestCores.NoBattery);
                 return (bundle.Core, bundle.DebugTarget);
             }
             if (core == "marsrt")
@@ -66,7 +63,7 @@ namespace EmuSen.WiseMan.Cores
             var found = CoreDiscovery.Found.Single(c => c.Info.Id == "nephrite");
             string rom = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, Guid.NewGuid().ToString("N"))).FullName, "calls.md");
             File.WriteAllBytes(rom, NephriteDebugTests.CallsRom(interrupt: false));
-            var engine = new CoreEngine(found.Open()!);
+            var engine = new CoreEngine(found.Open()!) { Options = TestCores.NoBattery };
             engine.LoadRom(rom);
             return (engine, engine.CreateDebugTarget());
         }

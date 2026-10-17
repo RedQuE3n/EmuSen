@@ -2,7 +2,6 @@ using System;
 using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Threading;
-using EmuSen.Graphics;
 using EmuSen.LunaP.Threading;
 using EmuSen.LunaP.Windowing;
 
@@ -67,19 +66,20 @@ namespace EmuSen.Serenity
         {
             _frames = new Latest<FrameData>(PresentPendingFrame);
             _control = new GameFrameControl();
-            _window = new ToolWindow
-            {
-                Title = GraphicsSettings.WindowTitle,
-                Width = GraphicsSettings.WindowWidth,
-                Height = GraphicsSettings.WindowHeight,
-                CanResize = GraphicsSettings.WindowResizable,
-                Content = _control,
-            };
+            _window = new ToolWindow { Content = _control };
             _window.Closed += (_, _) => _isOpen = false;
             _window.Show();
         }
 
         public bool IsOpen() => _isOpen;
+
+        // The window's title, size and resizing and the picture's filtering and display sync, which the frontend sets from graphics.json - see EmuSen_Serenity.md §4.
+        public string? WindowTitle { get => _window.Title; set => _window.Title = value; }
+        public double WindowWidth { get => _window.Width; set => _window.Width = value; }
+        public double WindowHeight { get => _window.Height; set => _window.Height = value; }
+        public bool WindowResizable { get => _window.CanResize; set => _window.CanResize = value; }
+        public bool BilinearFiltering { get => _control.BilinearFiltering; set => _control.BilinearFiltering = value; }
+        public bool SyncToDisplay { get => _control.SyncToDisplay; set => _control.SyncToDisplay = value; }
 
         public void Present(byte[] rgba, int width, int height) =>
             _frames.Offer(new FrameData { Rgba = rgba, Width = width, Height = height });

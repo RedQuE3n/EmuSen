@@ -27,7 +27,6 @@ namespace EmuSen.WiseMan.Cores
         public static MercuryRig Load(string path)
         {
             // No battery save, so no run depends on the last; only ever set true, so the classes run in parallel - see Mercury_RealCartridges.md §2.
-            CoreOptions.BatteryRamDisabled = true;
 
             return MercuryRig.Open(path);
         }

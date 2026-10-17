@@ -3,7 +3,7 @@ using EmuSen.Galaxia.Native;
 
 namespace EmuSen.Galaxia.Models
 {
-    // On-disk mirror of EmuSen.Graphics.GraphicsSettings, with WindowTitle left out on purpose - see EmuSen_Config_Reference.md §3.3.
+    // graphics.json, which the frontends read for the presenter's and the window's properties and the runtime for each console's settings - see EmuSen_Config_Reference.md §3.3.
     public class GraphicsConfig
     {
         public int WindowWidth { get; set; } = 1060;
@@ -72,5 +72,14 @@ namespace EmuSen.Galaxia.Models
             GalaxiaNative.Active ? File.LoadNative(upgrade: false) ?? ConfigFile<GraphicsConfig>.NewNative(upgrade: false) : File.Load(() => new GraphicsConfig());
 
         public static bool Exists => File.Exists;
+
+        // Written with its defaults on the first run, so there is something to hand-edit.
+        public static void SeedIfMissing()
+        {
+            if (!Exists) Load().Save();
+        }
+
+        // The window's size within the range a program opens one at; the file keeps what it holds.
+        public (int Width, int Height) WindowSize() => (System.Math.Clamp(WindowWidth, 256, 16384), System.Math.Clamp(WindowHeight, 224, 16384));
     }
 }

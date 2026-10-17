@@ -24,7 +24,6 @@ namespace EmuSen.WiseMan.Cores
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = true;
             try { Directory.Delete(_dir, recursive: true); } catch (IOException) { }
         }
 
@@ -236,7 +235,6 @@ namespace EmuSen.WiseMan.Cores
         [MemberData(nameof(Cases))]
         public void Each_cartridge_on_each_console_runs_as_that_console(byte cgb, GbModel model)
         {
-            CoreOptions.BatteryRamDisabled = true;
             using MercuryRig rig = MercuryRig.Create(ProbeRom(cgb), model);
             for (int f = 0; f < 10; f++) rig.RunFrame();
             byte[] wram = rig.FieldBytes("Bus.Wram");
@@ -281,7 +279,6 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(0x43, 0x991A)]
         public void A_nintendo_game_on_the_color_hands_off_its_checksum(int checksum, int hl)
         {
-            CoreOptions.BatteryRamDisabled = true;
             using MercuryRig rig = MercuryRig.Create(ProbeRom(0x00, checksum, licensee: 0x01), GbModel.GameBoyColor);
             for (int f = 0; f < 3; f++) rig.RunFrame();
             byte[] wram = rig.FieldBytes("Bus.Wram");
@@ -297,7 +294,6 @@ namespace EmuSen.WiseMan.Cores
         [InlineData((byte)0xC0, GbModel.Auto, GbModel.GameBoy)]
         public void A_state_resumes_on_the_console_it_was_made_on(byte cgb, GbModel madeOn, GbModel loadedOn)
         {
-            CoreOptions.BatteryRamDisabled = true;
             byte[] rom = SyntheticGbRom.Build(romBanks: 4, cartridgeType: 0x03, ramSizeCode: 0x02, cgbFlag: cgb, patches: (0, MercuryPrograms.Busy));
             using MercuryRig first = MercuryRig.Create(rom, madeOn);
             for (int f = 0; f < 120; f++) first.RunFrame();
@@ -329,10 +325,9 @@ namespace EmuSen.WiseMan.Cores
         [InlineData((byte)0x80, GbModel.GameBoy)]
         public void The_debugger_shows_the_console_the_game_runs_on(byte cgb, GbModel model)
         {
-            CoreOptions.BatteryRamDisabled = true;
             string path = Path.Combine(_dir, $"debug-{cgb:X2}-{model}.gb");
             File.WriteAllBytes(path, ProbeRom(cgb, 0x70, licensee: 0x01));
-            using var rt = new MercuryRtCore { Model = model };
+            using var rt = new MercuryRtCore { Options = TestCores.NoBattery, Model = model };
             rt.LoadRom(path);
             var target = rt.CreateDebugTarget();
             for (int f = 0; f < 10; f++) rt.RunFrame();
@@ -367,16 +362,15 @@ namespace EmuSen.WiseMan.Cores
         [InlineData((byte)0x80, GbModel.GameBoy, GbModel.Auto)]
         public void A_rebuild_for_a_state_keeps_the_debuggers_call_stack(byte cgb, GbModel madeOn, GbModel loadedOn)
         {
-            CoreOptions.BatteryRamDisabled = true;
             byte[] rom = SyntheticGbRom.Build(cgbFlag: cgb, patches: new[] { (0, new byte[] { 0xCD, 0x00, 0x02, 0x18, 0xFE }), (0xB0, new byte[] { 0x18, 0xFE }) });
             string path = Path.Combine(_dir, $"calls-{cgb:X2}.gb");
             File.WriteAllBytes(path, rom);
-            using var maker = new MercuryRtCore { Model = madeOn };
+            using var maker = new MercuryRtCore { Options = TestCores.NoBattery, Model = madeOn };
             maker.LoadRom(path);
             using var saved = new MemoryStream();
             maker.SaveState(saved);
 
-            using var rt = new MercuryRtCore { Model = loadedOn };
+            using var rt = new MercuryRtCore { Options = TestCores.NoBattery, Model = loadedOn };
             rt.LoadRom(path);
             rt.Breakpoints.AddBreakpoint(0x7000);
             Assert.NotEqual(maker.CoreName, rt.CoreName);
@@ -391,10 +385,9 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_model_setting_is_honoured_before_the_first_frame_and_otherwise_at_the_next_load()
         {
-            CoreOptions.BatteryRamDisabled = true;
             string path = Path.Combine(_dir, "model.gb");
             File.WriteAllBytes(path, ProbeRom(0x00));
-            using var core = new MercuryRtCore();
+            using var core = new MercuryRtCore() { Options = TestCores.NoBattery };
             var settings = (ICoreSettings)core;
             Assert.Equal(CoreCatalog.SettingsFor("GB"), settings.Settings);
             Assert.Equal(MercuryRtCore.ModelAuto, settings.Get(MercuryRtCore.ModelKey));
@@ -425,7 +418,6 @@ namespace EmuSen.WiseMan.Cores
                 _output.WriteLine("the corpus or boot_regs-cgb.gb is absent, not run");
                 return;
             }
-            CoreOptions.BatteryRamDisabled = true;
             using MercuryRig rig = MercuryRig.Open(rom, model);
             rig.SkipRendering = true;
             var verdict = TestRomVerdict.NoVerdict;

@@ -7,9 +7,6 @@ namespace EmuSen.Pharaoh
     {
         public static int Run(string path, int frameBudget)
         {
-            // Third-party ROMs are read-only fixtures; nothing here should leave an .srm beside them.
-            CoreOptions.BatteryRamDisabled = true;
-
             string[] roms = ResolveRoms(path);
             if (roms.Length == 0)
             {

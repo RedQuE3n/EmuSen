@@ -19,14 +19,13 @@ using EmuSen.Crystal.Debugger;
 using EmuSen.Crystal.Recording;
 using EmuSen.DianaSh.DianaSh.Var.Shell;
 using EmuSen.DianaSh.DianaSh.Dev;
-using EmuSen.Graphics;
 using EmuSen.Endymion;
 using EmuSen.Endymion.Input;
 using EmuSen.Hotaru.Imaging;
 using EmuSen.Hotaru.Input;
 using EmuSen.Serenity;
 using EmuSen.Galaxia.Input;
-using EmuSen.Audio;
+using EmuSen.Galaxia.Models;
 using EmuSen.Common;
 
 namespace EmuSen.Hotaru.Views
@@ -67,9 +66,8 @@ namespace EmuSen.Hotaru.Views
         private readonly GamepadBindings _gamepadBindings =
             GamepadBindings.Load(EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console));
         private readonly GamepadManager _gamepad;
-        // Endymion is a leaf and reads no globals, so the settings come from here - see EmuSen_Audio_Sync.md §7.1.
-        private readonly AudioPlayer _audioPlayer = new(
-            AudioSettings.SampleRate, AudioSettings.OutputTargetLatencyMs, AudioSettings.RateControlMaxDeviation);
+        // Endymion is a leaf and reads no globals, so audio.json's settings come from here - see EmuSen_Audio_Sync.md §7.1.
+        private readonly AudioPlayer _audioPlayer = NewAudioPlayer(AudioConfig.Load().Bounded());
         private readonly DispatcherTimer _gamepadTimer;
 
         // Tracked separately and OR'd: either device works at any time.
@@ -114,6 +112,8 @@ namespace EmuSen.Hotaru.Views
         // Was written out here, in Mistress and in Serenity, all three with one defect - LunaP.md §22.1.
         private readonly Latest<FrameData> _frames;
 
+        private static AudioPlayer NewAudioPlayer(AudioConfig audio) => new(audio.SampleRate, audio.OutputTargetLatencyMs, audio.RateControlMaxDeviation);
+
         public GameWindow(ICore core, IEnumerable<IDianaShCommand> extraCommands, string statePath)
         {
             _frames = new Latest<FrameData>(PresentPendingFrame);
@@ -128,10 +128,14 @@ namespace EmuSen.Hotaru.Views
             _debugTarget.Watches.AddWatch("WRAM", 0x8000, 0x1800);
             _debugTarget.Watches.AddWatch("WRAM", 0x0D80, 0x0080);
 
-            Title = GraphicsSettings.WindowTitle;
-            Width = GraphicsSettings.WindowWidth;
-            Height = GraphicsSettings.WindowHeight;
-            CanResize = GraphicsSettings.WindowResizable;
+            // graphics.json's window and picture; the title is the window's own - see EmuSen_Settings_Reference.md §3.
+            GraphicsConfig graphics = GraphicsConfig.Load();
+            (int width, int height) = graphics.WindowSize();
+            Width = width;
+            Height = height;
+            CanResize = graphics.WindowResizable;
+            GameFrame.BilinearFiltering = graphics.BilinearFiltering;
+            GameFrame.SyncToDisplay = graphics.SyncToDisplay;
 
             _gamepad = new GamepadManager(_gamepadBindings.For(core.CoreName))
             {
@@ -412,8 +416,8 @@ namespace EmuSen.Hotaru.Views
                 while (_running)
                 {
                     _speed.SetTurbo(_turboHeld);
-                    scheduler.SyncToDisplay = GraphicsSettings.SyncToDisplay;
-                    nextTick = scheduler.Next(nextTick, _core.FrameRateHz, _speed);
+                    scheduler.SyncToDisplay = GameFrame.SyncToDisplay;
+                    nextTick = scheduler.Next(nextTick, _core.FrameRateHz, _speed.IsNormalSpeed, _speed.FrameInterval(_core.FrameRateHz));
 
                     // Takes over the frame entirely - see EmuSen_Rewind_And_FastForward.md §4.
                     if (_rewindHeld)

@@ -20,7 +20,6 @@ namespace EmuSen.WiseMan.Cores
     public class NephritePlayersTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenNephritePlayers_" + Guid.NewGuid().ToString("N"));
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
         private readonly ITestOutputHelper _output;
 
         public NephritePlayersTests(ITestOutputHelper output)
@@ -29,14 +28,12 @@ namespace EmuSen.WiseMan.Cores
             Directory.CreateDirectory(_root);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreOptions.BatteryRamDisabled = true;
             CoreDiscovery.UseDirectories(null);
             CoreDiscovery.UseDevelopment(false);
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
             CoreDiscovery.UseDevelopment(null);
@@ -50,7 +47,7 @@ namespace EmuSen.WiseMan.Cores
             config.SetValue("Genesis", "pad1", pad1);
             config.SetValue("Genesis", "pad2", pad2);
             config.Save();
-            return Assert.IsType<CoreEngine>(CoreFactory.Load(rom).Core);
+            return Assert.IsType<CoreEngine>(CoreFactory.Load(rom, options: TestCores.NoBattery).Core);
         }
 
         [Fact]

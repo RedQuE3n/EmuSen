@@ -21,19 +21,16 @@ namespace EmuSen.WiseMan.Cores
     {
         private readonly ITestOutputHelper _output;
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenMoonRtFrontendTests", Guid.NewGuid().ToString("N"));
-        private readonly bool _batteryWas = CoreOptions.BatteryRamDisabled;
 
         public MoonRtFrontendTests(ITestOutputHelper output)
         {
             _output = output;
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreOptions.BatteryRamDisabled = true;
         }
 
         public void Dispose()
         {
-            CoreOptions.BatteryRamDisabled = _batteryWas;
             DataStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch { }
         }
@@ -65,7 +62,7 @@ namespace EmuSen.WiseMan.Cores
             string rom = Rom(Program());
             foreach (string? engine in new[] { null, CoreCatalog.MoonRtEngine, "Moon (C#)" })
             {
-                CoreBundle bundle = CoreFactory.Load(rom, engine: engine);
+                CoreBundle bundle = CoreFactory.Load(rom, engine: engine, options: TestCores.NoBattery);
                 var core = Assert.IsType<MoonRtCore>(bundle.Core);
                 Assert.Null(bundle.Notice);
                 Assert.IsType<MoonRtDebugTarget>(bundle.DebugTarget);
@@ -106,7 +103,6 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_battery_save_loads_is_written_back_and_is_absent_without_a_battery()
         {
-            CoreOptions.BatteryRamDisabled = false;
             string rom = Rom(Program(), "Battery.nes");
             string save = Path.ChangeExtension(SaveLibrary.SramPathFor(rom, BatterySave.Nes), SaveLibrary.SramExtension);
             byte[] marked = new byte[NesHeader.PrgRamSize];
@@ -147,8 +143,8 @@ namespace EmuSen.WiseMan.Cores
             var cheats = new CheatRegistry();
             var (address, value) = NesGameGenieCodec.Decode("SXIOPO");
             cheats.AddRomPatch(address, value, NesGameGenieCodec.DecodeCompare("SXIOPO"), "infinite lives");
-            var coded = (MoonRtCore)CoreFactory.Load(smb, cheats: cheats).Core;
-            var plain = (MoonRtCore)CoreFactory.Load(smb).Core;
+            var coded = (MoonRtCore)CoreFactory.Load(smb, cheats: cheats, options: TestCores.NoBattery).Core;
+            var plain = (MoonRtCore)CoreFactory.Load(smb, options: TestCores.NoBattery).Core;
             for (int f = 0; f < 900; f++)
                 foreach (MoonRtCore core in new[] { coded, plain })
                 {
@@ -180,7 +176,7 @@ namespace EmuSen.WiseMan.Cores
             int disabled = cheats.AddRomPatch(0x9200, 0x77, null, "off");
             cheats.SetEnabled(disabled, false);
 
-            var core = (MoonRtCore)CoreFactory.Load(Rom(Program()), cheats: cheats).Core;
+            var core = (MoonRtCore)CoreFactory.Load(Rom(Program()), cheats: cheats, options: TestCores.NoBattery).Core;
             core.RunFrame();
             var touched = new HashSet<int> { 0x9123, 0x9124, 0xFFFF, 0x4020, 0x3FFF, gg, 0x9200 };
             for (int address = 0x4020; address <= 0xFFFF; address++)
@@ -201,7 +197,7 @@ namespace EmuSen.WiseMan.Cores
         public void A_bus_read_after_a_new_cheat_sees_it()
         {
             var cheats = new CheatRegistry();
-            var rust = (MoonRtCore)CoreFactory.Load(Rom(Program()), cheats: cheats).Core;
+            var rust = (MoonRtCore)CoreFactory.Load(Rom(Program()), cheats: cheats, options: TestCores.NoBattery).Core;
             rust.RunFrame();
             byte before = rust.ReadSpace(NesSystem.CpuBus, 0xC001);
             cheats.AddRomPatch(0xC001, (byte)(before ^ 0x5A), null, "new");
@@ -216,7 +212,7 @@ namespace EmuSen.WiseMan.Cores
             byte[] image = SyntheticNesRom.Build(mapper: 1);
             byte[] empty = image.AsSpan(0, 16).ToArray().Concat(image.AsSpan(16 + SyntheticNesRom.PrgBankSize).ToArray()).ToArray();
             empty[4] = 0;
-            using var core = new MoonRtCore();
+            using var core = new MoonRtCore() { Options = TestCores.NoBattery };
             Exception refused = Assert.ThrowsAny<Exception>(() => core.LoadRom(Rom(empty, "NoPrg.nes")));
             _output.WriteLine(refused.GetType().Name + ": " + refused.Message);
             Assert.False(core.IsRomLoaded);

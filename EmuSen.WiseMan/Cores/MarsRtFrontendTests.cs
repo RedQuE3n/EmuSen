@@ -177,12 +177,12 @@ namespace EmuSen.WiseMan.Cores
         public void A_state_of_the_other_memory_size_carries_the_pak_with_it()
         {
             string rom = Rom(SyntheticN64Rom.Build(patches: (0, InterruptsOffSpin)));
-            using var small = new MarsRtCore(expansionPak: false, batteryRamDisabled: true);
+            using var small = new MarsRtCore(expansionPak: false) { Options = TestCores.NoBattery };
             small.LoadRom(rom);
             small.RunFrame();
             byte[] state = small.Save(snapshot: false);
 
-            using var large = new MarsRtCore(expansionPak: true, batteryRamDisabled: true);
+            using var large = new MarsRtCore(expansionPak: true) { Options = TestCores.NoBattery };
             large.LoadRom(rom);
             large.LoadState(state);
             Assert.False(large.ExpansionPak);
@@ -254,7 +254,7 @@ namespace EmuSen.WiseMan.Cores
         {
             Assert.True(MarsRtCore.Available, MarsNative.Report);
             string rom = Rom(SyntheticN64System.Build(rsp: true));
-            using var core = new MarsRtCore(batteryRamDisabled: true) { ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true, SkipRendering = false };
+            using var core = new MarsRtCore() { Options = TestCores.NoBattery, ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true, SkipRendering = false };
             var profiler = Assert.IsAssignableFrom<IFrameProfiler>(core);
             string[] names = { "machine", "machine/rdp-wait", "present", "present/rdp-wait", "present/walk-join" };
             Assert.Equal(names, profiler.LastFramePhases.Select(p => p.Name));
@@ -312,7 +312,7 @@ namespace EmuSen.WiseMan.Cores
         {
             string rom = Rom(SyntheticN64System.Build(rsp: false));
             // Presented at once: the synthetic picture changes on alternate frames, and a deferred one shows the same alternation a frame late.
-            using var core = new MarsRtCore(batteryRamDisabled: true) { DeferredPresentation = false };
+            using var core = new MarsRtCore() { Options = TestCores.NoBattery, DeferredPresentation = false };
             core.LoadRom(rom);
             for (int frame = 0; frame < 5; frame++) core.RunFrame();
 
@@ -354,7 +354,7 @@ namespace EmuSen.WiseMan.Cores
             string? folder = Environment.GetEnvironmentVariable(MarsRtTests.StatesVariable);
             if (folder is null || !File.Exists(Path.Combine(folder, "sm64.z64")) || !File.Exists(Path.Combine(folder, "sm64.state"))) { output.WriteLine("sm64 absent, not run"); return; }
             if (!VulkanDevices.Any()) { output.WriteLine("no Vulkan device: not run"); return; }
-            using var core = new MarsRtCore(expansionPak: true, batteryRamDisabled: true) { ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true, SkipRendering = false };
+            using var core = new MarsRtCore(expansionPak: true) { Options = TestCores.NoBattery, ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true, SkipRendering = false };
             ((ICoreSettings)core).Set("RenderScale", "2");
             ((ICoreSettings)core).Set("Gpu", "true");
             core.LoadRom(Rom(File.ReadAllBytes(Path.Combine(folder, "sm64.z64"))));
@@ -472,7 +472,7 @@ namespace EmuSen.WiseMan.Cores
             string rom = Path.Combine(_dir, "Untouched.z64");
             File.WriteAllBytes(rom, SyntheticN64Rom.Build(patches: (0, new byte[] { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 })));
 
-            using var core = new MarsRtCore(batteryRamDisabled: false);
+            using var core = new MarsRtCore();
             core.LoadRom(rom);
             core.RunFrame();
             core.SaveSram();
@@ -487,7 +487,7 @@ namespace EmuSen.WiseMan.Cores
             string rom = WriteRom("Twice");
             string save = SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64);
 
-            using var core = new MarsRtCore(batteryRamDisabled: false);
+            using var core = new MarsRtCore();
             core.LoadRom(rom);
             for (int frame = 0; frame < 40; frame++) core.RunFrame();
             core.SaveSram();
@@ -509,7 +509,7 @@ namespace EmuSen.WiseMan.Cores
             string rom = WriteRom("Autosave");
             string save = SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64);
 
-            using var core = new MarsRtCore(batteryRamDisabled: false);
+            using var core = new MarsRtCore();
             core.LoadRom(rom);
             for (int frame = 1; frame < BatterySave.FlushEveryNFrames; frame++) core.RunFrame();
             Assert.False(File.Exists(save));
@@ -526,7 +526,7 @@ namespace EmuSen.WiseMan.Cores
             byte[] original = MarkedSave();
             Place(rom, original);
 
-            using var core = new MarsRtCore(batteryRamDisabled: true);
+            using var core = new MarsRtCore() { Options = TestCores.NoBattery };
             core.LoadRom(rom);
             Assert.Equal(Enumerable.Repeat((byte)0xFF, 8), core.BatteryContents![Marked..(Marked + 8)]);
             for (int frame = 0; frame < 40; frame++) core.RunFrame();

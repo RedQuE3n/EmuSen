@@ -5,7 +5,7 @@ to make it. Every claim about the code is cited to a file, read on `WiseMan` at 
 toolkit checkout `EmuSen.LunaP` on `openemu-library` at `e098b08`. Claims marked **measured** were measured on
 2026-10-10 by the commands or the tool §1 names; claims marked **argued** are reasoning that a later step must
 prove, and the step's gate in §7 says how. Revised 2026-10-10 where `EmuSen_DianaSh.md` §16 Q1 decides it: §7's S5 and
-§8's Q2 (§17.2 there); this page's own ten questions are not decided.*
+§8's Q2 (§17.2 there); this page's own ten questions are not decided.* *Revised 2026-10-17: S1 and S3 built, with their gates as measured (§7.1).*
 
 Companion docs: `EmuSen_CoreAPI.md` (the core ABI v1, and in §8–§10 the runtime and the frontend API that this page
 does not redesign), `EmuSen_NativeCores.md` (the pre-stable core interface and its C# host), `EmuSen_RustPlatform.md`
@@ -264,7 +264,7 @@ None of the graph's edges closes a cycle. Seven places in the code exist because
 | No leaf reaches the core assembly | `EmuSen_Multicore.md` §9.2 | **kept** (`LeafAssemblyTests.cs:108–117`) |
 | DianaSh references only Galaxia, and no UI toolkit | `EmuSen_Debugging_Tools_Reference_v5.md` §3.3b; `LeafAssemblyTests.cs:61` | **kept** |
 | LunaP names nothing of EmuSen's | LunaP's `docs/LunaP.md` §1, §16 | **kept**: no project reference; its one mention of an EmuSen name is a comment (§4.11) |
-| The core assembly does not depend on the presentation layer | implied by `EmuSen_CoreAPI.md` §3; stated in no rule of `EmuSen_Multicore.md` §9, which counts Serenity a leaf | **broken**: `EmuSen → Serenity` (`EmuSen.csproj:39`); no test looks (§4.2) |
+| The core assembly does not depend on the presentation layer | implied by `EmuSen_CoreAPI.md` §3; stated in no rule of `EmuSen_Multicore.md` §9, which counts Serenity a leaf | **broken**: `EmuSen → Serenity` (`EmuSen.csproj:39`); no test looks (§4.2). *Kept since 2026-10-17: stated in `EmuSen_Multicore.md` §9.4 and pinned by `LeafAssemblyTests` (§7.1)* |
 | A client never names a core, an engine type or a console's internals | `EmuSen_CoreAPI.md` §3, as the target | **not yet kept**: Hotaru names 4 of Venus's types and Pharaoh 18 of Moon's and Venus's (§4.5) |
 
 `EmuSen_Audio_Sync.md`'s opening paragraph still calls Endymion "a leaf project with no project references at all"; its own §7.1
@@ -665,9 +665,9 @@ where its pages put it (S5, S6), and the visibility work after the code it would
 | Step | What | Gate | Ranked problem |
 |---|---|---|---|
 | **S0** | **Record the surfaces.** The reader of §1 becomes a WiseMan tool test that writes, per assembly, the public types, the non-test outside callers and the edges of §2.1 to a file in the repository, and fails when a reference set changes without that file changing. `LeafAssemblyTests` gains EmuSen's own reference set as it stands today, `{ DianaSh, Galaxia, Serenity }`. *Revised 2026-10-11: that pin was added by `EmuSen_DianaSh.md`'s S2 as `{ Crystal, Galaxia, Serenity }` (§2.1's note)* | the test passes on `96c3f563`'s numbers; a later step that changes them updates the file in the same commit | all; it turns §3's table into something a diff shows |
-| **S1** | **Cut EmuSen → Serenity.** `FrameScheduler` and `PacingDecision` move into Serenity beside `DisplayClock` (`EmuSen_CoreAPI.md` §8.4 already places pacing there); `DisplayShape`'s two constants move to the systems table in DianaSh (§8 Q2); Venus's six dead `using EmuSen.Graphics` go; the `ProjectReference` goes | S0's pin becomes `{ DianaSh, Galaxia }` (*since 2026-10-11, `{ Crystal, Galaxia }`, §2.1's note*); `ls EmuSen.Pharaoh/bin/Debug/net10.0 \| grep -ci avalonia` goes from 24 to 0; the pacing and display-aspect tests pass unchanged. Predicted, **argued**: Pharaoh's Debug output loses about 186 MB | §4.2 |
+| **S1** | **Cut EmuSen → Serenity.** `FrameScheduler` and `PacingDecision` move into Serenity beside `DisplayClock` (`EmuSen_CoreAPI.md` §8.4 already places pacing there); `DisplayShape`'s two constants move to the systems table in DianaSh (§8 Q2; *overtaken 2026-10-17: the shape is machine info's, and the constants went to Crystal's assembly, §7.1*); Venus's six dead `using EmuSen.Graphics` go; the `ProjectReference` goes | S0's pin becomes `{ DianaSh, Galaxia }` (*since 2026-10-11, `{ Crystal, Galaxia }`, §2.1's note*); `ls EmuSen.Pharaoh/bin/Debug/net10.0 \| grep -ci avalonia` goes from 24 to 0; the pacing and display-aspect tests pass unchanged. Predicted, **argued**: Pharaoh's Debug output loses about 186 MB. *Built 2026-10-17; the gates as measured are §7.1's* | §4.2 |
 | **S2** | **Declare what is used.** The five transitive edges of §2.1 become `ProjectReference`s | builds; S0's file unchanged except for the declared column | §4.9 |
-| **S3** | **Settings are parameters, not globals.** `GameFrameControl` and `FramePresenter` take the window size, title, resizing, filtering and display sync as properties the frontend sets from `GraphicsConfig`; `GraphicsSettings` is deleted, and with it the hand synchronisation of `PreferencesWindow.cs:276` and the two knobs nothing reads (§8 Q6). The frontends read `AudioConfig` for `AudioPlayer`'s arguments, and Venus's audio rate stops being the device's (`VenusCore.cs:384`). `CoreOptions.BatteryRamDisabled` becomes a create option. `DebugSettings` waits for `EmuSen_DianaSh.md` (§6.3 item 5) | `grep` for `GraphicsSettings\.` in shipped code: 0 (today 17 lines outside its own file, comments excluded), and for `AudioSettings\.` outside the EmuSen assembly: 0 (today 4 lines); the settings, preferences and battery-latch tests pass; one of the suite's serial collections can be removed (`EmuSen_Debugging_Tools_Reference_v5.md` §3.56) | §4.3, §4.8 |
+| **S3** | **Settings are parameters, not globals.** `GameFrameControl` and `FramePresenter` take the window size, title, resizing, filtering and display sync as properties the frontend sets from `GraphicsConfig`; `GraphicsSettings` is deleted, and with it the hand synchronisation of `PreferencesWindow.cs:276` and the two knobs nothing reads (§8 Q6). The frontends read `AudioConfig` for `AudioPlayer`'s arguments, and Venus's audio rate stops being the device's (`VenusCore.cs:384`). `CoreOptions.BatteryRamDisabled` becomes a create option. `DebugSettings` waits for `EmuSen_DianaSh.md` (§6.3 item 5) | `grep` for `GraphicsSettings\.` in shipped code: 0 (today 17 lines outside its own file, comments excluded), and for `AudioSettings\.` outside the EmuSen assembly: 0 (today 4 lines); the settings, preferences and battery-latch tests pass; one of the suite's serial collections can be removed (`EmuSen_Debugging_Tools_Reference_v5.md` §3.56). *Built 2026-10-17; the gates as measured are §7.1's* | §4.3, §4.8 |
 | **S4** | **A client names no console's internals, by test.** A WiseMan metadata test fails when Mistress, Hotaru or Pharaoh names a type under `EmuSen.Cores.Nintendo.*` or `EmuSen.Cores.Sega.*`, with an allow-list holding today's 4 (Hotaru) and 18 (Pharaoh) that may only shrink. Hotaru's three Venus debug dumps become shell commands over `IDebugTarget` | the test; the allow-list's length recorded | §4.5 |
 | **S5** **(theirs)** | `EmuSen_CoreAPI.md` §10.2 **D1**: the engine SPI, the native host and the systems table into `DianaSh/Sys/`; `CoreCatalog` and `CoreFactory` answered from the runtime. One addition from this audit: the registration facts of §4.8's table (extensions, engine names, button orders) each get one home there. *Revised 2026-10-10, by decision (`EmuSen_DianaSh.md` §16 Q1, §17.2): "into `DianaSh/Sys/`" is read as "into the runtime's own assembly", Crystal's, beneath the shell and beside the cores* | the registration-equivalence test (`CoreRegistrationEquivalenceTests.cs`); the extension and engine-name counts of §4.8 at one each | §4.4, §4.8 |
 | **S6** **(theirs)** | **D2–D3**, and `EmuSen_DianaSh.md`: sessions, the one frame loop, the services, the frontend API's contract and binding; Pharaoh first, then the shell, Hotaru, Mistress | that page's gates; and from this audit, the divergences of §4.1's table each closed by one test that runs the operation through every client (five post-load sequences become one; rewind capture asks the engine in every client) | §4.1 |
@@ -681,6 +681,106 @@ pacing neighbour; doing S3 first would touch `FrameScheduler` in the wrong assem
 allow-list tells D2 which of Pharaoh's verbs are still console-shaped. S7 after S5, because hiding EmuSen's types before
 the engine SPI moves would mean deciding twice which of them are the SPI. S8 and S9 are independent of the rest and can
 run beside any step.
+
+### 7.1 S1 and S3, as built (measured 2026-10-17)
+
+Both were built on 2026-10-17 on top of `WiseMan` at `69974969`, as step B0 of `EmuSen_Backend.md` §6. Neither changes
+what a player sees. The figures above were measured at `96c3f563`; where the code had moved since, the corrections are
+recorded here rather than by rewriting the measured text.
+
+**S1, the edge cut.**
+
+- `FrameScheduler`, `PacingDecision` and `PacingMode` are `EmuSen.Serenity/FrameScheduler.cs`, beside `DisplayClock`.
+  The pacer named the core assembly's `SpeedController`, which presentation cannot reach, so `Next` and `Interval` take
+  the two values they read from it, whether the speed is 100% and the frame's interval at it; the frontends pass
+  `_speed.IsNormalSpeed` and `_speed.FrameInterval(hz)`, and the tests reach the same call through a three-line
+  adapter in WiseMan (`FrameSchedulerSpeed.cs`), so their bodies are unchanged.
+- `DisplayShape` is `EmuSen.Crystal/DisplayShape.cs`, in Crystal's assembly and outside the systems table's namespace;
+  the cores' shims and Serenity's CRT filter both read it there. **The step's own words are corrected here:** "to the
+  systems table" (this row and §8 Q2) was overtaken on 2026-10-17 by `EmuSen_Backend.md` §5.3 and its fact F26, decided
+  under D6, which give a display's shape to the core's machine info, per frame. The v1 cores already report it there;
+  what the constants still serve is the shims' answer before a machine exists (`DisplayAspectTests` asks a core with no
+  game) and the CRT filter's tube. Moving the shims onto machine info alone would change that answer, so B0 leaves the
+  constants in the plainest place both assemblies reach, and they go with the shims at B4. `SystemEntry` gained
+  nothing, and `PsxSystem.DisplayAspect`, the pack's second copy that §5.3 retires, is left for that step.
+- The two Serenity types the cores handed through, which §4.2's IL walk did not count because they arrived after it
+  (`EmuSen_Backend.md` §4.5 counted ten files), now cross in forms the core assembly owns: the device lend as
+  `IDeviceLend`, which is the core ABI's `emusen_device_lend` (`CoreInterface.DeviceLend`) with `Take` and `Settle`,
+  and the raw picture as `CoreRawPicture`. Mistress, which holds both sides, wraps Serenity's `SlangLend` in
+  `SlangDeviceLend` and turns a `CoreRawPicture` into Serenity's `RawPicture` (`EmuSen.Mistress/CorePictures.cs`);
+  `EmuSen_DevicePicture.md` §17 and `EmuSen_CRT.md` §22 say so.
+- §4.2's "five C# cores' `DisplayAspect`" were three shims by this date (MoonRT, MercuryRT, MarsRT), and its six dead
+  `using EmuSen.Graphics` lines had gone with C# Venus: none was left in the core assembly to remove.
+- The `ProjectReference` is gone; `EmuSen.csproj` references Crystal and Galaxia.
+
+| Gate | Before | After |
+|---|---|---|
+| `LeafAssemblyTests`: the core assembly's EmuSen references | `{ Crystal, Galaxia, Serenity }` | `{ Crystal, Galaxia }`, pinned (`The_core_assembly_references_Crystal_and_Galaxia_only`) |
+| `ls EmuSen.Pharaoh/bin/Debug/net10.0 \| grep -ci avalonia`, a clean build with `-p:EmuSenNative=false` | 24 | 0 |
+| Pharaoh's Debug output, the same build (`du -sm`) | 686 MB | 492 MB |
+| The pacing and display-aspect tests | pass | pass, with only their `using` lines and the adapter's call form changed |
+
+**A defect the cut made, found and closed before it was committed.** SkiaSharp's Linux library is a package of its own,
+`SkiaSharp.NativeAssets.Linux`, which the core assembly never declared: it arrived through Avalonia. With the edge cut,
+Pharaoh's output had SkiaSharp's managed assembly and its Windows and macOS libraries but no `libSkiaSharp.so`, so its
+recorder's PNG writer (`PngFile`, through `record on`) would have failed on Linux at its first frame. WiseMan could not
+see it, since WiseMan takes Serenity itself. `PharaohDependencyTests` reads Pharaoh's dependency file and failed on
+`linux-x64` and `linux-arm64`; the core assembly now declares the package, and the test passes. It also pins the gate
+above: no Avalonia library and no Serenity in Pharaoh's dependencies.
+
+**The prediction, retired.** "Pharaoh's Debug output loses about 186 MB": it lost 194 MB (686 to 492), within the
+estimate's error. A first build without the Linux Skia library had lost 342 MB; the difference, 149 MB, is that library's
+builds for thirteen Linux targets, which the estimate had rightly counted as the core assembly's own.
+
+**S3, settings as parameters.**
+
+- `GraphicsSettings` is deleted. `GameFrameControl` takes `BilinearFiltering` and `SyncToDisplay` as properties, and
+  `FramePresenter` forwards those two and the window's `WindowTitle`, `WindowWidth`, `WindowHeight` and
+  `WindowResizable`. Hotaru's window reads `graphics.json` for its size (`GraphicsConfig.WindowSize()`, the static's
+  clamp) and resizing and sets its picture's two properties; its title is the window's own "EmuSen", which is all
+  `WindowTitle` ever held, since the field was never loaded from the file. `TargetFps` and `VSyncEnabled` lose their
+  fields and keep their keys (§8 Q6).
+- **Display sync has one owner at run time**, the picture's control. Mistress sets `GameFrame.SyncToDisplay` from
+  `graphics.json` at start; Preferences writes the file through the main window's `GraphicsConfig` and tells the
+  window, which sets the control (`PreferencesWindow.SyncToDisplayChanged`); the emulation thread reads the control
+  each frame and hands the value to the pacer. The field is `volatile`, so the UI thread's write is seen by the
+  emulation thread's next read without a lock. The hand synchronisation of `PreferencesWindow.cs:276`, two stores
+  written together, is gone: the file is the setting, the control is the setting applied.
+- `AudioSettings` is deleted, not only kept out of the frontends: with C# Venus gone, the fields the cores still read
+  were the buffer limit and a fallback rate, and both have a better owner. The frontends read `audio.json` themselves
+  (`AudioConfig.Load().Bounded()`, holding the static's clamps) for `AudioPlayer`'s three arguments. The buffer limit
+  became the second field of the create option below, `AudioBufferMaxSamples`, which Mistress and Hotaru take from the
+  same file (`CoreOptions.From`) and Pharaoh, which never loaded it, leaves at its default. A session with no core
+  reports `AudioConfig.DefaultSampleRate`. `SampleQueue`, which no shipped core uses any more, keeps its default limit
+  where it used to follow the static.
+- Both programs seed the two files on the first run with `SeedIfMissing()` on each model, as `LoadFromDisk` did.
+- **`CoreOptions` is a create option**: an immutable record a core holds (`CoreEngine.Options`, set before
+  `LoadRom`), passed through `CoreFactory`'s five create and load calls and `EmulatorSession.Options`, in place of a
+  process-wide static (`EmuSen_Multicore.md` §6.1). Pharaoh's `--nobattery` and its test-ROM runner make their cores
+  with it; MarsRT's `batteryRamDisabled` constructor parameter, a second way of saying the same thing, went with the
+  static. In the suite, the 60 files that set the static now make their cores with `TestCores.NoBattery`, or, for the
+  four tests about the battery itself, with the battery on, and the Mistress windows they open are given the same
+  option before they load (`TestCores.WithoutBattery`).
+- `DebugSettings` is unchanged, as the step says.
+- **Not done: removing a serial collection**, the last clause of S3's gate. Most classes that set the static also set
+  another process-wide one (`DataStore.OverrideDirectory`, `FirmwareLibrary.Directory`, the discovery switches) and
+  stay serial for it; a few no longer assign any by `grep` (`BreakpointConditionTests`, `MercuryModelTests`,
+  `MoonGoldenTests`, `MoonRtRawPictureTests` among them), but whether each can leave needs the per-class audit of
+  `EmuSen_Debugging_Tools_Reference_v5.md` §3.57, which this step did not make.
+
+| Gate | Before (`69974969`) | After |
+|---|---|---|
+| `grep` for `GraphicsSettings\.` in shipped code, comments excluded | 20 lines (21 with the one comment; §7's 17 was measured at `96c3f563`) | 0 |
+| `grep` for `AudioSettings\.` outside the EmuSen assembly | 4 | 0 (and 0 inside it: the class is gone) |
+| `grep` for `CoreOptions.BatteryRamDisabled =` in the solution | 127 lines (2 in Pharaoh, 1 in MarsRT's PGO driver, 124 in WiseMan, restores included) | 0; `--nobattery` is a value in a record |
+| The settings, preferences and battery-latch tests (`SettingsPersistenceTests`, the Sync to display menu case, `BatterySaveTests`, `GenesisBatteryTests`, `MercuryDefectTests`' D3) | pass | pass |
+| The whole WiseMan suite, run in four parts under the test lock | — | 6,427 tests: 6,354 passed, 71 skipped, 2 failed; both fail the same way on `69974969` (below) |
+
+The two failures are not this step's. `MultiplayerTests`' handheld-notice case with `claim: True` failed four runs of
+four on `69974969` and two of three on this step, the class's first-press case once; it depends on the order the
+simulated pads are polled in. `VenusGoldenTests.No_corpus_verdict_is_worse_than_the_csharp_baseline` finds no golden
+for the baseline's 108 corpus ROMs under a `bin/` folder (`…/undisbeliever-snes-test-roms/bin/` first): the repository's
+`.gitignore` ignores every `bin/` directory, so those traces were never committed and a fresh checkout cannot pass. Both are left for their owners.
 
 ---
 
@@ -762,4 +862,4 @@ retrains it.
 | Places that say which bit is which button | 19 | §4.8 |
 | Environment variable names; changing shipped behaviour; undocumented among those | 226; 49; 3 | §4.10 |
 | Shipped paths under a Galaxia root built outside Galaxia | 12 | §4.10 |
-| Avalonia assemblies in Pharaoh's build output | 24 | §4.2 |
+| Avalonia assemblies in Pharaoh's build output | 24; 0 since S1 (2026-10-17) | §4.2, §7.1 |

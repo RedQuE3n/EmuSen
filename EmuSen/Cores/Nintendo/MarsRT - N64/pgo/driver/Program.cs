@@ -20,10 +20,9 @@ settings.RemoveAll(p => p[0] == "warmup");
 string scratch = Path.Combine(Path.GetTempPath(), "marsrt-pgo-" + Environment.ProcessId);
 EmuSen.Galaxia.Library.DataStore.OverrideDirectory = Path.Combine(scratch, "home");
 EmuSen.Galaxia.ConfigStore.OverrideDirectory = Path.Combine(scratch, "config");
-CoreOptions.BatteryRamDisabled = true;
 try
 {
-    var session = new EmulatorSession { Engine = CoreCatalog.MarsRtEngine };
+    var session = new EmulatorSession { Engine = CoreCatalog.MarsRtEngine, Options = new CoreOptions { BatteryRamDisabled = true } };
     session.LoadRom(rom);
     if (session.Core is not MarsRtCore core)
     {

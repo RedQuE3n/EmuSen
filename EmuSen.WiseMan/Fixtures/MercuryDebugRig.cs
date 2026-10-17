@@ -51,7 +51,7 @@ namespace EmuSen.WiseMan.Fixtures
 
         private sealed class MercuryRtRig : MercuryDebugRig
         {
-            private readonly MercuryRtCore _core = new();
+            private readonly MercuryRtCore _core = new() { Options = TestCores.NoBattery };
             private readonly MercuryRtDebugTarget _target;
 
             public MercuryRtRig(string rom) : base(rom)

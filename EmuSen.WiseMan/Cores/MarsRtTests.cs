@@ -34,7 +34,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // MarsRT's interpreter on one thread, now that the shim's defaults are production's; the tier and thread runs turn theirs on themselves.
-        public static MarsRtCore Twin(bool expansionPak = false) => new(expansionPak, batteryRamDisabled: true) { SkipRendering = true, UseBlocks = false, ThreadedRdp = false, DeferredPresentation = false, RdpWorkers = 1 };
+        public static MarsRtCore Twin(bool expansionPak = false) => new(expansionPak) { Options = TestCores.NoBattery, SkipRendering = true, UseBlocks = false, ThreadedRdp = false, DeferredPresentation = false, RdpWorkers = 1 };
 
         // n64-systemtest through the IS-Viewer: its own summary, and through the recompiler line for line what the interpreter reports.
         [Fact]

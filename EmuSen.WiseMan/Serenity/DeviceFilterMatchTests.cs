@@ -80,11 +80,11 @@ namespace EmuSen.WiseMan.Serenity
 
         // The filter drawn both ways over the same frames; the chain is given each new frame and rendered once for it, as the runner does.
         private (byte[] Skia, byte[] Device)? Both(ScreenFilter filter, string? console, IReadOnlyDictionary<string, float>? chosen, IReadOnlyList<byte[]> frames,
-            int width, int height, int rowRepeat, int windowWidth, int windowHeight, ShaderEffect? effect = null, RawPicture? raw = null)
+            int width, int height, int rowRepeat, int windowWidth, int windowHeight, ShaderEffect? effect = null, RawPicture? raw = null, bool bilinear = true)
         {
             if (GlDevice.Value is not { } gl || _gpu is null) return null;
             byte[] skia = Session.Dispatch(() =>
-                ShaderBench.Picture(effect is { } simple ? new GameFrameControl { ActiveEffect = simple } : new GameFrameControl { FilterConsole = console, ShaderParameters = chosen, ActiveFilter = filter },
+                ShaderBench.Picture(effect is { } simple ? new GameFrameControl { ActiveEffect = simple, BilinearFiltering = bilinear } : new GameFrameControl { FilterConsole = console, ShaderParameters = chosen, ActiveFilter = filter, BilinearFiltering = bilinear },
                     frames.ToArray(), width, height, rowRepeat, windowWidth, windowHeight, gl, raw: raw),
                 default).GetAwaiter().GetResult();
 
@@ -113,9 +113,9 @@ namespace EmuSen.WiseMan.Serenity
         }
 
         private Difference? Match(string what, ScreenFilter filter, string? console, IReadOnlyDictionary<string, float>? chosen, IReadOnlyList<byte[]> frames,
-            int width, int height, int rowRepeat, int windowWidth, int windowHeight, ShaderEffect? effect = null, RawPicture? raw = null)
+            int width, int height, int rowRepeat, int windowWidth, int windowHeight, ShaderEffect? effect = null, RawPicture? raw = null, bool bilinear = true)
         {
-            if (Both(filter, console, chosen, frames, width, height, rowRepeat, windowWidth, windowHeight, effect, raw) is not var (skia, device)) return null;
+            if (Both(filter, console, chosen, frames, width, height, rowRepeat, windowWidth, windowHeight, effect, raw, bilinear) is not var (skia, device)) return null;
             Difference d = Compare(skia, device, windowWidth);
             if (d.BeyondOne > 0)
             {
@@ -232,22 +232,13 @@ namespace EmuSen.WiseMan.Serenity
         [InlineData(ShaderEffect.Crt, true)]
         public void The_plain_picture_and_the_simple_effects_on_the_chain_draw_what_skia_draws(ShaderEffect effect, bool bilinear)
         {
-            bool before = EmuSen.Graphics.GraphicsSettings.BilinearFiltering;
-            EmuSen.Graphics.GraphicsSettings.BilinearFiltering = bilinear;
-            try
-            {
-                foreach (var (console, width, height, repeat, ww, wh) in Frames)
-                    foreach (var (what, frames) in Sequences(width, height))
-                    {
-                        string name = $"{effect} {(bilinear ? "bilinear" : "nearest")} {console} {width}x{height}x{repeat} in {ww}x{wh} {what}";
-                        if (Match(name, BuiltInShaders.AsFilter(effect, bilinear), console, null, frames, width, height, repeat, ww, wh, effect) is not { } d) return;
-                        Assert.True(WithinTolerance(d), $"{name}: {d}");
-                    }
-            }
-            finally
-            {
-                EmuSen.Graphics.GraphicsSettings.BilinearFiltering = before;
-            }
+            foreach (var (console, width, height, repeat, ww, wh) in Frames)
+                foreach (var (what, frames) in Sequences(width, height))
+                {
+                    string name = $"{effect} {(bilinear ? "bilinear" : "nearest")} {console} {width}x{height}x{repeat} in {ww}x{wh} {what}";
+                    if (Match(name, BuiltInShaders.AsFilter(effect, bilinear), console, null, frames, width, height, repeat, ww, wh, effect, bilinear: bilinear) is not { } d) return;
+                    Assert.True(WithinTolerance(d), $"{name}: {d}");
+                }
         }
     
 

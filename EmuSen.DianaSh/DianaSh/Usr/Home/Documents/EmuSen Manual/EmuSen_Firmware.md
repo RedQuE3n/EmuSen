@@ -129,6 +129,12 @@ settings (`EmuSen_Config_Reference.md` §7.2), so none was given this one; `man 
 
 ---
 
+*Decided 2026-10-17 by the tester, each as recommended:* the order above, the player's folder first and then
+`home/Firmware`; the setting's place on the Firmware page of Preferences and of Big Picture's settings, not among the
+Library tab's folders; and, as a standing rule for every folder setting, a folder that does not exist is accepted and
+said, never refused, so that a drive mounted later is found. The other folder settings take that rule when the queued
+work on the folder-setting rules (Config Reference §7) is done.
+
 ## 3. What each frontend does
 
 The prompt is deliberately *not* in the core. A core deep in a constructor cannot open a dialog, and the frontends do not agree on what "ask the player" means.

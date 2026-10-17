@@ -85,6 +85,7 @@ namespace EmuSen.Cores.Native
         public bool IsRomLoaded => _machine != null;
         public long TotalFrames => _machine?.TotalFrames ?? 0;
         public virtual double FrameRateHz => _machine?.Info.FrameRateHz ?? 60.0;
+        public string? TelevisionStandard => _machine?.Info.Region;
         public int AudioSampleRate => _machine is null ? 44100 : _audioRate;
 
         // The picture's size as the last frame reported it, its rows repeated unless the frontend repeats them.

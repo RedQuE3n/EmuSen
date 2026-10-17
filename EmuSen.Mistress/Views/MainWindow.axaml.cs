@@ -460,7 +460,7 @@ namespace EmuSen.Mistress.Views
             string? stored = _graphics.Value(console, GraphicsSettingsWindow.ScreenFilterKey);
             EmuSen.Serenity.Shaders.ScreenFilterChoice choice = EmuSen.Serenity.Shaders.ScreenFilters.Find(stored);
             // Before the shader, so a chain or runner built for it starts from the player's values - see EmuSen_Settings_Reference.md §4.48.3.
-            GameFrame.ShaderParameters = ShaderParameterValues(console, stored ?? choice.Name);
+            GameFrame.ShaderParameters = RunningStandard(ShaderParameterValues(console, stored ?? choice.Name));
             GameFrame.ActiveEffect = choice.Effect;
             // Before the filter, whose chain starts from this console's defaults and constants - see EmuSen_Serenity.md §3.9.
             GameFrame.FilterConsole = EmuSen.Cores.CoreCatalog.HostOf(console);
@@ -974,6 +974,8 @@ namespace EmuSen.Mistress.Views
                 // The catalogue's console, not the core's name: a Game Boy core says GBC while it is a Color, and the GB tab is its settings - see §4.47.
                 _activeConsole = console == "Unknown" ? EmuSen.Cores.CoreCatalog.DiscoveredConsoleForSystem((_session.Core as EmuSen.Cores.Native.CoreEngine)?.Machine.Info.System) ?? _session.CoreName : console;
 
+                // Recorded before the picture's settings, which take the running game's own crop and standard - see EmuSen_CRT.md §26.6.
+                _currentRomPath = path;
                 // What the graphics window holds for this console, or each setting's own default - see EmuSen_Settings_Reference.md §4.26.
                 ApplyConsoleSettings(_session, _activeConsole);
                 ApplyScreenFilter(_activeConsole);
@@ -986,7 +988,6 @@ namespace EmuSen.Mistress.Views
                     return;
                 }
                 WireSession(_session, displayName, restoredCheats, newGame: !reset);
-                _currentRomPath = path;
                 _consoleSession = null;
                 _currentDisplayName = displayName;
                 if (!reset) RecordStart(path);

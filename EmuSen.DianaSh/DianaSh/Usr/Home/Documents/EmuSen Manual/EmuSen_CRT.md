@@ -2559,7 +2559,7 @@ section builds all four.
 A new setting, **Television standard** (NTSC or PAL), selects the model; a second, **PAL colour decoding** (Delay line
 or Simple), selects the receiver. Both decide which passes are built and what is written into them, so both are
 structural. The standard is the player's choice for now. Choosing it from the game's region is a question for the
-tester (§23.7), and nothing selects it automatically.
+tester (§23.7), and nothing selects it automatically. *(Since 2026-10-17 it follows the game by default, §26.)*
 
 The console's line on each standard lives in the same console constants as before (`ConsoleTiming`), the PAL figures
 under the prefix `pal.`. The filter writes the line of the chosen standard into each pass as SkSL constants where it
@@ -2876,4 +2876,159 @@ keeps winning**: stored parameters are passed over the defaults (`ScreenFilter.V
 **Tests.** The two cases that measure the modelled amounts, the checkerboards' contrast (§11.6) and the tail left after
 a held white (§11.4), took the old defaults by leaving the parameter out of their otherwise-off set; they now set it to
 1 explicitly, and measure the model as before. Every other CRT case either turns both off or does not depend on them.
+
+## 26. The television standard follows the game (2026-10-17)
+
+§23.7's first question was decided on 2026-10-11: the standard follows the game's region, and a player's choice is
+kept per game when it is set. This section answers where the game's standard comes from, how it reaches a filter,
+how a filter says it can use it, what wins over what, and what form the feature takes; then records what was built.
+Before it, one check that round three asked for first.
+
+### 26.1 The NES's raw picture still arrives through the core ABI
+
+C# Moon's retirement could have left the filter's NES signal silently falling back to RGB (§22.8). It did not: the
+path is the ABI's. MoonRT lists `nes.ppu` in machine info's `video.raw` and hands it under `RAW_PICTURE`
+(`MoonRT - NES/src/ffi/v1.rs:160–174`); the host asks for the encoding the chosen filter reads and copies the
+picture out (`EmuSen/Cores/Native/CoreEngine.cs`, `RawEncoding` and `RawPicture`); `MoonRtCore` is a `PortEngine`,
+which is a `CoreEngine`, so the test that runs it is on the path Mistress runs; and Mistress hands the encoding to the
+session and the picture to the frame control with each frame (`MainWindow.axaml.cs`, `SubmitFrame`). Measured
+2026-10-17 on the RX 6800: the end-to-end case draws the emphasis written at line 103, 0.137 of peak above it and
+0.055 below through the raw picture against 0.101 either side through RGB, §22.8.1's figures to the digit; and
+`MoonRtRawPictureTests` passes all its golden runs. Nothing needed fixing.
+
+### 26.2 What already crosses the core ABI
+
+**(a) The region is already in machine info, since version 1.0.** No member is missing, and §23.7's note that one
+was needed was written without reading the ABI.
+
+- `EmuSen_CoreAPI.md` §6.4 lists machine info's `system` and `region`, "which system entry and region the game runs
+  as" (line 711), beside `frame_rate`, exact, as a ratio (line 712); core info's systems list the `regions` a system
+  can run (line 680). Machine info is JSON (`emusen_core.h:333`), so the field is in no struct of the header.
+- The core kit's type is `Region { Ntsc, Pal }`, "the television standard a machine runs to"
+  (`emusen-native/src/abi.rs:65–71`); `MachineInfo.region` is optional (`core/desc.rs:173`) and written as `"ntsc"`
+  or `"pal"` (`core/desc.rs:58–63`, `592–593`).
+- The host reads it into `CoreMachineInfo.Region` (`EmuSen/Cores/Native/CoreDescriptors.cs:83`, `195`). Until this
+  section nothing read it further.
+
+Which cores fill it:
+
+| Core | `region` in machine info | Decided by | Frame rate given |
+|---|---|---|---|
+| VenusRT (SNES) | NTSC or PAL (`VenusRT - SNES/src/v1.rs:289`) | the header's country byte (`cart.rs:34`) | 50 or 60 Hz timing (`v1.rs:290`) |
+| Nephrite (Genesis, Sega CD, 32X) | NTSC or PAL (`Nephrite - Genesis/src/v1.rs:454`) | the model, from the cartridge or the core's Region setting (`v1.rs:88`, `409`) | `v1.rs:455` |
+| MarsRT (N64) | NTSC or PAL (`MarsRT - N64/src/ffi/v1.rs:496`) | the cartridge (`v1.rs:492`) | 50 or 60000/1001 (`v1.rs:497`) |
+| Diamond (PlayStation) | NTSC or PAL (`Diamond - PlayStation/src/v1.rs:311`) | the disc's licence text or the core's Region setting (`v1.rs:95`, `173`) | `v1.rs:312` |
+| MoonRT (NES) | always NTSC (`MoonRT - NES/src/ffi/v1.rs:112`) | MoonRT runs every cartridge as a 2C02 NES; it has no PAL timing | NTSC |
+| MercuryRT (Game Boy) | none (`MercuryRT - GB/src/ffi/v1.rs:126`) | a handheld has no standard | the LCD's |
+
+So four of the six cores already say PAL when they run PAL. The NES does not because MoonRT emulates no PAL console,
+which is MoonRT's own missing feature, not a surface: when it runs a 2C07's timing it will say `"pal"` through the same
+field. PAL-M and SECAM are not values of `Region`; no core here emulates a PAL-M console (the Brazilian SNES and Mega
+Drive), and SECAM consoles output RGB or PAL. Adding either would be a new value of an open string, recorded here for
+when a core needs it, not built.
+
+**(e) The form, therefore: none of the three new ones.** The data already crosses a stable surface; nothing in the
+core ABI, the host's descriptor or any other versioned surface changes. What is added is the frontend's reading of a
+field it already parses, one small owner in Serenity for the standard's names, and a per-game choice in Mistress's
+own records. It is neither a module nor a component.
+
+**(f) The layering** (`EmuSen_Backend.md` §2.1). The standard a machine runs to is the machine's, so it is backend:
+the core reports it and every frontend reads the same answer from machine info. What a picture is drawn as is a
+presentation preference, so it is frontend: the filter's parameter, the player's per-console value in
+`graphics.json`'s shader parameters (frontend, §2.3 of that page), and the per-game choice, which is presentation
+stored by the library as a game's crop is (§2.3, "A game's crop"). The per-game core region that Nephrite and Diamond
+offer as a core setting is a different thing, what the console *is*; it lives where core settings live (SR10, the
+file per game, once built; `graphics.json`'s `Consoles` today, to move to `consoles.json` under SR12), and the
+picture follows it through machine info without any further wiring.
+
+### 26.3 How a filter is told, and how it says it can listen
+
+**(c) A parameter, by name.** A filter models PAL when it declares a parameter the frontend knows to mean the
+television standard. The plainest form is the one the filters already use: no capability flag, no description field,
+only a parameter id with fixed values.
+
+- **The built-in filters**: `standard`, 0 for NTSC and 1 for PAL, as since §23.1, with a third value, **2, "The
+  game's"**, now the CRT's default. One owner holds the id and its values: `TelevisionStandards` in Serenity.
+- **RetroArch presets**: no name is shared. In the pack (read 2026-10-17 from the downloaded copy), PAL is `PAL` in
+  Scanline Classic's encoders (`bezel/scanline-classic/.../sys-encode.inc`, "Phase alternating line (off, on)"),
+  `uModePAL` in crt-consumer's NTSC module, `u_pal` in ntsc-simple, each 0 or 1; mudlord's VHS shader has
+  `PALSignal`, which defaults to on and models a tape, and `pal` in retro-palettes is a palette count. So a generic
+  name such as "pal" cannot be trusted, and the frontend sets only a short list of ids known to mean PAL on and off
+  (`TelevisionStandards.PresetSwitches`: `PAL`, `uModePAL`, `u_pal`). An id a preset does not declare is ignored by the
+  chain (`EmuSen_Serenity.md` §7.6), so the list costs a preset that lacks it nothing.
+
+**Why 2 and not "no value".** The Shaders window forgets a value equal to its default
+(`ShaderSettingsWindow.Changed`), so with NTSC as the default a player could not store "NTSC" for a console at all:
+choosing it would erase the choice and the game would be followed again. With "The game's" as the default, NTSC
+and PAL are both choices that are stored. Stored values keep their meaning, 0 NTSC and 1 PAL, so a console a player
+set to PAL before this change stays PAL. A filter drawn with no frontend (a test, the bench) and given 2 draws NTSC.
+
+### 26.4 What wins
+
+**(d) Precedence**, highest first:
+
+1. **The player's choice for the game**: Television Standard in the game's options (the gamelist's Select menu in
+   Big Picture, the context menu on the desktop): The game's, NTSC or PAL. Stored in `games.db`'s `game_edit` under
+   `tvstandard`, beside the edits as the borrowed cover is, not a field of the metadata editor, and kept by the
+   editor's Clear, since it is the player's choice and not metadata. It follows the game when it is renamed or moved,
+   as every edit does.
+2. **The player's choice for the console**: the filter's own Television standard setting, NTSC or PAL, stored per
+   console in `graphics.json` as every shader parameter is.
+3. **The game's standard, from the core**: machine info's `region`, read once the game is loaded.
+4. **NTSC**, where the core says nothing.
+
+A European player who wants every SNES game drawn PAL sets the console; a player who wants one PAL game drawn as an
+NTSC set would show it sets the game. Only the picture changes: the console still runs at the core's rate.
+
+**Where it lives under the settings decisions.** The per-game choice is a presentation preference, so SR10's file per
+game, which holds a game's core settings and is the runtime's (SR5: a frontend never writes the runtime's settings
+file), is not its place; it sits with the game's crop in the library's records, which `EmuSen_Backend.md` §2.3 already
+places as "presentation; stored by the library, meant by the frontend". SR12 moves `graphics.json`'s `Consoles` to
+`consoles.json`; the shader parameters stay in `graphics.json`, so the per-console choice does not move.
+
+### 26.5 What each tier changes on PAL
+
+**(b)** Every item below was built in §23 and is chosen now by the game; nothing in the model changes here.
+
+| What changes on PAL | Source | Performance | Balanced | Accurate |
+|---|---|---|---|---|
+| Subcarrier 4.43361875 MHz, the console's own cycles a line and phase per line and frame | ITU-R BT.470-6 Table 2; §23.2's clocks | the notch's band and the chroma blur scaled to it | the encode and decode at 4 samples a cycle | at 2048 samples a line |
+| V switched every line, and between frames on an odd line count | BT.470-6; §23.3 | none (no subcarrier) | encoder and decoder | encoder and decoder |
+| The delay line, or the simple decoder | §23.3 (Telefunken; nesdev's *PAL video*) | colour averaged with the row above | U and V averaged with the line above | the same |
+| 625/50: the field of 20 ms for the phosphors' decay | §23.4 | no tails | the tails' ratios on a 20 ms field | the same |
+| Lines and visible area (288 and 576) | the console's frame; §15 | the console's picture fills the tube | the same | the same |
+
+The scan timing's visible effects are all in the subcarrier's relation to the console's pixels, which the table's
+first row carries per console; the line count is the frame the core hands over, which fills the same tube (§14, §15),
+so no tier needs the standard's line count of its own.
+
+### 26.6 Built
+
+- `ICore.TelevisionStandard`, machine info's `region` through the host (`CoreEngine`), and
+  `EmulatorSession.TelevisionStandard` for the frontends.
+- `TelevisionStandards` (Serenity): the names, the built-in parameter and its follow value, the presets' switches, and
+  `Apply`, which lays a standard over a filter's values: over every value when it is the player's choice for the game,
+  and otherwise only where the player has stored none, or has stored "The game's".
+- The CRT's Television standard: NTSC, PAL, **The game's** (default).
+- Mistress: `ApplyScreenFilter` draws with the precedence of §26.4; Television Standard in the game's options of a
+  game of a console that drove a television.
+- **A defect found on the way, and fixed.** A game was loaded, its filter applied, and only then was it recorded as the
+  running game (`_currentRomPath`), so anything the filter takes from the running game was the previous game's or
+  none on the first frame. The game's own crop (`EmuSen_Settings_Reference.md` §4.100) was therefore not drawn when a
+  game started, only once its options were opened while it ran. Both the crop and the standard are now taken after the
+  game is recorded.
+
+**Tests** (`Mistress/GameStandardTests.cs`, headless): a Japanese header draws NTSC and a European one PAL with nothing
+chosen; a console's stored NTSC is kept over a PAL game's own, and "The game's" stored for the console follows it; the
+game's NTSC wins over the console's PAL from the first frame, and with it removed the console's wins again; and a
+game's own crop is drawn from its first frame. Before the load-order fix the last two failed (expected 0, drawn 1;
+the console's crop drawn).
+
+The game's options gained a row, so their recorded specifications at 1280 × 800 and 1920 × 1200 were recorded again:
+the menu scrolls 54 pixels further at the smaller size, as it already scrolled, and every rule of the fit audit holds.
+Run 2026-10-17 for this step: those four cases, the game options' desktop and Big Picture tests, the collections'
+sheet, the crop's, the records', the emulation menu's, the console start's, the Shaders window's, every
+`ScreenFilterRenderTests` and `DeviceFilterMatchTests` case and the whole fit audit, 813 cases, of which four failed
+on the new row (three expected lists and the two recordings, one test asserting the desktop menu had no row at all,
+now that it has a game's row) and pass with those updated.
 

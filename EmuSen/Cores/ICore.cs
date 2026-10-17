@@ -28,6 +28,9 @@ namespace EmuSen.Cores
         // The last frame's picture before the palette in RawEncoding, where the core keeps it; null otherwise - see EmuSen_CRT.md §22.1.
         CoreRawPicture? RawPicture => null;
 
+        // The television standard the machine runs to, machine info's "ntsc" or "pal"; null where the core says none - see EmuSen_CRT.md §26.
+        string? TelevisionStandard => null;
+
         // Hardware refresh rate, for frontend frame pacing - see Venus_CPU.md §8.5b.
         double FrameRateHz { get; }
 

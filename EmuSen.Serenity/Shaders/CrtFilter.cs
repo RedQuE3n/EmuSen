@@ -115,7 +115,7 @@ namespace EmuSen.Serenity.Shaders
         {
             Choice("quality", "Quality", (int)Quality.Balanced, "Performance", "Balanced", "Accurate"),
             Choice("signal", "Signal", (int)Signal.Composite, "RGB", "S-Video", "Composite"),
-            Choice("standard", "Television standard", 0, "NTSC", "PAL"),
+            Choice(TelevisionStandards.Parameter, "Television standard", (int)TelevisionStandards.FollowsGame, "NTSC", "PAL", "The game's"),
             Choice("palDecoder", "PAL colour decoding", 0, "Delay line", "Simple"),
             Choice("screen", "Screen", DefaultScreen, Screens.Select(s => s.Label).ToArray()),
             Choice("colour", "Colour", 0, Colours.Select(c => c.Label).ToArray()),
@@ -255,7 +255,7 @@ namespace EmuSen.Serenity.Shaders
             var quality = (Quality)At(values, "quality", 3);
             int mask = At(values, "mask", 5), decoder = At(values, "decoder", 3);
             double megahertz = screen.ChromaMegahertz * values["chroma"];
-            bool pal = values.TryGetValue("standard", out float standard) && standard > 0.5;
+            bool pal = values.TryGetValue(TelevisionStandards.Parameter, out float standard) && TelevisionStandards.IsPal(standard);
             LineTiming line = LineOf(values, pal);
 
             // A two-line comb has nothing to subtract when a console repeats its phase every line, and a set with one falls back to its notch; PAL's comb is not modelled - see EmuSen_CRT.md §11.3 and §23.

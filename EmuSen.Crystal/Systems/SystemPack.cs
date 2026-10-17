@@ -65,6 +65,20 @@ namespace EmuSen.Crystal.Systems
             (Psx.PsxSystem.Id, Psx.PsxSystem.CardLiteral), (N64.N64System.Id, N64.N64System.PakLiteral),
         };
 
+        // Each pack's codecs by the library's ids with the C# codecs' factories, in the table's order: the parity class's oracle for the library's codecs - see EmuSen_Backend.md §13.
+        public static IReadOnlyList<(string System, (string Id, Func<ICheatCodeCodec> Managed)? Auto, (string Id, Func<ICheatCodeCodec> Managed)? Explicit)> ManagedCodecs { get; } = new (string, (string, Func<ICheatCodeCodec>)?, (string, Func<ICheatCodeCodec>)?)[]
+        {
+            (Nes.NesSystem.Id, ("nes.raw", Nes.NesSystem.ManagedRaw), ("nes.gg", Nes.NesSystem.ManagedGameGenie)),
+            (Snes.SnesSystem.Id, ("snes.par", Snes.SnesSystem.ManagedProActionReplay), ("snes.gg", Snes.SnesSystem.ManagedGameGenie)),
+            (Genesis.GenesisSystems.MegaDriveId, ("md.ar", Genesis.GenesisSystems.ManagedActionReplay), ("md.gg", Genesis.GenesisSystems.ManagedGameGenie)),
+            (Genesis.GenesisSystems.MegaCdId, ("md.ar", Genesis.GenesisSystems.ManagedActionReplay), ("md.gg", Genesis.GenesisSystems.ManagedGameGenie)),
+            (Genesis.GenesisSystems.S32xId, ("md.ar", Genesis.GenesisSystems.ManagedActionReplay), ("md.gg", Genesis.GenesisSystems.ManagedGameGenie)),
+            (Psx.PsxSystem.Id, ("psx.gs", Psx.PsxSystem.ManagedGameShark), ("psx.xp", Psx.PsxSystem.ManagedXploder)),
+            (GameBoy.GameBoySystems.GameBoyId, ("gb.gs", GameBoy.GameBoyCheatCodecs.ManagedGameShark), ("gb.gg", GameBoy.GameBoyCheatCodecs.ManagedGameGenie)),
+            (GameBoy.GameBoySystems.GameBoyColorId, ("gb.gs", GameBoy.GameBoyCheatCodecs.ManagedGameShark), ("gb.gg", GameBoy.GameBoyCheatCodecs.ManagedGameGenie)),
+            (N64.N64System.Id, ("n64.gs", N64.N64System.ManagedGameShark), null),
+        };
+
         public static SystemPack? For(string? systemId) => All.FirstOrDefault(p => p.Entry.Id == systemId);
     }
 }

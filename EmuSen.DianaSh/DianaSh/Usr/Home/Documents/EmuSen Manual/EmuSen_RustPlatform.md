@@ -3167,4 +3167,5 @@ words. The C# facade is `Crystal/Systems/SystemCode.cs`, chosen with the table b
 `Load` refuses a library without every export the code takes. An empty text may come as a null pointer with no length,
 as .NET pins an empty array (`given` in `lib.rs`). The number went from 13 to 14 in `emusen_platform.h`, `lib.rs` and
 `PlatformLibrary.InterfaceVersion` together. Later parts of B3 add exports to the same interface number, since nothing
-was released between them.
+was released between them. The cheat codecs followed (`emusen_systems_cheat_codecs`, `_cheat_decode`, `_cheat_encode`),
+with the facade `NativeCheatCodec`.

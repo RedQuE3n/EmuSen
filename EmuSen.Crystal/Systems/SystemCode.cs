@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.SaveMedia;
 using EmuSen.Galaxia.Native;
 
@@ -17,6 +18,7 @@ namespace EmuSen.Crystal.Systems
         public static readonly IReadOnlyList<string> Exports = new[]
         {
             "emusen_systems_media", "emusen_systems_media_read", "emusen_systems_media_copy", "emusen_systems_media_delete", "emusen_systems_media_format",
+            "emusen_systems_cheat_codecs", "emusen_systems_cheat_decode", "emusen_systems_cheat_encode",
         };
 
         // The library's code is in use: the switch chose the table.
@@ -75,6 +77,55 @@ namespace EmuSen.Crystal.Systems
         private sealed class SystemCodeFault(int status, string words) : Exception(words)
         {
             public int Status { get; } = status;
+        }
+
+        // A codec as the library names it: its name, kind and space; and each system's pair of codecs by id.
+        public sealed record CodecFacts(string Id, string Name, CheatCodeKind Kind, string? Space);
+
+        public sealed record CodecPair(string System, string? Auto, string? Explicit);
+
+        private static readonly Lazy<(IReadOnlyList<CodecFacts> Codecs, IReadOnlyList<CodecPair> Pairs)> CodecTable = new(() =>
+        {
+            var codecs = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)Export("emusen_systems_cheat_codecs");
+            using var document = JsonDocument.Parse(Bytes((o, l) => codecs(o, l), 2048));
+            JsonElement r = document.RootElement;
+            return (r.GetProperty("codecs").EnumerateArray().Select(c => new CodecFacts(c.GetProperty("id").GetString()!, c.GetProperty("name").GetString()!,
+                    Enum.Parse<CheatCodeKind>(c.GetProperty("kind").GetString()!), c.GetProperty("space").GetString())).ToArray(),
+                r.GetProperty("systems").EnumerateArray().Select(p => new CodecPair(p.GetProperty("id").GetString()!, p.GetProperty("auto").GetString(), p.GetProperty("explicit").GetString())).ToArray());
+        });
+
+        public static IReadOnlyList<CodecFacts> Codecs => CodecTable.Value.Codecs;
+
+        public static IReadOnlyList<CodecPair> CodecPairs => CodecTable.Value.Pairs;
+
+        // A pack's codec: the library's under the codec's id, the C# codec as its failover, or the C# alone under the switch's 0.
+        public static ICheatCodeCodec Codec(string id, ICheatCodeCodec managed) => Active ? new NativeCheatCodec(id, managed) : managed;
+
+        // A code's answers from the library's codec, as JSON.
+        internal static JsonDocument CheatDecode(string codec, string code)
+        {
+            byte[] id = Encoding.UTF8.GetBytes(codec), text = Encoding.UTF8.GetBytes(code);
+            var decode = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long>)Export("emusen_systems_cheat_decode");
+            fixed (byte* i = id)
+            fixed (byte* t = text)
+            {
+                byte* ip = i, tp = t;
+                nuint il = (nuint)id.Length, tl = (nuint)text.Length;
+                return JsonDocument.Parse(Guard(() => Bytes((o, l) => decode(ip, il, tp, tl, o, l), 1024)));
+            }
+        }
+
+        // A Game Genie code for a patch, from the library's encoder of the codec named; the SNES's and the Genesis's.
+        public static string CheatEncode(string codec, int address, uint value)
+        {
+            byte[] id = Encoding.UTF8.GetBytes(codec);
+            var encode = (delegate* unmanaged[Cdecl]<byte*, nuint, int, uint, byte*, nuint, long>)Export("emusen_systems_cheat_encode");
+            fixed (byte* i = id)
+            {
+                byte* ip = i;
+                nuint il = (nuint)id.Length;
+                return Encoding.UTF8.GetString(Guard(() => Bytes((o, l) => encode(ip, il, address, value, o, l), 16)));
+            }
         }
 
         public static MediumListing MediaRead(string medium, ReadOnlySpan<byte> image)

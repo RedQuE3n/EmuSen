@@ -83,11 +83,16 @@ namespace EmuSen.Crystal.Systems.Genesis
             return head.Length >= data + 14 && head.Slice(data, 14).SequenceEqual("SEGADISCSYSTEM"u8);
         }
 
-        public static ICheatCodeCodec ActionReplay() => new DelegateCheatCodec("Action Replay", CheatCodeKind.RamPoke, Wram,
+        public static ICheatCodeCodec ManagedActionReplay() => new DelegateCheatCodec("Action Replay", CheatCodeKind.RamPoke, Wram,
             GenesisCheatFormats.IsActionReplay, GenesisCheatFormats.DecodeActionReplay, decodeWrites: GenesisCheatFormats.ActionReplayWrites);
 
-        public static ICheatCodeCodec GameGenie() => new DelegateCheatCodec("Game Genie", CheatCodeKind.RomPatch, null,
+        public static ICheatCodeCodec ManagedGameGenie() => new DelegateCheatCodec("Game Genie", CheatCodeKind.RomPatch, null,
             GenesisCheatFormats.IsPatch, GenesisCheatFormats.DecodePatch, decodeWrites: GenesisCheatFormats.PatchWrites);
+
+        // Each codec is emusen-systems' under its id, its Managed twin the C# - see EmuSen_Backend.md §13.
+        public static ICheatCodeCodec ActionReplay() => SystemCode.Codec("md.ar", ManagedActionReplay());
+
+        public static ICheatCodeCodec GameGenie() => SystemCode.Codec("md.gg", ManagedGameGenie());
 
         public static readonly SystemPack MegaDrivePack = new(MegaDrive, ActionReplay, GameGenie, PlayerControllers);
         // The Sega CD's backup RAM inside the unit and its RAM cartridge, one format read by SegaCdBramFormat; each the table's words with its literal's extension and module - see EmuSen_SaveMedia.md §6.2, §7.3.

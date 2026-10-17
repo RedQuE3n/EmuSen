@@ -398,8 +398,8 @@ int64_t emusen_disc_sbi_beside(const uint8_t *image, size_t image_len, uint8_t *
 /*
  * Every system's facts as one compact JSON array, one object a system in the table's order, each with the keys id,
  * name, console, manufacturer, release_year, extensions, cheat_systems, openvgdb_systems, cover_aspect, esde_system,
- * esde_full_name, self_delimiting_images, attached_to (a console or null), screenscraper_system (a number or null) and
- * media (a list of objects with the keys id, title and noun), in that order. By the length-query idiom.
+ * esde_full_name, self_delimiting_images, attached_to (a console or null), screenscraper_system (a number or null),
+ * cheat_space (a memory space or null) and media (a list of objects with the keys id, title and noun), in that order. By the length-query idiom.
  * EMUSEN_PLATFORM_PARSE with words only for a library built from a broken data file.
  */
 int64_t emusen_systems_table(uint8_t *out, size_t len);
@@ -428,6 +428,23 @@ int64_t emusen_systems_media_delete(const uint8_t *id, size_t id_len, const uint
 
 /* A formatted blank of the medium. */
 int64_t emusen_systems_media_format(const uint8_t *id, size_t id_len, uint8_t *out, size_t len);
+
+/*
+ * The cheat codecs, by codec id. Every codec and each system's pair as a JSON object: codecs (each id, name, kind
+ * RamPoke or RomPatch, space or null) and systems (each id, auto and explicit, a codec's id or null).
+ */
+int64_t emusen_systems_cheat_codecs(uint8_t *out, size_t len);
+
+/*
+ * A code's answers from one codec as a JSON object: can (whether the code is the codec's), then decode (address and
+ * value), compare (a byte or null) and writes (a list of objects with the keys space, address, value, width, type as
+ * CheatWriteType's number, bit or null, big_endian, repeat, repeat_address and repeat_value, or null), each of those
+ * three an object with the key format (the codec's words) or range where it refused. ABSENT for a codec there is not.
+ */
+int64_t emusen_systems_cheat_decode(const uint8_t *codec, size_t codec_len, const uint8_t *code, size_t code_len, uint8_t *out, size_t len);
+
+/* The Game Genie code that patches `value` at `address`, for snes.gg and md.gg; ABSENT for a codec with no encoder. */
+int64_t emusen_systems_cheat_encode(const uint8_t *codec, size_t codec_len, int32_t address, uint32_t value, uint8_t *out, size_t len);
 
 /* ---- Endymion: the logic half (EmuSen_Audio_Sync.md, sections 1 to 3; EmuSen_Input.md, sections 7 and 8) ---- */
 

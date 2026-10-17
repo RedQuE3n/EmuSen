@@ -47,11 +47,16 @@ namespace EmuSen.Crystal.Systems.Snes
         // OpenVGDB hashes an image without the 512-byte copier header some dumps carry, as No-Intro does - see EmuSen_Settings_Reference.md §4.39.
         public static byte[] WithoutCopierHeader(byte[] file) => file.Length % 1024 == 512 ? file[512..] : file;
 
-        public static ICheatCodeCodec ProActionReplay() => new DelegateCheatCodec("Pro Action Replay", CheatCodeKind.RamPoke, CpuBus,
+        public static ICheatCodeCodec ManagedProActionReplay() => new DelegateCheatCodec("Pro Action Replay", CheatCodeKind.RamPoke, CpuBus,
             SnesCheatFormats.IsProActionReplay, SnesCheatFormats.DecodeProActionReplay, decodeWrites: SnesCheatFormats.ProActionReplayWrites);
 
-        public static ICheatCodeCodec GameGenie() => new DelegateCheatCodec("Game Genie", CheatCodeKind.RomPatch, null,
+        public static ICheatCodeCodec ManagedGameGenie() => new DelegateCheatCodec("Game Genie", CheatCodeKind.RomPatch, null,
             SnesCheatFormats.IsGameGenie, SnesCheatFormats.DecodeGameGenie);
+
+        // Each codec is emusen-systems' under its id, its Managed twin the C# - see EmuSen_Backend.md §13.
+        public static ICheatCodeCodec ProActionReplay() => SystemCode.Codec("snes.par", ManagedProActionReplay());
+
+        public static ICheatCodeCodec GameGenie() => SystemCode.Codec("snes.gg", ManagedGameGenie());
 
         public static readonly SystemPack Pack = new(Entry, ProActionReplay, GameGenie, DebugViews: SnesDebugViews.Instance);
     }

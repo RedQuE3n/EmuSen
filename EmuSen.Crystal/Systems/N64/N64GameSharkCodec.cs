@@ -4,9 +4,9 @@ using System.Globalization;
 using System.Text;
 using EmuSen.Crystal.Cheats;
 
-namespace EmuSen.Cores.Nintendo.MarsRT
+namespace EmuSen.Crystal.Systems.N64
 {
-    // The N64 GameShark: lines of an eight-digit command and a four-digit value, decoded to RDRAM writes and tests - see Mars_Cheats.md.
+    // The N64 GameShark: lines of an eight-digit command and a four-digit value, decoded to RDRAM writes and tests; the C# failover of emusen-systems' n64.gs, moved from the MarsRT shim - see Mars_Cheats.md, EmuSen_Backend.md §13.
     public static class N64GameSharkCodec
     {
         // The command's top byte is the type, so the rest is a physical address and KSEG0 and KSEG1 name one byte - see Mars_Cheats.md §3.
@@ -92,7 +92,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             // Both references take an 8-bit code's value from its low byte - see Mars_Cheats.md §2.1.
             return new CheatWrite
             {
-                Space = MarsDebugSpaces.Rdram,
+                Space = N64System.Rdram,
                 Address = line.Address,
                 Value = width == 1 ? (uint)(line.Value & 0xFF) : line.Value,
                 Width = width,

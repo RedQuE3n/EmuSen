@@ -2,6 +2,7 @@
 //! `SystemTable` and `SystemCode` facades (EmuSen_Backend.md §5.4, §12, §13). Nothing is decided here.
 
 use crate::{bytes, fail, given, put, required, status};
+use emusen_systems::cheats;
 use emusen_systems::media::{self, Fault};
 
 /// The table as `emusen_systems::to_json` writes it, by the length-query idiom.
@@ -113,6 +114,50 @@ pub unsafe extern "C" fn emusen_systems_media_format(id: *const u8, id_len: usiz
         Err(s) => return s as i64,
     };
     edited(media::format(id).map(Ok), out, len)
+}
+
+/// Every cheat codec and each system's pair as JSON, by the length-query idiom.
+///
+/// # Safety
+/// `out` must be valid for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_systems_cheat_codecs(out: *mut u8, len: usize) -> i64 {
+    unsafe { put(cheats::codecs_json().as_bytes(), out, len) }
+}
+
+/// A code's every answer from the codec `codec` as JSON, by the length-query idiom; ABSENT for a codec there is not.
+///
+/// # Safety
+/// Each pointer must be valid for its length; `out` for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_systems_cheat_decode(codec: *const u8, codec_len: usize, code: *const u8, code_len: usize, out: *mut u8, len: usize) -> i64 {
+    let (codec, code) = match unsafe { (required(codec, codec_len), given(code, code_len)) } {
+        (Ok(codec), Ok(code)) => (codec, code),
+        (Err(s), _) | (_, Err(s)) => return s as i64,
+    };
+    match cheats::decode(codec, code) {
+        Some(answer) => unsafe { put(cheats::answer_json(&answer).as_bytes(), out, len) },
+        None => fail(status::ABSENT, format!("no codec is named {codec}")) as i64,
+    }
+}
+
+/// The Game Genie code of the SNES's or the Genesis's that patches `value` at `address`, by the length-query idiom;
+/// ABSENT for a codec with no encoder.
+///
+/// # Safety
+/// `codec` must be valid for `codec_len` bytes; `out` for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_systems_cheat_encode(codec: *const u8, codec_len: usize, address: i32, value: u32, out: *mut u8, len: usize) -> i64 {
+    let codec = match unsafe { required(codec, codec_len) } {
+        Ok(codec) => codec,
+        Err(s) => return s as i64,
+    };
+    let code = match codec {
+        "snes.gg" => emusen_systems::snes::cheats::encode_game_genie(address, value as u8),
+        "md.gg" => emusen_systems::genesis::cheats::encode_game_genie(address, value as u16),
+        _ => return fail(status::ABSENT, format!("the codec {codec} has no encoder")) as i64,
+    };
+    unsafe { put(code.as_bytes(), out, len) }
 }
 
 #[cfg(test)]

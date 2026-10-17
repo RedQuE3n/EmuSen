@@ -24,13 +24,13 @@ namespace EmuSen.Crystal.Systems
             (nameof(SystemEntry.ScreenScraperSystem), "screenscraper_system"),
         };
 
-        // The keys a row holds beyond SystemEntry's, read into the pack's other parts: its save media.
-        public static readonly IReadOnlyList<string> PackKeys = new[] { "media" };
+        // The keys a row holds beyond SystemEntry's, read into the pack's other parts: the space its RAM cheats write into, and its save media.
+        public static readonly IReadOnlyList<string> PackKeys = new[] { "cheat_space", "media" };
 
         // A save medium as a row names it, by the system whose row it is in.
         public sealed record RowMedium(string System, string Id, string Title, string Noun);
 
-        private sealed record Table(IReadOnlyList<SystemEntry>? Rows, string Report, string? Json, IReadOnlyList<RowMedium>? Media = null);
+        private sealed record Table(IReadOnlyList<SystemEntry>? Rows, string Report, string? Json, IReadOnlyList<RowMedium>? Media = null, IReadOnlyDictionary<string, string?>? CheatSpaces = null);
 
         private static readonly Lazy<Table> Loaded = new(Load);
 
@@ -46,6 +46,9 @@ namespace EmuSen.Crystal.Systems
 
         // The table's rows in its order, each with no code; empty where the library is not in use.
         public static IReadOnlyList<SystemEntry> Rows => Loaded.Value.Rows ?? Array.Empty<SystemEntry>();
+
+        // Each row's cheat space by its system's id; empty where the library is not in use.
+        public static IReadOnlyDictionary<string, string?> CheatSpaces => Loaded.Value.CheatSpaces ?? new Dictionary<string, string?>();
 
         // Every row's media in the table's order; empty where the library is not in use.
         public static IReadOnlyList<RowMedium> Media => Loaded.Value.Media ?? Array.Empty<RowMedium>();
@@ -78,7 +81,7 @@ namespace EmuSen.Crystal.Systems
                 byte[] bytes = new byte[length];
                 fixed (byte* b = bytes) length = call(b, (nuint)bytes.Length);
                 string json = Encoding.UTF8.GetString(bytes);
-                return new(Parse(json), $"{PlatformLibrary.FileName}, the systems table", json, ParseMedia(json));
+                return new(Parse(json), $"{PlatformLibrary.FileName}, the systems table", json, ParseMedia(json), ParseCheatSpaces(json));
             }
             catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException)
             {
@@ -104,6 +107,12 @@ namespace EmuSen.Crystal.Systems
             using var document = JsonDocument.Parse(json);
             return document.RootElement.EnumerateArray().SelectMany(r => r.GetProperty("media").EnumerateArray().Select(m =>
                 new RowMedium(Text(r, "id")!, Text(m, "id")!, Text(m, "title")!, Text(m, "noun")!))).ToArray();
+        }
+
+        private static IReadOnlyDictionary<string, string?> ParseCheatSpaces(string json)
+        {
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.EnumerateArray().ToDictionary(r => Text(r, "id")!, r => Text(r, "cheat_space"));
         }
 
         private static string? Text(JsonElement row, string key) => row.GetProperty(key).ValueKind == JsonValueKind.Null ? null : row.GetProperty(key).GetString();

@@ -135,6 +135,12 @@ pub fn simple_upper(c: char) -> char {
     }
 }
 
+/// `char.ToUpperInvariant`: Unicode's simple mapping, one character to one, except the dotless i, which keeps itself; the
+/// long s goes to S (measured on .NET 10.0.112, 2026-10-17), where `simple_upper` keeps it.
+pub fn upper_invariant(c: char) -> char {
+    if c == '\u{17F}' { 'S' } else { simple_upper(c) }
+}
+
 /// `string.Equals(a, b, StringComparison.OrdinalIgnoreCase)`.
 pub fn equals_ignore_case(a: &str, b: &str) -> bool {
     // ASCII's ordinal case is ASCII's own, and it is how nearly every name the shell compares is spelt.
@@ -166,12 +172,16 @@ pub fn is_letter(c: char) -> bool {
     (c as u32) <= 0xFFFF && c.is_alphabetic()
 }
 
-/// `char.IsLetterOrDigit`, as `is_letter` approximates it outside ASCII.
+/// `char.IsLetterOrDigit`, from .NET's own ranges: a character outside the Basic Multilingual Plane is two surrogates to
+/// .NET, and neither is a letter or a digit.
 pub fn is_letter_or_digit(c: char) -> bool {
     if c.is_ascii() {
         return c.is_ascii_alphanumeric();
     }
-    (c as u32) <= 0xFFFF && (c.is_alphabetic() || c.is_numeric())
+    let unit = c as u32;
+    unit <= 0xFFFF && crate::letter_or_digit::LETTER_OR_DIGIT.binary_search_by(|&(low, high)| {
+        if (high as u32) < unit { std::cmp::Ordering::Less } else if (low as u32) > unit { std::cmp::Ordering::Greater } else { std::cmp::Ordering::Equal }
+    }).is_ok()
 }
 
 /// `string.Trim()`.
@@ -232,6 +242,13 @@ pub fn pad_left(text: &str, width: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn letters_and_digits_and_upper_case_are_dotnets() {
+        assert!(is_letter_or_digit('\u{663}') && is_letter_or_digit('\u{FF11}') && is_letter_or_digit('\u{E9}'));
+        assert!(!is_letter_or_digit('\u{B2}') && !is_letter_or_digit('\u{2163}') && !is_letter_or_digit('\u{301}') && !is_letter_or_digit('\u{1F600}'));
+        assert_eq!([upper_invariant('a'), upper_invariant('\u{17F}'), upper_invariant('\u{131}'), upper_invariant('\u{DF}')], ['A', 'S', '\u{131}', '\u{DF}']);
+    }
     use super::*;
 
     #[test]

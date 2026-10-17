@@ -1089,3 +1089,70 @@ cases, `GoldenCorpusTests` (its `memcard` file unchanged), `GalaxiaParityTests`,
 | the backup RAM's directory blocks as (n + 1) / 2 | the parity class (2 cases), `SegaCdBramFormatTests` (2), the crate's tests (1) |
 | the facade dropping `damaged` from a listing | the parity class (3 cases) |
 
+### 13.2 Part (b): the cheat codecs
+
+- **Eleven codecs in `emusen-systems`**, a family module each (`nes::cheats`, `snes::cheats`, `genesis::cheats`,
+  `psx::cheats`, `gb::cheats`, `n64::cheats`) and `cheats`, which names each codec by an id (`nes.raw`, `md.gg`,
+  `n64.gs` and the rest), pairs them per system as the packs do (detected, then explicit) and answers a code with all
+  four of `ICheatCodeCodec`'s answers at once: whether the code is the codec's, its one byte, its compare byte and its
+  writes, each refusal with the C# codec's words. The two Game Genie encoders (the SNES's and the Genesis's) are ported
+  too, though only tests call them.
+- **The N64's codec joined its pack** (F7): `N64GameSharkCodec` moved from the MarsRT shim to `Crystal/Systems/N64/`
+  as the Rust codec's failover, `N64System` gained `GameShark()` and its pack the codec, and the shim's
+  `MarsCheatCodecs` became a name for the pack's. `CoreFactory.CheatCodecsFor`'s dispatch by extension and the MarsRT
+  bundle's own codec gave way to the pack of the console the core runs, so every console's codecs are its pack's.
+- **The data files gained `cheat_space`**, the space a console's RAM cheats write into (F27), read by the codecs and held
+  by the parity class to each pack's C# codec's `SpaceName`. F27 asks for it to be held to core info by a test as well;
+  that needs a machine's info, which only a loaded game gives, and is left to B7, when the runtime first reads the
+  field. Until then the cores' own cheat tests apply codes through those space names.
+- **No new export beyond interface 14's minor**: `emusen_systems_cheat_codecs`, `emusen_systems_cheat_decode` (one
+  code's answers as JSON) and `emusen_systems_cheat_encode`. The facade is `NativeCheatCodec`, which each pack's codec
+  factory returns unless `EMUSEN_SYSTEMS_NATIVE=0`, fronting the C# codec (`Managed`) for a null or a code that cannot
+  cross; it keeps the last code's answers, since a caller asks `CanDecode` and then decodes the same code. Each pack
+  keeps its C# codecs as `Managed…` factories, listed in `SystemPacks.ManagedCodecs` for the parity class.
+- **Two of .NET's rules joined `emusen-dotnet`**, measured on .NET 10.0.112: `char.ToUpperInvariant` sends the long s to
+  S and keeps the dotless i (`upper_invariant`), which decides whether `ſſſſ-ſſſſ` is a Genesis Game Genie code; and
+  `char.IsLetterOrDigit` now answers from .NET's own 398 ranges above ASCII, where it had approximated with Rust's
+  alphabetic and numeric classes, which count superscripts and Roman numerals .NET does not. The shell's lexer, which
+  also reads it, keeps its golden corpus unchanged.
+
+| Part (b) | Lines |
+|---|---:|
+| C# replaced (the seven codec files of `Crystal/Systems/` and the shim's `N64GameSharkCodec`) | 848 |
+| Rust, the codecs | 1,106 |
+| Rust, `emusen-dotnet`'s two rules with the generated ranges | about 90 |
+| Rust, the C layer | about 60 |
+| C# facade (`NativeCheatCodec`, `SystemCode`'s part, the packs' factories) | about 200 |
+| The parity class `CheatCodecParityTests` | 187 |
+
+| Gate | Result |
+|---|---|
+| `cargo test --release -p emusen-dotnet -p emusen-systems -p emusen-platform` | 26, 16, 27 and 4 pass |
+| `CheatCodecParityTests` | 5 pass: every codec's name, kind, space and pair; 936 codes taken from every cheat test and from the golden corpus's `cheat` file, and 6,008 generated codes, each through all eleven codecs and all four answers, words included; the encoders on 3,000 generated patches and every Game Genie code of the tests |
+| The blast radius, with `EMUSEN_SYSTEMS_NATIVE` unset and `0` | 540 pass, 540 pass |
+
+The blast radius was the two parity classes and the table's, every codec and cheat class (`CheatCodecAdapterTests`,
+`NesGameGenieCodecTests`, `MoonCheatTests`, `MarsCheatTests`, `GenesisCheatFormatsTests`, `SnesSystemPackTests`,
+`PsxCheatFormatsTests`, `CodecProperties`), the cheat commands' and database's classes, `CoreFactoryCheatWiringTests`,
+Mistress's `ActiveCheatsWindowTests`, `CheatDatabaseWindowTests` and `ConsoleContextTests`, the cores' classes that
+apply cheats (`MercuryRtCoreTests`, `DiamondTests`, `NephriteTests`, `MarsRtFrontendTests`, `MoonRtFrontendTests`),
+`CoreRegistrationEquivalenceTests`, `SessionServiceParityTests`, `GalaxiaParityTests` and `GoldenCorpusTests`, its
+`cheat` file unchanged.
+
+**Seeded faults**, each made, built, run and reverted:
+
+| Fault | Caught by |
+|---|---|
+| the NES's eight-letter value bit 30 for 31 | the parity class (2 cases) |
+| a SNES Action Replay write given a repeat count of 1, where the C# left 0 | the parity class (2 cases) |
+| the Genesis's codes upper-cased as ASCII alone | the parity class (generated codes) |
+| the PlayStation's letter-or-digit test as Rust's alphanumeric | the parity class (generated codes) |
+| the Xploder's key 7 adding where it subtracts | the parity class (2 cases) |
+| the N64 repeater without its step's alignment check | the parity class (2 cases) |
+| the Game Boy compare byte rotated left | the parity class (2 cases) |
+| the facade dropping a slide's value step | the parity class (2 cases), `PsxCheatFormatsTests` (1) |
+
+The codecs' own WiseMan classes caught none of the faults in the Rust, because they call the C# decoders' static
+methods directly; only a codec handed out by a pack goes through the facade. They remain the C#'s tests, and the parity
+class is the Rust's.
+

@@ -6,10 +6,14 @@
 //! settings, `starts_empty`) is core info's (§5.3, D9). The packs' code is a module per console family beside the
 //! table (§5.2, D6): the save media's format modules first (step B3). EmuSen_Backend.md §12 and §13 record what was built.
 
+pub mod cheats;
+pub mod gb;
 pub mod genesis;
 pub mod media;
 pub mod n64;
+pub mod nes;
 pub mod psx;
+pub mod snes;
 
 use emusen_dotnet::json::{self, Value};
 use std::sync::OnceLock;
@@ -38,6 +42,9 @@ pub struct System {
     pub attached_to: Option<String>,
     /// ScreenScraper's `systemeid`; none where ScreenScraper has no such system.
     pub screenscraper_system: Option<u32>,
+    /// The memory space a console's RAM cheats write into, as every engine of it names the space; none for a console
+    /// with no codec that writes RAM (EmuSen_Backend.md F27).
+    pub cheat_space: Option<String>,
     /// The console's save media, each read by a format module of its family's; none for a console that has no medium.
     pub media: Vec<Medium>,
 }
@@ -64,7 +71,7 @@ impl std::fmt::Display for Error {
 }
 
 /// Every key a data file holds, in the order the table writes them; a file with any other key is refused.
-pub const KEYS: [&str; 15] = [
+pub const KEYS: [&str; 16] = [
     "id",
     "name",
     "console",
@@ -79,6 +86,7 @@ pub const KEYS: [&str; 15] = [
     "self_delimiting_images",
     "attached_to",
     "screenscraper_system",
+    "cheat_space",
     "media",
 ];
 
@@ -213,6 +221,7 @@ pub fn parse(file: &str, text: &str) -> Result<System, Error> {
         self_delimiting_images: f.bool("self_delimiting_images")?,
         attached_to: f.optional_text("attached_to")?,
         media: Vec::new(),
+        cheat_space: f.optional_text("cheat_space")?,
         screenscraper_system: if f.value("screenscraper_system")?.is_null() {
             None
         } else {
@@ -286,6 +295,7 @@ pub fn to_json(systems: &[System]) -> String {
                 Value::Bool(s.self_delimiting_images),
                 or_null(s.attached_to.as_deref().map(Value::string)),
                 or_null(s.screenscraper_system.map(Value::number)),
+                or_null(s.cheat_space.as_deref().map(Value::string)),
                 Value::Array(
                     s.media
                         .iter()

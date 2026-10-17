@@ -22,7 +22,7 @@ namespace EmuSen.Mistress.Views
     public partial class MainWindow
     {
         public const string MainMenuTitle = "Main Menu", GameSettingsMenu = "Game Settings", LibraryMenu = "Library", SettingsMenu = "Settings", EmuSenMenu = "EmuSen";
-        public const string QuestionNo = "No", QuestionYes = "Yes", MemoryCardsMenu = "Memory Cards";
+        public const string QuestionNo = "No", QuestionYes = "Yes", MemoryCardsMenu = "Memory Cards", SwapPlayersRow = "Swap Players 1 and 2";
 
         // One page of the menu: its title (null for the first, whose title is the game's or Main Menu), its rows, the row last on, and for a question the sentence under it.
         private sealed class PadMenuPage(string? title, Func<List<PadMenuEntry>> rows, string? detail = null, bool question = false)
@@ -94,6 +94,8 @@ namespace EmuSen.Mistress.Views
         {
             List<PadMenuEntry> rows =
             [
+                // Shown while player 2 has a pad, connected or kept - see EmuSen_Input.md §8.13.
+                .. (_gamepad.CanSwapPlayers ? new[] { new PadMenuEntry(() => SwapPlayersRow, SwapPlayers) } : Array.Empty<PadMenuEntry>()),
                 Opens("Cheats", ShowActiveCheats),
                 Opens("Players & Controllers", () => ShowPreferencesAt(PreferencesWindow.ControllersTab)),
                 Opens("Controller Bindings", ShowControllerBindings),

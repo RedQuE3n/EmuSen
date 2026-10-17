@@ -52,7 +52,7 @@ namespace EmuSen.Mistress.Views
                 _activeConsole = console;
                 ApplyConsoleSettings(_session, _activeConsole);
                 ApplyScreenFilter(_activeConsole);
-                WireSession(_session, name, restoredCheats);
+                WireSession(_session, name, restoredCheats, newGame: !reset);
                 _currentRomPath = null;
                 _consoleSession = console;
                 _currentDisplayName = name;

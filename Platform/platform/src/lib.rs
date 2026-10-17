@@ -17,7 +17,7 @@ pub mod serenity;
 pub mod serenity_device;
 
 /// The interface's one number, matched exactly by the host that was built against it.
-pub const ABI_VERSION: u32 = 11;
+pub const ABI_VERSION: u32 = 12;
 
 /// Every status the interface returns. Zero and up is success: a count or a length.
 pub mod status {

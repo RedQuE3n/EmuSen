@@ -53,6 +53,7 @@ namespace EmuSen.Mistress.Views
         private void TrackControllers()
         {
             _gamepad.FirstControllerOnly = _appSettings.FirstControllerOnly;
+            ApplyPlayerRules();
             IReadOnlyList<ConnectedPad> pads = _gamepad.Pads;
             for (int i = 0; i < _gamepad.FrontendPadCount; i++)
             {
@@ -99,9 +100,37 @@ namespace EmuSen.Mistress.Views
             if (!change.Connected) _padActive.Remove(change.Pad.Id);
             // The library's hint names the pad's buttons or the keyboard's, so the first pad in and the last out redraw it.
             if (_gamepad.Pads.Count == (change.Connected ? 1 : 0) && LibraryView.IsVisible && !ThemedLibraryShown) ShowLibraryEntries();
-            // The player it took or keeps reserved, so a player knows the number without opening Preferences (EmuSen_Input.md §8.2).
-            string player = change.Player > 0 ? $" (Player {change.Player})" : "";
-            if (_appSettings.ControllerNotifications) PadNotice.Show($"{(change.Connected ? "Controller connected" : "Controller disconnected")}: {change.Pad.Name}{player}");
+            if (_appSettings.ControllerNotifications) PadNotice.Show(change.Connected ? ConnectedNotice(change.Pad, change.Player) : DisconnectedNotice(change.Pad, change.Player));
+        }
+
+        // The player a pad took, first, and what to do when player 1 has no controller or only built-in controls nobody pressed - see EmuSen_Input.md §8.13.
+        private string ConnectedNotice(ConnectedPad pad, int player)
+        {
+            if (player == 0) return $"{pad.Name}: no player";
+            string seat = $"{pad.Name}: player {player}";
+            if (player == 1) return seat;
+            ConnectedPad? first = _gamepad.Players.PadFor(1);
+            if (first is not null && !(first.IsBuiltIn && !_gamepad.PlayerOneClaimed)) return seat;
+            string why = first is null ? "player 1 has no controller" : "player 1 is the built-in controls";
+            string how = _gamepad.ClaimPlayersByPress && !_gamepad.PlayerOneClaimed ? "Press a button on it first in a game to take player 1." : "Swap Players under Game Settings makes it player 1.";
+            return $"{seat}, and {why}. {how}";
+        }
+
+        private static string DisconnectedNotice(ConnectedPad pad, int player) =>
+            player > 0 ? $"{pad.Name} disconnected: player {player} is kept for it" : $"{pad.Name} disconnected";
+
+        // A press in a game moved the pad to another player.
+        private void OnPadClaimed(PadConnection change)
+        {
+            if (_appSettings.ControllerNotifications) PadNotice.Show($"{change.Pad.Name}: player {change.Player}");
+        }
+
+        // The game menu's Swap Players: players 1 and 2 trade pads, and the notice names both.
+        private void SwapPlayers()
+        {
+            if (!_gamepad.SwapPlayers()) return;
+            string Seat(int player) => _gamepad.Players.SeatOf(player) is { } pad ? $"{pad.Name}: player {player}" : $"player {player}: no controller";
+            PadNotice.Show($"{Seat(1)} · {Seat(2)}");
         }
     }
 }

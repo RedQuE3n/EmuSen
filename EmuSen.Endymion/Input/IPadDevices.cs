@@ -28,6 +28,9 @@ namespace EmuSen.Endymion.Input
         string Guid(IntPtr pad);
         string? Path(IntPtr pad);
 
+        // The USB vendor in the high 16 bits and the product in the low; under Steam Input, the controller behind its virtual pad - see EmuSen_Input.md §8.13.
+        uint VendorProduct(IntPtr pad);
+
         // Lights the player number on a pad that has one; most have none, and SDL ignores them.
         void SetPlayerIndex(IntPtr pad, int index);
     }
@@ -65,7 +68,22 @@ namespace EmuSen.Endymion.Input
 
         public short Axis(IntPtr pad, SDL.GamepadAxis axis) => SDL.GetGamepadAxis(pad, axis);
 
-        public string? Name(IntPtr pad) => SDL.GetGamepadName(pad);
+        // Steam's virtual pad by the controller Steam's file names behind it, which only the joystick's name carries - see EmuSen_Input.md §8.13.2.
+        public string? Name(IntPtr pad)
+        {
+            IntPtr joystick = SDL.GetGamepadJoystick(pad);
+            if (IsSteamVirtual(SDL.GetJoystickGUID(joystick)) && (SDL.GetGamepadVendor(pad), SDL.GetGamepadProduct(pad)) != (SteamVendor, SteamVirtualProduct)) return SDL.GetJoystickName(joystick);
+            return SDL.GetGamepadName(pad);
+        }
+
+        private const ushort SteamVendor = 0x28DE, SteamVirtualProduct = 0x11FF;
+
+        // Vendor and product little-endian at bytes 4 and 8 of SDL's GUID.
+        internal static bool IsSteamVirtual(SDL.GUID guid)
+        {
+            ReadOnlySpan<byte> data = System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(ref guid, 1));
+            return System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(data[4..]) == SteamVendor && System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(data[8..]) == SteamVirtualProduct;
+        }
 
         public SDL.GamepadType Type(IntPtr pad) => SDL.GetGamepadType(pad);
 
@@ -78,6 +96,8 @@ namespace EmuSen.Endymion.Input
             Convert.ToHexString(System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(ref guid, 1))).ToLowerInvariant();
 
         public string? Path(IntPtr pad) => SDL.GetGamepadPath(pad) is { Length: > 0 } path ? path : null;
+
+        public uint VendorProduct(IntPtr pad) => (uint)SDL.GetGamepadVendor(pad) << 16 | SDL.GetGamepadProduct(pad);
 
         public void SetPlayerIndex(IntPtr pad, int index) => SDL.SetGamepadPlayerIndex(pad, index);
     }

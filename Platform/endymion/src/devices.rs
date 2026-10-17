@@ -31,6 +31,9 @@ pub trait PadDevices: Send {
     fn label(&mut self, pad: Handle, button: i32) -> i32;
     fn guid(&mut self, pad: Handle) -> String;
     fn path(&mut self, pad: Handle) -> Option<String>;
+    /// The USB vendor in the high sixteen bits and the product in the low, as SDL reports them; under Steam Input, the
+    /// controller behind Steam's virtual pad. See EmuSen_Input.md §8.13.
+    fn vendor_product(&mut self, pad: Handle) -> u32;
     fn set_player_index(&mut self, pad: Handle, index: i32);
     /// Hides every pad but these, or none for `None`; only a layer over real devices has pads to hide.
     fn show_only(&mut self, _ids: Option<HashSet<u32>>) {}
@@ -50,6 +53,14 @@ impl SdlPads {
     fn pad(pad: Handle) -> *mut std::ffi::c_void {
         pad as *mut std::ffi::c_void
     }
+}
+
+const STEAM_VENDOR: u16 = 0x28de;
+const STEAM_VIRTUAL_PRODUCT: u16 = 0x11ff;
+
+/// Whether a GUID is Steam Input's virtual pad's, its vendor and product as SDL writes them, little-endian at bytes 4 and 8.
+pub fn is_steam_virtual(guid: &sdl::Guid) -> bool {
+    u16::from_le_bytes([guid.data[4], guid.data[5]]) == STEAM_VENDOR && u16::from_le_bytes([guid.data[8], guid.data[9]]) == STEAM_VIRTUAL_PRODUCT
 }
 
 /// SDL's GUID as the C# writes it: the sixteen bytes in SDL's order, in lower-case hexadecimal.
@@ -114,7 +125,14 @@ impl PadDevices for SdlPads {
         unsafe { (self.sdl.f.get_gamepad_axis)(Self::pad(pad), axis) }
     }
 
+    /// Steam's virtual pad is named by the controller Steam's file names behind it, which only the joystick's name
+    /// carries; the gamepad's is its mapping's, "Steam Virtual Gamepad", for every slot. See EmuSen_Input.md §8.13.2.
     fn name(&mut self, pad: Handle) -> Option<String> {
+        let joystick = unsafe { (self.sdl.f.get_gamepad_joystick)(Self::pad(pad)) };
+        let guid = unsafe { (self.sdl.f.get_joystick_guid)(joystick) };
+        if is_steam_virtual(&guid) && self.vendor_product(pad) != (STEAM_VENDOR as u32) << 16 | STEAM_VIRTUAL_PRODUCT as u32 {
+            return unsafe { sdl::text((self.sdl.f.get_joystick_name)(joystick)) };
+        }
         unsafe { sdl::text((self.sdl.f.get_gamepad_name)(Self::pad(pad))) }
     }
 
@@ -132,6 +150,12 @@ impl PadDevices for SdlPads {
 
     fn path(&mut self, pad: Handle) -> Option<String> {
         unsafe { sdl::text((self.sdl.f.get_gamepad_path)(Self::pad(pad))) }.filter(|path| !path.is_empty())
+    }
+
+    fn vendor_product(&mut self, pad: Handle) -> u32 {
+        let vendor = unsafe { (self.sdl.f.get_gamepad_vendor)(Self::pad(pad)) } as u32;
+        let product = unsafe { (self.sdl.f.get_gamepad_product)(Self::pad(pad)) } as u32;
+        vendor << 16 | product
     }
 
     fn set_player_index(&mut self, pad: Handle, index: i32) {
@@ -153,6 +177,8 @@ pub struct SimulatedPad {
     /// The player number SDL was last asked to light on it, or -1.
     pub player_index: i32,
     pub kind: i32,
+    /// The vendor and product it reports, as `PadDevices::vendor_product`; 0 for none.
+    pub vendor_product: u32,
     held: HashSet<i32>,
     axes: HashMap<i32, i16>,
 }
@@ -160,7 +186,7 @@ pub struct SimulatedPad {
 impl SimulatedPad {
     /// `path` is the host's to number, one per pad as a USB port's.
     pub fn new(path: Option<String>) -> SimulatedPad {
-        SimulatedPad { name: "Simulated pad".to_string(), guid: None, path, player_index: -1, kind: 0, held: HashSet::new(), axes: HashMap::new() }
+        SimulatedPad { name: "Simulated pad".to_string(), guid: None, path, player_index: -1, kind: 0, vendor_product: 0, held: HashSet::new(), axes: HashMap::new() }
     }
 
     pub fn press(&mut self, button: i32) {
@@ -326,6 +352,10 @@ impl PadDevices for SimulatedPads {
         self.pad(pad).and_then(|p| lock(p).path.clone())
     }
 
+    fn vendor_product(&mut self, pad: Handle) -> u32 {
+        self.pad(pad).map_or(0, |p| lock(p).vendor_product)
+    }
+
     fn set_player_index(&mut self, pad: Handle, index: i32) {
         if let Some(p) = self.pad(pad) {
             lock(p).player_index = index;
@@ -385,6 +415,9 @@ impl PadDevices for SharedSet {
     fn path(&mut self, pad: Handle) -> Option<String> {
         lock_set(self).path(pad)
     }
+    fn vendor_product(&mut self, pad: Handle) -> u32 {
+        lock_set(self).vendor_product(pad)
+    }
     fn set_player_index(&mut self, pad: Handle, index: i32) {
         lock_set(self).set_player_index(pad, index)
     }
@@ -432,6 +465,15 @@ mod tests {
         pad.set_axis(2, f64::NAN);
         pad.set_axis(3, 0.5 / 32767.0 * 3.0);
         assert_eq!((pad.axis(0), pad.axis(1), pad.axis(2), pad.axis(3)), (32767, -32767, 0, 2));
+    }
+
+    #[test]
+    fn steams_virtual_pad_is_known_by_its_guid() {
+        let slot0 = [0x03, 0x00, 0x79, 0xf6, 0xde, 0x28, 0x00, 0x00, 0xff, 0x11, 0x00, 0x00, 0x14, 0x01, 0x00, 0x00];
+        assert!(is_steam_virtual(&sdl::Guid { data: slot0 }));
+        let mut xbox = slot0;
+        (xbox[4], xbox[5], xbox[8], xbox[9]) = (0x5e, 0x04, 0x8e, 0x02);
+        assert!(!is_steam_virtual(&sdl::Guid { data: xbox }));
     }
 
     #[test]

@@ -182,6 +182,8 @@ namespace EmuSen.Mistress.Views
             // SDL's device scan takes ~150 ms, so it waits for the window's first frame - see EmuSen_Settings_Reference.md §4.42.
             _gamepad = new GamepadManager(_gamepadBindings.For(_activeConsole), start: false);
             _gamepad.PadChanged += OnPadChanged;
+            _gamepad.Claimed += OnPadClaimed;
+            ApplyPlayerRules();
             _ports = new PortRouter(_gamepad, (p, b, held) => _session?.SetButton(p, b, held), (p, a, v) => _session?.SetAxis(p, a, v), (p, on) => _session?.SetControllerConnected(p, on))
             {
                 KeyboardHeld = control => _keyboardHeld[(int)control],
@@ -328,6 +330,14 @@ namespace EmuSen.Mistress.Views
             _ports.KeyboardPlayer = Math.Clamp(_appSettings.KeyboardPlayer, 1, PlayerSlots.MaxPlayers);
             _ports.MirrorPlayer1ToPlayer2 = _appSettings.MirrorPlayer1ToPlayer2;
             _gamepad.FirstControllerOnly = _appSettings.FirstControllerOnly;
+            ApplyPlayerRules();
+        }
+
+        // Both before any pad is seated and on every poll, so a change in Preferences applies at once - see EmuSen_Input.md §8.13.
+        private void ApplyPlayerRules()
+        {
+            _gamepad.ClaimPlayersByPress = _appSettings.ClaimPlayersByPress;
+            _gamepad.ExternalControllerFirst = _appSettings.ExternalControllerFirst;
         }
 
         private void PollGamepad()
@@ -972,7 +982,7 @@ namespace EmuSen.Mistress.Views
                     StatusText.Text = resumeFailure;
                     return;
                 }
-                WireSession(_session, displayName, restoredCheats);
+                WireSession(_session, displayName, restoredCheats, newGame: !reset);
                 _currentRomPath = path;
                 _consoleSession = null;
                 _currentDisplayName = displayName;
@@ -990,13 +1000,15 @@ namespace EmuSen.Mistress.Views
         }
 
         // A loaded session's pad, ports, rewind, debugger and screen, and the status line naming it.
-        private void WireSession(EmulatorSession session, string displayName, int restoredCheats)
+        private void WireSession(EmulatorSession session, string displayName, int restoredCheats, bool newGame)
         {
             _gamepad.Bindings = _gamepadBindings.For(_activeConsole);
             string bindingsConsole = _activeConsole;
             _gamepad.PlayerBindings = player => _gamepadBindings.For(bindingsConsole, player);
             _gamepad.LeftStickIsAnalog = session.SupportedAxes.Contains(PadAxis.LeftX);
             _ports.Reset(session.ControllerPorts, session.SupportedAxes);
+            // A new game is claimed again by the first press; a restart keeps its players - see EmuSen_Input.md §8.13.
+            if (newGame) _gamepad.BeginClaims();
 
             _rewind.Clear(); // a discontinuous jump - see §1.4
             _rewind.IntervalFrames = RewindIntervalFor(session.FrameRateHz);

@@ -702,7 +702,7 @@ Nephrite's follow-up, not built here: an empty start for `mcd`, once the stall i
 - In a session with a drive: Emulation → *Insert Disc...* and *Eject Disc*, and the same two rows in the game's pad menu.
 - *Insert Disc...* opens `InsertDiscWindow`, built with LunaP and framed as a menu in big picture. It lists the console's
   library games, with *Browse...* on the desktop only.
-- `EmuSen_Settings_Reference.md` §4.119 is the player-facing summary.
+- `EmuSen_Settings_Reference.md` §4.120 is the player-facing summary.
 
 **DianaSh.**
 - `core <corename> --console` returns `HostAction.StartConsole` where the host says the console starts empty

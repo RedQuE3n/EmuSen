@@ -3748,13 +3748,18 @@ the next pad into its place, which the single-pad rescan did; a spare pad plugge
 | Button Swap | `SwapPadButtons` | off | A and B trade functions: Accept on East and Back on South, in the library, the themed view, the pad menu, every sheet and the on-screen keyboard. The help bar and the text hints name the swapped buttons. X and Y are not swapped, unlike ES-DE's setting (plan §24.5). The keyboard and every game are unaffected. *Since 2026-09-27 X and Y trade as well, as ES-DE's do (§4.79.5)* |
 | First Controller | `FirstControllerOnly` | off | Only the first pad opened steers the interface; ES-DE's remedy for a wireless pad that registers twice. ~~The game is unaffected (it reads the first pad anyway)~~ *Since 2026-10-04 the game hears player 1's pad alone with it on, which is what it heard before players, so the twin of a pad that registers twice does not press a second port (`EmuSen_Input.md` §8.3)* |
 | Players | seats in `GamepadManager.Players`; `KeyboardPlayer` | keyboard: Player 1 | *Added 2026-10-04.* A row per connected pad naming it, with the player it plays as (Player 1 to 8, or None); choosing a player another pad has trades the two. Any button held on a pad lights its row. A seat kept for a pad that has gone is a row with Forget. The Keyboard row is the player the keyboard plays as. The seats last until Mistress quits; only `KeyboardPlayer` is saved (`EmuSen_Input.md` §8.9) |
+| Player 1 | `ClaimPlayersByPress` | on | *Added 2026-10-17 (§4.119).* In a game, the first pad pressed is player 1 and the others follow in the order they are used |
+| External Controller | `ExternalControllerFirst` | on | *Added 2026-10-17 (§4.119).* On a handheld, an external pad is seated ahead of the built-in controls |
 | Notifications | `ControllerNotifications` | on | The notice below |
 
 **The notice.** "Controller connected: *name*" or "Controller disconnected: *name*" (since 2026-10-04 followed by the
 player the pad took or keeps, "(Player 2)"), drawn with LunaP's `NoticeLayer`
 at the top centre over whatever is on screen (the library, the themed view, a sheet or a game), in a desktop or a
 big-screen session. It fades in over half a second, holds three and fades out over half a second, which is ES-DE 3.4.1's
-popup as recorded once (plan §24.4). The pads connected when Mistress starts are not announced.
+popup as recorded once (plan §24.4). The pads connected when Mistress starts are not announced. *(Since 2026-10-17
+the words lead with the player, "Xbox Wireless Controller: player 1", a press that moves a pad to another player in a
+game has a notice of its own, and a pad seated behind built-in controls nobody pressed is told how to take player 1:
+§4.119 and `EmuSen_Input.md` §8.13.5.)*
 
 **The help bar follows the pad last pressed.** With Automatic, the themed help bar draws the family of the pad whose
 buttons most recently went from none held to some held; when that pad goes, the first pad's.
@@ -8826,7 +8831,39 @@ the variable unset and with it 0.
 - **The Memory Cards window** has an N64 tab listing each pak's notes (game code, publisher and name) and pages free,
   with copy, move, delete, new pak and import, as for the PlayStation's cards.
 
-### 4.119 A console started with nothing in it, and a disc put in afterwards (2026-10-17)
+### 4.119 Who is player 1: the first pad pressed, and a handheld's external pad first (2026-10-17)
+
+*Decided 2026-10-17 by the tester, after the Legion Go S's built-in controls took player 1 and every one-player game
+ignored the Xbox pad (`EmuSen_Input.md` §8.13, which has the design, the evidence and the tests).* Two settings in
+Preferences ▸ Controllers, after the players' rows, stored in `appsettings.json` (and in the platform library's model
+of it, `Platform/galaxia/src/models.rs`, which drops a key it does not list); each applies at once:
+
+| Row | Setting | Default | What it does |
+|---|---|---|---|
+| Player 1 ("The first controller pressed") | `ClaimPlayersByPress` | on | In a game, the first pad a button is pressed on is player 1 and the others follow in the order they are used. The players hold for the rest of the game, and a restart keeps them; a new game asks again. Off, pads are the players they were seated as (`EmuSen_Input.md` §8.2), and only Preferences or Swap Players changes them |
+| External Controller ("Ahead of the built-in controls") | `ExternalControllerFirst` | on | A pad that is not a handheld's own is seated ahead of the built-in controls, which move to the next player, as it connects and when the setting is turned on. It never takes a player already claimed by a press in the running game. Without built-in controls connected it does nothing, and its hint says so. The built-in controls are known by the vendor and product SDL reports; under Steam Input, those of the controller behind Steam's virtual pad, from the file Steam gives the program (`EmuSen_Input.md` §8.13.2) |
+
+**Swap Players 1 and 2**, the first row of the pad menu's Game Settings while player 2 has a pad, trades players 1
+and 2 and names both in a notice. It, and any choice of player in Preferences, fixes the seats for the rest of the
+game, so a later press moves nobody.
+
+**The notice** names the player right after the pad: "Xbox Wireless Controller: player 1". A pad seated as player 2
+or later while player 1 has no controller, or while player 1 is built-in controls nobody pressed in the game, is told
+what to do: "…: player 2, and player 1 is the built-in controls. Press a button on it first in a game to take player
+1." (or "Swap Players under Game Settings makes it player 1." where the first setting is off or player 1 is claimed).
+The full list is `EmuSen_Input.md` §8.13.5.
+
+**How they meet the existing settings.** *First Controller* (`FirstControllerOnly`) still means that the game hears
+player 1 alone, and the press decides who player 1 is. *Mirror Player 1 to Player 2* mirrors whoever player 1 is. The
+keyboard stays `KeyboardPlayer`'s player and a key claims nothing. *Controller Type* follows the pad last pressed, as
+before. Hotaru has no settings and plays with both on.
+
+**Tests.** `PlayerClaimsTests`, `MultiplayerTests` (the report and the handheld's three cases), `PadMenuTests` (the
+swap), `ControllersTests.The_controller_settings_persist`, `UinputHotplugTests` (Steam's virtual pads, opt-in), and the
+Preferences fit audit, `WindowFitAuditTests.The_players_rows_in_preferences_are_whole_at_both_sizes`, which draws the two
+new rows on the desktop and in a big screen at 1280 by 800 and 1920 by 1200.
+
+### 4.120 A console started with nothing in it, and a disc put in afterwards (2026-10-17)
 
 *Built at `Diamond_Shell.md`'s step S2, the tester's go of 2026-10-17; the design and its reasons are that page's §1.5
 and §9.* A console whose engine says in its core info that it starts empty (core ABI 1.11, `EmuSen_CoreAPI.md` §6.31)

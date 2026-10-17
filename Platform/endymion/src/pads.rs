@@ -18,6 +18,8 @@ pub struct Pad {
     /// Read once at opening, so a pad that has gone is still known by them.
     pub guid: String,
     pub path: Option<String>,
+    /// The vendor in the high sixteen bits, the product in the low, as last read; kept when the pad closes.
+    vendor_product: u32,
     closed_name: Option<String>,
     closed_kind: i32,
 }
@@ -135,9 +137,10 @@ impl Pads {
             }
             let guid = self.devices.guid(handle);
             let path = self.devices.path(handle);
+            let vendor_product = self.devices.vendor_product(handle);
             let key = self.next_key;
             self.next_key += 1;
-            self.known.insert(key, Pad { id, handle, guid, path, closed_name: None, closed_kind: 0 });
+            self.known.insert(key, Pad { id, handle, guid, path, vendor_product, closed_name: None, closed_kind: 0 });
             self.open.push(key);
             events.push(PadEvent::Opened { key, announce });
         }
@@ -190,6 +193,7 @@ impl Pads {
         }
         let name = self.name(key);
         let kind = self.kind(key);
+        self.vendor_product(key);
         self.devices.close(handle);
         let pad = self.known.get_mut(&key).expect("a known pad");
         pad.closed_name = Some(name);
@@ -250,6 +254,17 @@ impl Pads {
             return self.known.get(&key).and_then(|pad| pad.closed_name.clone()).unwrap_or_else(|| "Unknown controller".to_string());
         }
         self.devices.name(handle).filter(|name| !name.is_empty()).unwrap_or_else(|| "Unknown controller".to_string())
+    }
+
+    /// Read while the pad is open, since SDL learns the controller behind a Steam virtual pad from Steam's file within
+    /// seconds of opening it; the last reading once it closes. See EmuSen_Input.md §8.13.2.
+    pub fn vendor_product(&mut self, key: u64) -> Option<u32> {
+        let handle = self.handle(key);
+        if handle != 0 {
+            let read = self.devices.vendor_product(handle);
+            self.known.get_mut(&key)?.vendor_product = read;
+        }
+        self.known.get(&key).map(|pad| pad.vendor_product)
     }
 
     /// SDL's own reading of what the pad is.

@@ -2150,7 +2150,8 @@ become ⁸⁄₁₅ and ⁴⁄₁₅ for NTSC and ⅚ for PAL, as `Diamond_Plan.
 constants. The 368-wide mode needs nothing of its own: the row is in microseconds and cycles, and every width fills
 the same 2,560 clocks. The console's video encoder and its filters were not looked for; the standard's limits stand in,
 as for the SNES. **Coverage**: `ScreenFilterRenderTests.The_playstations_line_is_its_video_clocks_over_the_subcarrier`,
-and the compile test over every variant for every console, the PlayStation among them.
+and the compile test over every variant for every console, the PlayStation among them. *(Checked 2026-10-17 against
+Diamond as built and D-0's referee step, §28: the line settled at 3,412.5 and 3,405, and the row stands.)*
 
 ### 20.7 Questions for the tester
 
@@ -3157,3 +3158,33 @@ nothing changed here. The 2C07's black border (the top line and two pixels at ea
 picture and not the filter's.
 
 Also not modelled: a 6538 or Dendy as such (the capture's chip), and the levels of a 2C07, which no source gives.
+
+## 28. The PlayStation's row, against Diamond as built (2026-10-17)
+
+§20.6 wrote `ConsoleTiming["PlayStation"]` at Diamond's stage 11 with the clock settled and the line's length
+provisional, and said the phases would change with the core's constants if D-0 settled the other way. It settled
+this way. Read on 2026-10-17:
+
+- **The core.** `Diamond - PlayStation/src/video.rs:5–14`: the video clock is 53.693175 MHz in NTSC and 53.203425 MHz
+  in PAL (as half clocks a CPU cycle, `NTSC_CLOCK` and `PAL_CLOCK`); a line is 3,412.5 video clocks in NTSC mode and
+  3,405 in PAL (`NTSC_LINE`, `PAL_LINE`, in half clocks, still commented "provisional on D-0"); 263 and 314 lines a
+  field, and interlaced 263 and 262, or 313 and 312, alternately (`lines_of_field`, `video.rs:91–95`). The display
+  range a game sets by default is 2,560 video clocks across (`video.rs:57–58`), the widths 256 to 640 its dividers 10,
+  8, 7, 5 and 4 (`dot_divider`, `video.rs:98`).
+- **The dispute.** `Diamond_Disputes.md` D-0, its referee step: "the line is 3,412.5 video clocks in NTSC mode and
+  3,405 in PAL", witnessed; still open only how the half clock is spread over lines, "which no referee output shows".
+  The code's comment predates that conclusion.
+
+**The row against them.** NTSC: 2,560 clocks of 53.693175 MHz, 47.68 µs, and 2,560 / 15 = 170⅔ cycles across; a
+line of 3,412.5 clocks is 227½ cycles, so half a cycle a line, and 263 lines leave half a cycle a frame. PAL: 2,560
+clocks of 53.203425 MHz, 48.12 µs, 213⅓ cycles; 3,405 clocks is 283¾ cycles, three quarters a line; 314 lines leave
+half a cycle a frame, crawling over two, and 314 is even, so V's switch keeps its lines from frame to frame. Every
+figure is the row as written (`CrtFilter.ConsoleTiming`), so **nothing changes**; the existing case
+`The_playstations_line_is_its_video_clocks_over_the_subcarrier` holds it, and the compile test covers every variant.
+
+**What the row cannot say.** A field of 480i PAL is 313 or 312 lines, not 314: an odd field turns the switch over for
+the next and adds a quarter cycle, an even one does not. `ConsoleTiming` holds one line per standard and console, and
+the filter draws a woven 576-line frame as two fields of one timing (§11.1), so the alternation of 313 and 312 is not
+drawn; nor is how the half clock of an NTSC line is spread (alternate lines of 3,412 and 3,413 would put the phase a
+line at ⁷⁄₁₅ and ⁸⁄₁₅ in place of ½), which Diamond itself has not settled. Both are recorded, not built: the first
+would need a timing per field, which no other console's row needs, and the second waits on D-0's last question.

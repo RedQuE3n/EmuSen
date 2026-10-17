@@ -7,10 +7,17 @@ using EmuSen.Crystal.SaveMedia;
 
 namespace EmuSen.Crystal.Systems.N64
 {
-    // The Controller Pak's file system as N64brew's "Controller Pak/Filesystem" lays it out: an ID page, an index of pages and its backup, sixteen notes - see EmuSen_SaveMedia.md §7.2.
+    // The Controller Pak's file system as N64brew's "Controller Pak/Filesystem" lays it out: an ID page, an index of pages and its backup, sixteen notes; emusen-systems' module unless EMUSEN_SYSTEMS_NATIVE=0 - see EmuSen_SaveMedia.md §7.2, EmuSen_Backend.md §13.
     public sealed class N64PakFormat : ISaveMediumFormat
     {
-        public static readonly N64PakFormat Instance = new();
+        public static readonly N64PakFormat Instance = new(managed: false);
+
+        private N64PakFormat(bool managed) => Managed = managed ? this : new N64PakFormat(managed: true);
+
+        // The C# module alone, the failover and the parity class's oracle.
+        public N64PakFormat Managed { get; }
+
+        private bool Native => Managed != this && SystemCode.Active;
 
         public const string Id = "n64.pak";
         public const int PakLength = 32 * 1024, PageLength = 256, Pages = 128, FirstData = 5, Notes = 16, NoteLength = 32;
@@ -21,9 +28,9 @@ namespace EmuSen.Crystal.Systems.N64
         private static readonly int[] IdBlocks = { 0x20, 0x60, 0x80, 0xC0 };
 
         public string Medium => Id;
-        public int Length => PakLength;
-        public int Capacity => Pages - FirstData;
-        public string Unit => "page";
+        public int Length => Native ? SystemCode.Module(Id).Length : PakLength;
+        public int Capacity => Native ? SystemCode.Module(Id).Capacity : Pages - FirstData;
+        public string Unit => Native ? SystemCode.Module(Id).Unit : "page";
 
         // An ID block's two checksums: the sum of its first fourteen big-endian words, and 0xFFF2 less that.
         private static (ushort Sum, ushort Inverse) IdChecksums(ReadOnlySpan<byte> block)
@@ -133,10 +140,12 @@ namespace EmuSen.Crystal.Systems.N64
             return extension.Length > 0 ? $"{name}.{extension}" : name;
         }
 
-        public MediumListing Read(ReadOnlySpan<byte> image)
+        public MediumListing Read(ReadOnlySpan<byte> image) => Native ? SystemCode.MediaRead(Id, image) : ReadManaged(image);
+
+        private static MediumListing ReadManaged(ReadOnlySpan<byte> image)
         {
             if (image.Length != PakLength) return MediumListing.Unreadable($"a Controller Pak is {PakLength} bytes; this file is {image.Length}");
-            if (!IsFormatted(image)) return new MediumListing(false, Array.Empty<SaveEntry>(), Capacity, "not formatted: a game formats it when it first saves");
+            if (!IsFormatted(image)) return new MediumListing(false, Array.Empty<SaveEntry>(), Pages - FirstData, "not formatted: a game formats it when it first saves");
             if (IndexOf(image) is not int indexPage) return MediumListing.Unreadable("both copies of its index of pages are damaged");
             ReadOnlySpan<byte> index = Page(image, indexPage);
             var saves = new List<SaveEntry>();
@@ -170,7 +179,9 @@ namespace EmuSen.Crystal.Systems.N64
             index.CopyTo(image.AsSpan(BackupIndexPage * PageLength, PageLength));
         }
 
-        public MediumEdit Copy(ReadOnlySpan<byte> from, string save, ReadOnlySpan<byte> to)
+        public MediumEdit Copy(ReadOnlySpan<byte> from, string save, ReadOnlySpan<byte> to) => Native && SystemCode.Takes(save) ? SystemCode.MediaCopy(Id, from, save, to) : CopyManaged(from, save, to);
+
+        private static MediumEdit CopyManaged(ReadOnlySpan<byte> from, string save, ReadOnlySpan<byte> to)
         {
             if (!IsFormatted(from) || IndexOf(from) is not int fromIndex) return MediumEdit.Refused("the pak copied from is not a formatted Controller Pak");
             if (!IsFormatted(to) || IndexOf(to) is not int toIndex) return MediumEdit.Refused("the pak copied to is not formatted");
@@ -199,7 +210,9 @@ namespace EmuSen.Crystal.Systems.N64
         }
 
         // As the console's manager deletes: the note's pages freed in the index and its entry cleared.
-        public MediumEdit Delete(ReadOnlySpan<byte> image, string save)
+        public MediumEdit Delete(ReadOnlySpan<byte> image, string save) => Native && SystemCode.Takes(save) ? SystemCode.MediaDelete(Id, image, save) : DeleteManaged(image, save);
+
+        private static MediumEdit DeleteManaged(ReadOnlySpan<byte> image, string save)
         {
             if (!IsFormatted(image) || IndexOf(image) is not int indexPage) return MediumEdit.Refused("the pak is not formatted");
             int note = Find(image, save);
@@ -214,7 +227,9 @@ namespace EmuSen.Crystal.Systems.N64
         }
 
         // A blank pak as N64brew lays one out: the ID block with a zero serial, a controller pak of one bank, at its four places; every data page free; no notes.
-        public byte[] Format()
+        public byte[] Format() => Native ? SystemCode.MediaFormat(Id)! : FormatManaged();
+
+        private static byte[] FormatManaged()
         {
             byte[] image = new byte[PakLength];
             Span<byte> id = stackalloc byte[32];

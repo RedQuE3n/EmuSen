@@ -12,5 +12,6 @@
   "esde_full_name": "Sony PlayStation",
   "self_delimiting_images": false,
   "attached_to": null,
-  "screenscraper_system": 57
+  "screenscraper_system": 57,
+  "media": [{ "id": "psx.card", "title": "Memory Card", "noun": "Card" }]
 }

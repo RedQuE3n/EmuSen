@@ -7,10 +7,17 @@ using EmuSen.Crystal.SaveMedia;
 
 namespace EmuSen.Crystal.Systems.Psx
 {
-    // The memory card's file system as psx-spx's "Memory Card Data Format" lays it out: a directory block and fifteen blocks of saves - see EmuSen_SaveMedia.md §6.2, Diamond_Cards.md.
+    // The memory card's file system as psx-spx's "Memory Card Data Format" lays it out: a directory block and fifteen blocks of saves; emusen-systems' module unless EMUSEN_SYSTEMS_NATIVE=0 - see EmuSen_SaveMedia.md §6.2, Diamond_Cards.md, EmuSen_Backend.md §13.
     public sealed class PsxCardFormat : ISaveMediumFormat
     {
-        public static readonly PsxCardFormat Instance = new();
+        public static readonly PsxCardFormat Instance = new(managed: false);
+
+        private PsxCardFormat(bool managed) => Managed = managed ? this : new PsxCardFormat(managed: true);
+
+        // The C# module alone, the failover and the parity class's oracle.
+        public PsxCardFormat Managed { get; }
+
+        private bool Native => Managed != this && SystemCode.Active;
 
         public const string Id = "psx.card";
         public const int CardLength = 128 * 1024, BlockLength = 8 * 1024, FrameLength = 128, Blocks = 15;
@@ -20,9 +27,9 @@ namespace EmuSen.Crystal.Systems.Psx
         private const ushort NoNext = 0xFFFF;
 
         public string Medium => Id;
-        public int Length => CardLength;
-        public int Capacity => Blocks;
-        public string Unit => "block";
+        public int Length => Native ? SystemCode.Module(Id).Length : CardLength;
+        public int Capacity => Native ? SystemCode.Module(Id).Capacity : Blocks;
+        public string Unit => Native ? SystemCode.Module(Id).Unit : "block";
 
         private static ReadOnlySpan<byte> Frame(ReadOnlySpan<byte> image, int frame) => image.Slice(frame * FrameLength, FrameLength);
 
@@ -69,7 +76,9 @@ namespace EmuSen.Crystal.Systems.Psx
             return blocks;
         }
 
-        public MediumListing Read(ReadOnlySpan<byte> image)
+        public MediumListing Read(ReadOnlySpan<byte> image) => Native ? SystemCode.MediaRead(Id, image) : ReadManaged(image);
+
+        private static MediumListing ReadManaged(ReadOnlySpan<byte> image)
         {
             if (image.Length != CardLength) return MediumListing.Unreadable($"a memory card is {CardLength} bytes; this file is {image.Length}");
             if (!IsFormatted(image)) return new MediumListing(false, Array.Empty<SaveEntry>(), Blocks, "not formatted: a game or the console formats it when it first saves");
@@ -114,7 +123,9 @@ namespace EmuSen.Crystal.Systems.Psx
             return -1;
         }
 
-        public MediumEdit Copy(ReadOnlySpan<byte> from, string save, ReadOnlySpan<byte> to)
+        public MediumEdit Copy(ReadOnlySpan<byte> from, string save, ReadOnlySpan<byte> to) => Native && SystemCode.Takes(save) ? SystemCode.MediaCopy(Id, from, save, to) : CopyManaged(from, save, to);
+
+        private static MediumEdit CopyManaged(ReadOnlySpan<byte> from, string save, ReadOnlySpan<byte> to)
         {
             if (!IsFormatted(from)) return MediumEdit.Refused("the card copied from is not a formatted memory card");
             if (!IsFormatted(to)) return MediumEdit.Refused("the card copied to is not formatted");
@@ -146,7 +157,9 @@ namespace EmuSen.Crystal.Systems.Psx
         }
 
         // As the console's manager deletes: each frame marked deleted, the blocks kept, so the save can be brought back.
-        public MediumEdit Delete(ReadOnlySpan<byte> image, string save)
+        public MediumEdit Delete(ReadOnlySpan<byte> image, string save) => Native && SystemCode.Takes(save) ? SystemCode.MediaDelete(Id, image, save) : DeleteManaged(image, save);
+
+        private static MediumEdit DeleteManaged(ReadOnlySpan<byte> image, string save)
         {
             if (!IsFormatted(image)) return MediumEdit.Refused("the card is not formatted");
             int first = Find(image, save);
@@ -164,7 +177,9 @@ namespace EmuSen.Crystal.Systems.Psx
         }
 
         // Block 0 as psx-spx lists a formatted card's: the header, fifteen free entries, an empty broken-sector list, FFh to frame 62, the header again at 63.
-        public byte[] Format()
+        public byte[] Format() => Native ? SystemCode.MediaFormat(Id)! : FormatManaged();
+
+        private static byte[] FormatManaged()
         {
             byte[] image = new byte[CardLength];
             for (int f = 0; f < 64; f++)

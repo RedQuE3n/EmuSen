@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 13u
+#define EMUSEN_PLATFORM_ABI_VERSION 14u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -50,6 +50,7 @@ extern "C" {
 #define EMUSEN_PLATFORM_NOT_FOUND (-1031)    /* a file or directory that had to exist does not */
 #define EMUSEN_PLATFORM_ACCESS (-1032)       /* the system refused access */
 #define EMUSEN_PLATFORM_BAD_ARGUMENT (-1033) /* a kind, an operation or a number the call does not know */
+#define EMUSEN_PLATFORM_REFUSED (-1034)      /* an operation the rules refuse; an answer, with words for the player */
 
 /* ---- The library ---- */
 
@@ -392,16 +393,41 @@ int64_t emusen_disc_playlist(const uint8_t *list, size_t list_len, uint8_t *out,
 /* The .sbi a disc's LibCrypt patches are looked for in beside an image: the image's stem with .sbi. */
 int64_t emusen_disc_sbi_beside(const uint8_t *image, size_t image_len, uint8_t *out, size_t len);
 
-/* ---- The systems table: emusen-systems (EmuSen_Backend.md, sections 5 and 12) ---- */
+/* ---- The systems table and the packs' code: emusen-systems (EmuSen_Backend.md, sections 5, 12 and 13) ---- */
 
 /*
  * Every system's facts as one compact JSON array, one object a system in the table's order, each with the keys id,
  * name, console, manufacturer, release_year, extensions, cheat_systems, openvgdb_systems, cover_aspect, esde_system,
- * esde_full_name, self_delimiting_images, attached_to (a console or null) and screenscraper_system (a number or null),
- * in that order. By the length-query idiom. EMUSEN_PLATFORM_PARSE with words only for a library built from a broken
- * data file.
+ * esde_full_name, self_delimiting_images, attached_to (a console or null), screenscraper_system (a number or null) and
+ * media (a list of objects with the keys id, title and noun), in that order. By the length-query idiom.
+ * EMUSEN_PLATFORM_PARSE with words only for a library built from a broken data file.
  */
 int64_t emusen_systems_table(uint8_t *out, size_t len);
+
+/*
+ * The save media's format modules. A medium is named by its id in the table's media; one no module reads is ABSENT.
+ * Images are the caller's for the call; a null image with no length is an empty one. Each answer is by the
+ * length-query idiom, and an edited image is as long as the one it was made from, so a buffer of that length takes it
+ * in one call. A refusal is EMUSEN_PLATFORM_REFUSED with the words for the player; a damaged directory that reaches
+ * outside the image is BAD_ARGUMENT, where the C# module threw.
+ */
+
+/* Every medium's module as a JSON array of objects with the keys id, length (the file's), capacity and unit (the medium's own: block, page). */
+int64_t emusen_systems_media(uint8_t *out, size_t len);
+
+/* A medium's listing as a JSON object with the keys formatted, saves (each id, title, units, game or null, damaged), free and problem (words or null). */
+int64_t emusen_systems_media_read(const uint8_t *id, size_t id_len, const uint8_t *image, size_t image_len, uint8_t *out, size_t len);
+
+/* `to` with the save named `save` on `from` copied onto it. */
+int64_t emusen_systems_media_copy(const uint8_t *id, size_t id_len, const uint8_t *from, size_t from_len, const uint8_t *save, size_t save_len,
+                                  const uint8_t *to, size_t to_len, uint8_t *out, size_t len);
+
+/* `image` with the save named `save` deleted as the console's own manager deletes. */
+int64_t emusen_systems_media_delete(const uint8_t *id, size_t id_len, const uint8_t *image, size_t image_len, const uint8_t *save, size_t save_len,
+                                    uint8_t *out, size_t len);
+
+/* A formatted blank of the medium. */
+int64_t emusen_systems_media_format(const uint8_t *id, size_t id_len, uint8_t *out, size_t len);
 
 /* ---- Endymion: the logic half (EmuSen_Audio_Sync.md, sections 1 to 3; EmuSen_Input.md, sections 7 and 8) ---- */
 

@@ -323,6 +323,12 @@ save of every source, adds their units, refuses when they exceed the target's fr
 share an id (an identical save already there is skipped as present), and otherwise folds `Copy` over a copy of the
 target in memory, writing once.
 
+*Since 2026-10-17 (`EmuSen_Backend.md` §13, its step B3) each module's file system is a crate with no standard library
+in `EmuSen/Cores/Shared/` (`Hardware/Shared/EmuSen_MediumFormats.md`), its words a family module of `emusen-systems`,
+and the three C# classes forward to them through the platform library unless `EMUSEN_SYSTEMS_NATIVE=0`; each class's
+`Managed` twin is the C# alone. A medium's title and noun are the systems table's `media`, its extension and module
+still the pack's literal.*
+
 A medium's **entry** in its console's system pack names it whether or not a module reads it:
 
 ```csharp

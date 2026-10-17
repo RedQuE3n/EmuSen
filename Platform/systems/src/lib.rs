@@ -3,8 +3,13 @@
 //! One data file per system, `data/<id>.json`, embedded when the crate is built, so there is no installed file to go
 //! missing and no file from outside is read (EmuSen_Backend.md §5.2, D6). A field belongs here when it is true of the
 //! console on every engine; what an engine does (the extensions it receives, its firmware, its controllers, its
-//! settings, `starts_empty`) is core info's (§5.3, D9). The packs' code, recognisers and codecs, is step B3, not this
-//! crate yet. EmuSen_Backend.md §12 records what was built.
+//! settings, `starts_empty`) is core info's (§5.3, D9). The packs' code is a module per console family beside the
+//! table (§5.2, D6): the save media's format modules first (step B3). EmuSen_Backend.md §12 and §13 record what was built.
+
+pub mod genesis;
+pub mod media;
+pub mod n64;
+pub mod psx;
 
 use emusen_dotnet::json::{self, Value};
 use std::sync::OnceLock;
@@ -33,6 +38,16 @@ pub struct System {
     pub attached_to: Option<String>,
     /// ScreenScraper's `systemeid`; none where ScreenScraper has no such system.
     pub screenscraper_system: Option<u32>,
+    /// The console's save media, each read by a format module of its family's; none for a console that has no medium.
+    pub media: Vec<Medium>,
+}
+
+/// A save medium as the console's own manager names it (EmuSen_SaveMedia.md §6.2).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Medium {
+    pub id: String,
+    pub title: String,
+    pub noun: String,
 }
 
 /// Why a data file is not a system: the file, and the words.
@@ -49,7 +64,7 @@ impl std::fmt::Display for Error {
 }
 
 /// Every key a data file holds, in the order the table writes them; a file with any other key is refused.
-pub const KEYS: [&str; 14] = [
+pub const KEYS: [&str; 15] = [
     "id",
     "name",
     "console",
@@ -64,7 +79,11 @@ pub const KEYS: [&str; 14] = [
     "self_delimiting_images",
     "attached_to",
     "screenscraper_system",
+    "media",
 ];
+
+/// Every key a medium's object holds, in the order the table writes them.
+pub const MEDIUM_KEYS: [&str; 3] = ["id", "title", "noun"];
 
 /// The data files, by the id each is named for, in the table's order.
 pub const DATA: [(&str, &str); 9] = [
@@ -133,6 +152,24 @@ impl<'a> Fields<'a> {
         }
     }
 
+    fn media(&self) -> Result<Vec<Medium>, Error> {
+        let Value::Array(items) = self.value("media")? else { return self.fail("media is not a list") };
+        let mut media: Vec<Medium> = Vec::with_capacity(items.len());
+        for item in items {
+            let Value::Object(members) = item else { return self.fail("media holds something that is not a medium") };
+            if members.len() != MEDIUM_KEYS.len() || members.iter().zip(MEDIUM_KEYS).any(|((name, _), key)| name.text != key) {
+                return self.fail(format!("a medium's fields are not {}", MEDIUM_KEYS.join(", ")));
+            }
+            let m = Fields { file: self.file, members };
+            let medium = Medium { id: m.text("id")?, title: m.text("title")?, noun: m.text("noun")? };
+            if media.iter().any(|other| other.id == medium.id) {
+                return self.fail(format!("the medium {} is named twice", medium.id));
+            }
+            media.push(medium);
+        }
+        Ok(media)
+    }
+
     fn bool(&self, key: &str) -> Result<bool, Error> {
         match self.value(key)?.as_bool() {
             Some(value) => Ok(value),
@@ -175,6 +212,7 @@ pub fn parse(file: &str, text: &str) -> Result<System, Error> {
         esde_full_name: f.text("esde_full_name")?,
         self_delimiting_images: f.bool("self_delimiting_images")?,
         attached_to: f.optional_text("attached_to")?,
+        media: Vec::new(),
         screenscraper_system: if f.value("screenscraper_system")?.is_null() {
             None
         } else {
@@ -184,6 +222,7 @@ pub fn parse(file: &str, text: &str) -> Result<System, Error> {
             }
         },
     };
+    let system = System { media: f.media()?, ..system };
     if system.id != file {
         return f.fail(format!("its id is {}, not the {file} it is named for", system.id));
     }
@@ -204,6 +243,9 @@ pub fn build(files: &[(&str, &str)]) -> Result<Vec<System>, Error> {
         }
         if systems.iter().any(|s| s.console.eq_ignore_ascii_case(&system.console)) {
             return fail(format!("the console {} is another file's", system.console));
+        }
+        if let Some(m) = system.media.iter().find(|m| systems.iter().any(|s| s.media.iter().any(|o| o.id == m.id))) {
+            return fail(format!("the medium {} is another file's", m.id));
         }
         systems.push(system);
     }
@@ -244,6 +286,15 @@ pub fn to_json(systems: &[System]) -> String {
                 Value::Bool(s.self_delimiting_images),
                 or_null(s.attached_to.as_deref().map(Value::string)),
                 or_null(s.screenscraper_system.map(Value::number)),
+                Value::Array(
+                    s.media
+                        .iter()
+                        .map(|m| {
+                            let values = [m.id.as_str(), m.title.as_str(), m.noun.as_str()].map(Value::string);
+                            Value::Object(MEDIUM_KEYS.iter().zip(values).map(|(key, value)| (json::Text::new(*key), value)).collect())
+                        })
+                        .collect(),
+                ),
             ];
             Value::Object(KEYS.iter().zip(values).map(|(key, value)| (json::Text::new(*key), value)).collect())
         })
@@ -380,6 +431,18 @@ mod tests {
         let orphan = build(&[DATA[3]]).unwrap_err();
         assert_eq!((orphan.file.as_str(), orphan.what.as_str()), ("mcd", "it is attached to Genesis, which is no console of its own in the table"));
         assert!(build(&[DATA[2], DATA[3]]).is_ok());
+    }
+
+    #[test]
+    fn a_medium_is_its_three_words_once() {
+        let psx = DATA[5].1;
+        assert_eq!(find("psx").unwrap().media, [Medium { id: "psx.card".into(), title: "Memory Card".into(), noun: "Card".into() }]);
+        assert_eq!(refused("psx", &psx.replace(r#""noun": "Card" }"#, r#""noun": "Card", "x": 1 }"#)), "a medium's fields are not id, title, noun");
+        assert_eq!(refused("psx", &psx.replace(r#""title": "Memory Card""#, r#""title": " ""#)), "title is blank");
+        let twice = psx.replace(r#"[{ "id": "psx.card", "title": "Memory Card", "noun": "Card" }]"#, r#"[{ "id": "psx.card", "title": "A", "noun": "B" }, { "id": "psx.card", "title": "C", "noun": "D" }]"#);
+        assert_eq!(refused("psx", &twice), "the medium psx.card is named twice");
+        let stolen = DATA[8].1.replace("n64.pak", "psx.card");
+        assert_eq!(build(&[DATA[5], ("n64", &stolen)]).unwrap_err().what, "the medium psx.card is another file's");
     }
 
     #[test]

@@ -3156,3 +3156,15 @@ is run on the other two then: `EmuSen_Backend.md` B7's state 2 per program and S
 client, `EmuSen_DianaSh.md` S7's hour of play on Windows and macOS, and the state-3 gates of this page. Portable
 means what §2 has always meant: a platform's own calls stay behind the platform library and Galaxia, never in a core,
 a pack or Crystal.
+
+## 32. Interface 14, 2026-10-17: the save media's format modules, and the packs' code after them
+
+With the backend's step B3 (`EmuSen_Backend.md` §13), `emusen-systems` gained the packs' code and the library its C
+layer in `Platform/platform/src/systems.rs`: first the save media's (`emusen_systems_media`, `_media_read`,
+`_media_copy`, `_media_delete`, `_media_format`) over three crates with no standard library in
+`EmuSen/Cores/Shared/`, and one status, `REFUSED` (−1034), for an operation the rules refuse, which is an answer with
+words. The C# facade is `Crystal/Systems/SystemCode.cs`, chosen with the table by `EMUSEN_SYSTEMS_NATIVE`, whose
+`Load` refuses a library without every export the code takes. An empty text may come as a null pointer with no length,
+as .NET pins an empty array (`given` in `lib.rs`). The number went from 13 to 14 in `emusen_platform.h`, `lib.rs` and
+`PlatformLibrary.InterfaceVersion` together. Later parts of B3 add exports to the same interface number, since nothing
+was released between them.

@@ -18,7 +18,7 @@ pub mod serenity_device;
 pub mod systems;
 
 /// The interface's one number, matched exactly by the host that was built against it.
-pub const ABI_VERSION: u32 = 13;
+pub const ABI_VERSION: u32 = 14;
 
 /// Every status the interface returns. Zero and up is success: a count or a length.
 pub mod status {
@@ -42,6 +42,8 @@ pub mod status {
     pub const ACCESS: i32 = -1032;
     /// A kind, an operation or a number the call does not know.
     pub const BAD_ARGUMENT: i32 = -1033;
+    /// An operation the rules refuse: an answer, with words for the player.
+    pub const REFUSED: i32 = -1034;
 }
 
 thread_local! {
@@ -97,6 +99,26 @@ pub(crate) unsafe fn text<'a>(data: *const u8, len: usize) -> Result<Option<&'a 
 /// As `text`.
 pub(crate) unsafe fn required<'a>(data: *const u8, len: usize) -> Result<&'a str, i32> {
     unsafe { text(data, len) }?.ok_or_else(|| fail(status::NULL, "a required text is null"))
+}
+
+/// Text a caller had to pass, where an empty text may come as a null pointer with no length, as .NET pins an empty array.
+///
+/// # Safety
+/// As `text`.
+pub(crate) unsafe fn given<'a>(data: *const u8, len: usize) -> Result<&'a str, i32> {
+    if data.is_null() && len == 0 { Ok("") } else { unsafe { required(data, len) } }
+}
+
+/// The bytes a caller passed: empty for a null pointer with no length, a status for a null pointer with one.
+///
+/// # Safety
+/// `data` must be valid for `len` bytes, or null.
+pub(crate) unsafe fn bytes<'a>(data: *const u8, len: usize) -> Result<&'a [u8], i32> {
+    match (data.is_null(), len) {
+        (_, 0) => Ok(&[]),
+        (true, _) => Err(fail(status::NULL, "a buffer with a length is null")),
+        (false, _) => Ok(unsafe { std::slice::from_raw_parts(data, len) }),
+    }
 }
 
 /// The length-query idiom: the whole length, with `bytes` copied only when `out` holds all of them.

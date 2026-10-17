@@ -58,6 +58,13 @@ namespace EmuSen.Crystal.Systems
             GameBoy.GameBoySystems.GameBoyLiteral, GameBoy.GameBoySystems.GameBoyColorLiteral, N64.N64System.Literal,
         };
 
+        // Each pack's C# literal media by its system's id, in the table's order: the parity class's oracle for the table's media - see EmuSen_Backend.md §13.
+        public static IReadOnlyList<(string System, SaveMedia.SaveMediumEntry Medium)> MediumLiterals { get; } = new[]
+        {
+            (Genesis.GenesisSystems.MegaCdId, Genesis.GenesisSystems.RamCartridgeLiteral), (Genesis.GenesisSystems.MegaCdId, Genesis.GenesisSystems.BackupRamLiteral),
+            (Psx.PsxSystem.Id, Psx.PsxSystem.CardLiteral), (N64.N64System.Id, N64.N64System.PakLiteral),
+        };
+
         public static SystemPack? For(string? systemId) => All.FirstOrDefault(p => p.Entry.Id == systemId);
     }
 }

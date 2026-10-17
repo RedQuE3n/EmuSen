@@ -145,6 +145,12 @@ namespace EmuSen.Galaxia.Native
         }
     }
 
+    // Whether a text crosses to the platform library as it is, for a facade outside Galaxia - see EmuSen_RustPlatform.md §21.
+    public static class PlatformText
+    {
+        public static bool Crosses(string? text, bool listed = false) => GalaxiaNative.Crosses(text, listed);
+    }
+
     // Galaxia's half of emusen_platform, and the switch that chooses it over the C# - see EmuSen_RustPlatform.md §3.9 and §10.2.
     internal static unsafe class GalaxiaNative
     {

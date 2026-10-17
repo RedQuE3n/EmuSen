@@ -12,5 +12,6 @@
   "esde_full_name": "Sega Mega Drive 32X",
   "self_delimiting_images": false,
   "attached_to": "Genesis",
-  "screenscraper_system": 19
+  "screenscraper_system": 19,
+  "media": []
 }

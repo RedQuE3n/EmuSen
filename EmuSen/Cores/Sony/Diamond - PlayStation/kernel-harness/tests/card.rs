@@ -78,3 +78,24 @@ fn the_asynchronous_calls_refuse_what_the_synchronous_ones_refuse() {
     assert_eq!(m.b(0x34, &[fd, DST, 0x80]), u32::MAX, "at the file's end");
     assert_eq!(m.b(0x36, &[fd]), fd);
 }
+
+/// A card the kernel formatted, made a file on and wrote, read by the host's format crate: one save of one block under
+/// its name, its data the bytes written, fourteen blocks free (EmuSen_Backend.md F21, D14).
+#[test]
+fn a_card_the_kernel_writes_reads_by_the_hosts_format_crate() {
+    let mut m = with_a_file();
+    let fd = m.b(0x32, &[NAME, 3]);
+    assert_eq!(m.b(0x35, &[fd, SRC, 0x2000]), 0x2000, "written synchronously");
+    m.b(0x36, &[fd]);
+    let pattern = src(&m, 0, 0x2000);
+    let card = &m.rig.sio0.card.as_ref().unwrap().data;
+    assert!(emusen_psx_card::is_formatted(card));
+    let saves: Vec<emusen_psx_card::Save> = emusen_psx_card::saves(card).collect();
+    assert_eq!(saves.len(), 1);
+    let save = saves[0];
+    assert_eq!((save.blocks, save.damaged), (1, false));
+    assert_eq!(emusen_psx_card::name(card, save.entry), b"BASLUS-00000ASYNC");
+    assert_eq!(emusen_psx_card::free_blocks(card), 14);
+    let at = (save.entry + 1) * emusen_psx_card::BLOCK_LENGTH;
+    assert_eq!(&card[at..at + 0x2000], &pattern[..]);
+}

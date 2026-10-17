@@ -78,7 +78,7 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Equal(data, SystemTable.Keys.Select(k => k.Property).Order(StringComparer.Ordinal).ToArray());
             using var document = JsonDocument.Parse(SystemTable.Json!);
             foreach (JsonElement row in document.RootElement.EnumerateArray())
-                Assert.Equal(SystemTable.Keys.Select(k => k.Key).ToArray(), row.EnumerateObject().Select(m => m.Name).ToArray());
+                Assert.Equal(SystemTable.Keys.Select(k => k.Key).Concat(SystemTable.PackKeys).ToArray(), row.EnumerateObject().Select(m => m.Name).ToArray());
         }
 
         [Fact]
@@ -116,11 +116,12 @@ namespace EmuSen.WiseMan.Crystal
         }
 
         [Fact]
-        public void The_header_declares_the_one_export_the_facade_calls()
+        public void The_header_declares_the_exports_the_facades_call_and_no_other()
         {
             string header = File.ReadAllText(Path.Combine(ConfigRoot.Managed.Directory, "Platform", "include", "emusen_platform.h"));
             Assert.Contains("int64_t emusen_systems_table(uint8_t *out, size_t len);", header);
-            Assert.Single(Regex.Matches(header, @"^\w+ \*?emusen_systems_\w+\(", RegexOptions.Multiline));
+            var declared = Regex.Matches(header, @"^\w+ \*?(emusen_systems_\w+)\(", RegexOptions.Multiline).Select(m => m.Groups[1].Value).Order(StringComparer.Ordinal);
+            Assert.Equal(SystemCode.Exports.Append("emusen_systems_table").Order(StringComparer.Ordinal), declared);
         }
     }
 }

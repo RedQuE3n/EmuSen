@@ -550,7 +550,7 @@ session header's three copies, the save library's names in both halves), are lef
 | F18 | Tables keyed by console name | `CoreCatalog`'s `CatalogKeys` (`:47`), `EsdeNames`, `ButtonsByConsole` (`:213`), `SettingsByConsole` (`:297`), `SystemIdsByConsole` (`:392`); `ControllerPorts.cs:39–43`; the save folders of `BatterySave.cs:4`; Mistress's controller layouts (`ControllerDiagrams.cs:17–24`) | the pack for console facts (with its save folder's name), core info for controls and ports; a diagram is drawn by the frontend from the controller's id |
 | F19 | Controller ids (`md.pad3`, `psx.dualshock` and the rest) | the packs; `ControllerDiagrams.cs:12,15`; Nephrite's and Diamond's info (`Nephrite/src/v1.rs:65–67`, `Diamond/src/pad.rs:252`) | core info; the pack's player rule refers to them by id |
 | F20 | Two consoles' settings schemas | the shims (`N64Console.cs`'s `VideoSettings`, `MercuryRtCore.cs:59`) and the cores (`MarsRT/src/ffi/v1.rs:114–118`, `MercuryRT/src/ffi/v1.rs:30,74`) | core info's schema (B4) |
-| F21 | A save medium's file system | the PlayStation card in `PsxCardFormat.cs` (195 lines) and in Diamond's open kernel (`kernel/src/bu.rs`, 695); the Sega CD's backup RAM in `SegaCdBramFormat.cs` (290) and in Nephrite (`src/mcd/openbram.rs`, 436). Two jobs, a host's card tool and an emulated console's firmware, over one on-disk layout | the pack's format module, written at B3 as a crate with no standard library that an open firmware may also build on; whether a core adopts it is the core's own decision (D14); until then a round trip holds the two equal |
+| F21 | A save medium's file system | the PlayStation card in `PsxCardFormat.cs` (195 lines) and in Diamond's open kernel (`kernel/src/bu.rs`, 695); the Sega CD's backup RAM in `SegaCdBramFormat.cs` (290) and in Nephrite (`src/mcd/openbram.rs`, 436). *Corrected by B3 (§13.1): Nephrite's file system is its open BIOS's `src/mcd/bios/bram.s`, 1,016 lines of 68000 assembly; `openbram.rs` is the Rust test that runs it.* Two jobs, a host's card tool and an emulated console's firmware, over one on-disk layout | the pack's format module, written at B3 as a crate with no standard library that an open firmware may also build on; whether a core adopts it is the core's own decision (D14); until then a round trip holds the two equal |
 | F22 | A crash file's name | four writers, three patterns (`Mistress/CrashLog.cs:27`, `Cores/Native/CoreLibrary.cs:117`, `NativeCoreLibrary.cs`, `Galaxia/Native/PlatformLibrary.cs:53`), none of them pruned (`error_log.rs` matches `emusen_*.log`) | one rule named by Galaxia, `EmuSen_Surfaces.md` S8; Crystal writes a session's crash records through it |
 | F23 | The sidecar's schema | written by the kit's `sidecar.rs:13–32` at build and by `CoreDiscovery.cs:28–45` for tests; read as untyped JSON (`CoreDescriptors.cs`) | `emusen-core-host` (B6), for the kit and Crystal alike |
 | F24 | The library of games | two databases, `catalogue.db` (Galaxia's `ICatalogue` with `SqliteCatalogue`, read by Pharaoh's indexer alone) and `games.db` (Mistress's `GameRecords`), and two records named `RomEntry` | `games.db` through `emusen-library` (B8); `ICatalogue` and `catalogue.db` retire with Pharaoh's indexer (D3) |
@@ -654,7 +654,7 @@ too, so a frontend lists consoles, engines and games without running any core co
 |---|---|
 | Crystal in Rust (B7) | the crate's Rust API, linked |
 | The library (B8) | the crate's Rust API, for routing during a scan |
-| The C# runtime, until B7's state 3 | the platform library's interface, matched exactly as `emusen_platform.h` is (`EmuSen_RustPlatform.md` §3.2) [R]: `emusen_systems_table` (JSON), `_route`, `_recognise`, `_cheat_decode`, `_media_read` and `_media_edit`, `_debug_view`; facades keep `SystemPacks`' C# names |
+| The C# runtime, until B7's state 3 | the platform library's interface, matched exactly as `emusen_platform.h` is (`EmuSen_RustPlatform.md` §3.2) [R]: `emusen_systems_table` (JSON), `_route`, `_recognise`, `_cheat_decode`, `_media_read` and `_media_edit`, `_debug_view`; facades keep `SystemPacks`' C# names. *As built by B3 (§13), the media's are `emusen_systems_media`, `_media_read`, `_media_copy`, `_media_delete` and `_media_format`, an edit being one call per operation rather than one call with an operation's number* |
 | Frontends, C# or Rust | never directly: `emusen_crystal_systems` and `route`, and the library's `identity` |
 | DianaSh's modules | never directly: the session service's `cheat_codecs`, `cheat_op` (decode) and the card manager's functions as the service gains them |
 | The kit | not at all: it tests a core through the core ABI alone (`EmuSen_CoreAPI.md` §12.2) [R] |
@@ -1008,3 +1008,84 @@ packs of §5.1 and the 2,539 lines of `Crystal/Systems/`.
 - No program yet reads the table without the C#: `emusen_crystal_systems` (§3.5) is B2's, and the Rust Crystal B7's.
 - `CatalogKeys`, `ButtonsByConsole`, `SettingsByConsole` and `AxesByConsole` (F18) remain `CoreCatalog`'s; controls and
   settings are core info's (§5.3) and go with B4 and B7.
+
+---
+
+## 13. What was built, 2026-10-17: B3, the packs' code in Rust
+
+*Measured on 2026-10-17 on branch `b3-packcode`, from `WiseMan` at `358ae2b0`. The step of §6's B3 row, built in the
+four parts that row's size asked for, each graded and committed before the next: (a) the card formats, (b) the cheat
+codecs, (c) the recognisers, routing, header readers and the OpenVGDB transform, (d) the debugger views and the
+disassemblers. The decisions that bear on it: D6 (data and code in `emusen-systems`), D14 (each medium's file system a
+crate with no standard library), SR7 (the C# as failover behind `EMUSEN_SYSTEMS_NATIVE`) and SR8.*
+
+### 13.1 Part (a): the card formats
+
+- **Three crates with no standard library and no allocation**, in `EmuSen/Cores/Shared/`: `emusen-psx-card`,
+  `emusen-n64-pak` and `emusen-mcd-bram` (`Hardware/Shared/EmuSen_MediumFormats.md`). Each edits an image in place and
+  names a save by its place in the directory; a refusal leaves the image as it was. Shared by the cores' tree because an
+  open firmware may build on them (D14); CI's shared-crates job tests every crate in that folder already.
+- **Their words in `emusen-systems`**: a family module each (`psx::card`, `n64::pak`, `genesis::bram`) giving a save
+  its id, title and game and a refusal its C# words, and `media`, which dispatches by medium id and writes a listing as
+  JSON. A title's code page 932 and NFKC are tables generated from .NET 10.0.112 (`psx/cp932.rs`, 1,590 lines, and
+  `psx::shift_jis`), complete for what code page 932 decodes to and for nothing else; no dependency was added.
+- **The data files gained `media`**, each medium's id, title and noun, the part of a medium §5.3 gives the pack; its
+  extension and its module stay the C# literal's (F28: the suffix is core info's). The table writes `media` last and the
+  parity class reads it as one of `SystemTable.PackKeys`, the keys a row holds beyond `SystemEntry`'s.
+- **Interface 14**, an additive minor: `emusen_systems_media` (each module's length, capacity and unit),
+  `_media_read`, `_media_copy`, `_media_delete` and `_media_format`, and a status, `EMUSEN_PLATFORM_REFUSED` (−1034), for
+  an operation the rules refuse, an answer with words. A damaged directory that reaches outside the image is
+  `BAD_ARGUMENT`, which the facade throws as the `ArgumentOutOfRangeException` the C# threw.
+- **The facade**: `SystemCode` (`Crystal/Systems/SystemCode.cs`) under the systems table's switch, which now refuses a
+  library without every export the code takes, so the table and the code are chosen together and announced once. The
+  three C# classes keep their names and forward (`PsxCardFormat.Instance` and the rest); each has a `Managed` twin, the
+  C# alone, the failover and the parity class's oracle. A save name that cannot cross as UTF-8 stays on the C#.
+- **One defect, shown and fixed in both halves**: the C# Sega CD module wrote a name back as `Encoding.ASCII` read it,
+  so a copy, and a delete that rewrote the entries after the one deleted, turned a byte past 7Fh into `?` (shown by
+  `SegaCdBramFormatTests.A_name_outside_ascii_is_copied_and_kept_byte_for_byte` failing on the C#: byte C1h written as
+  3Fh). Its entry now keeps the stored bytes.
+- **Two behaviours found and kept**: a backup RAM whose footer counts 255 or 256 files, and a delete over later entries
+  that lie outside the volume, threw `ArgumentOutOfRangeException` in the C#; both halves still do (the parity class has
+  a case), and whether a card tool should list such a volume is a question for the tester.
+- **F21's round trips**: Diamond's open kernel formats a card and writes a file that `emusen-psx-card` reads
+  (`kernel-harness/tests/card.rs`); Nephrite's open BIOS writes three files that `emusen-mcd-bram` reads, reads back
+  two the crate copies in, and deletes byte for byte as the crate does (`src/mcd/openbram.rs`). Both are
+  dev-dependencies of the cores' test rigs alone. Nephrite's backup RAM code is 68000 assembly (`bios/bram.s`), so its
+  firmware cannot build on a Rust crate as it stands: for it D14's round trip is the lasting form, not a stage before
+  adoption.
+
+| Part (a) | Lines |
+|---|---:|
+| C# replaced (the three modules at `358ae2b0`) | 718 |
+| Rust, the three crates with their tests | 1,272 |
+| Rust, `emusen-systems`' media and family modules, hand-written | 610 |
+| Rust, the generated code page 932 tables | 1,590 |
+| Rust, the C layer and the table's `media` | about 200 |
+| C# facade (`SystemCode` and the forwarding in the three classes and `SystemTable`) | about 230 |
+| The parity class `SaveMediaParityTests` | 422 |
+
+| Gate | Result |
+|---|---|
+| `cargo test --release` in each new crate | 6, 7 and 7 pass |
+| `cargo test --release -p emusen-systems -p emusen-platform` | 15, 27 and 4 pass |
+| Diamond's `kernel-harness` `card` tests; Nephrite's `openbram` tests | 4 pass; 10 pass |
+| `emusen_platform.h` as C99 and C++17, `-Wall -Wextra -pedantic -Werror` | clean |
+| `SaveMediaParityTests` | 8 pass: 300 generated cards, 300 paks and 400 backup RAMs read, and each save copied and deleted, byte for byte or refused alike; noise images and wrong lengths; every lead and trail of code page 932 through a title; edits by each half read by the other |
+| The blast radius, with `EMUSEN_SYSTEMS_NATIVE` unset and `0` | 270 pass, 270 pass |
+
+The blast radius was the two parity classes, the three format modules' classes, `SaveMediaManagerTests`,
+`SaveMediaTests`, `DiamondShellTests`, `NephriteMediaTests`, `MemoryCardsOfferTests`, Mistress's Memory Cards window
+cases, `GoldenCorpusTests` (its `memcard` file unchanged), `GalaxiaParityTests`, `EndymionParityTests`,
+`SessionHeaderTests`, `CoreRegistrationEquivalenceTests` and `LeafAssemblyTests`.
+
+**Seeded faults**, each made, built, run and reverted:
+
+| Fault | Caught by |
+|---|---|
+| the card's checksum over 126 bytes | the parity class (generated cards); not the crate's own tests |
+| an unmapped code page 932 pair read as `?` | the parity class (3 cases) |
+| NFKC without its composition | the parity class (3 cases) |
+| a note's id without its extension's dot | the parity class (2 cases) |
+| the backup RAM's directory blocks as (n + 1) / 2 | the parity class (2 cases), `SegaCdBramFormatTests` (2), the crate's tests (1) |
+| the facade dropping `damaged` from a listing | the parity class (3 cases) |
+

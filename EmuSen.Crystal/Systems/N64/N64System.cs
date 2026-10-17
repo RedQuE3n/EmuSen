@@ -25,7 +25,8 @@ namespace EmuSen.Crystal.Systems.N64
 
         public static readonly SystemEntry Entry = SystemTable.Entry(Literal);
 
-        public static readonly SaveMediumEntry Pak = new(N64PakFormat.Id, "Controller Pak", "Pak", ".mpk", N64PakFormat.Instance);
+        // The Controller Pak: the table's words with this literal's extension and module - see EmuSen_Backend.md §13.
+        public static readonly SaveMediumEntry PakLiteral = new(N64PakFormat.Id, "Controller Pak", "Pak", ".mpk", N64PakFormat.Instance), Pak = SystemTable.Medium(PakLiteral);
 
         public static readonly SystemPack Pack = new(Entry, null, null, Media: new[] { Pak });
     }

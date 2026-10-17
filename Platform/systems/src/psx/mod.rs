@@ -1,0 +1,5 @@
+//! The PlayStation's pack code: the memory card's module, and the Shift-JIS its titles are written in.
+
+pub mod card;
+mod cp932;
+pub mod shift_jis;

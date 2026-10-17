@@ -12,5 +12,6 @@
   "esde_full_name": "Nintendo 64",
   "self_delimiting_images": false,
   "attached_to": null,
-  "screenscraper_system": 14
+  "screenscraper_system": 14,
+  "media": [{ "id": "n64.pak", "title": "Controller Pak", "noun": "Pak" }]
 }

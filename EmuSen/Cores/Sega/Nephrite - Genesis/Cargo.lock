@@ -111,6 +111,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-mcd-bram"
+version = "0.1.0"
+
+[[package]]
 name = "emusen-native"
 version = "0.1.0"
 
@@ -142,6 +146,7 @@ dependencies = [
  "beryl-sn76489",
  "beryl-z80",
  "emusen-disc",
+ "emusen-mcd-bram",
  "emusen-native",
 ]
 

@@ -12,5 +12,9 @@
   "esde_full_name": "Sega CD",
   "self_delimiting_images": false,
   "attached_to": "Genesis",
-  "screenscraper_system": 20
+  "screenscraper_system": 20,
+  "media": [
+    { "id": "mcd.ramcart", "title": "Backup RAM Cartridge", "noun": "Cartridge" },
+    { "id": "mcd.backup", "title": "Internal Backup RAM", "noun": "Backup RAM" }
+  ]
 }

@@ -71,6 +71,12 @@ here.
   a GPU: the device chosen by rank or by name (`EMUSEN_GPU_DEVICE`), storage buffers, compute programs, submissions
   waited for, pending or ahead; no shader and no console. Moved 2026-10-13 out of MarsRT, whose `rdp/gpu/device.rs` it
   was, for Diamond's enhanced renderer; the seam for the kit's lent device, and what Diamond's renderer will need.
+- [`Shared/EmuSen_MediumFormats.md`](Shared/EmuSen_MediumFormats.md) — `emusen-psx-card`, `emusen-n64-pak` and
+  `emusen-mcd-bram`, the PlayStation memory card's, the Controller Pak's and the Sega CD backup RAM's file systems as
+  crates with no standard library and no allocation, for a host's card tool and an open firmware alike (the backend's
+  D14), built 2026-10-17 at its step B3: the surface, the damaged volumes the C# threw on and the name it rewrote, a
+  title's code page 932 and NFKC from tables generated from .NET, and the round trips with Diamond's open kernel and
+  Nephrite's open BIOS.
 
 ## Atari
 

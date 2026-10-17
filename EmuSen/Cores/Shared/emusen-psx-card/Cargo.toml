@@ -1,0 +1,13 @@
+[package]
+name = "emusen-psx-card"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The PlayStation memory card's file system with no standard library and no allocation, every edit made in place: the
+# host's card tool reads and edits a card through it, and an open firmware may build on it. See
+# Hardware/Shared/EmuSen_MediumFormats.md and EmuSen_Backend.md D14.
+[lib]
+name = "emusen_psx_card"
+
+[dependencies]

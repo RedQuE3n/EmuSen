@@ -114,7 +114,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         public override double FrameRateHz => CpuClockHz / (double)CyclesPerFrame;
 
         // The LCD's 160 by 144 square pixels, a game loaded or not - see EmuSen_Serenity.md §2.9.
-        public override double DisplayAspect => EmuSen.Serenity.DisplayShape.GameBoy;
+        public override double DisplayAspect => EmuSen.Crystal.Systems.DisplayShape.GameBoy;
         public override int StateVersion => StateFormatVersion;
 
         // The console the next load builds, sent as the create-time setting Model; a change before the first frame loads the game again at once.

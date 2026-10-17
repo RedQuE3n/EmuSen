@@ -189,7 +189,7 @@ namespace EmuSen.WiseMan.Common
                 if (f[4] != "1") continue;
                 clock.ObserveVblank(long.Parse(f[5]), long.Parse(f[6]), long.Parse(f[1]));
                 if (++n % 60 != 0 || clock.Reading is not { } r) continue;
-                var d = EmuSen.Common.FrameScheduler.Decide(content, r, true, true);
+                var d = FrameScheduler.Decide(content, r, true, true);
                 decided++; if (d.Locked) locked++;
                 if (n % 600 == 0) System.Console.WriteLine(System.FormattableString.Invariant($"[replay] {n}: {r.RefreshHz:F3} Hz variable={r.Variable} presents={r.FromPresents} -> {d.Describe()}"));
             }

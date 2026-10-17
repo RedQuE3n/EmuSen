@@ -2492,7 +2492,7 @@ colour number and green the emphasis bits, and `rawSize` (0, 0) where none came.
 it:
 
 - **The encoding is named.** `ICore.RawPicture` was an RGBA-laid array that the filter took to be the NES's because
-  only Moon set it. It is now a `RawPicture` (Serenity) carrying its encoding, size, element width and row stride. A
+  only Moon set it. It is now a `RawPicture` (Serenity) carrying its encoding, size, element width and row stride. Since 2026-10-17 the core hands it as a `CoreRawPicture` of the core assembly's own, of the same fields, which Mistress turns into Serenity's (`CorePictures.ForPresenter`) as it offers the frame, so that the cores name nothing of the presenter (`EmuSen_Surfaces.md` §7 S1). A
   filter states the encoding its `raw` child reads (`ScreenFilter.RawEncoding`; the CRT filter's is `nes.ppu`), and a
   picture of another encoding, or none, binds `raw` to the frame itself with `rawSize` (0, 0), as before. So a later
   encoding of another console reaches this filter only when a pass is written for it.

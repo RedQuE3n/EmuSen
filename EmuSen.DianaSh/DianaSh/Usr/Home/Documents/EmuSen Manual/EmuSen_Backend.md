@@ -153,7 +153,7 @@ write must have one owner below both, or it acquires two writers, two migration 
 |---|---|---|
 | Windows, menus, sheets, Big Picture, ES-DE themes and `themes.db` | Mistress, LunaP | a toolkit |
 | The presenter, shaders, filters, the device picture's chain, the display clock | Serenity (its Vulkan half already Rust) | a display |
-| Pacing against the display: `FrameScheduler`, the hand-off hold | `EmuSen/Common/FrameScheduler.cs`, `FrameHandOff.cs` | a display clock (`EmuSen_CoreAPI.md` §8.4) [R] |
+| Pacing against the display: `FrameScheduler`, the hand-off hold | `EmuSen.Serenity/FrameScheduler.cs` (moved by B0), `FrameHandOff.cs` | a display clock (`EmuSen_CoreAPI.md` §8.4) [R] |
 | The audio device, resampler and rate control; UI sounds | Endymion (already Rust) | an audio device |
 | Physical bindings: keys, pads, hotkeys; device to player | `keybindings.json`, `hotkeybindings.json`, `gamepadbindings.json`, `GamepadManager`, `PortRouter` | an input device |
 | Window size, filtering, shader parameters and recent shaders | `graphics.json` minus `Consoles` | presentation preference |

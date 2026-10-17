@@ -413,7 +413,7 @@ namespace EmuSen.Hotaru.Views
                 {
                     _speed.SetTurbo(_turboHeld);
                     scheduler.SyncToDisplay = GraphicsSettings.SyncToDisplay;
-                    nextTick = scheduler.Next(nextTick, _core.FrameRateHz, _speed);
+                    nextTick = scheduler.Next(nextTick, _core.FrameRateHz, _speed.IsNormalSpeed, _speed.FrameInterval(_core.FrameRateHz));
 
                     // Takes over the frame entirely - see EmuSen_Rewind_And_FastForward.md §4.
                     if (_rewindHeld)

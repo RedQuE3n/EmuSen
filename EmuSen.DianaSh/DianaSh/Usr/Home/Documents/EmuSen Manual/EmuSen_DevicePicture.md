@@ -803,7 +803,10 @@ The plan of §16.3, in its order:
 4. **The C# path**: `SlangLend`; `CoreMachine` takes a lend at create (only for a core that claims the bit), settles
    its copies before the machine is freed and lets go of it after, and `TakeDeviceFrame` asks `frame_device` after
    `advance` and `present` on a frame that is drawn; `CoreEngine` implements `IDevicePicture` (`DeviceLender`, `Lend`,
-   `PictureOnDevice`); `CoreFactory.Loaded` and `EmulatorSession` pass the lender; `GameFrameControl.TryLend` lends the
+   `PictureOnDevice`); `CoreFactory.Loaded` and `EmulatorSession` pass the lender. Since 2026-10-17 the core assembly
+   names no Serenity type (`EmuSen_Surfaces.md` §7 S1): the lend crosses as `IDeviceLend`, the core ABI's
+   `emusen_device_lend` (`CoreInterface.DeviceLend`) with `Take` and `Settle`, and Mistress's `SlangDeviceLend` wraps a
+   `SlangLend` in it, and unwraps it again to hand the picture to the presenter; `GameFrameControl.TryLend` lends the
    presenter's device; `FrameHandOff` and `GameFrameControl.UpdateFrame` carry a lend in place of pixels, which only
    the device path draws; Mistress lends at load (and in the launch screen's early load) and offers the picture on the
    device when the core says it is there and the window presents on the device, reading pixels back only for a

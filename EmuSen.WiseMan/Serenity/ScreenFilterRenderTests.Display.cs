@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using EmuSen.Crystal.Systems;
 using EmuSen.Serenity;
 using EmuSen.Serenity.Shaders;
 using SkiaSharp;

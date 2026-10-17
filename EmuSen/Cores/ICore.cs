@@ -26,7 +26,7 @@ namespace EmuSen.Cores
         string? RawEncoding { get => null; set { } }
 
         // The last frame's picture before the palette in RawEncoding, where the core keeps it; null otherwise - see EmuSen_CRT.md §22.1.
-        EmuSen.Serenity.RawPicture? RawPicture => null;
+        CoreRawPicture? RawPicture => null;
 
         // Hardware refresh rate, for frontend frame pacing - see Venus_CPU.md §8.5b.
         double FrameRateHz { get; }

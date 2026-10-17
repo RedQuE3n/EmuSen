@@ -64,7 +64,7 @@ namespace EmuSen.Common
         public string? Engine { get; set; }
 
         // Set by the frontend before LoadRom: the device a core may draw its picture on - see EmuSen_DevicePicture.md §17.
-        public Func<EmuSen.Serenity.Slang.SlangLend?>? DeviceLender { get; set; }
+        public Func<IDeviceLend?>? DeviceLender { get; set; }
 
         // Why the engine asked for is not the one running, or null - see CoreFactory.EngineNotice.
         public string? EngineNotice { get; private set; }
@@ -147,7 +147,7 @@ namespace EmuSen.Common
 
         public int DisplayLines => _core?.DisplayLines ?? 0;
 
-        public EmuSen.Serenity.RawPicture? RawPicture => _core?.RawPicture;
+        public CoreRawPicture? RawPicture => _core?.RawPicture;
 
         // What the frame control's filter reads, passed to the core before each frame - see EmuSen_CoreAPI.md §6.30.
         public string? RawEncoding

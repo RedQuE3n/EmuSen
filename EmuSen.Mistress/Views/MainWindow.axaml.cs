@@ -963,7 +963,7 @@ namespace EmuSen.Mistress.Views
             {
                 // Off the path, not the session: no core exists yet to ask - see EmuSen_Multicore.md §12.
                 string console = EmuSen.Cores.CoreCatalog.ConsoleForRom(path) ?? "Unknown";
-                _session = new EmulatorSession { Cheats = _cheats, Engine = EngineChosenFor(path), DeviceLender = GameFrame.TryLend };
+                _session = new EmulatorSession { Cheats = _cheats, Engine = EngineChosenFor(path), DeviceLender = LendDevice };
                 StartLogging(console);
                 _session.LoadRom(path, loading?.GetAwaiter().GetResult());
                 if (_session.EngineNotice is { } engineNotice) Console.WriteLine("[core] " + engineNotice);
@@ -1340,7 +1340,7 @@ namespace EmuSen.Mistress.Views
                 // Held turbo wins over the menu's base speed - see EmuSen_Settings_Reference.md §4.13.
                 _speed.SpeedPercent = _turboHeld ? _speed.TurboPercent : _baseSpeedPercent;
                 scheduler.SyncToDisplay = EmuSen.Graphics.GraphicsSettings.SyncToDisplay;
-                nextTick = scheduler.Next(nextTick, session.FrameRateHz, _speed);
+                nextTick = scheduler.Next(nextTick, session.FrameRateHz, _speed.IsNormalSpeed, _speed.FrameInterval(session.FrameRateHz));
 
                 // Takes over the frame entirely - see EmuSen_Rewind_And_FastForward.md §4.
                 if (_rewindHeld && session.Core is not null)
@@ -1431,7 +1431,7 @@ namespace EmuSen.Mistress.Views
                     if (!session.SkipRendering && (serial is null || serial != offeredSerial))
                     {
                         // A picture on the device goes to the chain there, its pixels read back only for a rewind's picture - see EmuSen_DevicePicture.md §17.
-                        if (session.Core is EmuSen.Cores.IDevicePicture { PictureOnDevice: true, Lend: { } lend } && GameFrame.PresentsOnDevice)
+                        if (session.Core is EmuSen.Cores.IDevicePicture { PictureOnDevice: true, Lend: SlangDeviceLend { Slang: var lend } } && GameFrame.PresentsOnDevice)
                         {
                             if (captured) PictureUnchanged(session, serial);
                             _frames.Offer(Array.Empty<byte>(), session.ScreenWidth, session.ScreenHeight, 1, null, session.TotalFrames, session.DisplayAspect, session.DisplayLines, null, lend);
@@ -1517,7 +1517,7 @@ namespace EmuSen.Mistress.Views
                 else
                 {
                     // Owed rather than forgotten, up to a cap, or a game whose drawing frames overrun runs slow - see §4.28.
-                    nextTick = FramePacer.Settle(nextTick, clock.Elapsed, scheduler.Interval(session.FrameRateHz, _speed));
+                    nextTick = FramePacer.Settle(nextTick, clock.Elapsed, scheduler.Interval(_speed.FrameInterval(session.FrameRateHz)));
                 }
             }
         }
@@ -1532,10 +1532,13 @@ namespace EmuSen.Mistress.Views
         }
 
         // Called from the emulation thread; newest wins - see EmuSen_Serenity.md §4.
-        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, EmuSen.Serenity.RawPicture? raw = null)
+        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, CoreRawPicture? raw = null)
         {
-            _frames.Offer(pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw);
+            _frames.Offer(pixels, width, height, rowRepeat, release, sequence, aspect, lines, CorePictures.ForPresenter(raw));
         }
+
+        // The device the picture is presented on, lent to a core machine; null when none is - see EmuSen_DevicePicture.md §17.
+        private IDeviceLend? LendDevice() => SlangDeviceLend.Of(GameFrame.TryLend());
 
         private void OnExitClick(object? sender, RoutedEventArgs e)
         {

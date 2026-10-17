@@ -225,7 +225,7 @@ namespace EmuSen.Serenity.Shaders
             RawEncoding = RawEncodings.NesPpu,
             Structural = Structural,
             ConsoleDefaults = ConsoleTiming,
-            Aspect = DisplayShape.Television,
+            Aspect = EmuSen.Crystal.Systems.DisplayShape.Television,
             RowsOnce = true,
             CropsItself = true,
             RequiresDevice = true,

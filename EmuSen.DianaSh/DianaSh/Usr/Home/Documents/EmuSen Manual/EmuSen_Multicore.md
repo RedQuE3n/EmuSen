@@ -208,6 +208,16 @@ The corollary is that this can still happen once more per stale ref. `backup-pre
 
 Both directories were removed on 2026-08-09 after confirming they contained no hand-written file: everything under them was SDK-generated (`AssemblyInfo.cs`, `GlobalUsings.g.cs`, `.cache`, `.deps.json`), nothing was tracked, and no `.csproj`, `.sln` entry or `ProjectReference` named either. The only surviving mention is the historical note in `EmuSen.Endymion.csproj`, which is correct and should stay.
 
+### 9.4 The core assembly does not reference the presentation layer
+
+**Decided 2026-10-11** (`EmuSen_Surfaces.md` §8 Q1), **true since 2026-10-17** (§7 S1 there): `EmuSen`, the core
+assembly, references `EmuSen.Crystal` and `EmuSen.Galaxia` and nothing else, and `LeafAssemblyTests` pins that set.
+Until then it referenced Serenity for the pacer, two display-shape constants, the device lend and the raw picture, so
+that every headless consumer of the cores, Pharaoh first, took Avalonia with it. The pacer is Serenity's now, the
+shapes the systems table's, and the lend and the raw picture cross in forms the core assembly owns, which a frontend
+converts. The rule mirrors §9's own from the other side: a leaf is not allowed to know a core exists, and a core is
+not allowed to know a window does.
+
 ---
 
 ## 10. The console context in Mistress

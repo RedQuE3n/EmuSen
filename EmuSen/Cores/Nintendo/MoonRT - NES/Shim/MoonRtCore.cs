@@ -42,7 +42,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
         public override int StateVersion => CurrentStateVersion;
 
         // A television's 4:3, with or without a game - see EmuSen_Serenity.md §2.9.
-        public override double DisplayAspect => EmuSen.Serenity.DisplayShape.Television;
+        public override double DisplayAspect => EmuSen.Crystal.Systems.DisplayShape.Television;
 
         public CallStackRegistry CallStack => MirrorCallStack;
         public CoverageRegistry Coverage => MirrorCoverage;

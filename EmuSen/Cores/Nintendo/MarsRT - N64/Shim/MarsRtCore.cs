@@ -78,7 +78,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         public override int ScreenWidth => IsRomLoaded ? base.ScreenWidth : N64Console.ScreenWidthPixels;
         public override int ScreenHeight => IsRomLoaded ? base.ScreenHeight : N64Console.DefaultScreenHeight;
         // The screen's shape: a television's 4:3 at every VI width and in PAL - see EmuSen_Serenity.md §2.9.
-        public override double DisplayAspect => EmuSen.Serenity.DisplayShape.Television;
+        public override double DisplayAspect => EmuSen.Crystal.Systems.DisplayShape.Television;
 
         public int DisplayLines => N64Console.LinesOf(ScreenWidth, ScreenHeight);
 

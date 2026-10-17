@@ -74,13 +74,13 @@ namespace EmuSen.WiseMan.Common
             Assert.Equal(new[] { "EmuSen.Crystal", "EmuSen.Galaxia" }, EmuSenReferencesOf(dianaSh));
         }
 
-        // The cores reach the runtime beneath the shell and not the shell; Serenity's edge waits for EmuSen_Surfaces.md §7's S1 - see EmuSen_DianaSh.md §13.6.
+        // The cores reach the runtime beneath the shell and not the shell, and no presentation layer since S1 - see EmuSen_DianaSh.md §13.6 and EmuSen_Surfaces.md §7.
         [Fact]
-        public void The_core_assembly_references_Crystal_and_not_the_shell()
+        public void The_core_assembly_references_Crystal_and_Galaxia_only()
         {
             Assembly cores = typeof(EmuSen.Cores.CoreCatalog).Assembly;
 
-            Assert.Equal(new[] { "EmuSen.Crystal", "EmuSen.Galaxia", "EmuSen.Serenity" }, EmuSenReferencesOf(cores));
+            Assert.Equal(new[] { "EmuSen.Crystal", "EmuSen.Galaxia" }, EmuSenReferencesOf(cores));
         }
 
         // What the leaf enforced by construction is now this rule - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.1.

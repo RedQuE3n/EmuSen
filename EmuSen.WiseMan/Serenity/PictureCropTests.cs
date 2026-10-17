@@ -13,6 +13,7 @@ using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Views;
+using EmuSen.Crystal.Systems;
 using EmuSen.Serenity;
 using EmuSen.Serenity.Shaders;
 using EmuSen.WiseMan.Fixtures;

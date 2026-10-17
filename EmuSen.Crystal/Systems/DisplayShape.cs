@@ -1,4 +1,4 @@
-namespace EmuSen.Serenity
+namespace EmuSen.Crystal.Systems
 {
     // The shapes of the screens consoles were made for, width over height, which the cores report and the CRT filter's tube is drawn in - see EmuSen_Serenity.md §2.9.
     public static class DisplayShape

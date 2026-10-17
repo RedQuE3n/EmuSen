@@ -86,7 +86,7 @@ namespace EmuSen.Crystal.Systems.Psx
         };
 
         // A television's 4:3, the shape every PlayStation picture is shown in.
-        public const double DisplayAspect = 4.0 / 3.0;
+        public const double DisplayAspect = DisplayShape.Television;
 
         public const string DualShock = "psx.dualshock", DigitalPad = "psx.pad";
 

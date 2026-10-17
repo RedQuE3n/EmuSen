@@ -91,7 +91,7 @@ namespace EmuSen.Cores
         }
 
         // A console started with nothing in it, on the engine asked for where it starts the console empty, else the first that does - see Diamond_Shell.md §1.5.
-        public static ICore CreateConsole(string console, string? engine = null, Func<EmuSen.Serenity.Slang.SlangLend?>? lender = null)
+        public static ICore CreateConsole(string console, string? engine = null, Func<IDeviceLend?>? lender = null)
         {
             var start = CoreCatalog.EmptyStartFor(console) ?? throw new NotSupportedException($"No core in this build starts the {console} with nothing in it.");
             bool Starts(Native.DiscoveredCore c) => c.Info.Systems.Any(s => s.Id == start.SystemId && s.StartsEmpty);
@@ -108,12 +108,12 @@ namespace EmuSen.Cores
         }
 
         // CreateConsole with its debugger and cheat codecs, as Load gives a game's.
-        public static CoreBundle LoadConsole(string console, CheatRegistry? cheats = null, string? engine = null, Func<EmuSen.Serenity.Slang.SlangLend?>? lender = null) =>
+        public static CoreBundle LoadConsole(string console, CheatRegistry? cheats = null, string? engine = null, Func<IDeviceLend?>? lender = null) =>
             Bundle(CreateConsole(console, engine, lender), cheats);
 
         // Loads the ROM too, because a debug target needs the core's hardware to already exist.
         public static CoreBundle Load(string romPath, bool headless = true, CheatRegistry? cheats = null,
-            string? engine = null, Func<EmuSen.Serenity.Slang.SlangLend?>? lender = null)
+            string? engine = null, Func<IDeviceLend?>? lender = null)
         {
             ICore core = Loaded(romPath, headless, engine, lender);
             return Bundle(core, cheats) with { Notice = EngineNotice(romPath, engine, core) };
@@ -121,7 +121,7 @@ namespace EmuSen.Cores
 
         // The core made and the file loaded into it, Load without its wiring, for a caller that loads off its own thread.
         // lender is asked for the device to lend a core whose picture can lie on it - see EmuSen_DevicePicture.md §17.
-        public static ICore Loaded(string romPath, bool headless = true, string? engine = null, Func<EmuSen.Serenity.Slang.SlangLend?>? lender = null)
+        public static ICore Loaded(string romPath, bool headless = true, string? engine = null, Func<IDeviceLend?>? lender = null)
         {
             ICore core = Create(romPath, headless, engine);
             if (core is IDevicePicture picture) picture.DeviceLender = lender;

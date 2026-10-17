@@ -142,7 +142,7 @@ namespace EmuSen.WiseMan.Serenity
             try { core.LoadRom(path); } finally { System.IO.File.Delete(path); }
             core.RawEncoding = RawEncodings.NesPpu;
             for (int f = 0; f < 8; f++) core.RunFrame();
-            RawPicture raw = core.RawPicture!.Value;
+            RawPicture raw = EmuSen.Mistress.CorePictures.ForPresenter(core.RawPicture)!.Value;
             byte[] rgb = core.GetFrameBufferRgba();
             int first = Enumerable.Range(0, 240).First(y => (raw.Values[y * 512] | raw.Values[y * 512 + 1] << 8) >> 6 == 7);
             Assert.InRange(first, 60, 180);

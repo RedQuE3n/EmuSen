@@ -46,7 +46,7 @@ namespace EmuSen.Mistress.Views
             int restoredCheats = DropCheatsFromAnotherGame(name);
             try
             {
-                _session = new EmulatorSession { Cheats = _cheats, Engine = CoreCatalog.EngineChosen(console, _graphics.Value(console, CoreCatalog.EngineKey)), DeviceLender = GameFrame.TryLend };
+                _session = new EmulatorSession { Cheats = _cheats, Engine = CoreCatalog.EngineChosen(console, _graphics.Value(console, CoreCatalog.EngineKey)), DeviceLender = LendDevice };
                 StartLogging(console);
                 _session.StartConsole(console);
                 _activeConsole = console;

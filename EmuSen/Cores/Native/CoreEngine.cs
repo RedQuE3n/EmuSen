@@ -587,20 +587,20 @@ namespace EmuSen.Cores.Native
         }
 
         // The last frame's picture before the palette in RawEncoding, copied into an array lent as the RGBA frame is; null where the core kept none.
-        public EmuSen.Serenity.RawPicture? RawPicture
+        public CoreRawPicture? RawPicture
         {
             get
             {
                 if (_machine is not { } m || _rawIndex < 0 || _rawAsked is not { } encoding || m.RawInfo((uint)_rawIndex) is not { } f) return null;
                 byte[] values = _rawLending.Lend((int)f.Bytes);
                 m.CopyRaw((uint)_rawIndex, values);
-                return new EmuSen.Serenity.RawPicture(encoding, f.Width, f.Height, (int)f.Element, f.Stride, values);
+                return new CoreRawPicture(encoding, f.Width, f.Height, (int)f.Element, f.Stride, values);
             }
         }
 
-        public Func<EmuSen.Serenity.Slang.SlangLend?>? DeviceLender { get; set; }
+        public Func<IDeviceLend?>? DeviceLender { get; set; }
 
-        public EmuSen.Serenity.Slang.SlangLend? Lend => _machine?.Lend;
+        public IDeviceLend? Lend => _machine?.Lend;
 
         public bool PictureOnDevice { get; private set; }
 

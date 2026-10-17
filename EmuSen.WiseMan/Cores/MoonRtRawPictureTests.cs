@@ -33,7 +33,7 @@ namespace EmuSen.WiseMan.Cores
         // Every pixel's nes.ppu value through the NES system pack's palette is the frame's pixel; the emphasis bits seen are added to the set.
         private static void Held(MoonRtCore core, int frame, HashSet<int> emphasis)
         {
-            RawPicture raw = core.RawPicture ?? throw new Xunit.Sdk.XunitException($"frame {frame}: no picture before the palette");
+            CoreRawPicture raw = core.RawPicture ?? throw new Xunit.Sdk.XunitException($"frame {frame}: no picture before the palette");
             Assert.Equal((RawEncodings.NesPpu, 256, 240, 2, 512), (raw.Encoding, raw.Width, raw.Height, raw.Element, raw.Stride));
             byte[] rgba = core.GetFrameBufferRgba();
             for (int i = 0; i < 256 * 240; i++)

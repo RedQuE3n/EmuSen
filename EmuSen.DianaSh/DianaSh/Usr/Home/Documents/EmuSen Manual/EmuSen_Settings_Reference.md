@@ -7472,7 +7472,7 @@ only (`DisplayClockTests`).
 
 #### 4.87.4 `FrameScheduler`: the decision and the deadline, in one place
 
-`EmuSen/Common/FrameScheduler.cs` is the whole of the pacing. Mistress's and Hotaru's emulation loops both call it
+`EmuSen.Serenity/FrameScheduler.cs` is the whole of the pacing (in the core assembly as `EmuSen/Common/FrameScheduler.cs` until 2026-10-17, when it moved beside `DisplayClock`, the display it times against: `EmuSen_Surfaces.md` §7 S1). Since that move it takes the speed as two values, whether it is 100% and the frame's interval at it, which the frontend reads from its `SpeedController`; the arithmetic is unchanged. Mistress's and Hotaru's emulation loops both call it
 and neither holds any of its logic; it is written to be moved behind a runtime interface without change. **Its inputs
 from the core are the two every core already reports through `ICore`: `FrameRateHz`, read each frame, and the samples
 drained.** Nothing was added to a core or to the core interface, and there is no branch on which core is running.

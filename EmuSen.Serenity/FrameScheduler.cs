@@ -1,8 +1,7 @@
 using System;
 using System.Diagnostics;
-using EmuSen.Serenity;
 
-namespace EmuSen.Common
+namespace EmuSen.Serenity
 {
     public enum PacingMode { ContentPaced, DisplayLocked }
 
@@ -69,14 +68,14 @@ namespace EmuSen.Common
             return new(PacingMode.DisplayLocked, k, refresh, contentHz, "");
         }
 
-        // The deadline after the frame that was due at `due`, both on the caller's clock.
-        public TimeSpan Next(TimeSpan due, double contentHz, SpeedController speed)
+        // The deadline after the frame that was due at `due`, both on the caller's clock; paced is the frame's interval at the speed chosen, used when not locked.
+        public TimeSpan Next(TimeSpan due, double contentHz, bool normalSpeed, TimeSpan paced)
         {
             long now = Stopwatch.GetTimestamp();
             _contentHz = _contentHz <= 0 || Math.Abs(contentHz - _contentHz) > RateJump * _contentHz ? contentHz : _contentHz + (contentHz - _contentHz) / 32;
             DisplayReading? reading = _display(now);
-            Decision = Decide(_contentHz, reading, SyncToDisplay, speed.IsNormalSpeed, Tolerance);
-            if (!Decision.Locked) { _held = _upcoming = 0; return due + speed.FrameInterval(contentHz); }
+            Decision = Decide(_contentHz, reading, SyncToDisplay, normalSpeed, Tolerance);
+            if (!Decision.Locked) { _held = _upcoming = 0; return due + paced; }
 
             double period = reading!.PeriodTicks;
             long lead = Lead(period);
@@ -122,8 +121,8 @@ namespace EmuSen.Common
         }
 
         // How long the caller's late-frame rule should treat one frame as.
-        public TimeSpan Interval(double contentHz, SpeedController speed) => Decision.Locked
+        public TimeSpan Interval(TimeSpan paced) => Decision.Locked
             ? TimeSpan.FromSeconds(Decision.RefreshesPerFrame / Decision.DisplayHz)
-            : speed.FrameInterval(contentHz);
+            : paced;
     }
 }

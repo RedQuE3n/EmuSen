@@ -70,6 +70,25 @@ namespace EmuSen.WiseMan.Cores
             return Directory.EnumerateFiles(library, "*.s?c", SearchOption.AllDirectories).FirstOrDefault(f => Md5(f) == g.Md5);
         }
 
+        // A golden left out of a run, and whether that fails it: a game the library lacks passes, one whose firmware is missing fails - see VenusRT_Native.md §70.4.
+        public sealed record Skipped(string File, string Why, bool Fails);
+
+        // Each golden's ROM in the library, or why it is skipped.
+        public static (List<(Golden Golden, string Rom)> Runs, List<Skipped> Skips) Plan(string? library, IEnumerable<Golden> goldens, IReadOnlyList<string?> firmwareFolders)
+        {
+            var runs = new List<(Golden, string)>();
+            var skips = new List<Skipped>();
+            foreach (var g in goldens)
+            {
+                if (library is null || !Directory.Exists(library)) skips.Add(new(g.File, $"{Variable} unset or naming no folder", false));
+                else if (Find(library, g) is not { } found) skips.Add(new(g.File, "not in the library", false));
+                else if (VenusRtSnesEngine.DspRequest(found) is { } dsp && VenusRtSnesEngine.DspFirmware(found, firmwareFolders) is null)
+                    skips.Add(new(g.File, $"in the library, but no {dsp.Name} among the player's images", true));
+                else runs.Add((g, found));
+            }
+            return (runs, skips);
+        }
+
         private static string Md5(string path) => Convert.ToHexString(MD5.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
 
         // FNV-1a over a picture's size and its 15-bit words.
@@ -95,35 +114,62 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(Goldens.Length, Goldens.Select(g => g.Md5).Distinct().Count());
         }
 
-        // Opt-in: each anchor's VenusRT picture equal to one of Mesen's within the window, or the cause recorded, and its hash as recorded.
+        // The skip rule on a synthetic library: a DSP game present without its image fails, with an image of its size it runs, and an absent game is listed and passes.
+        [Fact]
+        public void A_game_in_the_library_without_its_firmware_fails_the_run_and_an_absent_one_is_listed()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "EmuSenVenusRtSkips_" + Guid.NewGuid().ToString("N"));
+            string library = Path.Combine(root, "library"), firmware = Directory.CreateDirectory(Path.Combine(root, "firmware")).FullName;
+            try
+            {
+                string rom = Path.Combine(Directory.CreateDirectory(Path.Combine(library, "SNES")).FullName, "dsp-game.sfc");
+                File.WriteAllBytes(rom, SyntheticRom.BuildNecDsp("PILOTWINGS"));
+                var request = VenusRtSnesEngine.DspRequest(rom);
+                Assert.NotNull(request);
+                var present = new Golden("dsp-game.sfc", Md5(rom), "DSP-1", Array.Empty<SnesPress>(), new[] { new Anchor(10, "a frame", "") });
+                var absent = new Golden("absent.sfc", new string('0', 32), "plain", Array.Empty<SnesPress>(), new[] { new Anchor(10, "a frame", "") });
+
+                var (runs, skips) = Plan(library, new[] { present, absent }, new[] { firmware });
+                Assert.Empty(runs);
+                Assert.Equal(new[] { ("dsp-game.sfc", true), ("absent.sfc", false) }, skips.Select(s => (s.File, s.Fails)));
+                Assert.Contains(request!.Name, skips[0].Why);
+
+                File.WriteAllBytes(Path.Combine(firmware, request.Name), new byte[request.Size]);
+                (runs, skips) = Plan(library, new[] { present, absent }, new[] { firmware });
+                Assert.Equal(rom, runs.Single().Rom);
+                Assert.Equal(("absent.sfc", false), (skips.Single().File, skips.Single().Fails));
+
+                (runs, skips) = Plan(null, Goldens, new[] { firmware });
+                Assert.Empty(runs);
+                Assert.Equal(Goldens.Select(g => g.File), skips.Select(s => s.File));
+                Assert.All(skips, s => Assert.False(s.Fails));
+            }
+            finally
+            {
+                try { Directory.Delete(root, recursive: true); } catch (IOException) { }
+            }
+        }
+
+        // Opt-in: each anchor's VenusRT picture equal to one of Mesen's within the window, or the cause recorded, and its hash as recorded; every skipped game listed.
         [Fact]
         public void The_goldens_against_Mesen()
         {
-            if (Library is not { } library || !Directory.Exists(library))
-            {
-                _output.WriteLine($"{Variable} unset, not run");
-                return;
-            }
+            var (runs, skips) = Plan(Library, Goldens, VenusRtSnesEngine.FirmwareFolders);
             string scratch = Path.Combine(Path.GetTempPath(), "EmuSenVenusRtGoldens_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(scratch);
             var failures = new List<string>();
             var table = new List<string> { "game\tframe\tscene\tresult\tlag\tdiffering\tvenusrt_hash\trecorded" };
+            foreach (var s in skips)
+            {
+                table.Add(string.Join('\t', s.File, "", s.Why, "not run", "", "", "", ""));
+                if (s.Fails) failures.Add($"{s.File}: {s.Why}, so its anchors were not checked");
+            }
             try
             {
-                foreach (var g in Goldens)
+                foreach (var (g, found) in runs)
                 {
-                    if (Find(library, g) is not { } found)
-                    {
-                        _output.WriteLine($"{g.File}: not in the library, not run");
-                        continue;
-                    }
                     string rom = Path.Combine(scratch, g.Md5 + Path.GetExtension(found));
                     File.Copy(found, rom, overwrite: true);
-                    if (VenusRtSnesEngine.DspRequest(rom) is { } dsp && VenusRtSnesEngine.DspFirmware(rom) is null)
-                    {
-                        _output.WriteLine($"{g.File}: no {dsp.Name} among the player's images, not run");
-                        continue;
-                    }
                     var ours = new VenusRtSnesEngine().Run(rom, g.Anchors.Select(a => a.Frame).ToArray(), g.Presses);
                     foreach (var a in g.Anchors)
                     {

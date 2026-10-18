@@ -7635,4 +7635,49 @@ changed, so no other golden can move. `VenusGoldenTests`' traces are recorded on
 
 **A gap left open:** a golden whose firmware is missing is skipped with a line of output, and the run still passes, which
 is how these six went unrecorded for two weeks. Making a skipped game visible in the result is a change to the test's
-contract and is put to the tester rather than made here.
+contract and is put to the tester rather than made here. *Decided 2026-10-18 by the tester, and built in §70.5.*
+
+### 70.5 A skipped golden is listed, and a missing firmware fails the run (decided 2026-10-18 by the tester)
+
+**The rule.** `The_goldens_against_Mesen` lists every golden it does not run, as a row of its result table (and of the
+report file) with the result "not run" and the reason, and it **fails when a game is in the library but its firmware
+is not found**, naming the game and the image it lacks: "in the library, but no dsp1b.rom among the player's images, so
+its anchors were not checked". A game the library does not hold is listed and passes, and so does a run with no library
+at all, such as CI's, where all twelve are listed with "EMUSEN_VENUSRT_GOLDENS unset or naming no folder". The test
+needs a firmware image only for a game the player owns, so the failure asks for nothing the player does not already
+have, and nothing is ever fetched.
+
+**How.** The decision is `VenusRtGoldenTests.Plan`, which takes the library, the goldens and the firmware folders and
+returns the runs and the skips, each skip marked whether it fails. `VenusRtSnesEngine.DspFirmware` gained an overload
+taking its folders (`FirmwareFolders`, the corpus's firmware folder then the player's, is the default), so the rule
+can be tested on folders of its own.
+
+**The rule's test,** `A_game_in_the_library_without_its_firmware_fails_the_run_and_an_absent_one_is_listed`, builds a
+library folder holding one synthetic DSP-1 cartridge (`SyntheticRom.BuildNecDsp`) and an empty firmware folder, with
+a golden for that cartridge and one for a game absent from the library. The cartridge is a failing skip naming the image
+VenusRT's `firmware_for` asks for, and the absent game a passing one. With a file of the requested size in the folder
+(zeros, not an image) the cartridge is run instead. With no library, every golden of the table is listed and none
+fails. It needs no library and runs everywhere.
+
+**Measured on 2026-10-18.** Before the change, with a library holding Super Mario Kart and F1 ROC II and no firmware
+folder holding their images, the test **passed**, skipping both with an output line. After it, the same run fails,
+naming both games and the two images. With no library it passes, listing all twelve; with the whole library, the
+corpus's firmware folder and the Mesen probe it passes, all 36 anchors as recorded.
+
+**The other opt-in tests, read for the same gap,** across WiseMan and the cores' crates:
+- **Diamond's `Ps1_tests_pass_by_their_tty_on_a_players_bios` had it, and has the rule now.** Given a firmware folder,
+  it took whichever of the core's declared BIOS files the folder holds by name, and with none of them it ran ps1-tests
+  on the open kernel and passed as a run on the player's BIOS. It now fails, naming the folder and the names it looked
+  for. Measured on 2026-10-18 with the release in the probe folder and a folder of the player's images whose files
+  are named otherwise: before, both ps1-tests cases passed (17 s); after, this one fails with that message and the
+  open kernel's case still passes (`Diamond_Native.md`, the player's BIOS under §11).
+- **No other test skips or degrades a game for missing firmware.** `VenusGoldenTests` records and grades on an empty
+  firmware folder by design (§68.2). `MoonGoldenTests` and `MercuryGoldenTests` run no firmware. Nephrite's library
+  comparison takes cartridges only, and its reference probe's firmware skip is an exception asserted by its own test.
+  Diamond's crate tests on the player's BIOS already fail when the folder lacks the declared American BIOS (an
+  `expect` in `tests/programs.rs`). The VenusRT adapter and debugger cases that install the corpus's DSP images compare
+  two paths given the same firmware and record no anchors.
+- **Read and left as they are:** the VenusRT crate's oracle tests (`dsporacle::firmware`, §37.1) print "not run" for a
+  chip whose image the folder named by `EMUSEN_VENUSRT_FIRMWARE` lacks. They grade the chips, not a game, and a player
+  may hold some chips' images and not others, so the rule's condition, a game the player owns, has no counterpart
+  there.

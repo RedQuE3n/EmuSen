@@ -298,6 +298,7 @@ namespace EmuSen.WiseMan.Cores
             }
             var declared = CoreLibrary.Open(LibraryPath).Info.Systems.Single().Firmware;
             var bios = declared.Where(f => File.Exists(Path.Combine(firmware, f.Name))).Select(f => (f.Which, File.ReadAllBytes(Path.Combine(firmware, f.Name)))).ToArray();
+            Assert.True(bios.Length > 0, $"EMUSEN_DIAMOND_FIRMWARE names {firmware}, which holds none of {string.Join(", ", declared.Select(f => f.Name))}, so the run would be the open kernel's");
             Assert.Empty(RunPs1Tests(corpus, bios));
         }
 

@@ -332,6 +332,7 @@ built.factory[NES plain <null>].buttons = [Up, Down, Left, Right, Select, Start,
 built.factory[NES plain <null>].axes = []
 built.factory[NES plain <null>].state-version = 6
 built.factory[NES plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[NES plain <null>].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 built.factory[NES plain <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Nope].supported = True
@@ -347,6 +348,7 @@ built.factory[NES plain Nope].buttons = [Up, Down, Left, Right, Select, Start, B
 built.factory[NES plain Nope].axes = []
 built.factory[NES plain Nope].state-version = 6
 built.factory[NES plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[NES plain Nope].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 built.factory[NES plain Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Venus (C#)].supported = True
@@ -362,6 +364,7 @@ built.factory[NES plain Venus (C#)].buttons = [Up, Down, Left, Right, Select, St
 built.factory[NES plain Venus (C#)].axes = []
 built.factory[NES plain Venus (C#)].state-version = 6
 built.factory[NES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[NES plain Venus (C#)].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 built.factory[NES plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Moon (C#)].supported = True
@@ -377,6 +380,7 @@ built.factory[NES plain Moon (C#)].buttons = [Up, Down, Left, Right, Select, Sta
 built.factory[NES plain Moon (C#)].axes = []
 built.factory[NES plain Moon (C#)].state-version = 6
 built.factory[NES plain Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[NES plain Moon (C#)].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 built.factory[NES plain Moon (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Moon (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[NES battery <null>].supported = True
@@ -392,6 +396,7 @@ built.factory[NES battery <null>].buttons = [Up, Down, Left, Right, Select, Star
 built.factory[NES battery <null>].axes = []
 built.factory[NES battery <null>].state-version = 6
 built.factory[NES battery <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[NES battery <null>].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 built.factory[NES battery <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES battery <null>].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
 built.factory[NES battery <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
@@ -408,6 +413,7 @@ built.factory[NES battery Nope].buttons = [Up, Down, Left, Right, Select, Start,
 built.factory[NES battery Nope].axes = []
 built.factory[NES battery Nope].state-version = 6
 built.factory[NES battery Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[NES battery Nope].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 built.factory[NES battery Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES battery Nope].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
 built.factory[NES battery Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
@@ -424,6 +430,7 @@ built.factory[NES battery Venus (C#)].buttons = [Up, Down, Left, Right, Select, 
 built.factory[NES battery Venus (C#)].axes = []
 built.factory[NES battery Venus (C#)].state-version = 6
 built.factory[NES battery Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[NES battery Venus (C#)].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 built.factory[NES battery Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES battery Venus (C#)].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
 built.factory[NES battery Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
@@ -440,6 +447,7 @@ built.factory[NES battery Moon (C#)].buttons = [Up, Down, Left, Right, Select, S
 built.factory[NES battery Moon (C#)].axes = []
 built.factory[NES battery Moon (C#)].state-version = 6
 built.factory[NES battery Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+built.factory[NES battery Moon (C#)].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 built.factory[NES battery Moon (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[NES battery Moon (C#)].file = Home/Saves/NES/Game.srm 8192 17b6456fb56dc08f
 built.factory[NES battery Moon (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
@@ -1209,6 +1217,7 @@ nothing-discovered.factory[NES plain <null>].buttons = [Up, Down, Left, Right, S
 nothing-discovered.factory[NES plain <null>].axes = []
 nothing-discovered.factory[NES plain <null>].state-version = 6
 nothing-discovered.factory[NES plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+nothing-discovered.factory[NES plain <null>].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 nothing-discovered.factory[NES plain Nope].supported = True
 nothing-discovered.factory[NES plain Nope].probe = MoonRtCore
 nothing-discovered.factory[NES plain Nope].core = MoonRtCore
@@ -1222,6 +1231,7 @@ nothing-discovered.factory[NES plain Nope].buttons = [Up, Down, Left, Right, Sel
 nothing-discovered.factory[NES plain Nope].axes = []
 nothing-discovered.factory[NES plain Nope].state-version = 6
 nothing-discovered.factory[NES plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+nothing-discovered.factory[NES plain Nope].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 nothing-discovered.factory[NES plain Venus (C#)].supported = True
 nothing-discovered.factory[NES plain Venus (C#)].probe = MoonRtCore
 nothing-discovered.factory[NES plain Venus (C#)].core = MoonRtCore
@@ -1235,6 +1245,7 @@ nothing-discovered.factory[NES plain Venus (C#)].buttons = [Up, Down, Left, Righ
 nothing-discovered.factory[NES plain Venus (C#)].axes = []
 nothing-discovered.factory[NES plain Venus (C#)].state-version = 6
 nothing-discovered.factory[NES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+nothing-discovered.factory[NES plain Venus (C#)].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 nothing-discovered.factory[NES plain Moon (C#)].supported = True
 nothing-discovered.factory[NES plain Moon (C#)].probe = MoonRtCore
 nothing-discovered.factory[NES plain Moon (C#)].core = MoonRtCore
@@ -1248,6 +1259,7 @@ nothing-discovered.factory[NES plain Moon (C#)].buttons = [Up, Down, Left, Right
 nothing-discovered.factory[NES plain Moon (C#)].axes = []
 nothing-discovered.factory[NES plain Moon (C#)].state-version = 6
 nothing-discovered.factory[NES plain Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+nothing-discovered.factory[NES plain Moon (C#)].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 nothing-discovered.factory[GB plain <null>].supported = True
 nothing-discovered.factory[GB plain <null>].probe = MercuryRtCore
 nothing-discovered.factory[GB plain <null>].core = MercuryRtCore
@@ -1474,6 +1486,7 @@ refused-discovered.factory[NES plain <null>].buttons = [Up, Down, Left, Right, S
 refused-discovered.factory[NES plain <null>].axes = []
 refused-discovered.factory[NES plain <null>].state-version = 6
 refused-discovered.factory[NES plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+refused-discovered.factory[NES plain <null>].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 refused-discovered.factory[NES plain Nope].supported = True
 refused-discovered.factory[NES plain Nope].probe = MoonRtCore
 refused-discovered.factory[NES plain Nope].core = MoonRtCore
@@ -1487,6 +1500,7 @@ refused-discovered.factory[NES plain Nope].buttons = [Up, Down, Left, Right, Sel
 refused-discovered.factory[NES plain Nope].axes = []
 refused-discovered.factory[NES plain Nope].state-version = 6
 refused-discovered.factory[NES plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+refused-discovered.factory[NES plain Nope].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 refused-discovered.factory[NES plain Venus (C#)].supported = True
 refused-discovered.factory[NES plain Venus (C#)].probe = MoonRtCore
 refused-discovered.factory[NES plain Venus (C#)].core = MoonRtCore
@@ -1500,6 +1514,7 @@ refused-discovered.factory[NES plain Venus (C#)].buttons = [Up, Down, Left, Righ
 refused-discovered.factory[NES plain Venus (C#)].axes = []
 refused-discovered.factory[NES plain Venus (C#)].state-version = 6
 refused-discovered.factory[NES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+refused-discovered.factory[NES plain Venus (C#)].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 refused-discovered.factory[NES plain Moon (C#)].supported = True
 refused-discovered.factory[NES plain Moon (C#)].probe = MoonRtCore
 refused-discovered.factory[NES plain Moon (C#)].core = MoonRtCore
@@ -1513,6 +1528,7 @@ refused-discovered.factory[NES plain Moon (C#)].buttons = [Up, Down, Left, Right
 refused-discovered.factory[NES plain Moon (C#)].axes = []
 refused-discovered.factory[NES plain Moon (C#)].state-version = 6
 refused-discovered.factory[NES plain Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+refused-discovered.factory[NES plain Moon (C#)].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 refused-discovered.factory[GB plain <null>].supported = True
 refused-discovered.factory[GB plain <null>].probe = MercuryRtCore
 refused-discovered.factory[GB plain <null>].core = MercuryRtCore

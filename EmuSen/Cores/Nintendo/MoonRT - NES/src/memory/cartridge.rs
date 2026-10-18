@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use crate::Skip;
+use crate::model::Model;
 use crate::state::{StateReader, StateResult, StateWriter};
 
 pub const PRG_BANK_SIZE: i32 = 0x4000;
@@ -45,7 +46,7 @@ impl Cartridge {
         if image.len() < HEADER_SIZE || image[0] != b'N' || image[1] != b'E' || image[2] != b'S' || image[3] != 0x1A {
             return Err(RomError::NotInes);
         }
-        let nes20 = (image[7] & 0x0C) == 0x08;
+        let nes20 = is_nes20(image);
         let archaic = !nes20 && ((image[7] & 0x0C) != 0 || image[12] != 0 || image[13] != 0 || image[14] != 0 || image[15] != 0);
         let mut prg_banks = image[4] as i32;
         let mut chr_banks = image[5] as i32;
@@ -96,6 +97,19 @@ impl Cartridge {
             header_mirroring: Skip(header_mirroring),
             cpu_cycle: 0,
         })
+    }
+
+    /// The console the header names: NES 2.0's byte 12, where 2 (either console) runs as NTSC; an iNES 1.0 header has
+    /// no reliable flag and runs as NTSC (Moon_PAL.md §3).
+    pub fn header_model(image: &[u8]) -> Model {
+        if image.len() < HEADER_SIZE || !is_nes20(image) {
+            return Model::Ntsc;
+        }
+        match image[12] & 0x03 {
+            1 => Model::Pal,
+            3 => Model::Dendy,
+            _ => Model::Ntsc,
+        }
     }
 
     #[inline(always)]
@@ -156,4 +170,9 @@ impl Cartridge {
         r.bytes(&mut self.prg_ram)?; // PrgRam
         Ok(())
     }
+}
+
+/// Byte 7's bits 2-3 read 2: the header is NES 2.0.
+fn is_nes20(image: &[u8]) -> bool {
+    (image[7] & 0x0C) == 0x08
 }

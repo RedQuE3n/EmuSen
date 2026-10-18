@@ -16,6 +16,9 @@ pub static NES_PALETTE: [u8; 192] = [
     204, 210, 120, 180, 222, 120, 168, 226, 144, 152, 226, 180, 160, 214, 228, 160, 162, 160, 0, 0, 0, 0, 0, 0,
 ];
 
+/// The border's colour number, a black ($0E as NES_MiSTer draws it), with no emphasis bits.
+const BORDER_COLOUR: u8 = 0x0E;
+
 impl Ppu {
     /// Coarse Y wraps at 29, not 31: rows 30 and 31 are the attribute table.
     pub(super) fn increment_y(&mut self) {
@@ -54,6 +57,26 @@ impl Ppu {
             self.composite_keeping_raw(line, board);
         } else {
             self.composite::<false>(line, board);
+        }
+        if self.timing.black_border && !*self.skip_rendering {
+            self.draw_border(line);
+        }
+    }
+
+    /// The 2C07's border: the top line and two pixels at each side black, without emphasis or greyscale (Moon_PAL.md §4.2).
+    #[cold]
+    #[inline(never)]
+    fn draw_border(&mut self, line: i32) {
+        let row = line as usize * SCREEN_WIDTH;
+        let black = BORDER_COLOUR as usize * 3;
+        let mut raw = self.raw.as_deref_mut().filter(|r| r.on);
+        for x in (0..SCREEN_WIDTH).filter(|&x| line == 0 || !(2..SCREEN_WIDTH - 2).contains(&x)) {
+            if let Some(out) = self.frame_rgba.get_mut((row + x) * 4..(row + x) * 4 + 4) {
+                out.copy_from_slice(&[NES_PALETTE[black], NES_PALETTE[black + 1], NES_PALETTE[black + 2], 0xFF]);
+            }
+            if let Some(out) = raw.as_mut().and_then(|r| r.values.get_mut((row + x) * 2..(row + x) * 2 + 2)) {
+                out.copy_from_slice(&(BORDER_COLOUR as u16).to_le_bytes());
+            }
         }
     }
 

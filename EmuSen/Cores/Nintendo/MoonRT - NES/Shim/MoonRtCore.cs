@@ -13,11 +13,11 @@ namespace EmuSen.Cores.Nintendo.MoonRT
     {
         public const int Width = 256, Height = 240;
 
-        // "MOON" little-endian, and the versions this build writes and reads - see Moon_Core.md §5.
+        // "MOON" little-endian; an NTSC NES writes version 6, a PAL NES or a Dendy 7, and this build reads 3 to 7 - see Moon_PAL.md §7.
         public const uint StateMagic = 0x4E4F4F4D;
-        public const int CurrentStateVersion = 6, OldestReadableVersion = 3;
+        public const int CurrentStateVersion = 6, NewestStateVersion = 7, OldestReadableVersion = 3;
 
-        // The master clock over the clocks of a frame, 262 lines of 341 dots of 4.
+        // The NTSC NES's master clock over the clocks of a frame, 262 lines of 341 dots of 4; a loaded game's is machine info's.
         public const double FrameRate = 21477272.0 / (262 * 341 * 4);
 
         private uint _mutes;
@@ -38,8 +38,8 @@ namespace EmuSen.Cores.Nintendo.MoonRT
         public override string CoreName => "NES";
         public override int ScreenWidth => Width;
         public override int ScreenHeight => Height;
-        public override double FrameRateHz => FrameRate;
-        public override int StateVersion => CurrentStateVersion;
+        public override double FrameRateHz => IsRomLoaded ? base.FrameRateHz : FrameRate;
+        public override int StateVersion => IsRomLoaded ? base.StateVersion : CurrentStateVersion;
 
         // A television's 4:3, with or without a game - see EmuSen_Serenity.md §2.9.
         public override double DisplayAspect => EmuSen.Crystal.DisplayShape.Television;
@@ -122,7 +122,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             if (state.Length < 8) throw new EndOfStreamException("Unable to read beyond the end of the stream.");
             if (BitConverter.ToUInt32(state, 0) != StateMagic) throw new InvalidDataException("Not a Moon save state.");
             int version = BitConverter.ToInt32(state, 4);
-            if (version is < OldestReadableVersion or > CurrentStateVersion) throw new InvalidDataException($"Save state version {version} is not one this build reads ({OldestReadableVersion} to {CurrentStateVersion}).");
+            if (version is < OldestReadableVersion or > NewestStateVersion) throw new InvalidDataException($"Save state version {version} is not one this build reads ({OldestReadableVersion} to {NewestStateVersion}).");
         }
 
         protected override Exception? OwnRefusal(int status, ulong detail) => Own(status);
@@ -144,6 +144,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             -9 => "not an iNES image",
             -10 => "a mapper no board implements",
             -11 => "a header claiming more PRG than the file holds",
+            -12 => "a state saved on another console, the NTSC NES, the PAL NES or the Dendy, than the one this game runs on",
             NativeInterface.FaultBase - 1 => "an index outside an array",
             NativeInterface.FaultBase - 2 => "a division by zero",
             NativeInterface.FaultBase - 3 => "a clock running backwards",

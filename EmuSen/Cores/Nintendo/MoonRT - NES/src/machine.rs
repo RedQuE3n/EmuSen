@@ -6,18 +6,22 @@ use crate::memory::Board;
 use crate::memory::bus::{MemoryBus, Observed, Plain};
 use crate::memory::cartridge::{Cartridge, RomError};
 use crate::memory::mappers::Mapper;
+use crate::model::Model;
 use crate::ppu::Ppu;
 use crate::state::{StateError, StateReader, StateResult, StateWriter};
 use crate::{Fault, Skip};
 
-pub const MASTER_CLOCKS_PER_CPU_CYCLE: i64 = 12;
-pub const MASTER_CLOCKS_PER_SCANLINE: i64 = 341 * 4;
-
 /// "MOON" little-endian, then the format version - see Moon_Core.md §5.
 pub const STATE_MAGIC: u32 = 0x4E4F_4F4D;
-pub const STATE_VERSION: i32 = 6;
+/// Version 7 adds the console's model, written only by a machine that is not the NTSC NES, whose states stay version 6
+/// byte for byte (Moon_PAL.md §7).
+pub const STATE_VERSION: i32 = 7;
+pub const NTSC_STATE_VERSION: i32 = 6;
 /// Version 4 adds the DMA's tail, version 5 the mixer, version 6 the PPU's RenderingSince; 3 to 5 still load (Moon_Native.md §3.14).
 pub const OLDEST_READABLE_VERSION: i32 = 3;
+
+/// The output rate the mixer makes its samples at.
+pub const SAMPLE_RATE: i32 = 44100;
 
 /// Why a load or a frame could not complete as C# would have.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,19 +40,25 @@ pub struct Machine {
     pub frame_complete: Skip<bool>,
     /// A frame an observed stop left part-run: its scanline's cycles are earned, so its resume must not earn them again.
     pub frame_open: Skip<bool>,
+    /// The console the machine was made as, fixed for its life.
+    pub model: Skip<Model>,
     pub cpu: Cpu,
     pub bus: MemoryBus,
 }
 
 impl Machine {
-    /// `MoonCore.LoadRom` after the file is read: the board, the PPU and APU, the bus, then the four resets in C#'s order.
+    /// `MoonCore.LoadRom` after the file is read, as the console the header names.
     pub fn load_rom(image: &[u8]) -> Result<Machine, LoadError> {
+        Machine::load_rom_as(image, Cartridge::header_model(image))
+    }
+
+    /// The board, the PPU and APU, the bus, the console's clocks, then the four resets in C#'s order.
+    pub fn load_rom_as(image: &[u8], model: Model) -> Result<Machine, LoadError> {
         let cart = Cartridge::parse(image).map_err(LoadError::Rom)?;
         let mapper = Mapper::new(&cart).map_err(LoadError::Rom)?;
-        let mut apu = Apu::default();
-        apu.set_sample_rate(44100);
-        let bus = MemoryBus::new(Board { cart, mapper }, Ppu::default(), apu);
-        let mut m = Machine { total_frames: 0, line_start_clock: 0, cpu_budget: 0, master_clock: 0, cpu_remainder: 0, frame_complete: Skip(false), frame_open: Skip(false), cpu: Cpu::default(), bus };
+        let mut bus = MemoryBus::new(Board { cart, mapper }, Ppu::default(), Apu::default());
+        bus.set_model(model, SAMPLE_RATE);
+        let mut m = Machine { total_frames: 0, line_start_clock: 0, cpu_budget: 0, master_clock: 0, cpu_remainder: 0, frame_complete: Skip(false), frame_open: Skip(false), model: Skip(model), cpu: Cpu::default(), bus };
         crate::take_fault();
         m.bus.ppu.reset();
         m.bus.apu.reset();
@@ -86,7 +96,7 @@ impl Machine {
         *self.frame_complete = false;
         let mut earned = std::mem::take(&mut *self.frame_open);
         while !*self.frame_complete {
-            let deadline = self.line_start_clock.wrapping_add(MASTER_CLOCKS_PER_SCANLINE);
+            let deadline = self.line_start_clock.wrapping_add(self.model.master_clocks_per_scanline());
             if !earned {
                 self.earn(deadline)?;
             }
@@ -95,7 +105,7 @@ impl Machine {
             if deadline > self.master_clock {
                 self.master_clock = deadline;
             }
-            self.line_start_clock = self.line_start_clock.wrapping_add(MASTER_CLOCKS_PER_SCANLINE);
+            self.line_start_clock = self.line_start_clock.wrapping_add(self.model.master_clocks_per_scanline());
             if let Some(fault) = crate::take_fault() {
                 return Err(fault);
             }
@@ -111,8 +121,9 @@ impl Machine {
             return Err(Fault::ArgumentOutOfRange);
         }
         let scaled = delta.wrapping_add(self.cpu_remainder);
-        self.cpu_remainder = scaled % MASTER_CLOCKS_PER_CPU_CYCLE;
-        self.cpu_budget = self.cpu_budget.wrapping_add(scaled / MASTER_CLOCKS_PER_CPU_CYCLE);
+        let per_cycle = self.model.master_clocks_per_cpu_cycle();
+        self.cpu_remainder = scaled % per_cycle;
+        self.cpu_budget = self.cpu_budget.wrapping_add(scaled / per_cycle);
         Ok(())
     }
 
@@ -124,7 +135,7 @@ impl Machine {
         let mut unchecked = flags & emusen_native::debug::run::UNCHECKED != 0;
         let result = (|| {
             while !*self.frame_complete {
-                let deadline = self.line_start_clock.wrapping_add(MASTER_CLOCKS_PER_SCANLINE);
+                let deadline = self.line_start_clock.wrapping_add(self.model.master_clocks_per_scanline());
                 if !earned {
                     self.earn(deadline)?;
                 }
@@ -161,7 +172,7 @@ impl Machine {
                 if deadline > self.master_clock {
                     self.master_clock = deadline;
                 }
-                self.line_start_clock = self.line_start_clock.wrapping_add(MASTER_CLOCKS_PER_SCANLINE);
+                self.line_start_clock = self.line_start_clock.wrapping_add(self.model.master_clocks_per_scanline());
                 if let Some(fault) = crate::take_fault() {
                     return Err(fault);
                 }
@@ -275,10 +286,15 @@ impl Machine {
         }
     }
 
+    /// The version this machine's states are written in: 6 for the NTSC NES, 7 with the model's tail for the others.
+    pub fn state_version(&self) -> i32 {
+        if *self.model == Model::Ntsc { NTSC_STATE_VERSION } else { STATE_VERSION }
+    }
+
     /// `MoonCore.SaveState`: the header, then the cartridge, its board, the CPU (with the bus inside), the bus, the PPU and the APU.
     pub fn write_state(&self, w: &mut StateWriter) {
         w.u32("Magic", STATE_MAGIC);
-        w.i32("Version", STATE_VERSION);
+        w.i32("Version", self.state_version());
         w.i64("TotalFrames", self.total_frames);
         w.i64("_lineStartClock", self.line_start_clock);
         w.i64("_cpuBudget", self.cpu_budget);
@@ -305,6 +321,10 @@ impl Machine {
         w.f64("Apu._hp440Prev", mix.hp440_prev);
         w.f64("Apu._lp14k", mix.lp14k);
         w.i64("Ppu.RenderingSince", *self.bus.ppu.rendering_since);
+        if *self.model != Model::Ntsc {
+            w.u8("Model", self.model.code());
+            w.u8("Bus.DotPhase", *self.bus.dot_phase);
+        }
     }
 
     fn read_state(&mut self, r: &mut StateReader) -> StateResult {
@@ -347,6 +367,12 @@ impl Machine {
         }
         // Before version 6 rendering counts as switched on long ago.
         *self.bus.ppu.rendering_since = if version >= 6 { r.i64()? } else { i64::MIN };
+        // Before version 7 every state was the NTSC NES's; a state of another console than this machine's is refused.
+        let (saved, phase) = if version >= 7 { (r.u8()?, r.u8()?) } else { (Model::Ntsc.code(), 0) };
+        if Model::from_code(saved) != Some(*self.model) {
+            return Err(StateError::OtherModel { saved, running: self.model.code() });
+        }
+        *self.bus.dot_phase = phase % 5;
         self.bus.forget_last_read();
         *self.bus.internal_bus = self.bus.open_bus;
         *self.bus.apu.frame_irq_readable = self.bus.apu.frame_irq_pending;

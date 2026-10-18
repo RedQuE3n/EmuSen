@@ -228,6 +228,10 @@ impl Cpu {
     /// `MemoryBus.RunDma`: every DMA that wants the bus, run while the CPU is halted on a read of `address`.
     #[cold]
     fn run_dma<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
+        // The 2A07 waits for an instruction's first cycle, its opcode fetch or an interrupt's first read (Moon_PAL.md §6).
+        if *bus.dma_on_first_cycle && self.instruction_cycles != 0 {
+            return;
+        }
         loop {
             if *bus.oam_dma_pending {
                 self.run_oam_dma(bus, address);

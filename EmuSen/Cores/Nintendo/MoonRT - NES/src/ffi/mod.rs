@@ -92,7 +92,7 @@ impl NativeCore for Machine {
     }
 
     fn audio_rate(&self) -> i32 {
-        44100
+        crate::machine::SAMPLE_RATE
     }
 
     fn audio_buffered(&self) -> usize {

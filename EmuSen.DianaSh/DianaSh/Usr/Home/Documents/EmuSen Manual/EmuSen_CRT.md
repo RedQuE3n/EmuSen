@@ -2920,12 +2920,12 @@ Which cores fill it:
 | Nephrite (Genesis, Sega CD, 32X) | NTSC or PAL (`Nephrite - Genesis/src/v1.rs:454`) | the model, from the cartridge or the core's Region setting (`v1.rs:88`, `409`) | `v1.rs:455` |
 | MarsRT (N64) | NTSC or PAL (`MarsRT - N64/src/ffi/v1.rs:496`) | the cartridge (`v1.rs:492`) | 50 or 60000/1001 (`v1.rs:497`) |
 | Diamond (PlayStation) | NTSC or PAL (`Diamond - PlayStation/src/v1.rs:311`) | the disc's licence text or the core's Region setting (`v1.rs:95`, `173`) | `v1.rs:312` |
-| MoonRT (NES) | always NTSC (`MoonRT - NES/src/ffi/v1.rs:112`) | MoonRT runs every cartridge as a 2C02 NES; it has no PAL timing | NTSC |
+| MoonRT (NES) | NTSC or PAL (`MoonRT - NES/src/ffi/v1.rs:144`), since 2026-10-17; until then always NTSC | the NES 2.0 header's byte 12, an iNES 1.0 header NTSC, or the core's Region setting (`v1.rs:18`, `Moon_PAL.md` §3); the Dendy reports PAL | 50.007 or 60.099 Hz timing (`model.rs`, `Moon_PAL.md` §2) |
 | MercuryRT (Game Boy) | none (`MercuryRT - GB/src/ffi/v1.rs:126`) | a handheld has no standard | the LCD's |
 
 So four of the six cores already say PAL when they run PAL. The NES does not because MoonRT emulates no PAL console,
 which is MoonRT's own missing feature, not a surface: when it runs a 2C07's timing it will say `"pal"` through the same
-field. PAL-M and SECAM are not values of `Region`; no core here emulates a PAL-M console (the Brazilian SNES and Mega
+field. *(It does since 2026-10-17, five of six: `Moon_PAL.md`. Nothing on this page changed for it.)* PAL-M and SECAM are not values of `Region`; no core here emulates a PAL-M console (the Brazilian SNES and Mega
 Drive), and SECAM consoles output RGB or PAL. Adding either would be a new value of an open string, recorded here for
 when a core needs it, not built.
 
@@ -3158,6 +3158,13 @@ nothing changed here. The 2C07's black border (the top line and two pixels at ea
 picture and not the filter's.
 
 Also not modelled: a 6538 or Dendy as such (the capture's chip), and the levels of a 2C07, which no source gives.
+
+**Built 2026-10-17** (`Moon_PAL.md`). MoonRT runs the PAL NES and the Dendy, chosen by the NES 2.0 header or the core's
+Region setting, and reports `"pal"` for both, so §26's path selects the 2C07 from the game with nothing changed here.
+It draws the border itself, colour $0E with no emphasis bits in `nes.ppu` and black in its RGB frame (`Moon_PAL.md`
+§4.3). `nes.ppu` keeps its name and its encoding on PAL: it carries PPUMASK's bits 5–7 as written, and this filter's
+2C07 path is the one owner of the swap of bits 5 and 6 (§27.2); MoonRT's RGB frame applies no emphasis on either
+console, so it has no order to change (`Moon_PAL.md` §4.4). The Dendy's PPU is the 6538 of §27.3's capture.
 
 *Decided 2026-10-17 by the tester, on round 3's questions: MoonRT gains a PAL timing mode as work of its own, after
 which it says `"pal"` through the existing field; the per-game choice stays in `games.db`'s `game_edit`, a presentation

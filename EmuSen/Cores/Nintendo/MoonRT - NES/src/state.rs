@@ -10,7 +10,12 @@ pub enum StateError {
     NotAMoonState(u32),
     Version(i32),
     BufferTooSmall { needed: usize },
+    /// A state of one console, by NES 2.0's timing number, loaded into a machine of another (Moon_PAL.md §7).
+    OtherModel { saved: u8, running: u8 },
 }
+
+/// A state saved on the NTSC NES, the PAL NES or the Dendy, loaded into a machine of another of them.
+pub const STATUS_OTHER_MODEL: i32 = -12;
 
 impl StateError {
     pub fn status(&self) -> i32 {
@@ -19,6 +24,7 @@ impl StateError {
             StateError::NotAMoonState(_) => status::FOREIGN,
             StateError::Version(_) => status::VERSION,
             StateError::BufferTooSmall { .. } => status::BUFFER_TOO_SMALL,
+            StateError::OtherModel { .. } => STATUS_OTHER_MODEL,
         }
     }
 }

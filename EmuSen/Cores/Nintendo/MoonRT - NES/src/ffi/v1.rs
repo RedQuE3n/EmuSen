@@ -2,19 +2,45 @@
 //! facts its C# shim held are its descriptors here. See EmuSen_CoreAPI.md §13.1, §22.
 
 use emusen_native::core::{
-    self as v1, Battery, Button, Control, Controller, Create, Firmware, FrameInfo, Info, MachineInfo, Port, Processor, RawEncoding, RawFrame, Region, Space, StateFormat,
-    System, Video, caps, status,
+    self as v1, Battery, Button, Choice, Control, Controller, Create, Effect, Firmware, FrameInfo, Info, MachineInfo, Port, Processor, RawEncoding, RawFrame, Region, Scope,
+    Setting, SettingKind, Space, StateFormat, System, Video, caps, status,
 };
 
 use super::{BATTERY_SPACE, STATUS_NOT_INES, STATUS_NULL, STATUS_PRG_TRUNCATED, STATUS_UNSUPPORTED_BOARD, build_rom_patches, fault_status, rom_patch};
-use crate::machine::{LoadError, Machine, OLDEST_READABLE_VERSION, STATE_VERSION};
-use crate::memory::cartridge::RomError;
-use crate::ppu::{FRAME_BYTES, SCREEN_HEIGHT, SCREEN_WIDTH, TOTAL_SCANLINES};
+use crate::machine::{LoadError, Machine, OLDEST_READABLE_VERSION, SAMPLE_RATE, STATE_VERSION};
+use crate::memory::cartridge::{Cartridge, RomError};
+use crate::model::Model;
 use crate::ppu::render::NES_PALETTE;
+use crate::ppu::{FRAME_BYTES, SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::state::STATUS_OTHER_MODEL;
 
-/// `MoonCore.MasterClockHz` over the master clocks of a frame, 341 dots of 4 a scanline.
-const MASTER_CLOCK_HZ: u64 = 21_477_272;
-const MASTER_CLOCKS_PER_SCANLINE: u64 = 341 * 4;
+/// The setting that chooses the console, read at create: the header's, or one console for every game (Moon_PAL.md §3).
+pub const REGION_KEY: &str = "region";
+pub const REGION_AUTO: &str = "auto";
+pub const REGIONS: [(&str, &str, Model); 3] = [("nes.ntsc", "NTSC NES", Model::Ntsc), ("nes.pal", "PAL NES", Model::Pal), ("nes.dendy", "Dendy", Model::Dendy)];
+
+fn region_setting() -> Setting {
+    let mut choices = vec![Choice { value: REGION_AUTO.into(), label: "From the cartridge".into(), help: None }];
+    choices.extend(REGIONS.iter().map(|&(value, label, _)| Choice { value: value.into(), label: label.into(), help: None }));
+    Setting {
+        key: REGION_KEY.into(),
+        label: "Region".into(),
+        help: "The console a game runs on, which sets its speed and the picture's rate: the NTSC NES at 60 frames a second, the PAL NES at 50, and the Dendy, a famiclone, at 50 with the NTSC NES's sound. From the cartridge, a game runs as the console its NES 2.0 header names, and an older iNES header, which has no reliable mark, as the NTSC NES. A game made for one console runs too fast, too slow or wrongly on another. Takes effect when a game is next loaded.".into(),
+        kind: SettingKind::Choice(choices),
+        default: REGION_AUTO.into(),
+        scope: Scope::Create,
+        category: Some("Console".into()),
+        effect: Effect::None,
+        advanced: false,
+        hidden: false,
+        restart: true,
+    }
+}
+
+/// The console the setting asks for, the header's where it says `auto` or nothing.
+pub fn chosen_model(setting: Option<&str>, image: &[u8]) -> Model {
+    REGIONS.iter().find(|r| Some(r.0) == setting).map_or_else(|| Cartridge::header_model(image), |r| r.2)
+}
 
 /// `MoonMachine.SpaceNames`, numbered as the ABI numbers them.
 const SPACES: [&str; 8] = ["RAM", "PRGROM", "PRGRAM", "CHR", "CIRAM", "OAM", "PALETTE", "CPUBUS"];
@@ -50,7 +76,7 @@ impl v1::Core for Machine {
                 id: "nes".into(),
                 name: "Nintendo Entertainment System".into(),
                 extensions: vec![".nes".into()],
-                regions: vec![Region::Ntsc],
+                regions: vec![Region::Ntsc, Region::Pal],
                 controllers: vec![Controller {
                     id: "nes.pad".into(),
                     label: "Controller".into(),
@@ -67,8 +93,13 @@ impl v1::Core for Machine {
         }
     }
 
+    fn settings_schema() -> Vec<Setting> {
+        vec![region_setting()]
+    }
+
     fn status_text(code: i32) -> Option<String> {
         let words = match code {
+            STATUS_OTHER_MODEL => "a state saved on another console, the NTSC NES, the PAL NES or the Dendy, than the one this game runs on",
             STATUS_NOT_INES => "not an iNES image",
             STATUS_UNSUPPORTED_BOARD => "a mapper no board implements",
             STATUS_PRG_TRUNCATED => "a header claiming more PRG than the file holds",
@@ -80,9 +111,10 @@ impl v1::Core for Machine {
         Some(words.to_owned())
     }
 
-    /// `MoonCore.LoadRom` from an image, then the battery save written into PRG RAM, clipped to it, before any frame.
+    /// `MoonCore.LoadRom` from an image as the console chosen, then the battery save written into PRG RAM, clipped to it.
     fn create(r: &Create<'_>) -> Result<Self, i32> {
-        let mut m = Machine::load_rom(r.image).map_err(|e| match e {
+        let model = chosen_model(r.settings.get(REGION_KEY), r.image);
+        let mut m = Machine::load_rom_as(r.image, model).map_err(|e| match e {
             LoadError::Rom(RomError::NotInes) => STATUS_NOT_INES,
             LoadError::Rom(RomError::PrgTruncated) => STATUS_PRG_TRUNCATED,
             LoadError::Rom(RomError::UnsupportedMapper(n)) => {
@@ -109,10 +141,10 @@ impl v1::Core for Machine {
         let battery = *self.bus.board.cart.has_battery && !self.bus.board.cart.prg_ram.is_empty();
         MachineInfo {
             system: "nes".into(),
-            region: Some(Region::Ntsc),
-            frame_rate: (MASTER_CLOCK_HZ, TOTAL_SCANLINES as u64 * MASTER_CLOCKS_PER_SCANLINE),
+            region: Some(if *self.model == Model::Ntsc { Region::Ntsc } else { Region::Pal }),
+            frame_rate: self.model.frame_rate(),
             video: Video { base_width: SCREEN_WIDTH as u32, base_height: SCREEN_HEIGHT as u32, max_width: SCREEN_WIDTH as u32, max_height: SCREEN_HEIGHT as u32, aspect: (4, 3), formats: Vec::new() },
-            audio: v1::Audio { rate: 44100, channels: ["Pulse 1", "Pulse 2", "Triangle", "Noise", "DMC"].map(String::from).to_vec() },
+            audio: v1::Audio { rate: SAMPLE_RATE, channels: ["Pulse 1", "Pulse 2", "Triangle", "Noise", "DMC"].map(String::from).to_vec() },
             ports: vec![Port { port: 0, controller: Some("nes.pad".into()) }, Port { port: 1, controller: Some("nes.pad".into()) }],
             spaces: SPACES
                 .iter()
@@ -121,7 +153,7 @@ impl v1::Core for Machine {
                 .collect(),
             processors: vec![Processor { id: 0, name: "CPU".into(), pc_bits: 16, registers: Vec::new(), code_space: None }],
             battery: if battery { vec![Battery::game(0, ".srm")] } else { Vec::new() },
-            state: StateFormat { format: "MOON".into(), version: STATE_VERSION as i64, loads_from: (OLDEST_READABLE_VERSION..=STATE_VERSION).map(i64::from).collect() },
+            state: StateFormat { format: "MOON".into(), version: self.state_version() as i64, loads_from: (OLDEST_READABLE_VERSION..=STATE_VERSION).map(i64::from).collect() },
             phases: Vec::new(),
             patches: Some((0x4020, 0xFFFF)),
             skip_rendering_state_neutral: false,
@@ -175,7 +207,7 @@ impl v1::Core for Machine {
     }
 
     fn audio_rate(&self) -> i32 {
-        44100
+        SAMPLE_RATE
     }
 
     fn audio_buffered(&self) -> usize {
@@ -399,5 +431,37 @@ mod tests {
             out
         };
         assert_eq!(save(&mut kept), save(&mut plain));
+    }
+
+    // The region setting chooses the console at create, `auto` the header's; machine info reports its standard, its rate
+    // and its state version, and a state of another console is refused with words of its own.
+    #[test]
+    fn the_region_setting_chooses_the_console_and_machine_info_reports_it() {
+        assert!(Machine::settings_schema().iter().all(|s| s.check().is_ok() && matches!(s.scope, Scope::Create)));
+        let made = |img: &[u8], region: &str| {
+            let r = Create { image: img, settings: Settings::from_pairs(vec![(REGION_KEY.into(), region.into())]), files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None };
+            <Machine as Core>::create(&r).unwrap()
+        };
+        let ines = image(&boot(0x0F, 0, 0), &[0x40]);
+        let mut pal_header = ines.clone();
+        (pal_header[7], pal_header[12]) = (0x08, 0x01);
+        for (img, region, model) in [
+            (&ines, "auto", Model::Ntsc),
+            (&ines, "nes.pal", Model::Pal),
+            (&ines, "nes.dendy", Model::Dendy),
+            (&pal_header, "auto", Model::Pal),
+            (&pal_header, "nes.ntsc", Model::Ntsc),
+        ] {
+            let m = made(img, region);
+            let info = m.machine_info();
+            assert_eq!(*m.model, model, "{region}");
+            assert_eq!(info.region, Some(if model == Model::Ntsc { Region::Ntsc } else { Region::Pal }), "{region}");
+            assert_eq!(info.frame_rate, model.frame_rate(), "{region}");
+            assert_eq!(info.state.version, if model == Model::Ntsc { 6 } else { 7 }, "{region}");
+            assert_eq!(info.state.loads_from, (3..=7).collect::<Vec<i64>>());
+        }
+        assert_eq!(made(&ines, "auto").machine_info().frame_rate, (21_477_272, 262 * 341 * 4));
+        assert!(<Machine as Core>::status_text(STATUS_OTHER_MODEL).is_some());
+        assert_eq!(Machine::info().systems[0].regions, vec![Region::Ntsc, Region::Pal]);
     }
 }

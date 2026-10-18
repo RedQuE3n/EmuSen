@@ -72,6 +72,12 @@ player's setting is not read. That exists so tests can point at a temp folder �
 
 An image whose length doesn't match `Size` is treated as **absent**, not loaded. A truncated or mismatched dump executes as garbage and produces a bewildering failure a long way from its cause; "not found" is a far better diagnostic. `Install` applies the same rule, and refuses to copy anything that fails it.
 
+*Since 2026-10-17* a file given as a symbolic link is measured by what it links to, which is what is read, and a link
+to nothing is neither the image nor a file of the wrong size. Before, the size compared was the link's own, the length
+of the path it holds, so a linked image of the right size was passed over and a link whose path happened to be as
+long as the image passed off a file of another size (`EmuSen_Backend.md` §14.1, shown by two tests of
+`FirmwareLibraryTests`).
+
 Checksums would be stricter still, and `FirmwareRequest` has room for them later. Size alone already rejects every accident seen in practice — the wrong chip's dump, a half-downloaded file, a ROM picked by mistake.
 
 ### 2.2 Canonical names and alternates
@@ -91,7 +97,8 @@ otherwise erase the choice. Its value is read by the folder rules of `EmuSen_Con
 unset, `~` and `~/` are the home, a relative path or a file is refused, and a folder that does not exist is said.
 
 **The order.** `SettingFolders.Firmware(settings)` in Galaxia is the one owner of the lookup order, and
-`FirmwareLibrary.Folders` asks it; the cores' hand-over (`CoreEngine.LoadRom` and `StartConsole`), the question
+`FirmwareLibrary.Folders` asks it (*since 2026-10-17 its Rust half, `emusen-firmware`'s `folders` over
+`emusen-galaxia`'s `setting_folders`, answers under `EMUSEN_SERVICES_NATIVE`, `EmuSen_Backend.md` §14.1*); the cores' hand-over (`CoreEngine.LoadRom` and `StartConsole`), the question
 before a launch (`EmulatorSession.MissingFirmwareFor`) and the Firmware page (`FirmwareOverview.Build`) all search
 those folders, through `FirmwareLibrary.Find`, and no other code builds a firmware path to read.
 

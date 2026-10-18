@@ -192,6 +192,11 @@ that a refusal can say who holds the card.
   refusing it would refuse the game; the lock serves the card manager's refusal.
 - **The card manager writes nothing locked**, and says by whom it is held where it knows.
 
+*Since 2026-10-17* the lock has a Rust half in Galaxia's crate (`emusen-galaxia`'s `medium_lock`), the same `flock`
+on the same file with the same words in it and the same table of shared handles, which `MediumLock` forwards to under
+Galaxia's own switch, so a program's games and its card manager hold one table between them; a lock either half takes
+refuses the other as another program's would (`EmuSen_Backend.md` §14.2).
+
 ## 4. Who owns which fact
 
 | Fact | Owner | Surface |
@@ -286,6 +291,10 @@ every save of chosen cards onto one card, refused as a whole when the card's cap
 naming the saves and the blocks each needs; make a **new** card under a name; **duplicate** a whole card; **rename**
 one. It never writes a file a running machine holds (§3.5), and it reads a game's own card for an import without
 writing it.
+
+*Since 2026-10-17* the manager is `emusen-savemedia` in Rust, behind `EMUSEN_SERVICES_NATIVE`, with the C# kept as
+`SaveMediaManager.Managed`; which medium a file is, by its extension, still crosses from the C# (`EmuSen_Backend.md`
+§14.2).
 
 Three operations need no format module, since they treat a medium as bytes: a new card (an absent file, which the game
 or the kernel formats, as a new physical card), duplicating a card, and importing a game's whole card onto a drawer

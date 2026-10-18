@@ -3231,3 +3231,33 @@ little-endian bytes, the JSON, then a picture's RGBA or a tile's pixels. The C# 
 disassemblers' own forwarding, chosen with the table by `EMUSEN_SYSTEMS_NATIVE`. The number went from 14 to 15 in
 `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together, since 14 had been merged.
 
+
+## 35. Interface 17, 2026-10-17: the file services
+
+With the backend's step B5 (`EmuSen_Backend.md` §14), the workspace gained three crates, `emusen-firmware`,
+`emusen-savemedia` and `emusen-cheats` (`Platform/firmware/`, `Platform/savemedia/`, `Platform/cheats/`), and Galaxia's
+crate two modules, `setting_folders` (the folder setting's rules, the Rust half of `SettingFolders.Checked`) and
+`medium_lock` (`MediumLock`). The library gained their C layers in `Platform/platform/src/firmware.rs`, `savemedia.rs`
+and `cheats.rs`:
+
+- `emusen_firmware_folders`, `_find`, `_locate` and `_install`, each taking one JSON request; `_find` answers with an
+  envelope (the JSON's length in four little-endian bytes, the JSON, then each part's bytes), as `emusen_systems_view`
+  does.
+- `emusen_savemedia_op`, one call for the card manager's eight operations, the medium of each file it names given by
+  the host, since a medium's file suffix is not the pack's (`EmuSen_Backend.md` F28).
+- `emusen_galaxia_medium_lock_take`, `_release` and `_holder`: a lock is a handle above zero, released once. They are
+  Galaxia's, listed in `GalaxiaNative.Exports` and chosen by Galaxia's switch, since the lock is Galaxia's class; the
+  other exports here are chosen by `EMUSEN_SERVICES_NATIVE`.
+- `emusen_cheats_parse`, `_write`, `_database_open` with `_free`, `_entries` and `_query`, `_prune_plan`,
+  `_prune_apply` and `_install`. A database is an opaque handle made and freed by the library, as a mapped file is,
+  scanned once and never changed, so any thread may ask it; `emusen_cheats_install` answers
+  `NOT_SUPPORTED` without writing anything for an archive whose form the C# reads itself.
+
+No callback crosses (§3.7): where the C# held the knowledge (a file's medium, a codec by its object), it is passed as
+data; where it held a process-wide table (the medium lock's holders), the table moved into the library whole, so both
+halves of the program read one. The C# facades are `ServiceLibrary` in Crystal (the switch, in state 2, and the calls),
+`FirmwareNative` in the runtime, `SaveMediaNative` and `CheatsNative` in Crystal, and `MediumLockNative` in Galaxia.
+
+The number went from 15 to 17 in `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together. 16 was
+left to the frontend API's step, B2, which was running beside this one and may need it; whichever of the two is
+merged second takes the next number then.

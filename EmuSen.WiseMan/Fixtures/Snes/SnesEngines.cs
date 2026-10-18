@@ -52,7 +52,7 @@ namespace EmuSen.WiseMan.Fixtures.Snes
         internal static readonly PadButton[] Buttons = Enumerable.Range(0, 12).Select(i => (PadButton)i).ToArray();
     }
 
-    // VenusRT's bare machine on the core ABI v1, with the DSP image found and the core's own boot program unless told otherwise - see VenusRT_Native.md §41.1, EmuSen_Backend.md §17.9.
+    // VenusRT's bare machine on the core ABI v1, with the DSP image found and the core's own boot program unless told otherwise - see VenusRT_Native.md §41.1, EmuSen_Backend.md §19.9.
     public sealed class VenusRtSnesEngine : ISnesEngine
     {
         public const string NoFirmwareVariable = "EMUSEN_VENUSRT_NO_FIRMWARE", BootVariable = "EMUSEN_VENUSRT_BOOT";

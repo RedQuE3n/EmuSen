@@ -1,5 +1,5 @@
 //! VenusRT on the stable core ABI, version 1: `Core` over the machine and `core_exports!`, its only exports since
-//! 2026-10-18. See EmuSen_CoreAPI.md §18.6, VenusRT_Native.md §31 and EmuSen_Backend.md §17.9.
+//! 2026-10-18. See EmuSen_CoreAPI.md §18.6, VenusRT_Native.md §31 and EmuSen_Backend.md §19.9.
 
 use emusen_native::abi::NativeCore;
 use emusen_native::core::*;

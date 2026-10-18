@@ -1,6 +1,6 @@
 //! The pre-stable interface's trait over the machine, which exports nothing since 2026-10-18: v1's create and battery
 //! still call it, until the pre-stable set is deleted with MercuryRT's shim. A negative return is a status. See
-//! EmuSen_NativeCores.md §3, VenusRT_Native.md §2 and EmuSen_Backend.md §17.9.
+//! EmuSen_NativeCores.md §3, VenusRT_Native.md §2 and EmuSen_Backend.md §19.9.
 
 use emusen_native::abi::{self, File, FrameInfo, NativeCore, Settings};
 

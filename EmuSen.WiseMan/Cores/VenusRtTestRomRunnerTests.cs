@@ -147,7 +147,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.InRange(w.Gain, 1.98, 2.02);
         }
 
-        // Since 2026-10-18 the library is on the core ABI alone: no pre-stable export is left in it - see EmuSen_Backend.md §17.9.
+        // Since 2026-10-18 the library is on the core ABI alone: no pre-stable export is left in it - see EmuSen_Backend.md §19.9.
         [Fact]
         public void VenusRTs_library_is_on_the_core_abi_alone_and_its_state_is_its_own()
         {

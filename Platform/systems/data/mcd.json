@@ -18,5 +18,5 @@
     { "id": "mcd.ramcart", "title": "Backup RAM Cartridge", "noun": "Cartridge" },
     { "id": "mcd.backup", "title": "Internal Backup RAM", "noun": "Backup RAM" }
   ],
-  "byte_order": null
+  "byte_order": "big"
 }

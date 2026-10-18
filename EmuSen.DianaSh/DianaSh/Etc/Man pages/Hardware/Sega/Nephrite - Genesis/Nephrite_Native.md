@@ -2984,6 +2984,8 @@ each claim of §41-§43 is a test in the crate or in WiseMan, and C15 passes on 
 eight games of §42.2. G7 is met but for the Z80's call stack, which the ABI does not carry for a second processor
 (§40.1).
 
+*2026-10-18: the frame log reads these spaces big-end first, the Z80's two excepted as a known limit (§66).*
+
 ## 44. The four-player adapters, step 1: the Team Player and the 4 Way Play in the core (2026-10-07)
 
 The follow-up list's second item (§40.2), taken before stage 8 at the tester's choice. This step puts the two
@@ -4713,3 +4715,68 @@ discs' drive traffic on it is unchanged, line for line, over 4,000 frames.
 - **Measured** (2026-10-16): the crate's 193 tests; the 71 digests of `Nephrite_Attachments.md` §11.1 equal the
   baseline's; the five discs' drive traffic on the open BIOS unchanged; the conformance kit compliant on its 64-image
   Genesis sample, on the 240p disc with mcd-verificator and on Sonic CD (USA) with the player's BIOS over 2,400 frames.
+
+## 66. The frame log's byte order for the Genesis family (2026-10-18)
+
+The systems table's `byte_order` (`EmuSen_Backend.md` §18.9) tells `CoreEngine` in which order to assemble a frame
+log's value of two or four bytes from a space. It had been left unstated for the three Genesis systems, which a reader
+takes as little-endian. Decided 2026-10-18 by the tester: read how Nephrite lays out a word in each space it lists,
+and set it with a test.
+
+### 66.1 What each space holds
+
+Every space is a byte array read through `space_read` byte for byte (`src/v1.rs:554–567`); the question is only how
+the core stores a word in it. Paths are under the crate's `src/`.
+
+| System | Space | A 16-bit value at an even address | Where |
+|---|---|---|---|
+| all | `M68KBUS` (view) | big-end first: each byte is the cartridge's, the 68000's RAM's or the Z80's RAM's as stored | `machine.rs:388–397`, `genesis/debugger.rs:94–101` |
+| all | `WRAM` | big-end first: the 68000's word read takes the high byte from the even address, its word write puts it there | `genesis/mod.rs:607`, `:647–648` |
+| all | `ROM` | big-end first: the image's bytes in the cartridge's order, a copier's interleaved blocks put back in it at load | `genesis/cart.rs:178–183`, `:214–216`; `media.rs:68–98` |
+| all | `VRAM` | big-end first: a data-port word's high byte goes to the even address (an odd address swaps the two, as the VDP does), and the read takes the word the same way | `genesis/vdp.rs:622–629`, `:678–680`, `:689` |
+| all | `CRAM`, `VSRAM` | big-end first, written and read as VRAM is | `genesis/vdp.rs:642–643`, `:651–652` |
+| all | `SRAM` | big-end first on a board that wires both lanes; one byte per word on a board that wires one, so a value the game spreads over consecutive words lands high byte first | `genesis/cart.rs:164–176`, `:214–216` |
+| all | `Z80RAM` | **the Z80's order, little-end first**: one byte per address, and what the Z80 stores as a word it stores low byte first; a 68000 word write lands its high byte alone | `genesis/mod.rs:739`, `:751`, `:643` |
+| all | `Z80BUS` (view) | the Z80's RAM below `$4000`, little-end first as above; through the bank window, `$8000` up, the 68000's space, big-end first | `genesis/debugger.rs:106–115` |
+| Sega CD | `PRGRAM` | big-end first: the sub CPU's reads and the CDC's DMA both put the high byte at the even address | `mcd/mod.rs:841`, `:597`, `:307` |
+| Sega CD | `WORDRAM` | big-end first, in 2M order; in 1M mode a bank's word *n* is the space's word 2*n* + *b*, so its two bytes stay together while consecutive words of one bank are four bytes apart | `mcd/word.rs:6`, `:41–44`; `mcd/mod.rs:842–849`, `:599–601` |
+| Sega CD | `PCMRAM` | one byte per address, the RF5C164's 8-bit samples; no word is stored | `mcd/mod.rs:595`, `:935`, `:943` |
+| Sega CD | `BRAM`, `CARTRAM` | one byte per word, on the odd lane; the format's 16-bit fields are big-end first (`Nephrite_Bram.md` §3, §5) | `mcd/mod.rs:851`, `:907`, `:199`, `:211` |
+| 32X | `SDRAM`, `FRAMEBUFFER`, `PALETTE` | not decided by the core: the stub's memories are zeroed and no processor reads or writes them (§62; `Nephrite_Attachments.md` §3.9). The SH-2 and the 68000 that share them are both big-endian | `s32x/mod.rs:11`, `:36–45`, `:82–95` |
+
+### 66.2 The decision
+
+The three data files and the three pack literals say `big`. Every space a 68000 or a device on its side owns stores
+a word big-end first, and those are the spaces a player logs: the 68000's RAM (the cheat space), the cartridge, the
+VDP's three memories, the save RAM, the Sega CD's program and word RAM. The 32X's memories will hold SH-2 and 68000
+words, so stages 11 and 12 are to store them big-end first and keep this field true.
+
+**The spaces differ.** `Z80RAM`, and `Z80BUS` below `$8000`, hold the Z80's own words low byte first. A system has one
+`byte_order`, so a frame log of two bytes there now reads a Z80 pointer with its bytes swapped, where before this
+change every 68000 value was swapped instead. That trade favours the spaces a player logs; it is not correct for
+the Z80's. The 8-bit spaces (`PCMRAM`, `BRAM`, `CARTRAM`) are unaffected at width 1, the width their contents have.
+
+**The smallest correct form, proposed and not built.** The core owns the fact of how it lays out each space, so the
+fact belongs beside the space in machine info: a byte order per space in the space list, which `CoreEngine` would
+read first and fall back to the table's `byte_order` where a core does not say. That is an addition to the core ABI
+(a minor), and Nephrite would state `Z80RAM` and `Z80BUS` little-endian. `Z80BUS`'s bank window would still read
+big-endian values the wrong way through that space; they are the 68000's and are read right through `M68KBUS`. A
+smaller form, a per-space exception in the systems table's data file, needs no ABI change, but it would tie a
+system's data to one core's space names, which a second Genesis core need not share; it is not recommended.
+
+### 66.3 The test
+
+`NephriteTests.The_frame_log_reads_a_genesis_value_big_end_first` logs a known value through `CoreEngine`'s frame
+log over one frame on a synthetic image of each system (`SyntheticMdRom`): the header's `SE` and `SEGA` at `$100` of
+`ROM`, two and four bytes, on a Genesis and a 32X cartridge; `$12 $34` written into `WRAM` on a Genesis cartridge and
+a Sega CD disc, into the Sega CD's `PRGRAM` and the 32X's `SDRAM`. All seven cases failed before the change, the frame
+log giving `0x4553`, `0x41474553` and `0x3412`, and pass after it.
+
+### 66.4 Measured (2026-10-18)
+
+- **WiseMan**, with `EMUSEN_SYSTEMS_NATIVE` unset: `NephriteTests` (its seven new cases among them),
+  `SystemTableParityTests`, `GoldenCorpusTests` and `CoreRegistrationEquivalence`, 129 of 129. With
+  `EMUSEN_SYSTEMS_NATIVE=0`, the pack literals' path: `SystemTableParityTests` and the seven new cases, 15 of 15. No
+  golden was re-recorded: the corpus's frame-log case runs on its fake target, not on a core.
+- **`emusen-systems` and `emusen-platform`**, `--profile test-checked`: 24, and 31 with the four of `dianash_abi`.
+  `a_byte_order_is_big_little_or_unstated` now finds the Genesis `big` and still reads an unstated order as none.

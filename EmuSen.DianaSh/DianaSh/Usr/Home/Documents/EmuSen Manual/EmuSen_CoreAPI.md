@@ -3187,6 +3187,8 @@ mean; a quiet run remains owed for the per-game figures, as it does for §22.2's
   sends; when both are on `WiseMan` they can become one class with the registries as parameters.
 - **The pre-stable set's deletion** (§13.5), with `NativeRtCore`, `MoonMachine` and `MercuryMachine` and the moving of
   their machine and state tests onto the v1 handle, waits for VenusRT to drop its own.
+  *VenusRT dropped its own on 2026-10-18 (`EmuSen_Backend.md` §19.9); MoonRT's and MercuryRT's remain, each going with
+  its shim at B4.*
 
 ---
 

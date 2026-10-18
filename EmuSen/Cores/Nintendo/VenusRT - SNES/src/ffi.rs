@@ -1,5 +1,6 @@
-//! VenusRT's C ABI: the common native interface, with no optional group yet. A negative return is a status.
-//! See EmuSen_NativeCores.md §3 and VenusRT_Native.md §2.
+//! The pre-stable interface's trait over the machine, which exports nothing since 2026-10-18: v1's create and battery
+//! still call it, until the pre-stable set is deleted with MercuryRT's shim. A negative return is a status. See
+//! EmuSen_NativeCores.md §3, VenusRT_Native.md §2 and EmuSen_Backend.md §19.9.
 
 use emusen_native::abi::{self, File, FrameInfo, NativeCore, Settings};
 
@@ -267,8 +268,6 @@ impl Machine {
         self.sys.cart.dsp.as_mut().map(|(d, _)| d).filter(|d| d.st())
     }
 }
-
-emusen_native::native_exports!(Machine;);
 
 #[cfg(test)]
 mod tests {

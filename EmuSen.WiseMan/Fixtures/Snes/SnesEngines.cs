@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.VenusRT;
+using EmuSen.Cores.Native;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.WiseMan.Fixtures.Snes
@@ -52,7 +52,7 @@ namespace EmuSen.WiseMan.Fixtures.Snes
         internal static readonly PadButton[] Buttons = Enumerable.Range(0, 12).Select(i => (PadButton)i).ToArray();
     }
 
-    // VenusRT through the common interface, with the DSP image found and the core's own boot program unless told otherwise - see VenusRT_Native.md §41.1.
+    // VenusRT's bare machine on the core ABI v1, with the DSP image found and the core's own boot program unless told otherwise - see VenusRT_Native.md §41.1, EmuSen_Backend.md §19.9.
     public sealed class VenusRtSnesEngine : ISnesEngine
     {
         public const string NoFirmwareVariable = "EMUSEN_VENUSRT_NO_FIRMWARE", BootVariable = "EMUSEN_VENUSRT_BOOT";
@@ -73,9 +73,32 @@ namespace EmuSen.WiseMan.Fixtures.Snes
 
         public string Name => "VenusRT";
 
+        // The library the build puts beside the tests, opened by its path rather than through discovery.
+        public static string LibraryPath => Path.Combine(AppContext.BaseDirectory,
+            OperatingSystem.IsWindows() ? "venusrt.dll" : OperatingSystem.IsMacOS() ? "libvenusrt.dylib" : "libvenusrt.so");
+
+        public static CoreLibrary Library => CoreLibrary.Open(LibraryPath);
+
         // The NEC DSP firmware VenusRT's own firmware_for names for the ROM as file 2, if any.
-        public static EmuSen.Cores.Native.CoreFirmware? DspRequest(string rom) =>
-            EmuSen.Cores.Native.CoreLibrary.Open(Path.Combine(AppContext.BaseDirectory, VenusNative.Library.FileName)).FirmwareFor(File.ReadAllBytes(rom)).FirstOrDefault(f => f.Which == 2);
+        public static CoreFirmware? DspRequest(string rom) => Library.FirmwareFor(File.ReadAllBytes(rom)).FirstOrDefault(f => f.Which == 2);
+
+        // A machine for the image with the files a player's folder would give it: file 1 the boot image, file 2 the DSP's firmware.
+        public static CoreMachine Machine(byte[] image, byte[]? dspFirmware = null, byte[]? boot = null)
+        {
+            var files = new List<(uint, byte[])>();
+            if (boot is not null) files.Add((1, boot));
+            if (dspFirmware is not null) files.Add((2, dspFirmware));
+            return new CoreMachine(Library, image, "", files);
+        }
+
+        // A space read whole, by its name in any case; empty for a space the machine does not list.
+        public static byte[] ReadSpace(CoreMachine m, string name)
+        {
+            if (m.Info.Spaces.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)) is not { } space) return Array.Empty<byte>();
+            var bytes = new byte[m.SpaceSize(space.Id)];
+            if (bytes.Length > 0) m.ReadSpace(space.Id, 0, bytes);
+            return bytes;
+        }
 
         // The folders searched for it: the corpus's firmware folder, then the player's.
         public static IReadOnlyList<string?> FirmwareFolders => new[] { SnesTestRomCorpus.Root is { } r ? Path.Combine(r, "firmware") : null, EmuSen.Common.Firmware.FirmwareLibrary.Directory };
@@ -98,7 +121,7 @@ namespace EmuSen.WiseMan.Fixtures.Snes
 
         public SnesRun Run(string rom, IReadOnlyList<int> frames, IReadOnlyList<SnesPress>? presses = null, bool audio = false)
         {
-            using var m = new VenusMachine(File.ReadAllBytes(rom), dspFirmware: _dspFirmware ? DspFirmware(rom) : null, boot: _boot);
+            using var m = Machine(File.ReadAllBytes(rom), _dspFirmware ? DspFirmware(rom) : null, _boot);
             var shots = new List<SnesSnapshot>();
             var sound = new List<short>();
             foreach (int target in frames.Order())
@@ -111,10 +134,10 @@ namespace EmuSen.WiseMan.Fixtures.Snes
                     foreach (var b in SnesEngine.Buttons) if (SnesEngine.Held(presses, b, frame)) mask |= 1u << (int)b;
                     m.SetButtons(0, mask, 0xFFF);
                     m.Advance();
-                    short[] s = m.DrainAudio(int.MaxValue);
+                    var (s, _) = m.DrainAudio(int.MaxValue);
                     if (audio) sound.AddRange(s);
                 }
-                var mem = SnesEngine.Spaces.ToDictionary(n => n, n => m.ReadSpace(n));
+                var mem = SnesEngine.Spaces.ToDictionary(n => n, n => ReadSpace(m, n));
                 var info = m.FrameInfo;
                 var rgba = new byte[info.Bytes];
                 m.CopyFrame(rgba);

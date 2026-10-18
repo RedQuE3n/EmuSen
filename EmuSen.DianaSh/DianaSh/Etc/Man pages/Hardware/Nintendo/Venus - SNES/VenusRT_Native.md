@@ -7379,6 +7379,9 @@ its Mesen columns reproduced, its C# columns frozen.
 - **G6's battery run on the handheld**, owed since §65, is still owed.
 - **The pre-stable interface.** `VenusMachine` and `VenusNative` stay for the runner and the native host's tests until
   that interface retires (`EmuSen_CoreAPI.md` §13.5).
+  *Retired 2026-10-18 (`EmuSen_Backend.md` §19.9): the two classes are deleted, the runner and its tests drive the bare
+  v1 machine (`CoreMachine`), and the library exports no `emusen_native_` symbol; the `NativeCore` trait over the
+  machine stays as v1's create and battery call it, until the pre-stable set goes with MercuryRT's shim.*
 
 ### 68.8 Beside the NES's retirement
 

@@ -1276,27 +1276,106 @@ last graded part and ask rather than choose:
 The SM83 and 6502 disassemblers, the NES and SNES views' pure parts (vectors, symbols, a summary line, the B bus's
 names) and `Nes6502Disassembler` raise none of these and wait only on the same part.
 
-### 13.5 Sizes, against §7, and what is left
+### 13.5 Part (d), 2026-10-17: the debugger views, the disassemblers and the damaged backup RAM
 
-| | §7's estimate | Built, parts (a) to (c) |
+*Built on branch `b3-packcode-d` from `WiseMan` at `8b09514b`, on the tester's four answers recorded at the head of
+§13.4.*
+
+- **The views read memory through a reader** (`emusen-systems`' `debug::Memory`): a byte, a batch of bytes whose
+  addresses the view knew before it read any of them, and a run from a space's start. B7's Crystal will implement it
+  over a core's memory; the C# facade's implementation is `debug::Tape`, the bytes the host has read so far for one
+  request in the order asked. The first read past them is asked for with the rest of its batch, and every read after it
+  answers 0 and is not asked for, since its address may hang on a byte not yet read; so the host reads exactly the
+  bytes the C# view read, in its order, a batch to a round. The one view whose reads hang on what it reads is the SNES's
+  DMA table, which reads a channel's line counter only for an enabled HDMA channel; it takes up to 25 rounds, the rest
+  one or two. The two tile sheets read a space whole where it states no side effects, the NES's interleaved byte by
+  byte where it does (the SNES's sheet already read its 64 KiB in order).
+- **The views** are `nes::views` and `snes::views`, each of `ISystemDebugViews`' members the C# implements: palettes,
+  the swatch, the tile sheet, the tilemap entry and its stride, a tile's pixels (the refusal of a depth with the C#'s
+  words and parameter), the vectors, and the SNES's DMA channels, the B bus's names, the symbols and the summary line.
+  The facade is `NativeDebugViews`, which each pack's views are unless `EMUSEN_SYSTEMS_NATIVE=0`, fronting the C#
+  views; the MoonRT shim's debug target now reads the NES pack's views rather than the C# class.
+- **The disassemblers**: `nes::disasm` (the 2A03), `gb::disasm` (the SM83, moved with its C# from the MercuryRT shim)
+  and the VR4300's in `emusen-mips` (`vr4300.rs`, MIPS III in the VR4300's spelling, `Spelling` now a field of
+  `Dialect`; `EmuSen_Mips.md` §6), reached through `n64::disasm`, its C# with `MarsOperands` moved from the MarsRT shim
+  to `Crystal/Systems/N64/`, where the shim's RSP disassembler still reads them. Each C# method forwards, its C#
+  kept as a `…Managed` twin. `blackmoon-gte` and `blackmoon-r3000` name the R3000's spelling where they build a
+  `Dialect`; nothing they do changed.
+- **`MoonBoards` split**: the sixteen boards' names by mapper number are the NES pack's (`nes::boards`,
+  `NesSystem.BoardName`), and `MoonBoards` takes its names from there; its register paths, mirroring rules and the list
+  of mappers MoonRT implements stay in the shim for B4, as decided.
+- **A backup RAM whose footer counts 255 or 256 files** is listed as damaged in both halves: its readable entries (254
+  of an 8 KiB volume's) with `Problem` saying why, a copy onto it and a delete from it refused, a save copied off it
+  allowed, nothing thrown. Shown by `SaveMediaParityTests.A_directory_reaching_outside_the_volume_is_listed_as_damaged_in_both`
+  failing first (`ArgumentOutOfRangeException`). The delete over later entries outside the volume (§13.1) still throws
+  as it did; it was not among the questions.
+- **Interface 15**, since 14 was merged: `emusen_systems_disassemble`, `emusen_systems_board_name` and
+  `emusen_systems_view` (`Platform/platform/src/systems_debug.rs`). B2, which may take 15, rebases to the next number.
+
+| Part (d) | Lines |
+|---|---:|
+| C# replaced (the two views 401, the three disassemblers 741, the board names) | about 1,160 |
+| Rust, `emusen-systems`' views, disassemblers, boards and reader | 795 |
+| Rust, `emusen-mips`' VR4300 table | 410 |
+| Rust, the C layer | 249 |
+| C# facade (`NativeDebugViews`, `SystemCode`'s part, the disassemblers' forwarding) | about 270 |
+| The parity class `DebugCodeParityTests` | 240 |
+
+| Gate | Result |
+|---|---|
+| `cargo test --release` in `emusen-mips`, `blackmoon-gte`, `blackmoon-r3000`, Diamond's `kernel-harness` | 11, 10, 38 and every harness test pass |
+| `cargo test --release -p emusen-systems -p emusen-platform` | 19, 29 and 4 pass |
+| `emusen_platform.h` as C99 and C++17 | clean |
+| `DebugCodeParityTests` | 6 pass: every 6502 and SM83 opcode at six addresses and 21 operand pairs, every SM83 CB suffix, the references of each at seven operands; about 298,000 VR4300 words (every primary opcode with every function and register pattern the decode reads, and 200,000 random); every mapper number from −2 to 4,099; the NES's views on 8 memory shapes, every tilemap entry of a 4 KiB nametable space and every tile of an 8 KiB CHR at two depths; the SNES's on 6 shapes, every tilemap entry of 64 KiB of VRAM, every tile at four depths, every B bus register, 400 register sets for the summary and seven symbols; each answer and the reads it made compared, in order, or as a set for a sheet read whole |
+| The golden corpus's `tile`, `tilemap` and `disasm` files | unchanged (`GoldenCorpusTests` passes with neither re-recorded) |
+| The blast radius, with `EMUSEN_SYSTEMS_NATIVE` unset and `0` | 1,047 pass, 1,047 pass |
+
+The blast radius was the parity classes of all four parts and the table's, the card classes (`SegaCdBramFormatTests`,
+`SaveMediaManagerTests`, `NephriteMediaTests`), every class that reads a view, a disassembly or a reference
+(`CoreDebugViewTests`, `TilePixelDecodeTests`, `StaticReferenceClassificationTests`, `SetRegVectorsAddrTests`,
+`ConditionBreakAndDmaTests`, `CoreAdapterTests`, `SnesSystemPackTests`, `VenusRtDebugTests`, `VenusRtDebugViewTests`,
+`MoonDebugTargetContract`, `MoonRtFrontendTests`, `MercuryDebugTargetTests`, `MercuryAuditTests`, `MercuryModelTests`,
+`MercuryRtCoreTests`, `MarsDisassemblerTests`, `MarsDebugTests`, `MarsRtTests`, `MarsRtFrontendTests`,
+`DiamondDebugTests`, `DiamondTests`, `NephriteDebugTests`), `DisasmWidthHintTests`, `SessionServiceParityTests`,
+`CoreRegistrationEquivalenceTests`, `LeafAssemblyTests` and `GoldenCorpusTests`.
+
+**Seeded faults**, each made, built, run and reverted:
+
+| Fault | Caught by |
+|---|---|
+| the 6502's branch counted from the third byte | the parity class, `MoonDebugTargetContract` |
+| the SM83's positive displacement without its plus | the parity class |
+| the VR4300's register 30 written `fp` | the parity class, `MarsDisassemblerTests` (5) |
+| the VR4300's jump region taken from the jump, not its delay slot | the parity class, `MarsDisassemblerTests` (3) |
+| the NES's backdrop mirror tested with mask 03h | none: an equivalent mutant, since the entries it adds to the mirror map to themselves; recorded, and replaced by the next |
+| the NES's backdrop mirrored to the wrong entry | the parity class |
+| the SNES's DMA table reading every line counter | the parity class (the reads) |
+| the tape reading on past its first gap | the parity class (the reads), `VenusRtDebugViewTests` |
+| MMC3 named `MMC-3` | the parity class |
+| the facade dropping a refusal's parameter | the parity class |
+| an overcounted backup RAM deleted from | the parity class (3 cases) |
+
+### 13.6 Sizes, against §7, and what is left
+
+| | §7's estimate | Built, parts (a) to (d) |
 |---|---:|---:|
-| C# replaced | about 2,950 | about 1,860 (718, 848 and about 290) |
-| Rust, hand-written, with in-crate tests and the C layer | 7,400 (5,900–8,900) | about 4,000 |
+| C# replaced | about 2,950 | about 3,020 (718, 848, about 290 and about 1,160) |
+| Rust, hand-written, with in-crate tests and the C layer | 7,400 (5,900–8,900) | about 5,500 |
 | Rust, generated from .NET (code page 932, the letter-or-digit ranges) | — | 1,645 |
-| C# facade | 300 | about 630 |
-| The parity classes | — | 822, with `DiscProbeTests` 84 |
+| C# facade | 300 | about 900 |
+| The parity classes | — | 1,062, with `DiscProbeTests` 84 |
 
-The Rust ran at about 2.2 times the C# it replaced for parts (a) to (c), against §7's 2.5: the format crates came in
-larger (their in-place, allocation-free surface and their own tests), the codecs and routing smaller. The facade is
-twice §7's figure because each part has its own call shapes; it is deleted whole at state 3. Part (d) would replace
-about 1,140 lines more (the two views 401, the three disassemblers 741).
+The Rust ran at about 1.8 times the C# it replaced, against §7's 2.5: the format crates came in larger (their in-place,
+allocation-free surface and their own tests), the codecs, routing, views and disassemblers smaller, being ports of
+tables and of short functions whose .NET text rules were few. The facade is three times §7's figure because each part
+has its own call shapes and the views their rounds; it is deleted whole at state 3.
 
 **Left for later:**
 
-- Part (d), on the tester's answers to §13.4.
-- State 3, the C# formats, codecs, recognisers and readers deleted, at the tester's word after goldens (§6, B10). Until
-  then a change to a module is made in both halves, and the parity classes fail on one alone.
+- State 3, the C# formats, codecs, recognisers, readers, views and disassemblers deleted, at the tester's word after
+  goldens (§6, B10). Until then a change to a module is made in both halves, and the parity classes fail on one alone.
+- B4: `MoonBoards`' register paths, mirroring rules and implemented mappers into MoonRT's own exports; `GbCartridge`'s
+  refusal of a type no board implements into MercuryRT's info; the RSP's disassembler with the MarsRT shim.
 - F27's test of `cheat_space` against a core's machine info (§13.2), with B7.
-- The two backup RAM behaviours of §13.1 that throw, which are the tester's to decide.
+- The delete over a backup RAM whose later entries lie outside it, which still throws (§13.1).
 - `PsxSystem.Bios` and `DisplayAspect`, which §5.3 says go, are untouched: neither is code this step moved.
-

@@ -2,6 +2,8 @@
 
 *Historical since 2026-10-16: Mars (C#), the C# core whose construction this page records, was deleted when MarsRT replaced it (`Mars_Native.md` §6.7). The record stays as the project's research and its hardware findings stand; the code it names is in git history before the retirement, and the pieces MarsRT kept are listed in §6.7.1 there.*
 
+*Since 2026-10-17 the VR4300's decoder is `emusen-mips`' (`vr4300.rs`, in this page's spelling as `Spelling::Vr4300`), reached through the N64 pack, with the C# moved to `Crystal/Systems/N64/Vr4300Disassembler.cs` as its failover; the RSP's stays with the MarsRT shim (`EmuSen_Backend.md` §13.5, `EmuSen_Mips.md` §6).*
+
 *Not a slice: an instrument, landed 2026-09-18. Two pure decoders — one word and its address in, text and a static
 reference out — for the VR4300 (`Cpu/Disassembler/Vr4300Disassembler.cs`, which also holds the shared
 `MarsInstruction`) and for the RSP (`Rsp/RspDisassembler.cs`). Tests in `MarsDisassemblerTests`. Neither is wired into

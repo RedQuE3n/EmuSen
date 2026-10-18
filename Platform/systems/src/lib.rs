@@ -7,6 +7,7 @@
 //! table (§5.2, D6): the save media's format modules first (step B3). EmuSen_Backend.md §12 and §13 record what was built.
 
 pub mod cheats;
+pub mod debug;
 pub mod gb;
 pub mod genesis;
 pub mod media;

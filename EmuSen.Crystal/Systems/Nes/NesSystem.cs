@@ -58,6 +58,30 @@ namespace EmuSen.Crystal.Systems.Nes
         // The pair a loaded NES game and a console chosen in the UI both get: detected, then explicit.
         public static (ICheatCodeCodec AutoDetect, ICheatCodeCodec Explicit) Pair() => (Raw(), GameGenie());
 
-        public static readonly SystemPack Pack = new(Entry, Raw, GameGenie, DebugViews: NesDebugViews.Instance);
+        // The boards the pack names by iNES mapper number, the C# failover and the parity class's oracle - see EmuSen_Backend.md §13.5.
+        public static readonly IReadOnlyDictionary<int, string> BoardNamesManaged = new Dictionary<int, string>
+        {
+            [0] = "NROM",
+            [1] = "MMC1",
+            [2] = "UxROM",
+            [3] = "CNROM",
+            [4] = "MMC3",
+            [7] = "AxROM",
+            [9] = "MMC2",
+            [11] = "Color Dreams",
+            [64] = "RAMBO-1",
+            [65] = "Irem H3001",
+            [66] = "GxROM",
+            [67] = "Sunsoft-3",
+            [68] = "Sunsoft-4",
+            [69] = "Sunsoft FME-7",
+            [71] = "Camerica BF909x",
+            [79] = "NINA-003-006",
+        };
+
+        // A mapper's board by name; null for a number the pack names none for.
+        public static string? BoardName(int mapper) => SystemCode.Active ? SystemCode.BoardName(mapper) : BoardNamesManaged.GetValueOrDefault(mapper);
+
+        public static readonly SystemPack Pack = new(Entry, Raw, GameGenie, DebugViews: SystemCode.Views(Id, NesDebugViews.Instance));
     }
 }

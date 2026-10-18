@@ -1,3 +1,4 @@
+using EmuSen.Crystal.Systems.GameBoy;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Crystal.Cheats;

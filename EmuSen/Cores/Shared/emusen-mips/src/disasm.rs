@@ -37,14 +37,27 @@ impl Coprocessor {
     }
 }
 
-/// The coprocessors a processor has, by number; an absent one is written with numbers only.
+/// How a processor's documents write its instructions: Appendix A's MIPS I as the R3000's do, or the VR4300's MIPS III
+/// with its folded forms and `s8` (EmuSen_Mips.md §6, decided by the tester on 2026-10-17 so that neither console's
+/// debugger output changes).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Spelling {
+    #[default]
+    AppendixA,
+    Vr4300,
+}
+
+/// The coprocessors a processor has, by number, an absent one written with numbers only; and its spelling. The VR4300's
+/// spelling names its own coprocessors' registers, so its tables here go unread.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Dialect {
     pub cop: [Option<&'static Coprocessor>; 4],
+    pub spelling: Spelling,
 }
 
 impl Dialect {
-    pub const MIPS_I: Dialect = Dialect { cop: [None; 4] };
+    pub const MIPS_I: Dialect = Dialect { cop: [None; 4], spelling: Spelling::AppendixA };
+    pub const VR4300: Dialect = Dialect { cop: [None; 4], spelling: Spelling::Vr4300 };
 }
 
 /// An instruction ready to be written as text: `word`, fetched from `pc`.
@@ -76,6 +89,11 @@ fn cop_register(f: &mut fmt::Formatter, names: Option<&[&'static str; 32]>, n: u
 
 impl fmt::Display for Disassembly<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.dialect.spelling == Spelling::Vr4300 {
+            let i = crate::vr4300::decode(self.word, self.pc);
+            f.write_str(&i.mnemonic)?;
+            return if i.operands.is_empty() { Ok(()) } else { write!(f, " {}", i.operands) };
+        }
         let w = Word(self.word);
         let op = decode(self.word);
         if self.word == 0 {
@@ -143,7 +161,7 @@ mod tests {
     };
 
     fn text(word: u32, pc: u32) -> String {
-        let d = Dialect { cop: [Some(&TEST_COP), None, None, None] };
+        let d = Dialect { cop: [Some(&TEST_COP), None, None, None], ..Dialect::MIPS_I };
         disassemble(word, pc, &d).to_string()
     }
 

@@ -1,9 +1,9 @@
 using System;
 using EmuSen.Crystal.Debugger;
 
-namespace EmuSen.Cores.Nintendo.MercuryRT
+namespace EmuSen.Crystal.Systems.GameBoy
 {
-    // A second opcode table, independent of the executing one - see Mercury_Debug.md §4.
+    // A second opcode table, independent of the executing one; emusen-systems' unless EMUSEN_SYSTEMS_NATIVE=0, each *Managed method the C#, moved from the MercuryRT shim - see Mercury_Debug.md §4, EmuSen_Backend.md §13.5.
     public static class Sm83Disassembler
     {
         // The placeholders a template can carry; each one also fixes the instruction's length.
@@ -97,7 +97,18 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         // The whole $CB page is two bytes: the prefix and the operation - see Mercury_Cpu.md §6.2.
         public const int CbLength = 2;
 
-        public static int LengthOf(byte opcode)
+        public static int LengthOf(byte opcode) => SystemCode.Active ? SystemCode.Disassemble("sm83", new[] { opcode }, 0, 0).Length : LengthOfManaged(opcode);
+
+        public static string MnemonicOf(byte opcode, byte suffix) => SystemCode.Active ? SystemCode.Disassemble("sm83", new[] { opcode, suffix }, 0, 0).Mnemonic : MnemonicOfManaged(opcode, suffix);
+
+        public static string FormatOperand(byte opcode, int address, byte low, byte high) =>
+            SystemCode.Active ? SystemCode.Disassemble("sm83", new[] { opcode, low, high }, address, 0).Operands : FormatOperandManaged(opcode, address, low, high);
+
+        public static (StaticReferenceKind Kind, int Target)? ClassifyStaticReference(byte opcode, int operand, int address) =>
+            !SystemCode.Active ? ClassifyStaticReferenceManaged(opcode, operand, address)
+            : SystemCode.Disassemble("sm83", new[] { opcode }, address, operand) is { Kind: { } kind } i ? (kind, (int)i.Target) : null;
+
+        public static int LengthOfManaged(byte opcode)
         {
             if (opcode == 0xCB) return CbLength;
 
@@ -112,7 +123,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
                 || template.Contains(Signed, StringComparison.Ordinal) ? 2 : 1;
         }
 
-        public static string MnemonicOf(byte opcode, byte suffix)
+        public static string MnemonicOfManaged(byte opcode, byte suffix)
         {
             if (opcode == 0xCB) return CbMnemonic(suffix);
 
@@ -122,7 +133,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         }
 
         // <address> is only needed to resolve a relative branch, which is measured from the next instruction.
-        public static string FormatOperand(byte opcode, int address, byte low, byte high)
+        public static string FormatOperandManaged(byte opcode, int address, byte low, byte high)
         {
             if (opcode == 0xCB) return CbOperand(low);
 
@@ -158,7 +169,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         }
 
         // Only the forms whose target is knowable from the bytes alone - see IDebugTarget's own comment.
-        public static (StaticReferenceKind Kind, int Target)? ClassifyStaticReference(byte opcode, int operand, int address)
+        public static (StaticReferenceKind Kind, int Target)? ClassifyStaticReferenceManaged(byte opcode, int operand, int address)
         {
             switch (opcode)
             {

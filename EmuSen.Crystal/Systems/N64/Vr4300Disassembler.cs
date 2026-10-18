@@ -1,14 +1,14 @@
 using EmuSen.Crystal.Debugger;
 
-namespace EmuSen.Cores.Nintendo.MarsRT
+namespace EmuSen.Crystal.Systems.N64
 {
     // One decoded word, and the address it names when that is knowable from the word alone - see Mars_Disassembler.md §1.
     public readonly record struct MarsInstruction(string Mnemonic, string Operands, StaticReferenceKind? Kind, uint Target);
 
-    // The spellings both of Mars's disassemblers share - see Mars_Disassembler.md §2.
-    internal static class MarsOperands
+    // The spellings both of Mars's disassemblers share, the RSP's still the MarsRT shim's - see Mars_Disassembler.md §2.
+    public static class MarsOperands
     {
-        internal static readonly string[] Gpr =
+        public static readonly string[] Gpr =
         {
             "zero", "at", "v0", "v1", "a0", "a1", "a2", "a3",
             "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7",
@@ -16,25 +16,25 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             "t8", "t9", "k0", "k1", "gp", "sp", "s8", "ra",
         };
 
-        internal static string Hex(long value) => value < 0 ? $"-0x{-value:X}" : $"0x{value:X}";
+        public static string Hex(long value) => value < 0 ? $"-0x{-value:X}" : $"0x{value:X}";
 
-        internal static MarsInstruction Word(uint word) => new(".word", $"0x{word:X8}", null, 0);
+        public static MarsInstruction Word(uint word) => new(".word", $"0x{word:X8}", null, 0);
 
-        internal static MarsInstruction Plain(string mnemonic, string operands = "") => new(mnemonic, operands, null, 0);
+        public static MarsInstruction Plain(string mnemonic, string operands = "") => new(mnemonic, operands, null, 0);
 
         // A software code field is shown only when something was put in it - see Mars_Disassembler.md §2.
-        internal static string Code(uint code) => code == 0 ? "" : Hex(code);
+        public static string Code(uint code) => code == 0 ? "" : Hex(code);
 
-        internal static int Rs(uint word) => (int)((word >> 21) & 0x1F);
+        public static int Rs(uint word) => (int)((word >> 21) & 0x1F);
 
-        internal static int Rt(uint word) => (int)((word >> 16) & 0x1F);
+        public static int Rt(uint word) => (int)((word >> 16) & 0x1F);
 
-        internal static int Rd(uint word) => (int)((word >> 11) & 0x1F);
+        public static int Rd(uint word) => (int)((word >> 11) & 0x1F);
 
-        internal static int Sa(uint word) => (int)((word >> 6) & 0x1F);
+        public static int Sa(uint word) => (int)((word >> 6) & 0x1F);
     }
 
-    // A pure decode of one VR4300 word, naming what Mars's interpreter executes and no more - see Mars_Disassembler.md §3.
+    // A pure decode of one VR4300 word, naming what Mars's interpreter executes and no more; emusen-mips' through the N64 pack unless EMUSEN_SYSTEMS_NATIVE=0, DecodeManaged the C#, moved from the MarsRT shim - see Mars_Disassembler.md §3, EmuSen_Backend.md §13.5.
     public static class Vr4300Disassembler
     {
         private static readonly string[] Cop0Names =
@@ -52,6 +52,13 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         };
 
         public static MarsInstruction Decode(uint word, uint address)
+        {
+            if (!SystemCode.Active) return DecodeManaged(word, address);
+            var i = SystemCode.Disassemble("vr4300", new[] { (byte)(word >> 24), (byte)(word >> 16), (byte)(word >> 8), (byte)word }, unchecked((int)address), 0);
+            return new MarsInstruction(i.Mnemonic, i.Operands, i.Kind, unchecked((uint)i.Target));
+        }
+
+        public static MarsInstruction DecodeManaged(uint word, uint address)
         {
             int rs = MarsOperands.Rs(word), rt = MarsOperands.Rt(word);
 

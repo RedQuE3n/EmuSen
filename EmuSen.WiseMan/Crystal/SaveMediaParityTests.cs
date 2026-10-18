@@ -380,14 +380,31 @@ namespace EmuSen.WiseMan.Crystal
             Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(20)));
         }
 
-        // A footer counting 255 files puts the last entries' directory block outside the volume: the C# threw, and the library's module throws the same exception through the facade.
-        [Fact]
-        public void A_directory_reaching_outside_the_volume_throws_in_both()
+        // A footer counting 255 or 256 files puts the last entries' directory block outside the volume: each half lists the entries it can read, says why, refuses to write to it and throws nothing - see EmuSen_Backend.md §13.5.
+        [Theory]
+        [InlineData(255)]
+        [InlineData(256)]
+        public void A_directory_reaching_outside_the_volume_is_listed_as_damaged_in_both(int files)
         {
-            byte[] image = Managed(SegaCdBramFormat.BackupRam.Medium).Format()!;
-            for (int k = 0; k < 4; k++) BinaryPrimitives.WriteUInt16BigEndian(image.AsSpan(0x2000 - 0x28 + 2 * k), 255);
-            Assert.Equal("threw ArgumentOutOfRangeException", Shown(() => Managed(SegaCdBramFormat.BackupRam.Medium).Read(image)));
-            Assert.Equal("threw ArgumentOutOfRangeException", Shown(() => Native(SegaCdBramFormat.BackupRam.Medium).Read(image)));
+            foreach (ISaveMediumFormat format in new[] { Managed(SegaCdBramFormat.BackupRam.Medium), Native(SegaCdBramFormat.BackupRam.Medium) })
+            {
+                byte[] good = BramOne(format, "KEEP_______"u8.ToArray(), 2, 0x5A, false);
+                byte[] image = (byte[])good.Clone();
+                for (int k = 0; k < 4; k++) BinaryPrimitives.WriteUInt16BigEndian(image.AsSpan(0x2000 - 0x28 + 2 * k), (ushort)files);
+                MediumListing listing = format.Read(image);
+                Assert.True(listing.Formatted);
+                Assert.NotNull(listing.Problem);
+                Assert.Equal(254, listing.Saves.Count);
+                Assert.Equal("KEEP_______", listing.Saves[0].Id);
+                Assert.NotNull(format.Copy(good, "KEEP_______", image).Refusal);
+                Assert.NotNull(format.Delete(image, "KEEP_______").Refusal);
+                Assert.NotNull(format.Copy(image, "KEEP_______", format.Format()!).Image);
+            }
+            byte[] damaged = Managed(SegaCdBramFormat.BackupRam.Medium).Format()!;
+            for (int k = 0; k < 4; k++) BinaryPrimitives.WriteUInt16BigEndian(damaged.AsSpan(0x2000 - 0x28 + 2 * k), (ushort)files);
+            var differences = new List<string>();
+            Compare(SegaCdBramFormat.BackupRam.Medium, damaged, Managed(SegaCdBramFormat.BackupRam.Medium).Format()!, "damaged", differences);
+            Assert.Empty(differences);
         }
 
         // Cards written by each side read by the other: the library's copies and deletes listed by the C#, and the C#'s by the library.

@@ -227,7 +227,7 @@ mod tests {
     };
 
     fn dialect() -> Dialect {
-        Dialect { cop: [None, None, Some(&GTE_LIKE), None] }
+        Dialect { cop: [None, None, Some(&GTE_LIKE), None], ..Dialect::MIPS_I }
     }
 
     /// Every operation with random operands: the text the disassembler writes assembles to the same word.

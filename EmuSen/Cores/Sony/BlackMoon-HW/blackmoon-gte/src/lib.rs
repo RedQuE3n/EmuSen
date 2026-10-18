@@ -186,7 +186,7 @@ mod tests {
     /// Each command is written by its name in its canonical form and with its bits otherwise, and reads back.
     #[test]
     fn the_commands_disassemble_by_name_and_assemble_back() {
-        let d = emusen_mips::Dialect { cop: [None, None, Some(&COPROCESSOR), None] };
+        let d = emusen_mips::Dialect { cop: [None, None, Some(&COPROCESSOR), None], ..emusen_mips::Dialect::MIPS_I };
         let mut numbers: Vec<u32> = COPROCESSOR.commands.iter().map(|c| c.select).collect();
         numbers.sort();
         numbers.dedup();

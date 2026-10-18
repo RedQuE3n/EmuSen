@@ -48,7 +48,11 @@ Two cases were found while porting, both read from the C# and shown by the parit
   `ArgumentOutOfRangeException`, for a read as much as an edit. The crate returns `None` for such an entry and an
   error from an edit, the family module turns that into `Fault::Outside`, and the facade throws the same exception,
   so a player sees what they saw before. Whether a card tool should list such a volume rather than throw is a
-  question for the tester, not answered here.
+  question for the tester, not answered here. *Decided by the tester on 2026-10-17 and built the same day
+  (`EmuSen_Backend.md` §13.5): such a volume is listed as damaged, its readable entries shown with words saying why
+  (`Problem`), a copy onto it or a delete from it refused, a save copied off it allowed, and nothing thrown; shown first
+  by `SaveMediaParityTests.A_directory_reaching_outside_the_volume_is_listed_as_damaged_in_both` failing, in both
+  halves.*
 - **A delete over a directory whose later entries lie outside the volume** threw the same exception from the move's
   slice. The crate refuses it as `MoveOutside`, with the same outcome through the facade. The C#'s other two failure
   points in that statement (the target beyond the image, the target shorter than the range) cannot be reached, since

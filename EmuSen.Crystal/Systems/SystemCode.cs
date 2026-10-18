@@ -20,6 +20,7 @@ namespace EmuSen.Crystal.Systems
             "emusen_systems_media", "emusen_systems_media_read", "emusen_systems_media_copy", "emusen_systems_media_delete", "emusen_systems_media_format",
             "emusen_systems_cheat_codecs", "emusen_systems_cheat_decode", "emusen_systems_cheat_encode",
             "emusen_systems_code", "emusen_systems_recognise", "emusen_systems_route", "emusen_systems_openvgdb", "emusen_systems_header",
+            "emusen_systems_disassemble", "emusen_systems_board_name", "emusen_systems_view",
         };
 
         // The library's code is in use: the switch chose the table.
@@ -274,6 +275,78 @@ namespace EmuSen.Crystal.Systems
             HeaderRefused(r);
             return new GameBoy.GbCartridge(r.GetProperty("type").GetByte(), r.GetProperty("board").GetString()!, r.GetProperty("rom_banks").GetInt32(), r.GetProperty("ram_length").GetInt32(),
                 r.GetProperty("battery").GetBoolean(), r.GetProperty("timer").GetBoolean(), r.GetProperty("rumble").GetBoolean(), r.GetProperty("cgb_flag").GetByte());
+        }
+
+        // One instruction as a disassembler of the library's gives it: its length, mnemonic, operands and the address it names.
+        public sealed record Instruction(int Length, string Mnemonic, string Operands, Debugger.StaticReferenceKind? Kind, long Target);
+
+        public static Instruction Disassemble(string processor, ReadOnlySpan<byte> code, int pc, int operand)
+        {
+            byte[] id = Encoding.UTF8.GetBytes(processor);
+            var disassemble = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, int, int, byte*, nuint, long>)Export("emusen_systems_disassemble");
+            byte[] answer;
+            fixed (byte* i = id)
+            fixed (byte* c = code)
+            {
+                byte* ip = i, cp = c;
+                nuint il = (nuint)id.Length, cl = (nuint)code.Length;
+                answer = Guard(() => Bytes((o, l) => disassemble(ip, il, cp, cl, pc, operand, o, l), 256));
+            }
+            using var document = JsonDocument.Parse(answer);
+            JsonElement r = document.RootElement, reference = r.GetProperty("reference");
+            return new Instruction(r.GetProperty("length").GetInt32(), r.GetProperty("mnemonic").GetString()!, r.GetProperty("operands").GetString()!,
+                reference.ValueKind == JsonValueKind.Null ? null : Enum.Parse<Debugger.StaticReferenceKind>(reference.GetProperty("kind").GetString()!),
+                reference.ValueKind == JsonValueKind.Null ? 0 : reference.GetProperty("target").GetInt64());
+        }
+
+        // The board an iNES mapper number means, as the NES pack names it; null for a number it names none for.
+        public static string? BoardName(int mapper)
+        {
+            var board = (delegate* unmanaged[Cdecl]<int, byte*, nuint, long>)Export("emusen_systems_board_name");
+            return Guard(() =>
+            {
+                try { return Encoding.UTF8.GetString(Bytes((o, l) => board(mapper, o, l), 64)); }
+                catch (SystemCodeFault fault) when (fault.Status == Absent) { return null; }
+            });
+        }
+
+        // A pack's views: the library's fronting the C# views, or the C# alone under the switch's 0.
+        public static ISystemDebugViews Views(string system, ISystemDebugViews managed) => Active ? new NativeDebugViews(system, managed) : managed;
+
+        // One view's answer, reading memory in the rounds the view asks for; null where the system has no such view.
+        internal static (JsonDocument Answer, byte[] Payload)? View(byte[] request, IReadOnlyList<Debugger.IDebugMemorySpace> spaces)
+        {
+            var view = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long>)Export("emusen_systems_view");
+            var tape = new List<byte>();
+            for (int round = 0; ; round++)
+            {
+                byte[] taped = tape.ToArray();
+                byte[]? envelope;
+                fixed (byte* r = request)
+                fixed (byte* t = taped)
+                {
+                    byte* rp = r, tp = t;
+                    nuint rl = (nuint)request.Length, tl = (nuint)taped.Length;
+                    envelope = Guard(() =>
+                    {
+                        try { return Bytes((o, l) => view(rp, rl, tp, tl, o, l), 4096); }
+                        catch (SystemCodeFault fault) when (fault.Status == Absent) { return null; }
+                    });
+                }
+                if (envelope is null) return null;
+                int length = BitConverter.ToInt32(envelope, 0);
+                var answer = JsonDocument.Parse(envelope.AsMemory(4, length));
+                if (!answer.RootElement.TryGetProperty("need", out JsonElement need)) return (answer, envelope[(4 + length)..]);
+                if (round >= 64) throw new InvalidOperationException($"{PlatformLibrary.FileName}: a view asked for memory in more than 64 rounds");
+                foreach (JsonElement run in need.EnumerateArray())
+                {
+                    string name = run.GetProperty("space").GetString()!;
+                    Debugger.IDebugMemorySpace space = spaces.First(s => s.Name == name);
+                    int at = run.GetProperty("address").GetInt32(), count = run.GetProperty("length").GetInt32();
+                    for (int a = 0; a < count; a++) tape.Add(space.Read(at + a));
+                }
+                answer.Dispose();
+            }
         }
 
         public static MediumListing MediaRead(string medium, ReadOnlySpan<byte> image)

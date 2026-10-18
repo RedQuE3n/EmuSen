@@ -100,10 +100,20 @@ namespace EmuSen.Crystal.Systems.Genesis
             return new Entry(e[..11].ToArray(), e[11] != 0, start, blocks, !whole || !inside);
         }
 
+        // An entry whose directory block lies below the volume, where a footer counts more files than it can hold.
+        private static bool Outside(ReadOnlySpan<byte> image, int index) => DirectoryAt(image.Length, (index - 1) / 2) < 0;
+
+        // Whether the footer counts entries outside the volume, which leaves the directory damaged: read as far as it goes, never written.
+        private static bool Overcounted(ReadOnlySpan<byte> image) => Counts(image).Files > 0 && Outside(image, Counts(image).Files);
+
+        // The words for such a volume.
+        private static string OvercountedWords(ReadOnlySpan<byte> image) =>
+            $"its directory counts {Counts(image).Files} files, more than it can hold; the {Entries(image).Count} it can read are listed and nothing is written to it";
+
         private static List<Entry> Entries(ReadOnlySpan<byte> image)
         {
             var list = new List<Entry>();
-            for (int i = 1; i <= Counts(image).Files; i++) list.Add(EntryOf(image, i));
+            for (int i = 1; i <= Counts(image).Files && !Outside(image, i); i++) list.Add(EntryOf(image, i));
             return list;
         }
 
@@ -141,7 +151,7 @@ namespace EmuSen.Crystal.Systems.Genesis
             var saves = new List<SaveEntry>();
             foreach (Entry e in Entries(image))
                 saves.Add(new SaveEntry(e.Name, e.Name.TrimEnd('_'), e.Blocks, null, e.Damaged));
-            return new MediumListing(true, saves, Counts(image).Free);
+            return new MediumListing(true, saves, Counts(image).Free, Overcounted(image) ? OvercountedWords(image) : null);
         }
 
         // As BRMWRITE places a file (§7.2): after the last file, its blocks as they were stored, which a copy keeps (§7.2's copies).
@@ -154,6 +164,7 @@ namespace EmuSen.Crystal.Systems.Genesis
             Entry? source = Entries(from).Find(e => e.Name == save);
             if (source is null) return MediumEdit.Refused($"no save named {save} is on the backup RAM");
             if (source.Damaged) return MediumEdit.Refused($"{save}'s directory entry is damaged, so it cannot be copied");
+            if (Overcounted(to)) return MediumEdit.Refused($"the backup RAM copied to is damaged: {OvercountedWords(to)}");
             var there = Entries(to);
             if (there.Exists(e => e.Name == save)) return MediumEdit.Refused($"the backup RAM already holds a save named {save}");
             var (free, files) = Counts(to);
@@ -175,6 +186,7 @@ namespace EmuSen.Crystal.Systems.Genesis
         private static MediumEdit DeleteManaged(ReadOnlySpan<byte> image, string save)
         {
             if (!SizeOk(image.Length) || KindOf(image) != Kind.Sega) return MediumEdit.Refused("the backup RAM is not formatted");
+            if (Overcounted(image)) return MediumEdit.Refused($"the backup RAM is damaged: {OvercountedWords(image)}");
             var entries = Entries(image);
             int index = entries.FindIndex(e => e.Name == save);
             if (index < 0) return MediumEdit.Refused($"no save named {save} is on the backup RAM");

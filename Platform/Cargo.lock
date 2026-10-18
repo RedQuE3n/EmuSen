@@ -224,6 +224,10 @@ name = "emusen-mcd-bram"
 version = "0.1.0"
 
 [[package]]
+name = "emusen-mips"
+version = "0.1.0"
+
+[[package]]
 name = "emusen-n64-pak"
 version = "0.1.0"
 
@@ -286,6 +290,7 @@ version = "0.1.0"
 dependencies = [
  "emusen-dotnet",
  "emusen-mcd-bram",
+ "emusen-mips",
  "emusen-n64-pak",
  "emusen-psx-card",
 ]

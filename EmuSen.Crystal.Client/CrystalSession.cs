@@ -35,6 +35,23 @@ namespace EmuSen.Crystal.Client
 
         public long PictureBytes => Check(Contract.Crystal.PictureCopy(Rt, Id, null, 0));
 
+        // Since 1.1: the current machine's lend for the presenter to borrow, zero for none; asked again after a frame, since a machine made again is lent afresh.
+        public nint PictureLend() => Contract.Crystal.PictureLend(Rt, Id);
+
+        // Since 1.1: the raw encoding kept from the next frame; null keeps none.
+        public void RawSelect(string? encoding) => WithText(encoding, (e, el) => Check(Contract.Crystal.RawSelect(Rt, Id, (byte*)e, el)));
+
+        // Since 1.1: the last frame's raw picture into the buffer and its shape; the bytes it needs, or -1 for none kept.
+        public long RawCopy(Span<byte> into, out CrystalRawInfo info)
+        {
+            var shape = new CrystalRawInfo { size = (uint)sizeof(CrystalRawInfo) };
+            long bytes;
+            fixed (byte* p = into) bytes = Contract.Crystal.RawCopy(Rt, Id, &shape, into.IsEmpty ? null : p, (nuint)into.Length);
+            info = shape;
+            if (bytes == CrystalSessionAbi.Absent) return -1;
+            return Check(bytes);
+        }
+
         // Stereo frames of interleaved samples into the buffer, their rate out; the frames written.
         public int DrainAudio(Span<short> into, out uint rate)
         {

@@ -48,7 +48,7 @@ namespace EmuSen.WiseMan.Cores
 
         private static void Mode(string mode, string? slot1 = null)
         {
-            var config = GraphicsConfig.Load();
+            var config = ConsolesConfig.Load();
             config.SetValue("PlayStation", MemoryCards.ModeKey, mode);
             if (slot1 is not null) config.SetValue("PlayStation", MemoryCards.SlotKeys[0], slot1);
             config.Save();

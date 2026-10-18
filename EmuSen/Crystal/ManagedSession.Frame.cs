@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using EmuSen.Common.Imaging;
 using EmuSen.Cores;
+using EmuSen.Cores.Native;
 using EmuSen.Crystal.Recording;
 using EmuSen.Crystal.Session;
 
@@ -18,7 +19,7 @@ namespace EmuSen.Crystal.Managed
 
         public void Frame(FrameInfoV1* info)
         {
-            if (info != null && info->size < sizeof(FrameInfoV1)) throw CrystalException.BadStruct("emusen_crystal_frame_info", info->size, sizeof(FrameInfoV1));
+            if (info != null && info->size < FrameInfoV1.Size10) throw CrystalException.BadStruct("emusen_crystal_frame_info", info->size, FrameInfoV1.Size10);
             int me = Environment.CurrentManagedThreadId;
             int other = Interlocked.CompareExchange(ref _inFrame, me, 0);
             if (other != 0 && other != me) throw new CrystalException(CrystalNumbers.Busy, $"another thread is inside a frame of session {Id}; a session has one frame thread");
@@ -92,6 +93,9 @@ namespace EmuSen.Crystal.Managed
             info->paused = _paused ? 1u : 0u;
             info->halted_processor = _halted ? HaltedIndex() : 0;
             info->halted_address = _halted ? unchecked((uint)Core.HaltedAddress) : 0;
+            if (info->size < sizeof(FrameInfoV1)) return;
+            info->picture_on_device = ran && Core is IDevicePicture { PictureOnDevice: true } ? 1u : 0u;
+            info->reserved = 0;
         }
 
         private uint HaltedIndex()
@@ -99,6 +103,42 @@ namespace EmuSen.Crystal.Managed
             if (Engine is not { IsRomLoaded: true } engine) return 0;
             int index = engine.Machine.Info.Processors.ToList().FindIndex(p => p.Id == engine.HaltedProcessor);
             return index < 0 ? 0 : (uint)index;
+        }
+
+        // The current machine's lend for the presenter to borrow, or zero; a machine made again holds a new one.
+        public nint PictureLend()
+        {
+            lock (_lock) return Core is IDevicePicture { Lend: PlatformLend lend } ? lend.Handle : 0;
+        }
+
+        // The raw encoding kept from the next frame; null keeps none.
+        public void RawSelect(string? encoding)
+        {
+            CoreEngine engine = Engine ?? throw new CrystalException(SessionAbi.NotSupported, $"{CoreFactory.Running(Core)} keeps no picture before its palette");
+            engine.RawEncoding = encoding;
+        }
+
+        // The last frame's raw picture into the caller's buffer and its shape into info; ABSENT for none.
+        public long RawCopy(RawInfoV1* info, byte* o, nuint n)
+        {
+            if (info != null && info->size < sizeof(RawInfoV1)) throw CrystalException.BadStruct("emusen_crystal_raw_info", info->size, sizeof(RawInfoV1));
+            lock (_lock)
+            {
+                if (_closed) throw new CrystalException(SessionAbi.NoSession, $"session {Id} was closed");
+                var into = o == null ? Span<byte>.Empty : new Span<byte>(o, (int)Math.Min(n, (nuint)int.MaxValue));
+                Cores.Native.CoreInterface.RawFrame shape = default;
+                long bytes = Engine is { } engine ? engine.CopyRaw(into, out shape) : -1;
+                if (bytes < 0) throw new CrystalException(SessionAbi.Absent, "no picture before the palette is kept");
+                if (info != null)
+                {
+                    info->element = shape.Element;
+                    info->width = shape.Width;
+                    info->height = shape.Height;
+                    info->stride = shape.Stride;
+                    info->reserved = 0;
+                }
+                return bytes;
+            }
         }
 
         // The picture as RGBA8888, read whole: from another thread it waits for the frame in progress.

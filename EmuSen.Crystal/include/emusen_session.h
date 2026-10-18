@@ -389,7 +389,10 @@ typedef struct emusen_session_v1 {
 
     /* -- Cheats ------------------------------------------------------------------------------------------------ */
     /* EMUSEN_SESSION_CHEAT_*. DB_PRUNE with "apply" and DB_UPDATE change the database on disk and answer with a record:
-     * the first call applies, and the record is kept until a buffer takes it, as events_drain keeps its events. */
+     * the first call applies, and the record is kept until a buffer takes it, as events_drain keeps its events.
+     * Since the frontend API's 1.1 its twin also answers session 0, with no game, for the ops that need none:
+     * DB_SYSTEMS, DB_GAMES, DB_FIND, DB_STATUS, DB_PARSE, DB_PRUNE, DB_UPDATE, CHT_PARSE, FILES and FILE_READ; any
+     * other op on session 0 is NO_SESSION. */
     int64_t (*cheat_op)(void *ctx, uint32_t session, uint32_t op, const uint8_t *args, size_t args_len,
                         uint8_t *out, size_t len);
     /* reads. {"auto":codec|null,"explicit":codec|null,"systems":[name]}, a codec being {"name","kind","space"}. */

@@ -53,21 +53,21 @@ namespace EmuSen.Cores
         private static ICore GameBoy(CoreOptions options) => MercuryRtCore.Available ? new MercuryRtCore { Options = options }
             : throw new NotSupportedException($"This build has no Game Boy core: {CoreCatalog.MercuryRtEngine} is missing ({MercuryNative.Report}).");
 
-        // What graphics.json holds for the console the file runs as, so a setting read only at create reaches the machine - see EmuSen_Settings_Reference.md §4.90.
+        // What consoles.json holds for the console the file runs as, so a setting read only at create reaches the machine - see EmuSen_Settings_Reference.md §4.90.
         private static IReadOnlyDictionary<string, string> StoredSettings(string romPath, Native.CoreLibrary library)
         {
             string? console = CoreCatalog.ConsoleForRom(romPath) ?? CoreCatalog.DiscoveredConsoleForFile(romPath, library.Info);
             if (console is null) return new Dictionary<string, string>();
-            var config = GraphicsConfig.Load();
+            var config = ConsolesConfig.Load();
             return library.Settings.Select(s => (s.Key, Value: config.Value(console, s.Key))).Where(p => p.Value is not null).ToDictionary(p => p.Key, p => p.Value!);
         }
 
-        // Each save medium's mode graphics.json holds for the console the file runs as - see EmuSen_SaveMedia.md §3.3.
+        // Each save medium's mode consoles.json holds for the console the file runs as - see EmuSen_SaveMedia.md §3.3.
         private static IReadOnlyDictionary<string, CardChoice> StoredMedia(string romPath, Native.CoreLibrary library)
         {
             string? console = CoreCatalog.ConsoleForRom(romPath) ?? CoreCatalog.DiscoveredConsoleForFile(romPath, library.Info);
             if (console is null) return new Dictionary<string, CardChoice>();
-            var config = GraphicsConfig.Load();
+            var config = ConsolesConfig.Load();
             return MemoryCards.Stored(MemoryCards.MediaOf(console, CoreCatalog.SystemOfFile(romPath, library.Info)), key => config.Value(console, key));
         }
 
@@ -98,7 +98,7 @@ namespace EmuSen.Cores
             var found = Native.CoreDiscovery.ForSystem(start.SystemId).Where(Starts).OrderBy(c => c.EngineName == engine ? 0 : 1).FirstOrDefault()
                 ?? throw new NotSupportedException($"No core in this build starts the {console} with nothing in it.");
             var library = found.Open() ?? throw new NotSupportedException($"{found.EngineName} is not in use: {found.Report}");
-            var config = GraphicsConfig.Load();
+            var config = ConsolesConfig.Load();
             var settings = library.Settings.Select(s => (s.Key, Value: config.Value(console, s.Key))).Where(p => p.Value is not null).ToDictionary(p => p.Key, p => p.Value!);
             var system = library.Info.Systems.First(s => s.Id == start.SystemId);
             var media = MemoryCards.Stored(MemoryCards.MediaOf(console, system), key => config.Value(console, key));
@@ -142,7 +142,7 @@ namespace EmuSen.Cores
 
         // The engine graphics.json stores for the ROM's console, so every frontend makes the one decision Mistress's row records; null where nothing is stored - see EmuSen_Settings_Reference.md §4.44.
         public static string? ConfiguredEngine(string romPath) =>
-            CoreCatalog.ConsoleForRom(romPath) is { } console ? CoreCatalog.EngineChosen(console, GraphicsConfig.Load().Value(console, CoreCatalog.EngineKey)) : null;
+            CoreCatalog.ConsoleForRom(romPath) is { } console ? CoreCatalog.EngineChosen(console, ConsolesConfig.Load().Value(console, CoreCatalog.EngineKey)) : null;
 
         // Why the engine asked for is not running, or null when it is - see EmuSen_Settings_Reference.md §4.44.
         public static string? EngineNotice(string romPath, string? engine, ICore core)

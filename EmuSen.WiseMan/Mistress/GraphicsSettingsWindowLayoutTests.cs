@@ -66,11 +66,12 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task The_N64s_controls_show_the_configs_values_and_the_defaults_where_it_has_none() => Session.Dispatch(() =>
         {
-            var config = new GraphicsConfig();
-            config.SetValue("N64", "RdpWorkers", "2");
-            config.SetValue("N64", "SkipRepeatedScans", "false");
+            var consoles = new ConsolesConfig();
+            consoles.SetValue("N64", "RdpWorkers", "2");
+            consoles.SetValue("N64", "SkipRepeatedScans", "false");
+            consoles.Save();
 
-            var window = new GraphicsSettingsWindow(config, null, "N64");
+            var window = new GraphicsSettingsWindow(new GraphicsConfig(), null, "N64");
             window.Show();
             window.CaptureRenderedFrame();
 
@@ -92,10 +93,10 @@ namespace EmuSen.WiseMan.Mistress
             ByName<LunaSwitch>(window, "N64.ThreadedRdp").IsChecked = false;
             ByName<Dropdown>(window, "N64.RdpWorkers").SelectedItem = "5";
 
-            Assert.Equal("false", config.Value("N64", "ThreadedRdp"));
-            Assert.Equal("5", config.Value("N64", "RdpWorkers"));
+            Assert.Equal("false", ConsolesConfig.Load().Value("N64", "ThreadedRdp"));
+            Assert.Equal("5", ConsolesConfig.Load().Value("N64", "RdpWorkers"));
             Assert.Equal(new[] { "N64", "N64" }, reported);
-            Assert.Equal("5", GraphicsConfig.Load().Value("N64", "RdpWorkers"));
+            Assert.Null(config.Value("N64", "RdpWorkers"));
         }, default);
 
         // The Antialiasing row says what the chosen level becomes when the resolution holds it back, and says nothing where it applies - see Mars_Performance.md §42.5.
@@ -111,10 +112,11 @@ namespace EmuSen.WiseMan.Mistress
         [InlineData("3", "Off", null)]
         public Task The_antialiasing_row_says_when_the_resolution_holds_it_back(string scale, string level, string? said) => Session.Dispatch(() =>
         {
-            var config = new GraphicsConfig();
-            config.SetValue("N64", "RenderScale", scale);
-            config.SetValue("N64", "Antialiasing", level);
-            var window = new GraphicsSettingsWindow(config, null, "N64");
+            var consoles = new ConsolesConfig();
+            consoles.SetValue("N64", "RenderScale", scale);
+            consoles.SetValue("N64", "Antialiasing", level);
+            consoles.Save();
+            var window = new GraphicsSettingsWindow(new GraphicsConfig(), null, "N64");
             window.Show();
             window.CaptureRenderedFrame();
 
@@ -127,9 +129,10 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task The_antialiasing_note_follows_the_resolution_as_it_changes() => Session.Dispatch(() =>
         {
-            var config = new GraphicsConfig();
-            config.SetValue("N64", "Antialiasing", "3x");
-            var window = new GraphicsSettingsWindow(config, null, "N64");
+            var consoles = new ConsolesConfig();
+            consoles.SetValue("N64", "Antialiasing", "3x");
+            consoles.Save();
+            var window = new GraphicsSettingsWindow(new GraphicsConfig(), null, "N64");
             window.Show();
             window.CaptureRenderedFrame();
             var note = ByName<HintText>(window, "N64.Antialiasing.Note");

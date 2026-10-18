@@ -343,7 +343,7 @@ namespace EmuSen.WiseMan.Cores
                 Add($"{world}.configured[{console} nothing stored]", CoreFactory.ConfiguredEngine(game));
                 foreach (string? stored in engines.Skip(1))
                 {
-                    GraphicsConfig graphics = GraphicsConfig.Load();
+                    ConsolesConfig graphics = ConsolesConfig.Load();
                     graphics.SetValue(console, CoreCatalog.EngineKey, stored!);
                     graphics.Save();
                     Add($"{world}.configured[{console} {stored}]", CoreFactory.ConfiguredEngine(game));

@@ -23,6 +23,9 @@ namespace EmuSen.Crystal.Client.Contract
         public delegate* unmanaged[Cdecl]<nint, uint, uint, int> disc_lid;
         public delegate* unmanaged[Cdecl]<nint, uint, CrystalFrameInfo*, int> frame;
         public delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, long> picture_copy;
+        public delegate* unmanaged[Cdecl]<nint, uint, nint> picture_lend;
+        public delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, int> raw_select;
+        public delegate* unmanaged[Cdecl]<nint, uint, CrystalRawInfo*, byte*, nuint, long> raw_copy;
         public delegate* unmanaged[Cdecl]<nint, uint, short*, nuint, uint*, long> audio_drain;
         public delegate* unmanaged[Cdecl]<nint, uint, uint, int> wait;
         public delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, long> phase_names;
@@ -41,10 +44,14 @@ namespace EmuSen.Crystal.Client.Contract
         public delegate* unmanaged[Cdecl]<nint, uint, uint, int> state_slot_save;
         public delegate* unmanaged[Cdecl]<nint, uint, uint, int> state_slot_load;
         public delegate* unmanaged[Cdecl]<nint, uint, int> resume_save;
+        public delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, long> state_record;
+        public delegate* unmanaged[Cdecl]<nint, byte*, nuint, int> state_forget;
         public delegate* unmanaged[Cdecl]<nint, uint, int> resume_load;
         public delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, byte*, nuint, byte*, nuint, long> settings_schema;
         public delegate* unmanaged[Cdecl]<nint, uint, uint, byte*, nuint, byte*, nuint, byte*, nuint, long> settings_get;
         public delegate* unmanaged[Cdecl]<nint, uint, uint, byte*, nuint, byte*, nuint, byte*, nuint, int> settings_set;
+        public delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, byte*, nuint, long> game_setting_get;
+        public delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, byte*, nuint, int> game_setting_set;
         public delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, byte*, nuint, long> firmware_needed;
         public delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, int> firmware_install;
         public delegate* unmanaged[Cdecl]<nint, byte*, nuint, long> firmware_overview;

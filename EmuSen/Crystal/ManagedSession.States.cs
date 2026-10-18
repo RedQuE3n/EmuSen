@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Crystal.Session;
@@ -25,16 +26,63 @@ namespace EmuSen.Crystal.Managed
         {
             if (Path.GetDirectoryName(Path.GetFullPath(path)) is { } folder) Directory.CreateDirectory(folder);
             Core.SaveState(path);
+            Runtime.Records.Write(path, Record());
             Runtime.Events.Raise(Id, CrystalNumbers.EventState, "state", w => { w.WriteString("op", "saved"); w.WriteString("path", path); });
         });
 
         public void LoadState(string path) => Change(() =>
         {
-            if (!File.Exists(path)) throw new CrystalException(SessionAbi.Absent, $"no state at {path}");
-            Core.LoadState(path);
+            if (!File.Exists(path)) throw new SessionException(SessionAbi.Absent, $"no state at {path}");
+            if (Runtime.Records.Read(path) is { } record && Refusal(record) is { } why) throw new SessionException(CrystalNumbers.StateRefused, why);
+            try { Core.LoadState(path); }
+            catch (InvalidDataException e) when (Cores.Native.CoreMachine.StatusOf(e) is not null) { throw new SessionException(CrystalNumbers.StateRefused, e.Message); }
             AfterJump();
             Runtime.Events.Raise(Id, CrystalNumbers.EventState, "state", w => { w.WriteString("op", "loaded"); w.WriteString("path", path); });
         });
+
+        // The build a state record names: the runtime's, its commit appended where the SDK knows it.
+        public static readonly string BuildName =
+            System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(ManagedSession).Assembly)?.InformationalVersion ?? "unknown";
+
+        // The game's hash and size, read once on a worker as a session opens; a state saved before it is known records none.
+        private volatile string? _romMd5;
+        private long _romBytes;
+
+        private void StartIdentifying()
+        {
+            if (GamePath is not { } path) return;
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    Interlocked.Exchange(ref _romBytes, new FileInfo(path).Length);
+                    _romMd5 = RomHash.Md5(path);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            });
+        }
+
+        private StateRecord Record() => new()
+        {
+            Console = Console,
+            Core = CoreFactory.Running(Core),
+            StateVersion = Core is IStateFormat format ? format.StateVersion : 0,
+            Build = BuildName,
+            SavedAt = DateTime.Now,
+            RomFile = Path.GetFileName(GameKey),
+            RomMd5 = GamePath is null ? null : _romMd5,
+            RomBytes = GamePath is null ? 0 : Interlocked.Read(ref _romBytes),
+        };
+
+        // Why the record says a state is not this machine's to load, or null: another console's, or this engine's version outside what the machine reads - see EmuSen_Backend.md §14.12.
+        private string? Refusal(StateRecord record)
+        {
+            if (!string.Equals(record.Console, Console, StringComparison.OrdinalIgnoreCase))
+                return $"That state was saved by the {record.Console} core, and {Path.GetFileName(GameKey)} runs on the {Console} core.";
+            if (record.Core == CoreFactory.Running(Core) && Engine is { IsRomLoaded: true } e && e.Machine.Info.LoadsFrom is { Count: > 0 } loads && !loads.Contains(record.StateVersion))
+                return $"That state is {record.Core}'s version {record.StateVersion}; this machine reads versions {loads.Min()} to {loads.Max()}.";
+            return null;
+        }
 
         // After the machine jumped: no history leads to it, no halt holds it, and the debugger reads where it is now.
         private void AfterJump()
@@ -100,7 +148,7 @@ namespace EmuSen.Crystal.Managed
         // Held rewind's step, in place of a frame: the sound it skipped drained and dropped, the picture the snapshot left on show.
         public long StepBack(uint count, FrameInfoV1* info)
         {
-            if (info != null && info->size < sizeof(FrameInfoV1)) throw CrystalException.BadStruct("emusen_crystal_frame_info", info->size, sizeof(FrameInfoV1));
+            if (info != null && info->size < FrameInfoV1.Size10) throw CrystalException.BadStruct("emusen_crystal_frame_info", info->size, FrameInfoV1.Size10);
             return Change(() =>
             {
                 Core.SkipRendering = false;

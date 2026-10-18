@@ -61,7 +61,7 @@ namespace EmuSen.WiseMan.Mistress
             model.SelectedItem = MercuryRtCore.ModelGameBoyColor;
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("GB", told);
-            Assert.Equal(MercuryRtCore.ModelGameBoyColor, GraphicsConfig.Load().Value("GB", MercuryRtCore.ModelKey));
+            Assert.Equal(MercuryRtCore.ModelGameBoyColor, ConsolesConfig.Load().Value("GB", MercuryRtCore.ModelKey));
             UiTest.AssertLaidOut(window, "graphics-gb-model-color");
             window.Close();
         });
@@ -72,7 +72,7 @@ namespace EmuSen.WiseMan.Mistress
         [InlineData((byte)0x80, MercuryRtCore.ModelGameBoy, "GB")]
         public Task A_game_runs_on_the_console_the_gb_tab_names(byte cgb, string model, string runsAs) => UiTest.Run(() =>
         {
-            GraphicsConfig config = GraphicsConfig.Load();
+            ConsolesConfig config = ConsolesConfig.Load();
             config.SetValue("GB", MercuryRtCore.ModelKey, model);
             config.Save();
             File.WriteAllBytes(_rom, SyntheticGbRom.Build(cgbFlag: cgb, patches: (0, new byte[] { 0x18, 0xFE })));

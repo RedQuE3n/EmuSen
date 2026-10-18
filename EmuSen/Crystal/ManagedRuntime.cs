@@ -17,6 +17,7 @@ namespace EmuSen.Crystal.Managed
         public ManagedRuntime()
         {
             Handle = GCHandle.ToIntPtr(GCHandle.Alloc(this));
+            CopyEngineChoices();
         }
 
         public nint Handle { get; private set; }
@@ -94,6 +95,8 @@ namespace EmuSen.Crystal.Managed
             if (Handle == 0) return;
             foreach (ManagedSession s in Sessions) s.Close();
             Events.Clear();
+            _records?.Dispose();
+            _noGame?.Dispose();
             GCHandle.FromIntPtr(Handle).Free();
             Handle = 0;
         }

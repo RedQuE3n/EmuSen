@@ -21,6 +21,12 @@ namespace EmuSen.Mistress.Views
         private readonly List<(string Console, Action Show)> _notes = new();
         private bool _filling;
 
+        // The keys each console's core reads, the runtime's since SR12: read from consoles.json, written through the frontend API; every other key is Mistress's, in graphics.json - see EmuSen_Backend.md §14.12.
+        private readonly HashSet<(string Console, string Key)> _core = new();
+
+        private string? Value(string console, string key) =>
+            _core.Contains((console, key)) ? CoreSettings.Stored(console, key) : _config.Value(console, key);
+
         // Parameterless constructor exists only for tooling - real code always uses the one below.
         public GraphicsSettingsWindow() : this(new GraphicsConfig(), null, null) { }
 
@@ -122,6 +128,13 @@ namespace EmuSen.Mistress.Views
         private Control BuildConsolePanel(string console)
         {
             IReadOnlyList<CoreSetting> settings = CoreCatalog.SettingsFor(console);
+            foreach (CoreSetting s in settings) _core.Add((console, s.Key));
+            if (CoreCatalog.EngineFor(console) is { } engineRow) _core.Add((console, engineRow.Key));
+            foreach (SaveMedium medium in MemoryCards.MediaFor(console))
+            {
+                var (modeRow, slotRows) = MemoryCards.RowsFor(medium);
+                foreach (CoreSetting s in slotRows.Prepend(modeRow)) _core.Add((console, s.Key));
+            }
             var panel = new StackPanel { Spacing = 12, Margin = new Avalonia.Thickness(0, 8, 0, 0) };
             var refreshers = new List<Action>();
 
@@ -221,7 +234,7 @@ namespace EmuSen.Mistress.Views
                     var row = new FieldRow { Name = $"{console}.{setting.Key}.Row", Label = setting.Label, Hint = setting.Hint, Content = control };
                     if (setting != mode)
                     {
-                        void Shown() => row.IsVisible = MemoryCards.Read(key => _config.Value(console, key), medium).Mode == MemoryCards.Named;
+                        void Shown() => row.IsVisible = MemoryCards.Read(key => Value(console, key), medium).Mode == MemoryCards.Named;
                         Shown();
                         refreshers.Add(Shown);
                         _notes.Add((console, Shown));
@@ -257,7 +270,7 @@ namespace EmuSen.Mistress.Views
         private (Control, Action) BuildControl(string console, CoreSetting setting)
         {
             string name = $"{console}.{setting.Key}";
-            string Current() => _config.Value(console, setting.Key) ?? setting.Default;
+            string Current() => Value(console, setting.Key) ?? setting.Default;
 
             if (setting.Kind == CoreSettingKind.Switch)
             {
@@ -286,7 +299,7 @@ namespace EmuSen.Mistress.Views
         {
             var text = Ui.Hint("");
             text.Name = $"{console}.{setting.Key}.Note";
-            string Value(string key) => _config.Value(console, key) ?? settings.FirstOrDefault(s => s.Key == key)?.Default ?? "";
+            string Value(string key) => this.Value(console, key) ?? settings.FirstOrDefault(s => s.Key == key)?.Default ?? "";
             void Show()
             {
                 string? said = note(Value);
@@ -312,8 +325,12 @@ namespace EmuSen.Mistress.Views
         // Saved at once, like the preferences, and the frontend told which console so a running one can take it - see §4.26.
         private void Changed(string console, string key, string value)
         {
-            _config.SetValue(console, key, value);
-            _config.Save();
+            if (_core.Contains((console, key))) CoreSettings.Set(console, key, value);
+            else
+            {
+                _config.SetValue(console, key, value);
+                _config.Save();
+            }
             foreach ((string noted, Action show) in _notes) if (noted == console) show();
             _changed?.Invoke(console);
         }
@@ -324,6 +341,7 @@ namespace EmuSen.Mistress.Views
             if (index < 0 || index >= _panels.Count) return;
 
             (string console, Action refresh) = _panels[index];
+            foreach ((string c, string key) in _core) if (c == console && CoreSettings.Stored(console, key) is not null) CoreSettings.Set(console, key, null);
             _config.Forget(console);
             _config.Save();
             refresh();

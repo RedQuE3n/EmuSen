@@ -52,7 +52,8 @@ namespace EmuSen.WiseMan.Crystal
             ["int16_t *"] = typeof(short*), ["uint32_t *"] = typeof(uint*), ["double *"] = typeof(double*), ["emusen_crystal_runtime *"] = typeof(nint),
             ["emusen_crystal_subscription *"] = typeof(nint), ["const emusen_session_v1 *"] = typeof(nint),
             ["const emusen_crystal_config *"] = typeof(CrystalConfig*), ["const emusen_crystal_open_params *"] = typeof(CrystalOpenParams*),
-            ["emusen_crystal_frame_info *"] = typeof(CrystalFrameInfo*),
+            ["emusen_crystal_frame_info *"] = typeof(CrystalFrameInfo*), ["const void *"] = typeof(nint),
+            ["emusen_crystal_raw_info *"] = typeof(CrystalRawInfo*),
         };
 
         private static Type ManagedType(string c) => c switch
@@ -60,6 +61,7 @@ namespace EmuSen.WiseMan.Crystal
             "const emusen_crystal_config *" => typeof(ManagedCrystal).Assembly.GetType("EmuSen.Crystal.Managed.ConfigV1")!.MakePointerType(),
             "const emusen_crystal_open_params *" => typeof(ManagedCrystal).Assembly.GetType("EmuSen.Crystal.Managed.OpenParamsV1")!.MakePointerType(),
             "emusen_crystal_frame_info *" => typeof(ManagedCrystal).Assembly.GetType("EmuSen.Crystal.Managed.FrameInfoV1")!.MakePointerType(),
+            "emusen_crystal_raw_info *" => typeof(ManagedCrystal).Assembly.GetType("EmuSen.Crystal.Managed.RawInfoV1")!.MakePointerType(),
             _ => Client[c],
         };
 
@@ -69,7 +71,7 @@ namespace EmuSen.WiseMan.Crystal
         public void The_header_declares_the_exports_this_test_reads()
         {
             var exports = Exports();
-            Assert.Equal(132, exports.Count);
+            Assert.Equal(139, exports.Count);
             Assert.Equal(exports.Count, exports.Select(e => e.Name).Distinct().Count());
             Assert.All(exports, e => Assert.All(e.Parameters.Append(e.Return), t => Assert.True(Client.ContainsKey(t), $"{e.Name}: a type the test does not know: '{t}'")));
         }
@@ -145,6 +147,7 @@ namespace EmuSen.WiseMan.Crystal
             ("emusen_crystal_config", typeof(CrystalConfig), "ConfigV1"),
             ("emusen_crystal_open_params", typeof(CrystalOpenParams), "OpenParamsV1"),
             ("emusen_crystal_frame_info", typeof(CrystalFrameInfo), "FrameInfoV1"),
+            ("emusen_crystal_raw_info", typeof(CrystalRawInfo), "RawInfoV1"),
         };
 
         // Each struct as a C compiler lays it out from the header, and both mirrors laid out alike, field by field by name.
@@ -170,7 +173,7 @@ namespace EmuSen.WiseMan.Crystal
                     Type managed = typeof(ManagedCrystal).Assembly.GetType("EmuSen.Crystal.Managed." + managedName)!;
                     Assert.Equal(printed[c], Marshal.SizeOf(client));
                     Assert.Equal(printed[c], Marshal.SizeOf(managed));
-                    Assert.Equal(client.GetFields().Select(f => f.Name), managed.GetFields().Select(f => f.Name));
+                    Assert.Equal(client.GetFields().Select(f => f.Name), managed.GetFields().Where(f => !f.IsLiteral).Select(f => f.Name));
                     foreach (FieldInfo f in client.GetFields())
                     {
                         Assert.Equal(printed[$"{c}.{f.Name}"], (int)Marshal.OffsetOf(client, f.Name));

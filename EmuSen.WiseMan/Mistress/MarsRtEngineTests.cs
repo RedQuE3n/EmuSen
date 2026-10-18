@@ -63,7 +63,7 @@ namespace EmuSen.WiseMan.Mistress
 
         private static void Choose(string engine)
         {
-            GraphicsConfig config = GraphicsConfig.Load();
+            ConsolesConfig config = ConsolesConfig.Load();
             config.SetValue("N64", CoreCatalog.EngineKey, engine);
             config.Save();
         }

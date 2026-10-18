@@ -187,9 +187,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         // The N64 tab at 3x resolution with 3x antialiasing, where the Antialiasing row carries its note (Mars_Performance.md §42.5).
         internal static void ShowN64WithNote(MainWindow window)
         {
-            var graphics = (GraphicsConfig)typeof(MainWindow).GetField("_graphics", Hidden)!.GetValue(window)!;
+            var graphics = ConsolesConfig.Load();
             graphics.SetValue("N64", "RenderScale", "3");
             graphics.SetValue("N64", "Antialiasing", "3x");
+            graphics.Save();
             Call(window, "ShowGraphicsSettings");
             Settle(window);
             var tabs = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<EmuSen.LunaP.Controls.Tabs>().First(t => t.Name == "ConsoleTabs");
@@ -231,9 +232,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         // The PlayStation's tab under Named cards with one card in both slots, so the slots' rows and slot 2's note are shown - see Diamond_Cards.md §9.
         internal static void ShowNamedCards(MainWindow window)
         {
-            var graphics = (GraphicsConfig)typeof(MainWindow).GetField("_graphics", Hidden)!.GetValue(window)!;
+            var graphics = ConsolesConfig.Load();
             graphics.SetValue("PlayStation", EmuSen.Cores.MemoryCards.ModeKey, EmuSen.Cores.MemoryCards.Named);
             foreach (string key in EmuSen.Cores.MemoryCards.SlotKeys) graphics.SetValue("PlayStation", key, "Card 1");
+            graphics.Save();
             ShowDiscoveredTab(window, "PlayStation");
             var shown = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>().ToList();
             Assert.Contains(shown, c => c.Name == "PlayStation.Card2.Row" && c.IsEffectivelyVisible);
@@ -334,7 +336,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 case "ControllerBindingsPlayStationDigital":
                     if (which.EndsWith("Digital", StringComparison.Ordinal))
                     {
-                        var digital = GraphicsConfig.Load();
+                        var digital = ConsolesConfig.Load();
                         digital.SetValue("PlayStation", "pad1", "psx.pad");
                         digital.Save();
                     }
@@ -365,7 +367,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Assert.Equal("Genesis", (Sheets(window).Current as InputSettingsWindow)?.ShownConsole);
                     break;
                 case "ControllerBindingsGenesisSix":
-                    var stored = GraphicsConfig.Load();
+                    var stored = ConsolesConfig.Load();
                     stored.SetValue("Genesis", "pad1", "md.pad6");
                     stored.Save();
                     Call(window, "ShowControllerBindings");
@@ -374,7 +376,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     break;
                 case "ControllerBindingsGenesisTeamPlayer":
                     // A Team Player on port 1: the window offers five players, and the fourth's pad is drawn.
-                    var tapped = GraphicsConfig.Load();
+                    var tapped = ConsolesConfig.Load();
                     tapped.SetValue("Genesis", "pad1", "md.teamplayer6");
                     tapped.Save();
                     Call(window, "ShowControllerBindings");

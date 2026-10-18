@@ -43,6 +43,12 @@ namespace EmuSen.Crystal.Client.Contract
 
         public static long PictureCopy(nint rt, uint session, byte* out_, nuint len) => Table->picture_copy(rt, session, out_, len);
 
+        public static nint PictureLend(nint rt, uint session) => Table->picture_lend(rt, session);
+
+        public static int RawSelect(nint rt, uint session, byte* encoding, nuint len) => Table->raw_select(rt, session, encoding, len);
+
+        public static long RawCopy(nint rt, uint session, CrystalRawInfo* info, byte* out_, nuint len) => Table->raw_copy(rt, session, info, out_, len);
+
         public static long AudioDrain(nint rt, uint session, short* out_, nuint frames, uint* rate) => Table->audio_drain(rt, session, out_, frames, rate);
 
         public static int Wait(nint rt, uint session, uint timeout_ms) => Table->wait(rt, session, timeout_ms);
@@ -79,6 +85,10 @@ namespace EmuSen.Crystal.Client.Contract
 
         public static int ResumeSave(nint rt, uint session) => Table->resume_save(rt, session);
 
+        public static long StateRecord(nint rt, byte* path, nuint path_len, byte* out_, nuint len) => Table->state_record(rt, path, path_len, out_, len);
+
+        public static int StateForget(nint rt, byte* path, nuint path_len) => Table->state_forget(rt, path, path_len);
+
         public static int ResumeLoad(nint rt, uint session) => Table->resume_load(rt, session);
 
         public static long SettingsSchema(nint rt, uint session, byte* console, nuint console_len, byte* engine, nuint engine_len, byte* out_, nuint len) => Table->settings_schema(rt, session, console, console_len, engine, engine_len, out_, len);
@@ -86,6 +96,10 @@ namespace EmuSen.Crystal.Client.Contract
         public static long SettingsGet(nint rt, uint session, uint scope, byte* console, nuint console_len, byte* key, nuint key_len, byte* out_, nuint len) => Table->settings_get(rt, session, scope, console, console_len, key, key_len, out_, len);
 
         public static int SettingsSet(nint rt, uint session, uint scope, byte* console, nuint console_len, byte* key, nuint key_len, byte* value, nuint value_len) => Table->settings_set(rt, session, scope, console, console_len, key, key_len, value, value_len);
+
+        public static long GameSettingGet(nint rt, byte* path, nuint path_len, byte* key, nuint key_len, byte* out_, nuint len) => Table->game_setting_get(rt, path, path_len, key, key_len, out_, len);
+
+        public static int GameSettingSet(nint rt, byte* path, nuint path_len, byte* key, nuint key_len, byte* value, nuint value_len) => Table->game_setting_set(rt, path, path_len, key, key_len, value, value_len);
 
         public static long FirmwareNeeded(nint rt, byte* path, nuint path_len, byte* engine, nuint engine_len, byte* out_, nuint len) => Table->firmware_needed(rt, path, path_len, engine, engine_len, out_, len);
 

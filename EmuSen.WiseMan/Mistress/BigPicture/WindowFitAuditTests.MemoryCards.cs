@@ -18,8 +18,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     {
         internal static void ShowMemoryCards(MainWindow window, bool held)
         {
-            var graphics = (GraphicsConfig)typeof(MainWindow).GetField("_graphics", Hidden)!.GetValue(window)!;
+            var graphics = ConsolesConfig.Load();
             graphics.SetValue("PlayStation", EmuSen.Cores.MemoryCards.ModeKey, EmuSen.Cores.MemoryCards.Shared);
+            graphics.Save();
             string card = SaveLibrary.CardPathFor("PlayStation", "Card 1", ".mcr");
             Directory.CreateDirectory(Path.GetDirectoryName(card)!);
             byte[] saves = SaveMediaManagerTests.WithSave(SaveMediaManagerTests.WithSave(PsxCardFormat.Instance.Format(), "BASLUS-00067DRACULA", "ＤＲＡＣＵＬＡ　Ｘ　ＣＨＲＯＮＩＣＬＥ　ＳＡＶＥ", new[] { 0 }, 1), "BESCES-00344TOMB", "Tomb Raider II, Venice, a long title", new[] { 1, 2, 3 }, 2);

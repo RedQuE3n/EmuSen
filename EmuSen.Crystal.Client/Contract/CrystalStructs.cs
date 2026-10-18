@@ -24,6 +24,7 @@ namespace EmuSen.Crystal.Client.Contract
         public nuint engine_len;
         public uint audio_buffer_max_samples;
         public uint reserved;
+        public void* device;
     }
 
     // emusen_crystal_frame_info, field for field.
@@ -50,5 +51,19 @@ namespace EmuSen.Crystal.Client.Contract
         public uint paused;
         public uint halted_processor;
         public ulong halted_address;
+        public uint picture_on_device;
+        public uint reserved;
+    }
+
+    // emusen_crystal_raw_info, field for field, since 1.1.
+    [StructLayout(LayoutKind.Sequential)]
+    public struct CrystalRawInfo
+    {
+        public uint size;
+        public uint element;
+        public int width;
+        public int height;
+        public int stride;
+        public uint reserved;
     }
 }

@@ -242,7 +242,7 @@ namespace EmuSen.WiseMan.Mistress
             CoreDiscovery.UseDevelopment(false);
             try
             {
-                GraphicsConfig graphics = GraphicsConfig.Load();
+                ConsolesConfig graphics = ConsolesConfig.Load();
                 graphics.SetValue("Genesis", "pad1", "md.pad6");
                 graphics.Save();
                 (MainWindow window, PadDriver first) = Playing("JCart.md", NephritePlayersTests.JCartReader(), ByConnection, bigScreen: true);

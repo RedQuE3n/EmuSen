@@ -650,6 +650,16 @@ namespace EmuSen.Cores.Native
             (_rawAsked, _rawCurrent, _rawIndex) = (wanted, true, index);
         }
 
+        // RawPicture into the caller's buffer, allocating nothing; its byte count, or -1 where the core kept none, written only when the buffer holds it.
+        public long CopyRaw(Span<byte> into, out CoreInterface.RawFrame shape)
+        {
+            shape = default;
+            if (_machine is not { } m || _rawIndex < 0 || _rawAsked is null || m.RawInfo((uint)_rawIndex) is not { } f) return -1;
+            shape = f;
+            if (into.Length >= f.Bytes) m.CopyRaw((uint)_rawIndex, into[..(int)f.Bytes]);
+            return f.Bytes;
+        }
+
         // The last frame's picture before the palette in RawEncoding, copied into an array lent as the RGBA frame is; null where the core kept none.
         public CoreRawPicture? RawPicture
         {

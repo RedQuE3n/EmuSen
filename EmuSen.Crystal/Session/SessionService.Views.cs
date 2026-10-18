@@ -302,10 +302,17 @@ namespace EmuSen.Crystal.Session
         };
 
         // A read answers with a record; a change with its id, its count or 0, and copies nothing - see emusen_session.h.
+        // The cheat ops that need no game: a provider with no target answers them, as the frontend API's session 0 asks - see EmuSen_Backend.md §14.12.
+        public static readonly IReadOnlySet<uint> GameFreeCheatOps = new HashSet<uint>
+        {
+            SessionAbi.CheatDbSystems, SessionAbi.CheatDbGames, SessionAbi.CheatDbFind, SessionAbi.CheatDbStatus, SessionAbi.CheatDbParse,
+            SessionAbi.CheatDbPrune, SessionAbi.CheatDbUpdate, SessionAbi.CheatChtParse, SessionAbi.CheatFiles, SessionAbi.CheatFileRead,
+        };
+
         internal (byte[]? Record, long Value) CheatOp(uint session, uint op, ReadOnlySpan<byte> args, bool readOnly)
         {
-            IDebugTarget t = Target(session);
-            CheatRegistry cheats = t.Cheats;
+            IDebugTarget t = _target is null && GameFreeCheatOps.Contains(op) ? null! : Target(session);
+            CheatRegistry cheats = t?.Cheats ?? new CheatRegistry();
             if (op > SessionAbi.CheatDbUpdate) throw NotSupported($"no cheat op {op}");
             JsonElement a = Parse(args);
             bool changes = CheatChanges.Contains(op) || (op == SessionAbi.CheatMaster && OptionalBool(a, "enabled") is not null)

@@ -234,6 +234,7 @@ fn every_constant_is_the_header_s() {
         ("EMUSEN_CRYSTAL_BUSY", status::BUSY.into()),
         ("EMUSEN_CRYSTAL_BAD_STRUCT", status::BAD_STRUCT.into()),
         ("EMUSEN_CRYSTAL_IO", status::IO.into()),
+        ("EMUSEN_CRYSTAL_STATE_REFUSED", status::STATE_REFUSED.into()),
         ("EMUSEN_CRYSTAL_OPEN_NO_BATTERY", OPEN_NO_BATTERY.into()),
         ("EMUSEN_CRYSTAL_OPEN_SINGLE_ROWS", OPEN_SINGLE_ROWS.into()),
         ("EMUSEN_CRYSTAL_SPEED_NORMAL", SPEED_NORMAL.into()),
@@ -271,7 +272,7 @@ fn every_constant_is_the_header_s() {
 #[test]
 fn the_statuses_follow_the_session_service_s_in_the_band() {
     for (name, value) in defines(&header()) {
-        let status_names = ["NO_ENGINE", "FIRMWARE", "BUSY", "BAD_STRUCT", "IO"];
+        let status_names = ["NO_ENGINE", "FIRMWARE", "BUSY", "BAD_STRUCT", "IO", "STATE_REFUSED"];
         if status_names.iter().any(|s| name == format!("EMUSEN_CRYSTAL_{s}")) {
             assert!((-1139..=-1109).contains(&value), "{name} = {value}: the frontend API's statuses are -1109 to -1139");
         }
@@ -327,12 +328,13 @@ fn rust_layouts() -> Vec<(&'static str, usize, usize, Vec<(&'static str, usize)>
     }
     vec![
         layout!("emusen_crystal_config", emusen_crystal_config, [size, flags]),
-        layout!("emusen_crystal_open_params", emusen_crystal_open_params, [size, flags, path, path_len, console, console_len, engine, engine_len, audio_buffer_max_samples, reserved]),
+        layout!("emusen_crystal_open_params", emusen_crystal_open_params, [size, flags, path, path_len, console, console_len, engine, engine_len, audio_buffer_max_samples, reserved, device]),
         layout!(
             "emusen_crystal_frame_info",
             emusen_crystal_frame_info,
-            [size, ran, halted, rendered, picture_serial, width, height, row_repeat, display_lines, display_aspect, audio_frames, audio_rate, play_audio, speed_percent, frame_interval_ns, total_frames, frame_rate_hz, paused, halted_processor, halted_address]
+            [size, ran, halted, rendered, picture_serial, width, height, row_repeat, display_lines, display_aspect, audio_frames, audio_rate, play_audio, speed_percent, frame_interval_ns, total_frames, frame_rate_hz, paused, halted_processor, halted_address, picture_on_device, reserved]
         ),
+        layout!("emusen_crystal_raw_info", emusen_crystal_raw_info, [size, element, width, height, stride, reserved]),
     ]
 }
 
@@ -435,6 +437,24 @@ fn parse_baseline(text: &str) -> BTreeMap<String, (String, String)> {
     lines
 }
 
+/// A struct fact's size and alignment.
+fn layout(value: &str) -> Option<(usize, usize)> {
+    let words: Vec<&str> = value.split_whitespace().collect();
+    match words.as_slice() {
+        ["size", size, "align", align] => Some((size.parse().ok()?, align.parse().ok()?)),
+        _ => None,
+    }
+}
+
+/// Whether the header's struct is the baseline's with fields appended: larger, its alignment the same. The baseline's
+/// line then stands as the size a callee still accepts, the core ABI's rule (EmuSen_CoreAPI.md §4.2), and the new
+/// fields' own lines record the growth, each at or past that size.
+fn grown(key: &str, was: &str, now: &str, facts: &BTreeMap<String, String>) -> bool {
+    let (Some(name), Some((was_size, was_align)), Some((now_size, now_align))) = (key.strip_prefix("struct "), layout(was), layout(now)) else { return false };
+    now_size > was_size && was_align == now_align
+        && facts.iter().filter_map(|(k, v)| k.strip_prefix(&format!("field {name}.")).map(|_| v)).all(|v| v.strip_prefix("offset ").and_then(|o| o.parse::<usize>().ok()).is_some())
+}
+
 const BASELINE_HEADER: &str = "# The frontend API, emusen_crystal.h, version 1: one fact per line, sorted; struct layouts are a 64-bit target's.\n# Written by `CRYSTAL_ABI_EMIT=1 cargo test -p emusen-crystal --test crystal_abi`; a line is never edited once its minor is released.\n# See EmuSen_Backend.md section 14.\n";
 
 #[test]
@@ -449,15 +469,25 @@ fn the_baseline_holds_every_fact_and_loses_none() {
     if std::env::var("CRYSTAL_ABI_EMIT").as_deref() == Ok("1") {
         let mut text = BASELINE_HEADER.to_string();
         for (key, value) in &facts {
-            let tag = recorded.get(key).filter(|(v, _)| v == value).map_or(minor.clone(), |(_, tag)| format!("@{tag}"));
-            text += &format!("{key} {value} {tag}\n");
+            match recorded.get(key) {
+                Some((was, tag)) if was == value || grown(key, was, value, &facts) => text += &format!("{key} {was} @{tag}\n"),
+                _ => text += &format!("{key} {value} {minor}\n"),
+            }
         }
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, text).unwrap();
         return;
     }
     for (key, (value, tag)) in &recorded {
-        assert_eq!(facts.get(key), Some(value), "baseline line `{key} {value} @{tag}` is no longer a fact: a removed or changed line needs a new major");
+        let now = facts.get(key);
+        assert!(now == Some(value) || now.is_some_and(|n| grown(key, value, n, &facts)), "baseline line `{key} {value} @{tag}` is no longer a fact: a removed or changed line needs a new major");
+        if let (Some(name), Some((size, _))) = (key.strip_prefix("struct "), layout(value)) {
+            for (field, offset) in facts.iter().filter_map(|(k, v)| k.strip_prefix(&format!("field {name}.")).map(|f| (f, v))) {
+                let recorded_field = recorded.contains_key(&format!("field {name}.{field}"));
+                let at: usize = offset.trim_start_matches("offset ").parse().unwrap();
+                assert!(recorded_field || at >= size, "field {name}.{field} at {at} is inside the struct's recorded size {size}: a field may only be appended");
+            }
+        }
     }
     for (key, value) in &facts {
         assert!(recorded.contains_key(key), "`{key} {value}` is not in the baseline; record it with CRYSTAL_ABI_EMIT=1 in the same change");

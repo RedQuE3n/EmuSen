@@ -6,6 +6,7 @@ using EmuSen.Cores;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Session;
 using EmuSen.Crystal.Systems;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Crystal.Managed
 {
@@ -15,7 +16,7 @@ namespace EmuSen.Crystal.Managed
         public ManagedSession Open(OpenParamsV1* p)
         {
             if (p == null) throw new CrystalException(SessionAbi.Null, "null open parameters");
-            if (p->size < sizeof(OpenParamsV1)) throw CrystalException.BadStruct("emusen_crystal_open_params", p->size, sizeof(OpenParamsV1));
+            if (p->size < OpenParamsV1.Size10) throw CrystalException.BadStruct("emusen_crystal_open_params", p->size, OpenParamsV1.Size10);
             const uint known = CrystalNumbers.OpenNoBattery | CrystalNumbers.OpenSingleRows;
             if ((p->flags & ~known) != 0) throw new CrystalException(SessionAbi.NotSupported, $"open flags 0x{p->flags & ~known:X} are not known to 1.{CrystalNumbers.Minor}");
             string? path = ManagedCrystal.Text(p->path, p->path_len);
@@ -27,7 +28,11 @@ namespace EmuSen.Crystal.Managed
                 BatteryRamDisabled = (p->flags & CrystalNumbers.OpenNoBattery) != 0,
                 AudioBufferMaxSamples = p->audio_buffer_max_samples > 0 ? (int)Math.Min(p->audio_buffer_max_samples, int.MaxValue) : CoreOptions.Default.AudioBufferMaxSamples,
             };
-            CoreBundle bundle = path is not null ? OpenGame(path, engine, options) : StartConsole(console!, engine, options, out console);
+            // The presenter's device, read only from a 1.1 struct that holds it; each machine made is lent it afresh.
+            nint device = p->size >= sizeof(OpenParamsV1) ? (nint)p->device : 0;
+            var refusals = new LendRefusals();
+            Func<IDeviceLend?>? lender = device == 0 ? null : () => PlatformLend.Make(device, refusals.Note);
+            CoreBundle bundle = path is not null ? OpenGame(path, engine, options, lender) : StartConsole(console!, engine, options, lender, out console);
             string name = (bundle.Core as Cores.Native.CoreEngine)?.Console is { Length: > 0 } running ? running : console ?? CoreCatalog.ConsoleForRom(path!) ?? bundle.Core.CoreName;
             var session = new ManagedSession(this, NextId(), bundle, path, name, path is null ? console : null, p->flags);
             session.ApplyStored(key => GetSettingOf(session, key));
@@ -43,22 +48,35 @@ namespace EmuSen.Crystal.Managed
             return session;
         }
 
-        private static CoreBundle OpenGame(string path, string? engine, CoreOptions options)
+        private static CoreBundle OpenGame(string path, string? engine, CoreOptions options, Func<IDeviceLend?>? lender)
         {
             if (!File.Exists(path)) throw new CrystalException(CrystalNumbers.Io, $"{path} does not exist");
             string? chosen = engine ?? EngineFor(path);
             if (EmulatorSession.MissingFirmwareFor(path, chosen) is { Count: > 0 } missing)
                 throw new CrystalException(CrystalNumbers.Firmware, $"{Path.GetFileName(path)} needs firmware the library does not hold: {string.Join("; ", missing.Select(m => m.Describe()))}");
-            try { return CoreFactory.Load(path, headless: true, new CheatRegistry(), chosen, lender: null, options); }
+            try { return CoreFactory.Load(path, headless: true, new CheatRegistry(), chosen, lender, options); }
             catch (NotSupportedException e) { throw new CrystalException(CrystalNumbers.NoEngine, e.Message); }
         }
 
-        private static CoreBundle StartConsole(string asked, string? engine, CoreOptions options, out string console)
+        private static CoreBundle StartConsole(string asked, string? engine, CoreOptions options, Func<IDeviceLend?>? lender, out string console)
         {
             console = ConsoleNamed(asked) ?? throw new CrystalException(CrystalNumbers.NoEngine, $"no console named \"{asked}\" starts with nothing in it in this build");
             string? chosen = engine ?? ConsoleEngine(console);
-            try { return CoreFactory.LoadConsole(console, new CheatRegistry(), chosen, lender: null, options); }
+            try { return CoreFactory.LoadConsole(console, new CheatRegistry(), chosen, lender, options); }
             catch (NotSupportedException e) { throw new CrystalException(CrystalNumbers.NoEngine, e.Message); }
+        }
+
+        // Why no device was lent, said once a session in the error log, where a frontend's own report used to say it.
+        private sealed class LendRefusals
+        {
+            private bool _said;
+
+            public void Note(string why)
+            {
+                if (_said) return;
+                _said = true;
+                ErrorLog.Warning("picture", why);
+            }
         }
 
         // A console started empty, by its name or one of its systems' ids.

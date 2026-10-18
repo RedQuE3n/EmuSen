@@ -173,7 +173,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.DoesNotContain(CoreCatalog.ShelvesInReleaseOrder, s => s.EsdeSystem is "sega32x");
             Assert.Equal(new[] { "model", "region", "pad1", "pad2" }, CoreCatalog.SettingsFor("Genesis").Select(s => s.Key));
             Assert.Equal(12, CoreCatalog.ButtonsFor("Genesis").Count);
-            var firmware = FirmwareOverview.Build(new EmuSen.Galaxia.Models.GraphicsConfig());
+            var firmware = FirmwareOverview.Build(new EmuSen.Galaxia.Models.ConsolesConfig());
             Assert.Contains(firmware, f => f.Name == "Sega Genesis / Mega Drive");
             Assert.Contains(firmware, f => f.Name == "Sega CD / Mega-CD");
             Assert.DoesNotContain(firmware, f => f.Name == "Sega 32X");

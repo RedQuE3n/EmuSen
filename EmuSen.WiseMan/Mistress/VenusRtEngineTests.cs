@@ -71,13 +71,13 @@ namespace EmuSen.WiseMan.Mistress
         public Task A_game_runs_on_venusrt_and_a_stored_venus_choice_runs_it_too() => Session.Dispatch(() =>
         {
             if (!Found) return;
-            Assert.Null(GraphicsConfig.Load().Value("SNES", CoreCatalog.EngineKey));
+            Assert.Null(ConsolesConfig.Load().Value("SNES", CoreCatalog.EngineKey));
             Assert.Null(CoreFactory.ConfiguredEngine(_rom));
             foreach (bool stored in new[] { false, true })
             {
                 if (stored)
                 {
-                    GraphicsConfig config = GraphicsConfig.Load();
+                    ConsolesConfig config = ConsolesConfig.Load();
                     config.SetValue("SNES", CoreCatalog.EngineKey, "Venus (C#)");
                     config.Save();
                     Assert.Equal(VenusRtCoreAbiTests.Engine, CoreFactory.ConfiguredEngine(_rom));

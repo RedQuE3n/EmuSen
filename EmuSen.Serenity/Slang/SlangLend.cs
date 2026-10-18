@@ -6,7 +6,8 @@ namespace EmuSen.Serenity.Slang
     // The slang device lent to one core machine, and the host's taking of the pictures the core hands on it - see EmuSen_DevicePicture.md §17.
     public sealed unsafe class SlangLend : IDisposable
     {
-        private readonly SerenityHandle _handle;
+        private readonly SerenityHandle? _handle;
+        private readonly nint _borrowed;
 
         // What the core is given at create, as the core ABI's emusen_device_lend holds it.
         public uint ApiVersion { get; }
@@ -22,7 +23,13 @@ namespace EmuSen.Serenity.Slang
         // The device lent, which a chain must be on to take the pictures.
         public SlangVulkan Owner { get; }
 
-        internal nint Value => _handle.Value;
+        internal nint Value => _handle?.Value ?? _borrowed;
+
+        // A lend another component made and frees, here only read: the frontend API's runtime lends each machine and the presenter borrows it - see EmuSen_Backend.md §14.12.
+        public static SlangLend Borrow(SlangVulkan owner, nint lend) =>
+            lend == 0 ? throw new ArgumentException("no lend to borrow", nameof(lend)) : new SlangLend(owner, lend);
+
+        private SlangLend(SlangVulkan owner, nint borrowed) => (Owner, _borrowed) = (owner, borrowed);
 
         private SlangLend(SlangVulkan owner, SerenityHandle handle, SerenityNative.LendInfo info)
         {
@@ -46,7 +53,7 @@ namespace EmuSen.Serenity.Slang
         // On the thread that runs the machine: the core's picture copied on the device once its ready reaches value, done then signalled; false for one not newer than the last.
         public bool Take(ulong buffer, ulong offset, int width, int height, int stride, ulong ready, ulong value)
         {
-            int status = SerenityNative.LendTake(_handle.Value, buffer, offset, width, height, stride, ready, value);
+            int status = SerenityNative.LendTake(Value, buffer, offset, width, height, stride, ready, value);
             GC.KeepAlive(this);
             if (status < 0) throw new InvalidOperationException(SerenityNative.Words());
             return status == 1;
@@ -55,11 +62,12 @@ namespace EmuSen.Serenity.Slang
         // Every copy waited for, so that nothing of the core's is read; before the machine is freed.
         public void Settle()
         {
-            int status = SerenityNative.LendSettle(_handle.Value);
+            int status = SerenityNative.LendSettle(Value);
             GC.KeepAlive(this);
             if (status < 0) throw new InvalidOperationException(SerenityNative.Words());
         }
 
-        public void Dispose() => _handle.Dispose();
+        // A borrowed lend is its maker's to free.
+        public void Dispose() => _handle?.Dispose();
     }
 }

@@ -26,7 +26,7 @@ namespace EmuSen.Mistress.Views
         {
             if (CoreCatalog.ConsoleForRom(romPath) is not { } console) return;
             var media = MemoryCards.MediaFor(console);
-            if (MemoryCards.ImportToOffer(media, key => _graphics.Value(console, key)) is not { } medium) return;
+            if (MemoryCards.ImportToOffer(media, CoreSettings.StoredFor(console, _graphics)) is not { } medium) return;
             _graphics.SetValue(console, MemoryCards.OfferedKey(medium), "true");
             _graphics.Save();
             string noun = MediumWords.InText(medium.Title), shared = medium.DefaultName(0);

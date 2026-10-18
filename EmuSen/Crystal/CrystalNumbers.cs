@@ -6,13 +6,14 @@ namespace EmuSen.Crystal.Managed
     internal static class CrystalNumbers
     {
         public const uint Major = 1u;
-        public const uint Minor = 0u;
+        public const uint Minor = 1u;
         public const uint Version = (Major << 16) | Minor;
         public const int NoEngine = -1109;
         public const int Firmware = -1110;
         public const int Busy = -1111;
         public const int BadStruct = -1112;
         public const int Io = -1113;
+        public const int StateRefused = -1114;
         public const uint OpenNoBattery = 1u;
         public const uint OpenSingleRows = 2u;
         public const uint SpeedNormal = 0u;
@@ -52,6 +53,9 @@ namespace EmuSen.Crystal.Managed
     [StructLayout(LayoutKind.Sequential)]
     internal unsafe struct OpenParamsV1
     {
+        // 1.0's size, the shortest taken; device is read only from a struct that holds it.
+        public const int Size10 = 64;
+
         public uint size;
         public uint flags;
         public byte* path;
@@ -62,12 +66,16 @@ namespace EmuSen.Crystal.Managed
         public nuint engine_len;
         public uint audio_buffer_max_samples;
         public uint reserved;
+        public void* device;
     }
 
     // emusen_crystal_frame_info as the implementation fills it.
     [StructLayout(LayoutKind.Sequential)]
     internal struct FrameInfoV1
     {
+        // 1.0's size, the shortest taken; picture_on_device is written only into a struct that holds it.
+        public const int Size10 = 104;
+
         public uint size;
         public uint ran;
         public uint halted;
@@ -88,5 +96,19 @@ namespace EmuSen.Crystal.Managed
         public uint paused;
         public uint halted_processor;
         public ulong halted_address;
+        public uint picture_on_device;
+        public uint reserved;
+    }
+
+    // emusen_crystal_raw_info, field for field, since 1.1.
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct RawInfoV1
+    {
+        public uint size;
+        public uint element;
+        public int width;
+        public int height;
+        public int stride;
+        public uint reserved;
     }
 }

@@ -64,9 +64,9 @@ namespace EmuSen.Cores
         public static IReadOnlyList<string> Folders => FirmwareLibrary.Folders;
 
         // The catalog's consoles on the engine each will run, then any system only a discovered core runs; a core in development is left out.
-        public static IReadOnlyList<FirmwareSystem> Build(GraphicsConfig? config = null)
+        public static IReadOnlyList<FirmwareSystem> Build(ConsolesConfig? config = null)
         {
-            config ??= GraphicsConfig.Load();
+            config ??= ConsolesConfig.Load();
             IReadOnlyList<string> folders = FirmwareLibrary.Folders;
             var systems = new List<FirmwareSystem>();
             foreach (var console in CoreCatalog.ConsolesInReleaseOrder)

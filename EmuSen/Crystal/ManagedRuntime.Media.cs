@@ -105,7 +105,7 @@ namespace EmuSen.Crystal.Managed
         // A session's save media, each slot's file as its medium's mode places it.
         public static byte[] SaveMediaJson(ManagedSession s) => CrystalJson.Write(w =>
         {
-            GraphicsConfig config = GraphicsConfig.Load();
+            ConsolesConfig config = ConsolesConfig.Load();
             w.WriteStartObject();
             CrystalJson.StringOrNull(w, "notice", s.Engine?.MediaNotice);
             w.WriteStartArray("media");

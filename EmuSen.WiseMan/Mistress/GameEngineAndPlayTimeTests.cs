@@ -100,7 +100,7 @@ namespace EmuSen.WiseMan.Mistress
                 string rom = Path.Combine(roms, "System.z64");
                 File.WriteAllBytes(rom, SyntheticN64System.Build(rsp: true));
                 new AppSettings { RomDirectory = roms, ResumeOnLaunch = AppSettings.ResumeNever, StateDirectory = Path.Combine(root, "States") }.Save();
-                GraphicsConfig config = GraphicsConfig.Load();
+                ConsolesConfig config = ConsolesConfig.Load();
                 config.SetValue("N64", CoreCatalog.EngineKey, "Mars (C#)");
                 config.Save();
                 using (GameRecords records = GameRecords.Open(GameRecords.DefaultPath))

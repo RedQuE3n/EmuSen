@@ -53,7 +53,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CRYSTAL_MAJOR 1u
-#define EMUSEN_CRYSTAL_MINOR 0u
+#define EMUSEN_CRYSTAL_MINOR 1u
 #define EMUSEN_CRYSTAL_VERSION ((EMUSEN_CRYSTAL_MAJOR << 16) | EMUSEN_CRYSTAL_MINOR)
 
 /* ---- Statuses (EmuSen_Backend.md section 3.2). The session service's keep their numbers and names; these follow. -- */
@@ -62,6 +62,9 @@ extern "C" {
 #define EMUSEN_CRYSTAL_BUSY       (-1111) /* a frame called while another thread is inside one */
 #define EMUSEN_CRYSTAL_BAD_STRUCT (-1112) /* a struct shorter than its 1.0 size */
 #define EMUSEN_CRYSTAL_IO         (-1113) /* reading or writing a file failed; the system's words */
+#define EMUSEN_CRYSTAL_STATE_REFUSED (-1114) /* since 1.1: the state is not this machine's: another console's, a version
+                                              * outside machine info's loads_from, or the core's own refusal, whose
+                                              * words follow; the machine is unchanged */
 
 /* ---- Open enumerations ------------------------------------------------------------------------------------- */
 
@@ -105,7 +108,7 @@ typedef struct emusen_crystal_config { /* 8 bytes */
     uint32_t flags;                    /* none is defined in 1.0; 0 */
 } emusen_crystal_config;
 
-typedef struct emusen_crystal_open_params { /* 64 bytes */
+typedef struct emusen_crystal_open_params { /* 72 bytes since 1.1; 64 in 1.0 */
     uint32_t size;
     uint32_t flags;                    /* EMUSEN_CRYSTAL_OPEN_* */
     const uint8_t *path;               /* the game; absent to start a console empty */
@@ -116,9 +119,12 @@ typedef struct emusen_crystal_open_params { /* 64 bytes */
     size_t engine_len;
     uint32_t audio_buffer_max_samples; /* the most samples the core holds undrained; 0 is the runtime's default */
     uint32_t reserved;                 /* 0 */
+    const void *device;                /* since 1.1: the presenter's Vulkan device, the platform library's
+                                        * emusen_serenity_device, or null; each machine of the session is lent it, and
+                                        * its pictures are taken there inside frame (section 14.12) */
 } emusen_crystal_open_params;
 
-typedef struct emusen_crystal_frame_info {  /* 104 bytes; filled by frame and rewind_step */
+typedef struct emusen_crystal_frame_info {  /* 112 bytes since 1.1, 104 in 1.0; filled by frame and rewind_step */
     uint32_t size;
     uint32_t ran;                      /* 1 when a frame completed; 0 while paused or halted, or when one halted */
     uint32_t halted;                   /* a breakpoint or a step stopped the session inside a frame */
@@ -139,7 +145,19 @@ typedef struct emusen_crystal_frame_info {  /* 104 bytes; filled by frame and re
     uint32_t paused;                   /* run control's pause holds the session */
     uint32_t halted_processor;         /* the processor a halt stopped, an index of `processors`; 0 otherwise */
     uint64_t halted_address;           /* where it stopped */
+    uint32_t picture_on_device;        /* since 1.1: the picture was taken on the device the session was lent, and the
+                                        * presenter reads it from picture_lend's lend; picture_copy still reads it back */
+    uint32_t reserved;                 /* 0 */
 } emusen_crystal_frame_info;
+
+typedef struct emusen_crystal_raw_info { /* 24 bytes, since 1.1; filled by raw_copy */
+    uint32_t size;
+    uint32_t element;                  /* bytes a value; the encoding is the one raw_select chose */
+    int32_t width;
+    int32_t height;
+    int32_t stride;                    /* bytes a row */
+    uint32_t reserved;                 /* 0 */
+} emusen_crystal_raw_info;
 
 /* ---- The library ------------------------------------------------------------------------------------------- */
 
@@ -225,6 +243,20 @@ int32_t emusen_crystal_frame(emusen_crystal_runtime *rt, uint32_t session, emuse
 /* reads. The picture as RGBA8888, width * 4 bytes a row: the frame's width and height. */
 int64_t emusen_crystal_picture_copy(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
 
+/* reads, since 1.1. The current machine's lend, the platform library's emusen_serenity_lend, for the presenter to
+ * borrow and not free; null when nothing is lent. A machine made again, by a reset or a state of another size, is
+ * lent afresh, so it is asked again after a frame. */
+const void *emusen_crystal_picture_lend(emusen_crystal_runtime *rt, uint32_t session);
+
+/* changes, since 1.1. The encoding of the picture before the core's palette that the session keeps from the next
+ * frame, one the machine's raw_encodings names; absent keeps none. */
+int32_t emusen_crystal_raw_select(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *encoding, size_t len);
+
+/* reads, since 1.1. The last frame's picture before its palette, in the encoding raw_select chose, its shape into
+ * info; returns the bytes. ABSENT when none is kept. */
+int64_t emusen_crystal_raw_copy(emusen_crystal_runtime *rt, uint32_t session, emusen_crystal_raw_info *info,
+                                uint8_t *out, size_t len);
+
 /* changes. Up to frames stereo frames of interleaved int16 into out, their rate into rate when it is not null; returns
  * the frames written. A null out asks how many are ready and drains none. */
 int64_t emusen_crystal_audio_drain(emusen_crystal_runtime *rt, uint32_t session, int16_t *out, size_t frames, uint32_t *rate);
@@ -299,6 +331,15 @@ int32_t emusen_crystal_state_slot_load(emusen_crystal_runtime *rt, uint32_t sess
 /* changes. The resume state, offered at the game's next start, with its picture. */
 int32_t emusen_crystal_resume_save(emusen_crystal_runtime *rt, uint32_t session);
 
+/* reads, since 1.1. The record the runtime keeps of the state at path in states.db, while the file is the one it was
+ * written for: {"console","core","state_version","build","saved_at","rom_file","rom_md5","rom_bytes"}; ABSENT for
+ * none. A state_save writes it; state_load refuses with STATE_REFUSED what it says another console wrote. */
+int64_t emusen_crystal_state_record(emusen_crystal_runtime *rt, const uint8_t *path, size_t path_len, uint8_t *out,
+                                    size_t len);
+
+/* changes, since 1.1. The record of the state at path forgotten, as when the player deletes the state. */
+int32_t emusen_crystal_state_forget(emusen_crystal_runtime *rt, const uint8_t *path, size_t path_len);
+
 /* changes. As state_slot_load, for the resume state. */
 int32_t emusen_crystal_resume_load(emusen_crystal_runtime *rt, uint32_t session);
 
@@ -319,6 +360,16 @@ int64_t emusen_crystal_settings_get(emusen_crystal_runtime *rt, uint32_t session
  * value forgets the scope's own, so a lower one shows through. BAD_ARGUMENT for a value the schema refuses. */
 int32_t emusen_crystal_settings_set(emusen_crystal_runtime *rt, uint32_t session, uint32_t scope, const uint8_t *console,
                                     size_t console_len, const uint8_t *key, size_t key_len, const uint8_t *value, size_t value_len);
+
+/* reads, since 1.1. A game's own value of the key, from its file of settings, with no session: the library's view of
+ * a game; ABSENT where it holds none. For the engine the key is "Engine". */
+int64_t emusen_crystal_game_setting_get(emusen_crystal_runtime *rt, const uint8_t *path, size_t path_len,
+                                        const uint8_t *key, size_t key_len, uint8_t *out, size_t len);
+
+/* changes, since 1.1. A game's own value set, or forgotten with an absent value, with no session; checked against
+ * the console's schema, and applied to an open session of the game between frames. */
+int32_t emusen_crystal_game_setting_set(emusen_crystal_runtime *rt, const uint8_t *path, size_t path_len,
+                                        const uint8_t *key, size_t key_len, const uint8_t *value, size_t value_len);
 
 /* ---- Firmware ------------------------------------------------------------------------------------------- */
 

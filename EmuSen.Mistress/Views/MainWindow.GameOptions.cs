@@ -32,8 +32,13 @@ namespace EmuSen.Mistress.Views
         private GameMetadata MetadataFor(string path) =>
             GameMetadata.Resolve(path, _scrapedText.GetValueOrDefault(path), _editSnapshot.GetValueOrDefault(path), _appSettings.ScrapeGameNames);
 
-        // ES-DE's per-game alternative emulator: the game's engine over the console's, when its console has that engine (§4.66).
-        private string? GameEngine(string path) => GameMetadata.EngineFor(path, _records.Edits(path).GetValueOrDefault(GameMetadata.AltEmulator));
+        // ES-DE's per-game alternative emulator, the game's own file's "Engine" since SR10, which the runtime keeps; one its console does not run is not stored (§4.66, EmuSen_Backend.md §14.12).
+        private static void SetGameEngine(string path, string? chosen)
+        {
+            string? engine = GameMetadata.EngineFor(path, chosen);
+            try { CoreSettings.Runtime.SetGameSetting(path, EmuSen.Cores.CoreCatalog.EngineKey, engine); }
+            catch (EmuSen.Crystal.Client.CrystalException e) { EmuSen.Galaxia.Library.ErrorLog.Warning("settings", $"{System.IO.Path.GetFileName(path)}'s engine could not be stored: {e.Message}"); }
+        }
 
         // The player's name for a game where they gave one, else ScreenScraper's with "Game names" on (Q30), else the file's, in every list Mistress draws.
         private string DisplayTitle(RomEntry entry) =>
@@ -182,6 +187,7 @@ namespace EmuSen.Mistress.Views
         {
             IReadOnlyDictionary<string, string?> changes = draft.Changes();
             if (changes.Count > 0) _records.SaveEdits(draft.Path, changes, DateTime.Now);
+            if (changes.TryGetValue(GameMetadata.AltEmulator, out string? engine)) SetGameEngine(draft.Path, engine);
             if (draft.Favourite != draft.StoredFavourite) _records.SetFavourite(draft.Path, draft.Favourite);
             if (draft.PlayCount != draft.StoredPlayCount || Math.Abs(draft.PlaySeconds - draft.StoredPlaySeconds) > 0.5)
                 _records.SetPlayStats(draft.Path, draft.PlayCount, draft.PlaySeconds);

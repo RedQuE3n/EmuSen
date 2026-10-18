@@ -193,7 +193,7 @@ namespace EmuSen.Cores.Native
         public static FirmwareRequest Request(string core, CoreFirmware f) =>
             new(core, f.Label, f.Name, (int)f.Size, f.Required ? "required" : "optional")
             {
-                Parts = f.Parts, Required = f.Required, ReplacementEffect = f.Replacement?.Effect, ReplacementCost = f.Replacement?.Cost,
+                Parts = f.Parts, Required = f.Required, ReplacementEffect = f.Replacement?.Effect, ReplacementCost = f.Replacement?.Cost, Md5 = f.Md5,
             };
 
         // One line for the status bar only when a file is absent with no replacement; a running replacement is the normal path and says nothing - see VenusRT_Native.md §66.
@@ -209,8 +209,8 @@ namespace EmuSen.Cores.Native
             return null;
         }
 
-        // The folder each entry passed to the last machine came from, by its Which, for the session's log.
-        private readonly Dictionary<uint, string> _firmwareFolders = new();
+        // Where each entry passed to the last machine was found, by its Which, for the session's log.
+        private readonly Dictionary<uint, FirmwareLocated> _firmwareFolders = new();
 
         // Each entry whole by its name and size, else its first split form, from the first folder holding it; part n as file Which + n - see EmuSen_CoreAPI.md §6.2 and EmuSen_Firmware.md §2.3.
         private List<(uint, byte[])> FirmwareFiles(IEnumerable<CoreFirmware> entries)
@@ -222,18 +222,20 @@ namespace EmuSen.Cores.Native
             {
                 if (FirmwareLibrary.Find(Request(f), folders) is not { } found) continue;
                 firmware.AddRange(found.Parts.Select((p, n) => (f.Which + (uint)n, p)));
-                _firmwareFolders[f.Which] = found.Folder;
+                _firmwareFolders[f.Which] = new FirmwareLocated(found.Folder, found.Names, found.Whole, found.ByContent);
             }
             return firmware;
         }
 
         // Which firmware the machine runs on, one line each for the session's log: the player's file and its folder, or the core's own - see EmuSen_Firmware.md §3.1.
-        public static IEnumerable<string> FirmwareLines(string core, IReadOnlyList<CoreFirmwareSource> used, IReadOnlyList<CoreFirmware> wanted, IReadOnlyDictionary<uint, string>? folders = null) =>
+        public static IEnumerable<string> FirmwareLines(string core, IReadOnlyList<CoreFirmwareSource> used, IReadOnlyList<CoreFirmware> wanted, IReadOnlyDictionary<uint, FirmwareLocated>? folders = null) =>
             used.Select(u => (u.Source, u.Which, F: wanted.FirstOrDefault(f => f.Which == u.Which)))
                 .Where(u => u.F is not null)
                 .Select(u => $"[Firmware] {u.F!.Label}: " + u.Source switch
                 {
-                    "file" => $"the player's {u.F.Name}" + (folders?.GetValueOrDefault(u.Which) is { } folder ? $", in {folder}" : ""),
+                    "file" => folders?.GetValueOrDefault(u.Which) is { } at
+                        ? $"the player's {(at.ByContent ? at.Names[0] + ", recognised by its content" : u.F.Name)}, in {at.Folder}"
+                        : $"the player's {u.F.Name}",
                     "replacement" => $"{core}'s own replacement",
                     _ => "absent",
                 });

@@ -627,6 +627,8 @@ int64_t emusen_core_last_error(const emusen_machine *machine, uint8_t *out, size
   words ("Games may start a fraction of a second later."), with no engine name or address in it, and puts the detail
   after it. A cost of one sentence is shown whole. The page shows an entry's `label` followed by its `name` in
   brackets, so a label is the thing's name in plain words, without its size or file name.
+
+  *Added at 1.12* (§6.32): an entry may carry `md5`, the MD5s of the images the core accepts whatever they are called.
 - **`free` — In.** It may be called from any thread, provided no other call on that machine is in flight; that is what
   the host's finaliser already does (§1.2, item 9). Every thread the core started for the machine has stopped when it
   returns.
@@ -1591,6 +1593,30 @@ BIOS's own, from power-on with an empty drive. Nephrite's Sega CD waits for its 
 on its first picture with an empty drive (`Nephrite_Bram.md` §11, `Nephrite_OpenBios.md` §16), so it does not yet start
 empty correctly and does not claim the field.
 
+### 6.32 A firmware file recognised by its content: `md5` (1.12, 2026-10-18)
+
+*Decided 2026-10-18 by the tester, as `EmuSen_Firmware.md` §7 proposed it. This section is the normative text; that
+page has the design, the store's rule and their reasons.* A player's firmware file is often named as the collection it
+came from names it, not as the core declares it, and a store that matches by name alone then runs the core's
+replacement without a word.
+
+- **The entry.** A firmware entry, in `firmware_for`'s answer (§6.2) and in core info's per-system `firmware` lists
+  (§6.3), may carry `md5`: an array of 32 lower-case hexadecimal digits each, the MD5s of the images of `size` bytes
+  the core accepts in that slot, whatever they are called. Absent or empty, the entry is recognised by its names alone,
+  as before, so no earlier answer changes by a byte. An entry that appears in both, by `which` and `name`, lists the
+  same checksums in both. No export, struct, status, flag or capability bit is added.
+- **What a host does with it** is the store's (`EmuSen_Firmware.md` §7.4): within each folder it searches, the names
+  first, then the split forms, then the folder's files of the declared size whose MD5 is listed, in the order the core
+  lists them. The core is passed the file's bytes as file `which`, as for a file found by name; it is never told the
+  file's name, and does not need it.
+- **Which checksums.** The images a core accepts, cited from a public description of them (`EmuSen_Firmware.md` §0);
+  never computed by the project from dumps it holds or a player's.
+- **Older and newer peers.** An older host never reads `md5`, and finds by name as before; an older core lists none.
+  The minor gates nothing in a host (§4.1).
+- **The Rust side.** `Firmware` gains `md5: Vec<String>`, written only when not empty.
+- **The host** (`CoreEngine`): `CoreFirmware.Md5` is read from the entry and passed in the store's request.
+- **The kit.** C23 (§28.18).
+
 ## 7. Core discovery and trust
 
 ### 7.1 Where cores are found
@@ -2385,6 +2411,13 @@ that starts empty making that console and any other refused with `EMUSEN_BAD_IMA
 export's check; the guard's checker learns the field; the C# host reads `CoreSystem.StartsEmpty` and passes the system
 (`CoreMachine`). Kit case C22 is added; the test core starts empty, and `FAULT_EMPTY_LOADED` (1 << 26) fails C22 alone.
 Diamond claims it for `psx`.
+
+**v1.12, 2026-10-18** (§6.32), the tester's decision that the firmware store recognise a file by its content
+(`EmuSen_Firmware.md` §7): a firmware entry's optional `md5`, in `firmware_for`'s answer and in core info's lists, the
+lower-case MD5s of the images the core accepts in that slot. Baseline 485 facts, `--check` and `--against` 1.11
+passing. `emusen-native` gains `Firmware::md5`, written only when not empty; the C# host reads `CoreFirmware.Md5`.
+Kit case C23 is added; the test core lists a made-up checksum for its boot ROM, and `FAULT_MD5_SHORT` (1 << 27), the
+checksum a digit short, fails C23 alone.
 
 **Kit, 2026-10-15**, no change to the ABI: C7 saves at every eighth of the run and once near its end, each state
 loaded by a machine just made and held to a machine that never loads, in place of once at the middle against a machine
@@ -3722,6 +3755,19 @@ The test cores pass, `kit_test_core` starting empty and `kit_plain_core` too, it
 that takes only a host of 1.0, fail it among their other cases. Diamond passes it on its library with Crash
 Bandicoot's disc given for the other cases: "psx started empty: 1 drive(s) empty, two machines alike over 240 frames, a
 state carried to a third" (measured on 2026-10-17, 600 frames, 71 s for the whole run).
+
+### 28.18 C23, firmware checksums (1.12, 2026-10-18)
+
+C23 runs once a library, among the core's cases. It reads every firmware entry of core info's systems and of
+`firmware_for`'s answer on the session's image, and for each that lists `md5`: the library is of 1.12 or later; each
+checksum is 32 lower-case hexadecimal digits, which the schema's pattern does not hold to a length; none is listed
+twice in one entry; and an entry in both, by `which` and `name`, lists the same checksums in both. The kit carries no
+firmware and checks no content: whether a checksum is an image's is the core author's citation (§6.32). A library that
+lists none passes, with a note of the count.
+
+The test cores pass, `kit_test_core` listing one made-up checksum for its boot ROM. `FAULT_MD5_SHORT` (the checksum a
+digit short) fails C23 alone; it is among `kit_faulty_full_core`'s faults, so that core fails C23 in the single-image
+form and in the corpus form.
 
 ## 29. A space that is a view, 2026-10-07
 

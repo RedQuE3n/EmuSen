@@ -123,7 +123,7 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // The conformance kit on synthetic cartridges, one with each kind of save chip it builds: all 21 cases a core without a drive has.
+        // The conformance kit on synthetic cartridges, one with each kind of save chip it builds: all 22 cases a core without a drive has.
         [Fact]
         public void The_kit_passes_on_synthetic_cartridges()
         {
@@ -139,7 +139,7 @@ namespace EmuSen.WiseMan.Cores
                 process.WaitForExit();
                 _output.WriteLine($"{name}:\n{output}{stderr.Result}");
                 Assert.True(process.ExitCode == 0, output + stderr.Result);
-                Assert.Equal(21, output.Split('\n').Count(l => l.StartsWith("pass C")));
+                Assert.Equal(22, output.Split('\n').Count(l => l.StartsWith("pass C")));
             }
         }
     }

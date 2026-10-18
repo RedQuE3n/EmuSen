@@ -1,21 +1,27 @@
 //! The firmware store, the C# `FirmwareLibrary` and the facts of `FirmwareOverview`'s rows, knowing nothing about any
 //! console (EmuSen_Firmware.md §2). The folders are the player's chosen one when its setting is usable, then
 //! home/Firmware, each searched once and only read; within a folder the canonical name, then the alternates, then each
-//! split form whole from that folder; size is the only test. An install writes into home/Firmware alone.
+//! split form whole from that folder, then the folder's files of the declared size by their MD5 when the request lists
+//! checksums (EmuSen_Firmware.md §7); size is the only test of a named file. An install writes into home/Firmware alone.
 
 use emusen_dotnet::json::{self, Value};
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::setting_folders::{self, FolderValue};
+use emusen_galaxia::rom_hash;
 use emusen_galaxia::tree::file_exists;
+use std::collections::HashMap;
 use std::sync::Mutex;
+use std::time::SystemTime;
 
-/// One image a core can use: its canonical name, its size, the other names it circulates under, and its split forms.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// One image a core can use: its canonical name, its size, the other names it circulates under, its split forms, and
+/// the MD5s, in lower-case hexadecimal, of the images the core accepts whatever their name.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Request {
     pub file: String,
     pub size: i32,
     pub alternates: Vec<String>,
     pub parts: Vec<Vec<String>>,
+    pub md5: Vec<String>,
 }
 
 /// An image found: the folder, the names read, and the bytes whole or as the parts of a split form in order.
@@ -24,6 +30,8 @@ pub struct Found {
     pub folder: String,
     pub names: Vec<String>,
     pub parts: Vec<Vec<u8>>,
+    /// Found by its content, `names` then holding the player's own file name.
+    pub content: bool,
 }
 
 /// Where an image is, without its bytes: what the overview and the question before a launch need.
@@ -32,6 +40,7 @@ pub struct Located {
     pub folder: String,
     pub names: Vec<String>,
     pub whole: bool,
+    pub content: bool,
 }
 
 /// The name a refused or absent value is reported under, `AppSettings.FirmwareDirectory`.
@@ -120,11 +129,45 @@ impl Take for Opens {
     }
 }
 
-fn search<T: Take>(request: &Request, folders: &[String]) -> Option<(String, Vec<String>, Vec<T::Part>)> {
+static DIGESTS: Mutex<Option<HashMap<(String, u64, SystemTime), String>>> = Mutex::new(None);
+
+/// A file's MD5, kept for the life of the process by its path, length and modification time (EmuSen_Firmware.md §7.6).
+fn md5_of(file: &str, length: u64) -> Option<String> {
+    let modified = std::fs::metadata(file).and_then(|m| m.modified()).ok()?;
+    let key = (file.to_string(), length, modified);
+    if let Some(digest) = DIGESTS.lock().unwrap_or_else(|p| p.into_inner()).get_or_insert_with(HashMap::new).get(&key) {
+        return Some(digest.clone());
+    }
+    let digest = rom_hash::md5(file).ok()?;
+    DIGESTS.lock().unwrap_or_else(|p| p.into_inner()).get_or_insert_with(HashMap::new).insert(key, digest.clone());
+    Some(digest)
+}
+
+/// The folder's own files of the request's size, in ordinal order of name, and the first whose MD5 the request lists,
+/// the checksums taken in the request's order (EmuSen_Firmware.md §7.4).
+fn by_content(request: &Request, folder: &str) -> Option<(String, String)> {
+    if request.md5.is_empty() || request.size < 0 {
+        return None;
+    }
+    let mut names: Vec<String> = std::fs::read_dir(folder).ok()?.filter_map(|e| e.ok()?.file_name().into_string().ok()).collect();
+    names.sort_by(|a, b| a.encode_utf16().cmp(b.encode_utf16()));
+    let candidates: Vec<(String, String, String)> = names
+        .into_iter()
+        .filter_map(|name| {
+            let file = path::combine(Style::HOST, folder, &name);
+            let n = length(&file).filter(|&n| n == request.size as u64)?;
+            let digest = md5_of(&file, n)?;
+            Some((name, file, digest))
+        })
+        .collect();
+    request.md5.iter().find_map(|want| candidates.iter().find(|c| c.2 == *want).map(|c| (c.0.clone(), c.1.clone())))
+}
+
+fn search<T: Take>(request: &Request, folders: &[String]) -> Option<(String, Vec<String>, Vec<T::Part>, bool)> {
     for folder in folders {
         for name in std::iter::once(&request.file).chain(&request.alternates) {
             if let Some(part) = T::exact(&path::combine(Style::HOST, folder, name), request.size) {
-                return Some((folder.clone(), vec![name.clone()], vec![part]));
+                return Some((folder.clone(), vec![name.clone()], vec![part], false));
             }
         }
         for form in request.parts.iter().filter(|f| f.len() >= 2) {
@@ -133,7 +176,12 @@ fn search<T: Take>(request: &Request, folders: &[String]) -> Option<(String, Vec
             if request.size > 0 && parts.iter().map(T::len).sum::<u64>() != request.size as u64 {
                 continue;
             }
-            return Some((folder.clone(), form.clone(), parts));
+            return Some((folder.clone(), form.clone(), parts, false));
+        }
+        if let Some((name, file)) = by_content(request, folder)
+            && let Some(part) = T::any(&file)
+        {
+            return Some((folder.clone(), vec![name], vec![part], true));
         }
     }
     None
@@ -141,12 +189,12 @@ fn search<T: Take>(request: &Request, folders: &[String]) -> Option<(String, Vec
 
 /// `FirmwareLibrary.Find`: the first folder holding the image whole by any of its names or as a complete split form.
 pub fn find(request: &Request, folders: &[String]) -> Option<Found> {
-    search::<Bytes>(request, folders).map(|(folder, names, parts)| Found { folder, names, parts })
+    search::<Bytes>(request, folders).map(|(folder, names, parts, content)| Found { folder, names, parts, content })
 }
 
 /// Where `find` would take the image, each file opened and measured but not read.
 pub fn locate(request: &Request, folders: &[String]) -> Option<Located> {
-    search::<Opens>(request, folders).map(|(folder, names, parts)| Located { folder, names, whole: parts.len() == 1 })
+    search::<Opens>(request, folders).map(|(folder, names, parts, content)| Located { folder, names, whole: parts.len() == 1, content })
 }
 
 /// The first folder holding a file of the canonical name and the wrong size, for the overview's note.
@@ -176,7 +224,7 @@ fn words(value: Option<&Value>) -> Result<Vec<String>, String> {
     }
 }
 
-/// A request from its JSON: `file`, `size`, `alternates` and `parts`, a list of lists.
+/// A request from its JSON: `file`, `size`, `alternates`, `parts`, a list of lists, and `md5`, a list of checksums.
 pub fn request_from(value: &Value) -> Result<Request, String> {
     let file = value.get("file").and_then(Value::as_str).ok_or("a request has no file")?.to_string();
     let size = match value.get("size") {
@@ -187,7 +235,7 @@ pub fn request_from(value: &Value) -> Result<Request, String> {
         Some(Value::Array(forms)) => forms.iter().map(|f| words(Some(f))).collect::<Result<_, _>>()?,
         _ => Vec::new(),
     };
-    Ok(Request { file, size, alternates: words(value.get("alternates"))?, parts })
+    Ok(Request { file, size, alternates: words(value.get("alternates"))?, parts, md5: words(value.get("md5"))? })
 }
 
 /// A list of folders from its JSON.
@@ -221,12 +269,13 @@ pub fn folders_json(list: &[String], value: &FolderValue) -> String {
 }
 
 /// What was found as an envelope: the JSON's length in four little-endian bytes, the JSON (`folder`, `names`,
-/// `lengths`), then every part's bytes in order.
+/// `lengths`, `content`), then every part's bytes in order.
 pub fn found_envelope(found: &Found) -> Vec<u8> {
     let head = compact(&object(vec![
         ("folder", Value::string(found.folder.as_str())),
         ("names", text_list(&found.names)),
         ("lengths", Value::Array(found.parts.iter().map(|p| Value::number(p.len())).collect())),
+        ("content", Value::Bool(found.content)),
     ]));
     let mut out = Vec::with_capacity(4 + head.len() + found.parts.iter().map(Vec::len).sum::<usize>());
     out.extend_from_slice(&(head.len() as u32).to_le_bytes());
@@ -237,10 +286,10 @@ pub fn found_envelope(found: &Found) -> Vec<u8> {
     out
 }
 
-/// Where the image is and where a wrong-sized file of its name is, as JSON: `found` (`folder`, `names`, `whole`, or
-/// null) and `wrong` (a folder, or null; looked for only when nothing is found).
+/// Where the image is and where a wrong-sized file of its name is, as JSON: `found` (`folder`, `names`, `whole`,
+/// `content`, or null) and `wrong` (a folder, or null; looked for only when nothing is found).
 pub fn located_json(located: Option<&Located>, wrong: Option<&str>) -> String {
-    let found = located.map_or(Value::Null, |l| object(vec![("folder", Value::string(l.folder.as_str())), ("names", text_list(&l.names)), ("whole", Value::Bool(l.whole))]));
+    let found = located.map_or(Value::Null, |l| object(vec![("folder", Value::string(l.folder.as_str())), ("names", text_list(&l.names)), ("whole", Value::Bool(l.whole)), ("content", Value::Bool(l.content))]));
     compact(&object(vec![("found", found), ("wrong", wrong.map_or(Value::Null, Value::string))]))
 }
 
@@ -275,7 +324,7 @@ mod tests {
     }
 
     fn widget() -> Request {
-        Request { file: "widget.rom".into(), size: 64, alternates: vec!["w.bin".into()], parts: vec![vec!["w.lo".into(), "w.hi".into()]] }
+        Request { file: "widget.rom".into(), size: 64, alternates: vec!["w.bin".into()], parts: vec![vec!["w.lo".into(), "w.hi".into()]], md5: Vec::new() }
     }
 
     #[test]
@@ -289,7 +338,7 @@ mod tests {
         assert_eq!((found.folder.as_str(), found.parts[0][0]), (store.as_str(), 2));
         put(&chosen, "w.bin", 64, 3);
         assert_eq!(find(&widget(), &folders).unwrap().names, ["w.bin"]);
-        assert_eq!(locate(&widget(), &folders).unwrap(), Located { folder: chosen.clone(), names: vec!["w.bin".into()], whole: true });
+        assert_eq!(locate(&widget(), &folders).unwrap(), Located { folder: chosen.clone(), names: vec!["w.bin".into()], whole: true, content: false });
         assert_eq!(wrong_size_in(&widget(), &folders), Some(chosen));
     }
 
@@ -329,9 +378,96 @@ mod tests {
         assert_eq!(folders(Some(&absent), "/h", &store).0, [absent, store]);
     }
 
+    fn random(size: usize, seed: u64) -> Vec<u8> {
+        let mut x = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
+        (0..size).map(|_| { x ^= x << 13; x ^= x >> 7; x ^= x << 17; x as u8 }).collect()
+    }
+
+    fn stand_in(folder: &str, name: &str, size: usize, seed: u64) -> String {
+        let file = format!("{folder}/{name}");
+        std::fs::write(&file, random(size, seed)).unwrap();
+        rom_hash::md5(&file).unwrap()
+    }
+
+    fn listing(md5: Vec<String>) -> Request {
+        Request { md5, ..widget() }
+    }
+
+    #[test]
+    fn a_renamed_file_is_found_by_its_content_and_another_content_of_the_size_is_not() {
+        let d = Dir::new("content");
+        let f = d.sub("f");
+        stand_in(&f, "a other.bin", 64, 1);
+        let digest = stand_in(&f, "PLAYER COPY.BIN", 64, 2);
+        assert_eq!(find(&listing(vec!["0".repeat(32)]), std::slice::from_ref(&f)), None);
+        let found = find(&listing(vec![digest.clone()]), std::slice::from_ref(&f)).unwrap();
+        assert_eq!((found.names, found.content, found.parts[0].clone()), (vec!["PLAYER COPY.BIN".to_string()], true, random(64, 2)));
+        assert_eq!(locate(&listing(vec![digest]), std::slice::from_ref(&f)), Some(Located { folder: f, names: vec!["PLAYER COPY.BIN".into()], whole: true, content: true }));
+    }
+
+    #[test]
+    fn a_name_is_taken_before_content_in_a_folder_and_the_chosen_folder_wholly_before_the_store() {
+        let d = Dir::new("order");
+        let (chosen, store) = (d.sub("chosen"), d.sub("store"));
+        let digest = stand_in(&chosen, "copy.bin", 64, 3);
+        stand_in(&store, "widget.rom", 64, 4);
+        let found = find(&listing(vec![digest.clone()]), &[chosen.clone(), store.clone()]).unwrap();
+        assert_eq!((found.folder.as_str(), found.content), (chosen.as_str(), true));
+        stand_in(&chosen, "w.bin", 64, 5);
+        let found = find(&listing(vec![digest]), &[chosen.clone(), store]).unwrap();
+        assert_eq!((found.names, found.content), (vec!["w.bin".to_string()], false));
+    }
+
+    #[test]
+    fn the_checksums_are_taken_in_the_requests_order_then_the_names_in_ordinal_order() {
+        let d = Dir::new("pick");
+        let f = d.sub("f");
+        let first = stand_in(&f, "b.bin", 64, 6);
+        let second = stand_in(&f, "a.bin", 64, 7);
+        std::fs::copy(format!("{f}/b.bin"), format!("{f}/C.bin")).unwrap();
+        assert_eq!(find(&listing(vec![first.clone(), second.clone()]), std::slice::from_ref(&f)).unwrap().names, ["C.bin"]);
+        assert_eq!(find(&listing(vec![second, first]), std::slice::from_ref(&f)).unwrap().names, ["a.bin"]);
+    }
+
+    #[test]
+    fn a_listed_file_of_another_size_a_subfolder_and_a_missing_folder_find_nothing() {
+        let d = Dir::new("size");
+        let f = d.sub("f");
+        let short = stand_in(&f, "short.bin", 63, 8);
+        let inner = d.sub("f/inner");
+        let nested = stand_in(&inner, "deep.bin", 64, 9);
+        let absent = format!("{}/absent", d.0.to_string_lossy());
+        assert_eq!(find(&listing(vec![short, nested]), &[f, absent]), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_is_measured_and_hashed_by_its_target_and_a_dangling_link_is_passed_over() {
+        let d = Dir::new("link");
+        let (f, elsewhere) = (d.sub("f"), d.sub("elsewhere"));
+        let digest = stand_in(&elsewhere, "target", 64, 10);
+        std::os::unix::fs::symlink(format!("{elsewhere}/target"), format!("{f}/link.bin")).unwrap();
+        std::os::unix::fs::symlink(format!("{elsewhere}/nothing"), format!("{f}/dangling.bin")).unwrap();
+        let found = find(&listing(vec![digest]), std::slice::from_ref(&f)).unwrap();
+        assert_eq!((found.names, found.parts[0].clone()), (vec!["link.bin".to_string()], random(64, 10)));
+    }
+
+    #[test]
+    fn a_file_rewritten_in_place_is_hashed_again() {
+        let d = Dir::new("cache");
+        let f = d.sub("f");
+        let old = stand_in(&f, "x.bin", 64, 11);
+        assert!(find(&listing(vec![old.clone()]), std::slice::from_ref(&f)).is_some());
+        let new = stand_in(&f, "x.bin", 64, 12);
+        let later = SystemTime::now() + std::time::Duration::from_secs(60);
+        std::fs::File::options().write(true).open(format!("{f}/x.bin")).unwrap().set_modified(later).unwrap();
+        assert_eq!(find(&listing(vec![old]), std::slice::from_ref(&f)), None);
+        assert!(find(&listing(vec![new]), std::slice::from_ref(&f)).is_some());
+    }
+
     #[test]
     fn a_request_reads_from_its_json() {
-        let v = json::parse(r#"{"file":"a.rom","size":8,"alternates":["b"],"parts":[["c","d"]]}"#).unwrap();
-        assert_eq!(request_from(&v).unwrap(), Request { file: "a.rom".into(), size: 8, alternates: vec!["b".into()], parts: vec![vec!["c".into(), "d".into()]] });
+        let v = json::parse(r#"{"file":"a.rom","size":8,"alternates":["b"],"parts":[["c","d"]],"md5":["e"]}"#).unwrap();
+        assert_eq!(request_from(&v).unwrap(), Request { file: "a.rom".into(), size: 8, alternates: vec!["b".into()], parts: vec![vec!["c".into(), "d".into()]], md5: vec!["e".into()] });
     }
 }

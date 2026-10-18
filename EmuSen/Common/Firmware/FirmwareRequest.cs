@@ -17,6 +17,9 @@ namespace EmuSen.Common.Firmware
         // Split forms of the same dump, each a list of files that together make it, passed as files from the core's number upwards - see EmuSen_CoreAPI.md §6.2.
         public IReadOnlyList<IReadOnlyList<string>> Parts { get; init; } = Array.Empty<IReadOnlyList<string>>();
 
+        // The lower-case MD5s of the images the core accepts whatever they are called - see EmuSen_Firmware.md §7.
+        public IReadOnlyList<string> Md5 { get; init; } = Array.Empty<string>();
+
         // False when the game runs without the file, on the core's replacement or without the chip; only a required request is prompted for - see VenusRT_DspHle.md §7.3.
         public bool Required { get; init; } = true;
 

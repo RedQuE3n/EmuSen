@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 17u
+#define EMUSEN_PLATFORM_ABI_VERSION 18u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -507,16 +507,18 @@ int64_t emusen_systems_view(const uint8_t *request, size_t request_len, const ui
 
 /*
  * Firmware (EmuSen_Firmware.md, section 2). A request is a JSON object: file (the canonical name), size, alternates
- * (names) and parts (split forms, each a list of names). Folders are a list of full paths, searched first to last.
+ * (names), parts (split forms, each a list of names) and, since interface 18, md5 (the lower-case MD5s of the images
+ * accepted whatever their name, EmuSen_Firmware.md section 7). Folders are a list of full paths, searched first to last.
  */
 /* In: {"setting": the FirmwareDirectory value or null, "home": the player's home, "store": home/Firmware}. Out: folders,
  * state (Unset, Usable, Missing, Relative or File), path, written and problem. A refused or absent value's line is queued
  * for emusen_platform_diagnostics once, and again only when the value changes. */
 int64_t emusen_firmware_folders(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
 /* In: {"request", "folders"}. Out: an envelope, the JSON's length as four little-endian bytes, the JSON (folder, names,
- * lengths), then each part's bytes in order. ABSENT when no folder holds the image. */
+ * lengths, content), then each part's bytes in order; content is true when the file was recognised by its MD5.
+ * ABSENT when no folder holds the image. */
 int64_t emusen_firmware_find(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
-/* In: {"request", "folders"}. Out: found (folder, names, whole; or null), each file opened and measured but not read,
+/* In: {"request", "folders"}. Out: found (folder, names, whole, content; or null), each file opened and measured but not read,
  * and wrong (the first folder with a file of the canonical name and another size, looked for only when nothing is found). */
 int64_t emusen_firmware_locate(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
 /* In: {"request", "source", "store"}. 1 when the source, of the request's size, was copied to the store under the

@@ -3432,3 +3432,14 @@ morning, which built all seven. Every job of both branch runs passed, the portab
 - **The run's length is the WiseMan job's**, which ran from 14.8 to 27.9 minutes over these four runs on the same tests,
   the shipped libraries built as before. That variation is the runner's, and over twenty times the profile's cost: about half a minute
   more before the WiseMan job can start, on a run of twenty to thirty-five minutes.
+
+## 38. Interface 18, 2026-10-18: firmware recognised by its content
+
+The firmware store recognises a player's file by its MD5 as well as by its name (`EmuSen_Firmware.md` §7,
+`EmuSen_Backend.md` §15.6). No export was added or removed: the request that `emusen_firmware_find`, `_locate` and
+`_install` take gained `md5`, the lower-case MD5s of the images accepted whatever their name, and the answers of
+`_find` and `_locate` gained `content`, true when the file was recognised by its MD5. A library of interface 17 would
+read such a request, ignore `md5` and answer by name alone, so that it and its C# twin would disagree without a word;
+the number therefore went from 17 to 18 in `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion`
+together, and an older library is refused, its services left on the C#. B2, running beside this step, takes no number
+of this interface.

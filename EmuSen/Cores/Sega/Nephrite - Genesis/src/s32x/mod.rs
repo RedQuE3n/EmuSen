@@ -25,7 +25,7 @@ const BOOT_COST: &str = "Nephrite's open replacements for the 32X's boot ROMs ar
 
 /// Its three boot ROMs, the 68000's, the master SH-2's and the slave's, as the frontend's files `which`.
 pub fn boot_firmware(which: [u32; 3]) -> Vec<Firmware> {
-    let rom = |which, name: &str, label: &str, size| Firmware { which, name: name.into(), label: label.into(), size, required: false, parts: vec![vec![name.into()]], replacement: Some(Replacement::None { cost: BOOT_COST.into() }) };
+    let rom = |which, name: &str, label: &str, size| Firmware { which, name: name.into(), label: label.into(), size, required: false, parts: vec![vec![name.into()]], replacement: Some(Replacement::None { cost: BOOT_COST.into() }), md5: Vec::new() };
     vec![
         rom(which[0], "32X_G_BIOS.BIN", "The 32X's 68000 boot ROM (256 bytes)", 256),
         rom(which[1], "32X_M_BIOS.BIN", "The 32X's master SH-2 boot ROM (2,048 bytes)", 2048),

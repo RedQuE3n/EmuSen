@@ -102,6 +102,7 @@
         "size": { "type": "integer", "minimum": 0 },
         "required": { "type": "boolean" },
         "parts": { "type": "array", "items": { "type": "array", "items": { "type": "string" } } },
+        "md5": { "type": "array", "items": { "type": "string", "pattern": "^[0-9a-f]+$" } },
         "replacement": {
           "type": "object",
           "required": ["effect"],

@@ -58,6 +58,7 @@ pub(crate) fn bios_firmware(region: char, which: u32) -> Firmware {
         required: false,
         parts: vec![vec![name]],
         replacement: Some(Replacement::Accuracy { cost: BIOS_COST.into() }),
+        md5: Vec::new(),
     }
 }
 

@@ -74,6 +74,7 @@ fn dsp(stem: &str, size: u64) -> Firmware {
         required: false,
         parts: vec![vec![format!("{stem}.rom")], vec![format!("{stem}.program.rom"), format!("{stem}.data.rom")]],
         replacement: Some(replacement(stem)),
+        md5: Vec::new(),
     }
 }
 
@@ -89,6 +90,7 @@ fn boot() -> Firmware {
         replacement: Some(Replacement::Accuracy {
             cost: "Games may start a fraction of a second later. Without the image, VenusRT's own boot program runs: a program reading $FFC0-$FFFF with the boot ROM mapped sees other bytes than a console's, and the upload handshake can take some cycles more (VenusRT_Native.md §35.3, §64).".into(),
         }),
+        md5: Vec::new(),
     }
 }
 

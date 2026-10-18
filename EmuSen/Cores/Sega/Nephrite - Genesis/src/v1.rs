@@ -256,7 +256,7 @@ fn booted_bios(mine: u32, given: &[u32]) -> Vec<(u32, FirmwareSource)> {
 }
 
 fn firmware(which: u32, name: &str, label: &str, size: u64, cost: &str) -> Firmware {
-    Firmware { which, name: name.into(), label: label.into(), size, required: false, parts: vec![vec![name.into()]], replacement: Some(Replacement::None { cost: cost.into() }) }
+    Firmware { which, name: name.into(), label: label.into(), size, required: false, parts: vec![vec![name.into()]], replacement: Some(Replacement::None { cost: cost.into() }), md5: Vec::new() }
 }
 
 fn tmss() -> Firmware {
@@ -280,6 +280,7 @@ fn lock_on_files() -> Vec<Firmware> {
         required: false,
         parts: vec![vec![name.into()]],
         replacement: Some(Replacement::None { cost: "Without it Sonic & Knuckles runs alone, as the cartridge does with nothing on top.".into() }),
+        md5: Vec::new(),
     };
     vec![
         cart(LOCK_ON, "lockon.bin", "The cartridge locked on top of Sonic & Knuckles", 0x20_0000),

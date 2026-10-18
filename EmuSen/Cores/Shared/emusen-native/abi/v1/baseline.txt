@@ -33,8 +33,8 @@ const EMUSEN_CAP_SETTINGS 0x40 @1.0
 const EMUSEN_CAP_SETTING_NOTES 0x8000 @1.0
 const EMUSEN_CAP_SNAPSHOT 0x4 @1.0
 const EMUSEN_CORE_ABI_MAJOR 0x1 @1.0
-const EMUSEN_CORE_ABI_MINOR 0xb @1.11
-const EMUSEN_CORE_ABI_VERSION 0x1000b @1.11
+const EMUSEN_CORE_ABI_MINOR 0xc @1.12
+const EMUSEN_CORE_ABI_VERSION 0x1000c @1.12
 const EMUSEN_CREATE_LENT 0x1 @1.3
 const EMUSEN_CREATE_SHARED_CONSOLE 0x4 @1.8
 const EMUSEN_CREATE_SHARED_REMOVABLE 0x2 @1.7
@@ -304,6 +304,7 @@ json disassembly[].reference.kind string required @1.0
 json disassembly[].reference.target integer required @1.0
 json firmware array<object> @1.0
 json firmware[].label string required @1.0
+json firmware[].md5 array<string> optional @1.12
 json firmware[].name string required @1.0
 json firmware[].parts array<array<string>> optional @1.0
 json firmware[].replacement object optional @1.0
@@ -352,6 +353,7 @@ json info.systems[].development boolean optional @1.2
 json info.systems[].extensions array<string> required @1.0
 json info.systems[].firmware array<object> optional @1.0
 json info.systems[].firmware[].label string required @1.0
+json info.systems[].firmware[].md5 array<string> optional @1.12
 json info.systems[].firmware[].name string required @1.0
 json info.systems[].firmware[].parts array<array<string>> optional @1.0
 json info.systems[].firmware[].replacement object optional @1.0

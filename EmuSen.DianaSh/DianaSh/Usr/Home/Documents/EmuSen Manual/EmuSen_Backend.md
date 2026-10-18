@@ -2361,6 +2361,22 @@ state 3.
   portable job of `EmuSen_RustPlatform.md` §31 compiles the three crates for both; it was not run here, since this
   machine's toolchain carries no standard library for either target.
 
+### 15.6 Built 2026-10-18: the store recognises a file by its content
+
+*Decided 2026-10-18 by the tester* (`EmuSen_Firmware.md` §7.9): the firmware store also recognises a player's file by
+its MD5, whatever it is called, from checksums each core lists in its own info (core ABI 1.12, `EmuSen_CoreAPI.md`
+§6.32). In this crate it is a third step of `search`, after the names and the split forms of each folder: `by_content`
+lists the folder's own entries, keeps the files whose length, a link's by its target, is the request's size, takes
+their MD5 by Galaxia's `rom_hash::md5`, and picks the first file of the first listed checksum, file names compared in
+the order of their UTF-16 code units, which is the C#'s ordinal order. A file's MD5 is kept for the life of the
+process by its path, length and modification time. The C# twin, `FirmwareLibrary.Managed`, takes the same step
+(`ByContent`, `Md5Of`). `FirmwareFound` and `FirmwareLocated` gained `ByContent`, the C layer's requests `md5` and its
+answers `content`, and the platform interface went from 17 to 18 (`EmuSen_RustPlatform.md` §38). The overview's
+`FirmwareItem.FoundAs` and the session's line name the player's file; the frontend API's overview does not carry it yet
+(`EmuSen_Firmware.md` §7.5).
+
+The gates, seeded faults and measurements are `EmuSen_Firmware.md` §7.10.
+
 ## 16. What was built, 2026-10-18: the cheat database's download in Rust
 
 *Measured on 2026-10-18 on branch `cheatdb-download`, from `WiseMan` at `c922c968`, with .NET 10.0.112. The piece of

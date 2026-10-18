@@ -419,6 +419,9 @@ all, and is gone below one and a half.)*
 
 ### 4.1 The choice: the built-in SkSL `FilterChain`
 
+*Superseded 2026-10-17: the filter runs on the slang chain alone and its text is Vulkan GLSL (§29). The argument
+below chose SkSL while a Mac had no Vulkan device; `EmuSen_DevicePicture.md` §10's revision of Q2 answers that.*
+
 Two paths exist (`EmuSen_Serenity.md` §3.2 and §7). The CRT filter goes on the first, for every tier.
 
 **The argument.**
@@ -1204,7 +1207,8 @@ names its four consoles, its 4:3 shape and its rows taken once; and a white fiel
 `EMUSEN_BENCH_GL_DEVICE` names another, and return without drawing where there is none, as the slang tests do.
 **The raster path takes 12.8 seconds a frame at 640 × 480** for this filter against a tenth of a second on the
 device, which is why the measurements are on the device; one case draws the same small picture both ways and
-finds no value more than 2 apart.
+finds no value more than 2 apart. *Since 2026-10-17 there is no raster path (§29): the white field's case draws
+through the chain read back onto the headless canvas, and the comparison case compares that with the GL canvas's.*
 
 | Case | What it asserts |
 |---|---|
@@ -1611,7 +1615,9 @@ one draw with the driver's cache warm and 29 ms with it cold, against 4 to 10 an
 headless window and pad test draws the plain picture in its place: that is the stand-in, for the Shaders window's,
 the pad menu's and the fit audit's tests, which test the window. Where a real picture is wanted, the tests draw on
 the device (`ScreenFilterRenderTests` and `ScreenFilterDeviceTests`, through `ShaderBench.Picture`), and the two
-cases that test the software path itself say so with `DrawDeviceFiltersInSoftware`.
+cases that test the software path itself say so with `DrawDeviceFiltersInSoftware`. *Since 2026-10-17 a headless
+window draws the real CRT, through the chain read back, where the process has a Vulkan device, and the plain picture
+where it has none; `RequiresDevice` and `DrawDeviceFiltersInSoftware` are gone (§29).*
 
 **A pad test's route, changed.** With one more built-in in the list, `The_shaders_window_from_the_pad_menu_adjusts_a_
 built_in_filter_and_resets_it_all` failed in all seven of its rows: its search for a pad path from a slider to Reset All
@@ -3192,3 +3198,16 @@ the filter draws a woven 576-line frame as two fields of one timing (§11.1), so
 drawn; nor is how the half clock of an NTSC line is spread (alternate lines of 3,412 and 3,413 would put the phase a
 line at ⁷⁄₁₅ and ⁸⁄₁₅ in place of ½), which Diamond itself has not settled. Both are recorded, not built: the first
 would need a timing per field, which no other console's row needs, and the second waits on D-0's last question.
+
+## 29. The filter on the chain alone (2026-10-17)
+
+The CRT's passes, with every other built-in's, are Vulkan GLSL since `EmuSen_DevicePicture.md` §20: the SkSL text
+was converted once, and every pass of every variant was shown to give glslang the same tokens and the chain's
+compiler the same SPIR-V as the translation of §3.1 there did, so the filter draws what it drew, to the byte, on the
+125 variants held by `BuiltInGoldenTests` (90 of them this filter's tiers, signals and standards on five consoles,
+18 from the NES's raw picture, three brought back from twice the lines). Skia's `FilterChain` is gone (§21 there):
+where the device path is off, the filter is drawn by the same chain and read back (§19 there), which costs the render
+thread 1.0 to 2.6 ms a frame on the RX 6800 across the tiers at 1280 × 800 and 1080p, and the tiers' own GPU time is
+unchanged at 1080p (Performance 0.53, Balanced 0.76, Accurate 1.75 ms). The phosphors' tails advance once a game
+frame on every path (§22 there): a window resized or a slider moved no longer moves them on. The handheld's figures
+are `EmuSen_DevicePicture.md` §18.9's to take, with §12.7's.

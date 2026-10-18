@@ -12,18 +12,18 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void Scanlines_declares_expected_uniforms_and_darken_factor()
         {
-            Assert.Contains("uniform shader image;", BuiltInShaders.ScanlinesSksl);
-            Assert.Contains("uniform float2 outputSize;", BuiltInShaders.ScanlinesSksl);
-            Assert.Contains("0.78", BuiltInShaders.ScanlinesSksl);
+            Assert.Contains("uniform sampler2D image;", BuiltInShaders.ScanlinesGlsl);
+            Assert.Contains("uniform vec2 outputSize;", BuiltInShaders.ScanlinesGlsl);
+            Assert.Contains("0.78", BuiltInShaders.ScanlinesGlsl);
         }
 
         [Fact]
         public void Crt_declares_expected_uniforms_and_darken_factor_and_vignette()
         {
-            Assert.Contains("uniform shader image;", BuiltInShaders.CrtSksl);
-            Assert.Contains("uniform float2 outputSize;", BuiltInShaders.CrtSksl);
-            Assert.Contains("0.72", BuiltInShaders.CrtSksl);
-            Assert.Contains("vignette", BuiltInShaders.CrtSksl);
+            Assert.Contains("uniform sampler2D image;", BuiltInShaders.CrtGlsl);
+            Assert.Contains("uniform vec2 outputSize;", BuiltInShaders.CrtGlsl);
+            Assert.Contains("0.72", BuiltInShaders.CrtGlsl);
+            Assert.Contains("vignette", BuiltInShaders.CrtGlsl);
         }
     }
 }

@@ -317,6 +317,9 @@ namespace EmuSen.Serenity.Slang
             private uint _frameCount;
             private bool _disposed;
 
+            // A frame advanced and not yet rendered: its first render turns each feedback pass's two images round, and no later render of it does - see EmuSen_DevicePicture.md §22.
+            private bool _feedbackDue;
+
             // Readbacks an image may be lent, and one never lent for a copy; a lent one is written again only once its image lets go - see EmuSen_Serenity.md §9.1.
             private readonly List<ReadbackSlot> _readbacks = new();
             private ReadbackSlot? _scratch;
@@ -682,6 +685,7 @@ namespace EmuSen.Serenity.Slang
                 if (_rows is null) _gpu.Upload(_history[_head]!, picture, _staging!);
                 else _gpu.UploadRepeated(_history[_head]!, picture, _rows, repeat, _staging!);
                 _frameCount++;
+                _feedbackDue = true;
                 SlangProbe.Current?.Phase(SlangProbe.AdvanceEnd);
             }
 
@@ -742,6 +746,16 @@ namespace EmuSen.Serenity.Slang
                 if (_originalWidth == 0) throw new InvalidOperationException("No frame has been given to the chain yet.");
                 SlangProbe.Current?.Phase(SlangProbe.RenderBegin);
                 uint vw = (uint)Math.Max(1, viewWidth), vh = (uint)Math.Max(1, viewHeight);
+                if (_feedbackDue)
+                {
+                    foreach (Pass pass in _passes)
+                    {
+                        if (!pass.WantsFeedback) continue;
+                        (pass.Output, pass.Previous) = (pass.Previous, pass.Output);
+                        (pass.OutputFramebuffer, pass.PreviousFramebuffer) = (pass.PreviousFramebuffer, pass.OutputFramebuffer);
+                    }
+                    _feedbackDue = false;
+                }
 
                 uint sw = _originalWidth, sh = _originalHeight;
                 for (int i = 0; i < _passes.Length; i++)
@@ -774,12 +788,6 @@ namespace EmuSen.Serenity.Slang
                 });
 
                 SlangProbe.Current?.Phase(SlangProbe.Ran);
-                foreach (Pass pass in _passes)
-                {
-                    if (!pass.WantsFeedback) continue;
-                    (pass.Output, pass.Previous) = (pass.Previous, pass.Output);
-                    (pass.OutputFramebuffer, pass.PreviousFramebuffer) = (pass.PreviousFramebuffer, pass.OutputFramebuffer);
-                }
                 SlangProbe.Current?.Phase(SlangProbe.Copied);
                 return bytes;
             }

@@ -139,7 +139,7 @@ can `#reference` a built-in's file, which is how the built-in CRT stacks with an
    `BuiltInShaders.cs` is rewritten in GLSL, the translation's preamble and rewrites dropped, and the Skia path
    (`FilterChain`, the runtime effects of `GameFrameControl`) removed. The conversion is proven the cheap and exact
    way: every pass of every variant, preprocessed by glslang from the old text with the preamble and from the new text
-   without it, gives the same tokens. Removing the Skia path is Q2 (§10).
+   without it, gives the same tokens. Removing the Skia path is Q2 (§10). *Done 2026-10-17: §20 and §21.*
 
 ### 3.2 What each name means on the chain
 
@@ -290,7 +290,8 @@ The device path is used only when all hold, each checked once per window and log
 Otherwise the picture is drawn as today: Skia draws the plain picture, a preset is read back and drawn by Skia (§9.1
 of `EmuSen_Serenity.md`), and a built-in filter is drawn by Skia from its SkSL while that text stands (§3.1's first
 stage), which costs the render thread 0.09 ms where its readback would cost 1.8 (§8.3 there), and read back once the
-text is converted. That is the path on Windows (ANGLE offers D3D11 handles, not Vulkan's),
+text is converted. *Since 2026-10-17 a built-in is read back from the chain on this path too (§19), and since §21
+Skia draws no filter at all.* That is the path on Windows (ANGLE offers D3D11 handles, not Vulkan's),
 on macOS (no Vulkan device is shipped there; Q2), under Avalonia's EGL mode, on a machine whose compositor and Vulkan
 device are different cards, and with no Vulkan device at all.
 
@@ -457,6 +458,13 @@ Diamond, the latency in frames from a frame's emulation to its picture's present
 ## 10. Questions for the tester
 
 *Decided 2026-10-15 by the tester: Q1 to Q3, each as recommended. Avalonia stays on GLX; Skia's filter path stays until a macOS build ships with MoltenVK; every picture stays on the device unless the handheld drops frames.*
+
+*Q2 revised 2026-10-17 by the tester: §3.1's second stage goes ahead now.* Windows and macOS are paused while Linux
+is finished (`EmuSen_RustPlatform.md` §31), so no build that would draw the built-ins plain ships in the meantime.
+When the Mac port resumes, it ships a Vulkan driver (MoltenVK or KosmicKrisp) before its release, and the built-ins
+are drawn there by the chain, on the device path or read back. The handheld comes first: before Skia's path is
+removed, a handheld whose device path is off or given up must still draw every built-in, which §19's readback does.
+§20 to §22 are the stage as built.
 
 | | Question | Recommended |
 |---|---|---|
@@ -1015,3 +1023,313 @@ the TV attached to it. The cause is not proven: the GPU's load and the nested ga
 PipeWire stream are candidates; the units had no display of the session in their environment. Runs on the handheld are
 agreed with the tester beforehand from now on.
 
+### 18.9 The ten-minute run under Game Mode: the tester's procedure (written 2026-10-17)
+
+§18.7's ten minutes were under a headless gamescope, a probe and not Mistress; the run that settles the default is
+Mistress under Game Mode, by the tester, as §18.8 asks. **Nothing has to change for a build to take the device path
+there**: it is on by default since 46fe60c6 (§19.1), and `EMUSEN_DEVICE_PICTURE=0` turns it off.
+
+1. **The build.** From the branch `shader-consolidate` at the commit that records §19 or later, a Linux publish as
+   every one is made (`dotnet publish EmuSen.Mistress -c Release -r linux-x64 --self-contained true -o <folder>`, the
+   platform library and the cores built into it, each core library's hash checked against its sidecar), copied to the
+   handheld as earlier builds were (§11, step 1), started from its usual Game Mode shortcut so that the launcher runs.
+2. **The ten minutes.** In the shortcut's launch options (Properties, Launch Options), and nothing else:
+
+   ```
+   EMUSEN_PRESENT_TRACE=$HOME/emusen-trace-device.csv EMUSEN_PRESENT_TRACE_SECONDS=630 %command%
+   ```
+
+   Then one session, no restart, no other game: an NTSC PlayStation game with its Internal resolution at 2× (the case
+   that froze on 2026-10-15, Diamond lent the device), the CRT filter at Balanced, played or left in its attract mode
+   for **ten minutes** from its first picture. Watch for: the picture stopping while the sound goes on (the deadlock's
+   symptom, §18.1), and any stutter or tearing that `EMUSEN_DEVICE_PICTURE=0` does not show. Quit from the menu, so the
+   trace is written (it is also written by itself 630 s after the first frame).
+3. **What proves the absence of the deadlock**, read afterwards in Desktop Mode or over ssh:
+   - **The log.** In the log folder (the LogDirectory setting; `~/.config/EmuSen/Logs` when it is unset), the day's
+     file must hold **no** line with `[picture]`:
+
+     ```
+     grep '\[picture\]' <log folder>/emusen_$(date +%Y%m%d).log
+     ```
+
+     Every way off the device path writes one: a refusal at start (`WARN [picture] The picture is read back: ...` or
+     `No Vulkan device: ...`), a failure while drawing (`The picture is read back from now on: ...`), and the watchdog
+     of §18.3, which is the deadlock's own signature: `WARN [picture] The picture is read back from now on: nothing was
+     shown for 1 s while 30 or more frames were offered`. A lend refused writes `No device is lent to the core: ...`.
+     With no such line, every picture of the run went through the device path.
+   - **The trace.** Each picture the window drew is a line of the trace; this counts the new ones a second and finds
+     the longest wait between two:
+
+     ```
+     python3 - $HOME/emusen-trace-device.csv <<'X'
+     import sys, collections
+     f = open(sys.argv[1]); freq = int(f.readline().split()[2])
+     t = [int(l.split(",")[1]) for l in f if l.startswith("D,") and l.split(",")[3] == "1"]
+     per = collections.Counter((x - t[0]) // freq for x in t); last = max(per)
+     print(len(t), "new pictures over", last + 1, "s; fewest in a second", min(per[k] for k in range(1, last)),
+           "; longest wait", round(max(b - a for a, b in zip(t, t[1:])) * 1000 / freq), "ms")
+     X
+     ```
+
+     **Passes**: some 36,000 new pictures over at least 600 s, never fewer than 59 in a second, no wait longer than
+     100 ms. The deadlock shows as one wait as long as the rest of the run.
+4. **The readback, for the built-ins where the device path is off** (§19), the same day: launch options
+   `EMUSEN_DEVICE_PICTURE=0 EMUSEN_PRESENT_TRACE=$HOME/emusen-trace-readback.csv EMUSEN_PRESENT_TRACE_SECONDS=200 %command%`,
+   an NTSC SNES game, the CRT at Performance for a minute, Balanced for a minute, Accurate for a minute (changed in the
+   Shaders window while it plays). The log holds no `[picture]` line here either (nothing tries the device), and the
+   script above, given that file, should show at least 59 a second in each minute but the seconds of the changes. A
+   tier that shows fewer, where the device path showed 60 at it, is a tier the readback cannot hold on the handheld:
+   report it before Skia's last path is relied on there.
+5. **Report**: the three numbers of each run, any `[picture]` line in full, the charger or battery, and what was seen.
+   Do not change a setting to work around a failure.
+
+## 19. The built-in filters read back where the device path is off (2026-10-17)
+
+### 19.1 The handheld's default, read from the code
+
+The device path is already on by default on the handheld: `GameFrameControl.DevicePictureAllowed` is
+`EMUSEN_DEVICE_PICTURE != "0"` since 46fe60c6 (§18.6); `DevicePictureEnvironment.Prepare`, the first call in
+Mistress's and the shell's `Main`, sets `keep_native_window_glx_drawable=true` in the native environment unless the
+player has, and the publish's `launcher.sh` exports the same. Nothing in Mistress turns the path off by machine,
+compositor or Mesa version. So no change was needed for a build to take the device path by default there, and
+`EMUSEN_DEVICE_PICTURE=0` stays the off switch. What is owed is the run under Game Mode itself, §18.9.
+
+What a handheld lacked was a path for the built-ins should the device path be refused or given up there: until now
+they fell back to Skia's SkSL (`FilterChain`), the path §21 removes.
+
+### 19.2 What was built
+
+**A built-in read back.** Where the device path is not in use (refused at start, given up by the watchdog,
+`EMUSEN_DEVICE_PICTURE=0`, a headless window), a built-in filter or simple effect is drawn by the same chain the device
+path runs: rendered for the destination rectangle in the display's pixels, read back, and drawn by Skia into that
+rectangle, as a RetroArch preset already was (§9.1 of `EmuSen_Serenity.md`). The plain picture stays Skia's
+`DrawImage`. A filter that places a crop itself is given it as a value; any other is drawn under the clip of §2.10
+there, as before. The chain is given the frame's rows repeated where the filter is not `RowsOnce`, and the NES's raw
+frame, as the device path gives them (`SlangRunner.Draw` takes both now).
+
+**One chain for both paths.** `GameFrameControl.BuiltInFor` keeps one runner for the built-in in force, keyed on the
+filter, its console, its **structural** values and the multiple its frame is brought back from (`EmuSen_CRT.md` §16).
+Its preset is written on the build's own thread (a `SlangRunner` made with a writer), so neither the UI thread nor the
+render thread writes a file. Every other value reaches the chain at each draw (`GiveValues`), so a slider moved no
+longer writes a new preset and builds a new chain: before, the preset was written from all the player's values, so
+each step of a non-structural slider on the device path built the chain again and reset its history and feedback.
+A newly chosen filter's chain is built while the one before it goes on drawing, and before the first the plain picture
+is drawn in the filter's shape, as §3.10 of `EmuSen_Serenity.md` had it for Skia's chain. A runner that cannot be
+built (no Vulkan device) says why once (`The built-in filter is not drawn: ...`); for this step only, Skia's chain then
+draws the filter, and the comparison tests ask for Skia's chain explicitly (`SkiaFilters`). §21 removes both.
+
+**A uniform found wherever it stands.** `BuiltInPreset` lifted a pass's `uniform` lines only when each was alone on its
+line; it now finds a declaration anywhere on one. The built-ins' text is unchanged by it to the token (their
+declarations are one to a line); test filters with two to a line no longer fail to compile on the chain.
+
+### 19.3 What it costs
+
+Measured 2026-10-17 on the RX 6800 with the bench of §8.1 of `EmuSen_Serenity.md` (an SNES picture of 256 × 224 under
+the CRT at each tier, CRT (Lottes) and the Game Boy LCD; 60 frames of warm-up and 300 paced at 60 Hz; three rounds,
+the order rotated; the median of each run's median; `results-base.txt` and `results-part1.txt` under
+`~/.cache/emusen/probe/shader-consolidate/`). Milliseconds a frame:
+
+| Picture | Window | Skia's chain: render thread, GL GPU | Read back: render thread | Read back: GPU passes, readback, GL |
+|---|---|---|---|---|
+| CRT, Performance | 1280 × 800 | 0.11, 0.42 | **0.99** | 0.45, 0.12, 0.15 |
+| CRT, Performance | 1920 × 1080 | 0.13, 0.52 | **1.34** | 0.55, 0.21, 0.25 |
+| CRT, Balanced | 1280 × 800 | 0.19, 0.63 | **1.29** | 0.62, 0.11, 0.15 |
+| CRT, Balanced | 1920 × 1080 | 0.21, 0.78 | **1.62** | 0.83, 0.21, 0.25 |
+| CRT, Accurate | 1280 × 800 | 0.31, 1.51 | **2.24** | 1.54, 0.12, 0.15 |
+| CRT, Accurate | 1920 × 1080 | 0.24, 1.75 | **2.64** | 1.80, 0.21, 0.25 |
+| CRT (Lottes) | 1280 × 800 | 0.12, 0.50 | 1.09 | |
+| CRT (Lottes) | 1920 × 1080 | 0.09, 0.76 | 1.44 | |
+| Game Boy LCD | 1280 × 800 | 0.12, 0.07 | 0.58 | |
+| The plain picture | 1280 × 800, 1920 × 1080 | 0.07, 0.08 | 0.08, 0.07 (Skia's, unchanged) | |
+
+**What it says.** The render thread now waits for the chain: its time is the passes' GPU time, the readback's copy
+and a few tenths of recording, where Skia's chain recorded and left the GPU work to Avalonia's flush. On this card
+that is 1 to 2.6 ms of a 16.7 ms frame at every tier and size, so **the readback holds the frame rate here** with
+more than 13 ms to spare. The passes cost the same on either path (they are the same chain); what the readback adds
+to the device path is the copy back (0.12 and 0.21 ms of GPU) and Skia's upload and draw (0.15 and 0.25). The pictures
+hashed by the bench were the same in every round. **Not measured: the handheld**, where the tiers themselves have never
+been measured (`EmuSen_CRT.md` §12.7); §18.9 step 4 is that measurement.
+
+### 19.4 The built-ins' pictures, recorded before anything changed
+
+Before this step's code, every variant of every built-in was drawn by the chain from the translation of 5f2a006c and
+hashed: the CRT at each of its 90 combinations of console (NES, SNES, Genesis, N64, PlayStation), standard, tier and
+signal; the NES's 18 from a `nes.ppu` raw picture; three N64 frames brought back from twice the console's lines;
+CRT (Lottes) on two frames; the six LCDs; the three simple effects at both samplings. 125 variants, each four frames
+of a moving pattern rendered once each, the last picture's SHA-256 kept (`BuiltInGoldenTests`,
+`BuiltInGoldens.txt`, recorded with `EMUSEN_RECORD_GOLDENS=1` on the RX 6800 under RADV, Mesa 26.2.4). The 125 are
+distinct, and the same in two further processes. This step leaves all 125 as they were; §20 and §21 are held to them.
+
+### 19.5 Tests
+
+Run 2026-10-17, in one run, 440 of 440: WiseMan's Serenity namespace and the Mistress and Hotaru cases that host the
+frame control (screen filter settings, the Shaders window, the Sega CD's screen, the game's standard, the hand-off,
+the crop), the slider case of the Shaders window once it waited for its chain. One case that failed before this step now passes:
+`Under_the_crt_filter_a_frame_at_any_internal_resolution_is_drawn_as_the_console_s_own(quality: 1, lines: 240)`
+failed at 5f2a006c on Skia's chain (5,593 values differing by up to 3, from the reducing pass on GL) and passes on the
+chain read back. Changed, each for a reason of the chain's own:
+
+- the DMG's shades and the GBC's red were read from one frame shown once; on the chain the earlier frames start black
+  (§3.5), so the frame is now shown as many times as the filter looks back;
+- `A_filter_keeps_the_frames_it_looks_back_at` read Skia's history count, which the chain does not have (its history
+  is §7.4's, held by the chain's own tests), and is retired;
+- `A_filter_that_needs_a_device_is_drawn_plain_in_software_unless_asked_otherwise` held that the CRT is drawn plain on
+  a canvas with no GPU; read back, it is drawn on any canvas, and the case is retired;
+- the slider case of the Shaders window and the Simple CRT repeat case wait for the chain's build before their first
+  frame, as `ShaderBench.Picture` always did for Skia's.
+
+## 20. Step (b), second stage: the built-ins' text in Vulkan GLSL (2026-10-17)
+
+### 20.1 What was done
+
+**The text converted.** The SkSL in `CrtFilter.cs`, `CrtFilters.cs`, `HandheldFilters.cs` and `BuiltInShaders.cs` is
+Vulkan GLSL now. It was converted once, by a tool that rewrote only the C# files' string literals, the holes of an
+interpolated string left alone (`~/.cache/emusen/probe/shader-consolidate/tools/sksl2glsl.py`): `half4 main(` became
+`vec4 filter_main(`, `uniform shader x;` became `uniform sampler2D x;`, `x.eval(` became `x_eval(`, and SkSL's type
+names became GLSL's (`float2` `vec2`, `half` `float`, `float3x3` `mat3`, and the rest), which are the translation's
+own rewrites done once to the source instead of at every build. The reducing pass of `EmuSen_CRT.md` §16 moved from
+Skia's chain into `BuiltInPreset` as `ReduceGlsl`. `FilterPass.Sksl` is `FilterPass.Glsl`, and the members named for
+SkSL are named for GLSL.
+
+**What a pass's text is.** Fragment code in Vulkan GLSL 4.50, with no block, binding or stage of its own: its inputs
+are its `uniform` declarations, a `sampler2D` for each child, read with `name_eval(p)` at a pixel coordinate, and a
+`float`, `vec2` or `vec4` for each value; its entry is `vec4 filter_main(vec2 coord)`, called with the pass's pixel
+centre. `BuiltInPreset` still writes what makes it a slang pass, because that is the chain's interface and not a
+translation: each value as a member of the pass's block under the semantic §3.2 names, each child as a sampler with
+its `_eval` reading it by fetch or linearly, the vertex stage, and the `main` that writes the colour. The preamble of
+type names, the rewrite of `.eval` and the renaming of `main` are gone.
+
+**For this step only**, Skia's chain reads the GLSL back in SkSL's words (`FilterChain.Sksl`, the same rewrites the
+other way), so that the comparison tests still ran against the converted text; §21 removes it with the chain.
+
+**One refusal kept.** Skia's chain refused a pass that reads `feedback` without being a feedback pass; the
+translation bound it to the pass's own last output instead, silently. It is refused by name now, as before.
+
+### 20.2 Proven by tokens, and by SPIR-V
+
+Every pass of every variant was written from the old text through the translation (at 5f2a006c, before §19, kept on
+disk) and from the new text without it, and the two compared: the 2,316 variants of `ShaderNamesTests`' enumeration,
+widened (each console a filter suits and none; the defaults; each structural parameter at each of its values; each of
+those at each pair of tier and signal; the CRT brought back by 2, 3, 4 and 8 at each tier; the simple effects at both
+samplings), 15,142 passes and 406 distinct pairs of texts. For each pair, each stage as the chain reads it (split by
+`SlangSource`) was preprocessed by glslang, through the Shaderc the chain compiles with, and its output split into
+tokens; and each stage was compiled to SPIR-V by the chain's compiler with the chain's options.
+
+| Check | Result |
+|---|---|
+| Tokens after glslang's preprocessor | 450,163 compared; every stage's sequence the same, with one name changed throughout: the entry, `sksl_main` before and `filter_main` now (no other text held the new name) |
+| SPIR-V | 812 of 812 stages byte for byte the same |
+| A positive control: Scanlines' 0.78 written 0.79 | 4 failures: both samplings' fragment stage, by its tokens and by its SPIR-V |
+
+### 20.3 The pictures
+
+`BuiltInGoldenTests`' 125 hashes, recorded before §19 (§19.4), are the same after the conversion, and the bench's
+pictures (the CRT at each tier at 1080p, read back and as a preset) are the same in the build before §19, after it and
+after this step. The SPIR-V being the same, nothing else was expected.
+
+### 20.4 What a tier costs on the device path
+
+The passes are the device path's GPU work and the same programs before and after. Measured 2026-10-17 at 1920 × 1080
+(the bench of §19.3, three rounds of 300 frames), GPU milliseconds of the passes a frame: Performance 0.53 at
+5f2a006c, 0.55 after §19, 0.53 after this step; Balanced 0.77, 0.83, 0.76; Accurate 1.76, 1.80, 1.75. **Unchanged**,
+the differences inside the rounds' own spread and of no consistent sign.
+
+## 21. Skia's filter path removed (2026-10-17)
+
+### 21.1 What went
+
+`FilterChain` (Skia's chain of SkSL runtime effects, its warming, its software path and the GLSL-back-to-SkSL reading
+of §20), `GameFrameControl`'s runtime effects for the simple effects (`GetEffect`, `GetBuilder` and the shader drawn
+through a local matrix), `GameFrameControl.DrawDeviceFiltersInSoftware`, the comparison switch `SkiaFilters`, and
+`ScreenFilter.RequiresDevice`, which had marked a filter too slow for Skia's software path.
+
+### 21.2 What draws a picture now
+
+| Picture | Device path in use | Device path off, refused or given up |
+|---|---|---|
+| The plain picture | the chain, a one-pass built-in (§4.5) | Skia's `DrawImage`, unchanged |
+| A built-in filter or simple effect | the chain, presented (§13) | the chain, read back and drawn by Skia (§19) |
+| A RetroArch preset | the chain, presented | the chain, read back (`EmuSen_Serenity.md` §9.1) |
+| No Vulkan device at all | — | the plain picture, the filter's failure said once in the log (`The built-in filter is not drawn: ...`) |
+
+While a filter's chain is being built, the plain picture is drawn in the filter's shape, as before. Where no Vulkan
+device exists the built-ins are drawn plain; §10's revision of Q2 is why that leaves no shipped build without its
+filters, and the Mac port ships a Vulkan driver before release. A headless window draws the built-ins too now, by
+the readback onto its raster canvas, where it had drawn the CRT plain (§3.10 of `EmuSen_Serenity.md`).
+
+### 21.3 The tests
+
+- **Retired, having compared Skia with the chain**: `DeviceFilterMatchTests` (each family against Skia's picture on
+  real frames, §12) and `ScreenFilterDeviceTests` (Skia's float surfaces, feedback and warming on a GL context). Their
+  hashes were recorded before any of this work, as `BuiltInGoldenTests` (§19.4), which holds every variant of every
+  built-in to them; it passes after the removal, so nothing any of these drew has changed.
+- **Retired with the code they guarded**: three of `GameFrameControlRenderTests`' four cases of the runtime effects
+  (byte-identical repeated output, a picture changed by the effect, 120 frames without throwing), which were the
+  regression guard for `SKRuntimeShaderBuilder`'s disposal crash (`EmuSen_Project_Overview_v2.md` §2a). The fourth,
+  Scanlines' exact factor of 0.78 on odd rows at the window's pixels, holds the effect's documented arithmetic and not
+  Skia's, so it stays, drawn by the chain.
+- **Kept, now through the chain**: every case of `ScreenFilterRenderTests` (the LCDs, Lottes, the CRT's physics),
+  `ScreenFilterChainTests` (float targets, sizes, feedback, names, variants, a stated shape, rows once, the filter
+  before a new one drawn while it builds), and the crop and shape cases that draw a filter. "Every built-in compiles"
+  and "every variant of the CRT compiles" compile each pass of each preset with the chain's compiler and no device;
+  "a child or a uniform no pass provides is refused by name" asks `BuiltInPreset`. Two CRT cases that drew through
+  Skia's software path draw through the readback onto a raster canvas, and the second now compares that with the GL
+  canvas's picture of the same chain. A case that draws a filter passes by where the process has no Vulkan device
+  (`ChainDevice.Missing`), as the slang cases already did.
+- **`ShaderNamesTests`** guarded against Metal's words because Skia wrote a pass's names into the Metal Shading
+  Language unchanged. A pass reaches every driver as SPIR-V now, whose names are only debug names; a port that turns
+  SPIR-V into Metal's language through SPIRV-Cross renames that language's words itself. What can still go wrong
+  silently is a pass naming something by a name the preset writes into every pass (`OutputSize`, `FragColor`, `MVP`,
+  `Source`, the `emusen_` values, a history or feedback sampler's name), which would shadow or collide with it, and a
+  word GLSL keeps (`sample`, `filter`, `input`, `common` and the rest of its reserved words), which glslang refuses.
+  The case now reads every pass text of every variant for those, and for the `gl_` prefix and a double underscore.
+  None is used. The second case holds the reading: such a name found, the same word in a comment or inside a longer
+  name not.
+
+Run 2026-10-17 on the RX 6800, after the removal: WiseMan's Serenity namespace, the Mistress and Hotaru cases that host
+the frame control, and the leaf-assembly case, 407 of 407; `BuiltInGoldenTests` among them, its 125 pictures as
+recorded before §19.
+
+## 22. Feedback advanced once a game frame, in both chains (2026-10-17)
+
+### 22.1 The defect
+
+Found as a candidate while CRT round 3 was read (`EmuSen_CRT.md` §26 to §28) and proven here. The chain gave each
+pass that is read as feedback two images and turned them round **after every render**, in both implementations
+(`SlangChain.Managed.RenderInto`, and `render_into` and `present` in `Platform/serenity/src/chain.rs`). A frame is
+rendered again without a new game frame whenever the runner is asked to (`SlangRunner`: a new size, a value changed,
+the readback's first draw after the device path), and each such render read the render before it as "the last frame"
+and so moved feedback on: the CRT's phosphor tails decayed by a field more, and any RetroArch preset with feedback
+did the same. Skia's chain had turned them once a game frame (`EmuSen_Serenity.md` §3.9's rule: state follows the
+game's frames, not the screen's); with Skia's chain gone, the chain's behaviour was the only one.
+
+**The failing case first.** `SerenityChainParityTests.Feedback_advances_once_a_game_frame_however_often_the_frame_is_rendered_on_both`:
+a one-pass preset that adds a tenth of white to its own last output, read through feedback by its alias; one frame
+rendered twice must give the same picture twice, a value changed and rendered again the same, the next frame 25 or so
+levels more; and on the library's chain a present of the frame followed by a readback must read what a readback alone
+reads. Before the fix it failed on the C# chain, "a second render of one frame moved its feedback from 25 to 50"; with
+the C# chain fixed and the library's not, on the library's, with the same words and numbers.
+
+### 22.2 The fix
+
+Both chains note a frame advanced (`Advance`, and the library's `advance_lent` when it takes a picture) and turn each
+feedback pass's two images round at the first render or present after it, before anything is recorded, and at no
+other render. The images change places in the host's bookkeeping only; what the device reads is still ordered by the
+wait for the last submission that every render and present already makes first. For one render a frame, which is what
+the goldens and every bench run make, the pictures are the same as before: the first render after a frame writes into
+the other image, which is as blank as the one it wrote into before.
+
+### 22.3 Proven
+
+Run 2026-10-17 on the RX 6800: the case above on both chains; `SerenityChainParityTests` whole, the C# and the
+library's chains still giving the same pictures byte for byte, and the library's chain clean under the validation
+layer with synchronisation validation; `BuiltInGoldenTests`' 125 pictures unchanged; with the Serenity namespace, the
+frontends' frame-control cases and the leaf-assembly case, 408 of 408. The platform library's own tests,
+`cargo test -p emusen-serenity`, 31 of 31.
+
+**The tiers after §21 and this step**, at 1920 × 1080 by the bench of §19.3 (three rounds, load average about 3):
+the passes' GPU time a frame Performance 0.48, Balanced 0.82, Accurate 1.77 ms, against 0.53, 0.77 and 1.76 at
+5f2a006c, inside the rounds' spread; the bench's hashed pictures the same as at 5f2a006c in every round. The render
+thread's time read back was 3 to 9% above §19.3's, in Skia's draw of the image and its flush and not in the chain's
+wait; nothing in those changed in §21 or here, the machine carried other work during the run, and the cause was not
+isolated. The device path does neither.

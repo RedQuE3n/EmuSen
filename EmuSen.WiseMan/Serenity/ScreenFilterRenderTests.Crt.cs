@@ -123,14 +123,12 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void Every_variant_of_the_crt_compiles_for_every_console()
         {
-            Type chainType = typeof(GameFrameControl).Assembly.GetType("EmuSen.Serenity.Shaders.FilterChain")!;
             foreach (string? console in new[] { "NES", "SNES", "Genesis", "N64", "PlayStation", null })
                 for (int quality = 0; quality < 3; quality++) for (int signal = 0; signal < 3; signal++) for (int mask = 0; mask < 5; mask++) for (int decoder = 0; decoder < 3; decoder++)
                     foreach (int screen in signal == 2 && mask == 0 ? Enumerable.Range(0, CrtFilter.Screens.Count) : new[] { CrtFilter.DefaultScreen })
                     {
-                        using var chain = (IDisposable)Activator.CreateInstance(chainType, CrtFilter.Filter, console)!;
-                        chainType.GetMethod("SetParameters")!.Invoke(chain, new object[] { new Dictionary<string, float> { ["quality"] = quality, ["signal"] = signal, ["mask"] = mask, ["decoder"] = decoder, ["screen"] = screen } });
-                        Assert.True((int)chainType.GetProperty("PassCount")!.GetValue(chain)! >= new[] { 2, 6, 8 }[quality]);
+                        var chosen = new Dictionary<string, float> { ["quality"] = quality, ["signal"] = signal, ["mask"] = mask, ["decoder"] = decoder, ["screen"] = screen };
+                        Assert.True(Compiles(CrtFilter.Filter, console, chosen) >= new[] { 2, 6, 8 }[quality]);
                     }
         }
 
@@ -141,7 +139,6 @@ namespace EmuSen.WiseMan.Serenity
             foreach (string console in CrtFilter.Filter.Consoles!) Assert.Contains(CrtFilter.Name, ScreenFilters.NamesFor(console));
             Assert.DoesNotContain(CrtFilter.Name, ScreenFilters.NamesFor("GB"));
             Assert.Equal(ScreenFilters.None, ScreenFilters.NamesFor("Genesis")[0]);
-            Assert.True(CrtFilter.Filter.RequiresDevice);
             Assert.Equal(4.0 / 3.0, CrtFilter.Filter.Aspect);
             Assert.True(CrtFilter.Filter.RowsOnce);
             foreach (string console in CrtFilter.Filter.Consoles!) Assert.True(CrtFilter.ConsoleTiming.ContainsKey(console), $"{console} has no timing");
@@ -159,11 +156,12 @@ namespace EmuSen.WiseMan.Serenity
             Assert.Equal(314 * 3405 / 12.0 % 1, pal.PhaseCrawl, 6);
         }
 
-        // Through the headless raster path, on a frame small enough for it: a white field's light is the tube's white over the display's peak, and neutral.
+        // Read back onto the headless raster canvas, on a small frame: a white field's light is the tube's white over the display's peak, and neutral.
         [Fact]
-        public Task Drawn_in_software_a_white_field_keeps_its_light_and_its_colour() => Session.Dispatch(() =>
+        public Task Read_back_onto_a_raster_canvas_a_white_field_keeps_its_light_and_its_colour() => Session.Dispatch(() =>
         {
-            var control = new GameFrameControl { FilterConsole = "SNES", ActiveFilter = CrtFilter.Filter, DrawDeviceFiltersInSoftware = true, Crop = PictureCrop.Enlarged(10) };
+            if (ChainDevice.Missing) return;
+            var control = new GameFrameControl { FilterConsole = "SNES", ActiveFilter = CrtFilter.Filter, Crop = PictureCrop.Enlarged(10) };
             control.ShaderParameters = Values(Reference.Concat(With(Plain, ("signal", 0f))));
             control.WaitForFilter();
             var window = new Avalonia.Controls.Window { Width = 240, Height = 180, Content = control };
@@ -180,7 +178,7 @@ namespace EmuSen.WiseMan.Serenity
 
                 // 224 rows over ten times the window's height: nine scanlines are 72.3 pixels. The rows are a real field's, since the spot's reach along a line is sized for one (§14.3).
                 double[] mean = picture.Mean(60, 54, 120, 72.3);
-                foreach (double channel in mean) Within(1.0 / 3.0, channel, 0.03, "a white field's light in software");
+                foreach (double channel in mean) Within(1.0 / 3.0, channel, 0.03, "a white field's light on a raster canvas");
                 Assert.True(mean.Max() - mean.Min() < 0.01, $"neutral: {string.Join(", ", mean)}");
             }
             finally
@@ -625,14 +623,15 @@ namespace EmuSen.WiseMan.Serenity
             Assert.True(once.Luminance(400, 300, 160, 120) > 0.02, "and it is a picture");
         }, default);
 
-        // The same picture through Skia's raster code and through the device: one shader, so one picture, to within a code value.
+        // The chain's picture read back draws the same on a GL canvas and on the headless raster one: one chain, so one picture, to within a code value.
         [Fact]
-        public Task The_device_and_the_software_path_draw_the_same_picture() => Session.Dispatch(() =>
+        public Task A_gl_canvas_and_a_raster_one_draw_the_chain_s_picture_the_same() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             byte[] frame = Paint(48, 16, (x, y) => (x / 47.0, y / 15.0, (x * 7 + y * 3) % 16 / 15.0));
             (string, float)[] set = { ("overscan", 300f) };
             if (Draw("Genesis", 48, 16, 240, 180, Twice(frame), set) is not { } device) return;
-            var control = new GameFrameControl { FilterConsole = "Genesis", ShaderParameters = Values(Reference.Concat(set)), ActiveFilter = CrtFilter.Filter, DrawDeviceFiltersInSoftware = true, Crop = Overscanned(set) };
+            var control = new GameFrameControl { FilterConsole = "Genesis", ShaderParameters = Values(Reference.Concat(set)), ActiveFilter = CrtFilter.Filter, Crop = Overscanned(set) };
             control.WaitForFilter();
             var window = new Avalonia.Controls.Window { Width = 240, Height = 180, Content = control };
             window.Show();

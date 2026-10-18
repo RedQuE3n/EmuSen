@@ -11,7 +11,7 @@ using EmuSen.Serenity.Slang;
 
 namespace EmuSen.Serenity.Shaders
 {
-    // A built-in filter written as a slang preset for the chain, its passes translated from their SkSL - see EmuSen_DevicePicture.md §3.
+    // A built-in filter written as a slang preset for the chain, each pass's Vulkan GLSL given its block, samplers and stages - see EmuSen_DevicePicture.md §3 and §20.
     public static class BuiltInPreset
     {
         // The parameters the runner sets at each draw, which no settings window lists - see EmuSen_DevicePicture.md §3.2.
@@ -26,28 +26,44 @@ namespace EmuSen.Serenity.Shaders
             [PixelScale] = 1, [OriginX] = 0, [OriginY] = 0, [CropLeft] = 0, [CropTop] = 0, [CropWidth] = 1, [CropHeight] = 1, [RawWidth] = 0, [RawHeight] = 0,
         };
 
+        // The most rows of a frame that one of the console's lines may take for the reducing pass to bring them back - see EmuSen_CRT.md §16.
+        public const int MostRowsToALine = 8;
+
+        // How many rows of a frame are one of the console's lines, for a filter that counts lines and keeps no history; one where the frame is not a whole multiple.
+        public static int ReduceBy(ScreenFilter filter, int width, int height, int lines) =>
+            filter.RowsOnce && filter.History == 0 && lines > 0 && height > lines && height % lines == 0 && height / lines <= MostRowsToALine && width % (height / lines) == 0 ? height / lines : 1;
+
+        // The chosen values a filter's passes are written from, its structural ones; every other value reaches the chain at each draw - see EmuSen_DevicePicture.md §19.
+        public static Dictionary<string, float>? StructuralOf(ScreenFilter filter, IReadOnlyDictionary<string, float>? chosen)
+        {
+            if (chosen is null || filter.Structural is not { } ids) return null;
+            var kept = new Dictionary<string, float>(StringComparer.Ordinal);
+            foreach (string id in ids) if (chosen.TryGetValue(id, out float value)) kept[id] = value;
+            return kept;
+        }
+
         // Where generated presets are kept, a folder per content; a test sets it before any is written.
         internal static string? RootOverride;
 
         public static string Root => RootOverride ?? Path.Combine(DataStore.Shaders, "builtin");
 
-        private static readonly (Regex Pattern, string Glsl)[] Types =
-        {
-            (new Regex(@"\bfloat2x2\b"), "mat2"), (new Regex(@"\bfloat3x3\b"), "mat3"), (new Regex(@"\bfloat4x4\b"), "mat4"),
-            (new Regex(@"\bhalf2x2\b"), "mat2"), (new Regex(@"\bhalf3x3\b"), "mat3"), (new Regex(@"\bhalf4x4\b"), "mat4"),
-            (new Regex(@"\bfloat([234])\b"), "vec$1"), (new Regex(@"\bhalf([234])\b"), "vec$1"), (new Regex(@"\bhalf\b"), "float"),
-            (new Regex(@"\bint([234])\b"), "ivec$1"), (new Regex(@"\bbool([234])\b"), "bvec$1"),
-        };
+        // A uniform a pass declares, wherever it stands; each is lifted into the pass's block, or bound as a child when it is a sampler2D.
+        private static readonly Regex Uniform = new(@"\buniform[ \t]+(\w+)[ \t]+(\w+)[ \t]*;");
 
-        private static readonly Regex UniformLine = new(@"^[ \t]*uniform[ \t]+(\w+)[ \t]+(\w+)[ \t]*;[ \t]*\r?$", RegexOptions.Multiline);
-        private static readonly Regex Main = new(@"\b(half4|float4)(\s+)main(\s*)\(");
-
-        // SkSL's names for its types as GLSL's; the one rewrite of text the translation makes besides a child's eval.
-        public static string GlslTypes(string sksl)
-        {
-            foreach (var (pattern, glsl) in Types) sksl = pattern.Replace(sksl, glsl);
-            return sksl;
+        // A frame drawn at a whole multiple of the console's picture, brought back to it: each pixel the mean of the square drawn for it - see EmuSen_CRT.md §16.
+        public const string ReduceGlsl = @"
+uniform sampler2D source;
+uniform float by;
+vec4 filter_main(vec2 coord) {
+    vec2 corner = floor(coord) * by;
+    vec4 sum = vec4(0.0);
+    for (int j = 0; j < 8; j++) {
+        for (int i = 0; i < 8; i++) {
+            if (float(i) < by && float(j) < by) sum += source_eval(corner + vec2(float(i) + 0.5, float(j) + 0.5));
         }
+    }
+    return vec4(sum / (by * by));
+}";
 
         // How a pass reads one child: by fetch at its texel, or linearly through the bound sampler.
         private readonly record struct Child(string Name, string Sampler, bool Linear, bool Stretched = false);
@@ -62,7 +78,7 @@ namespace EmuSen.Serenity.Shaders
             var all = new List<FilterPass>();
             bool reduced = reduceBy > 1;
             if (reduced)
-                all.Add(new FilterPass(FilterChain.ReduceSksl.Replace("uniform float by;", "const float by = " + reduceBy.ToString(CultureInfo.InvariantCulture) + ".0;"), PassScale.Source)
+                all.Add(new FilterPass(ReduceGlsl.Replace("uniform float by;", "const float by = " + reduceBy.ToString(CultureInfo.InvariantCulture) + ".0;"), PassScale.Source)
                 { Name = "reduced", Width = new PassSize(PassAxis.Source, 1f / reduceBy), Height = new PassSize(PassAxis.Source, 1f / reduceBy) });
             all.AddRange(passes);
 
@@ -71,7 +87,7 @@ namespace EmuSen.Serenity.Shaders
             bool linearOriginal = false;
             for (int j = 0; j < all.Count; j++)
             {
-                foreach (string child in ChildrenOf(all[j].Sksl))
+                foreach (string child in ChildrenOf(all[j].Glsl))
                 {
                     if (!ReadsLinearly(all[j], child)) continue;
                     if (child == "source") { if (j == 0) linearOriginal = true; else linearOutputs.Add(j - 1); }
@@ -102,8 +118,8 @@ namespace EmuSen.Serenity.Shaders
             return null;
         }
 
-        private static IEnumerable<string> ChildrenOf(string sksl) =>
-            UniformLine.Matches(sksl).Where(m => m.Groups[1].Value == "shader").Select(m => m.Groups[2].Value);
+        private static IEnumerable<string> ChildrenOf(string glsl) =>
+            Uniform.Matches(glsl).Where(m => m.Groups[1].Value == "sampler2D").Select(m => m.Groups[2].Value);
 
         private static bool ReadsLinearly(FilterPass pass, string child) =>
             child is "source" or "image" ? pass.LinearSource : pass.Linear is { } names && names.Contains(child);
@@ -113,7 +129,7 @@ namespace EmuSen.Serenity.Shaders
         private static string PassText(ScreenFilter filter, IReadOnlyList<FilterPass> passes, int index, IReadOnlyDictionary<string, float> values, bool reduced, bool originalIsReduced, (float X, float Y) nudge)
         {
             FilterPass pass = passes[index];
-            string body = pass.Sksl;
+            string body = pass.Glsl;
             var children = new List<Child>();
             var globals = new StringBuilder();
             var assignments = new StringBuilder();
@@ -136,10 +152,10 @@ namespace EmuSen.Serenity.Shaders
                 foreach (string need in needs) vectors.Add(need);
             }
 
-            foreach (Match m in UniformLine.Matches(body))
+            foreach (Match m in Uniform.Matches(body))
             {
                 string type = m.Groups[1].Value, name = m.Groups[2].Value;
-                if (type == "shader")
+                if (type == "sampler2D")
                 {
                     string sampler = name switch
                     {
@@ -147,7 +163,7 @@ namespace EmuSen.Serenity.Shaders
                         "original" => originalIsReduced ? Alias("reduced") : "Original",
                         "raw" => "raw",
                         "image" => "Original",
-                        "feedback" => pass.Name is { } own ? Alias(own) + "Feedback" : $"PassFeedback{index}",
+                        "feedback" when pass.Feedback => pass.Name is { } own ? Alias(own) + "Feedback" : $"PassFeedback{index}",
                         _ when name.StartsWith("history", StringComparison.Ordinal) && int.TryParse(name["history".Length..], out int back) && back >= 1 => $"OriginalHistory{back}",
                         _ when IndexOfName(passes, name, index) is not null => Alias(name),
                         _ => throw new InvalidOperationException($"The '{filter.Name}' filter asks for a child called '{name}', which no pass provides."),
@@ -180,10 +196,7 @@ namespace EmuSen.Serenity.Shaders
                 }
             }
 
-            body = UniformLine.Replace(body, "");
-            foreach (Child child in children) body = Regex.Replace(body, $@"\b{child.Name}\.eval\(", child.Name + "_eval(");
-            body = Main.Replace(body, "$1$2sksl_main$3(", 1);
-            body = GlslTypes(body);
+            body = Uniform.Replace(body, "");
 
             var block = new StringBuilder();
             block.Append("layout(std140, set = 0, binding = 0) uniform UBO\n{\n    mat4 MVP;\n");
@@ -228,7 +241,7 @@ layout(location = 0) out vec4 FragColor;
 " + samplers + globals + body + @"
 void main()
 {
-" + assignments + "    vec4 c = sksl_main(gl_FragCoord.xy" + (nudge == default ? "" : $" + vec2({F(nudge.X)}, {F(nudge.Y)})") + ");\n    " + write + "\n}\n";
+" + assignments + "    vec4 c = filter_main(gl_FragCoord.xy" + (nudge == default ? "" : $" + vec2({F(nudge.X)}, {F(nudge.Y)})") + ");\n    " + write + "\n}\n";
         }
 
         // The preset's text over its passes, and the values its parameters start at.

@@ -8796,9 +8796,19 @@ picture is then shown the frame it is drawn rather than a frame later (`EmuSen_D
 pictures and screenshots still read it back when they are taken. **`EMUSEN_DEVICE_LEND=0`** lends nothing, the
 picture then read back as before.
 
-**Tests.** `DevicePresenterTests` (each refusal alone, the device's identity, the shown image); `DeviceFilterMatchTests`
-(each built-in family against its Skia picture on real frames, with `EMUSEN_GPU_FRAMES`); the real-window proof of
-§13.3 there.
+**Skia's filters gone (2026-10-17)** (`EmuSen_DevicePicture.md` §19 to §22). Where the device path is off, refused or
+given up, a built-in filter is drawn by the same Vulkan chain and read back, as a RetroArch preset already was; Skia
+draws the plain picture and the interface only. With no Vulkan device at all a built-in is drawn plain, and the log
+says so once (`picture: The built-in filter is not drawn: ...`). So `EMUSEN_DEVICE_PICTURE=0` now gives the readback
+for every filter, not Skia's own filters. A slider moved no longer rebuilds a built-in's chain, and a filter's
+phosphor tails and any other feedback advance once a game frame, whatever redraws the picture (§22 there). The
+handheld's ten-minute
+run under Game Mode, with the readback's, is the tester's procedure in §18.9 there.
+
+**Tests.** `DevicePresenterTests` (each refusal alone, the device's identity, the shown image); `BuiltInGoldenTests`
+(every variant of every built-in drawn by the chain, held to hashes recorded before Skia's path was removed;
+`DeviceFilterMatchTests`, which compared each family with its Skia picture, retired with Skia's path); the
+real-window proof of §13.3 there.
 
 ### 4.117 DianaSh's shell on the platform library: `EMUSEN_DIANASH_NATIVE` (2026-10-16)
 

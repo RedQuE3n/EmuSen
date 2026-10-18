@@ -23,8 +23,8 @@ namespace EmuSen.Serenity.Shaders
         }));
     }
 
-    // One SkSL pass; History is how many earlier frames it reads, as history1 to historyN - see EmuSen_Serenity.md §3.2 and §3.9.
-    public sealed record FilterPass(string Sksl, PassScale Scale, bool LinearSource = false, int History = 0)
+    // One pass in Vulkan GLSL; History is how many earlier frames it reads, as history1 to historyN - see EmuSen_DevicePicture.md §20.
+    public sealed record FilterPass(string Glsl, PassScale Scale, bool LinearSource = false, int History = 0)
     {
         // Either axis sized apart from Scale; null keeps Scale's.
         public PassSize? Width { get; init; }
@@ -64,9 +64,6 @@ namespace EmuSen.Serenity.Shaders
         // Places the part of the picture kept itself, from the uniform "crop" (left, top, width and height as shares of the frame) - see EmuSen_Serenity.md §2.10.
         public bool CropsItself { get; init; }
 
-        // Drawn plain where there is no GPU, whose software path would take seconds a frame - see EmuSen_Serenity.md §3.10.
-        public bool RequiresDevice { get; init; }
-
         // The frame's rows drawn once each, where a core hands them over to be repeated; a filter that models the screen counts scanlines - see EmuSen_Serenity.md §3.9.
         public bool RowsOnce { get; init; }
 
@@ -104,7 +101,7 @@ namespace EmuSen.Serenity.Shaders
 
         // Whether a pass made for this console and these values reads RawEncoding, so a frontend asks its core for that encoding.
         public bool ReadsRaw(string? console, IReadOnlyDictionary<string, float>? given) =>
-            RawEncoding is not null && (Build?.Invoke(ValuesFor(console, given)) ?? Passes).Any(pass => pass.Sksl.Contains("uniform shader raw;", StringComparison.Ordinal));
+            RawEncoding is not null && (Build?.Invoke(ValuesFor(console, given)) ?? Passes).Any(pass => pass.Glsl.Contains("uniform sampler2D raw;", StringComparison.Ordinal));
 
         // What a parameter starts at on a console: the console's value where it has one, the parameter's own otherwise.
         public float DefaultFor(SlangParameter parameter, string? console) =>

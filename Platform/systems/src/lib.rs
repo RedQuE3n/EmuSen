@@ -362,7 +362,8 @@ mod tests {
     fn a_byte_order_is_big_little_or_unstated() {
         let table = build(&DATA).unwrap();
         let order = |id: &str| table.iter().find(|s| s.id == id).unwrap().byte_order.clone();
-        assert_eq!((order("n64").as_deref(), order("nes").as_deref(), order("md")), (Some("big"), Some("little"), None));
+        assert_eq!((order("n64").as_deref(), order("nes").as_deref(), order("md").as_deref()), (Some("big"), Some("little"), Some("big")));
+        assert_eq!(parse("nes", &nes().replace("\"byte_order\": \"little\"", "\"byte_order\": null")).unwrap().byte_order, None);
         assert_eq!(refused("nes", &nes().replace("\"byte_order\": \"little\"", "\"byte_order\": \"middle\"")), "byte_order middle is neither big nor little");
     }
 

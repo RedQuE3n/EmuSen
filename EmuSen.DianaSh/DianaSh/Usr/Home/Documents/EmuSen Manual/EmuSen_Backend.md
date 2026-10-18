@@ -3701,7 +3701,11 @@ a reader takes as little-endian, as today (a question below). `SystemPack.ByteOr
 reads the table's under the switch, and `CoreEngine` keeps the answer per machine and reads a frame log's value in that
 order. No core's output changes today: MarsRT's shim reads its own, and every other system's order is the one the
 adapter already read. `MarsRtCoreAbiTests.The_v1_adapter_logs_an_n64_value_big_end_first` failed first, the adapter
-logging `0x3412` for the bytes `12 34`, and passes with the change.
+logging `0x3412` for the bytes `12 34`, and passes with the change. *The Genesis family was set `big`, measured on
+2026-10-18 (`Nephrite_Native.md` §66): every space on the 68000's side, the Sega CD's and the 32X's holds a word big-end
+first; the Z80's RAM and bus hold the Z80's words little-end first and now read swapped, a per-space byte order in
+machine info proposed for them; `NephriteTests.The_frame_log_reads_a_genesis_value_big_end_first` failed first and
+passes with the change.*
 
 **The gates, after:**
 
@@ -3728,6 +3732,7 @@ logging `0x3412` for the bytes `12 34`, and passes with the change.
 big-endian, and if Nephrite's spaces hold memory in the processors' own byte order, as MarsRT's do, the frame log reads
 a Genesis value with its bytes swapped today. Recommended: Nephrite's owner states it after reading how its spaces lay
 out a word, with a test like MarsRT's; it is left null here because setting it changes that core's output.
+*Answered 2026-10-18: `big` for all three, the byte-order paragraph above and `Nephrite_Native.md` §66.*
 
 ---
 

@@ -93,7 +93,7 @@ namespace EmuSen.WiseMan.DianaSh
         {
             var registry = new CheatRegistry();
             registry.AddCheat(CheatKind.RomPatch, Patch.DecodeWrites("SCRA-BJX0")!, null, "rings");
-            Assert.Equal(new uint[] { 0x9C76, 0x54, uint.MaxValue, 0x9C77, 0x78, uint.MaxValue }, NativeRtCore<NativeMachine>.RomPatchTriples(registry, 0, 0x3F_FFFF));
+            Assert.Equal(new uint[] { 0x9C76, 0x54, uint.MaxValue, 0x9C77, 0x78, uint.MaxValue }, CoreEngine.RomPatchTriples(registry, 0, 0x3F_FFFF));
         }
 
         [Fact]

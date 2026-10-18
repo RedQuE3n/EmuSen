@@ -12,6 +12,7 @@ namespace EmuSen.Cores.Native
         public const uint FlagCalls = 1, FlagWrites = 2, FlagInterrupts = 4, FlagEach = 8, FlagProfiling = 16, FlagCoverage = 8, FlagReads = 32;
         public const uint RangeWatch = 0, RangeBreak = 1, RangeReadWatch = 2, RangeReadBreak = 3;
         public const uint RunUnchecked = 1, RunContinue = 2;
+        public const int StopInterrupt = 16;
 
         private readonly CoreEngine _engine;
         private uint[] _events = new uint[4 * 1024];
@@ -25,6 +26,11 @@ namespace EmuSen.Cores.Native
         public IReadOnlyList<CoverageRegistry> Coverage { get; private set; } = Array.Empty<CoverageRegistry>();
         public CallStackRegistry CallStack { get; } = new();
 
+        // Whether processor n takes breakpoints, asked once a machine with an empty table; a refusal means it cannot halt - see EmuSen_CoreAPI.md §6.14.
+        public IReadOnlyList<bool> Halting { get; private set; } = Array.Empty<bool>();
+
+        public bool CanHalt(int processor) => Supported && processor >= 0 && processor < Halting.Count && Halting[processor];
+
         // The frame the calls being drained were made in, which the registry stamps on each push.
         public long EventFrame { get; private set; }
 
@@ -35,7 +41,7 @@ namespace EmuSen.Cores.Native
         // Loads reach the read ranges only on a core that claims them; any other core is pushed none - see EmuSen_CoreAPI.md §6.14.
         public bool ReadsSupported => Supported && _engine.Library.Has(CoreInterface.CapDebugReads);
 
-        // A game loaded: one registry set a processor, the main one's breakpoints kept as the engine's.
+        // A game loaded: one registry set a processor, the main one's breakpoints kept as the engine's, the call stack the new machine's own.
         public void Attach(CoreMachine machine)
         {
             var processors = machine.Info.Processors;
@@ -43,8 +49,18 @@ namespace EmuSen.Cores.Native
             Breakpoints = Enumerable.Range(0, count).Select(n => n == 0 ? _engine.Breakpoints : (n < Breakpoints.Count ? Breakpoints[n] : new BreakpointRegistry())).ToArray();
             Coverage = Enumerable.Range(0, count).Select(n => n < Coverage.Count ? Coverage[n] : new CoverageRegistry()).ToArray();
             _coverageBits = Enumerable.Range(0, count).Select(n => new byte[(int)Math.Min(1L << 21, (1L << Math.Clamp(n < processors.Count ? processors[n].PcBits : 24, 1, 24)) / 8)]).ToArray();
+            CallStack.Reset();
             CallStack.FrameNumberProvider = () => EventFrame;
+            CallStack.EntryPointObserver = Coverage[0].RecordEntryPoint;
+            Halting = Enumerable.Range(0, count).Select(n => n == 0 || Probe(machine, (uint)n)).ToArray();
             if (Supported) _engine.Breakpoints.CallStack = CallStack;
+        }
+
+        // An empty table pushed to processor n: whether its breakpoints are taken.
+        private bool Probe(CoreMachine machine, uint processor)
+        {
+            if (!Supported) return false;
+            lock (machine.Gate) return machine.Library.Api.DebugSetBreakpoints(machine.Handle, processor, null, 0) >= 0;
         }
 
         // Anything that can halt, record or report takes the observed frame.
@@ -85,14 +101,17 @@ namespace EmuSen.Cores.Native
                 uint stopped;
                 ulong pc, detail;
                 int reasons;
+                bool noted;
                 lock (machine.Gate)
                 {
                     PushTables(machine);
                     reasons = api.DebugRunFrame(machine.Handle, flags, &stopped, &pc, &detail);
-                    Drain(machine);
+                    noted = Drain(machine);
                 }
                 flags = RunUnchecked | RunContinue;
                 if (reasons < 0) throw new CoreRefusedException(reasons, machine.Words(reasons));
+                // An interrupt stopped for with none in the call log, as a loop that dispatches interrupts outside it reports one - see EmuSen_CoreAPI.md §6.14.
+                if ((reasons & StopInterrupt) != 0 && !noted) _engine.Breakpoints.NoteInterrupt(CallFrameKind.Irq);
                 if (reasons == 0)
                 {
                     haltedAt = 0;
@@ -136,6 +155,7 @@ namespace EmuSen.Cores.Native
 
             for (int n = 0; n < Breakpoints.Count; n++)
             {
+                if (n > 0 && !CanHalt(n)) continue;
                 BreakpointRegistry registry = Breakpoints[n];
                 var list = new List<int>();
                 // A step on a processor other than the main one is a breakpoint over its whole space, which the registry then judges.
@@ -186,9 +206,10 @@ namespace EmuSen.Cores.Native
         private static uint? ReportedSpace(CoreMachine machine, string name, bool loads) =>
             machine.Info.Spaces.FirstOrDefault(s => (loads ? s.ReportsLoads : s.ReportsStores) && string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))?.Id;
 
-        // The logs into the registries in the C# observers' order: stores, loads, then calls and returns, then the counts.
-        public void Drain(CoreMachine machine)
+        // The logs into the registries in the C# observers' order: stores, loads, then calls and returns, then the counts; true when an interrupt was among the calls.
+        public bool Drain(CoreMachine machine)
         {
+            bool interrupted = false;
             CoreInterface api = machine.Library.Api;
             nint handle = machine.Handle;
             long writes = api.DebugWrites(handle, null, 0);
@@ -224,7 +245,9 @@ namespace EmuSen.Cores.Native
                     }
                     CallFrameKind frame = kind switch { 2 => CallFrameKind.Irq, 3 => CallFrameKind.Nmi, 4 => CallFrameKind.Brk, 5 => CallFrameKind.Cop, _ => CallFrameKind.Call };
                     CallStack.NotePush((int)_events[3 * i + 1], (int)_events[3 * i + 2], frame);
-                    if (frame != CallFrameKind.Call) _engine.Breakpoints.NoteInterrupt(frame);
+                    if (frame == CallFrameKind.Call) continue;
+                    _engine.Breakpoints.NoteInterrupt(frame);
+                    interrupted = true;
                 }
             }
 
@@ -243,6 +266,7 @@ namespace EmuSen.Cores.Native
                 fixed (byte* data = _coverageBits[n]) length = api.DebugCoverage(handle, (uint)n, data, (nuint)_coverageBits[n].Length, &recorded);
                 if (length > 0) Coverage[n].Merge(_coverageBits[n].AsSpan(0, (int)Math.Min(length, _coverageBits[n].Length)), recorded);
             }
+            return interrupted;
         }
 
         // A read watch's byte goes to the watches with the value read; a read data breakpoint's to the breakpoints, ahead of its load - see EmuSen_CoreAPI.md §6.14.

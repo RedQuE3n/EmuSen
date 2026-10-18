@@ -94,6 +94,13 @@ pub const STATE_LOST_FROM: i64 = 90;
 pub const FAULT_EMPTY_LOADED: u32 = 1 << 26;
 /// Seeded fault for the kit's C23 (since 1.12): the boot ROM's checksum a digit short, which the schema's pattern lets by.
 pub const FAULT_MD5_SHORT: u32 = 1 << 27;
+/// Not a fault: an image whose payload begins with `UNLOGGED_INTERRUPT` stops an observed frame for an interrupt every fourth
+/// frame with no call logged, as a core whose loop dispatches interrupts outside its call log does (MarsRT's); the host
+/// notes it from the stop reason (EmuSen_CoreAPI.md §6.14).
+pub const UNLOGGED_INTERRUPT: u8 = 0x16;
+/// Not a fault: an image whose payload begins with `HELPER` has a second processor, "Helper", whose breakpoints are
+/// refused, so that it cannot halt (EmuSen_CoreAPI.md §6.14).
+pub const HELPER: u8 = 0xC2;
 /// A made-up checksum the boot ROM entry lists, so that C23 has one to check; no image has it on purpose.
 const BOOT_MD5: &str = "00112233445566778899aabbccddeeff";
 /// The included faults, narrowed to the bits of `EMUSEN_TEST_CORE_FAULTS` when that is set, so each can be shown alone.
@@ -184,6 +191,11 @@ pub struct TestCore {
     raw: Option<Vec<u8>>,
     /// The last frame's count, kept out of the state (`FAULT_STATE_LOST_LATE`).
     held: u8,
+    /// `UNLOGGED_INTERRUPT`: whether interrupts stop the observed frame, and the frame the last one was raised in.
+    unlogged_interrupts: bool,
+    interrupted: i64,
+    /// `HELPER`: the second processor listed.
+    helper: bool,
 }
 
 /// The test core's one encoding of its picture before the palette: each pixel's red byte (EmuSen_CoreAPI.md §6.30).
@@ -265,6 +277,9 @@ impl TestCore {
             raw_mask: 0,
             raw: None,
             held: 0,
+            unlogged_interrupts: body.first() == Some(&UNLOGGED_INTERRUPT),
+            interrupted: -1,
+            helper: body.first() == Some(&HELPER),
         };
         m.draw();
         Ok(m)
@@ -279,7 +294,9 @@ impl TestCore {
             audio: Audio { rate: self.rate, channels: vec!["Tone".into()] },
             ports: vec![Port { port: 0, controller: Some("test.pad".into()) }, Port { port: 1, controller: None }],
             spaces: vec![Space { cheats: true, ..Space::new(0, "RAM") }, Space { read_only: true, ..Space::new(1, "ROM") }],
-            processors: vec![Processor { id: 0, name: "Counter".into(), pc_bits: 8, registers: vec![("F".into(), 64)], code_space: None }],
+            processors: std::iter::once(Processor { id: 0, name: "Counter".into(), pc_bits: 8, registers: vec![("F".into(), 64)], code_space: None })
+                .chain(self.helper.then(|| Processor { id: 1, name: "Helper".into(), pc_bits: 8, registers: Vec::new(), code_space: None }))
+                .collect(),
             battery: std::iter::once(Battery::game(0, ".srm")).chain(self.card.map(|_| Battery::removable(1, ".card"))).chain(self.memory.map(|_| Battery::console(2, ".mem"))).collect(),
             state: StateFormat { format: "TST1".into(), version: 1, loads_from: vec![1] },
             phases: vec!["count".into()],
@@ -731,6 +748,10 @@ impl Core for TestCore {
             if why != 0 {
                 return Ok(why);
             }
+        }
+        if self.unlogged_interrupts && self.hooks.interrupts && self.frames % 4 == 3 && self.interrupted != self.frames {
+            self.interrupted = self.frames;
+            return Ok(emusen_native::debug::stop::INTERRUPT);
         }
         self.hooks.record(pc);
         let before = self.samples.len();

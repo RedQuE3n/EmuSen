@@ -140,9 +140,6 @@ namespace EmuSen.Cores.Native
         // After a machine is adopted: the mirror's load, and whatever else the console keeps per game.
         protected virtual void Loaded(string path) { }
 
-        // The C# core's refusals, with its messages, before the bytes reach the machine.
-        protected abstract void CheckState(byte[] state);
-
         // The console's own exception for a status of its band, or null; and its words for one.
         protected abstract Exception? OwnRefusal(int status, ulong detail);
         protected abstract string? OwnWords(long status);
@@ -194,13 +191,12 @@ namespace EmuSen.Cores.Native
             }
         }
 
-        // The console's rules first, then the adapter's load with this game's battery file, then the held pads and the mirror.
+        // The console's rules first, then the adapter's load with this game's battery file, a refusal in the core's words, then the held pads and the mirror.
         public override void LoadRom(string path)
         {
             byte[] image = File.ReadAllBytes(path);
             _battery = Prepare(path, image);
-            try { base.LoadRom(path); }
-            catch (CoreRefusedException e) { throw Refusal(e.Status, e.Detail); }
+            base.LoadRom(path);
             for (int pad = 0; pad < _pads.Length; pad++) HoldButtons(pad, _pads[pad], 0xFF);
             _halted = false;
             Loaded(path);
@@ -236,17 +232,6 @@ namespace EmuSen.Cores.Native
             try { m.Advance(); }
             catch (CoreRefusedException e) { throw Refusal(e.Status, e.Detail); }
             return true;
-        }
-
-        // The C# core's refusals with its messages; past them a refusal is the core's own words.
-        public override void LoadState(Stream stream)
-        {
-            if (!IsRomLoaded) throw new InvalidOperationException("LoadState() called before LoadRom().");
-            using var copy = new MemoryStream();
-            stream.CopyTo(copy);
-            byte[] state = copy.ToArray();
-            CheckState(state);
-            base.LoadState(new MemoryStream(state, writable: false));
         }
 
         protected int SpaceNumber(string spaceName)

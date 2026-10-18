@@ -62,11 +62,18 @@ namespace EmuSen.Hotaru
                 : new CrystalOpen { Console = launch.Console, AudioBufferMaxSamples = buffer });
         }
 
-        // The engine's own name, the one logs, screenshots and pad bindings go by.
+        // The engine's own name, the one logs and screenshots go by.
         public static string CoreNameOf(CrystalSession session)
         {
             using JsonDocument info = JsonDocument.Parse(session.ServiceInfo());
             return info.RootElement.GetProperty("engine").GetString() ?? "core";
+        }
+
+        // The console a game's pad bindings are kept by, as Mistress keeps them - see EmuSen_Input.md §5.1.
+        public static string BindingsConsoleOf(CrystalSession session)
+        {
+            using JsonDocument info = JsonDocument.Parse(session.Info());
+            return info.RootElement.GetProperty("console").GetString() ?? CoreNameOf(session);
         }
 
         private static string? NoticeOf(CrystalSession session)

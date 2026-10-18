@@ -315,21 +315,7 @@ namespace EmuSen.Cores.Native
             int version = cheats.Version;
             if (version == _patchVersion || _machine is null) return;
             _patchVersion = version;
-            _machine.SetRomPatches(RomPatchTriples(cheats, PatchLow, PatchHigh));
-        }
-
-        // (address, value, compare) for each byte ResolveRomPatches lists in [lo, hi], in its order; uint.MaxValue is no compare.
-        public static uint[] RomPatchTriples(CheatRegistry cheats, long lo, long hi)
-        {
-            var words = new List<uint>();
-            foreach (var patch in cheats.ResolveRomPatches(hi + 1))
-            {
-                if (patch.Address < lo) continue;
-                words.Add(patch.Address);
-                words.Add(patch.Value);
-                words.Add(patch.Compare is byte compare ? compare : uint.MaxValue);
-            }
-            return words.ToArray();
+            _machine.SetRomPatches(CoreEngine.RomPatchTriples(cheats, PatchLow, PatchHigh));
         }
 
         public virtual void Dispose()

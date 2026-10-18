@@ -972,6 +972,18 @@ DianaSh (§8.2) or from a core's extension exports. §15 Q10 decided that views 
 What the Rust cores publish against their C# counterparts, item by item with the route each would take, is §30.6
 (2026-10-10); `cpu` as the first processor machine info lists is §30.1.
 
+**Clarified 2026-10-18, no minor** (`EmuSen_Backend.md` §18.2 F7 and F13, decided in §20 there; built §22):
+
+- **A processor that cannot halt.** A processor whose `debug_set_breakpoints` answers `EMUSEN_NOT_SUPPORTED` takes no
+  breakpoint and so cannot halt: a host learns it by pushing an empty table to each processor machine info lists, once
+  a machine, and offers no breakpoint and no step on one that refuses. Processor 0 of a core claiming `DEBUG` always
+  takes them. This is what `emusen-native`'s default already answers for any processor but 0 that a core does not
+  take, and what MarsRT's RSP, which runs inside the bus's clock, answers; no field of machine info states it twice.
+- **An interrupt stopped for without a call.** `STOP_INTERRUPT` is a stop reason in its own right. A core whose loop
+  dispatches interrupts outside its call log (MarsRT's) stops with it and logs no call entry of kinds 2 to 5; a host
+  notes an interrupt from the stop reason when the round's call log held none, and from the log when it did, so an
+  interrupt reaches `runto irq` once whichever way the core reports it.
+
 #### 6.14.1 Read watches and read data breakpoints (since 1.2)
 
 Added 2026-10-11 by `EmuSen_CoreAPI_Extensions.md` §13, which records the forms weighed, the peers and the cost; this
@@ -2418,6 +2430,9 @@ lower-case MD5s of the images the core accepts in that slot. Baseline 485 facts,
 passing. `emusen-native` gains `Firmware::md5`, written only when not empty; the C# host reads `CoreFirmware.Md5`.
 Kit case C23 is added; the test core lists a made-up checksum for its boot ROM, and `FAULT_MD5_SHORT` (1 << 27), the
 checksum a digit short, fails C23 alone.
+
+**Clarified 2026-10-18, no minor** (§6.14): a processor whose `debug_set_breakpoints` refuses cannot halt, and an
+interrupt stopped for with no call logged is noted from the stop reason.
 
 **Kit, 2026-10-15**, no change to the ABI: C7 saves at every eighth of the run and once near its end, each state
 loaded by a machine just made and held to a machine that never loads, in place of once at the middle against a machine
@@ -4316,6 +4331,40 @@ fullsnes's names (`COLDATA $2132` where it printed `$2132`, `APUI00` for `APUIO0
 golden case prints one of them, and the corpus did not move. After the switch the parity tests compare the two engines'
 memory through one decoder, which still shows their CGRAM, VRAM, registers and vectors agree; the comparison of the
 decoders themselves is the run recorded in §31.3.
+
+### 31.7 The pack views' shared surface, B4 (2026-10-18)
+
+`EmuSen_Backend.md` §17.2 (D4, D6, D7, D12, D13), §18.2 (F9, F10) and §19.3 (D6, D7, D13, D14) found that the views
+the Game Boy's, the N64's and the NES's shims show and `CoreDebugTarget` does not are sprites, sound channels, the
+address decode behind `addr`, and summary lines that need more than the main processor's registers. Each is a fact
+of the console, so it belongs to the pack (§31.2's rule), and each needs one of two inputs a pack's view did not get:
+the memory spaces, and the registers of the parts that run no code (a PPU's, an APU's, a cartridge board's), which
+core ABI 1.13 publishes as machine info's units (`EmuSen_Backend.md` §20). `ISystemDebugViews` therefore gained, each defaulted to
+"none" so that no pack changes:
+
+| Member | Inputs | What the target does with it |
+|---|---|---|
+| `MaxSprites` | none | `IDebugTarget.MaxSprites` |
+| `Sprites` | spaces, units | `IDebugTarget.Sprites`, from a ring as the palettes are |
+| `AudioChannels` | spaces, units, the mutes | `IDebugTarget.AudioChannels`, from a ring; bit n of the mutes mutes channel n |
+| `ResolvePhysical` | an address on the main processor's bus, spaces, units | `IDebugTarget.ResolvePhysical`, behind `addr` |
+| `UnitLabel` | a unit | the words a unit is shown under, as a board by its name |
+| `Summary`, `DmaChannels`, `DecodeTilemapEntry` | the inputs they had, and spaces and units | overloads that default to the old member, so a pack that reads neither is unchanged |
+
+`DebugUnit` is a unit as a pack sees it: its id, name and kind, and its registers named with this frame's values.
+**The ring.** The palettes' ring of §14.5 of `EmuSen_Backend.md` was made general, `ViewRing<T>` inside
+`CoreDebugTarget`: it learns once a machine which spaces a view reads, by watching it decode, and at each
+`RefreshProviders` copies those spaces' bytes and every unit's register values into a slot of the ring, allocating
+nothing; the reader builds the view from the copy. Palettes, sprites and channels go through it. A view no pack fills
+touches no space and copies nothing.
+
+**What is not here.** No console fills a new member yet: the Game Boy's sprites, palettes from its palette RAM spaces,
+channels, HDMA and decode, the NES's sprites, channels, board label and decode, and the N64's physical map and summary
+lines are each the core branch's, with their Rust twins in `emusen-systems` under the parity rule of §31.3. The
+platform library's C interface did not change: `emusen_systems_view` takes a view by name, and a view the library
+does not know answers "none", which `NativeDebugViews` turns into the C# views' answer; the new members forward to the
+C# views until a console adds its Rust twins, which is when the platform interface takes its next number. An address
+the core translates first (1.13's `DEBUG_TRANSLATE`) reaches `ResolvePhysical` translated.
 
 ---
 

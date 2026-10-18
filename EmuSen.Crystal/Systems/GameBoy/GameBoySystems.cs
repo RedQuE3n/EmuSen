@@ -38,7 +38,7 @@ namespace EmuSen.Crystal.Systems.GameBoy
 
         public static readonly SystemEntry GameBoy = SystemTable.Entry(GameBoyLiteral), GameBoyColor = SystemTable.Entry(GameBoyColorLiteral);
 
-        public static readonly SystemPack GameBoyPack = new(GameBoy, GameBoyCheatCodecs.GameShark, GameBoyCheatCodecs.GameGenie, ByteOrder: "little"),
-            GameBoyColorPack = new(GameBoyColor, GameBoyCheatCodecs.GameShark, GameBoyCheatCodecs.GameGenie, ByteOrder: "little");
+        public static readonly SystemPack GameBoyPack = new(GameBoy, GameBoyCheatCodecs.GameShark, GameBoyCheatCodecs.GameGenie, DebugViews: SystemCode.Views(GameBoyId, GameBoyDebugViews.Instance), ByteOrder: "little"),
+            GameBoyColorPack = new(GameBoyColor, GameBoyCheatCodecs.GameShark, GameBoyCheatCodecs.GameGenie, DebugViews: SystemCode.Views(GameBoyColorId, GameBoyDebugViews.Instance), ByteOrder: "little");
     }
 }

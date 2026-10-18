@@ -13,9 +13,12 @@ namespace EmuSen.Crystal.Systems.GameBoy
         public static GbCartridge Read(byte[] image) => SystemCode.Active ? SystemCode.GbHeader(image) : ReadManaged(image);
 
         // The C# reader alone, the failover and the parity class's oracle.
-        public static GbCartridge ReadManaged(byte[] image)
+        public static GbCartridge ReadManaged(byte[] image) => ReadManaged(image, image.Length);
+
+        // The header from an image's first bytes and its whole length, so a view reads 336 bytes of a ROM and not all of it.
+        public static GbCartridge ReadManaged(ReadOnlySpan<byte> image, int length)
         {
-            if (image.Length < HeaderLength) throw new InvalidDataException($"Not a Game Boy image: {image.Length} bytes is shorter than the 336-byte header.");
+            if (length < HeaderLength || image.Length < HeaderLength) throw new InvalidDataException($"Not a Game Boy image: {length} bytes is shorter than the 336-byte header.");
             byte type = image[0x0147];
             bool timer = type is 0x0F or 0x10;
             bool rumble = type is 0x1C or 0x1D or 0x1E or 0x22;
@@ -36,7 +39,7 @@ namespace EmuSen.Crystal.Systems.GameBoy
                 _ => "unknown",
             };
             bool battery = type is 0x03 or 0x06 or 0x09 or 0x0D or 0x0F or 0x10 or 0x13 or 0x1B or 0x1E or 0x22 or 0xFF;
-            return new GbCartridge(type, board, image.Length / RomBankSize, RamLengthFor(image[0x0149], type), battery, timer, rumble, image[0x0143]);
+            return new GbCartridge(type, board, length / RomBankSize, RamLengthFor(image[0x0149], type), battery, timer, rumble, image[0x0143]);
         }
 
         // MBC2 carries 512 half-bytes on the chip itself and reports no size in the header.

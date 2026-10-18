@@ -37,6 +37,11 @@ namespace EmuSen.Crystal.Systems
         // The same with the spaces and the units' registers, which a console whose summary needs more than the processor's reads - see EmuSen_CoreAPI.md §31.7.
         string? Summary(IReadOnlyList<DebugRegisterValue> registers, IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units) => Summary(registers);
 
+        // The palettes and their swatch with the units' registers, which a console whose palettes are registers reads - see EmuSen_CoreAPI.md §31.7.
+        IReadOnlyList<DebugPaletteInfo> Palettes(IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units) => Palettes(spaces);
+
+        (byte[] Rgba, int Width, int Height) PaletteSwatch(IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units) => PaletteSwatch(spaces);
+
         IReadOnlyList<DebugDmaChannel> DmaChannels(IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units) => DmaChannels(spaces);
 
         string DecodeTilemapEntry(IDebugMemorySpace space, int address, IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units) => DecodeTilemapEntry(space, address);

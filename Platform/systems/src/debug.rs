@@ -121,3 +121,17 @@ impl Memory for Tape<'_> {
         out
     }
 }
+
+/// A part that runs no code and holds registers, as machine info's units name it with this frame's values
+/// (`DebugUnit` in C#; EmuSen_CoreAPI.md §31.7).
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct Unit {
+    pub name: String,
+    pub kind: String,
+    pub registers: Vec<(String, u64)>,
+}
+
+/// A unit by its name, ignoring case.
+pub fn unit<'a>(units: &'a [Unit], name: &str) -> Option<&'a Unit> {
+    units.iter().find(|u| equals_ignore_case(&u.name, name))
+}

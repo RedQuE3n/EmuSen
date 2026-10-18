@@ -26,6 +26,9 @@ namespace EmuSen.WiseMan.Crystal
                     IEnumerable<DebugPaletteInfo> p => string.Join(";", p.Select(x => $"{x.Index}:{string.Join(",", x.Colors)}")),
                     IEnumerable<DebugDmaChannel> d => string.Join(";", d.Select(c => $"{c.Index} {c.GeneralEnabled} {c.HdmaEnabled} {c.Control} {c.DestinationRegister} {c.SourceAddress} {c.TransferSize} {c.HdmaActive} {c.TableAddress} {c.LineCounter} {c.IndirectAddress}")),
                     IEnumerable<InterruptVector> v => string.Join(";", v.Select(x => $"{x.Name} {x.Address} {x.Width} {x.Mode}")),
+                    IEnumerable<DebugSpriteInfo> sp => string.Join(";", sp.Select(x => $"{x.Index} {x.X} {x.Y} {x.Width} {x.Height} {x.TileIndex} {x.PaletteIndex} {x.Priority} {x.FlipX} {x.FlipY}")),
+                    IEnumerable<DebugAudioChannelInfo> ch => string.Join(";", ch.Select(x => $"{x.Index} {x.Name} {x.Active} {x.Level} {x.Muted} {x.Info}")),
+                    PhysicalAddress pa => $"{pa.Space} {pa.Offset} {pa.IsAddressable}",
                     IEnumerable<string> s => string.Join(",", s),
                     var other => other.ToString()!,
                 };
@@ -311,6 +314,99 @@ namespace EmuSen.WiseMan.Crystal
                 foreach (string symbol in new[] { "flag.c", "FLAG.N", "flag.m", "sp", "DBR", "pc", "" })
                     Both(differences, $"symbol {symbol} {n}", vram, (v, s) => v.Symbol(symbol, registers), views, "snes");
             }
+            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(10)));
+        }
+
+        private static DebugUnit GbUnit(Random r, string name, string kind, params (string Name, int Bits)[] registers) =>
+            new(0, name, kind, registers.Select(x => new DebugRegisterValue(x.Name, (ulong)r.NextInt64(0, 1L << Math.Min(x.Bits + 1, 40)), x.Bits)).ToArray());
+
+        // Units as a Game Boy engine lists them, in colour mode or not, with HDMA, a channel or the APU left out at times, values past their widths at times.
+        private static DebugUnit[] GbUnits(Random r, bool colour)
+        {
+            var ppu = new List<(string, int)> { ("LCDC", 8), ("STAT", 8), ("SCY", 8), ("SCX", 8), ("LY", 8), ("LYC", 8), ("BGP", 8), ("OBP0", 8), ("OBP1", 8), ("WY", 8), ("WX", 8), ("Mode", 2), ("Dot", 16), ("WindowLine", 8) };
+            if (colour) ppu.AddRange(new[] { ("VBK", 1), ("SVBK", 3), ("BCPS", 8), ("OCPS", 8), ("KEY1", 8) });
+            var units = new List<DebugUnit> { GbUnit(r, "PPU", "video", ppu.ToArray()) };
+            if (r.Next(5) > 0) units.Add(GbUnit(r, "APU", "audio", Enumerable.Range(0xFF10, 0x17).Select(a => ($"${a:X4}", 8)).Concat(new[] { ("Power", 1), ("SeqStep", 3) }).ToArray()));
+            units.Add(GbUnit(r, "Timer", "timer", ("DIV", 8), ("TIMA", 8), ("TMA", 8), ("TAC", 8)));
+            if (r.Next(6) > 0) units.Add(GbUnit(r, "Pulse 1", "channel", ("Enabled", 1), ("Dac", 1), ("Duty", 2), ("Freq", 11), ("Vol", 4), ("Len", 8), ("SweepPeriod", 3), ("SweepShift", 3), ("SweepNegate", 1)));
+            units.Add(GbUnit(r, "Pulse 2", "channel", ("Enabled", 1), ("Dac", 1), ("Duty", 2), ("Freq", 11), ("Vol", 4), ("Len", 8)));
+            units.Add(GbUnit(r, r.Next(4) == 0 ? "wave" : "Wave", "channel", ("Enabled", 1), ("Dac", 1), ("Freq", 11), ("Vol", 2), ("Len", 9)));
+            units.Add(GbUnit(r, "Noise", "channel", ("Enabled", 1), ("Dac", 1), ("Shift", 4), ("Div", 3), ("Short", 1), ("Vol", 4), ("Len", 8)));
+            if (colour) units.Add(GbUnit(r, "HDMA", "dma", ("BlocksLeft", 8), ("HBlank", 1), ("Source", 16), ("Destination", 16)));
+            return units.ToArray();
+        }
+
+        // A call on both halves over the same spaces and units, each half's reads logged and compared in order.
+        private static void BothWithUnits(List<string> differences, string what, (string Name, byte[] Data, bool SideEffects)[] spaces, DebugUnit[] units, string system,
+            Func<ISystemDebugViews, IReadOnlyList<IDebugMemorySpace>, IReadOnlyList<DebugUnit>, object?> call)
+        {
+            ISystemDebugViews managed = GameBoyDebugViews.Instance;
+            var nativeLog = new List<string>();
+            var managedLog = new List<string>();
+            var n = spaces.Select(x => (IDebugMemorySpace)new Logged(x.Name, x.Data, x.SideEffects, nativeLog)).ToArray();
+            var m = spaces.Select(x => (IDebugMemorySpace)new Logged(x.Name, x.Data, x.SideEffects, managedLog)).ToArray();
+            Same(differences, what, () => call(new NativeDebugViews(system, managed), n, units), () => call(managed, m, units));
+            if (!nativeLog.SequenceEqual(managedLog)) differences.Add($"{what}: the reads differ ({nativeLog.Count} by the library, {managedLog.Count} by the C#)");
+        }
+
+        // Every Game Boy view on generated spaces and units in each console mode, every tilemap entry and tile of a VRAM bank, and the address map from end to end - see EmuSen_Backend.md §17.10.
+        [Fact]
+        public void Every_game_boy_view_answers_alike_and_reads_alike()
+        {
+            Assert.True(SystemTable.Ready, SystemTable.Report);
+            var r = new Random(1989);
+            var differences = new List<string>();
+            for (int round = 0; round < 48; round++)
+            {
+                bool colour = round % 3 == 0, twoBanks = colour || round % 3 == 1;
+                string system = round % 2 == 0 ? "gb" : "gbc";
+                byte[] rom = Random(r, new[] { 0x14F, 0x150, 0x8000, 0x20000 }[round % 4]);
+                if (rom.Length > 0x149) (rom[0x147], rom[0x149]) = ((byte)r.Next(256), (byte)r.Next(8));
+                byte[] oam = Random(r, round % 11 == 5 ? 100 : 0xA0);
+                for (int i = 0; i + 3 < oam.Length; i += 4) if (r.Next(3) == 0) oam[i] = (byte)(r.Next(2) == 0 ? 0 : 160);
+                var spaces = new List<(string, byte[], bool)> { ("ROM", rom, false), ("VRAM", Random(r, twoBanks ? 0x4000 : 0x2000), false), ("OAM", oam, false), ("CPUBUS", Random(r, 16), true) };
+                if (round % 7 != 6) spaces.AddRange(new[] { ("BGPAL", Random(r, 64), false), (round % 13 == 12 ? "objpal" : "OBJPAL", Random(r, 64), false) });
+                var all = spaces.ToArray();
+                DebugUnit[] units = round % 17 == 16 ? Array.Empty<DebugUnit>() : GbUnits(r, colour);
+                string label = $"round {round} ({(colour ? "colour" : twoBanks ? "compatibility" : "dmg")})";
+                BothWithUnits(differences, $"palettes {label}", all, units, system, (v, s, u) => v.Palettes(s, u));
+                BothWithUnits(differences, $"palettes without units {label}", all, units, system, (v, s, u) => v.Palettes(s));
+                BothWithUnits(differences, $"swatch {label}", all, units, system, (v, s, u) => v.PaletteSwatch(s, u));
+                BothWithUnits(differences, $"tile sheet {label}", all, units, system, (v, s, u) => v.TileSheet(s));
+                BothWithUnits(differences, $"sprites {label}", all, units, system, (v, s, u) => v.Sprites(s, u));
+                uint mutes = (uint)r.Next(32);
+                BothWithUnits(differences, $"channels {label}", all, units, system, (v, s, u) => v.AudioChannels(s, u, mutes));
+                BothWithUnits(differences, $"dma {label}", all, units, system, (v, s, u) => v.DmaChannels(s, u));
+                string[] names = { "A", "F", "BC", "DE", "HL", "SP", "PC", "Z", "N", "H", "C", "IME", "HALT", "IE", "IF", "Cycles" };
+                var registers = names.Where(x => x != "PC" || round % 9 != 8).Select(x => new DebugRegisterValue(x, (ulong)r.Next(0x20000), 16)).ToArray();
+                BothWithUnits(differences, $"summary {label}", all, units, system, (v, s, u) => v.Summary(registers, s, u));
+                BothWithUnits(differences, $"summary without units {label}", all, units, system, (v, s, u) => v.Summary(registers));
+                foreach (int address in new[] { -1, 0, 0x3FFF, 0x4000, 0x7FFF, 0x8000, 0x9FFF, 0xA000, 0xC000, 0xCFFF, 0xD000, 0xDFFF, 0xE000, 0xFE00, 0xFE9F, 0xFEA0, 0xFF00, 0xFF7F, 0xFF80, 0xFFFE, 0xFFFF, 0x10000 })
+                    BothWithUnits(differences, $"address {address:X} {label}", all, units, system, (v, s, u) => v.ResolvePhysical(address, s, u));
+            }
+            var bank = new[] { ("VRAM", Random(r, 0x4000), false) };
+            foreach (bool colour in new[] { false, true })
+            {
+                DebugUnit[] units = GbUnits(r, colour);
+                for (int address = -1; address < 0x2000; address += 3)
+                {
+                    int a = address;
+                    BothWithUnits(differences, $"tilemap entry {a} {(colour ? "colour" : "dmg")}", bank, units, "gb", (v, s, u) => v.DecodeTilemapEntry(s[0], a, s, u));
+                    BothWithUnits(differences, $"tilemap entry without units {a}", bank, units, "gb", (v, s, u) => v.DecodeTilemapEntry(s[0], a));
+                }
+            }
+            for (int address = 0; address < 0x4000; address += 16)
+                foreach (int bpp in new[] { 2, 4 })
+                {
+                    int a = address, b = bpp;
+                    BothWithUnits(differences, $"tile {a} at {b}bpp", bank, Array.Empty<DebugUnit>(), "gbc", (v, s, u) => v.DecodeTilePixels(s[0], a, b));
+                }
+            var none = Array.Empty<DebugUnit>();
+            BothWithUnits(differences, "stride", bank, none, "gb", (v, s, u) => v.TilemapEntryStride);
+            BothWithUnits(differences, "vectors", bank, none, "gb", (v, s, u) => v.InterruptVectors);
+            BothWithUnits(differences, "max sprites", bank, none, "gb", (v, s, u) => v.MaxSprites);
+            BothWithUnits(differences, "dma destination", bank, none, "gb", (v, s, u) => v.NameDmaDestination(0x51));
+            BothWithUnits(differences, "symbols", bank, none, "gb", (v, s, u) => v.SymbolNames);
             Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(10)));
         }
     }

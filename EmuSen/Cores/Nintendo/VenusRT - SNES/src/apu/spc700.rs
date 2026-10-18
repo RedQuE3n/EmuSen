@@ -504,7 +504,7 @@ impl Spc700 {
                 let (la, ha) = (self.dp(o), self.dp(o.wrapping_add(1)));
                 let lo = bus.read(la) as u16;
                 let step: u16 = if op == 0x3A { 1 } else { 0xFFFF };
-                let r_lo = (lo + step) & 0xFF;
+                let r_lo = lo.wrapping_add(step) & 0xFF;
                 bus.write(la, r_lo as u8);
                 let hi = bus.read(ha) as u16;
                 let r = (hi << 8 | lo).wrapping_add(step);

@@ -11,3 +11,8 @@ name = "blackmoon_gte"
 [dependencies]
 emusen-native = { path = "../../../Shared/emusen-native" }
 emusen-mips = { path = "../../../Shared/emusen-mips" }
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

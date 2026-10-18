@@ -21,3 +21,8 @@ codegen-units = 1
 inherits = "release"
 debug = false
 strip = "debuginfo"
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

@@ -111,13 +111,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # The ABI check needs libclang and runs in abi-guard alone.
+      # The ABI check needs libclang and runs in abi-guard alone. Every suite of this workflow runs on test-checked, release with overflow checks on (EmuSen_RustPlatform.md §37).
       - name: Test
         shell: bash
         run: |
           for crate in EmuSen/Cores/Shared/*/ "EmuSen/Cores/Sega/Beryl-HW"/*/ "EmuSen/Cores/Sony/BlackMoon-HW"/*/; do
             case "$crate" in *emusen-core-abi-check/) continue ;; esac
-            (cd "$crate" && cargo test --release)
+            (cd "$crate" && cargo test --profile test-checked)
           done
 
       # The platform's crates: their own rules with no .NET present, the header against the exports, and the header as C99 and C++17. Not yet a gate, as nothing of the platform's is until Galaxia's own (EmuSen_RustPlatform.md §3.9, §10.6): a failure here is reported and does not stop the cores.
@@ -125,7 +125,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          (cd Platform && cargo test --release)
+          (cd Platform && cargo test --profile test-checked)
           case "$RUNNER_OS" in
             Windows) ;;
             *)
@@ -147,18 +147,18 @@ jobs:
             *) lib=libv1_test_core.so ;;
           esac
           py=$(command -v python3 || command -v python)
-          "$py" $dir/abi/v1/export_check.py $dir/abi/v1/baseline.txt $dir/target/release/examples/$lib
-          "$py" $dir/abi/v1/export_check.py $dir/abi/v1/baseline.txt $dir/target/release/examples/${lib/test_core/plain_core}
+          "$py" $dir/abi/v1/export_check.py $dir/abi/v1/baseline.txt $dir/target/test-checked/examples/$lib
+          "$py" $dir/abi/v1/export_check.py $dir/abi/v1/baseline.txt $dir/target/test-checked/examples/${lib/test_core/plain_core}
 
       # The two test cores, for the WiseMan job's tests of the v1 adapter on the same platform.
       - uses: actions/upload-artifact@v4
         with:
           name: v1-test-cores-${{ runner.os }}
           path: |
-            EmuSen/Cores/Shared/emusen-native/target/release/examples/*v1_test_core.*
-            EmuSen/Cores/Shared/emusen-native/target/release/examples/*v1_plain_core.*
-            EmuSen/Cores/Shared/emusen-core-conform/target/release/emusen-core-conform
-            EmuSen/Cores/Shared/emusen-core-conform/target/release/emusen-core-conform.exe
+            EmuSen/Cores/Shared/emusen-native/target/test-checked/examples/*v1_test_core.*
+            EmuSen/Cores/Shared/emusen-native/target/test-checked/examples/*v1_plain_core.*
+            EmuSen/Cores/Shared/emusen-core-conform/target/test-checked/emusen-core-conform
+            EmuSen/Cores/Shared/emusen-core-conform/target/test-checked/emusen-core-conform.exe
           if-no-files-found: error
 
   # Diamond's open kernel (Diamond_OpenKernel.md §6, §7): its harness on blackmoon-r3000, and its image rebuilt by the pinned nightly to the committed bytes.
@@ -179,7 +179,7 @@ jobs:
           DIAMOND_KERNEL_REBUILD: require
         run: |
           cd "EmuSen/Cores/Sony/Diamond - PlayStation/kernel-harness"
-          cargo +stable test --release
+          cargo +stable test --profile test-checked
 
   # The header against emusen-native's Rust and against the baseline on all four triples, and the base branch's baseline against this one: a removed or changed line fails (EmuSen_CoreAPI.md §5.2, §5.4).
   abi-guard:
@@ -206,8 +206,8 @@ jobs:
       - name: The guard
         working-directory: EmuSen/Cores/Shared/emusen-core-abi-check
         run: |
-          cargo test --release
-          cargo run --release -- --check $AGAINST
+          cargo test --profile test-checked
+          cargo run --profile test-checked -- --check $AGAINST
       # DianaSh's host API and module ABI, stable from S3: the headers against the Rust, the facts against their baseline, and the base branch's baseline against this one (EmuSen_DianaSh.md §11.4, §13.7).
       - name: DianaSh's surfaces
         shell: bash
@@ -218,7 +218,7 @@ jobs:
             git show "$base:$path" > "$RUNNER_TEMP/dianash-base-baseline.txt"
             export DIANASH_ABI_AGAINST="$RUNNER_TEMP/dianash-base-baseline.txt"
           fi
-          cd Platform && cargo test --release -p emusen-platform --test dianash_abi
+          cd Platform && cargo test --profile test-checked -p emusen-platform --test dianash_abi
       # The frontend API, stable from its first commit: the header against the Rust types, against the session service's table
       # (every function's twin, both ways), C99 and C++17, and its baseline against the base branch's (EmuSen_Backend.md §3.2, §14).
       - name: The frontend API's surface
@@ -230,7 +230,7 @@ jobs:
             git show "$base:$path" > "$RUNNER_TEMP/crystal-base-baseline.txt"
             export CRYSTAL_ABI_AGAINST="$RUNNER_TEMP/crystal-base-baseline.txt"
           fi
-          cd Platform && cargo test --release -p emusen-crystal --test crystal_abi
+          cd Platform && cargo test --profile test-checked -p emusen-crystal --test crystal_abi
 
   # While Windows and macOS are paused, every crate is still compiled for them here, so their code cannot break unseen (EmuSen_RustPlatform.md §31, §36).
   # Windows is checked as x86_64-pc-windows-gnu with MinGW-w64, the C toolchain ring's build script needs; x86_64-pc-windows-msvc checks the crates without C. Apple's target is checked on the Mac mini, whose Xcode builds ring.
@@ -379,7 +379,7 @@ jobs:
       # The crate's own suite; the games and the corpus skip without their files. MarsRT's block tests run compiled code, which is the check on each platform's JIT rules.
       - name: Test
         if: matrix.platform.test == true
-        run: cargo test --release --target ${{ matrix.platform.target }}
+        run: cargo test --profile test-checked --target ${{ matrix.platform.target }}
 
       # Diamond's machine and its two layers beside its library, each its own crate with its own suite; the renderer's tests stand down without a Vulkan device.
       - name: Test Diamond's machine and layers
@@ -387,7 +387,7 @@ jobs:
         shell: bash
         run: |
           for d in .. ../precision ../renderer; do
-            (cd "$d" && cargo test --release --target ${{ matrix.platform.target }}) || exit 1
+            (cd "$d" && cargo test --profile test-checked --target ${{ matrix.platform.target }}) || exit 1
           done
 
       - name: Build

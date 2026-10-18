@@ -1979,6 +1979,10 @@ release, where their run time belongs. An alternative is a test profile inheriti
 `overflow-checks = true`, which would check the integration suites too at near-release speed, at the cost of a third
 build of the crate; not measured. Neither is built.
 
+*Decided 2026-10-18 by the tester:* the second, for every Rust suite CI runs, not Diamond's alone. Built the same day
+as `test-checked` (`EmuSen_RustPlatform.md` §37); Diamond's suite with both corpora took 487.8 s on it against 456.8 s
+in release, and found nothing left after this section's fix.
+
 ## 29. A display range moved across or onto the beam (2026-10-18)
 
 ### 29.1 The question

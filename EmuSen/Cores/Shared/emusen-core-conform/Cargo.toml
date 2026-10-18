@@ -56,3 +56,8 @@ crate-type = ["cdylib"]
 [[example]]
 name = "kit_hung_core"
 crate-type = ["cdylib"]
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

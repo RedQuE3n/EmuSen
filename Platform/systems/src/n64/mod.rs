@@ -1,6 +1,7 @@
 //! The N64's pack code: its GameShark codec, the Controller Pak's module and its images' byte order.
 
 pub mod cheats;
+pub mod disasm;
 pub mod pak;
 
 /// The magic word of a big-endian (.z64) image.

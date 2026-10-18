@@ -16,3 +16,5 @@ emusen-dotnet = { path = "../dotnet" }
 emusen-psx-card = { path = "../../EmuSen/Cores/Shared/emusen-psx-card" }
 emusen-n64-pak = { path = "../../EmuSen/Cores/Shared/emusen-n64-pak" }
 emusen-mcd-bram = { path = "../../EmuSen/Cores/Shared/emusen-mcd-bram" }
+# The MIPS instruction set, for the VR4300's disassembly (EmuSen_Backend.md F8).
+emusen-mips = { path = "../../EmuSen/Cores/Shared/emusen-mips" }

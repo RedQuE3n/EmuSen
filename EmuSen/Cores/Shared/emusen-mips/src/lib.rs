@@ -1,14 +1,16 @@
 //! The MIPS instruction set as data, shared by the cores whose processors are MIPS: the fields of an instruction word,
-//! the decode of MIPS I as the R3000 decodes it, the disassembler with a table per coprocessor, and an assembler for
-//! test programs. Nothing here executes; each processor crate keeps its own semantics. See EmuSen_Mips.md.
+//! the decode of MIPS I as the R3000 decodes it, the disassembler with a table per coprocessor, an assembler for test
+//! programs, and MIPS III as the VR4300 runs it, written in that part's own spelling. Nothing here executes; each
+//! processor crate keeps its own semantics. See EmuSen_Mips.md.
 
 mod asm;
 mod decode;
 mod disasm;
+pub mod vr4300;
 
 pub use asm::{AsmError, assemble, assemble_line};
 pub use decode::{Op, Operand, decode};
-pub use disasm::{Command, Coprocessor, Dialect, Disassembly, GPR_NAMES, disassemble};
+pub use disasm::{Command, Coprocessor, Dialect, Disassembly, GPR_NAMES, Spelling, disassemble};
 
 /// An instruction word and its fields (IDT R30xx Family Software Reference Manual, Figure A.1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

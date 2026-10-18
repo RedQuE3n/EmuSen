@@ -20,7 +20,7 @@ namespace EmuSen.Crystal.Systems.Nes
         Relative,
     }
 
-    // The 2A03's instructions as text, independent of any engine's executing table - see Moon_Debug.md §5.
+    // The 2A03's instructions as text, independent of any engine's executing table; emusen-systems' unless EMUSEN_SYSTEMS_NATIVE=0, each *Managed method the C# - see Moon_Debug.md §5, EmuSen_Backend.md §13.5.
     public static class Nes6502Disassembler
     {
         // The 256 mnemonics, the undocumented ones by their common names - see Moon_CPU.md §6.
@@ -80,9 +80,20 @@ namespace EmuSen.Crystal.Systems.Nes
 
         public static Nes6502AddressMode ModeOf(byte opcode) => (Nes6502AddressMode)Modes[opcode];
 
-        public static string MnemonicOf(byte opcode) => OpcodeNames[opcode];
+        public static string MnemonicOf(byte opcode) => SystemCode.Active ? SystemCode.Disassemble("6502", new[] { opcode }, 0, 0).Mnemonic : MnemonicOfManaged(opcode);
 
-        public static int LengthOf(byte opcode) => (Nes6502AddressMode)Modes[opcode] switch
+        public static int LengthOf(byte opcode) => SystemCode.Active ? SystemCode.Disassemble("6502", new[] { opcode }, 0, 0).Length : LengthOfManaged(opcode);
+
+        public static string FormatOperand(byte opcode, int address, byte operandLow, byte operandHigh) =>
+            SystemCode.Active ? SystemCode.Disassemble("6502", new[] { opcode, operandLow, operandHigh }, address, 0).Operands : FormatOperandManaged(opcode, address, operandLow, operandHigh);
+
+        public static (StaticReferenceKind Kind, int Target)? ClassifyStaticReference(byte opcode, int operand) =>
+            !SystemCode.Active ? ClassifyStaticReferenceManaged(opcode, operand)
+            : SystemCode.Disassemble("6502", new[] { opcode }, 0, operand) is { Kind: { } kind } i ? (kind, (int)i.Target) : null;
+
+        public static string MnemonicOfManaged(byte opcode) => OpcodeNames[opcode];
+
+        public static int LengthOfManaged(byte opcode) => (Nes6502AddressMode)Modes[opcode] switch
         {
             Nes6502AddressMode.Implied or Nes6502AddressMode.Accumulator => 1,
             Nes6502AddressMode.Absolute or Nes6502AddressMode.AbsoluteX or Nes6502AddressMode.AbsoluteY or Nes6502AddressMode.Indirect => 3,
@@ -90,7 +101,7 @@ namespace EmuSen.Crystal.Systems.Nes
         };
 
         // <address> is only used to resolve a branch target, which is relative to the next instruction.
-        public static string FormatOperand(byte opcode, int address, byte operandLow, byte operandHigh)
+        public static string FormatOperandManaged(byte opcode, int address, byte operandLow, byte operandHigh)
         {
             int word = operandLow | (operandHigh << 8);
 
@@ -114,7 +125,7 @@ namespace EmuSen.Crystal.Systems.Nes
         }
 
         // Only the forms whose target is knowable from the bytes alone - see IDebugTarget's own comment.
-        public static (StaticReferenceKind Kind, int Target)? ClassifyStaticReference(byte opcode, int operand)
+        public static (StaticReferenceKind Kind, int Target)? ClassifyStaticReferenceManaged(byte opcode, int operand)
         {
             var mode = (Nes6502AddressMode)Modes[opcode];
             if (mode != Nes6502AddressMode.Absolute && mode != Nes6502AddressMode.ZeroPage) return null;
@@ -122,7 +133,7 @@ namespace EmuSen.Crystal.Systems.Nes
             if (opcode == 0x20) return (StaticReferenceKind.Call, operand);
             if (opcode == 0x4C) return (StaticReferenceKind.Call, operand);
 
-            return MnemonicOf(opcode) switch
+            return MnemonicOfManaged(opcode) switch
             {
                 "STA" or "STX" or "STY" or "SAX" => (StaticReferenceKind.Write, operand),
                 "INC" or "DEC" or "ASL" or "LSR" or "ROL" or "ROR" => (StaticReferenceKind.Write, operand),

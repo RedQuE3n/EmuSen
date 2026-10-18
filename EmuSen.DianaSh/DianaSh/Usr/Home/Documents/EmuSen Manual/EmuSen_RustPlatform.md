@@ -3219,3 +3219,15 @@ Silk.NET's list is keyed on, compiles a fragment stage through Serenity and a co
 compiler, and requires the loaded file to be under the program's folder. It failed before the change with the runner's
 `FileNotFoundException` and passes after it. Under `bwrap` as above, with the system's file unreadable, the two cores'
 cases, `SlangCompileTests` and the new class pass, and `LD_DEBUG` shows the shipped copy loaded.
+
+## 34. Interface 15, 2026-10-17: the packs' debugger code
+
+With the backend's step B3, part (d) (`EmuSen_Backend.md` §13.5), the library gained
+`emusen_systems_disassemble`, `emusen_systems_board_name` and `emusen_systems_view`
+(`Platform/platform/src/systems_debug.rs`). A view reads the engine's memory in rounds, since no callback crosses
+(§3.7): the host passes the bytes it has read for the request so far, the view asks for the next batch it lacks, and
+the host reads it byte by byte in that order and asks again. The answer is an envelope, the JSON's length in four
+little-endian bytes, the JSON, then a picture's RGBA or a tile's pixels. The C# facades are `NativeDebugViews` and the
+disassemblers' own forwarding, chosen with the table by `EMUSEN_SYSTEMS_NATIVE`. The number went from 14 to 15 in
+`emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together, since 14 had been merged.
+

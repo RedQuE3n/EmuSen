@@ -1,6 +1,7 @@
 using System;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Crystal.Debugger;
+using EmuSen.Crystal.Systems.N64;
 
 namespace EmuSen.WiseMan.Cores
 {

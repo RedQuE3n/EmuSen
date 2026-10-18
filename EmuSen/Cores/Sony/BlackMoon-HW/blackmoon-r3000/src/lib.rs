@@ -235,5 +235,5 @@ impl R3000 {
 /// The R3000A's instructions as `emusen-mips` writes and reads them: coprocessor 0 by this processor's names, and
 /// coprocessor 2 by the table its core gives (the GTE's on the PlayStation).
 pub fn dialect(cop2: Option<&'static emusen_mips::Coprocessor>) -> emusen_mips::Dialect {
-    emusen_mips::Dialect { cop: [Some(&COP0), None, cop2, None] }
+    emusen_mips::Dialect { cop: [Some(&COP0), None, cop2, None], ..emusen_mips::Dialect::MIPS_I }
 }

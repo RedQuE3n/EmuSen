@@ -104,3 +104,21 @@ word. In `blackmoon-r3000` [M]: **every one of the r3000 suite's 55,000 opcodes 
 its disassembly assembles to a word that agrees with it on every field the instruction uses and is canonical elsewhere,
 and disassembles to the same text. In `blackmoon-gte` [M]: each of the 22 commands is written by its name and reads
 back.
+
+## 6. MIPS III in the VR4300's spelling (2026-10-17)
+
+*Built with the backend's step B3, part (d) (`EmuSen_Backend.md` §13.5), as the tester decided on 2026-10-17.*
+`emusen-mips` owns the instruction set for both of the project's MIPS processors (`EmuSen_Backend.md` F8). The VR4300's
+disassembly, which was the MarsRT shim's C# `Vr4300Disassembler` (`Mars_Disassembler.md`), is `src/vr4300.rs`: MIPS III
+with the VR4300's coprocessor 0 and FPU, written in that part's own spelling. The two spellings differ in every
+respect a reader notices, register 30 (`s8` against `fp`), folded forms (`beqz`, `b`, `move`, `neg`, `not`), hexadecimal
+case and `.word` for what the part does not decode, and each console's debugger output and golden corpus hold its own.
+So the spelling is a field of `Dialect` (`Spelling::AppendixA`, the default, and `Spelling::Vr4300`), and
+`Dialect::VR4300` writes `vr4300::decode`'s text; neither golden changes [C].
+
+The R3000's decode (`decode`), which `blackmoon-r3000` executes by, is untouched: MIPS III's instructions are reserved
+instructions on that part, so the VR4300's table is a decode of its own rather than an extension of `Op` [A]. Its
+`decode` also gives the address a word names where the word alone gives it (a branch, a jump, a load or store from the
+zero register), for the debugger's references. The C# remains, moved to `Crystal/Systems/N64/`, as the failover the
+parity class holds this to.
+

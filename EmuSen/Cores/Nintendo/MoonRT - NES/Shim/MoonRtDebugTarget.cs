@@ -31,7 +31,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             _apuRegisters = Polled(ReadApuRegisters);
             _coprocessorRegisters = Polled(() => Array.Empty<DebugRegisterValue>());
             _sprites = new(ReadSprites, ReadSprites());
-            _palettes = new(() => NesDebugViews.Instance.Palettes(_spaces), NesDebugViews.Instance.Palettes(_spaces));
+            _palettes = new(() => Views.Palettes(_spaces), Views.Palettes(_spaces));
             _audioChannels = new(ReadAudioChannels, ReadAudioChannels());
             _hardwareLoad = new(ReadHardwareLoad, ReadHardwareLoad());
         }
@@ -48,7 +48,10 @@ namespace EmuSen.Cores.Nintendo.MoonRT
         public CallStackRegistry? CallStack => _engine.CallStack;
         public long FrameCount => _engine.TotalFrames;
         public int MaxSprites => 64;
-        public int TilemapEntryStride => NesDebugViews.Instance.TilemapEntryStride;
+        // The NES pack's views, the library's unless EMUSEN_SYSTEMS_NATIVE=0 - see EmuSen_Backend.md §13.5.
+        private static Crystal.Systems.ISystemDebugViews Views => NesSystem.Pack.DebugViews!;
+
+        public int TilemapEntryStride => Views.TilemapEntryStride;
 
         // The Apply button, which must not wait for a frame the pause is not running - see EmuSen_Cheats.md §6.
         public void ApplyCheats() => _engine.ApplyCheats();
@@ -62,7 +65,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
         public IRealtimeProvider<IReadOnlyList<DebugAudioChannelInfo>> AudioChannels => _audioChannels;
         public IRealtimeProvider<IReadOnlyList<DebugLoadInfo>> HardwareLoad => _hardwareLoad;
 
-        public IReadOnlyList<InterruptVector> InterruptVectors => NesDebugViews.Instance.InterruptVectors;
+        public IReadOnlyList<InterruptVector> InterruptVectors => Views.InterruptVectors;
 
         public IReadOnlyList<DebugCpu> DebugCpus => new[]
         {
@@ -238,13 +241,13 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             return operand < 0 ? null : Nes6502Disassembler.ClassifyStaticReference(opcode, operand);
         }
 
-        public string DecodeTilemapEntry(IDebugMemorySpace space, int address) => NesDebugViews.Instance.DecodeTilemapEntry(space, address);
+        public string DecodeTilemapEntry(IDebugMemorySpace space, int address) => Views.DecodeTilemapEntry(space, address);
 
-        public byte[] DecodeTilePixels(IDebugMemorySpace space, int address, int bpp) => NesDebugViews.Instance.DecodeTilePixels(space, address, bpp);
+        public byte[] DecodeTilePixels(IDebugMemorySpace space, int address, int bpp) => Views.DecodeTilePixels(space, address, bpp);
 
-        public (byte[] Rgba, int Width, int Height) RenderTileSheet() => NesDebugViews.Instance.TileSheet(_spaces);
+        public (byte[] Rgba, int Width, int Height) RenderTileSheet() => Views.TileSheet(_spaces);
 
-        public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => NesDebugViews.Instance.PaletteSwatch(_spaces);
+        public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => Views.PaletteSwatch(_spaces);
 
         // Only the ranges whose destination is fixed; a banked $8000+ depends on the board's live state.
         public PhysicalAddress? ResolvePhysical(int cpuAddress)

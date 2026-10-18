@@ -9,9 +9,19 @@ fn refused<T>(words: String) -> Result<T, Fault> {
     Err(Fault::Refused(words))
 }
 
-/// Every entry of the directory, or `Outside` where one lies outside the volume, as the C# reading threw.
-fn entries(image: &[u8]) -> Result<Vec<bram::Entry>, Fault> {
-    bram::entries(image).map(|e| e.ok_or(Fault::Outside)).collect()
+/// The entries of the directory as far as it lies inside the volume.
+fn entries(image: &[u8]) -> Vec<bram::Entry> {
+    bram::entries(image).map_while(|e| e).collect()
+}
+
+/// Whether the footer counts entries outside the volume, which leaves the directory damaged: read as far as it goes,
+/// never written (decided by the tester, EmuSen_Backend.md §13.4).
+fn overcounted(image: &[u8]) -> bool {
+    bram::entries(image).any(|e| e.is_none())
+}
+
+fn overcounted_words(image: &[u8]) -> String {
+    format!("its directory counts {} files, more than it can hold; the {} it can read are listed and nothing is written to it", bram::counts(image).1, entries(image).len())
 }
 
 fn formatted(image: &[u8]) -> bool {
@@ -28,14 +38,14 @@ pub fn read(image: &[u8]) -> Result<Listing, Fault> {
         bram::Kind::Other => return not(format!("another format, {}", ascii(bram::format_name(image)))),
         bram::Kind::Sega => {}
     }
-    let saves = entries(image)?
+    let saves = entries(image)
         .into_iter()
         .map(|e| {
             let name = ascii(&e.name);
             Save { title: name.trim_end_matches('_').to_string(), id: name, units: e.blocks, game: None, damaged: e.damaged }
         })
         .collect();
-    Ok(Listing { formatted: true, saves, free: bram::counts(image).0, problem: None })
+    Ok(Listing { formatted: true, saves, free: bram::counts(image).0, problem: overcounted(image).then(|| overcounted_words(image)) })
 }
 
 /// The index, from 1, of the entry named `save`.
@@ -50,12 +60,15 @@ pub fn copy(from: &[u8], save: &str, to: &[u8]) -> Result<Vec<u8>, Fault> {
     if !formatted(to) {
         return refused("the backup RAM copied to is not formatted".into());
     }
-    let source = entries(from)?;
+    let source = entries(from);
     let Some(index) = find(&source, save) else { return refused(format!("no save named {save} is on the backup RAM")) };
     if source[index - 1].damaged {
         return refused(format!("{save}'s directory entry is damaged, so it cannot be copied"));
     }
-    if find(&entries(to)?, save).is_some() {
+    if overcounted(to) {
+        return refused(format!("the backup RAM copied to is damaged: {}", overcounted_words(to)));
+    }
+    if find(&entries(to), save).is_some() {
         return refused(format!("the backup RAM already holds a save named {save}"));
     }
     let mut image = to.to_vec();
@@ -73,7 +86,10 @@ pub fn delete(image: &[u8], save: &str) -> Result<Vec<u8>, Fault> {
     if !formatted(image) {
         return refused("the backup RAM is not formatted".into());
     }
-    let Some(index) = find(&entries(image)?, save) else { return refused(format!("no save named {save} is on the backup RAM")) };
+    if overcounted(image) {
+        return refused(format!("the backup RAM is damaged: {}", overcounted_words(image)));
+    }
+    let Some(index) = find(&entries(image), save) else { return refused(format!("no save named {save} is on the backup RAM")) };
     let mut edited = image.to_vec();
     match bram::delete(image, index, &mut edited) {
         Ok(()) => Ok(edited),

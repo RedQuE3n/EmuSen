@@ -96,6 +96,9 @@ table! {
         raw_select: fn(M, u64) -> i32,
         raw_info: fn(C, u32, *mut RawFrame) -> i32,
         raw_copy: fn(C, u32, *mut u8, usize) -> i64,
+        telemetry: fn(C, *mut i64, usize) -> i64,
+        set_present: fn(M, u32, u32) -> i32,
+        debug_translate: fn(C, u32, u32, *mut u32) -> i32,
     }
 }
 
@@ -403,6 +406,59 @@ impl Machine<'_> {
         let damaged: usize = (0..n).map(|i| broken(&buf[i * element..(i + 1) * element], known)).sum();
         self.lib.canaries_broken.fetch_add(damaged, Ordering::Relaxed);
         (0..got.min(n)).map(|i| unsafe { std::ptr::read_unaligned(buf.as_ptr().add(i * element) as *const Event) }).collect()
+    }
+
+    /// `debug_registers` by the length-query idiom (a processor's or, since 1.13, a unit's), or its status.
+    pub fn registers(&self, id: u32) -> Result<Vec<i64>, i64> {
+        let Some(f) = self.lib.f.debug_registers else { return Err(status::NOT_SUPPORTED as i64) };
+        let n = unsafe { f(self.h, id, std::ptr::null_mut(), 0) };
+        if n < 0 {
+            return Err(n);
+        }
+        let mut out = vec![0i64; n as usize];
+        let m = unsafe { f(self.h, id, out.as_mut_ptr(), out.len()) };
+        if m != n {
+            return Err(m.min(-1));
+        }
+        Ok(out)
+    }
+
+    /// `telemetry` (since 1.13): the count it answers to a null buffer, and the values it writes into one that holds them.
+    pub fn telemetry(&self) -> Result<(i64, Vec<i64>), i64> {
+        let Some(f) = self.lib.f.telemetry else { return Err(status::NOT_SUPPORTED as i64) };
+        let n = unsafe { f(self.h, std::ptr::null_mut(), 0) };
+        if n < 0 {
+            return Err(n);
+        }
+        let mut out = vec![0i64; n as usize];
+        let m = unsafe { f(self.h, out.as_mut_ptr(), out.len()) };
+        if m < 0 {
+            return Err(m);
+        }
+        Ok((m, out))
+    }
+
+    /// `set_present` (since 1.13): `NOT_SUPPORTED` where the library lacks it.
+    pub fn set_present(&self, port: u32, present: u32) -> i32 {
+        self.lib.f.set_present.map_or(status::NOT_SUPPORTED, |f| unsafe { f(self.h, port, present) })
+    }
+
+    /// `debug_translate` (since 1.13): its answer and the bus address it wrote.
+    pub fn translate(&self, processor: u32, address: u32) -> (i32, u32) {
+        let Some(f) = self.lib.f.debug_translate else { return (status::NOT_SUPPORTED, 0) };
+        let mut bus = 0u32;
+        let r = unsafe { f(self.h, processor, address, &mut bus) };
+        (r, bus)
+    }
+
+    pub fn space_write(&self, space: u32, address: u32, value: u8) -> i64 {
+        unsafe { (self.lib.f.space_write)(self.h, space, address, &value, 1) }
+    }
+
+    pub fn space_byte(&self, space: u32, address: u32) -> u8 {
+        let mut b = 0u8;
+        unsafe { (self.lib.f.space_read)(self.h, space, address, &mut b, 1) };
+        b
     }
 
     pub fn set_buttons(&self, port: u32, mask: u32, changed: u32) -> i32 {

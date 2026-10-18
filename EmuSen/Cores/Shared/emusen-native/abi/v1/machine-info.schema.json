@@ -86,6 +86,26 @@
         }
       }
     },
+    "units": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "kind", "registers"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 256 },
+          "name": { "type": "string" },
+          "kind": { "type": "string" },
+          "registers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "bits"],
+              "properties": { "name": { "type": "string" }, "bits": { "type": "integer", "minimum": 0 } }
+            }
+          }
+        }
+      }
+    },
     "battery": {
       "type": "array",
       "items": {
@@ -111,6 +131,19 @@
       }
     },
     "phases": { "type": "array", "items": { "type": "string" } },
+    "telemetry": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "label", "unit", "kind"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z0-9_.]+$" },
+          "label": { "type": "string" },
+          "unit": { "type": "string" },
+          "kind": { "type": "string" }
+        }
+      }
+    },
     "patches": {
       "type": "object",
       "required": ["low", "high"],

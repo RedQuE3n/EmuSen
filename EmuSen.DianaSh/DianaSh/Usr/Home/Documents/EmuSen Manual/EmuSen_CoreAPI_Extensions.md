@@ -1664,3 +1664,38 @@ core's own minor or later.
 Nothing for a core that does not declare it. For one that does, the kit's comparison of a loaded run's first frames is
 weaker by exactly the frames declared, and what it compares past them is unchanged. The bound is a promise the kit
 checks on the images it is given, not a proof: a game outside them can break it (`Diamond_Enhancements.md` §52.4).
+
+---
+
+## 15. B4's six items (1.13), decided 2026-10-18
+
+*Proposed by `EmuSen_Backend.md` §17.3 (the Game Boy's shim), §18.4 (MarsRT's) and §19.4 (MoonRT's and VenusRT's),
+which weigh each item's forms; decided by the tester on 2026-10-18 as one minor (`EmuSen_Backend.md` §20); built on
+2026-10-18 (`EmuSen_Backend.md` §22). The normative text is `EmuSen_CoreAPI.md` §6.33 to §6.38.* Each item is
+something only a core holds, which a shim read past the core ABI or through a private export, and which a generic
+host must reach without per-core code once the shims retire (SR8).
+
+| Item | Form | Surface | First core to claim it | `EmuSen_CoreAPI.md` |
+|---|---|---|---|---|
+| **Units** (§17.3's `units`, §19.4's `devices`, built once as `units`) | an extension of `DEBUG_REGISTERS` | machine info's `units`, ids from 256, read by `debug_registers`; no bit, no export | MoonRT (PPU, APU, board), MercuryRT (PPU, APU, timer, channels, HDMA) | §6.33 |
+| **`TELEMETRY`** | a capability | bit 23, `emusen_core_telemetry`, machine info's `telemetry` | MarsRT (58 counters) | §6.34 |
+| **`frame_info.lines`** | a struct field appended | `emusen_frame_info` 64 bytes, 56 still taken | MarsRT at an internal resolution above 1x | §6.35 |
+| **`PRESENCE`** | a capability, the narrow form | bit 24, `emusen_core_set_present` | MarsRT | §6.36 |
+| **`EMUSEN_FRAME_CHEATS_HELD`** | a frame flag | `frame_info.flags` bit 1; no bit | MarsRT (`Status.IE` clear) | §6.37 |
+| **`DEBUG_TRANSLATE`** | a capability, with `DEBUG` | bit 25, `emusen_core_debug_translate` | MarsRT (the TLB); VenusRT's §30.6 item 11 and Diamond's segments may follow | §6.38 |
+
+**Why one name.** The two phase-1 sections proposed the same field under two names; `devices` would have been the
+third meaning of "device" in the ABI after 1.9's lent Vulkan device and §10.1's controller kinds, so `units` was
+taken. Ids from 256 were §19.4's, kept because processors' ids are bounded below 24 by the coverage flags.
+
+**Older and newer peers.** Each item is optional: a field a 1.12 host ignores, a bit it never sees claimed, a flag bit
+it never tests, and a struct it passes at 56 bytes, which a 1.13 core fills as far as it goes. A 1.13 host reading an
+older core finds no field, no bit and no flag, and drives it exactly as before.
+
+**Cost.** None a frame for a core that claims nothing: the host reads `frame_info` once after a frame only while it
+holds cheats of its own to apply. `telemetry` and `debug_registers` copy into buffers the host made once; presence is
+sent only on a change.
+
+**What is deferred.** §10.1's general `set_device` stays deferred: presence is what the N64 needs and is part of its
+state, and a device kind would restate the controller choice the settings already make. The session service's
+telemetry kind and `coretop`'s counters are the frontend API's next minor.

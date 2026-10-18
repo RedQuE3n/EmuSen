@@ -4,7 +4,7 @@
 /// `EMUSEN_CORE_ABI_MAJOR`.
 pub const ABI_MAJOR: u32 = 1;
 /// `EMUSEN_CORE_ABI_MINOR`.
-pub const ABI_MINOR: u32 = 12;
+pub const ABI_MINOR: u32 = 13;
 /// `EMUSEN_CORE_ABI_VERSION`.
 pub const ABI_VERSION: u32 = (ABI_MAJOR << 16) | ABI_MINOR;
 
@@ -101,7 +101,8 @@ pub struct Media {
     pub file_size: usize,
 }
 
-/// `emusen_frame_info`. A core fills everything but `size`.
+/// `emusen_frame_info`. A core fills everything but `size`; `lines` and `reserved2` are since 1.13, absent from a
+/// host's struct of 56 bytes.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FrameInfo {
@@ -117,9 +118,16 @@ pub struct FrameInfo {
     pub reserved: u32,
     pub serial: i64,
     pub bytes: i64,
+    /// Since 1.13: the console's lines in this picture where it is drawn at a whole multiple of them; 0, its rows are
+    /// its lines (EmuSen_CoreAPI.md §6.35).
+    pub lines: i32,
+    pub reserved2: u32,
 }
 
 impl FrameInfo {
+    /// The struct's size at 1.0, the least a core accepts (EmuSen_CoreAPI.md §4.2).
+    pub const SIZE_1_0: usize = std::mem::offset_of!(FrameInfo, lines);
+
     /// An RGBA8888 picture of square pixels shown once a row; the serial is the macro's to fill without `FRAME_SERIAL`.
     pub fn rgba(width: i32, height: i32) -> FrameInfo {
         FrameInfo {
@@ -195,14 +203,23 @@ pub mod caps {
     pub const DEVICE_PICTURE: u64 = 1 << 21;
     /// Since 1.10: the core hands the picture before its palette in the encodings machine info lists (`raw_*`).
     pub const RAW_PICTURE: u64 = 1 << 22;
-    /// Bits 23-47, for later minors; a core may not claim them.
-    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 23) - 1);
+    /// Since 1.13: the core's own counters, named in machine info's `telemetry` and read by `telemetry`.
+    pub const TELEMETRY: u64 = 1 << 23;
+    /// Since 1.13: a controller in a port or none, told by `set_present`.
+    pub const PRESENCE: u64 = 1 << 24;
+    /// Since 1.13, with `DEBUG`: a processor's address on its bus, by `debug_translate`.
+    pub const DEBUG_TRANSLATE: u64 = 1 << 25;
+    /// Bits 26-47, for later minors; a core may not claim them.
+    pub const UNASSIGNED: u64 = ((1 << 48) - 1) & !((1 << 26) - 1);
 }
 
 /// `EMUSEN_OPTION_*`, `EMUSEN_FRAME_*`, `EMUSEN_BATTERY_*`, `EMUSEN_FILE_BATTERY`, `EMUSEN_NO_COMPARE`.
 pub mod flags {
     pub const OPTION_SKIP_RENDERING: u32 = 1;
     pub const FRAME_WALKED: u32 = 1;
+    /// Since 1.13, `frame_info.flags` bit 1: a host applies no cheat of its own after this frame, and a core that
+    /// claims `CHEAT_POKES` applied none of its own at its end (EmuSen_CoreAPI.md §6.37).
+    pub const FRAME_CHEATS_HELD: u32 = 2;
     pub const BATTERY_CHANGED: u32 = 1;
     pub const BATTERY_TRACKED: u32 = 2;
     pub const FILE_BATTERY: u32 = 0;
@@ -312,6 +329,9 @@ pub const EXPORTS: &[(&str, u64)] = &[
     ("emusen_core_raw_select", caps::RAW_PICTURE),
     ("emusen_core_raw_info", caps::RAW_PICTURE),
     ("emusen_core_raw_copy", caps::RAW_PICTURE),
+    ("emusen_core_telemetry", caps::TELEMETRY),
+    ("emusen_core_set_present", caps::PRESENCE),
+    ("emusen_core_debug_translate", caps::DEBUG_TRANSLATE),
 ];
 
 /// Each assigned bit's name, as core info's `capabilities` lists it.
@@ -339,4 +359,7 @@ pub const CAPABILITY_NAMES: &[(u64, &str)] = &[
     (caps::BORROW, "BORROW"),
     (caps::DEVICE_PICTURE, "DEVICE_PICTURE"),
     (caps::RAW_PICTURE, "RAW_PICTURE"),
+    (caps::TELEMETRY, "TELEMETRY"),
+    (caps::PRESENCE, "PRESENCE"),
+    (caps::DEBUG_TRANSLATE, "DEBUG_TRANSLATE"),
 ];

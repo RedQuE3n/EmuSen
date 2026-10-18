@@ -25,6 +25,9 @@ namespace EmuSen.Crystal.Telemetry
         public override int GetHashCode() => HashCode.Combine(Name, Value, BitWidth);
     }
 
+    // One of a core's own counters with its value as last read: what it counts, in what unit, and whether a total, a frame's or a level - see EmuSen_CoreAPI.md §6.34.
+    public readonly record struct DebugCounterValue(string Name, string Label, string Unit, string Kind, long Value);
+
     // One sprite/OBJ entry, reduced to what any sprite viewer needs - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.4.2.
     public readonly struct DebugSpriteInfo
     {

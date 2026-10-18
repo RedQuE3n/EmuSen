@@ -26,6 +26,55 @@ namespace EmuSen.Cores.Native
             Sprites = new ViewRing<IReadOnlyList<DebugSpriteInfo>>(this, (v, s, u) => v.Sprites(s, u), Array.Empty<DebugSpriteInfo>()).Provider;
             AudioChannels = new ViewRing<IReadOnlyList<DebugAudioChannelInfo>>(this, (v, s, u) => v.AudioChannels(s, u, _mutes), Array.Empty<DebugAudioChannelInfo>()).Provider;
             HardwareLoad = new RingProvider<double, IReadOnlyList<DebugLoadInfo>>(16, FillLoad, BuildLoad);
+            VideoRegisters = UnitRegisters(u => u.Kind == "video");
+            ApuRegisters = UnitRegisters(u => u.Kind is "audio" or "timer" or "cartridge");
+            Counters = new RingProvider<long, IReadOnlyList<DebugCounterValue>>(64, slot => _engine.Telemetry(slot), BuildCounters);
+        }
+
+        // The registers of the units a kind selects, in machine info's order, each frame's values into a ring; a cartridge's board is headed by a row naming it - see EmuSen_CoreAPI.md §6.33.
+        private IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> UnitRegisters(Func<CoreUnit, bool> chosen) =>
+            new RingProvider<long, IReadOnlyList<DebugRegisterValue>>(64, slot => FillUnits(slot, chosen), (values, n) => BuildUnits(values, n, chosen));
+
+        private int FillUnits(long[] slot, Func<CoreUnit, bool> chosen)
+        {
+            if (!_engine.IsRomLoaded) return 0;
+            CoreMachine m = _engine.Machine;
+            int at = 0;
+            IReadOnlyList<CoreUnit> units = m.Info.Units;
+            for (int u = 0; u < units.Count; u++)
+            {
+                CoreUnit unit = units[u];
+                if (!chosen(unit)) continue;
+                int count = unit.Registers.Count;
+                if (at + count <= slot.Length) m.Registers(unit.Id, slot.AsSpan(at, count));
+                at += count;
+            }
+            return at;
+        }
+
+        private IReadOnlyList<DebugRegisterValue> BuildUnits(long[] values, int n, Func<CoreUnit, bool> chosen)
+        {
+            if (!_engine.IsRomLoaded) return Array.Empty<DebugRegisterValue>();
+            var rows = new List<DebugRegisterValue>();
+            int at = 0;
+            foreach (CoreUnit unit in _engine.Machine.Info.Units)
+            {
+                if (!chosen(unit)) continue;
+                if (unit.Kind == "cartridge") rows.Add(new DebugRegisterValue($"Board:{UnitLabel(unit, values, at, n)}", 0, 8));
+                foreach (var (name, bits) in unit.Registers) rows.Add(new DebugRegisterValue(name, at < n ? (ulong)values[at++] : 0, bits));
+            }
+            return rows;
+        }
+
+        // The pack's words for a board, from its registers in the copy, else the unit's name.
+        private string UnitLabel(CoreUnit unit, long[] values, int at, int n) =>
+            Views?.UnitLabel(new DebugUnit(unit.Id, unit.Name, unit.Kind, unit.Registers.Select((r, i) => new DebugRegisterValue(r.Name, at + i < n ? (ulong)values[at + i] : 0, r.Bits)).ToArray())) ?? unit.Name;
+
+        private IReadOnlyList<DebugCounterValue> BuildCounters(long[] values, int n)
+        {
+            if (!_engine.IsRomLoaded) return Array.Empty<DebugCounterValue>();
+            var listed = _engine.Machine.Info.Telemetry;
+            return listed.Select((k, i) => new DebugCounterValue(k.Name, k.Label, k.Unit, k.Kind, i < n ? values[i] : 0)).ToArray();
         }
 
         // The console's pack decodes what the core publishes as spaces; null for a system without one.
@@ -61,8 +110,10 @@ namespace EmuSen.Cores.Native
                 if (total > slot.Length) return total;
                 _spaces.Fill(slot, _read);
                 int at = _spaces.Total;
-                foreach (CoreUnit unit in machine.Info.Units)
+                IReadOnlyList<CoreUnit> units = machine.Info.Units;
+                for (int u = 0; u < units.Count; u++)
                 {
+                    CoreUnit unit = units[u];
                     int n = Math.Min(unit.Registers.Count, machine.Registers(unit.Id, _scratch));
                     for (int i = 0; i < unit.Registers.Count; i++, at += 8) System.Buffers.Binary.BinaryPrimitives.WriteInt64LittleEndian(slot.AsSpan(at), i < n ? _scratch[i] : 0);
                 }
@@ -146,8 +197,11 @@ namespace EmuSen.Cores.Native
         public int MaxSprites => Views?.MaxSprites ?? 0;
 
         public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CpuRegisters { get; }
-        public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> VideoRegisters { get; } = Empty<DebugRegisterValue>();
-        public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> ApuRegisters { get; } = Empty<DebugRegisterValue>();
+        public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> VideoRegisters { get; }
+        public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> ApuRegisters { get; }
+
+        // TELEMETRY's counters, named by machine info, each refresh's values into a ring - see EmuSen_CoreAPI.md §6.34.
+        public IRealtimeProvider<IReadOnlyList<DebugCounterValue>> Counters { get; }
         // What `cop` names, the same processor `regs <name>` shows - see `man cpus`.
         public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CoprocessorRegisters => EmuSen.Crystal.Debugger.DebugCpus.Coprocessor(DebugCpus)?.Registers ?? NoRegisters;
         public IRealtimeProvider<IReadOnlyList<DebugSpriteInfo>> Sprites { get; }
@@ -163,6 +217,9 @@ namespace EmuSen.Cores.Native
             Palettes.Refresh();
             Sprites.Refresh();
             AudioChannels.Refresh();
+            VideoRegisters.Refresh();
+            ApuRegisters.Refresh();
+            Counters.Refresh();
             HardwareLoad.Refresh();
         }
 
@@ -315,8 +372,18 @@ namespace EmuSen.Cores.Native
         public IReadOnlyList<InterruptVector> InterruptVectors => Views?.InterruptVectors ?? Array.Empty<InterruptVector>();
         public IReadOnlyList<DebugDmaChannel> DmaChannels => Views?.DmaChannels(ViewSpaces(), LiveUnits()) ?? Array.Empty<DebugDmaChannel>();
 
-        // The console's map for an address on the main processor's bus - see `man addr`.
-        public PhysicalAddress? ResolvePhysical(int cpuAddress) => Views?.ResolvePhysical(cpuAddress, ViewSpaces(), LiveUnits());
+        // The console's map for an address on the main processor's bus, after the core's own translation where it claims DEBUG_TRANSLATE - see `man addr` and EmuSen_CoreAPI.md §6.38.
+        public PhysicalAddress? ResolvePhysical(int cpuAddress)
+        {
+            if (!_engine.IsRomLoaded) return null;
+            uint address = unchecked((uint)cpuAddress);
+            if (_engine.Library.Has(CoreInterface.CapDebugTranslate))
+            {
+                if (_engine.Machine.Translate(0, address) is not uint bus) return new PhysicalAddress("unmapped", cpuAddress, isAddressable: false);
+                address = bus;
+            }
+            return Views?.ResolvePhysical(unchecked((int)address), ViewSpaces(), LiveUnits());
+        }
         public string? NameDmaDestination(byte register) => Views?.NameDmaDestination(register);
 
         // Machine info's channel n is set_mutes' bit n.

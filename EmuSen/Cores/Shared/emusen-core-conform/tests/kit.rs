@@ -94,11 +94,11 @@ fn the_seeded_faults_fail_the_cases_they_break_and_no_others() {
 
 // An exact setting that changes the state, a refusal of any host but 1.0, info that drifts, a writable read-only
 // space, an observed frame with other sound, a lent image read otherwise than its copy and a drive that names a place
-// past its image's end break C9, C12, C13, C14, C15, C17 and C18, a picture answered on a device nobody lent C20, and a
-// raw picture its palette does not draw as the frame C21.
+// past its image's end break C9, C12, C13, C14, C15, C17 and C18, a picture answered on a device nobody lent C20, a
+// raw picture its palette does not draw as the frame C21, and lines that do not divide the picture's height C6.
 #[test]
 fn the_faults_of_c9_and_c12_to_c18_fail_those_cases_and_no_others() {
-    let failing = ["C9", "C12", "C13", "C14", "C15", "C17", "C18", "C20", "C21", "C22", "C23"];
+    let failing = ["C6", "C9", "C12", "C13", "C14", "C15", "C17", "C18", "C20", "C21", "C22", "C23"];
     assert_eq!(verdicts("kit_faulty_full_core"), cases(true).into_iter().map(|c| (c, !failing.contains(&c))).collect::<Vec<_>>());
 }
 
@@ -223,8 +223,8 @@ fn a_sidecar_carries_the_librarys_own_descriptors_and_hash() {
     assert_eq!(v.get("sidecar").and_then(Value::as_i64), Some(1));
     assert_eq!(v.get("library").and_then(Value::as_str), lib.file_name().and_then(|n| n.to_str()));
     assert_eq!(v.get("sha256").and_then(Value::as_str), Some(digest::sha256_hex(&std::fs::read(&lib).unwrap()).as_str()));
-    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.12"));
-    assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0x7FFFFF));
+    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.13"));
+    assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0x3FFFFFF));
     assert_eq!(v.get("info").and_then(|i| i.get("id")).and_then(Value::as_str), Some("v1-test-core"));
     assert_eq!(v.get("settings").and_then(Value::as_array).map(|a| a.len()), Some(4));
     assert!(v.get("development").is_none());
@@ -328,7 +328,7 @@ fn a_corpus_says_of_each_image_what_the_single_image_form_says() {
 #[test]
 fn the_seeded_faults_fail_the_same_cases_in_a_corpus() {
     let (_, list) = corpus_files("faults");
-    for (name, core, per_image) in [("kit_faulty_core", vec!["C4", "C9", "C10", "C12", "C13", "C22"], vec!["C7", "C8", "C17", "C18"]), ("kit_faulty_full_core", vec!["C9", "C12", "C13", "C15", "C22", "C23"], vec!["C14", "C17", "C18", "C20", "C21"])] {
+    for (name, core, per_image) in [("kit_faulty_core", vec!["C4", "C9", "C10", "C12", "C13", "C22"], vec!["C7", "C8", "C17", "C18"]), ("kit_faulty_full_core", vec!["C9", "C12", "C13", "C15", "C22", "C23"], vec!["C6", "C14", "C17", "C18", "C20", "C21"])] {
         let c = run_corpus(name, &list, 2);
         assert_eq!(c.core.cases.iter().filter(|x| !x.passed).map(|x| x.id).collect::<Vec<_>>(), core, "{name}");
         for i in &c.images {
@@ -518,4 +518,54 @@ fn a_state_wrong_only_late_in_the_run_fails_c7_at_its_points_where_one_middle_mi
     let (failed, text) = failed_with("kit_settling_core", 1 << 25, 240);
     assert_eq!(failed, ["C7", "C8", "C12"], "{text}");
     assert!(text.contains("across a save and load at frame 120 the run differs"), "{text}");
+}
+
+// Core ABI 1.13's seeded faults (EmuSen_CoreAPI.md §6.33-§6.38), each alone in a runner process of its own, fail the
+// case each is for and no other: a unit a register short, a total that moves when read, presence taken past the ports
+// and pokes applied in a held frame C14, lines that do not divide the height C6, and an unstable translation C15. The
+// lines fail C12 and C22 as well, which run frames; the held frames are those of an image that holds the cheats; the default image holds none, so its fault goes unseen.
+#[test]
+fn each_fault_of_1_13_alone_fails_its_case_alone() {
+    let plain = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("kit-1-13.v1tc");
+    std::fs::write(&plain, image(&[1, 2, 3, 0x20, 0x41])).unwrap();
+    let held = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("kit-1-13-held.v1tc");
+    std::fs::write(&held, image(&[0xC4, 2, 3, 0x20, 0x41])).unwrap();
+    let cases = [
+        (1u64 << 28, &plain, vec!["C14"], "unit 256 (Timer) lists 2 registers and debug_registers answers 1"),
+        (1 << 29, &plain, vec!["C14"], "the total test.frames moved"),
+        (1 << 30, &plain, vec!["C6", "C12", "C22"], "frame_info's lines are 3, which do not divide its height of 4"),
+        (1 << 31, &plain, vec!["C14"], "set_present on port 2, past machine info's, answered 0, not NO_SUCH_PORT"),
+        (1 << 32, &held, vec!["C14"], "is flagged FRAME_CHEATS_HELD and the core's poke changed space 0's byte 0"),
+        (1 << 32, &plain, vec![], ""),
+        (1 << 33, &plain, vec!["C15"], "processor 0's translation of 0x0 answered"),
+    ];
+    for (fault, file, cases, words) in cases {
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_emusen-core-conform"))
+            .args(["--self-delimiting", "--frames", "120", "--core"])
+            .arg(library("kit_faulty_full_core"))
+            .arg("--image")
+            .arg(file)
+            .env("EMUSEN_TEST_CORE_FAULTS", fault.to_string())
+            .output()
+            .unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        let failed: Vec<&str> = text.lines().filter_map(|l| l.strip_prefix("FAIL ")).filter_map(|l| l.split_whitespace().next()).collect();
+        assert_eq!(failed, cases, "fault {fault}:\n{text}");
+        assert!(text.contains(words), "fault {fault}: {words:?} not in\n{text}");
+    }
+}
+
+// On the test core, which claims every item of 1.13, C14 and C15 say what they checked, and the held image's frames
+// are counted; on the plain core, which claims none, they say what they said at 1.12.
+#[test]
+fn the_items_of_1_13_are_reported_only_where_claimed() {
+    let of = |name: &str, opts: &Options, id: &str| run(&library(name), opts).cases.into_iter().find(|c| c.id == id).unwrap();
+    let c14 = of("kit_test_core", &options(), "C14");
+    assert!(c14.passed && c14.evidence.last().unwrap().ends_with(", 1 unit(s) each answered with its registers, 2 counter(s) read twice alike; set_present refused past the ports"), "{:?}", c14.evidence);
+    let held = of("kit_test_core", &Options { image: image(&[0xC4, 2, 3, 0x20, 0x41]), ..options() }, "C14");
+    assert!(held.passed && held.evidence.last().unwrap().ends_with("; 8 frame(s) of 32 held the cheats, the core's pokes with them"), "{:?}", held.evidence);
+    let c15 = of("kit_test_core", &options(), "C15");
+    assert!(c15.passed && c15.evidence.last().unwrap().ends_with("; each processor's translation answered alike twice, changing nothing"), "{:?}", c15.evidence);
+    let plain = of("kit_plain_core", &options(), "C14");
+    assert_eq!(plain.evidence, ["2 spaces, 1 battery files of the 3 core info lists, 1 processors"]);
 }

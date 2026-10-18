@@ -11,10 +11,14 @@ namespace EmuSen.Cores.Native
         private bool[] _moved = Array.Empty<bool>();
         private int _axesPerPort;
 
+        // Whether each port holds a controller, every port full at a new machine, and which changed since the last send - see EmuSen_CoreAPI.md §6.36.
+        private bool[] _present = { true, true }, _presenceChanged = new bool[2];
+
         // What Send copies out under the gate and passes to the machine outside it, kept so a frame allocates nothing.
         private uint[] _sendHeld = Array.Empty<uint>(), _sendChanged = Array.Empty<uint>();
         private double[] _sendAxes = Array.Empty<double>();
         private bool[] _sendMoved = Array.Empty<bool>();
+        private bool[] _sendPresent = Array.Empty<bool>(), _sendPresenceChanged = Array.Empty<bool>();
 
         // Nothing held, for a new machine of ports ports whose axes are numbered below axesPerPort.
         public void Reset(int ports, int axesPerPort)
@@ -23,6 +27,9 @@ namespace EmuSen.Cores.Native
             {
                 _held = new uint[ports];
                 _changed = new uint[ports];
+                _present = new bool[ports];
+                Array.Fill(_present, true);
+                _presenceChanged = new bool[ports];
                 _axesPerPort = axesPerPort;
                 _axes = new double[ports * axesPerPort];
                 _moved = new bool[ports * axesPerPort];
@@ -35,8 +42,12 @@ namespace EmuSen.Cores.Native
             lock (_gate)
             {
                 if (ports <= _held.Length) return;
+                int was = _held.Length;
                 Array.Resize(ref _held, ports);
                 Array.Resize(ref _changed, ports);
+                Array.Resize(ref _present, ports);
+                Array.Fill(_present, true, was, ports - was);
+                Array.Resize(ref _presenceChanged, ports);
                 Array.Resize(ref _axes, ports * _axesPerPort);
                 Array.Resize(ref _moved, ports * _axesPerPort);
             }
@@ -63,6 +74,17 @@ namespace EmuSen.Cores.Native
             }
         }
 
+        // A controller plugged in or pulled out; only a change is sent.
+        public void Connect(int port, bool connected)
+        {
+            lock (_gate)
+            {
+                if (port < 0 || port >= _held.Length || _present[port] == connected) return;
+                _present[port] = connected;
+                _presenceChanged[port] = !_presenceChanged[port];
+            }
+        }
+
         // An axis's latest value replaces any not yet sent.
         public void Move(int port, uint axis, double value)
         {
@@ -85,6 +107,10 @@ namespace EmuSen.Cores.Native
                 perPort = _axesPerPort;
                 if (_sendHeld.Length != ports) (_sendHeld, _sendChanged) = (new uint[ports], new uint[ports]);
                 if (_sendAxes.Length != _axes.Length) (_sendAxes, _sendMoved) = (new double[_axes.Length], new bool[_axes.Length]);
+                if (_sendPresent.Length != ports) (_sendPresent, _sendPresenceChanged) = (new bool[ports], new bool[ports]);
+                _present.CopyTo(_sendPresent, 0);
+                _presenceChanged.CopyTo(_sendPresenceChanged, 0);
+                Array.Clear(_presenceChanged);
                 _held.CopyTo(_sendHeld, 0);
                 _changed.CopyTo(_sendChanged, 0);
                 _axes.CopyTo(_sendAxes, 0);
@@ -94,6 +120,7 @@ namespace EmuSen.Cores.Native
             }
             for (int port = 0; port < ports; port++)
             {
+                if (_sendPresenceChanged[port]) machine.SetPresent(port, _sendPresent[port]);
                 if (_sendChanged[port] != 0) machine.SetButtons(port, _sendHeld[port], _sendChanged[port]);
                 for (int axis = 0; axis < perPort; axis++)
                     if (_sendMoved[port * perPort + axis]) machine.SetAxis(port, (uint)axis, _sendAxes[port * perPort + axis]);

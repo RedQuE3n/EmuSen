@@ -282,6 +282,37 @@ pub trait Core: Sized + StateMachine {
         Err(status::NOT_SUPPORTED)
     }
 
+    /// `DEBUG_REGISTERS`, since 1.13: machine info's `units`, the parts that run no code and hold registers, each
+    /// answered by `debug_registers` by its id (EmuSen_CoreAPI.md §6.33). Listed only while the machine has them.
+    fn units(&self) -> Vec<Unit> {
+        Vec::new()
+    }
+
+    /// `TELEMETRY`, since 1.13: machine info's `telemetry`, the core's own counters, the same list for the life of a
+    /// machine (EmuSen_CoreAPI.md §6.34).
+    fn counters(&self) -> Vec<Counter> {
+        Vec::new()
+    }
+
+    /// `TELEMETRY`, since 1.13: the values of machine info's `telemetry` counters in their order, as of the last call
+    /// that ran the machine, written into `out` as far as it holds them; their count. Allocates nothing and changes
+    /// nothing (EmuSen_CoreAPI.md §6.34).
+    fn telemetry(&self, _out: &mut [i64]) -> usize {
+        0
+    }
+
+    /// `PRESENCE`, since 1.13: a controller in `port` or none, as the console's own hardware shows it to the game;
+    /// `NO_SUCH_PORT` for a port past machine info's (EmuSen_CoreAPI.md §6.36).
+    fn set_present(&mut self, _port: u32, _present: bool) -> Result<(), i32> {
+        Err(status::NOT_SUPPORTED)
+    }
+
+    /// `DEBUG_TRANSLATE`, since 1.13: the address `processor`'s bus sees for `address` by its own translation, never
+    /// faulting and changing nothing; `None` where nothing maps it (EmuSen_CoreAPI.md §6.38).
+    fn debug_translate(&self, _processor: u32, _address: u32) -> Result<Option<u32>, i32> {
+        Err(status::NOT_SUPPORTED)
+    }
+
     /// Clears whatever the core records between calls, after every call that changes the machine.
     fn end_call() {}
 }
@@ -304,7 +335,10 @@ pub const EXPORTING: u64 = caps::RESET
     | caps::MEDIA
     | caps::DEBUG_READS
     | caps::DEVICE_PICTURE
-    | caps::RAW_PICTURE;
+    | caps::RAW_PICTURE
+    | caps::TELEMETRY
+    | caps::PRESENCE
+    | caps::DEBUG_TRANSLATE;
 
 /// `core_exports!`'s compile-time check: the groups named are exactly the claimed bits that have exports.
 #[doc(hidden)]
@@ -312,6 +346,7 @@ pub const fn check_groups<T: Core>(named: u64) {
     assert!(T::CAPABILITIES & EXPORTING == named, "the optional groups named and CAPABILITIES disagree");
     assert!(T::CAPABILITIES & caps::UNASSIGNED == 0, "CAPABILITIES claims a bit no minor has assigned");
     assert!(T::CAPABILITIES & caps::DEBUG_READS == 0 || T::CAPABILITIES & caps::DEBUG != 0, "DEBUG_READS is claimed without DEBUG");
+    assert!(T::CAPABILITIES & caps::DEBUG_TRANSLATE == 0 || T::CAPABILITIES & caps::DEBUG != 0, "DEBUG_TRANSLATE is claimed without DEBUG");
 }
 
 /// The capability bit of an optional group.
@@ -336,6 +371,9 @@ macro_rules! __core_capability {
     (debug_reads) => { $crate::core::caps::DEBUG_READS };
     (device_picture) => { $crate::core::caps::DEVICE_PICTURE };
     (raw_picture) => { $crate::core::caps::RAW_PICTURE };
+    (telemetry) => { $crate::core::caps::TELEMETRY };
+    (presence) => { $crate::core::caps::PRESENCE };
+    (debug_translate) => { $crate::core::caps::DEBUG_TRANSLATE };
 }
 
 /// One export: the C signature, forwarding to the generic body of the same name in `core::exports`.
@@ -411,6 +449,15 @@ macro_rules! __core_optional {
         $crate::__core_export!($t, emusen_core_raw_select => raw_select(machine: *mut $crate::core::sys::Machine, mask: u64) -> i32);
         $crate::__core_export!($t, emusen_core_raw_info => raw_info(machine: *const $crate::core::sys::Machine, raw: u32, out: *mut $crate::core::sys::RawFrame) -> i32);
         $crate::__core_export!($t, emusen_core_raw_copy => raw_copy(machine: *const $crate::core::sys::Machine, raw: u32, out: *mut u8, len: usize) -> i64);
+    };
+    ($t:ty, telemetry) => {
+        $crate::__core_export!($t, emusen_core_telemetry => telemetry(machine: *const $crate::core::sys::Machine, out: *mut i64, len: usize) -> i64);
+    };
+    ($t:ty, presence) => {
+        $crate::__core_export!($t, emusen_core_set_present => set_present(machine: *mut $crate::core::sys::Machine, port: u32, present: u32) -> i32);
+    };
+    ($t:ty, debug_translate) => {
+        $crate::__core_export!($t, emusen_core_debug_translate => debug_translate(machine: *const $crate::core::sys::Machine, processor: u32, address: u32, bus: *mut u32) -> i32);
     };
     ($t:ty, debug) => {
         $crate::__core_export!($t, emusen_core_debug_set => debug_set(machine: *mut $crate::core::sys::Machine, flags: u32, depth_target: i32, depth_guard: i32) -> i32);

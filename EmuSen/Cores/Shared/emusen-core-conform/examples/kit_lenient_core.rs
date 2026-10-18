@@ -3,7 +3,7 @@
 pub const TEST_ID: &str = "v1-lenient-core";
 pub const TEST_NAME: &str = "V1LenientCore";
 pub const TEST_CAPABILITIES: u64 = 0;
-pub const TEST_FAULTS: u32 = LENIENT_IMAGES;
+pub const TEST_FAULTS: u64 = LENIENT_IMAGES;
 
 include!("../../emusen-native/examples/common/test_core.rs");
 

@@ -1,4 +1,4 @@
-//! emusen-native's test core with every capability and the seeded faults C9, C12-C23 are for, so that this crate's
+//! emusen-native's test core with every capability and the seeded faults C9, C12-C23 and core ABI 1.13's are for, so that this crate's
 //! tests see each of those cases fail it; C16's are a cartridge's, a machine listing no drive.
 
 pub const TEST_ID: &str = "v1-faulty-full-core";
@@ -24,11 +24,15 @@ pub const TEST_CAPABILITIES: u64 = emusen_native::core::caps::RESET
     | emusen_native::core::caps::MEDIA
     | emusen_native::core::caps::BORROW
     | emusen_native::core::caps::DEVICE_PICTURE
-    | emusen_native::core::caps::RAW_PICTURE;
-pub const TEST_FAULTS: u32 =
+    | emusen_native::core::caps::RAW_PICTURE
+    | emusen_native::core::caps::TELEMETRY
+    | emusen_native::core::caps::PRESENCE
+    | emusen_native::core::caps::DEBUG_TRANSLATE;
+pub const TEST_FAULTS: u64 =
     FAULT_EXACT_SETTING_CHANGES_STATE | FAULT_ONLY_HOST_1_0 | FAULT_INFO_DRIFTS | FAULT_READ_ONLY_WRITABLE | FAULT_OBSERVED_FRAME_DIFFERS | FAULT_LENT_RUN_DIFFERS | FAULT_NAMES_PAST_THE_IMAGE
-        | FAULT_DRIVELESS_ACCEPTS | FAULT_DRIVELESS_FAULTS | FAULT_DRIVELESS_NAMES_PLACES | FAULT_CARD_ROLLED_BACK | FAULT_CONSOLE_ROLLED_BACK | FAULT_MEDIUM_DISAGREES | FAULT_DEVICE_PICTURE_UNLENT | FAULT_RAW_DISAGREES | FAULT_EMPTY_LOADED | FAULT_MD5_SHORT;
+        | FAULT_DRIVELESS_ACCEPTS | FAULT_DRIVELESS_FAULTS | FAULT_DRIVELESS_NAMES_PLACES | FAULT_CARD_ROLLED_BACK | FAULT_CONSOLE_ROLLED_BACK | FAULT_MEDIUM_DISAGREES | FAULT_DEVICE_PICTURE_UNLENT | FAULT_RAW_DISAGREES | FAULT_EMPTY_LOADED | FAULT_MD5_SHORT
+        | FAULT_UNIT_SHORT | FAULT_TELEMETRY_MOVES | FAULT_LINES_UNEVEN | FAULT_PRESENCE_ANY_PORT | FAULT_POKES_WHILE_HELD | FAULT_TRANSLATE_UNSTABLE;
 
 include!("../../emusen-native/examples/common/test_core.rs");
 
-emusen_native::core_exports!(TestCore; reset, present, phases, audio_peek, mutes, axes, settings, setting_notes, rom_patches, cheat_pokes, debug, debug_stack, debug_registers, debug_disassemble, media, device_picture, raw_picture);
+emusen_native::core_exports!(TestCore; reset, present, phases, audio_peek, mutes, axes, settings, setting_notes, rom_patches, cheat_pokes, debug, debug_stack, debug_registers, debug_disassemble, media, device_picture, raw_picture, telemetry, presence, debug_translate);

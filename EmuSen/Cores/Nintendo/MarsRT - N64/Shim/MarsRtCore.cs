@@ -78,7 +78,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         // The screen's shape: a television's 4:3 at every VI width and in PAL - see EmuSen_Serenity.md §2.9.
         public override double DisplayAspect => EmuSen.Crystal.DisplayShape.Television;
 
-        public int DisplayLines => N64Console.LinesOf(ScreenWidth, ScreenHeight);
+        public new int DisplayLines => N64Console.LinesOf(ScreenWidth, ScreenHeight);
 
         public override double FrameRateHz => N64Console.ProcessorClockHz / (double)(IsRomLoaded ? Counter(2) : N64Console.CycleCap);
         public long Cycles => Counter(0);
@@ -366,7 +366,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         }
 
         // A library built before the export answers for the first controller alone, as it always did.
-        public void SetControllerConnected(int port, bool connected)
+        public new void SetControllerConnected(int port, bool connected)
         {
             if (IsRomLoaded && port >= 0 && port < N64Console.Ports) SetPresent(Machine.Handle, (uint)port, connected ? 1u : 0);
         }

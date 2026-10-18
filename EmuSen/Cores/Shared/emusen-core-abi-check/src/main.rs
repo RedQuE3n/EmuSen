@@ -273,7 +273,7 @@ mod tests {
         let committed = base(&read(&baseline_path()).unwrap());
         check(&facts, &committed, None, &mut problems);
         assert_eq!(problems, Vec::<String>::new());
-        assert_eq!(facts.keys().filter(|k| k.starts_with("fn ")).count(), 62);
+        assert_eq!(facts.keys().filter(|k| k.starts_with("fn ")).count(), 65);
         assert_eq!(facts.get("struct emusen_media").map(String::as_str), Some("size 48 align 8"));
         assert_eq!(facts.get("struct emusen_create_params").map(String::as_str), Some("size 112 align 8"), "grown at 1.3, 1.9 and 1.11");
         assert_eq!(committed.get("struct emusen_create_params"), Some(&("size 88 align 8".to_owned(), "1.0".to_owned())), "its 1.0 line stands");
@@ -282,7 +282,9 @@ mod tests {
         assert_eq!(committed.get("json info.systems[].battery"), Some(&("array<object> optional".to_owned(), "1.3".to_owned())));
         assert_eq!(facts.get("const EMUSEN_FILE_MEDIA").map(String::as_str), Some("0x10000"));
         assert_eq!(facts.get("const EMUSEN_CAP_DEBUG_READS").map(String::as_str), Some("0x80000"));
-        assert_eq!(facts.get("struct emusen_frame_info").map(String::as_str), Some("size 56 align 8"));
+        assert_eq!(facts.get("struct emusen_frame_info").map(String::as_str), Some("size 64 align 8"), "grown at 1.13");
+        assert_eq!(committed.get("struct emusen_frame_info"), Some(&("size 56 align 8".to_owned(), "1.0".to_owned())), "its 1.0 line stands");
+        assert_eq!(committed.get("field emusen_frame_info.lines"), Some(&("offset 56 type int32_t".to_owned(), "1.13".to_owned())));
         assert_eq!(facts.get("field emusen_frame_info.serial").map(String::as_str), Some("offset 40 type int64_t"));
         assert_eq!(facts.get("fn emusen_core_advance").map(String::as_str), Some("(emusen_machine*, uint64_t*) -> int32_t"));
         assert_eq!(facts.get("json info.systems[].extensions").map(String::as_str), Some("array<string> required"));

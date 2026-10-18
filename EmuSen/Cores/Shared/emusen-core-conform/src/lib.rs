@@ -413,6 +413,10 @@ fn frame_checks(f: u64, fi: &FrameInfo, copied: usize, problems: &mut Vec<String
     if fi.width <= 0 || fi.height <= 0 || (fi.stride as i64) * (fi.height as i64) > fi.bytes || fi.stride < fi.width * 4 {
         problems.push(format!("frame {f}: {}x{} with stride {} does not fit {} bytes", fi.width, fi.height, fi.stride, fi.bytes));
     }
+    // Since 1.13 (EmuSen_CoreAPI.md §6.35): the console's lines in a picture drawn at a whole multiple of them.
+    if fi.lines != 0 && (fi.lines < 0 || fi.height <= 0 || fi.height % fi.lines != 0) {
+        problems.push(format!("frame {f}: frame_info's lines are {}, which do not divide its height of {}", fi.lines, fi.height));
+    }
 }
 
 fn parse(text: &str) -> Option<Value> {
@@ -850,7 +854,13 @@ fn c5(s: &mut Session<'_>) -> Case {
         claim(caps::SETTING_NOTES, "SETTING_NOTES", f.setting_notes.map(|g| g(h, std::ptr::null_mut(), 0)));
         claim(caps::DEBUG, "DEBUG", f.debug_set.map(|g| g(h, 0, i32::MIN, -1) as i64));
         claim(caps::DEBUG_STACK, "DEBUG_STACK", f.debug_set_stack.map(|g| g(h, std::ptr::null(), 0) as i64));
+        claim(caps::TELEMETRY, "TELEMETRY", f.telemetry.map(|g| g(h, std::ptr::null_mut(), 0)));
+        if mi.as_ref().and_then(|v| v.get("ports")?.as_array().map(|a| !a.is_empty())).unwrap_or(false) {
+            claim(caps::PRESENCE, "PRESENCE", f.set_present.map(|g| g(h, 0, 1) as i64));
+        }
         if processors > 0 {
+            let mut bus = 0u32;
+            claim(caps::DEBUG_TRANSLATE, "DEBUG_TRANSLATE", f.debug_translate.map(|g| g(h, 0, 0, &mut bus) as i64));
             claim(caps::DEBUG_REGISTERS, "DEBUG_REGISTERS", f.debug_registers.map(|g| g(h, 0, std::ptr::null_mut(), 0)));
             if let Some(&space) = spaces.first() {
                 claim(caps::DEBUG_DISASSEMBLE, "DEBUG_DISASSEMBLE", f.debug_disassemble.map(|g| g(h, 0, space as u32, 0, 1, std::ptr::null_mut(), 0)));
@@ -1417,8 +1427,133 @@ fn c14(s: &mut Session<'_>) -> Case {
             c.that(r == 0, || format!("processor {id} is named and debug_pc answers {r}"));
         }
     }
-    c.note(format!("{} spaces, {} battery files{}, {} processors", list("spaces").len(), list("battery").len(), listed.map_or(String::new(), |l| format!(" of the {} core info lists", l.len())), list("processors").len()));
+    let more = since_1_13(s, &m, &info, &mut c);
+    c.note(format!("{} spaces, {} battery files{}, {} processors{more}", list("spaces").len(), list("battery").len(), listed.map_or(String::new(), |l| format!(" of the {} core info lists", l.len())), list("processors").len()));
     c.done("C14", "descriptors against exports")
+}
+
+/// C14's checks of core ABI 1.13's descriptors and calls (EmuSen_CoreAPI.md §6.33-§6.37), each made only where the
+/// machine lists the item or the library claims it, so a core with none of them is reported as before; the words its
+/// summary gains.
+fn since_1_13(s: &mut Session<'_>, m: &Machine<'_>, info: &Value, c: &mut Check) -> String {
+    let list = |k: &str| info.get(k).and_then(Value::as_array).map(|a| a.to_vec()).unwrap_or_default();
+    let mut more = String::new();
+    let units = list("units");
+    if !units.is_empty() {
+        c.that(s.lib.claims(caps::DEBUG_REGISTERS), || "machine info lists units and DEBUG_REGISTERS is not claimed".to_owned());
+        let processors: BTreeSet<i64> = list("processors").iter().filter_map(|p| p.get("id").and_then(Value::as_i64)).collect();
+        let mut ids = BTreeSet::new();
+        for u in &units {
+            let id = u.get("id").and_then(Value::as_i64).unwrap_or(-1);
+            let name = u.get("name").and_then(Value::as_str).unwrap_or("").to_owned();
+            let count = u.get("registers").and_then(Value::as_array).map_or(0, |r| r.len());
+            c.that(id >= emusen_native::core::UNIT_FIRST_ID as i64, || format!("unit {id} ({name}) has an id below 256, where processors' ids are"));
+            c.that(ids.insert(id) && !processors.contains(&id), || format!("unit {id} ({name}) shares its id with another unit or a processor"));
+            match m.registers(id as u32) {
+                Ok(v) => c.that(v.len() == count, || format!("unit {id} ({name}) lists {count} registers and debug_registers answers {}", v.len())),
+                Err(e) => c.that(false, || format!("unit {id} ({name}) is listed and debug_registers answers {e}")),
+            }
+        }
+        let past = ids.iter().max().copied().unwrap_or(255) + 1;
+        let r = m.registers(past as u32);
+        c.that(r == Err(status::NOT_SUPPORTED as i64), || format!("debug_registers of {past}, which no processor or unit has, answered {r:?}, not NOT_SUPPORTED"));
+        more += &format!(", {} unit(s) each answered with its registers", units.len());
+    }
+    let counters = list("telemetry");
+    c.that(counters.is_empty() || s.lib.claims(caps::TELEMETRY), || "machine info lists telemetry and TELEMETRY is not claimed".to_owned());
+    if s.lib.claims(caps::TELEMETRY) {
+        for k in &counters {
+            let name = k.get("name").and_then(Value::as_str).unwrap_or("");
+            c.that(!name.is_empty() && name.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'.'), || format!("the counter {name:?} is not named [a-z0-9_.]+"));
+        }
+        let before = s.state_digest(m);
+        match (m.telemetry(), m.telemetry()) {
+            (Ok((n, first)), Ok((_, second))) => {
+                c.that(n as usize == counters.len(), || format!("telemetry answers {n} counters and machine info lists {}", counters.len()));
+                for (i, k) in counters.iter().enumerate().filter(|(_, k)| k.get("kind").and_then(Value::as_str) == Some("total")) {
+                    let name = k.get("name").and_then(Value::as_str).unwrap_or("");
+                    c.that(first.get(i) == second.get(i), || format!("the total {name} moved from {:?} to {:?} between two reads with nothing run", first.get(i), second.get(i)));
+                }
+            }
+            (Err(e), _) | (_, Err(e)) => c.that(false, || format!("TELEMETRY is claimed and telemetry answered {e}")),
+        }
+        c.that(s.state_digest(m) == before, || "reading telemetry changed the state".to_owned());
+        more += &format!(", {} counter(s) read twice alike", counters.len());
+    }
+    if s.lib.claims(caps::PRESENCE) {
+        let ports = list("ports").len() as u32;
+        let before = s.state_digest(m);
+        let past = m.set_present(ports, 0);
+        c.that(past == status::NO_SUCH_PORT, || format!("set_present on port {ports}, past machine info's, answered {past}, not NO_SUCH_PORT"));
+        let other = m.set_present(0, 2);
+        c.that(other == status::NOT_SUPPORTED, || format!("set_present with present 2 answered {other}, not NOT_SUPPORTED"));
+        c.that(s.state_digest(m) == before, || "a refused set_present changed the state".to_owned());
+        more += "; set_present refused past the ports";
+    }
+    let cheats = list("spaces").iter().find(|x| strs(x.get("flags")).iter().any(|f| f == "cheats")).and_then(|x| x.get("id")?.as_i64());
+    if s.lib.claims(caps::CHEAT_POKES)
+        && let Some(space) = cheats
+    {
+        match held_cheats(s, space as u32) {
+            Ok(0) => {}
+            Ok(n) => more += &format!("; {n} frame(s) of {HELD_FRAMES} held the cheats, the core's pokes with them"),
+            Err(e) => c.that(false, || e),
+        }
+    }
+    more
+}
+
+/// The frames the held-cheats check runs.
+const HELD_FRAMES: u64 = 32;
+
+/// Since 1.13 (EmuSen_CoreAPI.md §6.37): over `HELD_FRAMES` frames, the frames flagged `FRAME_CHEATS_HELD`, each of which
+/// must apply none of the core's pokes: a machine with a poke on a cheats space's byte and one without, the byte set
+/// alike in both before each frame, agree on it after a held frame.
+fn held_cheats(s: &mut Session<'_>, space: u32) -> Result<u64, String> {
+    let settings = s.opts.settings.clone();
+    let poke = |m: &Machine<'_>| {
+        let quad = [space, 0, 0x5A, flags::NO_COMPARE];
+        m.lib.f.set_cheat_pokes.map(|g| unsafe { g(m.h, quad.as_ptr(), 1) });
+    };
+    let held = |m: &Machine<'_>| m.frame_info().map(|fi| fi.flags & flags::FRAME_CHEATS_HELD != 0).unwrap_or(false);
+    let step = |m: &Machine<'_>| -> Result<(), String> {
+        m.advance().map_err(|e| format!("advance failed with {e}"))?;
+        m.present();
+        m.drain_audio();
+        Ok(())
+    };
+    let alone = s.machine(&settings)?;
+    poke(&alone);
+    let mut any = false;
+    for _ in 0..HELD_FRAMES {
+        step(&alone)?;
+        any |= held(&alone);
+    }
+    drop(alone);
+    if !any {
+        return Ok(0);
+    }
+    let (a, b) = (s.machine(&settings)?, s.machine(&settings)?);
+    poke(&a);
+    let mut n = 0;
+    for f in 0..HELD_FRAMES {
+        let w = match (f as u8).wrapping_mul(37) | 1 {
+            0x5A => 0x5B,
+            w => w,
+        };
+        a.space_write(space, 0, w);
+        b.space_write(space, 0, w);
+        step(&a)?;
+        step(&b)?;
+        if held(&a) {
+            n += 1;
+            let (x, y) = (a.space_byte(space, 0), b.space_byte(space, 0));
+            if x != y {
+                return Err(format!("frame {f} is flagged FRAME_CHEATS_HELD and the core's poke changed space {space}'s byte 0 to {x:#04x}, where a machine with no poke has {y:#04x}"));
+            }
+        }
+    }
+    Ok(n)
 }
 
 use emusen_native::debug::{flag, range, run as runflag, stop};
@@ -2455,7 +2590,8 @@ fn c15(s: &mut Session<'_>) -> Case {
                 c.that(r == want, || format!("debug_set_ranges of kind {kind} answered {r}, {want} for a core that {} DEBUG_READS", if reads { "claims" } else { "does not claim" }));
             }
         }
-        c.note(format!("armed against plain over {frames} frames{}; a breakpoint at the next instruction; eight steps under EACH; range kinds 2-4", if s.lib.claims(caps::DEBUG_READS) { ", loads among them" } else { "" }));
+        let translated = if s.lib.claims(caps::DEBUG_TRANSLATE) { translation(s, &m, &ids, c)? } else { String::new() };
+        c.note(format!("armed against plain over {frames} frames{}; a breakpoint at the next instruction; eight steps under EACH; range kinds 2-4{translated}", if s.lib.claims(caps::DEBUG_READS) { ", loads among them" } else { "" }));
         Ok(())
     };
     if let Err(e) = body(s, &mut c) {
@@ -2463,6 +2599,24 @@ fn c15(s: &mut Session<'_>) -> Case {
     }
     s.observed = false;
     c.done("C15", "debug")
+}
+
+/// Since 1.13 (EmuSen_CoreAPI.md §6.38): each processor's translation of a few addresses answered alike twice and
+/// changing nothing, and a processor machine info does not name refused.
+fn translation(s: &mut Session<'_>, m: &Machine<'_>, ids: &[i64], c: &mut Check) -> Result<String, String> {
+    let before = s.state_digest(m)?;
+    for &id in ids {
+        for address in [0u32, 0x100, 0x8000_0000, 0xFFFF_FFFF] {
+            let (first, second) = (m.translate(id as u32, address), m.translate(id as u32, address));
+            c.that(first == second, || format!("processor {id}'s translation of {address:#x} answered {first:?}, then {second:?}"));
+            c.that(first.0 >= 0 || first.0 == status::NOT_SUPPORTED, || format!("processor {id}'s translation of {address:#x} answered {}", first.0));
+        }
+    }
+    let past = ids.iter().max().map_or(0, |m| m + 1) as u32;
+    let r = m.translate(past, 0).0;
+    c.that(r == status::NOT_SUPPORTED, || format!("debug_translate on processor {past}, which machine info does not name, answered {r}"));
+    c.that(s.state_digest(m)? == before, || "debug_translate changed the state".to_owned());
+    Ok(format!("; each processor's translation answered alike twice, changing nothing"))
 }
 
 #[cfg(test)]

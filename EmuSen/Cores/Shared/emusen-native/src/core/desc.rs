@@ -263,6 +263,34 @@ pub struct Processor {
     pub code_space: Option<u32>,
 }
 
+/// Since 1.13: a part that runs no code and holds registers (a PPU, an APU, a sound channel, a cartridge's board), read
+/// through `debug_registers` by its id, 256 or above, as a processor's are (EmuSen_CoreAPI.md §6.33).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Unit {
+    pub id: u32,
+    pub name: String,
+    /// Open: `video`, `audio`, `channel`, `timer`, `dma`, `cartridge`, or a core's own word.
+    pub kind: String,
+    /// `(name, bits)` in `debug_registers`' order.
+    pub registers: Vec<(String, u32)>,
+}
+
+/// The first id a unit may take, above every processor's (EmuSen_CoreAPI.md §6.33).
+pub const UNIT_FIRST_ID: u32 = 256;
+
+/// Since 1.13 (`TELEMETRY`): one of the core's own counters, its value read by `telemetry` in the list's order
+/// (EmuSen_CoreAPI.md §6.34).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Counter {
+    /// `[a-z0-9_.]+`, stable for the core's major.
+    pub name: String,
+    pub label: String,
+    /// Open: `cycles`, `instructions`, `ns`, `bytes`, `count`.
+    pub unit: String,
+    /// Open: `total` (counts up from create), `frame` (the last frame's), `level` (as it stands now).
+    pub kind: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct Battery {
     pub which: u32,
@@ -589,6 +617,10 @@ pub struct Measured<'a> {
     pub picture_settles: u32,
     /// `Core::raw_encodings` of a core claiming `RAW_PICTURE`, written as `video.raw` when there are any (since 1.10).
     pub raw: &'a [RawEncoding],
+    /// `Core::units` of a core claiming `DEBUG_REGISTERS`, written as `units` when there are any (since 1.13).
+    pub units: &'a [Unit],
+    /// `Core::counters` of a core claiming `TELEMETRY`, written as `telemetry` when there are any (since 1.13).
+    pub telemetry: &'a [Counter],
 }
 
 /// The most frames `state.picture_settles` may name: ten seconds at 60 frames a second (EmuSen_CoreAPI.md §6.9).
@@ -661,6 +693,18 @@ pub fn machine_info_json(m: &MachineInfo, measured: &Measured<'_>, drives: &[Dri
         j.end_array().end_object();
     }
     j.end_array();
+    if !measured.units.is_empty() {
+        j.key("units").begin_array();
+        for u in measured.units {
+            j.begin_object().field_uint("id", u.id as u64).field_str("name", &u.name).field_str("kind", &u.kind);
+            j.key("registers").begin_array();
+            for (name, bits) in &u.registers {
+                j.begin_object().field_str("name", name).field_uint("bits", *bits as u64).end_object();
+            }
+            j.end_array().end_object();
+        }
+        j.end_array();
+    }
     j.key("battery").begin_array();
     for b in &m.battery {
         j.begin_object().field_uint("which", b.which as u64).field_str("suffix", &b.suffix).field_int("length", (measured.battery_len)(b.which).unwrap_or(0));
@@ -684,6 +728,13 @@ pub fn machine_info_json(m: &MachineInfo, measured: &Measured<'_>, drives: &[Dri
     }
     j.end_object();
     j.field_strs("phases", &m.phases);
+    if !measured.telemetry.is_empty() {
+        j.key("telemetry").begin_array();
+        for c in measured.telemetry {
+            j.begin_object().field_str("name", &c.name).field_str("label", &c.label).field_str("unit", &c.unit).field_str("kind", &c.kind).end_object();
+        }
+        j.end_array();
+    }
     if let Some((low, high)) = m.patches {
         j.key("patches").begin_object().field_uint("low", low as u64).field_uint("high", high as u64).end_object();
     }

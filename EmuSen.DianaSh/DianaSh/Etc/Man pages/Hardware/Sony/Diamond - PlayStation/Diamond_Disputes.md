@@ -31,6 +31,8 @@ fights began (`Diamond_Players.md` §13).
 of Crash Bandicoot's screen undrawn (`Diamond_Players.md` §14).
 *The third play step (2026-10-12)* took D-48, the subchannel Q a read's seek leaves, which had held a radio line of
 Mega Man Legends on the screen for ever (`Diamond_Players.md` §14.6).
+*A step of 2026-10-18* took D-49, a display range moved onto or across the beam's line, left open by the display
+range behind the beam (`Diamond_Native.md` §28.5, §29).
 
 ## The rules this log keeps
 
@@ -1627,3 +1629,26 @@ Mega Man Legends on the screen for ever (`Diamond_Players.md` §14.6).
 - **Pinned by:** the unit test above, failing before the change.
 - **Implemented in:** `drive.rs`'s `found`, called by `seek_done` as a seek turns into a read or a play, in the commit
   citing this entry.
+
+### D-49. A display range moved onto or across the beam's line within a field: onto it, the line is met in the next field; across it, the interrupt and the level read at once stay open
+
+- **Opened:** 2026-10-18, from the two cases `Diamond_Native.md` §28.5 left after the display range behind the beam.
+- **Documents read:** psx-spx `6d7d1bc`, GP1(07h) (Y1 and Y2 relative to VSYNC; a much too large Y2 stops IRQ0),
+  GPUSTAT bit 31 (zero during vblank), "Timers" (a mode write resets the count), "Interrupts" (I_STAT is
+  edge-triggered). None says what a range changed within a field does.
+- **The console's logs:** none. No program of ps1-tests, amidog's, Peter Lemon's or the 240p suite moves the range
+  within a field by itself (`Diamond_Native.md` §29.2).
+- **What Diamond did:** the levels follow the new range at once; edges come only at a line the range names, at its
+  start; a new Y1 or Y2 equal to the current line gave its edge at that line's start, already passed.
+- **Test program:** `programs/range-cross.s`, nine cases (`Diamond_Native.md` §29.3).
+- **Referee:** the five of `Diamond_Referees.md` §2, outputs only; the tables are `Diamond_Native.md` §29.4.
+  PCSX-Redux and PCSX-ReARMed do not move vblank with the range and are not counted.
+- **Conclusion** [A]: **a new Y1 or Y2 on the beam's line is met in the next field**, as a line behind it is (§28):
+  Beetle PSX and DuckStation agree that timer 1 in sync mode 0 keeps the state it had when Y2 or Y1 is moved onto its
+  line, and neither raises IRQ0 at the start of a line already begun; Beetle PSX, the strongest witness for video
+  timing, meets the line in the next field. *Open*: across the beam, the interrupt (the referees disagree in every
+  case) and the level read at once, where Beetle PSX alone opposes Diamond (a latch, proposed, `Diamond_Native.md`
+  §29.5); and a Y2 past the field, where psx-spx and Beetle PSX give no interrupt and Diamond one each field.
+- **Pinned by:** `video::tests::a_range_line_moved_onto_the_beams_line_is_no_edge_this_field` and `programs.rs`'s
+  `a_range_moved_onto_the_beams_line_waits_for_the_next_field`, both failing before the change.
+- **Implemented in:** `video.rs`'s `retime`, in the commit citing this entry.

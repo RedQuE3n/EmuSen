@@ -481,6 +481,24 @@ fn a_mode_write_with_sync_resets_the_count() {
     assert_eq!(results(&m, 0x10_0080, 32), [[0, 0, 0, 0, 3, 6, 3, 6], free, [3, 6, 3, 6, 0, 0, 0, 0], [0; 8]].concat(), "timer 1, vblank");
 }
 
+/// GP1(07h) moved onto the beam's line gives no edge until the next field (Diamond_Native.md §29): the first two
+/// vblank interrupts of each of `range-cross.s`'s cases, and whether timer 1 in sync mode 0 and 3, written just before
+/// the range, counts within 20 lines, never from before its own write. Before the fix Y2 moved onto line 100 raised
+/// IRQ0 at once, and timer 1 read 1,104 and 1,113 just after its write, counted from the line's start.
+#[test]
+fn a_range_moved_onto_the_beams_line_waits_for_the_next_field() {
+    let m = run_for(include_str!("../programs/range-cross.s"), 300, Market::Americas);
+    assert_eq!(m.board.ram_word(0xFFFF0), 0xD1A0_D00E, "the program finished");
+    let edges: Vec<[u32; 4]> = (0..8).map(|c| results(&m, 0x10_0000 + 0x20 * c, 6)).map(|r| [r[0], r[3], r[4], r[5]]).collect();
+    assert_eq!(edges, [[107, 263, 526, 2], [107, 320, 583, 2], [107, 370, 633, 2], [107, 263, 526, 2], [2, 6, 269, 2], [12, 263, 526, 2], [12, 263, 526, 2], [107, 270, 533, 2]]);
+    let counting = |at: u32| -> Vec<bool> {
+        (0..8).map(|c| results(&m, at + 0x20 * c, 4)).inspect(|r| assert!(r[0] <= 16, "{at:X}: {r:?} counted from before the write")).map(|r| r[3] > 0).collect()
+    };
+    assert_eq!(counting(0x10_0400), [true, true, true, true, false, false, false, true], "sync mode 0");
+    assert_eq!(counting(0x10_0600), [false, false, false, false, true, false, false, false], "sync mode 3");
+    counting(0x10_0800);
+}
+
 /// The console log's largest first sample and largest rise in each of `timers`' fourteen sync tables, in its order.
 const SYNC_LOG: [(i32, i32); 14] =
     [(260, 123), (245, 123), (242, 123), (242, 123), (242, 123), (38, 20), (48, 25), (54, 28), (76, 39), (95, 49), (248, 123), (0, 1), (248, 123), (247, 123)];

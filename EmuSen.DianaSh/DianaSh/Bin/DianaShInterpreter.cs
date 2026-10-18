@@ -28,6 +28,9 @@ namespace EmuSen.DianaSh.DianaSh.Bin
         private readonly NativeShell? _shell;
         private readonly uint _session;
 
+        // The session service a frontend on Crystal's API handed this shell, whose run events answer Resume and Step.
+        private SessionService? _service;
+
         public CommandHistory History { get; }
 
         // Every registered command's own Name - see EmuSen_Debugging_Tools_Reference_v5.md §3.18 on why this exists.
@@ -98,14 +101,32 @@ namespace EmuSen.DianaSh.DianaSh.Bin
         {
             DianaShSandbox.EnsureInitialWorkingDirectory();
             if (DianaShNative.Active) return CreateNative(target, extraCommands, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, sessions, supportedCheatSystems);
+            return CreateManaged(target, extraCommands, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, sessions, supportedCheatSystems, null);
+        }
 
+        // A shell with no game, as a launch prompt makes one before the frontend API has a session to hand it - see EmuSen_Backend.md §14.11.
+        public static DianaShInterpreter CreateWithoutSession(IEnumerable<IDianaShCommand>? extraCommands = null, Func<IReadOnlyCollection<string>>? supportedCheatSystems = null) =>
+            CreateDefault(null, extraCommands, supportedCheatSystems: supportedCheatSystems);
+
+        // The C# interpreter; over a session's service, each shell `tmux new` makes is over it too.
+        private static DianaShInterpreter CreateManaged(
+            IDebugTarget? target,
+            IEnumerable<IDianaShCommand>? extraCommands,
+            ICheatCodeCodec? cheatAutoDetectCodec,
+            ICheatCodeCodec? cheatExplicitCodec,
+            ICpuTraceSwitch? cpuTraceSwitch,
+            DianaShSessionManager? sessions,
+            Func<IReadOnlyCollection<string>>? supportedCheatSystems,
+            SessionService? service)
+        {
             var history = new CommandHistory();
 
             // whoami/su/useradd need this interpreter's own CurrentUser, which Execute cannot reach.
             DianaShInterpreter? self = null;
             Func<DianaShInterpreter> selfAccessor = () => self!;
-            List<IDianaShCommand> commands = DefaultCommands(target, extraCommands, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, sessions, supportedCheatSystems, selfAccessor, history);
-            self = new DianaShInterpreter(new Managed(target, commands, history));
+            Func<DianaShInterpreter>? newSession = sessions is null ? null : () => CreateManaged(target, extraCommands, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, sessions, supportedCheatSystems, service);
+            List<IDianaShCommand> commands = DefaultCommands(target, extraCommands, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, sessions, supportedCheatSystems, selfAccessor, history, newSession);
+            self = new DianaShInterpreter(new Managed(target, commands, history)) { _service = service };
             return self;
         }
 
@@ -119,7 +140,8 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             DianaShSessionManager? sessions,
             Func<IReadOnlyCollection<string>>? supportedCheatSystems,
             Func<DianaShInterpreter> selfAccessor,
-            CommandHistory history)
+            CommandHistory history,
+            Func<DianaShInterpreter>? newSession = null)
         {
             // snapshot/diff share one store, constructed here with every other command's state.
             var snapshotStore = new SnapshotStore();
@@ -188,7 +210,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 new Commands.Unix.FindCommand(),
                 new XxdCommand(),
                 new NanoCommand(),
-                new TmuxCommand(sessions, sessions is null ? null : () => CreateDefault(target, extraCommands, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, sessions, supportedCheatSystems)),
+                new TmuxCommand(sessions, sessions is null ? null : newSession ?? (() => CreateDefault(target, extraCommands, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, sessions, supportedCheatSystems))),
                 new PsCommand(sessions),
                 new KillCommand(sessions),
                 new WhoamiCommand(selfAccessor),
@@ -228,14 +250,18 @@ namespace EmuSen.DianaSh.DianaSh.Bin
 
         // The Rust shell, with every C# command it does not answer itself registered as the host's - see EmuSen_DianaSh.md §13.7.
         // A shell over a session's emusen.session@1 table, as a frontend on Crystal's API hands it one; its commands reach the session through that table - see EmuSen_Backend.md §14.8.
-        public static unsafe DianaShInterpreter CreateForService(nint sessionService, IEnumerable<IDianaShCommand>? extraCommands = null)
+        // With sessions, `tmux` makes more shells over the same table; Resume and Step come back from the session's own run events - see EmuSen_Backend.md §14.11.
+        public static unsafe DianaShInterpreter CreateForService(nint sessionService, IEnumerable<IDianaShCommand>? extraCommands = null, DianaShSessionManager? sessions = null)
         {
             SessionService provider = SessionService.Of((EmuSenSessionV1*)sessionService)
                 ?? throw new ArgumentException("not a session service table this process's provider made; the Rust Crystal's tables are B7's", nameof(sessionService));
             SessionServiceOptions o = provider.Options;
             DianaShSandbox.EnsureInitialWorkingDirectory();
-            if (DianaShNative.Active) return CreateNative(provider.DebugTarget, extraCommands, o.AutoDetectCodec, o.ExplicitCodec, o.Trace, null, o.CheatSystems, provider);
-            return CreateDefault(provider.DebugTarget, extraCommands, o.AutoDetectCodec, o.ExplicitCodec, o.Trace, null, o.CheatSystems);
+            DianaShInterpreter shell = DianaShNative.Active
+                ? CreateNative(provider.DebugTarget, extraCommands, o.AutoDetectCodec, o.ExplicitCodec, o.Trace, sessions, o.CheatSystems, provider)
+                : CreateManaged(provider.DebugTarget, extraCommands, o.AutoDetectCodec, o.ExplicitCodec, o.Trace, sessions, o.CheatSystems, provider);
+            shell._service = provider;
+            return shell;
         }
 
         private static DianaShInterpreter CreateNative(
@@ -320,6 +346,29 @@ namespace EmuSen.DianaSh.DianaSh.Bin
 
         // Buffers raw text across calls whenever the parser says "not finished yet" - see §3.17.
         public (bool NeedsMoreInput, string Output, HostAction? Action) Submit(string rawLine)
+        {
+            // A run event the frontend raised itself, outside a line, is not this line's.
+            _service?.DrainRunRequests();
+            var result = SubmitToShell(rawLine);
+            return _service is null ? result : FromRunEvents(result);
+        }
+
+        // Over a session's service a C# command's resume or step is asked of run control, as the Rust shell's modules ask it; either way the session's run events answer - see EmuSen_Backend.md §14.11.
+        private unsafe (bool NeedsMoreInput, string Output, HostAction? Action) FromRunEvents((bool NeedsMoreInput, string Output, HostAction? Action) result)
+        {
+            if (_managed is null) return result;
+            if (result.Action is HostAction.Resume or HostAction.Step)
+            {
+                EmuSenSessionV1* table = _service!.Table;
+                table->run_control(table->ctx, 0, SessionAbi.RunResume, 0, 0);
+            }
+            string? run = null;
+            foreach (string op in _service!.DrainRunRequests()) run = op;
+            if (result.Action is not null || run is null) return result;
+            return (result.NeedsMoreInput, result.Output, run == "step" ? new HostAction.Step() : new HostAction.Resume());
+        }
+
+        private (bool NeedsMoreInput, string Output, HostAction? Action) SubmitToShell(string rawLine)
         {
             if (_managed is not null) return _managed.Submit(rawLine);
             var (status, output, requests) = Native.Submit(_session, rawLine ?? "");

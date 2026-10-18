@@ -1,6 +1,6 @@
 # EmuSen — the backend in Rust: the line, the frontend API, the system packs and the services
 
-*This revision: the first, 2026-10-17. A design; B1 has since been built (§12, 2026-10-17), and B2's first two parts (§14, 2026-10-17). It answers the tester's goal of 2026-10-16, "to
+*This revision: the first, 2026-10-17. A design; B1 has since been built (§12, 2026-10-17), and B2's first three parts (§14, 2026-10-17). It answers the tester's goal of 2026-10-16, "to
 get the entire backend ported to rust", after which the frontend's move is planned, and the request of 2026-10-17 to
 design two things: one frontend API by which every frontend drives the cores, and the system packs and the remaining C#
 platform services in Rust. Every claim about the code was read on `WiseMan` at `165e60b4`. Claims are marked as
@@ -1701,3 +1701,98 @@ moves of the windowed frontends, which pace; Pharaoh does not.
   C7's console case, F4's skipped test made to pass, `HostAction` synthesised from events), then Mistress (1.1, C1, C2
   and C5's own cases, F3's copy from `games.db`, SR12), and the session service's 1.3 with `games`, `open_game` and
   `open_console` (D10).
+
+### 14.11 Part 3: emusen-shell and Hotaru's game window on the API
+
+**What moved.** Hotaru's session and its window now drive the core through `EmuSen.Crystal.Client` alone:
+
+- **`HotaruSession`** opens the game, or an empty console, with the runtime's `open`. The engine is the one the
+  settings' layers choose; the sound buffer is `audio.json`'s.
+- **The window's loop** calls `frame` beside its own pacer. It copies the picture into buffers it owns
+  (`PictureSlots`, `EmuSen_Serenity.md` §2.11) and drains the sound into a buffer of its own.
+- **Input** goes through the API's input calls. Turbo is `speed_mode`; a held rewind is `rewind_step`.
+- **F5, F9 and `state`** use the API's states, in the player's folder (F4). F6 is `record_start` and `record_stop`,
+  F1 is `summary`, and the first watches are `watch_add`.
+- **A breakpoint** leaves the session halted. The window's prompt runs until a resume, and leaving the prompt with a
+  blank line or `feed` asks `run_control(RESUME)`.
+
+**emusen-shell.** The program holds one runtime for the process. Its launch prompt and its shell window make their
+shell with `CreateWithoutSession`, and `core` reads its vocabulary from the API's `systems` (below).
+
+**Removed from the frontends:**
+
+- their `RewindBuffer`, `SpeedController`, `FrameRecorder` and state path;
+- every `ICore`, `CoreFactory`, `CoreCatalog`, `IDebugTarget` and `CoreDescriptor`.
+
+Two helpers they used moved:
+
+- `CategorizedLogWriter`, which three frontends use and which needs only the BCL, moved from `EmuSen.Common` to
+  `EmuSen.Galaxia.Library`.
+- Hotaru's `FrameImageWriter` encodes its PNG with SkiaSharp itself. The runtime keeps `PngFile` for its recorder,
+  on the other side of the API.
+
+`FrontendReferenceTests` now holds Hotaru and emusen-shell to SR2 as it holds Pharaoh. Its check that it sees a
+violator reads Mistress, which is not yet moved.
+
+**The surfaces this needed.** Under SR2, five members of DianaSh's and Serenity's C# surfaces could not be called,
+because their signatures named a runtime type. The tester decided on 2026-10-17 to add members that name only
+DianaSh's, Serenity's or the BCL's types, and to give SR2 no exemption. The additions:
+
+- in DianaSh, `HostCommand`, `CoreChoice`, `CreateForService` with sessions, `CreateWithoutSession` and
+  `CoretopCommand(Action)` (`EmuSen_DianaSh.md` §13.14);
+- in Serenity, `PictureSlots` and `CoretopWindow.Over(ISessionReadout)` (`EmuSen_Serenity.md` §2.11).
+
+Both are recorded in `EmuSen_Surfaces.md` §6.2. The old signatures that took `CoreDescriptor` or
+`Action<IDebugTarget>` had no caller left and were removed.
+
+One form differs from the decision and is put to the tester in `EmuSen_Serenity.md` §2.11. The coretop window reads
+through the frontend's binding, not a service table reached with `SessionService.Of`, because a table's pointer
+outlives a swap.
+
+**`HostAction` from events** (`EmuSen_DianaSh.md` Q5). Over a session's table, `resume` and `step` reach the session's
+run control on both shells: the Rust shell's modules call it, and the C# facade asks it for its commands. The facade
+then reports the action because the session's run events raised it (`EmuSen_DianaSh.md` §13.14,
+`ShellOverSessionTests`). The window's loop does not pass the session along: the session itself holds or runs.
+
+**The `core` vocabulary, 1.1.** The runtime alone knows the names `core <name>` accepts:
+
+- the catalog's codenames and console names;
+- each discovered console's and engine's name;
+- each core's display name and extensions.
+
+The tester decided on 2026-10-17 that these ride along on each `systems` entry as an additive 1.1 field, `core`,
+filled from the registry. They are the engine's facts, not the pack's (§5.3), so they stay out of `emusen-systems`'
+data files. The decision named `names` and `display_name`. The field also carries `console` and `extensions`, because
+`core`'s refusals print them ("no core in this build starts the …", "… - expected: .smc, .sfc"), and Mercury's one
+core spans two systems whose extensions differ.
+
+`HotaruOnTheApiTests.The_core_vocabulary_read_from_the_API_is_the_registry_s` holds every name of the registry equal
+on the API in all three facts. The golden corpus holds the words.
+
+A system that only an engine's info names, with no pack, now gets a `core` entry of its id and its engines' names.
+This lets `core test …` swap the test core's games, which the registry never offered. The version constant moves to
+1.1 with part 4's exports, in the same unmerged step.
+
+**Behaviour that changed:**
+
+- In a running game, `core <name> --console` opens the console as a new session. It no longer starts it in place only
+  when the running engine is the console's.
+- A launch of an empty console is said as "the <console> with nothing in it".
+
+**The gates of part 3:**
+
+| Gate | Result |
+|---|---|
+| F4 | The test committed skipped in part 1 now runs and passes. With a state folder set, Hotaru's state is `<folder>/Kept.state`, the API's path for every client. |
+| C3 | **Not shown failing.** The race is in the code: `CoreEngine.GetFrameBufferRgba` writes `_frame` and `_shape` outside the machine's lock, from the UI thread's feed poll and the emulation thread at once. The test core's picture is one row of eight pixels, a single small copy, so no torn picture was produced to show it. On the API, the feed copies into an array of its own through `picture_copy`. A copy taken on another thread while frames run is always one whole picture (`C3_a_picture_copied_beside_the_frames_is_always_whole`). |
+| C4, the frontend's half | The window's pictures are presented from at most four buffers in 100 frames, where Hotaru's hand-over made one a frame (part 1's test shows that one). |
+| C6 | **Held by a test of the window itself**, run headless over the test core: after a `core` swap is typed, no session is opened or closed until the UI thread runs, and then one is opened and the old one closed. The pads are rebound in the same call. The old path's defect was read from the code (`GameWindow.axaml.cs:364–365` before this step), not shown by a test, since that window is gone. |
+| C7, Hotaru's console case | **Shown failing** on the old wiring: `state load` through `StateCommand` over the engine left the rewind history from before the load. On the API, the same command clears it, and the window's events reset the audio rate control once. |
+| SR2 | Hotaru and emusen-shell name no type of `EmuSen` or `EmuSen.Crystal`. |
+| Shells | `ShellOverSessionTests` pass on the Rust shell and, with `EMUSEN_DIANASH_NATIVE=0`, on the C# shell. The golden corpus, the shell's tests, the Crystal classes and the Hotaru, Shell, Serenity and Mistress tests pass. |
+
+**Left as it was:**
+
+- The window still gives Endymion's `AudioPlayer.Submit` an array of exactly the samples drained, one a frame, as
+  before. Endymion's C# rate control copies the samples whatever it is given.
+- Passing a span would need an Endymion overload, and it would save nothing until that copy goes.

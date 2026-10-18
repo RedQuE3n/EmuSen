@@ -141,6 +141,8 @@ namespace EmuSen.Crystal.Client
 
         public string Summary() => Text((o, n) => Contract.Crystal.Summary(Rt, Id, o, n));
 
+        public string Telemetry(uint kind) => Text((o, n) => Contract.Crystal.Telemetry(Rt, Id, kind, o, n));
+
         public string Spaces() => Text((o, n) => Contract.Crystal.Spaces(Rt, Id, o, n));
 
         // Bytes of a memory space from an address, read as the space reads any address.

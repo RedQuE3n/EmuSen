@@ -38,14 +38,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The emulation core (Cores/Nintendo/Venus - SNES/*, Common/, Debug/,
-         Settings/) - EmuSen.csproj is a pure library, no Main/window
-         ownership of its own. -->
-    <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
-    <!-- The shell its F4 prompt and terminal embed, and Crystal beneath it for the debug target and FrameRecorder;
-         the cores no longer bring the shell with them - see EmuSen_DianaSh.md §13.6. -->
+    <!-- The frontend API's binding, the one way this frontend drives a core; it names no type of EmuSen or
+         EmuSen.Crystal (SR2) - see EmuSen_Backend.md §14.11. -->
+    <ProjectReference Include="..\EmuSen.Crystal.Client\EmuSen.Crystal.Client.csproj" />
+    <!-- The shell its F4 prompt and terminal embed, made over the session's service table - see EmuSen_DianaSh.md §13.6. -->
     <ProjectReference Include="..\EmuSen.DianaSh\EmuSen.DianaSh.csproj" />
-    <ProjectReference Include="..\EmuSen.Crystal\EmuSen.Crystal.csproj" />
     <!-- GameFrameControl/ShaderEffect/BuiltInShaders - the Avalonia-native
          presenter this frontend is built around. See
          EmuSen.Serenity.csproj. -->

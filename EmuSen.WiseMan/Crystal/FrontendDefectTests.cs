@@ -25,8 +25,8 @@ namespace EmuSen.WiseMan.Crystal
             settings.Save();
         }
 
-        // F4: with a state folder set, emusen-shell's game (Hotaru's session) names its state outside it, so a state saved in one program is not found by the other.
-        [Fact(Skip = "F4, shown failing on 2026-10-17 (the state in Home/Saves/Save States, not the folder set): passes once emusen-shell opens its games through the API")]
+        // F4: with a state folder set, emusen-shell's game (Hotaru's session) named its state outside it (Home/Saves/Save States, shown failing on 2026-10-17); on the API it names the folder's.
+        [Fact]
         public void F4_emusen_shell_names_the_state_the_API_names()
         {
             string folder = Path.Combine(_f.Root, "States");
@@ -35,9 +35,14 @@ namespace EmuSen.WiseMan.Crystal
             TextWriter output = Console.Out;
             try
             {
-                var hotaru = EmuSen.Hotaru.HotaruSession.Build(game, output);
-                using CrystalSession s = _f.Open(game);
-                Assert.Equal(s.DefaultStatePath(), hotaru.StatePath);
+                var hotaru = EmuSen.Hotaru.HotaruSession.Build(game, output, _f.Runtime);
+                using (hotaru.Session)
+                using (hotaru.LogWriter)
+                {
+                    Assert.Equal(Path.Combine(folder, "Kept.state"), hotaru.StatePath);
+                    using CrystalSession s = _f.Open(game);
+                    Assert.Equal(s.DefaultStatePath(), hotaru.StatePath);
+                }
             }
             finally
             {

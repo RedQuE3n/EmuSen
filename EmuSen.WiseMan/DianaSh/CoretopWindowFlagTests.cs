@@ -43,13 +43,13 @@ namespace EmuSen.WiseMan.DianaSh
         public void Minus_w_with_a_window_opener_calls_it_instead_of_the_console_dashboard()
         {
             var target = BuildTarget();
-            IDebugTarget? received = null;
+            int opened = 0;
             var shell = DianaShInterpreter.CreateDefault(target,
-                new IDianaShCommand[] { new CoretopCommand(t => received = t) });
+                new IDianaShCommand[] { new CoretopCommand(() => opened++) });
 
             var result = shell.Submit("coretop -w");
 
-            Assert.Same(target, received);
+            Assert.Equal(1, opened);
             Assert.Contains("opened in a separate window", result.Output);
         }
 
@@ -57,7 +57,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Minus_w_without_a_rom_loaded_reports_no_rom_before_checking_the_flag()
         {
             var shell = DianaShInterpreter.CreateDefault(null,
-                new IDianaShCommand[] { new CoretopCommand(_ => { }) });
+                new IDianaShCommand[] { new CoretopCommand(() => { }) });
 
             var result = shell.Submit("coretop -w");
 
@@ -70,7 +70,7 @@ namespace EmuSen.WiseMan.DianaSh
             var target = BuildTarget();
             int calls = 0;
             var shell = DianaShInterpreter.CreateDefault(target,
-                new IDianaShCommand[] { new CoretopCommand(_ => calls++) });
+                new IDianaShCommand[] { new CoretopCommand(() => calls++) });
 
             shell.Submit("coretop -W");
 

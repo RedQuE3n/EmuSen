@@ -276,7 +276,7 @@ namespace EmuSen.WiseMan.DianaSh
         // The commands the shell program adds; `hotaru`'s window is a stand-in that opens nothing, and a ROM named broken* will not load.
         private static IDianaShCommand[] HostCommands(Func<string> statePath, bool window) => new IDianaShCommand[]
         {
-            new CoreCommand(CoreCatalog.Registry, EmuSen.Hotaru.HotaruSession.StartsEmpty),
+            new CoreCommand(CoreChoices.Of(CoreCatalog.Registry), console => CoreCatalog.EmptyStartFor(console) is not null),
             new StateCommand(p => File.WriteAllText(p, "state"), p => _ = File.ReadAllText(p), statePath),
             new EmuSen.Hotaru.HotaruCommand(window ? OpenNothing : null),
         };

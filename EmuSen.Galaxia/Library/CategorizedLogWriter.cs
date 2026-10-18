@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 
-namespace EmuSen.Common
+namespace EmuSen.Galaxia.Library
 {
     // Console output split by tag, written on a background thread - see EmuSen_Debugging_Tools_Reference_v5.md §2.1.
     public class CategorizedLogWriter : System.IO.TextWriter

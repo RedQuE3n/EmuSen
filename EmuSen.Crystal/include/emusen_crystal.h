@@ -160,8 +160,10 @@ int32_t emusen_crystal_free(emusen_crystal_runtime *rt);
 
 /* ---- The systems and the engines (reads) ------------------------------------------------------------------- */
 
-/* [{the systems table's keys (EmuSen_Backend.md 12.1), "engines":[name],"starts_empty"}], the table's systems first in
- * its order, then those only an engine's info names, with "id","name","extensions","engines","starts_empty". */
+/* [{the systems table's keys (EmuSen_Backend.md 12.1), "engines":[name],"starts_empty","core"}], the table's systems
+ * first in its order, then those only an engine's info names, with "id","name","extensions","engines","starts_empty",
+ * "core". Since 1.1 "core" is {"names":[name],"display_name","console","extensions":[ext]} or null: the engine's facts
+ * riding along, not a pack's, the names `core <name>` knows its core by (section 14.11). */
 int64_t emusen_crystal_systems(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
 
 /* [{"name","id","version","systems":[id],"available","report"}]: every engine discovery found. */

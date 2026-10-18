@@ -6,7 +6,6 @@ using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Dev;
 using EmuSen.Hotaru;
 using EmuSen.Hotaru.Views;
@@ -29,16 +28,19 @@ namespace EmuSen.Shell.Views
         private ILiveShell? _live;
 
         private DianaShInterpreter _shell;
+        private readonly Func<IReadOnlyCollection<string>>? _cheatSystems;
 
         public DianaShShellWindow() : this(null, null, null) { }
 
         public DianaShShellWindow(
             Func<HotaruLaunch, Window>? launchRom,
             Func<string, HotaruLaunch?>? resolveCoreCommand,
-            IEnumerable<string>? supportedCores)
+            IEnumerable<string>? supportedCores,
+            Func<IReadOnlyCollection<string>>? cheatSystems = null)
         {
             _launchRom = launchRom;
             _resolveCoreCommand = resolveCoreCommand;
+            _cheatSystems = cheatSystems;
             _shell = BuildInterpreter();
 
             Title = "DianaSh";
@@ -59,9 +61,9 @@ namespace EmuSen.Shell.Views
         }
 
         private DianaShInterpreter BuildInterpreter() =>
-            DianaShInterpreter.CreateDefault(null,
+            DianaShInterpreter.CreateWithoutSession(
                 new IDianaShCommand[] { new ClearShellWindowCommand(() => _console.Clear()), new HotaruCommand(_launchRom is null ? null : OpenGame) },
-                supportedCheatSystems: () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems);
+                _cheatSystems);
 
         // `hotaru`'s window, from this window's own prompt; a ROM that will not load comes back as the command's failure.
         private void OpenGame(string romPath, HotaruOutput output) => _launchRom!(HotaruLaunch.Rom(romPath)).Show();
@@ -150,17 +152,17 @@ namespace EmuSen.Shell.Views
     }
 
     // Replaces ClearCommand's Console.Clear(), which does nothing to a widget.
-    public class ClearShellWindowCommand : IDianaShCommand
+    public class ClearShellWindowCommand : HostCommand
     {
         private readonly Action _clearOutput;
 
         public ClearShellWindowCommand(Action clearOutput) => _clearOutput = clearOutput;
 
-        public string Name => "clear";
-        public bool IsReadOnly => true;
-        public string Usage => "  clear                         clear this shell window's output";
+        public override string Name => "clear";
+        public override bool IsReadOnly => true;
+        public override string Usage => "  clear                         clear this shell window's output";
 
-        public DianaShResult Execute(IDebugTarget? target, string[] args, string? stdin)
+        protected override DianaShResult Run(string[] args, string? stdin)
         {
             _clearOutput();
             return DianaShResult.Ok(string.Empty);

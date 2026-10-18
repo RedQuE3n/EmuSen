@@ -18,9 +18,12 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
         // Lets a frontend wire `-w` without DianaSh knowing any toolkit exists - see §3.3b.
         private readonly Action<IDebugTarget>? _openWindow;
 
-        public CoretopCommand(Action<IDebugTarget>? openWindow = null)
+        public CoretopCommand() { }
+
+        // A frontend on the frontend API opens its window over its own session, so `-w` hands it nothing - see EmuSen_Backend.md §14.11.
+        public CoretopCommand(Action openWindow)
         {
-            _openWindow = openWindow;
+            _openWindow = _ => openWindow();
         }
 
         public string Name => "coretop";

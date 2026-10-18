@@ -2503,6 +2503,45 @@ C# class under both.
 
 ---
 
+### 13.14 The shell's C# surface for a frontend on the frontend API (decided 2026-10-17)
+
+emusen-shell moved onto the frontend API in B2's part 3 (`EmuSen_Backend.md` §14.11). SR2 holds a frontend on that
+API to naming no type of `EmuSen` or `EmuSen.Crystal`. Five members of this shell's C# surface named one in their
+signatures, so a frontend calling them failed the check even when it passed only null:
+
+- `IDianaShCommand.Execute` names `IDebugTarget`;
+- `CreateDefault` names `IDebugTarget`, `ICheatCodeCodec` and `ICpuTraceSwitch`;
+- `CoreCommand` took a dictionary of `CoreDescriptor`;
+- `CoretopCommand` took `Action<IDebugTarget>`.
+
+The tester decided on 2026-10-17 to extend the surface with members that name only this assembly's types or the
+BCL's, and to leave SR2 without an exemption. Each addition is additive and stays within the existing surface (rule
+D of `EmuSen_Surfaces.md` §6.1):
+
+| Addition | What it is for |
+|---|---|
+| `HostCommand` (`Lib/HostCommand.cs`) | An abstract `IDianaShCommand` whose `Run(args, stdin)` takes no target, for a host's own commands: emusen-shell's `hotaru` and its window's `clear`. A class deriving from it names no runtime type; the interface is implemented in this assembly. |
+| `CreateForService(table, extras, sessions)` | Part 2's factory, now with `tmux` sessions. Each session `tmux new` makes is over the same table. Over a service, a C# command's `resume` or `step` is asked of the table's `run_control`, as the Rust shell's modules already ask it, and the session's run events answer it (below). |
+| `CreateWithoutSession(extras, cheatSystems)` | A shell with no game, which a launch prompt makes before the API has a session to hand it. |
+| `CoreChoice` (`Lib/CoreChoice.cs`) and `CoreCommand(IReadOnlyDictionary<string, CoreChoice>, startsEmpty)` | The `core` vocabulary as plain data: a display name, a console and the extensions loaded. A frontend fills it from the API's `systems`, whose `core` field the runtime fills from its registry. `CoreCommand`'s refusals and its words are unchanged, held by the golden corpus. |
+| `CoretopCommand(Action)` | `coretop -w` hands the frontend nothing; a frontend on the API opens its window over its own session. |
+
+The old signatures that took `CoreDescriptor` or `Action<IDebugTarget>` had no caller left once emusen-shell moved,
+and were removed in the same step. Only tests used them, and the tests now convert the catalog's registry with a
+helper of their own. `CreateDefault` stays, because Mistress and the cores' tests call it.
+
+**`HostAction` from events.** `EmuSen_DianaSh.md` Q5 decided that `HostAction` is retired by the session service and
+its events, with the C# facade synthesising today's actions until Hotaru moves. Over a service table, the facade
+reports `Resume` and `Step` because the session's run control raised them:
+
+- On the Rust shell, a module's call raises them, and `DrainRunRequest` already turns them into actions.
+- On the C# shell, the facade asks `run_control(RESUME)` for a command's own `Resume` or `Step`, then drains the
+  provider's run events.
+
+A run event the frontend raised itself, outside any line, is drained before the line, so it is never reported as
+that line's (`ShellOverSessionTests`). `Shutdown`, `SwitchSession`, `LoadCore` and `StartConsole` stay the shell's
+and the frontend's actions, as Q5 decided.
+
 ## 14. How it is tested
 
 - **The golden corpus** (§13.1), the oracle of every step.

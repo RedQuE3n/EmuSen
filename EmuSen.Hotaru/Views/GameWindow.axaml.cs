@@ -9,14 +9,12 @@ using Avalonia.Controls;
 using EmuSen.LunaP.Windowing;
 using Avalonia.Input;
 using Avalonia.Threading;
-using EmuSen.LunaP.Threading;
-using EmuSen.Cores;
+using EmuSen.Crystal.Client;
+using EmuSen.Crystal.Client.Contract;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.Crystal.Debugger;
-using EmuSen.Crystal.Recording;
 using EmuSen.DianaSh.DianaSh.Var.Shell;
 using EmuSen.DianaSh.DianaSh.Dev;
 using EmuSen.Endymion;
@@ -26,27 +24,24 @@ using EmuSen.Hotaru.Input;
 using EmuSen.Serenity;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Models;
-using EmuSen.Common;
 
 namespace EmuSen.Hotaru.Views
 {
-    // Hotaru's game window and its three threads - see EmuSen_Frontend_Driver.md §1, §2 and §3f.
-    public partial class GameWindow : ToolWindow, ILiveShell
+    // Hotaru's game window and its three threads, over a session of the frontend API - see EmuSen_Frontend_Driver.md §1, §2 and §3f, and EmuSen_Backend.md §14.11.
+    public partial class GameWindow : ToolWindow, ILiveShell, IHotaruHost
     {
-        private readonly ICore _core;
+        private readonly CrystalRuntime _runtime;
+
+        // Replaced by a swap on the UI thread while the emulation thread waits, so it is read once per use.
+        private volatile CrystalSession _session;
+        private string _coreName;
 
         // The pointer gets out of the way over the game - see EmuSen_Frontend_Driver.md §3d.
         private IdleCursor? _idleCursor;
         private FileDrop? _fileDrop;
 
-        // Set by a drop on the UI thread, taken by ProcessHotkeys - SwapCore runs there. See §3d.
+        // Set by a drop on the UI thread, taken by ProcessHotkeys, which asks the UI thread to swap. See §3d.
         private volatile string? _droppedRom;
-
-        // Rebuilt per load, which is why it is not readonly - see EmuSen_Frontend_Driver.md §3f.
-        private IDebugTarget _debugTarget = null!;
-
-        // The rest of the loaded core's wiring - codecs, trace switch - see EmuSen_Multicore.md §4.
-        private CoreBundle? _bundle;
 
         // See `man tmux`.
         private readonly DianaShSessionManager _sessions = new();
@@ -56,15 +51,10 @@ namespace EmuSen.Hotaru.Views
         private DianaShInterpreter _debugCmd => _sessions.Current!.Interpreter;
         private DianaShInterpreterScheduler _scheduler => _schedulers[_sessions.Current!];
 
-        private FrameRecorder _frameRecorder = null!;
-
         // Reused unchanged across every rebuild - see EmuSen_Frontend_Driver.md §3f.
         private readonly IEnumerable<IDianaShCommand> _extraCommands;
 
-        private readonly string _statePath;
-
-        private readonly GamepadBindings _gamepadBindings =
-            GamepadBindings.Load(EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console));
+        private readonly GamepadBindings _gamepadBindings;
         private readonly GamepadManager _gamepad;
         // Endymion is a leaf and reads no globals, so audio.json's settings come from here - see EmuSen_Audio_Sync.md §7.1.
         private readonly AudioPlayer _audioPlayer = NewAudioPlayer(AudioConfig.Load().Bounded());
@@ -93,40 +83,44 @@ namespace EmuSen.Hotaru.Views
         // Held, not edge-triggered - see EmuSen_Rewind_And_FastForward.md §4.
         private volatile bool _turboHeld;
         private volatile bool _rewindHeld;
-
-        private readonly EmuSen.Common.SpeedController _speed = new();
-        private readonly EmuSen.Common.RewindBuffer _rewind = new() { Enabled = true };
+        private bool _turboApplied;
+        private bool _recording;
 
         private readonly HashSet<Key> _heldPhysicalKeys = new();
 
         // 'feed's way back into the prompt without window focus - see `man feed`.
         private bool _feedWatchActive;
 
-        // Coalescing hand-off to the UI thread - see EmuSen_Serenity.md §4.
-        private sealed class FrameData
-        {
-            public required byte[] Rgba;
-            public required int Width;
-            public required int Height;
-        }
-        // Was written out here, in Mistress and in Serenity, all three with one defect - LunaP.md §22.1.
-        private readonly Latest<FrameData> _frames;
+        // The last frame's facts, the picture's shape read by the feed window too.
+        private CrystalFrameInfo _info;
+        private volatile int _pictureWidth, _pictureHeight;
+        private short[] _sound = new short[8192];
+
+        // The session's state and session events, for every session this window opens - see EmuSen_Backend.md §14.11.
+        private readonly HotaruEvents _events;
+        private readonly Action _resetRateControl;
+
+        // Pictures to the frame control in buffers made once, so a frame allocates none (C4) - see EmuSen_Backend.md §14.11.
+        private readonly PictureSlots _pictures;
 
         private static AudioPlayer NewAudioPlayer(AudioConfig audio) => new(audio.SampleRate, audio.OutputTargetLatencyMs, audio.RateControlMaxDeviation);
 
-        public GameWindow(ICore core, IEnumerable<IDianaShCommand> extraCommands, string statePath)
+        public GameWindow(HotaruSession session)
         {
-            _frames = new Latest<FrameData>(PresentPendingFrame);
+            _pictures = new PictureSlots((pixels, width, height, release) => GameFrame.UpdateFrame(pixels, width, height, release: release));
             InitializeComponent();
 
-            _core = core;
-            _extraCommands = extraCommands;
-            _statePath = statePath;
+            _runtime = session.Runtime;
+            _session = session.Session;
+            _coreName = session.CoreName;
+            _events = new HotaruEvents(_runtime);
+            _resetRateControl = () => _audioPlayer.RateControl.Reset();
+            _extraCommands = HotaruCommands.For(this);
+            _gamepadBindings = GamepadBindings.Load(HotaruSystems.ConsolesInReleaseOrder(_runtime));
 
-            RebuildDebugTargetAndCommands();
+            RebuildShells();
             // First load only; a swap deliberately does not re-add them - see EmuSen_Frontend_Driver.md §3f.
-            _debugTarget.Watches.AddWatch("WRAM", 0x8000, 0x1800);
-            _debugTarget.Watches.AddWatch("WRAM", 0x0D80, 0x0080);
+            AddFirstWatches();
 
             // graphics.json's window and picture; the title is the window's own - see EmuSen_Settings_Reference.md §3.
             GraphicsConfig graphics = GraphicsConfig.Load();
@@ -137,31 +131,35 @@ namespace EmuSen.Hotaru.Views
             GameFrame.BilinearFiltering = graphics.BilinearFiltering;
             GameFrame.SyncToDisplay = graphics.SyncToDisplay;
 
-            _gamepad = new GamepadManager(_gamepadBindings.For(core.CoreName))
+            HotaruControls controls = HotaruControls.Of(_session);
+            _gamepad = new GamepadManager(_gamepadBindings.For(_coreName))
             {
-                LeftStickIsAnalog = core.SupportedAxes.Contains(PadAxis.LeftX),
-                PlayerBindings = player => _gamepadBindings.For(_core.CoreName, player),
+                LeftStickIsAnalog = controls.Axes.Contains(PadAxis.LeftX),
+                PlayerBindings = player => _gamepadBindings.For(_coreName, player),
                 // Mistress's defaults, as Hotaru has no settings - see EmuSen_Input.md §8.13.
                 ClaimPlayersByPress = true,
                 ExternalControllerFirst = true,
             };
             // The keyboard is player 1's here; Hotaru has no setting to move it - see EmuSen_Input.md §8.5.
-            _ports = new PortRouter(_gamepad, (p, b, held) => _core.SetButton(p, b, held), (p, a, v) => _core.SetAxis(p, a, v), (p, on) => _core.SetControllerConnected(p, on))
+            _ports = new PortRouter(_gamepad, (p, b, held) => _session.Button(p, b, held), (p, a, v) => _session.Axis(p, a, v), (p, on) => _session.Connected(p, on))
             {
                 KeyboardHeld = c => _keyboardHeld[(int)c],
             };
-            _ports.Reset(EmuSen.Cores.ControllerPorts.Of(core), core.SupportedAxes);
+            _ports.Reset(controls.Ports, controls.Axes);
             _gamepad.BeginClaims();
             _gamepadTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.0 / 60.0) };
             _gamepadTimer.Tick += (_, _) => PollGamepad();
             _gamepadTimer.Start();
+
+            // Rewind kept by the runtime, gated by the engine inside the frame - see EmuSen_Backend.md §14.4.
+            _session.Rewind(true);
 
             KeyDown += OnKeyDown;
             KeyUp += OnKeyUp;
 
             // The whole window, because the whole window is the game here.
             _idleCursor = new IdleCursor(this);
-            // Queued rather than loaded: SwapCore belongs to the emulation thread.
+            // Queued rather than loaded: a swap is asked of the UI thread by the emulation thread between frames.
             _fileDrop = new FileDrop(this, paths => _droppedRom = paths[0]) { Accept = paths => paths.Count == 1 };
 
             Closing += (_, _) =>
@@ -177,6 +175,21 @@ namespace EmuSen.Hotaru.Views
 
             _consoleReaderThread = new Thread(ConsoleReaderLoop) { IsBackground = true, Name = "EmuSen-ConsoleReader" };
             _consoleReaderThread.Start();
+        }
+
+        // IHotaruHost: the session the window runs, for the commands made over it.
+        CrystalSession IHotaruHost.Session => _session;
+
+        CrystalRuntime IHotaruHost.Runtime => _runtime;
+
+        private void AddFirstWatches()
+        {
+            try
+            {
+                _session.WatchAdd("WRAM", 0x8000, 0x1800, 0);
+                _session.WatchAdd("WRAM", 0x0D80, 0x0080, 0);
+            }
+            catch (CrystalException) { }
         }
 
         // Sole owner of ConsoleLineReader.ReadLine - see EmuSen_Frontend_Driver.md §3f.
@@ -235,10 +248,10 @@ namespace EmuSen.Hotaru.Views
                 EmitShellOutput(output);
 
                 if (action is HostAction.Shutdown) return true;
-                if (action is HostAction.LoadCore loadCore) { SwapCore(loadCore.RomPath); continue; }
-                if (action is HostAction.StartConsole start) { StartConsoleInPlace(start.Console); continue; }
+                if (action is HostAction.LoadCore loadCore) { Swap(HotaruLaunch.Rom(loadCore.RomPath)); continue; }
+                if (action is HostAction.StartConsole start) { Swap(HotaruLaunch.Empty(start.Console)); continue; }
                 if (action is HostAction.SwitchSession) SyncSchedulersToSessions();
-                // Resume with nothing halted is a no-op, and StepCommand already armed its own step.
+                // Resume and Step came from the session's run events, and the session already runs.
             }
             return false;
         }
@@ -293,7 +306,7 @@ namespace EmuSen.Hotaru.Views
             }
         }
 
-        // Through ICore, not the bus; each player's pad to its own port, the keyboard to player 1's - see EmuSen_Input.md §8.5.
+        // Through the API's input, not the bus; each player's pad to its own port, the keyboard to player 1's - see EmuSen_Input.md §8.5.
         private void ApplyKeys()
         {
             _ports.MirrorPlayer1ToPlayer2 = _mirrorPlayer1ToPlayer2;
@@ -315,13 +328,9 @@ namespace EmuSen.Hotaru.Views
             Console.WriteLine($"[SHADER] Active effect: {effect}");
         }
 
-        // Rebuilds _debugTarget/_frameRecorder and every session - see `man core` and `man tmux`.
-        private void RebuildDebugTargetAndCommands()
+        // Every shell over the session's service table, rebuilt when a swap opens another session - see `man core` and `man tmux`.
+        private void RebuildShells()
         {
-            _bundle = CoreFactory.Bundle(_core);
-            _debugTarget = _bundle.DebugTarget;
-            _frameRecorder = new FrameRecorder(_debugTarget);
-
             if (_sessions.Sessions.Count == 0)
             {
                 var initial = new DianaShSession("main", BuildInterpreter());
@@ -334,11 +343,7 @@ namespace EmuSen.Hotaru.Views
             SyncSchedulersToSessions();
         }
 
-        private DianaShInterpreter BuildInterpreter() =>
-            DianaShInterpreter.CreateDefault(_debugTarget, _extraCommands,
-                _bundle?.CheatAutoDetectCodec, _bundle?.CheatExplicitCodec, _bundle?.CpuTraceSwitch,
-                _sessions,
-                () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems);
+        private DianaShInterpreter BuildInterpreter() => DianaShInterpreter.CreateForService(_session.ServiceTable(), _extraCommands, _sessions);
 
         // Syncs _schedulers to whatever sessions currently exist - see `man tmux`.
         private void SyncSchedulersToSessions()
@@ -354,52 +359,45 @@ namespace EmuSen.Hotaru.Views
             }
         }
 
-        // Deliberately narrow: one core, reloaded in place - see EmuSen_Frontend_Driver.md §3f.
-        private void SwapCore(string romPath)
+        // The emulation thread's: another game or an empty console, opened and the old session closed on the UI thread while this thread waits (C6) - see EmuSen_Backend.md §14.11.
+        private void Swap(HotaruLaunch launch)
         {
-            if (_frameRecorder.IsRecording)
+            if (_recording)
             {
                 Console.WriteLine("[CORE] Refusing to swap ROM while a recording is in progress - stop it first (F6).");
                 return;
             }
-
-            CoreFactory.LoadInto(_core, romPath);
-            // The new console's pad, not the outgoing one's - see EmuSen_Input.md §5.1.
-            _gamepad.Bindings = _gamepadBindings.For(_core.CoreName);
-            _gamepad.LeftStickIsAnalog = _core.SupportedAxes.Contains(PadAxis.LeftX);
-            // On the thread that polls, which a swap on the emulation thread would otherwise race.
-            int ports = EmuSen.Cores.ControllerPorts.Of(_core);
-            IReadOnlyList<PadAxis> axes = _core.SupportedAxes;
-            Dispatcher.UIThread.Post(() =>
+            string? failed = Dispatcher.UIThread.Invoke(() => SwapOnUiThread(launch));
+            if (failed is not null)
             {
-                _ports.Reset(ports, axes);
-                _gamepad.BeginClaims();
-            });
-            _rewind.Clear(); // a discontinuous jump - see §1.4
-            _audioPlayer.RateControl.Reset();
-            RebuildDebugTargetAndCommands();
-            // An open dashboard has a refresh timer, not a swap notification - see EmuSen_Frontend_Driver.md §3f.
-            DebugWindows.UpdateCoretopWindowTargetIfOpen(_debugTarget);
-            Console.WriteLine($"[CORE] Loaded: {romPath}");
-        }
-
-        // `core <name> --console`: the running engine starts the console empty where it is that console's; one core, in place, as SwapCore - see Diamond_Shell.md §1.5.
-        private void StartConsoleInPlace(string console)
-        {
-            if (CoreCatalog.EmptyStartFor(console) is not { } start || _core is not EmuSen.Cores.Native.CoreEngine engine || !engine.Info.Systems.Any(s => s.Id == start.SystemId && s.StartsEmpty))
-            {
-                Console.WriteLine($"[CORE] The running core does not start the {console}; start it from the launch prompt with `core <name> --console`.");
+                Console.WriteLine($"[CORE] {failed}");
                 return;
             }
-            engine.StartConsole(start.SystemId);
-            int ports = EmuSen.Cores.ControllerPorts.Of(_core);
-            IReadOnlyList<PadAxis> axes = _core.SupportedAxes;
-            Dispatcher.UIThread.Post(() => _ports.Reset(ports, axes));
-            _rewind.Clear();
+            _info = default;
             _audioPlayer.RateControl.Reset();
-            RebuildDebugTargetAndCommands();
-            DebugWindows.UpdateCoretopWindowTargetIfOpen(_debugTarget);
-            Console.WriteLine($"[CORE] Started: {ConsoleSession.NameOf(console)}");
+            Console.WriteLine(launch.RomPath is { } rom ? $"[CORE] Loaded: {rom}" : $"[CORE] Started: {launch}");
+        }
+
+        // The UI thread's: the new session first, so a game that will not open leaves the old one running; then the pads and every shell rebound here.
+        internal string? SwapOnUiThread(HotaruLaunch launch)
+        {
+            CrystalSession opened;
+            try { opened = HotaruSession.Open(_runtime, launch); }
+            catch (CrystalException e) { return e.Message; }
+            CrystalSession old = _session;
+            _session = opened;
+            _coreName = HotaruSession.CoreNameOf(opened);
+            opened.Rewind(true);
+            old.Dispose();
+
+            HotaruControls controls = HotaruControls.Of(opened);
+            // The new console's pad, not the outgoing one's - see EmuSen_Input.md §5.1.
+            _gamepad.Bindings = _gamepadBindings.For(_coreName);
+            _gamepad.LeftStickIsAnalog = controls.Axes.Contains(PadAxis.LeftX);
+            _ports.Reset(controls.Ports, controls.Axes);
+            _gamepad.BeginClaims();
+            RebuildShells();
+            return null;
         }
 
         // Runs entirely off the UI thread - see EmuSen_Frontend_Driver.md §1.
@@ -410,55 +408,51 @@ namespace EmuSen.Hotaru.Views
 
             // Shared with Mistress - see EmuSen_Settings_Reference.md §4.87.
             var scheduler = new FrameScheduler(GameFrame.Display.Current, Stopwatch.GetTimestamp());
+            double frameRate = HotaruControls.FrameRateOf(_session);
 
             try
             {
                 while (_running)
                 {
-                    _speed.SetTurbo(_turboHeld);
+                    CrystalSession session = _session;
+                    if (_turboHeld != _turboApplied)
+                    {
+                        _turboApplied = _turboHeld;
+                        session.SpeedMode(_turboApplied ? CrystalAbi.SpeedTurbo : CrystalAbi.SpeedNormal);
+                    }
+                    if (_info.frame_rate_hz > 0) frameRate = _info.frame_rate_hz;
+                    TimeSpan interval = _info.frame_interval_ns > 0 ? TimeSpan.FromTicks((long)(_info.frame_interval_ns / 100)) : TimeSpan.FromSeconds(1.0 / frameRate);
                     scheduler.SyncToDisplay = GameFrame.SyncToDisplay;
-                    nextTick = scheduler.Next(nextTick, _core.FrameRateHz, _speed.IsNormalSpeed, _speed.FrameInterval(_core.FrameRateHz));
+                    nextTick = scheduler.Next(nextTick, frameRate, !_turboApplied, interval);
 
                     // Takes over the frame entirely - see EmuSen_Rewind_And_FastForward.md §4.
                     if (_rewindHeld)
                     {
-                        _core.SkipRendering = false;
-                        if (!_rewind.Rewind(_core)) nextTick = clock.Elapsed;
-                        // No RunFrame() ran, so these would otherwise be stale - see §3.
-                        _debugTarget.RefreshProviders();
-                        _core.DequeueAudioSamples(int.MaxValue);
-                        _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
-                        SubmitFrame(_core.GetFrameBufferRgba(), _core.ScreenWidth, _core.ScreenHeight);
+                        if (session.RewindStep(1, ref _info) == 0) nextTick = clock.Elapsed;
+                        DrainSound(session, play: false);
+                        SubmitPicture(session);
+                        if (DrainEvents()) { RequestClose(); return; }
                         if (ProcessPendingConsoleCommands()) { RequestClose(); return; }
                         SleepUntil(nextTick, clock);
                         continue;
                     }
 
-                    _core.SkipRendering = !_speed.ShouldRender(_core.TotalFrames);
-
                     long frameStart = Stopwatch.GetTimestamp();
-                    _core.RunFrame();
+                    session.Frame(ref _info);
 
-                    // Publishes this frame's snapshots, on the thread that produced them - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.
-                    _debugTarget.RefreshProviders();
-
-                    // A breakpoint or armed step stopped RunFrame mid-frame; go straight to the prompt.
-                    if (_core.IsHaltedAtBreakpoint)
+                    // A breakpoint or armed step stopped the frame; the session holds itself halted until run control resumes it.
+                    if (_info.halted != 0)
                     {
-                        Console.WriteLine($"\n[BREAKPOINT] Halted at ${_core.HaltedAddress:X6}");
-                        Console.WriteLine(_debugTarget.GetSummaryText());
+                        Console.WriteLine($"\n[BREAKPOINT] Halted at ${unchecked((int)(uint)_info.halted_address):X6}");
+                        Console.WriteLine(session.Summary());
                         if (RunDebugPrompt()) { RequestClose(); return; }
                         nextTick = clock.Elapsed; // don't burst-catch-up for time spent at the prompt
                         continue;
                     }
 
-                    _rewind.OnFrameCompleted(_core);
-
                     // Drained every frame either way, so a muted stretch cannot back the buffer up - see EmuSen_Audio_Sync.md §4.
-                    short[] samples = _core.DequeueAudioSamples(int.MaxValue);
                     _audioPlayer.RateControl.NominalRatio = scheduler.Decision.AudioRatio;
-                    if (_speed.ShouldPlayAudio) _audioPlayer.Submit(samples, _core.AudioSampleRate);
-                    else _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
+                    DrainSound(session, play: _info.play_audio != 0);
 
                     // Nothing new was drawn on a skipped frame.
                     long held = 0;
@@ -468,9 +462,10 @@ namespace EmuSen.Hotaru.Views
                         SleepUntil(notBefore, clock);
                         held = Stopwatch.GetTimestamp() - holdStart;
                     }
-                    if (!_core.SkipRendering) SubmitFrame(_core.GetFrameBufferRgba(), _core.ScreenWidth, _core.ScreenHeight);
+                    if (_info.rendered != 0) SubmitPicture(session);
                     scheduler.Completed(TimeSpan.FromTicks((Stopwatch.GetTimestamp() - frameStart - held) * TimeSpan.TicksPerSecond / Stopwatch.Frequency));
 
+                    if (DrainEvents()) { RequestClose(); return; }
                     if (ProcessHotkeys()) { RequestClose(); return; }
                     if (ProcessPendingConsoleCommands()) { RequestClose(); return; }
 
@@ -488,11 +483,40 @@ namespace EmuSen.Hotaru.Views
             }
             catch (Exception ex)
             {
-                // Halt and print rather than recover; the core's own autosave covers SRAM.
+                // Halt and print rather than recover; closing the session writes the battery save.
                 Console.WriteLine($"\n[CPU HALT] {ex.Message}");
                 RequestClose();
             }
         }
+
+        // The sound waiting, played or dropped as the speed says; a dropped stretch resets the rate control - see EmuSen_Audio_Sync.md §3.2.
+        private void DrainSound(CrystalSession session, bool play)
+        {
+            int frames = session.AudioFramesReady;
+            if (_sound.Length < frames * 2) _sound = new short[frames * 2];
+            int got = session.DrainAudio(_sound, out uint rate);
+            if (!play || got == 0)
+            {
+                if (!play) _audioPlayer.RateControl.Reset();
+                return;
+            }
+            _audioPlayer.Submit(_sound.AsSpan(0, got * 2).ToArray(), (int)rate);
+        }
+
+        // The picture into a buffer the hand-off owns; none free means the screen still holds them all, and this one is skipped.
+        private void SubmitPicture(CrystalSession session)
+        {
+            int width = _info.width, height = _info.height;
+            if (width <= 0 || height <= 0) return;
+            _pictureWidth = width;
+            _pictureHeight = height;
+            if (_pictures.Rent(width * height * 4) is not { } pixels) return;
+            session.CopyPicture(pixels);
+            _pictures.Offer(width, height);
+        }
+
+        // A state loaded resets the audio rate control, whoever loaded it (C7); true when the session was closed under the window.
+        private bool DrainEvents() => _events.Drain(_session.Id, _resetRateControl);
 
         // Spins rather than sleeps, for the reason measured in EmuSen_Settings_Reference.md §4.21.
         private static void SleepUntil(TimeSpan target, Stopwatch clock)
@@ -523,67 +547,77 @@ namespace EmuSen.Hotaru.Views
                 }
             }
 
-            // A ROM dropped on the window, taken on this thread because SwapCore's is this one.
+            // A ROM dropped on the window, swapped between frames as `core` swaps one.
             if (_droppedRom is { } dropped)
             {
                 _droppedRom = null;
-                SwapCore(dropped);
+                Swap(HotaruLaunch.Rom(dropped));
             }
-
-            // Every frame, cheap no-op when not recording.
-            _frameRecorder.CaptureFrame(path => FrameImageWriter.SavePng(_core.GetFrameBufferRgba(), _core.ScreenWidth, _core.ScreenHeight, path));
 
             if (_requestToggleRecording) { _requestToggleRecording = false; ToggleRecording(); }
             if (_requestMirrorToggle) { _requestMirrorToggle = false; ToggleMirror(); }
-            if (_requestSummary) { _requestSummary = false; Console.WriteLine(_debugTarget.GetSummaryText()); }
+            if (_requestSummary) { _requestSummary = false; Console.WriteLine(_session.Summary()); }
             if (_requestDebugPrompt) { _requestDebugPrompt = false; if (RunDebugPrompt()) return true; }
             if (_requestScreenshot) { _requestScreenshot = false; TakeScreenshot(); }
-            if (_requestSaveState) { _requestSaveState = false; SaveState(_statePath); }
-            if (_requestLoadState) { _requestLoadState = false; LoadState(_statePath); }
+            if (_requestSaveState) { _requestSaveState = false; SaveState(null); }
+            if (_requestLoadState) { _requestLoadState = false; LoadState(null); }
 
             return false;
         }
 
+        // The picture now, in an array of its own: for a screenshot, and for the feed window on the UI thread (C3).
+        internal (byte[] Rgba, int Width, int Height) CopyPicture()
+        {
+            int width = _pictureWidth, height = _pictureHeight;
+            if (width <= 0 || height <= 0) return (Array.Empty<byte>(), 0, 0);
+            var rgba = new byte[width * height * 4];
+            try { _session.CopyPicture(rgba); }
+            catch (CrystalException) { return (Array.Empty<byte>(), 0, 0); }
+            return (rgba, width, height);
+        }
+
         private void TakeScreenshot()
         {
-            string coreLogDir = Path.Combine(DianaShSandbox.LogsDirectory, _debugTarget.CoreName);
+            string coreLogDir = Path.Combine(DianaShSandbox.LogsDirectory, _coreName);
             Directory.CreateDirectory(coreLogDir);
-            string baseName = $"screenshot_frame{_debugTarget.FrameCount}";
+            ulong frame = _info.total_frames;
+            string baseName = $"screenshot_frame{frame}";
             string shotPath = Path.Combine(coreLogDir, baseName + ".png");
             string metaPath = Path.Combine(coreLogDir, baseName + ".txt");
 
-            FrameImageWriter.SavePng(_core.GetFrameBufferRgba(), _core.ScreenWidth, _core.ScreenHeight, shotPath);
+            var (rgba, width, height) = CopyPicture();
+            FrameImageWriter.SavePng(rgba, width, height, shotPath);
             File.WriteAllText(metaPath,
-                $"Core: {_debugTarget.CoreName}\n" +
-                $"Frame: {_debugTarget.FrameCount}\n" +
+                $"Core: {_coreName}\n" +
+                $"Frame: {frame}\n" +
                 $"Wall-clock: {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}\n");
 
-            Console.WriteLine($"[SCREENSHOT] Saved {shotPath} (Core={_debugTarget.CoreName} Frame={_debugTarget.FrameCount})");
+            Console.WriteLine($"[SCREENSHOT] Saved {shotPath} (Core={_coreName} Frame={frame})");
         }
 
-        private void SaveState(string path)
+        // The runtime's state_save; with no path, the player's state folder's.
+        private void SaveState(string? path)
         {
             try
             {
-                _core.SaveState(path);
-                Console.WriteLine($"[STATE] Saved: {path}");
+                _session.SaveState(path);
+                Console.WriteLine($"[STATE] Saved: {path ?? _session.DefaultStatePath()}");
             }
-            catch (Exception ex)
+            catch (CrystalException ex)
             {
                 Console.WriteLine($"[STATE] Save failed: {ex.Message}");
             }
         }
 
-        private void LoadState(string path)
+        // The runtime's state_load clears the rewind history and raises the event that resets the rate control (C7).
+        private void LoadState(string? path)
         {
             try
             {
-                _core.LoadState(path);
-                _rewind.Clear(); // a discontinuous jump - see §1.4
-                _audioPlayer.RateControl.Reset();
-                Console.WriteLine($"[STATE] Loaded: {path}");
+                _session.LoadState(path);
+                Console.WriteLine($"[STATE] Loaded: {path ?? _session.DefaultStatePath()}");
             }
-            catch (Exception ex)
+            catch (CrystalException ex)
             {
                 Console.WriteLine($"[STATE] Load failed: {ex.Message}");
             }
@@ -591,15 +625,23 @@ namespace EmuSen.Hotaru.Views
 
         private void ToggleRecording()
         {
-            if (_frameRecorder.IsRecording)
+            try
             {
-                Console.WriteLine($"[RECORD] Stopped: {_frameRecorder.SessionDir}");
-                _frameRecorder.Stop();
+                if (_recording)
+                {
+                    Console.WriteLine($"[RECORD] Stopped: {_session.StopRecording()}");
+                    _recording = false;
+                }
+                else
+                {
+                    string dir = _session.StartRecording(Path.Combine(DianaShSandbox.LogsDirectory, _coreName, "Recordings"), 1);
+                    _recording = true;
+                    Console.WriteLine($"[RECORD] Started -> {dir}");
+                }
             }
-            else
+            catch (CrystalException ex)
             {
-                string dir = _frameRecorder.Start(Path.Combine(DianaShSandbox.LogsDirectory, _debugTarget.CoreName, "Recordings"));
-                Console.WriteLine($"[RECORD] Started -> {dir}");
+                Console.WriteLine($"[RECORD] {ex.Message}");
             }
         }
 
@@ -609,7 +651,7 @@ namespace EmuSen.Hotaru.Views
             Console.WriteLine($"[INPUT] Mirror Player 1 -> Player 2: {(_mirrorPlayer1ToPlayer2 ? "ON" : "OFF")}");
         }
 
-        // Blocks the emulation thread, never the UI thread - see EmuSen_Frontend_Driver.md §2.
+        // Blocks the emulation thread, never the UI thread; leaving it resumes the session unless a swap or a step ran it - see EmuSen_Frontend_Driver.md §2.
         private bool RunDebugPrompt()
         {
             DisarmFeedWatch();
@@ -628,6 +670,7 @@ namespace EmuSen.Hotaru.Views
                         // An empty line is not really a command, so it stays pre-dispatch.
                         if (trimmed.Length == 0)
                         {
+                            Resume();
                             break;
                         }
                         if (trimmed.Equals("feed", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("feed ", StringComparison.OrdinalIgnoreCase))
@@ -636,10 +679,11 @@ namespace EmuSen.Hotaru.Views
                             bool windowed = feedParts.Length >= 2 && feedParts[1].Equals("-w", StringComparison.OrdinalIgnoreCase);
                             if (windowed)
                             {
-                                DebugWindows.ShowFeedWindow(() => (_core.GetFrameBufferRgba(), _core.ScreenWidth, _core.ScreenHeight));
+                                DebugWindows.ShowFeedWindow(CopyPicture);
                                 Console.WriteLine("[FEED] Opened in a separate window.");
                             }
                             ArmFeedWatch();
+                            Resume();
                             Console.WriteLine("Resuming - press Ctrl+C in this terminal to reopen the prompt.");
                             break;
                         }
@@ -658,8 +702,8 @@ namespace EmuSen.Hotaru.Views
                         continue;
                     }
                     if (action is HostAction.Resume or HostAction.Step) break;
-                    if (action is HostAction.LoadCore loadCore) { SwapCore(loadCore.RomPath); break; }
-                    if (action is HostAction.StartConsole start) { StartConsoleInPlace(start.Console); break; }
+                    if (action is HostAction.LoadCore loadCore) { Swap(HotaruLaunch.Rom(loadCore.RomPath)); break; }
+                    if (action is HostAction.StartConsole start) { Swap(HotaruLaunch.Empty(start.Console)); break; }
                 }
                 Console.WriteLine("--- Resuming ---");
                 return false;
@@ -668,6 +712,13 @@ namespace EmuSen.Hotaru.Views
             {
                 _scheduler.Halted = false;
             }
+        }
+
+        // Leaving the prompt with no resume of its own: the session runs again, a halt released.
+        private void Resume()
+        {
+            try { _session.Run(CrystalSessionAbi.RunResume); }
+            catch (CrystalException ex) { Console.WriteLine($"[CORE] {ex.Message}"); }
         }
 
         private void ArmFeedWatch()
@@ -683,14 +734,6 @@ namespace EmuSen.Hotaru.Views
             _feedWatchActive = false;
         }
 
-        private void SubmitFrame(byte[] rgba, int width, int height)
-        {
-            _frames.Offer(new FrameData { Rgba = rgba, Width = width, Height = height });
-        }
-
-        private void PresentPendingFrame(FrameData frame) =>
-            GameFrame.UpdateFrame(frame.Rgba, frame.Width, frame.Height);
-
         private void Shutdown()
         {
             _gamepadTimer.Stop();
@@ -701,7 +744,9 @@ namespace EmuSen.Hotaru.Views
 
             // The reader thread is not joined at all - see EmuSen_Frontend_Driver.md §3f.
 
-            _core.SaveSram();
+            // Closing the session writes the battery save, as SaveSram did.
+            _events.Dispose();
+            _session.Dispose();
             _gamepad.Dispose();
             _audioPlayer.Dispose();
         }

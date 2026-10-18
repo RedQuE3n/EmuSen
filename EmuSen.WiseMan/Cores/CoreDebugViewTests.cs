@@ -132,7 +132,7 @@ namespace EmuSen.WiseMan.Cores
             File.WriteAllBytes(rom, SyntheticMdRom.Cartridge());
             try
             {
-                DianaShResult result = new CoreCommand(CoreCatalog.Registry).Execute(null, new[] { "core", "genesis", rom }, null);
+                DianaShResult result = new CoreCommand(EmuSen.WiseMan.DianaSh.CoreChoices.Of(CoreCatalog.Registry)).Execute(null, new[] { "core", "genesis", rom }, null);
                 Assert.True(result.Action is HostAction.LoadCore, result.Output);
             }
             finally

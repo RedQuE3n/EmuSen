@@ -63,7 +63,7 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.False(new StepCommand().IsReadOnly);
             Assert.False(new ResumeCommand().IsReadOnly);
             Assert.False(new ShutdownCommand().IsReadOnly);
-            Assert.False(new CoreCommand(new Dictionary<string, CoreDescriptor>()).IsReadOnly);
+            Assert.False(new CoreCommand(new Dictionary<string, CoreChoice>()).IsReadOnly);
             Assert.False(new StateCommand(_ => { }, _ => { }, () => "").IsReadOnly);
         }
 

@@ -6850,3 +6850,53 @@ reads an address of `0x1c4a`, a device handle the loader could not find. The sam
 a row, 499 each. A `test-checked` build compiles the same library and test sources as before the change, so this is an
 intermittent defect that predates it: one crash in five runs, in a device being created while another test's device is
 torn down by a panic. It is recorded here and not pursued.
+
+## 9. What the host is told beside the frame, on v1's own surfaces (B4, 2026-10-18)
+
+*Step 3 of `EmuSen_Backend.md` §18.7, decided 2026-10-18 (§20 there): the parts of the shim's work that MarsRT can carry
+itself through capabilities and descriptors the core ABI v1 already defines, before the shim retires. The shim still
+reads its own extensions; nothing a player or the debugger sees through it changes. The code is `src/ffi/host.rs`.*
+
+- **`DEBUG_REGISTERS`.** Machine info names each processor's registers, in `debug_registers`' order: the CPU's PC, the
+  32 general registers by `MarsOperands.Gpr`'s names, HI, LO and the bus's cycle count, all 64 bits (36); the RSP's PC
+  (16 bits), whether it is halted (1) and its 32 scalar registers (32 bits each), 34 in all, *broke* left out as the
+  shim's view leaves it. The values are those `marsrt_core_cpu_registers` and `marsrt_core_rsp_registers` give.
+- **The VI's registers as a space**, `VI`, number 6: the fourteen registers as stored, big-endian, 56 bytes, read-only,
+  no side effects (a read is of the stored array, as the shim's export was). It is no view (§29 of `EmuSen_CoreAPI.md`):
+  it holds registers no other space holds. The N64 pack names them (`EmuSen_Backend.md` §18.7, step 4).
+- **`SETTING_NOTES`.** The antialiasing note, in the shim's words: what the chosen level becomes at the chosen
+  resolution when the two together pass four. And the `Gpu` setting's note when it is on at a multiple and no device
+  drew: the sentence the last attempt gave. The device is tried at the next scan-out, not when the setting is applied
+  (`Mars_Gpu.md` §11), so a note read straight after the setting changes says what the attempt before it found; the
+  log line below says what each attempt finds as it happens.
+- **The log.** The IS-Viewer's transcript (`memory/isviewer.rs`), a game's or a test ROM's debug output, reaches the log
+  a line at a time, category `IS-Viewer`, once each line ends; a part line waits for its newline. The transcript is the
+  harness's (`Skip`, in no state), so a load does not replay it. A change in the device report reaches the log as
+  "The multiple is drawn on <device>." or, when no device drew, as a warning with the report's sentence. Both are told
+  after a frame, a present or an observed frame, the calls in which a v1 core may log; the corpus's instruction steps
+  (`marsrt_core_run_steps`, a test's hook) tell the host nothing, and the corpus test reads the transcript as before.
+- **The frame rate.** Machine info's `frame_rate` was the region's nominal rate (`60000/1001` or `50/1`); it is now
+  the rate the VI's registers program, twice the video clock over the half lines a field holds times the clocks a line
+  takes, an exact ratio (for a PAL game, `99313060/1985625`, 50.01602 Hz), and before the VI is programmed a frame of
+  the cycle cap's length, `93750000/4100000`, which is what such a frame is. `MACHINE_INFO` is raised after a frame,
+  a present or a load whose rate differs from the one machine info last gave, so the host reads it again only then. The
+  shim's `FrameRateHz`, the last field's own cycles, alternates by a few parts in ten million between two values from
+  field to field (measured from §7.3's digest files: 50.016032 and 50.016005 on Ocarina of Time) as each field's end is
+  rounded to a whole cycle; machine info gives their limit. The shim keeps reading its own until it retires; the digest
+  probe's rate column then shows the limit (`EmuSen_Backend.md` §20, Q6).
+- **`RdpWorkers`' help** no longer says "as on Mars".
+
+**Cost.** After each frame and present: a comparison of the IS-Viewer's length and the report's text with what was last
+logged, and of two ratios. Nothing is allocated unless a line or a report is logged or the rate moved.
+
+**Proof.** The crate's tests through the exports (`ffi::host::tests`): the rate the cap's until the VI is programmed,
+then the field's, with one `MACHINE_INFO` and none on the next frame; the IS-Viewer's whole lines logged and a part line
+held; the VI space's bytes, its end and its refused write; both processors' registers; the note.
+
+*Measured on 2026-10-18*, against the baselines of `EmuSen_Backend.md` §18.9 taken from the same tree before the change:
+the crate's tests with `--profile test-checked`, the measurement states and the corpus, 498 before and 505 after, the
+seven of `ffi::host` added and none failing; the digest probe, 26 runs and 8,654 lines and the two runs at 2× on the
+RX 6800, identical line for line before and after (the shim reads its own rate, so even the rate column holds); the
+corpus, *Failed 46 of 4637 tests* and the recompiler's transcript the interpreter's; and the kit on copies of Super
+Mario 64 and Ocarina of Time, 600 frames, 22 cases passing on each before and after, now with 50 exports, capabilities
+`0x19fde` and seven spaces.

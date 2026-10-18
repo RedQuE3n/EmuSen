@@ -19,7 +19,7 @@ use crate::state::{State, StateError, StateWriter};
 use crate::vi::scan::{RASTER_WIDTH, Scanout};
 
 /// `MarsDebugSpaces`' names, numbered as `ffi::space` numbers them.
-pub const SPACES: [&str; 6] = ["RDRAM", "DMEM", "IMEM", "PIFRAM", "ROM", "CPU"];
+pub const SPACES: [&str; 7] = ["RDRAM", "DMEM", "IMEM", "PIFRAM", "ROM", "CPU", "VI"];
 
 /// `MarsCore.StickReach` and `CButtonThreshold`: a stick's full reach, and how far the right stick goes before a C button is held.
 const STICK_REACH: f64 = 127.0;
@@ -153,7 +153,7 @@ pub fn schema() -> Vec<Setting> {
         Setting {
             key: RDP_WORKERS.into(),
             label: "Rasteriser threads".into(),
-            help: "How many processors share each list when it runs on a thread of its own, each shading every Nth row. Exact at any count: frame for frame the machine on one thread. One per three cores is the default, as on Mars.".into(),
+            help: "How many processors share each list when it runs on a thread of its own, each shading every Nth row. Exact at any count: frame for frame the machine on one thread. One per three cores is the default.".into(),
             kind: SettingKind::Count { min: 1, max: 8, step: 1 },
             default: default_workers().to_string(),
             scope: Scope::Run,
@@ -385,6 +385,11 @@ impl StateMachine for Core {
             self.shown = presented.walked;
             self.frame_serial += 1;
         }
+        let rate = self.frame_rate();
+        if rate != self.rate_told {
+            self.rate_told = rate;
+            v1::emit(event::MACHINE_INFO, 0, 0);
+        }
         Ok(())
     }
 
@@ -413,7 +418,9 @@ impl v1::Core for Core {
         | caps::ROW_REPEAT
         | caps::BATTERY_DIRTY
         | caps::ROM_PATCHES
-        | caps::DEBUG;
+        | caps::SETTING_NOTES
+        | caps::DEBUG
+        | caps::DEBUG_REGISTERS;
 
     fn info() -> Info {
         Info {
@@ -484,6 +491,7 @@ impl v1::Core for Core {
         let mut core = Core::new(machine);
         core.paks_apart = r.shared_removable;
         core.apply(defaults().with(&r.settings));
+        core.rate_told = core.frame_rate();
         Ok(core)
     }
 
@@ -494,7 +502,7 @@ impl v1::Core for Core {
         MachineInfo {
             system: "n64".into(),
             region: Some(if pal { Region::Pal } else { Region::Ntsc }),
-            frame_rate: if pal { (50, 1) } else { (60_000, 1001) },
+            frame_rate: self.frame_rate(),
             video: Video { base_width: 320, base_height: 240, max_width: (RASTER_WIDTH * 4) as u32, max_height: 576 * 4, aspect: (4, 3), formats: Vec::new() },
             audio: Audio { rate: crate::memory::ai::DEFAULT_SAMPLE_RATE, channels: Vec::new() },
             ports: (0..4).map(|port| Port { port, controller: Some("n64.pad".into()) }).collect(),
@@ -504,7 +512,7 @@ impl v1::Core for Core {
                 .map(|(id, &name)| {
                     let id = id as u32;
                     Space {
-                        read_only: id == space::ROM,
+                        read_only: id == space::ROM || id == space::VI,
                         cheats: matches!(id, space::RDRAM | space::DMEM | space::IMEM | space::PIF_RAM),
                         reports_stores: matches!(id, space::RDRAM | space::DMEM | space::IMEM | space::PIF_RAM),
                         view: id == space::CPU,
@@ -513,8 +521,8 @@ impl v1::Core for Core {
                 })
                 .collect(),
             processors: vec![
-                Processor { id: 0, name: "CPU".into(), pc_bits: 32, registers: Vec::new(), code_space: Some(space::CPU) },
-                Processor { id: 1, name: "RSP".into(), pc_bits: 12, registers: Vec::new(), code_space: Some(space::IMEM) },
+                Processor { id: 0, name: "CPU".into(), pc_bits: 32, registers: super::host::cpu_registers(), code_space: Some(space::CPU) },
+                Processor { id: 1, name: "RSP".into(), pc_bits: 12, registers: super::host::rsp_registers(), code_space: Some(space::IMEM) },
             ],
             battery: battery(),
             state: StateFormat { format: "MARS".into(), version: STATE_VERSION as i64, loads_from: vec![STATE_VERSION as i64, SNAPSHOT_VERSION as i64] },
@@ -529,11 +537,13 @@ impl v1::Core for Core {
         let shape = self.machine.bus.state_shape();
         Core::advance(self);
         self.tell_state_size(shape);
+        self.tell_host();
         Ok(())
     }
 
     fn present(&mut self) -> Result<(), i32> {
         self.present_profiled();
+        self.tell_host();
         Ok(())
     }
 
@@ -642,6 +652,9 @@ impl v1::Core for Core {
         if space == space::CPU {
             return Ok(1 << 32);
         }
+        if space == space::VI {
+            return Ok((crate::vi::REGISTERS * 4) as i64);
+        }
         self.memory(space).map(|m| m.len() as i64).ok_or(status::NO_SUCH_SPACE)
     }
 
@@ -693,6 +706,10 @@ impl v1::Core for Core {
         Ok(())
     }
 
+    fn setting_notes(&self) -> Vec<(String, String)> {
+        self.notes()
+    }
+
     fn debug_hooks(&mut self) -> Option<&mut Hooks> {
         self.sync_rsp_coverage();
         Some(&mut self.machine.cpu.hooks.shared)
@@ -710,9 +727,14 @@ impl v1::Core for Core {
         let shape = self.machine.bus.state_shape();
         let why = self.machine.run_frame_debug(bits & emusen_native::debug::run::UNCHECKED != 0, bits & emusen_native::debug::run::CONTINUE != 0);
         self.tell_state_size(shape);
+        self.tell_host();
         self.profile[0] += started.elapsed().as_nanos() as i64;
         self.profile[1] += (self.drain_waited() - waited).max(0);
         Ok(why)
+    }
+
+    fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
+        self.registers(processor).ok_or(status::NOT_SUPPORTED)
     }
 
     fn debug_pc(&self, processor: u32) -> Option<u64> {
@@ -728,7 +750,7 @@ impl v1::Core for Core {
     }
 }
 
-emusen_native::core_exports!(Core; present, phases, audio_peek, axes, settings, rom_patches, debug);
+emusen_native::core_exports!(Core; present, phases, audio_peek, axes, settings, setting_notes, rom_patches, debug, debug_registers);
 
 // ---- Extensions: what the shim reads beside the ABI, and the tests' ways into the machine -------------------------------------
 

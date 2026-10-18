@@ -163,3 +163,34 @@ fn a_state_with_the_settings_on_is_the_machines_and_machine_info_states_the_boun
     Core::advance(&mut off, &mut 0).unwrap();
     assert!(state(&mut on) == state(&mut off), "a state of the kept form loads and the machine continues");
 }
+
+/// Diamond_Native.md §27: the reset button with every enhancement on keeps the renderer, and the machine runs on as a
+/// fresh one does, its state and sound alike frame for frame and its picture once settled as after a load; RESET is
+/// claimed.
+#[test]
+fn reset_with_the_settings_on_keeps_the_renderer_and_runs_on_as_a_fresh_machine() {
+    assert_eq!(Diamond::CAPABILITIES & caps::RESET, caps::RESET);
+    let on = [(PRECISION_KEY, "true"), (RESOLUTION_KEY, "2"), (COLOUR_KEY, "true"), (FILTERING_KEY, "3d")];
+    let (mut a, mut b) = (create(&on), create(&on));
+    for _ in 0..8 {
+        Core::advance(&mut a, &mut 0).unwrap();
+    }
+    a.drain_audio(&mut vec![0; 1 << 16], usize::MAX);
+    let drawn = a.renderer_ref().is_some();
+    Core::reset(&mut a).unwrap();
+    assert_eq!(a.renderer_ref().is_some(), drawn, "the renderer is kept");
+    let settles = Core::picture_settles(&a) as usize;
+    let (mut pa, mut pb) = (vec![0i16; 1 << 14], vec![0i16; 1 << 14]);
+    for f in 0..settles + 10 {
+        Core::advance(&mut a, &mut 0).unwrap();
+        Core::advance(&mut b, &mut 0).unwrap();
+        let (na, nb) = (a.drain_audio(&mut pa, usize::MAX), b.drain_audio(&mut pb, usize::MAX));
+        assert!(pa[..na] == pb[..nb], "frame {f} after the reset: the sound differs");
+        let (sa, sb) = (accurate(&mut a), accurate(&mut b));
+        assert!(sa[..8] == sb[..8] && sa[16..] == sb[16..], "frame {f} after the reset: the machine differs");
+        if f >= settles {
+            assert!(a.frame() == b.frame(), "frame {f} after the reset: the picture has not settled");
+        }
+    }
+    assert_eq!(Core::frame_count(&a), (8 + settles + 10) as i64);
+}

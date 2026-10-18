@@ -202,6 +202,7 @@ namespace EmuSen.Cores.Native
 
         public void Reset()
         {
+            if (!Has(CoreInterface.CapReset)) throw new CoreRefusedException(CoreInterface.StatusNotSupported, $"{Name} has no reset button.");
             lock (_gate) Ok(_api.Reset(Handle), "reset");
         }
 

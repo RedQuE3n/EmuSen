@@ -869,11 +869,38 @@ fn c5(s: &mut Session<'_>) -> Case {
         c.that(port == 0 || port == status::NO_SUCH_PORT, || format!("port 99 answered {port}, neither ignored nor NO_SUCH_PORT"));
     }
     drop(m);
+    if s.lib.claims(caps::RESET)
+        && let Err(e) = reset_runs_on(s)
+    {
+        c.that(false, || e);
+    }
     match s.lib.create(&s.opts.image, &s.opts.settings, &s.opts.files, 1 | 1 << 40) {
         Ok(m) => c.that(m.frame_info().map(|fi| fi.format == 0).unwrap_or(false), || "with an unknown pixel format offered, the picture is not RGBA8888".to_owned()),
         Err((code, _)) => c.that(false, || format!("create refused an unknown pixel-format bit with {code}")),
     }
     c.done("C5", "capability honesty")
+}
+
+/// C5's reset button: a machine reset two frames in runs on, and two machines fed and reset alike stay alike
+/// (EmuSen_CoreAPI.md §6.2).
+fn reset_runs_on(s: &mut Session<'_>) -> Result<(), String> {
+    let settings = s.opts.settings.clone();
+    let run = |s: &mut Session<'_>| -> Result<(Digests, u64), String> {
+        let m = s.machine(&settings)?;
+        s.play(&m, 0, 2, false)?;
+        let reset = s.lib.f.reset.ok_or("RESET is claimed and not exported")?;
+        let r = unsafe { reset(m.h) };
+        if r != 0 {
+            return Err(format!("reset two frames in answered {r}"));
+        }
+        let t = s.play(&m, 2, 3, false).map_err(|e| format!("after a reset two frames in: {e}"))?;
+        Ok((t.digests, s.state_digest(&m)?))
+    };
+    let (a, b) = (run(s)?, run(s)?);
+    if a != b {
+        return Err(format!("two machines reset alike differ after it: {a:?} against {b:?}"));
+    }
+    Ok(())
 }
 
 fn c6(s: &mut Session<'_>) -> Case {

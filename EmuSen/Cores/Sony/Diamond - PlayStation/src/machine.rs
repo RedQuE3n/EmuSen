@@ -59,7 +59,7 @@ pub struct Machine {
     pub board: Board,
     pub kernel: Kernel,
     /// The PS-EXE the kernel's shell entry is to receive, while it waits, and the program kept for a state that loads
-    /// from before the side-load.
+    /// from before the side-load and for the reset button.
     pub exe: Option<Vec<u8>>,
     pub image: Option<Vec<u8>>,
     pub frames: i64,
@@ -139,7 +139,7 @@ impl Machine {
             cpu,
             board,
             kernel,
-            image: exe.clone(),
+            image: is_exe.then(|| image.to_vec()),
             exe,
             frames: 0,
             skip: false,
@@ -188,6 +188,33 @@ impl Machine {
         }
         self.board.sync_cdrom();
         self.board.schedule();
+    }
+
+    /// The reset button: every chip as at power-on, on the same kernel with the same program, keeping what /RESET does
+    /// not reach (the devices in the ports, the disc and the lid) and what the host set (Diamond_Native.md §27).
+    pub fn reset(&mut self) {
+        let layer = self.detach();
+        let rom = self.kernel.boots().then(|| (std::mem::take(&mut self.board.bios), self.kernel));
+        let rom = rom.as_ref().map(|(b, k)| (b.as_slice(), *k));
+        let mut m = Machine::new(self.media, self.config, self.ports, self.image.as_deref().unwrap_or_default(), rom);
+        m.board.sio0.ports = std::mem::take(&mut self.board.sio0.ports);
+        let c = &mut self.board.cdrom;
+        m.board.cdrom = crate::cdrom::Cdrom::powered(c.disc.take(), c.lid_open, self.config.market);
+        m.board.cdrom.trace = c.trace;
+        std::mem::swap(&mut m.board.spu.out, &mut self.board.spu.out);
+        m.board.schedule();
+        m.disc_print = self.disc_print;
+        (m.frames, m.skip, m.card_reported, m.cards_apart, m.idle, m.runs) = (self.frames, self.skip, self.card_reported, self.cards_apart, self.idle.clone(), self.runs);
+        m.firmware = std::mem::take(&mut self.firmware);
+        m.debug = std::mem::take(&mut self.debug);
+        m.debug.close();
+        if let Some(mut l) = layer {
+            for tag in l.tags() {
+                l.clear(tag);
+            }
+            m.attach(l);
+        }
+        *self = m;
     }
 
     pub fn pal(&self) -> bool {

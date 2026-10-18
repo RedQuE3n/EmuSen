@@ -11,7 +11,6 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -28,8 +27,6 @@ namespace EmuSen.WiseMan.Mistress
     {
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(MoonRtEngineTests).GetTypeInfo().Assembly);
-
-        public const string FallbackMarkVariable = "EMUSEN_MOONRT_FALLBACK_MARK";
 
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenMoonRtEngineTests", Guid.NewGuid().ToString("N"));
         private readonly string _rom;
@@ -73,11 +70,11 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task A_stored_csharp_choice_plays_on_MoonRT_with_rewind_and_its_states() => Session.Dispatch(() =>
         {
-            Assert.True(MoonRtCore.Available, MoonNative.Report);
+            Assert.True(MoonEngines.Available, MoonEngines.Report);
             Choose("Moon (C#)");
             MainWindow window = Start();
             WindowGame game = Game(window);
-            Assert.IsType<MoonRtCore>(game.Core);
+            Assert.IsType<EmuSen.Cores.Native.CoreEngine>(game.Core);
             Assert.Null(game.EngineNotice);
             Assert.DoesNotContain("not available", Status(window).Text ?? "");
             WaitFor(() => game.TotalFrames > 90 && Rewind(window).Depth > 0);
@@ -85,59 +82,30 @@ namespace EmuSen.WiseMan.Mistress
             Status(window).Text = "";
             Invoke(window, "SaveState");
             WaitFor(() => Status(window).Text?.StartsWith("State saved") == true);
-            using var reader = new MoonRtCore();
+            using var reader = MoonEngines.Create();
             reader.LoadRom(_rom);
             reader.LoadState(StatePath(window));
             Assert.True(reader.TotalFrames > 60);
             window.Close();
         }, default);
 
-        // The library is loaded once per process, so a process started with it off is the only honest test of the fallback - see Mars_Native.md §5.5.
+        // A build without MoonRT's library, or its sidecar, loads no NES game, and the status says why in the player's words; discovery is per process call, so no child process is needed.
         [Fact]
-        public void With_the_library_turned_off_an_nes_game_does_not_load_and_the_status_says_why()
+        public Task Without_its_library_an_nes_game_does_not_load_and_the_status_says_why() => Session.Dispatch(() =>
         {
-            string mark = Path.Combine(_root, "fallback.txt");
-            var start = new ProcessStartInfo("dotnet")
+            EmuSen.Cores.Native.CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "nothing") });
+            try
             {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-            };
-            foreach (string argument in new[] { "test", typeof(MoonRtEngineTests).Assembly.Location, "--filter", $"FullyQualifiedName={typeof(MoonRtEngineTests).FullName}.{nameof(TheFallbackInAProcessWithTheLibraryOff)}" })
-                start.ArgumentList.Add(argument);
-            start.Environment[MoonNative.Variable] = "0";
-            start.Environment[FallbackMarkVariable] = mark;
-
-            using Process child = Process.Start(start)!;
-            Task<string> output = child.StandardOutput.ReadToEndAsync();
-            Task<string> errors = child.StandardError.ReadToEndAsync();
-            Assert.True(child.WaitForExit(240_000), "the child test run did not finish");
-            Assert.True(child.ExitCode == 0, output.Result + errors.Result);
-            Assert.True(File.Exists(mark), "the child ran nothing:\n" + output.Result);
-
-            string[] found = File.ReadAllLines(mark);
-            Assert.Equal("no core", found[0]);
-            Assert.Contains("turned off by EMUSEN_MOON_NATIVE=0", found[1]);
-            Assert.Contains("This build has no NES core: " + CoreCatalog.MoonRtEngine + " is missing (turned off by EMUSEN_MOON_NATIVE=0)", found[2]);
-        }
-
-        // Run only by the test above, in its own process; it asserts nothing unless that process has the library off.
-        [Fact]
-        public Task TheFallbackInAProcessWithTheLibraryOff() => Session.Dispatch(() =>
-        {
-            if (Environment.GetEnvironmentVariable(FallbackMarkVariable) is not { } mark || Environment.GetEnvironmentVariable(MoonNative.Variable) != "0") return;
-
-            Assert.False(MoonNative.Available);
-            Assert.False(MoonRtCore.Available);
-            var window = new MainWindow();
-            window.Show();
-            Invoke(window, "LoadRom", _rom, "Program.nes");
-            string status = Status(window).Text ?? "";
-
-            Assert.Null(typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
-            Assert.StartsWith("Failed to load Program.nes: ", status);
-            File.WriteAllLines(mark, new[] { "no core", MoonNative.Report, status });
-            window.Close();
+                var window = new MainWindow();
+                window.Show();
+                Invoke(window, "LoadRom", _rom, "Program.nes");
+                string status = Status(window).Text ?? "";
+                Assert.Null(typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
+                Assert.StartsWith("Failed to load Program.nes: ", status);
+                Assert.Contains($"This build has no NES core: {CoreCatalog.MoonRtEngine} is missing (no sidecar for it was found beside the program)", status);
+                window.Close();
+            }
+            finally { EmuSen.Cores.Native.CoreDiscovery.UseDirectories(null); }
         }, default);
 
         private MainWindow Start()

@@ -96,8 +96,8 @@ case on moonrt
 target moonrt
 covers 1
 $ tilemap PPU 0 4 2
-out 100
-Error: No memory space named 'PPU'. Available: RAM, PRGROM, PRGRAM, CHR, CIRAM, OAM, PALETTE, CPUBUS
+out 116
+Error: No memory space named 'PPU'. Available: RAM, PRGROM, PRGRAM, CHR, CIRAM, OAM, PALETTE, CPUBUS, PPUREG, APUREG
 status 1
 action none
 end

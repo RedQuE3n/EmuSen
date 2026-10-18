@@ -342,12 +342,13 @@ namespace EmuSen.Cores
         public const string MarsRtEngine = "MarsRT (Rust)";
 
         // An engine a console runs through its own shim, with no choice beside it, so it has no row - see EmuSen_Settings_Reference.md §4.44.
-        private static readonly string[] SoleEngines = { MarsRtEngine, MercuryRtEngine, MoonRtEngine };
+        private static readonly string[] SoleEngines = { MarsRtEngine, MercuryRtEngine };
 
-        // A console whose one engine is a discovered v1 engine, opened by the generic branch whatever name is asked for - see VenusRT_Native.md §68.5.
+        // A console whose one engine is a discovered v1 engine, opened by the generic branch whatever name is asked for - see VenusRT_Native.md §68.5, EmuSen_Backend.md §23.
         private static readonly Dictionary<string, string> SoleDiscoveredEngines = new(StringComparer.OrdinalIgnoreCase)
         {
             ["SNES"] = VenusRtEngine,
+            ["NES"] = MoonRtEngine,
         };
 
         public static string? SoleDiscoveredEngine(string console) => SoleDiscoveredEngines.GetValueOrDefault(console);

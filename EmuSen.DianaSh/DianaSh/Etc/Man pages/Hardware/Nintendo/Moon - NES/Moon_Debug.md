@@ -131,3 +131,10 @@ defaults are no longer defaults.*
 
 What stays out: read breakpoints and read watches. The bus reports no reads to an observer, on either engine, so a
 data breakpoint `OnRead` never fires. That is the same on Mercury and on both NES engines.
+
+## 8. Since the shim retired (2026-10-18)
+
+This page describes the C# target and then the shim's (`MoonRtDebugTarget`). Both are gone: the NES's debugger is the
+generic target over MoonRT's processor and units and the NES pack's views, which show what §2 to §5 describe, with the
+differences `EmuSen_Backend.md` §19.5 and §23 list (one load bar, the board's mapper number as a row, the engine's name in
+headings). The board registers of §3.1, `IrqsFired` among them, are the board unit's.

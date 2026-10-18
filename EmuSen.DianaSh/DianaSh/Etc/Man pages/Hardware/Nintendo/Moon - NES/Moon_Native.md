@@ -2495,3 +2495,14 @@ leaves the loop without the encoding the same code, and puts the encoding's stat
 still grows by those 8 bytes, and that is in the measurement above. The finding does not generalise to "a
 flag in a loop is expensive"; it says that on this library an A/B of a hot path needs a control that changes placement
 and adds no work before a cost is attributed. That is put to the tester as a rule for the project's benches.
+
+## 10. The shim retired (2026-10-18)
+
+MoonRT runs on the generic engine and target, found through discovery, as every v1 core does; its shim
+(`MoonRtCore`, `MoonRtDebugTarget`, `MoonBoards`, `MoonMachine`, `MoonNative`), its pre-stable exports
+(`native_exports!`, `moonrt_step`, `moonrt_rom_patch`) and `EMUSEN_MOON_NATIVE` are gone. What the shim held went into the
+core or the NES system pack: the 2A03's registers by `DEBUG_REGISTERS`, its disassembly by `DEBUG_DISASSEMBLE` over the
+shared `emusen-6502`, the step goldens' `moonrt_core_step`, and nine units on core ABI 1.13 (the PPU, the APU, its five
+channels, the board, whose registers and nametable arrangement are now each board's own in `mappers.rs`, and the
+cartridge's facts), over which the pack draws the sprites, the channels, the board's name and the summary. The record,
+with what a player and the shell see differently, is `EmuSen_Backend.md` §21 and §23.

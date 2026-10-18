@@ -3,7 +3,6 @@ using EmuSen.Cores.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Crystal.Systems.Nes;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Crystal.Cheats;
 
 namespace EmuSen.WiseMan.Cores
@@ -27,11 +26,10 @@ namespace EmuSen.WiseMan.Cores
             Assert.Empty(CoreEngine.RomPatchTriples(new CheatRegistry(), 0, 0xFFFF));
         }
 
-        // The loaders' switches and crash-log names; MoonRT and MercuryRT on the common interface, MarsRT on the core ABI v1 since its step 5.
+        // The loaders' switches and crash-log names; MercuryRT on the common interface, MarsRT on the core ABI v1 since its step 5, MoonRT through discovery since its shim retired.
         [Fact]
         public void The_three_loaders_keep_their_switches_and_crash_logs()
         {
-            Assert.Equal(("moonrt", "EMUSEN_MOON_NATIVE", "moonrt_crash"), (MoonNative.Library.Crate, MoonNative.Library.Variable, MoonNative.Library.CrashLogStem));
             Assert.Equal(("mercuryrt", "EMUSEN_MERCURY_NATIVE", "mercuryrt_crash"), (MercuryNative.Library.Crate, MercuryNative.Library.Variable, MercuryNative.Library.CrashLogStem));
             Assert.Equal(("marsrt", "EMUSEN_MARS_NATIVE"), (MarsNative.Library.Crate, MarsNative.Library.Variable));
             Assert.True(MarsNative.Available, MarsNative.Report);
@@ -40,7 +38,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0, MarsNative.Export("mars_machine_new"));
             Assert.Equal(0, MarsNative.Export("no_such_export"));
 
-            var off = NativeCoreLibrary.Common("moonrt", "EMUSEN_CLEANUP_TEST_OFF", MoonNative.CoreVersion, MoonNative.RequiredCapabilities);
+            var off = NativeCoreLibrary.Common("mercuryrt", "EMUSEN_CLEANUP_TEST_OFF", MercuryNative.CoreVersion, MercuryNative.RequiredCapabilities);
             Environment.SetEnvironmentVariable("EMUSEN_CLEANUP_TEST_OFF", "0");
             try
             {
@@ -50,9 +48,9 @@ namespace EmuSen.WiseMan.Cores
             }
             finally { Environment.SetEnvironmentVariable("EMUSEN_CLEANUP_TEST_OFF", null); }
 
-            var wrong = NativeCoreLibrary.Common("moonrt", "EMUSEN_CLEANUP_TEST_UNSET", 999, MoonNative.RequiredCapabilities);
+            var wrong = NativeCoreLibrary.Common("mercuryrt", "EMUSEN_CLEANUP_TEST_UNSET", 999, MercuryNative.RequiredCapabilities);
             Assert.False(wrong.Available);
-            Assert.EndsWith($"speaks common interface 1 core {MoonNative.CoreVersion}, this build common 1 core 999", wrong.Report);
+            Assert.EndsWith($"speaks common interface 1 core {MercuryNative.CoreVersion}, this build common 1 core 999", wrong.Report);
         }
 
         // A MercuryRT library that is not there is refused with the words the notice carries, and its capabilities agree with its exports.
@@ -77,14 +75,12 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Each_machine_describes_the_shared_codes_and_its_own()
         {
-            Assert.Equal("not a Moon save state", MoonMachine.Describe(-3));
             Assert.Equal("not a Mercury save state", MercuryMachine.Describe(-3));
             Assert.Equal("not a Mars save state", MarsMachine.Describe(-3));
             Assert.Equal("the buffer is too small", MarsMachine.Describe(-7));
-            Assert.Equal("a mapper no board implements", MoonMachine.Describe(-10));
             Assert.Equal("a cartridge type no board implements", MercuryMachine.Describe(-10));
             Assert.Equal("an RDRAM size that is neither 4 MB nor 8 MB", MarsMachine.Describe(-12));
-            Assert.Equal("status -99", MoonMachine.Describe(-99));
+            Assert.Equal("status -99", MercuryMachine.Describe(-99));
         }
 
         // MarsRT's state handle is a v1 machine: it writes either kind, has loaded nothing, and is the size it was asked for.

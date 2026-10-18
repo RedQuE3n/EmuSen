@@ -1,5 +1,5 @@
-//! MoonRT on the core ABI v1, beside its pre-stable exports until the v1 adapter is its only loader. The console's
-//! facts its C# shim held are its descriptors here. See EmuSen_CoreAPI.md §13.1, §22.
+//! MoonRT on the core ABI v1, its only interface since its shim retired: the console's facts its C# shim held are its
+//! descriptors, units and exports here. See EmuSen_CoreAPI.md §13.1, §22 and EmuSen_Backend.md §23.
 
 use emusen_native::core::{
     self as v1, Battery, Button, Choice, Control, Controller, Create, Effect, Firmware, FrameInfo, Info, Instruction, MachineInfo, Port, Processor, RawEncoding, RawFrame,
@@ -401,7 +401,7 @@ impl v1::Core for Machine {
 
 emusen_native::core_exports!(Machine; reset, mutes, rom_patches, debug, debug_stack, raw_picture, debug_registers, debug_disassemble);
 
-/// `moonrt_rom_patch` for a machine of the core ABI v1: the byte a CPU read of `address` returns for `original` under
+/// The byte a CPU read of `address` returns for `original` under
 /// the current patches, or -1 for none, the exhaustive patch test's view through the v1 loader (EmuSen_CoreAPI.md §26).
 ///
 /// # Safety
@@ -411,7 +411,7 @@ pub unsafe extern "C" fn moonrt_core_rom_patch(machine: *const v1::sys::Machine,
     unsafe { v1::exports::core_of::<Machine>(machine) }.map_or(STATUS_NULL, |m| rom_patch(m, address, original))
 }
 
-/// `moonrt_step` for a machine of the core ABI v1: one instruction with the frame loop's DMA charge, NMI edge and stolen
+/// One instruction with the frame loop's DMA charge, NMI edge and stolen
 /// cycles, the cycles or a fault status; a test extension, as the step goldens drive it (EmuSen_Backend.md §19.3.5, M15).
 ///
 /// # Safety

@@ -19,7 +19,7 @@ use crate::state::{State, StateError, StateWriter};
 use crate::vi::scan::{RASTER_WIDTH, Scanout};
 
 /// `MarsDebugSpaces`' names, numbered as `ffi::space` numbers them.
-pub const SPACES: [&str; 7] = ["RDRAM", "DMEM", "IMEM", "PIFRAM", "ROM", "CPU", "VI"];
+pub const SPACES: [&str; 6] = ["RDRAM", "DMEM", "IMEM", "PIFRAM", "ROM", "CPU"];
 
 /// `MarsCore.StickReach` and `CButtonThreshold`: a stick's full reach, and how far the right stick goes before a C button is held.
 const STICK_REACH: f64 = 127.0;
@@ -420,7 +420,10 @@ impl v1::Core for Core {
         | caps::ROM_PATCHES
         | caps::SETTING_NOTES
         | caps::DEBUG
-        | caps::DEBUG_REGISTERS;
+        | caps::DEBUG_REGISTERS
+        | caps::TELEMETRY
+        | caps::PRESENCE
+        | caps::DEBUG_TRANSLATE;
 
     fn info() -> Info {
         Info {
@@ -512,7 +515,7 @@ impl v1::Core for Core {
                 .map(|(id, &name)| {
                     let id = id as u32;
                     Space {
-                        read_only: id == space::ROM || id == space::VI,
+                        read_only: id == space::ROM,
                         cheats: matches!(id, space::RDRAM | space::DMEM | space::IMEM | space::PIF_RAM),
                         reports_stores: matches!(id, space::RDRAM | space::DMEM | space::IMEM | space::PIF_RAM),
                         view: id == space::CPU,
@@ -563,7 +566,8 @@ impl v1::Core for Core {
         let (width, height, repeat) = if self.scanout.width == 0 { (RASTER_WIDTH as u32, BLANK_HEIGHT as u32, 1) } else { (self.scanout.width, self.scanout.height, self.scanout.row_repeat.max(1)) };
         FrameInfo {
             row_repeat: repeat as i32,
-            flags: if self.shown { flags::FRAME_WALKED } else { 0 },
+            flags: (if self.shown { flags::FRAME_WALKED } else { 0 }) | (if self.cheats_held() { flags::FRAME_CHEATS_HELD } else { 0 }),
+            lines: Core::lines(width, height),
             aspect_num: 4,
             aspect_den: 3,
             serial: self.frame_serial,
@@ -652,9 +656,6 @@ impl v1::Core for Core {
         if space == space::CPU {
             return Ok(1 << 32);
         }
-        if space == space::VI {
-            return Ok((crate::vi::REGISTERS * 4) as i64);
-        }
         self.memory(space).map(|m| m.len() as i64).ok_or(status::NO_SUCH_SPACE)
     }
 
@@ -737,6 +738,35 @@ impl v1::Core for Core {
         self.registers(processor).ok_or(status::NOT_SUPPORTED)
     }
 
+    fn units(&self) -> Vec<emusen_native::core::Unit> {
+        super::host::units()
+    }
+
+    fn counters(&self) -> Vec<emusen_native::core::Counter> {
+        super::host::counters()
+    }
+
+    fn telemetry(&self, out: &mut [i64]) -> usize {
+        self.telemetry_into(out)
+    }
+
+    fn set_present(&mut self, port: u32, present: bool) -> Result<(), i32> {
+        if port >= 4 {
+            return Err(status::NO_SUCH_PORT);
+        }
+        self.machine.set_present(port as usize, present);
+        Ok(())
+    }
+
+    /// Kernel mode's view of the address, the TLB consulted and never faulted (`Mars_Debug.md` §4); the signal processor's
+    /// addresses are its memories' own.
+    fn debug_translate(&self, processor: u32, address: u32) -> Result<Option<u32>, i32> {
+        match processor {
+            0 => Ok(self.physical(address)),
+            _ => Err(status::NOT_SUPPORTED),
+        }
+    }
+
     fn debug_pc(&self, processor: u32) -> Option<u64> {
         match processor {
             0 => Some(self.machine.cpu.pc),
@@ -750,7 +780,7 @@ impl v1::Core for Core {
     }
 }
 
-emusen_native::core_exports!(Core; present, phases, audio_peek, axes, settings, setting_notes, rom_patches, debug, debug_registers);
+emusen_native::core_exports!(Core; present, phases, audio_peek, axes, settings, setting_notes, rom_patches, debug, debug_registers, telemetry, presence, debug_translate);
 
 // ---- Extensions: what the shim reads beside the ABI, and the tests' ways into the machine -------------------------------------
 

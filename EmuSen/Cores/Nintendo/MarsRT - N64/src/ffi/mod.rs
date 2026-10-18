@@ -38,8 +38,6 @@ pub mod space {
     pub const PIF_RAM: u32 = 3;
     pub const ROM: u32 = 4;
     pub const CPU: u32 = 5;
-    /// The VI's fourteen registers as stored, big-endian, read-only (Mars_Native.md §9).
-    pub const VI: u32 = 6;
 }
 
 /// The machine and its host: the VI's scan-out, one for the machine's life as C#'s raster is, and whether a frame is scanned at all.
@@ -202,16 +200,6 @@ impl Core {
             }
             return Ok(());
         }
-        if space == space::VI {
-            out.fill(0);
-            for (i, byte) in out.iter_mut().enumerate() {
-                let at = address.wrapping_add(i as u32);
-                if at < crate::vi::REGISTERS * 4 {
-                    *byte = self.machine.bus.vi.read32(at & !3).to_be_bytes()[(at & 3) as usize];
-                }
-            }
-            return Ok(());
-        }
         let bytes = self.memory(space).ok_or(STATUS_NO_SUCH_SPACE)?;
         out.fill(0);
         let start = address as usize;
@@ -237,7 +225,7 @@ impl Core {
                 }
             }
         } else {
-            if space == space::ROM || space == space::VI {
+            if space == space::ROM {
                 return Err(STATUS_READ_ONLY);
             }
             let bytes = self.memory_mut(space).ok_or(STATUS_NO_SUCH_SPACE)?;

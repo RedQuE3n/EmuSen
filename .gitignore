@@ -1,5 +1,7 @@
 # .NET Build Outputs
 bin/
+# VenusRT's corpus goldens keep the corpus's own folder names, bin/ among them - see VenusRT_Native.md §69.7.
+!EmuSen.WiseMan/Cores/VenusGoldens/corpus/**/bin/
 obj/
 TestResults/
 # The README's publish recipe writes standalone builds here - see README.md.

@@ -7512,7 +7512,7 @@ frame that lost a pair, the frame that was swapped after it, or both.
 the_csharp_baseline` passes on a machine that has recorded the corpus, but on a fresh checkout it fails at the first of
 them ("`src/undisbeliever-snes-test-roms/bin/65816-examples/arguments-after-jsr.sfc` is in the baseline and has no
 golden"), as it did on WiseMan before this change. An exception for `EmuSen.WiseMan/Cores/VenusGoldens/` in
-`.gitignore` and the 108 traces committed would close it.
+`.gitignore` and the 108 traces committed would close it. *Closed on 2026-10-18, §69.7.*
 
 `VenusRtGoldenTests.The_goldens_against_Mesen`, run with the library and the player's firmware, fails on six anchors,
 Super Mario Kart's three and F1 ROC II's three: each picture still equals Mesen's within the window, at lags of 0 to
@@ -7523,3 +7523,33 @@ both), so the fix does not cause it; the open-replacement runs of those two game
 re-recording; and the blast radius in WiseMan, `AudioDrainTests`, `VenusRtCoreAbiTests`, `VenusRtDebugTests`,
 `VenusRtDebugViewTests`, `VenusRtTestRomRunnerTests`, `VenusRtEngineTests`, `SnesSystemPackTests` and
 `VenusRtGoldenTests`, 88 cases, 87 passed and the Mesen goldens failed as above.
+
+### 69.7 The corpus traces under `bin/` committed (2026-10-18)
+
+Decided 2026-10-18: the 108 corpus traces that `.gitignore` kept out of the tree are committed, as a change of their
+own. They existed on no disk once the worktree that recorded them was gone, so they were recorded again, from VenusRT
+at c922c968, which carries §69.4's fix; their header gives that reason.
+
+**The exception** is one negation under `.gitignore`'s `bin/`, `!EmuSen.WiseMan/Cores/VenusGoldens/corpus/**/bin/`, so
+only a `bin/` folder inside the corpus goldens is taken back. `git check-ignore -v` still names `bin/` for every other
+place tried: the projects' build outputs (`EmuSen/bin/`, `EmuSen.WiseMan/bin/`), a crate's folder, and a `bin/` in
+`VenusGoldens/` or `Cores/` outside the corpus folder. All 108 traces lie under the corpus's `bin/` folders (every one
+in undisbeliever's `src/.../bin/`), and none is ignored by any other rule.
+
+**Recorded, measured on 2026-10-18.** `VenusGoldenTests` run in recording mode over the whole catalogue passed 24 of 24
+and wrote exactly the 108 missing traces: none of the 187 corpus traces already in the tree, nor any program, random or
+game trace, was rewritten, which is the check that the tracked ones were already §69.6's. Of the 187, 186 carry
+§69.6's reason and one (`blargg_2010-03-14/speed_2_freezes2.smc`) its first recording's, the one corpus run whose chain
+the fix did not move. Every verdict of the 108 is `Visual 3600`, the protocol `text`.
+
+**What they hold:** 218,327 bytes in 7,734 lines, the corpus folder 622,952 bytes with them. Each is the header (the
+run's name, the image's SHA-256, the input script, the engine and the reason), 60 rows of chained digests (6,480 in
+all, each a frame number and 16-digit hashes, every field checked by script) and the verdict, its protocol, and in 66
+of them the grader's detail: the text the runner read off the test ROM's screen, in printable ASCII, as 162 of the
+tracked traces already hold. No image, picture, sound or byte of a ROM is in them.
+
+**From a fresh clone, measured on 2026-10-18.** The branch cloned into a scratch folder, with nothing untracked beside
+the build's outputs and `LunaP.props` pointed at the sibling checkout as on every machine here, ran `VenusGoldenTests`
+with the corpus, the games and six threads: 24 of 24 passed in 7.6 minutes, `No_corpus_verdict_is_worse_than_the_
+csharp_baseline` and `The_corpus_runs_as_its_goldens_recorded` among them. The baseline check now passes on a checkout
+that has never recorded anything.

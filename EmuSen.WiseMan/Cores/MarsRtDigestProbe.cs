@@ -113,6 +113,8 @@ namespace EmuSen.WiseMan.Cores
             public void Load(string rom)
             {
                 _core.LoadRom(rom);
+                // One player, as Mistress's router seats one pad: ports 2 to 4 emptied before the first frame - see EmuSen_Backend.md §18.10.
+                for (int port = 1; port < 4; port++) _core.SetControllerConnected(port, false);
                 Line("load", -1);
             }
 

@@ -357,6 +357,9 @@ mod tests {
     #[test]
     fn presence_and_translation_reach_the_machine() {
         let (m, _image) = make();
+        assert!(unsafe { core_of_mut::<Core>(m) }.unwrap().machine.bus.si.controllers.iter().all(|c| c.present), "every port holds a controller at create");
+        assert_eq!(unsafe { emusen_core_set_present(m, 2, 0) }, 0);
+        assert!(!unsafe { core_of_mut::<Core>(m) }.unwrap().machine.bus.si.controllers[2].present);
         assert_eq!(unsafe { emusen_core_set_present(m, 2, 1) }, 0);
         assert!(unsafe { core_of_mut::<Core>(m) }.unwrap().machine.bus.si.controllers[2].present);
         assert!(unsafe { emusen_core_set_present(m, 4, 1) } < 0);

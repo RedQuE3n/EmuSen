@@ -185,5 +185,36 @@ namespace EmuSen.WiseMan.Crystal
                 foreach (string path in new[] { nes, gb, n64 }) try { File.Delete(path); } catch (IOException) { }
             }
         }
+
+        // MarsRT's frame on the generic engine, its picture and its sound allocate nothing on the calling thread, the frame end's reads among them - see EmuSen_Backend.md §14.5, §18.10.
+        [Fact]
+        public void MarsRTs_frame_picture_and_sound_allocate_nothing()
+        {
+            string n64 = SyntheticN64Rom.WriteTemp(SyntheticN64System.Build(rsp: true));
+            try
+            {
+                using var mars = new MarsRtTestCore { Options = TestCores.NoBattery };
+                mars.LoadRom(n64);
+                var picture = new byte[1 << 22];
+                var sound = new short[1 << 16];
+                for (int i = 0; i < 200; i++)
+                {
+                    mars.RunFrame();
+                    mars.CopyPicture(picture);
+                    mars.DrainAudio(sound, out _);
+                }
+                long Measure(Action a)
+                {
+                    long before = GC.GetAllocatedBytesForCurrentThread();
+                    for (int i = 0; i < 300; i++) a();
+                    return GC.GetAllocatedBytesForCurrentThread() - before;
+                }
+                Assert.Equal((0L, 0L, 0L), (Measure(mars.RunFrame), Measure(() => mars.CopyPicture(picture)), Measure(() => mars.DrainAudio(sound, out _))));
+            }
+            finally
+            {
+                try { File.Delete(n64); } catch (IOException) { }
+            }
+        }
     }
 }

@@ -296,6 +296,12 @@ is `EmuSen_Cheats.md` §6's defect over again; pressed in the boot's first 61–
 it. The gate samples IE once, at the frame end. And a game that loads and checksums more code later would need the
 same care; none is known, and it is untested.
 
+**Where the gate lives since 2026-10-18.** MarsRT no longer applies cheats behind a shim of its own. It flags each frame
+that ended with `Status.IE` clear with core ABI 1.13's `EMUSEN_FRAME_CHEATS_HELD` (`EmuSen_CoreAPI.md` §6.37), and the
+generic host gives such a frame none of its cheats at its end, the rule above made a fact of the frame rather than of
+the N64's code (`Mars_Native.md` §10, `EmuSen_Backend.md` §18.10). An explicit Apply is still not gated. The two tests
+named above run on `CoreEngine` now.
+
 ## 6. ROM patches: supported, at the cartridge
 
 **`MemoryBus.ReadCart32` is the one place a cartridge byte enters the machine after the handoff.** Processor loads

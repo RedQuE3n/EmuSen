@@ -6930,8 +6930,11 @@ MarsRT itself now does.*
   failed on it before the fix (`EmuSen_Backend.md` §18.10). With it, the lines column is the baseline's.
 - **`EMUSEN_FRAME_CHEATS_HELD`** on a frame that ended with COP0's `Status.IE` clear, Project64's gate
   (`Mars_Cheats.md` §5.1), which the host now honours for every cheat it applies.
-- **`set_present`** for ports 0 to 3; **`debug_translate`** for processor 0, kernel mode's view through the TLB, never
-  faulting.
+- **`set_present`** for ports 0 to 3, and all four holding a controller at create, as §6.36 of the core ABI says. Before this
+  step the machine made port 0 alone full, so a pad plugged into an emptied port never reached the game: the host's latch
+  sends only a change from the state it assumes at create (`EmuSen_Backend.md` §18.10). `Machine` keeps its own default,
+  port 0, for the crate's tests, and `create` fills the rest.
+- **`debug_translate`** for processor 0, kernel mode's view through the TLB, never faulting.
 
 **What stays as extensions**, read only by WiseMan's fixture (`Fixtures/MarsRt.cs`) by name, never by a shipped host:
 `marsrt_core_run_steps`, `_is_viewer_text`, `_cop0`, `_bus_write32`, `_bus_read32`, `_set_cop0`, `_mi_raise`,

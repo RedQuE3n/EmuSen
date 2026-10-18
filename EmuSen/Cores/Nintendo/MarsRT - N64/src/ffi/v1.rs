@@ -492,6 +492,8 @@ impl v1::Core for Core {
             m
         };
         let mut core = Core::new(machine);
+        // Every port holds a controller at create (EmuSen_CoreAPI.md §6.36); a frontend empties the ones no player holds.
+        core.machine.bus.si.controllers.iter_mut().for_each(|c| c.present = true);
         core.paks_apart = r.shared_removable;
         core.apply(defaults().with(&r.settings));
         core.rate_told = core.frame_rate();

@@ -252,6 +252,8 @@ namespace EmuSen.WiseMan.Mistress
             (MainWindow window, PadDriver first) = Playing("Four.z64", SyntheticN64Rom.Build(patches: (0, new byte[] { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 })), ByConnection, bigScreen: true);
             var mars = Assert.IsType<CoreEngine>(SessionOf(window).Core);
             Poll(window);
+            // Every port holds a controller at create; the ports no player holds are emptied as the next frame starts - see EmuSen_CoreAPI.md §6.36.
+            mars.RunFrame();
             Assert.Equal(new[] { true, false, false, false }, N64Ports(mars).Select(p => p.Present));
 
             PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4"), first.Plug("Pad 5") };

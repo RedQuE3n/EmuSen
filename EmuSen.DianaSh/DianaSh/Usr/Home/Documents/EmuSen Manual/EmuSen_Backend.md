@@ -2982,6 +2982,56 @@ Asked one by one, each with its recommendation; nothing here is decided by this 
   own, merged before any core switches*, so that no two branches change `CoreEngine`, the header or the pack's views
   interface at once.
 
+### 17.9 Built 2026-10-18: steps 1 (C1), 3 and 6
+
+*Measured on 2026-10-18 on branch `b4-mercury`, from `WiseMan` at `4b42f4f1`, after §20's decisions. The steps of
+§17.7 that need no ABI change and no host piece the three cores share; C2 to C4, step 2, the minor and the pack's views
+are another branch's (§20), and steps 4, 5, 7 and 8 wait on it.*
+
+- **C1, shown and removed.** `GameRefusalTests` opens an MBC7 image (`$22`) through `CrystalRuntime`: before the change
+  the open failed with `NoEngine` (−1109); after it, with a fault whose words name MercuryRT and `$22`. Two changes made
+  it: the header reader stopped refusing (step 6, below), and the shim throws `-10` as the host's
+  `CoreRefusedException`, in the words the generic host will print after the switch ("MercuryRT (Rust) refused the
+  game: cartridge type $22 is not implemented."), rather than the deleted C# core's `NotSupportedException`.
+- **Step 6.** `gb::cartridge` and `GbCartridge.ReadManaged` name every type the header table defines: MMM01
+  (`$0B`–`$0D`), MBC6 (`$20`), MBC7 (`$22`), Pocket Camera (`$FC`), TAMA5 (`$FD`), HuC3 (`$FE`), HuC1 (`$FF`), and
+  `unknown` for the codes the table leaves undefined. The refusal of an image shorter than the header stays, a
+  console fact. `SystemCodeParityTests`' header case, every type at five lengths, holds the two halves equal unchanged;
+  `MercuryCartridgeTests` names eight boards and has MercuryRT's create refuse `$22` with status −10.
+- **Step 3**, MercuryRT's own exports and info (`src/ffi/v1.rs`, `src/machine.rs`): `DEBUG_REGISTERS` with the
+  sixteen registers of D1 in machine info's `processors[0]`; `DEBUG_DISASSEMBLE` over any space, decoded by
+  `EmuSen/Cores/Shared/emusen-sm83` (no standard library; the table that was `gb::disasm`, which now re-exports it, so
+  `DebugCodeParityTests` grades the moved table unchanged); `BGPAL` and `OBJPAL` as read-only spaces 7 and 8 of 64
+  bytes, a write refused with `READ_ONLY`; `battery_files` naming file 0 `.srm` for both systems, and `create` keeping
+  file 0 only on a board with a battery; the Model's help as §4.47 of the settings reference words it. The shim still
+  shows the machine through its own target and reads none of this: its spaces, registers and disassembly are its own
+  until the switch, so the debugger's golden corpus is unchanged.
+- **P7, retired as predicted, but not where §17.7 put it.** §17.7 measured it "on the shim before the switch"; reading
+  `BreakpointExpressions` showed that a condition refreshes the whole target, and the shim's refresh retakes its whole
+  state snapshot whatever its registers come from, so the shim could not show the saving. It was measured instead
+  through the generic engine the Game Boy switches to, by a row `mercuryrt-v1` added to
+  `BreakpointConditionCostBench` (Release, `EMUSEN_BP_BENCH=1`, 2,926 hits a frame):
+
+  | Target | A register condition, a hit | A register logpoint, a hit | `if 0`, a hit |
+  |---|---|---|---|
+  | MercuryRT through its shim | 5.27 µs | 5.29 µs | 0.30 µs |
+  | MercuryRT through `CoreEngine` and `DEBUG_REGISTERS` | 0.98 µs | 1.08 µs | 0.42 µs |
+  | Nephrite (`CoreDebugTarget`), the same run | 1.35 µs | 1.27 µs | 0.57 µs |
+
+  0.98 µs is within 0.5 µs of Nephrite's 1.88 of §13.12 and of its 1.35 here. At 2,926 hits a frame the condition now
+  costs about 2.9 ms a frame against 15.4 through the shim.
+
+**The gates as measured.**
+
+| | Result |
+|---|---|
+| MercuryRT's crate, `cargo test --profile test-checked` | 42 in six binaries (8, 9, 16, 5, the new `v1` with 4, 0 doc-tests), all pass; four seeded faults (the battery rule dropped, Z read from bit 6, the branch's base off by one, palette RAM writable) each fail one case |
+| `emusen-sm83` | 3 pass |
+| `emusen-systems` and `emusen-platform`, `cargo test --release` | 31, 4 and 19 pass |
+| The kit on the release library | capabilities `0x33830`; the core's cases pass, C14 finding 9 spaces and file 0 listed by core info and kept by no image of the four; 4 of 4 games and 173 of 173 corpus ROMs pass |
+| WiseMan, §17.4's 46 classes with `GameRefusalTests`, `MercuryCommercialRomBatteryTests`, `SystemCodeParityTests`, `DebugCodeParityTests`, `SystemTableParityTests` and `CoreDiscoveryTests`, the goldens' games and corpus set | 809 cases: 808 passed, and `MercuryRtCoreAbiTests`' capability case failed as it should, pinning the old set; with the two capabilities added it passes, 8 of 8. `GoldenCorpusTests` 100 of 100 and the registration golden unchanged; the goldens' 56 cases, the four games and the 173 corpus traces as recorded |
+| The header's and refusal's classes again with `EMUSEN_SYSTEMS_NATIVE=0` | 25 of 25 |
+
 ---
 
 ## 18. B4's first phase for MarsRT, 2026-10-18: the shim inventoried, a proposal, the gates and a plan

@@ -3730,3 +3730,28 @@ runs before a load already treats that exception as "nothing to ask for".
 - **MoonRT and MarsRT** keep `PortEngine`'s and their own mirrors until their C# cores leave.
 - **Stage 9's open items** stand: the corpus's two forced-console columns graded by verdict alone, the PPU's line
   boundary as the next piece of work and its re-baseline, MagenTests' HDMA case, and the handheld.
+
+## 16. B4: what the core took from its shim (2026-10-18)
+
+*Decided 2026-10-18 by the tester: B4 may touch MercuryRT to retire its shim, while stage 9's open items stay paused.
+Nothing here changes what the machine emulates; the goldens, the corpus baseline and the kit are unchanged. The
+inventory, the plan and the measurements are `EmuSen_Backend.md` §17, the record of this step §17.9.*
+
+What moved out of `MercuryRtCore` and `MercuryRtDebugTarget` into MercuryRT's own exports and info:
+
+- **The CPU's registers** (`DEBUG_REGISTERS`): A, F, BC, DE, HL, SP, PC, the flags Z, N, H and C, IME, HALT, IE, IF and
+  the cycle count, in the order and widths the shim's target printed, each as the state holds it. A register
+  condition read through them costs about 1 µs a hit where the shim's snapshot cost 5 to 7.
+- **The disassembly** (`DEBUG_DISASSEMBLE`), over any space, byte for byte as `space_read` reads it, from
+  `emusen-sm83`, the SM83 table the Game Boy's pack also uses (§4 of `Mercury_Debug.md` describes the table).
+- **Palette RAM** as two read-only spaces, `BGPAL` (7) and `OBJPAL` (8), 64 bytes each, the colour palettes' bytes in
+  the order BCPD and OCPD write them; on a Game Boy, whatever the machine's reset leaves there.
+- **The battery rule**: core info lists file 0 (`.srm`) for both systems, and `create` writes it into cartridge RAM only
+  where the header names a battery and the board has RAM, the same condition under which machine info lists the file.
+  A stray save beside a game whose board has RAM and no battery no longer fills that RAM at power-on.
+- **The refusal of a board MercuryRT does not build** is `create`'s alone (status −10, the type in its words); the
+  Game Boy pack's header reader names every type of the header table instead of refusing.
+- **The Model's help** is the sentence the settings window showed.
+
+The pre-stable interface (`src/ffi/mod.rs`) was left as it was: it goes with the shim (`EmuSen_Backend.md` §17.7,
+step 8).

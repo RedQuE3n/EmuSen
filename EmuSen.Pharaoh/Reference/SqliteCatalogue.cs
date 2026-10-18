@@ -4,7 +4,7 @@ using System.IO;
 using EmuSen.Galaxia.Library.Catalogue;
 using Microsoft.Data.Sqlite;
 
-namespace EmuSen.Common.Catalogue
+namespace EmuSen.Pharaoh.Reference
 {
     // The catalogue's driver - see EmuSen_Galaxia.md §7.1.
     public sealed class SqliteCatalogue : ICatalogue, IDisposable

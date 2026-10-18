@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using EmuSen.Cores;
+using System.Text.Json;
+using EmuSen.Crystal.Client;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Pharaoh.Reference
@@ -42,12 +43,11 @@ namespace EmuSen.Pharaoh.Reference
                 if (!args[i].StartsWith('-')) stride = long.Parse(args[i], CultureInfo.InvariantCulture);
             }
 
-            string? engine = CoreFactory.ConfiguredEngine(romPath);
-            ICore core = CoreFactory.Create(romPath, headless: true, engine);
-            CoreFactory.LoadInto(core, romPath);
-            if (CoreFactory.EngineNotice(romPath, engine, core) is { } notice) Console.WriteLine($"[core] {notice}");
+            using var runtime = new CrystalRuntime();
+            using CrystalSession session = runtime.Open(new CrystalOpen { Path = romPath });
+            if (JsonDocument.Parse(session.Info()).RootElement.GetProperty("notices").GetProperty("engine").GetString() is { } notice) Console.WriteLine($"[core] {notice}");
 
-            return PeerProbe.Run(core, romPath, dumpDir, startFrame, endFrame, stride, wantSignature, taps,
+            return PeerProbe.Run(runtime, session, romPath, dumpDir, startFrame, endFrame, stride, wantSignature, taps,
                 Console.WriteLine);
         }
     }

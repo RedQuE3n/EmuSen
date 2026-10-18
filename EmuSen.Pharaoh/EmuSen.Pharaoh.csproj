@@ -8,12 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- The cores and their debug targets, run headless and driven by a script of commands instead of a human at the F4 prompt. -->
-    <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
-    <!-- The shell that the commands verbs of a script fall through to, and Crystal beneath it for the debug target and FrameRecorder;
-         the cores no longer bring the shell with them - see EmuSen_DianaSh.md §13.6. -->
+    <!-- The frontend API, the one way this program drives a core; it names nothing of the runtime's own assemblies - see EmuSen_Backend.md §14.8 and SR2. -->
+    <ProjectReference Include="..\EmuSen.Crystal.Client\EmuSen.Crystal.Client.csproj" />
+    <!-- The shell its scripts' other verbs fall through to, handed the session's own table. -->
     <ProjectReference Include="..\EmuSen.DianaSh\EmuSen.DianaSh.csproj" />
-    <ProjectReference Include="..\EmuSen.Crystal\EmuSen.Crystal.csproj" />
+    <!-- Paths, the config models and the input vocabulary. -->
+    <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
   </ItemGroup>
 
   <ItemGroup>

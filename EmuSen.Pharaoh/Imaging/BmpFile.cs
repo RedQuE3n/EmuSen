@@ -1,4 +1,4 @@
-namespace EmuSen.Common.Imaging
+namespace EmuSen.Pharaoh.Imaging
 {
     // Minimal uncompressed 32bpp BMP reader/writer - no case for PNG's DEFLATE needed just to look at a frame.
     public static class BmpFile

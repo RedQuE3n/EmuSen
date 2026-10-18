@@ -1,4 +1,4 @@
-namespace EmuSen.Common.Imaging
+namespace EmuSen.Pharaoh.Imaging
 {
     // 64-bit FNV-1a over raw RGBA bytes - used by --autoshot to decide whether the current frame differs.
     public static class FrameHash

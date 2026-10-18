@@ -1,4 +1,4 @@
-using EmuSen.Common.Imaging;
+using EmuSen.Pharaoh.Imaging;
 
 namespace EmuSen.WiseMan.Imaging
 {

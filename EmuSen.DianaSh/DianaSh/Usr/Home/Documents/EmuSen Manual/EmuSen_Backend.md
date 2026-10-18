@@ -1574,3 +1574,85 @@ it shares; a client that has not moved still diverges until its move.
   reader on another thread sees, and so the tester's to decide.
 - **Where a game's settings file is named.** `games/<the game's file name>.json`, the name its states and saves go by
   (`SaveLibrary`'s stem); SR10 decided the file, not its name, so this is recorded as the choice made.
+
+### 14.8 Part 2: Pharaoh on the API
+
+Pharaoh, first by §3.10's order, now drives its cores through the binding alone. Its project references
+`EmuSen.Crystal.Client`, the shell and Galaxia, and no longer `EmuSen` or `EmuSen.Crystal`.
+
+- **Every mode moved.** The classic loop and `--commands` run `FrameRunner` over a `CrystalSession`: held buttons are
+  `input_button`, a frame is the frame call, the picture is `picture_copy` into a buffer kept between frames, the sound
+  `audio_drain`; after a halt, the next frame asks run control to resume, as a script's next verb always resumed the open
+  frame. The verbs map one to one: `savestate`/`loadstate` are the state twins (whose load is the one sequence of
+  §14.6.1, row 2), `rewind` is `rewind_set`, `rewind_step` and `rewind_reel`, `ff` is `SPEED_DRAW_NONE`, `record` is
+  `record_start` and `record_stop`, `perf` reads `phase_names` once and `phases` each frame, `vramsheet` and
+  `paletteswatch` are the tile sheet's and the swatch's twins, `spriteoverlay` the sprites' twin, `audiodump`
+  `audio_peek`, `tapuntil` and `waitchange` `space_read`. `--probe` reads the NES's spaces through `space_read` and the
+  cartridge's header through `route`; `--testroms` opens each ROM with no battery, reads PRG RAM through `space_read` and
+  resets through `reset`, a build with no NES engine an error and a board the engine refuses a skip, as before.
+- **The shell is handed the session's table.** `DianaShInterpreter.CreateForService(table)` is the host API's new entry:
+  the shell's Rust modules call the table, and its C# host commands reach the provider behind it (`SessionService.Of`)
+  for its target, codecs and trace switch. A shell does not dispose a provider it was handed; the runtime does, with
+  the session (`NativeShell`'s providers it made itself are the ones it ends).
+- **What served Pharaoh alone moved into it**: `BmpFile`, `FrameHash`, `ContactSheet`, `SpriteOverlay` (now given a
+  rectangle, not a debugger type) and `WavFile` to `EmuSen.Pharaoh/Imaging` and `Audio`, and `SqliteCatalogue` to
+  `Reference`, as §4.1's "what stays C#" placed them; WiseMan's users follow the namespace. `PngFile` stays in `EmuSen`,
+  which Mistress, Hotaru and the recorder use.
+- **`--flag`** names are Pharaoh's own table, its one entry today the log switch, instead of reflection over
+  `DebugSettings`.
+- **The API gained, within 1.0**: `session_info`'s `"picture"` (width, height, row repeat, for a screenshot taken
+  between frames) and `route`'s `"cartridge"` (the NES pack's reading of the iNES header: board, header trust, PRG and
+  CHR bytes, battery), which the probe and the library indexer read in place of the shim's `Header`.
+- **`--index-library`** reads the board from `route` and marks a NES image playable when it opens on the API, where it
+  asked the MoonRT shim's board list before: the same answer for every board the shim lists, read through the engine
+  instead of beside it, at the cost of one open a NES file.
+
+**Behaviour that changes, each by the API's rule and recorded here:** a session's close writes the battery save (no
+change under `--nobattery`, which the bench runs use); a game whose required firmware is missing is refused with
+`EMUSEN_CRYSTAL_FIRMWARE` before it loads; the shell's `cheat` is given the catalog's cheat systems, as Mistress's and
+Hotaru's are; a step of rewind drains and drops the sound the step skipped; recording draws every frame while it
+records; and an N64 game runs on the console's stored settings (§14.6.1, row 7). `perf`'s wall time now includes the
+frame-end order, which it did not.
+
+| Gate | Result |
+|---|---|
+| `framesum 600` then `audiosum 600` with `--nobattery`, the old Pharaoh (`WiseMan` at `8b09514b`, Release) against the new, the same core libraries beside both | **equal on all seven**: Super Mario Bros. 3 (NES), Donkey Kong Country 2 (SNES), Tetris 2 (Game Boy), 10-Pin Bowling (Game Boy Color), Super Mario 64 (N64), Sonic the Hedgehog 2 (Mega Drive), Ape Escape (PlayStation, a `.cue`) |
+| `FrontendReferenceTests.Pharaoh_names_no_runtime_type` (SR2): no `EmuSen` or `EmuSen.Crystal` among Pharaoh's referenced assemblies, and no type reference in its metadata resolving to either, so a type reached through a transitive reference fails too; held to seeing Hotaru's `ICore` | pass |
+| `FrameRunnerTests` (on the API, the synthetic SNES ROM), `HeadlessDebugOptionsTests`, `PharaohDependencyTests`, `CpuThrottleTests`, `MoonTestRomTests`, `MoonPpuDefectTests`, the imaging and WAV tests, `CatalogueTests`, and every class of `EmuSen.WiseMan.Crystal`, with a shell handed a session's table on the Rust shell and on the C# one | 186 pass, 1 skipped (F4's record); `EmuSen.WiseMan.DianaSh` and `.Shell`, the golden corpus among them, 1,034 pass |
+
+Each other frontend's old path stays until its own move: Hotaru, emusen-shell and Mistress are untouched.
+
+### 14.9 Sizes against §7, and two predictions
+
+| | §7's estimate | Built in parts 1 and 2 |
+|---|---:|---:|
+| Header and baseline | 1,100 | 697 (the header 496, the baseline 201) |
+| Rust checks (no Rust runtime before B7) | — | 588 (`abi` and `lib` 118, the test 470) |
+| C# contract layer and binding | 1,900 | 1,067, of which 561 generated from the header (the table, the functions, the numbers) |
+| C# implementation | 2,500 | 3,271, of which 982 generated (the export map and the 78 twins' entries); 2,289 written |
+| Changes to the provider and the engine | — | about 200 |
+| Tests | 2,000 | about 1,300 of C# in 9 classes, and the Rust test above |
+| Pharaoh | — | 759 lines in, 503 out over 17 files, the imaging, WAV and catalogue files moved whole |
+
+**P1** (the C# implementation no larger than what it consolidates, about 3,600) holds so far by its written part,
+2,289; it is retired by counting when the last frontend has moved and its frame-end code is deleted. **P2** (the frame
+call under 2 µs a frame over `RunFrame`): measured on 2026-10-17 in Release on the v1 test core, the best of five rounds
+of 20,000 frames, the frame call and the drain through the binding cost 1.793 µs a frame against 1.676 µs for
+`RunFrame`, the debugger's refresh and the drain called on the engine directly: **0.117 µs** added, the function
+pointers' two transitions and the gate. `pacebench`'s distribution on the bench games, P2's second half, is for the
+moves of the windowed frontends, which pace; Pharaoh does not.
+
+### 14.10 For the review
+
+- **The API's shape** is §14.2's table and the header. Its first commit is stable by SR3, so a change after the review is
+  a minor, not an edit: anything the review would rather see differently in 1.0 is best said before emusen-shell and
+  Mistress are built on it.
+- **Four choices made in building it** that the review may want to settle: the info twin kept verbatim and the
+  frontend's description a function of its own (§14.2); the names `disc_*`, `subscription_*`, `state_slot_*` and the
+  two input calls; the game's settings file named for the game's file (§14.7); and 1.1, not 1.0, for the device
+  picture, the raw picture and the state records, so that each arrives tested with the frontend that needs it.
+- **One proposal**: the debugger's snapshots only while a debugger reads them (§14.5).
+- **What comes next**, after the review: emusen-shell with Hotaru's session and window (C3, C4's frontend half, C6,
+  C7's console case, F4's skipped test made to pass, `HostAction` synthesised from events), then Mistress (1.1, C1, C2
+  and C5's own cases, F3's copy from `games.db`, SR12), and the session service's 1.3 with `games`, `open_game` and
+  `open_console` (D10).

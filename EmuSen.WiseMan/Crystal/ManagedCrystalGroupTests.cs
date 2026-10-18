@@ -297,6 +297,19 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Equal(1u, Frame(s).paused);
         }
 
+        // A shell handed the session's table reaches that session: a watch its command adds is the session's, and its state load runs the one sequence - see EmuSen_Backend.md §14.8.
+        [Fact]
+        public void A_shell_handed_the_session_s_table_reaches_the_session()
+        {
+            using CrystalSession s = _f.Open();
+            Frame(s);
+            var shell = EmuSen.DianaSh.DianaSh.Bin.DianaShInterpreter.CreateForService(s.ServiceTable());
+            Assert.Contains("RAM", shell.Execute("spaces"));
+            shell.Execute("watch add RAM 3 1");
+            Assert.Single(Json(s.WatchList()).EnumerateArray());
+            Assert.Throws<ArgumentException>(() => EmuSen.DianaSh.DianaSh.Bin.DianaShInterpreter.CreateForService(1234));
+        }
+
         // A struct shorter than 1.0's is refused; a longer one has its tail left as the client wrote it - EmuSen_CoreAPI.md §4.2's rule, one layer up.
         [Fact]
         public unsafe void A_frame_struct_of_another_size_is_refused_or_its_tail_kept()

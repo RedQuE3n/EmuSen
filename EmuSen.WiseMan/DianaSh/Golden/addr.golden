@@ -99,13 +99,13 @@ $000000 -> RAM 0x0
 status 0
 action none
 $ addr 8000
-out 62
-NES does not report an address decode, or $008000 is unmapped.
+out 65
+MoonRT does not report an address decode, or $008000 is unmapped.
 status 0
 action none
 $ addr FFFC
-out 62
-NES does not report an address decode, or $00FFFC is unmapped.
+out 65
+MoonRT does not report an address decode, or $00FFFC is unmapped.
 status 0
 action none
 end

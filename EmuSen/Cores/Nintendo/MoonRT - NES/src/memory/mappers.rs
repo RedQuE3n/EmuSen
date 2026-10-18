@@ -368,6 +368,92 @@ impl Mapper {
         }
     }
 
+    /// The board's own registers as a debugger shows them, `(name, bits, value)`, the names and widths C#'s boards gave
+    /// them (`DebugState`); none for a board that holds nothing worth showing (Moon_Debug.md §3.1, EmuSen_Backend.md §19).
+    pub fn debug_registers(&self) -> Vec<(&'static str, u32, i64)> {
+        const BYTES: [&str; 16] = ["R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"];
+        const CHR: [&str; 4] = ["Chr0", "Chr1", "Chr2", "Chr3"];
+        let b = |v: bool| v as i64;
+        match self {
+            Mapper::Mmc3(m) => {
+                let mut r = vec![("BankSelect", 3, m.bank_select as i64), ("PrgMode", 1, m.prg_mode as i64), ("ChrMode", 1, m.chr_mode as i64)];
+                r.extend(m.registers.iter().enumerate().map(|(i, &v)| (BYTES[i], 8, v as i64)));
+                r.extend([
+                    ("IrqLatch", 8, m.irq_reload_value as i64),
+                    ("IrqCounter", 8, m.irq_counter as i64),
+                    ("IrqReload", 1, b(m.irq_reload)),
+                    ("IrqEnabled", 1, b(m.irq_enabled)),
+                    ("IrqPending", 1, b(m.irq_pending)),
+                    ("IrqsFired", 32, m.irqs_fired as i64),
+                    ("WramEnabled", 1, b(m.wram_enabled)),
+                ]);
+                r
+            }
+            Mapper::Mmc2(m) => vec![
+                ("PrgBank", 4, m.prg_bank as i64),
+                ("LeftFD", 5, m.left_bank[0] as i64),
+                ("LeftFE", 5, m.left_bank[1] as i64),
+                ("RightFD", 5, m.right_bank[0] as i64),
+                ("RightFE", 5, m.right_bank[1] as i64),
+                ("LeftLatch", 1, m.left_latch as i64),
+                ("RightLatch", 1, m.right_latch as i64),
+                ("Horizontal", 1, b(m.horizontal)),
+            ],
+            Mapper::Rambo1(m) => {
+                let mut r = vec![("BankSelect", 8, m.bank_select as i64)];
+                r.extend(m.registers[..10].iter().enumerate().map(|(i, &v)| (BYTES[i], 8, v as i64)));
+                r.extend([
+                    ("R15", 8, m.registers[15] as i64),
+                    ("IrqLatch", 8, m.irq_reload_value as i64),
+                    ("IrqCounter", 8, m.irq_counter as i64),
+                    ("IrqCycleMode", 1, b(m.irq_cycle_mode)),
+                    ("IrqEnabled", 1, b(m.irq_enabled)),
+                    ("IrqPending", 1, b(m.irq_pending)),
+                ]);
+                r
+            }
+            Mapper::IremH3001(m) => vec![
+                ("Prg8000", 8, m.prg_banks[0] as i64),
+                ("PrgA000", 8, m.prg_banks[1] as i64),
+                ("PrgC000", 8, m.prg_banks[2] as i64),
+                ("IrqLatch", 16, m.irq_reload_value as i64),
+                ("IrqCounter", 16, m.irq_counter as i64),
+                ("IrqEnabled", 1, b(m.irq_enabled)),
+                ("IrqPending", 1, b(m.irq_pending)),
+                ("Horizontal", 1, b(m.horizontal)),
+            ],
+            Mapper::Sunsoft3(m) => {
+                let mut r = vec![("PrgBank", 8, m.prg_bank as i64)];
+                r.extend(m.chr_banks.iter().enumerate().map(|(i, &v)| (CHR[i], 8, v as i64)));
+                r.extend([("IrqCounter", 16, m.irq_counter as i64), ("IrqEnabled", 1, b(m.irq_enabled)), ("IrqPending", 1, b(m.irq_pending))]);
+                r
+            }
+            Mapper::Sunsoft4(m) => {
+                let mut r = vec![("PrgBank", 3, m.prg_bank as i64)];
+                r.extend(m.chr_banks.iter().enumerate().map(|(i, &v)| (CHR[i], 8, v as i64)));
+                r.extend([
+                    ("Nt0", 8, m.nametable_banks[0] as i64),
+                    ("Nt1", 8, m.nametable_banks[1] as i64),
+                    ("ChrNametables", 1, b(m.use_chr_for_nametables)),
+                    ("PrgRamEnabled", 1, b(m.prg_ram_enabled)),
+                ]);
+                r
+            }
+            Mapper::SunsoftFme7(m) => vec![
+                ("Command", 4, m.command as i64),
+                ("Prg8000", 6, m.prg_banks[0] as i64),
+                ("PrgA000", 6, m.prg_banks[1] as i64),
+                ("PrgC000", 6, m.prg_banks[2] as i64),
+                ("Window6000", 8, m.window_control as i64),
+                ("IrqCounter", 16, m.irq_counter as i64),
+                ("IrqEnabled", 1, b(m.irq_enabled)),
+                ("IrqCounting", 1, b(m.irq_counter_enabled)),
+                ("IrqPending", 1, b(m.irq_pending)),
+            ],
+            _ => Vec::new(),
+        }
+    }
+
     /// `ReadPrg`, CPU `$4020`-`$FFFF`.
     #[inline]
     pub fn read_prg(&self, cart: &Cartridge, address: u16) -> u8 {

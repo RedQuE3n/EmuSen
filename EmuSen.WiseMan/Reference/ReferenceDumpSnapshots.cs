@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.Crystal.Debugger;
 using EmuSen.WiseMan.Fixtures;
@@ -150,7 +149,7 @@ namespace EmuSen.WiseMan.Reference
 
             if (system == "nes")
             {
-                using var core = new MoonRtCore() { Options = TestCores.NoBattery };
+                using var core = EmuSen.WiseMan.Fixtures.MoonEngines.Create(TestCores.NoBattery);
                 core.LoadRom(romPath);
                 var target = core.CreateDebugTarget();
 

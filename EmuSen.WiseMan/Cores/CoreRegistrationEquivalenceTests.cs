@@ -11,7 +11,6 @@ using EmuSen.Cores;
 using EmuSen.Cores.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Systems;
@@ -30,8 +29,8 @@ namespace EmuSen.WiseMan.Cores
         public const string RecordVariable = "EMUSEN_RECORD_REGISTRATION";
         public const string OffMarkVariable = "EMUSEN_REGISTRATION_OFF_MARK";
 
-        // The switch variables of every engine a build registers by hand, and VenusRT's former shim's.
-        public static readonly string[] OffVariables = { MoonNative.Variable, MercuryNative.Variable, MarsNative.Variable, "EMUSEN_VENUS_NATIVE" };
+        // The switch variables of every engine a build still registers by hand; MoonRT's and VenusRT's retired with their shims.
+        public static readonly string[] OffVariables = { MercuryNative.Variable, MarsNative.Variable };
 
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenRegistration_" + Guid.NewGuid().ToString("N"));
         private readonly string? _logsWere = ErrorLog.DirectoryOverride;
@@ -271,7 +270,7 @@ namespace EmuSen.WiseMan.Cores
             }
             foreach (string name in EngineNames().Append("Stored").Append("Nope")) Add($"{world}.registered[{name}]", CoreCatalog.IsRegisteredEngine(name));
             Add($"{world}.registered[<null>]", CoreCatalog.IsRegisteredEngine(null));
-            Add($"{world}.available", $"MoonRT={MoonRtCore.Available} MercuryRT={MercuryRtCore.Available} MarsRT={MarsRtCore.Available}");
+            Add($"{world}.available", $"MercuryRT={MercuryRtCore.Available} MarsRT={MarsRtCore.Available}");
             foreach (var found in CoreDiscovery.Found.OrderBy(c => c.Info.Id, StringComparer.Ordinal))
             {
                 bool opens = found.Open() is not null;

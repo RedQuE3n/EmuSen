@@ -5,7 +5,6 @@ using System.Linq;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Crystal.Systems.GameBoy;
 using EmuSen.Cores.Nintendo.MercuryRT;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia.Models;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
@@ -33,7 +32,7 @@ namespace EmuSen.Cores
             V1Library(romPath, engine) is { } v1 ? new Native.CoreEngine(v1, StoredSettings(romPath, v1)) { Media = StoredMedia(romPath, v1), Options = options ?? CoreOptions.Default } : Extension(romPath) switch
         {
             ".smc" or ".sfc" => throw Missing("SNES", CoreCatalog.VenusRtEngine),
-            ".nes" => Nes(options ?? CoreOptions.Default),
+            ".nes" => throw Missing("NES", CoreCatalog.MoonRtEngine),
             ".gb" or ".gbc" => GameBoy(options ?? CoreOptions.Default),
             ".z64" or ".n64" or ".v64" => MarsRtCore.Available ? new MarsRtCore(expansionPak: true) { Media = StoredMedia(romPath, MarsNative.Library.Library!), Options = options ?? CoreOptions.Default }
                 : throw new NotSupportedException($"The N64 core is not in this build ({MarsNative.Report})."),
@@ -44,10 +43,6 @@ namespace EmuSen.Cores
         // A console's sole discovered engine when its library is missing or refused, in the player's words - see VenusRT_Native.md §68.5.
         private static NotSupportedException Missing(string console, string engine) =>
             new($"This build has no {console} core: {engine} is missing ({Native.CoreDiscovery.ByEngineName(engine)?.Report ?? "no sidecar for it was found beside the program"}).");
-
-        // MoonRT, the NES's one engine; a build without its library says so rather than running nothing - see Moon_Native.md §9.5.
-        private static ICore Nes(CoreOptions options) => MoonRtCore.Available ? new MoonRtCore { Options = options }
-            : throw new NotSupportedException($"This build has no NES core: {CoreCatalog.MoonRtEngine} is missing ({MoonNative.Report}).");
 
         // MercuryRT, the Game Boy's one engine; a build without its library says so rather than running nothing - see Mercury_Native.md §15.4.
         private static ICore GameBoy(CoreOptions options) => MercuryRtCore.Available ? new MercuryRtCore { Options = options }
@@ -159,7 +154,6 @@ namespace EmuSen.Cores
         {
             MarsRtCore => CoreCatalog.MarsRtEngine,
             MercuryRtCore => CoreCatalog.MercuryRtEngine,
-            MoonRtCore => CoreCatalog.MoonRtEngine,
             Native.CoreEngine v1 => v1.Info.DisplayName,
             _ => core.CoreName,
         };
@@ -172,15 +166,6 @@ namespace EmuSen.Cores
 
             switch (core)
             {
-                // The NES pack's codecs, and MoonRT's own target, reading its state by its listing - see Moon_Native.md §9.4.
-                case MoonRtCore moonRt:
-                    return new CoreBundle(
-                        moonRt,
-                        moonRt.CreateDebugTarget(),
-                        Crystal.Systems.Nes.NesSystem.Raw(),
-                        Crystal.Systems.Nes.NesSystem.GameGenie(),
-                        null);
-
                 // The Game Boy's codecs, and MercuryRT's target: its state through the layout listing for what it shows, the core's hooks for what halts - see Mercury_Native.md §15.2.
                 case MercuryRtCore mercuryRt:
                     return new CoreBundle(

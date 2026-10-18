@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Text.Json;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Crystal.Client;
 using EmuSen.Crystal.Client.Contract;
 using EmuSen.Galaxia;
@@ -49,7 +48,7 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void A_pal_state_in_an_ntsc_session_is_refused_in_the_core_s_words()
         {
-            Assert.True(MoonRtCore.Available, MoonNative.Report);
+            Assert.True(Fixtures.MoonEngines.Available, Fixtures.MoonEngines.Report);
             using var runtime = new CrystalRuntime();
             string state = Path.Combine(_root, "Pal.state");
             using (CrystalSession pal = runtime.Open(new CrystalOpen { Path = Rom("Pal.nes", 1), NoBattery = true }))

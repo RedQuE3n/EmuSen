@@ -1,5 +1,5 @@
-//! MoonRT on the core ABI v1, beside its pre-stable exports until the v1 adapter is its only loader. The console's
-//! facts its C# shim held are its descriptors here. See EmuSen_CoreAPI.md §13.1, §22.
+//! MoonRT on the core ABI v1, its only interface since its shim retired: the console's facts its C# shim held are its
+//! descriptors, units and exports here. See EmuSen_CoreAPI.md §13.1, §22 and EmuSen_Backend.md §23.
 
 use emusen_native::core::{
     self as v1, Battery, Button, Choice, Control, Controller, Create, Effect, Firmware, FrameInfo, Info, Instruction, MachineInfo, Port, Processor, RawEncoding, RawFrame,
@@ -337,10 +337,15 @@ impl v1::Core for Machine {
         (processor == 0).then_some(self.cpu.pc as u64)
     }
 
+    /// The PPU, the APU, its channels, the board and the cartridge, by the ids from 256 (EmuSen_CoreAPI.md §6.33).
+    fn units(&self) -> Vec<v1::Unit> {
+        super::units::units(self)
+    }
+
     /// `REGISTERS`' values, read from the CPU itself: what the shim's target read out of a saved state (EmuSen_DianaSh.md Q28).
     fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
         if processor != 0 {
-            return Err(status::NOT_SUPPORTED);
+            return super::units::registers(self, processor).ok_or(status::NOT_SUPPORTED);
         }
         let c = &self.cpu;
         let mut values = vec![c.a as i64, c.x as i64, c.y as i64, c.s as i64, c.pc as i64, c.p as i64];
@@ -396,7 +401,7 @@ impl v1::Core for Machine {
 
 emusen_native::core_exports!(Machine; reset, mutes, rom_patches, debug, debug_stack, raw_picture, debug_registers, debug_disassemble);
 
-/// `moonrt_rom_patch` for a machine of the core ABI v1: the byte a CPU read of `address` returns for `original` under
+/// The byte a CPU read of `address` returns for `original` under
 /// the current patches, or -1 for none, the exhaustive patch test's view through the v1 loader (EmuSen_CoreAPI.md §26).
 ///
 /// # Safety
@@ -406,7 +411,7 @@ pub unsafe extern "C" fn moonrt_core_rom_patch(machine: *const v1::sys::Machine,
     unsafe { v1::exports::core_of::<Machine>(machine) }.map_or(STATUS_NULL, |m| rom_patch(m, address, original))
 }
 
-/// `moonrt_step` for a machine of the core ABI v1: one instruction with the frame loop's DMA charge, NMI edge and stolen
+/// One instruction with the frame loop's DMA charge, NMI edge and stolen
 /// cycles, the cycles or a fault status; a test extension, as the step goldens drive it (EmuSen_Backend.md §19.3.5, M15).
 ///
 /// # Safety
@@ -653,5 +658,31 @@ mod tests {
         m.space_read(9, 0x20, &mut b[1..]).unwrap();
         assert_eq!(b[1], 0);
         assert_eq!(<Machine as Core>::space_size(&m, 10), Err(status::NO_SUCH_SPACE));
+    }
+
+    // §6.33's units: nine, ids from 256, each answered with as many values as machine info names, the board's after
+    // its mapper number and an MMC3's eighteen after that; another id refused.
+    #[test]
+    fn the_units_are_answered_as_machine_info_names_them() {
+        let nrom = machine(&image(&boot(0x0F, 0, 0), &[0x40]));
+        let units = nrom.units();
+        assert_eq!(units.iter().map(|u| (u.id, u.kind.as_str())).collect::<Vec<_>>(), [
+            (256, "video"), (257, "audio"), (258, "channel"), (259, "channel"), (260, "channel"), (261, "channel"), (262, "channel"), (263, "cartridge"), (264, "other"),
+        ]);
+        for u in &units {
+            assert_eq!(nrom.debug_registers(u.id).unwrap().len(), u.registers.len(), "{}", u.name);
+        }
+        assert_eq!(units[1].registers.len(), 22);
+        assert_eq!(nrom.debug_registers(263).unwrap(), vec![0]);
+        assert_eq!(nrom.debug_registers(264).unwrap(), vec![0, 0, 0]);
+        assert_eq!(nrom.debug_registers(265), Err(status::NOT_SUPPORTED));
+        let mut mmc3 = image(&boot(0x0F, 0, 0), &[0x40]);
+        (mmc3[4], mmc3[6]) = (2, 0x40);
+        mmc3.splice(16..16, mmc3[16..16 + 0x4000].to_vec());
+        let m = machine(&mmc3);
+        let board = m.units().into_iter().find(|u| u.id == 263).unwrap();
+        assert_eq!(board.registers.len(), 19);
+        assert_eq!((board.registers[0].0.as_str(), board.registers[18].0.as_str()), ("Mapper", "WramEnabled"));
+        assert_eq!(m.debug_registers(263).unwrap()[0], 4);
     }
 }

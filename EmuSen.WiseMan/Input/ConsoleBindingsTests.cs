@@ -172,7 +172,6 @@ namespace EmuSen.WiseMan.Input
         {
             var catalogNames = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToHashSet();
 
-            using (var moonRt = new EmuSen.Cores.Nintendo.MoonRT.MoonRtCore()) Assert.Contains(moonRt.CoreName, catalogNames);
             using var marsRt = new EmuSen.Cores.Nintendo.MarsRT.MarsRtCore();
             Assert.Contains(marsRt.CoreName, catalogNames);
         }
@@ -190,7 +189,7 @@ namespace EmuSen.WiseMan.Input
         [Fact]
         public void The_catalogs_button_list_is_the_cores_own()
         {
-            using (var moonRt = new EmuSen.Cores.Nintendo.MoonRT.MoonRtCore()) Assert.Equal(moonRt.SupportedButtons, CoreCatalog.ButtonsFor("NES"));
+            using (var moonRt = Fixtures.MoonEngines.Create()) Assert.Equal(moonRt.SupportedButtons, CoreCatalog.ButtonsFor("NES"));
             Assert.Equal(EmuSen.Crystal.Systems.Snes.SnesSystem.PadButtons, CoreCatalog.ButtonsFor("SNES"));
             using (var gameBoy = new EmuSen.Cores.Nintendo.MercuryRT.MercuryRtCore()) Assert.Equal(gameBoy.SupportedButtons.Order(), CoreCatalog.ButtonsFor("GB").Order());
             using var marsRt = new EmuSen.Cores.Nintendo.MarsRT.MarsRtCore();

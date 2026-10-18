@@ -1949,8 +1949,8 @@ in debug.
 ### 28.7 The gates
 
 - **Release** [M, `cargo test --release`, both corpus variables set to the probe's copies]: the lib suite 179, colour 3,
-  filtered 4, precise 14, programs 82, renderer 3, scaled 7, shell 10, all passing after the goldens' re-recording
-  below. Before it, the six Silent Hill lines failed in every gate that compares with `discs.txt` (the goldens, the
+  filtered 4, precise 14, programs 82, renderer 3 (the RX 6800), scaled 7, shell 10, all passing after the goldens'
+  re-recording below; `diamond-v1`'s 5, `precision`'s 8 and the renderer crate's 2 lib tests passing. Before it, the six Silent Hill lines failed in every gate that compares with `discs.txt` (the goldens, the
   precise, scaled and renderer gates), and nothing else failed.
 - **The goldens** (`Diamond_Enhancements.md` §6.2): `programs.txt` and `ps1-tests.txt` unchanged; in `discs.txt`
   Silent Hill's state digests at frames 1,500 to 3,000, six lines, changed, each by §28.2's timer 0, and no picture or

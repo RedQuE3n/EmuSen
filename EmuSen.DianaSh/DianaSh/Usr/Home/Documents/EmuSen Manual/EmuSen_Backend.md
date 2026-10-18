@@ -3060,8 +3060,7 @@ reads the machine's state. Two surface changes came with them:
   members, since a Game Boy's palettes are registers; `CoreDebugTarget` passes them, and its view ring learns again
   when machine info changes, as a state from the other console changes it.
 - **Platform interface 21** (MarsRT's N64 pack took 20 first, §18.10.2): `emusen_systems_view` takes the systems
-  `gb` and `gbc`, a request's `units` (each a name,
-  a kind and its registers) and `mutes`; `NativeDebugViews` sends the units with each view that takes them, and a
+  `gb` and `gbc`, a request's `units` (each a name, a kind and its registers) and `mutes`; `NativeDebugViews` sends the units with each view that takes them, and a
   units-reading summary to the library first, a system without that view (the NES today) answering from the C#
   views. This is the pattern the NES's Rust twins can follow.
 
@@ -3106,14 +3105,14 @@ hardware-test runner's `IllegalOpcode` holds. The shim-against-adapter compariso
 | `SM83` becomes `CPU`, machine info's name for the processor | `cpus`, `regs`, `setreg` | as §20 decided `CPU` for the 2A03; **for the tester to confirm for the SM83** |
 | `BGPAL` and `OBJPAL` listed; the ROM read-only as before | `spaces`, `mem`, `tile`, `counters` | follows from §17.2 D5, decided |
 | `channels` after `mute 0 on` shows the channel muted | `mute` | a correction: the old recording read the shim's snapshot from before the mute |
-| `eval symbols` lists the processor's registers, `frame` and `stackdepth`; the PPU's, APU's and timer's register names are no longer symbols | `eval` | **for the tester**: the host piece §23.6 recommends for every core with units; built here once and taken out again so as not to move the NES's recording |
+| `eval symbols` lists the processor's registers, `frame`, `stackdepth` and the units' registers by qualified name (`ppu.LY`, `timer.DIV`, `pulse1.Freq`, 54 of them); a bare name one unit alone has (`LY`, `SeqStep`) still reads in an expression, a name the channels share (`Vol`) does not, and the APU's `$FF10`–`$FF26` and `Board:ROM` are no longer listed, being no identifiers an expression can read | `eval` | follows from §24, decided |
 | the summary's sound line loses `buffered=1476 frames` | `summary` | **for the tester**: the queue's length is the engine's, not a register or a space a pack reads |
 
 **The registration golden**, recorded again: the Game Boy's rows are `CoreEngine`, `CoreDebugTarget`, the engine's
 name and the Model row from the sidecar (its text the shim's, §17.9); the `off` rows run the Game Boy, no switch
 turning it off; a tampered sidecar now refuses MercuryRT as trust refuses any discovered engine (the shim loaded its
-library unchecked); the SNES's and the NES's settings rows appear; the NES's battery rows as above. Every other row is
-unchanged.
+library unchecked); the NES's battery rows as above. Recorded again on top of MarsRT's N64 rows (WiseMan 08812dde), which it leaves
+unchanged, as it leaves every other row.
 
 **The gates as measured**:
 
@@ -3129,8 +3128,8 @@ unchanged.
 changed in four ways §17.4 had not listed (the processor's name, the new spaces, the muted channel, the symbols and
 the queue), each in the table above.
 
-**Left**: the cross-core deletion (§20); the units' registers as expression symbols and the summary's queue, for the
-tester; the Rust twins of the other consoles' new view members.
+**Left**: the cross-core deletion (§20); the summary's queue, for the tester; the Rust twins of the other consoles'
+new view members.
 
 ---
 

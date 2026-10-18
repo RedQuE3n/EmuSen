@@ -308,8 +308,10 @@ case on mercuryrt
 target mercuryrt
 covers 1-2
 $ eval symbols
-out 101
+out 707
   A
+  apu.Power
+  apu.SeqStep
   BC
   C
   Cycles
@@ -323,9 +325,54 @@ out 101
   IF
   IME
   N
+  noise.Dac
+  noise.Div
+  noise.Enabled
+  noise.Len
+  noise.Shift
+  noise.Short
+  noise.Vol
   PC
+  ppu.BGP
+  ppu.Dot
+  ppu.LCDC
+  ppu.LY
+  ppu.LYC
+  ppu.Mode
+  ppu.OBP0
+  ppu.OBP1
+  ppu.SCX
+  ppu.SCY
+  ppu.STAT
+  ppu.WindowLine
+  ppu.WX
+  ppu.WY
+  pulse1.Dac
+  pulse1.Duty
+  pulse1.Enabled
+  pulse1.Freq
+  pulse1.Len
+  pulse1.SweepNegate
+  pulse1.SweepPeriod
+  pulse1.SweepShift
+  pulse1.Vol
+  pulse2.Dac
+  pulse2.Duty
+  pulse2.Enabled
+  pulse2.Freq
+  pulse2.Len
+  pulse2.Vol
   SP
   stackdepth
+  timer.DIV
+  timer.TAC
+  timer.TIMA
+  timer.TMA
+  wave.Dac
+  wave.Enabled
+  wave.Freq
+  wave.Len
+  wave.Vol
   Z
 status 0
 action none

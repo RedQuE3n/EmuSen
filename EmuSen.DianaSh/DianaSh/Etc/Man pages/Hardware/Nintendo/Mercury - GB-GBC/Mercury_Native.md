@@ -3755,3 +3755,23 @@ What moved out of `MercuryRtCore` and `MercuryRtDebugTarget` into MercuryRT's ow
 
 The pre-stable interface (`src/ffi/mod.rs`) was left as it was: it goes with the shim (`EmuSen_Backend.md` §17.7,
 step 8).
+
+## 17. B4: the Game Boy on the generic engine, its shim deleted (2026-10-18)
+
+*The record with its measurements is `EmuSen_Backend.md` §17.10; nothing here changed what the machine emulates, and
+the goldens, the corpus baseline and the kit are as they were.*
+
+- **The host's way to MercuryRT is the generic engine.** `CoreFactory` opens the discovered library for every `.gb`
+  and `.gbc` file, as it opens VenusRT's and MoonRT's; `MercuryRtCore`, `MercuryRtDebugTarget`, `MercuryMachine` and
+  `MercuryNative` are deleted, and with them `EMUSEN_MERCURY_NATIVE`.
+- **What the debugger shows** comes from MercuryRT's own surfaces: the CPU's registers (`DEBUG_REGISTERS`), its units
+  for the PPU, the APU, the timer, the four channels and HDMA (core ABI 1.13), its disassembly (`DEBUG_DISASSEMBLE` on
+  `emusen-sm83`), and the Game Boy pack's views over its spaces and units (`Mercury_Debug.md`, head note).
+- **The ROM is a read-only space**, a write refused with `READ_ONLY`, as the shim's target showed it.
+- **An illegal opcode** stops a frame with status −20, its detail word `(opcode << 16) | pc` and the words "opcode $XX
+  at $YYYY is no SM83's", on the plain and the observed frame alike; WiseMan's rig turns it into the `IllegalOpcode`
+  the corpus's verdicts and the goldens' transcripts record.
+- **The tests** hold MercuryRT through `Fixtures/MercuryEngines` and `MercuryRig`, both on the generic engine; the rig's
+  `CoreName` is the console the machine runs as, from machine info.
+- **Left** for the step that deletes the pre-stable interface: `src/ffi/mod.rs` and its six `mercuryrt_*` exports,
+  which only `NativeHostTests` still loads.

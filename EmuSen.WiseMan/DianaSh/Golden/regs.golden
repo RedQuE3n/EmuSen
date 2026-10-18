@@ -124,8 +124,8 @@ case on moonrt
 target moonrt
 covers 1-2
 $ regs
-out 909
-NES CPU registers:
+out 932
+MoonRT CPU registers:
   A    = 0x00
   X    = 0x00
   Y    = 0x00
@@ -176,11 +176,25 @@ APU registers:
   FrameCounter = 0x00
   FrameIRQ  = 0x1
   Board:NROM = 0x00
+  Mapper    = 0x000
 status 0
 action none
 $ regs cpu
-out 38
-cpu reports no registers on this core.
+out 271
+CPU registers:
+  A         = 0x00
+  X         = 0x00
+  Y         = 0x00
+  S         = 0xFA
+  PC        = 0xB454
+  P         = 0x24
+  N         = 0x0
+  V         = 0x0
+  D         = 0x0
+  I         = 0x1
+  Z         = 0x0
+  C         = 0x0
+  Cycles    = 0x000000000000E8AB
 status 0
 action none
 end

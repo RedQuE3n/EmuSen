@@ -3345,6 +3345,7 @@ mean; a quiet run remains owed for the per-game figures, as it does for §22.2's
   their machine and state tests onto the v1 handle, waits for VenusRT to drop its own.
   *VenusRT dropped its own on 2026-10-18 (`EmuSen_Backend.md` §19.9); MoonRT's and MercuryRT's remain, each going with
   its shim at B4.*
+  *MoonRT dropped its own on 2026-10-18 with its shim (`EmuSen_Backend.md` §23); MercuryRT's remains.*
 
 ---
 

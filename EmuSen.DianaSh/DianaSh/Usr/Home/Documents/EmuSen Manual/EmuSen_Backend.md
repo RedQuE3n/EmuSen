@@ -1,6 +1,6 @@
 # EmuSen — the backend in Rust: the line, the frontend API, the system packs and the services
 
-*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18), and B4's shared part with core ABI 1.13 (§22, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
+*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18), and B4's shared part with core ABI 1.13 (§22, 2026-10-18), and MoonRT's units, pack views and switch (§23, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
 get the entire backend ported to rust", after which the frontend's move is planned, and the request of 2026-10-17 to
 design two things: one frontend API by which every frontend drives the cores, and the system packs and the remaining C#
 platform services in Rust. Every claim about the code was read on `WiseMan` at `165e60b4`. Claims are marked as
@@ -4370,3 +4370,111 @@ still to come.
 - **No platform interface number was taken**: neither half changed the platform library's C interface.
 - **The shims hide `CoreEngine.Labels`** with labels of their own (MercuryRT's, MoonRT's and MarsRT's registries,
   compiler warning CS0108); left as it is, since each goes with its shim.
+
+---
+
+## 23. B4's last phase for MoonRT, 2026-10-18: the units, the pack's views and the switch
+
+*Built on branch `b4-moon-venus` from `WiseMan` at `e75ad6bf`, core ABI 1.13 and §22's host pieces merged: §19.8's steps
+4 to 6, and §21's two items left for after the shared part (the fixed map wired, `MoonCheatTests` moved). MoonRT now runs
+on the generic engine and target alone. `PortEngine` and the pre-stable host stay, for MercuryRT's shim, and go in one
+commit after its switch.*
+
+### 23.1 Step 4: MoonRT's units
+
+Nine units on 1.13's `units` (`EmuSen_CoreAPI.md` §6.33), ids from 256, each register read by `debug_registers` from the
+part that holds it (`src/ffi/units.rs`), one function giving a unit's names and values so machine info's list and the
+export cannot disagree:
+
+| Id | Unit | Kind | Registers |
+|---|---|---|---|
+| 256 | PPU | `video` | the shim target's twelve: PPUCTRL, PPUMASK, PPUSTATUS, OAMADDR, v, t, x, w, the scanline and three status flags |
+| 257 | APU | `audio` | `$4000` to `$4013`, FrameCounter, FrameIRQ |
+| 258 to 262 | Pulse 1, Pulse 2, Triangle, Noise, DMC | `channel` | the internal counters the channels view reads: duty, timer period, sweep, length counter, envelope (constant, volume, decay), the DMC's bytes remaining, output, rate, address, length and loop |
+| 263 | Board | `cartridge` | `Mapper`, then the board's own registers |
+| 264 | Cartridge | `other` | Mirroring (the board's arrangement, in `NesMirroring`'s order), ChrRam, Battery |
+
+**`MoonBoards` moved into the boards.** Each board's registers for `regs` are now `Mapper::debug_registers`
+(`memory/mappers.rs`), with the names and widths C#'s boards gave them, MMC3's `IrqsFired` among them (Q6), and the
+nametable arrangement is `Mapper::mirroring`, the one the PPU draws by, where the shim restated sixteen rules over
+state paths. The channels are of kind `channel` and the cartridge's facts of kind `other` so that `regs`, which shows
+the `video`, `audio`, `timer` and `cartridge` units (§22.4), prints what the shim printed: the one added row is the
+board's `Mapper`, which the pack's label and summary need and a unit's label cannot be given otherwise
+(`UnitLabel` sees one unit).
+
+### 23.2 Step 4: the NES pack's views
+
+`NesDebugViews` fills §31.7's members over the units and the spaces: `MaxSprites` 64; `Sprites` from `OAM` and the
+PPU's PPUCTRL (8x8 or 8x16); `AudioChannels` with `Moon_Native.md` §9.4's three display rules, which are the 2A03's and
+so the pack's; `UnitLabel`, a board by its mapper number's name from `nes::boards`; `Summary` from the `PRGROM` and
+`CHR` spaces' sizes and the units; and `ResolvePhysical`, the fixed map of §21.2, which `CoreDebugTarget.ResolvePhysical`
+now reaches. `NativeDebugViews` answers a summary that reads units from the C# views and one that reads only the
+processor's registers from the library as before; the new members have no Rust twins yet, as §22.2 allows, so no
+platform interface number was taken. `nes::views::resolve_physical` stands as the map's Rust half for the twins.
+
+**Shown against the shim's target before it was deleted** (commit `ac65711e`): on all 32 boards' programs
+(`MoonPrograms.Boards`), the CPU, video and APU registers, the sprites, the five channels and the summary were the same
+at frames 30, 60, 90 and 120, but for the board's `Mapper` row and the summary's head; 38 of 38 of
+`MoonRtCoreAbiTests` passed. That comparison left with the shim.
+
+### 23.3 Step 5: the switch
+
+- **Deleted**: the shim's five files (`MoonRtCore`, `MoonRtDebugTarget`, `MoonBoards`, `MoonMachine`, `MoonNative`), 649
+  lines; MoonRT's pre-stable exports (`native_exports!`, its `NativeCore` implementation, `moonrt_step`,
+  `moonrt_rom_patch`), so the library defines 51 `emusen_core_` symbols, `moonrt_core_step`, `moonrt_core_rom_patch` and
+  no `emusen_native_` symbol; CI counts `emusen_core_` for `moonrt`.
+- **`CoreFactory`**: the `.nes` arm and `Bundle`'s and `Running`'s shim cases go; a `.nes` opens on the generic engine
+  through discovery, and a build without the library says "This build has no NES core: MoonRT (Rust) is missing (…)".
+- **`CoreCatalog`**: `MoonRtEngine` leaves `SoleEngines` for `SoleDiscoveredEngines`, beside VenusRT's.
+- **`EMUSEN_MOON_NATIVE` retired** (§20); `EmuSen_Settings_Reference.md` and `EmuSen_CoreAPI.md` §26.5 carry dated notes,
+  and `Moon_Native.md` §10 and `Moon_Debug.md` §8 record the retirement.
+- **The tests**: `Fixtures/MoonEngines.cs` loses the shim branch; every class of §21.3's second table now holds a
+  `CoreEngine`, the debugger's classes through the generic target (`MoonDebugEngineTests`' armed-against-plain runs read
+  the bridge's coverage and call stack), the frontend classes through the factory, the library case holding that no
+  pre-stable export is left, and the missing-library cases through discovery (`MoonRtEngineTests` needs no child process
+  any more, discovery being read per call). `NativeHostTests` tests the pre-stable loader on MercuryRT's library alone.
+  `MoonRtCoreAbiTests`' comparisons with the shim became the factory's one-engine case, the fixed map through the target,
+  and the adapter against the bare v1 machine.
+
+### 23.4 Step 6: what changed, and what was re-recorded
+
+Re-recorded as §20 decided, each file's change read before it was kept:
+
+| Record | What changed |
+|---|---|
+| The debugger's corpus: `regs`, `spaces`, `cpus`, `bp`, `mem`, `counters`, `addr`, `tile`, `tilemap` (`moonrt` cases) | "MoonRT" for "NES" in headings and messages; `cpus` "CPU" for "2A03" and `regs` among what it supports; `spaces` and the space lists gain `PPUREG` and `APUREG` |
+| `regs`, `setreg` | `regs cpu` prints the thirteen registers; `regs` adds the board's `Mapper` row |
+| `summary` | the generic head ("MoonRT (Rust) 0.1.0, nes, frame 2"); the scanline at the end of the PPU's second line; the false APU line gone (C4) |
+| `mute` | channel 0, muted, now reads `muted=True`: **a defect of the shim's target**, whose frame record cleared its mutes and then read them back from itself (`MoonRtDebugTarget.cs:78–79` as it stood), so every channel read unmuted whatever was muted |
+| `eval symbols` | the processor's registers, the pack's symbols and `stackdepth`; **the PPU's and the APU's register names are no longer symbols**, the generic target's expressions reading the main processor alone (§23.6) |
+| `CoreRegistrationGolden.txt` | the NES's rows: `CoreEngine` and `CoreDebugTarget` for the shim's types, "MoonRT" as the identity's name, `registered[MoonRT (Rust)] = False`, the `available` line without MoonRT, the "off" world running MoonRT, and for a game without a battery a save placed in an earlier folder now copied into `Saves/NES`, as the SNES's already is (the core then ignores it, C1) |
+| Eight corpus traces of `MoonGoldenTests` | `verdict Unsupported CoreRefusedException` for `NotSupportedException`, with the reason written into each; no other line of any trace moved |
+
+**Retired as recommended** (§19.3.3 D16): a store the debugger makes on `CPUBUS` lands but is not logged as the
+program's; `MoonDebugEngineTests.A_store_through_the_bus_space_lands_and_is_not_the_programs` holds it, where the
+shim's test held the report.
+
+### 23.5 The gates, measured on 2026-10-18
+
+| Gate | Result |
+|---|---|
+| MoonRT's goldens, the corpus and the games opted in | 112 cases pass: every step chain, the corpus's 263 ROMs as recorded (the eight re-recorded verdicts the only lines moved), the seven games' 3,600 frames each as recorded and again from their recorded states; 105 corpus passes, as the C# baseline had |
+| WiseMan, the blast radius (53 classes: every class of §21's two tables, `MoonRtCoreAbiTests`, `CoreRegistrationEquivalenceTests`, `GoldenCorpusTests`, `CoreDebugViewTests`, `SharedHostTests`, `CoreAdapterTests`, `GameRefusalTests`, `DebugCodeParityTests`, `CoreDiscoveryTests`, `CoreAbiTests`, `CoreAbi113Tests`, the frontend API's and Hotaru's classes, `SessionServiceParityTests`, `BreakpointConditionTests`, `DebugPlumbingTests`, `RewindToMomentTests`, `CheatCodecAdapterTests`, `MultiplayerTests`, `NesGameGenieCodecTests`) | 599 tests, **598 passed, 1 failed**: `CoreDebugViewTests`' MoonRT case held the shim's summary head; corrected to the generic head §20 decided, the class run again, **5 of 5** |
+| WiseMan, the classes that reach an NES game through Mistress, Hotaru, the shell or the library (19 classes: `ConsoleContextTests`, `CoreCommandTests`, `MainWindowLogDirectoryTests`, `GameEngineAndPlayTimeTests`, `ManagedCrystalGroupTests`, `RuntimeCatalogTests`, `MenusFollowupTests`, `GameCheatListTests`, `FrameSchedulerTests`, `CatalogueTests`, the themed library's five, `LibraryScreenTests`, the scene classes, `CoreDebugViewTests`) | **229 of 229 pass** |
+| MoonRT's crate, `cargo test --profile test-checked` | 27 pass (the units' case new) |
+| The kit, 20 corpus images at 600 frames, `--self-delimiting` | the core's cases and 20 of 20 images pass, at core ABI 1.13, the units checked by C14 |
+| `export_check.py` against the baseline | ABI 1.13, 51 `emusen_core_` symbols; no `emusen_native_` symbol, and of MoonRT's own only `moonrt_core_step` and `moonrt_core_rom_patch` |
+| No per-core type | `grep -rn "EmuSen.Cores.Nintendo.MoonRT"` over shipped code: 0 |
+
+`moonbench`'s hashes were not taken again, as in §21.4: the games' traces hold the same games' states under its input
+at every frame.
+
+### 23.6 Left, and for the tester
+
+- **Register names in expressions.** The shim's target let `eval`, a condition or a logpoint name the PPU's and the
+  APU's registers; the generic target's expressions read the main processor's registers alone, so `bp … if
+  PPUCTRL==0x80` no longer parses on the NES. Reading the units' registers in the expression context is a host change
+  for every core with units (MercuryRT's and MarsRT's too), and so a shared piece, not this branch's; *recommended*: add
+  it to the host, the units' names after the processor's, a name both hold resolving to the processor's.
+- **The new pack members' Rust twins** for the NES, with their parity cases, when the views' C# is to be retired (B7).
+- **MercuryRT's switch**, after which `PortEngine`, `NativeRtCore` and the pre-stable host go in one commit (§22.7).

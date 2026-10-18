@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MoonRT;
+using EmuSen.Cores.Native;
 using EmuSen.Crystal.Systems.Nes;
 using EmuSen.Crystal.Cheats;
 using EmuSen.WiseMan.Fixtures;
@@ -16,7 +16,7 @@ namespace EmuSen.WiseMan.Cores
         private const int Address = 0x8000;
 
         private readonly string _romPath;
-        private readonly MoonRtCore _core = new();
+        private readonly CoreEngine _core = MoonEngines.Create();
 
         public MoonCheatTests()
         {

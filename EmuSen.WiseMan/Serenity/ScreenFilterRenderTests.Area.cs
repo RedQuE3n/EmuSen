@@ -207,7 +207,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void The_n64_s_cores_report_the_console_s_lines_from_the_frame_s_width()
         {
-            using (var moonRt = new EmuSen.Cores.Nintendo.MoonRT.MoonRtCore()) Assert.Equal(0, ((EmuSen.Cores.ICore)moonRt).DisplayLines);
+            using (var moonRt = Fixtures.MoonEngines.Create()) Assert.Equal(0, ((EmuSen.Cores.ICore)moonRt).DisplayLines);
 
             // MarsRT states the lines in frame_info (core ABI 1.13): before its first frame the picture is 640 by 480, both fields at the console's own size; at 2x it is 1280 wide and still those lines.
             Assert.True(MarsRt.Available, MarsRt.Report);

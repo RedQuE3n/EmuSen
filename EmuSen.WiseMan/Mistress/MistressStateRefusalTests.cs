@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -90,7 +89,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task A_pal_state_in_an_ntsc_game_is_refused_in_the_core_s_words() => Session.Dispatch(() =>
         {
-            Assert.True(MoonRtCore.Available, MoonNative.Report);
+            Assert.True(Fixtures.MoonEngines.Available, Fixtures.MoonEngines.Report);
             MainWindow saving = Started(_pal);
             TextBlock status = saving.FindControl<TextBlock>("StatusText")!;
             Invoke(saving, "SaveState");

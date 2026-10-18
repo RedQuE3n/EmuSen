@@ -8,7 +8,6 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.Pharaoh;
 
@@ -104,9 +103,9 @@ namespace EmuSen.WiseMan.Fixtures
             trace.Input = ScriptName(run.Input, run.Frames);
             using var core = MoonEngines.Create(TestCores.NoBattery);
             try { core.LoadRom(RomFile(rom)); }
-            catch (Exception e) when (MoonEngines.RefusalWord(e) is { } word)
+            catch (CoreRefusedException e)
             {
-                trace.Transcript["verdict"] = $"Unsupported {word}";
+                trace.Transcript["verdict"] = $"Unsupported {e.GetType().Name}";
                 return;
             }
             core.SkipRendering = run.SkipRendering;
@@ -175,35 +174,8 @@ namespace EmuSen.WiseMan.Fixtures
         }
 
         // Each instruction's state hashed into a chain, written every StepRow instructions and at the end; a refusal ends the run.
+        // Each instruction's state hashed into a chain, written every StepRow instructions and at the end, each step through moonrt_core_step; a refusal ends the run.
         private static void Steps(byte[] rom, MoonGoldenRun run, GoldenTrace trace)
-        {
-            if (!MoonEngines.Shim)
-            {
-                StepsOnV1(rom, run, trace);
-                return;
-            }
-            trace.Input = "none";
-            using var machine = new MoonMachine(rom);
-            machine.SetOptions(run.SkipRendering);
-            var chain = new byte[8];
-            int done = 0;
-            for (int i = 1; i <= run.Steps; i++)
-            {
-                int cycles = machine.Step();
-                if (cycles < 0)
-                {
-                    trace.Transcript["stop"] = $"{i} {MoonMachine.Describe(cycles)}";
-                    break;
-                }
-                GoldenTrace.Fold(chain, SHA256.HashData(machine.Save()));
-                done = i;
-                if (i % StepRow == 0) trace.Rows.Add(new[] { i.ToString(CultureInfo.InvariantCulture), Convert.ToHexString(chain) });
-            }
-            if (done % StepRow != 0) trace.Rows.Add(new[] { done.ToString(CultureInfo.InvariantCulture), Convert.ToHexString(chain) });
-        }
-
-        // The same chain over the v1 machine, each instruction through moonrt_core_step.
-        private static void StepsOnV1(byte[] rom, MoonGoldenRun run, GoldenTrace trace)
         {
             trace.Input = "none";
             using var machine = MoonEngines.Machine(rom);

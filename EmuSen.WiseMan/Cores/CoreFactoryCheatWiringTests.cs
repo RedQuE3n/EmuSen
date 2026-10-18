@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Crystal.Cheats;
 using EmuSen.WiseMan.Fixtures;
 using EmuSen.Cores.Nintendo.MercuryRT;
@@ -79,7 +78,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var cheats = new CheatRegistry();
             CoreBundle bundle = CoreFactory.Load(_nes, headless: true, cheats);
-            var core = (MoonRtCore)bundle.Core;
+            var core = (EmuSen.Cores.Native.CoreEngine)bundle.Core;
 
             Assert.Equal(Original, core.ReadSpace("CPUBUS", 0x8000));
 
@@ -107,7 +106,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var cheats = new CheatRegistry();
             CoreBundle bundle = CoreFactory.Load(_nes, headless: true, cheats);
-            var core = (MoonRtCore)bundle.Core;
+            var core = (EmuSen.Cores.Native.CoreEngine)bundle.Core;
 
             cheats.AddRamPoke("RAM", 0x0000, 0x42, "poke");
             bundle.DebugTarget.ApplyCheats();

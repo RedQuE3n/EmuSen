@@ -143,6 +143,92 @@ namespace EmuSen.Crystal.Systems.Nes
             _ => null,
         };
 
+        public PhysicalAddress? ResolvePhysical(int address, IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units) => ResolvePhysical(address);
+
+        // The units an NES engine lists, by the names the console's views read them under - see EmuSen_Backend.md §23.
+        public const string Ppu = "PPU", Board = "Board", Cartridge = "Cartridge";
+
+        private static DebugUnit? Unit(IReadOnlyList<DebugUnit> units, string name)
+        {
+            foreach (var u in units) if (string.Equals(u.Name, name, StringComparison.Ordinal)) return u;
+            return null;
+        }
+
+        private static long Value(DebugUnit? unit, string register) => unit is not null && Register(unit.Registers, register) is { } v ? (long)v : 0;
+
+        private static bool Flag(DebugUnit? unit, string register) => Value(unit, register) != 0;
+
+        public int MaxSprites => 64;
+
+        // The 64 OAM entries, 8x8 or 8x16 by PPUCTRL bit 5; one parked below the visible lines is the usual way to hide it.
+        public IReadOnlyList<DebugSpriteInfo> Sprites(IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units)
+        {
+            if (Find(spaces, NesSystem.Oam) is not { Size: >= 256 } oam || Unit(units, Ppu) is not { } ppu) return Array.Empty<DebugSpriteInfo>();
+            int height = (Value(ppu, "PPUCTRL") & 0x20) != 0 ? 16 : 8;
+            var sprites = new List<DebugSpriteInfo>();
+            for (int i = 0; i < 64; i++)
+            {
+                int y = oam.Read(i * 4), x = oam.Read(i * 4 + 3);
+                byte tile = oam.Read(i * 4 + 1), attributes = oam.Read(i * 4 + 2);
+                if (y >= 240) continue;
+                sprites.Add(new DebugSpriteInfo(i, x, y + 1, 8, height, tile, attributes & 0x03, (attributes & 0x20) != 0 ? 0 : 1, (attributes & 0x40) != 0, (attributes & 0x80) != 0));
+            }
+            return sprites;
+        }
+
+        // The 2A03's five channels from their units, the three display rules of Moon_Native.md §9.4: a pulse silenced below period 8 or past a sweep target of $7FF, an envelope's output its volume when constant and else its decay, the DMC active while bytes remain.
+        public IReadOnlyList<DebugAudioChannelInfo> AudioChannels(IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units, uint mutes)
+        {
+            if (Unit(units, "Pulse 1") is null) return Array.Empty<DebugAudioChannelInfo>();
+            bool Muted(int index) => (mutes & (1u << index)) != 0;
+            long Envelope(DebugUnit? u) => Flag(u, "ConstantVolume") ? Value(u, "Volume") : Value(u, "Decay");
+            DebugAudioChannelInfo Pulse(int index, string name)
+            {
+                DebugUnit? u = Unit(units, name);
+                long period = Value(u, "TimerPeriod"), change = period >> (int)Value(u, "SweepShift");
+                long target = Flag(u, "SweepNegate") ? period - change - (Flag(u, "OnesComplement") ? 1 : 0) : period + change;
+                bool silenced = period < 8 || target > 0x7FF;
+                long length = Value(u, "LengthCounter"), volume = Envelope(u);
+                return new(index, name, length > 0 && !silenced, Scale(volume, 15), Muted(index), $"Duty={Value(u, "Duty")} Period={period} Vol={volume} Len={length} Sweep={Flag(u, "SweepEnabled")}");
+            }
+            DebugUnit? triangle = Unit(units, "Triangle"), noise = Unit(units, "Noise"), dmc = Unit(units, "DMC");
+            long triangleLength = Value(triangle, "LengthCounter"), trianglePeriod = Value(triangle, "TimerPeriod"), noiseLength = Value(noise, "LengthCounter");
+            long noiseVolume = Envelope(noise), dmcOut = Value(dmc, "OutputLevel");
+            return new DebugAudioChannelInfo[]
+            {
+                Pulse(0, "Pulse 1"),
+                Pulse(1, "Pulse 2"),
+                new(2, "Triangle", triangleLength > 0, triangleLength > 0 && trianglePeriod >= 2 ? 100 : 0, Muted(2), $"Period={trianglePeriod} Len={triangleLength} Halt={Flag(triangle, "ControlFlag")}"),
+                new(3, "Noise", noiseLength > 0, Scale(noiseVolume, 15), Muted(3), $"PeriodIndex={Value(noise, "PeriodIndex")} Vol={noiseVolume} Len={noiseLength} Short={Flag(noise, "ShortMode")}"),
+                new(4, "DMC", Value(dmc, "BytesRemaining") > 0, Scale(dmcOut, 127), Muted(4),
+                    $"Rate={Value(dmc, "RateIndex")} Out={dmcOut} Addr=0x{Value(dmc, "SampleAddress"):X4} Len={Value(dmc, "SampleLength")} Loop={Flag(dmc, "Loop")}"),
+            };
+        }
+
+        private static int Scale(long value, int max) => (int)Math.Round(value / (double)max * 100.0);
+
+        // A cartridge's board by its mapper number's name, the pack's own; "?" for a number it names no board for.
+        public string? UnitLabel(DebugUnit unit) => unit.Kind == "cartridge" && Register(unit.Registers, "Mapper") is { } mapper ? NesSystem.BoardName((int)mapper) ?? "?" : null;
+
+        // The cartridge, the processor and the PPU, from the spaces' sizes and the units, after the host's own head line.
+        public string? Summary(IReadOnlyList<DebugRegisterValue> registers, IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units)
+        {
+            if (Unit(units, Ppu) is not { } ppu) return null;
+            DebugUnit? board = Unit(units, Board), cartridge = Unit(units, Cartridge);
+            long R(string name) => Register(registers, name) is { } v ? (long)v : 0;
+            long P(string name) => Value(ppu, name);
+            int mapper = (int)Value(board, "Mapper");
+            int prg = (Find(spaces, "PRGROM")?.Size ?? 0) / 0x4000, chr = (Find(spaces, NesSystem.Chr)?.Size ?? 0) / 0x2000;
+            string chrText = Flag(cartridge, "ChrRam") ? "8K CHR RAM" : $"{chr}x8K CHR ROM";
+            var text = new System.Text.StringBuilder();
+            text.AppendLine($"Mapper {mapper} ({NesSystem.BoardName(mapper) ?? "?"}), {prg}x16K PRG, {chrText}, mirroring {(NesMirroring)Value(cartridge, "Mirroring")}{(Flag(cartridge, "Battery") ? ", battery" : "")}");
+            text.AppendLine($"CPU  A={R("A"):X2} X={R("X"):X2} Y={R("Y"):X2} S={R("S"):X2} PC={R("PC"):X4} P={R("P"):X2}");
+            long mask = P("PPUMASK"), status = P("PPUSTATUS");
+            text.AppendLine($"PPU  CTRL={P("PPUCTRL"):X2} MASK={mask:X2} STATUS={status:X2} v={P("v"):X4} t={P("t"):X4} x={P("x")}");
+            text.Append($"     rendering={((mask & 0x18) != 0 ? "on" : "off")} vblank={(status >> 7) & 1} sprite0={(status >> 6) & 1} scanline={P("Scanline")}");
+            return text.ToString();
+        }
+
         public IReadOnlyList<InterruptVector> InterruptVectors { get; } = new[]
         {
             new InterruptVector("NMI", NmiVector),

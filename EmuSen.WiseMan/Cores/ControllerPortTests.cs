@@ -5,7 +5,6 @@ using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
 using EmuSen.Cores.Nintendo.MercuryRT;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
@@ -83,9 +82,9 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_nes_second_pad_reads_port_1_alone()
         {
-            Assert.True(MoonRtCore.Available, MoonNative.Report);
+            Assert.True(MoonEngines.Available, MoonEngines.Report);
             string nes = Rom(SyntheticNesRom.Build(patches: (0, ReadSecondNesPad)), "pads.nes");
-            var core = (MoonRtCore)CoreFactory.Load(nes, options: TestCores.NoBattery).Core;
+            var core = (EmuSen.Cores.Native.CoreEngine)CoreFactory.Load(nes, options: TestCores.NoBattery).Core;
             Func<int, byte> ram = a => core.ReadSpace("RAM", a);
             byte[] Bits() { core.RunFrame(); core.RunFrame(); return Enumerable.Range(0x300, 8).Select(ram).ToArray(); }
 

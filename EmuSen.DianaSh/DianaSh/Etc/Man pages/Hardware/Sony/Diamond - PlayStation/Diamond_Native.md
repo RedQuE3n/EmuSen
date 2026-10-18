@@ -2115,7 +2115,7 @@ samples.
 above line 0 (`vblank_rise`), so IRQ0 comes every field (case 7). psx-spx says such a Y2 stops the interrupts, and
 Beetle PSX gives none; DuckStation agrees with Diamond. A document and a referee against Diamond: by this page's rule
 it could change, but the range is static, outside both of §28.5's cases, "much too large" is not a number, and no
-game in §29.7 sets it, so it is recorded for the tester and not changed.
+game in §29.7 sets it, so it is recorded for the tester and not changed. *Decided and built 2026-10-18 (§29.10):* no vblank.
 
 ### 29.6 The change
 
@@ -2164,3 +2164,54 @@ and gate lines, `gpu.vhd`'s lines 540–560), `rtl/irq.vhd` and `rtl/psx_top.vhd
 (searched for the video output's settings), and the file names of `rtl/` and of PS-GPU's `rtl/`. That is contrary to
 `Diamond_FPGA_Referees.md` §1; nothing of them is used above, and every ruling rests on the referees' outputs alone.
 The same rule withdraws §28.3's citation of `rtl/gpu_videoout_sync.vhd`.
+
+### 29.10 Y2 past the field: no vblank (2026-10-18)
+
+*Decided 2026-10-18 by the tester,* on §29.5's finding: a Y2 the line counter never reaches stops the vblank
+interrupt, as psx-spx and Beetle PSX have it. D-50 holds the entry.
+
+**The program** [M]. `programs/y2-past-field.s`, interrupts off, NTSC at 320 (263 lines a field), sets the range
+16–256, takes the vblank edge at line 256 as its reference with timer 1 counting hblanks, and on line 100 writes Y1
+16 and a Y2 of 256 (the control), 262, 263 (the field's line count, a line the counter never reaches) or 300. Until
+line 5 two fields on it counts the vblank interrupts, samples GPUSTAT bit 31 over lines 5 to 12 of the next field,
+then writes timer 1's mode, sync mode 0 on the system clock, on line 5 and reads it at once and 1.5, 3 and 20 lines
+later. Side-loaded on the five referees by `psxreferee.py ram`, the player's BIOS given as before:
+
+| Y2 | Diamond before | Diamond after | Beetle PSX | DuckStation | SwanStation | PCSX-Redux, PCSX-ReARMed |
+|---|---|---|---|---|---|---|
+| 256 | 2 interrupts, from line 256; top lines blank; timer held to line 16 | the same | the same | 2, from line 256 | 2, from line 256 | 2, from line 255 |
+| 262 | 2, from line 262; blank; held | the same | the same | 2, from line 261 | 2, from line 262 | 2, from line 255 |
+| 263 | **2, from line 0**; blank; held | **none**; picture; counting | **none**; picture; counting | 2, from line 262 | 2, from line 0 | 2, from line 255 |
+| 300 | **2, from line 0**; blank; held | **none**; picture; counting | **none**; picture; counting | 2, from line 0 | 2, from line 0 | 2, from line 255 |
+
+"Picture" is bit 31 alternating over lines 5 to 12; "blank", zero; "counting", timer 1 reading 5 at once and
+3,237, 6,470 and 43,065 after (Beetle PSX 5, 3,246, 6,469, 43,065); "held", zero until line 16 ends the blank,
+then 19,211 at 20 lines. DuckStation and SwanStation alternate bit 31 in the blank and hold timer 1 for all 20
+lines in every case, the control included, so they witness the interrupt only; the PCSX family raises it at the same
+line whatever the range.
+
+**The ruling** [A, C]. psx-spx and Beetle PSX agree that such a Y2 gives no interrupt; DuckStation disagrees, its
+interrupt at line 0 or, for 263, at line 262, and the tester chose the document and Beetle PSX. A vblank that never
+begins has no blank to report either: Beetle PSX shows the top lines as picture in GPUSTAT bit 31 and to a timer's
+mode write, and Diamond follows it, so that its level and its edges keep one rule. Y1's edge stays: it is where a
+blank begun under an earlier range ends, and without it a timer held by that blank would never count again.
+
+**The change.** `Video` has no vblank when Y2 is at or past the field's line count: `vblank_rise` no longer starts one
+at line 0, and the level (`in_vblank_at`, GPUSTAT bit 31) is the picture on every line. The frame still ends at the
+field's end, as for a range with no vblank before. Pinned by `video::tests::y2_past_the_field_gives_no_vblank` and
+`programs.rs`'s `y2_past_the_field_stops_the_vblank_interrupt`, both failing before.
+
+**The corpus** [M]. A probe build printed every range change that left Y2 at or past the field's line count, over
+the goldens of `programs/` and ps1-tests and the eight bench discs, and over the nineteen loose `.bin` games of the
+player's library (the fifteen of §29.7 and four bench discs again) booted and left for 3,000 frames: none outside the
+project's own programs, `range-cross.s`'s case 7 and `y2-past-field.s`'s two. No disc digest moves.
+
+**The gates.** Release [M, `cargo test --release`, both corpus variables set, the renderer on the RX 6800]: the lib
+suite 181 (one test added), colour 3, filtered 4, scaled 7 and shell 10 passing at once; precise 14, programs 84 (one
+added) and renderer 3 passing once `programs.txt` was recorded again, in a commit of its own
+(`Diamond_Enhancements.md` §6.2): `range-cross.s`'s line moves, by its case 7, the one this change is for, which no
+longer waits on two interrupts and so shifts every case after it; `y2-past-field.s`'s line is added; every other line,
+`discs.txt` and `ps1-tests.txt` are as they were. `programs.rs`'s `a_range_moved_onto_the_beams_line_waits_for_the_next_field`
+now expects no interrupt in case 7, as Beetle PSX gave in §29.4. `diamond-v1`'s 5 and `precision`'s 8 lib tests pass.
+Debug [M, `cargo test --lib`]: 181 passing, the two program tests passing in debug too. The kit [M,
+`emusen-core-conform --frames 600`, `libdiamond.so` from `v1/`]: 22 of 22 on `gpu/animated-triangle` and on Ape Escape.

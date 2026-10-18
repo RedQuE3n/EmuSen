@@ -33,7 +33,7 @@ namespace EmuSen.WiseMan.Fixtures
         public void SavePng(string path)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            EmuSen.Hotaru.Imaging.FrameImageWriter.SavePng(Rgba, Width, Height, path);
+            EmuSen.Serenity.Imaging.FrameImageWriter.SavePng(Rgba, Width, Height, path);
         }
     }
 

@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
-using EmuSen.Crystal.Cheats;
+using EmuSen.Mistress;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
@@ -36,16 +36,20 @@ namespace EmuSen.WiseMan.Mistress
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 
-        private static CheatRegistry WithOneCheat(bool enabled = true)
+        private static CheatFileEntry Poke(string description, uint address = 0x7E005E, bool enabled = true) =>
+            new() { Kind = "RamPoke", Description = description, Enabled = enabled, Writes = { new CheatFileWrite { Space = "CpuBus", Address = address.ToString("X"), Value = "10" } } };
+
+        // A list of one held with no game, as one arranged before a game starts is.
+        private static CheatList WithOneCheat(bool enabled = true)
         {
-            var registry = new CheatRegistry();
-            registry.AddRamPoke("CpuBus", 0x7E005E, 0x10, "fast walk", enabled);
-            return registry;
+            var list = new CheatList();
+            list.Import(new CheatFile { Cheats = { Poke("fast walk", enabled: enabled) } });
+            return list;
         }
 
-        private static ActiveCheatsWindow Open(CheatRegistry registry, Func<bool>? applyNow = null, Func<GameCheats?>? saveTarget = null)
+        private static ActiveCheatsWindow Open(CheatList list, Func<GameCheats?>? saveTarget = null)
         {
-            var window = new ActiveCheatsWindow(registry, null, null, applyNow, saveTarget);
+            var window = new ActiveCheatsWindow(list, saveTarget);
             window.Show();
             return window;
         }
@@ -59,17 +63,15 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Load_restores_the_saved_list_over_whatever_is_live() => Session.Dispatch(() =>
         {
-            var saved = new CheatRegistry();
-            saved.AddRamPoke("CpuBus", 0x7E005E, 0x10, "fast walk");
-            Assert.True(CheatFile.For("Alpha").Save(saved.ToCheatFile()));
+            Assert.True(CheatFile.For("Alpha").Save(new CheatFile { Cheats = { Poke("fast walk") } }));
 
-            var live = new CheatRegistry();
-            live.AddRamPoke("CpuBus", 0x7E0001, 0x01, "something else");
+            var live = new CheatList();
+            live.Import(new CheatFile { Cheats = { Poke("something else", 0x7E0001) } });
             var window = Open(live, saveTarget: () => GameCheats.For(null, "Alpha.smc"));
 
             Click(window, "LoadButton");
 
-            Assert.Equal("fast walk", live.GetCheats().Single().Description);
+            Assert.Equal("fast walk", live.Cheats.Single().Description);
             Assert.Contains("Loaded 1 cheat(s)", Status(window));
 
             window.Close();
@@ -104,17 +106,17 @@ namespace EmuSen.WiseMan.Mistress
         {
             string path = Path.Combine(_root, "elsewhere", "mycheats.json");
             var source = WithOneCheat();
-            Assert.True(CheatFile.SaveTo(path, source.ToCheatFile()));
+            Assert.True(CheatFile.SaveTo(path, source.ToFile()));
 
             CheatFile? read = CheatFile.LoadFrom(path);
             Assert.NotNull(read);
 
-            var target = new CheatRegistry();
-            (int loaded, int skipped) = target.LoadFrom(read!);
+            using var game = new RuntimeGame("SNES");
+            (int loaded, int skipped) = game.Cheats.Import(read!);
 
             Assert.Equal(1, loaded);
             Assert.Equal(0, skipped);
-            Assert.Equal("fast walk", target.GetCheats().Single().Description);
+            Assert.Equal("fast walk", game.Cheats.Cheats.Single().Description);
             return Task.CompletedTask;
         }, default);
 
@@ -128,15 +130,16 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Null(CheatFile.LoadFrom(path));
         }
 
+        // A running session applies its list at every frame boundary, so Apply says so.
         [Fact]
-        public Task Apply_pokes_the_running_core_and_says_how_many() => Session.Dispatch(() =>
+        public Task Apply_on_a_running_game_says_how_many() => Session.Dispatch(() =>
         {
-            int applies = 0;
-            var window = Open(WithOneCheat(), applyNow: () => { applies++; return true; });
+            using var game = new RuntimeGame("SNES");
+            game.Cheats.Import(new CheatFile { Cheats = { Poke("fast walk") } });
+            var window = Open(game.Cheats);
 
             Click(window, "ApplyButton");
 
-            Assert.Equal(1, applies);
             Assert.Contains("Applied 1 cheat(s)", Status(window));
 
             window.Close();
@@ -147,7 +150,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Apply_with_no_game_running_says_the_cheats_are_armed() => Session.Dispatch(() =>
         {
-            var window = Open(WithOneCheat(), applyNow: () => false);
+            var window = Open(WithOneCheat());
 
             Click(window, "ApplyButton");
 
@@ -159,12 +162,10 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Apply_with_nothing_ticked_says_so_rather_than_claiming_success() => Session.Dispatch(() =>
         {
-            int applies = 0;
-            var window = Open(WithOneCheat(enabled: false), applyNow: () => { applies++; return true; });
+            var window = Open(WithOneCheat(enabled: false));
 
             Click(window, "ApplyButton");
 
-            Assert.Equal(0, applies);
             Assert.Contains("nothing to apply", Status(window));
 
             window.Close();
@@ -175,13 +176,13 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Apply_turns_the_master_switch_back_on() => Session.Dispatch(() =>
         {
-            CheatRegistry registry = WithOneCheat();
-            registry.MasterEnabled = false;
-            var window = Open(registry, applyNow: () => true);
+            CheatList list = WithOneCheat();
+            list.Master = false;
+            var window = Open(list);
 
             Click(window, "ApplyButton");
 
-            Assert.True(registry.MasterEnabled);
+            Assert.True(list.Master);
             Assert.True(window.GetControl<LunaSwitch>("MasterSwitch").IsChecked);
 
             window.Close();
@@ -190,7 +191,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Apply_and_save_are_off_while_the_list_is_empty() => Session.Dispatch(() =>
         {
-            var window = Open(new CheatRegistry());
+            var window = Open(new CheatList());
 
             Assert.False(window.GetControl<Button>("ApplyButton").IsEnabled);
             Assert.False(window.GetControl<Button>("SaveButton").IsEnabled);
@@ -218,17 +219,13 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task A_saved_list_keeps_which_cheats_were_on() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            registry.AddRamPoke("CpuBus", 0x7E005E, 0x10, "on one", enabled: true);
-            registry.AddRamPoke("CpuBus", 0x7E005F, 0x11, "off one", enabled: false);
-            var window = Open(registry, saveTarget: () => GameCheats.For(null, "Alpha.smc"));
+            var list = new CheatList();
+            list.Import(new CheatFile { Cheats = { Poke("on one", enabled: true), Poke("off one", 0x7E005F, enabled: false) } });
+            var window = Open(list, saveTarget: () => GameCheats.For(null, "Alpha.smc"));
 
             Click(window, "SaveButton");
 
-            var restored = new CheatRegistry();
-            restored.LoadFrom(CheatFile.For("Alpha").Load()!);
-
-            Assert.Equal(new[] { true, false }, restored.GetCheats().Select(c => c.Enabled));
+            Assert.Equal(new[] { true, false }, CheatFile.For("Alpha").Load()!.Cheats.Select(c => c.Enabled));
 
             window.Close();
         }, default);

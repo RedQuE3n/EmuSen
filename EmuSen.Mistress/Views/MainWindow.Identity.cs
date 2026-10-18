@@ -5,8 +5,6 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Threading;
-using EmuSen.Common;
-using EmuSen.Cores;
 using EmuSen.Galaxia.Library;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Library;
@@ -16,9 +14,9 @@ namespace EmuSen.Mistress.Views
     // A game known by its contents as well as its path, and a state that says who wrote it - see EmuSen_Settings_Reference.md §4.37.
     public partial class MainWindow
     {
-        // The build a state record names; the SDK appends the commit to the version when it knows it.
+        // This build's name; the SDK appends the commit to the version when it knows it.
         public static readonly string BuildName =
-            typeof(EmulatorSession).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
+            typeof(MainWindow).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
 
         // Read on the emulation thread when a state is written, so volatile; null until the hash is known.
         private volatile string? _currentRomMd5;
@@ -118,41 +116,6 @@ namespace EmuSen.Mistress.Views
             });
         }
 
-        // Save states' records and the shader pack's build, in records.db - see EmuSen_Settings_Reference.md §4.64.
-        private readonly FileRecords _fileRecords = FileRecords.Load();
-
-        // On the emulation thread, after the state it describes is written; the ROM's hash is whatever is known by then.
-        private void WriteStateRecord(EmulatorSession session, string statePath, string romPath)
-        {
-            if (session.Core is not { } core || core is not IStateFormat format) return;
-            _fileRecords.WriteState(statePath, new StateRecord
-            {
-                Console = _consoleSession ?? CoreCatalog.ConsoleForRom(romPath) ?? session.CoreName,
-                Core = CoreFactory.Running(core),
-                StateVersion = format.StateVersion,
-                Build = BuildName,
-                SavedAt = DateTime.Now,
-                RomFile = Path.GetFileName(romPath),
-                RomMd5 = _consoleSession is null ? _currentRomMd5 : null,
-                RomBytes = _consoleSession is null ? _currentRomBytes : 0,
-            });
-        }
-
-        // Why a state must not reach this game's core, or null; a version older than the core's is the core's to judge.
-        private static string? Refusal(StateRecord? record, string romPath, EmulatorSession? session, string? sessionConsole = null)
-        {
-            if (record is null) return null;
-            string? console = sessionConsole ?? CoreCatalog.ConsoleForRom(romPath);
-            if (console is not null && record.Console != console)
-                return $"That state was saved by the {record.Console} core, and {Path.GetFileName(romPath)} runs on the {console} core.";
-            // Another engine's version numbers are not this one's - see EmuSen_Galaxia.md §5.3b.
-            bool otherEngine = console is not null && session?.Core is { } core && record.Core != CoreFactory.Running(core)
-                && CoreCatalog.EngineFor(console)?.Choices?.Contains(record.Core) == true;
-            if (!otherEngine && session?.Core is IStateFormat format && record.StateVersion > format.StateVersion)
-                return $"That state was saved by a newer build ({record.Build}, {record.Core} state version {record.StateVersion}); this one reads up to {format.StateVersion}.";
-            return null;
-        }
-
         private static string Provenance(StateRecord? record) =>
             record is null ? "" : $" It was saved by {record.Build}, {record.Core} state version {record.StateVersion}.";
 
@@ -173,7 +136,6 @@ namespace EmuSen.Mistress.Views
         {
             _recordsClosed = true;
             _records.Dispose();
-            _fileRecords.Dispose();
         }
     }
 }

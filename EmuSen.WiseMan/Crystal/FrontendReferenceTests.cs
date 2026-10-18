@@ -50,12 +50,15 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void Emusen_shell_names_no_runtime_type() => AssertNamesNoRuntimeType(typeof(EmuSen.Shell.LaunchMode).Assembly);
 
-        // The check sees a frontend that does name the runtime's types: Mistress, not yet moved, names ICore.
         [Fact]
-        public void The_check_sees_a_frontend_that_names_the_runtime()
+        public void Mistress_names_no_runtime_type() => AssertNamesNoRuntimeType(typeof(EmuSen.Mistress.FrameHandOff).Assembly);
+
+        // The check sees an assembly that does name the runtime's types: DianaSh's C# shell, which is no frontend, names the debug target.
+        [Fact]
+        public void The_check_sees_an_assembly_that_names_the_runtime()
         {
-            var reached = TypeReferences(typeof(EmuSen.Mistress.FrameHandOff).Assembly);
-            Assert.Contains(reached, r => r == ("EmuSen", "EmuSen.Cores.ICore"));
+            var reached = TypeReferences(typeof(EmuSen.DianaSh.DianaSh.Bin.DianaShInterpreter).Assembly);
+            Assert.Contains(reached, r => r == ("EmuSen.Crystal", "EmuSen.Crystal.Debugger.IDebugTarget"));
         }
     }
 }

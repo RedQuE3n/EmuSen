@@ -268,13 +268,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private void OpenInGame(MainWindow window, PadDriver pad, string which)
         {
-            var cheats = (CheatRegistry)Field(window, "_cheats");
             switch (which)
             {
                 case "ActiveCheats":
                 case "ActiveCheatsGeneral":
-                    cheats.AddRamPoke("CpuBus", 0x7E0100, 0x42, "Infinite lives");
-                    cheats.AddRamPoke("CpuBus", 0x7E0101, 0x09, "Nine continues, and a description long enough to need the whole row or more of it");
+                    MistressGame.TwoCheats(window, "Nine continues, and a description long enough to need the whole row or more of it");
                     Call(window, "ShowActiveCheats");
                     Settle(window);
                     if (which == "ActiveCheatsGeneral") Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<TabControl>().First().SelectedIndex = 0;
@@ -408,13 +406,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     _ = SheetLayer.Show(new ScreenshotWindow(shot, "Cobalt Harbor (Synthetic), Screenshot 1"), window);
                     break;
                 case "RewindReel":
-                    var speed = (SpeedController)Field(window, "_speed");
-                    speed.MaxFrameSkip = 0;
-                    typeof(MainWindow).GetField("_baseSpeedPercent", Hidden)!.SetValue(window, SpeedController.UnthrottledPercent);
-                    var session = (EmulatorSession)Field(window, "_session");
-                    long until = session.TotalFrames + 120;
-                    WaitFor(() => session.TotalFrames >= until, "the frames");
-                    typeof(MainWindow).GetField("_baseSpeedPercent", Hidden)!.SetValue(window, SpeedController.NormalPercent);
+                    MistressGame.Play(window, 120, (until, what) => WaitFor(until, what));
                     Choose(window, pad, "Rewind");
                     WaitFor(() => Sheets(window).Current is RewindReelWindow, "the reel");
                     break;
@@ -428,9 +420,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Assert.IsType<ResumeWindow>(Sheets(window).Current);
                     break;
                 case "ActiveCheatsLongCheat":
-                    cheats.AddRamPoke("CpuBus", 0x7E0100, 0x42, "Infinite lives");
-                    cheats.AddCheat(CheatKind.RamPoke, [LongWrite], null, LongCheat);
-                    cheats.AddRamPoke("CpuBus", 0x7E0102, 0x63, "Ninety-nine coins");
+                    MistressGame.Cheats(window).Import(new EmuSen.Galaxia.Models.CheatFile { Cheats =
+                    {
+                        new() { Kind = "RamPoke", Description = "Infinite lives", Writes = { new() { Space = "CpuBus", Address = "7E0100", Value = "42" } } },
+                        new() { Kind = "RamPoke", Description = LongCheat, Writes = { LongWrite } },
+                        new() { Kind = "RamPoke", Description = "Ninety-nine coins", Writes = { new() { Space = "CpuBus", Address = "7E0102", Value = "63" } } },
+                    } });
                     Call(window, "ShowActiveCheats");
                     Settle(window);
                     PadAudit.Reach(Sheets(window).SheetOf(Sheets(window).Current!)!, pad, e => e is ListBoxItem item && item.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == LongCheat));
@@ -487,9 +482,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         // A cheat's description and code as long as a database's get (Q190).
         internal const string LongCheat = "Infinite health, ammunition and continues for both players, with the timer stopped in every stage except the last";
-        private static readonly CheatWrite LongWrite = new()
+        private static readonly EmuSen.Galaxia.Models.CheatFileWrite LongWrite = new()
         {
-            Space = "CpuBus", Address = 0x7E0100, Value = 0x12345678, Width = 4, Type = CheatWriteType.Increase, BigEndian = true, RepeatCount = 16, RepeatAddAddress = 4, RepeatAddValue = 1,
+            Space = "CpuBus", Address = "7E0100", Value = "12345678", Width = 4, Type = "Increase", BigEndian = true, RepeatCount = 16, RepeatAddAddress = "4", RepeatAddValue = "1",
         };
 
         // A preset whose parameters have names as long as RetroArch's longest, under the SNES tab's list as "long-names" (Q190).
@@ -716,9 +711,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             (MainWindow window, _) = InGame(width, height, game: LongTitle, bigScreen: bigScreen);
             try
             {
-                var session = (EmulatorSession)Field(window, "_session");
-                long until = session.TotalFrames + 90;
-                WaitFor(() => session.TotalFrames >= until, "the frames");
+                long until = MistressGame.TotalFrames(window) + 90;
+                WaitFor(() => MistressGame.TotalFrames(window) >= until, "the frames");
                 TextBlock status = window.GetControl<TextBlock>("StatusText"), fps = window.GetControl<TextBlock>("FpsText");
                 WaitFor(() => fps.Text is { Length: > 0 }, "the counters");
                 Border bar = window.GetControl<Border>("StatusBar");

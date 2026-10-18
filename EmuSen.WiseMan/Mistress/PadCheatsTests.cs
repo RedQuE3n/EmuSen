@@ -72,11 +72,11 @@ namespace EmuSen.WiseMan.Mistress
         private static Control Sheet(MainWindow w) => Sheets(w).SheetOf(Sheets(w).Current!)!;
         private static InputElement Reach(MainWindow w, PadDriver pad, Func<InputElement, bool> target) => PadAudit.Reach(Sheet(w), pad, target);
         private static void Picture(MainWindow w, string name) => UiTest.Dump("pad-" + name, UiTest.Capture(w));
-        private static CheatRegistry Cheats(MainWindow w) => (CheatRegistry)typeof(MainWindow).GetField("_cheats", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w)!;
+        private static EmuSen.Mistress.CheatList Cheats(MainWindow w) => MistressGame.Cheats(w);
 
         private static byte Peek(MainWindow w, int address)
         {
-            var target = (IDebugTarget)typeof(MainWindow).GetField("_debugTarget", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w)!;
+            IDebugTarget target = MistressGame.Target(w);
             return target.GetMemorySpaces().First(s => s.Name == "CpuBus").Read(address);
         }
 
@@ -147,27 +147,31 @@ namespace EmuSen.WiseMan.Mistress
 
             Reach(window, pad, e => e is Button { Name: "SNESAddButton" });
             pad.A();
-            CheatInfo added = Assert.Single(Cheats(window).GetCheats());
+            EmuSen.Mistress.CheatLine added = Assert.Single(Cheats(window).Cheats);
             Assert.Equal("lives", added.Description);
             Assert.True(added.Enabled);
 
             // A on the cheat's row ticks its box, and the table writes it through to the registry.
             Reach(window, pad, e => e is ListBoxItem);
             pad.A();
-            Assert.False(Cheats(window).GetCheats().Single().Enabled);
+            Assert.False(Cheats(window).Cheats.Single().Enabled);
             pad.A();
-            Assert.True(Cheats(window).GetCheats().Single().Enabled);
+            Assert.True(Cheats(window).Cheats.Single().Enabled);
             Picture(window, "cheats-list");
 
             byte before = Peek(window, 0x7E0100);
             Assert.NotEqual(0x42, before);
             Reach(window, pad, e => e is Button { Name: "ApplyButton" });
             pad.A();
-            Assert.Equal(0x42, Peek(window, 0x7E0100));
+            // The sheet holds the game paused, and the session applies its list at a frame's end only (C5): the poke lands once B lets the game run.
+            Assert.Equal(before, Peek(window, 0x7E0100));
 
             pad.B();
             Assert.False(Sheets(window).IsPresenting);
             Assert.False(window.IsPaused);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (Peek(window, 0x7E0100) != 0x42 && clock.ElapsedMilliseconds < 5_000) { Avalonia.Threading.Dispatcher.UIThread.RunJobs(); System.Threading.Thread.Sleep(5); }
+            Assert.Equal(0x42, Peek(window, 0x7E0100));
             Stop(window);
             window.Close();
         }, default);
@@ -233,8 +237,11 @@ namespace EmuSen.WiseMan.Mistress
         public Task Every_control_of_the_cheat_sheets_is_reached_by_the_pad(string which) => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Cheats(window).AddRamPoke("CpuBus", 0x7E0100, 0x42, "one");
-            Cheats(window).AddRamPoke("CpuBus", 0x7E0101, 0x43, "two");
+            Cheats(window).Import(new CheatFile { Cheats =
+            {
+                new() { Kind = "RamPoke", Description = "one", Writes = { new() { Space = "CpuBus", Address = "7E0100", Value = "42" } } },
+                new() { Kind = "RamPoke", Description = "two", Writes = { new() { Space = "CpuBus", Address = "7E0101", Value = "43" } } },
+            } });
             Choose(window, pad, "Cheats");
             if (which == "Cheat Database")
             {
@@ -270,6 +277,7 @@ namespace EmuSen.WiseMan.Mistress
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
             var settings = (AppSettings)typeof(MainWindow).GetField("_appSettings", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
             settings.CheatDatabaseDirectory = Path.Combine(_root, "Cheats");
+            settings.Save();
 
             Choose(window, pad, "Cheats");
             Reach(window, pad, e => e is Button { Name: "DatabaseButton" });
@@ -282,7 +290,7 @@ namespace EmuSen.WiseMan.Mistress
             Picture(window, "cheat-database-games");
             pad.A();
 
-            CheatInfo loaded = Assert.Single(Cheats(window).GetCheats());
+            EmuSen.Mistress.CheatLine loaded = Assert.Single(Cheats(window).Cheats);
             Assert.Equal("Beta lives", loaded.Description);
             Assert.False(loaded.Enabled);
 
@@ -291,7 +299,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.IsType<ActiveCheatsWindow>(Sheets(window).Current);
             Reach(window, pad, e => e is ListBoxItem item && item.FindAncestorOfType<ListBox>()?.Name == "PART_Rows");
             pad.A();
-            Assert.True(Cheats(window).GetCheats().Single().Enabled);
+            Assert.True(Cheats(window).Cheats.Single().Enabled);
 
             pad.B();
             Assert.False(Sheets(window).IsPresenting);

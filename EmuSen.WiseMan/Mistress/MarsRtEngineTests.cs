@@ -85,7 +85,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             Assert.True(MarsRtCore.Available, MarsNative.Report);
             MainWindow window = Start();
-            EmulatorSession game = Game(window);
+            WindowGame game = Game(window);
             Assert.IsType<MarsRtCore>(game.Core);
             Assert.Null(game.EngineNotice);
             Assert.DoesNotContain("not available", Status(window).Text ?? "");
@@ -93,7 +93,7 @@ namespace EmuSen.WiseMan.Mistress
             long? serial = game.FrameSerial;
             WaitFor(() => game.TotalFrames > 60 && game.FrameSerial != serial);
             Assert.True(Rewind(window).Depth > 0, "MarsRT's frames left no rewind history");
-            Assert.Equal("true", ((ICoreSettings)game.Core!).Get("ExpansionPak"));
+            Assert.Equal("true", ((ICoreSettings)game.Core).Get("ExpansionPak"));
             window.Close();
 
             Choose("Mars (C#)");
@@ -110,7 +110,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             Choose(CoreCatalog.MarsRtEngine);
             MainWindow window = Start();
-            EmulatorSession game = Game(window);
+            WindowGame game = Game(window);
             WaitFor(() => game.TotalFrames > 120 && Rewind(window).Depth > 20);
             var core = Assert.IsType<MarsRtCore>(game.Core);
             Assert.True(core.ThreadedRdp && core.DeferredPresentation, "Mistress did not give MarsRT its workers and the deferred picture");
@@ -130,7 +130,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             Choose(CoreCatalog.MarsRtEngine);
             MainWindow window = Start();
-            EmulatorSession game = Game(window);
+            WindowGame game = Game(window);
 
             Status(window).Text = "";
             Invoke(window, "SaveState");
@@ -173,21 +173,19 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        // A code typed into the window's list is decoded by the session's codecs and applied by the session at the frame's end.
         [Fact]
-        public Task A_cheat_imported_from_a_cht_file_reaches_MarsRT_at_the_frame_s_end() => Session.Dispatch(() =>
+        public Task A_cheat_added_to_the_list_reaches_MarsRT_at_the_frame_s_end() => Session.Dispatch(() =>
         {
             Choose(CoreCatalog.MarsRtEngine);
             MainWindow window = Start();
-            EmulatorSession game = Game(window);
-            string cht = Path.Combine(_root, "System.cht");
-            File.WriteAllText(cht, "cheats = 1\n\ncheat0_desc = \"Poke\"\ncheat0_code = \"80000300 0042\"\ncheat0_enable = false\n");
+            WindowGame game = Game(window);
 
-            var cheats = (CheatRegistry)typeof(MainWindow).GetField("_cheats", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
-            Assert.Same(cheats, game.DebugTarget!.Cheats);
-            CheatImport.FromChtFile(cheats, cht, game.CheatAutoDetectCodec, replace: true);
-            cheats.SetEnabled(cheats.GetCheats().Single().Id, true);
+            var (added, words) = MistressGame.Cheats(window).AddCode("80000300 0042", "Poke");
+            Assert.True(added, words);
+            Assert.Single(game.DebugTarget.Cheats.GetCheats());
 
-            var core = (MarsRtCore)game.Core!;
+            var core = (MarsRtCore)game.Core;
             WaitFor(() => core.Peek(MarsRtSpace.Rdram, 0x300) == 0x42);
             window.Close();
         }, default);
@@ -272,11 +270,9 @@ namespace EmuSen.WiseMan.Mistress
             }
         }
 
-        private static EmulatorSession Game(MainWindow window) =>
-            (EmulatorSession)typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+        private static WindowGame Game(MainWindow window) => new(window);
 
-        private static RewindBuffer Rewind(MainWindow window) =>
-            (RewindBuffer)typeof(MainWindow).GetField("_rewind", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+        private static RewindBuffer Rewind(MainWindow window) => MistressGame.Rewind(window);
 
         private static string StatePath(MainWindow window) =>
             (string)typeof(MainWindow).GetProperty("CurrentStatePath", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;

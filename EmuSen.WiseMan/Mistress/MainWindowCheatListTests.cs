@@ -11,6 +11,7 @@ using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
+using EmuSen.Mistress;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 
@@ -61,7 +62,14 @@ namespace EmuSen.WiseMan.Mistress
             Invoke(window, "LaunchSelectedLibraryEntry");
         }
 
-        private static CheatRegistry Cheats(MainWindow window) => (CheatRegistry)Field(window, "_cheats")!;
+        private static CheatList Cheats(MainWindow window) => MistressGame.Cheats(window);
+
+        private static CheatFile ListOf(string space, uint address, uint value, string description)
+        {
+            var file = new CheatFile();
+            file.Cheats.Add(new CheatFileEntry { Kind = "RamPoke", Description = description, Writes = { new CheatFileWrite { Space = space, Address = CheatFileWrite.Hex(address, 1), Value = CheatFileWrite.Hex(value, 2) } } });
+            return file;
+        }
 
         // Private by design - the cheat list is internal to MainWindow, not API.
         private static void Invoke(MainWindow window, string method) =>
@@ -70,18 +78,16 @@ namespace EmuSen.WiseMan.Mistress
         private static object? Field(MainWindow window, string name) =>
             typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window);
 
-        // The whole point of moving ownership out of SnesDebugTarget: the
-        // core is rebuilt per load, the list is not.
+        // The window's list is the running session's own: what it shows is what the core applies - see EmuSen_Backend.md §14.13.
         [Fact]
-        public Task The_running_core_shares_the_windows_own_cheat_registry() => Session.Dispatch(() =>
+        public Task The_window_s_list_is_the_running_session_s() => Session.Dispatch(() =>
         {
             var window = new MainWindow();
             window.Show();
             Launch(window, 0);
 
-            var target = (EmuSen.Crystal.Debugger.IDebugTarget?)Field(window, "_debugTarget");
-            Assert.NotNull(target);
-            Assert.Same(Cheats(window), target!.Cheats);
+            Cheats(window).Import(ListOf("WRAM", 0x9C, 0x63, "infinite lives"));
+            Assert.Equal("infinite lives", MistressGame.Target(window).Cheats.GetCheats().Single().Description);
 
             window.Close();
         }, default);
@@ -92,10 +98,10 @@ namespace EmuSen.WiseMan.Mistress
             var window = new MainWindow();
             window.Show();
 
-            Cheats(window).AddRamPoke("WRAM", 0x9C, 0x63, "loaded first");
+            Cheats(window).Import(ListOf("WRAM", 0x9C, 0x63, "loaded first"));
             Launch(window, 0);
 
-            Assert.Equal("loaded first", Cheats(window).GetCheats()[0].Description);
+            Assert.Equal("loaded first", Cheats(window).Cheats[0].Description);
 
             window.Close();
         }, default);
@@ -109,10 +115,10 @@ namespace EmuSen.WiseMan.Mistress
             window.Show();
             Launch(window, 0);
 
-            Cheats(window).AddRamPoke("WRAM", 0x9C, 0x63, "infinite lives");
+            Cheats(window).Import(ListOf("WRAM", 0x9C, 0x63, "infinite lives"));
             Invoke(window, "ResetEmulation");
 
-            Assert.Equal("infinite lives", Cheats(window).GetCheats()[0].Description);
+            Assert.Equal("infinite lives", Cheats(window).Cheats[0].Description);
 
             window.Close();
         }, default);
@@ -125,11 +131,11 @@ namespace EmuSen.WiseMan.Mistress
             var window = new MainWindow();
             window.Show();
             Launch(window, 0);
-            Cheats(window).AddRamPoke("WRAM", 0x9C, 0x63, "infinite lives");
+            Cheats(window).Import(ListOf("WRAM", 0x9C, 0x63, "infinite lives"));
 
             Launch(window, 1);
 
-            Assert.Empty(Cheats(window).GetCheats());
+            Assert.Empty(Cheats(window).Cheats);
 
             window.Close();
         }, default);
@@ -142,12 +148,12 @@ namespace EmuSen.WiseMan.Mistress
             var window = new MainWindow();
             window.Show();
             Launch(window, 0);
-            Cheats(window).AddRamPoke("WRAM", 0x9C, 0x63, "infinite lives");
+            Cheats(window).Import(ListOf("WRAM", 0x9C, 0x63, "infinite lives"));
 
             Invoke(window, "ShowLibrary");
             Launch(window, 0);
 
-            Assert.Equal("infinite lives", Cheats(window).GetCheats()[0].Description);
+            Assert.Equal("infinite lives", Cheats(window).Cheats[0].Description);
 
             window.Close();
         }, default);
@@ -160,16 +166,16 @@ namespace EmuSen.WiseMan.Mistress
             var first = new MainWindow();
             first.Show();
             Launch(first, 0);
-            Cheats(first).AddRamPoke("CpuBus", 0x7E005E, 0x10, "fast walk");
-            CheatFile.For("Alpha").Save(Cheats(first).ToCheatFile());
+            Cheats(first).Import(ListOf("CpuBus", 0x7E005E, 0x10, "fast walk"));
+            CheatFile.For("Alpha").Save(Cheats(first).ToFile());
             first.Close();
 
             var second = new MainWindow();
             second.Show();
             Launch(second, 0);
 
-            Assert.Equal("fast walk", Cheats(second).GetCheats().Single().Description);
-            Assert.True(Cheats(second).GetCheats().Single().Enabled);
+            Assert.Equal("fast walk", Cheats(second).Cheats.Single().Description);
+            Assert.True(Cheats(second).Cheats.Single().Enabled);
 
             second.Close();
         }, default);
@@ -178,15 +184,13 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task A_saved_list_is_not_restored_for_a_different_game() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            registry.AddRamPoke("CpuBus", 0x7E005E, 0x10, "fast walk");
-            CheatFile.For("Alpha").Save(registry.ToCheatFile());
+            CheatFile.For("Alpha").Save(ListOf("CpuBus", 0x7E005E, 0x10, "fast walk"));
 
             var window = new MainWindow();
             window.Show();
             Launch(window, 1); // Beta
 
-            Assert.Empty(Cheats(window).GetCheats());
+            Assert.Empty(Cheats(window).Cheats);
 
             window.Close();
         }, default);
@@ -195,20 +199,18 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Restoring_never_overwrites_a_list_already_in_hand() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            registry.AddRamPoke("CpuBus", 0x7E005E, 0x10, "from disk");
-            CheatFile.For("Alpha").Save(registry.ToCheatFile());
+            CheatFile.For("Alpha").Save(ListOf("CpuBus", 0x7E005E, 0x10, "from disk"));
 
             var window = new MainWindow();
             window.Show();
             Launch(window, 0);
-            Cheats(window).AddRamPoke("CpuBus", 0x7E0060, 0x22, "added since");
+            Cheats(window).Import(ListOf("CpuBus", 0x7E0060, 0x22, "added since"));
 
             Invoke(window, "ResetEmulation");
             Invoke(window, "ShowLibrary");
             Launch(window, 0);
 
-            Assert.Contains(Cheats(window).GetCheats(), c => c.Description == "added since");
+            Assert.Contains(Cheats(window).Cheats, c => c.Description == "added since");
 
             window.Close();
         }, default);
@@ -216,11 +218,11 @@ namespace EmuSen.WiseMan.Mistress
         // The cheat database window edits the same list the Active Cheats
         // window shows - see §4.14.
         [Fact]
-        public Task Both_cheat_windows_reach_the_windows_own_registry() => Session.Dispatch(() =>
+        public Task Both_cheat_windows_reach_the_windows_own_list() => Session.Dispatch(() =>
         {
             var window = new MainWindow();
             window.Show();
-            Cheats(window).AddRamPoke("WRAM", 0x9C, 0x63, "infinite lives");
+            Cheats(window).Import(ListOf("WRAM", 0x9C, 0x63, "infinite lives"));
 
             var settings = System.Linq.Enumerable.Single(
                 window.GetControl<EmuSen.LunaP.Controls.MenuBar>("MenuStrip").Menus, m => m.Title == "_Settings");
@@ -234,7 +236,7 @@ namespace EmuSen.WiseMan.Mistress
                 item.Invoke();
             }
 
-            Assert.Single(Cheats(window).GetCheats());
+            Assert.Single(Cheats(window).Cheats);
 
             window.Close();
         }, default);

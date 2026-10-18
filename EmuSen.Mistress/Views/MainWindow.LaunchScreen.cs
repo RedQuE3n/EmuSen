@@ -22,7 +22,7 @@ namespace EmuSen.Mistress.Views
         // The game's name, its system and its marquee, else its cover, each by the library's own order of sources (§4.60).
         internal (string Name, string System, string? Art) LaunchContent(SceneGame game)
         {
-            var shelf = EmuSen.Cores.CoreCatalog.ShelfByName(EmuSen.Cores.CoreCatalog.ShelfFor(game.File));
+            var shelf = EmuSen.Mistress.Library.RuntimeCatalog.ShelfByName(EmuSen.Mistress.Library.RuntimeCatalog.ShelfFor(game.File));
             string system = shelf?.EsdeFullName is { Length: > 0 } full ? full : shelf?.Name ?? "";
             string? art = null;
             if (shelf?.EsdeSystem is { Length: > 0 } esde)

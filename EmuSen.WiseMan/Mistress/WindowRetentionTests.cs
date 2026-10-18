@@ -64,7 +64,7 @@ namespace EmuSen.WiseMan.Mistress
                 UiTest.Capture(window);
                 Assert.NotNull(window.GetControl<SheetLayer>("Sheets").Current);
             }
-            object core = ((EmulatorSession)typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!).Core!;
+            object core = MistressGame.Core(window);
             window.Close();
             return (new WeakReference(window), new WeakReference(core));
         }

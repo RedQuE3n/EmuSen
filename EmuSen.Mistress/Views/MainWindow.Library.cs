@@ -114,7 +114,7 @@ namespace EmuSen.Mistress.Views
         private void ScanArtwork()
         {
             string directory = ArtworkDirectory;
-            Task.Run(() => ArtworkIndex.Scan(directory, EmuSen.Cores.CoreCatalog.Cores)).ContinueWith(scan =>
+            Task.Run(() => ArtworkIndex.Scan(directory, EmuSen.Mistress.Library.RuntimeCatalog.Consoles)).ContinueWith(scan =>
             {
                 if (!scan.IsCompletedSuccessfully) return;
                 Dispatcher.UIThread.Post(() =>
@@ -127,15 +127,15 @@ namespace EmuSen.Mistress.Views
 
         // The cover the library shows, by the order of §4.60: the player's own, ScreenScraper's, an ES-DE folder's, OpenEmu's.
         private string? CoverPathFor(RomEntry entry) =>
-            EmuSen.Cores.CoreCatalog.ShelfByName(entry.Shelf)?.EsdeSystem is { Length: > 0 } system ? MediaSourcesNow().Cover(system, entry.FullPath) : HandCoverFor(entry);
+            EmuSen.Mistress.Library.RuntimeCatalog.ShelfByName(entry.Shelf)?.EsdeSystem is { Length: > 0 } system ? MediaSourcesNow().Cover(system, entry.FullPath) : HandCoverFor(entry);
 
         // Only what the player placed in the art folder, or added with Add Cover Art.
         private string? HandCoverFor(RomEntry entry) =>
-            _artwork.Find(EmuSen.Cores.CoreCatalog.ByDisplayName(entry.CoreDisplayName)?.Console, entry.Title);
+            _artwork.Find(EmuSen.Mistress.Library.RuntimeCatalog.ByDisplayName(entry.CoreDisplayName)?.Console, entry.Title);
 
         private void BindCover(Control tile, RomEntry entry)
         {
-            var descriptor = EmuSen.Cores.CoreCatalog.ByDisplayName(entry.CoreDisplayName);
+            var descriptor = EmuSen.Mistress.Library.RuntimeCatalog.ByDisplayName(entry.CoreDisplayName);
             string console = descriptor?.Console ?? "";
             string? cover = CoverPathFor(entry);
             string title = DisplayTitle(entry) is var shown && shown != entry.Title ? shown : ArtworkIndex.Untagged(entry.Title);
@@ -172,7 +172,7 @@ namespace EmuSen.Mistress.Views
 
         private string SidebarKey =>
             CollectionKey != AllGamesKey ? CollectionKey
-            : SelectedConsole == EmuSen.Cores.CoreCatalog.AllConsoles ? AllGamesKey
+            : SelectedConsole == EmuSen.Mistress.Library.RuntimeCatalog.AllConsoles ? AllGamesKey
             : ConsoleKeyPrefix + SelectedConsole;
 
         private void FillSidebar()
@@ -185,7 +185,7 @@ namespace EmuSen.Mistress.Views
                 new SourceListItem(FavouritesKey, "Favourites", favourites.ToString()),
                 new SourceListItem(RecentKey, "Recently Played", recent.ToString()),
             });
-            var consoles = new SourceListGroup("Consoles", EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder
+            var consoles = new SourceListGroup("Consoles", EmuSen.Mistress.Library.RuntimeCatalog.Shelves
                 .Select(s => new SourceListItem(ConsoleKeyPrefix + s.Name, s.Label, _allScan.Entries.Count(e => e.Shelf == s.Name && Listed(e)).ToString()))
                 .ToArray());
             LibrarySidebar.Fill(new[] { library, consoles, CollectionsGroup() }, SidebarKey);
@@ -202,11 +202,11 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
-            string console = key.StartsWith(ConsoleKeyPrefix, StringComparison.Ordinal) ? key[ConsoleKeyPrefix.Length..] : EmuSen.Cores.CoreCatalog.AllConsoles;
+            string console = key.StartsWith(ConsoleKeyPrefix, StringComparison.Ordinal) ? key[ConsoleKeyPrefix.Length..] : EmuSen.Mistress.Library.RuntimeCatalog.AllConsoles;
             _appSettings.LibraryCollection = key.StartsWith(ConsoleKeyPrefix, StringComparison.Ordinal) ? AllGamesKey : key;
             if (console != SelectedConsole)
             {
-                LibraryFilter.SetFacets(EmuSen.Cores.CoreCatalog.FilterChoices, console);
+                LibraryFilter.SetFacets(EmuSen.Mistress.Library.RuntimeCatalog.FilterChoices, console);
                 OnLibraryFilterChanged();
             }
             else
@@ -297,7 +297,7 @@ namespace EmuSen.Mistress.Views
         // Where Add Cover Art puts a picture, found again only if it is the one the index would show.
         private string? OwnCoverPath(RomEntry entry)
         {
-            string? console = EmuSen.Cores.CoreCatalog.ByDisplayName(entry.CoreDisplayName)?.Console;
+            string? console = EmuSen.Mistress.Library.RuntimeCatalog.ByDisplayName(entry.CoreDisplayName)?.Console;
             if (console is null || HandCoverFor(entry) is not string shown) return null;
             string folder = Path.GetFullPath(Path.Combine(ArtworkDirectory, console));
             return Path.GetFullPath(shown).StartsWith(folder + Path.DirectorySeparatorChar, StringComparison.Ordinal) ? shown : null;
@@ -313,7 +313,7 @@ namespace EmuSen.Mistress.Views
 
         private void AddCoverArt(RomEntry entry, string picture)
         {
-            string console = EmuSen.Cores.CoreCatalog.ByDisplayName(entry.CoreDisplayName)?.Console ?? "Other";
+            string console = EmuSen.Mistress.Library.RuntimeCatalog.ByDisplayName(entry.CoreDisplayName)?.Console ?? "Other";
             try
             {
                 if (OwnCoverPath(entry) is string old) { File.Delete(old); _covers.Forget(old); }

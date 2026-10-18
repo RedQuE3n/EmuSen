@@ -180,7 +180,8 @@ extern "C" {
 #define EMUSEN_SESSION_CHEAT_FILES          18u /* -> {"directory","names"}: the saved cheat lists */
 #define EMUSEN_SESSION_CHEAT_FILE_READ      19u /* {"name"} -> {"path","file"}: a list as IMPORT takes it, null where unreadable */
 #define EMUSEN_SESSION_CHEAT_FILE_WRITE     20u /* {"name"} -> the number saved; BAD_ARGUMENT for a name no file may have */
-#define EMUSEN_SESSION_CHEAT_DB_STATUS      21u /* -> {"directory","exists"} */
+#define EMUSEN_SESSION_CHEAT_DB_STATUS      21u /* -> {"directory","exists"}; since the frontend API's 1.1 also "attribution", the
+                                                 * database's licence words a frontend shows beside it */
 #define EMUSEN_SESSION_CHEAT_DB_PARSE       22u /* {"game"} -> CHT_PARSE's record for the best match, "game" its name or null */
 #define EMUSEN_SESSION_CHEAT_DB_PRUNE       23u /* {"apply"} -> {"can_apply","reason","removing":[{"system","files","bytes"}],"keeping","pruned","failed"} */
 #define EMUSEN_SESSION_CHEAT_DB_UPDATE      24u /* -> {"installed","directory","attribution"}: downloads and installs the database */

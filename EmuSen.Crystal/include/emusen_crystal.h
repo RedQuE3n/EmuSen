@@ -181,8 +181,15 @@ int32_t emusen_crystal_free(emusen_crystal_runtime *rt);
 /* [{the systems table's keys (EmuSen_Backend.md 12.1), "engines":[name],"starts_empty","core"}], the table's systems
  * first in its order, then those only an engine's info names, with "id","name","extensions","engines","starts_empty",
  * "core". Since 1.1 "core" is {"names":[name],"display_name","console","extensions":[ext]} or null: the engine's facts
- * riding along, not a pack's, the names `core <name>` knows its core by (section 14.11). */
+ * riding along, not a pack's, the names `core <name>` knows its core by (section 14.11). Since 1.1 "controllers" is
+ * {"buttons":[control],"axes":[axis],"ports","players":[controller id|null]}, the engine's too: the console's pad, its
+ * most ports, and each player's controller as the console's stored settings stand at the call (section 14.13). */
 int64_t emusen_crystal_systems(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
+
+/* reads, since 1.1. [{"name","label","system","esde_system","esde_full_name","core":{"display_name","console",
+ * "extensions":[ext]}}] in release order: the library's shelves, one for each system a console's core runs, named for
+ * the core, a file's own in route's "shelf" (section 14.13). */
+int64_t emusen_crystal_shelves(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
 
 /* [{"name","id","version","systems":[id],"available","report"}]: every engine discovery found. */
 int64_t emusen_crystal_engines(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
@@ -193,9 +200,10 @@ int64_t emusen_crystal_cores(emusen_crystal_runtime *rt, uint8_t *out, size_t le
 /* changes. Lists the cores directories again; a session already open keeps its engine. */
 int32_t emusen_crystal_rescan(emusen_crystal_runtime *rt);
 
-/* {"system","console","engine","reason","cartridge"}: what opens the file and with which engine, as open would; "system"
- * and "engine" null with the decision's words in "reason" when nothing does. "cartridge" is what the system's pack reads
- * of the file's header, {"board","header_trust","prg_bytes","chr_bytes","battery"} for the NES, null where its pack reads
+/* {"system","console","engine","reason","cartridge","shelf"}: what opens the file and with which engine, as open would;
+ * "system" and "engine" null with the decision's words in "reason" when nothing does. Since 1.1 "shelf" names the shelf
+ * the file sits on, one that shelves lists, null where none. "cartridge" is what the system's pack reads of the file's
+ * header, {"board","header_trust","prg_bytes","chr_bytes","battery"} for the NES, null where its pack reads
  * none. Reads the file; runs no core. */
 int64_t emusen_crystal_route(emusen_crystal_runtime *rt, const uint8_t *path, size_t path_len, uint8_t *out, size_t len);
 
@@ -215,7 +223,9 @@ int32_t emusen_crystal_reset(emusen_crystal_runtime *rt, uint32_t session);
 /* reads. {"id","engine","system","console","game":{"path","name"}|null,"run":"running"|"paused"|"halted",
  * "halted":{"processor","address"}|null,"ports":[{"port","controller"}],"buttons":[control],"axes":[axis],
  * "discs":{"count","index","can_change","lid_open"},"picture":{"width","height","row_repeat"},"frame_rate_hz","total_frames","state_version",
- * "rewind_capture","rewind_withheld","notices":{"engine","firmware","media"}}: the session as a frontend shows it. */
+ * "rewind_capture","rewind_withheld","notices":{"engine","firmware","media"}}: the session as a frontend shows it. Since 1.1
+ * also "state":{"format","version","loads_from":[version]} and "television_standard", "ntsc" or "pal" as machine info
+ * gives the machine's signal, null where it gives none (section 14.13). */
 int64_t emusen_crystal_session_info(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
 
 /* ---- Discs ------------------------------------------------------------------------------------------------ */
@@ -347,7 +357,9 @@ int32_t emusen_crystal_resume_load(emusen_crystal_runtime *rt, uint32_t session)
 
 /* reads. [{"key","label","hint","kind":"switch"|"count"|"choice","default","min","max","choices","choice_labels",
  * "group"}]: the console's settings, the engine's choice among them as key "Engine", for the named engine or the one
- * the console runs; an absent console is the session's. */
+ * the console runs; an absent console is the session's. Since 1.1 a row whose core words the value chosen has "note",
+ * that sentence as the console's stored values stand or null when it says nothing, and every row has "shown_with",
+ * {"key","value"} where the row means something only while another key holds that value, else null (section 14.13). */
 int64_t emusen_crystal_settings_schema(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *console,
                                        size_t console_len, const uint8_t *engine, size_t engine_len, uint8_t *out, size_t len);
 
@@ -399,7 +411,11 @@ int64_t emusen_crystal_save_media(emusen_crystal_runtime *rt, uint32_t session, 
  * are JSON; a change answers {"done","words"}, its refusal an answer with done false. EMUSEN_CRYSTAL_CARDS_*. */
 int64_t emusen_crystal_cards_op(emusen_crystal_runtime *rt, uint32_t op, const uint8_t *args, size_t args_len, uint8_t *out, size_t len);
 
-#define EMUSEN_CRYSTAL_CARDS_LIST      0u /* reads. {"console"} -> [{"medium","title","noun","extension","cards":[{"path","name","label","games_own","held_by"}]}] */
+#define EMUSEN_CRYSTAL_CARDS_LIST      0u /* reads. {"console"} -> [{"medium","title","noun","extension","cards":[{"path","name","label","games_own","held_by"}]}];
+                                          * since 1.1 also "kind" ("removable"|"console"), "capacity" and "unit" (null where no format module
+                                          * reads the medium), "mode" ("game"|"shared"|"named") and its settings key "mode_key", "slots":[{"label",
+                                          * "name","path"}] as the mode places them, "next_name" (the first name no card has) and "import_due"
+                                          * (the games' own saves wait for the shared card's first import) - section 14.13 */
 #define EMUSEN_CRYSTAL_CARDS_OPEN      1u /* reads. {"path"} -> {"medium","exists","length","formatted","free","problem","saves":[{"id","title","units","game","damaged"}]}; ABSENT for a file of no medium */
 #define EMUSEN_CRYSTAL_CARDS_COPY      2u /* changes. {"from","save","to"}: a save by its id or its place from 1 */
 #define EMUSEN_CRYSTAL_CARDS_MOVE      3u /* changes. {"from","save","to"} */

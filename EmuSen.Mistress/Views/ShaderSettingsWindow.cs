@@ -12,7 +12,6 @@ using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
-using EmuSen.Cores;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
@@ -60,7 +59,7 @@ namespace EmuSen.Mistress.Views
             CanResize = true;
 
             LoadPack();
-            var consoles = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToList();
+            var consoles = EmuSen.Mistress.Library.RuntimeCatalog.Consoles.Select(c => c.Console).ToList();
             foreach (string console in consoles)
             {
                 var panel = new ShaderPanel(this, console);
@@ -584,7 +583,7 @@ namespace EmuSen.Mistress.Views
                 }
 
                 // A built-in filter's default may be this console's own - see EmuSen_Serenity.md §3.9.
-                float initial = builtIn?.DefaultFor(parameter, CoreCatalog.HostOf(Console)) ?? parameter.Initial;
+                float initial = builtIn?.DefaultFor(parameter, EmuSen.Mistress.Library.RuntimeCatalog.HostOf(Console)) ?? parameter.Initial;
                 items.Add(new SliderItem(
                     string.IsNullOrWhiteSpace(parameter.Description) ? parameter.Id : parameter.Description.Trim(),
                     Exact(parameter.Minimum),

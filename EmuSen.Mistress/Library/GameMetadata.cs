@@ -83,14 +83,14 @@ namespace EmuSen.Mistress.Library
         public static IReadOnlyList<(string Value, string Text)> ChoicesFor(MetadataField field, string path)
         {
             if (field.Key != AltEmulator) return field.Choices;
-            string? console = EmuSen.Cores.CoreCatalog.ConsoleForRom(path);
-            IReadOnlyList<string> engines = console is null ? [] : EmuSen.Cores.CoreCatalog.EngineFor(console)?.Choices ?? [];
+            string? console = RuntimeCatalog.ConsoleForRom(path);
+            IReadOnlyList<string> engines = console is null ? [] : RuntimeCatalog.EngineChoices(console);
             return engines.Select(e => (e, e)).Prepend(("", "None (the console's engine)")).ToList();
         }
 
         // The engine this game asks for, when it names one its console has; null otherwise, so the console's own choice runs it.
         public static string? EngineFor(string path, string? chosen) =>
-            chosen is { Length: > 0 } && EmuSen.Cores.CoreCatalog.ConsoleForRom(path) is { } console && EmuSen.Cores.CoreCatalog.EngineFor(console)?.Choices?.Contains(chosen) == true
+            chosen is { Length: > 0 } && RuntimeCatalog.ConsoleForRom(path) is { } console && RuntimeCatalog.EngineChoices(console).Contains(chosen)
                 ? chosen : null;
 
         public const string Yes = "1", No = "0";

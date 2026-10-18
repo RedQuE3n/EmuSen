@@ -14,6 +14,7 @@ using Avalonia.Interactivity;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
+using EmuSen.Mistress;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 
@@ -60,7 +61,13 @@ namespace EmuSen.WiseMan.Mistress
             File.WriteAllText(Path.Combine(dir, game + ".cht"), OneCheat);
         }
 
-        private AppSettings Settings() => new() { CheatDatabaseDirectory = _dbDir };
+        // Saved, since the runtime reads the cheat folder from the settings file as the window does.
+        private AppSettings Settings()
+        {
+            var settings = new AppSettings { CheatDatabaseDirectory = _dbDir };
+            settings.Save();
+            return settings;
+        }
 
         private static Stream BuildZip(params string[] paths)
         {
@@ -89,7 +96,8 @@ namespace EmuSen.WiseMan.Mistress
             var window = new CheatDatabaseWindow(Settings());
             window.Show();
 
-            var systems = window.GetControl<ListBox>("SystemsList").ItemsSource!.Cast<string>().ToList();
+            // A system this build plays that the folder lacks is listed as not downloaded beside the two that are here (§4.95).
+            var systems = window.GetControl<ListBox>("SystemsList").ItemsSource!.Cast<string>().Where(s => !s.EndsWith("(not downloaded)", StringComparison.Ordinal)).ToList();
             Assert.Equal(2, systems.Count);
             Assert.Contains(systems, s => s.Contains("Nintendo") && s.Contains("(2)"));
             Assert.Contains("3 cheat file(s)", Status(window).Text!);
@@ -104,7 +112,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Show();
 
             Assert.Contains("No cheat files", Status(window).Text!);
-            Assert.Empty(window.GetControl<ListBox>("SystemsList").ItemsSource!.Cast<string>());
+            Assert.All(window.GetControl<ListBox>("SystemsList").ItemsSource!.Cast<string>(), s => Assert.EndsWith("(not downloaded)", s));
 
             window.Close();
         }, default);
@@ -141,7 +149,7 @@ namespace EmuSen.WiseMan.Mistress
             await WaitFor(() => Status(window).Text!.Contains("Installed"));
 
             Assert.Contains("Installed 2 cheat file(s)", Status(window).Text!);
-            Assert.Equal(2, window.GetControl<ListBox>("SystemsList").ItemsSource!.Cast<string>().Count());
+            Assert.Equal(2, window.GetControl<ListBox>("SystemsList").ItemsSource!.Cast<string>().Count(s => !s.EndsWith("(not downloaded)", StringComparison.Ordinal)));
 
             window.Close();
         }, default);
@@ -208,9 +216,6 @@ namespace EmuSen.WiseMan.Mistress
         private static ListBox Systems(CheatDatabaseWindow w) => w.GetControl<ListBox>("SystemsList");
         private static ListBox Games(CheatDatabaseWindow w) => w.GetControl<ListBox>("GamesList");
 
-        private static EmuSen.Crystal.Cheats.ICheatCodeCodec Codec() =>
-            EmuSen.Crystal.Systems.Snes.SnesSystem.ProActionReplay();
-
         // Selecting a system used to do nothing at all - the games never
         // appeared, so a downloaded database was unreachable from the GUI.
         [Fact]
@@ -274,9 +279,9 @@ namespace EmuSen.WiseMan.Mistress
         public Task Picking_a_game_populates_the_active_cheat_list_disabled() => Session.Dispatch(() =>
         {
             WriteChtFile(Snes, "Super Mario World (USA)");
-            var registry = new CheatRegistry();
+            using var game = new RuntimeGame("SNES");
 
-            var window = new CheatDatabaseWindow(Settings(), () => registry, Codec());
+            var window = new CheatDatabaseWindow(Settings(), game.Cheats, () => game.Session);
             window.Show();
 
             Systems(window).SelectedIndex = 0;
@@ -284,8 +289,8 @@ namespace EmuSen.WiseMan.Mistress
 
             window.GetControl<Button>("LoadGameButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-            Assert.Equal("Infinite Maximum Coins", registry.GetCheats().Single().Description);
-            Assert.False(registry.GetCheats().Single().Enabled);
+            Assert.Equal("Infinite Maximum Coins", game.Cheats.Cheats.Single().Description);
+            Assert.False(game.Cheats.Cheats.Single().Enabled);
             Assert.Contains("Loaded 1 cheat(s)", Status(window).Text!);
 
             window.Close();
@@ -296,9 +301,9 @@ namespace EmuSen.WiseMan.Mistress
         public Task Picking_a_game_replaces_rather_than_appends() => Session.Dispatch(() =>
         {
             WriteChtFile(Snes, "Super Mario World (USA)");
-            var registry = new CheatRegistry();
+            using var game = new RuntimeGame("SNES");
 
-            var window = new CheatDatabaseWindow(Settings(), () => registry, Codec());
+            var window = new CheatDatabaseWindow(Settings(), game.Cheats, () => game.Session);
             window.Show();
 
             Systems(window).SelectedIndex = 0;
@@ -308,7 +313,7 @@ namespace EmuSen.WiseMan.Mistress
             load.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             load.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-            Assert.Single(registry.GetCheats());
+            Assert.Single(game.Cheats.Cheats);
 
             window.Close();
         }, default);
@@ -317,10 +322,10 @@ namespace EmuSen.WiseMan.Mistress
         public Task A_load_tells_whoever_is_showing_the_list_to_refresh() => Session.Dispatch(() =>
         {
             WriteChtFile(Snes, "Super Mario World (USA)");
-            var registry = new CheatRegistry();
+            using var game = new RuntimeGame("SNES");
             int refreshes = 0;
 
-            var window = new CheatDatabaseWindow(Settings(), () => registry, Codec(), () => refreshes++);
+            var window = new CheatDatabaseWindow(Settings(), game.Cheats, () => game.Session, () => refreshes++);
             window.Show();
 
             Systems(window).SelectedIndex = 0;
@@ -354,9 +359,9 @@ namespace EmuSen.WiseMan.Mistress
         public Task The_load_button_stays_off_until_a_game_is_picked() => Session.Dispatch(() =>
         {
             WriteChtFile(Snes, "Super Mario World (USA)");
-            var registry = new CheatRegistry();
+            using var game = new RuntimeGame("SNES");
 
-            var window = new CheatDatabaseWindow(Settings(), () => registry, Codec());
+            var window = new CheatDatabaseWindow(Settings(), game.Cheats, () => game.Session);
             window.Show();
 
             Assert.False(window.GetControl<Button>("LoadGameButton").IsEnabled);
@@ -376,10 +381,10 @@ namespace EmuSen.WiseMan.Mistress
         public Task The_active_cheats_button_asks_its_owner_to_open_that_window() => Session.Dispatch(() =>
         {
             WriteChtFile(Snes, "Super Mario World (USA)");
-            var registry = new CheatRegistry();
+            using var game = new RuntimeGame("SNES");
 
             int opened = 0;
-            var window = new CheatDatabaseWindow(Settings(), () => registry, Codec(), null, () => opened++);
+            var window = new CheatDatabaseWindow(Settings(), game.Cheats, () => game.Session, null, () => opened++);
             window.Show();
 
             window.GetControl<Button>("ActiveCheatsButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -392,7 +397,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task The_active_cheats_button_is_off_when_no_owner_can_open_one() => Session.Dispatch(() =>
         {
-            var window = new CheatDatabaseWindow(Settings(), () => new CheatRegistry(), Codec());
+            var window = new CheatDatabaseWindow(Settings(), new CheatList());
             window.Show();
 
             Assert.False(window.GetControl<Button>("ActiveCheatsButton").IsEnabled);

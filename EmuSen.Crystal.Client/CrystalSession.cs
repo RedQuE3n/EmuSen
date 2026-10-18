@@ -184,8 +184,15 @@ namespace EmuSen.Crystal.Client
 
         public byte[] AudioPeek() => Bytes((o, n) => Contract.Crystal.AudioPeek(Rt, Id, o, n));
 
+        // An op that answers a record, read with the copy-out protocol's two calls; a record-answering change is kept by the provider between them.
         public string CheatOp(uint op, string argsJson) =>
             WithText(argsJson, (a, al) => Text((o, n) => Contract.Crystal.CheatOp(Rt, Id, op, (byte*)a, al, o, n)));
+
+        // An op that changes the list and answers a value, not a record, called once, since two calls would make the change twice - see EmuSen_Backend.md §14.13.
+        public long CheatChange(uint op, string argsJson) =>
+            WithText(argsJson, (a, al) => Check(Contract.Crystal.CheatOp(Rt, Id, op, (byte*)a, al, null, 0)));
+
+        public string CheatCodecs() => Text((o, n) => Contract.Crystal.CheatCodecs(Rt, Id, o, n));
 
         public void Close()
         {

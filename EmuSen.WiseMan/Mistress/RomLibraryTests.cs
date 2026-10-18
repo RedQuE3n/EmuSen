@@ -167,9 +167,9 @@ namespace EmuSen.WiseMan.Mistress
 
         // The scan list is the catalog's and the archives', so a new core needs no edit in RomLibrary.
         [Fact]
-        public void Scanned_extensions_come_from_the_core_catalog()
+        public void Scanned_extensions_are_the_runtime_s_shelves_and_the_archives()
         {
-            Assert.Equal(EmuSen.Cores.CoreCatalog.RomExtensions.Concat(EmuSen.Galaxia.Media.ArchiveImages.Extensions), RomLibrary.Extensions);
+            Assert.Equal(EmuSen.Cores.CoreCatalog.RomExtensions.Concat(EmuSen.Galaxia.Media.ArchiveImages.Extensions).Order(System.StringComparer.Ordinal), RomLibrary.Extensions.Order(System.StringComparer.Ordinal));
         }
 
         [Fact]

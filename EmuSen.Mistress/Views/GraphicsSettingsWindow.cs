@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Layout;
-using EmuSen.Cores;
+using EmuSen.Mistress.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
@@ -21,11 +21,11 @@ namespace EmuSen.Mistress.Views
         private readonly List<(string Console, Action Show)> _notes = new();
         private bool _filling;
 
-        // The keys each console's core reads, the runtime's since SR12: read from consoles.json, written through the frontend API; every other key is Mistress's, in graphics.json - see EmuSen_Backend.md §14.12.
+        // The keys each console's schema names, the runtime's since SR12: read and written through the frontend API; every other key is Mistress's, in graphics.json - see EmuSen_Backend.md §14.12.
         private readonly HashSet<(string Console, string Key)> _core = new();
 
         private string? Value(string console, string key) =>
-            _core.Contains((console, key)) ? CoreSettings.Stored(console, key) : _config.Value(console, key);
+            _core.Contains((console, key)) ? CoreSettings.Value(console, key) : _config.Value(console, key);
 
         // Parameterless constructor exists only for tooling - real code always uses the one below.
         public GraphicsSettingsWindow() : this(new GraphicsConfig(), null, null) { }
@@ -58,7 +58,7 @@ namespace EmuSen.Mistress.Views
             MinHeight = 400;
             CanResize = true;
 
-            var consoles = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToList();
+            var consoles = RuntimeCatalog.ConsoleNames.ToList();
             foreach (string console in consoles)
             {
                 _tabs.Add(console, new ScrollViewer { Content = BuildConsolePanel(console) });
@@ -89,9 +89,9 @@ namespace EmuSen.Mistress.Views
         // The frontend's other row: the screen's shape as the core reports it, or the frame's square pixels - see EmuSen_Settings_Reference.md §4.97.
         public const string PictureShapeKey = "PictureShape", TvShape = "tv", SquarePixels = "square";
 
-        public static readonly CoreSetting PictureShape = new(PictureShapeKey, "Picture shape",
+        public static readonly SettingRow PictureShape = new(PictureShapeKey, "Picture shape",
             "The screen the console was made for, or each of the frame's pixels square.",
-            CoreSettingKind.Choice, TvShape, Choices: new[] { TvShape, SquarePixels }, ChoiceLabels: new[] { "TV shape", "Square pixels" });
+            SettingRow.Choice, TvShape, 0, 0, new[] { TvShape, SquarePixels }, new[] { "TV shape", "Square pixels" }, null, null, null, null);
 
         // The frontend's third row: what is hidden at the picture's edges, on a console that had a television - see EmuSen_Settings_Reference.md §4.99.
         public const string OverscanKey = "Overscan", NoOverscan = "off", TvOverscan = "tv", CustomCrop = "custom";
@@ -99,12 +99,12 @@ namespace EmuSen.Mistress.Views
         // The four edges of a custom crop, each a percentage of the picture's width or height, in the order they are shown.
         public static readonly (string Key, string Label)[] CropEdges = CropFields.Edges;
 
-        public static readonly CoreSetting Overscan = new(OverscanKey, "Overscan",
+        public static readonly SettingRow Overscan = new(OverscanKey, "Overscan",
             "The whole picture, the part a television showed, or a crop of your own.",
-            CoreSettingKind.Choice, NoOverscan, Choices: new[] { NoOverscan, TvOverscan, CustomCrop }, ChoiceLabels: new[] { "Whole picture", "TV overscan", "Custom crop" });
+            SettingRow.Choice, NoOverscan, 0, 0, new[] { NoOverscan, TvOverscan, CustomCrop }, new[] { "Whole picture", "TV overscan", "Custom crop" }, null, null, null, null);
 
         // The consoles that drove a television, an attachment by its host's screen; an LCD showed every pixel - see EmuSen_Serenity.md §3.12.
-        public static bool HasOverscan(string console) => EmuSen.Serenity.Shaders.CrtFilter.TelevisionConsoles.Contains(CoreCatalog.HostOf(console));
+        public static bool HasOverscan(string console) => EmuSen.Serenity.Shaders.CrtFilter.TelevisionConsoles.Contains(RuntimeCatalog.HostOf(console));
 
         // What a console's stored choice hides at each edge of the picture - see EmuSen_Settings_Reference.md §4.99.
         public static EmuSen.Serenity.PictureCrop CropFor(GraphicsConfig config, string console)
@@ -127,14 +127,13 @@ namespace EmuSen.Mistress.Views
 
         private Control BuildConsolePanel(string console)
         {
-            IReadOnlyList<CoreSetting> settings = CoreCatalog.SettingsFor(console);
-            foreach (CoreSetting s in settings) _core.Add((console, s.Key));
-            if (CoreCatalog.EngineFor(console) is { } engineRow) _core.Add((console, engineRow.Key));
-            foreach (SaveMedium medium in MemoryCards.MediaFor(console))
-            {
-                var (modeRow, slotRows) = MemoryCards.RowsFor(medium);
-                foreach (CoreSetting s in slotRows.Prepend(modeRow)) _core.Add((console, s.Key));
-            }
+            // The schema's rows sorted as the tab shows them: the engine's, a medium's mode and the slots shown with it, then the core's own.
+            IReadOnlyList<SettingRow> schema = RuntimeCatalog.SettingsFor(console);
+            foreach (SettingRow s in schema) _core.Add((console, s.Key));
+            var shownWith = schema.Select(r => r.ShownWithKey).OfType<string>().ToHashSet();
+            SettingRow? engineRow = schema.FirstOrDefault(r => r.Key == RuntimeCatalog.EngineKey && r.Choices.Count > 1);
+            IReadOnlyList<SettingRow> cardRows = schema.Where(r => r.ShownWithKey is not null || shownWith.Contains(r.Key)).ToArray();
+            IReadOnlyList<SettingRow> settings = schema.Where(r => r.Key != RuntimeCatalog.EngineKey && !cardRows.Contains(r)).ToArray();
             var panel = new StackPanel { Spacing = 12, Margin = new Avalonia.Thickness(0, 8, 0, 0) };
             var refreshers = new List<Action>();
 
@@ -175,7 +174,7 @@ namespace EmuSen.Mistress.Views
             }
 
             // Before the core's own rows, since it decides which core reads them - see EmuSen_Settings_Reference.md §4.44.
-            if (CoreCatalog.EngineFor(console) is { } engine)
+            if (engineRow is { } engine)
             {
                 (Control control, Action refresh) = BuildControl(console, engine);
                 refreshers.Add(refresh);
@@ -183,7 +182,7 @@ namespace EmuSen.Mistress.Views
             }
 
             // The runtime's card mode, where the engine lists a card the player carries; the slots' rows only under Named cards - see EmuSen_Settings_Reference.md §4.114.
-            foreach (FieldRow row in BuildCardRows(console, refreshers)) panel.Children.Add(row);
+            foreach (FieldRow row in BuildCardRows(console, cardRows, refreshers)) panel.Children.Add(row);
 
             if (settings.Count == 0)
             {
@@ -193,16 +192,16 @@ namespace EmuSen.Mistress.Views
             }
 
             string? group = null;
-            foreach (CoreSetting setting in settings)
+            foreach (SettingRow setting in settings)
             {
                 // A heading before each group of rows the schema sets apart, enhancements among them - see EmuSen_Settings_Reference.md §4.110.
                 if (setting.Group is { } g && g != group) panel.Children.Add(new SectionHeader { Name = $"{console}.Group.{g}", Text = g });
                 group = setting.Group;
                 (Control control, Action refresh) = BuildControl(console, setting);
                 refreshers.Add(refresh);
-                if (setting.Note is { } note)
+                if (setting.HasNote)
                 {
-                    (Control noted, Action show) = WithNote(console, setting, note, control, settings);
+                    (Control noted, Action show) = WithNote(console, setting, control);
                     control = noted;
                     refreshers.Add(show);
                 }
@@ -213,34 +212,29 @@ namespace EmuSen.Mistress.Views
             return panel;
         }
 
-        // Each medium's rows from MemoryCards, a slot's shown while its medium is Named, as the crop's row is while a custom crop is - see EmuSen_SaveMedia.md §3.3.
-        private List<FieldRow> BuildCardRows(string console, List<Action> refreshers)
+        // Each medium's rows from the schema, a slot's shown while the row it is shown with holds its value, as the crop's row is while a custom crop is - see EmuSen_SaveMedia.md §3.3.
+        private List<FieldRow> BuildCardRows(string console, IReadOnlyList<SettingRow> cardRows, List<Action> refreshers)
         {
             var rows = new List<FieldRow>();
-            foreach (SaveMedium medium in MemoryCards.MediaFor(console))
+            foreach (SettingRow setting in cardRows)
             {
-                var (mode, slots) = MemoryCards.RowsFor(medium);
-                IReadOnlyList<CoreSetting> group = slots.Prepend(mode).ToArray();
-                foreach (CoreSetting setting in group)
+                (Control control, Action refresh) = BuildControl(console, setting);
+                refreshers.Add(refresh);
+                if (setting.HasNote)
                 {
-                    (Control control, Action refresh) = BuildControl(console, setting);
-                    refreshers.Add(refresh);
-                    if (setting.Note is { } note)
-                    {
-                        (Control noted, Action show) = WithNote(console, setting, note, control, group);
-                        control = noted;
-                        refreshers.Add(show);
-                    }
-                    var row = new FieldRow { Name = $"{console}.{setting.Key}.Row", Label = setting.Label, Hint = setting.Hint, Content = control };
-                    if (setting != mode)
-                    {
-                        void Shown() => row.IsVisible = MemoryCards.Read(key => Value(console, key), medium).Mode == MemoryCards.Named;
-                        Shown();
-                        refreshers.Add(Shown);
-                        _notes.Add((console, Shown));
-                    }
-                    rows.Add(row);
+                    (Control noted, Action show) = WithNote(console, setting, control);
+                    control = noted;
+                    refreshers.Add(show);
                 }
+                var row = new FieldRow { Name = $"{console}.{setting.Key}.Row", Label = setting.Label, Hint = setting.Hint, Content = control };
+                if (setting.ShownWithKey is { } key)
+                {
+                    void Shown() => row.IsVisible = Value(console, key) == setting.ShownWithValue;
+                    Shown();
+                    refreshers.Add(Shown);
+                    _notes.Add((console, Shown));
+                }
+                rows.Add(row);
             }
             return rows;
         }
@@ -267,12 +261,12 @@ namespace EmuSen.Mistress.Views
         }
 
         // A switch for on or off, a dropdown of the counts a range allows, or one of the names; each named so a test can find it.
-        private (Control, Action) BuildControl(string console, CoreSetting setting)
+        private (Control, Action) BuildControl(string console, SettingRow setting)
         {
             string name = $"{console}.{setting.Key}";
             string Current() => Value(console, setting.Key) ?? setting.Default;
 
-            if (setting.Kind == CoreSettingKind.Switch)
+            if (setting.Kind == SettingRow.Switch)
             {
                 var toggle = new LunaSwitch { Name = name, HorizontalAlignment = HorizontalAlignment.Left };
                 toggle.IsCheckedChanged += (_, _) => { if (!_filling) Changed(console, setting.Key, toggle.IsChecked == true ? "true" : "false"); };
@@ -282,11 +276,11 @@ namespace EmuSen.Mistress.Views
             }
 
             var dropdown = new Dropdown { Name = name, HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 120 };
-            string[] values = setting.Kind == CoreSettingKind.Count
+            string[] values = setting.Kind == SettingRow.Count
                 ? Enumerable.Range(setting.Min, setting.Max - setting.Min + 1).Select(n => n.ToString()).ToArray()
-                : (setting.Choices ?? Array.Empty<string>()).ToArray();
+                : setting.Choices.ToArray();
             // A choice the core names in words is shown by them and stored by its value - see §4.90.
-            string[] items = setting.ChoiceLabels is { } labels && labels.Count == values.Length ? labels.ToArray() : values;
+            string[] items = setting.ChoiceLabels.Count == values.Length ? setting.ChoiceLabels.ToArray() : values;
             string Shown(string value) => items[Math.Max(0, Array.IndexOf(values, value))];
             dropdown.Chose += chosen => { if (!_filling && chosen is string shown && Array.IndexOf(items, shown) is >= 0 and int i) Changed(console, setting.Key, values[i]); };
             void Fill() { _filling = true; string current = Current(); dropdown.Fill(items, Shown(values.Contains(current) ? current : setting.Default)); _filling = false; }
@@ -294,15 +288,16 @@ namespace EmuSen.Mistress.Views
             return (dropdown, Fill);
         }
 
-        // The core's sentence under its control when the value chosen is not the one it will use, shown again whenever the console's values change - see §4.26 and EmuSen_Multicore.md §13.1.
-        private (Control, Action) WithNote(string console, CoreSetting setting, Func<Func<string, string>, string?> note, Control control, IReadOnlyList<CoreSetting> settings)
+        // The core's sentence under its control when the value chosen is not the one it will use, the schema read again whenever the console's values change - see §4.26 and EmuSen_Multicore.md §13.1.
+        private (Control, Action) WithNote(string console, SettingRow setting, Control control)
         {
             var text = Ui.Hint("");
             text.Name = $"{console}.{setting.Key}.Note";
-            string Value(string key) => this.Value(console, key) ?? settings.FirstOrDefault(s => s.Key == key)?.Default ?? "";
+            bool first = true;
             void Show()
             {
-                string? said = note(Value);
+                string? said = first ? setting.Note : RuntimeCatalog.SettingsFor(console).FirstOrDefault(r => r.Key == setting.Key)?.Note;
+                first = false;
                 text.Text = said ?? "";
                 text.IsVisible = said is not null;
             }
@@ -341,7 +336,7 @@ namespace EmuSen.Mistress.Views
             if (index < 0 || index >= _panels.Count) return;
 
             (string console, Action refresh) = _panels[index];
-            foreach ((string c, string key) in _core) if (c == console && CoreSettings.Stored(console, key) is not null) CoreSettings.Set(console, key, null);
+            foreach ((string c, string key) in _core) if (c == console) CoreSettings.Set(console, key, null);
             _config.Forget(console);
             _config.Save();
             refresh();

@@ -1,25 +1,28 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia.Threading;
-using EmuSen.Common;
-using EmuSen.Cores;
+using EmuSen.Crystal.Client;
 using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Mistress.Views
 {
-    // The rewind reel: pictures kept with the snapshots, and a moment chosen from them - see EmuSen_Settings_Reference.md §4.49.
+    // The rewind reel: the pictures the runtime keeps with its snapshots, and a moment chosen from them - see EmuSen_Settings_Reference.md §4.49 and EmuSen_Backend.md §14.13.
     public partial class MainWindow
     {
-        // Emulation thread only: the last picture made for a snapshot, and the frame serial it was made from.
-        private RewindThumbnail? _lastThumbnail;
-        private long? _lastThumbnailSerial;
-
         // Why the reel cannot open now, or null when it can.
         private string? RewindUnavailable()
         {
-            if (EngineFeatures.Of(_session?.Core) is { RewindCapture: false } withheld) return withheld.RewindWithheld ?? "not kept for this engine";
-            if (_rewind.SnapshotBytes == 0) return "nothing to go back to yet";
+            if (_session is not { } session) return "no game running";
+            if (!session.RewindCapture) return session.RewindWithheld ?? "not kept for this engine";
+            try
+            {
+                using JsonDocument reel = JsonDocument.Parse(session.Crystal.RewindReel());
+                if (reel.RootElement.GetProperty("snapshot_bytes").GetInt64() == 0) return "nothing to go back to yet";
+            }
+            catch (CrystalException) { return "no game running"; }
             return null;
         }
 
@@ -35,10 +38,10 @@ namespace EmuSen.Mistress.Views
             OpenRewindReel(resume);
         }
 
-        // Paused first, then the moments read on the thread that owns the buffer - see §4.49.
+        // Paused first, then the moments and their pictures read from the runtime off the UI thread - see §4.49.
         private void OpenRewindReel(bool resumeAfter)
         {
-            if (_session is not { IsRomLoaded: true } || RewindUnavailable() is string why)
+            if (_session is not { } session || RewindUnavailable() is string why)
             {
                 string status = $"Rewind: {RewindUnavailable() ?? "no game running"}";
                 StatusText.Text = status;
@@ -53,21 +56,34 @@ namespace EmuSen.Mistress.Views
                 resumeAfter = true;
             }
 
-            double hz = _session.FrameRateHz;
-            RequestOnEmulationThread(session =>
+            double hz = session.FrameRateHz;
+            Task.Run(() =>
             {
-                IReadOnlyList<RewindMoment> moments = _rewind.Moments();
-                List<ReelMoment> reel = ReelMoment.From(moments, _rewind.Frame, hz, PresentPicture(session));
+                List<ReelMoment> reel;
+                try { reel = ReelOf(session, hz); }
+                catch (CrystalException) { reel = new List<ReelMoment>(); }
                 Dispatcher.UIThread.Post(() => _ = ShowRewindReelAsync(reel, resumeAfter));
             });
         }
 
-        private RewindThumbnail? PresentPicture(EmulatorSession session)
+        // The held moments with pictures, oldest first, then the picture on show as the present.
+        private static List<ReelMoment> ReelOf(GameSession session, double hz)
         {
-            byte[] rgba = session.GetFrameBufferRgba();
-            RewindThumbnail? picture = RewindThumbnail.From(rgba, session.ScreenWidth, session.ScreenHeight, session.RowRepeat, _rewind.ThumbnailWidth);
-            (session.Core as IFrameBufferPool)?.ReturnFrameBuffer(rgba);
-            return picture;
+            using JsonDocument reel = JsonDocument.Parse(session.Crystal.RewindReel());
+            var moments = new List<(long, byte[], int, int)>();
+            long now = 0;
+            foreach (JsonElement m in reel.RootElement.GetProperty("moments").EnumerateArray())
+            {
+                long frame = m.GetProperty("frame").GetInt64();
+                now = Math.Max(now, frame);
+                if (m.GetProperty("picture").ValueKind != JsonValueKind.Object) continue;
+                byte[] packed = session.Crystal.RewindPicture((ulong)frame);
+                int width = (int)BitConverter.ToUInt32(packed, 0), height = (int)BitConverter.ToUInt32(packed, 4);
+                moments.Add((frame, packed[8..], width, height));
+            }
+            using JsonDocument info = JsonDocument.Parse(session.Crystal.Info());
+            now = Math.Max(now, info.RootElement.GetProperty("total_frames").GetInt64());
+            return ReelMoment.From(moments, now, hz, CurrentPicture(session));
         }
 
         private async Task ShowRewindReelAsync(List<ReelMoment> reel, bool resumeAfter)
@@ -93,7 +109,7 @@ namespace EmuSen.Mistress.Views
                 Sheets.Hint = footer;
             }
 
-            if (chosen is null)
+            if (chosen is null || _session is not { } session)
             {
                 if (resumeAfter && GameOnScreen) ResumeEmulation();
                 return;
@@ -101,17 +117,17 @@ namespace EmuSen.Mistress.Views
 
             long frame = chosen.Frame;
             string label = chosen.Label;
-            RequestOnEmulationThread(session =>
+            _ = Task.Run(() =>
             {
-                bool rewound = session.Core is { } core && _rewind.RewindTo(core, frame);
-                if (rewound)
+                bool rewound;
+                try
                 {
-                    _lastThumbnail = null;
-                    _debugTarget?.RefreshProviders();
-                    session.DequeueAudioSamples(int.MaxValue);
+                    session.Crystal.RewindTo((ulong)frame);
                     _audioPlayer.RateControl.Reset();
-                    SubmitFrame(session.GetFrameBufferRgba(), session.ScreenWidth, session.ScreenHeight, session.RowRepeat, _frames.ReleaseFor(session.Core), aspect: session.DisplayAspect, lines: session.DisplayLines, raw: session.RawPicture);
+                    OfferStill(session);
+                    rewound = true;
                 }
+                catch (CrystalException) { rewound = false; }
 
                 Dispatcher.UIThread.Post(() =>
                 {
@@ -122,26 +138,31 @@ namespace EmuSen.Mistress.Views
             });
         }
 
-        // A snapshot was just taken and this frame is being shown: its picture, downscaled - see §4.49.
-        private void Picture(EmulatorSession session, byte[] frame, long? serial)
+        // The picture on show, its repeated rows written out; null where none is drawn.
+        private static (byte[] Rgba, int Width, int Height)? CurrentPicture(GameSession session)
         {
-            if (_rewind.AttachThumbnail(frame, session.ScreenWidth, session.ScreenHeight, session.RowRepeat) is not { } made) return;
-            _lastThumbnail = made;
-            _lastThumbnailSerial = serial;
+            CrystalSession crystal = session.Crystal;
+            using JsonDocument shown = JsonDocument.Parse(crystal.Info());
+            JsonElement picture = shown.RootElement.GetProperty("picture");
+            int width = picture.GetProperty("width").GetInt32(), height = picture.GetProperty("height").GetInt32(), repeat = Math.Max(1, picture.GetProperty("row_repeat").GetInt32());
+            var rgba = new byte[crystal.PictureBytes];
+            crystal.CopyPicture(rgba);
+            if (width <= 0 || height <= 0 || rgba.Length < width * height * 4) return null;
+            if (repeat == 1) return (rgba, width, height);
+            var tall = new byte[width * height * repeat * 4];
+            int row = width * 4;
+            for (int y = 0; y < height; y++)
+                for (int r = 0; r < repeat; r++)
+                    Buffer.BlockCopy(rgba, y * row, tall, (y * repeat + r) * row, row);
+            return (tall, width, height * repeat);
         }
 
-        // A snapshot on a frame whose picture was not offered again: the last picture if it is that one, else the frame fetched for it.
-        private void PictureUnchanged(EmulatorSession session, long? serial)
+        // A paused machine's picture to the screen after it moved, as a frame would offer it.
+        private void OfferStill(GameSession session)
         {
-            if (serial is not null && serial == _lastThumbnailSerial && _lastThumbnail is { } same)
-            {
-                _rewind.AttachThumbnail(same);
-                return;
-            }
-
-            byte[] frame = session.GetFrameBufferRgba();
-            Picture(session, frame, serial);
-            (session.Core as IFrameBufferPool)?.ReturnFrameBuffer(frame);
+            if (CurrentPicture(session) is not { } still || _frames.Rent(still.Rgba.Length) is not { } pixels) return;
+            still.Rgba.CopyTo(pixels, 0);
+            _frames.Offer(pixels, still.Width, still.Height, 1);
         }
     }
 }

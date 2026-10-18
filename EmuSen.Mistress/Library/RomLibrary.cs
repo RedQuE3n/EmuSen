@@ -22,10 +22,10 @@ namespace EmuSen.Mistress.Library
 
         // Which console this file belongs to, by extension and, where several take it, by content - see EmuSen_Multicore.md §10.
         public string CoreDisplayName =>
-            EmuSen.Cores.CoreCatalog.CoreForRom(FullPath)?.DisplayName ?? "Unknown";
+            RuntimeCatalog.CoreForRom(FullPath)?.DisplayName ?? "Unknown";
 
         // The library shelf, which splits the Game Boy's core into Game Boy and Game Boy Color - see EmuSen_Settings_Reference.md §4.46.
-        public string Shelf => EmuSen.Cores.CoreCatalog.ShelfFor(FullPath) ?? "Unknown";
+        public string Shelf => RuntimeCatalog.ShelfFor(FullPath) ?? "Unknown";
     }
 
     // CoreDisplayName is the console the scan was narrowed to, null when it was not.
@@ -37,7 +37,7 @@ namespace EmuSen.Mistress.Library
     public static class RomLibrary
     {
         // Whatever cores this build has, not a second copy of the list, and the archives a game may be packed in - see EmuSen_Multicore.md §3.
-        public static string[] Extensions => EmuSen.Cores.CoreCatalog.RomExtensions.Concat(EmuSen.Galaxia.Media.ArchiveImages.Extensions).ToArray();
+        public static string[] Extensions => RuntimeCatalog.RomExtensions.Concat(EmuSen.Galaxia.Media.ArchiveImages.Extensions).ToArray();
 
         private static readonly IReadOnlyList<RomEntry> None = Array.Empty<RomEntry>();
 
@@ -49,7 +49,7 @@ namespace EmuSen.Mistress.Library
             AttributesToSkip = FileAttributes.Hidden | FileAttributes.System,
         };
 
-        // <coreDisplayName> narrows to one console; null or CoreCatalog.AllConsoles keeps everything.
+        // <coreDisplayName> narrows to one console; null or RuntimeCatalog.AllConsoles keeps everything.
         public static RomLibraryResult Scan(string? romDirectory, string? coreDisplayName = null)
         {
             if (string.IsNullOrWhiteSpace(romDirectory))
@@ -65,12 +65,11 @@ namespace EmuSen.Mistress.Library
             List<RomEntry> entries;
             try
             {
-                var shelf = EmuSen.Cores.CoreCatalog.ShelfByName(coreDisplayName);
+                var shelf = RuntimeCatalog.ShelfByName(coreDisplayName);
+                string[] extensions = Extensions;
 
                 var files = Directory.EnumerateFiles(romDirectory, "*", Recursive)
-                    .Where(f => shelf is null
-                        ? Extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase)
-                        : shelf.Core.SupportsExtension(EmuSen.Cores.CoreCatalog.ImageExtension(f)))
+                    .Where(f => extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
                     .ToList();
                 // A sheet's tracks and a list's discs are the sheet's and the list's game, not games of their own.
                 entries = EmuSen.Galaxia.Media.ImageSets.Shelved(files)
@@ -100,7 +99,7 @@ namespace EmuSen.Mistress.Library
 
         // The shelf's name only when it names a real shelf in this build.
         private static string? Narrowed(string? coreDisplayName) =>
-            EmuSen.Cores.CoreCatalog.ShelfByName(coreDisplayName)?.Name;
+            RuntimeCatalog.ShelfByName(coreDisplayName)?.Name;
 
         // The one place the "why is my list empty" wording lives, so the
         // inline library and the modal browser can't drift apart.

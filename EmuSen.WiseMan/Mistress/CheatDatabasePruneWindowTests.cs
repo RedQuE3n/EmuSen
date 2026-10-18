@@ -15,7 +15,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // The Prune button's two-stage confirm - see EmuSen_Settings_Reference.md §4.16.
+    // The Prune button's two-stage confirm, against the folders the runtime's systems claim - see EmuSen_Settings_Reference.md §4.16.
     [Collection(TestCollections.ProcessGlobals)]
     public class CheatDatabasePruneWindowTests : IDisposable
     {
@@ -25,7 +25,8 @@ namespace EmuSen.WiseMan.Mistress
         private readonly string _root;
         private readonly string _dbDir;
 
-        private static readonly string[] Snes = { "Nintendo - Super Nintendo Entertainment System" };
+        // A folder of the libretro database that no system of this build claims.
+        private const string Unsupported = "Atari - 2600";
 
         public CheatDatabasePruneWindowTests()
         {
@@ -50,11 +51,11 @@ namespace EmuSen.WiseMan.Mistress
             for (int i = 0; i < files; i++) File.WriteAllText(Path.Combine(dir, $"Game {i}.cht"), "cheats = 0\n");
         }
 
-        private AppSettings Settings() => new() { CheatDatabaseDirectory = _dbDir };
-
-        private CheatDatabaseWindow Open(Func<IReadOnlyCollection<string>>? supported)
+        private CheatDatabaseWindow Open()
         {
-            var window = new CheatDatabaseWindow(Settings(), null, null, null, null, supported);
+            var settings = new AppSettings { CheatDatabaseDirectory = _dbDir };
+            settings.Save();
+            var window = new CheatDatabaseWindow(settings);
             window.Show();
             return window;
         }
@@ -70,14 +71,14 @@ namespace EmuSen.WiseMan.Mistress
         public Task The_first_click_reports_and_deletes_nothing() => Session.Dispatch(() =>
         {
             WriteSystem("Nintendo - Super Nintendo Entertainment System", 2);
-            WriteSystem("Sony - PlayStation", 3);
-            var window = Open(() => Snes);
+            WriteSystem(Unsupported, 3);
+            var window = Open();
 
             Click(window);
 
             Assert.Contains("no core in this build", Status(window));
             Assert.Contains("Delete 1 system(s)?", Label(window));
-            Assert.True(Directory.Exists(Path.Combine(_dbDir, "Sony - PlayStation")));
+            Assert.True(Directory.Exists(Path.Combine(_dbDir, Unsupported)));
 
             window.Close();
         }, default);
@@ -86,18 +87,18 @@ namespace EmuSen.WiseMan.Mistress
         public Task The_second_click_deletes_and_the_list_updates() => Session.Dispatch(() =>
         {
             WriteSystem("Nintendo - Super Nintendo Entertainment System", 2);
-            WriteSystem("Sony - PlayStation", 3);
-            var window = Open(() => Snes);
+            WriteSystem(Unsupported, 3);
+            var window = Open();
 
             Click(window);
             Click(window);
 
             Assert.Contains("Deleted 1 system(s), 3 file(s)", Status(window));
-            Assert.False(Directory.Exists(Path.Combine(_dbDir, "Sony - PlayStation")));
+            Assert.False(Directory.Exists(Path.Combine(_dbDir, Unsupported)));
             Assert.Equal("Prune Unsupported", Label(window));
 
             // The systems pane must not still be offering what was deleted.
-            Assert.Single(window.GetControl<ListBox>("SystemsList").ItemsSource!);
+            Assert.DoesNotContain(window.GetControl<ListBox>("SystemsList").ItemsSource!.Cast<string>(), r => r.StartsWith(Unsupported, StringComparison.Ordinal));
 
             window.Close();
         }, default);
@@ -107,13 +108,14 @@ namespace EmuSen.WiseMan.Mistress
         public Task A_supported_system_missing_from_the_folder_is_listed_as_not_downloaded() => Session.Dispatch(() =>
         {
             WriteSystem("Nintendo - Super Nintendo Entertainment System", 2);
-            var window = Open(() => new[] { Snes[0], "Sega - Mega Drive - Genesis" });
+            var window = Open();
 
             var rows = window.GetControl<ListBox>("SystemsList").ItemsSource!.Cast<string>().ToList();
 
-            Assert.Equal(2, rows.Count);
-            Assert.Equal("Sega - Mega Drive - Genesis  (not downloaded)", rows[1]);
-            Assert.Contains("Sega - Mega Drive - Genesis not downloaded: Download fetches it.", Status(window));
+            Assert.Equal("Nintendo - Super Nintendo Entertainment System  (2)", rows[0]);
+            Assert.Contains("Sega - Mega Drive - Genesis  (not downloaded)", rows);
+            Assert.Contains("Sega - Mega Drive - Genesis", Status(window));
+            Assert.Contains("not downloaded: Download fetches them.", Status(window));
 
             window.Close();
         }, default);
@@ -122,7 +124,7 @@ namespace EmuSen.WiseMan.Mistress
         public Task Nothing_to_prune_says_so_and_stays_disarmed() => Session.Dispatch(() =>
         {
             WriteSystem("Nintendo - Super Nintendo Entertainment System", 2);
-            var window = Open(() => Snes);
+            var window = Open();
 
             Click(window);
 
@@ -137,25 +139,14 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task A_keep_set_matching_nothing_refuses_from_the_button_too() => Session.Dispatch(() =>
         {
-            WriteSystem("Sony - PlayStation", 3);
-            var window = Open(() => Snes);
+            WriteSystem(Unsupported, 3);
+            var window = Open();
 
             Click(window);
             Click(window);
 
             Assert.Contains("refusing to delete the whole database", Status(window));
-            Assert.True(Directory.Exists(Path.Combine(_dbDir, "Sony - PlayStation")));
-
-            window.Close();
-        }, default);
-
-        [Fact]
-        public Task The_button_is_off_when_nobody_says_what_is_supported() => Session.Dispatch(() =>
-        {
-            WriteSystem("Sony - PlayStation", 3);
-            var window = Open(null);
-
-            Assert.False(window.GetControl<Button>("PruneButton").IsEnabled);
+            Assert.True(Directory.Exists(Path.Combine(_dbDir, Unsupported)));
 
             window.Close();
         }, default);

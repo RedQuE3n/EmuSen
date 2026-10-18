@@ -80,8 +80,11 @@ namespace EmuSen.Crystal.Managed
             return Cores.Native.CoreDiscovery.Found.Where(c => c.Info.Systems.Any(s => ids.Contains(s.Id) || string.Equals(s.Id, console, StringComparison.OrdinalIgnoreCase))).ToArray();
         }
 
-        public static byte[] SchemaJson(IReadOnlyList<CoreSetting> rows) => CrystalJson.Write(w =>
+        // The rows, each with its note as the console's stored values stand, a value not stored read at its row's default - see EmuSen_Backend.md §14.13.
+        public static byte[] SchemaJson(IReadOnlyList<CoreSetting> rows, string? console = null) => CrystalJson.Write(w =>
         {
+            ConsolesConfig stored = ConsolesConfig.Load();
+            string Value(string key) => (console is null ? null : stored.Value(console, key)) ?? rows.FirstOrDefault(r => r.Key == key)?.Default ?? "";
             w.WriteStartArray();
             foreach (CoreSetting s in rows)
             {
@@ -96,6 +99,15 @@ namespace EmuSen.Crystal.Managed
                 CrystalJson.Strings(w, "choices", s.Choices ?? Array.Empty<string>());
                 CrystalJson.Strings(w, "choice_labels", s.ChoiceLabels ?? Array.Empty<string>());
                 CrystalJson.StringOrNull(w, "group", s.Group);
+                if (s.Note is { } rule) CrystalJson.StringOrNull(w, "note", rule(Value));
+                if (s.ShownWith is { } with)
+                {
+                    w.WriteStartObject("shown_with");
+                    w.WriteString("key", with.Key);
+                    w.WriteString("value", with.Value);
+                    w.WriteEndObject();
+                }
+                else w.WriteNull("shown_with");
                 w.WriteEndObject();
             }
             w.WriteEndArray();

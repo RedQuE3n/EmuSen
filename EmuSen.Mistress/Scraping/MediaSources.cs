@@ -74,7 +74,7 @@ namespace EmuSen.Mistress.Scraping
                 return (MediaSource.OtherGame, borrowed);
 
             string title = Path.GetFileNameWithoutExtension(romPath);
-            string? console = file ? EmuSen.Cores.CoreCatalog.ConsoleForRom(romPath) : null;
+            string? console = file ? Library.RuntimeCatalog.ConsoleForRom(romPath) : null;
             var system = new ThemeSystem(esdeSystem, esdeSystem, esdeSystem);
 
             if (cover && console is not null && _handPlaced(console, title) is string hand) return (MediaSource.HandPlaced, hand);
@@ -85,7 +85,7 @@ namespace EmuSen.Mistress.Scraping
         }
 
         private static string? SystemOf(string romPath) =>
-            EmuSen.Cores.CoreCatalog.ShelfByName(EmuSen.Cores.CoreCatalog.ShelfFor(romPath))?.EsdeSystem is { Length: > 0 } s ? s : null;
+            Library.RuntimeCatalog.ShelfByName(Library.RuntimeCatalog.ShelfFor(romPath))?.EsdeSystem is { Length: > 0 } s ? s : null;
 
         // Where CoverFetcher writes: <root>/<console>/<libretro-safe stem>.<ext>.
         public static string? OpenEmuCover(string root, string console, string title)

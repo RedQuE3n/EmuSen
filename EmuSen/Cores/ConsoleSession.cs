@@ -1,8 +1,8 @@
 namespace EmuSen.Cores
 {
-    // A console started with nothing in it has no game, so its states, locks and words go by this name - see Diamond_Shell.md §1.5.
+    // The name a console started empty goes by, Galaxia's with the rest of the save library's names - see Diamond_Shell.md §1.5.
     public static class ConsoleSession
     {
-        public static string NameOf(string console) => $"{console} (no disc)";
+        public static string NameOf(string console) => Galaxia.Library.SaveLibrary.ConsoleSessionName(console);
     }
 }

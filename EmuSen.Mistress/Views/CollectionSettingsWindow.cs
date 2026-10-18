@@ -142,7 +142,7 @@ namespace EmuSen.Mistress.Views
         private StackPanel FolderSwitches()
         {
             var switches = Ui.Stack(4, Switch("FoldersOnTop", "Sort folders on top of gamelists", S.FoldersOnTop, on => S.FoldersOnTop = on));
-            foreach (EmuSen.Cores.CoreCatalog.LibraryShelf shelf in EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder.Where(s => s.EsdeSystem.Length > 0))
+            foreach (EmuSen.Mistress.Library.LibraryShelf shelf in EmuSen.Mistress.Library.RuntimeCatalog.Shelves.Where(s => s.EsdeSystem.Length > 0))
                 switches.Children.Add(Switch($"Flatten_{shelf.EsdeSystem}", $"Flatten {shelf.EsdeFullName} folders", S.FlattenedSystems.Contains(shelf.EsdeSystem), on =>
                 {
                     S.FlattenedSystems.Remove(shelf.EsdeSystem);

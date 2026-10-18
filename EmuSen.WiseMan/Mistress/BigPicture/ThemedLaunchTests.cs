@@ -17,7 +17,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(ThemedLaunchTests).GetTypeInfo().Assembly);
 
         private static bool Loaded(ThemedSession s) =>
-            typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(s.Window) is EmuSen.Common.EmulatorSession { IsRomLoaded: true };
+            MistressGame.Live(s.Window) is not null;
 
         private static void LaunchFromTheGamelist(ThemedSession s)
         {

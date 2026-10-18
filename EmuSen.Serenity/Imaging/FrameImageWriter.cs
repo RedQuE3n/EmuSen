@@ -1,9 +1,9 @@
 using System.IO;
 using SkiaSharp;
 
-namespace EmuSen.Hotaru.Imaging
+namespace EmuSen.Serenity.Imaging
 {
-    // An RGBA8888 picture copied from the API to a PNG, for the F3 screenshot; SkiaSharp directly, testable with no display - see EmuSen_Backend.md §14.11.
+    // An RGBA8888 picture copied from the API to a PNG, for a frontend's screenshot and state picture; SkiaSharp directly, testable with no display - see EmuSen_Serenity.md §2.11.
     public static class FrameImageWriter
     {
         public static void SavePng(byte[] rgba, int width, int height, string path)

@@ -83,8 +83,7 @@ namespace EmuSen.WiseMan.Mistress
 
         private static ushort SnesPlayer1(MainWindow w)
         {
-            var session = (EmulatorSession)typeof(MainWindow).GetField("_session", Hidden)!.GetValue(w)!;
-            return SyntheticRom.Pads(session.Core!).One;
+            return SyntheticRom.Pads(MistressGame.Core(w)).One;
         }
 
         public static TheoryData<string> Screens => new() { "library", "big picture", "game" };

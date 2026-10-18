@@ -8,25 +8,9 @@ using EmuSen.Galaxia.Models;
 
 namespace EmuSen.Cores
 {
-    // One firmware file a system's engine can use, in a player's words: what it is, which version runs, and what the open one changes - see EmuSen_Settings_Reference.md §4.89.
+    // One firmware file a system's engine can use: its file, whether a folder holds it at its size, and what the engine's open version costs; a frontend words it - see EmuSen_Settings_Reference.md §4.89.
     public sealed record FirmwareItem(string Label, string FileName, int Size, bool Present, bool WrongSize, string? Effect, string? Cost)
     {
-        public const string OpenVersion = "Using EmuSen's open version", OwnFile = "Using your own file", NoVersion = "No open version yet";
-        public const string NeedsFile = "Games that need this chip need your own file.", Exact = "Exact: games run the same either way.", AsTheConsole = "Runs as on the console.";
-
-        // Whether the engine carries an open replacement that runs the chip, exact or at a cost.
-        public bool HasOpenVersion => Effect is "exact" or "accuracy";
-
-        public string Title => $"{Label} ({FileName})";
-
-        public string InUse => Present ? OwnFile : HasOpenVersion ? OpenVersion : NoVersion;
-
-        // The same in a word or two, for a menu row's value.
-        public string InUseShort => Present ? "Your own file" : HasOpenVersion ? "Open version" : "None yet";
-
-        // What the open version changes: the first sentence of the cost the core states, or the fixed words where there is nothing to quote.
-        public string Change => Present ? AsTheConsole : Effect == "exact" ? Exact : HasOpenVersion && FirstSentence(Cost) is { } said ? said : NeedsFile;
-
         public const string YourFolder = "your folder", EmuSensFolder = "EmuSen's folder";
 
         // Which folder the file in use was found in, as YourFolder or EmuSensFolder, or null when none is - see EmuSen_Firmware.md §2.3.
@@ -34,18 +18,6 @@ namespace EmuSen.Cores
 
         // Which folder holds a file of the name and the wrong size, when no folder holds the right one.
         public string? WrongSizeIn { get; init; }
-
-        public string? Where => FoundIn is { } folder ? $"Found in {folder}." : null;
-
-        // Said of a file that is in a folder and not used, since size is the library's one test - see EmuSen_Firmware.md §2.1.
-        public string? Note => WrongSize ? $"Not used: the file in {WrongSizeIn ?? EmuSensFolder} is not {Size:N0} bytes." : null;
-
-        public static string? FirstSentence(string? text)
-        {
-            if (string.IsNullOrWhiteSpace(text)) return null;
-            int end = text.IndexOf(". ", StringComparison.Ordinal);
-            return end < 0 ? text.Trim() : text[..(end + 1)];
-        }
     }
 
     // A system the build runs and the engine that runs it, with the firmware that engine declares; none for most.
@@ -54,8 +26,6 @@ namespace EmuSen.Cores
     // What every shipped system's firmware is doing, read from the cores' own declarations and the firmware folder, never a table of its own - see EmuSen_Settings_Reference.md §4.89.
     public static class FirmwareOverview
     {
-        public const string NoFirmware = "Needs no firmware files.";
-        public const string Optional = "Every file here is optional, and EmuSen never downloads firmware. A file of your own in a firmware folder is used in place of EmuSen's open version the next time a game starts.";
 
         // home/Firmware, which EmuSen makes and a file the player installs goes in.
         public static string Folder => FirmwareLibrary.Directory;

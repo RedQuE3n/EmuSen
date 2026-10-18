@@ -104,6 +104,9 @@ namespace EmuSen.Cores
             // The system name an ES-DE theme keys its folders and variables by, and the full name it shows - see EmuSen_BigPicture.md §4.1.
             public string EsdeSystem { get; init; } = "";
             public string EsdeFullName { get; init; } = "";
+
+            // The systems table's id of the system the shelf holds the games of.
+            public string System { get; init; } = "";
         }
 
         public const string GameBoyColorShelf = "Game Boy Color (Mercury)";
@@ -118,7 +121,7 @@ namespace EmuSen.Cores
             var row = RowOf(c);
             var systems = row?.Systems ?? new[] { PackOf(c.Console)! };
             var names = row?.ShelfNames ?? new[] { c.DisplayName };
-            return systems.Select((s, i) => new LibraryShelf(names[i], s.Console, c) { EsdeSystem = s.EsdeSystem, EsdeFullName = s.EsdeFullName });
+            return systems.Select((s, i) => new LibraryShelf(names[i], s.Console, c) { EsdeSystem = s.EsdeSystem, EsdeFullName = s.EsdeFullName, System = s.Id });
         }
 
 
@@ -127,8 +130,11 @@ namespace EmuSen.Cores
             ShelvesInReleaseOrder.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
 
         // The shelf a ROM sits on, or null for a file no core claims.
-        public static string? ShelfFor(string romPath) =>
-            CoreForRom(romPath) is not { } core ? null
+        public static string? ShelfFor(string romPath) => ShelfFor(romPath, CoreForRom(romPath));
+
+        // The same, for a file whose console routing has already decided.
+        public static string? ShelfFor(string romPath, CoreDescriptor? core) =>
+            core is null ? null
             : ReferenceEquals(core, Mercury) && IsGameBoyColor(romPath) ? GameBoyColorShelf
             : core.DisplayName;
 

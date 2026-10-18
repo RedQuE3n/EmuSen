@@ -86,7 +86,7 @@ namespace EmuSen.WiseMan.Mistress
 
         private static string Md5(byte[] bytes) => Convert.ToHexString(MD5.HashData(bytes));
 
-        private static CoreDescriptor Core(string console) => CoreCatalog.Cores.Single(c => c.Console == console);
+        private static ConsoleCore Core(string console) => RuntimeCatalog.Consoles.Single(c => c.Console == console);
 
         private string Rom(string name, byte[] bytes)
         {
@@ -118,28 +118,31 @@ namespace EmuSen.WiseMan.Mistress
             return got;
         }
 
+        // The systems table's rule as the library reads it, through the platform library, for the console's first system.
+        private static byte[] Bytes(string console, byte[] file) => OpenVgdbBytes.Of(Core(console).Systems[0], file);
+
         [Fact]
         public void The_bytes_each_console_hashes_are_the_ones_openvgdb_hashed()
         {
             byte[] body = Filled(0x8000, 1);
             byte[] ines = new byte[] { (byte)'N', (byte)'E', (byte)'S', 0x1A }.Concat(new byte[12]).Concat(body).ToArray();
-            Assert.Equal(body, Core("NES").OpenVgdbBytes!(ines));
-            Assert.Equal(body, Core("NES").OpenVgdbBytes!(body));
+            Assert.Equal(body, Bytes("NES", ines));
+            Assert.Equal(body, Bytes("NES", body));
 
             byte[] copier = new byte[512].Concat(body).ToArray();
-            Assert.Equal(body, Core("SNES").OpenVgdbBytes!(copier));
-            Assert.Equal(body, Core("SNES").OpenVgdbBytes!(body));
+            Assert.Equal(body, Bytes("SNES", copier));
+            Assert.Equal(body, Bytes("SNES", body));
 
-            Assert.Equal(body, Core("GB").OpenVgdbBytes!(body));
+            Assert.Equal(body, Bytes("GB", body));
 
             byte[] z64 = new byte[] { 0x80, 0x37, 0x12, 0x40 }.Concat(Filled(0x1000 - 4, 2)).ToArray();
             byte[] v64 = new byte[z64.Length];
             for (int i = 0; i < z64.Length; i += 2) { v64[i] = z64[i + 1]; v64[i + 1] = z64[i]; }
             byte[] n64 = new byte[z64.Length];
             for (int i = 0; i < z64.Length; i += 4) { n64[i] = z64[i + 3]; n64[i + 1] = z64[i + 2]; n64[i + 2] = z64[i + 1]; n64[i + 3] = z64[i]; }
-            Assert.Equal(v64, Core("N64").OpenVgdbBytes!(z64));
-            Assert.Equal(v64, Core("N64").OpenVgdbBytes!(v64));
-            Assert.Equal(v64, Core("N64").OpenVgdbBytes!(n64));
+            Assert.Equal(v64, Bytes("N64", z64));
+            Assert.Equal(v64, Bytes("N64", v64));
+            Assert.Equal(v64, Bytes("N64", n64));
         }
 
         [Theory]

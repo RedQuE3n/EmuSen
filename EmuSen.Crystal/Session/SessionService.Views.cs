@@ -452,7 +452,7 @@ namespace EmuSen.Crystal.Session
                 case SessionAbi.CheatDbStatus:
                 {
                     CheatDatabase db = Database();
-                    return (Write(w => { w.WriteStartObject(); w.WriteString("directory", db.Directory); w.WriteBoolean("exists", db.Exists); w.WriteEndObject(); }), 0);
+                    return (Write(w => { w.WriteStartObject(); w.WriteString("directory", db.Directory); w.WriteBoolean("exists", db.Exists); w.WriteString("attribution", CheatDatabaseInstaller.Attribution); w.WriteEndObject(); }), 0);
                 }
                 case SessionAbi.CheatDbParse:
                 {

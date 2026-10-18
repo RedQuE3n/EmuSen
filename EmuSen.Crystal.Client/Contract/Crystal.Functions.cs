@@ -15,6 +15,8 @@ namespace EmuSen.Crystal.Client.Contract
 
         public static long Systems(nint rt, byte* out_, nuint len) => Table->systems(rt, out_, len);
 
+        public static long Shelves(nint rt, byte* out_, nuint len) => Table->shelves(rt, out_, len);
+
         public static long Engines(nint rt, byte* out_, nuint len) => Table->engines(rt, out_, len);
 
         public static long Cores(nint rt, byte* out_, nuint len) => Table->cores(rt, out_, len);

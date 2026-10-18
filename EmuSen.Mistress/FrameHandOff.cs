@@ -1,11 +1,10 @@
 using System;
 using System.Threading;
-using EmuSen.Cores;
 using EmuSen.LunaP.Threading;
 
 namespace EmuSen.Mistress
 {
-    // The emulation thread's pictures to the frame control, newest wins, each lent array given back exactly once - see EmuSen_Serenity.md §2.8.
+    // The emulation thread's pictures to the frame control, newest wins, in buffers made once and given back by the control - see EmuSen_Serenity.md §2.8 and EmuSen_Backend.md §14.13.
     public sealed class FrameHandOff
     {
         private const int Waiting = 0, Presented = 1, Dropped = 2;
@@ -14,7 +13,6 @@ namespace EmuSen.Mistress
         {
             public required byte[] Pixels;
             public required int Width, Height, RowRepeat;
-            public required Action<byte[]>? Release;
             public long Sequence;
             public double Aspect;
             public int Lines;
@@ -23,46 +21,69 @@ namespace EmuSen.Mistress
             public int State;
         }
 
-        // The way a session's arrays go back, cut when the session ends so the picture left on screen cannot keep its core alive.
-        private sealed class Route(IFrameBufferPool pool)
-        {
-            private IFrameBufferPool? _pool = pool;
-
-            public bool Serves(IFrameBufferPool pool) => ReferenceEquals(Volatile.Read(ref _pool), pool);
-
-            public void Return(byte[] buffer) => Volatile.Read(ref _pool)?.ReturnFrameBuffer(buffer);
-
-            public void Cut() => Volatile.Write(ref _pool, null);
-        }
-
         public delegate void PresentFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence, double aspect, int lines, EmuSen.Serenity.RawPicture? raw, EmuSen.Serenity.Slang.SlangLend? lend);
 
         private readonly Latest<Frame> _latest;
         private readonly PresentFrame _present;
+        private readonly Buffers _pictures = new(), _raws = new();
+        private readonly Action<byte[]> _release;
         private Frame? _newest;
-        private Route? _route;
 
-        // present runs on the UI thread and owns release from then on; a frame it never reaches is released here.
+        // present runs on the UI thread and hands each array back through the release it is given, once nothing there reads it.
         public FrameHandOff(PresentFrame present)
         {
             _present = present ?? throw new ArgumentNullException(nameof(present));
             _latest = new Latest<Frame>(Present);
+            _release = buffer => { if (!_pictures.Return(buffer)) _raws.Return(buffer); };
         }
 
-        // What to pass with each of this core's pictures: null for a core that does not lend them; the same route until EndSession.
-        public Action<byte[]>? ReleaseFor(ICore? core)
+        // Four buffers of each kind, each free, written or out with the control.
+        private sealed class Buffers
         {
-            if (core is not IFrameBufferPool pool) return null;
-            Route? route = _route;
-            if (route is null || !route.Serves(pool)) _route = route = new Route(pool);
-            return route.Return;
+            private readonly byte[][] _arrays = { Array.Empty<byte>(), Array.Empty<byte>(), Array.Empty<byte>(), Array.Empty<byte>() };
+            private readonly int[] _out = new int[4];
+
+            public byte[]? Rent(int bytes)
+            {
+                for (int i = 0; i < _arrays.Length; i++)
+                {
+                    if (Interlocked.CompareExchange(ref _out[i], 1, 0) != 0) continue;
+                    if (_arrays[i].Length != bytes) Volatile.Write(ref _arrays[i], new byte[bytes]);
+                    return _arrays[i];
+                }
+                return null;
+            }
+
+            public bool Return(byte[] buffer)
+            {
+                for (int i = 0; i < _arrays.Length; i++)
+                    if (ReferenceEquals(Volatile.Read(ref _arrays[i]), buffer)) { Volatile.Write(ref _out[i], 0); return true; }
+                return false;
+            }
         }
 
-        // Any one thread at a time: the frame this replaces goes back now if the UI thread never took it.
-        // lend is a core's picture on the device in place of the pixels - see EmuSen_DevicePicture.md §17.
-        public void Offer(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, EmuSen.Serenity.RawPicture? raw = null, EmuSen.Serenity.Slang.SlangLend? lend = null)
+        // The frame thread's: a buffer for the next picture, or null when the control still holds every one and the picture is skipped.
+        public byte[]? Rent(int bytes) => _pictures.Rent(bytes);
+
+        // The same for its picture before the palette.
+        public byte[]? RentRaw(int bytes) => _raws.Rent(bytes);
+
+        // A rented buffer handed back unoffered.
+        public void GiveBack(byte[]? buffer)
         {
-            var frame = new Frame { Pixels = pixels, Width = width, Height = height, RowRepeat = rowRepeat, Release = release, Sequence = sequence, Aspect = aspect, Lines = lines, Raw = raw, Lend = lend };
+            if (buffer is not null) _release(buffer);
+        }
+
+        // The frame thread's: the picture in a rented buffer, offered; the frame it replaces goes back if the control never took it.
+        public void Offer(byte[] pixels, int width, int height, int rowRepeat, long sequence = 0, double aspect = 0, int lines = 0, EmuSen.Serenity.RawPicture? raw = null) =>
+            Push(new Frame { Pixels = pixels, Width = width, Height = height, RowRepeat = rowRepeat, Sequence = sequence, Aspect = aspect, Lines = lines, Raw = raw });
+
+        // A picture taken on the device, which the control reads from the lend in place of pixels - see EmuSen_DevicePicture.md §17.
+        public void OfferOnDevice(EmuSen.Serenity.Slang.SlangLend lend, int width, int height, long sequence, double aspect, int lines) =>
+            Push(new Frame { Pixels = Array.Empty<byte>(), Width = width, Height = height, RowRepeat = 1, Sequence = sequence, Aspect = aspect, Lines = lines, Lend = lend });
+
+        private void Push(Frame frame)
+        {
             Drop(Interlocked.Exchange(ref _newest, frame));
             _latest.Offer(frame);
         }
@@ -70,25 +91,21 @@ namespace EmuSen.Mistress
         // Once the producer has stopped: a frame not yet taken goes back rather than being shown.
         public void DropPending() => Drop(Interlocked.Exchange(ref _newest, null));
 
-        // The pending frame back to its core, then the route cut: what the screen still holds of this session is dropped when it lets go.
-        public void EndSession()
-        {
-            DropPending();
-            Interlocked.Exchange(ref _route, null)?.Cut();
-        }
+        // The session ended: its pending frame goes back; what the control still shows is given back when it lets go.
+        public void EndSession() => DropPending();
 
-        // Whoever moves a frame out of Waiting owns its array: the UI thread by presenting it, the producer by dropping it.
-        private static void Drop(Frame? frame)
+        // Whoever moves a frame out of Waiting owns its buffers: the UI thread by presenting it, the producer by dropping it.
+        private void Drop(Frame? frame)
         {
             if (frame is null || Interlocked.CompareExchange(ref frame.State, Dropped, Waiting) != Waiting) return;
-            frame.Release?.Invoke(frame.Pixels);
-            if (frame.Raw is { } raw) frame.Release?.Invoke(raw.Values);
+            if (frame.Pixels.Length > 0) _release(frame.Pixels);
+            if (frame.Raw is { } raw) _release(raw.Values);
         }
 
         private void Present(Frame frame)
         {
             if (Interlocked.CompareExchange(ref frame.State, Presented, Waiting) != Waiting) return;
-            _present(frame.Pixels, frame.Width, frame.Height, frame.RowRepeat, frame.Release, frame.Sequence, frame.Aspect, frame.Lines, frame.Raw, frame.Lend);
+            _present(frame.Pixels, frame.Width, frame.Height, frame.RowRepeat, frame.Pixels.Length > 0 || frame.Raw is not null ? _release : null, frame.Sequence, frame.Aspect, frame.Lines, frame.Raw, frame.Lend);
         }
     }
 }

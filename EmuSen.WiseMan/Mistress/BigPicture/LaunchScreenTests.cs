@@ -172,16 +172,17 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private static System.Threading.ManualResetEventSlim LoadsUnderTheScreen(ThemedSession s)
         {
             var ended = new System.Threading.ManualResetEventSlim();
-            typeof(MainWindow).GetProperty("EarlyLoader", Hidden)!.SetValue(s.Window, (Func<string, string?, EmuSen.Cores.ICore>)((p, engine) =>
+            var open = MistressGame.OwnOpen(s.Window);
+            MistressGame.EarlyLoad(s.Window, what =>
             {
-                try { return EmuSen.Cores.CoreFactory.Loaded(p, headless: true, engine); }
+                try { return open(what); }
                 finally { ended.Set(); }
-            }));
+            });
             return ended;
         }
 
         // A themed session with one synthetic disc whose load under the screen waits for the gate; the disc's path.
-        private static ThemedSession HeldDisc(System.Threading.ManualResetEventSlim gate, System.Threading.ManualResetEventSlim loaded, List<EmuSen.Cores.ICore> cores, out string bin)
+        private static ThemedSession HeldDisc(System.Threading.ManualResetEventSlim gate, System.Threading.ManualResetEventSlim loaded, List<EmuSen.Mistress.GameSession> cores, out string bin)
         {
             string path = "";
             var s = new ThemedSession(settings: a => a.BigPictureInterface.LaunchScreenDuration = BigPictureInterface.LaunchNormal, roms: r =>
@@ -190,14 +191,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 path = Path.Combine(r, "psx", "Opal Wait.bin");
                 File.WriteAllBytes(path, SyntheticPsxDisc.Build().DataTrack);
             });
-            typeof(MainWindow).GetProperty("EarlyLoader", Hidden)!.SetValue(s.Window, (Func<string, string?, EmuSen.Cores.ICore>)((p, engine) =>
+            var open = MistressGame.OwnOpen(s.Window);
+            MistressGame.EarlyLoad(s.Window, what =>
             {
                 gate.Wait();
-                var core = EmuSen.Cores.CoreFactory.Loaded(p, headless: true, engine);
+                var core = open(what);
                 cores.Add(core);
                 loaded.Set();
                 return core;
-            }));
+            });
             for (int guard = 0; guard < 6 && s.System != "psx"; guard++) s.Pad.Right();
             s.Pad.A();
             s.Pad.A();
@@ -222,7 +224,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             using var gate = new System.Threading.ManualResetEventSlim();
             using var loaded = new System.Threading.ManualResetEventSlim();
-            var cores = new List<EmuSen.Cores.ICore>();
+            var cores = new List<EmuSen.Mistress.GameSession>();
             using var s = HeldDisc(gate, loaded, cores, out string bin);
             s.Run(3000 + 160);
             Assert.Null(Running(s.Window));
@@ -242,7 +244,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             using var gate = new System.Threading.ManualResetEventSlim();
             using var loaded = new System.Threading.ManualResetEventSlim();
-            var cores = new List<EmuSen.Cores.ICore>();
+            var cores = new List<EmuSen.Mistress.GameSession>();
             using var s = HeldDisc(gate, loaded, cores, out _);
             s.Run(3000 + 160);
             Assert.Null(Running(s.Window));
@@ -252,7 +254,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Pump();
             Assert.Null(Running(s.Window));
             Assert.False(GameShown(s));
-            Assert.True(System.Threading.SpinWait.SpinUntil(() => !cores.Single().IsRomLoaded, TimeSpan.FromSeconds(10)), "the core loaded for a closed window was kept");
+            Assert.True(System.Threading.SpinWait.SpinUntil(() => cores.Single().Crystal.Closed, TimeSpan.FromSeconds(10)), "the session opened for a closed window was kept");
         }, default);
 
         [Fact]

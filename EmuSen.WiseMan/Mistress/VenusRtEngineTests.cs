@@ -83,7 +83,7 @@ namespace EmuSen.WiseMan.Mistress
                     Assert.Equal(VenusRtCoreAbiTests.Engine, CoreFactory.ConfiguredEngine(_rom));
                 }
                 MainWindow window = Start();
-                EmulatorSession game = Game(window);
+                WindowGame game = Game(window);
                 var core = Assert.IsType<CoreEngine>(game.Core);
                 Assert.Equal("venusrt", core.Info.Id);
                 Assert.Null(game.EngineNotice);
@@ -153,10 +153,8 @@ namespace EmuSen.WiseMan.Mistress
             }
         }
 
-        private static EmulatorSession Game(MainWindow window) =>
-            (EmulatorSession)typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+        private static WindowGame Game(MainWindow window) => new(window);
 
-        private static RewindBuffer Rewind(MainWindow window) =>
-            (RewindBuffer)typeof(MainWindow).GetField("_rewind", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+        private static RewindBuffer Rewind(MainWindow window) => MistressGame.Rewind(window);
     }
 }

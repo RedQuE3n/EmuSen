@@ -8,7 +8,6 @@ using EmuSen.Galaxia.Library;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Scraping;
-using EmuSen.Crystal.Systems;
 
 namespace EmuSen.Mistress.Views
 {
@@ -27,7 +26,7 @@ namespace EmuSen.Mistress.Views
         private CoverFetcher? _fetcher;
         private bool _downloadingDatabase;
         private bool _coverRefreshPosted;
-        private readonly System.Collections.Generic.List<(RomEntry Entry, CoreDescriptor Core)> _waitingForDatabase = new();
+        private readonly System.Collections.Generic.List<(RomEntry Entry, ConsoleCore Core)> _waitingForDatabase = new();
 
         private string OpenVgdbPath => OpenVgdb.DefaultPath;
 
@@ -71,14 +70,14 @@ namespace EmuSen.Mistress.Views
         private void StartFetcher()
         {
             _fetcher = new CoverFetcher(_http!, OpenVgdbPath, OpenEmuCoverDirectory, result => Dispatcher.UIThread.Post(() => CoverArrived(result)));
-            foreach ((RomEntry entry, CoreDescriptor core) in _waitingForDatabase) _fetcher.Enqueue(entry, core);
+            foreach ((RomEntry entry, ConsoleCore core) in _waitingForDatabase) _fetcher.Enqueue(entry, core);
             _waitingForDatabase.Clear();
         }
 
         // Called only by a run the player started; true when the game was handed to the failover. A past answer is final until "Scrape This Game".
-        private bool AskForCover(RomEntry entry, CoreDescriptor? core)
+        private bool AskForCover(RomEntry entry, ConsoleCore? core)
         {
-            if (!_appSettings.OpenEmuFallback || core is null || core.OpenVgdbSystemNames.Count == 0 || _recordsClosed) return false;
+            if (!_appSettings.OpenEmuFallback || core is null || core.OpenVgdbSystems.Count == 0 || _recordsClosed) return false;
             if (_records.CoverLookup(entry.FullPath) is not null) return false;
             _http ??= HttpFactory();
             if (_fetcher is not null) return _fetcher.Enqueue(entry, core);

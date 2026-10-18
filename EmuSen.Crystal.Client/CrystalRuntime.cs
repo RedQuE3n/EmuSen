@@ -81,6 +81,8 @@ namespace EmuSen.Crystal.Client
 
         public string Systems() => Text((o, n) => Contract.Crystal.Systems(Handle, o, n));
 
+        public string Shelves() => Text((o, n) => Contract.Crystal.Shelves(Handle, o, n));
+
         public string Engines() => Text((o, n) => Contract.Crystal.Engines(Handle, o, n));
 
         public string Cores() => Text((o, n) => Contract.Crystal.Cores(Handle, o, n));

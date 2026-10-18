@@ -145,7 +145,7 @@ namespace EmuSen.Mistress.Views
         }
 
         private static string SystemName(int id) => Scraper.SystemIds.FirstOrDefault(s => s.Value == id).Key is { Length: > 0 } s
-            ? EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder.FirstOrDefault(shelf => shelf.EsdeSystem == s)?.EsdeFullName ?? s
+            ? EmuSen.Mistress.Library.RuntimeCatalog.Shelves.FirstOrDefault(shelf => shelf.EsdeSystem == s)?.EsdeFullName ?? s
             : $"system {id}";
 
         public bool Choose(ScrapedGame game)

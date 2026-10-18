@@ -81,11 +81,11 @@ namespace EmuSen.WiseMan.Mistress
         public Task The_tab_shows_every_system_and_each_file_s_words_from_the_overview() => Session.Dispatch(() =>
         {
             PreferencesWindow window = Open();
-            var systems = FirmwareOverview.Build();
+            var systems = FirmwareView.Current.Systems;
             Assert.Equal(systems.Select(s => s.Name), window.GetVisualDescendants().OfType<SectionHeader>().Select(h => h.Text));
-            Assert.Equal(systems.Count(s => s.Items.Count == 0), window.GetVisualDescendants().OfType<HintText>().Count(h => h.Text == FirmwareOverview.NoFirmware));
+            Assert.Equal(systems.Count(s => s.Items.Count == 0), window.GetVisualDescendants().OfType<HintText>().Count(h => h.Text == FirmwarePane.NoFirmware));
             Assert.NotEmpty(systems.SelectMany(s => s.Items));
-            foreach (FirmwareItem item in systems.SelectMany(s => s.Items))
+            foreach (FirmwareRow item in systems.SelectMany(s => s.Items))
             {
                 // A file two systems use, as the Genesis and the Sega CD both use the TMSS ROM, has a row under each.
                 List<FieldRow> rows = window.GetVisualDescendants().OfType<FieldRow>().Where(r => r.Label == item.Title).ToList();
@@ -97,7 +97,7 @@ namespace EmuSen.WiseMan.Mistress
                 });
             }
             FieldRow folder = RowOf(window, FirmwarePane.FolderRowLabel);
-            Assert.Equal(FirmwareOverview.Optional, folder.Hint);
+            Assert.Equal(FirmwarePane.Optional, folder.Hint);
             Assert.Contains("never downloads", folder.Hint);
             Assert.DoesNotContain("below", folder.Hint);
             Assert.DoesNotContain("above", folder.Hint);
@@ -130,18 +130,18 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task The_rows_follow_the_folder_when_the_window_comes_back_and_when_it_is_opened_again() => Session.Dispatch(() =>
         {
-            string title = FirmwareOverview.Build().SelectMany(s => s.Items).First().Title;
-            string file = FirmwareOverview.Build().SelectMany(s => s.Items).First().FileName;
-            int size = FirmwareOverview.Build().SelectMany(s => s.Items).First().Size;
+            string title = FirmwareView.Current.Systems.SelectMany(s => s.Items).First().Title;
+            string file = FirmwareView.Current.Systems.SelectMany(s => s.Items).First().FileName;
+            int size = FirmwareView.Current.Systems.SelectMany(s => s.Items).First().Size;
             PreferencesWindow window = Open();
-            Assert.NotEqual(FirmwareItem.OwnFile, Words(RowOf(window, title))[0]);
+            Assert.NotEqual(FirmwareRow.OwnFile, Words(RowOf(window, title))[0]);
             Assert.False(window.RefreshFirmware());
 
             Directory.CreateDirectory(FirmwareLibrary.Directory);
             File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, file), new byte[size]);
             Assert.True(window.RefreshFirmware());
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal([FirmwareItem.OwnFile, FirmwareItem.AsTheConsole, "Found in EmuSen's folder."], Words(RowOf(window, title)));
+            Assert.Equal([FirmwareRow.OwnFile, FirmwareRow.AsTheConsole, "Found in EmuSen's folder."], Words(RowOf(window, title)));
 
             // One byte short is not the file: the open version runs and the row says why.
             File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, file), new byte[size - 1]);
@@ -154,7 +154,7 @@ namespace EmuSen.WiseMan.Mistress
             File.Delete(Path.Combine(FirmwareLibrary.Directory, file));
             window = Open();
             Assert.Equal(2, Words(RowOf(window, title)).Length);
-            Assert.NotEqual(FirmwareItem.OwnFile, Words(RowOf(window, title))[0]);
+            Assert.NotEqual(FirmwareRow.OwnFile, Words(RowOf(window, title))[0]);
             window.Close();
         }, default);
 
@@ -162,7 +162,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task The_folder_row_keeps_a_folder_refuses_a_relative_path_or_a_file_and_clears() => Session.Dispatch(() =>
         {
-            FirmwareItem first = FirmwareOverview.Build().SelectMany(s => s.Items).First();
+            FirmwareRow first = FirmwareView.Current.Systems.SelectMany(s => s.Items).First();
             string chosen = Path.Combine(_root, "BIOS");
             Directory.CreateDirectory(chosen);
             File.WriteAllBytes(Path.Combine(chosen, first.FileName), new byte[first.Size]);
@@ -193,14 +193,14 @@ namespace EmuSen.WiseMan.Mistress
             Type(window, chosen);
             Assert.Equal(chosen, AppSettings.Load().FirmwareDirectory);
             Assert.False(Problem(window).IsVisible);
-            Assert.Equal([FirmwareItem.OwnFile, FirmwareItem.AsTheConsole, "Found in your folder."], Words(RowOf(window, first.Title)));
+            Assert.Equal([FirmwareRow.OwnFile, FirmwareRow.AsTheConsole, "Found in your folder."], Words(RowOf(window, first.Title)));
 
             Button clear = Picker(window).GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PART_Clear");
             clear.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Assert.Null(AppSettings.Load().FirmwareDirectory);
             Assert.Equal("", Picker(window).Path);
-            Assert.NotEqual(FirmwareItem.OwnFile, Words(RowOf(window, first.Title))[0]);
+            Assert.NotEqual(FirmwareRow.OwnFile, Words(RowOf(window, first.Title))[0]);
             Assert.Equal([first.FileName], Directory.GetFileSystemEntries(chosen).Select(Path.GetFileName));
             window.Close();
         }, default);

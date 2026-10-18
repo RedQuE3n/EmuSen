@@ -9,6 +9,7 @@ namespace EmuSen.Crystal.Client.Contract
         public delegate* unmanaged[Cdecl]<CrystalConfig*, nint> @new;
         public delegate* unmanaged[Cdecl]<nint, int> free;
         public delegate* unmanaged[Cdecl]<nint, byte*, nuint, long> systems;
+        public delegate* unmanaged[Cdecl]<nint, byte*, nuint, long> shelves;
         public delegate* unmanaged[Cdecl]<nint, byte*, nuint, long> engines;
         public delegate* unmanaged[Cdecl]<nint, byte*, nuint, long> cores;
         public delegate* unmanaged[Cdecl]<nint, int> rescan;

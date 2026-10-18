@@ -159,13 +159,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         // Seconds of history in a fraction of one, unthrottled, then back to normal speed.
         private static void Play(MainWindow window, int frames)
         {
-            var speed = (SpeedController)Field(window, "_speed");
-            speed.MaxFrameSkip = 0;
-            typeof(MainWindow).GetField("_baseSpeedPercent", Hidden)!.SetValue(window, SpeedController.UnthrottledPercent);
-            var session = (EmulatorSession)Field(window, "_session");
-            long until = session.TotalFrames + frames;
-            WaitFor(() => session.TotalFrames >= until, "the frames");
-            typeof(MainWindow).GetField("_baseSpeedPercent", Hidden)!.SetValue(window, SpeedController.NormalPercent);
+            MistressGame.Play(window, frames, (until, what) => WaitFor(until, what));
         }
 
         [WindowLookPngFact]
@@ -178,9 +172,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 string p = $"{w}x{h}";
                 try
                 {
-                    var cheats = (CheatRegistry)Field(window, "_cheats");
-                    cheats.AddRamPoke("CpuBus", 0x7E0100, 0x42, "Infinite lives");
-                    cheats.AddRamPoke("CpuBus", 0x7E0101, 0x09, "Nine continues");
+                    MistressGame.TwoCheats(window);
                     Call(window, "ShowActiveCheats");
                     Save(window, $"active-cheats-{p}", _out);
                     pad.R1();

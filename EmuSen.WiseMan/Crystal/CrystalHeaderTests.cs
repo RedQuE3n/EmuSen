@@ -71,7 +71,7 @@ namespace EmuSen.WiseMan.Crystal
         public void The_header_declares_the_exports_this_test_reads()
         {
             var exports = Exports();
-            Assert.Equal(139, exports.Count);
+            Assert.Equal(140, exports.Count);
             Assert.Equal(exports.Count, exports.Select(e => e.Name).Distinct().Count());
             Assert.All(exports, e => Assert.All(e.Parameters.Append(e.Return), t => Assert.True(Client.ContainsKey(t), $"{e.Name}: a type the test does not know: '{t}'")));
         }

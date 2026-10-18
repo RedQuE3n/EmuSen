@@ -342,12 +342,12 @@ namespace EmuSen.WiseMan.Mistress
             Assert.False(PadMenu.IsOpen(window));
             Assert.False(window.IsPaused);
 
-            // Yes: Restart gives a new session of the same game, running.
+            // Yes: Restart presses the console's reset, VenusRT claiming one, so the session stays and runs on (decided 2026-10-18).
             Chord(pad);
             Enter(window, pad, "Restart Game");
             PadMenu.Answer(window, pad, yes: true);
             Assert.False(PadMenu.IsOpen(window));
-            Assert.NotSame(session, Field(window, "_session"));
+            Assert.Same(session, Field(window, "_session"));
             Assert.NotNull(Running(window));
             Assert.False(window.IsPaused);
 
@@ -381,9 +381,9 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(window.IsPaused);
             Assert.NotNull(Running(window));
             for (int i = 0; i < 10; i++) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(5); }
-            long frames = ((EmulatorSession)Field(window, "_session")!).TotalFrames;
+            long frames = MistressGame.TotalFrames(window);
             for (int i = 0; i < 20; i++) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(5); }
-            Assert.Equal(frames, ((EmulatorSession)Field(window, "_session")!).TotalFrames);
+            Assert.Equal(frames, MistressGame.TotalFrames(window));
 
             pad.Start();
             Assert.Equal("Back to Cobalt Harbor (Synthetic)", PadMenu.Lines(window)[0]);

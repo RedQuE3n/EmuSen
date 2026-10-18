@@ -13,6 +13,7 @@ namespace EmuSen.Crystal.Managed
             ["emusen_crystal_new"] = (nint)(delegate* unmanaged[Cdecl]<ConfigV1*, nint>)&emusen_crystal_new,
             ["emusen_crystal_free"] = (nint)(delegate* unmanaged[Cdecl]<nint, int>)&emusen_crystal_free,
             ["emusen_crystal_systems"] = (nint)(delegate* unmanaged[Cdecl]<nint, byte*, nuint, long>)&emusen_crystal_systems,
+            ["emusen_crystal_shelves"] = (nint)(delegate* unmanaged[Cdecl]<nint, byte*, nuint, long>)&emusen_crystal_shelves,
             ["emusen_crystal_engines"] = (nint)(delegate* unmanaged[Cdecl]<nint, byte*, nuint, long>)&emusen_crystal_engines,
             ["emusen_crystal_cores"] = (nint)(delegate* unmanaged[Cdecl]<nint, byte*, nuint, long>)&emusen_crystal_cores,
             ["emusen_crystal_rescan"] = (nint)(delegate* unmanaged[Cdecl]<nint, int>)&emusen_crystal_rescan,

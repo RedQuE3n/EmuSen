@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,7 +17,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // Mistress's word for a state of the other console is the core's: it compared the record's version with the running core's and said "a newer build" (Moon_PAL.md §7); on the frontend API it asks nothing of the record and shows the API's refusal - see EmuSen_Backend.md §14.12.
+    // Mistress's word for a state of the other console is the core's: it once compared the record's version with the running core's and said "a newer build" (Moon_PAL.md §7); on the frontend API it shows the API's refusal - see EmuSen_Backend.md §14.12.
     [Collection(TestCollections.ProcessGlobals)]
     public class MistressStateRefusalTests : IDisposable
     {
@@ -85,8 +86,8 @@ namespace EmuSen.WiseMan.Mistress
         private static void Invoke(MainWindow window, string method) =>
             typeof(MainWindow).GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic, null, Type.EmptyTypes, null)!.Invoke(window, null);
 
-        // Saved by the PAL copy of a game and loaded into the NTSC copy, whose state is the same file: the core refuses, and the status line says what the core said.
-        [Fact(Skip = "Shown failing on 2026-10-18 (\"That state was saved by a newer build (0.9.1+...\"): passes once Mistress loads its states through the frontend API, B2's part 4b")]
+        // A PAL copy's state loaded into the NTSC copy: the core refuses, and the status line says what it said - see EmuSen_Backend.md §14.13.
+        [Fact]
         public Task A_pal_state_in_an_ntsc_game_is_refused_in_the_core_s_words() => Session.Dispatch(() =>
         {
             Assert.True(MoonRtCore.Available, MoonNative.Report);
@@ -100,6 +101,10 @@ namespace EmuSen.WiseMan.Mistress
             MainWindow loading = Started(_ntsc);
             status = loading.FindControl<TextBlock>("StatusText")!;
             Invoke(loading, "LoadState");
+            // The two dumps differ, so the window first asks about another copy of the game; going on is what reaches the core.
+            WaitFor(() => loading.OwnedWindows.Count > 0 || status.Text?.Contains("Load State", StringComparison.Ordinal) == true, () => status.Text);
+            if (loading.OwnedWindows.FirstOrDefault() is { } ask)
+                Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(ask).OfType<Button>().First(b => b.Content as string == "Load Anyway").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             WaitFor(() => status.Text?.Contains("Load State", StringComparison.Ordinal) == true, () => status.Text);
             string said = status.Text!;
             loading.Close();

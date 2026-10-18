@@ -128,7 +128,7 @@ namespace EmuSen.Mistress.Views
         private IReadOnlyList<ThemedShelf> ThemedShelves()
         {
             IReadOnlyDictionary<string, string> links = FolderLinks();
-            return SystemsOrder.Sort(EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder, _appSettings.BigPictureInterface.SystemsSorting, s => s.EsdeSystem, s => s.EsdeFullName)
+            return SystemsOrder.Sort(EmuSen.Mistress.Library.RuntimeCatalog.Shelves, _appSettings.BigPictureInterface.SystemsSorting, s => s.EsdeSystem, s => s.EsdeFullName)
                 .Select(s => new ThemedShelf(new ThemeSystem(s.EsdeSystem, s.EsdeFullName, s.EsdeSystem),
                     _allScan.Entries.Where(e => e.Shelf == s.Name && Listed(e)).Select(ThemedGame)
                         .OrderByDescending(g => g.Favorite).ThenBy(g => g.SortName ?? g.Name, StringComparer.OrdinalIgnoreCase).ToList())
@@ -203,7 +203,7 @@ namespace EmuSen.Mistress.Views
                 case ThemedAction.ToggleCollection when command.Game is { } member:
                     ToggleEditedMembership(member);
                     break;
-                case ThemedAction.Leave when _session is { IsRomLoaded: true }:
+                case ThemedAction.Leave when _session is not null:
                     ToggleLibrary();
                     break;
             }

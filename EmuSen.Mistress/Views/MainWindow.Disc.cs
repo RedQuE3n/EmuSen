@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Avalonia.Threading;
-using EmuSen.Cores.Native;
+using EmuSen.Crystal.Client;
 using EmuSen.Mistress.Input;
 
 namespace EmuSen.Mistress.Views
@@ -11,31 +11,31 @@ namespace EmuSen.Mistress.Views
     {
         private int _discChoice;
 
-        // The running engine where it changes discs and the game has more than one; null otherwise.
-        private CoreEngine? DiscEngine => _session?.Core is CoreEngine { CanChangeDisc: true, Discs.Count: > 1 } engine ? engine : null;
+        // The drive where it changes discs and the game has more than one; null otherwise.
+        private (int Count, int Index)? DiscDrive => _session?.Discs is { CanChange: true, Count: > 1 } d ? (d.Count, d.Index) : null;
 
-        private string DiscValue() => DiscEngine is { } e ? $"Disc {_discChoice + 1} of {e.Discs.Count}{(_discChoice == e.DiscIndex ? " (in)" : "")}" : "";
+        private string DiscValue() => DiscDrive is { } d ? $"Disc {_discChoice + 1} of {d.Count}{(_discChoice == d.Index ? " (in)" : "")}" : "";
 
         private void StepDisc(int step)
         {
-            if (DiscEngine is not { } e) return;
-            _discChoice = (_discChoice + step + e.Discs.Count) % e.Discs.Count;
+            if (DiscDrive is not { } d) return;
+            _discChoice = (_discChoice + step + d.Count) % d.Count;
         }
 
-        // On the emulation thread, as a state's load is, so no frame runs half through the change.
+        // At the next frame boundary, as the runtime applies a state's load, so no frame runs half through the change.
         private void ChangeDisc()
         {
-            if (DiscEngine is null) return;
+            if (DiscDrive is null || _session is not { } session) return;
             int disc = _discChoice;
-            RequestOnEmulationThread(_ =>
+            System.Threading.Tasks.Task.Run(() =>
             {
                 string status;
                 try
                 {
-                    (_session?.Core as CoreEngine)?.ChangeDisc(disc);
+                    session.Crystal.ChangeDisc((uint)disc);
                     status = $"Disc {disc + 1} is in";
                 }
-                catch (System.Exception ex) when (ex is System.InvalidOperationException or System.IO.IOException or System.IO.InvalidDataException)
+                catch (CrystalException ex)
                 {
                     status = $"Change Disc failed: {ex.Message}";
                 }
@@ -46,8 +46,8 @@ namespace EmuSen.Mistress.Views
         // The row, where there is a disc to change to.
         private IEnumerable<PadMenuEntry> DiscRows()
         {
-            if (DiscEngine is not { } e) yield break;
-            if (_discChoice >= e.Discs.Count || _discChoice < 0) _discChoice = Math.Max(0, e.DiscIndex);
+            if (DiscDrive is not { } d) yield break;
+            if (_discChoice >= d.Count || _discChoice < 0) _discChoice = Math.Max(0, d.Index);
             yield return new PadMenuEntry(() => $"Change Disc      <  {DiscValue()}  >", ChangeDisc, StepDisc) { Label = () => "Change Disc", Value = DiscValue };
         }
     }

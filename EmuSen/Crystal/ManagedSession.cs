@@ -350,6 +350,7 @@ namespace EmuSen.Crystal.Managed
             CrystalJson.StringOrNull(w, "firmware", Core.FirmwareNotice);
             CrystalJson.StringOrNull(w, "media", Engine?.MediaNotice);
             w.WriteEndObject();
+            CrystalJson.StringOrNull(w, "television_standard", Core.TelevisionStandard);
             w.WriteEndObject();
         });
     }

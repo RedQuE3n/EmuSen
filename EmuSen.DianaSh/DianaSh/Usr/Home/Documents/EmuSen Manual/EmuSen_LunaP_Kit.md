@@ -368,6 +368,11 @@ crates.io at 1.0, not before.
 
 ### 5.1 Why wgpu restricted to Vulkan, and not a renderer on ash
 
+*Decided 2026-10-17 by the tester, as recommended:*
+- *Vulkan through ash stays the one API for the emulator's own GPU work on every system (cores' pictures, the slang chain, the core ABI's device lend), with MoltenVK bundled on macOS (`EmuSen_Serenity.md` §12).*
+- *wgpu is pinned: one exact version in `Cargo.lock`, upgraded only as a deliberate step with its own measurement, never by a routine `cargo update`.*
+- *wgpu's Metal backend for the kit's UI on macOS is measured on the Mac mini when the port resumes (§9.3's K1), against the same UI through MoltenVK, sharing the game picture through Metal objects; it is adopted only if it measures better.*
+
 The tester's choice is Vulkan as the one target. Two ways to honour it: write the kit's renderer on ash directly, or
 use wgpu with only its Vulkan backend enabled. **This plan takes wgpu**, for three reasons:
 

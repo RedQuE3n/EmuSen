@@ -219,7 +219,7 @@ fn open_disc(image: &[u8], files: &[emusen_native::abi::File<'_>]) -> Result<(cr
 pub use crate::cdrom::DRIVE;
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::AXES | caps::BATTERY_DIRTY | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE | caps::DEBUG_READS | caps::MEDIA | caps::BORROW;
+    const CAPABILITIES: u64 = caps::RESET | caps::AXES | caps::BATTERY_DIRTY | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE | caps::DEBUG_READS | caps::MEDIA | caps::BORROW;
 
     fn info() -> Info {
         Info {
@@ -338,6 +338,11 @@ impl Core for Machine {
 
     fn settle(&mut self) {
         Machine::settle(self);
+    }
+
+    fn reset(&mut self) -> Result<(), i32> {
+        Machine::reset(self);
+        Ok(())
     }
 
     fn advance(&mut self, _detail: &mut u64) -> Result<(), i32> {
@@ -957,5 +962,87 @@ mod tests {
         m.set_axis(0, 1, -1.0).unwrap();
         assert_eq!(m.board.sio0.controller(0).unwrap().report(), [0x73, 0x5A, 0xFF, 0xFF, 0x80, 0x80, 0xFF, 0x00]);
         assert_eq!(m.set_axis(8, 0, 0.0), Err(status::NO_SUCH_PORT));
+    }
+
+    /// One frame: the picture, the sound, and the state with its frame count (bytes 8 to 16) left out.
+    fn frame_of(m: &mut Machine) -> (Vec<u8>, Vec<i16>, Vec<u8>) {
+        Core::advance(m, &mut 0).unwrap();
+        let mut sound = vec![0i16; 1 << 14];
+        let n = m.drain_audio(&mut sound, usize::MAX);
+        sound.truncate(n);
+        let mut state = vec![0; m.state_size()];
+        m.save_state(&mut state).unwrap();
+        state[8..16].fill(0);
+        (m.frame().to_vec(), sound, state)
+    }
+
+    /// The fields of `layout` in which states `x` and `y` differ.
+    fn differing(layout: &str, x: &[u8], y: &[u8]) -> Vec<String> {
+        let fields: Vec<(usize, &str)> = layout.lines().filter_map(|l| Some((l.split(' ').next()?.parse().ok()?, l.rsplit(' ').next()?))).collect();
+        let mut out: Vec<String> = Vec::new();
+        for i in (0..x.len()).filter(|&i| x[i] != y[i]) {
+            let name = fields.iter().rev().find(|f| f.0 <= i).map_or("?", |f| f.1);
+            if out.last().is_none_or(|l| l != name) {
+                out.push(name.to_owned());
+            }
+        }
+        out
+    }
+
+    /// Diamond_Native.md §27: reset 30 frames in, the machine runs on as a fresh one of the same image does, frame for
+    /// frame: the same picture and sound, and the same state but for the frame count, which runs on, and for the
+    /// devices in the ports, which /RESET does not reach, until the kernel has spoken to them again; a program on the
+    /// open kernel, a disc, and the console started empty, whose shell polls the pads.
+    #[test]
+    fn reset_runs_on_as_a_fresh_machine_does() {
+        let program = crate::machine::tests::program("loop: j loop\nnop");
+        let us = disc(Market::Americas, Some(2));
+        let makers: [(&str, Box<dyn Fn() -> Machine>); 3] =
+            [("program", Box::new(|| create(&program, &[], vec![]).unwrap())), ("disc", Box::new(|| create(&us, &[], vec![]).unwrap())), ("empty", Box::new(|| create_empty(&[], vec![]).unwrap()))];
+        for (name, make) in makers {
+            let mut a = make();
+            for _ in 0..30 {
+                Core::advance(&mut a, &mut 0).unwrap();
+            }
+            a.drain_audio(&mut vec![0; 1 << 16], usize::MAX);
+            Core::reset(&mut a).unwrap();
+            let mut b = make();
+            let mut devices = 0;
+            for f in 0..120 {
+                let (x, y) = (frame_of(&mut a), frame_of(&mut b));
+                assert!(x.0 == y.0 && x.1 == y.1, "{name}, frame {f} after the reset: the picture or the sound differs");
+                let fields = differing(&a.layout(), &x.2, &y.2);
+                assert!(fields.iter().all(|d| d.starts_with("Bus.Sio0.Port") && (d.contains(".Controller.") || d.contains(".Card."))), "{name}, frame {f} after the reset: {fields:?}");
+                devices = if fields.is_empty() { devices } else { f + 1 };
+            }
+            assert!(devices < 120 && (name == "empty" || devices == 0), "{name}: the devices differ until frame {devices}");
+            assert_eq!(Core::frame_count(&a), 150, "{name}");
+        }
+    }
+
+    /// §27: what /RESET does not reach is kept: the card with its contents and the change the host has not saved, the
+    /// button held, the disc with the lid left open; and the host's bound on the sound.
+    #[test]
+    fn reset_keeps_the_cards_the_buttons_the_disc_and_the_lid() {
+        let mut m = played(over_card(&card_game(0x100, 0xA5), &vec![0u8; CARD_BYTES], false));
+        m.set_buttons(0, 1 << 3, 1 << 3).unwrap();
+        m.set_audio_limit(1000);
+        let card = m.battery(0).unwrap().0.to_vec();
+        assert_eq!(m.battery(0).unwrap().1 & flags::BATTERY_CHANGED, flags::BATTERY_CHANGED);
+        Core::reset(&mut m).unwrap();
+        assert!(m.battery(0).unwrap() == (&card[..], flags::BATTERY_TRACKED | flags::BATTERY_CHANGED) && sector(&card, 0x100).iter().all(|&x| x == 0xA5));
+        assert_eq!((m.cpu.regs.pc, m.board.now, m.board.ram_word(0xFFFF0)), (0xBFC0_0000, 0, 0), "the console starts again");
+        assert_eq!(m.board.sio0.controller(0).unwrap().buttons() & 1 << 3, 1 << 3);
+        Core::advance(&mut m, &mut 0).unwrap();
+        assert_eq!(m.board.spu.out.len(), 1000);
+        let mut d = create(&disc(Market::Americas, Some(2)), &[], vec![]).unwrap();
+        d.media_lid(DRIVE, true).unwrap();
+        let print = d.disc_print;
+        Core::reset(&mut d).unwrap();
+        assert_eq!((d.drives()[0].lid_open, d.drives()[0].loaded, d.disc_print), (true, true, print));
+        d.media_lid(DRIVE, false).unwrap();
+        for _ in 0..3 {
+            Core::advance(&mut d, &mut 0).unwrap();
+        }
     }
 }

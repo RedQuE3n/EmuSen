@@ -267,6 +267,11 @@ impl Core for Diamond {
         info
     }
 
+    /// The machine's, the renderer kept with its picture to settle as after a load (Diamond_Native.md §27).
+    fn reset(&mut self) -> Result<(), i32> {
+        Core::reset(&mut self.machine)
+    }
+
     fn advance(&mut self, detail: &mut u64) -> Result<(), i32> {
         Core::advance(&mut self.machine, detail)?;
         self.frame_end();
@@ -434,7 +439,7 @@ impl Core for Diamond {
     }
 }
 
-emusen_native::core_exports!(Diamond; axes, debug, debug_stack, debug_registers, debug_disassemble, debug_reads, media, settings, setting_notes, device_picture);
+emusen_native::core_exports!(Diamond; reset, axes, debug, debug_stack, debug_registers, debug_disassemble, debug_reads, media, settings, setting_notes, device_picture);
 
 #[cfg(test)]
 mod tests;

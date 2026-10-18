@@ -242,6 +242,12 @@ pub fn firmware(market: Market) -> [u8; 4] {
 
 impl Cdrom {
     pub fn new(disc: Option<Disc>, market: Market) -> Cdrom {
+        Cdrom::powered(disc.map(DiscSlot::new), false, market)
+    }
+
+    /// The drive as its controller comes out of reset, holding the disc in `slot` with its lid as it is: closed on a
+    /// disc, it spins up (Diamond_Native.md §27).
+    pub fn powered(slot: Option<DiscSlot>, lid_open: bool, market: Market) -> Cdrom {
         let empty = Buffered { raw: Box::new([0; 2352]), at: 0, second_try: false };
         let mut c = Cdrom {
             index: 0,
@@ -280,7 +286,7 @@ impl Cdrom {
             resume: drive::PARKED,
             drive_at: u64::MAX,
             motor_stops_at: u64::MAX,
-            lid_open: false,
+            lid_open,
             pending_seek: false,
             seek_data: false,
             delivered: empty,
@@ -295,11 +301,11 @@ impl Cdrom {
             scratch: Box::new([0; 2352]),
             xa_frames: Vec::with_capacity(4032),
             market,
-            disc: disc.map(DiscSlot::new),
+            disc: slot,
             next: u64::MAX,
             trace: false,
         };
-        if c.disc.is_some() {
+        if c.disc.is_some() && !lid_open {
             c.spin_up(0, Then::Hold { complete: false });
         }
         c.refresh();

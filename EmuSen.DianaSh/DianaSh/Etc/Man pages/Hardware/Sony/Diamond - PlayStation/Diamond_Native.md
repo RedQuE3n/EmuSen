@@ -1736,3 +1736,110 @@ The record is `Diamond_Enhancements.md` §21 to §31. In brief:
   walk fills a precise triangle to the console's own; a mark a pixel in the mirror's spare half; `RNDR` 3.5 MiB with
   the marks; no crate, export or setting added.
 
+
+## 27. The reset button (2026-10-18)
+
+### 27.1 The defect
+
+`CoreEngine.Reset()` on a running Diamond machine ended the host process: the triangle program of
+`DiamondEnhancementsTests` run eight frames and reset, the test host died before the next frame, with a lent device or
+without, at 1× and at 2×, through `CoreFactory.Loaded` as through the frontend API's session [M, 2026-10-18, the
+report reproduced by `DiamondResetTests` in a child test host].
+
+**How it died** [M]. The child test host ended on `SIGSEGV`; its core dump (`coredumpctl`, `gdb`) has `rip` 0 and `rdi`
+the machine's handle, frame 1 in JIT-compiled code, no Rust frame on the stack and no panic text on stderr. That is a
+call through a null function pointer with the handle as its argument, and rules out the other candidates: no panic
+reached an `extern "C"` boundary (that aborts with `SIGABRT` and the core's panic report, `CoreEngineThreadTests`'
+crash file); no device or GPU resource was freed twice (the same death follows on `v1_plain_core`, which has no device,
+no renderer and no Vulkan); no stack overflow or `unreachable!` (no Rust frame at all).
+
+**The cause** [R, M]. Diamond did not claim `RESET` (`src/v1.rs`, `CAPABILITIES`), so `libdiamond.so` had no
+`emusen_core_reset`: `nm -D` lists 52 `emusen_core_` symbols, none of them reset. The ABI makes the export optional and
+behind its bit (`EmuSen_CoreAPI.md` §6.2, §6.21; the kit's C2 holds an unclaimed export absent). `CoreInterface`
+resolves an absent export to zero, and `CoreMachine.Reset` called `_api.Reset(Handle)` without asking `Has(CapReset)`,
+where every other optional call in the class asks first (`SetSettings` refuses without `SETTINGS`, `Present`'s caller
+checks `PRESENT`). The defect is therefore the host's, and Diamond's absence of a reset button exposed it.
+
+**Who else** [M]. Through the host, every core without `RESET` died the same way: MarsRT, MercuryRT and Nephrite
+claim no reset, nor does the kit's `v1_plain_core`, on which the WiseMan test reproduced it. Through the kit nothing
+dies: it calls `reset` only behind the bit (C5), and MoonRT and VenusRT, which claim it, pass the reset check of
+§27.4 below.
+
+**Who reaches it** [R]. Not the player in Mistress: its Reset menu item, the HUD's Restart and the pad menu's Restart
+all call `ResetEmulation`, a power cycle that loads the game again (`EmuSen_Settings_Reference.md` §4.12) and never
+calls `CoreEngine.Reset()`. The frontend API's session reset (`ManagedSession.Reset`) calls it on any engine, and so
+did any direct caller.
+
+### 27.2 The fix
+
+Two parts, each standing alone:
+
+- **The host** refuses a reset the core does not claim: `CoreMachine.Reset` throws `CoreRefusedException` with
+  `NOT_SUPPORTED`, as `SetSettings` does for `SETTINGS`. One line in `EmuSen/Cores/Native/CoreMachine.cs`.
+- **Diamond claims `RESET`**: `Machine::reset` in `src/machine.rs`, `Core::reset` in `src/v1.rs`, and `diamond-v1`
+  passing it on with `reset` among its exported groups. No `catch_unwind` is added: nothing panicked, and the ABI's
+  boundary rule (`EmuSen_CoreAPI.md` §6.16) is the crate's panic hook, which already stands.
+
+### 27.3 What the reset does
+
+psx-spx `6d7d1bc`, "Controllers - Additional Inputs": the button "reboots the PSX via /RESET signal", and "No idea if
+it clears ALL memory during reboot?" [R]. "Pinouts - Controller Ports and Memory-Card Ports": the ports carry data,
+clock, select, acknowledge and supplies (+3.5 V and +7.5 V), and no reset line [R]. Hence:
+
+- **Every chip on /RESET as at power-on**: the processor at `BFC00000h` with BEV set, memory control, the cache, the
+  interrupt controller, timers, DMA, the GPU and the video timing, the SPU, the CD-ROM controller, the MDEC, SIO0's
+  registers and the GTE; the clock from 0. They are made by `Machine::new` from the machine's own media, settings,
+  ports, program and kernel image, the constructor a create uses, so that a reset and a create cannot drift apart.
+- **RAM, the scratchpad, VRAM and sound RAM** start as at power-on, zero [A, C]. Whether DRAM keeps its contents
+  through /RESET is not documented, as psx-spx says; the kernel's boot writes what it uses before reading it; and with
+  zero a reset is the machine a fresh load makes, which can be tested. A measurement on a console would retire this.
+- **Kept, since /RESET does not reach them**: the devices in the ports, each with its own state (a DualShock's mode and
+  motors, the buttons and sticks the host holds, each card's contents, flag and the change the host has not saved, a
+  multitap); the disc in the drive, and the lid as it is, the drive spinning up as at power-on when it is closed and
+  staying still when it is open (`Cdrom::powered`). The spin-up's timing after a reset is power-on's [A].
+- **Kept, since the host set them**: the frame count, which runs on as MoonRT's and VenusRT's do; skipped rendering;
+  the sound's bound and the samples not yet drained; the card reports; the firmware list; the cards-apart mode; the
+  debugger's hooks, its open frame closed as a load closes it; the idle and run levers; the attached layer, its blocks
+  cleared and seeded from the new GPU as a load without blocks does (§23), its picture settling within
+  `picture_settles` as after a load.
+
+The program image is now kept for every PS-EXE (`Machine::image`); before, it was kept only where a kernel boots and
+side-loads it, and a machine with no kernel loaded it directly and dropped it. Neither is any part of the state.
+
+### 27.4 Measured
+
+Reset 30 frames in, then 120 frames beside a fresh machine of the same image (`v1::tests::
+reset_runs_on_as_a_fresh_machine_does`) [M]:
+
+| Image | Picture and sound | State (frame count left out) |
+|---|---|---|
+| A PS-EXE on the open kernel | the same every frame | the same every frame |
+| A disc on the open kernel | the same every frame | the same every frame |
+| The console started empty | the same every frame | the same from the third frame; before it the ports' devices differ: `Port1` and `Port2.Controller.Motors` and `.Out`, and `Port1.Card.Registers` |
+
+The empty console's shell polls the pads and reads the card before the reset, which leaves the devices configured and
+the card's new-card flag cleared; a fresh machine's devices are at their power-on values, and the shell's next polls
+bring the two together. This is the kept device state of §27.3, not a difference in the console.
+
+With all four enhancements on at 2× (`diamond-v1`'s test, the renderer on the desktop's RX 6800) the sound and the
+machine's state are the same as a fresh machine's every frame and the picture the same from frame `picture_settles`
+(240) on. Through the host (`DiamondResetTests`, a child test host): the triangle program reset at frame 8, then 70
+frames beside a fresh load, the same sound and, past the settling frames, the same pictures, at 1× and at 2×; and
+`v1_plain_core` refuses a reset with `NOT_SUPPORTED` and runs on.
+
+**Unchanged** [M]: the goldens of `programs/`, ps1-tests build 158 and the bench discs (`tests/goldens/`); the kit on a
+PS-EXE, every digest equal to the previous build's, the export count 52 to 53 and the capabilities `0x3fb448` to
+`0x3fb449` being `RESET`; the kit's 22 cases passing on a PS-EXE and on a disc.
+
+**The kit's check.** C5 now also resets a claiming core two frames in, requires three more frames to run, and requires
+two machines fed and reset alike to give the same digests and state. It tests the contract that stands (§6.2: `reset`
+is the console's reset button; C5: every claimed capability works on a running machine) and adds no requirement, so no
+minor. MoonRT, VenusRT and Diamond pass it; MarsRT, MercuryRT and Nephrite, which do not claim reset, still pass all
+their cases [M, one image each, 120 frames].
+
+### 27.5 Found beside it
+
+In a debug build `Video::line_start` (`src/video.rs`, `line - base_line`) overflows in the empty console's first
+frames: `v1::tests::the_console_starts_empty_and_its_market_comes_from_the_bios_given` fails under `cargo test` without
+`--release` on the commit before this one as on this one [M]. The project runs Diamond's tests in release, where the
+subtraction wraps. It is recorded here, unfixed, for its own investigation.

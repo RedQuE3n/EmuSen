@@ -1748,9 +1748,8 @@ DianaSh's, Serenity's or the BCL's types, and to give SR2 no exemption. The addi
 Both are recorded in `EmuSen_Surfaces.md` §6.2. The old signatures that took `CoreDescriptor` or
 `Action<IDebugTarget>` had no caller left and were removed.
 
-One form differs from the decision and is put to the tester in `EmuSen_Serenity.md` §2.11. The coretop window reads
-through the frontend's binding, not a service table reached with `SessionService.Of`, because a table's pointer
-outlives a swap.
+The coretop window reads through the frontend's binding, not a service table reached with `SessionService.Of`, because
+a table's pointer outlives a swap. Decided 2026-10-17 by the tester (`EmuSen_Serenity.md` §2.11).
 
 **`HostAction` from events** (`EmuSen_DianaSh.md` Q5). Over a session's table, `resume` and `step` reach the session's
 run control on both shells: the Rust shell's modules call it, and the C# facade asks it for its commands. The facade
@@ -1765,7 +1764,8 @@ then reports the action because the session's run events raised it (`EmuSen_Dian
 
 The tester decided on 2026-10-17 that these ride along on each `systems` entry as an additive 1.1 field, `core`,
 filled from the registry. They are the engine's facts, not the pack's (§5.3), so they stay out of `emusen-systems`'
-data files. The decision named `names` and `display_name`. The field also carries `console` and `extensions`, because
+data files. The decision named `names` and `display_name`. The field also carries `console` and `extensions`, accepted by the
+tester the same day, because
 `core`'s refusals print them ("no core in this build starts the …", "… - expected: .smc, .sfc"), and Mercury's one
 core spans two systems whose extensions differ.
 

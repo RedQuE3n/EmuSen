@@ -383,7 +383,7 @@ case on marsrt
 target marsrt
 covers 1-2
 $ eval symbols
-out 206
+out 379
   a0
   a1
   a2
@@ -421,6 +421,20 @@ out 206
   t9
   v0
   v1
+  vi.BURST
+  vi.CONTROL
+  vi.H_START
+  vi.H_SYNC
+  vi.LEAP
+  vi.ORIGIN
+  vi.V_BURST
+  vi.V_CURRENT
+  vi.V_INTR
+  vi.V_START
+  vi.V_SYNC
+  vi.WIDTH
+  vi.X_SCALE
+  vi.Y_SCALE
   zero
 status 0
 action none

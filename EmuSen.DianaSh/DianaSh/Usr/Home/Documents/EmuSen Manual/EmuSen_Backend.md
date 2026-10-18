@@ -4618,7 +4618,8 @@ at every frame.
 *Decided 2026-10-18 by the tester, as §23.6 recommended: the generic host's expressions (`eval`, breakpoint conditions,
 logpoints) name the registers of a core's units (core ABI 1.13, `EmuSen_CoreAPI.md` §6.33) after the processor's own.
 Built on branch `b4-unit-exprs` from `WiseMan` at `9eb357a9`. A shared host change: it serves every core that lists
-units, MoonRT's nine today and MercuryRT's and MarsRT's once their switches land.*
+units: MoonRT's nine, MarsRT's one (the VI, which reached `WiseMan` at `08812dde` and was merged into this branch
+before it went back), and MercuryRT's once its switch lands.*
 
 ### 24.1 The regression, shown first
 
@@ -4735,9 +4736,42 @@ the pairs move in both directions. A unit-register condition on MoonRT costs wha
   without. It is not the units' read: `BreakpointExpressions`' `Live` calls `RefreshProviders` once an evaluation
   first names a symbol, and on MoonRT that refreshes the pack's view rings (palettes, sprites, channels), which copy
   the spaces they read, at every hit. Refreshing only the register providers there would bring it near MercuryRT's;
-  that is `BreakpointExpressions`' rule (`EmuSen_DianaSh.md` §13.12), so it is proposed, not built. MercuryRT and MarsRT
-  will meet the same cost once they list units.
+  that is `BreakpointExpressions`' rule (`EmuSen_DianaSh.md` §13.12), so it is proposed, not built. MercuryRT will
+  meet the same cost once it lists units; MarsRT's, its VI listed and the N64 pack's views
+  refreshed, cost 1.4 to 1.9 µs a hit (§24.6).
 - **§6.33's text** says units are read through `debug_registers` but not, in words, that the read changes nothing;
   the header's `const` and the trait's `&self` say it. *Recommended*: a clarification of one sentence there, no minor.
-- **MercuryRT's and MarsRT's switches** need nothing more: once their targets are `CoreDebugTarget`, their units are
-  in every scope by these rules, and their `eval symbols` recordings will gain the qualified names.
+- **MercuryRT's switch** needs nothing more: once its target is `CoreDebugTarget`, its units are in every scope by
+  these rules, and its `eval symbols` recording will gain the qualified names, as MarsRT's did (§24.6).
+
+### 24.6 After MarsRT's switch, measured on 2026-10-18
+
+`WiseMan` at `08812dde` (MarsRT on the generic engine and target, its one unit the VI: id 256, `video`, fourteen
+registers by libultra's names) was merged into this branch with no conflict; `CoreDebugTarget`'s view-space reads and
+its ring's re-learning on a machine-info change sit beside this section's changes untouched. MarsRT's VI reads its
+registers through `&self` (`vi.read32`), so the read changes nothing, as §24.2 requires. Nothing of the design moved:
+the VI's names clash with neither processor's (the CPU's and the RSP's registers are MIPS names, `PC`, `HI`, `LO`,
+`Cycles` and `Halted`).
+
+**Re-recorded**, each line read: `eval.golden`, case "on marsrt", `eval symbols`: 14 lines added, `vi.BURST`,
+`vi.CONTROL`, `vi.H_START`, `vi.H_SYNC`, `vi.LEAP`, `vi.ORIGIN`, `vi.V_BURST`, `vi.V_CURRENT`, `vi.V_INTR`,
+`vi.V_START`, `vi.V_SYNC`, `vi.WIDTH`, `vi.X_SCALE`, `vi.Y_SCALE`, and the output's length (206 to 379); no other line
+of any file changed (`disasm.golden`'s trailing empty line, stripped again by the recording pass, was put back).
+
+**Tested**, Debug: §24.4's 20 classes with `MarsRtDebugTests` and `MarsDebugTests`: **402 tests, 402 passed**.
+
+**The bench**, Release, with a MarsRT row on `vi.ORIGIN==1` added, run twice (µs a hit over a breakpoint never
+reached; the machine was shared with other test runs, and the first row of the first run read an `if 0` floor of 1.90
+against 0.39 to 0.42 elsewhere, so its numbers are set aside):
+
+| Row | Condition, run 1 / run 2 | `if 0`, run 1 / run 2 |
+|---|---|---|
+| MarsRT, `t0==0` | 1.68 / 1.90 | 0.39 / 0.42 |
+| MarsRT, `vi.ORIGIN==1` (new) | set aside / 1.42 | set aside / 0.42 |
+| MoonRT, `ppu.PPUCTRL==0x99` | 4.68 / 4.59 | 0.36 / 0.48 |
+| MoonRT, `A==0x99` | 4.72 / 5.00 | 0.38 / 0.41 |
+| MercuryRT on the generic engine, `HL==0x1234` | 0.96 / 1.13 | 0.35 / 0.38 |
+| Nephrite, `D2==0` | 1.36 / 1.86 | 0.52 / 0.60 |
+
+A unit-register condition costs what a processor-register one does on the same core. The spread between the two runs
+of one build (Nephrite 1.36 and 1.86) is wider than any difference §24.4 found between the builds before and after.

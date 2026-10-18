@@ -86,6 +86,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData("mercuryrt", "0153", "HL==0x1234", "HL")]
         [InlineData("mercuryrt-v1", "0153", "HL==0x1234", "HL")]
         [InlineData("marsrt", "A400004C", "t0==0", "t0")]
+        [InlineData("marsrt", "A400004C", "vi.ORIGIN==1", "vi.ORIGIN")]
         [InlineData("nephrite", "302", "D2==0", "D2")]
         public void A_conditions_cost_per_hit_is_measured(string core, string address, string condition, string log)
         {

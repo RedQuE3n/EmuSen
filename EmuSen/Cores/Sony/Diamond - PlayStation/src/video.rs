@@ -136,18 +136,14 @@ impl Video {
         pos < self.x1 as u64 * 2 || pos >= self.x2 as u64 * 2
     }
 
-    /// The field line at which vblank begins, if it does.
+    /// The field line at which vblank begins, if it does: never when Y2 is a line the counter does not reach.
     fn vblank_rise(&self) -> Option<u32> {
-        let (a, b, n) = (self.y1, self.y2.min(self.field_lines), self.field_lines);
-        if a >= b {
-            None
-        } else if b < n {
-            Some(b)
-        } else if a > 0 {
-            Some(0)
-        } else {
-            None
-        }
+        (self.y1 < self.y2 && self.y2 < self.field_lines).then_some(self.y2)
+    }
+
+    /// Whether field line `l` is in the blank; with Y2 past the field there is no vblank (Diamond_Native.md §29.10).
+    fn blank_line(&self, l: u32) -> bool {
+        self.y2 < self.field_lines && (l < self.y1 || l >= self.y2)
     }
 
     /// The absolute line at CPU cycle `t`, and the first absolute line of the field being scanned.
@@ -161,8 +157,7 @@ impl Video {
 
     pub fn in_vblank_at(&self, t: u64) -> bool {
         let (line, _) = self.line_at(self.h_at(t));
-        let l = (line - self.field_line) as u32;
-        l < self.y1 || l >= self.y2
+        self.blank_line((line - self.field_line) as u32)
     }
 
     pub fn in_hblank_at(&self, t: u64) -> bool {
@@ -317,7 +312,7 @@ impl Video {
     pub fn status_bits(&self, t: u64) -> u32 {
         let (line, _) = self.line_at(self.h_at(t));
         let l = (line - self.field_line) as u32;
-        let vblank = l < self.y1 || l >= self.y2;
+        let vblank = self.blank_line(l);
         let hires = self.interlaced() && self.mode & 1 << 2 != 0;
         let odd = if hires { self.odd } else { line & 1 != 0 };
         let mut bits = 0;
@@ -444,6 +439,21 @@ mod tests {
         v.retime(late, |v| v.mode = 1);
         let next = v.next_edge(false);
         assert_eq!((v.edge(next, false), v.position(next).0), (edge::VBLANK_START, 256), "an edge still due at the line's start is kept");
+    }
+
+    /// A Y2 at or past the field's line count, which the line counter never reaches, gives no vblank: no start, and the
+    /// picture on every line; Y1's edge stays, and Y2 262 still starts one (Diamond_Native.md §29.10).
+    #[test]
+    fn y2_past_the_field_gives_no_vblank() {
+        for (y2, starts) in [(262, 3), (263, 0), (300, 0)] {
+            let mut v = Video::new(false);
+            v.y2 = y2;
+            let edges = run(&mut v, 3 * 566_122, false);
+            let count = |kind: u32| edges.iter().filter(|e| e.1 & kind != 0).count();
+            assert_eq!((count(edge::VBLANK_START), count(edge::VBLANK_END), count(edge::FIELD)), (starts, 3, 3), "Y2 {y2}");
+            let line5 = v.t_at(v.line_start(v.field_line + 5) + 3_000);
+            assert_eq!(v.in_vblank_at(line5), starts > 0, "Y2 {y2}: line 5");
+        }
     }
 
     /// A range's line the beam has passed is no edge until the next field, whether the range moved behind it or a new

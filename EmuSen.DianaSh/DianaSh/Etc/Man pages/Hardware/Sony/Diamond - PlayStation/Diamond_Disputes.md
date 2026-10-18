@@ -33,6 +33,7 @@ of Crash Bandicoot's screen undrawn (`Diamond_Players.md` §14).
 Mega Man Legends on the screen for ever (`Diamond_Players.md` §14.6).
 *A step of 2026-10-18* took D-49, a display range moved onto or across the beam's line, left open by the display
 range behind the beam (`Diamond_Native.md` §28.5, §29).
+*The same day* took D-50, a Y2 the line counter never reaches, decided by the tester (`Diamond_Native.md` §29.10).
 
 ## The rules this log keeps
 
@@ -1648,7 +1649,27 @@ range behind the beam (`Diamond_Native.md` §28.5, §29).
   line, and neither raises IRQ0 at the start of a line already begun; Beetle PSX, the strongest witness for video
   timing, meets the line in the next field. *Open*: across the beam, the interrupt (the referees disagree in every
   case) and the level read at once, where Beetle PSX alone opposes Diamond (a latch, proposed, `Diamond_Native.md`
-  §29.5); and a Y2 past the field, where psx-spx and Beetle PSX give no interrupt and Diamond one each field.
+  §29.5); and ~~a Y2 past the field, where psx-spx and Beetle PSX give no interrupt and Diamond one each field~~
+  *settled 2026-10-18, D-50*.
 - **Pinned by:** `video::tests::a_range_line_moved_onto_the_beams_line_is_no_edge_this_field` and `programs.rs`'s
   `a_range_moved_onto_the_beams_line_waits_for_the_next_field`, both failing before the change.
 - **Implemented in:** `video.rs`'s `retime`, in the commit citing this entry.
+
+### D-50. A Y2 the line counter never reaches: no vblank, so no interrupt and the picture on every line
+
+- **Opened:** 2026-10-18, from `Diamond_Native.md` §29.5: Diamond started the blank at line 0 when Y2 lay at or past
+  the field's line count and Y1 above line 0, so IRQ0 came every field.
+- **Documents read:** psx-spx `6d7d1bc`, GP1(07h): "If Y2 is set to a much too large value, then the hardware stops
+  to generate vblank interrupts (IRQ0)."
+- **The console's logs:** none; no suite program sets such a Y2.
+- **Test program:** `programs/y2-past-field.s`, Y2 256, 262, 263 and 300 (`Diamond_Native.md` §29.10).
+- **Referee:** the five of `Diamond_Referees.md` §2, outputs only. Beetle PSX: no interrupt for 263 and 300, the top
+  lines the picture in GPUSTAT bit 31 and to timer 1's sync. DuckStation and SwanStation: an interrupt each field (at
+  line 0, or line 262 for 263 on DuckStation); they witness nothing about the level. The PCSX family raises it at the
+  same line whatever the range.
+- **Conclusion** [A, C]: **a Y2 at or past the field's line count gives no vblank**: no start, no interrupt, and the
+  picture on every line; Y1's edge stays. psx-spx and Beetle PSX agree, DuckStation does not; decided 2026-10-18 by
+  the tester for the document and Beetle PSX.
+- **Pinned by:** `video::tests::y2_past_the_field_gives_no_vblank` and `programs.rs`'s
+  `y2_past_the_field_stops_the_vblank_interrupt`, both failing before the change.
+- **Implemented in:** `video.rs`'s `vblank_rise` and `blank_line`, in the commit citing this entry.

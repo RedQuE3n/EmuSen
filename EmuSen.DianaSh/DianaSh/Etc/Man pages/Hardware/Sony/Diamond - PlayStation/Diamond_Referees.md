@@ -562,6 +562,13 @@ counted. Beetle PSX and DuckStation agree on timer 1's gate in every case writte
 the interrupt in every case that moves the line across the range. `Diamond_Native.md` §29.4 has the tables,
 `Diamond_Disputes.md` D-49 the ruling.
 
+### 4.19 D-50: a Y2 past the field — `y2-past-field.s`
+
+*Added 2026-10-18.* `programs/y2-past-field.s`, side-loaded on the five referees by `psxreferee.py ram` as in §4.18.
+Beetle PSX gives no vblank interrupt for a Y2 of 263 or 300 and shows the top lines as the picture; DuckStation and
+SwanStation give one each field and hold timer 1 in the control as well; the PCSX family ignores the range.
+`Diamond_Native.md` §29.10 has the table, `Diamond_Disputes.md` D-50 the ruling.
+
 ## 5. What changed in Diamond
 
 Each a writer's step citing its entry, after the rulings above:
@@ -592,6 +599,9 @@ Each a writer's step citing its entry, after the rulings above:
 
 - *D-49*: a new Y1 or Y2 on the beam's line is met in the next field (`video.rs`), on two lineages for the timer and
   the strongest witness for the field. Pinned by `a_range_moved_onto_the_beams_line_waits_for_the_next_field`.
+
+- *D-50*: a Y2 at or past the field's line count gives no vblank (`video.rs`), psx-spx and Beetle PSX against
+  DuckStation, the tester's choice. Pinned by `y2_past_the_field_stops_the_vblank_interrupt`.
 
 The other programs are pinned on Diamond as it reads them: `gpustat_while_each_shape_arrives_and_draws`,
 `the_gpu_is_ready_at_once_after_each_transfer`, `stores_drain_as_the_fit_has_them`.

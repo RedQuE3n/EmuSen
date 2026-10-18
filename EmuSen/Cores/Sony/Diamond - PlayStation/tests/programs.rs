@@ -490,13 +490,29 @@ fn a_range_moved_onto_the_beams_line_waits_for_the_next_field() {
     let m = run_for(include_str!("../programs/range-cross.s"), 300, Market::Americas);
     assert_eq!(m.board.ram_word(0xFFFF0), 0xD1A0_D00E, "the program finished");
     let edges: Vec<[u32; 4]> = (0..8).map(|c| results(&m, 0x10_0000 + 0x20 * c, 6)).map(|r| [r[0], r[3], r[4], r[5]]).collect();
-    assert_eq!(edges, [[107, 263, 526, 2], [107, 320, 583, 2], [107, 370, 633, 2], [107, 263, 526, 2], [2, 6, 269, 2], [12, 263, 526, 2], [12, 263, 526, 2], [107, 270, 533, 2]]);
+    assert_eq!(edges, [[107, 263, 526, 2], [107, 320, 583, 2], [107, 370, 633, 2], [107, 263, 526, 2], [2, 6, 269, 2], [12, 263, 526, 2], [12, 263, 526, 2], [107, 0, 0, 0]]);
     let counting = |at: u32| -> Vec<bool> {
         (0..8).map(|c| results(&m, at + 0x20 * c, 4)).inspect(|r| assert!(r[0] <= 16, "{at:X}: {r:?} counted from before the write")).map(|r| r[3] > 0).collect()
     };
     assert_eq!(counting(0x10_0400), [true, true, true, true, false, false, false, true], "sync mode 0");
     assert_eq!(counting(0x10_0600), [false, false, false, false, true, false, false, false], "sync mode 3");
     counting(0x10_0800);
+}
+
+/// A Y2 at or past the field's 263 lines stops the vblank interrupt, as psx-spx says, and leaves the top lines the
+/// picture, for GPUSTAT bit 31 and for timer 1's sync, as Beetle PSX has them (Diamond_Native.md §29.10): `y2-past-field.s`'s
+/// interrupts and the count at the first, its bit 31 samples, and timer 1 written on line 5. Before, Y2 263 and 300 gave
+/// an interrupt at line 0 every field, a blank to line 16 and the timer held to it.
+#[test]
+fn y2_past_the_field_stops_the_vblank_interrupt() {
+    let m = run_for(include_str!("../programs/y2-past-field.s"), 300, Market::Americas);
+    assert_eq!(m.board.ram_word(0xFFFF0), 0xD1A0_D00E, "the program finished");
+    let cases: Vec<(u32, u32, bool, bool)> = (0..4)
+        .map(|c| results(&m, 0x10_0000 + 0x20 * c, 7))
+        .inspect(|r| assert!(r[3] <= 16, "{r:?}: timer 1 counted from before its write"))
+        .map(|r| (r[0], r[1], r[2] != 0, r[4] != 0))
+        .collect();
+    assert_eq!(cases, [(2, 263, false, false), (2, 269, false, false), (0, 0, true, true), (0, 0, true, true)]);
 }
 
 /// The console log's largest first sample and largest rise in each of `timers`' fourteen sync tables, in its order.

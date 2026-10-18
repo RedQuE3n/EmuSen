@@ -1,8 +1,8 @@
+using EmuSen.Crystal.Systems.N64;
 using EmuSen.Cores.Native;
 using EmuSen.WiseMan.Fixtures;
 using System.Collections.Generic;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MarsRT;
 
 namespace EmuSen.WiseMan.Cores
 {
@@ -23,7 +23,7 @@ namespace EmuSen.WiseMan.Cores
         {
             ICore core = engine switch
             {
-                "MarsRT" => new MarsRtCore(),
+                "MarsRT" => new MarsRtTestCore(),
                 "MoonRT" => Fixtures.MoonEngines.Create(),
                 "MercuryRT" => MercuryEngines.Create(),
                 _ => CoreFactory.Create("game.sfc"),

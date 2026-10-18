@@ -1,6 +1,6 @@
 using EmuSen.Cores.Native;
 using EmuSen.WiseMan.Fixtures;
-using EmuSen.Cores.Nintendo.MarsRT;
+using EmuSen.Crystal.Systems.N64;
 using EmuSen.Crystal.Systems.GameBoy;
 using EmuSen.Crystal.Systems.Nes;
 using EmuSen.Crystal.Systems.Snes;
@@ -17,7 +17,7 @@ namespace EmuSen.WiseMan.Cores
             { "NES Game Genie", "Game Genie", CheatCodeKind.RomPatch, null },
             { "GB GameShark", "GameShark", CheatCodeKind.RamPoke, MercuryEngines.SpaceCpuBus },
             { "GB Game Genie", "Game Genie", CheatCodeKind.RomPatch, null },
-            { "N64 GameShark", "GameShark", CheatCodeKind.RamPoke, MarsDebugSpaces.Rdram },
+            { "N64 GameShark", "GameShark", CheatCodeKind.RamPoke, MarsRt.Rdram },
             { "SNES Action Replay", "Pro Action Replay", CheatCodeKind.RamPoke, SnesSystem.CpuBus },
             { "SNES Game Genie", "Game Genie", CheatCodeKind.RomPatch, null },
         };
@@ -28,7 +28,7 @@ namespace EmuSen.WiseMan.Cores
             "NES Game Genie" => NesSystem.GameGenie(),
             "GB GameShark" => GameBoyCheatCodecs.GameShark(),
             "GB Game Genie" => GameBoyCheatCodecs.GameGenie(),
-            "N64 GameShark" => MarsCheatCodecs.GameShark(),
+            "N64 GameShark" => N64System.GameShark(),
             "SNES Action Replay" => SnesSystem.ProActionReplay(),
             _ => SnesSystem.GameGenie(),
         };
@@ -48,7 +48,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(NesGameGenieCodec.DecodeCompare("SXIOPOVK"), NesSystem.GameGenie().DecodeCompare("SXIOPOVK"));
             Assert.NotNull(NesSystem.GameGenie().DecodeCompare("SXIOPOVK"));
             Assert.Null(SnesSystem.GameGenie().DecodeCompare("DD62-6DAD"));
-            Assert.Equal(3, MarsCheatCodecs.GameShark().DecodeWrites("8110FB40 FFFF+8110FB42 F801+80001003 0000")!.Count);
+            Assert.Equal(3, N64System.GameShark().DecodeWrites("8110FB40 FFFF+8110FB42 F801+80001003 0000")!.Count);
             Assert.Null(NesSystem.Raw().DecodeWrites("0x0042:99"));
         }
     }

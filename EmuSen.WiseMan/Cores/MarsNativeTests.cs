@@ -1,4 +1,6 @@
-using EmuSen.Cores.Nintendo.MarsRT;
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.Cores.Native;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
@@ -8,9 +10,9 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_native_library_is_built_beside_the_assemblies_and_speaks_this_builds_interface()
         {
-            Assert.True(MarsNative.Available, MarsNative.Report);
-            Assert.NotEqual(0, MarsNative.Export("emusen_core_abi_version"));
-            Assert.Equal(0, MarsNative.Export("no_such_export"));
+            Assert.True(MarsRt.Available, MarsRt.Report);
+            Assert.NotEqual(0, MarsRt.Export("emusen_core_abi_version"));
+            Assert.Equal(0, MarsRt.Export("no_such_export"));
         }
     }
 }

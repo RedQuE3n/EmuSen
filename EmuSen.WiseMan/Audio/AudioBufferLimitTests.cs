@@ -1,10 +1,10 @@
+using EmuSen.Crystal.Systems.N64;
 using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 
@@ -81,10 +81,10 @@ namespace EmuSen.WiseMan.Audio
         [Fact]
         public void MarsRT_keeps_no_more_than_the_setting()
         {
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            Assert.True(MarsRt.Available, MarsRt.Report);
             string path = SyntheticN64Rom.WriteTemp(SyntheticN64System.Build(rsp: false));
             _files.Add(path);
-            using var core = new MarsRtCore { Options = Limited with { BatteryRamDisabled = true } };
+            using var core = new MarsRtTestCore { Options = Limited with { BatteryRamDisabled = true } };
             core.LoadRom(path);
             for (int i = 0; i < 120; i++) core.RunFrame();
             Assert.Equal(Limit, core.DequeueAudioSamples(int.MaxValue).Length);

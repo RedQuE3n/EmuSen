@@ -1,3 +1,4 @@
+using EmuSen.Crystal.Systems.N64;
 using System;
 using System.IO;
 using System.Linq;
@@ -6,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Crystal.Client;
 using EmuSen.Crystal.Client.Contract;
@@ -175,13 +175,44 @@ namespace EmuSen.WiseMan.Crystal
                 moon.LoadRom(nes);
                 using var mercury = MercuryEngines.Create(TestCores.NoBattery);
                 mercury.LoadRom(gb);
-                using var mars = new MarsRtCore { Options = TestCores.NoBattery };
+                using var mars = new MarsRtTestCore { Options = TestCores.NoBattery };
                 mars.LoadRom(n64);
-                Assert.Equal((0L, 0L, 0L), (Measure(moon, nes, moon.CreateDebugTarget()), Measure(mercury, gb, mercury.CreateDebugTarget()), Measure(mars, n64, new MarsRtDebugTarget(mars))));
+                Assert.Equal((0L, 0L, 0L), (Measure(moon, nes, moon.CreateDebugTarget()), Measure(mercury, gb, mercury.CreateDebugTarget()), Measure(mars, n64, mars.CreateDebugTarget())));
             }
             finally
             {
                 foreach (string path in new[] { nes, gb, n64 }) try { File.Delete(path); } catch (IOException) { }
+            }
+        }
+
+        // MarsRT's frame on the generic engine, its picture and its sound allocate nothing on the calling thread, the frame end's reads among them - see EmuSen_Backend.md §14.5, §18.10.
+        [Fact]
+        public void MarsRTs_frame_picture_and_sound_allocate_nothing()
+        {
+            string n64 = SyntheticN64Rom.WriteTemp(SyntheticN64System.Build(rsp: true));
+            try
+            {
+                using var mars = new MarsRtTestCore { Options = TestCores.NoBattery };
+                mars.LoadRom(n64);
+                var picture = new byte[1 << 22];
+                var sound = new short[1 << 16];
+                for (int i = 0; i < 200; i++)
+                {
+                    mars.RunFrame();
+                    mars.CopyPicture(picture);
+                    mars.DrainAudio(sound, out _);
+                }
+                long Measure(Action a)
+                {
+                    long before = GC.GetAllocatedBytesForCurrentThread();
+                    for (int i = 0; i < 300; i++) a();
+                    return GC.GetAllocatedBytesForCurrentThread() - before;
+                }
+                Assert.Equal((0L, 0L, 0L), (Measure(mars.RunFrame), Measure(() => mars.CopyPicture(picture)), Measure(() => mars.DrainAudio(sound, out _))));
+            }
+            finally
+            {
+                try { File.Delete(n64); } catch (IOException) { }
             }
         }
     }

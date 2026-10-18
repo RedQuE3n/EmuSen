@@ -143,7 +143,7 @@ namespace EmuSen.WiseMan.Crystal
             Assert.True(differences.Count == 0, string.Join("\n", differences));
         }
 
-        // The N64 pack's views against the C# moved from the MarsRT shim: each space's decode, the physical map over its boundaries, and the VI's registers and the summary on generated memory - see EmuSen_Backend.md §18.7.
+        // The N64 pack's views against the C# moved from the MarsRT shim: each space's decode, the physical map over its boundaries, and the summary on generated registers - see EmuSen_Backend.md §18.7.
         [Fact]
         public void The_n64_views_answer_alike()
         {
@@ -172,18 +172,12 @@ namespace EmuSen.WiseMan.Crystal
                     Same($"physical {a:X8} with {rdram}", Place(N64Views.Physical(a, rdram)), Place(N64Views.PhysicalManaged(a, rdram)));
             for (int round = 0; round < 50; round++)
             {
-                var vi = new byte[round % 10 == 0 ? 20 : 56];
-                r.NextBytes(vi);
-                var memory = new IDebugMemorySpace[]
-                {
-                    new DelegateDebugMemorySpace("RDRAM", 8 << 20, _ => 0),
-                    new DelegateDebugMemorySpace(round % 7 == 0 ? "vi" : "VI", vi.Length, a => vi[a]),
-                };
+                var vi = new[] { "CONTROL", "ORIGIN", "WIDTH", "V_INTR", "V_CURRENT", "BURST", "V_SYNC" }.Take(round % 10 == 0 ? 3 : 7)
+                    .Select(n => new DebugRegisterValue(round % 7 == 0 ? n.ToLowerInvariant() : n, (ulong)r.NextInt64(), 32)).ToArray();
                 var registers = new[] { new DebugRegisterValue("PC", (ulong)r.NextInt64(), 64), new DebugRegisterValue("sp", (ulong)r.NextInt64(), 64), new DebugRegisterValue("ra", (ulong)r.NextInt64(), 64) };
-                Same($"video registers {round}", string.Join(",", N64Views.VideoRegisters(memory).Select(v => $"{v.Name}={v.Value}")), string.Join(",", N64Views.VideoRegistersManaged(memory).Select(v => $"{v.Name}={v.Value}")));
-                Same($"summary {round}", N64Views.Summary(registers, memory), N64Views.SummaryManaged(registers, memory));
-                Same($"summary without a VI {round}", N64Views.Summary(registers, memory[..1]), N64Views.SummaryManaged(registers, memory[..1]));
-                Same($"summary without ra {round}", N64Views.Summary(registers[..2], memory) ?? "null", N64Views.SummaryManaged(registers[..2], memory) ?? "null");
+                Same($"summary {round}", N64Views.Summary(registers, vi), N64Views.SummaryManaged(registers, vi));
+                Same($"summary without a VI {round}", N64Views.Summary(registers, null), N64Views.SummaryManaged(registers, null));
+                Same($"summary without ra {round}", N64Views.Summary(registers[..2], vi) ?? "null", N64Views.SummaryManaged(registers[..2], vi) ?? "null");
             }
             Assert.True(differences.Count == 0, string.Join("\n", differences));
         }

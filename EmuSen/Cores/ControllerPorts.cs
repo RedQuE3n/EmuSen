@@ -40,8 +40,7 @@ namespace EmuSen.Cores
         {
             "NES" => Crystal.Systems.Nes.NesSystem.Ports,
             "SNES" => Crystal.Systems.Snes.SnesSystem.Ports,
-            "N64" => Nintendo.MarsRT.N64Console.Ports,
-            _ when console is not null && CoreCatalog.DiscoveredSystem(console) is { } system => Math.Max(1, system.Controllers.SelectMany(c => c.Ports).Select(p => (int)p + 1).DefaultIfEmpty(0).Max()),
+            _ when console is not null && (CoreCatalog.DiscoveredSystem(console) ?? CoreCatalog.SoleEngineSystem(console)) is { } system => Math.Max(1, system.Controllers.SelectMany(c => c.Ports).Select(p => (int)p + 1).DefaultIfEmpty(0).Max()),
             _ => 1,
         };
     }

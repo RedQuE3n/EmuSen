@@ -1,6 +1,7 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.WiseMan.Fixtures;
 using System;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Crystal.Systems.Nes;
 using EmuSen.Crystal.Cheats;
 
@@ -30,17 +31,16 @@ namespace EmuSen.WiseMan.Cores
         private const ulong MercuryCapabilities = NativeInterface.Mutes | NativeInterface.RomPatches | NativeInterface.Debug | NativeInterface.DebugStack;
         private static readonly NativeCoreLibrary Mercury = NativeCoreLibrary.Common("mercuryrt", "EMUSEN_MERCURY_NATIVE", MercuryCoreVersion, MercuryCapabilities);
 
-        // The loaders' switches and crash-log names; MercuryRT's pre-stable half on the common interface, MarsRT on the core ABI v1 since its step 5, MoonRT and MercuryRT through discovery since their shims retired.
+        // The loaders' switches and crash-log names; MercuryRT's pre-stable half on the common interface, every engine discovered from its sidecar since the shims retired, MarsRT's component exports gone.
         [Fact]
         public void The_three_loaders_keep_their_switches_and_crash_logs()
         {
             Assert.Equal(("mercuryrt", "EMUSEN_MERCURY_NATIVE", "mercuryrt_crash"), (Mercury.Crate, Mercury.Variable, Mercury.CrashLogStem));
-            Assert.Equal(("marsrt", "EMUSEN_MARS_NATIVE"), (MarsNative.Library.Crate, MarsNative.Library.Variable));
-            Assert.True(MarsNative.Available, MarsNative.Report);
-            Assert.NotEqual(0, MarsNative.Export("emusen_core_create"));
-            Assert.NotEqual(0, MarsNative.Export("mars_rsp_new"));
-            Assert.Equal(0, MarsNative.Export("mars_machine_new"));
-            Assert.Equal(0, MarsNative.Export("no_such_export"));
+            Assert.True(MarsRt.Available, MarsRt.Report);
+            Assert.NotEqual(0, MarsRt.Export("emusen_core_create"));
+            Assert.Equal(0, MarsRt.Export("mars_rsp_new"));
+            Assert.Equal(0, MarsRt.Export("mars_machine_new"));
+            Assert.Equal(0, MarsRt.Export("no_such_export"));
 
             var off = NativeCoreLibrary.Common("mercuryrt", "EMUSEN_CLEANUP_TEST_OFF", MercuryCoreVersion, MercuryCapabilities);
             Environment.SetEnvironmentVariable("EMUSEN_CLEANUP_TEST_OFF", "0");

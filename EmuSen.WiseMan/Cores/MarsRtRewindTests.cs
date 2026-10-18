@@ -1,3 +1,5 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -6,7 +8,6 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using EmuSen.Common;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
@@ -46,19 +47,19 @@ namespace EmuSen.WiseMan.Cores
                 return null;
             }
 
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            Assert.True(MarsRt.Available, MarsRt.Report);
             string rom = SyntheticN64Rom.WriteTemp(File.ReadAllBytes(Path.Combine(folder, romName)));
             _temporary.Add(rom);
             return (rom, File.ReadAllBytes(Path.Combine(folder, stateName)));
         }
 
         // Mistress's settings for MarsRT: four workers, the picture deferred, the recompiler on.
-        private static MarsRtCore Production(bool device = false) => AtTwoOnTheDevice(new(expansionPak: true) { Options = TestCores.NoBattery, ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true, SkipRendering = false }, device);
+        private static MarsRtTestCore Production(bool device = false) => AtTwoOnTheDevice(new(expansionPak: true) { Options = TestCores.NoBattery, ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true, SkipRendering = false }, device);
 
-        private static MarsRtCore OneThread(bool device = false) => AtTwoOnTheDevice(new(expansionPak: true) { Options = TestCores.NoBattery, ThreadedRdp = false, DeferredPresentation = false, SkipRendering = false, UseBlocks = false }, device);
+        private static MarsRtTestCore OneThread(bool device = false) => AtTwoOnTheDevice(new(expansionPak: true) { Options = TestCores.NoBattery, ThreadedRdp = false, DeferredPresentation = false, SkipRendering = false, UseBlocks = false }, device);
 
         // At two on the device, whose scans the drain's leader runs, when asked - see Mars_Native.md §6.15.
-        private static MarsRtCore AtTwoOnTheDevice(MarsRtCore core, bool device)
+        private static MarsRtTestCore AtTwoOnTheDevice(MarsRtTestCore core, bool device)
         {
             if (!device) return core;
             ((EmuSen.Cores.ICoreSettings)core).Set("RenderScale", "2");
@@ -84,7 +85,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // The same input for a frame whichever run reaches it, so a frame run again after a rewind is the frame the reference ran.
-        private static void Drive(MarsRtCore core)
+        private static void Drive(MarsRtTestCore core)
         {
             long frame = core.TotalFrames + 1;
             PadButton[] buttons = { PadButton.A, PadButton.B, PadButton.Start, PadButton.Up, PadButton.L2, PadButton.R };
@@ -113,12 +114,12 @@ namespace EmuSen.WiseMan.Cores
 
         private static string Hash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
 
-        private static string Picture(MarsRtCore core) => $"{core.ScreenWidth}x{core.ScreenHeight}/{core.RowRepeat} {Hash(core.GetFrameBufferRgba())}";
+        private static string Picture(MarsRtTestCore core) => $"{core.ScreenWidth}x{core.ScreenHeight}/{core.RowRepeat} {Hash(core.GetFrameBufferRgba())}";
 
         // Frame by frame on one thread: the state, the picture the frame presented, and the picture a load of that state presents.
         private static Dictionary<long, (string State, string Shown, string Loaded)> Reference((string Rom, byte[] State) game, int frames, bool device)
         {
-            using MarsRtCore reference = OneThread(device), loader = OneThread(device);
+            using MarsRtTestCore reference = OneThread(device), loader = OneThread(device);
             reference.LoadRom(game.Rom);
             loader.LoadRom(game.Rom);
             reference.LoadState(game.State);
@@ -141,10 +142,10 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_capture_and_a_step_back_allocate_no_array_of_the_state_s_size()
         {
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            Assert.True(MarsRt.Available, MarsRt.Report);
             string rom = SyntheticN64Rom.WriteTemp(SyntheticN64System.Build(rsp: true));
             _temporary.Add(rom);
-            using MarsRtCore core = Production();
+            using MarsRtTestCore core = Production();
             core.LoadRom(rom);
             var rewind = new RewindBuffer { Enabled = true, IntervalFrames = 1 };
             for (int frame = 0; frame < 20; frame++)
@@ -198,7 +199,7 @@ namespace EmuSen.WiseMan.Cores
             {
                 foreach (bool on in round % 2 == 0 ? new[] { false, true } : new[] { true, false })
                 {
-                    using MarsRtCore core = Production();
+                    using MarsRtTestCore core = Production();
                     core.LoadRom(game.Rom);
                     core.LoadState(game.State);
                     var rewind = new RewindBuffer { Enabled = on };
@@ -237,7 +238,7 @@ namespace EmuSen.WiseMan.Cores
 
             foreach (int interval in new[] { 1, RewindBuffer.DefaultIntervalFrames })
             {
-                using MarsRtCore subject = Production(device);
+                using MarsRtTestCore subject = Production(device);
                 subject.LoadRom(game.Rom);
                 subject.LoadState(game.State);
                 var rewind = new RewindBuffer { Enabled = true, IntervalFrames = interval };
@@ -305,7 +306,7 @@ namespace EmuSen.WiseMan.Cores
             string last = "";
             var log = new Queue<string>();
 
-            using MarsRtCore subject = Production(device);
+            using MarsRtTestCore subject = Production(device);
             subject.LoadRom(game.Rom);
             subject.LoadState(game.State);
             var rewind = new RewindBuffer { Enabled = true, IntervalFrames = 1 };

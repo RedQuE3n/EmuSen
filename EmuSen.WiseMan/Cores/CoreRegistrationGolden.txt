@@ -147,22 +147,23 @@ catalog.console[N64].axes = [LeftX, LeftY, RightX, RightY]
 catalog.console[N64].controls = [Up, Down, Left, Right, A, B, Start, L, R, L2, LeftStickUp, LeftStickDown, LeftStickLeft, LeftStickRight, RightStickUp, RightStickDown, RightStickLeft, RightStickRight]
 catalog.console[N64].system-ids = [n64]
 catalog.console[N64].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | 0..0 | []
-catalog.console[N64].setting[ThreadedRdp].hint = The display processor runs its lists on a thread of its own, behind marks on the memory it reaches. Exact; faster on any machine with two cores to spare.
+catalog.console[N64].setting[ThreadedRdp].hint = The display processor runs its lists on a thread of its own, behind marks on the memory it reaches. Exact: frame for frame the machine on one thread.
 catalog.console[N64].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | 1..8 | []
-catalog.console[N64].setting[RdpWorkers].hint = How many processors share each list, each shading every Nth row. Exact at any count; past two, each adds less. One per three cores is the default.
+catalog.console[N64].setting[RdpWorkers].hint = How many processors share each list when it runs on a thread of its own, each shading every Nth row. Exact at any count: frame for frame the machine on one thread. One per three cores is the default.
 catalog.console[N64].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | 0..0 | []
-catalog.console[N64].setting[DeferredPresentation].hint = The picture is finished on another thread while the machine runs the next frame, so it reaches the screen one frame late. Off, the frame waits for its picture.
+catalog.console[N64].setting[DeferredPresentation].hint = The picture is finished on another thread while the machine runs the next frame, so it reaches the screen one frame late, exactly the picture it would have been. The picture reaches the screen one frame later.
 catalog.console[N64].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | 0..0 | []
 catalog.console[N64].setting[SkipRepeatedScans].hint = A scan whose registers and bytes match the last walk is not walked again. Exact; the picture is the same either way.
 catalog.console[N64].setting[RenderScale] = Internal resolution | Choice | default 1 | 0..0 | [1, 2, 3, 4]
-catalog.console[N64].setting[RenderScale].hint = The picture drawn at a multiple of the console's, beside the exact drawing games read back. Each step costs its square in drawing: 2x is four times the pixels, 4x sixteen. Threads help; 2x is what most machines can hold at full speed.
+catalog.console[N64].setting[RenderScale].hint = The picture drawn at a multiple of the console's, beside the exact drawing games read back. Each step costs its square in drawing: 2x is four times the pixels, 4x sixteen. Threads help; 2x is what most machines can hold at full speed. Each step costs its square in drawing.
 catalog.console[N64].setting[Antialiasing] = Antialiasing | Choice | default Off | 0..0 | [Off, 2x, 3x, 4x]
-catalog.console[N64].setting[Antialiasing].hint = Each pixel of the picture averaged from a drawing that many times finer each way, which smooths edges and shimmering textures. It multiplies the drawing's cost like the internal resolution, and the two together are held to four: at 2x resolution the most is 2x.
-catalog.console[N64].setting[Antialiasing].note-at-defaults = <null>
+catalog.console[N64].setting[Antialiasing].hint = Each pixel of the picture averaged from a drawing that many times finer each way, which smooths edges and shimmering textures. It multiplies the drawing's cost like the internal resolution, and the two together are held to four: at 2x resolution the most is 2x. It multiplies the drawing's cost like the internal resolution.
 catalog.console[N64].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | 0..0 | []
 catalog.console[N64].setting[Gpu].hint = The picture at an internal resolution above one is shaded by the graphics card rather than by the processor's own threads, which is where nearly all of that setting's cost is. It needs Vulkan; without it the setting does nothing and the processor draws as before. It changes nothing at 1x, and the drawing the game itself reads back is never the card's.
 catalog.console[N64].setting[ExpansionPak] = Expansion Pak | Switch | default true | 0..0 | []
 catalog.console[N64].setting[ExpansionPak].hint = The memory accessory that doubles the console's 4MB. A few games refuse to start without it and more use it when it is there. Takes effect when a game is next loaded; a save state resumes with the memory it was made with.
+catalog.console[N64].setting[Recompiler] = Compile the processor's code | Switch | default true | 0..0 | []
+catalog.console[N64].setting[Recompiler].hint = The processor's code is compiled to the host's machine code in blocks, each compared with memory before it runs, on a thread of its own. Exact: frame for frame the interpreter, which is what off leaves running, slower.
 catalog.console[Atari 2600].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R, L2, R2, L3, R3]
 catalog.console[Atari 2600].axes = []
 catalog.console[Atari 2600].controls = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R, L2, R2, L3, R3]
@@ -195,9 +196,9 @@ built.engine-row[Atari 2600].discovered = []
 built.engine-row[Atari 2600].chosen-default = <null>
 built.engine-row[Atari 2600].chosen-stored = Stored
 built.registered[Mars (C#)] = False
-built.registered[MarsRT (Rust)] = True
+built.registered[MarsRT (Rust)] = False
 built.registered[Mercury (C#)] = False
-built.registered[MercuryRT (Rust)] = False
+built.registered[MercuryRT (Rust)] = True
 built.registered[Moon (C#)] = False
 built.registered[MoonRT (Rust)] = False
 built.registered[Venus (C#)] = False
@@ -205,7 +206,7 @@ built.registered[VenusRT (Rust)] = False
 built.registered[Stored] = False
 built.registered[Nope] = False
 built.registered[<null>] = False
-built.available = MarsRT=True
+built.available = MercuryRT=True MarsRT=True
 built.discovered[diamond] = Diamond systems=[psx] opens=True
 built.discovered[marsrt] = MarsRT (Rust) systems=[n64] opens=True
 built.discovered[mercuryrt] = MercuryRT (Rust) systems=[gb, gbc] opens=True
@@ -338,6 +339,7 @@ built.factory[NES plain <null>].state-version = 6
 built.factory[NES plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[NES plain <null>].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 built.factory[NES plain <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+built.factory[NES plain <null>].file = Home/Saves/NES/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Nope].supported = True
 built.factory[NES plain Nope].probe = CoreEngine
@@ -354,6 +356,7 @@ built.factory[NES plain Nope].state-version = 6
 built.factory[NES plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[NES plain Nope].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 built.factory[NES plain Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+built.factory[NES plain Nope].file = Home/Saves/NES/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Venus (C#)].supported = True
 built.factory[NES plain Venus (C#)].probe = CoreEngine
@@ -370,6 +373,7 @@ built.factory[NES plain Venus (C#)].state-version = 6
 built.factory[NES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[NES plain Venus (C#)].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 built.factory[NES plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+built.factory[NES plain Venus (C#)].file = Home/Saves/NES/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Moon (C#)].supported = True
 built.factory[NES plain Moon (C#)].probe = CoreEngine
@@ -386,6 +390,7 @@ built.factory[NES plain Moon (C#)].state-version = 6
 built.factory[NES plain Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[NES plain Moon (C#)].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 built.factory[NES plain Moon (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+built.factory[NES plain Moon (C#)].file = Home/Saves/NES/Game.srm 64 cc7321cce5e4409b
 built.factory[NES plain Moon (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[NES battery <null>].supported = True
 built.factory[NES battery <null>].probe = CoreEngine
@@ -460,14 +465,14 @@ built.configured[NES Nope] = Nope
 built.configured[NES Venus (C#)] = VenusRT (Rust)
 built.configured[NES Moon (C#)] = MoonRT (Rust)
 built.factory[GB plain <null>].supported = True
-built.factory[GB plain <null>].probe = CoreEngine
-built.factory[GB plain <null>].core = CoreEngine
+built.factory[GB plain <null>].probe = MercuryRtCore
+built.factory[GB plain <null>].core = MercuryRtCore
 built.factory[GB plain <null>].notice = <null>
-built.factory[GB plain <null>].debug-target = CoreDebugTarget
+built.factory[GB plain <null>].debug-target = MercuryRtDebugTarget
 built.factory[GB plain <null>].trace-switch = <null>
 built.factory[GB plain <null>].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB plain <null>].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB plain <null>].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+built.factory[GB plain <null>].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB plain <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB plain <null>].axes = []
 built.factory[GB plain <null>].state-version = 11
@@ -476,14 +481,14 @@ built.factory[GB plain <null>].setting[Model] = Model | Choice | default Auto | 
 built.factory[GB plain <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB plain <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB plain Nope].supported = True
-built.factory[GB plain Nope].probe = CoreEngine
-built.factory[GB plain Nope].core = CoreEngine
+built.factory[GB plain Nope].probe = MercuryRtCore
+built.factory[GB plain Nope].core = MercuryRtCore
 built.factory[GB plain Nope].notice = <null>
-built.factory[GB plain Nope].debug-target = CoreDebugTarget
+built.factory[GB plain Nope].debug-target = MercuryRtDebugTarget
 built.factory[GB plain Nope].trace-switch = <null>
 built.factory[GB plain Nope].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB plain Nope].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB plain Nope].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+built.factory[GB plain Nope].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB plain Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB plain Nope].axes = []
 built.factory[GB plain Nope].state-version = 11
@@ -492,14 +497,14 @@ built.factory[GB plain Nope].setting[Model] = Model | Choice | default Auto | [A
 built.factory[GB plain Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB plain Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB plain Venus (C#)].supported = True
-built.factory[GB plain Venus (C#)].probe = CoreEngine
-built.factory[GB plain Venus (C#)].core = CoreEngine
+built.factory[GB plain Venus (C#)].probe = MercuryRtCore
+built.factory[GB plain Venus (C#)].core = MercuryRtCore
 built.factory[GB plain Venus (C#)].notice = <null>
-built.factory[GB plain Venus (C#)].debug-target = CoreDebugTarget
+built.factory[GB plain Venus (C#)].debug-target = MercuryRtDebugTarget
 built.factory[GB plain Venus (C#)].trace-switch = <null>
 built.factory[GB plain Venus (C#)].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB plain Venus (C#)].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+built.factory[GB plain Venus (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB plain Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB plain Venus (C#)].axes = []
 built.factory[GB plain Venus (C#)].state-version = 11
@@ -508,14 +513,14 @@ built.factory[GB plain Venus (C#)].setting[Model] = Model | Choice | default Aut
 built.factory[GB plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB plain Mercury (C#)].supported = True
-built.factory[GB plain Mercury (C#)].probe = CoreEngine
-built.factory[GB plain Mercury (C#)].core = CoreEngine
+built.factory[GB plain Mercury (C#)].probe = MercuryRtCore
+built.factory[GB plain Mercury (C#)].core = MercuryRtCore
 built.factory[GB plain Mercury (C#)].notice = <null>
-built.factory[GB plain Mercury (C#)].debug-target = CoreDebugTarget
+built.factory[GB plain Mercury (C#)].debug-target = MercuryRtDebugTarget
 built.factory[GB plain Mercury (C#)].trace-switch = <null>
 built.factory[GB plain Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB plain Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB plain Mercury (C#)].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+built.factory[GB plain Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB plain Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB plain Mercury (C#)].axes = []
 built.factory[GB plain Mercury (C#)].state-version = 11
@@ -524,14 +529,14 @@ built.factory[GB plain Mercury (C#)].setting[Model] = Model | Choice | default A
 built.factory[GB plain Mercury (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB plain Mercury (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB battery <null>].supported = True
-built.factory[GB battery <null>].probe = CoreEngine
-built.factory[GB battery <null>].core = CoreEngine
+built.factory[GB battery <null>].probe = MercuryRtCore
+built.factory[GB battery <null>].core = MercuryRtCore
 built.factory[GB battery <null>].notice = <null>
-built.factory[GB battery <null>].debug-target = CoreDebugTarget
+built.factory[GB battery <null>].debug-target = MercuryRtDebugTarget
 built.factory[GB battery <null>].trace-switch = <null>
 built.factory[GB battery <null>].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB battery <null>].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB battery <null>].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+built.factory[GB battery <null>].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB battery <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB battery <null>].axes = []
 built.factory[GB battery <null>].state-version = 11
@@ -541,14 +546,14 @@ built.factory[GB battery <null>].file = Home/Saves/GB/Game.srm 8192 17b6456fb56d
 built.factory[GB battery <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB battery <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB battery Nope].supported = True
-built.factory[GB battery Nope].probe = CoreEngine
-built.factory[GB battery Nope].core = CoreEngine
+built.factory[GB battery Nope].probe = MercuryRtCore
+built.factory[GB battery Nope].core = MercuryRtCore
 built.factory[GB battery Nope].notice = <null>
-built.factory[GB battery Nope].debug-target = CoreDebugTarget
+built.factory[GB battery Nope].debug-target = MercuryRtDebugTarget
 built.factory[GB battery Nope].trace-switch = <null>
 built.factory[GB battery Nope].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB battery Nope].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB battery Nope].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+built.factory[GB battery Nope].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB battery Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB battery Nope].axes = []
 built.factory[GB battery Nope].state-version = 11
@@ -558,14 +563,14 @@ built.factory[GB battery Nope].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc0
 built.factory[GB battery Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB battery Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB battery Venus (C#)].supported = True
-built.factory[GB battery Venus (C#)].probe = CoreEngine
-built.factory[GB battery Venus (C#)].core = CoreEngine
+built.factory[GB battery Venus (C#)].probe = MercuryRtCore
+built.factory[GB battery Venus (C#)].core = MercuryRtCore
 built.factory[GB battery Venus (C#)].notice = <null>
-built.factory[GB battery Venus (C#)].debug-target = CoreDebugTarget
+built.factory[GB battery Venus (C#)].debug-target = MercuryRtDebugTarget
 built.factory[GB battery Venus (C#)].trace-switch = <null>
 built.factory[GB battery Venus (C#)].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB battery Venus (C#)].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+built.factory[GB battery Venus (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB battery Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB battery Venus (C#)].axes = []
 built.factory[GB battery Venus (C#)].state-version = 11
@@ -575,14 +580,14 @@ built.factory[GB battery Venus (C#)].file = Home/Saves/GB/Game.srm 8192 17b6456f
 built.factory[GB battery Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB battery Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB battery Mercury (C#)].supported = True
-built.factory[GB battery Mercury (C#)].probe = CoreEngine
-built.factory[GB battery Mercury (C#)].core = CoreEngine
+built.factory[GB battery Mercury (C#)].probe = MercuryRtCore
+built.factory[GB battery Mercury (C#)].core = MercuryRtCore
 built.factory[GB battery Mercury (C#)].notice = <null>
-built.factory[GB battery Mercury (C#)].debug-target = CoreDebugTarget
+built.factory[GB battery Mercury (C#)].debug-target = MercuryRtDebugTarget
 built.factory[GB battery Mercury (C#)].trace-switch = <null>
 built.factory[GB battery Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB battery Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB battery Mercury (C#)].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+built.factory[GB battery Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB battery Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB battery Mercury (C#)].axes = []
 built.factory[GB battery Mercury (C#)].state-version = 11
@@ -592,14 +597,14 @@ built.factory[GB battery Mercury (C#)].file = Home/Saves/GB/Game.srm 8192 17b645
 built.factory[GB battery Mercury (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB battery Mercury (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB colour-battery <null>].supported = True
-built.factory[GB colour-battery <null>].probe = CoreEngine
-built.factory[GB colour-battery <null>].core = CoreEngine
+built.factory[GB colour-battery <null>].probe = MercuryRtCore
+built.factory[GB colour-battery <null>].core = MercuryRtCore
 built.factory[GB colour-battery <null>].notice = <null>
-built.factory[GB colour-battery <null>].debug-target = CoreDebugTarget
+built.factory[GB colour-battery <null>].debug-target = MercuryRtDebugTarget
 built.factory[GB colour-battery <null>].trace-switch = <null>
 built.factory[GB colour-battery <null>].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB colour-battery <null>].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB colour-battery <null>].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+built.factory[GB colour-battery <null>].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB colour-battery <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB colour-battery <null>].axes = []
 built.factory[GB colour-battery <null>].state-version = 11
@@ -609,14 +614,14 @@ built.factory[GB colour-battery <null>].file = Home/Saves/GBC/Game.srm 8192 17b6
 built.factory[GB colour-battery <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB colour-battery <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB colour-battery Nope].supported = True
-built.factory[GB colour-battery Nope].probe = CoreEngine
-built.factory[GB colour-battery Nope].core = CoreEngine
+built.factory[GB colour-battery Nope].probe = MercuryRtCore
+built.factory[GB colour-battery Nope].core = MercuryRtCore
 built.factory[GB colour-battery Nope].notice = <null>
-built.factory[GB colour-battery Nope].debug-target = CoreDebugTarget
+built.factory[GB colour-battery Nope].debug-target = MercuryRtDebugTarget
 built.factory[GB colour-battery Nope].trace-switch = <null>
 built.factory[GB colour-battery Nope].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB colour-battery Nope].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB colour-battery Nope].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+built.factory[GB colour-battery Nope].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB colour-battery Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB colour-battery Nope].axes = []
 built.factory[GB colour-battery Nope].state-version = 11
@@ -626,14 +631,14 @@ built.factory[GB colour-battery Nope].file = Home/Saves/GBC/Game.srm 8192 17b645
 built.factory[GB colour-battery Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB colour-battery Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB colour-battery Venus (C#)].supported = True
-built.factory[GB colour-battery Venus (C#)].probe = CoreEngine
-built.factory[GB colour-battery Venus (C#)].core = CoreEngine
+built.factory[GB colour-battery Venus (C#)].probe = MercuryRtCore
+built.factory[GB colour-battery Venus (C#)].core = MercuryRtCore
 built.factory[GB colour-battery Venus (C#)].notice = <null>
-built.factory[GB colour-battery Venus (C#)].debug-target = CoreDebugTarget
+built.factory[GB colour-battery Venus (C#)].debug-target = MercuryRtDebugTarget
 built.factory[GB colour-battery Venus (C#)].trace-switch = <null>
 built.factory[GB colour-battery Venus (C#)].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB colour-battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB colour-battery Venus (C#)].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+built.factory[GB colour-battery Venus (C#)].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB colour-battery Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB colour-battery Venus (C#)].axes = []
 built.factory[GB colour-battery Venus (C#)].state-version = 11
@@ -643,14 +648,14 @@ built.factory[GB colour-battery Venus (C#)].file = Home/Saves/GBC/Game.srm 8192 
 built.factory[GB colour-battery Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[GB colour-battery Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[GB colour-battery Mercury (C#)].supported = True
-built.factory[GB colour-battery Mercury (C#)].probe = CoreEngine
-built.factory[GB colour-battery Mercury (C#)].core = CoreEngine
+built.factory[GB colour-battery Mercury (C#)].probe = MercuryRtCore
+built.factory[GB colour-battery Mercury (C#)].core = MercuryRtCore
 built.factory[GB colour-battery Mercury (C#)].notice = <null>
-built.factory[GB colour-battery Mercury (C#)].debug-target = CoreDebugTarget
+built.factory[GB colour-battery Mercury (C#)].debug-target = MercuryRtDebugTarget
 built.factory[GB colour-battery Mercury (C#)].trace-switch = <null>
 built.factory[GB colour-battery Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
 built.factory[GB colour-battery Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
-built.factory[GB colour-battery Mercury (C#)].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+built.factory[GB colour-battery Mercury (C#)].identity = GBC 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
 built.factory[GB colour-battery Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
 built.factory[GB colour-battery Mercury (C#)].axes = []
 built.factory[GB colour-battery Mercury (C#)].state-version = 11
@@ -664,14 +669,14 @@ built.configured[GB Nope] = Nope
 built.configured[GB Venus (C#)] = VenusRT (Rust)
 built.configured[GB Mercury (C#)] = MercuryRT (Rust)
 built.factory[N64 plain <null>].supported = True
-built.factory[N64 plain <null>].probe = MarsRtCore
-built.factory[N64 plain <null>].core = MarsRtCore
+built.factory[N64 plain <null>].probe = CoreEngine
+built.factory[N64 plain <null>].core = CoreEngine
 built.factory[N64 plain <null>].notice = <null>
-built.factory[N64 plain <null>].debug-target = MarsRtDebugTarget
+built.factory[N64 plain <null>].debug-target = CoreDebugTarget
 built.factory[N64 plain <null>].trace-switch = <null>
 built.factory[N64 plain <null>].codec-auto = GameShark | RamPoke | RDRAM
 built.factory[N64 plain <null>].codec-explicit = <null>
-built.factory[N64 plain <null>].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+built.factory[N64 plain <null>].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
 built.factory[N64 plain <null>].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
 built.factory[N64 plain <null>].axes = [LeftX, LeftY, RightX, RightY]
 built.factory[N64 plain <null>].state-version = 1
@@ -689,14 +694,14 @@ built.factory[N64 plain <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 plain <null>].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 plain <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 plain MarsRT (Rust)].supported = True
-built.factory[N64 plain MarsRT (Rust)].probe = MarsRtCore
-built.factory[N64 plain MarsRT (Rust)].core = MarsRtCore
+built.factory[N64 plain MarsRT (Rust)].probe = CoreEngine
+built.factory[N64 plain MarsRT (Rust)].core = CoreEngine
 built.factory[N64 plain MarsRT (Rust)].notice = <null>
-built.factory[N64 plain MarsRT (Rust)].debug-target = MarsRtDebugTarget
+built.factory[N64 plain MarsRT (Rust)].debug-target = CoreDebugTarget
 built.factory[N64 plain MarsRT (Rust)].trace-switch = <null>
 built.factory[N64 plain MarsRT (Rust)].codec-auto = GameShark | RamPoke | RDRAM
 built.factory[N64 plain MarsRT (Rust)].codec-explicit = <null>
-built.factory[N64 plain MarsRT (Rust)].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+built.factory[N64 plain MarsRT (Rust)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
 built.factory[N64 plain MarsRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
 built.factory[N64 plain MarsRT (Rust)].axes = [LeftX, LeftY, RightX, RightY]
 built.factory[N64 plain MarsRT (Rust)].state-version = 1
@@ -714,14 +719,14 @@ built.factory[N64 plain MarsRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e
 built.factory[N64 plain MarsRT (Rust)].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 plain MarsRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 plain Nope].supported = True
-built.factory[N64 plain Nope].probe = MarsRtCore
-built.factory[N64 plain Nope].core = MarsRtCore
+built.factory[N64 plain Nope].probe = CoreEngine
+built.factory[N64 plain Nope].core = CoreEngine
 built.factory[N64 plain Nope].notice = <null>
-built.factory[N64 plain Nope].debug-target = MarsRtDebugTarget
+built.factory[N64 plain Nope].debug-target = CoreDebugTarget
 built.factory[N64 plain Nope].trace-switch = <null>
 built.factory[N64 plain Nope].codec-auto = GameShark | RamPoke | RDRAM
 built.factory[N64 plain Nope].codec-explicit = <null>
-built.factory[N64 plain Nope].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+built.factory[N64 plain Nope].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
 built.factory[N64 plain Nope].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
 built.factory[N64 plain Nope].axes = [LeftX, LeftY, RightX, RightY]
 built.factory[N64 plain Nope].state-version = 1
@@ -739,14 +744,14 @@ built.factory[N64 plain Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 plain Nope].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 plain Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 plain Venus (C#)].supported = True
-built.factory[N64 plain Venus (C#)].probe = MarsRtCore
-built.factory[N64 plain Venus (C#)].core = MarsRtCore
+built.factory[N64 plain Venus (C#)].probe = CoreEngine
+built.factory[N64 plain Venus (C#)].core = CoreEngine
 built.factory[N64 plain Venus (C#)].notice = <null>
-built.factory[N64 plain Venus (C#)].debug-target = MarsRtDebugTarget
+built.factory[N64 plain Venus (C#)].debug-target = CoreDebugTarget
 built.factory[N64 plain Venus (C#)].trace-switch = <null>
 built.factory[N64 plain Venus (C#)].codec-auto = GameShark | RamPoke | RDRAM
 built.factory[N64 plain Venus (C#)].codec-explicit = <null>
-built.factory[N64 plain Venus (C#)].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+built.factory[N64 plain Venus (C#)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
 built.factory[N64 plain Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
 built.factory[N64 plain Venus (C#)].axes = [LeftX, LeftY, RightX, RightY]
 built.factory[N64 plain Venus (C#)].state-version = 1
@@ -764,14 +769,14 @@ built.factory[N64 plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e440
 built.factory[N64 plain Venus (C#)].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 plain Mars (C#)].supported = True
-built.factory[N64 plain Mars (C#)].probe = MarsRtCore
-built.factory[N64 plain Mars (C#)].core = MarsRtCore
+built.factory[N64 plain Mars (C#)].probe = CoreEngine
+built.factory[N64 plain Mars (C#)].core = CoreEngine
 built.factory[N64 plain Mars (C#)].notice = <null>
-built.factory[N64 plain Mars (C#)].debug-target = MarsRtDebugTarget
+built.factory[N64 plain Mars (C#)].debug-target = CoreDebugTarget
 built.factory[N64 plain Mars (C#)].trace-switch = <null>
 built.factory[N64 plain Mars (C#)].codec-auto = GameShark | RamPoke | RDRAM
 built.factory[N64 plain Mars (C#)].codec-explicit = <null>
-built.factory[N64 plain Mars (C#)].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+built.factory[N64 plain Mars (C#)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
 built.factory[N64 plain Mars (C#)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
 built.factory[N64 plain Mars (C#)].axes = [LeftX, LeftY, RightX, RightY]
 built.factory[N64 plain Mars (C#)].state-version = 1
@@ -789,14 +794,14 @@ built.factory[N64 plain Mars (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409
 built.factory[N64 plain Mars (C#)].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 plain Mars (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 eeprom <null>].supported = True
-built.factory[N64 eeprom <null>].probe = MarsRtCore
-built.factory[N64 eeprom <null>].core = MarsRtCore
+built.factory[N64 eeprom <null>].probe = CoreEngine
+built.factory[N64 eeprom <null>].core = CoreEngine
 built.factory[N64 eeprom <null>].notice = <null>
-built.factory[N64 eeprom <null>].debug-target = MarsRtDebugTarget
+built.factory[N64 eeprom <null>].debug-target = CoreDebugTarget
 built.factory[N64 eeprom <null>].trace-switch = <null>
 built.factory[N64 eeprom <null>].codec-auto = GameShark | RamPoke | RDRAM
 built.factory[N64 eeprom <null>].codec-explicit = <null>
-built.factory[N64 eeprom <null>].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+built.factory[N64 eeprom <null>].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
 built.factory[N64 eeprom <null>].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
 built.factory[N64 eeprom <null>].axes = [LeftX, LeftY, RightX, RightY]
 built.factory[N64 eeprom <null>].state-version = 1
@@ -814,14 +819,14 @@ built.factory[N64 eeprom <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 eeprom <null>].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 eeprom <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 eeprom MarsRT (Rust)].supported = True
-built.factory[N64 eeprom MarsRT (Rust)].probe = MarsRtCore
-built.factory[N64 eeprom MarsRT (Rust)].core = MarsRtCore
+built.factory[N64 eeprom MarsRT (Rust)].probe = CoreEngine
+built.factory[N64 eeprom MarsRT (Rust)].core = CoreEngine
 built.factory[N64 eeprom MarsRT (Rust)].notice = <null>
-built.factory[N64 eeprom MarsRT (Rust)].debug-target = MarsRtDebugTarget
+built.factory[N64 eeprom MarsRT (Rust)].debug-target = CoreDebugTarget
 built.factory[N64 eeprom MarsRT (Rust)].trace-switch = <null>
 built.factory[N64 eeprom MarsRT (Rust)].codec-auto = GameShark | RamPoke | RDRAM
 built.factory[N64 eeprom MarsRT (Rust)].codec-explicit = <null>
-built.factory[N64 eeprom MarsRT (Rust)].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+built.factory[N64 eeprom MarsRT (Rust)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
 built.factory[N64 eeprom MarsRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
 built.factory[N64 eeprom MarsRT (Rust)].axes = [LeftX, LeftY, RightX, RightY]
 built.factory[N64 eeprom MarsRT (Rust)].state-version = 1
@@ -839,14 +844,14 @@ built.factory[N64 eeprom MarsRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5
 built.factory[N64 eeprom MarsRT (Rust)].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 eeprom MarsRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 eeprom Nope].supported = True
-built.factory[N64 eeprom Nope].probe = MarsRtCore
-built.factory[N64 eeprom Nope].core = MarsRtCore
+built.factory[N64 eeprom Nope].probe = CoreEngine
+built.factory[N64 eeprom Nope].core = CoreEngine
 built.factory[N64 eeprom Nope].notice = <null>
-built.factory[N64 eeprom Nope].debug-target = MarsRtDebugTarget
+built.factory[N64 eeprom Nope].debug-target = CoreDebugTarget
 built.factory[N64 eeprom Nope].trace-switch = <null>
 built.factory[N64 eeprom Nope].codec-auto = GameShark | RamPoke | RDRAM
 built.factory[N64 eeprom Nope].codec-explicit = <null>
-built.factory[N64 eeprom Nope].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+built.factory[N64 eeprom Nope].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
 built.factory[N64 eeprom Nope].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
 built.factory[N64 eeprom Nope].axes = [LeftX, LeftY, RightX, RightY]
 built.factory[N64 eeprom Nope].state-version = 1
@@ -864,14 +869,14 @@ built.factory[N64 eeprom Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 eeprom Nope].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 eeprom Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 eeprom Venus (C#)].supported = True
-built.factory[N64 eeprom Venus (C#)].probe = MarsRtCore
-built.factory[N64 eeprom Venus (C#)].core = MarsRtCore
+built.factory[N64 eeprom Venus (C#)].probe = CoreEngine
+built.factory[N64 eeprom Venus (C#)].core = CoreEngine
 built.factory[N64 eeprom Venus (C#)].notice = <null>
-built.factory[N64 eeprom Venus (C#)].debug-target = MarsRtDebugTarget
+built.factory[N64 eeprom Venus (C#)].debug-target = CoreDebugTarget
 built.factory[N64 eeprom Venus (C#)].trace-switch = <null>
 built.factory[N64 eeprom Venus (C#)].codec-auto = GameShark | RamPoke | RDRAM
 built.factory[N64 eeprom Venus (C#)].codec-explicit = <null>
-built.factory[N64 eeprom Venus (C#)].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+built.factory[N64 eeprom Venus (C#)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
 built.factory[N64 eeprom Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
 built.factory[N64 eeprom Venus (C#)].axes = [LeftX, LeftY, RightX, RightY]
 built.factory[N64 eeprom Venus (C#)].state-version = 1
@@ -889,14 +894,14 @@ built.factory[N64 eeprom Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e44
 built.factory[N64 eeprom Venus (C#)].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 eeprom Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 eeprom Mars (C#)].supported = True
-built.factory[N64 eeprom Mars (C#)].probe = MarsRtCore
-built.factory[N64 eeprom Mars (C#)].core = MarsRtCore
+built.factory[N64 eeprom Mars (C#)].probe = CoreEngine
+built.factory[N64 eeprom Mars (C#)].core = CoreEngine
 built.factory[N64 eeprom Mars (C#)].notice = <null>
-built.factory[N64 eeprom Mars (C#)].debug-target = MarsRtDebugTarget
+built.factory[N64 eeprom Mars (C#)].debug-target = CoreDebugTarget
 built.factory[N64 eeprom Mars (C#)].trace-switch = <null>
 built.factory[N64 eeprom Mars (C#)].codec-auto = GameShark | RamPoke | RDRAM
 built.factory[N64 eeprom Mars (C#)].codec-explicit = <null>
-built.factory[N64 eeprom Mars (C#)].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+built.factory[N64 eeprom Mars (C#)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
 built.factory[N64 eeprom Mars (C#)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
 built.factory[N64 eeprom Mars (C#)].axes = [LeftX, LeftY, RightX, RightY]
 built.factory[N64 eeprom Mars (C#)].state-version = 1
@@ -914,14 +919,14 @@ built.factory[N64 eeprom Mars (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e440
 built.factory[N64 eeprom Mars (C#)].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 eeprom Mars (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 byteswapped <null>].supported = True
-built.factory[N64 byteswapped <null>].probe = MarsRtCore
-built.factory[N64 byteswapped <null>].core = MarsRtCore
+built.factory[N64 byteswapped <null>].probe = CoreEngine
+built.factory[N64 byteswapped <null>].core = CoreEngine
 built.factory[N64 byteswapped <null>].notice = <null>
-built.factory[N64 byteswapped <null>].debug-target = MarsRtDebugTarget
+built.factory[N64 byteswapped <null>].debug-target = CoreDebugTarget
 built.factory[N64 byteswapped <null>].trace-switch = <null>
 built.factory[N64 byteswapped <null>].codec-auto = GameShark | RamPoke | RDRAM
 built.factory[N64 byteswapped <null>].codec-explicit = <null>
-built.factory[N64 byteswapped <null>].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+built.factory[N64 byteswapped <null>].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
 built.factory[N64 byteswapped <null>].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
 built.factory[N64 byteswapped <null>].axes = [LeftX, LeftY, RightX, RightY]
 built.factory[N64 byteswapped <null>].state-version = 1
@@ -939,14 +944,14 @@ built.factory[N64 byteswapped <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4
 built.factory[N64 byteswapped <null>].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 byteswapped <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 byteswapped MarsRT (Rust)].supported = True
-built.factory[N64 byteswapped MarsRT (Rust)].probe = MarsRtCore
-built.factory[N64 byteswapped MarsRT (Rust)].core = MarsRtCore
+built.factory[N64 byteswapped MarsRT (Rust)].probe = CoreEngine
+built.factory[N64 byteswapped MarsRT (Rust)].core = CoreEngine
 built.factory[N64 byteswapped MarsRT (Rust)].notice = <null>
-built.factory[N64 byteswapped MarsRT (Rust)].debug-target = MarsRtDebugTarget
+built.factory[N64 byteswapped MarsRT (Rust)].debug-target = CoreDebugTarget
 built.factory[N64 byteswapped MarsRT (Rust)].trace-switch = <null>
 built.factory[N64 byteswapped MarsRT (Rust)].codec-auto = GameShark | RamPoke | RDRAM
 built.factory[N64 byteswapped MarsRT (Rust)].codec-explicit = <null>
-built.factory[N64 byteswapped MarsRT (Rust)].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+built.factory[N64 byteswapped MarsRT (Rust)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
 built.factory[N64 byteswapped MarsRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
 built.factory[N64 byteswapped MarsRT (Rust)].axes = [LeftX, LeftY, RightX, RightY]
 built.factory[N64 byteswapped MarsRT (Rust)].state-version = 1
@@ -964,14 +969,14 @@ built.factory[N64 byteswapped MarsRT (Rust)].file = Home/Saves/Game.srm 64 cc732
 built.factory[N64 byteswapped MarsRT (Rust)].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 byteswapped MarsRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 byteswapped Nope].supported = True
-built.factory[N64 byteswapped Nope].probe = MarsRtCore
-built.factory[N64 byteswapped Nope].core = MarsRtCore
+built.factory[N64 byteswapped Nope].probe = CoreEngine
+built.factory[N64 byteswapped Nope].core = CoreEngine
 built.factory[N64 byteswapped Nope].notice = <null>
-built.factory[N64 byteswapped Nope].debug-target = MarsRtDebugTarget
+built.factory[N64 byteswapped Nope].debug-target = CoreDebugTarget
 built.factory[N64 byteswapped Nope].trace-switch = <null>
 built.factory[N64 byteswapped Nope].codec-auto = GameShark | RamPoke | RDRAM
 built.factory[N64 byteswapped Nope].codec-explicit = <null>
-built.factory[N64 byteswapped Nope].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+built.factory[N64 byteswapped Nope].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
 built.factory[N64 byteswapped Nope].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
 built.factory[N64 byteswapped Nope].axes = [LeftX, LeftY, RightX, RightY]
 built.factory[N64 byteswapped Nope].state-version = 1
@@ -989,14 +994,14 @@ built.factory[N64 byteswapped Nope].file = Home/Saves/Game.srm 64 cc7321cce5e440
 built.factory[N64 byteswapped Nope].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 byteswapped Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 byteswapped Venus (C#)].supported = True
-built.factory[N64 byteswapped Venus (C#)].probe = MarsRtCore
-built.factory[N64 byteswapped Venus (C#)].core = MarsRtCore
+built.factory[N64 byteswapped Venus (C#)].probe = CoreEngine
+built.factory[N64 byteswapped Venus (C#)].core = CoreEngine
 built.factory[N64 byteswapped Venus (C#)].notice = <null>
-built.factory[N64 byteswapped Venus (C#)].debug-target = MarsRtDebugTarget
+built.factory[N64 byteswapped Venus (C#)].debug-target = CoreDebugTarget
 built.factory[N64 byteswapped Venus (C#)].trace-switch = <null>
 built.factory[N64 byteswapped Venus (C#)].codec-auto = GameShark | RamPoke | RDRAM
 built.factory[N64 byteswapped Venus (C#)].codec-explicit = <null>
-built.factory[N64 byteswapped Venus (C#)].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+built.factory[N64 byteswapped Venus (C#)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
 built.factory[N64 byteswapped Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
 built.factory[N64 byteswapped Venus (C#)].axes = [LeftX, LeftY, RightX, RightY]
 built.factory[N64 byteswapped Venus (C#)].state-version = 1
@@ -1014,14 +1019,14 @@ built.factory[N64 byteswapped Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cc
 built.factory[N64 byteswapped Venus (C#)].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 byteswapped Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[N64 byteswapped Mars (C#)].supported = True
-built.factory[N64 byteswapped Mars (C#)].probe = MarsRtCore
-built.factory[N64 byteswapped Mars (C#)].core = MarsRtCore
+built.factory[N64 byteswapped Mars (C#)].probe = CoreEngine
+built.factory[N64 byteswapped Mars (C#)].core = CoreEngine
 built.factory[N64 byteswapped Mars (C#)].notice = <null>
-built.factory[N64 byteswapped Mars (C#)].debug-target = MarsRtDebugTarget
+built.factory[N64 byteswapped Mars (C#)].debug-target = CoreDebugTarget
 built.factory[N64 byteswapped Mars (C#)].trace-switch = <null>
 built.factory[N64 byteswapped Mars (C#)].codec-auto = GameShark | RamPoke | RDRAM
 built.factory[N64 byteswapped Mars (C#)].codec-explicit = <null>
-built.factory[N64 byteswapped Mars (C#)].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+built.factory[N64 byteswapped Mars (C#)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
 built.factory[N64 byteswapped Mars (C#)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
 built.factory[N64 byteswapped Mars (C#)].axes = [LeftX, LeftY, RightX, RightY]
 built.factory[N64 byteswapped Mars (C#)].state-version = 1
@@ -1043,26 +1048,34 @@ built.configured[N64 MarsRT (Rust)] = MarsRT (Rust)
 built.configured[N64 Nope] = Nope
 built.configured[N64 Venus (C#)] = VenusRT (Rust)
 built.configured[N64 Mars (C#)] = MarsRT (Rust)
-settings[N64 MarsRT (Rust)].core = MarsRtCore
+settings[N64 MarsRT (Rust)].core = CoreEngine
 settings[N64 MarsRT (Rust)].row[ThreadedRdp] = Draw on a separate thread | Switch | default true | 0..0 | []
 settings[N64 MarsRT (Rust)].row[ThreadedRdp].hint = The display processor runs its lists on a thread of its own, behind marks on the memory it reaches. Exact: frame for frame the machine on one thread.
+settings[N64 MarsRT (Rust)].row[ThreadedRdp].note-at-defaults = <null>
 settings[N64 MarsRT (Rust)].row[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | 1..8 | []
 settings[N64 MarsRT (Rust)].row[RdpWorkers].hint = How many processors share each list when it runs on a thread of its own, each shading every Nth row. Exact at any count: frame for frame the machine on one thread. One per three cores is the default.
+settings[N64 MarsRT (Rust)].row[RdpWorkers].note-at-defaults = <null>
 settings[N64 MarsRT (Rust)].row[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | 0..0 | []
-settings[N64 MarsRT (Rust)].row[DeferredPresentation].hint = The picture is finished on another thread while the machine runs the next frame, so it reaches the screen one frame late, exactly the picture it would have been.
+settings[N64 MarsRT (Rust)].row[DeferredPresentation].hint = The picture is finished on another thread while the machine runs the next frame, so it reaches the screen one frame late, exactly the picture it would have been. The picture reaches the screen one frame later.
+settings[N64 MarsRT (Rust)].row[DeferredPresentation].note-at-defaults = <null>
 settings[N64 MarsRT (Rust)].row[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | 0..0 | []
 settings[N64 MarsRT (Rust)].row[SkipRepeatedScans].hint = A scan whose registers and bytes match the last walk is not walked again. Exact; the picture is the same either way.
+settings[N64 MarsRT (Rust)].row[SkipRepeatedScans].note-at-defaults = <null>
 settings[N64 MarsRT (Rust)].row[RenderScale] = Internal resolution | Choice | default 1 | 0..0 | [1, 2, 3, 4]
-settings[N64 MarsRT (Rust)].row[RenderScale].hint = The picture drawn at a multiple of the console's, beside the exact drawing games read back. Each step costs its square in drawing: 2x is four times the pixels, 4x sixteen. Threads help; 2x is what most machines can hold at full speed.
+settings[N64 MarsRT (Rust)].row[RenderScale].hint = The picture drawn at a multiple of the console's, beside the exact drawing games read back. Each step costs its square in drawing: 2x is four times the pixels, 4x sixteen. Threads help; 2x is what most machines can hold at full speed. Each step costs its square in drawing.
+settings[N64 MarsRT (Rust)].row[RenderScale].note-at-defaults = <null>
 settings[N64 MarsRT (Rust)].row[Antialiasing] = Antialiasing | Choice | default Off | 0..0 | [Off, 2x, 3x, 4x]
-settings[N64 MarsRT (Rust)].row[Antialiasing].hint = Each pixel of the picture averaged from a drawing that many times finer each way, which smooths edges and shimmering textures. It multiplies the drawing's cost like the internal resolution, and the two together are held to four: at 2x resolution the most is 2x.
+settings[N64 MarsRT (Rust)].row[Antialiasing].hint = Each pixel of the picture averaged from a drawing that many times finer each way, which smooths edges and shimmering textures. It multiplies the drawing's cost like the internal resolution, and the two together are held to four: at 2x resolution the most is 2x. It multiplies the drawing's cost like the internal resolution.
 settings[N64 MarsRT (Rust)].row[Antialiasing].note-at-defaults = <null>
 settings[N64 MarsRT (Rust)].row[Gpu] = Draw the multiple on the graphics card | Switch | default false | 0..0 | []
 settings[N64 MarsRT (Rust)].row[Gpu].hint = The picture at an internal resolution above one is shaded by the graphics card rather than by the processor's own threads, which is where nearly all of that setting's cost is. It needs Vulkan; without it the setting does nothing and the processor draws as before. It changes nothing at 1x, and the drawing the game itself reads back is never the card's.
+settings[N64 MarsRT (Rust)].row[Gpu].note-at-defaults = <null>
 settings[N64 MarsRT (Rust)].row[ExpansionPak] = Expansion Pak | Switch | default true | 0..0 | []
 settings[N64 MarsRT (Rust)].row[ExpansionPak].hint = The memory accessory that doubles the console's 4MB. A few games refuse to start without it and more use it when it is there. Takes effect when a game is next loaded; a save state resumes with the memory it was made with.
+settings[N64 MarsRT (Rust)].row[ExpansionPak].note-at-defaults = <null>
 settings[N64 MarsRT (Rust)].row[Recompiler] = Compile the processor's code | Switch | default true | 0..0 | []
 settings[N64 MarsRT (Rust)].row[Recompiler].hint = The processor's code is compiled to the host's machine code in blocks, each compared with memory before it runs, on a thread of its own. Exact: frame for frame the interpreter, which is what off leaves running, slower.
+settings[N64 MarsRT (Rust)].row[Recompiler].note-at-defaults = <null>
 codecs.default = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
 codecs.for[<null>] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
 codecs.for[] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
@@ -1188,9 +1201,9 @@ nothing-discovered.engine-row[Atari 2600].discovered = []
 nothing-discovered.engine-row[Atari 2600].chosen-default = <null>
 nothing-discovered.engine-row[Atari 2600].chosen-stored = Stored
 nothing-discovered.registered[Mars (C#)] = False
-nothing-discovered.registered[MarsRT (Rust)] = True
+nothing-discovered.registered[MarsRT (Rust)] = False
 nothing-discovered.registered[Mercury (C#)] = False
-nothing-discovered.registered[MercuryRT (Rust)] = False
+nothing-discovered.registered[MercuryRT (Rust)] = True
 nothing-discovered.registered[Moon (C#)] = False
 nothing-discovered.registered[MoonRT (Rust)] = False
 nothing-discovered.registered[Venus (C#)] = False
@@ -1198,7 +1211,7 @@ nothing-discovered.registered[VenusRT (Rust)] = False
 nothing-discovered.registered[Stored] = False
 nothing-discovered.registered[Nope] = False
 nothing-discovered.registered[<null>] = False
-nothing-discovered.available = MarsRT=True
+nothing-discovered.available = MercuryRT=True MarsRT=True
 nothing-discovered.factory[SNES plain <null>].supported = True
 nothing-discovered.factory[SNES plain <null>].probe = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (no sidecar for it was found beside the program).
 nothing-discovered.factory[SNES plain <null>].load = NotSupportedException: This build has no SNES core: VenusRT (Rust) is missing (no sidecar for it was found beside the program).
@@ -1221,127 +1234,76 @@ nothing-discovered.factory[NES plain Moon (C#)].supported = True
 nothing-discovered.factory[NES plain Moon (C#)].probe = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (no sidecar for it was found beside the program).
 nothing-discovered.factory[NES plain Moon (C#)].load = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (no sidecar for it was found beside the program).
 nothing-discovered.factory[GB plain <null>].supported = True
-nothing-discovered.factory[GB plain <null>].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (no sidecar for it was found beside the program).
-nothing-discovered.factory[GB plain <null>].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (no sidecar for it was found beside the program).
+nothing-discovered.factory[GB plain <null>].probe = MercuryRtCore
+nothing-discovered.factory[GB plain <null>].core = MercuryRtCore
+nothing-discovered.factory[GB plain <null>].notice = <null>
+nothing-discovered.factory[GB plain <null>].debug-target = MercuryRtDebugTarget
+nothing-discovered.factory[GB plain <null>].trace-switch = <null>
+nothing-discovered.factory[GB plain <null>].codec-auto = GameShark | RamPoke | CPUBUS
+nothing-discovered.factory[GB plain <null>].codec-explicit = Game Genie | RomPatch | <null>
+nothing-discovered.factory[GB plain <null>].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+nothing-discovered.factory[GB plain <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
+nothing-discovered.factory[GB plain <null>].axes = []
+nothing-discovered.factory[GB plain <null>].state-version = 11
+nothing-discovered.factory[GB plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+nothing-discovered.factory[GB plain <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 nothing-discovered.factory[GB plain Nope].supported = True
-nothing-discovered.factory[GB plain Nope].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (no sidecar for it was found beside the program).
-nothing-discovered.factory[GB plain Nope].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (no sidecar for it was found beside the program).
+nothing-discovered.factory[GB plain Nope].probe = MercuryRtCore
+nothing-discovered.factory[GB plain Nope].core = MercuryRtCore
+nothing-discovered.factory[GB plain Nope].notice = <null>
+nothing-discovered.factory[GB plain Nope].debug-target = MercuryRtDebugTarget
+nothing-discovered.factory[GB plain Nope].trace-switch = <null>
+nothing-discovered.factory[GB plain Nope].codec-auto = GameShark | RamPoke | CPUBUS
+nothing-discovered.factory[GB plain Nope].codec-explicit = Game Genie | RomPatch | <null>
+nothing-discovered.factory[GB plain Nope].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+nothing-discovered.factory[GB plain Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
+nothing-discovered.factory[GB plain Nope].axes = []
+nothing-discovered.factory[GB plain Nope].state-version = 11
+nothing-discovered.factory[GB plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+nothing-discovered.factory[GB plain Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 nothing-discovered.factory[GB plain Venus (C#)].supported = True
-nothing-discovered.factory[GB plain Venus (C#)].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (no sidecar for it was found beside the program).
-nothing-discovered.factory[GB plain Venus (C#)].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (no sidecar for it was found beside the program).
+nothing-discovered.factory[GB plain Venus (C#)].probe = MercuryRtCore
+nothing-discovered.factory[GB plain Venus (C#)].core = MercuryRtCore
+nothing-discovered.factory[GB plain Venus (C#)].notice = <null>
+nothing-discovered.factory[GB plain Venus (C#)].debug-target = MercuryRtDebugTarget
+nothing-discovered.factory[GB plain Venus (C#)].trace-switch = <null>
+nothing-discovered.factory[GB plain Venus (C#)].codec-auto = GameShark | RamPoke | CPUBUS
+nothing-discovered.factory[GB plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
+nothing-discovered.factory[GB plain Venus (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+nothing-discovered.factory[GB plain Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
+nothing-discovered.factory[GB plain Venus (C#)].axes = []
+nothing-discovered.factory[GB plain Venus (C#)].state-version = 11
+nothing-discovered.factory[GB plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+nothing-discovered.factory[GB plain Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 nothing-discovered.factory[GB plain Mercury (C#)].supported = True
-nothing-discovered.factory[GB plain Mercury (C#)].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (no sidecar for it was found beside the program).
-nothing-discovered.factory[GB plain Mercury (C#)].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (no sidecar for it was found beside the program).
+nothing-discovered.factory[GB plain Mercury (C#)].probe = MercuryRtCore
+nothing-discovered.factory[GB plain Mercury (C#)].core = MercuryRtCore
+nothing-discovered.factory[GB plain Mercury (C#)].notice = <null>
+nothing-discovered.factory[GB plain Mercury (C#)].debug-target = MercuryRtDebugTarget
+nothing-discovered.factory[GB plain Mercury (C#)].trace-switch = <null>
+nothing-discovered.factory[GB plain Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
+nothing-discovered.factory[GB plain Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
+nothing-discovered.factory[GB plain Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+nothing-discovered.factory[GB plain Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
+nothing-discovered.factory[GB plain Mercury (C#)].axes = []
+nothing-discovered.factory[GB plain Mercury (C#)].state-version = 11
+nothing-discovered.factory[GB plain Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+nothing-discovered.factory[GB plain Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 nothing-discovered.factory[N64 plain <null>].supported = True
-nothing-discovered.factory[N64 plain <null>].probe = MarsRtCore
-nothing-discovered.factory[N64 plain <null>].core = MarsRtCore
-nothing-discovered.factory[N64 plain <null>].notice = <null>
-nothing-discovered.factory[N64 plain <null>].debug-target = MarsRtDebugTarget
-nothing-discovered.factory[N64 plain <null>].trace-switch = <null>
-nothing-discovered.factory[N64 plain <null>].codec-auto = GameShark | RamPoke | RDRAM
-nothing-discovered.factory[N64 plain <null>].codec-explicit = <null>
-nothing-discovered.factory[N64 plain <null>].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
-nothing-discovered.factory[N64 plain <null>].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
-nothing-discovered.factory[N64 plain <null>].axes = [LeftX, LeftY, RightX, RightY]
-nothing-discovered.factory[N64 plain <null>].state-version = 1
-nothing-discovered.factory[N64 plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-nothing-discovered.factory[N64 plain <null>].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain <null>].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
-nothing-discovered.factory[N64 plain <null>].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain <null>].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain <null>].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
-nothing-discovered.factory[N64 plain <null>].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
-nothing-discovered.factory[N64 plain <null>].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
-nothing-discovered.factory[N64 plain <null>].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain <null>].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+nothing-discovered.factory[N64 plain <null>].probe = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (no sidecar for it was found beside the program).
+nothing-discovered.factory[N64 plain <null>].load = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (no sidecar for it was found beside the program).
 nothing-discovered.factory[N64 plain MarsRT (Rust)].supported = True
-nothing-discovered.factory[N64 plain MarsRT (Rust)].probe = MarsRtCore
-nothing-discovered.factory[N64 plain MarsRT (Rust)].core = MarsRtCore
-nothing-discovered.factory[N64 plain MarsRT (Rust)].notice = <null>
-nothing-discovered.factory[N64 plain MarsRT (Rust)].debug-target = MarsRtDebugTarget
-nothing-discovered.factory[N64 plain MarsRT (Rust)].trace-switch = <null>
-nothing-discovered.factory[N64 plain MarsRT (Rust)].codec-auto = GameShark | RamPoke | RDRAM
-nothing-discovered.factory[N64 plain MarsRT (Rust)].codec-explicit = <null>
-nothing-discovered.factory[N64 plain MarsRT (Rust)].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
-nothing-discovered.factory[N64 plain MarsRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
-nothing-discovered.factory[N64 plain MarsRT (Rust)].axes = [LeftX, LeftY, RightX, RightY]
-nothing-discovered.factory[N64 plain MarsRT (Rust)].state-version = 1
-nothing-discovered.factory[N64 plain MarsRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-nothing-discovered.factory[N64 plain MarsRT (Rust)].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain MarsRT (Rust)].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
-nothing-discovered.factory[N64 plain MarsRT (Rust)].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain MarsRT (Rust)].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain MarsRT (Rust)].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
-nothing-discovered.factory[N64 plain MarsRT (Rust)].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
-nothing-discovered.factory[N64 plain MarsRT (Rust)].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
-nothing-discovered.factory[N64 plain MarsRT (Rust)].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain MarsRT (Rust)].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+nothing-discovered.factory[N64 plain MarsRT (Rust)].probe = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (no sidecar for it was found beside the program).
+nothing-discovered.factory[N64 plain MarsRT (Rust)].load = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (no sidecar for it was found beside the program).
 nothing-discovered.factory[N64 plain Nope].supported = True
-nothing-discovered.factory[N64 plain Nope].probe = MarsRtCore
-nothing-discovered.factory[N64 plain Nope].core = MarsRtCore
-nothing-discovered.factory[N64 plain Nope].notice = <null>
-nothing-discovered.factory[N64 plain Nope].debug-target = MarsRtDebugTarget
-nothing-discovered.factory[N64 plain Nope].trace-switch = <null>
-nothing-discovered.factory[N64 plain Nope].codec-auto = GameShark | RamPoke | RDRAM
-nothing-discovered.factory[N64 plain Nope].codec-explicit = <null>
-nothing-discovered.factory[N64 plain Nope].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
-nothing-discovered.factory[N64 plain Nope].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
-nothing-discovered.factory[N64 plain Nope].axes = [LeftX, LeftY, RightX, RightY]
-nothing-discovered.factory[N64 plain Nope].state-version = 1
-nothing-discovered.factory[N64 plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-nothing-discovered.factory[N64 plain Nope].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain Nope].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
-nothing-discovered.factory[N64 plain Nope].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain Nope].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain Nope].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
-nothing-discovered.factory[N64 plain Nope].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
-nothing-discovered.factory[N64 plain Nope].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
-nothing-discovered.factory[N64 plain Nope].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain Nope].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+nothing-discovered.factory[N64 plain Nope].probe = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (no sidecar for it was found beside the program).
+nothing-discovered.factory[N64 plain Nope].load = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (no sidecar for it was found beside the program).
 nothing-discovered.factory[N64 plain Venus (C#)].supported = True
-nothing-discovered.factory[N64 plain Venus (C#)].probe = MarsRtCore
-nothing-discovered.factory[N64 plain Venus (C#)].core = MarsRtCore
-nothing-discovered.factory[N64 plain Venus (C#)].notice = <null>
-nothing-discovered.factory[N64 plain Venus (C#)].debug-target = MarsRtDebugTarget
-nothing-discovered.factory[N64 plain Venus (C#)].trace-switch = <null>
-nothing-discovered.factory[N64 plain Venus (C#)].codec-auto = GameShark | RamPoke | RDRAM
-nothing-discovered.factory[N64 plain Venus (C#)].codec-explicit = <null>
-nothing-discovered.factory[N64 plain Venus (C#)].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
-nothing-discovered.factory[N64 plain Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
-nothing-discovered.factory[N64 plain Venus (C#)].axes = [LeftX, LeftY, RightX, RightY]
-nothing-discovered.factory[N64 plain Venus (C#)].state-version = 1
-nothing-discovered.factory[N64 plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-nothing-discovered.factory[N64 plain Venus (C#)].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain Venus (C#)].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
-nothing-discovered.factory[N64 plain Venus (C#)].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain Venus (C#)].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain Venus (C#)].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
-nothing-discovered.factory[N64 plain Venus (C#)].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
-nothing-discovered.factory[N64 plain Venus (C#)].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
-nothing-discovered.factory[N64 plain Venus (C#)].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain Venus (C#)].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+nothing-discovered.factory[N64 plain Venus (C#)].probe = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (no sidecar for it was found beside the program).
+nothing-discovered.factory[N64 plain Venus (C#)].load = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (no sidecar for it was found beside the program).
 nothing-discovered.factory[N64 plain Mars (C#)].supported = True
-nothing-discovered.factory[N64 plain Mars (C#)].probe = MarsRtCore
-nothing-discovered.factory[N64 plain Mars (C#)].core = MarsRtCore
-nothing-discovered.factory[N64 plain Mars (C#)].notice = <null>
-nothing-discovered.factory[N64 plain Mars (C#)].debug-target = MarsRtDebugTarget
-nothing-discovered.factory[N64 plain Mars (C#)].trace-switch = <null>
-nothing-discovered.factory[N64 plain Mars (C#)].codec-auto = GameShark | RamPoke | RDRAM
-nothing-discovered.factory[N64 plain Mars (C#)].codec-explicit = <null>
-nothing-discovered.factory[N64 plain Mars (C#)].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
-nothing-discovered.factory[N64 plain Mars (C#)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
-nothing-discovered.factory[N64 plain Mars (C#)].axes = [LeftX, LeftY, RightX, RightY]
-nothing-discovered.factory[N64 plain Mars (C#)].state-version = 1
-nothing-discovered.factory[N64 plain Mars (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-nothing-discovered.factory[N64 plain Mars (C#)].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain Mars (C#)].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
-nothing-discovered.factory[N64 plain Mars (C#)].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain Mars (C#)].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain Mars (C#)].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
-nothing-discovered.factory[N64 plain Mars (C#)].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
-nothing-discovered.factory[N64 plain Mars (C#)].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
-nothing-discovered.factory[N64 plain Mars (C#)].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
-nothing-discovered.factory[N64 plain Mars (C#)].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+nothing-discovered.factory[N64 plain Mars (C#)].probe = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (no sidecar for it was found beside the program).
+nothing-discovered.factory[N64 plain Mars (C#)].load = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (no sidecar for it was found beside the program).
 refused-discovered.engine-row[SNES] = <null>
 refused-discovered.engine-row[SNES].discovered = [VenusRT (Rust)]
 refused-discovered.engine-row[SNES].chosen-default = <null>
@@ -1363,9 +1325,9 @@ refused-discovered.engine-row[Atari 2600].discovered = []
 refused-discovered.engine-row[Atari 2600].chosen-default = <null>
 refused-discovered.engine-row[Atari 2600].chosen-stored = Stored
 refused-discovered.registered[Mars (C#)] = False
-refused-discovered.registered[MarsRT (Rust)] = True
+refused-discovered.registered[MarsRT (Rust)] = False
 refused-discovered.registered[Mercury (C#)] = False
-refused-discovered.registered[MercuryRT (Rust)] = False
+refused-discovered.registered[MercuryRT (Rust)] = True
 refused-discovered.registered[Moon (C#)] = False
 refused-discovered.registered[MoonRT (Rust)] = False
 refused-discovered.registered[Venus (C#)] = False
@@ -1373,7 +1335,7 @@ refused-discovered.registered[VenusRT (Rust)] = False
 refused-discovered.registered[Stored] = False
 refused-discovered.registered[Nope] = False
 refused-discovered.registered[<null>] = False
-refused-discovered.available = MarsRT=True
+refused-discovered.available = MercuryRT=True MarsRT=True
 refused-discovered.discovered[diamond] = Diamond systems=[psx] opens=False report=libdiamond.so is not the library its sidecar describes (its SHA-256 differs); it was not loaded
 refused-discovered.discovered[marsrt] = MarsRT (Rust) systems=[n64] opens=False report=<lib marsrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded
 refused-discovered.discovered[mercuryrt] = MercuryRT (Rust) systems=[gb, gbc] opens=False report=<lib mercuryrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded
@@ -1402,127 +1364,76 @@ refused-discovered.factory[NES plain Moon (C#)].supported = True
 refused-discovered.factory[NES plain Moon (C#)].probe = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (<lib moonrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
 refused-discovered.factory[NES plain Moon (C#)].load = NotSupportedException: This build has no NES core: MoonRT (Rust) is missing (<lib moonrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
 refused-discovered.factory[GB plain <null>].supported = True
-refused-discovered.factory[GB plain <null>].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (<lib mercuryrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
-refused-discovered.factory[GB plain <null>].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (<lib mercuryrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
+refused-discovered.factory[GB plain <null>].probe = MercuryRtCore
+refused-discovered.factory[GB plain <null>].core = MercuryRtCore
+refused-discovered.factory[GB plain <null>].notice = <null>
+refused-discovered.factory[GB plain <null>].debug-target = MercuryRtDebugTarget
+refused-discovered.factory[GB plain <null>].trace-switch = <null>
+refused-discovered.factory[GB plain <null>].codec-auto = GameShark | RamPoke | CPUBUS
+refused-discovered.factory[GB plain <null>].codec-explicit = Game Genie | RomPatch | <null>
+refused-discovered.factory[GB plain <null>].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+refused-discovered.factory[GB plain <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
+refused-discovered.factory[GB plain <null>].axes = []
+refused-discovered.factory[GB plain <null>].state-version = 11
+refused-discovered.factory[GB plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+refused-discovered.factory[GB plain <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 refused-discovered.factory[GB plain Nope].supported = True
-refused-discovered.factory[GB plain Nope].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (<lib mercuryrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
-refused-discovered.factory[GB plain Nope].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (<lib mercuryrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
+refused-discovered.factory[GB plain Nope].probe = MercuryRtCore
+refused-discovered.factory[GB plain Nope].core = MercuryRtCore
+refused-discovered.factory[GB plain Nope].notice = <null>
+refused-discovered.factory[GB plain Nope].debug-target = MercuryRtDebugTarget
+refused-discovered.factory[GB plain Nope].trace-switch = <null>
+refused-discovered.factory[GB plain Nope].codec-auto = GameShark | RamPoke | CPUBUS
+refused-discovered.factory[GB plain Nope].codec-explicit = Game Genie | RomPatch | <null>
+refused-discovered.factory[GB plain Nope].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+refused-discovered.factory[GB plain Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
+refused-discovered.factory[GB plain Nope].axes = []
+refused-discovered.factory[GB plain Nope].state-version = 11
+refused-discovered.factory[GB plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+refused-discovered.factory[GB plain Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 refused-discovered.factory[GB plain Venus (C#)].supported = True
-refused-discovered.factory[GB plain Venus (C#)].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (<lib mercuryrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
-refused-discovered.factory[GB plain Venus (C#)].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (<lib mercuryrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
+refused-discovered.factory[GB plain Venus (C#)].probe = MercuryRtCore
+refused-discovered.factory[GB plain Venus (C#)].core = MercuryRtCore
+refused-discovered.factory[GB plain Venus (C#)].notice = <null>
+refused-discovered.factory[GB plain Venus (C#)].debug-target = MercuryRtDebugTarget
+refused-discovered.factory[GB plain Venus (C#)].trace-switch = <null>
+refused-discovered.factory[GB plain Venus (C#)].codec-auto = GameShark | RamPoke | CPUBUS
+refused-discovered.factory[GB plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
+refused-discovered.factory[GB plain Venus (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+refused-discovered.factory[GB plain Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
+refused-discovered.factory[GB plain Venus (C#)].axes = []
+refused-discovered.factory[GB plain Venus (C#)].state-version = 11
+refused-discovered.factory[GB plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+refused-discovered.factory[GB plain Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 refused-discovered.factory[GB plain Mercury (C#)].supported = True
-refused-discovered.factory[GB plain Mercury (C#)].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (<lib mercuryrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
-refused-discovered.factory[GB plain Mercury (C#)].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (<lib mercuryrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
+refused-discovered.factory[GB plain Mercury (C#)].probe = MercuryRtCore
+refused-discovered.factory[GB plain Mercury (C#)].core = MercuryRtCore
+refused-discovered.factory[GB plain Mercury (C#)].notice = <null>
+refused-discovered.factory[GB plain Mercury (C#)].debug-target = MercuryRtDebugTarget
+refused-discovered.factory[GB plain Mercury (C#)].trace-switch = <null>
+refused-discovered.factory[GB plain Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
+refused-discovered.factory[GB plain Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
+refused-discovered.factory[GB plain Mercury (C#)].identity = GB 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
+refused-discovered.factory[GB plain Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
+refused-discovered.factory[GB plain Mercury (C#)].axes = []
+refused-discovered.factory[GB plain Mercury (C#)].state-version = 11
+refused-discovered.factory[GB plain Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+refused-discovered.factory[GB plain Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
 refused-discovered.factory[N64 plain <null>].supported = True
-refused-discovered.factory[N64 plain <null>].probe = MarsRtCore
-refused-discovered.factory[N64 plain <null>].core = MarsRtCore
-refused-discovered.factory[N64 plain <null>].notice = <null>
-refused-discovered.factory[N64 plain <null>].debug-target = MarsRtDebugTarget
-refused-discovered.factory[N64 plain <null>].trace-switch = <null>
-refused-discovered.factory[N64 plain <null>].codec-auto = GameShark | RamPoke | RDRAM
-refused-discovered.factory[N64 plain <null>].codec-explicit = <null>
-refused-discovered.factory[N64 plain <null>].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
-refused-discovered.factory[N64 plain <null>].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
-refused-discovered.factory[N64 plain <null>].axes = [LeftX, LeftY, RightX, RightY]
-refused-discovered.factory[N64 plain <null>].state-version = 1
-refused-discovered.factory[N64 plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-refused-discovered.factory[N64 plain <null>].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain <null>].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
-refused-discovered.factory[N64 plain <null>].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain <null>].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain <null>].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
-refused-discovered.factory[N64 plain <null>].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
-refused-discovered.factory[N64 plain <null>].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
-refused-discovered.factory[N64 plain <null>].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain <null>].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+refused-discovered.factory[N64 plain <null>].probe = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (<lib marsrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
+refused-discovered.factory[N64 plain <null>].load = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (<lib marsrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
 refused-discovered.factory[N64 plain MarsRT (Rust)].supported = True
-refused-discovered.factory[N64 plain MarsRT (Rust)].probe = MarsRtCore
-refused-discovered.factory[N64 plain MarsRT (Rust)].core = MarsRtCore
-refused-discovered.factory[N64 plain MarsRT (Rust)].notice = <null>
-refused-discovered.factory[N64 plain MarsRT (Rust)].debug-target = MarsRtDebugTarget
-refused-discovered.factory[N64 plain MarsRT (Rust)].trace-switch = <null>
-refused-discovered.factory[N64 plain MarsRT (Rust)].codec-auto = GameShark | RamPoke | RDRAM
-refused-discovered.factory[N64 plain MarsRT (Rust)].codec-explicit = <null>
-refused-discovered.factory[N64 plain MarsRT (Rust)].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
-refused-discovered.factory[N64 plain MarsRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
-refused-discovered.factory[N64 plain MarsRT (Rust)].axes = [LeftX, LeftY, RightX, RightY]
-refused-discovered.factory[N64 plain MarsRT (Rust)].state-version = 1
-refused-discovered.factory[N64 plain MarsRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-refused-discovered.factory[N64 plain MarsRT (Rust)].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain MarsRT (Rust)].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
-refused-discovered.factory[N64 plain MarsRT (Rust)].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain MarsRT (Rust)].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain MarsRT (Rust)].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
-refused-discovered.factory[N64 plain MarsRT (Rust)].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
-refused-discovered.factory[N64 plain MarsRT (Rust)].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
-refused-discovered.factory[N64 plain MarsRT (Rust)].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain MarsRT (Rust)].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+refused-discovered.factory[N64 plain MarsRT (Rust)].probe = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (<lib marsrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
+refused-discovered.factory[N64 plain MarsRT (Rust)].load = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (<lib marsrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
 refused-discovered.factory[N64 plain Nope].supported = True
-refused-discovered.factory[N64 plain Nope].probe = MarsRtCore
-refused-discovered.factory[N64 plain Nope].core = MarsRtCore
-refused-discovered.factory[N64 plain Nope].notice = <null>
-refused-discovered.factory[N64 plain Nope].debug-target = MarsRtDebugTarget
-refused-discovered.factory[N64 plain Nope].trace-switch = <null>
-refused-discovered.factory[N64 plain Nope].codec-auto = GameShark | RamPoke | RDRAM
-refused-discovered.factory[N64 plain Nope].codec-explicit = <null>
-refused-discovered.factory[N64 plain Nope].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
-refused-discovered.factory[N64 plain Nope].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
-refused-discovered.factory[N64 plain Nope].axes = [LeftX, LeftY, RightX, RightY]
-refused-discovered.factory[N64 plain Nope].state-version = 1
-refused-discovered.factory[N64 plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-refused-discovered.factory[N64 plain Nope].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain Nope].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
-refused-discovered.factory[N64 plain Nope].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain Nope].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain Nope].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
-refused-discovered.factory[N64 plain Nope].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
-refused-discovered.factory[N64 plain Nope].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
-refused-discovered.factory[N64 plain Nope].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain Nope].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+refused-discovered.factory[N64 plain Nope].probe = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (<lib marsrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
+refused-discovered.factory[N64 plain Nope].load = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (<lib marsrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
 refused-discovered.factory[N64 plain Venus (C#)].supported = True
-refused-discovered.factory[N64 plain Venus (C#)].probe = MarsRtCore
-refused-discovered.factory[N64 plain Venus (C#)].core = MarsRtCore
-refused-discovered.factory[N64 plain Venus (C#)].notice = <null>
-refused-discovered.factory[N64 plain Venus (C#)].debug-target = MarsRtDebugTarget
-refused-discovered.factory[N64 plain Venus (C#)].trace-switch = <null>
-refused-discovered.factory[N64 plain Venus (C#)].codec-auto = GameShark | RamPoke | RDRAM
-refused-discovered.factory[N64 plain Venus (C#)].codec-explicit = <null>
-refused-discovered.factory[N64 plain Venus (C#)].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
-refused-discovered.factory[N64 plain Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
-refused-discovered.factory[N64 plain Venus (C#)].axes = [LeftX, LeftY, RightX, RightY]
-refused-discovered.factory[N64 plain Venus (C#)].state-version = 1
-refused-discovered.factory[N64 plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-refused-discovered.factory[N64 plain Venus (C#)].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain Venus (C#)].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
-refused-discovered.factory[N64 plain Venus (C#)].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain Venus (C#)].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain Venus (C#)].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
-refused-discovered.factory[N64 plain Venus (C#)].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
-refused-discovered.factory[N64 plain Venus (C#)].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
-refused-discovered.factory[N64 plain Venus (C#)].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain Venus (C#)].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+refused-discovered.factory[N64 plain Venus (C#)].probe = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (<lib marsrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
+refused-discovered.factory[N64 plain Venus (C#)].load = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (<lib marsrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
 refused-discovered.factory[N64 plain Mars (C#)].supported = True
-refused-discovered.factory[N64 plain Mars (C#)].probe = MarsRtCore
-refused-discovered.factory[N64 plain Mars (C#)].core = MarsRtCore
-refused-discovered.factory[N64 plain Mars (C#)].notice = <null>
-refused-discovered.factory[N64 plain Mars (C#)].debug-target = MarsRtDebugTarget
-refused-discovered.factory[N64 plain Mars (C#)].trace-switch = <null>
-refused-discovered.factory[N64 plain Mars (C#)].codec-auto = GameShark | RamPoke | RDRAM
-refused-discovered.factory[N64 plain Mars (C#)].codec-explicit = <null>
-refused-discovered.factory[N64 plain Mars (C#)].identity = N64 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
-refused-discovered.factory[N64 plain Mars (C#)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
-refused-discovered.factory[N64 plain Mars (C#)].axes = [LeftX, LeftY, RightX, RightY]
-refused-discovered.factory[N64 plain Mars (C#)].state-version = 1
-refused-discovered.factory[N64 plain Mars (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-refused-discovered.factory[N64 plain Mars (C#)].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain Mars (C#)].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
-refused-discovered.factory[N64 plain Mars (C#)].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain Mars (C#)].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain Mars (C#)].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
-refused-discovered.factory[N64 plain Mars (C#)].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
-refused-discovered.factory[N64 plain Mars (C#)].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
-refused-discovered.factory[N64 plain Mars (C#)].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
-refused-discovered.factory[N64 plain Mars (C#)].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+refused-discovered.factory[N64 plain Mars (C#)].probe = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (<lib marsrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
+refused-discovered.factory[N64 plain Mars (C#)].load = NotSupportedException: This build has no N64 core: MarsRT (Rust) is missing (<lib marsrt> is not the library its sidecar describes (its SHA-256 differs); it was not loaded).
 [off]
 catalog.registry[diamond] = PlayStation (Diamond)
 catalog.registry[gb] = Game Boy (Mercury)
@@ -1672,22 +1583,23 @@ catalog.console[N64].axes = [LeftX, LeftY, RightX, RightY]
 catalog.console[N64].controls = [Up, Down, Left, Right, A, B, Start, L, R, L2, LeftStickUp, LeftStickDown, LeftStickLeft, LeftStickRight, RightStickUp, RightStickDown, RightStickLeft, RightStickRight]
 catalog.console[N64].system-ids = [n64]
 catalog.console[N64].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | 0..0 | []
-catalog.console[N64].setting[ThreadedRdp].hint = The display processor runs its lists on a thread of its own, behind marks on the memory it reaches. Exact; faster on any machine with two cores to spare.
+catalog.console[N64].setting[ThreadedRdp].hint = The display processor runs its lists on a thread of its own, behind marks on the memory it reaches. Exact: frame for frame the machine on one thread.
 catalog.console[N64].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | 1..8 | []
-catalog.console[N64].setting[RdpWorkers].hint = How many processors share each list, each shading every Nth row. Exact at any count; past two, each adds less. One per three cores is the default.
+catalog.console[N64].setting[RdpWorkers].hint = How many processors share each list when it runs on a thread of its own, each shading every Nth row. Exact at any count: frame for frame the machine on one thread. One per three cores is the default.
 catalog.console[N64].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | 0..0 | []
-catalog.console[N64].setting[DeferredPresentation].hint = The picture is finished on another thread while the machine runs the next frame, so it reaches the screen one frame late. Off, the frame waits for its picture.
+catalog.console[N64].setting[DeferredPresentation].hint = The picture is finished on another thread while the machine runs the next frame, so it reaches the screen one frame late, exactly the picture it would have been. The picture reaches the screen one frame later.
 catalog.console[N64].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | 0..0 | []
 catalog.console[N64].setting[SkipRepeatedScans].hint = A scan whose registers and bytes match the last walk is not walked again. Exact; the picture is the same either way.
 catalog.console[N64].setting[RenderScale] = Internal resolution | Choice | default 1 | 0..0 | [1, 2, 3, 4]
-catalog.console[N64].setting[RenderScale].hint = The picture drawn at a multiple of the console's, beside the exact drawing games read back. Each step costs its square in drawing: 2x is four times the pixels, 4x sixteen. Threads help; 2x is what most machines can hold at full speed.
+catalog.console[N64].setting[RenderScale].hint = The picture drawn at a multiple of the console's, beside the exact drawing games read back. Each step costs its square in drawing: 2x is four times the pixels, 4x sixteen. Threads help; 2x is what most machines can hold at full speed. Each step costs its square in drawing.
 catalog.console[N64].setting[Antialiasing] = Antialiasing | Choice | default Off | 0..0 | [Off, 2x, 3x, 4x]
-catalog.console[N64].setting[Antialiasing].hint = Each pixel of the picture averaged from a drawing that many times finer each way, which smooths edges and shimmering textures. It multiplies the drawing's cost like the internal resolution, and the two together are held to four: at 2x resolution the most is 2x.
-catalog.console[N64].setting[Antialiasing].note-at-defaults = <null>
+catalog.console[N64].setting[Antialiasing].hint = Each pixel of the picture averaged from a drawing that many times finer each way, which smooths edges and shimmering textures. It multiplies the drawing's cost like the internal resolution, and the two together are held to four: at 2x resolution the most is 2x. It multiplies the drawing's cost like the internal resolution.
 catalog.console[N64].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | 0..0 | []
 catalog.console[N64].setting[Gpu].hint = The picture at an internal resolution above one is shaded by the graphics card rather than by the processor's own threads, which is where nearly all of that setting's cost is. It needs Vulkan; without it the setting does nothing and the processor draws as before. It changes nothing at 1x, and the drawing the game itself reads back is never the card's.
 catalog.console[N64].setting[ExpansionPak] = Expansion Pak | Switch | default true | 0..0 | []
 catalog.console[N64].setting[ExpansionPak].hint = The memory accessory that doubles the console's 4MB. A few games refuse to start without it and more use it when it is there. Takes effect when a game is next loaded; a save state resumes with the memory it was made with.
+catalog.console[N64].setting[Recompiler] = Compile the processor's code | Switch | default true | 0..0 | []
+catalog.console[N64].setting[Recompiler].hint = The processor's code is compiled to the host's machine code in blocks, each compared with memory before it runs, on a thread of its own. Exact: frame for frame the interpreter, which is what off leaves running, slower.
 catalog.console[Atari 2600].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R, L2, R2, L3, R3]
 catalog.console[Atari 2600].axes = []
 catalog.console[Atari 2600].controls = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R, L2, R2, L3, R3]
@@ -1720,9 +1632,9 @@ off.engine-row[Atari 2600].discovered = []
 off.engine-row[Atari 2600].chosen-default = <null>
 off.engine-row[Atari 2600].chosen-stored = Stored
 off.registered[Mars (C#)] = False
-off.registered[MarsRT (Rust)] = True
+off.registered[MarsRT (Rust)] = False
 off.registered[Mercury (C#)] = False
-off.registered[MercuryRT (Rust)] = False
+off.registered[MercuryRT (Rust)] = True
 off.registered[Moon (C#)] = False
 off.registered[MoonRT (Rust)] = False
 off.registered[Venus (C#)] = False
@@ -1730,7 +1642,7 @@ off.registered[VenusRT (Rust)] = False
 off.registered[Stored] = False
 off.registered[Nope] = False
 off.registered[<null>] = False
-off.available = MarsRT=False
+off.available = MercuryRT=False MarsRT=True
 off.discovered[diamond] = Diamond systems=[psx] opens=True
 off.discovered[marsrt] = MarsRT (Rust) systems=[n64] opens=True
 off.discovered[mercuryrt] = MercuryRT (Rust) systems=[gb, gbc] opens=True
@@ -1863,6 +1775,7 @@ off.factory[NES plain <null>].state-version = 6
 off.factory[NES plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[NES plain <null>].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 off.factory[NES plain <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[NES plain <null>].file = Home/Saves/NES/Game.srm 64 cc7321cce5e4409b
 off.factory[NES plain <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[NES plain Nope].supported = True
 off.factory[NES plain Nope].probe = CoreEngine
@@ -1879,6 +1792,7 @@ off.factory[NES plain Nope].state-version = 6
 off.factory[NES plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[NES plain Nope].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 off.factory[NES plain Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[NES plain Nope].file = Home/Saves/NES/Game.srm 64 cc7321cce5e4409b
 off.factory[NES plain Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[NES plain Venus (C#)].supported = True
 off.factory[NES plain Venus (C#)].probe = CoreEngine
@@ -1895,6 +1809,7 @@ off.factory[NES plain Venus (C#)].state-version = 6
 off.factory[NES plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[NES plain Venus (C#)].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 off.factory[NES plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[NES plain Venus (C#)].file = Home/Saves/NES/Game.srm 64 cc7321cce5e4409b
 off.factory[NES plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[NES plain Moon (C#)].supported = True
 off.factory[NES plain Moon (C#)].probe = CoreEngine
@@ -1911,6 +1826,7 @@ off.factory[NES plain Moon (C#)].state-version = 6
 off.factory[NES plain Moon (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[NES plain Moon (C#)].setting[region] = Region | Choice | default auto | [auto, nes.ntsc, nes.pal, nes.dendy] | now auto
 off.factory[NES plain Moon (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[NES plain Moon (C#)].file = Home/Saves/NES/Game.srm 64 cc7321cce5e4409b
 off.factory[NES plain Moon (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[NES battery <null>].supported = True
 off.factory[NES battery <null>].probe = CoreEngine
@@ -1985,260 +1901,453 @@ off.configured[NES Nope] = Nope
 off.configured[NES Venus (C#)] = VenusRT (Rust)
 off.configured[NES Moon (C#)] = MoonRT (Rust)
 off.factory[GB plain <null>].supported = True
-off.factory[GB plain <null>].probe = CoreEngine
-off.factory[GB plain <null>].core = CoreEngine
-off.factory[GB plain <null>].notice = <null>
-off.factory[GB plain <null>].debug-target = CoreDebugTarget
-off.factory[GB plain <null>].trace-switch = <null>
-off.factory[GB plain <null>].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB plain <null>].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB plain <null>].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB plain <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB plain <null>].axes = []
-off.factory[GB plain <null>].state-version = 11
-off.factory[GB plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB plain <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB plain <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB plain <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB plain <null>].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB plain <null>].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB plain Nope].supported = True
-off.factory[GB plain Nope].probe = CoreEngine
-off.factory[GB plain Nope].core = CoreEngine
-off.factory[GB plain Nope].notice = <null>
-off.factory[GB plain Nope].debug-target = CoreDebugTarget
-off.factory[GB plain Nope].trace-switch = <null>
-off.factory[GB plain Nope].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB plain Nope].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB plain Nope].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB plain Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB plain Nope].axes = []
-off.factory[GB plain Nope].state-version = 11
-off.factory[GB plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB plain Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB plain Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB plain Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB plain Nope].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB plain Nope].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB plain Venus (C#)].supported = True
-off.factory[GB plain Venus (C#)].probe = CoreEngine
-off.factory[GB plain Venus (C#)].core = CoreEngine
-off.factory[GB plain Venus (C#)].notice = <null>
-off.factory[GB plain Venus (C#)].debug-target = CoreDebugTarget
-off.factory[GB plain Venus (C#)].trace-switch = <null>
-off.factory[GB plain Venus (C#)].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB plain Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB plain Venus (C#)].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB plain Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB plain Venus (C#)].axes = []
-off.factory[GB plain Venus (C#)].state-version = 11
-off.factory[GB plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB plain Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB plain Venus (C#)].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB plain Venus (C#)].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB plain Mercury (C#)].supported = True
-off.factory[GB plain Mercury (C#)].probe = CoreEngine
-off.factory[GB plain Mercury (C#)].core = CoreEngine
-off.factory[GB plain Mercury (C#)].notice = <null>
-off.factory[GB plain Mercury (C#)].debug-target = CoreDebugTarget
-off.factory[GB plain Mercury (C#)].trace-switch = <null>
-off.factory[GB plain Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB plain Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB plain Mercury (C#)].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB plain Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB plain Mercury (C#)].axes = []
-off.factory[GB plain Mercury (C#)].state-version = 11
-off.factory[GB plain Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB plain Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB plain Mercury (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB plain Mercury (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB plain Mercury (C#)].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB plain Mercury (C#)].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB battery <null>].supported = True
-off.factory[GB battery <null>].probe = CoreEngine
-off.factory[GB battery <null>].core = CoreEngine
-off.factory[GB battery <null>].notice = <null>
-off.factory[GB battery <null>].debug-target = CoreDebugTarget
-off.factory[GB battery <null>].trace-switch = <null>
-off.factory[GB battery <null>].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB battery <null>].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB battery <null>].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB battery <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB battery <null>].axes = []
-off.factory[GB battery <null>].state-version = 11
-off.factory[GB battery <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB battery <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB battery <null>].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB battery <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB battery <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB battery <null>].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB battery <null>].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB battery Nope].supported = True
-off.factory[GB battery Nope].probe = CoreEngine
-off.factory[GB battery Nope].core = CoreEngine
-off.factory[GB battery Nope].notice = <null>
-off.factory[GB battery Nope].debug-target = CoreDebugTarget
-off.factory[GB battery Nope].trace-switch = <null>
-off.factory[GB battery Nope].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB battery Nope].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB battery Nope].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB battery Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB battery Nope].axes = []
-off.factory[GB battery Nope].state-version = 11
-off.factory[GB battery Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB battery Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB battery Nope].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB battery Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB battery Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB battery Nope].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB battery Nope].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB battery Venus (C#)].supported = True
-off.factory[GB battery Venus (C#)].probe = CoreEngine
-off.factory[GB battery Venus (C#)].core = CoreEngine
-off.factory[GB battery Venus (C#)].notice = <null>
-off.factory[GB battery Venus (C#)].debug-target = CoreDebugTarget
-off.factory[GB battery Venus (C#)].trace-switch = <null>
-off.factory[GB battery Venus (C#)].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB battery Venus (C#)].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB battery Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB battery Venus (C#)].axes = []
-off.factory[GB battery Venus (C#)].state-version = 11
-off.factory[GB battery Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB battery Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB battery Venus (C#)].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB battery Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB battery Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB battery Venus (C#)].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB battery Venus (C#)].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB battery Mercury (C#)].supported = True
-off.factory[GB battery Mercury (C#)].probe = CoreEngine
-off.factory[GB battery Mercury (C#)].core = CoreEngine
-off.factory[GB battery Mercury (C#)].notice = <null>
-off.factory[GB battery Mercury (C#)].debug-target = CoreDebugTarget
-off.factory[GB battery Mercury (C#)].trace-switch = <null>
-off.factory[GB battery Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB battery Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB battery Mercury (C#)].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB battery Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB battery Mercury (C#)].axes = []
-off.factory[GB battery Mercury (C#)].state-version = 11
-off.factory[GB battery Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB battery Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB battery Mercury (C#)].file = Home/Saves/GB/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB battery Mercury (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB battery Mercury (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB battery Mercury (C#)].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB battery Mercury (C#)].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB colour-battery <null>].supported = True
-off.factory[GB colour-battery <null>].probe = CoreEngine
-off.factory[GB colour-battery <null>].core = CoreEngine
-off.factory[GB colour-battery <null>].notice = <null>
-off.factory[GB colour-battery <null>].debug-target = CoreDebugTarget
-off.factory[GB colour-battery <null>].trace-switch = <null>
-off.factory[GB colour-battery <null>].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB colour-battery <null>].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB colour-battery <null>].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB colour-battery <null>].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB colour-battery <null>].axes = []
-off.factory[GB colour-battery <null>].state-version = 11
-off.factory[GB colour-battery <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB colour-battery <null>].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB colour-battery <null>].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB colour-battery <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB colour-battery <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB colour-battery <null>].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB colour-battery <null>].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB colour-battery Nope].supported = True
-off.factory[GB colour-battery Nope].probe = CoreEngine
-off.factory[GB colour-battery Nope].core = CoreEngine
-off.factory[GB colour-battery Nope].notice = <null>
-off.factory[GB colour-battery Nope].debug-target = CoreDebugTarget
-off.factory[GB colour-battery Nope].trace-switch = <null>
-off.factory[GB colour-battery Nope].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB colour-battery Nope].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB colour-battery Nope].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB colour-battery Nope].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB colour-battery Nope].axes = []
-off.factory[GB colour-battery Nope].state-version = 11
-off.factory[GB colour-battery Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB colour-battery Nope].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB colour-battery Nope].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB colour-battery Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB colour-battery Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB colour-battery Nope].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB colour-battery Nope].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB colour-battery Venus (C#)].supported = True
-off.factory[GB colour-battery Venus (C#)].probe = CoreEngine
-off.factory[GB colour-battery Venus (C#)].core = CoreEngine
-off.factory[GB colour-battery Venus (C#)].notice = <null>
-off.factory[GB colour-battery Venus (C#)].debug-target = CoreDebugTarget
-off.factory[GB colour-battery Venus (C#)].trace-switch = <null>
-off.factory[GB colour-battery Venus (C#)].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB colour-battery Venus (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB colour-battery Venus (C#)].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB colour-battery Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB colour-battery Venus (C#)].axes = []
-off.factory[GB colour-battery Venus (C#)].state-version = 11
-off.factory[GB colour-battery Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB colour-battery Venus (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB colour-battery Venus (C#)].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB colour-battery Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB colour-battery Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB colour-battery Venus (C#)].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB colour-battery Venus (C#)].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.factory[GB colour-battery Mercury (C#)].supported = True
-off.factory[GB colour-battery Mercury (C#)].probe = CoreEngine
-off.factory[GB colour-battery Mercury (C#)].core = CoreEngine
-off.factory[GB colour-battery Mercury (C#)].notice = <null>
-off.factory[GB colour-battery Mercury (C#)].debug-target = CoreDebugTarget
-off.factory[GB colour-battery Mercury (C#)].trace-switch = <null>
-off.factory[GB colour-battery Mercury (C#)].codec-auto = GameShark | RamPoke | CPUBUS
-off.factory[GB colour-battery Mercury (C#)].codec-explicit = Game Genie | RomPatch | <null>
-off.factory[GB colour-battery Mercury (C#)].identity = MercuryRT 160x144 59.72750056960583 Hz 44100 loaded=True frames=0
-off.factory[GB colour-battery Mercury (C#)].buttons = [Up, Down, Left, Right, A, B, Select, Start]
-off.factory[GB colour-battery Mercury (C#)].axes = []
-off.factory[GB colour-battery Mercury (C#)].state-version = 11
-off.factory[GB colour-battery Mercury (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
-off.factory[GB colour-battery Mercury (C#)].setting[Model] = Model | Choice | default Auto | [Auto, Game Boy, Game Boy Color] | now Auto
-off.factory[GB colour-battery Mercury (C#)].file = Home/Saves/GBC/Game.srm 8192 17b6456fb56dc08f
-off.factory[GB colour-battery Mercury (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
-off.factory[GB colour-battery Mercury (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
+off.factory[GB colour-battery Mercury (C#)].probe = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
+off.factory[GB colour-battery Mercury (C#)].load = NotSupportedException: This build has no Game Boy core: MercuryRT (Rust) is missing (turned off by EMUSEN_MERCURY_NATIVE=0).
 off.configured[GB nothing stored] = <null>
 off.configured[GB Nope] = Nope
 off.configured[GB Venus (C#)] = VenusRT (Rust)
 off.configured[GB Mercury (C#)] = MercuryRT (Rust)
 off.factory[N64 plain <null>].supported = True
-off.factory[N64 plain <null>].probe = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
-off.factory[N64 plain <null>].load = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
+off.factory[N64 plain <null>].probe = CoreEngine
+off.factory[N64 plain <null>].core = CoreEngine
+off.factory[N64 plain <null>].notice = <null>
+off.factory[N64 plain <null>].debug-target = CoreDebugTarget
+off.factory[N64 plain <null>].trace-switch = <null>
+off.factory[N64 plain <null>].codec-auto = GameShark | RamPoke | RDRAM
+off.factory[N64 plain <null>].codec-explicit = <null>
+off.factory[N64 plain <null>].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+off.factory[N64 plain <null>].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
+off.factory[N64 plain <null>].axes = [LeftX, LeftY, RightX, RightY]
+off.factory[N64 plain <null>].state-version = 1
+off.factory[N64 plain <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[N64 plain <null>].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
+off.factory[N64 plain <null>].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
+off.factory[N64 plain <null>].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
+off.factory[N64 plain <null>].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
+off.factory[N64 plain <null>].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
+off.factory[N64 plain <null>].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
+off.factory[N64 plain <null>].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
+off.factory[N64 plain <null>].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
+off.factory[N64 plain <null>].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+off.factory[N64 plain <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 plain <null>].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 plain <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[N64 plain MarsRT (Rust)].supported = True
-off.factory[N64 plain MarsRT (Rust)].probe = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
-off.factory[N64 plain MarsRT (Rust)].load = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
+off.factory[N64 plain MarsRT (Rust)].probe = CoreEngine
+off.factory[N64 plain MarsRT (Rust)].core = CoreEngine
+off.factory[N64 plain MarsRT (Rust)].notice = <null>
+off.factory[N64 plain MarsRT (Rust)].debug-target = CoreDebugTarget
+off.factory[N64 plain MarsRT (Rust)].trace-switch = <null>
+off.factory[N64 plain MarsRT (Rust)].codec-auto = GameShark | RamPoke | RDRAM
+off.factory[N64 plain MarsRT (Rust)].codec-explicit = <null>
+off.factory[N64 plain MarsRT (Rust)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+off.factory[N64 plain MarsRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
+off.factory[N64 plain MarsRT (Rust)].axes = [LeftX, LeftY, RightX, RightY]
+off.factory[N64 plain MarsRT (Rust)].state-version = 1
+off.factory[N64 plain MarsRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[N64 plain MarsRT (Rust)].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
+off.factory[N64 plain MarsRT (Rust)].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
+off.factory[N64 plain MarsRT (Rust)].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
+off.factory[N64 plain MarsRT (Rust)].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
+off.factory[N64 plain MarsRT (Rust)].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
+off.factory[N64 plain MarsRT (Rust)].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
+off.factory[N64 plain MarsRT (Rust)].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
+off.factory[N64 plain MarsRT (Rust)].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
+off.factory[N64 plain MarsRT (Rust)].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+off.factory[N64 plain MarsRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 plain MarsRT (Rust)].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 plain MarsRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[N64 plain Nope].supported = True
-off.factory[N64 plain Nope].probe = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
-off.factory[N64 plain Nope].load = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
+off.factory[N64 plain Nope].probe = CoreEngine
+off.factory[N64 plain Nope].core = CoreEngine
+off.factory[N64 plain Nope].notice = <null>
+off.factory[N64 plain Nope].debug-target = CoreDebugTarget
+off.factory[N64 plain Nope].trace-switch = <null>
+off.factory[N64 plain Nope].codec-auto = GameShark | RamPoke | RDRAM
+off.factory[N64 plain Nope].codec-explicit = <null>
+off.factory[N64 plain Nope].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+off.factory[N64 plain Nope].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
+off.factory[N64 plain Nope].axes = [LeftX, LeftY, RightX, RightY]
+off.factory[N64 plain Nope].state-version = 1
+off.factory[N64 plain Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[N64 plain Nope].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
+off.factory[N64 plain Nope].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
+off.factory[N64 plain Nope].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
+off.factory[N64 plain Nope].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
+off.factory[N64 plain Nope].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
+off.factory[N64 plain Nope].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
+off.factory[N64 plain Nope].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
+off.factory[N64 plain Nope].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
+off.factory[N64 plain Nope].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+off.factory[N64 plain Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 plain Nope].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 plain Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[N64 plain Venus (C#)].supported = True
-off.factory[N64 plain Venus (C#)].probe = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
-off.factory[N64 plain Venus (C#)].load = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
+off.factory[N64 plain Venus (C#)].probe = CoreEngine
+off.factory[N64 plain Venus (C#)].core = CoreEngine
+off.factory[N64 plain Venus (C#)].notice = <null>
+off.factory[N64 plain Venus (C#)].debug-target = CoreDebugTarget
+off.factory[N64 plain Venus (C#)].trace-switch = <null>
+off.factory[N64 plain Venus (C#)].codec-auto = GameShark | RamPoke | RDRAM
+off.factory[N64 plain Venus (C#)].codec-explicit = <null>
+off.factory[N64 plain Venus (C#)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+off.factory[N64 plain Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
+off.factory[N64 plain Venus (C#)].axes = [LeftX, LeftY, RightX, RightY]
+off.factory[N64 plain Venus (C#)].state-version = 1
+off.factory[N64 plain Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[N64 plain Venus (C#)].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
+off.factory[N64 plain Venus (C#)].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
+off.factory[N64 plain Venus (C#)].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
+off.factory[N64 plain Venus (C#)].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
+off.factory[N64 plain Venus (C#)].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
+off.factory[N64 plain Venus (C#)].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
+off.factory[N64 plain Venus (C#)].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
+off.factory[N64 plain Venus (C#)].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
+off.factory[N64 plain Venus (C#)].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+off.factory[N64 plain Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 plain Venus (C#)].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[N64 plain Mars (C#)].supported = True
-off.factory[N64 plain Mars (C#)].probe = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
-off.factory[N64 plain Mars (C#)].load = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
+off.factory[N64 plain Mars (C#)].probe = CoreEngine
+off.factory[N64 plain Mars (C#)].core = CoreEngine
+off.factory[N64 plain Mars (C#)].notice = <null>
+off.factory[N64 plain Mars (C#)].debug-target = CoreDebugTarget
+off.factory[N64 plain Mars (C#)].trace-switch = <null>
+off.factory[N64 plain Mars (C#)].codec-auto = GameShark | RamPoke | RDRAM
+off.factory[N64 plain Mars (C#)].codec-explicit = <null>
+off.factory[N64 plain Mars (C#)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+off.factory[N64 plain Mars (C#)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
+off.factory[N64 plain Mars (C#)].axes = [LeftX, LeftY, RightX, RightY]
+off.factory[N64 plain Mars (C#)].state-version = 1
+off.factory[N64 plain Mars (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[N64 plain Mars (C#)].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
+off.factory[N64 plain Mars (C#)].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
+off.factory[N64 plain Mars (C#)].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
+off.factory[N64 plain Mars (C#)].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
+off.factory[N64 plain Mars (C#)].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
+off.factory[N64 plain Mars (C#)].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
+off.factory[N64 plain Mars (C#)].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
+off.factory[N64 plain Mars (C#)].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
+off.factory[N64 plain Mars (C#)].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+off.factory[N64 plain Mars (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 plain Mars (C#)].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 plain Mars (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[N64 eeprom <null>].supported = True
-off.factory[N64 eeprom <null>].probe = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
-off.factory[N64 eeprom <null>].load = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
+off.factory[N64 eeprom <null>].probe = CoreEngine
+off.factory[N64 eeprom <null>].core = CoreEngine
+off.factory[N64 eeprom <null>].notice = <null>
+off.factory[N64 eeprom <null>].debug-target = CoreDebugTarget
+off.factory[N64 eeprom <null>].trace-switch = <null>
+off.factory[N64 eeprom <null>].codec-auto = GameShark | RamPoke | RDRAM
+off.factory[N64 eeprom <null>].codec-explicit = <null>
+off.factory[N64 eeprom <null>].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+off.factory[N64 eeprom <null>].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
+off.factory[N64 eeprom <null>].axes = [LeftX, LeftY, RightX, RightY]
+off.factory[N64 eeprom <null>].state-version = 1
+off.factory[N64 eeprom <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[N64 eeprom <null>].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
+off.factory[N64 eeprom <null>].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
+off.factory[N64 eeprom <null>].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
+off.factory[N64 eeprom <null>].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
+off.factory[N64 eeprom <null>].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
+off.factory[N64 eeprom <null>].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
+off.factory[N64 eeprom <null>].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
+off.factory[N64 eeprom <null>].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
+off.factory[N64 eeprom <null>].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+off.factory[N64 eeprom <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 eeprom <null>].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 eeprom <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[N64 eeprom MarsRT (Rust)].supported = True
-off.factory[N64 eeprom MarsRT (Rust)].probe = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
-off.factory[N64 eeprom MarsRT (Rust)].load = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
+off.factory[N64 eeprom MarsRT (Rust)].probe = CoreEngine
+off.factory[N64 eeprom MarsRT (Rust)].core = CoreEngine
+off.factory[N64 eeprom MarsRT (Rust)].notice = <null>
+off.factory[N64 eeprom MarsRT (Rust)].debug-target = CoreDebugTarget
+off.factory[N64 eeprom MarsRT (Rust)].trace-switch = <null>
+off.factory[N64 eeprom MarsRT (Rust)].codec-auto = GameShark | RamPoke | RDRAM
+off.factory[N64 eeprom MarsRT (Rust)].codec-explicit = <null>
+off.factory[N64 eeprom MarsRT (Rust)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+off.factory[N64 eeprom MarsRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
+off.factory[N64 eeprom MarsRT (Rust)].axes = [LeftX, LeftY, RightX, RightY]
+off.factory[N64 eeprom MarsRT (Rust)].state-version = 1
+off.factory[N64 eeprom MarsRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[N64 eeprom MarsRT (Rust)].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
+off.factory[N64 eeprom MarsRT (Rust)].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
+off.factory[N64 eeprom MarsRT (Rust)].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
+off.factory[N64 eeprom MarsRT (Rust)].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
+off.factory[N64 eeprom MarsRT (Rust)].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
+off.factory[N64 eeprom MarsRT (Rust)].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
+off.factory[N64 eeprom MarsRT (Rust)].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
+off.factory[N64 eeprom MarsRT (Rust)].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
+off.factory[N64 eeprom MarsRT (Rust)].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+off.factory[N64 eeprom MarsRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 eeprom MarsRT (Rust)].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 eeprom MarsRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[N64 eeprom Nope].supported = True
-off.factory[N64 eeprom Nope].probe = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
-off.factory[N64 eeprom Nope].load = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
+off.factory[N64 eeprom Nope].probe = CoreEngine
+off.factory[N64 eeprom Nope].core = CoreEngine
+off.factory[N64 eeprom Nope].notice = <null>
+off.factory[N64 eeprom Nope].debug-target = CoreDebugTarget
+off.factory[N64 eeprom Nope].trace-switch = <null>
+off.factory[N64 eeprom Nope].codec-auto = GameShark | RamPoke | RDRAM
+off.factory[N64 eeprom Nope].codec-explicit = <null>
+off.factory[N64 eeprom Nope].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+off.factory[N64 eeprom Nope].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
+off.factory[N64 eeprom Nope].axes = [LeftX, LeftY, RightX, RightY]
+off.factory[N64 eeprom Nope].state-version = 1
+off.factory[N64 eeprom Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[N64 eeprom Nope].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
+off.factory[N64 eeprom Nope].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
+off.factory[N64 eeprom Nope].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
+off.factory[N64 eeprom Nope].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
+off.factory[N64 eeprom Nope].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
+off.factory[N64 eeprom Nope].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
+off.factory[N64 eeprom Nope].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
+off.factory[N64 eeprom Nope].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
+off.factory[N64 eeprom Nope].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+off.factory[N64 eeprom Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 eeprom Nope].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 eeprom Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[N64 eeprom Venus (C#)].supported = True
-off.factory[N64 eeprom Venus (C#)].probe = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
-off.factory[N64 eeprom Venus (C#)].load = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
+off.factory[N64 eeprom Venus (C#)].probe = CoreEngine
+off.factory[N64 eeprom Venus (C#)].core = CoreEngine
+off.factory[N64 eeprom Venus (C#)].notice = <null>
+off.factory[N64 eeprom Venus (C#)].debug-target = CoreDebugTarget
+off.factory[N64 eeprom Venus (C#)].trace-switch = <null>
+off.factory[N64 eeprom Venus (C#)].codec-auto = GameShark | RamPoke | RDRAM
+off.factory[N64 eeprom Venus (C#)].codec-explicit = <null>
+off.factory[N64 eeprom Venus (C#)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+off.factory[N64 eeprom Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
+off.factory[N64 eeprom Venus (C#)].axes = [LeftX, LeftY, RightX, RightY]
+off.factory[N64 eeprom Venus (C#)].state-version = 1
+off.factory[N64 eeprom Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[N64 eeprom Venus (C#)].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
+off.factory[N64 eeprom Venus (C#)].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
+off.factory[N64 eeprom Venus (C#)].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
+off.factory[N64 eeprom Venus (C#)].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
+off.factory[N64 eeprom Venus (C#)].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
+off.factory[N64 eeprom Venus (C#)].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
+off.factory[N64 eeprom Venus (C#)].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
+off.factory[N64 eeprom Venus (C#)].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
+off.factory[N64 eeprom Venus (C#)].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+off.factory[N64 eeprom Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 eeprom Venus (C#)].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 eeprom Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[N64 eeprom Mars (C#)].supported = True
-off.factory[N64 eeprom Mars (C#)].probe = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
-off.factory[N64 eeprom Mars (C#)].load = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
+off.factory[N64 eeprom Mars (C#)].probe = CoreEngine
+off.factory[N64 eeprom Mars (C#)].core = CoreEngine
+off.factory[N64 eeprom Mars (C#)].notice = <null>
+off.factory[N64 eeprom Mars (C#)].debug-target = CoreDebugTarget
+off.factory[N64 eeprom Mars (C#)].trace-switch = <null>
+off.factory[N64 eeprom Mars (C#)].codec-auto = GameShark | RamPoke | RDRAM
+off.factory[N64 eeprom Mars (C#)].codec-explicit = <null>
+off.factory[N64 eeprom Mars (C#)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+off.factory[N64 eeprom Mars (C#)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
+off.factory[N64 eeprom Mars (C#)].axes = [LeftX, LeftY, RightX, RightY]
+off.factory[N64 eeprom Mars (C#)].state-version = 1
+off.factory[N64 eeprom Mars (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[N64 eeprom Mars (C#)].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
+off.factory[N64 eeprom Mars (C#)].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
+off.factory[N64 eeprom Mars (C#)].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
+off.factory[N64 eeprom Mars (C#)].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
+off.factory[N64 eeprom Mars (C#)].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
+off.factory[N64 eeprom Mars (C#)].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
+off.factory[N64 eeprom Mars (C#)].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
+off.factory[N64 eeprom Mars (C#)].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
+off.factory[N64 eeprom Mars (C#)].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+off.factory[N64 eeprom Mars (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 eeprom Mars (C#)].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 eeprom Mars (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[N64 byteswapped <null>].supported = True
-off.factory[N64 byteswapped <null>].probe = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
-off.factory[N64 byteswapped <null>].load = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
+off.factory[N64 byteswapped <null>].probe = CoreEngine
+off.factory[N64 byteswapped <null>].core = CoreEngine
+off.factory[N64 byteswapped <null>].notice = <null>
+off.factory[N64 byteswapped <null>].debug-target = CoreDebugTarget
+off.factory[N64 byteswapped <null>].trace-switch = <null>
+off.factory[N64 byteswapped <null>].codec-auto = GameShark | RamPoke | RDRAM
+off.factory[N64 byteswapped <null>].codec-explicit = <null>
+off.factory[N64 byteswapped <null>].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+off.factory[N64 byteswapped <null>].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
+off.factory[N64 byteswapped <null>].axes = [LeftX, LeftY, RightX, RightY]
+off.factory[N64 byteswapped <null>].state-version = 1
+off.factory[N64 byteswapped <null>].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[N64 byteswapped <null>].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
+off.factory[N64 byteswapped <null>].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
+off.factory[N64 byteswapped <null>].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
+off.factory[N64 byteswapped <null>].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
+off.factory[N64 byteswapped <null>].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
+off.factory[N64 byteswapped <null>].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
+off.factory[N64 byteswapped <null>].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
+off.factory[N64 byteswapped <null>].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
+off.factory[N64 byteswapped <null>].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+off.factory[N64 byteswapped <null>].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 byteswapped <null>].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 byteswapped <null>].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[N64 byteswapped MarsRT (Rust)].supported = True
-off.factory[N64 byteswapped MarsRT (Rust)].probe = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
-off.factory[N64 byteswapped MarsRT (Rust)].load = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
+off.factory[N64 byteswapped MarsRT (Rust)].probe = CoreEngine
+off.factory[N64 byteswapped MarsRT (Rust)].core = CoreEngine
+off.factory[N64 byteswapped MarsRT (Rust)].notice = <null>
+off.factory[N64 byteswapped MarsRT (Rust)].debug-target = CoreDebugTarget
+off.factory[N64 byteswapped MarsRT (Rust)].trace-switch = <null>
+off.factory[N64 byteswapped MarsRT (Rust)].codec-auto = GameShark | RamPoke | RDRAM
+off.factory[N64 byteswapped MarsRT (Rust)].codec-explicit = <null>
+off.factory[N64 byteswapped MarsRT (Rust)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+off.factory[N64 byteswapped MarsRT (Rust)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
+off.factory[N64 byteswapped MarsRT (Rust)].axes = [LeftX, LeftY, RightX, RightY]
+off.factory[N64 byteswapped MarsRT (Rust)].state-version = 1
+off.factory[N64 byteswapped MarsRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[N64 byteswapped MarsRT (Rust)].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
+off.factory[N64 byteswapped MarsRT (Rust)].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
+off.factory[N64 byteswapped MarsRT (Rust)].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
+off.factory[N64 byteswapped MarsRT (Rust)].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
+off.factory[N64 byteswapped MarsRT (Rust)].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
+off.factory[N64 byteswapped MarsRT (Rust)].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
+off.factory[N64 byteswapped MarsRT (Rust)].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
+off.factory[N64 byteswapped MarsRT (Rust)].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
+off.factory[N64 byteswapped MarsRT (Rust)].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+off.factory[N64 byteswapped MarsRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 byteswapped MarsRT (Rust)].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 byteswapped MarsRT (Rust)].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[N64 byteswapped Nope].supported = True
-off.factory[N64 byteswapped Nope].probe = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
-off.factory[N64 byteswapped Nope].load = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
+off.factory[N64 byteswapped Nope].probe = CoreEngine
+off.factory[N64 byteswapped Nope].core = CoreEngine
+off.factory[N64 byteswapped Nope].notice = <null>
+off.factory[N64 byteswapped Nope].debug-target = CoreDebugTarget
+off.factory[N64 byteswapped Nope].trace-switch = <null>
+off.factory[N64 byteswapped Nope].codec-auto = GameShark | RamPoke | RDRAM
+off.factory[N64 byteswapped Nope].codec-explicit = <null>
+off.factory[N64 byteswapped Nope].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+off.factory[N64 byteswapped Nope].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
+off.factory[N64 byteswapped Nope].axes = [LeftX, LeftY, RightX, RightY]
+off.factory[N64 byteswapped Nope].state-version = 1
+off.factory[N64 byteswapped Nope].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[N64 byteswapped Nope].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
+off.factory[N64 byteswapped Nope].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
+off.factory[N64 byteswapped Nope].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
+off.factory[N64 byteswapped Nope].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
+off.factory[N64 byteswapped Nope].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
+off.factory[N64 byteswapped Nope].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
+off.factory[N64 byteswapped Nope].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
+off.factory[N64 byteswapped Nope].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
+off.factory[N64 byteswapped Nope].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+off.factory[N64 byteswapped Nope].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 byteswapped Nope].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 byteswapped Nope].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[N64 byteswapped Venus (C#)].supported = True
-off.factory[N64 byteswapped Venus (C#)].probe = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
-off.factory[N64 byteswapped Venus (C#)].load = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
+off.factory[N64 byteswapped Venus (C#)].probe = CoreEngine
+off.factory[N64 byteswapped Venus (C#)].core = CoreEngine
+off.factory[N64 byteswapped Venus (C#)].notice = <null>
+off.factory[N64 byteswapped Venus (C#)].debug-target = CoreDebugTarget
+off.factory[N64 byteswapped Venus (C#)].trace-switch = <null>
+off.factory[N64 byteswapped Venus (C#)].codec-auto = GameShark | RamPoke | RDRAM
+off.factory[N64 byteswapped Venus (C#)].codec-explicit = <null>
+off.factory[N64 byteswapped Venus (C#)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+off.factory[N64 byteswapped Venus (C#)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
+off.factory[N64 byteswapped Venus (C#)].axes = [LeftX, LeftY, RightX, RightY]
+off.factory[N64 byteswapped Venus (C#)].state-version = 1
+off.factory[N64 byteswapped Venus (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[N64 byteswapped Venus (C#)].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
+off.factory[N64 byteswapped Venus (C#)].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
+off.factory[N64 byteswapped Venus (C#)].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
+off.factory[N64 byteswapped Venus (C#)].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
+off.factory[N64 byteswapped Venus (C#)].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
+off.factory[N64 byteswapped Venus (C#)].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
+off.factory[N64 byteswapped Venus (C#)].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
+off.factory[N64 byteswapped Venus (C#)].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
+off.factory[N64 byteswapped Venus (C#)].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+off.factory[N64 byteswapped Venus (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 byteswapped Venus (C#)].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 byteswapped Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[N64 byteswapped Mars (C#)].supported = True
-off.factory[N64 byteswapped Mars (C#)].probe = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
-off.factory[N64 byteswapped Mars (C#)].load = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
+off.factory[N64 byteswapped Mars (C#)].probe = CoreEngine
+off.factory[N64 byteswapped Mars (C#)].core = CoreEngine
+off.factory[N64 byteswapped Mars (C#)].notice = <null>
+off.factory[N64 byteswapped Mars (C#)].debug-target = CoreDebugTarget
+off.factory[N64 byteswapped Mars (C#)].trace-switch = <null>
+off.factory[N64 byteswapped Mars (C#)].codec-auto = GameShark | RamPoke | RDRAM
+off.factory[N64 byteswapped Mars (C#)].codec-explicit = <null>
+off.factory[N64 byteswapped Mars (C#)].identity = MarsRT 640x480 22.865853658536587 Hz 44100 loaded=True frames=0
+off.factory[N64 byteswapped Mars (C#)].buttons = [Up, Down, Left, Right, A, B, Start, L, R, L2]
+off.factory[N64 byteswapped Mars (C#)].axes = [LeftX, LeftY, RightX, RightY]
+off.factory[N64 byteswapped Mars (C#)].state-version = 1
+off.factory[N64 byteswapped Mars (C#)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
+off.factory[N64 byteswapped Mars (C#)].setting[ThreadedRdp] = Draw on a separate thread | Switch | default true | [] | now true
+off.factory[N64 byteswapped Mars (C#)].setting[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | [] | now <one per three cores>
+off.factory[N64 byteswapped Mars (C#)].setting[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | [] | now true
+off.factory[N64 byteswapped Mars (C#)].setting[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | [] | now true
+off.factory[N64 byteswapped Mars (C#)].setting[RenderScale] = Internal resolution | Choice | default 1 | [1, 2, 3, 4] | now 1
+off.factory[N64 byteswapped Mars (C#)].setting[Antialiasing] = Antialiasing | Choice | default Off | [Off, 2x, 3x, 4x] | now Off
+off.factory[N64 byteswapped Mars (C#)].setting[Gpu] = Draw the multiple on the graphics card | Switch | default false | [] | now false
+off.factory[N64 byteswapped Mars (C#)].setting[ExpansionPak] = Expansion Pak | Switch | default true | [] | now true
+off.factory[N64 byteswapped Mars (C#)].setting[Recompiler] = Compile the processor's code | Switch | default true | [] | now true
+off.factory[N64 byteswapped Mars (C#)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 byteswapped Mars (C#)].file = Home/Saves/N64/Game.srm 64 cc7321cce5e4409b
+off.factory[N64 byteswapped Mars (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.configured[N64 nothing stored] = <null>
 off.configured[N64 MarsRT (Rust)] = MarsRT (Rust)
 off.configured[N64 Nope] = Nope
 off.configured[N64 Venus (C#)] = VenusRT (Rust)
 off.configured[N64 Mars (C#)] = MarsRT (Rust)
-settings[N64 MarsRT (Rust)].core = NotSupportedException: The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0).
+settings[N64 MarsRT (Rust)].core = CoreEngine
+settings[N64 MarsRT (Rust)].row[ThreadedRdp] = Draw on a separate thread | Switch | default true | 0..0 | []
+settings[N64 MarsRT (Rust)].row[ThreadedRdp].hint = The display processor runs its lists on a thread of its own, behind marks on the memory it reaches. Exact: frame for frame the machine on one thread.
+settings[N64 MarsRT (Rust)].row[ThreadedRdp].note-at-defaults = <null>
+settings[N64 MarsRT (Rust)].row[RdpWorkers] = Rasteriser threads | Count | default <one per three cores> | 1..8 | []
+settings[N64 MarsRT (Rust)].row[RdpWorkers].hint = How many processors share each list when it runs on a thread of its own, each shading every Nth row. Exact at any count: frame for frame the machine on one thread. One per three cores is the default.
+settings[N64 MarsRT (Rust)].row[RdpWorkers].note-at-defaults = <null>
+settings[N64 MarsRT (Rust)].row[DeferredPresentation] = Scan out while the next frame runs | Switch | default true | 0..0 | []
+settings[N64 MarsRT (Rust)].row[DeferredPresentation].hint = The picture is finished on another thread while the machine runs the next frame, so it reaches the screen one frame late, exactly the picture it would have been. The picture reaches the screen one frame later.
+settings[N64 MarsRT (Rust)].row[DeferredPresentation].note-at-defaults = <null>
+settings[N64 MarsRT (Rust)].row[SkipRepeatedScans] = Skip a scan that repeats the last | Switch | default true | 0..0 | []
+settings[N64 MarsRT (Rust)].row[SkipRepeatedScans].hint = A scan whose registers and bytes match the last walk is not walked again. Exact; the picture is the same either way.
+settings[N64 MarsRT (Rust)].row[SkipRepeatedScans].note-at-defaults = <null>
+settings[N64 MarsRT (Rust)].row[RenderScale] = Internal resolution | Choice | default 1 | 0..0 | [1, 2, 3, 4]
+settings[N64 MarsRT (Rust)].row[RenderScale].hint = The picture drawn at a multiple of the console's, beside the exact drawing games read back. Each step costs its square in drawing: 2x is four times the pixels, 4x sixteen. Threads help; 2x is what most machines can hold at full speed. Each step costs its square in drawing.
+settings[N64 MarsRT (Rust)].row[RenderScale].note-at-defaults = <null>
+settings[N64 MarsRT (Rust)].row[Antialiasing] = Antialiasing | Choice | default Off | 0..0 | [Off, 2x, 3x, 4x]
+settings[N64 MarsRT (Rust)].row[Antialiasing].hint = Each pixel of the picture averaged from a drawing that many times finer each way, which smooths edges and shimmering textures. It multiplies the drawing's cost like the internal resolution, and the two together are held to four: at 2x resolution the most is 2x. It multiplies the drawing's cost like the internal resolution.
+settings[N64 MarsRT (Rust)].row[Antialiasing].note-at-defaults = <null>
+settings[N64 MarsRT (Rust)].row[Gpu] = Draw the multiple on the graphics card | Switch | default false | 0..0 | []
+settings[N64 MarsRT (Rust)].row[Gpu].hint = The picture at an internal resolution above one is shaded by the graphics card rather than by the processor's own threads, which is where nearly all of that setting's cost is. It needs Vulkan; without it the setting does nothing and the processor draws as before. It changes nothing at 1x, and the drawing the game itself reads back is never the card's.
+settings[N64 MarsRT (Rust)].row[Gpu].note-at-defaults = <null>
+settings[N64 MarsRT (Rust)].row[ExpansionPak] = Expansion Pak | Switch | default true | 0..0 | []
+settings[N64 MarsRT (Rust)].row[ExpansionPak].hint = The memory accessory that doubles the console's 4MB. A few games refuse to start without it and more use it when it is there. Takes effect when a game is next loaded; a save state resumes with the memory it was made with.
+settings[N64 MarsRT (Rust)].row[ExpansionPak].note-at-defaults = <null>
+settings[N64 MarsRT (Rust)].row[Recompiler] = Compile the processor's code | Switch | default true | 0..0 | []
+settings[N64 MarsRT (Rust)].row[Recompiler].hint = The processor's code is compiled to the host's machine code in blocks, each compared with memory before it runs, on a thread of its own. Exact: frame for frame the interpreter, which is what off leaves running, slower.
+settings[N64 MarsRT (Rust)].row[Recompiler].note-at-defaults = <null>
 codecs.default = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
 codecs.for[<null>] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>
 codecs.for[] = Pro Action Replay | RamPoke | CpuBus / Game Genie | RomPatch | <null>

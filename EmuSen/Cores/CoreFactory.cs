@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Galaxia.Models;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
@@ -32,8 +31,7 @@ namespace EmuSen.Cores
             ".smc" or ".sfc" => throw Missing("SNES", CoreCatalog.VenusRtEngine),
             ".nes" => throw Missing("NES", CoreCatalog.MoonRtEngine),
             ".gb" or ".gbc" => throw Missing("Game Boy", CoreCatalog.MercuryRtEngine),
-            ".z64" or ".n64" or ".v64" => MarsRtCore.Available ? new MarsRtCore(expansionPak: true) { Media = StoredMedia(romPath, MarsNative.Library.Library!), Options = options ?? CoreOptions.Default }
-                : throw new NotSupportedException($"The N64 core is not in this build ({MarsNative.Report})."),
+            ".z64" or ".n64" or ".v64" => throw Missing("N64", CoreCatalog.MarsRtEngine),
             var other => throw new NotSupportedException(
                 $"No core in this build handles '{other}' - see CoreCatalog for what is registered."),
         };
@@ -147,7 +145,6 @@ namespace EmuSen.Cores
         // The catalog's name for the engine that is running: a notice's, and the one a save state's record keeps.
         public static string Running(ICore core) => core switch
         {
-            MarsRtCore => CoreCatalog.MarsRtEngine,
             Native.CoreEngine v1 => v1.Info.DisplayName,
             _ => core.CoreName,
         };
@@ -160,9 +157,6 @@ namespace EmuSen.Cores
 
             switch (core)
             {
-                // The GameShark pokes, and no N64 format patches ROM; the target's hooks are tables in the Rust loop - see Mars_Cheats.md §1, Mars_Native.md §6.5.
-                case MarsRtCore marsRt:
-                    return new CoreBundle(marsRt, new MarsRtDebugTarget(marsRt, cheats), Crystal.Systems.N64.N64System.GameShark(), null, null);
 
                 // Any v1 engine: the generic target, and the codecs of its system's pack - see EmuSen_CoreAPI.md §19.
                 case Native.CoreEngine v1:

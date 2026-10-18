@@ -131,7 +131,7 @@ fn registers_of(v: Option<&Value>) -> Vec<(String, u64)> {
 
 /// One view of a system's, for a request as JSON: `system` (nes or snes), `view`, `spaces` (each name, size and
 /// side_effects) and what the view takes (`space`, `address`, `bpp`, `register`, `name`, `registers` as name and value, and
-/// since interface 20 `units`, each a name, a kind and its registers, and `mutes`).
+/// since interface 21 `units`, each a name, a kind and its registers, and `mutes`).
 /// `tape` is the bytes the host has read for this request so far, in the order asked. The answer is an envelope: the
 /// JSON's length in four little-endian bytes, the JSON, then any bytes. The JSON is `need` (each space, address and
 /// length, read in order and the call made again with them appended) or the view's answer. ABSENT for a system with no
@@ -240,11 +240,15 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
             let (name, offset, addressable) = n64::views::physical_in(m, address as u32);
             (object(vec![("space", Value::string(name)), ("offset", Value::number(offset)), ("addressable", Value::Bool(addressable))]), Vec::new())
         }
-        ("n64", "video_registers") => {
-            let rows = n64::views::video_registers(m).into_iter().map(|(name, value)| object(vec![("name", Value::string(name)), ("value", Value::number(value))])).collect();
-            (object(vec![("registers", Value::Array(rows))]), Vec::new())
+        ("n64", "summary") => {
+            let vi: Option<Vec<(String, u64)>> = match r.get("vi") {
+                Some(Value::Array(items)) => Some(
+                    items.iter().map(|x| (text(x.get("name")).unwrap_or_default().to_string(), match x.get("value") { Some(Value::Number(n)) => n.parse().unwrap_or(0), _ => 0 })).collect(),
+                ),
+                _ => None,
+            };
+            textual(n64::views::summary(&registers, vi.as_deref()))
         }
-        ("n64", "summary") => textual(n64::views::summary(&registers, m)),
         ("gb" | "gbc", "palettes") => (palettes_json(gb::views::palettes(m, &units)), Vec::new()),
         ("gb" | "gbc", "palette_swatch") => picture(gb::views::palette_swatch(m, &units)),
         ("gb" | "gbc", "tile_sheet") => picture(gb::views::tile_sheet(m)),

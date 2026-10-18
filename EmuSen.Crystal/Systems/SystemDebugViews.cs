@@ -59,6 +59,10 @@ namespace EmuSen.Crystal.Systems
 
         // The words a unit is shown under, as a cartridge's board by its name; null for the unit's own name.
         string? UnitLabel(DebugUnit unit) => null;
+
+        // A space's code listed by the processor that runs it, with the address each instruction names, for an engine that decodes none; empty where the console's pack does not.
+        IReadOnlyList<(DisassembledInstruction Instruction, (StaticReferenceKind Kind, int Target)? Reference)> Disassemble(IDebugMemorySpace space, int address, int count) =>
+            Array.Empty<(DisassembledInstruction, (StaticReferenceKind, int)?)>();
     }
 
     // A part that runs no code and holds registers, as machine info's units name it with the values read this frame - see EmuSen_CoreAPI.md §31.7.

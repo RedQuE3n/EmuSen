@@ -1,9 +1,10 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
@@ -34,7 +35,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // MarsRT's interpreter on one thread, now that the shim's defaults are production's; the tier and thread runs turn theirs on themselves.
-        public static MarsRtCore Twin(bool expansionPak = false) => new(expansionPak) { Options = TestCores.NoBattery, SkipRendering = true, UseBlocks = false, ThreadedRdp = false, DeferredPresentation = false, RdpWorkers = 1 };
+        public static MarsRtTestCore Twin(bool expansionPak = false) => new(expansionPak) { Options = TestCores.NoBattery, SkipRendering = true, UseBlocks = false, ThreadedRdp = false, DeferredPresentation = false, RdpWorkers = 1 };
 
         // n64-systemtest through the IS-Viewer: its own summary, and through the recompiler line for line what the interpreter reports.
         [Fact]
@@ -47,10 +48,10 @@ namespace EmuSen.WiseMan.Cores
                 return;
             }
 
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            Assert.True(MarsRt.Available, MarsRt.Report);
             string Run(bool blocks)
             {
-                using var core = new MarsRtCore { UseBlocks = blocks };
+                using var core = new MarsRtTestCore { UseBlocks = blocks };
                 core.Boot(path);
                 string text = "";
                 for (int i = 0; i < 400; i++)
@@ -73,13 +74,13 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_idle_skip_changes_nothing_marsrt_computes()
         {
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            Assert.True(MarsRt.Available, MarsRt.Report);
             string rom = Temporary(Scenario("system"));
             byte[]? reference = null;
             long passed = 0;
             foreach (var (idle, whole) in new[] { (false, false), (true, false), (true, true) })
             {
-                using MarsRtCore twin = Twin();
+                using MarsRtTestCore twin = Twin();
                 twin.IdleSkip = idle;
                 twin.RspWhole = whole;
                 twin.LoadRom(rom);
@@ -97,7 +98,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // The program into IMEM and the processor started by the status write given, while the CPU sits in its idle loop.
-        private static void Drive(MarsRtCore twin, int frame)
+        private static void Drive(MarsRtTestCore twin, int frame)
         {
             PadButton[] buttons = { PadButton.A, PadButton.B, PadButton.Start, PadButton.Up, PadButton.L2, PadButton.R };
             PadButton button = buttons[frame % buttons.Length];

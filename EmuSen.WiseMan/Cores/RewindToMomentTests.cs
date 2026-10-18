@@ -1,3 +1,4 @@
+using EmuSen.Crystal.Systems.N64;
 using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
@@ -7,7 +8,6 @@ using System.Linq;
 using System.Security.Cryptography;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 
@@ -158,8 +158,8 @@ namespace EmuSen.WiseMan.Cores
 
         private static ICore Production()
         {
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
-            var core = new MarsRtCore(expansionPak: true) { Options = TestCores.NoBattery, ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true, SkipRendering = false };
+            Assert.True(MarsRt.Available, MarsRt.Report);
+            var core = new MarsRtTestCore(expansionPak: true) { Options = TestCores.NoBattery, ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true, SkipRendering = false };
             core.LoadRom(SyntheticN64Rom.WriteTemp(SyntheticN64System.Build(rsp: true)));
             // Any load marks the controller pak dirty, so the proof starts from a loaded machine - see EmuSen_Rewind_And_FastForward.md §5.2.
             core.LoadState(core.Save(false));
@@ -170,7 +170,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void On_a_fresh_MarsRT_a_load_of_its_own_state_changes_nothing_of_it()
         {
-            using var core = new MarsRtCore(expansionPak: true) { Options = TestCores.NoBattery, ThreadedRdp = false, DeferredPresentation = false, SkipRendering = false };
+            using var core = new MarsRtTestCore(expansionPak: true) { Options = TestCores.NoBattery, ThreadedRdp = false, DeferredPresentation = false, SkipRendering = false };
             core.LoadRom(SyntheticN64Rom.WriteTemp(SyntheticN64System.Build(rsp: true)));
             for (int f = 0; f < 4; f++) core.RunFrame();
             byte[] before = core.Save(false);

@@ -1,9 +1,9 @@
+using EmuSen.Crystal.Systems.N64;
 using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
@@ -55,8 +55,8 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void MarsRT_writes_Mars_header_for_a_state_and_a_snapshot()
         {
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
-            using var core = new MarsRtCore() { Options = TestCores.NoBattery };
+            Assert.True(MarsRt.Available, MarsRt.Report);
+            using var core = new MarsRtTestCore() { Options = TestCores.NoBattery };
             string rom = Keep(Path.Combine(Path.GetTempPath(), $"mars-header-{Guid.NewGuid():N}.z64"));
             File.WriteAllBytes(rom, SyntheticN64System.Build());
             core.LoadRom(rom);

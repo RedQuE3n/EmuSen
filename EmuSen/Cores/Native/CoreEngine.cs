@@ -108,8 +108,8 @@ namespace EmuSen.Cores.Native
         public virtual int ScreenHeight => _shape.Height * (RepeatRows ? Math.Max(1, _shape.RowRepeat) : 1);
 
         // The frame's own shape when the core gives one, else its machine's; 0 when it gives neither - see EmuSen_Serenity.md §2.9.
-        // The console's lines in a picture drawn at a whole multiple of them, 0 where its rows are its lines - see EmuSen_CoreAPI.md §6.35.
-        public int DisplayLines => _shape.Lines;
+        // The console's lines in a picture drawn at a whole multiple of them, counted in the rows ScreenHeight holds - see EmuSen_CoreAPI.md §6.35.
+        public int DisplayLines => _shape.Lines * (RepeatRows ? Math.Max(1, _shape.RowRepeat) : 1);
 
         public virtual double DisplayAspect =>
             _shape.AspectNum > 0 && _shape.AspectDen > 0 ? _shape.AspectNum / (double)_shape.AspectDen
@@ -376,6 +376,8 @@ namespace EmuSen.Cores.Native
             _audioRate = machine.AudioSampleRate;
             string run = SettingsText(createScope: false);
             if (run.Length > 0 && Library.Has(CoreInterface.CapSettings)) machine.SetSettings(run);
+            // The notes for the values the machine was made with, so a row shows its note from the first frame - see EmuSen_Backend.md §18.10.
+            _notes = machine.SettingNotes();
             Drain();
             _shape = machine.FrameInfo;
             _frame = new byte[Math.Max(0, (int)_shape.Bytes)];

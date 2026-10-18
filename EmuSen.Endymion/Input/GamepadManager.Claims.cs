@@ -10,6 +10,9 @@ namespace EmuSen.Endymion.Input
         private int _claimed;
         private bool _arranged, _externalFirst;
 
+        // Pads holding a button as the game started: that press was the interface's, so each claims only after letting go - see EmuSen_Input.md §8.13.8.
+        private readonly List<ConnectedPad> _heldAtStart = new();
+
         // Player 1 to the first pad pressed after a game starts, the others in the order they are used.
         public bool ClaimPlayersByPress { get; set; }
 
@@ -44,11 +47,14 @@ namespace EmuSen.Endymion.Input
             }
         }
 
-        // A game started: no seat is claimed yet.
+        // A game started: no seat is claimed yet, and a button still held from the launch is not a claim.
         public void BeginClaims()
         {
             _claimed = 0;
             _arranged = false;
+            _heldAtStart.Clear();
+            foreach (ConnectedPad pad in Pads)
+                if (pad.IsOpen && pad.AnyPressed()) _heldAtStart.Add(pad);
         }
 
         // Each game poll, before the players are read: a pad pressed for the first time takes the next player.
@@ -59,6 +65,11 @@ namespace EmuSen.Endymion.Input
             for (int i = 0; i < pads.Count; i++)
             {
                 ConnectedPad pad = pads[i];
+                if (_heldAtStart.Count > 0 && _heldAtStart.Contains(pad))
+                {
+                    if (!pad.AnyPressed()) _heldAtStart.Remove(pad);
+                    continue;
+                }
                 int seat = Players.PlayerOf(pad);
                 if (seat == 0 || seat <= _claimed || !pad.IsOpen || !pad.AnyPressed()) continue;
                 _claimed++;

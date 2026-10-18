@@ -62,8 +62,14 @@ namespace EmuSen.WiseMan.Mistress
             window.Show();
             var first = new PadDriver(window) { Pad = { Name = "First Pad" } };
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
-            first.A();
+
+            // The launching A outlasts the game's first poll, as a real press does, so a test cannot pass by the poll timer's luck - see EmuSen_Input.md §8.13.8.
+            first.Pad.Press(SDL.GamepadButton.South);
+            first.Tick();
             Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
+            Poll(window);
+            first.Pad.Release(SDL.GamepadButton.South);
+            first.Tick();
             typeof(MainWindow).GetMethod("StopEmulationThread", Hidden)!.Invoke(window, null);
             return (window, first);
         }

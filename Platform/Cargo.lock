@@ -300,6 +300,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-6502"
+version = "0.1.0"
+
+[[package]]
 name = "emusen-cheat"
 version = "0.1.0"
 dependencies = [
@@ -477,6 +481,7 @@ version = "0.1.0"
 name = "emusen-systems"
 version = "0.1.0"
 dependencies = [
+ "emusen-6502",
  "emusen-dotnet",
  "emusen-mcd-bram",
  "emusen-mips",

@@ -5,7 +5,6 @@ using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Crystal.Systems.Nes;
 using EmuSen.Galaxia.Input;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 
@@ -27,12 +26,12 @@ namespace EmuSen.WiseMan.Cores
             return image;
         }
 
-        private static MoonRtCore Load(byte[] image)
+        private static EmuSen.Cores.Native.CoreEngine Load(byte[] image)
         {
             string path = SyntheticNesRom.WriteTemp(image);
             try
             {
-                var core = new MoonRtCore() { Options = TestCores.NoBattery };
+                var core = MoonEngines.Create(TestCores.NoBattery);
                 core.LoadRom(path);
                 return core;
             }
@@ -94,8 +93,8 @@ namespace EmuSen.WiseMan.Cores
                 _output.WriteLine($"{MoonGoldenTests.CorpusVariable} unset, not run");
                 return;
             }
-            Assert.True(MoonRtCore.Available, "MoonRT is not built");
-            using var native = new MoonRtCore() { Options = TestCores.NoBattery };
+            Assert.True(MoonEngines.Available, MoonEngines.Report);
+            using var native = MoonEngines.Create(TestCores.NoBattery);
             native.LoadRom(path);
             for (int f = 0; f < 120; f++) native.RunFrame();
             Assert.Equal(1, native.ReadSpace(NesSystem.Ram, 0xF8));

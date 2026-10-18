@@ -5,7 +5,6 @@ using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 
@@ -58,8 +57,8 @@ namespace EmuSen.WiseMan.Audio
         [Fact]
         public void MoonRT_keeps_no_more_than_the_setting()
         {
-            Assert.True(MoonRtCore.Available, MoonNative.Report);
-            Assert.Equal(Limit, Undrained(new MoonRtCore { Options = Limited }, Nes()).Length);
+            Assert.True(MoonEngines.Available, MoonEngines.Report);
+            Assert.Equal(Limit, Undrained(MoonEngines.Create(Limited), Nes()).Length);
         }
 
         [Fact]

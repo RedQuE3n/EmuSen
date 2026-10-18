@@ -20,3 +20,5 @@ emusen-mcd-bram = { path = "../../EmuSen/Cores/Shared/emusen-mcd-bram" }
 emusen-mips = { path = "../../EmuSen/Cores/Shared/emusen-mips" }
 # The SM83 instruction set as text, which MercuryRT decodes with too (EmuSen_Backend.md §17.2 D10).
 emusen-sm83 = { path = "../../EmuSen/Cores/Shared/emusen-sm83" }
+# The 6502 instruction set as text, which MoonRT disassembles with too (EmuSen_Backend.md §21).
+emusen-6502 = { path = "../../EmuSen/Cores/Shared/emusen-6502" }

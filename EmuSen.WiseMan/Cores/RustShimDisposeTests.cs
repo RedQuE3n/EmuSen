@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MercuryRT;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
@@ -43,8 +42,8 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void MoonRT_closes_its_lending_when_disposed()
         {
-            Assert.True(MoonRtCore.Available, MoonNative.Report);
-            var core = new MoonRtCore();
+            Assert.True(MoonEngines.Available, MoonEngines.Report);
+            var core = MoonEngines.Create();
             core.LoadRom(Keep(SyntheticNesRom.WriteTemp(SyntheticNesRom.Build(patches: (0, new byte[] { 0x4C, 0x00, 0x80 })))));
             ReturnedAfterDispose(core, core.FrameBuffers);
         }

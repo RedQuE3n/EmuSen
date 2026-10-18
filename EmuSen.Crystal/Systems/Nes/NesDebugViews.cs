@@ -133,6 +133,16 @@ namespace EmuSen.Crystal.Systems.Nes
             return pixels;
         }
 
+        // A CPU address's destination where the console fixes it, null for $8000 and up, which the board banks; no view reads it until the views carry it - see EmuSen_Backend.md §21.
+        public PhysicalAddress? ResolvePhysical(int cpuAddress) => cpuAddress switch
+        {
+            < 0x2000 => new PhysicalAddress(NesSystem.Ram, cpuAddress & 0x07FF),
+            < 0x4000 => new PhysicalAddress(NesSystem.PpuRegisters, cpuAddress & 0x07, false),
+            < 0x4020 => new PhysicalAddress(NesSystem.ApuRegisters, cpuAddress - 0x4000, false),
+            < 0x8000 => new PhysicalAddress(NesSystem.PrgRam, cpuAddress & 0x1FFF),
+            _ => null,
+        };
+
         public IReadOnlyList<InterruptVector> InterruptVectors { get; } = new[]
         {
             new InterruptVector("NMI", NmiVector),

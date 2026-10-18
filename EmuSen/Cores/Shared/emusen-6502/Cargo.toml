@@ -1,0 +1,16 @@
+[package]
+name = "emusen-6502"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The 6502 instruction set as text, as the NES pack and MoonRT both disassemble it: mnemonics, addressing modes, lengths, operands and static references. No execution. See EmuSen_Backend.md §21.
+[lib]
+name = "emusen_6502"
+
+[dependencies]
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

@@ -4,7 +4,6 @@ using System.Linq;
 using System.Security.Cryptography;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
@@ -53,8 +52,8 @@ namespace EmuSen.WiseMan.Cores
                 _output.WriteLine($"{RomVariable} unset, not run");
                 return;
             }
-            Assert.True(MoonRtCore.Available, "MoonRT is not built");
-            using var core = new MoonRtCore() { Options = TestCores.NoBattery };
+            Assert.True(MoonEngines.Available, MoonEngines.Report);
+            using var core = MoonEngines.Create(TestCores.NoBattery);
             core.LoadRom(path);
             var run = AccuracyCoinRun.Run(core.RunFrame, a => core.ReadSpace("RAM", a), down => core.SetButton(0, PadButton.Start, down));
             _output.WriteLine($"menu at frame {run.MenuFrame}, table at {run.TableFrame}: {run.PassedTally} of {run.Tested} passed");

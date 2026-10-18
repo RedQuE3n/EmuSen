@@ -2,8 +2,8 @@
 //! facts its C# shim held are its descriptors here. See EmuSen_CoreAPI.md §13.1, §22.
 
 use emusen_native::core::{
-    self as v1, Battery, Button, Choice, Control, Controller, Create, Effect, Firmware, FrameInfo, Info, MachineInfo, Port, Processor, RawEncoding, RawFrame, Region, Scope,
-    Setting, SettingKind, Space, StateFormat, System, Video, caps, status,
+    self as v1, Battery, Button, Choice, Control, Controller, Create, Effect, Firmware, FrameInfo, Info, Instruction, MachineInfo, Port, Processor, RawEncoding, RawFrame,
+    Region, Scope, Setting, SettingKind, Space, StateFormat, System, Video, caps, status,
 };
 
 use super::{BATTERY_SPACE, STATUS_NOT_INES, STATUS_NULL, STATUS_PRG_TRUNCATED, STATUS_UNSUPPORTED_BOARD, build_rom_patches, fault_status, rom_patch};
@@ -45,6 +45,31 @@ pub fn chosen_model(setting: Option<&str>, image: &[u8]) -> Model {
 /// `MoonMachine.SpaceNames`, numbered as the ABI numbers them.
 const SPACES: [&str; 8] = ["RAM", "PRGROM", "PRGRAM", "CHR", "CIRAM", "OAM", "PALETTE", "CPUBUS"];
 
+/// The CPU's bus, and the two register windows the core logs stores under: `$2000`-`$2007` and `$4000`-`$401F` read and
+/// written through it, so with the bus's side effects (EmuSen_Backend.md §19.3.3, D15).
+const CPU_BUS: u32 = 7;
+const PPU_REGISTERS: (u32, &str, i32, i32) = (crate::memory::bus::SPACE_PPU_REGISTERS, "PPUREG", 0x2000, 8);
+const APU_REGISTERS: (u32, &str, i32, i32) = (crate::memory::bus::SPACE_APU_REGISTERS, "APUREG", 0x4000, 0x20);
+
+/// The 2A03's registers as `debug_registers` gives them: the six, P's six flags broken out, and the cycle count.
+const REGISTERS: [(&str, u32); 13] =
+    [("A", 8), ("X", 8), ("Y", 8), ("S", 8), ("PC", 16), ("P", 8), ("N", 1), ("V", 1), ("D", 1), ("I", 1), ("Z", 1), ("C", 1), ("Cycles", 64)];
+
+/// A register window's space, its first CPU address and its length; `None` for any other space.
+fn window(space: u32) -> Option<(i32, i32)> {
+    [PPU_REGISTERS, APU_REGISTERS].iter().find(|w| w.0 == space).map(|w| (w.2, w.3))
+}
+
+/// A byte of a space as a host reads it: a register window's through the CPU's bus, past its end 0.
+fn space_byte(m: &mut Machine, space: u32, address: i32) -> u8 {
+    match window(space) {
+        Some((base, length)) => {
+            if (0..length).contains(&address) { m.read_space(CPU_BUS, base + address) } else { 0 }
+        }
+        None => m.read_space(space, address),
+    }
+}
+
 /// The registered name of the PPU's picture before the palette (EmuSen_CoreAPI.md §6.30).
 pub const RAW_NES_PPU: &str = "nes.ppu";
 
@@ -61,7 +86,8 @@ const PAD: [(u32, Control, &str); 8] = [
 ];
 
 impl v1::Core for Machine {
-    const CAPABILITIES: u64 = caps::RESET | caps::MUTES | caps::ROM_PATCHES | caps::DEBUG | caps::DEBUG_STACK | caps::RAW_PICTURE;
+    const CAPABILITIES: u64 =
+        caps::RESET | caps::MUTES | caps::ROM_PATCHES | caps::DEBUG | caps::DEBUG_STACK | caps::RAW_PICTURE | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE;
 
     fn info() -> Info {
         Info {
@@ -111,7 +137,8 @@ impl v1::Core for Machine {
         Some(words.to_owned())
     }
 
-    /// `MoonCore.LoadRom` from an image as the console chosen, then the battery save written into PRG RAM, clipped to it.
+    /// `MoonCore.LoadRom` from an image as the console chosen, then the battery save written into PRG RAM, clipped to it, for a
+    /// cartridge whose header claims a battery; another's file 0 is left unread (EmuSen_Backend.md §19.6, C1).
     fn create(r: &Create<'_>) -> Result<Self, i32> {
         let model = chosen_model(r.settings.get(REGION_KEY), r.image);
         let mut m = Machine::load_rom_as(r.image, model).map_err(|e| match e {
@@ -127,6 +154,9 @@ impl v1::Core for Machine {
             if file.which != 0 {
                 v1::detail(&format!("file {} is not one MoonRT takes", file.which));
                 return Err(status::BAD_FILE);
+            }
+            if !*m.bus.board.cart.has_battery {
+                continue;
             }
             let length = m.space_size(BATTERY_SPACE).min(file.data.len());
             for (i, &b) in file.data[..length].iter().enumerate() {
@@ -149,9 +179,16 @@ impl v1::Core for Machine {
             spaces: SPACES
                 .iter()
                 .enumerate()
-                .map(|(id, &name)| Space { cheats: id == 0, side_effects: id == 7, reports_stores: matches!(id, 0 | 2 | 7), ..Space::new(id as u32, name) })
+                .map(|(id, &name)| Space { cheats: id == 0, read_only: id == 1, side_effects: id == 7, reports_stores: matches!(id, 0 | 2 | 7), ..Space::new(id as u32, name) })
+                .chain([PPU_REGISTERS, APU_REGISTERS].iter().map(|w| Space { side_effects: true, reports_stores: true, ..Space::new(w.0, w.1) }))
                 .collect(),
-            processors: vec![Processor { id: 0, name: "CPU".into(), pc_bits: 16, registers: Vec::new(), code_space: None }],
+            processors: vec![Processor {
+                id: 0,
+                name: "CPU".into(),
+                pc_bits: 16,
+                registers: REGISTERS.iter().map(|&(name, bits)| (name.to_owned(), bits)).collect(),
+                code_space: None,
+            }],
             battery: if battery { vec![Battery::game(0, ".srm")] } else { Vec::new() },
             state: StateFormat { format: "MOON".into(), version: self.state_version() as i64, loads_from: (OLDEST_READABLE_VERSION..=STATE_VERSION).map(i64::from).collect() },
             phases: Vec::new(),
@@ -237,25 +274,35 @@ impl v1::Core for Machine {
     }
 
     fn space_size(&self, space: u32) -> Result<i64, i32> {
-        if space as usize >= SPACES.len() {
-            return Err(status::NO_SUCH_SPACE);
+        match window(space) {
+            Some((_, length)) => Ok(length as i64),
+            None if (space as usize) < SPACES.len() => Ok(Machine::space_size(self, space) as i64),
+            None => Err(status::NO_SUCH_SPACE),
         }
-        Ok(Machine::space_size(self, space) as i64)
     }
 
     fn space_read(&mut self, space: u32, address: u32, out: &mut [u8]) -> Result<(), i32> {
         for (i, b) in out.iter_mut().enumerate() {
-            *b = self.read_space(space, (address as i32).wrapping_add(i as i32));
+            *b = space_byte(self, space, (address as i32).wrapping_add(i as i32));
         }
         Ok(())
     }
 
     fn space_write(&mut self, space: u32, address: u32, data: &[u8]) -> Result<(), i32> {
-        if space as usize >= SPACES.len() {
+        let window = window(space);
+        if window.is_none() && space as usize >= SPACES.len() {
             return Err(status::NO_SUCH_SPACE);
         }
+        if space == 1 {
+            return Err(status::READ_ONLY);
+        }
         for (i, &b) in data.iter().enumerate() {
-            self.write_space(space, (address as i32).wrapping_add(i as i32), b);
+            let at = (address as i32).wrapping_add(i as i32);
+            match window {
+                Some((base, length)) if (0..length).contains(&at) => self.write_space(CPU_BUS, base + at, b),
+                Some(_) => {}
+                None => self.write_space(space, at, b),
+            }
         }
         Ok(())
     }
@@ -290,12 +337,64 @@ impl v1::Core for Machine {
         (processor == 0).then_some(self.cpu.pc as u64)
     }
 
+    /// `REGISTERS`' values, read from the CPU itself: what the shim's target read out of a saved state (EmuSen_DianaSh.md Q28).
+    fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
+        if processor != 0 {
+            return Err(status::NOT_SUPPORTED);
+        }
+        let c = &self.cpu;
+        let mut values = vec![c.a as i64, c.x as i64, c.y as i64, c.s as i64, c.pc as i64, c.p as i64];
+        values.extend([7, 6, 3, 2, 1, 0].map(|bit| ((c.p >> bit) & 1) as i64));
+        values.push(c.cycles);
+        Ok(values)
+    }
+
+    /// The shared 6502 table over the bytes a host would read, each instruction's opcode read and then its bytes, as the
+    /// shim's target read them (EmuSen_Backend.md §19.3.3, D10).
+    fn debug_disassemble(&mut self, processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<Instruction>, i32> {
+        if processor != 0 {
+            return Err(status::NOT_SUPPORTED);
+        }
+        <Machine as v1::Core>::space_size(self, space)?;
+        let mut list = Vec::new();
+        let mut pc = address as i32;
+        for _ in 0..count.min(4096) {
+            let opcode = space_byte(self, space, pc);
+            let length = emusen_6502::length_of(opcode);
+            let bytes: Vec<u8> = (0..length as i32).map(|b| space_byte(self, space, pc.wrapping_add(b))).collect();
+            let (low, high) = (bytes.get(1).copied().unwrap_or(0), bytes.get(2).copied().unwrap_or(0));
+            let operand = match length {
+                2 => low as i32,
+                3 => low as i32 | (high as i32) << 8,
+                _ => -1,
+            };
+            let reference = if operand < 0 { None } else { emusen_6502::classify(bytes[0], operand) };
+            list.push(Instruction {
+                address: pc as u32,
+                bytes,
+                mnemonic: emusen_6502::mnemonic_of(opcode).to_owned(),
+                operands: emusen_6502::format_operand(opcode, pc, low, high),
+                reference: reference.map(|(kind, target)| {
+                    let kind = match kind {
+                        emusen_6502::Reference::Call => v1::Reference::Call,
+                        emusen_6502::Reference::Read => v1::Reference::Read,
+                        emusen_6502::Reference::Write => v1::Reference::Write,
+                    };
+                    (kind, target as u32)
+                }),
+            });
+            pc = pc.wrapping_add(length as i32);
+        }
+        crate::take_fault();
+        Ok(list)
+    }
+
     fn end_call() {
         crate::take_fault();
     }
 }
 
-emusen_native::core_exports!(Machine; reset, mutes, rom_patches, debug, debug_stack, raw_picture);
+emusen_native::core_exports!(Machine; reset, mutes, rom_patches, debug, debug_stack, raw_picture, debug_registers, debug_disassemble);
 
 /// `moonrt_rom_patch` for a machine of the core ABI v1: the byte a CPU read of `address` returns for `original` under
 /// the current patches, or -1 for none, the exhaustive patch test's view through the v1 loader (EmuSen_CoreAPI.md §26).
@@ -305,6 +404,20 @@ emusen_native::core_exports!(Machine; reset, mutes, rom_patches, debug, debug_st
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn moonrt_core_rom_patch(machine: *const v1::sys::Machine, address: u32, original: u32) -> i32 {
     unsafe { v1::exports::core_of::<Machine>(machine) }.map_or(STATUS_NULL, |m| rom_patch(m, address, original))
+}
+
+/// `moonrt_step` for a machine of the core ABI v1: one instruction with the frame loop's DMA charge, NMI edge and stolen
+/// cycles, the cycles or a fault status; a test extension, as the step goldens drive it (EmuSen_Backend.md §19.3.5, M15).
+///
+/// # Safety
+/// `machine` must be null or a live handle `emusen_core_create` returned, with no other call on it in flight.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn moonrt_core_step(machine: *mut v1::sys::Machine) -> i32 {
+    unsafe { v1::exports::core_of_mut::<Machine>(machine) }.map_or(STATUS_NULL, |m| {
+        crate::take_fault();
+        let cycles = m.step();
+        crate::take_fault().map_or(cycles, fault_status)
+    })
 }
 
 #[cfg(test)]
@@ -463,5 +576,82 @@ mod tests {
         assert_eq!(made(&ines, "auto").machine_info().frame_rate, (21_477_272, 262 * 341 * 4));
         assert!(<Machine as Core>::status_text(STATUS_OTHER_MODEL).is_some());
         assert_eq!(Machine::info().systems[0].regions, vec![Region::Ntsc, Region::Pal]);
+    }
+
+    fn with_battery_file(img: &[u8], data: &[u8]) -> Machine {
+        let r = Create { image: img, settings: Settings::default(), files: vec![emusen_native::abi::File { which: 0, data }], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None };
+        <Machine as Core>::create(&r).unwrap()
+    }
+
+    // C1 (EmuSen_Backend.md §19.6): file 0 reaches PRG RAM only where the header claims a battery, and machine info lists
+    // the file only then.
+    #[test]
+    fn a_battery_file_is_taken_only_by_a_cartridge_with_a_battery() {
+        let plain = image(&boot(0x0F, 0, 0), &[0x40]);
+        let mut battery = plain.clone();
+        battery[6] |= 0x02;
+        let saved = vec![0xA5u8; 0x2000];
+        let (mut without, mut with) = (with_battery_file(&plain, &saved), with_battery_file(&battery, &saved));
+        assert_eq!(without.read_space(BATTERY_SPACE, 0x10), 0);
+        assert_eq!(with.read_space(BATTERY_SPACE, 0x10), 0xA5);
+        assert!(without.machine_info().battery.is_empty());
+        assert_eq!(with.machine_info().battery.len(), 1);
+    }
+
+    // Q28 (EmuSen_DianaSh.md): the thirteen registers machine info names, read from the CPU, the flags P's bits.
+    #[test]
+    fn the_registers_are_the_cpus_own_in_machine_infos_order() {
+        let mut m = machine(&image(&boot(0x0F, 0, 0), &[0x40]));
+        let mut detail = 0;
+        for _ in 0..3 {
+            m.advance(&mut detail).unwrap();
+        }
+        let names: Vec<String> = m.machine_info().processors[0].registers.iter().map(|r| r.0.clone()).collect();
+        assert_eq!(names, REGISTERS.iter().map(|r| r.0.to_owned()).collect::<Vec<_>>());
+        let v = m.debug_registers(0).unwrap();
+        assert_eq!(v.len(), 13);
+        assert_eq!((v[0], v[1], v[2], v[3], v[4], v[5]), (m.cpu.a as i64, m.cpu.x as i64, m.cpu.y as i64, m.cpu.s as i64, m.cpu.pc as i64, m.cpu.p as i64));
+        assert_eq!(v[6..12].iter().zip([7, 6, 3, 2, 1, 0]).map(|(f, bit)| *f << bit).sum::<i64>(), (m.cpu.p & 0xCF) as i64);
+        assert_eq!(v[12], m.cpu.cycles);
+        assert_eq!(m.debug_registers(1), Err(status::NOT_SUPPORTED));
+    }
+
+    // The boot program as the shared table writes it, from the reset vector through the CPU's bus, branches resolved.
+    #[test]
+    fn the_disassembly_is_the_shared_tables_over_the_bus() {
+        let mut m = machine(&image(&boot(0x0F, 0, 0), &[0x40]));
+        let list = m.debug_disassemble(0, CPU_BUS, 0xC000, 7).unwrap();
+        let text: Vec<String> = list.iter().map(|i| format!("{:04X} {} {}", i.address, i.mnemonic, i.operands)).collect();
+        assert_eq!(text, ["C000 SEI ", "C001 CLD ", "C002 LDX #$FF", "C004 TXS ", "C005 BIT $2002", "C008 BPL $C005", "C00A BIT $2002"]);
+        assert_eq!(list[4].reference, Some((v1::Reference::Read, 0x2002)));
+        assert_eq!(list[4].bytes, vec![0x2C, 0x02, 0x20]);
+        assert_eq!(m.debug_disassemble(1, CPU_BUS, 0xC000, 1).err(), Some(status::NOT_SUPPORTED));
+        assert_eq!(m.debug_disassemble(0, 10, 0, 1).err(), Some(status::NO_SUCH_SPACE));
+    }
+
+    // D1 and D15 (EmuSen_Backend.md §19.3.3): PRG ROM read-only, and the two register windows the core logs stores under,
+    // read and written through the bus, nothing past their ends.
+    #[test]
+    fn prg_rom_is_read_only_and_the_register_windows_go_through_the_bus() {
+        let mut m = machine(&image(&boot(0x0F, 0, 0), &[0x40]));
+        let info = m.machine_info();
+        let space = |id: u32| info.spaces.iter().find(|s| s.id == id).unwrap().clone();
+        assert!(space(1).read_only && !space(0).read_only);
+        assert_eq!(m.space_write(1, 0, &[0x55]), Err(status::READ_ONLY));
+        for (id, name, length) in [(8, "PPUREG", 8), (9, "APUREG", 0x20)] {
+            let s = space(id);
+            assert_eq!((s.name.as_str(), s.side_effects, s.reports_stores, s.read_only, s.view), (name, true, true, false, false));
+            assert_eq!(<Machine as Core>::space_size(&m, id), Ok(length));
+        }
+        m.space_write(8, 6, &[0x3F]).unwrap();
+        m.space_write(8, 6, &[0x00]).unwrap();
+        m.space_write(8, 7, &[0x21]).unwrap();
+        assert_eq!(m.bus.ppu.palette_ram[0], 0x21);
+        m.space_write(9, 0x15, &[0x01]).unwrap();
+        let mut b = [0xFFu8; 2];
+        m.space_read(9, 0x15, &mut b[..1]).unwrap();
+        m.space_read(9, 0x20, &mut b[1..]).unwrap();
+        assert_eq!(b[1], 0);
+        assert_eq!(<Machine as Core>::space_size(&m, 10), Err(status::NO_SUCH_SPACE));
     }
 }

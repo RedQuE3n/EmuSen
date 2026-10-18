@@ -1,6 +1,6 @@
 # EmuSen — the backend in Rust: the line, the frontend API, the system packs and the services
 
-*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
+*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
 get the entire backend ported to rust", after which the frontend's move is planned, and the request of 2026-10-17 to
 design two things: one frontend API by which every frontend drives the cores, and the system packs and the remaining C#
 platform services in Rust. Every claim about the code was read on `WiseMan` at `165e60b4`. Claims are marked as
@@ -3993,3 +3993,118 @@ The three first phases (§17, §18, §19) were answered by the tester on 2026-10
   6502 disassemblers in shared crates the cores and the packs both use; the IS-Viewer's output in the core's log; the
   oracles' exception types retired, so a refused game reaches the frontend API as a fault and a refused state as
   `StateRefused`.
+
+---
+
+## 21. B4's second phase for MoonRT, steps 1 to 3, 2026-10-18: the core's own exports, the pack's fixed map, the tests moved
+
+*Built on branch `b4-moon-venus` from `WiseMan` at `4b42f4f1`, under §20's decisions: §19.8's steps 1 to 3, the ones that
+need no core ABI change and no host piece the cores share. The entry-point observer (C5), the patch refresh on a read
+(C6), `ISystemDebugViews`' new members, the oracles' exception types' retirement and core ABI 1.13 are another
+branch's, `b4-shared`; step 4 (MoonRT's devices) waits for it, and step 5 (the switch) for step 4. MoonRT's machine and
+its state did not change: every golden, the corpus and the games' traces hold as recorded.*
+
+### 21.1 Step 1: the core
+
+- **C1, shown first.** `MoonRtCoreAbiTests.A_battery_file_beside_a_game_without_one_is_not_loaded_on_the_adapter`
+  puts a `.srm` of `A5h` beside a game whose header claims no battery and loads it on the shim and on the generic
+  engine. Against the unchanged library the shim read 0 and the adapter **165**, the save written into PRG RAM
+  (§19.6). MoonRT's v1 `create` now reads file 0 only for a cartridge with a battery and leaves another's unread; the
+  case passes, and the crate's `a_battery_file_is_taken_only_by_a_cartridge_with_a_battery` holds it beside machine
+  info, which lists the file only then. The pre-stable `create`, which `MoonMachine` alone calls, is unchanged.
+- **`DEBUG_REGISTERS`** (Q28): machine info's processor 0 names the shim target's thirteen, A, X, Y, S, PC, P, the six
+  flags N, V, D, I, Z and C as 1-bit values and the 64-bit cycle count, and `debug_registers` reads them from the CPU's
+  own fields, not from a saved state.
+- **`PRGROM` read-only.** Flagged `read_only`, and a write to it is refused with `READ_ONLY` and changes nothing:
+  §19's D1 named only the flag, but the kit's C14 holds a `read_only` space to refusing a write, which the core's
+  `write_space` had silently ignored.
+- **`PPUREG` and `APUREG`** (spaces 8 and 9, 8 and 32 bytes), the ids the core already logged stores under, now listed
+  with `side_effects` and `reports_stores`, read and written through the CPU's bus at `$2000+a` and `$4000+a`, nothing
+  past their ends. **Not `view`, correcting §19's D15**: §29 of `EmuSen_CoreAPI.md` has a view promise that it is
+  read-only and that its reads change nothing, and a read of `$2002` clears the vertical blank.
+- **`moonrt_core_step`**, the test extension on the v1 handle, with `moonrt_step`'s body: one instruction with the frame
+  loop's DMA charge, NMI edge and stolen cycles.
+- **`DEBUG_DISASSEMBLE` over a shared crate** (Q2). `emusen-systems`' `nes::disasm` moved whole into
+  `EmuSen/Cores/Shared/emusen-6502` (the table, the modes, lengths, operand text and references, with a `Reference`
+  of its own), which MoonRT's `debug_disassemble` and the NES pack both read; the pack's module re-exports it and maps
+  the references to its own, so `emusen_systems_disassemble` and `DebugCodeParityTests` are unchanged. The core reads
+  each instruction as the shim's target did, the opcode and then its bytes, through the space asked for. **Two new
+  dependencies, stated as the project's rule asks**: MoonRT on `emusen-6502`, and `emusen-systems` on it, as both
+  sides already depend on `emusen-mips` for the MIPS cores.
+- **A correction to §19's D16**: a host's store to `CPUBUS` is reported by MoonRT itself when the debugger listens to
+  stores (`machine.rs`, `write_space`'s space 7, under the last instruction), so nothing retires there; the shim's
+  `Observed` path only routes the same report.
+
+MoonRT now exports 51 `emusen_core_` symbols (49 before) and claims `0x433821` (`0x403821` before);
+`export_check.py` passes it against the 1.12 baseline. `CoreDebugTarget` over the v1 engine shows the 2A03's
+registers and disassembly exactly as the shim's target does:
+`MoonRtCoreAbiTests.The_cores_registers_and_disassembly_are_what_the_shims_target_shows` compares the registers after
+30, 60 and 90 frames of a busy MMC3 program, and 64 instructions from six addresses (the program, its loop, the reset
+code, the vectors, RAM and PRG RAM) with their static references.
+
+### 21.2 Step 2: the NES pack's fixed memory map
+
+`nes::views::resolve_physical` in Rust and `NesDebugViews.ResolvePhysical` in C#: RAM, `PPUREG`, `APUREG` and `PRGRAM`
+for the ranges the console fixes, nothing for `$8000` and up. **Not wired**: `ISystemDebugViews` has no such member, and
+adding one is `b4-shared`'s, with the facade's call and its parity case; `CoreDebugTarget.ResolvePhysical` forwards to it
+then. Until then `MoonRtCoreAbiTests.The_nes_packs_fixed_map_is_the_shim_targets` holds the C# function to the shim
+target's for every address from −1 to `$10000`, and the crate's test pins the Rust function's edges.
+`NesSystem` names the two windows (`PpuRegisters`, `ApuRegisters`).
+
+### 21.3 Step 3: the tests moved
+
+**The mechanism.** `Fixtures/MoonEngines.cs` makes the engine a moved test runs: the generic `CoreEngine` over MoonRT's
+library beside the tests, opened by its path, or, while `EMUSEN_MOONRT_ENGINE=shim`, the shim, so that every moved test
+runs on both until the switch, when the variable and its branch go. The shim is a `CoreEngine` subclass, so a moved test
+holds a `CoreEngine` either way. The step chains run on a bare v1 machine through `moonrt_core_step`, or on `MoonMachine`
+with the variable set. `MoonEngines.Field` reads a state field by the machine's layout listing, for the tests that read
+the shim's `Layout`.
+
+**The corpus traces' word for a refused image.** Eight corpus traces record `verdict Unsupported NotSupportedException`,
+the shim's exception for a board MoonRT does not build. The generic engine refuses the same image with
+`CoreRefusedException` and status −10, so `MoonEngines.RefusalWord` reads a refusal by its status into the word the
+traces hold (−10 `NotSupportedException`, −9 and −11 `InvalidDataException`), and the traces stand on both engines.
+Whether they are re-recorded with words of the core's own is the switch's question, as the exception types retire
+there (§20).
+
+**Moved**: `MoonGoldenTests` and `Fixtures/MoonGolden.cs` (the frame runs, the corpus, the games and the step chains),
+`MoonRtRawPictureTests`, `MoonRtPalTests`, `MoonSpriteZeroTests`, `MoonTestRomTests`, `MoonPpuDefectTests`,
+`MoonAccuracyCoinTests`, `NesRunToFrameTests`, `RustShimDisposeTests`, `RustStateHeaderTests` (the header read as "MOON"
+and 6 rather than from the shim's constants), `PadButtonTests`, `EngineFeaturesTests`, `AudioBufferLimitTests`,
+`BatterySaveTests` (its MoonRT rows) and `ScreenFilterRenderTests`' MoonRT case.
+
+**Not moved, and why:**
+
+| Class | What holds it to the shim |
+|---|---|
+| `MoonCheatTests` | it reads the bus after adding a patch, between frames, which the adapter answers without the patch until a frame (C6, `b4-shared`) |
+| `MoonDebugEngineTests` with `MoonDebugTargetContract`, and `ManagedCrystalTests`' MoonRT case | the debugger's views and registries through the shim's target; the generic target needs `b4-shared`'s pieces and step 4's devices |
+| `MoonRtFrontendTests`, `CoreFactoryCheatWiringTests`, `ControllerPortTests`, `CoreRegistrationEquivalenceTests`, `MoonRtEngineTests`, `StateRefusalTests`, `MistressStateRefusalTests` | what `CoreFactory` and the frontend API build for a `.nes`, which changes at the switch, and the oracle's exception types and switch variable, which retire there |
+| `ConsoleBindingsTests`, `DisplayAspectTests`, `ScreenFilterRenderTests`' area case | the shim's identity before a game: "NES" for its name, a 4:3 shape and its lines with no game, which §19.5's decided differences change at the switch |
+| `NativeHostTests` | the pre-stable host itself, which stays until MercuryRT's shim goes |
+| `CoreOutputHashProbe`, `ReferenceDumpSnapshots` | opt-in probes, moved at the switch with the factory |
+
+### 21.4 The gates, measured on 2026-10-18
+
+| Gate | Result |
+|---|---|
+| C1 against the unchanged library | fails: expected 0, actual 165 |
+| WiseMan, the blast radius on the generic engine (the moved and not-moved classes above, `MoonRtCoreAbiTests` 6, `DebugCodeParityTests` 5 and `GoldenCorpusTests` 100), with the corpus (`EMUSEN_MOONRT_CORPUS`) and the games (`EMUSEN_MOONRT_ROMS=library`) | **453 of 453 pass**, 6 min 30 s: the corpus's 263 ROMs as recorded, the seven games' 3,600 frames each as recorded and again from their recorded states, every step chain through `moonrt_core_step`, 105 corpus passes as the C# baseline had |
+| The same with `EMUSEN_MOONRT_ENGINE=shim` | **453 of 453 pass**, 6 min 27 s |
+| `GoldenCorpusTests` | 100 of 100 in each run, nothing re-recorded |
+| MoonRT's crate, `cargo test --profile test-checked` | 26 pass, the four new among them |
+| `emusen-6502` | 3 pass |
+| `emusen-systems`, `emusen-platform` | 31, 4 and 20 pass (the 20 with `resolve_physical`'s case) |
+| The kit, `emusen-core-conform` at 600 frames, `--self-delimiting`, on 20 corpus images (every thirteenth `.nes` of the corpus, less a board MoonRT does not build), the library at `4b42f4f1` and this one | the core's cases and 20 of 20 images pass on both; the reports differ only in the two exports and the capability word, and in timings, memory and C13's rounds |
+
+`moonbench`'s hashes (§19.7.1) were not taken again: it is a program kept outside the tree, and the games' traces hold
+the same games' state hashes under the bench's input at every frame.
+
+### 21.5 What is left
+
+- **After `b4-shared` merges**: `CoreDebugTarget.ResolvePhysical` wired to the pack's function; `MoonCheatTests` moved
+  once C6's refresh is in the host; step 4, MoonRT's three devices under 1.13's one name, with `MoonBoards`' registers
+  and arrangement rules moved into the boards, and the pack's sprites, channels and summary over them.
+- **Step 5, the switch**: `CoreFactory`'s `.nes` arm, `MoonRtEngine` to `SoleDiscoveredEngines`, the shim's five files,
+  MoonRT's `native_exports!`, `moonrt_step` and `moonrt_rom_patch`, `EMUSEN_MOONRT_ENGINE` and its branch, the classes of
+  §21.3's second table, and the eight corpus traces' refusal word decided.

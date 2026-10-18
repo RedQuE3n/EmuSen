@@ -4,7 +4,6 @@ using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 
@@ -36,7 +35,7 @@ namespace EmuSen.WiseMan.Cores
 
         private static ICore Make(string engine, CoreOptions? options = null) => engine switch
         {
-            "MoonRT" => new MoonRtCore { Options = options ?? CoreOptions.Default },
+            "MoonRT" => MoonEngines.Create(options),
             _ => new MercuryRtCore { Options = options ?? CoreOptions.Default },
         };
 
@@ -399,7 +398,7 @@ namespace EmuSen.WiseMan.Cores
 
         private static byte ReadRam(ICore core, string engine, int address) => engine switch
         {
-            "MoonRT" => ((MoonRtCore)core).ReadSpace(RamSpace(engine), address),
+            "MoonRT" => ((EmuSen.Cores.Native.CoreEngine)core).ReadSpace(RamSpace(engine), address),
             _ => ((MercuryRtCore)core).ReadSpace(RamSpace(engine), address),
         };
 
@@ -407,7 +406,7 @@ namespace EmuSen.WiseMan.Cores
         {
             switch (engine)
             {
-                case "MoonRT": ((MoonRtCore)core).WriteSpace(RamSpace(engine), address, value); break;
+                case "MoonRT": ((EmuSen.Cores.Native.CoreEngine)core).WriteSpace(RamSpace(engine), address, value); break;
                 default: ((MercuryRtCore)core).WriteSpace(RamSpace(engine), address, value); break;
             }
         }

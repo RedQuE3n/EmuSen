@@ -39,7 +39,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { ".nes" }, Discovered.Info.Systems.Single().Extensions);
             var library = Discovered.Open();
             Assert.True(library is { Available: true }, Discovered.Report);
-            Assert.Equal(CoreInterface.CapReset | CoreInterface.CapMutes | CoreInterface.CapRomPatches | CoreInterface.CapDebug | CoreInterface.CapDebugStack | CoreInterface.CapRawPicture, library!.Capabilities);
+            Assert.Equal(CoreInterface.CapReset | CoreInterface.CapMutes | CoreInterface.CapRomPatches | CoreInterface.CapDebug | CoreInterface.CapDebugStack | CoreInterface.CapRawPicture
+                | CoreInterface.CapDebugRegisters | CoreInterface.CapDebugDisassemble, library!.Capabilities);
             Assert.True(MoonNative.Available, MoonNative.Report);
         }
 
@@ -56,6 +57,69 @@ namespace EmuSen.WiseMan.Cores
                 Assert.IsType<MoonRtCore>(core);
                 Assert.Null(CoreFactory.EngineNotice("game.nes", engine, core));
                 ((IDisposable)core).Dispose();
+            }
+        }
+
+        // A save beside a game whose header claims no battery reaches no machine on the adapter, as the shim never opened one - see EmuSen_Backend.md §19.6, C1.
+        [Fact]
+        public void A_battery_file_beside_a_game_without_one_is_not_loaded_on_the_adapter()
+        {
+            string rom = Path.Combine(_root, "plain.nes");
+            File.WriteAllBytes(rom, SyntheticNesRom.Build(prgBanks: 2, chrBanks: 1, battery: false));
+            string save = SaveLibrary.SramPathFor(rom, BatterySave.Nes);
+            Directory.CreateDirectory(Path.GetDirectoryName(save)!);
+            File.WriteAllBytes(save, Enumerable.Repeat((byte)0xA5, 0x2000).ToArray());
+            using var shim = new MoonRtCore();
+            using var adapter = new CoreEngine(Discovered.Open()!);
+            shim.LoadRom(rom);
+            adapter.LoadRom(rom);
+            Assert.Equal(0, shim.ReadSpace("PRGRAM", 0x10));
+            Assert.Equal(0, adapter.ReadSpace("PRGRAM", 0x10));
+        }
+
+        // The 2A03's registers through DEBUG_REGISTERS and its disassembly through DEBUG_DISASSEMBLE, on the generic target, are what the shim's target shows - see EmuSen_Backend.md §21.
+        [Fact]
+        public void The_cores_registers_and_disassembly_are_what_the_shims_target_shows()
+        {
+            string rom = Path.Combine(_root, "busy.nes");
+            File.WriteAllBytes(rom, MoonPrograms.Rom(4, 8, (0, MoonPrograms.Busy)));
+            using var shim = new MoonRtCore() { Options = TestCores.NoBattery };
+            using var adapter = new CoreEngine(Discovered.Open()!) { Options = TestCores.NoBattery };
+            shim.LoadRom(rom);
+            adapter.LoadRom(rom);
+            var theirs = shim.CreateDebugTarget();
+            var ours = adapter.CreateDebugTarget();
+            for (int f = 0; f < 90; f++)
+            {
+                shim.RunFrame();
+                adapter.RunFrame();
+                if (f % 30 != 29) continue;
+                theirs.RefreshProviders();
+                ours.RefreshProviders();
+                Assert.Equal(theirs.CpuRegisters.Current.Select(r => (r.Name, r.Value, r.BitWidth)), ours.CpuRegisters.Current.Select(r => (r.Name, r.Value, r.BitWidth)));
+            }
+            foreach (int start in new[] { 0x8000, 0x8015, 0xC000, 0xFFF0, 0x0000, 0x6000 })
+            {
+                var a = theirs.Disassemble("CPUBUS", start, 64);
+                var b = ours.Disassemble("CPUBUS", start, 64);
+                Assert.Equal(a.Select(i => (i.Address, string.Join(" ", i.Bytes), i.Mnemonic, i.OperandText, theirs.ClassifyStaticReference(i))),
+                    b.Select(i => (i.Address, string.Join(" ", i.Bytes), i.Mnemonic, i.OperandText, ours.ClassifyStaticReference(i))));
+            }
+        }
+
+        // The NES pack's fixed memory map, for any engine's target once the views carry it, is the shim target's for every address - see EmuSen_Backend.md §21.
+        [Fact]
+        public void The_nes_packs_fixed_map_is_the_shim_targets()
+        {
+            string rom = Path.Combine(_root, "plain.nes");
+            File.WriteAllBytes(rom, SyntheticNesRom.Build());
+            using var shim = new MoonRtCore() { Options = TestCores.NoBattery };
+            shim.LoadRom(rom);
+            var target = shim.CreateDebugTarget();
+            for (int a = -1; a <= 0x10000; a++)
+            {
+                var (theirs, ours) = (target.ResolvePhysical(a), EmuSen.Crystal.Systems.Nes.NesDebugViews.Instance.ResolvePhysical(a));
+                Assert.Equal((theirs?.Space, theirs?.Offset, theirs?.IsAddressable), (ours?.Space, ours?.Offset, ours?.IsAddressable));
             }
         }
 

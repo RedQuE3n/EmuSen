@@ -214,6 +214,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-firmware"
+version = "0.1.0"
+dependencies = [
+ "emusen-dotnet",
+ "emusen-galaxia",
+]
+
+[[package]]
 name = "emusen-galaxia"
 version = "0.1.0"
 dependencies = [
@@ -251,6 +259,7 @@ dependencies = [
  "emusen-disc",
  "emusen-dotnet",
  "emusen-endymion",
+ "emusen-firmware",
  "emusen-galaxia",
  "emusen-native",
  "emusen-serenity",

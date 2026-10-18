@@ -1,0 +1,15 @@
+[package]
+name = "emusen-firmware"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The firmware store: the folders searched and their order, an image found whole or split, the overview's facts, and an install into home/Firmware. See EmuSen_Firmware.md §2 and EmuSen_Backend.md §14.
+[lib]
+name = "emusen_firmware"
+
+[dependencies]
+# .NET's path rules and File.Exists, and the folder setting's rules, which are Galaxia's.
+emusen-galaxia = { path = "../galaxia" }
+emusen-dotnet = { path = "../dotnet" }

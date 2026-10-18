@@ -17,6 +17,7 @@ pub mod model;
 pub mod models;
 pub mod rom_hash;
 pub mod saves;
+pub mod setting_folders;
 pub mod suggestion;
 pub mod tree;
 

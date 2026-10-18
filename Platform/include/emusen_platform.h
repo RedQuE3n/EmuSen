@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 15u
+#define EMUSEN_PLATFORM_ABI_VERSION 17u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -502,6 +502,26 @@ int64_t emusen_systems_board_name(int32_t mapper, uint8_t *out, size_t len);
  * system or view there is not; PARSE for a request that is not one.
  */
 int64_t emusen_systems_view(const uint8_t *request, size_t request_len, const uint8_t *tape, size_t tape_len, uint8_t *out, size_t len);
+
+/* ---- The file services: emusen-firmware, emusen-savemedia, emusen-cheats (EmuSen_Backend.md, section 14). Since interface 17. ---- */
+
+/*
+ * Firmware (EmuSen_Firmware.md, section 2). A request is a JSON object: file (the canonical name), size, alternates
+ * (names) and parts (split forms, each a list of names). Folders are a list of full paths, searched first to last.
+ */
+/* In: {"setting": the FirmwareDirectory value or null, "home": the player's home, "store": home/Firmware}. Out: folders,
+ * state (Unset, Usable, Missing, Relative or File), path, written and problem. A refused or absent value's line is queued
+ * for emusen_platform_diagnostics once, and again only when the value changes. */
+int64_t emusen_firmware_folders(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+/* In: {"request", "folders"}. Out: an envelope, the JSON's length as four little-endian bytes, the JSON (folder, names,
+ * lengths), then each part's bytes in order. ABSENT when no folder holds the image. */
+int64_t emusen_firmware_find(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+/* In: {"request", "folders"}. Out: found (folder, names, whole; or null), each file opened and measured but not read,
+ * and wrong (the first folder with a file of the canonical name and another size, looked for only when nothing is found). */
+int64_t emusen_firmware_locate(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+/* In: {"request", "source", "store"}. 1 when the source, of the request's size, was copied to the store under the
+ * canonical name; 0 when its size is not the request's; IO with the words when the store could not be written. */
+int32_t emusen_firmware_install(const uint8_t *request, size_t request_len);
 
 /* ---- Endymion: the logic half (EmuSen_Audio_Sync.md, sections 1 to 3; EmuSen_Input.md, sections 7 and 8) ---- */
 

@@ -210,12 +210,17 @@ impl Video {
         let dots = self.dots(t) - self.dots_from_line_start(t);
         let hblanks = self.hblanks(t);
         let start = self.line_start(line);
+        let due = self.next_edge_h(false);
         change(self);
         self.base_h = start;
         self.base_line = line;
         self.base_dots = dots;
         self.base_hblanks = hblanks - self.hblank_rise().is_some_and(|r| pos >= r) as u64;
         self.field_lines = self.lines_of_field().max((line - self.field_line + 1) as u32);
+        // A range moved onto the current line meets it in the next field, unless that line's edge was still due (Diamond_Native.md §29).
+        if due > start && self.next_edge_h(false) == start {
+            self.done_h = self.done_h.max(start);
+        }
     }
 
     fn dots_from_line_start(&self, t: u64) -> u64 {
@@ -414,6 +419,31 @@ mod tests {
         assert_eq!(w.hblanks(late), before, "an edge already passed in the line is kept");
         let a = v.t_of_dots(v.dots(t) + 10 * 426);
         assert!(v.hblanks(a) - h == 10 || v.hblanks(a) - h == 11, "426 dots a line at 320 pixels");
+    }
+
+    /// A range moved onto the line the beam is in gives no edge at that line's start, already passed: Y2 there waits
+    /// for the next field, behind the field's end, and Y1 there in the top blank leaves vblank's start at Y2 next
+    /// (Diamond_Native.md §29).
+    #[test]
+    fn a_range_line_moved_onto_the_beams_line_is_no_edge_this_field() {
+        let changes: [(&str, u64, fn(&mut Video), u32, u64); 2] =
+            [("Y2 moved to line 100", 100, |v| v.y2 = 100, edge::FIELD, 263), ("Y1 moved to line 5", 5, |v| v.y1 = 5, edge::VBLANK_START, 256)];
+        for (what, line, change, next_edge, next_line) in changes {
+            let mut v = Video::new(false);
+            let t = v.t_at(v.line_start(line) + 3_000);
+            run(&mut v, t, false);
+            v.retime(t, change);
+            let next = v.next_edge(false);
+            assert!(next > t, "{what}: an edge at cycle {next}, before the change at {t}");
+            assert_eq!(v.edge(next, false), next_edge, "{what}");
+            assert_eq!(v.position(next).0, next_line, "{what}");
+        }
+        let mut v = Video::new(false);
+        let late = v.t_at(v.line_start(256) + 20);
+        run(&mut v, late - 30, false);
+        v.retime(late, |v| v.mode = 1);
+        let next = v.next_edge(false);
+        assert_eq!((v.edge(next, false), v.position(next).0), (edge::VBLANK_START, 256), "an edge still due at the line's start is kept");
     }
 
     /// A range's line the beam has passed is no edge until the next field, whether the range moved behind it or a new

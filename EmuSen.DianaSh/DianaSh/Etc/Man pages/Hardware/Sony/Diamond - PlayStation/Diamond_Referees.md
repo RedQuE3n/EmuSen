@@ -552,6 +552,16 @@ reads back x 896 to 1023, lines 0 to 191. DuckStation, SwanStation and Beetle PS
 the triangle from the screen, after it all four the same as those three. PCSX-Redux fills columns 896 to 991 for every
 shape, the control among them, and is not counted. `Diamond_Disputes.md` D-47 has the table and the ruling.
 
+### 4.18 D-49: a display range moved onto or across the beam — `range-cross.s`
+
+*Added 2026-10-18.* `programs/range-cross.s`, side-loaded on the five referees by `psxreferee.py ram`, the player's
+BIOS given as each one's firmware, RAM read at its done word [M]. Nine cases of a GP1(07h) written mid-line: the vblank
+interrupts that follow, GPUSTAT bit 31 over the next lines, and timer 1 in sync modes 0 and 3 written before or after
+the range. PCSX-Redux and PCSX-ReARMed raise IRQ0 at the same lines whatever the range and gate nothing, and are not
+counted. Beetle PSX and DuckStation agree on timer 1's gate in every case written before the range, and disagree on
+the interrupt in every case that moves the line across the range. `Diamond_Native.md` §29.4 has the tables,
+`Diamond_Disputes.md` D-49 the ruling.
+
 ## 5. What changed in Diamond
 
 Each a writer's step citing its entry, after the rulings above:
@@ -579,6 +589,9 @@ Each a writer's step citing its entry, after the rulings above:
 
 - *The second play step (D-47)*: a triangle or line reaching left of -1,024 (or above it) is drawn 2,048 further on
   (`raster.rs`), on three referees of two lineages. Pinned by `a_primitive_past_the_offsets_eleven_bits_is_drawn_modulo_2048`.
+
+- *D-49*: a new Y1 or Y2 on the beam's line is met in the next field (`video.rs`), on two lineages for the timer and
+  the strongest witness for the field. Pinned by `a_range_moved_onto_the_beams_line_waits_for_the_next_field`.
 
 The other programs are pinned on Diamond as it reads them: `gpustat_while_each_shape_arrives_and_draws`,
 `the_gpu_is_ready_at_once_after_each_transfer`, `stores_drain_as_the_fit_has_them`.

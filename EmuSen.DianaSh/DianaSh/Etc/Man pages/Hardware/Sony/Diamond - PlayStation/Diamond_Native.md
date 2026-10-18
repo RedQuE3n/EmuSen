@@ -1901,10 +1901,13 @@ the pictures and the sound are the same through frame 3,000.
 psx-spx `6d7d1bc`, "GPU Display Control", GP1(07h): Y1 and Y2 are "scanline numbers on screen, relative to VSYNC",
 and "If Y2 is set to a much too large value, then the hardware stops to generate vblank interrupts (IRQ0)" [R]. The
 range is compared with a line counter that runs forward from vsync, and a value the counter never reaches gives no
-interrupt. PSX_MiSTer's `rtl/gpu_videoout_sync.vhd` does this at each line's start: the new line number against
+interrupt. ~~PSX_MiSTer's `rtl/gpu_videoout_sync.vhd` does this at each line's start: the new line number against
 `vDisplayStart` and `vDisplayEnd`, IRQ0 when the blank's level changes [R]; nothing is evaluated at a line already
-left. A line the counter has passed this field is therefore met again only in the next field, and an edge for it
-belongs to no time in the present field. The rule is a branch, not a wrap: wrapping is not what the counter does.
+left.~~ *Withdrawn 2026-10-18:* PSX_MiSTer's RTL may not be read for Diamond (`Diamond_FPGA_Referees.md` §1, the plan's
+§1.3), so it is no source here; the referees run as black boxes stand in its place, and on Y1 moved behind the beam
+all of them that model the range agree with the fix (§29.4). A line the counter has passed this field is therefore met
+again only in the next field, and an edge for it belongs to no time in the present field. The rule is a branch, not a
+wrap: wrapping is not what the counter does.
 
 ### 28.4 The fix
 
@@ -1918,12 +1921,15 @@ earlier one. No state field changes and the state format is as before.
 - **A range moved across the current line.** When GP1(07h) puts the current line on the other side of the range (Y1
   raised above the current line during the top blank, or Y2 raised above it during the picture), Diamond's levels
   (`in_vblank_at`, GPUSTAT bit 31) change at once, but no edge is delivered: timer 1's vblank sync and IRQ0 wait for
-  the next field. PSX_MiSTer evaluates the level at the next line's start and raises IRQ0 there when it changed [R].
-  Silent Hill's write does not reach this (line 255 is in the blank before and after). One FPGA is weak evidence
-  (`Diamond_FPGA_Referees.md`), and the change would move IRQ0 in the cases it reaches; it is proposed, not built.
+  the next field. ~~PSX_MiSTer evaluates the level at the next line's start and raises IRQ0 there when it changed [R].~~
+  Silent Hill's write does not reach this (line 255 is in the blank before and after). ~~One FPGA is weak evidence
+  (`Diamond_FPGA_Referees.md`), and the change would move IRQ0 in the cases it reaches; it is proposed, not built.~~
+  *Refereed 2026-10-18 (§29):* the referees disagree on IRQ0 in every such case, so it stays; Diamond's level at once
+  is opposed by Beetle PSX, which a change would need a state field to follow (§29.5).
 - **A range moved onto the current line.** A new Y1 or Y2 equal to the current line still gives its edge at the line's
   start, already passed, taken at the next event: the same sync at a past cycle, by less than one line. Its blank flag
   is the one the level reports, so it is not wrong in kind, only in time. The corpus probe did not look for it.
+  *Fixed 2026-10-18 (§29):* the line is met in the next field.
 
 ### 28.6 Debug-only overflows elsewhere
 
@@ -1968,3 +1974,185 @@ leaves overflow checks off, so this class of defect cannot fail CI. Proposed: on
 release, where their run time belongs. An alternative is a test profile inheriting `release` with
 `overflow-checks = true`, which would check the integration suites too at near-release speed, at the cost of a third
 build of the crate; not measured. Neither is built.
+
+## 29. A display range moved across or onto the beam (2026-10-18)
+
+### 29.1 The question
+
+§28.5 left two cases of a GP1(07h) written mid-field. **Across:** the write puts the current line on the other side
+of the range, from the picture into the blank or back. Diamond's levels (`in_vblank_at`, GPUSTAT bit 31) follow the
+new range at once, but no edge is delivered, so timer 1's vblank sync and IRQ0 wait for the next line the range names.
+**Onto:** the new Y1 or Y2 equals the current line, and Diamond delivered that line's edge at its start, already
+passed. The tester's rule for both: investigate first, change only what two independent references agree on or a
+hardware test settles.
+
+### 29.2 What the documents and the suites say [R]
+
+psx-spx `6d7d1bc`: GP1(07h)'s Y1 and Y2 are "scanline numbers on screen, relative to VSYNC", and "If Y2 is set to a
+much too large value, then the hardware stops to generate vblank interrupts (IRQ0)"; GPUSTAT bit 31 "is always zero
+during Vblank (vertical retrace and upper/lower screen border)"; "Timers" gives sync modes 0 to 3 for timer 1 against
+vblank and says a mode write resets the count to 0000h; "Interrupts" says I_STAT's bits are edge-triggered, set only
+when a source goes from false to true; "GPU Timings" warns that the video output's blanks "are not necessarily the
+same as the timer/interrupt HBLANK and VBLANK". Nothing says what a range changed within a field does.
+
+No test program settles it. Of ps1-tests (sources and release build 158), only `timers` and `timer-dump` set the
+display, through `PutDispEnv` with 240 lines throughout, so the range never moves; no program writes GP1(07h) itself.
+amidog's four tests are binaries that move the display only by the player's presses; Peter Lemon's programs set the
+range once at their start; the 240p suite is a disc driven by the player. No emulator's source is local, and none may
+be read (`Diamond_Plan.md` §1.3). PSX_MiSTer's RTL may not be read either (`Diamond_FPGA_Referees.md` §1), so it is
+no source here; §29.9 records the files of it opened on this day all the same, and why nothing of them is used.
+
+### 29.3 The program
+
+`programs/range-cross.s`, interrupts off, NTSC at 320, writes the range 16–256, lets two vblank edges pass, takes the
+next one (line 256) as its reference, and at the middle of a chosen line writes a new range. Nine cases:
+
+| Case | Line | New range | What it is |
+|---|---|---|---|
+| 0 | 100 | 16–256 | the control: the range written unchanged |
+| 1 | 100 | 16–50 | across: Y2 behind the beam, picture to blank |
+| 2 | 100 | 16–100 | onto: Y2 on the beam's line |
+| 3 | 100 | 150–256 | across: Y1 past the beam, picture to blank |
+| 4 | 258 | 16–262 | across: Y2 past the beam, blank to picture |
+| 5 | 5 | 2–256 | across: Y1 behind the beam, blank to picture |
+| 6 | 5 | 5–256 | onto: Y1 on the beam's line |
+| 7 | 100 | 16–300 | Y2 past the field's 263 lines, psx-spx's "much too large" |
+| 8 | 100 | 50–256 | §28's case: Y1 behind the beam, the line still in the picture |
+
+Its first part counts hblanks on timer 1 from the reference and records the count at the write, eight samples of
+GPUSTAT bit 31 at the next eight lines, and the counts at the next two vblank interrupts (I_STAT bit 0) within 600
+lines. Its second part writes timer 1's mode with sync mode 0 (paused in vblank) just before the range and reads the
+count at once and 1.5, 3 and 20 lines later, then does the same with sync mode 3 (held until a vblank, then free);
+its third writes the range first and sync mode 0 just after. It was run on Diamond and side-loaded on the five
+referees of `Diamond_Referees.md` §2 by `psxreferee.py ram`, the player's BIOS given as there, RAM read at the done
+word [M].
+
+### 29.4 What each did [M]
+
+The first two vblank interrupts, in hblanks from the reference (107 is the write's line 100, 2 its line 258, 12 its
+line 5; 263 is line 256 a field on):
+
+| Case | Diamond before | Diamond after | Beetle PSX | DuckStation | SwanStation |
+|---|---|---|---|---|---|
+| 0 control | 263, 526 | 263, 526 | 263, 526 | 263, 526 | 263, 526 |
+| 1 Y2 behind | 320, 583 | 320, 583 | 320, 583 | **108**, 320 | **107**, 320 |
+| 2 Y2 onto | **107**, 370 | 370, 633 | 370, 633 | **108**, 370 | **107**, 370 |
+| 3 Y1 past | 263, 526 | 263, 526 | 263, 526 | **108**, 262 | **107**, 263 |
+| 4 Y2 past, in the blank | 6, 269 | 6, 269 | **269**, 532 | 6, 269 | 6, 269 |
+| 5 Y1 behind, in the blank | 263, 526 | 263, 526 | **526**, none | 263, 526 | 263, 526 |
+| 6 Y1 onto, in the blank | 263, 526 | 263, 526 | **526**, none | 262, 526 | 263, 526 |
+| 7 Y2 past the field | 270, 533 | 270, 533 | **none** | 270, 532 | 270, 533 |
+| 8 §28's case | 263, 526 | 263, 526 | 263, 526 | 263, 525 | 263, 526 |
+
+PCSX-Redux and PCSX-ReARMed raise IRQ0 at 262 and 525 in every case: neither moves vblank with the range, and they are
+no witnesses here. Beetle PSX enters the blank only on the line equal to Y2 and leaves it only on the line equal to
+Y1: a move across the beam changes nothing until the counter meets the new value, a blank never left gives no
+interrupt (cases 5 and 6), and a Y2 the counter never reaches gives none at all, as psx-spx says (case 7).
+DuckStation and its fork raise IRQ0 at the write or within its line whenever the write moves the line into the blank
+(1 to 3), and keep Diamond's figures otherwise.
+
+Timer 1, written just before the range, counting (R) within 20 lines or held (0); every reading at once was 16
+cycles or fewer, except where marked:
+
+| Case | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|---|
+| Sync mode 0, Diamond before | R | R | **1, then held** | R | 0 | 0 | **R from 1,104** | R | R |
+| Sync mode 0, Diamond after, Beetle PSX, DuckStation, SwanStation | R | R | R | R | 0 | 0 | 0 | R | R |
+| Sync mode 3, Diamond before | 0 | 0 | **R from 1,113** | 0 | R at line 262 | 0 | 0 | 0 | 0 |
+| Sync mode 3, Diamond after | 0 | 0 | 0 | 0 | R at line 262 | 0 | 0 | 0 | 0 |
+| Sync mode 3, Beetle PSX | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Sync mode 3, DuckStation | 0 | R | R | R | R | R | R | R | R |
+| Range first, then sync mode 0, Diamond | R | **0** | **0** | **0** | R, then 0 at 262 | **R** | **R** | R | R |
+| Range first, then sync mode 0, Beetle PSX | R | R | R | R | 0 | 0 | 0 | R | R |
+| Range first, then sync mode 0, DuckStation | **0** | R | R | R | 0 | 0 | 0 | R | R |
+
+PCSX-Redux and PCSX-ReARMed count in sync mode 0 in every case, and SwanStation's mode 3 holds at 2 after any range
+write: no witnesses for those rows. In DuckStation sync mode 3 counts after any GP1(07h) write that changes the range,
+case 8's included, which moves no blank, so its mode 3 row is not counted either; and its control in the last row,
+the range written unchanged on line 100 and then the mode, holds a timer every model would run.
+
+GPUSTAT bit 31 over the eight lines after the write: Beetle PSX keeps the old level (the picture's alternation in
+cases 1 to 3, 7 and 8; zero in 4 to 6); Diamond follows the new range at once (zero in 1 to 3; the alternation in 4,
+for its four lines before 262, and in 5 and 6). DuckStation and SwanStation alternate in the blank too (case 4) and
+are no witnesses for the bit.
+
+### 29.5 The rulings [A]
+
+**Onto: Diamond was wrong, and is changed.** Beetle PSX and DuckStation, separate lineages, agree on every row of
+the sync mode 0 table, and both reject what Diamond did in cases 2 and 6: a timer held when Y2 is moved onto its
+line, and in case 6 one that counts from the line's start, 1,104 cycles before the mode write that reset it to zero,
+which psx-spx's reset rule excludes on any model. Neither raises IRQ0 at the start of the line already begun; Beetle
+PSX meets the line in the next field, DuckStation within the line after the write. Between those two the ruling names
+the strongest single witness for video timing, Beetle PSX, the one referee that reproduces the console's frame
+(`Diamond_Referees.md` §4.1), which is also §28.3's rule: a line whose comparison has passed is met in the next field.
+
+**Across, the interrupt: no change.** The referees disagree in every case that moves the line across the range
+(1, 3, 4 and 5), Diamond agreeing with Beetle PSX in 1 and 3 and with DuckStation in 4 and 5; there is no agreement
+for it to follow.
+
+**Across, the timer's gate: no change.** Written before the range, timer 1 counts or holds alike on Diamond and every
+referee that gates it (sync mode 0, cases 1, 3, 4 and 5).
+
+**Across, the level read at once: Diamond is opposed, and a change is proposed, not built.** Diamond reads the blank
+from the new range at once (`in_vblank_at`, used for GPUSTAT bit 31 and for a timer mode write's sync state); Beetle
+PSX keeps the old level until the counter meets Y1 or Y2, for the bit and for the timer alike. DuckStation agrees with
+Beetle PSX on the timer in cases 1 to 6, but holds its control too, a reading no model gives, so its agreement is not
+counted. One witness against Diamond, then. To follow it, the blank would become a latch set and cleared at the
+edges, a field `Video` does not have: a new state field and every state digest of the goldens recorded again, for a
+case no game in §29.7 reaches. It is the tester's to decide; what would settle it on a console is the third part of
+`range-cross.s` (the timer's count after its mode is written just after the range) and its first part's GPUSTAT
+samples.
+
+**Found on the way: Y2 past the field.** Diamond starts the blank at line 0 when Y2 lies beyond the field and Y1
+above line 0 (`vblank_rise`), so IRQ0 comes every field (case 7). psx-spx says such a Y2 stops the interrupts, and
+Beetle PSX gives none; DuckStation agrees with Diamond. A document and a referee against Diamond: by this page's rule
+it could change, but the range is static, outside both of §28.5's cases, "much too large" is not a number, and no
+game in §29.7 sets it, so it is recorded for the tester and not changed.
+
+### 29.6 The change
+
+`Video::retime` notes, before the change, the next vblank or field edge the old timing has due; after it, when the new
+timing's next such edge is the current line's start and the old timing had nothing due there, it moves the processed
+mark to that start, so the edge waits for the next field. The condition keeps an edge the old timing still had due at
+the line's start, which the event loop can leave unprocessed for up to one instruction's cycles when a GP1 write
+lands just after it (the unit test's third case). The mark is part of the state, and it moves only in the case fixed.
+Pinned by `video::tests::a_range_line_moved_onto_the_beams_line_is_no_edge_this_field` (Y2 onto line 100, Y1 onto
+line 5, and the due edge kept; the first two failing before, the third failing without the condition) and
+`programs.rs`'s `a_range_moved_onto_the_beams_line_waits_for_the_next_field` (the first part's interrupts and the
+timer rows above for Diamond after, with every reading at once 16 cycles or fewer; failing before).
+
+### 29.7 The corpus [M]
+
+A probe build printed every range change within a field with the line, the old and new ranges and the level on each
+side, over the goldens of `programs/` and ps1-tests and the eight bench discs (plain and observed), and over fifteen
+more games of the player's library, booted and left to their attract modes for 3,000 frames (Chocobo Racing, both
+other Crash Bandicoots, CTR, Gex: Enter the Gecko, MediEvil, Mega Man Legends 2, Mega Man X4 to X6, both Resident
+Evils, Spyro 2, Spyro: Year of the Dragon, which stays in the kernel here, and Jedi Power Battles). Seven changes in
+all, none across the beam and none onto it: Silent Hill's five, each in a blank and leaving it a blank (lines 8,
+250, 253, 255 and 261), Rayman's at line 180 (16–256 to 16–255) and CTR's at line 134 (16–256 to 28–244), both in
+the picture and leaving it the picture. The fix moves no golden (§29.8).
+
+### 29.8 The gates
+
+- **Release** [M, `cargo test --release`, both corpus variables set to the probe's copies, the renderer on the RX
+  6800]: the lib suite 180 (one test added), colour 3, filtered 4, scaled 7 and shell 10 passing on the first run;
+  precise 14, programs 83 (one added) and renderer 3 passing after `programs.txt` gained the new program's line, the
+  only line that differed in any gate before it; `diamond-v1`'s 5 and `precision`'s 8 lib tests passing.
+- **Debug** [M, `cargo test --lib`]: 180 passing; the new program test passing in debug too.
+- **The goldens** (`Diamond_Enhancements.md` §6.2): `discs.txt` and `ps1-tests.txt` unchanged, as §29.7 expected;
+  `programs.txt` gains `range-cross.s`, recorded in a commit of its own, every other line as it was.
+- **The kit** [M, `emusen-core-conform --frames 600`, `libdiamond.so` from `v1/` after]: 22 of 22 cases pass on
+  `gpu/animated-triangle` and on Ape Escape.
+
+### 29.9 What was read
+
+psx-spx `6d7d1bc`: "GPU Display Control" (GP1(06h), GP1(07h)), "GPU Status Register", "GPU Timings" (the vertical
+timings and the note on the blanks), "Timers" and "Interrupts". ps1-tests: the file names of every folder and the
+sources of `timers`, `timer-dump` and `common/gpu.cpp`, searched for GP1 writes; amidog's four `.txt` files; the
+240p suite's README. Before the access rule was found, PSX_MiSTer `cd17b5a` was opened as this step's first list
+named it: `rtl/gpu_videoout_sync.vhd` (searched, lines 95–275), `rtl/gpu_videoout_async.vhd` (searched, lines
+250–500, 600–620 and 870–910), `rtl/gpu_videoout.vhd`, `rtl/gpu.vhd` and `rtl/timer.vhd` (searched for their vblank
+and gate lines, `gpu.vhd`'s lines 540–560), `rtl/irq.vhd` and `rtl/psx_top.vhd` (searched for vblank), `PSX.sv`
+(searched for the video output's settings), and the file names of `rtl/` and of PS-GPU's `rtl/`. That is contrary to
+`Diamond_FPGA_Referees.md` §1; nothing of them is used above, and every ruling rests on the referees' outputs alone.
+The same rule withdraws §28.3's citation of `rtl/gpu_videoout_sync.vhd`.

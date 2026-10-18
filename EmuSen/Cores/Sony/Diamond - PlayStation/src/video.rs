@@ -113,6 +113,7 @@ impl Video {
         (self.base_line + rel / len, rel % len)
     }
 
+    /// The half clock a line of the current segment, at or after its first, begins at.
     fn line_start(&self, line: u64) -> u64 {
         self.base_h + (line - self.base_line) * self.line_length()
     }
@@ -238,12 +239,18 @@ impl Video {
                 best = h;
             }
         };
-        let field_line = |l: u32| self.line_start(self.field_line + l as u64);
-        if let Some(l) = self.vblank_rise() {
-            consider(field_line(l));
+        // A field line the beam has passed is no edge until the next field (Diamond_Native.md §28).
+        let field_line = |l: u32| {
+            let line = self.field_line + l as u64;
+            (line >= self.base_line).then(|| self.line_start(line))
+        };
+        if let Some(h) = self.vblank_rise().and_then(field_line) {
+            consider(h);
         }
         if self.y1 < self.y2.min(self.field_lines) && self.y1 > 0 {
-            consider(field_line(self.y1));
+            if let Some(h) = field_line(self.y1) {
+                consider(h);
+            }
         }
         if hblank {
             let (line, _) = self.line_at(after.max(self.base_h));
@@ -407,5 +414,22 @@ mod tests {
         assert_eq!(w.hblanks(late), before, "an edge already passed in the line is kept");
         let a = v.t_of_dots(v.dots(t) + 10 * 426);
         assert!(v.hblanks(a) - h == 10 || v.hblanks(a) - h == 11, "426 dots a line at 320 pixels");
+    }
+
+    /// A range's line the beam has passed is no edge until the next field, whether the range moved behind it or a new
+    /// line length put it there; the next edge is vblank's start at Y2 (Diamond_Native.md §28).
+    #[test]
+    fn a_range_line_behind_the_beam_is_no_edge_this_field() {
+        let changes: [(&str, fn(&mut Video)); 2] = [("Y1 moved to line 50", |v| v.y1 = 50), ("PAL mode", |v| v.mode = 1 << 3)];
+        for (what, change) in changes {
+            let mut v = Video::new(false);
+            let t = v.t_at(v.line_start(100) + 100);
+            run(&mut v, t, false);
+            v.retime(t, change);
+            let next = v.next_edge(false);
+            assert!(next > t, "{what}: an edge at cycle {next}, before the change at {t}");
+            assert_eq!(v.edge(next, false), edge::VBLANK_START, "{what}");
+            assert_eq!(v.position(next).0, 256, "{what}");
+        }
     }
 }

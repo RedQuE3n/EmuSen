@@ -592,7 +592,8 @@ psx-spx's maintained text says ("Consoles will always use the video clock for it
   fraction dropped (psx-spx), 426 at 320 pixels.
 - **GPUSTAT's bit 31** is the line's parity in 240-line mode and the field's interlaced, zero in vblank; bit 13 the
   field, 1 when not interlaced.
-- A change to the mode or the ranges takes effect from the current line, the counts so far kept [C].
+- A change to the mode or the ranges takes effect from the current line, the counts so far kept [C]. A range's line the current line
+  has already passed is no edge until the next field (§28).
 - *Superseded at stage 4 (§12): a frame ends as a field's vblank begins, the rate unchanged. Decided 2026-10-11: the
   frame ends as vblank begins, and stays so.* **The frame** is one
   field, from its first line to the next field's; machine info's rate the console's own standard
@@ -1842,4 +1843,128 @@ their cases [M, one image each, 120 frames].
 In a debug build `Video::line_start` (`src/video.rs`, `line - base_line`) overflows in the empty console's first
 frames: `v1::tests::the_console_starts_empty_and_its_market_comes_from_the_bios_given` fails under `cargo test` without
 `--release` on the commit before this one as on this one [M]. The project runs Diamond's tests in release, where the
-subtraction wraps. It is recorded here, unfixed, for its own investigation.
+subtraction wraps. It is recorded here, unfixed, for its own investigation. *Investigated and fixed in §28: in
+release the wrap gave a wrong answer, an edge in the past.*
+
+## 28. The display range behind the beam (2026-10-18)
+
+### 28.1 The report
+
+§27.5's overflow: `Video::line_start` computes `base_h + (line - base_line) * line_length()`, the start of a line of
+the current timing segment, and in a debug build the subtraction overflows during the empty console's first frames.
+The question it leaves is whether the release build's wrap computes a wrong answer, hidden because every suite runs in
+release, or a value nothing uses. It is both, by case; one case reaches a bench disc.
+
+### 28.2 What the wrap computed
+
+`Video` keeps its timing as a segment since the last change of mode or ranges (`retime`): the segment's first line
+`base_line`, which is the line current at the change, and its start `base_h`. `line_start` is meant for lines at or
+after `base_line`. Of its callers, only `next_edge_h`'s two candidates in the field can ask for an earlier line: vblank's
+start at field line Y2 and its end at field line Y1, after a change made on a later line of the field [R]. The field's
+end, the hblank lines, `t_of_dots`, `t_of_hblanks` and `retime` itself ask only for lines at or after the segment's
+first, since `retime` lengthens the field to hold the current line.
+
+In two's-complement arithmetic the wrapped result is `base_h - (base_line - line) * line_length()` modulo 2^64: the
+line's start extrapolated backwards on the **new** timing, a time in the past. `consider` takes any candidate later
+than the last edge processed (`done_h`), past or not. Hence two cases [A, then M]:
+
+- **Unused.** With the ranges and the line length unchanged, the extrapolated start is the start of the edge's own
+  line, an edge the loop has already processed, so it equals `done_h` or lies before it and is never taken. This is
+  the empty console's case: in the three tests that fail in debug, 16,006 calls asked for line Y1 behind the segment,
+  each after a write that left Y1 and the line length as they were (GP1(08h) with only the horizontal resolution
+  changed, and the mode rewritten unchanged), and every one computed exactly `done_h` [M, a probe printing each call,
+  release].
+- **Wrong.** When the change moved Y1 or Y2 to a line the beam has passed, or changed the line length (GP1(08h) bit 3),
+  the extrapolated start lies after the last processed edge. The event loop then takes an edge **in the past**.
+  `edge` finds nothing at it, since `line_at` clamps a time before the segment to the segment's first line, so no blank
+  is flagged; but the loop has already brought the GPU and timers 0 and 1 to that past cycle, and `Timers::sync` at an
+  earlier cycle sets the timer's tick base back. The next sync counts the interval a second time.
+
+**Measured** [M, release, the code before the fix]: `bus::tests::a_display_range_moved_behind_the_beam_leaves_the_timers_counting`
+writes timer 1's mode (system clock, free running) on line 100, then GP1(07h) with Y1 moved from 16 to 50, and reads
+the count 1,000 cycles later: **43,091**, where the same write with Y1 unchanged reads 999. `video::tests::
+a_range_line_behind_the_beam_is_no_edge_this_field` has `next_edge` return a cycle before the change, for Y1 moved
+behind the beam and for a change to PAL mode.
+
+**On the corpus** [M, the same probe, for Y1 over the whole release suite, for Y1 and Y2 over `programs/`'s and
+ps1-tests' goldens and the eight bench discs, plain and observed]: the wrong case occurs in one run only, **Silent
+Hill**, once. At frame 1,454 the game writes
+GP1(07h) on field line 255, inside the bottom blank, moving the range from lines 32–240 to 24–248; the new vblank start,
+line 248, is seven lines behind, and the old build takes an edge 47,775 half clocks (seven lines) in the past. Timer 0,
+free running on the system clock (mode 1400h), is credited **15,299 cycles** it never counted, seven lines' 15,068
+cycles and the write's place in line 255: its count is EBFAh against B037h at frame 1,454, 8F63h against 53A0h at
+1,455, 8FD4h against 5411h at 1,500. `Bus.Timer0.Count` is the only field of the state that differs at those frames;
+the pictures and the sound are the same through frame 3,000.
+
+### 28.3 The hardware's rule
+
+psx-spx `6d7d1bc`, "GPU Display Control", GP1(07h): Y1 and Y2 are "scanline numbers on screen, relative to VSYNC",
+and "If Y2 is set to a much too large value, then the hardware stops to generate vblank interrupts (IRQ0)" [R]. The
+range is compared with a line counter that runs forward from vsync, and a value the counter never reaches gives no
+interrupt. PSX_MiSTer's `rtl/gpu_videoout_sync.vhd` does this at each line's start: the new line number against
+`vDisplayStart` and `vDisplayEnd`, IRQ0 when the blank's level changes [R]; nothing is evaluated at a line already
+left. A line the counter has passed this field is therefore met again only in the next field, and an edge for it
+belongs to no time in the present field. The rule is a branch, not a wrap: wrapping is not what the counter does.
+
+### 28.4 The fix
+
+`next_edge_h` offers a field line as an edge only when it is at or after the segment's first line; vblank's start and
+end at an earlier line wait for the next field, where `field_end` already leads. `line_start` keeps its plain
+subtraction, now documented as for the segment's lines, so a debug build still stops any new caller that asks for an
+earlier one. No state field changes and the state format is as before.
+
+### 28.5 What is left [A]
+
+- **A range moved across the current line.** When GP1(07h) puts the current line on the other side of the range (Y1
+  raised above the current line during the top blank, or Y2 raised above it during the picture), Diamond's levels
+  (`in_vblank_at`, GPUSTAT bit 31) change at once, but no edge is delivered: timer 1's vblank sync and IRQ0 wait for
+  the next field. PSX_MiSTer evaluates the level at the next line's start and raises IRQ0 there when it changed [R].
+  Silent Hill's write does not reach this (line 255 is in the blank before and after). One FPGA is weak evidence
+  (`Diamond_FPGA_Referees.md`), and the change would move IRQ0 in the cases it reaches; it is proposed, not built.
+- **A range moved onto the current line.** A new Y1 or Y2 equal to the current line still gives its edge at the line's
+  start, already passed, taken at the next event: the same sync at a past cycle, by less than one line. Its blank flag
+  is the one the level reports, so it is not wrong in kind, only in time. The corpus probe did not look for it.
+
+### 28.6 Debug-only overflows elsewhere
+
+`cargo test --lib` in debug, before the fix: 172 passed, 5 failed [M]. Three are §28.2's (`v1::tests`: the empty
+console, the black frame with the SPU off, the reset). Two are in test code, and neither touches what the core
+computes:
+
+- `card::tests::a_write_then_a_read_round_trip_a_sector_with_its_checksum` built its sector as `i as u8 * 3`, a `u8`
+  product that overflows from i = 86; release's wrap gives `i * 3` modulo 256, the intended pattern. Now
+  `(i * 3) as u8`, the same bytes.
+- `cdrom::tests::xa_adpcm_plays_its_channel_and_delivers_the_data_between` indexed its 32-entry ring as
+  `(p - i) & 31`, which underflows while p < i; the mask made the wrapped value the right index. Now `(p + 32 - i) & 31`.
+
+The integration suites in debug (the corpora unset) found one more, also in test code: `programs.rs`'s
+`the_video_timing_is_the_referees_line_on_both_clocks` took the difference of two reads of timer 1, a 16-bit counter
+of hblanks, as `(b - a) & 0xFFFF` on `u32`, which underflows when the counter wrapped between them. There the wrap is
+the counter's own rule, so it is now `b.wrapping_sub(a) & 0xFFFF`.
+
+After [M, debug]: the lib suite 179 passed (177 and the two new tests); colour 3, filtered 4, precise 14, programs 82,
+scaled 7 and shell 10 passed; `diamond-v1`'s 5 and `precision`'s 8 lib tests passed. The renderer's suite was not run
+in debug.
+
+### 28.7 The gates
+
+- **Release** [M, `cargo test --release`, both corpus variables set to the probe's copies]: the lib suite 179, colour 3,
+  filtered 4, precise 14, programs 82, renderer 3, scaled 7, shell 10, all passing after the goldens' re-recording
+  below. Before it, the six Silent Hill lines failed in every gate that compares with `discs.txt` (the goldens, the
+  precise, scaled and renderer gates), and nothing else failed.
+- **The goldens** (`Diamond_Enhancements.md` §6.2): `programs.txt` and `ps1-tests.txt` unchanged; in `discs.txt`
+  Silent Hill's state digests at frames 1,500 to 3,000, six lines, changed, each by §28.2's timer 0, and no picture or
+  sound digest. Re-recorded in a commit of their own after the fix.
+- **The kit** [M, `emusen-core-conform --frames 600`, `libdiamond.so` from `v1/` before and after]: 22 of 22 cases
+  pass on `gpu/animated-triangle` and on Ape Escape; the reports equal but for the library's path and C13's count of
+  rounds, which is timing.
+
+### 28.8 Proposed: one debug run in CI [C]
+
+The workflow (`.github/workflows/rust-cores.yml`) runs every crate's suite with `--release`, and the release profile
+leaves overflow checks off, so this class of defect cannot fail CI. Proposed: one step on the Linux x86-64 runner only,
+`cargo test --lib` in debug for Diamond's machine, which built in 9 s from cold and ran in 39 to 66 s on the desktop
+[M, the slower beside other work]. The goldens and the corpora stay in
+release, where their run time belongs. An alternative is a test profile inheriting `release` with
+`overflow-checks = true`, which would check the integration suites too at near-release speed, at the cost of a third
+build of the crate; not measured. Neither is built.

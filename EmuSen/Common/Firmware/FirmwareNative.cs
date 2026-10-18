@@ -7,7 +7,7 @@ using EmuSen.Galaxia.Models;
 
 namespace EmuSen.Common.Firmware
 {
-    // FirmwareLibrary's calls into emusen-firmware, under the file services' switch; a text that cannot cross stays on the C# - see EmuSen_Backend.md §14.1.
+    // FirmwareLibrary's calls into emusen-firmware, under the file services' switch; a text that cannot cross stays on the C# - see EmuSen_Backend.md §15.1.
     public static class FirmwareNative
     {
         public static bool Active => ServiceLibrary.Active;

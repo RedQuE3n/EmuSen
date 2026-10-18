@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
-# The card manager: a card's saves listed, copied, moved, deleted and imported, and whole cards made, duplicated and renamed, over files, each medium's format module and the medium's lock; it needs no core. See EmuSen_SaveMedia.md §6 and EmuSen_Backend.md §14.
+# The card manager: a card's saves listed, copied, moved, deleted and imported, and whole cards made, duplicated and renamed, over files, each medium's format module and the medium's lock; it needs no core. See EmuSen_SaveMedia.md §6 and EmuSen_Backend.md §15.
 [lib]
 name = "emusen_savemedia"
 

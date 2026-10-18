@@ -17,7 +17,7 @@ namespace EmuSen.Crystal.Services
         public int Status { get; } = status;
     }
 
-    // The file services in Rust, emusen-firmware, emusen-savemedia and emusen-cheats, chosen together by EMUSEN_SERVICES_NATIVE; each caller keeps its C# as failover - see EmuSen_Backend.md §14.
+    // The file services in Rust, emusen-firmware, emusen-savemedia and emusen-cheats, chosen together by EMUSEN_SERVICES_NATIVE; each caller keeps its C# as failover - see EmuSen_Backend.md §15.
     public static unsafe class ServiceLibrary
     {
         public const string Variable = "EMUSEN_SERVICES_NATIVE";

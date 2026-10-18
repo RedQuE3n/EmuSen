@@ -3232,9 +3232,9 @@ disassemblers' own forwarding, chosen with the table by `EMUSEN_SYSTEMS_NATIVE`.
 `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together, since 14 had been merged.
 
 
-## 35. Interface 17, 2026-10-17: the file services
+## 35. Interface 16, 2026-10-17: the file services
 
-With the backend's step B5 (`EmuSen_Backend.md` §14), the workspace gained three crates, `emusen-firmware`,
+With the backend's step B5 (`EmuSen_Backend.md` §15), the workspace gained three crates, `emusen-firmware`,
 `emusen-savemedia` and `emusen-cheats` (`Platform/firmware/`, `Platform/savemedia/`, `Platform/cheats/`), and Galaxia's
 crate two modules, `setting_folders` (the folder setting's rules, the Rust half of `SettingFolders.Checked`) and
 `medium_lock` (`MediumLock`). The library gained their C layers in `Platform/platform/src/firmware.rs`, `savemedia.rs`
@@ -3258,6 +3258,6 @@ data; where it held a process-wide table (the medium lock's holders), the table 
 halves of the program read one. The C# facades are `ServiceLibrary` in Crystal (the switch, in state 2, and the calls),
 `FirmwareNative` in the runtime, `SaveMediaNative` and `CheatsNative` in Crystal, and `MediumLockNative` in Galaxia.
 
-The number went from 15 to 17 in `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together. 16 was
-left to the frontend API's step, B2, which was running beside this one and may need it; whichever of the two is
-merged second takes the next number then.
+The number went from 15 to 16 in `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together. The
+frontend API's step, B2, which ran beside this one, takes no number of this interface: its API is served by the C#
+until B7, through its own header, `emusen_crystal.h`.

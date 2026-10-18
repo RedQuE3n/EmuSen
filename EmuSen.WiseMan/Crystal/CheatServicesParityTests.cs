@@ -11,7 +11,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // emusen-cheats held to the C# cheat files and database: every .cht text of the cheat tests and generated ones read with every console's codecs, cheats written, generated trees indexed, searched and pruned, and generated archives installed - see EmuSen_Backend.md §14.3.
+    // emusen-cheats held to the C# cheat files and database: every .cht text of the cheat tests and generated ones read with every console's codecs, cheats written, generated trees indexed, searched and pruned, and generated archives installed - see EmuSen_Backend.md §15.3.
     [Collection(TestCollections.ProcessGlobals)]
     public class CheatServicesParityTests : IDisposable
     {

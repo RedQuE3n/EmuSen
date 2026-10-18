@@ -18,7 +18,7 @@ namespace EmuSen.Crystal.Cheats
         public string Path { get; init; }
     }
 
-    // An index over the player's own .cht tree, never anything EmuSen ships - see `man cheat`; emusen-cheats' under the file services' switch - see EmuSen_Backend.md §14.3.
+    // An index over the player's own .cht tree, never anything EmuSen ships - see `man cheat`; emusen-cheats' under the file services' switch - see EmuSen_Backend.md §15.3.
     public sealed class CheatDatabase
     {
         public string Directory { get; }

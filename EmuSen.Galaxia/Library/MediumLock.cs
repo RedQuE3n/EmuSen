@@ -24,7 +24,7 @@ namespace EmuSen.Galaxia.Library
 
         private bool _released;
 
-        // The library's handle where Galaxia's switch chose it, else zero for the C# table's - see EmuSen_Backend.md §14.2.
+        // The library's handle where Galaxia's switch chose it, else zero for the C# table's - see EmuSen_Backend.md §15.2.
         private readonly ulong _native;
 
         public string Path { get; }

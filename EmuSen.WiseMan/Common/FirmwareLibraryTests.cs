@@ -39,7 +39,7 @@ namespace EmuSen.WiseMan.Common
 
         // --- Discovery ---
 
-        // A file given as a symbolic link is measured by what it links to, which is what is read - see EmuSen_Backend.md §14.1.
+        // A file given as a symbolic link is measured by what it links to, which is what is read - see EmuSen_Backend.md §15.1.
         [Fact]
         public void An_image_given_as_a_link_is_measured_by_its_target()
         {

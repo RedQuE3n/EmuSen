@@ -824,6 +824,9 @@ finished (`EmuSen_RustPlatform.md` §31), so a gate here written for the three s
 - **SR9. A new dependency: an HTTP and TLS client in the platform library**, for the cheat database's download and
   scraping (§10, R6). *Recommended: one crate for the whole platform, chosen at B5 by a measured comparison of two
   candidates on the three systems, its licence recorded in `THIRD_PARTY_NOTICES.md`; until decided, downloads stay C#.*
+  *Decided 2026-10-18 by the tester, on B5's measurement (§15.4): `ureq` 3 with `rustls` is the platform's one HTTP and
+  TLS client, and certificates are checked against each system's own store through `rustls-platform-verifier`, as
+  .NET's `HttpClient` checks them today, not against a bundled `webpki-roots`.*
 - **SR10. Where a game's own core settings live** (§3.6): the file per game `EmuSen_CoreAPI.md` §8.5 adopted
   (`/etc/EmuSen/games/<game id>.json`), `games.db`'s `altemulator`, or a package's `settings.json`? *Recommended: the
   file per game, migrated once from `games.db`'s engine field by copying, with a package's file read in its place when
@@ -1992,7 +1995,7 @@ The blast radius was the three parity classes and the systems table's, `CheatCod
 | the target's trailing separator kept | the parity class (archives) |
 | the facade reading every cheat as a RAM poke | the parity class (texts) |
 
-### 15.4 SR9: the HTTP client, measured; the download stays C#
+### 15.4 SR9: the HTTP client, measured and chosen; the download still C#
 
 SR9 chose one HTTP and TLS crate for the whole platform by a measured comparison of two candidates. The step measured
 them on Linux on 2026-10-17, each in a scratch crate outside the repository built as the platform is (release, fat
@@ -2012,11 +2015,19 @@ waits for the port, as §31 says of this gate.
 For scale, `emusen_platform` is 4.74 MB today, and `curl` took the same 0.22–0.25 s; the network, not the client,
 bounded every run. Both bundle Mozilla's root certificates (`webpki-roots`) unless told to read the system's.
 
-**Recommended, for the tester to decide:** `ureq` with `rustls`: a quarter of the crates, three quarters of the size,
-half the memory, no asynchronous runtime for what is one blocking download, at the same speed. A second question rides
-on it: whether the platform bundles Mozilla's roots, one more licence and a list the project would update, or reads
-each system's store (`rustls-platform-verifier`), which is what .NET's `HttpClient` does today. **Nothing was adopted**:
-the download (`CheatDatabaseInstaller.Fetch`) stays C#, and `Cargo.lock` gained no HTTP crate.
+Recommended to the tester: `ureq` with `rustls`, a quarter of the crates, three quarters of the size, half the memory
+and no asynchronous runtime for what is one blocking download, at the same speed; and for the certificates, each
+system's store (`rustls-platform-verifier`), which is what .NET's `HttpClient` does today, rather than Mozilla's roots
+bundled, one more licence and a list the project would have to keep current.
+
+*Decided 2026-10-18 by the tester, each as recommended:* `ureq` 3 with `rustls` is the platform's one HTTP and TLS
+client (SR9, §11.1), and certificates are checked against each system's own store through `rustls-platform-verifier`,
+not a bundled `webpki-roots`. Nothing was adopted in this step: the download (`CheatDatabaseInstaller.Fetch`) stays
+C#, and `Cargo.lock` gained no HTTP crate. **Moving the cheat database's download to Rust on `ureq` is the next piece
+of work after this step is merged**; the install then takes its bytes from the Rust download rather than from the C#.
+
+*Also decided 2026-10-18 by the tester:* `MediumLock` stays backed by the library under Galaxia's own switch, as §15.2
+built it.
 
 ### 15.5 Sizes, against §7, and what is left
 
@@ -2028,7 +2039,9 @@ the download (`CheatDatabaseInstaller.Fetch`) stays C#, and `Cargo.lock` gained 
 | The parity classes | — | 690 (175, 235 and 280) |
 
 On the finished branch the three parts' blast radii together, less the missing Venus golden of §15.1, gave 699 pass
-and 8 skipped of 707 with `EMUSEN_SERVICES_NATIVE` unset and the same with it `0`.
+and 8 skipped of 707 with `EMUSEN_SERVICES_NATIVE` unset and the same with it `0`. Rebased on 2026-10-18 onto `WiseMan`
+at `73bffab6` (B2's first three parts and MoonRT's PAL machine in), with the interface renumbered 16, the same run gave
+the same counts both ways, and the three parity classes with Endymion's device and Serenity's parity classes 36 pass.
 
 The Rust ran at about 2.4 times the C# it replaced, at §7's central ratio. The facade is more than twice §7's figure,
 as B3's was, because each service has its own call shapes and the cheat database its handle; it is deleted whole at
@@ -2038,7 +2051,7 @@ state 3.
 
 - State 3, the C# services deleted, at the tester's word after goldens (§6, B10). Until then a change to a service is
   made in both halves, and the parity classes fail on one alone.
-- SR9's choice (§15.4), after which the download moves and the install takes its bytes from it rather than from the C#.
+- The download on `ureq`, next after this step (§15.4); the install then takes its bytes from it rather than from the C#.
 - The overview's enumeration of systems and engines, with B6 and B7; `CheatImport` with the registry at B7; the
   firmware store's reading of `FirmwareDirectory` from Rust once a Rust host loads `appsettings.json` itself.
 - On Windows and macOS: the zip times' local zone, and every gate of this section, when the port resumes. The

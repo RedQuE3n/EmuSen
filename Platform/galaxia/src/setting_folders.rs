@@ -1,5 +1,5 @@
 //! A folder setting's value after the rules of EmuSen_Config_Reference.md §7.7: the Rust half of the C#
-//! `SettingFolders.Checked` and `FolderValue`, which the platform's file services read (EmuSen_Backend.md §14). Blank is
+//! `SettingFolders.Checked` and `FolderValue`, which the platform's file services read (EmuSen_Backend.md §15). Blank is
 //! unset, `~` and `~/` are the home, a relative path or a file is refused, and a folder that does not exist is said.
 
 use crate::dotnet_path::{self as path, Style, is_blank};

@@ -40,7 +40,7 @@ namespace EmuSen.Crystal.Cheats
         // Refuses the two cases where an empty or unmatched keep-set would wipe everything - see §4.16.
         public static CheatPrunePlan Plan(CheatDatabase database, IReadOnlyCollection<string> keep) => database.NativePlan(keep) ?? ManagedPlan(database, keep);
 
-        // The C# plan: the failover, and the parity class's oracle - see EmuSen_Backend.md §14.3.
+        // The C# plan: the failover, and the parity class's oracle - see EmuSen_Backend.md §15.3.
         public static CheatPrunePlan ManagedPlan(CheatDatabase database, IReadOnlyCollection<string> keep)
         {
             var keepSet = new HashSet<string>(keep, StringComparer.OrdinalIgnoreCase);

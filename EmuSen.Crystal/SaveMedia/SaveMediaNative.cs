@@ -9,7 +9,7 @@ using EmuSen.Galaxia.Native;
 
 namespace EmuSen.Crystal.SaveMedia
 {
-    // SaveMediaManager's calls into emusen-savemedia; the medium a file is, by its extension, crosses as data - see EmuSen_Backend.md §14.2.
+    // SaveMediaManager's calls into emusen-savemedia; the medium a file is, by its extension, crosses as data - see EmuSen_Backend.md §15.2.
     public static class SaveMediaNative
     {
         // Where the services' switch, the packs' code and Galaxia's lock all chose the library, so a card is read by the modules and held by the lock the rest of the program uses.

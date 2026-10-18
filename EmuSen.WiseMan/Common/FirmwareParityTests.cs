@@ -7,7 +7,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Common
 {
-    // emusen-firmware held to the C# store on generated trees: the folders' order and its reports, every image found whole or split, the overview's facts, and installs - see EmuSen_Backend.md §14.1.
+    // emusen-firmware held to the C# store on generated trees: the folders' order and its reports, every image found whole or split, the overview's facts, and installs - see EmuSen_Backend.md §15.1.
     [Collection(TestCollections.ProcessGlobals)]
     public class FirmwareParityTests : IDisposable
     {

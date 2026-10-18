@@ -3,7 +3,7 @@ using System.Text;
 
 namespace EmuSen.Galaxia.Native
 {
-    // MediumLock's calls into emusen-galaxia's medium lock, under Galaxia's switch; a text that cannot cross keeps the C# table - see EmuSen_Backend.md §14.2.
+    // MediumLock's calls into emusen-galaxia's medium lock, under Galaxia's switch; a text that cannot cross keeps the C# table - see EmuSen_Backend.md §15.2.
     internal static unsafe class MediumLockNative
     {
         private const int Absent = -1030;

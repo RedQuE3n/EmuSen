@@ -48,7 +48,7 @@ namespace EmuSen.Crystal.Cheats
         public static string Write(IReadOnlyList<ChtCheat> cheats) =>
             CheatsNative.Active && CheatsNative.TakesWrite(cheats) ? CheatsNative.Write(cheats) : Managed.Write(cheats);
 
-        // The C# reader and writer: the failover, and the parity class's oracle - see EmuSen_Backend.md §14.3.
+        // The C# reader and writer: the failover, and the parity class's oracle - see EmuSen_Backend.md §15.3.
         public static class Managed
         {
             public static ChtParseResult Parse(string text, ICheatCodeCodec? codeDecoder, string spaceName, ICheatCodeCodec? patchCodec = null)
@@ -63,7 +63,7 @@ namespace EmuSen.Crystal.Cheats
                     return new ChtParseResult { Cheats = cheats, Skipped = 0 };
                 }
 
-                // Only an entry with fields can read as a cheat; every other number below the count is skipped without being visited - see EmuSen_Backend.md §14.3.
+                // Only an entry with fields can read as a cheat; every other number below the count is skipped without being visited - see EmuSen_Backend.md §15.3.
                 int visited = 0;
                 foreach (int i in Entries(fields, count))
                 {

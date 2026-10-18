@@ -53,11 +53,11 @@ namespace EmuSen.Crystal.Cheats
             return CheatsNative.Install(bytes, targetDirectory) ?? ManagedInstall(new MemoryStream(bytes), targetDirectory);
         }
 
-        // The C# install: the failover, an archive of a form the library leaves to it, and the parity class's oracle - see EmuSen_Backend.md §14.3.
+        // The C# install: the failover, an archive of a form the library leaves to it, and the parity class's oracle - see EmuSen_Backend.md §15.3.
         public static CheatDatabaseInstallResult ManagedInstall(Stream zip, string targetDirectory)
         {
             Directory.CreateDirectory(targetDirectory);
-            // Without its trailing separator, or root + '/' below would match no entry at all - see EmuSen_Backend.md §14.3.
+            // Without its trailing separator, or root + '/' below would match no entry at all - see EmuSen_Backend.md §15.3.
             string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(targetDirectory));
 
             int installed = 0, skipped = 0;

@@ -11,7 +11,7 @@ using EmuSen.Galaxia.Native;
 
 namespace EmuSen.Crystal.Cheats
 {
-    // The cheat files and the database's calls into emusen-cheats, under the file services' switch; what cannot cross stays on the C# - see EmuSen_Backend.md §14.3.
+    // The cheat files and the database's calls into emusen-cheats, under the file services' switch; what cannot cross stays on the C# - see EmuSen_Backend.md §15.3.
     public static unsafe class CheatsNative
     {
         public static bool Active => ServiceLibrary.Active;

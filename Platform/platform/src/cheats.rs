@@ -1,5 +1,5 @@
 //! The C layer over emusen-cheats, for the C# `ChtFile`, `CheatDatabase`, `CheatDatabasePruner` and
-//! `CheatDatabaseInstaller.Install` behind `EMUSEN_SERVICES_NATIVE` (EmuSen_Backend.md §14.3). A database is a handle,
+//! `CheatDatabaseInstaller.Install` behind `EMUSEN_SERVICES_NATIVE` (EmuSen_Backend.md §15.3). A database is a handle,
 //! scanned once and never changed, so any thread may ask it.
 
 use crate::{bytes, fail, fail_io, given, put, required, status};

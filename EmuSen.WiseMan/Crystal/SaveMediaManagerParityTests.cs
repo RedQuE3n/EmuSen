@@ -12,7 +12,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // emusen-savemedia held to the C# card manager on generated trees of every medium's cards, free and held, each script of operations run on a copy of the tree by each half, outcomes and files compared - see EmuSen_Backend.md §14.2.
+    // emusen-savemedia held to the C# card manager on generated trees of every medium's cards, free and held, each script of operations run on a copy of the tree by each half, outcomes and files compared - see EmuSen_Backend.md §15.2.
     [Collection(TestCollections.ProcessGlobals)]
     public class SaveMediaManagerParityTests : IDisposable
     {

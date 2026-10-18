@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
-# The cheat files and the player's cheat database: RetroArch's .cht read and written, the .cht tree indexed and searched, its systems pruned, and a downloaded archive installed. The download itself is the C#'s until an HTTP client is chosen (EmuSen_Backend.md SR9). See EmuSen_Cheats.md, `man cheat` and EmuSen_Backend.md §14.
+# The cheat files and the player's cheat database: RetroArch's .cht read and written, the .cht tree indexed and searched, its systems pruned, and a downloaded archive installed. The download itself is the C#'s until an HTTP client is chosen (EmuSen_Backend.md SR9). See EmuSen_Cheats.md, `man cheat` and EmuSen_Backend.md §15.
 [lib]
 name = "emusen_cheats"
 

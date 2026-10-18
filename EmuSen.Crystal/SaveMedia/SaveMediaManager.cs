@@ -61,7 +61,7 @@ namespace EmuSen.Crystal.SaveMedia
         public static MediaOutcome Rename(string from, string to) =>
             SaveMediaNative.Takes([from, to], null) ? SaveMediaNative.Rename(from, to) : Managed.Rename(from, to);
 
-        // The C# manager: the failover, and what the parity class holds emusen-savemedia to - see EmuSen_Backend.md §14.2.
+        // The C# manager: the failover, and what the parity class holds emusen-savemedia to - see EmuSen_Backend.md §15.2.
         public static class Managed
         {
             public static MediumCard? Open(string path)

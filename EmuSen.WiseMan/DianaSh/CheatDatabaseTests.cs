@@ -232,7 +232,7 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Equal(1, result.Skipped);
         }
 
-        // A target written with a separator at its end, as a player may type the folder, is the same folder - see EmuSen_Backend.md §14.3.
+        // A target written with a separator at its end, as a player may type the folder, is the same folder - see EmuSen_Backend.md §15.3.
         [Fact]
         public void An_update_into_a_folder_written_with_a_trailing_separator_installs_every_cheat()
         {

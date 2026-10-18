@@ -195,7 +195,7 @@ that a refusal can say who holds the card.
 *Since 2026-10-17* the lock has a Rust half in Galaxia's crate (`emusen-galaxia`'s `medium_lock`), the same `flock`
 on the same file with the same words in it and the same table of shared handles, which `MediumLock` forwards to under
 Galaxia's own switch, so a program's games and its card manager hold one table between them; a lock either half takes
-refuses the other as another program's would (`EmuSen_Backend.md` §14.2).
+refuses the other as another program's would (`EmuSen_Backend.md` §15.2).
 
 ## 4. Who owns which fact
 

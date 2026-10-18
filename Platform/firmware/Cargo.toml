@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
-# The firmware store: the folders searched and their order, an image found whole or split, the overview's facts, and an install into home/Firmware. See EmuSen_Firmware.md §2 and EmuSen_Backend.md §14.
+# The firmware store: the folders searched and their order, an image found whole or split, the overview's facts, and an install into home/Firmware. See EmuSen_Firmware.md §2 and EmuSen_Backend.md §15.
 [lib]
 name = "emusen_firmware"
 

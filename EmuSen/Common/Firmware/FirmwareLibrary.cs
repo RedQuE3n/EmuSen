@@ -75,7 +75,7 @@ namespace EmuSen.Common.Firmware
             }
         }
 
-        // The C# store: the failover, and what the parity class holds emusen-firmware to - see EmuSen_Backend.md §14.1.
+        // The C# store: the failover, and what the parity class holds emusen-firmware to - see EmuSen_Backend.md §15.1.
         public static class Managed
         {
             public static IReadOnlyList<string> Folders(AppSettings settings) => SettingFolders.Firmware(settings);
@@ -144,7 +144,7 @@ namespace EmuSen.Common.Firmware
             }
         }
 
-        // A file's length as reading it finds it: a link's final target's, and none for a link to nothing - see EmuSen_Backend.md §14.1.
+        // A file's length as reading it finds it: a link's final target's, and none for a link to nothing - see EmuSen_Backend.md §15.1.
         private static long? LengthOf(string path)
         {
             try

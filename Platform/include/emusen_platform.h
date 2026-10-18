@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 17u
+#define EMUSEN_PLATFORM_ABI_VERSION 16u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -503,7 +503,7 @@ int64_t emusen_systems_board_name(int32_t mapper, uint8_t *out, size_t len);
  */
 int64_t emusen_systems_view(const uint8_t *request, size_t request_len, const uint8_t *tape, size_t tape_len, uint8_t *out, size_t len);
 
-/* ---- The file services: emusen-firmware, emusen-savemedia, emusen-cheats (EmuSen_Backend.md, section 14). Since interface 17. ---- */
+/* ---- The file services: emusen-firmware, emusen-savemedia, emusen-cheats (EmuSen_Backend.md, section 15). Since interface 16. ---- */
 
 /*
  * Firmware (EmuSen_Firmware.md, section 2). A request is a JSON object: file (the canonical name), size, alternates

@@ -1,6 +1,6 @@
 //! C#'s `Ppu.Timing.cs`: the dot-by-dot clock, modelled on Mesen's `NesPpu::Exec`. See Moon_PPU.md §1.
 
-use super::{PRE_RENDER_SCANLINE, Ppu, VBLANK_SCANLINE, VISIBLE_SCANLINES};
+use super::{Ppu, VISIBLE_SCANLINES};
 use crate::memory::Board;
 
 pub const LAST_DOT: i32 = 340;
@@ -27,7 +27,7 @@ impl Ppu {
     fn begin_scanline(&mut self) {
         self.cycle = 0;
         self.scanline = self.scanline.wrapping_add(1);
-        if self.scanline > PRE_RENDER_SCANLINE {
+        if self.scanline > self.timing.pre_render_scanline {
             self.scanline = 0;
             self.frame_count = self.frame_count.wrapping_add(1);
             self.frame_complete = true;
@@ -39,12 +39,12 @@ impl Ppu {
     fn run_dot(&mut self, board: &mut Board) {
         if self.scanline < VISIBLE_SCANLINES {
             self.run_visible_dot(board);
-        } else if self.scanline == VBLANK_SCANLINE && self.cycle == 1 {
+        } else if self.scanline == self.timing.vblank_scanline && self.cycle == 1 {
             if !self.suppress_v_blank {
                 self.status |= 0x80;
             }
             self.suppress_v_blank = false;
-        } else if self.scanline == PRE_RENDER_SCANLINE {
+        } else if self.scanline == self.timing.pre_render_scanline {
             self.run_pre_render_dot(board);
         }
     }
@@ -84,7 +84,7 @@ impl Ppu {
             self.copy_vertical();
             self.render_v = self.v;
         } else if self.cycle == 338 {
-            *self.skip_last_dot = self.rendering_enabled() && (self.frame_count & 1) != 0;
+            *self.skip_last_dot = self.timing.skips_odd_dot && self.rendering_enabled() && (self.frame_count & 1) != 0;
         } else if self.cycle == 339 && *self.skip_last_dot {
             self.cycle = LAST_DOT;
         }

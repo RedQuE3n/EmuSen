@@ -2426,6 +2426,8 @@ alone:
   `MoonRtRawPictureTests` holds all 512 of its entries to the pack's `NesDebugViews.MasterPalette`.
 - **`MercuryGoldenTrace`** is the same format as the shared `GoldenTrace`; folding it in is left to the Game Boy's
   side.
+- **PAL.** Done 2026-10-17: the PAL NES and the Dendy, with every NTSC golden, the corpus and the bench unchanged
+  (`Moon_PAL.md`).
 
 ### 9.7 The picture before the palette, on the core ABI (2026-10-16)
 

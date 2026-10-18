@@ -30,7 +30,7 @@ One master clock, NTSC only:
 | Scanlines per frame | 262 |
 | Frame rate | 21477272 / (262 × 1364) ≈ **60.0985 Hz** |
 
-**PAL is not implemented.** A PAL NES runs 312 scanlines off a different crystal with a 3.2 CPU-clocks-per-dot ratio, and the iNES header's TV-system bits are unreliable enough that guessing would be worse than not trying. NTSC is assumed unconditionally.
+~~**PAL is not implemented.** A PAL NES runs 312 scanlines off a different crystal with a 3.2 CPU-clocks-per-dot ratio, and the iNES header's TV-system bits are unreliable enough that guessing would be worse than not trying. NTSC is assumed unconditionally.~~ MoonRT runs the PAL NES and the Dendy since 2026-10-17, chosen by NES 2.0's byte 12 or the region setting; an iNES 1.0 header still runs as NTSC (`Moon_PAL.md`). The table above is the NTSC NES's; `Moon_PAL.md` §1 has the other two.
 
 ### 2.1 Why the CPU budget needs an accumulator
 
@@ -98,6 +98,8 @@ The blob carries the frame counter, the line-start clock, the CPU budget carry, 
 
 Version 3 is slightly *more* than a re-layout: Crystal's span held `Now` and eight event slots, seven of which were always `Never`, and it had nowhere to put `ClockAccumulator`'s remainder — so §2.1's carry was silently dropped on every load. `_cpuRemainder` is written now, which is why a v3 state resumes on the same sub-cycle phase it was saved on.
 
+**Version 7** (MoonRT, 2026-10-17) appends the console's model and the 2A07's long-cycle count, written only by a PAL NES or a Dendy; the NTSC NES still writes version 6 byte for byte, and a state loads only into a machine of its own console (`Moon_PAL.md` §7).
+
 The mapper is written separately from the cartridge because it is a different object with its own banking state; a state that restored the cartridge but not the mapper would resume with the wrong bank mapped and jump into the wrong code immediately.
 
 `PrgRom` is `[SkipInState]` — it is the ROM file, is identical on both sides of a save, and would otherwise put a copy of the whole cartridge in every state. `Chr` is **not** skipped, because on a CHR-RAM board it is live video memory the game writes to.
@@ -141,6 +143,6 @@ The scheduler is re-armed from scratch, which restarts the master clock at zero.
 
 Implemented: the CPU (`Moon_CPU.md`, validated), the cartridge and ten mappers including MMC3, the PPU's registers and scanline rendering, all five APU channels (`Moon_APU.md`), controllers, OAM DMA, save states, cheats, the frame log, breakpoints and coverage.
 
-Not implemented: PAL, per-dot timing (§3), rewind hooks beyond what `ICore` gives for free, expansion audio, and the mappers past the ten in `Moon_Memory.md` §4 — which is now the largest single gap for library coverage, at 16.2% of the local set.
+Not implemented: per-dot timing (§3) (PAL is MoonRT's since 2026-10-17, `Moon_PAL.md`), rewind hooks beyond what `ICore` gives for free, expansion audio, and the mappers past the ten in `Moon_Memory.md` §4 — which is now the largest single gap for library coverage, at 16.2% of the local set.
 
 Only the CPU is validated against ground truth. The PPU, APU and mappers rest on synthetic fixtures and four commercial ROMs; the blargg test-ROM suites are the standing gap — see `Moon_TestRoms.md`.

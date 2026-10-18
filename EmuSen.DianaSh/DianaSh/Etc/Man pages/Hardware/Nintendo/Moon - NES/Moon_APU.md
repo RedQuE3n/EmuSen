@@ -12,7 +12,7 @@ Covers `Cores/Nintendo/Moon - NES/Apu/`.
 
 ## 1. Clocking
 
-Every timer here is expressed against the **NTSC CPU clock, 1789773 Hz** (`Apu.CpuClockHz`). PAL is not modelled — see §6.
+Every timer here is expressed against the **NTSC CPU clock, 1789773 Hz** (`Apu.CpuClockHz`). PAL is not modelled — see §6. *(MoonRT's 2A07 since 2026-10-17: its own tables and clock, `Moon_PAL.md` §5.)*
 
 `Apu.Step(1)` is called **once per CPU bus cycle**, from `MemoryBus.Tick` via `ICpuBus.Tick` — the CPU's own clock, not a per-instruction batch (`Moon_CPU.md` §2). That matters twice over: the frame sequencer's boundaries are cycle counts, so an approximation drifts the envelope and length-counter rates audibly within seconds; and a `lda $4015` has to observe the APU as it stands *at that cycle*, which a batch applied after the instruction retires cannot do. Cycles stolen by OAM DMA and by DMC fetches are handed to the APU too — they are cycles the chip lived through even though the CPU was not driving the bus.
 
@@ -152,7 +152,7 @@ Two consequences:
 
 ## 6. Not done
 
-- **PAL.** Every table and the clock constant are NTSC. A PAL cart runs at the wrong pitch and the wrong sequencer rate.
+- ~~**PAL.** Every table and the clock constant are NTSC. A PAL cart runs at the wrong pitch and the wrong sequencer rate.~~ Built in MoonRT, 2026-10-17: the 2A07's noise, DMC and frame counter tables and its clock, blargg's `pal_apu_tests` passing 10 of 10 (`Moon_PAL.md` §5, §8).
 - **DMC fetch cost is a flat 4 cycles** rather than the real 3-4 depending on alignment, and the fetch does not steal the specific cycle that corrupts a controller read on hardware — the bug some games are written to work around. This is what `apu_test`'s `7-dmc_basics` and `8-dmc_rates` still fail on, and it is the whole of what is left in that suite.
 - **The sweep unit's reload subtlety** — a reload and a clock on the same half frame — follows the common implementation rather than being verified against hardware.
 

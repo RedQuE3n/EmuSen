@@ -158,7 +158,7 @@ Fast-forward (`SkipRendering`) skips only the framebuffer writes. Sprite evaluat
 - Emphasis bits (§3.5).
 - The sprite overflow hardware bug (§3.2).
 - The `$2003`/`$2004` OAM corruption quirks.
-- PAL.
+- ~~PAL.~~ MoonRT's 2C07 and 6538 since 2026-10-17: 312 lines, no dropped dot, the border (`Moon_PAL.md` §4).
 
 ## 7. `NesPpuWriteLogging` — every $2000-$2007 write, with the dot it landed on
 

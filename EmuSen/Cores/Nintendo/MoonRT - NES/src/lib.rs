@@ -5,8 +5,11 @@ pub mod cpu;
 pub mod ffi;
 pub mod machine;
 pub mod memory;
+pub mod model;
 #[cfg(test)]
 mod naming;
+#[cfg(test)]
+mod pal_tests;
 pub mod ppu;
 pub mod state;
 

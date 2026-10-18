@@ -6,14 +6,12 @@ mod timing;
 use crate::Skip;
 use crate::memory::Board;
 use crate::memory::cartridge::mirroring as m;
+use crate::model::Model;
 use crate::state::{StateReader, StateResult, StateWriter};
 
 pub const SCREEN_WIDTH: usize = 256;
 pub const SCREEN_HEIGHT: usize = 240;
 pub const VISIBLE_SCANLINES: i32 = 240;
-pub const VBLANK_SCANLINE: i32 = 241;
-pub const PRE_RENDER_SCANLINE: i32 = 261;
-pub const TOTAL_SCANLINES: i32 = 262;
 pub const OAM_SIZE: usize = 256;
 pub const SPRITES_PER_LINE: usize = 8;
 pub const OPEN_BUS_DECAY_FRAMES: u8 = 36;
@@ -66,6 +64,23 @@ pub struct Ppu {
     pub skip_last_dot: Skip<bool>,
     /// `RenderingSince`, the dot rendering was last switched on; written in the state's tail (Moon_PPU.md §3.4).
     pub rendering_since: Skip<i64>,
+    /// The console's lines and border, which `set_model` chooses.
+    pub timing: Skip<Timing>,
+}
+
+/// Where the 2C02, the 2C07 and the 6538 differ: the vblank and pre-render lines, the odd frame's dot and the border.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Timing {
+    pub vblank_scanline: i32,
+    pub pre_render_scanline: i32,
+    pub skips_odd_dot: bool,
+    pub black_border: bool,
+}
+
+impl Timing {
+    pub const fn of(model: Model) -> Timing {
+        Timing { vblank_scanline: model.vblank_scanline(), pre_render_scanline: model.pre_render_scanline(), skips_odd_dot: model.skips_odd_dot(), black_border: model.black_border() }
+    }
 }
 
 impl Default for Ppu {
@@ -101,6 +116,7 @@ impl Default for Ppu {
             sprite_count: Skip(0),
             skip_last_dot: Skip(false),
             rendering_since: Skip(i64::MIN),
+            timing: Skip(Timing::of(Model::Ntsc)),
         }
     }
 }
@@ -171,6 +187,10 @@ impl Ppu {
     #[inline(always)]
     pub fn nmi_output(&self) -> bool {
         self.nmi_enabled() && self.vblank_flag()
+    }
+
+    pub fn set_model(&mut self, model: Model) {
+        *self.timing = Timing::of(model);
     }
 
     /// Power-on: the soft reset, then everything the RESET line leaves alone.
@@ -270,7 +290,7 @@ impl Ppu {
         match register & 0x07 {
             2 => {
                 let value = (self.status & 0xE0) | (self.open_bus & 0x1F);
-                if self.scanline == VBLANK_SCANLINE && self.cycle == 0 {
+                if self.scanline == self.timing.vblank_scanline && self.cycle == 0 {
                     self.suppress_v_blank = true;
                 }
                 self.set_vblank_flag(false);
@@ -280,7 +300,7 @@ impl Ppu {
             }
             4 => {
                 let clearing = self.rendering_enabled()
-                    && (self.scanline < VISIBLE_SCANLINES || self.scanline == PRE_RENDER_SCANLINE)
+                    && (self.scanline < VISIBLE_SCANLINES || self.scanline == self.timing.pre_render_scanline)
                     && (1..=64).contains(&self.cycle);
                 let mut value = if clearing { 0xFF } else { self.oam[self.oam_address as usize] };
                 if !clearing && (self.oam_address & 0x03) == 0x02 {

@@ -5,10 +5,10 @@ pub mod channels;
 use crate::Skip;
 use emusen_native::SampleQueue;
 use crate::state::{StateReader, StateResult, StateWriter};
-use channels::{DmcChannel, LENGTH_COUNTER, NoiseChannel, PulseChannel, TriangleChannel};
+use crate::model::Model;
+use channels::{DMC_RATE, DMC_RATE_PAL, DmcChannel, LENGTH_COUNTER, NOISE_PERIOD, NOISE_PERIOD_PAL, NoiseChannel, PulseChannel, TriangleChannel};
 
 pub const CHANNEL_COUNT: usize = 5;
-pub const CPU_CLOCK_HZ: f64 = 1789773.0;
 const OUTPUT_GAIN: f64 = 80000.0;
 
 const FRAME_NONE: i32 = 0;
@@ -17,6 +17,9 @@ const FRAME_HALF: i32 = 2;
 const STEP_COUNT: i32 = 6;
 static FOUR_STEP_CYCLES: [i32; 6] = [7457, 14913, 22371, 29828, 29829, 29830];
 static FIVE_STEP_CYCLES: [i32; 6] = [7457, 14913, 22371, 29829, 37281, 37282];
+/// The 2A07's sequence, nesdev's APU cycles doubled as the 2A03's are (Moon_PAL.md §5.1).
+static FOUR_STEP_CYCLES_PAL: [i32; 6] = [8313, 16627, 24939, 33252, 33253, 33254];
+static FIVE_STEP_CYCLES_PAL: [i32; 6] = [8313, 16627, 24939, 33253, 41565, 41566];
 static FRAME_TYPES: [i32; 6] = [FRAME_QUARTER, FRAME_HALF, FRAME_QUARTER, FRAME_NONE, FRAME_HALF, FRAME_NONE];
 
 /// The mixer's state, none of it in a save state; a C# load keeps the instance's own (Moon_Native.md §3.1).
@@ -44,7 +47,7 @@ impl Default for Mixer {
         Mixer {
             sample_accumulator: 0.0,
             sample_count: 0,
-            cycles_per_sample: CPU_CLOCK_HZ / 44100.0,
+            cycles_per_sample: Model::Ntsc.cpu_clock_hz() / 44100.0,
             cycle_fraction: 0.0,
             samples: SampleQueue::with_capacity(emusen_native::samples::DEFAULT_LIMIT),
             hp90: 0.0,
@@ -80,8 +83,33 @@ pub struct Apu {
     pub step_mode: bool,
     pub write_delay_counter: i32,
     pub length_written: Skip<bool>,
+    /// The console's tables and clock, which `set_model` chooses.
+    pub tables: Skip<Tables>,
 
     pub mixer: Skip<Mixer>,
+}
+
+/// What the 2A03 and 2A07 count differently: the noise periods, the DMC rates, both sequences and the clock.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Tables {
+    pub noise: &'static [i32; 16],
+    pub dmc: &'static [i32; 16],
+    pub four_step: &'static [i32; 6],
+    pub five_step: &'static [i32; 6],
+    pub cpu_clock_hz: f64,
+}
+
+impl Tables {
+    pub fn of(model: Model) -> Tables {
+        let pal = model.pal_apu();
+        Tables {
+            noise: if pal { &NOISE_PERIOD_PAL } else { &NOISE_PERIOD },
+            dmc: if pal { &DMC_RATE_PAL } else { &DMC_RATE },
+            four_step: if pal { &FOUR_STEP_CYCLES_PAL } else { &FOUR_STEP_CYCLES },
+            five_step: if pal { &FIVE_STEP_CYCLES_PAL } else { &FIVE_STEP_CYCLES },
+            cpu_clock_hz: model.cpu_clock_hz(),
+        }
+    }
 }
 
 impl Default for Apu {
@@ -105,6 +133,7 @@ impl Default for Apu {
             step_mode: false,
             write_delay_counter: 0,
             length_written: Skip(false),
+            tables: Skip(Tables::of(Model::Ntsc)),
             mixer: Skip(Mixer::default()),
         }
     }
@@ -136,11 +165,17 @@ impl Apu {
     pub fn set_sample_rate(&mut self, sample_rate: i32) {
         let rate = sample_rate.max(1);
         let m = &mut *self.mixer;
-        m.cycles_per_sample = CPU_CLOCK_HZ / rate as f64;
+        m.cycles_per_sample = self.tables.cpu_clock_hz / rate as f64;
         let dt = 1.0 / rate as f64;
         m.high_pass90_alpha = high_pass_alpha(90.0, dt);
         m.high_pass440_alpha = high_pass_alpha(440.0, dt);
         m.low_pass_alpha = low_pass_alpha(14000.0, dt);
+    }
+
+    /// The console's tables and clock, and the cycles a sample at `sample_rate` spans on that clock.
+    pub fn set_model(&mut self, model: Model, sample_rate: i32) {
+        *self.tables = Tables::of(model);
+        self.set_sample_rate(sample_rate);
     }
 
     pub fn reset(&mut self) {
@@ -298,13 +333,13 @@ impl Apu {
                 *self.frame_irq_readable = false;
             }
             self.triangle.step_timer();
-            self.dmc.step_timer();
+            self.dmc.step_timer(self.tables.dmc);
 
             self.apu_cycle = !self.apu_cycle;
             if self.apu_cycle {
                 self.pulse1.step_timer();
                 self.pulse2.step_timer();
-                self.noise.step_timer();
+                self.noise.step_timer(self.tables.noise);
             }
 
             self.step_frame_counter();
@@ -342,7 +377,7 @@ impl Apu {
     #[inline(always)]
     fn step_frame_counter(&mut self) {
         self.frame_cycle = self.frame_cycle.wrapping_add(1);
-        let steps = if self.step_mode { &FIVE_STEP_CYCLES } else { &FOUR_STEP_CYCLES };
+        let steps = if self.step_mode { self.tables.five_step } else { self.tables.four_step };
         let due = match steps.get(self.frame_step as usize) {
             Some(&d) => d,
             None => {

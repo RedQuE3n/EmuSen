@@ -8,8 +8,11 @@ pub static LENGTH_COUNTER: [u8; 32] = [
 ];
 static PULSE_DUTY: [[u8; 8]; 4] = [[0, 1, 0, 0, 0, 0, 0, 0], [0, 1, 1, 0, 0, 0, 0, 0], [0, 1, 1, 1, 1, 0, 0, 0], [1, 0, 0, 1, 1, 1, 1, 1]];
 static TRIANGLE_SEQUENCE: [u8; 32] = [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-static NOISE_PERIOD: [i32; 16] = [4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068];
-static DMC_RATE: [i32; 16] = [428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54];
+/// The noise periods and DMC rates in CPU cycles, the 2A03's and then the 2A07's (Moon_PAL.md §5).
+pub static NOISE_PERIOD: [i32; 16] = [4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068];
+pub static NOISE_PERIOD_PAL: [i32; 16] = [4, 8, 14, 30, 60, 88, 118, 148, 188, 236, 354, 472, 708, 944, 1890, 3778];
+pub static DMC_RATE: [i32; 16] = [428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54];
+pub static DMC_RATE_PAL: [i32; 16] = [398, 354, 316, 298, 276, 236, 210, 198, 176, 148, 132, 118, 98, 78, 66, 50];
 
 /// A table read whose index a loaded state can set: C#'s exception becomes a fault and zero.
 #[inline(always)]
@@ -390,12 +393,12 @@ impl NoiseChannel {
     }
 
     #[inline(always)]
-    pub fn step_timer(&mut self) {
+    pub fn step_timer(&mut self, periods: &[i32; 16]) {
         if self.timer > 0 {
             self.timer -= 1;
             return;
         }
-        self.timer = (table(&NOISE_PERIOD, self.period_index) >> 1) - 1;
+        self.timer = (table(periods, self.period_index) >> 1) - 1;
         let tap = if self.short_mode { (self.shift >> 6) & 0x01 } else { (self.shift >> 1) & 0x01 };
         let feedback = (self.shift & 0x01) ^ tap;
         self.shift = (self.shift >> 1) | (feedback << 14);
@@ -546,7 +549,7 @@ impl DmcChannel {
 
     /// `StepTimer`: the table is the period, so the count reloads one short.
     #[inline(always)]
-    pub fn step_timer(&mut self) {
+    pub fn step_timer(&mut self, rates: &[i32; 16]) {
         if *self.load_delay > 0 {
             *self.load_delay -= 1;
         } else if *self.load_delay < 0 {
@@ -556,7 +559,7 @@ impl DmcChannel {
             self.timer -= 1;
             return;
         }
-        self.timer = table(&DMC_RATE, self.rate_index) - 1;
+        self.timer = table(rates, self.rate_index) - 1;
         self.clock();
     }
 

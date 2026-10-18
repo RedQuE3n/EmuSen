@@ -6,6 +6,7 @@ use super::{Board, Controller};
 use crate::Skip;
 use emusen_native::debug::Hooks;
 use crate::apu::Apu;
+use crate::model::Model;
 use crate::ppu::Ppu;
 use crate::state::{StateReader, StateResult, StateWriter};
 
@@ -48,6 +49,12 @@ pub struct MemoryBus {
     pub cpu_cycles: Skip<i64>,
     /// The debugger's tables and logs, which only the `Observed` view of this bus writes.
     pub hooks: Skip<Box<Hooks>>,
+    /// The 2A07's clock: one CPU cycle in five takes a fourth dot, the cycle `dot_phase` counts to (Moon_PAL.md §4.1).
+    pub long_cycles: Skip<bool>,
+    /// Cycles since the last long one, 0 to 4; written in a PAL state's tail.
+    pub dot_phase: Skip<u8>,
+    /// The 2A07 halts for DMA only on an instruction's first cycle (Moon_PAL.md §6).
+    pub dma_on_first_cycle: Skip<bool>,
 }
 
 impl MemoryBus {
@@ -74,13 +81,28 @@ impl MemoryBus {
             internal_bus: Skip(0),
             cpu_cycles: Skip(0),
             hooks: Skip(Box::new(Hooks::new(&[16]))),
+            long_cycles: Skip(false),
+            dot_phase: Skip(0),
+            dma_on_first_cycle: Skip(false),
         }
+    }
+
+    /// The console's clocks for the CPU, the PPU and the APU; the APU's samples stay at `sample_rate`.
+    pub fn set_model(&mut self, model: Model, sample_rate: i32) {
+        *self.long_cycles = model.long_cycles();
+        *self.dot_phase = 0;
+        *self.dma_on_first_cycle = model.dma_on_first_cycle();
+        self.ppu.set_model(model);
+        self.apu.set_model(model, sample_rate);
     }
 
     /// One CPU cycle's first two dots and everything else clocked from the CPU; returns the IRQ level, in C#'s order.
     #[inline(always)]
     pub fn tick(&mut self) -> bool {
         self.ppu.step(DOTS_PER_CPU_CYCLE - 1, &mut self.board);
+        if *self.long_cycles {
+            self.long_cycle_dot();
+        }
         self.apu.step(1);
         if *self.mapper_clocks_on_cpu {
             self.board.mapper.on_cpu_cycle();
@@ -91,6 +113,16 @@ impl MemoryBus {
             self.controller2.set_strobe(*self.strobe_out);
         }
         self.irq_level()
+    }
+
+    /// The fourth dot of every fifth cycle, before the access as NES_MiSTer places it (Moon_PAL.md §4.1).
+    #[inline(always)]
+    fn long_cycle_dot(&mut self) {
+        *self.dot_phase += 1;
+        if *self.dot_phase == 5 {
+            *self.dot_phase = 0;
+            self.ppu.step(1, &mut self.board);
+        }
     }
 
     /// `EndCycle`: the cycle's third dot after its access; returns /NMI's level.

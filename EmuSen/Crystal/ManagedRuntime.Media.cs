@@ -174,14 +174,45 @@ namespace EmuSen.Crystal.Managed
 
         private static byte[] CardsList(string console) => CrystalJson.Write(w =>
         {
+            ConsolesConfig config = ConsolesConfig.Load();
+            Func<string, string?> stored = key => config.Value(console, key);
+            IReadOnlyList<SaveMedium> media = MemoryCards.MediaFor(console);
+            SaveMedium? offer = MemoryCards.ImportToOffer(media, stored);
             w.WriteStartArray();
-            foreach (SaveMedium medium in MemoryCards.MediaFor(console))
+            foreach (SaveMedium medium in media)
             {
+                CardChoice choice = MemoryCards.Read(stored, medium);
                 w.WriteStartObject();
                 w.WriteString("medium", medium.Id);
                 w.WriteString("title", medium.Title);
                 w.WriteString("noun", medium.Noun);
                 w.WriteString("extension", medium.Extension);
+                w.WriteString("kind", medium.IsConsole ? "console" : "removable");
+                if (medium.Entry?.Format is { } format)
+                {
+                    w.WriteNumber("capacity", format.Capacity);
+                    w.WriteString("unit", format.Unit);
+                }
+                else
+                {
+                    w.WriteNull("capacity");
+                    w.WriteNull("unit");
+                }
+                w.WriteString("mode", choice.Mode);
+                w.WriteString("mode_key", medium.ModeKey);
+                w.WriteBoolean("import_due", ReferenceEquals(offer, medium));
+                w.WriteString("next_name", MemoryCards.NextName(medium));
+                w.WriteStartArray("slots");
+                for (int slot = 0; slot < medium.Slots.Count; slot++)
+                {
+                    string name = medium.NameFor(choice, slot);
+                    w.WriteStartObject();
+                    w.WriteString("label", medium.SlotLabel(slot));
+                    w.WriteString("name", name);
+                    w.WriteString("path", medium.PathOf(name));
+                    w.WriteEndObject();
+                }
+                w.WriteEndArray();
                 w.WriteStartArray("cards");
                 foreach (MemoryCards.MediumFile card in MemoryCards.CardsOf(medium))
                 {

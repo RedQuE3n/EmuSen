@@ -119,11 +119,12 @@ namespace EmuSen.Mistress.Views
 
         private bool HasHandCover(string system, string path)
         {
-            string? console = EmuSen.Cores.CoreCatalog.ConsoleForRom(path);
+            string? console = EmuSen.Mistress.Library.RuntimeCatalog.ConsoleForRom(path);
             return console is not null && _artwork.Find(console, Path.GetFileNameWithoutExtension(path)) is not null;
         }
 
-        private static Func<byte[], byte[]>? TransformFor(string path) => EmuSen.Cores.CoreCatalog.CoreForRom(path)?.OpenVgdbBytes;
+        private static Func<byte[], byte[]>? TransformFor(string path) =>
+            EmuSen.Mistress.Library.RuntimeCatalog.CoreForRom(path)?.Systems.FirstOrDefault() is string system ? bytes => OpenVgdbBytes.Of(system, bytes) : null;
 
         private void ReadScrapeSnapshot()
         {
@@ -146,7 +147,7 @@ namespace EmuSen.Mistress.Views
             return null;
         }
 
-        private static string? SystemOf(RomEntry entry) => EmuSen.Cores.CoreCatalog.ShelfByName(entry.Shelf)?.EsdeSystem is { Length: > 0 } s ? s : null;
+        private static string? SystemOf(RomEntry entry) => EmuSen.Mistress.Library.RuntimeCatalog.ShelfByName(entry.Shelf)?.EsdeSystem is { Length: > 0 } s ? s : null;
 
         // The games a scope names, from the library as last scanned; a wide run keeps those its criteria name (§38).
         private List<RomEntry> ScopeGames(ScrapeScope scope)
@@ -420,7 +421,7 @@ namespace EmuSen.Mistress.Views
             {
                 var entry = new RomEntry(path);
                 if (CoverPathFor(entry) is not null || run.FailoverPending.Contains(path)) continue;
-                if (AskForCover(entry, EmuSen.Cores.CoreCatalog.ByDisplayName(entry.CoreDisplayName)))
+                if (AskForCover(entry, EmuSen.Mistress.Library.RuntimeCatalog.ByDisplayName(entry.CoreDisplayName)))
                 {
                     run.FailoverPending.Add(path);
                     run.FailoverAsked++;

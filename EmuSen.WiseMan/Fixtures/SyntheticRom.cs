@@ -127,7 +127,7 @@ namespace EmuSen.WiseMan.Fixtures
             return session;
         }
 
-        private static string WriteTempFile(byte[] rom)
+        public static string WriteTempFile(byte[] rom)
         {
             string path = Path.Combine(Path.GetTempPath(), $"wiseman_synth_{Guid.NewGuid():N}.sfc");
             File.WriteAllBytes(path, rom);

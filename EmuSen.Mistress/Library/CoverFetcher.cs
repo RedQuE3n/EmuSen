@@ -9,7 +9,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Galaxia.Library;
-using EmuSen.Crystal.Systems;
 
 namespace EmuSen.Mistress.Library
 {
@@ -32,7 +31,7 @@ namespace EmuSen.Mistress.Library
         private readonly string _databasePath;
         private readonly string _artworkDirectory;
         private readonly Action<CoverResult> _done;
-        private readonly BlockingCollection<(RomEntry Game, CoreDescriptor Core)> _queue = new();
+        private readonly BlockingCollection<(RomEntry Game, ConsoleCore Core)> _queue = new();
         private readonly ConcurrentDictionary<string, byte> _asked = new(StringComparer.Ordinal);
         private readonly CancellationTokenSource _stop = new();
         private readonly Task _worker;
@@ -52,7 +51,7 @@ namespace EmuSen.Mistress.Library
         public int Pending => _queue.Count;
 
         // Once per game per session; the caller's record of past outcomes decides whether to ask at all.
-        public bool Enqueue(RomEntry game, CoreDescriptor core)
+        public bool Enqueue(RomEntry game, ConsoleCore core)
         {
             if (_stop.IsCancellationRequested || !_asked.TryAdd(game.FullPath, 0)) return false;
             _queue.Add((game, core));
@@ -66,7 +65,7 @@ namespace EmuSen.Mistress.Library
             OpenVgdb? database = null;
             try
             {
-                foreach ((RomEntry game, CoreDescriptor core) in _queue.GetConsumingEnumerable(_stop.Token))
+                foreach ((RomEntry game, ConsoleCore core) in _queue.GetConsumingEnumerable(_stop.Token))
                 {
                     database ??= OpenVgdb.Open(_databasePath);
                     CoverResult result;
@@ -93,19 +92,19 @@ namespace EmuSen.Mistress.Library
             }
         }
 
-        private CoverResult LookUp(OpenVgdb database, RomEntry game, CoreDescriptor core)
+        private CoverResult LookUp(OpenVgdb database, RomEntry game, ConsoleCore core)
         {
             string stem = Path.GetFileNameWithoutExtension(game.FullPath);
-            OpenVgdbMatch? match = database.ByName(stem, core.OpenVgdbSystemNames);
-            if (match is null && core.OpenVgdbBytes is { } bytesOf && new FileInfo(game.FullPath).Length <= HashLimitBytes)
-                match = database.ByMd5(Convert.ToHexString(System.Security.Cryptography.MD5.HashData(bytesOf(File.ReadAllBytes(game.FullPath)))), core.OpenVgdbSystemNames);
+            OpenVgdbMatch? match = database.ByName(stem, core.OpenVgdbSystems);
+            if (match is null && new FileInfo(game.FullPath).Length <= HashLimitBytes)
+                match = database.ByMd5(Convert.ToHexString(System.Security.Cryptography.MD5.HashData(OpenVgdbBytes.Of(core.Systems.FirstOrDefault(), File.ReadAllBytes(game.FullPath)))), core.OpenVgdbSystems);
             if (match is null) return new CoverResult(game.FullPath, core.Console, CoverOutcome.Unknown, null, null, null);
 
             string target = Path.Combine(_artworkDirectory, core.Console, Safe(stem) + ".png");
             if (File.Exists(target)) return new CoverResult(game.FullPath, core.Console, CoverOutcome.Found, match.RomName, target, "already there");
 
             foreach (string name in Names(match.RomName))
-                foreach (string system in core.CheatSystemNames)
+                foreach (string system in core.CheatSystems)
                 {
                     string url = ThumbnailServer + Uri.EscapeDataString(system) + "/Named_Boxarts/" + Uri.EscapeDataString(Safe(name)) + ".png";
                     if (Fetch(url, target) is string saved) return new CoverResult(game.FullPath, core.Console, CoverOutcome.Found, match.RomName, saved, url);

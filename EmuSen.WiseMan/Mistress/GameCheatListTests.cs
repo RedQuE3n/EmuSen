@@ -8,6 +8,7 @@ using EmuSen.Crystal.Cheats;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
+using EmuSen.Mistress;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 
@@ -52,8 +53,18 @@ namespace EmuSen.WiseMan.Mistress
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 
-        private static CheatRegistry Cheats(MainWindow window) =>
-            (CheatRegistry)typeof(MainWindow).GetField("_cheats", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+        private static CheatList Cheats(MainWindow window) => MistressGame.Cheats(window);
+
+        // A RAM poke as the session's list writes it to a game's file.
+        private static CheatFileEntry Poke(uint address, uint value, string description, bool enabled = true) =>
+            new() { Kind = "RamPoke", Description = description, Enabled = enabled, Writes = { new CheatFileWrite { Space = "CpuBus", Address = CheatFileWrite.Hex(address, 1), Value = CheatFileWrite.Hex(value, 2) } } };
+
+        private static CheatFile ListOf(params CheatFileEntry[] cheats)
+        {
+            var file = new CheatFile();
+            file.Cheats.AddRange(cheats);
+            return file;
+        }
 
         private static void Play(MainWindow window, string path) =>
             typeof(MainWindow).GetMethod("LoadRom", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { path, Path.GetFileName(path) });
@@ -73,16 +84,14 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Two_consoles_games_of_one_name_keep_separate_lists() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            registry.AddRamPoke("CpuBus", 0x7E005E, 0x10, "snes only");
-            Assert.True(GameCheats.For("SNES", _snes)!.Save(registry.ToCheatFile()));
+            Assert.True(GameCheats.For("SNES", _snes)!.Save(ListOf(Poke(0x7E005E, 0x10, "snes only"))));
 
             var window = Open();
             Play(window, _nes);
-            Assert.Empty(Cheats(window).GetCheats());
+            Assert.Empty(Cheats(window).Cheats);
 
             Play(window, _snes);
-            Assert.Equal("snes only", Cheats(window).GetCheats().Single().Description);
+            Assert.Equal("snes only", Cheats(window).Cheats.Single().Description);
             window.Close();
         }, default);
 
@@ -91,7 +100,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             var first = Open();
             Play(first, _snes);
-            Cheats(first).AddRamPoke("CpuBus", 0x7E005E, 0x10, "fast walk", enabled: false);
+            Cheats(first).Import(ListOf(Poke(0x7E005E, 0x10, "fast walk", enabled: false)));
             Leave(first);
             first.Close();
 
@@ -99,7 +108,7 @@ namespace EmuSen.WiseMan.Mistress
 
             var second = Open();
             Play(second, _snes);
-            var kept = Cheats(second).GetCheats().Single();
+            var kept = Cheats(second).Cheats.Single();
             Assert.Equal("fast walk", kept.Description);
             Assert.False(kept.Enabled);
             second.Close();
@@ -110,7 +119,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             var window = Open();
             Play(window, _snes);
-            Cheats(window).AddRamPoke("CpuBus", 0x7E005E, 0x10, "fast walk");
+            Cheats(window).Import(ListOf(Poke(0x7E005E, 0x10, "fast walk")));
             window.Close();
 
             Assert.Equal("fast walk", GameCheats.For("SNES", _snes)!.Load()!.Cheats.Single().Description);
@@ -130,9 +139,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task An_unchanged_list_is_not_written_again() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            registry.AddRamPoke("CpuBus", 0x7E005E, 0x10, "fast walk");
-            Assert.True(GameCheats.For("SNES", _snes)!.Save(registry.ToCheatFile()));
+            Assert.True(GameCheats.For("SNES", _snes)!.Save(ListOf(Poke(0x7E005E, 0x10, "fast walk"))));
             var stamp = new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
             File.SetLastWriteTimeUtc(ListPath("SNES"), stamp);
 
@@ -147,9 +154,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Removing_every_cheat_is_kept_so_they_do_not_come_back() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            registry.AddRamPoke("CpuBus", 0x7E005E, 0x10, "fast walk");
-            Assert.True(GameCheats.For("SNES", _snes)!.Save(registry.ToCheatFile()));
+            Assert.True(GameCheats.For("SNES", _snes)!.Save(ListOf(Poke(0x7E005E, 0x10, "fast walk"))));
 
             var first = Open();
             Play(first, _snes);
@@ -159,23 +164,21 @@ namespace EmuSen.WiseMan.Mistress
 
             var second = Open();
             Play(second, _snes);
-            Assert.Empty(Cheats(second).GetCheats());
+            Assert.Empty(Cheats(second).Cheats);
             second.Close();
         }, default);
 
         [Fact]
         public Task A_flat_list_from_an_earlier_build_is_still_restored_and_left_untouched() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            registry.AddRamPoke("CpuBus", 0x7E005E, 0x10, "from before");
-            Assert.True(CheatFile.For("Gamma").Save(registry.ToCheatFile()));
+            Assert.True(CheatFile.For("Gamma").Save(ListOf(Poke(0x7E005E, 0x10, "from before"))));
             string flat = CheatFile.For("Gamma").Path;
             string before = File.ReadAllText(flat);
 
             var window = Open();
             Play(window, _snes);
-            Assert.Equal("from before", Cheats(window).GetCheats().Single().Description);
-            Cheats(window).AddRamPoke("CpuBus", 0x7E0060, 0x22, "added since");
+            Assert.Equal("from before", Cheats(window).Cheats.Single().Description);
+            Cheats(window).Import(ListOf(Poke(0x7E0060, 0x22, "added since")));
             Leave(window);
             window.Close();
 

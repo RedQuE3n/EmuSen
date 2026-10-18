@@ -5,9 +5,11 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using System.Text.Json;
 using EmuSen.LunaP.Windowing;
 using EmuSen.DianaSh.DianaSh.Etc;
-using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Client;
+using EmuSen.Crystal.Client.Contract;
 using EmuSen.Galaxia.Models;
 using EmuSen.Galaxia.Library;
 
@@ -23,12 +25,11 @@ namespace EmuSen.Mistress.Views
     {
         private readonly AppSettings _settings;
 
-        // Resolved per use, never cached - the frontend's registry outlives
-        // this window and is replaced on a ROM change. See §4.14.
-        private readonly Func<CheatRegistry?>? _activeCheats;
+        // The list a game's cheats load into: the running session's, or the one held for the next game - see §4.14.
+        private readonly CheatList? _cheats;
 
-        private readonly ICheatCodeCodec? _codec;
-        private readonly ICheatCodeCodec? _patchCodec;
+        // The running session, whose codecs read a game's codes; null with no game, when the database's own ops answer on session 0.
+        private readonly Func<CrystalSession?> _session;
 
         // Raised after a load, so an Active Cheats window already open shows
         // the new list without being reopened.
@@ -38,19 +39,10 @@ namespace EmuSen.Mistress.Views
         // not by this one - both are its children and only one may exist.
         private readonly Action? _openActiveCheats;
 
-        // Which cheat-database folders this build's cores can use. Injected
-        // rather than known here - see §4.16.
-        private readonly Func<IReadOnlyCollection<string>>? _supportedSystems;
+        // The plan the Prune button offers, set by its first click and confirmed by its second.
+        private bool _armedPrune;
 
-        // The plan the Prune button is currently offering to carry out, set
-        // by its first click and consumed by its second. Null means the
-        // button is back to being an offer rather than a confirmation.
-        private CheatPrunePlan? _armedPrune;
-
-        // One scan per folder, reused by both lists - see CheatDatabase.
-        private CheatDatabase _db;
-
-        private IReadOnlyList<CheatDatabaseEntry> _games = Array.Empty<CheatDatabaseEntry>();
+        private IReadOnlyList<(string Game, string Path)> _games = Array.Empty<(string, string)>();
         private string? _selectedSystem;
 
         // Narrows the systems list to one console's folders - see EmuSen_Multicore.md §10.
@@ -65,15 +57,14 @@ namespace EmuSen.Mistress.Views
 
         // The libretro folder names the selected console claims, or null for no narrowing.
         private IReadOnlyList<string>? ConsoleSystems =>
-            EmuSen.Cores.CoreCatalog.ByDisplayName(_console) is { } core && core.CheatSystemNames.Count > 0
-                ? core.CheatSystemNames
+            EmuSen.Mistress.Library.RuntimeCatalog.ByDisplayName(_console) is { } core && core.CheatSystems.Count > 0
+                ? core.CheatSystems
                 : null;
 
         public CheatDatabaseWindow() : this(AppSettings.Load()) { }
 
-        public CheatDatabaseWindow(AppSettings settings, Func<CheatRegistry?>? activeCheats = null, ICheatCodeCodec? codec = null,
-            Action? changed = null, Action? openActiveCheats = null,
-            Func<IReadOnlyCollection<string>>? supportedSystems = null, string? console = null, ICheatCodeCodec? patchCodec = null)
+        public CheatDatabaseWindow(AppSettings settings, CheatList? cheats = null, Func<CrystalSession?>? session = null,
+            Action? changed = null, Action? openActiveCheats = null, string? console = null)
         {
             InitializeComponent();
             if (Content is DockPanel body) EmuSen.LunaP.Controls.MenuLook.WhenApplied(body, () => InLook(body));
@@ -81,22 +72,18 @@ namespace EmuSen.Mistress.Views
             SystemsList.Label = r => r.Count > 0 ? $"{r.System}  ({r.Count})" : $"{r.System}  (not downloaded)";
             SystemsList.Key = r => r.System;
             _settings = settings;
-            _activeCheats = activeCheats;
-            _codec = codec;
-            _patchCodec = patchCodec;
+            _cheats = cheats;
+            _session = session ?? (() => null);
             _changed = changed;
             _openActiveCheats = openActiveCheats;
-            _supportedSystems = supportedSystems;
             _console = console;
-            _db = new CheatDatabase(Directory);
-            AttributionText.Text = CheatDatabaseInstaller.Attribution;
+            AttributionText.Text = Attribution;
             DirectoryPicker.Path = _settings.CheatDatabaseDirectory ?? "";
             DirectoryPicker.PathPicked += OnDirectoryPicked;
             // A folder typed, and a game loaded with Enter, for a pad in Game Mode - see EmuSen_Settings_Reference.md §4.45.5.
             DirectoryPicker.IsEditable = true;
             GamesList.AddHandler(KeyDownEvent, (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) { e.Handled = true; LoadSelectedGame(); } }, handledEventsToo: true);
             ActiveCheatsButton.IsEnabled = _openActiveCheats is not null;
-            PruneButton.IsEnabled = _supportedSystems is not null;
 
             // Before Refresh, so the first ShowGames already has it - see EmuSen_Settings_Reference.md §4.23.
             GameFilter.SearchText = _settings.CheatSearch;
@@ -112,6 +99,30 @@ namespace EmuSen.Mistress.Views
                 _settings.Save();
             };
         }
+
+        // A database op through the runtime: on the running session where one is, else on session 0, which answers those that need no game - see EmuSen_Backend.md §14.12.
+        private string Op(uint op, object? args = null)
+        {
+            string json = args is null ? "{}" : JsonSerializer.Serialize(args);
+            return _session() is { Closed: false } s ? s.CheatOp(op, json) : CoreSettings.Runtime.CheatOp(op, json);
+        }
+
+        // The licence's words the database's status carries.
+        private string Attribution
+        {
+            get
+            {
+                try
+                {
+                    using JsonDocument status = JsonDocument.Parse(Op(CrystalSessionAbi.CheatDbStatus));
+                    return status.RootElement.TryGetProperty("attribution", out JsonElement a) ? a.GetString() ?? "" : "";
+                }
+                catch (CrystalException) { return ""; }
+            }
+        }
+
+        private static string Human(long bytes) =>
+            bytes >= 1 << 30 ? $"{bytes / (double)(1 << 30):F1} GB" : bytes >= 1 << 20 ? $"{bytes / (double)(1 << 20):F1} MB" : bytes >= 1 << 10 ? $"{bytes / 1024.0:F1} KB" : $"{bytes} bytes";
 
         // On a big-screen sheet in ES-DE's look: the status over centred buttons, and the folder typed rather than browsed, as a pad cannot drive the file dialog (§4.80).
         private void InLook(DockPanel dock)
@@ -140,7 +151,7 @@ namespace EmuSen.Mistress.Views
             string intro = dock.Children.OfType<TextBlock>().FirstOrDefault(t => t.Text?.StartsWith("EmuSen ships no cheat data", StringComparison.Ordinal) == true) is { } first ? first.Text! : "";
             if (dock.Children.OfType<TextBlock>().FirstOrDefault(t => t.Text == intro) is { } shownIntro) shownIntro.IsVisible = false;
             EmuSen.LunaP.Controls.MenuLook.SetFooterLines(this, 4);
-            EmuSen.LunaP.Controls.MenuLook.SetFooter(this, (intro + " " + CheatDatabaseInstaller.Attribution).Trim());
+            EmuSen.LunaP.Controls.MenuLook.SetFooter(this, (intro + " " + Attribution).Trim());
             GamesHeaderText.TextWrapping = Avalonia.Media.TextWrapping.Wrap;
             _inLook = true;
             ShowGames();
@@ -172,7 +183,13 @@ namespace EmuSen.Mistress.Views
         // Every system on disk, or only the selected console's when one is chosen.
         private IReadOnlyList<(string System, int Count)> VisibleSystems()
         {
-            IReadOnlyList<(string System, int Count)> all = _db.Systems();
+            IReadOnlyList<(string System, int Count)> all;
+            try
+            {
+                using JsonDocument systems = JsonDocument.Parse(Op(CrystalSessionAbi.CheatDbSystems));
+                all = systems.RootElement.EnumerateArray().Select(e => (e.GetProperty("system").GetString() ?? "", e.GetProperty("count").GetInt32())).ToArray();
+            }
+            catch (CrystalException) { all = Array.Empty<(string, int)>(); }
             IReadOnlyList<string>? only = ConsoleSystems;
             if (only is null) return all;
 
@@ -182,7 +199,7 @@ namespace EmuSen.Mistress.Views
         // The folders a playable console claims that this folder lacks, as a pruned database does for a console added since - see EmuSen_Settings_Reference.md §4.95.
         private IReadOnlyList<string> MissingSystems(IReadOnlyList<(string System, int Count)> shown)
         {
-            if (_supportedSystems?.Invoke() is not { } supported) return Array.Empty<string>();
+            IReadOnlyCollection<string> supported = EmuSen.Mistress.Library.RuntimeCatalog.SupportedCheatSystems;
             IReadOnlyList<string>? only = ConsoleSystems;
 
             return supported
@@ -194,7 +211,6 @@ namespace EmuSen.Mistress.Views
 
         private void Refresh()
         {
-            _db = new CheatDatabase(Directory);
             IReadOnlyList<(string System, int Count)> systems = VisibleSystems();
             int total = systems.Sum(s => s.Count);
 
@@ -220,9 +236,16 @@ namespace EmuSen.Mistress.Views
 
         private void ShowGames()
         {
-            _games = _selectedSystem is null
-                ? Array.Empty<CheatDatabaseEntry>()
-                : _db.Games(_selectedSystem, GameFilter.SearchText);
+            _games = Array.Empty<(string, string)>();
+            if (_selectedSystem is not null)
+            {
+                try
+                {
+                    using JsonDocument games = JsonDocument.Parse(Op(CrystalSessionAbi.CheatDbGames, new { system = _selectedSystem, filter = GameFilter.SearchText }));
+                    _games = games.RootElement.EnumerateArray().Select(g => (g.GetProperty("game").GetString() ?? "", g.GetProperty("path").GetString() ?? "")).ToArray();
+                }
+                catch (CrystalException) { }
+            }
 
             GamesList.ItemsSource = _games.Select(g => g.Game).ToList();
 
@@ -237,80 +260,138 @@ namespace EmuSen.Mistress.Views
         private void OnGameSelected(object? sender, SelectionChangedEventArgs e) => UpdateLoadButton();
 
         private void UpdateLoadButton() =>
-            LoadGameButton.IsEnabled = SelectedGame is not null && _activeCheats?.Invoke() is not null;
+            LoadGameButton.IsEnabled = SelectedGame is not null && _cheats is not null;
 
-        private CheatDatabaseEntry? SelectedGame =>
+        private (string Game, string Path)? SelectedGame =>
             GamesList.SelectedIndex is int i && i >= 0 && i < _games.Count ? _games[i] : null;
 
         private void OnGameActivated(object? sender, RoutedEventArgs e) => LoadSelectedGame();
 
         private void OnLoadGameClick(object? sender, RoutedEventArgs e) => LoadSelectedGame();
 
-        // Replaces the active list rather than merging, so picking a game
-        // twice cannot double it up - see §4.14.
+        // Replaces the active list rather than merging, so picking a game twice cannot double it up; the codes are read by the running game's codecs where one runs - see §4.14.
         private void LoadSelectedGame()
         {
-            if (SelectedGame is not CheatDatabaseEntry game) return;
+            if (SelectedGame is not { } game) return;
 
-            if (_activeCheats?.Invoke() is not CheatRegistry registry)
+            if (_cheats is null)
             {
                 StatusText.Text = "No cheat list to load into.";
                 return;
             }
 
-            CheatImportResult result;
-            try { result = CheatImport.FromChtFile(registry, game.Path, _codec, replace: true, patchCodec: _patchCodec); }
-            catch (Exception ex)
+            CheatFile parsed;
+            int skipped;
+            try
+            {
+                using JsonDocument cht = JsonDocument.Parse(Op(CrystalSessionAbi.CheatChtParse, new { text = File.ReadAllText(game.Path) }));
+                (parsed, skipped) = CheatFileOf(cht.RootElement);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CrystalException or JsonException)
             {
                 ErrorLog.Error("cheats", $"Couldn't read {game.Game}", ex);
                 StatusText.Text = $"Couldn't read {game.Game}: {ex.Message}";
                 return;
             }
 
+            (int loaded, int refused) = _cheats.Replace(parsed);
+            skipped += refused;
             _changed?.Invoke();
 
-            string skipped = result.Skipped > 0 ? $", {result.Skipped} skipped" : "";
-            StatusText.Text = result.Loaded > 0
-                ? $"Loaded {result.Loaded} cheat(s) for {game.Game}{skipped} - all disabled, turn them on under Active Cheats..."
-                : $"No usable cheats in {game.Game}{skipped}";
+            string skippedText = skipped > 0 ? $", {skipped} skipped" : "";
+            StatusText.Text = loaded > 0
+                ? $"Loaded {loaded} cheat(s) for {game.Game}{skippedText} - all disabled, turn them on under Active Cheats..."
+                : $"No usable cheats in {game.Game}{skippedText}";
+        }
+
+        // CHT_PARSE's record as the cheat file a list imports.
+        private static (CheatFile File, int Skipped) CheatFileOf(JsonElement parsed)
+        {
+            var file = new CheatFile();
+            foreach (JsonElement c in parsed.GetProperty("cheats").EnumerateArray())
+            {
+                bool rom = c.GetProperty("kind").GetString() == "rom";
+                file.Cheats.Add(new CheatFileEntry
+                {
+                    Kind = rom ? "RomPatch" : "RamPoke",
+                    Description = c.GetProperty("description").GetString() ?? "",
+                    Enabled = c.GetProperty("enabled").GetBoolean(),
+                    Writes = c.GetProperty("writes").EnumerateArray().Select(w => new CheatFileWrite
+                    {
+                        Space = w.GetProperty("space").GetString() ?? "",
+                        Address = CheatFileWrite.Hex((uint)w.GetProperty("address").GetInt64(), rom ? 6 : 1),
+                        Value = CheatFileWrite.Hex(w.GetProperty("value").GetUInt32(), Math.Max(1, w.GetProperty("width").GetInt32()) * 2),
+                        Width = Math.Max(1, w.GetProperty("width").GetInt32()),
+                        Type = w.GetProperty("type").GetString() ?? "Set",
+                        BitPosition = w.GetProperty("bit").ValueKind == JsonValueKind.Number ? w.GetProperty("bit").GetInt32() : null,
+                        BigEndian = w.GetProperty("big_endian").GetBoolean(),
+                        RepeatCount = Math.Max(1, w.GetProperty("repeat").GetInt32()),
+                        RepeatAddAddress = CheatFileWrite.Hex((uint)w.GetProperty("repeat_address").GetInt64(), 1),
+                        RepeatAddValue = CheatFileWrite.Hex(w.GetProperty("repeat_value").GetUInt32(), 1),
+                    }).ToList(),
+                });
+            }
+            return (file, parsed.GetProperty("skipped").GetInt32());
         }
 
         // Where a just-loaded list is actually turned on, so it is a button
         // here rather than a trip back to the menu bar - see §4.14.
         private void OnActiveCheatsClick(object? sender, RoutedEventArgs e) => _openActiveCheats?.Invoke();
 
+        // The prune's plan or its outcome, as DB_PRUNE answers.
+        private JsonDocument? Prune(bool apply)
+        {
+            try { return JsonDocument.Parse(Op(CrystalSessionAbi.CheatDbPrune, new { apply })); }
+            catch (CrystalException ex)
+            {
+                StatusText.Text = $"Prune failed: {ex.Message}";
+                return null;
+            }
+        }
+
+        private static (int Systems, long Files, long Bytes, string Keeping) Sum(JsonElement plan)
+        {
+            JsonElement[] removing = plan.GetProperty("removing").EnumerateArray().ToArray();
+            return (removing.Length, removing.Sum(r => r.GetProperty("files").GetInt64()), removing.Sum(r => r.GetProperty("bytes").GetInt64()),
+                string.Join(", ", plan.GetProperty("keeping").EnumerateArray().Select(k => k.GetString())));
+        }
+
         // Deleting is irreversible and the only way back is a 250MB
         // download, so the first click only ever reports - see §4.16.
         private void OnPruneClick(object? sender, RoutedEventArgs e)
         {
-            if (_armedPrune is CheatPrunePlan armed)
+            if (_armedPrune)
             {
-                (int removed, IReadOnlyList<string> failed) = CheatDatabasePruner.Apply(_db, armed);
+                using JsonDocument? done = Prune(apply: true);
                 DisarmPrune();
                 Refresh();
-
-                string trouble = failed.Count > 0 ? $"  Couldn't remove: {string.Join("; ", failed)}" : "";
-                StatusText.Text = $"Deleted {removed} system(s), {armed.Files:N0} file(s), {CheatPrunePlan.Human(armed.Bytes)}.{trouble}";
+                if (done is null) return;
+                var (systems, files, bytes, _) = Sum(done.RootElement);
+                string[] failed = done.RootElement.GetProperty("failed").EnumerateArray().Select(f => f.GetString() ?? "").ToArray();
+                string trouble = failed.Length > 0 ? $"  Couldn't remove: {string.Join("; ", failed)}" : "";
+                StatusText.Text = $"Deleted {done.RootElement.GetProperty("pruned").GetInt32()} system(s), {files:N0} file(s), {Human(bytes)}.{trouble}";
                 return;
             }
 
-            CheatPrunePlan plan = CheatDatabasePruner.Plan(_db, _supportedSystems?.Invoke() ?? Array.Empty<string>());
-            if (!plan.CanApply)
+            using JsonDocument? plan = Prune(apply: false);
+            if (plan is null) return;
+            if (!plan.RootElement.GetProperty("can_apply").GetBoolean())
             {
-                StatusText.Text = $"Nothing to prune - {plan.Reason}";
+                StatusText.Text = $"Nothing to prune - {plan.RootElement.GetProperty("reason").GetString()}";
                 return;
             }
 
-            _armedPrune = plan;
-            PruneButton.Content = $"Delete {plan.Removing.Count} system(s)?";
-            StatusText.Text = $"{plan.Removing.Count} system(s) have no core in this build - {plan.Files:N0} file(s), " +
-                              $"{CheatPrunePlan.Human(plan.Bytes)}. Keeping {string.Join(", ", plan.Keeping)}. " +
+            var (count, fileCount, size, keeping) = Sum(plan.RootElement);
+            _armedPrune = true;
+            PruneButton.Content = $"Delete {count} system(s)?";
+            StatusText.Text = $"{count} system(s) have no core in this build - {fileCount:N0} file(s), " +
+                              $"{Human(size)}. Keeping {keeping}. " +
                               "Click again to delete them for good, or Close to leave them alone.";
         }
 
         private void DisarmPrune()
         {
-            _armedPrune = null;
+            _armedPrune = false;
             PruneButton.Content = "Prune Unsupported";
         }
 
@@ -318,13 +399,15 @@ namespace EmuSen.Mistress.Views
         // 250MB actually arrives - see §4.16.
         private void OfferPrune()
         {
-            CheatPrunePlan plan = CheatDatabasePruner.Plan(_db, _supportedSystems?.Invoke() ?? Array.Empty<string>());
-            if (!plan.CanApply) return;
+            using JsonDocument? plan = Prune(apply: false);
+            if (plan is null || !plan.RootElement.GetProperty("can_apply").GetBoolean()) return;
 
-            _armedPrune = plan;
-            PruneButton.Content = $"Delete {plan.Removing.Count} system(s)?";
-            StatusText.Text = $"{StatusText.Text}  -  {plan.Removing.Count} of {plan.Removing.Count + plan.Keeping.Count} " +
-                              $"system(s) have no core in this build ({plan.Files:N0} file(s), {CheatPrunePlan.Human(plan.Bytes)}). " +
+            var (count, files, bytes, _) = Sum(plan.RootElement);
+            int keeping = plan.RootElement.GetProperty("keeping").GetArrayLength();
+            _armedPrune = true;
+            PruneButton.Content = $"Delete {count} system(s)?";
+            StatusText.Text = $"{StatusText.Text}  -  {count} of {count + keeping} " +
+                              $"system(s) have no core in this build ({files:N0} file(s), {Human(bytes)}). " +
                               "Prune Unsupported deletes them.";
         }
 
@@ -350,19 +433,15 @@ namespace EmuSen.Mistress.Views
 
             try
             {
-                // Off the UI thread - this is a real network fetch of a
-                // multi-megabyte archive.
-                CheatDatabaseInstallResult result = await Task.Run(() =>
-                {
-                    using Stream zip = CheatDatabaseInstaller.Fetch(CheatDatabaseInstaller.LibretroCheatsUrl);
-                    return CheatDatabaseInstaller.Install(zip, target);
-                });
+                // Off the UI thread - this is a real network fetch of a multi-megabyte archive, made by the runtime.
+                string answer = await Task.Run(() => Op(CrystalSessionAbi.CheatDbUpdate));
+                using JsonDocument installed = JsonDocument.Parse(answer);
 
                 Refresh();
-                StatusText.Text = $"Installed {result.Installed:N0} cheat file(s) into {target}";
+                StatusText.Text = $"Installed {installed.RootElement.GetProperty("installed").GetInt64():N0} cheat file(s) into {target}";
                 OfferPrune();
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is CrystalException or JsonException)
             {
                 ErrorLog.Error("cheats", "The cheat database download failed", ex);
                 StatusText.Text = $"Download failed: {ex.Message}";

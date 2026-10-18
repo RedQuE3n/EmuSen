@@ -31,7 +31,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             string nes = Touch("Nintendo - Nintendo Entertainment System", "Named_Boxarts", "Tetris (USA).png");
             string gb = Touch("Nintendo - Game Boy", "Named_Boxarts", "Tetris (World) (Rev 1).png");
-            ArtworkIndex index = ArtworkIndex.Scan(_root, CoreCatalog.Cores);
+            ArtworkIndex index = ArtworkIndex.Scan(_root, RuntimeCatalog.Consoles);
 
             Assert.Equal(nes, index.Find("NES", "Tetris (USA)"));
             Assert.Equal(gb, index.Find("GB", "Tetris (World) (Rev 1)"));
@@ -43,7 +43,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             string mario = Touch("N64", "Super Mario 64 (USA).jpg");
             string zelda = Touch("Legend of Zelda, The - Link_s Awakening (USA).png");
-            ArtworkIndex index = ArtworkIndex.Scan(_root, CoreCatalog.Cores);
+            ArtworkIndex index = ArtworkIndex.Scan(_root, RuntimeCatalog.Consoles);
 
             Assert.Equal(mario, index.Find("N64", "Super Mario 64 (Europe) (En,Fr,De)"));
             Assert.Equal(zelda, index.Find("GB", "Legend of Zelda, The - Link's Awakening (USA)".Replace("'", "&")));
@@ -55,7 +55,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             Touch("N64", "Wave Race 64 (Japan).png");
             string exact = Touch("Wave Race 64 (USA) (Rev A).png");
-            ArtworkIndex index = ArtworkIndex.Scan(_root, CoreCatalog.Cores);
+            ArtworkIndex index = ArtworkIndex.Scan(_root, RuntimeCatalog.Consoles);
 
             Assert.Equal(exact, index.Find("N64", "Wave Race 64 (USA) (Rev A)"));
         }
@@ -63,8 +63,8 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void A_missing_directory_is_an_empty_index_rather_than_a_failure()
         {
-            Assert.Equal(0, ArtworkIndex.Scan(Path.Combine(_root, "absent"), CoreCatalog.Cores).Count);
-            Assert.Equal(0, ArtworkIndex.Scan(null, CoreCatalog.Cores).Count);
+            Assert.Equal(0, ArtworkIndex.Scan(Path.Combine(_root, "absent"), RuntimeCatalog.Consoles).Count);
+            Assert.Equal(0, ArtworkIndex.Scan(null, RuntimeCatalog.Consoles).Count);
         }
 
         [Theory]

@@ -59,7 +59,7 @@ namespace EmuSen.Mistress.Views
 
         // The startup choices: Default, then each system in the order the carousel shows them.
         public IReadOnlyList<(string Value, string Text)> StartupChoices() =>
-            SystemsOrder.Sort(EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder, S.SystemsSorting, s => s.EsdeSystem, s => s.EsdeFullName)
+            SystemsOrder.Sort(EmuSen.Mistress.Library.RuntimeCatalog.Shelves, S.SystemsSorting, s => s.EsdeSystem, s => s.EsdeFullName)
                 .Select(s => (s.EsdeSystem, s.EsdeFullName)).Prepend(("", "Default (the first system)")).ToList();
 
         public Control[] Rows() =>

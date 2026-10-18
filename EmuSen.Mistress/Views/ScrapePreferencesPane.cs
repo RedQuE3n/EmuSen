@@ -95,7 +95,7 @@ namespace EmuSen.Mistress.Views
         // The shelves a scope can name, Game Boy Color as its own; the first entry is the whole library.
         public const string AllShelves = "Every console";
 
-        public static string[] ShelfChoices => [AllShelves, .. EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder.Select(s => s.Name)];
+        public static string[] ShelfChoices => [AllShelves, .. EmuSen.Mistress.Library.RuntimeCatalog.Shelves.Select(s => s.Name)];
 
         public ScrapeScope ChosenScope() => new(Shelf: _scopeShelf.SelectedItem is string s && s != AllShelves ? s : null)
         {

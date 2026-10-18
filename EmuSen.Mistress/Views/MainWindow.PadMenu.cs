@@ -49,7 +49,7 @@ namespace EmuSen.Mistress.Views
             _padMenuPages.Add(new PadMenuPage(null, _padMenuInGame ? GameMenuRows : MainMenuRows));
 
             // Before the menu shows, so no frame runs under it - the library's own rule (§4.18).
-            _padMenuPaused = _padMenuInGame && _pauseSignal.IsSet;
+            _padMenuPaused = _padMenuInGame && !IsPaused;
             if (_padMenuPaused) PauseEmulation();
 
             PadMenuPanel.IsVisible = true;
@@ -77,7 +77,7 @@ namespace EmuSen.Mistress.Views
         private List<PadMenuEntry> MainMenuRows()
         {
             var rows = new List<PadMenuEntry>();
-            if (_session is { IsRomLoaded: true }) rows.Add(new(() => $"Back to {RunningGameTitle()}", ToggleLibrary));
+            if (_session is not null) rows.Add(new(() => $"Back to {RunningGameTitle()}", ToggleLibrary));
             // The sidebar library's game options; the themed gamelist has them on Select - see EmuSen_Settings_Reference.md §4.63.
             if (!ThemedLibraryShown && SelectedLibraryEntry is EmuSen.Mistress.Library.RomEntry chosen)
                 rows.Add(Opens("Game Options...", () => ShowLibraryGameOptions(chosen)));
@@ -318,7 +318,7 @@ namespace EmuSen.Mistress.Views
 
         private void StepSpeed(int by)
         {
-            int[] speeds = { _speed.SlowMotionPercent, EmuSen.Common.SpeedController.NormalPercent, _speed.TurboPercent };
+            int[] speeds = { SlowMotionPercent, NormalPercent, TurboPercent };
             int at = Math.Max(0, Array.IndexOf(speeds, _baseSpeedPercent));
             SetBaseSpeed(speeds[Math.Clamp(at + by, 0, speeds.Length - 1)]);
         }

@@ -5,9 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
-using EmuSen.Common;
-using EmuSen.Cores;
-using EmuSen.Cores.Native;
+using EmuSen.Crystal.Client;
 using EmuSen.Galaxia.Library;
 using EmuSen.LunaP.Commands;
 using EmuSen.LunaP.Controls;
@@ -30,11 +28,11 @@ namespace EmuSen.Mistress.Views
         internal static string StartWithNoDiscLabel(string console) => $"Start {console} With No Disc";
 
         // The consoles an engine of this build starts empty, read from the engines' info.
-        private static IReadOnlyList<string> StartableConsoles => CoreCatalog.ConsolesThatStartEmpty.Select(c => c.Console).ToArray();
+        private static IReadOnlyList<string> StartableConsoles => RuntimeCatalog.ConsolesThatStartEmpty;
 
         // The console a library shelf shows, where it can be started empty; null otherwise.
         private static string? StartableConsoleOfShelf(string? shelf) =>
-            CoreCatalog.ShelfByName(shelf)?.Core.Console is string console && CoreCatalog.EmptyStartFor(console) is not null ? console : null;
+            RuntimeCatalog.ShelfByName(shelf)?.Core.Console is string console && RuntimeCatalog.StartsEmpty(console) ? console : null;
 
         // Run from the menus: no game to ask about, so no firmware or resume question comes first.
         private void StartConsole(string console) => StartConsole(console, reset: false);
@@ -42,25 +40,24 @@ namespace EmuSen.Mistress.Views
         private void StartConsole(string console, bool reset)
         {
             ShutDownCurrentSession(leaving: !reset);
-            string name = ConsoleSession.NameOf(console);
+            string name = SaveLibrary.ConsoleSessionName(console);
             int restoredCheats = DropCheatsFromAnotherGame(name);
             try
             {
-                _session = new EmulatorSession { Cheats = _cheats, Engine = CoreCatalog.EngineChosen(console, CoreSettings.Stored(console, CoreCatalog.EngineKey)), DeviceLender = LendDevice, Options = CoreOptions };
                 StartLogging(console);
-                _session.StartConsole(console);
+                GameSession session = OpenSession(new CrystalOpen { Console = console });
+                _session = session;
                 _activeConsole = console;
-                ApplyConsoleSettings(_session, _activeConsole);
                 ApplyScreenFilter(_activeConsole);
-                WireSession(_session, name, restoredCheats, newGame: !reset);
+                WireSession(session, name, restoredCheats, newGame: !reset);
                 _currentRomPath = null;
                 _consoleSession = console;
                 _currentDisplayName = name;
-                RunSession(_session);
+                RunSession(session);
             }
-            catch (Exception ex)
+            catch (CrystalException ex)
             {
-                _session = null;
+                CloseSession();
                 ShowLibrary();
                 ErrorLog.Error("launch", $"Failed to start {console}", ex);
                 StatusText.Text = $"Failed to start {console}: {ex.Message}";
@@ -89,7 +86,7 @@ namespace EmuSen.Mistress.Views
         {
             if (_insertDisc is null || _ejectDisc is null) return;
             _insertDisc.IsEnabled = DriveEngine is not null;
-            _ejectDisc.IsEnabled = DriveEngine is { DiscIndex: >= 0 };
+            _ejectDisc.IsEnabled = DriveEngine is { } drive && drive.Discs.Index >= 0;
         }
 
         // The library toolbar's button, shown while the sidebar shows a console that starts empty.
@@ -112,18 +109,18 @@ namespace EmuSen.Mistress.Views
         private void AddStartConsoleOption(List<GameOption> options)
         {
             string? esde = _themed?.SelectedSystem?.System.Name;
-            string? console = CoreCatalog.ShelvesInReleaseOrder.FirstOrDefault(s => s.EsdeSystem == esde)?.Core.Console;
-            if (console is null || CoreCatalog.EmptyStartFor(console) is null) return;
+            string? console = RuntimeCatalog.Shelves.FirstOrDefault(s => s.EsdeSystem == esde)?.Core.Console;
+            if (console is null || !RuntimeCatalog.StartsEmpty(console)) return;
             options.Insert(0, new GameOption(StartWithNoDiscLabel(console), () => StartConsole(console)));
         }
 
-        // The running engine where its machine has a drive; null otherwise.
-        private CoreEngine? DriveEngine => _session?.Core is CoreEngine { CanChangeDisc: true } engine ? engine : null;
+        // The running session where its machine has a drive; null otherwise.
+        private GameSession? DriveEngine => _session is { } session && session.Discs.CanChange ? session : null;
 
         // The console's games in the library, as the chooser lists them.
         private IReadOnlyList<(string Title, string Path)> DiscsFor(string console)
         {
-            var shelves = CoreCatalog.ShelvesInReleaseOrder.Where(s => s.Core.Console == console).Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var shelves = RuntimeCatalog.Shelves.Where(s => s.Core.Console == console).Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
             return _allScan.Entries.Where(e => e.Shelf is not null && shelves.Contains(e.Shelf) && Listed(e)).Select(e => (DisplayTitle(e), e.FullPath)).OrderBy(d => d.Item1, StringComparer.CurrentCultureIgnoreCase).ToArray();
         }
 
@@ -155,22 +152,23 @@ namespace EmuSen.Mistress.Views
             SheetLayer.ShowDialog<string?>(new InsertDiscWindow(console, discs, browse), this);
 
         // On the emulation thread, as Change Disc is, so no frame runs half through the change.
-        private void InsertDisc(string path) => OnDrive(engine => engine.InsertDisc(path), $"{Path.GetFileNameWithoutExtension(path)} is in", "Insert Disc");
+        private void InsertDisc(string path) => OnDrive(session => session.InsertDisc(path), $"{Path.GetFileNameWithoutExtension(path)} is in", "Insert Disc");
 
-        private void EjectDisc() => OnDrive(engine => engine.EjectDisc(), "The disc is out", "Eject Disc");
+        private void EjectDisc() => OnDrive(session => session.EjectDisc(), "The disc is out", "Eject Disc");
 
-        private void OnDrive(Action<CoreEngine> act, string done, string what)
+        // At the next frame boundary, as the runtime applies every change, so no frame runs half through it.
+        private void OnDrive(Action<CrystalSession> act, string done, string what)
         {
-            if (DriveEngine is null) return;
-            RequestOnEmulationThread(_ =>
+            if (DriveEngine is not { } session) return;
+            System.Threading.Tasks.Task.Run(() =>
             {
                 string status;
                 try
                 {
-                    if (_session?.Core is CoreEngine engine) act(engine);
+                    act(session.Crystal);
                     status = done;
                 }
-                catch (Exception ex) when (ex is InvalidOperationException or IOException or InvalidDataException or NotSupportedException)
+                catch (CrystalException ex)
                 {
                     status = $"{what} failed: {ex.Message}";
                 }
@@ -181,9 +179,9 @@ namespace EmuSen.Mistress.Views
         // The game menu's rows for a machine with a drive.
         private IEnumerable<PadMenuEntry> DriveRows()
         {
-            if (DriveEngine is not { } engine) yield break;
+            if (DriveEngine is not { } session) yield break;
             yield return new PadMenuEntry(() => "Insert Disc...", () => _ = InsertDiscAsync()) { Opens = true };
-            if (engine.DiscIndex >= 0) yield return new PadMenuEntry(() => "Eject Disc", EjectDisc);
+            if (session.Discs.Index >= 0) yield return new PadMenuEntry(() => "Eject Disc", EjectDisc);
         }
     }
 }

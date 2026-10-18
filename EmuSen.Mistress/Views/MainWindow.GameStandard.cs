@@ -16,7 +16,7 @@ namespace EmuSen.Mistress.Views
 
         // Offered for a game of a console that drove a television, which every filter of a tube is offered for.
         private static bool StandardOffered(string path) =>
-            EmuSen.Cores.CoreCatalog.ConsoleForRom(path) is { } console && CrtFilter.TelevisionConsoles.Contains(EmuSen.Cores.CoreCatalog.HostOf(console));
+            EmuSen.Mistress.Library.RuntimeCatalog.ConsoleForRom(path) is { } console && CrtFilter.TelevisionConsoles.Contains(EmuSen.Mistress.Library.RuntimeCatalog.HostOf(console));
 
         // The values drawn with the running game's standard laid over them: its own choice wins over the console's, the core's answer only fills in.
         private Dictionary<string, float> RunningStandard(Dictionary<string, float> values) =>

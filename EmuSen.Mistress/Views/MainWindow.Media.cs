@@ -71,10 +71,10 @@ namespace EmuSen.Mistress.Views
         private void ShowMedia(IReadOnlyList<RomEntry> games, string search)
         {
             IReadOnlyList<MediaItem> all = _category == StatesCategory
-                ? MediaLibrary.SaveStates(StateDirectory, _allScan.Entries, _fileRecords.ReadState, _records.PathByHash)
+                ? MediaLibrary.SaveStates(StateDirectory, _allScan.Entries, path => StateRecordsOnApi.Read(Runtime, path), _records.PathByHash)
                 : MediaLibrary.Screenshots(DataStore.Screenshots, _allScan.Entries);
             var inView = new HashSet<string>(games.Select(g => g.FullPath), StringComparer.Ordinal);
-            bool everything = SelectedConsole == EmuSen.Cores.CoreCatalog.AllConsoles && CollectionKey == AllGamesKey;
+            bool everything = SelectedConsole == EmuSen.Mistress.Library.RuntimeCatalog.AllConsoles && CollectionKey == AllGamesKey;
             _shownMedia = all.Where(m => (everything || m.Game is not null && inView.Contains(m.Game.FullPath))
                                           && (string.IsNullOrWhiteSpace(search) || FilterBar.Matches(search, m.Title))).ToList();
             MediaGrid.Refresh(_shownMedia);
@@ -93,7 +93,7 @@ namespace EmuSen.Mistress.Views
 
         private void BindMedia(Control tile, MediaItem item)
         {
-            var descriptor = item.Game is null ? null : EmuSen.Cores.CoreCatalog.ByDisplayName(item.Game.CoreDisplayName);
+            var descriptor = item.Game is null ? null : EmuSen.Mistress.Library.RuntimeCatalog.ByDisplayName(item.Game.CoreDisplayName);
             string subtitle = item.Kind == MediaKind.SaveState ? $"{item.Label}  ·  {item.When:d MMM, HH:mm}" : item.Label;
             ((CoverTile)tile).Show(ArtworkIndex.Untagged(item.Title), subtitle, descriptor?.Console ?? "", 0.75,
                 item.PicturePath is null ? null : _covers.Get(item.PicturePath), favourite: false);
@@ -113,11 +113,6 @@ namespace EmuSen.Mistress.Views
                 StatusText.Text = $"{item.GameStem} is not in the library, so its state has no game to load into.";
                 return;
             }
-            if (Refusal(item.Record, game.FullPath, null) is string refused)
-            {
-                StatusText.Text = refused;
-                return;
-            }
             if (!await SameGameOrConfirmedAsync(item.Record, game.FullPath)) return;
             await PrepareGameAsync(game.FullPath);
             LoadGame(game.FullPath, game.FileName, resumeFrom: item.Path, reset: false);
@@ -134,7 +129,8 @@ namespace EmuSen.Mistress.Views
                 if (item.Kind == MediaKind.SaveState && item.PicturePath is string picture) File.Delete(picture);
                 if (item.Kind == MediaKind.SaveState)
                 {
-                    _fileRecords.ForgetState(item.Path);
+                    try { Runtime.StateForget(item.Path); }
+                    catch (EmuSen.Crystal.Client.CrystalException) { }
                     File.Delete(StateRecord.SidecarPathFor(item.Path));
                 }
                 if (item.PicturePath is string shown) _covers.Forget(shown);

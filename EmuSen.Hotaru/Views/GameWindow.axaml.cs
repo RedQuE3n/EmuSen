@@ -19,7 +19,7 @@ using EmuSen.DianaSh.DianaSh.Var.Shell;
 using EmuSen.DianaSh.DianaSh.Dev;
 using EmuSen.Endymion;
 using EmuSen.Endymion.Input;
-using EmuSen.Hotaru.Imaging;
+using EmuSen.Serenity.Imaging;
 using EmuSen.Hotaru.Input;
 using EmuSen.Serenity;
 using EmuSen.Galaxia.Input;

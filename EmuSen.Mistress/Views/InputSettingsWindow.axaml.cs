@@ -11,14 +11,12 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using SDL3;
-using EmuSen.Cores;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Mistress.Input;
 using EmuSen.Endymion.Input;
 using EmuSen.Galaxia.Models;
 using EmuSen.Galaxia.Input;
 using EmuSen.LunaP.Windowing;
-using EmuSen.Crystal.Systems;
 
 namespace EmuSen.Mistress.Views
 {
@@ -103,12 +101,12 @@ namespace EmuSen.Mistress.Views
             _gamepad?.Players.PadFor(PlayerOf(console)) ?? (PlayerOf(console) == 1 ? _gamepad?.Primary : null);
 
         // One tab per console this build has, oldest first - see EmuSen_Input.md §5.1.
-        private readonly IReadOnlyList<CoreDescriptor> _consoles;
+        private readonly IReadOnlyList<EmuSen.Mistress.Library.ConsoleCore> _consoles;
 
         // For Avalonia's XAML tooling only - real code uses the full ctor.
         public InputSettingsWindow() : this(
-            new ControllerKeyBindings(CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console)),
-            new GamepadBindings(CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console)),
+            new ControllerKeyBindings(EmuSen.Mistress.Library.RuntimeCatalog.Consoles.Select(c => c.Console)),
+            new GamepadBindings(EmuSen.Mistress.Library.RuntimeCatalog.Consoles.Select(c => c.Console)),
             null!, new AppSettings(), new HotkeyBindingMap())
         { }
 
@@ -118,7 +116,7 @@ namespace EmuSen.Mistress.Views
             InitializeComponent();
             if (selectedConsole is not null && runningControllers is not null) _running = (selectedConsole, runningControllers);
             _usePlayer1 = Ui.Button("Use Player 1's", UsePlayer1).HelpText("Give the player shown player 1's gamepad buttons again");
-            _consoles = CoreCatalog.ConsolesInReleaseOrder;
+            _consoles = EmuSen.Mistress.Library.RuntimeCatalog.Consoles;
             _keyBindings = keyBindings;
             _gamepadBindings = gamepadBindings;
             _hotkeyBindings = hotkeyBindings;
@@ -173,7 +171,7 @@ namespace EmuSen.Mistress.Views
 
         private void BuildConsoleTabs()
         {
-            foreach (CoreDescriptor console in _consoles)
+            foreach (EmuSen.Mistress.Library.ConsoleCore console in _consoles)
             {
                 var page = new ScrollViewer();
                 Control list = BuildConsolePanel(console);
@@ -182,7 +180,7 @@ namespace EmuSen.Mistress.Views
             }
         }
 
-        private Control BuildConsolePanel(CoreDescriptor console)
+        private Control BuildConsolePanel(EmuSen.Mistress.Library.ConsoleCore console)
         {
             var panel = new StackPanel { Spacing = 4, Margin = new Avalonia.Thickness(0, 8, 0, 0) };
 
@@ -196,7 +194,7 @@ namespace EmuSen.Mistress.Views
                 .Margin(0, 0, 0, 6));
 
             TextBlock keyboardHeader = ColumnHeader(KeyboardHeader(console.Console));
-            if (EmuSen.Cores.ControllerPorts.ForConsole(console.Console) > 1)
+            if (EmuSen.Mistress.Library.RuntimeCatalog.PadOf(console.Console).Ports > 1)
             {
                 var words = new TextBlock { Name = $"PlayerWords{console.Console}", TextWrapping = TextWrapping.Wrap, Margin = new Avalonia.Thickness(0, 0, 0, 6) };
                 _playerRows[console.Console] = (words, keyboardHeader);
@@ -212,7 +210,7 @@ namespace EmuSen.Mistress.Views
                 .Name("ButtonHeaderRow").Margin(0, 0, 0, 2));
 
             var rows = new StackPanel { Name = "BindingsPanel", Spacing = 6 };
-            foreach (PadControl control in CoreCatalog.ControlsFor(console.Console))
+            foreach (PadControl control in EmuSen.Mistress.Library.RuntimeCatalog.ControlsFor(console.Console))
             {
                 rows.Children.Add(BuildButtonRow(console.Console, control));
             }
@@ -245,8 +243,7 @@ namespace EmuSen.Mistress.Views
         {
             string? console = ShownConsole;
             // The players the console's ports hold as its settings stand: an adapter's four where one is set.
-            var config = GraphicsConfig.Load();
-            int ports = console is not null && RunningControllers(console) is { } running ? running.Count : EmuSen.Cores.ControllerPorts.ForConsole(console, CoreSettings.StoredFor(console!, config));
+            int ports = console is not null && RunningControllers(console) is { } running ? running.Count : Math.Max(1, EmuSen.Mistress.Library.RuntimeCatalog.PadNow(console).Players.Count);
             PlayerBar.IsVisible = console is not null && ports > 1;
             if (!PlayerBar.IsVisible) return;
             _playerChoice.Fill(Enumerable.Range(1, ports).Select(PlayerPreferencesRows.Player).ToArray(), PlayerPreferencesRows.Player(Math.Min(PlayerOf(console!), ports)));
@@ -520,10 +517,10 @@ namespace EmuSen.Mistress.Views
             var conflicting = new HashSet<(string, PadControl)>();
             var conflictingHotkeys = new HashSet<HotkeyAction>();
 
-            foreach (CoreDescriptor console in _consoles)
+            foreach (EmuSen.Mistress.Library.ConsoleCore console in _consoles)
             {
                 string name = console.Console;
-                var buttons = CoreCatalog.ControlsFor(name).ToHashSet();
+                var buttons = EmuSen.Mistress.Library.RuntimeCatalog.ControlsFor(name).ToHashSet();
                 var seen = new Dictionary<Key, List<string>>();
 
                 // Displayed buttons only - a button this console lacks is unreachable, so it cannot clash.

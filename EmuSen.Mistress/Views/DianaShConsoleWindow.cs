@@ -6,8 +6,7 @@ using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.Crystal.Cheats;
-using EmuSen.Crystal.Debugger;
+using EmuSen.Crystal.Client;
 using EmuSen.DianaSh.DianaSh.Var.Shell;
 using EmuSen.DianaSh.DianaSh.Dev;
 using EmuSen.LunaP.Controls;
@@ -31,31 +30,21 @@ namespace EmuSen.Mistress.Views
         private DianaShInterpreter _shell => _sessions.Current!.Interpreter;
         private DianaShInterpreterScheduler _scheduler => _schedulers[_sessions.Current!];
 
-        // Display text for the welcome banner, from the catalog rather than a second copy.
-        private static readonly string[] SupportedCores =
-            EmuSen.Cores.CoreCatalog.Cores.Select(c => c.DisplayName).ToArray();
+        // Display text for the welcome banner, from the runtime's shelves rather than a second copy.
+        private static string[] SupportedCores => EmuSen.Mistress.Library.RuntimeCatalog.Consoles.Select(c => c.DisplayName).ToArray();
 
         // Mistress-only builtins that DianaShInterpreter's CreateDefault does not know about - see EmulationControlCommands.cs.
         private readonly IEnumerable<IDianaShCommand> _extraCommands;
 
-        private IDebugTarget? _target;
-
-        // From the loaded core's bundle, so this window names no core - see EmuSen_Multicore.md §4.
-        private ICheatCodeCodec? _cheatAutoDetectCodec;
-        private ICheatCodeCodec? _cheatExplicitCodec;
-        private ICpuTraceSwitch? _cpuTraceSwitch;
+        // The running game's session, whose service table the shell is made over; null with no game - see EmuSen_Backend.md §14.13.
+        private CrystalSession? _session;
 
         public DianaShConsoleWindow() : this(null, null) { }
 
-        public DianaShConsoleWindow(IDebugTarget? target, IEnumerable<IDianaShCommand>? extraCommands = null,
-            ICheatCodeCodec? cheatAutoDetectCodec = null, ICheatCodeCodec? cheatExplicitCodec = null,
-            ICpuTraceSwitch? cpuTraceSwitch = null)
+        public DianaShConsoleWindow(CrystalSession? session, IEnumerable<IDianaShCommand>? extraCommands = null)
         {
             _extraCommands = Combine(extraCommands);
-            _target = target;
-            _cheatAutoDetectCodec = cheatAutoDetectCodec;
-            _cheatExplicitCodec = cheatExplicitCodec;
-            _cpuTraceSwitch = cpuTraceSwitch;
+            _session = session;
 
             Title = "DianaSh";
             Width = 860;
@@ -73,7 +62,7 @@ namespace EmuSen.Mistress.Views
 
             // Printed once, right here - opening this window IS launching this frontend's shell.
             _console.AppendLine(_shell.GetWelcomeBanner(SupportedCores));
-            if (target is null) _console.AppendLine("No ROM loaded yet - commands needing a real target will report so until one is.");
+            if (session is null) _console.AppendLine("No ROM loaded yet - commands needing a real target will report so until one is.");
 
             Opened += (_, _) => _console.FocusInput();
         }
@@ -87,14 +76,9 @@ namespace EmuSen.Mistress.Views
         }
 
         // Called by MainWindow whenever the loaded ROM changes - a fresh interpreter, since it is immutable after construction.
-        public void UpdateTarget(IDebugTarget? target, string? romDisplayName,
-            ICheatCodeCodec? cheatAutoDetectCodec = null, ICheatCodeCodec? cheatExplicitCodec = null,
-            ICpuTraceSwitch? cpuTraceSwitch = null)
+        public void UpdateTarget(CrystalSession? session, string? romDisplayName)
         {
-            _target = target;
-            _cheatAutoDetectCodec = cheatAutoDetectCodec;
-            _cheatExplicitCodec = cheatExplicitCodec;
-            _cpuTraceSwitch = cpuTraceSwitch;
+            _session = session;
             _sessions.RebuildAll(BuildInterpreter);
             SyncSchedulersToSessions();
             _console.ResetHistoryRecall();
@@ -102,10 +86,9 @@ namespace EmuSen.Mistress.Views
         }
 
         private DianaShInterpreter BuildInterpreter() =>
-            DianaShInterpreter.CreateDefault(_target, _extraCommands,
-                _cheatAutoDetectCodec, _cheatExplicitCodec, _cpuTraceSwitch,
-                _sessions,
-                () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems);
+            _session is { Closed: false } session
+                ? DianaShInterpreter.CreateForService(session.ServiceTable(), _extraCommands, _sessions)
+                : DianaShInterpreter.CreateWithoutSession(_extraCommands, () => EmuSen.Mistress.Library.RuntimeCatalog.SupportedCheatSystems);
 
         // Syncs _schedulers to whatever sessions currently exist - see `man tmux`.
         private void SyncSchedulersToSessions()
@@ -155,7 +138,7 @@ namespace EmuSen.Mistress.Views
     }
 
     // Replaces DianaSh's own ClearCommand, whose Console.Clear() does nothing against a widget - see EmuSen_Debugging_Tools_Reference_v5.md §3.17.
-    public class ClearConsoleWindowCommand : IDianaShCommand
+    public class ClearConsoleWindowCommand : HostCommand
     {
         private readonly System.Action _clearOutput;
 
@@ -164,11 +147,11 @@ namespace EmuSen.Mistress.Views
             _clearOutput = clearOutput;
         }
 
-        public string Name => "clear";
-        public bool IsReadOnly => true;
-        public string Usage => "  clear                         clear this console window's output";
+        public override string Name => "clear";
+        public override bool IsReadOnly => true;
+        public override string Usage => "  clear                         clear this console window's output";
 
-        public DianaShResult Execute(IDebugTarget? target, string[] args, string? stdin)
+        protected override DianaShResult Run(string[] args, string? stdin)
         {
             _clearOutput();
             return DianaShResult.Ok(string.Empty);

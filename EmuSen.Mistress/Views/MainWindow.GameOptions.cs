@@ -36,7 +36,7 @@ namespace EmuSen.Mistress.Views
         private static void SetGameEngine(string path, string? chosen)
         {
             string? engine = GameMetadata.EngineFor(path, chosen);
-            try { CoreSettings.Runtime.SetGameSetting(path, EmuSen.Cores.CoreCatalog.EngineKey, engine); }
+            try { CoreSettings.Runtime.SetGameSetting(path, EmuSen.Mistress.Library.RuntimeCatalog.EngineKey, engine); }
             catch (EmuSen.Crystal.Client.CrystalException e) { EmuSen.Galaxia.Library.ErrorLog.Warning("settings", $"{System.IO.Path.GetFileName(path)}'s engine could not be stored: {e.Message}"); }
         }
 
@@ -200,7 +200,7 @@ namespace EmuSen.Mistress.Views
         public void ClearMetadata(string path)
         {
             _records.ClearEdits(path);
-            string? system = EmuSen.Cores.CoreCatalog.ShelfByName(EmuSen.Cores.CoreCatalog.ShelfFor(path) ?? "")?.EsdeSystem;
+            string? system = EmuSen.Mistress.Library.RuntimeCatalog.ShelfByName(EmuSen.Mistress.Library.RuntimeCatalog.ShelfFor(path) ?? "")?.EsdeSystem;
             IReadOnlyList<string> gone = _mediaStore is { IsOpen: true } store ? store.Forget(path, system, GameFolders.Of(_appSettings.RomDirectory, path)) : [];
             _scrapeGeneration++;
             ReadScrapeSnapshot();

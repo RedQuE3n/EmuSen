@@ -232,7 +232,7 @@ namespace EmuSen.Mistress.Views
             {
                 List<RomEntry> pool = _slideGames.Count > 1 && _slide?.Game is { } last ? _slideGames.Where(e => e.FullPath != last.File).ToList() : _slideGames;
                 RomEntry pick = pool[ScreensaverRandom.Next(pool.Count)];
-                string? esde = EmuSen.Cores.CoreCatalog.ShelfByName(pick.Shelf)?.EsdeSystem is { Length: > 0 } s ? s : null;
+                string? esde = EmuSen.Mistress.Library.RuntimeCatalog.ShelfByName(pick.Shelf)?.EsdeSystem is { Length: > 0 } s ? s : null;
                 if (!_slidePictures.TryGetValue(pick.FullPath, out string? picture))
                     _slidePictures[pick.FullPath] = picture = esde is null ? null : Screensaver.SlideKinds.Select(k => sources.Locate(esde, pick.FullPath, k).Path).FirstOrDefault(p => p is not null);
                 if (picture is null)

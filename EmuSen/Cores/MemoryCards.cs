@@ -194,7 +194,7 @@ namespace EmuSen.Cores
                 CoreSettingKind.Choice, DefaultMode(medium), Choices: new[] { PerGame, Shared, Named }, ChoiceLabels: new[] { "Per game", "Shared", "Named" });
             CoreSetting Slot(int slot) => new(medium.SlotKey(slot), $"{medium.Title}: {medium.SlotLabel(slot)}",
                 $"Which {noun} is here under Named; a name with no file yet is a new, blank one, which the game formats. Takes effect when a game is next loaded.",
-                CoreSettingKind.Choice, medium.DefaultName(slot), Choices: names, Note: slot > 0 ? value => SameNameNote(medium, slot, value) : null);
+                CoreSettingKind.Choice, medium.DefaultName(slot), Choices: names, Note: slot > 0 ? value => SameNameNote(medium, slot, value) : null, ShownWith: (medium.ModeKey, Named));
             return (mode, Enumerable.Range(0, medium.Slots.Count).Select(Slot).ToArray());
         }
 

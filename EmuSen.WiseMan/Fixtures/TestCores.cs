@@ -7,10 +7,11 @@ namespace EmuSen.WiseMan.Fixtures
     {
         public static readonly CoreOptions NoBattery = new() { BatteryRamDisabled = true };
 
-        // The main window's cores made the same way, before anything is loaded.
+        // The main window's sessions opened the same way, before anything is loaded.
         public static T WithoutBattery<T>(this T window) where T : EmuSen.Mistress.Views.MainWindow
         {
-            typeof(EmuSen.Mistress.Views.MainWindow).GetProperty("CoreOptions", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(window, NoBattery);
+            var options = typeof(EmuSen.Mistress.Views.MainWindow).GetProperty("OpenOptions", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            options.SetValue(window, ((EmuSen.Crystal.Client.CrystalOpen)options.GetValue(window)!) with { NoBattery = true });
             return window;
         }
     }

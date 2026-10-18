@@ -76,7 +76,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(MoonRtCore.Available, MoonNative.Report);
             Choose("Moon (C#)");
             MainWindow window = Start();
-            EmulatorSession game = Game(window);
+            WindowGame game = Game(window);
             Assert.IsType<MoonRtCore>(game.Core);
             Assert.Null(game.EngineNotice);
             Assert.DoesNotContain("not available", Status(window).Text ?? "");
@@ -161,11 +161,9 @@ namespace EmuSen.WiseMan.Mistress
             }
         }
 
-        private static EmulatorSession Game(MainWindow window) =>
-            (EmulatorSession)typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+        private static WindowGame Game(MainWindow window) => new(window);
 
-        private static EmuSen.Common.RewindBuffer Rewind(MainWindow window) =>
-            (EmuSen.Common.RewindBuffer)typeof(MainWindow).GetField("_rewind", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+        private static EmuSen.Common.RewindBuffer Rewind(MainWindow window) => MistressGame.Rewind(window);
 
         private static string StatePath(MainWindow window) =>
             (string)typeof(MainWindow).GetProperty("CurrentStatePath", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;

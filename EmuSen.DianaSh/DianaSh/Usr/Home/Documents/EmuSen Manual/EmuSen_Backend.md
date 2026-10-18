@@ -1800,26 +1800,6 @@ This lets `core test …` swap the test core's games, which the registry never o
   before. Endymion's C# rate control copies the samples whatever it is given.
 - Passing a span would need an Endymion overload, and it would save nothing until that copy goes.
 
----
-
-## 15. What was built, 2026-10-17: B5, the file services in Rust
-
-*Measured on 2026-10-17 on branch `b5-services`, from `WiseMan` at `53117c71`. The step of §6's B5 row, built in the
-three parts that row names, each graded and committed before the next: (a) the firmware store, (b) the card manager,
-(c) the cheat files and the database. The decisions that bear on it: SR5 (one writer per settings file: none of the
-three writes `appsettings.json`, and the firmware store reads `FirmwareDirectory` from the C#'s load and passes it
-down), SR7 (the C# as failover, behind one switch, `EMUSEN_SERVICES_NATIVE`, in state 2 of `EmuSen_RustPlatform.md`
-§3.9), SR9 (the HTTP client, §15.4), SR11 (JSON for every request; no new store) and D4 (the crates in `Platform/`,
-exported from `emusen_platform`).*
-
-**The switch.** `ServiceLibrary` in Crystal holds it: the library unless the variable is `0`; a library absent,
-refused or without one of the services' exports leaves all three on the C#, said once. Each service keeps its C# as a
-`Managed` twin (`FirmwareLibrary.Managed`, `SaveMediaManager.Managed`, `ChtFile.Managed`, `CheatDatabase.Managed`,
-`CheatDatabasePruner.ManagedPlan` and `ManagedApply`, `CheatDatabaseInstaller.ManagedInstall`), which is the failover
-and the parity classes' oracle; a call whose text cannot cross (a NUL in a path, half a surrogate pair) stays on the
-C#, which refuses it as it always did. Every public type and signature the C# services had is unchanged, so their
-callers, the frontend API's managed implementation among them, compile and behave as before.
-
 
 ### 14.12 Part 4a: the API's 1.1, and the settings the runtime now owns
 
@@ -1863,11 +1843,11 @@ would leave the core waiting on `done`. Serenity gained `SlangLend.Borrow`, a le
 - four undrawn frames;
 - a session opened again, Mistress's power cycle, which gets a new lend.
 
-An in-place reset was left out of the test when it was written: **resetting a Diamond machine running the triangle
-PS-EXE killed the host process** on any path, lent or not. The host called a null `emusen_core_reset` for a core that
-did not claim RESET. That was fixed in Diamond's own work on 2026-10-18. Diamond now claims RESET, and the reset is in the test. No v1 engine makes a machine again inside a state load of another
-size, so "a state of another size" has no case among the v1 engines today. MarsRT's rebuild is its own shim's, and
-MarsRT takes no lend.
+A reset is in the test too. When 4a was written, resetting a Diamond machine running the triangle PS-EXE killed the host
+process on any path, a null `emusen_core_reset` called for a core that claims no reset. It was reported for Diamond's
+owner on 2026-10-18 and fixed in `b23cbff6`: the host refuses a reset a core does not claim, and Diamond claims RESET.
+No v1 engine makes a machine again inside a state load of another size, so "a state of another size" has no case among
+the v1 engines today. MarsRT's rebuild is its own shim's, and MarsRT takes no lend.
 
 **States: `states.db` and the refusals** (D8). The runtime keeps each state's record in `states.db` (`StateRecords`).
 The record has records.db's columns less `source`, and is stamped with the state file's size and time. Its first open
@@ -1939,6 +1919,207 @@ before it refuses any other op with `NO_SESSION`. `emusen_session.h`'s `cheat_op
   lines at `@1.1`.
 - The Crystal, Mistress, Diamond, Nephrite and settings tests: the fixtures that wrote a core's key to graphics.json
   now write consoles.json.
+
+
+### 14.13 Part 4b: Mistress on the API
+
+**What moved.** Mistress now drives every core through `EmuSen.Crystal.Client` alone. Its project names neither
+`EmuSen` nor `EmuSen.Crystal`, and `FrontendReferenceTests.Mistress_names_no_runtime_type` holds it to SR2 as it holds
+Pharaoh, Hotaru and emusen-shell. Before the move it named 72 types of the two assemblies, by the same metadata
+reading. The check that sees a violator now reads DianaSh's C# shell, which is no frontend and names the debug target.
+
+The pieces that replaced what Mistress named:
+
+| Mistress before | Mistress now |
+|---|---|
+| `EmulatorSession`, `ICore`, `CoreFactory`, `CoreOptions` | `GameSession` over a `CrystalSession`, opened with `CrystalOpen` |
+| `RewindBuffer`, `RewindThumbnail`, `SpeedController` | the session's `rewind_*` and `speed_*`; the reel reads `rewind_reel` and `rewind_picture` |
+| its own lend (`SlangDeviceLend`) and `CorePictures` | `open_params.device` from `GameFrameControl.LendableDevice`, `picture_lend` borrowed with `SlangLend.Borrow`, `raw_copy` |
+| the request queue and pause signal of the emulation thread | run control and `wait` (C1); a halt is the frame's `halted` (C2) |
+| `CheatRegistry`, the codecs, `CheatImport`, `CheatDatabase*` | `CheatList` over `cheat_op`, the database's ops on session 0 or the running session |
+| `MemoryCards`, `SaveMediaManager`, `MediaOutcome` | `cards_op` |
+| `FirmwareOverview`, `FirmwareLibrary`, `EmulatorSession.MissingFirmwareFor` | `firmware_overview`, `firmware_needed`, `firmware_install` |
+| `CoreSetting`, `ICoreSettings`, `ApplyConsoleSettings` | `settings_schema` and `settings_set`; the runtime applies a console's settings to its sessions |
+| `IDebugTarget`, `ICheatCodeCodec`, `ICpuTraceSwitch` in the console window | `CreateForService` over the session's table, `CreateWithoutSession` with no game; the window's commands are `HostCommand`s |
+| `DebugSettings.MasterLoggingEnabled` | the runtime's `log_switch` and `log_status` |
+| `CoreCatalog`, `CoreDescriptor`, `SystemPacks`, `ControllerPorts` | `RuntimeCatalog`, a facade over `systems`, `shelves` and `route` |
+| records.db's state rows, `Refusal` | states.db through `state_record` and `state_forget`; `state_load`'s refusal |
+
+**The catalog's facts.** `RuntimeCatalog` reads `systems` and `shelves` once and keeps them until it is told to forget,
+which a library refresh does, and asks `route` once for each version of a file (its path, size and time). Each fact and
+where it now comes from:
+
+| Fact | Source | Owner |
+|---|---|---|
+| The library's shelves: name, label, system, ES-DE names, and the core each belongs to | `shelves`, new in 1.1 | the systems table, each shelf a system of a console's core, named for the core |
+| A file's console, shelf and engine | `route`; `shelf` new in 1.1 | routing |
+| A console's pad, its most ports, each player's controller as its settings stand | `systems[].controllers`, new in 1.1 | the engine's facts, from core info, as `core` is |
+| The engines a console offers a choice of | the schema's `Engine` row | the runtime's settings |
+| A console's host, cheat folders, OpenVGDB names, cover shape, ScreenScraper id, first release | `systems` | the systems table |
+| The extensions the scan and the file picker take | the shelves' cores' extensions | the systems table |
+| A machine's television standard | `session_info.television_standard`, new in 1.1 | machine info |
+| The bytes OpenVGDB hashed for a file | `emusen_systems_openvgdb`, the platform library's own C interface | the systems table's rule |
+
+The OpenVGDB rule is the library's, not a session's or the runtime's: the cover lookup asks it of files no session runs.
+The library is a component of its own at B8 (§2.4), which will read the systems table itself, so the rule is read from
+the platform library's interface directly rather than added to the frontend API.
+
+Three things are Mistress's own presentation, and stay in Mistress:
+- **The order of the console filter**: every console, then the shelves in release order. Before the move it followed the
+  catalog's registration order, which differed from the sidebar's for no reason a player could see.
+- **When the engine's row is shown** in Graphics Settings: where the schema offers more than one engine.
+- **The Speed menu's choices**: 100, 300, 25 and unthrottled, set through `speed_set`. The speed itself is the runtime's.
+
+The name a console started empty goes by ("SNES (no disc)") moved from `EmuSen.Cores.ConsoleSession` to Galaxia's
+`SaveLibrary.ConsoleSessionName`, beside the save library's other names; the runtime's `ConsoleSession` calls it.
+
+**1.1's additions in this part**, each additive, none changing a struct:
+
+| Addition | What it is | Owner |
+|---|---|---|
+| `shelves` | the library's shelves in release order | the systems table |
+| `systems[].controllers` | `{"buttons","axes","ports","players"}` | the engine's facts, from core info |
+| `route`'s `shelf` | the shelf a file sits on | routing |
+| `session_info.television_standard` | "ntsc", "pal" or null; `session_info.state` is now documented in the header as well | machine info |
+| `settings_schema` rows' `note` and `shown_with` | where the core words the value chosen, that sentence as the stored values stand; the row a row is shown with | the core's setting, a card's medium |
+| `cards_op` LIST's `kind`, `capacity`, `unit`, `mode`, `mode_key`, `slots`, `next_name`, `import_due` | what the card window showed from `MemoryCards` | the card manager |
+| `CHEAT_DB_STATUS`'s `attribution` | the database's licence words | the cheat database |
+
+The crate's baseline gained one line, `emusen_crystal_shelves` at `@1.1`; the header test reads 140 exports.
+
+**A defect in the binding, shown and fixed.** `CrystalSession.CheatOp` read every op with the copy-out protocol's two
+calls. An op that changes the list and answers a value rather than a record, such as `IMPORT` or `ADD`, was therefore
+made twice. Measured on 2026-10-18 with a probe on the C# implementation: one `IMPORT` of a list of one cheat through
+`CheatOp` left two cheats. `CrystalSession.CheatChange` makes such an op with one call (one cheat), and
+`ManagedCrystal11Tests.A_cheat_change_through_the_binding_is_made_once` holds it. No client had called a change through
+the binding before this part. Record-answering changes, `DB_PRUNE` with "apply" and `DB_UPDATE`, were already safe: the
+provider keeps their record between the two calls.
+
+**Endymion's claims.** The button that starts a game from the library could claim player 1 for its pad, if the game's
+first poll saw it still held. A quicker launch on the API made the race show every time
+`MultiplayerTests.The_pad_pressed_first_in_a_game_is_player_1_whichever_connected_first` ran first in its process. The
+same defect was fixed in Endymion on its own on 2026-10-18 (`385eb29d`, `EmuSen_Input.md` §8.13.8): a pad held as claims
+begin claims nothing until let go. Mistress on the API takes that fix as it is.
+
+**The loop.** The emulation thread calls `frame`, paces against the display from `frame_info`'s interval and speed, and
+drains the sound the frame reports playable. Between frames it drains the session's events:
+- a state loaded resets the audio rate control (C7);
+- a run event updates the window's pause, resume and halt;
+- a setting re-reads the ports;
+- a disc event updates the drive's menu.
+
+A picture taken on the device goes to the frame control as the borrowed lend. Otherwise it is copied into one of four
+buffers that `FrameHandOff` owns and gets back from the control, so a frame allocates next to nothing
+(`FrameHandOffTests.With_the_picture_copied_as_Mistress_copies_it_a_frame_allocates_next_to_nothing`). The raw picture
+is selected and copied the same way when the screen's filter reads one.
+
+Which way the picture reaches the screen is said once in the log, at a session's first picture (`[picture] <engine>:
+on the device …` or `read back: …` with the reason), as proposed with the device lend.
+
+The launch screen's load under the screen now opens the session on a worker for every engine, not only the v1 engines:
+`open` may be called on any thread.
+
+**States.** Save and Load State use the API's slots, and leaving a game writes the resume state; the runtime writes the
+picture and the record. Mistress keeps the question about another copy of the game, which reads the record's hash, and
+asks nothing else of the record. Its `Refusal`, which compared the record's state version with the running core's, is
+gone: what may load is `state_load`'s answer. A refusal (`STATE_REFUSED`) is shown as `Load State: <the words>`.
+
+`MistressStateRefusalTests` now runs. Its PAL and NTSC copies differ, so the window first asks about another copy, and
+the test answers Load Anyway, which is what reaches the core: MoonRT refuses with "a state saved on another console" and
+the status line says so, with no "newer build". The test as committed in 4a had no such answer, because Mistress's
+`Refusal` came before the question. The behaviour it was written to show is unchanged.
+
+**Reset** (decided 2026-10-18 by the tester). The menu's Reset, the HUD's Restart and the pad menu's Restart call
+`ResetEmulation`. It presses the console's own reset through `reset` and keeps the session. A core that claims no reset
+answers `NOT_SUPPORTED`, and only then is the game started again in a new session, its cheat list carried over:
+- `MainWindowEmulationMenuTests.Reset_presses_the_console_s_reset_where_the_core_claims_one` (VenusRT: the same session
+  and the same machine);
+- `MainWindowEmulationMenuTests.Reset_starts_the_game_again_where_the_core_claims_no_reset` (MercuryRT: a new session,
+  the list kept).
+
+**The windows.**
+- **Cheats.** `CheatList` is the running session's list over `cheat_op`, or with no game a list held in Mistress as a
+  cheat file, which the next game starts with, as the window's registry did before. A typed code is decoded by
+  `CHEAT_CLAIMS` and `CHEAT_DECODE` and added with `CHEAT_ADD`, so only the running game's tab takes one. Another console's
+  tab, and every tab with no game, says that a game of it must run (decided 2026-10-18; see the proposal below). The
+  database window lists, loads, prunes and downloads through the database's ops, on session 0 with no game. Leaving a
+  game keeps its list in the game's file, as before.
+- **Memory cards** read and change cards through `cards_op`; the offer of a shared card's import reads LIST's
+  `import_due` and Mistress's own record that it asked, in graphics.json.
+- **Firmware.** The firmware page reads `firmware_overview` and words it itself (`FirmwareRow`); the runtime's
+  `FirmwareItem` keeps only the data. The prompt before a game uses `firmware_needed` and `firmware_install`.
+- **Graphics Settings** builds a console's rows from its schema; a row's note is the schema's, read again after each
+  change, and a card's slot rows are shown with the mode row they name.
+- **Controller Bindings** takes each console's pad and players from `systems`.
+- **The DianaSh console** is a shell over the session's table, or without a session, and its window commands (pause,
+  resume, coretop, vstop, feed, clear) are `HostCommand`s.
+- **The hardware dashboard** reads the session through `SessionReadout`, at each poll, so a new game needs no update.
+- **Debug Logging** is the runtime's log switch.
+
+`FrameImageWriter`, which encodes a picture as PNG with SkiaSharp, moved from Hotaru to Serenity
+(`EmuSen.Serenity.Imaging`), since Mistress's screenshots now need it too; Hotaru dropped its own SkiaSharp reference.
+`GameFrameControl.TryLend`, whose one caller was Mistress's own lend, became `LendableDevice`, the presenter's device for
+the runtime to lend. Both are recorded in `EmuSen_Surfaces.md` §6.2.
+
+**§3.12's candidates in Mistress.** Each was shown failing on the Mistress of before the move (`71c6f548`), with the test
+adapted only in how it reads the old window's fields, and passes after it (`MistressRunControlTests`):
+
+| # | Shown on the old Mistress | On the API |
+|---|---|---|
+| C1 | Failed: the `resume` typed in the console left the game paused | The window's resume is run control's; the paused frame thread parks in `wait` and drains the console's queue there |
+| C2 | Failed: the breakpoint stopped the game, but the window still said `Running: Loop.sfc` | `frame` returns `halted` and the session advances nothing; the window says `[BREAKPOINT] Halted at $…`, and a resume lets it go |
+| C5 | Failed: the poke landed while the game was paused, before any frame ended | the list is the session's and is applied in the frame-end order only, so Apply while paused pokes at the next frame |
+
+**Behaviour that changed:**
+- A cheat code can be typed only on the running game's tab.
+- The console filter is in release order.
+- The early load under the launch screen covers every engine.
+- A state another build wrote is no longer refused by version in Mistress; the runtime and the core decide.
+- Graphics Settings' SNES tab shows VenusRT's own setting, SA-1 catch-up, which the runtime's schema offers and applies.
+  The window read the catalog's list before, which holds none for the SNES, so the tab said "No core settings yet"
+  over a setting the runtime took. The six interface recordings of the tab were recorded again
+  (`GraphicsSettings`, `GraphicsSettingsSnesEngine` and `GraphicsSettingsGameCropNote`, at both sizes); nothing else of
+  the 518 audited states changed.
+
+**Proposed, not built:**
+- **Cheat codecs with no game.** `cheat_codecs`, `CHEAT_CLAIMS` and `CHEAT_DECODE` on session 0 with `{"console"}`, as an
+  additive 1.1 extension of the ten game-free ops, would let a code be typed for a console before a game of it starts,
+  as the window allowed before. It changes the decision that fixed the game-free ops at ten, so it is the tester's to
+  make.
+- **One session readout.** Mistress's `SessionReadout` and Hotaru's are twelve lines alike. The one place both could share
+  is a toolkit-free assembly that knows both the binding and Serenity's `ISessionReadout`, which does not exist. The
+  duplication is left until a third frontend wants it.
+
+**Left as it was:**
+- The library and scraping stay Mistress's until B8. `FileRecords` keeps records.db's shader-pack record; its state
+  methods have no caller in Mistress now, and records.db's state rows are read once, by D8's copy.
+- The sound is still handed to Endymion as an array drained each frame, as in part 3.
+- A rewind snapshot taken on a frame the speed leaves undrawn keeps no picture, so a reel opened after fast-forwarding
+  shows only the moments that were drawn. This was so before the move as well, where the reel's tests set the speed's
+  frame skip to none; on the API the tests play at normal speed instead.
+
+**The gates of part 4b:** Mistress's tests in three runs, measured on 2026-10-18: the window and library set 615 passed and 7 skipped; Big Picture and scraping 1,073 passed and 46 skipped; the window fit audit passed after the six recordings above. The blast radius beside them (the Crystal and binding tests, input and player claims, firmware, the device lend, screen filters, `FrameImageWriter`, the golden corpus, the shell over a session, core registration and the frontend reference test) 522 passed and 8 skipped. The ABI baseline's crate tests and the session service's header test pass.
+
+---
+
+## 15. What was built, 2026-10-17: B5, the file services in Rust
+
+*Measured on 2026-10-17 on branch `b5-services`, from `WiseMan` at `53117c71`. The step of §6's B5 row, built in the
+three parts that row names, each graded and committed before the next: (a) the firmware store, (b) the card manager,
+(c) the cheat files and the database. The decisions that bear on it: SR5 (one writer per settings file: none of the
+three writes `appsettings.json`, and the firmware store reads `FirmwareDirectory` from the C#'s load and passes it
+down), SR7 (the C# as failover, behind one switch, `EMUSEN_SERVICES_NATIVE`, in state 2 of `EmuSen_RustPlatform.md`
+§3.9), SR9 (the HTTP client, §15.4), SR11 (JSON for every request; no new store) and D4 (the crates in `Platform/`,
+exported from `emusen_platform`).*
+
+**The switch.** `ServiceLibrary` in Crystal holds it: the library unless the variable is `0`; a library absent,
+refused or without one of the services' exports leaves all three on the C#, said once. Each service keeps its C# as a
+`Managed` twin (`FirmwareLibrary.Managed`, `SaveMediaManager.Managed`, `ChtFile.Managed`, `CheatDatabase.Managed`,
+`CheatDatabasePruner.ManagedPlan` and `ManagedApply`, `CheatDatabaseInstaller.ManagedInstall`), which is the failover
+and the parity classes' oracle; a call whose text cannot cross (a NUL in a path, half a surrogate pair) stays on the
+C#, which refuses it as it always did. Every public type and signature the C# services had is unchanged, so their
+callers, the frontend API's managed implementation among them, compile and behave as before.
+
 
 ### 15.1 Part (a): the firmware store, `emusen-firmware`
 

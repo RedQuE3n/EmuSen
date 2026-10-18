@@ -5,7 +5,6 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
-using EmuSen.Crystal.Systems;
 
 namespace EmuSen.Mistress.Library
 {
@@ -27,16 +26,16 @@ namespace EmuSen.Mistress.Library
         public string? Directory { get; private set; }
 
         // Recurses; a folder named for a console or a libretro system scopes what is under it to that console.
-        public static ArtworkIndex Scan(string? directory, IEnumerable<CoreDescriptor> cores)
+        public static ArtworkIndex Scan(string? directory, IEnumerable<ConsoleCore> cores)
         {
             var index = new ArtworkIndex { Directory = directory };
             if (string.IsNullOrWhiteSpace(directory) || !System.IO.Directory.Exists(directory)) return index;
 
             var consoleByFolder = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (CoreDescriptor core in cores)
+            foreach (ConsoleCore core in cores)
             {
                 consoleByFolder[core.Console] = core.Console;
-                foreach (string system in core.CheatSystemNames) consoleByFolder[system] = core.Console;
+                foreach (string system in core.CheatSystems) consoleByFolder[system] = core.Console;
             }
 
             var options = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.Hidden | FileAttributes.System };

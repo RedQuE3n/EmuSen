@@ -62,6 +62,9 @@ namespace EmuSen.WiseMan.Mistress
             window.Show();
             var first = new PadDriver(window) { Pad = { Name = "First Pad" } };
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
+            // The pad manager starts after the window's first frame, so the launch's A is pressed once it sees the pads.
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (clock.ElapsedMilliseconds < 300) { Avalonia.Threading.Dispatcher.UIThread.RunJobs(); System.Threading.Thread.Sleep(5); }
 
             // The launching A outlasts the game's first poll, as a real press does, so a test cannot pass by the poll timer's luck - see EmuSen_Input.md §8.13.8.
             first.Pad.Press(SDL.GamepadButton.South);
@@ -77,7 +80,7 @@ namespace EmuSen.WiseMan.Mistress
         // The seats as the pads connected, for the cases about the slot rule and the routing rather than the first press - see EmuSen_Input.md §8.13.
         private static void ByConnection(AppSettings app) => app.ClaimPlayersByPress = false;
 
-        private static EmulatorSession SessionOf(MainWindow w) => (EmulatorSession)typeof(MainWindow).GetField("_session", Hidden)!.GetValue(w)!;
+        private static WindowGame SessionOf(MainWindow w) => new(w);
 
         private static void Poll(MainWindow w) => typeof(MainWindow).GetMethod("PollGamepad", Hidden)!.Invoke(w, null);
 
@@ -300,8 +303,10 @@ namespace EmuSen.WiseMan.Mistress
                 Poll(window);
                 Assert.Equal(2, SessionOf(window).ControllerPorts);
 
-                core.Set("pad1", "md.teamplayer3");
+                // Through the runtime's settings, as Graphics Settings sets it; with the window's loop stopped here, the frame runs by hand and the window reads its ports again as its loop does after a setting's event.
+                MistressGame.Runtime.SetSetting(MistressGame.Of(window).Console, "pad1", "md.teamplayer3");
                 core.RunFrame();
+                MistressGame.Of(window).RefreshPorts();
                 Assert.Equal(5, SessionOf(window).ControllerPorts);
                 Poll(window);
                 for (int f = 0; f < 4; f++) core.RunFrame();

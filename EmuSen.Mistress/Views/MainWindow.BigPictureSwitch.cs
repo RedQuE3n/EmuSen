@@ -107,7 +107,7 @@ namespace EmuSen.Mistress.Views
 
         // Esc leaves only where it has nothing else to do: the library showing, no game behind it, nothing over it.
         private bool EscapeLeavesBigPicture =>
-            _bigScreen && LibraryView.IsVisible && _session is not { IsRomLoaded: true } && !_padMenuOpen && !Sheets.IsPresenting
+            _bigScreen && LibraryView.IsVisible && _session is null && !_padMenuOpen && !Sheets.IsPresenting
             && !TextEntryOpen;
 
         private DesktopPlace DesktopPlaceNow() =>
@@ -118,7 +118,7 @@ namespace EmuSen.Mistress.Views
             LibraryFilter.SearchText = place.Search;
             if (place.Console != SelectedConsole)
             {
-                LibraryFilter.SetFacets(EmuSen.Cores.CoreCatalog.FilterChoices, place.Console);
+                LibraryFilter.SetFacets(EmuSen.Mistress.Library.RuntimeCatalog.FilterChoices, place.Console);
                 OnLibraryFilterChanged();
             }
             ShowLibraryEntries();

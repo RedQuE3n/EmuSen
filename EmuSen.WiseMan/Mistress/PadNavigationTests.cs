@@ -162,11 +162,11 @@ namespace EmuSen.WiseMan.Mistress
         public Task Left_and_right_step_the_console_filter_round_and_the_choice_is_kept() => Session.Dispatch(() =>
         {
             MainWindow window = LibraryOf(2);
-            var choices = EmuSen.Cores.CoreCatalog.FilterChoices;
+            var choices = EmuSen.Mistress.Library.RuntimeCatalog.FilterChoices;
             var filter = window.GetControl<FilterBar>("LibraryFilter");
             int at = choices.ToList().IndexOf((string)filter.Facet!);
 
-            // The first step lands on the legacy default, which is how EmuSen_Multicore.md §10.3a was found.
+            // Every console, then the shelves in release order, round and round.
             Pad(window, UiButton.Right);
             Assert.Equal(choices[(at + 1) % choices.Count], filter.Facet);
             Assert.Equal(choices[(at + 1) % choices.Count], AppSettings.Load().SelectedCore);

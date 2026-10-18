@@ -6,29 +6,25 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
-using EmuSen.Crystal.Cheats;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
+using EmuSen.Mistress;
 using EmuSen.WiseMan.LunaP;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // The GUI half of `cheat list`/`enable`/`disable`/`remove`/`master` -
-    // see `man cheat` and EmuSen_Settings_Reference.md §4.14.
+    // The GUI half of `cheat list`/`enable`/`disable`/`remove`/`master` - see `man cheat` and EmuSen_Backend.md §14.13.
     [Collection(TestCollections.ProcessGlobals)]
     public class ActiveCheatsWindowTests
     {
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(ActiveCheatsWindowTests).GetTypeInfo().Assembly);
 
-        private static ICheatCodeCodec Poke() => EmuSen.Crystal.Systems.Snes.SnesSystem.ProActionReplay();
-        private static ICheatCodeCodec Patch() => EmuSen.Crystal.Systems.Snes.SnesSystem.GameGenie();
-
-        private static ActiveCheatsWindow Open(CheatRegistry registry)
+        private static ActiveCheatsWindow Open(CheatList list, string console = "SNES")
         {
-            var window = new ActiveCheatsWindow(registry, Poke(), Patch(), console: "SNES");
+            var window = new ActiveCheatsWindow(list, console: console);
             window.Show();
             return window;
         }
@@ -57,12 +53,23 @@ namespace EmuSen.WiseMan.Mistress
 
         private static TextBlock Status(ActiveCheatsWindow w) => w.GetControl<TextBlock>("StatusText");
 
-        private static CheatRegistry WithTwoCheats()
+        private static CheatFileEntry Poke(string description) => new() { Kind = "RamPoke", Description = description, Enabled = false, Writes = { new CheatFileWrite { Space = "WRAM", Address = "9C", Value = "63" } } };
+
+        private static CheatFileEntry Patch(string description) => new() { Kind = "RomPatch", Description = description, Enabled = false, Writes = { new CheatFileWrite { Address = "008000", Value = "EA" } } };
+
+        // Two cheats held with no game, as a list loaded from the database before one starts is.
+        private static CheatList WithTwoCheats()
         {
-            var registry = new CheatRegistry();
-            registry.AddRamPoke("WRAM", 0x9C, 0x63, "infinite lives", enabled: false);
-            registry.AddRomPatch(0x008000, 0xEA, null, "no music", enabled: false);
-            return registry;
+            var list = new CheatList();
+            list.Import(new CheatFile { Cheats = { Poke("infinite lives"), Patch("no music") } });
+            return list;
+        }
+
+        private static void Add(ActiveCheatsWindow window, string code, string? description = null)
+        {
+            CodeBox(window).Text = code;
+            if (description is not null) DescriptionBox(window).Text = description;
+            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         }
 
         [Fact]
@@ -83,7 +90,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task An_empty_list_says_where_cheats_come_from() => Session.Dispatch(() =>
         {
-            var window = Open(new CheatRegistry());
+            var window = Open(new CheatList());
 
             Assert.Empty(Rows(window));
             Assert.Contains("No cheats loaded", window.GetControl<TextBlock>("ListHeaderText").Text!);
@@ -92,21 +99,20 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // The row's own box is the deactivate control the shell spells
-        // `cheat disable <id>`.
+        // The row's own box is the deactivate control the shell spells `cheat disable <id>`, on the running session's list.
         [Fact]
-        public Task Ticking_a_row_enables_that_cheat_in_the_registry() => Session.Dispatch(() =>
+        public Task Ticking_a_row_enables_that_cheat_in_the_session() => Session.Dispatch(() =>
         {
-            CheatRegistry registry = WithTwoCheats();
-            var window = Open(registry);
+            using var game = new RuntimeGame("SNES");
+            game.Cheats.Import(new CheatFile { Cheats = { Poke("infinite lives"), Patch("no music") } });
+            var window = Open(game.Cheats);
 
             Rows(window)[0].Enabled = true;
 
-            Assert.True(registry.GetCheats()[0].Enabled);
-            Assert.False(registry.GetCheats()[1].Enabled);
+            Assert.Equal(new[] { true, false }, game.Cheats.Cheats.Select(c => c.Enabled));
 
             Rows(window)[0].Enabled = false;
-            Assert.False(registry.GetCheats()[0].Enabled);
+            Assert.False(game.Cheats.Cheats[0].Enabled);
 
             window.Close();
         }, default);
@@ -114,18 +120,18 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task The_master_switch_starts_on_and_writes_through() => Session.Dispatch(() =>
         {
-            CheatRegistry registry = WithTwoCheats();
-            var window = Open(registry);
+            CheatList list = WithTwoCheats();
+            var window = Open(list);
             var master = window.GetControl<LunaSwitch>("MasterSwitch");
 
             Assert.True(master.IsChecked);
 
             master.IsChecked = false;
-            Assert.False(registry.MasterEnabled);
+            Assert.False(list.Master);
             Assert.Contains("off", Status(window).Text!);
 
             master.IsChecked = true;
-            Assert.True(registry.MasterEnabled);
+            Assert.True(list.Master);
 
             window.Close();
         }, default);
@@ -134,8 +140,8 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task The_master_switch_leaves_each_rows_own_box_alone() => Session.Dispatch(() =>
         {
-            CheatRegistry registry = WithTwoCheats();
-            var window = Open(registry);
+            CheatList list = WithTwoCheats();
+            var window = Open(list);
             Rows(window)[0].Enabled = true;
 
             window.GetControl<LunaSwitch>("MasterSwitch").IsChecked = false;
@@ -146,18 +152,17 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // A registry that arrives with the switch already off must show that,
-        // not a ticked box over a dead list.
+        // A list that arrives with the switch already off must show that, not a ticked box over a dead list.
         [Fact]
-        public Task An_already_off_registry_opens_showing_it_off() => Session.Dispatch(() =>
+        public Task An_already_off_list_opens_showing_it_off() => Session.Dispatch(() =>
         {
-            CheatRegistry registry = WithTwoCheats();
-            registry.MasterEnabled = false;
+            CheatList list = WithTwoCheats();
+            list.Master = false;
 
-            var window = Open(registry);
+            var window = Open(list);
 
             Assert.False(window.GetControl<LunaSwitch>("MasterSwitch").IsChecked);
-            Assert.True(registry.MasterEnabled == false, "opening the window must not flip the switch back on");
+            Assert.False(list.Master, "opening the window must not flip the switch back on");
 
             window.Close();
         }, default);
@@ -165,76 +170,62 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task A_pro_action_replay_code_can_be_added_by_hand() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            var window = Open(registry);
+            using var game = new RuntimeGame("SNES");
+            var window = Open(game.Cheats);
 
-            CodeBox(window).Text = "7E0DBF63";
-            DescriptionBox(window).Text = "max coins";
-            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Add(window, "7E0DBF63", "max coins");
 
-            CheatInfo added = registry.GetCheats().Single();
+            CheatLine added = game.Cheats.Cheats.Single();
             Assert.Equal("max coins", added.Description);
-            Assert.Equal(CheatKind.RamPoke, added.Kind);
+            Assert.False(added.RomPatch);
             Assert.True(added.Enabled);
             Assert.Empty(CodeBox(window).Text!);
 
             window.Close();
         }, default);
 
-        // The 4-then-4 punctuation is the Game Genie convention `cheat add`
-        // guesses on - see `man cheat`.
+        // The 4-then-4 punctuation is the Game Genie convention `cheat add` guesses on - see `man cheat`.
         [Fact]
         public Task A_game_genie_code_is_added_as_a_rom_patch() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            var window = Open(registry);
+            using var game = new RuntimeGame("SNES");
+            var window = Open(game.Cheats);
 
-            CodeBox(window).Text = "DD82-64DD";
-            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Add(window, "DD82-64DD");
 
-            Assert.Equal(CheatKind.RomPatch, registry.GetCheats().Single().Kind);
+            Assert.True(game.Cheats.Cheats.Single().RomPatch);
 
             window.Close();
         }, default);
 
-        // NES codes carry no punctuation to guess from, so the window asks the
-        // codecs which one claims the code - see EmuSen_Cheats.md §2.
-        private static ActiveCheatsWindow OpenNes(CheatRegistry registry)
-        {
-            var window = new ActiveCheatsWindow(registry,
-                EmuSen.Crystal.Systems.Nes.NesSystem.Raw(),
-                EmuSen.Crystal.Systems.Nes.NesSystem.GameGenie(), console: "NES");
-            window.Show();
-            return window;
-        }
-
+        // NES codes carry no punctuation to guess from, so the runtime's codecs are asked which one claims the code - see EmuSen_Cheats.md §2.
         [Fact]
         public Task An_unpunctuated_nes_game_genie_code_is_added_as_a_rom_patch() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            var window = OpenNes(registry);
+            using var game = new RuntimeGame("NES");
+            var window = Open(game.Cheats, "NES");
 
-            CodeBox(window).Text = "SXIOPO";
-            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Add(window, "SXIOPO");
 
-            var added = registry.GetCheats().Single();
-            Assert.Equal(CheatKind.RomPatch, added.Kind);
-            Assert.Equal(0x91D9, added.Writes[0].Address);
+            CheatFileEntry added = game.Cheats.ToFile().Cheats.Single();
+            Assert.True(added.IsRomPatch);
+            Assert.Equal(0x91D9u, Address(added.Writes[0]));
 
             window.Close();
         }, default);
+
+        private static uint Address(CheatFileWrite write) => CheatFileWrite.TryHex(write.Address, out uint address) ? address : uint.MaxValue;
 
         // The compare is what makes an 8-letter code target one bank.
         [Fact]
         public Task An_eight_letter_nes_code_keeps_its_compare_byte() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            var window = OpenNes(registry);
+            using var game = new RuntimeGame("NES");
+            var window = Open(game.Cheats, "NES");
 
-            CodeBox(window).Text = "SLXPLOVS";
-            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Add(window, "SLXPLOVS");
 
-            Assert.Equal((byte)0xDE, registry.GetCheats().Single().Compare);
+            Assert.Equal("DE", game.Cheats.ToFile().Cheats.Single().Compare);
 
             window.Close();
         }, default);
@@ -242,41 +233,31 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task An_nes_address_value_code_is_added_as_a_ram_poke() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            var window = OpenNes(registry);
+            using var game = new RuntimeGame("NES");
+            var window = Open(game.Cheats, "NES");
 
-            CodeBox(window).Text = "0075:09";
-            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Add(window, "0075:09");
 
-            var added = registry.GetCheats().Single();
-            Assert.Equal(CheatKind.RamPoke, added.Kind);
+            CheatFileEntry added = game.Cheats.ToFile().Cheats.Single();
+            Assert.False(added.IsRomPatch);
             Assert.Equal("CPUBUS", added.Writes[0].Space);
 
             window.Close();
         }, default);
 
         // A GameShark code is lines, a test and the write it guards, so the window adds it whole - see EmuSen_Cheats.md §7.
-        private static ActiveCheatsWindow OpenN64(CheatRegistry registry)
-        {
-            var window = new ActiveCheatsWindow(registry,
-                EmuSen.Cores.Nintendo.MarsRT.MarsCheatCodecs.GameShark(), null, console: "N64");
-            window.Show();
-            return window;
-        }
-
         [Fact]
         public Task An_n64_code_of_several_lines_is_added_as_one_cheat() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            var window = OpenN64(registry);
+            using var game = new RuntimeGame("N64");
+            var window = Open(game.Cheats, "N64");
 
-            CodeBox(window).Text = "D0000200 0005+81000100 1234";
-            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Add(window, "D0000200 0005+81000100 1234");
 
-            var added = registry.GetCheats().Single();
-            Assert.Equal(CheatKind.RamPoke, added.Kind);
-            Assert.Equal(new[] { CheatWriteType.IfEqual, CheatWriteType.Set }, added.Writes.Select(w => w.Type));
-            Assert.Equal(0x1234u, added.Writes[1].Value);
+            CheatFileEntry added = game.Cheats.ToFile().Cheats.Single();
+            Assert.False(added.IsRomPatch);
+            Assert.Equal(new[] { "IfEqual", "Set" }, added.Writes.Select(w => w.Type));
+            Assert.True(CheatFileWrite.TryHex(added.Writes[1].Value, out uint value) && value == 0x1234);
             Assert.Equal("RDRAM", added.Writes[1].Space);
             Assert.Contains("as GameShark", Status(window).Text!);
 
@@ -286,13 +267,12 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task An_n64_code_mars_refuses_says_why_and_adds_nothing() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            var window = OpenN64(registry);
+            using var game = new RuntimeGame("N64");
+            var window = Open(game.Cheats, "N64");
 
-            CodeBox(window).Text = "F1000318 0040";
-            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Add(window, "F1000318 0040");
 
-            Assert.Empty(registry.GetCheats());
+            Assert.Empty(game.Cheats.Cheats);
             Assert.Contains("boot-time write", Status(window).Text!);
 
             window.Close();
@@ -302,13 +282,12 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task A_malformed_n64_code_is_answered_by_the_gameshark() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            var window = OpenN64(registry);
+            using var game = new RuntimeGame("N64");
+            var window = Open(game.Cheats, "N64");
 
-            CodeBox(window).Text = "8033-B21E";
-            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Add(window, "8033-B21E");
 
-            Assert.Empty(registry.GetCheats());
+            Assert.Empty(game.Cheats.Cheats);
             Assert.Contains("isn't an N64 GameShark code", Status(window).Text!);
 
             window.Close();
@@ -317,13 +296,12 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task An_undecodable_code_reports_it_and_adds_nothing() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            var window = Open(registry);
+            using var game = new RuntimeGame("SNES");
+            var window = Open(game.Cheats);
 
-            CodeBox(window).Text = "not-a-code";
-            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Add(window, "not-a-code");
 
-            Assert.Empty(registry.GetCheats());
+            Assert.Empty(game.Cheats.Cheats);
             Assert.Contains("Couldn't decode", Status(window).Text!);
 
             window.Close();
@@ -332,12 +310,12 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task An_empty_code_box_says_so_rather_than_doing_nothing() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            var window = Open(registry);
+            using var game = new RuntimeGame("SNES");
+            var window = Open(game.Cheats);
 
             AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-            Assert.Empty(registry.GetCheats());
+            Assert.Empty(game.Cheats.Cheats);
             Assert.Contains("Type a cheat code", Status(window).Text!);
 
             window.Close();
@@ -346,15 +324,15 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Remove_takes_out_only_the_selected_cheat() => Session.Dispatch(() =>
         {
-            CheatRegistry registry = WithTwoCheats();
-            var window = Open(registry);
+            CheatList list = WithTwoCheats();
+            var window = Open(list);
             Assert.False(window.GetControl<Button>("RemoveButton").IsEnabled);
 
             SelectRow(window, 0);
             Assert.True(window.GetControl<Button>("RemoveButton").IsEnabled);
             window.GetControl<Button>("RemoveButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-            Assert.Equal("no music", registry.GetCheats().Single().Description);
+            Assert.Equal("no music", list.Cheats.Single().Description);
             Assert.Single(Rows(window));
 
             window.Close();
@@ -363,12 +341,12 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Remove_all_empties_the_list() => Session.Dispatch(() =>
         {
-            CheatRegistry registry = WithTwoCheats();
-            var window = Open(registry);
+            CheatList list = WithTwoCheats();
+            var window = Open(list);
 
             window.GetControl<Button>("ClearButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-            Assert.Empty(registry.GetCheats());
+            Assert.Empty(list.Cheats);
             Assert.Empty(Rows(window));
             Assert.False(window.GetControl<Button>("ClearButton").IsEnabled);
 
@@ -379,11 +357,11 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Refresh_picks_up_cheats_added_from_outside_the_window() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            var window = Open(registry);
+            var list = new CheatList();
+            var window = Open(list);
             Assert.Empty(Rows(window));
 
-            registry.AddRamPoke("WRAM", 0x9C, 0x63, "loaded elsewhere", enabled: false);
+            list.Import(new CheatFile { Cheats = { Poke("loaded elsewhere") } });
             window.Refresh();
 
             Assert.Equal("loaded elsewhere", Rows(window).Single().Description);
@@ -391,37 +369,39 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // The whole point of the tabs: the same typed text means different things per console.
+        // A code is read by the running game's codecs, so only that game's tab takes one; another console's tab, and every tab with no game, says a game of it must run (decided 2026-10-18; EmuSen_Backend.md §14.13).
         [Fact]
-        public Task The_tab_a_code_is_typed_under_decides_how_it_is_parsed() => Session.Dispatch(() =>
+        public Task Only_the_running_game_s_tab_takes_a_code() => Session.Dispatch(() =>
         {
-            var registry = new CheatRegistry();
-            var window = new ActiveCheatsWindow(registry);
-            window.Show();
+            var held = new ActiveCheatsWindow(new CheatList());
+            held.Show();
+            var heldTabs = held.GetControl<TabControl>("Tabs");
+            foreach (TabItem item in heldTabs.Items.OfType<TabItem>().Skip(1))
+            {
+                heldTabs.SelectedItem = item;
+                Assert.False(AddButton(held).IsEnabled, $"{item.Header}: a code was offered with no game running");
+            }
+            held.Close();
+
+            using var game = new RuntimeGame("SNES");
+            var window = Open(game.Cheats);
             var tabs = window.GetControl<TabControl>("Tabs");
-
-            // Eight hex digits: a Pro Action Replay poke on the SNES.
-            tabs.SelectedItem = tabs.Items.OfType<TabItem>().First(t => (string)t.Header! == "SNES");
-            CodeBox(window).Text = "7E0DBF63";
-            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-
-            // Six letters: a Game Genie ROM patch on the NES.
             tabs.SelectedItem = tabs.Items.OfType<TabItem>().First(t => (string)t.Header! == "NES");
-            CodeBox(window).Text = "SXIOPO";
-            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-
-            var kinds = registry.GetCheats().Select(c => c.Kind).ToArray();
-            Assert.Equal(new[] { CheatKind.RamPoke, CheatKind.RomPatch }, kinds);
+            Assert.False(AddButton(window).IsEnabled);
+            Assert.Contains(((Control)((TabItem)tabs.SelectedItem!).Content!).GetLogicalDescendants().OfType<TextBlock>(), t => t.Text?.StartsWith("Start a NES game", System.StringComparison.Ordinal) == true);
+            tabs.SelectedItem = tabs.Items.OfType<TabItem>().First(t => (string)t.Header! == "SNES");
+            Assert.True(AddButton(window).IsEnabled);
+            Add(window, "7E0DBF63");
+            Assert.Single(game.Cheats.Cheats);
 
             window.Close();
         }, default);
 
-        // A list is a list: both consoles' cheats sit in the one live registry.
+        // A list is a list: every tab shows the one list.
         [Fact]
         public Task Every_tab_shows_the_same_live_list() => Session.Dispatch(() =>
         {
-            var registry = WithTwoCheats();
-            var window = new ActiveCheatsWindow(registry);
+            var window = new ActiveCheatsWindow(WithTwoCheats());
             window.Show();
             var tabs = window.GetControl<TabControl>("Tabs");
 
@@ -434,36 +414,25 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // Every console in the catalog gets a tab, and each names the formats it takes or says it has none - see §4.14.
-        [Fact]
-        public Task Each_console_tab_offers_its_own_formats() => Session.Dispatch(() =>
+        // Every console of the runtime's shelves gets a tab, and the running game's names the formats its codecs read - see §4.14.
+        [Theory]
+        [InlineData("SNES", "Game Genie")]
+        [InlineData("NES", "Game Genie")]
+        [InlineData("N64", "GameShark")]
+        public Task The_running_game_s_tab_offers_its_codecs_formats(string console, string format) => Session.Dispatch(() =>
         {
-            var window = new ActiveCheatsWindow(new CheatRegistry());
-            window.Show();
+            using var game = new RuntimeGame(console);
+            var window = Open(game.Cheats, console);
 
             var tabs = window.GetControl<TabControl>("Tabs");
             var headers = tabs.Items.OfType<TabItem>().Select(t => (string)t.Header!).ToArray();
             Assert.Equal(new[] { "General", "NES", "GB", "SNES", "N64", "Genesis", "Sega CD", "PlayStation" }, headers);
 
-            foreach (TabItem item in tabs.Items.OfType<TabItem>().Skip(1))
-            {
-                tabs.SelectedItem = item;
-                string console = (string)item.Header!;
-                string[] texts = ((Control)item.Content!).GetLogicalDescendants().OfType<TextBlock>()
-                    .Select(t => t.Text ?? "").ToArray();
-
-                // No N64 format patches ROM, so its tab takes the GameShark alone - see Mars_Cheats.md §1.
-                if (console == "N64")
-                {
-                    Assert.True(AddButton(window).IsEnabled, "N64 should accept a typed GameShark code.");
-                    Assert.Equal("Accepts: GameShark.", texts.First(t => t.StartsWith("Accepts:")));
-                    continue;
-                }
-
-                Assert.True(AddButton(window).IsEnabled, $"{console} should accept a typed code.");
-                // The PlayStation's formats are the GameShark and the Xploder, told apart by their digits - see EmuSen_Cheats.md §10.
-                Assert.Contains(console == "PlayStation" ? "Xploder" : "Game Genie", texts.First(t => t.StartsWith("Accepts:")));
-            }
+            var item = (TabItem)tabs.SelectedItem!;
+            Assert.Equal(console, item.Header);
+            string[] texts = ((Control)item.Content!).GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToArray();
+            Assert.True(AddButton(window).IsEnabled, $"{console} should accept a typed code.");
+            Assert.Contains(format, texts.First(t => t.StartsWith("Accepts:")));
 
             window.Close();
         }, default);

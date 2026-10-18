@@ -2,14 +2,14 @@ using System;
 using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Media;
-using EmuSen.Debug;
+using EmuSen.Crystal.Client;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Mistress.Views
 {
-    // Live GUI for DebugSettings' *Logging flags - see EmuSen_Settings_Reference.md §1 for the investigation history behind each one.
+    // Live GUI for the runtime's logging, its master switch through the frontend API's log switch - see EmuSen_Settings_Reference.md §1 and EmuSen_Backend.md §14.13.
     public class DebugSettingsWindow : ToolWindow
     {
         private readonly record struct Flag(string Label, string Description, Func<bool> Get, Action<bool> Set);
@@ -21,17 +21,19 @@ namespace EmuSen.Mistress.Views
         private readonly LunaSwitch _master = new() { Name = "MasterLoggingCheckBox", Label = "Enable Logging (master switch)", FontWeight = FontWeight.Bold };
         private readonly StackPanel _flags = Ui.Stack(4).Name("FlagsPanel");
 
-        public DebugSettingsWindow()
+        public DebugSettingsWindow() : this(CoreSettings.Runtime) { }
+
+        public DebugSettingsWindow(CrystalRuntime runtime)
         {
             Title = "Debug Logging";
             Width = 480;
             Height = 560;
             this.MinSize(420, 360);
 
-            _master.IsChecked = DebugSettings.MasterLoggingEnabled;
+            _master.IsChecked = runtime.LogSwitch;
             _master.IsCheckedChanged += (_, _) =>
             {
-                DebugSettings.MasterLoggingEnabled = _master.IsChecked == true;
+                runtime.LogSwitch = _master.IsChecked == true;
                 UpdateFlagEnabledState();
             };
 

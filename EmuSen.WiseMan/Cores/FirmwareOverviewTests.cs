@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Common.Firmware;
@@ -7,6 +8,7 @@ using EmuSen.Cores.Native;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
+using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
@@ -37,7 +39,12 @@ namespace EmuSen.WiseMan.Cores
 
         private static DiscoveredCore VenusRt => CoreDiscovery.Found.Single(c => c.Info.Id == "venusrt");
 
-        private static FirmwareSystem Snes(ConsolesConfig? config = null) => FirmwareOverview.Build(config ?? new ConsolesConfig()).Single(s => s.Name == "Super Nintendo");
+        // The runtime's rows as the firmware page words them.
+        private sealed record Worded(string Name, string Engine, IReadOnlyList<FirmwareRow> Items);
+
+        private static Worded Words(FirmwareSystem s) => new(s.Name, s.Engine, s.Items.Select(i => new FirmwareRow(i.Label, i.FileName, i.Size, i.Present, i.WrongSize, i.Effect, i.Cost) { FoundIn = i.FoundIn, WrongSizeIn = i.WrongSizeIn }).ToArray());
+
+        private static Worded Snes(ConsolesConfig? config = null) => Words(FirmwareOverview.Build(config ?? new ConsolesConfig()).Single(s => s.Name == "Super Nintendo"));
 
         private static void Put(string name, int bytes) => File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, name), new byte[bytes]);
 
@@ -48,7 +55,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(["Nintendo Entertainment System", "Game Boy and Game Boy Color", "Super Nintendo", "Nintendo 64", "Sony PlayStation", "Sega Genesis / Mega Drive", "Sega CD / Mega-CD"], systems.Select(s => s.Name));
             Assert.All(systems.Where(s => s.Name is not ("Super Nintendo" or "Sega Genesis / Mega Drive" or "Sony PlayStation" or "Sega CD / Mega-CD")), s => Assert.Empty(s.Items));
 
-            FirmwareSystem snes = Snes();
+            Worded snes = Snes();
             CoreSystem declared = VenusRt.Info.Systems.Single(s => s.Id == "snes");
             Assert.Equal(CoreCatalog.VenusRtEngine, snes.Engine);
             Assert.Equal(declared.Firmware.Select(f => (f.Label, f.Name, (int)f.Size, f.Replacement?.Effect, f.Replacement?.Cost)), snes.Items.Select(i => (i.Label, i.FileName, i.Size, i.Effect, i.Cost)));
@@ -60,49 +67,49 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_file_in_the_folder_changes_the_words_and_one_of_the_wrong_size_is_said_to_be_unused()
         {
-            FirmwareItem boot = Snes().Items.Single(i => i.FileName == "spc700.rom");
-            Assert.Equal((false, FirmwareItem.OpenVersion, "Open version"), (boot.Present, boot.InUse, boot.InUseShort));
-            Assert.Equal(FirmwareItem.FirstSentence(boot.Cost), boot.Change);
+            FirmwareRow boot = Snes().Items.Single(i => i.FileName == "spc700.rom");
+            Assert.Equal((false, FirmwareRow.OpenVersion, "Open version"), (boot.Present, boot.InUse, boot.InUseShort));
+            Assert.Equal(FirmwareRow.FirstSentence(boot.Cost), boot.Change);
             Assert.Equal("Games may start a fraction of a second later.", boot.Change);
 
             Put("spc700.rom", 63);
             boot = Snes().Items.Single(i => i.FileName == "spc700.rom");
-            Assert.Equal((false, true, FirmwareItem.OpenVersion), (boot.Present, boot.WrongSize, boot.InUse));
+            Assert.Equal((false, true, FirmwareRow.OpenVersion), (boot.Present, boot.WrongSize, boot.InUse));
             Assert.Equal(("Games may start a fraction of a second later.", "Not used: the file in EmuSen's folder is not 64 bytes."), (boot.Change, boot.Note));
 
             Put("spc700.rom", 64);
             boot = Snes().Items.Single(i => i.FileName == "spc700.rom");
-            Assert.Equal((true, false, FirmwareItem.OwnFile, "Your own file", FirmwareItem.AsTheConsole), (boot.Present, boot.WrongSize, boot.InUse, boot.InUseShort, boot.Change));
+            Assert.Equal((true, false, FirmwareRow.OwnFile, "Your own file", FirmwareRow.AsTheConsole), (boot.Present, boot.WrongSize, boot.InUse, boot.InUseShort, boot.Change));
             Assert.Null(boot.Note);
 
             File.Delete(Path.Combine(FirmwareLibrary.Directory, "spc700.rom"));
-            Assert.Equal(FirmwareItem.OpenVersion, Snes().Items.Single(i => i.FileName == "spc700.rom").InUse);
+            Assert.Equal(FirmwareRow.OpenVersion, Snes().Items.Single(i => i.FileName == "spc700.rom").InUse);
         }
 
         [Fact]
         public void A_chip_with_no_open_version_says_its_games_need_the_file_and_a_split_pair_counts_as_the_file()
         {
-            FirmwareItem dsp3 = Snes().Items.Single(i => i.FileName == "dsp3.rom");
-            Assert.Equal(("none", FirmwareItem.NoVersion, "None yet", FirmwareItem.NeedsFile), (dsp3.Effect, dsp3.InUse, dsp3.InUseShort, dsp3.Change));
+            FirmwareRow dsp3 = Snes().Items.Single(i => i.FileName == "dsp3.rom");
+            Assert.Equal(("none", FirmwareRow.NoVersion, "None yet", FirmwareRow.NeedsFile), (dsp3.Effect, dsp3.InUse, dsp3.InUseShort, dsp3.Change));
 
-            FirmwareItem dsp1 = Snes().Items.Single(i => i.FileName == "dsp1.rom");
-            Assert.Equal(("accuracy", FirmwareItem.OpenVersion), (dsp1.Effect, dsp1.InUse));
-            Assert.Equal(FirmwareItem.FirstSentence(dsp1.Cost), dsp1.Change);
+            FirmwareRow dsp1 = Snes().Items.Single(i => i.FileName == "dsp1.rom");
+            Assert.Equal(("accuracy", FirmwareRow.OpenVersion), (dsp1.Effect, dsp1.InUse));
+            Assert.Equal(FirmwareRow.FirstSentence(dsp1.Cost), dsp1.Change);
             Put("dsp1.program.rom", 6144);
             Put("dsp1.data.rom", 2048);
-            Assert.Equal(FirmwareItem.OwnFile, Snes().Items.Single(i => i.FileName == "dsp1.rom").InUse);
-            Assert.Equal(FirmwareItem.OpenVersion, Snes().Items.Single(i => i.FileName == "dsp1b.rom").InUse);
+            Assert.Equal(FirmwareRow.OwnFile, Snes().Items.Single(i => i.FileName == "dsp1.rom").InUse);
+            Assert.Equal(FirmwareRow.OpenVersion, Snes().Items.Single(i => i.FileName == "dsp1b.rom").InUse);
         }
 
         [Fact]
         public void An_exact_open_version_says_so_and_a_cost_is_cut_at_its_first_sentence()
         {
-            Assert.Equal(FirmwareItem.Exact, new FirmwareItem("A chip", "chip.rom", 8, false, false, "exact", null).Change);
-            Assert.Equal(FirmwareItem.NeedsFile, new FirmwareItem("A chip", "chip.rom", 8, false, false, null, null).Change);
-            Assert.Equal(FirmwareItem.NeedsFile, new FirmwareItem("A chip", "chip.rom", 8, false, false, "accuracy", null).Change);
-            Assert.Equal("One thing differs.", FirmwareItem.FirstSentence("One thing differs. The rest is detail, e.g. at $FFC0."));
-            Assert.Equal("No full stop", FirmwareItem.FirstSentence("No full stop"));
-            Assert.Null(FirmwareItem.FirstSentence(" "));
+            Assert.Equal(FirmwareRow.Exact, new FirmwareRow("A chip", "chip.rom", 8, false, false, "exact", null).Change);
+            Assert.Equal(FirmwareRow.NeedsFile, new FirmwareRow("A chip", "chip.rom", 8, false, false, null, null).Change);
+            Assert.Equal(FirmwareRow.NeedsFile, new FirmwareRow("A chip", "chip.rom", 8, false, false, "accuracy", null).Change);
+            Assert.Equal("One thing differs.", FirmwareRow.FirstSentence("One thing differs. The rest is detail, e.g. at $FFC0."));
+            Assert.Equal("No full stop", FirmwareRow.FirstSentence("No full stop"));
+            Assert.Null(FirmwareRow.FirstSentence(" "));
         }
 
         // A stored choice of the retired Venus (C#) shows VenusRT's rows; with VenusRT's library gone the SNES lists nothing to use - see VenusRT_Native.md §68.5.
@@ -111,7 +118,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var config = new ConsolesConfig();
             config.SetValue("SNES", CoreCatalog.EngineKey, "Venus (C#)");
-            FirmwareSystem snes = Snes(config);
+            Worded snes = Snes(config);
             Assert.Equal(CoreCatalog.VenusRtEngine, snes.Engine);
             Assert.Equal(Snes().Items.Select(i => i.FileName), snes.Items.Select(i => i.FileName));
 

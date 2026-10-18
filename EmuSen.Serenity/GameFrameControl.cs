@@ -415,15 +415,18 @@ namespace EmuSen.Serenity
 
         public DevicePresenter? Presenter => _presenter;
 
-        // The device the picture is presented on, lent to a core so that its pictures reach the chain there; null while the picture is not presented on the device - see EmuSen_DevicePicture.md §17.
-        public Slang.SlangLend? TryLend()
+        // The device the picture is presented on, for the frontend API's runtime to lend each machine so its pictures reach the chain there; null while the picture is not presented on the device - see EmuSen_DevicePicture.md §17 and EmuSen_Backend.md §14.12.
+        public Slang.SlangVulkan? LendableDevice
         {
-            DevicePresenter? presenter;
-            lock (_cacheLock) presenter = _presenter;
-            if (presenter is null || !DevicePictureAllowed || !DeviceLendAllowed) return null;
-            Slang.SlangLend? lend = Slang.SlangLend.TryCreate(presenter.Device, out string? problem);
-            if (lend is null) DevicePictureReport?.Invoke($"No device is lent to the core: {problem}");
-            return lend;
+            get
+            {
+                DevicePresenter? presenter;
+                lock (_cacheLock) presenter = _presenter;
+                if (presenter is null || !DevicePictureAllowed || !DeviceLendAllowed) return null;
+                if (presenter.Device.IsNative) return presenter.Device;
+                DevicePictureReport?.Invoke("No device is lent to the core: the C#'s device lends nothing");
+                return null;
+            }
         }
 
         // EMUSEN_DEVICE_LEND=0 lends no core the device, its pictures then read back as before - see EmuSen_DevicePicture.md §17.

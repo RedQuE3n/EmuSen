@@ -29,8 +29,8 @@ namespace EmuSen.Mistress.Scraping
     public sealed class Scraper : IDisposable
     {
         // ScreenScraper's systemeid for each ES-DE system name the library's shelves carry, as the systems table gives them - see EmuSen_BigPicture.md §5.3, EmuSen_Backend.md §12.
-        public static readonly IReadOnlyDictionary<string, int> SystemIds = EmuSen.Crystal.Systems.SystemPacks.All.Select(p => p.Entry)
-            .Where(e => e.ScreenScraperSystem is not null).ToDictionary(e => e.EsdeSystem, e => e.ScreenScraperSystem!.Value, StringComparer.Ordinal);
+        public static IReadOnlyDictionary<string, int> SystemIds => Library.RuntimeCatalog.Systems
+            .Where(e => e.ScreenScraperSystem is not null && e.EsdeSystem.Length > 0).GroupBy(e => e.EsdeSystem).ToDictionary(g => g.Key, g => g.First().ScreenScraperSystem!.Value, StringComparer.Ordinal);
 
         public const int MaxAttempts = 5;
 

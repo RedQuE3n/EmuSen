@@ -72,9 +72,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
             pad.A();
             Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
-            var cheats = (CheatRegistry)typeof(MainWindow).GetField("_cheats", Hidden)!.GetValue(window)!;
-            cheats.AddRamPoke("CpuBus", 0x7E0100, 0x42, "Infinite lives");
-            cheats.AddRamPoke("CpuBus", 0x7E0101, 0x09, "Nine continues");
+            MistressGame.Cheats(window).Import(new EmuSen.Galaxia.Models.CheatFile { Cheats =
+            {
+                new() { Kind = "RamPoke", Description = "Infinite lives", Writes = { new() { Space = "CpuBus", Address = "7E0100", Value = "42" } } },
+                new() { Kind = "RamPoke", Description = "Nine continues", Writes = { new() { Space = "CpuBus", Address = "7E0101", Value = "09" } } },
+            } });
             return (window, pad);
         }
 

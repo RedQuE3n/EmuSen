@@ -177,6 +177,7 @@ fn emusen_crystal_set_register int32_t (emusen_crystal_runtime *, uint32_t, uint
 fn emusen_crystal_settings_get int64_t (emusen_crystal_runtime *, uint32_t, uint32_t, const uint8_t *, size_t, const uint8_t *, size_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_settings_schema int64_t (emusen_crystal_runtime *, uint32_t, const uint8_t *, size_t, const uint8_t *, size_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_settings_set int32_t (emusen_crystal_runtime *, uint32_t, uint32_t, const uint8_t *, size_t, const uint8_t *, size_t, const uint8_t *, size_t) @1.0
+fn emusen_crystal_shelves int64_t (emusen_crystal_runtime *, uint8_t *, size_t) @1.1
 fn emusen_crystal_space_read int64_t (emusen_crystal_runtime *, uint32_t, const uint8_t *, size_t, uint32_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_space_write int32_t (emusen_crystal_runtime *, uint32_t, const uint8_t *, size_t, uint32_t, const uint8_t *, size_t) @1.0
 fn emusen_crystal_spaces int64_t (emusen_crystal_runtime *, uint32_t, uint8_t *, size_t) @1.0

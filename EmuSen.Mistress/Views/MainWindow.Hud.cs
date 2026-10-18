@@ -93,7 +93,7 @@ namespace EmuSen.Mistress.Views
         {
             Deactivated += (_, _) =>
             {
-                if (!_appSettings.PauseInBackground || !GameFrame.IsVisible || _session is not { IsRomLoaded: true } || IsPaused) return;
+                if (!_appSettings.PauseInBackground || !GameFrame.IsVisible || _session is null || IsPaused) return;
                 PauseEmulation();
                 _pausedInBackground = true;
             };
@@ -116,7 +116,7 @@ namespace EmuSen.Mistress.Views
         private void SyncHud()
         {
             if (_hudPause is null) return;
-            bool paused = _session is { IsRomLoaded: true } && IsPaused;
+            bool paused = _session is not null && IsPaused;
             _hudPause.Content = Glyph(paused ? PlayGlyph : PauseGlyph);
             ToolTip.SetTip(_hudPause, paused ? "Resume Game" : "Pause Game");
             AutomationProperties.SetName(_hudPause, paused ? "Resume Game" : "Pause Game");
@@ -128,12 +128,12 @@ namespace EmuSen.Mistress.Views
             if (GameFrame.IsVisible) GameNotice.Show(text);
         }
 
-        // Written on the emulation thread with the frame the machine is on, like a state's picture - see EmuSen_Settings_Reference.md §4.34.
+        // The picture the machine is on, copied whole off the UI thread, like a state's picture - see EmuSen_Settings_Reference.md §4.34.
         private void TakeScreenshot()
         {
-            if (_session is not { IsRomLoaded: true } || _currentRomPath is not string rom) return;
+            if (_session is not { } session || _currentRomPath is not string rom) return;
             string path = Path.Combine(DataStore.Screenshots, $"{Path.GetFileNameWithoutExtension(rom)} {DateTime.Now:yyyy-MM-dd HH.mm.ss.fff}.png");
-            RequestOnEmulationThread(session =>
+            System.Threading.Tasks.Task.Run(() =>
             {
                 string status;
                 try

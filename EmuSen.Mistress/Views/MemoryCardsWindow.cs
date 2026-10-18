@@ -1,32 +1,77 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Layout;
-using EmuSen.Cores;
-using EmuSen.Crystal.SaveMedia;
+using EmuSen.Crystal.Client;
+using EmuSen.Crystal.Client.Contract;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Windowing;
+using EmuSen.Mistress.Library;
 
 namespace EmuSen.Mistress.Views
 {
-    // Every console's save media: each medium's cards, the saves on one, and copying, moving, deleting and importing them through the card manager - see EmuSen_SaveMedia.md §6.5.
+    // A console's save medium as the runtime's card manager lists it.
+    public sealed record CardMedium(string Console, string Id, string Title, string Noun, string Extension, bool ConsoleKind, int? Capacity, string? Unit, string Mode, string ModeKey,
+        IReadOnlyList<(string Label, string Name, string Path)> Slots, string NextName, bool ImportDue, IReadOnlyList<CardFile> Cards)
+    {
+        public bool Readable => Capacity is not null;
+
+        // Where a card of this name lives in the drawer, by the save library's names.
+        public string PathOf(string name) => SaveLibrary.MediumPathFor(Console, ConsoleKind, name, Extension);
+
+        // Each medium of a console, from cards_op's listing.
+        public static IReadOnlyList<CardMedium> Of(CrystalRuntime runtime, string console)
+        {
+            using JsonDocument list = JsonDocument.Parse(runtime.CardsOp(CrystalAbi.CardsList, JsonSerializer.Serialize(new { console })));
+            static string? Text(JsonElement e, string name) => e.TryGetProperty(name, out JsonElement v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+            return list.RootElement.EnumerateArray().Select(m => new CardMedium(console, Text(m, "medium") ?? "", Text(m, "title") ?? "", Text(m, "noun") ?? "", Text(m, "extension") ?? "",
+                Text(m, "kind") == "console", m.GetProperty("capacity").ValueKind == JsonValueKind.Number ? m.GetProperty("capacity").GetInt32() : null, Text(m, "unit"),
+                Text(m, "mode") ?? "game", Text(m, "mode_key") ?? "", m.GetProperty("slots").EnumerateArray().Select(s => (Text(s, "label") ?? "", Text(s, "name") ?? "", Text(s, "path") ?? "")).ToArray(),
+                Text(m, "next_name") ?? "", m.GetProperty("import_due").GetBoolean(),
+                m.GetProperty("cards").EnumerateArray().Select(c => new CardFile(Text(c, "path") ?? "", Text(c, "name") ?? "", Text(c, "label") ?? "", c.GetProperty("games_own").GetBoolean(), Text(c, "held_by"))).ToArray())).ToArray();
+        }
+
+        // A medium's words inside a sentence: each word lower case unless it is an initialism, as "Controller Pak" reads "controller pak" and "SRAM" stays.
+        public static string InText(string words) =>
+            string.Join(' ', words.Split(' ').Select(w => w.Length > 1 && w.All(c => !char.IsLetter(c) || char.IsUpper(c)) ? w : w.ToLowerInvariant()));
+    }
+
+    // A card in the drawer, or a game's own, and the session that holds it, if one does.
+    public sealed record CardFile(string Path, string Name, string Label, bool GamesOwn, string? HeldBy);
+
+    // An action's answer from the card manager: done or not, and its words.
+    public sealed record CardOutcome(bool Done, string Words)
+    {
+        public static CardOutcome Of(CrystalRuntime runtime, uint op, object args)
+        {
+            try
+            {
+                using JsonDocument answer = JsonDocument.Parse(runtime.CardsOp(op, JsonSerializer.Serialize(args)));
+                return new CardOutcome(answer.RootElement.GetProperty("done").GetBoolean(), answer.RootElement.GetProperty("words").GetString() ?? "");
+            }
+            catch (CrystalException e) { return new CardOutcome(false, e.Message); }
+        }
+    }
+
+    // Every console's save media: each medium's cards, the saves on one, and copying, moving, deleting and importing them through the runtime's card manager - see EmuSen_SaveMedia.md §6.5 and EmuSen_Backend.md §14.13.
     public sealed class MemoryCardsWindow : ToolWindow
     {
-        private readonly GraphicsConfig _config;
         private readonly Tabs _tabs = new() { Name = "MemoryCardTabs" };
         private readonly HintText _status = new() { Name = "MemoryCardsStatus" };
         private readonly List<MediumPane> _panes = new();
+        private readonly CrystalRuntime _runtime;
 
         // Parameterless constructor exists only for tooling - real code always uses the one below.
         public MemoryCardsWindow() : this(new GraphicsConfig(), null) { }
 
         public MemoryCardsWindow(GraphicsConfig config, string? selectedConsole)
         {
-            _config = config;
+            _runtime = CoreSettings.Runtime;
             Title = "Memory Cards";
             Width = 720;
             Height = 600;
@@ -34,8 +79,9 @@ namespace EmuSen.Mistress.Views
             MinHeight = 420;
             CanResize = true;
 
-            Consoles = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).Where(c => MemoryCards.MediaFor(c).Count > 0).ToList();
-            foreach (string console in Consoles) _tabs.Add(console, new ScrollViewer { Content = BuildConsole(console) });
+            var media = RuntimeCatalog.ConsoleNames.Select(c => (Console: c, Media: CardMedium.Of(_runtime, c))).Where(c => c.Media.Count > 0).ToList();
+            Consoles = media.Select(c => c.Console).ToList();
+            foreach (var (console, list) in media) _tabs.Add(console, new ScrollViewer { Content = BuildConsole(list) });
             int selected = selectedConsole is null ? -1 : Consoles.ToList().IndexOf(selectedConsole);
             if (selected >= 0) _tabs.SelectedIndex = selected;
 
@@ -60,10 +106,10 @@ namespace EmuSen.Mistress.Views
         // What the last action did or why it did nothing.
         public string? Status => _status.Text;
 
-        private Control BuildConsole(string console)
+        private Control BuildConsole(IReadOnlyList<CardMedium> media)
         {
             var panel = new StackPanel { Spacing = 18, Margin = new Avalonia.Thickness(0, 8, 0, 0) };
-            foreach (SaveMedium medium in MemoryCards.MediaFor(console))
+            foreach (CardMedium medium in media)
             {
                 var pane = new MediumPane(this, medium);
                 _panes.Add(pane);
@@ -75,7 +121,7 @@ namespace EmuSen.Mistress.Views
         // The pane of a medium; every pane drawn again after an action, as a copy changes the card it lands on.
         internal IReadOnlyList<MediumPane> Panes => _panes;
 
-        private void Done(MediaOutcome outcome)
+        private void Done(CardOutcome outcome)
         {
             _status.Text = outcome.Words;
             foreach (MediumPane pane in _panes) pane.Refresh();
@@ -85,18 +131,17 @@ namespace EmuSen.Mistress.Views
         internal sealed class MediumPane
         {
             private readonly MemoryCardsWindow _owner;
-            private readonly SaveMedium _medium;
+            private CardMedium _medium;
             private readonly Dropdown _card;
             private readonly Dropdown _target;
             private readonly HintText _about = new();
             private readonly StackPanel _saves = Ui.Stack(4);
             private readonly TextBox _name = new() { MinWidth = 200, HorizontalAlignment = HorizontalAlignment.Left };
             private readonly Button _copy, _move, _delete, _create, _import;
-            private IReadOnlyList<MemoryCards.MediumFile> _cards = Array.Empty<MemoryCards.MediumFile>();
             private string? _chosenCard;
             private string? _chosenSave;
 
-            public MediumPane(MemoryCardsWindow owner, SaveMedium medium)
+            public MediumPane(MemoryCardsWindow owner, CardMedium medium)
             {
                 _owner = owner;
                 _medium = medium;
@@ -110,7 +155,7 @@ namespace EmuSen.Mistress.Views
                 _name.Name = name + ".NewName";
                 _copy = Act("Copy Save", name + ".Copy", () => Transfer(move: false));
                 _move = Act("Move Save", name + ".Move", () => Transfer(move: true));
-                _delete = Act("Delete Save", name + ".Delete", () => _owner.Done(SaveMediaManager.DeleteSave(_chosenCard!, _chosenSave!)));
+                _delete = Act("Delete Save", name + ".Delete", () => _owner.Done(CardOutcome.Of(_owner._runtime, CrystalAbi.CardsDelete, new { card = _chosenCard, save = _chosenSave })));
                 _create = Act("New Card", name + ".New", Create);
                 _import = Act("Import Every Game's Saves", name + ".Import", Import);
                 View = Ui.Stack(8,
@@ -118,7 +163,7 @@ namespace EmuSen.Mistress.Views
                     new FieldRow { Label = "Card", Hint = "A card in the drawer, or a game's own.", Content = Ui.Stack(4, _card, _about) },
                     new FieldRow { Label = "Saves", Hint = "Choose a save to copy, move or delete it.", Content = _saves },
                     new FieldRow { Label = "Copy or move to", Content = Ui.Stack(8, _target, Ui.Row(8, _copy, _move, _delete)) },
-                    new FieldRow { Label = "New card", Hint = $"A name for a new {MediumWords.InText(medium.Noun)} in the drawer.", Content = Ui.Row(8, _name, _create) },
+                    new FieldRow { Label = "New card", Hint = $"A name for a new {CardMedium.InText(medium.Noun)} in the drawer.", Content = Ui.Row(8, _name, _create) },
                     new FieldRow { Label = "Import", Hint = "Every save on every game's own card copied onto the chosen card, all or none; each game's own card stays as it is.", Content = _import });
                 Refresh();
             }
@@ -134,97 +179,113 @@ namespace EmuSen.Mistress.Views
                 return button;
             }
 
-            private string? PathOf(string shown) => _cards.FirstOrDefault(c => c.Label == shown)?.Path;
+            private string? PathOf(string shown) => _medium.Cards.FirstOrDefault(c => c.Label == shown)?.Path;
 
-            // The chooser and the saves read again from the files, the actions enabled as the card and its holder allow.
+            private CardFile? Chosen => _medium.Cards.FirstOrDefault(c => c.Path == _chosenCard);
+
+            // The chooser and the saves read again from the runtime, the actions enabled as the card and its holder allow.
             public void Refresh()
             {
-                _cards = MemoryCards.CardsOf(_medium);
-                if (_chosenCard is null || _cards.All(c => c.Path != _chosenCard)) _chosenCard = AssignedCard() ?? _cards.FirstOrDefault()?.Path;
+                _medium = CardMedium.Of(_owner._runtime, _medium.Console).FirstOrDefault(m => m.Id == _medium.Id) ?? _medium;
+                IReadOnlyList<CardFile> cards = _medium.Cards;
+                if (_chosenCard is null || cards.All(c => c.Path != _chosenCard)) _chosenCard = AssignedCard() ?? cards.FirstOrDefault()?.Path;
                 _filling = true;
-                string[] labels = _cards.Select(c => c.Label).ToArray();
-                _card.Fill(labels, _cards.FirstOrDefault(c => c.Path == _chosenCard)?.Label ?? "");
-                string[] targets = _cards.Where(c => c.Path != _chosenCard).Select(c => c.Label).ToArray();
+                string[] labels = cards.Select(c => c.Label).ToArray();
+                _card.Fill(labels, Chosen?.Label ?? "");
+                string[] targets = cards.Where(c => c.Path != _chosenCard).Select(c => c.Label).ToArray();
                 _target.Fill(targets, targets.FirstOrDefault() ?? "");
                 _filling = false;
-                if (string.IsNullOrEmpty(_name.Text) || _cards.Any(c => !c.GamesOwn && c.Name == _name.Text)) _name.Text = MemoryCards.NextName(_medium);
+                if (string.IsNullOrEmpty(_name.Text) || cards.Any(c => !c.GamesOwn && c.Name == _name.Text)) _name.Text = _medium.NextName;
 
                 _saves.Children.Clear();
-                MediumCard? card = _chosenCard is null ? null : SaveMediaManager.Open(_chosenCard);
                 string mode = ModeText();
-                if (card is null)
+                JsonDocument? opened = null;
+                try
                 {
-                    _about.Text = $"{mode} No card of this medium is in the drawer or a game's yet.";
-                }
-                else if (card.Listing is not { } listing)
-                {
-                    _about.Text = $"{mode} {card.Length:N0} bytes. No format module reads this medium yet, so its saves are not listed; a new card can still be made.";
-                }
-                else
-                {
-                    _about.Text = $"{mode} " + (listing.Formatted ? $"{listing.Saves.Count} save(s), {listing.FreeUnits} of {card.Medium.Format!.Capacity} {card.Medium.Format.Unit}s free." : listing.Problem);
-                    foreach (SaveEntry save in listing.Saves)
+                    if (_chosenCard is not null)
                     {
-                        string id = save.Id;
-                        Button row = Ui.Button($"{(id == _chosenSave ? "▸ " : "")}{save.Title}  ·  {save.Units} {card.Medium.Format!.Unit}(s){(save.Damaged ? "  ·  damaged" : "")}", () => { _chosenSave = id; Refresh(); });
-                        row.Name = $"{_medium.Console}.{_medium.Id}.Save.{listing.Saves.ToList().IndexOf(save)}";
-                        row.HorizontalAlignment = HorizontalAlignment.Stretch;
-                        row.HorizontalContentAlignment = HorizontalAlignment.Left;
-                        _saves.Children.Add(row);
+                        try { opened = JsonDocument.Parse(_owner._runtime.CardsOp(CrystalAbi.CardsOpen, JsonSerializer.Serialize(new { path = _chosenCard }))); }
+                        catch (CrystalException) { opened = null; }
                     }
-                    if (listing.Saves.Count == 0) _saves.Children.Add(Ui.Hint("No saves."));
+                    if (opened is null)
+                    {
+                        _about.Text = $"{mode} No card of this medium is in the drawer or a game's yet.";
+                    }
+                    else if (!_medium.Readable)
+                    {
+                        _about.Text = $"{mode} {opened.RootElement.GetProperty("length").GetInt64():N0} bytes. No format module reads this medium yet, so its saves are not listed; a new card can still be made.";
+                    }
+                    else
+                    {
+                        JsonElement card = opened.RootElement;
+                        JsonElement[] saves = card.GetProperty("saves").EnumerateArray().ToArray();
+                        _about.Text = $"{mode} " + (card.GetProperty("formatted").GetBoolean()
+                            ? $"{saves.Length} save(s), {card.GetProperty("free").GetInt64()} of {_medium.Capacity} {_medium.Unit}s free."
+                            : card.GetProperty("problem").GetString());
+                        for (int i = 0; i < saves.Length; i++)
+                        {
+                            string id = saves[i].GetProperty("id").GetString() ?? "";
+                            string title = saves[i].GetProperty("title").GetString() ?? "";
+                            bool damaged = saves[i].GetProperty("damaged").GetBoolean();
+                            Button row = Ui.Button($"{(id == _chosenSave ? "▸ " : "")}{title}  ·  {saves[i].GetProperty("units").GetInt64()} {_medium.Unit}(s){(damaged ? "  ·  damaged" : "")}", () => { _chosenSave = id; Refresh(); });
+                            row.Name = $"{_medium.Console}.{_medium.Id}.Save.{i}";
+                            row.HorizontalAlignment = HorizontalAlignment.Stretch;
+                            row.HorizontalContentAlignment = HorizontalAlignment.Left;
+                            _saves.Children.Add(row);
+                        }
+                        if (saves.Length == 0) _saves.Children.Add(Ui.Hint("No saves."));
+                    }
                 }
-                if (_chosenCard is not null && SaveMediaManager.HeldBy(_chosenCard) is { } holder)
+                finally { opened?.Dispose(); }
+                if (Chosen?.HeldBy is { } holder)
                     _about.Text += $" In use by {holder}, which is running: its saves can be looked at, and changed when the game is closed.";
                 Enable();
             }
 
             private void Enable()
             {
-                bool held = _chosenCard is not null && SaveMediaManager.HeldBy(_chosenCard) is not null;
-                bool readable = _medium.Entry?.Format is not null;
+                bool held = Chosen?.HeldBy is not null;
                 bool chosen = _chosenSave is not null && _chosenCard is not null;
                 string? target = _target.SelectedItem as string is { Length: > 0 } t ? PathOf(t) : null;
-                _copy.IsEnabled = chosen && readable && target is not null;
-                _move.IsEnabled = chosen && readable && target is not null && !held;
-                _delete.IsEnabled = chosen && readable && !held;
-                _import.IsEnabled = readable && _chosenCard is not null && !held && _cards.FirstOrDefault(c => c.Path == _chosenCard) is { GamesOwn: false };
+                _copy.IsEnabled = chosen && _medium.Readable && target is not null;
+                _move.IsEnabled = chosen && _medium.Readable && target is not null && !held;
+                _delete.IsEnabled = chosen && _medium.Readable && !held;
+                _import.IsEnabled = _medium.Readable && _chosenCard is not null && !held && Chosen is { GamesOwn: false };
             }
 
-            // The mode, and which card each slot holds under it, as the console's settings say.
+            // The mode, and which card each slot holds under it, as the runtime places them.
             private string ModeText()
             {
-                CardChoice choice = MemoryCards.Read(CoreSettings.StoredFor(_medium.Console, _owner._config), _medium);
-                if (!choice.Apart) return "Per game: each game keeps its own.";
-                string slots = string.Join(", ", Enumerable.Range(0, _medium.Slots.Count).Select(n => $"{_medium.NameFor(choice, n)} in {_medium.SlotLabel(n)}"));
-                return $"{(choice.Mode == MemoryCards.Shared ? "Shared" : "Named")}: {slots}.";
+                if (_medium.Mode is not ("shared" or "named")) return "Per game: each game keeps its own.";
+                string slots = string.Join(", ", _medium.Slots.Select(s => $"{s.Name} in {s.Label}"));
+                return $"{(_medium.Mode == "shared" ? "Shared" : "Named")}: {slots}.";
             }
 
             // The card the first slot holds under a shared or named mode, where it exists.
-            private string? AssignedCard()
-            {
-                CardChoice choice = MemoryCards.Read(CoreSettings.StoredFor(_medium.Console, _owner._config), _medium);
-                string path = _medium.PathOf(_medium.NameFor(choice, 0));
-                return choice.Apart && _cards.Any(c => c.Path == path) ? path : null;
-            }
+            private string? AssignedCard() =>
+                _medium.Mode is "shared" or "named" && _medium.Slots.FirstOrDefault().Path is { } path && _medium.Cards.Any(c => c.Path == path) ? path : null;
 
             private void Transfer(bool move)
             {
                 if (_target.SelectedItem is not string shown || PathOf(shown) is not { } target || _chosenCard is null || _chosenSave is null) return;
-                _owner.Done(move ? SaveMediaManager.MoveSave(_chosenCard, _chosenSave, target) : SaveMediaManager.CopySave(_chosenCard, _chosenSave, target));
+                _owner.Done(CardOutcome.Of(_owner._runtime, move ? CrystalAbi.CardsMove : CrystalAbi.CardsCopy, new { from = _chosenCard, save = _chosenSave, to = target }));
                 if (move) _chosenSave = null;
             }
+
+            // A name that is one file in the drawer: no separator, no leading dot, nothing a path would read otherwise.
+            private static bool IsName(string name) =>
+                name.Trim() == name && name.Length > 0 && !name.StartsWith('.') && name.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) < 0 && name.IndexOfAny(new[] { '/', '\\' }) < 0;
 
             private void Create()
             {
                 string name = (_name.Text ?? "").Trim();
-                if (!MemoryCards.IsName(name))
+                if (!IsName(name))
                 {
-                    _owner.Done(MediaOutcome.No($"\"{name}\" is not a name a card can have: no slash, no leading dot."));
+                    _owner.Done(new CardOutcome(false, $"\"{name}\" is not a name a card can have: no slash, no leading dot."));
                     return;
                 }
                 string path = _medium.PathOf(name);
-                MediaOutcome made = SaveMediaManager.New(path);
+                CardOutcome made = CardOutcome.Of(_owner._runtime, CrystalAbi.CardsNew, new { path });
                 if (made.Done) _chosenCard = path;
                 _name.Text = "";
                 _owner.Done(made);
@@ -233,7 +294,7 @@ namespace EmuSen.Mistress.Views
             private void Import()
             {
                 if (_chosenCard is null) return;
-                _owner.Done(SaveMediaManager.Import(_chosenCard, _cards.Where(c => c.GamesOwn).Select(c => c.Path).ToArray()));
+                _owner.Done(CardOutcome.Of(_owner._runtime, CrystalAbi.CardsImport, new { to = _chosenCard, from = _medium.Cards.Where(c => c.GamesOwn).Select(c => c.Path).ToArray() }));
             }
         }
     }

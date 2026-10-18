@@ -9,6 +9,9 @@ namespace EmuSen.Galaxia.Library
     // What a given ROM's save files are called, and where - see EmuSen_Galaxia.md §5.
     public static class SaveLibrary
     {
+        // A console started with nothing in it has no game, so its states, locks and words go by this name - see Diamond_Shell.md §1.5.
+        public static string ConsoleSessionName(string console) => $"{console} (no disc)";
+
         public const string SramExtension = ".srm";
         public const string StateExtension = ".state";
 

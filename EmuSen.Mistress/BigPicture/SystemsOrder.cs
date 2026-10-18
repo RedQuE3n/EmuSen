@@ -16,15 +16,18 @@ namespace EmuSen.Mistress.BigPicture
         ];
 
         // Each system's first release by its ES-DE name, the systems table's year - see EmuSen_Backend.md §12.
-        public static readonly IReadOnlyDictionary<string, int> FirstRelease =
-            EmuSen.Crystal.Systems.SystemPacks.All.ToDictionary(p => p.Entry.EsdeSystem, p => p.Entry.ReleaseYear, StringComparer.Ordinal);
+        public static IReadOnlyDictionary<string, int> FirstRelease =>
+            EmuSen.Mistress.Library.RuntimeCatalog.Systems.Where(s => s.EsdeSystem.Length > 0).GroupBy(s => s.EsdeSystem).ToDictionary(g => g.Key, g => g.First().ReleaseYear, StringComparer.Ordinal);
 
         // The shelves in the chosen order; a system with no known year goes last, and ties keep the order given.
         public static IReadOnlyList<T> Sort<T>(IReadOnlyList<T> shelves, string sorting, Func<T, string> system, Func<T, string> fullName) => sorting switch
         {
             BigPictureInterface.SortFullNames => shelves.OrderBy(fullName, StringComparer.OrdinalIgnoreCase).ToList(),
-            BigPictureInterface.SortReleaseYear => shelves.OrderBy(s => FirstRelease.GetValueOrDefault(system(s), int.MaxValue)).ToList(),
+            BigPictureInterface.SortReleaseYear => ByYear(shelves, system, FirstRelease),
             _ => shelves,
         };
+
+        private static List<T> ByYear<T>(IReadOnlyList<T> shelves, Func<T, string> system, IReadOnlyDictionary<string, int> years) =>
+            shelves.OrderBy(s => years.GetValueOrDefault(system(s), int.MaxValue)).ToList();
     }
 }

@@ -82,10 +82,10 @@ namespace EmuSen.WiseMan.Mistress
             Invoke(window, "LoadRom", _rom, "Mono.gb");
             WaitFor(() => Game(window).TotalFrames > 20);
 
-            EmulatorSession game = Game(window);
+            WindowGame game = Game(window);
             Assert.IsType<MercuryRtCore>(game.Core);
             Assert.Equal(runsAs, game.CoreName);
-            Assert.Equal(model, ((ICoreSettings)game.Core!).Get(MercuryRtCore.ModelKey));
+            Assert.Equal(model, ((ICoreSettings)game.Core).Get(MercuryRtCore.ModelKey));
             Assert.Equal("GB", (string)typeof(MainWindow).GetField("_activeConsole", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!);
             window.Close();
         });
@@ -101,8 +101,7 @@ namespace EmuSen.WiseMan.Mistress
             }
         }
 
-        private static EmulatorSession Game(MainWindow window) =>
-            (EmulatorSession)typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+        private static WindowGame Game(MainWindow window) => new(window);
 
         private static void Invoke(MainWindow window, string name, params object[] args) =>
             typeof(MainWindow).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic, null, Array.ConvertAll(args, a => a.GetType()), null)!.Invoke(window, args);

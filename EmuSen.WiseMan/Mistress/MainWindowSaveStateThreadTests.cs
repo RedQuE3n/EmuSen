@@ -108,7 +108,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.InRange(Game(window).TotalFrames, saved, saved + 60);
             // Read back through a MarsRT of its own, outside the window's session.
             string parked = Path.Combine(_root, "parked.state");
-            Game(window).Core!.SaveState(parked);
+            Game(window).Core.SaveState(parked);
             using (MarsRtCore loaded = Load(parked)) AssertOneInstant(loaded);
 
             window.Close();
@@ -171,8 +171,7 @@ namespace EmuSen.WiseMan.Mistress
             }
         }
 
-        private static EmulatorSession Game(MainWindow window) =>
-            (EmulatorSession)typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+        private static WindowGame Game(MainWindow window) => new(window);
 
         private static string StatePath(MainWindow window) =>
             (string)typeof(MainWindow).GetProperty("CurrentStatePath", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;

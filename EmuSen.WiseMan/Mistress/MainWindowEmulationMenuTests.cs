@@ -16,6 +16,7 @@ using EmuSen.Common;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Commands;
+using EmuSen.Mistress;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 
@@ -130,19 +131,47 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        // Decided 2026-10-18 by the tester: Reset presses the console's own reset where its core claims one, so the session and its machine stay - see EmuSen_Backend.md §14.13.
         [Fact]
-        public Task Reset_rebuilds_the_machine_and_stays_on_the_game_screen() => Session.Dispatch(() =>
+        public Task Reset_presses_the_console_s_reset_where_the_core_claims_one() => Session.Dispatch(() =>
         {
             var window = StartGame();
             object? before = Field(window, "_session");
             Assert.NotNull(before);
+            object machine = MistressGame.Core(window);
 
             Click(window, "ResetMenuItem");
 
-            Assert.NotSame(before, Field(window, "_session"));
+            Assert.Same(before, Field(window, "_session"));
+            Assert.Same(machine, MistressGame.Core(window));
             Assert.Equal("Reset: Playable.smc", Status(window).Text);
             Assert.True(GameFrame(window).IsVisible);
             Assert.False(LibraryView(window).IsVisible);
+
+            window.Close();
+        }, default);
+
+        // And where the core claims no reset, as MercuryRT does not, the game is started again in a new session, its cheats kept.
+        [Fact]
+        public Task Reset_starts_the_game_again_where_the_core_claims_no_reset() => Session.Dispatch(() =>
+        {
+            Assert.True(EmuSen.Cores.Nintendo.MercuryRT.MercuryRtCore.Available, EmuSen.Cores.Nintendo.MercuryRT.MercuryNative.Report);
+            string rom = Path.Combine(_romDir, "Mono.gb");
+            File.WriteAllBytes(rom, SyntheticGbRom.Build());
+            var window = new MainWindow();
+            window.Show();
+            Invoke(window, "LoadRom", rom, "Mono.gb");
+            object? before = Field(window, "_session");
+            Assert.NotNull(before);
+            MistressGame.Cheats(window).Import(new CheatFile { Cheats = { new CheatFileEntry { Kind = "RamPoke", Description = "kept", Writes = { new CheatFileWrite { Space = "CPUBUS", Address = "C000", Value = "01" } } } } });
+
+            Click(window, "ResetMenuItem");
+
+            Assert.NotNull(Field(window, "_session"));
+            Assert.NotSame(before, Field(window, "_session"));
+            Assert.Equal("Reset: Mono.gb", Status(window).Text);
+            Assert.Equal("kept", MistressGame.Cheats(window).Cheats.Single().Description);
+            Assert.True(GameFrame(window).IsVisible);
 
             window.Close();
         }, default);
@@ -173,8 +202,6 @@ namespace EmuSen.WiseMan.Mistress
             Assert.False(GameFrame(window).IsVisible);
             Assert.Equal("No ROM loaded", Status(window).Text);
             Assert.Null(Field(window, "_session"));
-            // Or an open console/dashboard keeps inspecting the core we dropped.
-            Assert.Null(Field(window, "_debugTarget"));
 
             Assert.False(Item(window, "CloseGameMenuItem").IsEnabled);
 
@@ -460,7 +487,10 @@ namespace EmuSen.WiseMan.Mistress
 
         // Private by design - the emulation menu is internal to MainWindow, not API.
         private static void Invoke(MainWindow window, string method) =>
-            typeof(MainWindow).GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
+            typeof(MainWindow).GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic, null, Type.EmptyTypes, null)!.Invoke(window, null);
+
+        private static void Invoke(MainWindow window, string method, string path, string name) =>
+            typeof(MainWindow).GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { typeof(string), typeof(string) }, null)!.Invoke(window, new object[] { path, name });
 
         private static object? Field(MainWindow window, string name) =>
             typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window);

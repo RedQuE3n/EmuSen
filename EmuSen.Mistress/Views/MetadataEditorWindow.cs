@@ -269,7 +269,7 @@ namespace EmuSen.Mistress.Views
 
         // ES-DE's one line under the editor's title: the file's name and its system in brackets (Q105).
         public static string SubtitleOf(string path) =>
-            EmuSen.Cores.CoreCatalog.ShelfByName(new EmuSen.Mistress.Library.RomEntry(path).Shelf)?.EsdeSystem is { Length: > 0 } system
+            EmuSen.Mistress.Library.RuntimeCatalog.ShelfByName(new EmuSen.Mistress.Library.RomEntry(path).Shelf)?.EsdeSystem is { Length: > 0 } system
                 ? $"{Path.GetFileName(path)} [{system.ToUpperInvariant()}]"
                 : Path.GetFileName(path);
 

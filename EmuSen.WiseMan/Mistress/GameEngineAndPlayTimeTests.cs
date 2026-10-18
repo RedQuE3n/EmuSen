@@ -111,8 +111,7 @@ namespace EmuSen.WiseMan.Mistress
                     var window = new MainWindow();
                     window.Show();
                     typeof(MainWindow).GetMethod("LoadRom", Hidden)!.Invoke(window, [rom, "System.z64"]);
-                    var session = (EmulatorSession)typeof(MainWindow).GetField("_session", Hidden)!.GetValue(window)!;
-                    string engine = session.Engine!;
+                    string engine = MistressGame.Of(window).Engine;
                     window.Close();
                     return engine;
                 }

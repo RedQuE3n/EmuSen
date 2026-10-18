@@ -9,7 +9,6 @@ using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.VisualTree;
-using EmuSen.Common;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Windowing;
@@ -20,23 +19,24 @@ namespace EmuSen.Mistress.Views
     // One tile of the reel: a held moment with its picture, or the present - see EmuSen_Settings_Reference.md §4.49.
     public sealed class ReelMoment
     {
-        private byte[]? _rgba;
-
-        public ReelMoment(long frame, double secondsBack, RewindThumbnail picture, bool isNow)
+        public ReelMoment(long frame, double secondsBack, byte[] rgba, int width, int height, bool isNow)
         {
             Frame = frame;
             SecondsBack = secondsBack;
-            Picture = picture;
+            Rgba = rgba;
+            Width = width;
+            Height = height;
             IsNow = isNow;
         }
 
         public long Frame { get; }
         public double SecondsBack { get; }
-        public RewindThumbnail Picture { get; }
         public bool IsNow { get; }
 
-        // Made when a tile first shows it, and kept while the reel is open.
-        public byte[] Rgba => _rgba ??= Picture.ToRgba();
+        // The moment's picture as the runtime kept it, RGBA rows.
+        public byte[] Rgba { get; }
+        public int Width { get; }
+        public int Height { get; }
 
         public string Label => IsNow ? "Now" : Ago(SecondsBack);
 
@@ -44,13 +44,13 @@ namespace EmuSen.Mistress.Views
             seconds < 10 ? $"{seconds:F2} s ago" : seconds < 60 ? $"{seconds:F1} s ago" : $"{(int)(seconds / 60)}:{(int)(seconds % 60):00} ago";
 
         // The held moments that have pictures, oldest first, then the present - see §4.49.
-        public static List<ReelMoment> From(IReadOnlyList<RewindMoment> moments, long now, double frameRateHz, RewindThumbnail? present)
+        public static List<ReelMoment> From(IReadOnlyList<(long Frame, byte[] Rgba, int Width, int Height)> moments, long now, double frameRateHz, (byte[] Rgba, int Width, int Height)? present)
         {
             double hz = frameRateHz > 0 ? frameRateHz : 60;
-            var reel = moments.Where(m => m.Thumbnail is not null && m.Frame <= now)
-                .Select(m => new ReelMoment(m.Frame, (now - m.Frame) / hz, m.Thumbnail!, isNow: false))
+            var reel = moments.Where(m => m.Frame <= now)
+                .Select(m => new ReelMoment(m.Frame, (now - m.Frame) / hz, m.Rgba, m.Width, m.Height, isNow: false))
                 .ToList();
-            if (present is not null) reel.Add(new ReelMoment(now, 0, present, isNow: true));
+            if (present is { } p) reel.Add(new ReelMoment(now, 0, p.Rgba, p.Width, p.Height, isNow: true));
             return reel;
         }
 
@@ -145,13 +145,13 @@ namespace EmuSen.Mistress.Views
         private static void Bind(Control tile, ReelMoment moment)
         {
             var panel = (StackPanel)tile;
-            ((RgbaImageView)panel.Children[0]).SetFrame(moment.Rgba, moment.Picture.Width, moment.Picture.Height);
+            ((RgbaImageView)panel.Children[0]).SetFrame(moment.Rgba, moment.Width, moment.Height);
             ((TextBlock)panel.Children[1]).Text = moment.Label;
         }
 
         private void Show(ReelMoment moment)
         {
-            _preview.SetFrame(moment.Rgba, moment.Picture.Width, moment.Picture.Height);
+            _preview.SetFrame(moment.Rgba, moment.Width, moment.Height);
             _caption.Text = moment.IsNow ? "Now - where the game is paused" : moment.Label;
         }
 

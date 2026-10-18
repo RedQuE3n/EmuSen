@@ -112,8 +112,8 @@ namespace EmuSen.WiseMan.Mistress
 
             StateRecord record = States(window).ReadState(SaveLibrary.StatePathFor(rom, 1, _states))!;
             Assert.Equal("N64", record.Console);
-            Assert.Equal(EmuSen.Cores.CoreFactory.Running(Game(window).Core!), record.Core);
-            Assert.Equal(((EmuSen.Cores.IStateFormat)Game(window).Core!).StateVersion, record.StateVersion);
+            Assert.Equal(EmuSen.Cores.CoreFactory.Running(MistressGame.Core(window)), record.Core);
+            Assert.Equal(((EmuSen.Cores.IStateFormat)MistressGame.Core(window)).StateVersion, record.StateVersion);
             Assert.Equal(RomHash.Md5(rom), record.RomMd5);
             Assert.Equal(new FileInfo(rom).Length, record.RomBytes);
             Assert.Equal("Counter.z64", record.RomFile);
@@ -121,7 +121,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // records.db, not a sidecar: the record outlives the window that wrote it, and the state loads under it - see EmuSen_Settings_Reference.md §4.64.
+        // The runtime's states.db, not a sidecar: the record outlives the window that wrote it, and the state loads under it - see EmuSen_Backend.md §14.12.
         [Fact]
         public Task A_state_saved_and_loaded_round_trips_its_record_through_the_database_and_writes_no_sidecar() => Session.Dispatch(() =>
         {
@@ -135,11 +135,10 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
 
             Assert.False(File.Exists(StateRecord.SidecarPathFor(state)));
-            Assert.True(File.Exists(Path.Combine(DataStore.Library, FileRecords.FileName)));
+            Assert.True(File.Exists(Path.Combine(DataStore.Library, EmuSen.Crystal.Managed.StateRecords.FileName)));
 
             window = Open();
             Assert.Equal(written, States(window).ReadState(state));
-            Assert.Equal("written", States(window).StateSource(state));
             Invoke(window, "LoadRom", rom, "Counter.z64");
             WaitFor(() => Field(window, "_currentRomMd5") is string);
             Status(window).Text = "";
@@ -148,10 +147,10 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        // The runtime's refusal by the record, in its words; a version the machine does not read is the runtime's and the core's to judge, held by StateRefusalTests - see EmuSen_Backend.md §14.12.
         [Theory]
         [InlineData("SNES", 0, "SNES core")]
-        [InlineData(null, 1, "newer build")]
-        public Task A_state_from_another_console_or_a_newer_build_is_refused_before_the_core_reads_it(string? console, int newer, string says) => Session.Dispatch(() =>
+        public Task A_state_from_another_console_is_refused_before_the_core_reads_it(string? console, int newer, string says) => Session.Dispatch(() =>
         {
             string rom = Counter();
             MainWindow window = Open();
@@ -239,8 +238,19 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         private static GameRecords Records(MainWindow w) => (GameRecords)Field(w, "_records")!;
-        private static FileRecords States(MainWindow w) => (FileRecords)Field(w, "_fileRecords")!;
-        private static EmulatorSession Game(MainWindow w) => (EmulatorSession)Field(w, "_session")!;
+        // The runtime's records, read and written as records.db's were.
+        private sealed class RuntimeStates
+        {
+            public StateRecord? ReadState(string path) => MistressGame.States.Read(path);
+
+            public bool WriteState(string path, StateRecord record)
+            {
+                MistressGame.States.Write(path, record);
+                return true;
+            }
+        }
+
+        private static RuntimeStates States(MainWindow w) => new();
         private static TextBlock Status(MainWindow w) => w.GetControl<TextBlock>("StatusText");
         private static RomEntry Entry(MainWindow w, string name) => ((IReadOnlyList<RomEntry>)Field(w, "_shownEntries")!).Single(e => e.FileName == name);
         private static string[] Shown(MainWindow w) => ((IReadOnlyList<RomEntry>)Field(w, "_shownEntries")!).Select(e => e.FileName).ToArray();

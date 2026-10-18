@@ -194,6 +194,16 @@ namespace EmuSen.WiseMan.Crystal
             CrystalSessionAbi.CheatDbPrune, CrystalSessionAbi.CheatDbUpdate, CrystalSessionAbi.CheatChtParse, CrystalSessionAbi.CheatFiles, CrystalSessionAbi.CheatFileRead,
         };
 
+        // A cheat op that changes the list and answers a value, not a record, is made once through the binding: the copy-out protocol's two calls would make it twice.
+        [Fact]
+        public void A_cheat_change_through_the_binding_is_made_once()
+        {
+            using CrystalSession s = _f.Open(_f.Game("Cheats.tst"));
+            const string file = "{\"Cheats\":[{\"Kind\":\"RamPoke\",\"Description\":\"One\",\"Enabled\":true,\"Writes\":[{\"Space\":\"RAM\",\"Address\":\"10\",\"Value\":\"01\"}]}]}";
+            Assert.Equal(1, s.CheatChange(CrystalSessionAbi.CheatImport, file));
+            Assert.Equal(1, Json(s.CheatOp(CrystalSessionAbi.CheatList, "{}")).GetProperty("cheats").GetArrayLength());
+        }
+
         // cheat_op with no game: the database's status answers, and every op a game's session alone answers is NO_SESSION.
         [Fact]
         public void Cheat_ops_with_no_game_answer_only_those_that_need_none()

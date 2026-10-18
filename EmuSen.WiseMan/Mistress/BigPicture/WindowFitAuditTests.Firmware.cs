@@ -49,7 +49,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Window top = Sheets(window).Current ?? window.OwnedWindows.OfType<PreferencesWindow>().Last();
                 var preferences = Assert.IsType<PreferencesWindow>(top);
                 Control root = Sheets(window).SheetOf(top) ?? top;
-                IReadOnlyList<FirmwareItem> items = FirmwareOverview.Build().SelectMany(s => s.Items).ToList();
+                IReadOnlyList<FirmwareRow> items = FirmwareView.Current.Systems.SelectMany(s => s.Items).ToList();
                 Assert.Contains(items, i => i.FoundIn == FirmwareItem.YourFolder);
                 Assert.Contains(items, i => i.FoundIn == FirmwareItem.EmuSensFolder);
                 Assert.Contains(items, i => i.WrongSize);
@@ -76,7 +76,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     // Every row with the focus on it, since the footer's words are the focused row's.
                     Assert.Equal(PreferencesWindow.FirmwareTab, preferences.Form!.Menu.Title);
                     List<Control> rows = root.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "BigMenuRows").Children.Where(c => c is Button or PathPickerRow).ToList();
-                    Assert.Equal(new[] { FirmwarePane.FolderLabel, FirmwarePane.ChosenLabel, FirmwarePane.FolderRowLabel }.Concat(FirmwareOverview.Build().SelectMany(s => s.Items.Count == 0 ? [s.Name] : s.Items.Select(FirmwarePane.MenuLabel))), rows.Select(MenuLabelOf));
+                    Assert.Equal(new[] { FirmwarePane.FolderLabel, FirmwarePane.ChosenLabel, FirmwarePane.FolderRowLabel }.Concat(FirmwareView.Current.Systems.SelectMany(s => s.Items.Count == 0 ? [s.Name] : s.Items.Select(FirmwarePane.MenuLabel))), rows.Select(MenuLabelOf));
                     var picker = Assert.IsType<PathPickerRow>(rows[1]);
                     Assert.Equal(ChosenFirmware, picker.Path);
                     // A file's name and EmuSen's folder's are drawn in their own case, since a player types them as they read; the look's case is for words.
@@ -90,7 +90,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                         var focused = (Control)window.FocusManager!.GetFocusedElement()!;
                         Assert.True(ReferenceEquals(rows[i], focused) || focused.FindAncestorOfType<PathPickerRow>() == rows[i], $"{name}: row {i} does not have the focus");
                         Assert.False(string.IsNullOrEmpty(preferences.Form.Menu.Footer), $"{name}: no footer on row {i}");
-                        if (i == 2) Assert.Equal((FirmwareOverview.Folder, EmuSen.LunaP.Media.LetterCase.None), (preferences.Form.Menu.Footer, preferences.Form.Menu.FooterLetterCase));
+                        if (i == 2) Assert.Equal((FirmwareView.Current.Folder, EmuSen.LunaP.Media.LetterCase.None), (preferences.Form.Menu.Footer, preferences.Form.Menu.FooterLetterCase));
                         else Assert.Null(preferences.Form.Menu.FooterLetterCase);
                         // Select joins the hints only on the folder's row, the one row of the page that takes a choice.
                         Assert.Equal(i == 1 ? ["Select", "Back", "Choose"] : ["Back", "Choose"], preferences.Form.Menu.Hints!.Select(h => h.Label));

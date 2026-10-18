@@ -26,7 +26,7 @@ namespace EmuSen.Mistress.Views
 
         private const double PadStickThreshold = 0.55;
 
-        private bool GameOnScreen => GameFrame.IsVisible && _session is { IsRomLoaded: true };
+        private bool GameOnScreen => GameFrame.IsVisible && _session is not null;
 
         // Asked for by the setting, by --bigscreen, or by a Deck's Game Mode, which SteamDeck=1 alone does not tell from Desktop Mode - see EmuSen_Settings_Reference.md §4.43.
         private bool WantsBigScreen() => WantsBigScreen(_appSettings.BigScreen, Environment.GetCommandLineArgs(), Environment.GetEnvironmentVariable);
@@ -168,7 +168,7 @@ namespace EmuSen.Mistress.Views
                 case UiButton.Options: if (LibraryList.Selected is EmuSen.Mistress.Library.RomEntry chosen) ToggleFavourite(chosen); break;
                 case UiButton.Accept: LaunchSelectedLibraryEntry(); break;
                 case UiButton.Search: SearchFromThePad(); break;
-                case UiButton.Back: if (!LeaveTheSearchBox() && _session is { IsRomLoaded: true }) ToggleLibrary(); break;
+                case UiButton.Back: if (!LeaveTheSearchBox() && _session is not null) ToggleLibrary(); break;
                 case UiButton.Menu: OpenPadMenu(); break;
             }
         }
@@ -203,7 +203,7 @@ namespace EmuSen.Mistress.Views
         // The console filter stepped round, as choosing it from the bar would do.
         private void StepLibraryConsole(int by)
         {
-            IReadOnlyList<string> choices = EmuSen.Cores.CoreCatalog.FilterChoices;
+            IReadOnlyList<string> choices = EmuSen.Mistress.Library.RuntimeCatalog.FilterChoices;
             int at = Math.Max(0, choices.ToList().IndexOf(LibraryFilter.Facet as string ?? SelectedConsole));
             string next = choices[(at + by + choices.Count) % choices.Count];
 
@@ -213,7 +213,7 @@ namespace EmuSen.Mistress.Views
 
         private string PadLibraryHint()
         {
-            string back = _session is { IsRomLoaded: true } ? $"B  Back to {_currentDisplayName}      " : "";
+            string back = _session is not null ? $"B  Back to {_currentDisplayName}      " : "";
             string moves = GridShown ? "L1 R1  Console      L2 R2  Top, End" : "L1 R1  Page      L2 R2  Top, End      Left Right  Console";
             return PadHints.Face($"A  Play      {back}Y  Search      Select  Favourite      {moves}      Start  Menu");
         }

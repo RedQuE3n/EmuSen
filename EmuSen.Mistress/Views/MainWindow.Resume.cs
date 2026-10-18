@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
-using EmuSen.Common;
+using EmuSen.Crystal.Client;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.BigPicture;
@@ -25,7 +25,7 @@ namespace EmuSen.Mistress.Views
         {
             await PrepareGameAsync(path);
             if (await ChooseResumeAsync(path) is not { } choice) return;
-            Task<EmuSen.Cores.ICore>? loading = bigPicture is not null ? LoadUnderLaunchScreen(path) : null;
+            Task<GameSession>? loading = bigPicture is not null ? LoadUnderLaunchScreen(path) : null;
             if (bigPicture is not null && !await ShowLaunchScreenAsync(bigPicture))
             {
                 LetGo(loading);
@@ -49,26 +49,20 @@ namespace EmuSen.Mistress.Views
             if (failed) PadNotice.Show(StatusText.Text ?? $"Failed to load {displayName}");
         }
 
-        // A core loaded for a launch that will not happen is disposed once its load ends.
-        private static void LetGo(Task<EmuSen.Cores.ICore>? loading) =>
-            _ = loading?.ContinueWith(t => (t.Result as IDisposable)?.Dispose(), TaskContinuationOptions.OnlyOnRanToCompletion);
+        // A session opened for a launch that will not happen is closed once its open ends.
+        private static void LetGo(Task<GameSession>? loading) =>
+            _ = loading?.ContinueWith(t => t.Result.Dispose(), TaskContinuationOptions.OnlyOnRanToCompletion);
 
-        // A v1 engine's load begun on a worker as the launch screen opens, so the screen's time covers the disc's read; null loads it after, as before - see Diamond_Players.md §12.8.3.
-        private Task<EmuSen.Cores.ICore>? LoadUnderLaunchScreen(string path)
+        // The game opened on a worker as the launch screen opens, so the screen's time covers the disc's read; null opens it after, as before - see Diamond_Players.md §12.8.3.
+        private Task<GameSession>? LoadUnderLaunchScreen(string path)
         {
-            if (EarlyLoader is not { } load || LaunchScreen.DurationOf(_appSettings.BigPictureInterface.LaunchScreenDuration) <= TimeSpan.Zero || path == _currentRomPath) return null;
-            string? engine = EngineChosenFor(path);
-            if (!EmuSen.Cores.CoreFactory.RunsOnV1Engine(path, engine)) return null;
-            // The default load is lent the device the picture is presented on; a test's own loader is run as it is given.
-            Func<EmuSen.Cores.IDeviceLend?> lender = LendDevice;
-            EmuSen.Cores.CoreOptions options = CoreOptions;
-            return ReferenceEquals(load, DefaultEarlyLoader) ? Task.Run(() => EmuSen.Cores.CoreFactory.Loaded(path, headless: true, engine, lender, options)) : Task.Run(() => load(path, engine));
+            if (EarlyLoader is not { } open || LaunchScreen.DurationOf(_appSettings.BigPictureInterface.LaunchScreenDuration) <= TimeSpan.Zero || path == _currentRomPath) return null;
+            CrystalOpen what = new() { Path = path };
+            return Task.Run(() => open(what));
         }
 
-        // What loads a game's core under the launch screen; a test gives one it can hold back, or none where its clock is stepped.
-        internal Func<string, string?, EmuSen.Cores.ICore>? EarlyLoader { get; set; } = DefaultEarlyLoader;
-
-        private static readonly Func<string, string?, EmuSen.Cores.ICore> DefaultEarlyLoader = (path, engine) => EmuSen.Cores.CoreFactory.Loaded(path, headless: true, engine);
+        // What opens a game under the launch screen; a test gives one it can hold back, or none where its clock is stepped.
+        internal Func<CrystalOpen, GameSession>? EarlyLoader { get; set; }
 
         private string ResumeStatePath(string romPath) => SaveLibrary.ResumeStatePathFor(romPath, _appSettings.StateDirectory);
 
@@ -77,12 +71,8 @@ namespace EmuSen.Mistress.Views
         {
             string state = ResumeStatePath(romPath);
             if (!File.Exists(state)) return ResumeChoice.Restart;
-            StateRecord? record = _fileRecords.ReadState(state);
-            if (Refusal(record, romPath, null) is string refused)
-            {
-                StatusText.Text = $"{refused} Starting from the beginning.";
-                return ResumeChoice.Restart;
-            }
+            // Whether the state may load is the runtime's to say when it is loaded; only another copy of the game is asked about here - see EmuSen_Backend.md §14.12.
+            StateRecord? record = StateRecordsOnApi.Read(Runtime, state);
 
             switch (_appSettings.ResumeOnLaunch)
             {
@@ -90,7 +80,7 @@ namespace EmuSen.Mistress.Views
                 case AppSettings.ResumeNever: return ResumeChoice.Restart;
             }
 
-            if (_session is { IsRomLoaded: true }) PauseEmulation();
+            if (_session is not null) PauseEmulation();
             var ask = new ResumeWindow(Path.GetFileNameWithoutExtension(romPath), SaveLibrary.PicturePathFor(state), File.GetLastWriteTime(state));
             ResumeChoice? choice = await SheetLayer.ShowDialog<ResumeChoice?>(ask, this);
             if (choice is { } chosen && ask.Remember)
@@ -102,61 +92,37 @@ namespace EmuSen.Mistress.Views
             return choice;
         }
 
-        // Only with the emulation thread stopped; a failure is reported, never thrown at a closing window.
+        // Only with the emulation thread stopped; the runtime writes the state, its picture and its record. A failure is reported, never thrown at a closing window.
         private void WriteResumeState()
         {
-            if (_session is not { IsRomLoaded: true } session || _currentRomPath is not string rom) return;
-            string path = ResumeStatePath(rom);
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                session.SaveState(path);
-                WriteStatePicture(session, path);
-                WriteStateRecord(session, path, rom);
-            }
-            catch (Exception ex)
+            if (_session is not { } session || _currentRomPath is null) return;
+            try { session.Crystal.SaveResume(); }
+            catch (CrystalException ex)
             {
                 ErrorLog.Error("states", "Could not save where you left off", ex);
                 StatusText.Text = $"Could not save where you left off: {ex.Message}";
             }
         }
 
-        // On the thread that owns the core, so the picture is the frame the state holds - see EmuSen_Galaxia.md §5.2.
-        private static void WriteStatePicture(EmulatorSession session, string statePath) =>
-            WritePicture(session, SaveLibrary.PicturePathFor(statePath));
-
-        private static void WritePicture(EmulatorSession session, string picturePath)
+        // The picture on show as a PNG, the rows the screen repeats written out, as a state's picture is - see EmuSen_Settings_Reference.md §4.34.
+        private static void WritePicture(GameSession session, string picturePath)
         {
-            byte[] rgba = session.GetFrameBufferRgba();
-            int width = session.ScreenWidth, height = session.ScreenHeight, repeat = Math.Max(1, session.RowRepeat);
-            if (rgba.Length < width * height * 4) return;
-            if (repeat > 1)
-            {
-                var tall = new byte[width * height * repeat * 4];
-                int row = width * 4;
-                for (int y = 0; y < height; y++)
-                    for (int r = 0; r < repeat; r++)
-                        Buffer.BlockCopy(rgba, y * row, tall, (y * repeat + r) * row, row);
-                rgba = tall;
-                height *= repeat;
-            }
-            EmuSen.Common.Imaging.PngFile.Write(picturePath, rgba, width, height);
+            if (CurrentPicture(session) is { } shown) EmuSen.Serenity.Imaging.FrameImageWriter.SavePng(shown.Rgba, shown.Width, shown.Height, picturePath);
         }
 
-        // Null when the state loaded; otherwise why it did not, and the caller starts the game afresh.
-        private string? TryResume(EmulatorSession session, string statePath, string romPath)
+        // Null when the state loaded; otherwise why it did not, in the runtime's or the core's words, and the caller starts the game afresh.
+        private string? TryResume(GameSession session, string path)
         {
-            StateRecord? record = _fileRecords.ReadState(statePath);
-            if (Refusal(record, romPath, session) is string refused) return $"Could not resume, started from the beginning: {refused}";
+            StateRecord? record = StateRecordsOnApi.Read(Runtime, path);
             try
             {
-                session.LoadState(statePath);
+                session.Crystal.LoadState(path);
                 return null;
             }
-            catch (Exception ex)
+            catch (CrystalException ex)
             {
-                ErrorLog.Error("states", "Could not resume", ex, statePath);
-                return $"Could not resume, started from the beginning: {ex.Message}{Provenance(record)}";
+                ErrorLog.Error("states", "Could not resume", ex, path);
+                return $"Could not resume, started from the beginning: {ex.Message}{(ex.Status == EmuSen.Crystal.Client.Contract.CrystalAbi.StateRefused ? "" : Provenance(record))}";
             }
         }
 

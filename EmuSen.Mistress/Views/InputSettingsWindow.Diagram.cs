@@ -9,7 +9,6 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
-using EmuSen.Cores;
 using EmuSen.Endymion.Input;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Models;
@@ -181,10 +180,10 @@ namespace EmuSen.Mistress.Views
         // The pad the shown player's port is set to, where the console's engine has a setting for it; the drawing follows it.
         private ControllerLayout LayoutOf(string console)
         {
-            var config = GraphicsConfig.Load();
             int player = PlayerOf(console);
             string? running = RunningControllers(console) is { } list && player <= list.Count ? list[player - 1] : null;
-            return ControllerDiagrams.LayoutFor(console, running ?? CoreCatalog.ControllerFor(console, player - 1, CoreSettings.StoredFor(console, config)));
+            IReadOnlyList<string?> players = EmuSen.Mistress.Library.RuntimeCatalog.PadNow(console).Players;
+            return ControllerDiagrams.LayoutFor(console, running ?? (player <= players.Count ? players[player - 1] : null));
         }
 
         // The drawing of a console whose pad differs by port is drawn again for the player now shown.
@@ -207,7 +206,7 @@ namespace EmuSen.Mistress.Views
         {
             foreach ((string console, ControllerDiagram diagram) in _diagrams)
             {
-                foreach (PadControl control in CoreCatalog.ControlsFor(console))
+                foreach (PadControl control in EmuSen.Mistress.Library.RuntimeCatalog.ControlsFor(console))
                 {
                     string region = ControllerDiagrams.RegionFor(console, control);
                     bool keyWanted = _listeningForKey == (console, control), padWanted = _listeningForPad == (console, control);
@@ -245,7 +244,7 @@ namespace EmuSen.Mistress.Views
         // A region chosen on the drawing listens for a key and, for a button, a pad button as well; whichever comes first is bound.
         private void ChooseRegion(string console, string region)
         {
-            if (ControllerDiagrams.ControlFor(console, region, CoreCatalog.ControlsFor(console)) is not { } control) return;
+            if (ControllerDiagrams.ControlFor(console, region, EmuSen.Mistress.Library.RuntimeCatalog.ControlsFor(console)) is not { } control) return;
             if (_testing) SetTesting(false);
             CancelCapture();
             StartListeningForKey(console, control);
@@ -274,7 +273,7 @@ namespace EmuSen.Mistress.Views
             foreach ((string console, ControllerDiagram diagram) in _diagrams)
             {
                 bool live = console == ShownConsole && Capturing == PadCapture.None;
-                foreach (PadControl control in CoreCatalog.ControlsFor(console))
+                foreach (PadControl control in EmuSen.Mistress.Library.RuntimeCatalog.ControlsFor(console))
                     diagram.SetPressed(ControllerDiagrams.RegionFor(console, control), live && Held(console, control));
                 foreach ((string stick, PadAxis x, PadAxis y) in StickAxes(diagram.Layout))
                     diagram.SetStick(stick, live ? StickValue(console, x) : 0, live ? StickValue(console, y) : 0);
@@ -353,7 +352,7 @@ namespace EmuSen.Mistress.Views
             }
 
             // The stick stands in for the cross only on a console that does not read it as a stick - see EmuSen_Input.md §7.3.
-            bool stickIsAnalog = CoreCatalog.AxesFor(console).Contains(PadAxis.LeftX);
+            bool stickIsAnalog = EmuSen.Mistress.Library.RuntimeCatalog.AxesFor(console).Contains(PadAxis.LeftX);
             if (gamepad.AnalogStickAsDpad && !stickIsAnalog && button is PadButton.Up or PadButton.Down or PadButton.Left or PadButton.Right)
             {
                 double threshold = Math.Clamp(gamepad.StickDeadzone, 0.05, 0.95);

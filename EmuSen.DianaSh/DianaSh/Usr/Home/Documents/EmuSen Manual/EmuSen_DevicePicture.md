@@ -819,6 +819,10 @@ The plan of §16.3, in its order:
    the device path draws; Mistress lends at load (and in the launch screen's early load) and offers the picture on the
    device when the core says it is there and the window presents on the device, reading pixels back only for a
    rewind's picture. `EMUSEN_DEVICE_LEND=0` lends nothing.
+   *Since 2026-10-18 (`EmuSen_Backend.md` §14.12, §14.13) the lend is the frontend API's runtime's: Mistress hands
+   `GameFrameControl.LendableDevice` to `open`, the runtime makes each machine's lend through the platform library and
+   takes inside `frame`, and Mistress borrows `picture_lend` with `SlangLend.Borrow`; `SlangDeviceLend` and `TryLend`
+   are gone.*
 5. **The setting's cost** in Diamond's four hints now reads "a frame later unless the frontend presents it on the
    same card".
 

@@ -5,9 +5,16 @@ using EmuSen.Crystal.Session;
 
 namespace EmuSen.Crystal.Managed
 {
-    // The functions 1.1 added: the device's lend, the raw picture, the states' records, a game's settings with no session, and cheat_op with no game - see EmuSen_Backend.md §14.12.
+    // The functions 1.1 added: the shelves, the device's lend, the raw picture, the states' records, a game's settings with no session, and cheat_op with no game - see EmuSen_Backend.md §14.12.
     public static unsafe partial class ManagedCrystal
     {
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static long emusen_crystal_shelves(nint rt, byte* out_, nuint len)
+        {
+            try { RuntimeOf(rt); return Copy(ManagedRuntime.ShelvesJson(), out_, len); }
+            catch (Exception e) { return Fail(e); }
+        }
+
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static nint emusen_crystal_picture_lend(nint rt, uint session)
         {

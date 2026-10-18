@@ -27,14 +27,6 @@
     <!-- Native X11 backend - opted into explicitly by LunaApp, which
          EmuSen.Shell's Program.cs starts (Linux only), matching EmuSen.Mistress. -->
     <PackageReference Include="Avalonia.X11" Version="12.1.0" />
-    <!-- Imaging/FrameImageWriter.cs encodes screenshots/frame-recording
-         PNGs directly via SKImage.Encode, not Avalonia's
-         WriteableBitmap.Save - see that file's own comment for why.
-         Already a transitive dependency via EmuSen.Serenity's own
-         PackageReference; referenced explicitly here too since Hotaru
-         imports SkiaSharp types directly, matching Serenity's own
-         "don't rely on an implicit transitive version" convention. -->
-    <PackageReference Include="SkiaSharp" Version="3.119.4" />
   </ItemGroup>
 
   <ItemGroup>

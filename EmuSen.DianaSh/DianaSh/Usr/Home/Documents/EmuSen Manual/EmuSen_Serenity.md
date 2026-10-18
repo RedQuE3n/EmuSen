@@ -338,6 +338,15 @@ The first decision, on 2026-10-17, was that the window opens over a session's se
 
 Decided 2026-10-17 by the tester: the readout form, in place of the service table.
 
+Two more came with Mistress's move (`EmuSen_Backend.md` §14.13), each naming only Serenity's, SkiaSharp's or the BCL's
+types:
+
+- **`FrameImageWriter.SavePng`** encodes an RGBA8888 picture as PNG with SkiaSharp. It moved here from Hotaru, whose F3
+  screenshot it wrote, because Mistress's screenshots and pictures now copy the API's picture too.
+- **`GameFrameControl.LendableDevice`** is the presenter's Vulkan device, or null while the picture is not presented on
+  the device. A frontend hands its `DeviceHandle` to the runtime in `open_params`, and the runtime lends each machine
+  from it (§14.12 of the backend page). It replaced `TryLend`, which made a lend in the frontend for a core loaded there.
+
 ---
 
 ## 3. The built-in shaders

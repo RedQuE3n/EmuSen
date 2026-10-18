@@ -173,7 +173,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             int opened = EmuSen.WiseMan.Mistress.NoSteam.Launcher.Opened.Count;
             WindowFitAuditTests.SavePicture(s.Window, $"PreferencesFirmware-Themed-{width}x{height}");
             Control[] rows = Rows(s);
-            var systems = EmuSen.Cores.FirmwareOverview.Build();
+            var systems = FirmwareView.Current.Systems;
             // The second row is the player's folder, a text row; every other row is a fact's.
             var folder = Assert.IsType<PathPickerRow>(rows[1]);
             Control[] facts = rows.Where(r => r != folder).ToArray();

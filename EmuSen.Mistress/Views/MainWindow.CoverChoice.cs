@@ -42,7 +42,7 @@ namespace EmuSen.Mistress.Views
             {
                 if (entry.FullPath == path || !Listed(entry) || LeadsTo(entry.FullPath, path)) continue;
                 if (CoverPathFor(entry) is not string cover) continue;
-                string console = EmuSen.Cores.CoreCatalog.ShelfByName(entry.Shelf)?.Label ?? entry.Shelf;
+                string console = EmuSen.Mistress.Library.RuntimeCatalog.ShelfByName(entry.Shelf)?.Label ?? entry.Shelf;
                 candidates.Add(new CoverCandidate(entry.FullPath, CoverTitle(entry), console, cover));
             }
             return candidates;

@@ -27,7 +27,10 @@ namespace EmuSen.Mistress.Input
         };
 
         // The Genesis and its attachments, which plug into it and share its pads - see EmuSen_Serenity.md §3.12.
-        public static bool IsGenesis(string console) => string.Equals(EmuSen.Cores.CoreCatalog.HostOf(console), EmuSen.Crystal.Systems.Genesis.GenesisSystems.MegaDrive.Console, StringComparison.OrdinalIgnoreCase);
+        public static bool IsGenesis(string console) => string.Equals(Library.RuntimeCatalog.HostOf(console), Library.RuntimeCatalog.ConsoleOfSystem(MegaDriveSystem), StringComparison.OrdinalIgnoreCase);
+
+        // The systems table's id of the console whose pads the Genesis layouts draw.
+        private const string MegaDriveSystem = "md";
 
         // The Genesis pad's buttons by the RetroPad controls the core gives them: A on Y, C on A, X on L, Y on X, Z on R and Mode on Select - see Nephrite_Plan.md §4.2.
         private static readonly Dictionary<PadControl, string> Genesis = new()

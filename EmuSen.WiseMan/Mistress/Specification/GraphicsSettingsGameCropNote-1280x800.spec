@@ -35,8 +35,8 @@ tree
           20 TextBlock at=653,216,85,36 box=85,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="SEGA CD" layout=84.18,36 limit=641,210,109,48 owner=19 paints=#86868AFF role=text size=30 text="SEGA CD"
         21 TabItem at=750,210,156,48 by=clip drawn focus heard=PLAYSTATION limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text=PlayStation
           22 TextBlock at=762,216,132,36 box=132,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=PLAYSTATION layout=131.91,36 limit=750,210,156,48 owner=21 paints=#86868AFF role=text size=30 text=PLAYSTATION
-        23 ScrollViewer at=286,260,709,342 by=clip fades=b limit=274,260,733,342 overflow=33 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=286,260,709,342
-          24 StackPanel at=286,268,709,367 by=scroll in=23 limit=286,260,709,342 role=none seen=286,268,709,334
+        23 ScrollViewer at=286,260,709,342 by=clip fades=b limit=274,260,733,342 overflow=249 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=286,260,709,342
+          24 StackPanel at=286,268,709,583 by=scroll in=23 limit=286,260,709,342 role=none seen=286,268,709,334
             25 FieldRow at=286,268,709,129 by=scroll heard="Shader and shape" in=23 limit=286,260,709,342 paints=#9C9CA0FF role=group
               26 TextBlock at=286,268,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Shader and shape" in=23 layout=145.94,28.8 limit=286,268,709,129 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Shader and shape"
               27 HintText at=286,301,709,48 box=709,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square." in=23 layout=699.98,48 limit=286,268,709,129 paints=#86868AFF part role=text size=20 text="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square."
@@ -55,14 +55,14 @@ tree
                   40 TextBlock at=298,475,122,32 box=122,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Whole picture" in=23 layout=121.45,31.2 limit=298,475,122,32 owner=39 paints=#9C9CA0FF role=text size=26 text="Whole picture"
                   41 ViewboxContainer at=430,488.73,12,6.54 by=clip in=23 limit=430,488.73,12,6.54 nohit role=none
                 42 HintText at=286,518,709,48 box=709,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Cobalt Harbor (Synthetic) has a crop of its own, which replaces this while it runs. Change it with Crop This Game in the game's options." in=23 layout=681.36,48 limit=286,409,709,157 name=SNES.Overscan.Note paints=#86868AFF role=text size=20 text="Cobalt Harbor (Synthetic) has a crop of its own, which replaces this while it runs. Change it with Crop This Game in the game's options."
-            43 EmptyState at=376,578,528,57 by=scroll heard="No core settings yet" in=23 limit=286,260,709,342 paints=#86868AFF,#9C9CA0FF role=text seen=376,578,528,24
-              44 TextBlock at=558,578,163,29 box=163,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="No core settings yet" in=23 layout=162.74,28.8 limit=376,578,528,57 name=PART_Message paints=#86868AFF part role=text seen=558,578,163,24 size=24 text="No core settings yet"
+            43 FieldRow at=286,578,709,273 by=scroll heard="SA-1 catch-up" in=23 limit=286,260,709,342 paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF role=group seen=286,578,709,24
+              44 TextBlock at=286,578,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="SA-1 catch-up" in=23 layout=112.01,28.8 limit=286,578,709,273 name=PART_Label paints=#9C9CA0FF part role=text seen=286,578,709,24 size=24 text="SA-1 catch-up"
 focus 29
-edge 4 up 31
+edge 4 up 13
 edge 4 down same
-edge 4 left 39
+edge 4 left path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0
 edge 4 right 6
-edge 6 up 31
+edge 6 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0
 edge 6 down same
 edge 6 left 4
 edge 6 right same
@@ -75,7 +75,9 @@ edge 29 right 31
 edge 31 up 13
 edge 31 down 39
 edge 39 up 29
-edge 39 down 4
+edge 39 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0 up 39
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0 down 4
 press pageup focus="Button 'Shaders...'" tab=GB title="Graphics Settings" top=GraphicsSettingsWindow
 press pagedown focus="Button 'Shaders...'" tab=SNES title="Graphics Settings" top=GraphicsSettingsWindow
 press first focus="Button 'Shaders...'" tab=SNES title="Graphics Settings" top=GraphicsSettingsWindow

@@ -335,7 +335,7 @@ namespace EmuSen.Mistress.Views
         };
 
         private static string ConsoleOf(string system) =>
-            EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder.FirstOrDefault(s => s.EsdeSystem == system)?.Name ?? system;
+            EmuSen.Mistress.Library.RuntimeCatalog.Shelves.FirstOrDefault(s => s.EsdeSystem == system)?.Name ?? system;
 
         private static string Plural(int n, string what) => n == 1 ? $"1 {what}" : $"{n:N0} {what}s";
 

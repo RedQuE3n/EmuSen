@@ -12,9 +12,8 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using EmuSen.Common;
-using EmuSen.Common.Firmware;
-using EmuSen.Cores;
+using EmuSen.Crystal.Client;
+using EmuSen.Crystal.Client.Contract;
 using EmuSen.Endymion;
 using EmuSen.Endymion.Input;
 using EmuSen.Serenity;
@@ -30,8 +29,6 @@ using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.Crystal.Cheats;
-using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Dev;
 using EmuSen.Galaxia.Input;
 
@@ -56,7 +53,10 @@ namespace EmuSen.Mistress.Views
         private readonly ActionGroup _speeds = new();
         private readonly ActionGroup _slots = new();
 
-        private EmulatorSession? _session;
+        // The game or empty console open on the frontend API; replaced only with the emulation thread stopped - see EmuSen_Backend.md §14.13.
+        private GameSession? _session;
+
+        private static CrystalRuntime Runtime => CoreSettings.Runtime;
 
         // Over the frame only, so the pointer stays visible on the menu - see §4.20.
         private IdleCursor? _idleCursor;
@@ -72,12 +72,15 @@ namespace EmuSen.Mistress.Views
 
         internal static int RewindIntervalFor(double frameRateHz) => Math.Max(1, (int)Math.Round(frameRateHz / RewindSnapshotsPerSecond));
 
-        private readonly EmuSen.Common.SpeedController _speed = new();
-        // Pictures for the reel ride along with each snapshot - see EmuSen_Settings_Reference.md §4.49.
-        private readonly EmuSen.Common.RewindBuffer _rewind = new() { Enabled = true, ThumbnailWidth = EmuSen.Common.RewindBuffer.DefaultThumbnailWidth };
+        // The runtime keeps the history; the reel's pictures ride along with each snapshot this many pixels wide - see EmuSen_Settings_Reference.md §4.49.
+        internal const int ReelPictureWidth = 160;
+        private int _rewindInterval = 30;
 
-        // What the Speed menu picked, read by EmulationLoop - see EmuSen_Settings_Reference.md §4.13.
-        private volatile int _baseSpeedPercent = EmuSen.Common.SpeedController.NormalPercent;
+        // The Speed menu's choices, which the window sets through the API: the runtime owns the speed itself - see EmuSen_Settings_Reference.md §4.13.
+        internal const int NormalPercent = 100, TurboPercent = 300, SlowMotionPercent = 25, UnthrottledPercent = 0;
+
+        // What the Speed menu picked - see EmuSen_Settings_Reference.md §4.13.
+        private volatile int _baseSpeedPercent = NormalPercent;
 
         // Which save slot Save/Load State act on, 1-8 - see §4.13.
         private int _stateSlot = 1;
@@ -90,21 +93,20 @@ namespace EmuSen.Mistress.Views
         private Thread? _emuThread;
         private volatile bool _running;
 
-        // Signalled means running; a stop always Sets before Join - see `man pause` and §4.21.
-        private readonly ManualResetEventSlim _pauseSignal = new(initialState: true);
+        // The session's run control holds a pause; this mirrors it for the menus, set by the window and by the session's run events - see `man pause`.
+        private volatile bool _paused;
 
-        public bool IsPaused => !_pauseSignal.IsSet;
+        public bool IsPaused => _paused;
 
-        // Save and load, handed to the thread that owns the core and run between frames or woken while paused - see §4.21a.
-        private readonly System.Collections.Concurrent.ConcurrentQueue<Action<EmulatorSession>> _coreRequests = new();
-        private readonly ManualResetEventSlim _requestSignal = new(initialState: false);
-        private WaitHandle[]? _parkedWakes;
+        // A breakpoint holds the session until run control resumes it; the window says so and a resume lets it go (C2).
+        private volatile bool _halted;
+
+        // The last frame's facts, the frame thread's; and the session events it drains between frames - see EmuSen_Backend.md §14.13.
+        private CrystalFrameInfo _info;
+        private CrystalSubscription? _events;
 
         // Coalescing hand-off to the UI thread over LunaP's Latest (LunaP.md §22.1), giving a lent array back once - see EmuSen_Serenity.md §2.8.
         private readonly FrameHandOff _frames;
-
-        // Rebuilt on every LoadRom, so the console never sees a swapped-out core - see §4.12.
-        private IDebugTarget? _debugTarget;
 
         // At most one, reused and brought forward rather than duplicated; cleared on Closed.
         private readonly WindowSlot<DianaShConsoleWindow> _consoleWindow = new();
@@ -121,24 +123,21 @@ namespace EmuSen.Mistress.Views
         // Same at-most-one/reuse/clear-on-Closed pattern, retained so a console switch can retarget it.
         private readonly WindowSlot<CheatDatabaseWindow> _cheatDatabaseWindow = new();
 
-        // Owned here so a cheat list outlives the core a Reset rebuilds - see §4.14.
-        private readonly CheatRegistry _cheats = new();
+        // The running session's cheats, or with no game a list held for the next, so a list outlives a session a restart replaces - see §4.14.
+        private readonly CheatList _cheats = new();
 
         // Which ROM the cheats are for; not _currentRomPath, which a close resets - see §4.14.
         private string? _cheatsRomPath;
 
-        // Cheats are poked from the thread that owns the core - see §4.15.
-        private volatile bool _applyCheatsPending;
-
         private string? _currentRomPath;
         private string? _currentDisplayName; // for restoring StatusText's "Running: ..." text exactly after a pause, without reformatting from _currentRomPath
         private readonly ControllerKeyBindings _keyBindings =
-            ControllerKeyBindings.Load(EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console));
+            ControllerKeyBindings.Load(RuntimeCatalog.ConsoleNames);
         private readonly GamepadBindings _gamepadBindings =
-            GamepadBindings.Load(EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console));
+            GamepadBindings.Load(RuntimeCatalog.ConsoleNames);
 
         // Follows the loaded ROM; catalog order stands in before one loads - see EmuSen_Input.md §5.1.
-        private string _activeConsole = EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder[0].Console;
+        private string _activeConsole = RuntimeCatalog.Consoles.FirstOrDefault()?.Console ?? "";
         private readonly HotkeyBindingMap _hotkeyBindings = HotkeyBindingMap.Load();
         private readonly AppSettings _appSettings = AppSettings.Load();
         private readonly GraphicsConfig _graphics = GraphicsConfig.Load();
@@ -158,6 +157,7 @@ namespace EmuSen.Mistress.Views
         public MainWindow()
         {
             _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend));
+            EarlyLoader = OpenSession;
             _pause = new LunaAction("_Pause", _ => TogglePause()) { IsCheckable = true };
             _reset = new LunaAction("_Reset", ResetEmulation);
             _closeGame = new LunaAction("_Close Game", ShowLibrary);
@@ -167,7 +167,7 @@ namespace EmuSen.Mistress.Views
             _slotMenu = new LunaAction("State Sl_ot", () => { });
             _fullscreen = new LunaAction("_Fullscreen", a => IsFullScreen = a.IsChecked) { IsCheckable = true };
             _bigPictureMenu = new LunaAction("_Big Picture", () => SetBigPicture(!_bigScreen)) { HelpText = "Full screen, in big picture mode" };
-            _hardwareDashboard = new LunaAction("_Hardware Dashboard...", () => OpenCoretopWindow(_debugTarget));
+            _hardwareDashboard = new LunaAction("_Hardware Dashboard...", OpenCoretopWindow);
             _rewindReel = new LunaAction("Re_wind...", () => OpenRewindReel(resumeAfter: false));
             InitializeComponent();
             // Why the game's picture is read back rather than handed to the compositor on the device, logged once a window - see EmuSen_DevicePicture.md §4.4.
@@ -183,7 +183,7 @@ namespace EmuSen.Mistress.Views
             _gamepad.PadChanged += OnPadChanged;
             _gamepad.Claimed += OnPadClaimed;
             ApplyPlayerRules();
-            _ports = new PortRouter(_gamepad, (p, b, held) => _session?.SetButton(p, b, held), (p, a, v) => _session?.SetAxis(p, a, v), (p, on) => _session?.SetControllerConnected(p, on))
+            _ports = new PortRouter(_gamepad, (p, b, held) => Send(s => s.Button(p, b, held)), (p, a, v) => Send(s => s.Axis(p, a, v)), (p, on) => Send(s => s.Connected(p, on)))
             {
                 KeyboardHeld = control => _keyboardHeld[(int)control],
             };
@@ -193,7 +193,7 @@ namespace EmuSen.Mistress.Views
             // Endymion is a leaf and reads no globals, so audio.json's settings come from here, the cores' with them - see EmuSen_Audio_Sync.md §7.1.
             AudioConfig audio = AudioConfig.Load().Bounded();
             _audioPlayer = new AudioPlayer(audio.SampleRate, audio.OutputTargetLatencyMs, audio.RateControlMaxDeviation);
-            CoreOptions = EmuSen.Cores.CoreOptions.From(audio);
+            OpenOptions = new CrystalOpen { AudioBufferMaxSamples = audio.AudioBufferMaxSamples };
             // graphics.json's filtering and display sync, which the picture and the pacer read - see EmuSen_Settings_Reference.md §3, §4.87.
             GameFrame.BilinearFiltering = _graphics.BilinearFiltering;
             GameFrame.SyncToDisplay = _graphics.SyncToDisplay;
@@ -215,10 +215,11 @@ namespace EmuSen.Mistress.Views
                 _padTimer?.Stop();
                 CloseThemedLibrary();
                 StopEmulationThread();
-                _session?.SaveSram();
                 WriteResumeState();
                 RecordPlayTime();
                 KeepCheatList();
+                CloseSession();
+                _events?.Dispose();
                 StopScraping();
                 StopOnlineCovers();
                 CloseRecords();
@@ -323,7 +324,7 @@ namespace EmuSen.Mistress.Views
         // Through ICore, not the bus; each player's pad to its own port and the keyboard to its player's - see EmuSen_Input.md §8.5.
         private void ApplyKeys()
         {
-            if (_session is not { IsRomLoaded: true }) return;
+            if (_session is null) return;
             RoutePlayers();
             _ports.KeysChanged();
         }
@@ -349,7 +350,7 @@ namespace EmuSen.Mistress.Views
 
             // A menu over the game, or the button that closed one, is not the game's - see §4.29.
             if (PadBelongsToTheInterface()) return;
-            if (_session is not { IsRomLoaded: true }) return;
+            if (_session is null) return;
 
             // A core whose ports changed while the game runs, as by an adapter set on a port, is heard on its new ports - see EmuSen_Input.md §8.11.
             if (_session.ControllerPorts != _ports.Ports) _ports.Resize(_session.ControllerPorts);
@@ -362,7 +363,7 @@ namespace EmuSen.Mistress.Views
         private async Task OpenRomAsync()
         {
             // One entry per core in this build, so a new core needs no edit here.
-            FilePickerFileType[] types = EmuSen.Cores.CoreCatalog.Cores
+            FilePickerFileType[] types = RuntimeCatalog.Consoles
                 .Select(c => new FilePickerFileType($"{c.DisplayName} ROMs")
                 {
                     Patterns = c.Extensions.Select(e => "*" + e).ToArray()
@@ -376,30 +377,39 @@ namespace EmuSen.Mistress.Views
             await StartGameAsync(file.Path, file.Name);
         }
 
-        // The engine is chosen before the core exists, from the game's own choice or the console's, as the runtime's route answers - see EmuSen_Settings_Reference.md §4.44 and EmuSen_Backend.md §14.12.
-        private static string? EngineChosenFor(string path) => CoreSettings.EngineFor(path);
-
-        // Runs before LoadRom because afterwards is too late, asking the engine that will run the game; declining is fine - see EmuSen_Firmware.md §3.
+        // Runs before the game opens because afterwards is too late, asking the runtime what the engine that will run it needs; declining is fine - see EmuSen_Firmware.md §3.
         private async Task PromptForMissingFirmwareAsync(string romPath)
         {
-            foreach (FirmwareRequest request in EmulatorSession.MissingFirmwareFor(romPath, EngineChosenFor(romPath)))
+            string needed;
+            try { needed = Runtime.FirmwareNeeded(romPath); }
+            catch (CrystalException) { return; }
+            using System.Text.Json.JsonDocument requests = System.Text.Json.JsonDocument.Parse(needed);
+            foreach (System.Text.Json.JsonElement request in requests.RootElement.EnumerateArray())
             {
+                string chip = request.GetProperty("chip").GetString() ?? "", file = request.GetProperty("file").GetString() ?? "";
+                long size = request.GetProperty("size").GetInt64();
                 var types = new[]
                 {
-                    new FilePickerFileType($"{request.ChipName} firmware") { Patterns = new[] { request.FileName, "*.rom", "*.bin" } },
+                    new FilePickerFileType($"{chip} firmware") { Patterns = new[] { file, "*.rom", "*.bin" } },
                     new FilePickerFileType("All files") { Patterns = new[] { "*" } },
                 };
 
-                string title = $"{request.ChipName} firmware needed - pick {request.FileName} ({request.Size:N0} bytes), or cancel to play without it";
+                string title = $"{chip} firmware needed - pick {file} ({size:N0} bytes), or cancel to play without it";
                 if (await Dialogs.PickFileAsync(this, title, types) is not { } chosen)
                 {
-                    StatusText.Text = $"No {request.ChipName} firmware selected - that chip will not be emulated.";
+                    StatusText.Text = $"No {chip} firmware selected - that chip will not be emulated.";
                     continue;
                 }
 
-                StatusText.Text = FirmwareLibrary.Install(request, chosen.Path)
-                    ? $"Installed {request.ChipName} firmware."
-                    : $"{chosen.Name} is not a {request.ChipName} dump ({request.Size:N0} bytes expected) - that chip will not be emulated.";
+                try
+                {
+                    Runtime.FirmwareInstall(request.GetRawText(), chosen.Path);
+                    StatusText.Text = $"Installed {chip} firmware.";
+                }
+                catch (CrystalException)
+                {
+                    StatusText.Text = $"{chosen.Name} is not a {chip} dump ({size:N0} bytes expected) - that chip will not be emulated.";
+                }
             }
         }
 
@@ -421,7 +431,7 @@ namespace EmuSen.Mistress.Views
         private void ShowControllerBindings()
         {
             var window = new InputSettingsWindow(_keyBindings, _gamepadBindings, _gamepad, _appSettings, _hotkeyBindings,
-                _session is null ? null : _activeConsole, _session is null ? null : EmuSen.Cores.ControllerPorts.ControllersOf(_session.Core));
+                _session is null ? null : _activeConsole, _session?.PortControllers);
             // A rebind has to reach the menu, or it advertises the old key - see §4.19.
             window.Closed += (_, _) => SyncMenuState();
             _ = SheetLayer.Show(window, this);
@@ -429,10 +439,9 @@ namespace EmuSen.Mistress.Views
 
         private void ShowGraphicsSettings()
         {
+            // A core's setting reaches a running session through the runtime's settings_set; the picture's are the window's own - see §4.26.
             var window = new GraphicsSettingsWindow(_graphics, console =>
             {
-                // On the emulation thread, between frames, and only when the running game is that console's - see §4.26.
-                if (_session is not null && console == _activeConsole) RequestOnEmulationThread(session => ApplyConsoleSettings(session, console));
                 if (_session is not null && console == _activeConsole) ApplyScreenFilter(console);
             }, _session is null ? null : _activeConsole, HttpFactory, overscanNote: RunningGameCropNote) { ShadersChanged = ShaderChanged };
             _ = SheetLayer.Show(window, this);
@@ -459,7 +468,7 @@ namespace EmuSen.Mistress.Views
             GameFrame.ShaderParameters = RunningStandard(ShaderParameterValues(console, stored ?? choice.Name));
             GameFrame.ActiveEffect = choice.Effect;
             // Before the filter, whose chain starts from this console's defaults and constants - see EmuSen_Serenity.md §3.9.
-            GameFrame.FilterConsole = EmuSen.Cores.CoreCatalog.HostOf(console);
+            GameFrame.FilterConsole = RuntimeCatalog.HostOf(console);
             GameFrame.SquarePixels = _graphics.Value(console, GraphicsSettingsWindow.PictureShapeKey) == GraphicsSettingsWindow.SquarePixels;
             GameFrame.Crop = RunningCrop(console);
             GameFrame.ActiveFilter = choice.Filter;
@@ -493,20 +502,6 @@ namespace EmuSen.Mistress.Views
             return null;
         }
 
-        // Every setting the core offers, from the config or its default; a value the core refuses falls back to the default - see §4.26.
-        private void ApplyConsoleSettings(EmulatorSession session, string console)
-        {
-            if (session.Core is not EmuSen.Cores.ICoreSettings settings) return;
-
-            Func<string, string?> stored = CoreSettings.StoredFor(console, _graphics);
-            foreach (EmuSen.Cores.CoreSetting setting in settings.Settings)
-            {
-                string value = stored(setting.Key) ?? setting.Default;
-                try { settings.Set(setting.Key, value); }
-                catch (ArgumentException) { settings.Set(setting.Key, setting.Default); }
-            }
-        }
-
         private void ShowPreferences() => ShowPreferencesAt(null);
 
         private void ShowPreferencesAt(string? tab)
@@ -532,58 +527,37 @@ namespace EmuSen.Mistress.Views
 
         private void ShowDebugLogging()
         {
-            _ = SheetLayer.Show(new DebugSettingsWindow(), this);
+            _ = SheetLayer.Show(new DebugSettingsWindow(Runtime), this);
         }
 
         // The running game's console, else the library's filter: cheats are for the game being played - see EmuSen_Settings_Reference.md §4.45.5.
-        private string CheatConsole => _session is { IsRomLoaded: true } ? _activeConsole : CoreOfShelf(SelectedConsole);
+        private string CheatConsole => _session is not null ? _activeConsole : CoreOfShelf(SelectedConsole);
 
         // The cheat windows know cores, not shelves: the Game Boy Color shelf is Mercury's - see EmuSen_Settings_Reference.md §4.46.
-        private static string CoreOfShelf(string shelf) => EmuSen.Cores.CoreCatalog.ShelfByName(shelf)?.Core.DisplayName ?? shelf;
+        private static string CoreOfShelf(string shelf) => RuntimeCatalog.ShelfByName(shelf)?.Core.DisplayName ?? shelf;
 
-        // Never needs a ROM: it manages a folder and a list, not a session. See §4.14.
+        // Never needs a ROM: it manages a folder and a list, not a session; the database's ops need no game. See §4.14.
         private void ShowCheatDatabase()
         {
-            _cheatDatabaseWindow.Show(this, () => new CheatDatabaseWindow(_appSettings, () => _cheats,
-                ConsoleCodecs(CheatConsole).AutoDetect,
+            _cheatDatabaseWindow.Show(this, () => new CheatDatabaseWindow(_appSettings, _cheats, () => _session?.Crystal,
                 () => _activeCheatsWindow.Current?.Refresh(),
                 ShowActiveCheats,
-                () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems,
-                CheatConsole,
-                ConsoleCodecs(CheatConsole).Explicit));
+                CheatConsole));
         }
-
-        
 
         // The menu item and the database window's button are the same door - see §4.14.
         private void ShowActiveCheats()
         {
-            var codecs = ConsoleCodecs(CheatConsole);
             _activeCheatsWindow.Show(this, () => new ActiveCheatsWindow(_cheats,
-                codecs.AutoDetect,
-                codecs.Explicit,
-                RequestCheatApply,
                 () => CheatsFor(_cheatsRomPath),
                 CheatConsole,
                 ShowCheatDatabase),
                 refresh: w => w.Refresh());
         }
 
-        // Hands the poke to the emulation thread; false means there was no core - see §4.15.
-        private bool RequestCheatApply()
-        {
-            if (_debugTarget is null) return false;
-
-            // Paused parks that thread outside the core, so this can happen now - see §4.15.
-            if (IsPaused) _debugTarget.ApplyCheats();
-            else _applyCheatsPending = true;
-
-            return true;
-        }
-
         // In the console's folder, so two consoles' games of one name keep separate lists - see EmuSen_Config_Reference.md §3.4b.
         private static GameCheats? CheatsFor(string? romPath) =>
-            GameCheats.For(romPath is null ? null : EmuSen.Cores.CoreCatalog.ConsoleForRom(romPath), romPath);
+            GameCheats.For(romPath is null ? null : RuntimeCatalog.ConsoleForRom(romPath), romPath);
 
         // Whatever was saved for this ROM, brought back; returns how many - see §4.15.
         private int LoadSavedCheatsFor(string path)
@@ -591,45 +565,42 @@ namespace EmuSen.Mistress.Views
             CheatFile? saved = CheatsFor(path)?.Load();
             if (saved is null) return 0;
 
-            (int loaded, _) = _cheats.LoadFrom(saved);
+            (int loaded, _) = _cheats.Import(saved);
             _activeCheatsWindow.Current?.Refresh();
             return loaded;
         }
 
         private void ShowShellConsole()
         {
-            _consoleWindow.Show(this, () => new DianaShConsoleWindow(_debugTarget, MakeEmulationControlCommands(),
-                _session?.CheatAutoDetectCodec, _session?.CheatExplicitCodec, _session?.CpuTraceSwitch));
+            _consoleWindow.Show(this, () => new DianaShConsoleWindow(_session?.Crystal, MakeEmulationControlCommands()));
         }
 
         // Built fresh per console window, so the delegates never outlive a MainWindow.
         private IEnumerable<IDianaShCommand> MakeEmulationControlCommands() => new IDianaShCommand[]
         {
-            new PauseCommand(PauseEmulation, () => IsPaused),
-            new ResumeCommand(ResumeEmulation, () => IsPaused),
-            new CoretopWindowCommand(OpenCoretopWindow),
-            new VstopWindowCommand(OpenVstopWindow),
-            new FeedCommand(() => Activate()),
+            new PauseCommand(() => Dispatcher.UIThread.Post(PauseEmulation), () => IsPaused),
+            new ResumeCommand(() => Dispatcher.UIThread.Post(ResumeEmulation), () => IsPaused || _halted),
+            new CoretopWindowCommand(() => Dispatcher.UIThread.Post(OpenCoretopWindow), () => _session is not null),
+            new VstopWindowCommand(() => Dispatcher.UIThread.Post(OpenVstopWindow)),
+            new FeedCommand(() => Dispatcher.UIThread.Post(() => Activate())),
             new EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.StateCommand(SaveStateFromConsole, LoadStateFromConsole, () => CurrentStatePath ?? ""),
         };
 
-        // Not method groups: _session can still be null at construction time - see `man state`.
+        // Not method groups: _session can still be null at construction time; the runtime clears the history and raises the load's event - see `man state`.
         private void SaveStateFromConsole(string path)
         {
             if (_session is null) throw new InvalidOperationException("No ROM loaded.");
-            _session.SaveState(path);
+            _session.Crystal.SaveState(path);
         }
 
         private void LoadStateFromConsole(string path)
         {
             if (_session is null) throw new InvalidOperationException("No ROM loaded.");
-            _session.LoadState(path);
-            _rewind.Clear(); // a discontinuous jump - see §1.4
+            _session.Crystal.LoadState(path);
         }
 
-        // Triggered from inside the console window itself (typing `coretop`) rather than a menu item.
-        private void OpenCoretopWindow(IDebugTarget? target) =>
-            _coretopWindow.Show(this, () => new CoretopWindow(target), refresh: w => w.UpdateTarget(target));
+        // Over the window's session as the API answers it, read at each poll, so a new game needs no update - see EmuSen_Backend.md §14.13.
+        private void OpenCoretopWindow() => _coretopWindow.Show(this, () => CoretopWindow.Over(new SessionReadout(() => _session?.Crystal)));
 
         // No target to hand over or refresh, unlike OpenCoretopWindow above.
         private void OpenVstopWindow() => _vstopWindow.Show(this, () => new VstopWindow());
@@ -637,37 +608,46 @@ namespace EmuSen.Mistress.Views
         // The same tree `state save` writes to, overridable in Preferences.
         private string? CurrentStatePath => StatePathForSlot(_stateSlot);
 
-        // Slot 1 is the plain <rom>.state every other frontend writes - see §4.13.
-        private string? StatePathForSlot(int slot) =>
-            StateKey is not string key
-                ? null
-                : SaveLibrary.StatePathFor(key, slot, _appSettings.StateDirectory);
+        // A slot's file as the running session's states name it, slot 1 the plain <rom>.state every other frontend writes; null with no game - see §4.13.
+        private string? StatePathForSlot(int slot) => SlotPaths() is { } paths && slot < paths.Length ? paths[slot] : null;
 
-        // What a state is filed under: the game's path, or a console session's name - see Diamond_Shell.md §9 Q8.
-        private string? StateKey => _currentRomPath ?? (_consoleSession is string console ? EmuSen.Cores.ConsoleSession.NameOf(console) : null);
+        // The session's slots, the resume state's first, read once a menu sync - see EmuSen_Backend.md §14.13.
+        private string[]? _slotPaths;
+        private GameSession? _slotPathsOf;
+
+        private string[]? SlotPaths()
+        {
+            if (_session is not { } session) return null;
+            if (ReferenceEquals(_slotPathsOf, session) && _slotPaths is { } known) return known;
+            try
+            {
+                using System.Text.Json.JsonDocument slots = System.Text.Json.JsonDocument.Parse(session.Crystal.StateSlots());
+                _slotPaths = slots.RootElement.EnumerateArray().OrderBy(e => e.GetProperty("slot").GetInt32()).Select(e => e.GetProperty("path").GetString() ?? "").ToArray();
+                _slotPathsOf = session;
+                return _slotPaths;
+            }
+            catch (CrystalException) { return null; }
+        }
 
         private void SaveState()
         {
-            if (_session is not { IsRomLoaded: true } || CurrentStatePath is not string path)
+            if (_session is not { } session || CurrentStatePath is not string path)
             {
                 StatusText.Text = "Save State: no ROM loaded";
                 return;
             }
 
             int slot = _stateSlot;
-            string rom = StateKey!;
-            RequestOnEmulationThread(session =>
+            // Off the UI thread: the runtime applies it at the next frame boundary, the caller waiting - see EmuSen_Backend.md §14.3.
+            Task.Run(() =>
             {
                 string status;
                 try
                 {
-                    System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
-                    session.SaveState(path);
-                    WriteStatePicture(session, path);
-                    WriteStateRecord(session, path, rom);
+                    session.Crystal.SaveSlot((uint)slot);
                     status = $"State saved to slot {slot}: {System.IO.Path.GetFileName(path)}";
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is CrystalException or IOException or InvalidOperationException)
                 {
                     ErrorLog.Error("states", $"Save State to slot {slot} failed", ex, path);
                     status = $"Save State failed: {ex.Message}";
@@ -680,14 +660,15 @@ namespace EmuSen.Mistress.Views
 
         private void LoadState() => _ = LoadStateAsync();
 
-        // Runs straight through to the request unless the state's record gives a reason to stop or to ask - see EmuSen_Settings_Reference.md §4.37.
+        // Runs straight through to the load unless the state's record names another copy of the game; what may load is the runtime's to say - see EmuSen_Settings_Reference.md §4.37 and EmuSen_Backend.md §14.12.
         private async Task LoadStateAsync()
         {
-            if (_session is not { IsRomLoaded: true } || CurrentStatePath is not string path || StateKey is not string rom)
+            if (_session is not { } session || CurrentStatePath is not string path)
             {
                 StatusText.Text = "Load State: no ROM loaded";
                 return;
             }
+            string rom = _currentRomPath ?? "";
 
             if (!System.IO.File.Exists(path))
             {
@@ -695,57 +676,51 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
-            StateRecord? record = _fileRecords.ReadState(path);
-            if (Refusal(record, rom, _session, _consoleSession) is string refused)
-            {
-                StatusText.Text = $"Load State: {refused}";
-                Notify("State not loaded");
-                return;
-            }
+            StateRecord? record = StateRecordsOnApi.Read(Runtime, path);
             if (!await SameGameOrConfirmedAsync(record, rom)) return;
 
             int slot = _stateSlot;
-            RequestOnEmulationThread(session =>
+            await Task.Run(() =>
             {
-                string status;
+                string status, notice;
                 try
                 {
-                    session.LoadState(path);
-                    _rewind.Clear(); // a discontinuous jump - see §1.4
-                    _audioPlayer.RateControl.Reset();
+                    session.Crystal.LoadSlot((uint)slot);
                     status = $"State loaded from slot {slot}: {System.IO.Path.GetFileName(path)}";
+                    notice = $"State loaded from slot {slot}";
                 }
-                catch (Exception ex)
+                catch (CrystalException ex) when (ex.Status == CrystalAbi.StateRefused)
+                {
+                    status = $"Load State: {ex.Message}";
+                    notice = "State not loaded";
+                }
+                catch (Exception ex) when (ex is CrystalException or IOException or InvalidOperationException)
                 {
                     ErrorLog.Error("states", $"Load State from slot {slot} failed", ex, path);
                     status = $"Load State failed: {ex.Message}{Provenance(record)}";
+                    notice = status;
                 }
 
-                Dispatcher.UIThread.Post(() => { StatusText.Text = status; Notify(status.StartsWith("State loaded", StringComparison.Ordinal) ? $"State loaded from slot {slot}" : status); });
+                Dispatcher.UIThread.Post(() => { StatusText.Text = status; Notify(notice); });
             });
         }
 
-        private void RequestOnEmulationThread(Action<EmulatorSession> request)
+        // A call into the running session that may find it closed under it.
+        private void Send(Action<CrystalSession> call)
         {
-            _coreRequests.Enqueue(request);
-            _requestSignal.Set();
-        }
-
-        // Only on the emulation thread; reset first, so a request queued while these run wakes the next wait - see §4.21a.
-        private void RunCoreRequests(EmulatorSession session)
-        {
-            _requestSignal.Reset();
-            while (_coreRequests.TryDequeue(out Action<EmulatorSession>? request)) request(session);
+            if (_session is not { } session) return;
+            try { call(session.Crystal); }
+            catch (CrystalException) { }
         }
 
         // The four menus - shortcuts stay with HotkeyBindingMap, see EmuSen_Settings_Reference.md §4.19.
         private void BuildMenus()
         {
             _speedMenu.Submenu = new LunaMenu("Spee_d",
-                _speeds.Add(new LunaAction("_Normal", () => SetBaseSpeed(EmuSen.Common.SpeedController.NormalPercent))),
-                _speeds.Add(new LunaAction("_Fast Forward", () => SetBaseSpeed(_speed.TurboPercent))),
-                _speeds.Add(new LunaAction("_Slow Motion", () => SetBaseSpeed(_speed.SlowMotionPercent))),
-                _speeds.Add(new LunaAction("_Unthrottled", () => SetBaseSpeed(EmuSen.Common.SpeedController.UnthrottledPercent))));
+                _speeds.Add(new LunaAction("_Normal", () => SetBaseSpeed(NormalPercent))),
+                _speeds.Add(new LunaAction("_Fast Forward", () => SetBaseSpeed(TurboPercent))),
+                _speeds.Add(new LunaAction("_Slow Motion", () => SetBaseSpeed(SlowMotionPercent))),
+                _speeds.Add(new LunaAction("_Unthrottled", () => SetBaseSpeed(UnthrottledPercent))));
 
             BuildSaveSlotItems();
 
@@ -809,7 +784,7 @@ namespace EmuSen.Mistress.Views
         // Called wherever the state actually changes, not when a menu opens - see §4.12.
         private void SyncMenuState()
         {
-            bool running = _session is { IsRomLoaded: true };
+            bool running = _session is not null;
             _pause.IsEnabled = running;
             _reset.IsEnabled = running;
             _closeGame.IsEnabled = running;
@@ -827,7 +802,7 @@ namespace EmuSen.Mistress.Views
 
             _saveState.Text = $"Save _State (slot {_stateSlot})";
             _loadState.Text = $"_Load State (slot {_stateSlot})";
-            _hardwareDashboard.IsEnabled = _debugTarget is not null;
+            _hardwareDashboard.IsEnabled = _session is not null;
 
             ShowHotkeysOnTheMenu();
             SyncHud();
@@ -835,22 +810,26 @@ namespace EmuSen.Mistress.Views
 
         private int SpeedIndex(int percent)
         {
-            if (percent == _speed.TurboPercent) return 1;
-            if (percent == _speed.SlowMotionPercent) return 2;
-            if (percent == EmuSen.Common.SpeedController.UnthrottledPercent) return 3;
+            if (percent == TurboPercent) return 1;
+            if (percent == SlowMotionPercent) return 2;
+            if (percent == UnthrottledPercent) return 3;
             return 0;
         }
 
         private void SetBaseSpeed(int percent)
         {
             _baseSpeedPercent = percent;
+            Send(ApplySpeed);
             _audioPlayer.RateControl.Reset(); // the device's pacing target just moved - see EmuSen_Audio_Sync.md §3.2
-            if (_session is { IsRomLoaded: true }) StatusText.Text = $"Speed: {DescribeSpeed(percent)}";
+            if (_session is not null) StatusText.Text = $"Speed: {DescribeSpeed(percent)}";
             SyncMenuState();
         }
 
         private static string DescribeSpeed(int percent) =>
-            percent == EmuSen.Common.SpeedController.UnthrottledPercent ? "unthrottled" : $"{percent}%";
+            percent == UnthrottledPercent ? "unthrottled" : $"{percent}%";
+
+        // The menu's speed as the session's normal one, with the turbo and slow motion the hotkeys and the menu name.
+        private void ApplySpeed(CrystalSession session) => session.Speed((uint)_baseSpeedPercent, TurboPercent, SlowMotionPercent);
 
         // Rebuilt on every sync so a slot saved since last time shows its new stamp.
         private void BuildSaveSlotItems()
@@ -881,7 +860,7 @@ namespace EmuSen.Mistress.Views
         private void SelectStateSlot(int slot)
         {
             _stateSlot = slot;
-            if (_session is { IsRomLoaded: true }) StatusText.Text = $"Save slot {slot} selected ({DescribeSlot(slot)})";
+            if (_session is not null) StatusText.Text = $"Save slot {slot} selected ({DescribeSlot(slot)})";
             SyncMenuState();
         }
 
@@ -889,8 +868,11 @@ namespace EmuSen.Mistress.Views
         private void KeepCheatList()
         {
             if (CheatsFor(_cheatsRomPath) is not { } target) return;
-            bool? kept = target.SaveIfChanged(_cheats.ToCheatFile());
-            if (kept == true) Console.WriteLine($"[cheats] Kept {_cheats.GetCheats().Count} cheat(s) for {target.Name} in {target.File.Path}");
+            CheatFile list;
+            try { list = _cheats.ToFile(); }
+            catch (CrystalException) { return; }
+            bool? kept = target.SaveIfChanged(list);
+            if (kept == true) Console.WriteLine($"[cheats] Kept {list.Cheats.Count} cheat(s) for {target.Name} in {target.File.Path}");
             else if (kept == false) ErrorLog.Error("cheats", $"Could not keep the cheat list for {target.Name}", new IOException(target.File.Path));
         }
 
@@ -907,34 +889,49 @@ namespace EmuSen.Mistress.Views
             _cheatsRomPath = path;
 
             // Not when the list is already in hand: a Reset must not overwrite edits since - see §4.15.
-            return !sameGame && _cheats.GetCheats().Count == 0 ? LoadSavedCheatsFor(path) : 0;
+            return !sameGame && _cheats.Count == 0 ? LoadSavedCheatsFor(path) : 0;
         }
 
-        // A power cycle, not a soft reset - see EmuSen_Settings_Reference.md §4.12.
+        // The console's own reset button where its core claims one, else the game started again - decided 2026-10-18 by the tester; see EmuSen_Settings_Reference.md §4.12 and EmuSen_Backend.md §14.13.
         private void ResetEmulation()
         {
-            if (_session is not { IsRomLoaded: true }) return;
+            if (_session is not { } session) return;
+            ResumeEmulation(); // a reset always comes back running, however it was paused
+            try
+            {
+                session.Crystal.Reset();
+                _audioPlayer.RateControl.Reset();
+                StatusText.Text = $"Reset: {_currentDisplayName}";
+                return;
+            }
+            catch (CrystalException ex) when (ex.Status == CrystalSessionAbi.NotSupported)
+            {
+                Console.WriteLine($"[core] {ex.Message}; the game is started again instead");
+            }
+            catch (CrystalException ex)
+            {
+                StatusText.Text = $"Reset failed: {ex.Message}";
+                return;
+            }
+
             if (_consoleSession is string console)
             {
-                ResumeEmulation();
                 StartConsole(console, reset: true);
-                if (_session is { IsRomLoaded: true }) StatusText.Text = $"Reset: {_currentDisplayName}";
+                if (_session is not null) StatusText.Text = $"Reset: {_currentDisplayName}";
                 return;
             }
             if (_currentRomPath is not string path || _currentDisplayName is not string displayName) return;
 
-            ResumeEmulation(); // a reset always comes back running, however it was paused
             LoadGame(path, displayName, resumeFrom: null, reset: true);
-            if (_session is { IsRomLoaded: true }) StatusText.Text = $"Reset: {displayName}";
+            if (_session is not null) StatusText.Text = $"Reset: {displayName}";
         }
 
-        // Everything that must happen before _session can be replaced or dropped.
+        // Everything that must happen before _session can be replaced or dropped; the session is closed, which writes its battery save.
         private void ShutDownCurrentSession(bool leaving = true)
         {
             _timer?.Stop();
             StopEmulationThread(); // must fully stop before _session changes - see that method's own comment
-            _frames.EndSession(); // a picture the screen never took goes back, and the one it shows lets go of its core - see EmuSen_Serenity.md §2.8
-            _session?.SaveSram(); // flush whatever was previously running before switching
+            _frames.EndSession(); // a picture the screen never took goes back - see EmuSen_Serenity.md §2.8
             // A Reset starts the same game again, so it is not leaving it - see EmuSen_Settings_Reference.md §4.31.
             if (leaving)
             {
@@ -942,7 +939,17 @@ namespace EmuSen.Mistress.Views
                 RecordPlayTime();
                 KeepCheatList();
             }
-            _session?.ReleaseMedia();
+            CloseSession();
+        }
+
+        // The list kept for the next game, then the session closed: its battery save written and its media let go.
+        private void CloseSession()
+        {
+            _cheats.Detach();
+            GameSession? closing = _session;
+            _session = null;
+            _slotPaths = null;
+            closing?.Dispose();
         }
 
         internal static string? PlayArgument(string[] args)
@@ -953,46 +960,43 @@ namespace EmuSen.Mistress.Views
 
         private void LoadRom(string path, string displayName) => LoadGame(path, displayName, resumeFrom: null, reset: false);
 
-        // resumeFrom is a state to load before the first frame runs, and loading a finished load of the core off this thread - see EmuSen_Settings_Reference.md §4.31.
-        private void LoadGame(string path, string displayName, string? resumeFrom, bool reset, Task<EmuSen.Cores.ICore>? loading = null)
+        // resumeFrom is a state to load before the first frame runs, and loading a game already opened off this thread - see EmuSen_Settings_Reference.md §4.31.
+        private void LoadGame(string path, string displayName, string? resumeFrom, bool reset, Task<GameSession>? loading = null)
         {
             ShutDownCurrentSession(leaving: !reset);
             int restoredCheats = DropCheatsFromAnotherGame(path);
 
             try
             {
-                // Off the path, not the session: no core exists yet to ask - see EmuSen_Multicore.md §12.
-                string console = EmuSen.Cores.CoreCatalog.ConsoleForRom(path) ?? "Unknown";
-                _session = new EmulatorSession { Cheats = _cheats, Engine = EngineChosenFor(path), DeviceLender = LendDevice, Options = CoreOptions };
-                StartLogging(console);
-                _session.LoadRom(path, loading?.GetAwaiter().GetResult());
-                if (_session.EngineNotice is { } engineNotice) Console.WriteLine("[core] " + engineNotice);
+                // Off the path, not the session: nothing is open yet to ask - see EmuSen_Multicore.md §12.
+                StartLogging(RuntimeCatalog.ConsoleForRom(path) ?? "Unknown");
+                GameSession session = loading?.GetAwaiter().GetResult() ?? OpenSession(new CrystalOpen { Path = path });
+                _session = session;
+                if (session.EngineNotice is { } engineNotice) Console.WriteLine("[core] " + engineNotice);
 
-                // The catalogue's console, not the core's name: a Game Boy core says GBC while it is a Color, and the GB tab is its settings - see §4.47.
-                _activeConsole = console == "Unknown" ? EmuSen.Cores.CoreCatalog.DiscoveredConsoleForSystem((_session.Core as EmuSen.Cores.Native.CoreEngine)?.Machine.Info.System) ?? _session.CoreName : console;
+                // The runtime's console, not the core's name: a Game Boy core says GBC while it is a Color, and the GB tab is its settings - see §4.47.
+                _activeConsole = session.Console;
 
                 // Recorded before the picture's settings, which take the running game's own crop and standard - see EmuSen_CRT.md §26.6.
                 _currentRomPath = path;
-                // What the graphics window holds for this console, or each setting's own default - see EmuSen_Settings_Reference.md §4.26.
-                ApplyConsoleSettings(_session, _activeConsole);
                 ApplyScreenFilter(_activeConsole);
                 // A half-loaded state is not a machine to run on, so the game starts again from nothing.
-                if (resumeFrom is not null && TryResume(_session, resumeFrom, path) is string resumeFailure)
+                if (resumeFrom is not null && TryResume(session, resumeFrom) is string resumeFailure)
                 {
-                    _session = null;
+                    CloseSession();
                     LoadGame(path, displayName, resumeFrom: null, reset: false);
                     StatusText.Text = resumeFailure;
                     return;
                 }
-                WireSession(_session, displayName, restoredCheats, newGame: !reset);
+                WireSession(session, displayName, restoredCheats, newGame: !reset);
                 _consoleSession = null;
                 _currentDisplayName = displayName;
                 if (!reset) RecordStart(path);
-                RunSession(_session);
+                RunSession(session);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is CrystalException or IOException or InvalidOperationException)
             {
-                _session = null;
+                CloseSession();
                 // Back to the list rather than a black viewport with only a status line.
                 ShowLibrary();
                 ErrorLog.Error("launch", $"Failed to load {displayName}", ex);
@@ -1000,26 +1004,42 @@ namespace EmuSen.Mistress.Views
             }
         }
 
-        // A loaded session's pad, ports, rewind, debugger and screen, and the status line naming it.
-        private void WireSession(EmulatorSession session, string displayName, int restoredCheats, bool newGame)
+        // A session opened on the runtime with the presenter's device to lend and the window's options; any thread.
+        private GameSession OpenSession(CrystalOpen what)
+        {
+            EmuSen.Serenity.Slang.SlangVulkan? device = PresenterDevice;
+            _lentDevice = device;
+            return GameSession.Open(Runtime, OpenOptions with { Path = what.Path, Console = what.Console, Engine = what.Engine, Device = device?.DeviceHandle ?? 0, SingleRows = true });
+        }
+
+        // The presenter's device, read on the UI thread before a session opens on any thread; the one the open session was lent, for borrowing its lend.
+        private EmuSen.Serenity.Slang.SlangVulkan? PresenterDevice => GameFrame.LendableDevice;
+        private volatile EmuSen.Serenity.Slang.SlangVulkan? _lentDevice;
+
+        // A loaded session's pad, ports, rewind, speed, cheats, shell and screen, and the status line naming it.
+        private void WireSession(GameSession session, string displayName, int restoredCheats, bool newGame)
         {
             _gamepad.Bindings = _gamepadBindings.For(_activeConsole);
             string bindingsConsole = _activeConsole;
             _gamepad.PlayerBindings = player => _gamepadBindings.For(bindingsConsole, player);
-            _gamepad.LeftStickIsAnalog = session.SupportedAxes.Contains(PadAxis.LeftX);
-            _ports.Reset(session.ControllerPorts, session.SupportedAxes);
+            _gamepad.LeftStickIsAnalog = session.Axes.Contains(PadAxis.LeftX);
+            _ports.Reset(session.ControllerPorts, session.Axes);
             // A new game is claimed again by the first press; a restart keeps its players - see EmuSen_Input.md §8.13.
             if (newGame) _gamepad.BeginClaims();
 
-            _rewind.Clear(); // a discontinuous jump - see §1.4
-            _rewind.IntervalFrames = RewindIntervalFor(session.FrameRateHz);
+            // The history the runtime keeps, a snapshot every half second of console time with its reel picture - see §4.49.
+            _rewindInterval = RewindIntervalFor(session.FrameRateHz);
+            session.Crystal.Rewind(true, (uint)_rewindInterval, 0, ReelPictureWidth);
+            ApplySpeed(session.Crystal);
             _audioPlayer.RateControl.Reset();
+            _info = default;
+            _paused = false;
+            _halted = false;
+            _cheats.Attach(session.Crystal);
+            _events ??= Runtime.Subscribe(0, CrystalAbi.EventState | CrystalAbi.EventRun | CrystalAbi.EventSettings | CrystalAbi.EventDisc);
 
-            // Built by CoreFactory alongside the core, so this window names no concrete target.
-            _debugTarget = session.DebugTarget;
-            _consoleWindow.Current?.UpdateTarget(_debugTarget, displayName,
-                session.CheatAutoDetectCodec, session.CheatExplicitCodec, session.CpuTraceSwitch);
-            _coretopWindow.Current?.UpdateTarget(_debugTarget);
+            _consoleWindow.Current?.UpdateTarget(session.Crystal, displayName);
+            _activeCheatsWindow.Current?.Refresh();
 
             GameFrame.IsVisible = true;
             LibraryView.IsVisible = false;
@@ -1033,15 +1053,12 @@ namespace EmuSen.Mistress.Views
         }
 
         // The wired session started: the pad polled and the emulation thread running.
-        private void RunSession(EmulatorSession session)
+        private void RunSession(GameSession session)
         {
             // Gamepad polling only; emulation is _emuThread's - see §4.21.
             _timer = new DispatcherTimer { Interval = FrameInterval };
             _timer.Tick += (_, _) => PollGamepad();
             _timer.Start();
-
-            // The frame control stretches repeated rows on the GPU, so a core that can is asked to send each once - see EmuSen_Multicore.md §15.
-            if (session.Core is EmuSen.Cores.IRepeatedRows repeated) repeated.RepeatRows = false;
 
             StartEmulationThread();
             SyncMenuState();
@@ -1050,7 +1067,7 @@ namespace EmuSen.Mistress.Views
         // Steps out of a game without unloading it, unlike ShowLibrary - see EmuSen_Settings_Reference.md §4.18.
         private void ToggleLibrary()
         {
-            if (_session is not { IsRomLoaded: true }) return;
+            if (_session is null) return;
 
             if (LibraryView.IsVisible)
             {
@@ -1072,16 +1089,12 @@ namespace EmuSen.Mistress.Views
         {
             ShutDownCurrentSession();
             StopLogging(); // this ROM's log files have no next writer - see §4.12
-            _session = null;
             _currentRomPath = null;
             _consoleSession = null;
             _currentDisplayName = null;
-            _rewind.Clear();
 
-            // Or an open console/dashboard keeps inspecting the core we just dropped.
-            _debugTarget = null;
+            // Or an open console keeps a shell over the session just closed; the dashboard reads whatever session is open.
             _consoleWindow.Current?.UpdateTarget(null, null);
-            _coretopWindow.Current?.UpdateTarget(null);
 
             GameFrame.IsVisible = false;
             LibraryView.IsVisible = true;
@@ -1110,14 +1123,8 @@ namespace EmuSen.Mistress.Views
 
             // An open cheat window is showing the old console's systems.
             _cheatDatabaseWindow.Current?.SetConsole(CoreOfShelf(chosen));
-            _activeCheatsWindow.Current?.SetConsole(CoreOfShelf(chosen), ConsoleCodecs(CoreOfShelf(chosen)));
+            _activeCheatsWindow.Current?.SetConsole(CoreOfShelf(chosen));
         }
-
-        // A running game wins over the filter - its codecs are the ones that can actually be applied.
-        private (ICheatCodeCodec? AutoDetect, ICheatCodeCodec? Explicit) ConsoleCodecs(string console) =>
-            _session is { CheatAutoDetectCodec: not null } live
-                ? (live.CheatAutoDetectCodec, live.CheatExplicitCodec)
-                : CoreFactory.CheatCodecsFor(console);
 
         // Everything the console filter matched, before the search box narrows it.
         private RomLibraryResult _libraryScan = new(RomLibraryStatus.NoDirectoryConfigured, null, Array.Empty<RomEntry>());
@@ -1131,10 +1138,10 @@ namespace EmuSen.Mistress.Views
             {
                 _libraryFilterReady = true;
                 LibraryList.Key = e => e.FullPath;
-                LibraryFilter.SetFacets(EmuSen.Cores.CoreCatalog.FilterChoices,
-                    EmuSen.Cores.CoreCatalog.FilterChoices.Contains(SelectedConsole)
+                LibraryFilter.SetFacets(RuntimeCatalog.FilterChoices,
+                    RuntimeCatalog.FilterChoices.Contains(SelectedConsole)
                         ? SelectedConsole
-                        : EmuSen.Cores.CoreCatalog.AllConsoles);
+                        : RuntimeCatalog.AllConsoles);
 
                 // Safe to set before wiring: FilterBar stopped raising Changed for a code-set SearchText in LunaP 0.10.0 - see EmuSen_LunaP.md §14.2.
                 LibraryFilter.SearchText = _appSettings.LibrarySearch;
@@ -1143,7 +1150,8 @@ namespace EmuSen.Mistress.Views
                 LibraryFilter.Submitted += LaunchSelectedLibraryEntry;
             }
 
-            // The disk walk happens here, once for every console; the sidebar counts them, the console choice narrows them, and typing only re-filters.
+            // The disk walk happens here, once for every console, with each file's route asked again - see EmuSen_Backend.md §14.13.
+            RuntimeCatalog.Forget();
             _allScan = RomLibrary.Scan(_appSettings.RomDirectory);
             _libraryScan = RomLibrary.Narrow(_allScan, SelectedConsole);
             ShowLibraryEntries();
@@ -1187,7 +1195,7 @@ namespace EmuSen.Mistress.Views
             }
 
             // Otherwise a suspended game is unreachable from here - see EmuSen_Settings_Reference.md §4.18.
-            bool suspended = _session is { IsRomLoaded: true };
+            bool suspended = _session is not null;
             LibraryHintText.IsVisible = shownEntries.Count > 0 || suspended;
             LibraryHintText.Text = _gamepad.IsConnected
                 ? PadLibraryHint()
@@ -1241,22 +1249,26 @@ namespace EmuSen.Mistress.Views
         // Hotkey counterpart to the console's pause/resume pair - see `man pause`.
         private void TogglePause()
         {
-            if (_session is not { IsRomLoaded: true }) return;
+            if (_session is null) return;
             if (IsPaused) ResumeEmulation(); else PauseEmulation();
         }
 
+        // Held by the session's run control; the emulation thread parks in the runtime's wait - see `man pause` and EmuSen_Backend.md §14.13.
         public void PauseEmulation()
         {
-            _pauseSignal.Reset();
+            _paused = true;
+            Send(s => s.Run(CrystalSessionAbi.RunPause));
             _playClock.Stop();
-            if (_session is { IsRomLoaded: true }) StatusText.Text = "Paused";
+            if (_session is not null) StatusText.Text = "Paused";
             SyncMenuState();
         }
 
         public void ResumeEmulation()
         {
-            _pauseSignal.Set();
-            if (_session is { IsRomLoaded: true })
+            _paused = false;
+            _halted = false;
+            Send(s => s.Run(CrystalSessionAbi.RunResume));
+            if (_session is not null)
             {
                 _playClock.Start();
                 StatusText.Text = $"Running: {_currentDisplayName}";
@@ -1264,12 +1276,31 @@ namespace EmuSen.Mistress.Views
             SyncMenuState();
         }
 
+        // The session paused, resumed or halted by anyone, the shell's run control among them: the window's mirror follows the session's run state as it is now, so an event of the window's own that arrives late undoes nothing.
+        private void RunChanged(GameSession session, string? op, long address)
+        {
+            if (!ReferenceEquals(session, _session)) return;
+            string? run;
+            try
+            {
+                using System.Text.Json.JsonDocument info = System.Text.Json.JsonDocument.Parse(session.Crystal.Info());
+                run = info.RootElement.GetProperty("run").GetString();
+            }
+            catch (CrystalException) { return; }
+            bool paused = run == "paused", halted = run == "halted";
+            if (paused != _paused || halted != _halted)
+            {
+                _paused = paused;
+                _halted = halted;
+                if (paused || halted) _playClock.Stop(); else _playClock.Start();
+                StatusText.Text = halted ? $"[BREAKPOINT] Halted at ${address:X6} - type resume in the DianaSh console to go on"
+                    : paused ? "Paused" : $"Running: {_currentDisplayName}";
+            }
+            SyncMenuState();
+        }
+
         private void StartEmulationThread()
         {
-            // A request queued for the session this one replaced is not this session's to run.
-            _coreRequests.Clear();
-            _requestSignal.Reset();
-            _parkedWakes ??= new[] { _pauseSignal.WaitHandle, _requestSignal.WaitHandle };
             _running = true;
             _emuThread = new Thread(EmulationLoop) { IsBackground = true, Name = "EmuSen-Emulation" };
             _emuThread.Start();
@@ -1280,14 +1311,122 @@ namespace EmuSen.Mistress.Views
         {
             if (_emuThread is null) return;
             _running = false;
-            _pauseSignal.Set(); // wake the thread if it's currently paused, so it can observe _running=false and exit rather than deadlocking Join() below
-            _emuThread.Join();
+            _emuThread.Join(); // a paused thread waits in the runtime at most a moment between looks at _running
             _emuThread = null;
         }
 
-        // Runs off the UI thread, and the input race is accepted - see EmuSen_Settings_Reference.md §4.21.
+        // Frames until the ports are read again after a setting changed; the frame thread's.
+        private int _portsDue;
+
+        // The events a frame thread acts on between frames: a load resets the rate control (C7), a setting can move the ports, the rest are the window's.
+        private void DrainEvents(GameSession session)
+        {
+            if (_events is not { } events || !events.Wait(0)) return;
+            using System.Text.Json.JsonDocument drained = System.Text.Json.JsonDocument.Parse(events.Drain());
+            foreach (System.Text.Json.JsonElement e in drained.RootElement.EnumerateArray())
+            {
+                string? kind = e.GetProperty("kind").GetString(), op = e.TryGetProperty("op", out System.Text.Json.JsonElement o) ? o.GetString() : null;
+                uint id = e.TryGetProperty("session", out System.Text.Json.JsonElement s) ? s.GetUInt32() : 0;
+                // A console's setting is raised on no session; it is this one's where it names this session's console.
+                bool ours = id == session.Id || (id == 0 && kind == "settings" && e.TryGetProperty("console", out System.Text.Json.JsonElement c) && string.Equals(c.GetString(), session.Console, StringComparison.OrdinalIgnoreCase));
+                if (!ours) continue;
+                switch (kind)
+                {
+                    case "state" when op == "loaded":
+                        _audioPlayer.RateControl.Reset();
+                        break;
+                    case "run":
+                        long address = e.TryGetProperty("address", out System.Text.Json.JsonElement a) && a.ValueKind == System.Text.Json.JsonValueKind.Number ? a.GetInt64() : 0;
+                        Dispatcher.UIThread.Post(() => RunChanged(session, op, address));
+                        break;
+                    case "settings":
+                        _portsDue = 2;
+                        break;
+                    case "disc":
+                        Dispatcher.UIThread.Post(SyncMenuState);
+                        break;
+                }
+            }
+        }
+
+        // The sound waiting, played or dropped as the speed says; a dropped stretch resets the rate control - see EmuSen_Audio_Sync.md §3.2.
+        private short[] _sound = new short[8192];
+
+        private void DrainSound(CrystalSession session, bool play)
+        {
+            int frames = session.AudioFramesReady;
+            if (_sound.Length < frames * 2) _sound = new short[frames * 2];
+            int got = session.DrainAudio(_sound, out uint rate);
+            if (!play)
+            {
+                _audioPlayer.RateControl.Reset();
+                return;
+            }
+            if (got > 0) _audioPlayer.Submit(_sound.AsSpan(0, got * 2).ToArray(), (int)rate);
+        }
+
+        // The picture to the frame control: the lent device's when the core drew there and the screen presents there, else copied into a buffer the hand-off owns - see EmuSen_DevicePicture.md §17.
+        private void OfferPicture(GameSession session)
+        {
+            int width = _info.width, height = _info.height;
+            if (width <= 0 || height <= 0) return;
+            if (_info.picture_on_device != 0 && GameFrame.PresentsOnDevice && BorrowedLend(session) is { } lend)
+            {
+                _frames.OfferOnDevice(lend, width, height, (long)_info.total_frames, _info.display_aspect, _info.display_lines);
+                return;
+            }
+            if (_frames.Rent(width * height * 4) is not { } pixels) return;
+            session.Crystal.CopyPicture(pixels);
+            _frames.Offer(pixels, width, height, Math.Max(1, _info.row_repeat), (long)_info.total_frames, _info.display_aspect, _info.display_lines, RawFor(session.Crystal));
+        }
+
+        // The machine's lend borrowed for the presenter, kept while the runtime hands the same one - see EmuSen_Backend.md §14.12.
+        private (nint Handle, EmuSen.Serenity.Slang.SlangLend Lend)? _borrowed;
+
+        private EmuSen.Serenity.Slang.SlangLend? BorrowedLend(GameSession session)
+        {
+            nint handle = session.Crystal.PictureLend();
+            if (handle == 0 || _lentDevice is not { } device) return null;
+            if (_borrowed is { } kept && kept.Handle == handle) return kept.Lend;
+            var lend = EmuSen.Serenity.Slang.SlangLend.Borrow(device, handle);
+            _borrowed = (handle, lend);
+            return lend;
+        }
+
+        // The picture before the palette in the encoding the screen's filter reads, where it reads one - see EmuSen_CRT.md §22.
+        private string? _rawSelected;
+
+        private EmuSen.Serenity.RawPicture? RawFor(CrystalSession session)
+        {
+            string? wanted = GameFrame.RawEncoding;
+            if (wanted != _rawSelected)
+            {
+                try { session.RawSelect(wanted); } catch (CrystalException) { wanted = null; }
+                _rawSelected = wanted;
+                return null;
+            }
+            if (wanted is null) return null;
+            long bytes = session.RawCopy(Span<byte>.Empty, out _);
+            if (bytes <= 0 || _frames.RentRaw((int)bytes) is not { } values) return null;
+            session.RawCopy(values, out CrystalRawInfo shape);
+            return new EmuSen.Serenity.RawPicture(wanted, shape.width, shape.height, (int)shape.element, shape.stride, values);
+        }
+
+        // Which way the picture reaches the screen, said once a session as its first picture is shown - see EmuSen_Backend.md §14.13.
+        private void NamePicturePath(GameSession session)
+        {
+            string path = _info.picture_on_device != 0 && GameFrame.PresentsOnDevice ? "on the device: the core draws on the presenter's device and the chain reads it there"
+                : !session.DeviceOffered ? "read back: the picture is not presented on the device, so no device was lent"
+                : _info.picture_on_device == 0 ? "read back: the engine took no lent device"
+                : "read back: the screen stopped presenting on the device";
+            Console.WriteLine($"[picture] {session.Engine}: {path}");
+        }
+
+        // Runs off the UI thread; the frame-end order is the runtime's, the pacing against the display the window's - see EmuSen_Settings_Reference.md §4.21 and EmuSen_Backend.md §14.13.
         private void EmulationLoop()
         {
+            if (_session is not { } session) return;
+            CrystalSession crystal = session.Crystal;
             Stopwatch clock = Stopwatch.StartNew();
             TimeSpan nextTick = clock.Elapsed;
 
@@ -1295,131 +1434,96 @@ namespace EmuSen.Mistress.Views
             var scheduler = new FrameScheduler(GameFrame.Display.Current, Stopwatch.GetTimestamp());
             if (double.TryParse(Environment.GetEnvironmentVariable("EMUSEN_SYNC_MARGIN_MS"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double marginMs)) scheduler.Margin = TimeSpan.FromMilliseconds(marginMs);
 
-            // Counts completed RunFrame calls, not presented frames - see §4.21.
+            // Counts completed frames, not presented ones - see §4.21.
             TimeSpan fpsWindowStart = clock.Elapsed;
             int framesInWindow = 0, offeredInWindow = 0;
 
             // The serial of the picture last offered; a core that says its picture is unchanged is not offered it again - see EmuSen_Multicore.md §14.
-            long? offeredSerial = null;
+            ulong? offeredSerial = null;
+            bool pictureNamed = false, turboApplied = false;
 
-            // RunFrame alone against the rest of this loop's per-frame work - see §4.21.
+            // The frame call alone against the rest of this loop's per-frame work - see §4.21.
             TimeSpan runFrameTimeInWindow = TimeSpan.Zero;
             var frameStopwatch = new Stopwatch();
+            long eventsTicks = 0, audioTicks = 0, handOffTicks = 0, restTicks = 0, loopMark = 0;
 
-            // The loop's work outside RunFrame, split so a slow frame says where it went - see EmuSen_Settings_Reference.md §4.21.
-            long requestsTicks = 0, audioTicks = 0, handOffTicks = 0, restTicks = 0, loopMark = 0;
-
-            // Whatever phases the core publishes, averaged like runFrameTimeInWindow - see EmuSen_Multicore.md §5.
-            var profiler = _session?.Core as IFrameProfiler;
-            string[] phaseNames = profiler?.LastFramePhases.Select(p => p.Name).ToArray() ?? Array.Empty<string>();
+            // Whatever phases the core publishes, averaged like the frame's time - see EmuSen_Multicore.md §5.
+            string[] phaseNames = PhaseNamesOf(crystal);
+            var phases = new double[phaseNames.Length];
             var phaseMsInWindow = new double[phaseNames.Length];
-
-            // A core that lends its pictures gets each back once nothing can read it - see EmuSen_Serenity.md §2.8.
-            Action<byte[]>? release = _frames.ReleaseFor(_session?.Core);
 
             while (_running)
             {
-                // Checked before waiting so the unpaused case stays a plain read - see §4.21.
-                if (!_pauseSignal.IsSet)
-                {
-                    // Woken by a save or a load as well as by resume, so the hotkeys work while paused - see §4.21a.
-                    while (!_pauseSignal.IsSet && _running)
-                    {
-                        WaitHandle.WaitAny(_parkedWakes!);
-                        if (_session is { } parked) RunCoreRequests(parked);
-                    }
-
-                    if (!_running) break;
-
-                    // Or the whole paused duration lands on one artificially slow frame - see §4.21.
-                    nextTick = clock.Elapsed;
-                }
-
-                EmulatorSession? session = _session;
-                if (session is null) break;
-
-                // Held turbo wins over the menu's base speed - see EmuSen_Settings_Reference.md §4.13.
-                _speed.SpeedPercent = _turboHeld ? _speed.TurboPercent : _baseSpeedPercent;
-                scheduler.SyncToDisplay = GameFrame.SyncToDisplay;
-                nextTick = scheduler.Next(nextTick, session.FrameRateHz, _speed.IsNormalSpeed, _speed.FrameInterval(session.FrameRateHz));
-
-                // Takes over the frame entirely - see EmuSen_Rewind_And_FastForward.md §4.
-                if (_rewindHeld && session.Core is not null)
-                {
-                    session.SkipRendering = false;
-                    // One step every interval/speedup ticks, so a sparse history does not rewind in a blur.
-                    if (++_heldRewindTicks >= Math.Max(1, (int)Math.Round(_rewind.IntervalFrames / HeldRewindSpeedup)))
-                    {
-                        _heldRewindTicks = 0;
-                        if (!_rewind.Rewind(session.Core)) nextTick = clock.Elapsed;
-                    }
-                    // No RunFrame() ran, so these would otherwise be stale - see §3.
-                    _debugTarget?.RefreshProviders();
-                    session.DequeueAudioSamples(int.MaxValue);
-                    _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
-                    SubmitFrame(session.GetFrameBufferRgba(), session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release, aspect: session.DisplayAspect, lines: session.DisplayLines, raw: session.RawPicture);
-                    offeredSerial = null;
-                    RunCoreRequests(session);
-                    SleepUntil(nextTick, clock);
-                    continue;
-                }
-
-                session.SkipRendering = !_speed.ShouldRender(session.TotalFrames);
-                session.RawEncoding = GameFrame.RawEncoding;
-
                 try
                 {
+                    // Held turbo wins over the menu's base speed - see EmuSen_Settings_Reference.md §4.13.
+                    if (_turboHeld != turboApplied)
+                    {
+                        turboApplied = _turboHeld;
+                        crystal.SpeedMode(turboApplied ? CrystalAbi.SpeedTurbo : CrystalAbi.SpeedNormal);
+                    }
+                    double frameRate = _info.frame_rate_hz > 0 ? _info.frame_rate_hz : session.FrameRateHz;
+                    bool known = _info.size != 0;
+                    TimeSpan interval = known ? TimeSpan.FromTicks((long)(_info.frame_interval_ns / 100)) : TimeSpan.FromSeconds(1.0 / frameRate);
+                    scheduler.SyncToDisplay = GameFrame.SyncToDisplay;
+                    nextTick = scheduler.Next(nextTick, frameRate, !known || _info.speed_percent == NormalPercent, interval);
+
+                    // Takes over the frame entirely: one step back every interval/speedup ticks, so a sparse history does not rewind in a blur - see EmuSen_Rewind_And_FastForward.md §4.
+                    if (_rewindHeld)
+                    {
+                        if (++_heldRewindTicks >= Math.Max(1, (int)Math.Round(_rewindInterval / HeldRewindSpeedup)))
+                        {
+                            _heldRewindTicks = 0;
+                            if (crystal.RewindStep(1, ref _info) == 0) nextTick = clock.Elapsed;
+                            else OfferPicture(session);
+                        }
+                        DrainSound(crystal, play: false);
+                        DrainEvents(session);
+                        _consoleWindow.Current?.DrainPendingFromEmulationThread();
+                        offeredSerial = null;
+                        SleepUntil(nextTick, clock);
+                        continue;
+                    }
+
                     long frameStart = Stopwatch.GetTimestamp();
                     if (loopMark != 0) restTicks += frameStart - loopMark;
                     frameStopwatch.Restart();
-                    session.RunFrame();
+                    crystal.Frame(ref _info);
+
+                    // Paused or halted: nothing ran, and the thread parks in the runtime until a change or run control wakes it (C1, C2).
+                    if (_info.ran == 0)
+                    {
+                        DrainEvents(session);
+                        _consoleWindow.Current?.DrainPendingFromEmulationThread();
+                        crystal.Wait(20);
+                        nextTick = clock.Elapsed;
+                        loopMark = 0;
+                        continue;
+                    }
                     runFrameTimeInWindow += frameStopwatch.Elapsed;
                     long afterRun = Stopwatch.GetTimestamp();
 
-                    // Publishes this frame's snapshots; null-conditional because a swap can be in flight.
-                    _debugTarget?.RefreshProviders();
-
-                    // Runs what the console queued, on the thread that owns the core - see `man pause`.
+                    // Runs what the console queued, between frames - see `man pause`.
                     _consoleWindow.Current?.DrainPendingFromEmulationThread();
-
-                    // Same rule, same thread: the Apply Cheats button only sets the flag - see §4.15.
-                    if (_applyCheatsPending)
-                    {
-                        _applyCheatsPending = false;
-                        _debugTarget?.ApplyCheats();
-                    }
-
-                    // Between frames, and before the rewind snapshot, so a loaded state seeds the chain - see §4.21a.
-                    RunCoreRequests(session);
-
-                    long afterRequests = Stopwatch.GetTimestamp();
-                    requestsTicks += afterRequests - afterRun;
-
-                    // Right after RunFrame, which is what produces new samples to drain.
-                    // Off for an engine that withholds it - see EmuSen_Settings_Reference.md §4.85.4.
-                    bool captured = session.Core is not null && EmuSen.Cores.EngineFeatures.Of(session.Core).RewindCapture && _rewind.OnFrameCompleted(session.Core);
+                    DrainEvents(session);
+                    // A setting can move the ports, as an adapter set on one does; machine info says so once a frame has run under it.
+                    if (_portsDue > 0 && --_portsDue == 0) session.RefreshPorts();
+                    long afterEvents = Stopwatch.GetTimestamp();
+                    eventsTicks += afterEvents - afterRun;
 
                     // Drained every frame either way, so a muted stretch cannot back the buffer up - see EmuSen_Audio_Sync.md §4.
-                    short[] samples = session.DequeueAudioSamples(int.MaxValue);
                     _audioPlayer.RateControl.NominalRatio = scheduler.Decision.AudioRatio; // the locked rate's drift, centred - see EmuSen_Audio_Sync.md §3.4
                     if (PresentationTrace.Enabled) PresentationTrace.Audio(Stopwatch.GetTimestamp(), _audioPlayer.QueuedFrames, _audioPlayer.RateControl.LastRatio, _audioPlayer.RateControl.NominalRatio, _audioPlayer.RateControl.SheddingEvents);
-                    if (_speed.ShouldPlayAudio) _audioPlayer.Submit(samples, session.AudioSampleRate);
-                    else _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
-
+                    DrainSound(crystal, play: _info.play_audio != 0);
                     long afterAudio = Stopwatch.GetTimestamp();
-                    audioTicks += afterAudio - afterRequests;
+                    audioTicks += afterAudio - afterEvents;
 
-                    if (profiler is not null)
+                    if (phases.Length > 0)
                     {
-                        var current = profiler.LastFramePhases;
-                        for (int p = 0; p < phaseMsInWindow.Length && p < current.Count; p++)
-                        {
-                            phaseMsInWindow[p] += current[p].Milliseconds;
-                        }
+                        int count = crystal.Phases(phases);
+                        for (int p = 0; p < phaseMsInWindow.Length && p < count; p++) phaseMsInWindow[p] += phases[p];
                     }
 
-                    // Nothing new was drawn on a skipped frame.
-                    long? serial = session.FrameSerial;
                     // A picture for a later refresh is not handed over a refresh early - see EmuSen_Settings_Reference.md §4.87.6.
                     long held = 0;
                     if (scheduler.HandOverNotBefore is { } notBefore && clock.Elapsed < notBefore)
@@ -1429,28 +1533,22 @@ namespace EmuSen.Mistress.Views
                         held = Stopwatch.GetTimestamp() - holdStart;
                     }
 
-                    if (!session.SkipRendering && (serial is null || serial != offeredSerial))
+                    // Nothing new was drawn on a frame the speed left undrawn, nor when the core says its picture is the last one.
+                    if (_info.rendered != 0 && _info.picture_serial != offeredSerial)
                     {
-                        // A picture on the device goes to the chain there, its pixels read back only for a rewind's picture - see EmuSen_DevicePicture.md §17.
-                        if (session.Core is EmuSen.Cores.IDevicePicture { PictureOnDevice: true, Lend: SlangDeviceLend { Slang: var lend } } && GameFrame.PresentsOnDevice)
+                        OfferPicture(session);
+                        if (!pictureNamed)
                         {
-                            if (captured) PictureUnchanged(session, serial);
-                            _frames.Offer(Array.Empty<byte>(), session.ScreenWidth, session.ScreenHeight, 1, null, session.TotalFrames, session.DisplayAspect, session.DisplayLines, null, lend);
+                            pictureNamed = true;
+                            NamePicturePath(session);
                         }
-                        else
-                        {
-                            byte[] frame = session.GetFrameBufferRgba();
-                            if (captured) Picture(session, frame, serial);
-                            SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release, session.TotalFrames, session.DisplayAspect, session.DisplayLines, session.RawPicture);
-                        }
-                        offeredSerial = serial;
+                        offeredSerial = _info.picture_serial;
                         offeredInWindow++;
-                        PresentationTrace.Frame(session.TotalFrames, frameStart, Stopwatch.GetTimestamp(), true);
+                        PresentationTrace.Frame((long)_info.total_frames, frameStart, Stopwatch.GetTimestamp(), true);
                     }
                     else
                     {
-                        if (captured && !session.SkipRendering) PictureUnchanged(session, serial);
-                        PresentationTrace.Frame(session.TotalFrames, frameStart, Stopwatch.GetTimestamp(), false);
+                        PresentationTrace.Frame((long)_info.total_frames, frameStart, Stopwatch.GetTimestamp(), false);
                     }
 
                     loopMark = Stopwatch.GetTimestamp();
@@ -1482,7 +1580,7 @@ namespace EmuSen.Mistress.Views
                             ? $" | offered {offeredInWindow / seconds:F1}, shown 0"
                             : $" | offered {offeredInWindow / seconds:F1}, shown {shown.Frames / seconds:F1} fps ({shown.Copies / seconds:F1} copied), copy {shown.CopyMilliseconds / Math.Max(shown.Copies, 1):F2} draw {shown.DrawMilliseconds / shown.Frames:F2}ms, {(shown.Gpu ? "GPU" : "software")} {shown.Width}x{shown.Height}";
                         double Ms(long ticks) => ticks * 1000.0 / Stopwatch.Frequency / framesInWindow;
-                        string outside = $" | outside: requests {Ms(requestsTicks):F2} audio {Ms(audioTicks):F2} hand-off {Ms(handOffTicks):F2} sleep+rest {Ms(restTicks):F2}ms";
+                        string outside = $" | outside: events {Ms(eventsTicks):F2} audio {Ms(audioTicks):F2} hand-off {Ms(handOffTicks):F2} sleep+rest {Ms(restTicks):F2}ms";
                         string counters = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms)";
                         string line = $"{counters}{breakdown}{presentation}{outside} | {scheduler.Decision.Describe()}";
                         PresentationTrace.Note($"{scheduler.Decision.Describe()}; render timer {RenderTimerRate.Current} fps");
@@ -1495,7 +1593,7 @@ namespace EmuSen.Mistress.Views
                         offeredInWindow = 0;
                         Array.Clear(phaseMsInWindow);
                         runFrameTimeInWindow = TimeSpan.Zero;
-                        requestsTicks = audioTicks = handOffTicks = restTicks = 0;
+                        eventsTicks = audioTicks = handOffTicks = restTicks = 0;
                         fpsWindowStart = clock.Elapsed;
                     }
                 }
@@ -1503,9 +1601,8 @@ namespace EmuSen.Mistress.Views
                 {
                     _running = false;
                     string message = ex.Message;
-                    Func<string, string?> stored = CoreSettings.StoredFor(_activeConsole, _graphics);
-                    string settings = string.Join(", ", EmuSen.Cores.CoreCatalog.SettingsFor(_activeConsole).Select(k => $"{k.Key}={stored(k.Key) ?? k.Default}"));
-                    string? report = CrashLog.Write("emulation halt", ex, $"{_activeConsole}, frame {session.Core?.TotalFrames}: {settings}");
+                    string settings = string.Join(", ", RuntimeCatalog.SettingsFor(_activeConsole).Select(k => $"{k.Key}={SettingOrDefault(_activeConsole, k)}"));
+                    string? report = CrashLog.Write("emulation halt", ex, $"{_activeConsole}, frame {_info.total_frames}: {settings}");
                     // Halt and print rather than recover; StatusText needs the UI thread.
                     Dispatcher.UIThread.Post(() => StatusText.Text = $"[CPU HALT] {message}" + (report is null ? "" : $" - written to {report}"));
                     break;
@@ -1519,9 +1616,26 @@ namespace EmuSen.Mistress.Views
                 else
                 {
                     // Owed rather than forgotten, up to a cap, or a game whose drawing frames overrun runs slow - see §4.28.
-                    nextTick = FramePacer.Settle(nextTick, clock.Elapsed, scheduler.Interval(_speed.FrameInterval(session.FrameRateHz)));
+                    TimeSpan step = _info.frame_interval_ns > 0 ? TimeSpan.FromTicks((long)(_info.frame_interval_ns / 100)) : TimeSpan.Zero;
+                    nextTick = FramePacer.Settle(nextTick, clock.Elapsed, scheduler.Interval(step));
                 }
             }
+        }
+
+        private static string[] PhaseNamesOf(CrystalSession session)
+        {
+            try
+            {
+                using System.Text.Json.JsonDocument names = System.Text.Json.JsonDocument.Parse(session.PhaseNames());
+                return names.RootElement.EnumerateArray().Select(n => n.GetString() ?? "").ToArray();
+            }
+            catch (CrystalException) { return Array.Empty<string>(); }
+        }
+
+        private static string SettingOrDefault(string console, SettingRow row)
+        {
+            try { return Runtime.Setting(console, row.Key) ?? row.Default; }
+            catch (CrystalException) { return row.Default; }
         }
 
         // Spins the whole interval; the hybrid was measured and dropped - see §4.21.
@@ -1533,17 +1647,8 @@ namespace EmuSen.Mistress.Views
             }
         }
 
-        // Called from the emulation thread; newest wins - see EmuSen_Serenity.md §4.
-        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, CoreRawPicture? raw = null)
-        {
-            _frames.Offer(pixels, width, height, rowRepeat, release, sequence, aspect, lines, CorePictures.ForPresenter(raw));
-        }
-
-        // What each core is made with: audio.json's limit, and for a test no battery - see EmuSen_Multicore.md §6.
-        internal CoreOptions CoreOptions { get; set; } = EmuSen.Cores.CoreOptions.Default;
-
-        // The device the picture is presented on, lent to a core machine; null when none is - see EmuSen_DevicePicture.md §17.
-        private IDeviceLend? LendDevice() => SlangDeviceLend.Of(GameFrame.TryLend());
+        // What each session is opened with: audio.json's limit, and for a test no battery - see EmuSen_Multicore.md §6.
+        internal CrystalOpen OpenOptions { get; set; } = new();
 
         private void OnExitClick(object? sender, RoutedEventArgs e)
         {

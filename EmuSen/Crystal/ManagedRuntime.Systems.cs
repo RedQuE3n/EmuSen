@@ -14,6 +14,7 @@ namespace EmuSen.Crystal.Managed
     {
         public static byte[] SystemsJson() => CrystalJson.Write(w =>
         {
+            Galaxia.Models.ConsolesConfig stored = Galaxia.Models.ConsolesConfig.Load();
             var empty = new HashSet<string>(CoreCatalog.ConsolesThatStartEmpty.Select(e => e.SystemId), StringComparer.Ordinal);
             var listed = new HashSet<string>(StringComparer.Ordinal);
             w.WriteStartArray();
@@ -39,6 +40,7 @@ namespace EmuSen.Crystal.Managed
                 CrystalJson.Strings(w, "engines", EnginesOf(e.Console, e.Id));
                 w.WriteBoolean("starts_empty", empty.Contains(e.Id));
                 CoreOf(w, e.Console, e.Extensions);
+                Controllers(w, e.Console, stored);
                 w.WriteEndObject();
             }
             foreach (var group in CoreDiscovery.Found.SelectMany(c => c.Info.Systems.Where(CoreDiscovery.Offered).Select(s => (Core: c, System: s))).Where(p => !listed.Contains(p.System.Id)).GroupBy(p => p.System.Id))
@@ -56,6 +58,51 @@ namespace EmuSen.Crystal.Managed
                 w.WriteString("display_name", $"{s.Name} ({string.Join(", ", engines)})");
                 w.WriteString("console", s.Id);
                 CrystalJson.Strings(w, "extensions", s.Extensions);
+                w.WriteEndObject();
+                Controllers(w, CoreCatalog.DiscoveredConsoleForSystem(s.Id) ?? s.Id, stored);
+                w.WriteEndObject();
+            }
+            w.WriteEndArray();
+        });
+
+        // A console's pad, its most ports and each player's controller as its stored settings stand: the engine's facts, from core info - see EmuSen_Backend.md §14.13.
+        private static void Controllers(Utf8JsonWriter w, string console, Galaxia.Models.ConsolesConfig stored)
+        {
+            Func<string, string?> value = key => stored.Value(console, key);
+            w.WriteStartObject("controllers");
+            w.WriteStartArray("buttons");
+            foreach (Galaxia.Input.PadButton b in CoreCatalog.ButtonsFor(console)) w.WriteNumberValue((int)b);
+            w.WriteEndArray();
+            w.WriteStartArray("axes");
+            foreach (Galaxia.Input.PadAxis a in CoreCatalog.AxesFor(console)) w.WriteNumberValue((int)a);
+            w.WriteEndArray();
+            w.WriteNumber("ports", ControllerPorts.ForConsole(console));
+            w.WriteStartArray("players");
+            for (int p = 0; p < ControllerPorts.ForConsole(console, value); p++)
+            {
+                if (CoreCatalog.ControllerFor(console, p, value) is { } id) w.WriteStringValue(id);
+                else w.WriteNullValue();
+            }
+            w.WriteEndArray();
+            w.WriteEndObject();
+        }
+
+        // The library's shelves in release order, each a system of a console's core, named for the core - see EmuSen_Backend.md §14.13.
+        public static byte[] ShelvesJson() => CrystalJson.Write(w =>
+        {
+            w.WriteStartArray();
+            foreach (CoreCatalog.LibraryShelf s in CoreCatalog.ShelvesInReleaseOrder)
+            {
+                w.WriteStartObject();
+                w.WriteString("name", s.Name);
+                w.WriteString("label", s.Label);
+                w.WriteString("system", s.System);
+                w.WriteString("esde_system", s.EsdeSystem);
+                w.WriteString("esde_full_name", s.EsdeFullName);
+                w.WriteStartObject("core");
+                w.WriteString("display_name", s.Core.DisplayName);
+                w.WriteString("console", s.Core.Console);
+                CrystalJson.Strings(w, "extensions", s.Core.Extensions);
                 w.WriteEndObject();
                 w.WriteEndObject();
             }
@@ -148,6 +195,7 @@ namespace EmuSen.Crystal.Managed
             CrystalJson.StringOrNull(w, "engine", engine);
             CrystalJson.StringOrNull(w, "reason", system is null ? routed?.Reason ?? $"no engine in this build takes {extension} files" : null);
             Cartridge(w, system, path);
+            CrystalJson.StringOrNull(w, "shelf", CoreCatalog.ShelfFor(path, core));
             w.WriteEndObject();
         });
 

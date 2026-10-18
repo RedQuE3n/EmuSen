@@ -281,7 +281,7 @@ namespace EmuSen.Crystal.Managed
                 ManagedRuntime r = RuntimeOf(rt);
                 ManagedSession? s = session != 0 ? r.Session(session) : null;
                 string name = Text(console, console_len) ?? s?.Console ?? throw new CrystalException(SessionAbi.BadArgument, "with no session, the console is named");
-                return Copy(ManagedRuntime.SchemaJson(ManagedRuntime.Schema(name, Text(engine, engine_len), s)), out_, len);
+                return Copy(ManagedRuntime.SchemaJson(ManagedRuntime.Schema(name, Text(engine, engine_len), s), name), out_, len);
             }
             catch (Exception e) { return Fail(e); }
         }

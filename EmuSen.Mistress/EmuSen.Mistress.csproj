@@ -9,6 +9,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- Precompiled at publish for a start ~360 ms sooner; the JIT still re-tiers hot code - see EmuSen_Settings_Reference.md §4.42. -->
@@ -77,18 +78,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Pulls in the emulation core (Cores/Nintendo/Venus - SNES/*, Settings/*, etc).
-         EmuSen.csproj is a pure library (no Main, no window ownership) - the Raylib
-         console frontend's own Main/hotkey loop lives in the sibling
-         EmuSen.Hotaru project instead, so this reference no longer drags
-         in another frontend's Exe/window-ownership baggage, just the core. -->
-    <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
-    <!-- The frontend API's binding, through which Mistress writes a console's core settings since SR12 - see EmuSen_Backend.md §14.12. -->
+    <!-- The frontend API's binding, the one way Mistress drives a core; it names no type of EmuSen or
+         EmuSen.Crystal (SR2) - see EmuSen_Backend.md §14.13. -->
     <ProjectReference Include="..\EmuSen.Crystal.Client\EmuSen.Crystal.Client.csproj" />
-    <!-- The shell its console windows embed, and Crystal beneath it for the debug target and the cheat engine; the
-         cores no longer bring the shell with them - see EmuSen_DianaSh.md §13.6. -->
+    <!-- The shell its console windows embed, made over the session's service table - see EmuSen_DianaSh.md §13.14. -->
     <ProjectReference Include="..\EmuSen.DianaSh\EmuSen.DianaSh.csproj" />
-    <ProjectReference Include="..\EmuSen.Crystal\EmuSen.Crystal.csproj" />
     <!-- GameFrameControl (see Views/MainWindow.axaml/.axaml.cs) - the same
          GPU-accelerated (Skia/Ganesh, when Avalonia negotiates a hardware
          context) presentation surface EmuSen.Hotaru's GameWindow uses,

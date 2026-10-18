@@ -84,12 +84,7 @@ namespace EmuSen.WiseMan.Mistress
         // Unthrottled with every frame drawn, so seconds of history take a fraction of one, then back to normal speed.
         private static void Play(MainWindow window, int frames)
         {
-            var speed = (SpeedController)Field(window, "_speed");
-            speed.MaxFrameSkip = 0;
-            SetField(window, "_baseSpeedPercent", SpeedController.UnthrottledPercent);
-            long until = Game(window).TotalFrames + frames;
-            WaitFor(() => Game(window).TotalFrames >= until);
-            SetField(window, "_baseSpeedPercent", SpeedController.NormalPercent);
+            MistressGame.Play(window, frames, (until, _) => WaitFor(until));
         }
 
         private static void Choose(MainWindow window, PadDriver pad, string entry)
@@ -115,8 +110,8 @@ namespace EmuSen.WiseMan.Mistress
 
         private static SheetLayer Sheets(MainWindow w) => w.GetControl<SheetLayer>("Sheets");
         private static Control Sheet(MainWindow w) => Sheets(w).SheetOf(Sheets(w).Current!)!;
-        private static RewindBuffer Rewind(MainWindow w) => (RewindBuffer)Field(w, "_rewind");
-        private static EmulatorSession Game(MainWindow w) => (EmulatorSession)Field(w, "_session");
+        private static RewindBuffer Rewind(MainWindow w) => MistressGame.Rewind(w);
+        private static WindowGame Game(MainWindow w) => new(w);
         private static TextBlock Status(MainWindow w) => w.GetControl<TextBlock>("StatusText");
         private static object Field(MainWindow w, string name) => typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w)!;
         private static void SetField(MainWindow w, string name, object value) => typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(w, value);

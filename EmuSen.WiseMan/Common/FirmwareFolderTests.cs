@@ -190,7 +190,7 @@ namespace EmuSen.WiseMan.Common
         public void The_overview_says_which_folder_each_file_was_found_in()
         {
             Choose(Chosen);
-            var item = new FirmwareItem("A chip", "chip.rom", 8, true, false, "accuracy", null) { FoundIn = FirmwareItem.YourFolder };
+            var item = new EmuSen.Mistress.Views.FirmwareRow("A chip", "chip.rom", 8, true, false, "accuracy", null) { FoundIn = FirmwareItem.YourFolder };
             Assert.Equal("Found in your folder.", item.Where);
             Assert.Null((item with { Present = false, FoundIn = null }).Where);
             Assert.Equal("Not used: the file in EmuSen's folder is not 8 bytes.", (item with { Present = false, FoundIn = null, WrongSize = true, WrongSizeIn = FirmwareItem.EmuSensFolder }).Note);

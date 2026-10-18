@@ -1,4 +1,4 @@
-using EmuSen.Hotaru.Imaging;
+using EmuSen.Serenity.Imaging;
 using SkiaSharp;
 
 namespace EmuSen.WiseMan.Imaging

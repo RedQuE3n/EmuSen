@@ -95,8 +95,7 @@ namespace EmuSen.WiseMan.Mistress
                 Assert.True(list.SelectedIndex >= 0, $"the list holds {string.Join(", ", list.Items.Cast<object>())}");
                 pad.A();
                 Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
-                var session = (EmuSen.Common.EmulatorSession)typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
-                var core = Assert.IsType<CoreEngine>(session.Core);
+                var core = Assert.IsType<CoreEngine>(MistressGame.Core(window));
                 Assert.Equal(("diamond", "psx", path), (core.Info.Id, core.Machine.Info.System, core.RomPath));
                 Assert.Equal("PlayStation", (string)typeof(MainWindow).GetField("_activeConsole", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!);
                 Assert.True(SpinWait.SpinUntil(() => core.TotalFrames > 5, TimeSpan.FromSeconds(20)), "the game runs");
@@ -163,8 +162,8 @@ namespace EmuSen.WiseMan.Mistress
                 pad.A();
                 string status = window.GetControl<TextBlock>("StatusText").Text ?? "";
                 if (!window.GetControl<Control>("GameFrame").IsVisible) return $"not opened: {status}";
-                var session = (EmuSen.Common.EmulatorSession?)typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window);
-                if (session?.Core is not CoreEngine core) return $"opened on {session?.Core?.GetType().Name ?? "nothing"}: {status}";
+                EmuSen.Cores.ICore? running = MistressGame.Live(window) is null ? null : MistressGame.Core(window);
+                if (running is not CoreEngine core) return $"opened on {running?.GetType().Name ?? "nothing"}: {status}";
                 bool ran = SpinWait.SpinUntil(() => core.TotalFrames >= frames, TimeSpan.FromSeconds(120));
                 return $"opened on {core.Info.Id} as {core.Machine.Info.System}, {core.TotalFrames} frames{(ran ? "" : " (stopped short)")}, path {(core.RomPath == path ? "the library's" : core.RomPath)}: {status}";
             }

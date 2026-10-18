@@ -251,10 +251,9 @@ namespace EmuSen.WiseMan.Mistress
             }
         }
 
-        private static EmulatorSession? Live(MainWindow window) =>
-            (EmulatorSession?)typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window);
+        private static WindowGame? Live(MainWindow window) => MistressGame.Live(window) is null ? null : new WindowGame(window);
 
-        private static EmulatorSession Game(MainWindow window) => Live(window)!;
+        private static WindowGame Game(MainWindow window) => Live(window)!;
 
         private static void Invoke(MainWindow window, string name) =>
             typeof(MainWindow).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public, null, Type.EmptyTypes, null)!.Invoke(window, null);

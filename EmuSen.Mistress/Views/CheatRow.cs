@@ -1,21 +1,18 @@
-using EmuSen.Crystal.Cheats;
-
 namespace EmuSen.Mistress.Views
 {
-    // One row of the Active Cheats table. Its checkbox writes straight
-    // through to the registry - see EmuSen_Settings_Reference.md §4.14.
+    // One row of the Active Cheats table; its checkbox writes straight through to the list - see EmuSen_Settings_Reference.md §4.14.
     public sealed class CheatRow
     {
-        private readonly CheatRegistry _registry;
+        private readonly CheatList _list;
 
-        public CheatRow(CheatRegistry registry, CheatInfo cheat, string detail)
+        public CheatRow(CheatList list, CheatLine cheat)
         {
-            _registry = registry;
+            _list = list;
             Id = cheat.Id;
-            Enabled = cheat.Enabled;
+            _enabled = cheat.Enabled;
             Description = string.IsNullOrWhiteSpace(cheat.Description) ? $"cheat #{cheat.Id}" : cheat.Description;
-            Kind = cheat.Kind == CheatKind.RamPoke ? "RAM" : "ROM";
-            Detail = detail;
+            Kind = cheat.RomPatch ? "ROM" : "RAM";
+            Detail = cheat.Detail;
         }
 
         public int Id { get; }
@@ -32,7 +29,7 @@ namespace EmuSen.Mistress.Views
             {
                 if (_enabled == value) return;
                 _enabled = value;
-                _registry.SetEnabled(Id, value);
+                _list.SetEnabled(Id, value);
             }
         }
     }

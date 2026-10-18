@@ -24,35 +24,35 @@ impl ffi::Status for StateError {
 }
 
 /// Seeded faults for the conformance kit's own tests: each machine differs from the last, and a truncated state loads.
-pub const FAULT_MACHINES_DIFFER: u32 = 1;
-pub const FAULT_TAKES_TRUNCATED_STATE: u32 = 2;
+pub const FAULT_MACHINES_DIFFER: u64 = 1;
+pub const FAULT_TAKES_TRUNCATED_STATE: u64 = 2;
 /// Not a fault for an open image format: any non-empty image is taken as the payload whole.
-pub const LENIENT_IMAGES: u32 = 4;
+pub const LENIENT_IMAGES: u64 = 4;
 /// Seeded faults for the kit's C9 and C12-C15: an "exact" setting that changes the state, a refusal of any host but
 /// version 1.0, an info document that changes from call to call, a read-only space that takes writes, and an observed
 /// frame whose sound differs from the plain one.
-pub const FAULT_EXACT_SETTING_CHANGES_STATE: u32 = 8;
-pub const FAULT_ONLY_HOST_1_0: u32 = 16;
-pub const FAULT_INFO_DRIFTS: u32 = 32;
-pub const FAULT_READ_ONLY_WRITABLE: u32 = 64;
-pub const FAULT_OBSERVED_FRAME_DIFFERS: u32 = 128;
+pub const FAULT_EXACT_SETTING_CHANGES_STATE: u64 = 8;
+pub const FAULT_ONLY_HOST_1_0: u64 = 16;
+pub const FAULT_INFO_DRIFTS: u64 = 32;
+pub const FAULT_READ_ONLY_WRITABLE: u64 = 64;
+pub const FAULT_OBSERVED_FRAME_DIFFERS: u64 = 128;
 /// Seeded fault for the kit's C17: a machine reading an image its host lent runs otherwise than one reading its copy.
-pub const FAULT_LENT_RUN_DIFFERS: u32 = 256;
+pub const FAULT_LENT_RUN_DIFFERS: u64 = 256;
 /// Seeded fault for the kit's C18: the drive names a place past its image's end.
-pub const FAULT_NAMES_PAST_THE_IMAGE: u32 = 512;
+pub const FAULT_NAMES_PAST_THE_IMAGE: u64 = 512;
 /// Not a fault, since 1.5: after a load the picture of the next `SETTLE_FRAMES` frames is drawn otherwise, as an
 /// enhancement redrawing from the machine would, and machine info's `state.picture_settles` says so.
-pub const SETTLES: u32 = 1024;
+pub const SETTLES: u64 = 1024;
 /// Seeded faults for the kit's rule of settling pictures (§28.10): the picture after a load never settles; it differs
 /// without being declared; the sound differs while it settles; and a bound past the maximum is declared.
-pub const FAULT_NEVER_SETTLES: u32 = 2048;
-pub const FAULT_SETTLES_UNDECLARED: u32 = 4096;
-pub const FAULT_SOUND_DIFFERS_WHILE_SETTLING: u32 = 8192;
-pub const FAULT_SETTLES_PAST_THE_MAXIMUM: u32 = 16384;
+pub const FAULT_NEVER_SETTLES: u64 = 2048;
+pub const FAULT_SETTLES_UNDECLARED: u64 = 4096;
+pub const FAULT_SOUND_DIFFERS_WHILE_SETTLING: u64 = 8192;
+pub const FAULT_SETTLES_PAST_THE_MAXIMUM: u64 = 16384;
 /// For the kit's deadline on progress: each frame takes `SLOW_FRAME_MS`; and the tenth frame of an image whose payload
 /// begins with `HANGING_IMAGE` never ends.
-pub const SLOW_FRAMES: u32 = 32768;
-pub const FAULT_HANGS: u32 = 65536;
+pub const SLOW_FRAMES: u64 = 32768;
+pub const FAULT_HANGS: u64 = 65536;
 pub const SETTLE_FRAMES: u32 = 3;
 pub const SLOW_FRAME_MS: u64 = 4;
 pub const HANGING_IMAGE: u8 = 0xEE;
@@ -64,36 +64,36 @@ pub const CARTRIDGE: u8 = 0xCA;
 pub const CARD: u8 = 0xCD;
 /// Seeded fault for the kit's C19: a load under `CREATE_SHARED_REMOVABLE` rolls the card back to blank, and marks it
 /// changed, as a core that keeps its card in its state and puts it back would.
-pub const FAULT_CARD_ROLLED_BACK: u32 = 1 << 20;
+pub const FAULT_CARD_ROLLED_BACK: u64 = 1 << 20;
 /// Not a fault, since 1.8: an image whose payload begins with `CONSOLE_MEMORY` has memory inside the console, battery
 /// file 2, of kind console, which no state holds either (EmuSen_CoreAPI.md §6.28).
 pub const CONSOLE_MEMORY: u8 = 0xCE;
 /// Seeded faults for the kit's C19 and C14 (since 1.8): a load under `CREATE_SHARED_CONSOLE` rolls the console's memory
 /// back to blank and marks it changed; and core info gives file 2 the card's medium, which disagrees in kind and
 /// extension, and port 7, which no machine lists.
-pub const FAULT_CONSOLE_ROLLED_BACK: u32 = 1 << 21;
-pub const FAULT_MEDIUM_DISAGREES: u32 = 1 << 22;
+pub const FAULT_CONSOLE_ROLLED_BACK: u64 = 1 << 21;
+pub const FAULT_MEDIUM_DISAGREES: u64 = 1 << 22;
 /// Seeded faults for the kit's C16 and C18 on a machine that lists no drive: a media call taken, a media call answered
 /// with a status of the fault band, and a place named for the drive the machine does not list.
-pub const FAULT_DRIVELESS_ACCEPTS: u32 = 131072;
-pub const FAULT_DRIVELESS_FAULTS: u32 = 262144;
-pub const FAULT_DRIVELESS_NAMES_PLACES: u32 = 524288;
+pub const FAULT_DRIVELESS_ACCEPTS: u64 = 131072;
+pub const FAULT_DRIVELESS_FAULTS: u64 = 262144;
+pub const FAULT_DRIVELESS_NAMES_PLACES: u64 = 524288;
 /// Seeded fault for the kit's C20 (since 1.9): a picture answered as on the device by a machine nobody lent one, which
 /// the host would then read from a buffer that does not exist (EmuSen_CoreAPI.md §6.29). Without it the test core,
 /// which draws on no device, answers that every picture is in `frame_copy`.
-pub const FAULT_DEVICE_PICTURE_UNLENT: u32 = 1 << 23;
+pub const FAULT_DEVICE_PICTURE_UNLENT: u64 = 1 << 23;
 /// Seeded fault for the kit's C21 (since 1.10): the raw picture's first value one more than the frame's pixel, so that
 /// the palette the core declares no longer draws its own frame (EmuSen_CoreAPI.md §6.30).
-pub const FAULT_RAW_DISAGREES: u32 = 1 << 24;
+pub const FAULT_RAW_DISAGREES: u64 = 1 << 24;
 /// Seeded fault for the kit's C7 (EmuSen_CoreAPI.md §28.14): from frame `STATE_LOST_FROM` on, each picture's red adds a
 /// byte of the frame before that no state holds, as a woven picture's other field does, so that only a machine given a
 /// state there by another shows it wrong, for one frame; a machine loading its own state does not see it.
-pub const FAULT_STATE_LOST_LATE: u32 = 1 << 25;
+pub const FAULT_STATE_LOST_LATE: u64 = 1 << 25;
 pub const STATE_LOST_FROM: i64 = 90;
 /// Seeded fault for the kit's C22 (since 1.11): a machine started empty reports a disc in its drive.
-pub const FAULT_EMPTY_LOADED: u32 = 1 << 26;
+pub const FAULT_EMPTY_LOADED: u64 = 1 << 26;
 /// Seeded fault for the kit's C23 (since 1.12): the boot ROM's checksum a digit short, which the schema's pattern lets by.
-pub const FAULT_MD5_SHORT: u32 = 1 << 27;
+pub const FAULT_MD5_SHORT: u64 = 1 << 27;
 /// Not a fault: an image whose payload begins with `UNLOGGED_INTERRUPT` stops an observed frame for an interrupt every fourth
 /// frame with no call logged, as a core whose loop dispatches interrupts outside its call log does (MarsRT's); the host
 /// notes it from the stop reason (EmuSen_CoreAPI.md §6.14).
@@ -101,12 +101,29 @@ pub const UNLOGGED_INTERRUPT: u8 = 0x16;
 /// Not a fault: an image whose payload begins with `HELPER` has a second processor, "Helper", whose breakpoints are
 /// refused, so that it cannot halt (EmuSen_CoreAPI.md §6.14).
 pub const HELPER: u8 = 0xC2;
+/// Seeded faults for core ABI 1.13's items (EmuSen_CoreAPI.md §6.33-§6.38): the unit answering one register short
+/// (C14); a counter of kind `total` that moves at each read (C14); `frame_info.lines` not dividing the height (C6); a
+/// controller's presence taken on a port machine info does not list (C14); the core's pokes applied at the end of a
+/// frame it says holds them (C14); and a translation that answers otherwise at each call (C15).
+pub const FAULT_UNIT_SHORT: u64 = 1 << 28;
+pub const FAULT_TELEMETRY_MOVES: u64 = 1 << 29;
+pub const FAULT_LINES_UNEVEN: u64 = 1 << 30;
+pub const FAULT_PRESENCE_ANY_PORT: u64 = 1 << 31;
+pub const FAULT_POKES_WHILE_HELD: u64 = 1 << 32;
+pub const FAULT_TRANSLATE_UNSTABLE: u64 = 1 << 33;
+/// Not a fault, since 1.13: an image whose payload begins with `HELD_CHEATS` holds the cheats at the end of every
+/// fourth frame, its own pokes and a host's, as a console whose cheat device holds off does (EmuSen_CoreAPI.md §6.37).
+pub const HELD_CHEATS: u8 = 0xC4;
+/// The test core's one unit (since 1.13): the timer, its count and the frames it has run.
+pub const TIMER_UNIT: u32 = 256;
+/// RAM's byte whose bit n says port n has no controller (`PRESENCE`, since 1.13), kept in the state as a console keeps it.
+const ABSENT: usize = 5;
 /// A made-up checksum the boot ROM entry lists, so that C23 has one to check; no image has it on purpose.
 const BOOT_MD5: &str = "00112233445566778899aabbccddeeff";
 /// The included faults, narrowed to the bits of `EMUSEN_TEST_CORE_FAULTS` when that is set, so each can be shown alone.
-fn faults() -> u32 {
-    static MASK: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
-    TEST_FAULTS & *MASK.get_or_init(|| std::env::var("EMUSEN_TEST_CORE_FAULTS").ok().and_then(|v| v.parse().ok()).unwrap_or(u32::MAX))
+fn faults() -> u64 {
+    static MASK: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    TEST_FAULTS & *MASK.get_or_init(|| std::env::var("EMUSEN_TEST_CORE_FAULTS").ok().and_then(|v| v.parse().ok()).unwrap_or(u64::MAX))
 }
 static INFO_CALLS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 static MADE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
@@ -196,6 +213,11 @@ pub struct TestCore {
     interrupted: i64,
     /// `HELPER`: the second processor listed.
     helper: bool,
+    /// `HELD_CHEATS`: whether every fourth frame holds the cheats, and whether the last frame did.
+    holds: bool,
+    cheats_held: bool,
+    /// Reads of `telemetry` and of `debug_translate`, which their seeded faults answer by.
+    reads: std::cell::Cell<i64>,
 }
 
 /// The test core's one encoding of its picture before the palette: each pixel's red byte (EmuSen_CoreAPI.md §6.30).
@@ -280,6 +302,9 @@ impl TestCore {
             unlogged_interrupts: body.first() == Some(&UNLOGGED_INTERRUPT),
             interrupted: -1,
             helper: body.first() == Some(&HELPER),
+            holds: body.first() == Some(&HELD_CHEATS),
+            cheats_held: false,
+            reads: std::cell::Cell::new(0),
         };
         m.draw();
         Ok(m)
@@ -516,7 +541,8 @@ impl Core for TestCore {
             self.sram_dirty = true;
             emit(event::BATTERY, 0, 0);
         }
-        for q in self.pokes.chunks_exact(4) {
+        self.cheats_held = self.holds && self.frames % 4 == 0;
+        for q in self.pokes.chunks_exact(4).filter(|_| !self.cheats_held || faults() & FAULT_POKES_WHILE_HELD != 0) {
             if q[0] == 0 && (q[3] == flags::NO_COMPARE || self.ram[q[1] as usize & 0xFF] as u32 == q[3]) {
                 self.ram[q[1] as usize & 0xFF] = q[2] as u8;
             }
@@ -568,7 +594,9 @@ impl Core for TestCore {
     }
 
     fn frame_info(&self) -> FrameInfo {
-        FrameInfo { serial: self.frames, aspect_num: 4, aspect_den: 3, ..FrameInfo::rgba(self.width(), 4) }
+        let lines = if faults() & FAULT_LINES_UNEVEN != 0 { 3 } else if self.wide { 2 } else { 0 };
+        let flags = if self.cheats_held { flags::FRAME_CHEATS_HELD } else { 0 };
+        FrameInfo { serial: self.frames, aspect_num: 4, aspect_den: 3, lines, flags, ..FrameInfo::rgba(self.width(), 4) }
     }
 
     fn frame(&self) -> &[u8] {
@@ -767,7 +795,46 @@ impl Core for TestCore {
     }
 
     fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
-        if processor == 0 { Ok(vec![self.frames]) } else { Err(status::NOT_SUPPORTED) }
+        match processor {
+            0 => Ok(vec![self.frames]),
+            TIMER_UNIT if faults() & FAULT_UNIT_SHORT != 0 => Ok(vec![self.ram[2] as i64]),
+            TIMER_UNIT => Ok(vec![self.ram[2] as i64, self.frames]),
+            _ => Err(status::NOT_SUPPORTED),
+        }
+    }
+
+    fn units(&self) -> Vec<Unit> {
+        vec![Unit { id: TIMER_UNIT, name: "Timer".into(), kind: "timer".into(), registers: vec![("Count".into(), 8), ("Frames".into(), 64)] }]
+    }
+
+    fn counters(&self) -> Vec<Counter> {
+        let counter = |name: &str, label: &str, unit: &str, kind: &str| Counter { name: name.into(), label: label.into(), unit: unit.into(), kind: kind.into() };
+        vec![counter("test.frames", "Frames run", "frames", "total"), counter("test.samples", "Samples waiting", "samples", "level")]
+    }
+
+    fn telemetry(&self, out: &mut [i64]) -> usize {
+        let moved = if faults() & FAULT_TELEMETRY_MOVES != 0 { self.reads.replace(self.reads.get() + 1) + 1 } else { 0 };
+        for (o, v) in out.iter_mut().zip([self.frames + moved, self.samples.len() as i64]) {
+            *o = v;
+        }
+        2
+    }
+
+    fn set_present(&mut self, port: u32, present: bool) -> Result<(), i32> {
+        if port >= 2 && faults() & FAULT_PRESENCE_ANY_PORT == 0 {
+            return Err(status::NO_SUCH_PORT);
+        }
+        let bit = 1u8 << (port % 8);
+        self.ram[ABSENT] = if present { self.ram[ABSENT] & !bit } else { self.ram[ABSENT] | bit };
+        Ok(())
+    }
+
+    fn debug_translate(&self, processor: u32, address: u32) -> Result<Option<u32>, i32> {
+        if processor != 0 {
+            return Err(status::NOT_SUPPORTED);
+        }
+        let skew = if faults() & FAULT_TRANSLATE_UNSTABLE != 0 { (self.reads.replace(self.reads.get() + 1) & 1) as u32 } else { 0 };
+        Ok((address < 0x1_0000).then_some((address & 0xFF) + skew))
     }
 
     fn battery_files(system: &str) -> Option<Vec<Battery>> {

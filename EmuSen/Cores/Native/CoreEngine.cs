@@ -108,6 +108,9 @@ namespace EmuSen.Cores.Native
         public virtual int ScreenHeight => _shape.Height * (RepeatRows ? Math.Max(1, _shape.RowRepeat) : 1);
 
         // The frame's own shape when the core gives one, else its machine's; 0 when it gives neither - see EmuSen_Serenity.md §2.9.
+        // The console's lines in a picture drawn at a whole multiple of them, 0 where its rows are its lines - see EmuSen_CoreAPI.md §6.35.
+        public int DisplayLines => _shape.Lines;
+
         public virtual double DisplayAspect =>
             _shape.AspectNum > 0 && _shape.AspectDen > 0 ? _shape.AspectNum / (double)_shape.AspectDen
             : _machine?.Info is { AspectNum: > 0, AspectDen: > 0 } info ? info.AspectNum / (double)info.AspectDen : 0;
@@ -148,6 +151,9 @@ namespace EmuSen.Cores.Native
                 _input.Hold(port, pressed ? bit : 0, bit);
             }
         }
+
+        // A controller plugged in or pulled out, sent to a core claiming PRESENCE as the next frame starts - see EmuSen_CoreAPI.md §6.36.
+        public void SetControllerConnected(int port, bool connected) => _input.Connect(port, connected);
 
         public void SetAxis(int port, PadAxis axis, double value)
         {
@@ -525,7 +531,8 @@ namespace EmuSen.Cores.Native
         protected virtual void EndFrame(CoreMachine m)
         {
             FrameLog.RecordFrame(TotalFrames, _readForFrameLog);
-            if (_machine is not null) _hostCheats.ApplyAll(_read, _write);
+            // A frame the core says its console's cheat devices hold off for gets none of the host's - see EmuSen_CoreAPI.md §6.37.
+            if (_machine is not null && _hostCheats.MasterEnabled && (m.FrameInfo.Flags & CoreInterface.FrameCheatsHeld) == 0) _hostCheats.ApplyAll(_read, _write);
             if (Freezes.Count > 0) Freezes.Enforce(_read, _write);
             Breakpoints.NoteFrame(TotalFrames);
             if (BatterySave.IsFlushFrame(TotalFrames)) SaveSram();
@@ -729,6 +736,9 @@ namespace EmuSen.Cores.Native
             for (int i = 0; i < n; i++) into[i] = _phaseScratch[i] / 1e6;
             return n;
         }
+
+        // TELEMETRY's counters, in machine info's order, into the caller's buffer, allocating nothing; how many there are - see EmuSen_CoreAPI.md §6.34.
+        public int Telemetry(Span<long> into) => _machine?.Telemetry(into) ?? 0;
 
         public IReadOnlyList<(string Name, double Milliseconds)> LastFramePhases
         {

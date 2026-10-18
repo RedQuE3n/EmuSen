@@ -1,6 +1,6 @@
 # EmuSen — the backend in Rust: the line, the frontend API, the system packs and the services
 
-*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
+*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18), and B4's shared part with core ABI 1.13 (§22, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
 get the entire backend ported to rust", after which the frontend's move is planned, and the request of 2026-10-17 to
 design two things: one frontend API by which every frontend drives the cores, and the system packs and the remaining C#
 platform services in Rust. Every claim about the code was read on `WiseMan` at `165e60b4`. Claims are marked as
@@ -4293,3 +4293,80 @@ Run again with its neighbours (`MoonTestRomTests`, `GameRefusalTests`, `SharedHo
 **Sizes, against §7's B4 row** [M: `git diff --numstat`]: about 215 lines of C# added and 100 removed in the host and
 the shims, 22 in the test core, 199 in `SharedHostTests`; §7 estimated 300 for "the generic C# adapter" and §17.7
 about 150 for these host pieces.
+
+### 22.4 Core ABI 1.13, as built
+
+One minor of six items, as §20 decided; the normative text is `EmuSen_CoreAPI.md` §6.33 to §6.38 and its changelog's
+row, the summary `EmuSen_CoreAPI_Extensions.md` §15.
+
+- **Units, under that name.** §17.3's `units` and §19.4's `devices` were one proposal; `units` was taken because 1.9
+  already gave "device" to the Vulkan device a host lends (`emusen_device_lend`, `DEVICE_PICTURE`) and the extensions
+  page's §10.1 to a controller kind. **Ids from 256**, §19.4's choice, kept: processors are below 24 by the coverage
+  flags, so `debug_registers` reads either with no second argument. Machine info's `units` is written only when a
+  core lists any, through `Core::units`, beside `processors`, so no existing core's machine info changes.
+- **`TELEMETRY`** (bit 23): `emusen_core_telemetry` and machine info's `telemetry`, `Core::counters` and
+  `Core::telemetry(&self, out: &mut [i64]) -> usize`, which writes into the host's buffer and allocates nothing.
+- **`frame_info.lines`**: `emusen_frame_info` grown to 64 bytes. `emusen-native`'s `frame_info` refused any struct
+  shorter than its own until now, which would have refused every 1.12 host's 56 bytes once the struct grew; it now
+  takes a struct of 56 or more and writes what both sides know, §4.2's rule, shown by a crate test with a struct of 56.
+- **`PRESENCE`** (bit 24): `emusen_core_set_present`, the narrow form; the crate refuses a `present` other than 0 or 1
+  before the core sees it.
+- **`EMUSEN_FRAME_CHEATS_HELD`** (frame flag 2), no bit.
+- **`DEBUG_TRANSLATE`** (bit 25, only with `DEBUG`, which `core_exports!` checks at compile time):
+  `emusen_core_debug_translate`.
+
+**The host.** `CoreInterface` at 1.13 with the three bits, the three exports and `FrameInfo.Lines`;
+`CoreMachineInfo.Units` and `.Telemetry`; `CoreMachine.Telemetry`, `.SetPresent` and `.Translate`;
+`CoreEngine.Telemetry(Span<long>)`, `SetControllerConnected` (through the input latch, a change sent as the next frame
+starts), `DisplayLines` (the last frame's `lines`) and the frame end, which reads `frame_info` once while it holds
+cheats of its own and skips them after a held frame; `CoreDebugTarget`'s `VideoRegisters` from `video` units,
+`ApuRegisters` from `audio`, `timer` and `cartridge` units (a board headed by `Board:<label>`), `Counters` (a new
+`ICoreTelemetry` member, defaulted to none) and `ResolvePhysical` translating first. Every provider is filled from a
+ring at each refresh and allocates nothing. Not built: the session service's telemetry kind and `coretop`'s list,
+which are the frontend API's next minor (§18.4.1 put them there).
+
+**The kit.** Each check is made only where its item is claimed or listed, so that a core claiming none is reported
+as at 1.12: C2 holds the three new exports to their bits (as it does every export); C5 calls each claimed export;
+every frame's checks hold `lines` to 0 or a divisor of the height; C14 checks the units, the counters, presence's
+refusals and, on a core claiming `CHEAT_POKES` with a `cheats` space, that a held frame applies none of the core's
+pokes (one machine runs 32 frames with a poke, and only if a frame is held do two machines, with the poke and
+without, run side by side); C15 checks the translation. The test core claims all six; six seeded faults, 1 << 28 to
+1 << 33 (the test cores' faults are now 64 bits wide), each fail their case alone.
+
+### 22.5 Tested
+
+Measured on 2026-10-18 [M]:
+
+| What | Result |
+|---|---|
+| `emusen-native`, `cargo test --profile test-checked` | 79 passed (78 before, the new one the minor's items on the test core) |
+| `emusen-core-abi-check` tests; `--check --against` the 1.12 baseline | 6 passed; 509 facts agree on 4 triples, with the Rust and with the baseline (485 at 1.12; `struct emusen_frame_info` keeps its 1.0 line of 56 bytes, the two fields their own lines) |
+| The header as C99, C11 and C++17, `-Wall -Wextra -pedantic -Werror` | compiles |
+| `emusen-core-conform`, `cargo test --profile test-checked` | 8 and 26 passed (two new: each 1.13 fault alone, and the items reported only where claimed) |
+| `export_check.py` on every core's library and the test core | every core's exports as the baseline requires, ABI 1.13; the test core 65 symbols |
+| **The kit's corpus on every core**, at 600 frames, the old kit on the libraries of `WiseMan` before the minor against the new kit on the same tree with it: MoonRT (4 NES images, `--self-delimiting`), MercuryRT (4), VenusRT (2), MarsRT (Super Mario 64, Ocarina of Time), Nephrite (`genesis-sample.txt`, 64), Diamond (`psx-sample.txt`, 9) | **91 reports (85 images and the six summaries), every case's verdict and evidence the same** once the minor's number (C1's "core ABI 1.13", the heading's `abi`) and C13's count of rounds are set aside; every core's info is the same but its `abi`, and its settings schema the same to the byte. MoonRT and MarsRT were run again after their second phases were merged (their own registers claimed), with the same result (5 and 3 reports) |
+| WiseMan, the minor's blast radius, first run (49 classes: `CoreAbi113Tests`, `CoreAbiTests`, `CoreAdapterTests`, `CoreDiscoveryTests`, `CoreRegistrationEquivalenceTests`, `SharedHostTests`, `CoreEngineThreadTests`, the VenusRT, Diamond, Nephrite, MarsRT, MoonRT and MercuryRT adapter and debug classes, `MultiplayerTests`, `ControllerPortTests`, `PadButtonTests`, `GameRefusalTests`, the `ManagedCrystal` classes, `FrontendDefectTests`, `HotaruOnTheApiTests`, `SessionServiceParityTests`, `StateRefusalTests`, `GoldenCorpusTests`, `DisplayAspectTests`, the cheat, breakpoint, battery and rewind classes) | 687 tests, 684 passed, 3 failed: `CoreAbiTests`' count of 62 exports and a unit's expected first register (the tests' own numbers, corrected), and **`The_frame_call_allocates_nothing`**, a real regression: the target's ring walked machine info's units with `foreach` over an `IReadOnlyList`, whose enumerator is an allocation a frame once a core lists any; both loops were made index loops |
+| The same on `WiseMan` at `e1350291` (MarsRT's second phase merged), with `MarsCoreSettingsTests`, `MarsDebugTests`, `MarsRtDebugTests`, `MarsRtEngineTests`, `MercuryRtDebugTests`, `MoonRtFrontendTests` and `NativeHostTests` added (56 classes) | **787 tests, 787 passed**, 13 min 49 s |
+
+### 22.6 Sizes, against §7
+
+[M: `git diff --numstat`] In `emusen-native`, the header and the guard, about 290 lines added (the trait's five
+methods and three groups, the descriptors' writer, the three exports, the header's text) and 300 more in the test
+core, the crate's tests and the schema; in the kit about 270 (its API, the checks, the tests); in the host about 160
+of C#, and 139 in `CoreAbi113Tests`. §17.3 estimated 40 for the units in the crate and 60 in the host, §19.4 60 in the
+crate and header, 120 in the host and 60 in the kit, and §18.7 250 in `emusen-native` and the kit for its five items;
+together about 590 against about 720 built, the difference mostly the test core's six faults and the kit's tests of
+them. The whole shared part, both halves, is about 1,000 lines of Rust and C and 375 of C# beside about 340 of tests,
+inside §7's B4 row (1,500 to 3,000 of Rust across the cores, 300 of generic C#), of which the cores' own fills are
+still to come.
+
+### 22.7 For the core branches, and what was not done
+
+- **No core claims an item.** MarsRT's counters, presence, cheat gate, lines and translation, MoonRT's and
+  MercuryRT's units, and each console's pack views of §31.7 are their branches' work; the host reads each as soon as a
+  core claims it.
+- **The frame-time exception mapping** of `PortEngine` and MoonRT's `Reset` stays until those shims go (§22.2).
+- **The session service and `coretop`** do not yet show the counters (§22.4).
+- **No platform interface number was taken**: neither half changed the platform library's C interface.
+- **The shims hide `CoreEngine.Labels`** with labels of their own (MercuryRT's, MoonRT's and MarsRT's registries,
+  compiler warning CS0108); left as it is, since each goes with its shim.

@@ -435,6 +435,8 @@ pub unsafe fn machine_info<T: Core>(machine: *const Machine, out: *mut u8, len: 
         capabilities: T::CAPABILITIES,
         picture_settles: core.picture_settles(),
         raw: &if T::CAPABILITIES & caps::RAW_PICTURE != 0 { core.raw_encodings() } else { Vec::new() },
+        units: &if T::CAPABILITIES & caps::DEBUG_REGISTERS != 0 { core.units() } else { Vec::new() },
+        telemetry: &if T::CAPABILITIES & caps::TELEMETRY != 0 { core.counters() } else { Vec::new() },
     };
     let drives = if T::CAPABILITIES & caps::MEDIA != 0 { core.drives() } else { Vec::new() };
     let text = desc::machine_info_json(&core.machine_info(), &measured, &drives);
@@ -510,7 +512,8 @@ pub unsafe fn frame_info<T: Core>(machine: *const Machine, out: *mut FrameInfo) 
     if out.is_null() {
         return NULL;
     }
-    if (unsafe { std::ptr::read_unaligned(out as *const u32) } as usize) < size_of::<FrameInfo>() {
+    let size = unsafe { std::ptr::read_unaligned(out as *const u32) } as usize;
+    if size < FrameInfo::SIZE_1_0 {
         return status::BAD_STRUCT;
     }
     let mut f = inst.core.frame_info();
@@ -520,8 +523,8 @@ pub unsafe fn frame_info<T: Core>(machine: *const Machine, out: *mut FrameInfo) 
     if T::CAPABILITIES & caps::ROW_REPEAT == 0 {
         f.row_repeat = 1;
     }
-    // Everything after `size`, which stays the host's.
-    unsafe { std::ptr::copy_nonoverlapping((&f as *const FrameInfo as *const u8).add(4), (out as *mut u8).add(4), size_of::<FrameInfo>() - 4) };
+    // Everything after `size` that both sides know (since 1.13 a host's struct of 56 bytes has no `lines`); `size` stays the host's.
+    unsafe { std::ptr::copy_nonoverlapping((&f as *const FrameInfo as *const u8).add(4), (out as *mut u8).add(4), size.min(size_of::<FrameInfo>()) - 4) };
     0
 }
 
@@ -823,6 +826,23 @@ pub unsafe fn media_insert<T: Core>(machine: *mut Machine, drive: u32, media: *c
     status_of(r)
 }
 
+// ---- Telemetry and presence (since 1.13) ----------------------------------------------------------------------
+
+/// `TELEMETRY`: the counters' values in machine info's order, `min(len, count)` copied; their count. Never allocates.
+pub unsafe fn telemetry<T: Core>(machine: *const Machine, out: *mut i64, len: usize) -> i64 {
+    let Some(inst) = (unsafe { shared::<T>(machine) }) else { return NULL as i64 };
+    inst.core.telemetry(unsafe { slice_mut(out, len) }) as i64
+}
+
+/// `PRESENCE`: a controller in `port` (1) or none (0); any other value is refused before the core sees it.
+pub unsafe fn set_present<T: Core>(machine: *mut Machine, port: u32, present: u32) -> i32 {
+    let Some(inst) = (unsafe { mutable::<T>(machine) }) else { return NULL };
+    if present > 1 {
+        return status::NOT_SUPPORTED;
+    }
+    status_of(call(inst, |c| c.set_present(port, present == 1)))
+}
+
 // ---- Debug ---------------------------------------------------------------------------------------------------
 
 fn hooks<'a, T: Core + 'a>(machine: *mut Machine) -> Result<&'a mut debug::Hooks, i32> {
@@ -925,6 +945,21 @@ pub unsafe fn debug_registers<T: Core>(machine: *const Machine, processor: u32, 
     match look(inst, |c| c.debug_registers(processor)) {
         Ok(values) => unsafe { copy_values(&values, out, len) },
         Err(e) => e as i64,
+    }
+}
+
+/// `DEBUG_TRANSLATE` (since 1.13): 1 with the bus address written, 0 where nothing maps it, or a status.
+pub unsafe fn debug_translate<T: Core>(machine: *const Machine, processor: u32, address: u32, bus: *mut u32) -> i32 {
+    let Some(inst) = (unsafe { shared::<T>(machine) }) else { return NULL };
+    match look(inst, |c| c.debug_translate(processor, address)) {
+        Ok(Some(at)) => {
+            if let Some(b) = unsafe { bus.as_mut() } {
+                *b = at;
+            }
+            1
+        }
+        Ok(None) => 0,
+        Err(e) => e,
     }
 }
 

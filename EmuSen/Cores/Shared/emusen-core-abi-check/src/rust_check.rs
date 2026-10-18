@@ -81,6 +81,9 @@ signatures! {
     emusen_core_raw_select: emusen_core_raw_select_fn,
     emusen_core_raw_info: emusen_core_raw_info_fn,
     emusen_core_raw_copy: emusen_core_raw_copy_fn,
+    emusen_core_telemetry: emusen_core_telemetry_fn,
+    emusen_core_set_present: emusen_core_set_present_fn,
+    emusen_core_debug_translate: emusen_core_debug_translate_fn,
 }
 
 macro_rules! layouts {
@@ -107,7 +110,7 @@ macro_rules! layouts {
 layouts! {
     sys::FileEntry = emusen_file { size, which, data, len } [];
     sys::CreateParams = emusen_create_params { size, host_abi_version, image, image_len, settings, settings_len, file_count, file_size, pixel_formats, error, error_len, flags } [files, device, system];
-    sys::FrameInfo = emusen_frame_info { size, format, width, height, stride, row_repeat, flags, aspect_num, aspect_den, reserved, serial, bytes } [];
+    sys::FrameInfo = emusen_frame_info { size, format, width, height, stride, row_repeat, flags, aspect_num, aspect_den, reserved, serial, bytes, lines, reserved2 } [];
     sys::Event = emusen_event { size, kind, a, b } [];
     sys::Media = emusen_media { size, flags, image, image_len, file_count, file_size } [files];
     sys::DeviceLend = emusen_device_lend { size, api_version, get_instance_proc_addr, instance, physical_device, device, queue_family, queue_index, host_queue_family, reserved, done } [];
@@ -171,8 +174,12 @@ constants! {
     EMUSEN_CAP_BORROW = caps::BORROW,
     EMUSEN_CAP_DEVICE_PICTURE = caps::DEVICE_PICTURE,
     EMUSEN_CAP_RAW_PICTURE = caps::RAW_PICTURE,
+    EMUSEN_CAP_TELEMETRY = caps::TELEMETRY,
+    EMUSEN_CAP_PRESENCE = caps::PRESENCE,
+    EMUSEN_CAP_DEBUG_TRANSLATE = caps::DEBUG_TRANSLATE,
     EMUSEN_OPTION_SKIP_RENDERING = flags::OPTION_SKIP_RENDERING,
     EMUSEN_FRAME_WALKED = flags::FRAME_WALKED,
+    EMUSEN_FRAME_CHEATS_HELD = flags::FRAME_CHEATS_HELD,
     EMUSEN_BATTERY_CHANGED = flags::BATTERY_CHANGED,
     EMUSEN_BATTERY_TRACKED = flags::BATTERY_TRACKED,
     EMUSEN_FILE_BATTERY = flags::FILE_BATTERY,

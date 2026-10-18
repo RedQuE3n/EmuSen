@@ -573,6 +573,29 @@ namespace EmuSen.Cores.Native
             }
         }
 
+        // TELEMETRY's counters into the caller's buffer, allocating nothing; how many there are, written only as far as the buffer holds them - see EmuSen_CoreAPI.md §6.34.
+        public int Telemetry(Span<long> into)
+        {
+            if (_api.Telemetry == null || !Has(CoreInterface.CapTelemetry)) return 0;
+            lock (_gate)
+                fixed (long* v = into) return (int)Math.Max(0, _api.Telemetry(Handle, v, (nuint)into.Length));
+        }
+
+        // PRESENCE: a controller in the port or none; a port the machine lacks is ignored - see EmuSen_CoreAPI.md §6.36.
+        public void SetPresent(int port, bool present)
+        {
+            if (_api.SetPresent == null || !Has(CoreInterface.CapPresence)) return;
+            lock (_gate) _api.SetPresent(Handle, (uint)port, present ? 1u : 0);
+        }
+
+        // DEBUG_TRANSLATE: the processor's bus address for an address, null where nothing maps it or the core does not translate - see EmuSen_CoreAPI.md §6.38.
+        public uint? Translate(uint processor, uint address)
+        {
+            if (_api.DebugTranslate == null || !Has(CoreInterface.CapDebugTranslate)) return null;
+            uint bus;
+            lock (_gate) return _api.DebugTranslate(Handle, processor, address, &bus) == 1 ? bus : null;
+        }
+
         // The phase times into the caller's buffer, allocating nothing; how many there are, written only when the buffer holds them.
         public int Phases(Span<long> into)
         {

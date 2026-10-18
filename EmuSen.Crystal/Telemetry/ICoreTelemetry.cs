@@ -27,6 +27,9 @@ namespace EmuSen.Crystal.Telemetry
         IRealtimeProvider<IReadOnlyList<DebugPaletteInfo>> Palettes { get; }
         IRealtimeProvider<IReadOnlyList<DebugAudioChannelInfo>> AudioChannels { get; }
 
+        // The core's own counters (core ABI 1.13's TELEMETRY); none for a core that publishes none - see EmuSen_CoreAPI.md §6.34.
+        IRealtimeProvider<IReadOnlyList<DebugCounterValue>> Counters => NoCounters.Provider;
+
         // Per-subsystem load bars; an empty list means this core models none - see §3.66.3.
         IRealtimeProvider<IReadOnlyList<DebugLoadInfo>> HardwareLoad { get; }
 
@@ -44,5 +47,11 @@ namespace EmuSen.Crystal.Telemetry
 
         // Free-text core state, for whatever is too core-specific to model - see §3.66.3.
         string GetSummaryText();
+    }
+
+    // The empty counters, one provider for every target that has none.
+    internal static class NoCounters
+    {
+        public static readonly IRealtimeProvider<IReadOnlyList<DebugCounterValue>> Provider = new PollingProvider<IReadOnlyList<DebugCounterValue>>(() => System.Array.Empty<DebugCounterValue>(), System.Array.Empty<DebugCounterValue>());
     }
 }

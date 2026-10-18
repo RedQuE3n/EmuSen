@@ -19,11 +19,13 @@ const EMUSEN_CAP_DEBUG_DISASSEMBLE 0x20000 @1.0
 const EMUSEN_CAP_DEBUG_READS 0x80000 @1.2
 const EMUSEN_CAP_DEBUG_REGISTERS 0x10000 @1.0
 const EMUSEN_CAP_DEBUG_STACK 0x2000 @1.0
+const EMUSEN_CAP_DEBUG_TRANSLATE 0x2000000 @1.13
 const EMUSEN_CAP_DEVICE_PICTURE 0x200000 @1.9
 const EMUSEN_CAP_FRAME_SERIAL 0x100 @1.0
 const EMUSEN_CAP_MEDIA 0x40000 @1.1
 const EMUSEN_CAP_MUTES 0x20 @1.0
 const EMUSEN_CAP_PHASES 0x80 @1.0
+const EMUSEN_CAP_PRESENCE 0x1000000 @1.13
 const EMUSEN_CAP_PRESENT 0x2 @1.0
 const EMUSEN_CAP_RAW_PICTURE 0x400000 @1.10
 const EMUSEN_CAP_RESET 0x1 @1.0
@@ -32,9 +34,10 @@ const EMUSEN_CAP_ROW_REPEAT 0x200 @1.0
 const EMUSEN_CAP_SETTINGS 0x40 @1.0
 const EMUSEN_CAP_SETTING_NOTES 0x8000 @1.0
 const EMUSEN_CAP_SNAPSHOT 0x4 @1.0
+const EMUSEN_CAP_TELEMETRY 0x800000 @1.13
 const EMUSEN_CORE_ABI_MAJOR 0x1 @1.0
-const EMUSEN_CORE_ABI_MINOR 0xc @1.12
-const EMUSEN_CORE_ABI_VERSION 0x1000c @1.12
+const EMUSEN_CORE_ABI_MINOR 0xd @1.13
+const EMUSEN_CORE_ABI_VERSION 0x1000d @1.13
 const EMUSEN_CREATE_LENT 0x1 @1.3
 const EMUSEN_CREATE_SHARED_CONSOLE 0x4 @1.8
 const EMUSEN_CREATE_SHARED_REMOVABLE 0x2 @1.7
@@ -48,6 +51,7 @@ const EMUSEN_DEBUG_WRITES 0x2 @1.0
 const EMUSEN_FILE_BATTERY 0x0 @1.0
 const EMUSEN_FILE_IMAGE 0xffffffff @1.4
 const EMUSEN_FILE_MEDIA 0x10000 @1.1
+const EMUSEN_FRAME_CHEATS_HELD 0x2 @1.13
 const EMUSEN_FRAME_WALKED 0x1 @1.0
 const EMUSEN_MEDIA_LENT 0x2 @1.3
 const EMUSEN_MEDIA_RESTORE 0x1 @1.1
@@ -123,6 +127,7 @@ export emusen_core_debug_set optional EMUSEN_CAP_DEBUG @1.0
 export emusen_core_debug_set_breakpoints optional EMUSEN_CAP_DEBUG @1.0
 export emusen_core_debug_set_ranges optional EMUSEN_CAP_DEBUG @1.0
 export emusen_core_debug_set_stack optional EMUSEN_CAP_DEBUG_STACK @1.0
+export emusen_core_debug_translate optional EMUSEN_CAP_DEBUG_TRANSLATE @1.13
 export emusen_core_debug_writes optional EMUSEN_CAP_DEBUG @1.0
 export emusen_core_events required @1.0
 export emusen_core_firmware_for required @1.0
@@ -150,6 +155,7 @@ export emusen_core_set_cheat_pokes optional EMUSEN_CAP_CHEAT_POKES @1.0
 export emusen_core_set_crash_log required @1.0
 export emusen_core_set_mutes optional EMUSEN_CAP_MUTES @1.0
 export emusen_core_set_options required @1.0
+export emusen_core_set_present optional EMUSEN_CAP_PRESENCE @1.13
 export emusen_core_set_rom_patches optional EMUSEN_CAP_ROM_PATCHES @1.0
 export emusen_core_set_settings optional EMUSEN_CAP_SETTINGS @1.0
 export emusen_core_setting_notes optional EMUSEN_CAP_SETTING_NOTES @1.0
@@ -162,6 +168,7 @@ export emusen_core_state_load required @1.0
 export emusen_core_state_save required @1.0
 export emusen_core_state_size required @1.0
 export emusen_core_status_text required @1.0
+export emusen_core_telemetry optional EMUSEN_CAP_TELEMETRY @1.13
 field emusen_create_params.device offset 96 type const struct emusen_device_lend* @1.9
 field emusen_create_params.error offset 72 type uint8_t* @1.0
 field emusen_create_params.error_len offset 80 type size_t @1.0
@@ -212,7 +219,9 @@ field emusen_frame_info.bytes offset 48 type int64_t @1.0
 field emusen_frame_info.flags offset 24 type uint32_t @1.0
 field emusen_frame_info.format offset 4 type uint32_t @1.0
 field emusen_frame_info.height offset 12 type int32_t @1.0
+field emusen_frame_info.lines offset 56 type int32_t @1.13
 field emusen_frame_info.reserved offset 36 type uint32_t @1.0
+field emusen_frame_info.reserved2 offset 60 type uint32_t @1.13
 field emusen_frame_info.row_repeat offset 20 type int32_t @1.0
 field emusen_frame_info.serial offset 40 type int64_t @1.0
 field emusen_frame_info.size offset 0 type uint32_t @1.0
@@ -255,6 +264,7 @@ fn emusen_core_debug_set (emusen_machine*, uint32_t, int32_t, int32_t) -> int32_
 fn emusen_core_debug_set_breakpoints (emusen_machine*, uint32_t, const int32_t*, size_t) -> int32_t @1.0
 fn emusen_core_debug_set_ranges (emusen_machine*, uint32_t, const uint32_t*, size_t) -> int32_t @1.0
 fn emusen_core_debug_set_stack (emusen_machine*, const uint32_t*, size_t) -> int32_t @1.0
+fn emusen_core_debug_translate (const emusen_machine*, uint32_t, uint32_t, uint32_t*) -> int32_t @1.13
 fn emusen_core_debug_writes (emusen_machine*, uint32_t*, size_t) -> int64_t @1.0
 fn emusen_core_events (emusen_machine*, emusen_event*, size_t, size_t) -> int64_t @1.0
 fn emusen_core_firmware_for (const uint8_t*, size_t, uint8_t*, size_t) -> int64_t @1.0
@@ -282,6 +292,7 @@ fn emusen_core_set_cheat_pokes (emusen_machine*, const uint32_t*, size_t) -> int
 fn emusen_core_set_crash_log (const char*) -> int32_t @1.0
 fn emusen_core_set_mutes (emusen_machine*, uint32_t) -> int32_t @1.0
 fn emusen_core_set_options (emusen_machine*, uint32_t) -> int32_t @1.0
+fn emusen_core_set_present (emusen_machine*, uint32_t, uint32_t) -> int32_t @1.13
 fn emusen_core_set_rom_patches (emusen_machine*, const uint32_t*, size_t) -> int64_t @1.0
 fn emusen_core_set_settings (emusen_machine*, const uint8_t*, size_t) -> int32_t @1.0
 fn emusen_core_setting_notes (const emusen_machine*, uint8_t*, size_t) -> int64_t @1.0
@@ -294,6 +305,7 @@ fn emusen_core_state_load (emusen_machine*, const uint8_t*, size_t) -> int32_t @
 fn emusen_core_state_save (emusen_machine*, uint32_t, uint8_t*, size_t) -> int64_t @1.0
 fn emusen_core_state_size (const emusen_machine*, uint32_t) -> int64_t @1.0
 fn emusen_core_status_text (int32_t, uint8_t*, size_t) -> int64_t @1.0
+fn emusen_core_telemetry (const emusen_machine*, int64_t*, size_t) -> int64_t @1.13
 json disassembly array<object> @1.0
 json disassembly[].address integer required @1.0
 json disassembly[].bytes array<integer> required @1.0
@@ -418,6 +430,18 @@ json machine_info.state.loads_from array<integer> optional @1.0
 json machine_info.state.picture_settles integer optional @1.5
 json machine_info.state.version integer required @1.0
 json machine_info.system string required @1.0
+json machine_info.telemetry array<object> optional @1.13
+json machine_info.telemetry[].kind string required @1.13
+json machine_info.telemetry[].label string required @1.13
+json machine_info.telemetry[].name string required @1.13
+json machine_info.telemetry[].unit string required @1.13
+json machine_info.units array<object> optional @1.13
+json machine_info.units[].id integer required @1.13
+json machine_info.units[].kind string required @1.13
+json machine_info.units[].name string required @1.13
+json machine_info.units[].registers array<object> required @1.13
+json machine_info.units[].registers[].bits integer required @1.13
+json machine_info.units[].registers[].name string required @1.13
 json machine_info.video object required @1.0
 json machine_info.video.aspect object required @1.0
 json machine_info.video.aspect.den integer required @1.0

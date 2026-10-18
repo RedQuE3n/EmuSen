@@ -4,7 +4,7 @@
 pub const TEST_ID: &str = "v1-slow-core";
 pub const TEST_NAME: &str = "V1SlowCore";
 pub const TEST_CAPABILITIES: u64 = 0;
-pub const TEST_FAULTS: u32 = SLOW_FRAMES;
+pub const TEST_FAULTS: u64 = SLOW_FRAMES;
 
 include!("../../emusen-native/examples/common/test_core.rs");
 

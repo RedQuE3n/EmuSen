@@ -47,9 +47,12 @@ fn params(image: &[u8], settings: &str, files: &[FileEntry]) -> CreateParams {
 }
 
 fn make(settings: &str) -> *mut Machine {
+    make_image(&image(&[1, 2, 3]), settings)
+}
+
+fn make_image(img: &[u8], settings: &str) -> *mut Machine {
     let mut code = 1;
-    let img = image(&[1, 2, 3]);
-    let m = unsafe { emusen_core_create(&params(&img, settings, &[]), &mut code) };
+    let m = unsafe { emusen_core_create(&params(img, settings, &[]), &mut code) };
     assert_eq!(code, 0);
     assert!(!m.is_null());
     m
@@ -90,9 +93,9 @@ fn every_descriptor_validates_against_its_committed_schema() {
         assert_eq!(schema::validate(s, doc), Vec::<String>::new(), "{doc}");
     }
     let v = crate::json::parse(info.as_bytes()).unwrap();
-    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.12"));
+    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.13"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
-    assert_eq!(names.len(), 23);
+    assert_eq!(names.len(), 26);
     assert!(
         info.contains(r#""battery":[{"which":0,"suffix":".srm"},{"which":1,"suffix":".card","kind":"removable","medium":"test.card","label":"Card slot"},{"which":2,"suffix":".mem","kind":"console","medium":"test.memory","label":"Inside the console"}]"#),
         "core info lists the system's battery files since 1.3, a removable one's kind since 1.7, a console one's and each slot's medium and label since 1.8, and nothing unset: {info}"
@@ -118,7 +121,7 @@ fn a_replacement_and_a_firmware_source_are_written_as_the_schemas_say() {
     assert!(doc.contains(r#""replacement":{"effect":"accuracy","cost":"slower"}"#), "{doc}");
     assert!(doc.contains(r#""effect":"none""#) && doc.matches("replacement").count() == 2, "{doc}");
     let m = MachineInfo { firmware: vec![(2, FirmwareSource::Replacement), (3, FirmwareSource::File)], ..MachineInfo::default() };
-    let measured = super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0, picture_settles: 0, raw: &[] };
+    let measured = super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0, picture_settles: 0, raw: &[], units: &[], telemetry: &[] };
     let mi = super::desc::machine_info_json(&m, &measured, &[]);
     assert!(mi.contains(r#""firmware":[{"which":2,"source":"replacement"},{"which":3,"source":"file"}]"#), "{mi}");
     assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
@@ -142,7 +145,7 @@ fn a_firmware_entrys_md5_list_is_written_only_when_not_empty() {
 fn a_picture_settling_bound_is_written_under_the_state_only_when_declared() {
     use super::desc::{MachineInfo, PICTURE_SETTLES_MAX};
     let m = MachineInfo::default();
-    let of = |n: u32| super::desc::machine_info_json(&m, &super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0, picture_settles: n, raw: &[] }, &[]);
+    let of = |n: u32| super::desc::machine_info_json(&m, &super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0, picture_settles: n, raw: &[], units: &[], telemetry: &[] }, &[]);
     assert!(!of(0).contains("picture_settles"), "{}", of(0));
     assert!(of(240).contains(r#""loads_from":[],"picture_settles":240}"#), "{}", of(240));
     assert_eq!(schema::validate(schema::MACHINE_INFO, &of(PICTURE_SETTLES_MAX)), Vec::<String>::new());
@@ -154,7 +157,7 @@ fn a_picture_settling_bound_is_written_under_the_state_only_when_declared() {
 fn a_view_is_a_flag_of_its_space() {
     use super::desc::{MachineInfo, Space};
     let m = MachineInfo { spaces: vec![Space { read_only: true, view: true, ..Space::new(0, "CPUBUS") }, Space::new(1, "WRAM")], ..MachineInfo::default() };
-    let measured = super::desc::Measured { space_size: &|id| Some(if id == 0 { 1 << 24 } else { 1 << 16 }), battery_len: &|_| None, capabilities: 0, picture_settles: 0, raw: &[] };
+    let measured = super::desc::Measured { space_size: &|id| Some(if id == 0 { 1 << 24 } else { 1 << 16 }), battery_len: &|_| None, capabilities: 0, picture_settles: 0, raw: &[], units: &[], telemetry: &[] };
     let mi = super::desc::machine_info_json(&m, &measured, &[]);
     assert!(mi.contains(r#"{"id":0,"name":"CPUBUS","size":16777216,"flags":["read_only","view"]}"#), "{mi}");
     assert!(mi.contains(r#"{"id":1,"name":"WRAM","size":65536,"flags":[]}"#), "{mi}");
@@ -319,10 +322,14 @@ fn structs_below_their_size_are_refused_and_bytes_past_it_are_left_alone() {
         info: FrameInfo,
         canary: u64,
     }
-    let mut big = Bigger { info: FrameInfo { size: 64, ..FrameInfo::default() }, canary: 0xC0FFEE };
+    let mut big = Bigger { info: FrameInfo { size: 72, ..FrameInfo::default() }, canary: 0xC0FFEE };
     unsafe { emusen_core_advance(m, null_mut()) };
     assert_eq!(unsafe { emusen_core_frame_info(m, &mut big.info) }, 0);
-    assert_eq!((big.info.size, big.canary, big.info.width, big.info.stride, big.info.serial, big.info.aspect_num), (64, 0xC0FFEE, 16, 64, 1, 4));
+    assert_eq!((big.info.size, big.canary, big.info.width, big.info.stride, big.info.serial, big.info.aspect_num, big.info.lines), (72, 0xC0FFEE, 16, 64, 1, 4, 2));
+    // A host of 1.12 passes the 56 bytes it knows; `lines` is past them and is left as the host's.
+    let mut older = Bigger { info: FrameInfo { size: 56, lines: -1, reserved2: 7, ..FrameInfo::default() }, canary: 0xC0FFEE };
+    assert_eq!(unsafe { emusen_core_frame_info(m, &mut older.info) }, 0);
+    assert_eq!((older.info.width, older.info.serial, older.info.lines, older.info.reserved2, older.canary), (16, 1, -1, 7, 0xC0FFEE));
     assert_eq!(big.info.bytes, unsafe { emusen_core_frame_copy(m, null_mut(), 0) });
     #[repr(C)]
     #[derive(Clone, Copy)]
@@ -510,7 +517,7 @@ fn read_ranges_reach_a_core_that_claims_them_and_an_unknown_kind_is_refused() {
 
 #[test]
 fn the_crates_constants_are_the_headers_own_numbers() {
-    assert_eq!(ABI_VERSION, 0x0001_000C);
+    assert_eq!(ABI_VERSION, 0x0001_000D);
     assert_eq!((std::mem::size_of::<CreateParams>(), std::mem::offset_of!(CreateParams, system)), (112, 104), "since 1.11");
     assert_eq!(caps::DEVICE_PICTURE, 1 << 21, "since 1.9");
     assert_eq!((caps::RAW_PICTURE, caps::UNASSIGNED & caps::RAW_PICTURE, std::mem::size_of::<RawFrame>(), std::mem::offset_of!(RawFrame, bytes)), (1 << 22, 0, 32, 24), "since 1.10");
@@ -521,9 +528,9 @@ fn the_crates_constants_are_the_headers_own_numbers() {
     assert_eq!((CreateParams::SIZE_1_0, std::mem::offset_of!(CreateParams, device), std::mem::size_of::<CreateParams>()), (88, 96, 112), "the device lent at 1.9 follows 1.3's flags and their padding, and 1.11's system follows it");
     assert_eq!((status::BAD_STRUCT, status::BAD_IMAGE, status::STATE_VERSION), (-263, -264, -4));
     assert_eq!((status::LID_CLOSED, status::WRONG_MEDIA, status::NO_SUCH_DRIVE, flags::FILE_MEDIA, flags::MEDIA_RESTORE), (-265, -266, -267, 65_536, 1));
-    assert_eq!(EXPORTS.len(), 62);
+    assert_eq!(EXPORTS.len(), 65);
     assert_eq!(EXPORTS.iter().filter(|e| e.1 == 0).count(), 32);
-    assert_eq!(CAPABILITY_NAMES.len(), 23);
+    assert_eq!(CAPABILITY_NAMES.len(), 26);
     assert_eq!((caps::MEDIA, caps::DEBUG_READS, caps::UNASSIGNED & (caps::MEDIA | caps::DEBUG_READS)), (1 << 18, 1 << 19, 0));
     assert_eq!(super::EXPORTING & !(caps::SNAPSHOT | caps::FRAME_SERIAL | caps::ROW_REPEAT | caps::BATTERY_DIRTY), super::EXPORTING);
 }
@@ -796,4 +803,45 @@ fn an_empty_image_starts_a_system_that_starts_empty_and_nothing_else() {
     let short = CreateParams { size: 104, system: c"test".as_ptr(), ..params(&[], "", &[]) };
     assert!(unsafe { emusen_core_create(&short, &mut code) }.is_null(), "a struct of 1.10 carries no system");
     assert_eq!(code, status::BAD_IMAGE);
+}
+
+// Core ABI 1.13's items on the test core (EmuSen_CoreAPI.md §6.33-§6.38): the unit and the counters in machine info,
+// read through their exports; presence on a listed port and refused past it; a translation; the held frame's flag.
+#[test]
+fn the_items_of_1_13_are_written_and_answered() {
+    let m = make("");
+    let info = text(|o, l| unsafe { emusen_core_machine_info(m, o, l) });
+    assert!(info.contains(r#""units":[{"id":256,"name":"Timer","kind":"timer","registers":[{"name":"Count","bits":8},{"name":"Frames","bits":64}]}]"#), "{info}");
+    assert!(info.contains(r#""telemetry":[{"name":"test.frames","label":"Frames run","unit":"frames","kind":"total"},{"name":"test.samples","label":"Samples waiting","unit":"samples","kind":"level"}]"#), "{info}");
+    unsafe { emusen_core_advance(m, null_mut()) };
+    let mut two = [0i64; 2];
+    assert_eq!(unsafe { emusen_core_debug_registers(m, 256, two.as_mut_ptr(), 2) }, 2);
+    assert_eq!(two[1], 1);
+    assert_eq!(unsafe { emusen_core_debug_registers(m, 257, null_mut(), 0) }, status::NOT_SUPPORTED as i64);
+    assert_eq!(unsafe { emusen_core_telemetry(m, null_mut(), 0) }, 2);
+    assert_eq!(unsafe { emusen_core_telemetry(m, two.as_mut_ptr(), 1) }, 2);
+    assert_eq!(two[0], 1);
+    assert_eq!(unsafe { emusen_core_set_present(m, 1, 0) }, 0);
+    assert_eq!(unsafe { emusen_core_set_present(m, 2, 0) }, status::NO_SUCH_PORT);
+    assert_eq!(unsafe { emusen_core_set_present(m, 0, 2) }, status::NOT_SUPPORTED);
+    let mut ram = [0u8; 8];
+    unsafe { emusen_core_space_read(m, 0, 0, ram.as_mut_ptr(), 8) };
+    assert_eq!(ram[5], 2, "port 1 marked empty in the state");
+    let mut bus = 0u32;
+    assert_eq!(unsafe { emusen_core_debug_translate(m, 0, 0x1234, &mut bus) }, 1);
+    assert_eq!(bus, 0x34);
+    assert_eq!(unsafe { emusen_core_debug_translate(m, 0, 0x1_0000, &mut bus) }, 0);
+    assert_eq!(unsafe { emusen_core_debug_translate(m, 1, 0, &mut bus) }, status::NOT_SUPPORTED);
+    unsafe { emusen_core_free(m) };
+    let held = make_image(&image(&[HELD_CHEATS, 2, 3]), "");
+    let mut fi = FrameInfo { size: 64, ..FrameInfo::default() };
+    let flags: Vec<u32> = (0..4)
+        .map(|_| unsafe {
+            emusen_core_advance(held, null_mut());
+            emusen_core_frame_info(held, &mut fi);
+            fi.flags & flags::FRAME_CHEATS_HELD
+        })
+        .collect();
+    assert_eq!(flags, [0, 0, 0, flags::FRAME_CHEATS_HELD]);
+    unsafe { emusen_core_free(held) };
 }

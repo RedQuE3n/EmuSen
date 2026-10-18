@@ -1,4 +1,4 @@
-/* emusen_core.h - the EmuSen core ABI, version 1.12.
+/* emusen_core.h - the EmuSen core ABI, version 1.13.
  *
  * A core is a shared library exporting the functions below, C calling convention. The normative text is
  * EmuSen_CoreAPI.md in the EmuSen manual; this header is its machine-checked half, and where the two disagree the
@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CORE_ABI_MAJOR 1u
-#define EMUSEN_CORE_ABI_MINOR 12u
+#define EMUSEN_CORE_ABI_MINOR 13u
 #define EMUSEN_CORE_ABI_VERSION ((EMUSEN_CORE_ABI_MAJOR << 16) | EMUSEN_CORE_ABI_MINOR)
 
 /* An opaque machine. Several may exist at once, from one library. */
@@ -90,11 +90,17 @@ typedef struct emusen_machine emusen_machine;
 #define EMUSEN_CAP_BORROW            (1ull << 20)  /* @since 1.3: the core keeps pointers into an image and media files lent to it */
 #define EMUSEN_CAP_DEVICE_PICTURE    (1ull << 21)  /* @since 1.9: the core draws on a device the host lends, emusen_core_frame_device */
 #define EMUSEN_CAP_RAW_PICTURE       (1ull << 22)  /* @since 1.10: emusen_core_raw_select, emusen_core_raw_info, emusen_core_raw_copy */
-/* Bits 23..47 are for later minors; 48..63 are never assigned, for a core's private use in tests. */
+#define EMUSEN_CAP_TELEMETRY         (1ull << 23)  /* @since 1.13: emusen_core_telemetry, machine info's "telemetry" */
+#define EMUSEN_CAP_PRESENCE          (1ull << 24)  /* @since 1.13: emusen_core_set_present */
+#define EMUSEN_CAP_DEBUG_TRANSLATE   (1ull << 25)  /* @since 1.13, with DEBUG: emusen_core_debug_translate */
+/* Bits 26..47 are for later minors; 48..63 are never assigned, for a core's private use in tests. */
 
 /* ---- Flags and small constants ------------------------------------------------------------------ */
 #define EMUSEN_OPTION_SKIP_RENDERING 1u  /* set_options bit 0; every other bit is reserved and ignored */
 #define EMUSEN_FRAME_WALKED          1u  /* frame_info.flags bit 0: the last present walked the picture */
+/* @since 1.13 (section 6.37), frame_info.flags bit 1: a host applies no cheat of its own after this frame, and a core that
+ * claims CHEAT_POKES applied none of its own at its end; the console's cheat devices hold off for it. */
+#define EMUSEN_FRAME_CHEATS_HELD     2u
 #define EMUSEN_BATTERY_CHANGED       1u  /* battery flags bit 0: changed since battery_saved */
 #define EMUSEN_BATTERY_TRACKED       2u  /* battery flags bit 1: the core tracks changes (BATTERY_DIRTY) */
 #define EMUSEN_FILE_BATTERY          0u  /* emusen_file.which of the battery save */
@@ -259,19 +265,22 @@ typedef struct emusen_device_frame {
     uint64_t value;
 } emusen_device_frame;
 
-typedef struct emusen_frame_info {  /* 56 bytes */
+typedef struct emusen_frame_info {  /* 64 bytes since 1.13; 56 at 1.0, the least a core accepts */
     uint32_t size;
     uint32_t format;                /* enum emusen_pixel_format, one the host accepted */
     int32_t width;
     int32_t height;
     int32_t stride;                 /* bytes per row in frame_copy's output */
     int32_t row_repeat;             /* each row is shown this many times; 1 without ROW_REPEAT */
-    uint32_t flags;                 /* EMUSEN_FRAME_WALKED */
+    uint32_t flags;                 /* EMUSEN_FRAME_WALKED, since 1.13 EMUSEN_FRAME_CHEATS_HELD */
     uint32_t aspect_num;            /* display aspect of this picture; 0/0 for square pixels */
     uint32_t aspect_den;
     uint32_t reserved;
     int64_t serial;                 /* moves only when the picture does with FRAME_SERIAL; the frame count without */
     int64_t bytes;                  /* frame_copy's whole length */
+    int32_t lines;                  /* @since 1.13 (section 6.35): the console's lines in this picture where it is drawn
+                                     * at a whole multiple of them, dividing height; 0, its rows are its lines */
+    uint32_t reserved2;
 } emusen_frame_info;
 
 /* @since 1.10, RAW_PICTURE (section 6.30): the picture of the frame frame_copy holds, before the core's palette, in the
@@ -427,7 +436,8 @@ int64_t emusen_core_debug_profile(emusen_machine *machine, int64_t *out, size_t 
 int64_t emusen_core_debug_coverage(emusen_machine *machine, uint32_t processor, uint8_t *out, size_t len, int64_t *recorded);
 int64_t emusen_core_debug_counters(emusen_machine *machine, int64_t *out, size_t len);  /* depth, unmatched returns */
 int32_t emusen_core_debug_pc(const emusen_machine *machine, uint32_t processor, uint64_t *pc);
-/* DEBUG_REGISTERS: the values, in machine info's processors[].registers order; returns the count. */
+/* DEBUG_REGISTERS: the values, in machine info's processors[].registers order; returns the count. @since 1.13 the id may
+ * also be a unit's (machine info's units[], ids 256 and above, section 6.33), the values in its registers order. */
 int64_t emusen_core_debug_registers(const emusen_machine *machine, uint32_t processor, int64_t *out, size_t len);
 /* DEBUG_DISASSEMBLE: `count` instructions from `address` as a JSON array of records. */
 int64_t emusen_core_debug_disassemble(emusen_machine *machine, uint32_t processor, uint32_t space, uint32_t address,
@@ -435,6 +445,19 @@ int64_t emusen_core_debug_disassemble(emusen_machine *machine, uint32_t processo
 /* @since 1.2, DEBUG_READS: the read log as (space, address, value, pc, kind), kind the range kind that logged it:
  * READ_WATCH a byte read and its value, READ_BREAK a byte about to be read and the value space_read gives there. */
 int64_t emusen_core_debug_reads(emusen_machine *machine, uint32_t *out, size_t len);
+
+/* @since 1.13, DEBUG_TRANSLATE (section 6.38): the address processor's bus sees for `address`, by its own translation
+ * (a TLB consulted, never faulted, nothing changed): 1 with *bus written, 0 where nothing maps it, or a status. */
+int32_t emusen_core_debug_translate(const emusen_machine *machine, uint32_t processor, uint32_t address, uint32_t *bus);
+
+/* ---- Telemetry and presence (sections 6.34, 6.36), @since 1.13 ------------------------ */
+/* TELEMETRY: the values of machine info's "telemetry" entries, in their order, as of the last call that ran the
+ * machine; copies min(len, count) and returns the count. Never allocates and never changes the machine. */
+int64_t emusen_core_telemetry(const emusen_machine *machine, int64_t *out, size_t len);
+/* PRESENCE: a controller in `port` (present 1) or none (0), as the console's own hardware shows it to the game; part of
+ * the state where that hardware keeps it. A port past machine info's is EMUSEN_NO_SUCH_PORT; another value of present is
+ * EMUSEN_NOT_SUPPORTED. */
+int32_t emusen_core_set_present(emusen_machine *machine, uint32_t port, uint32_t present);
 
 /* ---- Media (section 6.23), @since 1.1 ------------------------------------------------- */
 /* @since 1.6 (section 6.26): MEDIA is the library's, so a machine may list no drive in machine info; on one that
@@ -509,6 +532,9 @@ typedef int32_t (*emusen_core_frame_device_fn)(emusen_machine *, emusen_device_f
 typedef int32_t (*emusen_core_raw_select_fn)(emusen_machine *, uint64_t);
 typedef int32_t (*emusen_core_raw_info_fn)(const emusen_machine *, uint32_t, emusen_raw_frame *);
 typedef int64_t (*emusen_core_raw_copy_fn)(const emusen_machine *, uint32_t, uint8_t *, size_t);
+typedef int64_t (*emusen_core_telemetry_fn)(const emusen_machine *, int64_t *, size_t);
+typedef int32_t (*emusen_core_set_present_fn)(emusen_machine *, uint32_t, uint32_t);
+typedef int32_t (*emusen_core_debug_translate_fn)(const emusen_machine *, uint32_t, uint32_t, uint32_t *);
 
 #ifdef __cplusplus
 }

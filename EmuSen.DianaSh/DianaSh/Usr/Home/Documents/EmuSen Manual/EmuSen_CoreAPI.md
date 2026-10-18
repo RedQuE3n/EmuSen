@@ -1629,6 +1629,133 @@ replacement without a word.
 - **The host** (`CoreEngine`): `CoreFirmware.Md5` is read from the entry and passed in the store's request.
 - **The kit.** C23 (§28.18).
 
+### 6.33 Units: the registers of the parts that run no code (1.13, 2026-10-18)
+
+*Decided 2026-10-18 by the tester (`EmuSen_Backend.md` §20), as `EmuSen_Backend.md` §17.3 and §19.4 proposed it
+under two names, `units` and `devices`. This section and §6.34 to §6.38 are the normative text of core ABI 1.13;
+those pages have the forms weighed, and `EmuSen_CoreAPI_Extensions.md` §15 the summary.* A console's debugger shows
+registers that belong to no processor: a PPU's, an APU's and its channels', a timer's, a DMA unit's, a cartridge
+board's. v1 named registers only per processor.
+
+- **The name** is `units`. `devices` was the other proposal's word, and core ABI 1.9 already gave "device" to the
+  Vulkan device a host lends (`emusen_device_lend`, `DEVICE_PICTURE`), and `EmuSen_CoreAPI_Extensions.md` §10.1 to a
+  controller kind; `units` collides with nothing.
+- **Machine info** gains `units`, an array of `{ id, name, kind, registers: [{ name, bits }] }`, written only when the
+  machine has any. **Ids are 256 and above** (§19.4's choice, kept): processors' ids are below 24 by the coverage
+  flags' rule (§6.14), so the two lists can never meet and `debug_registers` takes either without a second argument.
+  Ids are unique; a unit is listed only while the machine has it, and a change is announced by `MACHINE_INFO`, as a
+  state from the other console already announces the system's.
+- **`kind`** is open: `video`, `audio`, `channel`, `timer`, `dma`, `cartridge`, or a core's own word.
+- **Read through `debug_registers`**, the export `DEBUG_REGISTERS` already has: the id may be a unit's, the values in
+  its `registers` order, the count returned by the length-query idiom. An id machine info lists neither as a processor
+  nor as a unit is refused with `EMUSEN_NOT_SUPPORTED` and changes nothing. **Listing a unit is the claim**, and only a
+  core claiming `DEBUG_REGISTERS` lists one; no capability bit or export is added.
+- **Older and newer peers.** A 1.12 host ignores `units`. A 1.13 host reading an older core finds none and shows none.
+- **The host** (`CoreEngine`, `CoreDebugTarget`): `CoreMachineInfo.Units`; `video` units' registers are
+  `IDebugTarget.VideoRegisters`, `audio`, `timer` and `cartridge` units' `ApuRegisters` in machine info's order, a
+  cartridge's headed by a row `Board:<label>` (the pack's `UnitLabel`, else the unit's name), as the shims printed
+  them; every unit goes to the pack's views as a `DebugUnit` (§31.7). Each refresh copies the values into a ring and
+  allocates nothing.
+- **The kit.** C14: each listed unit's id is 256 or above and unique, `debug_registers` answers it with its count,
+  and the id past the last is refused; a unit listed without `DEBUG_REGISTERS` fails. The test core lists a timer
+  (id 256, `Count` and `Frames`); `FAULT_UNIT_SHORT` (1 << 28), the unit a register short, fails C14 alone.
+
+### 6.34 `TELEMETRY`: a core's own counters (1.13, 2026-10-18)
+
+`EmuSen_Backend.md` §18.4.1 (D11's capability). A dashboard, `coretop`, a test or a benchmark reads what the machine
+did (cycles, instructions, a thread's waits, a recompiler's hits) without per-core code.
+
+- **Claimed by `TELEMETRY`** (bit 23), with one export,
+  `int64_t emusen_core_telemetry(const emusen_machine *, int64_t *out, size_t len)`: the values of machine info's
+  `telemetry` entries in their order, as of the last call that ran the machine (`advance`, `present`,
+  `debug_run_frame`, `reset`, `state_load`); it copies `min(len, count)` and returns the count. **It never allocates
+  and never changes the machine**; on the machine's thread, between calls, as `phases`.
+- **Machine info** gains `telemetry`, an array of `{ name, label, unit, kind }`, written only by a core claiming the
+  bit: `name` is `[a-z0-9_.]+` and stable for the core's major; `label` is for a person; `unit` is open (`cycles`,
+  `instructions`, `ns`, `bytes`, `count`); `kind` is open: `total` (counts up from create; a load or reset may set it
+  either way, so a host differences two reads with neither between), `frame` (the last frame's), `level` (as it
+  stands now). **The list is fixed for a machine**: a counter of a part that is off reads 0, so a host's buffer is
+  sized once.
+- **Cost a frame: none unless read.** The values are fields a core keeps already; a read copies them into the
+  caller's buffer.
+- **Not for** text (the log carries it), registers (`DEBUG_REGISTERS`) or anything a frame depends on; counts of
+  other units are not folded into `phases`, whose values are nanoseconds.
+- **The host**: `CoreMachine.Telemetry(Span<long>)` and `CoreEngine.Telemetry(Span<long>)`, allocating nothing;
+  `CoreMachineInfo.Telemetry`; `ICoreTelemetry.Counters`, defaulted to none so the C# targets and fakes need nothing,
+  which `CoreDebugTarget` fills from a ring at each refresh. The session service's `telemetry` kind and `coretop`'s
+  list are the frontend API's next minor, not this one.
+- **The kit.** C5 holds the bit and the export together; C14 holds the count to the list, every name to its pattern,
+  a `total` unmoved between two reads with nothing run, and the state unchanged by reading. The test core counts its
+  frames and its waiting samples; `FAULT_TELEMETRY_MOVES` (1 << 29), a total that moves at each read, fails C14 alone.
+
+### 6.35 `frame_info.lines`: the console's lines in a picture drawn at a multiple (1.13, 2026-10-18)
+
+`EmuSen_Backend.md` §18.4.2. A core drawing above its console's resolution (an enhancement setting) says how many of
+the console's lines the picture holds, so the CRT filter draws the console's scanlines and not the picture's rows.
+
+- **`emusen_frame_info` grows to 64 bytes**: `int32_t lines` at offset 56 and `uint32_t reserved2` after it, appended
+  as §4.2 grows a struct. `lines` is the console's lines in this picture where it is drawn at a whole multiple of
+  them, dividing `height`; 0 means its rows are its lines (`ROW_REPEAT`'s repeats aside), which is what a core of an
+  earlier minor leaves in a host's zeroed struct.
+- **A struct of 56 bytes is still taken**: a core writes what both sides know, `min(size, 64) - 4` bytes after `size`,
+  and refuses only a struct shorter than 1.0's 56 with `EMUSEN_BAD_STRUCT`. `emusen-native` before 1.13 refused
+  anything shorter than its own struct; it now keeps §4.2's rule here as it did for the create params.
+- **The host**: `ICore.DisplayLines` on `CoreEngine` is the last frame's `lines`.
+- **The kit.** Every frame C6, C7 and the rest run: `lines` is 0 or divides `height`. The test core writes 2 when its
+  `Wide` setting is on; `FAULT_LINES_UNEVEN` (1 << 30), lines of 3 over 4 rows, fails C6 and the cases that rerun
+  frames (C12, C22).
+
+### 6.36 `PRESENCE`: a controller in a port, or none (1.13, 2026-10-18)
+
+`EmuSen_Backend.md` §18.4.3, the narrow form decided over `EmuSen_CoreAPI_Extensions.md` §10.1's `set_device`. A
+console whose games tell an empty port from a full one (the N64's, a PlayStation's) needs to be told.
+
+- **Claimed by `PRESENCE`** (bit 24), with one export,
+  `int32_t emusen_core_set_present(emusen_machine *, uint32_t port, uint32_t present)`: a controller in `port`
+  (`present` 1) or none (0), seen by the game as the console's own hardware shows it; part of the state where that
+  hardware keeps it. A port past machine info's is `EMUSEN_NO_SUCH_PORT`; any other `present` is
+  `EMUSEN_NOT_SUPPORTED` (the crate refuses it before the core sees it). Every port holds a controller at create.
+- **The host** (`CoreEngine.SetControllerConnected`, which `ICore` had and the adapter did not answer) holds the
+  flags in the input latch, as buttons are, and sends only a change, as the next frame starts; a port the machine
+  lacks is ignored. A core without the bit is never called.
+- **The kit.** C5 holds the bit and the export together and asks port 0 to be full; C14 holds a port past the list
+  refused with `NO_SUCH_PORT`, a `present` of 2 refused, and the state unchanged by both. The test core keeps the
+  empty ports as bits of its RAM byte 5; `FAULT_PRESENCE_ANY_PORT` (1 << 31) fails C14 alone.
+
+### 6.37 `EMUSEN_FRAME_CHEATS_HELD`: the frame at whose end cheats hold off (1.13, 2026-10-18)
+
+`EmuSen_Backend.md` §18.4.4. Some consoles' cheat devices apply nothing while the console is in a state that would
+break (Project64's rule for the N64, that codes apply only while COP0's `Status.IE` is set, keeps a code restored at
+power-on from breaking the boot's checksum, `Mars_Cheats.md` §5.1).
+
+- **`frame_info.flags` bit 1**, `EMUSEN_FRAME_CHEATS_HELD` (2): after this frame a host applies no cheat of its own,
+  and a core that claims `CHEAT_POKES` applied none of its own at the frame's end. No capability bit: the flag is a
+  statement about one frame, and a core that never sets it is a core whose cheats never hold.
+- **The host** reads `frame_info` once after each frame while it holds cheats of its own to apply, and skips them for
+  a held frame. An explicit apply between frames (Mistress's Apply, `CoreEngine.ApplyCheats`) is not gated.
+- **The kit.** C14, on a core claiming `CHEAT_POKES` with a space flagged `cheats`: a machine with a poke on that
+  space's byte 0 runs 32 frames; if any is held, two machines, one with the poke and one without, the byte set alike
+  in both before each frame, must agree on it after every held frame. A core that holds nothing is reported as
+  before. The test core holds every fourth frame of an image whose payload begins `0xC4`;
+  `FAULT_POKES_WHILE_HELD` (1 << 32) fails C14 on that image and on no other.
+
+### 6.38 `DEBUG_TRANSLATE`: a processor's address on its bus (1.13, 2026-10-18)
+
+`EmuSen_Backend.md` §18.4.5. `addr` names where an address lands, and only the core holds a TLB or a segment map.
+
+- **Claimed by `DEBUG_TRANSLATE`** (bit 25), only with `DEBUG`, with one export,
+  `int32_t emusen_core_debug_translate(const emusen_machine *, uint32_t processor, uint32_t address, uint32_t *bus)`:
+  the address `processor`'s bus sees for `address`, by its own translation (a TLB consulted, never faulted, nothing
+  changed): 1 with `*bus` written, 0 where nothing maps it, or a status; a processor machine info does not name is
+  `EMUSEN_NOT_SUPPORTED`. The pack names the place the bus address is (§31.7).
+- **The host** (`CoreDebugTarget.ResolvePhysical`): with the bit, the address is translated first, an address that
+  maps nowhere answered "unmapped", and the bus address handed to the pack's `ResolvePhysical`; without it the pack
+  is given the address as it is.
+- **The kit.** C5 holds the bit and the export together; C15 asks each processor for four addresses twice, which must
+  agree, and the processor past the list, which must be refused, the state unchanged. The test core maps its 16-bit
+  addresses onto RAM; `FAULT_TRANSLATE_UNSTABLE` (1 << 33), a translation that answers otherwise at each call, fails
+  C15 alone.
+
 ## 7. Core discovery and trust
 
 ### 7.1 Where cores are found
@@ -2430,6 +2557,19 @@ lower-case MD5s of the images the core accepts in that slot. Baseline 485 facts,
 passing. `emusen-native` gains `Firmware::md5`, written only when not empty; the C# host reads `CoreFirmware.Md5`.
 Kit case C23 is added; the test core lists a made-up checksum for its boot ROM, and `FAULT_MD5_SHORT` (1 << 27), the
 checksum a digit short, fails C23 alone.
+
+**v1.13, 2026-10-18** (§6.33 to §6.38), the tester's decision of one minor of six items for B4
+(`EmuSen_Backend.md` §20): machine info's `units`, read through `debug_registers` by ids from 256; `TELEMETRY`
+(bit 23, `emusen_core_telemetry`, machine info's `telemetry`); `emusen_frame_info` grown to 64 bytes with `lines`;
+`PRESENCE` (bit 24, `emusen_core_set_present`); `EMUSEN_FRAME_CHEATS_HELD` (frame flag 2); `DEBUG_TRANSLATE`
+(bit 25, with `DEBUG`, `emusen_core_debug_translate`). Baseline 509 facts, `--check` and `--against` 1.12 passing;
+the header compiles as C99, C11 and C++17. `emusen-native` gains `Core::units`, `counters`, `telemetry`,
+`set_present` and `debug_translate`, defaulted, the groups `telemetry`, `presence` and `debug_translate`, and
+`frame_info` taking a struct of 56 bytes; the guard's checker learns the struct and the three signatures. The C# host
+reads units and counters, sends presence, reads `lines`, gates its own cheats and translates for `addr`. The kit's
+C5, C6, C14 and C15 gain the checks, each made only where the item is claimed or listed, so that no core claiming none
+is reported otherwise by a byte; the test core claims all six, and six seeded faults (1 << 28 to 1 << 33) each fail
+their case alone. No project core claims any item yet; MarsRT, MoonRT and MercuryRT take them at their own B4 steps.
 
 **Clarified 2026-10-18, no minor** (§6.14): a processor whose `debug_set_breakpoints` refuses cannot halt, and an
 interrupt stopped for with no call logged is noted from the stop reason.
@@ -4339,7 +4479,7 @@ the Game Boy's, the N64's and the NES's shims show and `CoreDebugTarget` does no
 address decode behind `addr`, and summary lines that need more than the main processor's registers. Each is a fact
 of the console, so it belongs to the pack (§31.2's rule), and each needs one of two inputs a pack's view did not get:
 the memory spaces, and the registers of the parts that run no code (a PPU's, an APU's, a cartridge board's), which
-core ABI 1.13 publishes as machine info's units (`EmuSen_Backend.md` §20). `ISystemDebugViews` therefore gained, each defaulted to
+core ABI 1.13 publishes as machine info's units (§6.33). `ISystemDebugViews` therefore gained, each defaulted to
 "none" so that no pack changes:
 
 | Member | Inputs | What the target does with it |
@@ -4364,7 +4504,7 @@ lines are each the core branch's, with their Rust twins in `emusen-systems` unde
 platform library's C interface did not change: `emusen_systems_view` takes a view by name, and a view the library
 does not know answers "none", which `NativeDebugViews` turns into the C# views' answer; the new members forward to the
 C# views until a console adds its Rust twins, which is when the platform interface takes its next number. An address
-the core translates first (1.13's `DEBUG_TRANSLATE`) reaches `ResolvePhysical` translated.
+the core translates first (`DEBUG_TRANSLATE`, §6.38) reaches `ResolvePhysical` translated.
 
 ---
 

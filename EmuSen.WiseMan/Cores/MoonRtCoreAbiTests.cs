@@ -107,6 +107,42 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // Every board's views on the generic target over MoonRT's units and the NES pack are the shim target's, but for the board's mapper row and the summary's head - see EmuSen_Backend.md §23.
+        [Theory]
+        [MemberData(nameof(MoonPrograms.Boards), MemberType = typeof(MoonPrograms))]
+        public void The_units_and_the_pack_show_every_board_as_the_shims_target(int mapper, int chr)
+        {
+            string rom = Path.Combine(_root, $"board-{mapper}-{chr}.nes");
+            File.WriteAllBytes(rom, BoardPrograms.Build(mapper, chr, cycleIrq: mapper is 64 or 65 or 67 or 69));
+            using var shim = new MoonRtCore() { Options = TestCores.NoBattery };
+            using var adapter = new CoreEngine(Discovered.Open()!) { Options = TestCores.NoBattery };
+            shim.LoadRom(rom);
+            adapter.LoadRom(rom);
+            var theirs = shim.CreateDebugTarget();
+            var ours = adapter.CreateDebugTarget();
+            static string Rows(IReadOnlyList<EmuSen.Crystal.Telemetry.DebugRegisterValue> r) => string.Join("\n", r.Where(v => v.Name != "Mapper").Select(v => $"{v.Name} {v.Value:X} {v.BitWidth}"));
+            Assert.Equal(theirs.MaxSprites, ours.MaxSprites);
+            for (int f = 1; f <= 120; f++)
+            {
+                shim.SetButton(0, PadButton.Start, f % 40 < 3);
+                adapter.SetButton(0, PadButton.Start, f % 40 < 3);
+                shim.RunFrame();
+                adapter.RunFrame();
+                if (f % 30 != 0) continue;
+                theirs.RefreshProviders();
+                ours.RefreshProviders();
+                Assert.Equal(Rows(theirs.CpuRegisters.Current), Rows(ours.CpuRegisters.Current));
+                Assert.Equal(Rows(theirs.VideoRegisters.Current), Rows(ours.VideoRegisters.Current));
+                Assert.Equal(Rows(theirs.ApuRegisters.Current), Rows(ours.ApuRegisters.Current));
+                Assert.Equal(theirs.Sprites.Current.Select(s => (s.Index, s.X, s.Y, s.Width, s.Height, s.TileIndex, s.PaletteIndex, s.Priority, s.FlipX, s.FlipY)),
+                    ours.Sprites.Current.Select(s => (s.Index, s.X, s.Y, s.Width, s.Height, s.TileIndex, s.PaletteIndex, s.Priority, s.FlipX, s.FlipY)));
+                Assert.Equal(theirs.AudioChannels.Current.Select(c => (c.Index, c.Name, c.Active, c.Level, c.Muted, c.Info)), ours.AudioChannels.Current.Select(c => (c.Index, c.Name, c.Active, c.Level, c.Muted, c.Info)));
+                string[] a = theirs.GetSummaryText().Split('\n'), b = ours.GetSummaryText().Split('\n');
+                string scanline = a[0][(a[0].LastIndexOf("scanline ", StringComparison.Ordinal) + "scanline ".Length)..];
+                Assert.Equal(a[1..5], b[1..5].Select((l, i) => i == 3 ? l.Replace($" scanline={scanline}", "") : l));
+            }
+        }
+
         // The NES pack's fixed memory map, for any engine's target once the views carry it, is the shim target's for every address - see EmuSen_Backend.md §21.
         [Fact]
         public void The_nes_packs_fixed_map_is_the_shim_targets()

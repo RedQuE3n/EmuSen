@@ -143,6 +143,10 @@ namespace EmuSen.Crystal.Systems
 
         public string? UnitLabel(DebugUnit unit) => Managed.UnitLabel(unit);
 
+        // A summary that reads units is the C# views' until its twin, one that reads only the processor's registers the library's as before.
+        public string? Summary(IReadOnlyList<DebugRegisterValue> registers, IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units) =>
+            units.Count > 0 ? Managed.Summary(registers, spaces, units) : Summary(registers);
+
         public string? Summary(IReadOnlyList<DebugRegisterValue> registers) =>
             Crosses("", registers) && Ask("summary", Array.Empty<IDebugMemorySpace>(), w => Registers(w, registers)) is { } a ? a.Root.GetProperty("text").GetString() : Managed.Summary(registers);
     }

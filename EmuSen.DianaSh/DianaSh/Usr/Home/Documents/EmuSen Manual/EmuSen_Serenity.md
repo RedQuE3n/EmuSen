@@ -768,7 +768,7 @@ The history mutant **survived the first history test**: with two history slots, 
 - The chain is rendered at the letterbox rectangle's size **in device pixels**: the canvas's scale times the rectangle, so a 2× display gets a 2× viewport, as RetroArch's would.
 - The result is drawn as an opaque image, with nearest sampling since it is already at the size shown.
 
-A redraw with no new frame and no change of size reuses the last image. This is §2.6's distinction between a redraw and a frame, kept so that a feedback or history preset does not advance on a repaint.
+A redraw with no new frame and no change of size reuses the last image. This is §2.6's distinction between a redraw and a frame, kept so that a feedback or history preset does not advance on a repaint. *A new size or a value changed did render again, and until 2026-10-17 each such render moved a preset's feedback on; it advances once a game frame now (`EmuSen_DevicePicture.md` §22).*
 
 **Tests** (`SlangFrameControlTests`, through the real headless render pass):
 - An inverting preset turns an (10, 20, 30) frame into (245, 235, 225) once built.
@@ -2024,5 +2024,5 @@ chain's image (§4 there).
 
 `FilterChain`, the control's runtime effects and the software path are gone: the plain picture is Skia's `DrawImage`
 where the device path is off, and every filter, built-in or RetroArch, is the chain of §7, handed to the compositor
-or read back (§9.1). The built-ins' text is Vulkan GLSL. `EmuSen_DevicePicture.md` §19 to §21 are the record, with what
+or read back (§9.1). The built-ins' text is Vulkan GLSL. `EmuSen_DevicePicture.md` §19 to §22 are the record, with what
 it costs and how the pictures were held to those of before.

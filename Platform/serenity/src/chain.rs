@@ -483,6 +483,9 @@ pub struct Chain {
     upload_rows: u32,
     upload_repeat: u32,
     frame_count: u32,
+    /// A frame advanced and not yet rendered or presented: its first render turns each feedback pass's two images
+    /// round, and no later one of the same frame does (EmuSen_DevicePicture.md §22).
+    feedback_due: bool,
     /// A frame written into the staging buffer whose copy to the device waits for the next render or present's
     /// submission, so that a frame costs one submission (EmuSen_DevicePicture.md §13).
     upload_pending: bool,
@@ -549,6 +552,7 @@ impl Chain {
             upload_rows: 0,
             upload_repeat: 0,
             frame_count: 0,
+            feedback_due: false,
             upload_pending: false,
             from_lend: None,
             lent_value: 0,
@@ -637,6 +641,7 @@ impl Chain {
         self.device.write_staging(staging, picture);
         (self.upload_pending, self.from_lend) = (true, None);
         self.frame_count = self.frame_count.wrapping_add(1);
+        self.feedback_due = true;
         self.device.phase(point::ADVANCE_END);
         Ok(())
     }
@@ -674,6 +679,7 @@ impl Chain {
         (self.upload_pending, self.lent_value) = (true, taken.value);
         self.from_lend = Some((lend.clone(), taken));
         self.frame_count = self.frame_count.wrapping_add(1);
+        self.feedback_due = true;
         self.device.phase(point::ADVANCE_END);
         Ok(true)
     }
@@ -812,6 +818,7 @@ impl Chain {
         }
         self.device.settle()?;
         self.device.phase(point::RENDER_BEGIN);
+        self.turn_feedback();
         self.size_passes(vw, vh)?;
         let count = self.passes.len();
         for i in 0..count {
@@ -844,12 +851,19 @@ impl Chain {
             wait,
         )?;
         self.device.phase(point::RAN);
+        Ok(())
+    }
+
+    /// Each feedback pass's two images turned round, once for the frame advanced since the last render or present.
+    fn turn_feedback(&mut self) {
+        if !std::mem::take(&mut self.feedback_due) {
+            return;
+        }
         for pass in &mut self.passes {
             if pass.wants_feedback {
                 std::mem::swap(&mut pass.output, &mut pass.previous);
             }
         }
-        Ok(())
     }
 
     /// Each pass's output made the size the viewport and the scale types give it.
@@ -872,6 +886,7 @@ impl Chain {
         }
         self.device.settle()?;
         self.device.phase(point::RENDER_BEGIN);
+        self.turn_feedback();
         let (vw, vh) = (view_width.max(1) as u32, view_height.max(1) as u32);
         let count = self.passes.len();
 
@@ -915,11 +930,6 @@ impl Chain {
         }, wait)?;
 
         self.device.phase(point::RAN);
-        for pass in &mut self.passes {
-            if pass.wants_feedback {
-                std::mem::swap(&mut pass.output, &mut pass.previous);
-            }
-        }
         self.device.phase(point::COPIED);
         Ok(bytes)
     }

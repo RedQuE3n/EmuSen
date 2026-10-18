@@ -3204,5 +3204,6 @@ compiler the same SPIR-V as the translation of §3.1 there did, so the filter dr
 18 from the NES's raw picture, three brought back from twice the lines). Skia's `FilterChain` is gone (§21 there):
 where the device path is off, the filter is drawn by the same chain and read back (§19 there), which costs the render
 thread 1.0 to 2.6 ms a frame on the RX 6800 across the tiers at 1280 × 800 and 1080p, and the tiers' own GPU time is
-unchanged at 1080p (Performance 0.53, Balanced 0.76, Accurate 1.75 ms). The handheld's figures are
-`EmuSen_DevicePicture.md` §18.9's to take, with §12.7's.
+unchanged at 1080p (Performance 0.53, Balanced 0.76, Accurate 1.75 ms). The phosphors' tails advance once a game
+frame on every path (§22 there): a window resized or a slider moved no longer moves them on. The handheld's figures
+are `EmuSen_DevicePicture.md` §18.9's to take, with §12.7's.

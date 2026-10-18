@@ -8796,11 +8796,13 @@ picture is then shown the frame it is drawn rather than a frame later (`EmuSen_D
 pictures and screenshots still read it back when they are taken. **`EMUSEN_DEVICE_LEND=0`** lends nothing, the
 picture then read back as before.
 
-**Skia's filters gone (2026-10-17)** (`EmuSen_DevicePicture.md` §19 to §21). Where the device path is off, refused or
+**Skia's filters gone (2026-10-17)** (`EmuSen_DevicePicture.md` §19 to §22). Where the device path is off, refused or
 given up, a built-in filter is drawn by the same Vulkan chain and read back, as a RetroArch preset already was; Skia
 draws the plain picture and the interface only. With no Vulkan device at all a built-in is drawn plain, and the log
 says so once (`picture: The built-in filter is not drawn: ...`). So `EMUSEN_DEVICE_PICTURE=0` now gives the readback
-for every filter, not Skia's own filters. A slider moved no longer rebuilds a built-in's chain. The handheld's ten-minute
+for every filter, not Skia's own filters. A slider moved no longer rebuilds a built-in's chain, and a filter's
+phosphor tails and any other feedback advance once a game frame, whatever redraws the picture (§22 there). The
+handheld's ten-minute
 run under Game Mode, with the readback's, is the tester's procedure in §18.9 there.
 
 **Tests.** `DevicePresenterTests` (each refusal alone, the device's identity, the shown image); `BuiltInGoldenTests`

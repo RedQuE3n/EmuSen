@@ -339,6 +339,39 @@ namespace EmuSen.WiseMan.Serenity
             Compare(Mips(), 16, 6, 2, 48, 36, 4);
         }
 
+        // A pass that adds a tenth of white to its own last output: the phosphor tails' shape, read through feedback by its alias.
+        private string Counting() => Preset("counting.slangp", "shaders = 1\nshader0 = " + Path.GetFileName(Write("counting.slang", Plain
+            + "layout(set = 0, binding = 2) uniform sampler2D CountFeedback;\nvoid main() { FragColor = vec4(texture(CountFeedback, vTexCoord).r + 0.1 * params.gain, 0.0, 0.0, 1.0); }\n"))
+            + "\nalias0 = Count\nfilter_linear0 = false\n");
+
+        // A frame rendered again, for a new size, a new value or a present before a readback, leaves feedback where the frame left it; the next frame moves it on - see EmuSen_DevicePicture.md §22.
+        [Fact]
+        public void Feedback_advances_once_a_game_frame_however_often_the_frame_is_rendered_on_both()
+        {
+            if (!Both) return;
+            var frame = new byte[8 * 8 * 4];
+            foreach (var (name, gpu) in new[] { ("C#", _managed!), ("library", _library!) })
+            {
+                using var chain = new SlangChain(gpu, SlangPreset.Load(Counting()), null, 1);
+                chain.Advance(frame, 8, 8, 1);
+                byte[] once = chain.Render(8, 8), again = chain.Render(8, 8);
+                Assert.True(once.AsSpan().SequenceEqual(again), $"{name}: a second render of one frame moved its feedback from {once[0]} to {again[0]}");
+                chain.SetParameters(new Dictionary<string, float> { ["gain"] = 1f });
+                Assert.Equal(once[0], chain.Render(8, 8)[0]);
+                chain.Advance(frame, 8, 8, 1);
+                Assert.InRange(chain.Render(8, 8)[0] - once[0], 24, 27);
+            }
+
+            // The device path's present and a readback after it, one frame: both read the frame before's output.
+            using var presented = new SlangChain(_library!, SlangPreset.Load(Counting()), null, 1);
+            using var shown = SlangShown.TryCreate(_library!, 8, 8, linear: true, out string? problem) ?? throw new InvalidOperationException(problem);
+            presented.Advance(frame, 8, 8, 1);
+            presented.Present(shown, 8, 8, waitFree: false);
+            using var rendered = new SlangChain(_library!, SlangPreset.Load(Counting()), null, 1);
+            rendered.Advance(frame, 8, 8, 1);
+            Assert.Equal(rendered.Render(8, 8)[0], presented.Render(8, 8)[0]);
+        }
+
         [Fact]
         public void Three_passes_that_read_every_name_give_the_same_pictures_from_both()
         {

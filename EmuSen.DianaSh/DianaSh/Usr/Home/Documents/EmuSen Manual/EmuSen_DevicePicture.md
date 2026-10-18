@@ -1289,3 +1289,47 @@ the readback onto its raster canvas, where it had drawn the CRT plain (§3.10 of
 Run 2026-10-17 on the RX 6800, after the removal: WiseMan's Serenity namespace, the Mistress and Hotaru cases that host
 the frame control, and the leaf-assembly case, 407 of 407; `BuiltInGoldenTests` among them, its 125 pictures as
 recorded before §19.
+
+## 22. Feedback advanced once a game frame, in both chains (2026-10-17)
+
+### 22.1 The defect
+
+Found as a candidate while CRT round 3 was read (`EmuSen_CRT.md` §26 to §28) and proven here. The chain gave each
+pass that is read as feedback two images and turned them round **after every render**, in both implementations
+(`SlangChain.Managed.RenderInto`, and `render_into` and `present` in `Platform/serenity/src/chain.rs`). A frame is
+rendered again without a new game frame whenever the runner is asked to (`SlangRunner`: a new size, a value changed,
+the readback's first draw after the device path), and each such render read the render before it as "the last frame"
+and so moved feedback on: the CRT's phosphor tails decayed by a field more, and any RetroArch preset with feedback
+did the same. Skia's chain had turned them once a game frame (`EmuSen_Serenity.md` §3.9's rule: state follows the
+game's frames, not the screen's); with Skia's chain gone, the chain's behaviour was the only one.
+
+**The failing case first.** `SerenityChainParityTests.Feedback_advances_once_a_game_frame_however_often_the_frame_is_rendered_on_both`:
+a one-pass preset that adds a tenth of white to its own last output, read through feedback by its alias; one frame
+rendered twice must give the same picture twice, a value changed and rendered again the same, the next frame 25 or so
+levels more; and on the library's chain a present of the frame followed by a readback must read what a readback alone
+reads. Before the fix it failed on the C# chain, "a second render of one frame moved its feedback from 25 to 50"; with
+the C# chain fixed and the library's not, on the library's, with the same words and numbers.
+
+### 22.2 The fix
+
+Both chains note a frame advanced (`Advance`, and the library's `advance_lent` when it takes a picture) and turn each
+feedback pass's two images round at the first render or present after it, before anything is recorded, and at no
+other render. The images change places in the host's bookkeeping only; what the device reads is still ordered by the
+wait for the last submission that every render and present already makes first. For one render a frame, which is what
+the goldens and every bench run make, the pictures are the same as before: the first render after a frame writes into
+the other image, which is as blank as the one it wrote into before.
+
+### 22.3 Proven
+
+Run 2026-10-17 on the RX 6800: the case above on both chains; `SerenityChainParityTests` whole, the C# and the
+library's chains still giving the same pictures byte for byte, and the library's chain clean under the validation
+layer with synchronisation validation; `BuiltInGoldenTests`' 125 pictures unchanged; with the Serenity namespace, the
+frontends' frame-control cases and the leaf-assembly case, 408 of 408. The platform library's own tests,
+`cargo test -p emusen-serenity`, 31 of 31.
+
+**The tiers after §21 and this step**, at 1920 × 1080 by the bench of §19.3 (three rounds, load average about 3):
+the passes' GPU time a frame Performance 0.48, Balanced 0.82, Accurate 1.77 ms, against 0.53, 0.77 and 1.76 at
+5f2a006c, inside the rounds' spread; the bench's hashed pictures the same as at 5f2a006c in every round. The render
+thread's time read back was 3 to 9% above §19.3's, in Skia's draw of the image and its flush and not in the chain's
+wait; nothing in those changed in §21 or here, the machine carried other work during the run, and the cause was not
+isolated. The device path does neither.

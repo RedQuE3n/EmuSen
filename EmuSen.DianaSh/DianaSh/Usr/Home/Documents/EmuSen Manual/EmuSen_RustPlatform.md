@@ -3261,3 +3261,40 @@ halves of the program read one. The C# facades are `ServiceLibrary` in Crystal (
 The number went from 15 to 16 in `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together. The
 frontend API's step, B2, which ran beside this one, takes no number of this interface: its API is served by the C#
 until B7, through its own header, `emusen_crystal.h`.
+
+## 36. Interface 17, 2026-10-18: the HTTP client
+
+The cheat database's download moved to Rust (`EmuSen_Backend.md` §16), on the HTTP and TLS client SR9 chose, `ureq` 3
+over `rustls` with certificates checked against each system's own store by `rustls-platform-verifier`. The client is a
+crate of its own, `emusen-net` (`Platform/net/`), and not a module of `emusen-cheats`: scraping (B9) is its next user,
+and a second HTTP client would be a second owner of the same rules. The library gained its C layer in
+`Platform/platform/src/net.rs`:
+
+- `emusen_net_download_start` takes one JSON request (`url`, `timeout_ms`, `test_roots`) and gives an opaque handle;
+  the download runs on a thread of the library's own from that moment. `emusen_net_download_free` frees the handle and
+  leaves a fetch still running to end on its own, its body dropped.
+- `emusen_net_download_progress` (the state, the body's bytes so far and its length once known), `_wait` (a wait with a
+  timeout, like the frontend API's two blocking calls) and `_cancel`, which ends the download for the host at once,
+  whatever its socket is doing; the fetch stops at its next read.
+- `emusen_net_download_body` for a download that is done, and `_failure` for one that is not: a JSON object of the
+  failure's kind, .NET's words for it, the words of the cause .NET would carry inside them, and the status.
+
+No callback crosses (§3.7): progress is drained, never pushed, which is the frontend API's pull rule
+(`EmuSen_Backend.md` §14.3). `test_roots`, a PEM text of roots trusted beside the system's, exists for a host's tests
+against a server of their own; no setting, variable or command reaches it, and the C# facade's public download never
+passes one. The C# facade is `NativeDownload` in Crystal, chosen with the file services by `EMUSEN_SERVICES_NATIVE`, its
+seven exports added to `ServiceLibrary.Exports`.
+
+The number went from 16 to 17 in `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together. B2,
+running beside this step, takes no number of this interface.
+
+**The portable check and `ring`.** `rustls` signs and verifies through `ring`, whose build script compiles C and
+assembly for the target. CI's portable job (§31) runs `cargo check --target` for `x86_64-pc-windows-msvc` and
+`aarch64-apple-darwin` on an Ubuntu runner with no C toolchain or system headers for either, and a build script runs
+under `cargo check` as under `cargo build`. Measured on 2026-10-18 on this machine with both targets' standard
+libraries: for macOS, `cc` (GCC) refuses Apple's flags and `clang` finds no headers for the target; for Windows,
+`cc-rs` looks for `lib.exe`, and `clang-cl` finds no `assert.h`. With the C compiler replaced by `true` for a local
+probe only, every Rust crate of the library, `emusen-net` and `rustls-platform-verifier`'s macOS code among them,
+checked clean for `aarch64-apple-darwin`; for Windows `ring`'s build script still stopped. The portable job therefore
+fails on both targets once this step is merged, until it is given the targets' headers (an SDK for each) or leaves
+`ring` out of its check; the choice is the tester's (`EmuSen_Backend.md` §16.6).

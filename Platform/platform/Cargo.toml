@@ -34,5 +34,7 @@ emusen-systems = { path = "../systems" }
 emusen-firmware = { path = "../firmware" }
 emusen-savemedia = { path = "../savemedia" }
 emusen-cheats = { path = "../cheats" }
+# The platform's one HTTP client, for the cheat database's download (EmuSen_Backend.md §16).
+emusen-net = { path = "../net" }
 # .NET's JSON, for the requests the systems' C layer reads.
 emusen-dotnet = { path = "../dotnet" }

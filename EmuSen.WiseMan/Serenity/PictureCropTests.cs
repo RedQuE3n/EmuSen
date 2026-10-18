@@ -159,6 +159,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_simple_effect_and_a_filter_of_passes_are_cropped_as_the_plain_picture_is() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             const string through = "uniform sampler2D source; uniform vec2 inputSize; uniform vec2 outputSize; vec4 filter_main(vec2 coord) { return source_eval(coord * inputSize / outputSize); }";
             var passes = new ScreenFilter("through", new[] { new FilterPass(through, PassScale.Source), new FilterPass(through, PassScale.Viewport, LinearSource: true) }, null, "");
             byte[] frame = Marked(640, 480, Uneven, whiteInside: true);

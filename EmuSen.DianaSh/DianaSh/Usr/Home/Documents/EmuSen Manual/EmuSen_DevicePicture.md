@@ -1233,3 +1233,59 @@ The passes are the device path's GPU work and the same programs before and after
 (the bench of §19.3, three rounds of 300 frames), GPU milliseconds of the passes a frame: Performance 0.53 at
 5f2a006c, 0.55 after §19, 0.53 after this step; Balanced 0.77, 0.83, 0.76; Accurate 1.76, 1.80, 1.75. **Unchanged**,
 the differences inside the rounds' own spread and of no consistent sign.
+
+## 21. Skia's filter path removed (2026-10-17)
+
+### 21.1 What went
+
+`FilterChain` (Skia's chain of SkSL runtime effects, its warming, its software path and the GLSL-back-to-SkSL reading
+of §20), `GameFrameControl`'s runtime effects for the simple effects (`GetEffect`, `GetBuilder` and the shader drawn
+through a local matrix), `GameFrameControl.DrawDeviceFiltersInSoftware`, the comparison switch `SkiaFilters`, and
+`ScreenFilter.RequiresDevice`, which had marked a filter too slow for Skia's software path.
+
+### 21.2 What draws a picture now
+
+| Picture | Device path in use | Device path off, refused or given up |
+|---|---|---|
+| The plain picture | the chain, a one-pass built-in (§4.5) | Skia's `DrawImage`, unchanged |
+| A built-in filter or simple effect | the chain, presented (§13) | the chain, read back and drawn by Skia (§19) |
+| A RetroArch preset | the chain, presented | the chain, read back (`EmuSen_Serenity.md` §9.1) |
+| No Vulkan device at all | — | the plain picture, the filter's failure said once in the log (`The built-in filter is not drawn: ...`) |
+
+While a filter's chain is being built, the plain picture is drawn in the filter's shape, as before. Where no Vulkan
+device exists the built-ins are drawn plain; §10's revision of Q2 is why that leaves no shipped build without its
+filters, and the Mac port ships a Vulkan driver before release. A headless window draws the built-ins too now, by
+the readback onto its raster canvas, where it had drawn the CRT plain (§3.10 of `EmuSen_Serenity.md`).
+
+### 21.3 The tests
+
+- **Retired, having compared Skia with the chain**: `DeviceFilterMatchTests` (each family against Skia's picture on
+  real frames, §12) and `ScreenFilterDeviceTests` (Skia's float surfaces, feedback and warming on a GL context). Their
+  hashes were recorded before any of this work, as `BuiltInGoldenTests` (§19.4), which holds every variant of every
+  built-in to them; it passes after the removal, so nothing any of these drew has changed.
+- **Retired with the code they guarded**: three of `GameFrameControlRenderTests`' four cases of the runtime effects
+  (byte-identical repeated output, a picture changed by the effect, 120 frames without throwing), which were the
+  regression guard for `SKRuntimeShaderBuilder`'s disposal crash (`EmuSen_Project_Overview_v2.md` §2a). The fourth,
+  Scanlines' exact factor of 0.78 on odd rows at the window's pixels, holds the effect's documented arithmetic and not
+  Skia's, so it stays, drawn by the chain.
+- **Kept, now through the chain**: every case of `ScreenFilterRenderTests` (the LCDs, Lottes, the CRT's physics),
+  `ScreenFilterChainTests` (float targets, sizes, feedback, names, variants, a stated shape, rows once, the filter
+  before a new one drawn while it builds), and the crop and shape cases that draw a filter. "Every built-in compiles"
+  and "every variant of the CRT compiles" compile each pass of each preset with the chain's compiler and no device;
+  "a child or a uniform no pass provides is refused by name" asks `BuiltInPreset`. Two CRT cases that drew through
+  Skia's software path draw through the readback onto a raster canvas, and the second now compares that with the GL
+  canvas's picture of the same chain. A case that draws a filter passes by where the process has no Vulkan device
+  (`ChainDevice.Missing`), as the slang cases already did.
+- **`ShaderNamesTests`** guarded against Metal's words because Skia wrote a pass's names into the Metal Shading
+  Language unchanged. A pass reaches every driver as SPIR-V now, whose names are only debug names; a port that turns
+  SPIR-V into Metal's language through SPIRV-Cross renames that language's words itself. What can still go wrong
+  silently is a pass naming something by a name the preset writes into every pass (`OutputSize`, `FragColor`, `MVP`,
+  `Source`, the `emusen_` values, a history or feedback sampler's name), which would shadow or collide with it, and a
+  word GLSL keeps (`sample`, `filter`, `input`, `common` and the rest of its reserved words), which glslang refuses.
+  The case now reads every pass text of every variant for those, and for the `gl_` prefix and a double underscore.
+  None is used. The second case holds the reading: such a name found, the same word in a comment or inside a longer
+  name not.
+
+Run 2026-10-17 on the RX 6800, after the removal: WiseMan's Serenity namespace, the Mistress and Hotaru cases that host
+the frame control, and the leaf-assembly case, 407 of 407; `BuiltInGoldenTests` among them, its 125 pictures as
+recorded before §19.

@@ -12,7 +12,7 @@ using EmuSen.Serenity.Slang;
 
 namespace EmuSen.WiseMan.Serenity
 {
-    // What a filter's passes may ask of the chain beyond the frame and the pass before: float surfaces, sizes, feedback, names, variants, a shape - see EmuSen_Serenity.md §3.9.
+    // What a filter's passes may ask of the chain beyond the frame and the pass before: float targets, sizes, feedback, names, variants, a shape - see EmuSen_Serenity.md §3.9 and EmuSen_DevicePicture.md §21.
     public class ScreenFilterChainTests
     {
         private static readonly HeadlessUnitTestSession Session =
@@ -82,6 +82,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_float_pass_keeps_a_negative_a_value_above_white_and_its_alpha_and_an_8_bit_pass_keeps_none() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             byte[] frame = Solid(8, 8, 0, 0, 0);
             using (Shown kept = Show(Of(new FilterPass(Wide, PassScale.Source) { Float = true }, new FilterPass(Narrow, PassScale.Viewport))))
                 Near((128, 128, 128), kept.Frame(frame, 4, 4), 1, "through a float surface");
@@ -92,6 +93,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_pass_is_as_wide_as_it_says_and_as_tall_as_the_frame_times_its_factor() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             const string size = Head + "uniform vec2 inputSize; uniform vec2 viewportSize; vec4 filter_main(vec2 coord) { return vec4(inputSize.x / 255.0, inputSize.y / 255.0, viewportSize.x / 255.0, 1.0); }";
             var sized = new FilterPass("vec4 filter_main(vec2 coord) { return vec4(0.0, 0.0, 0.0, 1.0); }", PassScale.Source) { Width = PassSize.Fixed(40), Height = new PassSize(PassAxis.Source, 2.5f) };
             using Shown shown = Show(Of(sized, new FilterPass(size, PassScale.Viewport)), 16, 16);
@@ -101,6 +103,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_feedback_pass_reads_its_last_frame_s_output_and_a_redraw_reads_the_same_one() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             const string count = "uniform sampler2D feedback; vec4 filter_main(vec2 coord) { return vec4(feedback_eval(coord).r + 10.0 / 255.0, 0.0, 0.0, 1.0); }";
             byte[] frame = Solid(8, 8, 0, 0, 0);
             using Shown shown = Show(Of(new FilterPass(count, PassScale.Source) { Feedback = true, Float = true }, new FilterPass(Head + "vec4 filter_main(vec2 coord) { return vec4(source_eval(coord).rgb, 1.0); }", PassScale.Viewport)));
@@ -115,6 +118,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_later_pass_reads_an_earlier_one_by_name_with_its_size() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             const string red = "vec4 filter_main(vec2 coord) { return vec4(0.4, 0.0, 0.0, 1.0); }";
             const string green = Head + "vec4 filter_main(vec2 coord) { return vec4(0.0, 0.2 + source_eval(coord).r, 0.0, 1.0); }";
             const string both = Head + "uniform sampler2D first; uniform vec2 firstSize; vec4 filter_main(vec2 coord) { return vec4(first_eval(vec2(0.5, 0.5)).r, source_eval(coord).g, firstSize.x / 255.0, 1.0); }";
@@ -143,6 +147,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_built_filter_takes_a_console_s_defaults_and_is_built_again_only_when_a_structural_value_changes() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             int builds = 0;
             ScreenFilter filter = Variants(() => builds++);
             byte[] frame = Solid(8, 8, 0, 0, 0);
@@ -167,6 +172,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_filter_that_states_a_shape_is_drawn_in_that_shape_and_the_others_in_the_frame_s() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             var white = new FilterPass("vec4 filter_main(vec2 coord) { return vec4(1.0, 1.0, 1.0, 1.0); }", PassScale.Viewport);
             byte[] frame = Solid(8, 8, 0, 0, 0);
             using (Shown square = Show(Of(white), 400, 300))
@@ -182,6 +188,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_console_s_values_that_are_not_parameters_reach_the_passes_and_any_console_takes_the_general_ones() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             var pass = new FilterPass("uniform float clock; uniform float tint; vec4 filter_main(vec2 coord) { return vec4(clock, tint, 0.0, 1.0); }", PassScale.Viewport);
             var filter = new ScreenFilter("constants", new[] { pass }, null, "", new[] { Tint })
             {
@@ -203,6 +210,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_filter_that_counts_scanlines_is_given_the_frame_s_rows_once() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             var pass = new FilterPass("uniform vec2 originalSize; vec4 filter_main(vec2 coord) { return vec4(originalSize.y / 255.0, 0.0, 0.0, 1.0); }", PassScale.Viewport);
             byte[] frame = Solid(8, 8, 0, 0, 0);
             foreach (var (filter, rows) in new[] { (Of(pass), 16), (Of(pass) with { RowsOnce = true }, 8) })
@@ -231,6 +239,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task While_a_new_filter_builds_the_one_before_it_is_drawn_and_the_render_thread_never_waits() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             using var gate = new System.Threading.ManualResetEventSlim(false);
             byte[] frame = Solid(8, 8, 0, 51, 0);
             using Shown shown = Show(Of(Colour("0.8, 0.0, 0.0")));
@@ -256,6 +265,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task The_first_filter_is_preceded_by_the_plain_picture_not_by_nothing() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             using var gate = new System.Threading.ManualResetEventSlim(false);
             var control = new GameFrameControl { ActiveFilter = Held(gate, "0.0, 0.8, 0.0") };
             var window = new Window { Width = 8, Height = 8, Content = control };
@@ -274,13 +284,10 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void A_child_or_a_uniform_no_pass_provides_is_refused_by_name()
         {
-            var chain = (IDisposable)Activator.CreateInstance(typeof(GameFrameControl).Assembly.GetType("EmuSen.Serenity.Shaders.FilterChain")!, Of(new FilterPass("uniform sampler2D feedback; vec4 filter_main(vec2 coord) { return feedback_eval(coord); }", PassScale.Viewport)))!;
-            using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(8, 8));
-            using var image = SkiaSharp.SKImage.FromPixelCopy(new SkiaSharp.SKImageInfo(8, 8, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Unpremul), Solid(8, 8, 0, 0, 0));
-            MethodInfo draw = chain.GetType().GetMethod("Draw")!;
-            var thrown = Assert.Throws<TargetInvocationException>(() => draw.Invoke(chain, new object?[] { surface.Canvas, null, image, 1, new SkiaSharp.SKRect(0, 0, 8, 8), default(PictureCrop), 0, null }));
-            Assert.Contains("'feedback'", thrown.InnerException!.Message);
-            chain.Dispose();
+            var feedback = Assert.Throws<InvalidOperationException>(() => BuiltInPreset.Translate(Of(new FilterPass("uniform sampler2D feedback; vec4 filter_main(vec2 coord) { return feedback_eval(coord); }", PassScale.Viewport)), new Dictionary<string, float>()));
+            Assert.Contains("'feedback'", feedback.Message);
+            var size = Assert.Throws<InvalidOperationException>(() => BuiltInPreset.Translate(Of(new FilterPass("uniform vec2 secondSize; vec4 filter_main(vec2 coord) { return vec4(secondSize, 0.0, 1.0); }", PassScale.Viewport)), new Dictionary<string, float>()));
+            Assert.Contains("'secondSize'", size.Message);
         }
     }
 }

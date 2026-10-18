@@ -180,6 +180,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_filter_s_own_shape_holds_under_either_setting() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             var tube = new ScreenFilter("tube", new[] { new FilterPass("vec4 filter_main(vec2 coord) { return vec4(1.0, 1.0, 1.0, 1.0); }", PassScale.Viewport) }, null, "") { Aspect = DisplayShape.Television };
             foreach (bool square in new[] { false, true })
             {

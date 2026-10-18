@@ -7,10 +7,12 @@ using Avalonia.Headless;
 using Avalonia.Media.Imaging;
 using EmuSen.Serenity;
 using EmuSen.Serenity.Shaders;
+using EmuSen.Serenity.Slang;
+using System.Collections.Generic;
 
 namespace EmuSen.WiseMan.Serenity
 {
-    // The accurate filters drawn through GameFrameControl's real render pass, and their pixels checked against the measured constants - see EmuSen_Serenity.md §3.4 and §3.5.
+    // The accurate filters drawn through GameFrameControl's real render pass, by their chain read back, and their pixels checked against the measured constants - see EmuSen_Serenity.md §3.4 and §3.5.
     public partial class ScreenFilterRenderTests
     {
         private static readonly HeadlessUnitTestSession Session =
@@ -67,13 +69,27 @@ namespace EmuSen.WiseMan.Serenity
             Near(rgb & 0xFF, actual.B, tolerance, what + " blue");
         }
 
+        // Each pass of a built-in as the chain's compiler takes it, both stages, with no device: what a chain would build - see EmuSen_DevicePicture.md §21.
+        internal static int Compiles(ScreenFilter filter, string? console, IReadOnlyDictionary<string, float>? chosen = null)
+        {
+            SlangPreset preset = SlangPreset.Load(BuiltInPreset.Write(filter, console, chosen));
+            foreach (SlangPassSpec pass in preset.Passes)
+            {
+                SlangSource source = SlangSource.Load(pass.ShaderPath);
+                SlangRunner.Cache.Compile(source.Vertex, SlangStage.Vertex, pass.ShaderPath);
+                SlangRunner.Cache.Compile(source.Fragment, SlangStage.Fragment, pass.ShaderPath);
+            }
+            return preset.Passes.Count;
+        }
+
         [Fact]
         public void Every_built_in_filter_compiles()
         {
             foreach (ScreenFilterChoice choice in ScreenFilters.All.Where(c => c.Filter is not null))
-            {
-                using var chain = (IDisposable)Activator.CreateInstance(typeof(GameFrameControl).Assembly.GetType("EmuSen.Serenity.Shaders.FilterChain")!, choice.Filter)!;
-            }
+                foreach (string? console in (choice.Filter!.Consoles ?? Array.Empty<string>()).Cast<string?>().Append(null))
+                    Assert.True(Compiles(choice.Filter!, console) > 0);
+            foreach (ShaderEffect effect in new[] { ShaderEffect.None, ShaderEffect.Scanlines, ShaderEffect.Crt })
+                foreach (bool bilinear in new[] { false, true }) Assert.Equal(1, Compiles(BuiltInShaders.AsFilter(effect, bilinear), null));
         }
 
         [Fact]
@@ -101,6 +117,7 @@ namespace EmuSen.WiseMan.Serenity
         [InlineData(0x00, HandheldFilters.DmgDarkest)]
         public Task A_dmg_grey_becomes_the_panel_s_measured_shade(byte grey, int shade) => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             Picture picture = Show(HandheldFilters.DmgLcd, 8, 8, 8, 8, Held(Solid(8, 8, grey, grey, grey), 4));
             NearRgb(shade, picture.At(4, 4), 2, $"grey {grey:X2}");
         }, default);
@@ -109,6 +126,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_dmg_pixel_turned_dark_takes_frames_to_get_there() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             byte[] white = Solid(8, 8, 0xFF, 0xFF, 0xFF), black = Solid(8, 8, 0, 0, 0);
             Picture once = Show(HandheldFilters.DmgLcd, 8, 8, 8, 8, white, white, white, white, black);
             Picture settled = Show(HandheldFilters.DmgLcd, 8, 8, 8, 8, white, black, black, black, black);
@@ -121,6 +139,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_magnified_dmg_screen_shows_dots_gaps_and_the_shadow_they_cast() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             byte[] frame = Solid(4, 4, 0xFF, 0xFF, 0xFF);
             int i = (1 * 4 + 1) * 4;
             (frame[i], frame[i + 1], frame[i + 2]) = (0, 0, 0);
@@ -136,6 +155,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task Gbc_red_is_the_measured_panel_s_red() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             Picture picture = Show(HandheldFilters.GbcLcd, 8, 8, 8, 8, Held(Solid(8, 8, 0xFF, 0, 0), 2));
             double r = Math.Pow(0.905 * 0.91, 1 / 2.2) * 255, g = Math.Pow(0.10 * 0.91, 1 / 2.2) * 255, b = Math.Pow(0.1575 * 0.91, 1 / 2.2) * 255;
             var (ar, ag, ab) = picture.At(4, 4);
@@ -148,6 +168,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_magnified_gbc_pixel_shows_red_green_and_blue_stripes() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             Picture picture = Show(HandheldFilters.GbcLcd, 2, 2, 24, 24, Solid(2, 2, 0xFF, 0xFF, 0xFF), Solid(2, 2, 0xFF, 0xFF, 0xFF));
             var left = picture.At(2, 4); var middle = picture.At(6, 4); var right = picture.At(10, 4);
             Assert.True(left.R > left.G && left.R > left.B, $"left stripe {left}");
@@ -159,6 +180,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task The_lottes_crt_draws_scanlines_and_a_curved_edge() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             Picture picture = Show(CrtFilters.Lottes, 16, 16, 128, 128, Solid(16, 16, 0xA0, 0xA0, 0xA0));
             double onLine = Enumerable.Range(58, 12).Average(x => picture.Luma(x, 68));
             double between = Enumerable.Range(58, 12).Average(x => picture.Luma(x, 64));
@@ -180,6 +202,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_lottes_parameter_set_while_it_runs_reaches_the_picture_without_a_new_frame() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             var control = new GameFrameControl { ActiveFilter = CrtFilters.Lottes };
             control.WaitForFilter();
             var window = new Window { Width = 64, Height = 64, Content = control };
@@ -204,6 +227,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_dmg_whose_dot_shadow_is_set_to_zero_casts_none() => Session.Dispatch(() =>
         {
+            if (ChainDevice.Missing) return;
             byte[] frame = Solid(4, 4, 0xFF, 0xFF, 0xFF);
             int i = (1 * 4 + 1) * 4;
             (frame[i], frame[i + 1], frame[i + 2]) = (0, 0, 0);

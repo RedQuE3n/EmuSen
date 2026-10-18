@@ -64,9 +64,6 @@ namespace EmuSen.Serenity.Shaders
         // Places the part of the picture kept itself, from the uniform "crop" (left, top, width and height as shares of the frame) - see EmuSen_Serenity.md §2.10.
         public bool CropsItself { get; init; }
 
-        // Drawn plain where there is no GPU, whose software path would take seconds a frame - see EmuSen_Serenity.md §3.10.
-        public bool RequiresDevice { get; init; }
-
         // The frame's rows drawn once each, where a core hands them over to be repeated; a filter that models the screen counts scanlines - see EmuSen_Serenity.md §3.9.
         public bool RowsOnce { get; init; }
 

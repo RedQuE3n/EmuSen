@@ -78,10 +78,27 @@ namespace EmuSen.WiseMan.Serenity
             for (int seed = 0; seed < 4; seed++)
             {
                 if (image is not null) chain.ReplaceLut(BuiltInPreset.RawTexture, image, v.Width, v.Height);
-                chain.Advance(DeviceFilterMatchTests.Pattern(v.Width, v.Height, seed), v.Width, v.Height, v.Filter.RowsOnce ? 1 : v.RowRepeat);
+                chain.Advance(Pattern(v.Width, v.Height, seed), v.Width, v.Height, v.Filter.RowsOnce ? 1 : v.RowRepeat);
                 picture = chain.Render(v.WindowWidth, v.WindowHeight);
             }
             return picture;
+        }
+
+        // A frame whose every edge and level differs: a gradient under a checker of four sizes.
+        public static byte[] Pattern(int width, int height, int seed)
+        {
+            var rgba = new byte[width * height * 4];
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                {
+                    int i = (y * width + x) * 4;
+                    bool check = ((x >> (1 + seed % 3)) + (y >> (1 + (seed + 1) % 3))) % 2 == 0;
+                    rgba[i] = (byte)(check ? x * 255 / Math.Max(1, width - 1) : 255 - y * 255 / Math.Max(1, height - 1));
+                    rgba[i + 1] = (byte)((x * 7 + y * 13 + seed * 50) & 0xFF);
+                    rgba[i + 2] = (byte)(check ? 40 + seed * 30 : 220 - seed * 20);
+                    rgba[i + 3] = 255;
+                }
+            return rgba;
         }
 
         public static string Hash(byte[] picture) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(picture))[..16].ToLowerInvariant();

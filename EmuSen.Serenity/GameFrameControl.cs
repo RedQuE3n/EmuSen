@@ -10,7 +10,7 @@ using EmuSen.Serenity.Shaders;
 
 namespace EmuSen.Serenity
 {
-    // Draws a raw RGBA8888 frame through Avalonia's own Skia backend - see EmuSen_Serenity.md §2.
+    // Shows a raw RGBA8888 frame: handed to the compositor on the device, or drawn by Avalonia's Skia with any filter read back from its chain - see EmuSen_Serenity.md §2 and EmuSen_DevicePicture.md §21.
     public sealed class GameFrameControl : Control
     {
         // One offered picture, its rows' repeat (§2.7) and who can still read its array - see EmuSen_Serenity.md §2.8.
@@ -49,9 +49,7 @@ namespace EmuSen.Serenity
         private readonly object _cacheLock = new();
         private SKImage? _cachedImage;
 
-        // The raw frame of the offer last copied, made only while the running filter reads one; the render thread's and the device path's, under the cache lock.
-        private SKImage? _cachedRaw;
-        private long _rawVersion = -1;
+        // The raw frame of the offer last converted, made only while the running filter reads one; the render thread's and the device path's, under the cache lock.
         private byte[] _rawImage = Array.Empty<byte>();
         private long _rawImageVersion = -1;
 
@@ -75,11 +73,6 @@ namespace EmuSen.Serenity
         private void NoteRawEncoding() =>
             System.Threading.Volatile.Write(ref _rawEncoding, _activeFilter is { RawEncoding: { } e } f && f.ReadsRaw(_filterConsole, _shaderParameters) ? e : null);
 
-        private readonly Dictionary<ShaderEffect, SKRuntimeEffect> _effects = new();
-
-        // One long-lived builder per effect, never rebuilt per frame - see EmuSen_Serenity.md §2.2.
-        private readonly Dictionary<ShaderEffect, SKRuntimeShaderBuilder> _builders = new();
-
         // Not "Effect" - Avalonia's Visual already has an unrelated one - see EmuSen_Serenity.md §2.4.
         public ShaderEffect ActiveEffect { get; set; } = ShaderEffect.None;
 
@@ -99,50 +92,13 @@ namespace EmuSen.Serenity
             set => _syncToDisplay = value;
         }
 
-        // A multi-pass filter, drawn instead of ActiveEffect when set; its chain is built on the render thread - see EmuSen_Serenity.md §3.2.
+        // A multi-pass filter, drawn instead of ActiveEffect when set, by its chain on the device or read back - see EmuSen_Serenity.md §3.2 and EmuSen_DevicePicture.md §21.
         private ScreenFilter? _activeFilter;
-        private FilterChain? _chain;
 
-        // The chain being built for a newly chosen filter or console; the one before it is drawn until it is ready - see EmuSen_Serenity.md §3.10.
-        private FilterChain? _nextChain;
-
-        // Starts Skia's chain for the filter now chosen, on a pool thread, where Skia draws it: asked to, or with no chain on the device; called under the lock - see EmuSen_DevicePicture.md §19.
-        private void Rechain()
-        {
-            NoteRawEncoding();
-            _nextChain?.Dispose();
-            _nextChain = _activeFilter is { } filter && (_skiaFilters || _builtInUnavailable) ? new FilterChain(filter, _filterConsole, _shaderParameters, background: true) { DrawInSoftware = _drawInSoftware } : null;
-            if (_nextChain is null)
-            {
-                _chain?.Dispose();
-                _chain = null;
-            }
-        }
-
-        private bool _drawInSoftware;
-
-        // A filter that needs a device drawn through Skia's software path anyway, for the tests of that path - see EmuSen_Serenity.md §3.10.
-        internal bool DrawDeviceFiltersInSoftware
-        {
-            get { lock (_cacheLock) return _drawInSoftware; }
-            set { lock (_cacheLock) { _drawInSoftware = value; if (_chain is { } c) c.DrawInSoftware = value; if (_nextChain is { } n) n.DrawInSoftware = value; } }
-        }
-
-        private bool _skiaFilters, _builtInUnavailable;
-
-        // The built-in filters drawn by Skia from their SkSL rather than by the chain, for the tests that compare the two.
-        internal bool SkiaFilters
-        {
-            get { lock (_cacheLock) return _skiaFilters; }
-            set { lock (_cacheLock) { _skiaFilters = value; Rechain(); } }
-        }
-
-        // Blocks until the chosen filter's passes are built, or makes the next draw wait for its chain's build, for a test or a bench that must not see the plain picture first.
+        // Makes the next draw wait for the chosen filter's chain to be built, for a test or a bench that must not see the plain picture first.
         internal void WaitForFilter()
         {
-            FilterChain? next;
-            lock (_cacheLock) { next = _nextChain ?? _chain; _waitForBuild = true; }
-            next?.Wait();
+            lock (_cacheLock) _waitForBuild = true;
         }
 
         public ScreenFilter? ActiveFilter
@@ -154,7 +110,7 @@ namespace EmuSen.Serenity
                 {
                     if (ReferenceEquals(_activeFilter, value)) return;
                     _activeFilter = value;
-                    Rechain();
+                    NoteRawEncoding();
                 }
                 InvalidateVisual();
             }
@@ -172,7 +128,7 @@ namespace EmuSen.Serenity
                 {
                     if (string.Equals(_filterConsole, value, StringComparison.Ordinal)) return;
                     _filterConsole = value;
-                    Rechain();
+                    NoteRawEncoding();
                 }
                 InvalidateVisual();
             }
@@ -213,8 +169,6 @@ namespace EmuSen.Serenity
                 {
                     _shaderParameters = value is null ? null : new Dictionary<string, float>(value, StringComparer.Ordinal);
                     NoteRawEncoding();
-                    _chain?.SetParameters(_shaderParameters);
-                    _nextChain?.SetParameters(_shaderParameters);
                     _slang?.SetParameters(_shaderParameters);
                 }
                 InvalidateVisual();
@@ -222,7 +176,7 @@ namespace EmuSen.Serenity
         }
 
         // What the running filter's chain holds for a parameter, NaN when there is no chain yet, for a test.
-        internal float FilterParameter(string id) { lock (_cacheLock) return (_nextChain ?? _chain)?.ValueOf(id) ?? _builtIn?.Chain?.ValueOf(id) ?? float.NaN; }
+        internal float FilterParameter(string id) { lock (_cacheLock) return _builtIn?.Chain?.ValueOf(id) ?? float.NaN; }
 
         // Whether the preset has finished building, for a test that waits on it.
         internal bool SlangBuilt { get { lock (_cacheLock) return _slang?.Built ?? true; } }
@@ -447,38 +401,6 @@ namespace EmuSen.Serenity
             return ((actualWidth - w) * 0.5, (actualHeight - h) * 0.5, w, h);
         }
 
-        // Compiles a built-in SkSL effect on first use and caches it - see EmuSen_Serenity.md §2.2.
-        private SKRuntimeEffect GetEffect(ShaderEffect effect)
-        {
-            if (_effects.TryGetValue(effect, out SKRuntimeEffect? existing)) return existing;
-
-            string sksl = effect switch
-            {
-                ShaderEffect.Scanlines => BuiltInShaders.ScanlinesGlsl,
-                ShaderEffect.Crt => BuiltInShaders.CrtGlsl,
-                _ => throw new ArgumentOutOfRangeException(nameof(effect), effect, "No shader source for this effect."),
-            };
-
-            SKRuntimeEffect compiled = SKRuntimeEffect.CreateShader(FilterChain.Sksl(sksl), out string errors);
-            if (compiled == null)
-            {
-                throw new InvalidOperationException($"Failed to compile the '{effect}' SkSL shader: {errors}");
-            }
-
-            _effects[effect] = compiled;
-            return compiled;
-        }
-
-        // Lives as long as the control; only Children/Uniforms rebind - see EmuSen_Serenity.md §2.2.
-        private SKRuntimeShaderBuilder GetBuilder(ShaderEffect effect)
-        {
-            if (_builders.TryGetValue(effect, out SKRuntimeShaderBuilder? existing)) return existing;
-
-            var builder = new SKRuntimeShaderBuilder(GetEffect(effect));
-            _builders[effect] = builder;
-            return builder;
-        }
-
         // The picture handed to the compositor on the device where it can be, Skia drawing it otherwise; EMUSEN_DEVICE_PICTURE=0 keeps Skia's - see EmuSen_DevicePicture.md §4 and §18.
         public static bool DevicePictureAllowed { get; set; } = Environment.GetEnvironmentVariable("EMUSEN_DEVICE_PICTURE") != "0";
 
@@ -566,7 +488,6 @@ namespace EmuSen.Serenity
                 next.WaitBuilt();
                 _builtIn?.Dispose();
                 (_builtIn, _builtInKey, _builtInNext, _builtInNextKey, _builtInVersion) = (next, key, null, null, -1);
-                if (next.Problem is not null && !_builtInUnavailable) { _builtInUnavailable = true; Rechain(); }
             }
             _waitForBuild = false;
             if (_builtInKey is { } drawn) wanted = drawn.Filter;
@@ -653,21 +574,13 @@ namespace EmuSen.Serenity
                 (_builtIn, _builtInKey, _builtInNext, _builtInNextKey, _builtInVersion, _valuesRunner) = (null, null, null, null, -1, null);
                 _cachedImage?.Dispose();
                 _cachedImage = null;
-                _cachedRaw?.Dispose();
-                _cachedRaw = null;
-                _rawVersion = -1;
-                _chain?.Dispose();
-                _chain = null;
-                _nextChain?.Dispose();
-                _nextChain = null;
             }
         }
 
-        // Shown again, the chosen filter is built again, its chains having been let go on leaving.
+        // Shown again, the device is asked for again; the filter's chain, let go on leaving, is built again at the next draw.
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
-            lock (_cacheLock) if (_activeFilter is not null && _chain is null && _nextChain is null) Rechain();
             if (DevicePictureAllowed && _presenterStart is null) _presenterStart = StartPresenterAsync();
         }
 
@@ -806,20 +719,12 @@ namespace EmuSen.Serenity
                     }
                     try
                     {
-                        // The chain built for a new choice takes over once its passes are ready; until then the one before it, or the plain picture, is drawn.
-                        _owner._nextChain?.Prepare(grContext);
-                        if (_owner._nextChain is { Settled: true } next)
-                        {
-                            _owner._chain?.Dispose();
-                            (_owner._chain, _owner._nextChain) = (next, null);
-                        }
-
-                        // A built-in filter or simple effect is drawn by its chain on the device and read back, unless Skia is asked to draw it - see EmuSen_DevicePicture.md §19.
-                        ScreenFilter? builtIn = _owner._slang is null && !_owner._skiaFilters ? _owner._activeFilter ?? (_effect == ShaderEffect.None ? null : BuiltInShaders.AsFilter(_effect, _owner.BilinearFiltering)) : null;
+                        // A built-in filter or simple effect is drawn by its chain on the device and read back; until that is built, the plain picture - see EmuSen_DevicePicture.md §19.
+                        ScreenFilter? builtIn = _owner._slang is null ? _owner._activeFilter ?? (_effect == ShaderEffect.None ? null : BuiltInShaders.AsFilter(_effect, _owner.BilinearFiltering)) : null;
                         Slang.SlangRunner? runner = builtIn is null ? null : _owner.BuiltInFor(source, ref builtIn);
 
                         // A preset or a chain that will draw reads the array itself, so no image of the source is made, and one made earlier is now stale - see EmuSen_Serenity.md §9.3.
-                        bool presetOnly = (_owner._slang is { Ready: true } || runner is { Ready: true }) && _owner._chain is null;
+                        bool presetOnly = _owner._slang is { Ready: true } || runner is { Ready: true };
                         if (presetOnly && fresh) { _owner._cachedImage?.Dispose(); _owner._cachedImage = null; }
                         bool copy = !presetOnly && (fresh || _owner._cachedImage is null);
                         if (copy) CopySource(source);
@@ -831,7 +736,7 @@ namespace EmuSen.Serenity
                         else
                         {
                             if (_owner._cachedImage is null) { CopySource(source); copy = true; }
-                            if (!(_owner._chain is { } chain && DrawFiltered(canvas, chain, grContext, _owner._cachedImage!, source))) Draw(canvas, _owner._cachedImage!, source);
+                            Draw(canvas, _owner._cachedImage!, source);
                         }
 
                         // Flushed here so the texture's upload, which Skia defers to a flush, is timed with the draw - see EmuSen_Serenity.md §2.5.
@@ -848,28 +753,12 @@ namespace EmuSen.Serenity
                 }
             }
 
-            // The offer's raw frame as an image, copied once per offer and only for a chain that reads it.
-            private SKImage? RawOf(FilterChain chain, Offer source)
-            {
-                if (!chain.ReadsRaw || _owner.RawImage(source, chain.Filter) is not { } raw) return null;
-                if (_owner._rawVersion != source.Version || _owner._cachedRaw is null)
-                {
-                    _owner._cachedRaw?.Dispose();
-                    _owner._cachedRaw = SKImage.FromPixelCopy(new SKImageInfo(source.Width, source.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul), raw);
-                    _owner._rawVersion = source.Version;
-                }
-                return _owner._cachedRaw;
-            }
-
             private void CopySource(Offer source)
             {
                 var sourceInfo = new SKImageInfo(source.Width, source.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
                 SKImage? previous = _owner._cachedImage;
                 _owner._cachedImage = SKImage.FromPixelCopy(sourceInfo, source.Rgba);
-
-                // A filter that looks back keeps the frame just replaced; otherwise it is freed as before.
-                if (_owner._chain is { } running) running.Advance(previous);
-                else previous?.Dispose();
+                previous?.Dispose();
             }
 
             // A filter that states a shape gets it; otherwise the screen's the core reports, unless square pixels are asked for - see EmuSen_Serenity.md §2.9 and §3.9.
@@ -918,17 +807,6 @@ namespace EmuSen.Serenity
                 return drawn;
             }
 
-            private bool DrawFiltered(SKCanvas canvas, FilterChain chain, GRContext? context, SKImage sourceImage, Offer source)
-            {
-                SKRect destination = Destination(source, chain.Filter.Aspect);
-                // A filter that models the screen keeps its glass where it is and moves the picture under it.
-                if (chain.Filter.CropsItself) return chain.Draw(canvas, context, sourceImage, source.RowRepeat, destination, _owner._crop, source.Lines, RawOf(chain, source));
-                bool cropped = BeginCrop(canvas, ref destination);
-                bool drawn = chain.Draw(canvas, context, sourceImage, source.RowRepeat, destination, lines: source.Lines, raw: RawOf(chain, source));
-                if (cropped) canvas.Restore();
-                return drawn;
-            }
-
             private void Draw(SKCanvas canvas, SKImage sourceImage, Offer source)
             {
                 // The control's BilinearFiltering - see EmuSen_Settings_Reference.md §3.
@@ -939,32 +817,7 @@ namespace EmuSen.Serenity
                 // While a chosen filter is built the plain picture takes its shape, so nothing moves when it takes over.
                 SKRect destRect = Destination(source, _owner._activeFilter?.Aspect);
                 bool cropped = BeginCrop(canvas, ref destRect);
-                float x = destRect.Left, y = destRect.Top;
-                int upscaledW = (int)Math.Round(destRect.Width), upscaledH = (int)Math.Round(destRect.Height);
-
-                // No offscreen surface on either path - see EmuSen_Serenity.md §2.2.
-                if (_effect == ShaderEffect.None)
-                {
-                    canvas.DrawImage(sourceImage, destRect, sampling);
-                    if (cropped) canvas.Restore();
-                    return;
-                }
-
-                // A local matrix is what puts the shader's math in output-pixel space - see EmuSen_Serenity.md §3.
-                float scaleX = upscaledW / (float)source.Width;
-                float scaleY = upscaledH / (float)source.Height;
-
-                SKRuntimeShaderBuilder builder = _owner.GetBuilder(_effect);
-                builder.Children["image"] = sourceImage.ToShader(
-                    SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, sampling, SKMatrix.CreateScale(scaleX, scaleY));
-                builder.Uniforms["outputSize"] = new[] { (float)upscaledW, (float)upscaledH };
-
-                using SKShader shader = builder.Build();
-                using var paint = new SKPaint { Shader = shader };
-                canvas.Save();
-                canvas.Translate(x, y);
-                canvas.DrawRect(new SKRect(0, 0, upscaledW, upscaledH), paint);
-                canvas.Restore();
+                canvas.DrawImage(sourceImage, destRect, sampling);
                 if (cropped) canvas.Restore();
             }
         }

@@ -228,7 +228,6 @@ namespace EmuSen.Serenity.Shaders
             Aspect = EmuSen.Crystal.DisplayShape.Television,
             RowsOnce = true,
             CropsItself = true,
-            RequiresDevice = true,
         };
 
         private static string N(double value) => value.ToString("0.0#######", CultureInfo.InvariantCulture);

@@ -6,7 +6,7 @@ How a core's finished frame gets on screen. Core-agnostic: nothing in this proje
 |---|---|---|
 | `GameFrameControl` | `EmuSen.Serenity/GameFrameControl.cs` | Avalonia, Skia, and a pixel buffer |
 | `ShaderEffect` / `FramePresenter` | `EmuSen.Serenity/FramePresenter.cs` | a `Window` and the control above |
-| `BuiltInShaders` | `EmuSen.Serenity/Shaders/BuiltInShaders.cs` | nothing — two SkSL strings |
+| `BuiltInShaders` | `EmuSen.Serenity/Shaders/BuiltInShaders.cs` | nothing — the simple effects' and the plain picture's GLSL *(SkSL until 2026-10-17)* |
 | `FrameScheduler` / `PacingDecision` *(since 2026-10-17)* | `EmuSen.Serenity/FrameScheduler.cs` | `DisplayClock`'s readings |
 | ~~`GraphicsSettings`~~ *(deleted 2026-10-17, §5)* | — | — |
 
@@ -51,6 +51,10 @@ Which real GPU API sits under Skia's `GRContext` is decided by Avalonia's platfo
 With the overlay gone, reproducing the reference-canvas math would show the game tiny in one corner with dead space filling the rest — a visible regression dressed up as fidelity. Fitting the frame's own native aspect ratio into the control's actual bounds is what "show me the game, scaled to fit the window" now means.
 
 ### 2.2 Nothing GPU-adjacent is allocated per frame
+
+*Since 2026-10-17 the control has no runtime effect, so no `GetEffect` or `GetBuilder`: Skia draws the plain picture
+and the images a chain reads back, and every filter is the chain's (`EmuSen_DevicePicture.md` §21). The rule stands
+for what Skia still draws.*
 
 This is the rule the draw path is built around, and it was learned twice, expensively:
 
@@ -310,6 +314,9 @@ The share is the same in both regions; a PAL set's overscan was not found stated
 
 ## 3. The built-in shaders
 
+*Since 2026-10-17 every built-in's passes are Vulkan GLSL, drawn by §7's chain, handed to the compositor or read back;
+nothing here is drawn by Skia (`EmuSen_DevicePicture.md` §19 to §21). What follows on SkSL is the port's history.*
+
 Two single-pass effects, `Scanlines` and `Crt`, as SkSL source embedded in `BuiltInShaders`. `ShaderEffect.None` is always the fallback and is bit-identical to having no shader pipeline at all.
 
 They are faithful ports of the original Raylib/GLSL versions, not a redesign — the port was part of moving off Raylib, and doing it as a translation kept the two changes separable. They stay embedded as C# string constants for the same reason the GLSL predecessors were: no "did the build actually copy this file" failure mode while the pipeline itself is still being proven out. `BuiltInShaders` is `internal`, an implementation detail of `GameFrameControl` rather than public API; `AssemblyInfo.cs` opens it to `EmuSen.WiseMan` alone so the SkSL source can be asserted directly.
@@ -327,6 +334,9 @@ The exact darkening factors are part of the contract, not incidental: `Scanlines
 `ScreenFilters` is the list a settings window shows and a config stores: a name for each filter and the effect it draws, with **None** first. A frontend keeps the name, never the enum's number, so a filter added later or renamed cannot shift what an old config meant, and `ByName` answers None for any name it does not know, so a config from a newer build shows the picture unfiltered rather than failing. Today the list is the two effects above, as "Scanlines" and "Simple CRT"; it is where accurate CRT and handheld LCD filters are meant to arrive (`EmuSen_Settings_Reference.md` §4.40).
 
 ### 3.2 Multi-pass filters, and the frames they look back at (2026-09-21)
+
+*`FilterChain` was removed 2026-10-17; `BuiltInPreset` writes these passes as a slang preset and §7's chain runs
+them, each name below bound to the semantic `EmuSen_DevicePicture.md` §3.2 gives it. SkSL's limits no longer apply.*
 
 A `ScreenFilter` is a list of `FilterPass`es, each an SkSL program drawn either at the game's own size (`PassScale.Source`: a panel's colour, its response) or at the size of the rectangle the picture is shown in (`PassScale.Viewport`: a pixel grid, a CRT mask). `GameFrameControl.ActiveFilter` draws one in place of `ActiveEffect` when set. `FilterChain` runs it: every pass but the last draws into a surface of its size (a GPU surface on the lease's `GRContext` when there is one, a raster one otherwise), whose snapshot is the next pass's `source`; the last pass draws straight into the letterboxed rectangle when it is viewport-sized, and its surface is stretched there when it is not.
 
@@ -384,6 +394,9 @@ A `ScreenFilter` may now list `Parameters`, each a `SlangParameter` (id, label, 
 
 ### 3.9 What a pass may ask of the chain beyond §3.2 (2026-10-07)
 
+*Since 2026-10-17 on §7's chain: a float pass is a `float_framebuffer`, a size a scale type, feedback and names the
+slang semantics, all through `BuiltInPreset`; `ScreenFilterChainTests` runs through the chain read back.*
+
 Six additions to `FilterChain`, `FilterPass`, `ScreenFilter` and `GameFrameControl`, made for `EmuSen_CRT.md` §4.2 and usable by any filter. A filter that uses none of them is drawn exactly as before (the evidence is at the end of this section).
 
 **Half-float passes.** `FilterPass.Float` draws the pass into an `RgbaF16` surface. Such a surface keeps a negative value, a value above white and an alpha that is not coverage, where the 8-bit surfaces of §3.2 clamp the first two and Skia's blending overwrites the third. For the alpha to arrive, a float pass is drawn with the `Src` blend and without the clear to opaque black that an 8-bit pass gets; an 8-bit pass keeps the clear and the default blend. When the device refuses the format the surface is made in memory instead, as §3.2's already were, and `FilterChain.SurfacesOnDevice` turns false so that a bench does not time an upload unawares. There is no fall back to 8 bits: a filter written for float values would draw wrongly, not approximately.
@@ -409,6 +422,11 @@ Six additions to `FilterChain`, `FilterPass`, `ScreenFilter` and `GameFrameContr
 **Nothing drawn before has changed**, measured 2026-10-07 on the commit before and the commit after: all ten of §3.1's choices (None, Lottes, the six LCDs, Scanlines, Simple CRT) over five frames of a moving pattern at 160×144 in a 643×481 window through the headless raster path, the last two frames of each hashed, 20 hashes identical; and the same ten on the RX 6800 through the bench of §8.1 at 1920×1080, three hashed pictures each, 30 identical. The existing `ScreenFilterRenderTests`, `GameFrameControl` tests, `SlangFrameControlTests` and `ShaderSettingsWindowTests` pass unchanged.
 
 ### 3.10 A filter built off the render thread, and one that needs a device (2026-10-07)
+
+*Superseded 2026-10-17: a built-in's chain is built on a pool thread by a `SlangRunner`, its preset written there too,
+the chain before drawn until it is ready; there is no warming, no software path, and neither `RequiresDevice` nor
+`DrawDeviceFiltersInSoftware`; `WaitForFilter` makes the next draw wait for the build (`EmuSen_DevicePicture.md` §19,
+§21).*
 
 **What was measured before.** A filter's passes were compiled at its first draw, on the render thread: for the CRT
 filter of `EmuSen_CRT.md`, SkSL's compile of ten passes took 22 ms the first time in a process and 2 ms after, and
@@ -462,6 +480,9 @@ build on the render thread; the chain before dropped at once; the software path 
 chain never prepared.
 
 ### 3.11 Names a pass may not use (2026-10-08)
+
+*Since 2026-10-17 the guard reads each pass for GLSL's kept words and the names the chain's preset writes into every
+pass, not for Metal's: a pass reaches every driver as SPIR-V (`EmuSen_DevicePicture.md` §21.3).*
 
 **The defect.** On macOS the CRT filter of `EmuSen_CRT.md` drew a black picture at its Balanced and Accurate tiers,
 and a correct one at Performance. Reported by the tester on 2026-10-08 on a Mac mini (M1, macOS 27.0, a 1920 × 1080
@@ -631,8 +652,8 @@ All headless, in `EmuSen.WiseMan/Serenity/`, through `HeadlessUnitTestSession` �
 
 - `GameFrameControlTests.cs` — `ComputeLetterboxRect` arithmetic, including the degenerate zero/negative inputs.
 - `GameFrameReleaseTests.cs` — §2.8: draw operations held and drawn out of order, and the arrays given back.
-- `GameFrameControlRenderTests.cs` — the real render path, added specifically to close the "nothing exercises this" gap that hid the §2.2 crash. Byte-identical repeated output, 120 consecutive frames without throwing, and the exact scanline pixel math.
-- `BuiltInShadersTests.cs` — asserts the SkSL source itself, via the `InternalsVisibleTo` in `AssemblyInfo.cs`.
+- `GameFrameControlRenderTests.cs` — the real render path, added specifically to close the "nothing exercises this" gap that hid the §2.2 crash. Byte-identical repeated output, 120 consecutive frames without throwing, and the exact scanline pixel math (since 2026-10-17 drawn by the chain; the runtime effects' crash guards went with them).
+- `BuiltInShadersTests.cs` — asserts the effects' source itself (GLSL since 2026-10-17), via the `InternalsVisibleTo` in `AssemblyInfo.cs`.
 - `FramePresenterEffectCyclingTests.cs` — `NextEffect`'s cycle, without a window.
 - `ShaderBenchTests.cs` — §8.1's bench runs a short case and reports every stage; skipped unless `EMUSEN_SHADER_BENCH=1` and a pack are given, since it needs a GL device.
 - `Common/LeafAssemblyTests.cs` — §1's reference set.
@@ -1998,3 +2019,10 @@ The game's picture, the built-in filters and the hand-over to the compositor are
 device of §7: the design and the record of each step are `EmuSen_DevicePicture.md`. §3's filters become passes of
 §7's chain (§3 there), and the readback of §7.4 and §9.1 becomes the fallback where the compositor cannot import the
 chain's image (§4 there).
+
+## 12. Skia's filter path removed (2026-10-17)
+
+`FilterChain`, the control's runtime effects and the software path are gone: the plain picture is Skia's `DrawImage`
+where the device path is off, and every filter, built-in or RetroArch, is the chain of §7, handed to the compositor
+or read back (§9.1). The built-ins' text is Vulkan GLSL. `EmuSen_DevicePicture.md` §19 to §21 are the record, with what
+it costs and how the pictures were held to those of before.

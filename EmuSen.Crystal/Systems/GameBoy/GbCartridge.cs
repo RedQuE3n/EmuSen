@@ -3,13 +3,13 @@ using System.IO;
 
 namespace EmuSen.Crystal.Systems.GameBoy
 {
-    // What a Game Boy image's header says about its board, read before the image reaches the library, with the two refusals the board makes; emusen-systems' reader unless EMUSEN_SYSTEMS_NATIVE=0 - see Mercury_Memory.md §2, EmuSen_Backend.md §13.3.
+    // What a Game Boy image's header says about its board, every type named, an engine refusing at create what it does not build; emusen-systems' reader unless EMUSEN_SYSTEMS_NATIVE=0 - see Mercury_Memory.md §2, EmuSen_Backend.md §17.2 L1.
     public readonly record struct GbCartridge(byte Type, string Board, int RomBanks, int RamLength, bool HasBattery, bool HasTimer, bool HasRumble, byte CgbFlag)
     {
         public const int HeaderLength = 0x0150;
         public const int RomBankSize = 0x4000;
 
-        // The header's facts; an image shorter than the header, or of a type no board implements, is refused as the core refuses it.
+        // The header's facts; an image shorter than the header is refused.
         public static GbCartridge Read(byte[] image) => SystemCode.Active ? SystemCode.GbHeader(image) : ReadManaged(image);
 
         // The C# reader alone, the failover and the parity class's oracle.
@@ -26,7 +26,14 @@ namespace EmuSen.Crystal.Systems.GameBoy
                 0x05 or 0x06 => "MBC2",
                 >= 0x0F and <= 0x13 => timer ? "MBC3+RTC" : "MBC3",
                 >= 0x19 and <= 0x1E => rumble ? "MBC5+Rumble" : "MBC5",
-                _ => throw new NotSupportedException($"Cartridge type ${type:X2} is not implemented - see Mercury_Memory.md §4."),
+                >= 0x0B and <= 0x0D => "MMM01",
+                0x20 => "MBC6",
+                0x22 => "MBC7",
+                0xFC => "Pocket Camera",
+                0xFD => "TAMA5",
+                0xFE => "HuC3",
+                0xFF => "HuC1",
+                _ => "unknown",
             };
             bool battery = type is 0x03 or 0x06 or 0x09 or 0x0D or 0x0F or 0x10 or 0x13 or 0x1B or 0x1E or 0x22 or 0xFF;
             return new GbCartridge(type, board, image.Length / RomBankSize, RamLengthFor(image[0x0149], type), battery, timer, rumble, image[0x0143]);

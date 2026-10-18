@@ -7,8 +7,13 @@ name = "emusen-native"
 version = "0.1.0"
 
 [[package]]
+name = "emusen-sm83"
+version = "0.1.0"
+
+[[package]]
 name = "mercuryrt"
 version = "0.1.0"
 dependencies = [
  "emusen-native",
+ "emusen-sm83",
 ]

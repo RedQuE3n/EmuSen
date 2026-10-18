@@ -1,0 +1,16 @@
+[package]
+name = "emusen-sm83"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The SM83's instructions as text, shared by MercuryRT's DEBUG_DISASSEMBLE and the Game Boy's pack, with no standard library. No execution. See EmuSen_Backend.md §17.2 D10.
+[lib]
+name = "emusen_sm83"
+
+[dependencies]
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

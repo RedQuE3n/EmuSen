@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 16u
+#define EMUSEN_PLATFORM_ABI_VERSION 17u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -561,6 +561,39 @@ int64_t emusen_cheats_prune_apply(const uint8_t *request, size_t request_len, ui
  * the host reads itself (Zip64, spanned, encrypted, a method other than stored and deflate, a name holding a NUL, a
  * directory that is not one); IO, NOT_FOUND or ACCESS where the target could not be made. */
 int64_t emusen_cheats_install(const uint8_t *zip, size_t zip_len, const uint8_t *target, size_t target_len, uint8_t *out, size_t len);
+
+/* ---- The HTTP client: emusen-net (EmuSen_Backend.md, section 16). Since interface 17. ---- */
+
+/*
+ * A GET whose body is held whole, as .NET's HttpClient.GetByteArrayAsync makes it: its redirects (50 at most, never
+ * from https to http), one timeout over the whole call, a request no byte answered sent again three times, certificates
+ * checked against the system's own store, and .NET's words for every failure. It runs on a thread of the library's own;
+ * the host drains its progress and waits for its end, and nothing calls the host back. Opaque to the host.
+ */
+typedef struct emusen_net_download emusen_net_download;
+#define EMUSEN_NET_RUNNING 0
+#define EMUSEN_NET_DONE 1
+#define EMUSEN_NET_FAILED 2
+#define EMUSEN_NET_CANCELLED 3
+/* In: {"url", "timeout_ms" (null for none), "test_roots"}. test_roots is a PEM text of roots trusted beside the system's,
+ * for a host's tests against a server of their own; no setting reaches it. Null for a request that is not one, with the
+ * words in emusen_platform_last_error. Freed with emusen_net_download_free, which leaves a fetch still running to end
+ * on its own. */
+emusen_net_download *emusen_net_download_start(const uint8_t *request, size_t request_len);
+void emusen_net_download_free(emusen_net_download *d);
+/* Where it stands, an EMUSEN_NET_ value; the body's bytes so far, and its length, -1 until an answer gives one. Either
+ * pointer may be null. */
+int32_t emusen_net_download_progress(const emusen_net_download *d, uint64_t *received, int64_t *total);
+/* Waits up to timeout_ms for the end, and says where it stands. */
+int32_t emusen_net_download_wait(const emusen_net_download *d, uint32_t timeout_ms);
+/* Ends it for the host now: it stands cancelled at once, and its fetch stops at its next read. */
+void emusen_net_download_cancel(const emusen_net_download *d);
+/* The body of one that is done; ABSENT otherwise. */
+int64_t emusen_net_download_body(const emusen_net_download *d, uint8_t *out, size_t len);
+/* Why one that failed or was cancelled gave no body: {"kind", "message", "inner", "status"}, kind one of status,
+ * timeout, ended, unanswered, tls, connect, resolve, invalid, limit, cancelled, url, scheme and other, message and
+ * inner .NET's words; ABSENT otherwise. */
+int64_t emusen_net_download_failure(const emusen_net_download *d, uint8_t *out, size_t len);
 
 /*
  * A save medium's lock (EmuSen_SaveMedia.md, section 3.5): <file>.lock, locked with flock while held and removed with

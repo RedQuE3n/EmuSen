@@ -1,6 +1,6 @@
 # EmuSen — the backend in Rust: the line, the frontend API, the system packs and the services
 
-*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), and B2's first three parts (§14, 2026-10-17). It answers the tester's goal of 2026-10-16, "to
+*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), and the cheat database's download on SR9's client (§16, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
 get the entire backend ported to rust", after which the frontend's move is planned, and the request of 2026-10-17 to
 design two things: one frontend API by which every frontend drives the cores, and the system packs and the remaining C#
 platform services in Rust. Every claim about the code was read on `WiseMan` at `165e60b4`. Claims are marked as
@@ -674,7 +674,7 @@ behind a switch until the tester agrees to state 3, and says how it is proven. T
 | **B2** | **The frontend API v1 and its C# implementation.** `emusen_crystal.h` and its baseline; `EmuSen.Crystal.Client`; a managed implementation in `EmuSen` written from `EmulatorSession`, `CoreFactory` and the three loops' frame-end order, which is then written once; Pharaoh, emusen-shell and Mistress moved onto the binding in that order; `HostAction` synthesised from events for the C# shell; the session service 1.3 with `games`, `open_game` and `open_console` | one test per row of `EmuSen_Surfaces.md` §4.1's divergence table, run through every client (rewind gated by the engine in each; one post-load sequence); F3 and F4, and the candidates C1 to C7 of §3.12, each shown by a test that fails first or recorded as no defect; Pharaoh's `framesum` and `audiosum` equal before and after on the bench games; the shell's golden corpus; the shape check that only C-expressible types appear in the contract layer (`EmuSen_CoreAPI.md` §9.3) [R]; the header and the binding agreeing by a test | each frontend's old path stays until its own move is merged; afterwards git, since the implementation is the same C# moved |
 | **B3** | **Pack code in Rust**: the recognisers and routing, header readers, cheat codecs, the card formats (`PsxCardFormat`, `N64PakFormat`, `SegaCdBramFormat`), debugger views, the OpenVGDB transform; the console code of the shims moved in (`N64GameSharkCodec`, `MoonBoards`, `GbCartridge`, the SM83 disassembler) and the VR4300's onto `emusen-mips` | a parity class per pack on generated inputs: synthetic discs and cartridges for the recognisers, every code of the cheat tests both ways, cards written by each side read by the other and edited to the same bytes, and cards written by Diamond's and Nephrite's open firmware read by the pack's modules (F21), every tile and tilemap entry of the debug-view tests; seeded faults shown to be caught (`EmuSen_RustPlatform.md` §6.5) [R]; the golden corpus's `cheat`, `cards`, `tile` and `dis` files | `EMUSEN_SYSTEMS_NATIVE=0` |
 | **B4** | **The per-core shims retired.** What each adds above the ABI goes into its core's own exports, as optional capabilities of the core ABI v1 where one exists (`DEBUG_REGISTERS`, `EmuSen_DianaSh.md` Q28 [R]) and a minor where none does; MarsRT's private exports (`marsrt_core_counters`, `_cpu_registers`, `_gpu_report` and the rest, `MarsRtCore.cs:21–32` [M]) become telemetry or debug capabilities; the shims, `PortEngine` and the pre-stable host deleted; the three dead classes deleted | each core's goldens and corpus baseline unchanged (`EmuSen_Stack.md` §2.1, 2026-10-16) [R]; the kit's corpus on each core; the debugger's golden corpus on each core unchanged, or each difference recorded and decided; `grep` for a type under `EmuSen.Cores.Nintendo.` in shipped code: 0 | per core: its shim stays until its core's exports pass, reached through `CoreFactory` as now |
-| **B5** | **The file services in Rust**: `emusen-firmware` (the store, the folders' order, the overview), `emusen-savemedia` (the card manager over B3's formats and Galaxia's `MediumLock`), `emusen-cheats`' files and database (`.cht`, the list files, the database's install, prune and import) | a parity class per service over generated trees (firmware whole and split, cards of each medium held and free, `.cht` files of the cheat tests); the golden corpus's `cards`, `cheat db` and `firmware` cases. *Built 2026-10-17, §15; the download waits on SR9's choice (§15.4)* | `EMUSEN_SERVICES_NATIVE=0` |
+| **B5** | **The file services in Rust**: `emusen-firmware` (the store, the folders' order, the overview), `emusen-savemedia` (the card manager over B3's formats and Galaxia's `MediumLock`), `emusen-cheats`' files and database (`.cht`, the list files, the database's install, prune and import) | a parity class per service over generated trees (firmware whole and split, cards of each medium held and free, `.cht` files of the cheat tests); the golden corpus's `cards`, `cheat db` and `firmware` cases. *Built 2026-10-17, §15; the download on SR9's client built 2026-10-18, §16* | `EMUSEN_SERVICES_NATIVE=0` |
 | **B6** | **The core host in Rust, shared with the kit**: `emusen-core-host` in `EmuSen/Cores/Shared/` (discovery from sidecars, trust and the manifest, the checks of `EmuSen_CoreAPI.md` §7.2, the v1 calls, the input latch, the state layout), which the kit's `api.rs`, `sidecar.rs` and `lender.rs` fold into | the kit's corpus on every core gives the same report through the new crate; discovery's listing as JSON equal from the C# and the Rust over the published tree and over trees with a missing, altered and unapproved library | the kit keeps its own loader until its corpus passes; the C# host is untouched by this step |
 | **B7** | **Crystal in Rust**: `emusen-crystal` over B1 to B6: sessions and the frame call, input, speed, rewind, states and `states.db`, settings and `consoles.json`, save-media placement, cheat application, the debugger's registries, expressions and bridge, telemetry, the recorder, the session service's table; exported as `emusen_crystal_*` from the platform library. Built in four parts, each graded before the next: (a) life, frame, input, speed, rewind, states, settings, media; (b) the debugger; (c) the service table; (d) the per-program switch | the parity class runs scripted sessions through the binding on both implementations and compares frame and audio digests, state bytes, files written, events drained and every service function's JSON; the debugger's golden corpus with Crystal's table; then state 2 per program: **Pharaoh first**, then emusen-shell, then Mistress, each after a full blast-radius run on Linux and the three systems' CI | `EMUSEN_CRYSTAL_NATIVE=0`, per process, the B2 implementation |
 | **B8** | **The library in Rust**: `emusen-library` and `emusen_library.h`; the scan, identity over Galaxia's extended `RomHash`, `games.db` with its migrations, play time, collections and edits; Mistress's `Library/` behind the binding | a parity class: a generated library scanned by both into separate databases, compared row for row; every `games.db` version of the migration tests opened by both; the SQLite rule of `EmuSen_RustPlatform.md` §2.8 kept, one copy of SQLite per process (the C# lends `e_sqlite3` as Q25 there decided) [R] | `EMUSEN_LIBRARY_NATIVE=0` |
@@ -777,7 +777,7 @@ about 5,480 lines are deleted unported and 3,117 are replaced by the table Cryst
 | R3 | **Two implementations to keep in step** from B2 to B7's state 3: a change to behaviour must land in both | the parity class fails on a change in one; the window is kept short by doing B3 to B6 beside each other |
 | R4 | **SQLite twice in one process** when the library or states move while C# still opens the same files | `EmuSen_RustPlatform.md` §2.8's rule, one copy per process, kept by lending `e_sqlite3` as Q25 there decided; a database moves whole, with one owner at a time [R] |
 | R5 | **Settings clobbered** by a frontend saving a stale `graphics.json` | §2.5's split before B7 writes any setting |
-| R6 | **Network I/O in Rust** (the cheat database's install at B5, scraping at B9) brings an HTTP and TLS dependency on three systems | stated as its own question (SR9); B5's install may stay C# until it is decided |
+| R6 | **Network I/O in Rust** (the cheat database's install at B5, scraping at B9) brings an HTTP and TLS dependency on three systems | stated as its own question (SR9); B5's install may stay C# until it is decided. *SR9 decided 2026-10-18; the client is `emusen-net`, §16, and its portable check's need of a C toolchain for `ring` is §16.6* |
 | R7 | **Threads at the seam**: a change called from the frame thread that waited for the frame boundary would wait for itself | §3.3's rule: on the frame thread between frames a change applies at once; elsewhere it waits; a test for each |
 | R8 | **The service's behaviour shifts when its provider changes** at B7(c), under modules that rely on version 1.2 | the golden corpus on every core with Crystal's table, both ways |
 | R9 | **Windows and macOS**: the Rust shell has not run on Windows (`EmuSen_DianaSh.md` §13.10) [R], and Crystal's state 2 needs all three | the CI jobs of `EmuSen_RustPlatform.md` §27–§29 for every step's crates and WiseMan classes, with the Mac mini for the device picture [R] |
@@ -2145,6 +2145,7 @@ client (SR9, §11.1), and certificates are checked against each system's own sto
 not a bundled `webpki-roots`. Nothing was adopted in this step: the download (`CheatDatabaseInstaller.Fetch`) stays
 C#, and `Cargo.lock` gained no HTTP crate. **Moving the cheat database's download to Rust on `ureq` is the next piece
 of work after this step is merged**; the install then takes its bytes from the Rust download rather than from the C#.
+*Built 2026-10-18, §16.*
 
 *Also decided 2026-10-18 by the tester:* `MediumLock` stays backed by the library under Galaxia's own switch, as §15.2
 built it.
@@ -2172,8 +2173,202 @@ state 3.
 - State 3, the C# services deleted, at the tester's word after goldens (§6, B10). Until then a change to a service is
   made in both halves, and the parity classes fail on one alone.
 - The download on `ureq`, next after this step (§15.4); the install then takes its bytes from it rather than from the C#.
+  *Built 2026-10-18, §16.*
 - The overview's enumeration of systems and engines, with B6 and B7; `CheatImport` with the registry at B7; the
   firmware store's reading of `FirmwareDirectory` from Rust once a Rust host loads `appsettings.json` itself.
 - On Windows and macOS: the zip times' local zone, and every gate of this section, when the port resumes. The
   portable job of `EmuSen_RustPlatform.md` §31 compiles the three crates for both; it was not run here, since this
   machine's toolchain carries no standard library for either target.
+
+## 16. What was built, 2026-10-18: the cheat database's download in Rust
+
+*Measured on 2026-10-18 on branch `cheatdb-download`, from `WiseMan` at `c922c968`, with .NET 10.0.112. The piece of
+work §15.4 named as next: the download (`CheatDatabaseInstaller.Fetch`) on the HTTP and TLS client SR9 chose, the
+install it feeds being Rust already (§15.3). The decisions that bear on it: SR9 (`ureq` 3 over `rustls`, certificates
+from each system's own store through `rustls-platform-verifier`, one client for the whole platform), SR7 (the C# as
+failover behind `EMUSEN_SERVICES_NATIVE`), and `EmuSen_RustPlatform.md` §31 (Windows and macOS paused, every crate
+still compiled for both).*
+
+**What the C# did, read before anything was built.** `Fetch(url)` made an `HttpClient` of default settings with a
+five-minute `Timeout` and called `GetByteArrayAsync`, holding the archive in memory for `ZipArchive`, which must seek.
+Three things a reader might expect of a download it never had: **no progress** (each caller shows a fixed line until the
+call returns), **no cancellation** (none of the three callers, `cheat db update`, the session's `DB_UPDATE` and
+Mistress's Cheat Database window, can stop it), and **no file**: the archive is never written to disk, so there is no
+partial file to leave behind and no atomic write to make; a failed download throws before `Install` runs, and nothing
+is half-installed. Its request carries **no `User-Agent`**: .NET's `HttpClient` sends none unless told to, and EmuSen
+never told it (measured: the request is `GET <path> HTTP/1.1`, `Host: <host:port>` and nothing else). Each of these is
+kept: the Rust holds the archive in memory, sends no `User-Agent`, and the public `Fetch` neither reports progress nor
+can be cancelled. Progress and cancellation exist in the Rust download for a host that drains them (§16.3); no C#
+caller uses them, since the service's public shape is unchanged for B2.
+
+### 16.1 The crate, `emusen-net`
+
+The client is a crate of its own (`Platform/net/`), not a module of `emusen-cheats`, because scraping (B9) is its next
+user and one client means one owner of its rules. `ureq` brings no TLS of its own here: `tls.rs` is a connector over
+`rustls` whose verifier is the platform verifier, since `ureq`'s own rustls connector takes no verifier and a test's
+extra root needs one. `ring` is the crypto provider, `ureq`'s default. What `HttpClient.GetByteArrayAsync` does with a
+client of default settings, each rule measured against .NET 10.0.112 with a server of the measurement's own, and
+reproduced:
+
+- **The request**: `GET`, the path and query, `Host` with the port when one is written, nothing else; no
+  `User-Agent`, no `Accept`, no `Accept-Encoding` (.NET decompresses nothing by default). One difference on the wire
+  stays: `ureq` writes header names in lower case (`host:`), .NET `Host:`; HTTP header names are case-insensitive
+  (RFC 9110 §5.1), and the tests compare names without case.
+- **Redirects**: 300, 301, 302, 303, 307 and 308 with a `Location`, resolved against the request's URL as RFC 3986
+  §5.2 resolves a reference (`location.rs`, held to the RFC's own table of examples); 50 at the most, after which the
+  fifty-first answer is the answer (measured: 51 requests, then "301 (Moved Permanently)"); never from https to http,
+  and never to a scheme other than these two, the redirect's own answer being then the answer. `ureq`'s redirects are
+  off (`max_redirects(0)`): it follows https to http and fails on a missing `Location`, where .NET returns the answer.
+- **One timeout over the whole call**: the clock starts when the call does and covers each redirect and the body; the
+  remainder is each request's `ureq` timeout. A server that answers each hop in a second, with a timeout of 1.5
+  seconds, fails, as .NET's does.
+- **A request no byte answered is sent again three times**: a connection that ends after the request and before any
+  byte of an answer is retried, four requests on four connections in all (measured on .NET; `ureq` never retries).
+- **The body**: by its length, by chunks, or to the connection's close; a body that ends before its length or its last
+  chunk fails, one that ends at the close is whole. A close without TLS's `close_notify` ends a body as a close does, in
+  both (`ureq` reads an end of file, a reset or an abort as the close). The most a body may hold is .NET's
+  `MaxResponseContentBufferSize`, `int.MaxValue`, refused at its length or as it grows past it.
+- **Certificates**: the system's store through `rustls-platform-verifier` (on Linux the files `openssl-probe` finds,
+  as .NET's OpenSSL reads them), never a bundled list; TLS 1.2 and 1.3. A test's own root is trusted beside the store
+  only when the request names one (§16.3).
+- **What `ureq` does not keep**, a status line as sent: .NET's words carry the server's reason phrase (a 404 sent as
+  "404 Nope Nope" is "404 (Nope Nope)", one sent with none is "404."), and an answer that is not HTTP is named by its
+  first line. `wire.rs` is a transport over each connection that keeps the first line after each request, and whether
+  any byte came at all, which is also how an unanswered request is told from one whose answer broke. It is built on
+  `ureq`'s `unversioned` transport interface, which may change between `ureq`'s minor versions; the version is pinned,
+  and the parity class fails if a new one changes what the line gives. *Decided 2026-10-18 by the tester: relying on
+  the `unversioned` interface is accepted, `ureq` pinned and the parity class its guard.*
+- **A proxy** in the environment (`HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`) is used by both; `ureq` reads it as .NET
+  does for a CONNECT proxy, and neither half was tested through one.
+
+### 16.2 The words for each failure
+
+Every caller shows the exception's `Message` (`cheat db update: <message>`, Mistress's "Download failed: <message>",
+the session's last error), so the Rust gives .NET's words and the facade throws the exception .NET throws. Measured:
+
+| Failure | .NET throws | Message (inner) |
+|---|---|---|
+| a status not 2xx, a redirect not followed included | `HttpRequestException` | `Response status code does not indicate success: 404 (Not Found).`, or `...: 404.` with no reason sent |
+| the timeout | `TaskCanceledException` | `The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.` (`TimeoutException`: `The operation was canceled.`) |
+| a body cut before its length or last chunk | `HttpRequestException` | `Error while copying content to a stream.` (`HttpIOException`: `The response ended prematurely. (ResponseEnded)`) |
+| no byte after the request, four times | `HttpRequestException` | `An error occurred while sending the request.` (the same `HttpIOException`) |
+| a certificate refused | `HttpRequestException` | `The SSL connection could not be established, see inner exception.` (`AuthenticationException`, below) |
+| a connection refused | `HttpRequestException` | `Connection refused (localhost:1)`, the system's words and the URL's host and port (`SocketException`) |
+| a name not found | `HttpRequestException` | `Name or service not known (host:443)` (`SocketException`) |
+| an answer that is not HTTP | `HttpRequestException` | `Received an invalid status line: 'SSH-2.0-OpenSSH'.` |
+| a URL not absolute, or of another scheme | `InvalidOperationException`, `NotSupportedException` | .NET's two sentences, `The 'ftp' scheme is not supported.` |
+
+The certificate's inner words are .NET's chain status, which rustls does not give: it says "unknown issuer" both of a
+chain that ends at a root no store trusts and of one the server left open. The verifier is wrapped (`Chains`), and an
+unknown issuer is told apart as .NET tells it: a chain that, followed from the leaf through what the server sent, ends
+at a certificate that issued itself is `UntrustedRoot`; one that does not is `PartialChain`; and where the leaf is not
+for the host's name as well, `The remote certificate is invalid according to the validation procedure:
+RemoteCertificateNameMismatch, RemoteCertificateChainErrors`. A trusted chain for another name is
+`...validation procedure: RemoteCertificateNameMismatch`, measured on .NET with the test's root given as the system's
+store through `SSL_CERT_FILE`, since the parity class's oracle can only trust a test root through its own callback,
+whose refusal has words of its own. Other refusals (an expired certificate is `NotTimeValid`) follow the same table;
+anything rustls refuses that .NET has no status for is given in rustls's words. A cancel, which .NET's call has no
+form of, is `OperationCanceledException`, "The operation was canceled.".
+
+### 16.3 The C layer, the facade and the switch
+
+A download is a handle running on a thread of the library's own (`emusen_net_download_start`), drained by the host:
+`_progress` (where it stands, the body's bytes so far, its length once known), `_wait` (a wait with a timeout),
+`_cancel` (it stands cancelled at once, whatever its socket is doing, and its fetch stops at its next read), `_body` and
+`_failure` (a JSON object of the kind, the words, the inner words and the status), `_free`. No callback crosses
+(`EmuSen_RustPlatform.md` §36, interface 17). The request's `test_roots`, a PEM text trusted beside the system's
+store, is for a host's tests against a server of their own: no setting, variable or command reaches it, and
+`CheatDatabaseInstaller.Fetch` never passes one; it is not a switch a player can flip.
+
+`NativeDownload` in Crystal is the facade: `Fetch(url, timeout)` starts, waits and returns the body or throws the
+failure's exception, and its instance methods give the progress and the cancel to a caller that wants them. The switch
+is the file services' own: `CheatDatabaseInstaller.Fetch` takes the Rust where `ServiceLibrary.Active` and the URL can
+cross, and `ManagedFetch`, the C# as it was, otherwise; the download's seven exports joined `ServiceLibrary.Exports`, so
+a library without them leaves all the services on the C#. `FetchOverride`, the tests' hook, is unchanged and comes
+first. `FetchTimeout` names the five minutes both halves are given. `ManagedFetch(url, timeout, testRoot)` is public, as
+B5's other twins are, for the parity class.
+
+### 16.4 The gates
+
+| Gate | Result |
+|---|---|
+| `cargo test --release -p emusen-net -p emusen-platform` | 5 and 13 pass, `emusen-net`'s own and its tests against a server of their own; the platform's 31 and 4, its header test reading the new C layer; `emusen-cheats`' 8 unchanged |
+| `emusen_platform.h` as C99 and C++17, `-Wall -Wextra -pedantic -Werror` | clean |
+| `CheatDownloadParityTests`, against an HTTPS server on 127.0.0.1 made by the test, certificates made at test time, never the internet | 12 pass |
+| The blast radius, with `EMUSEN_SERVICES_NATIVE` unset and `0` | 312 pass and 8 skipped of 320, each way |
+| The golden corpus | in the blast radius; its `cheat` file, `cheat db` cases included, unchanged |
+
+The parity class runs each case through the C# (`ManagedFetch` then `ManagedInstall`) and the Rust (`NativeDownload`
+then `emusen_cheats_install`), and compares what each said (the exception's type and words and the inner exception's,
+or the counts installed and skipped), every file each wrote with its bytes' hash, and the requests the server saw
+(their number, the connections, and each head with header names in lower case). The cases: an archive whole, chunked
+and after a relative redirect; fifty-one redirects and one from https to http; 404, 500, 503, a reason of the server's
+own and none; a connection cut halfway through a body by its length, through a chunk and at a close, the last giving a
+corrupt archive; a corrupt archive served whole; a server that stalls in the body, one that never answers and one whose
+two hops each take a second, each against a timeout of 1.5 seconds; a self-signed certificate, one issued by a root
+the store does not hold, and one for another name, each with the system's store alone; an answer that is not HTTP; a
+request no byte answers; a refused connection. Progress and the cancel, which the C# has not, are held to the server's
+bytes: progress drained to the body's length and its total, never going back, and a cancel during a stalled body
+answered within 200 ms with nothing installed. The C# emits no progress events, so there were none to compare.
+
+The blast radius was the parity class and B5's three (`CheatServicesParityTests`, `FirmwareParityTests`,
+`SaveMediaManagerParityTests`, whose switch gained the download's exports), every `CheatDatabase…` class, Mistress's
+Cheat Database window and its prune sheet, `SettingPathsOpenTests` and `SheetLookTests` (which swap or read
+`CheatDatabaseInstaller`), `CheatPruneCommandTests`, `SessionServiceParityTests` (the session's `DB_UPDATE`),
+`GoldenCorpusTests`, and for the interface's number `GalaxiaParityTests`, `EndymionParityTests`,
+`SystemTableParityTests`, `SessionHeaderTests`, `NativeSwitchTests`, `DianaShSwitchTests` and `LeafAssemblyTests`.
+
+**Seeded faults**, each made, built, run and reverted; the Rust ones against `emusen-net`'s own tests, the facade's
+against the parity class:
+
+| Fault | Caught by |
+|---|---|
+| a redirect from https to http followed | `a_redirect_from_https_to_http_is_not_followed` |
+| ten redirects the most | `a_relative_redirect_is_followed_and_fifty_is_the_most` |
+| an unanswered request not sent again | `a_request_no_byte_answers_is_sent_four_times` |
+| the standard reason phrase in place of the one sent | `a_status_names_the_reason_the_server_sent` |
+| the timeout restarted at each redirect | `the_timeout_covers_the_body_and_the_wait_for_an_answer` |
+| the body's length never given to progress | the three tests that drain progress |
+| a cancel that waits for the fetch to notice | not at first, since the test's server sent its body in pieces and the fetch noticed between two; caught once the server stalled in the body |
+| a chain ending at a self-issued root not told from an open one | `a_certificate_the_system_does_not_trust_is_refused` |
+| a name mismatch on an untrusted chain not told | `a_certificate_the_system_does_not_trust_is_refused` |
+| the test's roots ignored | eleven tests |
+| a 3xx taken as success | the two redirect tests |
+| the status line kept with its carriage return | four tests |
+| a close without `close_notify` read as an error | none: an equivalent mutant, since `ureq` reads the error a missing `close_notify` gives as the close, and the special case it would have removed was deleted as redundant |
+| the facade throwing a timeout as `HttpRequestException` | the parity class (the slow and silent servers) |
+| the facade throwing a refused certificate without its cause | the parity class (both certificate cases) |
+| the facade giving the timeout in seconds where milliseconds are read | the parity class (three cases) |
+
+### 16.5 Size, and the download by hand
+
+The library built with the `dist` profile, as a publish builds it: 4,737,096 bytes at `c922c968` and 6,763,544 with
+this step, **2,026,448 bytes more**, about 2.03 MB, against §15.4's 2.48 MB, which measured `ureq` with its default
+features, Mozilla's bundled roots among them. The client's tree for Linux is 24 crates (§15.4 counted 23 with Mozilla's roots in
+place of the system's); their licences,
+MIT, Apache-2.0, ISC and BSD-3-Clause, all compatible with the GPL-3.0, are in `THIRD_PARTY_NOTICES.md` §1.4 with each
+ISC and BSD text, and `ring`'s three, in `licenses/`. Every version is pinned exactly in `Platform/net/Cargo.toml`.
+
+**The download by hand**, run once on 2026-10-18 on the desktop into `~/.cache/emusen/probe/cheatdb-live/`, not the
+player's cheat folder: the libretro archive (`LibretroCheatsUrl`) fetched by `ManagedFetch` and then by
+`NativeDownload`, each 36,872,908 bytes with the same SHA-256 (`7CCC166B…34DF8D5C`), byte for byte the same; 0.38 s
+and 0.24 s. The Rust's progress, drained every 50 ms, gave its length from the first answer, never went back and
+ended at the body's length. Each archive installed by its own half into its own folder gave 27,915 files installed
+and 9 skipped, and the two trees the same, file for file and byte for byte.
+
+### 16.6 Left for later, and for the tester
+
+- **CI's portable job and `ring`** (`EmuSen_RustPlatform.md` §36). `ring`'s build script compiles C for its target,
+  and the portable job's Ubuntu runner has no C toolchain or headers for `x86_64-pc-windows-msvc` or
+  `aarch64-apple-darwin`; measured here, the check stops at `ring` for both. With the C compiler replaced by `true` for a
+  local probe, every Rust crate checked clean for macOS; Windows could not be checked past `ring`. The job will fail on
+  both targets as it stood. *Decided 2026-10-18 by the tester:* Windows is checked as `x86_64-pc-windows-gnu` with
+  MinGW-w64 on the Ubuntu runner, `x86_64-pc-windows-msvc` kept for the crates without C, and `aarch64-apple-darwin` is
+  checked on the Mac mini (`EmuSen_RustPlatform.md` §29, §31, §36).
+- **On Windows and macOS** every gate of this section, when the ports resume (§31): the verifier there is the system's
+  own (Schannel's and Security.framework's chain checks), whose words for a refused chain may differ from Linux's.
+- **The status line's watcher** depends on `ureq`'s `unversioned` transport interface, accepted by the tester on
+  2026-10-18; a new `ureq` is taken only with the parity class run.
+- **State 3**: the C# download is deleted with the other services' C# at the tester's word (§6, B10); until then a
+  change to it is made in both halves.
+- **Scraping (B9)** takes `emusen-net` as it is; the redirect, timeout and certificate rules are the platform's from now.

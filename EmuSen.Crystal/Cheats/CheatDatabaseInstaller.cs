@@ -2,6 +2,9 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+using EmuSen.Crystal.Services;
 
 namespace EmuSen.Crystal.Cheats
 {
@@ -29,14 +32,40 @@ namespace EmuSen.Crystal.Cheats
         // Swapped in tests so the unpack path runs without a network.
         public static Func<string, Stream>? FetchOverride { get; set; }
 
+        // The whole call's limit, redirects and body included.
+        public static readonly TimeSpan FetchTimeout = TimeSpan.FromMinutes(5);
+
         public static Stream Fetch(string url)
         {
             if (FetchOverride is not null) return FetchOverride(url);
+            if (!NativeDownload.Active || !ServiceLibrary.Takes(url)) return ManagedFetch(url, FetchTimeout);
+            return new MemoryStream(NativeDownload.Fetch(url, FetchTimeout));
+        }
 
-            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+        // The C# download: the failover and the parity class's oracle; testRoot is trusted beside the system's store for a test's own server - see EmuSen_Backend.md §16.
+        public static Stream ManagedFetch(string url, TimeSpan timeout, X509Certificate2? testRoot = null)
+        {
+            using var http = testRoot is null ? new HttpClient() : new HttpClient(Trusting(testRoot));
+            http.Timeout = timeout;
             // ZipArchive must seek, and an HTTP response stream cannot.
             byte[] bytes = http.GetByteArrayAsync(url).GetAwaiter().GetResult();
             return new MemoryStream(bytes);
+        }
+
+        private static SocketsHttpHandler Trusting(X509Certificate2 root)
+        {
+            var handler = new SocketsHttpHandler();
+            handler.SslOptions.RemoteCertificateValidationCallback = (_, certificate, _, errors) =>
+            {
+                if (errors == SslPolicyErrors.None) return true;
+                if (errors != SslPolicyErrors.RemoteCertificateChainErrors || certificate is null) return false;
+                using var chain = new X509Chain();
+                chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+                chain.ChainPolicy.CustomTrustStore.Add(root);
+                chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+                return chain.Build(X509CertificateLoader.LoadCertificate(certificate.GetRawCertData()));
+            };
+            return handler;
         }
 
         public static CheatDatabaseInstallResult Install(Stream zip, string targetDirectory)

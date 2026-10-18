@@ -72,7 +72,11 @@ library's shared set is `emusen-disc`'s, which reads CHD images through the `chd
 uses the MD5 crates for the hash by which a ROM file is recognised after a rename, `libloading` (with `windows-link`
 on Windows) to call the SDL3, the Shaderc and the SQLite the program ships, `sha2` (with `cpufeatures`, and on some
 processors `libc`) for the keys of the compiled-shader cache, `ash`, without its own loader, for Vulkan's
-declarations, and `memmap2` for a disc's files mapped read-only.
+declarations, and `memmap2` for a disc's files mapped read-only. Since 2026-10-18 it also carries the platform's one HTTP
+and TLS client, `ureq` over `rustls` with `ring`, certificates checked against the system's own store through
+`rustls-platform-verifier` (`rustls-native-certs` and `openssl-probe` on Linux, `security-framework` and
+`core-foundation` on macOS, `windows-sys` on Windows), for the cheat database's download; `cc`, `shlex` and
+`find-msvc-tools` only build `ring` and are not shipped. Those crates were taken from `cargo tree` on 2026-10-18.
 
 | Crate | Version | Licence | Copyright or authors | Used by |
 |---|---|---|---|---|
@@ -82,15 +86,20 @@ declarations, and `memmap2` for a disc's files mapped read-only.
 | [arrayvec](https://github.com/bluss/arrayvec) | 0.7.8 | MIT OR Apache-2.0 | bluss | Nephrite, Diamond, platform |
 | [ash](https://github.com/ash-rs/ash) | 0.38.0+1.3.281 | MIT OR Apache-2.0 | Copyright 2016 Maik Klein | MarsRT, Diamond, platform |
 | [autocfg](https://github.com/cuviper/autocfg) | 1.5.1 | Apache-2.0 OR MIT | Josh Stone | Nephrite, Diamond, platform |
-| [bitflags](https://github.com/bitflags/bitflags) | 1.3.2 | MIT/Apache-2.0 | Copyright (c) 2014 The Rust Project Developers | MarsRT |
+| [base64](https://github.com/marshallpierce/rust-base64) | 0.23.1 | MIT OR Apache-2.0 | Copyright (c) 2025 Alice Maz, Marshall Pierce | platform |
+| [bitflags](https://github.com/bitflags/bitflags) | 1.3.2, 2.13.2 | MIT/Apache-2.0; 2.13.2: MIT OR Apache-2.0 | Copyright (c) 2014 The Rust Project Developers | 1.3.2: MarsRT; 2.13.2: platform (macOS) |
 | [bitreader](https://github.com/irauta/bitreader) | 0.3.11 | MIT OR Apache-2.0 | Ilkka Rauta | Nephrite, Diamond, platform |
 | [block-buffer](https://github.com/RustCrypto/utils) | 0.12.1 | MIT OR Apache-2.0 | Copyright (c) 2018-2025 The RustCrypto Project Developers | platform |
 | [bumpalo](https://github.com/fitzgen/bumpalo) | 3.20.3 | MIT OR Apache-2.0 | Copyright (c) 2019 Nick Fitzgerald | MarsRT |
 | [byteorder](https://github.com/BurntSushi/byteorder) | 1.5.0 | Unlicense OR MIT | Andrew Gallant | Nephrite, Diamond, platform |
+| [bytes](https://github.com/tokio-rs/bytes) | 1.12.1 | MIT (`licenses/bytes-MIT.txt`) | Copyright (c) 2018 Carl Lerche | platform |
+| [cc](https://github.com/rust-lang/cc-rs) | 1.8.0 | MIT OR Apache-2.0 | Copyright (c) 2014 Alex Crichton | platform (builds `ring`; not shipped) |
 | [cfg-if](https://github.com/rust-lang/cfg-if) | 1.0.5 | MIT OR Apache-2.0 | Copyright (c) 2014 Alex Crichton | MarsRT, Nephrite, Diamond, platform |
 | [chd](https://github.com/SnowflakePowered/chd-rs) | 0.3.4, 0.3.5 | BSD-3-Clause (`licenses/chd-BSD-3-Clause.txt`) | Ronny Chan | 0.3.4: Diamond, platform; 0.3.5: Nephrite |
 | [claxon](https://github.com/ruuda/claxon) | 0.4.3 | Apache-2.0 | Ruud van Asseldonk | Nephrite, Diamond, platform |
 | [const-oid](https://github.com/RustCrypto/formats) | 0.10.2 | Apache-2.0 OR MIT | Copyright (c) 2020-2026 The RustCrypto Project Developers | platform |
+| [core-foundation](https://github.com/servo/core-foundation-rs) | 0.10.1 | MIT OR Apache-2.0 | Copyright (c) 2012-2013 Mozilla Foundation | platform (macOS) |
+| [core-foundation-sys](https://github.com/servo/core-foundation-rs) | 0.8.7 | MIT OR Apache-2.0 | Copyright (c) 2012-2013 Mozilla Foundation | platform (macOS) |
 | [cpufeatures](https://github.com/RustCrypto/utils) | 0.3.1 | MIT OR Apache-2.0 | Copyright (c) 2020-2026 The RustCrypto Project Developers | platform |
 | cranelift-assembler-x64 | 0.136.0 | Apache-2.0 WITH LLVM-exception | the cranelift-assembler-x64 contributors | MarsRT |
 | cranelift-assembler-x64-meta | 0.136.0 | Apache-2.0 WITH LLVM-exception | the cranelift-assembler-x64-meta contributors | MarsRT |
@@ -112,42 +121,64 @@ declarations, and `memmap2` for a disc's files mapped read-only.
 | [crypto-common](https://github.com/RustCrypto/traits) | 0.2.2 | MIT OR Apache-2.0 | Copyright (c) 2021-2026 RustCrypto Developers | platform |
 | [digest](https://github.com/RustCrypto/traits) | 0.11.3 | MIT OR Apache-2.0 | Copyright (c) 2017-2025 RustCrypto Developers; Copyright (c) 2017 Artyom Pavlov | platform |
 | [equivalent](https://github.com/indexmap-rs/equivalent) | 1.0.2 | Apache-2.0 OR MIT | Copyright (c) 2016--2023 | MarsRT |
+| [find-msvc-tools](https://github.com/rust-lang/cc-rs) | 0.1.14 | MIT OR Apache-2.0 | Copyright (c) 2014 Alex Crichton | platform (builds `ring`; not shipped) |
 | [flate2](https://github.com/rust-lang/flate2-rs) | 1.1.10 | MIT OR Apache-2.0 | Alex Crichton, Josh Triplett | Nephrite, Diamond, platform |
 | [fnv](https://github.com/servo/rust-fnv) | 1.0.7 | Apache-2.0 / MIT | Copyright (c) 2017 Contributors | MarsRT |
 | [foldhash](https://github.com/orlp/foldhash) | 0.2.0 | Zlib | Copyright (c) 2024 Orson Peters | MarsRT |
+| [getrandom](https://github.com/rust-random/getrandom) | 0.2.17 | MIT OR Apache-2.0 | Copyright (c) 2018-2024 The rust-random Project Developers | platform |
 | [gimli](https://github.com/gimli-rs/gimli) | 0.33.0 | MIT OR Apache-2.0 | Copyright (c) 2015 The Rust Project Developers | MarsRT |
 | [hashbrown](https://github.com/rust-lang/hashbrown) | 0.16.1, 0.17.1 | MIT OR Apache-2.0 | Copyright (c) 2016 Amanieu d'Antras | MarsRT |
 | [heck](https://github.com/withoutboats/heck) | 0.5.0 | MIT OR Apache-2.0 | Copyright (c) 2015 The Rust Project Developers | MarsRT |
+| [http](https://github.com/hyperium/http) | 1.5.0 | MIT OR Apache-2.0 | Copyright (c) 2017 http-rs authors | platform |
+| [httparse](https://github.com/seanmonstar/httparse) | 1.10.1 | MIT OR Apache-2.0 | Copyright (c) 2015-2025 Sean McArthur | platform |
 | [hybrid-array](https://github.com/RustCrypto/hybrid-array) | 0.4.15 | MIT OR Apache-2.0 | Copyright (c) 2022-2026 The RustCrypto Project Developers | platform |
 | [indexmap](https://github.com/indexmap-rs/indexmap) | 2.14.2 | Apache-2.0 OR MIT | Copyright (c) 2016--2017 | MarsRT |
+| [itoa](https://github.com/dtolnay/itoa) | 1.0.18 | MIT OR Apache-2.0 | David Tolnay | platform |
 | [libc](https://github.com/rust-lang/libc) | 0.2.189 | MIT OR Apache-2.0 | Copyright (c) The Rust Project Developers | MarsRT, platform |
 | [libloading](https://github.com/nagisa/rust_libloading/) | 0.8.9, 0.9.0 | ISC | Copyright © 2015, Simonas Kazlauskas | 0.8.9: MarsRT, Diamond; 0.9.0: platform |
 | [libm](https://github.com/rust-lang/compiler-builtins) | 0.2.16 | MIT | Copyright (c) 2018 Jorge Aparicio | MarsRT |
-| [log](https://github.com/rust-lang/log) | 0.4.34 | MIT OR Apache-2.0 | Copyright (c) 2014 The Rust Project Developers | MarsRT |
+| [log](https://github.com/rust-lang/log) | 0.4.34 | MIT OR Apache-2.0 | Copyright (c) 2014 The Rust Project Developers | MarsRT, platform |
 | [lzma-rs-perf-exp](https://github.com/SnowflakePowered/lzma-rs) | 0.2.1 | MIT | Guillaume Endignoux, Ronny Chan | Nephrite, Diamond, platform |
 | [mach2](https://github.com/JohnTitor/mach2) | 0.4.3 | BSD-2-Clause OR MIT OR Apache-2.0 | Copyright (c) 2019 Nick Fitzgerald, 2021 Yuki Okushi | MarsRT |
 | [md-5](https://github.com/RustCrypto/hashes) | 0.11.0 | MIT OR Apache-2.0 | Copyright (c) 2016-2026 The RustCrypto Project Developers; Copyright (c) 2016 Artyom Pavlov; Copyright (c) 2009-2013 Mozilla Foundation; Copyright (c) 2006-2009 Graydon Hoare | platform |
 | [memmap2](https://github.com/RazrFalcon/memmap2-rs) | 0.9.11 | MIT OR Apache-2.0 | Copyright (c) 2020 Yevhenii Reizner | MarsRT, platform |
 | [num-derive](https://github.com/rust-num/num-derive) | 0.4.2 | MIT OR Apache-2.0 | The Rust Project Developers | Nephrite, Diamond, platform |
 | [num-traits](https://github.com/rust-num/num-traits) | 0.2.19 | MIT OR Apache-2.0 | The Rust Project Developers | Nephrite, Diamond, platform |
+| [once_cell](https://github.com/matklad/once_cell) | 1.21.4 | MIT OR Apache-2.0 | Aleksey Kladov | platform |
+| [openssl-probe](https://github.com/rustls/openssl-probe) | 0.2.1 | MIT OR Apache-2.0 | Copyright (c) 2014 Alex Crichton | platform (Linux) |
+| [percent-encoding](https://github.com/servo/rust-url/) | 2.3.2 | MIT OR Apache-2.0 | Copyright (c) 2013-2025 The rust-url developers | platform |
 | [proc-macro2](https://github.com/dtolnay/proc-macro2) | 1.0.107 | MIT OR Apache-2.0 | David Tolnay, Alex Crichton | Nephrite, Diamond, platform |
 | [quote](https://github.com/dtolnay/quote) | 1.0.47 | MIT OR Apache-2.0 | David Tolnay | Nephrite, Diamond, platform |
 | [regalloc2](https://github.com/bytecodealliance/regalloc2) | 0.15.2 | Apache-2.0 WITH LLVM-exception | Chris Fallin, Mozilla SpiderMonkey Developers | MarsRT |
 | [region](https://github.com/darfink/region-rs) | 3.0.2 | MIT | Copyright (c) 2016 Elliott Linder | MarsRT |
+| [ring](https://github.com/briansmith/ring) | 0.17.14 | Apache-2.0 AND ISC, with parts from BoringSSL under Apache-2.0 or ISC and from once_cell under MIT OR Apache-2.0 (`licenses/ring-0.17.14-LICENSE.txt`) | Copyright 2015-2025 Brian Smith; The BoringSSL Authors | platform |
 | [rustc-hash](https://github.com/rust-lang/rustc-hash) | 2.1.3 | Apache-2.0 OR MIT | The Rust Project Developers | MarsRT |
+| [rustls](https://github.com/rustls/rustls) | 0.23.46 | Apache-2.0 OR ISC OR MIT | Copyright (c) 2016 Joseph Birr-Pixton | platform |
+| [rustls-native-certs](https://github.com/rustls/rustls-native-certs) | 0.8.5 | Apache-2.0 OR ISC OR MIT | the rustls-native-certs contributors | platform (Linux) |
+| [rustls-pki-types](https://github.com/rustls/pki-types) | 1.15.1 | MIT OR Apache-2.0 | Copyright (c) 2023 Dirkjan Ochtman | platform |
+| [rustls-platform-verifier](https://github.com/rustls/rustls-platform-verifier) | 0.7.1 | MIT OR Apache-2.0 | Copyright (c) 2022 1Password | platform |
+| [rustls-webpki](https://github.com/rustls/webpki) | 0.103.15 | ISC (`licenses/rustls-webpki-ISC.txt`) | Copyright 2015 Brian Smith | platform |
 | [ruzstd](https://github.com/KillingSpark/zstd-rs) | 0.8.3, 0.9.1 | MIT | Moritz Borcherding | 0.8.3: Diamond, platform; 0.9.1: Nephrite |
+| [security-framework](https://github.com/kornelski/rust-security-framework) | 3.7.0 | MIT OR Apache-2.0 | Copyright (c) 2015 Steven Fackler | platform (macOS) |
+| [security-framework-sys](https://github.com/kornelski/rust-security-framework) | 2.17.0 | MIT OR Apache-2.0 | Copyright (c) 2015 Steven Fackler | platform (macOS) |
 | [sha2](https://github.com/RustCrypto/hashes) | 0.11.0 | MIT OR Apache-2.0 | Copyright (c) 2016-2026 The RustCrypto Project Developers | platform |
+| [shlex](https://github.com/comex/rust-shlex) | 2.0.1 | MIT OR Apache-2.0 | Copyright (c) 2015 Nicholas Allegra (comex) | platform (builds `ring`; not shipped) |
 | [smallvec](https://github.com/servo/rust-smallvec) | 1.16.1 | MIT OR Apache-2.0 | Copyright (c) 2018 The Servo Project Developers | MarsRT |
+| [subtle](https://github.com/dalek-cryptography/subtle) | 2.6.1 | BSD-3-Clause (`licenses/subtle-BSD-3-Clause.txt`) | Copyright (c) 2016-2017 Isis Agora Lovecruft, Henry de Valence; Copyright (c) 2016-2024 Isis Agora Lovecruft | platform |
 | [syn](https://github.com/dtolnay/syn) | 2.0.119 | MIT OR Apache-2.0 | David Tolnay | Nephrite, Diamond, platform |
 | [target-lexicon](https://github.com/bytecodealliance/target-lexicon) | 0.13.5 | Apache-2.0 WITH LLVM-exception | Dan Gohman | MarsRT |
 | [text_io](https://github.com/oli-obk/rust-si) | 0.1.13 | MIT OR Apache-2.0 | Oliver Schneider | Nephrite, Diamond, platform |
 | [twox-hash](https://github.com/shepmaster/twox-hash) | 2.1.5 | MIT | Jake Goulding | Nephrite, Diamond, platform |
 | [typenum](https://github.com/paholg/typenum) | 1.20.1 | MIT OR Apache-2.0 | Copyright (c) 2014 Paho Lurie-Gregg | platform |
 | [unicode-ident](https://github.com/dtolnay/unicode-ident) | 1.0.26, 1.0.27 | (MIT OR Apache-2.0) AND Unicode-3.0 | Copyright © 1991-2023 Unicode, Inc. | 1.0.26: platform; 1.0.27: Nephrite, Diamond |
+| [untrusted](https://github.com/briansmith/untrusted) | 0.9.0 | ISC (`licenses/untrusted-ISC.txt`) | Copyright 2015-2016 Brian Smith | platform |
+| [ureq](https://github.com/algesten/ureq) | 3.4.2 | MIT OR Apache-2.0 | Copyright (c) 2019 Martin Algesten | platform |
+| [ureq-proto](https://github.com/algesten/ureq-proto) | 0.6.5 | MIT OR Apache-2.0 | Copyright 2022 Martin Algesten | platform |
+| [utf8-zero](https://github.com/algesten/utf8-zero) | 0.8.1 | MIT OR Apache-2.0 | Simon Sapin, Martin Algesten | platform |
 | wasmtime-internal-core | 49.0.0 | Apache-2.0 WITH LLVM-exception | The Wasmtime Project Developers | MarsRT |
 | [wasmtime-internal-jit-icache-coherence](https://github.com/bytecodealliance/wasmtime) | 49.0.0 | Apache-2.0 WITH LLVM-exception | The Wasmtime Project Developers | MarsRT |
 | [windows-link](https://github.com/microsoft/windows-rs) | 0.2.1 | MIT OR Apache-2.0 | the windows-link contributors | MarsRT, Diamond, platform |
-| [windows-sys](https://github.com/microsoft/windows-rs) | 0.52.0, 0.61.2 | MIT OR Apache-2.0 | Microsoft | MarsRT |
+| [windows-sys](https://github.com/microsoft/windows-rs) | 0.52.0, 0.61.2 | MIT OR Apache-2.0 | Microsoft | MarsRT; 0.61.2: platform (Windows) |
 | [windows-targets](https://github.com/microsoft/windows-rs) | 0.52.6 | MIT OR Apache-2.0 | Microsoft | MarsRT |
 | [windows_aarch64_gnullvm](https://github.com/microsoft/windows-rs) | 0.52.6 | MIT OR Apache-2.0 | Microsoft | MarsRT |
 | [windows_aarch64_msvc](https://github.com/microsoft/windows-rs) | 0.52.6 | MIT OR Apache-2.0 | Microsoft | MarsRT |
@@ -157,6 +188,7 @@ declarations, and `memmap2` for a disc's files mapped read-only.
 | [windows_x86_64_gnu](https://github.com/microsoft/windows-rs) | 0.52.6 | MIT OR Apache-2.0 | Microsoft | MarsRT |
 | [windows_x86_64_gnullvm](https://github.com/microsoft/windows-rs) | 0.52.6 | MIT OR Apache-2.0 | Microsoft | MarsRT |
 | [windows_x86_64_msvc](https://github.com/microsoft/windows-rs) | 0.52.6 | MIT OR Apache-2.0 | Microsoft | MarsRT |
+| [zeroize](https://github.com/RustCrypto/utils) | 1.9.1 | Apache-2.0 OR MIT | Copyright (c) 2018-2026 The RustCrypto Project Developers | platform |
 | [zlib-rs](https://github.com/trifectatechfoundation/zlib-rs) | 0.6.8 | Zlib (`licenses/zlib-rs-Zlib.txt`) | Trifecta Tech Foundation | Nephrite, Diamond, platform |
 
 Where a crate offers a choice of licences ("MIT OR Apache-2.0"), EmuSen uses it under the MIT licence.
@@ -204,6 +236,7 @@ keeps its own licence and terms, which apply to the downloaded copy.
 |---|---|---|
 | [xunit](https://github.com/xunit/xunit), xunit.runner.visualstudio | Apache-2.0 | Test framework |
 | [CsCheck](https://github.com/AnthonyLloyd/CsCheck) | Apache-2.0 | Property tests |
+| [rcgen](https://github.com/rustls/rcgen) 0.14.10 and the crates it brings | MIT OR Apache-2.0 | Certificates made at test time for `emusen-net`'s own test server |
 | Microsoft.NET.Test.Sdk, [coverlet](https://github.com/coverlet-coverage/coverlet) | MIT | Test running and coverage |
 | Avalonia.Headless | MIT | Headless UI tests |
 | Avalonia.BuildServices 11.3.2 | MIT | Build-time only |

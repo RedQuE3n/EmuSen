@@ -1,0 +1,21 @@
+[package]
+name = "emusen-net"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The platform's one HTTP and TLS client (EmuSen_Backend.md SR9, §16): a GET whose body is held, with .NET HttpClient's redirects, timeout and words, certificates checked against the system's own store, and a download a host drains for progress. The cheat database's download is its first user; scraping is the next.
+[lib]
+name = "emusen_net"
+
+[dependencies]
+# HTTP/1.1, chosen by the tester on 2026-10-18; no TLS of its own here, since the connector in tls.rs is ours.
+ureq = { version = "=3.4.2", default-features = false }
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
+# The system's own certificate store, as .NET's HttpClient reads it; never a bundled list of roots.
+rustls-platform-verifier = { version = "=0.7.1", default-features = false }
+
+[dev-dependencies]
+# A certificate made at test time for the tests' own server.
+rcgen = { version = "=0.14.10", default-features = false, features = ["ring", "pem"] }

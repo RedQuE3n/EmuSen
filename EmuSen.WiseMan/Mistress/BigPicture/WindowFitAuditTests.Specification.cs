@@ -100,7 +100,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             doc.Header["case"] = which;
             if (entered is not null) doc.Header["entered"] = entered;
             Assert.Equal(FitAudit.Check(root, allow).Select(InterfaceRules.Category).Order(), InterfaceRules.Fit(doc).Select(InterfaceRules.Category).Order());
-            InterfaceRecorder.Walk(doc, root, pad, ids);
+            InterfaceRecorder.Walk(doc, root, pad, ids, settled: top is ShaderSettingsWindow shaders ? ShadersRead(shaders) : null);
             if (presses) InterfaceSpecFiles.Presses(doc, pad, window, () => Observe(window), InterfaceSpecFiles.Grammar);
             return InterfaceSpecFiles.Check(doc, output, Known);
         }

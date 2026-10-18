@@ -265,6 +265,9 @@ namespace EmuSen.Mistress.Views
         // Completes once the shown shader's sliders are built, for a test.
         public Task Reading { get; private set; } = Task.CompletedTask;
 
+        // True while a read the panel started has not built its sliders, for a test; a selection still settling has started none.
+        public bool ReadInFlight => _settling is null && !Reading.IsCompleted;
+
         public GroupedList<ShaderEntry> List => _list;
 
         public FilterBar Filter => _filter;

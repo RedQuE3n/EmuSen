@@ -60,7 +60,7 @@ namespace EmuSen.WiseMan.Fixtures
         public static bool TakesSideways(InputElement e) => e is ComboBox or Slider or TabItem or EmuSen.LunaP.Controls.ISidewaysAdjustable;
 
         // The whole focus graph from the focus: each direction from each control reached and where it lands, and whether the limit cut the walk short - see EmuSen_InterfaceSpec.md §3.
-        public static (object Start, List<(object From, int Direction, object? To)> Edges, bool Truncated) Graph(Control root, PadDriver pad, IReadOnlyCollection<object> shown, int limit = 400)
+        public static (object Start, List<(object From, int Direction, object? To)> Edges, bool Truncated) Graph(Control root, PadDriver pad, IReadOnlyCollection<object> shown, int limit = 400, System.Func<bool>? settled = null)
         {
             TopLevel top = TopLevel.GetTopLevel(root)!;
             object start = KeyOf((InputElement)top.FocusManager!.GetFocusedElement()!);
@@ -69,7 +69,7 @@ namespace EmuSen.WiseMan.Fixtures
             System.Action[] presses = { () => pad.Up(), () => pad.Down(), () => pad.Left(), () => pad.Right() };
             // The walk ends once every control shown when it began has been found and left in every direction, rather than exploring rows built only by scrolling to the limit.
             Dictionary<object, List<int>> paths = Walk(root, presses, _ => false, limit, out _, p => shown.All(k => explored.Contains(k)),
-                edge: (f, d, t) => { explored.Add(f); edges.Add((f, d, t)); });
+                edge: (f, d, t) => { explored.Add(f); edges.Add((f, d, t)); }, settled: settled);
             return (start, edges, paths.Count >= limit);
         }
 
@@ -97,7 +97,7 @@ namespace EmuSen.WiseMan.Fixtures
         }
 
         // Breadth first over every direction from every control reached, each left from as the walk found it, by replaying its path - see EmuSen_Settings_Reference.md §4.48.5.
-        private static Dictionary<object, List<int>> Walk(Control root, System.Action[] presses, System.Func<InputElement, bool> target, int limit, out object? found, System.Func<Dictionary<object, List<int>>, bool>? enough = null, System.Action<object, int, object?>? edge = null)
+        private static Dictionary<object, List<int>> Walk(Control root, System.Action[] presses, System.Func<InputElement, bool> target, int limit, out object? found, System.Func<Dictionary<object, List<int>>, bool>? enough = null, System.Action<object, int, object?>? edge = null, System.Func<bool>? settled = null)
         {
             TopLevel top = TopLevel.GetTopLevel(root)!;
             InputElement? Focused() => top.FocusManager!.GetFocusedElement() as InputElement;
@@ -118,6 +118,14 @@ namespace EmuSen.WiseMan.Fixtures
             {
                 foreach ((ListBox list, int index) in selections)
                     if (list.SelectedIndex != index) list.SelectedIndex = index;
+                // A pane that reads what a selection names, off the UI thread, is waited for, however late a loaded run's pool runs it.
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                while (settled?.Invoke() == false)
+                {
+                    if (clock.ElapsedMilliseconds > 20_000) Assert.Fail("the window's reads did not finish within 20 s of a selection put back");
+                    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    System.Threading.Thread.Sleep(1);
+                }
                 top.UpdateLayout();
                 // A start among rows a pane rebuilds after a selection, such as a preset's sliders, is waited for before its scroll is put back (§4.83.7).
                 if (startKey is (ItemsControl owner, int item, string _, string _))

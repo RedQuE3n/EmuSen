@@ -2553,3 +2553,27 @@ and 9 skipped, and the two trees the same, file for file and byte for byte.
 - **State 3**: the C# download is deleted with the other services' C# at the tester's word (§6, B10); until then a
   change to it is made in both halves.
 - **Scraping (B9)** takes `emusen-net` as it is; the redirect, timeout and certificate rules are the platform's from now.
+
+### 16.7 Two parity cases that failed once in a combined run (2026-10-18)
+
+**What was seen.** In the combined run that merged B2's part 4b (818 tests of the Crystal, Mistress and golden
+classes, after a build of the solution), `An_archive_installs_alike_whole_chunked_and_after_a_redirect` failed in 51 ms
+and `Redirects_are_refused_alike_past_fifty_and_from_https_to_http` in 259 ms, each with one side reporting
+`HttpRequestException: An error occurred while sending the request.` Both passed when run alone. The run's log was
+kept only as far as that line, so which side threw, and the inner exception, are not known.
+
+**What it was not.** Nothing runs beside the class: it is in the `ProcessGlobals` collection, whose definition disables
+parallel running, so no other test runs while it does, though threads an earlier test left may. Not a timeout:
+both failures came in well under the 20 s each fetch is given, and a longer one would change nothing. Not a server's
+close racing a reused connection: with the server holding each connection open 300 ms after its reply, so that a
+client reusing it meets a server about to close it, every case passed, because .NET sends a request again when a
+reused connection closes before any answer, and `fetch.rs` retries an unanswered request as .NET does (§16.2).
+
+**Measured on 2026-10-18 without a failure:** the same combined filter three times in a tree at `701dade7`, 823 of
+823 each; and the class fifteen times with its test host held to two CPUs shared with two busy loops, 12 of 12 each.
+
+**Left as it is, said better.** With no cause found there is no condition to wait on, and a sleep is no fix. A case
+that differs now says why in full: the failure's message adds every exception an update threw, whole, with its inner
+exceptions to the bottom, and what the test's server itself caught and swallowed, in accepting a connection or in
+serving one. Neither enters the comparison, which still reads only what both sides report, so a passing case is
+unchanged. The next failure will name its side and its cause.

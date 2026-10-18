@@ -125,6 +125,43 @@ down from the second row left the list, correctly for that list; the Super Ninte
 recording reported their third row unreachable (§6.3.1). With the name in the key a refilled list's rows are rows the
 walk has not seen, explored in their own state. A row whose name a reader cannot hear keys as before, by list and index.
 
+### 3.1 A window that reads after a selection: the shader settings (2026-10-18)
+
+**The failure.** On 2026-10-18 two combined runs each failed one Shaders recording, a different one each time:
+`ShaderSettingsPlayStation` at 1280 × 800, then `ShaderSettings` at 1920 × 1200, whose line 134 had recorded
+`edge 75 down path:0/3/0/0/2/3/…` (In Use, down, to a control of the parameter area) and now read `edge 75 down 30` (a
+row of the shader list on the other side of the window). The window had changed in that merge only in where it reads
+its consoles and a console's host, both now from the runtime catalog, whose answers `RuntimeCatalogTests` holds equal
+to the catalog's.
+
+**Not a change of the window.** The twelve Shaders recordings were run ten times each at the commit before the merge
+(`2493ce6e`) and ten times at the merge (`701dade7`), alone: 120 of 120 passed at both **[M]**. Re-recording would
+have recorded one timing.
+
+**A dependence on the clock, shown.** The panel shows a shader's parameters once the selection has held still for its
+settle, 120 ms, by a timer (`EmuSen_Settings_Reference.md` §4.48.9 and §4.48.10); a move after a pause reads at once.
+So the walk's state at a press depended on whether a timer had fired since the last move, which depends on how fast
+the walk ran. Forcing it, with the settle set to 1 ms so every settle fires before the walk's next step, all twelve
+recordings differed, among them `edge 41 right path:0/3/0/0/2/3/…` where `75` was recorded, the control of the
+failure above appearing where it had not **[M]**. A second dependence is the read itself: a preset's parameters are
+read on the thread pool, and the two presets beside it are read ahead, at most two at a time, the rest dropped. With
+the pool kept busy (twice as many three-second sleeps as threads, queued as the walk began), `ShaderSettingsSliders`
+recorded `edge 71 right 25` where `"item:88/2/0/0/1/Scanline weight"` was recorded, in both runs **[M]**.
+
+**What the walk now does.** The audit's opener, once a Shaders window is up, waits until every panel has built its
+sliders and no read-ahead is running, then sets the window's settle to a day, so that in the walk only the first
+keyed move reads at once and every later one is left settling, as a quick player's presses leave them, never as the
+clock happens to. `PadAudit.Graph` takes an optional `settled` condition, which the walk waits on each time it puts
+the lists' selections back before replaying a path; for this window it is that no read and no read-ahead is in
+flight (`ShaderPanel.ReadInFlight`, which a selection still settling does not count, and
+`ShaderSettingsWindow.PrefetchesRunning`). A wait longer than 20 s fails the case with its reason, rather than
+recording what was there. The three openers that waited for a preset's sliders with a loop of 2,000 one-millisecond
+sleeps, about two seconds, now wait on the same condition with the audit's `WaitFor`.
+
+**After.** The twelve recordings pass unchanged: 10 runs of 12 alone **[M]**, and 2 runs of 12 with the pool kept busy
+as above **[M]**. Before the read-ahead was part of the condition, the busy pool still turned the Sliders edge in 2
+runs of 2, which is how it was found.
+
 ## 4. §2.4's rules as checks
 
 `InterfaceRules.cs` (WiseMan) reads only a `SpecDocument`, so a recording from any frontend is held to them.

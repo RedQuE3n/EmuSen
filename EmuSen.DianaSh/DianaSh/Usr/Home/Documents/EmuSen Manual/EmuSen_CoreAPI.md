@@ -715,7 +715,7 @@ What depends on the game, read after create:
 | **`video`** | `base_width`, `base_height`, `max_width`, `max_height`, `aspect` as a ratio, `formats` the core can produce; since 1.10, `raw`, the encodings of the picture before the palette a core claiming `RAW_PICTURE` can hand (§6.30) |
 | **`audio`** | `rate` at start; `channels`: the names `set_mutes`' bits stand for |
 | **`ports`** | which controller each port holds |
-| **`spaces`** | `{ id, name, size, flags }`; `flags` an array of the strings `read_only`, `side_effects`, `reports_stores`, `cheats`, since 2026-10-07 `view` (§29) and, since 1.2, `reports_loads` (§6.14.1) (open, as any enumerated string). `size` and `battery`'s `length` are written by the crate from `space_size` and `battery`, and `state.kinds` from `SNAPSHOT`, so they cannot disagree with the exports (C14). The names are the C# oracle's where there is one (`MoonMachine.cs:17`), so the cheats and the debugger key on them as now |
+| **`spaces`** | `{ id, name, size, flags }`; `flags` an array of the strings `read_only`, `side_effects`, `reports_stores`, `cheats`, since 2026-10-07 `view` (§29) and, since 1.2, `reports_loads` (§6.14.1) (open, as any enumerated string); since 1.14 an optional `byte_order`, `big` or `little`, where the space's order is not its system's (§6.39). `size` and `battery`'s `length` are written by the crate from `space_size` and `battery`, and `state.kinds` from `SNAPSHOT`, so they cannot disagree with the exports (C14). The names are the C# oracle's where there is one (`MoonMachine.cs:17`), so the cheats and the debugger key on them as now |
 | `processors` | `{ id, name, pc_bits, registers: [{ name, bits }], code_space }`, main processor first; `IDebugTarget.DebugCpus` and `regs` from data. `code_space`, appended 2026-10-04 for VenusRT's SPC700 (`VenusRT_Native.md` §36), is the id of the space the processor's code is listed from; absent, the host takes the space named `<name>BUS`, else `<name>PRG`, else for processor 0 the first space |
 | `battery` | `{ which, suffix, length }`: `.srm`, the N64's pak; the path rule stays the runtime's (`SaveLibrary.SramPathFor`) |
 | **`state`** | `{ format, version, kinds, loads_from }`: the magic and version a frontend records beside a state (`IStateFormat`), the kinds, and the versions it reads; since 1.5 `picture_settles`, the frames after a load whose pictures may differ from the saving machine's (§6.9) |
@@ -1757,6 +1757,40 @@ power-on from breaking the boot's checksum, `Mars_Cheats.md` §5.1).
   addresses onto RAM; `FAULT_TRANSLATE_UNSTABLE` (1 << 33), a translation that answers otherwise at each call, fails
   C15 alone.
 
+### 6.39 A space's byte order: `byte_order` (1.14, 2026-10-18)
+
+*Decided 2026-10-18 by the tester, the machine-info form of the two that `Nephrite_Native.md` §66.2 weighed. This
+section is the normative text; `EmuSen_CoreAPI_Extensions.md` §16 has the summary and the forms, and
+`Nephrite_Native.md` §66 the spaces that needed it.* A host assembles a value of two or more bytes from a space byte by
+byte: a frame log's entry, a watch of a word. In which order is a fact of how the core stores a word in that space,
+which only the core knows. The systems table's `byte_order` (`EmuSen_Backend.md` §18.9) gives a system one order, and a
+console whose processors disagree (the Genesis's 68000 and its Z80) has spaces of both.
+
+- **The field.** A space in machine info's `spaces` (§6.4) may carry `byte_order`, `"big"` or `"little"`, spelt as the
+  systems data files spell theirs: the order in which the core stores a word of the space, its high byte at the lower
+  address or its low byte. Absent, the space has its system's order, as the systems table gives it. A core states the
+  field where a space differs from its system's, so that the table stays the owner of a system's order; stating it
+  where the two agree is not wrong, and says nothing more.
+- **A space of two orders.** A space whose words are stored both ways (a processor's bus with a window onto the other
+  processor's memory) states the order of the values a reader most often names in it, and the core's documentation
+  names the part that differs. A space is not split to give each part its own order: its id, name and size are what
+  the debugger, the cheats and every frame log already key on.
+- **No other change.** No export, struct, constant, status or capability bit is added. Reads stay byte by byte through
+  `space_read`; the field says how to put the bytes together, never what `space_read` returns.
+- **Older and newer peers.** A 1.13 host ignores the field and reads every space in its system's order, as before. A
+  1.14 host reading an older core finds none and reads the system's order. The minor gates nothing in a host (§4.1).
+- **The Rust side.** `Space::byte_order`, an `Option<&'static str>`, `None` from `Space::new`; `BYTE_ORDER_BIG` and
+  `BYTE_ORDER_LITTLE` are the two spellings. It is written only when set, so that no core's machine info changes by a
+  byte unless it states an order.
+- **The host** (`CoreEngine`): `CoreSpace.ByteOrder`, null when absent. A frame log's value is assembled in the space's
+  order where it is `big` or `little`, and in the system's (`SystemPacks.BigEndian`) otherwise, an unknown spelling
+  included.
+- **The kit.** C14: every stated order is `big` or `little`, on a library of 1.14 or later. The check is made only
+  where a space states an order, so a core that states none is reported as before. The test core, a core claiming
+  anything, states its `ROM` `big` (its system `test` is in no table, so little); `FAULT_BYTE_ORDER_MISSPELT`
+  (1 << 34), the order spelt `Big`, fails C14 alone. The plain core states none.
+- **The first core** to state one is Nephrite: `Z80RAM` and `Z80BUS` `little` (`Nephrite_Native.md` §66.5).
+
 ## 7. Core discovery and trust
 
 ### 7.1 Where cores are found
@@ -2571,6 +2605,16 @@ reads units and counters, sends presence, reads `lines`, gates its own cheats an
 C5, C6, C14 and C15 gain the checks, each made only where the item is claimed or listed, so that no core claiming none
 is reported otherwise by a byte; the test core claims all six, and six seeded faults (1 << 28 to 1 << 33) each fail
 their case alone. No project core claims any item yet; MarsRT, MoonRT and MercuryRT take them at their own B4 steps.
+
+**v1.14, 2026-10-18** (§6.39), the tester's choice of the machine-info form for `Nephrite_Native.md` §66.2: a space's
+optional `byte_order` in machine info, `big` or `little`, absent meaning the system's, so that a host assembles a
+value of a space whose processor's order is not its system's (the Genesis's Z80) in that order. Baseline 510 facts,
+`--check` and `--against` 1.13 passing; the header compiles as C99, C11 and C++17. `emusen-native` gains
+`Space::byte_order` with the spellings `BYTE_ORDER_BIG` and `BYTE_ORDER_LITTLE`, written only when set; the C# host
+reads `CoreSpace.ByteOrder` and `CoreEngine`'s frame log reads a space in its order before the system's. The kit's
+C14 checks the spelling where a space states one; the test core states its ROM `big`, and `FAULT_BYTE_ORDER_MISSPELT`
+(1 << 34) fails C14 alone. Nephrite states `Z80RAM` and `Z80BUS` `little`; no other core states one, and their kit
+reports are unchanged but for the minor's number (`EmuSen_Backend.md` §25).
 
 **Clarified 2026-10-18, no minor** (§6.14): a processor whose `debug_set_breakpoints` refuses cannot halt, and an
 interrupt stopped for with no call logged is noted from the stop reason.

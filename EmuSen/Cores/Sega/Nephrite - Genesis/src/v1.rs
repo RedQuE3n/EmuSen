@@ -457,7 +457,7 @@ impl Core for Machine {
             video: Video { base_width: WIDTH, base_height: HEIGHT, max_width: 320, max_height: 480, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
             ports: self.pad_kinds().iter().enumerate().map(|(p, &six)| Port { port: p as u32, controller: Some(if six { "md.pad6" } else { "md.pad3" }.into()) }).collect(),
-            spaces: self.spaces().iter().map(|m| Space { read_only: m.read_only, cheats: m.name == "WRAM", view: m.id <= crate::genesis::debugger::Z80BUS_ID, reports_stores: crate::genesis::debugger::reports_stores(m.id), ..Space::new(m.id, m.name) }).collect(),
+            spaces: self.spaces().iter().map(|m| Space { read_only: m.read_only, cheats: m.name == "WRAM", view: m.id <= crate::genesis::debugger::Z80BUS_ID, reports_stores: crate::genesis::debugger::reports_stores(m.id), byte_order: crate::genesis::debugger::byte_order(m.id), ..Space::new(m.id, m.name) }).collect(),
             processors: self.processors(),
             battery: self.batteries(),
             state: StateFormat { format: "NPHR".into(), version: STATE_VERSION as i64, loads_from: (self.oldest_state_version()..=STATE_VERSION).map(i64::from).collect() },
@@ -756,6 +756,7 @@ mod tests {
         let info = md.machine_info();
         assert_eq!((info.system.as_str(), info.region, info.frame_rate), ("md", Some(Region::Ntsc), NTSC_FRAME));
         assert_eq!(info.spaces.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["M68KBUS", "Z80BUS", "WRAM", "Z80RAM", "VRAM", "CRAM", "VSRAM", "ROM"]);
+        assert_eq!(info.spaces.iter().filter_map(|s| Some((s.name.as_str(), s.byte_order?))).collect::<Vec<_>>(), [("Z80BUS", "little"), ("Z80RAM", "little")], "the Z80's words, and the system's order elsewhere (Nephrite_Native.md §66.5)");
         assert!(md.frame().chunks(4).all(|p| p == [0, 0, 0, 255]) && md.frame().len() == 320 * 224 * 4);
 
         let pal = create(&cartridge("SEGA MEGA DRIVE", "E", None), vec![]).unwrap();

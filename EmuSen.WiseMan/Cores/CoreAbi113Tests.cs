@@ -38,9 +38,9 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void The_interface_is_1_13_with_the_three_new_capabilities()
+        public void The_interface_has_1_13s_three_capabilities()
         {
-            Assert.Equal((1u, 13u), (CoreInterface.Major, CoreInterface.Minor));
+            Assert.True(CoreInterface.Major == 1 && CoreInterface.Minor >= 13);
             Assert.Equal(new[] { "TELEMETRY", "PRESENCE", "DEBUG_TRANSLATE" }, CoreInterface.CapabilityNames.Where(c => c.Bit >= 1UL << 23).Select(c => c.Name));
             Assert.True(CoreAdapterTests.Full.Has(CoreInterface.CapTelemetry | CoreInterface.CapPresence | CoreInterface.CapDebugTranslate));
             Assert.False(CoreAdapterTests.Plain.Has(CoreInterface.CapTelemetry));

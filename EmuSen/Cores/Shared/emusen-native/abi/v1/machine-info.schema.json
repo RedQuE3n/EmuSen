@@ -62,7 +62,8 @@
           "id": { "type": "integer", "minimum": 0 },
           "name": { "type": "string" },
           "size": { "type": "integer", "minimum": 0 },
-          "flags": { "type": "array", "items": { "type": "string" } }
+          "flags": { "type": "array", "items": { "type": "string" } },
+          "byte_order": { "type": "string", "enum": ["big", "little"] }
         }
       }
     },

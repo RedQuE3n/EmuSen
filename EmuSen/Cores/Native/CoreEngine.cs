@@ -912,7 +912,16 @@ namespace EmuSen.Cores.Native
             _cheats.ApplyAll(ReadSpace, WriteSpace);
         }
 
-        private uint? SpaceOf(string name) => _machine?.Info.Spaces.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))?.Id;
+        private uint? SpaceOf(string name) => SpaceNamed(name)?.Id;
+
+        private CoreSpace? SpaceNamed(string name)
+        {
+            if (_machine is null) return null;
+            IReadOnlyList<CoreSpace> spaces = _machine.Info.Spaces;
+            for (int i = 0; i < spaces.Count; i++)
+                if (string.Equals(spaces[i].Name, name, StringComparison.OrdinalIgnoreCase)) return spaces[i];
+            return null;
+        }
 
         // The ROM patches are brought up to the registry first, a version compare when nothing changed, so a read between frames answers as the next frame will.
         public virtual byte ReadSpace(string spaceName, int address)
@@ -930,11 +939,12 @@ namespace EmuSen.Cores.Native
             _machine.WriteSpace(space, address, stackalloc byte[] { value });
         }
 
-        // A value of the system's byte order, the pack's fact - see EmuSen_Backend.md §18.7.
+        // A value in its space's byte order where the core states one, else the system's - see EmuSen_CoreAPI.md §6.39.
         private long ReadForFrameLog(string spaceName, int address, int width)
         {
+            bool big = SpaceNamed(spaceName)?.ByteOrder switch { "big" => true, "little" => false, _ => _bigEndian };
             long value = 0;
-            for (int i = 0; i < width; i++) value = _bigEndian ? value << 8 | ReadSpace(spaceName, address + i) : value | (long)ReadSpace(spaceName, address + i) << (8 * i);
+            for (int i = 0; i < width; i++) value = big ? value << 8 | ReadSpace(spaceName, address + i) : value | (long)ReadSpace(spaceName, address + i) << (8 * i);
             return value;
         }
 

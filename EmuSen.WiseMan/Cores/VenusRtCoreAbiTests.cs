@@ -6,7 +6,6 @@ using System.Text.Json.Nodes;
 using EmuSen.Common.Firmware;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.VenusRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
@@ -15,7 +14,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // VenusRT on the core ABI v1 through discovery: the SNES's one engine, the factory and its refusal without the library, the generic adapter against the shim - see VenusRT_Native.md §33, §68.5.
+    // VenusRT on the core ABI v1 through discovery: the SNES's one engine, the factory and its refusal without the library, the generic adapter against the bare machine - see VenusRT_Native.md §33, §68.5.
     [Collection(TestCollections.ProcessGlobals)]
     public class VenusRtCoreAbiTests : IDisposable
     {
@@ -67,7 +66,7 @@ namespace EmuSen.WiseMan.Cores
         {
             if (Discovered is not { } found)
             {
-                Assert.False(VenusNative.Available, "VenusRT's library is beside the tests without its sidecar");
+                Assert.False(File.Exists(VenusRtSnesEngine.LibraryPath), "VenusRT's library is beside the tests without its sidecar");
                 return;
             }
             Assert.Equal(Engine, found.EngineName);
@@ -234,50 +233,52 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(pair, StateSize());
         }
 
-        // The generic engine over VenusRT's v1 exports and the shim over its pre-stable ones: the same picture, sound and state, frame for frame.
+        // The generic engine and the bare v1 machine under it: the same picture, sound and state, frame for frame, so the adapter adds nothing to what the core makes.
         [Fact]
-        public void The_v1_adapter_runs_venusrt_exactly_as_the_shim()
+        public void The_v1_adapter_runs_venusrt_exactly_as_its_bare_machine()
         {
             if (Discovered is not { } found) return;
             string rom = Path.Combine(_root, "adapter.sfc");
             File.WriteAllBytes(rom, PadToBackdropRom());
             using var adapter = new CoreEngine(found.Open()!) { Options = TestCores.NoBattery };
             adapter.LoadRom(rom);
-            using var shim = new VenusMachine(File.ReadAllBytes(rom));
-            Assert.True(Compare(adapter, shim, 240) > 0);
+            using var bare = VenusRtSnesEngine.Machine(File.ReadAllBytes(rom));
+            Assert.True(Compare(adapter, bare, 240) > 0);
             adapter.Cheats.AddRamPoke("WRAM", 0x20, 0x5A, "poke");
             adapter.RunFrame();
             Assert.Equal(0x5A, adapter.ReadSpace("WRAM", 0x20));
         }
 
         // Frame by frame with pad 1 pressing in turn: the picture and the sound each frame, the state at the end; how many frames showed a picture.
-        private static int Compare(CoreEngine adapter, VenusMachine shim, int frames)
+        private static int Compare(CoreEngine adapter, CoreMachine bare, int frames)
         {
             int lit = 0;
-            Assert.Equal(shim.AudioSampleRate, adapter.AudioSampleRate);
+            Assert.Equal(bare.AudioSampleRate, adapter.AudioSampleRate);
             var picture = new byte[0];
             for (int f = 0; f < frames; f++)
             {
                 uint mask = (uint)(1 << (f / 8 % 12));
                 for (int b = 0; b < 12; b++) adapter.SetButton(0, (PadButton)b, (mask & (1u << b)) != 0);
-                shim.SetButtons(0, mask, 0xFFF);
+                bare.SetButtons(0, mask, 0xFFF);
                 adapter.RunFrame();
-                shim.Advance();
-                if (picture.Length != (int)shim.FrameInfo.Bytes) picture = new byte[(int)shim.FrameInfo.Bytes];
-                shim.CopyFrame(picture);
+                bare.Advance();
+                if (picture.Length != (int)bare.FrameInfo.Bytes) picture = new byte[(int)bare.FrameInfo.Bytes];
+                bare.CopyFrame(picture);
                 Assert.True(picture.AsSpan().SequenceEqual(adapter.GetFrameBufferRgba()), $"the picture differs at frame {f + 1}");
                 if (picture.Where((_, i) => i % 4 != 3).Any(b => b != 0)) lit++;
-                Assert.Equal(shim.DrainAudio(int.MaxValue), adapter.DequeueAudioSamples(int.MaxValue));
+                Assert.Equal(bare.DrainAudio(int.MaxValue).Samples, adapter.DequeueAudioSamples(int.MaxValue));
             }
             var state = new MemoryStream();
             adapter.SaveState(state);
-            Assert.True(shim.Save().AsSpan().SequenceEqual(state.ToArray()), "the states differ");
+            byte[] own = new byte[bare.StateSize()];
+            bare.Save(own);
+            Assert.True(own.AsSpan().SequenceEqual(state.ToArray()), "the states differ");
             return lit;
         }
 
-        // Opt-in: each game in EMUSEN_VENUSRT_GAMES through ICore on the adapter, as the shim runs it with the same firmware, for 600 frames.
+        // Opt-in: each game in EMUSEN_VENUSRT_GAMES through ICore on the adapter, as its bare machine runs it with the same firmware, for 600 frames.
         [Fact]
-        public void Commercial_games_run_on_the_adapter_as_on_the_shim()
+        public void Commercial_games_run_on_the_adapter_as_on_the_bare_machine()
         {
             string? dir = Environment.GetEnvironmentVariable("EMUSEN_VENUSRT_GAMES");
             if (dir is null || Discovered is not { } found) return;
@@ -288,8 +289,8 @@ namespace EmuSen.WiseMan.Cores
                 File.Copy(source, rom, overwrite: true);
                 using var adapter = new CoreEngine(found.Open()!) { Options = TestCores.NoBattery };
                 adapter.LoadRom(rom);
-                using var shim = new VenusMachine(File.ReadAllBytes(rom), dspFirmware: VenusRtSnesEngine.DspFirmware(rom));
-                int lit = Compare(adapter, shim, 600);
+                using var bare = VenusRtSnesEngine.Machine(File.ReadAllBytes(rom), VenusRtSnesEngine.DspFirmware(rom));
+                int lit = Compare(adapter, bare, 600);
                 Assert.True(lit > 0, $"{Path.GetFileName(rom)} shows nothing in 600 frames");
                 _output.WriteLine($"{Path.GetFileName(rom)}: 600 frames equal, {lit} with a picture");
             }

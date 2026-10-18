@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.VenusRT;
 using EmuSen.WiseMan.Fixtures;
 using EmuSen.WiseMan.Fixtures.Snes;
 using Xunit.Abstractions;
@@ -148,28 +147,30 @@ namespace EmuSen.WiseMan.Cores
             Assert.InRange(w.Gain, 1.98, 2.02);
         }
 
+        // Since 2026-10-18 the library is on the core ABI alone: no pre-stable export is left in it - see EmuSen_Backend.md §17.9.
         [Fact]
-        public void VenusRTs_library_claims_nothing_it_does_not_export_and_its_state_is_its_own()
+        public void VenusRTs_library_is_on_the_core_abi_alone_and_its_state_is_its_own()
         {
-            Assert.True(VenusNative.Available, VenusNative.Report);
-            Assert.Equal(("venusrt", "EMUSEN_VENUS_NATIVE", "venusrt_crash"), (VenusNative.Library.Crate, VenusNative.Library.Variable, VenusNative.Library.CrashLogStem));
-            Assert.Equal(0ul, VenusNative.Library.Capabilities);
-            nint handle = NativeLibrary.Load(Path.Combine(AppContext.BaseDirectory, VenusNative.Library.FileName));
-            foreach (string name in NativeInterface.Required) Assert.True(NativeLibrary.TryGetExport(handle, name, out _), name);
+            CoreLibrary library = VenusRtSnesEngine.Library;
+            Assert.True(library.Available, library.Report);
+            Assert.Equal("venusrt", library.Info.Id);
+            nint handle = NativeLibrary.Load(VenusRtSnesEngine.LibraryPath);
+            foreach (string name in NativeInterface.Required) Assert.False(NativeLibrary.TryGetExport(handle, name, out _), name);
             foreach (var (_, name, exports) in NativeInterface.Optional)
                 foreach (string export in exports) Assert.False(NativeLibrary.TryGetExport(handle, export, out _), $"{name}: {export}");
 
-            using var m = new VenusMachine(new byte[0x8000 + 512]);
+            using var m = VenusRtSnesEngine.Machine(new byte[0x8000 + 512]);
             for (int i = 0; i < 3; i++) m.Advance();
             Assert.Equal(3, m.TotalFrames);
             Assert.Equal((256, 224), (m.FrameInfo.Width, m.FrameInfo.Height));
             Assert.Equal(32000, m.AudioSampleRate);
-            Assert.Equal(new[] { 0x10000, 0x200, 0x220, 0x20000, 0x10000 }, SnesEngine.Spaces.Select(n => m.ReadSpace(n).Length));
-            byte[] state = m.Save();
+            Assert.Equal(new[] { 0x10000, 0x200, 0x220, 0x20000, 0x10000 }, SnesEngine.Spaces.Select(n => VenusRtSnesEngine.ReadSpace(m, n).Length));
+            byte[] state = new byte[m.StateSize()];
+            m.Save(state);
             Assert.Equal("VNRT"u8.ToArray(), state[..4]);
             state[0] = (byte)'S'; state[1] = (byte)'N'; state[2] = (byte)'E'; state[3] = (byte)'S';
             Assert.Throws<InvalidDataException>(() => m.Load(state));
-            Assert.Throws<InvalidDataException>(() => new VenusMachine(new byte[0x4000]));
+            Assert.Equal(-9, Assert.Throws<CoreRefusedException>(() => VenusRtSnesEngine.Machine(new byte[0x4000])).Status);
         }
 
         [Fact]

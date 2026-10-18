@@ -297,7 +297,7 @@ jobs:
               {"name": "marsrt", "dir": "EmuSen/Cores/Nintendo/MarsRT - N64", "symbol": "emusen_core_"},
               {"name": "mercuryrt", "dir": "EmuSen/Cores/Nintendo/MercuryRT - GB", "symbol": "emusen_native_"},
               {"name": "moonrt", "dir": "EmuSen/Cores/Nintendo/MoonRT - NES", "symbol": "emusen_native_"},
-              {"name": "venusrt", "dir": "EmuSen/Cores/Nintendo/VenusRT - SNES", "symbol": "emusen_native_"},
+              {"name": "venusrt", "dir": "EmuSen/Cores/Nintendo/VenusRT - SNES", "symbol": "emusen_core_"},
               {"name": "nephrite", "dir": "EmuSen/Cores/Sega/Nephrite - Genesis", "symbol": "emusen_core_"},
               {"name": "diamond", "dir": "EmuSen/Cores/Sony/Diamond - PlayStation/v1", "symbol": "emusen_core_"},
               {"name": "emusen_platform", "dir": "Platform", "symbol": "emusen_galaxia_"}

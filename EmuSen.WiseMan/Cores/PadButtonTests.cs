@@ -20,7 +20,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void MoonRT_reports_only_the_eight_buttons_an_NES_pad_has()
         {
-            using var moon = new EmuSen.Cores.Nintendo.MoonRT.MoonRtCore();
+            using var moon = Fixtures.MoonEngines.Create();
             moon.LoadRom(Fixtures.SyntheticNesRom.WriteTemp(Fixtures.SyntheticNesRom.Build()));
 
             Assert.Equal(8, moon.SupportedButtons.Count);

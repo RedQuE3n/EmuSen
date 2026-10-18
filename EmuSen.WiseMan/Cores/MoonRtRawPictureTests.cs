@@ -1,5 +1,4 @@
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Crystal.Systems.Nes;
 using EmuSen.Serenity;
 using EmuSen.Serenity.Shaders;
@@ -31,7 +30,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // Every pixel's nes.ppu value through the NES system pack's palette is the frame's pixel; the emphasis bits seen are added to the set.
-        private static void Held(MoonRtCore core, int frame, HashSet<int> emphasis)
+        private static void Held(EmuSen.Cores.Native.CoreEngine core, int frame, HashSet<int> emphasis)
         {
             CoreRawPicture raw = core.RawPicture ?? throw new Xunit.Sdk.XunitException($"frame {frame}: no picture before the palette");
             Assert.Equal((RawEncodings.NesPpu, 256, 240, 2, 512), (raw.Encoding, raw.Width, raw.Height, raw.Element, raw.Stride));
@@ -79,7 +78,7 @@ namespace EmuSen.WiseMan.Cores
             File.WriteAllBytes(path, rom);
             try
             {
-                using var core = new MoonRtCore() { Options = TestCores.NoBattery };
+                using var core = MoonEngines.Create(TestCores.NoBattery);
                 core.LoadRom(path);
                 Assert.Equal(new[] { RawEncodings.NesPpu }, ((EmuSen.Cores.Native.CoreEngine)core).Machine.Info.Raw.Select(r => r.Encoding));
                 // The palette MoonRT declares is the NES system pack's, all 64 colours, whatever the emphasis bits (Moon_Native.md §9.6).

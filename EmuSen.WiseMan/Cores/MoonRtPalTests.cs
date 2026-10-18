@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
@@ -27,9 +26,9 @@ namespace EmuSen.WiseMan.Cores
             return path;
         }
 
-        private static MoonRtCore Loaded(string rom, string? region = null)
+        private static EmuSen.Cores.Native.CoreEngine Loaded(string rom, string? region = null)
         {
-            var core = new MoonRtCore() { Options = TestCores.NoBattery };
+            var core = MoonEngines.Create(TestCores.NoBattery);
             if (region is not null) core.Set("region", region);
             core.LoadRom(rom);
             for (int i = 0; i < 3; i++) core.RunFrame();
@@ -51,7 +50,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(1, "nes.ntsc", "ntsc", 60.0985, 6)]
         public void The_console_comes_from_the_header_or_the_setting_and_the_host_reads_its_standard_rate_and_version(int? timing, string? region, string standard, double hz, int version)
         {
-            Assert.True(MoonRtCore.Available, MoonNative.Report);
+            Assert.True(MoonEngines.Available, MoonEngines.Report);
             using var core = Loaded(Rom(timing), region);
             Assert.Equal(standard, core.TelevisionStandard);
             Assert.InRange(core.FrameRateHz, hz - 0.0005, hz + 0.0005);
@@ -62,7 +61,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_state_loads_into_its_own_console_and_is_refused_by_another_with_the_cores_words()
         {
-            Assert.True(MoonRtCore.Available, MoonNative.Report);
+            Assert.True(MoonEngines.Available, MoonEngines.Report);
             string rom = Rom(null);
             using var pal = Loaded(rom, "nes.pal");
             using var ntsc = Loaded(rom);

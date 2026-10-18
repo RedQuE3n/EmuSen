@@ -135,10 +135,10 @@ namespace EmuSen.WiseMan.Serenity
         public Task MoonRt_s_emphasis_written_in_the_middle_of_a_frame_reaches_the_screen_through_the_raw_picture() => Session.Dispatch(() =>
         {
             if (CrtDevice.Value is not { } device) return;
-            Assert.True(EmuSen.Cores.Nintendo.MoonRT.MoonRtCore.Available, EmuSen.Cores.Nintendo.MoonRT.MoonNative.Report);
+            Assert.True(Fixtures.MoonEngines.Available, Fixtures.MoonEngines.Report);
             string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"emusen-raw-crt-{Environment.ProcessId}.nes");
             System.IO.File.WriteAllBytes(path, EmphasisMidFrame());
-            using var core = new EmuSen.Cores.Nintendo.MoonRT.MoonRtCore();
+            using var core = Fixtures.MoonEngines.Create();
             try { core.LoadRom(path); } finally { System.IO.File.Delete(path); }
             core.RawEncoding = RawEncodings.NesPpu;
             for (int f = 0; f < 8; f++) core.RunFrame();

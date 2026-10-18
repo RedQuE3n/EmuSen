@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
@@ -28,8 +27,8 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void MoonRT_halts_at_the_start_of_the_frame_after_the_one_run_to()
         {
-            Assert.True(MoonRtCore.Available, MoonNative.Report);
-            using var core = new MoonRtCore();
+            Assert.True(MoonEngines.Available, MoonEngines.Report);
+            using var core = MoonEngines.Create();
             core.LoadRom(Loop());
             core.Breakpoints.ArmRunToFrame(2);
 

@@ -3,7 +3,6 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia.Models;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
@@ -276,7 +275,7 @@ namespace EmuSen.WiseMan.Cores
             if (mine is null || mine.Length != cached.State.Length) return $"; at frame {cached.Frame} the states differ in length";
             int first = mine.AsSpan().CommonPrefixLength(cached.State);
             if (first == mine.Length) return $"; at frame {cached.Frame} the state equals the recorded one byte for byte, so the trace moved and not the engine";
-            using var machine = new MoonMachine(run.Rom());
+            using var machine = MoonEngines.Machine(run.Rom());
             string field = machine.Layout().Split('\n').Where(l => l.Length > 0).Select(l => l.Split(' '))
                 .LastOrDefault(p => int.Parse(p[0], CultureInfo.InvariantCulture) <= first) is { } line ? line[^1] : "?";
             return $"; at frame {cached.Frame} the state first differs from the recorded one at byte {first}, in {field}";

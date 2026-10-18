@@ -1,4 +1,3 @@
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Pharaoh;
 using EmuSen.WiseMan.Fixtures;
 
@@ -87,7 +86,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_soft_reset_restarts_the_cpu_without_clearing_ram()
         {
-            using var core = new MoonRtCore();
+            using var core = MoonEngines.Create();
             core.LoadRom(Rom(SyntheticNesRom.Build()));
 
             core.RunFrame();
@@ -98,14 +97,14 @@ namespace EmuSen.WiseMan.Cores
 
             Assert.Equal(0x5A, core.ReadSpace("RAM", 0x0123));
             Assert.Equal(0xA5, core.ReadSpace("PRGRAM", 0x6100));
-            Assert.Equal(0x8000, core.Layout!.Int(core.Machine.Save(), "Cpu.PC"));
+            Assert.Equal(0x8000, MoonEngines.Field(core, "Cpu.PC"));
         }
 
         // A hard reset is the power switch, and it does clear both.
         [Fact]
         public void A_hard_reset_clears_what_a_soft_one_keeps()
         {
-            using var core = new MoonRtCore();
+            using var core = MoonEngines.Create();
             string path = Rom(SyntheticNesRom.Build());
             core.LoadRom(path);
 

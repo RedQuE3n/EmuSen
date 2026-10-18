@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Pharaoh;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
@@ -21,14 +20,14 @@ namespace EmuSen.WiseMan.Cores
         public void Rendering_returns_oamaddr_to_zero()
         {
             string path = SyntheticNesRom.WriteTemp(SyntheticNesRom.Build(mapper: 0));
-            using var core = new MoonRtCore() { Options = TestCores.NoBattery };
+            using var core = MoonEngines.Create(TestCores.NoBattery);
             core.LoadRom(path);
             File.Delete(path);
             core.WriteSpace("CPUBUS", 0x2003, 0x05);
             core.WriteSpace("CPUBUS", 0x2001, 0x18);
             core.RunFrame();
             core.RunFrame();
-            Assert.Equal(0, core.Layout!.Int(core.Machine.Save(), "Ppu.OamAddress"));
+            Assert.Equal(0, MoonEngines.Field(core, "Ppu.OamAddress"));
         }
 
         // P3-P6 and C1: blargg's NMI timing, suppression, NMI on and off, the odd frame's skip, and NMI against BRK and IRQ.

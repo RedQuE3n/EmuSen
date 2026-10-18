@@ -3147,7 +3147,11 @@ systems run as before, including §29's Mac mini, which stays registered and idl
 **What keeps the code portable.** A job of its own, `portable`, runs on Linux whenever the other two systems are
 paused and compiles every crate (the cores, the shared, Beryl and BlackMoon crates, and the platform workspace) for
 `x86_64-pc-windows-msvc` and `aarch64-apple-darwin` with `cargo check --all-targets`, so code that would not build
-there fails the run the day it is written. It links nothing and runs nothing: a fault that shows only at run time
+there fails the run the day it is written. *Since 2026-10-18 (§36), decided by the tester:* Windows is checked as
+`x86_64-pc-windows-gnu` on Ubuntu with MinGW-w64 installed, since the platform library's `ring` compiles C, and
+`x86_64-pc-windows-msvc` still checks every crate without C (all but the platform workspace); `aarch64-apple-darwin`
+is checked on §29's Mac mini, a compile check alone (no test, build or publish), under §29's rules: a push or a manual
+start on a working branch, never `main` or a tag, and GitHub's `macos-latest` when `EMUSEN_MAC_RUNNER` is `off`. It links nothing and runs nothing: a fault that shows only at run time
 (the Metal keyword of `EmuSen_Serenity.md` §3.11 is the example) waits for the port. The C# needs no job of its own,
 because the Linux build already compiles its Windows and macOS branches; only its native assets differ by RID.
 
@@ -3295,6 +3299,10 @@ under `cargo check` as under `cargo build`. Measured on 2026-10-18 on this machi
 libraries: for macOS, `cc` (GCC) refuses Apple's flags and `clang` finds no headers for the target; for Windows,
 `cc-rs` looks for `lib.exe`, and `clang-cl` finds no `assert.h`. With the C compiler replaced by `true` for a local
 probe only, every Rust crate of the library, `emusen-net` and `rustls-platform-verifier`'s macOS code among them,
-checked clean for `aarch64-apple-darwin`; for Windows `ring`'s build script still stopped. The portable job therefore
-fails on both targets once this step is merged, until it is given the targets' headers (an SDK for each) or leaves
-`ring` out of its check; the choice is the tester's (`EmuSen_Backend.md` §16.6).
+checked clean for `aarch64-apple-darwin`; for Windows `ring`'s build script still stopped.
+
+*Decided 2026-10-18 by the tester:* the portable job checks Windows as `x86_64-pc-windows-gnu`, with Ubuntu's
+MinGW-w64 (`gcc-mingw-w64-x86-64`) installed for `ring`'s C, and keeps `x86_64-pc-windows-msvc` for the crates without
+C, which is every crate but the platform workspace; and it checks `aarch64-apple-darwin` on the Mac mini (§29), where
+Xcode compiles `ring` for its own target, as a compile check alone, under §29's rules, falling back to GitHub's
+`macos-latest` when `EMUSEN_MAC_RUNNER` is `off` (§31).

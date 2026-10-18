@@ -232,26 +232,40 @@ jobs:
           fi
           cd Platform && cargo test --release -p emusen-crystal --test crystal_abi
 
-  # While Windows and macOS are paused, every crate is still compiled for them here, so their code cannot break unseen (EmuSen_RustPlatform.md §31).
+  # While Windows and macOS are paused, every crate is still compiled for them here, so their code cannot break unseen (EmuSen_RustPlatform.md §31, §36).
+  # Windows is checked as x86_64-pc-windows-gnu with MinGW-w64, the C toolchain ring's build script needs; x86_64-pc-windows-msvc checks the crates without C. Apple's target is checked on the Mac mini, whose Xcode builds ring.
   portable:
     name: Compiles for ${{ matrix.target }}
     if: vars.EMUSEN_ALL_PLATFORMS != 'on'
-    runs-on: ubuntu-24.04
+    # Apple Silicon jobs of a working branch run on the project's Mac mini; main, tags and EMUSEN_MAC_RUNNER=off take GitHub's (EmuSen_RustPlatform.md §29).
+    runs-on: ${{ matrix.os == 'macos-latest' && vars.EMUSEN_MAC_RUNNER != 'off' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') && fromJSON('["self-hosted", "macOS", "ARM64", "emusen-mac"]') || matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        target: [x86_64-pc-windows-msvc, aarch64-apple-darwin]
+        include:
+          - target: x86_64-pc-windows-gnu
+            os: ubuntu-24.04
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          # The platform library links ring, whose C this runner cannot compile for MSVC; the cores and shared crates have none.
+          - target: x86_64-pc-windows-msvc
+            os: ubuntu-24.04
+            without_c: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - name: MinGW-w64, for ring's C
+        if: matrix.target == 'x86_64-pc-windows-gnu'
+        run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64
       - name: Check every crate
         shell: bash
         run: |
           status=0
           for dir in "EmuSen/Cores/Nintendo/MarsRT - N64" "EmuSen/Cores/Nintendo/MercuryRT - GB" "EmuSen/Cores/Nintendo/MoonRT - NES" "EmuSen/Cores/Nintendo/VenusRT - SNES" "EmuSen/Cores/Sega/Nephrite - Genesis" "EmuSen/Cores/Sony/Diamond - PlayStation/v1" Platform EmuSen/Cores/Shared/*/ "EmuSen/Cores/Sega/Beryl-HW"/*/ "EmuSen/Cores/Sony/BlackMoon-HW"/*/; do
             case "$dir" in *emusen-core-abi-check/) continue ;; esac
+            if [ "${{ matrix.without_c }}" = "true" ] && [ "$dir" = "Platform" ]; then continue; fi
             echo "::group::$dir"
             (cd "$dir" && cargo check --release --all-targets --target ${{ matrix.target }}) || { echo "::error::$dir does not compile for ${{ matrix.target }}"; status=1; }
             echo "::endgroup::"

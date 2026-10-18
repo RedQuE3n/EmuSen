@@ -2236,7 +2236,8 @@ reproduced:
   first line. `wire.rs` is a transport over each connection that keeps the first line after each request, and whether
   any byte came at all, which is also how an unanswered request is told from one whose answer broke. It is built on
   `ureq`'s `unversioned` transport interface, which may change between `ureq`'s minor versions; the version is pinned,
-  and the parity class fails if a new one changes what the line gives.
+  and the parity class fails if a new one changes what the line gives. *Decided 2026-10-18 by the tester: relying on
+  the `unversioned` interface is accepted, `ureq` pinned and the parity class its guard.*
 - **A proxy** in the environment (`HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`) is used by both; `ureq` reads it as .NET
   does for a CONNECT proxy, and neither half was tested through one.
 
@@ -2361,14 +2362,13 @@ and 9 skipped, and the two trees the same, file for file and byte for byte.
   and the portable job's Ubuntu runner has no C toolchain or headers for `x86_64-pc-windows-msvc` or
   `aarch64-apple-darwin`; measured here, the check stops at `ring` for both. With the C compiler replaced by `true` for a
   local probe, every Rust crate checked clean for macOS; Windows could not be checked past `ring`. The job will fail on
-  both targets once this is merged. The choices are the tester's: give the job each target's headers (an MSVC CRT and
-  Windows SDK, as `xwin` fetches them, and a macOS SDK), leave the platform library out of the portable check until the
-  ports resume, or take a pure-Rust crypto provider, which `rustls` does not recommend for production. Not worked around
-  here.
+  both targets as it stood. *Decided 2026-10-18 by the tester:* Windows is checked as `x86_64-pc-windows-gnu` with
+  MinGW-w64 on the Ubuntu runner, `x86_64-pc-windows-msvc` kept for the crates without C, and `aarch64-apple-darwin` is
+  checked on the Mac mini (`EmuSen_RustPlatform.md` §29, §31, §36).
 - **On Windows and macOS** every gate of this section, when the ports resume (§31): the verifier there is the system's
   own (Schannel's and Security.framework's chain checks), whose words for a refused chain may differ from Linux's.
-- **The status line's watcher** depends on `ureq`'s `unversioned` transport interface; a new `ureq` is taken only with
-  the parity class run.
+- **The status line's watcher** depends on `ureq`'s `unversioned` transport interface, accepted by the tester on
+  2026-10-18; a new `ureq` is taken only with the parity class run.
 - **State 3**: the C# download is deleted with the other services' C# at the tester's word (§6, B10); until then a
   change to it is made in both halves.
 - **Scraping (B9)** takes `emusen-net` as it is; the redirect, timeout and certificate rules are the platform's from now.

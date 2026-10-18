@@ -315,7 +315,7 @@ impl Cpu for Replay {
     }
 
     fn step<B: Bus>(&mut self, bus: &mut B) {
-        let n = self.cycles.len() - (self.spoil == Spoil::DropLastCycle) as usize;
+        let n = self.cycles.len().saturating_sub((self.spoil == Spoil::DropLastCycle) as usize);
         let mut flipped = false;
         for (i, c) in self.cycles.iter().take(n).enumerate() {
             let (Some(address), Some(mut pins)) = (c.address, c.signals) else {

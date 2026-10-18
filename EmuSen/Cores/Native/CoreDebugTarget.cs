@@ -283,7 +283,22 @@ namespace EmuSen.Cores.Native
         public BreakpointRegistry? CoprocessorBreakpoints => EmuSen.Crystal.Debugger.DebugCpus.Coprocessor(DebugCpus)?.Breakpoints;
         public CoverageRegistry? CoprocessorCoverage => EmuSen.Crystal.Debugger.DebugCpus.Coprocessor(DebugCpus)?.Coverage;
         public LabelRegistry? Labels => _engine.Labels;
-        public IExpressionContext? Expressions => DebugCpus.Count > 0 ? ExpressionsOf(DebugCpus[0]) : null;
+        private IExpressionContext? _expressions;
+        private CoreMachineInfo? _expressionsOf;
+
+        // Made once a machine info, so an evaluation allocates no context; the units' registers after the processor's - see `man eval`.
+        public IExpressionContext? Expressions
+        {
+            get
+            {
+                IReadOnlyList<DebugCpu> cpus = DebugCpus;
+                if (cpus.Count == 0) return null;
+                CoreMachineInfo info = _engine.Machine.Info;
+                if (_expressions is not null && ReferenceEquals(_expressionsOf, info)) return _expressions;
+                _expressionsOf = info;
+                return _expressions = new UnitExpressionContext(_engine, ExpressionsOf(cpus[0]), OwnNames(Processors()[0], Views?.SymbolNames, cpus[0].CallStack is null ? null : "stackdepth"));
+            }
+        }
 
         // The main processor's registers, the pack's symbols over them, and the call stack's depth where the core keeps one - see `man eval`.
         private IExpressionContext ExpressionsOf(DebugCpu main)
@@ -317,16 +332,29 @@ namespace EmuSen.Cores.Native
         private DebugCpu[] MakeCpus()
         {
             var bridge = _engine.Debug;
-            return Processors().Select((p, i) => new DebugCpu(p.Name.ToLowerInvariant(), p.Name, Halts && i < bridge.Breakpoints.Count ? bridge.Breakpoints[i] : i == 0 ? _engine.Breakpoints : new BreakpointRegistry())
+            return Processors().Select((p, i) => MakeCpu(bridge, p, i)).ToArray();
+        }
+
+        // A processor's expressions are its own registers, then the units' - see `man eval`.
+        private DebugCpu MakeCpu(CoreDebugBridge bridge, CoreProcessor p, int i)
+        {
+            IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> registers = i == 0 ? CpuRegisters : RegistersOf(p);
+            string? code = CodeSpaceOf(p);
+            return new DebugCpu(p.Name.ToLowerInvariant(), p.Name, Halts && i < bridge.Breakpoints.Count ? bridge.Breakpoints[i] : i == 0 ? _engine.Breakpoints : new BreakpointRegistry())
             {
-                Registers = i == 0 ? CpuRegisters : RegistersOf(p),
+                Registers = registers,
                 CanHalt = Halts && bridge.CanHalt(i),
                 Coverage = Halts && i < bridge.Coverage.Count ? bridge.Coverage[i] : null,
                 CallStack = Halts && i == 0 ? bridge.CallStack : null,
-                CodeSpace = CodeSpaceOf(p),
+                CodeSpace = code,
                 ProgramCounter = Halts ? () => bridge.ProgramCounter(p.Id) : null,
-            }).ToArray();
+                Expressions = new UnitExpressionContext(_engine, new DebugCpuExpressionContext(this, () => registers.Current, code), OwnNames(p, null, null)),
+            };
         }
+
+        // What a processor's context answers besides labels: its registers, the pack's symbols, `stackdepth` and `frame`.
+        private static IReadOnlyList<string> OwnNames(CoreProcessor p, IReadOnlyList<string>? pack, string? stack) =>
+            p.Registers.Select(r => r.Name).Concat(pack ?? Array.Empty<string>()).Append("frame").Concat(stack is null ? Array.Empty<string>() : new[] { stack }).ToArray();
 
         // The space a processor's code is listed from: the one machine info names, else by name, its bus ("<name>BUS"), its program ("<name>PRG"), or the first space.
         private string? CodeSpaceOf(CoreProcessor p)

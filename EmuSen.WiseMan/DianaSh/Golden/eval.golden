@@ -226,18 +226,71 @@ case on moonrt
 target moonrt
 covers 1-2
 $ eval symbols
-out 78
+out 1032
   A
+  apu.FrameCounter
+  apu.FrameIRQ
+  board.Mapper
   C
+  cartridge.Battery
+  cartridge.ChrRam
+  cartridge.Mirroring
   Cycles
   D
+  dmc.BytesRemaining
+  dmc.Loop
+  dmc.OutputLevel
+  dmc.RateIndex
+  dmc.SampleAddress
+  dmc.SampleLength
   frame
   I
   N
+  noise.ConstantVolume
+  noise.Decay
+  noise.LengthCounter
+  noise.PeriodIndex
+  noise.ShortMode
+  noise.Volume
   P
   PC
+  ppu.OAMADDR
+  ppu.PPUCTRL
+  ppu.PPUMASK
+  ppu.PPUSTATUS
+  ppu.Scanline
+  ppu.Sprite0Hit
+  ppu.SpriteOverflow
+  ppu.t
+  ppu.v
+  ppu.VBlank
+  ppu.w
+  ppu.x
+  pulse1.ConstantVolume
+  pulse1.Decay
+  pulse1.Duty
+  pulse1.LengthCounter
+  pulse1.OnesComplement
+  pulse1.SweepEnabled
+  pulse1.SweepNegate
+  pulse1.SweepShift
+  pulse1.TimerPeriod
+  pulse1.Volume
+  pulse2.ConstantVolume
+  pulse2.Decay
+  pulse2.Duty
+  pulse2.LengthCounter
+  pulse2.OnesComplement
+  pulse2.SweepEnabled
+  pulse2.SweepNegate
+  pulse2.SweepShift
+  pulse2.TimerPeriod
+  pulse2.Volume
   S
   stackdepth
+  triangle.ControlFlag
+  triangle.LengthCounter
+  triangle.TimerPeriod
   V
   X
   Y

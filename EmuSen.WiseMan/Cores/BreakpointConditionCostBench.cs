@@ -82,6 +82,7 @@ namespace EmuSen.WiseMan.Cores
 
         [Theory]
         [InlineData("moonrt", "8008", "A==0x99", "A")]
+        [InlineData("moonrt", "8008", "ppu.PPUCTRL==0x99", "ppu.PPUCTRL")]
         [InlineData("mercuryrt", "0153", "HL==0x1234", "HL")]
         [InlineData("mercuryrt-v1", "0153", "HL==0x1234", "HL")]
         [InlineData("marsrt", "A400004C", "t0==0", "t0")]

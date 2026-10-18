@@ -1,6 +1,6 @@
 # EmuSen — the backend in Rust: the line, the frontend API, the system packs and the services
 
-*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18), and B4's shared part with core ABI 1.13 (§22, 2026-10-18), and MoonRT's units, pack views and switch (§23, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
+*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18), and B4's shared part with core ABI 1.13 (§22, 2026-10-18), and MoonRT's units, pack views and switch (§23, 2026-10-18), and debugger expressions naming the units' registers (§24, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
 get the entire backend ported to rust", after which the frontend's move is planned, and the request of 2026-10-17 to
 design two things: one frontend API by which every frontend drives the cores, and the system packs and the remaining C#
 platform services in Rust. Every claim about the code was read on `WiseMan` at `165e60b4`. Claims are marked as
@@ -4475,6 +4475,138 @@ at every frame.
   APU's registers; the generic target's expressions read the main processor's registers alone, so `bp … if
   PPUCTRL==0x80` no longer parses on the NES. Reading the units' registers in the expression context is a host change
   for every core with units (MercuryRT's and MarsRT's too), and so a shared piece, not this branch's; *recommended*: add
-  it to the host, the units' names after the processor's, a name both hold resolving to the processor's.
+  it to the host, the units' names after the processor's, a name both hold resolving to the processor's. *Decided
+  2026-10-18 and built: §24.*
 - **The new pack members' Rust twins** for the NES, with their parity cases, when the views' C# is to be retired (B7).
 - **MercuryRT's switch**, after which `PortEngine`, `NativeRtCore` and the pre-stable host go in one commit (§22.7).
+
+---
+
+## 24. Debugger expressions name the units' registers, 2026-10-18
+
+*Decided 2026-10-18 by the tester, as §23.6 recommended: the generic host's expressions (`eval`, breakpoint conditions,
+logpoints) name the registers of a core's units (core ABI 1.13, `EmuSen_CoreAPI.md` §6.33) after the processor's own.
+Built on branch `b4-unit-exprs` from `WiseMan` at `9eb357a9`. A shared host change: it serves every core that lists
+units, MoonRT's nine today and MercuryRT's and MarsRT's once their switches land.*
+
+### 24.1 The regression, shown first
+
+MoonRT's shim had no expression context of its own, so `DebugExpressions.For` gave it the fallback,
+`DebugTargetExpressionContext`, which names every row of `CpuRegisters`, `VideoRegisters`, `ApuRegisters` and
+`CoprocessorRegisters` bare; `PPUCTRL` and `FrameIRQ` were symbols. The generic target publishes a context built from
+the main processor's registers, the pack's symbols and `stackdepth`, so after the switch (§23.4, `eval symbols`) no
+unit register was nameable. `UnitExpressionTests` was written first and run on the unchanged tree, Release, measured on
+2026-10-18 [M]: on a SyntheticRom NES image whose loop sets PPUCTRL to `$10`, the PPU's fine x to 3 and v to `$2108`,
+and pulse 1's duty to 3, four of its five cases failed: `eval ppu.PPUCTRL` answered "Unknown symbol 'ppu.PPUCTRL'",
+`bp add 801E if "ppu.PPUCTRL==0x11"` was refused at the add, and the context resolved nothing. The fifth, a core that
+lists no units (Nephrite), passed before as after, which is its point. The bench's new MoonRT row, a condition naming
+`ppu.PPUCTRL`, was refused at the add likewise.
+
+### 24.2 The design, settled before building
+
+- **Spelling.** A unit register is `<unit>.<register>`, the unit's name lowercased with every character but letters,
+  digits and `_` dropped: `ppu.PPUCTRL`, `pulse1.Duty`, `board.Mapper`. The register alone is a symbol too where
+  exactly one unit has a register of that name, so §23.6's `bp … if PPUCTRL==0x80` reads as it did under the shim.
+  Case does not matter, as for every symbol. The expression language already reads `.` inside an identifier (the
+  SNES pack's `flag.c`), so no change to `ExpressionEvaluator` is needed.
+- **Order, and the clashes.** A scope's existing symbols are consulted first, unchanged: `frame`, the processor's
+  registers, the pack's symbols and `stackdepth`, then labels; the units come after all of them. The rule this buys is
+  that nothing that resolved before a core listed units changes meaning, whatever units a core later adds. So on the
+  NES `x` and `v` stay the CPU's X and overflow flag while `ppu.x` and `ppu.v` are the PPU's, and a label `PPUCTRL`
+  (common in NES disassemblies, at `$2000`) keeps `PPUCTRL` as its address while `ppu.PPUCTRL` reads the register.
+  The shim put its video and APU rows before labels; that order was not kept, because a label is something the player
+  defined and a unit register's bare name a convenience, and the qualified form is always there.
+- **Two units, one name.** A bare name two units share is a symbol of neither, and is refused as unknown: on the NES
+  `Duty` (both pulses) and `LengthCounter` (four channels). A condition silently reading the wrong channel would be
+  worse than a refusal at the add, which points at `eval symbols`. The same rule covers two units whose spellings
+  coincide; no core has such a pair.
+- **What cannot be spelled.** A register name that is not an identifier of the language, such as the APU's `$4000`
+  to `$4013` and the Game Boy's `$FF10` onwards as MercuryRT's shim names them, is not a symbol: `$4000` is a number to the tokenizer, and the shim
+  listed those names in `eval symbols` without any expression being able to reach them. `regs` shows them. Dropping
+  characters to make a spelling (`apu.4000`) was weighed and not taken, as a second rule to learn for one register file.
+- **Every scope.** Units belong to no processor, so they follow every scope's own symbols: the unscoped context the
+  main processor's registry reads, and each processor's (`eval <cpu>`, `bp <cpu> … if`), including processor 0 named
+  explicitly, whose context stays its registers alone as before.
+- **`eval symbols`** lists the qualified forms; the man page states the bare rule. Listing both would double the
+  list on the NES for names that are the same registers.
+- **Side effects.** None, by the ABI: `emusen_core_debug_registers` takes `const emusen_machine *` in the normative
+  header (`emusen_core.h`), and `emusen-native`'s `Core::debug_registers` takes `&self`, which a unit's id (§6.33,
+  "read through `debug_registers`") shares with a processor's. MoonRT's `units.rs` reads fields. The text of §6.33 does
+  not say "no side effects" in words; §24.5 asks whether it should.
+- **Cost.** A condition naming only processor registers must take the path it took. So the order above is kept by
+  construction rather than by asking the scope first: a table built once for each machine info holds the unit
+  spellings, with every name the scope itself answers besides labels (the processor's registers from machine info,
+  the pack's `SymbolNames`, `stackdepth`, `frame`) left out of it. A name not in the table goes to the scope exactly as
+  before, after one dictionary miss; a name in it is checked against the labels (a dictionary lookup, since labels
+  change at any time) and then read. Asking the scope first was tried and measured: a name the scope does not hold
+  walks the ring provider's `Current`, which builds a list, and asks the pack's `Symbol`, which on the NES is a JSON
+  round trip to the platform library, about 12 KB allocated a lookup (3.6 MB over 300) [M]. The read is `CoreMachine.Registers(id, span)`
+  into a buffer on the stack, at evaluation time; nothing is allocated. The target's context is now made once for
+  each machine info rather than on every call of `Expressions`, so an evaluation no longer allocates a context either
+  (the evaluator's own parse still allocates its tokens, as before). The design rests on one property of the packs:
+  `ISystemDebugViews.Symbol` answers only names its `SymbolNames` lists, which `eval symbols` already relies on.
+
+### 24.3 What was built
+
+- **`UnitExpressionContext`** (`EmuSen/Cores/Native`), one job: a scope's context, then the units. Its table
+  (`UnitSymbols`) maps each spelling to a unit's id, a register's index and the unit's register count, rebuilt when
+  the machine's info is a new object, which a new machine and a `MACHINE_INFO` change both make.
+- **`CoreDebugTarget`**: `Expressions` wraps the main context and caches it for each machine info; each `DebugCpu` it
+  makes carries an `Expressions` of its own registers wrapped the same way, which `DebugExpressions.For(target, cpu)`
+  already prefers. No surface changed: `IExpressionContext`, `IDebugTarget`, `DebugCpu`, Crystal and the session
+  service are as they were; the session service's `eval` and `symbols` reach the new contexts through
+  `DebugExpressions` as both shells do.
+- **`man eval`** gained a UNITS section with the rules above.
+
+### 24.4 Measured on 2026-10-18
+
+**The tests** [M], Debug: `UnitExpressionTests`' five cases, which failed four of five before (§24.1) and pass after:
+`eval ppu.PPUCTRL`, `eval PPUCTRL`, `eval ppu.ppuctrl` answering `$10` and `pulse1.Duty` 3; a condition on
+`ppu.PPUCTRL==0x11` never halting while a logpoint records `ppu.v=0x2108  PPUCTRL=0x10`, and one on
+`ppu.PPUCTRL==0x10 && pulse1.Duty==3` halting at `$801E`; the clashes (`x` 5 and `ppu.x` 3, `v` the CPU's flag and
+`ppu.v` `$2108`, a label `PPUCTRL` at `$2000` answering `PPUCTRL` while `ppu.PPUCTRL` stays `$10`, `Duty` refused
+by `eval` and at a breakpoint's add while `pulse1.Duty` and `pulse2.Duty` answer 3 and 0, `eval cpu ppu.PPUCTRL`);
+300 lookups of unit registers allocating 0 bytes; and Nephrite, which lists no units, naming exactly the 22 symbols
+of the corpus's recording on processor 0 and on each processor what its own context named before.
+
+The blast radius, 20 classes (`UnitExpressionTests`, `BreakpointConditionTests`, `MoonDebugEngineTests`,
+`NephriteDebugTests`, `VenusRtDebugTests`, `VenusRtDebugViewTests`, `DiamondDebugTests`, `CoreDebugViewTests`,
+`SessionServiceParityTests`, `ExpressionEvaluatorTests`, `GoldenCorpusTests`, `SharedHostTests`, `CoreAbi113Tests`,
+`CoreAdapterTests`, `MercuryRtDebugTests`, `MoonRtFrontendTests`, `DebugPlumbingTests`, `BreakAndCovCommandTests`,
+`HotaruOnTheApiTests`, `CoprocessorDebugTests`): **369 tests, 367 passed, 2 failed**, both the corpus's recordings
+this change moves. Re-recorded, each difference read:
+
+| Record | What changed |
+|---|---|
+| `eval.golden`, case "on moonrt", `eval symbols` | 53 lines added, the units' qualified names (`apu.FrameCounter` to `triangle.TimerPeriod`); the APU's `$4000` to `$4013` absent, as unspellable; no existing line moved |
+| `man.golden`, case "the page for eval", `man eval` | the page's new UNITS section, 25 lines, and the output's length; no other page's recording changed |
+
+No other file of the corpus changed (a recording pass also stripped a trailing empty line from `disasm.golden`, which
+was put back, as no case of it changed). `GoldenCorpusTests` with `UnitExpressionTests` again: **105 of 105 pass**.
+
+**The cost**, Release, `BreakpointConditionCostBench` (`EMUSEN_BP_BENCH=1`), per hit over a breakpoint never reached,
+on the tree before the change (its tests and the bench's new row only) and after:
+
+| Row | Condition, before / after | Logpoint, before / after | `if 0`, before / after |
+|---|---|---|---|
+| MercuryRT on the generic engine (`mercuryrt-v1`), `HL==0x1234` | 1.08 / 1.13 µs | 1.02 / 1.06 µs | 0.44 / 0.36 µs |
+| Nephrite, `D2==0` | 1.48 / 1.38 µs | 1.42 / 1.48 µs | 0.61 / 0.54 µs |
+| MoonRT, `A==0x99` | 5.11 / 4.74 µs | 4.89 / 4.99 µs | 0.48 / 0.40 µs |
+| MoonRT, `ppu.PPUCTRL==0x99` (new) | refused / 4.62 µs | refused / 4.82 µs | 0.47 µs after |
+
+A processor-register condition costs what it did: every pair moves less than the bench moves on a path this change
+does not reach, MercuryRT's shim, whose register condition went from 4.93 to 5.43 µs between the same two builds, and
+the pairs move in both directions. A unit-register condition on MoonRT costs what a processor-register one does there.
+
+### 24.5 Left, and for the tester
+
+- **MoonRT's register condition is about 4.7 µs a hit, against about 1.1 on MercuryRT's generic row**, with units or
+  without. It is not the units' read: `BreakpointExpressions`' `Live` calls `RefreshProviders` once an evaluation
+  first names a symbol, and on MoonRT that refreshes the pack's view rings (palettes, sprites, channels), which copy
+  the spaces they read, at every hit. Refreshing only the register providers there would bring it near MercuryRT's;
+  that is `BreakpointExpressions`' rule (`EmuSen_DianaSh.md` §13.12), so it is proposed, not built. MercuryRT and MarsRT
+  will meet the same cost once they list units.
+- **§6.33's text** says units are read through `debug_registers` but not, in words, that the read changes nothing;
+  the header's `const` and the trait's `&self` say it. *Recommended*: a clarification of one sentence there, no minor.
+- **MercuryRT's and MarsRT's switches** need nothing more: once their targets are `CoreDebugTarget`, their units are
+  in every scope by these rules, and their `eval symbols` recordings will gain the qualified names.

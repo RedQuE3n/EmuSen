@@ -803,7 +803,11 @@ PCSX-ReARMed); their logs were not read.
 | `cpu/io-access-bitwidth` | not graded: a table to compare by eye; it differs from the console's log in the registers' upper "garbage" bits (16–31 of I_MASK, the timers' and SIO's), which Diamond reads as zero, and in DEV1, which reads FFh where the console's DTL-era window holds what was written |
 
 **A player's BIOS** (`Ps1_tests_pass_by_their_tty_on_a_players_bios`, the American BIOS for NTSC and the European one
-for `timers`): all seven pass, `access-time` with 50 of 51 cells within 0.20 cycles (§11.3).
+for `timers`): all seven pass, `access-time` with 50 of 51 cells within 0.20 cycles (§11.3). *Since 2026-10-18* the
+test fails when the folder `EMUSEN_DIAMOND_FIRMWARE` names holds none of the BIOS files the core declares, by name;
+before, it ran the open kernel and passed as though on the player's BIOS. Measured that day: with a folder whose
+images carry other file names, the old test passed both cases in 17 s and the new one fails, naming the folder and
+the three names it looked for (`VenusRT_Native.md` §70.5, decided 2026-10-18 by the tester).
 
 **Bare-metal programs**: Peter Lemon's 72 programs, 120 frames each, Diamond's RAM against PCSX-ReARMed's from 10000h
 up [M]: **64 identical but for the 16 bytes above the initial stack, which PCSX-ReARMed's own kernel writes**; GTEAVSZ,

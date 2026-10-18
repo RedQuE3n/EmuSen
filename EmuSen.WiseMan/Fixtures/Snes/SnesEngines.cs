@@ -77,11 +77,16 @@ namespace EmuSen.WiseMan.Fixtures.Snes
         public static EmuSen.Cores.Native.CoreFirmware? DspRequest(string rom) =>
             EmuSen.Cores.Native.CoreLibrary.Open(Path.Combine(AppContext.BaseDirectory, VenusNative.Library.FileName)).FirmwareFor(File.ReadAllBytes(rom)).FirstOrDefault(f => f.Which == 2);
 
-        // That firmware's bytes, whole or as its program and data pair, from the corpus's firmware folder or the player's.
-        public static byte[]? DspFirmware(string rom)
+        // The folders searched for it: the corpus's firmware folder, then the player's.
+        public static IReadOnlyList<string?> FirmwareFolders => new[] { SnesTestRomCorpus.Root is { } r ? Path.Combine(r, "firmware") : null, EmuSen.Common.Firmware.FirmwareLibrary.Directory };
+
+        // That firmware's bytes, whole or as its program and data pair, from the first of the folders holding it.
+        public static byte[]? DspFirmware(string rom) => DspFirmware(rom, FirmwareFolders);
+
+        public static byte[]? DspFirmware(string rom, IEnumerable<string?> folders)
         {
             if (DspRequest(rom) is { } request)
-                foreach (string? dir in new[] { SnesTestRomCorpus.Root is { } r ? Path.Combine(r, "firmware") : null, EmuSen.Common.Firmware.FirmwareLibrary.Directory })
+                foreach (string? dir in folders)
                 {
                     if (dir is null) continue;
                     string whole = Path.Combine(dir, request.Name), stem = Path.Combine(dir, Path.GetFileNameWithoutExtension(request.Name));

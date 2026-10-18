@@ -1,0 +1,126 @@
+# AMD Radeon RX 6800 (RADV NAVI21)
+crt NES std0 q0 s0	d032c692defa5c8b
+crt NES std0 q0 s1	2d48daaa6f06543f
+crt NES std0 q0 s2	cfbfd77023ff0a51
+crt NES std0 q1 s0	f96dde686f473ea0
+crt NES std0 q1 s1	44f02081ef4c58a8
+crt NES std0 q1 s2	53a0dfcdb9b9d2bc
+crt NES std0 q2 s0	ce3180a137195a9f
+crt NES std0 q2 s1	2f4ff2a680726f0f
+crt NES std0 q2 s2	8eb887ec69f1c8cb
+crt NES std1 q0 s0	a9b145efe73f83bd
+crt NES std1 q0 s1	1ce83a8382637109
+crt NES std1 q0 s2	31f3776f2599fa4b
+crt NES std1 q1 s0	bfc1ba77aae5c44d
+crt NES std1 q1 s1	390e1f10f4028d1e
+crt NES std1 q1 s2	1eb978d3f3ce5bc9
+crt NES std1 q2 s0	2ce7e65e03773262
+crt NES std1 q2 s1	43433a62989025e4
+crt NES std1 q2 s2	0ccdbaba37b4e146
+crt SNES std0 q0 s0	0482ca0e17602ba8
+crt SNES std0 q0 s1	e6bc403cd55c53ae
+crt SNES std0 q0 s2	85c9a49c7fb3f4ee
+crt SNES std0 q1 s0	9768066067836e05
+crt SNES std0 q1 s1	56a195178ddcdf8c
+crt SNES std0 q1 s2	7833b662f54330b0
+crt SNES std0 q2 s0	78098c89de135155
+crt SNES std0 q2 s1	4781f2f1b606e1c4
+crt SNES std0 q2 s2	537d10b5d40cfd1c
+crt SNES std1 q0 s0	6b455a6969a3c388
+crt SNES std1 q0 s1	8605550c3e7a0bf7
+crt SNES std1 q0 s2	acda1704e6445de4
+crt SNES std1 q1 s0	7569462232df14a1
+crt SNES std1 q1 s1	f008999397f97c74
+crt SNES std1 q1 s2	06573bb0e97aadaa
+crt SNES std1 q2 s0	609bda070b902aea
+crt SNES std1 q2 s1	ff603dd3db2bb8d9
+crt SNES std1 q2 s2	e26ea3d2075556d6
+crt Genesis std0 q0 s0	63f5729f701607bf
+crt Genesis std0 q0 s1	8851e002118ceb5d
+crt Genesis std0 q0 s2	150d90bbacbc9f28
+crt Genesis std0 q1 s0	6281c5108c6c280e
+crt Genesis std0 q1 s1	f579bf0fa062bf6e
+crt Genesis std0 q1 s2	a7da05e2d3f606ac
+crt Genesis std0 q2 s0	a50e925289cebeaa
+crt Genesis std0 q2 s1	0ec3c0a8ee096189
+crt Genesis std0 q2 s2	da51fc0f8f0389cb
+crt Genesis std1 q0 s0	552e9d6769d5c0a5
+crt Genesis std1 q0 s1	14c5bfd54b3a1687
+crt Genesis std1 q0 s2	0a41fe6ad8994324
+crt Genesis std1 q1 s0	c104652297d0dfde
+crt Genesis std1 q1 s1	1cf28997d01514b3
+crt Genesis std1 q1 s2	5fb3d56238af347d
+crt Genesis std1 q2 s0	efcf89fcf8e5f270
+crt Genesis std1 q2 s1	d3d8d4ec2b907c3d
+crt Genesis std1 q2 s2	4b1bf309cca812c7
+crt N64 std0 q0 s0	e4f575516ae4a813
+crt N64 std0 q0 s1	c0c5263f8691d748
+crt N64 std0 q0 s2	99c6a2f29cdfef26
+crt N64 std0 q1 s0	8d6619f954a58fca
+crt N64 std0 q1 s1	0fe778842c88039c
+crt N64 std0 q1 s2	eb377974390a542a
+crt N64 std0 q2 s0	7bc07d3b1d911697
+crt N64 std0 q2 s1	ecadd1ae99956a2b
+crt N64 std0 q2 s2	d53ed1d1940e9875
+crt N64 std1 q0 s0	5ffb53ee6b29485c
+crt N64 std1 q0 s1	f260b92f6423f1eb
+crt N64 std1 q0 s2	2f6f3f5608446460
+crt N64 std1 q1 s0	5036cb20d5fb7ab7
+crt N64 std1 q1 s1	2502b79fb8365308
+crt N64 std1 q1 s2	6307d6d2bd84c2c5
+crt N64 std1 q2 s0	85b30f18ac065f2d
+crt N64 std1 q2 s1	93d5870fa17ef6db
+crt N64 std1 q2 s2	3bfe7c3366100a28
+crt PlayStation std0 q0 s0	4809e2d01990c2ce
+crt PlayStation std0 q0 s1	686a95867ceec206
+crt PlayStation std0 q0 s2	b6f2c3daad8570a7
+crt PlayStation std0 q1 s0	b19143a553bb4b1d
+crt PlayStation std0 q1 s1	a4b9c34e73d84100
+crt PlayStation std0 q1 s2	c11abeea2ae7a26b
+crt PlayStation std0 q2 s0	c2144f1fe320147c
+crt PlayStation std0 q2 s1	6bcfc278027d5e18
+crt PlayStation std0 q2 s2	6b31a10314215660
+crt PlayStation std1 q0 s0	b687ac1ee4ec59fb
+crt PlayStation std1 q0 s1	0b94f847a2cbe368
+crt PlayStation std1 q0 s2	5e78d50b0df913bf
+crt PlayStation std1 q1 s0	e40a859bcbf43bee
+crt PlayStation std1 q1 s1	fd202462e0077d8b
+crt PlayStation std1 q1 s2	c10c98b4fd28b9f7
+crt PlayStation std1 q2 s0	888ac3bf4a062bb7
+crt PlayStation std1 q2 s1	342b9be438f90ca0
+crt PlayStation std1 q2 s2	14f96ece491241c1
+crt NES raw std0 q0 s0	ac78aad80bc7cc78
+crt NES raw std0 q0 s1	64b50c13f2e61ef3
+crt NES raw std0 q0 s2	62c151276f9ab0c4
+crt NES raw std0 q1 s0	e47eebe7f88d1cec
+crt NES raw std0 q1 s1	29fc3412fc66a05b
+crt NES raw std0 q1 s2	966bf1f5306d7d4d
+crt NES raw std0 q2 s0	c034ce1b413c77bf
+crt NES raw std0 q2 s1	d30089f087b3b75a
+crt NES raw std0 q2 s2	495b8b4645eba8f5
+crt NES raw std1 q0 s0	d38ce9ba37877c41
+crt NES raw std1 q0 s1	4833ce3b7cce5d95
+crt NES raw std1 q0 s2	ac5d4ea141228c07
+crt NES raw std1 q1 s0	09dc880aecf1df0c
+crt NES raw std1 q1 s1	7d513817db50d8d2
+crt NES raw std1 q1 s2	006b7055329836d4
+crt NES raw std1 q2 s0	3e50c758edd484e3
+crt NES raw std1 q2 s1	7f02f7cc217f28bf
+crt NES raw std1 q2 s2	01a29a8ca488fffa
+crt N64 reduced q0	d14614f1ac3c831e
+crt N64 reduced q1	099468848235466e
+crt N64 reduced q2	84e7d85d0fc90ef6
+lottes SNES	9a68d21d237ded3a
+lottes N64	fc600d724ea094d8
+lcd Game Boy LCD	caa95f2744eaab65
+lcd Game Boy Pocket LCD	9f301f522af03ff5
+lcd Game Boy Light LCD	60e42747dced68c9
+lcd Game Boy Color LCD	77147d0efbebf24f
+lcd Game Boy Advance LCD	70c8d2dbce1a7d64
+lcd Game Boy Advance SP (AGS-101) LCD	58789ba0bf168dad
+effect None nearest	856daa17fadc82c7
+effect None bilinear	2d6f9e343c9cefb1
+effect Scanlines nearest	231e9bfef8dc5d56
+effect Scanlines bilinear	e6b5212e86fa9f39
+effect Crt nearest	a0bbe5470fb1ff2d
+effect Crt bilinear	47a879802c971349

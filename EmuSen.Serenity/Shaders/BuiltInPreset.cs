@@ -26,6 +26,22 @@ namespace EmuSen.Serenity.Shaders
             [PixelScale] = 1, [OriginX] = 0, [OriginY] = 0, [CropLeft] = 0, [CropTop] = 0, [CropWidth] = 1, [CropHeight] = 1, [RawWidth] = 0, [RawHeight] = 0,
         };
 
+        // The most rows of a frame that one of the console's lines may take for the reducing pass to bring them back - see EmuSen_CRT.md §16.
+        public const int MostRowsToALine = 8;
+
+        // How many rows of a frame are one of the console's lines, for a filter that counts lines and keeps no history; one where the frame is not a whole multiple.
+        public static int ReduceBy(ScreenFilter filter, int width, int height, int lines) =>
+            filter.RowsOnce && filter.History == 0 && lines > 0 && height > lines && height % lines == 0 && height / lines <= MostRowsToALine && width % (height / lines) == 0 ? height / lines : 1;
+
+        // The chosen values a filter's passes are written from, its structural ones; every other value reaches the chain at each draw - see EmuSen_DevicePicture.md §19.
+        public static Dictionary<string, float>? StructuralOf(ScreenFilter filter, IReadOnlyDictionary<string, float>? chosen)
+        {
+            if (chosen is null || filter.Structural is not { } ids) return null;
+            var kept = new Dictionary<string, float>(StringComparer.Ordinal);
+            foreach (string id in ids) if (chosen.TryGetValue(id, out float value)) kept[id] = value;
+            return kept;
+        }
+
         // Where generated presets are kept, a folder per content; a test sets it before any is written.
         internal static string? RootOverride;
 
@@ -39,7 +55,8 @@ namespace EmuSen.Serenity.Shaders
             (new Regex(@"\bint([234])\b"), "ivec$1"), (new Regex(@"\bbool([234])\b"), "bvec$1"),
         };
 
-        private static readonly Regex UniformLine = new(@"^[ \t]*uniform[ \t]+(\w+)[ \t]+(\w+)[ \t]*;[ \t]*\r?$", RegexOptions.Multiline);
+        // A uniform a pass declares, wherever it stands; each is lifted into the pass's block or bound as a child.
+        private static readonly Regex Uniform = new(@"\buniform[ \t]+(\w+)[ \t]+(\w+)[ \t]*;");
         private static readonly Regex Main = new(@"\b(half4|float4)(\s+)main(\s*)\(");
 
         // SkSL's names for its types as GLSL's; the one rewrite of text the translation makes besides a child's eval.
@@ -103,7 +120,7 @@ namespace EmuSen.Serenity.Shaders
         }
 
         private static IEnumerable<string> ChildrenOf(string sksl) =>
-            UniformLine.Matches(sksl).Where(m => m.Groups[1].Value == "shader").Select(m => m.Groups[2].Value);
+            Uniform.Matches(sksl).Where(m => m.Groups[1].Value == "shader").Select(m => m.Groups[2].Value);
 
         private static bool ReadsLinearly(FilterPass pass, string child) =>
             child is "source" or "image" ? pass.LinearSource : pass.Linear is { } names && names.Contains(child);
@@ -136,7 +153,7 @@ namespace EmuSen.Serenity.Shaders
                 foreach (string need in needs) vectors.Add(need);
             }
 
-            foreach (Match m in UniformLine.Matches(body))
+            foreach (Match m in Uniform.Matches(body))
             {
                 string type = m.Groups[1].Value, name = m.Groups[2].Value;
                 if (type == "shader")
@@ -180,7 +197,7 @@ namespace EmuSen.Serenity.Shaders
                 }
             }
 
-            body = UniformLine.Replace(body, "");
+            body = Uniform.Replace(body, "");
             foreach (Child child in children) body = Regex.Replace(body, $@"\b{child.Name}\.eval\(", child.Name + "_eval(");
             body = Main.Replace(body, "$1$2sksl_main$3(", 1);
             body = GlslTypes(body);

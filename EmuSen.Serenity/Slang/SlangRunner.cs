@@ -27,6 +27,7 @@ namespace EmuSen.Serenity.Slang
 
         private readonly Task<SlangChain?> _build;
         private readonly Action<string>? _failed;
+        private readonly Func<string>? _write;
         private SKImage? _output;
         private bool _advanced, _disposed;
         private IReadOnlyDictionary<string, float>? _values;
@@ -46,12 +47,22 @@ namespace EmuSen.Serenity.Slang
         internal SlangChain? Chain => _build.IsCompletedSuccessfully ? _build.Result : null;
 
         // Failed is called on whichever thread found the problem, once; built is called when building ends either way.
-        public SlangRunner(string presetPath, Action<string>? failed = null, Action? built = null)
+        public SlangRunner(string presetPath, Action<string>? failed = null, Action? built = null) : this(presetPath, null, failed, built) { }
+
+        // A built-in filter's preset, written by write on the build's thread and then built as any preset; name stands for it in reports - see EmuSen_DevicePicture.md §19.
+        internal SlangRunner(string name, Func<string>? write, Action<string>? failed, Action? built)
         {
-            PresetPath = presetPath;
+            PresetPath = name;
             _failed = failed;
+            _write = write;
             _build = Task.Run(Build);
             if (built is not null) _build.ContinueWith(_ => built(), TaskScheduler.Default);
+        }
+
+        // Blocks until the build has ended either way, for a test or a bench whose first frame must be drawn by it.
+        internal void WaitBuilt()
+        {
+            try { _build.Wait(); } catch (AggregateException) { }
         }
 
         public static string DeviceReport => Shared.Value.Report;
@@ -65,7 +76,7 @@ namespace EmuSen.Serenity.Slang
             {
                 var (device, report) = Shared.Value;
                 if (device is null) { Fail(report); return null; }
-                return new SlangChain(device, SlangPreset.Load(PresetPath), Cache);
+                return new SlangChain(device, SlangPreset.Load(_write?.Invoke() ?? PresetPath), Cache);
             }
             catch (Exception e) when (e is IOException or InvalidDataException or SlangCompileException or InvalidOperationException or ArgumentException or UnauthorizedAccessException)
             {
@@ -88,7 +99,10 @@ namespace EmuSen.Serenity.Slang
         }
 
         // On the render thread, under the owner's lock: false draws nothing and the caller draws the picture plain.
-        public bool Draw(SKCanvas canvas, byte[] rgba, int width, int height, bool newFrame, SKRect destination)
+        public bool Draw(SKCanvas canvas, byte[] rgba, int width, int height, bool newFrame, SKRect destination) => Draw(canvas, rgba, width, height, newFrame, destination, 1, null);
+
+        // The same with the frame's rows repeated and its raw image, as Present takes them, for a built-in filter read back - see EmuSen_DevicePicture.md §19.
+        internal bool Draw(SKCanvas canvas, byte[] rgba, int width, int height, bool newFrame, SKRect destination, int rowRepeat, byte[]? raw)
         {
             if (_disposed || !_build.IsCompletedSuccessfully || _build.Result is not { } chain) return false;
             float scale = Math.Max(Math.Abs(canvas.TotalMatrix.ScaleX), 0.01f);
@@ -97,8 +111,13 @@ namespace EmuSen.Serenity.Slang
             {
                 bool retuned = _appliedVersion != _valuesVersion;
                 if (retuned) { chain.SetParameters(_values); _appliedVersion = _valuesVersion; }
-                // The rows once, as the console sent them and as a libretro core hands them over; the destination alone carries the repeat - see EmuSen_Serenity.md §10.6.
-                if (newFrame || !_advanced) { chain.Advance(rgba, width, height, 1); _advanced = true; }
+                // A preset takes the rows once, as a libretro core hands them over, the destination alone carrying the repeat - see EmuSen_Serenity.md §10.6.
+                if (newFrame || !_advanced)
+                {
+                    if (raw is not null && raw.Length == width * height * 4) chain.ReplaceLut(Shaders.BuiltInPreset.RawTexture, raw, width, height);
+                    chain.Advance(rgba, width, height, rowRepeat);
+                    _advanced = true;
+                }
                 if (newFrame || retuned || _output is null || _output.Width != pw || _output.Height != ph)
                 {
                     // Let go first, so the readback it holds can take the new picture - see EmuSen_Serenity.md §9.1.

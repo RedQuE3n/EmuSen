@@ -172,6 +172,7 @@ namespace EmuSen.WiseMan.Serenity
                 try
                 {
                     control.ActiveEffect = effect;
+                    control.WaitForFilter();
 
                     ulong? firstHash = null;
                     for (int i = 0; i < 30; i++)

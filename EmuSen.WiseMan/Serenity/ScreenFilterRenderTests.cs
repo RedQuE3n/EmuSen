@@ -90,6 +90,9 @@ namespace EmuSen.WiseMan.Serenity
             Assert.Equal(ScreenFilters.None, ScreenFilters.NamesFor("GB")[0]);
         }
 
+        // A frame shown as many times as a filter looks back, since the chain's earlier frames start black - see EmuSen_DevicePicture.md §3.5.
+        private static byte[][] Held(byte[] frame, int times) => Enumerable.Repeat(frame, times).ToArray();
+
         // Mercury's four greys at one pixel each become SameBoy's four DMG shades; at this size there is no grid to draw.
         [Theory]
         [InlineData(0xFF, HandheldFilters.DmgLightest)]
@@ -98,7 +101,7 @@ namespace EmuSen.WiseMan.Serenity
         [InlineData(0x00, HandheldFilters.DmgDarkest)]
         public Task A_dmg_grey_becomes_the_panel_s_measured_shade(byte grey, int shade) => Session.Dispatch(() =>
         {
-            Picture picture = Show(HandheldFilters.DmgLcd, 8, 8, 8, 8, Solid(8, 8, grey, grey, grey));
+            Picture picture = Show(HandheldFilters.DmgLcd, 8, 8, 8, 8, Held(Solid(8, 8, grey, grey, grey), 4));
             NearRgb(shade, picture.At(4, 4), 2, $"grey {grey:X2}");
         }, default);
 
@@ -133,7 +136,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task Gbc_red_is_the_measured_panel_s_red() => Session.Dispatch(() =>
         {
-            Picture picture = Show(HandheldFilters.GbcLcd, 8, 8, 8, 8, Solid(8, 8, 0xFF, 0, 0));
+            Picture picture = Show(HandheldFilters.GbcLcd, 8, 8, 8, 8, Held(Solid(8, 8, 0xFF, 0, 0), 2));
             double r = Math.Pow(0.905 * 0.91, 1 / 2.2) * 255, g = Math.Pow(0.10 * 0.91, 1 / 2.2) * 255, b = Math.Pow(0.1575 * 0.91, 1 / 2.2) * 255;
             var (ar, ag, ab) = picture.At(4, 4);
             Near((int)Math.Round(r), ar, 3, "red");
@@ -213,24 +216,6 @@ namespace EmuSen.WiseMan.Serenity
             window.Close();
 
             Assert.Equal(picture.Luma(8, 56), picture.Luma(40, 38), 0);
-        }, default);
-
-        // The chain keeps as many earlier frames as its passes read, and no more.
-        [Fact]
-        public Task A_filter_keeps_the_frames_it_looks_back_at() => Session.Dispatch(() =>
-        {
-            var control = new GameFrameControl { ActiveFilter = HandheldFilters.DmgLcd };
-            control.WaitForFilter();
-            var window = new Window { Width = 8, Height = 8, Content = control };
-            window.Show();
-            for (int i = 0; i < 6; i++)
-            {
-                control.UpdateFrame(Solid(8, 8, (byte)(i * 40), 0, 0), 8, 8);
-                window.CaptureRenderedFrame()!.Dispose();
-            }
-            int held = (int)typeof(GameFrameControl).GetProperty("FilterHistoryHeld", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(control)!;
-            Assert.Equal(HandheldFilters.DmgLcd.History, held);
-            window.Close();
         }, default);
     }
 }

@@ -84,7 +84,7 @@ namespace EmuSen.WiseMan.Serenity
         {
             if (GlDevice.Value is not { } gl || _gpu is null) return null;
             byte[] skia = Session.Dispatch(() =>
-                ShaderBench.Picture(effect is { } simple ? new GameFrameControl { ActiveEffect = simple, BilinearFiltering = bilinear } : new GameFrameControl { FilterConsole = console, ShaderParameters = chosen, ActiveFilter = filter, BilinearFiltering = bilinear },
+                ShaderBench.Picture(effect is { } simple ? new GameFrameControl { SkiaFilters = true, ActiveEffect = simple, BilinearFiltering = bilinear } : new GameFrameControl { SkiaFilters = true, FilterConsole = console, ShaderParameters = chosen, ActiveFilter = filter, BilinearFiltering = bilinear },
                     frames.ToArray(), width, height, rowRepeat, windowWidth, windowHeight, gl, raw: raw),
                 default).GetAwaiter().GetResult();
 

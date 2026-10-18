@@ -272,17 +272,6 @@ namespace EmuSen.WiseMan.Serenity
         }, default);
 
         [Fact]
-        public Task A_filter_that_needs_a_device_is_drawn_plain_in_software_unless_asked_otherwise() => Session.Dispatch(() =>
-        {
-            byte[] frame = Solid(8, 8, 0, 0, 153);
-            using (Shown plain = Show(Of(Colour("0.8, 0.0, 0.0")) with { RequiresDevice = true }))
-                Near((0, 0, 153), plain.Frame(frame, 4, 4), 1, "drawn plain on the headless raster path");
-            using Shown asked = Show(Of(Colour("0.8, 0.0, 0.0")) with { RequiresDevice = true });
-            asked.Control.DrawDeviceFiltersInSoftware = true;
-            Near((204, 0, 0), asked.Frame(frame, 4, 4), 1, "drawn when asked to");
-        }, default);
-
-        [Fact]
         public void A_child_or_a_uniform_no_pass_provides_is_refused_by_name()
         {
             var chain = (IDisposable)Activator.CreateInstance(typeof(GameFrameControl).Assembly.GetType("EmuSen.Serenity.Shaders.FilterChain")!, Of(new FilterPass("uniform shader feedback; half4 main(float2 coord) { return feedback.eval(coord); }", PassScale.Viewport)))!;

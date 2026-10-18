@@ -334,8 +334,8 @@ namespace EmuSen.WiseMan.Mistress
             typeof(MainWindow).GetMethod("LoadRom", BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { typeof(string), typeof(string) }, null)!
                 .Invoke(window, new object[] { _rom, "Game.sfc" });
             GameFrameControl frame = window.GetControl<GameFrameControl>("GameFrame");
-            // Small, since a runtime effect drawn on the CPU costs about 150 microseconds a pixel, 18 s for a 400x300 frame.
             frame.Width = frame.Height = 24;
+            frame.WaitForFilter();
             frame.UpdateFrame(new byte[16 * 16 * 4], 16, 16);
             UiTest.Capture(window);
             Assert.Equal(0.8f, Held(frame, "maskDark"));

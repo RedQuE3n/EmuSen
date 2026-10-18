@@ -99,6 +99,11 @@
     <None Include="Cores\CoreRegistrationGolden.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- Every built-in filter's variants as the chain draws them on the RX 6800 - see EmuSen_DevicePicture.md §19. -->
+  <ItemGroup>
+    <None Include="Serenity\BuiltInGoldens.txt" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Serenity\BuiltInGoldens.txt')" />
+  </ItemGroup>
+
   <!-- The SNES corpus's recorded verdicts, which the runner reproduces - see VenusRT_Native.md §3.5. -->
   <ItemGroup>
     <None Include="Cores\VenusRtBaseline.tsv" CopyToOutputDirectory="PreserveNewest" />

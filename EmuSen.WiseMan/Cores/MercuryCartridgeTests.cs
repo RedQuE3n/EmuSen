@@ -1,5 +1,4 @@
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 using EmuSen.Crystal.Systems.GameBoy;
 
@@ -141,7 +140,7 @@ namespace EmuSen.WiseMan.Cores
             string rom = SyntheticGbRom.WriteTemp(SyntheticGbRom.Build(cartridgeType: 0x22));
             try
             {
-                using var core = new MercuryRtCore { Options = TestCores.NoBattery };
+                using var core = MercuryEngines.Create(TestCores.NoBattery);
                 var e = Assert.Throws<CoreRefusedException>(() => core.LoadRom(rom));
                 Assert.Equal(-10, e.Status);
                 Assert.Contains("$22", e.Message);

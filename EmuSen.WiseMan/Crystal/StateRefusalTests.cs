@@ -73,7 +73,7 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void A_reset_the_core_does_not_claim_is_not_supported()
         {
-            Assert.True(EmuSen.Cores.Nintendo.MercuryRT.MercuryRtCore.Available, EmuSen.Cores.Nintendo.MercuryRT.MercuryNative.Report);
+            Assert.True(MercuryEngines.Available, MercuryEngines.Report);
             using var runtime = new CrystalRuntime();
             string rom = Path.Combine(_root, "Mono.gb");
             File.WriteAllBytes(rom, SyntheticGbRom.Build());

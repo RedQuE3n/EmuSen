@@ -171,8 +171,8 @@ case on mercuryrt
 target mercuryrt
 covers 1
 $ regs cpu
-out 337
-SM83 registers:
+out 336
+CPU registers:
   A         = 0x01
   F         = 0xB0
   BC        = 0x0013

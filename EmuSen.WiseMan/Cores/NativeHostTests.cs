@@ -2,7 +2,6 @@ using EmuSen.Crystal.Systems.N64;
 using EmuSen.WiseMan.Fixtures;
 using System;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Crystal.Systems.Nes;
 using EmuSen.Crystal.Cheats;
 
@@ -27,18 +26,23 @@ namespace EmuSen.WiseMan.Cores
             Assert.Empty(CoreEngine.RomPatchTriples(new CheatRegistry(), 0, 0xFFFF));
         }
 
-        // The loaders' switches and crash-log names; MercuryRT on the common interface, MarsRT and MoonRT discovered from their sidecars since their shims retired, MarsRT's component exports gone.
+        // MercuryRT's pre-stable half, which no host loads since every shim on it retired, still answers the common interface until that interface goes.
+        private const ushort MercuryCoreVersion = 5;
+        private const ulong MercuryCapabilities = NativeInterface.Mutes | NativeInterface.RomPatches | NativeInterface.Debug | NativeInterface.DebugStack;
+        private static readonly NativeCoreLibrary Mercury = NativeCoreLibrary.Common("mercuryrt", "EMUSEN_MERCURY_NATIVE", MercuryCoreVersion, MercuryCapabilities);
+
+        // The loaders' switches and crash-log names; MercuryRT's pre-stable half on the common interface, every engine discovered from its sidecar since the shims retired, MarsRT's component exports gone.
         [Fact]
         public void The_three_loaders_keep_their_switches_and_crash_logs()
         {
-            Assert.Equal(("mercuryrt", "EMUSEN_MERCURY_NATIVE", "mercuryrt_crash"), (MercuryNative.Library.Crate, MercuryNative.Library.Variable, MercuryNative.Library.CrashLogStem));
+            Assert.Equal(("mercuryrt", "EMUSEN_MERCURY_NATIVE", "mercuryrt_crash"), (Mercury.Crate, Mercury.Variable, Mercury.CrashLogStem));
             Assert.True(MarsRt.Available, MarsRt.Report);
             Assert.NotEqual(0, MarsRt.Export("emusen_core_create"));
             Assert.Equal(0, MarsRt.Export("mars_rsp_new"));
             Assert.Equal(0, MarsRt.Export("mars_machine_new"));
             Assert.Equal(0, MarsRt.Export("no_such_export"));
 
-            var off = NativeCoreLibrary.Common("mercuryrt", "EMUSEN_CLEANUP_TEST_OFF", MercuryNative.CoreVersion, MercuryNative.RequiredCapabilities);
+            var off = NativeCoreLibrary.Common("mercuryrt", "EMUSEN_CLEANUP_TEST_OFF", MercuryCoreVersion, MercuryCapabilities);
             Environment.SetEnvironmentVariable("EMUSEN_CLEANUP_TEST_OFF", "0");
             try
             {
@@ -48,26 +52,26 @@ namespace EmuSen.WiseMan.Cores
             }
             finally { Environment.SetEnvironmentVariable("EMUSEN_CLEANUP_TEST_OFF", null); }
 
-            var wrong = NativeCoreLibrary.Common("mercuryrt", "EMUSEN_CLEANUP_TEST_UNSET", 999, MercuryNative.RequiredCapabilities);
+            var wrong = NativeCoreLibrary.Common("mercuryrt", "EMUSEN_CLEANUP_TEST_UNSET", 999, MercuryCapabilities);
             Assert.False(wrong.Available);
-            Assert.EndsWith($"speaks common interface 1 core {MercuryNative.CoreVersion}, this build common 1 core 999", wrong.Report);
+            Assert.EndsWith($"speaks common interface 1 core {MercuryCoreVersion}, this build common 1 core 999", wrong.Report);
         }
 
         // A MercuryRT library that is not there is refused with the words the notice carries, and its capabilities agree with its exports.
         [Fact]
         public void MercuryRTs_library_is_on_the_common_interface_and_a_missing_one_is_refused()
         {
-            var missing = NativeCoreLibrary.Common("mercuryrt_missing", "EMUSEN_MERCURYRT_MISSING_TEST", MercuryNative.CoreVersion, MercuryNative.RequiredCapabilities);
+            var missing = NativeCoreLibrary.Common("mercuryrt_missing", "EMUSEN_MERCURYRT_MISSING_TEST", MercuryCoreVersion, MercuryCapabilities);
             Assert.False(missing.Available);
             Assert.Contains("not found beside the assemblies", missing.Report);
 
-            Assert.True(MercuryNative.Available, MercuryNative.Report);
-            Assert.Equal(MercuryNative.RequiredCapabilities, MercuryNative.Library.Capabilities);
-            nint handle = System.Runtime.InteropServices.NativeLibrary.Load(System.IO.Path.Combine(AppContext.BaseDirectory, MercuryNative.Library.FileName));
+            Assert.True(Mercury.Available, Mercury.Report);
+            Assert.Equal(MercuryCapabilities, Mercury.Capabilities);
+            nint handle = System.Runtime.InteropServices.NativeLibrary.Load(System.IO.Path.Combine(AppContext.BaseDirectory, Mercury.FileName));
             foreach (string name in NativeInterface.Required) Assert.True(System.Runtime.InteropServices.NativeLibrary.TryGetExport(handle, name, out _), name);
             foreach (var (bit, name, exports) in NativeInterface.Optional)
                 foreach (string export in exports)
-                    Assert.True(System.Runtime.InteropServices.NativeLibrary.TryGetExport(handle, export, out _) == ((MercuryNative.Library.Capabilities & bit) != 0), $"{name}: {export}");
+                    Assert.True(System.Runtime.InteropServices.NativeLibrary.TryGetExport(handle, export, out _) == ((Mercury.Capabilities & bit) != 0), $"{name}: {export}");
             Assert.False(System.Runtime.InteropServices.NativeLibrary.TryGetExport(handle, "mercury_machine_new", out _), "the old mercury_* exports are retired");
         }
 
@@ -75,12 +79,11 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Each_machine_describes_the_shared_codes_and_its_own()
         {
-            Assert.Equal("not a Mercury save state", MercuryMachine.Describe(-3));
+            Assert.Equal("not a Mercury save state", NativeMachine.Shared(-3, "Mercury"));
             Assert.Equal("not a Mars save state", MarsMachine.Describe(-3));
             Assert.Equal("the buffer is too small", MarsMachine.Describe(-7));
-            Assert.Equal("a cartridge type no board implements", MercuryMachine.Describe(-10));
             Assert.Equal("an RDRAM size that is neither 4 MB nor 8 MB", MarsMachine.Describe(-12));
-            Assert.Equal("status -99", MercuryMachine.Describe(-99));
+            Assert.Null(NativeMachine.Shared(-99, "Mercury"));
         }
 
         // MarsRT's state handle is a v1 machine: it writes either kind, has loaded nothing, and is the size it was asked for.

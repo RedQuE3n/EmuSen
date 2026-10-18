@@ -1,3 +1,4 @@
+using EmuSen.Cores.Native;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -11,7 +12,6 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -22,14 +22,12 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // A build whose MercuryRT library is missing or turned off: Mistress loads no Game Boy game and says plainly why - see Mercury_Native.md §15.4.
+    // A build whose MercuryRT library is missing: Mistress loads no Game Boy game and says plainly why, as for any console whose one engine is not found - see Mercury_Native.md §15.4, EmuSen_Backend.md §17.10.
     [Collection(TestCollections.ProcessGlobals)]
     public class MercuryRtFallbackTests : IDisposable
     {
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(MercuryRtFallbackTests).GetTypeInfo().Assembly);
-
-        public const string FallbackMarkVariable = "EMUSEN_MERCURYRT_FALLBACK_MARK";
 
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenMercuryRtFallbackTests", Guid.NewGuid().ToString("N"));
         private readonly string _rom;
@@ -47,56 +45,22 @@ namespace EmuSen.WiseMan.Mistress
 
         public void Dispose()
         {
+            CoreDiscovery.UseDirectories(null);
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 
-        // The library is loaded once per process, so a process started with it off is the only honest test of the fallback - see Mars_Native.md §5.5.
+        // Discovery pointed at a folder with no cores, as a build without the library finds none.
         [Fact]
-        public void With_the_library_turned_off_a_game_boy_game_does_not_load_and_the_status_says_why()
+        public Task Without_the_library_a_game_boy_game_does_not_load_and_the_status_says_why() => Session.Dispatch(() =>
         {
-            string mark = Path.Combine(_root, "fallback.txt");
-            var start = new ProcessStartInfo("dotnet")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-            };
-            foreach (string argument in new[] { "test", typeof(MercuryRtFallbackTests).Assembly.Location, "--filter", $"FullyQualifiedName={typeof(MercuryRtFallbackTests).FullName}.{nameof(TheFallbackInAProcessWithTheLibraryOff)}" })
-                start.ArgumentList.Add(argument);
-            start.Environment[MercuryNative.Variable] = "0";
-            start.Environment[FallbackMarkVariable] = mark;
-
-            using Process child = Process.Start(start)!;
-            Task<string> output = child.StandardOutput.ReadToEndAsync();
-            Task<string> errors = child.StandardError.ReadToEndAsync();
-            Assert.True(child.WaitForExit(240_000), "the child test run did not finish");
-            Assert.True(child.ExitCode == 0, output.Result + errors.Result);
-            Assert.True(File.Exists(mark), "the child ran nothing:\n" + output.Result);
-
-            string[] found = File.ReadAllLines(mark);
-            Assert.Equal("no core", found[0]);
-            Assert.Contains("turned off by EMUSEN_MERCURY_NATIVE=0", found[1]);
-            Assert.Contains("This build has no Game Boy core: " + CoreCatalog.MercuryRtEngine + " is missing (turned off by EMUSEN_MERCURY_NATIVE=0)", found[2]);
-        }
-
-        // Run only by the test above, in its own process; it asserts nothing unless that process has the library off.
-        [Fact]
-        public Task TheFallbackInAProcessWithTheLibraryOff() => Session.Dispatch(() =>
-        {
-            if (Environment.GetEnvironmentVariable(FallbackMarkVariable) is not { } mark || Environment.GetEnvironmentVariable(MercuryNative.Variable) != "0") return;
-
-            Assert.False(MercuryNative.Available);
-            Assert.False(MercuryRtCore.Available);
+            CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "NoCores") });
             var window = new MainWindow();
             window.Show();
             Invoke(window, "LoadRom", _rom, "Loop.gb");
-            string status = Status(window).Text ?? "";
-
             Assert.Null(typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
-            Assert.StartsWith("Failed to load Loop.gb: ", status);
-            File.WriteAllLines(mark, new[] { "no core", MercuryNative.Report, status });
+            Assert.Equal("Failed to load Loop.gb: This build has no Game Boy core: " + CoreCatalog.MercuryRtEngine + " is missing (no sidecar for it was found beside the program).", Status(window).Text);
             window.Close();
         }, default);
 

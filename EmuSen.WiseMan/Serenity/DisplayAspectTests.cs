@@ -20,7 +20,6 @@ using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Views;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using EmuSen.Cores.Nintendo.MercuryRT;
 
 namespace EmuSen.WiseMan.Serenity
 {
@@ -53,7 +52,14 @@ namespace EmuSen.WiseMan.Serenity
             using var marsRt = new MarsRtTestCore { Options = TestCores.NoBattery };
             marsRt.LoadRom(SyntheticN64Rom.WriteTemp(SyntheticN64Rom.Build()));
             Assert.Equal(DisplayShape.Television, marsRt.DisplayAspect);
-            using (var gameBoy = new MercuryRtCore()) Assert.Equal(DisplayShape.GameBoy, gameBoy.DisplayAspect);
+            string gb = SyntheticGbRom.WriteTemp(SyntheticGbRom.Build());
+            try
+            {
+                using var gameBoy = MercuryEngines.Create(TestCores.NoBattery);
+                gameBoy.LoadRom(gb);
+                Assert.Equal(10.0 / 9.0, gameBoy.DisplayAspect);
+            }
+            finally { File.Delete(gb); }
             Assert.Equal(DisplayShape.Television, CrtFilter.Filter.Aspect);
         }
 

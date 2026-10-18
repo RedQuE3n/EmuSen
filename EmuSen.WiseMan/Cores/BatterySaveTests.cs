@@ -4,7 +4,6 @@ using System;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 
@@ -37,10 +36,10 @@ namespace EmuSen.WiseMan.Cores
         private static ICore Make(string engine, CoreOptions? options = null) => engine switch
         {
             "MoonRT" => MoonEngines.Create(options),
-            _ => new MercuryRtCore { Options = options ?? CoreOptions.Default },
+            _ => MercuryEngines.Create(options ?? CoreOptions.Default),
         };
 
-        private static string RamSpace(string engine) => Nes(engine) ? "PRGRAM" : MercuryRtCore.SpaceCartRam;
+        private static string RamSpace(string engine) => Nes(engine) ? "PRGRAM" : MercuryEngines.SpaceCartRam;
 
         // A cartridge with battery-backed RAM whose program never touches it, so what a load put there stays.
         private string Rom(string engine, string stem, bool withRam = true)
@@ -60,7 +59,7 @@ namespace EmuSen.WiseMan.Cores
             return bytes;
         }
 
-        private static string SaveOf(string engine, string rom) => SaveLibrary.SramPathFor(rom, Nes(engine) ? BatterySave.Nes : BatterySave.GameBoyFolder(rom));
+        private static string SaveOf(string engine, string rom) => SaveLibrary.SramPathFor(rom, Nes(engine) ? BatterySave.Nes : MercuryEngines.SaveFolder(rom));
 
         private static string Beside(string rom) => Path.ChangeExtension(rom, SaveLibrary.SramExtension);
 
@@ -221,7 +220,7 @@ namespace EmuSen.WiseMan.Cores
             }
             string gbc = Path.Combine(_library, "Same.gbc");
             File.Copy(Rom("MercuryRT", "Colour"), gbc);
-            using (var colour = new MercuryRtCore())
+            using (var colour = MercuryEngines.Create())
             {
                 colour.LoadRom(gbc);
                 colour.SaveSram();
@@ -257,7 +256,7 @@ namespace EmuSen.WiseMan.Cores
         public void A_gb_game_played_as_a_colour_console_keeps_its_save_in_gb()
         {
             string rom = Rom("MercuryRT", "Played as Colour");
-            using (var core = new MercuryRtCore { Model = GbModel.GameBoyColor })
+            using (var core = MercuryEngines.Create(null, GbModel.GameBoyColor))
             {
                 core.LoadRom(rom);
                 core.SaveSram();
@@ -267,7 +266,7 @@ namespace EmuSen.WiseMan.Cores
             // A .gb image whose header asks for the Color, as seventeen in the library do: filed with the .gb images, as the library files it.
             string dual = Path.Combine(_library, "Dual.gb");
             File.WriteAllBytes(dual, SyntheticGbRom.Build(cartridgeType: 0x03, ramSizeCode: 0x02, cgbFlag: 0x80, patches: (0, new byte[] { 0x18, 0xFE })));
-            foreach (ICore core2 in new ICore[] { new MercuryRtCore() })
+            foreach (ICore core2 in new ICore[] { MercuryEngines.Create() })
             {
                 core2.LoadRom(dual);
                 core2.SaveSram();
@@ -400,7 +399,7 @@ namespace EmuSen.WiseMan.Cores
         private static byte ReadRam(ICore core, string engine, int address) => engine switch
         {
             "MoonRT" => ((EmuSen.Cores.Native.CoreEngine)core).ReadSpace(RamSpace(engine), address),
-            _ => ((MercuryRtCore)core).ReadSpace(RamSpace(engine), address),
+            _ => ((CoreEngine)core).ReadSpace(RamSpace(engine), address),
         };
 
         private static void WriteRam(ICore core, string engine, int address, byte value)
@@ -408,7 +407,7 @@ namespace EmuSen.WiseMan.Cores
             switch (engine)
             {
                 case "MoonRT": ((EmuSen.Cores.Native.CoreEngine)core).WriteSpace(RamSpace(engine), address, value); break;
-                default: ((MercuryRtCore)core).WriteSpace(RamSpace(engine), address, value); break;
+                default: ((CoreEngine)core).WriteSpace(RamSpace(engine), address, value); break;
             }
         }
     }

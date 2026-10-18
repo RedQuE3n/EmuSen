@@ -160,18 +160,18 @@ case on mercuryrt
 target mercuryrt
 covers 1-3,6
 $ dma
-out 29
-GB publishes no DMA channels.
+out 36
+MercuryRT publishes no DMA channels.
 status 1
 action none
 $ dma log on
-out 26
-GB records no DMA history.
+out 33
+MercuryRT records no DMA history.
 status 1
 action none
 $ dma stats
-out 26
-GB records no DMA history.
+out 33
+MercuryRT records no DMA history.
 status 1
 action none
 end

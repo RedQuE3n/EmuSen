@@ -1,3 +1,4 @@
+using EmuSen.Cores.Native;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -10,7 +11,6 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -53,27 +53,27 @@ namespace EmuSen.WiseMan.Mistress
             var window = new GraphicsSettingsWindow(config, console => told = console, "GB");
             window.Show();
 
-            Dropdown model = window.GetLogicalDescendants().OfType<Dropdown>().Where(d => d.Name == $"GB.{MercuryRtCore.ModelKey}").Distinct().Single();
-            Assert.Equal(new[] { MercuryRtCore.ModelAuto, MercuryRtCore.ModelGameBoy, MercuryRtCore.ModelGameBoyColor }, model.Items.Cast<object>().Select(o => o.ToString()));
-            Assert.Equal(MercuryRtCore.ModelAuto, model.SelectedItem);
+            Dropdown model = window.GetLogicalDescendants().OfType<Dropdown>().Where(d => d.Name == $"GB.{MercuryEngines.ModelKey}").Distinct().Single();
+            Assert.Equal(new[] { MercuryEngines.ModelAuto, MercuryEngines.ModelGameBoy, MercuryEngines.ModelGameBoyColor }, model.Items.Cast<object>().Select(o => o.ToString()));
+            Assert.Equal(MercuryEngines.ModelAuto, model.SelectedItem);
             UiTest.AssertLaidOut(window, "graphics-gb-model");
 
-            model.SelectedItem = MercuryRtCore.ModelGameBoyColor;
+            model.SelectedItem = MercuryEngines.ModelGameBoyColor;
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("GB", told);
-            Assert.Equal(MercuryRtCore.ModelGameBoyColor, ConsolesConfig.Load().Value("GB", MercuryRtCore.ModelKey));
+            Assert.Equal(MercuryEngines.ModelGameBoyColor, ConsolesConfig.Load().Value("GB", MercuryEngines.ModelKey));
             UiTest.AssertLaidOut(window, "graphics-gb-model-color");
             window.Close();
         });
 
         // The stored choice reaches the core before the first frame, and a colour cartridge's GB tab is the same tab.
         [Theory]
-        [InlineData((byte)0x00, MercuryRtCore.ModelGameBoyColor, "GBC")]
-        [InlineData((byte)0x80, MercuryRtCore.ModelGameBoy, "GB")]
+        [InlineData((byte)0x00, MercuryEngines.ModelGameBoyColor, "GBC")]
+        [InlineData((byte)0x80, MercuryEngines.ModelGameBoy, "GB")]
         public Task A_game_runs_on_the_console_the_gb_tab_names(byte cgb, string model, string runsAs) => UiTest.Run(() =>
         {
             ConsolesConfig config = ConsolesConfig.Load();
-            config.SetValue("GB", MercuryRtCore.ModelKey, model);
+            config.SetValue("GB", MercuryEngines.ModelKey, model);
             config.Save();
             File.WriteAllBytes(_rom, SyntheticGbRom.Build(cgbFlag: cgb, patches: (0, new byte[] { 0x18, 0xFE })));
 
@@ -83,9 +83,9 @@ namespace EmuSen.WiseMan.Mistress
             WaitFor(() => Game(window).TotalFrames > 20);
 
             WindowGame game = Game(window);
-            Assert.IsType<MercuryRtCore>(game.Core);
-            Assert.Equal(runsAs, game.CoreName);
-            Assert.Equal(model, ((ICoreSettings)game.Core).Get(MercuryRtCore.ModelKey));
+            Assert.IsType<CoreEngine>(game.Core);
+            Assert.Equal(runsAs, ((CoreEngine)game.Core).Machine.Info.System.ToUpperInvariant());
+            Assert.Equal(model, ((ICoreSettings)game.Core).Get(MercuryEngines.ModelKey));
             Assert.Equal("GB", (string)typeof(MainWindow).GetField("_activeConsole", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!);
             window.Close();
         });

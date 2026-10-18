@@ -3032,6 +3032,114 @@ are another branch's (§20), and steps 4, 5, 7 and 8 wait on it.*
 | WiseMan, §17.4's 46 classes with `GameRefusalTests`, `MercuryCommercialRomBatteryTests`, `SystemCodeParityTests`, `DebugCodeParityTests`, `SystemTableParityTests` and `CoreDiscoveryTests`, the goldens' games and corpus set | 809 cases: 808 passed, and `MercuryRtCoreAbiTests`' capability case failed as it should, pinning the old set; with the two capabilities added it passes, 8 of 8. `GoldenCorpusTests` 100 of 100 and the registration golden unchanged; the goldens' 56 cases, the four games and the 173 corpus traces as recorded |
 | The header's and refusal's classes again with `EMUSEN_SYSTEMS_NATIVE=0` | 25 of 25 |
 
+### 17.10 Built 2026-10-18: steps 4, 5, 7 and 8 (MercuryRT's part) and 9; the Game Boy on the generic engine
+
+*Measured on 2026-10-18 on branch `b4-mercury`, from `WiseMan` at `e75ad6bf` (core ABI 1.13 and §22's host pieces in)
+and merged with `a17ff513` (MoonRT's switch, §23) before the last runs. The rest of §17.7 under §20's decisions. The
+deletion of `PortEngine.cs`, the pre-stable host, MercuryRT's pre-stable half (`src/ffi/mod.rs`) and the three dead
+classes waits for MarsRT's switch, as §20 orders it.*
+
+**Step 4, MercuryRT's units** (`src/ffi/v1.rs`, ids from 256, read through `debug_registers`): `PPU` (video) with the
+fourteen registers the shim's target printed, STAT read as the CPU reads it, and in colour mode VBK, SVBK, BCPS, OCPS
+and KEY1 after them; `APU` (audio), `$FF10`–`$FF26` as the CPU reads them, the power bit and the sequencer's step;
+`Timer` (timer), DIV, TIMA, TMA, TAC; `Pulse 1`, `Pulse 2`, `Wave` and `Noise` (channel), each channel's on and DAC
+bits and the counters no register shows; `HDMA` (dma) in colour mode only. Seven units, eight in colour mode; the
+bus's own I/O read, which disturbs nothing, serves the registers a CPU reads. The generic target's video and sound
+sections therefore print as the shim's did, but for the `Board:` row (§20).
+
+**Step 5, the Game Boy pack's views in both halves.** `GameBoyDebugViews` (C#) and `emusen-systems`' `gb::views`
+(Rust), the second reading the same bytes in the same order, in batches where the C# reads one at a time so that a
+view takes at most sixteen rounds: palettes and the swatch (DMG greys from BGP, OBP0, OBP1; the Color's sixteen from
+`BGPAL` and `OBJPAL`; compatibility mode through palette RAM), the tile sheet, a tile's pixels, the tilemap entry
+with bank 1's attribute in colour mode, the five vectors, forty sprites at most from OAM with LCDC's height, the
+channels from their units, HDMA as one row, the address map behind `addr`, and the summary's cartridge, CPU, PPU,
+colour and sound lines. Colour mode is the PPU unit's VBK; compatibility mode two VRAM banks without it, so no view
+reads the machine's state. Two surface changes came with them:
+
+- `ISystemDebugViews` gained `Palettes` and `PaletteSwatch` overloads taking the units, defaulting to the old
+  members, since a Game Boy's palettes are registers; `CoreDebugTarget` passes them, and its view ring learns again
+  when machine info changes, as a state from the other console changes it.
+- **Platform interface 21** (MarsRT's N64 pack took 20 first, §18.10.2): `emusen_systems_view` takes the systems
+  `gb` and `gbc`, a request's `units` (each a name, a kind and its registers) and `mutes`; `NativeDebugViews` sends the units with each view that takes them, and a
+  units-reading summary to the library first, a system without that view (the NES today) answering from the C#
+  views. This is the pattern the NES's Rust twins can follow.
+
+`DebugCodeParityTests.Every_game_boy_view_answers_alike_and_reads_alike`: 48 rounds of generated spaces and units in
+each console mode (a ROM cut at the header's length, OAM short, palette spaces absent or named in lower case, units
+left out, values past their widths), every tilemap entry and tile of a 16 KiB bank, the address map from end to end;
+answers and reads alike. Seeded faults, each caught: a DMG sprite's palette from bit 3, the wave's level from 3 − vol,
+the I/O registers called addressable.
+
+**Step 7, the switch.** `MercuryRtEngine` left `CoreCatalog`'s sole engines and joined its sole discovered engines
+beside the SNES's and the NES's; `CoreFactory`'s `.gb` arm names the missing engine, as the SNES's does; the Game Boy's
+pad is read from its engine's info and its settings from its engine's sidecar, which gives the SNES and the NES their
+own rows in `SettingsFor` as well (§17.8 Q11). MercuryRT's ROM became a read-only space, as the shim's target showed
+it (C14 now checks the refusal), and an illegal opcode in an observed frame is refused in the core's words with its
+detail word. WiseMan holds MercuryRT through `Fixtures/MercuryEngines` (the generic engine over its library, its own
+`mercuryrt_core_step`, `_tick`, `_stop`, `_serial` and `_rom_patch`, `GbModel` and the facts its machine info
+states); `MercuryRig` reads an illegal opcode as the corpus's verdicts and the goldens' transcripts record it, so the
+hardware-test runner's `IllegalOpcode` holds. The shim-against-adapter comparison left with the shim, and
+`MercuryRtFallbackTests` points discovery at an empty folder, as the SNES's test does.
+
+**Three host defects the switch showed**, each by a test that failed on the switched tree before its fix:
+
+- *A save kept beside a game was copied into Saves for a board without battery RAM*
+  (`BatterySaveTests.A_cartridge_without_ram_has_no_save_at_all`). The generic engine opens file 0 for the first create,
+  as core info lists it, and `BatterySave.Open` copied an old home's save in on opening. `Open` now reads the old home
+  in place, and `Settle` copies it in when a load knows the machine keeps the file. The same rule reached the NES: a
+  battery-less NES game's save beside it is no longer copied into Saves (the registration golden's `NES plain` rows).
+- *A refused debug frame dropped its detail word*: `CoreDebugBridge` now carries it, as `CoreMachine.Advance` does.
+- *A Game Boy view could not see the units' registers it needs for palettes*: the overloads above.
+
+**Step 8, MercuryRT's deletions.** The shim's four files, `DisplayShape.GameBoy`, `BatterySave.GameBoyFolder` and
+`mercuryrt_core_set_sample_rate`; `EMUSEN_MERCURY_NATIVE` retired with them (§20). `grep` for a type under
+`EmuSen.Cores.Nintendo.MercuryRT` in every project: 0.
+
+**The debugger's corpus, recorded again**, eleven files with a `mercuryrt` case:
+
+| Difference | Files | Standing |
+|---|---|---|
+| `GB` becomes `MercuryRT` in headings and refusals | `regs`, `cpus`, `spaces`, `dma`, `mem`, `tile`, `counters` | decided (§20) |
+| the summary's head is the generic one | `summary` | decided (§20) |
+| the `Board:ROM` row leaves `regs` | `regs` | decided (§20) |
+| `SM83` becomes `CPU`, machine info's name for the processor | `cpus`, `regs`, `setreg` | as §20 decided `CPU` for the 2A03; **for the tester to confirm for the SM83** |
+| `BGPAL` and `OBJPAL` listed; the ROM read-only as before | `spaces`, `mem`, `tile`, `counters` | follows from §17.2 D5, decided |
+| `channels` after `mute 0 on` shows the channel muted | `mute` | a correction: the old recording read the shim's snapshot from before the mute |
+| `eval symbols` lists the processor's registers, `frame`, `stackdepth` and the units' registers by qualified name (`ppu.LY`, `timer.DIV`, `pulse1.Freq`, 47 of them on the DMG case); a bare name one unit alone has (`LY`, `SeqStep`) still reads in an expression, a name the channels share (`Vol`) does not, and the APU's `$FF10`–`$FF26` and `Board:ROM` are no longer listed, being no identifiers an expression can read | `eval` | follows from §24, decided |
+| the summary's sound line loses `buffered=1476 frames` | `summary` | **for the tester**: the queue's length is the engine's, not a register or a space a pack reads |
+
+**The registration golden**, recorded again: the Game Boy's rows are `CoreEngine`, `CoreDebugTarget`, the engine's
+name and the Model row from the sidecar (its text the shim's, §17.9); the `off` rows run the Game Boy, no switch
+turning it off; a tampered sidecar now refuses MercuryRT as trust refuses any discovered engine (the shim loaded its
+library unchecked); the NES's battery rows as above. Recorded again on top of MarsRT's N64 rows (WiseMan 08812dde), which it leaves
+unchanged, as it leaves every other row.
+
+**The gates as measured**:
+
+| | Result |
+|---|---|
+| MercuryRT's crate, `cargo test --profile test-checked` | 43 in six binaries, all pass |
+| `emusen-sm83`; `emusen-systems` and `emusen-platform` (`--release`) | 3; 24, 31 and 4, all pass |
+| The kit on the release library | ABI 1.13; the core's cases pass, C14 finding 9 spaces, the ROM refused a write, 7 or 8 units; 4 of 4 games and 173 of 173 corpus ROMs |
+| WiseMan on the merged tree, 99 classes: §17.4's, the parity classes, every Mercury class, the Moon classes, the frontend API's, the host's (`SharedHostTests`, `CoreAbi113Tests`, `CoreAdapterTests`, `CoreEngineThreadTests`, `DebugPlumbingTests`), the other cores' engine, debug and media classes, Mistress's settings and engine windows, `GoldenCorpusTests`, with the goldens' games and corpus set | 1,410 cases, 1,407 passed. Two failures were the registration test reading the golden's copy from the build before the recording (it passes after a build: the class and `GoldenCorpusTests`, 103 of 103); the third, `GraphicsSettingsWindowLayoutTests`' N64 case at 3x with antialiasing 3x, is the N64's settings window, which this step does not touch: it failed the same way in each of three combined runs and passes alone, the class 14 of 14. `GoldenCorpusTests` passes on both shells, 100 of 100 with `EMUSEN_DIANASH_NATIVE=0` as well |
+| MercuryRT's oracles on the generic engine | the goldens' 56 cases (four games, 173 corpus traces, the synthetic and random programs) as recorded; the corpus baseline under all three models; `MercuryStateLayoutTests` 52 |
+| Again on 2026-10-18 after merging WiseMan 602ad054 (MarsRT at interface 20, the unit-register expressions of §24): 113 classes, the 99 above with `UnitExpressionTests`, `BreakpointConditionTests`, all seven `MercuryCommercialRom*` classes, the Mars classes the merge touched and the N64 pack's, with `EMUSEN_COMMERCIAL_ROMS` naming the project's `TestRoms` (read in place, unchanged after the run) | 2,247 cases, 2,247 passed. Each `MercuryCommercialRom*` class (Audio, Battery, Boot, Colour, Determinism, RenderSkip, SaveState) 7 of 7, one per Game Boy image; `MercuryStateLayoutTests` 118; `GoldenCorpusTests` 100; the registration class 3; `UnitExpressionTests` 5; `BreakpointConditionTests` 12; `DebugCodeParityTests` 8. The crate's 43, `emusen-sm83`'s 3, `emusen-systems`' 24 and the platform's 31 and 4 pass again, and the kit 4 of 4 games and 173 of 173 corpus ROMs |
+
+**Two layout listings were missing.** Kirby's Dream Land and Super Mario Land are MBC1 boards without RAM, a shape
+no hardware-test program uses, so `MercuryCommercialRomAudioTests` and `MercuryCommercialRomRenderSkipTests` found no
+listing for them on a tree that had the commercial images; the worktree that built the switch had none, and those
+classes passed as one empty case each. Twenty-four listings were recorded for every board, RAM size and console the
+core takes, and `Every_board_ram_size_and_console_has_a_committed_listing` checks all forty-two shapes from synthetic
+headers (`Mercury_Native.md` §14.5). `CommercialRomLibrary` reads `EMUSEN_COMMERCIAL_ROMS` before the install
+directory's `TestRoms`, so a checkout without the images can run the classes against a folder read in place.
+
+**P8 does not hold as written.** No golden trace, corpus verdict or kit report on MercuryRT changed, but the corpus
+changed in four ways §17.4 had not listed (the processor's name, the new spaces, the muted channel, the symbols and
+the queue), each in the table above.
+
+**Left**: the cross-core deletion (§20); the summary's queue, for the tester; the Rust twins of the other consoles'
+new view members.
+
 ---
 
 ## 18. B4's first phase for MarsRT, 2026-10-18: the shim inventoried, a proposal, the gates and a plan

@@ -3,7 +3,6 @@ using System.IO;
 using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
@@ -50,15 +49,17 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { "Model" }, library.Settings.Select(s => s.Key));
         }
 
+        // Since B4's switch the Game Boy's one engine is the discovered library on the generic engine, with no row, whatever name is asked for - see EmuSen_Backend.md §17.10.
         [Fact]
-        public void The_shim_stays_mercuryrts_loader_and_the_game_boy_has_no_engine_row()
+        public void The_game_boy_runs_on_the_generic_engine_and_has_no_engine_row()
         {
             _ = Discovered;
             Assert.Null(CoreCatalog.EngineFor("GB"));
-            Assert.True(CoreCatalog.IsRegisteredEngine(CoreCatalog.MercuryRtEngine));
-            Assert.IsType<MercuryRtCore>(CoreFactory.Create("game.gb", options: TestCores.NoBattery));
+            Assert.False(CoreCatalog.IsRegisteredEngine(CoreCatalog.MercuryRtEngine));
+            Assert.Equal(CoreCatalog.MercuryRtEngine, CoreCatalog.SoleDiscoveredEngine("GB"));
+            Assert.IsType<CoreEngine>(CoreFactory.Create("game.gb", options: TestCores.NoBattery));
             ICore core = CoreFactory.Create("game.gb", engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery);
-            Assert.IsType<MercuryRtCore>(core);
+            Assert.IsType<CoreEngine>(core);
             Assert.Null(CoreFactory.EngineNotice("game.gb", CoreCatalog.MercuryRtEngine, core));
         }
 
@@ -78,7 +79,7 @@ namespace EmuSen.WiseMan.Cores
                 Assert.Equal(CoreCatalog.MercuryRtEngine, engine);
                 Assert.Equal(engine, CoreCatalog.EngineChosen("GB", retired));
                 CoreBundle bundle = CoreFactory.Load(rom, engine: engine, options: TestCores.NoBattery);
-                Assert.IsType<MercuryRtCore>(bundle.Core);
+                Assert.IsType<CoreEngine>(bundle.Core);
                 Assert.Null(bundle.Notice);
                 (bundle.Core as IDisposable)?.Dispose();
                 string[] lines = Directory.Exists(logs) ? Directory.GetFiles(logs).SelectMany(File.ReadAllLines).Where(l => l.Contains(retired + " was retired")).ToArray() : Array.Empty<string>();
@@ -88,41 +89,6 @@ namespace EmuSen.WiseMan.Cores
             {
                 ErrorLog.DirectoryOverride = logsWere;
             }
-        }
-
-        // On a Game Boy and on a Game Boy Color, and with the Model setting forcing the colour console onto a Game Boy game.
-        [Theory]
-        [InlineData(0x00, "Auto")]
-        [InlineData(0x80, "Auto")]
-        [InlineData(0x00, "Game Boy Color")]
-        public void The_v1_adapter_over_mercuryrt_runs_a_game_exactly_as_the_shim(byte cgb, string model)
-        {
-            string rom = Rom("busy.gb", cgb);
-            using var shim = new MercuryRtCore() { Options = TestCores.NoBattery };
-            using var adapter = new CoreEngine(Discovered.Open()!, new System.Collections.Generic.Dictionary<string, string> { ["Model"] = model }) { Options = TestCores.NoBattery };
-            ((ICoreSettings)shim).Set("Model", model);
-            shim.LoadRom(rom);
-            adapter.LoadRom(rom);
-            Assert.Equal((shim.ScreenWidth, shim.ScreenHeight, shim.StateVersion), (adapter.ScreenWidth, adapter.ScreenHeight, adapter.StateVersion));
-            Assert.Equal(shim.FrameRateHz, adapter.FrameRateHz, 9);
-            Assert.Equal(shim.SupportedButtons, adapter.SupportedButtons);
-            for (int f = 0; f < 240; f++)
-            {
-                foreach (ICore core in new ICore[] { shim, adapter })
-                {
-                    core.SetButton(0, PadButton.Start, f % 60 < 4);
-                    core.SetButton(0, PadButton.A, f % 30 < 2);
-                    core.RunFrame();
-                }
-                Assert.Equal(shim.GetFrameBufferRgba(), adapter.GetFrameBufferRgba());
-                Assert.Equal(shim.DequeueAudioSamples(int.MaxValue), adapter.DequeueAudioSamples(int.MaxValue));
-            }
-            var a = new MemoryStream();
-            var b = new MemoryStream();
-            shim.SaveState(a);
-            adapter.SaveState(b);
-            Assert.Equal(a.ToArray(), b.ToArray());
-            Assert.Equal(model == "Auto" && cgb == 0 ? "gb" : "gbc", adapter.Machine.Info.System);
         }
 
         // A state made on the other console changes machine info's system, and the core says so with MACHINE_INFO - see EmuSen_CoreAPI.md §26.

@@ -7,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Crystal.Client;
 using EmuSen.Crystal.Client.Contract;
@@ -174,7 +173,7 @@ namespace EmuSen.WiseMan.Crystal
                 }
                 using var moon = Fixtures.MoonEngines.Create(TestCores.NoBattery);
                 moon.LoadRom(nes);
-                using var mercury = new MercuryRtCore { Options = TestCores.NoBattery };
+                using var mercury = MercuryEngines.Create(TestCores.NoBattery);
                 mercury.LoadRom(gb);
                 using var mars = new MarsRtTestCore { Options = TestCores.NoBattery };
                 mars.LoadRom(n64);

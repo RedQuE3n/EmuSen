@@ -1,6 +1,6 @@
+using EmuSen.Cores.Native;
 using EmuSen.Crystal.Systems.GameBoy;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
 using EmuSen.WiseMan.Fixtures;
@@ -88,7 +88,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var (_, target) = Load(patches: (0, bytes));
 
-            var instruction = target.Disassemble(MercuryRtCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 1)[0];
+            var instruction = target.Disassemble(MercuryEngines.SpaceCpuBus, SyntheticGbRom.EntryPoint, 1)[0];
             Assert.Equal(expected, Text(instruction));
             Assert.Equal(bytes.Length, instruction.Length);
         }
@@ -99,7 +99,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var (_, target) = Load(patches: (0, new byte[] { 0x18, 0xFE }));
 
-            var instruction = target.Disassemble(MercuryRtCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 1)[0];
+            var instruction = target.Disassemble(MercuryEngines.SpaceCpuBus, SyntheticGbRom.EntryPoint, 1)[0];
             Assert.Equal($"JR ${SyntheticGbRom.EntryPoint:X4}", Text(instruction));
         }
 
@@ -109,7 +109,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var (_, target) = Load(patches: (0, new byte[] { 0xE8, 0xFE, 0xF8, 0x02 }));
 
-            var instructions = target.Disassemble(MercuryRtCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 2);
+            var instructions = target.Disassemble(MercuryEngines.SpaceCpuBus, SyntheticGbRom.EntryPoint, 2);
             Assert.Equal("ADD SP,-2", Text(instructions[0]));
             Assert.Equal("LD HL,SP+2", Text(instructions[1]));
         }
@@ -124,7 +124,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var (_, target) = Load(patches: (0, bytes));
 
-            var instruction = target.Disassemble(MercuryRtCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 1)[0];
+            var instruction = target.Disassemble(MercuryEngines.SpaceCpuBus, SyntheticGbRom.EntryPoint, 1)[0];
             Assert.Equal(expected, Text(instruction));
             Assert.Equal(2, instruction.Length);
         }
@@ -134,7 +134,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var (_, target) = Load(patches: (0, new byte[] { 0x00, 0x3E, 0x01, 0xC3, 0x50, 0x01 }));
 
-            var instructions = target.Disassemble(MercuryRtCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 3);
+            var instructions = target.Disassemble(MercuryEngines.SpaceCpuBus, SyntheticGbRom.EntryPoint, 3);
 
             Assert.Equal(SyntheticGbRom.EntryPoint, instructions[0].Address);
             Assert.Equal(SyntheticGbRom.EntryPoint + 1, instructions[1].Address);
@@ -146,7 +146,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var (_, target) = Load(patches: (0, new byte[] { 0xCD, 0x00, 0x40, 0xEA, 0x10, 0xC0, 0xFA, 0x20, 0xC0, 0xE0, 0x47 }));
 
-            var instructions = target.Disassemble(MercuryRtCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 4);
+            var instructions = target.Disassemble(MercuryEngines.SpaceCpuBus, SyntheticGbRom.EntryPoint, 4);
 
             Assert.Equal((StaticReferenceKind.Call, 0x4000), target.ClassifyStaticReference(instructions[0]));
             Assert.Equal((StaticReferenceKind.Write, 0xC010), target.ClassifyStaticReference(instructions[1]));
@@ -160,7 +160,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var (_, target) = Load(patches: (0, new byte[] { 0xE9 }));
 
-            var instruction = target.Disassemble(MercuryRtCore.SpaceCpuBus, SyntheticGbRom.EntryPoint, 1)[0];
+            var instruction = target.Disassemble(MercuryEngines.SpaceCpuBus, SyntheticGbRom.EntryPoint, 1)[0];
             Assert.Null(target.ClassifyStaticReference(instruction));
         }
 
@@ -170,7 +170,7 @@ namespace EmuSen.WiseMan.Cores
             var (_, target) = Load();
 
             string[] names = target.GetMemorySpaces().Select(s => s.Name).ToArray();
-            Assert.Equal(new[] { "ROM", "VRAM", "CARTRAM", "WRAM", "OAM", "HRAM", "CPUBUS" }, names);
+            Assert.Equal(new[] { "ROM", "VRAM", "CARTRAM", "WRAM", "OAM", "HRAM", "CPUBUS", "BGPAL", "OBJPAL" }, names);
 
             var rom = target.GetMemorySpaces().First(s => s.Name == "ROM");
             Assert.False(rom.IsWritable);
@@ -276,10 +276,10 @@ namespace EmuSen.WiseMan.Cores
         {
             var (_, target) = Load();
 
-            Assert.Equal(MercuryRtCore.SpaceVram, target.ResolvePhysical(0x8010)!.Value.Space);
-            Assert.Equal(MercuryRtCore.SpaceWram, target.ResolvePhysical(0xC005)!.Value.Space);
-            Assert.Equal(MercuryRtCore.SpaceOam, target.ResolvePhysical(0xFE04)!.Value.Space);
-            Assert.Equal(MercuryRtCore.SpaceHram, target.ResolvePhysical(0xFF85)!.Value.Space);
+            Assert.Equal(MercuryEngines.SpaceVram, target.ResolvePhysical(0x8010)!.Value.Space);
+            Assert.Equal(MercuryEngines.SpaceWram, target.ResolvePhysical(0xC005)!.Value.Space);
+            Assert.Equal(MercuryEngines.SpaceOam, target.ResolvePhysical(0xFE04)!.Value.Space);
+            Assert.Equal(MercuryEngines.SpaceHram, target.ResolvePhysical(0xFF85)!.Value.Space);
 
             // A banked ROM window depends on live mapper state, so it is reported as unknowable.
             Assert.Null(target.ResolvePhysical(0x4000));
@@ -295,7 +295,8 @@ namespace EmuSen.WiseMan.Cores
             core.RunFrame();
 
             string summary = target.GetSummaryText();
-            Assert.Contains($"GBC ({EngineName})", summary);
+            Assert.Contains("MercuryRT (Rust)", summary);
+            Assert.Contains(", gbc, frame 1", summary);
             Assert.Contains("CGB", summary);
             Assert.Contains("ROM,", summary);
         }
@@ -316,7 +317,7 @@ namespace EmuSen.WiseMan.Cores
                 Assert.IsType(rig.CoreType, bundle.Core);
                 Assert.IsType(rig.TargetType, bundle.DebugTarget);
                 (bundle.Core as IDisposable)?.Dispose();
-                Assert.Equal(("GameShark", MercuryRtCore.SpaceCpuBus), (bundle.CheatAutoDetectCodec!.Name, bundle.CheatAutoDetectCodec.SpaceName));
+                Assert.Equal(("GameShark", MercuryEngines.SpaceCpuBus), (bundle.CheatAutoDetectCodec!.Name, bundle.CheatAutoDetectCodec.SpaceName));
                 Assert.Equal(("Game Genie", CheatCodeKind.RomPatch), (bundle.CheatExplicitCodec!.Name, bundle.CheatExplicitCodec.Kind));
             }
         }

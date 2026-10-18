@@ -194,7 +194,7 @@ namespace EmuSen.WiseMan.Input
         {
             using (var moonRt = Fixtures.MoonEngines.Create()) Assert.Equal(moonRt.SupportedButtons, CoreCatalog.ButtonsFor("NES"));
             Assert.Equal(EmuSen.Crystal.Systems.Snes.SnesSystem.PadButtons, CoreCatalog.ButtonsFor("SNES"));
-            using (var gameBoy = new EmuSen.Cores.Nintendo.MercuryRT.MercuryRtCore()) Assert.Equal(gameBoy.SupportedButtons.Order(), CoreCatalog.ButtonsFor("GB").Order());
+            using (var gameBoy = MercuryEngines.Create()) Assert.Equal(gameBoy.SupportedButtons.Order(), CoreCatalog.ButtonsFor("GB").Order());
             using var marsRt = new MarsRtTestCore();
             Assert.Equal(marsRt.SupportedButtons, CoreCatalog.ButtonsFor("N64"));
         }

@@ -1,3 +1,4 @@
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -7,7 +8,6 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.WiseMan.Fixtures
@@ -204,12 +204,12 @@ namespace EmuSen.WiseMan.Fixtures
             if (!run.Corpus) return;
             trace.Transcript.TryAdd("verdict", $"NoVerdict {run.Frames}");
             trace.Transcript["serial"] = Convert.ToHexString(rig.SerialLog.ToArray());
-            if (HardwareTestRomLibrary.ReadCartRamStatus(i => rig.ReadSpace(MercuryRtCore.SpaceCartRam, i)) is not null)
+            if (HardwareTestRomLibrary.ReadCartRamStatus(i => rig.ReadSpace(MercuryEngines.SpaceCartRam, i)) is not null)
             {
                 var text = new List<byte>();
                 for (int i = 4; i < 0x2000; i++)
                 {
-                    byte b = rig.ReadSpace(MercuryRtCore.SpaceCartRam, i);
+                    byte b = rig.ReadSpace(MercuryEngines.SpaceCartRam, i);
                     if (b == 0) break;
                     text.Add(b);
                 }
@@ -222,7 +222,7 @@ namespace EmuSen.WiseMan.Fixtures
         {
             TestRomVerdict serial = HardwareTestRomLibrary.ReadVerdict(rig.SerialLog);
             if (serial != TestRomVerdict.NoVerdict) return serial.ToString();
-            return HardwareTestRomLibrary.ReadCartRamStatus(i => rig.ReadSpace(MercuryRtCore.SpaceCartRam, i)) is int status ? (status == 0 ? "Passed" : $"Failed({status})") : null;
+            return HardwareTestRomLibrary.ReadCartRamStatus(i => rig.ReadSpace(MercuryEngines.SpaceCartRam, i)) is int status ? (status == 0 ? "Passed" : $"Failed({status})") : null;
         }
 
         // Each instruction's state hashed into a chain, written every StepRow instructions and at the end; an illegal opcode ends the run.

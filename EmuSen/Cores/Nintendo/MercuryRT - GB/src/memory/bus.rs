@@ -392,7 +392,8 @@ impl MemoryBus {
         0xC0 | (select & 0x30) | (low & 0x0F)
     }
 
-    fn read_io(&self, address: u16) -> u8 {
+    /// A CPU read of an I/O register, which disturbs nothing, so the debugger's units read through it too.
+    pub(crate) fn read_io(&self, address: u16) -> u8 {
         match address {
             0xFF00 => self.read_joypad(),
             0xFF01 => self.serial_data,

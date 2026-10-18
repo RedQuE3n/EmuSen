@@ -7,7 +7,6 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
@@ -33,8 +32,8 @@ namespace EmuSen.WiseMan.Cores
         private static readonly (string Core, string Extension, int Frames, Func<ICore> Create)[] Cores =
         {
             ("MoonRT", ".nes", 900, () => MoonEngines.Create(TestCores.NoBattery)),
-            ("MercuryRT", ".gb", 900, () => new MercuryRtCore { Options = TestCores.NoBattery }),
-            ("MercuryRT", ".gbc", 900, () => new MercuryRtCore { Options = TestCores.NoBattery }),
+            ("MercuryRT", ".gb", 900, () => MercuryEngines.Create(TestCores.NoBattery)),
+            ("MercuryRT", ".gbc", 900, () => MercuryEngines.Create(TestCores.NoBattery)),
             ("MarsRT", ".z64", 500, () => new MarsRtTestCore(expansionPak: true) { Options = TestCores.NoBattery }),
         };
 
@@ -109,17 +108,17 @@ namespace EmuSen.WiseMan.Cores
                     {
                         DataStore.OverrideDirectory = Path.Combine(Home, "migrate-" + engine);
                         if (Directory.Exists(DataStore.OverrideDirectory)) Directory.Delete(DataStore.OverrideDirectory, recursive: true);
-                        ICore core = engine switch { "MoonRT" => MoonEngines.Create(), _ => new MercuryRtCore() };
+                        ICore core = engine switch { "MoonRT" => MoonEngines.Create(), _ => MercuryEngines.Create() };
                         core.LoadRom(rom);
-                        string space = nes ? "PRGRAM" : MercuryRtCore.SpaceCartRam;
+                        string space = nes ? "PRGRAM" : MercuryEngines.SpaceCartRam;
                         int matching = 0;
                         for (int i = 0; i < original.Length; i++)
                         {
-                            byte b = core switch { MercuryRtCore m => m.ReadSpace(space, i), EmuSen.Cores.Native.CoreEngine m => m.ReadSpace(space, i), _ => 0 };
+                            byte b = core switch { CoreEngine m => m.ReadSpace(space, i), _ => 0 };
                             if (b == original[i]) matching++;
                         }
                         (core as IDisposable)?.Dispose();
-                        byte[] copy = File.ReadAllBytes(SaveLibrary.SramPathFor(rom, nes ? BatterySave.Nes : BatterySave.GameBoyFolder(rom)));
+                        byte[] copy = File.ReadAllBytes(SaveLibrary.SramPathFor(rom, nes ? BatterySave.Nes : MercuryEngines.SaveFolder(rom)));
                         bool untouched = File.ReadAllBytes(beside).AsSpan().SequenceEqual(original) && File.GetLastWriteTimeUtc(beside) == written;
                         lines.Add($"{engine} {Path.GetFileName(rom)}: copied {copy.AsSpan().SequenceEqual(original)}, RAM matching {matching} of {original.Length}, original untouched {untouched}");
                     }

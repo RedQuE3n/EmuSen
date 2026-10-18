@@ -1,4 +1,4 @@
-using EmuSen.Cores.Nintendo.MercuryRT;
+using EmuSen.Cores.Native;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores

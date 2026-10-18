@@ -1,9 +1,9 @@
-//! MercuryRT on the core ABI v1, beside its pre-stable exports until the v1 adapter is its only loader. The console's
-//! facts its C# shim held are its descriptors here. See EmuSen_CoreAPI.md §13.1, §23.
+//! MercuryRT on the core ABI v1, the host's only way to it since B4 retired its C# shim; the pre-stable exports beside it
+//! serve the native host's tests until that interface goes. See EmuSen_CoreAPI.md §13.1, §23, EmuSen_Backend.md §17.
 
 use emusen_native::core::{
     self as v1, Battery, Button, Choice, Control, Controller, Create, Effect, FrameInfo, Info, Instruction, MachineInfo, Port, Processor, Reference, Region,
-    Scope, Setting, SettingKind, Space, StateFormat, System, Video, caps, status,
+    Scope, Setting, SettingKind, Space, StateFormat, System, UNIT_FIRST_ID, Unit, Video, caps, status,
 };
 
 use super::{BATTERY_SPACE, SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ILLEGAL_OPCODE, STATUS_NULL, STATUS_TOO_SHORT, STATUS_UNKNOWN_MODEL, STATUS_UNSUPPORTED_BOARD, build_rom_patches, rom_patch, serial, step};
@@ -11,7 +11,8 @@ use crate::debug::Hooks;
 use crate::machine::{CPU_CLOCK_HZ, CYCLES_PER_FRAME, Machine, Model, OLDEST_READABLE_VERSION, STATE_VERSION};
 use crate::memory::cartridge::RomError;
 
-/// `MercuryMachine.SpaceNames`, numbered as the ABI numbers them, then the colour palette RAM's two halves, read only (EmuSen_Backend.md §17.2 D5).
+/// The spaces, numbered as the ABI numbers them: the cartridge's ROM is read only, as the shim's target showed it, and so are the colour
+/// palette RAM's two halves after CPUBUS (EmuSen_Backend.md §17.2 D5).
 const SPACES: [&str; 9] = ["ROM", "VRAM", "CARTRAM", "WRAM", "OAM", "HRAM", "CPUBUS", "BGPAL", "OBJPAL"];
 
 /// The CPU's registers as `debug_registers(0)` gives them: the debugger's order, names and widths (EmuSen_Backend.md §17.2 D1).
@@ -33,6 +34,63 @@ const REGISTERS: [(&str, u32); 16] = [
     ("IF", 8),
     ("Cycles", 64),
 ];
+
+/// The units' ids, from 256, in machine info's order; HDMA is listed only in colour mode (EmuSen_Backend.md §17.2 D2, D3, D6, D7).
+const PPU: u32 = UNIT_FIRST_ID;
+const APU: u32 = UNIT_FIRST_ID + 1;
+const TIMER: u32 = UNIT_FIRST_ID + 2;
+const PULSE1: u32 = UNIT_FIRST_ID + 3;
+const PULSE2: u32 = UNIT_FIRST_ID + 4;
+const WAVE: u32 = UNIT_FIRST_ID + 5;
+const NOISE: u32 = UNIT_FIRST_ID + 6;
+const HDMA: u32 = UNIT_FIRST_ID + 7;
+
+/// The PPU's registers as the debugger printed them: STAT as the CPU reads it; the colour mode's five after.
+const PPU_REGISTERS: [(&str, u32); 14] = [
+    ("LCDC", 8),
+    ("STAT", 8),
+    ("SCY", 8),
+    ("SCX", 8),
+    ("LY", 8),
+    ("LYC", 8),
+    ("BGP", 8),
+    ("OBP0", 8),
+    ("OBP1", 8),
+    ("WY", 8),
+    ("WX", 8),
+    ("Mode", 2),
+    ("Dot", 16),
+    ("WindowLine", 8),
+];
+const COLOUR_REGISTERS: [(&str, u32); 5] = [("VBK", 1), ("SVBK", 3), ("BCPS", 8), ("OCPS", 8), ("KEY1", 8)];
+const APU_TAIL: [(&str, u32); 2] = [("Power", 1), ("SeqStep", 3)];
+const TIMER_REGISTERS: [(&str, u32); 4] = [("DIV", 8), ("TIMA", 8), ("TMA", 8), ("TAC", 8)];
+const PULSE_REGISTERS: [(&str, u32); 6] = [("Enabled", 1), ("Dac", 1), ("Duty", 2), ("Freq", 11), ("Vol", 4), ("Len", 8)];
+const SWEEP_REGISTERS: [(&str, u32); 3] = [("SweepPeriod", 3), ("SweepShift", 3), ("SweepNegate", 1)];
+const WAVE_REGISTERS: [(&str, u32); 5] = [("Enabled", 1), ("Dac", 1), ("Freq", 11), ("Vol", 2), ("Len", 9)];
+const NOISE_REGISTERS: [(&str, u32); 7] = [("Enabled", 1), ("Dac", 1), ("Shift", 4), ("Div", 3), ("Short", 1), ("Vol", 4), ("Len", 8)];
+const HDMA_REGISTERS: [(&str, u32); 4] = [("BlocksLeft", 8), ("HBlank", 1), ("Source", 16), ("Destination", 16)];
+
+fn named(list: &[(&str, u32)]) -> Vec<(String, u32)> {
+    list.iter().map(|&(n, b)| (n.to_owned(), b)).collect()
+}
+
+fn unit(id: u32, name: &str, kind: &str, registers: Vec<(String, u32)>) -> Unit {
+    Unit { id, name: name.into(), kind: kind.into(), registers }
+}
+
+/// The sound registers `$FF10`-`$FF26` by their addresses, as the CPU reads them.
+fn sound_names() -> Vec<(String, u32)> {
+    (0xFF10..=0xFF26u16).map(|a| (format!("${a:04X}"), 8)).collect()
+}
+
+fn pulse_values(p: &crate::apu::channels::PulseChannel, sweep: bool) -> Vec<i64> {
+    let mut v = vec![p.enabled as i64, p.dac_enabled as i64, p.duty as i64, p.frequency as i64, p.envelope.volume as i64, p.length.counter as i64];
+    if sweep {
+        v.extend([p.sweep_period as i64, p.sweep_shift as i64, p.sweep_negate as i64]);
+    }
+    v
+}
 
 /// The pad's bits (right, left, up, down, A, B, select, start) in `MercuryCore.PadButtons`' order, the order a bindings screen shows them.
 const PAD: [(u32, Control, &str); 8] = [
@@ -159,7 +217,7 @@ impl v1::Core for Machine {
             spaces: SPACES
                 .iter()
                 .enumerate()
-                .map(|(id, &name)| Space { cheats: id == 3, side_effects: id == 6, reports_stores: (1..=5).contains(&id), read_only: id >= 7, ..Space::new(id as u32, name) })
+                .map(|(id, &name)| Space { cheats: id == 3, side_effects: id == 6, reports_stores: (1..=5).contains(&id), read_only: id == 0 || id >= 7, ..Space::new(id as u32, name) })
                 .collect(),
             processors: vec![Processor { id: 0, name: "CPU".into(), pc_bits: 16, registers: REGISTERS.iter().map(|&(n, b)| (n.to_owned(), b)).collect(), code_space: None }],
             battery: if battery { vec![Battery::game(0, ".srm")] } else { Vec::new() },
@@ -246,7 +304,7 @@ impl v1::Core for Machine {
         if space as usize >= SPACES.len() {
             return Err(status::NO_SUCH_SPACE);
         }
-        if space >= 7 {
+        if space == 0 || space >= 7 {
             return Err(status::READ_ONLY);
         }
         for (i, &b) in data.iter().enumerate() {
@@ -275,6 +333,7 @@ impl v1::Core for Machine {
     fn debug_run_frame(&mut self, flags: u32, detail: &mut u64) -> Result<u32, i32> {
         self.run_frame_debug(flags).map_err(|e| {
             *detail = ((e.opcode as u64) << 16) | e.pc as u64;
+            v1::detail(&format!("opcode ${:02X} at ${:04X} is no SM83's", e.opcode, e.pc));
             STATUS_ILLEGAL_OPCODE
         })
     }
@@ -283,10 +342,58 @@ impl v1::Core for Machine {
         (processor == 0).then_some(self.cpu.pc as u64)
     }
 
-    /// The CPU's sixteen in `REGISTERS`' order, each as the state holds it.
+    /// The PPU, the APU, the timer, the four channels, and HDMA in colour mode.
+    fn units(&self) -> Vec<Unit> {
+        let colour = *self.bus.cgb;
+        let ppu = if colour { named(&[&PPU_REGISTERS[..], &COLOUR_REGISTERS[..]].concat()) } else { named(&PPU_REGISTERS) };
+        let mut units = vec![
+            unit(PPU, "PPU", "video", ppu),
+            unit(APU, "APU", "audio", [sound_names(), named(&APU_TAIL)].concat()),
+            unit(TIMER, "Timer", "timer", named(&TIMER_REGISTERS)),
+            unit(PULSE1, "Pulse 1", "channel", named(&[&PULSE_REGISTERS[..], &SWEEP_REGISTERS[..]].concat())),
+            unit(PULSE2, "Pulse 2", "channel", named(&PULSE_REGISTERS)),
+            unit(WAVE, "Wave", "channel", named(&WAVE_REGISTERS)),
+            unit(NOISE, "Noise", "channel", named(&NOISE_REGISTERS)),
+        ];
+        if colour {
+            units.push(unit(HDMA, "HDMA", "dma", named(&HDMA_REGISTERS)));
+        }
+        units
+    }
+
+    /// The CPU's sixteen in `REGISTERS`' order, each as the state holds it; a unit's in its own order.
     fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
-        if processor != 0 {
-            return Err(status::NOT_SUPPORTED);
+        let (bus, apu) = (&self.bus, &self.bus.apu);
+        let io = |a: u16| bus.read_io(a) as i64;
+        match processor {
+            0 => {}
+            PPU => {
+                let p = &bus.ppu;
+                let mut v = vec![p.lcdc as i64, io(0xFF41), p.scy as i64, p.scx as i64, p.ly as i64, p.lyc as i64, p.bgp as i64, p.obp0 as i64, p.obp1 as i64, p.wy as i64, p.wx as i64];
+                v.extend([p.mode_i32() as i64, p.dot as i64, p.window_line as i64]);
+                if *bus.cgb {
+                    v.extend([bus.vram_bank as i64, bus.wram_bank as i64, io(0xFF68), io(0xFF6A), if bus.double_speed { 0x80 } else { 0 }]);
+                }
+                return Ok(v);
+            }
+            APU => {
+                let mut v: Vec<i64> = (0xFF10..=0xFF26u16).map(io).collect();
+                v.extend([apu.powered_on as i64, apu.sequencer_step as i64]);
+                return Ok(v);
+            }
+            TIMER => return Ok(vec![(bus.div_counter >> 8) as i64, bus.tima as i64, bus.tma as i64, bus.tac as i64]),
+            PULSE1 => return Ok(pulse_values(&apu.pulse1, true)),
+            PULSE2 => return Ok(pulse_values(&apu.pulse2, false)),
+            WAVE => {
+                let w = &apu.wave;
+                return Ok(vec![w.enabled as i64, w.dac_enabled as i64, w.frequency as i64, w.volume_code as i64, w.length.counter as i64]);
+            }
+            NOISE => {
+                let n = &apu.noise;
+                return Ok(vec![n.enabled as i64, n.dac_enabled as i64, n.clock_shift as i64, n.divisor_code as i64, n.short_mode as i64, n.envelope.volume as i64, n.length.counter as i64]);
+            }
+            HDMA if *bus.cgb => return Ok(vec![bus.hdma_blocks_left as i64, bus.hdma_is_h_blank_driven as i64, bus.hdma_source as i64, bus.hdma_destination as i64]),
+            _ => return Err(status::NOT_SUPPORTED),
         }
         let (c, f) = (&self.cpu, self.cpu.f as i64);
         Ok(vec![
@@ -354,18 +461,6 @@ impl v1::Core for Machine {
 }
 
 emusen_native::core_exports!(Machine; audio_peek, mutes, rom_patches, debug, debug_stack, debug_registers, debug_disassemble);
-
-/// `mercuryrt_set_sample_rate` for a machine of the core ABI v1: C#'s `Apu.SetSampleRate`, the division and `Math.Pow`
-/// evaluated by C# so the coefficients are its to the bit (Mercury_Native.md §3.3, EmuSen_CoreAPI.md §26).
-///
-/// # Safety
-/// `machine` must be null or a live handle `emusen_core_create` returned.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mercuryrt_core_set_sample_rate(machine: *mut v1::sys::Machine, cycles_per_sample: f64, charge_factor: f64) -> i32 {
-    let Some(m) = (unsafe { v1::exports::core_of_mut::<Machine>(machine) }) else { return STATUS_NULL };
-    m.bus.apu.set_sample_rate(cycles_per_sample, charge_factor);
-    0
-}
 
 /// `mercuryrt_rom_patch` for a machine of the core ABI v1: the exhaustive patch test's view through the v1 loader.
 ///

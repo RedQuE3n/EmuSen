@@ -15,6 +15,7 @@ namespace EmuSen.Crystal.Systems
         private readonly Lazy<int> _stride;
         private readonly Lazy<IReadOnlyList<InterruptVector>> _vectors;
         private readonly Lazy<IReadOnlyList<string>> _symbols;
+        private readonly Lazy<int> _maxSprites;
 
         public NativeDebugViews(string system, ISystemDebugViews managed)
         {
@@ -27,6 +28,7 @@ namespace EmuSen.Crystal.Systems
             _symbols = new(() => Ask("symbol_names", Array.Empty<IDebugMemorySpace>()) is { } a
                 ? a.Root.GetProperty("names").EnumerateArray().Select(n => n.GetString()!).ToArray()
                 : Managed.SymbolNames);
+            _maxSprites = new(() => Ask("max_sprites", Array.Empty<IDebugMemorySpace>()) is { } a ? a.Root.GetProperty("max_sprites").GetInt32() : Managed.MaxSprites);
         }
 
         // The C# views this one fronts, the failover and the parity class's oracle.
@@ -132,20 +134,80 @@ namespace EmuSen.Crystal.Systems
             return v.ValueKind == JsonValueKind.Null ? null : v.GetInt64();
         }
 
-        // The views no console's library answers yet, the C# views' until a console's fill adds their twins.
-        public int MaxSprites => Managed.MaxSprites;
+        // The units as a view of the library reads them: each one's name and kind, and its registers named with their values.
+        private static void Units(Utf8JsonWriter w, IReadOnlyList<DebugUnit> units)
+        {
+            w.WriteStartArray("units");
+            foreach (DebugUnit u in units)
+            {
+                w.WriteStartObject();
+                w.WriteString("name", u.Name);
+                w.WriteString("kind", u.Kind);
+                Registers(w, u.Registers);
+                w.WriteEndObject();
+            }
+            w.WriteEndArray();
+        }
 
-        public IReadOnlyList<DebugSpriteInfo> Sprites(IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units) => Managed.Sprites(spaces, units);
+        private static bool Crosses(IReadOnlyList<DebugUnit> units) => units.All(u => SystemCode.Takes(u.Name) && SystemCode.Takes(u.Kind) && Crosses("", u.Registers));
 
-        public IReadOnlyList<DebugAudioChannelInfo> AudioChannels(IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units, uint mutes) => Managed.AudioChannels(spaces, units, mutes);
+        private static IReadOnlyList<DebugPaletteInfo> PalettesOf(Answer a) =>
+            a.Root.GetProperty("palettes").EnumerateArray().Select(p => new DebugPaletteInfo(p.GetProperty("index").GetInt32(),
+                p.GetProperty("colors").EnumerateArray().Select(c => (c[0].GetByte(), c[1].GetByte(), c[2].GetByte())).ToArray())).ToArray();
 
-        public PhysicalAddress? ResolvePhysical(int address, IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units) => Managed.ResolvePhysical(address, spaces, units);
+        // A console whose palettes are registers reads the units too; with none the request is the palettes' as before.
+        public IReadOnlyList<DebugPaletteInfo> Palettes(IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units) =>
+            units.Count == 0 ? Palettes(spaces)
+            : Crosses(spaces) && Crosses(units) && Ask("palettes", spaces, w => Units(w, units)) is { } a ? PalettesOf(a) : Managed.Palettes(spaces, units);
+
+        public (byte[] Rgba, int Width, int Height) PaletteSwatch(IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units) =>
+            units.Count == 0 ? PaletteSwatch(spaces)
+            : Crosses(spaces) && Crosses(units) && Ask("palette_swatch", spaces, w => Units(w, units)) is { } a ? Picture(a) : Managed.PaletteSwatch(spaces, units);
+
+        public string DecodeTilemapEntry(IDebugMemorySpace space, int address, IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units) =>
+            units.Count == 0 ? DecodeTilemapEntry(space, address)
+            : Crosses(new[] { space }) && Crosses(units) && Ask("tilemap_entry", new[] { space }, w => { w.WriteString("space", space.Name); w.WriteNumber("address", address); Units(w, units); }) is { } a
+                ? a.Root.GetProperty("text").GetString()!
+                : Managed.DecodeTilemapEntry(space, address, spaces, units);
+
+        public IReadOnlyList<DebugDmaChannel> DmaChannels(IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units) =>
+            units.Count == 0 ? DmaChannels(spaces)
+            : Crosses(spaces) && Crosses(units) && Ask("dma_channels", spaces, w => Units(w, units)) is { } a
+                ? a.Root.GetProperty("channels").EnumerateArray().Select(c => new DebugDmaChannel(c.GetProperty("index").GetInt32(), c.GetProperty("general").GetBoolean(),
+                    c.GetProperty("hdma").GetBoolean(), c.GetProperty("control").GetByte(), c.GetProperty("destination").GetByte(), c.GetProperty("source").GetInt32(),
+                    c.GetProperty("size").GetInt32(), c.GetProperty("hdma_active").GetBoolean(), c.GetProperty("table").GetInt32(), c.GetProperty("line_counter").GetByte(),
+                    c.GetProperty("indirect").GetInt32())).ToArray()
+                : Managed.DmaChannels(spaces, units);
+
+        public int MaxSprites => _maxSprites.Value;
+
+        public IReadOnlyList<DebugSpriteInfo> Sprites(IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units) =>
+            Crosses(spaces) && Crosses(units) && Ask("sprites", spaces, w => Units(w, units)) is { } a
+                ? a.Root.GetProperty("sprites").EnumerateArray().Select(x => new DebugSpriteInfo(x.GetProperty("index").GetInt32(), x.GetProperty("x").GetInt32(), x.GetProperty("y").GetInt32(),
+                    x.GetProperty("width").GetInt32(), x.GetProperty("height").GetInt32(), x.GetProperty("tile").GetInt32(), x.GetProperty("palette").GetInt32(), x.GetProperty("priority").GetInt32(),
+                    x.GetProperty("flip_x").GetBoolean(), x.GetProperty("flip_y").GetBoolean())).ToArray()
+                : Managed.Sprites(spaces, units);
+
+        public IReadOnlyList<DebugAudioChannelInfo> AudioChannels(IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units, uint mutes) =>
+            Crosses(spaces) && Crosses(units) && Ask("audio_channels", spaces, w => { Units(w, units); w.WriteNumber("mutes", mutes); }) is { } a
+                ? a.Root.GetProperty("channels").EnumerateArray().Select(c => new DebugAudioChannelInfo(c.GetProperty("index").GetInt32(), c.GetProperty("name").GetString()!,
+                    c.GetProperty("active").GetBoolean(), c.GetProperty("level").GetInt32(), c.GetProperty("muted").GetBoolean(), c.GetProperty("info").GetString()!)).ToArray()
+                : Managed.AudioChannels(spaces, units, mutes);
+
+        public PhysicalAddress? ResolvePhysical(int address, IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units)
+        {
+            if (!Crosses(spaces) || !Crosses(units) || Ask("physical", spaces, w => { w.WriteNumber("address", address); Units(w, units); }) is not { } a) return Managed.ResolvePhysical(address, spaces, units);
+            JsonElement space = a.Root.GetProperty("space");
+            return space.ValueKind == JsonValueKind.Null ? null : new PhysicalAddress(space.GetString()!, a.Root.GetProperty("offset").GetInt32(), a.Root.GetProperty("addressable").GetBoolean());
+        }
 
         public string? UnitLabel(DebugUnit unit) => Managed.UnitLabel(unit);
 
-        // A summary that reads units is the C# views' until its twin, one that reads only the processor's registers the library's as before.
         public string? Summary(IReadOnlyList<DebugRegisterValue> registers, IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units) =>
-            units.Count > 0 ? Managed.Summary(registers, spaces, units) : Summary(registers);
+            units.Count == 0 ? Summary(registers)
+            : Crosses(spaces) && Crosses(units) && Crosses("", registers) && Ask("summary", spaces, w => { Registers(w, registers); Units(w, units); }) is { } a
+                ? a.Root.GetProperty("text").GetString()
+                : Managed.Summary(registers, spaces, units);
 
         public string? Summary(IReadOnlyList<DebugRegisterValue> registers) =>
             Crosses("", registers) && Ask("summary", Array.Empty<IDebugMemorySpace>(), w => Registers(w, registers)) is { } a ? a.Root.GetProperty("text").GetString() : Managed.Summary(registers);

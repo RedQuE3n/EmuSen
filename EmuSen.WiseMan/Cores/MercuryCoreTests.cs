@@ -1,5 +1,5 @@
+using EmuSen.Cores.Native;
 using EmuSen.Galaxia.Input;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
@@ -45,7 +45,7 @@ namespace EmuSen.WiseMan.Cores
             for (int i = 0; i < 3; i++) core.RunFrame();
 
             Assert.Equal(3, core.TotalFrames);
-            Assert.True(core.Field("Cpu.<Cycles>k__BackingField") >= 3 * MercuryRtCore.CyclesPerFrame);
+            Assert.True(core.Field("Cpu.<Cycles>k__BackingField") >= 3 * MercuryEngines.CyclesPerFrame);
         }
 
         [Fact]
@@ -213,7 +213,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Running_before_a_rom_is_loaded_is_an_error_rather_than_a_crash()
         {
-            Assert.Throws<InvalidOperationException>(() => { using var core = new MercuryRtCore(); core.RunFrame(); });
+            Assert.Throws<InvalidOperationException>(() => { using var core = MercuryEngines.Create(); core.RunFrame(); });
         }
     }
 }

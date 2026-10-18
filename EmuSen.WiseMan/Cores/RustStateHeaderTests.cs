@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
@@ -46,11 +45,11 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void MercuryRT_writes_Mercurys_header()
         {
-            Assert.True(MercuryRtCore.Available, MercuryNative.Report);
-            using var core = new MercuryRtCore();
+            Assert.True(MercuryEngines.Available, MercuryEngines.Report);
+            using var core = MercuryEngines.Create();
             core.LoadRom(Keep(SyntheticGbRom.WriteTemp(SyntheticGbRom.Build())));
-            Assert.Equal((MercuryRtCore.StateMagic, MercuryRtCore.StateFormatVersion), Header(core));
-            Assert.Equal(MercuryRtCore.StateFormatVersion, ((IStateFormat)core).StateVersion);
+            Assert.Equal((MercuryEngines.StateMagic, MercuryEngines.StateFormatVersion), Header(core));
+            Assert.Equal(MercuryEngines.StateFormatVersion, ((IStateFormat)core).StateVersion);
         }
 
         [Fact]

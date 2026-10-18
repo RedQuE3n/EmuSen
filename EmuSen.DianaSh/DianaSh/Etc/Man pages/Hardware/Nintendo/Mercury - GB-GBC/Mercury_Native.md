@@ -3483,7 +3483,11 @@ verbatim from MercuryRT's `state_layout` (`EMUSEN_MERCURY_LAYOUT_RECORD=1` write
 missing). Eighteen are committed, 100 KB: the five boards on each console with the RAM sizes the programs' eleven boards
 use (none with 0 and 8 KB, MBC1 with 8 and 32 KB, MBC2's 512 bytes, MBC3 with 32 KB, MBC5 with none, 32 and 128 KB).
 `Every_board_on_every_console_has_a_committed_listing` runs each of the eleven boards under each model, so a board the
-programs use cannot lack one. `MercuryStateLayoutTests` holds each committed listing to MercuryRT's `state_layout` and to C#'s
+programs use cannot lack one. A cartridge outside the programs could still lack one: Kirby's Dream Land and Super
+Mario Land, MBC1 without RAM, found no listing on 2026-10-18, so twenty-four more were recorded, forty-two in all, and
+`Every_board_ram_size_and_console_has_a_committed_listing` builds a synthetic header for every shape the cores take
+(no MBC, MBC1, MBC3 and MBC5 with RAM codes 0 and 2 to 5, MBC2, each on both consoles), so no commercial image is
+needed to find a missing one. `MercuryStateLayoutTests` holds each committed listing to MercuryRT's `state_layout` and to C#'s
 reflection walk for a cartridge of that shape, and `MercuryStateLayout.StateVersion` to the version both engines write:
 a listing is recorded again when the format moves. When the walk leaves `main`, these files are the format's
 specification (§3.7's third rule).
@@ -3755,3 +3759,24 @@ What moved out of `MercuryRtCore` and `MercuryRtDebugTarget` into MercuryRT's ow
 
 The pre-stable interface (`src/ffi/mod.rs`) was left as it was: it goes with the shim (`EmuSen_Backend.md` §17.7,
 step 8).
+
+## 17. B4: the Game Boy on the generic engine, its shim deleted (2026-10-18)
+
+*The record with its measurements is `EmuSen_Backend.md` §17.10; nothing here changed what the machine emulates, and
+the goldens, the corpus baseline and the kit are as they were.*
+
+- **The host's way to MercuryRT is the generic engine.** `CoreFactory` opens the discovered library for every `.gb`
+  and `.gbc` file, as it opens VenusRT's and MoonRT's; `MercuryRtCore`, `MercuryRtDebugTarget`, `MercuryMachine` and
+  `MercuryNative` are deleted, and with them `EMUSEN_MERCURY_NATIVE`.
+- **What the debugger shows** comes from MercuryRT's own surfaces: the CPU's registers (`DEBUG_REGISTERS`), its units
+  for the PPU, the APU, the timer, the four channels and HDMA (core ABI 1.13), its disassembly (`DEBUG_DISASSEMBLE` on
+  `emusen-sm83`), and the Game Boy pack's views over its spaces and units, in C# and in `emusen-systems` from platform
+  interface 21 (`Mercury_Debug.md`, head note).
+- **The ROM is a read-only space**, a write refused with `READ_ONLY`, as the shim's target showed it.
+- **An illegal opcode** stops a frame with status −20, its detail word `(opcode << 16) | pc` and the words "opcode $XX
+  at $YYYY is no SM83's", on the plain and the observed frame alike; WiseMan's rig turns it into the `IllegalOpcode`
+  the corpus's verdicts and the goldens' transcripts record.
+- **The tests** hold MercuryRT through `Fixtures/MercuryEngines` and `MercuryRig`, both on the generic engine; the rig's
+  `CoreName` is the console the machine runs as, from machine info.
+- **Left** for the step that deletes the pre-stable interface: `src/ffi/mod.rs` and its six `mercuryrt_*` exports,
+  which only `NativeHostTests` still loads.

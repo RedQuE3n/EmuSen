@@ -199,10 +199,9 @@ namespace EmuSen.Cores
             {
                 [Venus.Console] = Crystal.Systems.Snes.SnesSystem.PadButtons,
                 [Moon.Console] = Crystal.Systems.Nes.NesSystem.PadButtons,
-                [Mercury.Console] = Nintendo.MercuryRT.MercuryRtCore.PadButtons,
             };
 
-        // The console's pad with no ROM loaded, or every button for a console this build does not know.
+        // The console's pad with no ROM loaded, from its engine's info where no row names it, or every button for a console this build does not know.
         public static IReadOnlyList<Galaxia.Input.PadButton> ButtonsFor(string console) =>
             ButtonsByConsole.TryGetValue(console, out var buttons) ? buttons
             : (DiscoveredSystem(console) ?? SoleEngineSystem(console)) is { } system && system.Controllers.SelectMany(c => c.Buttons).Select(b => b.Control).OfType<Galaxia.Input.PadButton>().Distinct().ToArray() is { Length: > 0 } pad ? pad
@@ -276,7 +275,6 @@ namespace EmuSen.Cores
         // The settings each console's core offers a frontend, by console, empty for one that offers none - see EmuSen_Multicore.md §13.
         private static readonly Dictionary<string, IReadOnlyList<CoreSetting>> SettingsByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["GB"] = Nintendo.MercuryRT.MercuryRtCore.ModelSettings,
         };
 
         public static IReadOnlyList<CoreSetting> SettingsFor(string console) =>
@@ -338,13 +336,14 @@ namespace EmuSen.Cores
         public const string MarsRtEngine = "MarsRT (Rust)";
 
         // An engine a console runs through its own shim, with no choice beside it, so it has no row - see EmuSen_Settings_Reference.md §4.44.
-        private static readonly string[] SoleEngines = { MercuryRtEngine };
+        private static readonly string[] SoleEngines = Array.Empty<string>();
 
         // A console whose one engine is a discovered v1 engine, opened by the generic branch whatever name is asked for - see VenusRT_Native.md §68.5, EmuSen_Backend.md §23.
         private static readonly Dictionary<string, string> SoleDiscoveredEngines = new(StringComparer.OrdinalIgnoreCase)
         {
             ["SNES"] = VenusRtEngine,
             ["NES"] = MoonRtEngine,
+            ["GB"] = MercuryRtEngine,
             ["N64"] = MarsRtEngine,
         };
 

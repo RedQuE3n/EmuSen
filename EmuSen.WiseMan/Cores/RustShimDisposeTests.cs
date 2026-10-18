@@ -1,8 +1,8 @@
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
@@ -51,8 +51,8 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void MercuryRT_closes_its_lending_when_disposed()
         {
-            Assert.True(MercuryRtCore.Available, MercuryNative.Report);
-            var core = new MercuryRtCore();
+            Assert.True(MercuryEngines.Available, MercuryEngines.Report);
+            var core = MercuryEngines.Create();
             core.LoadRom(Keep(SyntheticGbRom.WriteTemp(SyntheticGbRom.Build())));
             ReturnedAfterDispose(core, core.FrameBuffers);
         }

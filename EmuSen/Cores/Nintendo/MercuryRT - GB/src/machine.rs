@@ -78,7 +78,7 @@ impl Machine {
         } else {
             cpu.reset(*bus.cgb);
         }
-        // C#'s SetSampleRate(44100), divided in doubles (Mercury_Native.md §9.1); the shim passes C#'s own Math.Pow.
+        // C#'s SetSampleRate(44100), divided in doubles, powf giving .NET's Math.Pow to the bit (Mercury_Native.md §9.1, EmuSen_Backend.md §17.2 L5).
         let cycles_per_sample = CPU_CLOCK_HZ as f64 / 44_100.0;
         bus.apu.set_sample_rate(cycles_per_sample, crate::apu::HIGH_PASS_SEED.powf(cycles_per_sample));
         if let Some(old) = old {

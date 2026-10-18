@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 
@@ -53,7 +52,7 @@ namespace EmuSen.WiseMan.Cores
             byte[] rom = RomFor(listing);
             using MercuryRig rust = MercuryRig.Create(rom);
             rust.RunFrame();
-            Assert.Equal(committed, rust.Core.Machine.Core.Layout());
+            Assert.Equal(committed, rust.Core.Machine.Layout());
             Assert.Equal(MercuryLayouts.FileName(MercuryLayouts.Board(rom[0x147]), listing.Contains("-gbc-"), StateLayout.FromText(listing, committed)["Cart.Ram"].Length), listing);
             Assert.Same(MercuryLayouts.Load(Path.Combine(MercuryLayouts.Directory(), listing)), MercuryLayouts.For(rom, rust.State()));
         }
@@ -79,10 +78,36 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(MercuryLayouts.StateVersion, rust.Field("Version"));
         }
 
+        // Each board with each RAM size a header can name, on each console, as a commercial cartridge may be any of them; the commercial classes read through these.
+        public static TheoryData<byte, byte, byte> EveryShape
+        {
+            get
+            {
+                var data = new TheoryData<byte, byte, byte>();
+                foreach (byte cgb in new byte[] { 0x00, 0xC0 })
+                {
+                    foreach (var (plain, withRam) in new (byte, byte)[] { (0x00, 0x08), (0x01, 0x03), (0x11, 0x13), (0x19, 0x1B) })
+                        foreach (byte code in new byte[] { 0x00, 0x02, 0x03, 0x04, 0x05 })
+                            data.Add(code == 0 ? plain : withRam, code, cgb);
+                    data.Add(0x06, 0x00, cgb);
+                }
+                return data;
+            }
+        }
+
+        [Theory]
+        [MemberData(nameof(EveryShape))]
+        public void Every_board_ram_size_and_console_has_a_committed_listing(byte kind, byte ram, byte cgb)
+        {
+            using MercuryRig rust = MercuryRig.Create(SyntheticGbRom.Build(romBanks: 4, cartridgeType: kind, ramSizeCode: ram, cgbFlag: cgb));
+            rust.RunFrame();
+            Assert.Equal(MercuryLayouts.StateVersion, rust.Field("Version"));
+        }
+
         [Fact]
         public void The_listings_describe_the_state_version_mercuryrt_writes()
         {
-            Assert.Equal(MercuryRtCore.StateFormatVersion, MercuryLayouts.StateVersion);
+            Assert.Equal(MercuryEngines.StateFormatVersion, MercuryLayouts.StateVersion);
             Assert.NotEmpty(Listings);
         }
     }

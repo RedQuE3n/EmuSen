@@ -1,9 +1,10 @@
+using EmuSen.Cores.Native;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 
@@ -16,6 +17,9 @@ namespace EmuSen.WiseMan.Cores
 
         public MercuryRtPlatformTests(ITestOutputHelper output) => _output = output;
 
+        // What a real console's output capacitor does to the DAC's standing offset - see Mercury_Apu.md §5.2.
+        private const double HighPassSeed = 0.999958;
+
         private static byte[] Program(string name) => name switch
         {
             "four channels" => SyntheticGbRom.Build(patches: (0, MercuryPrograms.FourChannels)),
@@ -25,12 +29,12 @@ namespace EmuSen.WiseMan.Cores
             _ => throw new ArgumentException(name),
         };
 
-        // Math.Pow's two uses for the mixer, as linux-x64's libm answers them; since D1 the shim sends the second alone (§3.3, §9.4).
+        // Math.Pow's two uses for the mixer, as linux-x64's libm answers them; the second is the one MercuryRT computes for itself (§3.3, §9.4).
         [Fact]
         public void The_high_pass_charge_factors_are_linuxs()
         {
-            long integral = BitConverter.DoubleToInt64Bits(Math.Pow(MercuryRtCore.HighPassSeed, MercuryRtCore.CpuClockHz / 44100));
-            long fractional = BitConverter.DoubleToInt64Bits(Math.Pow(MercuryRtCore.HighPassSeed, MercuryRtCore.CpuClockHz / 44100.0));
+            long integral = BitConverter.DoubleToInt64Bits(Math.Pow(HighPassSeed, MercuryEngines.CpuClockHz / 44100));
+            long fractional = BitConverter.DoubleToInt64Bits(Math.Pow(HighPassSeed, MercuryEngines.CpuClockHz / 44100.0));
             _output.WriteLine($"{RuntimeInformation.RuntimeIdentifier}: pow(seed, 95) {integral:X16}, pow(seed, 95.108) {fractional:X16}");
             Assert.Equal(0x3FEFDF60DC188482L, integral);
             Assert.Equal(0x3FEFDF574D84E421L, fractional);
@@ -43,18 +47,19 @@ namespace EmuSen.WiseMan.Cores
         [InlineData("colour", "D3A2D8F2637085A1BAFD9F981A948D3170B2738889A7F70109ADDA16964B698B", "E293A91DAADF31E4B368DD0D0C2BDE7190D8D5312A4E924370CA4A8F4F180C39", "0DAE338EA80B1AC6D5914FF8035831667C52F57111DF6F38F912A3A1E77FD6B7", "320BA9EE56401C683645F0C0042C8CD2E3A1FDA9637CB7867A3CDAC02192B776")]
         public void Sound_picture_and_state_match_linuxs(string program, string sound, string picture, string state, string stateVersion7)
         {
-            Assert.True(MercuryMachine.Available, MercuryNative.Report);
-            using var rust = new MercuryMachine(Program(program));
+            Assert.True(MercuryEngines.Available, MercuryEngines.Report);
+            using var rust = new CoreMachine(MercuryEngines.Library, Program(program), $"{MercuryEngines.ModelKey}={MercuryEngines.ModelAuto}", new List<(uint, byte[])>());
 
             var digests = new Digests();
-            var frame = new byte[MercuryMachine.FrameBytes];
+            var frame = new byte[MercuryEngines.ScreenWidthPixels * MercuryEngines.ScreenHeightPixels * 4];
             for (int f = 0; f < 600; f++)
             {
-                rust.RunFrame();
+                rust.Advance();
                 rust.CopyFrame(frame);
-                digests.Frame(rust.DrainAudio(int.MaxValue), frame);
+                digests.Frame(rust.DrainAudio(int.MaxValue).Samples, frame);
             }
-            byte[] saved = rust.Save();
+            byte[] saved = new byte[rust.StateSize()];
+            rust.Save(saved);
             digests.State = Convert.ToHexString(SHA256.HashData(saved));
 
             // Version 11 is version 7 with the mixer's 24 bytes, OAM DMA's 4, the sweep's 1 and the frozen LY=LYC bit's 1 after the walks: undone, the state hashes as version 7 would - see Mercury_Native.md §10, §13.

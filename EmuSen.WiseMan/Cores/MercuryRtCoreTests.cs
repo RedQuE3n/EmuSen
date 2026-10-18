@@ -1,9 +1,9 @@
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Crystal.Systems.GameBoy;
@@ -14,7 +14,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // MercuryRtCore through ICore alone: the engine setting, cheats, battery saves, states, the spaces and the debugger's view - see Mercury_Native.md §8.3, §15.
+    // MercuryRT on the generic engine through ICore alone: the engine setting, cheats, battery saves, states, the spaces and the debugger's view - see Mercury_Native.md §8.3, §15.
     [Collection(TestCollections.ProcessGlobals)]
     public class MercuryRtCoreTests : IDisposable
     {
@@ -56,12 +56,13 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_default_engine_builds_mercuryrt()
         {
-            Assert.True(MercuryRtCore.Available, MercuryNative.Report);
+            Assert.True(MercuryEngines.Available, MercuryEngines.Report);
             string rom = Rom("engine", CountingRom(0x03));
             CoreBundle rt = CoreFactory.Load(rom, engine: CoreCatalog.EngineChosen("GB", null));
-            Assert.IsType<MercuryRtCore>(rt.Core);
+            Assert.IsType<CoreEngine>(rt.Core);
             Assert.Null(rt.Notice);
-            Assert.Equal("GB", rt.Core.CoreName);
+            Assert.Equal("MercuryRT", rt.Core.CoreName);
+            Assert.Equal("gb", ((CoreEngine)rt.Core).Machine.Info.System);
             Assert.Equal(4194304.0 / 70224, rt.Core.FrameRateHz);
             (rt.Core as IDisposable)?.Dispose();
         }
@@ -69,9 +70,9 @@ namespace EmuSen.WiseMan.Cores
         // The count the vblank handler keeps after some frames, with the registry given.
         private byte CountAfter(string rom, int frames, CheatRegistry? cheats = null)
         {
-            using var core = (MercuryRtCore)CoreFactory.Load(rom, cheats: cheats, engine: CoreCatalog.MercuryRtEngine).Core;
+            using var core = (CoreEngine)CoreFactory.Load(rom, cheats: cheats, engine: CoreCatalog.MercuryRtEngine).Core;
             for (int f = 0; f < frames; f++) core.RunFrame();
-            return core.ReadSpace(MercuryRtCore.SpaceWram, 0);
+            return core.ReadSpace(MercuryEngines.SpaceWram, 0);
         }
 
         // A RAM poke lands, and a compare-gated ROM patch makes the handler count by three; with the master switch off it counts by one.
@@ -84,16 +85,16 @@ namespace EmuSen.WiseMan.Cores
 
             var cheats = new CheatRegistry();
             cheats.AddRomPatch(0x0300, 0x03, compare: 0x01, "count by three");
-            cheats.AddRamPoke(MercuryRtCore.SpaceCpuBus, 0xC010, 0x5A, "a poke");
-            using var core = (MercuryRtCore)CoreFactory.Load(rom, cheats: cheats, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core;
+            cheats.AddRamPoke(MercuryEngines.SpaceCpuBus, 0xC010, 0x5A, "a poke");
+            using var core = (CoreEngine)CoreFactory.Load(rom, cheats: cheats, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core;
             for (int f = 0; f < 300; f++) core.RunFrame();
-            Assert.Equal((byte)(plain * 3), core.ReadSpace(MercuryRtCore.SpaceWram, 0));
-            Assert.Equal(0x5A, core.ReadSpace(MercuryRtCore.SpaceWram, 0x10));
+            Assert.Equal((byte)(plain * 3), core.ReadSpace(MercuryEngines.SpaceWram, 0));
+            Assert.Equal(0x5A, core.ReadSpace(MercuryEngines.SpaceWram, 0x10));
 
             cheats.MasterEnabled = false;
-            byte before = core.ReadSpace(MercuryRtCore.SpaceWram, 0);
+            byte before = core.ReadSpace(MercuryEngines.SpaceWram, 0);
             for (int f = 0; f < 300; f++) core.RunFrame();
-            Assert.Equal((byte)(before + plain), core.ReadSpace(MercuryRtCore.SpaceWram, 0));
+            Assert.Equal((byte)(before + plain), core.ReadSpace(MercuryEngines.SpaceWram, 0));
             _output.WriteLine($"WRAM count {plain} plain after 300 frames, {(byte)(plain * 3)} by three");
         }
 
@@ -107,13 +108,13 @@ namespace EmuSen.WiseMan.Cores
             new Random(64).NextBytes(saved);
             File.WriteAllBytes(srm, saved);
 
-            using var rt = new MercuryRtCore();
+            using var rt = MercuryEngines.Create();
             rt.LoadRom(rom);
-            Assert.Equal(saved[17], rt.ReadSpace(MercuryRtCore.SpaceCartRam, 17));
+            Assert.Equal(saved[17], rt.ReadSpace(MercuryEngines.SpaceCartRam, 17));
             for (int f = 0; f < 300; f++) rt.RunFrame();
             byte[] written = File.ReadAllBytes(srm);
             Assert.False(written.SequenceEqual(saved), "frame 300's save wrote nothing new");
-            Assert.Equal(rt.ReadSpace(MercuryRtCore.SpaceCartRam, 0), written[0]);
+            Assert.Equal(rt.ReadSpace(MercuryEngines.SpaceCartRam, 0), written[0]);
         }
 
         // A state saved and loaded again resumes into the same future, and a foreign or too old state is refused.
@@ -121,7 +122,7 @@ namespace EmuSen.WiseMan.Cores
         public void A_state_saved_resumes_into_the_same_future()
         {
             string rom = Rom("states", CountingRom(0x1B));
-            using var rt = (MercuryRtCore)CoreFactory.Load(rom, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core;
+            using var rt = (CoreEngine)CoreFactory.Load(rom, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core;
             for (int f = 0; f < 120; f++) rt.RunFrame();
 
             string path = Path.Combine(_dir, "rt.state");
@@ -134,7 +135,7 @@ namespace EmuSen.WiseMan.Cores
 
             Assert.Throws<InvalidDataException>(() => rt.LoadState(new MemoryStream(new byte[] { 0x4D, 0x41, 0x52, 0x54, 5, 0, 0, 0 })));
             Assert.Throws<InvalidDataException>(() => rt.LoadState(new MemoryStream(new byte[] { 0x4D, 0x45, 0x52, 0x43, 4, 0, 0, 0 })));
-            Assert.Throws<InvalidOperationException>(() => { using var unloaded = new MercuryRtCore() { Options = TestCores.NoBattery }; unloaded.RunFrame(); });
+            Assert.Throws<InvalidOperationException>(() => { using var unloaded = MercuryEngines.Create(TestCores.NoBattery); unloaded.RunFrame(); });
         }
 
         private static byte[] State(ICore core)
@@ -163,7 +164,7 @@ namespace EmuSen.WiseMan.Cores
             int disabled = cheats.AddRomPatch(0x2200, 0x77, null, "off");
             cheats.SetEnabled(disabled, false);
 
-            var core = (MercuryRtCore)CoreFactory.Load(Rom("patches", CountingRom(0x03)), cheats: cheats, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core;
+            var core = (CoreEngine)CoreFactory.Load(Rom("patches", CountingRom(0x03)), cheats: cheats, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core;
             core.RunFrame();
             var touched = new HashSet<int> { 0x1123, 0x1124, 0x7FFF, 0x0000, gg, 0x2200 };
             for (int address = 0; address <= 0x7FFF; address++)
@@ -172,11 +173,11 @@ namespace EmuSen.WiseMan.Cores
                 foreach (int original in values)
                 {
                     int want = cheats.TryPatchRom((uint)address, (byte)original, out byte patched) ? patched : -1;
-                    int got = core.Machine.RomPatch(address, (byte)original);
+                    int got = MercuryEngines.RomPatch(core, address, (byte)original);
                     Assert.True(want == got, $"${address:X4} over {original:X2}: TryPatchRom {want}, MercuryRT {got}");
                 }
             }
-            Assert.Equal(-1, core.Machine.RomPatch(0x8000, 0));
+            Assert.Equal(-1, MercuryEngines.RomPatch(core, 0x8000, 0));
             core.Dispose();
         }
 
@@ -185,13 +186,13 @@ namespace EmuSen.WiseMan.Cores
         public void A_second_ports_buttons_are_ignored()
         {
             string rom = Rom("ports", CountingRom(0x03));
-            using var rt = (MercuryRtCore)CoreFactory.Load(rom, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core;
+            using var rt = (CoreEngine)CoreFactory.Load(rom, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core;
             rt.SetButton(1, PadButton.A, true);
             rt.SetButton(0, PadButton.B, true);
             // A v1 engine hands a press to its machine as the next frame starts - see Diamond_Players.md §12.7.
             rt.RunFrame();
-            rt.WriteSpace(MercuryRtCore.SpaceCpuBus, 0xFF00, 0x10);
-            Assert.Equal(0b1101, rt.ReadSpace(MercuryRtCore.SpaceCpuBus, 0xFF00) & 0x0F);
+            rt.WriteSpace(MercuryEngines.SpaceCpuBus, 0xFF00, 0x10);
+            Assert.Equal(0b1101, rt.ReadSpace(MercuryEngines.SpaceCpuBus, 0xFF00) & 0x0F);
         }
 
         // Every named space sized as the board and the console make it, and an unknown one empty - mutant M22 (§8.4).
@@ -201,10 +202,11 @@ namespace EmuSen.WiseMan.Cores
         public void Every_space_has_its_size(byte kind, byte ramCode, int ram)
         {
             byte[] image = SyntheticGbRom.Build(cartridgeType: kind, ramSizeCode: ramCode, patches: (0, new byte[] { 0x18, 0xFE }));
-            using var rt = (MercuryRtCore)CoreFactory.Load(Rom($"spaces-{kind}", image), engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core;
+            using var rt = (CoreEngine)CoreFactory.Load(Rom($"spaces-{kind}", image), engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core;
             for (int i = 0; i < 5; i++) rt.RunFrame();
             var sizes = new Dictionary<string, int> { ["ROM"] = image.Length, ["VRAM"] = 0x2000, ["CARTRAM"] = ram, ["WRAM"] = 0x2000, ["OAM"] = 0xA0, ["HRAM"] = 0x7F, ["CPUBUS"] = 0x10000, ["NOSUCH"] = 0 };
-            foreach (var (space, size) in sizes) Assert.True(size == rt.SpaceSize(space), $"{space}: {rt.SpaceSize(space)}, not {size}");
+            int Size(string name) => rt.Machine.Info.Spaces.FirstOrDefault(s => s.Name == name) is { } s ? (int)rt.Machine.SpaceSize(s.Id) : 0;
+            foreach (var (space, size) in sizes) Assert.True(size == Size(space), $"{space}: {Size(space)}, not {size}");
             Assert.Equal(image[0x150], rt.ReadSpace("ROM", 0x150));
             Assert.Equal(0, rt.ReadSpace("NOSUCH", 0));
         }
@@ -214,11 +216,11 @@ namespace EmuSen.WiseMan.Cores
         {
             string rom = Rom("debug", CountingRom(0x03));
             CoreBundle rt = CoreFactory.Load(rom, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery);
-            var core = (MercuryRtCore)rt.Core;
+            var core = (CoreEngine)rt.Core;
             for (int i = 0; i < 200; i++) core.RunFrame();
             rt.DebugTarget.RefreshProviders();
 
-            var (state, layout) = core.Snapshot();
+            var (state, layout) = MercuryEngines.Snapshot(core);
             var registers = rt.DebugTarget.CpuRegisters.Current.ToDictionary(r => r.Name, r => (long)r.Value);
             Assert.Equal(layout.Get(state, "Cpu.PC"), registers["PC"]);
             Assert.Equal(layout.Get(state, "Cpu.SP"), registers["SP"]);
@@ -228,7 +230,7 @@ namespace EmuSen.WiseMan.Cores
             IDebugMemorySpace wram = rt.DebugTarget.GetMemorySpaces().Single(s => s.Name == "WRAM");
             Assert.Equal(layout.Bytes(state, "Bus.Wram")[0], wram.Read(0));
             wram.Write(0x20, 0x77);
-            Assert.Equal(0x77, core.ReadSpace(MercuryRtCore.SpaceWram, 0x20));
+            Assert.Equal(0x77, core.ReadSpace(MercuryEngines.SpaceWram, 0x20));
             _output.WriteLine(string.Join(",", registers.Select(r => $"{r.Key}={r.Value}")));
             core.Dispose();
         }

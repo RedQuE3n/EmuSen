@@ -1,9 +1,9 @@
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Galaxia.Input;
 using EmuSen.WiseMan.Fixtures;
@@ -20,7 +20,7 @@ namespace EmuSen.WiseMan.Cores
         public MercuryRtDebugTests(ITestOutputHelper output)
         {
             _output = output;
-            Assert.True(MercuryRtCore.Available, MercuryNative.Report);
+            Assert.True(MercuryEngines.Available, MercuryEngines.Report);
 
         }
 
@@ -50,43 +50,36 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0, core.CallStack!.Depth);
         }
 
-        // The registry's stack is pushed down with the tables, so a reset or a load of it is MercuryRT's depth too.
+        // The registry's stack is pushed down with the tables, so a reset of it is the depth the machine steps to.
         [Fact]
         public void The_registrys_stack_is_the_depth_the_machine_stops_at()
         {
             MercuryDebugRig core = Load(CallOnce);
             HaltAt(core, 0x162);
-            var rt = (MercuryRtCore)core.Core;
-            Assert.Equal(1, rt.NativeDepth);
+            Assert.Equal(1, core.CallStack!.Depth);
 
             core.CallStack!.Reset();
             core.Breakpoints.ArmStepToDepth(0);
             core.RunFrame();
 
             Assert.Equal(0x163, core.HaltedAddress);
-            Assert.Equal(0, rt.NativeDepth);
+            Assert.Equal(0, core.CallStack.Depth);
         }
 
-        // The core logs no store until a target listens, and none that no range covers.
+        // A store is logged while a watch covers it, on the generic engine with or without a target, and none once the watch is gone.
         [Fact]
-        public void A_store_is_reported_only_while_a_target_listens()
+        public void A_store_is_reported_while_a_watch_covers_it()
         {
             string rom = Temporary(CountForever);
-            using var rt = new MercuryRtCore();
+            using var rt = MercuryEngines.Create();
             rt.LoadRom(rom);
             int b = rt.Watches.AddWatch("WRAM", 0, 1);
-            rt.RunFrame();
-            Assert.Empty(rt.Watches.GetEvents(b));
-            Assert.False(rt.Listening);
-
-            _ = rt.CreateDebugTarget();
-            Assert.True(rt.Listening);
             rt.RunFrame();
             Assert.NotEmpty(rt.Watches.GetEvents(b));
             Assert.All(Events(rt.Watches, b), e => Assert.Equal(0, e.Item2));
 
             rt.Watches.RemoveWatch(b);
-            Assert.False(rt.Listening);
+            Assert.False(rt.Debug.Armed);
         }
 
         // Every table armed, and every stop one the registry refuses, against the same program run plain.
@@ -120,11 +113,11 @@ namespace EmuSen.WiseMan.Cores
         {
             foreach (string path in Games().Prepend(Temporary(Interrupts)))
             {
-                using var plain = new MercuryRtCore();
+                using var plain = MercuryEngines.Create();
                 plain.LoadRom(path);
-                using var rt = new MercuryRtCore();
+                using var rt = MercuryEngines.Create();
                 rt.LoadRom(path);
-                MercuryRtDebugTarget rtTarget = rt.CreateDebugTarget();
+                CoreDebugTarget rtTarget = rt.CreateDebugTarget();
 
                 int halts = 0;
                 for (int f = 0; f < 900; f++)
@@ -152,9 +145,9 @@ namespace EmuSen.WiseMan.Cores
         // The armed run: MercuryRT with every table armed against MercuryRT plain, every frame, and the registries shown to have recorded.
         private void Armed(string path, string name, int frames)
         {
-            using var plain = new MercuryRtCore();
+            using var plain = MercuryEngines.Create();
             plain.LoadRom(path);
-            using var rt = new MercuryRtCore();
+            using var rt = MercuryEngines.Create();
             rt.LoadRom(path);
             _ = rt.CreateDebugTarget();
             BreakpointRegistry bp = rt.Breakpoints;
@@ -165,8 +158,8 @@ namespace EmuSen.WiseMan.Cores
             bp.AddDataBreakpoint("WRAM", 0, 0xFF, 0x100, onRead: false, changedOnly: false, condition: null);
             bp.AddDataBreakpoint("HRAM", 0, 0x7E, 0x100, onRead: false, changedOnly: false, condition: null);
             bp.ArmDepthGuard(512);
-            rt.Coverage.Arm();
-            rt.CallStack.ArmProfiler();
+            rt.Debug.Coverage[0].Arm();
+            rt.Debug.CallStack.ArmProfiler();
             int[] watches = { rt.Watches.AddWatch("WRAM", 0, 0x1000), rt.Watches.AddWatch("HRAM", 0, 0x7F), rt.Watches.AddWatch("OAM", 0, 0xA0), rt.Watches.AddWatch("VRAM", 0, 0x2000), rt.Watches.AddWatch("cartram", 0, 0x2000) };
 
             for (int f = 0; f < frames; f++)
@@ -180,11 +173,11 @@ namespace EmuSen.WiseMan.Cores
                 Assert.True(plain.DequeueAudioSamples(int.MaxValue).AsSpan().SequenceEqual(rt.DequeueAudioSamples(int.MaxValue)), $"{name}, frame {f}: sound differs");
             }
 
-            Assert.True(rt.Coverage.InstructionsRecorded > 0, $"{name}: nothing recorded");
-            Assert.Equal(rt.Coverage.InstructionsRecorded, rt.CallStack.ProfiledInstructions);
+            Assert.True(rt.Debug.Coverage[0].InstructionsRecorded > 0, $"{name}: nothing recorded");
+            Assert.Equal(rt.Debug.Coverage[0].InstructionsRecorded, rt.Debug.CallStack.ProfiledInstructions);
             long stored = watches.Sum(w => rt.Watches.GetEventCounts(w).Total);
-            _output.WriteLine($"{name}: {frames} frames armed, identical to plain; {rt.Coverage.InstructionsRecorded} steps recorded and charged, {stored} stores watched, " +
-                              $"{rt.Breakpoints.LogEntriesRecorded} logpoint passes, {rt.Coverage.EntryPointCount} entry points, depth {rt.CallStack.Depth}, {rt.CallStack.UnmatchedReturns} unmatched returns");
+            _output.WriteLine($"{name}: {frames} frames armed, identical to plain; {rt.Debug.Coverage[0].InstructionsRecorded} steps recorded and charged, {stored} stores watched, " +
+                              $"{rt.Breakpoints.LogEntriesRecorded} logpoint passes, {rt.Debug.Coverage[0].EntryPointCount} entry points, depth {rt.Debug.CallStack.Depth}, {rt.Debug.CallStack.UnmatchedReturns} unmatched returns");
         }
 
         private static IEnumerable<string> Games()

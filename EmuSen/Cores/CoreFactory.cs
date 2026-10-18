@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using EmuSen.Crystal.Systems.GameBoy;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Galaxia.Models;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
@@ -32,7 +30,7 @@ namespace EmuSen.Cores
         {
             ".smc" or ".sfc" => throw Missing("SNES", CoreCatalog.VenusRtEngine),
             ".nes" => throw Missing("NES", CoreCatalog.MoonRtEngine),
-            ".gb" or ".gbc" => GameBoy(options ?? CoreOptions.Default),
+            ".gb" or ".gbc" => throw Missing("Game Boy", CoreCatalog.MercuryRtEngine),
             ".z64" or ".n64" or ".v64" => throw Missing("N64", CoreCatalog.MarsRtEngine),
             var other => throw new NotSupportedException(
                 $"No core in this build handles '{other}' - see CoreCatalog for what is registered."),
@@ -42,9 +40,6 @@ namespace EmuSen.Cores
         private static NotSupportedException Missing(string console, string engine) =>
             new($"This build has no {console} core: {engine} is missing ({Native.CoreDiscovery.ByEngineName(engine)?.Report ?? "no sidecar for it was found beside the program"}).");
 
-        // MercuryRT, the Game Boy's one engine; a build without its library says so rather than running nothing - see Mercury_Native.md §15.4.
-        private static ICore GameBoy(CoreOptions options) => MercuryRtCore.Available ? new MercuryRtCore { Options = options }
-            : throw new NotSupportedException($"This build has no Game Boy core: {CoreCatalog.MercuryRtEngine} is missing ({MercuryNative.Report}).");
 
         // What consoles.json holds for the console the file runs as, so a setting read only at create reaches the machine - see EmuSen_Settings_Reference.md §4.90.
         private static IReadOnlyDictionary<string, string> StoredSettings(string romPath, Native.CoreLibrary library)
@@ -150,7 +145,6 @@ namespace EmuSen.Cores
         // The catalog's name for the engine that is running: a notice's, and the one a save state's record keeps.
         public static string Running(ICore core) => core switch
         {
-            MercuryRtCore => CoreCatalog.MercuryRtEngine,
             Native.CoreEngine v1 => v1.Info.DisplayName,
             _ => core.CoreName,
         };
@@ -163,14 +157,6 @@ namespace EmuSen.Cores
 
             switch (core)
             {
-                // The Game Boy's codecs, and MercuryRT's target: its state through the layout listing for what it shows, the core's hooks for what halts - see Mercury_Native.md §15.2.
-                case MercuryRtCore mercuryRt:
-                    return new CoreBundle(
-                        mercuryRt,
-                        mercuryRt.CreateDebugTarget(),
-                        GameBoyCheatCodecs.GameShark(),
-                        GameBoyCheatCodecs.GameGenie(),
-                        null);
 
                 // Any v1 engine: the generic target, and the codecs of its system's pack - see EmuSen_CoreAPI.md §19.
                 case Native.CoreEngine v1:

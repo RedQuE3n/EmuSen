@@ -308,39 +308,14 @@ case on mercuryrt
 target mercuryrt
 covers 1-2
 $ eval symbols
-out 420
-  $FF10
-  $FF11
-  $FF12
-  $FF13
-  $FF14
-  $FF15
-  $FF16
-  $FF17
-  $FF18
-  $FF19
-  $FF1A
-  $FF1B
-  $FF1C
-  $FF1D
-  $FF1E
-  $FF1F
-  $FF20
-  $FF21
-  $FF22
-  $FF23
-  $FF24
-  $FF25
-  $FF26
+out 707
   A
+  apu.Power
+  apu.SeqStep
   BC
-  BGP
-  Board:ROM
   C
   Cycles
   DE
-  DIV
-  Dot
   F
   frame
   H
@@ -349,26 +324,55 @@ out 420
   IE
   IF
   IME
-  LCDC
-  LY
-  LYC
-  Mode
   N
-  OBP0
-  OBP1
+  noise.Dac
+  noise.Div
+  noise.Enabled
+  noise.Len
+  noise.Shift
+  noise.Short
+  noise.Vol
   PC
-  Power
-  SCX
-  SCY
-  SeqStep
+  ppu.BGP
+  ppu.Dot
+  ppu.LCDC
+  ppu.LY
+  ppu.LYC
+  ppu.Mode
+  ppu.OBP0
+  ppu.OBP1
+  ppu.SCX
+  ppu.SCY
+  ppu.STAT
+  ppu.WindowLine
+  ppu.WX
+  ppu.WY
+  pulse1.Dac
+  pulse1.Duty
+  pulse1.Enabled
+  pulse1.Freq
+  pulse1.Len
+  pulse1.SweepNegate
+  pulse1.SweepPeriod
+  pulse1.SweepShift
+  pulse1.Vol
+  pulse2.Dac
+  pulse2.Duty
+  pulse2.Enabled
+  pulse2.Freq
+  pulse2.Len
+  pulse2.Vol
   SP
-  STAT
-  TAC
-  TIMA
-  TMA
-  WindowLine
-  WX
-  WY
+  stackdepth
+  timer.DIV
+  timer.TAC
+  timer.TIMA
+  timer.TMA
+  wave.Dac
+  wave.Enabled
+  wave.Freq
+  wave.Len
+  wave.Vol
   Z
 status 0
 action none

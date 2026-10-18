@@ -10,7 +10,6 @@ using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
-using EmuSen.Cores.Nintendo.MercuryRT;
 
 namespace EmuSen.WiseMan.Cores
 {
@@ -134,7 +133,7 @@ namespace EmuSen.WiseMan.Cores
 
         private static ICore GameBoy()
         {
-            var core = new MercuryRtCore();
+            var core = MercuryEngines.Create();
             core.LoadRom(SyntheticGbRom.WriteTemp(GbRom));
             return core;
         }

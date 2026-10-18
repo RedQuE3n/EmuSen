@@ -22,7 +22,7 @@ namespace EmuSen.Cores.Native
         {
             _engine = engine;
             CpuRegisters = Processors().Count > 0 ? RegistersOf(Processors()[0]) : NoRegisters;
-            Palettes = new ViewRing<IReadOnlyList<DebugPaletteInfo>>(this, (v, s, u) => v.Palettes(s), Array.Empty<DebugPaletteInfo>()).Provider;
+            Palettes = new ViewRing<IReadOnlyList<DebugPaletteInfo>>(this, (v, s, u) => v.Palettes(s, u), Array.Empty<DebugPaletteInfo>()).Provider;
             Sprites = new ViewRing<IReadOnlyList<DebugSpriteInfo>>(this, (v, s, u) => v.Sprites(s, u), Array.Empty<DebugSpriteInfo>()).Provider;
             AudioChannels = new ViewRing<IReadOnlyList<DebugAudioChannelInfo>>(this, (v, s, u) => v.AudioChannels(s, u, _mutes), Array.Empty<DebugAudioChannelInfo>()).Provider;
             HardwareLoad = new RingProvider<double, IReadOnlyList<DebugLoadInfo>>(16, FillLoad, BuildLoad);
@@ -87,6 +87,7 @@ namespace EmuSen.Cores.Native
             private readonly Func<ISystemDebugViews, IReadOnlyList<IDebugMemorySpace>, IReadOnlyList<DebugUnit>, T> _view;
             private readonly T _none;
             private CoreMachine? _of;
+            private CoreMachineInfo? _info;
             private ISystemDebugViews? _views;
             private ViewSpaceCopy _spaces = ViewSpaceCopy.None;
             private ViewSpaceCopy.Reader? _read;
@@ -104,7 +105,7 @@ namespace EmuSen.Cores.Native
             private int Fill(byte[] slot)
             {
                 CoreMachine? machine = _target._engine.IsRomLoaded ? _target._engine.Machine : null;
-                if (!ReferenceEquals(machine, _of)) Learn(machine);
+                if (!ReferenceEquals(machine, _of) || !ReferenceEquals(machine?.Info, _info)) Learn(machine);
                 if (machine is null || _views is null || _read is null) return 0;
                 int total = _spaces.Total + 8 * _registers;
                 if (total > slot.Length) return total;
@@ -124,6 +125,7 @@ namespace EmuSen.Cores.Native
             private void Learn(CoreMachine? machine)
             {
                 _of = machine;
+                _info = machine?.Info;
                 _views = _target.Views;
                 _registers = machine?.Info.Units.Sum(u => u.Registers.Count) ?? 0;
                 _scratch = new long[machine?.Info.Units.Select(u => u.Registers.Count).DefaultIfEmpty(0).Max() ?? 0];
@@ -224,7 +226,7 @@ namespace EmuSen.Cores.Native
         }
 
         public (byte[] Rgba, int Width, int Height) RenderTileSheet() => Views?.TileSheet(ViewSpaces()) ?? (Array.Empty<byte>(), 0, 0);
-        public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => Views?.PaletteSwatch(ViewSpaces()) ?? (Array.Empty<byte>(), 0, 0);
+        public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => Views?.PaletteSwatch(ViewSpaces(), LiveUnits()) ?? (Array.Empty<byte>(), 0, 0);
 
         public (short[] Samples, int SampleRate) GetAudioSamples() => _engine.IsRomLoaded ? (_engine.Machine.PeekAudio(), _engine.AudioSampleRate) : (Array.Empty<short>(), 0);
 

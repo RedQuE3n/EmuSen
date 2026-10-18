@@ -7395,3 +7395,131 @@ the SNES's rows and the retired name's, as in §68.6.
 
 **Measured on 2026-10-16 on the merged tree**: the whole solution builds; the blast radius of §68.6 with every Moon
 class and the whole window-fit audit added, 2,394 cases, 2,386 passed and 8 opt-in skipped.
+
+## 69. The stereo sample handed over whole: a frame's end between the DSP's cycles 26 and 27 (2026-10-18)
+
+### 69.1 The report
+
+The tester heard "a weird audio burp in the background" in *Bishoujo Senshi Sailor Moon: Another Story* (the English
+fan translation, a 4 MB HiROM image) on the handheld, in Mistress on VenusRT at WiseMan fb845b80, and saved a state
+during it at 23:24 on 2026-10-17: a dialogue scene ("Monster...?!") with the music playing and no input. The state is a
+VNRT version 22 state at frame 348,258. Neither the image nor the state is in the tree; both stay in the probe folder.
+
+### 69.2 The two places separated
+
+**The frontend's path was ruled out first, by the log and by the core's own output.** The session's `general.log`
+(copied from the handheld after it was flushed) holds 286 `[fps]` lines and nothing else: 60.1 frames a second with
+2 to 3 ms of emulation a frame throughout, except two lines at 19 and 18 frames a second about two minutes in, which
+fit the menu opened for the save (argued), and the last, where the game was closed. The audio player writes no underrun line (`AudioPlayer.cs` has no
+logger), so the log's silence on underruns is not evidence by itself; what settles it is that the defect below is in
+the samples the core hands over, before any resampling, and depends only on the machine's state.
+
+**The core's raw output**, recorded from the state headlessly with `examples/audio_dump.rs` (the S-DSP's own 32 kHz
+pairs as a WAV, with each frame's first pair and count), was compared with the stream the DSP actually produced,
+collected by a probe that keeps a sample left over at a frame's end for the next frame instead of discarding it. The
+two machines' states were first shown identical after each of ten frames, whether the APU was caught up only at each
+frame's end or after every S-CPU instruction (measured), so the probe changes the collection and not the emulation.
+Over the state's first 3,600 frames the two streams differ: **the frame-end hand-off lost 113 stereo pairs, and for
+each a whole frame went out with its channels swapped** (measured).
+
+### 69.3 The mechanism
+
+The DSP made the left sample at cycle 26 and the right at cycle 27, each pushed on its own into the S-SMP's sample
+buffer (`dsp.rs` at 393408e0: steps 26 and 27 at lines 496-498, the push at line 720). The SPC700 runs behind the S-CPU
+and is caught up an instruction at a time (§21.3); at a frame's end `finish_frame` catches it up, takes the buffer two
+samples at a time with `chunks_exact(2)` and clears it (`machine.rs` lines 180-190). When the catch-up stops between
+cycles 26 and 27, which happens at about one frame end in 32 because the stop falls anywhere in the 32-cycle sample,
+the buffer holds an odd count: the lone left sample is dropped by `chunks_exact` and erased by `clear`. The next frame's
+buffer then starts with that sample's right half, so every pair of the frame is (right, next left), the channels
+swapped and half a sample late; its count is odd as well, and its last right sample is dropped in turn, which puts the
+frame after it back in order. So each such frame end costs one pair and swaps one whole frame.
+
+In this scene the swap is loud because the music is wide: voices 1 and 2 are panned 14:2 and 1:14, and the echo adds
+to both sides, so the left and right channels correlate at only 0.60 over the minute and their difference has nearly
+the level of either (RMS 3,026 against 3,310, measured). At the first sample of a swapped frame the jump in either
+channel has a median of 2,118 and a 90th percentile of 5,648, against a median sample-to-sample step of 332 and a 99th
+percentile of 2,050 in the true stream; the frame's 16.7 ms then plays with the stereo image reversed and ends with a
+second jump. That pair of clicks around a reversed frame, about twice a second at irregular times, is the burp
+(argued from the measurement; the recordings are in the probe folder for the tester to hear). **In the state's
+playback** the swapped frames are 348,261, 348,265, 348,309, 348,322, 348,344, 348,368, ... (0.05, 0.12, 0.85, 1.06,
+1.43 and 1.83 seconds after the load), 113 in the first minute, a mean of 0.53 seconds apart.
+
+It is not this game's: it has been in every VenusRT run since the DSP was built (§22, 2026-10-02), in every game,
+and its loudness depends only on how far the two channels differ. A game whose music is close to mono hides it. The
+fan translation could not be compared with the Japanese original, which the library does not hold; since the defect is
+in the frame's hand-off and not in anything the sound program does, the comparison would not change the finding.
+
+**Why the sound comparisons of §22.3 and §23.3 did not see it:** both folded the two channels to mono before
+comparing, and a channel swap vanishes in a mono sum; one pair lost every 32 frames or so is well inside §23.3's lag
+search. A comparison that keeps the channels apart is the check that would have caught it.
+
+### 69.4 The referee and the fix
+
+SNES_MiSTer computes the two halves at different steps, as anomie places them, `OUTL` at `VS_EVOLL` and `OUTR` at
+`VS_EVOLR` (`rtl/DSP.vhd` lines 1058-1071), and hands them out together: `AUDIO_L`, `AUDIO_R` and `SND_RDY` are set in
+one clock at step 31 (lines 1324-1329). The pair leaves the chip as one unit, which is also what a frontend's queue of
+interleaved pairs assumes.
+
+**The fix gives the DSP that rule.** `output` keeps the left sample in `Dsp::left` at cycle 26 and pushes both halves at
+cycle 27, so the S-SMP's buffer only ever holds whole pairs and `finish_frame`'s two-at-a-time take is exact. The
+DSP's timing is unchanged: each half is computed at its own cycle, from the registers as they stand then. `left` is
+packed into two of the `DspCore` block's spare bytes (82 of its 96 global bytes were used, 84 now), so the layout and
+the state's size are unchanged and the version stays 22: a state written before reads zero there, and a state saved at
+a frame end between cycles 26 and 27 now carries the pending sample, so loading it sounds the same pair. A state from
+before the fix saved at such a frame end loses that one left half (a zero for one sample); it can no longer swap
+channels, because the pairing is now made inside the DSP. `left` is cleared once it is pushed, so a state differs from
+the old build's only at such frame ends, and only when that left sample is not zero.
+
+### 69.5 The tests
+
+- `every_stereo_sample_reaches_the_queue_whole_and_in_its_channels` (`machine.rs`): a machine idling on a LoROM loop
+  whose DSP plays voice 0 hard left from a looping BRR block, run 300 frames through `run_frame`. It requires that at
+  least one frame ended between cycles 26 and 27, that no right sample is ever non-zero and that the queue holds one
+  pair for every cycle 27 the DSP ran. **Before the fix it failed with 3,192 left samples in the right channel**, six
+  swapped frames of 532 pairs (measured); after, it passes.
+- `a_state_saved_between_the_left_and_right_samples_keeps_the_pair`: runs to a frame end between the two cycles, saves,
+  loads into a fresh machine and requires both to drain the same next frame. With the fix but without `left` in the
+  state, it fails (measured), so it guards the packed field.
+
+The crate's 145 tests pass. The recorded Sailor Moon stream through `run_frame` with the fix equals the probe's
+true-output stream sample for sample, 1,916,843 pairs over 3,600 frames (measured).
+
+### 69.6 The goldens re-recorded (measured 2026-10-18)
+
+Graded with the fix before re-recording, 23 of `VenusGoldenTests`' 24 cases failed. Every synthetic program, every
+board's random code and the games failed first on a sound digest, and each first difference was the same: a silent
+frame of 532 pairs (`8378CF66AF72B7B2`) became one of 533 (`85A96A80013E9F6C`), the pair the old hand-off lost; wherever
+the grader reported it, the state at frame 300 was byte for byte the one recorded. The corpus failed on 294 of its 295 chains, the four
+broken-trace checks failed because the digest they break was no longer the first difference, and the baseline check
+failed on the missing traces of the last paragraph below. The traces were recorded again with the reason "the S-DSP hands its stereo sample over whole (section
+69)", then graded: **all 24 cases pass.** What changed, digest by digest, with the old trace expanded against the new:
+
+| Runs | Traces changed | Sound digests | State digests | Picture digests | Verdicts |
+|---|---|---|---|---|---|
+| `programs/` | 10 of 10 | 130 | 0 | 0 | — |
+| `random/` | 48 of 48 | 357 | 0 | 0 | — |
+| `games/` | 6 of 6 | 667 | 554 | 0 | — |
+| `corpus/` | 186 tracked | 11,397 chained rows | (folded into the chain) | (folded) | 0 changed |
+
+No picture digest changed anywhere, which is the check that the fix moved nothing but the sound's hand-off. The state
+digests that changed are the games' frames whose end fell between cycles 26 and 27 with a non-zero left sample, 81 to
+103 in each game's 3,600 frames, about one in 38 (one in 32 frame ends, less those whose left sample is zero); the
+synthetic programs and random code, silent at those frame ends, changed no state. Each sound digest that changed is a
+frame that lost a pair, the frame that was swapped after it, or both.
+
+**Found on the way, not changed here:** 108 of the 295 corpus traces lie under `bin/` folders, which the repository's
+`.gitignore` (line 2, `bin/`) keeps out of the tree. The recording writes them, so `No_corpus_verdict_is_worse_than_
+the_csharp_baseline` passes on a machine that has recorded the corpus, but on a fresh checkout it fails at the first of
+them ("`src/undisbeliever-snes-test-roms/bin/65816-examples/arguments-after-jsr.sfc` is in the baseline and has no
+golden"), as it did on WiseMan before this change. An exception for `EmuSen.WiseMan/Cores/VenusGoldens/` in
+`.gitignore` and the 108 traces committed would close it.
+
+`VenusRtGoldenTests.The_goldens_against_Mesen`, run with the library and the player's firmware, fails on six anchors,
+Super Mario Kart's three and F1 ROC II's three: each picture still equals Mesen's within the window, at lags of 0 to
+−3 frames, but its hash is not the one recorded. The same six hashes come out of the build before the fix (measured on
+both), so the fix does not cause it; the open-replacement runs of those two games in `games/` changed no picture.
+
+**The tests run for this change** (measured 2026-10-18): the crate's 145; `VenusGoldenTests`, 24 of 24 after the
+re-recording; and the blast radius in WiseMan, `AudioDrainTests`, `VenusRtCoreAbiTests`, `VenusRtDebugTests`,
+`VenusRtDebugViewTests`, `VenusRtTestRomRunnerTests`, `VenusRtEngineTests`, `SnesSystemPackTests` and
+`VenusRtGoldenTests`, 88 cases, 87 passed and the Mesen goldens failed as above.

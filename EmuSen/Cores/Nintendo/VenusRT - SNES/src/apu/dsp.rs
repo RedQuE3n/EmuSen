@@ -144,6 +144,8 @@ pub struct Dsp {
     pub echo_ptr: u16,
     pub echo_offset: u16,
     pub echo_length: u16,
+    /// The left sample made at cycle 26, held until the right one at 27 so that the pair leaves whole (§69).
+    pub left: i16,
 }
 
 impl Default for Dsp {
@@ -181,6 +183,7 @@ impl Default for Dsp {
             echo_ptr: 0,
             echo_offset: 0,
             echo_length: 0,
+            left: 0,
         }
     }
 }
@@ -261,6 +264,7 @@ impl Dsp {
                 p.put(&v.to_le_bytes());
             }
         }
+        p.put(&self.left.to_le_bytes());
         let used = p.1;
         p.0[used..].fill(0);
     }
@@ -310,6 +314,7 @@ impl Dsp {
                 *v = u.u16() as i16;
             }
         }
+        self.left = u.u16() as i16;
     }
 
     pub fn read(&self, address: u8) -> u8 {
@@ -717,7 +722,12 @@ impl Dsp {
         if self.regs[reg::FLG] & 0x40 != 0 {
             sample = 0;
         }
-        out.push(sample as i16);
+        if side == 0 {
+            self.left = sample as i16;
+        } else {
+            out.extend([self.left, sample as i16]);
+            self.left = 0;
+        }
         self.main[side] = 0;
         if side == 0 {
             self.t_efb = self.regs[reg::EFB] as i8;

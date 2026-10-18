@@ -102,6 +102,29 @@ namespace EmuSen.WiseMan.Input
             Assert.Equal((2, 1), (PlayerOf(m, builtIn), PlayerOf(m, xbox)));
         }
 
+        // The press that started the game is the interface's: the built-in controls still holding it take nothing from the Xbox pad, and claim once pressed again - see EmuSen_Input.md §8.13.8.
+        [Fact]
+        public void A_button_held_as_the_game_starts_claims_nothing_until_it_is_pressed_again()
+        {
+            SimulatedPad builtIn = BuiltIn(), xbox = Xbox();
+            builtIn.Press(SDL.GamepadButton.South);
+            (GamepadManager m, _, PortRouter router, _, List<PadConnection> claims) = Game(2, claim: true, externalFirst: true, builtIn, xbox);
+            Assert.Equal((2, 1), (PlayerOf(m, builtIn), PlayerOf(m, xbox)));
+
+            router.PollPads();
+            router.PollPads();
+            Assert.Empty(claims);
+            Assert.False(m.PlayerOneClaimed);
+            Assert.Equal((2, 1), (PlayerOf(m, builtIn), PlayerOf(m, xbox)));
+
+            builtIn.Release(SDL.GamepadButton.South);
+            router.PollPads();
+            builtIn.Press(SDL.GamepadButton.East);
+            router.PollPads();
+            PadConnection claim = Assert.Single(claims);
+            Assert.Equal(("Legion Go S", 1), (claim.Pad.Name, claim.Player));
+        }
+
         // What the game heard before 2026-10-17, kept for a player who arranges the seats by hand.
         [Fact]
         public void With_claims_off_the_players_are_the_order_the_pads_connected()

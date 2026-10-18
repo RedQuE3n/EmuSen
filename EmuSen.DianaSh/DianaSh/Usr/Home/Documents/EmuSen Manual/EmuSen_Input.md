@@ -854,7 +854,8 @@ Stated as a player would be told them:
 1. **In a game, the first pad a button is pressed on is player 1.** The next pad pressed is player 2, and so on. A
    press is any button held, or a trigger past half its travel, as the Preferences rows light a pad
    (`ConnectedPad.AnyPressed`, one definition for both). A pad that becomes player 1 this way trades seats with the pad
-   that was player 1, by §8.2 rule 6's trade, so nobody is left without a seat.
+   that was player 1, by §8.2 rule 6's trade, so nobody is left without a seat. A button still held from the press
+   that started the game is not a press in the game: that pad claims once it has let go and pressed again (§8.13.8).
 2. **The players then hold for the rest of the game.** A pad that has claimed its player keeps it. A restart
    (Restart Game) keeps the players; a new game, or the same game started again from the library, asks again.
 3. **A player is changed mid-game only on purpose:** *Swap Players 1 and 2* in the pad menu's Game Settings, or a
@@ -962,7 +963,7 @@ and the device parity tests compare both halves' readings of them.
 |---|---|
 | `MultiplayerTests.The_pad_pressed_first_in_a_game_is_player_1_whichever_connected_first` | the report: failed on 6cc427b3 (`(0, 4096)`), passes; the first pad not known as built-in |
 | `MultiplayerTests.On_a_handheld_the_notice_names_the_player_an_external_pad_took` (3 cases) | through Mistress's poll: the handheld setting on seats the Xbox pad as player 1 as it connects; off, the notice's two remedies, and the game's ports with the press rule on and off |
-| `PlayerClaimsTests` (15 cases) | recognition by vendor and product; both halves reading them at opening and keeping them; the built-in pad first and the external pad's first press player 1; the rule off; the handheld setting on and off, at start and hot-plugged, turned on later, and never over a claimed player; a claimed pad reconnecting; two pads pressed together; the swap and the claims it ends until the next game; one pad cannot be swapped; None and First Controller; the keyboard |
+| `PlayerClaimsTests` (16 cases) | recognition by vendor and product; both halves reading them at opening and keeping them; the built-in pad first and the external pad's first press player 1; the rule off; the handheld setting on and off, at start and hot-plugged, turned on later, and never over a claimed player; a claimed pad reconnecting; two pads pressed together; the swap and the claims it ends until the next game; one pad cannot be swapped; None and First Controller; the keyboard; a button held as the game starts claiming nothing until pressed again (§8.13.8) |
 | `PadMenuTests.Swap_players_under_game_settings_trades_players_1_and_2` (3 cases) | the row reached by pad in a desktop session and a big screen at 1280 by 800 and 1920 by 1200, the page fit-audited, the trade and its notice |
 | `UinputHotplugTests.Steams_virtual_pads_report_the_controllers_behind_them_and_the_external_one_is_player_1` (2, opt-in) | under each manager on the real SDL layer: Steam's two virtual pads made through uinput with a file in Steam's format; the vendors, products and names of the controllers behind them; the Xbox pad player 1 and the built-in controls player 2, each heard as its player alone |
 | `ControllersTests.The_controller_settings_persist` | the two switches saved, reaching the pads on the next poll, and their defaults |
@@ -1002,3 +1003,63 @@ microsecond a frame.
 5. If the names in step 1 are still "Steam Virtual Gamepad", Steam did not give Mistress its file:
    `tr '\0' '\n' < /proc/$(pidof EmuSen)/environ | grep SteamVirtualGamepadInfo` shows whether the variable is set,
    and the file it names shows the sections. The press rule works either way.
+
+#### 8.13.8 The press that started the game claimed player 1 (2026-10-18)
+
+**The symptom.** `On_a_handheld_the_notice_names_the_player_an_external_pad_took` failed 4 of 4 runs on 69974969 on
+2026-10-17 and 2 of 3 on a later branch, and passed on rerun on 2026-10-18; `The_pad_pressed_first_in_a_game_is_player_1…`
+failed once. The failures had three faces: the Xbox pad's notice "…: player 2" where the handheld setting should have
+made it player 1; the bare "Xbox Wireless Controller: player 2" where the notice should have said how to take player
+1; and `(0, 4096)` where `(4096, 0)` was expected, the original report's own signature.
+
+**The cause.** All three are what §8.13.3's rules give once seat 1 has been claimed before the test's pads arrive,
+and something did claim it: the A press that launched the game from the library. The launch goes through
+`MainWindow.RunSession`, which starts the game's 60 Hz `DispatcherTimer` calling `PollGamepad`. The test's helper
+pressed A, ran the interface's tick and its dispatcher jobs, then let A go. If the game's timer came due within those
+jobs, which it does when the launch takes longer than one frame interval to reach them, `PollGamepad` ran with A
+still held, `ClaimPressed` read the launching pad as pressed and counted seat 1 claimed. After that
+`PlayerOneClaimed` was true, so `ConnectedNotice` gave the plain seat, `SeatAhead` started its search above seat 1,
+and the Xbox pad's later press took seat 2. Nothing in the claim logic reads a clock; the timing was the dispatcher's,
+and only decided whether a game poll fell inside the launching press.
+
+**Demonstrated before anything changed.** A diagnostic case read `GamepadManager._claimed` after the helper's launch
+(it should be 0), and each of the three cases was looped in one test host, 200 runs each, measured 2026-10-18 on the
+desktop:
+
+| Setting | launch claimed seat 1 | handheld, setting off | handheld, setting on | first press |
+|---|---|---|---|---|
+| alone | 10 of 200 | 4 of 200 | 14 of 200 | 2 of 200 |
+| sixteen busy loops on the sixteen threads | 106 of 200 | 100 of 200 | 52 of 200 | 138 of 200 |
+| beside a second test host running the other Mistress tests | 8 of 200 | 0 of 200 | 0 of 200 | 68 of 200 |
+
+Every failure carried one of the three messages above. With the timing forced, by the helper holding A across one
+`PollGamepad` call before letting go, all four failed 50 of 50 runs, and so did the three `MultiplayerTests` cases in an
+ordinary run.
+
+**A product defect, not only a test's.** A real press lasts around a tenth of a second and the game polls every 16 ms,
+so for a game that loads within the press, the pad that launched it held a button through the game's first polls and
+claimed player 1, every time; for a game that loads after the press is over, it did not. On the handheld with the
+external pad first, launching with the built-in controls' A moved them to player 1 and the Xbox pad to player 2, the
+report of §8.13.1 recreated by the launch, and whether it happened depended on the load time. §4.29 of the settings
+reference already says the button that closed a menu is not the game's; the launch is the same case, and rule 1 says
+a press *in* a game.
+
+**The fix**, in the rule's owner, `GamepadManager.Claims.cs`, so Mistress and Hotaru both have it: `BeginClaims`
+notes each open pad that holds a button as the game starts, and `ClaimPressed` passes over such a pad until it is seen
+with nothing held, after which its next press claims as any other. A pad that connects later, or one that pressed
+nothing at the start, is unaffected; the game still hears the held button as its seat's, as before (whether the game
+should hear the launching press at all is §4.29's question and is not changed here). The list is allocated once and
+holds a handful of pads at most, so the poll allocates nothing. No `MainWindow` file changed.
+
+**The tests now hold the press.** `MultiplayerTests`' launch helper holds A across one game poll, as a real press
+does, so the cases run the same path every time instead of whichever path the timer chose.
+`PlayerClaimsTests.A_button_held_as_the_game_starts_claims_nothing_until_it_is_pressed_again` is the defect at the
+manager: the built-in controls holding A at the start, the Xbox pad player 1 by the handheld setting, two polls with
+no claim, then a fresh press on the built-in controls claiming player 1. It failed before the fix with the claim made
+on the first poll.
+
+**After the fix**, the same four cases looped 200 runs each in each setting, with the launch now holding A across a game
+poll, measured 2026-10-18: 0 of 800 failed alone, 0 of 800 under the sixteen busy loops, 0 of 800 beside the second
+test host, 0 of 800 in one test host beside every other Mistress test (2,255 more, all passing, 54 skipped by their
+own opt-in), and 0 of 800 under the busy loops with `EMUSEN_ENDYMION_NATIVE=0`, the C# manager in place of the
+library's. The claims are C# over either manager, so the two halves were expected to agree, and did.

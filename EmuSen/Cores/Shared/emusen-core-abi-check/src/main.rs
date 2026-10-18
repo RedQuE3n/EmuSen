@@ -285,6 +285,7 @@ mod tests {
         assert_eq!(facts.get("struct emusen_frame_info").map(String::as_str), Some("size 64 align 8"), "grown at 1.13");
         assert_eq!(committed.get("struct emusen_frame_info"), Some(&("size 56 align 8".to_owned(), "1.0".to_owned())), "its 1.0 line stands");
         assert_eq!(committed.get("field emusen_frame_info.lines"), Some(&("offset 56 type int32_t".to_owned(), "1.13".to_owned())));
+        assert_eq!(committed.get("json machine_info.spaces[].byte_order"), Some(&("string optional".to_owned(), "1.14".to_owned())));
         assert_eq!(facts.get("field emusen_frame_info.serial").map(String::as_str), Some("offset 40 type int64_t"));
         assert_eq!(facts.get("fn emusen_core_advance").map(String::as_str), Some("(emusen_machine*, uint64_t*) -> int32_t"));
         assert_eq!(facts.get("json info.systems[].extensions").map(String::as_str), Some("array<string> required"));

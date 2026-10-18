@@ -88,6 +88,12 @@ pub(crate) fn reports_stores(space: u32) -> bool {
     matches!(space, M68KBUS_ID | Z80BUS_ID | crate::genesis::WRAM_ID | crate::genesis::Z80RAM_ID)
 }
 
+/// A space's byte order where it is not the system's (core ABI 1.14): the Z80's RAM and bus hold its words low byte first.
+/// The bus's bank window, `$8000` up, shows the 68000's space, whose own words read right through `M68KBUS` (Nephrite_Native.md §66.5).
+pub(crate) fn byte_order(space: u32) -> Option<&'static str> {
+    matches!(space, Z80BUS_ID | crate::genesis::Z80RAM_ID).then_some(emusen_native::core::BYTE_ORDER_LITTLE)
+}
+
 impl Hw {
     /// A byte of the 68000's space as a debugger reads it: the cartridge, the Z80's RAM and the 68000's RAM as the bus
     /// gives them; the ports, whose reads change what they read, and unmapped addresses as $FF.

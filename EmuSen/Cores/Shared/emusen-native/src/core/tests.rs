@@ -93,7 +93,7 @@ fn every_descriptor_validates_against_its_committed_schema() {
         assert_eq!(schema::validate(s, doc), Vec::<String>::new(), "{doc}");
     }
     let v = crate::json::parse(info.as_bytes()).unwrap();
-    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.13"));
+    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.14"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
     assert_eq!(names.len(), 26);
     assert!(
@@ -162,6 +162,20 @@ fn a_view_is_a_flag_of_its_space() {
     assert!(mi.contains(r#"{"id":0,"name":"CPUBUS","size":16777216,"flags":["read_only","view"]}"#), "{mi}");
     assert!(mi.contains(r#"{"id":1,"name":"WRAM","size":65536,"flags":[]}"#), "{mi}");
     assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
+}
+
+// Since 1.14 a space's byte order is written only where the core states one, so no earlier machine info changes by a byte (§6.39).
+#[test]
+fn a_spaces_byte_order_is_written_only_when_stated() {
+    use super::desc::{BYTE_ORDER_BIG, BYTE_ORDER_LITTLE, MachineInfo, Space};
+    let m = MachineInfo { spaces: vec![Space::new(0, "WRAM"), Space { byte_order: Some(BYTE_ORDER_LITTLE), ..Space::new(1, "Z80RAM") }, Space { byte_order: Some(BYTE_ORDER_BIG), ..Space::new(2, "VRAM") }], ..MachineInfo::default() };
+    let measured = super::desc::Measured { space_size: &|_| Some(8), battery_len: &|_| None, capabilities: 0, picture_settles: 0, raw: &[], units: &[], telemetry: &[] };
+    let mi = super::desc::machine_info_json(&m, &measured, &[]);
+    assert!(mi.contains(r#"{"id":0,"name":"WRAM","size":8,"flags":[]}"#), "{mi}");
+    assert!(mi.contains(r#"{"id":1,"name":"Z80RAM","size":8,"flags":[],"byte_order":"little"}"#), "{mi}");
+    assert!(mi.contains(r#"{"id":2,"name":"VRAM","size":8,"flags":[],"byte_order":"big"}"#), "{mi}");
+    assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
+    assert_eq!(schema::validate(schema::MACHINE_INFO, &mi.replace(r#""byte_order":"big""#, r#""byte_order":"Big""#)), vec![r#"$.spaces[2].byte_order: "Big" is not one of the enumeration"#]);
 }
 
 #[test]
@@ -517,7 +531,7 @@ fn read_ranges_reach_a_core_that_claims_them_and_an_unknown_kind_is_refused() {
 
 #[test]
 fn the_crates_constants_are_the_headers_own_numbers() {
-    assert_eq!(ABI_VERSION, 0x0001_000D);
+    assert_eq!(ABI_VERSION, 0x0001_000E);
     assert_eq!((std::mem::size_of::<CreateParams>(), std::mem::offset_of!(CreateParams, system)), (112, 104), "since 1.11");
     assert_eq!(caps::DEVICE_PICTURE, 1 << 21, "since 1.9");
     assert_eq!((caps::RAW_PICTURE, caps::UNASSIGNED & caps::RAW_PICTURE, std::mem::size_of::<RawFrame>(), std::mem::offset_of!(RawFrame, bytes)), (1 << 22, 0, 32, 24), "since 1.10");

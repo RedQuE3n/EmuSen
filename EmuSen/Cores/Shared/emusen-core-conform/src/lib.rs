@@ -1,7 +1,7 @@
 //! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C23 on a library loaded through the core
 //! ABI v1 alone, and a library's sidecar (§7.1). Each case reports its verdict and its evidence; §21 and §24 record what each
 //! checks and how, §28 the corpus form, which runs the checks that do not depend on the image once, §6.24 C17 and
-//! §6.25 C18, §6.27 and §6.28 C19, §6.29 C20, §6.30 C21, §6.31 C22, §6.32 C23.
+//! §6.25 C18, §6.27 and §6.28 C19, §6.29 C20, §6.30 C21, §6.31 C22, §6.32 C23, §6.39 C14's byte orders.
 
 pub mod api;
 mod lender;
@@ -1427,7 +1427,7 @@ fn c14(s: &mut Session<'_>) -> Case {
             c.that(r == 0, || format!("processor {id} is named and debug_pc answers {r}"));
         }
     }
-    let more = since_1_13(s, &m, &info, &mut c);
+    let more = since_1_13(s, &m, &info, &mut c) + &byte_orders(s, &info, &mut c);
     c.note(format!("{} spaces, {} battery files{}, {} processors{more}", list("spaces").len(), list("battery").len(), listed.map_or(String::new(), |l| format!(" of the {} core info lists", l.len())), list("processors").len()));
     c.done("C14", "descriptors against exports")
 }
@@ -1501,6 +1501,25 @@ fn since_1_13(s: &mut Session<'_>, m: &Machine<'_>, info: &Value, c: &mut Check)
         }
     }
     more
+}
+
+/// C14's check of core ABI 1.14's byte orders (EmuSen_CoreAPI.md §6.39): a space that states one states `big` or
+/// `little`, on a library of 1.14 or later; made only where a space states one, so a core stating none is reported as
+/// before. The words its summary gains.
+fn byte_orders(s: &Session<'_>, info: &Value, c: &mut Check) -> String {
+    let minor = unsafe { (s.lib.f.abi_version)() } & 0xFFFF;
+    let spaces = info.get("spaces").and_then(Value::as_array).map(|a| a.to_vec()).unwrap_or_default();
+    let mut stated = 0;
+    for space in &spaces {
+        let Some(order) = space.get("byte_order") else { continue };
+        let name = space.get("name").and_then(Value::as_str).unwrap_or("");
+        let text = order.as_str();
+        let shown = text.map_or_else(|| "not a string".to_owned(), |t| format!("{t:?}"));
+        c.that(matches!(text, Some("big" | "little")), || format!("space {name}'s byte_order is {shown}, which is neither \"big\" nor \"little\""));
+        c.that(minor >= 14, || format!("space {name} states a byte_order, which core ABI 1.{minor} does not have"));
+        stated += 1;
+    }
+    if stated == 0 { String::new() } else { format!("; {stated} space(s) state their byte order") }
 }
 
 /// The frames the held-cheats check runs.

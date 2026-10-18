@@ -111,6 +111,8 @@ pub const FAULT_LINES_UNEVEN: u64 = 1 << 30;
 pub const FAULT_PRESENCE_ANY_PORT: u64 = 1 << 31;
 pub const FAULT_POKES_WHILE_HELD: u64 = 1 << 32;
 pub const FAULT_TRANSLATE_UNSTABLE: u64 = 1 << 33;
+/// Seeded fault for core ABI 1.14's byte order (EmuSen_CoreAPI.md §6.39): ROM's order, stated by a core claiming anything, spelt `Big` (C14).
+pub const FAULT_BYTE_ORDER_MISSPELT: u64 = 1 << 34;
 /// Not a fault, since 1.13: an image whose payload begins with `HELD_CHEATS` holds the cheats at the end of every
 /// fourth frame, its own pokes and a host's, as a console whose cheat device holds off does (EmuSen_CoreAPI.md §6.37).
 pub const HELD_CHEATS: u8 = 0xC4;
@@ -318,7 +320,7 @@ impl TestCore {
             video: Video { base_width: 8, base_height: 4, max_width: 16, max_height: 4, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: self.rate, channels: vec!["Tone".into()] },
             ports: vec![Port { port: 0, controller: Some("test.pad".into()) }, Port { port: 1, controller: None }],
-            spaces: vec![Space { cheats: true, ..Space::new(0, "RAM") }, Space { read_only: true, ..Space::new(1, "ROM") }],
+            spaces: vec![Space { cheats: true, ..Space::new(0, "RAM") }, Space { read_only: true, byte_order: (TEST_CAPABILITIES != 0).then(|| if faults() & FAULT_BYTE_ORDER_MISSPELT != 0 { "Big" } else { BYTE_ORDER_BIG }), ..Space::new(1, "ROM") }],
             processors: std::iter::once(Processor { id: 0, name: "Counter".into(), pc_bits: 8, registers: vec![("F".into(), 64)], code_space: None })
                 .chain(self.helper.then(|| Processor { id: 1, name: "Helper".into(), pc_bits: 8, registers: Vec::new(), code_space: None }))
                 .collect(),

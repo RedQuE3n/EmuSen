@@ -223,7 +223,7 @@ fn a_sidecar_carries_the_librarys_own_descriptors_and_hash() {
     assert_eq!(v.get("sidecar").and_then(Value::as_i64), Some(1));
     assert_eq!(v.get("library").and_then(Value::as_str), lib.file_name().and_then(|n| n.to_str()));
     assert_eq!(v.get("sha256").and_then(Value::as_str), Some(digest::sha256_hex(&std::fs::read(&lib).unwrap()).as_str()));
-    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.13"));
+    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.14"));
     assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0x3FFFFFF));
     assert_eq!(v.get("info").and_then(|i| i.get("id")).and_then(Value::as_str), Some("v1-test-core"));
     assert_eq!(v.get("settings").and_then(Value::as_array).map(|a| a.len()), Some(4));
@@ -555,15 +555,35 @@ fn each_fault_of_1_13_alone_fails_its_case_alone() {
     }
 }
 
-// On the test core, which claims every item of 1.13, C14 and C15 say what they checked, and the held image's frames
-// are counted; on the plain core, which claims none, they say what they said at 1.12.
+// Core ABI 1.14's seeded fault (EmuSen_CoreAPI.md §6.39), alone in a runner process of its own: a space's byte order
+// spelt otherwise than `big` or `little` fails C14 and no other case.
+#[test]
+fn the_fault_of_1_14_alone_fails_c14_alone() {
+    let plain = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("kit-1-14.v1tc");
+    std::fs::write(&plain, image(&[1, 2, 3, 0x20, 0x41])).unwrap();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_emusen-core-conform"))
+        .args(["--self-delimiting", "--frames", "120", "--core"])
+        .arg(library("kit_faulty_full_core"))
+        .arg("--image")
+        .arg(&plain)
+        .env("EMUSEN_TEST_CORE_FAULTS", (1u64 << 34).to_string())
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    let failed: Vec<&str> = text.lines().filter_map(|l| l.strip_prefix("FAIL ")).filter_map(|l| l.split_whitespace().next()).collect();
+    assert_eq!(failed, ["C14"], "{text}");
+    assert!(text.contains(r#"space ROM's byte_order is "Big", which is neither "big" nor "little""#), "{text}");
+}
+
+// On the test core, which claims every item of 1.13 and states ROM's byte order (1.14), C14 and C15 say what they checked, and the held image's frames
+// are counted; on the plain core, which claims and states none, they say what they said at 1.12.
 #[test]
 fn the_items_of_1_13_are_reported_only_where_claimed() {
     let of = |name: &str, opts: &Options, id: &str| run(&library(name), opts).cases.into_iter().find(|c| c.id == id).unwrap();
     let c14 = of("kit_test_core", &options(), "C14");
-    assert!(c14.passed && c14.evidence.last().unwrap().ends_with(", 1 unit(s) each answered with its registers, 2 counter(s) read twice alike; set_present refused past the ports"), "{:?}", c14.evidence);
+    assert!(c14.passed && c14.evidence.last().unwrap().ends_with(", 1 unit(s) each answered with its registers, 2 counter(s) read twice alike; set_present refused past the ports; 1 space(s) state their byte order"), "{:?}", c14.evidence);
     let held = of("kit_test_core", &Options { image: image(&[0xC4, 2, 3, 0x20, 0x41]), ..options() }, "C14");
-    assert!(held.passed && held.evidence.last().unwrap().ends_with("; 8 frame(s) of 32 held the cheats, the core's pokes with them"), "{:?}", held.evidence);
+    assert!(held.passed && held.evidence.last().unwrap().ends_with("; 8 frame(s) of 32 held the cheats, the core's pokes with them; 1 space(s) state their byte order"), "{:?}", held.evidence);
     let c15 = of("kit_test_core", &options(), "C15");
     assert!(c15.passed && c15.evidence.last().unwrap().ends_with("; each processor's translation answered alike twice, changing nothing"), "{:?}", c15.evidence);
     let plain = of("kit_plain_core", &options(), "C14");

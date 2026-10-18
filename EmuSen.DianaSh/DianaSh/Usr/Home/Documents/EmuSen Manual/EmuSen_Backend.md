@@ -3606,7 +3606,7 @@ logging `0x3412` for the bytes `12 34`, and passes with the change. *The Genesis
 2026-10-18 (`Nephrite_Native.md` §66): every space on the 68000's side, the Sega CD's and the 32X's holds a word big-end
 first; the Z80's RAM and bus hold the Z80's words little-end first and now read swapped, a per-space byte order in
 machine info proposed for them; `NephriteTests.The_frame_log_reads_a_genesis_value_big_end_first` failed first and
-passes with the change.*
+passes with the change. That per-space order was built the same day as core ABI 1.14, §24.*
 
 **The gates, after:**
 
@@ -4609,3 +4609,76 @@ at every frame.
   it to the host, the units' names after the processor's, a name both hold resolving to the processor's.
 - **The new pack members' Rust twins** for the NES, with their parity cases, when the views' C# is to be retired (B7).
 - **MercuryRT's switch**, after which `PortEngine`, `NativeRtCore` and the pre-stable host go in one commit (§22.7).
+
+---
+
+## 24. Core ABI 1.14, 2026-10-18: a byte order for each memory space
+
+*Built on 2026-10-18 on branch `space-byte-order`, from `WiseMan` at `08812dde`, under the tester's decision of the same
+day: the machine-info form `Nephrite_Native.md` §66.2 proposed, an optional byte order on each space of machine info's
+space list, which `CoreEngine` reads first, falling back to the systems table where a core says nothing. Claims are
+marked as at the head of this page. The normative text is `EmuSen_CoreAPI.md` §6.39 and its changelog's row, the
+summary and the forms weighed `EmuSen_CoreAPI_Extensions.md` §16, and Nephrite's spaces `Nephrite_Native.md` §66.5.*
+
+### 24.1 The defect, shown first
+
+Since §18.9 the frame log reads a value in its system's order, and the Genesis family's is `big` (`Nephrite_Native.md`
+§66). The Z80's words are stored low byte first, so a two-byte frame log of `Z80RAM`, or of `Z80BUS` where the Z80's
+RAM shows, read the Z80's value with its bytes swapped. `NephriteTests.The_frame_log_reads_a_z80_word_little_end_first_as_the_z80_stores_it`
+writes the Z80's word `0x1234` as the Z80 stores it (`$34 $12`) and logs it over one frame, from `Z80RAM` on a Genesis,
+a 32X and a Sega CD image and from `Z80BUS` on a Genesis image. Run with the test alone on the branch's base, the
+change stashed [M]: **4 failed** with `0x3412`, the two bytes in place; the seven 68000-side cases of §18.9's test
+passed beside them.
+
+### 24.2 What was built
+
+- **The schema and the field.** `machine-info.schema.json`'s spaces gain `byte_order`, a string of the enumeration
+  `big`, `little`, spelt as the systems data files spell theirs (`Platform/systems/data/*.json`); absent, the system's.
+  The baseline gains `json machine_info.spaces[].byte_order string optional @1.14`, and `EMUSEN_CORE_ABI_MINOR` is 14.
+  No export, struct, constant, status or bit.
+- **`emusen_core.h`**: version 1.14 and a note under the memory spaces' calls; the field is JSON, so nothing else.
+- **`emusen-native`**: `Space::byte_order`, an `Option<&'static str>`, `None` from `Space::new`, and the two spellings
+  `BYTE_ORDER_BIG` and `BYTE_ORDER_LITTLE`; `machine_info_json` writes the field only when it is set, so that no core's
+  machine info changes by a byte unless it states an order. Every core builds a space through `..Space::new`, so none
+  needed an edit to compile. `ABI_MINOR` 14.
+- **The C# host**: `CoreInterface.Minor` 14; `CoreSpace.ByteOrder`, read from the field, null when absent;
+  `CoreEngine.ReadForFrameLog` assembles a value in the space's order where it is `big` or `little` and in the system's
+  (`SystemPacks.BigEndian`) otherwise. The space's descriptor is found by a loop (`SpaceNamed`), which `SpaceOf` now
+  uses too, in place of a query that made a closure at every byte read.
+- **The kit**: C14 checks, where a space states an order, that it is `big` or `little` and that the library is of 1.14
+  or later, and adds "N space(s) state their byte order" to its note only then. The test core, a core claiming
+  anything, states its `ROM` `big`, where its system, `test`, is in no table and so little; the plain core states
+  none. `FAULT_BYTE_ORDER_MISSPELT` (1 << 34) spells it `Big`.
+- **Nephrite** states `Z80RAM` and `Z80BUS` `little` (`genesis/debugger.rs`'s `byte_order`). `Z80BUS` holds the Z80's
+  RAM below `$4000` and the 68000's space through the bank window from `$8000`; it is not split, and states the order
+  of the words the Z80 itself reads as words, the window's 68000 words a documented exception read right through
+  `M68KBUS` (`Nephrite_Native.md` §66.5, which gives the reasons).
+
+### 24.3 Tested
+
+Measured on 2026-10-18 [M]:
+
+| What | Result |
+|---|---|
+| `emusen-native`, `cargo test --profile test-checked` | 80 passed (79 before; the new one writes a stated order and no other, and finds `Big` outside the schema) |
+| `emusen-core-abi-check` tests; `--emit-baseline`, then `--check --against` the 1.13 baseline | 6 passed (one assertion added for the new line); 510 facts agree on 4 triples, with the Rust and with the baseline (509 at 1.13) |
+| The header as C99, C11 and C++17, `-Wall -Wextra -pedantic -Werror` | compiles |
+| `emusen-core-conform`, `cargo test --profile test-checked` | 8 and 27 passed (one new: the fault alone fails C14 alone, in a runner of its own). The first run failed one case of its own words: the held image's C14 note now ends with the byte order's words; the expectation was corrected |
+| `export_check.py` on every core's release library and the two test cores | every one ABI 1.14 and its exports as the baseline requires; the test core 65 symbols, the plain core 32 |
+| **The kit's corpus on every core**, the 1.13 kit on the base's libraries against the 1.14 kit on the branch's, at 600 frames (Diamond's sample at its list's 1,800): MoonRT (4 NES images, `--self-delimiting`), MercuryRT (4), VenusRT (2), MarsRT (Super Mario 64, Ocarina of Time), Nephrite (`genesis-sample.txt`, 64), Diamond (`psx-sample.txt`, 9) | **91 reports** (85 images and the six summaries), every core's cases and every image passing in both. With timings, the minor's number and C13's count of rounds set aside, **27 are identical**: every report of MoonRT, MercuryRT, VenusRT, MarsRT and Diamond and Nephrite's summary; Nephrite's 64 image reports differ only in C14's note, which gains "; 2 space(s) state their byte order", and are identical once that is set aside |
+| Nephrite's crate, `cargo test --profile test-checked --lib v1::` | 21 passed (`the_stub_reports_each_system_and_a_blank_picture` holds the two stated orders and no other) |
+| WiseMan, the blast radius: `NephriteTests`, `SystemTableParityTests`, `CoreAbi113Tests`, `CoreAbi114Tests` (new), `CoreAbiTests`, `CoreAdapterTests`, `CoreDiscoveryTests`, `CoreRegistrationEquivalence`, `GoldenCorpusTests`, `MarsRtCoreAbiTests`, `SharedHostTests` | **187 of 187** in 9 min 38 s: the four Z80 cases now pass, the seven 68000-side cases as before, and the N64's big-endian frame log as before |
+
+`CoreAbi114Tests` holds the interface at 1.14, the test core's `ROM` read as `big` and its `RAM` and every plain-core
+space as stating none, and the frame log reading the bytes `$12 $34` as `0x3412` from `RAM` (the system's order) and
+`0x1234` from `ROM` (the space's). `CoreAbi113Tests`' first case now holds 1.13's three bits under any later minor.
+No golden was re-recorded.
+
+### 24.4 For the tester
+
+- **Other spaces of two orders.** None is known outside the Genesis: the N64's, SNES's, NES's, Game Boy's and
+  PlayStation's spaces each hold one processor's words, in the order their systems' entries state. The 32X's memories
+  are stubs (`Nephrite_Native.md` §66.1) and will hold the SH-2's and the 68000's words, both big-endian, so the table's
+  order stands for them.
+- **The frame log alone reads the field**, as it was the one caller of `SystemPacks.BigEndian`. A cheat's order is its
+  code format's (`CheatWrite.BigEndian`), not the space's, and is unchanged.

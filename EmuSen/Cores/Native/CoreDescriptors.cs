@@ -59,6 +59,8 @@ namespace EmuSen.Cores.Native
         public bool ReportsLoads => Flags.Contains("reports_loads");
         // A window onto other spaces' memory, holding none of its own - see EmuSen_CoreAPI.md §29.
         public bool View => Flags.Contains("view");
+        // Since 1.14: "big" or "little", the order the core stores a word in; null for the system's - see EmuSen_CoreAPI.md §6.39.
+        public string? ByteOrder { get; init; }
     }
 
     public sealed record CoreProcessor(uint Id, string Name, int PcBits, IReadOnlyList<(string Name, int Bits)> Registers, uint? CodeSpace = null);
@@ -217,7 +219,7 @@ namespace EmuSen.Cores.Native
                 (uint)Long(aspect, "num"), (uint)Long(aspect, "den"),
                 (int)Long(audio, "rate", audioRate), Strs(audio, "channels"),
                 Arr(r, "ports").Select(p => new CorePort((uint)Long(p, "port"), OptStr(p, "controller"))).ToArray(),
-                Arr(r, "spaces").Select(s => new CoreSpace((uint)Long(s, "id"), Str(s, "name"), Long(s, "size"), Strs(s, "flags"))).ToArray(),
+                Arr(r, "spaces").Select(s => new CoreSpace((uint)Long(s, "id"), Str(s, "name"), Long(s, "size"), Strs(s, "flags")) { ByteOrder = OptStr(s, "byte_order") }).ToArray(),
                 Arr(r, "processors").Select(p => new CoreProcessor((uint)Long(p, "id"), Str(p, "name"), (int)Long(p, "pc_bits"),
                     Arr(p, "registers").Select(g => (Str(g, "name"), (int)Long(g, "bits"))).ToArray(),
                     p.TryGetProperty("code_space", out var code) && code.ValueKind == JsonValueKind.Number ? (uint)code.GetInt64() : null)).ToArray(),

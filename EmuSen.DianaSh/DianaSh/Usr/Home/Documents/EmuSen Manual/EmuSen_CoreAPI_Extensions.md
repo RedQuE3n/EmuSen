@@ -1699,3 +1699,53 @@ sent only on a change.
 **What is deferred.** §10.1's general `set_device` stays deferred: presence is what the N64 needs and is part of its
 state, and a device kind would restate the controller choice the settings already make. The session service's
 telemetry kind and `coretop`'s counters are the frontend API's next minor.
+
+---
+
+## 16. A space's byte order (1.14), decided 2026-10-18
+
+*Proposed by `Nephrite_Native.md` §66.2, when the Genesis family's systems table entry was set `big` and the Z80's
+spaces began to read swapped; decided by the tester on 2026-10-18 and built the same day (`EmuSen_Backend.md` §24). The
+normative text is `EmuSen_CoreAPI.md` §6.39.*
+
+### 16.1 What existed
+
+A space was a byte array read through `space_read`, and a host that put two or more bytes together (the frame log)
+took the order from the systems table's `byte_order`, one a system (`EmuSen_Backend.md` §18.9). On the Genesis every
+space of the 68000's side holds a word high byte first, and the Z80's RAM, and its bus where the RAM shows, hold the
+Z80's words low byte first (`Nephrite_Native.md` §66.1). One order a system could not be right for both.
+
+### 16.2 The forms weighed
+
+| Form | For | Against |
+|---|---|---|
+| (a) **Machine info's `spaces[].byte_order`**, stated by the core | the core owns how it stores a word, and states it beside the space it describes; the table keeps a system's order and the field is needed only where a space differs | a descriptor field, so a minor |
+| (b) A per-space exception in the systems data file | no ABI change | ties a system's data to one core's space names, which a second Genesis core need not share; the table would hold a core's fact |
+| (c) Splitting a mixed space into spaces of one order each | every space one order | renames and renumbers spaces the debugger, the cheats and saved frame logs key on; a processor's bus is one space because the processor sees one |
+
+**Chosen: (a)** [C], an extension of an existing surface: one optional field of a descriptor every core already
+writes, which gives no component a second job and couples none. A space of two orders states the order its readers
+most often need and documents the rest (`EmuSen_CoreAPI.md` §6.39).
+
+### 16.3 The surface change
+
+- `machine_info.spaces[].byte_order`, a string, optional, `big` or `little`: the baseline's line
+  `json machine_info.spaces[].byte_order string optional @1.14`, the schema's property with its two values, and
+  `EMUSEN_CORE_ABI_MINOR` 14. No export, struct, constant or bit changes.
+- `emusen-native`: `Space::byte_order`, `None` by default, written only when set, so that no other core's machine info
+  changes by a byte.
+- The C# host: `CoreSpace.ByteOrder`; `CoreEngine`'s frame log reads the space's order first and the system's after.
+- The kit: C14 holds a stated order to the two spellings, with a seeded fault in its test core.
+
+### 16.4 Older and newer peers
+
+An older host ignores the field and reads every space in the system's order, which was its behaviour; for Nephrite's Z80
+spaces that is the swapped reading §66.2 recorded. An older kit ignores the field. A newer host reading an older core
+finds none and reads the system's order.
+
+### 16.5 Cost, and what it breaks
+
+Nothing a frame for a core that states none: the field is read with machine info. The frame log looks its space up by
+name once more for each value, beside the lookup it made for every byte, and the lookup became a loop over the
+descriptors, which allocates nothing where the query it replaced made a closure at every byte. Nothing breaks: a value the frame log reads from a
+space that states an order changes only where that order differs from the system's, which is the defect it fixes.

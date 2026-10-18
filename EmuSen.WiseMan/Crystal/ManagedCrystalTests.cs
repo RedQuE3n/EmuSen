@@ -1,3 +1,4 @@
+using EmuSen.Crystal.Systems.N64;
 using System;
 using System.IO;
 using System.Linq;
@@ -6,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Crystal.Debugger;
@@ -177,9 +177,9 @@ namespace EmuSen.WiseMan.Crystal
                 moon.LoadRom(nes);
                 using var mercury = new MercuryRtCore { Options = TestCores.NoBattery };
                 mercury.LoadRom(gb);
-                using var mars = new MarsRtCore { Options = TestCores.NoBattery };
+                using var mars = new MarsRtTestCore { Options = TestCores.NoBattery };
                 mars.LoadRom(n64);
-                Assert.Equal((0L, 0L, 0L), (Measure(moon, nes, moon.CreateDebugTarget()), Measure(mercury, gb, mercury.CreateDebugTarget()), Measure(mars, n64, new MarsRtDebugTarget(mars))));
+                Assert.Equal((0L, 0L, 0L), (Measure(moon, nes, moon.CreateDebugTarget()), Measure(mercury, gb, mercury.CreateDebugTarget()), Measure(mars, n64, mars.CreateDebugTarget())));
             }
             finally
             {

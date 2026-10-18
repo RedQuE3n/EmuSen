@@ -1,9 +1,10 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.Cores.Native;
 using System;
 using System.IO;
 using System.Linq;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Crystal.Cheats;
 using EmuSen.WiseMan.Fixtures;
@@ -134,7 +135,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var cheats = new CheatRegistry();
             CoreBundle bundle = CoreFactory.Load(_n64, headless: true, cheats);
-            var core = (MarsRtCore)bundle.Core;
+            var core = (CoreEngine)bundle.Core;
             uint physical = 0x1000_0000 + N64RomOffset;
 
             Assert.Equal(Original, (byte)(core.ReadBus32(physical) >> 24));
@@ -150,9 +151,9 @@ namespace EmuSen.WiseMan.Cores
         {
             var cheats = new CheatRegistry();
             CoreBundle bundle = CoreFactory.Load(_n64, headless: true, cheats);
-            var core = (MarsRtCore)bundle.Core;
+            var core = (CoreEngine)bundle.Core;
 
-            cheats.AddRamPoke(MarsDebugSpaces.Rdram, 0x100, 0x42, "poke");
+            cheats.AddRamPoke(MarsRt.Rdram, 0x100, 0x42, "poke");
             bundle.Core.RunFrame();
 
             Assert.Equal(0x42, core.Peek(MarsRtSpace.Rdram, 0x100));
@@ -163,9 +164,9 @@ namespace EmuSen.WiseMan.Cores
         {
             var cheats = new CheatRegistry();
             CoreBundle bundle = CoreFactory.Load(_n64, headless: true, cheats);
-            var core = (MarsRtCore)bundle.Core;
+            var core = (CoreEngine)bundle.Core;
 
-            cheats.AddRamPoke(MarsDebugSpaces.Rdram, 0x100, 0x42, "poke");
+            cheats.AddRamPoke(MarsRt.Rdram, 0x100, 0x42, "poke");
             bundle.DebugTarget.ApplyCheats();
 
             Assert.Equal(0x42, core.Peek(MarsRtSpace.Rdram, 0x100));
@@ -178,7 +179,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var cheats = new CheatRegistry();
             CoreBundle bundle = CoreFactory.Load(_n64, headless: true, cheats);
-            var core = (MarsRtCore)bundle.Core;
+            var core = (CoreEngine)bundle.Core;
             core.Poke(MarsRtSpace.Rdram, 0x200, 0x05);
 
             cheats.AddCheat(CheatKind.RamPoke, bundle.CheatAutoDetectCodec!.DecodeWrites("D0000200 0005+81000100 1234")!, null, "guarded");
@@ -194,10 +195,10 @@ namespace EmuSen.WiseMan.Cores
             var session = new EmulatorSession { Cheats = cheats };
             session.LoadRom(_n64);
 
-            cheats.AddRamPoke(MarsDebugSpaces.Rdram, 0x100, 0x42, "poke");
+            cheats.AddRamPoke(MarsRt.Rdram, 0x100, 0x42, "poke");
             session.RunFrame();
 
-            Assert.Equal(0x42, ((MarsRtCore)session.Core!).Peek(MarsRtSpace.Rdram, 0x100));
+            Assert.Equal(0x42, ((CoreEngine)session.Core!).Peek(MarsRtSpace.Rdram, 0x100));
         }
 
         // A v1 engine's target, VenusRT's, whose core gates its own pokes at a frame's end: a paused Apply pokes at once all the same - see VenusRT_Native.md §66.3.

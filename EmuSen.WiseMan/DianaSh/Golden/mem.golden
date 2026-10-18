@@ -170,8 +170,8 @@ case on marsrt
 target marsrt
 covers 1
 $ spaces
-out 218
-N64 memory spaces:
+out 221
+MarsRT memory spaces:
   RDRAM       8388608 bytes  R/W
   DMEM           4096 bytes  R/W
   IMEM           4096 bytes  R/W

@@ -1,5 +1,5 @@
 //! MarsRT on the core ABI v1: `Core` over the machine and its scan-out, the console's facts as descriptors, the settings C#
-//! Mars offers as the schema, and the `marsrt_core_*` extensions the shim and WiseMan's tests call on a v1 handle. See
+//! Mars offers as the schema, and the `marsrt_core_*` extensions WiseMan's tests call on a v1 handle. See
 //! Mars_Native.md §7 and EmuSen_CoreAPI.md §18.6.
 
 use std::sync::Arc;
@@ -15,7 +15,7 @@ use super::{Core, PHASES, STATUS_NOT_A_ROM, STATUS_NULL, space};
 use crate::machine::{Machine, SNAPSHOT_VERSION, STATE_VERSION};
 use crate::memory::bus::StateShape;
 use crate::rom::RomImage;
-use crate::state::{State, StateError, StateWriter};
+use crate::state::StateError;
 use crate::vi::scan::{RASTER_WIDTH, Scanout};
 
 /// `MarsDebugSpaces`' names, numbered as `ffi::space` numbers them.
@@ -782,7 +782,7 @@ impl v1::Core for Core {
 
 emusen_native::core_exports!(Core; present, phases, audio_peek, axes, settings, setting_notes, rom_patches, debug, debug_registers, telemetry, presence, debug_translate);
 
-// ---- Extensions: what the shim reads beside the ABI, and the tests' ways into the machine -------------------------------------
+// ---- Extensions: the tests' ways into the machine, which WiseMan's fixture reaches by name and no shipped host calls (EmuSen_Backend.md §18.10)
 
 /// A live handle's core, or `None` for null.
 ///
@@ -809,44 +809,6 @@ unsafe fn copy<T: Copy>(values: &[T], out: *mut T, len: usize) -> i64 {
     values.len() as i64
 }
 
-/// Cycles, total frames, the last frame's cycles, instructions, and the idle loop's turns and instructions, up to `len`; returns 6.
-///
-/// # Safety
-/// `machine` a live v1 handle or null; `out` valid for `len` values, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_counters(machine: *const v1::sys::Machine, out: *mut i64, len: usize) -> i64 {
-    let Some(c) = (unsafe { of(machine) }) else { return STATUS_NULL as i64 };
-    let m = &c.machine;
-    unsafe { copy(&[m.bus.cycles, m.total_frames, m.last_frame_cycles, m.cpu.instructions, m.cpu.run.idle_turns_passed, m.cpu.run.idle_instructions], out, len) }
-}
-
-/// The display processor's thread counters in `Core::thread_counters`' order, up to `len`; returns how many there are.
-///
-/// # Safety
-/// As `marsrt_core_counters`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_thread_counters(machine: *const v1::sys::Machine, out: *mut i64, len: usize) -> i64 {
-    unsafe { of(machine) }.map_or(STATUS_NULL as i64, |c| unsafe { copy(&c.thread_counters(), out, len) })
-}
-
-/// The recompiler's counters in `Blocks::counters`' order, up to `len`; returns how many there are.
-///
-/// # Safety
-/// As `marsrt_core_counters`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_block_counters(machine: *const v1::sys::Machine, out: *mut i64, len: usize) -> i64 {
-    unsafe { of(machine) }.map_or(STATUS_NULL as i64, |c| unsafe { copy(&c.block_counters(), out, len) })
-}
-
-/// `MarsCore.GpuReport` as UTF-8, copied up to `len` bytes; returns its whole length.
-///
-/// # Safety
-/// `machine` a live v1 handle or null; `out` valid for `len` bytes, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_gpu_report(machine: *const v1::sys::Machine, out: *mut u8, len: usize) -> i64 {
-    unsafe { of(machine) }.map_or(STATUS_NULL as i64, |c| unsafe { copy(c.gpu_report().as_bytes(), out, len) })
-}
-
 /// The IS-Viewer's transcript, copied up to `len` bytes; returns its whole length.
 ///
 /// # Safety
@@ -867,23 +829,6 @@ pub unsafe extern "C" fn marsrt_core_run_steps(machine: *mut v1::sys::Machine, s
     0
 }
 
-/// The CPU's fields alone, as C#'s `StateSerializer.Write(w, cpu)` writes them; returns the bytes, or a negative status.
-///
-/// # Safety
-/// `machine` a live v1 handle or null; `out` valid for `len` bytes, or null to ask the length.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_save_cpu(machine: *const v1::sys::Machine, out: *mut u8, len: usize) -> i64 {
-    let Some(c) = (unsafe { of(machine) }) else { return STATUS_NULL as i64 };
-    if out.is_null() {
-        let mut w = StateWriter::counter();
-        c.machine.cpu.write_state(&mut w);
-        return w.len() as i64;
-    }
-    let mut w = StateWriter::new(unsafe { std::slice::from_raw_parts_mut(out, len) });
-    c.machine.cpu.write_state(&mut w);
-    if w.overflowed() { status::BUFFER_TOO_SMALL as i64 } else { w.len() as i64 }
-}
-
 /// One COP0 register, `Cop0[register]`; the cheat gate reads Status (12).
 ///
 /// # Safety
@@ -891,65 +836,6 @@ pub unsafe extern "C" fn marsrt_core_save_cpu(machine: *const v1::sys::Machine, 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn marsrt_core_cop0(machine: *const v1::sys::Machine, register: u32) -> u64 {
     unsafe { of(machine) }.map_or(0, |c| c.machine.cpu.cop0[(register & 31) as usize])
-}
-
-/// The CPU's registers for a debugger: PC, the 32 GPRs, HI, LO and the bus's cycles, up to `len`; returns 36.
-///
-/// # Safety
-/// `machine` a live v1 handle or null; `out` valid for `len` values, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_cpu_registers(machine: *const v1::sys::Machine, out: *mut u64, len: usize) -> i64 {
-    let Some(c) = (unsafe { of(machine) }) else { return STATUS_NULL as i64 };
-    let cpu = &c.machine.cpu;
-    let mut values = [0u64; 36];
-    values[0] = cpu.pc;
-    values[1..33].copy_from_slice(&cpu.gpr);
-    values[33..].copy_from_slice(&[cpu.hi, cpu.lo, c.machine.bus.cycles as u64]);
-    unsafe { copy(&values, out, len) }
-}
-
-/// The signal processor's registers for a debugger: PC, halted, broke, and the 32 scalar registers, up to `len`; returns 35.
-///
-/// # Safety
-/// As `marsrt_core_cpu_registers`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_rsp_registers(machine: *const v1::sys::Machine, out: *mut u32, len: usize) -> i64 {
-    let Some(c) = (unsafe { of(machine) }) else { return STATUS_NULL as i64 };
-    let rsp = &c.machine.bus.sp.processor;
-    let mut values = [0u32; 35];
-    values[..3].copy_from_slice(&[rsp.pc, rsp.halted as u32, rsp.broke as u32]);
-    values[3..].copy_from_slice(&rsp.gpr);
-    unsafe { copy(&values, out, len) }
-}
-
-/// The VI's fourteen registers as stored, up to `len`; returns 14.
-///
-/// # Safety
-/// As `marsrt_core_cpu_registers`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_vi_registers(machine: *const v1::sys::Machine, out: *mut u32, len: usize) -> i64 {
-    let Some(c) = (unsafe { of(machine) }) else { return STATUS_NULL as i64 };
-    let values: Vec<u32> = (0..crate::vi::REGISTERS).map(|i| c.machine.bus.vi.read32(i * 4)).collect();
-    unsafe { copy(&values, out, len) }
-}
-
-/// `MarsDebugSpaces.TryPhysical`: kernel mode's view of a 32-bit virtual address; returns 1 and the physical address, or 0 where
-/// the TLB has no entry.
-///
-/// # Safety
-/// `machine` a live v1 handle or null; `physical` valid for one value, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_physical(machine: *const v1::sys::Machine, address: u32, physical: *mut u32) -> u32 {
-    let Some(c) = (unsafe { of(machine) }) else { return 0 };
-    match c.physical(address) {
-        Some(p) => {
-            if let Some(out) = unsafe { physical.as_mut() } {
-                *out = p;
-            }
-            1
-        }
-        None => 0,
-    }
 }
 
 /// A test's way to a device register: `MemoryBus.Write32` at a physical address, as the WiseMan tests program the VI.
@@ -1016,17 +902,6 @@ pub unsafe extern "C" fn marsrt_core_rsp_step(machine: *mut v1::sys::Machine, st
     0
 }
 
-/// The call stack's depth, its unmatched returns, and the exceptions entered, up to `len`; returns 3.
-///
-/// # Safety
-/// `machine` a live v1 handle or null; `out` valid for `len` values, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_debug_counters(machine: *const v1::sys::Machine, out: *mut i64, len: usize) -> i64 {
-    let Some(c) = (unsafe { of(machine) }) else { return STATUS_NULL as i64 };
-    let hooks = &c.machine.cpu.hooks;
-    unsafe { copy(&[hooks.depth() as i64, hooks.unmatched_returns, c.machine.cpu.run.exceptions], out, len) }
-}
-
 /// The version of the state last loaded: 1 a state, 2 a snapshot, 0 none.
 ///
 /// # Safety
@@ -1048,20 +923,6 @@ pub unsafe extern "C" fn marsrt_core_load_fields(machine: *mut v1::sys::Machine,
         Ok(()) => 0,
         Err(e) => e.status(),
     }
-}
-
-/// A controller plugged into the port, or pulled out.
-///
-/// # Safety
-/// `machine` a live v1 handle or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn marsrt_core_set_present(machine: *mut v1::sys::Machine, port: u32, present: u32) -> i32 {
-    let Some(c) = (unsafe { of_mut(machine) }) else { return STATUS_NULL };
-    if port >= 4 {
-        return status::NO_SUCH_PORT;
-    }
-    c.machine.set_present(port as usize, present != 0);
-    0
 }
 
 #[cfg(test)]

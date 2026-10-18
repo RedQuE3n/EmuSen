@@ -1,7 +1,8 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.Cores.Native;
 using System;
 using System.Linq;
 using EmuSen.WiseMan.Fixtures;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.Crystal.Debugger;
 
@@ -55,9 +56,9 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Resolve_names_the_same_memory_for_either_engine()
         {
-            Assert.Equal(MarsDebugSpaces.Rdram, MarsDebugSpaces.Resolve(0x100, 8 * 1024 * 1024)!.Value.Space);
-            Assert.False(MarsDebugSpaces.Resolve(0x0050_0000, 4 * 1024 * 1024)!.Value.IsAddressable);
-            Assert.Equal(MarsDebugSpaces.Imem, MarsDebugSpaces.Resolve(0x0400_1010, 4 * 1024 * 1024)!.Value.Space);
+            Assert.Equal(MarsRt.Rdram, N64Views.Physical(0x100, 8 * 1024 * 1024).Space);
+            Assert.False(N64Views.Physical(0x0050_0000, 4 * 1024 * 1024).IsAddressable);
+            Assert.Equal(MarsRt.Imem, N64Views.Physical(0x0400_1010, 4 * 1024 * 1024).Space);
         }
     }
 }

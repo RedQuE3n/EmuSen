@@ -1,5 +1,6 @@
+using EmuSen.Cores.Native;
+using EmuSen.WiseMan.Fixtures;
 using System;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Crystal.Systems.N64;
 

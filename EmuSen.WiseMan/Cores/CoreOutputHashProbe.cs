@@ -1,3 +1,5 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -5,7 +7,6 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia.Input;
@@ -35,7 +36,7 @@ namespace EmuSen.WiseMan.Cores
             ("MoonRT", ".nes", 900, () => new MoonRtCore { Options = TestCores.NoBattery }),
             ("MercuryRT", ".gb", 900, () => new MercuryRtCore { Options = TestCores.NoBattery }),
             ("MercuryRT", ".gbc", 900, () => new MercuryRtCore { Options = TestCores.NoBattery }),
-            ("MarsRT", ".z64", 500, () => new MarsRtCore(expansionPak: true) { Options = TestCores.NoBattery }),
+            ("MarsRT", ".z64", 500, () => new MarsRtTestCore(expansionPak: true) { Options = TestCores.NoBattery }),
         };
 
         [Fact]

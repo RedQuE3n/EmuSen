@@ -6900,3 +6900,44 @@ RX 6800, identical line for line before and after (the shim reads its own rate, 
 corpus, *Failed 46 of 4637 tests* and the recompiler's transcript the interpreter's; and the kit on copies of Super
 Mario 64 and Ocarina of Time, 600 frames, 22 cases passing on each before and after, now with 50 exports, capabilities
 `0x19fde` and seven spaces.
+
+## 10. On the generic host alone: core ABI 1.13's items, the switch, and the shim deleted (B4, 2026-10-18)
+
+*Steps 5 to 9 of `EmuSen_Backend.md` §18.7, decided 2026-10-18 (§20 there), after core ABI 1.13 was built (§22 there,
+`EmuSen_CoreAPI.md` §6.33 to §6.38). The record of gates and differences is §18.10 there; this section is what
+MarsRT itself now does.*
+
+**What MarsRT claims.** Its capabilities are `0x3819fde`: §9's `SETTING_NOTES` and `DEBUG_REGISTERS`, and since 1.13
+`TELEMETRY`, `PRESENCE` and `DEBUG_TRANSLATE`; 53 `emusen_core_` exports.
+
+- **The VI is a unit**, id 256, kind `video`, its fourteen registers of 32 bits by libultra's names, read by
+  `debug_registers`. It is the one part that runs no code whose registers the debugger showed, and so the one MarsRT
+  lists; the AI, PI, SI, MI and RI are not shown today and are not listed. §9's VI space is gone, so the registers
+  have one statement, the core's, and the N64 pack reads the summary's VI line from the unit.
+- **Telemetry**: 58 counters, the machine's seven (cycles, frames, the last frame's cycles, instructions, the idle
+  loop's turns and instructions, exceptions entered), the display processor's thread's 38 (its own and twelve sites'
+  waits and times) and the recompiler's 13, the names in machine info and the values written into the host's buffer.
+  `Blocks::counters` is an array now, so a read allocates nothing. The three counter extensions, the debugger's
+  counters, the GPU report, the registers' three extensions, `marsrt_core_physical`, `marsrt_core_set_present` and
+  `marsrt_core_save_cpu` are deleted, and with them 13 of the component exports C# Mars and its tests called (the six
+  `mars_rdp_*` and seven `mars_rsp_*`; the eight `mars_vi_scan_*` stay for the VI differential).
+- **`frame_info.lines`**: the picture's rows over the multiple its width is of the 640-wide raster, the shim's rule;
+  a row-repeated picture counts its stored rows (§6.35's "repeats aside"). Every field that is not interlaced is
+  stored once and repeated (a 240-line field is 640 × 240 with a row repeat of 2), so the count the frontend reads must
+  be scaled by the repeat wherever the rows are repeated for it. `CoreEngine.DisplayLines` did not do that and gave 240
+  for a frame shown 480 rows tall, which the CRT filter would have averaged two rows to a line and two pixels to a
+  column; the digest showed it on all 26 runs and `ScreenFilterRenderTests.A_field_s_lines_are_counted_in_the_rows_the_frame_is_handed_with`
+  failed on it before the fix (`EmuSen_Backend.md` §18.10). With it, the lines column is the baseline's.
+- **`EMUSEN_FRAME_CHEATS_HELD`** on a frame that ended with COP0's `Status.IE` clear, Project64's gate
+  (`Mars_Cheats.md` §5.1), which the host now honours for every cheat it applies.
+- **`set_present`** for ports 0 to 3; **`debug_translate`** for processor 0, kernel mode's view through the TLB, never
+  faulting.
+
+**What stays as extensions**, read only by WiseMan's fixture (`Fixtures/MarsRt.cs`) by name, never by a shipped host:
+`marsrt_core_run_steps`, `_is_viewer_text`, `_cop0`, `_bus_write32`, `_bus_read32`, `_set_cop0`, `_mi_raise`,
+`_rsp_step`, `_state_kind` and `_load_fields`.
+
+**The host.** `CoreFactory` opens an N64 game through its v1 arm, MarsRT being the N64's sole discovered engine as
+VenusRT is the SNES's; the shim's nine files, `PortLibrary`'s use for MarsRT and `EMUSEN_MARS_NATIVE` are gone. The
+catalog reads the N64's pad, axes, ports and settings rows from MarsRT's sidecar. The debugger is `CoreDebugTarget`
+over `CoreDebugBridge`, with the N64 pack's views (`EmuSen_Backend.md` §18.10).

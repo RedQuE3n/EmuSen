@@ -1,8 +1,9 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.Cores.Native;
 using System;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
@@ -236,8 +237,8 @@ namespace EmuSen.WiseMan.Cores
 
             string n64 = Path.Combine(_library, "Same.z64");
             File.WriteAllBytes(n64, SyntheticN64System.Build());
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
-            using (var mars = new MarsRtCore())
+            Assert.True(MarsRt.Available, MarsRt.Report);
+            using (var mars = new MarsRtTestCore())
             {
                 mars.LoadRom(n64);
                 for (int frame = 0; frame < 40; frame++) mars.RunFrame();
@@ -307,19 +308,19 @@ namespace EmuSen.WiseMan.Cores
             var eeprom = new byte[512];
             new Random(8).NextBytes(eeprom);
             PutFlat(rom, eeprom);
-            string flatPak = Path.ChangeExtension(Flat(rom), N64Console.PakExtension);
+            string flatPak = Path.ChangeExtension(Flat(rom), MarsRt.PakExtension);
             var pak = new byte[32768];
             new Random(9).NextBytes(pak);
             File.WriteAllBytes(flatPak, pak);
             var before = (Snapshot(Flat(rom)), Snapshot(flatPak));
 
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
-            using var mars = new MarsRtCore();
+            Assert.True(MarsRt.Available, MarsRt.Report);
+            using var mars = new MarsRtTestCore();
             mars.LoadRom(rom);
             Assert.Equal(eeprom, mars.BatteryContents![..eeprom.Length]);
             string save = SaveLibrary.SramPathFor(rom, BatterySave.N64);
             Assert.Equal(eeprom, File.ReadAllBytes(save));
-            Assert.Equal(pak, File.ReadAllBytes(Path.ChangeExtension(save, N64Console.PakExtension)));
+            Assert.Equal(pak, File.ReadAllBytes(Path.ChangeExtension(save, MarsRt.PakExtension)));
             AssertUnchanged(before.Item1, Flat(rom));
             AssertUnchanged(before.Item2, flatPak);
         }
@@ -385,8 +386,8 @@ namespace EmuSen.WiseMan.Cores
                 Assert.NotEqual(Pattern(13)[5], Sram(cart, 5));
                 cart.SaveSram();
             }
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
-            using (var mars = new MarsRtCore() { Options = TestCores.NoBattery })
+            Assert.True(MarsRt.Available, MarsRt.Report);
+            using (var mars = new MarsRtTestCore() { Options = TestCores.NoBattery })
             {
                 mars.LoadRom(n64);
                 mars.SaveSram();

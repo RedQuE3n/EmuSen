@@ -4,7 +4,6 @@
 pub mod blocks;
 pub mod host;
 pub mod multiple;
-pub mod rdp;
 pub mod threads;
 pub mod v1;
 pub mod vi;

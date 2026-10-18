@@ -1,3 +1,5 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -173,8 +175,9 @@ namespace EmuSen.WiseMan.Input
             var catalogNames = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToHashSet();
 
             using (var moonRt = new EmuSen.Cores.Nintendo.MoonRT.MoonRtCore()) Assert.Contains(moonRt.CoreName, catalogNames);
-            using var marsRt = new EmuSen.Cores.Nintendo.MarsRT.MarsRtCore();
-            Assert.Contains(marsRt.CoreName, catalogNames);
+            using var marsRt = new MarsRtTestCore();
+            marsRt.LoadRom(SyntheticN64Rom.WriteTemp(SyntheticN64Rom.Build()));
+            Assert.Contains(marsRt.Console, catalogNames);
         }
 
         [Fact]
@@ -193,7 +196,7 @@ namespace EmuSen.WiseMan.Input
             using (var moonRt = new EmuSen.Cores.Nintendo.MoonRT.MoonRtCore()) Assert.Equal(moonRt.SupportedButtons, CoreCatalog.ButtonsFor("NES"));
             Assert.Equal(EmuSen.Crystal.Systems.Snes.SnesSystem.PadButtons, CoreCatalog.ButtonsFor("SNES"));
             using (var gameBoy = new EmuSen.Cores.Nintendo.MercuryRT.MercuryRtCore()) Assert.Equal(gameBoy.SupportedButtons.Order(), CoreCatalog.ButtonsFor("GB").Order());
-            using var marsRt = new EmuSen.Cores.Nintendo.MarsRT.MarsRtCore();
+            using var marsRt = new MarsRtTestCore();
             Assert.Equal(marsRt.SupportedButtons, CoreCatalog.ButtonsFor("N64"));
         }
 

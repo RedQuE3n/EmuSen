@@ -1,9 +1,9 @@
+using EmuSen.Crystal.Systems.N64;
 using System;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia.Input;
@@ -76,7 +76,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0, ControllerPorts.Of(null));
 
             if (MercuryRtCore.Available) Assert.Equal(1, ControllerPorts.Of(CoreFactory.Load(gb, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core));
-            if (MarsRtCore.Available) Assert.Equal(4, ControllerPorts.Of(new MarsRtCore() { Options = TestCores.NoBattery }));
+            if (MarsRt.Available) Assert.Equal(4, ControllerPorts.Of(new MarsRtTestCore() { Options = TestCores.NoBattery }));
         }
 
         // Port 1 is controller 2; ports 2 and 3 used to land on controller 2 as well.

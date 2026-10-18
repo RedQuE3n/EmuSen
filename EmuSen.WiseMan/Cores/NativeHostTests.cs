@@ -1,6 +1,7 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.WiseMan.Fixtures;
 using System;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Crystal.Systems.Nes;
 using EmuSen.Cores.Nintendo.MoonRT;
@@ -27,18 +28,17 @@ namespace EmuSen.WiseMan.Cores
             Assert.Empty(CoreEngine.RomPatchTriples(new CheatRegistry(), 0, 0xFFFF));
         }
 
-        // The loaders' switches and crash-log names; MoonRT and MercuryRT on the common interface, MarsRT on the core ABI v1 since its step 5.
+        // The loaders' switches and crash-log names; MoonRT and MercuryRT on the common interface, MarsRT discovered from its sidecar with no switch since B4, its component exports gone.
         [Fact]
         public void The_three_loaders_keep_their_switches_and_crash_logs()
         {
             Assert.Equal(("moonrt", "EMUSEN_MOON_NATIVE", "moonrt_crash"), (MoonNative.Library.Crate, MoonNative.Library.Variable, MoonNative.Library.CrashLogStem));
             Assert.Equal(("mercuryrt", "EMUSEN_MERCURY_NATIVE", "mercuryrt_crash"), (MercuryNative.Library.Crate, MercuryNative.Library.Variable, MercuryNative.Library.CrashLogStem));
-            Assert.Equal(("marsrt", "EMUSEN_MARS_NATIVE"), (MarsNative.Library.Crate, MarsNative.Library.Variable));
-            Assert.True(MarsNative.Available, MarsNative.Report);
-            Assert.NotEqual(0, MarsNative.Export("emusen_core_create"));
-            Assert.NotEqual(0, MarsNative.Export("mars_rsp_new"));
-            Assert.Equal(0, MarsNative.Export("mars_machine_new"));
-            Assert.Equal(0, MarsNative.Export("no_such_export"));
+            Assert.True(MarsRt.Available, MarsRt.Report);
+            Assert.NotEqual(0, MarsRt.Export("emusen_core_create"));
+            Assert.Equal(0, MarsRt.Export("mars_rsp_new"));
+            Assert.Equal(0, MarsRt.Export("mars_machine_new"));
+            Assert.Equal(0, MarsRt.Export("no_such_export"));
 
             var off = NativeCoreLibrary.Common("moonrt", "EMUSEN_CLEANUP_TEST_OFF", MoonNative.CoreVersion, MoonNative.RequiredCapabilities);
             Environment.SetEnvironmentVariable("EMUSEN_CLEANUP_TEST_OFF", "0");

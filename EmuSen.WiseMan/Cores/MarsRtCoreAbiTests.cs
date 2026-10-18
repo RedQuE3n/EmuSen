@@ -1,10 +1,10 @@
+using EmuSen.Crystal.Systems.N64;
 using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
@@ -48,14 +48,14 @@ namespace EmuSen.WiseMan.Cores
         {
             Assert.Equal("MarsRT (Rust)", Discovered.EngineName);
             Assert.Equal(new[] { ".z64", ".n64", ".v64" }, Discovered.Info.Systems.Single().Extensions);
-            Assert.True(MarsNative.Available, MarsNative.Report);
-            CoreLibrary library = MarsNative.Library.Library!;
+            Assert.True(MarsRt.Available, MarsRt.Report);
+            CoreLibrary library = MarsRt.Library!;
             Assert.Equal(Path.GetFullPath(Discovered.Sidecar.SidecarPath), Path.GetFullPath(CoreSidecar.PathFor(library.Path)));
-            Assert.Equal(0, MarsNative.Export("mars_machine_load_rom"));
-            Assert.Equal(0, MarsNative.Export("emusen_native_interface_version"));
-            Assert.Equal(MarsRtCore.VideoSettings.Select(s => s.Key).Order(), library.Settings.Where(s => !s.Hidden).Select(s => s.Key).Order());
+            Assert.Equal(0, MarsRt.Export("mars_machine_load_rom"));
+            Assert.Equal(0, MarsRt.Export("emusen_native_interface_version"));
+            Assert.Equal(MarsRt.VideoSettings.Select(s => s.Key).Order(), library.Settings.Where(s => !s.Hidden).Select(s => s.Key).Order());
             ICore core = CoreFactory.Create("game.z64", engine: CoreCatalog.MarsRtEngine, options: TestCores.NoBattery);
-            Assert.IsType<MarsRtCore>(core);
+            Assert.IsType<CoreEngine>(core);
             Assert.Null(CoreFactory.EngineNotice("game.z64", CoreCatalog.MarsRtEngine, core));
         }
 
@@ -65,8 +65,8 @@ namespace EmuSen.WiseMan.Cores
         {
             string rom = Rom(SyntheticN64Rom.BuildHomebrew(N64SaveType.Eeprom4k));
             var settings = new System.Collections.Generic.Dictionary<string, string> { ["ExpansionPak"] = "true" };
-            using var shim = new MarsRtCore(expansionPak: true) { Options = TestCores.NoBattery };
-            using var adapter = new CoreEngine(MarsNative.Library.Library!, settings) { Options = TestCores.NoBattery };
+            using var shim = new MarsRtTestCore(expansionPak: true) { Options = TestCores.NoBattery };
+            using var adapter = new CoreEngine(MarsRt.Library!, settings) { Options = TestCores.NoBattery };
             shim.LoadRom(rom);
             adapter.LoadRom(rom);
             Assert.Equal((shim.ScreenWidth, shim.ScreenHeight, shim.StateVersion), (adapter.ScreenWidth, adapter.ScreenHeight, adapter.StateVersion));
@@ -93,7 +93,7 @@ namespace EmuSen.WiseMan.Cores
         public void The_v1_adapter_logs_an_n64_value_big_end_first()
         {
             string rom = Rom(SyntheticN64Rom.BuildHomebrew(N64SaveType.Eeprom4k));
-            using var adapter = new CoreEngine(MarsNative.Library.Library!, new System.Collections.Generic.Dictionary<string, string> { ["ExpansionPak"] = "true" }) { Options = TestCores.NoBattery };
+            using var adapter = new CoreEngine(MarsRt.Library!, new System.Collections.Generic.Dictionary<string, string> { ["ExpansionPak"] = "true" }) { Options = TestCores.NoBattery };
             adapter.LoadRom(rom);
             adapter.WriteSpace("RDRAM", 0x7F_0000, 0x12);
             adapter.WriteSpace("RDRAM", 0x7F_0001, 0x34);
@@ -107,7 +107,7 @@ namespace EmuSen.WiseMan.Cores
         public void The_generic_target_reads_the_processor_s_view_at_kseg0()
         {
             string rom = Rom(SyntheticN64Rom.BuildHomebrew(N64SaveType.Eeprom4k));
-            using var adapter = new CoreEngine(MarsNative.Library.Library!, new System.Collections.Generic.Dictionary<string, string> { ["ExpansionPak"] = "true" }) { Options = TestCores.NoBattery };
+            using var adapter = new CoreEngine(MarsRt.Library!, new System.Collections.Generic.Dictionary<string, string> { ["ExpansionPak"] = "true" }) { Options = TestCores.NoBattery };
             adapter.LoadRom(rom);
             adapter.WriteSpace("RDRAM", 0x40_0400, 0x5A);
             var cpu = adapter.CreateDebugTarget().GetMemorySpaces().Single(s => s.Name == "CPU");
@@ -127,7 +127,7 @@ namespace EmuSen.WiseMan.Cores
         public void A_state_saved_with_a_button_held_runs_on_as_the_run_that_went_on()
         {
             string rom = Rom(SyntheticN64Rom.BuildHomebrew(N64SaveType.Eeprom4k));
-            using var through = new MarsRtCore(expansionPak: true) { Options = TestCores.NoBattery };
+            using var through = new MarsRtTestCore(expansionPak: true) { Options = TestCores.NoBattery };
             through.LoadRom(rom);
             for (int f = 0; f < 120; f++)
             {
@@ -137,7 +137,7 @@ namespace EmuSen.WiseMan.Cores
                 through.RunFrame();
             }
             byte[] held = State(through);
-            using var loaded = new MarsRtCore(expansionPak: true) { Options = TestCores.NoBattery };
+            using var loaded = new MarsRtTestCore(expansionPak: true) { Options = TestCores.NoBattery };
             loaded.LoadRom(rom);
             loaded.LoadState(held);
             Assert.Equal(held, State(loaded));
@@ -159,7 +159,7 @@ namespace EmuSen.WiseMan.Cores
             foreach (var (name, image) in new[] { ("plain.z64", SyntheticN64Rom.Build()), ("eeprom.z64", SyntheticN64Rom.BuildHomebrew(N64SaveType.Eeprom4k)), ("flash.v64", SyntheticN64Rom.ToByteSwapped(SyntheticN64Rom.BuildHomebrew(N64SaveType.FlashRam))) })
             {
                 var start = new ProcessStartInfo(runner) { RedirectStandardOutput = true, RedirectStandardError = true };
-                foreach (string a in new[] { "--core", MarsNative.Library.Library!.Path, "--image", Rom(image, name), "--frames", "120" }) start.ArgumentList.Add(a);
+                foreach (string a in new[] { "--core", MarsRt.Library!.Path, "--image", Rom(image, name), "--frames", "120" }) start.ArgumentList.Add(a);
                 using var process = Process.Start(start)!;
                 var stderr = process.StandardError.ReadToEndAsync();
                 string output = process.StandardOutput.ReadToEnd();

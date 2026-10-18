@@ -84,10 +84,10 @@ case on marsrt
 target marsrt
 covers 1
 $ summary
-out 167
-N64 (MarsRT) - frame 2, 0.09s of console time, 8MB RDRAM
+out 136
+MarsRT (Rust) 0.1.0, n64, frame 2
 CPU  PC=FFFFFFFFA4000040 SP=FFFFFFFFA4001FF0 RA=FFFFFFFFA4001550
-VI   ORIGIN=00000000 WIDTH=0 V_SYNC=0 640x480
+VI   ORIGIN=00000000 WIDTH=0 V_SYNC=0
 status 0
 action none
 end

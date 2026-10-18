@@ -1,6 +1,8 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.Cores.Native;
+using EmuSen.WiseMan.Fixtures;
 using System;
 using System.IO;
-using EmuSen.Cores.Nintendo.MarsRT;
 using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
@@ -33,7 +35,7 @@ namespace EmuSen.WiseMan.Cores
                 return;
             }
 
-            Assert.True(MarsMachine.Available, MarsNative.Report);
+            Assert.True(MarsMachine.Available, MarsRt.Report);
             byte[] state = File.ReadAllBytes(path);
             using var machine = new MarsMachine(Rdram);
             machine.Load(state);
@@ -45,7 +47,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_state_that_is_not_marss_or_is_cut_short_is_refused_and_changes_nothing()
         {
-            Assert.True(MarsMachine.Available, MarsNative.Report);
+            Assert.True(MarsMachine.Available, MarsRt.Report);
             byte[] state;
             using (var source = new MarsMachine(Rdram)) state = source.Save(snapshot: false);
 

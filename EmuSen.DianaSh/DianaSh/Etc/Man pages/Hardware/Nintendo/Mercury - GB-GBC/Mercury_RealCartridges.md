@@ -21,7 +21,8 @@ with battery, MBC5 with battery. Sizes from 32K to 1 MB. Yellow is `$0143 = $80`
 so it is also the first colour cartridge Phase D has ever seen.
 
 None of them is committed and none of them is required. `CommercialRomLibrary`
-discovers whatever is sitting in the gitignored `TestRoms/` directory and
+discovers whatever is sitting in the gitignored `TestRoms/` directory (or the folder
+`EMUSEN_COMMERCIAL_ROMS` names, read in place, for a checkout without one) and
 `MercuryCommercialRomTests` passes when that directory is empty — the same shape
 `ReferenceDumpTests` already used for the reference dumps, and for the same
 reason.

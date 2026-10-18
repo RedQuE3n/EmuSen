@@ -1,6 +1,6 @@
 # EmuSen — the backend in Rust: the line, the frontend API, the system packs and the services
 
-*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), and B4's first phase for MarsRT, an inventory and a proposal with nothing built (§17, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
+*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), and B4's first phase for MarsRT, an inventory and a proposal with nothing built (§18, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
 get the entire backend ported to rust", after which the frontend's move is planned, and the request of 2026-10-17 to
 design two things: one frontend API by which every frontend drives the cores, and the system packs and the remaining C#
 platform services in Rust. Every claim about the code was read on `WiseMan` at `165e60b4`. Claims are marked as
@@ -758,9 +758,9 @@ about 5,480 lines are deleted unported and 3,117 are replaced by the table Cryst
   leaves `pacebench`'s frame-time distribution on the bench games unchanged within its run-to-run spread. Retired at B2
   and again at B7. If it fails at B7, a runtime-owned thread fed the display's timing as data is designed as a minor.
 - **P3.** Every behaviour a shim adds above the ABI fits an optional capability the core ABI v1 already defines, except
-  MarsRT's counters, which need a telemetry minor. Retired at B4. *Found not to hold for MarsRT on 2026-10-18 (§17.2):
+  MarsRT's counters, which need a telemetry minor. Retired at B4. *Found not to hold for MarsRT on 2026-10-18 (§18.2):
   beside the counters, the lines of a picture at a multiple, a controller plugged in, the cheat gate and the TLB walk
-  behind `addr` have no v1 home; §17.4 proposes them.*
+  behind `addr` have no v1 home; §18.4 proposes them.*
 - **P4.** The debugger's registries in Rust cost no more per breakpoint check than in C#, measured as `EmuSen_DianaSh.md`
   §13.12 measured conditions. Retired at B7(b).
 - **P5.** No `games.db` row differs between the two scans of B8 except in columns that record a time. Retired at B8.
@@ -2607,7 +2607,7 @@ unchanged. The next failure will name its side and its cause.
 
 ---
 
-## 17. B4's first phase for MarsRT, 2026-10-18: the shim inventoried, a proposal, the gates and a plan
+## 18. B4's first phase for MarsRT, 2026-10-18: the shim inventoried, a proposal, the gates and a plan
 
 *Read on 2026-10-18 on branch `b4-marsrt`, from `WiseMan` at `480bf5e2` (core ABI 1.12). The first phase of §6's B4
 row for one core: every behaviour MarsRT's shim adds above the core ABI v1 and every private export it calls, each
@@ -2616,7 +2616,7 @@ pass; a plan in steps; and the questions only the tester can answer. **Nothing w
 no edit to MarsRT or the host. Line numbers are of the files at `480bf5e2`. Claims are marked as at the head of this
 page.*
 
-### 17.1 What the shim is
+### 18.1 What the shim is
 
 - **Nine files, 1,478 lines, 1,247 of them not blank** [M: `wc -l`, `grep -cv '^\s*$'`], in
   `EmuSen/Cores/Nintendo/MarsRT - N64/Shim/`: `MarsRtCore.cs` (473) and `MarsRtCore.Debug.cs` (293), one class, a
@@ -2635,10 +2635,10 @@ page.*
   one is missing (`PortEngine.cs:44–56`), so the N64 runs nothing without them. MarsRT also exports **21 component
   exports** the shim does not call: `mars_rsp_*` (7), `mars_rdp_*` (6) and `mars_vi_scan_*` (8) [M:
   `grep -c 'extern "C" fn mars_'`].
-- **36 WiseMan files name a shim type** (§17.5). WiseMan is not shipped, so the B4 gate's `grep` does not count them;
+- **36 WiseMan files name a shim type** (§18.5). WiseMan is not shipped, so the B4 gate's `grep` does not count them;
   each must still move before the shim goes.
 
-### 17.2 Every behaviour above the ABI, and where it goes
+### 18.2 Every behaviour above the ABI, and where it goes
 
 The destinations, in order of preference, each later one widening a surface more:
 
@@ -2653,30 +2653,30 @@ The destinations, in order of preference, each later one widening a surface more
   closed it, is kept.
 - **dead**: no caller anywhere, shown by `grep` over every `.cs`, `.rs`, `.py` and `.fs` file outside build output;
   deleted.
-- **minor**: no v1 home; proposed in §17.4 as part of a core ABI minor, written "1.next" until approved.
+- **minor**: no v1 home; proposed in §18.4 as part of a core ABI minor, written "1.next" until approved.
 
 **(a) The engine and its frame**
 
 | # | What the shim adds | Read by | Goes to |
 |---|---|---|---|
-| A1 | `CoreName` is `"N64"` (`MarsRtCore.cs:75`) | the debugger's headings (`regs`, `cpus`, `spaces`), the session service's `engine` (`SessionService.Machine.cs:28`), the frame recorder's file names, Hotaru's title | **host**: core info's `name`, `"MarsRT"`, as every v1 core names itself (Nephrite's headings read `Nephrite`); a difference in the golden corpus (§17.6.3) |
+| A1 | `CoreName` is `"N64"` (`MarsRtCore.cs:75`) | the debugger's headings (`regs`, `cpus`, `spaces`), the session service's `engine` (`SessionService.Machine.cs:28`), the frame recorder's file names, Hotaru's title | **host**: core info's `name`, `"MarsRT"`, as every v1 core names itself (Nephrite's headings read `Nephrite`); a difference in the golden corpus (§18.6.3) |
 | A2 | Width and height before a game: 640 × 480 (`:76–77`, `N64Console.cs:17–18`) | nothing in the factory's paths reads it between a core's creation and its load [A]; `MarsRtFrontendTests:366` reads the multiple after a load | **host**: 0 × 0 before a machine, as for every v1 core; after create the blank is `frame_info`'s, 640 × 480, as now |
 | A3 | `DisplayAspect` is the television's 4:3 (`:79`) | Serenity's presenter | **info**: machine info's `aspect` and every `frame_info` already say 4/3 (`v1.rs:498`, `:557`), and `CoreEngine.DisplayAspect` reads them; the same value |
-| A4 | `DisplayLines`: the console's lines in a picture drawn at a multiple (`:81`, `N64Console.cs:37`) | the CRT filter through `ICore.DisplayLines` (`EmuSen_CRT.md` §16), the frontend API's `display_lines` (`ManagedSession.Frame.cs:84`), the digest probe | **minor**: `frame_info` carries no such field; without one the generic adapter answers 0, and the CRT filter would draw 1,152 scanlines over a 576-line game at 2× (§17.4.2) |
+| A4 | `DisplayLines`: the console's lines in a picture drawn at a multiple (`:81`, `N64Console.cs:37`) | the CRT filter through `ICore.DisplayLines` (`EmuSen_CRT.md` §16), the frontend API's `display_lines` (`ManagedSession.Frame.cs:84`), the digest probe | **minor**: `frame_info` carries no such field; without one the generic adapter answers 0, and the CRT filter would draw 1,152 scanlines over a 576-line game at 2× (§18.4.2) |
 | A5 | `FrameRateHz` from the last frame's cycles, 93,750,000 over `marsrt_core_counters[2]` (`:83`, `N64Console.cs:11`, `:14`) | every frontend's pacer, the load bars' budget (`CoreDebugTarget.cs:67`), the digest probe | **info**: machine info's `frame_rate`, which MarsRT writes as the region's nominal rate (`v1.rs:497`); measured from the digest files of `Mars_Native.md` §7.3 (`~/.cache/emusen/probe/mars/v1/digest-after2/`), the shim's rate alternates field by field, 50.016032 on 336 frames and 50.016005 on 262 of Ocarina of Time's 602 from power-on (Super Mario 64: 338 and 261), with 22.87 and 27.39 on the boot's cap-length frames. Recommended: machine info's rate is the VI's programmed field pair as an exact ratio (93,750,000 × 2 over the two fields' cycles), raised by `MACHINE_INFO` when the VI's timing registers change and the nominal rate before they are programmed (Q6) |
 | A6 | `StateVersion` is `MarsMachine.StateKind`, 1 (`:87`) | the state records | **info**: machine info's `state.version`, `STATE_VERSION`, 1 |
 | A7 | `ControllerPorts` is 4 (`:89`) | `ControllerPorts.Of` | **info**: machine info's four ports, which `ControllerPorts.OfEngine` already reads (`ControllerPorts.cs:17–22`) |
 | A8 | `LastFramePhases` read into one array kept (`:395–410`) | `ManagedSession.Frame.cs:188–195` | **cap**: `PHASES` is claimed and machine info names the same five phases (`v1.rs:521`); the adapter's `PhaseMilliseconds` already allocates nothing |
 | A9 | The frame-end work in Mars's order: cheats (gated, D1), freezes, the frame log, the breakpoints' frame, the periodic save (`:375–382`) | every frame | **host**: the runtime's order (`CoreEngine.cs:515–522`), which records the frame log *before* the cheats, so a logged address a cheat holds shows the game's value rather than the cheat's. The port's own order existed to match C# Mars (`EmuSen_NativeCores.md` §8.2's R4), retired as an oracle on 2026-10-16; recorded as a difference, not kept |
 | A10 | `PeekAudioSamples` (`:413`) | `MarsRtDebugTarget.GetAudioSamples` | **cap**: `AUDIO_PEEK` is claimed; `CoreDebugTarget.GetAudioSamples` peeks the same way (`CoreDebugTarget.cs:122`) |
-| A11 | A refused image becomes `InvalidDataException("MarsRT refused … as a Nintendo 64 image")`; the call stack is reset and the halt cleared (`:344–350`) | a frontend's message | **host**: `CoreRefusedException` with `status_text`'s words, "not a Nintendo 64 cartridge image" (`v1.rs:448`). The call stack: the adapter's bridge does not reset its `CallStack` on a new machine (`CoreDebugBridge.cs:39–48`), a candidate defect of every v1 core reloaded in one engine, to be shown by a test before anything changes (C2 of §17.3) |
+| A11 | A refused image becomes `InvalidDataException("MarsRT refused … as a Nintendo 64 image")`; the call stack is reset and the halt cleared (`:344–350`) | a frontend's message | **host**: `CoreRefusedException` with `status_text`'s words, "not a Nintendo 64 cartridge image" (`v1.rs:448`). The call stack: the adapter's bridge does not reset its `CallStack` on a new machine (`CoreDebugBridge.cs:39–48`), a candidate defect of every v1 core reloaded in one engine, to be shown by a test before anything changes (C2 of §18.3) |
 | A12 | `Boot`: the corpus's hand-off with the hidden `Boot` setting, and no battery file while it runs (`:353–366`, `:341–342`) | `MarsRtTests:53` | **test**: the schema already carries `Boot` (create scope, hidden, `v1.rs:214`), so a test makes `new CoreEngine(library, { Boot = true, ExpansionPak = true })` with `BatteryRamDisabled`; no ABI change |
 
 **(b) Settings**
 
 | # | What the shim adds | Read by | Goes to |
 |---|---|---|---|
-| B1 | Typed properties over the settings: `IdleSkip`, `RspWhole`, `RenderScale`, `Antialiasing`, `Gpu`, `ThreadedRdp`, `RdpWorkers`, `DeferredPresentation`, `SkipRepeatedScans`, `UseBlocks`, `VerifyBlocks`, `BlockTier`, `VerifyRdp` (`:92–187`) | tests only (§17.5) | **host**: `Get` and `Set` by key |
+| B1 | Typed properties over the settings: `IdleSkip`, `RspWhole`, `RenderScale`, `Antialiasing`, `Gpu`, `ThreadedRdp`, `RdpWorkers`, `DeferredPresentation`, `SkipRepeatedScans`, `UseBlocks`, `VerifyBlocks`, `BlockTier`, `VerifyRdp` (`:92–187`) | tests only (§18.5) | **host**: `Get` and `Set` by key |
 | B2 | `VideoSettings`, the rows in C# with MarsRT's hints (`:196–209`), and `Settings` returning them | Mistress's Graphics Settings window through `ICoreSettings` | **info**: the schema (`v1.rs:149`), which `CoreEngine.Settings` already turns into rows. The two texts differ in one place [M]: `RdpWorkers`' help ends "…, as on Mars." in the schema (`v1.rs:156`) and not in the shim (`MarsRtCore.cs:204`); the schema's words are the ones that stay, with "as on Mars" taken out, since C# Mars is gone |
 | B3 | The antialiasing note, a C# function of the values (`N64Console.cs:43–53`, rule at `:40`) | the settings window's row note | **cap**: `SETTING_NOTES`; MarsRT computes the same sentence where `EffectiveAntialiasing`'s rule already lives (`ffi/multiple.rs:8`). A note then needs a running machine; with none the window shows no note (Q15) |
 | B4 | `Set` clamps a count to its range and refuses other text with `ArgumentException`; `Get` throws on an unknown key (`:211–228`) | `ManagedSession.ApplySetting`, tests | **host**: the adapter refuses anything outside the domain with `ArgumentException` (`CoreEngine.cs:909–912`), and `ApplySetting` then falls back to the default; `Get` of an unknown key answers `""`. A stored count past its range is clamped today and becomes the default; recorded |
@@ -2687,7 +2687,7 @@ The destinations, in order of preference, each later one widening a surface more
 
 | # | What the shim adds | Read by | Goes to |
 |---|---|---|---|
-| C1 | A refused state is thrown again as a new `InvalidDataException` (`:432`) | `ManagedSession.States.cs:38` | **host**. The new exception does not carry the status the adapter's carried (`CoreMachine.cs:403`), so the frontend API's filter, `StatusOf(e) is not null`, cannot match it, and a refused MarsRT state is answered as a fault rather than `StateRefused`: a candidate defect read from the code (C1 of §17.3), removed by the generic adapter, to be shown by a test first |
+| C1 | A refused state is thrown again as a new `InvalidDataException` (`:432`) | `ManagedSession.States.cs:38` | **host**. The new exception does not carry the status the adapter's carried (`CoreMachine.cs:403`), so the frontend API's filter, `StatusOf(e) is not null`, cannot match it, and a refused MarsRT state is answered as a fault rather than `StateRefused`: a candidate defect read from the code (C1 of §18.3), removed by the generic adapter, to be shown by a test first |
 | C2 | `LoadState(ReadOnlySpan<byte>)`, `Save(bool)` (`:438–453`) | tests | **host**: `LoadState(Stream)`, `SaveState`, `SaveSnapshot` (`ISnapshotCore`) |
 | C3 | `BatteryContents` (`:338`) | `BatterySaveTests:320`, `MarsRtFrontendTests:531` | **host**: `Machine.Battery(0)` |
 | C4 | `MarsMachine`: a machine for the state alone, `marsrt_core_load_fields`, `marsrt_core_state_kind`, `Describe` (`MarsMachine.cs:10–80`) | `MarsNativeStateTests`, `MarsRtRewindTests`, `MarsRtThreadsTests`, `NativeHostTests`, `RustStateHeaderTests` | **test** for the two exports; `Describe` repeats `status_text` and the crate's codes, so the fixture uses `CoreLibrary.Words` (one owner) |
@@ -2697,7 +2697,7 @@ The destinations, in order of preference, each later one widening a surface more
 
 | # | What the shim adds | Read by | Goes to |
 |---|---|---|---|
-| D1 | **The frame end applies cheats only while COP0's `Status.IE` is set** (`:377`, `Cop0` at `:270`, `marsrt_core_cop0`), Project64's rule, which keeps a cheat restored at power-on from breaking the boot code's checksum (`Mars_Cheats.md` §5.1: Super Mario 64 spins at `0x800001CC` without it) | every frame with a cheat on | **minor** (§17.4.4). v1's `CHEAT_POKES` was meant for this core (§6.12 of the core ABI page), but the host sends it only one-byte `Set`s (`CoreEngine.cs:861`): of Project64's 21,103 N64 code lines, the 16-bit writes (38.2%), the tests (7.4%) and the repeaters (4.2%) would still be applied by the host, ungated (`Mars_Cheats.md`'s census) |
+| D1 | **The frame end applies cheats only while COP0's `Status.IE` is set** (`:377`, `Cop0` at `:270`, `marsrt_core_cop0`), Project64's rule, which keeps a cheat restored at power-on from breaking the boot code's checksum (`Mars_Cheats.md` §5.1: Super Mario 64 spins at `0x800001CC` without it) | every frame with a cheat on | **minor** (§18.4.4). v1's `CHEAT_POKES` was meant for this core (§6.12 of the core ABI page), but the host sends it only one-byte `Set`s (`CoreEngine.cs:861`): of Project64's 21,103 N64 code lines, the 16-bit writes (38.2%), the tests (7.4%) and the repeaters (4.2%) would still be applied by the host, ungated (`Mars_Cheats.md`'s census) |
 | D2 | The cheat spaces by name, case-insensitively, a read past the end zero (`:231–245`) | the cheat registry | **host**: `CoreEngine.SpaceOf` matches as case-insensitively; past the end is MarsRT's own rule in `space_read` |
 | D3 | `MarsCheatCodecs.GameShark()` and `Pair()` (`Cheats/MarsCheatCodecs.cs:9`, `:12`) | `CheatCodecAdapterTests`, `MarsCheatTests` | **pack**: `N64System.GameShark()`, which the factory already uses (`CoreFactory.cs:195`); the alias goes |
 
@@ -2705,7 +2705,7 @@ The destinations, in order of preference, each later one widening a surface more
 
 | # | What the shim adds | Read by | Goes to |
 |---|---|---|---|
-| E1 | **A controller plugged in or pulled out**, `SetControllerConnected` over `marsrt_core_set_present` (`:369–372`) | `EmulatorSession.cs:33`, the frontend API's `connected` (`ManagedSession.cs:233`), Endymion's router on every poll (`EmuSen_Input.md` §8.6) | **minor** (§17.4.3). The N64's games tell an empty port from a full one; `ICore.SetControllerConnected` defaults to nothing (`ICore.cs:56`) and the adapter does not override it, so without a v1 home a second player's controller would never be present |
+| E1 | **A controller plugged in or pulled out**, `SetControllerConnected` over `marsrt_core_set_present` (`:369–372`) | `EmulatorSession.cs:33`, the frontend API's `connected` (`ManagedSession.cs:233`), Endymion's router on every poll (`EmuSen_Input.md` §8.6) | **minor** (§18.4.3). The N64's games tell an empty port from a full one; `ICore.SetControllerConnected` defaults to nothing (`ICore.cs:56`) and the adapter does not override it, so without a v1 home a second player's controller would never be present |
 | E2 | `RunSteps` sends the held buttons before it steps (`:416–422`) | `MarsRtTests`, `MarsRtDebugTests` | **test**, with `marsrt_core_run_steps`; the fixture sends the latch as `SendInput` does |
 
 **(f) The debugger**
@@ -2716,17 +2716,17 @@ The destinations, in order of preference, each later one widening a surface more
 | F2 | The observed loop: tables pushed, `debug_run_frame`, logs drained (`MarsRtCore.Debug.cs:73–200`) | every armed frame | **host**: `CoreDebugBridge` does the same over the same exports, with two differences, F12 and F13 |
 | F3 | The CPU's registers, `marsrt_core_cpu_registers`: PC, the 32 GPRs, HI, LO and the cycle count, named by `MarsOperands.Gpr` (`MarsRtDebugTarget.cs:123–132`) | `regs`, `eval`, `setreg`'s list, conditions, Mistress's debugger | **cap**: `DEBUG_REGISTERS`, as `EmuSen_DianaSh.md` Q28 asked of the other ports: the 36 names in machine info's `processors[0].registers` (empty today, `v1.rs:515–518`) and `debug_registers` giving the values |
 | F4 | The RSP's registers, `marsrt_core_rsp_registers`: PC (16 bits), halted (1), the 32 scalars; *broke* is read and not shown (`:134–140`) | `regs`, `regs rsp`, `cop` | **cap**: `DEBUG_REGISTERS` for processor 1, the 34 shown today |
-| F5 | The VI's fourteen registers by their libultra names, `marsrt_core_vi_registers` (`:17–20`, `:142–147`) | `regs`' video section, `eval`, the summary | **info** and **pack**: a read-only `view` space `VI` of 56 bytes, the registers big-endian as stored (MarsRT's machine info), and the names the pack's (`ISystemDebugViews.VideoRegisters(spaces)`, a new member with its Rust twin, as §31.2 of the core ABI page reads the SNES's spaces by name). No ABI change; `spaces` lists one more space (§17.6.3) |
-| F6 | Processor descriptions "VR4300 (MarsRT)" and "RSP (MarsRT)" (`:74`, `:82`) | `cpus` | **info**: machine info's names, `CPU` and `RSP`, which the adapter lowercases into the words `cpu` and `rsp` the commands take; the descriptions change in `cpus` (§17.6.3) |
+| F5 | The VI's fourteen registers by their libultra names, `marsrt_core_vi_registers` (`:17–20`, `:142–147`) | `regs`' video section, `eval`, the summary | **info** and **pack**: a read-only `view` space `VI` of 56 bytes, the registers big-endian as stored (MarsRT's machine info), and the names the pack's (`ISystemDebugViews.VideoRegisters(spaces)`, a new member with its Rust twin, as §31.2 of the core ABI page reads the SNES's spaces by name). No ABI change; `spaces` lists one more space (§18.6.3) |
+| F6 | Processor descriptions "VR4300 (MarsRT)" and "RSP (MarsRT)" (`:74`, `:82`) | `cpus` | **info**: machine info's names, `CPU` and `RSP`, which the adapter lowercases into the words `cpu` and `rsp` the commands take; the descriptions change in `cpus` (§18.6.3) |
 | F7 | **The RSP cannot halt**: its breakpoints are a registry never pushed, and `CanHalt` is false (`:25–26`, `:88`), since the RSP runs inside the bus's clock (`Mars_Debug.md` §5) | `bp rsp`, `step rsp`, `cpus`' "supports" | **host**: the crate's default answers `NOT_SUPPORTED` to `debug_set_breakpoints` for any processor but 0 that a core does not take (`emusen-native/src/core/mod.rs:198–206`), and the bridge ignores the answer (`CoreDebugBridge.cs:154`). The target asks once per machine, with an empty table, and marks a refusing processor as one that cannot halt; the core ABI page's §6.14 says so in a clarification (Q16). Without it, `bp rsp add` would be accepted and never hit |
 | F8 | **Disassembly by space**: the VR4300 for RDRAM (at KSEG0), the ROM (at `0xB0000000`), PIF RAM (at `0xBFC007C0`) and the processor's view; the RSP for IMEM and DMEM (`:152–188`); static references (`:170–175`) | `disasm`, `callers`, `trace`, the call graph | **pack**: MarsRT claims no `DEBUG_DISASSEMBLE`, and the adapter's target disassembles nothing without it (`CoreDebugTarget.cs:238`). The VR4300's table is already `emusen-mips`' and reached through the pack's `n64::disasm` (§13.5); the RSP's moves from `RspDisassembler.cs` into `emusen-mips` as a dialect beside it, the item §13.6 left for this step, by B3's method (a parity class against the C# before the C# goes). The target then asks the pack when the core does not decode (Q7) |
-| F9 | **A virtual address's physical place**, `addr`: the TLB walked without faulting (`marsrt_core_physical`), then the physical map named (`MarsDebugSpaces.cs:23–44`) (`:96`, `MarsRtCore.Debug.cs:252–263`) | `addr`, `DebugPlumbingTests:58–60` | **minor** for the walk (§17.4.5): only the core holds the TLB. **pack** for the map: the N64's physical map is the console's, whichever engine runs it, read with the RDRAM space's size |
-| F10 | The summary: frame, console time from the cycle count, RDRAM size, the CPU's PC, SP and RA, the VI's origin, width and sync, and the picture's size (`:215–226`) | `summary`, Mistress's debugger | **pack**: `ISystemDebugViews.Summary` given the spaces as well as the registers, so the N64's lines come from the CPU's registers (the cycle count is register 35, F3) and the `VI` space; the head line becomes the adapter's (§17.6.3) |
+| F9 | **A virtual address's physical place**, `addr`: the TLB walked without faulting (`marsrt_core_physical`), then the physical map named (`MarsDebugSpaces.cs:23–44`) (`:96`, `MarsRtCore.Debug.cs:252–263`) | `addr`, `DebugPlumbingTests:58–60` | **minor** for the walk (§18.4.5): only the core holds the TLB. **pack** for the map: the N64's physical map is the console's, whichever engine runs it, read with the RDRAM space's size |
+| F10 | The summary: frame, console time from the cycle count, RDRAM size, the CPU's PC, SP and RA, the VI's origin, width and sync, and the picture's size (`:215–226`) | `summary`, Mistress's debugger | **pack**: `ISystemDebugViews.Summary` given the spaces as well as the registers, so the N64's lines come from the CPU's registers (the cycle count is register 35, F3) and the `VI` space; the head line becomes the adapter's (§18.6.3) |
 | F11 | Tiles and tilemaps refused with the N64's words (`:200–204`) | `tile`, `tilemap` | **host**: the adapter answers empty, and `tile` says the core decodes no tiles (§30.4 of the core ABI page) |
 | F12 | A watch's log line names the store's PC with eight digits, `PC=A4000040` (`MarsRtCore.Debug.cs:161`) | `watch log` | **host**: the bridge writes `PC=$A4000040` (`CoreDebugBridge.cs:205`, `X4` pads but does not cut); one character differs |
 | F13 | An interrupt noted from the stop reason, `INTERRUPT` (16), with no frame pushed (`MarsRtCore.Debug.cs:36`, `:91`), since MarsRT's loop stops for an interrupt without pushing a call (`Mars_Native.md` §7.2) | `bp irq`, the call stack | **host**: the bridge notes interrupts only from call kinds 2 to 5 (`CoreDebugBridge.cs:225–227`); it notes one on the stop reason as well, for any core, the reason being v1's (`emusen-native/src/debug.rs:20`) |
 | F14 | The frame log reads a value big-endian (`MarsRtCore.Debug.cs:227–237`) | `framelog` | **pack**: the N64 is big-endian whichever engine runs it; the adapter reads little-endian (`CoreEngine.cs:893–898`) and takes the order from the system's pack (Q13) |
-| F15 | Expression symbols: every register of the three providers, the VI's and the RSP's among them (the golden `eval symbols` lists `BURST`, `CONTROL`, `Halted`) | `eval`, conditions | **host**: the adapter's context is the main processor's registers, the pack's symbols and `stackdepth` (`CoreDebugTarget.cs:182–190`); the VI's names come back as pack symbols over the `VI` space, the RSP's do not (§17.6.3) |
+| F15 | Expression symbols: every register of the three providers, the VI's and the RSP's among them (the golden `eval symbols` lists `BURST`, `CONTROL`, `Halted`) | `eval`, conditions | **host**: the adapter's context is the main processor's registers, the pack's symbols and `stackdepth` (`CoreDebugTarget.cs:182–190`); the VI's names come back as pack symbols over the `VI` space, the RSP's do not (§18.6.3) |
 | F16 | Test hooks: `WriteBus32`, `ReadBus32`, `SetCop0`, `RaiseInterrupt` with `MiInterrupt`, `StepRsp`, `DebugCounterValues` (`MarsRtCore.Debug.cs:9–19`, `:266–291`) | `MarsDebugRig`, `MarsCheatTests`, `MarsDebugTests`, `MarsRtDebugTests`, `CoreFactoryCheatWiringTests`, `MainWindowSaveStateThreadTests` | **test**, with `marsrt_core_bus_write32`, `_bus_read32`, `_set_cop0`, `_mi_raise`, `_rsp_step`; `marsrt_core_debug_counters`' third value is telemetry (H4) |
 
 **(g) The console's facts with no library loaded (`N64Console`)**
@@ -2746,7 +2746,7 @@ The destinations, in order of preference, each later one widening a surface more
 
 | # | What the shim adds | Read by | Goes to |
 |---|---|---|---|
-| H1 | `marsrt_core_counters`: cycles, frames, the last frame's cycles, instructions, the idle loop's turns and instructions (`v1.rs:765–771`) | `FrameRateHz` (A5), the summary (F10), `MarsDebugTests:203–223`, `MarsRtDebugTests:97`, `MarsRtTests:94` | **minor**, `TELEMETRY` (§17.4.1); the cycle count is also register 35 (F3) |
+| H1 | `marsrt_core_counters`: cycles, frames, the last frame's cycles, instructions, the idle loop's turns and instructions (`v1.rs:765–771`) | `FrameRateHz` (A5), the summary (F10), `MarsDebugTests:203–223`, `MarsRtDebugTests:97`, `MarsRtTests:94` | **minor**, `TELEMETRY` (§18.4.1); the cycle count is also register 35 (F3) |
 | H2 | `marsrt_core_thread_counters`: the display processor's thread, 38 values (`ffi/threads.rs:8`, `:29–55`) | `MarsRtRewindTests:290`, `MarsRtThreadsTests:87` | **minor**, `TELEMETRY` |
 | H3 | `marsrt_core_block_counters`: the recompiler's 13 (`cpu/blocks/mod.rs:260–281`) | none outside the shim's `BlockCounterValues` [M] | **minor**, `TELEMETRY`, since `Mars_Recompiler.md` reads them when measuring; or **dead** if the tester prefers (Q1) |
 | H4 | The third value of `marsrt_core_debug_counters`, the exceptions entered (`v1.rs:972–977`; the first two are v1's `debug_counters`) | `MarsRtDebugTests:97` | **minor**, `TELEMETRY` |
@@ -2770,7 +2770,7 @@ cheat gate (D1) and the TLB walk behind `addr` (F9). Everything else goes to a c
 `SETTING_NOTES`, `AUDIO_PEEK`, `PHASES`), to descriptors, to the N64's pack, to the generic adapter, to a test fixture,
 or is dead.
 
-### 17.3 Candidate defects read on the way, none yet shown
+### 18.3 Candidate defects read on the way, none yet shown
 
 Each is to be shown by a test that fails before anything is changed, or recorded as no defect, as §3.12 asks.
 
@@ -2787,7 +2787,7 @@ Each is to be shown by a test that fails before anything is changed, or recorded
   bridge notes interrupts only from call kinds. The test: `bp irq` on the generic adapter over MarsRT, which the shim
   passes today.
 
-### 17.4 The proposal: what the core ABI needs, in one minor, "1.next"
+### 18.4 The proposal: what the core ABI needs, in one minor, "1.next"
 
 **The form, weighed as the project's rule asks.** Each item below was weighed as an **extension** of an existing
 surface, a **module** (a pack, a host change, a test fixture) or a **component of its own**. None is a component of its
@@ -2799,7 +2799,7 @@ older core as today. They are proposed together because they land together in on
 written once; each is claimed on its own, and the tester may take any of them without the others (Q1 to Q5). **No
 number is taken**: "1.next" is assigned when the proposal is approved, since MoonRT's step may propose a minor too.
 
-#### 17.4.1 `TELEMETRY`: a core's own counters, named in machine info
+#### 18.4.1 `TELEMETRY`: a core's own counters, named in machine info
 
 D11's capability. **What it is for**: a dashboard, `coretop`, a test or a benchmark reads what the machine did (cycles,
 instructions, a thread's waits, a recompiler's hits) without per-core code. **What it is not for**: text (H5 and H6 have
@@ -2855,7 +2855,7 @@ phase a frame, and counts of other units in that array would make its names lie.
 dashboard reads every frame, against §2.5 of the core ABI page. (d) Counters as a memory space: a space is the
 machine's memory, and a counter of host threads is not. Recommended: the export and the field, as above.
 
-#### 17.4.2 `frame_info.lines`: the console's lines in a picture drawn at a multiple
+#### 18.4.2 `frame_info.lines`: the console's lines in a picture drawn at a multiple
 
 ```c
 typedef struct emusen_frame_info {  /* 64 bytes since 1.next; 56 accepted */
@@ -2877,7 +2877,7 @@ way; the rest write nothing. The kit: `lines` is 0 or divides `height`.
 change and is a picture's fact, not a machine's); the host computing it from `RenderScale` (per-core code); repurposing
 `reserved` inside the struct (the core ABI page's §4.2 grows a struct only at its end).
 
-#### 17.4.3 `PRESENCE`: a controller in a port, or none
+#### 18.4.3 `PRESENCE`: a controller in a port, or none
 
 ```c
 #define EMUSEN_CAP_PRESENCE (1ull << NN)    /* @since 1.next: emusen_core_set_present */
@@ -2898,7 +2898,7 @@ Saturn's) claims it; the rest do not and are never called. *Weighed:* a `pad<n>`
 general `set_device` that `EmuSen_CoreAPI_Extensions.md` §10.1 foresaw (it would duplicate the controller choice the
 settings already make; narrower is better until a device kind needs it).
 
-#### 17.4.4 `EMUSEN_FRAME_CHEATS_HELD`: the frame at whose end the console's cheat devices hold off
+#### 18.4.4 `EMUSEN_FRAME_CHEATS_HELD`: the frame at whose end the console's cheat devices hold off
 
 ```c
 #define EMUSEN_FRAME_CHEATS_HELD 2u   /* @since 1.next, frame_info.flags bit 1: a host applies no cheat of its own after
@@ -2913,7 +2913,7 @@ ungated, D1); a richer `CHEAT_POKES` carrying tests, widths and repeats (the run
 against "codecs stay out of the ABI", §6.12 of the core ABI page); dropping the gate (the boot's checksum breaks, a
 defect already measured).
 
-#### 17.4.5 `DEBUG_TRANSLATE`: a processor's address on its bus
+#### 18.4.5 `DEBUG_TRANSLATE`: a processor's address on its bus
 
 ```c
 #define EMUSEN_CAP_DEBUG_TRANSLATE (1ull << NN)   /* @since 1.next, with DEBUG: emusen_core_debug_translate */
@@ -2929,7 +2929,7 @@ extension there) and Diamond's segments take the same call. *Weighed:* the TLB a
 owners of the VR4300's TLB match); `addr` answering only KSEG0 and KSEG1 by arithmetic in the pack (a mapped address,
 which is where games run their code after `osMapTLB`, would be unresolved).
 
-### 17.5 The tests that cover the shim today, and their baseline
+### 18.5 The tests that cover the shim today, and their baseline
 
 **36 WiseMan files name a shim type** [M: `grep -w` for the shim's ten type names], and three more reach it through
 `MarsDebugRig` (`MarsDebugTests`, `BreakpointConditionTests`, `BreakpointConditionCostBench`). What each reads beyond
@@ -2987,14 +2987,14 @@ the shared test lock:
 
 **1,345 tests, none failed, none skipped.** The opt-in probes and benches (`MarsRtDigestProbe`, `CoreOutputHashProbe`,
 `BreakpointConditionCostBench`) are not in the count; they run only with their variables set, and the digest probe is
-step 1's (§17.7).
+step 1's (§18.7).
 
-### 17.6 The gates for the second phase
+### 18.6 The gates for the second phase
 
-The B4 row's gates (§6), made particular to MarsRT. Each is run before the first change (step 1 of §17.7) and again
+The B4 row's gates (§6), made particular to MarsRT. Each is run before the first change (step 1 of §18.7) and again
 after the last; a result that differs is listed with its cause and decided, never re-recorded silently.
 
-#### 17.6.1 MarsRT's goldens and corpus
+#### 18.6.1 MarsRT's goldens and corpus
 
 - **The digest probe** (`MarsRtDigestProbe`, `EMUSEN_MARSRT_DIGEST_OUT` and `_GAMES`), Super Mario 64 and Ocarina of
   Time only (the probe's two graded games), the 26 runs `Mars_Native.md` §7.5 left and the two GPU runs on the RX 6800
@@ -3003,7 +3003,7 @@ after the last; a result that differs is listed with its cause and decided, neve
   `IRepeatedRows` only, so the same file runs on the shim and on the adapter, once its two shim reads (`GpuReport`,
   `DisplayLines` through the shim's type) read the setting note and `ICore.DisplayLines`. Expected differences, each to
   be confirmed and no other accepted: the rate column, if Q6 is answered as recommended; and none in `lines` once
-  `frame_info.lines` (§17.4.2) is in.
+  `frame_info.lines` (§18.4.2) is in.
 - **The N64 test ROM corpus**: n64-systemtest's summary, *Failed 46 of 4637 tests*, and the recompiler's transcript line
   for line the interpreter's (`MarsRtTests`), read from the log if Q8 says so; the crate's own corpus test.
 - **The crate's tests**, `cargo test --profile test-checked` in `MarsRT - N64/`, the count at step 1 and every test
@@ -3013,25 +3013,25 @@ after the last; a result that differs is listed with its cause and decided, neve
   synthetic cartridges.
 - **Speed**: `EmuSen_NativeCores.md` §8.1's P3, the plain frame within ±1% of the step-1 build, interleaved, through the
   PGO driver on the two games; and §14.5's frame call allocating nothing with MarsRT open, since the adapter's frame end
-  gains one `frame_info` read (§17.4.4).
+  gains one `frame_info` read (§18.4.4).
 - **The B4 grep**: no type under `EmuSen.Cores.Nintendo.MarsRT` in any shipped project, the PGO driver aside.
 
-#### 17.6.2 The WiseMan classes
+#### 18.6.2 The WiseMan classes
 
-The classes of §17.5, the same filter, every test passing or each change of count explained by a test moved, rewritten
+The classes of §18.5, the same filter, every test passing or each change of count explained by a test moved, rewritten
 or removed in step 7.
 
-#### 17.6.3 The debugger's golden corpus
+#### 18.6.3 The debugger's golden corpus
 
 **Measured on 2026-10-18, not predicted.** The corpus's `marsrt` target was pointed, in a working copy and not
 committed, at the generic adapter over the same library (`new CoreEngine(MarsNative.Library.Library!, { ExpansionPak =
 true })`, bundled by `CoreFactory.Bundle`, so the generic target and the N64's codec), and the corpus recorded again
 with `EMUSEN_DIANASH_GOLDEN=record`; the files were then put back. This is the adapter **as it stands today**, before
-any of §17.7's work. Of 100 cases, 91 pass unchanged (among them `bp`, `bt`, `cov`, `profile`, `trace`, `pal`,
+any of §18.7's work. Of 100 cases, 91 pass unchanged (among them `bp`, `bt`, `cov`, `profile`, `trace`, `pal`,
 `sprites`, `channels`, `core`, `man`, `watch`, `framelog`, `callers`), and nine files differ, each in its `marsrt` case
 alone:
 
-| File | The shim's output | The adapter's today | After §17.7 |
+| File | The shim's output | The adapter's today | After §18.7 |
 |---|---|---|---|
 | `regs` | "N64 CPU registers:", 36 named values, the VI's 14, the RSP's 34 | "MarsRT CPU registers:" and nothing else | the registers back through `DEBUG_REGISTERS` (F3, F4) and the VI's through the pack (F5); the heading's name differs (A1) |
 | `setreg` | "VR4300 (MarsRT) registers:", the list; the refusal names 36 registers | "CPU registers:", empty; "Available: (none)" | as the shim's but for the heading, "CPU registers:" (F6) |
@@ -3047,7 +3047,7 @@ name where the shim said "N64" (`regs`, `cpus`, `spaces`, `mem`, `vectors`), the
 and the RSP's absent symbol; plus the `VI` space's line in `spaces` and `mem`, and the error text of `mem` that lists
 the spaces. Any other difference fails the gate.
 
-### 17.7 The second phase, in steps
+### 18.7 The second phase, in steps
 
 Each step leaves every program working and is merged on its own gate; the shim stays, reached through the factory as
 now, until step 6 switches the N64 to the generic adapter (§6's B4 failover). Steps 2 to 4 widen no surface and can be
@@ -3056,8 +3056,8 @@ built before the tester answers Q1 to Q5; step 5 waits for those answers and for
 1. **Baselines on the branch's base**, before any change: the digest probe on Super Mario 64 and Ocarina of Time
    (`EMUSEN_MARSRT_DIGEST_GAMES`, the 26 runs of `Mars_Native.md` §7.5 and the two GPU runs on the RX 6800); MarsRT's
    crate tests with `--profile test-checked` and their count; the kit on the two games' copies, 600 frames; the
-   WiseMan counts of §17.5; and `EMUSEN_DIANASH_GOLDEN`'s `marsrt` cases through the generic adapter as §17.6.3 ran them.
-2. **The three candidate defects** of §17.3, each by a test that fails first, or recorded as none. C1's fix is the
+   WiseMan counts of §18.5; and `EMUSEN_DIANASH_GOLDEN`'s `marsrt` cases through the generic adapter as §18.6.3 ran them.
+2. **The three candidate defects** of §18.3, each by a test that fails first, or recorded as none. C1's fix is the
    generic adapter itself (step 6); C2's and C3's are the bridge's, for every core.
 3. **MarsRT's own work, no surface widened**: `DEBUG_REGISTERS` for both processors with their names in machine info
    (F3, F4); the `VI` view space (F5); `SETTING_NOTES` for the antialiasing note and the `Gpu` setting's report, and a
@@ -3073,7 +3073,7 @@ built before the tester answers Q1 to Q5; step 5 waits for those answers and for
    pack, the halting probe (F7), the summary with spaces; in the bridge the interrupt noted from the stop reason (F13)
    and the call stack reset on a new machine (C2); the frame log's byte order from the pack (F14).
 5. **The minor, once approved and numbered**: the header and `baseline.txt`, `emusen-native`'s trait methods and
-   `core_exports!` groups, the C# `CoreInterface`, the kit's cases (§17.4), the normative text as a new §6 section of
+   `core_exports!` groups, the C# `CoreInterface`, the kit's cases (§18.4), the normative text as a new §6 section of
    `EmuSen_CoreAPI.md` with its changelog row, and an entry in `EmuSen_CoreAPI_Extensions.md`; then MarsRT's
    implementations (`marsrt_core_counters`, `_thread_counters`, `_block_counters`, `_set_present` and `_physical`
    become the common exports; the gate sets the frame flag) and the host's use of each (`CoreEngine.Telemetry`,
@@ -3082,8 +3082,8 @@ built before the tester answers Q1 to Q5; step 5 waits for those answers and for
 6. **The switch**: the N64 moves from `SoleEngines` to `SoleDiscoveredEngines` (`CoreCatalog.cs:345`, `:348`), so the
    factory's v1 arm opens it; the factory's N64 arm, its `Running` and `Bundle` cases (`CoreFactory.cs:38–39`, `:160`,
    `:194–195`), `CoreCatalog`'s three N64 rows and `ControllerPorts`' (`:203`, `:242`, `:283`; `:43`) go, the catalog
-   reading core info as for any discovered console; `CoreRegistrationGolden.txt` changes only where §17.6 lists it.
-7. **The tests move**: each class of §17.5 onto `CoreEngine` and `CoreDebugTarget`, the test hooks into one WiseMan
+   reading core info as for any discovered console; `CoreRegistrationGolden.txt` changes only where §18.6 lists it.
+7. **The tests move**: each class of §18.5 onto `CoreEngine` and `CoreDebugTarget`, the test hooks into one WiseMan
    fixture, `MarsRtTestHooks`, calling the `marsrt_core_*` that stay by name through `CoreLibrary.Export`; `MarsDebugRig`
    onto the generic target; `MarsCoreSettingsTests` onto the schema and its notes; `MarsDisassemblerTests` onto the
    pack's parity class. A test whose claim was the shim's alone (`Get` of an unknown key throwing, the count clamped) is
@@ -3091,7 +3091,7 @@ built before the tester answers Q1 to Q5; step 5 waits for those answers and for
 8. **The deletions**: the shim's nine files; `marsrt_core_save_cpu`, `mars_rdp_*` and `mars_rsp_*` (dead), and each
    `marsrt_core_*` that step 5 made common; `PortLibrary`'s use for MarsRT (`PortEngine` stays until MoonRT's and
    MercuryRT's steps).
-9. **The gates of §17.6**, all of them, and then the pages: `Mars_Native.md` a section for the step, `Mars_Debug.md` and
+9. **The gates of §18.6**, all of them, and then the pages: `Mars_Native.md` a section for the step, `Mars_Debug.md` and
    `Mars_Cheats.md` where the debugger and the gate moved, `EmuSen_Mips.md` for the RSP's dialect, and this section's
    results.
 
@@ -3101,25 +3101,25 @@ the minor's five items and their tests); in `emusen-native` about 250 (the trait
 §13.6, the N64's views, the parity class's Rust half); in the host about 300 of C#; about 1,478 lines of C# deleted
 with the shim and about 300 of Rust with the dead exports.
 
-### 17.8 Questions for the tester
+### 18.8 Questions for the tester
 
 Each is asked on its own, so that no answer is read as deciding another. Q1 to Q5 are the minor's items; any may be
 taken without the rest.
 
 | | Question | Recommendation |
 |---|---|---|
-| **Q1** | `TELEMETRY` (§17.4.1): a core's counters as names in machine info and one export of values, for `coretop`, the session service, tests and benchmarks; or keep MarsRT's counters as private extensions that only tests read? | The capability, as D11 already recommended: it is the only form in which a dashboard can show any core's counters without per-core code, and it costs nothing a frame unless read. With it, the recompiler's 13 counters (H3), which nothing reads today, are kept in the list rather than deleted |
-| **Q2** | `frame_info.lines` (§17.4.2), appended to the struct, for the CRT filter at an internal resolution above 1×? | Yes: without it the filter draws a 2× picture's rows as the console's lines, a visible change; it is one field in a struct already read |
-| **Q3** | `PRESENCE` (§17.4.3) as the narrow `set_present`, or the general `set_device` of `EmuSen_CoreAPI_Extensions.md` §10.1? | The narrow call: presence is what the N64 needs and is part of its state; a device kind would duplicate the controller choice the settings already make, and can be added when a light gun needs it |
-| **Q4** | The cheat gate (§17.4.4): a frame flag the core sets when its console's cheat devices hold off; or `CHEAT_POKES` alone, leaving the 16-bit writes, tests and repeaters ungated; or no gate? | The flag: it keeps every code gated as today, one call a frame, and the gate is the measured fix for Super Mario 64's boot (`Mars_Cheats.md` §5.1) |
-| **Q5** | `DEBUG_TRANSLATE` (§17.4.5) for `addr` through the TLB; or `addr` answering only the unmapped segments by arithmetic in the pack? | The export: games run mapped code (GoldenEye's `0x7F` region, `Mars_Native.md`'s mapped blocks), and the walk is the core's alone; VenusRT's item 11 takes the same call |
+| **Q1** | `TELEMETRY` (§18.4.1): a core's counters as names in machine info and one export of values, for `coretop`, the session service, tests and benchmarks; or keep MarsRT's counters as private extensions that only tests read? | The capability, as D11 already recommended: it is the only form in which a dashboard can show any core's counters without per-core code, and it costs nothing a frame unless read. With it, the recompiler's 13 counters (H3), which nothing reads today, are kept in the list rather than deleted |
+| **Q2** | `frame_info.lines` (§18.4.2), appended to the struct, for the CRT filter at an internal resolution above 1×? | Yes: without it the filter draws a 2× picture's rows as the console's lines, a visible change; it is one field in a struct already read |
+| **Q3** | `PRESENCE` (§18.4.3) as the narrow `set_present`, or the general `set_device` of `EmuSen_CoreAPI_Extensions.md` §10.1? | The narrow call: presence is what the N64 needs and is part of its state; a device kind would duplicate the controller choice the settings already make, and can be added when a light gun needs it |
+| **Q4** | The cheat gate (§18.4.4): a frame flag the core sets when its console's cheat devices hold off; or `CHEAT_POKES` alone, leaving the 16-bit writes, tests and repeaters ungated; or no gate? | The flag: it keeps every code gated as today, one call a frame, and the gate is the measured fix for Super Mario 64's boot (`Mars_Cheats.md` §5.1) |
+| **Q5** | `DEBUG_TRANSLATE` (§18.4.5) for `addr` through the TLB; or `addr` answering only the unmapped segments by arithmetic in the pack? | The export: games run mapped code (GoldenEye's `0x7F` region, `Mars_Native.md`'s mapped blocks), and the walk is the core's alone; VenusRT's item 11 takes the same call |
 | **Q6** | The frame rate (A5): machine info's rate as the VI's programmed field pair, exact and constant while the VI's timing stands, raised by `MACHINE_INFO` when it changes; or the shim's per-frame alternation kept, by a per-frame field in `frame_info`? | Machine info's: it is the pacing rate by definition (§6.4 of the core ABI page), the alternation is half a millionth, and an event a frame would re-read machine info every frame. The digest probe's rate column then changes to the pair's mean, listed in the step's record |
 | **Q7** | Disassembly (F8): the N64's pack decoding when a core claims no `DEBUG_DISASSEMBLE`, with the RSP's table moved into `emusen-mips`; or MarsRT claiming `DEBUG_DISASSEMBLE` over the same crate? | The pack: B3 put the VR4300's, 6502's and SM83's disassemblers in the packs, and a second N64 engine gets them free; the core keeps the right to claim the capability later, which the target would then prefer |
 | **Q8** | The IS-Viewer (H6): its lines into the core's log, read by every frontend's log and by the corpus test; or a test-only extension as now? | The log: it is a game's debug output, which a player debugging homebrew wants to see, and v1 already carries logs |
 | **Q9** | The device report (H5): a note on the `Gpu` setting when it is not honoured, and a log line naming the device when it is? | Yes: both are existing surfaces, and the report is a sentence about a setting, which is what notes are for |
 | **Q10** | `ExpansionPak` after a state of the other memory size (B6): the setting left as the player chose it, the machine's memory stated by machine info; or kept following the state? | Left as chosen: the setting is the next load's choice, and the host has no way to follow a state without a rule for one core |
-| **Q11** | The golden corpus's `marsrt` cases (§17.6.3): accept the differences listed there and record the cases again from the generic adapter? | Yes, after the step's run lists them again: each is the adapter's rule that every v1 core already follows, not a loss of what the debugger shows |
-| **Q12** | The test hooks (A12, C4, E2, F16, I5): kept as `marsrt_core_*` extensions behind one WiseMan fixture; or the tests moved into MarsRT's crate and the exports deleted? | The fixture now: the tests are many (§17.5) and graded; moving them into the crate is a later piece of work that changes no shipped surface |
+| **Q11** | The golden corpus's `marsrt` cases (§18.6.3): accept the differences listed there and record the cases again from the generic adapter? | Yes, after the step's run lists them again: each is the adapter's rule that every v1 core already follows, not a loss of what the debugger shows |
+| **Q12** | The test hooks (A12, C4, E2, F16, I5): kept as `marsrt_core_*` extensions behind one WiseMan fixture; or the tests moved into MarsRT's crate and the exports deleted? | The fixture now: the tests are many (§18.5) and graded; moving them into the crate is a later piece of work that changes no shipped surface |
 | **Q13** | The frame log's byte order (F14): a fact of the N64's pack; or a `big_endian` flag on machine info's spaces? | The pack: every N64 engine's memory is big-endian, and a flag would make each core restate the console |
 | **Q14** | `EMUSEN_MARS_NATIVE=0` (I1): retired with `PortLibrary`'s use for MarsRT, since nothing is left to fall back to? | Retire it |
 | **Q15** | The antialiasing note with no game running (B3): none, since a note comes from a machine; or kept by a rule in the settings window? | None: a rule in the window is per-core code, and the note appears as soon as a game runs |

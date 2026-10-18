@@ -256,7 +256,7 @@ namespace EmuSen.WiseMan.Fixtures
         private static double Round(double v) => Math.Round(v, 2);
 
         // The focus graph the pad walk finds from the focus, each landing named by a node or, for a row built only once scrolled to, by its list and index.
-        public static void Walk(SpecDocument doc, Control root, PadDriver pad, Dictionary<Control, int> ids, int limit = 400)
+        public static void Walk(SpecDocument doc, Control root, PadDriver pad, Dictionary<Control, int> ids, int limit = 400, Func<bool>? settled = null)
         {
             TopLevel top = TopLevel.GetTopLevel(root)!;
             bool Inside() => top.FocusManager?.GetFocusedElement() is Visual f && f.IsAttachedToVisualTree() && (ReferenceEquals(f, root) || root.IsVisualAncestorOf(f));
@@ -286,7 +286,7 @@ namespace EmuSen.WiseMan.Fixtures
             }
             string Ref(Control c) => ids.TryGetValue(c, out int id) ? id.ToString(CultureInfo.InvariantCulture) : c.GetType().Name;
 
-            (object start, List<(object From, int Direction, object? To)> edges, bool truncated) = PadAudit.Graph(root, pad, ids.Keys.OfType<InputElement>().Where(e => PadAudit.IsOperable(e) && !PadAudit.Unseen(e)).Select(PadAudit.KeyOf).ToList(), limit);
+            (object start, List<(object From, int Direction, object? To)> edges, bool truncated) = PadAudit.Graph(root, pad, ids.Keys.OfType<InputElement>().Where(e => PadAudit.IsOperable(e) && !PadAudit.Unseen(e)).Select(PadAudit.KeyOf).ToList(), limit, settled);
             doc.Start = Name(start);
             var seen = new HashSet<(string, int)>();
             foreach ((object from, int direction, object? to) in edges)

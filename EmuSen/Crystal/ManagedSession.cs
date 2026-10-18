@@ -26,7 +26,7 @@ namespace EmuSen.Crystal.Managed
         private uint _basePercent = SpeedController.NormalPercent;
         private uint _mode = CrystalNumbers.SpeedNormal;
 
-        public ManagedSession(ManagedRuntime runtime, uint id, CoreBundle bundle, string? gamePath, string console, string? emptyConsole, uint flags)
+        public ManagedSession(ManagedRuntime runtime, uint id, CoreBundle bundle, string? gamePath, string console, string? emptyConsole, ManagedRuntime.OpenedWith opened)
         {
             Runtime = runtime;
             Id = id;
@@ -35,7 +35,8 @@ namespace EmuSen.Crystal.Managed
             GamePath = gamePath;
             Console = console;
             EmptyConsole = emptyConsole;
-            if ((flags & CrystalNumbers.OpenSingleRows) != 0 && Core is IRepeatedRows rows) rows.RepeatRows = false;
+            OpenedWith = opened;
+            if ((opened.Flags & CrystalNumbers.OpenSingleRows) != 0 && Core is IRepeatedRows rows) rows.RepeatRows = false;
             Provider = new SessionService(bundle.DebugTarget, new SessionServiceOptions
             {
                 AutoDetectCodec = bundle.CheatAutoDetectCodec,
@@ -49,11 +50,23 @@ namespace EmuSen.Crystal.Managed
                 Id = id,
                 Gate = this,
                 RunControl = RunControl,
+                Games = ManagedRuntime.SystemsJson,
+                Open = OpenAsThis,
             });
             StartIdentifying();
         }
 
+        // The session service's open_game and open_console: a session opened as this one was, its id answered in the service's statuses.
+        private uint OpenAsThis(string? path, string? console, string? engine)
+        {
+            try { return Runtime.Open(path, console, engine, OpenedWith).Id; }
+            catch (CrystalException e) { throw new SessionException(e.Status, e.Message); }
+        }
+
         public ManagedRuntime Runtime { get; }
+
+        // The open options this session was given, which a session opened from its service table is given too.
+        public ManagedRuntime.OpenedWith OpenedWith { get; }
         public uint Id { get; }
         public CoreBundle Bundle { get; }
         public ICore Core { get; }

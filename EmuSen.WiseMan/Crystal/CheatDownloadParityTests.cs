@@ -18,6 +18,9 @@ namespace EmuSen.WiseMan.Crystal
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenDownloadParity_" + Guid.NewGuid().ToString("N"));
         private static readonly TimeSpan Usual = TimeSpan.FromSeconds(20);
 
+        // Every exception an update threw, whole, for a failure's message: Thrown keeps to the depth both sides compare at.
+        private readonly List<string> _thrown = new();
+
         private static readonly Lazy<Certs> Made = new(Certs.Make);
 
         public CheatDownloadParityTests()
@@ -78,6 +81,9 @@ namespace EmuSen.WiseMan.Crystal
             public readonly List<string> Heads = new();
             public int Connections;
 
+            // What the server itself swallowed, for a failure's message only: a parity comparison never reads it.
+            public readonly List<string> Faults = new();
+
             public Server(X509Certificate2 cert, Func<string, Stream, Task> handler)
             {
                 _cert = cert;
@@ -95,7 +101,12 @@ namespace EmuSen.WiseMan.Crystal
                 while (true)
                 {
                     TcpClient client;
-                    try { client = await _listener.AcceptTcpClientAsync(); } catch (Exception) { return; }
+                    try { client = await _listener.AcceptTcpClientAsync(); }
+                    catch (Exception e)
+                    {
+                        lock (Faults) Faults.Add("accept: " + e);
+                        return;
+                    }
                     Interlocked.Increment(ref Connections);
                     _ = Task.Run(() => Serve(client));
                 }
@@ -121,7 +132,7 @@ namespace EmuSen.WiseMan.Crystal
                         await _handler(text.Split(' ')[1], tls);
                         await tls.FlushAsync();
                     }
-                    catch (Exception) { }
+                    catch (Exception e) { lock (Faults) Faults.Add("serve: " + e); }
                 }
             }
 
@@ -185,7 +196,11 @@ namespace EmuSen.WiseMan.Crystal
                 CheatDatabaseInstallResult r = install(bytes, target);
                 said = $"installed {r.Installed}, skipped {r.Skipped}";
             }
-            catch (Exception e) { said = Thrown(e); }
+            catch (Exception e)
+            {
+                said = Thrown(e);
+                _thrown.Add($"{name}: {e}");
+            }
             var files = Directory.Exists(target)
                 ? Directory.EnumerateFiles(target, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
                     .Select(f => $"  {Path.GetRelativePath(target, f)} {Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(f)))[..16]}")
@@ -205,7 +220,12 @@ namespace EmuSen.WiseMan.Crystal
             string native = Update(() => new MemoryStream(NativeDownload.Fetch(url, t, trusted ? c.Root.ExportCertificatePem() : null)),
                 (b, d) => CheatsNative.Install(b, d) ?? CheatDatabaseInstaller.ManagedInstall(new MemoryStream(b), d), "n" + id) + "\n" + server.Seen();
             native = native.Replace(" n" + id, " m" + id);
-            if (managed != native) Assert.Fail($"C#:\n{managed}\n\nRust:\n{native}");
+            if (managed != native)
+            {
+                string faults;
+                lock (server.Faults) faults = string.Join("\n", server.Faults);
+                Assert.Fail($"C#:\n{managed}\n\nRust:\n{native}\n\nThrown:\n{string.Join("\n", _thrown)}\n\nThe server swallowed:\n{faults}");
+            }
             return managed;
         }
 

@@ -19,22 +19,25 @@ namespace EmuSen.Crystal.Managed
             if (p->size < OpenParamsV1.Size10) throw CrystalException.BadStruct("emusen_crystal_open_params", p->size, OpenParamsV1.Size10);
             const uint known = CrystalNumbers.OpenNoBattery | CrystalNumbers.OpenSingleRows;
             if ((p->flags & ~known) != 0) throw new CrystalException(SessionAbi.NotSupported, $"open flags 0x{p->flags & ~known:X} are not known to 1.{CrystalNumbers.Minor}");
-            string? path = ManagedCrystal.Text(p->path, p->path_len);
-            string? console = ManagedCrystal.Text(p->console, p->console_len);
-            string? engine = ManagedCrystal.Text(p->engine, p->engine_len);
+            // The presenter's device, read only from a 1.1 struct that holds it; each machine made is lent it afresh.
+            var with = new OpenedWith(p->flags, p->audio_buffer_max_samples, p->size >= sizeof(OpenParamsV1) ? (nint)p->device : 0);
+            return Open(ManagedCrystal.Text(p->path, p->path_len), ManagedCrystal.Text(p->console, p->console_len), ManagedCrystal.Text(p->engine, p->engine_len), with);
+        }
+
+        // A game or an empty console opened with the options a session's open params gave, as the session service's open_game reuses them.
+        public ManagedSession Open(string? path, string? console, string? engine, OpenedWith with)
+        {
             if (path is null == console is null) throw new CrystalException(SessionAbi.BadArgument, "a session opens a game or starts a console: one of the two is given");
             var options = new CoreOptions
             {
-                BatteryRamDisabled = (p->flags & CrystalNumbers.OpenNoBattery) != 0,
-                AudioBufferMaxSamples = p->audio_buffer_max_samples > 0 ? (int)Math.Min(p->audio_buffer_max_samples, int.MaxValue) : CoreOptions.Default.AudioBufferMaxSamples,
+                BatteryRamDisabled = (with.Flags & CrystalNumbers.OpenNoBattery) != 0,
+                AudioBufferMaxSamples = with.AudioBufferMaxSamples > 0 ? (int)Math.Min(with.AudioBufferMaxSamples, int.MaxValue) : CoreOptions.Default.AudioBufferMaxSamples,
             };
-            // The presenter's device, read only from a 1.1 struct that holds it; each machine made is lent it afresh.
-            nint device = p->size >= sizeof(OpenParamsV1) ? (nint)p->device : 0;
             var refusals = new LendRefusals();
-            Func<IDeviceLend?>? lender = device == 0 ? null : () => PlatformLend.Make(device, refusals.Note);
+            Func<IDeviceLend?>? lender = with.Device == 0 ? null : () => PlatformLend.Make(with.Device, refusals.Note);
             CoreBundle bundle = path is not null ? OpenGame(path, engine, options, lender) : StartConsole(console!, engine, options, lender, out console);
             string name = (bundle.Core as Cores.Native.CoreEngine)?.Console is { Length: > 0 } running ? running : console ?? CoreCatalog.ConsoleForRom(path!) ?? bundle.Core.CoreName;
-            var session = new ManagedSession(this, NextId(), bundle, path, name, path is null ? console : null, p->flags);
+            var session = new ManagedSession(this, NextId(), bundle, path, name, path is null ? console : null, with);
             session.ApplyStored(key => GetSettingOf(session, key));
             Add(session);
             return session;
@@ -43,7 +46,7 @@ namespace EmuSen.Crystal.Managed
         // A session over an engine already made, for a test's engine no factory makes.
         internal ManagedSession Attach(CoreBundle bundle, string gamePath, string console)
         {
-            var session = new ManagedSession(this, NextId(), bundle, gamePath, console, null, 0);
+            var session = new ManagedSession(this, NextId(), bundle, gamePath, console, null, default);
             Add(session);
             return session;
         }
@@ -65,6 +68,9 @@ namespace EmuSen.Crystal.Managed
             try { return CoreFactory.LoadConsole(console, new CheatRegistry(), chosen, lender, options); }
             catch (NotSupportedException e) { throw new CrystalException(CrystalNumbers.NoEngine, e.Message); }
         }
+
+        // What a session was opened with besides its game: the open flags, the sound buffer and the presenter's device.
+        public readonly record struct OpenedWith(uint Flags, uint AudioBufferMaxSamples, nint Device);
 
         // Why no device was lent, said once a session in the error log, where a frontend's own report used to say it.
         private sealed class LendRefusals

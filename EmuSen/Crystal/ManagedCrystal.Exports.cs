@@ -147,6 +147,8 @@ namespace EmuSen.Crystal.Managed
             ["emusen_crystal_log_switch"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, int>)&emusen_crystal_log_switch,
             ["emusen_crystal_log_status"] = (nint)(delegate* unmanaged[Cdecl]<nint, int>)&emusen_crystal_log_status,
             ["emusen_crystal_events_drain"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, uint, byte*, nuint, long>)&emusen_crystal_events_drain,
+            ["emusen_crystal_open_game"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, byte*, nuint, long>)&emusen_crystal_open_game,
+            ["emusen_crystal_open_console"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, byte*, nuint, long>)&emusen_crystal_open_console,
         };
 
         // An export by its header name; zero for a name the header does not declare.

@@ -89,5 +89,8 @@ namespace EmuSen.Crystal.Session
         public delegate* unmanaged[Cdecl]<void*, uint, int> log_switch;
         public delegate* unmanaged[Cdecl]<void*, int> log_status;
         public delegate* unmanaged[Cdecl]<void*, uint, uint, byte*, nuint, long> events_drain;
+        public delegate* unmanaged[Cdecl]<void*, byte*, nuint, long> games;
+        public delegate* unmanaged[Cdecl]<void*, uint, byte*, nuint, byte*, nuint, long> open_game;
+        public delegate* unmanaged[Cdecl]<void*, uint, byte*, nuint, byte*, nuint, long> open_console;
     }
 }

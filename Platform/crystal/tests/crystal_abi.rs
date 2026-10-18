@@ -279,6 +279,9 @@ fn the_statuses_follow_the_session_service_s_in_the_band() {
     }
 }
 
+/// The service's functions whose twin the API already had under another name: 1.3's `games` is `systems` (§3.11).
+const NAMED_TWINS: [(&str, &str); 1] = [("games", "systems")];
+
 /// Every session-service function has its twin, the runtime in place of ctx and every other parameter the same, in the
 /// table's order; and the header's twins are exactly the table's functions (EmuSen_Backend.md §3.8, SR4).
 #[test]
@@ -289,17 +292,22 @@ fn every_session_service_function_has_its_twin_both_ways() {
     let all: BTreeMap<String, (String, Vec<String>)> = declared(&code(&h), "emusen_crystal_", true).into_iter().map(|(n, r, p)| (n, (r, p))).collect();
     let twins: Vec<String> = prototypes(&code(&h[at..]), "emusen_crystal_").into_iter().map(|(n, _, _)| n).collect();
     let table = table_functions(true);
-    assert_eq!(table.len(), 79, "the session service's 1.2 table has 79 functions");
+    assert_eq!(table.len(), 82, "the session service's 1.3 table has 82 functions");
 
     for (name, returns, params) in &table {
-        let twin = format!("emusen_crystal_{name}");
+        let named = NAMED_TWINS.iter().find(|(n, _)| n == name).map(|(_, t)| *t);
+        let twin = format!("emusen_crystal_{}", named.unwrap_or(name));
         let (twin_returns, twin_params) = all.get(&twin).unwrap_or_else(|| panic!("{name} has no twin {twin}"));
         assert_eq!(twin_returns, returns, "{twin}'s return");
         assert_eq!(twin_params[0], "emusen_crystal_runtime *rt", "{twin} takes the runtime first");
         assert_eq!(&twin_params[1..], &params[..], "{twin}'s parameters after the runtime, by type and by name");
     }
-    let expected: Vec<String> = table.iter().filter(|(n, _, _)| n != "last_error").map(|(n, _, _)| format!("emusen_crystal_{n}")).collect();
-    assert_eq!(twins, expected, "the header's twins, in order, are the table's functions but last_error, which is declared with the library's calls");
+    let expected: Vec<String> = table
+        .iter()
+        .filter(|(n, _, _)| n != "last_error" && !NAMED_TWINS.iter().any(|(t, _)| t == n))
+        .map(|(n, _, _)| format!("emusen_crystal_{n}"))
+        .collect();
+    assert_eq!(twins, expected, "the header's twins, in order, are the table's functions but last_error, declared with the library's calls, and those named elsewhere");
 }
 
 /// Any `emusen_crystal_` function the platform's crates export is declared by the header with its signature. At 1.0

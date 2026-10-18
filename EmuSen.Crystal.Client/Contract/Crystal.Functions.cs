@@ -282,5 +282,9 @@ namespace EmuSen.Crystal.Client.Contract
         public static int LogStatus(nint rt) => Table->log_status(rt);
 
         public static long EventsDrain(nint rt, uint session, uint kinds, byte* out_, nuint len) => Table->events_drain(rt, session, kinds, out_, len);
+
+        public static long OpenGame(nint rt, uint session, byte* path, nuint path_len, byte* engine, nuint engine_len) => Table->open_game(rt, session, path, path_len, engine, engine_len);
+
+        public static long OpenConsole(nint rt, uint session, byte* console, nuint console_len, byte* engine, nuint engine_len) => Table->open_console(rt, session, console, console_len, engine, engine_len);
     }
 }

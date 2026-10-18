@@ -925,7 +925,7 @@ Pharaoh or the terminal program:
 |---|---|
 | `open_window(kind)`: `coretop`, `vstop`, a debugger view | `CoretopCommand`'s and `VstopCommand`'s delegates; Mistress's `CoretopWindowCommand`, `VstopWindowCommand` |
 | `activate_game_window` | Mistress's `feed` |
-| `games` (JSON: the cores and systems a frontend can open) and `open_game(core, path)` | `CoreCommand` and `HostAction.LoadCore`; retired when Crystal opens sessions itself |
+| `games` (JSON: the cores and systems a frontend can open) and `open_game(core, path)` | `CoreCommand` and `HostAction.LoadCore`; retired when Crystal opens sessions itself. Since 2026-10-18 the session service's 1.3 has them, with `open_console` (§13.15) |
 | `pause`, `resume`, `is_paused` | Mistress's `pause` and `resume`; retired into run control when Crystal owns the loop |
 
 It is a service like any other: owned by Crystal's header family, never read by the shell, and refused politely
@@ -2541,6 +2541,60 @@ reports `Resume` and `Step` because the session's run control raised them:
 A run event the frontend raised itself, outside any line, is drained before the line, so it is never reported as
 that line's (`ShellOverSessionTests`). `Shutdown`, `SwitchSession`, `LoadCore` and `StartConsole` stay the shell's
 and the frontend's actions, as Q5 decided.
+
+### 13.15 The session service's 1.3: `games`, `open_game` and `open_console` (2026-10-18)
+
+*Built 2026-10-18 on branch `b2-frontend-api`, as `EmuSen_Backend.md` §3.11 and D10 placed them: in this service,
+served by Crystal, rather than in the frontend service of §9.9.*
+
+**What 1.3 appends**, after `events_drain`, so a 1.2 caller's table is unchanged and a 1.3 caller checks the table's
+size before calling one (`EMUSEN_SESSION_HAS`):
+
+| Function | Reads or changes | What it answers |
+|---|---|---|
+| `games(ctx, out, len)` | reads | the frontend API's `systems`, the same JSON: each system with its engines, `starts_empty` and `core`, the names `core <name>` knows an engine's core by (`EmuSen_Backend.md` §14.11) |
+| `open_game(ctx, session, path, engine)` | changes | a new session over the game at `path`, its id; an absent engine is the settings' choice |
+| `open_console(ctx, session, console, engine)` | changes | as `open_game`, a console started empty, named as `games` lists it with `starts_empty` |
+
+**A session opened as the one named was.** The session argument does not name the session to replace; it names the
+session whose open options the new one is given: the open flags (no battery, single rows), the sound buffer's limit,
+and the presenter's device, so a game opened from a console window inside Mistress is lent Mistress's device as the
+game it replaces was. The session named runs on. An open waits for no frame boundary, because it changes no running
+session; it is a change all the same, and a read-only table refuses it with `READ_ONLY` (§6.5).
+
+**Who takes the new session.** The runtime announces it with a session event, `{"kind":"session","session":<id>,"op":
+"opened"}`, which a frontend's subscription to session 0 already receives (`EmuSen_Backend.md` §3.5). The client that
+drives frames takes it with the binding's `SessionOf(id)` or closes it; until one does, it is open and runs no frame.
+This keeps the decision of whether a second game replaces the first, or plays beside it, the frontend's, which is the
+only component that knows whether it has one game window or several.
+
+**Its twins.** SR4 asks every function of this service for a frontend-API twin of the same arguments. `open_game`'s and
+`open_console`'s are new exports, `emusen_crystal_open_game` and `emusen_crystal_open_console`, additive in the API's
+1.1. `games` has one already: `emusen_crystal_systems` takes the same arguments after the runtime and answers the same
+JSON, so a second export answering it would be two owners of one fact. The twin check
+(`Platform/crystal/tests/crystal_abi.rs`) therefore holds a list of twins named otherwise, of one entry, and checks
+`games` against `systems` by return and parameters as it checks every other pair. 142 exports now, 80 of them twins.
+
+**Where a host opens nothing.** A provider whose host hands it no opener answers `games` and both opens with
+`NOT_SUPPORTED` and the words "this host opens no games through the session service". The C# provider's options carry
+the runtime's two delegates (`SessionServiceOptions.Games` and `Open`); the managed runtime fills them for each session
+it opens.
+
+**Statuses through the table.** A failure of the runtime's open keeps its own status and words: `IO` for a file that is
+not there, `NO_ENGINE` for a console no engine starts empty, `FIRMWARE` for missing firmware, as `open` answers them;
+`BAD_ARGUMENT` for an absent path or console, and `NO_SESSION` for a session the table does not serve.
+
+**Tests.** `SessionService13Tests`: `games` is `systems`; a game opened from a session's table is announced, opened
+with the first session's options, listed beside it, and both run a frame; the twin opens as the table does and the
+runtime's refusals come through; a read-only table refuses and a table names only its own session.
+`SessionServiceParityTests` reaches all three functions on every golden target and checks the provider with no opener;
+the header and table checks, C# and Rust, read 82 functions.
+
+**Not built, proposed.** No host hands a table to a console with no game running: `session_service` needs a session,
+so `core <name> <path>` typed in Mistress's console before any game still goes through the host's own `core` command
+and `HostAction.LoadCore`. Answering `session_service(rt, 0, flags)` with a game-free table, of the cheat ops' kind
+(§13.11), would let a module's `core` open the first game too; it widens what `session_service` accepts, so it is put
+to the tester rather than built. Moving `core` into the session module, Q25's second half, is S7's.
 
 ## 14. How it is tested
 

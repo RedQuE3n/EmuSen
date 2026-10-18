@@ -898,6 +898,36 @@ namespace EmuSen.Crystal.Session
             catch (Exception e) { return Fail(e); }
         }
 
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static long Games(void* ctx, byte* o, nuint n)
+        {
+            try
+            {
+                return Copy(B(ctx).Service.Games(), o, n);
+            }
+            catch (Exception e) { return Fail(e); }
+        }
+
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static long OpenGame(void* ctx, uint s, byte* path, nuint path_len, byte* engine, nuint engine_len)
+        {
+            try
+            {
+                return B(ctx).Change().Open(s, Text(path, path_len) ?? throw new SessionException(SessionAbi.BadArgument, "open_game needs the game's path"), null, Text(engine, engine_len));
+            }
+            catch (Exception e) { return Fail(e); }
+        }
+
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static long OpenConsole(void* ctx, uint s, byte* console, nuint console_len, byte* engine, nuint engine_len)
+        {
+            try
+            {
+                return B(ctx).Change().Open(s, null, Text(console, console_len) ?? throw new SessionException(SessionAbi.BadArgument, "open_console needs the console's name"), Text(engine, engine_len));
+            }
+            catch (Exception e) { return Fail(e); }
+        }
+
         // The tables NewTable made and Forget has not freed, so a table handed back is known for one.
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<nint, byte> Tables = new();
 
@@ -991,6 +1021,9 @@ namespace EmuSen.Crystal.Session
             t->log_switch = &LogSwitch;
             t->log_status = &LogStatus;
             t->events_drain = &EventsDrain;
+            t->games = &Games;
+            t->open_game = &OpenGame;
+            t->open_console = &OpenConsole;
             Tables[(nint)t] = 0;
             return t;
         }

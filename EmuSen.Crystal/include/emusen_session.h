@@ -1,4 +1,4 @@
-/* emusen_session.h - the session service, emusen.session@1, version 1.2. Owned by Crystal.
+/* emusen_session.h - the session service, emusen.session@1, version 1.3. Owned by Crystal.
  *
  * What a command module calls to reach a running core, and what a frontend's own windows call for the same thing: one
  * C function table, emusen_session_v1, provided by Crystal and handed to a module by the shell, which never reads it.
@@ -6,7 +6,7 @@
  * and where the two disagree the page wins and the header is in error. Section 13.6 there records version 1.0 as
  * built, and the C# provider that serves it until Crystal is written in Rust.
  *
- * Everything here is @since 1.0 unless marked otherwise; section 13.11 there records what 1.1 added and 13.12 what 1.2 did. Names: the table emusen_session_v1, constants
+ * Everything here is @since 1.0 unless marked otherwise; section 13.11 there records what 1.1 added, 13.12 what 1.2 did and 13.15 what 1.3 did. Names: the table emusen_session_v1, constants
  * EMUSEN_SESSION_* and, for statuses, EMUSEN_SVC_*; nothing here collides with emusen_core.h or emusen_platform.h, so a
  * module may include all three.
  *
@@ -51,7 +51,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_SESSION_MAJOR 1u
-#define EMUSEN_SESSION_MINOR 2u
+#define EMUSEN_SESSION_MINOR 3u
 #define EMUSEN_SESSION_VERSION ((EMUSEN_SESSION_MAJOR << 16) | EMUSEN_SESSION_MINOR)
 
 /* The name a module asks the shell for, with the major after an @. */
@@ -432,6 +432,21 @@ typedef struct emusen_session_v1 {
     /* -- Events -------------------------------------------------------------------------------------------- */
     /* reads. [event], each with its "kind"; removed once a buffer has taken them all, left waiting by a short one. */
     int64_t (*events_drain)(void *ctx, uint32_t session, uint32_t kinds, uint8_t *out, size_t len);
+
+    /* -- Games (@since 1.3): what the runtime can open, and a session opened from a command --------------- */
+    /* reads. What emusen_crystal_systems answers, the same JSON: each system with its "engines", "starts_empty" and
+     * "core", the names `core <name>` knows an engine's core by. */
+    int64_t (*games)(void *ctx, uint8_t *out, size_t len);
+    /* changes. Opens the game at path as a new session, with the open options of the session named (flags, the sound
+     * buffer, the presenter's device), and returns its id; an absent engine is the settings' choice. The session named
+     * runs on, and waits for no frame: the new one is announced by a session event {"op":"opened"}, and the client that
+     * drives frames takes it or closes it (EmuSen_DianaSh.md section 13.15). NOT_SUPPORTED where the host opens none. */
+    int64_t (*open_game)(void *ctx, uint32_t session, const uint8_t *path, size_t path_len, const uint8_t *engine,
+                         size_t engine_len);
+    /* changes. As open_game, starting a console empty: console by its name or one of its systems' ids, as games lists
+     * it with "starts_empty". */
+    int64_t (*open_console)(void *ctx, uint32_t session, const uint8_t *console, size_t console_len,
+                            const uint8_t *engine, size_t engine_len);
 } emusen_session_v1;
 
 #ifdef __cplusplus

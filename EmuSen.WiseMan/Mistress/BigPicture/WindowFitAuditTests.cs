@@ -396,7 +396,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Settle(window);
                     PadAudit.Reach(Sheets(window).SheetOf(Sheets(window).Current!)!, pad, e => e is ListBoxItem item && item.Content?.ToString() == "huge");
                     ShaderPanel snes = ((ShaderSettingsWindow)Sheets(window).Current!).PanelFor("SNES");
-                    for (int i = 0; i < 2000 && !snes.Reading.IsCompleted; i++) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(1); }
+                    WaitFor(() => snes.Reading.IsCompleted, "the preset\'s sliders");
                     Settle(window);
                     Assert.NotEmpty(snes.Sliders);
                     break;
@@ -439,7 +439,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Settle(window);
                     PadAudit.Reach(Sheets(window).SheetOf(Sheets(window).Current!)!, pad, e => e is ListBoxItem item && item.Content?.ToString() == "long-names");
                     ShaderPanel panel = ((ShaderSettingsWindow)Sheets(window).Current!).PanelFor("SNES");
-                    for (int i = 0; i < 2000 && !panel.Reading.IsCompleted; i++) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(1); }
+                    WaitFor(() => panel.Reading.IsCompleted, "the preset\'s sliders");
                     Settle(window);
                     Assert.NotEmpty(panel.Sliders);
                     break;
@@ -452,7 +452,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Settle(window);
                     ShaderPanel crt = ((ShaderSettingsWindow)Sheets(window).Current!).PanelFor("SNES");
                     crt.List.SelectedIndex = crt.List.Models.ToList().FindIndex(e => e.Stored == EmuSen.Serenity.Shaders.CrtFilter.Name);
-                    for (int i = 0; i < 2000 && !crt.Reading.IsCompleted; i++) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(1); }
+                    WaitFor(() => crt.Reading.IsCompleted, "the preset\'s sliders");
                     Settle(window);
                     Assert.NotEmpty(crt.Sliders);
                     break;
@@ -466,7 +466,21 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Call(window, "ShowControllerBindings");
                     break;
             }
+            if (Sheets(window).Current is ShaderSettingsWindow shaders) HeldStill(shaders);
         }
+
+        // Every shader's sliders built, and a keyed move's read left to settle after the walk, so no state hangs on the wall clock - see EmuSen_InterfaceSpec.md §3.1.
+        private static void HeldStill(ShaderSettingsWindow shaders)
+        {
+            WaitFor(() => shaders.PrefetchesRunning == 0 && Panels(shaders).All(p => p.Reading.IsCompleted), "the shader panels' first reads");
+            shaders.Settle = TimeSpan.FromDays(1);
+        }
+
+        // True once no read or read-ahead is in flight, for the walk to wait on after it puts a selection back.
+        internal static Func<bool> ShadersRead(ShaderSettingsWindow shaders) => () => shaders.PrefetchesRunning == 0 && !Panels(shaders).Any(p => p.ReadInFlight);
+
+        private static IEnumerable<ShaderPanel> Panels(ShaderSettingsWindow shaders) =>
+            EmuSen.Mistress.Library.RuntimeCatalog.Consoles.Select(c => shaders.PanelFor(c.Console));
 
         // A theme whose name, author, licence and variants are as long as ES-DE's list could carry (Q190).
         private static FakeTheme LongTheme => new()

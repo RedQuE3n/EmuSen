@@ -1063,3 +1063,34 @@ poll, measured 2026-10-18: 0 of 800 failed alone, 0 of 800 under the sixteen bus
 test host, 0 of 800 in one test host beside every other Mistress test (2,255 more, all passing, 54 skipped by their
 own opt-in), and 0 of 800 under the busy loops with `EMUSEN_ENDYMION_NATIVE=0`, the C# manager in place of the
 library's. The claims are C# over either manager, so the two halves were expected to agree, and did.
+
+#### 8.13.9 The game heard the press that launched it (2026-10-18)
+
+§8.13.8 left one question open: whether the game should hear the launching press at all. The tester decided on
+2026-10-18 that it should not. In real use the A that launches a game from the library is still held for about a
+tenth of a second into the game's first polls, and a game that loads within that time read it as its own: a menu
+opened, a title skipped or a jump made by a press the player meant for the library. §4.29 of the settings reference
+already keeps the press that closed a menu from the game; the launch is the same case.
+
+**Demonstrated before the change.** `MultiplayerTests.The_press_that_launched_a_game_is_not_the_game_s_until_it_is_let_go`
+launches a pad-reading SNES image with A held across a game poll, as `MultiplayerTests`' launch helper has done since
+§8.13.8, seats by connection so the claim rule of §8.13.8 is out of the way, and polls three more times with A still
+down. Before the change the game's pad word read `0x8000` (the SNES B bit, where the bottom face button lands) where
+`0` was expected.
+
+**The rule**, in `MainWindow`'s input path, where the menu's rule already lives: `RunSession`, which every launch,
+restart and console start goes through, sets `_padQuiet`, the flag a closing menu sets, and `PadBelongsToTheInterface`
+keeps every button from the game until no button is held, then clears it. The game's input still goes through the
+frontend API's input calls as before; what changed is only that nothing is sent while the flag stands. A launch made
+with nothing held clears the flag at the first poll, so a game started from a menu or the keyboard is unaffected.
+The rule is Mistress's, as §4.29's is: Hotaru launches from a prompt, with no press to carry over.
+
+**After the change** the same test reads `0` through the three polls and after the release, and the B bit once A is
+pressed again.
+
+**One test helper changed with it.** `MultiplayerTests`' launch helper let A go and then, in two Genesis cases, pressed
+other pads' buttons before any game poll ran, which no player's hands can do inside 16 ms: the quiet saw buttons held
+at every poll and the two cases read no input (`Four_pads_play_a_genesis_team_player_set…` and
+`…j_cart_game…`). The helper now runs the game's poll once after letting go, as the 60 Hz timer would, and both pass.
+Measured 2026-10-18 with the change: the pad, multiplayer, launch, emulation menu and player claims classes with the
+Shaders recordings, 250 passed and 1 skipped by its own opt-in.

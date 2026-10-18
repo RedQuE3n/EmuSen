@@ -3934,7 +3934,7 @@ The three first phases (§17, §18, §19) were answered by the tester on 2026-10
   `frame_info.lines`, `PRESENCE`, `EMUSEN_FRAME_CHEATS_HELD` and `DEBUG_TRANSLATE`. P3 is retired as wrong (§9).
 - **The names a retired shim showed give way to the generic host's**: the engine's name in the shell's headings and log
   folders ("MoonRT", "MercuryRT" for "NES", "GB"), "CPU" for "2A03", one load bar for the shim's several; the debugger's
-  golden corpus is re-recorded with each difference listed, as §17.4, §18.6.3 and §19.7 list them.
+  golden corpus is re-recorded with each difference listed, as §17.4, §18.6.3 and §19.5 list them.
 - **The order**: one branch builds the host pieces the three cores share (§17.7 step 2, §18.7, §19.8) and the minor,
   merged before any core switches to the generic host; meanwhile each core's steps that need no ABI change go ahead.
 - **Every other question** of §17.8, §18.8 and §19.10 as recommended, among them: the switches `EMUSEN_MOON_NATIVE`,

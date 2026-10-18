@@ -73,10 +73,10 @@ case on moonrt
 target moonrt
 covers 1
 $ cpus
-out 188
-NES debug processors:
-  cpu   PC=$00B454  2A03
-        supports: bp, cov, bt, disasm   code space: CPUBUS
+out 196
+MoonRT debug processors:
+  cpu   PC=$00B454  CPU
+        supports: bp, cov, bt, regs, disasm   code space: CPUBUS
 Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.
 status 0
 action none

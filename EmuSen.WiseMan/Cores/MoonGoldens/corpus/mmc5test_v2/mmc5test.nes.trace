@@ -6,5 +6,5 @@ input none
 rendering skipped
 unit chain
 recorded MoonRT
-reason first recording, from MoonRT at ec9810f4, before the C# core is deleted
-verdict Unsupported NotSupportedException
+reason A board MoonRT does not build is refused by the core as on every v1 engine, its exception the host's CoreRefusedException, the shim's NotSupportedException retired with it (EmuSen_Backend.md §20, §23).
+verdict Unsupported CoreRefusedException

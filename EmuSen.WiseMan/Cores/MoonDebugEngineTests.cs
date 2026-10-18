@@ -5,7 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using EmuSen.Cores;
 using EmuSen.Crystal.Systems.Nes;
-using EmuSen.Cores.Nintendo.MoonRT;
+using EmuSen.Cores.Native;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
 using EmuSen.WiseMan.Fixtures;
@@ -30,9 +30,9 @@ namespace EmuSen.WiseMan.Cores
 
         public static NesDebugRig Load(string engine, string path, CheatRegistry? cheats = null)
         {
-            Assert.True(MoonRtCore.Available, MoonNative.Report);
+            Assert.True(MoonEngines.Available, MoonEngines.Report);
             CoreBundle bundle = CoreFactory.Load(path, cheats: cheats, options: TestCores.NoBattery);
-            Assert.IsType<MoonRtCore>(bundle.Core);
+            Assert.IsType<CoreEngine>(bundle.Core);
             return new NesDebugRig(bundle.Core, bundle.DebugTarget);
         }
 
@@ -41,8 +41,8 @@ namespace EmuSen.WiseMan.Cores
         public CoverageRegistry Coverage => Target.Coverage!;
         public WatchRegistry Watches => Target.Watches;
 
-        public bool Halted => ((MoonRtCore)Core).IsHaltedAtBreakpoint;
-        public int HaltedAddress => ((MoonRtCore)Core).HaltedAddress;
+        public bool Halted => ((CoreEngine)Core).IsHaltedAtBreakpoint;
+        public int HaltedAddress => ((CoreEngine)Core).HaltedAddress;
         public int Pc => Target.DebugCpus[0].ProgramCounter!();
 
         public byte[] State()
@@ -204,16 +204,16 @@ namespace EmuSen.WiseMan.Cores
             Assert.Empty(rig.Watches.GetEvents(ram));
         }
 
-        // A CPU-bus store from the debugger is reported as the processor's are.
+        // A CPU-bus store from the debugger lands but is not logged as the program's, the shim's report of it retired as on every v1 core - see EmuSen_Backend.md §19.3.3 D16, §23.
         [Theory]
         [MemberData(nameof(NesDebugRig.Engines), MemberType = typeof(NesDebugRig))]
-        public void A_store_through_the_bus_space_reaches_a_watch(string engine)
+        public void A_store_through_the_bus_space_lands_and_is_not_the_programs(string engine)
         {
             using var rig = Load(engine);
             int id = rig.Watches.AddWatch("RAM", 0x0042, 1);
             rig.Target.GetMemorySpaces().Single(s => s.Name == NesSystem.CpuBus).Write(0x0042, 0x7E);
-            DebugWatchEvent e = Assert.Single(rig.Watches.GetEvents(id));
-            Assert.Equal((0x42, (byte)0x7E), (e.Address, e.Value));
+            Assert.Empty(rig.Watches.GetEvents(id));
+            Assert.Equal(0x7E, rig.Target.GetMemorySpaces().Single(s => s.Name == NesSystem.Ram).Read(0x0042));
         }
 
         // A halt and a resume leave the machine where a run without the breakpoint leaves it: the halted scanline's cycles are earned once.
@@ -248,24 +248,24 @@ namespace EmuSen.WiseMan.Cores
         public MoonRtArmedEqualsPlainTests(ITestOutputHelper output) => _output = output;
 
         // A breakpoint no game here executes, a watch and a data breakpoint no store matches, coverage over all 64K and the profiler.
-        public static void ArmEverything(MoonRtCore core)
+        public static void ArmEverything(CoreEngine core)
         {
             core.CreateDebugTarget();
             core.Breakpoints.AddBreakpoint(0x5FF0, 0x5FFF, null);
             core.Watches.AddWatch(NesSystem.Ram, 0, 0x800);
             core.Watches.AddWatch(NesSystem.PrgRam, 0, 0x2000);
             core.Breakpoints.AddDataBreakpoint(NesSystem.PrgRam, 0x1FFF, 0x1FFF, 0x5A, false, false, "false");
-            core.Coverage.Arm();
-            core.CallStack.ArmProfiler();
+            core.Debug.Coverage[0].Arm();
+            core.Debug.CallStack.ArmProfiler();
         }
 
-        public static void RunAlike(MoonRtCore plain, MoonRtCore armed, int frames, int from = 0)
+        public static void RunAlike(CoreEngine plain, CoreEngine armed, int frames, int from = 0)
         {
-            byte[] a = new byte[MoonMachine.FrameBytes], b = new byte[MoonMachine.FrameBytes];
+            byte[] a = new byte[plain.Machine.FrameInfo.Bytes], b = new byte[armed.Machine.FrameInfo.Bytes];
             for (int f = from; f < from + frames; f++)
             {
                 int p = f % 90;
-                foreach (MoonRtCore core in new[] { plain, armed })
+                foreach (CoreEngine core in new[] { plain, armed })
                 {
                     core.SetButton(0, EmuSen.Galaxia.Input.PadButton.Start, p < 5);
                     core.SetButton(0, EmuSen.Galaxia.Input.PadButton.A, p >= 45 && p < 50);
@@ -276,7 +276,7 @@ namespace EmuSen.WiseMan.Cores
                 plain.Machine.CopyFrame(a);
                 armed.Machine.CopyFrame(b);
                 Assert.True(a.AsSpan().SequenceEqual(b), $"frame {f}: the pictures differ");
-                Assert.True(plain.Machine.Save().AsSpan().SequenceEqual(armed.Machine.Save()), $"frame {f}: the states differ");
+                Assert.True(MoonEngines.Save(plain.Machine).AsSpan().SequenceEqual(MoonEngines.Save(armed.Machine)), $"frame {f}: the states differ");
             }
         }
 
@@ -292,16 +292,16 @@ namespace EmuSen.WiseMan.Cores
             foreach (byte[] image in runs)
             {
                 string rom = SyntheticNesRom.WriteTemp(image);
-                using var plain = new MoonRtCore() { Options = TestCores.NoBattery };
-                using var armed = new MoonRtCore() { Options = TestCores.NoBattery };
+                using var plain = MoonEngines.Create(TestCores.NoBattery);
+                using var armed = MoonEngines.Create(TestCores.NoBattery);
                 plain.LoadRom(rom);
                 armed.LoadRom(rom);
                 File.Delete(rom);
                 ArmEverything(armed);
                 RunAlike(plain, armed, 900);
-                Assert.True(armed.Coverage.InstructionsRecorded > 100_000, "the armed run did not take the observed frame");
+                Assert.True(armed.Debug.Coverage[0].InstructionsRecorded > 100_000, "the armed run did not take the observed frame");
                 Assert.True(armed.Watches.GetWatches().Any(w => armed.Watches.GetEvents(w.Id).Count > 0), "no store reached the watches");
-                _output.WriteLine($"{GoldenTrace.Hash(image)}: alike, {armed.Coverage.InstructionsRecorded} instructions covered");
+                _output.WriteLine($"{GoldenTrace.Hash(image)}: alike, {armed.Debug.Coverage[0].InstructionsRecorded} instructions covered");
             }
         }
     }

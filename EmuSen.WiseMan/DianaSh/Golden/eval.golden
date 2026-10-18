@@ -226,51 +226,19 @@ case on moonrt
 target moonrt
 covers 1-2
 $ eval symbols
-out 364
-  $4000
-  $4001
-  $4002
-  $4003
-  $4004
-  $4005
-  $4006
-  $4007
-  $4008
-  $4009
-  $400A
-  $400B
-  $400C
-  $400D
-  $400E
-  $400F
-  $4010
-  $4011
-  $4012
-  $4013
+out 78
   A
-  Board:NROM
   C
   Cycles
   D
   frame
-  FrameCounter
-  FrameIRQ
   I
   N
-  OAMADDR
   P
   PC
-  PPUCTRL
-  PPUMASK
-  PPUSTATUS
   S
-  Scanline
-  Sprite0Hit
-  SpriteOverflow
-  t
+  stackdepth
   V
-  VBlank
-  w
   X
   Y
   Z
@@ -287,38 +255,12 @@ case on mercuryrt
 target mercuryrt
 covers 1-2
 $ eval symbols
-out 421
-  $FF10
-  $FF11
-  $FF12
-  $FF13
-  $FF14
-  $FF15
-  $FF16
-  $FF17
-  $FF18
-  $FF19
-  $FF1A
-  $FF1B
-  $FF1C
-  $FF1D
-  $FF1E
-  $FF1F
-  $FF20
-  $FF21
-  $FF22
-  $FF23
-  $FF24
-  $FF25
-  $FF26
+out 101
   A
   BC
-  BGP
   C
   Cycles
   DE
-  DIV
-  Dot
   F
   frame
   H
@@ -327,27 +269,10 @@ out 421
   IE
   IF
   IME
-  LCDC
-  LY
-  LYC
-  Mode
   N
-  OBP0
-  OBP1
   PC
-  Power
-  SCX
-  SCY
-  SeqStep
   SP
   stackdepth
-  STAT
-  TAC
-  TIMA
-  TMA
-  WindowLine
-  WX
-  WY
   Z
 status 0
 action none

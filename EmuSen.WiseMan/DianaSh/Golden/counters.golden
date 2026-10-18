@@ -165,8 +165,8 @@ This core does not report access counters.
 status 1
 action none
 $ spaces
-out 282
-NES memory spaces:
+out 351
+MoonRT memory spaces:
   RAM            2048 bytes  R/W
   PRGROM        16384 bytes  R/O
   PRGRAM         8192 bytes  R/W
@@ -175,6 +175,8 @@ NES memory spaces:
   OAM             256 bytes  R/W
   PALETTE          32 bytes  R/W
   CPUBUS        65536 bytes  R/W
+  PPUREG            8 bytes  R/W
+  APUREG           32 bytes  R/W
 status 0
 action none
 end

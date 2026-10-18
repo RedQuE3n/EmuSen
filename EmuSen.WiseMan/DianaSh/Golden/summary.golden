@@ -54,13 +54,12 @@ case on moonrt
 target moonrt
 covers 1
 $ summary
-out 284
-NES (MoonRT) - frame 2, scanline 0
+out 232
+MoonRT (Rust) 0.1.0, nes, frame 2
 Mapper 0 (NROM), 1x16K PRG, 1x8K CHR ROM, mirroring Horizontal
 CPU  A=00 X=00 Y=00 S=FA PC=B454 P=24
 PPU  CTRL=00 MASK=00 STATUS=00 v=0000 t=0000 x=0
-     rendering=off vblank=0 sprite0=0
-APU  no synthesis modelled - registers and the frame IRQ only
+     rendering=off vblank=0 sprite0=0 scanline=0
 status 0
 action none
 end

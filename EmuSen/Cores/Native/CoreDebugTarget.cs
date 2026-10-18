@@ -287,21 +287,14 @@ namespace EmuSen.Cores.Native
         public LabelRegistry? Labels => _engine.Labels;
         public IExpressionContext? Expressions => DebugCpus.Count > 0 ? ExpressionsOf(DebugCpus[0]) : null;
 
-        // The main processor's registers, the pack's symbols over them, the registers `regs` shows of the units, and the call stack's depth where the core keeps one - see `man eval`.
+        // The main processor's registers, the pack's symbols over them, and the call stack's depth where the core keeps one - see `man eval`.
         private IExpressionContext ExpressionsOf(DebugCpu main)
         {
             var views = Views;
-            DebugRegisterValue[] unitRegisters = VideoRegisters.Current.Concat(ApuRegisters.Current).Where(r => !r.Name.StartsWith("Board:", StringComparison.Ordinal)).ToArray();
-            var names = (views?.SymbolNames ?? Array.Empty<string>()).Concat(unitRegisters.Select(r => r.Name)).Concat(main.CallStack is null ? Array.Empty<string>() : new[] { "stackdepth" }).ToArray();
-            long? Unit(string name)
-            {
-                foreach (DebugRegisterValue r in VideoRegisters.Current) if (string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase)) return (long)r.Value;
-                foreach (DebugRegisterValue r in ApuRegisters.Current) if (string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase) && !r.Name.StartsWith("Board:", StringComparison.Ordinal)) return (long)r.Value;
-                return null;
-            }
+            var names = (views?.SymbolNames ?? Array.Empty<string>()).Concat(main.CallStack is null ? Array.Empty<string>() : new[] { "stackdepth" }).ToArray();
             long? Extra(string name) =>
                 main.CallStack is { } stack && string.Equals(name, "stackdepth", StringComparison.OrdinalIgnoreCase) ? stack.Depth
-                : views?.Symbol(name, main.Registers?.Current ?? Array.Empty<DebugRegisterValue>()) ?? Unit(name);
+                : views?.Symbol(name, main.Registers?.Current ?? Array.Empty<DebugRegisterValue>());
             return new DebugCpuExpressionContext(this, () => main.Registers?.Current ?? Array.Empty<DebugRegisterValue>(), main.CodeSpace, names, Extra);
         }
 

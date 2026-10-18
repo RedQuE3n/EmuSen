@@ -1,4 +1,4 @@
-//! MoonRT, the NES core in Rust, called through the common native interface (EmuSen_NativeCores.md). See Moon_Native.md.
+//! MoonRT, the NES core in Rust, called through the core ABI v1 (EmuSen_CoreAPI.md). See Moon_Native.md.
 
 pub mod apu;
 pub mod cpu;

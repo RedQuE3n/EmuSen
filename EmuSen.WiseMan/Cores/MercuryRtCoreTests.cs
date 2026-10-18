@@ -14,7 +14,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // MercuryRtCore through ICore alone: the engine setting, cheats, battery saves, states, the spaces and the debugger's view - see Mercury_Native.md §8.3, §15.
+    // MercuryRT on the generic engine through ICore alone: the engine setting, cheats, battery saves, states, the spaces and the debugger's view - see Mercury_Native.md §8.3, §15.
     [Collection(TestCollections.ProcessGlobals)]
     public class MercuryRtCoreTests : IDisposable
     {

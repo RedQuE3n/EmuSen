@@ -7316,6 +7316,10 @@ the loader found. That happens when:
 
 An example: *"MoonRT (Rust) is not available (turned off by EMUSEN_MOON_NATIVE=0); Moon (C#) is running."*
 
+*Superseded 2026-10-18 (`EmuSen_Backend.md` §23): MoonRT's shim retired, the NES runs on the generic engine through
+discovery, and `EMUSEN_MOON_NATIVE` is read by nothing; a build without the library or its sidecar says "This build has
+no NES core: MoonRT (Rust) is missing (…)", as every console with one discovered engine does.*
+
 **What stays the same across the two:**
 
 - Save states are one format: a state saved on either loads on the other.

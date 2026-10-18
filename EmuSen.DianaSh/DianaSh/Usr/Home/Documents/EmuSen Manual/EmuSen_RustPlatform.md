@@ -3373,6 +3373,10 @@ Debug assertions are left off, for two reasons, the second the deciding one:
   `test-checked` now runs MarsRT's full counts in 46.0 s, against 44.3–47.3 s without, so this reason no longer
   applies, and the cost above is what remains to decide on.*
 
+  *Decided 2026-10-18 by the tester: debug assertions stay off in `test-checked`. Overflow checks catch the class of
+  defect the profile was made for, and about a fifth more test time, most of it Diamond's and MoonRT's, buys too little
+  beside them; the question is reopened if a defect only debug assertions would have caught reaches `WiseMan`.*
+
 ### 37.3 What it found
 
 Every suite ran on the profile, at first with debug assertions on as well, and again with overflow checks alone: 1,834

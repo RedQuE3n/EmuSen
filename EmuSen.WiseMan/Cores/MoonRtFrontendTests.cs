@@ -6,7 +6,6 @@ using System.Runtime.InteropServices;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
 using EmuSen.Crystal.Systems.Nes;
-using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
@@ -27,11 +26,13 @@ namespace EmuSen.WiseMan.Cores
             _output = output;
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
+            CoreDiscovery.UseDirectories(null);
         }
 
         public void Dispose()
         {
             DataStore.OverrideDirectory = null;
+            CoreDiscovery.UseDirectories(null);
             try { Directory.Delete(_root, recursive: true); } catch { }
         }
 
@@ -63,9 +64,9 @@ namespace EmuSen.WiseMan.Cores
             foreach (string? engine in new[] { null, CoreCatalog.MoonRtEngine, "Moon (C#)" })
             {
                 CoreBundle bundle = CoreFactory.Load(rom, engine: engine, options: TestCores.NoBattery);
-                var core = Assert.IsType<MoonRtCore>(bundle.Core);
+                var core = Assert.IsType<CoreEngine>(bundle.Core);
                 Assert.Null(bundle.Notice);
-                Assert.IsType<MoonRtDebugTarget>(bundle.DebugTarget);
+                Assert.IsType<CoreDebugTarget>(bundle.DebugTarget);
                 Assert.Equal(("NES address:value", NesSystem.CpuBus), (bundle.CheatAutoDetectCodec!.Name, bundle.CheatAutoDetectCodec.SpaceName));
                 Assert.Equal("Game Genie", bundle.CheatExplicitCodec!.Name);
                 Assert.True(EngineFeatures.Of(core).RewindCapture);
@@ -74,29 +75,26 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // The loader refuses a library that is not there with the words a build without it reports.
+        // A build without the library, or without its sidecar, opens no NES game and says why in the player's words, as every console with one discovered engine does.
         [Fact]
-        public void A_missing_library_is_reported_and_not_used()
+        public void Without_its_library_an_nes_game_is_refused_in_words()
         {
-            var missing = NativeCoreLibrary.Common("moonrt_missing", "EMUSEN_MOONRT_MISSING_TEST", MoonNative.CoreVersion, MoonNative.RequiredCapabilities);
-            Assert.False(missing.Available);
-            Assert.Contains("not found beside the assemblies", missing.Report);
-            Assert.False(new NativeInterface(missing).Complete);
+            CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "nothing") });
+            Assert.Equal($"This build has no NES core: {CoreCatalog.MoonRtEngine} is missing (no sidecar for it was found beside the program).",
+                Assert.Throws<NotSupportedException>(() => CoreFactory.Create("game.nes", options: TestCores.NoBattery)).Message);
         }
 
-        // Every capability the library claims has its exports, every one it does not claim has none, and every required export is there.
+        // Since its shim retired the library is on the core ABI alone: no pre-stable export and no extension of the pre-stable handle is left in it.
         [Fact]
-        public void The_capabilities_and_the_exports_agree()
+        public void The_library_is_on_the_core_abi_alone()
         {
-            Assert.True(MoonNative.Available, MoonNative.Report);
-            Assert.Equal(MoonNative.RequiredCapabilities, MoonNative.Library.Capabilities);
-            string path = Path.Combine(AppContext.BaseDirectory, MoonNative.Library.FileName);
-            nint handle = NativeLibrary.Load(path);
-            foreach (string name in NativeInterface.Required) Assert.True(NativeLibrary.TryGetExport(handle, name, out _), name);
-            foreach (var (bit, name, exports) in NativeInterface.Optional)
-                foreach (string export in exports)
-                    Assert.True(NativeLibrary.TryGetExport(handle, export, out _) == ((MoonNative.Library.Capabilities & bit) != 0), $"{name}: {export}");
-            Assert.False(NativeLibrary.TryGetExport(handle, "moon_machine_new", out _), "the old moon_* exports are retired");
+            Assert.True(MoonEngines.Available, MoonEngines.Report);
+            nint handle = NativeLibrary.Load(MoonEngines.LibraryPath);
+            foreach (string name in NativeInterface.Required) Assert.False(NativeLibrary.TryGetExport(handle, name, out _), name);
+            foreach (var (_, name, exports) in NativeInterface.Optional)
+                foreach (string export in exports) Assert.False(NativeLibrary.TryGetExport(handle, export, out _), $"{name}: {export}");
+            foreach (string gone in new[] { "moonrt_step", "moonrt_rom_patch", "moon_machine_new" }) Assert.False(NativeLibrary.TryGetExport(handle, gone, out _), gone);
+            foreach (string kept in new[] { "moonrt_core_step", "moonrt_core_rom_patch" }) Assert.True(NativeLibrary.TryGetExport(handle, kept, out _), kept);
         }
 
         // The program counts into $6000 every loop; a battery save starts the machine, is written back, and a board without one opens none.
@@ -110,7 +108,7 @@ namespace EmuSen.WiseMan.Cores
             Directory.CreateDirectory(Path.GetDirectoryName(save)!);
             File.WriteAllBytes(save, marked);
 
-            var rust = (MoonRtCore)CoreFactory.Load(rom).Core;
+            var rust = (CoreEngine)CoreFactory.Load(rom).Core;
             Assert.Equal(NesHeader.PrgRamSize, rust.Machine.Battery(0).Data.Length);
             Assert.Equal(marked[0x1000..0x1008], Enumerable.Range(0x1000, 8).Select(i => rust.ReadSpace(NesSystem.PrgRam, i)).ToArray());
             for (int f = 0; f < 301; f++) rust.RunFrame();
@@ -119,13 +117,13 @@ namespace EmuSen.WiseMan.Cores
             Assert.NotEqual(marked[..4], written[..4]);
             rust.Dispose();
 
-            var again = (MoonRtCore)CoreFactory.Load(rom).Core;
+            var again = (CoreEngine)CoreFactory.Load(rom).Core;
             Assert.Equal(written, Enumerable.Range(0, written.Length).Select(i => again.ReadSpace(NesSystem.PrgRam, i)).ToArray());
             again.Dispose();
 
             byte[] image = BoardPrograms.Build(4, 8, cycleIrq: false);
             image[6] &= 0xFD;
-            var none = (MoonRtCore)CoreFactory.Load(Rom(image, "NoBattery.nes")).Core;
+            var none = (CoreEngine)CoreFactory.Load(Rom(image, "NoBattery.nes")).Core;
             Assert.Empty(none.Machine.Battery(0).Data);
             none.Dispose();
         }
@@ -143,10 +141,10 @@ namespace EmuSen.WiseMan.Cores
             var cheats = new CheatRegistry();
             var (address, value) = NesGameGenieCodec.Decode("SXIOPO");
             cheats.AddRomPatch(address, value, NesGameGenieCodec.DecodeCompare("SXIOPO"), "infinite lives");
-            var coded = (MoonRtCore)CoreFactory.Load(smb, cheats: cheats, options: TestCores.NoBattery).Core;
-            var plain = (MoonRtCore)CoreFactory.Load(smb, options: TestCores.NoBattery).Core;
+            var coded = (CoreEngine)CoreFactory.Load(smb, cheats: cheats, options: TestCores.NoBattery).Core;
+            var plain = (CoreEngine)CoreFactory.Load(smb, options: TestCores.NoBattery).Core;
             for (int f = 0; f < 900; f++)
-                foreach (MoonRtCore core in new[] { coded, plain })
+                foreach (CoreEngine core in new[] { coded, plain })
                 {
                     core.SetButton(0, PadButton.Start, f % 90 < 5);
                     core.SetButton(0, PadButton.A, f % 90 is >= 45 and < 50);
@@ -176,7 +174,7 @@ namespace EmuSen.WiseMan.Cores
             int disabled = cheats.AddRomPatch(0x9200, 0x77, null, "off");
             cheats.SetEnabled(disabled, false);
 
-            var core = (MoonRtCore)CoreFactory.Load(Rom(Program()), cheats: cheats, options: TestCores.NoBattery).Core;
+            var core = (CoreEngine)CoreFactory.Load(Rom(Program()), cheats: cheats, options: TestCores.NoBattery).Core;
             core.RunFrame();
             var touched = new HashSet<int> { 0x9123, 0x9124, 0xFFFF, 0x4020, 0x3FFF, gg, 0x9200 };
             for (int address = 0x4020; address <= 0xFFFF; address++)
@@ -185,10 +183,10 @@ namespace EmuSen.WiseMan.Cores
                 foreach (int original in values)
                 {
                     int want = cheats.TryPatchRom((uint)address, (byte)original, out byte patched) ? patched : -1;
-                    Assert.True(want == core.Machine.RomPatch(address, (byte)original), $"${address:X4} over {original:X2}: TryPatchRom {want}, MoonRT {core.Machine.RomPatch(address, (byte)original)}");
+                    Assert.True(want == MoonEngines.RomPatch(core.Machine, address, (byte)original), $"${address:X4} over {original:X2}: TryPatchRom {want}, MoonRT {MoonEngines.RomPatch(core.Machine, address, (byte)original)}");
                 }
             }
-            Assert.Equal(-1, core.Machine.RomPatch(0x3FFF, 0));
+            Assert.Equal(-1, MoonEngines.RomPatch(core.Machine, 0x3FFF, 0));
             core.Dispose();
         }
 
@@ -197,7 +195,7 @@ namespace EmuSen.WiseMan.Cores
         public void A_bus_read_after_a_new_cheat_sees_it()
         {
             var cheats = new CheatRegistry();
-            var rust = (MoonRtCore)CoreFactory.Load(Rom(Program()), cheats: cheats, options: TestCores.NoBattery).Core;
+            var rust = (CoreEngine)CoreFactory.Load(Rom(Program()), cheats: cheats, options: TestCores.NoBattery).Core;
             rust.RunFrame();
             byte before = rust.ReadSpace(NesSystem.CpuBus, 0xC001);
             cheats.AddRomPatch(0xC001, (byte)(before ^ 0x5A), null, "new");
@@ -205,19 +203,19 @@ namespace EmuSen.WiseMan.Cores
             rust.Dispose();
         }
 
-        // An image with no PRG is refused at the load, with the exception the status stands for - see Moon_Native.md §6.2, D4.
+        // An image with no PRG is refused at the load as a fault, in the core's words with its status, the oracle's exception types retired - see EmuSen_Backend.md §20.
         [Fact]
         public void An_image_without_prg_is_refused()
         {
             byte[] image = SyntheticNesRom.Build(mapper: 1);
             byte[] empty = image.AsSpan(0, 16).ToArray().Concat(image.AsSpan(16 + SyntheticNesRom.PrgBankSize).ToArray()).ToArray();
             empty[4] = 0;
-            using var core = new MoonRtCore() { Options = TestCores.NoBattery };
-            Exception refused = Assert.ThrowsAny<Exception>(() => core.LoadRom(Rom(empty, "NoPrg.nes")));
-            _output.WriteLine(refused.GetType().Name + ": " + refused.Message);
+            using var core = MoonEngines.Create(TestCores.NoBattery);
+            var refused = Assert.Throws<CoreRefusedException>(() => core.LoadRom(Rom(empty, "NoPrg.nes")));
+            _output.WriteLine(refused.Status + ": " + refused.Message);
+            Assert.InRange(refused.Status, NativeInterface.FaultBase - 63, NativeInterface.FaultBase);
+            Assert.StartsWith($"{CoreCatalog.MoonRtEngine} refused the game: ", refused.Message);
             Assert.False(core.IsRomLoaded);
-            Assert.Equal(typeof(DivideByZeroException), MoonMachine.Refusal(NativeInterface.FaultBase - 2).GetType());
-            Assert.Equal(typeof(ArgumentOutOfRangeException), MoonMachine.Refusal(NativeInterface.FaultBase - 3).GetType());
         }
     }
 }

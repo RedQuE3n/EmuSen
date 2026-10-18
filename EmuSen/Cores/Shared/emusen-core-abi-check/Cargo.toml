@@ -12,3 +12,8 @@ clang-sys = { version = "1.9", features = ["clang_11_0", "runtime"] }
 
 [build-dependencies]
 bindgen = "0.72"
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

@@ -23,3 +23,8 @@ emusen-psx-card = { path = "../../../Shared/emusen-psx-card" }
 
 # Its own root, beside the kernel's.
 [workspace]
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

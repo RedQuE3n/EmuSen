@@ -16,3 +16,8 @@ ash = "0.38"
 
 [profile.release]
 opt-level = 3
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

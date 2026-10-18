@@ -90,7 +90,7 @@ fn every_descriptor_validates_against_its_committed_schema() {
         assert_eq!(schema::validate(s, doc), Vec::<String>::new(), "{doc}");
     }
     let v = crate::json::parse(info.as_bytes()).unwrap();
-    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.11"));
+    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.12"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
     assert_eq!(names.len(), 23);
     assert!(
@@ -122,6 +122,19 @@ fn a_replacement_and_a_firmware_source_are_written_as_the_schemas_say() {
     let mi = super::desc::machine_info_json(&m, &measured, &[]);
     assert!(mi.contains(r#""firmware":[{"which":2,"source":"replacement"},{"which":3,"source":"file"}]"#), "{mi}");
     assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
+}
+
+// Since 1.12 an entry's md5 list is written only when it has a checksum, so no earlier answer changes by a byte (§6.32).
+#[test]
+fn a_firmware_entrys_md5_list_is_written_only_when_not_empty() {
+    use super::desc::Firmware;
+    let plain = Firmware { which: 1, name: "a.rom".into(), label: "A".into(), size: 8, ..Firmware::default() };
+    let listed = Firmware { md5: vec!["0123456789abcdef0123456789abcdef".into(), "fedcba9876543210fedcba9876543210".into()], ..plain.clone() };
+    let doc = super::desc::firmware_json(&[plain, listed]);
+    assert_eq!(schema::validate(schema::FIRMWARE, &doc), Vec::<String>::new());
+    assert_eq!(doc.matches("\"md5\"").count(), 1, "{doc}");
+    assert!(doc.contains(r#""md5":["0123456789abcdef0123456789abcdef","fedcba9876543210fedcba9876543210"]"#), "{doc}");
+    assert!(!schema::validate(schema::FIRMWARE, &doc.replace("0123456789abcdef0123", "0123456789ABCDEF0123")).is_empty());
 }
 
 // Since 1.5 a bound of settling pictures is written under the state when it is not 0, within the schema's range, which is the crate's maximum.
@@ -497,7 +510,7 @@ fn read_ranges_reach_a_core_that_claims_them_and_an_unknown_kind_is_refused() {
 
 #[test]
 fn the_crates_constants_are_the_headers_own_numbers() {
-    assert_eq!(ABI_VERSION, 0x0001_000B);
+    assert_eq!(ABI_VERSION, 0x0001_000C);
     assert_eq!((std::mem::size_of::<CreateParams>(), std::mem::offset_of!(CreateParams, system)), (112, 104), "since 1.11");
     assert_eq!(caps::DEVICE_PICTURE, 1 << 21, "since 1.9");
     assert_eq!((caps::RAW_PICTURE, caps::UNASSIGNED & caps::RAW_PICTURE, std::mem::size_of::<RawFrame>(), std::mem::offset_of!(RawFrame, bytes)), (1 << 22, 0, 32, 24), "since 1.10");

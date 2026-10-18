@@ -136,6 +136,9 @@ pub struct Firmware {
     pub parts: Vec<Vec<String>>,
     /// What the core runs in the file's place when it is absent; `None` reads as no replacement (§6.2).
     pub replacement: Option<Replacement>,
+    /// Since 1.12: the lower-case MD5s of the images the core accepts whatever their name, each `size` bytes; written
+    /// only when not empty (§6.32).
+    pub md5: Vec<String>,
 }
 
 /// An open replacement for a firmware file, and what running on it costs, in the settings schema's words (§6.13).
@@ -471,6 +474,13 @@ fn write_firmware(j: &mut Json, f: &Firmware) {
         j.end_array();
     }
     j.end_array();
+    if !f.md5.is_empty() {
+        j.key("md5").begin_array();
+        for m in &f.md5 {
+            j.str(m);
+        }
+        j.end_array();
+    }
     if let Some(r) = &f.replacement {
         j.key("replacement").begin_object();
         match r {

@@ -37,6 +37,31 @@ namespace EmuSen.WiseMan.Common
             return path;
         }
 
+        // A file recognised by its content is named in the session's line by the player's own name - see EmuSen_Firmware.md §3.1 and §7.
+        [Fact]
+        public void The_session_line_names_a_file_recognised_by_its_content()
+        {
+            var entry = new EmuSen.Cores.Native.CoreFirmware(2, "widget.rom", "The widget's ROM", 64, false, []);
+            var used = new[] { new EmuSen.Cores.Native.CoreFirmwareSource(2, "file") };
+            var byName = new Dictionary<uint, FirmwareLocated> { [2] = new(_dir, ["widget.rom"], true) };
+            var byContent = new Dictionary<uint, FirmwareLocated> { [2] = new(_dir, ["PSX - COPY.BIN"], true, ByContent: true) };
+            Assert.Equal([$"[Firmware] The widget's ROM: the player's widget.rom, in {_dir}"], EmuSen.Cores.Native.CoreEngine.FirmwareLines("Core", used, [entry], byName));
+            Assert.Equal([$"[Firmware] The widget's ROM: the player's PSX - COPY.BIN, recognised by its content, in {_dir}"], EmuSen.Cores.Native.CoreEngine.FirmwareLines("Core", used, [entry], byContent));
+        }
+
+        // Through the public calls, a renamed file of a listed checksum is found and loaded, and Install still writes only the canonical name.
+        [Fact]
+        public void A_renamed_image_is_found_by_its_checksum_through_the_public_calls()
+        {
+            string renamed = WriteFile("A PLAYER COPY.BIN", 64);
+            var listed = Request with { Md5 = [Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(File.ReadAllBytes(renamed)))] };
+            Assert.Null(FirmwareLibrary.TryLoad(Request));
+            Assert.Equal(File.ReadAllBytes(renamed), FirmwareLibrary.TryLoad(listed));
+            Assert.True(FirmwareLibrary.IsInstalled(listed));
+            Assert.Equal((true, "A PLAYER COPY.BIN"), (FirmwareLibrary.Find(listed)!.ByContent, FirmwareLibrary.Find(listed)!.Names[0]));
+            Assert.Equal(["A PLAYER COPY.BIN"], Directory.GetFiles(_dir).Select(Path.GetFileName));
+        }
+
         // --- Discovery ---
 
         // A file given as a symbolic link is measured by what it links to, which is what is read - see EmuSen_Backend.md §15.1.

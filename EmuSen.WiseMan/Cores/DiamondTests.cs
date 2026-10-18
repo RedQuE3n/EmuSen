@@ -180,7 +180,7 @@ namespace EmuSen.WiseMan.Cores
                 process.WaitForExit();
                 _output.WriteLine($"{name}:\n{output}{stderr.Result}");
                 Assert.True(process.ExitCode == 0, output + stderr.Result);
-                Assert.Equal(22, output.Split('\n').Count(l => l.StartsWith("pass C")));
+                Assert.Equal(23, output.Split('\n').Count(l => l.StartsWith("pass C")));
             }
         }
 
@@ -259,10 +259,17 @@ namespace EmuSen.WiseMan.Cores
 
         private static string? Corpus => Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_PS1TESTS") is { } c && Directory.Exists(c) ? c : null;
 
+        // A program's settings with the region replaced where one is given, as the opt-in run on a player's BIOS may ask.
+        private static string WithRegion(string settings, string? region) =>
+            region is null ? settings : string.Join("\n", settings.Split('\n', StringSplitOptions.RemoveEmptyEntries).Where(l => !l.StartsWith("region=")).Append("region=" + region));
+
+        // The BIOS file a program's console takes: its region's, the Americas' when it names none - see Diamond_Plan.md §5.9.
+        private static uint BiosFor(string settings) => settings.Split('\n').FirstOrDefault(l => l.StartsWith("region="))?["region=".Length..] switch { "psx.jp" => 1u, "psx.eu" => 3u, _ => 2u };
+
         // Each of ps1-tests' graded programs run to its frame on `files`, and those that did not pass.
-        private List<string> RunPs1Tests(string corpus, IReadOnlyList<(uint, byte[])> files)
+        private List<string> RunPs1Tests(string corpus, IReadOnlyList<(uint, byte[])> files, string? region = null)
         {
-            var engine = new CoreAbiTestRomEngine(LibraryPath, _ => files, rom => Ps1Tests.Programs.FirstOrDefault(p => rom.Replace('\\', '/').EndsWith(p.Path))?.Settings ?? "");
+            var engine = new CoreAbiTestRomEngine(LibraryPath, _ => files, rom => WithRegion(Ps1Tests.Programs.FirstOrDefault(p => rom.Replace('\\', '/').EndsWith(p.Path))?.Settings ?? "", region));
             string? Log(string program) => Path.Combine(corpus, Path.GetDirectoryName(program)!, "psx.log") is var l && File.Exists(l) ? File.ReadAllText(l) : null;
             var failed = new List<string>();
             foreach (var program in Ps1Tests.Programs)
@@ -286,20 +293,24 @@ namespace EmuSen.WiseMan.Cores
             Assert.Empty(RunPs1Tests(corpus, Array.Empty<(uint, byte[])>()));
         }
 
-        // The same on a player's BIOS, the development path of Diamond_Plan.md §5.9's option D; opt-in by the corpus and a firmware folder.
+        // The same on a player's BIOS, the development path of Diamond_Plan.md §5.9's option D, found as Mistress finds it; opt-in by the corpus and a firmware folder, EMUSEN_DIAMOND_REGION naming a market for every program.
         [Fact]
         public void Ps1_tests_pass_by_their_tty_on_a_players_bios()
         {
-            string? firmware = Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_FIRMWARE");
+            string? firmware = Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_FIRMWARE"), region = Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_REGION") is { Length: > 0 } r ? r : null;
             if (Corpus is not { } corpus || firmware is null || !Directory.Exists(firmware))
             {
                 _output.WriteLine("skipped: EMUSEN_DIAMOND_PS1TESTS and EMUSEN_DIAMOND_FIRMWARE name ps1-tests' release and a folder of the player's own BIOS");
                 return;
             }
-            var declared = CoreLibrary.Open(LibraryPath).Info.Systems.Single().Firmware;
-            var bios = declared.Where(f => File.Exists(Path.Combine(firmware, f.Name))).Select(f => (f.Which, File.ReadAllBytes(Path.Combine(firmware, f.Name)))).ToArray();
-            Assert.True(bios.Length > 0, $"EMUSEN_DIAMOND_FIRMWARE names {firmware}, which holds none of {string.Join(", ", declared.Select(f => f.Name))}, so the run would be the open kernel's");
-            Assert.Empty(RunPs1Tests(corpus, bios));
+            CoreInfo info = CoreLibrary.Open(LibraryPath).Info;
+            var declared = info.Systems.Single().Firmware;
+            var found = declared.Select(f => (Entry: f, Found: EmuSen.Common.Firmware.FirmwareLibrary.Find(CoreEngine.Request(info.Name, f), [firmware]))).Where(x => x.Found is { Whole: true }).ToArray();
+            foreach (var (entry, at) in found) _output.WriteLine($"{entry.Label}: {at!.Names[0]}{(at.ByContent ? ", recognised by its content" : "")}");
+            var given = found.Select(x => x.Entry.Which).ToHashSet();
+            var lacking = Ps1Tests.Programs.Select(p => BiosFor(WithRegion(p.Settings, region))).Distinct().Where(w => !given.Contains(w)).Select(w => declared.Single(f => f.Which == w).Label).ToArray();
+            Assert.True(lacking.Length == 0, $"EMUSEN_DIAMOND_FIRMWARE names {firmware}, which holds no image of {string.Join(" or ", lacking)} by name or content, so those programs would run on the open kernel; EMUSEN_DIAMOND_REGION can name a market the folder holds");
+            Assert.Empty(RunPs1Tests(corpus, found.Select(x => (x.Entry.Which, x.Found!.Parts[0])).ToArray(), region));
         }
 
         // A program that turns the display on and fills a 16x16 square red through GP0, and loops.

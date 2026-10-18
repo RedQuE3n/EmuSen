@@ -92,6 +92,10 @@ pub const FAULT_STATE_LOST_LATE: u32 = 1 << 25;
 pub const STATE_LOST_FROM: i64 = 90;
 /// Seeded fault for the kit's C22 (since 1.11): a machine started empty reports a disc in its drive.
 pub const FAULT_EMPTY_LOADED: u32 = 1 << 26;
+/// Seeded fault for the kit's C23 (since 1.12): the boot ROM's checksum a digit short, which the schema's pattern lets by.
+pub const FAULT_MD5_SHORT: u32 = 1 << 27;
+/// A made-up checksum the boot ROM entry lists, so that C23 has one to check; no image has it on purpose.
+const BOOT_MD5: &str = "00112233445566778899aabbccddeeff";
 /// The included faults, narrowed to the bits of `EMUSEN_TEST_CORE_FAULTS` when that is set, so each can be shown alone.
 fn faults() -> u32 {
     static MASK: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
@@ -409,7 +413,16 @@ impl Core for TestCore {
                     buttons: vec![Button { bit: 0, control: Some(Control::A), label: "A".into() }, Button { bit: 1, control: None, label: "Turbo".into() }],
                     axes: vec![AxisControl { axis: Axis::LeftX as u32, control: Some(Axis::LeftX), trigger: false, label: "Stick".into() }],
                 }],
-                firmware: vec![Firmware { which: 16, name: "boot.rom".into(), label: "Boot ROM".into(), size: 64, required: false, parts: vec![], replacement: None }],
+                firmware: vec![Firmware {
+                    which: 16,
+                    name: "boot.rom".into(),
+                    label: "Boot ROM".into(),
+                    size: 64,
+                    required: false,
+                    parts: vec![],
+                    replacement: None,
+                    md5: vec![if faults() & FAULT_MD5_SHORT != 0 { BOOT_MD5[..31].into() } else { BOOT_MD5.into() }],
+                }],
                 development: false,
             }],
             deterministic: true,

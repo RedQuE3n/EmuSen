@@ -12,7 +12,7 @@ namespace EmuSen.Common.Firmware
     {
         public static bool Active => ServiceLibrary.Active;
 
-        private static bool Takes(FirmwareRequest r) => ServiceLibrary.Takes(r.FileName) && ServiceLibrary.TakesAll(r.AlternateNames) && r.Parts.All(ServiceLibrary.TakesAll);
+        private static bool Takes(FirmwareRequest r) => ServiceLibrary.Takes(r.FileName) && ServiceLibrary.TakesAll(r.AlternateNames) && r.Parts.All(ServiceLibrary.TakesAll) && ServiceLibrary.TakesAll(r.Md5);
 
         private static void Write(Utf8JsonWriter w, FirmwareRequest r)
         {
@@ -23,6 +23,7 @@ namespace EmuSen.Common.Firmware
             w.WriteStartArray("parts");
             foreach (var form in r.Parts) { w.WriteStartArray(); foreach (string name in form) w.WriteStringValue(name); w.WriteEndArray(); }
             w.WriteEndArray();
+            ServiceLibrary.WriteList(w, "md5", r.Md5);
             w.WriteEndObject();
         }
 
@@ -53,7 +54,7 @@ namespace EmuSen.Common.Firmware
                 parts.Add(envelope[at..(at + size)]);
                 at += size;
             }
-            return new FirmwareFound(d.RootElement.GetProperty("folder").GetString()!, ServiceLibrary.Words(d.RootElement, "names"), parts);
+            return new FirmwareFound(d.RootElement.GetProperty("folder").GetString()!, ServiceLibrary.Words(d.RootElement, "names"), parts, d.RootElement.GetProperty("content").GetBoolean());
         }
 
         public static (FirmwareLocated? Found, string? WrongSizeIn) Locate(FirmwareRequest r, IReadOnlyList<string> folders)
@@ -62,7 +63,7 @@ namespace EmuSen.Common.Firmware
             using JsonDocument d = ServiceLibrary.CallJson("emusen_firmware_locate", request, 512);
             JsonElement found = d.RootElement.GetProperty("found");
             FirmwareLocated? located = found.ValueKind == JsonValueKind.Null ? null
-                : new FirmwareLocated(found.GetProperty("folder").GetString()!, ServiceLibrary.Words(found, "names"), found.GetProperty("whole").GetBoolean());
+                : new FirmwareLocated(found.GetProperty("folder").GetString()!, ServiceLibrary.Words(found, "names"), found.GetProperty("whole").GetBoolean(), found.GetProperty("content").GetBoolean());
             return (located, ServiceLibrary.Text(d.RootElement, "wrong"));
         }
 

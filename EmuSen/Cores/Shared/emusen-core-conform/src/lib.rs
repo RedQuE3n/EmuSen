@@ -1,7 +1,7 @@
-//! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C22 on a library loaded through the core
+//! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C23 on a library loaded through the core
 //! ABI v1 alone, and a library's sidecar (§7.1). Each case reports its verdict and its evidence; §21 and §24 record what each
 //! checks and how, §28 the corpus form, which runs the checks that do not depend on the image once, §6.24 C17 and
-//! §6.25 C18, §6.27 and §6.28 C19, §6.29 C20, §6.30 C21, §6.31 C22.
+//! §6.25 C18, §6.27 and §6.28 C19, §6.29 C20, §6.30 C21, §6.31 C22, §6.32 C23.
 
 pub mod api;
 mod lender;
@@ -483,6 +483,7 @@ pub fn run(path: &Path, opts: &Options) -> Report {
     report.cases.push(c20(&mut s));
     report.cases.push(c21(&mut s));
     report.cases.push(c22(&mut s));
+    report.cases.push(c23(&mut s));
     report
 }
 
@@ -512,6 +513,7 @@ pub(crate) fn core_cases(path: &Path, opts: &Options) -> (Report, BTreeSet<i32>)
     report.cases.push(c13(&mut s));
     report.cases.push(c15(&mut s));
     report.cases.push(c22(&mut s));
+    report.cases.push(c23(&mut s));
     (report, s.statuses)
 }
 
@@ -2183,6 +2185,41 @@ fn c22(s: &mut Session<'_>) -> Case {
         }
     }
     c.done("C22", "a console started empty")
+}
+
+/// C23 (since 1.12, EmuSen_CoreAPI.md §6.32): every `md5` of core info's firmware lists and of `firmware_for`'s answer
+/// on the session's image is 32 lower-case hexadecimal digits, none repeated within an entry, and an entry in both, by
+/// `which` and `name`, lists the same checksums. The kit carries no firmware and checks no content. A library older than
+/// 1.12 lists none.
+fn c23(s: &mut Session<'_>) -> Case {
+    let mut c = Check::new();
+    let minor = unsafe { (s.lib.f.abi_version)() } & 0xFFFF;
+    let entries = |v: Option<Value>| -> Vec<Value> { v.and_then(|v| v.as_array().map(<[Value]>::to_vec)).unwrap_or_default() };
+    let info = s.lib.info().ok().and_then(|t| parse(&t));
+    let listed: Vec<Value> = entries(info.and_then(|v| v.get("systems").cloned())).iter().flat_map(|sys| entries(sys.get("firmware").cloned())).collect();
+    let image = s.opts.image.clone();
+    let asked = entries(api::text(|o, l| unsafe { (s.lib.f.firmware_for)(image.as_ptr(), image.len(), o, l) }).ok().and_then(|t| parse(&t)));
+    let key = |f: &Value| (f.get("which").and_then(Value::as_i64), f.get("name").and_then(Value::as_str).map(str::to_owned));
+    let sums = |f: &Value| -> Option<Vec<String>> { f.get("md5").map(|m| entries(Some(m.clone())).iter().map(|x| x.as_str().unwrap_or("").to_owned()).collect()) };
+    let mut count = 0;
+    for (from, f) in listed.iter().map(|f| ("core info", f)).chain(asked.iter().map(|f| ("firmware_for", f))) {
+        let name = f.get("name").and_then(Value::as_str).unwrap_or("?");
+        let Some(list) = sums(f) else { continue };
+        c.that(minor >= 12, || format!("{from}: {name} lists md5, which core ABI 1.{minor} does not have"));
+        for (i, m) in list.iter().enumerate() {
+            c.that(m.len() == 32 && m.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)), || format!("{from}: {name}'s md5 {m:?} is not 32 lower-case hexadecimal digits"));
+            c.that(!list[..i].contains(m), || format!("{from}: {name} lists md5 {m} twice"));
+        }
+        count += list.len();
+    }
+    for f in &asked {
+        if let Some(i) = listed.iter().find(|i| key(i) == key(f)) {
+            let (a, b) = (sums(f).unwrap_or_default(), sums(i).unwrap_or_default());
+            c.that(a == b, || format!("{}: firmware_for lists md5 {a:?} and core info {b:?}", f.get("name").and_then(Value::as_str).unwrap_or("?")));
+        }
+    }
+    c.note(format!("{count} checksum(s) over {} entries of core info and {} of firmware_for", listed.len(), asked.len()));
+    c.done("C23", "firmware checksums")
 }
 
 /// The encodings EmuSen_CoreAPI.md §6.30 registers: each name's element width and its largest value.

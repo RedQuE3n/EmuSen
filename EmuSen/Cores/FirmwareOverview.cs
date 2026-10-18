@@ -16,6 +16,9 @@ namespace EmuSen.Cores
         // Which folder the file in use was found in, as YourFolder or EmuSensFolder, or null when none is - see EmuSen_Firmware.md §2.3.
         public string? FoundIn { get; init; }
 
+        // The player's own file name when the file in use was recognised by its content, else null - see EmuSen_Firmware.md §7.
+        public string? FoundAs { get; init; }
+
         // Which folder holds a file of the name and the wrong size, when no folder holds the right one.
         public string? WrongSizeIn { get; init; }
     }
@@ -67,7 +70,7 @@ namespace EmuSen.Cores
             var (found, wrong) = FirmwareLibrary.Locate(request, folders);
             return new FirmwareItem(label, request.FileName, request.Size, found is not null, wrong is not null, request.ReplacementEffect, request.ReplacementCost)
             {
-                FoundIn = Role(found?.Folder), WrongSizeIn = Role(wrong),
+                FoundIn = Role(found?.Folder), WrongSizeIn = Role(wrong), FoundAs = found is { ByContent: true } ? found.Names[0] : null,
             };
         }
 

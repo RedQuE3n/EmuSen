@@ -2361,18 +2361,21 @@ state 3.
   portable job of `EmuSen_RustPlatform.md` §31 compiles the three crates for both; it was not run here, since this
   machine's toolchain carries no standard library for either target.
 
-### 15.6 Proposed 2026-10-18: the store recognises a file by its content
+### 15.6 Built 2026-10-18: the store recognises a file by its content
 
-*Decided 2026-10-18 by the tester:* the firmware store also recognises a player's file by a checksum of its content,
-whatever it is called, from checksums each core lists in its own info. The design is `EmuSen_Firmware.md` §7 and is
-not built: the core ABI's firmware entry has no checksum member, so it needs an additive minor (1.12, a `md5` list and
-kit case C23), and the firmware policy is silent on a core's info stating checksums of real firmware, so both wait
-for the tester (§7.9 there). For this crate the design is a third step in `search`, after the names and the split
-forms of each folder: the folder's files of the declared size whose MD5, computed as Galaxia's `rom_hash` computes it,
-is listed, with a cache from path, length and modification time to the MD5 in each half. The C# twin takes the same
-step, `FirmwareParityTests` gains the checksum cases of §7.7 there on synthetic files, and the platform interface
-moves to 18 so that an older library is refused rather than disagreeing with its twin. Measured on 2026-10-18 in a
-scratch folder of 200 files with 15 of the declared size: the listing 0.28 ms, the MD5s of the 15 files 9.1 ms.
+*Decided 2026-10-18 by the tester* (`EmuSen_Firmware.md` §7.9): the firmware store also recognises a player's file by
+its MD5, whatever it is called, from checksums each core lists in its own info (core ABI 1.12, `EmuSen_CoreAPI.md`
+§6.32). In this crate it is a third step of `search`, after the names and the split forms of each folder: `by_content`
+lists the folder's own entries, keeps the files whose length, a link's by its target, is the request's size, takes
+their MD5 by Galaxia's `rom_hash::md5`, and picks the first file of the first listed checksum, file names compared in
+the order of their UTF-16 code units, which is the C#'s ordinal order. A file's MD5 is kept for the life of the
+process by its path, length and modification time. The C# twin, `FirmwareLibrary.Managed`, takes the same step
+(`ByContent`, `Md5Of`). `FirmwareFound` and `FirmwareLocated` gained `ByContent`, the C layer's requests `md5` and its
+answers `content`, and the platform interface went from 17 to 18 (`EmuSen_RustPlatform.md` §37). The overview's
+`FirmwareItem.FoundAs` and the session's line name the player's file; the frontend API's overview does not carry it yet
+(`EmuSen_Firmware.md` §7.5).
+
+The gates, seeded faults and measurements are `EmuSen_Firmware.md` §7.10.
 
 ## 16. What was built, 2026-10-18: the cheat database's download in Rust
 

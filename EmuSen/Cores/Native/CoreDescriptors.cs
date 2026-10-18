@@ -18,6 +18,9 @@ namespace EmuSen.Cores.Native
     public sealed record CoreFirmware(uint Which, string Name, string Label, long Size, bool Required, IReadOnlyList<IReadOnlyList<string>> Parts)
     {
         public CoreReplacement? Replacement { get; init; }
+
+        // The MD5s of the images the core accepts whatever they are called; empty before 1.12 - see EmuSen_CoreAPI.md §6.32.
+        public IReadOnlyList<string> Md5 { get; init; } = Array.Empty<string>();
     }
 
     // An open replacement's effect in the settings schema's words, exact, accuracy or none, and its cost in plain words - see EmuSen_CoreAPI.md §6.2.
@@ -155,6 +158,7 @@ namespace EmuSen.Cores.Native
             Arr(f, "parts").Select(p => (IReadOnlyList<string>)p.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToArray()).ToArray())
         {
             Replacement = Obj(f, "replacement") is { ValueKind: JsonValueKind.Object } r ? new CoreReplacement(Str(r, "effect", "none"), OptStr(r, "cost")) : null,
+            Md5 = Strs(f, "md5"),
         };
 
         public static CoreInfo Info(string json)

@@ -1,4 +1,4 @@
-/* emusen_core.h - the EmuSen core ABI, version 1.13.
+/* emusen_core.h - the EmuSen core ABI, version 1.14.
  *
  * A core is a shared library exporting the functions below, C calling convention. The normative text is
  * EmuSen_CoreAPI.md in the EmuSen manual; this header is its machine-checked half, and where the two disagree the
@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CORE_ABI_MAJOR 1u
-#define EMUSEN_CORE_ABI_MINOR 13u
+#define EMUSEN_CORE_ABI_MINOR 14u
 #define EMUSEN_CORE_ABI_VERSION ((EMUSEN_CORE_ABI_MAJOR << 16) | EMUSEN_CORE_ABI_MINOR)
 
 /* An opaque machine. Several may exist at once, from one library. */
@@ -397,6 +397,8 @@ int32_t emusen_core_state_load(emusen_machine *machine, const uint8_t *data, siz
 int64_t emusen_core_state_layout(const emusen_machine *machine, uint32_t kind, uint8_t *out, size_t len);
 
 /* ---- Memory spaces, by the ids machine info lists -------------------------------------- */
+/* @since 1.14 (section 6.39) a space in machine info's spaces[] may carry byte_order, "big" or "little": the order the
+ * core stores a word of it in. Absent, the system's order, as the systems table gives it. Reads are byte by byte. */
 int64_t emusen_core_space_size(const emusen_machine *machine, uint32_t space);
 int64_t emusen_core_space_read(emusen_machine *machine, uint32_t space, uint32_t address, uint8_t *out, size_t len);
 int64_t emusen_core_space_write(emusen_machine *machine, uint32_t space, uint32_t address, const uint8_t *data, size_t len);

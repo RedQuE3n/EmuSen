@@ -200,6 +200,25 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(expected, engine.FrameLog.GetSamples(id).Single().Value);
         }
 
+        // The Z80 stores a word low byte first, so its word 0x1234 is $34 $12 and the frame log reads it as the Z80's own value, by the space's order in machine info - see Nephrite_Native.md §66.5.
+        [Theory]
+        [InlineData("game.md", "Z80RAM")]
+        [InlineData("game.md", "Z80BUS")]
+        [InlineData("game.32x", "Z80RAM")]
+        [InlineData("game.iso", "Z80RAM")]
+        public void The_frame_log_reads_a_z80_word_little_end_first_as_the_z80_stores_it(string name, string space)
+        {
+            byte[] image = name.EndsWith(".iso") ? SyntheticMdRom.Disc() : SyntheticMdRom.Cartridge(name.EndsWith(".32x") ? "SEGA 32X" : "SEGA GENESIS");
+            using var engine = new CoreEngine(CoreLibrary.Open(LibraryPath)) { Options = TestCores.NoBattery };
+            engine.LoadRom(Write(name, image));
+            engine.WriteSpace("Z80RAM", 0x1F00, 0x34);
+            engine.WriteSpace("Z80RAM", 0x1F01, 0x12);
+            int id = engine.FrameLog.AddEntry(space, 0x1F00, 2);
+            engine.RunFrame();
+            Assert.Equal((0x34, 0x12), (engine.ReadSpace(space, 0x1F00), engine.ReadSpace(space, 0x1F01)));
+            Assert.Equal(0x1234L, engine.FrameLog.GetSamples(id).Single().Value);
+        }
+
         [Fact]
         public void Pictures_compare_exactly_and_up_to_a_colour_map()
         {

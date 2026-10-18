@@ -244,11 +244,19 @@ pub struct Space {
     /// A read-only window onto memory other spaces hold, as a processor's bus is: it holds nothing of its own, so a host
     /// that copies every memory leaves it out (EmuSen_CoreAPI.md §29).
     pub view: bool,
+    /// Since 1.14: the order the core stores a word of the space in, `BYTE_ORDER_BIG` or `BYTE_ORDER_LITTLE`; `None`, the
+    /// system's, as the systems table gives it, and nothing written (EmuSen_CoreAPI.md §6.39).
+    pub byte_order: Option<&'static str>,
 }
+
+/// Machine info's `spaces[].byte_order` for a space whose words are stored high byte first (since 1.14, §6.39).
+pub const BYTE_ORDER_BIG: &str = "big";
+/// Machine info's `spaces[].byte_order` for a space whose words are stored low byte first (since 1.14, §6.39).
+pub const BYTE_ORDER_LITTLE: &str = "little";
 
 impl Space {
     pub fn new(id: u32, name: &str) -> Space {
-        Space { id, name: name.to_owned(), read_only: false, side_effects: false, reports_stores: false, reports_loads: false, cheats: false, view: false }
+        Space { id, name: name.to_owned(), read_only: false, side_effects: false, reports_stores: false, reports_loads: false, cheats: false, view: false, byte_order: None }
     }
 }
 
@@ -677,7 +685,11 @@ pub fn machine_info_json(m: &MachineInfo, measured: &Measured<'_>, drives: &[Dri
             .filter(|f| f.0)
             .map(|f| f.1)
             .collect();
-        j.begin_object().field_uint("id", s.id as u64).field_str("name", &s.name).field_int("size", (measured.space_size)(s.id).unwrap_or(0)).field_strs("flags", &flags).end_object();
+        j.begin_object().field_uint("id", s.id as u64).field_str("name", &s.name).field_int("size", (measured.space_size)(s.id).unwrap_or(0)).field_strs("flags", &flags);
+        if let Some(order) = s.byte_order {
+            j.field_str("byte_order", order);
+        }
+        j.end_object();
     }
     j.end_array();
     j.key("processors").begin_array();

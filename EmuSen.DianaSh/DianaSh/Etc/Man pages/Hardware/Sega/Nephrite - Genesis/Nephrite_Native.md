@@ -4730,14 +4730,14 @@ the core stores a word in it. Paths are under the crate's `src/`.
 
 | System | Space | A 16-bit value at an even address | Where |
 |---|---|---|---|
-| all | `M68KBUS` (view) | big-end first: each byte is the cartridge's, the 68000's RAM's or the Z80's RAM's as stored | `machine.rs:388–397`, `genesis/debugger.rs:94–101` |
+| all | `M68KBUS` (view) | big-end first: each byte is the cartridge's, the 68000's RAM's or the Z80's RAM's as stored | `machine.rs:388–397`, `genesis/debugger.rs:100–108` |
 | all | `WRAM` | big-end first: the 68000's word read takes the high byte from the even address, its word write puts it there | `genesis/mod.rs:607`, `:647–648` |
 | all | `ROM` | big-end first: the image's bytes in the cartridge's order, a copier's interleaved blocks put back in it at load | `genesis/cart.rs:178–183`, `:214–216`; `media.rs:68–98` |
 | all | `VRAM` | big-end first: a data-port word's high byte goes to the even address (an odd address swaps the two, as the VDP does), and the read takes the word the same way | `genesis/vdp.rs:622–629`, `:678–680`, `:689` |
 | all | `CRAM`, `VSRAM` | big-end first, written and read as VRAM is | `genesis/vdp.rs:642–643`, `:651–652` |
 | all | `SRAM` | big-end first on a board that wires both lanes; one byte per word on a board that wires one, so a value the game spreads over consecutive words lands high byte first | `genesis/cart.rs:164–176`, `:214–216` |
 | all | `Z80RAM` | **the Z80's order, little-end first**: one byte per address, and what the Z80 stores as a word it stores low byte first; a 68000 word write lands its high byte alone | `genesis/mod.rs:739`, `:751`, `:643` |
-| all | `Z80BUS` (view) | the Z80's RAM below `$4000`, little-end first as above; through the bank window, `$8000` up, the 68000's space, big-end first | `genesis/debugger.rs:106–115` |
+| all | `Z80BUS` (view) | the Z80's RAM below `$4000`, little-end first as above; through the bank window, `$8000` up, the 68000's space, big-end first | `genesis/debugger.rs:112–121` |
 | Sega CD | `PRGRAM` | big-end first: the sub CPU's reads and the CDC's DMA both put the high byte at the even address | `mcd/mod.rs:841`, `:597`, `:307` |
 | Sega CD | `WORDRAM` | big-end first, in 2M order; in 1M mode a bank's word *n* is the space's word 2*n* + *b*, so its two bytes stay together while consecutive words of one bank are four bytes apart | `mcd/word.rs:6`, `:41–44`; `mcd/mod.rs:842–849`, `:599–601` |
 | Sega CD | `PCMRAM` | one byte per address, the RF5C164's 8-bit samples; no word is stored | `mcd/mod.rs:595`, `:935`, `:943` |
@@ -4763,6 +4763,8 @@ read first and fall back to the table's `byte_order` where a core does not say. 
 big-endian values the wrong way through that space; they are the 68000's and are read right through `M68KBUS`. A
 smaller form, a per-space exception in the systems table's data file, needs no ABI change, but it would tie a
 system's data to one core's space names, which a second Genesis core need not share; it is not recommended.
+*Chosen by the tester on 2026-10-18 and built the same day as core ABI 1.14 (`EmuSen_CoreAPI.md` §6.39): Nephrite
+states `Z80RAM` and `Z80BUS` little, §66.5.*
 
 ### 66.3 The test
 
@@ -4780,3 +4782,50 @@ log giving `0x4553`, `0x41474553` and `0x3412`, and pass after it.
   golden was re-recorded: the corpus's frame-log case runs on its fake target, not on a core.
 - **`emusen-systems` and `emusen-platform`**, `--profile test-checked`: 24, and 31 with the four of `dianash_abi`.
   `a_byte_order_is_big_little_or_unstated` now finds the Genesis `big` and still reads an unstated order as none.
+
+### 66.5 The Z80's spaces on core ABI 1.14 (2026-10-18)
+
+The tester chose §66.2's machine-info form on 2026-10-18, and it was built as core ABI 1.14: a space in machine info
+may carry `byte_order`, `big` or `little`, absent meaning the system's (`EmuSen_CoreAPI.md` §6.39). `CoreEngine`'s
+frame log reads a space's own order first and the systems table's after. Nephrite states two spaces, through
+`genesis/debugger.rs`'s `byte_order`, which `v1.rs`'s machine info reads beside `reports_stores`; every other space
+states nothing and keeps the table's `big`, so §66.2's decision for the 68000's side stands unchanged.
+
+**`Z80RAM`: little.** §66.1's row: the space is the Z80's 8 KiB, one byte an address, and a word the Z80 stores there
+it stores low byte first.
+
+**`Z80BUS`: little, with the bank window as a documented exception.** The space is the Z80's 64 KiB as a debugger
+reads it (`peek_z80`, `genesis/debugger.rs:112–121`), in three parts:
+
+| Addresses | What reads there | Stored words |
+|---|---|---|
+| `$0000`–`$3FFF` | the Z80's RAM, its 8 KiB twice | the Z80's, low byte first |
+| `$4000`–`$7FFF` | the YM2612, the bank register, the PSG and the VDP, read as `$FF` | none |
+| `$8000`–`$FFFF` | the bank window: 32 KiB of the 68000's space at the bank register's page (`$FF` over the Z80's own range) | the 68000's, high byte first, or data laid out for the Z80 |
+
+The order is decided by what a frame log of a Z80-side value names. The Z80's own variables, its stack and the pointers
+its program keeps are in its RAM, so most such entries name the first part, where `little` is right. Through the
+window the Z80 reads the cartridge: mostly bytes (the DAC's 8-bit samples a sound driver streams, the commonest use of
+the window), for which the order does not matter at width 1, and data a Z80 program reads as words with its own 16-bit
+loads, which the game's author lays out low byte first for the Z80 even though it sits in the 68000's space [argued:
+a Z80 load takes the low byte from the lower address wherever the bytes are]. A value that is the 68000's (a word the
+68000's program wrote or reads) is the one that reads swapped through the window, and it reads right through
+`M68KBUS` or `ROM`, the spaces a frame log of a 68000 value names. So `little` is the order of every word the Z80
+itself reads as a word, and the exception is the 68000's words seen from the Z80's side.
+
+**The converse exception** is `M68KBUS`'s window onto the Z80's RAM, `$A00000`–`$A03FFF` (`peek_m68k`,
+`genesis/debugger.rs:100–108`): `M68KBUS` states no order and takes the table's `big`, so a Z80 word read there reads
+swapped; it reads right through `Z80RAM`. Neither bus is split: each is one space because its processor sees one
+address space, and its id, name and size are what the debugger, the cheats and saved frame logs key on.
+
+**The test.** `NephriteTests.The_frame_log_reads_a_z80_word_little_end_first_as_the_z80_stores_it` writes the Z80's
+word `0x1234` as the Z80 stores it, `$34` at `$1F00` and `$12` at `$1F01` of `Z80RAM`, and logs two bytes there over one
+frame: from `Z80RAM` on a Genesis cartridge, a 32X cartridge and a Sega CD disc, and from `Z80BUS` on a Genesis
+cartridge. On the tree without the change (the test alone, against `WiseMan` at `08812dde`'s code), all four failed,
+the frame log giving `0x3412` with both bytes in place; with it all four pass, and §66.3's seven 68000-side cases pass
+unchanged. The crate's `the_stub_reports_each_system_and_a_blank_picture` holds the two stated orders and no other.
+
+**Measured (2026-10-18).** WiseMan's blast radius, 187 of 187 (`EmuSen_Backend.md` §25); the crate's `v1::` tests, 21
+of 21 (`--profile test-checked`); the kit's corpus on `genesis-sample.txt`, 64 of 64 images passing as before, each
+report the same as at 1.13 but for the minor's number and C14's note, which now ends "2 space(s) state their byte
+order".

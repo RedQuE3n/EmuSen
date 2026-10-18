@@ -3309,3 +3309,126 @@ Xcode compiles `ring` for its own target, as a compile check alone, under §29's
 `cheatdb-download`: `x86_64-pc-windows-gnu` (with `ring` compiled by MinGW-w64 and `emusen-net` checked) and
 `x86_64-pc-windows-msvc` (the platform workspace left out) passed on `ubuntu-24.04`, and `aarch64-apple-darwin`
 passed on `emusen-mac-mini-1` in 73 seconds, `ring` compiled by Xcode; the push's own run, 39102831275, gave the same.
+
+## 37. Overflow checks in CI's Rust tests, 2026-10-18
+
+Every `cargo test` of `rust-cores.yml` ran with `--release`, and the release profile leaves overflow checks off: an
+arithmetic wrap that nobody wrote computes a value and fails nothing. `Diamond_Native.md` §28 records one that hid for
+weeks, a subtraction in Diamond's video timing whose wrapped value, in one Silent Hill frame, sent the event loop back
+in time and counted a timer interval twice. Its §28.8 proposed two remedies, a debug run of one crate or a test
+profile; *decided 2026-10-18 by the tester:* the profile, for every core's and the platform's tests.
+
+### 37.1 The profile
+
+```toml
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true
+```
+
+Each Rust root that CI tests carries it, because a profile belongs to the root a build starts from and every crate here
+but the platform's members is its own root: the five cores (MarsRT, MercuryRT, MoonRT, VenusRT, Nephrite), Diamond's
+machine, `v1/`, `precision/`, `renderer/` and `kernel-harness/`, the nine crates of `EmuSen/Cores/Shared/`, Beryl's
+four, BlackMoon's two, and `Platform/`'s workspace, whose twenty members take it from the root. The kernel's own crates
+(`kernel/`, `kernel-shell/`, `guest/`) build for the console with the pinned nightly and run no tests of their own,
+so they have none; the kernel is tested through its harness.
+
+- **What does not change.** `release` and `dist` are as they were, so the shipped libraries are the same builds. The
+  PGO profile (`Mars_Native.md` §6.17) is untouched; `build.rs`'s source digest covers `Cargo.toml`, so the manifest's
+  edit moves MarsRT's digest, which already differed from the one its profile was trained on (`36a5237755f1c652`), so
+  the profile's state, stale, is as it was.
+- **What the profile is.** Release's code, with each `+`, `-`, `*`, shift and negation of an integer checked, and a
+  panic where the result does not fit. The checks cover the dependencies too (cranelift, `ash`, `ring`), as any debug
+  build of them does.
+- **Where a wrap is the rule.** A wrap that the hardware performs is written as one, `wrapping_add` and its kin, which
+  compile to the same instruction in release; a wrap that hides a wrong result is a defect, fixed with a test that fails
+  first. The profile's job is to make the choice visible.
+
+### 37.2 Debug assertions: measured, and left off
+
+The profile could also turn on `debug-assertions`, which enables `debug_assert!`, the standard library's precondition
+checks, and every `cfg!(debug_assertions)`. Measured on 2026-10-18 on the desktop (Ryzen 7 7700X, 16 threads, the work
+at CPU weight 20 beside other jobs), every suite CI runs, no corpus set, each variant built cold into its own target folder:
+
+| Variant | Tests | Test time (all suites) | Diamond's suite | MoonRT's | MarsRT's |
+|---|---|---|---|---|---|
+| `--release` | 1,834 passed | 132.0 s | 63.3 s | 0.6 s | 46.9 s |
+| `test-checked`, overflow checks only | 1,834 passed | 137.9 s (+4.5%) | 67.0 s (+5.8%) | 0.5 s | 48.6 s |
+| `test-checked` with debug assertions | 1,834 passed | 162.4 s (+23%) | 81.4 s (+29%) | 5.7 s (×10) | 51.3 s |
+
+With Diamond's two corpora set (§37.3): release 456.8 s, overflow checks 487.8 s (+6.8%), with debug assertions 495.1 s
+(+8.4%). The cold builds took 462.5, 501.8 and 444.9 s in all, the same within the noise of a shared machine.
+
+Debug assertions are left off, for two reasons, the second the deciding one:
+
+- **Cost.** They add a fifth to the test time. The project's own `debug_assert!`s number eleven, in six crates; the
+  rest is the standard library's precondition checks and the dependencies' assertions, which were not costed apart.
+- **They change what the suites test.** MarsRT reads `cfg!(debug_assertions)` as "a slow build" and shortens its
+  suites: the threaded RDP's stress tests run 3 and 2 seeds instead of 24 and 12 (`src/tests/threads.rs`), the games
+  20 frames instead of 300 (`src/tests/games.rs`), and `Options::default` turns on the RDP's mark verification
+  (`src/machine.rs`). Under that profile CI would test less of MarsRT, in more time.
+
+### 37.3 What it found
+
+Every suite ran on the profile, at first with debug assertions on as well, and again with overflow checks alone: 1,834
+tests, all of them passing, with nothing found, as CI runs them, corpora unset. The opt-in corpora on this machine were
+then set, so that the checks see the code the corpora reach: Diamond's ps1-tests build 158 and the eight bench discs
+(`EMUSEN_DIAMOND_PS1TESTS`, `EMUSEN_DIAMOND_DISCS`: the goldens, the precise, scaled and renderer gates), VenusRT's
+SingleStepTests and gilyon's tests (`EMUSEN_VENUSRT_CORPUS`), n64-systemtest (`EMUSEN_MARSRT_CORPUS`), Nephrite's test
+programs and discs (`EMUSEN_NEPHRITE_ROMS`, `EMUSEN_NEPHRITE_DISCS`), Beryl's SingleStepTests and ZEXALL
+(`EMUSEN_BERYL_CORPUS`, `EMUSEN_BERYL_ZEX`) and BlackMoon's (`EMUSEN_BLACKMOON_CORPUS`). The games behind
+`EMUSEN_MARSRT_STATES` and `EMUSEN_MERCURYRT_ROMS` read the player's library and were not run.
+
+Two overflows, both in VenusRT and both behind its corpus; neither computed a wrong result:
+
+- **`src/apu/spc700.rs:507`, DECW's low byte.** `(lo + step) & 0xFF` on `u16`, with `step` = FFFFh for a decrement,
+  overflows for every low byte but zero. The wrap is the intended arithmetic, the low byte less one modulo 256; the
+  release build passes all 256,000 cases of the SPC700 suite with cycles. Now `lo.wrapping_add(step)`, as the
+  sixteen-bit result two lines below already was.
+- **`src/singlestep/w65816.rs:318`, the replay control.** The positive control spoiled by `DropLastCycle` counted its
+  cycles as `len - 1`. For MVN, MVP, WAI and STP the harness steps it again while its log is short, after its cycles
+  are spent, and `0 - 1` wrapped to `usize::MAX`, a count of nothing taken from an empty list, as zero is. Test code
+  only. Now `saturating_sub`.
+
+Diamond's §28 had already removed the one in its core and three in its tests; none was left. No golden moved.
+
+### 37.4 CI
+
+Every test step of the workflow runs on the profile: the shared, Beryl and BlackMoon crates and the platform workspace
+in `shared`, the kernel harness in `diamond-kernel`, the ABI guard's tests and its run (`cargo run --profile
+test-checked -- --check`, which reuses the build its tests made rather than making a release one) with DianaSh's and
+the frontend API's surface tests in `abi-guard`, and each library's suite with Diamond's machine and layers in
+`library`. The shared job's test cores and the kit's runner, which the WiseMan job loads, now come from
+`target/test-checked/`, so the adapter's tests run against cores with overflow checks too. Three things keep their
+profiles: `portable`'s `cargo check --release` (a compile check, on which overflow checks have no bearing), the
+library's `--profile dist` build, and the sidecar's `cargo run --release` of `emusen-core-conform`.
+
+### 37.5 The runs (measured 2026-10-18, branch `ci-overflow-checks`)
+
+Two runs of the branch, both building every library, against two of `WiseMan`'s: 39112689641, the base commit
+`20164238`, which built MarsRT, Diamond and the platform library and took the other four, and 39102619529 of the same
+morning, which built all seven. Every job of both branch runs passed, the portable checks for
+`x86_64-pc-windows-gnu`, `x86_64-pc-windows-msvc` and `aarch64-apple-darwin` (on the Mac mini) among them.
+
+| Job, minutes | 39102619529 | 39112689641 | 39119562729 (push) | 39121330307 (dispatch, `full`) |
+|---|---|---|---|---|
+| marsrt, its test step | 4.0 | 4.0 | 7.0 | 4.7 |
+| marsrt, the job | 6.8 | 6.8 | 10.2 | 7.4 |
+| diamond, the job | 4.4 | 4.2 | 3.1 | 3.2 |
+| emusen_platform, the job | 2.5 | 3.0 | 2.7 | 3.5 |
+| venusrt / nephrite / mercuryrt / moonrt | 2.8 / 2.3 / 1.2 / 1.3 | taken | 2.7 / 2.5 / 1.2 / 1.1 | 2.0 / 2.2 / 1.4 / 1.1 |
+| shared | 3.0 | 3.4 | 4.0 | 4.5 |
+| abi-guard / diamond-kernel | 2.1 / 0.8 | 2.3 / 0.8 | 2.0 / 0.8 | 1.9 / 0.8 |
+| libraries ready (from the start) | 7.2 | 7.2 | 10.6 | 7.7 |
+| the WiseMan job | 24.4 | 14.8 | 15.1 | 27.9 |
+| the run | 31.5 | 22.0 | 25.8 | 35.6 |
+
+- **MarsRT sets the libraries' pace, and pays for the profile in its build.** Its suite ran in 113.7–118.1 s on the
+  profile against 115.3–116.5 s in release: no difference beyond the runner's. Its compile for the tests took 2 min
+  45 s against 2 min 01–02 s, the checks adding code that fat LTO has to optimise. The push run paid more, 7.0 minutes:
+  `rust-cache` restored only a partial match, as the manifests had changed, and nothing under `target/test-checked/`.
+- **The other libraries and jobs** moved within the runners' spread, in both directions; the shared job's 4.0 and 4.5
+  minutes against 3.0 and 3.4 are the one consistent rise, about a minute.
+- **The run's length is the WiseMan job's**, which ran from 14.8 to 27.9 minutes over these four runs on the same tests,
+  the shipped libraries built as before. That variation is the runner's, and over twenty times the profile's cost: about half a minute
+  more before the WiseMan job can start, on a run of twenty to thirty-five minutes.

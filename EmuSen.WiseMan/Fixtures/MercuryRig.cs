@@ -4,27 +4,21 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.WiseMan.Fixtures
 {
-    // MercuryRT under WiseMan's machine tests: reads and edits through the committed layout listings, setup through a state round trip, time through frames, steps and ticks - see Mercury_Native.md §12.1, §14.5.
-    public sealed unsafe class MercuryRig : IDisposable
+    // MercuryRT under WiseMan's machine tests: the generic engine, reads and edits through the committed layout listings, setup through a state round trip, time through frames, steps and ticks - see Mercury_Native.md §12.1, §14.5.
+    public sealed class MercuryRig : IDisposable
     {
-        private static readonly delegate* unmanaged<nint, int> StepOf = (delegate* unmanaged<nint, int>)MercuryNative.Engine.Export("mercuryrt_core_step");
-        private static readonly delegate* unmanaged<nint, int, int> TickOf = (delegate* unmanaged<nint, int, int>)MercuryNative.Engine.Export("mercuryrt_core_tick");
-        private static readonly delegate* unmanaged<nint, int> StopOf = (delegate* unmanaged<nint, int>)MercuryNative.Engine.Export("mercuryrt_core_stop");
-        private static readonly delegate* unmanaged<nint, byte*, nuint, long> SerialOf = (delegate* unmanaged<nint, byte*, nuint, long>)MercuryNative.Engine.Export("mercuryrt_core_serial");
-
         // Interrupt bits of IE and IF, and the PPU's modes as the state numbers them - see Pan Docs, "Interrupts" and "STAT".
         public const int VBlank = 0, LcdStat = 1, Timer = 2, Serial = 3, Joypad = 4;
         public const int HBlankMode = 0, VBlankMode = 1, OamScanMode = 2, DrawingMode = 3;
 
         // The line's timing in T-cycles: 456 a line, 80 of OAM scan, 172 of drawing with SCX zero; 154 lines.
         public const int CyclesPerScanline = 456, OamScanCycles = 80, BaseDrawingCycles = 172, TotalScanlines = 154;
-        public const int ScreenWidth = MercuryRtCore.ScreenWidthPixels, ScreenHeight = MercuryRtCore.ScreenHeightPixels;
+        public const int ScreenWidth = MercuryEngines.ScreenWidthPixels, ScreenHeight = MercuryEngines.ScreenHeightPixels;
         public const int VramBankStride = 0x2000, WramBankSize = 0x1000, RomBankSize = 0x4000;
 
         // The flag register's four flags.
@@ -32,16 +26,16 @@ namespace EmuSen.WiseMan.Fixtures
 
         private readonly string _rom;
         private readonly bool _temporary;
-        private readonly MercuryRtCore _core;
+        private readonly CoreEngine _core;
+        private uint _mutes;
 
         private MercuryRig(string rom, bool temporary, GbModel model)
         {
             _rom = rom;
             _temporary = temporary;
             Rom = File.ReadAllBytes(rom);
-            Assert.True(MercuryRtCore.Available, MercuryNative.Engine.Report);
-            Assert.True(StepOf != null && TickOf != null && StopOf != null && SerialOf != null, "libmercuryrt lacks the rig's extensions");
-            _core = new MercuryRtCore { Options = TestCores.NoBattery, Model = model };
+            Assert.True(MercuryEngines.Available, MercuryEngines.Report);
+            _core = MercuryEngines.Create(TestCores.NoBattery, model);
             _core.LoadRom(rom);
         }
 
@@ -55,19 +49,14 @@ namespace EmuSen.WiseMan.Fixtures
         public static MercuryRig Open(string path, GbModel model = GbModel.Auto, bool temporary = false) => new(path, temporary, model);
 
         // The engine as a frontend holds it.
-        public MercuryRtCore Core => _core;
-
-        private T Run<T>(Func<nint, T> call)
-        {
-            lock (_core.Machine.Core.Gate) return call(_core.Machine.Core.Handle);
-        }
+        public CoreEngine Core => _core;
 
         // The machine without its CPU, for a number of T-cycles.
-        public void Tick(int cycles) => Run(h => TickOf(h, cycles));
+        public void Tick(int cycles) => MercuryEngines.Tick(_core, cycles);
 
         // The CPU's read and write, through the bus's decode and blocking.
-        public byte Read(int address) => _core.ReadSpace(MercuryRtCore.SpaceCpuBus, address & 0xFFFF);
-        public void Write(int address, byte value) => _core.WriteSpace(MercuryRtCore.SpaceCpuBus, address & 0xFFFF, value);
+        public byte Read(int address) => _core.ReadSpace(MercuryEngines.SpaceCpuBus, address & 0xFFFF);
+        public void Write(int address, byte value) => _core.WriteSpace(MercuryEngines.SpaceCpuBus, address & 0xFFFF, value);
 
         // A named space as the debugger reads and writes it: VRAM, WRAM and OAM by their whole arrays, no blocking.
         public byte ReadSpace(string space, int address) => _core.ReadSpace(space, address);
@@ -76,38 +65,49 @@ namespace EmuSen.WiseMan.Fixtures
         // One instruction with the frame loop's acknowledge and stall; its T-cycles; an illegal opcode throws NotSupportedException.
         public int Step()
         {
-            int cycles = Run(h => StepOf(h));
-            if (cycles == -20) throw new NotSupportedException("MercuryRT stopped on an opcode no SM83 has.");
+            int cycles = MercuryEngines.Step(_core);
+            if (cycles == MercuryEngines.IllegalOpcode) throw new NotSupportedException("MercuryRT stopped on an opcode no SM83 has.");
             return cycles;
         }
 
         // STOP with KEY1 armed: the speed switch.
-        public void Stop() => Run(h => StopOf(h));
+        public void Stop() => MercuryEngines.Stop(_core);
 
-        public IReadOnlyList<byte> SerialLog => Run(h =>
-        {
-            long n = SerialOf(h, null, 0);
-            var log = new byte[n];
-            fixed (byte* data = log) SerialOf(h, data, (nuint)log.Length);
-            return log;
-        });
+        public IReadOnlyList<byte> SerialLog => MercuryEngines.Serial(_core);
 
         public string SerialText => string.Concat(SerialLog.Select(b => (char)b));
 
-        public void SetChannelMuted(int channel, bool muted) => _core.SetChannelMuted(channel, muted);
-        public bool IsChannelMuted(int channel) => _core.IsChannelMuted(channel);
+        // A sound channel silenced, sent to the machine at once, as the debugger's mute is.
+        public void SetChannelMuted(int channel, bool muted)
+        {
+            if ((uint)channel >= 4) return;
+            _mutes = muted ? _mutes | (1u << channel) : _mutes & ~(1u << channel);
+            _core.Machine.SetMutes(_mutes);
+        }
+
+        public bool IsChannelMuted(int channel) => (uint)channel < 4 && (_mutes & (1u << channel)) != 0;
 
         public BreakpointRegistry Breakpoints => _core.Breakpoints;
         public IDebugTarget CreateDebugTarget() => _core.CreateDebugTarget();
         public bool IsHaltedAtBreakpoint => _core.IsHaltedAtBreakpoint;
         public int HaltedAddress => _core.HaltedAddress;
 
-        public void RunFrame() => _core.RunFrame();
+        // A frame; an illegal opcode throws NotSupportedException, the word the corpus's verdicts and the goldens' transcripts record.
+        public void RunFrame()
+        {
+            try { _core.RunFrame(); }
+            catch (CoreRefusedException e) when (MercuryEngines.IsIllegalOpcode(e)) { throw new NotSupportedException(e.Message, e); }
+        }
 
-        // LoadRom again on the same image, which resets the machine.
-        public void Reload() => _core.LoadRom(_rom);
+        // LoadRom again on the same image, which resets the machine and its mutes.
+        public void Reload()
+        {
+            _core.LoadRom(_rom);
+            _mutes = 0;
+        }
         public long TotalFrames => _core.TotalFrames;
-        public string CoreName => _core.CoreName;
+        // The console the machine runs as, GB or GBC, from its machine info; a state from the other console changes it.
+        public string CoreName => _core.Machine.Info.System.ToUpperInvariant();
         public int AudioSampleRate => _core.AudioSampleRate;
         public byte[] GetFrameBufferRgba() => _core.GetFrameBufferRgba();
         public short[] DequeueAudioSamples(int maxFrames) => _core.DequeueAudioSamples(maxFrames);
@@ -180,7 +180,7 @@ namespace EmuSen.WiseMan.Fixtures
             try { return MercuryLayouts.For(Rom, state); }
             catch (InvalidDataException) when (Environment.GetEnvironmentVariable(MercuryLayouts.RecordVariable) == "1")
             {
-                MercuryLayouts.Record(Rom[0x147], _core.Machine.Core.Layout());
+                MercuryLayouts.Record(Rom[0x147], _core.Machine.Layout());
                 return MercuryLayouts.For(Rom, state);
             }
         }

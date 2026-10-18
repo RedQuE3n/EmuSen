@@ -4,7 +4,6 @@ using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
@@ -75,7 +74,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal((2, 2, 1, 4, 1), (ControllerPorts.ForConsole("NES"), ControllerPorts.ForConsole("SNES"), ControllerPorts.ForConsole("GB"), ControllerPorts.ForConsole("N64"), ControllerPorts.ForConsole("Lynx")));
             Assert.Equal(0, ControllerPorts.Of(null));
 
-            if (MercuryRtCore.Available) Assert.Equal(1, ControllerPorts.Of(CoreFactory.Load(gb, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core));
+            if (MercuryEngines.Available) Assert.Equal(1, ControllerPorts.Of(CoreFactory.Load(gb, engine: CoreCatalog.MercuryRtEngine, options: TestCores.NoBattery).Core));
             if (MarsRtCore.Available) Assert.Equal(4, ControllerPorts.Of(new MarsRtCore() { Options = TestCores.NoBattery }));
         }
 
@@ -126,8 +125,8 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_game_boys_one_port_is_all_its_engine_reads()
         {
-            Assert.True(MercuryRtCore.Available, MercuryNative.Report);
-            using var rt = new MercuryRtCore() { Options = TestCores.NoBattery };
+            Assert.True(MercuryEngines.Available, MercuryEngines.Report);
+            using var rt = MercuryEngines.Create(TestCores.NoBattery);
             Assert.Equal(1, ((ICore)rt).ControllerPorts);
         }
     }

@@ -1,3 +1,4 @@
+using EmuSen.Cores.Native;
 using System;
 using System.IO;
 using System.Linq;
@@ -7,7 +8,6 @@ using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Crystal.Cheats;
 using EmuSen.WiseMan.Fixtures;
-using EmuSen.Cores.Nintendo.MercuryRT;
 
 namespace EmuSen.WiseMan.Cores
 {
@@ -51,13 +51,13 @@ namespace EmuSen.WiseMan.Cores
         {
             var cheats = new CheatRegistry();
             CoreBundle bundle = CoreFactory.Load(_gb, headless: true, cheats);
-            var core = (MercuryRtCore)bundle.Core;
+            var core = (CoreEngine)bundle.Core;
 
-            Assert.Equal(Original, core.ReadSpace(MercuryRtCore.SpaceCpuBus, SyntheticGbRom.EntryPoint));
+            Assert.Equal(Original, core.ReadSpace(MercuryEngines.SpaceCpuBus, SyntheticGbRom.EntryPoint));
 
             cheats.AddRomPatch(SyntheticGbRom.EntryPoint, 0xAD, null, "patch");
 
-            Assert.Equal(0xAD, core.ReadSpace(MercuryRtCore.SpaceCpuBus, SyntheticGbRom.EntryPoint));
+            Assert.Equal(0xAD, core.ReadSpace(MercuryEngines.SpaceCpuBus, SyntheticGbRom.EntryPoint));
         }
 
         [Fact]
@@ -65,12 +65,12 @@ namespace EmuSen.WiseMan.Cores
         {
             var cheats = new CheatRegistry();
             CoreBundle bundle = CoreFactory.Load(_gb, headless: true, cheats);
-            var core = (MercuryRtCore)bundle.Core;
+            var core = (CoreEngine)bundle.Core;
 
-            cheats.AddRamPoke(MercuryRtCore.SpaceCpuBus, 0xC000, 0x42, "poke");
+            cheats.AddRamPoke(MercuryEngines.SpaceCpuBus, 0xC000, 0x42, "poke");
             bundle.Core.RunFrame();
 
-            Assert.Equal(0x42, core.ReadSpace(MercuryRtCore.SpaceCpuBus, 0xC000));
+            Assert.Equal(0x42, core.ReadSpace(MercuryEngines.SpaceCpuBus, 0xC000));
         }
 
         [Fact]
@@ -93,12 +93,12 @@ namespace EmuSen.WiseMan.Cores
         {
             var cheats = new CheatRegistry();
             CoreBundle bundle = CoreFactory.Load(_gb, headless: true, cheats);
-            var core = (MercuryRtCore)bundle.Core;
+            var core = (CoreEngine)bundle.Core;
 
-            cheats.AddRamPoke(MercuryRtCore.SpaceCpuBus, 0xC000, 0x42, "poke");
+            cheats.AddRamPoke(MercuryEngines.SpaceCpuBus, 0xC000, 0x42, "poke");
             bundle.DebugTarget.ApplyCheats();
 
-            Assert.Equal(0x42, core.ReadSpace(MercuryRtCore.SpaceCpuBus, 0xC000));
+            Assert.Equal(0x42, core.ReadSpace(MercuryEngines.SpaceCpuBus, 0xC000));
         }
 
         [Fact]
@@ -122,10 +122,10 @@ namespace EmuSen.WiseMan.Cores
             var session = new EmulatorSession { Cheats = cheats };
             session.LoadRom(_gb);
 
-            cheats.AddRamPoke(MercuryRtCore.SpaceCpuBus, 0xC000, 0x42, "poke");
+            cheats.AddRamPoke(MercuryEngines.SpaceCpuBus, 0xC000, 0x42, "poke");
             session.RunFrame();
 
-            Assert.Equal(0x42, ((MercuryRtCore)session.Core!).ReadSpace(MercuryRtCore.SpaceCpuBus, 0xC000));
+            Assert.Equal(0x42, ((CoreEngine)session.Core!).ReadSpace(MercuryEngines.SpaceCpuBus, 0xC000));
         }
 
         // The N64 reads its cartridge through the PI, so a patch is asked for by ROM offset - see Mars_Cheats.md §6.

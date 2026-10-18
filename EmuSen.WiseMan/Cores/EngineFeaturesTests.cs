@@ -1,7 +1,8 @@
+using EmuSen.Cores.Native;
+using EmuSen.WiseMan.Fixtures;
 using System.Collections.Generic;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.MercuryRT;
 
 namespace EmuSen.WiseMan.Cores
 {
@@ -24,7 +25,7 @@ namespace EmuSen.WiseMan.Cores
             {
                 "MarsRT" => new MarsRtCore(),
                 "MoonRT" => Fixtures.MoonEngines.Create(),
-                "MercuryRT" => new MercuryRtCore(),
+                "MercuryRT" => MercuryEngines.Create(),
                 _ => CoreFactory.Create("game.sfc"),
             };
             Assert.Same(EngineFeatures.All, EngineFeatures.Of(core));

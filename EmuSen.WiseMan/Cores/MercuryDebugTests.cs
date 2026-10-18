@@ -1,9 +1,9 @@
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Crystal.Debugger;
 using EmuSen.WiseMan.Fixtures;
@@ -196,13 +196,15 @@ namespace EmuSen.WiseMan.Cores
             MercuryDebugRig core = Load(CountForever);
             int poke = core.Watches.AddWatch("WRAM", 0x10, 1);
             int typed = core.Watches.AddWatch("WRAM", 0x11, 1);
-            core.Cheats.AddRamPoke(MercuryRtCore.SpaceCpuBus, 0xC010, 0x5A, "a poke");
+            core.Cheats.AddRamPoke(MercuryEngines.SpaceCpuBus, 0xC010, 0x5A, "a poke");
 
             core.RunFrame();
             core.Target.GetMemorySpaces().Single(s => s.Name == "CPUBUS").Write(0xC011, 0x33);
             core.Target.GetMemorySpaces().Single(s => s.Name == "WRAM").Write(0x11, 0x44);
+            // A v1 core logs a store between frames and the host drains it with the next frame - see EmuSen_Backend.md §17.2 E7.
+            core.RunFrame();
 
-            Assert.Equal(0x5A, Assert.Single(core.Watches.GetEvents(poke)).Value);
+            Assert.Equal(0x5A, core.Watches.GetEvents(poke).First().Value);
             DebugWatchEvent seen = Assert.Single(core.Watches.GetEvents(typed));
             Assert.Equal(0x33, seen.Value);
             Assert.Equal($"PC=${Entry + 4:X4}", seen.Context);
@@ -444,8 +446,10 @@ namespace EmuSen.WiseMan.Cores
             core.Coverage.Arm();
             core.Watches.AddWatch("WRAM", 0, 16);
 
-            var thrown = Assert.Throws<NotSupportedException>(() => core.RunFrame());
-            Assert.Equal($"Opcode $D3 at ${Entry + 1:X4} is not a real SM83 instruction - see Mercury_Cpu.md §6.1.", thrown.Message);
+            var thrown = Assert.Throws<CoreRefusedException>(() => core.RunFrame());
+            Assert.Equal(MercuryEngines.IllegalOpcode, thrown.Status);
+            Assert.Equal((0xD3UL << 16) | (ulong)(Entry + 1), thrown.Detail);
+            Assert.Contains($"opcode $D3 at ${Entry + 1:X4} is no SM83's", thrown.Message);
         }
 
         // Halted at the vblank vector on every third frame and resumed, against the program run plain, unobserved.
@@ -455,7 +459,7 @@ namespace EmuSen.WiseMan.Cores
             string rom = Temporary(Interrupts);
             MercuryDebugRig core = Rig(rom);
             _rigs.Add(core);
-            using var plain = new MercuryRtCore();
+            using var plain = MercuryEngines.Create();
             plain.LoadRom(rom);
 
             int halts = 0;

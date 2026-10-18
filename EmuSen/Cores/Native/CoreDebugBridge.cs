@@ -109,7 +109,7 @@ namespace EmuSen.Cores.Native
                     noted = Drain(machine);
                 }
                 flags = RunUnchecked | RunContinue;
-                if (reasons < 0) throw new CoreRefusedException(reasons, machine.Words(reasons));
+                if (reasons < 0) throw new CoreRefusedException(reasons, machine.Words(reasons)) { Detail = detail };
                 // An interrupt stopped for with none in the call log, as a loop that dispatches interrupts outside it reports one - see EmuSen_CoreAPI.md §6.14.
                 if ((reasons & StopInterrupt) != 0 && !noted) _engine.Breakpoints.NoteInterrupt(CallFrameKind.Irq);
                 if (reasons == 0)

@@ -1,9 +1,10 @@
+using EmuSen.Cores.Native;
+using EmuSen.WiseMan.Fixtures;
 using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Crystal.Systems.GameBoy;
 using EmuSen.Crystal.Systems.Nes;
 using EmuSen.Crystal.Systems.Snes;
 using EmuSen.Crystal.Cheats;
-using EmuSen.Cores.Nintendo.MercuryRT;
 
 namespace EmuSen.WiseMan.Cores
 {
@@ -14,7 +15,7 @@ namespace EmuSen.WiseMan.Cores
         {
             { "NES raw", "NES address:value", CheatCodeKind.RamPoke, NesSystem.CpuBus },
             { "NES Game Genie", "Game Genie", CheatCodeKind.RomPatch, null },
-            { "GB GameShark", "GameShark", CheatCodeKind.RamPoke, MercuryRtCore.SpaceCpuBus },
+            { "GB GameShark", "GameShark", CheatCodeKind.RamPoke, MercuryEngines.SpaceCpuBus },
             { "GB Game Genie", "Game Genie", CheatCodeKind.RomPatch, null },
             { "N64 GameShark", "GameShark", CheatCodeKind.RamPoke, MarsDebugSpaces.Rdram },
             { "SNES Action Replay", "Pro Action Replay", CheatCodeKind.RamPoke, SnesSystem.CpuBus },

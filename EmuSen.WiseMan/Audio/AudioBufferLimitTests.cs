@@ -1,10 +1,10 @@
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.MarsRT;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 
@@ -64,8 +64,8 @@ namespace EmuSen.WiseMan.Audio
         [Fact]
         public void MercuryRT_keeps_no_more_than_the_setting()
         {
-            Assert.True(MercuryRtCore.Available, MercuryNative.Report);
-            Assert.Equal(Limit, Undrained(new MercuryRtCore { Options = Limited }, Gb()).Length);
+            Assert.True(MercuryEngines.Available, MercuryEngines.Report);
+            Assert.Equal(Limit, Undrained(MercuryEngines.Create(Limited), Gb()).Length);
         }
 
         // Venus honoured it before this pass; kept so all five are held to one rule.

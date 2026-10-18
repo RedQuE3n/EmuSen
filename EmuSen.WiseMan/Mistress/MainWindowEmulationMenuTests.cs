@@ -155,7 +155,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Reset_starts_the_game_again_where_the_core_claims_no_reset() => Session.Dispatch(() =>
         {
-            Assert.True(EmuSen.Cores.Nintendo.MercuryRT.MercuryRtCore.Available, EmuSen.Cores.Nintendo.MercuryRT.MercuryNative.Report);
+            Assert.True(MercuryEngines.Available, MercuryEngines.Report);
             string rom = Path.Combine(_romDir, "Mono.gb");
             File.WriteAllBytes(rom, SyntheticGbRom.Build());
             var window = new MainWindow();

@@ -7,6 +7,13 @@ form "Mercury does" is now a claim about MercuryRT only where its goldens or its
 over MercuryRT is `MercuryRtDebugTarget`, which reads the machine's state through its layout listing
 (`Mercury_Native.md` §15.2); the SM83 disassembler moved into MercuryRT's shim unchanged.
 
+*Since 2026-10-18 (`EmuSen_Backend.md` §17.10)* the shim is gone: MercuryRT is shown through the generic
+`CoreDebugTarget` like every v1 core. Its CPU registers come through `DEBUG_REGISTERS`, its PPU, APU, timer, channel and
+HDMA registers through core ABI 1.13's units, its disassembly through `DEBUG_DISASSEMBLE` on `emusen-sm83`, and the
+console-shaped views of §3 (palettes, sprites, the tilemap's colour attribute, the channels, HDMA, the address map and
+the summary) from the Game Boy pack's `GameBoyDebugViews` and its twin in `emusen-systems`, which read those spaces and
+units and none of the machine's state.
+
 *Written 2026-08-08, Phase B of the Mercury gameplan. This is the third
 `IDebugTarget` implementation the interface has had, after Venus and Moon, and
 the first one written when the interface was already stable.*

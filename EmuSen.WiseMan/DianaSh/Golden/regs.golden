@@ -189,8 +189,8 @@ case on mercuryrt
 target mercuryrt
 covers 1-2
 $ regs
-out 1115
-GB CPU registers:
+out 1103
+MercuryRT CPU registers:
   A    = 0x01
   F    = 0xB0
   BC   = 0x0013
@@ -252,12 +252,11 @@ APU registers:
   TIMA      = 0x00
   TMA       = 0x00
   TAC       = 0x00
-  Board:ROM = 0x00
 status 0
 action none
 $ regs cpu
-out 337
-SM83 registers:
+out 336
+CPU registers:
   A         = 0x01
   F         = 0xB0
   BC        = 0x0013

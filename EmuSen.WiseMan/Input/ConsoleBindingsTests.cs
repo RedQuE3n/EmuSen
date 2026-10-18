@@ -1,3 +1,4 @@
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -192,7 +193,7 @@ namespace EmuSen.WiseMan.Input
         {
             using (var moonRt = new EmuSen.Cores.Nintendo.MoonRT.MoonRtCore()) Assert.Equal(moonRt.SupportedButtons, CoreCatalog.ButtonsFor("NES"));
             Assert.Equal(EmuSen.Crystal.Systems.Snes.SnesSystem.PadButtons, CoreCatalog.ButtonsFor("SNES"));
-            using (var gameBoy = new EmuSen.Cores.Nintendo.MercuryRT.MercuryRtCore()) Assert.Equal(gameBoy.SupportedButtons.Order(), CoreCatalog.ButtonsFor("GB").Order());
+            using (var gameBoy = MercuryEngines.Create()) Assert.Equal(gameBoy.SupportedButtons.Order(), CoreCatalog.ButtonsFor("GB").Order());
             using var marsRt = new EmuSen.Cores.Nintendo.MarsRT.MarsRtCore();
             Assert.Equal(marsRt.SupportedButtons, CoreCatalog.ButtonsFor("N64"));
         }

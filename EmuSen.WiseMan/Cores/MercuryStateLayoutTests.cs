@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 
@@ -53,7 +52,7 @@ namespace EmuSen.WiseMan.Cores
             byte[] rom = RomFor(listing);
             using MercuryRig rust = MercuryRig.Create(rom);
             rust.RunFrame();
-            Assert.Equal(committed, rust.Core.Machine.Core.Layout());
+            Assert.Equal(committed, rust.Core.Machine.Layout());
             Assert.Equal(MercuryLayouts.FileName(MercuryLayouts.Board(rom[0x147]), listing.Contains("-gbc-"), StateLayout.FromText(listing, committed)["Cart.Ram"].Length), listing);
             Assert.Same(MercuryLayouts.Load(Path.Combine(MercuryLayouts.Directory(), listing)), MercuryLayouts.For(rom, rust.State()));
         }
@@ -82,7 +81,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_listings_describe_the_state_version_mercuryrt_writes()
         {
-            Assert.Equal(MercuryRtCore.StateFormatVersion, MercuryLayouts.StateVersion);
+            Assert.Equal(MercuryEngines.StateFormatVersion, MercuryLayouts.StateVersion);
             Assert.NotEmpty(Listings);
         }
     }

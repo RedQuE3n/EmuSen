@@ -1,3 +1,4 @@
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -7,7 +8,6 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 
@@ -105,7 +105,7 @@ namespace EmuSen.WiseMan.Cores
                 TestRomVerdict serial = HardwareTestRomLibrary.ReadVerdict(core.SerialLog);
                 if (serial != TestRomVerdict.NoVerdict) return (serial.ToString(), frame);
 
-                if (HardwareTestRomLibrary.ReadCartRamStatus(i => core.ReadSpace(MercuryRtCore.SpaceCartRam, i)) is int status)
+                if (HardwareTestRomLibrary.ReadCartRamStatus(i => core.ReadSpace(MercuryEngines.SpaceCartRam, i)) is int status)
                     return (status == 0 ? "Passed" : $"Failed({status})", frame);
             }
             return (TestRomVerdict.NoVerdict.ToString(), FrameCap);

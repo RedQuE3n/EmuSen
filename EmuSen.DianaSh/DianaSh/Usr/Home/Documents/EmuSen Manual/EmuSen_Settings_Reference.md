@@ -1873,6 +1873,11 @@ Both engines honour it:
 - `MercuryCore` and `MercuryRtCore` each read it at load (*since 2026-10-16 `MercuryRtCore` alone, which declares the row as `MercuryRtCore.ModelSettings`: C# Mercury was deleted, `Mercury_Native.md` §15*);
 - a change before a game's first frame loads the game again at once, as the Expansion Pak row does.
 
+*Since 2026-10-18 (`EmuSen_Backend.md` §17.10)* the row is MercuryRT's own settings schema, read from its sidecar, and
+the shim that declared `ModelSettings` is gone; the reload before the first frame is the generic engine's rule for any
+create-time setting of any v1 core (`EmuSen_Backend.md` §22.2), so a game's own Model in its settings file reaches the
+machine at the first load as well.
+
 Mistress does nothing model-specific. It hands the core its console's settings after the load and before the first
 frame (`ApplyConsoleSettings`), and the core rebuilds itself if the stored model differs.
 

@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
+using EmuSen.Cores.Native;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
 
@@ -51,8 +51,8 @@ namespace EmuSen.WiseMan.Fixtures
 
         private sealed class MercuryRtRig : MercuryDebugRig
         {
-            private readonly MercuryRtCore _core = new() { Options = TestCores.NoBattery };
-            private readonly MercuryRtDebugTarget _target;
+            private readonly CoreEngine _core = MercuryEngines.Create(TestCores.NoBattery);
+            private readonly CoreDebugTarget _target;
 
             public MercuryRtRig(string rom) : base(rom)
             {
@@ -63,9 +63,9 @@ namespace EmuSen.WiseMan.Fixtures
             public override ICore Core => _core;
             public override IDebugTarget Target => _target;
             public override Type TargetType => _target.GetType();
-            public override Type CoreType => typeof(MercuryRtCore);
+            public override Type CoreType => typeof(CoreEngine);
             public override string? Engine => CoreCatalog.MercuryRtEngine;
-            public override int Pc => _core.Pc;
+            public override int Pc => _core.Debug.ProgramCounter(0);
             public override byte ReadSpace(string space, int address) => _core.ReadSpace(space, address);
             public override void WriteSpace(string space, int address, byte value) => _core.WriteSpace(space, address, value);
             public override void Dispose() => _core.Dispose();

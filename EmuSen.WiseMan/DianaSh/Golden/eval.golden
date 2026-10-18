@@ -287,7 +287,7 @@ case on mercuryrt
 target mercuryrt
 covers 1-2
 $ eval symbols
-out 420
+out 421
   $FF10
   $FF11
   $FF12
@@ -314,7 +314,6 @@ out 420
   A
   BC
   BGP
-  Board:ROM
   C
   Cycles
   DE
@@ -341,6 +340,7 @@ out 420
   SCY
   SeqStep
   SP
+  stackdepth
   STAT
   TAC
   TIMA

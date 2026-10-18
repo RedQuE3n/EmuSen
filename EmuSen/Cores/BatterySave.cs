@@ -15,24 +15,28 @@ namespace EmuSen.Cores
         // Null when nothing is read or written: --nobattery, no battery-backed RAM, or no ROM path.
         public string? Path { get; }
 
-        private BatterySave(string? path) => Path = path;
+        // Where the save was kept before, read until Settle copies it in; null when it already lives at Path.
+        private readonly string? _previous;
+
+        private BatterySave(string? path, string? previous = null) => (Path, _previous) = (path, previous);
 
         public static bool IsFlushFrame(long frame) => frame % FlushEveryNFrames == 0;
 
         // The save folders, one per console as the ROM library names them.
         public const string Nes = "NES", Snes = "SNES", N64 = "N64", GameBoy = "GB", GameBoyColor = "GBC", Genesis = "Genesis", SegaCd = "Sega CD", S32x = "32X";
 
-        // By the file's extension alone, as the library files them: a setting or a header never moves a Game Boy save.
-        public static string GameBoyFolder(string romPath) =>
-            string.Equals(System.IO.Path.GetExtension(romPath), ".gbc", StringComparison.OrdinalIgnoreCase) ? GameBoyColor : GameBoy;
-
-        // disabled is the core's CoreOptions.BatteryRamDisabled, latched here; a save made before 2026-09-28 is copied in at the first load.
+        // disabled is the core's CoreOptions.BatteryRamDisabled, latched here; a save made before 2026-09-28 is read in place and copied in by Settle, for a file the machine keeps - see EmuSen_Backend.md §17.10.
         public static BatterySave Open(string? romPath, string console, bool hasRam = true, bool disabled = false, string extension = SaveLibrary.SramExtension)
         {
             if (disabled || !hasRam || string.IsNullOrEmpty(romPath)) return None;
             string path = System.IO.Path.ChangeExtension(SaveLibrary.SramPathFor(romPath, console), extension);
-            if (!File.Exists(path) && PreviousHome(romPath, console, extension) is { } previous) CopyIn(previous, path);
-            return new BatterySave(path);
+            return new BatterySave(path, File.Exists(path) ? null : PreviousHome(romPath, console, extension));
+        }
+
+        // The save kept before copied into its own place, once a load knows the machine keeps the file; the original untouched.
+        public void Settle()
+        {
+            if (Path is not null && _previous is not null && !File.Exists(Path)) CopyIn(_previous, Path);
         }
 
         // A card shared between games, by its own path rather than a game's; --nobattery holds for it as for any save - see Diamond_Cards.md §9.2.
@@ -61,7 +65,7 @@ namespace EmuSen.Cores
             if (AtomicFile.Write(path, saved)) Console.WriteLine($"[BatterySave] Copied {previous} to {path}, where this game's battery save now lives; the original is untouched.");
         }
 
-        public byte[]? Read() => Path is null ? null : AtomicFile.TryRead(Path);
+        public byte[]? Read() => Path is null ? null : AtomicFile.TryRead(Path) ?? (_previous is null || File.Exists(Path) ? null : AtomicFile.TryRead(_previous));
 
         // The save's bytes into ram, as many as both hold; false when there was nothing to read.
         public bool ReadInto(Span<byte> ram)

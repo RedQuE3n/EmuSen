@@ -91,6 +91,8 @@ fn palette_ram_is_two_read_only_spaces_of_64_bytes() {
         assert_eq!((space.name.as_str(), space.read_only), (name, true));
         assert_eq!(<Machine as Core>::space_size(&m, id), Ok(64));
     }
+    assert!(info.spaces[0].read_only, "the ROM is read only");
+    assert_eq!(<Machine as Core>::space_write(&mut m, 0, 0x150, &[0x12]).err(), Some(status::READ_ONLY));
     let mut obj = [0u8; 64];
     <Machine as Core>::space_read(&mut m, 8, 0, &mut obj).unwrap();
     assert_eq!(&obj[..], &m.bus.ppu.obj_palette_ram[..]);

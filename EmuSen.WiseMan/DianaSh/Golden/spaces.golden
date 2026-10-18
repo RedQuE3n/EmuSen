@@ -86,8 +86,8 @@ case on mercuryrt
 target mercuryrt
 covers 1
 $ spaces
-out 248
-GB memory spaces:
+out 321
+MercuryRT memory spaces:
   ROM           32768 bytes  R/O
   VRAM           8192 bytes  R/W
   CARTRAM           0 bytes  R/W
@@ -95,6 +95,8 @@ GB memory spaces:
   OAM             160 bytes  R/W
   HRAM            127 bytes  R/W
   CPUBUS        65536 bytes  R/W
+  BGPAL            64 bytes  R/O
+  OBJPAL           64 bytes  R/O
 status 0
 action none
 end

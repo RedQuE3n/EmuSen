@@ -1,9 +1,9 @@
+using EmuSen.Cores.Native;
 using System;
 using System.IO;
 using System.Linq;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
@@ -30,10 +30,10 @@ namespace EmuSen.WiseMan.Cores
             try { Directory.Delete(_dir, recursive: true); } catch (IOException) { }
         }
 
-        private static MercuryRtCore Make(bool battery = false)
+        private static CoreEngine Make(bool battery = false)
         {
-            Assert.True(MercuryRtCore.Available, MercuryNative.Report);
-            return new MercuryRtCore { Options = battery ? CoreOptions.Default : TestCores.NoBattery };
+            Assert.True(MercuryEngines.Available, MercuryEngines.Report);
+            return MercuryEngines.Create(battery ? CoreOptions.Default : TestCores.NoBattery);
         }
 
         private string Rom(string name, byte[] image)
@@ -49,7 +49,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void D1_the_mixer_makes_its_labelled_rate_of_samples_a_second()
         {
-            using MercuryRtCore core = Make();
+            using CoreEngine core = Make();
             core.LoadRom(Rom("rate", SyntheticGbRom.Build(patches: (0, new byte[] { 0x18, 0xFE }))));
             const int frames = 600;
             long stereo = 0;
@@ -58,7 +58,7 @@ namespace EmuSen.WiseMan.Cores
                 core.RunFrame();
                 stereo += core.DequeueAudioSamples(int.MaxValue).Length / 2;
             }
-            double seconds = frames * (double)MercuryRtCore.CyclesPerFrame / MercuryRtCore.CpuClockHz;
+            double seconds = frames * (double)MercuryEngines.CyclesPerFrame / MercuryEngines.CpuClockHz;
             double expected = seconds * core.AudioSampleRate;
             _output.WriteLine($"{stereo} stereo frames in {seconds:F4} s of console time, {stereo / seconds:F1} a second, labelled {core.AudioSampleRate}; expected {expected:F1}");
             Assert.True(Math.Abs(stereo - expected) <= 1.0, $"{stereo} stereo frames, {stereo / seconds:F1} a second, where {core.AudioSampleRate} Hz wants {expected:F1}");
@@ -82,7 +82,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(true)]
         public void D2_the_mbc3_clock_keeps_console_time_in_double_speed(bool doubleSpeed)
         {
-            using MercuryRtCore core = Make();
+            using CoreEngine core = Make();
             core.LoadRom(Rom($"clock-{doubleSpeed}", ClockRom(doubleSpeed)));
             for (int f = 0; f < 1200; f++) core.RunFrame();
             bool fast = (core.ReadSpace("CPUBUS", 0xFF4D) & 0x80) != 0;
@@ -111,13 +111,13 @@ namespace EmuSen.WiseMan.Cores
             string stray = Path.Combine(Environment.CurrentDirectory, ".tmp");
             bool strayBefore = File.Exists(stray);
 
-            using MercuryRtCore saver = Make(battery: !saverWithoutBattery);
+            using CoreEngine saver = Make(battery: !saverWithoutBattery);
             saver.LoadRom(a);
             for (int f = 0; f < 10; f++) saver.RunFrame();
             using var state = new MemoryStream();
             saver.SaveState(state);
 
-            using MercuryRtCore loader = Make(battery: !loaderWithoutBattery);
+            using CoreEngine loader = Make(battery: !loaderWithoutBattery);
             loader.LoadRom(b);
             loader.LoadState(new MemoryStream(state.ToArray()));
             while (loader.TotalFrames < 300) loader.RunFrame();

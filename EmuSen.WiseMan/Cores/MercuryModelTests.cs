@@ -1,9 +1,9 @@
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 
@@ -327,7 +327,7 @@ namespace EmuSen.WiseMan.Cores
         {
             string path = Path.Combine(_dir, $"debug-{cgb:X2}-{model}.gb");
             File.WriteAllBytes(path, ProbeRom(cgb, 0x70, licensee: 0x01));
-            using var rt = new MercuryRtCore { Options = TestCores.NoBattery, Model = model };
+            using var rt = MercuryEngines.Create(TestCores.NoBattery, model);
             rt.LoadRom(path);
             var target = rt.CreateDebugTarget();
             for (int f = 0; f < 10; f++) rt.RunFrame();
@@ -343,11 +343,11 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(Enumerable.Range(0, 4).Select(x => $"{frame[x * 4]:X2}{frame[x * 4 + 1]:X2}{frame[x * 4 + 2]:X2}"),
                 target.Palettes.Current[0].Colors.Select(c => $"{c.r:X2}{c.g:X2}{c.b:X2}"));
             bool compatibility = cgb == 0 && model == GbModel.GameBoyColor;
-            Assert.Equal(compatibility ? "GBC" : "GB", rt.CoreName);
+            Assert.Equal(compatibility ? "gbc" : "gb", rt.Machine.Info.System);
             if (!compatibility) return;
 
             // The object registers through object palettes 0 and 1 of colour RAM, which the boot ROM filled.
-            var (state, layout) = rt.Snapshot();
+            var (state, layout) = MercuryEngines.Snapshot(rt);
             byte[] obj = layout.Bytes(state, "Bus.Ppu.ObjPaletteRam").ToArray(), bg = layout.Bytes(state, "Bus.Ppu.BgPaletteRam").ToArray();
             static int Expand(int five) => (five << 3) | (five >> 2);
             static string Through(long register, byte[] ram, int palette) => string.Join(" ", Enumerable.Range(0, 4)
@@ -365,20 +365,20 @@ namespace EmuSen.WiseMan.Cores
             byte[] rom = SyntheticGbRom.Build(cgbFlag: cgb, patches: new[] { (0, new byte[] { 0xCD, 0x00, 0x02, 0x18, 0xFE }), (0xB0, new byte[] { 0x18, 0xFE }) });
             string path = Path.Combine(_dir, $"calls-{cgb:X2}.gb");
             File.WriteAllBytes(path, rom);
-            using var maker = new MercuryRtCore { Options = TestCores.NoBattery, Model = madeOn };
+            using var maker = MercuryEngines.Create(TestCores.NoBattery, madeOn);
             maker.LoadRom(path);
             using var saved = new MemoryStream();
             maker.SaveState(saved);
 
-            using var rt = new MercuryRtCore { Options = TestCores.NoBattery, Model = loadedOn };
+            using var rt = MercuryEngines.Create(TestCores.NoBattery, loadedOn);
             rt.LoadRom(path);
             rt.Breakpoints.AddBreakpoint(0x7000);
-            Assert.NotEqual(maker.CoreName, rt.CoreName);
+            Assert.NotEqual(maker.Machine.Info.System, rt.Machine.Info.System);
             rt.LoadState(new MemoryStream(saved.ToArray()));
-            Assert.Equal(maker.CoreName, rt.CoreName);
+            Assert.Equal(maker.Machine.Info.System, rt.Machine.Info.System);
 
             rt.RunFrame();
-            Assert.Equal(new[] { 0x0200 }, rt.CallStack.Frames.Select(f => (int)f.Target));
+            Assert.Equal(new[] { 0x0200 }, rt.Debug.CallStack.Frames.Select(f => (int)f.Target));
         }
 
         // The setting through ICoreSettings: read, refused, and before the first frame a change reloads the game at once.
@@ -387,23 +387,23 @@ namespace EmuSen.WiseMan.Cores
         {
             string path = Path.Combine(_dir, "model.gb");
             File.WriteAllBytes(path, ProbeRom(0x00));
-            using var core = new MercuryRtCore() { Options = TestCores.NoBattery };
+            using var core = MercuryEngines.Create(TestCores.NoBattery);
             var settings = (ICoreSettings)core;
-            Assert.Equal(CoreCatalog.SettingsFor("GB"), settings.Settings);
-            Assert.Equal(MercuryRtCore.ModelAuto, settings.Get(MercuryRtCore.ModelKey));
+            Assert.Equal(CoreCatalog.SettingsFor("GB").Select(s => (s.Key, s.Label, s.Default)), settings.Settings.Select(s => (s.Key, s.Label, s.Default)));
+            Assert.Equal(MercuryEngines.ModelAuto, settings.Get(MercuryEngines.ModelKey));
 
             core.LoadRom(path);
-            Assert.Equal("GB", core.CoreName);
-            settings.Set(MercuryRtCore.ModelKey, MercuryRtCore.ModelGameBoyColor);
-            Assert.Equal("GBC", core.CoreName);
+            Assert.Equal("gb", core.Machine.Info.System);
+            settings.Set(MercuryEngines.ModelKey, MercuryEngines.ModelGameBoyColor);
+            Assert.Equal("gbc", core.Machine.Info.System);
             core.RunFrame();
-            settings.Set(MercuryRtCore.ModelKey, MercuryRtCore.ModelGameBoy);
-            Assert.Equal("GBC", core.CoreName);
+            settings.Set(MercuryEngines.ModelKey, MercuryEngines.ModelGameBoy);
+            Assert.Equal("gbc", core.Machine.Info.System);
             core.LoadRom(path);
-            Assert.Equal("GB", core.CoreName);
-            Assert.Throws<ArgumentException>(() => settings.Set(MercuryRtCore.ModelKey, "Super Game Boy"));
-            Assert.Throws<ArgumentException>(() => settings.Get("Palette"));
-            Assert.Equal(MercuryRtCore.ModelGameBoy, settings.Get(MercuryRtCore.ModelKey));
+            Assert.Equal("gb", core.Machine.Info.System);
+            Assert.Throws<ArgumentException>(() => settings.Set(MercuryEngines.ModelKey, "Super Game Boy"));
+            Assert.Equal("", settings.Get("Palette"));
+            Assert.Equal(MercuryEngines.ModelGameBoy, settings.Get(MercuryEngines.ModelKey));
         }
 
         // mooneye's misc/boot_regs-cgb, verified on a CGB: a DMG header on the Color must hand over A=$11 F=$80 BC=$0000 DE=$0008 HL=$007C.

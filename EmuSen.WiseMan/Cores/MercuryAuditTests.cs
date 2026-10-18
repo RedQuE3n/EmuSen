@@ -1,5 +1,5 @@
+using EmuSen.Cores.Native;
 using EmuSen.Galaxia.Input;
-using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores

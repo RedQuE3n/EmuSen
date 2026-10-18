@@ -363,6 +363,7 @@ namespace EmuSen.Cores.Native
             AttachDebugger(machine);
             _battery.Clear();
             _battery.AddRange(wanted);
+            foreach (var (_, save) in wanted) save.Settle();
             RomPath = path;
             Console = console;
             _input.Reset(Math.Max(2, machine.Info.Ports.Count), AxesOf(machine));

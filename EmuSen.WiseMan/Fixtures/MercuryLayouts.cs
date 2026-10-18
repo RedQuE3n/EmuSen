@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
-using EmuSen.Cores.Nintendo.MercuryRT;
 
 namespace EmuSen.WiseMan.Fixtures
 {

@@ -1,5 +1,5 @@
-//! MercuryRT on the core ABI v1, beside its pre-stable exports until the v1 adapter is its only loader. The console's
-//! facts its C# shim held are its descriptors here. See EmuSen_CoreAPI.md §13.1, §23.
+//! MercuryRT on the core ABI v1, the host's only way to it since B4 retired its C# shim; the pre-stable exports beside it
+//! serve the native host's tests until that interface goes. See EmuSen_CoreAPI.md §13.1, §23, EmuSen_Backend.md §17.
 
 use emusen_native::core::{
     self as v1, Battery, Button, Choice, Control, Controller, Create, Effect, FrameInfo, Info, Instruction, MachineInfo, Port, Processor, Reference, Region,
@@ -11,7 +11,8 @@ use crate::debug::Hooks;
 use crate::machine::{CPU_CLOCK_HZ, CYCLES_PER_FRAME, Machine, Model, OLDEST_READABLE_VERSION, STATE_VERSION};
 use crate::memory::cartridge::RomError;
 
-/// `MercuryMachine.SpaceNames`, numbered as the ABI numbers them, then the colour palette RAM's two halves, read only (EmuSen_Backend.md §17.2 D5).
+/// The spaces, numbered as the ABI numbers them: the cartridge's ROM is read only, as the shim's target showed it, and so are the colour
+/// palette RAM's two halves after CPUBUS (EmuSen_Backend.md §17.2 D5).
 const SPACES: [&str; 9] = ["ROM", "VRAM", "CARTRAM", "WRAM", "OAM", "HRAM", "CPUBUS", "BGPAL", "OBJPAL"];
 
 /// The CPU's registers as `debug_registers(0)` gives them: the debugger's order, names and widths (EmuSen_Backend.md §17.2 D1).
@@ -216,7 +217,7 @@ impl v1::Core for Machine {
             spaces: SPACES
                 .iter()
                 .enumerate()
-                .map(|(id, &name)| Space { cheats: id == 3, side_effects: id == 6, reports_stores: (1..=5).contains(&id), read_only: id >= 7, ..Space::new(id as u32, name) })
+                .map(|(id, &name)| Space { cheats: id == 3, side_effects: id == 6, reports_stores: (1..=5).contains(&id), read_only: id == 0 || id >= 7, ..Space::new(id as u32, name) })
                 .collect(),
             processors: vec![Processor { id: 0, name: "CPU".into(), pc_bits: 16, registers: REGISTERS.iter().map(|&(n, b)| (n.to_owned(), b)).collect(), code_space: None }],
             battery: if battery { vec![Battery::game(0, ".srm")] } else { Vec::new() },
@@ -303,7 +304,7 @@ impl v1::Core for Machine {
         if space as usize >= SPACES.len() {
             return Err(status::NO_SUCH_SPACE);
         }
-        if space >= 7 {
+        if space == 0 || space >= 7 {
             return Err(status::READ_ONLY);
         }
         for (i, &b) in data.iter().enumerate() {
@@ -332,6 +333,7 @@ impl v1::Core for Machine {
     fn debug_run_frame(&mut self, flags: u32, detail: &mut u64) -> Result<u32, i32> {
         self.run_frame_debug(flags).map_err(|e| {
             *detail = ((e.opcode as u64) << 16) | e.pc as u64;
+            v1::detail(&format!("opcode ${:02X} at ${:04X} is no SM83's", e.opcode, e.pc));
             STATUS_ILLEGAL_OPCODE
         })
     }
@@ -459,18 +461,6 @@ impl v1::Core for Machine {
 }
 
 emusen_native::core_exports!(Machine; audio_peek, mutes, rom_patches, debug, debug_stack, debug_registers, debug_disassemble);
-
-/// `mercuryrt_set_sample_rate` for a machine of the core ABI v1: C#'s `Apu.SetSampleRate`, the division and `Math.Pow`
-/// evaluated by C# so the coefficients are its to the bit (Mercury_Native.md §3.3, EmuSen_CoreAPI.md §26).
-///
-/// # Safety
-/// `machine` must be null or a live handle `emusen_core_create` returned.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mercuryrt_core_set_sample_rate(machine: *mut v1::sys::Machine, cycles_per_sample: f64, charge_factor: f64) -> i32 {
-    let Some(m) = (unsafe { v1::exports::core_of_mut::<Machine>(machine) }) else { return STATUS_NULL };
-    m.bus.apu.set_sample_rate(cycles_per_sample, charge_factor);
-    0
-}
 
 /// `mercuryrt_rom_patch` for a machine of the core ABI v1: the exhaustive patch test's view through the v1 loader.
 ///

@@ -1,11 +1,12 @@
 //! The MIPS instruction set as data, shared by the cores whose processors are MIPS: the fields of an instruction word,
 //! the decode of MIPS I as the R3000 decodes it, the disassembler with a table per coprocessor, an assembler for test
-//! programs, and MIPS III as the VR4300 runs it, written in that part's own spelling. Nothing here executes; each
-//! processor crate keeps its own semantics. See EmuSen_Mips.md.
+//! programs, MIPS III as the VR4300 runs it, written in that part's own spelling, and the N64's signal processor with its
+//! vector unit in the same spelling. Nothing here executes; each processor crate keeps its own semantics. See EmuSen_Mips.md.
 
 mod asm;
 mod decode;
 mod disasm;
+pub mod rsp;
 pub mod vr4300;
 
 pub use asm::{AsmError, assemble, assemble_line};

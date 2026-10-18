@@ -61,6 +61,16 @@ namespace EmuSen.WiseMan.Crystal
             Assert.True(differences.Count == 0, "the data files differ from the literals:\n" + string.Join("\n", differences));
         }
 
+        // The byte order each data file states is the pack literal's, big for the N64 and unstated for the Genesis family - see EmuSen_Backend.md §18.7.
+        [Fact]
+        public void Each_pack_s_byte_order_is_its_data_file_s()
+        {
+            Assert.True(SystemTable.Ready, SystemTable.Report);
+            foreach (SystemPack pack in SystemPacks.All) Assert.Equal(pack.ByteOrder, SystemTable.ByteOrders[pack.Entry.Id]);
+            Assert.True(SystemPacks.BigEndian("n64"));
+            Assert.False(SystemPacks.BigEndian("nes") || SystemPacks.BigEndian("md") || SystemPacks.BigEndian("unknown"));
+        }
+
         [Fact]
         public void The_table_the_literals_and_the_packs_name_the_same_systems_in_one_order()
         {

@@ -2,6 +2,7 @@
 //! `vi`). A negative return is a status. See Mars_Native.md §5.1, §5.2, §5.5 and §7.
 
 pub mod blocks;
+pub mod host;
 pub mod multiple;
 pub mod rdp;
 pub mod threads;
@@ -37,6 +38,8 @@ pub mod space {
     pub const PIF_RAM: u32 = 3;
     pub const ROM: u32 = 4;
     pub const CPU: u32 = 5;
+    /// The VI's fourteen registers as stored, big-endian, read-only (Mars_Native.md §9).
+    pub const VI: u32 = 6;
 }
 
 /// The machine and its host: the VI's scan-out, one for the machine's life as C#'s raster is, and whether a frame is scanned at all.
@@ -67,6 +70,11 @@ pub struct Core {
     /// The host keeps the Controller Paks apart from the game (`CREATE_SHARED_REMOVABLE`): a load leaves them as they stand
     /// (Mars_Native.md §7.7).
     pub paks_apart: bool,
+    /// What the host has been told beside the frame: the IS-Viewer's bytes already logged, the device report last logged, and
+    /// the frame rate machine info last gave (Mars_Native.md §9).
+    pub is_viewer_logged: usize,
+    pub gpu_logged: String,
+    pub rate_told: (u64, u64),
 }
 
 /// `machine`, `machine/rdp-wait`, `present`, `present/rdp-wait`, `present/walk-join`: the phases `emusen_core_phases` reports.
@@ -81,7 +89,7 @@ impl Drop for Core {
 
 impl Core {
     pub fn new(machine: Machine) -> Core {
-        Core { machine, scanout: Scanout::default(), frame_serial: 0, skip_rendering: false, shown: false, render_scale: 1, antialiasing: 1, gpu: false, multiple_applied: false, profile: [0; PHASES], applied: None, unsaved: [false; v1::FILES], told: None, paks_apart: false }
+        Core { machine, scanout: Scanout::default(), frame_serial: 0, skip_rendering: false, shown: false, render_scale: 1, antialiasing: 1, gpu: false, multiple_applied: false, profile: [0; PHASES], applied: None, unsaved: [false; v1::FILES], told: None, paks_apart: false, is_viewer_logged: 0, gpu_logged: "off".into(), rate_told: (0, 0) }
     }
 
     /// Every wait of this thread for the display processor's drain, in nanoseconds; zero while it runs on this thread.
@@ -194,6 +202,16 @@ impl Core {
             }
             return Ok(());
         }
+        if space == space::VI {
+            out.fill(0);
+            for (i, byte) in out.iter_mut().enumerate() {
+                let at = address.wrapping_add(i as u32);
+                if at < crate::vi::REGISTERS * 4 {
+                    *byte = self.machine.bus.vi.read32(at & !3).to_be_bytes()[(at & 3) as usize];
+                }
+            }
+            return Ok(());
+        }
         let bytes = self.memory(space).ok_or(STATUS_NO_SUCH_SPACE)?;
         out.fill(0);
         let start = address as usize;
@@ -219,7 +237,7 @@ impl Core {
                 }
             }
         } else {
-            if space == space::ROM {
+            if space == space::ROM || space == space::VI {
                 return Err(STATUS_READ_ONLY);
             }
             let bytes = self.memory_mut(space).ok_or(STATUS_NO_SUCH_SPACE)?;

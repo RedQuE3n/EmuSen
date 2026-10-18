@@ -14,5 +14,6 @@
   "attached_to": null,
   "screenscraper_system": 57,
   "cheat_space": "RAM",
-  "media": [{ "id": "psx.card", "title": "Memory Card", "noun": "Card" }]
+  "media": [{ "id": "psx.card", "title": "Memory Card", "noun": "Card" }],
+  "byte_order": "little"
 }

@@ -119,6 +119,6 @@ namespace EmuSen.Crystal.Systems.Psx
         // The memory card, its two slots the core's files 0 and 4; Card is the table's words with this literal's extension and module - see EmuSen_SaveMedia.md §7.1, EmuSen_Backend.md §13.
         public static readonly SaveMedia.SaveMediumEntry CardLiteral = new("psx.card", "Memory Card", "Card", ".mcr", PsxCardFormat.Instance), Card = SystemTable.Medium(CardLiteral);
 
-        public static readonly SystemPack Pack = new(Entry, GameShark, Xploder, PlayerControllers, Media: new[] { Card });
+        public static readonly SystemPack Pack = new(Entry, GameShark, Xploder, PlayerControllers, Media: new[] { Card }, ByteOrder: "little");
     }
 }

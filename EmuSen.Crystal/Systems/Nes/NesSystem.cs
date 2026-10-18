@@ -82,6 +82,6 @@ namespace EmuSen.Crystal.Systems.Nes
         // A mapper's board by name; null for a number the pack names none for.
         public static string? BoardName(int mapper) => SystemCode.Active ? SystemCode.BoardName(mapper) : BoardNamesManaged.GetValueOrDefault(mapper);
 
-        public static readonly SystemPack Pack = new(Entry, Raw, GameGenie, DebugViews: SystemCode.Views(Id, NesDebugViews.Instance));
+        public static readonly SystemPack Pack = new(Entry, Raw, GameGenie, DebugViews: SystemCode.Views(Id, NesDebugViews.Instance), ByteOrder: "little");
     }
 }

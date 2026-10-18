@@ -38,9 +38,10 @@ namespace EmuSen.Crystal.Systems
         int? ScreenScraperSystem = null);
 
     // A console's system pack: its entry, its cheat codecs and its debugger views, which any engine of the console uses - see EmuSen_CoreAPI.md §8.2, §20, §31.
-    // PlayerControllers answers each player's controller id from the console's settings (EmuSen_Settings_Reference.md §4.102); Media names its save media and their format modules (EmuSen_SaveMedia.md §6.2).
+    // PlayerControllers answers each player's controller id from the console's settings (EmuSen_Settings_Reference.md §4.102); Media names its save media and their format modules (EmuSen_SaveMedia.md §6.2); ByteOrder is the table's byte_order literal (EmuSen_Backend.md §18.7).
     public sealed record SystemPack(SystemEntry Entry, Func<ICheatCodeCodec>? AutoDetectCodec, Func<ICheatCodeCodec>? ExplicitCodec,
-        Func<Func<string, string?>, IReadOnlyList<string>>? PlayerControllers = null, ISystemDebugViews? DebugViews = null, IReadOnlyList<SaveMedia.SaveMediumEntry>? Media = null);
+        Func<Func<string, string?>, IReadOnlyList<string>>? PlayerControllers = null, ISystemDebugViews? DebugViews = null, IReadOnlyList<SaveMedia.SaveMediumEntry>? Media = null,
+        string? ByteOrder = null);
 
     // The packs by system id, in the systems table's order; a system without one is shown by its engine's own name and has no codecs.
     public static class SystemPacks
@@ -80,5 +81,9 @@ namespace EmuSen.Crystal.Systems
         };
 
         public static SystemPack? For(string? systemId) => All.FirstOrDefault(p => p.Entry.Id == systemId);
+
+        // Whether a system's memory holds a multi-byte value big-end first: the table's byte_order where the switch chose it, else the pack's literal.
+        public static bool BigEndian(string? systemId) =>
+            For(systemId) is { } pack && (SystemTable.Active && SystemTable.ByteOrders.TryGetValue(pack.Entry.Id, out string? order) ? order : pack.ByteOrder) == "big";
     }
 }

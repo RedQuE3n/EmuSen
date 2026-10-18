@@ -122,3 +122,23 @@ instructions on that part, so the VR4300's table is a decode of its own rather t
 zero register), for the debugger's references. The C# remains, moved to `Crystal/Systems/N64/`, as the failover the
 parity class holds this to.
 
+
+## 7. The N64's signal processor (2026-10-18)
+
+*Built with step B4 for MarsRT (`EmuSen_Backend.md` §18.7, step 4), the item §13.6 there left for it.* The RSP's
+disassembly, which was the MarsRT shim's C# `RspDisassembler` (`Mars_Disassembler.md` §5), is `src/rsp.rs`: the scalar
+unit's MIPS subset, `mfc0` and `mtc0` over the sixteen registers the RSP reaches (the SP's and the DP's, by their
+libultra names), and coprocessor 2, the vector unit, with the SGI names for its operations, element selectors and
+loads and stores. It writes the VR4300's spelling and returns `vr4300::Instruction`, so the two N64 processors' text
+and references have one shape; every address it names is an offset into IMEM (a branch or jump, wrapped at 4 KiB) or
+DMEM (a load or store from register zero), never a CPU address [M: the C#'s `ImemMask` and `DmemMask`].
+
+It is a table of its own beside `vr4300.rs` rather than a coprocessor table on `Dialect`: the RSP's primary opcodes
+are a subset of MIPS I's with different meanings in the LWC2 and SWC2 slots, and its branches compute IMEM offsets
+where the VR4300's compute virtual addresses, so sharing the decode would make one branch rule two [A].
+
+The N64 pack reaches it as `n64::disasm::decode_rsp`, and the platform library's `emusen_systems_disassemble` as the
+processor `rsp` (interface 19). The C# moved to `Crystal/Systems/N64/RspDisassembler.cs`, its `Decode` forwarding to the
+library and its `DecodeManaged` the failover, held by `DebugCodeParityTests.Every_rsp_word_disassembles_alike` over
+every primary opcode crossed with every function, element and register pattern the decode reads, and 200,000 random
+words, at IMEM addresses that wrap.

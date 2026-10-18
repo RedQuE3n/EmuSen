@@ -5,7 +5,7 @@ namespace EmuSen.Crystal.Systems.N64
     // One decoded word, and the address it names when that is knowable from the word alone - see Mars_Disassembler.md §1.
     public readonly record struct MarsInstruction(string Mnemonic, string Operands, StaticReferenceKind? Kind, uint Target);
 
-    // The spellings both of Mars's disassemblers share, the RSP's still the MarsRT shim's - see Mars_Disassembler.md §2.
+    // The spellings both of Mars's disassemblers share - see Mars_Disassembler.md §2.
     public static class MarsOperands
     {
         public static readonly string[] Gpr =

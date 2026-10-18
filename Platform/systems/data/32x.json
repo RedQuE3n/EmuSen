@@ -14,5 +14,6 @@
   "attached_to": "Genesis",
   "screenscraper_system": 19,
   "cheat_space": "WRAM",
-  "media": []
+  "media": [],
+  "byte_order": null
 }

@@ -108,6 +108,83 @@ namespace EmuSen.WiseMan.Crystal
             Assert.True(differences.Count == 0, string.Join("\n", differences));
         }
 
+        // Each primary opcode with every function, element and register field the RSP's decode reads, and random words besides, at IMEM addresses that wrap - see EmuSen_Backend.md §18.7.
+        [Fact]
+        public void Every_rsp_word_disassembles_alike()
+        {
+            Assert.True(SystemTable.Ready, SystemTable.Report);
+            var r = new Random(1997);
+            var words = new List<uint> { 0, 0xFFFF_FFFF };
+            for (uint op = 0; op < 64; op++)
+                for (uint field = 0; field < 64; field++)
+                    foreach (uint regs in new uint[] { 0, 0x001F_0000, 0x03E0_0000, 0x03FF_F800, 0x0001_0000, 0x0020_0000, 0x0200_0000, 0x01E0_0000, 0x0000_F800, 0x0000_0780, 0x0000_07C0 })
+                    {
+                        words.Add(op << 26 | regs | field);
+                        words.Add(op << 26 | regs | field | (uint)r.Next(0x10000) & 0xFFFF);
+                        words.Add(op << 26 | (field << 21) | regs >> 5 | (uint)r.Next(64));
+                        words.Add(op << 26 | (field << 11) | regs | (uint)r.Next(128));
+                    }
+            for (int i = 0; i < 200_000; i++) words.Add((uint)r.Next() ^ (uint)r.Next() << 1);
+            uint[] addresses = { 0, 0xFFC, 0x800, 0x1004, 0xFFFF_FFFC };
+            var differences = new List<string>();
+            int n = 0;
+            foreach (uint w in words)
+            {
+                uint a = addresses[n++ % addresses.Length];
+                var m = RspDisassembler.DecodeManaged(w, a);
+                var i = SystemCode.Disassemble("rsp", new[] { (byte)(w >> 24), (byte)(w >> 16), (byte)(w >> 8), (byte)w }, unchecked((int)a), 0);
+                string managed = $"{m.Mnemonic} {m.Operands} {m.Kind} {(m.Kind is null ? 0 : m.Target)}", native = $"{i.Mnemonic} {i.Operands} {i.Kind} {(i.Kind is null ? 0 : unchecked((uint)i.Target))}";
+                if (managed != native && differences.Count < 10) differences.Add($"{w:X8} at {a:X8}:\n  library: {native}\n  C#:      {managed}");
+            }
+            Assert.True(words.Count > 340_000, $"{words.Count} words");
+            Assert.True(differences.Count == 0, string.Join("\n", differences));
+        }
+
+        // The N64 pack's views against the C# moved from the MarsRT shim: each space's decode, the physical map over its boundaries, and the VI's registers and the summary on generated memory - see EmuSen_Backend.md §18.7.
+        [Fact]
+        public void The_n64_views_answer_alike()
+        {
+            Assert.True(SystemTable.Ready, SystemTable.Report);
+            var r = new Random(64);
+            var differences = new List<string>();
+            void Same(string what, object? native, object? managed)
+            {
+                if (!Equals(native?.ToString(), managed?.ToString()) && differences.Count < 10) differences.Add($"{what}:\n  library: {native}\n  C#:      {managed}");
+            }
+            string Text(MarsInstruction i) => $"{i.Mnemonic} {i.Operands} {i.Kind} {(i.Kind is null ? 0 : i.Target)}";
+            string Place(PhysicalAddress p) => $"{p.Space} {p.Offset} {p.IsAddressable}";
+            string[] spaces = { "RDRAM", "rdram", "DMEM", "IMEM", "PIFRAM", "ROM", "CPU", "VI", "nothing" };
+            for (int i = 0; i < 4_000; i++)
+            {
+                uint word = (uint)r.Next() ^ (uint)r.Next() << 1, at = (uint)r.Next() ^ (uint)r.Next() << 1;
+                if (i % 4 == 0) at &= 0xFFF;
+                string space = spaces[i % spaces.Length];
+                Same($"{space} {word:X8} at {at:X8}", Text(N64Views.DecodeIn(space, word, at)), Text(N64Views.DecodeInManaged(space, word, at)));
+            }
+            var addresses = new List<uint> { 0, 0x003F_FFFF, 0x0040_0000, 0x007F_FFFF, 0x0080_0000, 0x03EF_FFFF, 0x03F0_0000, 0x03FF_FFFF, 0x0400_0000, 0x0400_0FFF, 0x0400_1000, 0x0403_FFFF,
+                0x0404_0000, 0x04FF_FFFF, 0x0500_0000, 0x07FF_FFFF, 0x0800_0000, 0x0FFF_FFFF, 0x1000_0000, 0x1FBF_FFFF, 0x1FC0_0000, 0x1FC0_07BF, 0x1FC0_07C0, 0x1FC0_07FF, 0x1FC0_0800, 0xFFFF_FFFF };
+            for (int i = 0; i < 2_000; i++) addresses.Add((uint)r.Next() ^ (uint)r.Next() << 1);
+            foreach (uint a in addresses)
+                foreach (long rdram in new long[] { 0, 4 << 20, 8 << 20 })
+                    Same($"physical {a:X8} with {rdram}", Place(N64Views.Physical(a, rdram)), Place(N64Views.PhysicalManaged(a, rdram)));
+            for (int round = 0; round < 50; round++)
+            {
+                var vi = new byte[round % 10 == 0 ? 20 : 56];
+                r.NextBytes(vi);
+                var memory = new IDebugMemorySpace[]
+                {
+                    new DelegateDebugMemorySpace("RDRAM", 8 << 20, _ => 0),
+                    new DelegateDebugMemorySpace(round % 7 == 0 ? "vi" : "VI", vi.Length, a => vi[a]),
+                };
+                var registers = new[] { new DebugRegisterValue("PC", (ulong)r.NextInt64(), 64), new DebugRegisterValue("sp", (ulong)r.NextInt64(), 64), new DebugRegisterValue("ra", (ulong)r.NextInt64(), 64) };
+                Same($"video registers {round}", string.Join(",", N64Views.VideoRegisters(memory).Select(v => $"{v.Name}={v.Value}")), string.Join(",", N64Views.VideoRegistersManaged(memory).Select(v => $"{v.Name}={v.Value}")));
+                Same($"summary {round}", N64Views.Summary(registers, memory), N64Views.SummaryManaged(registers, memory));
+                Same($"summary without a VI {round}", N64Views.Summary(registers, memory[..1]), N64Views.SummaryManaged(registers, memory[..1]));
+                Same($"summary without ra {round}", N64Views.Summary(registers[..2], memory) ?? "null", N64Views.SummaryManaged(registers[..2], memory) ?? "null");
+            }
+            Assert.True(differences.Count == 0, string.Join("\n", differences));
+        }
+
         [Fact]
         public void Every_mapper_number_names_the_same_board()
         {

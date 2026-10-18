@@ -97,6 +97,12 @@ impl Vi {
         if self.is_pal() { PAL_CLOCK } else { NTSC_CLOCK }
     }
 
+    /// The field rate the registers program, as a ratio of whole numbers: twice the video clock over the half lines a field
+    /// holds times the clocks a line takes; none while the signal is unprogrammed (Mars_Native.md §9).
+    pub fn field_rate(&self) -> Option<(u64, u64)> {
+        self.programmed().map(|(sync, _)| ((self.video_clock() * 2) as u64, sync as u64 * (self.register(HORIZONTAL_SYNC) & 0xFFF) as u64))
+    }
+
     /// `Programmed`: a line is VI_H_SYNC of the interface's clocks and the field VI_V_SYNC half lines.
     #[inline]
     fn programmed(&self) -> Option<(i32, i64)> {

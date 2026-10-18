@@ -54,6 +54,7 @@ namespace EmuSen.Cores.Native
         public string? MediaNotice { get; private set; }
 
         private MediaPlacement? _placement;
+        private bool _bigEndian;
 
         public CoreLibrary Library { get; }
         public CoreInfo Info => Library.Info;
@@ -349,6 +350,7 @@ namespace EmuSen.Cores.Native
 
             _machine?.Dispose();
             _machine = machine;
+            _bigEndian = EmuSen.Crystal.Systems.SystemPacks.BigEndian(machine.Info.System);
             FirmwareNotice = NoticeFor(machine, asked);
             foreach (string line in FirmwareLines(Info.DisplayName, machine.Info.Firmware, asked, _firmwareFolders)) System.Console.WriteLine(line);
             IsHaltedAtBreakpoint = false;
@@ -915,10 +917,11 @@ namespace EmuSen.Cores.Native
             _machine.WriteSpace(space, address, stackalloc byte[] { value });
         }
 
+        // A value of the system's byte order, the pack's fact - see EmuSen_Backend.md §18.7.
         private long ReadForFrameLog(string spaceName, int address, int width)
         {
             long value = 0;
-            for (int i = 0; i < width; i++) value |= (long)ReadSpace(spaceName, address + i) << (8 * i);
+            for (int i = 0; i < width; i++) value = _bigEndian ? value << 8 | ReadSpace(spaceName, address + i) : value | (long)ReadSpace(spaceName, address + i) << (8 * i);
             return value;
         }
 

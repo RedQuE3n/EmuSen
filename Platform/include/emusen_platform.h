@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 18u
+#define EMUSEN_PLATFORM_ABI_VERSION 19u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -480,10 +480,10 @@ int64_t emusen_systems_header(const uint8_t *system, size_t system_len, const ui
 /* ---- The packs' debugger code: emusen-systems (EmuSen_Backend.md, section 13.5) ---- */
 
 /*
- * One instruction of `processor` (6502, sm83 or vr4300) from its bytes (the VR4300's one big-endian word) fetched at
- * `pc`, as a JSON object: length, mnemonic, operands and reference (an object with kind, Call, Read or Write, and
+ * One instruction of `processor` (6502, sm83, vr4300 or, since interface 19, rsp) from its bytes (a MIPS processor's
+ * one big-endian word) fetched at `pc`, as a JSON object: length, mnemonic, operands and reference (an object with kind, Call, Read or Write, and
  * target; or null). For the two 8-bit processors the reference is classified from `operand` as their C# classifiers
- * took it; the VR4300's from its word. ABSENT for another processor.
+ * took it; a MIPS processor's from its word, the RSP's an IMEM or DMEM offset. ABSENT for another processor.
  */
 int64_t emusen_systems_disassemble(const uint8_t *processor, size_t processor_len, const uint8_t *code, size_t code_len, int32_t pc, int32_t operand,
                                    uint8_t *out, size_t len);
@@ -492,9 +492,10 @@ int64_t emusen_systems_disassemble(const uint8_t *processor, size_t processor_le
 int64_t emusen_systems_board_name(int32_t mapper, uint8_t *out, size_t len);
 
 /*
- * One debugger view of a system's. The request is a JSON object: system (nes or snes), view (palettes, palette_swatch,
- * tile_sheet, stride, tilemap_entry, tile_pixels, vectors; the SNES's also dma_channels, dma_destination,
- * symbol_names, symbol, summary), spaces (each name, size and side_effects) and what the view takes (space, address,
+ * One debugger view of a system's. The request is a JSON object: system (nes, snes or, since interface 19, n64), view
+ * (palettes, palette_swatch, tile_sheet, stride, tilemap_entry, tile_pixels, vectors; the SNES's also dma_channels,
+ * dma_destination, symbol_names, symbol, summary; the N64's disassemble with space, address and count, instruction with
+ * space, address and word, physical with address, video_registers, summary), spaces (each name, size and side_effects) and what the view takes (space, address,
  * bpp, register, name, registers as name and value). `tape` holds the bytes the host has read for the request so far,
  * in the order asked. The answer is an envelope: the JSON's length as four little-endian bytes, the JSON, then any
  * bytes (a picture's RGBA, a tile's 64 pixels). The JSON is either need, a list of runs (space, address, length) the

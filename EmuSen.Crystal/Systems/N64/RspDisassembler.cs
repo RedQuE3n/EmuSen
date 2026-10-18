@@ -1,9 +1,8 @@
 using EmuSen.Crystal.Debugger;
-using EmuSen.Crystal.Systems.N64;
 
-namespace EmuSen.Cores.Nintendo.MarsRT
+namespace EmuSen.Crystal.Systems.N64
 {
-    // A pure decode of one RSP word; every address it computes is an offset into IMEM or DMEM - see Mars_Disassembler.md §5.
+    // A pure decode of one RSP word, every address an IMEM or DMEM offset; emusen-mips' through the N64 pack unless EMUSEN_SYSTEMS_NATIVE=0, DecodeManaged the C#, moved from the MarsRT shim - see Mars_Disassembler.md §5, EmuSen_Backend.md §18.7.
     public static class RspDisassembler
     {
         private const uint ImemMask = 0xFFC;
@@ -40,6 +39,13 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private static readonly int[] OffsetScale = { 0, 1, 2, 3, 4, 4, 3, 3, 4, 4, 4, 4 };
 
         public static MarsInstruction Decode(uint word, uint address)
+        {
+            if (!SystemCode.Active) return DecodeManaged(word, address);
+            var i = SystemCode.Disassemble("rsp", new[] { (byte)(word >> 24), (byte)(word >> 16), (byte)(word >> 8), (byte)word }, unchecked((int)address), 0);
+            return new MarsInstruction(i.Mnemonic, i.Operands, i.Kind, unchecked((uint)i.Target));
+        }
+
+        public static MarsInstruction DecodeManaged(uint word, uint address)
         {
             int rs = MarsOperands.Rs(word), rt = MarsOperands.Rt(word);
 

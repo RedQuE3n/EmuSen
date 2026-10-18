@@ -179,6 +179,27 @@ namespace EmuSen.WiseMan.Cores
             Assert.DoesNotContain(firmware, f => f.Name == "Sega 32X");
         }
 
+        // The frame log reads a value big end first, as the 68000 lays it out in each of its spaces - see Nephrite_Native.md §66.
+        [Theory]
+        [InlineData("game.md", "ROM", 0x100, 2, 0x5345L)]
+        [InlineData("game.md", "ROM", 0x100, 4, 0x5345_4741L)]
+        [InlineData("game.md", "WRAM", 0x8000, 2, 0x1234L)]
+        [InlineData("game.32x", "ROM", 0x100, 2, 0x5345L)]
+        [InlineData("game.32x", "SDRAM", 0x100, 2, 0x1234L)]
+        [InlineData("game.iso", "WRAM", 0x8000, 2, 0x1234L)]
+        [InlineData("game.iso", "PRGRAM", 0x7_0000, 2, 0x1234L)]
+        public void The_frame_log_reads_a_genesis_value_big_end_first(string name, string space, int address, int width, long expected)
+        {
+            byte[] image = name.EndsWith(".iso") ? SyntheticMdRom.Disc() : SyntheticMdRom.Cartridge(name.EndsWith(".32x") ? "SEGA 32X" : "SEGA GENESIS");
+            using var engine = new CoreEngine(CoreLibrary.Open(LibraryPath)) { Options = TestCores.NoBattery };
+            engine.LoadRom(Write(name, image));
+            if (space != "ROM") for (int i = 0; i < width; i++) engine.WriteSpace(space, address + i, (byte)(expected >> (8 * (width - 1 - i))));
+            int id = engine.FrameLog.AddEntry(space, address, width);
+            engine.RunFrame();
+            Assert.Equal((byte)(expected >> (8 * (width - 1))), engine.ReadSpace(space, address));
+            Assert.Equal(expected, engine.FrameLog.GetSamples(id).Single().Value);
+        }
+
         [Fact]
         public void Pictures_compare_exactly_and_up_to_a_colour_map()
         {

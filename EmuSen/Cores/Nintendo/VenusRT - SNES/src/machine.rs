@@ -788,4 +788,60 @@ pub(crate) mod tests {
         assert!(skipped.sys.ppu.picture().chunks_exact(4).all(|px| px[..3] == [0, 0, 0]));
         assert!(drawn.sys.ppu.vram.iter().any(|&w| w != 0) && drawn.sys.ppu.oam.iter().any(|&b| b != 0));
     }
+
+    /// A machine idling on a LoROM loop whose S-DSP plays voice 0 at full volume on the left only, from a looping BRR block.
+    fn left_only() -> Machine {
+        let mut m = Machine::load_rom(&rom(&[0x80, 0xFE])).unwrap();
+        m.run_frame();
+        let a = &mut m.sys.apu;
+        a.ram[0x100..0x104].copy_from_slice(&[0x00, 0x02, 0x00, 0x02]);
+        a.ram[0x200] = 0xC3;
+        a.ram[0x201..0x209].fill(0x77);
+        for (r, v) in [(0x5D, 1), (0x00, 0x7F), (0x01, 0x00), (0x03, 0x10), (0x07, 0x7F), (0x0C, 0x7F), (0x1C, 0x7F), (0x6C, 0x20), (0x4C, 1)] {
+            a.dsp.write(r, v);
+        }
+        m.samples.clear();
+        m.samples.set_limit(1 << 20);
+        m
+    }
+
+    fn drain(m: &mut Machine) -> Vec<i16> {
+        let mut out = vec![0i16; m.samples.len()];
+        let n = out.len() / 2;
+        m.samples.drain(&mut out, n);
+        out
+    }
+
+    // VenusRT_Native.md §69: a frame's end between the DSP's cycles 26 and 27 neither drops the left sample nor swaps the next frame's channels.
+    #[test]
+    fn every_stereo_sample_reaches_the_queue_whole_and_in_its_channels() {
+        let mut m = left_only();
+        let (start, first, mut torn) = (m.sys.apu.cycles, m.sys.apu.dsp.step as u64, 0);
+        for _ in 0..300 {
+            m.run_frame();
+            torn += (m.sys.apu.dsp.step == 27) as u32;
+        }
+        let out = drain(&mut m);
+        assert!(torn > 0, "no frame ended between cycles 26 and 27");
+        assert!(out.chunks_exact(2).any(|p| p[0] > 0x1000), "the left channel is silent");
+        assert_eq!(out.chunks_exact(2).filter(|p| p[1] != 0).count(), 0, "left samples in the right channel");
+        let (ran, to_27) = (m.sys.apu.cycles - start, (27 + 32 - first) % 32);
+        assert_eq!(out.len() as u64 / 2, (ran + 31 - to_27) / 32, "a sample lost");
+    }
+
+    // A state saved between cycles 26 and 27 carries the left sample, so the loaded machine sounds the same pair.
+    #[test]
+    fn a_state_saved_between_the_left_and_right_samples_keeps_the_pair() {
+        let mut m = left_only();
+        while m.sys.apu.dsp.step != 27 {
+            m.run_frame();
+        }
+        drain(&mut m);
+        let mut back = Machine::load_rom(&rom(&[0x80, 0xFE])).unwrap();
+        back.load_state(&save(&m)).unwrap();
+        back.samples.set_limit(1 << 20);
+        m.run_frame();
+        back.run_frame();
+        assert_eq!(drain(&mut back), drain(&mut m));
+    }
 }

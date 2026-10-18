@@ -202,8 +202,8 @@ case on marsrt
 target marsrt
 covers 1
 $ regs cpu
-out 1214
-VR4300 (MarsRT) registers:
+out 1202
+CPU registers:
   PC        = 0xFFFFFFFFA4000040
   zero      = 0x0000000000000000
   at        = 0x0000000000000000

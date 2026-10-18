@@ -2,13 +2,13 @@ using System;
 using System.IO;
 using EmuSen.Cores.Native;
 
-namespace EmuSen.Cores.Nintendo.MarsRT
+namespace EmuSen.WiseMan.Fixtures
 {
-    // MarsRT's machine behind a v1 handle, for its state alone: read and written in the Mars state format, nothing derived - see Mars_Native.md §5.1, §7.2.
+    // MarsRT's machine behind a v1 handle for the state tests, read and written in the Mars state format through MarsRT's test hooks, nothing derived - see Mars_Native.md §5.1, §7.2.
     public sealed unsafe class MarsMachine : IDisposable
     {
-        private static readonly delegate* unmanaged<nint, byte*, nuint, int> LoadFields = (delegate* unmanaged<nint, byte*, nuint, int>)MarsNative.Export("marsrt_core_load_fields");
-        private static readonly delegate* unmanaged<nint, int> KindOf = (delegate* unmanaged<nint, int>)MarsNative.Export("marsrt_core_state_kind");
+        private static readonly delegate* unmanaged<nint, byte*, nuint, int> LoadFields = (delegate* unmanaged<nint, byte*, nuint, int>)MarsRt.Export("marsrt_core_load_fields");
+        private static readonly delegate* unmanaged<nint, int> KindOf = (delegate* unmanaged<nint, int>)MarsRt.Export("marsrt_core_state_kind");
 
         // "MARS" little-endian, then the format's version: a state, or a snapshot with the display processor's pending words - see Mars_SaveStates.md §1.
         public const uint StateMagic = 0x5352_414D;
@@ -24,14 +24,14 @@ namespace EmuSen.Cores.Nintendo.MarsRT
 
         private readonly CoreMachine _machine;
 
-        public static bool Available => MarsNative.Available && LoadFields != null;
+        public static bool Available => MarsRt.Available && LoadFields != null;
 
         public MarsMachine(int rdramBytes)
         {
-            if (!Available) throw new InvalidOperationException($"MarsRT is not in use: {MarsNative.Report}");
+            if (!Available) throw new InvalidOperationException($"MarsRT is not in use: {MarsRt.Report}");
             if (rdramBytes != Rdram && rdramBytes != ExpandedRdram) throw new ArgumentOutOfRangeException(nameof(rdramBytes), rdramBytes, "RDRAM is 4 MB or 8 MB.");
             string settings = $"ExpansionPak={(rdramBytes == ExpandedRdram ? "true" : "false")}\nThreadedRdp=false\nDeferredPresentation=false\nRecompiler=false";
-            _machine = new CoreMachine(MarsNative.Library.Library!, Image, settings, Array.Empty<(uint, byte[])>());
+            _machine = new CoreMachine(MarsRt.Library!, Image, settings, Array.Empty<(uint, byte[])>());
         }
 
         public int RdramBytes => (int)_machine.SpaceSize((uint)MarsRtSpace.Rdram);

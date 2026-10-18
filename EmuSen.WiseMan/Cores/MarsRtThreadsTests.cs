@@ -1,9 +1,10 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
@@ -45,13 +46,13 @@ namespace EmuSen.WiseMan.Cores
                 return null;
             }
 
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            Assert.True(MarsRt.Available, MarsRt.Report);
             string rom = SyntheticN64Rom.WriteTemp(File.ReadAllBytes(Path.Combine(folder, romName)));
             _temporary.Add(rom);
             return (rom, stateName is null ? null : File.ReadAllBytes(Path.Combine(folder, stateName)));
         }
 
-        private static MarsRtCore Twin(bool threaded, bool deferred, int workers = 1, int tier = 0, bool blocks = false) =>
+        private static MarsRtTestCore Twin(bool threaded, bool deferred, int workers = 1, int tier = 0, bool blocks = false) =>
             new(expansionPak: true) { Options = TestCores.NoBattery, ThreadedRdp = threaded, RdpWorkers = workers, DeferredPresentation = deferred, SkipRendering = false, UseBlocks = blocks, BlockTier = tier };
 
         // MarsRT on a thread, its state compared every frame (which joins) or every sixtieth (which leaves the thread running across frames), picture and sound every frame.
@@ -63,7 +64,7 @@ namespace EmuSen.WiseMan.Cores
             int frames = Frames(300);
             foreach (var (deferred, every) in new[] { (false, 1), (false, 60), (true, 60) })
             {
-                using MarsRtCore reference = Twin(threaded: false, deferred: false), subject = Twin(threaded: true, deferred);
+                using MarsRtTestCore reference = Twin(threaded: false, deferred: false), subject = Twin(threaded: true, deferred);
                 Load(reference, game);
                 Load(subject, game);
                 byte[] previous = reference.GetFrameBufferRgba().ToArray();
@@ -98,7 +99,7 @@ namespace EmuSen.WiseMan.Cores
         public void MarsRT_s_phases_on_a_game_are_each_frame_s_own(string romName, string stateName)
         {
             if (Game(romName, stateName) is not { } game) return;
-            using MarsRtCore subject = Twin(threaded: true, deferred: true, workers: 4, blocks: true);
+            using MarsRtTestCore subject = Twin(threaded: true, deferred: true, workers: 4, blocks: true);
             Load(subject, game);
             int frames = Frames(300), waitedInMachine = 0, waitedInPresent = 0, joined = 0;
             double machine = 0, machineWaits = 0, present = 0, presentWaits = 0;
@@ -130,7 +131,7 @@ namespace EmuSen.WiseMan.Cores
             int frames = Frames(300);
             foreach (int workers in new[] { 2, 4 })
             {
-                using MarsRtCore reference = Twin(threaded: false, deferred: false), subject = Twin(threaded: true, deferred: false, workers);
+                using MarsRtTestCore reference = Twin(threaded: false, deferred: false), subject = Twin(threaded: true, deferred: false, workers);
                 Load(reference, game);
                 Load(subject, game);
                 for (int frame = 1; frame <= frames; frame++)
@@ -156,7 +157,7 @@ namespace EmuSen.WiseMan.Cores
             return string.Join(", ", names.Take(6));
         }
 
-        private static void Load(MarsRtCore core, (string Rom, byte[]? State) game)
+        private static void Load(MarsRtTestCore core, (string Rom, byte[]? State) game)
         {
             core.LoadRom(game.Rom);
             if (game.State is { } state) core.LoadState(state);
@@ -168,7 +169,7 @@ namespace EmuSen.WiseMan.Cores
             throw new Xunit.Sdk.XunitException($"frame {frame}: the states differ from byte {want.AsSpan().CommonPrefixLength(got)} of {want.Length} ({got.Length})");
         }
 
-        private static void SamePicture(int frame, (int Width, int Height, int Repeat) shape, byte[] want, MarsRtCore twin)
+        private static void SamePicture(int frame, (int Width, int Height, int Repeat) shape, byte[] want, MarsRtTestCore twin)
         {
             if (shape != (twin.ScreenWidth, twin.ScreenHeight, twin.RowRepeat))
                 throw new Xunit.Sdk.XunitException($"frame {frame}: {shape} expected, {(twin.ScreenWidth, twin.ScreenHeight, twin.RowRepeat)} shown");

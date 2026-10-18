@@ -94,14 +94,14 @@ namespace EmuSen.Crystal.Systems.Genesis
 
         public static ICheatCodeCodec GameGenie() => SystemCode.Codec("md.gg", ManagedGameGenie());
 
-        public static readonly SystemPack MegaDrivePack = new(MegaDrive, ActionReplay, GameGenie, PlayerControllers);
+        public static readonly SystemPack MegaDrivePack = new(MegaDrive, ActionReplay, GameGenie, PlayerControllers, ByteOrder: "big");
         // The Sega CD's backup RAM inside the unit and its RAM cartridge, one format read by SegaCdBramFormat; each the table's words with its literal's extension and module - see EmuSen_SaveMedia.md §6.2, §7.3.
         public static readonly SaveMedia.SaveMediumEntry BackupRamLiteral = new("mcd.backup", "Internal Backup RAM", "Backup RAM", ".brm", SegaCdBramFormat.BackupRam),
             RamCartridgeLiteral = new("mcd.ramcart", "Backup RAM Cartridge", "Cartridge", ".crm", SegaCdBramFormat.RamCartridge),
             BackupRam = SystemTable.Medium(BackupRamLiteral), RamCartridge = SystemTable.Medium(RamCartridgeLiteral);
 
-        public static readonly SystemPack MegaCdPack = new(MegaCd, ActionReplay, GameGenie, PlayerControllers, Media: new[] { RamCartridge, BackupRam });
-        public static readonly SystemPack S32xPack = new(S32x, ActionReplay, GameGenie, PlayerControllers);
+        public static readonly SystemPack MegaCdPack = new(MegaCd, ActionReplay, GameGenie, PlayerControllers, Media: new[] { RamCartridge, BackupRam }, ByteOrder: "big");
+        public static readonly SystemPack S32xPack = new(S32x, ActionReplay, GameGenie, PlayerControllers, ByteOrder: "big");
 
         public const string Pad3 = "md.pad3", Pad6 = "md.pad6";
 

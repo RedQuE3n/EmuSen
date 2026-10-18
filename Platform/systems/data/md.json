@@ -15,5 +15,5 @@
   "screenscraper_system": 1,
   "cheat_space": "WRAM",
   "media": [],
-  "byte_order": null
+  "byte_order": "big"
 }

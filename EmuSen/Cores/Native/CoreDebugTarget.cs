@@ -236,22 +236,22 @@ namespace EmuSen.Cores.Native
             return Processors().Count > 0 && Views?.Summary(LiveRegisters(Processors()[0]), ViewSpaces(), LiveUnits()) is { } more ? head + "\n" + more : head;
         }
 
-        // A side-effect space is marked so, which `search` and plain reads already refuse.
+        // A side-effect space is marked so, which `search` and plain reads refuse; a view is read at the address asked, unwrapped - see EmuSen_Backend.md §18.10.
         public IReadOnlyList<IDebugMemorySpace> GetMemorySpaces()
         {
             if (!_engine.IsRomLoaded) return Array.Empty<IDebugMemorySpace>();
             var m = _engine.Machine;
             return m.Info.Spaces.Select(s => (IDebugMemorySpace)new DelegateDebugMemorySpace(s.Name, () => (int)Math.Min(int.MaxValue, m.SpaceSize(s.Id)),
-                a => _engine.ReadSpace(s.Name, a), s.ReadOnly ? null : (a, v) => _engine.WriteSpace(s.Name, a, v), s.SideEffects)).ToArray();
+                a => _engine.ReadSpace(s.Name, a), s.ReadOnly ? null : (a, v) => _engine.WriteSpace(s.Name, a, v), s.SideEffects, wrap: !s.View)).ToArray();
         }
 
-        // What a pack's whole-space views read: a space without side effects is copied by one space_read when first touched - see EmuSen_CoreAPI.md §31.5.
+        // What a pack's whole-space views read: a memory without side effects is copied by one space_read when first touched, a view read live - see EmuSen_CoreAPI.md §29.4, §31.5.
         private IReadOnlyList<IDebugMemorySpace> ViewSpaces()
         {
             var live = GetMemorySpaces();
             if (live.Count == 0) return live;
             var m = _engine.Machine;
-            return m.Info.Spaces.Select((s, i) => s.SideEffects || live[i].Size == 0 ? live[i] : Copied(m, s, live[i].Size)).ToArray();
+            return m.Info.Spaces.Select((s, i) => s.SideEffects || s.View || live[i].Size == 0 ? live[i] : Copied(m, s, live[i].Size)).ToArray();
         }
 
         private static IDebugMemorySpace Copied(CoreMachine m, CoreSpace s, int size)
@@ -367,10 +367,11 @@ namespace EmuSen.Cores.Native
                 ?? (p.Id == 0 ? spaces.FirstOrDefault() : null))?.Name;
         }
 
-        // DEBUG_DISASSEMBLE's records for processor 0 over the space named; empty for a core without it.
+        // DEBUG_DISASSEMBLE's records for processor 0 over the space named; the system pack's for a core without it, else empty.
         public IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count)
         {
-            if (!_engine.IsRomLoaded || !_engine.Library.Has(CoreInterface.CapDebugDisassemble)) return Array.Empty<DisassembledInstruction>();
+            if (!_engine.IsRomLoaded) return Array.Empty<DisassembledInstruction>();
+            if (!_engine.Library.Has(CoreInterface.CapDebugDisassemble)) return PackDisassembly(spaceName, address, count);
             var space = _engine.Machine.Info.Spaces.FirstOrDefault(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
             if (space is null) return Array.Empty<DisassembledInstruction>();
             using var doc = JsonDocument.Parse(_engine.Machine.Disassemble(0, space.Id, (uint)address, (uint)Math.Max(0, count)));
@@ -386,6 +387,20 @@ namespace EmuSen.Cores.Native
                     _references[at] = (kind, (int)reference.GetProperty("target").GetInt64());
                 }
                 else _references.Remove(at);
+            }
+            return list;
+        }
+
+        // The pack lists a space by the processor that runs code there, each reference kept for ClassifyStaticReference - see EmuSen_Backend.md §18.10.
+        private IReadOnlyList<DisassembledInstruction> PackDisassembly(string spaceName, int address, int count)
+        {
+            if (Views is not { } views || GetMemorySpaces().FirstOrDefault(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase)) is not { } space) return Array.Empty<DisassembledInstruction>();
+            var list = new List<DisassembledInstruction>(Math.Max(count, 0));
+            foreach (var (instruction, reference) in views.Disassemble(space, address, count))
+            {
+                list.Add(instruction);
+                if (reference is { } r) _references[instruction.Address] = r;
+                else _references.Remove(instruction.Address);
             }
             return list;
         }

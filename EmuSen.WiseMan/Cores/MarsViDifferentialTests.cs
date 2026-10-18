@@ -1,3 +1,5 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.Cores.Native;
 using System.Text;
 using EmuSen.WiseMan.Fixtures;
 
@@ -93,7 +95,7 @@ namespace EmuSen.WiseMan.Cores
         public void MarsRT_scans_out_what_the_reference_scans_out(string name)
         {
             IReadOnlyList<IReadOnlyList<byte[]>>? rt = ReplayedMarsRT.Value;
-            Assert.True(rt is not null, EmuSen.Cores.Nintendo.MarsRT.MarsNative.Report);
+            Assert.True(rt is not null, MarsRt.Report);
 
             int index = Array.FindIndex(Cases, c => c.Name == name);
             if (Replayed.Value is { } reference)

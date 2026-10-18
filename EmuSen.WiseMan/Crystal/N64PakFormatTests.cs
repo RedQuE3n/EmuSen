@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Crystal.SaveMedia;
 using EmuSen.Crystal.Systems.N64;
 using EmuSen.Galaxia;
@@ -78,10 +77,10 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void A_formatted_pak_is_marsrts_own_formatted_pak_byte_for_byte()
         {
-            Assert.True(MarsNative.Available, MarsNative.Report);
+            Assert.True(MarsRt.Available, MarsRt.Report);
             var image = new byte[0x2000];
             image[0] = 0x80; image[1] = 0x37; image[2] = 0x12; image[3] = 0x40;
-            using var machine = new CoreMachine(MarsNative.Library.Library!, image, "ThreadedRdp=false\nRecompiler=false", Array.Empty<(uint, byte[])>());
+            using var machine = new CoreMachine(MarsRt.Library!, image, "ThreadedRdp=false\nRecompiler=false", Array.Empty<(uint, byte[])>());
             Assert.Equal(Pak.Format(), machine.Battery(1).Data);
             var listing = Pak.Read(Pak.Format());
             Assert.Equal((true, 0, 123), (listing.Formatted, listing.Saves.Count, listing.FreeUnits));

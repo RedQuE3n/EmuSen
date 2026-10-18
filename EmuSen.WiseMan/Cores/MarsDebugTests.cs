@@ -253,7 +253,7 @@ namespace EmuSen.WiseMan.Cores
             var events = core.Target.Watches.GetEvents(id);
             Assert.NotEmpty(events);
             Assert.All(events, e => Assert.InRange(e.Address, 0x0010_0000, 0x0010_0003));
-            Assert.Contains("PC=A400004C", events[0].Context);
+            Assert.Contains("PC=$A400004C", events[0].Context);
         }
 
         // Nothing watched, no data breakpoint, no uninitialised-read check: the target says so, and says otherwise as soon as one exists.

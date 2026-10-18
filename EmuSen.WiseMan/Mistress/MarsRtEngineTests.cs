@@ -1,3 +1,5 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.Cores.Native;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -11,7 +13,6 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
@@ -29,7 +30,6 @@ namespace EmuSen.WiseMan.Mistress
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(MarsRtEngineTests).GetTypeInfo().Assembly);
 
-        public const string FallbackMarkVariable = "EMUSEN_MARSRT_FALLBACK_MARK";
 
         // Block 5 of the 4 Kbit EEPROM, which the synthetic system never writes; it writes block 2.
         private const int Marked = 5 * 8, Written = 2 * 8;
@@ -83,10 +83,10 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task A_game_runs_on_MarsRT_with_rewind_and_still_does_when_the_retired_Mars_is_stored() => Session.Dispatch(() =>
         {
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            Assert.True(MarsRt.Available, MarsRt.Report);
             MainWindow window = Start();
             WindowGame game = Game(window);
-            Assert.IsType<MarsRtCore>(game.Core);
+            Assert.IsType<CoreEngine>(game.Core);
             Assert.Null(game.EngineNotice);
             Assert.DoesNotContain("not available", Status(window).Text ?? "");
 
@@ -98,7 +98,7 @@ namespace EmuSen.WiseMan.Mistress
 
             Choose("Mars (C#)");
             window = Start();
-            Assert.IsType<MarsRtCore>(Game(window).Core);
+            Assert.IsType<CoreEngine>(Game(window).Core);
             Assert.Null(Game(window).EngineNotice);
             WaitFor(() => Game(window).TotalFrames > 60 && Rewind(window).Depth > 0);
             window.Close();
@@ -112,8 +112,8 @@ namespace EmuSen.WiseMan.Mistress
             MainWindow window = Start();
             WindowGame game = Game(window);
             WaitFor(() => game.TotalFrames > 120 && Rewind(window).Depth > 20);
-            var core = Assert.IsType<MarsRtCore>(game.Core);
-            Assert.True(core.ThreadedRdp && core.DeferredPresentation, "Mistress did not give MarsRT its workers and the deferred picture");
+            var core = Assert.IsType<CoreEngine>(game.Core);
+            Assert.True(core.Get("ThreadedRdp") == "true" && core.Get("DeferredPresentation") == "true", "Mistress did not give MarsRT its workers and the deferred picture");
 
             long reached = game.TotalFrames;
             FieldInfo held = typeof(MainWindow).GetField("_rewindHeld", BindingFlags.Instance | BindingFlags.NonPublic)!;
@@ -147,7 +147,7 @@ namespace EmuSen.WiseMan.Mistress
             window.PauseEmulation();
             WaitUntilParked(window);
 
-            Assert.IsType<MarsRtCore>(game.Core);
+            Assert.IsType<CoreEngine>(game.Core);
             Assert.InRange(game.TotalFrames, saved, saved + 60);
             window.Close();
         }, default);
@@ -185,56 +185,26 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(added, words);
             Assert.Single(game.DebugTarget.Cheats.GetCheats());
 
-            var core = (MarsRtCore)game.Core;
+            var core = (CoreEngine)game.Core;
             WaitFor(() => core.Peek(MarsRtSpace.Rdram, 0x300) == 0x42);
             window.Close();
         }, default);
 
-        // The library is loaded once per process, so a process started with it off is the only honest test of a build without it - see Mars_Native.md §6.7.
+        // With no MarsRT beside the program, an N64 game says which engine is missing, as every console with one discovered engine does - see VenusRT_Native.md §68.5.
         [Fact]
-        public void With_the_library_turned_off_an_n64_game_says_the_core_is_not_in_this_build()
+        public void With_no_marsrt_beside_the_program_an_n64_game_says_the_engine_is_missing()
         {
-            string mark = Path.Combine(_root, "fallback.txt");
-            var start = new ProcessStartInfo("dotnet")
+            CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "no-cores") });
+            try
             {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-            };
-            foreach (string argument in new[] { "test", typeof(MarsRtEngineTests).Assembly.Location, "--filter", $"FullyQualifiedName={typeof(MarsRtEngineTests).FullName}.{nameof(TheFallbackInAProcessWithTheLibraryOff)}" })
-                start.ArgumentList.Add(argument);
-            start.Environment[MarsNative.Variable] = "0";
-            start.Environment[FallbackMarkVariable] = mark;
-
-            using Process child = Process.Start(start)!;
-            Task<string> output = child.StandardOutput.ReadToEndAsync();
-            Task<string> errors = child.StandardError.ReadToEndAsync();
-            Assert.True(child.WaitForExit(240_000), "the child test run did not finish");
-            Assert.True(child.ExitCode == 0, output.Result + errors.Result);
-            Assert.True(File.Exists(mark), "the child ran nothing:\n" + output.Result);
-
-            string[] found = File.ReadAllLines(mark);
-            Assert.Contains("The N64 core is not in this build (turned off by EMUSEN_MARS_NATIVE=0)", found[0]);
+                var refused = Assert.Throws<NotSupportedException>(() => CoreFactory.Create(_rom, engine: CoreCatalog.MarsRtEngine));
+                Assert.StartsWith("This build has no N64 core: MarsRT (Rust) is missing", refused.Message);
+            }
+            finally
+            {
+                CoreDiscovery.UseDirectories(null);
+            }
         }
-
-        // Run only by the test above, in its own process; it asserts nothing unless that process has the library off.
-        [Fact]
-        public Task TheFallbackInAProcessWithTheLibraryOff() => Session.Dispatch(() =>
-        {
-            if (Environment.GetEnvironmentVariable(FallbackMarkVariable) is not { } mark || Environment.GetEnvironmentVariable(MarsNative.Variable) != "0") return;
-
-            Assert.False(MarsNative.Available);
-            Assert.False(MarsRtCore.Available);
-            var window = new MainWindow();
-            window.Show();
-            Invoke(window, "LoadRom", _rom, "System.z64");
-            string? status = Status(window).Text;
-
-            Assert.Null(typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
-            Assert.StartsWith("Failed to load System.z64: ", status);
-            File.WriteAllLines(mark, new[] { status! });
-            window.Close();
-        }, default);
 
         private MainWindow Start()
         {

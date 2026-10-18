@@ -1,6 +1,7 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.Cores.Native;
 using System;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.Crystal.Debugger;
 
@@ -64,16 +65,16 @@ namespace EmuSen.WiseMan.Fixtures
         private sealed class MarsRtRig : MarsDebugRig
         {
             private readonly string _rom;
-            private readonly MarsRtCore _core;
-            private readonly MarsRtDebugTarget _target;
+            private readonly MarsRtTestCore _core;
+            private readonly CoreDebugTarget _target;
 
             public MarsRtRig(string rom)
             {
                 _rom = rom;
-                _core = new MarsRtCore() { Options = TestCores.NoBattery, SkipRendering = true };
+                _core = new MarsRtTestCore() { Options = TestCores.NoBattery, SkipRendering = true };
                 _core.LoadRom(rom);
                 ProgramVideo();
-                _target = new MarsRtDebugTarget(_core);
+                _target = _core.CreateDebugTarget();
             }
 
             public override ICore Core => _core;
@@ -88,9 +89,9 @@ namespace EmuSen.WiseMan.Fixtures
             public override int HaltedAddress => _core.HaltedAddress;
             public override long TotalFrames => _core.TotalFrames;
             public override long Instructions => _core.Instructions;
-            public override bool Listening => _target.Listening;
+            public override bool Listening => _core.Listening;
             public override string? Engine => CoreCatalog.MarsRtEngine;
-            public override Type CoreType => typeof(MarsRtCore);
+            public override Type CoreType => typeof(CoreEngine);
 
             public override void Reload()
             {
@@ -109,7 +110,7 @@ namespace EmuSen.WiseMan.Fixtures
             public override void StepRsp(int steps) => _core.StepRsp(null, steps);
             public override void WriteImem(int offset, byte value) => _core.Poke(MarsRtSpace.Imem, (uint)offset, value);
             public override PhysicalAddress? ResolvePhysical(int address) => _target.ResolvePhysical(address);
-            public override (BreakpointRegistry, CoverageRegistry, WatchRegistry) RegistriesOf(ICore core) => (((MarsRtCore)core).Breakpoints, ((MarsRtCore)core).Coverage, ((MarsRtCore)core).Watches);
+            public override (BreakpointRegistry, CoverageRegistry, WatchRegistry) RegistriesOf(ICore core) => (((CoreEngine)core).Breakpoints, ((CoreEngine)core).Coverage, ((CoreEngine)core).Watches);
             public override void Dispose() => _core.Dispose();
         }
     }

@@ -183,6 +183,9 @@ struct Fetch {
     valid: bool,
 }
 
+/// How many values `Blocks::counters` gives.
+pub const COUNTERS: usize = 13;
+
 /// The recompiler's state beside a machine: none of it in the save state, all of it rebuilt from memory on demand.
 pub struct Blocks {
     pub on: bool,
@@ -257,13 +260,13 @@ impl Blocks {
     /// Live blocks, shaped, discarded, entries, instructions in blocks, interpreter steps, mapped entries, and six the
     /// compiled tiers fill: blocks compiled, nanoseconds compiling, bytes of code, entries and instructions that ran compiled,
     /// and blocks Cranelift refused, which run decoded.
-    pub fn counters(&self) -> Vec<i64> {
+    pub fn counters(&self) -> [i64; COUNTERS] {
         let s = &self.stats;
         let (compiled, nanos, bytes, failed) = self.compiler.as_ref().map_or((0, 0, 0, 0), |c| {
             let c = c.counters();
             (c.compiled.load(Relaxed), c.nanos.load(Relaxed), c.bytes.load(Relaxed), c.failed.load(Relaxed))
         });
-        vec![
+        [
             self.cache.live as i64,
             s.shaped as i64,
             s.discarded as i64,

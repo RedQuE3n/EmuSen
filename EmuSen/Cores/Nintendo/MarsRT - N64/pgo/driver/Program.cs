@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using EmuSen.Common;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MarsRT;
+using EmuSen.Cores.Native;
 
 // marsrt-pgo <rom> <state|-> <frames> [Setting=value]... [rewind=1] [mistress=1] [warmup=n]: Mistress's frame loop on MarsRT, ms a frame and the state's SHA-256 - see Mars_Native.md §6.17.
 if (args.Length < 3 || !int.TryParse(args[2], out int frames))
@@ -24,9 +24,9 @@ try
 {
     var session = new EmulatorSession { Engine = CoreCatalog.MarsRtEngine, Options = new CoreOptions { BatteryRamDisabled = true } };
     session.LoadRom(rom);
-    if (session.Core is not MarsRtCore core)
+    if (session.Core is not CoreEngine { Info.Id: "marsrt" } core)
     {
-        Console.Error.WriteLine($"MarsRT is not running: {session.EngineNotice ?? MarsNative.Report}");
+        Console.Error.WriteLine($"MarsRT is not running: {session.EngineNotice ?? CoreDiscovery.ByEngineName(CoreCatalog.MarsRtEngine)?.Report ?? "no sidecar"}");
         return 3;
     }
     foreach (var pair in settings) core.Set(pair[0], pair[1]);
@@ -78,7 +78,7 @@ try
     core.SaveState(state);
     string hash = Convert.ToHexString(SHA256.HashData(state.ToArray()))[..16];
     string shown = string.Join(' ', settings.Select(p => $"{p[0]}={p[1]}").Append(rewind ? "rewind=1" : "").Append(mistress ? "mistress=1" : "").Where(s => s.Length > 0));
-    Console.WriteLine($"{Path.GetFileName(rom)} {(statePath == "-" ? "power-on" : Path.GetFileName(statePath))} {frames} frames: {ms:F3} ms a frame, run {runMs / frames:F3}, state {hash}, {core.RdpWorkers} workers{(shown.Length > 0 ? ", " + shown : "")}");
+    Console.WriteLine($"{Path.GetFileName(rom)} {(statePath == "-" ? "power-on" : Path.GetFileName(statePath))} {frames} frames: {ms:F3} ms a frame, run {runMs / frames:F3}, state {hash}, {core.Get("RdpWorkers")} workers{(shown.Length > 0 ? ", " + shown : "")}");
     core.Dispose();
     return 0;
 }

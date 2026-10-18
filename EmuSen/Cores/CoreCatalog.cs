@@ -200,13 +200,12 @@ namespace EmuSen.Cores
                 [Venus.Console] = Crystal.Systems.Snes.SnesSystem.PadButtons,
                 [Moon.Console] = Crystal.Systems.Nes.NesSystem.PadButtons,
                 [Mercury.Console] = Nintendo.MercuryRT.MercuryRtCore.PadButtons,
-                [Mars.Console] = Nintendo.MarsRT.N64Console.PadButtons,
             };
 
         // The console's pad with no ROM loaded, or every button for a console this build does not know.
         public static IReadOnlyList<Galaxia.Input.PadButton> ButtonsFor(string console) =>
             ButtonsByConsole.TryGetValue(console, out var buttons) ? buttons
-            : DiscoveredSystem(console) is { } system && system.Controllers.SelectMany(c => c.Buttons).Select(b => b.Control).OfType<Galaxia.Input.PadButton>().Distinct().ToArray() is { Length: > 0 } pad ? pad
+            : (DiscoveredSystem(console) ?? SoleEngineSystem(console)) is { } system && system.Controllers.SelectMany(c => c.Buttons).Select(b => b.Control).OfType<Galaxia.Input.PadButton>().Distinct().ToArray() is { Length: > 0 } pad ? pad
             : Enum.GetValues<Galaxia.Input.PadButton>();
 
         // The controller a port of a console discovery added is set to, by its id: the engine's "pad<n>" setting as stored, else its default; null where the engine has no such setting.
@@ -235,17 +234,14 @@ namespace EmuSen.Cores
         public static Native.CoreSystem? EngineSystem(string console) =>
             DiscoveredSystem(console) ?? SystemIdsFor(console).SelectMany(id => Native.CoreDiscovery.ForSystem(id).Select(c => c.Info.Systems.FirstOrDefault(s => s.Id == id))).FirstOrDefault(s => s is not null);
 
-        // Only a console with a stick is listed, a discovered one by its engine's controllers; every other one reads no axis - see EmuSen_Input.md §7.
-        private static readonly Dictionary<string, IReadOnlyList<Galaxia.Input.PadAxis>> AxesByConsole =
-            new(StringComparer.OrdinalIgnoreCase)
-            {
-                [Mars.Console] = Nintendo.MarsRT.N64Console.PadAxes,
-            };
-
+        // The axes a console's engine's controllers read, a discovered console's or a catalog console's sole engine's; none for any other - see EmuSen_Input.md §7.
         public static IReadOnlyList<Galaxia.Input.PadAxis> AxesFor(string console) =>
-            AxesByConsole.TryGetValue(console, out var axes) ? axes
-            : DiscoveredSystem(console) is { } system ? system.Controllers.SelectMany(c => c.Axes).Select(a => a.Control).OfType<Galaxia.Input.PadAxis>().Distinct().ToArray()
+            (DiscoveredSystem(console) ?? SoleEngineSystem(console)) is { } system ? system.Controllers.SelectMany(c => c.Axes).Select(a => a.Control).OfType<Galaxia.Input.PadAxis>().Distinct().ToArray()
             : Array.Empty<Galaxia.Input.PadAxis>();
+
+        // The system entry a catalog console's sole discovered engine gives in its info, read from its sidecar with no library loaded - see EmuSen_Backend.md §18.10.
+        public static Native.CoreSystem? SoleEngineSystem(string console) =>
+            SoleDiscoveredEngine(console) is { } engine && Native.CoreDiscovery.ByEngineName(engine) is { } core ? core.Info.Systems.FirstOrDefault(s => SystemIdsFor(console).Contains(s.Id)) : null;
 
         // What the rebind window lists for a console: its buttons, then each direction of each stick it reads.
         public static IReadOnlyList<Galaxia.Input.PadControl> ControlsFor(string console) =>
@@ -280,13 +276,13 @@ namespace EmuSen.Cores
         // The settings each console's core offers a frontend, by console, empty for one that offers none - see EmuSen_Multicore.md §13.
         private static readonly Dictionary<string, IReadOnlyList<CoreSetting>> SettingsByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["N64"] = Nintendo.MarsRT.N64Console.VideoSettings,
             ["GB"] = Nintendo.MercuryRT.MercuryRtCore.ModelSettings,
         };
 
         public static IReadOnlyList<CoreSetting> SettingsFor(string console) =>
             SettingsByConsole.TryGetValue(console, out var settings) ? settings
-            : DiscoveredFor(console) is { } found ? CoreSidecarSettings(found) : Array.Empty<CoreSetting>();
+            : DiscoveredFor(console) is { } found ? CoreSidecarSettings(found)
+            : SoleDiscoveredEngine(console) is { } engine && Native.CoreDiscovery.ByEngineName(engine) is { } sole ? CoreSidecarSettings(sole) : Array.Empty<CoreSetting>();
 
         // A console no catalog core runs, whose system pack names it and a discovered engine serves it - see EmuSen_Settings_Reference.md §4.90.
         public static IReadOnlyList<string> DiscoveredConsoles =>
@@ -342,13 +338,14 @@ namespace EmuSen.Cores
         public const string MarsRtEngine = "MarsRT (Rust)";
 
         // An engine a console runs through its own shim, with no choice beside it, so it has no row - see EmuSen_Settings_Reference.md §4.44.
-        private static readonly string[] SoleEngines = { MarsRtEngine, MercuryRtEngine };
+        private static readonly string[] SoleEngines = { MercuryRtEngine };
 
         // A console whose one engine is a discovered v1 engine, opened by the generic branch whatever name is asked for - see VenusRT_Native.md §68.5, EmuSen_Backend.md §23.
         private static readonly Dictionary<string, string> SoleDiscoveredEngines = new(StringComparer.OrdinalIgnoreCase)
         {
             ["SNES"] = VenusRtEngine,
             ["NES"] = MoonRtEngine,
+            ["N64"] = MarsRtEngine,
         };
 
         public static string? SoleDiscoveredEngine(string console) => SoleDiscoveredEngines.GetValueOrDefault(console);

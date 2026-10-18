@@ -1,3 +1,4 @@
+using EmuSen.Crystal.Systems.N64;
 using System;
 using System.IO;
 using System.Linq;
@@ -10,7 +11,6 @@ using Avalonia.VisualTree;
 using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -90,7 +90,7 @@ namespace EmuSen.WiseMan.Mistress
         private static void Poll(MainWindow w) => typeof(MainWindow).GetMethod("PollGamepad", Hidden)!.Invoke(w, null);
 
         // Each N64 port as MarsRT's state holds it, found by the state layout's names - see Mars_Serial.md §3.
-        private static (bool Present, ushort Buttons, sbyte StickX)[] N64Ports(MarsRtCore core)
+        private static (bool Present, ushort Buttons, sbyte StickX)[] N64Ports(CoreEngine core)
         {
             byte[] state = core.Save(snapshot: false);
             string[][] fields = core.Machine.Layout().Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Split(' '))
@@ -250,12 +250,16 @@ namespace EmuSen.WiseMan.Mistress
         public Task Four_pads_play_the_n64s_four_ports_in_a_big_screen_session() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver first) = Playing("Four.z64", SyntheticN64Rom.Build(patches: (0, new byte[] { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 })), ByConnection, bigScreen: true);
-            var mars = Assert.IsType<MarsRtCore>(SessionOf(window).Core);
+            var mars = Assert.IsType<CoreEngine>(SessionOf(window).Core);
             Poll(window);
+            // Every port holds a controller at create; the ports no player holds are emptied as the next frame starts - see EmuSen_CoreAPI.md §6.36.
+            mars.RunFrame();
             Assert.Equal(new[] { true, false, false, false }, N64Ports(mars).Select(p => p.Present));
 
             PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4"), first.Plug("Pad 5") };
             Poll(window);
+            // A controller plugged in reaches the machine as the next frame starts, the adapter's rule for every v1 core - see Mars_Native.md §7.5.
+            mars.RunFrame();
             Assert.Equal(new[] { true, true, true, true }, N64Ports(mars).Select(p => p.Present));
 
             for (int i = 0; i < others.Length; i++) others[i].Pad.Press(SDL.GamepadButton.East);

@@ -32,6 +32,11 @@
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
   </ItemGroup>
 
+  <!-- The frontend API's tests attach an engine no factory makes, one that withholds rewind, through one internal member - see EmuSen_Backend.md §14. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="EmuSen.WiseMan" />
+  </ItemGroup>
+
   <!-- The Rust cores, built by cargo for this machine when it is installed and copied beside the assemblies; without one its console runs on its C# core where one remains, else not at all - see Mars_Native.md §1, Mercury_Native.md §8.6. A publish for another platform swaps the libraries in RustCoresPublish.targets. -->
   <Import Project="Cores\RustCores.props" />
 

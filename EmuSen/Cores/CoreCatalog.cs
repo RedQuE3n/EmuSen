@@ -327,7 +327,7 @@ namespace EmuSen.Cores
         private static bool Runs(Native.DiscoveredCore core, string systemId) => core.Info.Systems.Any(s => s.Id == systemId && !s.Development);
 
         // The engine's schema as the window lists it, from the library its sidecar names.
-        private static IReadOnlyList<CoreSetting> CoreSidecarSettings(Native.DiscoveredCore found) =>
+        internal static IReadOnlyList<CoreSetting> CoreSidecarSettings(Native.DiscoveredCore found) =>
             found.Open() is { } library ? library.Settings.Where(s => !s.Hidden).Select(s => s.AsCoreSetting()).OfType<CoreSetting>().ToArray() : Array.Empty<CoreSetting>();
 
         // The graphics.json key a console's engine is stored under; no core declares it, so no core is handed it - see EmuSen_Settings_Reference.md §4.44.

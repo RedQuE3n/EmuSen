@@ -54,13 +54,22 @@ namespace EmuSen.Cores.Native
             {
                 if (!Supported || Live is null) return false;
                 if (CallStack.IsProfiling || Listening) return true;
-                foreach (BreakpointRegistry b in Breakpoints) if (!b.IsQuiet) return true;
-                foreach (CoverageRegistry c in Coverage) if (c.IsArmed) return true;
+                for (int i = 0; i < Breakpoints.Count; i++) if (!Breakpoints[i].IsQuiet) return true;
+                for (int i = 0; i < Coverage.Count; i++) if (Coverage[i].IsArmed) return true;
                 return false;
             }
         }
 
-        private bool Listening => _engine.Watches.HasWatches || Breakpoints.Any(b => b.WatchesWrites);
+        // Asked every frame, so by index: an interface's enumerator is an allocation - see EmuSen_Backend.md §14.
+        private bool Listening
+        {
+            get
+            {
+                if (_engine.Watches.HasWatches) return true;
+                for (int i = 0; i < Breakpoints.Count; i++) if (Breakpoints[i].WatchesWrites) return true;
+                return false;
+            }
+        }
 
         private bool ListeningToReads => ReadsSupported && (_engine.Watches.GetWatches().Any(w => w.Kind != WatchKind.Write) || Breakpoints.Any(b => b.GetDataBreakpoints().Any(d => d.OnRead)));
 

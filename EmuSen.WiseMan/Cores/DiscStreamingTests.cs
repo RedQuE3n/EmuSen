@@ -198,7 +198,7 @@ namespace EmuSen.WiseMan.Cores
             {
                 a.Advance();
                 b.Advance();
-                foreach (var e in a.DrainEvents().Where(e => e.Kind == CoreInterface.EventMediaSeek))
+                foreach (var e in a.DrainEvents().ToArray().Where(e => e.Kind == CoreInterface.EventMediaSeek))
                 {
                     named++;
                     int file = (int)((uint)e.A - CoreInterface.FileMedia);

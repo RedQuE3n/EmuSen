@@ -30,6 +30,15 @@ namespace EmuSen.Crystal.Session
             _readOnlyTable = SessionExports.NewTable(_readOnly.Handle);
         }
 
+        // The target and the host's options the provider serves, for a shell given only the table - see EmuSen_Backend.md §14.
+        public IDebugTarget? DebugTarget => _target;
+
+        public SessionServiceOptions Options => _options;
+
+        // The provider whose table this is, or null for a table it did not make.
+        public static SessionService? Of(EmuSenSessionV1* table) =>
+            table != null && SessionExports.Made(table) && GCHandle.FromIntPtr((nint)table->ctx).Target is Binding b ? b.Service : null;
+
         // The table a module is handed for an ordinary call.
         public EmuSenSessionV1* Table => _fullTable != null ? _fullTable : throw new ObjectDisposedException(nameof(SessionService));
 
@@ -39,6 +48,8 @@ namespace EmuSen.Crystal.Session
         public void Dispose()
         {
             if (_fullTable == null) return;
+            SessionExports.Forget(_fullTable);
+            SessionExports.Forget(_readOnlyTable);
             NativeMemory.Free(_fullTable);
             NativeMemory.Free(_readOnlyTable);
             _fullTable = _readOnlyTable = null;
@@ -67,7 +78,7 @@ namespace EmuSen.Crystal.Session
         private IDebugTarget Target(uint session)
         {
             if (_target is null) throw new SessionException(SessionAbi.NoSession, "No ROM loaded - this command needs an active debug target.");
-            if (session != 0 && session != SessionId) throw new SessionException(SessionAbi.NoSession, $"no session {session}; this provider serves session {SessionId}");
+            if (session != 0 && session != _options.Id) throw new SessionException(SessionAbi.NoSession, $"no session {session}; this provider serves session {_options.Id}");
             return _target;
         }
 

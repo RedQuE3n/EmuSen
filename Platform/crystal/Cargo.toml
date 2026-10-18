@@ -1,0 +1,12 @@
+[package]
+name = "emusen-crystal"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Crystal in Rust, begun with the frontend API's types and numbers as emusen_crystal.h declares them, and the tests that
+# hold the header to its baseline and to the session service's table. The runtime itself is step B7. See
+# EmuSen_Backend.md §3 and §14.
+[lib]
+name = "emusen_crystal"

@@ -17,5 +17,14 @@ namespace EmuSen.Crystal.Session
         public Action<string>? SaveState { get; init; }
         public Action<string>? LoadState { get; init; }
         public Func<string>? DefaultStatePath { get; init; }
+
+        // The id the session is listed and answered by; a host with one session keeps 1.
+        public uint Id { get; init; } = SessionService.SessionId;
+
+        // Held around every change, so a change from another thread lands between two frames - see EmuSen_Backend.md §14.3.
+        public IChangeGate? Gate { get; init; }
+
+        // Run control as a runtime answers it, given the provider's own answer to call; null leaves it to the provider.
+        public Func<uint, uint, long, Func<long>, long>? RunControl { get; init; }
     }
 }

@@ -68,9 +68,17 @@ namespace EmuSen.Cores.Native
         // The debugger's tables and logs over DEBUG, every processor's registries in it.
         public CoreDebugBridge Debug { get; }
 
+        // The frame-end work's readers and writers, made once so a frame allocates none - see EmuSen_Backend.md §14.
+        private readonly Func<string, int, int, long> _readForFrameLog;
+        private readonly Func<string, int, byte> _read;
+        private readonly Action<string, int, byte> _write;
+
         // The settings a frontend stored for this engine, by key; a key the schema lacks is dropped, as §6.13 asks of a host.
         public CoreEngine(CoreLibrary library, IReadOnlyDictionary<string, string>? settings = null)
         {
+            _readForFrameLog = ReadForFrameLog;
+            _read = ReadSpace;
+            _write = WriteSpace;
             if (!library.Available) throw new InvalidOperationException($"{System.IO.Path.GetFileName(library.Path)} is not in use: {library.Report}");
             Library = library;
             Debug = new CoreDebugBridge(this);
@@ -101,6 +109,9 @@ namespace EmuSen.Cores.Native
 
         // What the last load's console logged, newest last, kept to the last few hundred lines.
         public IReadOnlyList<string> RecentLog => _log;
+
+        // Every line kept since the engine was made, so a reader can tell which of RecentLog are new.
+        public long LoggedLines { get; private set; }
 
         // The controller a port holds by machine info, else the system's first.
         private CoreController? ControllerFor(int port)
@@ -501,9 +512,9 @@ namespace EmuSen.Cores.Native
         // The frame-end work in the runtime's order; a port whose oracle's order differs overrides it - see EmuSen_NativeCores.md §8.2's R4.
         protected virtual void EndFrame(CoreMachine m)
         {
-            FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
-            if (_machine is not null) _hostCheats.ApplyAll(ReadSpace, WriteSpace);
-            if (Freezes.Count > 0) Freezes.Enforce(ReadSpace, WriteSpace);
+            FrameLog.RecordFrame(TotalFrames, _readForFrameLog);
+            if (_machine is not null) _hostCheats.ApplyAll(_read, _write);
+            if (Freezes.Count > 0) Freezes.Enforce(_read, _write);
             Breakpoints.NoteFrame(TotalFrames);
             if (BatterySave.IsFlushFrame(TotalFrames)) SaveSram();
         }
@@ -545,6 +556,8 @@ namespace EmuSen.Cores.Native
 
         private void KeepLog(IReadOnlyList<string> lines)
         {
+            if (lines.Count == 0) return;
+            LoggedLines += lines.Count;
             _log.AddRange(lines);
             if (_log.Count > 512) _log.RemoveRange(0, _log.Count - 512);
         }
@@ -563,6 +576,53 @@ namespace EmuSen.Cores.Native
                 for (int r = 0; r < repeat; r++)
                     _frame.AsSpan(y * stride, width * 4).CopyTo(buffer.AsSpan((y * repeat + r) * width * 4));
             return buffer;
+        }
+
+        // The picture into the caller's buffer, rows repeated unless the frontend repeats them, the bytes ScreenWidth * 4 * ScreenHeight; one copy where the core's rows are packed - see EmuSen_Backend.md §14.
+        public int CopyPicture(Span<byte> into)
+        {
+            if (_machine is not { } m) return 0;
+            _shape = m.FrameInfo;
+            int width = _shape.Width, height = _shape.Height, stride = _shape.Stride == 0 ? width * 4 : _shape.Stride;
+            int repeat = RepeatRows ? Math.Max(1, _shape.RowRepeat) : 1;
+            int bytes = width * 4 * height * repeat;
+            if (into.Length < bytes) return bytes;
+            if (repeat == 1 && stride == width * 4 && _shape.Bytes <= into.Length)
+            {
+                m.CopyFrame(into[..(int)_shape.Bytes]);
+                return bytes;
+            }
+            if (_frame.Length < _shape.Bytes) _frame = new byte[_shape.Bytes];
+            m.CopyFrame(_frame);
+            for (int y = 0; y < height; y++)
+                for (int r = 0; r < repeat; r++)
+                    _frame.AsSpan(y * stride, width * 4).CopyTo(into.Slice((y * repeat + r) * width * 4, width * 4));
+            return bytes;
+        }
+
+        // Stereo frames the core holds undrained.
+        public int BufferedAudioFrames => _machine is { } m ? m.BufferedSamples / 2 : 0;
+
+        // DequeueAudioSamples into the caller's buffer, allocating nothing; the stereo frames written and their rate.
+        public int DrainAudio(Span<short> into, out int rate)
+        {
+            if (_machine is not { } m)
+            {
+                rate = AudioSampleRate;
+                return 0;
+            }
+            int frames = m.DrainAudio(into, out rate);
+            _audioRate = rate;
+            return frames;
+        }
+
+        // The console's reset button; the halt a breakpoint left is let go with the frame it held - see EmuSen_CoreAPI.md §6.2.
+        public virtual void Reset()
+        {
+            CoreMachine m = Machine;
+            m.Reset();
+            IsHaltedAtBreakpoint = false;
+            Drain();
         }
 
         public void ReturnFrameBuffer(byte[] buffer)

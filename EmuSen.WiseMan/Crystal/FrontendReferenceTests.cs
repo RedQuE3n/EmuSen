@@ -44,11 +44,17 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void Pharaoh_names_no_runtime_type() => AssertNamesNoRuntimeType(typeof(EmuSen.Pharaoh.FrameRunner).Assembly);
 
-        // The check sees a frontend that does name the runtime's types: Hotaru, not yet moved, names ICore.
+        [Fact]
+        public void Hotaru_names_no_runtime_type() => AssertNamesNoRuntimeType(typeof(EmuSen.Hotaru.HotaruSession).Assembly);
+
+        [Fact]
+        public void Emusen_shell_names_no_runtime_type() => AssertNamesNoRuntimeType(typeof(EmuSen.Shell.LaunchMode).Assembly);
+
+        // The check sees a frontend that does name the runtime's types: Mistress, not yet moved, names ICore.
         [Fact]
         public void The_check_sees_a_frontend_that_names_the_runtime()
         {
-            var reached = TypeReferences(typeof(EmuSen.Hotaru.HotaruSession).Assembly);
+            var reached = TypeReferences(typeof(EmuSen.Mistress.FrameHandOff).Assembly);
             Assert.Contains(reached, r => r == ("EmuSen", "EmuSen.Cores.ICore"));
         }
     }

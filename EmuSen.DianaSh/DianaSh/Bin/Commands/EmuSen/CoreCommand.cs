@@ -5,7 +5,6 @@ using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.Crystal.Debugger;
-using EmuSen.Crystal.Systems;
 using EmuSen.DianaSh.DianaSh.Dev;
 
 namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
@@ -13,15 +12,16 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
     // For reloading an already-running session, which needs HostAction.LoadCore - see §3.3b.
     public class CoreCommand : IDianaShCommand
     {
-        private readonly IReadOnlyDictionary<string, CoreDescriptor> _registry;
+        private readonly IReadOnlyDictionary<string, CoreChoice> _registry;
         private readonly Func<string, bool> _startsEmpty;
 
-        // startsEmpty says whether a console can be started with nothing in it; the host knows, from its engines.
-        public CoreCommand(IReadOnlyDictionary<string, CoreDescriptor> registry, Func<string, bool>? startsEmpty = null)
+        // The registry as plain data, which a frontend on the frontend API fills from its systems; startsEmpty says whether a console can start with nothing in it - see EmuSen_Backend.md §14.11.
+        public CoreCommand(IReadOnlyDictionary<string, CoreChoice> registry, Func<string, bool>? startsEmpty = null)
         {
             _registry = registry;
             _startsEmpty = startsEmpty ?? (_ => false);
         }
+
 
         public string Name => "core";
         public bool IsReadOnly => false;
@@ -45,15 +45,15 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
                 return DianaShResult.Ok($"[CORE] Starting the {console} with nothing in it", new HostAction.StartConsole(coreName, console));
             }
             if (Refusal(_registry, coreName, romPath, out string resolved) is { } refused) return refused;
-            CoreDescriptor descriptor = _registry[coreName];
+            CoreChoice descriptor = _registry[coreName];
             return DianaShResult.Ok($"[CORE] Loading {descriptor.DisplayName}: {romPath}", new HostAction.LoadCore(coreName, resolved));
         }
 
         // What `core <name> --console` refuses, shared with the launch prompts; null when console may start empty - see `man core`.
-        public static DianaShResult? ConsoleRefusal(IReadOnlyDictionary<string, CoreDescriptor> registry, Func<string, bool> startsEmpty, string coreName, out string console)
+        public static DianaShResult? ConsoleRefusal(IReadOnlyDictionary<string, CoreChoice> registry, Func<string, bool> startsEmpty, string coreName, out string console)
         {
             console = "";
-            if (!registry.TryGetValue(coreName, out CoreDescriptor? descriptor))
+            if (!registry.TryGetValue(coreName, out CoreChoice? descriptor))
                 return DianaShResult.Fail($"core: unknown core '{coreName}'. Supported: {string.Join(", ", new SortedSet<string>(registry.Keys, StringComparer.OrdinalIgnoreCase))}");
             console = descriptor.Console;
             if (!startsEmpty(console)) return DianaShResult.Fail($"core: no core in this build starts the {console} with nothing in it");
@@ -61,10 +61,10 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
         }
 
         // What `core` refuses, shared with Hotaru's launch prompt; null when the ROM may load from resolved - see `man core`.
-        public static DianaShResult? Refusal(IReadOnlyDictionary<string, CoreDescriptor> registry, string coreName, string romPath, out string resolved)
+        public static DianaShResult? Refusal(IReadOnlyDictionary<string, CoreChoice> registry, string coreName, string romPath, out string resolved)
         {
             resolved = romPath;
-            if (!registry.TryGetValue(coreName, out CoreDescriptor? descriptor))
+            if (!registry.TryGetValue(coreName, out CoreChoice? descriptor))
             {
                 return DianaShResult.Fail($"core: unknown core '{coreName}'. Supported: {string.Join(", ", new SortedSet<string>(registry.Keys, StringComparer.OrdinalIgnoreCase))}");
             }

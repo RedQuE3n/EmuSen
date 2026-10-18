@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.Hotaru
 {
@@ -13,7 +12,7 @@ namespace EmuSen.Hotaru
     }
 
     // `hotaru <rom>`: Hotaru's game window, opened by a host that can open one - see `man hotaru`.
-    public sealed class HotaruCommand : IDianaShCommand
+    public sealed class HotaruCommand : HostCommand
     {
         public const string NoGameWindow = "this shell's host does not open Hotaru's game window";
 
@@ -26,12 +25,12 @@ namespace EmuSen.Hotaru
             _refusal = refusal ?? NoGameWindow;
         }
 
-        public string Name => "hotaru";
-        public bool IsReadOnly => false;
-        public string Usage => "  hotaru [--output window] <rom>  play <rom> in Hotaru's game window, with its hotkeys, feed and\n" +
+        public override string Name => "hotaru";
+        public override bool IsReadOnly => false;
+        public override string Usage => "  hotaru [--output window] <rom>  play <rom> in Hotaru's game window, with its hotkeys, feed and\n" +
                                 "                                debug windows; the shell keeps its prompt";
 
-        public DianaShResult Execute(IDebugTarget? target, string[] args, string? stdin)
+        protected override DianaShResult Run(string[] args, string? stdin)
         {
             HotaruOutput output = HotaruOutput.Window;
             string? rom = null;

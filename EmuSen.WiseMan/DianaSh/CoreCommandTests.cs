@@ -19,10 +19,10 @@ namespace EmuSen.WiseMan.DianaSh
     // File.Exists and the extension, never opens it.
     public class CoreCommandTests
     {
-        private static IReadOnlyDictionary<string, CoreDescriptor> Registry() => new Dictionary<string, CoreDescriptor>(System.StringComparer.OrdinalIgnoreCase)
+        private static IReadOnlyDictionary<string, CoreChoice> Registry() => new Dictionary<string, CoreChoice>(System.StringComparer.OrdinalIgnoreCase)
         {
-            ["venus"] = new CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
-            ["snes"] = new CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
+            ["venus"] = new CoreChoice("SNES (Venus)", "SNES (Venus)", new[] { ".smc", ".sfc" }),
+            ["snes"] = new CoreChoice("SNES (Venus)", "SNES (Venus)", new[] { ".smc", ".sfc" }),
         };
 
         private static string TempRomPath(string extension)
@@ -57,10 +57,10 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Console_flag_signals_StartConsole_only_for_a_console_that_starts_empty()
         {
-            var registry = new Dictionary<string, CoreDescriptor>(System.StringComparer.OrdinalIgnoreCase)
+            var registry = new Dictionary<string, CoreChoice>(System.StringComparer.OrdinalIgnoreCase)
             {
-                ["playstation"] = new CoreDescriptor("PlayStation", new[] { ".cue" }),
-                ["venus"] = new CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
+                ["playstation"] = new CoreChoice("PlayStation", "PlayStation", new[] { ".cue" }),
+                ["venus"] = new CoreChoice("SNES (Venus)", "SNES (Venus)", new[] { ".smc", ".sfc" }),
             };
             var command = new CoreCommand(registry, console => console == "PlayStation");
 

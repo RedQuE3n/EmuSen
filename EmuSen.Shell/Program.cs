@@ -6,13 +6,12 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
-using EmuSen.Common;
-using EmuSen.Cores;
+using EmuSen.Crystal.Client;
+using EmuSen.Galaxia.Library;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.Crystal.Systems;
 using EmuSen.DianaSh.DianaSh.Dev;
 using EmuSen.Hotaru;
 using EmuSen.Shell.Views;
@@ -24,7 +23,9 @@ namespace EmuSen.Shell
     class Program
     {
         // Backs both `core <name> <path>` paths off one shared registry - see EmuSen_Multicore.md §3.
-        private static IReadOnlyDictionary<string, CoreDescriptor> _coreRegistry => CoreCatalog.Registry;
+        // The process's one runtime of the frontend API, made when first asked.
+        private static CrystalRuntime? _runtime;
+        private static CrystalRuntime Runtime => _runtime ??= new CrystalRuntime();
 
         static void Main(string[] args)
         {
@@ -51,8 +52,8 @@ namespace EmuSen.Shell
             // Disposed by FlushAndDispose on every exit path, or its last buffered lines are lost - see EmuSen_Frontend_Driver.md §0.2.
             CategorizedLogWriter? logWriter = null;
 
-            // FlushAndDispose flushes its collapsed trace before the log writer closes - see EmuSen_Frontend_Driver.md §0.2.
-            ICore? core = null;
+            // The frontend API's runtime, one for the process, closed after the log writer is flushed - see EmuSen_Backend.md §14.11.
+            using CrystalRuntime runtime = Runtime;
 
             // The shutdown guard: several exit paths reach FlushAndDispose, and only the first may run it - see EmuSen_Frontend_Driver.md §0.2.
             int shutdownGuard = 0;
@@ -87,7 +88,7 @@ namespace EmuSen.Shell
             {
                 try
                 {
-                    RunWindowedShell(args, initialRomPath, originalOut, c => core = c, w => logWriter = w);
+                    RunWindowedShell(args, initialRomPath, originalOut, runtime, w => logWriter = w);
                 }
                 finally
                 {
@@ -102,8 +103,7 @@ namespace EmuSen.Shell
 
             try
             {
-                HotaruSession session = HotaruSession.Build(launch, originalOut);
-                core = session.Core;
+                HotaruSession session = HotaruSession.Build(launch, originalOut, runtime);
                 logWriter = session.LogWriter;
 
                 // Blocks until the window closes; GameWindow's own Closing handler does the teardown - see EmuSen_Frontend_Driver.md §1.
@@ -123,14 +123,13 @@ namespace EmuSen.Shell
         // The windowed counterpart to RunStandaloneShell - see EmuSen_Frontend_Driver.md §3c.
         private static void RunWindowedShell(
             string[] args, string? initialRomPath, TextWriter originalOut,
-            Action<ICore> onCore, Action<CategorizedLogWriter> onLogWriter)
+            CrystalRuntime runtime, Action<CategorizedLogWriter> onLogWriter)
         {
             DianaShShellWindow? shell = null;
 
             Window LaunchGame(HotaruLaunch launch)
             {
-                HotaruSession session = HotaruSession.Build(launch, originalOut);
-                onCore(session.Core);
+                HotaruSession session = HotaruSession.Build(launch, originalOut, runtime);
                 onLogWriter(session.LogWriter);
 
                 var game = session.OpenWindow();
@@ -142,10 +141,12 @@ namespace EmuSen.Shell
 
             Window BuildShell()
             {
+                HotaruCores cores = HotaruCores.Of(runtime);
                 shell = new DianaShShellWindow(
                     LaunchGame,
                     line => TryResolveCoreCommand(line, m => shell!.AppendLine(m)),
-                    _coreRegistry.Values.Select(d => d.DisplayName).Distinct());
+                    cores.DisplayNames,
+                    () => cores.CheatSystems);
 
                 if (initialRomPath != null) StartInitialRom(shell, initialRomPath, LaunchGame);
                 return shell;
@@ -179,10 +180,11 @@ namespace EmuSen.Shell
         private static HotaruLaunch? RunStandaloneShell(string? initialRomPath)
         {
             string? requested = null;
-            DianaShInterpreter shell = DianaShInterpreter.CreateDefault(null,
+            HotaruCores cores = HotaruCores.Of(Runtime);
+            DianaShInterpreter shell = DianaShInterpreter.CreateWithoutSession(
                 new IDianaShCommand[] { new HotaruCommand((rom, _) => requested = rom) },
-                supportedCheatSystems: () => CoreCatalog.SupportedCheatSystems);
-            Console.WriteLine(shell.GetWelcomeBanner(_coreRegistry.Values.Select(d => d.DisplayName).Distinct()));
+                () => cores.CheatSystems);
+            Console.WriteLine(shell.GetWelcomeBanner(cores.DisplayNames));
             Console.WriteLine("--- DianaSh (type 'help', 'hotaru <rom>' or 'core <name> <path>' to launch a game, 'shutdown' to quit) ---");
 
             if (initialRomPath != null)
@@ -233,7 +235,7 @@ namespace EmuSen.Shell
             string romPath = parts[2];
             if (romPath == CoreCommand.ConsoleFlag)
             {
-                if (CoreCommand.ConsoleRefusal(_coreRegistry, HotaruSession.StartsEmpty, coreName, out string console) is { } no)
+                if (CoreCommand.ConsoleRefusal(HotaruCores.Of(Runtime).Registry, c => HotaruSession.StartsEmpty(Runtime, c), coreName, out string console) is { } no)
                 {
                     report(no.Output);
                     return null;
@@ -241,7 +243,7 @@ namespace EmuSen.Shell
                 return HotaruLaunch.Empty(console);
             }
 
-            if (CoreCommand.Refusal(_coreRegistry, coreName, romPath, out string resolved) is { } refused)
+            if (CoreCommand.Refusal(HotaruCores.Of(Runtime).Registry, coreName, romPath, out string resolved) is { } refused)
             {
                 report(refused.Output);
                 return null;

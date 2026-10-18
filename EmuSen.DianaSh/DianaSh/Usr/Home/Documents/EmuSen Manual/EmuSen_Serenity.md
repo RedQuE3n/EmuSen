@@ -312,7 +312,35 @@ The share is the same in both regions; a PAL set's overscan was not found stated
 
 ---
 
-## 3. The built-in shaders
+### 2.11 Pictures from a frontend's own buffers, and the coretop window over a session (decided 2026-10-17)
+
+Two additions came with emusen-shell's move onto the frontend API (`EmuSen_Backend.md` §14.11). Each names only
+Serenity's own types or the BCL's, so that a frontend under SR2 can use it.
+
+**`PictureSlots`.** It carries a frontend's pictures from its frame thread to the frame control in four buffers made
+once and reused. The frame thread rents a free buffer and copies the API's picture into it. Offering it drops any
+picture still waiting back to free, so the newest wins. The control's `release` frees a buffer again once it has let
+it go. When the screen still holds all four, the picture is skipped rather than a fifth made. Hotaru's old hand-over
+made a new array every frame (C4). Over 100 frames this one presents from at most four
+(`HotaruOnTheApiTests.C4_the_window_s_pictures_reuse_their_buffers`).
+
+**`CoretopWindow.Over(ISessionReadout)`.** The tester decided on 2026-10-17 that the window opens over a session's
+service table, through `SessionService.Of`, until B7. The form built differs, and the difference is put to the tester
+here:
+
+- The window reads through `ISessionReadout`, six calls returning the session service's JSON and pictures, which the
+  frontend answers from its binding.
+- `SessionTelemetry` parses them into `ICoreTelemetry`.
+
+There are two reasons:
+
+- A table is a raw pointer that dies with its session. A swap closes the old session while the window's 250 ms poll
+  may still hold the pointer, and a closed game window leaves the coretop window polling it.
+- Through the binding, a closed session answers `NO_SESSION`, which reads as nothing, and the next poll reads the new
+  session with no update. Nothing reaches past a surface, not even the interim one.
+
+Switching to the decided form is a one-line change in Hotaru's `DebugWindows` if the tester prefers it.
+
 
 *Since 2026-10-17 every built-in's passes are Vulkan GLSL, drawn by §7's chain, handed to the compositor or read back;
 nothing here is drawn by Skia (`EmuSen_DevicePicture.md` §19 to §21). What follows on SkSL is the port's history.*

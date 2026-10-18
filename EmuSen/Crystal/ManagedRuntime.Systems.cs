@@ -38,6 +38,7 @@ namespace EmuSen.Crystal.Managed
                 else w.WriteNull("screenscraper_system");
                 CrystalJson.Strings(w, "engines", EnginesOf(e.Console, e.Id));
                 w.WriteBoolean("starts_empty", empty.Contains(e.Id));
+                CoreOf(w, e.Console, e.Extensions);
                 w.WriteEndObject();
             }
             foreach (var group in CoreDiscovery.Found.SelectMany(c => c.Info.Systems.Where(CoreDiscovery.Offered).Select(s => (Core: c, System: s))).Where(p => !listed.Contains(p.System.Id)).GroupBy(p => p.System.Id))
@@ -47,12 +48,38 @@ namespace EmuSen.Crystal.Managed
                 w.WriteString("id", s.Id);
                 w.WriteString("name", s.Name);
                 CrystalJson.Strings(w, "extensions", s.Extensions);
-                CrystalJson.Strings(w, "engines", group.Select(p => p.Core.EngineName).Distinct());
+                string[] engines = group.Select(p => p.Core.EngineName).Distinct().ToArray();
+                CrystalJson.Strings(w, "engines", engines);
                 w.WriteBoolean("starts_empty", group.Any(p => p.System.StartsEmpty));
+                w.WriteStartObject("core");
+                CrystalJson.Strings(w, "names", new[] { s.Id }.Concat(engines.Where(n => !n.Any(char.IsWhiteSpace)).Select(n => n.ToLowerInvariant())).Distinct());
+                w.WriteString("display_name", $"{s.Name} ({string.Join(", ", engines)})");
+                w.WriteString("console", s.Id);
+                CrystalJson.Strings(w, "extensions", s.Extensions);
+                w.WriteEndObject();
                 w.WriteEndObject();
             }
             w.WriteEndArray();
         });
+
+        // The names `core <name>` knows a system's core by, and that core's own display name, console and extensions, from the catalog's registry - see EmuSen_Backend.md §14.11.
+        private static void CoreOf(Utf8JsonWriter w, string console, IReadOnlyList<string> extensions)
+        {
+            var named = CoreCatalog.Registry.Where(kv => kv.Value.Console == console).ToArray();
+            if (named.Length == 0) named = CoreCatalog.Registry.Where(kv => extensions.All(kv.Value.SupportsExtension)).ToArray();
+            if (named.Length == 0)
+            {
+                w.WriteNull("core");
+                return;
+            }
+            CoreDescriptor core = named[0].Value;
+            w.WriteStartObject("core");
+            CrystalJson.Strings(w, "names", named.Where(kv => ReferenceEquals(kv.Value, core)).Select(kv => kv.Key));
+            w.WriteString("display_name", core.DisplayName);
+            w.WriteString("console", core.Console);
+            CrystalJson.Strings(w, "extensions", core.Extensions);
+            w.WriteEndObject();
+        }
 
         // The engines that run a system: the console's choice where it has one, else what discovery found for it.
         private static IReadOnlyList<string> EnginesOf(string console, string systemId) =>

@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using EmuSen.Common;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.WiseMan.Common
 {

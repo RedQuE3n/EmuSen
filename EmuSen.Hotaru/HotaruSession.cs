@@ -1,8 +1,7 @@
 using System;
 using System.IO;
-using EmuSen.Common;
-using EmuSen.Cores;
-using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
+using System.Text.Json;
+using EmuSen.Crystal.Client;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.Galaxia.Library;
@@ -18,55 +17,73 @@ namespace EmuSen.Hotaru
         public static HotaruLaunch Empty(string console) => new(null, console);
 
         // Said on the prompt when it launches.
-        public override string ToString() => RomPath ?? ConsoleSession.NameOf(Console ?? "");
+        public override string ToString() => RomPath ?? $"the {Console} with nothing in it";
     }
 
-    // Everything a GameWindow needs, built the same way whichever prompt asked for the ROM - see EmuSen_Frontend_Driver.md §1.
-    public sealed record HotaruSession(ICore Core, IDianaShCommand[] ExtraCommands, string StatePath, CategorizedLogWriter LogWriter)
+    // A game opened on the frontend API and what its window needs, built the same way whichever prompt asked - see EmuSen_Frontend_Driver.md §1 and EmuSen_Backend.md §14.11.
+    public sealed record HotaruSession(CrystalRuntime Runtime, CrystalSession Session, string CoreName, CategorizedLogWriter LogWriter)
     {
         // What the game's own prompt answers to `hotaru`, since its shell already has a game.
         public const string GameAlreadyRunning = "a game is already running in this shell - `core <name> <path>` swaps it";
 
+        // Where F5 and F9 and `state` keep the state: the API's answer, in the player's state folder, read at each use.
+        public string StatePath => Session.DefaultStatePath();
+
         // Takes over Console.Out for the game's log, as Hotaru's Main always did - see EmuSen_Frontend_Driver.md §1.
-        public static HotaruSession Build(string romPath, TextWriter originalOut) => Build(HotaruLaunch.Rom(romPath), originalOut);
+        public static HotaruSession Build(string romPath, TextWriter originalOut, CrystalRuntime runtime) => Build(HotaruLaunch.Rom(romPath), originalOut, runtime);
 
-        public static HotaruSession Build(HotaruLaunch launch, TextWriter originalOut)
+        public static HotaruSession Build(HotaruLaunch launch, TextWriter originalOut, CrystalRuntime runtime)
         {
-            // Separate from home/Saves' battery-backed cartridge SRAM - see EmuSen_Frontend_Driver.md §1.
-            string romPath = launch.RomPath ?? "";
-            string statePath = SaveLibrary.StatePathFor(launch.RomPath ?? ConsoleSession.NameOf(launch.Console!));
-
-            string? engine = launch.Console is { } console ? CoreCatalog.EngineChosen(console, GraphicsConfig.Load().Value(console, CoreCatalog.EngineKey)) : CoreFactory.ConfiguredEngine(romPath);
-            CoreOptions options = CoreOptions.From(AudioConfig.Load());
-            ICore core = launch.Console is { } empty ? CoreFactory.CreateConsole(empty, engine, options: options) : CoreFactory.Create(romPath, headless: false, engine, options);
-
-            // Needs core.CoreName, so it cannot be built any earlier - see EmuSen_Frontend_Driver.md §1 step 3.
-            string logDir = Path.Combine(DianaShSandbox.LogsDirectory, core.CoreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
-            Directory.CreateDirectory(logDir);
-            var logWriter = new CategorizedLogWriter(originalOut, logDir);
-            Console.SetOut(logWriter);
-
-            if (launch.RomPath is not null)
+            CrystalSession session = Open(runtime, launch);
+            try
             {
-                CoreFactory.LoadInto(core, romPath);
-                if (CoreFactory.EngineNotice(romPath, engine, core) is { } notice) Console.WriteLine($"[core] {notice}");
+                string coreName = CoreNameOf(session);
+                // Needs the engine's name, so it cannot be built any earlier - see EmuSen_Frontend_Driver.md §1 step 3.
+                string logDir = Path.Combine(DianaShSandbox.LogsDirectory, coreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
+                Directory.CreateDirectory(logDir);
+                var logWriter = new CategorizedLogWriter(originalOut, logDir);
+                Console.SetOut(logWriter);
+                if (NoticeOf(session) is { } notice) Console.WriteLine($"[core] {notice}");
+                return new HotaruSession(runtime, session, coreName, logWriter);
             }
-
-            // Built once here; GameWindow rebuilds the interpreter around them after a `core` swap - see EmuSen_Frontend_Driver.md §1.
-            IDianaShCommand[] extraCommands =
+            catch
             {
-                new CoretopCommand(DebugWindows.ShowCoretopWindow),
-                new StateCommand(core.SaveState, core.LoadState, () => statePath),
-                new CoreCommand(CoreCatalog.Registry, StartsEmpty),
-                new HotaruCommand(null, GameAlreadyRunning),
-            };
-
-            return new HotaruSession(core, extraCommands, statePath, logWriter);
+                session.Dispose();
+                throw;
+            }
         }
 
-        public GameWindow OpenWindow() => new(Core, ExtraCommands, StatePath);
+        // A game or an empty console, its sound buffered as audio.json says; the engine is the settings' layers' choice, made by the runtime.
+        public static CrystalSession Open(CrystalRuntime runtime, HotaruLaunch launch)
+        {
+            int buffer = AudioConfig.Load().Bounded().AudioBufferMaxSamples;
+            return runtime.Open(launch.RomPath is { } rom
+                ? new CrystalOpen { Path = rom, AudioBufferMaxSamples = buffer }
+                : new CrystalOpen { Console = launch.Console, AudioBufferMaxSamples = buffer });
+        }
+
+        // The engine's own name, the one logs, screenshots and pad bindings go by.
+        public static string CoreNameOf(CrystalSession session)
+        {
+            using JsonDocument info = JsonDocument.Parse(session.ServiceInfo());
+            return info.RootElement.GetProperty("engine").GetString() ?? "core";
+        }
+
+        private static string? NoticeOf(CrystalSession session)
+        {
+            using JsonDocument info = JsonDocument.Parse(session.Info());
+            return info.RootElement.TryGetProperty("notices", out JsonElement notices) && notices.TryGetProperty("engine", out JsonElement engine) ? engine.GetString() : null;
+        }
+
+        public GameWindow OpenWindow() => new(this);
 
         // Whether an engine of this build starts the console with nothing in it, for `core <name> --console`.
-        public static bool StartsEmpty(string console) => CoreCatalog.EmptyStartFor(console) is not null;
+        public static bool StartsEmpty(CrystalRuntime runtime, string console)
+        {
+            using JsonDocument systems = JsonDocument.Parse(runtime.Systems());
+            foreach (JsonElement system in systems.RootElement.EnumerateArray())
+                if (system.TryGetProperty("console", out JsonElement named) && string.Equals(named.GetString(), console, StringComparison.OrdinalIgnoreCase) && system.GetProperty("starts_empty").GetBoolean()) return true;
+            return false;
+        }
     }
 }

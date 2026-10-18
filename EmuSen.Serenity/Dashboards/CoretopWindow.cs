@@ -43,6 +43,9 @@ namespace EmuSen.Serenity.Dashboards
 
         public CoretopWindow() : this(null) { }
 
+        // Over a session of the frontend API, read through the frontend's own calls - see EmuSen_Backend.md §14.11.
+        public static CoretopWindow Over(ISessionReadout session) => new(new SessionTelemetry(session));
+
         public CoretopWindow(ICoreTelemetry? target)
         {
             _target = target;

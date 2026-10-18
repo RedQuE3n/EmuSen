@@ -1,6 +1,6 @@
 # EmuSen — the backend in Rust: the line, the frontend API, the system packs and the services
 
-*This revision: the first, 2026-10-17. A design; B1 has since been built (§12, 2026-10-17). It answers the tester's goal of 2026-10-16, "to
+*This revision: the first, 2026-10-17. A design; B1 has since been built (§12, 2026-10-17), and B2's first two parts (§14, 2026-10-17). It answers the tester's goal of 2026-10-16, "to
 get the entire backend ported to rust", after which the frontend's move is planned, and the request of 2026-10-17 to
 design two things: one frontend API by which every frontend drives the cores, and the system packs and the remaining C#
 platform services in Rust. Every claim about the code was read on `WiseMan` at `165e60b4`. Claims are marked as
@@ -1379,3 +1379,325 @@ has its own call shapes and the views their rounds; it is deleted whole at state
 - F27's test of `cheat_space` against a core's machine info (§13.2), with B7.
 - The delete over a backup RAM whose later entries lie outside it, which still throws (§13.1).
 - `PsxSystem.Bios` and `DisplayAspect`, which §5.3 says go, are untouched: neither is code this step moved.
+
+---
+
+## 14. What was built, 2026-10-17: B2, the frontend API v1 and its C# implementation
+
+*Measured on 2026-10-17 on branch `b2-frontend-api`, from `WiseMan` at `628bc821` (B0 and B1 in). The step of §6's B2 row,
+built in parts with a review between the second and the third: part 1 is the header, its baseline and checks, the
+binding and the C# implementation with their own tests (§14.1 to §14.7); part 2 is Pharaoh moved onto the binding
+(§14.8). emusen-shell with Hotaru, Mistress and the session service's 1.3 come after the review. The decisions that bear
+on it: SR2 to SR7, D1, D5, D10 and D12 (§11).*
+
+### 14.1 The artefacts
+
+- **The header, `EmuSen.Crystal/include/emusen_crystal.h`**, beside `emusen_session.h`, which it includes, so that the
+  service's statuses and enumerations are the API's too and a twin passes its status through. 132 exports: 54 of the
+  API's own and the 78 twins of the session service's 79 functions (the 79th, `last_error`, is the library's own, which
+  takes the runtime as its first argument and may be given none). Three size-prefixed structs (`emusen_crystal_config`, 8
+  bytes; `emusen_crystal_open_params`, 64; `emusen_crystal_frame_info`, 104), two opaque handles (the runtime, a
+  subscription). It compiles as C99 and C++17 with `-Wall -Wextra -Werror -pedantic`.
+- **The Rust side, the crate `emusen-crystal`** (`Platform/crystal/`): the header's numbers and structs as `abi`, the
+  baseline `abi/v1/baseline.txt` (198 facts: 33 constants, 132 functions, 3 structs and their 32 fields), and the test
+  `tests/crystal_abi.rs`, run by the core ABI guard job as a step of its own (`The frontend API's surface`) with the base
+  branch's baseline, as DianaSh's surfaces are (`EmuSen_DianaSh.md` §11.4). It holds: every constant equal; the statuses
+  in −1109 to −1139; every session-service function's twin present, in the table's order, with the same return and the
+  same parameters by type **and by name** after the runtime, and the header's twins exactly the table's functions; the
+  layouts the C compiler gives equal to the Rust ones; the header as C++17; the baseline neither losing nor gaining a
+  fact unrecorded; and every `emusen_crystal_` export of the platform's crates declared by the header with its signature.
+  At 1.0 the platform library exports none: the C# implementation serves the API until B7, so that check is a subset
+  check now and an equality from B7.
+- **The binding, `EmuSen.Crystal.Client`**, one assembly, two layers as `EmuSen_CoreAPI.md` §9.2 drew them. The
+  contract layer (`EmuSen.Crystal.Client.Contract`) is C-shaped: `CrystalExports`, the exports' function pointers in the
+  header's order; `Crystal`, one static function per export forwarding through that table; `CrystalAbi` and
+  `CrystalSessionAbi`, the two headers' numbers; and the three structs. The binding (`EmuSen.Crystal.Client`) gives
+  `CrystalRuntime`, `CrystalSession` and `CrystalSubscription`, which dispose their handles, `CrystalException` built
+  from a status and `last_error`, copy-out helpers, and a `ChannelReader` over a subscription. It references `EmuSen`,
+  for the C# implementation, and Galaxia, for the platform library's loader and `PadButton`/`PadAxis`.
+- **The switch.** The contract layer fills its table once, by export name, from the platform library when
+  `EMUSEN_CRYSTAL_NATIVE` is `1` and the library has every export of major 1, and otherwise from the C# implementation,
+  which answers export names as a library does (`ManagedCrystal.Export(name)`). This is `EmuSen_RustPlatform.md` §3.9's
+  state 1 (the C# the default, the library asked for), since the library has no export to offer before B7; asked for
+  and absent, the fallback says so once in the log. State 2 is B7's.
+- **The C# implementation, `EmuSen/Crystal/`** (namespace `EmuSen.Crystal.Managed`, in the `EmuSen` assembly because it
+  makes engines through `CoreFactory`): `ManagedCrystal`, every export as an `[UnmanagedCallersOnly]` entry that catches
+  what it throws and maps it to a status (`CrystalException`'s own, the service's `SessionException`'s, a core's
+  refusal as `FAULT`, I/O as `EMUSEN_CRYSTAL_IO`); `ManagedRuntime`, the sessions by id and the current one, the
+  systems, engines and routes, settings, firmware, save media and cards; `ManagedSession`, one session with its engine,
+  its debugger's provider, speed, rewind, states and the frame-end order; `ManagedEvents`, the subscriptions.
+- **Changes to the session service's C# provider**, Crystal's (`EmuSen.Crystal/Session/`): `SessionServiceOptions`
+  gained the id a session is listed and answered by (`Id`, 1 by default, as every shell's provider keeps), a gate held
+  around every change (`Gate`, an `IChangeGate`), and a run-control hook (`RunControl`) given the provider's own answer
+  to call; `SessionService.Of(table)` answers the provider whose table it is, from a registry of the tables it made;
+  and `DebugTarget` and `Options` are readable, for a shell given only the table (part 2). No function of the table
+  changed shape, and `SessionHeaderTests` and `SessionServiceParityTests` pass unchanged.
+- **Changes to the engine** so that a frame allocates nothing (§14.5): `CoreEngine` made its frame-end readers and
+  writers once, gained `CopyPicture(Span<byte>)`, `DrainAudio(Span<short>, out rate)`, `BufferedAudioFrames`,
+  `LoggedLines` and a virtual `Reset()` (MoonRT's shim's own reset overrides it); `CoreMachine.DrainEvents` fills a kept
+  array and returns a span, `CopyFrame` and `DrainAudio` take spans, and `DrainLog` allocates nothing when the core logged
+  nothing; `CoreDebugBridge.Armed` walks its registries by index.
+
+### 14.2 The API as built, against §3's sketch
+
+| §3.5's group | As built | Differs from the sketch, and why |
+|---|---|---|
+| Library | `abi_version`, `version_text`, `last_error(rt, …)`, `new(config)`, `free` | `last_error` takes the runtime, which may be null, because it is also the service's `last_error` twin |
+| Discovery and systems | `systems`, `engines`, `cores`, `rescan`, `route(path)` | `core_approve` is not in 1.0: the C# discovery has no approvals to grant (trust is the sidecar's hash), so a function would be one the implementation cannot honour; it is a later minor with the trust manifest |
+| Session life | `open(params)`, `close`, `reset`, `session_info` | the service's `info` twin answers exactly the provider's JSON, as SR4 asks, and the frontend's description is `session_info` of its own; `reset` is the console's button, Mistress's reload stays a frontend's choice |
+| Media | `disc_insert`, `disc_eject`, `disc_change`, `disc_lid` | named for discs, so that `save_media` and `cards_op` are not read as the same group |
+| The frame | `frame`, `picture_copy`, `audio_drain(…, rate)`, `wait`, `phase_names`, `phases` | the struct is `emusen_crystal_frame_info`, since C refuses a type and a function of one name (the core ABI's rule of `EmuSen_CoreAPI.md` §5.1); it gained `frame_interval_ns` (the speed's one owner hands the pacer its interval), `paused`, `halted_processor` and `halted_address`; the phases are names once as JSON and values per frame into a buffer, so a status line costs no JSON; `picture_raw` and the device picture are 1.1's, with Mistress (§14.7) |
+| Run control | the twins `run_control`, `halt_state` | `RUN_PAUSE` is served (D10) |
+| Input | `input_button`, `input_axis`, `input_connected` | two calls, because the core ABI has two enumerations, `emusen_control` and `emusen_axis` |
+| Speed | `speed_set(percent, turbo, slow, flags)`, `speed_mode(mode)` | the held turbo or slow motion is a mode, so its policy is the runtime's; `EMUSEN_CRYSTAL_SPEED_DRAW_NONE` is §2.2's "frames not drawn", Pharaoh's `ff` |
+| Rewind | `rewind_set`, `rewind_step`, `rewind_reel`, `rewind_picture(frame)`, `rewind_to(frame)` | a moment is named by its frame, as the reel lists it |
+| States | twins `state_save`, `state_load`, `state_default_path`; `state_slots`, `state_slot_save`, `state_slot_load`, `resume_save`, `resume_load` | `state_record` and `states.db` (D8) are 1.1's, with Mistress, so that the copy of `records.db`'s rows is made once, when its last writer moves |
+| Settings | `settings_schema`, `settings_get`, `settings_set` with `SCOPE_CONSOLE` and `SCOPE_GAME` | scope 1 is kept for an engine's own layer, which has no storage today |
+| Cheats | the twins `cheat_op`, `cheat_codecs` | — |
+| Save media | `save_media`, `cards_op` with nine ops | the ops are `SaveMediaManager`'s |
+| Firmware | `firmware_needed`, `firmware_install(request, source path)`, `firmware_overview` | `firmware_find` folded into the overview |
+| Debugger | `session_service(rt, session, flags)` and the twins | the session is named, since a session's table serves it |
+| Events | `subscribe`, `subscription_drain`, `subscription_wait`, `unsubscribe` | renamed from `events_*` because `events_drain` is the service's twin; kinds `session`, `run`, `state`, `rewind`, `settings`, `disc`, `log` |
+| — | `record_start`, `record_stop` | the frame recorder is backend (§2.2) and Pharaoh's `record` verb needs it |
+
+**Statuses.** The service's −1100 to −1108 under their names; then `EMUSEN_CRYSTAL_NO_ENGINE` −1109, `_FIRMWARE`
+−1110, `_BUSY` −1111 (a frame called while another thread is inside one), `_BAD_STRUCT` −1112 and `_IO` −1113.
+
+**The naming rule found by building it.** Types are `emusen_crystal_<noun>` where no export is
+`emusen_crystal_<noun>`: the first draft named the frame's struct `emusen_crystal_frame`, and a C compiler refused it,
+the core ABI's lesson again.
+
+### 14.3 Threads, run control and the pull rule
+
+A session has a gate: a lock held by a frame from start to end and by every change, entered by a change from another
+thread after the frame in progress and before the next, which waits for any change already waiting (a count of
+waiters the frame thread spins on before it takes the lock). So a change from another thread lands at a frame
+boundary and its caller waits, and a change on the frame thread between frames, the lock being its own and reentrant,
+applies at once: §3.3's rule with no queue of closures. A change from another thread wakes a frame thread parked in
+`emusen_crystal_wait`. The gate is handed to the session's provider (`SessionServiceOptions.Gate`), so a module's change
+through the session's table lands at a boundary too. Reads take no gate, except `picture_copy`, which waits for the
+frame in progress so that the picture is whole (C3).
+
+The runtime calls nothing of the client's: no callback crosses the API, events are drained, and the two blocking calls
+are waits with a timeout. Run control: `PAUSE` holds the session, `RESUME` lets it go and lets a halt go; a step arms
+the provider's step and lets one frame call run though the session is paused or halted; a run-to arms its breakpoint and
+lets the session run. A halt is a frame that did not complete: `ran` 0, `halted` 1, the debugger's snapshots refreshed,
+and nothing advances until run control resumes it.
+
+### 14.4 The frame-end order, written once
+
+From Mistress's `EmulationLoop`, Hotaru's `GameWindow` loop and Pharaoh's `FrameRunner`; `ManagedSession.Advance`:
+
+1. Rendering decided by speed: drawn unless `DRAW_NONE` or the speed's frame skip says not, and always while recording.
+2. The engine's frame: the input held sent as it starts, the cheats' patch table refreshed, the machine advanced, and the
+   engine's own frame-end work (frame logs, cheat pokes, freezes, the battery's period), then `present`.
+3. A halt stops here: snapshots refreshed, a `run` event `halted`, `ran` 0.
+4. The debugger's snapshots refreshed (`RefreshProviders`).
+5. Rewind's capture, where rewind is on **and the engine allows it** (`EngineFeatures.RewindCapture`), with the
+   picture attached when the reel keeps pictures.
+6. The recorder's picture, when recording.
+7. The core's new log lines as a `log` event.
+
+What stays the client's is what reads a display or a device: when to call `frame`, the hand-off hold, the audio device
+and its ratio, and a `state` event's reset of rate control.
+
+### 14.5 The frame call allocates nothing
+
+Measured on the calling thread with `GC.GetAllocatedBytesForCurrentThread` over 1,000 frames of the v1 test core,
+after 200 to warm (`ManagedCrystalTests.The_frame_call_allocates_nothing`):
+
+| | Before this step | After part 1 | After the review's change |
+|---|---:|---:|---:|
+| `CoreEngine.RunFrame`, bytes a frame | 144 (an event array, two boxed enumerators in `Armed`, three delegates) | **0** | **0** |
+| `picture_copy` into the client's buffer | (Hotaru's `GetFrameBufferRgba` with no return: a new picture a frame, C4) | **0** | **0** |
+| `audio_drain` into the client's buffer | (`DequeueAudioSamples`: a new array a frame) | **0** | **0** |
+| `frame` through the binding and the C# implementation | — | 944, all of it the debugger's snapshots | **0** |
+| `RefreshProviders` alone | 952 | 952 | **0** |
+
+Part 1 left the debugger's snapshots allocating: every loop publishes, each frame, a register list, a palette list
+and a hardware-load list, and part 1 proposed taking them only while a debugger reads. The tester declined that on
+2026-10-17, as a change of what a reader on another thread sees, and decided instead that the snapshots go into a
+preallocated, reused ring buffer with no change to what a debugger sees. That is what was built.
+
+**The mechanism.** `SnapshotRing<TRecord>` (`EmuSen.Crystal/Telemetry/SnapshotRing.cs`) holds four records made when
+the target is made. Once a frame the emulation thread fills the record after the newest in place, under that record's
+own lock, and then publishes it as the newest. A reader on any thread clones the newest record under the same lock, and
+the clone is shared by every reader until the next frame (`Newest`), so several providers read one frame's clone. The
+writer can only meet a reader's lock by coming round the ring to the record that reader is still cloning, three frames
+later. The frame side writes raw values only: register words, phase times, the bytes of a state or a space. Everything
+that allocates (the register list with its names, the decoded palettes, the channel descriptions) is built on the
+reader's side from the clone. A provider that fills a run of values of its own is a `RingProvider` (the generic
+`CoreDebugTarget`'s registers, hardware load and palettes, and MarsRT's three register sets). A target whose providers
+all read one record is a `SnapshotRing` with a `RingView` for each provider: MoonRT and MercuryRT save the machine's
+state into the record once a frame (they had allocated a new state array a frame), with the few values not in the
+state beside it: the channels' mutes, the frame's time, and for MercuryRT the registers its views read through the bus.
+
+**The palettes.** A system pack's palette view decodes the memory spaces it is handed, and which spaces it reads is
+the pack's business. `ViewSpaceCopy` (`EmuSen.Crystal/Debugger/ViewSpaceCopy.cs`) learns them once for each machine by
+running the view over spaces that note each read. Each frame it copies those spaces into the record, and the reader
+hands the view spaces over the copy. A space the view did not read when learnt is passed live. For a view whose reads
+depend on the machine's state, a mode register for instance, that space would be read at the reader's time, not the
+frame's. No pack in the tree does that today: the SNES pack's sixteen palettes over the copy match the live decode
+(`VenusRtDebugViewTests.Palette_snapshots_match_the_live_decode_and_allocate_nothing`).
+
+**Two allocations found by measuring, not by reading.** After the ring was in place, the generic target still cost
+56 bytes a frame. A probe of each provider in turn found two C# closures: `FillPalettes` and the `DebugCpus` getter
+each declared a local at method scope that a lambda captured. The compiler allocates the closure's object when the
+method is entered, even on the paths that create no lambda. Moving the code that makes the lambdas into methods of
+their own (`LearnPalettes`, `MakeCpus`) brought both to zero.
+
+**Measured** on 2026-10-17, steady state after 200 frames to warm, over 1,000 refreshes. These are 0 bytes for:
+
+- the generic target on the v1 test core and on VenusRT with the SNES pack;
+- MoonRT, MercuryRT and MarsRT's own targets (`ManagedCrystalTests.The_shims_debugger_snapshots_allocate_nothing`).
+
+The first refresh after a target is made still allocates once, when it builds its processor list. The work has moved,
+not vanished: a reader now clones a frame's record once for every frame it reads, which for MoonRT and MercuryRT is the
+size of a state. That cost falls on the debugger's thread, never on the frame.
+
+### 14.6 The gates of part 1
+
+| Gate | Result |
+|---|---|
+| `cargo test --release -p emusen-crystal` | 6 pass |
+| Seeded faults against it, each reverted: two twin parameters' names swapped; a twin's `uint32_t id` widened to `uint64_t`; a twin dropped; two fields of `emusen_crystal_frame_info` swapped | caught by the twin test; by the twin test and the baseline; by both; by the layout test |
+| The same widened parameter against the C# | caught by three of `CrystalHeaderTests`: the binding's table, the contract layer, the C# implementation's entries |
+| `CrystalHeaderTests` (the header against the binding and the C# implementation: 132 exports, every number of both headers in both mirrors, the struct layouts by a C compiler against both C# mirrors, C++17) | 7 pass |
+| `ContractShapeTests` (§9.3's shape check: the contract layer's public types are static classes or plain structs; every function, constant and field an integer, a double, a pointer to one or to a contract struct, or an unmanaged function pointer of such; no property, event or generic; the check seeing `string`, an array, a delegate, a list, a span and `bool`) | 3 pass |
+| `ManagedCrystalTests` and `ManagedCrystalGroupTests` (the session's life and its refusals; the frame against the engine run beside it, picture for picture and sample for sample; allocation; input; speed; rewind; states in the player's folder; settings in layers reaching a running session; firmware, save media and cards; systems, engines and a route; events and their overflow; run control; a resume waking a parked frame thread; a breakpoint's halt; a twin and the table answering alike and the read-only table refusing; a frame struct longer and shorter than 1.0's; two threads' frames refused, not run together) | 19 pass |
+| `DivergenceRowTests` (§14.6.1) and `FrontendDefectTests` (§14.6.2) | 11 pass, 1 skipped by design |
+
+#### 14.6.1 The divergence rows, re-measured
+
+`EmuSen_Surfaces.md` §4.1's table, re-read at `628bc821`; its line numbers and its `Hotaru/Program.cs` had drifted, so
+each row is restated with today's places. One test per row, on the API, which every client that drives a core through
+it shares; a client that has not moved still diverges until its move.
+
+| Row | Today | On the API |
+|---|---|---|
+| 1. Rewind capture and the engine's opt-out | Mistress gated (`MainWindow.axaml.cs:1402`); Hotaru (`GameWindow.axaml.cs:451`) and Pharaoh (`FrameRunner.cs:96`) not. No engine withholds today, so the test attaches one that does | gated inside `frame` |
+| 2. After a state load | Mistress's hotkey clears rewind and resets rate control, its console clears rewind alone; Hotaru's hotkey does both, its console neither (`HotaruSession.cs:58`); Pharaoh clears rewind and refreshes the snapshots | one sequence for every way of loading (the binding, the session's table as a shell's `state load` calls it, a slot, the resume state): rewind cleared, snapshots refreshed, a `state` event on which a client resets rate control |
+| 3. What the shell asks of the host | Mistress handled `SwitchSession`, Hotaru five actions, Pharaoh none | run control's requests are `run` events any client drains |
+| 4. A breakpoint's halt | Mistress never reads it; Hotaru and Pharaoh do | `frame` holds the session halted |
+| 5. The hand-over | Mistress: rows, aspect, lines, serial; Hotaru: width and height | `emusen_crystal_frame_info` carries all of them to every client |
+| 6. A picture's rows | Mistress's screenshots expand repeated rows, Hotaru's and Pharaoh's do not | the picture comes as shown unless the client opens with `SINGLE_ROWS`; a state's picture is always the shown one |
+| 7. *New:* a console's stored settings | applied after the load by Mistress alone (`MainWindow.axaml.cs:498–508`); `CoreFactory` gives a v1 engine its console's values at create, but MarsRT's shim none, so emusen-shell and Pharaoh ran an N64 game on the shim's defaults whatever the player stored [read from the code] | `open` applies every setting the engine takes as the layers give it, game over console |
+
+#### 14.6.2 F3, F4 and the candidates of §3.12
+
+| # | Status at the end of part 1 |
+|---|---|
+| F3 | The API reads a game's engine from its own file over its console's (`FrontendDefectTests.F3_…`). The old divergence (Mistress's `games.db` choice, emusen-shell's `graphics.json`) ends when both open through the API and Mistress's `altemulator` is copied once into the game files (SR10), both with Mistress's move |
+| F4 | **Shown failing**: with a state folder set, Hotaru's `HotaruSession.Build` names the state `Home/Saves/Save States/Kept.state` and the API `States/Kept.state`. The test is committed skipped with that record and passes once emusen-shell opens through the API (part 3). On the API every client is answered in the player's folder, read at each use |
+| C1 | On the API: a `RESUME` from another thread wakes the frame thread parked in `wait` (`ManagedCrystalGroupTests`). Mistress's own failing case comes with its move |
+| C2 | On the API: a breakpoint holds the session until run control resumes it. Mistress's own case with its move |
+| C3 | On the API, `picture_copy` waits for the frame in progress and the engine's scratch frame is used only under the session's gate. Hotaru's feed window's race with its move |
+| C4 | **Shown**: Hotaru's hand-over pattern (`GetFrameBufferRgba`, never returned) allocates a picture a frame, 100 frames at least 100 pictures' bytes; `picture_copy` into the client's buffer allocates nothing (`FrontendDefectTests.C4_…`) |
+| C5 | On the API a cheat's change takes the gate, so it lands between frames and never beside frame-end work. Mistress's own case with its move |
+| C6 | Not the API's (physical input is the frontend's, §2.3); with emusen-shell's move |
+| C7 | On the API: one post-load sequence (row 2). Hotaru's console case with its move |
+
+### 14.7 Left for later, and proposed
+
+- **1.1, with Mistress's move**: the device picture (the open parameters' `emusen_device_lend`, the frame's
+  `picture_on_device`, and the take the client makes), the raw picture, `state_record` and `states.db` with the one
+  copy of `records.db`'s state rows (D8), and the copy of `games.db`'s engine choices into the game files (SR10). The
+  split of `graphics.json` (SR12) comes before Mistress stops writing `Consoles`, so that the runtime's writes are not
+  undone by a stale copy (R5); until then `settings_set` writes `graphics.json`, which no moved client and Mistress do
+  not write at once in parts 1 and 2.
+- **`core_approve`**, with the trust manifest. **The engine's own settings layer** (scope 1), with storage for it.
+- **The debugger's snapshots.** Part 1 proposed taking them only while a debugger reads them. Decided 2026-10-17 by the
+  tester: declined, and the snapshots go into a preallocated, reused ring instead (§14.5).
+- **Where a game's settings file is named.** Part 1 named it `games/<the game's file name>.json`. Decided 2026-10-17
+  by the tester, before 1.0 froze: **`/etc/EmuSen/games/<system>/<file stem>.json`**. `<system>` is the systems
+  table's id, the one the saves' per-console folders go by, so two consoles' games of one name keep two files
+  (`ManagedCrystalGroupTests.Two_consoles_games_of_one_name_keep_two_settings_files`). It is not `<game id>`, the name
+  `EmuSen_CoreAPI.md` §8.5 had written, because a session runs with no library and so with no game id. The system is
+  the one routing decides for the file (`ManagedRuntime.SystemOfFile`), which needs no library either. A file that runs
+  as no system of the table has no file of its own: reads skip that layer and a write at the game's scope is refused
+  with `NOT_SUPPORTED`.
+
+### 14.8 Part 2: Pharaoh on the API
+
+Pharaoh, first by §3.10's order, now drives its cores through the binding alone. Its project references
+`EmuSen.Crystal.Client`, the shell and Galaxia, and no longer `EmuSen` or `EmuSen.Crystal`.
+
+- **Every mode moved.** The classic loop and `--commands` run `FrameRunner` over a `CrystalSession`: held buttons are
+  `input_button`, a frame is the frame call, the picture is `picture_copy` into a buffer kept between frames, the sound
+  `audio_drain`; after a halt, the next frame asks run control to resume, as a script's next verb always resumed the open
+  frame. The verbs map one to one: `savestate`/`loadstate` are the state twins (whose load is the one sequence of
+  §14.6.1, row 2), `rewind` is `rewind_set`, `rewind_step` and `rewind_reel`, `ff` is `SPEED_DRAW_NONE`, `record` is
+  `record_start` and `record_stop`, `perf` reads `phase_names` once and `phases` each frame, `vramsheet` and
+  `paletteswatch` are the tile sheet's and the swatch's twins, `spriteoverlay` the sprites' twin, `audiodump`
+  `audio_peek`, `tapuntil` and `waitchange` `space_read`. `--probe` reads the NES's spaces through `space_read` and the
+  cartridge's header through `route`; `--testroms` opens each ROM with no battery, reads PRG RAM through `space_read` and
+  resets through `reset`, a build with no NES engine an error and a board the engine refuses a skip, as before.
+- **The shell is handed the session's table.** `DianaShInterpreter.CreateForService(table)` is the host API's new entry:
+  the shell's Rust modules call the table, and its C# host commands reach the provider behind it (`SessionService.Of`)
+  for its target, codecs and trace switch. A shell does not dispose a provider it was handed; the runtime does, with
+  the session (`NativeShell`'s providers it made itself are the ones it ends).
+- **What served Pharaoh alone moved into it**: `BmpFile`, `FrameHash`, `ContactSheet`, `SpriteOverlay` (now given a
+  rectangle, not a debugger type) and `WavFile` to `EmuSen.Pharaoh/Imaging` and `Audio`, and `SqliteCatalogue` to
+  `Reference`, as §4.1's "what stays C#" placed them; WiseMan's users follow the namespace. `PngFile` stays in `EmuSen`,
+  which Mistress, Hotaru and the recorder use.
+- **`--flag`** names are Pharaoh's own table, its one entry today the log switch, instead of reflection over
+  `DebugSettings`.
+- **The API gained, within 1.0**: `session_info`'s `"picture"` (width, height, row repeat, for a screenshot taken
+  between frames) and `route`'s `"cartridge"` (the NES pack's reading of the iNES header: board, header trust, PRG and
+  CHR bytes, battery), which the probe and the library indexer read in place of the shim's `Header`.
+- **`--index-library`** reads the board from `route` and marks a NES image playable when it opens on the API, where it
+  asked the MoonRT shim's board list before: the same answer for every board the shim lists, read through the engine
+  instead of beside it, at the cost of one open a NES file.
+
+**Behaviour that changes, each by the API's rule and recorded here:** a session's close writes the battery save (no
+change under `--nobattery`, which the bench runs use); a game whose required firmware is missing is refused with
+`EMUSEN_CRYSTAL_FIRMWARE` before it loads; the shell's `cheat` is given the catalog's cheat systems, as Mistress's and
+Hotaru's are; a step of rewind drains and drops the sound the step skipped; recording draws every frame while it
+records; and an N64 game runs on the console's stored settings (§14.6.1, row 7). `perf`'s wall time now includes the
+frame-end order, which it did not.
+
+| Gate | Result |
+|---|---|
+| `framesum 600` then `audiosum 600` with `--nobattery`, the old Pharaoh (`WiseMan` at `8b09514b`, Release) against the new, the same core libraries beside both | **equal on all seven**: Super Mario Bros. 3 (NES), Donkey Kong Country 2 (SNES), Tetris 2 (Game Boy), 10-Pin Bowling (Game Boy Color), Super Mario 64 (N64), Sonic the Hedgehog 2 (Mega Drive), Ape Escape (PlayStation, a `.cue`) |
+| `FrontendReferenceTests.Pharaoh_names_no_runtime_type` (SR2): no `EmuSen` or `EmuSen.Crystal` among Pharaoh's referenced assemblies, and no type reference in its metadata resolving to either, so a type reached through a transitive reference fails too; held to seeing Hotaru's `ICore` | pass |
+| `FrameRunnerTests` (on the API, the synthetic SNES ROM), `HeadlessDebugOptionsTests`, `PharaohDependencyTests`, `CpuThrottleTests`, `MoonTestRomTests`, `MoonPpuDefectTests`, the imaging and WAV tests, `CatalogueTests`, and every class of `EmuSen.WiseMan.Crystal`, with a shell handed a session's table on the Rust shell and on the C# one | 186 pass, 1 skipped (F4's record); `EmuSen.WiseMan.DianaSh` and `.Shell`, the golden corpus among them, 1,034 pass |
+
+Each other frontend's old path stays until its own move: Hotaru, emusen-shell and Mistress are untouched.
+
+### 14.9 Sizes against §7, and two predictions
+
+| | §7's estimate | Built in parts 1 and 2 |
+|---|---:|---:|
+| Header and baseline | 1,100 | 697 (the header 496, the baseline 201) |
+| Rust checks (no Rust runtime before B7) | — | 588 (`abi` and `lib` 118, the test 470) |
+| C# contract layer and binding | 1,900 | 1,067, of which 561 generated from the header (the table, the functions, the numbers) |
+| C# implementation | 2,500 | 3,271, of which 982 generated (the export map and the 78 twins' entries); 2,289 written |
+| Changes to the provider and the engine | — | about 200 |
+| Tests | 2,000 | about 1,300 of C# in 9 classes, and the Rust test above |
+| Pharaoh | — | 759 lines in, 503 out over 17 files, the imaging, WAV and catalogue files moved whole |
+
+**P1** (the C# implementation no larger than what it consolidates, about 3,600) holds so far by its written part,
+2,289; it is retired by counting when the last frontend has moved and its frame-end code is deleted. **P2** (the frame
+call under 2 µs a frame over `RunFrame`): measured on 2026-10-17 in Release on the v1 test core, the best of five rounds
+of 20,000 frames, the frame call and the drain through the binding cost 1.793 µs a frame against 1.676 µs for
+`RunFrame`, the debugger's refresh and the drain called on the engine directly: **0.117 µs** added, the function
+pointers' two transitions and the gate. `pacebench`'s distribution on the bench games, P2's second half, is for the
+moves of the windowed frontends, which pace; Pharaoh does not.
+
+### 14.10 For the review
+
+- **The API's shape** is §14.2's table and the header. Its first commit is stable by SR3, so a change after the review is
+  a minor, not an edit: anything the review would rather see differently in 1.0 is best said before emusen-shell and
+  Mistress are built on it.
+- **Four choices made in building it** that the review may want to settle: the info twin kept verbatim and the
+  frontend's description a function of its own (§14.2); the names `disc_*`, `subscription_*`, `state_slot_*` and the
+  two input calls; the game's settings file named for the game's file (§14.7); and 1.1, not 1.0, for the device
+  picture, the raw picture and the state records, so that each arrives tested with the frontend that needs it.
+- **One proposal**: the debugger's snapshots only while a debugger reads them (§14.5).
+- **The review's answer**, 2026-10-17: 1.0 approved, with two changes made before it froze. The game's settings
+  file is `games/<system>/<file stem>.json`, and the debugger's snapshots go into a reused ring, the proposal declined
+  (§14.5, §14.7).
+- **What comes next**, after the review: emusen-shell with Hotaru's session and window (C3, C4's frontend half, C6,
+  C7's console case, F4's skipped test made to pass, `HostAction` synthesised from events), then Mistress (1.1, C1, C2
+  and C5's own cases, F3's copy from `games.db`, SR12), and the session service's 1.3 with `games`, `open_game` and
+  `open_console` (D10).

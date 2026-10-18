@@ -1,4 +1,4 @@
-using EmuSen.Audio;
+using EmuSen.Pharaoh.Audio;
 
 namespace EmuSen.WiseMan.Audio
 {

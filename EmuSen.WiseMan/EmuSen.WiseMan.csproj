@@ -76,6 +76,8 @@
          Galaxia/*Tests.cs. ConfigStore.OverrideDirectory is what keeps
          those tests off the real config tree. -->
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
+    <!-- The frontend API's binding and the C# implementation behind it - see Crystal/ManagedCrystalTests.cs and EmuSen_Backend.md §14. -->
+    <ProjectReference Include="..\EmuSen.Crystal.Client\EmuSen.Crystal.Client.csproj" />
     <!-- AudioPlayer/GamepadBindingMap - see Audio/AudioPlayerTests.cs and
          Input/GamepadBindingMapTests.cs. Real SDL3 calls against the dummy
          driver; nothing here opens a window. -->

@@ -13,7 +13,7 @@ namespace EmuSen.Crystal.Session
             if (_target is not null)
             {
                 w.WriteStartObject();
-                w.WriteNumber("id", SessionId);
+                w.WriteNumber("id", _options.Id);
                 w.WriteString("engine", _target.CoreName);
                 w.WriteBoolean("current", true);
                 w.WriteEndObject();
@@ -50,7 +50,7 @@ namespace EmuSen.Crystal.Session
             return Write(w =>
             {
                 w.WriteStartObject();
-                w.WriteNumber("id", SessionId);
+                w.WriteNumber("id", _options.Id);
                 w.WriteString("engine", t.CoreName);
                 w.WriteNumber("frame", t.FrameCount);
                 w.WriteNumber("max_sprites", t.MaxSprites);
@@ -65,7 +65,10 @@ namespace EmuSen.Crystal.Session
         internal byte[] Summary(uint session) => Utf8(Target(session).GetSummaryText());
 
         // Arms what today's step, runto and resume arm, and raises the run request their host action carried - see `man step`.
-        internal long RunControl(uint session, uint op, uint processor, long argument)
+        internal long RunControl(uint session, uint op, uint processor, long argument) =>
+            _options.RunControl is { } runtime ? runtime(op, processor, argument, () => OwnRunControl(session, op, processor, argument)) : OwnRunControl(session, op, processor, argument);
+
+        private long OwnRunControl(uint session, uint op, uint processor, long argument)
         {
             // Resume is the host loop's to answer, with or without a session, as today's `resume` asks it - see EmuSen_DianaSh.md §13.11.
             if (op == SessionAbi.RunResume && _target is null && session == 0)

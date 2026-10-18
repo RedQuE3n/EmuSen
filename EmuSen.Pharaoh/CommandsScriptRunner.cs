@@ -1,45 +1,32 @@
-using EmuSen.Cores;
-using EmuSen.Common.Imaging;
-using EmuSen.DianaSh;
+using System.Buffers.Binary;
+using System.Text.Json;
+using EmuSen.Crystal.Client;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
-using EmuSen.Crystal.Debugger;
-using EmuSen.Crystal.Recording;
-using EmuSen.DianaSh.DianaSh.Dev;
 using EmuSen.Galaxia.Input;
+using EmuSen.Pharaoh.Audio;
+using EmuSen.Pharaoh.Imaging;
 
 namespace EmuSen.Pharaoh
 {
-    // --commands mode's script interpreter: an ordered list of verbs
-    // executed one line at a time against a shared FrameRunner, so
-    // frame-stepping, input, screenshots, and debug commands can interleave
-    // freely in one script. Full verb syntax: EmuSen.DianaSh/DianaSh/Usr/Home/Documents/
-    // EmuSen Manual/EmuSen_Debugging_Tools_Reference_v5.md §3.15. Anything not recognized
-    // as one of those verbs falls through to the real DianaShInterpreter.
+    // --commands mode's script interpreter: verbs run one line at a time against a shared FrameRunner, anything else handed to the shell - see EmuSen_Debugging_Tools_Reference_v5.md §3.15.
     public sealed class CommandsScriptRunner
     {
         private readonly FrameRunner runner;
-        private readonly IDebugTarget debugTarget;
         private readonly DianaShInterpreter debugCmd;
         private readonly Action<string> emit;
+        private bool recording;
 
-        // Null until the `record` verb starts one - see §3.15b.
-        private FrameRecorder? recorder;
-
-        public CommandsScriptRunner(FrameRunner runner, IDebugTarget debugTarget, DianaShInterpreter debugCmd, Action<string> emit)
+        public CommandsScriptRunner(FrameRunner runner, DianaShInterpreter debugCmd, Action<string> emit)
         {
             this.runner = runner;
-            this.debugTarget = debugTarget;
             this.debugCmd = debugCmd;
             this.emit = emit;
         }
 
-        // Returns false if the commands file itself couldn't be found
-        // (caller emits nothing further and exits 1) - true once the whole
-        // script has run to completion. Deliberately doesn't touch
-        // "[RUN] Done"/savestate/--out - those are the
-        // shared epilogue, identical for this mode and the classic loop,
-        // handled once by the caller after this returns.
+        private CrystalSession Session => runner.Session;
+
+        // False when the commands file could not be found; the epilogue is the caller's - see §3.15.
         public bool Run(string commandsPath)
         {
             if (!File.Exists(commandsPath))
@@ -47,8 +34,6 @@ namespace EmuSen.Pharaoh
                 emit($"[ERROR] Commands file not found: {commandsPath}");
                 return false;
             }
-
-            var core = runner.Core;
 
             emit($"[COMMANDS] Running {commandsPath} (safety cap {runner.FrameCap} frames)...");
             emit("");
@@ -84,7 +69,8 @@ namespace EmuSen.Pharaoh
                 }
                 else if (verb == "screenshot" && parts.Length >= 2)
                 {
-                    BmpFile.Write(parts[1], core.GetFrameBufferRgba(), core.ScreenWidth, core.ScreenHeight);
+                    var (rgba, width, height) = runner.Picture();
+                    BmpFile.Write(parts[1], rgba, width, height);
                     emit($"[SCREENSHOT] Frame {runner.CurrentFrame} -> {parts[1]}");
                 }
                 else if (verb == "waitstable")
@@ -97,7 +83,6 @@ namespace EmuSen.Pharaoh
                 }
                 else if (verb == "contactsheet" && parts.Length >= 3)
                 {
-                    // <path> <count> [every=1] [cols=8] [scale=4] - see §3.15.
                     emit($"> {cmdLine}");
                     string path = parts[1];
                     int count = int.Parse(parts[2]);
@@ -110,7 +95,8 @@ namespace EmuSen.Pharaoh
                     for (int i = 0; i < count; i++)
                     {
                         runner.RunFrames(every);
-                        thumbs.Add(ContactSheet.Downsample(core.GetFrameBufferRgba(), core.ScreenWidth, core.ScreenHeight, scale, out thumbW, out thumbH));
+                        var (rgba, width, height) = runner.Picture();
+                        thumbs.Add(ContactSheet.Downsample(rgba, width, height, scale, out thumbW, out thumbH));
                     }
                     ContactSheet.WriteContactSheet(path, thumbs, thumbW, thumbH, cols);
                     emit($"[CONTACTSHEET] {count} frame(s), every {every}, {thumbW}x{thumbH} each -> {path}");
@@ -119,13 +105,10 @@ namespace EmuSen.Pharaoh
                 {
                     // Scene navigation anchored on state, not frame counts - see §3.15d.
                     emit($"> {cmdLine}");
-                    var button = Enum.Parse<EmuSen.Galaxia.Input.PadButton>(parts[1], ignoreCase: true);
-                    string spaceName = parts[2];
-                    var space = debugTarget.GetMemorySpaces()
-                        .FirstOrDefault(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
-                    if (space == null)
+                    var button = Enum.Parse<PadButton>(parts[1], ignoreCase: true);
+                    if (SpaceNamed(parts[2]) is not { } space)
                     {
-                        emit($"[WARN] No memory space named '{spaceName}' - ignoring.");
+                        emit($"[WARN] No memory space named '{parts[2]}' - ignoring.");
                         continue;
                     }
 
@@ -134,44 +117,33 @@ namespace EmuSen.Pharaoh
                     int cap = parts.Length >= 6 ? int.Parse(parts[5]) : 3600;
                     int every = parts.Length >= 7 ? int.Parse(parts[6]) : 20;
 
-                    byte[] Sample()
-                    {
-                        var b = new byte[target.Length];
-                        for (int i = 0; i < b.Length; i++) b[i] = space.Read(addr + i);
-                        return b;
-                    }
-
-                    byte[] now = Sample();
+                    byte[] now = Sample(space, addr, target.Length);
                     int stepped = 0, taps = 0;
                     while (!now.SequenceEqual(target) && stepped < cap && runner.CurrentFrame < runner.FrameCap)
                     {
-                        // One frame at a time throughout, including while the button is
-                        // held: a four-frame Tap() would step straight over the value.
+                        // One frame at a time, held included: a four-frame tap would step over the value.
                         int phase = stepped % Math.Max(every, 5);
                         if (phase == 0) { runner.Hold(button, 1); taps++; }
                         else if (phase == 4) runner.Release(button, 1);
 
                         runner.RunFrames(1);
                         stepped++;
-                        now = Sample();
+                        now = Sample(space, addr, target.Length);
                     }
                     runner.Release(button, 1);
 
                     string to = string.Join(' ', now.Select(v => v.ToString("X2")));
                     emit(now.SequenceEqual(target)
-                        ? $"[TAPUNTIL] {space.Name} 0x{addr:X} reached {to} after {taps} {button} tap(s), {stepped} frame(s) (frame {runner.CurrentFrame})."
-                        : $"[TAPUNTIL] {space.Name} 0x{addr:X} NOT reached - still {to} after {taps} {button} tap(s), {stepped} frame(s) (cap {cap}, frame {runner.CurrentFrame}).");
+                        ? $"[TAPUNTIL] {space} 0x{addr:X} reached {to} after {taps} {button} tap(s), {stepped} frame(s) (frame {runner.CurrentFrame})."
+                        : $"[TAPUNTIL] {space} 0x{addr:X} NOT reached - still {to} after {taps} {button} tap(s), {stepped} frame(s) (cap {cap}, frame {runner.CurrentFrame}).");
                 }
                 else if ((verb == "waitchange" || verb == "waitvalue") && parts.Length >= 4)
                 {
                     // waitstable's memory-side counterpart - see §3.15.
                     emit($"> {cmdLine}");
-                    string spaceName = parts[1];
-                    var space = debugTarget.GetMemorySpaces()
-                        .FirstOrDefault(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
-                    if (space == null)
+                    if (SpaceNamed(parts[1]) is not { } space)
                     {
-                        emit($"[WARN] No memory space named '{spaceName}' - ignoring.");
+                        emit($"[WARN] No memory space named '{parts[1]}' - ignoring.");
                         continue;
                     }
 
@@ -180,14 +152,7 @@ namespace EmuSen.Pharaoh
                     byte[] target = waitForValue ? ParseHexBytes(parts[3]) : new byte[Convert.ToInt32(parts[3], 16)];
                     int cap = parts.Length >= 5 ? int.Parse(parts[4]) : 600;
 
-                    byte[] Sample()
-                    {
-                        var b = new byte[target.Length];
-                        for (int i = 0; i < b.Length; i++) b[i] = space.Read(addr + i);
-                        return b;
-                    }
-
-                    byte[] start = Sample();
+                    byte[] start = Sample(space, addr, target.Length);
                     byte[] now = start;
                     int stepped = 0;
                     bool Done() => waitForValue ? now.SequenceEqual(target) : !now.SequenceEqual(start);
@@ -196,14 +161,14 @@ namespace EmuSen.Pharaoh
                     {
                         runner.RunFrames(1);
                         stepped++;
-                        now = Sample();
+                        now = Sample(space, addr, target.Length);
                     }
 
                     string from = string.Join(' ', start.Select(v => v.ToString("X2")));
                     string to = string.Join(' ', now.Select(v => v.ToString("X2")));
                     emit(Done()
-                        ? $"[{verb.ToUpperInvariant()}] {space.Name} 0x{addr:X} satisfied after {stepped} frame(s): {from} -> {to} (frame {runner.CurrentFrame})."
-                        : $"[{verb.ToUpperInvariant()}] {space.Name} 0x{addr:X} NOT satisfied - still {to} after {stepped} frame(s) (cap {cap}, frame {runner.CurrentFrame}).");
+                        ? $"[{verb.ToUpperInvariant()}] {space} 0x{addr:X} satisfied after {stepped} frame(s): {from} -> {to} (frame {runner.CurrentFrame})."
+                        : $"[{verb.ToUpperInvariant()}] {space} 0x{addr:X} NOT satisfied - still {to} after {stepped} frame(s) (cap {cap}, frame {runner.CurrentFrame}).");
                 }
                 else if ((verb == "savestate" || verb == "loadstate") && parts.Length >= 2)
                 {
@@ -211,7 +176,7 @@ namespace EmuSen.Pharaoh
                     emit($"> {cmdLine}");
                     if (verb == "savestate")
                     {
-                        core.SaveState(parts[1]);
+                        Session.SaveState(parts[1]);
                         emit($"[STATE] Frame {runner.CurrentFrame} saved -> {parts[1]}");
                     }
                     else if (!File.Exists(parts[1]))
@@ -220,11 +185,8 @@ namespace EmuSen.Pharaoh
                     }
                     else
                     {
-                        core.LoadState(parts[1]);
-                        // A discontinuous jump, so the rewind chain and the
-                        // per-frame providers regs/sprites/pal read are both stale.
-                        runner.Rewind.Clear();
-                        debugTarget.RefreshProviders();
+                        // The API's one sequence after a load clears rewind's history and refreshes the snapshots - see EmuSen_Backend.md §14.
+                        Session.LoadState(parts[1]);
                         emit($"[STATE] Loaded {parts[1]} (script frame counter stays at {runner.CurrentFrame})");
                     }
                 }
@@ -236,29 +198,23 @@ namespace EmuSen.Pharaoh
 
                     if (mode == "on")
                     {
-                        if (recorder != null) { emit("[RECORD] Already recording - `record off` first."); continue; }
+                        if (recording) { emit("[RECORD] Already recording - `record off` first."); continue; }
                         int stride = parts.Length >= 3 ? int.Parse(parts[2]) : 1;
-                        string baseDir = parts.Length >= 4
-                            ? parts[3]
-                            : Path.Combine(DianaShSandbox.LogsDirectory, debugTarget.CoreName, "Recordings");
-
-                        recorder = new FrameRecorder(debugTarget);
-                        string dir = recorder.Start(baseDir, stride);
-                        // Rendering has to actually happen for there to be anything to capture.
-                        core.SkipRendering = false;
-                        runner.AfterFrame = () => recorder!.CaptureFrame(
-                            path => PngFile.Write(path, core.GetFrameBufferRgba(), core.ScreenWidth, core.ScreenHeight));
+                        string baseDir = parts.Length >= 4 ? parts[3] : Path.Combine(DianaShSandbox.LogsDirectory, CoreName, "Recordings");
+                        string dir = Session.StartRecording(baseDir, (uint)Math.Max(1, stride));
+                        RecordingDir = dir;
+                        recording = true;
                         emit($"[RECORD] Started at frame {runner.CurrentFrame}, every {stride} frame(s) -> {dir}");
                     }
                     else if (mode == "off")
                     {
-                        if (recorder == null) { emit("[RECORD] Not recording."); continue; }
+                        if (!recording) { emit("[RECORD] Not recording."); continue; }
                         emit(StopRecording());
                     }
                     else
                     {
-                        emit(recorder is { IsRecording: true }
-                            ? $"[RECORD] Recording -> {recorder.SessionDir}"
+                        emit(recording
+                            ? $"[RECORD] Recording -> {RecordingDir}"
                             : "[RECORD] Not recording. `record on [<stride>] [<dir>]` starts one.");
                     }
                 }
@@ -267,43 +223,42 @@ namespace EmuSen.Pharaoh
                     // Headless already runs unpaced, so this is frame skip only - see §3.15.
                     emit($"> {cmdLine}");
                     bool on = parts.Length < 2 || parts[1].Equals("on", StringComparison.OrdinalIgnoreCase);
-                    core.SkipRendering = on;
+                    Session.Speed(100, drawNone: on);
                     emit($"[FASTFORWARD] Scanline rendering {(on ? "OFF - frames advance without drawing" : "ON")} (frame {runner.CurrentFrame}).");
                 }
                 else if (verb == "rewind")
                 {
                     emit($"> {cmdLine}");
                     string mode = parts.Length >= 2 ? parts[1].ToLowerInvariant() : "info";
-                    var rewind = runner.Rewind;
 
                     if (mode == "on")
                     {
-                        if (parts.Length >= 3) rewind.IntervalFrames = int.Parse(parts[2]);
-                        if (parts.Length >= 4) rewind.BudgetBytes = long.Parse(parts[3]) * 1024 * 1024;
-                        rewind.Enabled = true;
-                        rewind.CaptureNow(core);
-                        emit($"[REWIND] On - snapshot every {rewind.IntervalFrames} frame(s), budget {rewind.BudgetBytes / (1024 * 1024)}MB, {rewind.SnapshotBytes / 1024}KB per raw state.");
+                        uint interval = parts.Length >= 3 ? uint.Parse(parts[2]) : 0;
+                        ulong budget = parts.Length >= 4 ? ulong.Parse(parts[3]) * 1024 * 1024 : 0;
+                        Session.Rewind(true, interval, budget);
+                        JsonElement reel = Reel();
+                        runner.RewindInterval = reel.GetProperty("interval_frames").GetInt32();
+                        emit($"[REWIND] On - snapshot every {runner.RewindInterval} frame(s), budget {reel.GetProperty("budget_bytes").GetInt64() / (1024 * 1024)}MB, {reel.GetProperty("snapshot_bytes").GetInt64() / 1024}KB per raw state.");
                     }
                     else if (mode == "off")
                     {
-                        rewind.Enabled = false;
-                        rewind.Clear();
+                        Session.Rewind(false);
                         emit("[REWIND] Off - chain cleared.");
                     }
                     else if (mode == "back")
                     {
                         int steps = parts.Length >= 3 ? int.Parse(parts[2]) : 1;
                         int done = runner.StepBack(steps);
-                        // No RunFrame() ran, so regs/sprites/pal would be stale - see §3.15.
-                        debugTarget.RefreshProviders();
+                        int depth = Reel().GetProperty("depth").GetInt32();
                         emit(done == steps
-                            ? $"[REWIND] Stepped back {done} snapshot(s) - now at frame {runner.CurrentFrame}, {rewind.Depth} left."
+                            ? $"[REWIND] Stepped back {done} snapshot(s) - now at frame {runner.CurrentFrame}, {depth} left."
                             : $"[REWIND] Only {done} of {steps} snapshot(s) available - now at frame {runner.CurrentFrame}, chain exhausted.");
                     }
                     else
                     {
-                        emit($"[REWIND] {(rewind.Enabled ? "On" : "Off")} - depth {rewind.Depth} ({rewind.BufferedSeconds(core.FrameRateHz):F1}s), " +
-                             $"{rewind.BufferedBytes / 1024}KB held, {rewind.SnapshotBytes / 1024}KB per raw state, every {rewind.IntervalFrames} frame(s).");
+                        JsonElement reel = Reel();
+                        emit($"[REWIND] {(reel.GetProperty("enabled").GetBoolean() ? "On" : "Off")} - depth {reel.GetProperty("depth").GetInt32()} ({reel.GetProperty("seconds").GetDouble():F1}s), " +
+                             $"{reel.GetProperty("buffered_bytes").GetInt64() / 1024}KB held, {reel.GetProperty("snapshot_bytes").GetInt64() / 1024}KB per raw state, every {reel.GetProperty("interval_frames").GetInt32()} frame(s).");
                     }
                 }
                 else if (verb == "perf")
@@ -326,41 +281,35 @@ namespace EmuSen.Pharaoh
                     emit($"> {cmdLine}");
                     emit(RunAudioSum(parts.Length >= 2 ? long.Parse(parts[1]) : 300));
                 }
-                else if (verb == "vramsheet" && parts.Length >= 2)
-                {
-                    // IDebugTarget.RenderTileSheet(), not Renderer directly - core-agnostic.
-                    emit($"> {cmdLine}");
-                    var (rgba, w, h) = debugTarget.RenderTileSheet();
-                    BmpFile.Write(parts[1], rgba, w, h);
-                    emit($"[VRAMSHEET] {w}x{h} -> {parts[1]}");
-                }
-                else if (verb == "paletteswatch" && parts.Length >= 2)
+                else if ((verb == "vramsheet" || verb == "paletteswatch") && parts.Length >= 2)
                 {
                     emit($"> {cmdLine}");
-                    var (rgba, w, h) = debugTarget.RenderPaletteSwatch();
-                    BmpFile.Write(parts[1], rgba, w, h);
-                    emit($"[PALETTESWATCH] {w}x{h} -> {parts[1]}");
+                    byte[] sheet = verb == "vramsheet" ? Session.TileSheet() : Session.PaletteSwatch();
+                    int w = (int)BinaryPrimitives.ReadUInt32LittleEndian(sheet), h = (int)BinaryPrimitives.ReadUInt32LittleEndian(sheet.AsSpan(4));
+                    BmpFile.Write(parts[1], sheet[8..], w, h);
+                    emit($"[{verb.ToUpperInvariant()}] {w}x{h} -> {parts[1]}");
                 }
                 else if (verb == "spriteoverlay" && parts.Length >= 2)
                 {
-                    // Outlines every IDebugTarget.Sprites entry - already core-agnostic.
+                    // Outlines every sprite the session lists - already core-agnostic.
                     emit($"> {cmdLine}");
-                    byte[] rgba = core.GetFrameBufferRgba();
-                    var sprites = debugTarget.Sprites.Current;
-                    foreach (var s in sprites)
-                    {
-                        SpriteOverlay.DrawSpriteOutline(rgba, core.ScreenWidth, core.ScreenHeight, s);
-                    }
-                    BmpFile.Write(parts[1], rgba, core.ScreenWidth, core.ScreenHeight);
-                    emit($"[SPRITEOVERLAY] {sprites.Count} sprite(s) outlined -> {parts[1]}");
+                    var (rgba, width, height) = runner.Picture();
+                    JsonElement[] sprites = JsonDocument.Parse(Session.Sprites()).RootElement.GetProperty("sprites").EnumerateArray().ToArray();
+                    foreach (JsonElement s in sprites)
+                        SpriteOverlay.DrawSpriteOutline(rgba, width, height, s.GetProperty("x").GetInt32(), s.GetProperty("y").GetInt32(), s.GetProperty("width").GetInt32(), s.GetProperty("height").GetInt32());
+                    BmpFile.Write(parts[1], rgba, width, height);
+                    emit($"[SPRITEOVERLAY] {sprites.Length} sprite(s) outlined -> {parts[1]}");
                 }
                 else if (verb == "audiodump" && parts.Length >= 2)
                 {
                     emit($"> {cmdLine}");
                     int maxSamples = parts.Length >= 3 ? int.Parse(parts[2]) : int.MaxValue;
-                    var (samples, sampleRate) = debugTarget.GetAudioSamples();
+                    byte[] peek = Session.AudioPeek();
+                    int sampleRate = (int)BinaryPrimitives.ReadUInt32LittleEndian(peek);
+                    var samples = new short[(peek.Length - 4) / 2];
+                    for (int i = 0; i < samples.Length; i++) samples[i] = BinaryPrimitives.ReadInt16LittleEndian(peek.AsSpan(4 + i * 2));
                     if (samples.Length > maxSamples) samples = samples[..maxSamples];
-                    EmuSen.Audio.WavFile.Write(parts[1], samples, sampleRate);
+                    WavFile.Write(parts[1], samples, sampleRate);
                     emit($"[AUDIODUMP] {samples.Length} sample(s) @ {sampleRate}Hz -> {parts[1]}");
                 }
                 else
@@ -371,34 +320,45 @@ namespace EmuSen.Pharaoh
             }
 
             // A script that never says `record off` still gets its video.
-            if (recorder != null) emit(StopRecording());
+            if (recording) emit(StopRecording());
 
             return true;
         }
 
-        // Detaches the per-frame hook first - Stop() blocks while ffmpeg encodes.
         // tap is controller 1's and tapN controller N's, tap2 as it always was - see EmuSen_Input.md §8.7.
         public static int? TapController(string verb) =>
             verb == "tap" ? 1 : verb.StartsWith("tap", StringComparison.Ordinal) && int.TryParse(verb.AsSpan(3), System.Globalization.NumberStyles.None, null, out int n) && n is >= 1 and <= 8 ? n : null;
 
+        // The engine's name as the debugger gives it, which a recording's folder is named for.
+        private string CoreName => JsonDocument.Parse(Session.ServiceInfo()).RootElement.GetProperty("engine").GetString() ?? "core";
+
+        private string? RecordingDir { get; set; }
+
+        private JsonElement Reel() => JsonDocument.Parse(Session.RewindReel()).RootElement;
+
         private string StopRecording()
         {
-            runner.AfterFrame = null;
-            string? dir = recorder!.SessionDir;
-            recorder.Stop();
-            recorder = null;
+            string dir = Session.StopRecording();
+            recording = false;
             return $"[RECORD] Stopped at frame {runner.CurrentFrame} -> {dir}";
         }
 
-        // Wall clock per frame plus the core's own phase breakdown, so a
-        // slow game can be attributed rather than just observed - see §3.20.
+        // A memory space by its name in any case, as the session lists it; null when it has none of that name.
+        private string? SpaceNamed(string name) =>
+            JsonDocument.Parse(Session.Spaces()).RootElement.EnumerateArray().Select(s => s.GetProperty("name").GetString()).FirstOrDefault(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase));
+
+        private byte[] Sample(string space, int addr, int length)
+        {
+            var bytes = new byte[length];
+            Session.ReadSpace(space, unchecked((uint)addr), bytes);
+            return bytes;
+        }
+
+        // Wall clock per frame plus the core's own phase breakdown, so a slow game can be attributed - see §3.20.
         private string RunPerf(long count, int worstCount)
         {
-            var core = runner.Core;
-
-            // Probed by capability, not by core - see EmuSen_Multicore.md §5.
-            var profiler = core as IFrameProfiler;
-            string[] phaseNames = profiler?.LastFramePhases.Select(p => p.Name).ToArray() ?? Array.Empty<string>();
+            string[] phaseNames = JsonDocument.Parse(Session.PhaseNames()).RootElement.EnumerateArray().Select(e => e.GetString() ?? "").ToArray();
+            var current = new double[phaseNames.Length];
 
             var wall = new double[count];
             var phases = new double[phaseNames.Length][];
@@ -412,12 +372,8 @@ namespace EmuSen.Pharaoh
                 long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
                 runner.RunFrames(1);
                 wall[i] = (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * toMs;
-
-                if (profiler is not null)
-                {
-                    var current = profiler.LastFramePhases;
-                    for (int p = 0; p < phaseNames.Length && p < current.Count; p++) phases[p][i] = current[p].Milliseconds;
-                }
+                int n = Session.Phases(current);
+                for (int p = 0; p < phaseNames.Length && p < n; p++) phases[p][i] = current[p];
                 taken++;
             }
             if (taken == 0) return "[PERF] No frames ran - already at the safety cap.";
@@ -425,16 +381,17 @@ namespace EmuSen.Pharaoh
             var sortedWall = wall.Take((int)taken).OrderBy(v => v).ToArray();
             double Pct(double p) => sortedWall[Math.Min(sortedWall.Length - 1, (int)(p * sortedWall.Length))];
             double Mean(double[] a) => a.Take((int)taken).Average();
-            double budget = 1000.0 / core.FrameRateHz;
+            double hz = runner.Last.frame_rate_hz;
+            double budget = 1000.0 / hz;
 
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine($"[PERF] {taken} frame(s) to frame {runner.CurrentFrame}, budget {budget:F2}ms/frame at {core.FrameRateHz:F2}Hz.");
+            sb.AppendLine($"[PERF] {taken} frame(s) to frame {runner.CurrentFrame}, budget {budget:F2}ms/frame at {hz:F2}Hz.");
             sb.AppendLine($"  wall  mean {Mean(wall):F2}ms ({1000.0 / Mean(wall):F1} fps)  p50 {Pct(0.50):F2}  p95 {Pct(0.95):F2}  max {sortedWall[^1]:F2}");
             sb.AppendLine($"  over budget: {sortedWall.Count(v => v > budget)}/{taken} frame(s)");
 
             if (phaseNames.Length == 0)
             {
-                sb.AppendLine($"  {core.CoreName} publishes no per-phase breakdown.");
+                sb.AppendLine($"  {CoreName} publishes no per-phase breakdown.");
             }
             else
             {
@@ -469,21 +426,19 @@ namespace EmuSen.Pharaoh
             return sb.ToString().TrimEnd();
         }
 
-        // Folds every frame's FrameHash into one digest, so a renderer change can be
-        // shown pixel-identical across a whole window, not one sampled frame - see §3.21.
+        // Folds every frame's FrameHash into one digest, so a change can be shown pixel-identical across a window - see §3.21.
         private string RunFrameSum(long count)
         {
             const ulong FnvOffsetBasis = 14695981039346656037;
             const ulong FnvPrime = 1099511628211;
 
-            var core = runner.Core;
             ulong digest = FnvOffsetBasis;
             long taken = 0;
             for (long i = 0; i < count; i++)
             {
                 if (runner.CurrentFrame >= runner.FrameCap) break;
                 runner.RunFrames(1);
-                digest = (digest ^ FrameHash.Compute(core.GetFrameBufferRgba())) * FnvPrime;
+                digest = (digest ^ FrameHash.Compute(runner.Picture().Rgba)) * FnvPrime;
                 taken++;
             }
             return $"[FRAMESUM] {taken} frame(s) to frame {runner.CurrentFrame}: {digest:X16}";
@@ -494,7 +449,6 @@ namespace EmuSen.Pharaoh
         {
             const ulong FnvOffsetBasis = 14695981039346656037;
             const ulong FnvPrime = 1099511628211;
-            var core = runner.Core;
             ulong digest = FnvOffsetBasis;
             long taken = 0, samples = 0, nonzero = 0;
             double sumSquares = 0;
@@ -504,7 +458,7 @@ namespace EmuSen.Pharaoh
             {
                 if (runner.CurrentFrame >= runner.FrameCap) break;
                 runner.RunFrames(1);
-                short[] chunk = core.DequeueAudioSamples(int.MaxValue);
+                ReadOnlySpan<short> chunk = runner.DrainSound();
                 foreach (short s in chunk)
                 {
                     digest = (digest ^ (ulong)(ushort)s) * FnvPrime;
@@ -522,7 +476,6 @@ namespace EmuSen.Pharaoh
             return $"[AUDIOSUM] {taken} frame(s) to frame {runner.CurrentFrame}: {digest:X16} "
                  + $"samples={samples} nonzero={nonzero} ({(samples == 0 ? 0 : 100.0 * nonzero / samples):F1}%) peak={peak} rms={rms:F1}";
         }
-
 
         // "1E" or "1E,00" or "1E 00" - see §3.15's waitvalue entry.
         private static byte[] ParseHexBytes(string spec)

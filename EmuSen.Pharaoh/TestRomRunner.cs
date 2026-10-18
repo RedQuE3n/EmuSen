@@ -1,4 +1,3 @@
-using EmuSen.Cores;
 
 namespace EmuSen.Pharaoh
 {

@@ -1,4 +1,3 @@
-using EmuSen.Cores;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Pharaoh.Cli
@@ -23,6 +22,9 @@ namespace EmuSen.Pharaoh.Cli
         public bool Verbose { get; init; }
         public bool NoBattery { get; init; }
         public List<string> FlagsToEnable { get; init; } = new();
+
+        // The --flag names and their kinds: the debug switches the frontend API reaches, its log switch today - see EmuSen_Backend.md §14.8.
+        public static readonly IReadOnlyDictionary<string, Type> Flags = new Dictionary<string, Type> { ["MasterLoggingEnabled"] = typeof(bool) };
         public List<(long Start, long End, PadButton Button, int Controller)> Taps { get; init; } = new();
         public List<(long Frame, string Path)> Screenshots { get; init; } = new();
 
@@ -162,17 +164,13 @@ namespace EmuSen.Pharaoh.Cli
             {
                 string[] flagParts = flagSpec.Split(new[] { '=' }, 2);
                 string flagName = flagParts[0];
-                var settingsType = typeof(EmuSen.Debug.DebugSettings);
-                var prop = settingsType.GetProperty(flagName);
-                var field = prop == null ? settingsType.GetField(flagName) : null;
-                if (prop == null && field == null)
+                if (!Flags.TryGetValue(flagName, out Type? memberType))
                 {
                     warnings.Add($"[WARN] No DebugSettings.{flagName} property or field found - ignoring --flag {flagSpec}.");
                     continue;
                 }
 
                 // Same converter as apply time, so a bad value reports not throws.
-                Type memberType = prop?.PropertyType ?? field!.FieldType;
                 string? rawValue = flagParts.Length >= 2 ? flagParts[1] : null;
                 if (!TryConvertFlagValue(rawValue, memberType, out _, out string? convertError))
                 {

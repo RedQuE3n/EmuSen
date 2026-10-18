@@ -5,7 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
-using EmuSen.Common.Imaging;
+using EmuSen.Pharaoh.Imaging;
 using EmuSen.Serenity;
 
 namespace EmuSen.WiseMan.Serenity

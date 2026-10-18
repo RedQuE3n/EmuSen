@@ -81,6 +81,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 return B(ctx).Change().RunControl(s, op, p, argument);
             }
             catch (Exception e) { return Fail(e); }
@@ -123,6 +124,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().SpaceWrite(s, Text(space, space_len), address, Bytes(data, n));
                 return 0;
             }
@@ -164,6 +166,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().SetRegister(s, p, Text(name, name_len), value);
                 return 0;
             }
@@ -185,6 +188,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 return B(ctx).Change().BpAdd(s, p, SessionJson.Parse(Bytes(spec, spec_len)));
             }
             catch (Exception e) { return Fail(e); }
@@ -195,6 +199,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 return B(ctx).Change().BpAddData(s, p, SessionJson.Parse(Bytes(spec, spec_len)));
             }
             catch (Exception e) { return Fail(e); }
@@ -205,6 +210,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().BpSetEnabled(s, p, id, enabled != 0);
                 return 0;
             }
@@ -216,6 +222,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().BpRemove(s, p, id);
                 return 0;
             }
@@ -247,6 +254,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().BpLogClear(s, p);
                 return 0;
             }
@@ -258,6 +266,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().BpArmCondition(s, p, Text(name, name_len), flags);
                 return 0;
             }
@@ -279,6 +288,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().BpDepthGuard(s, p, depth);
                 return 0;
             }
@@ -290,6 +300,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 return B(ctx).Change().BpForbidRange(s, p, address, end);
             }
             catch (Exception e) { return Fail(e); }
@@ -300,6 +311,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().BpUninitialized(s, p, Text(space, space_len), size);
                 return 0;
             }
@@ -311,6 +323,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 return B(ctx).Change().WatchAdd(s, Text(space, space_len), address, length, kind);
             }
             catch (Exception e) { return Fail(e); }
@@ -321,6 +334,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().WatchRemove(s, id);
                 return 0;
             }
@@ -362,6 +376,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().WatchClear(s, id);
                 return 0;
             }
@@ -373,6 +388,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 return B(ctx).Change().FramelogAdd(s, Text(space, space_len), address, width);
             }
             catch (Exception e) { return Fail(e); }
@@ -383,6 +399,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().FramelogRemove(s, id);
                 return 0;
             }
@@ -414,6 +431,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().FramelogClear(s, id);
                 return 0;
             }
@@ -425,6 +443,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 return Copy(B(ctx).Service.CoverageOp(s, p, op, Bytes(args, args_len), B(ctx).ReadOnly), o, n);
             }
             catch (Exception e) { return Fail(e); }
@@ -435,6 +454,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 return Copy(B(ctx).Service.ProfileOp(s, p, op, Bytes(args, args_len), B(ctx).ReadOnly), o, n);
             }
             catch (Exception e) { return Fail(e); }
@@ -445,6 +465,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 return Copy(B(ctx).Service.CountersOp(s, op, Bytes(args, args_len), B(ctx).ReadOnly), o, n);
             }
             catch (Exception e) { return Fail(e); }
@@ -465,6 +486,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 return B(ctx).Change().FreezeAdd(s, Text(space, space_len), address, value);
             }
             catch (Exception e) { return Fail(e); }
@@ -475,6 +497,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().FreezeRemove(s, id);
                 return 0;
             }
@@ -496,6 +519,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().FreezeClear(s);
                 return 0;
             }
@@ -507,6 +531,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().LabelAdd(s, address, Text(name, name_len), Text(comment, comment_len));
                 return 0;
             }
@@ -518,6 +543,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().LabelRemove(s, Text(name, name_len), address);
                 return 0;
             }
@@ -549,6 +575,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 return Copy(B(ctx).Change().LabelLoad(s, Text(text, text_len), o == null ? -1 : (long)Math.Min((ulong)n, (ulong)long.MaxValue)), o, n);
             }
             catch (Exception e) { return Fail(e); }
@@ -569,6 +596,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().LabelClear(s);
                 return 0;
             }
@@ -590,6 +618,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 return Copy(B(ctx).Service.DmaLogOp(s, op, Bytes(args, args_len), B(ctx).ReadOnly), o, n);
             }
             catch (Exception e) { return Fail(e); }
@@ -600,6 +629,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 return Copy(B(ctx).Service.RegisterFlowOp(s, op, Bytes(args, args_len), B(ctx).ReadOnly), o, n);
             }
             catch (Exception e) { return Fail(e); }
@@ -680,6 +710,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().SetChannelMuted(s, channel, muted != 0);
                 return 0;
             }
@@ -711,6 +742,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 var (record, value) = B(ctx).Service.CheatOp(s, op, Bytes(args, args_len), B(ctx).ReadOnly);
                 if (record is null) return value;
                 if (o != null && n >= (nuint)record.Length) B(ctx).Service.TakePending(op);
@@ -734,6 +766,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().TraceOn(s, p, count);
                 return 0;
             }
@@ -745,6 +778,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().TraceOff(s, p);
                 return 0;
             }
@@ -796,6 +830,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().StateSave(s, Text(path, path_len));
                 return 0;
             }
@@ -807,6 +842,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change().StateLoad(s, Text(path, path_len));
                 return 0;
             }
@@ -828,6 +864,7 @@ namespace EmuSen.Crystal.Session
         {
             try
             {
+                using var gate = new GateScope(B(ctx).Service.Options.Gate);
                 B(ctx).Change();
                 SessionService.LogSwitch(on != 0);
                 return 0;
@@ -860,6 +897,13 @@ namespace EmuSen.Crystal.Session
             }
             catch (Exception e) { return Fail(e); }
         }
+
+        // The tables NewTable made and Forget has not freed, so a table handed back is known for one.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<nint, byte> Tables = new();
+
+        public static bool Made(EmuSenSessionV1* table) => Tables.ContainsKey((nint)table);
+
+        public static void Forget(EmuSenSessionV1* table) => Tables.TryRemove((nint)table, out _);
 
         // A table over one binding, in native memory a C caller can keep for the provider's life.
         public static EmuSenSessionV1* NewTable(GCHandle binding)
@@ -947,6 +991,7 @@ namespace EmuSen.Crystal.Session
             t->log_switch = &LogSwitch;
             t->log_status = &LogStatus;
             t->events_drain = &EventsDrain;
+            Tables[(nint)t] = 0;
             return t;
         }
     }

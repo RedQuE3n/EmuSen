@@ -25,6 +25,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Shell", "EmuSen.Shel
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Crystal", "EmuSen.Crystal\EmuSen.Crystal.csproj", "{40C38087-0EA1-4B65-A08C-355FF97ADCB3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Crystal.Client", "EmuSen.Crystal.Client\EmuSen.Crystal.Client.csproj", "{24123443-0A4C-44D7-B952-95B603AF6620}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -167,6 +169,18 @@ Global
 		{40C38087-0EA1-4B65-A08C-355FF97ADCB3}.Release|x64.Build.0 = Release|Any CPU
 		{40C38087-0EA1-4B65-A08C-355FF97ADCB3}.Release|x86.ActiveCfg = Release|Any CPU
 		{40C38087-0EA1-4B65-A08C-355FF97ADCB3}.Release|x86.Build.0 = Release|Any CPU
+		{24123443-0A4C-44D7-B952-95B603AF6620}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{24123443-0A4C-44D7-B952-95B603AF6620}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{24123443-0A4C-44D7-B952-95B603AF6620}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{24123443-0A4C-44D7-B952-95B603AF6620}.Debug|x64.Build.0 = Debug|Any CPU
+		{24123443-0A4C-44D7-B952-95B603AF6620}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{24123443-0A4C-44D7-B952-95B603AF6620}.Debug|x86.Build.0 = Debug|Any CPU
+		{24123443-0A4C-44D7-B952-95B603AF6620}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{24123443-0A4C-44D7-B952-95B603AF6620}.Release|Any CPU.Build.0 = Release|Any CPU
+		{24123443-0A4C-44D7-B952-95B603AF6620}.Release|x64.ActiveCfg = Release|Any CPU
+		{24123443-0A4C-44D7-B952-95B603AF6620}.Release|x64.Build.0 = Release|Any CPU
+		{24123443-0A4C-44D7-B952-95B603AF6620}.Release|x86.ActiveCfg = Release|Any CPU
+		{24123443-0A4C-44D7-B952-95B603AF6620}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

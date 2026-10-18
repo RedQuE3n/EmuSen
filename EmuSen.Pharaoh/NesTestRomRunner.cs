@@ -1,11 +1,13 @@
 using System;
 using System.IO;
-using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MoonRT;
+using System.Linq;
+using System.Text.Json;
+using EmuSen.Crystal.Client;
+using EmuSen.Crystal.Client.Contract;
 
 namespace EmuSen.Pharaoh
 {
-    // Runs a blargg-protocol test ROM headless on MoonRT and reads its verdict out of PRG RAM - see Moon_TestRoms.md.
+    // Runs a blargg-protocol test ROM headless and reads its verdict out of PRG RAM, through the frontend API - see Moon_TestRoms.md.
     public static class NesTestRomRunner
     {
         public const int DefaultFrameBudget = NesTestRomProtocol.DefaultFrameBudget;
@@ -13,37 +15,51 @@ namespace EmuSen.Pharaoh
         public static NesTestRomResult Run(string romPath, int frameBudget = DefaultFrameBudget)
         {
             string name = Path.GetFileNameWithoutExtension(romPath);
-            if (!MoonRtCore.Available) return new NesTestRomResult(name, NesTestRomOutcome.Error, -1, $"the NES core is missing: {MoonNative.Report}", 0, 0);
-            // Third-party ROMs are read-only fixtures; nothing here should leave an .srm beside them.
-            using var core = new MoonRtCore { Options = new CoreOptions { BatteryRamDisabled = true } };
+            using var runtime = new CrystalRuntime();
+            // A build with no engine for the NES is an error; a board its engine does not implement is a skip.
+            if (!JsonDocument.Parse(runtime.Engines()).RootElement.EnumerateArray().Any(e => e.GetProperty("available").GetBoolean() && e.GetProperty("systems").EnumerateArray().Any(s => s.GetString() == "nes")))
+                return new NesTestRomResult(name, NesTestRomOutcome.Error, -1, "the NES core is missing: no engine of this build runs the NES", 0, 0);
+            CrystalSession session;
             try
             {
-                core.LoadRom(romPath);
+                // Third-party ROMs are read-only fixtures; nothing here should leave an .srm beside them.
+                session = runtime.Open(new CrystalOpen { Path = romPath, NoBattery = true });
             }
-            catch (NotSupportedException ex)
+            catch (CrystalException ex) when (ex.Status == CrystalAbi.NoEngine)
             {
                 return new NesTestRomResult(name, NesTestRomOutcome.Unsupported, -1, ex.Message, 0, 0);
             }
-            catch (Exception ex) when (ex is InvalidDataException or IOException or InvalidOperationException)
+            catch (CrystalException ex)
             {
                 return new NesTestRomResult(name, NesTestRomOutcome.Error, -1, ex.Message, 0, 0);
             }
-            core.SkipRendering = true;
-            return RunLoaded(core, a => core.ReadSpace("PRGRAM", a), core.Reset, name, frameBudget);
+            using (session)
+            {
+                session.Speed(100, drawNone: true);
+                return RunLoaded(session, name, frameBudget);
+            }
         }
 
-        // <readPrgRam> reads PRG RAM by CPU address, as the protocol is read - see Moon_TestRoms.md §2.1.
-        public static NesTestRomResult RunLoaded(ICore core, Func<int, byte> readPrgRam, Action reset, string name, int frameBudget = DefaultFrameBudget)
+        // PRG RAM is read by CPU address, as the protocol is read - see Moon_TestRoms.md §2.1.
+        private static NesTestRomResult RunLoaded(CrystalSession session, string name, int frameBudget)
         {
-            var protocol = new NesTestRomProtocol(readPrgRam, reset);
+            byte ReadPrgRam(int address)
+            {
+                Span<byte> one = stackalloc byte[1];
+                session.ReadSpace("PRGRAM", unchecked((uint)address), one);
+                return one[0];
+            }
+            var protocol = new NesTestRomProtocol(ReadPrgRam, session.Reset);
+            var info = new CrystalFrameInfo();
+            var sound = new short[1 << 16];
             for (long frame = 1; frame <= frameBudget; frame++)
             {
                 try
                 {
-                    core.RunFrame();
-                    core.DequeueAudioSamples(int.MaxValue);
+                    session.Frame(ref info);
+                    while (session.DrainAudio(sound, out _) * 2 == sound.Length) { }
                 }
-                catch (Exception ex)
+                catch (CrystalException ex)
                 {
                     return new NesTestRomResult(name, NesTestRomOutcome.Error, -1, ex.Message, frame, protocol.Resets);
                 }

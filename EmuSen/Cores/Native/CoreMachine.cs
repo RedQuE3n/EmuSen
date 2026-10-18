@@ -279,7 +279,9 @@ namespace EmuSen.Cores.Native
                 fixed (byte* data = into) return _api.RawCopy(Handle, raw, data, (nuint)into.Length);
         }
 
-        public long CopyFrame(byte[] into)
+        public long CopyFrame(byte[] into) => CopyFrame(into.AsSpan());
+
+        public long CopyFrame(Span<byte> into)
         {
             lock (_gate)
                 fixed (byte* data = into) return _api.FrameCopy(Handle, data, (nuint)into.Length);
@@ -309,6 +311,26 @@ namespace EmuSen.Cores.Native
                 fixed (short* data = samples) n = _api.AudioDrain(Handle, data, (nuint)samples.Length, maxFrames, &rate);
                 if (n < wanted) Array.Resize(ref samples, (int)Math.Max(0, n));
                 return (samples, rate);
+            }
+        }
+
+        // DrainAudio into the caller's buffer, which allocates nothing; the stereo frames written.
+        public int DrainAudio(Span<short> into, out int rate)
+        {
+            lock (_gate)
+            {
+                int wanted = (int)Math.Min(into.Length, BufferedSamples);
+                wanted -= wanted & 1;
+                int r = AudioSampleRate;
+                if (wanted <= 0)
+                {
+                    rate = r;
+                    return 0;
+                }
+                long n;
+                fixed (short* data = into) n = _api.AudioDrain(Handle, data, (nuint)wanted, wanted / 2, &r);
+                rate = r;
+                return (int)Math.Max(0, n) / 2;
             }
         }
 
@@ -529,6 +551,34 @@ namespace EmuSen.Cores.Native
             }
         }
 
+        // A processor's registers into the caller's buffer, allocating nothing; how many there are, written only when the buffer holds them.
+        public int Registers(uint processor, Span<long> into)
+        {
+            if (!Has(CoreInterface.CapDebugRegisters)) return 0;
+            lock (_gate)
+            {
+                long n = _api.DebugRegisters(Handle, processor, null, 0);
+                if (n <= 0) return 0;
+                if (n > into.Length) return (int)n;
+                fixed (long* v = into) _api.DebugRegisters(Handle, processor, v, (nuint)n);
+                return (int)n;
+            }
+        }
+
+        // The phase times into the caller's buffer, allocating nothing; how many there are, written only when the buffer holds them.
+        public int Phases(Span<long> into)
+        {
+            if (!Has(CoreInterface.CapPhases)) return 0;
+            lock (_gate)
+            {
+                long n = _api.Phases(Handle, null, 0);
+                if (n <= 0) return 0;
+                if (n > into.Length) return (int)n;
+                fixed (long* v = into) _api.Phases(Handle, v, (nuint)n);
+                return (int)n;
+            }
+        }
+
         public long[] Registers(uint processor)
         {
             if (!Has(CoreInterface.CapDebugRegisters)) return Array.Empty<long>();
@@ -555,17 +605,20 @@ namespace EmuSen.Cores.Native
             }
         }
 
-        // Every event waiting, oldest first.
-        public IReadOnlyList<CoreInterface.Event> DrainEvents()
+        // The events DrainEvents read, kept so a frame that raises them allocates nothing.
+        private CoreInterface.Event[] _events = Array.Empty<CoreInterface.Event>();
+
+        // Every event waiting, oldest first, valid until the next call.
+        public ReadOnlySpan<CoreInterface.Event> DrainEvents()
         {
             lock (_gate)
             {
                 long n = _api.Events(Handle, null, 0, 0);
-                if (n <= 0) return Array.Empty<CoreInterface.Event>();
-                var events = new CoreInterface.Event[n];
-                for (int i = 0; i < events.Length; i++) events[i].Size = (uint)sizeof(CoreInterface.Event);
-                fixed (CoreInterface.Event* e = events) n = _api.Events(Handle, e, (nuint)events.Length, (nuint)sizeof(CoreInterface.Event));
-                return n == events.Length ? events : events[..(int)Math.Max(0, n)];
+                if (n <= 0) return ReadOnlySpan<CoreInterface.Event>.Empty;
+                if (_events.Length < n) _events = new CoreInterface.Event[n];
+                for (int i = 0; i < n; i++) _events[i] = new CoreInterface.Event { Size = (uint)sizeof(CoreInterface.Event) };
+                fixed (CoreInterface.Event* e = _events) n = _api.Events(Handle, e, (nuint)n, (nuint)sizeof(CoreInterface.Event));
+                return _events.AsSpan(0, (int)Math.Max(0, n));
             }
         }
 
@@ -577,6 +630,7 @@ namespace EmuSen.Cores.Native
         // A queue's records as lines; machine 0 is the library's own queue.
         public static IReadOnlyList<string> DrainLog(CoreInterface api, nint machine)
         {
+            if (api.LogDrain(machine, null, 0) <= 0) return Array.Empty<string>();
             var lines = new List<string>();
             for (int round = 0; round < 8; round++)
             {

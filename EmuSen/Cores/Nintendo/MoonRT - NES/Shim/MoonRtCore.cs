@@ -91,7 +91,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
         }
 
         // The RESET button - see Moon_Core.md §6.
-        public void Reset()
+        public override void Reset()
         {
             if (!IsRomLoaded) throw new InvalidOperationException("Reset() called before LoadRom().");
             try { Machine.Core.Reset(); }

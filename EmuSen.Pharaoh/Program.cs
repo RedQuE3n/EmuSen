@@ -1,12 +1,10 @@
-using EmuSen.Common.Imaging;
-using EmuSen.Cores;
+using System.Text.Json;
+using EmuSen.Crystal.Client;
 using EmuSen.Pharaoh;
 using EmuSen.Pharaoh.Cli;
+using EmuSen.Pharaoh.Imaging;
 using EmuSen.Pharaoh.Reference;
-using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
-using EmuSen.DianaSh.DianaSh.Etc;
-using EmuSen.DianaSh.DianaSh.Dev;
 
 // Headless script-driven debugging harness - loads a ROM, runs the
 // configured engine for a fixed number of frames with no window/audio/human
@@ -114,12 +112,6 @@ class Program
             return 1;
         }
 
-        // Off by default (matches DebugSettings.MasterLoggingEnabled's own
-        // default) - only flip it on when explicitly asked, since it turns
-        // on every individually-enabled *Logging flag's live console spam
-        // (the NES's PPU write log), useful for a short, targeted run but
-        // far too noisy over a long one.
-        if (options.Verbose) EmuSen.Debug.DebugSettings.MasterLoggingEnabled = true;
 
         var log = new List<string>();
         void Emit(string line)
@@ -128,231 +120,181 @@ class Program
             log.Add(line);
         }
 
-        // HeadlessDebugOptions.Parse already validated every --flag by the
-        // same DebugSettings reflection lookup below, so any warnings are
-        // ready the moment Emit exists - unlike the old Console.WriteLine
-        // from inside argument parsing, these now actually land in --out.
+        // Parse validated every --flag, so its warnings are ready the moment Emit exists, and land in --out too.
         foreach (string w in warnings) Emit(w);
 
-        foreach (string flagSpec in options.FlagsToEnable)
-        {
-            string[] parts = flagSpec.Split(new[] { '=' }, 2);
-            string flagName = parts[0];
-            string? rawValue = parts.Length >= 2 ? parts[1] : null;
+        using var runtime = new CrystalRuntime();
 
-            var settingsType = typeof(EmuSen.Debug.DebugSettings);
-            var prop = settingsType.GetProperty(flagName);
-            var field = prop == null ? settingsType.GetField(flagName) : null;
-            Type? memberType = prop?.PropertyType ?? field?.FieldType;
+        // Off by default; on when asked, since it turns on every individually-enabled logging flag's console output.
+        if (options.Verbose) runtime.LogSwitch = true;
+        // Any known flag turns the master switch on, as setting one always did; the one known today is that switch.
+        if (options.FlagsToEnable.Any(spec => HeadlessDebugOptions.Flags.ContainsKey(spec.Split('=', 2)[0]))) runtime.LogSwitch = true;
 
-            if (memberType == null) continue; // already warned above
-
-            // Parse already proved this converts, by this same function.
-            HeadlessDebugOptions.TryConvertFlagValue(rawValue, memberType, out object? value, out _);
-            if (prop != null) prop.SetValue(null, value);
-            else field!.SetValue(null, value);
-
-            EmuSen.Debug.DebugSettings.MasterLoggingEnabled = true;
-        }
-
-        // A create option, latched at LoadRom, which is what reads the .srm - see §3.15's --nobattery entry.
-        var coreOptions = new CoreOptions { BatteryRamDisabled = options.NoBattery };
+        // A create option, latched at open, which is what reads the .srm - see §3.15's --nobattery entry.
         if (options.NoBattery) Emit("[ROM] --nobattery: the cartridge save is neither read nor written.");
 
         // So a throttled measurement says so in its own log, not just on the parent's console - see §3.42.
         if (CpuThrottle.AlreadyThrottled) Emit("[THROTTLE] This run is inside a CPU quota; every timing below is a slow-machine timing.");
 
         Emit($"[ROM] Loading: {options.RomPath}");
-        ICore core;
+        CrystalSession session;
         try
         {
-            string? engine = CoreFactory.ConfiguredEngine(options.RomPath);
-            core = CoreFactory.Create(options.RomPath, headless: true, engine, coreOptions);
-            CoreFactory.LoadInto(core, options.RomPath);
-            if (CoreFactory.EngineNotice(options.RomPath, engine, core) is { } notice) Emit($"[core] {notice}");
+            session = runtime.Open(new CrystalOpen { Path = options.RomPath, NoBattery = options.NoBattery });
+            if (JsonDocument.Parse(session.Info()).RootElement.GetProperty("notices").GetProperty("engine").GetString() is { } notice) Emit($"[core] {notice}");
         }
-        catch (Exception ex) when (ex is NotSupportedException or InvalidDataException)
+        catch (CrystalException ex)
         {
             // A cartridge this build can't map is a bad-input answer, not a crash.
             Emit($"[ERROR] {ex.Message}");
             return 1;
         }
-        Emit($"[ROM] Core: {core.CoreName}");
-
-        // Jumping straight to a saved moment (e.g. Link already standing
-        // in a room) sidesteps blindly scripting menu-navigation input
-        // with --tap, which only works when the exact input timing is
-        // already known.
-        if (options.LoadStatePath != null)
+        using (session)
         {
-            if (!File.Exists(options.LoadStatePath))
+            string coreName = JsonDocument.Parse(session.ServiceInfo()).RootElement.GetProperty("engine").GetString() ?? "";
+            Emit($"[ROM] Core: {coreName}");
+
+            // Jumping straight to a saved moment sidesteps scripting menu navigation whose timing is not known.
+            if (options.LoadStatePath != null)
             {
-                Emit($"[ERROR] State file not found: {options.LoadStatePath}");
-                return 1;
-            }
-            core.LoadState(options.LoadStatePath);
-            Emit($"[STATE] Loaded: {options.LoadStatePath}");
-        }
-
-        // Feeds
-        // `coretop`'s hardware-load bars (not that this headless entry
-        // point has any interactive use for them today, but there's no
-        // reason for it to report less than the other two frontends do).
-        var bundle = CoreFactory.Bundle(core);
-        var debugTarget = bundle.DebugTarget;
-        var debugCmd = DianaShInterpreter.CreateDefault(debugTarget, null,
-            bundle.CheatAutoDetectCodec, bundle.CheatExplicitCodec, bundle.CpuTraceSwitch);
-
-        // Same two ranges registered from power-on in Hotaru's
-        // Program.cs for the Yoshi/coin investigation - duplicated here
-        // rather than shared, since this entry point has no window/input
-        // loop to hang that wiring off of and needs them active before the
-        // very first frame regardless.
-        // Skipped whole on a core with no space by that name, rather than registering watches that never fire.
-        if (debugTarget.GetMemorySpaces().Any(s => s.Name == "WRAM"))
-        {
-            debugTarget.Watches.AddWatch("WRAM", 0x8000, 0x1800);
-            debugTarget.Watches.AddWatch("WRAM", 0x0D80, 0x0080);
-        }
-
-        foreach (string spec in options.ExtraWatches)
-        {
-            string[] parts = spec.Split(':');
-            if (parts.Length < 3)
-            {
-                Emit($"[WARN] Ignoring malformed --watch '{spec}' (expected space:addr:len[:kind])");
-                continue;
-            }
-            string cmd = $"watch add {parts[0]} {parts[1]} {parts[2]}" + (parts.Length >= 4 ? $" {parts[3]}" : "");
-            Emit(debugCmd.Execute(cmd));
-        }
-
-        // Shared between both frame-loop modes below (only one of which
-        // actually runs per invocation) - see §3.15's --autoshot entry.
-        ulong? lastAutoshotHash = null;
-        if (options.AutoshotDir != null) Directory.CreateDirectory(options.AutoshotDir);
-
-        void CheckAutoshot(long frameNum)
-        {
-            if (options.AutoshotDir == null) return;
-            byte[] frame = core.GetFrameBufferRgba();
-            ulong hash = FrameHash.Compute(frame);
-            if (lastAutoshotHash == hash) return;
-            lastAutoshotHash = hash;
-            string path = Path.Combine(options.AutoshotDir, $"frame_{frameNum}.bmp");
-            BmpFile.Write(path, frame, core.ScreenWidth, core.ScreenHeight);
-            Emit($"[AUTOSHOT] Frame {frameNum} changed -> {path}");
-        }
-
-        // --commands takes over the whole run - see §3.15.
-        if (options.CommandsPath != null)
-        {
-            // CheckAutoshot(n) directly - post-increment, matching this
-            // mode's own autoshot filename convention (see §3.15).
-            // debugTarget.RefreshProviders() runs here too, once per frame,
-            // so the --commands verbs this scriptRunner drives (`spriteoverlay`,
-            // any future one reading a provider) see the frame that just ran,
-            // not whatever was live at debugTarget's construction.
-            var runner = new FrameRunner(core, options.FrameCount, Emit, n => { debugTarget.RefreshProviders(); CheckAutoshot(n); })
-            {
-                Verbose = options.Verbose,
-                OnHalted = debugTarget.RefreshProviders,
-            };
-            var scriptRunner = new CommandsScriptRunner(runner, debugTarget, debugCmd, Emit);
-            if (!scriptRunner.Run(options.CommandsPath))
-            {
-                return 1;
-            }
-
-            FinishRun(core, Emit);
-            WriteSaveStateIfRequested(core, options.SaveStatePath, Emit);
-            WriteOutLogIfRequested(options.OutPath, log);
-            return 0;
-        }
-
-        Emit($"[RUN] Executing {options.FrameCount} frames...");
-
-        // CheckAutoshot(n - 1) - the classic loop's autoshot filenames use
-        // the frame *about to run* (0-indexed, pre-increment), not
-        // FrameRunner's own post-increment CurrentFrame (see §3.15).
-        // debugTarget.RefreshProviders() runs here too, once per frame -
-        // see the --commands runner's own comment above.
-        var classicRunner = new FrameRunner(core, options.FrameCount, Emit, n => { debugTarget.RefreshProviders(); CheckAutoshot(n - 1); })
-        {
-            Verbose = options.Verbose,
-            OnHalted = debugTarget.RefreshProviders,
-        };
-        while (classicRunner.CurrentFrame < options.FrameCount)
-        {
-            // Captured before RunFrames(1) advances CurrentFrame, so
-            // --tap/--screenshot's frame indexing stays pre-increment (§3.15).
-            long frame = classicRunner.CurrentFrame;
-            foreach (var tap in options.Taps)
-            {
-                bool pressed = frame >= tap.Start && frame < tap.End;
-                if (pressed) classicRunner.Hold(tap.Button, tap.Controller);
-                else classicRunner.Release(tap.Button, tap.Controller);
-            }
-            classicRunner.RunFrames(1);
-            foreach (var shot in options.Screenshots)
-            {
-                if (shot.Frame == frame)
+                if (!File.Exists(options.LoadStatePath))
                 {
-                    BmpFile.Write(shot.Path, core.GetFrameBufferRgba(), core.ScreenWidth, core.ScreenHeight);
-                    Emit($"[SCREENSHOT] Frame {frame} -> {shot.Path}");
+                    Emit($"[ERROR] State file not found: {options.LoadStatePath}");
+                    return 1;
+                }
+                session.LoadState(options.LoadStatePath);
+                Emit($"[STATE] Loaded: {options.LoadStatePath}");
+            }
+
+            // The shell over the session's own table, so its debug verbs and the frame call reach one session - see EmuSen_Backend.md §14.8.
+            var debugCmd = DianaShInterpreter.CreateForService(session.ServiceTable());
+
+            // The two ranges registered from power-on for the Yoshi/coin investigation, on a core with a WRAM space.
+            if (JsonDocument.Parse(session.Spaces()).RootElement.EnumerateArray().Any(s => s.GetProperty("name").GetString() == "WRAM"))
+            {
+                session.WatchAdd("WRAM", 0x8000, 0x1800, 0);
+                session.WatchAdd("WRAM", 0x0D80, 0x0080, 0);
+            }
+
+            foreach (string spec in options.ExtraWatches)
+            {
+                string[] parts = spec.Split(':');
+                if (parts.Length < 3)
+                {
+                    Emit($"[WARN] Ignoring malformed --watch '{spec}' (expected space:addr:len[:kind])");
+                    continue;
+                }
+                string cmd = $"watch add {parts[0]} {parts[1]} {parts[2]}" + (parts.Length >= 4 ? $" {parts[3]}" : "");
+                Emit(debugCmd.Execute(cmd));
+            }
+
+            // Shared between both frame-loop modes below, only one of which runs - see §3.15's --autoshot entry.
+            ulong? lastAutoshotHash = null;
+            if (options.AutoshotDir != null) Directory.CreateDirectory(options.AutoshotDir);
+            FrameRunner? current = null;
+
+            void CheckAutoshot(long frameNum)
+            {
+                if (options.AutoshotDir == null) return;
+                var (frame, width, height) = current!.Picture();
+                ulong hash = FrameHash.Compute(frame);
+                if (lastAutoshotHash == hash) return;
+                lastAutoshotHash = hash;
+                string path = Path.Combine(options.AutoshotDir, $"frame_{frameNum}.bmp");
+                BmpFile.Write(path, frame, width, height);
+                Emit($"[AUTOSHOT] Frame {frameNum} changed -> {path}");
+            }
+
+            // --commands takes over the whole run - see §3.15.
+            if (options.CommandsPath != null)
+            {
+                // Post-increment autoshot names in this mode; the frame call refreshes the debugger's snapshots itself - see §3.15.
+                var runner = current = new FrameRunner(session, options.FrameCount, Emit, n => CheckAutoshot(n)) { Verbose = options.Verbose };
+                var scriptRunner = new CommandsScriptRunner(runner, debugCmd, Emit);
+                if (!scriptRunner.Run(options.CommandsPath))
+                {
+                    return 1;
+                }
+
+                FinishRun(session, Emit);
+                WriteSaveStateIfRequested(session, options.SaveStatePath, Emit);
+                WriteOutLogIfRequested(options.OutPath, log);
+                return 0;
+            }
+
+            Emit($"[RUN] Executing {options.FrameCount} frames...");
+
+            // The classic loop's autoshot names use the frame about to run, pre-increment - see §3.15.
+            var classicRunner = current = new FrameRunner(session, options.FrameCount, Emit, n => CheckAutoshot(n - 1)) { Verbose = options.Verbose };
+            while (classicRunner.CurrentFrame < options.FrameCount)
+            {
+                // Captured before RunFrames(1) advances CurrentFrame, so --tap/--screenshot stay pre-increment (§3.15).
+                long frame = classicRunner.CurrentFrame;
+                foreach (var tap in options.Taps)
+                {
+                    bool pressed = frame >= tap.Start && frame < tap.End;
+                    if (pressed) classicRunner.Hold(tap.Button, tap.Controller);
+                    else classicRunner.Release(tap.Button, tap.Controller);
+                }
+                classicRunner.RunFrames(1);
+                foreach (var shot in options.Screenshots)
+                {
+                    if (shot.Frame == frame)
+                    {
+                        var (rgba, width, height) = classicRunner.Picture();
+                        BmpFile.Write(shot.Path, rgba, width, height);
+                        Emit($"[SCREENSHOT] Frame {frame} -> {shot.Path}");
+                    }
                 }
             }
-        }
 
-        FinishRun(core, Emit);
+            FinishRun(session, Emit);
 
-        // Captures whatever scene --tap/frame-count navigation just
-        // reached, so a promising moment (found once, maybe after a lot of
-        // trial and error) can be jumped back to instantly with
-        // --loadstate on every later run instead of re-deriving it.
-        WriteSaveStateIfRequested(core, options.SaveStatePath, Emit);
+            // A moment found once, perhaps after much trial, is jumped back to with --loadstate on every later run.
+            WriteSaveStateIfRequested(session, options.SaveStatePath, Emit);
 
-        List<string> commands;
-        if (options.ScriptPath != null)
-        {
-            if (!File.Exists(options.ScriptPath))
+            List<string> commands;
+            if (options.ScriptPath != null)
             {
-                Emit($"[ERROR] Script not found: {options.ScriptPath}");
-                return 1;
+                if (!File.Exists(options.ScriptPath))
+                {
+                    Emit($"[ERROR] Script not found: {options.ScriptPath}");
+                    return 1;
+                }
+                commands = File.ReadAllLines(options.ScriptPath)
+                    .Select(l => l.Trim())
+                    .Where(l => l.Length > 0 && !l.StartsWith('#'))
+                    .ToList();
             }
-            commands = File.ReadAllLines(options.ScriptPath)
-                .Select(l => l.Trim())
-                .Where(l => l.Length > 0 && !l.StartsWith('#'))
-                .ToList();
-        }
-        else
-        {
-            commands = new List<string> { "watch list" };
-            commands.AddRange(debugTarget.Watches.GetWatches().Select(w => $"watch log {w.Id} 500"));
-        }
+            else
+            {
+                commands = new List<string> { "watch list" };
+                commands.AddRange(JsonDocument.Parse(session.WatchList()).RootElement.EnumerateArray().Select(w => $"watch log {w.GetProperty("id").GetInt64()} 500"));
+            }
 
-        Emit("");
-        Emit("=== Command output ===");
-        foreach (string cmd in commands)
-        {
-            Emit($"> {cmd}");
-            Emit(debugCmd.Execute(cmd));
+            Emit("");
+            Emit("=== Command output ===");
+            foreach (string cmd in commands)
+            {
+                Emit($"> {cmd}");
+                Emit(debugCmd.Execute(cmd));
+            }
+
+            WriteOutLogIfRequested(options.OutPath, log);
+
+            return 0;
         }
-
-        WriteOutLogIfRequested(options.OutPath, log);
-
-        return 0;
     }
 
-    private static void FinishRun(ICore core, Action<string> emit)
+    private static void FinishRun(CrystalSession session, Action<string> emit)
     {
-        emit($"[RUN] Done, {core.TotalFrames} total frames executed.");
+        emit($"[RUN] Done, {JsonDocument.Parse(session.Info()).RootElement.GetProperty("total_frames").GetInt64()} total frames executed.");
     }
 
-    private static void WriteSaveStateIfRequested(ICore core, string? saveStatePath, Action<string> emit)
+    private static void WriteSaveStateIfRequested(CrystalSession session, string? saveStatePath, Action<string> emit)
     {
         if (saveStatePath == null) return;
-        core.SaveState(saveStatePath);
+        session.SaveState(saveStatePath);
         emit($"[STATE] Saved: {saveStatePath}");
     }
 

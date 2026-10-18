@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using EmuSen.Common.Catalogue;
-using EmuSen.Cores.Nintendo.MoonRT;
-using EmuSen.Crystal.Systems.Nes;
+using System.Text.Json;
+using EmuSen.Crystal.Client;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Library.Catalogue;
 using EmuSen.Galaxia.Models;
@@ -32,6 +31,7 @@ namespace EmuSen.Pharaoh.Reference
 
             Console.WriteLine($"[INFO] indexing {root}");
             using SqliteCatalogue catalogue = SqliteCatalogue.Open(dbPath);
+            using var runtime = new CrystalRuntime();
 
             var entries = new List<RomEntry>();
             int read = 0, failed = 0;
@@ -43,7 +43,7 @@ namespace EmuSen.Pharaoh.Reference
 
                 try
                 {
-                    entries.Add(Describe(path, extension));
+                    entries.Add(Describe(runtime, path, extension));
                     read++;
                 }
                 catch (Exception)
@@ -64,7 +64,7 @@ namespace EmuSen.Pharaoh.Reference
 
         // Only the NES loader is asked for detail today; the others are catalogued
         // by name and size until their cores can answer the same questions.
-        private static RomEntry Describe(string path, string extension)
+        private static RomEntry Describe(CrystalRuntime runtime, string path, string extension)
         {
             var info = new FileInfo(path);
             string name = Path.GetFileNameWithoutExtension(path);
@@ -75,22 +75,25 @@ namespace EmuSen.Pharaoh.Reference
                 return new RomEntry(path, name, system, info.Length, null, null, null, null, 0, 0, false, null);
             }
 
-            // Described rather than loaded: an unimplemented board must still be
-            // catalogued with its number, since "which images use mapper 5" is the
-            // query the catalogue exists to answer.
-            NesHeader cart = NesHeader.Read(File.ReadAllBytes(path));
-            bool playable = MoonBoards.IsImplemented(cart.Mapper);
+            // The board as the NES pack reads the header, catalogued even where unimplemented; playable is whether the engine opens it.
+            JsonElement cart = JsonDocument.Parse(runtime.Route(path)).RootElement.GetProperty("cartridge");
+            if (cart.ValueKind != JsonValueKind.Object) throw new InvalidDataException($"{path} has no header the NES pack reads");
+            bool playable;
+            try
+            {
+                using CrystalSession session = runtime.Open(new CrystalOpen { Path = path, NoBattery = true });
+                playable = true;
+            }
+            catch (CrystalException)
+            {
+                playable = false;
+            }
 
             return new RomEntry(
                 path, name, system, info.Length, null,
-                cart.Mapper.ToString(CultureInfo.InvariantCulture),
-                cart.Trust switch
-                {
-                    NesHeaderTrust.Archaic => "archaic",
-                    NesHeaderTrust.Unverifiable => "unverifiable",
-                    _ => "clean",
-                },
-                null, cart.PrgBanks * NesHeader.PrgBankSize, cart.ChrIsRam ? NesHeader.ChrBankSize : cart.ChrBanks * NesHeader.ChrBankSize, playable, null);
+                cart.GetProperty("board").GetInt32().ToString(CultureInfo.InvariantCulture),
+                cart.GetProperty("header_trust").GetString(),
+                null, cart.GetProperty("prg_bytes").GetInt64(), cart.GetProperty("chr_bytes").GetInt64(), playable, null);
         }
 
         private static string SystemFor(string extension) => extension switch

@@ -1,4 +1,4 @@
-using EmuSen.Common.Imaging;
+using EmuSen.Pharaoh.Imaging;
 using EmuSen.Cores;
 using EmuSen.WiseMan.Fixtures;
 

@@ -1,5 +1,5 @@
 using EmuSen.WiseMan.Fixtures;
-using EmuSen.Common.Imaging;
+using EmuSen.Pharaoh.Imaging;
 using static EmuSen.WiseMan.Cores.MercuryCommercialRom;
 
 namespace EmuSen.WiseMan.Cores

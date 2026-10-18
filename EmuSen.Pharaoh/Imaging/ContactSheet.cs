@@ -1,4 +1,4 @@
-namespace EmuSen.Common.Imaging
+namespace EmuSen.Pharaoh.Imaging
 {
     // Tiles frames into one grid, for "is this actually moving" across a span without N screenshots.
     public static class ContactSheet

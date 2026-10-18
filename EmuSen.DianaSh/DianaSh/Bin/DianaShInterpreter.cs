@@ -227,6 +227,17 @@ namespace EmuSen.DianaSh.DianaSh.Bin
         }
 
         // The Rust shell, with every C# command it does not answer itself registered as the host's - see EmuSen_DianaSh.md §13.7.
+        // A shell over a session's emusen.session@1 table, as a frontend on Crystal's API hands it one; its commands reach the session through that table - see EmuSen_Backend.md §14.8.
+        public static unsafe DianaShInterpreter CreateForService(nint sessionService, IEnumerable<IDianaShCommand>? extraCommands = null)
+        {
+            SessionService provider = SessionService.Of((EmuSenSessionV1*)sessionService)
+                ?? throw new ArgumentException("not a session service table this process's provider made; the Rust Crystal's tables are B7's", nameof(sessionService));
+            SessionServiceOptions o = provider.Options;
+            DianaShSandbox.EnsureInitialWorkingDirectory();
+            if (DianaShNative.Active) return CreateNative(provider.DebugTarget, extraCommands, o.AutoDetectCodec, o.ExplicitCodec, o.Trace, null, o.CheatSystems, provider);
+            return CreateDefault(provider.DebugTarget, extraCommands, o.AutoDetectCodec, o.ExplicitCodec, o.Trace, null, o.CheatSystems);
+        }
+
         private static DianaShInterpreter CreateNative(
             IDebugTarget? target,
             IEnumerable<IDianaShCommand>? extraCommands,
@@ -234,7 +245,8 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             ICheatCodeCodec? cheatExplicitCodec,
             ICpuTraceSwitch? cpuTraceSwitch,
             DianaShSessionManager? sessions,
-            Func<IReadOnlyCollection<string>>? supportedCheatSystems)
+            Func<IReadOnlyCollection<string>>? supportedCheatSystems,
+            SessionService? provider = null)
         {
             NativeShell shell = sessions is null ? new NativeShell(keepsSessions: false) : sessions.Native ??= new NativeShell(keepsSessions: true);
             uint session = sessions is null ? 0 : shell.NewSession();
@@ -243,14 +255,14 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             IReadOnlyList<IDianaShCommand> Build() => DefaultCommands(target, extras, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, null, supportedCheatSystems, Unreachable, new CommandHistory());
             IReadOnlyList<IDianaShCommand> prototype = Build();
             // The session's own provider over its target, which the Rust command modules call - see EmuSen_DianaSh.md §13.11.
-            shell.SetSessionService(session, new SessionService(target, new SessionServiceOptions
+            shell.SetSessionService(session, provider ?? new SessionService(target, new SessionServiceOptions
             {
                 AutoDetectCodec = cheatAutoDetectCodec,
                 ExplicitCodec = cheatExplicitCodec,
                 Trace = cpuTraceSwitch,
                 CheatSystems = supportedCheatSystems,
                 CheatDatabaseFolder = () => global::EmuSen.Galaxia.Library.SettingFolders.Cheats(global::EmuSen.Galaxia.Models.AppSettings.Load()),
-            }));
+            }), owned: provider is null);
             shell.AddHost(session, HostManifest(shell, session, prototype, extras), new HostCommandFactory(target, Build, prototype));
             var facade = new DianaShInterpreter(shell, session);
             shell.Remember(session, facade);

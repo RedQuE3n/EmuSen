@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
-using EmuSen.Common.Catalogue;
+using EmuSen.Pharaoh.Reference;
 using EmuSen.Galaxia.Library.Catalogue;
 using EmuSen.Pharaoh.Reference;
 using Microsoft.Data.Sqlite;

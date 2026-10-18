@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The frontend API's C# binding, the one assembly a frontend references to drive the cores: the contract layer, C-shaped
+       functions over emusen_crystal.h's exports, and the binding over it, classes that dispose their handles. The
+       contract layer calls whichever implementation the switch chose: the platform library's exports, or the C#
+       implementation of step B2 in EmuSen/Crystal - see EmuSen_Backend.md §3.9 and §14. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- The contract layer is function pointers and structs, as the header is. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The C# implementation, found by export name as a library's are; nothing of it is named by a frontend. -->
+    <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
+    <!-- The platform library's loader and the input vocabulary, PadButton and PadAxis. -->
+    <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\EmuSen.Crystal\include\emusen_crystal.h" Link="include\emusen_crystal.h" />
+  </ItemGroup>
+
+</Project>

@@ -14,29 +14,91 @@ namespace EmuSen.Cores.Nintendo.MoonRT
     {
         private readonly MoonRtCore _engine;
         private readonly List<IDebugMemorySpace> _spaces = new();
-        private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _cpuRegisters, _videoRegisters, _apuRegisters, _coprocessorRegisters;
-        private readonly PollingProvider<IReadOnlyList<DebugSpriteInfo>> _sprites;
-        private readonly PollingProvider<IReadOnlyList<DebugPaletteInfo>> _palettes;
-        private readonly PollingProvider<IReadOnlyList<DebugAudioChannelInfo>> _audioChannels;
-        private readonly PollingProvider<IReadOnlyList<DebugLoadInfo>> _hardwareLoad;
-        private byte[]? _state;
+        private readonly IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> _cpuRegisters, _videoRegisters, _apuRegisters, _coprocessorRegisters;
+        private readonly IRealtimeProvider<IReadOnlyList<DebugSpriteInfo>> _sprites;
+        private readonly IRealtimeProvider<IReadOnlyList<DebugPaletteInfo>> _palettes;
+        private readonly IRealtimeProvider<IReadOnlyList<DebugAudioChannelInfo>> _audioChannels;
+        private readonly IRealtimeProvider<IReadOnlyList<DebugLoadInfo>> _hardwareLoad;
+
+        // Each frame's state and the rest the views read, in records made once and reused - see EmuSen_Backend.md §14.5.
+        private readonly SnapshotRing<Frame> _frames = new(() => new Frame());
+        private readonly Action<Frame> _fill;
+        private readonly ViewSpaceCopy.Reader _readSpace;
+        private readonly double[] _phases = new double[32];
+        private CoreMachine? _paletteOf;
+        private ViewSpaceCopy _paletteSpaces = ViewSpaceCopy.None;
+
+        // One frame of what the views read: the machine's state and listing, the bytes the palette view reads, the frame's time and the channels' mutes.
+        private sealed class Frame : ISnapshotRecord<Frame>
+        {
+            public StateLayout? Layout;
+            public NesHeader? Header;
+            public byte[] State = Array.Empty<byte>();
+            public ViewSpaceCopy PaletteSpaces = ViewSpaceCopy.None;
+            public byte[] Palette = Array.Empty<byte>();
+            public double FrameMilliseconds, FrameRateHz;
+            public uint Mutes;
+
+            public (StateLayout Layout, byte[] State)? Snapshot() => Layout is { } l ? (l, State) : null;
+
+            public bool Muted(int index) => (Mutes & (1u << index)) != 0;
+
+            public Frame Clone() => new()
+            {
+                Layout = Layout, Header = Header, State = State.ToArray(), PaletteSpaces = PaletteSpaces, Palette = Palette.ToArray(),
+                FrameMilliseconds = FrameMilliseconds, FrameRateHz = FrameRateHz, Mutes = Mutes,
+            };
+        }
 
         public MoonRtDebugTarget(MoonRtCore engine)
         {
             _engine = engine;
             foreach (var (name, writable, sideEffects) in new[] { ("RAM", true, false), ("PRGROM", false, false), ("PRGRAM", true, false), ("CHR", true, false), ("CIRAM", true, false), ("OAM", true, false), ("PALETTE", true, false), ("CPUBUS", true, true) })
                 _spaces.Add(new DelegateDebugMemorySpace(name, () => engine.SpaceSize(name), a => engine.ReadSpace(name, a), writable ? (a, v) => engine.WriteSpace(name, a, v) : null, sideEffects));
-            _cpuRegisters = Polled(ReadCpuRegisters);
-            _videoRegisters = Polled(ReadVideoRegisters);
-            _apuRegisters = Polled(ReadApuRegisters);
-            _coprocessorRegisters = Polled(() => Array.Empty<DebugRegisterValue>());
-            _sprites = new(ReadSprites, ReadSprites());
-            _palettes = new(() => Views.Palettes(_spaces), Views.Palettes(_spaces));
-            _audioChannels = new(ReadAudioChannels, ReadAudioChannels());
-            _hardwareLoad = new(ReadHardwareLoad, ReadHardwareLoad());
+            _fill = Fill;
+            _readSpace = ReadSpaceInto;
+            _frames.Refresh(_fill);
+            _cpuRegisters = new RingView<Frame, IReadOnlyList<DebugRegisterValue>>(_frames, ReadCpuRegisters);
+            _videoRegisters = new RingView<Frame, IReadOnlyList<DebugRegisterValue>>(_frames, ReadVideoRegisters);
+            _apuRegisters = new RingView<Frame, IReadOnlyList<DebugRegisterValue>>(_frames, ReadApuRegisters);
+            _coprocessorRegisters = new RingView<Frame, IReadOnlyList<DebugRegisterValue>>(_frames, _ => Array.Empty<DebugRegisterValue>());
+            _sprites = new RingView<Frame, IReadOnlyList<DebugSpriteInfo>>(_frames, ReadSprites);
+            _palettes = new RingView<Frame, IReadOnlyList<DebugPaletteInfo>>(_frames, f => Views.Palettes(f.PaletteSpaces.Over(_spaces, f.Palette)));
+            _audioChannels = new RingView<Frame, IReadOnlyList<DebugAudioChannelInfo>>(_frames, ReadAudioChannels);
+            _hardwareLoad = new RingView<Frame, IReadOnlyList<DebugLoadInfo>>(_frames, ReadHardwareLoad);
         }
 
-        private PollingProvider<IReadOnlyList<DebugRegisterValue>> Polled(Func<IReadOnlyList<DebugRegisterValue>> read) => new(read, read());
+        // The emulation thread's, once a frame: the state saved into the record, the palette view's spaces copied beside it.
+        private void Fill(Frame f)
+        {
+            f.Layout = _engine.IsRomLoaded ? _engine.Layout : null;
+            f.Header = _engine.Header;
+            f.FrameRateHz = _engine.FrameRateHz;
+            f.FrameMilliseconds = f.Layout is not null && _engine.PhaseMilliseconds(_phases, out _) is > 0 and var n && n <= _phases.Length ? _phases[0] : 0;
+            f.Mutes = 0;
+            for (int i = 0; i < 5; i++) if (f.Muted(i)) f.Mutes |= 1u << i;
+            if (f.Layout is not null)
+            {
+                PortMachine m = _engine.Machine;
+                int size = m.StateSize;
+                if (f.State.Length != size) f.State = new byte[size];
+                m.Save(f.State);
+            }
+            CoreMachine? core = _engine.IsRomLoaded ? _engine.Machine.Core : null;
+            if (!ReferenceEquals(core, _paletteOf))
+            {
+                _paletteOf = core;
+                _paletteSpaces = ViewSpaceCopy.Learn(_spaces, s => Views.Palettes(s));
+            }
+            f.PaletteSpaces = _paletteSpaces;
+            if (f.Palette.Length != _paletteSpaces.Total) f.Palette = new byte[_paletteSpaces.Total];
+            _paletteSpaces.Fill(f.Palette, _readSpace);
+        }
+
+        private void ReadSpaceInto(int space, Span<byte> into)
+        {
+            for (int a = 0; a < into.Length; a++) into[a] = _spaces[space].Read(a);
+        }
 
         public string CoreName => "NES";
         public WatchRegistry Watches => _engine.Watches;
@@ -80,28 +142,12 @@ namespace EmuSen.Cores.Nintendo.MoonRT
 
         public void RefreshProviders()
         {
-            _state = null;
-            _cpuRegisters.Refresh();
-            _videoRegisters.Refresh();
-            _apuRegisters.Refresh();
-            _coprocessorRegisters.Refresh();
-            _sprites.Refresh();
-            _palettes.Refresh();
-            _audioChannels.Refresh();
-            _hardwareLoad.Refresh();
+            _frames.Refresh(_fill);
         }
 
-        // The machine's state and its listing, taken once per refresh; null with no game.
-        private (StateLayout Layout, byte[] State)? Snapshot()
+        private static IReadOnlyList<DebugRegisterValue> ReadCpuRegisters(Frame f)
         {
-            if (!_engine.IsRomLoaded || _engine.Layout is not { } layout) return null;
-            _state ??= _engine.Machine.Save();
-            return (layout, _state);
-        }
-
-        private IReadOnlyList<DebugRegisterValue> ReadCpuRegisters()
-        {
-            if (Snapshot() is not (var l, var s)) return Array.Empty<DebugRegisterValue>();
+            if (f.Snapshot() is not (var l, var s)) return Array.Empty<DebugRegisterValue>();
             long p = l.Int(s, "Cpu.P");
             var values = new List<DebugRegisterValue>
             {
@@ -113,9 +159,9 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             return values;
         }
 
-        private IReadOnlyList<DebugRegisterValue> ReadVideoRegisters()
+        private static IReadOnlyList<DebugRegisterValue> ReadVideoRegisters(Frame f)
         {
-            if (Snapshot() is not (var l, var s)) return Array.Empty<DebugRegisterValue>();
+            if (f.Snapshot() is not (var l, var s)) return Array.Empty<DebugRegisterValue>();
             long status = l.Int(s, "Ppu.Status");
             return new DebugRegisterValue[]
             {
@@ -126,15 +172,15 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             };
         }
 
-        private IReadOnlyList<DebugRegisterValue> ReadApuRegisters()
+        private static IReadOnlyList<DebugRegisterValue> ReadApuRegisters(Frame f)
         {
-            if (Snapshot() is not (var l, var s)) return Array.Empty<DebugRegisterValue>();
+            if (f.Snapshot() is not (var l, var s)) return Array.Empty<DebugRegisterValue>();
             var values = new List<DebugRegisterValue>();
             for (int i = 0; i < l.Count("Apu.Registers"); i++) values.Add(new($"${0x4000 + i:X4}", (ulong)l.Int(s, "Apu.Registers", i), 8));
             values.Add(new("FrameCounter", (ulong)l.Int(s, "Apu.FrameCounter"), 8));
             values.Add(new("FrameIRQ", (ulong)l.Int(s, "Apu.FrameIrqPending"), 1));
             // The cartridge board's own registers ride along here - see Moon_Debug.md §3.1.
-            if (_engine.Header is { } header && MoonBoards.For(header.Mapper) is { } board)
+            if (f.Header is { } header && MoonBoards.For(header.Mapper) is { } board)
             {
                 values.Add(new($"Board:{board.Name}", 0, 8));
                 foreach (var (name, path, index, bits) in board.Registers) values.Add(new(name, (ulong)l.Int(s, path, index), bits));
@@ -142,9 +188,9 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             return values;
         }
 
-        private IReadOnlyList<DebugSpriteInfo> ReadSprites()
+        private static IReadOnlyList<DebugSpriteInfo> ReadSprites(Frame f)
         {
-            if (Snapshot() is not (var l, var s)) return Array.Empty<DebugSpriteInfo>();
+            if (f.Snapshot() is not (var l, var s)) return Array.Empty<DebugSpriteInfo>();
             ReadOnlySpan<byte> oam = l.Bytes(s, "Ppu.Oam");
             int height = (l.Int(s, "Ppu.Control") & 0x20) != 0 ? 16 : 8;
             var sprites = new List<DebugSpriteInfo>();
@@ -160,9 +206,9 @@ namespace EmuSen.Cores.Nintendo.MoonRT
         }
 
         // Level is a 0-100 rescale of whatever stands in for the channel's volume - see Moon_APU.md §5.
-        private IReadOnlyList<DebugAudioChannelInfo> ReadAudioChannels()
+        private static IReadOnlyList<DebugAudioChannelInfo> ReadAudioChannels(Frame f)
         {
-            if (Snapshot() is not (var l, var s)) return Array.Empty<DebugAudioChannelInfo>();
+            if (f.Snapshot() is not (var l, var s)) return Array.Empty<DebugAudioChannelInfo>();
             long I(string path) => l.Int(s, path);
             bool F(string path) => l.Flag(s, path);
             int Envelope(string channel) => (int)(F($"Apu.{channel}.Envelope.ConstantVolume") ? I($"Apu.{channel}.Envelope.Volume") : I($"Apu.{channel}.Envelope._decay"));
@@ -174,7 +220,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
                 bool muted = period < 8 || target > 0x7FF;
                 long length = I($"Apu.{channel}.LengthCounter");
                 int volume = Envelope(channel);
-                return new(index, name, length > 0 && !muted, Scale(volume, 15), _engine.IsChannelMuted(index),
+                return new(index, name, length > 0 && !muted, Scale(volume, 15), f.Muted(index),
                     $"Duty={I($"Apu.{channel}.Duty")} Period={period} Vol={volume} Len={length} Sweep={F($"Apu.{channel}.SweepEnabled")}");
             }
 
@@ -184,11 +230,11 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             {
                 Pulse(0, "Pulse 1", "Pulse1"),
                 Pulse(1, "Pulse 2", "Pulse2"),
-                new(2, "Triangle", triangleLength > 0, triangleLength > 0 && trianglePeriod >= 2 ? 100 : 0, _engine.IsChannelMuted(2),
+                new(2, "Triangle", triangleLength > 0, triangleLength > 0 && trianglePeriod >= 2 ? 100 : 0, f.Muted(2),
                     $"Period={trianglePeriod} Len={triangleLength} Halt={F("Apu.Triangle.ControlFlag")}"),
-                new(3, "Noise", noiseLength > 0, Scale(noiseVolume, 15), _engine.IsChannelMuted(3),
+                new(3, "Noise", noiseLength > 0, Scale(noiseVolume, 15), f.Muted(3),
                     $"PeriodIndex={I("Apu.Noise.PeriodIndex")} Vol={noiseVolume} Len={noiseLength} Short={F("Apu.Noise.ShortMode")}"),
-                new(4, "DMC", I("Apu.Dmc._bytesRemaining") > 0, Scale(dmcOut, 127), _engine.IsChannelMuted(4),
+                new(4, "DMC", I("Apu.Dmc._bytesRemaining") > 0, Scale(dmcOut, 127), f.Muted(4),
                     $"Rate={I("Apu.Dmc.RateIndex")} Out={dmcOut} Addr=0x{I("Apu.Dmc.SampleAddress"):X4} Len={I("Apu.Dmc.SampleLength")} Loop={F("Apu.Dmc.Loop")}"),
             };
         }
@@ -196,11 +242,11 @@ namespace EmuSen.Cores.Nintendo.MoonRT
         private static int Scale(int value, int max) => (int)Math.Round(value / (double)max * 100.0);
 
         // The whole frame's time is shown as the CPU's, as the machine runs its parts as one - see Moon_Debug.md §3.2.
-        private IReadOnlyList<DebugLoadInfo> ReadHardwareLoad()
+        private static IReadOnlyList<DebugLoadInfo> ReadHardwareLoad(Frame f)
         {
-            double budget = 1000.0 / _engine.FrameRateHz;
+            double budget = 1000.0 / f.FrameRateHz;
             double Percent(double ms) => Math.Min(100.0, ms / budget * 100.0);
-            double frame = _engine.IsRomLoaded ? _engine.LastFrameMilliseconds : 0;
+            double frame = f.FrameMilliseconds;
             return new[] { new DebugLoadInfo("CPU+APU", Percent(frame), DebugLoadKind.EmulatorCost), new DebugLoadInfo("PPU", Percent(0), DebugLoadKind.EmulatorCost) };
         }
 
@@ -261,7 +307,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
 
         public string GetSummaryText()
         {
-            if (Snapshot() is not (var l, var s) || _engine.Header is not { } header) return "No ROM loaded.";
+            if (_frames.Newest.Snapshot() is not (var l, var s) || _engine.Header is not { } header) return "No ROM loaded.";
             var board = MoonBoards.For(header.Mapper);
             long I(string path) => l.Int(s, path);
             var text = new StringBuilder();

@@ -26,6 +26,9 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
         private readonly Dictionary<uint, DianaShInterpreter> _facades = new();
         private readonly Dictionary<uint, DianaShSession> _sessions = new();
         private readonly List<SessionService> _services = new();
+
+        // The providers this shell made and ends with it; a runtime's own provider, handed in, is the runtime's to end.
+        private readonly List<SessionService> _owned = new();
         private readonly object _gate = new();
 
         public bool KeepsSessions { get; }
@@ -46,7 +49,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
             if (_handle != 0) Free(_handle);
             _handle = 0;
             foreach (GCHandle handle in _weak) handle.Free();
-            foreach (SessionService service in _services) service.Dispose();
+            foreach (SessionService service in _owned) service.Dispose();
         }
 
         public static int Check(int status) => status >= 0 ? status : throw new InvalidOperationException($"DianaSh: {LastError()} (status {status})");
@@ -80,9 +83,13 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
         }
 
         // A session's own emusen.session@1, the provider over its target, kept as long as this shell - see EmuSen_DianaSh.md §13.11.
-        public void SetSessionService(uint session, SessionService service)
+        public void SetSessionService(uint session, SessionService service, bool owned = true)
         {
-            lock (_gate) _services.Add(service);
+            lock (_gate)
+            {
+                _services.Add(service);
+                if (owned) _owned.Add(service);
+            }
             byte[] name = Encoding.UTF8.GetBytes("emusen.session");
             fixed (byte* n = name)
             {

@@ -1,4 +1,4 @@
-namespace EmuSen.Audio
+namespace EmuSen.Pharaoh.Audio
 {
     // Minimal uncompressed PCM WAV writer, mirroring BmpFile's style - no external audio library needed.
     public static class WavFile

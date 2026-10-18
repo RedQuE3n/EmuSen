@@ -3305,4 +3305,7 @@ checked clean for `aarch64-apple-darwin`; for Windows `ring`'s build script stil
 MinGW-w64 (`gcc-mingw-w64-x86-64`) installed for `ring`'s C, and keeps `x86_64-pc-windows-msvc` for the crates without
 C, which is every crate but the platform workspace; and it checks `aarch64-apple-darwin` on the Mac mini (§29), where
 Xcode compiles `ring` for its own target, as a compile check alone, under §29's rules, falling back to GitHub's
-`macos-latest` when `EMUSEN_MAC_RUNNER` is `off` (§31).
+`macos-latest` when `EMUSEN_MAC_RUNNER` is `off` (§31). Proved on 2026-10-18 by run 39102835456, a manual start on
+`cheatdb-download`: `x86_64-pc-windows-gnu` (with `ring` compiled by MinGW-w64 and `emusen-net` checked) and
+`x86_64-pc-windows-msvc` (the platform workspace left out) passed on `ubuntu-24.04`, and `aarch64-apple-darwin`
+passed on `emusen-mac-mini-1` in 73 seconds, `ring` compiled by Xcode; the push's own run, 39102831275, gave the same.

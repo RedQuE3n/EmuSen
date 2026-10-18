@@ -78,7 +78,7 @@ of the path it holds, so a linked image of the right size was passed over and a 
 long as the image passed off a file of another size (`EmuSen_Backend.md` §15.1, shown by two tests of
 `FirmwareLibraryTests`).
 
-Checksums would be stricter still, and `FirmwareRequest` has room for them later. Size alone already rejects every accident seen in practice — the wrong chip's dump, a half-downloaded file, a ROM picked by mistake.
+Checksums would be stricter still, and `FirmwareRequest` has room for them later. *Proposed 2026-10-18:* a file recognised by its content, whatever its name (§7). Size alone already rejects every accident seen in practice — the wrong chip's dump, a half-downloaded file, a ROM picked by mistake.
 
 ### 2.2 Canonical names and alternates
 
@@ -229,3 +229,179 @@ EmuSen is GPL-3.0, which obliges us to grant downstream recipients rights we wou
 3. **A test passes locally and fails on another machine, or vice versa.** It is reading the real firmware directory, or a `FirmwareDirectory` set in the real `appsettings.json`, instead of overriding `FirmwareLibrary.Directory` (which also stops the setting being read). Two tests were written this way once and only passed because the machine happened to have no dumps installed; they broke the moment one did. Any test whose outcome depends on what's installed must set `Directory` to a temp folder and `ResetDirectory()` after.
 4. **A player's file is in their folder and the open version still runs.** Read the session's `[Firmware]` line (§3.1), then Preferences ▸ Firmware: a message under the folder row says when the setting is refused or the folder is absent, and a file's row names the folder it was found in. A file of the wrong size in the chosen folder is passed over for one in `home/Firmware` (§2.3).
 5. **A firmware-gated test silently passes without testing anything.** That is by design — `NecDspRealFirmwareTests` returns early when no dump is present. It is the only way to keep real-firmware verification in a repo that cannot contain firmware.
+
+---
+
+## 7. A file recognised by its content (proposed 2026-10-18)
+
+> **Status: proposed, not built.** The design below changes a stable surface, the core ABI's firmware entry, and the
+> firmware policy of §0 says nothing about firmware checksums in a core's info. Both wait for the tester (§7.9).
+> Nothing in the store, the host or any core has changed.
+
+### 7.1 The report and the decision
+
+The tester's PlayStation images are named as the collection they came from names them (`PSX - SCPH5502.BIN`), while
+Diamond's info declares `scph5500.bin`, `scph5501.bin` and `scph5502.bin`. The store takes a file only by a declared
+name and the declared size (§2.2, §2.3), so Mistress runs the open kernel on a folder that holds the player's BIOS, and
+says nothing; and the opt-in run of ps1-tests on the player's BIOS fails, naming the folder and the names it looked
+for (`VenusRT_Native.md` §70.5, `Diamond_Native.md` §11). A read-only listing of the tester's folder on 2026-10-18
+found 15 files of 524,288 bytes, the size Diamond declares, none of them under a declared name; the store found none.
+
+*Decided 2026-10-18 by the tester:* the store also recognises a file by a checksum of its content, whatever it is
+called; each core lists the checksums it accepts in its own info, beside the names it declares; nothing is shipped or
+fetched; and the tests find firmware through the same store as Mistress, so that the two agree and the lookup has one
+owner.
+
+### 7.2 What the surfaces carry today
+
+- **The core ABI's firmware entry** (`EmuSen_CoreAPI.md` §6.2, `emusen-native/abi/v1/firmware.schema.json`) has
+  `which`, `name`, `label`, `size`, `required`, `parts` and `replacement`, and no checksum. The same entries appear in
+  core info's per-system `firmware` list (§6.3). A checksum is therefore a new optional member: an **additive minor,
+  1.12**, with a kit case.
+- **`FirmwareRequest`** has no checksum either; §2.1 noted the room for one. Neither does `emusen-firmware`'s
+  `Request`, nor the JSON its C layer takes (`emusen_firmware_find`, `_locate`, `_install`, platform interface 17).
+- **No core's info carries a checksum** of real firmware. The only checksums of firmware in the project's text are the
+  SHA-256 sums of Diamond's own open kernel images (§0).
+
+### 7.3 Which checksum: MD5, as Galaxia's `RomHash`
+
+The proposal is MD5, computed as `RomHash` computes a ROM's (`EmuSen_Galaxia.md` §5.4), for three reasons.
+
+1. **It is the same job.** `RomHash` is the project's identity of a player's file across a rename, which is exactly
+   what recognising a renamed firmware file is. Its Rust and C# halves exist already and are held to one answer
+   (`emusen-galaxia`'s `rom_hash`, `RomHash.Managed`), so the store adds no second owner of a hash.
+2. **It is what the public descriptions of firmware state.** The core info files of libretro give each firmware file's
+   MD5 in their notes (read on 2026-10-18 in the reference probe's copy of `mednafen_psx_libretro.info`: the three
+   PlayStation names Diamond declares, each with an MD5). A core author can then fill the field from a cited public
+   description rather than by hashing dumps, which matters under §0, where the originals are kept apart and read by
+   one tool only.
+3. **Collision resistance buys nothing here.** A file under a declared name and of the declared size is taken today
+   with no check of its content at all, and stays so (§7.4). A file crafted to share an MD5 with a real image would
+   gain nothing that naming it would not.
+
+*Alternatives weighed.* SHA-256 is the sidecar's hash (`EmuSen_CoreAPI.md` §7) and is resistant to collisions; on the
+machine measured (§7.6) it is faster where the processor has SHA extensions and slower where it has none, so speed
+does not decide it, and reason 3 removes its advantage. CRC-32 is not yet in `RomHash` (it is planned,
+`EmuSen_GamePackages.md` §3.3) and 32 bits is a weak identity among the hundreds of images of one size that a
+collection can hold. The member is named for its algorithm, `md5`, so a later minor can add another without
+ambiguity.
+
+### 7.4 The rule
+
+For each folder of §2.3, in order, the first of these that finds the image wins:
+
+1. the canonical name, then the alternates, each at the declared size (unchanged, §2.2);
+2. each split form by its names, whole from the folder (unchanged, §2.3);
+3. **by content**, when the request lists checksums: the folder's own files whose length is the declared size (a link
+   measured by its final target, as §2.1 has it since 2026-10-17), and among them the first whose MD5 is listed,
+   taking the checksums in the core's order and, for files of the same content, the file names in ordinal order.
+
+Then the next folder. The scan reads only the folder's own entries, never a subfolder, as the name search does.
+
+- **A file of the declared size whose content is not listed is not taken** by step 3: it is not the image, and the
+  search goes on to the next folder.
+- **A name match is kept ahead of a content match within a folder,** including a named file whose content is not
+  listed. Players are told by other emulators' documentation to rename a dump to the name a core expects, and a dump
+  of a version a core does not list, so renamed, runs today; ranking content first would make it lose, without a word,
+  to another file in the same folder. Step 3 adds finds and removes none.
+- **A content match in the chosen folder is ahead of a name match in `home/Firmware`.** The argument of §2.3 applies
+  unchanged: the chosen folder is the explicit choice, and a content match is the stronger evidence. The alternative,
+  every folder searched by name before any by content, would let a file left in `home/Firmware` by an older build
+  override a verified image in the folder the player chose. *Put to the tester (§7.9, Q2).*
+- **Each request is matched alone.** Diamond's three entries, one per market, each list their own checksums, and a
+  file is taken for a market only by that market's list. An image listed in two entries may be taken for both.
+- **Never written.** The store neither copies, renames nor touches a file it recognised; `Install` is unchanged and
+  still writes only `home/Firmware`, under the canonical name.
+- **Split forms by content** are left out of 1.12 (§7.9, Q4). A part has no declared size, so recognising parts would
+  either hash every file of the folder or need a further member of part sizes, and no core has asked: the one split
+  form in use, the NEC DSP's program and data files, is a naming convention of one layout whose holders hold it under
+  those names.
+
+### 7.5 What changes, piece by piece
+
+| Piece | Change |
+|---|---|
+| Core ABI 1.12 (`EmuSen_CoreAPI.md` §6.32, to be written on approval) | a firmware entry, in `firmware_for`'s answer and in core info's lists, may carry `md5`, an array of 32 lower-case hexadecimal digits, the images of `size` bytes the core accepts in that slot. Absent or empty is today's behaviour, so no existing info changes by a byte; an older host ignores it; an older core lists none. No export, struct, status or capability bit. `emusen_core.h`'s minor becomes 12 |
+| `emusen-native` | `Firmware` gains `md5: Vec<String>`, written only when not empty; the struct's literal sites (18, in VenusRT, Nephrite, Diamond, the test core and `emusen-native`'s tests) gain the field as empty, with no other change |
+| The kit | **C23**: every `md5` of `firmware_for`'s answer and of core info's lists is 32 lower-case hexadecimal digits, none repeated within an entry, and an entry that appears in both, by `which` and `name`, lists the same checksums. A seeded fault in the test core, an upper-case digit, fails C23 alone. The kit carries no firmware and checks no content |
+| Host (`CoreDescriptors`, `CoreEngine.Request`) | `CoreFirmware.Md5` read from the entry and passed into the request |
+| `FirmwareRequest` | `Md5`, a list of checksums, empty by default |
+| `FirmwareFound`, `FirmwareLocated` | `ByContent`, true when step 3 found it; `Names` then holds the player's own file name |
+| `emusen-firmware` and the C# twin | step 3 in `search`, in both halves; MD5 through Galaxia's `rom_hash` and `RomHash.Managed`'s arithmetic; the cache of §7.6 |
+| Platform interface 18 (`EmuSen_RustPlatform.md`) | the request's JSON gains `md5`, and `_find`'s and `_locate`'s answers `content`. The number moves 17 to 18, so an older library is refused and the C# answers, rather than a library that ignores `md5` disagreeing with its twin |
+| `FirmwareOverview`, Preferences ▸ Firmware | a row found by content names the player's file and says it was recognised by its content: "Your own file, PSX - SCPH5502.BIN, recognised by its content, in …" |
+| The session's line (§3.1) | "the player's PSX - SCPH5502.BIN, recognised by its content, in …" |
+| Diamond's opt-in test (`DiamondTests.Ps1_tests_pass_by_their_tty_on_a_players_bios`) | each declared entry found by `FirmwareLibrary.Find(CoreEngine.Request(core, f), [folder])`, not by its own `File.Exists` on the name; one owner of the lookup |
+| Diamond's info | its three entries gain `md5` (§7.8), in `bios()` of `src/v1.rs` and nowhere else |
+
+Diamond's crate tests on the player's BIOS (`tests/programs.rs`, the disc programs) read the American image by its
+declared name from `EMUSEN_DIAMOND_FIRMWARE`. They are a core's own tests and cannot call the store, which is the
+platform's (a core does not depend on the platform library); they keep the name, or take a file's path in a variable
+of their own. The decision's "the tests use the same store" is met by the WiseMan tests, which run on the store.
+
+### 7.6 What it costs (measured 2026-10-18)
+
+On the development machine (Ryzen 7 7700X), in a scratch folder of 200 files of random bytes: 185 of other sizes from
+2 KiB to 4 MiB and 15 of 524,288 bytes, the tester's folder's count. The page cache was warm; a cold read was not
+measured.
+
+| Step | Time |
+|---|---:|
+| list the folder and measure every file | 0.28 ms |
+| MD5 of the 15 files of the declared size, 7.9 MB | 9.1 ms (864 MB/s) |
+| SHA-256 of the same, with the processor's SHA extensions | 3.5 ms |
+| SHA-256 of the same, the software path | 15.0 ms |
+| MD5 of a folder of 200 files all of the declared size | 124 ms |
+
+Hashing only files of a declared size is what keeps the scan cheap: the listing costs a quarter of a millisecond, and
+the time is in the files of the right size. The overview asks once per entry, and Diamond's three entries would hash
+the same 15 files three times, 27 ms for one build of the page. The proposal is therefore a cache in each half, from a
+file's path, length and modification time to its MD5, for the life of the process, holding only files of a declared
+size: the second and third entries then cost the listing alone, and a file changed or replaced under the same name is
+hashed again. The cache is in the store and in no caller. A launch asks for one entry of Diamond's and so costs one
+scan, 9 ms here on first use.
+
+### 7.7 The gates, on approval
+
+- **Parity**: `FirmwareParityTests` extended with checksum cases on synthetic files of random bytes, whose MD5 the test
+  computes and declares in its own request: a renamed file found by content; a file of the right size and other
+  content refused; a name match preferred over a content match in the same folder; a content match in the first folder
+  ahead of a name match in the second (or the order Q2 decides); a missing folder; a file given as a link, found by
+  its target's content and size; a dangling link passed over; the generated trees of §15.1 with checksums added to
+  their requests. No test carries a real firmware checksum.
+- **Seeded faults**, each made, run and reverted: step 3 before step 1; the size filter dropped, so a file of another
+  size whose prefix is listed is hashed (shown by a counter of files hashed, not by content); the checksums compared
+  in upper case; a subfolder scanned; the cache keyed without the modification time.
+- **The blast radius** with `EMUSEN_SERVICES_NATIVE` unset and `0`, as §15.1 lists it, with the kit's C23 and the cores
+  whose firmware literals change.
+- **Read-only, last**: the store run on the tester's folder of PlayStation images, reporting which declared entry each
+  file matched, with nothing copied; then the opt-in ps1-tests run on that folder.
+
+### 7.8 What Diamond would list, and from where
+
+Each entry would list the MD5s of the images Diamond accepts for that market. Two scopes are possible:
+
+- **The image each name stands for**, one checksum per entry, as libretro's core info states them. The tester's folder
+  has no file of the American name; whether its files of the other two names are those images is not known without
+  hashing them, which waits for the policy. The ps1-tests programs name no market and run as an American console
+  (the Region setting's text in Diamond's `src/v1.rs`), so with this scope the opt-in test still finds no American
+  image in that folder, unless it is run with the Region setting naming another market.
+- **Every retail version of the market**, which is what lets the opt-in test run on the tester's folder as it is, and
+  what a player whose American dump is not of the one named version needs. The checksums would come from a public
+  description that lists every version, never from the project fetching or holding dumps; the images in Diamond's
+  probe cache are read by `firmwarecheck.py` alone (§0), so hashing them would be a second reader the policy does not
+  provide for.
+
+### 7.9 Questions for the tester
+
+1. **Policy.** §0 says what is never shipped or fetched and is silent on a core's info stating the checksums of real
+   firmware. libretro's core info files publish firmware MD5s, so the practice is common; the project has not decided
+   it. May a core's info carry them, and should §0 say so?
+2. **Order across folders.** A content match in the chosen folder ahead of a name match in `home/Firmware`
+   (recommended, §7.4), or every folder by name before any by content?
+3. **Diamond's scope** (§7.8): the one image each name stands for, or every retail version of each market; and the
+   public description the checksums are taken from.
+4. **Split forms by content**: left out of 1.12 (recommended, §7.4), or a `part_sizes` and `parts_md5` pair added in
+   the same minor.
+5. **The ABI minor and the hash**: 1.12 with `md5` and kit case C23 as §7.5 has them, and MD5 rather than SHA-256
+   (§7.3).

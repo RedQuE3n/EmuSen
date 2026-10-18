@@ -2361,6 +2361,19 @@ state 3.
   portable job of `EmuSen_RustPlatform.md` §31 compiles the three crates for both; it was not run here, since this
   machine's toolchain carries no standard library for either target.
 
+### 15.6 Proposed 2026-10-18: the store recognises a file by its content
+
+*Decided 2026-10-18 by the tester:* the firmware store also recognises a player's file by a checksum of its content,
+whatever it is called, from checksums each core lists in its own info. The design is `EmuSen_Firmware.md` §7 and is
+not built: the core ABI's firmware entry has no checksum member, so it needs an additive minor (1.12, a `md5` list and
+kit case C23), and the firmware policy is silent on a core's info stating checksums of real firmware, so both wait
+for the tester (§7.9 there). For this crate the design is a third step in `search`, after the names and the split
+forms of each folder: the folder's files of the declared size whose MD5, computed as Galaxia's `rom_hash` computes it,
+is listed, with a cache from path, length and modification time to the MD5 in each half. The C# twin takes the same
+step, `FirmwareParityTests` gains the checksum cases of §7.7 there on synthetic files, and the platform interface
+moves to 18 so that an older library is refused rather than disagreeing with its twin. Measured on 2026-10-18 in a
+scratch folder of 200 files with 15 of the declared size: the listing 0.28 ms, the MD5s of the 15 files 9.1 ms.
+
 ## 16. What was built, 2026-10-18: the cheat database's download in Rust
 
 *Measured on 2026-10-18 on branch `cheatdb-download`, from `WiseMan` at `c922c968`, with .NET 10.0.112. The piece of

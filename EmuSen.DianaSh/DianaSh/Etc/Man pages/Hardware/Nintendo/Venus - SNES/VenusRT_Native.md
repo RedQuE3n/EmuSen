@@ -6887,7 +6887,7 @@ Frames with the SPC700 in the boot program, from power-on, under the old program
 | The corpus runner without firmware (C# Venus beside it, without Mesen) | 116 of Mesen's 117, the one missing `spc_smp`, as before; no verdict changes. Only the 2010 timer printers' printed lines move |
 | The conformance kit, the eleven images of §31.2, no boot file | compliant on every one |
 | The crate | 141 of 141; the boot program's branch test follows the new listing, and the upload tests (two blocks and a jump, 300 bytes, a value behind the index) pass unchanged |
-| WiseMan, the VenusRt, CoreAbi, Snes, CoreDebug and Conform filters, the goldens against Mesen included | 121 of 121, after eleven anchors' hashes were re-recorded. Every anchor keeps its outcome. Yoshi's Island's lags move from +1, -10 and -10 to -4, -5 and -5, Metal Combat's from -6, -5 and -5 to -2, -1 and 0, and Super Mario RPG's attract lead from 40 to 41 frames at 1200 (42 at 2400 as before) |
+| WiseMan, the VenusRt, CoreAbi, Snes, CoreDebug and Conform filters, the goldens against Mesen included | 121 of 121, after eleven anchors' hashes were re-recorded. Every anchor keeps its outcome. Yoshi's Island's lags move from +1, -10 and -10 to -4, -5 and -5, Metal Combat's from -6, -5 and -5 to -2, -1 and 0, and Super Mario RPG's attract lead from 40 to 41 frames at 1200 (42 at 2400 as before). *Corrected 2026-10-18: Super Mario Kart and F1 ROC II were not run, for want of their DSP images, and their six anchors had moved (§70)* |
 | Cost | none to measure: the program runs only until a game's driver starts |
 
 
@@ -7518,6 +7518,7 @@ golden"), as it did on WiseMan before this change. An exception for `EmuSen.Wise
 Super Mario Kart's three and F1 ROC II's three: each picture still equals Mesen's within the window, at lags of 0 to
 −3 frames, but its hash is not the one recorded. The same six hashes come out of the build before the fix (measured on
 both), so the fix does not cause it; the open-replacement runs of those two games in `games/` changed no picture.
+*Settled on 2026-10-18 in §70: the six anchors were stale since §64's boot program, and are re-recorded.*
 
 **The tests run for this change** (measured 2026-10-18): the crate's 145; `VenusGoldenTests`, 24 of 24 after the
 re-recording; and the blast radius in WiseMan, `AudioDrainTests`, `VenusRtCoreAbiTests`, `VenusRtDebugTests`,
@@ -7553,3 +7554,85 @@ the build's outputs and `LunaP.props` pointed at the sibling checkout as on ever
 with the corpus, the games and six threads: 24 of 24 passed in 7.6 minutes, `No_corpus_verdict_is_worse_than_the_
 csharp_baseline` and `The_corpus_runs_as_its_goldens_recorded` among them. The baseline check now passes on a checkout
 that has never recorded anything.
+
+## 70. The six DSP anchors of G5: stale since the open boot program's speed-up, re-recorded (2026-10-18)
+
+### 70.1 The report
+
+§69.6 found `VenusRtGoldenTests.The_goldens_against_Mesen`, run with the library and the player's DSP images, failing
+on Super Mario Kart's three anchors (600, 2400, 3300) and F1 ROC II's three (600, 1500, 3300). Every one still equals a
+frame of Mesen's within the window; only VenusRT's picture hash differs from the recorded one, and the build before
+§69.4's fix gives the same six hashes. Both games need firmware, the DSP-1B and the ST010, so the question was whether
+a coprocessor had changed, the anchors had been recorded under other conditions, or Mesen was wrong.
+
+### 70.2 The cause, found by bisection (measured 2026-10-18)
+
+A probe tool outside the tree (`anchor_hash`, the crate's example loader with the DSP image given whole) computes the
+test's hash, FNV-1a over the width, the height and each pixel's 15 bits, at the anchor frames. It was built at each
+commit from the crate's and `emusen-native`'s trees alone, with the tester's DSP-1B and ST010 images, VenusRT's own boot
+program, no battery file and no input, as the test runs them.
+
+- **At 30fb9f89**, where G5 was recorded (§41.6), it gives the six recorded hashes exactly, so the tool and the test
+  agree and the images are the ones the anchors were recorded with. The images in the corpus's firmware folder and in
+  the tester's `home/Firmware` are byte-identical, so there is no other set they could have been.
+- **At 08819be9** (WiseMan, after §69) it gives the six hashes the failing test prints.
+- **Bisected over the 70 commits** that touched either crate between the two: the last commit giving the recorded
+  hashes is 26d6dab8 and the first giving the new ones is **c38631cd, the open boot program's faster block loop
+  (§64, D-38)**.
+- **Control 1:** 08819be9 with only `src/apu/boot.rs` put back as it stood at 26d6dab8 gives all six recorded hashes.
+  No other change since the recording, §69.4's included, moves these pictures.
+- **Control 2:** with the player's own SPC700 boot image as file 1 in place of the open program, 26d6dab8 and 08819be9
+  give the same six hashes. With the boot program held fixed, nothing in the DSP-1B's or the ST010's path, the S-CPU,
+  the PPU or the S-DSP changed these runs.
+
+**What changed in the runs.** The open program's first 21 bytes, up to its wait for the first kick at $FFD2, are the
+same in both versions, so each machine's state is identical frame by frame until the game starts its upload: the first
+state that differs (`state_hash` every frame) is frame 4 in Super Mario Kart and frame 6 in F1 ROC II. The first
+instruction that differs is the SPC700's first after the kick, the new program's `BPL` at $FFD5 where the old one read
+the address. From there the upload ends sooner, by the 6.37 and 0.76 frames §64.3 measured for these two games. In
+Super Mario Kart every later picture comes earlier: the new run's frames 600, 1500 and 2400 equal the old run's frames
+608, 1508 and 2408 (`frame_hashes`, every frame to 3,300), a shift larger than the upload's gain that was not looked
+into further. In F1 ROC II the three anchors now give exactly the hashes
+of the run with the player's boot image.
+
+**Why §64.4 missed them.** That commit re-recorded eleven anchors and reported "every anchor keeps its outcome", but
+its run cannot have run these two games: a DSP game without its image is skipped with "not run", and neither the
+corpus variable nor a `home/Firmware` with images is present in a fresh worktree (`home/` is ignored). Argued from the
+diff, which leaves both games' hashes untouched while their pictures had moved, and from control 1; the run's own log
+is not kept.
+
+### 70.3 Against Mesen
+
+Nothing here is a disagreement with Mesen. The probe binary is the one built on 2026-09-30, before G5 was recorded, so
+Mesen's side is unchanged as well. All six anchors equal one of Mesen's frames in every pixel, now nearer:
+
+| Anchor | Lag when recorded (§41.6) | Lag now |
+|---|---|---|
+| Super Mario Kart 600 | -11 | -3 |
+| Super Mario Kart 2400 | -7 | -1 |
+| Super Mario Kart 3300 | -11 | -3 |
+| F1 ROC II 600, 1500, 3300 | -1 each | 0 each |
+
+The lag is the open boot program's upload time against the console image's, which Mesen runs. §64.3 left Super Mario
+Kart's upload 3.16 frames behind the image's and F1 ROC II's 0.38, which fits -3 and 0 (argued; no run with the
+image was graded against Mesen here). No coprocessor step is
+involved, so SNES_MiSTer's coprocessor RTL was not needed to referee anything: the DSP-1B and ST010 runs are the same
+before and after once the boot program is held fixed (control 2).
+
+### 70.4 What was done
+
+The six hashes in `VenusRtGoldenTests` are re-recorded, each outcome kept "equal": Super Mario Kart `d7ce4fb7029b6aa0`,
+`c4af9d906ebf92f6`, `c243a180725238c2`; F1 ROC II `66ea1481506030a9`, `f6b026b5ef303d92`, `9f1ff8d28c746c58`. No core code
+changed, so no other golden can move. `VenusGoldenTests`' traces are recorded on the open DSP programs with no firmware
+(§68.2), a different path, and did not need changing.
+
+**The checks, measured on 2026-10-18:**
+- `VenusRtGoldenTests` with the library, the DSP images and the Mesen probe, and `VenusGoldenTests` with the corpus and
+  the library's games on six threads: 26 of 26. All 36 anchors give their recorded outcome and hash, the six above
+  with 0 differing pixels at the lags of §70.3;
+- the crate's tests with the corpus: 145 of 145;
+- the conformance kit (`emusen-core-conform`) with no firmware files, on §68.6's ten images: compliant on every one.
+
+**A gap left open:** a golden whose firmware is missing is skipped with a line of output, and the run still passes, which
+is how these six went unrecorded for two weeks. Making a skipped game visible in the result is a change to the test's
+contract and is put to the tester rather than made here.

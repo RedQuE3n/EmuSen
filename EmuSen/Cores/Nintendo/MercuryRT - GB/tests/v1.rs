@@ -95,3 +95,40 @@ fn palette_ram_is_two_read_only_spaces_of_64_bytes() {
     <Machine as Core>::space_read(&mut m, 8, 0, &mut obj).unwrap();
     assert_eq!(&obj[..], &m.bus.ppu.obj_palette_ram[..]);
 }
+
+fn colour_rom() -> Vec<u8> {
+    let mut rom = rom(0x00);
+    rom[0x143] = 0x80;
+    rom[HEADER_CHECKSUM_ADDRESS] = header_checksum(&rom);
+    rom
+}
+
+#[test]
+fn the_units_are_listed_from_256_each_answered_with_its_count() {
+    let (mono, colour) = (rom(0x00), colour_rom());
+    for (image, hdma) in [(&mono, false), (&colour, true)] {
+        let mut m = create(image, Vec::new()).unwrap();
+        for _ in 0..2 {
+            let mut detail = 0;
+            <Machine as Core>::advance(&mut m, &mut detail).unwrap();
+        }
+        let units = <Machine as Core>::units(&m);
+        let names: Vec<&str> = units.iter().map(|u| u.name.as_str()).collect();
+        let expected: &[&str] = if hdma { &["PPU", "APU", "Timer", "Pulse 1", "Pulse 2", "Wave", "Noise", "HDMA"] } else { &["PPU", "APU", "Timer", "Pulse 1", "Pulse 2", "Wave", "Noise"] };
+        assert_eq!(names, expected);
+        for (i, u) in units.iter().enumerate() {
+            assert_eq!(u.id, 256 + i as u32);
+            assert_eq!(<Machine as Core>::debug_registers(&m, u.id).unwrap().len(), u.registers.len(), "{}", u.name);
+        }
+        assert_eq!(units[0].registers.len(), if hdma { 19 } else { 14 }, "the colour registers only in colour mode");
+        let ppu = <Machine as Core>::debug_registers(&m, 256).unwrap();
+        let mut stat = [0u8];
+        <Machine as Core>::space_read(&mut m, 6, 0xFF41, &mut stat).unwrap();
+        assert_eq!((ppu[0], ppu[1], ppu[4]), (m.bus.ppu.lcdc as i64, stat[0] as i64, m.bus.ppu.ly as i64), "LCDC, STAT as read, LY");
+        let apu = <Machine as Core>::debug_registers(&m, 257).unwrap();
+        let mut nr52 = [0u8];
+        <Machine as Core>::space_read(&mut m, 6, 0xFF26, &mut nr52).unwrap();
+        assert_eq!((apu.len(), apu[22]), (25, nr52[0] as i64), "the sound registers as read, then Power and SeqStep");
+        assert_eq!(<Machine as Core>::debug_registers(&m, 256 + units.len() as u32).err(), Some(status::NOT_SUPPORTED));
+    }
+}

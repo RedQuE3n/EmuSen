@@ -154,7 +154,7 @@ namespace EmuSen.WiseMan.Crystal
             Frame(s);
             int narrow = Frame(s).width;
             s.SetSetting("Wide", "true", game: false);
-            Assert.Equal("true", GraphicsConfig.Load().Value(console, "Wide"));
+            Assert.Equal("true", ConsolesConfig.Load().Value(console, "Wide"));
             Assert.Equal("true", s.Setting("Wide", game: false));
             Frame(s);
             Assert.Equal(narrow * 2, Frame(s).width);

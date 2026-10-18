@@ -48,7 +48,7 @@ namespace EmuSen.Crystal.Managed
             return console is null ? null : ConsoleEngine(console);
         }
 
-        public static string? ConsoleEngine(string console) => CoreCatalog.EngineChosen(console, GraphicsConfig.Load().Value(console, CoreCatalog.EngineKey));
+        public static string? ConsoleEngine(string console) => CoreCatalog.EngineChosen(console, ConsolesConfig.Load().Value(console, CoreCatalog.EngineKey));
 
         // A console's settings, the engine's choice first: a running session's engine's own, else the named engine's where it is a discovered engine of the console.
         public static IReadOnlyList<CoreSetting> Schema(string console, string? engine, ManagedSession? session = null)
@@ -127,7 +127,7 @@ namespace EmuSen.Crystal.Managed
         private static string? Layered(string name, string? system, string? gameKey, string key)
         {
             if (gameKey is not null && GameValues(system, gameKey).TryGetValue(key, out string? own)) return key == CoreCatalog.EngineKey ? CoreCatalog.EngineChosen(name, own) : own;
-            string? stored = GraphicsConfig.Load().Value(name, key);
+            string? stored = ConsolesConfig.Load().Value(name, key);
             return key == CoreCatalog.EngineKey ? CoreCatalog.EngineChosen(name, stored) : stored;
         }
 
@@ -146,11 +146,8 @@ namespace EmuSen.Crystal.Managed
             }
             else
             {
-                GraphicsConfig config = GraphicsConfig.Load();
-                if (value is null)
-                {
-                    if (config.Consoles.TryGetValue(name, out var stored)) stored.Remove(key);
-                }
+                ConsolesConfig config = ConsolesConfig.Load();
+                if (value is null) config.Forget(name, key);
                 else config.SetValue(name, key, value);
                 config.Save();
             }

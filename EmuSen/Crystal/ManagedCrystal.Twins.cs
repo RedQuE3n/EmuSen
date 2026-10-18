@@ -701,17 +701,6 @@ namespace EmuSen.Crystal.Managed
         }
 
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-        private static long emusen_crystal_cheat_op(nint rt, uint session, uint op, byte* args, nuint args_len, byte* out_, nuint len)
-        {
-            try
-            {
-                ManagedSession s = SessionOf(rt, session);
-                return (long)Twin(s.Table->cheat_op(s.Table->ctx, s.Id, op, args, args_len, out_, len), s);
-            }
-            catch (Exception e) { return (long)Fail(e); }
-        }
-
-        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static long emusen_crystal_cheat_codecs(nint rt, uint session, byte* out_, nuint len)
         {
             try

@@ -655,7 +655,7 @@ jobs:
         if: ${{ !cancelled() }}
         working-directory: EmuSen-Project
         continue-on-error: true
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~CrystalHeaderTests|FullyQualifiedName~ContractShapeTests|FullyQualifiedName~ManagedCrystal|FullyQualifiedName~DivergenceRowTests|FullyQualifiedName~FrontendDefectTests|FullyQualifiedName~FrontendReferenceTests|FullyQualifiedName~HotaruOnTheApiTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=crystal-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~CrystalHeaderTests|FullyQualifiedName~ContractShapeTests|FullyQualifiedName~ManagedCrystal|FullyQualifiedName~DivergenceRowTests|FullyQualifiedName~FrontendDefectTests|FullyQualifiedName~FrontendReferenceTests|FullyQualifiedName~HotaruOnTheApiTests|FullyQualifiedName~StateRefusalTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=crystal-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       - uses: actions/upload-artifact@v4
         if: always()

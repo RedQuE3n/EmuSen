@@ -54,6 +54,9 @@ namespace EmuSen.Serenity.Slang
 
         internal bool IsNative => _native is not null;
         internal nint NativeValue => _native!.Value;
+
+        // The library's emusen_serenity_device, for the frontend API's open to lend each machine; zero for the C#'s device, which lends nothing.
+        public nint DeviceHandle => _native?.Value ?? 0;
         internal Managed ManagedValue => _managed!;
 
         internal Vk Vk => _managed?.Vk ?? (_vk ??= Vk.GetApi());

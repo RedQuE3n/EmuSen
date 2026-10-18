@@ -83,6 +83,8 @@
          EmuSen.Hotaru project instead, so this reference no longer drags
          in another frontend's Exe/window-ownership baggage, just the core. -->
     <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
+    <!-- The frontend API's binding, through which Mistress writes a console's core settings since SR12 - see EmuSen_Backend.md §14.12. -->
+    <ProjectReference Include="..\EmuSen.Crystal.Client\EmuSen.Crystal.Client.csproj" />
     <!-- The shell its console windows embed, and Crystal beneath it for the debug target and the cheat engine; the
          cores no longer bring the shell with them - see EmuSen_DianaSh.md §13.6. -->
     <ProjectReference Include="..\EmuSen.DianaSh\EmuSen.DianaSh.csproj" />

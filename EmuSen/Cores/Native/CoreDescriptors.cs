@@ -95,6 +95,9 @@ namespace EmuSen.Cores.Native
         // Since 1.5: the frames after a load whose pictures may differ from the saving machine's; 0 for an older core - see EmuSen_CoreAPI.md §6.9.
         public int PictureSettles { get; init; }
 
+        // The state versions the machine reads, as machine info's state.loads_from lists them; empty for a core that says nothing.
+        public IReadOnlyList<long> LoadsFrom { get; init; } = Array.Empty<long>();
+
         // Since 1.10, RAW_PICTURE: the encodings of the picture before the palette, by index; none for an older core - see EmuSen_CoreAPI.md §6.30.
         public IReadOnlyList<CoreRawEncoding> Raw { get; init; } = Array.Empty<CoreRawEncoding>();
     }
@@ -211,6 +214,7 @@ namespace EmuSen.Cores.Native
                 Firmware = Arr(r, "firmware").Select(f => new CoreFirmwareSource((uint)Long(f, "which"), Str(f, "source", "absent"))).ToArray(),
                 Drives = Arr(r, "drives").Select(d => new CoreDrive((uint)Long(d, "drive"), Str(d, "label"), Str(d, "kind"), Str(d, "lid") == "open", Bool(d, "loaded"))).ToArray(),
                 PictureSettles = (int)Long(state, "picture_settles"),
+                LoadsFrom = Arr(state, "loads_from").Select(v => v.GetInt64()).ToArray(),
                 Raw = Arr(video, "raw").Select(e => new CoreRawEncoding(Str(e, "encoding"), (int)Long(e, "element"), (int)Long(e, "max_width"), (int)Long(e, "max_height"),
                     Arr(e, "palette").Select(c => (int)c.GetInt64()).ToArray())).ToArray(),
             };

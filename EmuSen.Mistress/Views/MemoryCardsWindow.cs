@@ -194,7 +194,7 @@ namespace EmuSen.Mistress.Views
             // The mode, and which card each slot holds under it, as the console's settings say.
             private string ModeText()
             {
-                CardChoice choice = MemoryCards.Read(key => _owner._config.Value(_medium.Console, key), _medium);
+                CardChoice choice = MemoryCards.Read(CoreSettings.StoredFor(_medium.Console, _owner._config), _medium);
                 if (!choice.Apart) return "Per game: each game keeps its own.";
                 string slots = string.Join(", ", Enumerable.Range(0, _medium.Slots.Count).Select(n => $"{_medium.NameFor(choice, n)} in {_medium.SlotLabel(n)}"));
                 return $"{(choice.Mode == MemoryCards.Shared ? "Shared" : "Named")}: {slots}.";
@@ -203,7 +203,7 @@ namespace EmuSen.Mistress.Views
             // The card the first slot holds under a shared or named mode, where it exists.
             private string? AssignedCard()
             {
-                CardChoice choice = MemoryCards.Read(key => _owner._config.Value(_medium.Console, key), _medium);
+                CardChoice choice = MemoryCards.Read(CoreSettings.StoredFor(_medium.Console, _owner._config), _medium);
                 string path = _medium.PathOf(_medium.NameFor(choice, 0));
                 return choice.Apart && _cards.Any(c => c.Path == path) ? path : null;
             }

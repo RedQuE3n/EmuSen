@@ -99,7 +99,7 @@ namespace EmuSen.WiseMan.Mistress
             EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
             try
             {
-                var config = GraphicsConfig.Load();
+                var config = ConsolesConfig.Load();
                 config.SetValue("Genesis", "pad1", "md.teamplayer6");
                 config.SetValue("Genesis", "pad2", "md.pad3");
                 config.Save();
@@ -130,7 +130,7 @@ namespace EmuSen.WiseMan.Mistress
             EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
             try
             {
-                var config = GraphicsConfig.Load();
+                var config = ConsolesConfig.Load();
                 config.SetValue("Genesis", "pad1", pad);
                 config.SetValue("Genesis", "pad2", pad == "md.pad3" ? "md.pad6" : "md.pad3");
                 config.Save();

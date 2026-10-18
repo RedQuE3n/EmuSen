@@ -169,7 +169,7 @@ namespace EmuSen.WiseMan.Mistress
 
         private static void Picture(MainWindow w, string name) => UiTest.Dump("pad-" + name, UiTest.Capture(w));
 
-        private static string? Stored(string console, string key) => GraphicsConfig.Load().Value(console, key);
+        private static string? Stored(string console, string key) => ConsolesConfig.Load().Value(console, key) ?? GraphicsConfig.Load().Value(console, key);
 
         // A dropdown's list on a sheet, which asks for it inside the window (§4.45.8): the pad moves the focus among its items, never the page behind - see EmuSen_Settings_Reference.md §4.45.9.
         [Fact]

@@ -376,12 +376,8 @@ namespace EmuSen.Mistress.Views
             await StartGameAsync(file.Path, file.Name);
         }
 
-        // The engine is chosen before the core exists, from the game's own choice or the graphics window's row - see EmuSen_Settings_Reference.md §4.44.
-        private string? EngineChosenFor(string path)
-        {
-            string console = EmuSen.Cores.CoreCatalog.ConsoleForRom(path) ?? "Unknown";
-            return EmuSen.Cores.CoreCatalog.EngineChosen(console, GameEngine(path) ?? _graphics.Value(console, EmuSen.Cores.CoreCatalog.EngineKey));
-        }
+        // The engine is chosen before the core exists, from the game's own choice or the console's, as the runtime's route answers - see EmuSen_Settings_Reference.md §4.44 and EmuSen_Backend.md §14.12.
+        private static string? EngineChosenFor(string path) => CoreSettings.EngineFor(path);
 
         // Runs before LoadRom because afterwards is too late, asking the engine that will run the game; declining is fine - see EmuSen_Firmware.md §3.
         private async Task PromptForMissingFirmwareAsync(string romPath)
@@ -502,9 +498,10 @@ namespace EmuSen.Mistress.Views
         {
             if (session.Core is not EmuSen.Cores.ICoreSettings settings) return;
 
+            Func<string, string?> stored = CoreSettings.StoredFor(console, _graphics);
             foreach (EmuSen.Cores.CoreSetting setting in settings.Settings)
             {
-                string value = _graphics.Value(console, setting.Key) ?? setting.Default;
+                string value = stored(setting.Key) ?? setting.Default;
                 try { settings.Set(setting.Key, value); }
                 catch (ArgumentException) { settings.Set(setting.Key, setting.Default); }
             }
@@ -1506,7 +1503,8 @@ namespace EmuSen.Mistress.Views
                 {
                     _running = false;
                     string message = ex.Message;
-                    string settings = string.Join(", ", EmuSen.Cores.CoreCatalog.SettingsFor(_activeConsole).Select(k => $"{k.Key}={_graphics.Value(_activeConsole, k.Key) ?? k.Default}"));
+                    Func<string, string?> stored = CoreSettings.StoredFor(_activeConsole, _graphics);
+                    string settings = string.Join(", ", EmuSen.Cores.CoreCatalog.SettingsFor(_activeConsole).Select(k => $"{k.Key}={stored(k.Key) ?? k.Default}"));
                     string? report = CrashLog.Write("emulation halt", ex, $"{_activeConsole}, frame {session.Core?.TotalFrames}: {settings}");
                     // Halt and print rather than recover; StatusText needs the UI thread.
                     Dispatcher.UIThread.Post(() => StatusText.Text = $"[CPU HALT] {message}" + (report is null ? "" : $" - written to {report}"));

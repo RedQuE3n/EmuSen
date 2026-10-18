@@ -32,6 +32,7 @@ const EMUSEN_CRYSTAL_SPEED_DRAW_NONE 1 @1.0
 const EMUSEN_CRYSTAL_SPEED_NORMAL 0 @1.0
 const EMUSEN_CRYSTAL_SPEED_SLOW 2 @1.0
 const EMUSEN_CRYSTAL_SPEED_TURBO 1 @1.0
+const EMUSEN_CRYSTAL_STATE_REFUSED -1114 @1.1
 field emusen_crystal_config.flags offset 4 @1.0
 field emusen_crystal_config.size offset 0 @1.0
 field emusen_crystal_frame_info.audio_frames offset 48 @1.0
@@ -45,10 +46,12 @@ field emusen_crystal_frame_info.halted_address offset 96 @1.0
 field emusen_crystal_frame_info.halted_processor offset 92 @1.0
 field emusen_crystal_frame_info.height offset 28 @1.0
 field emusen_crystal_frame_info.paused offset 88 @1.0
+field emusen_crystal_frame_info.picture_on_device offset 104 @1.1
 field emusen_crystal_frame_info.picture_serial offset 16 @1.0
 field emusen_crystal_frame_info.play_audio offset 56 @1.0
 field emusen_crystal_frame_info.ran offset 4 @1.0
 field emusen_crystal_frame_info.rendered offset 12 @1.0
+field emusen_crystal_frame_info.reserved offset 108 @1.1
 field emusen_crystal_frame_info.row_repeat offset 32 @1.0
 field emusen_crystal_frame_info.size offset 0 @1.0
 field emusen_crystal_frame_info.speed_percent offset 60 @1.0
@@ -57,6 +60,7 @@ field emusen_crystal_frame_info.width offset 24 @1.0
 field emusen_crystal_open_params.audio_buffer_max_samples offset 56 @1.0
 field emusen_crystal_open_params.console offset 24 @1.0
 field emusen_crystal_open_params.console_len offset 32 @1.0
+field emusen_crystal_open_params.device offset 64 @1.1
 field emusen_crystal_open_params.engine offset 40 @1.0
 field emusen_crystal_open_params.engine_len offset 48 @1.0
 field emusen_crystal_open_params.flags offset 4 @1.0
@@ -64,6 +68,12 @@ field emusen_crystal_open_params.path offset 8 @1.0
 field emusen_crystal_open_params.path_len offset 16 @1.0
 field emusen_crystal_open_params.reserved offset 60 @1.0
 field emusen_crystal_open_params.size offset 0 @1.0
+field emusen_crystal_raw_info.element offset 4 @1.1
+field emusen_crystal_raw_info.height offset 12 @1.1
+field emusen_crystal_raw_info.reserved offset 20 @1.1
+field emusen_crystal_raw_info.size offset 0 @1.1
+field emusen_crystal_raw_info.stride offset 16 @1.1
+field emusen_crystal_raw_info.width offset 8 @1.1
 fn emusen_crystal_abi_version uint32_t (void) @1.0
 fn emusen_crystal_audio_channels int64_t (emusen_crystal_runtime *, uint32_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_audio_drain int64_t (emusen_crystal_runtime *, uint32_t, int16_t *, size_t, uint32_t *) @1.0
@@ -113,6 +123,8 @@ fn emusen_crystal_freeze_add int64_t (emusen_crystal_runtime *, uint32_t, const 
 fn emusen_crystal_freeze_clear int32_t (emusen_crystal_runtime *, uint32_t) @1.0
 fn emusen_crystal_freeze_list int64_t (emusen_crystal_runtime *, uint32_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_freeze_remove int32_t (emusen_crystal_runtime *, uint32_t, uint32_t) @1.0
+fn emusen_crystal_game_setting_get int64_t (emusen_crystal_runtime *, const uint8_t *, size_t, const uint8_t *, size_t, uint8_t *, size_t) @1.1
+fn emusen_crystal_game_setting_set int32_t (emusen_crystal_runtime *, const uint8_t *, size_t, const uint8_t *, size_t, const uint8_t *, size_t) @1.1
 fn emusen_crystal_halt_state int64_t (emusen_crystal_runtime *, uint32_t, uint32_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_info int64_t (emusen_crystal_runtime *, uint32_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_input_axis int32_t (emusen_crystal_runtime *, uint32_t, uint32_t, uint32_t, double) @1.0
@@ -135,8 +147,11 @@ fn emusen_crystal_palettes int64_t (emusen_crystal_runtime *, uint32_t, uint8_t 
 fn emusen_crystal_phase_names int64_t (emusen_crystal_runtime *, uint32_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_phases int64_t (emusen_crystal_runtime *, uint32_t, double *, size_t) @1.0
 fn emusen_crystal_picture_copy int64_t (emusen_crystal_runtime *, uint32_t, uint8_t *, size_t) @1.0
+fn emusen_crystal_picture_lend const void * (emusen_crystal_runtime *, uint32_t) @1.1
 fn emusen_crystal_processors int64_t (emusen_crystal_runtime *, uint32_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_profile_op int64_t (emusen_crystal_runtime *, uint32_t, uint32_t, uint32_t, const uint8_t *, size_t, uint8_t *, size_t) @1.0
+fn emusen_crystal_raw_copy int64_t (emusen_crystal_runtime *, uint32_t, emusen_crystal_raw_info *, uint8_t *, size_t) @1.1
+fn emusen_crystal_raw_select int32_t (emusen_crystal_runtime *, uint32_t, const uint8_t *, size_t) @1.1
 fn emusen_crystal_record_start int64_t (emusen_crystal_runtime *, uint32_t, const uint8_t *, size_t, uint32_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_record_stop int64_t (emusen_crystal_runtime *, uint32_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_register_flow_op int64_t (emusen_crystal_runtime *, uint32_t, uint32_t, const uint8_t *, size_t, uint8_t *, size_t) @1.0
@@ -169,7 +184,9 @@ fn emusen_crystal_speed_mode int32_t (emusen_crystal_runtime *, uint32_t, uint32
 fn emusen_crystal_speed_set int32_t (emusen_crystal_runtime *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t) @1.0
 fn emusen_crystal_sprites int64_t (emusen_crystal_runtime *, uint32_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_state_default_path int64_t (emusen_crystal_runtime *, uint32_t, uint8_t *, size_t) @1.0
+fn emusen_crystal_state_forget int32_t (emusen_crystal_runtime *, const uint8_t *, size_t) @1.1
 fn emusen_crystal_state_load int32_t (emusen_crystal_runtime *, uint32_t, const uint8_t *, size_t) @1.0
+fn emusen_crystal_state_record int64_t (emusen_crystal_runtime *, const uint8_t *, size_t, uint8_t *, size_t) @1.1
 fn emusen_crystal_state_save int32_t (emusen_crystal_runtime *, uint32_t, const uint8_t *, size_t) @1.0
 fn emusen_crystal_state_slot_load int32_t (emusen_crystal_runtime *, uint32_t, uint32_t) @1.0
 fn emusen_crystal_state_slot_save int32_t (emusen_crystal_runtime *, uint32_t, uint32_t) @1.0
@@ -199,3 +216,4 @@ fn emusen_crystal_watch_summary int64_t (emusen_crystal_runtime *, uint32_t, uin
 struct emusen_crystal_config size 8 align 4 @1.0
 struct emusen_crystal_frame_info size 104 align 8 @1.0
 struct emusen_crystal_open_params size 64 align 8 @1.0
+struct emusen_crystal_raw_info size 24 align 4 @1.1

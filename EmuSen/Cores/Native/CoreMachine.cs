@@ -273,6 +273,13 @@ namespace EmuSen.Cores.Native
             return status == 1 ? frame : null;
         }
 
+        public long CopyRaw(uint raw, Span<byte> into)
+        {
+            if (_api.RawCopy == null || !Has(CoreInterface.CapRawPicture)) return 0;
+            lock (_gate)
+                fixed (byte* data = into) return _api.RawCopy(Handle, raw, data, (nuint)into.Length);
+        }
+
         public long CopyRaw(uint raw, byte[] into)
         {
             if (_api.RawCopy == null || !Has(CoreInterface.CapRawPicture)) return 0;

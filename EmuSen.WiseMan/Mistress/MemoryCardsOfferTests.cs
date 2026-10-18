@@ -107,11 +107,13 @@ namespace EmuSen.WiseMan.Mistress
             Offer(window, Rom()).GetAwaiter().GetResult();
             Assert.Equal(0, _asked);
             Own("Amber Saga", "BASLUS-00001A", 0);
-            var graphics = (GraphicsConfig)typeof(MainWindow).GetField("_graphics", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
-            graphics.SetValue("PlayStation", MemoryCards.ModeKey, MemoryCards.PerGame);
+            var consoles = ConsolesConfig.Load();
+            consoles.SetValue("PlayStation", MemoryCards.ModeKey, MemoryCards.PerGame);
+            consoles.Save();
             Offer(window, Rom()).GetAwaiter().GetResult();
             Assert.Equal(0, _asked);
-            graphics.Consoles["PlayStation"].Remove(MemoryCards.ModeKey);
+            consoles.Forget("PlayStation", MemoryCards.ModeKey);
+            consoles.Save();
             Offer(window, Rom()).GetAwaiter().GetResult();
             Offer(window, Rom()).GetAwaiter().GetResult();
             Assert.Equal(1, _asked);

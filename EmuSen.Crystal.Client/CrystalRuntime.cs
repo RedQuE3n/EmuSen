@@ -19,6 +19,9 @@ namespace EmuSen.Crystal.Client
         public bool NoBattery { get; init; }
         public bool SingleRows { get; init; }
         public int AudioBufferMaxSamples { get; init; }
+
+        // Since 1.1: the presenter's Vulkan device, the platform library's emusen_serenity_device, lent to each machine; zero lends none.
+        public nint Device { get; init; }
     }
 
     // A copy-out call as the contract layer makes one: the whole length returned, written only when the buffer holds it.
@@ -106,6 +109,7 @@ namespace EmuSen.Crystal.Client
                     engine = engine is null ? null : e,
                     engine_len = (nuint)(engine?.Length ?? 0),
                     audio_buffer_max_samples = (uint)Math.Max(0, open.AudioBufferMaxSamples),
+                    device = (void*)open.Device,
                 };
                 return new CrystalSession(this, (uint)Check(Contract.Crystal.Open(Handle, &parameters)));
             }
@@ -117,6 +121,23 @@ namespace EmuSen.Crystal.Client
             Text((o, n) => Contract.Crystal.SessionInfo(Handle, id, o, n));
             return new CrystalSession(this, id);
         }
+
+        // Since 1.1: the record of the state at path, or null for none.
+        public string? StateRecord(string path) =>
+            WithText(path, (p, pl) => Optional(() => Text((o, n) => Contract.Crystal.StateRecord(Handle, (byte*)p, pl, o, n))));
+
+        public void StateForget(string path) => WithText(path, (p, pl) => Check(Contract.Crystal.StateForget(Handle, (byte*)p, pl)));
+
+        // Since 1.1: a game's own value with no session, or null where it holds none.
+        public string? GameSetting(string path, string key) =>
+            WithText(path, (p, pl) => WithText(key, (k, kl) => Optional(() => Text((o, n) => Contract.Crystal.GameSettingGet(Handle, (byte*)p, pl, (byte*)k, kl, o, n)))));
+
+        public void SetGameSetting(string path, string key, string? value) =>
+            WithText(path, (p, pl) => WithText(key, (k, kl) => WithText(value, (v, vl) => Check(Contract.Crystal.GameSettingSet(Handle, (byte*)p, pl, (byte*)k, kl, (byte*)v, vl)))));
+
+        // Since 1.1: a cheat op that needs no game, answered with no session.
+        public string CheatOp(uint op, string argsJson) =>
+            WithText(argsJson, (a, al) => Text((o, n) => Contract.Crystal.CheatOp(Handle, 0, op, (byte*)a, al, o, n)));
 
         public string FirmwareNeeded(string path, string? engine = null) =>
             WithText(path, (p, pl) => WithText(engine, (e, el) => Text((o, n) => Contract.Crystal.FirmwareNeeded(Handle, (byte*)p, pl, (byte*)e, el, o, n))));

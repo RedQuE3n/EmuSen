@@ -37,12 +37,14 @@ namespace EmuSen.Crystal.Managed
         }
 
         // A twin's answer from the session's table, its words taken across when it failed.
-        internal static long Twin(long result, ManagedSession s)
+        internal static long Twin(long result, ManagedSession s) => TwinOf(result, s.Table);
+
+        internal static long TwinOf(long result, EmuSenSessionV1* table)
         {
             if (result >= 0) return result;
-            long n = s.Table->last_error(s.Table->ctx, null, 0);
+            long n = table->last_error(table->ctx, null, 0);
             var words = new byte[Math.Max(0, n)];
-            fixed (byte* w = words) s.Table->last_error(s.Table->ctx, w, (nuint)words.Length);
+            fixed (byte* w = words) table->last_error(table->ctx, w, (nuint)words.Length);
             t_lastError = Encoding.UTF8.GetString(words);
             return result;
         }

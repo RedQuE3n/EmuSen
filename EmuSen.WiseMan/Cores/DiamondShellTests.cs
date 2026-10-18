@@ -31,7 +31,7 @@ namespace EmuSen.WiseMan.Cores
 
         private static void Mode(string mode)
         {
-            var config = GraphicsConfig.Load();
+            var config = ConsolesConfig.Load();
             config.SetValue("PlayStation", MemoryCards.ModeKey, mode);
             config.Save();
         }
@@ -129,7 +129,7 @@ namespace EmuSen.WiseMan.Cores
         public void The_shells_copy_and_delete_are_read_back_by_the_hosts_format_module()
         {
             Mode(MemoryCards.Shared);
-            var config = GraphicsConfig.Load();
+            var config = ConsolesConfig.Load();
             config.SetValue("PlayStation", "card2", "card");
             config.Save();
             var format = EmuSen.Crystal.Systems.Psx.PsxCardFormat.Instance;

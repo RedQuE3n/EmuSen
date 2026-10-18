@@ -64,7 +64,7 @@ namespace EmuSen.WiseMan.Serenity
             CoreDiscovery.UseDevelopment(false);
             try
             {
-                var config = new GraphicsConfig();
+                var config = new ConsolesConfig();
                 config.SetValue("Genesis", "region", region);
                 config.Save();
                 string rom = Path.Combine(dir, "game.md");

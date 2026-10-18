@@ -37,14 +37,14 @@ namespace EmuSen.WiseMan.Cores
 
         private static DiscoveredCore VenusRt => CoreDiscovery.Found.Single(c => c.Info.Id == "venusrt");
 
-        private static FirmwareSystem Snes(GraphicsConfig? config = null) => FirmwareOverview.Build(config ?? new GraphicsConfig()).Single(s => s.Name == "Super Nintendo");
+        private static FirmwareSystem Snes(ConsolesConfig? config = null) => FirmwareOverview.Build(config ?? new ConsolesConfig()).Single(s => s.Name == "Super Nintendo");
 
         private static void Put(string name, int bytes) => File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, name), new byte[bytes]);
 
         [Fact]
         public void The_rows_are_what_the_engine_in_use_declares_and_every_shipped_system_is_listed()
         {
-            var systems = FirmwareOverview.Build(new GraphicsConfig());
+            var systems = FirmwareOverview.Build(new ConsolesConfig());
             Assert.Equal(["Nintendo Entertainment System", "Game Boy and Game Boy Color", "Super Nintendo", "Nintendo 64", "Sony PlayStation", "Sega Genesis / Mega Drive", "Sega CD / Mega-CD"], systems.Select(s => s.Name));
             Assert.All(systems.Where(s => s.Name is not ("Super Nintendo" or "Sega Genesis / Mega Drive" or "Sony PlayStation" or "Sega CD / Mega-CD")), s => Assert.Empty(s.Items));
 
@@ -109,7 +109,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void With_venus_stored_the_rows_are_venusrt_s_and_with_its_library_gone_there_are_none()
         {
-            var config = new GraphicsConfig();
+            var config = new ConsolesConfig();
             config.SetValue("SNES", CoreCatalog.EngineKey, "Venus (C#)");
             FirmwareSystem snes = Snes(config);
             Assert.Equal(CoreCatalog.VenusRtEngine, snes.Engine);
@@ -142,7 +142,7 @@ namespace EmuSen.WiseMan.Cores
                 DiscoveredCore nephrite = CoreDiscovery.Found.Single(c => c.Info.Id == "nephrite");
                 Assert.True(nephrite.Sidecar.Development);
                 Assert.Contains(nephrite.Info.Systems, s => s.Firmware.Count > 0);
-                var systems = FirmwareOverview.Build(new GraphicsConfig());
+                var systems = FirmwareOverview.Build(new ConsolesConfig());
                 Assert.DoesNotContain(systems, s => s.Engine == nephrite.EngineName || nephrite.Info.Systems.Any(n => n.Name == s.Name));
             }
             finally
@@ -155,7 +155,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_genesis_and_the_sega_cd_are_listed_and_the_32x_is_not()
         {
-            var systems = FirmwareOverview.Build(new GraphicsConfig());
+            var systems = FirmwareOverview.Build(new ConsolesConfig());
             FirmwareSystem genesis = systems.Single(s => s.Name == "Sega Genesis / Mega Drive");
             Assert.Equal(CoreDiscovery.Found.Single(c => c.Info.Id == "nephrite").EngineName, genesis.Engine);
             Assert.Equal(["bios_MD.bin"], genesis.Items.Select(i => i.FileName));

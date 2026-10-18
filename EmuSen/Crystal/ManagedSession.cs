@@ -50,6 +50,7 @@ namespace EmuSen.Crystal.Managed
                 Gate = this,
                 RunControl = RunControl,
             });
+            StartIdentifying();
         }
 
         public ManagedRuntime Runtime { get; }
@@ -178,7 +179,8 @@ namespace EmuSen.Crystal.Managed
         public void Reset() => Change(() =>
         {
             if (Engine is not { } engine) throw new CrystalException(SessionAbi.NotSupported, $"{Core.CoreName} has no reset");
-            engine.Reset();
+            try { engine.Reset(); }
+            catch (Cores.Native.CoreRefusedException e) when (e.Status == Cores.Native.CoreInterface.StatusNotSupported) { throw new CrystalException(SessionAbi.NotSupported, $"{CoreFactory.Running(Core)} has no reset button: {e.Message}"); }
             _halted = false;
             Rewind.Clear();
             Bundle.DebugTarget.RefreshProviders();
@@ -333,6 +335,13 @@ namespace EmuSen.Crystal.Managed
             w.WriteNumber("frame_rate_hz", Core.FrameRateHz);
             w.WriteNumber("total_frames", Core.TotalFrames);
             w.WriteNumber("state_version", Core is IStateFormat format ? format.StateVersion : 0);
+            w.WriteStartObject("state");
+            CrystalJson.StringOrNull(w, "format", Engine is { IsRomLoaded: true } stateEngine ? stateEngine.Machine.Info.StateFormat : null);
+            w.WriteNumber("version", Core is IStateFormat f ? f.StateVersion : 0);
+            w.WriteStartArray("loads_from");
+            if (Engine is { IsRomLoaded: true } loaded) foreach (long v in loaded.Machine.Info.LoadsFrom) w.WriteNumberValue(v);
+            w.WriteEndArray();
+            w.WriteEndObject();
             EngineFeatures features = EngineFeatures.Of(Core);
             w.WriteBoolean("rewind_capture", features.RewindCapture);
             CrystalJson.StringOrNull(w, "rewind_withheld", features.RewindWithheld);

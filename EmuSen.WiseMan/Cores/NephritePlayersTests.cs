@@ -43,7 +43,7 @@ namespace EmuSen.WiseMan.Cores
         // The Genesis as a frontend makes it, the two port rows stored first.
         private CoreEngine Load(string rom, string pad1, string pad2 = "md.pad3")
         {
-            var config = new GraphicsConfig();
+            var config = new ConsolesConfig();
             config.SetValue("Genesis", "pad1", pad1);
             config.SetValue("Genesis", "pad2", pad2);
             config.Save();

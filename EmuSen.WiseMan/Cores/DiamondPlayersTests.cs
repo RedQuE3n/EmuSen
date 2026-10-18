@@ -279,7 +279,7 @@ namespace EmuSen.WiseMan.Cores
             var data = Enumerable.Range(0, 128).Select(i => (byte)(i * 3 + 1)).ToArray();
             string exe = Write("Card Writer.psexe", CardWriting(0x40, data));
             string card = Path.Combine(DataStore.Saves, "PlayStation", "Card Writer.mcr");
-            var config = GraphicsConfig.Load();
+            var config = ConsolesConfig.Load();
             config.SetValue("PlayStation", MemoryCards.ModeKey, MemoryCards.PerGame);
             config.Save();
             using (var core = (CoreEngine)CoreFactory.Load(exe).Core)

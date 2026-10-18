@@ -74,10 +74,11 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task The_genesis_tab_shows_each_choice_in_words_and_stores_its_value() => Session.Dispatch(() =>
         {
-            var config = new GraphicsConfig();
-            config.SetValue("Genesis", "pad2", "md.pad6");
+            var consoles = new ConsolesConfig();
+            consoles.SetValue("Genesis", "pad2", "md.pad6");
+            consoles.Save();
             string? changed = null;
-            var window = new GraphicsSettingsWindow(config, c => changed = c, "Genesis");
+            var window = new GraphicsSettingsWindow(new GraphicsConfig(), c => changed = c, "Genesis");
             window.Show();
             window.CaptureRenderedFrame();
 
@@ -86,14 +87,14 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal("6-Button Arcade Pad", ByName<Dropdown>(window, "Genesis.pad2").SelectedItem);
             ByName<Dropdown>(window, "Genesis.region").SelectedItem = "Europe (PAL)";
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal(("md.eu", "Genesis"), (config.Value("Genesis", "region"), changed));
+            Assert.Equal(("md.eu", "Genesis"), (ConsolesConfig.Load().Value("Genesis", "region"), changed));
             window.Close();
         }, default);
 
         [Fact]
         public void A_stored_region_model_and_pad_reach_the_machine_when_it_is_made()
         {
-            var config = new GraphicsConfig();
+            var config = new ConsolesConfig();
             config.SetValue("Genesis", "region", "md.eu");
             config.SetValue("Genesis", "pad1", "md.pad6");
             config.Save();

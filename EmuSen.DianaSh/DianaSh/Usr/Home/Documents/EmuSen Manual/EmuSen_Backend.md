@@ -1603,7 +1603,7 @@ it shares; a client that has not moved still diverges until its move.
 ### 14.7 Left for later, and proposed
 
 - **1.1, with Mistress's move**: the device picture (the open parameters' `emusen_device_lend`, the frame's
-  `picture_on_device`, and the take the client makes), the raw picture, `state_record` and `states.db` with the one
+  `picture_on_device`, and the take the client makes; the take was decided the runtime's on 2026-10-18, §14.12), the raw picture, `state_record` and `states.db` with the one
   copy of `records.db`'s state rows (D8), and the copy of `games.db`'s engine choices into the game files (SR10). The
   split of `graphics.json` (SR12) comes before Mistress stops writing `Consoles`, so that the runtime's writes are not
   undone by a stale copy (R5); until then `settings_set` writes `graphics.json`, which no moved client and Mistress do
@@ -1748,9 +1748,8 @@ DianaSh's, Serenity's or the BCL's types, and to give SR2 no exemption. The addi
 Both are recorded in `EmuSen_Surfaces.md` §6.2. The old signatures that took `CoreDescriptor` or
 `Action<IDebugTarget>` had no caller left and were removed.
 
-One form differs from the decision and is put to the tester in `EmuSen_Serenity.md` §2.11. The coretop window reads
-through the frontend's binding, not a service table reached with `SessionService.Of`, because a table's pointer
-outlives a swap.
+The coretop window reads through the frontend's binding, not a service table reached with `SessionService.Of`, because
+a table's pointer outlives a swap. Decided 2026-10-17 by the tester (`EmuSen_Serenity.md` §2.11).
 
 **`HostAction` from events** (`EmuSen_DianaSh.md` Q5). Over a session's table, `resume` and `step` reach the session's
 run control on both shells: the Rust shell's modules call it, and the C# facade asks it for its commands. The facade
@@ -1765,7 +1764,8 @@ then reports the action because the session's run events raised it (`EmuSen_Dian
 
 The tester decided on 2026-10-17 that these ride along on each `systems` entry as an additive 1.1 field, `core`,
 filled from the registry. They are the engine's facts, not the pack's (§5.3), so they stay out of `emusen-systems`'
-data files. The decision named `names` and `display_name`. The field also carries `console` and `extensions`, because
+data files. The decision named `names` and `display_name`. The field also carries `console` and `extensions`, accepted by the
+tester the same day, because
 `core`'s refusals print them ("no core in this build starts the …", "… - expected: .smc, .sfc"), and Mercury's one
 core spans two systems whose extensions differ.
 
@@ -1819,6 +1819,126 @@ refused or without one of the services' exports leaves all three on the C#, said
 and the parity classes' oracle; a call whose text cannot cross (a NUL in a path, half a surrogate pair) stays on the
 C#, which refuses it as it always did. Every public type and signature the C# services had is unchanged, so their
 callers, the frontend API's managed implementation among them, compile and behave as before.
+
+
+### 14.12 Part 4a: the API's 1.1, and the settings the runtime now owns
+
+Part 4 moves Mistress, and Mistress needs more from the API than 1.0 gives. Decided 2026-10-18 by the tester: the
+work is committed in two pieces, 4a with the API's 1.1 and the Mistress pieces that SR12 forces at once, and 4b with
+the move. This section is 4a.
+
+**1.1's additions.** `EMUSEN_CRYSTAL_MINOR` is 1. The baseline gained 18 lines, each tagged `@1.1`. A grown struct
+keeps its 1.0 line as the least size a callee accepts, the core ABI's rule (`EmuSen_CoreAPI.md` §4.2). The crate's
+baseline test now applies that rule, and a field may only be appended at or past the recorded size. Each addition
+and its owner:
+
+| Addition | What it is | Owner |
+|---|---|---|
+| `open_params.device` (offset 64; 72 bytes, 64 still taken) | the presenter's Vulkan device, the platform library's `emusen_serenity_device` | the frontend gives it; the runtime lends it |
+| `frame_info.picture_on_device` (offset 104; 112 bytes, 104 still taken) | the frame's picture was taken on the lent device | the runtime |
+| `picture_lend` | the current machine's lend, for the presenter to borrow (`SlangLend.Borrow`) | the runtime makes and frees it |
+| `raw_select`, `raw_copy`, `emusen_crystal_raw_info` | the picture before the core's palette, into the client's buffer | the core, through the runtime |
+| `state_record`, `state_forget` | a state's record in `states.db` | the runtime |
+| `STATE_REFUSED` (−1114) | a load refused: another console's record, a version outside `loads_from`, or the core's own refusal in its words | the runtime and the core |
+| `game_setting_get`, `game_setting_set` | a game's own file of settings with no session, the library's view | the runtime |
+| `cheat_op` with session 0 | the ten ops that need no game | the runtime's provider with no target |
+| `systems[].core` | the names `core <name>` knows, the display name, console and extensions (part 3) | the engine's facts, from the registry |
+| `session_info.state` | `{"format","version","loads_from"}` | machine info |
+
+**The device lend is the runtime's** (decided 2026-10-18 by the tester). This supersedes §14.7's take by the client.
+`open_params` carries the presenter's device. The runtime makes each machine's lend from it (`PlatformLend`) through
+the platform library's own C interface (`emusen_serenity_lend_new`, `_take`, `_settle`, `_free`). The core takes on
+the emulation thread inside `frame`, as `CoreMachine` took before, and the lend is settled before the machine is freed.
+No callback reaches the client, so the pull rule holds, and the Rust Crystal can do the same.
+
+Why a client's take would not do: a lend serves one machine, whose timeline `done` starts again at 1, and a machine
+can be made inside a call that is not `frame`. A client that skipped a take, on a rewind step or an undrawn frame,
+would leave the core waiting on `done`. Serenity gained `SlangLend.Borrow`, a lend read and not freed, and
+`SlangVulkan.DeviceHandle`.
+
+`ApiDeviceLendTests`, on the RX 6800, holds the next drawn picture taken and no frame call stalled after each of:
+- the open;
+- a reset, which keeps the machine and its lend;
+- held rewind's steps;
+- four undrawn frames;
+- a session opened again, Mistress's power cycle, which gets a new lend.
+
+An in-place reset was left out of the test when it was written: **resetting a Diamond machine running the triangle
+PS-EXE killed the host process** on any path, lent or not. The host called a null `emusen_core_reset` for a core that
+did not claim RESET. That was fixed in Diamond's own work on 2026-10-18. Diamond now claims RESET, and the reset is in the test. No v1 engine makes a machine again inside a state load of another
+size, so "a state of another size" has no case among the v1 engines today. MarsRT's rebuild is its own shim's, and
+MarsRT takes no lend.
+
+**States: `states.db` and the refusals** (D8). The runtime keeps each state's record in `states.db` (`StateRecords`).
+The record has records.db's columns less `source`, and is stamped with the state file's size and time. Its first open
+copies every state row of Mistress's records.db, none over a row already there, once, and marks the copy in a table
+of its own. `state_save` writes the record: the session's console, the running engine's name, the state version, the
+runtime's build, the time, the file's name, and the game's hash and size, which are read on a worker as the session
+opens.
+
+`state_load` refuses with `STATE_REFUSED` a state whose record names another console. It refuses one of the same
+engine whose version is outside machine info's `loads_from`, naming the range. Otherwise it gives the core's own
+refusal, an `InvalidDataException` from the core's status, in its words.
+
+The case that started this: Mistress compared the record's version with the running core's, so a PAL NES state
+(version 7) offered to an NTSC game (version 6) was refused as "saved by a newer build". The NTSC machine's
+`loads_from` is 3 to 7, so the runtime passes the state to MoonRT, which refuses it with "a state saved on another
+console", as Moon_PAL.md §7 recommends:
+- `StateRefusalTests` holds the API's answer.
+- `MistressStateRefusalTests` drives Mistress's window, saving with one copy of a game and loading into the other. It
+  was **shown failing** on today's Mistress on 2026-10-18 ("That state was saved by a newer build (0.9.1+…") and
+  passes with 4b's move.
+
+**SR12: consoles.json.** Each console's core settings are the runtime's own file, `/etc/EmuSen/consoles.json`
+(`ConsolesConfig` in Galaxia, which owns the file's name). Its first load, with no file there, copies graphics.json's
+`Consoles` map whole. It never copies over a file that exists. The whole map is copied because which keys are a core's
+depends on the engines installed at the time; a key no engine reads is inert there.
+
+The runtime's every reader moved to it: `CoreFactory`'s stored settings and media, `FirmwareOverview`,
+`settings_get`, `settings_set` and the save media. graphics.json keeps Mistress's own keys: the shader, the picture's
+shape, overscan and crop, and the flag that a card's import was offered.
+
+**What SR12 forced in Mistress at once.** A commit in which Mistress wrote a file the runtime no longer reads would be
+a broken commit. So:
+- The graphics window sorts its rows. The keys the console's schema, engine row and card rows name are the core's:
+  read from consoles.json and written through `settings_set`, which checks them against the schema and applies them
+  to a running session. Every other key stays in graphics.json, and Reset forgets both.
+- `ApplyConsoleSettings`, the crash log's settings line, the cards, the controller rows and the empty console's
+  engine read the runtime's stored values (`CoreSettings.StoredFor`).
+- The engine a game opens on is the runtime's route.
+- The metadata editor's "Alternative emulator" is written to the game's own file through `game_setting_set` as well
+  as to games.db, where ES-DE's field lives.
+
+Mistress reads consoles.json through Galaxia's model and never writes it: one writer, SR5. Mistress takes a
+reference to the binding for this. The rest of its move is 4b.
+
+**SR10's copy.** The runtime's first start copies each game's `altemulator` from games.db to its file of settings as
+`Engine`. It skips an engine the console's schema does not offer, never writes over a value already there, and does
+this once, marked by `games/.engine-choices-copied`. The library's badge reads the runtime's answer in 4b.
+
+**A reset the core does not claim.** Since the host refuses a reset a core does not claim (merged 2026-10-18: the host
+had called a null `emusen_core_reset`, which killed the process on Diamond's), the API's `reset` answers that refusal
+as `NOT_SUPPORTED` with its words, a status like any other, and the session runs on (`StateRefusalTests`, on
+MercuryRT). Mistress's Reset pressing the console's own reset where the core claims it is 4b's.
+
+**The cheat database with no game.** The ten game-free ops that `cheat_op` answers on session 0 are named once, as
+`SessionService.GameFreeCheatOps`. The provider answers them with no target, and the runtime asks the same set
+before it refuses any other op with `NO_SESSION`. `emusen_session.h`'s `cheat_op` says so.
+
+**Gates of 4a:**
+- `ManagedCrystal11Tests` (eight):
+  - consoles.json's one copy;
+  - a record written, read and forgotten;
+  - D8's one copy;
+  - another console's state refused by its record;
+  - a game's setting with no session;
+  - SR10's one copy;
+  - the raw picture;
+  - every op on session 0, the refused ones each.
+- `StateRefusalTests`, `ApiDeviceLendTests`, the header and shape tests at 1.1, and the crate's baseline with 18
+  lines at `@1.1`.
+- The Crystal, Mistress, Diamond, Nephrite and settings tests: the fixtures that wrote a core's key to graphics.json
+  now write consoles.json.
 
 ### 15.1 Part (a): the firmware store, `emusen-firmware`
 

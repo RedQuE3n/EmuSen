@@ -6,7 +6,7 @@
 use std::ffi::c_void;
 
 pub const MAJOR: u32 = 1;
-pub const MINOR: u32 = 0;
+pub const MINOR: u32 = 1;
 pub const VERSION: u32 = (MAJOR << 16) | MINOR;
 
 pub mod status {
@@ -15,6 +15,7 @@ pub mod status {
     pub const BUSY: i32 = -1111;
     pub const BAD_STRUCT: i32 = -1112;
     pub const IO: i32 = -1113;
+    pub const STATE_REFUSED: i32 = -1114;
 }
 
 pub const OPEN_NO_BATTERY: u32 = 1;
@@ -80,6 +81,8 @@ pub struct emusen_crystal_open_params {
     pub engine_len: usize,
     pub audio_buffer_max_samples: u32,
     pub reserved: u32,
+    /// Since 1.1: the presenter's Vulkan device, the platform library's `emusen_serenity_device`.
+    pub device: *const c_void,
 }
 
 #[repr(C)]
@@ -105,6 +108,21 @@ pub struct emusen_crystal_frame_info {
     pub paused: u32,
     pub halted_processor: u32,
     pub halted_address: u64,
+    /// Since 1.1.
+    pub picture_on_device: u32,
+    pub reserved: u32,
+}
+
+/// Since 1.1: the shape of `emusen_crystal_raw_copy`'s picture.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct emusen_crystal_raw_info {
+    pub size: u32,
+    pub element: u32,
+    pub width: i32,
+    pub height: i32,
+    pub stride: i32,
+    pub reserved: u32,
 }
 
 /// The session service's table as the header names it, which `emusen_crystal_session_service` returns; its layout is

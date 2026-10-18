@@ -3606,7 +3606,7 @@ logging `0x3412` for the bytes `12 34`, and passes with the change. *The Genesis
 2026-10-18 (`Nephrite_Native.md` §66): every space on the 68000's side, the Sega CD's and the 32X's holds a word big-end
 first; the Z80's RAM and bus hold the Z80's words little-end first and now read swapped, a per-space byte order in
 machine info proposed for them; `NephriteTests.The_frame_log_reads_a_genesis_value_big_end_first` failed first and
-passes with the change. That per-space order was built the same day as core ABI 1.14, §24.*
+passes with the change. That per-space order was built the same day as core ABI 1.14, §25.*
 
 **The gates, after:**
 
@@ -4612,7 +4612,7 @@ at every frame.
 
 ---
 
-## 24. Core ABI 1.14, 2026-10-18: a byte order for each memory space
+## 25. Core ABI 1.14, 2026-10-18: a byte order for each memory space
 
 *Built on 2026-10-18 on branch `space-byte-order`, from `WiseMan` at `08812dde`, under the tester's decision of the same
 day: the machine-info form `Nephrite_Native.md` §66.2 proposed, an optional byte order on each space of machine info's
@@ -4620,7 +4620,7 @@ space list, which `CoreEngine` reads first, falling back to the systems table wh
 marked as at the head of this page. The normative text is `EmuSen_CoreAPI.md` §6.39 and its changelog's row, the
 summary and the forms weighed `EmuSen_CoreAPI_Extensions.md` §16, and Nephrite's spaces `Nephrite_Native.md` §66.5.*
 
-### 24.1 The defect, shown first
+### 25.1 The defect, shown first
 
 Since §18.9 the frame log reads a value in its system's order, and the Genesis family's is `big` (`Nephrite_Native.md`
 §66). The Z80's words are stored low byte first, so a two-byte frame log of `Z80RAM`, or of `Z80BUS` where the Z80's
@@ -4630,7 +4630,7 @@ a 32X and a Sega CD image and from `Z80BUS` on a Genesis image. Run with the tes
 change stashed [M]: **4 failed** with `0x3412`, the two bytes in place; the seven 68000-side cases of §18.9's test
 passed beside them.
 
-### 24.2 What was built
+### 25.2 What was built
 
 - **The schema and the field.** `machine-info.schema.json`'s spaces gain `byte_order`, a string of the enumeration
   `big`, `little`, spelt as the systems data files spell theirs (`Platform/systems/data/*.json`); absent, the system's.
@@ -4654,7 +4654,7 @@ passed beside them.
   of the words the Z80 itself reads as words, the window's 68000 words a documented exception read right through
   `M68KBUS` (`Nephrite_Native.md` §66.5, which gives the reasons).
 
-### 24.3 Tested
+### 25.3 Tested
 
 Measured on 2026-10-18 [M]:
 
@@ -4674,7 +4674,7 @@ space as stating none, and the frame log reading the bytes `$12 $34` as `0x3412`
 `0x1234` from `ROM` (the space's). `CoreAbi113Tests`' first case now holds 1.13's three bits under any later minor.
 No golden was re-recorded.
 
-### 24.4 For the tester
+### 25.4 For the tester
 
 - **Other spaces of two orders.** None is known outside the Genesis: the N64's, SNES's, NES's, Game Boy's and
   PlayStation's spaces each hold one processor's words, in the order their systems' entries state. The 32X's memories

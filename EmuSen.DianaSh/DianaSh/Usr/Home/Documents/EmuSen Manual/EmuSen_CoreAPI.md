@@ -2614,7 +2614,7 @@ value of a space whose processor's order is not its system's (the Genesis's Z80)
 reads `CoreSpace.ByteOrder` and `CoreEngine`'s frame log reads a space in its order before the system's. The kit's
 C14 checks the spelling where a space states one; the test core states its ROM `big`, and `FAULT_BYTE_ORDER_MISSPELT`
 (1 << 34) fails C14 alone. Nephrite states `Z80RAM` and `Z80BUS` `little`; no other core states one, and their kit
-reports are unchanged but for the minor's number (`EmuSen_Backend.md` §24).
+reports are unchanged but for the minor's number (`EmuSen_Backend.md` §25).
 
 **Clarified 2026-10-18, no minor** (§6.14): a processor whose `debug_set_breakpoints` refuses cannot halt, and an
 interrupt stopped for with no call logged is noted from the stop reason.

@@ -4825,7 +4825,7 @@ cartridge. On the tree without the change (the test alone, against `WiseMan` at 
 the frame log giving `0x3412` with both bytes in place; with it all four pass, and §66.3's seven 68000-side cases pass
 unchanged. The crate's `the_stub_reports_each_system_and_a_blank_picture` holds the two stated orders and no other.
 
-**Measured (2026-10-18).** WiseMan's blast radius, 187 of 187 (`EmuSen_Backend.md` §24); the crate's `v1::` tests, 21
+**Measured (2026-10-18).** WiseMan's blast radius, 187 of 187 (`EmuSen_Backend.md` §25); the crate's `v1::` tests, 21
 of 21 (`--profile test-checked`); the kit's corpus on `genesis-sample.txt`, 64 of 64 images passing as before, each
 report the same as at 1.13 but for the minor's number and C14's note, which now ends "2 space(s) state their byte
 order".

@@ -1705,7 +1705,7 @@ telemetry kind and `coretop`'s counters are the frontend API's next minor.
 ## 16. A space's byte order (1.14), decided 2026-10-18
 
 *Proposed by `Nephrite_Native.md` §66.2, when the Genesis family's systems table entry was set `big` and the Z80's
-spaces began to read swapped; decided by the tester on 2026-10-18 and built the same day (`EmuSen_Backend.md` §24). The
+spaces began to read swapped; decided by the tester on 2026-10-18 and built the same day (`EmuSen_Backend.md` §25). The
 normative text is `EmuSen_CoreAPI.md` §6.39.*
 
 ### 16.1 What existed

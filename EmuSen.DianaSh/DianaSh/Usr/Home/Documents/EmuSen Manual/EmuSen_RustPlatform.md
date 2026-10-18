@@ -3368,6 +3368,11 @@ Debug assertions are left off, for two reasons, the second the deciding one:
   20 frames instead of 300 (`src/tests/games.rs`), and `Options::default` turns on the RDP's mark verification
   (`src/machine.rs`). Under that profile CI would test less of MarsRT, in more time.
 
+  *Since 2026-10-18 MarsRT keys that shortening on a cfg of its own, `marsrt_unoptimised`, which `build.rs` sets at
+  `opt-level` 0 (`Mars_Native.md` §8), and the mark verification, a check, stays on debug assertions. With them on,
+  `test-checked` now runs MarsRT's full counts in 46.0 s, against 44.3–47.3 s without, so this reason no longer
+  applies, and the cost above is what remains to decide on.*
+
 ### 37.3 What it found
 
 Every suite ran on the profile, at first with debug assertions on as well, and again with overflow checks alone: 1,834

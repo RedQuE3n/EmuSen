@@ -417,7 +417,7 @@ fn stress_with(seed: u32, rounds: u32, workers: usize) {
 
 #[test]
 fn seeded_lists_with_processor_accesses_between_leave_what_the_lists_at_once_leave() {
-    let seeds: u32 = std::env::var("EMUSEN_MARSRT_STRESS").ok().and_then(|v| v.parse().ok()).unwrap_or(if cfg!(debug_assertions) { 3 } else { 24 });
+    let seeds: u32 = std::env::var("EMUSEN_MARSRT_STRESS").ok().and_then(|v| v.parse().ok()).unwrap_or(if cfg!(marsrt_unoptimised) { 3 } else { 24 });
     for seed in 1..=seeds {
         stress_with(seed, 12, 1);
     }
@@ -645,7 +645,7 @@ fn a_snapshot_with_several_processors_stands_them_at_one_boundary() {
 
 #[test]
 fn seeded_lists_shared_by_several_processors_leave_what_the_lists_at_once_leave() {
-    let seeds: u32 = std::env::var("EMUSEN_MARSRT_STRESS").ok().and_then(|v| v.parse().ok()).unwrap_or(if cfg!(debug_assertions) { 2 } else { 12 });
+    let seeds: u32 = std::env::var("EMUSEN_MARSRT_STRESS").ok().and_then(|v| v.parse().ok()).unwrap_or(if cfg!(marsrt_unoptimised) { 2 } else { 12 });
     for seed in 1..=seeds {
         for workers in [2, 3, 4] {
             stress_with(seed * 7 + workers as u32, 8, workers);

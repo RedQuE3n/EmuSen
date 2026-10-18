@@ -147,7 +147,7 @@ fn the_video_timing_is_the_referees_line_on_both_clocks() {
             let hblanks = results(&m, 0x10_0100 + 0x200 * k as u32, 3);
             let mean = (stamps[40] - stamps[0]) as f64 / 40.0;
             assert!((mean - cycles as f64).abs() < 2.0, "{market:?} mode {k}: {mean}");
-            assert_eq!([(hblanks[1] - hblanks[0]) & 0xFFFF, (hblanks[2] - hblanks[1]) & 0xFFFF], lines, "{market:?} mode {k}");
+            assert_eq!([hblanks[1].wrapping_sub(hblanks[0]) & 0xFFFF, hblanks[2].wrapping_sub(hblanks[1]) & 0xFFFF], lines, "{market:?} mode {k}");
         }
     }
 }

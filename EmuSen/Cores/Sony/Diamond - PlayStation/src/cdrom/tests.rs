@@ -377,7 +377,7 @@ fn xa_adpcm_plays_its_channel_and_delivers_the_data_between() {
         if six == 0 {
             six = 6;
             for t in &xa::ZIGZAG {
-                let o = |c: usize| (1..=29).map(|i| ring[c][(p - i) & 31] as i32 * t[i - 1] >> 15).sum::<i32>().clamp(-32768, 32767) as i16;
+                let o = |c: usize| (1..=29).map(|i| ring[c][(p + 32 - i) & 31] as i32 * t[i - 1] >> 15).sum::<i32>().clamp(-32768, 32767) as i16;
                 want.push([o(0), o(1)]);
             }
         }

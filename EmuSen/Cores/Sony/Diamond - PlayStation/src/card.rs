@@ -157,7 +157,7 @@ mod tests {
     #[test]
     fn a_write_then_a_read_round_trip_a_sector_with_its_checksum() {
         let mut c = Card::new(None);
-        let data: [u8; 128] = std::array::from_fn(|i| i as u8 * 3);
+        let data: [u8; 128] = std::array::from_fn(|i| (i * 3) as u8);
         let w = transfer(&mut c, &write(0x3F, &data, 0));
         assert_eq!((w[0].byte, w.len(), w.last().unwrap().byte), (FLAG_NEW, 137, 0x47));
         assert_eq!((c.flag, c.changed), (0, true), "a write clears the new-card bit");

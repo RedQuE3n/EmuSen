@@ -1589,5 +1589,23 @@ mod tests {
         }
         assert_eq!(vblanks, 3);
     }
+
+    /// GP1(07h) moving Y1 behind the current line leaves timer 1 counting as a write of the same range does (Diamond_Native.md §28).
+    #[test]
+    fn a_display_range_moved_behind_the_beam_leaves_the_timers_counting() {
+        let count = |y1: u32| {
+            let mut b = board();
+            b.now = b.video.t_at(100 * crate::video::NTSC_LINE);
+            b.events();
+            b.io_write32(0x114, 0);
+            b.io_write32(0x814, 0x0700_0000 | (0x10 + 240) << 10 | y1);
+            b.events();
+            b.now += 1000;
+            b.io_read32(0x110)
+        };
+        let same = count(0x10);
+        assert!((990..=1000).contains(&same), "{same}");
+        assert_eq!(count(50), same);
+    }
 }
 

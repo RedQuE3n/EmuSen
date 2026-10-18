@@ -1,3 +1,4 @@
+using EmuSen.Cores.Native;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 using EmuSen.Crystal.Systems.GameBoy;
@@ -119,11 +120,34 @@ namespace EmuSen.WiseMan.Cores
             Assert.Throws<System.IO.InvalidDataException>(() => GbCartridge.Read(new byte[0x100]));
         }
 
-        [Fact]
-        public void A_type_no_board_implements_is_refused_with_its_number()
+        // Every type the header table defines is named; the refusal of a board is the engine's, at create - see EmuSen_Backend.md §17.2 L1.
+        [Theory]
+        [InlineData(0x0B, "MMM01")]
+        [InlineData(0x20, "MBC6")]
+        [InlineData(0x22, "MBC7")]
+        [InlineData(0xFC, "Pocket Camera")]
+        [InlineData(0xFD, "TAMA5")]
+        [InlineData(0xFE, "HuC3")]
+        [InlineData(0xFF, "HuC1")]
+        [InlineData(0x04, "unknown")]
+        public void A_type_no_engine_builds_is_named_not_refused(byte type, string board)
         {
-            var e = Assert.Throws<NotSupportedException>(() => GbCartridge.Read(SyntheticGbRom.Build(cartridgeType: 0x22)));
-            Assert.Contains("$22", e.Message);
+            Assert.Equal(board, GbCartridge.Read(SyntheticGbRom.Build(cartridgeType: type)).Board);
+        }
+
+        [Fact]
+        public void A_type_mercuryrt_does_not_build_is_refused_by_its_create_with_its_number()
+        {
+            string rom = SyntheticGbRom.WriteTemp(SyntheticGbRom.Build(cartridgeType: 0x22));
+            try
+            {
+                using var core = new MercuryRtCore { Options = TestCores.NoBattery };
+                var e = Assert.Throws<CoreRefusedException>(() => core.LoadRom(rom));
+                Assert.Equal(-10, e.Status);
+                Assert.Contains("$22", e.Message);
+                Assert.False(core.IsRomLoaded);
+            }
+            finally { File.Delete(rom); }
         }
     }
 }

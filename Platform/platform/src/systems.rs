@@ -324,7 +324,6 @@ pub unsafe extern "C" fn emusen_systems_header(system: *const u8, system_len: us
                 ("cgb_flag", Value::number(c.cgb_flag)),
             ]),
             Err(emusen_systems::gb::cartridge::Refusal::Invalid(w)) => refused("invalid", w),
-            Err(emusen_systems::gb::cartridge::Refusal::Unsupported(w)) => refused("unsupported", w),
         },
         _ => return fail(status::ABSENT, format!("{system} has no header reader")) as i64,
     };

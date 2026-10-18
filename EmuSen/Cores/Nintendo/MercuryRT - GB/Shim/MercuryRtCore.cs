@@ -159,7 +159,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             return null;
         }
 
-        // The header's refusals before the library sees the image, and the battery file a board with battery-backed RAM keeps.
+        // The header's refusal of an image too short before the library sees it, and the battery file a board with battery-backed RAM keeps.
         protected override BatterySave Prepare(string path, byte[] image)
         {
             _cartridgeType = image.Length > 0x147 ? image[0x147] : (byte)0;
@@ -197,10 +197,10 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             if (version is < OldestReadableVersion or > StateFormatVersion) throw new InvalidDataException($"Save state version {version} is not one this build reads ({OldestReadableVersion} to {StateFormatVersion}).");
         }
 
-        // The load's exceptions with the cartridge type the header named, and an illegal opcode built from the frame's detail word, (opcode << 16) | pc.
+        // A board MercuryRT does not build refused as any v1 engine refuses a game, and an illegal opcode built from the frame's detail word, (opcode << 16) | pc.
         protected override Exception? OwnRefusal(int status, ulong detail) => status switch
         {
-            -10 => new NotSupportedException($"Cartridge type ${_cartridgeType:X2} is not implemented - see Mercury_Memory.md §4."),
+            -10 => new CoreRefusedException(status, $"{Info.DisplayName} refused the game: cartridge type ${_cartridgeType:X2} is not implemented."),
             -9 or -11 => new InvalidDataException($"MercuryRT refused the image: {MercuryMachine.Describe(status)}."),
             -20 => MercuryMachine.IllegalOpcode((uint)detail),
             _ => null,

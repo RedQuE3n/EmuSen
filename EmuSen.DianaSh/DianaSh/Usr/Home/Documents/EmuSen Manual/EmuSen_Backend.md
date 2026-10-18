@@ -4108,3 +4108,110 @@ the same games' state hashes under the bench's input at every frame.
 - **Step 5, the switch**: `CoreFactory`'s `.nes` arm, `MoonRtEngine` to `SoleDiscoveredEngines`, the shim's five files,
   MoonRT's `native_exports!`, `moonrt_step` and `moonrt_rom_patch`, `EMUSEN_MOONRT_ENGINE` and its branch, the classes of
   §21.3's second table, and the eight corpus traces' refusal word decided.
+
+---
+
+## 22. B4's shared part, 2026-10-18: the host pieces the cores share, and core ABI 1.13
+
+*Built on 2026-10-18 on branch `b4-shared`, from `WiseMan` at `4b42f4f1`, under §20's decisions: one branch builds
+the host pieces the three B4 cores share (§17.7 step 2, §18.7 steps 4 and 5's host and bridge parts, §19.8 step 2's
+host parts) and the minor, merged before any core switches to the generic host. No core was switched and no shim was
+deleted; MercuryRT, MarsRT and MoonRT claim none of the minor's items, which their own branches take. Claims are marked
+as at the head of this page.*
+
+### 22.1 The candidate defects, shown before anything was fixed
+
+Each was written as a test in `SharedHostTests` and run on a tree with nothing of the fixes in it (a throwaway copy of
+`4b42f4f1` with only the tests, the two markers the test core gained for them, and Hotaru's key named as a member that
+still returned the engine's name) [M]. All thirteen cases failed there, each on its own assertion, and pass after:
+
+| Candidate | The test | Today's answer | After |
+|---|---|---|---|
+| §17.5 C2, §18.3 C1, §19.6 C2: a refused state through the frontend API | a foreign state of 64 bytes and a short one of 4, on a Game Boy, an NES and an N64 game | `Fault` (−1108) on all three | `StateRefused` (−1114) |
+| §19.5 item 8: a game no board builds | a mapper-200 NES image | `NoEngine` (−1109) | `Fault`, "MoonRT (Rust) refused the game: mapper 200 …" |
+| §17.5 C3: a game's own create-time setting | the test core's `Ram`, set for the game, the game opened again | 7, the console's | 42, the game's |
+| §17.2 E2: a create-time setting before the first frame | `Set("Ram", "42")` with no frame run, then `9` after one | 7 | 42 at once; `9` kept for the next load |
+| §18.3 C2: the call stack across a new machine | a call recorded, the game loaded again | depth 1 | 0 |
+| §18.3 C3, F13: an interrupt stopped for without a call | `runto irq` on an image whose loop stops for interrupts and logs no call | never halts | halts at frame 3 |
+| §18.2 F7: a processor that cannot halt | an image with a second processor whose breakpoints are refused | `helper` offered a halt | `helper` cannot halt |
+| §19.6 C5: coverage's entry points | a call pushed with coverage armed | none recorded | the target recorded, as a call |
+| §17.2 E8: labels | a label made through one target, read through another | absent | present |
+| §19.6 C6: a read between frames after a patch | a ROM patch at `$00:8005` on VenusRT, `CpuBus` read before the next frame | the unpatched byte | the patched byte |
+| §17.5 C4: Hotaru's binding key | the key for a test-core session | `V1TestCore`, the engine | `TEST`, the console |
+
+**One cause or two.** The refused state was one cause in two shapes: every shim answered the core's refusal with an
+exception that carried no `emusen.status`, which is what `ManagedSession.LoadState` takes a refusal by. MercuryRT's and
+MoonRT's shims threw their oracles' `InvalidDataException` and `EndOfStreamException` from a pre-check before the core
+saw the bytes (`PortEngine.CheckState`), and MarsRT's shim threw a new `InvalidDataException` around the adapter's,
+dropping its data. The fix is one rule, the one §20 decided: the oracles' exception types retire, so the core refuses
+and `CoreMachine.Load`'s exception, which carries the status, reaches the API.
+
+### 22.2 What was built
+
+- **The oracles' exception types retired where they reach the frontend API.** `PortEngine.CheckState` and its two
+  overrides are gone, so a state reaches the core and is refused in its words with its status; `PortEngine.LoadRom`
+  no longer maps the core's refusal to an oracle's type, so a refused game is `CoreRefusedException`, a fault, as on
+  every v1 core; `MarsRtCore.LoadState` no longer wraps the refusal. *Not retired here*: the frame-time mapping
+  (`PortEngine.AdvanceFrame`, MoonRT's `Reset`), which MercuryRT's hardware-test runner reads as its "illegal opcode"
+  verdict (`MercuryHardwareTestRomTests`), and Mercury's header pre-check (`GbCartridge.Read`, §17.2 L1); both go with
+  their shims at the core branches' switches.
+- **`CoreEngine` owns a `LabelRegistry`**, which `CoreDebugTarget.Labels` returns.
+- **`CoreDebugBridge`**: the call stack reset at each new machine; coverage's entry-point observer wired to processor
+  0's coverage; an interrupt noted from `STOP_INTERRUPT` when the round's call log held none (from the log when it
+  did, so it is noted once); and the halting probe, an empty table pushed to each processor once a machine, a refusal
+  marking it as one that cannot halt, its tables no longer pushed and its `DebugCpu.CanHalt` false. `EmuSen_CoreAPI.md`
+  §6.14 gained the clarification, no minor.
+- **`CoreEngine.ReadSpace` brings the ROM patches up first**, a version compare when nothing changed.
+- **A create-scope `Set` before the first frame makes the machine again**, the machine "fresh" from its create until
+  a frame runs or a state loads; a refusal at create puts the old value back and keeps the old machine.
+  `CoreEngine.Keep` holds a value for the next load alone, for MarsRT's shim's `Boot`, which sets create-time keys
+  around its own load.
+- **`RomPatchTriples` moved into `CoreEngine`**; `NativeRtCore` calls it there.
+- **Hotaru keys pad bindings by the session's console** (`HotaruSession.BindingsConsoleOf`), as Mistress does; logs,
+  screenshots and recordings stay under the engine's name.
+- **The pack views' shared surface**, `EmuSen_CoreAPI.md` §31.7: `ISystemDebugViews` gained `MaxSprites`, `Sprites`,
+  `AudioChannels`, `ResolvePhysical` and `UnitLabel`, and `Summary`, `DmaChannels` and `DecodeTilemapEntry` overloads
+  taking the spaces and the units; `DebugUnit` is a unit as a pack sees it; `CoreDebugTarget` wires each, the
+  palettes', sprites' and channels' copies through one ring (`ViewRing<T>`). **No console fills them**: each fill
+  needs the core's own registers and spaces and so is the core branch's, with its Rust twin in `emusen-systems`. The
+  platform library's C interface did not change, so this part takes no platform interface number (it is 18 here, and
+  19 is MarsRT's branch's): `emusen_systems_view` takes a
+  view by name, and the new members answer the C# views' until a console adds its Rust twins.
+
+### 22.3 Tested
+
+The blast radius of the first part, measured on 2026-10-18 on the branch's build, Debug, .NET 10.0.112 [M]: 57 classes,
+every class that names a shim or its rig, drives `CoreEngine`, `CoreDebugBridge` or `CoreDebugTarget` on any v1 core,
+or reaches a state, a setting, a cheat or the debugger through the frontend API, with `GoldenCorpusTests`:
+`SharedHostTests`, `CoreAdapterTests`, `CoreEngineThreadTests`, `BatterySaveTests`, `BreakpointConditionTests`,
+`CheatCodecAdapterTests`, `ControllerPortTests`, `CoreFactoryCheatWiringTests`, `CoreRegistrationEquivalenceTests`,
+`DebugPlumbingTests`, `DiamondDebugTests`, `DiamondTests`, `EngineFeaturesTests`, the Mars classes (`MarsCheatTests`,
+`MarsCoreSettingsTests`, `MarsDebugTests`, `MarsNativeStateTests`, `MarsRtCoreAbiTests`, `MarsRtDebugTests`,
+`MarsRtFrontendTests`, `MarsRtTests`, `MarsRtEngineTests`), the Mercury classes (`MercuryRtCoreAbiTests`,
+`MercuryRtCoreTests`, `MercuryRtDebugTests`, `MercuryDefectTests`, `MercuryModelTests`, `MercuryCartridgeTests`,
+`MercuryModelSettingTests`), the Moon classes (`MoonCheatTests`, `MoonDebugEngineTests`, `MoonRtCoreAbiTests`,
+`MoonRtFrontendTests`, `MoonRtPalTests`, `MoonRtEngineTests`), `NativeHostTests`, `NephriteDebugTests`,
+`RustShimDisposeTests`, `RustStateHeaderTests`, `RewindToMomentTests`, `VenusRtCoreAbiTests`, `VenusRtDebugTests`,
+`VenusRtDebugViewTests`, `DebugCodeParityTests`, `FrontendDefectTests`, `HotaruOnTheApiTests`, `ManagedCrystalTests`,
+`ManagedCrystal11Tests`, `SessionServiceParityTests`, `StateRefusalTests`, `MistressStateRefusalTests`,
+`GenesisCheatFormatsTests`, `GoldenCorpusTests`, `SnesSystemPackTests`, `DisplayAspectTests` and
+`ConsoleBindingsTests`: **784 tests, 783 passed, 1 failed**, in 12 min 53 s. The failure was a test's own words: the
+refused NES game's message carries the core's detail ("mapper 200 is not implemented") rather than `status_text`'s
+sentence; the assertion was corrected, and `SharedHostTests`, `CoreAdapterTests` and `NativeHostTests` run again:
+**32 of 32 passed**. No golden file changed: the debugger's corpus passed unchanged, the shims' cores still being the
+shims, and the generic target's new members answering as before where no pack fills them.
+
+**Again on `WiseMan` at `bd47a7c0`**, after MercuryRT's and MoonRT's second phases were merged (§17.9, §21) and this
+part was rebased onto them: the same classes with the moved and new ones (`GameRefusalTests`, `MoonGoldenTests`,
+`MoonAccuracyCoinTests`, `MoonPpuDefectTests`, `MoonRtRawPictureTests`, `MoonSpriteZeroTests`, `MoonTestRomTests`,
+`NesRunToFrameTests`, `PadButtonTests`, `AudioBufferLimitTests`, `MercuryRtFallbackTests`, `MercuryStateLayoutTests`):
+**1,066 tests, 1,065 passed, 1 failed**, in 14 min 43 s. The failure was Pharaoh's NES test-ROM runner, which took
+"no engine" as its word for a board the engine does not build; that board is now refused as every v1 engine refuses a
+game, a fault in the core's words, and the runner reads a fault whose words say the game was refused as the same skip.
+Run again with its neighbours (`MoonTestRomTests`, `GameRefusalTests`, `SharedHostTests`, `MoonGoldenTests`,
+`MoonRtCoreAbiTests`): **140 of 140 passed**. MercuryRT's shim had already turned its `-10` into the host's
+`CoreRefusedException` (`GameRefusalTests`), which this part's removal of the load-time mapping keeps.
+
+**Sizes, against §7's B4 row** [M: `git diff --numstat`]: about 215 lines of C# added and 100 removed in the host and
+the shims, 22 in the test core, 199 in `SharedHostTests`; §7 estimated 300 for "the generic C# adapter" and §17.7
+about 150 for these host pieces.

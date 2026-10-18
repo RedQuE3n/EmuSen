@@ -187,16 +187,6 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
 
         public int ControllerPorts => 1;
 
-        // The format's two refusals with their messages, before the bytes reach the machine.
-        protected override void CheckState(byte[] state)
-        {
-            if (state.Length < 4) throw new EndOfStreamException("Unable to read beyond the end of the stream.");
-            if (BitConverter.ToUInt32(state, 0) != StateMagic) throw new InvalidDataException("Not a Mercury save state.");
-            if (state.Length < 8) throw new EndOfStreamException("Unable to read beyond the end of the stream.");
-            int version = BitConverter.ToInt32(state, 4);
-            if (version is < OldestReadableVersion or > StateFormatVersion) throw new InvalidDataException($"Save state version {version} is not one this build reads ({OldestReadableVersion} to {StateFormatVersion}).");
-        }
-
         // A board MercuryRT does not build refused as any v1 engine refuses a game, and an illegal opcode built from the frame's detail word, (opcode << 16) | pc.
         protected override Exception? OwnRefusal(int status, ulong detail) => status switch
         {

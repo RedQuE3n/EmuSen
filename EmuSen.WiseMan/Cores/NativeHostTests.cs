@@ -20,11 +20,11 @@ namespace EmuSen.WiseMan.Cores
             cheats.AddRomPatch(0x9123, 0x55, null, "later");
             cheats.AddRomPatch(0x3FFF, 0x01, null, "below");
 
-            uint[] nes = NativeRtCore<MoonMachine>.RomPatchTriples(cheats, 0x4020, 0xFFFF);
+            uint[] nes = CoreEngine.RomPatchTriples(cheats, 0x4020, 0xFFFF);
             Assert.Equal(new uint[] { 0x9123, 0x42, 0x07, 0x9123, 0x55, uint.MaxValue }, nes);
-            uint[] gb = NativeRtCore<MoonMachine>.RomPatchTriples(cheats, 0, 0x7FFF);
+            uint[] gb = CoreEngine.RomPatchTriples(cheats, 0, 0x7FFF);
             Assert.Equal(new uint[] { 0x3FFF, 0x01, uint.MaxValue }, gb);
-            Assert.Empty(NativeRtCore<MoonMachine>.RomPatchTriples(new CheatRegistry(), 0, 0xFFFF));
+            Assert.Empty(CoreEngine.RomPatchTriples(new CheatRegistry(), 0, 0xFFFF));
         }
 
         // The loaders' switches and crash-log names; MoonRT and MercuryRT on the common interface, MarsRT on the core ABI v1 since its step 5.

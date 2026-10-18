@@ -130,6 +130,17 @@ namespace EmuSen.Crystal.Systems
             return v.ValueKind == JsonValueKind.Null ? null : v.GetInt64();
         }
 
+        // The views no console's library answers yet, the C# views' until a console's fill adds their twins.
+        public int MaxSprites => Managed.MaxSprites;
+
+        public IReadOnlyList<DebugSpriteInfo> Sprites(IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units) => Managed.Sprites(spaces, units);
+
+        public IReadOnlyList<DebugAudioChannelInfo> AudioChannels(IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units, uint mutes) => Managed.AudioChannels(spaces, units, mutes);
+
+        public PhysicalAddress? ResolvePhysical(int address, IReadOnlyList<IDebugMemorySpace> spaces, IReadOnlyList<DebugUnit> units) => Managed.ResolvePhysical(address, spaces, units);
+
+        public string? UnitLabel(DebugUnit unit) => Managed.UnitLabel(unit);
+
         public string? Summary(IReadOnlyList<DebugRegisterValue> registers) =>
             Crosses("", registers) && Ask("summary", Array.Empty<IDebugMemorySpace>(), w => Registers(w, registers)) is { } a ? a.Root.GetProperty("text").GetString() : Managed.Summary(registers);
     }

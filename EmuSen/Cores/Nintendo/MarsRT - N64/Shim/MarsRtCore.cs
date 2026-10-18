@@ -352,16 +352,16 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         // As the corpus boots a machine: the boot code handed off and nothing loaded beside it.
         public void Boot(string path, bool expansionPak = true)
         {
-            bool pak = ExpansionPak;
-            Flag(Key.ExpansionPak, expansionPak);
-            Flag(Key.Boot, true);
+            string pak = base.Get(Key.ExpansionPak);
+            Keep(Key.ExpansionPak, expansionPak ? "true" : "false");
+            Keep(Key.Boot, "true");
             _booting = true;
             try { LoadRom(path); }
             finally
             {
                 _booting = false;
-                Flag(Key.Boot, false);
-                Flag(Key.ExpansionPak, pak);
+                Keep(Key.Boot, "false");
+                Keep(Key.ExpansionPak, pak);
             }
         }
 
@@ -428,8 +428,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         {
             if (!IsRomLoaded) throw new InvalidOperationException("LoadState() called before LoadRom().");
             long before = SpaceSize(MarsRtSpace.Rdram);
-            try { base.LoadState(stream); }
-            catch (InvalidDataException e) { throw new InvalidDataException($"MarsRT refused the state: {Machine.Words(CoreMachine.StatusOf(e) ?? 0)}.", e); }
+            base.LoadState(stream);
             long after = SpaceSize(MarsRtSpace.Rdram);
             if (after != before) Flag(Key.ExpansionPak, after == ExpandedRdram);
         }

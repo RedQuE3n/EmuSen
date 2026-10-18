@@ -22,40 +22,88 @@ namespace EmuSen.Cores.Native
         {
             _engine = engine;
             CpuRegisters = Processors().Count > 0 ? RegistersOf(Processors()[0]) : NoRegisters;
-            Palettes = new RingProvider<byte, IReadOnlyList<DebugPaletteInfo>>(512, FillPalettes, BuildPalettes);
+            Palettes = new ViewRing<IReadOnlyList<DebugPaletteInfo>>(this, (v, s, u) => v.Palettes(s), Array.Empty<DebugPaletteInfo>()).Provider;
+            Sprites = new ViewRing<IReadOnlyList<DebugSpriteInfo>>(this, (v, s, u) => v.Sprites(s, u), Array.Empty<DebugSpriteInfo>()).Provider;
+            AudioChannels = new ViewRing<IReadOnlyList<DebugAudioChannelInfo>>(this, (v, s, u) => v.AudioChannels(s, u, _mutes), Array.Empty<DebugAudioChannelInfo>()).Provider;
             HardwareLoad = new RingProvider<double, IReadOnlyList<DebugLoadInfo>>(16, FillLoad, BuildLoad);
         }
 
         // The console's pack decodes what the core publishes as spaces; null for a system without one.
         private ISystemDebugViews? Views => _engine.IsRomLoaded ? SystemPacks.For(_engine.Machine.Info.System)?.DebugViews : null;
 
-        // The spaces the palette view reads, learnt once a machine and copied each frame into the ring - see EmuSen_Backend.md §14.5.
-        private CoreMachine? _paletteOf;
-        private ISystemDebugViews? _paletteViews;
-        private ViewSpaceCopy _paletteSpaces = ViewSpaceCopy.None;
-        private ViewSpaceCopy.Reader? _readPaletteSpace;
-
-        private int FillPalettes(byte[] slot)
+        // A pack's view decoded from a copy of the spaces it reads and the units' registers, the copy made at each refresh into a ring so a frame allocates nothing - see EmuSen_Backend.md §14.5.
+        private sealed class ViewRing<T>
         {
-            CoreMachine? machine = _engine.IsRomLoaded ? _engine.Machine : null;
-            if (!ReferenceEquals(machine, _paletteOf)) LearnPalettes(machine);
-            int total = _paletteSpaces.Total;
-            if (total > slot.Length || _readPaletteSpace is null) return total;
-            _paletteSpaces.Fill(slot, _readPaletteSpace);
-            return total;
+            private readonly CoreDebugTarget _target;
+            private readonly Func<ISystemDebugViews, IReadOnlyList<IDebugMemorySpace>, IReadOnlyList<DebugUnit>, T> _view;
+            private readonly T _none;
+            private CoreMachine? _of;
+            private ISystemDebugViews? _views;
+            private ViewSpaceCopy _spaces = ViewSpaceCopy.None;
+            private ViewSpaceCopy.Reader? _read;
+            private int _registers;
+            private long[] _scratch = Array.Empty<long>();
+
+            public ViewRing(CoreDebugTarget target, Func<ISystemDebugViews, IReadOnlyList<IDebugMemorySpace>, IReadOnlyList<DebugUnit>, T> view, T none)
+            {
+                (_target, _view, _none) = (target, view, none);
+                Provider = new RingProvider<byte, T>(512, Fill, Build);
+            }
+
+            public RingProvider<byte, T> Provider { get; }
+
+            private int Fill(byte[] slot)
+            {
+                CoreMachine? machine = _target._engine.IsRomLoaded ? _target._engine.Machine : null;
+                if (!ReferenceEquals(machine, _of)) Learn(machine);
+                if (machine is null || _views is null || _read is null) return 0;
+                int total = _spaces.Total + 8 * _registers;
+                if (total > slot.Length) return total;
+                _spaces.Fill(slot, _read);
+                int at = _spaces.Total;
+                foreach (CoreUnit unit in machine.Info.Units)
+                {
+                    int n = Math.Min(unit.Registers.Count, machine.Registers(unit.Id, _scratch));
+                    for (int i = 0; i < unit.Registers.Count; i++, at += 8) System.Buffers.Binary.BinaryPrimitives.WriteInt64LittleEndian(slot.AsSpan(at), i < n ? _scratch[i] : 0);
+                }
+                return total;
+            }
+
+            // Kept apart from Fill, whose closures would otherwise be allocated on every frame.
+            private void Learn(CoreMachine? machine)
+            {
+                _of = machine;
+                _views = _target.Views;
+                _registers = machine?.Info.Units.Sum(u => u.Registers.Count) ?? 0;
+                _scratch = new long[machine?.Info.Units.Select(u => u.Registers.Count).DefaultIfEmpty(0).Max() ?? 0];
+                IReadOnlyList<DebugUnit> units = machine is null ? Array.Empty<DebugUnit>() : Units(machine, null);
+                _spaces = machine is not null && _views is { } views ? ViewSpaceCopy.Learn(_target.ViewSpaces(), s => _view(views, s, units)) : ViewSpaceCopy.None;
+                _read = machine is null ? null : (i, into) => machine.ReadSpace(machine.Info.Spaces[i].Id, 0, into);
+            }
+
+            private T Build(byte[] copy, int count)
+            {
+                if (_views is not { } views || !_target._engine.IsRomLoaded) return _none;
+                CoreMachine machine = _target._engine.Machine;
+                return _view(views, _spaces.Over(_target.ViewSpaces(), copy), Units(machine, copy.AsSpan(_spaces.Total).ToArray()));
+            }
         }
 
-        // Kept apart from FillPalettes, whose closures would otherwise be allocated on every frame.
-        private void LearnPalettes(CoreMachine? machine)
+        // The machine's units with their registers, from a copy of their values where one is given, else read live.
+        private static IReadOnlyList<DebugUnit> Units(CoreMachine machine, byte[]? copy)
         {
-            _paletteOf = machine;
-            _paletteViews = Views;
-            _paletteSpaces = machine is not null && _paletteViews is { } views ? ViewSpaceCopy.Learn(ViewSpaces(), s => views.Palettes(s)) : ViewSpaceCopy.None;
-            _readPaletteSpace = machine is null ? null : (i, into) => machine.ReadSpace(machine.Info.Spaces[i].Id, 0, into);
+            var units = new List<DebugUnit>(machine.Info.Units.Count);
+            int at = 0;
+            foreach (CoreUnit unit in machine.Info.Units)
+            {
+                long[] values = copy is null ? machine.Registers(unit.Id) : Enumerable.Range(0, unit.Registers.Count).Select(i => at + 8 * (i + 1) <= copy.Length ? System.Buffers.Binary.BinaryPrimitives.ReadInt64LittleEndian(copy.AsSpan(at + 8 * i)) : 0).ToArray();
+                at += 8 * unit.Registers.Count;
+                units.Add(new DebugUnit(unit.Id, unit.Name, unit.Kind, unit.Registers.Select((r, i) => new DebugRegisterValue(r.Name, i < values.Length ? (ulong)values[i] : 0, r.Bits)).ToArray()));
+            }
+            return units;
         }
 
-        private IReadOnlyList<DebugPaletteInfo> BuildPalettes(byte[] copy, int count) =>
-            _paletteViews is { } views && _engine.IsRomLoaded ? views.Palettes(_paletteSpaces.Over(ViewSpaces(), copy)) : Array.Empty<DebugPaletteInfo>();
+        private IReadOnlyList<DebugUnit> LiveUnits() => _engine.IsRomLoaded ? Units(_engine.Machine, null) : Array.Empty<DebugUnit>();
 
         // Each phase the engine timed as a share of one frame at the machine's rate, the first element saying whether the core named its phases - see `man coretop`.
         private int FillLoad(double[] slot)
@@ -95,16 +143,16 @@ namespace EmuSen.Cores.Native
 
         public string CoreName => _engine.CoreName;
         public long FrameCount => _engine.TotalFrames;
-        public int MaxSprites => 0;
+        public int MaxSprites => Views?.MaxSprites ?? 0;
 
         public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CpuRegisters { get; }
         public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> VideoRegisters { get; } = Empty<DebugRegisterValue>();
         public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> ApuRegisters { get; } = Empty<DebugRegisterValue>();
         // What `cop` names, the same processor `regs <name>` shows - see `man cpus`.
         public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CoprocessorRegisters => EmuSen.Crystal.Debugger.DebugCpus.Coprocessor(DebugCpus)?.Registers ?? NoRegisters;
-        public IRealtimeProvider<IReadOnlyList<DebugSpriteInfo>> Sprites { get; } = Empty<DebugSpriteInfo>();
+        public IRealtimeProvider<IReadOnlyList<DebugSpriteInfo>> Sprites { get; }
         public IRealtimeProvider<IReadOnlyList<DebugPaletteInfo>> Palettes { get; }
-        public IRealtimeProvider<IReadOnlyList<DebugAudioChannelInfo>> AudioChannels { get; } = Empty<DebugAudioChannelInfo>();
+        public IRealtimeProvider<IReadOnlyList<DebugAudioChannelInfo>> AudioChannels { get; }
         public IRealtimeProvider<IReadOnlyList<DebugLoadInfo>> HardwareLoad { get; }
 
         public void RefreshProviders()
@@ -113,6 +161,8 @@ namespace EmuSen.Cores.Native
             IReadOnlyList<DebugCpu> cpus = DebugCpus;
             for (int i = 1; i < cpus.Count; i++) cpus[i].Registers?.Refresh();
             Palettes.Refresh();
+            Sprites.Refresh();
+            AudioChannels.Refresh();
             HardwareLoad.Refresh();
         }
 
@@ -126,7 +176,7 @@ namespace EmuSen.Cores.Native
         {
             if (!_engine.IsRomLoaded) return $"{_engine.Info.DisplayName} {_engine.Info.Version}, no game";
             string head = $"{_engine.Info.DisplayName} {_engine.Info.Version}, {_engine.Machine.Info.System}, frame {_engine.TotalFrames}";
-            return Processors().Count > 0 && Views?.Summary(LiveRegisters(Processors()[0])) is { } more ? head + "\n" + more : head;
+            return Processors().Count > 0 && Views?.Summary(LiveRegisters(Processors()[0]), ViewSpaces(), LiveUnits()) is { } more ? head + "\n" + more : head;
         }
 
         // A side-effect space is marked so, which `search` and plain reads already refuse.
@@ -175,7 +225,7 @@ namespace EmuSen.Cores.Native
         public CallStackRegistry? CallStack => Halts ? _engine.Debug.CallStack : null;
         public BreakpointRegistry? CoprocessorBreakpoints => EmuSen.Crystal.Debugger.DebugCpus.Coprocessor(DebugCpus)?.Breakpoints;
         public CoverageRegistry? CoprocessorCoverage => EmuSen.Crystal.Debugger.DebugCpus.Coprocessor(DebugCpus)?.Coverage;
-        public LabelRegistry? Labels { get; } = new();
+        public LabelRegistry? Labels => _engine.Labels;
         public IExpressionContext? Expressions => DebugCpus.Count > 0 ? ExpressionsOf(DebugCpus[0]) : null;
 
         // The main processor's registers, the pack's symbols over them, and the call stack's depth where the core keeps one - see `man eval`.
@@ -213,7 +263,7 @@ namespace EmuSen.Cores.Native
             return Processors().Select((p, i) => new DebugCpu(p.Name.ToLowerInvariant(), p.Name, Halts && i < bridge.Breakpoints.Count ? bridge.Breakpoints[i] : i == 0 ? _engine.Breakpoints : new BreakpointRegistry())
             {
                 Registers = i == 0 ? CpuRegisters : RegistersOf(p),
-                CanHalt = Halts,
+                CanHalt = Halts && bridge.CanHalt(i),
                 Coverage = Halts && i < bridge.Coverage.Count ? bridge.Coverage[i] : null,
                 CallStack = Halts && i == 0 ? bridge.CallStack : null,
                 CodeSpace = CodeSpaceOf(p),
@@ -259,11 +309,14 @@ namespace EmuSen.Cores.Native
             _references.TryGetValue(instr.Address, out var r) ? r : null;
 
         public int TilemapEntryStride => Views?.TilemapEntryStride ?? 0;
-        public string DecodeTilemapEntry(IDebugMemorySpace space, int address) => Views?.DecodeTilemapEntry(space, address) ?? "";
+        public string DecodeTilemapEntry(IDebugMemorySpace space, int address) => Views is { } views ? views.DecodeTilemapEntry(space, address, ViewSpaces(), LiveUnits()) : "";
         public byte[] DecodeTilePixels(IDebugMemorySpace space, int address, int bpp) => Views?.DecodeTilePixels(space, address, bpp) ?? Array.Empty<byte>();
 
         public IReadOnlyList<InterruptVector> InterruptVectors => Views?.InterruptVectors ?? Array.Empty<InterruptVector>();
-        public IReadOnlyList<DebugDmaChannel> DmaChannels => Views?.DmaChannels(ViewSpaces()) ?? Array.Empty<DebugDmaChannel>();
+        public IReadOnlyList<DebugDmaChannel> DmaChannels => Views?.DmaChannels(ViewSpaces(), LiveUnits()) ?? Array.Empty<DebugDmaChannel>();
+
+        // The console's map for an address on the main processor's bus - see `man addr`.
+        public PhysicalAddress? ResolvePhysical(int cpuAddress) => Views?.ResolvePhysical(cpuAddress, ViewSpaces(), LiveUnits());
         public string? NameDmaDestination(byte register) => Views?.NameDmaDestination(register);
 
         // Machine info's channel n is set_mutes' bit n.

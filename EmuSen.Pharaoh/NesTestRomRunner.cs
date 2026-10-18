@@ -25,7 +25,8 @@ namespace EmuSen.Pharaoh
                 // Third-party ROMs are read-only fixtures; nothing here should leave an .srm beside them.
                 session = runtime.Open(new CrystalOpen { Path = romPath, NoBattery = true });
             }
-            catch (CrystalException ex) when (ex.Status == CrystalAbi.NoEngine)
+            // A board the engine does not build is refused as every v1 engine refuses a game, a fault in its words - see EmuSen_Backend.md §22.
+            catch (CrystalException ex) when (ex.Status == CrystalAbi.NoEngine || ex.Status == CrystalSessionAbi.Fault && ex.Message.Contains("refused the game"))
             {
                 return new NesTestRomResult(name, NesTestRomOutcome.Unsupported, -1, ex.Message, 0, 0);
             }

@@ -41,6 +41,9 @@ namespace EmuSen.Cores.Native
         private List<string> _discs = new();
         private long _closeLidAt = -1;
 
+        // Whether the machine is as its create made it: no frame run and no state loaded, so a create-time setting may make it again.
+        private bool _fresh;
+
         // Each save medium's mode the frontend stored for the console, by medium id, read at each load; Per game where absent - see EmuSen_SaveMedia.md §3.3.
         public IReadOnlyDictionary<string, CardChoice> Media { get; set; } = new Dictionary<string, CardChoice>();
 
@@ -61,6 +64,9 @@ namespace EmuSen.Cores.Native
         public virtual WatchRegistry Watches { get; } = new();
         public virtual FrameLogRegistry FrameLog { get; } = new();
         public virtual BreakpointRegistry Breakpoints { get; } = new();
+
+        // The debugger's labels, the engine's so a label outlives the target it was made through - see EmuSen_Backend.md §22.
+        public LabelRegistry Labels { get; } = new();
 
         // Pinned bytes, written back at each frame's end, since a v1 core reports stores only after the fact - see `man freeze`.
         public FreezeRegistry Freezes { get; } = new();
@@ -352,6 +358,7 @@ namespace EmuSen.Cores.Native
             RomPath = path;
             Console = console;
             _input.Reset(Math.Max(2, machine.Info.Ports.Count), AxesOf(machine));
+            _fresh = true;
             _cheatVersion = -1;
             _audioLimitSent = -1;
             (_rawCurrent, _rawIndex) = (false, -1);
@@ -476,6 +483,7 @@ namespace EmuSen.Cores.Native
         {
             CoreMachine m = _machine ?? throw new InvalidOperationException("RunFrame() called before LoadRom().");
             if (_closeLidAt >= 0 && TotalFrames >= _closeLidAt) SetLid(false);
+            _fresh = false;
             RefreshCheats(m);
             SyncAudioLimit(m);
             _input.Send(m);
@@ -777,6 +785,7 @@ namespace EmuSen.Cores.Native
                 LoadOverItsDisc(m, copy.ToArray());
             }
             if (Library.Has(CoreInterface.CapMedia)) m.ReadInfo();
+            _fresh = false;
             _cheatVersion = -1;
             IsHaltedAtBreakpoint = false;
             Drain();
@@ -846,7 +855,7 @@ namespace EmuSen.Cores.Native
             int version = _cheats.Version;
             if (version == _cheatVersion) return;
             _cheatVersion = version;
-            if (m.Info.PatchLow is long low && m.Info.PatchHigh is long high) m.SetRomPatches(NativeRtCore<NativeMachine>.RomPatchTriples(_cheats, low, high));
+            if (m.Info.PatchLow is long low && m.Info.PatchHigh is long high) m.SetRomPatches(RomPatchTriples(_cheats, low, high));
             if (!Library.Has(CoreInterface.CapCheatPokes))
             {
                 _hostCheats = _cheats;
@@ -866,6 +875,20 @@ namespace EmuSen.Cores.Native
             _hostCheats = host;
         }
 
+        // (address, value, compare) for each byte ResolveRomPatches lists in [lo, hi], in its order; uint.MaxValue is no compare.
+        public static uint[] RomPatchTriples(CheatRegistry cheats, long lo, long hi)
+        {
+            var words = new List<uint>();
+            foreach (var patch in cheats.ResolveRomPatches(hi + 1))
+            {
+                if (patch.Address < lo) continue;
+                words.Add(patch.Address);
+                words.Add(patch.Value);
+                words.Add(patch.Compare is byte compare ? compare : uint.MaxValue);
+            }
+            return words.ToArray();
+        }
+
         // Apply now, between frames: every enabled poke, the ones the core gates at its frame's end too - see VenusRT_Native.md §66.3.
         public void ApplyCheats()
         {
@@ -876,9 +899,11 @@ namespace EmuSen.Cores.Native
 
         private uint? SpaceOf(string name) => _machine?.Info.Spaces.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))?.Id;
 
+        // The ROM patches are brought up to the registry first, a version compare when nothing changed, so a read between frames answers as the next frame will.
         public virtual byte ReadSpace(string spaceName, int address)
         {
             if (_machine is null || SpaceOf(spaceName) is not uint space) return 0;
+            RefreshCheats(_machine);
             Span<byte> one = stackalloc byte[1];
             _machine.ReadSpace(space, address, one);
             return one[0];
@@ -905,7 +930,7 @@ namespace EmuSen.Cores.Native
 
         public virtual string Get(string key) => _values.TryGetValue(key, out var v) ? v : "";
 
-        // A run-time key reaches the machine between frames; a create-time one is kept for the next load. A value outside its domain is refused.
+        // A run-time key reaches the machine between frames; a create-time one makes a fresh machine again, else waits for the next load - see EmuSen_Backend.md §22.
         public virtual void Set(string key, string value)
         {
             var s = Library.Settings.FirstOrDefault(x => x.Key == key) ?? throw new ArgumentException($"{Info.Name} has no setting {key}.");
@@ -916,7 +941,27 @@ namespace EmuSen.Cores.Native
                 _notes = m.SettingNotes();
                 Drain();
             }
+            string was = _values[key];
             _values[key] = value;
+            if (s.CreateScope && _machine is not null && _fresh && was != value) MakeAgain(key, was);
+        }
+
+        // A value held for the next load alone, for a shim that sets a create-time key around its own load.
+        protected void Keep(string key, string value) => _values[key] = value;
+
+        // The machine made again as it was made, with the values now held; a refusal puts the old value back and keeps the old machine.
+        private void MakeAgain(string key, string was)
+        {
+            try
+            {
+                if (StartedEmpty is { } system) StartConsole(system);
+                else LoadRom(RomPath);
+            }
+            catch (CoreRefusedException e)
+            {
+                _values[key] = was;
+                throw new ArgumentException($"{Info.Name} refused {key} at create: {e.Message}", e);
+            }
         }
 
         private static bool Accepts(CoreSettingDescriptor s, string value) => s.Kind switch

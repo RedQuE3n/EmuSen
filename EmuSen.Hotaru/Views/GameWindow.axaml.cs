@@ -35,6 +35,7 @@ namespace EmuSen.Hotaru.Views
         // Replaced by a swap on the UI thread while the emulation thread waits, so it is read once per use.
         private volatile CrystalSession _session;
         private string _coreName;
+        private string _bindingsConsole = "";
 
         // The pointer gets out of the way over the game - see EmuSen_Frontend_Driver.md §3d.
         private IdleCursor? _idleCursor;
@@ -132,10 +133,11 @@ namespace EmuSen.Hotaru.Views
             GameFrame.SyncToDisplay = graphics.SyncToDisplay;
 
             HotaruControls controls = HotaruControls.Of(_session);
-            _gamepad = new GamepadManager(_gamepadBindings.For(_coreName))
+            _bindingsConsole = HotaruSession.BindingsConsoleOf(_session);
+            _gamepad = new GamepadManager(_gamepadBindings.For(_bindingsConsole))
             {
                 LeftStickIsAnalog = controls.Axes.Contains(PadAxis.LeftX),
-                PlayerBindings = player => _gamepadBindings.For(_coreName, player),
+                PlayerBindings = player => _gamepadBindings.For(_bindingsConsole, player),
                 // Mistress's defaults, as Hotaru has no settings - see EmuSen_Input.md §8.13.
                 ClaimPlayersByPress = true,
                 ExternalControllerFirst = true,
@@ -392,7 +394,8 @@ namespace EmuSen.Hotaru.Views
 
             HotaruControls controls = HotaruControls.Of(opened);
             // The new console's pad, not the outgoing one's - see EmuSen_Input.md §5.1.
-            _gamepad.Bindings = _gamepadBindings.For(_coreName);
+            _bindingsConsole = HotaruSession.BindingsConsoleOf(opened);
+            _gamepad.Bindings = _gamepadBindings.For(_bindingsConsole);
             _gamepad.LeftStickIsAnalog = controls.Axes.Contains(PadAxis.LeftX);
             _ports.Reset(controls.Ports, controls.Axes);
             _gamepad.BeginClaims();

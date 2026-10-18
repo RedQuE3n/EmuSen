@@ -117,14 +117,6 @@ namespace EmuSen.Cores.Nintendo.MoonRT
 
         public int ControllerPorts => NesSystem.Ports;
 
-        protected override void CheckState(byte[] state)
-        {
-            if (state.Length < 8) throw new EndOfStreamException("Unable to read beyond the end of the stream.");
-            if (BitConverter.ToUInt32(state, 0) != StateMagic) throw new InvalidDataException("Not a Moon save state.");
-            int version = BitConverter.ToInt32(state, 4);
-            if (version is < OldestReadableVersion or > NewestStateVersion) throw new InvalidDataException($"Save state version {version} is not one this build reads ({OldestReadableVersion} to {NewestStateVersion}).");
-        }
-
         protected override Exception? OwnRefusal(int status, ulong detail) => Own(status);
 
         protected override string? OwnWords(long status) => StatusWords(status);

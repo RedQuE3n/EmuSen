@@ -63,6 +63,9 @@ namespace EmuSen.Cores.Native
 
     public sealed record CoreProcessor(uint Id, string Name, int PcBits, IReadOnlyList<(string Name, int Bits)> Registers, uint? CodeSpace = null);
 
+    // A part that runs no code and holds registers, read through debug_registers by its id - see EmuSen_CoreAPI.md §31.7.
+    public sealed record CoreUnit(uint Id, string Name, string Kind, IReadOnlyList<(string Name, int Bits)> Registers);
+
     // Whom a battery file belongs with: removable since 1.7, console since 1.8; a kind this host does not know reads as the game's - see EmuSen_CoreAPI.md §6.27, §6.28.
     public enum CoreBatteryKind { Game, Removable, Console }
 
@@ -103,6 +106,9 @@ namespace EmuSen.Cores.Native
 
         // Since 1.10, RAW_PICTURE: the encodings of the picture before the palette, by index; none for an older core - see EmuSen_CoreAPI.md §6.30.
         public IReadOnlyList<CoreRawEncoding> Raw { get; init; } = Array.Empty<CoreRawEncoding>();
+
+        // The parts that run no code and hold registers; none for a core that lists none.
+        public IReadOnlyList<CoreUnit> Units { get; init; } = Array.Empty<CoreUnit>();
     }
 
     // One setting of a v1 core's schema, its words and trade-off kept for presentation - see EmuSen_CoreAPI.md §6.13.

@@ -52,7 +52,7 @@ namespace EmuSen.WiseMan.Cores
             CoreLibrary library = MarsRt.Library!;
             Assert.Equal(Path.GetFullPath(Discovered.Sidecar.SidecarPath), Path.GetFullPath(CoreSidecar.PathFor(library.Path)));
             Assert.Equal(0, MarsRt.Export("mars_machine_load_rom"));
-            Assert.Equal(0, MarsRt.Export("emusen_native_interface_version"));
+            PreStableExports.AssertNone(library.Path);
             Assert.Equal(MarsRt.VideoSettings.Select(s => s.Key).Order(), library.Settings.Where(s => !s.Hidden).Select(s => s.Key).Order());
             ICore core = CoreFactory.Create("game.z64", engine: CoreCatalog.MarsRtEngine, options: TestCores.NoBattery);
             Assert.IsType<CoreEngine>(core);
@@ -168,6 +168,22 @@ namespace EmuSen.WiseMan.Cores
                 Assert.True(process.ExitCode == 0, output + stderr.Result);
                 Assert.Equal(22, output.Split('\n').Count(l => l.StartsWith("pass C")));
             }
+        }
+
+        // MarsRT's component exports are gone, its state handle's codes read in its own words, and the handle is a v1 machine of the size asked (moved from the deleted NativeHostTests).
+        [Fact]
+        public void MarsRTs_state_handle_is_a_v1_machine_with_its_own_words()
+        {
+            Assert.True(MarsRt.Available, MarsRt.Report);
+            Assert.NotEqual(0, MarsRt.Export("emusen_core_create"));
+            foreach (string gone in new[] { "mars_rsp_new", "mars_machine_new", "no_such_export" }) Assert.Equal(0, MarsRt.Export(gone));
+            Assert.Equal("not a Mars save state", MarsMachine.Describe(-3));
+            Assert.Equal("the buffer is too small", MarsMachine.Describe(-7));
+            Assert.Equal("an RDRAM size that is neither 4 MB nor 8 MB", MarsMachine.Describe(-12));
+            using var machine = new MarsMachine(4 * 1024 * 1024);
+            Assert.Equal((0, 4 * 1024 * 1024), (machine.LoadedKind, machine.RdramBytes));
+            Assert.NotEmpty(machine.Save(snapshot: false));
+            Assert.NotEmpty(machine.Save(snapshot: true));
         }
     }
 }

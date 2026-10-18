@@ -290,12 +290,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           FULL: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') || inputs.full == true }}
-          # The crates of RustCores.props, repeated because YAML cannot read it; symbol is the prefix of the exports the shim looks up.
+          # The crates of RustCores.props, repeated because YAML cannot read it; symbol is the prefix of the exports a built library must define.
           # Diamond's published library is v1/'s, which holds the machine with its enhancements (Diamond_Enhancements.md §24.1); emusen_platform is not a core but the platform library, built from its workspace and shipped the same way.
           CRATES: |
             [
               {"name": "marsrt", "dir": "EmuSen/Cores/Nintendo/MarsRT - N64", "symbol": "emusen_core_"},
-              {"name": "mercuryrt", "dir": "EmuSen/Cores/Nintendo/MercuryRT - GB", "symbol": "emusen_native_"},
+              {"name": "mercuryrt", "dir": "EmuSen/Cores/Nintendo/MercuryRT - GB", "symbol": "emusen_core_"},
               {"name": "moonrt", "dir": "EmuSen/Cores/Nintendo/MoonRT - NES", "symbol": "emusen_core_"},
               {"name": "venusrt", "dir": "EmuSen/Cores/Nintendo/VenusRT - SNES", "symbol": "emusen_core_"},
               {"name": "nephrite", "dir": "EmuSen/Cores/Sega/Nephrite - Genesis", "symbol": "emusen_core_"},

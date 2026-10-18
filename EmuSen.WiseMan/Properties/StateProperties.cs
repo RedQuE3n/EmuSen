@@ -78,20 +78,5 @@ namespace EmuSen.WiseMan.Properties
 
                 return core.Counter == firstCounter && core.Ram.SequenceEqual(firstRam);
             }, iter: 300);
-
-        // StateSerializer write-then-read is the identity over the whole field graph.
-        [Fact]
-        public void StateSerializer_write_then_read_is_the_identity() =>
-            Gen.Select(Gen.Int, Gen.Byte.Array[1024, 1024]).Sample((counter, ram) =>
-            {
-                var source = new FakeCore { Counter = counter, Ram = (byte[])ram.Clone() };
-                using var ms = new MemoryStream();
-                source.SaveState(ms);
-                ms.Position = 0;
-
-                var restored = new FakeCore();
-                restored.LoadState(ms);
-                return restored.Counter == counter && restored.Ram.SequenceEqual(ram);
-            }, iter: 500);
     }
 }

@@ -3,10 +3,11 @@
 
   export_check.py BASELINE LIBRARY
 
-Every required export present, every optional export present if and only if its capability bit is claimed, and no
-emusen_core_ symbol the baseline does not list. Presence is read through the loader, which works on every platform;
-the listing of symbols needs `nm` and is skipped where there is none (Windows). A library without
-emusen_core_abi_version is not on the stable ABI and is reported as such, exit 0, so a pre-stable core passes.
+Every required export present, every optional export present if and only if its capability bit is claimed, no
+emusen_core_ symbol the baseline does not list, and no emusen_native_ symbol of the pre-stable interface B4 deleted.
+Presence is read through the loader, which works on every platform; the listing of symbols needs `nm` and is skipped
+where there is none (Windows). A library without emusen_core_abi_version is not on the stable ABI and is reported as
+such, exit 0.
 """
 
 import ctypes
@@ -39,7 +40,7 @@ def listed_symbols(library):
     for line in out.splitlines():
         name = line.split()[-1] if line.split() else ""
         name = name[1:] if sys.platform == "darwin" and name.startswith("_") else name
-        if name.startswith("emusen_core_"):
+        if name.startswith(("emusen_core_", "emusen_native_")):
             names.add(name)
     return names
 
@@ -70,7 +71,7 @@ def main():
     symbols = listed_symbols(sys.argv[2])
     if symbols is not None:
         for name in sorted(symbols - set(exports)):
-            problems.append(f"{name} is exported but not in the baseline")
+            problems.append(f"{name} is a pre-stable export" if name.startswith("emusen_native_") else f"{name} is exported but not in the baseline")
     for p in problems:
         print(f"error: {p}")
     if not problems:

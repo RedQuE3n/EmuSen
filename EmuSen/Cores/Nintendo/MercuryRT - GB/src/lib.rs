@@ -1,4 +1,4 @@
-//! MercuryRT, the Game Boy and Game Boy Color core in Rust, called through the common native interface (EmuSen_NativeCores.md). See Mercury_Native.md.
+//! MercuryRT, the Game Boy and Game Boy Color core in Rust, called through the core ABI v1 (EmuSen_CoreAPI.md). See Mercury_Native.md.
 
 pub mod apu;
 pub mod cpu;

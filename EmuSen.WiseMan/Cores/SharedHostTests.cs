@@ -195,5 +195,21 @@ namespace EmuSen.WiseMan.Cores
             Assert.NotEqual(console, EmuSen.Hotaru.HotaruSession.CoreNameOf(s));
             Assert.Equal(console, EmuSen.Hotaru.HotaruSession.BindingsConsoleOf(s));
         }
+
+        // The triples the generic engine sends, in ResolveRomPatches' order and within the console's range; no compare is uint.MaxValue (moved from the deleted NativeHostTests).
+        [Fact]
+        public void The_rom_patch_triples_keep_the_registrys_order_within_their_bounds()
+        {
+            var cheats = new CheatRegistry();
+            cheats.AddRomPatch(0x9123, 0x42, 0x07, "compared");
+            cheats.AddRomPatch(0x9123, 0x55, null, "later");
+            cheats.AddRomPatch(0x3FFF, 0x01, null, "below");
+
+            uint[] nes = CoreEngine.RomPatchTriples(cheats, 0x4020, 0xFFFF);
+            Assert.Equal(new uint[] { 0x9123, 0x42, 0x07, 0x9123, 0x55, uint.MaxValue }, nes);
+            uint[] gb = CoreEngine.RomPatchTriples(cheats, 0, 0x7FFF);
+            Assert.Equal(new uint[] { 0x3FFF, 0x01, uint.MaxValue }, gb);
+            Assert.Empty(CoreEngine.RomPatchTriples(new CheatRegistry(), 0, 0xFFFF));
+        }
     }
 }

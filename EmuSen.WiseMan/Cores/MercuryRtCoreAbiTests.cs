@@ -49,6 +49,18 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { "Model" }, library.Settings.Select(s => s.Key));
         }
 
+        // The pre-stable interface and its six mercuryrt_ exports left with B4; the test extensions on the v1 handle stay - see EmuSen_Backend.md §25.
+        [Fact]
+        public void The_library_is_on_the_core_abi_alone()
+        {
+            PreStableExports.AssertNone(MercuryEngines.LibraryPath);
+            nint handle = System.Runtime.InteropServices.NativeLibrary.Load(MercuryEngines.LibraryPath);
+            foreach (string gone in new[] { "mercuryrt_set_sample_rate", "mercuryrt_serial", "mercuryrt_cgb_hardware", "mercuryrt_step", "mercuryrt_rom_patch", "mercuryrt_ram_length" })
+                Assert.False(System.Runtime.InteropServices.NativeLibrary.TryGetExport(handle, gone, out _), gone);
+            foreach (string kept in new[] { "mercuryrt_core_step", "mercuryrt_core_tick", "mercuryrt_core_stop", "mercuryrt_core_serial", "mercuryrt_core_rom_patch" })
+                Assert.True(System.Runtime.InteropServices.NativeLibrary.TryGetExport(handle, kept, out _), kept);
+        }
+
         // Since B4's switch the Game Boy's one engine is the discovered library on the generic engine, with no row, whatever name is asked for - see EmuSen_Backend.md §17.10.
         [Fact]
         public void The_game_boy_runs_on_the_generic_engine_and_has_no_engine_row()

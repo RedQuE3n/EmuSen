@@ -1055,6 +1055,8 @@ namespace EmuSen.Mistress.Views
         // The wired session started: the pad polled and the emulation thread running.
         private void RunSession(GameSession session)
         {
+            // The press that launched the game is not the game's until every button is let go, as after a menu - see EmuSen_Input.md §8.13.9.
+            _padQuiet = true;
             // Gamepad polling only; emulation is _emuThread's - see §4.21.
             _timer = new DispatcherTimer { Interval = FrameInterval };
             _timer.Tick += (_, _) => PollGamepad();

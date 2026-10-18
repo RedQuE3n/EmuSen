@@ -51,7 +51,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         // One game in the library, started from the first pad, then held still so the test runs the frames.
-        private (MainWindow Window, PadDriver First) Playing(string file, byte[] image, Action<AppSettings>? settings = null, bool bigScreen = false)
+        private (MainWindow Window, PadDriver First) Playing(string file, byte[] image, Action<AppSettings>? settings = null, bool bigScreen = false, bool letGo = true)
         {
             File.WriteAllBytes(Path.Combine(_romDir, file), image);
             var app = new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = bigScreen };
@@ -71,8 +71,13 @@ namespace EmuSen.WiseMan.Mistress
             first.Tick();
             Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
             Poll(window);
-            first.Pad.Release(SDL.GamepadButton.South);
-            first.Tick();
+            // Let go, and seen let go by the game's next poll, which ends the launch press's quiet as the 60 Hz timer would - see EmuSen_Input.md §8.13.9.
+            if (letGo)
+            {
+                first.Pad.Release(SDL.GamepadButton.South);
+                first.Tick();
+                Poll(window);
+            }
             typeof(MainWindow).GetMethod("StopEmulationThread", Hidden)!.Invoke(window, null);
             return (window, first);
         }
@@ -102,6 +107,26 @@ namespace EmuSen.WiseMan.Mistress
         private const ushort SnesB = 0x8000, SnesA = 0x0080, SnesStart = 0x1000;
 
         private static string? Notice(MainWindow w) => w.GetControl<NoticeLayer>("PadNotice").Current;
+
+        // The A that launched the game is still down for its first polls; the game hears no button until it is let go, as after a menu closes - see EmuSen_Input.md §8.13.9.
+        [Fact]
+        public Task The_press_that_launched_a_game_is_not_the_game_s_until_it_is_let_go() => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver first) = Playing("Launch.sfc", SyntheticRom.BuildPadReader(), ByConnection, letGo: false);
+            for (int poll = 0; poll < 3; poll++) Poll(window);
+            Assert.Equal((ushort)0, SnesPads(window).One);
+
+            first.Pad.Release(SDL.GamepadButton.South);
+            first.Tick();
+            Poll(window);
+            Assert.Equal((ushort)0, SnesPads(window).One);
+
+            first.Pad.Press(SDL.GamepadButton.South);
+            first.Tick();
+            Poll(window);
+            Assert.Equal(SnesB, SnesPads(window).One);
+            window.Close();
+        }, default);
 
         [Fact]
         public Task A_second_pad_plays_as_player_2_and_its_slot_waits_while_it_is_unplugged() => Session.Dispatch(() =>

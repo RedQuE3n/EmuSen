@@ -14,7 +14,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private static readonly string[] RegisterNames = MarsOperands.Gpr;
 
         // The VI's fourteen registers by the N64 pack's names, in the order MarsRT's register export returns them.
-        private static readonly IReadOnlyList<string> VideoRegisterNames = N64Views.VideoRegisterNames;
+        private static readonly IReadOnlyList<string> VideoRegisterNames = new[] { "CONTROL", "ORIGIN", "WIDTH", "V_INTR", "V_CURRENT", "BURST", "V_SYNC", "H_SYNC", "LEAP", "H_START", "V_START", "V_BURST", "X_SCALE", "Y_SCALE" };
 
         private readonly MarsRtCore _core;
         private readonly List<IDebugMemorySpace> _spaces = new();

@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 19u
+#define EMUSEN_PLATFORM_ABI_VERSION 22u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -495,7 +495,7 @@ int64_t emusen_systems_board_name(int32_t mapper, uint8_t *out, size_t len);
  * One debugger view of a system's. The request is a JSON object: system (nes, snes or, since interface 19, n64), view
  * (palettes, palette_swatch, tile_sheet, stride, tilemap_entry, tile_pixels, vectors; the SNES's also dma_channels,
  * dma_destination, symbol_names, symbol, summary; the N64's disassemble with space, address and count, instruction with
- * space, address and word, physical with address, video_registers, summary), spaces (each name, size and side_effects) and what the view takes (space, address,
+ * space, address and word, physical with address, summary with registers and, since interface 22, the VI unit's as vi), spaces (each name, size and side_effects) and what the view takes (space, address,
  * bpp, register, name, registers as name and value). `tape` holds the bytes the host has read for the request so far,
  * in the order asked. The answer is an envelope: the JSON's length as four little-endian bytes, the JSON, then any
  * bytes (a picture's RGBA, a tile's 64 pixels). The JSON is either need, a list of runs (space, address, length) the

@@ -7,17 +7,9 @@ using EmuSen.Crystal.Telemetry;
 
 namespace EmuSen.Crystal.Systems.N64
 {
-    // The N64's debugger views, emusen-systems' n64 module unless EMUSEN_SYSTEMS_NATIVE=0, each …Managed the C# moved from the MarsRT shim; read by the shim now and by the generic target later - see EmuSen_Backend.md §18.7.
+    // The N64's debugger views, emusen-systems' n64 module unless EMUSEN_SYSTEMS_NATIVE=0, each …Managed the C# moved from the MarsRT shim - see EmuSen_Backend.md §18.7, §18.10.
     public static class N64Views
     {
-        // The space every N64 engine names the VI's fourteen registers, big-endian.
-        public const string Vi = "VI";
-
-        public static readonly IReadOnlyList<string> VideoRegisterNames = new[]
-        {
-            "CONTROL", "ORIGIN", "WIDTH", "V_INTR", "V_CURRENT", "BURST", "V_SYNC", "H_SYNC", "LEAP", "H_START", "V_START", "V_BURST", "X_SCALE", "Y_SCALE",
-        };
-
         private static readonly IReadOnlyList<IDebugMemorySpace> NoSpaces = Array.Empty<IDebugMemorySpace>();
 
         private static NativeDebugViews.Answer? Ask(string view, IReadOnlyList<IDebugMemorySpace> spaces, Action<Utf8JsonWriter>? fields = null) =>
@@ -78,44 +70,42 @@ namespace EmuSen.Crystal.Systems.N64
             return new PhysicalAddress("PIF ROM", (int)(physical - PifRomBase), false);
         }
 
-        // The VI's registers from the engine's VI space, none where it publishes no such space.
-        public static IReadOnlyList<DebugRegisterValue> VideoRegisters(IReadOnlyList<IDebugMemorySpace> spaces) =>
-            Ask("video_registers", spaces) is { } a
-                ? a.Root.GetProperty("registers").EnumerateArray().Select(r => new DebugRegisterValue(r.GetProperty("name").GetString()!, r.GetProperty("value").GetUInt32(), 32)).ToArray()
-                : VideoRegistersManaged(spaces);
-
-        public static IReadOnlyList<DebugRegisterValue> VideoRegistersManaged(IReadOnlyList<IDebugMemorySpace> spaces)
+        // Count words of a space from address rounded down to a word, each read big-endian and decoded where it lies.
+        public static IReadOnlyList<(DisassembledInstruction Instruction, MarsInstruction Decoded)> Disassemble(IDebugMemorySpace space, int address, int count)
         {
-            if (SystemDebugSpaces.Find(spaces, Vi) is not { } vi) return Array.Empty<DebugRegisterValue>();
-            int n = Math.Min(Math.Max(0, vi.Size) / 4, VideoRegisterNames.Count);
-            var values = new DebugRegisterValue[n];
-            for (int i = 0; i < n; i++)
+            var listing = new List<(DisassembledInstruction, MarsInstruction)>(Math.Max(count, 0));
+            for (int i = 0, at = address & ~3; i < count; i++, at += 4)
             {
-                uint v = 0;
-                for (int b = 0; b < 4; b++) v = (v << 8) | vi.Read(4 * i + b);
-                values[i] = new DebugRegisterValue(VideoRegisterNames[i], v, 32);
+                var bytes = new byte[4];
+                for (int b = 0; b < 4; b++) bytes[b] = space.Read(at + b);
+                MarsInstruction decoded = DecodeIn(space.Name, (uint)((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]), (uint)at);
+                listing.Add((new DisassembledInstruction(at, bytes, decoded.Mnemonic, decoded.Operands), decoded));
             }
-            return values;
+            return listing;
         }
 
-        // The summary's console lines: the VR4300's PC, SP and RA, and the VI's origin, width and sync where the VI space is published.
-        public static string? Summary(IReadOnlyList<DebugRegisterValue> registers, IReadOnlyList<IDebugMemorySpace> spaces) =>
-            registers.All(r => SystemCode.Takes(r.Name)) && Ask("summary", spaces, w => WriteRegisters(w, registers)) is { } a
+        // The summary's console lines: the VR4300's PC, SP and RA, and the VI's origin, width and sync from the engine's video unit named VI.
+        public static string? Summary(IReadOnlyList<DebugRegisterValue> registers, IReadOnlyList<DebugRegisterValue>? vi) =>
+            registers.Concat(vi ?? Array.Empty<DebugRegisterValue>()).All(r => SystemCode.Takes(r.Name)) && Ask("summary", NoSpaces, w =>
+            {
+                WriteRegisters(w, "registers", registers);
+                if (vi is not null) WriteRegisters(w, "vi", vi);
+            }) is { } a
                 ? a.Root.GetProperty("text").GetString()
-                : SummaryManaged(registers, spaces);
+                : SummaryManaged(registers, vi);
 
-        public static string? SummaryManaged(IReadOnlyList<DebugRegisterValue> registers, IReadOnlyList<IDebugMemorySpace> spaces)
+        public static string? SummaryManaged(IReadOnlyList<DebugRegisterValue> registers, IReadOnlyList<DebugRegisterValue>? vi)
         {
-            ulong? R(string name) => registers.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase)) is { Name: not null } r ? r.Value : null;
-            if (R("PC") is not { } pc || R("sp") is not { } sp || R("ra") is not { } ra) return null;
+            if (SystemDebugSpaces.Register(registers, "PC") is not { } pc || SystemDebugSpaces.Register(registers, "sp") is not { } sp || SystemDebugSpaces.Register(registers, "ra") is not { } ra) return null;
             string text = $"CPU  PC={pc:X16} SP={sp:X16} RA={ra:X16}";
-            IReadOnlyList<DebugRegisterValue> vi = VideoRegistersManaged(spaces);
-            return vi.Count >= 7 ? $"{text}\nVI   ORIGIN={vi[1].Value:X8} WIDTH={vi[2].Value} V_SYNC={vi[6].Value}" : text;
+            return vi is not null && SystemDebugSpaces.Register(vi, "ORIGIN") is { } origin && SystemDebugSpaces.Register(vi, "WIDTH") is { } width && SystemDebugSpaces.Register(vi, "V_SYNC") is { } sync
+                ? $"{text}\nVI   ORIGIN={(uint)origin:X8} WIDTH={(uint)width} V_SYNC={(uint)sync}"
+                : text;
         }
 
-        private static void WriteRegisters(Utf8JsonWriter w, IReadOnlyList<DebugRegisterValue> registers)
+        private static void WriteRegisters(Utf8JsonWriter w, string key, IReadOnlyList<DebugRegisterValue> registers)
         {
-            w.WriteStartArray("registers");
+            w.WriteStartArray(key);
             foreach (DebugRegisterValue r in registers)
             {
                 w.WriteStartObject();

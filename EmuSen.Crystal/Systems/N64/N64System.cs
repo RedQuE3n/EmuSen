@@ -3,7 +3,7 @@ using EmuSen.Crystal.SaveMedia;
 
 namespace EmuSen.Crystal.Systems.N64
 {
-    // The N64's system pack: its systems-table entry, its GameShark codec and its Controller Pak - see EmuSen_Backend.md §12, §13, EmuSen_SaveMedia.md §7.2.
+    // The N64's system pack: its systems-table entry, its GameShark codec, its Controller Pak and its debugger views - see EmuSen_Backend.md §12, §13, EmuSen_SaveMedia.md §7.2.
     public static class N64System
     {
         public const string Id = "n64";
@@ -38,6 +38,6 @@ namespace EmuSen.Crystal.Systems.N64
         public static ICheatCodeCodec GameShark() => SystemCode.Codec("n64.gs", ManagedGameShark());
 
         // The GameShark pokes; no N64 format patches ROM, so the explicit slot stays empty - see Mars_Cheats.md §1.
-        public static readonly SystemPack Pack = new(Entry, GameShark, null, Media: new[] { Pak }, ByteOrder: "big");
+        public static readonly SystemPack Pack = new(Entry, GameShark, null, DebugViews: N64DebugViews.Instance, Media: new[] { Pak }, ByteOrder: "big");
     }
 }

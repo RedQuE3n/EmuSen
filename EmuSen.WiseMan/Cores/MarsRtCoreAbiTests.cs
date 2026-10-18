@@ -102,6 +102,19 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x1234, adapter.FrameLog.GetSamples(id).Single().Value);
         }
 
+        // The generic target reads the processor's view, a space of 4 GiB, at the address asked, not wrapped at its clamped size - see EmuSen_Backend.md §18.10.
+        [Fact]
+        public void The_generic_target_reads_the_processor_s_view_at_kseg0()
+        {
+            string rom = Rom(SyntheticN64Rom.BuildHomebrew(N64SaveType.Eeprom4k));
+            using var adapter = new CoreEngine(MarsNative.Library.Library!, new System.Collections.Generic.Dictionary<string, string> { ["ExpansionPak"] = "true" }) { Options = TestCores.NoBattery };
+            adapter.LoadRom(rom);
+            adapter.WriteSpace("RDRAM", 0x40_0400, 0x5A);
+            var cpu = adapter.CreateDebugTarget().GetMemorySpaces().Single(s => s.Name == "CPU");
+            Assert.Equal(0x5A, cpu.Read(unchecked((int)0x8040_0400u)));
+            Assert.Equal(0x5A, cpu.Read(unchecked((int)0xA040_0400u)));
+        }
+
         private static byte[] State(ICore core)
         {
             using var stream = new MemoryStream();

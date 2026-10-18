@@ -1,18 +1,11 @@
-//! The N64's debugger views, decoded from the spaces and registers any engine of the console publishes: each space's code
-//! listed by the processor that runs it, the physical map a processor's address lands in, the VI's registers by their
-//! libultra names, and the summary's lines. Moved from MarsRT's shim (`MarsRtDebugTarget`, `MarsDebugSpaces`), which they
-//! match (EmuSen_Backend.md §18.7).
+//! The N64's debugger views, decoded from the spaces, registers and units any engine of the console publishes: each
+//! space's code listed by the processor that runs it, the physical map a processor's address lands in, and the summary's
+//! lines. Moved from MarsRT's shim (`MarsRtDebugTarget`, `MarsDebugSpaces`), which they match (EmuSen_Backend.md §18.7,
+//! §18.10).
 
 use super::disasm::{decode, decode_rsp};
 use crate::debug::{Memory, Reference, find, register};
 use emusen_dotnet::text::equals_ignore_case;
-
-/// The space every N64 engine names its video interface's registers, fourteen big-endian words (MarsRT's machine info).
-pub const VI: &str = "VI";
-
-/// The VI's registers by their libultra names, in the order the space holds them.
-pub const VI_REGISTERS: [&str; 14] =
-    ["CONTROL", "ORIGIN", "WIDTH", "V_INTR", "V_CURRENT", "BURST", "V_SYNC", "H_SYNC", "LEAP", "H_START", "V_START", "V_BURST", "X_SCALE", "Y_SCALE"];
 
 /// One listed instruction: its address, its four bytes, mnemonic, operands and the address it names.
 pub struct Listed {
@@ -106,22 +99,15 @@ pub fn physical_in(m: &dyn Memory, address: u32) -> (&'static str, i32, bool) {
     physical(address, find(m, "RDRAM").map_or(0, |s| s.size as i64))
 }
 
-/// The VI's registers from the engine's VI space, as many as it holds up to fourteen; none where it publishes no such space.
-pub fn video_registers(m: &mut dyn Memory) -> Vec<(&'static str, u32)> {
-    let Some((name, size)) = find(m, VI).map(|s| (s.name.clone(), s.size)) else { return Vec::new() };
-    let n = (size.max(0) as usize / 4).min(VI_REGISTERS.len());
-    let bytes = m.run(&name, 4 * n);
-    bytes.chunks_exact(4).zip(VI_REGISTERS).map(|(b, name)| (name, u32::from_be_bytes([b[0], b[1], b[2], b[3]]))).collect()
-}
-
-/// The summary's lines the console gives: the VR4300's PC, SP and RA, and the VI's origin, width and sync where the VI space
-/// is published; none without the processor's three registers.
-pub fn summary(registers: &[(String, u64)], m: &mut dyn Memory) -> Option<String> {
+/// The summary's lines the console gives: the VR4300's PC, SP and RA, and the VI's origin, width and sync from the
+/// engine's `video` unit named VI, where it lists one; none without the processor's three registers.
+pub fn summary(registers: &[(String, u64)], vi: Option<&[(String, u64)]>) -> Option<String> {
     let (pc, sp, ra) = (register(registers, "PC")?, register(registers, "sp")?, register(registers, "ra")?);
     let mut text = format!("CPU  PC={pc:016X} SP={sp:016X} RA={ra:016X}");
-    let vi = video_registers(m);
-    if vi.len() >= 7 {
-        text.push_str(&format!("\nVI   ORIGIN={:08X} WIDTH={} V_SYNC={}", vi[1].1, vi[2].1, vi[6].1));
+    if let Some(vi) = vi
+        && let (Some(origin), Some(width), Some(sync)) = (register(vi, "ORIGIN"), register(vi, "WIDTH"), register(vi, "V_SYNC"))
+    {
+        text.push_str(&format!("\nVI   ORIGIN={:08X} WIDTH={} V_SYNC={}", origin as u32, width as u32, sync as u32));
     }
     Some(text)
 }
@@ -129,15 +115,6 @@ pub fn summary(registers: &[(String, u64)], m: &mut dyn Memory) -> Option<String
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::debug::{Space, Tape};
-
-    fn spaces() -> Vec<Space> {
-        vec![
-            Space { name: "RDRAM".into(), size: 8 << 20, side_effects: false },
-            Space { name: "IMEM".into(), size: 4096, side_effects: false },
-            Space { name: "VI".into(), size: 56, side_effects: false },
-        ]
-    }
 
     #[test]
     fn each_space_is_listed_by_its_own_processor_at_its_own_address() {
@@ -158,20 +135,14 @@ mod tests {
     }
 
     #[test]
-    fn the_vi_s_registers_are_read_from_its_space_in_one_round() {
-        let mut first = Tape::new(spaces(), &[]);
-        assert!(video_registers(&mut first).iter().all(|&(_, v)| v == 0));
-        assert_eq!(first.wants.len(), 1);
-        let mut bytes = vec![0u8; 56];
-        bytes[4..8].copy_from_slice(&0x0010_0000u32.to_be_bytes());
-        bytes[8..12].copy_from_slice(&640u32.to_be_bytes());
-        bytes[24..28].copy_from_slice(&525u32.to_be_bytes());
-        let mut second = Tape::new(spaces(), &bytes);
+    fn the_summary_reads_the_vi_from_its_unit() {
         let registers = vec![("PC".to_string(), 0xFFFF_FFFF_A400_0040u64), ("sp".into(), 0xA400_1FF0), ("ra".into(), 0x10)];
+        let vi = vec![("ORIGIN".to_string(), 0x0010_0000u64), ("WIDTH".into(), 640), ("V_SYNC".into(), 525)];
         assert_eq!(
-            summary(&registers, &mut second).unwrap(),
+            summary(&registers, Some(&vi)).unwrap(),
             "CPU  PC=FFFFFFFFA4000040 SP=00000000A4001FF0 RA=0000000000000010\nVI   ORIGIN=00100000 WIDTH=640 V_SYNC=525"
         );
-        assert!(second.wants.is_empty());
+        assert_eq!(summary(&registers, None).unwrap(), "CPU  PC=FFFFFFFFA4000040 SP=00000000A4001FF0 RA=0000000000000010");
+        assert_eq!(summary(&registers[..2], Some(&vi)), None);
     }
 }

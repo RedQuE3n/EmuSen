@@ -1,0 +1,17 @@
+[package]
+name = "emusen-savemedia"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The card manager: a card's saves listed, copied, moved, deleted and imported, and whole cards made, duplicated and renamed, over files, each medium's format module and the medium's lock; it needs no core. See EmuSen_SaveMedia.md §6 and EmuSen_Backend.md §14.
+[lib]
+name = "emusen_savemedia"
+
+[dependencies]
+# Each medium's format module and the words the systems table gives it.
+emusen-systems = { path = "../systems" }
+# The lock, the atomic write and .NET's path rules, which are Galaxia's.
+emusen-galaxia = { path = "../galaxia" }
+emusen-dotnet = { path = "../dotnet" }

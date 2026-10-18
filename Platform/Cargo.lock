@@ -262,6 +262,7 @@ dependencies = [
  "emusen-firmware",
  "emusen-galaxia",
  "emusen-native",
+ "emusen-savemedia",
  "emusen-serenity",
  "emusen-session",
  "emusen-systems",
@@ -271,6 +272,15 @@ dependencies = [
 [[package]]
 name = "emusen-psx-card"
 version = "0.1.0"
+
+[[package]]
+name = "emusen-savemedia"
+version = "0.1.0"
+dependencies = [
+ "emusen-dotnet",
+ "emusen-galaxia",
+ "emusen-systems",
+]
 
 [[package]]
 name = "emusen-serenity"

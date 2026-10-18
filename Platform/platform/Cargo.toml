@@ -32,5 +32,6 @@ emusen-serenity = { path = "../serenity" }
 emusen-systems = { path = "../systems" }
 # The file services, the store and the card manager and the cheat files (EmuSen_Backend.md §14).
 emusen-firmware = { path = "../firmware" }
+emusen-savemedia = { path = "../savemedia" }
 # .NET's JSON, for the requests the systems' C layer reads.
 emusen-dotnet = { path = "../dotnet" }

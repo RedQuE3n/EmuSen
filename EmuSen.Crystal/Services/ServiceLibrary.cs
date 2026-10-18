@@ -26,6 +26,7 @@ namespace EmuSen.Crystal.Services
         public static readonly IReadOnlyList<string> Exports = new[]
         {
             "emusen_firmware_folders", "emusen_firmware_find", "emusen_firmware_locate", "emusen_firmware_install",
+            "emusen_savemedia_op",
         };
 
         private static readonly Lazy<(bool Ready, string Report)> Loaded = new(() =>

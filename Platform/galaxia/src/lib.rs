@@ -12,6 +12,7 @@ pub mod dotnet_text;
 pub mod error_log;
 pub mod json;
 pub mod mapped;
+pub mod medium_lock;
 pub mod migration;
 pub mod model;
 pub mod models;

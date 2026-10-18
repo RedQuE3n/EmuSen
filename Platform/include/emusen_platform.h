@@ -523,6 +523,28 @@ int64_t emusen_firmware_locate(const uint8_t *request, size_t request_len, uint8
  * canonical name; 0 when its size is not the request's; IO with the words when the store could not be written. */
 int32_t emusen_firmware_install(const uint8_t *request, size_t request_len);
 
+/*
+ * The card manager (EmuSen_SaveMedia.md, section 6). The request is a JSON object: op (open, copy, move, delete,
+ * import, new, duplicate, rename), its files (file; from and to; card; to and from, a list, for import), save, and
+ * media, an object naming each file the request names with the medium id its extension makes it, or null. Out: open's
+ * {"card": {exists, length, listing} or null}, or {done, words}. A change takes the lock below as "the card manager".
+ * BAD_ARGUMENT for a damaged directory that reaches outside its image; NOT_FOUND, ACCESS or IO for a rename the system
+ * refused. A read or a write that failed is queued for emusen_platform_diagnostics.
+ */
+int64_t emusen_savemedia_op(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+
+/*
+ * A save medium's lock (EmuSen_SaveMedia.md, section 3.5): <file>.lock, locked with flock while held and removed with
+ * the last handle, holding the holder's words and the process's id. Within the process shared handles may hold one file
+ * together; a file another process or an unshared handle holds is refused.
+ */
+/* A handle above zero, or zero when the file is held. */
+uint64_t emusen_galaxia_medium_lock_take(const uint8_t *file, size_t file_len, const uint8_t *holder, size_t holder_len, int32_t shared);
+/* 1 when the handle was held, 0 when it was let go already. */
+int32_t emusen_galaxia_medium_lock_release(uint64_t handle);
+/* The latest holder's words in this process, "another program" for a lock held elsewhere; ABSENT when no one holds it. */
+int64_t emusen_galaxia_medium_lock_holder(const uint8_t *file, size_t file_len, uint8_t *out, size_t len);
+
 /* ---- Endymion: the logic half (EmuSen_Audio_Sync.md, sections 1 to 3; EmuSen_Input.md, sections 7 and 8) ---- */
 
 /*

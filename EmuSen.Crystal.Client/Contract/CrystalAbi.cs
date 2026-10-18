@@ -43,7 +43,7 @@ namespace EmuSen.Crystal.Client.Contract
     public static class CrystalSessionAbi
     {
         public const uint Major = 1u;
-        public const uint Minor = 2u;
+        public const uint Minor = 3u;
         public const uint Version = (Major << 16) | Minor;
         public const int Null = -1;
         public const int BadString = -5;

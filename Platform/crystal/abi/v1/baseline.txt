@@ -142,6 +142,8 @@ fn emusen_crystal_log_status int32_t (emusen_crystal_runtime *) @1.0
 fn emusen_crystal_log_switch int32_t (emusen_crystal_runtime *, uint32_t) @1.0
 fn emusen_crystal_new emusen_crystal_runtime * (const emusen_crystal_config *) @1.0
 fn emusen_crystal_open int64_t (emusen_crystal_runtime *, const emusen_crystal_open_params *) @1.0
+fn emusen_crystal_open_console int64_t (emusen_crystal_runtime *, uint32_t, const uint8_t *, size_t, const uint8_t *, size_t) @1.1
+fn emusen_crystal_open_game int64_t (emusen_crystal_runtime *, uint32_t, const uint8_t *, size_t, const uint8_t *, size_t) @1.1
 fn emusen_crystal_palette_swatch int64_t (emusen_crystal_runtime *, uint32_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_palettes int64_t (emusen_crystal_runtime *, uint32_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_phase_names int64_t (emusen_crystal_runtime *, uint32_t, uint8_t *, size_t) @1.0

@@ -26,5 +26,11 @@ namespace EmuSen.Crystal.Session
 
         // Run control as a runtime answers it, given the provider's own answer to call; null leaves it to the provider.
         public Func<uint, uint, long, Func<long>, long>? RunControl { get; init; }
+
+        // What the runtime can open, as its systems JSON; null where the host opens nothing - see EmuSen_DianaSh.md §13.15.
+        public Func<byte[]>? Games { get; init; }
+
+        // A session opened as this one was, from a game's path or a console's name and an engine, answering its id.
+        public Func<string?, string?, string?, uint>? Open { get; init; }
     }
 }

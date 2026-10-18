@@ -60,6 +60,7 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Equal(SessionAbi.NoSession, c.Call("bp_add", () => SessionClient.With("{\"address\":1}", (p, n) => t->bp_add(t->ctx, 0, 0, (byte*)p, n))));
             Assert.Equal(SessionAbi.NoSession, c.Call("trace_off", () => t->trace_off(t->ctx, 0, 0)));
             Assert.True(c.Call("log_status", () => t->log_status(t->ctx)) is 0 or 1);
+            Assert.Equal(SessionAbi.NotSupported, c.Out("games", (o, n) => t->games(t->ctx, o, n)).Status);
         }
 
         // Q7 of EmuSen_DianaSh.md §16: the read-only flag enforced by the table, not trusted.
@@ -134,6 +135,8 @@ namespace EmuSen.WiseMan.Crystal
                     SaveState = p => _states.Add("save " + p),
                     LoadState = p => _states.Add("load " + p),
                     DefaultStatePath = () => "/saves/default.state",
+                    Games = () => U8("[{\"id\":\"test\"}]"),
+                    Open = (path, console, engine) => { _states.Add($"open {path ?? "-"} {console ?? "-"} {engine ?? "-"}"); return 9; },
                 };
                 _service = new SessionService(target, _options);
                 Client = new SessionClient(_service.Table);
@@ -169,6 +172,7 @@ namespace EmuSen.WiseMan.Crystal
                     States();
                     Logs();
                     Events();
+                    Games();
                 }
                 finally
                 {
@@ -1163,6 +1167,15 @@ namespace EmuSen.WiseMan.Crystal
                 Ok(C.Call("state_load", () => T->state_load(X, 0, null, 0)));
                 Assert.Equal(new[] { "save /saves/a.state", "load /saves/default.state" }, _states);
                 Assert.Equal("/saves/default.state", C.Text("state_default_path", (o, n) => T->state_default_path(X, 0, o, n)));
+            }
+
+            private void Games()
+            {
+                Assert.Equal("[{\"id\":\"test\"}]", C.Text("games", (o, n) => T->games(X, o, n)));
+                _states.Clear();
+                Assert.Equal(9, C.Call("open_game", () => SessionClient.With("/roms/a.tst", (p, n) => T->open_game(X, 0, (byte*)p, n, null, 0))));
+                Assert.Equal(9, C.Call("open_console", () => SessionClient.With("Test", (p, n) => T->open_console(X, 0, (byte*)p, n, null, 0))));
+                Assert.Equal(new[] { "open /roms/a.tst - -", "open - Test -" }, _states);
             }
 
             private void Logs()

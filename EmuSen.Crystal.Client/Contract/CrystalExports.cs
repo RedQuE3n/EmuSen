@@ -143,5 +143,7 @@ namespace EmuSen.Crystal.Client.Contract
         public delegate* unmanaged[Cdecl]<nint, uint, int> log_switch;
         public delegate* unmanaged[Cdecl]<nint, int> log_status;
         public delegate* unmanaged[Cdecl]<nint, uint, uint, byte*, nuint, long> events_drain;
+        public delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, byte*, nuint, long> open_game;
+        public delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, byte*, nuint, long> open_console;
     }
 }

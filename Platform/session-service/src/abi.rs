@@ -7,7 +7,7 @@
 use std::ffi::c_void;
 
 pub const MAJOR: u32 = 1;
-pub const MINOR: u32 = 2;
+pub const MINOR: u32 = 3;
 pub const VERSION: u32 = (MAJOR << 16) | MINOR;
 
 /// A processor argument naming none: the session's own registries, as a command that names no processor reaches
@@ -268,6 +268,10 @@ pub struct emusen_session_v1 {
     pub log_status: Option<unsafe extern "C" fn(Ctx) -> i32>,
 
     pub events_drain: Option<unsafe extern "C" fn(Ctx, u32, u32, Out, usize) -> i64>,
+
+    pub games: Option<unsafe extern "C" fn(Ctx, Out, usize) -> i64>,
+    pub open_game: Option<unsafe extern "C" fn(Ctx, u32, In, usize, In, usize) -> i64>,
+    pub open_console: Option<unsafe extern "C" fn(Ctx, u32, In, usize, In, usize) -> i64>,
 }
 
 /// The offset of each field, by name, for the test that holds them to a C compiler's.
@@ -284,5 +288,5 @@ pub fn offsets() -> Vec<(&'static str, usize)> {
         label_clear, dma_channels, dma_log_op, register_flow_op, coprocessor_history, vectors, tilemap_entry, tile_pixels,
         sprites, palettes, audio_channels, set_channel_muted, evaluate, symbols, cheat_op, cheat_codecs, trace, trace_off,
         telemetry, tile_sheet, palette_swatch, audio_peek, state_save, state_load, state_default_path, log_switch,
-        log_status, events_drain)
+        log_status, events_drain, games, open_game, open_console)
 }

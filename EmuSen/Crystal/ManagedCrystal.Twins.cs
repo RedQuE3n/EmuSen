@@ -820,5 +820,27 @@ namespace EmuSen.Crystal.Managed
             }
             catch (Exception e) { return (long)Fail(e); }
         }
+
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static long emusen_crystal_open_game(nint rt, uint session, byte* path, nuint path_len, byte* engine, nuint engine_len)
+        {
+            try
+            {
+                ManagedSession s = SessionOf(rt, session);
+                return (long)Twin(s.Table->open_game(s.Table->ctx, s.Id, path, path_len, engine, engine_len), s);
+            }
+            catch (Exception e) { return (long)Fail(e); }
+        }
+
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static long emusen_crystal_open_console(nint rt, uint session, byte* console, nuint console_len, byte* engine, nuint engine_len)
+        {
+            try
+            {
+                ManagedSession s = SessionOf(rt, session);
+                return (long)Twin(s.Table->open_console(s.Table->ctx, s.Id, console, console_len, engine, engine_len), s);
+            }
+            catch (Exception e) { return (long)Fail(e); }
+        }
     }
 }

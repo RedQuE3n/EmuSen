@@ -4,7 +4,7 @@ namespace EmuSen.Crystal.Session
     public static class SessionAbi
     {
         public const uint Major = 1u;
-        public const uint Minor = 2u;
+        public const uint Minor = 3u;
         public const int Null = -1;
         public const int BadString = -5;
         public const int NoSession = -1100;

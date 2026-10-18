@@ -2100,6 +2100,15 @@ adapted only in how it reads the old window's fields, and passes after it (`Mist
 
 **The gates of part 4b:** Mistress's tests in three runs, measured on 2026-10-18: the window and library set 615 passed and 7 skipped; Big Picture and scraping 1,073 passed and 46 skipped; the window fit audit passed after the six recordings above. The blast radius beside them (the Crystal and binding tests, input and player claims, firmware, the device lend, screen filters, `FrameImageWriter`, the golden corpus, the shell over a session, core registration and the frontend reference test) 522 passed and 8 skipped. The ABI baseline's crate tests and the session service's header test pass.
 
+### 14.14 The session service's 1.3
+
+*Built 2026-10-18.* D10's three functions are in `emusen_session.h` 1.3, served by Crystal, and recorded in full in
+`EmuSen_DianaSh.md` §13.15: `games` answers what `systems` answers, and `open_game` and `open_console` open a session
+with the open options of the session the table serves, announce it with a session event and leave it to the client
+that drives frames. Their twins are `emusen_crystal_open_game` and `emusen_crystal_open_console`, additive in 1.1;
+`games`' twin is `systems` itself, so the twin check names that one pair rather than export the same JSON twice. The
+frontend service of §3.11 keeps its two window operations and gains nothing.
+
 ---
 
 ## 15. What was built, 2026-10-17: B5, the file services in Rust

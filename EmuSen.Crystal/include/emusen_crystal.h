@@ -557,6 +557,11 @@ int64_t emusen_crystal_state_default_path(emusen_crystal_runtime *rt, uint32_t s
 int32_t emusen_crystal_log_switch(emusen_crystal_runtime *rt, uint32_t on);
 int32_t emusen_crystal_log_status(emusen_crystal_runtime *rt);
 int64_t emusen_crystal_events_drain(emusen_crystal_runtime *rt, uint32_t session, uint32_t kinds, uint8_t *out, size_t len);
+/* Since 1.1, the twins of the service's 1.3; games' twin is emusen_crystal_systems above, of the same arguments and JSON. */
+int64_t emusen_crystal_open_game(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *path, size_t path_len,
+                                 const uint8_t *engine, size_t engine_len);
+int64_t emusen_crystal_open_console(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *console, size_t console_len,
+                                    const uint8_t *engine, size_t engine_len);
 
 #ifdef __cplusplus
 }

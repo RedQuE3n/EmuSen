@@ -7,6 +7,17 @@ namespace EmuSen.Crystal.Session
     // The session, run control, memory, processors and disassembly groups of EmuSen_DianaSh.md §9.2.
     public sealed partial class SessionService
     {
+        // What the runtime can open, the host's answer as it gives it - see EmuSen_DianaSh.md §13.15.
+        internal byte[] Games() => (_options.Games ?? throw new SessionException(SessionAbi.NotSupported, "this host opens no games through the session service"))();
+
+        // A session opened as the one named was, its id answered; the one named runs on.
+        internal long Open(uint session, string? path, string? console, string? engine)
+        {
+            Target(session);
+            var open = _options.Open ?? throw new SessionException(SessionAbi.NotSupported, "this host opens no games through the session service");
+            return open(path, console, engine);
+        }
+
         internal byte[] Sessions() => Write(w =>
         {
             w.WriteStartArray();

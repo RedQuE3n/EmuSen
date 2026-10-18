@@ -66,7 +66,7 @@ namespace EmuSen.WiseMan.Crystal
             using CrystalSession s = _f.Open(game);
             Assert.Equal(CrystalSessionAbi.BadArgument, Assert.Throws<CrystalException>(() => s.SetSetting("Engine", "Another Engine", game: true)).Status);
             s.SetSetting("Engine", "V1TestCore (test)", game: true);
-            string file = File.ReadAllText(Path.Combine(_f.Root, "Config", "games", "Chosen.json"));
+            string file = File.ReadAllText(Path.Combine(_f.Root, "Config", "games", "test", "Chosen.json"));
             Assert.Contains("\"Engine\": \"V1TestCore (test)\"", file);
             Assert.Equal("V1TestCore (test)", s.Setting("Engine"));
             Assert.Equal("V1TestCore (test)", JsonDocument.Parse(_f.Runtime.Route(game)).RootElement.GetProperty("engine").GetString());

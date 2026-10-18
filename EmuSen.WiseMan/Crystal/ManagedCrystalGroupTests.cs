@@ -161,12 +161,23 @@ namespace EmuSen.WiseMan.Crystal
             s.SetSetting("Wide", "false", game: true);
             Assert.Equal("false", s.Setting("Wide"));
             Assert.Equal("true", s.Setting("Wide", game: false));
-            Assert.True(File.Exists(Path.Combine(_f.Root, "Config", "games", "game.json")));
+            Assert.True(File.Exists(Path.Combine(_f.Root, "Config", "games", "test", "game.json")));
             s.SetSetting("Wide", null, game: true);
             Assert.Equal("true", s.Setting("Wide"));
             Assert.Equal(CrystalSessionAbi.BadArgument, Assert.Throws<CrystalException>(() => s.SetSetting("Rate", "44100", game: false)).Status);
             Assert.Equal(CrystalSessionAbi.NoSuchId, Assert.Throws<CrystalException>(() => s.SetSetting("Nothing", "1", game: false)).Status);
             Assert.Equal("true", _f.Runtime.Setting(console, "Wide"));
+        }
+
+        // A game's own settings are /etc/EmuSen/games/<system>/<file stem>.json, so two consoles' games of one name keep two files (decided 2026-10-17).
+        [Fact]
+        public void Two_consoles_games_of_one_name_keep_two_settings_files()
+        {
+            string nes = EmuSen.Crystal.Managed.ManagedRuntime.GameSettingsPath("nes", "/roms/Tetris.nes");
+            string gb = EmuSen.Crystal.Managed.ManagedRuntime.GameSettingsPath("gb", "/roms/Tetris.gb");
+            Assert.Equal(Path.Combine(_f.Root, "Config", "games", "nes", "Tetris.json"), nes);
+            Assert.Equal(Path.Combine(_f.Root, "Config", "games", "gb", "Tetris.json"), gb);
+            Assert.NotEqual(nes, gb);
         }
 
         [Fact]

@@ -22,33 +22,70 @@ namespace EmuSen.Cores.Native
         {
             _engine = engine;
             CpuRegisters = Processors().Count > 0 ? RegistersOf(Processors()[0]) : NoRegisters;
-            Palettes = new PollingProvider<IReadOnlyList<DebugPaletteInfo>>(ReadPalettes, ReadPalettes());
-            HardwareLoad = new PollingProvider<IReadOnlyList<DebugLoadInfo>>(ReadLoad, ReadLoad());
+            Palettes = new RingProvider<byte, IReadOnlyList<DebugPaletteInfo>>(512, FillPalettes, BuildPalettes);
+            HardwareLoad = new RingProvider<double, IReadOnlyList<DebugLoadInfo>>(16, FillLoad, BuildLoad);
         }
 
         // The console's pack decodes what the core publishes as spaces; null for a system without one.
         private ISystemDebugViews? Views => _engine.IsRomLoaded ? SystemPacks.For(_engine.Machine.Info.System)?.DebugViews : null;
 
-        private IReadOnlyList<DebugPaletteInfo> ReadPalettes() => Views?.Palettes(ViewSpaces()) ?? Array.Empty<DebugPaletteInfo>();
+        // The spaces the palette view reads, learnt once a machine and copied each frame into the ring - see EmuSen_Backend.md §14.5.
+        private CoreMachine? _paletteOf;
+        private ISystemDebugViews? _paletteViews;
+        private ViewSpaceCopy _paletteSpaces = ViewSpaceCopy.None;
+        private ViewSpaceCopy.Reader? _readPaletteSpace;
 
-        // Each phase the engine timed, as a share of one frame at the machine's rate - see `man coretop`.
-        private IReadOnlyList<DebugLoadInfo> ReadLoad()
+        private int FillPalettes(byte[] slot)
         {
-            if (!_engine.IsRomLoaded) return Array.Empty<DebugLoadInfo>();
+            CoreMachine? machine = _engine.IsRomLoaded ? _engine.Machine : null;
+            if (!ReferenceEquals(machine, _paletteOf)) LearnPalettes(machine);
+            int total = _paletteSpaces.Total;
+            if (total > slot.Length || _readPaletteSpace is null) return total;
+            _paletteSpaces.Fill(slot, _readPaletteSpace);
+            return total;
+        }
+
+        // Kept apart from FillPalettes, whose closures would otherwise be allocated on every frame.
+        private void LearnPalettes(CoreMachine? machine)
+        {
+            _paletteOf = machine;
+            _paletteViews = Views;
+            _paletteSpaces = machine is not null && _paletteViews is { } views ? ViewSpaceCopy.Learn(ViewSpaces(), s => views.Palettes(s)) : ViewSpaceCopy.None;
+            _readPaletteSpace = machine is null ? null : (i, into) => machine.ReadSpace(machine.Info.Spaces[i].Id, 0, into);
+        }
+
+        private IReadOnlyList<DebugPaletteInfo> BuildPalettes(byte[] copy, int count) =>
+            _paletteViews is { } views && _engine.IsRomLoaded ? views.Palettes(_paletteSpaces.Over(ViewSpaces(), copy)) : Array.Empty<DebugPaletteInfo>();
+
+        // Each phase the engine timed as a share of one frame at the machine's rate, the first element saying whether the core named its phases - see `man coretop`.
+        private int FillLoad(double[] slot)
+        {
+            if (!_engine.IsRomLoaded) return 0;
+            if (slot.Length < 2) return 2;
+            int n = _engine.PhaseMilliseconds(slot.AsSpan(1), out bool named);
+            if (n + 1 > slot.Length) return n + 1;
             double budget = 1000.0 / _engine.FrameRateHz;
-            return _engine.LastFramePhases.Select(p => new DebugLoadInfo(p.Name, Math.Min(100.0, p.Milliseconds / budget * 100.0), DebugLoadKind.EmulatorCost)).ToArray();
+            for (int i = 1; i <= n; i++) slot[i] = Math.Min(100.0, slot[i] / budget * 100.0);
+            slot[0] = named ? 1 : 0;
+            return n + 1;
+        }
+
+        private IReadOnlyList<DebugLoadInfo> BuildLoad(double[] copy, int count)
+        {
+            if (count == 0) return Array.Empty<DebugLoadInfo>();
+            IReadOnlyList<string> names = _engine.IsRomLoaded ? _engine.Machine.Info.Phases : Array.Empty<string>();
+            return Enumerable.Range(1, count - 1).Select(i => new DebugLoadInfo(copy[0] == 0 ? "frame" : i - 1 < names.Count ? names[i - 1] : $"phase {i - 1}", copy[i], DebugLoadKind.EmulatorCost)).ToArray();
         }
 
         private static IRealtimeProvider<IReadOnlyList<T>> Empty<T>() => new PollingProvider<IReadOnlyList<T>>(() => Array.Empty<T>(), Array.Empty<T>());
 
         private IReadOnlyList<CoreProcessor> Processors() => _engine.IsRomLoaded ? _engine.Machine.Info.Processors : Array.Empty<CoreProcessor>();
 
-        // Read once at creation, as every C# target's snapshot is, so a target made after N frames shows them - see EmuSen_CoreAPI.md §30.2.
-        private IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> RegistersOf(CoreProcessor p)
-        {
-            IReadOnlyList<DebugRegisterValue> Read() => LiveRegisters(p);
-            return new PollingProvider<IReadOnlyList<DebugRegisterValue>>(Read, Read());
-        }
+        // Read once at creation, as every C# target's snapshot is, so a target made after N frames shows them; each frame's values into the ring - see EmuSen_CoreAPI.md §30.2.
+        private IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> RegistersOf(CoreProcessor p) =>
+            new RingProvider<long, IReadOnlyList<DebugRegisterValue>>(p.Registers.Count,
+                slot => _engine.IsRomLoaded ? _engine.Machine.Registers(p.Id, slot) : 0,
+                (values, n) => p.Registers.Select((r, i) => new DebugRegisterValue(r.Name, i < n ? (ulong)values[i] : 0, r.Bits)).ToArray());
 
         private IReadOnlyList<DebugRegisterValue> LiveRegisters(CoreProcessor p)
         {
@@ -73,7 +110,8 @@ namespace EmuSen.Cores.Native
         public void RefreshProviders()
         {
             CpuRegisters.Refresh();
-            foreach (var cpu in DebugCpus.Skip(1)) cpu.Registers?.Refresh();
+            IReadOnlyList<DebugCpu> cpus = DebugCpus;
+            for (int i = 1; i < cpus.Count; i++) cpus[i].Registers?.Refresh();
             Palettes.Refresh();
             HardwareLoad.Refresh();
         }
@@ -164,18 +202,23 @@ namespace EmuSen.Cores.Native
                 CoreMachine? machine = _engine.IsRomLoaded ? _engine.Machine : null;
                 if (_cpus is not null && ReferenceEquals(_cpusOf, machine)) return _cpus;
                 _cpusOf = machine;
-                var bridge = _engine.Debug;
-                _cpus = Processors().Select((p, i) => new DebugCpu(p.Name.ToLowerInvariant(), p.Name, Halts && i < bridge.Breakpoints.Count ? bridge.Breakpoints[i] : i == 0 ? _engine.Breakpoints : new BreakpointRegistry())
-                {
-                    Registers = i == 0 ? CpuRegisters : RegistersOf(p),
-                    CanHalt = Halts,
-                    Coverage = Halts && i < bridge.Coverage.Count ? bridge.Coverage[i] : null,
-                    CallStack = Halts && i == 0 ? bridge.CallStack : null,
-                    CodeSpace = CodeSpaceOf(p),
-                    ProgramCounter = Halts ? () => bridge.ProgramCounter(p.Id) : null,
-                }).ToArray();
-                return _cpus;
+                return _cpus = MakeCpus();
             }
+        }
+
+        // Kept apart from the getter, whose closures would otherwise be allocated on every read.
+        private DebugCpu[] MakeCpus()
+        {
+            var bridge = _engine.Debug;
+            return Processors().Select((p, i) => new DebugCpu(p.Name.ToLowerInvariant(), p.Name, Halts && i < bridge.Breakpoints.Count ? bridge.Breakpoints[i] : i == 0 ? _engine.Breakpoints : new BreakpointRegistry())
+            {
+                Registers = i == 0 ? CpuRegisters : RegistersOf(p),
+                CanHalt = Halts,
+                Coverage = Halts && i < bridge.Coverage.Count ? bridge.Coverage[i] : null,
+                CallStack = Halts && i == 0 ? bridge.CallStack : null,
+                CodeSpace = CodeSpaceOf(p),
+                ProgramCounter = Halts ? () => bridge.ProgramCounter(p.Id) : null,
+            }).ToArray();
         }
 
         // The space a processor's code is listed from: the one machine info names, else by name, its bus ("<name>BUS"), its program ("<name>PRG"), or the first space.

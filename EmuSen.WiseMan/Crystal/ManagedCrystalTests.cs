@@ -4,7 +4,12 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using EmuSen.Cores;
 using EmuSen.Cores.Native;
+using EmuSen.Cores.Nintendo.MarsRT;
+using EmuSen.Cores.Nintendo.MercuryRT;
+using EmuSen.Cores.Nintendo.MoonRT;
+using EmuSen.Crystal.Debugger;
 using EmuSen.Crystal.Client;
 using EmuSen.Crystal.Client.Contract;
 using EmuSen.Galaxia.Input;
@@ -109,9 +114,9 @@ namespace EmuSen.WiseMan.Crystal
             }
         }
 
-        // The frame call allocates nothing of its own: the engine's frame, the picture and the sound allocate nothing, and the call costs what the debugger's per-frame snapshots cost, measured on the calling thread - see EmuSen_Backend.md §14.
+        // The frame call, the engine's frame, the picture, the sound and the debugger's per-frame snapshots allocate nothing, measured on the calling thread - see EmuSen_Backend.md §14.5.
         [Fact]
-        public void The_frame_call_allocates_nothing_but_the_debugger_s_snapshots()
+        public void The_frame_call_allocates_nothing()
         {
             using CrystalSession s = _f.Open();
             var info = new CrystalFrameInfo();
@@ -136,12 +141,50 @@ namespace EmuSen.WiseMan.Crystal
             using var engine = new CoreEngine(CoreAdapterTests.Full) { Options = TestCores.NoBattery };
             engine.LoadRom(_f.Game("beside.tst"));
             var target = engine.CreateDebugTarget();
-            for (int i = 0; i < 200; i++) engine.RunFrame();
+            for (int i = 0; i < 200; i++)
+            {
+                engine.RunFrame();
+                target.RefreshProviders();
+            }
             long runFrames = Measure(engine.RunFrame);
             long snapshots = Measure(target.RefreshProviders);
 
-            Assert.Equal((0L, 0L, 0L), (runFrames, pictures, sounds));
-            Assert.True(frames <= snapshots, $"1,000 frame calls allocated {frames} bytes, the debugger's snapshots alone {snapshots}");
+            Assert.Equal((0L, 0L, 0L, 0L, 0L), (frames, runFrames, pictures, sounds, snapshots));
+        }
+
+        // The Rust shims' own debugger targets fill their snapshot rings without allocating, and still show the processor - see EmuSen_Backend.md §14.5.
+        [Fact]
+        public void The_shims_debugger_snapshots_allocate_nothing()
+        {
+            string nes = SyntheticNesRom.WriteTemp(SyntheticNesRom.Build(patches: (0, new byte[] { 0x4C, 0x00, 0x80 })));
+            string gb = SyntheticGbRom.WriteTemp(SyntheticGbRom.Build());
+            string n64 = SyntheticN64Rom.WriteTemp(SyntheticN64System.Build(rsp: false));
+            try
+            {
+                long Measure(ICore core, string rom, IDebugTarget target)
+                {
+                    for (int i = 0; i < 200; i++)
+                    {
+                        core.RunFrame();
+                        target.RefreshProviders();
+                    }
+                    Assert.NotEmpty(target.CpuRegisters.Current);
+                    long before = GC.GetAllocatedBytesForCurrentThread();
+                    for (int i = 0; i < 1000; i++) target.RefreshProviders();
+                    return GC.GetAllocatedBytesForCurrentThread() - before;
+                }
+                using var moon = new MoonRtCore { Options = TestCores.NoBattery };
+                moon.LoadRom(nes);
+                using var mercury = new MercuryRtCore { Options = TestCores.NoBattery };
+                mercury.LoadRom(gb);
+                using var mars = new MarsRtCore { Options = TestCores.NoBattery };
+                mars.LoadRom(n64);
+                Assert.Equal((0L, 0L, 0L), (Measure(moon, nes, moon.CreateDebugTarget()), Measure(mercury, gb, mercury.CreateDebugTarget()), Measure(mars, n64, new MarsRtDebugTarget(mars))));
+            }
+            finally
+            {
+                foreach (string path in new[] { nes, gb, n64 }) try { File.Delete(path); } catch (IOException) { }
+            }
         }
     }
 }

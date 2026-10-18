@@ -691,6 +691,23 @@ namespace EmuSen.Cores.Native
             _audioLimitSent = limit;
         }
 
+        // LastFramePhases' times into the caller's buffer, allocating nothing; named false where the core times none and the one value is the whole frame.
+        private readonly long[] _phaseScratch = new long[32];
+
+        public int PhaseMilliseconds(Span<double> into, out bool named)
+        {
+            int n = _machine?.Phases(_phaseScratch) ?? 0;
+            named = n > 0;
+            if (n == 0)
+            {
+                if (into.Length > 0) into[0] = _lastFrameMs;
+                return 1;
+            }
+            if (n > _phaseScratch.Length || n > into.Length) return n;
+            for (int i = 0; i < n; i++) into[i] = _phaseScratch[i] / 1e6;
+            return n;
+        }
+
         public IReadOnlyList<(string Name, double Milliseconds)> LastFramePhases
         {
             get

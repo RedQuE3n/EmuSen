@@ -22,38 +22,74 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         private readonly MercuryRtCore _core;
         private readonly List<IDebugMemorySpace> _spaces = new();
         private readonly DebugCpu[] _cpus;
-        private byte[] _state = Array.Empty<byte>();
-        private StateLayout? _layout;
+        private readonly IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> _cpuRegisters;
+        private readonly IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> _videoRegisters;
+        private readonly IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> _apuRegisters;
+        private readonly IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> _coprocessorRegisters;
+        private readonly IRealtimeProvider<IReadOnlyList<DebugSpriteInfo>> _sprites;
+        private readonly IRealtimeProvider<IReadOnlyList<DebugPaletteInfo>> _palettes;
+        private readonly IRealtimeProvider<IReadOnlyList<DebugAudioChannelInfo>> _audioChannels;
+        private readonly IRealtimeProvider<IReadOnlyList<DebugLoadInfo>> _hardwareLoad;
 
-        private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _cpuRegisters;
-        private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _videoRegisters;
-        private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _apuRegisters;
-        private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _coprocessorRegisters;
-        private readonly PollingProvider<IReadOnlyList<DebugSpriteInfo>> _sprites;
-        private readonly PollingProvider<IReadOnlyList<DebugPaletteInfo>> _palettes;
-        private readonly PollingProvider<IReadOnlyList<DebugAudioChannelInfo>> _audioChannels;
-        private readonly PollingProvider<IReadOnlyList<DebugLoadInfo>> _hardwareLoad;
+        // Each frame's state and the registers read through the bus, in records made once and reused - see EmuSen_Backend.md §14.5.
+        private readonly SnapshotRing<Frame> _frames = new(() => new Frame());
+        private readonly Action<Frame> _fill;
+
+        // The registers the views show as the CPU reads them rather than as the state holds them.
+        private static readonly int[] BusRegisters = BuildBusRegisters();
+
+        private static int[] BuildBusRegisters()
+        {
+            var addresses = new List<int> { 0xFF41, 0xFF68, 0xFF6A };
+            for (int address = 0xFF10; address <= 0xFF26; address++) addresses.Add(address);
+            return addresses.ToArray();
+        }
+
+        // One frame of what the views read: the machine's state and listing, the bus's registers, the channels' mutes and the cartridge.
+        private sealed class Frame : ISnapshotRecord<Frame>
+        {
+            public StateLayout? Layout;
+            public byte[] State = Array.Empty<byte>();
+            public byte[] Io = new byte[0x80];
+            public uint Mutes;
+            public GbCartridge Cartridge;
+
+            public bool Loaded => Layout is not null;
+            public long F(string path) => Layout!.Get(State, path);
+            public bool B(string path) => F(path) != 0;
+            public ReadOnlySpan<byte> Bytes(string path) => Layout!.Bytes(State, path);
+            public byte Bus(int address) => Io[address - 0xFF00];
+            public bool Muted(int channel) => (Mutes & (1u << channel)) != 0;
+
+            // The console is a Game Boy Color; colour mode is that console running a cartridge made for it - see Mercury_Model.md §2.
+            private bool CgbHardware => Loaded && State[8] != 0;
+            public bool Cgb => CgbHardware && Cartridge.ColourGame;
+            public bool DmgCompat => CgbHardware && !Cartridge.ColourGame;
+
+            public Frame Clone() => new() { Layout = Layout, State = State.ToArray(), Io = Io.ToArray(), Mutes = Mutes, Cartridge = Cartridge };
+        }
 
         public MercuryRtDebugTarget(MercuryRtCore core)
         {
             _core = core;
 
             // The state is read before the first snapshot is taken - see EmuSen_CoreAPI.md §30.2.
-            Refresh();
+            _fill = Fill;
+            _frames.Refresh(_fill);
             foreach (string name in MercuryRtCore.SpaceNameList)
                 _spaces.Add(new DelegateDebugMemorySpace(name, () => core.SpaceSize(name), a => core.ReadSpace(name, a),
                     name == MercuryRtCore.SpaceRom ? null : (a, v) => core.WriteSpace(name, a, v), name == MercuryRtCore.SpaceCpuBus));
 
-            _cpuRegisters = new(ReadCpuRegisters, ReadCpuRegisters());
-            _videoRegisters = new(ReadVideoRegisters, ReadVideoRegisters());
-            _apuRegisters = new(ReadApuRegisters, ReadApuRegisters());
-            _coprocessorRegisters = new(() => Array.Empty<DebugRegisterValue>(), Array.Empty<DebugRegisterValue>());
-            _sprites = new(ReadSprites, ReadSprites());
-            _palettes = new(ReadPalettes, ReadPalettes());
-            _audioChannels = new(ReadAudioChannels, ReadAudioChannels());
+            _cpuRegisters = new RingView<Frame, IReadOnlyList<DebugRegisterValue>>(_frames, ReadCpuRegisters);
+            _videoRegisters = new RingView<Frame, IReadOnlyList<DebugRegisterValue>>(_frames, ReadVideoRegisters);
+            _apuRegisters = new RingView<Frame, IReadOnlyList<DebugRegisterValue>>(_frames, ReadApuRegisters);
+            _coprocessorRegisters = new RingView<Frame, IReadOnlyList<DebugRegisterValue>>(_frames, _ => Array.Empty<DebugRegisterValue>());
+            _sprites = new RingView<Frame, IReadOnlyList<DebugSpriteInfo>>(_frames, ReadSprites);
+            _palettes = new RingView<Frame, IReadOnlyList<DebugPaletteInfo>>(_frames, ReadPalettes);
+            _audioChannels = new RingView<Frame, IReadOnlyList<DebugAudioChannelInfo>>(_frames, ReadAudioChannels);
 
             // MercuryRT does not time its own subsystems, and an empty list is the documented way to say so.
-            _hardwareLoad = new(() => Array.Empty<DebugLoadInfo>(), Array.Empty<DebugLoadInfo>());
+            _hardwareLoad = new PollingProvider<IReadOnlyList<DebugLoadInfo>>(() => Array.Empty<DebugLoadInfo>(), Array.Empty<DebugLoadInfo>());
 
             _cpus = new[]
             {
@@ -104,39 +140,24 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             new InterruptVector("Joypad", 0x0060),
         };
 
-        // The state the views read, taken again at each refresh, as a frontend's refresh is the moment its windows read.
-        private void Refresh()
+        // The emulation thread's, once a frame: the state saved into the record and the bus's registers read beside it, as a frontend's refresh is the moment its windows read.
+        private void Fill(Frame f)
         {
+            f.Mutes = 0;
+            for (int i = 0; i < 4; i++) if (_core.IsChannelMuted(i)) f.Mutes |= 1u << i;
             if (!_core.IsRomLoaded)
             {
-                (_state, _layout) = (Array.Empty<byte>(), null);
+                f.Layout = null;
                 return;
             }
-            (_state, _layout) = _core.Snapshot();
+            f.Layout = _core.Snapshot(ref f.State);
+            f.Cartridge = _core.Cartridge;
+            foreach (int address in BusRegisters) f.Io[address - 0xFF00] = _core.ReadSpace(MercuryRtCore.SpaceCpuBus, address);
         }
-
-        private bool Loaded => _layout is not null;
-        private long F(string path) => _layout!.Get(_state, path);
-        private bool B(string path) => F(path) != 0;
-        private ReadOnlySpan<byte> Bytes(string path) => _layout!.Bytes(_state, path);
-        private byte Bus(int address) => _core.ReadSpace(MercuryRtCore.SpaceCpuBus, address);
-
-        // The console is a Game Boy Color; colour mode is that console running a cartridge made for it - see Mercury_Model.md §2.
-        private bool CgbHardware => Loaded && _state[8] != 0;
-        private bool Cgb => CgbHardware && _core.Cartridge.ColourGame;
-        private bool DmgCompat => CgbHardware && !_core.Cartridge.ColourGame;
 
         public void RefreshProviders()
         {
-            Refresh();
-            _cpuRegisters.Refresh();
-            _videoRegisters.Refresh();
-            _apuRegisters.Refresh();
-            _coprocessorRegisters.Refresh();
-            _sprites.Refresh();
-            _palettes.Refresh();
-            _audioChannels.Refresh();
-            _hardwareLoad.Refresh();
+            _frames.Refresh(_fill);
         }
 
         // The Apply button, which must not wait for a frame the pause is not running - see EmuSen_Cheats.md §6.
@@ -151,112 +172,112 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             return null;
         }
 
-        private IReadOnlyList<DebugRegisterValue> ReadCpuRegisters()
+        private static IReadOnlyList<DebugRegisterValue> ReadCpuRegisters(Frame f)
         {
-            if (!Loaded) return Array.Empty<DebugRegisterValue>();
-            byte f = (byte)F("Cpu.F");
+            if (!f.Loaded) return Array.Empty<DebugRegisterValue>();
+            byte flags = (byte)f.F("Cpu.F");
             return new[]
             {
-                new DebugRegisterValue("A", (ulong)F("Cpu.A"), 8),
-                new DebugRegisterValue("F", f, 8),
-                new DebugRegisterValue("BC", (ulong)(F("Cpu.B") << 8 | F("Cpu.C")), 16),
-                new DebugRegisterValue("DE", (ulong)(F("Cpu.D") << 8 | F("Cpu.E")), 16),
-                new DebugRegisterValue("HL", (ulong)(F("Cpu.H") << 8 | F("Cpu.L")), 16),
-                new DebugRegisterValue("SP", (ulong)F("Cpu.SP"), 16),
-                new DebugRegisterValue("PC", (ulong)F("Cpu.PC"), 16),
-                new DebugRegisterValue("Z", (ulong)((f >> 7) & 1), 1),
-                new DebugRegisterValue("N", (ulong)((f >> 6) & 1), 1),
-                new DebugRegisterValue("H", (ulong)((f >> 5) & 1), 1),
-                new DebugRegisterValue("C", (ulong)((f >> 4) & 1), 1),
-                new DebugRegisterValue("IME", (ulong)F("Cpu.Ime"), 1),
-                new DebugRegisterValue("HALT", (ulong)F("Cpu.Halted"), 1),
-                new DebugRegisterValue("IE", (ulong)F("Bus.InterruptEnable"), 8),
-                new DebugRegisterValue("IF", (ulong)F("Bus.InterruptFlags"), 8),
-                new DebugRegisterValue("Cycles", (ulong)F("Cpu.<Cycles>k__BackingField"), 64),
+                new DebugRegisterValue("A", (ulong)f.F("Cpu.A"), 8),
+                new DebugRegisterValue("F", flags, 8),
+                new DebugRegisterValue("BC", (ulong)(f.F("Cpu.B") << 8 | f.F("Cpu.C")), 16),
+                new DebugRegisterValue("DE", (ulong)(f.F("Cpu.D") << 8 | f.F("Cpu.E")), 16),
+                new DebugRegisterValue("HL", (ulong)(f.F("Cpu.H") << 8 | f.F("Cpu.L")), 16),
+                new DebugRegisterValue("SP", (ulong)f.F("Cpu.SP"), 16),
+                new DebugRegisterValue("PC", (ulong)f.F("Cpu.PC"), 16),
+                new DebugRegisterValue("Z", (ulong)((flags >> 7) & 1), 1),
+                new DebugRegisterValue("N", (ulong)((flags >> 6) & 1), 1),
+                new DebugRegisterValue("H", (ulong)((flags >> 5) & 1), 1),
+                new DebugRegisterValue("C", (ulong)((flags >> 4) & 1), 1),
+                new DebugRegisterValue("IME", (ulong)f.F("Cpu.Ime"), 1),
+                new DebugRegisterValue("HALT", (ulong)f.F("Cpu.Halted"), 1),
+                new DebugRegisterValue("IE", (ulong)f.F("Bus.InterruptEnable"), 8),
+                new DebugRegisterValue("IF", (ulong)f.F("Bus.InterruptFlags"), 8),
+                new DebugRegisterValue("Cycles", (ulong)f.F("Cpu.<Cycles>k__BackingField"), 64),
             };
         }
 
         // STAT and the colour palette indices as the CPU reads them; the rest as the state holds them.
-        private IReadOnlyList<DebugRegisterValue> ReadVideoRegisters()
+        private static IReadOnlyList<DebugRegisterValue> ReadVideoRegisters(Frame f)
         {
-            if (!Loaded) return Array.Empty<DebugRegisterValue>();
+            if (!f.Loaded) return Array.Empty<DebugRegisterValue>();
             var values = new List<DebugRegisterValue>
             {
-                new("LCDC", (ulong)F("Bus.Ppu.Lcdc"), 8),
-                new("STAT", Bus(0xFF41), 8),
-                new("SCY", (ulong)F("Bus.Ppu.Scy"), 8),
-                new("SCX", (ulong)F("Bus.Ppu.Scx"), 8),
-                new("LY", (ulong)F("Bus.Ppu.Ly"), 8),
-                new("LYC", (ulong)F("Bus.Ppu.Lyc"), 8),
-                new("BGP", (ulong)F("Bus.Ppu.Bgp"), 8),
-                new("OBP0", (ulong)F("Bus.Ppu.Obp0"), 8),
-                new("OBP1", (ulong)F("Bus.Ppu.Obp1"), 8),
-                new("WY", (ulong)F("Bus.Ppu.Wy"), 8),
-                new("WX", (ulong)F("Bus.Ppu.Wx"), 8),
-                new("Mode", (ulong)F("Bus.Ppu.Mode"), 2),
-                new("Dot", (ulong)F("Bus.Ppu.Dot"), 16),
-                new("WindowLine", (ulong)F("Bus.Ppu.WindowLine"), 8),
+                new("LCDC", (ulong)f.F("Bus.Ppu.Lcdc"), 8),
+                new("STAT", f.Bus(0xFF41), 8),
+                new("SCY", (ulong)f.F("Bus.Ppu.Scy"), 8),
+                new("SCX", (ulong)f.F("Bus.Ppu.Scx"), 8),
+                new("LY", (ulong)f.F("Bus.Ppu.Ly"), 8),
+                new("LYC", (ulong)f.F("Bus.Ppu.Lyc"), 8),
+                new("BGP", (ulong)f.F("Bus.Ppu.Bgp"), 8),
+                new("OBP0", (ulong)f.F("Bus.Ppu.Obp0"), 8),
+                new("OBP1", (ulong)f.F("Bus.Ppu.Obp1"), 8),
+                new("WY", (ulong)f.F("Bus.Ppu.Wy"), 8),
+                new("WX", (ulong)f.F("Bus.Ppu.Wx"), 8),
+                new("Mode", (ulong)f.F("Bus.Ppu.Mode"), 2),
+                new("Dot", (ulong)f.F("Bus.Ppu.Dot"), 16),
+                new("WindowLine", (ulong)f.F("Bus.Ppu.WindowLine"), 8),
             };
-            if (Cgb)
+            if (f.Cgb)
             {
-                values.Add(new DebugRegisterValue("VBK", (ulong)F("Bus.VramBank"), 1));
-                values.Add(new DebugRegisterValue("SVBK", (ulong)F("Bus.WramBank"), 3));
-                values.Add(new DebugRegisterValue("BCPS", Bus(0xFF68), 8));
-                values.Add(new DebugRegisterValue("OCPS", Bus(0xFF6A), 8));
-                values.Add(new DebugRegisterValue("KEY1", (ulong)(B("Bus.DoubleSpeed") ? 0x80 : 0x00), 8));
+                values.Add(new DebugRegisterValue("VBK", (ulong)f.F("Bus.VramBank"), 1));
+                values.Add(new DebugRegisterValue("SVBK", (ulong)f.F("Bus.WramBank"), 3));
+                values.Add(new DebugRegisterValue("BCPS", f.Bus(0xFF68), 8));
+                values.Add(new DebugRegisterValue("OCPS", f.Bus(0xFF6A), 8));
+                values.Add(new DebugRegisterValue("KEY1", (ulong)(f.B("Bus.DoubleSpeed") ? 0x80 : 0x00), 8));
             }
             return values;
         }
 
         // The sound registers as the CPU reads them, and the timer and board that ride along here - see Mercury_Debug.md §3.
-        private IReadOnlyList<DebugRegisterValue> ReadApuRegisters()
+        private static IReadOnlyList<DebugRegisterValue> ReadApuRegisters(Frame f)
         {
-            if (!Loaded) return Array.Empty<DebugRegisterValue>();
+            if (!f.Loaded) return Array.Empty<DebugRegisterValue>();
             var values = new List<DebugRegisterValue>();
-            for (int address = 0xFF10; address <= 0xFF26; address++) values.Add(new DebugRegisterValue($"${address:X4}", Bus(address), 8));
-            values.Add(new DebugRegisterValue("Power", (ulong)F("Bus.Apu.PoweredOn"), 1));
-            values.Add(new DebugRegisterValue("SeqStep", (ulong)F("Bus.Apu.SequencerStep"), 3));
-            values.Add(new DebugRegisterValue("DIV", (ulong)(F("Bus._divCounter") >> 8), 8));
-            values.Add(new DebugRegisterValue("TIMA", (ulong)F("Bus._tima"), 8));
-            values.Add(new DebugRegisterValue("TMA", (ulong)F("Bus._tma"), 8));
-            values.Add(new DebugRegisterValue("TAC", (ulong)F("Bus._tac"), 8));
-            values.Add(new DebugRegisterValue($"Board:{_core.Cartridge.Board}", 0, 8));
+            for (int address = 0xFF10; address <= 0xFF26; address++) values.Add(new DebugRegisterValue($"${address:X4}", f.Bus(address), 8));
+            values.Add(new DebugRegisterValue("Power", (ulong)f.F("Bus.Apu.PoweredOn"), 1));
+            values.Add(new DebugRegisterValue("SeqStep", (ulong)f.F("Bus.Apu.SequencerStep"), 3));
+            values.Add(new DebugRegisterValue("DIV", (ulong)(f.F("Bus._divCounter") >> 8), 8));
+            values.Add(new DebugRegisterValue("TIMA", (ulong)f.F("Bus._tima"), 8));
+            values.Add(new DebugRegisterValue("TMA", (ulong)f.F("Bus._tma"), 8));
+            values.Add(new DebugRegisterValue("TAC", (ulong)f.F("Bus._tac"), 8));
+            values.Add(new DebugRegisterValue($"Board:{f.Cartridge.Board}", 0, 8));
             return values;
         }
 
         // Level is a 0-100 rescale of the channel's own volume, which for the wave is a shift - see Mercury_Apu.md §3.4.
-        private IReadOnlyList<DebugAudioChannelInfo> ReadAudioChannels()
+        private static IReadOnlyList<DebugAudioChannelInfo> ReadAudioChannels(Frame f)
         {
-            if (!Loaded) return Array.Empty<DebugAudioChannelInfo>();
+            if (!f.Loaded) return Array.Empty<DebugAudioChannelInfo>();
             const string wave = "Bus.Apu.Wave.", noise = "Bus.Apu.Noise.";
-            int waveVolume = (int)F(wave + "VolumeCode");
+            int waveVolume = (int)f.F(wave + "VolumeCode");
             return new[]
             {
-                Pulse(0, "Pulse 1", "Bus.Apu.Pulse1."),
-                Pulse(1, "Pulse 2", "Bus.Apu.Pulse2."),
-                new DebugAudioChannelInfo(2, "Wave", B(wave + "Enabled") && B(wave + "DacEnabled"),
-                    waveVolume == 0 ? 0 : Scale(4 - waveVolume, 3), _core.IsChannelMuted(2),
-                    $"Freq={F(wave + "Frequency")} Vol={waveVolume} Len={F(wave + "Length.Counter")} Dac={B(wave + "DacEnabled")}"),
-                new DebugAudioChannelInfo(3, "Noise", B(noise + "Enabled") && B(noise + "DacEnabled"),
-                    Scale((int)F(noise + "Envelope.Volume"), 15), _core.IsChannelMuted(3),
-                    $"Shift={F(noise + "ClockShift")} Div={F(noise + "DivisorCode")} Short={B(noise + "ShortMode")} " +
-                    $"Vol={F(noise + "Envelope.Volume")} Len={F(noise + "Length.Counter")}"),
+                Pulse(f, 0, "Pulse 1", "Bus.Apu.Pulse1."),
+                Pulse(f, 1, "Pulse 2", "Bus.Apu.Pulse2."),
+                new DebugAudioChannelInfo(2, "Wave", f.B(wave + "Enabled") && f.B(wave + "DacEnabled"),
+                    waveVolume == 0 ? 0 : Scale(4 - waveVolume, 3), f.Muted(2),
+                    $"Freq={f.F(wave + "Frequency")} Vol={waveVolume} Len={f.F(wave + "Length.Counter")} Dac={f.B(wave + "DacEnabled")}"),
+                new DebugAudioChannelInfo(3, "Noise", f.B(noise + "Enabled") && f.B(noise + "DacEnabled"),
+                    Scale((int)f.F(noise + "Envelope.Volume"), 15), f.Muted(3),
+                    $"Shift={f.F(noise + "ClockShift")} Div={f.F(noise + "DivisorCode")} Short={f.B(noise + "ShortMode")} " +
+                    $"Vol={f.F(noise + "Envelope.Volume")} Len={f.F(noise + "Length.Counter")}"),
             };
         }
 
-        private DebugAudioChannelInfo Pulse(int index, string name, string p) =>
-            new(index, name, B(p + "Enabled") && B(p + "DacEnabled"), Scale((int)F(p + "Envelope.Volume"), 15), _core.IsChannelMuted(index),
-                $"Duty={F(p + "Duty")} Freq={F(p + "Frequency")} Vol={F(p + "Envelope.Volume")} Len={F(p + "Length.Counter")}" +
-                (B(p + "HasSweep") ? $" Sweep={F(p + "SweepPeriod")}/{F(p + "SweepShift")}{(B(p + "SweepNegate") ? "-" : "+")}" : ""));
+        private static DebugAudioChannelInfo Pulse(Frame f, int index, string name, string p) =>
+            new(index, name, f.B(p + "Enabled") && f.B(p + "DacEnabled"), Scale((int)f.F(p + "Envelope.Volume"), 15), f.Muted(index),
+                $"Duty={f.F(p + "Duty")} Freq={f.F(p + "Frequency")} Vol={f.F(p + "Envelope.Volume")} Len={f.F(p + "Length.Counter")}" +
+                (f.B(p + "HasSweep") ? $" Sweep={f.F(p + "SweepPeriod")}/{f.F(p + "SweepShift")}{(f.B(p + "SweepNegate") ? "-" : "+")}" : ""));
 
         private static int Scale(int value, int max) => (int)Math.Round(value / (double)max * 100.0);
 
-        private IReadOnlyList<DebugSpriteInfo> ReadSprites()
+        private static IReadOnlyList<DebugSpriteInfo> ReadSprites(Frame f)
         {
-            if (!Loaded) return Array.Empty<DebugSpriteInfo>();
-            ReadOnlySpan<byte> oam = Bytes("Bus.Oam");
-            int height = (F("Bus.Ppu.Lcdc") & 0x04) != 0 ? 16 : 8;
-            bool cgb = Cgb;
+            if (!f.Loaded) return Array.Empty<DebugSpriteInfo>();
+            ReadOnlySpan<byte> oam = f.Bytes("Bus.Oam");
+            int height = (f.F("Bus.Ppu.Lcdc") & 0x04) != 0 ? 16 : 8;
+            bool cgb = f.Cgb;
             var sprites = new List<DebugSpriteInfo>();
             for (int i = 0; i < SpriteCount; i++)
             {
@@ -275,19 +296,19 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         }
 
         // Four DMG palettes of four greys, or sixteen colour ones - see Mercury_Debug.md §3.1.
-        private IReadOnlyList<DebugPaletteInfo> ReadPalettes()
+        private static IReadOnlyList<DebugPaletteInfo> ReadPalettes(Frame f)
         {
-            if (!Loaded) return Array.Empty<DebugPaletteInfo>();
-            byte[] bg = Bytes("Bus.Ppu.BgPaletteRam").ToArray(), obj = Bytes("Bus.Ppu.ObjPaletteRam").ToArray();
-            byte bgp = (byte)F("Bus.Ppu.Bgp"), obp0 = (byte)F("Bus.Ppu.Obp0"), obp1 = (byte)F("Bus.Ppu.Obp1");
+            if (!f.Loaded) return Array.Empty<DebugPaletteInfo>();
+            byte[] bg = f.Bytes("Bus.Ppu.BgPaletteRam").ToArray(), obj = f.Bytes("Bus.Ppu.ObjPaletteRam").ToArray();
+            byte bgp = (byte)f.F("Bus.Ppu.Bgp"), obp0 = (byte)f.F("Bus.Ppu.Obp0"), obp1 = (byte)f.F("Bus.Ppu.Obp1");
             var palettes = new List<DebugPaletteInfo>();
-            if (Cgb)
+            if (f.Cgb)
             {
                 for (int p = 0; p < 8; p++) palettes.Add(ColorPalette(p, bg, p));
                 for (int p = 0; p < 8; p++) palettes.Add(ColorPalette(8 + p, obj, p));
                 return palettes;
             }
-            if (DmgCompat)
+            if (f.DmgCompat)
             {
                 palettes.Add(CompatibilityPalette(0, bgp, bg, 0));
                 palettes.Add(CompatibilityPalette(1, obp0, obj, 0));
@@ -344,13 +365,14 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         {
             get
             {
-                if (!Cgb) return Array.Empty<DebugDmaChannel>();
-                int blocks = (int)F("Bus.HdmaBlocksLeft");
-                bool hblank = B("Bus.HdmaIsHBlankDriven");
+                Frame f = _frames.Newest;
+                if (!f.Cgb) return Array.Empty<DebugDmaChannel>();
+                int blocks = (int)f.F("Bus.HdmaBlocksLeft");
+                bool hblank = f.B("Bus.HdmaIsHBlankDriven");
                 return new[]
                 {
-                    new DebugDmaChannel(0, blocks > 0 && !hblank, hblank, (byte)(hblank ? 0x80 : 0x00), 0x00, (int)F("Bus.HdmaSource"), blocks * 16,
-                        hblank && blocks > 0, 0, (byte)Math.Min(byte.MaxValue, blocks), 0x8000 | (int)F("Bus.HdmaDestination")),
+                    new DebugDmaChannel(0, blocks > 0 && !hblank, hblank, (byte)(hblank ? 0x80 : 0x00), 0x00, (int)f.F("Bus.HdmaSource"), blocks * 16,
+                        hblank && blocks > 0, 0, (byte)Math.Min(byte.MaxValue, blocks), 0x8000 | (int)f.F("Bus.HdmaDestination")),
                 };
             }
         }
@@ -395,8 +417,9 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         // A map cell is the tile number, and on a CGB the attribute that goes with it.
         public string DecodeTilemapEntry(IDebugMemorySpace space, int address)
         {
+            Frame f = _frames.Newest;
             byte tile = space.Read(address);
-            if (!Cgb) return $"${tile:X2}";
+            if (!f.Cgb) return $"${tile:X2}";
             byte attributes = space.Read(address + VramBankStride);
             string flips = $"{((attributes & 0x20) != 0 ? "X" : "-")}{((attributes & 0x40) != 0 ? "Y" : "-")}";
             return $"${tile:X2} p{attributes & 0x07} b{(attributes >> 3) & 0x01} {flips}{((attributes & 0x80) != 0 ? " pri" : "")}";
@@ -423,8 +446,9 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         // Grey by pixel value: a tile has no palette of its own until a map entry picks one.
         public (byte[] Rgba, int Width, int Height) RenderTileSheet()
         {
-            if (!Loaded) return (Array.Empty<byte>(), 0, 0);
-            ReadOnlySpan<byte> vram = Bytes("Bus.Vram");
+            Frame f = _frames.Newest;
+            if (!f.Loaded) return (Array.Empty<byte>(), 0, 0);
+            ReadOnlySpan<byte> vram = f.Bytes("Bus.Vram");
             const int tilesPerRow = 16;
             int tileCount = vram.Length / 16;
             int rows = (tileCount + tilesPerRow - 1) / tilesPerRow;
@@ -450,7 +474,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
 
         public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch()
         {
-            var palettes = ReadPalettes();
+            var palettes = ReadPalettes(_frames.Newest);
             if (palettes.Count == 0) return (Array.Empty<byte>(), 0, 0);
             const int swatch = 16, columns = 4;
             int width = columns * swatch, height = palettes.Count * swatch;
@@ -476,13 +500,14 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         // Only the ranges whose destination does not depend on live mapper or bank state.
         public PhysicalAddress? ResolvePhysical(int cpuAddress)
         {
-            if (!Loaded) return null;
+            Frame f = _frames.Newest;
+            if (!f.Loaded) return null;
             if (cpuAddress < 0x4000) return new PhysicalAddress(MercuryRtCore.SpaceRom, cpuAddress);
             if (cpuAddress < 0x8000) return null;
-            if (cpuAddress < 0xA000) return new PhysicalAddress(MercuryRtCore.SpaceVram, ((int)F("Bus.VramBank") * VramBankStride) + (cpuAddress - 0x8000));
+            if (cpuAddress < 0xA000) return new PhysicalAddress(MercuryRtCore.SpaceVram, ((int)f.F("Bus.VramBank") * VramBankStride) + (cpuAddress - 0x8000));
             if (cpuAddress < 0xC000) return null;
             if (cpuAddress < 0xD000) return new PhysicalAddress(MercuryRtCore.SpaceWram, cpuAddress - 0xC000);
-            if (cpuAddress < 0xE000) return new PhysicalAddress(MercuryRtCore.SpaceWram, (Math.Max(1, (int)F("Bus.WramBank")) * WramBankSize) + (cpuAddress - 0xD000));
+            if (cpuAddress < 0xE000) return new PhysicalAddress(MercuryRtCore.SpaceWram, (Math.Max(1, (int)f.F("Bus.WramBank")) * WramBankSize) + (cpuAddress - 0xD000));
             if (cpuAddress < 0xFE00) return null;
             if (cpuAddress < 0xFEA0) return new PhysicalAddress(MercuryRtCore.SpaceOam, cpuAddress - 0xFE00);
             if (cpuAddress < 0xFF00) return new PhysicalAddress("PROHIBITED", cpuAddress - 0xFEA0, false);
@@ -493,25 +518,26 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
 
         public string GetSummaryText()
         {
-            if (!Loaded) return "No ROM loaded.";
+            Frame f = _frames.Newest;
+            if (!f.Loaded) return "No ROM loaded.";
             GbCartridge cart = _core.Cartridge;
             var text = new StringBuilder();
-            text.AppendLine($"{_core.CoreName} (MercuryRT) - frame {FrameCount}, LY {F("Bus.Ppu.Ly")}, mode {F("Bus.Ppu.Mode")}");
+            text.AppendLine($"{_core.CoreName} (MercuryRT) - frame {FrameCount}, LY {f.F("Bus.Ppu.Ly")}, mode {f.F("Bus.Ppu.Mode")}");
             text.AppendLine($"{cart.Board}, {cart.RomBanks}x16K ROM, {(cart.RamLength == 0 ? "no RAM" : $"{cart.RamLength / 1024}K RAM")}" +
                             $"{(cart.HasBattery ? ", battery" : "")}{(cart.HasTimer ? ", RTC" : "")}");
-            text.AppendLine($"CPU  A={F("Cpu.A"):X2} F={F("Cpu.F"):X2} BC={F("Cpu.B"):X2}{F("Cpu.C"):X2} DE={F("Cpu.D"):X2}{F("Cpu.E"):X2} HL={F("Cpu.H"):X2}{F("Cpu.L"):X2} " +
-                            $"SP={F("Cpu.SP"):X4} PC={F("Cpu.PC"):X4}");
-            text.AppendLine($"     IME={F("Cpu.Ime")} HALT={F("Cpu.Halted")} IE={F("Bus.InterruptEnable"):X2} IF={F("Bus.InterruptFlags"):X2}");
-            text.AppendLine($"PPU  LCDC={F("Bus.Ppu.Lcdc"):X2} STAT={Bus(0xFF41):X2} SCY={F("Bus.Ppu.Scy"):X2} SCX={F("Bus.Ppu.Scx"):X2} " +
-                            $"WY={F("Bus.Ppu.Wy"):X2} WX={F("Bus.Ppu.Wx"):X2}");
-            if (Cgb)
+            text.AppendLine($"CPU  A={f.F("Cpu.A"):X2} F={f.F("Cpu.F"):X2} BC={f.F("Cpu.B"):X2}{f.F("Cpu.C"):X2} DE={f.F("Cpu.D"):X2}{f.F("Cpu.E"):X2} HL={f.F("Cpu.H"):X2}{f.F("Cpu.L"):X2} " +
+                            $"SP={f.F("Cpu.SP"):X4} PC={f.F("Cpu.PC"):X4}");
+            text.AppendLine($"     IME={f.F("Cpu.Ime")} HALT={f.F("Cpu.Halted")} IE={f.F("Bus.InterruptEnable"):X2} IF={f.F("Bus.InterruptFlags"):X2}");
+            text.AppendLine($"PPU  LCDC={f.F("Bus.Ppu.Lcdc"):X2} STAT={f.Bus(0xFF41):X2} SCY={f.F("Bus.Ppu.Scy"):X2} SCX={f.F("Bus.Ppu.Scx"):X2} " +
+                            $"WY={f.F("Bus.Ppu.Wy"):X2} WX={f.F("Bus.Ppu.Wx"):X2}");
+            if (f.Cgb)
             {
-                long blocks = F("Bus.HdmaBlocksLeft");
-                text.AppendLine($"CGB  VBK={F("Bus.VramBank")} SVBK={F("Bus.WramBank")} speed={(B("Bus.DoubleSpeed") ? "double" : "normal")} " +
+                long blocks = f.F("Bus.HdmaBlocksLeft");
+                text.AppendLine($"CGB  VBK={f.F("Bus.VramBank")} SVBK={f.F("Bus.WramBank")} speed={(f.B("Bus.DoubleSpeed") ? "double" : "normal")} " +
                                 $"HDMA={(blocks == 0 ? "idle" : $"{blocks} blocks")}");
             }
-            text.Append($"APU  power={(B("Bus.Apu.PoweredOn") ? "on" : "off")} vol={F("Bus.Apu.LeftVolume")}/{F("Bus.Apu.RightVolume")} " +
-                        $"pan={F("Bus.Apu.Panning"):X2} buffered={_core.Machine.Core.BufferedSamples / 2} frames");
+            text.Append($"APU  power={(f.B("Bus.Apu.PoweredOn") ? "on" : "off")} vol={f.F("Bus.Apu.LeftVolume")}/{f.F("Bus.Apu.RightVolume")} " +
+                        $"pan={f.F("Bus.Apu.Panning"):X2} buffered={_core.Machine.Core.BufferedSamples / 2} frames");
             return text.ToString();
         }
     }

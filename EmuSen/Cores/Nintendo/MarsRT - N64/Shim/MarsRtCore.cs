@@ -279,8 +279,33 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             return values;
         }
 
+        // CpuRegisters into the caller's buffer, allocating nothing; how many there are, written only when the buffer holds them.
+        public int CpuRegisters(Span<ulong> into)
+        {
+            if (!IsRomLoaded) return 0;
+            nint handle = Machine.Handle;
+            long n = CpuRegistersExport(handle, null, 0);
+            if (n <= 0 || n > into.Length) return (int)Math.Max(0, n);
+            fixed (ulong* data = into) CpuRegistersExport(handle, data, (nuint)n);
+            return (int)n;
+        }
+
         // PC, halted, broke, and the 32 scalar registers.
         public uint[] RspRegisters() => Words(RspRegistersExport);
+
+        public int RspRegisters(Span<uint> into) => Words(RspRegistersExport, into);
+
+        public int ViRegisters(Span<uint> into) => Words(ViRegistersExport, into);
+
+        private int Words(delegate* unmanaged<nint, uint*, nuint, long> export, Span<uint> into)
+        {
+            if (!IsRomLoaded) return 0;
+            nint handle = Machine.Handle;
+            long n = export(handle, null, 0);
+            if (n <= 0 || n > into.Length) return (int)Math.Max(0, n);
+            fixed (uint* data = into) export(handle, data, (nuint)n);
+            return (int)n;
+        }
 
         public uint[] ViRegisters() => Words(ViRegistersExport);
 

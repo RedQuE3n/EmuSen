@@ -1501,23 +1501,59 @@ From Mistress's `EmulationLoop`, Hotaru's `GameWindow` loop and Pharaoh's `Frame
 What stays the client's is what reads a display or a device: when to call `frame`, the hand-off hold, the audio device
 and its ratio, and a `state` event's reset of rate control.
 
-### 14.5 The frame call allocates nothing of its own
+### 14.5 The frame call allocates nothing
 
 Measured on the calling thread with `GC.GetAllocatedBytesForCurrentThread` over 1,000 frames of the v1 test core,
-after 200 to warm (`ManagedCrystalTests.The_frame_call_allocates_nothing_but_the_debugger_s_snapshots`):
+after 200 to warm (`ManagedCrystalTests.The_frame_call_allocates_nothing`):
 
-| | Before this step | After |
-|---|---:|---:|
-| `CoreEngine.RunFrame`, bytes a frame | 144 (an event array, two boxed enumerators in `Armed`, three delegates) | **0** |
-| `picture_copy` into the client's buffer | (Hotaru's `GetFrameBufferRgba` with no return: a new picture a frame, C4) | **0** |
-| `audio_drain` into the client's buffer | (`DequeueAudioSamples`: a new array a frame) | **0** |
-| `frame` through the binding and the C# implementation | — | 944, all of it the debugger's snapshots |
-| `RefreshProviders` alone | 952 | 952 |
+| | Before this step | After part 1 | After the review's change |
+|---|---:|---:|---:|
+| `CoreEngine.RunFrame`, bytes a frame | 144 (an event array, two boxed enumerators in `Armed`, three delegates) | **0** | **0** |
+| `picture_copy` into the client's buffer | (Hotaru's `GetFrameBufferRgba` with no return: a new picture a frame, C4) | **0** | **0** |
+| `audio_drain` into the client's buffer | (`DequeueAudioSamples`: a new array a frame) | **0** | **0** |
+| `frame` through the binding and the C# implementation | — | 944, all of it the debugger's snapshots | **0** |
+| `RefreshProviders` alone | 952 | 952 | **0** |
 
-The frame call adds nothing to what the debugger's snapshots cost, and those, published every frame by every loop
-today, are a register list, a palette list and a hardware-load list a frame. Making them allocation-free would mean
-handing readers on other threads a buffer the frame thread overwrites; making them lazy would change what `regs` shows
-after `frames`. Neither is done here; proposed in §14.7.
+Part 1 left the debugger's snapshots allocating: every loop publishes, each frame, a register list, a palette list
+and a hardware-load list, and part 1 proposed taking them only while a debugger reads. The tester declined that on
+2026-10-17, as a change of what a reader on another thread sees, and decided instead that the snapshots go into a
+preallocated, reused ring buffer with no change to what a debugger sees. That is what was built.
+
+**The mechanism.** `SnapshotRing<TRecord>` (`EmuSen.Crystal/Telemetry/SnapshotRing.cs`) holds four records made when
+the target is made. Once a frame the emulation thread fills the record after the newest in place, under that record's
+own lock, and then publishes it as the newest. A reader on any thread clones the newest record under the same lock, and
+the clone is shared by every reader until the next frame (`Newest`), so several providers read one frame's clone. The
+writer can only meet a reader's lock by coming round the ring to the record that reader is still cloning, three frames
+later. The frame side writes raw values only: register words, phase times, the bytes of a state or a space. Everything
+that allocates (the register list with its names, the decoded palettes, the channel descriptions) is built on the
+reader's side from the clone. A provider that fills a run of values of its own is a `RingProvider` (the generic
+`CoreDebugTarget`'s registers, hardware load and palettes, and MarsRT's three register sets). A target whose providers
+all read one record is a `SnapshotRing` with a `RingView` for each provider: MoonRT and MercuryRT save the machine's
+state into the record once a frame (they had allocated a new state array a frame), with the few values not in the
+state beside it: the channels' mutes, the frame's time, and for MercuryRT the registers its views read through the bus.
+
+**The palettes.** A system pack's palette view decodes the memory spaces it is handed, and which spaces it reads is
+the pack's business. `ViewSpaceCopy` (`EmuSen.Crystal/Debugger/ViewSpaceCopy.cs`) learns them once for each machine by
+running the view over spaces that note each read. Each frame it copies those spaces into the record, and the reader
+hands the view spaces over the copy. A space the view did not read when learnt is passed live. For a view whose reads
+depend on the machine's state, a mode register for instance, that space would be read at the reader's time, not the
+frame's. No pack in the tree does that today: the SNES pack's sixteen palettes over the copy match the live decode
+(`VenusRtDebugViewTests.Palette_snapshots_match_the_live_decode_and_allocate_nothing`).
+
+**Two allocations found by measuring, not by reading.** After the ring was in place, the generic target still cost
+56 bytes a frame. A probe of each provider in turn found two C# closures: `FillPalettes` and the `DebugCpus` getter
+each declared a local at method scope that a lambda captured. The compiler allocates the closure's object when the
+method is entered, even on the paths that create no lambda. Moving the code that makes the lambdas into methods of
+their own (`LearnPalettes`, `MakeCpus`) brought both to zero.
+
+**Measured** on 2026-10-17, steady state after 200 frames to warm, over 1,000 refreshes. These are 0 bytes for:
+
+- the generic target on the v1 test core and on VenusRT with the SNES pack;
+- MoonRT, MercuryRT and MarsRT's own targets (`ManagedCrystalTests.The_shims_debugger_snapshots_allocate_nothing`).
+
+The first refresh after a target is made still allocates once, when it builds its processor list. The work has moved,
+not vanished: a reader now clones a frame's record once for every frame it reads, which for MoonRT and MercuryRT is the
+size of a state. That cost falls on the debugger's thread, never on the frame.
 
 ### 14.6 The gates of part 1
 
@@ -1570,10 +1606,16 @@ it shares; a client that has not moved still diverges until its move.
   undone by a stale copy (R5); until then `settings_set` writes `graphics.json`, which no moved client and Mistress do
   not write at once in parts 1 and 2.
 - **`core_approve`**, with the trust manifest. **The engine's own settings layer** (scope 1), with storage for it.
-- **Proposed: the debugger's snapshots taken only while a debugger reads them** (§14.5), which is a change of what a
-  reader on another thread sees, and so the tester's to decide.
-- **Where a game's settings file is named.** `games/<the game's file name>.json`, the name its states and saves go by
-  (`SaveLibrary`'s stem); SR10 decided the file, not its name, so this is recorded as the choice made.
+- **The debugger's snapshots.** Part 1 proposed taking them only while a debugger reads them. Decided 2026-10-17 by the
+  tester: declined, and the snapshots go into a preallocated, reused ring instead (§14.5).
+- **Where a game's settings file is named.** Part 1 named it `games/<the game's file name>.json`. Decided 2026-10-17
+  by the tester, before 1.0 froze: **`/etc/EmuSen/games/<system>/<file stem>.json`**. `<system>` is the systems
+  table's id, the one the saves' per-console folders go by, so two consoles' games of one name keep two files
+  (`ManagedCrystalGroupTests.Two_consoles_games_of_one_name_keep_two_settings_files`). It is not `<game id>`, the name
+  `EmuSen_CoreAPI.md` §8.5 had written, because a session runs with no library and so with no game id. The system is
+  the one routing decides for the file (`ManagedRuntime.SystemOfFile`), which needs no library either. A file that runs
+  as no system of the table has no file of its own: reads skip that layer and a write at the game's scope is refused
+  with `NOT_SUPPORTED`.
 
 ### 14.8 Part 2: Pharaoh on the API
 
@@ -1652,6 +1694,9 @@ moves of the windowed frontends, which pace; Pharaoh does not.
   two input calls; the game's settings file named for the game's file (§14.7); and 1.1, not 1.0, for the device
   picture, the raw picture and the state records, so that each arrives tested with the frontend that needs it.
 - **One proposal**: the debugger's snapshots only while a debugger reads them (§14.5).
+- **The review's answer**, 2026-10-17: 1.0 approved, with two changes made before it froze. The game's settings
+  file is `games/<system>/<file stem>.json`, and the debugger's snapshots go into a reused ring, the proposal declined
+  (§14.5, §14.7).
 - **What comes next**, after the review: emusen-shell with Hotaru's session and window (C3, C4's frontend half, C6,
   C7's console case, F4's skipped test made to pass, `HostAction` synthesised from events), then Mistress (1.1, C1, C2
   and C5's own cases, F3's copy from `games.db`, SR12), and the session service's 1.3 with `games`, `open_game` and

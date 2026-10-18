@@ -95,13 +95,23 @@ namespace EmuSen.Crystal.Managed
             w.WriteEndArray();
         });
 
-        public static byte[] RouteJson(string path) => CrystalJson.Write(w =>
+        // The system a file runs as, the systems table's id or an engine's own: what routing decides, without running a core.
+        public static string? SystemOfFile(string path) => Routed(path).System;
+
+        private static (string? System, CoreDescriptor? Core, Routed? Decision) Routed(string path)
         {
             var (core, routed) = CoreCatalog.Route(path);
             string extension = CoreCatalog.ImageExtension(path);
             string? system = routed?.System?.Id
                 ?? (core is not null ? CoreCatalog.SystemIdsFor(core.Console).FirstOrDefault() ?? SystemPacks.All.FirstOrDefault(p => p.Entry.Console == core.Console)?.Entry.Id : null)
                 ?? (routed is null ? CoreDiscovery.ForExtension(extension).Select(c => c.Info.SystemFor(extension)?.Id).FirstOrDefault(id => id is not null) : null);
+            return (system, core, routed);
+        }
+
+        public static byte[] RouteJson(string path) => CrystalJson.Write(w =>
+        {
+            var (system, core, routed) = Routed(path);
+            string extension = CoreCatalog.ImageExtension(path);
             string? console = core?.Console ?? routed?.System?.Console ?? (system is not null ? CoreCatalog.DiscoveredConsoleForSystem(system) : null);
             string? engine = system is null ? null : EngineFor(path) ?? (console is not null ? CoreCatalog.SoleDiscoveredEngine(console) : null)
                 ?? CoreDiscovery.ForSystem(system).Select(c => c.EngineName).FirstOrDefault();

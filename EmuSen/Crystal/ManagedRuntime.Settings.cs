@@ -14,12 +14,14 @@ namespace EmuSen.Crystal.Managed
     // Settings in layers, game over console over the schema's default: the console's in graphics.json, a game's in a file of its own - see EmuSen_Backend.md §3.6, SR10 and §14.
     internal sealed unsafe partial class ManagedRuntime
     {
-        // Where a game's own settings are kept: /etc/EmuSen/games/<the game's file name>.json, the name its saves and states go by.
-        public static string GameSettingsPath(string gameKey) => ConfigStore.For("games", Path.GetFileNameWithoutExtension(gameKey) + ".json");
+        // Where a game's own settings are kept: /etc/EmuSen/games/<system>/<file stem>.json, by the systems table's id, so two consoles' games of one name keep two files and no library is needed - see EmuSen_Backend.md §14.7.
+        public static string GameSettingsPath(string system, string gameKey) =>
+            Path.Combine(ConfigStore.Directory, "games", system, Path.GetFileNameWithoutExtension(gameKey) + ".json");
 
-        private static Dictionary<string, string> GameValues(string gameKey)
+        private static Dictionary<string, string> GameValues(string? system, string gameKey)
         {
-            string path = GameSettingsPath(gameKey);
+            if (system is null) return new Dictionary<string, string>(StringComparer.Ordinal);
+            string path = GameSettingsPath(system, gameKey);
             if (AtomicFile.TryRead(path) is not { } bytes) return new Dictionary<string, string>(StringComparer.Ordinal);
             try { return JsonSerializer.Deserialize<Dictionary<string, string>>(bytes) ?? new Dictionary<string, string>(StringComparer.Ordinal); }
             catch (JsonException e)
@@ -29,9 +31,10 @@ namespace EmuSen.Crystal.Managed
             }
         }
 
-        private static void WriteGameValues(string gameKey, Dictionary<string, string> values)
+        private static void WriteGameValues(string? system, string gameKey, Dictionary<string, string> values)
         {
-            string path = GameSettingsPath(gameKey);
+            if (system is null) throw new CrystalException(SessionAbi.NotSupported, $"{Path.GetFileName(gameKey)} runs as no system of the table, so it has no file of its own settings");
+            string path = GameSettingsPath(system, gameKey);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             if (!AtomicFile.Write(path, JsonSerializer.SerializeToUtf8Bytes(values, new JsonSerializerOptions { WriteIndented = true })))
                 throw new CrystalException(CrystalNumbers.Io, $"{path} could not be written");
@@ -41,7 +44,7 @@ namespace EmuSen.Crystal.Managed
         public static string? EngineFor(string romPath)
         {
             string? console = CoreCatalog.ConsoleForRom(romPath);
-            if (GameValues(romPath).TryGetValue(CoreCatalog.EngineKey, out string? own)) return console is null ? own : CoreCatalog.EngineChosen(console, own);
+            if (GameValues(SystemOfFile(romPath), romPath).TryGetValue(CoreCatalog.EngineKey, out string? own)) return console is null ? own : CoreCatalog.EngineChosen(console, own);
             return console is null ? null : ConsoleEngine(console);
         }
 
@@ -114,16 +117,16 @@ namespace EmuSen.Crystal.Managed
         public string? GetSetting(uint session, uint scope, string? console, string key)
         {
             var (name, s) = Target(session, scope, console);
-            string? stored = scope == CrystalNumbers.ScopeGame ? GetSettingOf(s!, key) : Layered(name, null, key);
+            string? stored = scope == CrystalNumbers.ScopeGame ? GetSettingOf(s!, key) : Layered(name, null, null, key);
             return stored ?? Schema(name, null, s).FirstOrDefault(r => r.Key == key)?.Default;
         }
 
         // A session's stored value of a key, game over console; null where neither holds one.
-        public static string? GetSettingOf(ManagedSession s, string key) => Layered(s.Console, s.GameKey, key);
+        public static string? GetSettingOf(ManagedSession s, string key) => Layered(s.Console, s.SystemId, s.GameKey, key);
 
-        private static string? Layered(string name, string? gameKey, string key)
+        private static string? Layered(string name, string? system, string? gameKey, string key)
         {
-            if (gameKey is not null && GameValues(gameKey).TryGetValue(key, out string? own)) return key == CoreCatalog.EngineKey ? CoreCatalog.EngineChosen(name, own) : own;
+            if (gameKey is not null && GameValues(system, gameKey).TryGetValue(key, out string? own)) return key == CoreCatalog.EngineKey ? CoreCatalog.EngineChosen(name, own) : own;
             string? stored = GraphicsConfig.Load().Value(name, key);
             return key == CoreCatalog.EngineKey ? CoreCatalog.EngineChosen(name, stored) : stored;
         }
@@ -136,10 +139,10 @@ namespace EmuSen.Crystal.Managed
             if (value is not null && Refusal(row, value) is { } why) throw new CrystalException(SessionAbi.BadArgument, why);
             if (scope == CrystalNumbers.ScopeGame)
             {
-                Dictionary<string, string> values = GameValues(s!.GameKey);
+                Dictionary<string, string> values = GameValues(s!.SystemId, s.GameKey);
                 if (value is null) values.Remove(key);
                 else values[key] = value;
-                WriteGameValues(s.GameKey, values);
+                WriteGameValues(s.SystemId, s.GameKey, values);
             }
             else
             {

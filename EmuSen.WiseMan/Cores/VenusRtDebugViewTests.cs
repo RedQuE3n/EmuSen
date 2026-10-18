@@ -147,6 +147,27 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal((192, 192), (game.Target.RenderPaletteSwatch().Width, game.Target.RenderPaletteSwatch().Height));
         }
 
+        // The palettes come from each frame's copy in the snapshot ring and match the live decode, and a refresh allocates nothing - see EmuSen_Backend.md §14.5.
+        [Fact]
+        public void Palette_snapshots_match_the_live_decode_and_allocate_nothing()
+        {
+            using var game = One(Image(Program));
+            for (int i = 0; i < 200; i++)
+            {
+                game.Core.RunFrame();
+                game.Target.RefreshProviders();
+            }
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 1000; i++) game.Target.RefreshProviders();
+            Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);
+
+            static string Text(IEnumerable<DebugPaletteInfo> palettes) => string.Join(";", palettes.Select(p => p.Index + ":" + string.Join(",", p.Colors)));
+            var views = global::EmuSen.Crystal.Systems.SystemPacks.For(((CoreEngine)game.Core).Machine.Info.System)!.DebugViews!;
+            string live = Text(views.Palettes(game.Target.GetMemorySpaces()));
+            Assert.Equal(16, game.Target.Palettes.Current.Count);
+            Assert.Equal(live, Text(game.Target.Palettes.Current));
+        }
+
         [Fact]
         public void Tiles_tilemaps_and_the_tile_sheet_decode_vram()
         {

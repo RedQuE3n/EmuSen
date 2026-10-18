@@ -223,10 +223,21 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         // The machine's state now, and the listing that names its bytes; a load from the other console changes the state's length, and the listing is asked for again.
         public (byte[] State, StateLayout Layout) Snapshot()
         {
-            byte[] state = Machine.Save();
+            byte[] state = Array.Empty<byte>();
+            StateLayout layout = Snapshot(ref state);
+            return (state, layout);
+        }
+
+        // Snapshot into the caller's buffer, made again only when the state's length changes.
+        public StateLayout Snapshot(ref byte[] into)
+        {
+            int size = Machine.StateSize;
+            if (into.Length != size) into = new byte[size];
+            Machine.Save(into);
+            byte[] state = into;
             if (_layout is not { } layout || layout.Length != state.Length)
                 _layout = layout = StateLayout.FromText("MercuryRT", Machine.Core.Layout());
-            return (state, layout);
+            return layout;
         }
 
         // A sound channel silenced for the debugger, sent to the machine at once; a load clears them all.

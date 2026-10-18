@@ -551,6 +551,34 @@ namespace EmuSen.Cores.Native
             }
         }
 
+        // A processor's registers into the caller's buffer, allocating nothing; how many there are, written only when the buffer holds them.
+        public int Registers(uint processor, Span<long> into)
+        {
+            if (!Has(CoreInterface.CapDebugRegisters)) return 0;
+            lock (_gate)
+            {
+                long n = _api.DebugRegisters(Handle, processor, null, 0);
+                if (n <= 0) return 0;
+                if (n > into.Length) return (int)n;
+                fixed (long* v = into) _api.DebugRegisters(Handle, processor, v, (nuint)n);
+                return (int)n;
+            }
+        }
+
+        // The phase times into the caller's buffer, allocating nothing; how many there are, written only when the buffer holds them.
+        public int Phases(Span<long> into)
+        {
+            if (!Has(CoreInterface.CapPhases)) return 0;
+            lock (_gate)
+            {
+                long n = _api.Phases(Handle, null, 0);
+                if (n <= 0) return 0;
+                if (n > into.Length) return (int)n;
+                fixed (long* v = into) _api.Phases(Handle, v, (nuint)n);
+                return (int)n;
+            }
+        }
+
         public long[] Registers(uint processor)
         {
             if (!Has(CoreInterface.CapDebugRegisters)) return Array.Empty<long>();

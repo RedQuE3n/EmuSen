@@ -25,9 +25,9 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         // The RSP runs inside the bus's clock and cannot stop mid-tick, so it has no breakpoints of its own - see Mars_Debug.md §5.
         private readonly BreakpointRegistry _rspBreakpoints = new();
 
-        private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _cpuRegisters;
-        private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _videoRegisters;
-        private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _coprocessorRegisters;
+        private readonly RingProvider<ulong, IReadOnlyList<DebugRegisterValue>> _cpuRegisters;
+        private readonly RingProvider<uint, IReadOnlyList<DebugRegisterValue>> _videoRegisters;
+        private readonly RingProvider<uint, IReadOnlyList<DebugRegisterValue>> _coprocessorRegisters;
         private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _apuRegisters = new(() => Array.Empty<DebugRegisterValue>(), Array.Empty<DebugRegisterValue>());
         private readonly PollingProvider<IReadOnlyList<DebugSpriteInfo>> _sprites = new(() => Array.Empty<DebugSpriteInfo>(), Array.Empty<DebugSpriteInfo>());
         private readonly PollingProvider<IReadOnlyList<DebugPaletteInfo>> _palettes = new(() => Array.Empty<DebugPaletteInfo>(), Array.Empty<DebugPaletteInfo>());
@@ -51,9 +51,9 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             _spaces.Add(Space(MarsDebugSpaces.Rom, MarsRtSpace.Rom, false));
             _spaces.Add(Space(MarsDebugSpaces.Cpu, MarsRtSpace.Cpu, true));
 
-            _cpuRegisters = new(ReadCpuRegisters, ReadCpuRegisters());
-            _videoRegisters = new(ReadVideoRegisters, ReadVideoRegisters());
-            _coprocessorRegisters = new(ReadRspRegisters, ReadRspRegisters());
+            _cpuRegisters = new(36, slot => _core.CpuRegisters(slot), CpuRegistersOf);
+            _videoRegisters = new(VideoRegisterNames.Length, slot => _core.ViRegisters(slot), VideoRegistersOf);
+            _coprocessorRegisters = new(3 + RegisterNames.Length, slot => _core.RspRegisters(slot), RspRegistersOf);
         }
 
         public string CoreName => _core.CoreName;
@@ -119,10 +119,10 @@ namespace EmuSen.Cores.Nintendo.MarsRT
 
         public IReadOnlyList<IDebugMemorySpace> GetMemorySpaces() => _spaces;
 
-        private IReadOnlyList<DebugRegisterValue> ReadCpuRegisters()
+        // Each frame's raw values sit in a ring and are named here, on the reader's side - see EmuSen_Backend.md §14.5.
+        private static IReadOnlyList<DebugRegisterValue> CpuRegistersOf(ulong[] values, int count)
         {
-            if (!_core.IsRomLoaded) return Array.Empty<DebugRegisterValue>();
-            ulong[] values = _core.CpuRegisters();
+            if (count < 36) return Array.Empty<DebugRegisterValue>();
             var registers = new List<DebugRegisterValue>(RegisterNames.Length + 4) { new("PC", values[0], 64) };
             for (int i = 0; i < RegisterNames.Length; i++) registers.Add(new DebugRegisterValue(RegisterNames[i], values[1 + i], 64));
             registers.Add(new DebugRegisterValue("HI", values[33], 64));
@@ -131,20 +131,17 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             return registers;
         }
 
-        private IReadOnlyList<DebugRegisterValue> ReadRspRegisters()
+        private static IReadOnlyList<DebugRegisterValue> RspRegistersOf(uint[] values, int count)
         {
-            if (!_core.IsRomLoaded) return Array.Empty<DebugRegisterValue>();
-            uint[] values = _core.RspRegisters();
+            if (count < 3 + RegisterNames.Length) return Array.Empty<DebugRegisterValue>();
             var registers = new List<DebugRegisterValue>(RegisterNames.Length + 2) { new("PC", values[0], 16), new("Halted", values[1], 1) };
             for (int i = 0; i < RegisterNames.Length; i++) registers.Add(new DebugRegisterValue(RegisterNames[i], values[3 + i], 32));
             return registers;
         }
 
-        private IReadOnlyList<DebugRegisterValue> ReadVideoRegisters()
+        private static IReadOnlyList<DebugRegisterValue> VideoRegistersOf(uint[] values, int count)
         {
-            if (!_core.IsRomLoaded) return Array.Empty<DebugRegisterValue>();
-            uint[] values = _core.ViRegisters();
-            var registers = new DebugRegisterValue[Math.Min(values.Length, VideoRegisterNames.Length)];
+            var registers = new DebugRegisterValue[Math.Min(count, VideoRegisterNames.Length)];
             for (int i = 0; i < registers.Length; i++) registers[i] = new DebugRegisterValue(VideoRegisterNames[i], values[i], 32);
             return registers;
         }

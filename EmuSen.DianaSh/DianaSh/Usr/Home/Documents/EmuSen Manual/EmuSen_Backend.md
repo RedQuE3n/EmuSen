@@ -2602,3 +2602,380 @@ that differs now says why in full: the failure's message adds every exception an
 exceptions to the bottom, and what the test's server itself caught and swallowed, in accepting a connection or in
 serving one. Neither enters the comparison, which still reads only what both sides report, so a passing case is
 unchanged. The next failure will name its side and its cause.
+
+## 17. B4's first phase for MercuryRT, 2026-10-18: the Game Boy's shim inventoried, and where each piece goes
+
+*Read on 2026-10-18 on branch `b4-mercury`, from `WiseMan` at `480bf5e2`. Phase 1 of §6's B4 row for one core: an
+inventory and a proposal, with nothing built. Decided 2026-10-18 by the tester: B4 may touch MercuryRT to retire its
+shim, while the port's own open stages stay paused, so nothing proposed here changes what the machine emulates; it
+moves what the shim adds above the core ABI v1 into MercuryRT's exports and info, into the Game Boy's packs, or into
+the generic host, or it retires it. The MoonRT and VenusRT shims and the MarsRT shim are inventoried in sections of
+their own written beside this one; the pieces of the host the three share are marked "shared" below, and the three
+sections are expected to be renumbered when they are merged. Claims are marked as at the head of this page.*
+
+### 17.1 The shim, measured
+
+`EmuSen/Cores/Nintendo/MercuryRT - GB/Shim/` is four files and 914 lines [M: `wc -l`]: `MercuryRtCore.cs` (255),
+the engine over `PortEngine`; `MercuryRtDebugTarget.cs` (544), the debugger's view, which reads MercuryRT's save state
+through the listing `state_layout` prints (`Mercury_Native.md` §14.5, §15.2); `MercuryMachine.cs` (84), a machine of
+the pre-stable interface; and `MercuryNative.cs` (31), which loads the library through both interfaces. §4.1 counted
+1,114 lines at `165e60b4`; B3 has since moved `GbCartridge` and the SM83 disassembler out to
+`EmuSen.Crystal/Systems/GameBoy/` (§13.3, §13.5).
+
+What reaches it [M: `grep -rn` over shipped code]: `CoreFactory.GameBoy` builds it for `.gb` and `.gbc`
+(`CoreFactory.cs:37, 53`), `CoreFactory.Running` and `Bundle` name it (`:161, :185`), and `CoreCatalog` reads two of
+its lists, `PadButtons` (`CoreCatalog.cs:202`) and `ModelSettings` (`:284`), and keeps `MercuryRtEngine` among its
+`SoleEngines` (`:345`), which is what stops the generic branch from opening MercuryRT's sidecar in the shim's place. No
+frontend names a type of the shim. On the Rust side MercuryRT exports the core ABI v1 (`src/ffi/v1.rs`) beside the
+pre-stable `emusen_native_*` set (`src/ffi/mod.rs:38–203`) and twelve extensions of its own, six on each interface
+(`mod.rs:210–303`, `v1.rs:264–321`).
+
+### 17.2 Every behaviour the shim adds above the ABI, and where it goes
+
+The routes are those of `EmuSen_CoreAPI.md` §30.6, in its order of preference, refined for this step: **host**,
+the generic `CoreEngine` or `CoreDebugTarget`, from what v1 carries, no surface changed; **pack**, the Game Boy's
+packs in `emusen-systems` and their C# halves (§13), from v1's spaces and registers; **space**, a space MercuryRT adds
+to its machine info, a change to the core and none to the ABI; **capability**, an optional capability v1 already
+defines, claimed by MercuryRT; **info**, MercuryRT's core or machine info; **retired**, with no caller left, which is
+shown; **minor**, an addition to the core ABI. Each row names the shim's line and the destination's export, field or
+member. "Shared" marks a destination the MoonRT and MarsRT shims need as well.
+
+#### 17.2.1 Loading, refusals and the battery
+
+| # | What the shim does | Where (file:line) | Route | Destination |
+|---|---|---|---|---|
+| L1 | Reads the header before the library sees the image and refuses a cartridge type no board implements, with `NotSupportedException("Cartridge type $XX is not implemented - see Mercury_Memory.md §4.")` | `MercuryRtCore.cs:163–169`; `GbCartridge.cs:29`; Rust `gb/cartridge.rs:51–60` | info, retired | MercuryRT's `create` already refuses the same types with its own status `-10`, its `status_text` "a cartridge type no board implements" (`v1.rs:87–96`) and the detail "cartridge type $XX is not implemented" (`v1.rs:104–106`). The pre-check is a second owner of which boards MercuryRT builds, and goes. The pack's header reader stops refusing: it names every type the header table defines (a console fact) and leaves the refusal to the engine (§13.3 said as much). A list of implemented types in core info was weighed and is not proposed: no host reads one, and `create`'s refusal is the engine's statement already (Q8) |
+| L2 | The same refusals and an illegal opcode mapped to the C# oracle's exception types and messages: `NotSupportedException` for `-10` and `-20`, `InvalidDataException` for `-9` and `-11`, the fault band to the reproduced .NET exceptions | `MercuryRtCore.cs:200–218`; `PortEngine.cs:150–161`; `MercuryMachine.cs:38–50, 64–65` | retired | SR8: the oracle was deleted on 2026-10-16 (`Mercury_Native.md` §15). The host's `CoreRefusedException` carries the core's status and words, as for every v1 core. Through the frontend API this moves two answers, each a candidate defect of today to be shown first (§17.5): a refused Game Boy cartridge is `NoEngine` (−1109) today, through `OpenGame`'s catch of `NotSupportedException` (`ManagedRuntime.Open.cs:61`), where every other core's refused game is a fault; afterwards it is a fault like theirs |
+| L3 | The state's two refusals made in C# before the bytes reach the machine: `EndOfStreamException` for a short state, `InvalidDataException("Not a Mercury save state.")`, a version outside 5 to 11 | `MercuryRtCore.cs:191–198`; `PortEngine.cs:242–250` | retired | MercuryRT's `state_load` refuses each itself (`machine.rs:255–259`, with `state.rs`' `TRUNCATED`, `FOREIGN` and `VERSION`), and machine info states the format, version and `loads_from` 5 to 11 (`v1.rs:138`). Candidate defect C2 (§17.5): the shim's `InvalidDataException` carries no `emusen.status`, so the frontend API reports a refused Game Boy state as a fault (`InvalidDataException: Not a Mercury save state.`) rather than `StateRefused` (−1114) (`ManagedSession.States.cs:38`, `ManagedCrystal.cs:25–34`); a short one as `Io` |
+| L4 | The battery rule: file 0 passed only when the header says the board has a battery and RAM (`hasRam: HasBattery && RamLength > 0`), filed under `GB` or `GBC` by extension | `MercuryRtCore.cs:168`; `BatterySave.cs:26–27` | info, and one line of `create` | The folder is already the host's: `CoreEngine.LoadRom` files a `.gbc` game's save under `GBC` and a `.gb` game's under `GB` (`CoreEngine.cs:258–260`), which equals `GameBoyFolder` for every path. The `hasRam` rule is not: with core info listing no battery files, the host passes file 0 by its `.srm` rule at the first create (§6.3 of the core ABI), and MercuryRT's `create` writes it into cartridge RAM whatever the board (`v1.rs:109–118`), so a stray `.srm` beside a game whose board has RAM and no battery would fill that RAM at power-on. Proposed: MercuryRT's `battery_files` lists `{ which: 0, suffix: ".srm" }` for both systems, and `create` takes file 0 into cartridge RAM only where the board keeps a battery, the rule its machine info already states (`v1.rs:123, 137`). One create, as today. `GameBoyFolder` is then named only by tests and retires with them (Q6) |
+| L5 | The mixer's coefficients computed in C# and sent at every load: `4194304.0 / 44100` and `Math.Pow(0.999958, …)` through `mercuryrt_core_set_sample_rate` | `MercuryRtCore.cs:41, 171–181`; `MercuryMachine.cs:53–57` | retired | MercuryRT computes the same pair when it builds a machine (`machine.rs:81–83`). *Measured on 2026-10-18* on this machine: Rust's `powf`, CPython's `math.pow` and .NET 10's `Math.Pow` give `3FEFDF574D84E421` from `4057C6F8C751F177`, the same bits, so the call changes nothing on Linux. It goes, with both exports (`v1.rs:264–268`, `mod.rs:210–214`), which then have no caller. The goldens' sound column is the gate (§17.4) |
+| L6 | The pre-stable machine: `MercuryMachine`, its `Model=<number>` setting text, and the exports `mercuryrt_step`, `_cgb_hardware`, `_serial`, `_rom_patch`, `_ram_length`, `_set_sample_rate` with `native_exports!` and the `NativeCore` impl | `MercuryMachine.cs:1–84`; `MercuryNative.cs:12–20, 29`; `mod.rs:38–303` | retired | Called by two test classes alone, `MercuryRtPlatformTests` (one case, the platform digests) and `NativeHostTests` (three cases) [M]. `_cgb_hardware` restates machine info's `system`; `_ram_length` restates `space_size(2)`; the rest have v1 twins (`mercuryrt_core_step`, `_serial`, `_rom_patch`). The platform digests move to a v1 machine first. Deleted with the pre-stable interface (`EmuSen_CoreAPI.md` §13.5), at the deletion step of §17.7 (step 8) |
+| L7 | The switch `EMUSEN_MERCURY_NATIVE=0`, which turns the Game Boy off as the pre-stable loader did | `MercuryNative.cs:10, 23`; `PortEngine.cs:45` | retired | Generic discovery has no per-core switch: `EMUSEN_VENUS_NATIVE=0` already leaves the SNES running (`CoreRegistrationGolden.txt:1908–1911`). Named outside the shim by three test classes (`NativeHostTests`, `MercuryRtFallbackTests`, `CoreRegistrationEquivalenceTests`) and the registration golden's `off` rows. `MercuryRtFallbackTests` then shows a build without the library by hiding it from discovery, and the `off.factory[GB …]` rows of the golden change from "turned off by EMUSEN_MERCURY_NATIVE=0" to the SNES's answer (Q5) |
+
+#### 17.2.2 The machine as the engine presents it
+
+| # | What the shim does | Where | Route | Destination |
+|---|---|---|---|---|
+| E1 | The Model setting's schema: key, label, help, three choices, default `Auto` | `MercuryRtCore.cs:54–80, 134–142`; `CoreCatalog.cs:284` | info (F20) | MercuryRT's `settings_schema` (`v1.rs:71–85`), already present with the same key, label, values and default, `scope: create`, `restart: true`. Its help is shorter than the shim's, which `EmuSen_Settings_Reference.md` §4.47 quotes the substance of; proposed: the shim's sentence moves into the schema, so the one owner keeps the reviewed text (Q7). `CoreCatalog.SettingsByConsole["GB"]` goes; `SettingsFor` reads a catalog console's sole discovered engine's sidecar, as `ManagedRuntime.Schema` already does for the SNES (`ManagedRuntime.Settings.cs:70`), which adds the SNES's own rows to the registration golden as well (shared, Q11) |
+| E2 | A change of Model before the game's first frame loads the game again at once | `MercuryRtCore.cs:121–132` | host (shared) | Documented player-visible behaviour (`EmuSen_Settings_Reference.md` §4.47, "as the Expansion Pak row does"), and the reason a game's own Model reaches the machine through the frontend API at all: `CoreFactory.StoredSettings` hands the engine only the console's values at create (`CoreFactory.cs:57–63`), and `ApplyStored` layers the game's file over them only after the load (`ManagedRuntime.Open.cs:41`, `ManagedSession.cs:203–217`). On `CoreEngine` a create-scope `Set` is kept for the next load (`CoreEngine.cs:909–920`), and each open makes a new engine from the console's values, so on every v1 engine today a game's own create-time setting does not reach the machine when the game is opened, only a later load in the same session: candidate defect C3 (§17.5). Proposed: `CoreEngine.Set` of a create-scope key, with a game loaded and no frame run, makes the machine again with the new value, the shim's rule for every engine (Q4) |
+| E3 | `CoreName` "GB" or "GBC", following the console running, a state from the other console included | `MercuryRtCore.cs:111–112` | retired | Machine info's `system` (`gb`, `gbc`, `v1.rs:125`) says which console runs; the console the session is filed under is `CoreEngine.Console`. `CoreName` becomes `Info.Name`, "MercuryRT", as on every v1 core. The name reaches further than the debugger's headings: DianaSh's `cov`, `load` and `dump` file under `Logs/<CoreName>`, Hotaru's screenshots and recordings too, and Hotaru keys a game's pad bindings by it (`GameWindow.axaml.cs:135, 389`, through the service's `engine`). That last is candidate defect C4 (§17.5), already present for every v1 core, which B4 would extend to the Game Boy (Q9) |
+| E4 | Constants answered before a load: 160 by 144, `4194304 / 70224` Hz, state version 11, display aspect 10:9 (`DisplayShape.GameBoy`) | `MercuryRtCore.cs:27–38, 113–119` | info, retired | Machine info carries every one (`v1.rs:127–128, 138`) and `frame_info` the aspect (`:163`); `CoreEngine` answers them once a machine exists (`CoreEngine.cs:95–106, 734`) and 0, 60 or 0 before. `DisplayShape.GameBoy` is then named only by `DisplayAspectTests` (`:50`), which reads it before a load, and retires with that case (F26) |
+| E5 | The pad: bit order right, left, up, down, A, B, Select, Start; port 0 alone; the whole pad sent each time; buttons held before a load sent after it | `MercuryRtCore.cs:23, 47–52, 183–188`; `PortEngine.cs:204, 215–223` | info, host | Core info's `gb.pad` names each button's bit and port (`v1.rs:18–41`), and `CoreEngine.SetButton` routes by it, a port with no controller ignored. `PadButtons` for `CoreCatalog.ButtonsByConsole` (`:202`) is read from the console's engine's core info, not restated in the pack (§5.3: "controllers and their controls: core info"). A button held across a load is not carried by `InputLatch.Reset`; since B2 a game ignores the press that launched it until every button is let go (`2216d6d4`), so nothing a player does depends on the carry [A]; recorded, not kept |
+| E6 | The channel mutes held in the engine, cleared by a load, sent at once | `MercuryRtCore.cs:243–253`; `PortEngine.cs:297–301` | host | `CoreDebugTarget.SetChannelMuted` (`CoreDebugTarget.cs:270–275`), machine info's `audio.channels` naming the bits (`v1.rs:129`). The target keeps its mask across a reload where the machine starts unmuted; a target is made per load in every frontend, so the two agree [A]; recorded |
+| E7 | A read of `CPUBUS` brings the ROM patches up to the registry first; a write to it while a debugger listens is reported at once | `PortEngine.cs:259–283` | host (shared) | Proposed: `CoreEngine.ReadSpace` calls `RefreshCheats` first, a version compare when nothing changed, for every core, so a debugger read after a code is entered answers as the next frame will. The write: MercuryRT's own `write_space(6)` notes the store in its hooks (`machine.rs:211–217`) and `CoreDebugBridge` drains it with the next frame rather than at once; recorded, not kept, unless the golden corpus's `watch` or `writers` shows it |
+| E8 | The debugger's registries owned by the engine: labels outlive a target; coverage records call targets as entry points; the call stack resets at each load | `MercuryRtCore.cs:89–98, 180` | host (shared) | `CoreDebugTarget.Labels` is made per target (`CoreDebugTarget.cs:178`) and `CoreDebugBridge` wires no `EntryPointObserver` (only the three shims do, `MercuryRtCore.cs:92`, `MoonRtCore.cs:30`, `MarsRtCore.Debug.cs:63`). Proposed: `CoreEngine` owns a `LabelRegistry` and the bridge wires coverage's entry points, for every v1 core |
+| E9 | `NativeDebugBridge` in place of the adapter's own, with its "a target listens" rule for stores and `Counters()` | `PortEngine.cs:109–112, 164, 210, 226–239`; `MercuryRtCore.cs:145–150` | host | `CoreDebugBridge`, the generic one, which logs stores whenever a watch or data breakpoint exists. `NativeDepth` and `Listening` are read by tests alone [M] and go with them |
+| E10 | The mirror's registries supplied by the subclass (`MirrorCheats` with its setter, `MirrorCallStack`, `MirrorCoverage`), the spaces by name and the store-reporting spaces 1 to 5 | `MercuryRtCore.cs:100–104, 152–160` | info, retired | Machine info names the spaces and flags `reports_stores` on 1 to 5 and `side_effects` on `CPUBUS` (`v1.rs:131–135`) |
+| E11 | The status words of the core's band | `MercuryRtCore.cs:209–218` | retired | The same four sentences are MercuryRT's `status_text` (`v1.rs:87–96`) |
+
+#### 17.2.3 The debugger's view
+
+`MercuryRtDebugTarget` shows the machine by reading its save state through the listing's paths (`Cpu.A`,
+`Bus.Ppu.Lcdc`, `Cpu.<Cycles>k__BackingField`), so it is per-core code that reaches past the core ABI into the layout
+of one engine's state. SR8 does not allow it to survive, and `CoreDebugTarget`, which every other v1 core is shown
+through, publishes less: no video or sound registers, no sprites, no audio channels, no address decode, and the views
+a pack gives only where the pack has them (`CoreDebugTarget.cs:98–108`). Item by item:
+
+| # | What the view shows | Where | Route | Destination |
+|---|---|---|---|---|
+| D1 | CPU registers: A, F, BC, DE, HL, SP, PC, the flags Z N H C, IME, HALT, IE, IF and the cycle count | `MercuryRtDebugTarget.cs:175–198` | capability | `DEBUG_REGISTERS` (bit 16), already optional in v1: machine info's `processors[0].registers` lists the sixteen in this order with these widths (`v1.rs:136` lists none today) and `debug_registers(0)` returns them. This is `EmuSen_DianaSh.md` Q28's recommendation for MercuryRT; a register condition then costs what it costs on Nephrite rather than 6.84 µs a hit (§13.12 there). Q28 is not yet decided (Q2) |
+| D2 | Video registers: LCDC, STAT as the CPU reads it, SCY, SCX, LY, LYC, BGP, OBP0, OBP1, WY, WX, the mode, the dot, the window's line; and in colour mode VBK, SVBK, BCPS, OCPS (as read), KEY1 | `:200–230` | **minor** | No v1 surface carries registers that belong to no processor. §17.3 proposes `units` |
+| D3 | Sound registers `$FF10`–`$FF26` as read, the power bit, the sequencer's step, and the timer's DIV, TIMA, TMA, TAC; and a pseudo-register `Board:<name>` of value 0 | `:232–246` | **minor**; the board retired | The same `units`; the board's name is the pack's header reader's, which the summary already prints (`:526`), so the pseudo-register is not kept (Q5) |
+| D4 | Sprites: the forty OAM entries with LCDC's height, the colour palette or the DMG one, hidden when parked off-screen; `MaxSprites` 40 | `:110, 275–296` | pack | The pack decodes OAM (a v1 space) with LCDC from D2's unit; `ISystemDebugViews` gains `Sprites` and `MaxSprites` (shared: MoonRT's view shows sprites too, and VenusRT's §30.6 item 6 needs the same members) |
+| D5 | Palettes and the swatch: on a Game Boy, BGP, OBP0, OBP1 through four greys; in colour mode the sixteen palettes from palette RAM; in compatibility mode the DMG registers through palette RAM | `:20, 298–356, 475–498` | space and pack | Palette RAM is in no space (`v1.rs:15`). MercuryRT adds two, `BGPAL` and `OBJPAL`, 64 bytes each (ids 7 and 8, appended, so the existing numbering holds); the pack decodes them and the registers. The four greys are the view's presentation of shades a Game Boy does not define, stated in the pack |
+| D6 | Audio channels: each channel's on and DAC bits, a level from its envelope or wave shift, the mute, and a line of its duty, frequency, length, sweep, divisor | `:248–273` | **minor** and pack | The internal counters (envelope volume, length counter, frequency, sweep) are in no register a CPU reads. Each channel is a unit of kind `channel` in §17.3's form; the pack turns a unit's registers into `DebugAudioChannelInfo`, its level rule (the wave's shift) being the console's; `ISystemDebugViews` gains `AudioChannels` |
+| D7 | HDMA as one DMA channel in colour mode: blocks left, H-blank mode, source, destination | `:363–380` | **minor** and pack | HDMA's source and destination counters are in no readable register; a unit of kind `dma`, listed in colour mode only; the pack's `DmaChannels` reads it (its signature gains the units) |
+| D8 | The tilemap entry, with the colour attribute from VRAM bank 1 in colour mode; the stride 1 | `:112–113, 417–426` | pack | The pack's `DecodeTilemapEntry` needs the mode: colour mode is machine info's `gbc` with the header's flag at `$0143`, which the pack reads through the `ROM` space with its own header reader; its signature gains the spaces |
+| D9 | A tile's pixels (2bpp) and the tile sheet in greys | `:428–473` | pack | Over `VRAM`, a v1 space |
+| D10 | Disassembly and static references (SM83) | `:382–415` | capability | `DEBUG_DISASSEMBLE` (bit 17), as VenusRT, Nephrite and Diamond decode in the core (§6.14: "the core decodes; the command formats"). The decoder is `emusen-systems`' `gb::disasm` (115 lines, with the C# `Sm83Disassembler` as its failover); a core does not link the platform's pack crate, so it moves to a crate of its own in `EmuSen/Cores/Shared/`, `emusen-sm83`, which MercuryRT and `emusen-systems` both use, as `emusen-mips` serves Diamond and the pack (F8; Q3) |
+| D11 | Interrupt vectors, the five at `$40`–`$60` | `:133–141` | pack | A console fact; `InterruptVectors` |
+| D12 | Address decode for `addr`: the fixed ranges, VRAM by VBK, WRAM by SVBK | `:500–517` | pack | `ISystemDebugViews` gains `ResolvePhysical`, reading VBK and SVBK from D2's unit (shared: §30.6 item 11) |
+| D13 | The summary: console, frame, LY and mode; the cartridge's board, banks, RAM, battery and clock; the CPU line; the PPU line; the colour line; the APU line with the queue | `:519–542` | host and pack | `CoreDebugTarget.GetSummaryText`'s head line, then the pack's `Summary`, whose input gains the units and the spaces (the header from `ROM`). The head line becomes the generic one ("MercuryRT (Rust) 0.1.0, gb, frame 2"), a difference to record (Q5) |
+| D14 | The load bars: none (an empty list) | `:91–92` | host | `CoreDebugTarget.HardwareLoad` shows one bar, `frame`, from the engine's timing; a difference to record |
+| D15 | The audio the debugger peeks | `:360–361` | capability | `AUDIO_PEEK`, claimed already (`v1.rs:44`), read by `CoreDebugTarget.GetAudioSamples` |
+
+**Counted.** Of 33 rows, 21 need no surface (host, info, pack, space or an optional capability v1 defines), 8 are
+retired with their callers shown, and 4 (D2, D3, D6, D7) need registers that belong to no processor. §9's P3 predicted
+that every shim's additions would fit an optional capability already defined, MarsRT's counters excepted; for MercuryRT
+it does not hold, by those four, if the debugger is to keep what it shows. They have one form in common, below.
+
+### 17.3 The one proposal that widens a surface: units, a core ABI minor
+
+**What is missing.** A console's debugger shows registers that belong to no processor: the Game Boy's PPU, APU,
+timer and HDMA here; the SNES's PPU and S-DSP (§30.6 items 1, 2 and 7 of `EmuSen_CoreAPI.md`); the NES's cartridge
+board, which the tester decided on 2026-10-17 goes "into MoonRT's own debug registers capability and its info" (§13.4);
+the Genesis's VDP. `IDebugTarget` already has places for them (`VideoRegisters`, `ApuRegisters`), and every C#
+target filled them. v1 carries registers only per processor (`processors[].registers`, read by `debug_registers`).
+
+**The forms weighed, per the project's rule for a feature that would widen a stable surface:**
+
+| | Form | Verdict |
+|---|---|---|
+| a | **An extension of an existing surface**: machine info gains `units`, beside `processors`, and `debug_registers` reads a unit's id as it reads a processor's | **Proposed.** No new export and no new capability bit; one new field of machine info, which an older host ignores, read through an export cores already have |
+| b | The registers listed as processor 0's | Rejected: `regs cpu` would show the PPU's registers as the SM83's, and a condition `if LY==0` would read a register that is no processor's |
+| c | A processor with no program counter (`pc_bits: 0`) for each unit | Rejected on skew: a host of 1.12 makes a `DebugCpu` of every processor, so it would offer breakpoints, coverage and `step` on the PPU |
+| d | The space route alone: a view space of the registers as latched, decoded by the pack | Covers part only: the I/O registers a CPU reads are already reachable through `CPUBUS`, but the mode, the dot, the window's line, the sequencer, the channels' counters and HDMA's are in no register file; a space holding them would have a layout of one engine's choosing, which the pack would then have to know, the coupling SR8 removes |
+| e | A module, or a component of its own | Not applicable: the registers are state the core alone holds, read once a frame by the host that already reads its processors' |
+
+**The change, sketched for 1.next** (no number is taken here):
+
+```c
+/* Machine info, §6.4: one new optional field, read by a host of 1.next and ignored by an older one. */
+"units": [ { "id": 16, "name": "PPU", "kind": "video",
+             "registers": [ { "name": "LCDC", "bits": 8 }, { "name": "STAT", "bits": 8 } ] },
+           { "id": 17, "name": "APU", "kind": "audio", "registers": [ … ] },
+           { "id": 18, "name": "Pulse 1", "kind": "channel", "registers": [ … ] },
+           { "id": 22, "name": "HDMA", "kind": "dma", "registers": [ … ] } ]
+
+/* §6.14: DEBUG_REGISTERS reads a unit as it reads a processor; the text gains one sentence. */
+int64_t emusen_core_debug_registers(const emusen_machine *machine, uint32_t processor, int64_t *out, size_t len);
+/* `processor` is a processor's id or, since 1.next, a unit's; ids are unique across both lists. */
+```
+
+- **`kind`** is open (`video`, `audio`, `channel`, `timer`, `dma`, `board`, a core's own word), as every enumerated
+  string of machine info is. A host shows `video` as `VideoRegisters`, `audio` and `timer` in `ApuRegisters` in the
+  order machine info lists them, `channel` and `dma` to the pack's views, and anything else under the unit's name.
+- **Only with `DEBUG_REGISTERS`.** A core that lists units claims the capability, and answers `debug_registers` for
+  each listed id with its registers in their listed order. A unit is listed only while the machine has it (HDMA and
+  the colour registers on a Game Boy Color in colour mode); a change is announced by the `MACHINE_INFO` event, as a
+  state from the other console already announces the system's.
+- **Skew.** A 1.12 host ignores `units` and shows a 1.next core as now. A 1.next host reading a 1.12 core finds no
+  `units` and shows none. A host asks only for ids machine info lists. No version check is needed beyond the field's
+  presence.
+- **What moves.** `emusen-native`: `MachineInfo.units` and its JSON (about 40 lines), the crate's check that ids are
+  unique and that each listed unit answers with its count; the header's text and the baseline; `CoreDescriptors.cs`
+  reading `units` and `CoreDebugTarget` mapping them (about 60 lines of C#); the kit: C14 checks each unit's count
+  against `debug_registers`, and C15 reads every unit once; the test core lists one unit, and a seeded fault that
+  answers a unit with one register short fails C14 alone. `EmuSen_CoreAPI.md` §6.4 and §6.14 gain the normative text
+  and §17 its changelog row.
+- **What a pack reads of a unit** is its registers by name, as the SNES's pack reads its symbols from the 65816's
+  registers by name (§31.2 of `EmuSen_CoreAPI.md`). The Game Boy's pack states the names it reads (Pan Docs' names
+  for the registers a CPU sees; the internal counters by the names the pack's page states), so a second Game Boy engine
+  that publishes the same names gets the same views.
+
+**Who else would use it.** VenusRT's §30.6 items 1, 2, 6, 7 and 21 become buildable (the SNES's sprites need OBSEL,
+which only a PPU unit gives); MoonRT's board registers and the NES's PPU have a home; Nephrite's VDP has one. This is
+why it is proposed as a minor of v1 and not as a `mercuryrt_*` extension, which no generic host may call (SR8).
+
+**If it is not accepted** (Q1), the Game Boy is shown as Nephrite is: its CPU registers, disassembly, memory,
+breakpoints, coverage, the call stack, palettes, tiles, the tilemap, sprites (with LCDC read through `CPUBUS`),
+vectors and `addr`, and no video, sound or channel registers and no HDMA row. The golden corpus's `regs`, `channels`
+and the summary's PPU and APU lines change accordingly.
+
+### 17.4 The gates for phase 2
+
+Each gate fails before the change it guards or is recorded as already passing, as §6 requires.
+
+1. **MercuryRT's own oracles, unchanged** (`Mercury_Native.md` §15): the goldens of §14.4 there, graded by
+   `MercuryGoldenTests` with `EMUSEN_MERCURYRT_CORPUS` and `EMUSEN_MERCURYRT_ROMS` set (the 36 frame runs and 3 step
+   programs, the 176 random programs, the 173 corpus traces and the four games), now through `CoreEngine`; the
+   hardware corpus held to `MercuryCorpusBaseline.tsv` under each of the three models (Auto 126 passed, 42 failed, 5
+   without a verdict; 124, 44 and 5 on each forced console); `MercuryStateLayoutTests`' committed listings; and the
+   crate's own tests, 38 in five binaries. A trace that moves is a failure, never a re-recording: nothing in this step
+   is meant to change the machine.
+2. **The kit's corpus on MercuryRT**: `emusen-core-conform` over the four games of the goldens (Tetris, Kirby's Dream
+   Land, Link's Awakening, Pokémon Yellow, from the gitignored `TestRoms`) and over the 173 corpus ROMs, every case
+   passing as on 2026-10-03 (§24.3 of `EmuSen_CoreAPI.md`), with C14 and C15 now finding the new spaces, the
+   processor's registers and, if Q1 is accepted, the units; C13 counts `firmware_for` rounds as before.
+3. **The debugger's golden corpus** (`GoldenCorpusTests`): the 29 files with a `mercuryrt` case either unchanged or
+   each difference listed and decided before it is re-recorded. Expected, if §17.2's destinations are taken: the
+   heading word `GB` becomes `MercuryRT` (`regs`, `cpus`, `spaces`, `dma`, and every refusal that names the core);
+   the summary's first line becomes the generic head; the `Board:` row leaves `regs`; `coretop`, which has no
+   `mercuryrt` case, would show one bar. Everything else the corpus prints on MercuryRT is meant to stay byte for byte,
+   which is the measure of the pack's views. The Rust shell must print the same, as for every file.
+4. **The registration golden** (`CoreRegistrationEquivalenceTests`): `probe` and `core` for the Game Boy's rows
+   become `CoreEngine`; the `off` rows of L7; the Model row from the sidecar (unchanged in text if Q7 is taken); the
+   SNES's own setting rows if Q11 is taken. Every other console's rows unchanged.
+5. **Shown first, then fixed**: candidates C1 to C4 of §17.5, each by a test that fails on today's tree, or recorded as
+   no defect.
+6. **The cost**: `BreakpointConditionCostBench` (`EMUSEN_BP_BENCH=1`) on MercuryRT, a register condition about 1 µs a
+   hit rather than 6.84 (P7 below); and the frame through `CoreEngine` against the frame through the shim on the four
+   games, by `pacebench`'s frame-time distribution, equal within its run-to-run spread.
+7. **`grep`** for a type under `EmuSen.Cores.Nintendo.MercuryRT` in shipped code: 0, as the B4 row asks.
+
+**The WiseMan classes that cover the shim today** [M: every class whose file names a type of the shim or its rig, or
+loads a `.gb` image through the factory, and the debugger's corpus], 46 run on 2026-10-18 at `480bf5e2`:
+the Mercury claims `MercuryRtAccessBlockingTests`, `MercuryRtApuTests`, `MercuryRtAuditTests`,
+`MercuryRtCartridgeTests`, `MercuryCartridgeTests`, `MercuryRtCgbTests`, `MercuryRtCoreSurfaceTests`,
+`MercuryRtCpuTests`, `MercuryRtPpuTests`, `MercuryRtSerialTests`, `MercurySerialTests`, `MercuryDefectTests`,
+`MercuryModelTests`, `MercuryStateLayoutTests`; the engine's `MercuryRtCoreTests`, `MercuryRtCoreAbiTests`,
+`MercuryRtDebugTests`, `MercuryRtDebugTargetTests`, `MercuryRtPlatformTests`; the oracles `MercuryGoldenTests`,
+`MercuryHardwareTestRomTests`; the commercial-ROM classes `MercuryCommercialRomDeterminismTests`,
+`MercuryCommercialRomAudioTests`, `MercuryCommercialRomRenderSkipTests`; Mistress's `MercuryModelSettingTests`,
+`MercuryRtFallbackTests`, `MainWindowEmulationMenuTests`; and `AudioBufferLimitTests`, `BatterySaveTests`,
+`CheatCodecAdapterTests`, `ControllerPortTests`, `CoreFactoryCheatWiringTests`, `CoreOutputHashProbe`,
+`CoreRegistrationEquivalenceTests`, `EngineFeaturesTests`, `NativeHostTests`, `RewindToMomentTests`,
+`RustShimDisposeTests`, `RustStateHeaderTests`, `CheatCodecParityTests`, `ManagedCrystalTests`, `StateRefusalTests`,
+`ConsoleBindingsTests`, `DisplayAspectTests`, `BreakpointConditionTests` and `GoldenCorpusTests`. Not in that run and
+in the blast radius: `MercuryCommercialRomBatteryTests` (it names `BatterySave.GameBoyFolder` only), which phase 2
+adds.
+
+**The baseline, measured on 2026-10-18** at `480bf5e2`, Debug, .NET 10.0.112, with `EMUSEN_MERCURYRT_CORPUS` naming the
+173 corpus ROMs and `EMUSEN_MERCURYRT_ROMS` the goldens' games:
+
+| | Cases | Result |
+|---|---:|---|
+| The 46 classes above, one run | 775 | 774 passed, 1 failed: `The_games_run_as_their_goldens_recorded`, because the games folder first named held three ROMs besides the four with goldens, and the test grades every ROM it finds ("games/3296CE126E2EBF61 has no golden"); the run's setup, not a defect |
+| `MercuryGoldenTests` and `MercuryHardwareTestRomTests` again, the folder holding the four games alone | 59 | 59 passed: the four games reproduced over 3,600 frames and again from their recorded states of frame 900; 173 corpus traces as recorded; the corpus's verdicts Auto 126 passed, 42 failed, 5 without one, and 124, 44 and 5 on each forced console; the broken trace caught in each column |
+| MercuryRT's crate, `cargo test --profile test-checked` | 38 | 38 passed, in five binaries (8, 9, 16, 5 and 0 doc-tests) |
+| The kit, `emusen-core-conform` on the release library, over the four games | 4 images | the core's cases pass (C1 to C5, C9 to C13, C15, C22, C23; capabilities `0x3830`, one setting, C13's 71,713 rounds); 4 of 4 images pass |
+| The kit over the 173 corpus ROMs | 173 images | the core's cases pass; 173 of 173 images pass, in 128 s six at a time |
+
+By class, the 775: `GoldenCorpusTests` 100 (every file, of which 29 have a `mercuryrt` case), `MercuryModelTests` 111,
+`MercuryRtAuditTests` 69, `MercuryGoldenTests` 56, `MercuryStateLayoutTests` 52, `MercuryRtDebugTargetTests` 34,
+`MercuryRtDebugTests` 33, `MercuryRtPpuTests` 27, `MercuryRtApuTests` and `MercuryRtCgbTests` 23 each,
+`MainWindowEmulationMenuTests` 22, `MercuryRtCpuTests` 18, `BatterySaveTests` 17, `ConsoleBindingsTests` 16,
+`CoreFactoryCheatWiringTests`, `DisplayAspectTests` and `MercuryRtCoreSurfaceTests` 13 each,
+`BreakpointConditionTests` 12, `MercuryRtCoreTests` and `MercuryRtSerialTests` 9 each, `CheatCodecAdapterTests` and
+`MercuryRtCoreAbiTests` 8 each, `MercuryCartridgeTests` and `MercuryDefectTests` 7 each, `AudioBufferLimitTests` and
+`ManagedCrystalTests` 6 each, `CheatCodecParityTests`, `EngineFeaturesTests`, `MercuryRtPlatformTests`,
+`MercurySerialTests` and `NativeHostTests` 5 each, `ControllerPortTests`, `MercuryRtAccessBlockingTests` and
+`MercuryRtCartridgeTests` 4 each, `CoreRegistrationEquivalenceTests`, `MercuryHardwareTestRomTests`,
+`MercuryModelSettingTests`, `RewindToMomentTests` and `RustStateHeaderTests` 3 each, `CoreOutputHashProbe`,
+`MercuryRtFallbackTests`, `RustShimDisposeTests` and `StateRefusalTests` 2 each, and the three commercial-ROM classes
+1 each. Those three ran their empty case only: no commercial ROM lies under the install's `TestRoms`, which is where
+they look, so the four games are graded by `MercuryGoldenTests` and the kit alone.
+
+### 17.5 Candidate defects read at the seam, none yet shown
+
+Each was read from the code and not run; phase 2 shows each by a test that fails first, or records it as no defect.
+
+- **C1. A refused Game Boy cartridge is "no engine" through the frontend API.** `GbCartridge.Read` throws
+  `NotSupportedException`, which `ManagedRuntime.OpenGame` turns into `NoEngine` (−1109) (`ManagedRuntime.Open.cs:61`),
+  the answer for a file no engine opens; every other engine's refusal is `CoreRefusedException`, a fault, with the
+  core's words. Removed by L1 and L2.
+- **C2. A refused Game Boy state is a fault through the frontend API**, not `StateRefused` (−1114): the shim's
+  pre-check throws an `InvalidDataException` with no `emusen.status` (`MercuryRtCore.cs:194, 197`), which
+  `ManagedSession.LoadState` does not take (`ManagedSession.States.cs:38`), and a state shorter than 8 bytes is `Io`.
+  Removed by L3.
+- **C3. A game's own create-time setting does not reach a v1 engine's machine when the game is opened**, on every v1 core, only a later load in the same session: E2. The shim
+  hides it for the Game Boy, and MarsRT's shim for the Expansion Pak. Fixed in the host, for every engine.
+- **C4. Hotaru keys a game's pad bindings by the engine's name** (`GameWindow.axaml.cs:135, 389`; the service's
+  `engine` is the target's `CoreName`), where Mistress keys them by the console (`EmuSen_Settings_Reference.md`
+  §4.47). On the SNES, the Genesis and the PlayStation the key is the engine's name, so bindings a player made in
+  Mistress would not be found in emusen-shell's window, and a Game Boy Color game on the Color looks up `GBC`, which no
+  binding set is named. B4 would move the Game Boy's key from `GB` to `MercuryRT`. A frontend's fix, outside B4,
+  proposed before phase 2 switches the Game Boy (Q9).
+
+### 17.6 What only the Game Boy's shim keeps alive, for the deletion step
+
+Measured on 2026-10-18 [M: `grep -rnw` over every project, tests included]. **Nothing in `PortEngine.cs` or in the
+pre-stable host is kept alive by the Game Boy's shim alone**: the MoonRT shim derives from `PortEngine` too
+(`MoonRtCore.cs:12`), reads `PortMachine` (`MoonRtDebugTarget.cs:82`) and builds a `MoonMachine` on the pre-stable
+interface, the VenusRT shim's `VenusMachine` and `VenusNative` use `NativeMachine`, `NativeInterface` and
+`NativeCoreLibrary`, and MarsRT's `MarsNative.Library` is a `PortLibrary` (`MarsNative.cs:11`). So the deletion step
+waits on all three branches. What the Game Boy's shim alone uses, member by member:
+
+| Piece | Used only by the Game Boy's shim or its tests |
+|---|---|
+| `PortEngine.MirrorCheats`' setter override and `MirrorCoverage`/`MirrorCallStack` supplied by a subclass | `MercuryRtCore.cs:100–102` (MoonRT takes the defaults) |
+| `PortMachine.Save(byte[])` and `StateSize` | `MercuryRtCore.cs:234–236` (MarsRT's are its own) |
+| `PortLibrary`'s `requiredExports` with an export no other port needs | `mercuryrt_core_set_sample_rate` (`MercuryNative.cs:23`); MarsRT passes its own |
+| `PortMachine.RomPatch` through `PortLibrary.RomPatchExport` | `MercuryRtCoreTests.cs:175–179` and `MoonRtFrontendTests` both; not Mercury's alone |
+| `NativeMachine`'s settings text, non-empty | `MercuryMachine.cs:30` (`Model=<n>`); MoonRT and VenusRT pass `""` |
+| `NativeCoreLibrary.Common("mercuryrt", …)`, `MercuryNative.Api`, `RequiredCapabilities` | `NativeHostTests` (three cases) and `MercuryRtPlatformTests` (one) |
+| MercuryRT's six pre-stable exports and `native_exports!` | `MercuryMachine` alone |
+
+Found on the way, for the deletion step's plan though not Mercury's:
+
+- **`NativeRtCore<T>` has no subclass left** [M]. It survives for its static `RomPatchTriples`, which the generic
+  `CoreEngine.RefreshCheats` calls (`CoreEngine.cs:849`) and two tests name (`NativeHostTests.cs:23–27`,
+  `GenesisCheatFormatsTests.cs:96`). The method moves to `CoreEngine` (or to `CheatRegistry`) before `NativeRtCore.cs`
+  is deleted, with `INativeDebugBridge`, which it declares and only `NativeDebugBridge` implements.
+- **`PortLibrary` is the only part of `PortEngine.cs` MarsRT uses.** Its load rule (the switch variable, the file
+  beside the assemblies, the required capabilities and exports) has a generic twin in discovery except for the switch
+  (L7); MarsRT's branch decides whether its shim keeps it.
+- `DisplayShape.GameBoy` is named by this shim alone in shipped code (E4).
+
+### 17.7 The build plan for phase 2
+
+Each step is committed on its own, with the blast radius of §17.4 run before the next, and the shim kept as the Game
+Boy's engine until step 7 switches it, as the B4 row's failover asks ("its shim stays until its core's exports pass").
+
+1. **Show the candidates.** C1 and C2 by `StateRefusalTests`/`ManagedCrystalTests` cases through the frontend API on a
+   synthetic Game Boy image; C3 by a `ManagedCrystalTests` case on a v1 engine with a create-time setting in a game's
+   file; C4 by a Hotaru case if Q9 sends it with this step. Each fails on today's tree.
+2. **The host's generic pieces (shared).** `CoreEngine` owns a `LabelRegistry`; `CoreDebugBridge` wires coverage's
+   entry points; `CoreEngine.ReadSpace` refreshes ROM patches first; a create-scope `Set` before the first frame makes
+   the machine again (C3 passes). `RomPatchTriples` moves into `CoreEngine`. Every v1 core's debug and settings tests
+   in the blast radius; built once for the three B4 branches, by the branch Q12 names, the others rebasing on them.
+3. **MercuryRT's own exports and info**, with its goldens and the kit after: `DEBUG_REGISTERS` for processor 0;
+   `emusen-sm83` (moved from `gb::disasm`, the pack re-exporting it, its parity class unchanged) and
+   `DEBUG_DISASSEMBLE`; the spaces `BGPAL` and `OBJPAL`; `battery_files` and `create`'s battery rule (L4); the Model's
+   help (Q7). The C# shim reads `DEBUG_REGISTERS` from here on, so Q28's cost is measured on the shim before the switch.
+4. **The minor, if Q1 accepts it**: `units` in `emusen-native`, the header, the baseline, the host's reader, the kit's
+   C14 and C15 with a seeded fault; then MercuryRT's units (PPU, APU, timer, the four channels, HDMA). The kit's corpus
+   on MercuryRT and on every other core (no other core lists a unit, so every other report is unchanged).
+5. **The Game Boy's pack views**, in Rust in `emusen-systems` (`gb::views`) and in C# beside them under the parity
+   rule of §13: sprites, palettes and swatch, tiles and the sheet, the tilemap entry, the channels and HDMA from units,
+   vectors, `ResolvePhysical`, the summary lines; `ISystemDebugViews` gains `Sprites`, `MaxSprites`, `AudioChannels`,
+   `ResolvePhysical` and the units as an input (shared), and `emusen_systems_view` the matching views (a platform
+   interface bump). A parity class over generated OAM, VRAM, palette RAM and register sets, each answer compared with
+   the shim's target on the same machine, run while the shim still exists, with seeded faults.
+6. **The pack's header reader stops refusing** (L1), both halves, the parity class's header cases amended to name
+   every type; `MercuryCartridgeTests`' refusal case moves to MercuryRT's create.
+7. **The switch.** `MercuryRtEngine` leaves `SoleEngines` and joins `SoleDiscoveredEngines`; `CoreFactory`'s `.gb`
+   arm becomes `Missing("Game Boy", MercuryRtEngine)`, and `Running`'s and `Bundle`'s cases go;
+   `ButtonsByConsole` and `SettingsByConsole` lose the Game Boy (E1, E5). WiseMan's `MercuryRig` and `MercuryDebugRig`
+   build a `CoreEngine` and call `mercuryrt_core_step`, `_tick`, `_stop`, `_serial` and `_rom_patch` as the core's
+   own extensions (§4.7 of the core ABI), with `GbModel` and the space names moved into the fixtures. Every gate of
+   §17.4; the golden corpus's differences listed and, once decided, re-recorded in this commit alone.
+8. **The deletion.** The shim's four files, `DisplayShape.GameBoy`, `BatterySave.GameBoyFolder` with the tests that
+   named them, the `mercuryrt_core_set_sample_rate` export; and, once the other two branches are through, `PortEngine.cs`,
+   the pre-stable host (`Native{CoreLibrary,Interface,Machine,RtCore,DebugBridge}`), MercuryRT's `src/ffi/mod.rs`
+   pre-stable half, `emusen-native`'s `abi` macro and the three dead classes of §4.1, in one commit across the cores.
+9. **The records.** `Mercury_Native.md` gains its section for the step, `Mercury_Debug.md` the views' new home,
+   `EmuSen_Settings_Reference.md` §4.47 the host's rule, and this section its "what was built" sequel with the sizes:
+   §7 estimated 1,500 to 3,000 lines of Rust across the four cores' exports; for MercuryRT about 250 in the core,
+   about 120 in `emusen-native` and the kit for the minor, about 700 in the pack's two halves with its parity class,
+   about 150 in the host, against 914 deleted from the shim and about 270 of pre-stable exports [A].
+
+**Predictions to retire.**
+
+- **P7.** A register condition on MercuryRT costs within 0.5 µs of Nephrite's 1.88 µs a hit, measured by
+  `BreakpointConditionCostBench` at step 3. Retired at step 3.
+- **P8.** No golden trace, corpus verdict or kit report on MercuryRT changes at any step; the only recorded outputs
+  that change are the golden corpus's lines of §17.4 gate 3 and the registration golden's of gate 4. Retired at step 7.
+
+### 17.8 Questions for the tester
+
+Asked one by one, each with its recommendation; nothing here is decided by this section.
+
+- **Q1. The minor `units`** (§17.3): machine info's `units` read through `DEBUG_REGISTERS`, proposed for 1.next as an
+  extension of an existing surface? *Recommended: yes*, since four of the Game Boy's views and five of VenusRT's
+  §30.6 items have no other home that keeps a generic host. Without it the Game Boy is shown as Nephrite is (§17.3,
+  last paragraph).
+- **Q2. `EmuSen_DianaSh.md` Q28 for MercuryRT**: MercuryRT exports `DEBUG_REGISTERS` for its processor within B4?
+  *Recommended: yes*, as Q28 recommended; the capability is optional in v1 already.
+- **Q3. The SM83's decoder in `EmuSen/Cores/Shared/emusen-sm83`**, used by MercuryRT's `DEBUG_DISASSEMBLE` and by
+  `emusen-systems`, amending F8's "the others in their packs" for the SM83 as `emusen-mips` was placed for MIPS?
+  *Recommended: yes*: the core decodes, as every generic core does, and the pack keeps its one owner. The alternative,
+  `CoreDebugTarget` falling back to a pack's disassembler for a core without the capability, keeps the decoder where it
+  is but gives the host a second way to disassemble.
+- **Q4. A create-time setting changed before a game's first frame makes the machine again, in `CoreEngine`, for every
+  v1 engine** (E2, C3)? *Recommended: yes*: it is the documented behaviour of the Model and Expansion Pak rows, and it
+  makes a game's own create-time setting take effect at its first load on every engine.
+- **Q5. The golden corpus's and registration golden's expected differences** (§17.4 gates 3 and 4: `GB` to
+  `MercuryRT` in headings and log folders, the generic summary head, the `Board:` pseudo-register dropped, one load
+  bar, the `off` rows): accept them, re-recorded in the switch's commit? *Recommended: yes*: each brings the Game Boy to
+  what every v1 core prints.
+- **Q6. The battery rule** (L4): core info lists file 0 and `create` takes it only on a board with a battery, rather
+  than core info listing none and the host creating twice when a save exists? *Recommended: the first*: one create, and
+  the rule beside the machine info that states it.
+- **Q7. The Model's help**: the shim's longer sentence becomes the schema's, so the window keeps its words?
+  *Recommended: yes.*
+- **Q8. Unimplemented cartridge types**: refused by MercuryRT's `create` alone, the pack naming every type, rather than
+  a list of implemented boards in core info? *Recommended: the first*: no host would read the list, and it would be a
+  field of 1.next with no reader.
+- **Q9. Hotaru's binding key** (C4): fixed before phase 2's switch, as a frontend change of its own shown by a failing
+  test first, so that the Game Boy's bindings do not move? *Recommended: yes.*
+- **Q10. The off switch `EMUSEN_MERCURY_NATIVE`** (L7): retired with the pre-stable loader, a build without the library
+  shown by hiding it from discovery as for the SNES? *Recommended: yes.*
+- **Q11. `CoreCatalog.SettingsFor` reads a catalog console's sole discovered engine's schema** (E1), which adds the
+  SNES's rows to the registration golden too? *Recommended: yes*, coordinated with the VenusRT branch, so that the
+  console's settings have one owner in every list.
+- **Q12. Order across the three B4 branches**: the shared host pieces (§17.7 step 2, the `units` minor,
+  `ISystemDebugViews`' new members) built once by whichever branch reaches them first, the others rebasing? Or one
+  branch named to build them? *Recommended: one branch builds the shared host pieces and the minor as a step of their
+  own, merged before any core switches*, so that no two branches change `CoreEngine`, the header or the pack's views
+  interface at once.

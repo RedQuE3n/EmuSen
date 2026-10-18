@@ -470,6 +470,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-sm83"
+version = "0.1.0"
+
+[[package]]
 name = "emusen-systems"
 version = "0.1.0"
 dependencies = [
@@ -478,6 +482,7 @@ dependencies = [
  "emusen-mips",
  "emusen-n64-pak",
  "emusen-psx-card",
+ "emusen-sm83",
 ]
 
 [[package]]

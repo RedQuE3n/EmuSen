@@ -2,8 +2,8 @@
 //! facts its C# shim held are its descriptors here. See EmuSen_CoreAPI.md §13.1, §23.
 
 use emusen_native::core::{
-    self as v1, Battery, Button, Choice, Control, Controller, Create, Effect, FrameInfo, Info, MachineInfo, Port, Processor, Region, Scope, Setting,
-    SettingKind, Space, StateFormat, System, Video, caps, status,
+    self as v1, Battery, Button, Choice, Control, Controller, Create, Effect, FrameInfo, Info, Instruction, MachineInfo, Port, Processor, Reference, Region,
+    Scope, Setting, SettingKind, Space, StateFormat, System, Video, caps, status,
 };
 
 use super::{BATTERY_SPACE, SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ILLEGAL_OPCODE, STATUS_NULL, STATUS_TOO_SHORT, STATUS_UNKNOWN_MODEL, STATUS_UNSUPPORTED_BOARD, build_rom_patches, rom_patch, serial, step};
@@ -11,8 +11,28 @@ use crate::debug::Hooks;
 use crate::machine::{CPU_CLOCK_HZ, CYCLES_PER_FRAME, Machine, Model, OLDEST_READABLE_VERSION, STATE_VERSION};
 use crate::memory::cartridge::RomError;
 
-/// `MercuryMachine.SpaceNames`, numbered as the ABI numbers them.
-const SPACES: [&str; 7] = ["ROM", "VRAM", "CARTRAM", "WRAM", "OAM", "HRAM", "CPUBUS"];
+/// `MercuryMachine.SpaceNames`, numbered as the ABI numbers them, then the colour palette RAM's two halves, read only (EmuSen_Backend.md §17.2 D5).
+const SPACES: [&str; 9] = ["ROM", "VRAM", "CARTRAM", "WRAM", "OAM", "HRAM", "CPUBUS", "BGPAL", "OBJPAL"];
+
+/// The CPU's registers as `debug_registers(0)` gives them: the debugger's order, names and widths (EmuSen_Backend.md §17.2 D1).
+const REGISTERS: [(&str, u32); 16] = [
+    ("A", 8),
+    ("F", 8),
+    ("BC", 16),
+    ("DE", 16),
+    ("HL", 16),
+    ("SP", 16),
+    ("PC", 16),
+    ("Z", 1),
+    ("N", 1),
+    ("H", 1),
+    ("C", 1),
+    ("IME", 1),
+    ("HALT", 1),
+    ("IE", 8),
+    ("IF", 8),
+    ("Cycles", 64),
+];
 
 /// The pad's bits (right, left, up, down, A, B, select, start) in `MercuryCore.PadButtons`' order, the order a bindings screen shows them.
 const PAD: [(u32, Control, &str); 8] = [
@@ -41,7 +61,7 @@ fn pad() -> Controller {
 }
 
 impl v1::Core for Machine {
-    const CAPABILITIES: u64 = caps::AUDIO_PEEK | caps::MUTES | caps::ROM_PATCHES | caps::DEBUG | caps::DEBUG_STACK;
+    const CAPABILITIES: u64 = caps::AUDIO_PEEK | caps::MUTES | caps::ROM_PATCHES | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE;
 
     fn info() -> Info {
         let system = |id: &str, name: &str, ext: &str| System {
@@ -72,7 +92,7 @@ impl v1::Core for Machine {
         vec![Setting {
             key: MODEL_KEY.into(),
             label: "Model".into(),
-            help: "Which console a game runs on. Auto follows the cartridge: a Game Boy Color game on a Game Boy Color, the rest on a Game Boy. Game Boy runs every game on a Game Boy; Game Boy Color runs every game on a Game Boy Color. A save state resumes on the console it was made on.".into(),
+            help: "Which console a game runs on. Auto follows the cartridge: a Game Boy Color game on a Game Boy Color, the rest on a Game Boy. Game Boy runs every game on a Game Boy: a colour game in its own monochrome mode, and a game made only for the Color shows whatever that game shows a Game Boy. Game Boy Color runs every game on a Game Boy Color: a Game Boy game in the colours the Color's start-up picks for it from its title. Takes effect when a game is next loaded; a save state resumes on the console it was made on.".into(),
             kind: SettingKind::Choice(MODELS.iter().map(|&(v, _)| Choice { value: v.into(), label: v.into(), help: None }).collect()),
             default: "Auto".into(),
             scope: Scope::Create,
@@ -82,6 +102,11 @@ impl v1::Core for Machine {
             hidden: false,
             restart: true,
         }]
+    }
+
+    /// File 0 for both systems: a host passes it at the first create, and `create` keeps it only on a board with a battery.
+    fn battery_files(_system: &str) -> Option<Vec<Battery>> {
+        Some(vec![Battery::game(0, ".srm")])
     }
 
     fn status_text(code: i32) -> Option<String> {
@@ -95,7 +120,7 @@ impl v1::Core for Machine {
         Some(words.to_owned())
     }
 
-    /// `MercuryCore.LoadRom` on the console the Model setting names, then the battery save written into cartridge RAM, clipped to it.
+    /// `MercuryCore.LoadRom` on the console the Model setting names, then the battery save written into cartridge RAM, clipped to it, where the board keeps one.
     fn create(r: &Create<'_>) -> Result<Self, i32> {
         let chosen = r.settings.get(MODEL_KEY).unwrap_or("Auto");
         let model = MODELS.iter().find(|m| m.0 == chosen).map(|m| m.1).ok_or(STATUS_UNKNOWN_MODEL)?;
@@ -110,6 +135,9 @@ impl v1::Core for Machine {
             if file.which != 0 {
                 v1::detail(&format!("file {} is not one MercuryRT takes", file.which));
                 return Err(status::BAD_FILE);
+            }
+            if !(*m.bus.cart.has_battery && !m.bus.cart.ram.is_empty()) {
+                continue;
             }
             let length = m.space_size(BATTERY_SPACE).min(file.data.len());
             for (i, &b) in file.data[..length].iter().enumerate() {
@@ -131,9 +159,9 @@ impl v1::Core for Machine {
             spaces: SPACES
                 .iter()
                 .enumerate()
-                .map(|(id, &name)| Space { cheats: id == 3, side_effects: id == 6, reports_stores: (1..=5).contains(&id), ..Space::new(id as u32, name) })
+                .map(|(id, &name)| Space { cheats: id == 3, side_effects: id == 6, reports_stores: (1..=5).contains(&id), read_only: id >= 7, ..Space::new(id as u32, name) })
                 .collect(),
-            processors: vec![Processor { id: 0, name: "CPU".into(), pc_bits: 16, registers: Vec::new(), code_space: None }],
+            processors: vec![Processor { id: 0, name: "CPU".into(), pc_bits: 16, registers: REGISTERS.iter().map(|&(n, b)| (n.to_owned(), b)).collect(), code_space: None }],
             battery: if battery { vec![Battery::game(0, ".srm")] } else { Vec::new() },
             state: StateFormat { format: "MERC".into(), version: STATE_VERSION as i64, loads_from: (OLDEST_READABLE_VERSION..=STATE_VERSION).map(i64::from).collect() },
             phases: Vec::new(),
@@ -218,6 +246,9 @@ impl v1::Core for Machine {
         if space as usize >= SPACES.len() {
             return Err(status::NO_SUCH_SPACE);
         }
+        if space >= 7 {
+            return Err(status::READ_ONLY);
+        }
         for (i, &b) in data.iter().enumerate() {
             self.write_space(space, (address as i32).wrapping_add(i as i32), b);
         }
@@ -251,9 +282,78 @@ impl v1::Core for Machine {
     fn debug_pc(&self, processor: u32) -> Option<u64> {
         (processor == 0).then_some(self.cpu.pc as u64)
     }
+
+    /// The CPU's sixteen in `REGISTERS`' order, each as the state holds it.
+    fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
+        if processor != 0 {
+            return Err(status::NOT_SUPPORTED);
+        }
+        let (c, f) = (&self.cpu, self.cpu.f as i64);
+        Ok(vec![
+            c.a as i64,
+            f,
+            c.bc() as i64,
+            c.de() as i64,
+            c.hl() as i64,
+            c.sp as i64,
+            c.pc as i64,
+            (f >> 7) & 1,
+            (f >> 6) & 1,
+            (f >> 5) & 1,
+            (f >> 4) & 1,
+            c.ime as i64,
+            c.halted as i64,
+            self.bus.interrupt_enable as i64,
+            self.bus.interrupt_flags as i64,
+            c.cycles,
+        ])
+    }
+
+    /// `count` instructions from `address`, each byte read as `space_read` reads it, decoded by `emusen-sm83`.
+    fn debug_disassemble(&mut self, processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<Instruction>, i32> {
+        if processor != 0 {
+            return Err(status::NOT_SUPPORTED);
+        }
+        if space as usize >= SPACES.len() {
+            return Err(status::NO_SUCH_SPACE);
+        }
+        let mut out = Vec::new();
+        if Machine::space_size(self, space) == 0 {
+            return Ok(out);
+        }
+        let mut pc = address;
+        for _ in 0..count {
+            let opcode = self.read_space(space, pc as i32);
+            let length = emusen_sm83::length_of(opcode);
+            let bytes: Vec<u8> = (0..length as u32).map(|b| self.read_space(space, pc.wrapping_add(b) as i32)).collect();
+            let (low, high) = (bytes.get(1).copied().unwrap_or(0), bytes.get(2).copied().unwrap_or(0));
+            let operand = match length {
+                2 => low as i32,
+                3 => low as i32 | (high as i32) << 8,
+                _ => -1,
+            };
+            let reference = emusen_sm83::classify(opcode, operand, pc as i32).map(|(k, t)| {
+                let kind = match k {
+                    emusen_sm83::Reference::Call => Reference::Call,
+                    emusen_sm83::Reference::Read => Reference::Read,
+                    emusen_sm83::Reference::Write => Reference::Write,
+                };
+                (kind, t as u32)
+            });
+            out.push(Instruction {
+                address: pc,
+                mnemonic: emusen_sm83::mnemonic_of(opcode, low),
+                operands: emusen_sm83::format_operand(opcode, pc as i32, low, high),
+                bytes,
+                reference,
+            });
+            pc = pc.wrapping_add(length as u32);
+        }
+        Ok(out)
+    }
 }
 
-emusen_native::core_exports!(Machine; audio_peek, mutes, rom_patches, debug, debug_stack);
+emusen_native::core_exports!(Machine; audio_peek, mutes, rom_patches, debug, debug_stack, debug_registers, debug_disassemble);
 
 /// `mercuryrt_set_sample_rate` for a machine of the core ABI v1: C#'s `Apu.SetSampleRate`, the division and `Math.Pow`
 /// evaluated by C# so the coefficients are its to the bit (Mercury_Native.md §3.3, EmuSen_CoreAPI.md §26).

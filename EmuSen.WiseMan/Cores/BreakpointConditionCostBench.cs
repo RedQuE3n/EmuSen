@@ -50,6 +50,18 @@ namespace EmuSen.WiseMan.Cores
                 CoreBundle bundle = CoreFactory.Load(path, options: TestCores.NoBattery);
                 return (bundle.Core, bundle.DebugTarget);
             }
+            // MercuryRT through the generic engine the Game Boy switches to, its registers read through DEBUG_REGISTERS - see EmuSen_Backend.md §17.7's P7.
+            if (core == "mercuryrt-v1")
+            {
+                DataStore.OverrideDirectory = Path.Combine(_root, "Home");
+                CoreDiscovery.UseDirectories(null);
+                var mercury = CoreDiscovery.Found.Single(c => c.Info.Id == "mercuryrt");
+                string path = Path.Combine(_root, $"bench{Guid.NewGuid():N}.gb");
+                File.WriteAllBytes(path, SyntheticGbRom.Build(patches: new (int, byte[])[] { (0, new byte[] { 0x21, 0x00, 0xC0, 0x34, 0x18, 0xFD }) }));
+                var v1 = new CoreEngine(mercury.Open()!) { Options = TestCores.NoBattery };
+                v1.LoadRom(path);
+                return (v1, v1.CreateDebugTarget());
+            }
             if (core == "marsrt")
             {
                 string path = Path.Combine(_root, $"bench{Guid.NewGuid():N}.z64");
@@ -71,6 +83,7 @@ namespace EmuSen.WiseMan.Cores
         [Theory]
         [InlineData("moonrt", "8008", "A==0x99", "A")]
         [InlineData("mercuryrt", "0153", "HL==0x1234", "HL")]
+        [InlineData("mercuryrt-v1", "0153", "HL==0x1234", "HL")]
         [InlineData("marsrt", "A400004C", "t0==0", "t0")]
         [InlineData("nephrite", "302", "D2==0", "D2")]
         public void A_conditions_cost_per_hit_is_measured(string core, string address, string condition, string log)

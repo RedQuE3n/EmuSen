@@ -11,6 +11,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 emusen-native = { path = "../../Shared/emusen-native" }
+# The SM83 as text, the decoder DEBUG_DISASSEMBLE answers with and the Game Boy pack shares (EmuSen_Backend.md §17.2 D10).
+emusen-sm83 = { path = "../../Shared/emusen-sm83" }
 
 [profile.release]
 panic = "abort"

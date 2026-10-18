@@ -167,7 +167,7 @@ impl Machine {
         Ok(stop::FRAME)
     }
 
-    /// `MercuryCore.ReadSpace` by number: ROM, VRAM, CARTRAM, WRAM, OAM, HRAM, then CPUBUS through the real decode.
+    /// `MercuryCore.ReadSpace` by number: ROM, VRAM, CARTRAM, WRAM, OAM, HRAM, CPUBUS through the real decode, then the two halves of palette RAM.
     pub fn read_space(&mut self, space: u32, address: i32) -> u8 {
         let bus = &mut self.bus;
         match space {
@@ -184,6 +184,8 @@ impl Machine {
             4 => bus.oam[wrap(address, bus.oam.len())],
             5 => bus.high_ram[wrap(address, bus.high_ram.len())],
             6 => bus.read((address & 0xFFFF) as u16),
+            7 => bus.ppu.bg_palette_ram[wrap(address, bus.ppu.bg_palette_ram.len())],
+            8 => bus.ppu.obj_palette_ram[wrap(address, bus.ppu.obj_palette_ram.len())],
             _ => 0,
         }
     }
@@ -230,6 +232,7 @@ impl Machine {
             4 => 0xA0,
             5 => 0x7F,
             6 => 0x10000,
+            7 | 8 => crate::ppu::PALETTE_RAM_SIZE,
             _ => 0,
         }
     }

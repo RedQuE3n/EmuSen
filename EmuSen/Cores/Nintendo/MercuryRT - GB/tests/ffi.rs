@@ -73,8 +73,9 @@ fn the_patch_table_keeps_the_first_entry_for_each_original_byte() {
 fn a_space_the_machine_does_not_have_is_refused_through_the_core_abi() {
     use emusen_native::core::{Core, status as core_status};
     let mut m = create(0x00, "", &[]).unwrap();
-    assert_eq!(<Machine as Core>::space_size(&m, 7).err(), Some(core_status::NO_SUCH_SPACE));
-    assert_eq!(<Machine as Core>::space_write(&mut m, 7, 0, &[1]).err(), Some(core_status::NO_SUCH_SPACE));
+    assert_eq!(<Machine as Core>::space_size(&m, 9).err(), Some(core_status::NO_SUCH_SPACE));
+    assert_eq!(<Machine as Core>::space_write(&mut m, 9, 0, &[1]).err(), Some(core_status::NO_SUCH_SPACE));
+    assert_eq!(<Machine as Core>::space_write(&mut m, 7, 0, &[1]).err(), Some(core_status::READ_ONLY), "palette RAM is read only");
     <Machine as Core>::space_write(&mut m, 3, 0, &[0x5A]).unwrap();
     assert_eq!(m.bus.wram[0], 0x5A, "WRAM, space 3, takes the write");
 }

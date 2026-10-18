@@ -3218,3 +3218,152 @@ thread 1.0 to 2.6 ms a frame on the RX 6800 across the tiers at 1280 × 800 and 
 unchanged at 1080p (Performance 0.53, Balanced 0.76, Accurate 1.75 ms). The phosphors' tails advance once a game
 frame on every path (§22 there): a window resized or a slider moved no longer moves them on. The handheld's figures
 are `EmuSen_DevicePicture.md` §18.9's to take, with §12.7's.
+
+## 30. A scene change, and the light after it (2026-10-18)
+
+### 30.1 The report
+
+The tester reported that with the filter on, on every game and console, the picture's brightness visibly changes
+within about a second after a new scene appears, and that it does not with the filter off. The reproduction was a
+VenusRT state of *Sailor Moon: Another Story* (English translation), taken on the handheld at WiseMan c922c968: walk
+up through a door, and back down. The handheld's SNES settings were `quality` 2 (**Accurate**, the third of
+`CrtFilter.Quality`'s Performance, Balanced and Accurate), `curvature` 0, `persistence` 0.2, `glare` at its default
+of 0.1 (§25), and SyncToDisplay on.
+
+### 30.2 How it was measured
+
+`CrtSceneProbe` (WiseMan, `EmuSen.WiseMan/Serenity/CrtSceneProbe.cs`) loads a ROM and a state named by environment
+variables, presses buttons on a schedule, keeps every frame the core hands over, and draws them through the filter:
+once through `GameFrameControl`'s real readback path, and once through the chain alone, where each configuration
+may present to a device target first (the device path's call) or render more than once a frame. For each frame it
+writes the mean light of the core's picture and of the filter's output, in linear light, and against a settled frame
+of the same parity the largest change of a 16 × 16 block and of any colour's code value. Nothing runs unless the
+variables are set; the ROM and the state stay outside the repository.
+
+The run, measured on 2026-10-18 on the RX 6800: 700 frames from the state, B for six frames at 100 (the state
+resumes into the game's option menu, which B leaves), up from 200 for 150 frames, down from 450 for 150. The core
+gives 256 × 224 throughout. The game fades its picture out in 16 frames, holds black for about 60, and fades the next
+room in over 16 to 22; the door back into the first room is at frames 518 to 611, and frame 612 is the first that is
+the room whole and still. The output was read at 1920 × 1200 through `GameFrameControl` and at 1600 × 1200 (the
+tube's 4:3 at the handheld's height) through the chain.
+
+### 30.3 The curves
+
+The room's return, frame 612 on. "Against its steady light" is each frame's mean light over that of frame 696 or 695
+(the same parity of the composite signal's phase); the last five columns are the chain alone with one value changed.
+
+| Frame | After the first whole frame | Core's light | Filter off: shown | CRT: shown | CRT against its steady light | Persistence 0 | Glare 0 | Persistence 1 | Balanced | Performance |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 600 | −200 ms | 0.0114 | 0.0094 | 0.00433 | −94.07% | −94.04% | −94.07% | −94.20% | −94.09% | −94.06% |
+| 608 | −67 ms | 0.0810 | 0.0660 | 0.04096 | −43.94% | −43.71% | −43.95% | −44.92% | −43.97% | −43.68% |
+| 612 | 0 | 0.1377 | 0.1123 | 0.07279 | **−0.370%** | 0 | −0.370% | −1.850% | −0.383% | 0 |
+| 614 | +33 ms | 0.1377 | 0.1123 | 0.07284 | −0.301% | 0 | −0.315% | −1.494% | −0.301% | 0 |
+| 616 | +67 ms | 0.1377 | 0.1123 | 0.07287 | −0.260% | 0 | −0.260% | −1.288% | −0.260% | 0 |
+| 620 | +133 ms | 0.1377 | 0.1123 | 0.07292 | −0.192% | 0 | −0.205% | −1.000% | −0.205% | 0 |
+| 628 | +266 ms | 0.1377 | 0.1123 | 0.07297 | −0.123% | 0 | −0.123% | −0.630% | −0.123% | 0 |
+| 636 | +399 ms | 0.1377 | 0.1123 | 0.07301 | −0.068% | 0 | −0.082% | −0.397% | −0.082% | 0 |
+| 644 | +532 ms | 0.1377 | 0.1123 | 0.07303 | −0.041% | 0 | −0.041% | −0.247% | −0.041% | 0 |
+| 652 | +666 ms | 0.1377 | 0.1123 | 0.07305 | −0.014% | 0 | −0.027% | −0.151% | −0.027% | 0 |
+| 668 | +932 ms | 0.1377 | 0.1123 | 0.07306 | 0 | 0 | −0.014% | −0.055% | 0 | 0 |
+| 684 | +1198 ms | 0.1377 | 0.1123 | 0.07306 | 0 | 0 | 0 | −0.014% | 0 | 0 |
+
+The same frames at the tester's settings, the change from the settled picture in finer grain:
+
+| Frame | Largest 16 × 16 block | Largest code value | Colour values that differ at all | Persistence 1: block, code, differ |
+|---|---|---|---|---|
+| 612 | 0.70% | 12 | 8.48% | 2.97%, 34, 28.4% |
+| 616 | 0.54% | 8 | 6.08% | 2.08%, 30, 23.0% |
+| 628 | 0.34% | 4 | 2.92% | 1.10%, 19, 13.6% |
+| 644 | 0.25% | 2 | 0.94% | 0.50%, 9, 5.8% |
+| 668 | 0.10% | 2 | 0.21% | 0.21%, 2, 1.4% |
+| 692 | 0.06% | 1 | 0.01% | 0.05%, 1, 0.06% |
+
+The classroom on the other side of the door gives the same shape: its first whole frame (304) is 0.29% short of where
+it is 60 frames later, before the character walks.
+
+### 30.4 The term, and its time constant
+
+The filter's output does change after the scene appears, for about a second, and only one term does it: with
+persistence 0 every frame from 612 on is its steady light to the last digit, glare 0 changes nothing, and Performance,
+which has no state pass, is steady at once. It is §11.4's phosphor tail, and the shape follows from its arithmetic.
+The light shown is `kept · (E + Σ c (S − E))`, with `kept` chosen so that a held picture is unchanged. After a long
+black, each sum `S` holds only the frame now shown, so the first whole frame of the new scene is drawn at `kept · E`,
+short by the tails' whole share, and climbs to `E` as the sums fill:
+
+- the fast tail, 0.590 a frame, a time constant of 31.6 ms, is gone in about nine frames;
+- the slow tail, 0.945 a frame, a time constant of **295 ms**, falls to 1% of itself in 82 frames, **1.36 s**: the
+  "within about a second";
+- the share, at a persistence `p`, is `p · TailScale · (GreenFast · 1.439 + GreenSlow · 17.18)` = `p · 4.16%` of the
+  green and `p · 3.62%` of the blue, and nothing of the red. At the tester's 0.2: 0.83% of the green, 0.72% of the
+  blue. Weighted by the picture's colours, this room starts 0.370% short; a grey held after white and black in the
+  render test below starts 0.43% short two frames in.
+
+So at the tester's settings the change is about a third of a per cent of the light, falling by half in about
+130 ms and gone in 0.9 s. It leaves 91.5% of the colour values of the first whole frame as they will be and moves the
+rest by at most 12 steps; no 16 × 16 block changes by more than 0.70%. At persistence 1, the model's full strength,
+it is 1.85%, and 2.97% in the most affected block; the change is proportional to the setting, so at the default 0.1
+it is half the tester's.
+
+### 30.5 The paths, and the consolidation
+
+The C# chain and the library's give the same numbers to the last digit; so do a present before the readback and
+three renders a frame, as `EmuSen_DevicePicture.md` §22 requires. The commit before the consolidation, 5f2a006c,
+built in a scratch checkout and run on the same frames, gives the readback path's curve unchanged (0.07287 at frame
+616 on both, where its readback was still Skia's chain, which turned the tails once a game frame) and the library's
+chain at one render a frame unchanged. There, a present followed by a readback, or three renders, decayed the tails
+two or three times as fast (a largest block of 0.52% and 0.43% at frame 612 against 0.70%), which was §22's defect.
+On the device path the handheld draws, one present a frame, both builds advance the tails once a frame. The
+consolidation did not make the change, and did not alter it on the handheld.
+
+### 30.6 Against the sources
+
+The slow tail is longer than any decay the cited data measure. Kuhn's record ends at 2 ms and his fit near 10 ms
+(§3.5); García-Pérez and Peli give a residue "as large as 4% after 20 ms" (§11.4); Sherr's P22 times to 10% are 1.5 to
+6 ms. A 295 ms component is the two-exponential fit to §3.5's extrapolated `1/k` tail over its first thirty frames,
+which §11.4 kept as the only measured shape and rescaled. The sources neither support nor exclude a component that
+long; they say nothing past 20 ms. Its strength is bounded: whatever the frames before, the tails can move the light
+shown by no more than their share of the brighter of the light now and the light they hold, `p · 4.16%` of the green,
+since `kept` normalises the sum and each ratio is below one. No gain at or above one, and no sum left unnormalised, was found: the state pass
+`S ← E + r · S` with `r` 0.590 and 0.945 (`CrtFilter.State`) and its reading (`lightAt` in `CrtFilter.Face` and
+`CrtFilter.Spot`) are as §11.4 states them.
+
+### 30.7 What the measurement leaves
+
+At the tester's settings the filter's own output changes by 0.37% for about a second after a scene change, which this
+measurement finds too small to be the visible change reported, and with persistence 0 it does not change at all.
+Two causes remain open, and neither could be examined here, as the handheld was in use:
+
+- a path in Mistress on the handheld that differs from the readback and device-path calls made here, which the
+  code read for this section (`GameFrameControl.PresentOnDevice`, `SlangRunner.Present` and `Draw`, both chains'
+  feedback) did not show;
+- the display itself. A panel or a television that sets its backlight from the picture's content (AMD's adaptive
+  backlight on an eDP panel, a panel's own CABC, a television's dynamic contrast) changes the brightness over about
+  a second after the content changes, and the filter's picture, darker on average and made of bright stripes on
+  dark gaps, is the kind of content such control reacts to most. The first report of this symptom was on a
+  television, and was then put down to one of its settings.
+
+The test that separates them is the tester's: with persistence at 0 the filter is a function of the frame shown and
+nothing else, so a static picture leaves it unchanged frame after frame. If the brightness still visibly changes a
+second after a scene change with persistence 0, the change is made after the filter.
+
+### 30.8 Options, not taken
+
+Nothing in the filter was changed. If the tester wants the tail itself gone from a scene change:
+
+1. **Keep the model** (no change). On this scene the change is 0.19% at the default 0.1 and 0.37% at 0.2.
+2. **The fast tail alone**: drop the slow exponential and put its weight into the fast one, so a held white still
+   leaves 4% of its green in the first dark frame at persistence 1 (§11.12, question 1). The tail is then gone in
+   about nine frames, 150 ms, inside the 20 ms-to-a-frame window the sources speak to. It changes what Balanced and
+   Accurate model and the shape §11.4 decided, and the render test that requires the green to fall slowly (a tenth
+   frame keeping a quarter of the first) would be rewritten.
+3. **A shorter slow tail**, fitted to the first five frames rather than thirty: a compromise between the two, still
+   beyond the cited data.
+
+### 30.9 Tests
+
+`ScreenFilterRenderTests.A_picture_held_after_a_scene_change_returns_to_its_steady_light_by_the_tails_own_share`,
+on the RX 6800 at the tester's settings: a grey shown after 150 frames of white and 60 of black starts short of the
+same grey held from the start by more than a quarter and no more than the whole of the tails' share (measured 0.43%
+of 0.83%), is within 2% of that share 82 frames on (measured 0.0002%), equals it held (0.0000%), and with
+persistence 0 equals it at once. It passes as the filter stands; it guards the bound of §30.6 against a feedback
+gain or an unnormalised sum, which would break it, and it is the case to change with option 2 or 3.

@@ -531,6 +531,31 @@ namespace EmuSen.WiseMan.Serenity
             Assert.True(third[1] > 0.5 * first[1] && tenth[1] > 0.25 * first[1] && tenth[1] < third[1], $"green falls slowly: {first[1]:F4}, {third[1]:F4}, {tenth[1]:F4}");
         }, default);
 
+        // A picture held after a scene change starts short of its steady light by no more than the tails' share, keeps no part of it once the slow tail has gone, and with persistence off is steady at once - see EmuSen_CRT.md §30.
+        [Fact]
+        public Task A_picture_held_after_a_scene_change_returns_to_its_steady_light_by_the_tails_own_share() => Session.Dispatch(() =>
+        {
+            if (CrtDevice.Value is null) return;
+            byte[] white = Grey(256, 224, 1), black = Grey(256, 224, 0), grey = Grey(256, 224, 0.5);
+            (string, float)[] tester = { ("quality", 2f), ("level", 0f), ("maskLimit", 1f), ("curvature", 0f), ("persistence", 0.2f) };
+            var (left, top, width, height) = PictureIn(640, 480);
+            double Light(IEnumerable<byte[]> frames, params (string, float)[] set) => Draw("SNES", 256, 224, 640, 480, frames.ToArray(), set)!.Luminance(left, top, width, height);
+            IEnumerable<byte[]> After(int held) => Enumerable.Repeat(white, 150).Concat(Enumerable.Repeat(black, 60)).Concat(Enumerable.Repeat(grey, held));
+
+            CrtFilter.Tails t = CrtFilter.Tails.For(false);
+            double share = 0.2 * CrtFilter.TailScale * (t.GreenFast * t.Fast / (1 - t.Fast) + t.GreenSlow * t.Slow / (1 - t.Slow));
+            int gone = (int)Math.Ceiling(Math.Log(0.01) / Math.Log(t.Slow));
+            double steady = Light(Enumerable.Repeat(grey, 300), tester);
+            double first = 1 - Light(After(2), tester) / steady, later = 1 - Light(After(gone), tester) / steady, settled = 1 - Light(After(300), tester) / steady;
+            Assert.True(first > 0.25 * share && first <= share, $"the first frames start short by the tails' share, {share:P3} at most: {first:P3}");
+            Assert.True(Math.Abs(later) <= 0.02 * share + 0.0001, $"{gone} frames on, the slow tail has gone: {later:P4}");
+            Assert.True(Math.Abs(settled) <= 0.0001, $"held, the picture is its steady light: {settled:P4}");
+
+            (string, float)[] off = With(tester, ("persistence", 0f));
+            double still = Light(Enumerable.Repeat(grey, 2), off);
+            Assert.True(Math.Abs(1 - Light(After(2), off) / still) <= 0.0001, "with persistence off nothing of the scene before is kept");
+        }, default);
+
         // A one-pixel white line's red and blue are drawn either side of its green, by the screen's stated error at the centre and by more toward the edge.
         [Fact]
         public Task Red_and_blue_land_either_side_of_green_by_the_screen_s_convergence_error() => Session.Dispatch(() =>

@@ -7,7 +7,10 @@ namespace EmuSen.WiseMan.Fixtures
     // Mercury_RealCartridges.md §1.
     public static class CommercialRomLibrary
     {
-        public static string Root => Path.Combine(DianaShSandbox.InstallDirectory, "TestRoms");
+        // A folder that overrides the install's TestRoms, read in place and never written, as a worktree has none of its own.
+        public const string Variable = "EMUSEN_COMMERCIAL_ROMS";
+
+        public static string Root => Environment.GetEnvironmentVariable(Variable) is { Length: > 0 } folder ? folder : Path.Combine(DianaShSandbox.InstallDirectory, "TestRoms");
 
         public static IReadOnlyList<string> Find(params string[] extensions)
         {

@@ -78,6 +78,32 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(MercuryLayouts.StateVersion, rust.Field("Version"));
         }
 
+        // Each board with each RAM size a header can name, on each console, as a commercial cartridge may be any of them; the commercial classes read through these.
+        public static TheoryData<byte, byte, byte> EveryShape
+        {
+            get
+            {
+                var data = new TheoryData<byte, byte, byte>();
+                foreach (byte cgb in new byte[] { 0x00, 0xC0 })
+                {
+                    foreach (var (plain, withRam) in new (byte, byte)[] { (0x00, 0x08), (0x01, 0x03), (0x11, 0x13), (0x19, 0x1B) })
+                        foreach (byte code in new byte[] { 0x00, 0x02, 0x03, 0x04, 0x05 })
+                            data.Add(code == 0 ? plain : withRam, code, cgb);
+                    data.Add(0x06, 0x00, cgb);
+                }
+                return data;
+            }
+        }
+
+        [Theory]
+        [MemberData(nameof(EveryShape))]
+        public void Every_board_ram_size_and_console_has_a_committed_listing(byte kind, byte ram, byte cgb)
+        {
+            using MercuryRig rust = MercuryRig.Create(SyntheticGbRom.Build(romBanks: 4, cartridgeType: kind, ramSizeCode: ram, cgbFlag: cgb));
+            rust.RunFrame();
+            Assert.Equal(MercuryLayouts.StateVersion, rust.Field("Version"));
+        }
+
         [Fact]
         public void The_listings_describe_the_state_version_mercuryrt_writes()
         {

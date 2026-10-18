@@ -10,7 +10,7 @@ namespace EmuSen.Crystal.Systems.Nes
         public const string Id = "nes";
 
         // The space names every NES engine publishes, so a cheat or a view means the same memory on each.
-        public const string Ram = "RAM", PrgRam = "PRGRAM", Chr = "CHR", Ciram = "CIRAM", Oam = "OAM", Palette = "PALETTE", CpuBus = "CPUBUS";
+        public const string Ram = "RAM", PrgRam = "PRGRAM", Chr = "CHR", Ciram = "CIRAM", Oam = "OAM", Palette = "PALETTE", CpuBus = "CPUBUS", PpuRegisters = "PPUREG", ApuRegisters = "APUREG";
 
         public const int Ports = 2;
 

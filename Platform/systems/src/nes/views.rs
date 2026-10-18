@@ -137,3 +137,34 @@ pub fn decode_tile_pixels(memory: &mut dyn Memory, space: &str, address: i32, bp
 
 /// Where each vector's pointer lives.
 pub const VECTORS: [(&str, i32, i32, &str); 3] = [("NMI", NMI_VECTOR, 2, ""), ("RESET", RESET_VECTOR, 2, ""), ("IRQ/BRK", IRQ_VECTOR, 2, "")];
+
+/// Where a CPU address lies, for the ranges the console fixes: the space, the offset in it and whether a debugger reads
+/// it there; `None` for `$8000` and up, which the board banks (EmuSen_Backend.md §19.3.3, D13).
+pub fn resolve_physical(cpu_address: i32) -> Option<(&'static str, i32, bool)> {
+    match cpu_address {
+        a if a < 0x2000 => Some(("RAM", a & 0x07FF, true)),
+        a if a < 0x4000 => Some(("PPUREG", a & 0x07, false)),
+        a if a < 0x4020 => Some(("APUREG", a - 0x4000, false)),
+        a if a < 0x8000 => Some(("PRGRAM", a & 0x1FFF, true)),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_physical;
+
+    // The fixed ranges, their mirrors and their edges, and nothing for the banked half.
+    #[test]
+    fn the_fixed_ranges_resolve_and_the_banked_half_does_not() {
+        assert_eq!(resolve_physical(0x0000), Some(("RAM", 0, true)));
+        assert_eq!(resolve_physical(0x1FFF), Some(("RAM", 0x07FF, true)));
+        assert_eq!(resolve_physical(0x2000), Some(("PPUREG", 0, false)));
+        assert_eq!(resolve_physical(0x3FFF), Some(("PPUREG", 7, false)));
+        assert_eq!(resolve_physical(0x4015), Some(("APUREG", 0x15, false)));
+        assert_eq!(resolve_physical(0x4020), Some(("PRGRAM", 0x0020, true)));
+        assert_eq!(resolve_physical(0x7FFF), Some(("PRGRAM", 0x1FFF, true)));
+        assert_eq!(resolve_physical(0x8000), None);
+        assert_eq!(resolve_physical(0xFFFF), None);
+    }
+}

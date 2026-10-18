@@ -11,6 +11,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 emusen-native = { path = "../../Shared/emusen-native" }
+# The 6502 instruction set as text, the NES pack disassembling with the same table (EmuSen_Backend.md §21).
+emusen-6502 = { path = "../../Shared/emusen-6502" }
 
 # A build of seconds, not minutes, depends on the CPU's bus cycle staying out of line - see Moon_Native.md §8.6.
 [profile.release]

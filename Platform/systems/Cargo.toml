@@ -18,3 +18,5 @@ emusen-n64-pak = { path = "../../EmuSen/Cores/Shared/emusen-n64-pak" }
 emusen-mcd-bram = { path = "../../EmuSen/Cores/Shared/emusen-mcd-bram" }
 # The MIPS instruction set, for the VR4300's disassembly (EmuSen_Backend.md F8).
 emusen-mips = { path = "../../EmuSen/Cores/Shared/emusen-mips" }
+# The 6502 instruction set as text, which MoonRT disassembles with too (EmuSen_Backend.md §21).
+emusen-6502 = { path = "../../EmuSen/Cores/Shared/emusen-6502" }

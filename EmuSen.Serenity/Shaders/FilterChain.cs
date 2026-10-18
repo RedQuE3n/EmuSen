@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using SkiaSharp;
@@ -20,21 +21,19 @@ namespace EmuSen.Serenity.Shaders
         private SKSurface?[] _earlier = Array.Empty<SKSurface?>();
         private bool _built, _newFrame;
 
-        // A frame drawn at a whole multiple of the console's picture, brought back to it: each pixel the mean of the square drawn for it - see EmuSen_CRT.md §16.
-        internal const string ReduceSksl = @"
-uniform shader source;
-uniform float by;
-half4 main(float2 coord) {
-    float2 corner = floor(coord) * by;
-    float4 sum = float4(0.0);
-    for (int j = 0; j < 8; j++) {
-        for (int i = 0; i < 8; i++) {
-            if (float(i) < by && float(j) < by) sum += source.eval(corner + float2(float(i) + 0.5, float(j) + 0.5));
+        // The passes' GLSL in SkSL's words, so that Skia draws the converted text until this chain is removed - see EmuSen_DevicePicture.md §20.
+        internal static string Sksl(string glsl)
+        {
+            glsl = Regex.Replace(glsl, @"\bvec4(\s+)filter_main(\s*)\(", "half4$1main$2(");
+            glsl = Regex.Replace(glsl, @"\buniform([ \t]+)sampler2D\b", "uniform$1shader");
+            glsl = Regex.Replace(glsl, @"\b(\w+)_eval\(", "$1.eval(");
+            glsl = Regex.Replace(glsl, @"\bvec([234])\b", "float$1");
+            glsl = Regex.Replace(glsl, @"\bmat([234])\b", "float$1x$1");
+            glsl = Regex.Replace(glsl, @"\bivec([234])\b", "int$1");
+            return Regex.Replace(glsl, @"\bbvec([234])\b", "bool$1");
         }
-    }
-    return half4(sum / (by * by));
-}";
-        public const int MostRowsToALine = 8;
+
+        public const int MostRowsToALine = BuiltInPreset.MostRowsToALine;
         // The chain's own, since a builder's disposal takes its effect with it.
         private SKRuntimeEffect? _reduceEffect;
         private SKRuntimeShaderBuilder? _reduceBuilder;
@@ -149,7 +148,7 @@ half4 main(float2 coord) {
             var effects = new SKRuntimeEffect[passes.Count];
             for (int i = 0; i < passes.Count; i++)
             {
-                effects[i] = SKRuntimeEffect.CreateShader(passes[i].Sksl, out string errors);
+                effects[i] = SKRuntimeEffect.CreateShader(Sksl(passes[i].Glsl), out string errors);
                 if (effects[i] is not null) continue;
                 for (int k = 0; k < i; k++) effects[k].Dispose();
                 throw new InvalidOperationException($"Pass {i} of the '{Filter.Name}' filter did not compile: {errors}");
@@ -367,7 +366,7 @@ half4 main(float2 coord) {
                 var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
                 _reduced = (_context is not null ? SKSurface.Create(_context, false, info) : null) ?? SKSurface.Create(info);
             }
-            _reduceEffect ??= SKRuntimeEffect.CreateShader(ReduceSksl, out string errors) ?? throw new InvalidOperationException($"The reducing pass did not compile: {errors}");
+            _reduceEffect ??= SKRuntimeEffect.CreateShader(Sksl(BuiltInPreset.ReduceGlsl), out string errors) ?? throw new InvalidOperationException($"The reducing pass did not compile: {errors}");
             _reduceBuilder ??= new SKRuntimeShaderBuilder(_reduceEffect);
             SKShader source = original.ToShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, Nearest);
             made.Add(source);

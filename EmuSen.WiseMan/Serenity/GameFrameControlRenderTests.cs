@@ -244,7 +244,7 @@ namespace EmuSen.WiseMan.Serenity
         // Verifies the local-matrix scale (GameFrameControl.cs, replacing
         // the old offscreen-upscale-surface pass - see this file's own
         // header comment) puts the shader's "coord" in the right place:
-        // BuiltInShaders.ScanlinesSksl darkens odd output-resolution rows
+        // BuiltInShaders.ScanlinesGlsl darkens odd output-resolution rows
         // by exactly 0.78, leaving even rows untouched. A 1:4 upscale (16
         // native -> 64 window) makes every native pixel exactly 4 output
         // rows tall, so output rows 0-3 must be full brightness and rows

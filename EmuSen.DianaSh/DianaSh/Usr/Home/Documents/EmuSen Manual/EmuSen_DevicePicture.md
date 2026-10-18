@@ -139,7 +139,7 @@ can `#reference` a built-in's file, which is how the built-in CRT stacks with an
    `BuiltInShaders.cs` is rewritten in GLSL, the translation's preamble and rewrites dropped, and the Skia path
    (`FilterChain`, the runtime effects of `GameFrameControl`) removed. The conversion is proven the cheap and exact
    way: every pass of every variant, preprocessed by glslang from the old text with the preamble and from the new text
-   without it, gives the same tokens. Removing the Skia path is Q2 (§10).
+   without it, gives the same tokens. Removing the Skia path is Q2 (§10). *Done 2026-10-17: §20 and §21.*
 
 ### 3.2 What each name means on the chain
 
@@ -1177,3 +1177,59 @@ chain read back. Changed, each for a reason of the chain's own:
   a canvas with no GPU; read back, it is drawn on any canvas, and the case is retired;
 - the slider case of the Shaders window and the Simple CRT repeat case wait for the chain's build before their first
   frame, as `ShaderBench.Picture` always did for Skia's.
+
+## 20. Step (b), second stage: the built-ins' text in Vulkan GLSL (2026-10-17)
+
+### 20.1 What was done
+
+**The text converted.** The SkSL in `CrtFilter.cs`, `CrtFilters.cs`, `HandheldFilters.cs` and `BuiltInShaders.cs` is
+Vulkan GLSL now. It was converted once, by a tool that rewrote only the C# files' string literals, the holes of an
+interpolated string left alone (`~/.cache/emusen/probe/shader-consolidate/tools/sksl2glsl.py`): `half4 main(` became
+`vec4 filter_main(`, `uniform shader x;` became `uniform sampler2D x;`, `x.eval(` became `x_eval(`, and SkSL's type
+names became GLSL's (`float2` `vec2`, `half` `float`, `float3x3` `mat3`, and the rest), which are the translation's
+own rewrites done once to the source instead of at every build. The reducing pass of `EmuSen_CRT.md` §16 moved from
+Skia's chain into `BuiltInPreset` as `ReduceGlsl`. `FilterPass.Sksl` is `FilterPass.Glsl`, and the members named for
+SkSL are named for GLSL.
+
+**What a pass's text is.** Fragment code in Vulkan GLSL 4.50, with no block, binding or stage of its own: its inputs
+are its `uniform` declarations, a `sampler2D` for each child, read with `name_eval(p)` at a pixel coordinate, and a
+`float`, `vec2` or `vec4` for each value; its entry is `vec4 filter_main(vec2 coord)`, called with the pass's pixel
+centre. `BuiltInPreset` still writes what makes it a slang pass, because that is the chain's interface and not a
+translation: each value as a member of the pass's block under the semantic §3.2 names, each child as a sampler with
+its `_eval` reading it by fetch or linearly, the vertex stage, and the `main` that writes the colour. The preamble of
+type names, the rewrite of `.eval` and the renaming of `main` are gone.
+
+**For this step only**, Skia's chain reads the GLSL back in SkSL's words (`FilterChain.Sksl`, the same rewrites the
+other way), so that the comparison tests still ran against the converted text; §21 removes it with the chain.
+
+**One refusal kept.** Skia's chain refused a pass that reads `feedback` without being a feedback pass; the
+translation bound it to the pass's own last output instead, silently. It is refused by name now, as before.
+
+### 20.2 Proven by tokens, and by SPIR-V
+
+Every pass of every variant was written from the old text through the translation (at 5f2a006c, before §19, kept on
+disk) and from the new text without it, and the two compared: the 2,316 variants of `ShaderNamesTests`' enumeration,
+widened (each console a filter suits and none; the defaults; each structural parameter at each of its values; each of
+those at each pair of tier and signal; the CRT brought back by 2, 3, 4 and 8 at each tier; the simple effects at both
+samplings), 15,142 passes and 406 distinct pairs of texts. For each pair, each stage as the chain reads it (split by
+`SlangSource`) was preprocessed by glslang, through the Shaderc the chain compiles with, and its output split into
+tokens; and each stage was compiled to SPIR-V by the chain's compiler with the chain's options.
+
+| Check | Result |
+|---|---|
+| Tokens after glslang's preprocessor | 450,163 compared; every stage's sequence the same, with one name changed throughout: the entry, `sksl_main` before and `filter_main` now (no other text held the new name) |
+| SPIR-V | 812 of 812 stages byte for byte the same |
+| A positive control: Scanlines' 0.78 written 0.79 | 4 failures: both samplings' fragment stage, by its tokens and by its SPIR-V |
+
+### 20.3 The pictures
+
+`BuiltInGoldenTests`' 125 hashes, recorded before §19 (§19.4), are the same after the conversion, and the bench's
+pictures (the CRT at each tier at 1080p, read back and as a preset) are the same in the build before §19, after it and
+after this step. The SPIR-V being the same, nothing else was expected.
+
+### 20.4 What a tier costs on the device path
+
+The passes are the device path's GPU work and the same programs before and after. Measured 2026-10-17 at 1920 × 1080
+(the bench of §19.3, three rounds of 300 frames), GPU milliseconds of the passes a frame: Performance 0.53 at
+5f2a006c, 0.55 after §19, 0.53 after this step; Balanced 0.77, 0.83, 0.76; Accurate 1.76, 1.80, 1.75. **Unchanged**,
+the differences inside the rounds' own spread and of no consistent sign.

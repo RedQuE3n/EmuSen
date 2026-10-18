@@ -454,12 +454,12 @@ namespace EmuSen.Serenity
 
             string sksl = effect switch
             {
-                ShaderEffect.Scanlines => BuiltInShaders.ScanlinesSksl,
-                ShaderEffect.Crt => BuiltInShaders.CrtSksl,
+                ShaderEffect.Scanlines => BuiltInShaders.ScanlinesGlsl,
+                ShaderEffect.Crt => BuiltInShaders.CrtGlsl,
                 _ => throw new ArgumentOutOfRangeException(nameof(effect), effect, "No shader source for this effect."),
             };
 
-            SKRuntimeEffect compiled = SKRuntimeEffect.CreateShader(sksl, out string errors);
+            SKRuntimeEffect compiled = SKRuntimeEffect.CreateShader(FilterChain.Sksl(sksl), out string errors);
             if (compiled == null)
             {
                 throw new InvalidOperationException($"Failed to compile the '{effect}' SkSL shader: {errors}");

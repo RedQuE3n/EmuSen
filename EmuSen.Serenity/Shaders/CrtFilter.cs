@@ -289,10 +289,10 @@ namespace EmuSen.Serenity.Shaders
                     new FilterPass(Face(r), PassScale.Viewport) { Linear = new[] { "gun" } },
                 }.OfType<FilterPass>().ToArray();
             var signal = new PassSize(PassAxis.Fixed, r.Samples);
-            FilterPass Line(string sksl, string name, bool feedback = false, params string[] linear) =>
-                new(sksl, PassScale.Source) { Width = signal, Float = true, Name = name, Feedback = feedback, Linear = linear };
-            FilterPass Small(string sksl, string name, params string[] linear) =>
-                new(sksl, PassScale.Source) { Width = PassSize.Fixed(GlareWidth), Height = PassSize.Fixed(GlareHeight), Float = true, Name = name, Linear = linear };
+            FilterPass Line(string glsl, string name, bool feedback = false, params string[] linear) =>
+                new(glsl, PassScale.Source) { Width = signal, Float = true, Name = name, Feedback = feedback, Linear = linear };
+            FilterPass Small(string glsl, string name, params string[] linear) =>
+                new(glsl, PassScale.Source) { Width = PassSize.Fixed(GlareWidth), Height = PassSize.Fixed(GlareHeight), Float = true, Name = name, Linear = linear };
 
             var passes = new List<FilterPass>();
             if (colours is not null) passes.Add(colours);
@@ -326,7 +326,7 @@ float erf1(float x) {
     return x < 0.0 ? -y : y;
 }
 float cdf(float x) { return 0.5 + 0.5 * erf1(x * 0.70710678); }
-float3 cdf3(float3 x) { return float3(cdf(x.r), cdf(x.g), cdf(x.b)); }
+vec3 cdf3(vec3 x) { return vec3(cdf(x.r), cdf(x.g), cdf(x.b)); }
 ";
 
         // The tube's transfer in BT.1886's form, with the white at 1 and the black at the measured ratio.
@@ -334,11 +334,11 @@ float3 cdf3(float3 x) { return float3(cdf(x.r), cdf(x.g), cdf(x.b)); }
 uniform float gamma;
 uniform float contrast;
 uniform float brightness;
-float3 light(float3 v) {
+vec3 light(vec3 v) {
     float lb = pow(" + N(BlackLevel) + @", 1.0 / gamma);
     float b = lb / (1.0 - lb);
     float a = pow(1.0 - lb, gamma);
-    return a * pow(max(contrast * v + brightness + b, float3(0.0)), float3(gamma));
+    return a * pow(max(contrast * v + brightness + b, vec3(0.0)), vec3(gamma));
 }
 ";
 
@@ -382,15 +382,15 @@ float palSwitch(float row) {
 
         // The PPU's signal at a phase step, and its colour averaged over a whole cycle, from the frame before the palette - see EmuSen_CRT.md §22.
         private static string Ppu(bool pal) => @"
-uniform shader raw;
-uniform float2 rawSize;
-float2 ppuLevels(float row, float hue) {
+uniform sampler2D raw;
+uniform vec2 rawSize;
+vec2 ppuLevels(float row, float hue) {
     float lo = row < 0.5 ? " + N(PpuLevel(PpuLow[0])) + " : row < 1.5 ? " + N(PpuLevel(PpuLow[1])) + " : row < 2.5 ? " + N(PpuLevel(PpuLow[2])) + " : " + N(PpuLevel(PpuLow[3])) + @";
     float hi = row < 0.5 ? " + N(PpuLevel(PpuHigh[0])) + " : row < 1.5 ? " + N(PpuLevel(PpuHigh[1])) + " : row < 2.5 ? " + N(PpuLevel(PpuHigh[2])) + " : " + N(PpuLevel(PpuHigh[3])) + @";
-    if (hue > 13.5) return float2(0.0);
+    if (hue > 13.5) return vec2(0.0);
     if (hue < 0.5) lo = hi;
     if (hue > 12.5) hi = lo;
-    return float2(lo, hi);
+    return vec2(lo, hi);
 }
 bool inPhase(float hue, float p) { return mod(hue + p, 12.0) < 6.0; }
 " + (pal ? @"// The 2C07 makes PAL's switch by pairing its oscillators, k with 5 - k, on the lines whose V is inverted; its red and green bits change places.
@@ -398,22 +398,22 @@ float osc(float k, float s) { return s < 0.0 ? mod(5.0 - k, 12.0) : k; }
 float ppuAt(float colour, float emphasis, float p, float s) {
     float hue = mod(colour, 16.0);
     float row = floor(colour / 16.0);
-    float2 levels = ppuLevels(row, hue);
+    vec2 levels = ppuLevels(row, hue);
     float v = inPhase(hue > 0.5 && hue < 12.5 ? osc(hue, s) : hue, p) ? levels.y : levels.x;
     bool dim = (mod(floor(emphasis / 2.0), 2.0) > 0.5 && inPhase(osc(0.0, s), p)) || (mod(emphasis, 2.0) > 0.5 && inPhase(osc(4.0, s), p)) || (emphasis > 3.5 && inPhase(osc(8.0, s), p));
 " : @"float ppuAt(float colour, float emphasis, float p) {
     float hue = mod(colour, 16.0);
     float row = floor(colour / 16.0);
-    float2 levels = ppuLevels(row, hue);
+    vec2 levels = ppuLevels(row, hue);
     float v = inPhase(hue, p) ? levels.y : levels.x;
     bool dim = (mod(emphasis, 2.0) > 0.5 && inPhase(0.0, p)) || (mod(floor(emphasis / 2.0), 2.0) > 0.5 && inPhase(4.0, p)) || (emphasis > 3.5 && inPhase(8.0, p));
 ") + @"    return dim ? (" + N(PpuAttenuation) + " * (v * " + N(PpuIre100) + " + " + N(PpuBlack) + ") - " + N(PpuBlack) + ") / " + N(PpuIre100) + @" : v;
 }
-float2 ppuPixel(float2 at) {
-    half4 c = raw.eval(at);
-    return float2(floor(c.r * 255.0 + 0.5), floor(c.g * 255.0 + 0.5));
+vec2 ppuPixel(vec2 at) {
+    vec4 c = raw_eval(at);
+    return vec2(floor(c.r * 255.0 + 0.5), floor(c.g * 255.0 + 0.5));
 }
-float3 ppuRgb(float2 pixel" + (pal ? ", float s" : "") + @") {
+vec3 ppuRgb(vec2 pixel" + (pal ? ", float s" : "") + @") {
     float y = 0.0;
     float u = 0.0;
     float v = 0.0;
@@ -427,10 +427,10 @@ float3 ppuRgb(float2 pixel" + (pal ? ", float s" : "") + @") {
         v += level * (sin(b) - sin(a)) / 3.14159265;
     }
     float skew = " + N(PpuRowSkewDegrees * Math.PI / 180) + @" * floor(pixel.x / 16.0)" + (pal ? " * s" : "") + @";
-    float2 uv = " + N(pal ? PpuChromaGainPal : PpuChromaGain) + @" * float2(u * cos(skew) - v * sin(skew), u * sin(skew) + v * cos(skew));
+    vec2 uv = " + N(pal ? PpuChromaGainPal : PpuChromaGain) + @" * vec2(u * cos(skew) - v * sin(skew), u * sin(skew) + v * cos(skew));
     float ry = uv.y / 0.877;
     float by = uv.x / 0.492;
-    return float3(y + ry, y - (0.299 * ry + 0.114 * by) / 0.587, y + by);
+    return vec3(y + ry, y - (0.299 * ry + 0.114 * by) / 0.587, y + by);
 }
 ";
 
@@ -439,21 +439,21 @@ float3 ppuRgb(float2 pixel" + (pal ? ", float s" : "") + @") {
 
         // Each pixel's colour from the PPU's levels where the raw frame is handed over, the frame's own otherwise; on PAL the row's skew turns each line the way its switch decodes it.
         private static string PpuColours(Resolved r) => @"
-uniform shader original;
+uniform sampler2D original;
 " + Ppu(r.Pal) + (r.Pal ? Constants(r) + Phase : "") + @"
-half4 main(float2 coord) {
-    if (rawSize.x < 0.5) return original.eval(coord);
-    return half4(ppuRgb(ppuPixel(coord)" + (r.Pal ? ", palSwitch(floor(coord.y))" : "") + @"), 1.0);
+vec4 filter_main(vec2 coord) {
+    if (rawSize.x < 0.5) return original_eval(coord);
+    return vec4(ppuRgb(ppuPixel(coord)" + (r.Pal ? ", palSwitch(floor(coord.y))" : "") + @"), 1.0);
 }";
 
         // The console's picture through its encoder's band limits, each pixel a box in time under a Gaussian - see EmuSen_CRT.md §11.3.
         private static string Encode(Resolved r, bool ppu) => (@"
-uniform shader original;
-" + (ppu ? "uniform shader colours;\n" + (r.Signal == Signal.Composite ? Ppu(r.Pal) : "uniform float2 rawSize;\n") : "") + @"
-uniform float2 originalSize;
-uniform float2 outputSize;
+uniform sampler2D original;
+" + (ppu ? "uniform sampler2D colours;\n" + (r.Signal == Signal.Composite ? Ppu(r.Pal) : "uniform vec2 rawSize;\n") : "") + @"
+uniform vec2 originalSize;
+uniform vec2 outputSize;
 " + Constants(r) + Functions + (r.Signal == Signal.Rgb ? Transfer : Phase) + @"
-half4 main(float2 coord) {
+vec4 filter_main(vec2 coord) {
     float width = originalSize.x;
     float x = coord.x / outputSize.x * width;
     float row = floor(coord.y) + 0.5;
@@ -464,45 +464,45 @@ half4 main(float2 coord) {
         float level = 0.0;
         for (int j = 0; j < " + PpuLooks(r) + @"; j++) {
             float at = x0 + (float(j) + 0.5) / " + PpuLooks(r) + @".0 * dx;
-            float2 pixel = ppuPixel(float2(floor(at) + 0.5, row));
+            vec2 pixel = ppuPixel(vec2(floor(at) + 0.5, row));
             float q = 12.0 * (at * cyclesAcross / width + fract(floor(coord.y) * phaseLine) + mod(frameCount, 2.0) * phaseFrame) + " + (r.Pal ? N(PpuPalAxisStep) : "10.0") + " + floor(pixel.x / 16.0) * " + N(PpuRowSkewDegrees / 30) + @";
             level += ppuAt(pixel.x, pixel.y, floor(mod(q, 12.0))" + (r.Pal ? ", palSwitch(floor(coord.y))" : "") + ") / " + PpuLooks(r) + @".0;
         }
-        return half4(level, 0.0, 0.0, 1.0);
+        return vec4(level, 0.0, 0.0, 1.0);
     }
 " : "") + @"
     float rate = width / activeUs;
     float sy = 0.132532 * rate * " + (r.Signal == Signal.Rgb ? "sqrt(1.0 / (lumaMHz * lumaMHz) + " + N(1 / (r.Screen.VideoMegahertz * r.Screen.VideoMegahertz)) + ")" : "(1.0 / lumaMHz)") + @";
     float sc = 0.132532 / chromaMHz * rate;
     float first = floor(x);
-    float3 wide = float3(0.0);
-    float3 narrow = float3(0.0);
+    vec3 wide = vec3(0.0);
+    vec3 narrow = vec3(0.0);
     for (int i = -4; i <= 4; i++) {
         float k = first + float(i);
         if (k < 0.0 || k >= width) continue;
-        float3 rgb = " + (ppu ? "(rawSize.x > 0.5 ? colours.eval(float2(k + 0.5, row)) : original.eval(float2(k + 0.5, row))).rgb" : "original.eval(float2(k + 0.5, row)).rgb") + @";
-        float y = dot(rgb, float3(0.299, 0.587, 0.114));
+        vec3 rgb = " + (ppu ? "(rawSize.x > 0.5 ? colours_eval(vec2(k + 0.5, row)) : original_eval(vec2(k + 0.5, row))).rgb" : "original_eval(vec2(k + 0.5, row)).rgb") + @";
+        float y = dot(rgb, vec3(0.299, 0.587, 0.114));
         float wy = cdf((k + 1.0 - x) / sy) - cdf((k - x) / sy);
         float wc = cdf((k + 1.0 - x) / sc) - cdf((k - x) / sc);
 " + (r.Signal == Signal.Rgb ? @"
         wide += wy * rgb;
     }
-    return half4(light(wide), 1.0);
+    return vec4(light(wide), 1.0);
 }" : @"
         wide.x += wy * y;
-        narrow += wc * float3(0.0, 0.492 * (rgb.b - y), 0.877 * (rgb.r - y));
+        narrow += wc * vec3(0.0, 0.492 * (rgb.b - y), 0.877 * (rgb.r - y));
     }
     float angle = 6.2831853 * phaseAt(floor(coord.x), floor(coord.y), outputSize.x);
     float c = narrow.y * sin(angle) + " + (r.Pal ? "palSwitch(floor(coord.y)) * " : "") + @"narrow.z * cos(angle);
-" + (r.Signal == Signal.Composite ? "    return half4(wide.x + c, 0.0, 0.0, 1.0);\n}" : "    return half4(wide.x, c, 0.0, 1.0);\n}")));
+" + (r.Signal == Signal.Composite ? "    return vec4(wide.x + c, 0.0, 0.0, 1.0);\n}" : "    return vec4(wide.x, c, 0.0, 1.0);\n}")));
 
         // The receiver's first half: luma and chroma separated by a notch or a two-line comb, and chroma demodulated - see EmuSen_CRT.md §11.3.
         private static string Separate(Resolved r, IReadOnlyDictionary<string, float> values, bool ppu)
         {
             double theta = r.Line.PhaseLine * 2 * Math.PI, fr = (1 - Math.Cos(theta)) / 2, fi = Math.Sin(theta) / 2, gain = fr * fr + fi * fi;
             bool comb = r.Signal == Signal.Composite && r.Decoder == Decoder.Comb, trap = r.Signal == Signal.Composite && r.Decoder == Decoder.Notch;
-            string read = r.Signal == Signal.SVideo ? "source.eval(float2(x + 0.5, row + 0.5)).g" : "source.eval(float2(x + 0.5, row + 0.5)).r";
-            string above = "(row < 1.0 ? 0.0 : source.eval(float2(x + 0.5, row - 0.5)).r)";
+            string read = r.Signal == Signal.SVideo ? "source_eval(vec2(x + 0.5, row + 0.5)).g" : "source_eval(vec2(x + 0.5, row + 0.5)).r";
+            string above = "(row < 1.0 ? 0.0 : source_eval(vec2(x + 0.5, row - 0.5)).r)";
 
             // The loop reaches as far as the longer window does on this console, and no further.
             int reach = (int)Math.Ceiling(Math.Max(r.ChromaCycles, 2) * r.Samples / r.Line.CyclesAcross / 2);
@@ -513,20 +513,20 @@ half4 main(float2 coord) {
             {
                 double[] taps = TrapTaps(r.Samples / r.Line.ActiveMicroseconds, r.Subcarrier);
                 for (int j = 0; j < taps.Length; j++)
-                    band.Append(j == 0 ? "    " : $"    if (s >= {j}.0) ").Append($"band += {N(taps[j])} * source.eval(float2(s - {j}.0 + 0.5, row + 0.5)).r;\n");
+                    band.Append(j == 0 ? "    " : $"    if (s >= {j}.0) ").Append($"band += {N(taps[j])} * source_eval(vec2(s - {j}.0 + 0.5, row + 0.5)).r;\n");
             }
             return @"
-uniform shader source;
-uniform float2 inputSize;
-" + (ppu && r.Signal == Signal.Composite ? "uniform float2 rawSize;\n" : "") + Constants(r) + Phase + @"
-half4 main(float2 coord) {
+uniform sampler2D source;
+uniform vec2 inputSize;
+" + (ppu && r.Signal == Signal.Composite ? "uniform vec2 rawSize;\n" : "") + Constants(r) + Phase + @"
+vec4 filter_main(vec2 coord) {
     float s = floor(coord.x);
     float row = floor(coord.y);
     float perCycle = inputSize.x / cyclesAcross;
     float chromaHalf = " + N(r.ChromaCycles) + @" * perCycle * 0.5;
     float notchHalf = perCycle;
-    float2 chroma = float2(0.0);
-    float2 notch = float2(0.0);
+    vec2 chroma = vec2(0.0);
+    vec2 notch = vec2(0.0);
     float chromaSum = 0.0;
     float notchSum = 0.0;
     for (int j = -" + reach + "; j <= " + reach + @"; j++) {
@@ -535,7 +535,7 @@ half4 main(float2 coord) {
         if (x < 0.0 || x >= inputSize.x || t >= max(chromaHalf, notchHalf)) continue;
         float v = " + (comb ? $"0.5 * ({read} - {above})" : read) + @";
         float angle = 6.2831853 * phaseAt(x, row, inputSize.x);
-        float2 axes = float2(sin(angle), cos(angle));
+        vec2 axes = vec2(sin(angle), cos(angle));
         float wc = t < chromaHalf ? 0.5 + 0.5 * cos(3.14159265 * t / chromaHalf) : 0.0;
         chroma += wc * v * axes;
         chromaSum += wc;
@@ -546,13 +546,13 @@ half4 main(float2 coord) {
     chroma *= 2.0 / max(chromaSum, 0.0001)" + (ppu && r.Signal == Signal.Composite ? " * (rawSize.x > 0.5 ? " + N(r.Pal ? PpuChromaGainPal : PpuChromaGain) + " : 1.0)" : "") + @";
     notch *= 2.0 / max(notchSum, 0.0001);
 " + (r.Pal ? "    chroma.y *= palSwitch(row);\n" : "") + @"" + (comb ? @"
-    chroma = float2(" + N(fr / gain) + " * chroma.x + " + N(fi / gain) + " * chroma.y, " + N(fr / gain) + " * chroma.y - " + N(fi / gain) + @" * chroma.x);
-    notch = float2(" + N(fr / gain) + " * notch.x + " + N(fi / gain) + " * notch.y, " + N(fr / gain) + " * notch.y - " + N(fi / gain) + @" * notch.x);
+    chroma = vec2(" + N(fr / gain) + " * chroma.x + " + N(fi / gain) + " * chroma.y, " + N(fr / gain) + " * chroma.y - " + N(fi / gain) + @" * chroma.x);
+    notch = vec2(" + N(fr / gain) + " * notch.x + " + N(fi / gain) + " * notch.y, " + N(fr / gain) + " * notch.y - " + N(fi / gain) + @" * notch.x);
 " : "") + @"
     float here = 6.2831853 * phaseAt(s, row, inputSize.x);
     float band = 0.0;
-" + band + @"    float y = source.eval(float2(s + 0.5, row + 0.5)).r" + (comb ? " - (notch.x * sin(here) + notch.y * cos(here))" : trap ? " - band" : "") + @";
-    return half4(y, chroma.x, chroma.y, 1.0);
+" + band + @"    float y = source_eval(vec2(s + 0.5, row + 0.5)).r" + (comb ? " - (notch.x * sin(here) + notch.y * cos(here))" : trap ? " - band" : "") + @";
+    return vec4(y, chroma.x, chroma.y, 1.0);
 }";
         }
 
@@ -561,15 +561,15 @@ half4 main(float2 coord) {
         {
             double[][] m = AxesMatrix(r.Demodulator);
             string Row(int i) => $"{N(m[i][0])} * {by} + {N(m[i][1])} * {ry}";
-            return $"float3({Row(0)}, {Row(1)}, {by})";
+            return $"vec3({Row(0)}, {Row(1)}, {by})";
         }
 
         // The receiver's second half: its video bandwidth on the luma, its demodulator's matrix, and the tube's transfer - see EmuSen_CRT.md §11.3 and §24.
         private static string Drive(Resolved r) => @"
-uniform shader source;
-uniform float2 inputSize;
+uniform sampler2D source;
+uniform vec2 inputSize;
 " + Constants(r) + Transfer + @"
-half4 main(float2 coord) {
+vec4 filter_main(vec2 coord) {
     float s = floor(coord.x);
     float row = floor(coord.y) + 0.5;
     float sigma = 0.132532 / " + N(r.Screen.VideoMegahertz) + @" * inputSize.x / activeUs;
@@ -579,14 +579,14 @@ half4 main(float2 coord) {
         float x = s + float(j);
         if (x < 0.0 || x >= inputSize.x) continue;
         float w = exp(-0.5 * float(j * j) / (sigma * sigma));
-        y += w * source.eval(float2(x + 0.5, row)).r;
+        y += w * source_eval(vec2(x + 0.5, row)).r;
         sum += w;
     }
     y /= sum;
-    half4 here = source.eval(float2(s + 0.5, row));
-" + (r.DelayLine ? "    // PAL's delay line: each line's colour averaged with the line's before it.\n    if (row > 1.0) here.gb = 0.5 * (here.gb + source.eval(float2(s + 0.5, row - 1.0)).gb);\n" : "") + @"    float ry = here.b / 0.877;
+    vec4 here = source_eval(vec2(s + 0.5, row));
+" + (r.DelayLine ? "    // PAL's delay line: each line's colour averaged with the line's before it.\n    if (row > 1.0) here.gb = 0.5 * (here.gb + source_eval(vec2(s + 0.5, row - 1.0)).gb);\n" : "") + @"    float ry = here.b / 0.877;
     float by = here.g / 0.492;
-    return half4(light(y + " + Demodulate(r, "by", "ry") + @"), 1.0);
+    return vec4(light(y + " + Demodulate(r, "by", "ry") + @"), 1.0);
 }";
 
         // The Performance tier's signal: the frame's own pixels, luma and chroma blurred at the bandwidths the cable and the receiver leave them, no subcarrier - see EmuSen_CRT.md §12.1.
@@ -598,8 +598,8 @@ half4 main(float2 coord) {
             // The notch acts on the encoder's output and the video stage after it, whose gains at the subcarrier scale the band it takes away.
             double encoder = r.LumaMegahertz, through = Math.Exp(-0.5 * Math.Log(2) * r.Subcarrier * r.Subcarrier * (1 / (encoder * encoder) + 1 / (video * video)));
             return @"
-uniform shader original;
-" + (ppu ? "uniform shader colours;\nuniform float2 rawSize;\n" : "") + @"uniform float2 originalSize;
+uniform sampler2D original;
+" + (ppu ? "uniform sampler2D colours;\nuniform vec2 rawSize;\n" : "") + @"uniform vec2 originalSize;
 " + Constants(r) + Functions + Transfer + @"
 
 // The receiver's trap band's response to a step, a second-order band-pass's, from where the pixel starts - see EmuSen_CRT.md §24.
@@ -607,7 +607,7 @@ float band(float u, float a, float wd) {
     return u <= 0.0 ? 0.0 : " + N(TrapStepScale) + @" * exp(-a * u) * sin(wd * u);
 }
 
-half4 main(float2 coord) {
+vec4 filter_main(vec2 coord) {
     float width = originalSize.x;
     float x = coord.x * 0.5;
     float row = floor(coord.y) + 0.5;
@@ -617,56 +617,56 @@ half4 main(float2 coord) {
     float sy = 0.132532 * rate * sqrt(1.0 / (lumaMHz * lumaMHz) + " + N(1 / (video * video)) + @");
     float sc = 0.132532 * rate * sqrt(1.0 / (chromaMHz * chromaMHz) + " + N(1 / (chroma * chroma)) + @");
     float first = floor(x);
-    float3 wide = float3(0.0);
-    float2 narrow = float2(0.0);
+    vec3 wide = vec3(0.0);
+    vec2 narrow = vec2(0.0);
     for (int i = -4; i <= 4; i++) {
         float k = first + float(i);
         if (k < 0.0 || k >= width) continue;
-        float3 rgb = " + (ppu ? "(rawSize.x > 0.5 ? colours.eval(float2(k + 0.5, row)) : original.eval(float2(k + 0.5, row))).rgb" : "original.eval(float2(k + 0.5, row)).rgb") + @";
+        vec3 rgb = " + (ppu ? "(rawSize.x > 0.5 ? colours_eval(vec2(k + 0.5, row)) : original_eval(vec2(k + 0.5, row))).rgb" : "original_eval(vec2(k + 0.5, row)).rgb") + @";
         float wy = cdf((k + 1.0 - x) / sy) - cdf((k - x) / sy)" + (notch ? " - " + N(through) + " * (band(x - k, a, wd) - band(x - k - 1.0, a, wd))" : "") + @";
 " + (rgb ? @"        wide += wy * rgb;
     }
-    return half4(light(wide), 1.0);
+    return vec4(light(wide), 1.0);
 }" : @"        float wc = cdf((k + 1.0 - x) / sc) - cdf((k - x) / sc);
-        float y = dot(rgb, float3(0.299, 0.587, 0.114));
+        float y = dot(rgb, vec3(0.299, 0.587, 0.114));
         wide.x += wy * y;
-        narrow += wc * float2(rgb.b - y, rgb.r - y);
-" + (r.DelayLine ? (ppu ? @"        float2 up = float2(k + 0.5, max(row - 1.0, 0.5));
-        float3 above = (rawSize.x > 0.5 ? colours.eval(up) : original.eval(up)).rgb;" : @"        float3 above = original.eval(float2(k + 0.5, max(row - 1.0, 0.5))).rgb;") + @"
-        narrow += wc * float2(above.b, above.r) - wc * dot(above, float3(0.299, 0.587, 0.114));
+        narrow += wc * vec2(rgb.b - y, rgb.r - y);
+" + (r.DelayLine ? (ppu ? @"        vec2 up = vec2(k + 0.5, max(row - 1.0, 0.5));
+        vec3 above = (rawSize.x > 0.5 ? colours_eval(up) : original_eval(up)).rgb;" : @"        vec3 above = original_eval(vec2(k + 0.5, max(row - 1.0, 0.5))).rgb;") + @"
+        narrow += wc * vec2(above.b, above.r) - wc * dot(above, vec3(0.299, 0.587, 0.114));
 " : "") + @"    }
-" + (r.DelayLine ? "    narrow *= 0.5;\n" : "") + @"    return half4(light(wide.x + " + Demodulate(r, "narrow.x", "narrow.y") + @"), 1.0);
+" + (r.DelayLine ? "    narrow *= 0.5;\n" : "") + @"    return vec4(light(wide.x + " + Demodulate(r, "narrow.x", "narrow.y") + @"), 1.0);
 }");
         }
 
         // Green's and blue's slow light, two sums each over the frames before; red's is gone inside the frame - see EmuSen_CRT.md §11.4.
         private static string State(Resolved r) => @"
-uniform shader source;
-uniform shader feedback;
-half4 main(float2 coord) {
-    float3 e = source.eval(coord).rgb;
-    half4 f = feedback.eval(coord);
-    return half4(e.g + " + N(r.Tail.Fast) + " * f.r, e.g + " + N(r.Tail.Slow) + " * f.g, e.b + " + N(r.Tail.Fast) + " * f.b, e.b + " + N(r.Tail.Slow) + @" * f.a);
+uniform sampler2D source;
+uniform sampler2D feedback;
+vec4 filter_main(vec2 coord) {
+    vec3 e = source_eval(coord).rgb;
+    vec4 f = feedback_eval(coord);
+    return vec4(e.g + " + N(r.Tail.Fast) + " * f.r, e.g + " + N(r.Tail.Slow) + " * f.g, e.b + " + N(r.Tail.Fast) + " * f.b, e.b + " + N(r.Tail.Slow) + @" * f.a);
 }";
 
         // Each sample's light with its tail, and the spot it is drawn with: wider as the gun is driven harder - see EmuSen_CRT.md §11.5.
         private static string Spot(Resolved r) => @"
-uniform shader gun;
-uniform shader state;
+uniform sampler2D gun;
+uniform sampler2D state;
 uniform float persistence;
 uniform float spotSize;
 uniform float spotGrowth;
-float3 lightAt(float2 p) {
-    float3 e = gun.eval(p).rgb;
-    half4 st = state.eval(p);
-    float2 fast = persistence * float2(" + N(TailScale * r.Tail.GreenFast) + ", " + N(TailScale * r.Tail.BlueFast) + @");
-    float2 slow = persistence * float2(" + N(TailScale * r.Tail.GreenSlow) + ", " + N(TailScale * r.Tail.BlueSlow) + @");
-    float2 kept = 1.0 / (1.0 + fast * " + N(r.Tail.Fast / (1 - r.Tail.Fast)) + " + slow * " + N(r.Tail.Slow / (1 - r.Tail.Slow)) + @");
-    float2 now = float2(e.g, e.b);
-    float2 lit = kept * (now + fast * (float2(st.r, st.b) - now) + slow * (float2(st.g, st.a) - now));
-    return float3(e.r, lit.x, lit.y);
+vec3 lightAt(vec2 p) {
+    vec3 e = gun_eval(p).rgb;
+    vec4 st = state_eval(p);
+    vec2 fast = persistence * vec2(" + N(TailScale * r.Tail.GreenFast) + ", " + N(TailScale * r.Tail.BlueFast) + @");
+    vec2 slow = persistence * vec2(" + N(TailScale * r.Tail.GreenSlow) + ", " + N(TailScale * r.Tail.BlueSlow) + @");
+    vec2 kept = 1.0 / (1.0 + fast * " + N(r.Tail.Fast / (1 - r.Tail.Fast)) + " + slow * " + N(r.Tail.Slow / (1 - r.Tail.Slow)) + @");
+    vec2 now = vec2(e.g, e.b);
+    vec2 lit = kept * (now + fast * (vec2(st.r, st.b) - now) + slow * (vec2(st.g, st.a) - now));
+    return vec3(e.r, lit.x, lit.y);
 }
-float3 variance(float3 l) {
+vec3 variance(vec3 l) {
     float low = " + N(r.Screen.SpotMinimum * r.Screen.SpotMinimum) + @";
     float high = " + N(r.Screen.SpotMaximum * r.Screen.SpotMaximum) + @";
     return spotSize * spotSize * (low + (high - low) * spotGrowth * clamp(l, 0.0, 1.5));
@@ -675,66 +675,66 @@ float3 variance(float3 l) {
 
         // The spot's own width along the line, scattered from each sample; the second pass keeps the energy-weighted variance for the width across lines - see EmuSen_CRT.md §11.5.
         private static string Beam(Resolved r, bool spot) => @"
-uniform float2 outputSize;
+uniform vec2 outputSize;
 " + Functions + Spot(r) + @"
-half4 main(float2 coord) {
+vec4 filter_main(vec2 coord) {
     float s = floor(coord.x);
     float row = floor(coord.y) + 0.5;
     float perLine = outputSize.x * 0.75 / (outputSize.y > 300.0 ? outputSize.y * 0.5 : outputSize.y);
-    float3 sum = float3(0.0);
-    float3 weighted = float3(0.0);
+    vec3 sum = vec3(0.0);
+    vec3 weighted = vec3(0.0);
     for (int t = -8; t <= 8; t++) {
         float x = s + float(t);
         if (x < 0.0 || x >= outputSize.x) continue;
-        float3 l = lightAt(float2(x + 0.5, row));
-        float3 v = variance(l);
-        float3 sigma = sqrt(v) * perLine;
-        float3 w = cdf3((0.5 - float(t)) / sigma) - cdf3((-0.5 - float(t)) / sigma);
+        vec3 l = lightAt(vec2(x + 0.5, row));
+        vec3 v = variance(l);
+        vec3 sigma = sqrt(v) * perLine;
+        vec3 w = cdf3((0.5 - float(t)) / sigma) - cdf3((-0.5 - float(t)) / sigma);
         sum += l * w;
         weighted += l * w * v;
     }
-" + (spot ? "    return half4(weighted / max(sum, float3(0.000001)) + step(sum, float3(0.000001)) * variance(float3(0.0)), 1.0);\n}" : "    return half4(sum, 1.0);\n}");
+" + (spot ? "    return vec4(weighted / max(sum, vec3(0.000001)) + step(sum, vec3(0.000001)) * variance(vec3(0.0)), 1.0);\n}" : "    return vec4(sum, 1.0);\n}");
 
         // Where a point of the tube's face falls in the picture: the part of the frame kept fills the face, whatever its rows, width or region - see EmuSen_CRT.md §14 and §15.
         private static string Raster => @"
-uniform float4 crop;
-float2 pictureOf(float2 face) {
-    return crop.xy + (face / float2(1.0, 0.75) * 0.5 + 0.5) * crop.zw;
+uniform vec4 crop;
+vec2 pictureOf(vec2 face) {
+    return crop.xy + (face / vec2(1.0, 0.75) * 0.5 + 0.5) * crop.zw;
 }
 ";
 
         // The picture's light gathered into cells of the face, for the glass to spread - see EmuSen_CRT.md §11.6.
         private static string GlareGather(string lit) => (@"
-uniform shader beam;
-uniform float2 beamSize;
-uniform float2 outputSize;
+uniform sampler2D beam;
+uniform vec2 beamSize;
+uniform vec2 outputSize;
 " + Raster + @"
-half4 main(float2 coord) {
-    float3 sum = float3(0.0);
+vec4 filter_main(vec2 coord) {
+    vec3 sum = vec3(0.0);
     for (int i = 0; i < 6; i++) {
         for (int j = 0; j < 3; j++) {
-            float2 cell = (floor(coord) + float2((float(i) + 0.5) / 6.0, (float(j) + 0.5) / 3.0)) / outputSize;
-            float2 p = pictureOf((cell * 2.0 - 1.0) * float2(1.0, 0.75));
+            vec2 cell = (floor(coord) + vec2((float(i) + 0.5) / 6.0, (float(j) + 0.5) / 3.0)) / outputSize;
+            vec2 p = pictureOf((cell * 2.0 - 1.0) * vec2(1.0, 0.75));
             if (p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) continue;
-            sum += beam.eval(p * beamSize).rgb;
+            sum += beam_eval(p * beamSize).rgb;
         }
     }
-    return half4(sum / 18.0, 1.0);
+    return vec4(sum / 18.0, 1.0);
 }").Replace("beam", lit);
 
         // One axis of the glare's Gaussian; light that would land outside the face is lost.
         private static string GlareBlur(bool horizontal) => @"
-uniform shader source;
-uniform float2 inputSize;
-half4 main(float2 coord) {
+uniform sampler2D source;
+uniform vec2 inputSize;
+vec4 filter_main(vec2 coord) {
     float sigma = " + N(GlareSigma) + @" * inputSize.x;
-    float3 sum = float3(0.0);
+    vec3 sum = vec3(0.0);
     for (int t = -24; t <= 24; t++) {
-        float2 p = floor(coord) + 0.5 + " + (horizontal ? "float2(float(t), 0.0)" : "float2(0.0, float(t))") + @";
+        vec2 p = floor(coord) + 0.5 + " + (horizontal ? "vec2(float(t), 0.0)" : "vec2(0.0, float(t))") + @";
         if (p.x < 0.0 || p.x > inputSize.x || p.y < 0.0 || p.y > inputSize.y) continue;
-        sum += source.eval(p).rgb * exp(-0.5 * float(t * t) / (sigma * sigma));
+        sum += source_eval(p).rgb * exp(-0.5 * float(t * t) / (sigma * sigma));
     }
-    return half4(sum / " + N(Enumerable.Range(-24, 49).Sum(t => Math.Exp(-0.5 * t * t / (GlareSigma * GlareWidth * GlareSigma * GlareWidth)))) + @", 1.0);
+    return vec4(sum / " + N(Enumerable.Range(-24, 49).Sum(t => Math.Exp(-0.5 * t * t / (GlareSigma * GlareWidth * GlareSigma * GlareWidth)))) + @", 1.0);
 }";
 
         // One colour's stripes or dots: where its lit run starts in the triad, how wide it is, and whether its columns sit half a pitch down.
@@ -797,7 +797,7 @@ half4 main(float2 coord) {
             };
         }
 
-        private static string Row(double[] row) => $"float3({N(row[0])}, {N(row[1])}, {N(row[2])})";
+        private static string Row(double[] row) => $"vec3({N(row[0])}, {N(row[1])}, {N(row[2])})";
 
         // The share of a tent-shaped footprint that a periodic lit run covers, in closed form - see EmuSen_CRT.md §11.7.
         private const string Coverage = @"
@@ -850,16 +850,16 @@ float covered(float x, float reach, float start, float lit, float period) {
                 string odd = $"{by}({phase}, {reach}, {N(layout.Start[c] + 1)}, {N(layout.Width)}, 2.0)";
                 return layout.Shifted[c] ? $"        cover.{channel} = {even} * rowDown + {odd} * rowLevel;\n" : $"        cover.{channel} = {even} * rowLevel + {odd} * rowDown;\n";
             }));
-            string mask = r.Mask == Mask.None ? "    cover = float3(1.0);\n" : rowsOf + (accurate
+            string mask = r.Mask == Mask.None ? "    cover = vec3(1.0);\n" : rowsOf + (accurate
                 ? "    if (flatMask) {\n" + Columns("boxed", "footprint.x * 0.5") + "    } else {\n" + Columns("covered", "footprint.x") + "    }\n"
                 : Columns("boxed", "footprint.x"));
 
             string beams = accurate ? @"
-uniform shader beam;
-uniform shader spot;
-uniform float2 beamSize;
-float beamOf(float2 picture, float tall, float channel, float field, inout float lineMean, inout float linePeak) {
-    float2 p = picture * beamSize;
+uniform sampler2D beam;
+uniform sampler2D spot;
+uniform vec2 beamSize;
+float beamOf(vec2 picture, float tall, float channel, float field, inout float lineMean, inout float linePeak) {
+    vec2 p = picture * beamSize;
     if (picture.x < 0.0 || picture.x > 1.0) return 0.0;
     float scale = beamSize.y > 300.0 ? 2.0 : 1.0;
     float sum = 0.0;
@@ -873,7 +873,7 @@ float beamOf(float2 picture, float tall, float channel, float field, inout float
             float hi = min((g0 + float(j) + 1.0) * stride, beamSize.y);
             float overlap = min(hi, p.y + 0.5 * tall) - max(lo, top);
             if (overlap <= 0.0) continue;
-            half4 l = beam.eval(float2(p.x, floor(0.5 * (lo + hi)) + 0.5));
+            vec4 l = beam_eval(vec2(p.x, floor(0.5 * (lo + hi)) + 0.5));
             float light = channel < 0.5 ? l.r : channel < 1.5 ? l.g : l.b;
             sum += light * overlap / tall;
             linePeak = max(linePeak, light);
@@ -885,9 +885,9 @@ float beamOf(float2 picture, float tall, float channel, float field, inout float
     for (int j = -2; j <= 2; j++) {
         float row = first + float(j);
         if (row < 0.0 || row >= beamSize.y) continue;
-        float2 at = float2(p.x, row + 0.5);
-        half4 l = beam.eval(at);
-        half4 v = spot.eval(at);
+        vec2 at = vec2(p.x, row + 0.5);
+        vec4 l = beam_eval(at);
+        vec4 v = spot_eval(at);
         float light = channel < 0.5 ? l.r : channel < 1.5 ? l.g : l.b;
         float sigma = scale * sqrt(max(channel < 0.5 ? v.r : channel < 1.5 ? v.g : v.b, 0.000001));
         float d = p.y - (row + 0.5);
@@ -900,31 +900,31 @@ float beamOf(float2 picture, float tall, float channel, float field, inout float
     return sum;
 }
 " : @"
-uniform shader gun;
-uniform float2 gunSize;
+uniform sampler2D gun;
+uniform vec2 gunSize;
 uniform float spotSize;
 uniform float spotGrowth;
 " + (performance ? @"
-float3 lightAt(float2 p) { return gun.eval(p).rgb; }
+vec3 lightAt(vec2 p) { return gun_eval(p).rgb; }
 " : @"
-uniform shader state;
+uniform sampler2D state;
 uniform float persistence;
-float3 lightAt(float2 p) {
-    float3 e = gun.eval(p).rgb;
-    half4 st = state.eval(p);
-    float2 fast = persistence * float2(" + N(TailScale * r.Tail.GreenFast) + ", " + N(TailScale * r.Tail.BlueFast) + @");
-    float2 slow = persistence * float2(" + N(TailScale * r.Tail.GreenSlow) + ", " + N(TailScale * r.Tail.BlueSlow) + @");
-    float2 kept = 1.0 / (1.0 + fast * " + N(r.Tail.Fast / (1 - r.Tail.Fast)) + " + slow * " + N(r.Tail.Slow / (1 - r.Tail.Slow)) + @");
-    float2 now = float2(e.g, e.b);
-    float2 lit = kept * (now + fast * (float2(st.r, st.b) - now) + slow * (float2(st.g, st.a) - now));
-    return float3(e.r, lit.x, lit.y);
+vec3 lightAt(vec2 p) {
+    vec3 e = gun_eval(p).rgb;
+    vec4 st = state_eval(p);
+    vec2 fast = persistence * vec2(" + N(TailScale * r.Tail.GreenFast) + ", " + N(TailScale * r.Tail.BlueFast) + @");
+    vec2 slow = persistence * vec2(" + N(TailScale * r.Tail.GreenSlow) + ", " + N(TailScale * r.Tail.BlueSlow) + @");
+    vec2 kept = 1.0 / (1.0 + fast * " + N(r.Tail.Fast / (1 - r.Tail.Fast)) + " + slow * " + N(r.Tail.Slow / (1 - r.Tail.Slow)) + @");
+    vec2 now = vec2(e.g, e.b);
+    vec2 lit = kept * (now + fast * (vec2(st.r, st.b) - now) + slow * (vec2(st.g, st.a) - now));
+    return vec3(e.r, lit.x, lit.y);
 }
 ") + @"
-float3 beamsOf(float2 picture, float tall, float3 across, float field, inout float3 lineMean, inout float3 linePeak) {
-    float2 p = picture * gunSize;
-    if (picture.x < 0.0 || picture.x > 1.0) return float3(0.0);
+vec3 beamsOf(vec2 picture, float tall, vec3 across, float field, inout vec3 lineMean, inout vec3 linePeak) {
+    vec2 p = picture * gunSize;
+    if (picture.x < 0.0 || picture.x > 1.0) return vec3(0.0);
     float scale = gunSize.y > 300.0 ? 2.0 : 1.0;
-    float3 sum = float3(0.0);
+    vec3 sum = vec3(0.0);
     // A pixel taller than a line is the mean of the lines it covers, in as many groups as lines are read.
     float stride = ceil(tall / " + (performance ? "1.0" : "2.0") + @");
     if (stride > 1.5) {
@@ -936,7 +936,7 @@ float3 beamsOf(float2 picture, float tall, float3 across, float field, inout flo
             float overlap = min(hi, p.y + 0.5 * tall) - max(lo, top);
             if (overlap <= 0.0) continue;
             float row = floor(0.5 * (lo + hi)) + 0.5;
-            float3 l = " + (performance ? "lightAt(float2(p.x, row))" : "float3(lightAt(float2(across.r * gunSize.x, row)).r, lightAt(float2(across.g * gunSize.x, row)).g, lightAt(float2(across.b * gunSize.x, row)).b)") + @";
+            vec3 l = " + (performance ? "lightAt(vec2(p.x, row))" : "vec3(lightAt(vec2(across.r * gunSize.x, row)).r, lightAt(vec2(across.g * gunSize.x, row)).g, lightAt(vec2(across.b * gunSize.x, row)).b)") + @";
             sum += l * overlap / tall;
             linePeak = max(linePeak, l);
         }
@@ -947,9 +947,9 @@ float3 beamsOf(float2 picture, float tall, float3 across, float field, inout flo
     for (int j = " + (performance ? "0" : "-1") + @"; j <= " + (performance ? "1" : "1") + @"; j++) {
         float row = first + float(j)" + (performance ? "" : " + 0.0") + @";
         if (row < 0.0 || row >= gunSize.y) continue;
-        float3 l = " + (performance ? "lightAt(float2(p.x, row + 0.5))" : "float3(lightAt(float2(across.r * gunSize.x, row + 0.5)).r, lightAt(float2(across.g * gunSize.x, row + 0.5)).g, lightAt(float2(across.b * gunSize.x, row + 0.5)).b)") + @";
-        " + (performance ? "float" : "float3") + @" v = spotSize * spotSize * (" + N(r.Screen.SpotMinimum * r.Screen.SpotMinimum) + " + " + N(r.Screen.SpotMaximum * r.Screen.SpotMaximum - r.Screen.SpotMinimum * r.Screen.SpotMinimum) + @" * spotGrowth * clamp(" + (performance ? "dot(l, float3(0.299, 0.587, 0.114))" : "l") + @", 0.0, 1.5));
-        " + (performance ? "float" : "float3") + @" sigma = scale * sqrt(v);
+        vec3 l = " + (performance ? "lightAt(vec2(p.x, row + 0.5))" : "vec3(lightAt(vec2(across.r * gunSize.x, row + 0.5)).r, lightAt(vec2(across.g * gunSize.x, row + 0.5)).g, lightAt(vec2(across.b * gunSize.x, row + 0.5)).b)") + @";
+        " + (performance ? "float" : "vec3") + @" v = spotSize * spotSize * (" + N(r.Screen.SpotMinimum * r.Screen.SpotMinimum) + " + " + N(r.Screen.SpotMaximum * r.Screen.SpotMaximum - r.Screen.SpotMinimum * r.Screen.SpotMinimum) + @" * spotGrowth * clamp(" + (performance ? "dot(l, vec3(0.299, 0.587, 0.114))" : "l") + @", 0.0, 1.5));
+        " + (performance ? "float" : "vec3") + @" sigma = scale * sqrt(v);
         float d = p.y - (row + 0.5);
         float lit = scale > 1.5 && interlace > 0.5 ? (mod(row + field, 2.0) < 0.5 ? 2.0 : 0.0) : 1.0;
         sum += lit * l * (" + (performance ? "cdf((d + 0.5 * tall) / sigma) - cdf((d - 0.5 * tall) / sigma)" : "cdf3((d + 0.5 * tall) / sigma) - cdf3((d - 0.5 * tall) / sigma)") + @") / tall;
@@ -964,43 +964,43 @@ float3 beamsOf(float2 picture, float tall, float3 across, float field, inout flo
 
             string guns = accurate ? @"
     float spread = convergence * (" + N(r.Screen.ConvergenceCentre / halfWidth / 2) + " + " + N((r.Screen.ConvergenceEdge - r.Screen.ConvergenceCentre) / halfWidth / 2) + @" * dot(face, face) / 1.5625);
-    float2 miss = float2(pictureOf(face + float2(spread, 0.0)).x - before.x, 0.0);
-    float3 lineMean = float3(0.0);
-    float3 linePeak = float3(0.0);
-    float3 guns = float3(
-        beamOf(before + float2(shift.r * perPixel.x, 0.0) - miss, tall, 0.0, frameCount, lineMean.r, linePeak.r),
-        beamOf(before + float2(shift.g * perPixel.x, 0.0), tall, 1.0, frameCount, lineMean.g, linePeak.g),
-        beamOf(before + float2(shift.b * perPixel.x, 0.0) + miss, tall, 2.0, frameCount, lineMean.b, linePeak.b));
+    vec2 miss = vec2(pictureOf(face + vec2(spread, 0.0)).x - before.x, 0.0);
+    vec3 lineMean = vec3(0.0);
+    vec3 linePeak = vec3(0.0);
+    vec3 guns = vec3(
+        beamOf(before + vec2(shift.r * perPixel.x, 0.0) - miss, tall, 0.0, frameCount, lineMean.r, linePeak.r),
+        beamOf(before + vec2(shift.g * perPixel.x, 0.0), tall, 1.0, frameCount, lineMean.g, linePeak.g),
+        beamOf(before + vec2(shift.b * perPixel.x, 0.0) + miss, tall, 2.0, frameCount, lineMean.b, linePeak.b));
 " : performance ? @"
-    float3 lineMean = float3(0.0);
-    float3 linePeak = float3(0.0);
-    float3 guns = beamsOf(before, tall, float3(before.x), frameCount, lineMean, linePeak);
+    vec3 lineMean = vec3(0.0);
+    vec3 linePeak = vec3(0.0);
+    vec3 guns = beamsOf(before, tall, vec3(before.x), frameCount, lineMean, linePeak);
 " : @"
     float spread = convergence * (" + N(r.Screen.ConvergenceCentre / halfWidth / 2) + " + " + N((r.Screen.ConvergenceEdge - r.Screen.ConvergenceCentre) / halfWidth / 2) + @" * dot(face, face) / 1.5625);
-    float miss = pictureOf(face + float2(spread, 0.0)).x - before.x;
-    float3 lineMean = float3(0.0);
-    float3 linePeak = float3(0.0);
-    float3 guns = beamsOf(before, tall, before.x + shift * perPixel.x + float3(-miss, 0.0, miss), frameCount, lineMean, linePeak);
+    float miss = pictureOf(face + vec2(spread, 0.0)).x - before.x;
+    vec3 lineMean = vec3(0.0);
+    vec3 linePeak = vec3(0.0);
+    vec3 guns = beamsOf(before, tall, before.x + shift * perPixel.x + vec3(-miss, 0.0, miss), frameCount, lineMean, linePeak);
 ";
             string rows = accurate ? "beamSize.y" : "gunSize.y";
             string glass = performance ? @"
-    float3 direct = float3(dot(" + Row(m[0]) + ", guns), dot(" + Row(m[1]) + ", guns), dot(" + Row(m[2]) + @", guns));
-    float3 even = float3(dot(" + Row(m[0]) + ", lineMean), dot(" + Row(m[1]) + ", lineMean), dot(" + Row(m[2]) + @", lineMean));
-    float3 peak = float3(dot(" + Row(m[0]) + ", linePeak), dot(" + Row(m[1]) + ", linePeak), dot(" + Row(m[2]) + @", linePeak));
-    float3 veil = float3(0.0);
+    vec3 direct = vec3(dot(" + Row(m[0]) + ", guns), dot(" + Row(m[1]) + ", guns), dot(" + Row(m[2]) + @", guns));
+    vec3 even = vec3(dot(" + Row(m[0]) + ", lineMean), dot(" + Row(m[1]) + ", lineMean), dot(" + Row(m[2]) + @", lineMean));
+    vec3 peak = vec3(dot(" + Row(m[0]) + ", linePeak), dot(" + Row(m[1]) + ", linePeak), dot(" + Row(m[2]) + @", linePeak));
+    vec3 veil = vec3(0.0);
 " : @"
     float spill = " + N(GlareWeight) + @" * glare;
-    float3 scattered = haze.eval((face / float2(1.0, 0.75) * 0.5 + 0.5) * hazeSize).rgb;
-    float3 direct = (1.0 - spill) * float3(dot(" + Row(m[0]) + ", guns), dot(" + Row(m[1]) + ", guns), dot(" + Row(m[2]) + @", guns));
-    float3 even = (1.0 - spill) * float3(dot(" + Row(m[0]) + ", lineMean), dot(" + Row(m[1]) + ", lineMean), dot(" + Row(m[2]) + @", lineMean));
-    float3 peak = (1.0 - spill) * float3(dot(" + Row(m[0]) + ", linePeak), dot(" + Row(m[1]) + ", linePeak), dot(" + Row(m[2]) + @", linePeak));
-    float3 veil = spill * float3(dot(" + Row(m[0]) + ", scattered), dot(" + Row(m[1]) + ", scattered), dot(" + Row(m[2]) + @", scattered));
+    vec3 scattered = haze_eval((face / vec2(1.0, 0.75) * 0.5 + 0.5) * hazeSize).rgb;
+    vec3 direct = (1.0 - spill) * vec3(dot(" + Row(m[0]) + ", guns), dot(" + Row(m[1]) + ", guns), dot(" + Row(m[2]) + @", guns));
+    vec3 even = (1.0 - spill) * vec3(dot(" + Row(m[0]) + ", lineMean), dot(" + Row(m[1]) + ", lineMean), dot(" + Row(m[2]) + @", lineMean));
+    vec3 peak = (1.0 - spill) * vec3(dot(" + Row(m[0]) + ", linePeak), dot(" + Row(m[1]) + ", linePeak), dot(" + Row(m[2]) + @", linePeak));
+    vec3 veil = spill * vec3(dot(" + Row(m[0]) + ", scattered), dot(" + Row(m[1]) + ", scattered), dot(" + Row(m[2]) + @", scattered));
 ";
 
             return @"
-uniform float2 outputSize;
+uniform vec2 outputSize;
 uniform float pixelScale;
-uniform float2 pixelOrigin;
+uniform vec2 pixelOrigin;
 uniform float frameCount;
 uniform float displayNits;
 uniform float tubeNits;
@@ -1010,19 +1010,19 @@ uniform float maskPitch;
 uniform float maskLimit;
 uniform float maskDepth;
 uniform float interlace;
-" + (performance ? "uniform float curvature;\n" : @"uniform shader haze;
-uniform float2 hazeSize;
+" + (performance ? "uniform float curvature;\n" : @"uniform sampler2D haze;
+uniform vec2 hazeSize;
 uniform float curvature;
 uniform float glare;
 ") + (performance ? "" : "uniform float convergence;\n") + Functions + Raster + Coverage + beams + @"
 
-float2 faceOf(float2 screen) {
+vec2 faceOf(vec2 screen) {
 " + (@"    if (curvature <= 0.0) return screen;
     float radius = " + N(radius) + @" / curvature;
     float eye = " + N(distance) + @";
     float edgeX = radius - sqrt(radius * radius - 1.0);
     float edgeY = " + (r.Screen.Cylinder ? "0.0" : "radius - sqrt(radius * radius - 0.5625)") + @";
-    float2 s = screen * float2(eye / (eye + edgeX), eye / (eye + edgeY));
+    vec2 s = screen * vec2(eye / (eye + edgeX), eye / (eye + edgeY));
     float a = " + (r.Screen.Cylinder ? "s.x * s.x" : "dot(s, s)") + @" + eye * eye;
     float b = eye * (eye + radius);
     float c = eye * eye + 2.0 * eye * radius;
@@ -1030,38 +1030,38 @@ float2 faceOf(float2 screen) {
     return s * t;
 ") + @"}
 
-float3 encode(float3 c) {
-    return float3(c.r <= 0.0031308 ? c.r * 12.92 : 1.055 * pow(c.r, 0.41666667) - 0.055,
+vec3 encode(vec3 c) {
+    return vec3(c.r <= 0.0031308 ? c.r * 12.92 : 1.055 * pow(c.r, 0.41666667) - 0.055,
                   c.g <= 0.0031308 ? c.g * 12.92 : 1.055 * pow(c.g, 0.41666667) - 0.055,
                   c.b <= 0.0031308 ? c.b * 12.92 : 1.055 * pow(c.b, 0.41666667) - 0.055);
 }
 
-half4 main(float2 coord) {
-    float2 screen = (coord / outputSize * 2.0 - 1.0) * float2(1.0, 0.75);
-    float2 pixel = 2.0 / (outputSize * pixelScale) * float2(1.0, 0.75);
-    float2 face = faceOf(screen);
-    float2 grain = float2(faceOf(screen + float2(pixel.x, 0.0)).x - face.x, faceOf(screen + float2(0.0, pixel.y)).y - face.y);
+vec4 filter_main(vec2 coord) {
+    vec2 screen = (coord / outputSize * 2.0 - 1.0) * vec2(1.0, 0.75);
+    vec2 pixel = 2.0 / (outputSize * pixelScale) * vec2(1.0, 0.75);
+    vec2 face = faceOf(screen);
+    vec2 grain = vec2(faceOf(screen + vec2(pixel.x, 0.0)).x - face.x, faceOf(screen + vec2(0.0, pixel.y)).y - face.y);
 
-    float2 corner = max(abs(face) - float2(1.0, 0.75) + " + N(CornerRadius) + @", 0.0);
+    vec2 corner = max(abs(face) - vec2(1.0, 0.75) + " + N(CornerRadius) + @", 0.0);
     float inside = clamp((" + N(CornerRadius) + @" - length(corner)) / max(grain.x, 0.000001) + 0.5, 0.0, 1.0);
-    if (inside <= 0.0) return half4(0.0, 0.0, 0.0, 1.0);
+    if (inside <= 0.0) return vec4(0.0, 0.0, 0.0, 1.0);
 
-    float3 shift = subpixels < 0.5 ? float3(0.0) : subpixels < 1.5 ? float3(-1.0, 0.0, 1.0) / 3.0 : float3(1.0, 0.0, -1.0) / 3.0;
-    // A triad's width in display pixels: the screen's own, kept fine on a large display; up to that limit a whole number of the display's own pixels, and let go below one and a half - see EmuSen_CRT.md §18 and §20.
+    vec3 shift = subpixels < 0.5 ? vec3(0.0) : subpixels < 1.5 ? vec3(-1.0, 0.0, 1.0) / 3.0 : vec3(1.0, 0.0, -1.0) / 3.0;
+    // A triad's width in display pixels: the screen's own, kept fine on a large display; up to that limit a whole number of the display's own pixels, and let go below one and a float - see EmuSen_CRT.md §18 and §20.
     float wide = outputSize.x * pixelScale;
     float triadPixels = wide * maskPitch / " + N(r.Screen.TriadsAcross) + @";
     float finest = max(floor(" + N(FinestTriadPixels) + @" * maskPitch + 0.5), 2.0);
     if (maskLimit > 0.5) triadPixels = min(triadPixels, finest);
     float drawn = clamp((triadPixels - " + N(LeastTriadPixels - 0.25) + @") / 0.25, 0.0, 1.0);
     bool flatMask = triadPixels < max(finest, " + N(FinestTriadPixels) + @") + 0.001;
-    float2 triad;
-    float2 footprint;
+    vec2 triad;
+    vec2 footprint;
     float stepX;
     if (flatMask) {
         triadPixels = max(floor(triadPixels + 0.5), 2.0);
         float rowsDown = " + (layout.VerticalPitch > 0 ? "max(floor(" + N(layout.VerticalPitch) + " * triadPixels + 0.5), 2.0) / (" + N(layout.VerticalPitch) + " * triadPixels)" : "1.0") + @";
-        triad = (coord * pixelScale + pixelOrigin) / triadPixels * float2(1.0, 1.0 / rowsDown);
-        footprint = float2(1.0, 1.0 / rowsDown) / triadPixels" + (accurate ? "" : " * 0.5") + @";
+        triad = (coord * pixelScale + pixelOrigin) / triadPixels * vec2(1.0, 1.0 / rowsDown);
+        footprint = vec2(1.0, 1.0 / rowsDown) / triadPixels" + (accurate ? "" : " * 0.5") + @";
         stepX = 1.0 / triadPixels;
     } else {
         float across = 0.5 * wide / triadPixels;
@@ -1069,29 +1069,29 @@ half4 main(float2 coord) {
         footprint = grain * across" + (accurate ? "" : " * 0.5") + @";
         stepX = grain.x * across;
     }
-    float3 cover;
+    vec3 cover;
 " + mask + @"
     float litFraction = " + N(layout.LitFraction) + @";
 
-    float2 before = pictureOf(face);
-    float2 perPixel = float2(pictureOf(face + float2(grain.x, 0.0)).x - before.x, pictureOf(face + float2(0.0, grain.y)).y - before.y);
+    vec2 before = pictureOf(face);
+    vec2 perPixel = vec2(pictureOf(face + vec2(grain.x, 0.0)).x - before.x, pictureOf(face + vec2(0.0, grain.y)).y - before.y);
     float tall = perPixel.y * " + rows + @";
 " + guns + glass + @"
-    float luminance = dot(direct, float3(0.2126, 0.7152, 0.0722));
+    float luminance = dot(direct, vec3(0.2126, 0.7152, 0.0722));
     float lowest = min(direct.r, min(direct.g, direct.b));
     if (lowest < 0.0) direct = luminance + (direct - luminance) * (luminance / max(luminance - lowest, 0.000001));
 
     float headroom = level < 0.5 ? " + N(1 / BrightWhite) + @" : displayNits / tubeNits;
 
     // A scanline brighter at its centre than the display can go is drawn flatter, toward its line's even light, by just enough for its peak.
-    direct = even + (direct - even) * clamp((headroom - even) / max(peak - even, float3(0.000001)), 0.0, 1.0);
-    float3 depth = drawn * maskDepth * clamp((headroom / max(direct, float3(0.000001)) - 1.0) / (1.0 / litFraction - 1.0 + 0.000001), 0.0, 1.0);
-    float3 shown = (direct * (1.0 + depth * (cover / litFraction - 1.0)) + veil) / headroom;
-" + (performance ? @"    return half4(encode(clamp(shown * inside, 0.0, 1.0)), 1.0);
+    direct = even + (direct - even) * clamp((headroom - even) / max(peak - even, vec3(0.000001)), 0.0, 1.0);
+    vec3 depth = drawn * maskDepth * clamp((headroom / max(direct, vec3(0.000001)) - 1.0) / (1.0 / litFraction - 1.0 + 0.000001), 0.0, 1.0);
+    vec3 shown = (direct * (1.0 + depth * (cover / litFraction - 1.0)) + veil) / headroom;
+" + (performance ? @"    return vec4(encode(clamp(shown * inside, 0.0, 1.0)), 1.0);
 }" : @"
-    float2 onDisplay = coord * pixelScale + pixelOrigin;
-    float noise = fract(52.9829189 * fract(dot(floor(onDisplay), float2(0.06711056, 0.00583715)))) - 0.5;
-    return half4(clamp(encode(clamp(shown * inside, 0.0, 1.0)) + noise / 255.0, 0.0, 1.0), 1.0);
+    vec2 onDisplay = coord * pixelScale + pixelOrigin;
+    float noise = fract(52.9829189 * fract(dot(floor(onDisplay), vec2(0.06711056, 0.00583715)))) - 0.5;
+    return vec4(clamp(encode(clamp(shown * inside, 0.0, 1.0)) + noise / 255.0, 0.0, 1.0), 1.0);
 }");
         }
 

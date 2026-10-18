@@ -23,8 +23,8 @@ namespace EmuSen.Serenity.Shaders
         }));
     }
 
-    // One SkSL pass; History is how many earlier frames it reads, as history1 to historyN - see EmuSen_Serenity.md §3.2 and §3.9.
-    public sealed record FilterPass(string Sksl, PassScale Scale, bool LinearSource = false, int History = 0)
+    // One pass in Vulkan GLSL; History is how many earlier frames it reads, as history1 to historyN - see EmuSen_DevicePicture.md §20.
+    public sealed record FilterPass(string Glsl, PassScale Scale, bool LinearSource = false, int History = 0)
     {
         // Either axis sized apart from Scale; null keeps Scale's.
         public PassSize? Width { get; init; }
@@ -104,7 +104,7 @@ namespace EmuSen.Serenity.Shaders
 
         // Whether a pass made for this console and these values reads RawEncoding, so a frontend asks its core for that encoding.
         public bool ReadsRaw(string? console, IReadOnlyDictionary<string, float>? given) =>
-            RawEncoding is not null && (Build?.Invoke(ValuesFor(console, given)) ?? Passes).Any(pass => pass.Sksl.Contains("uniform shader raw;", StringComparison.Ordinal));
+            RawEncoding is not null && (Build?.Invoke(ValuesFor(console, given)) ?? Passes).Any(pass => pass.Glsl.Contains("uniform sampler2D raw;", StringComparison.Ordinal));
 
         // What a parameter starts at on a console: the console's value where it has one, the parameter's own otherwise.
         public float DefaultFor(SlangParameter parameter, string? console) =>

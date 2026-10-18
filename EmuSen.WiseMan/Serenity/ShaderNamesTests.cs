@@ -42,12 +42,12 @@ namespace EmuSen.WiseMan.Serenity
         // Every text the project hands SkSL: the simple effects, the reducing pass, and each filter's passes on each console with each structural setting at each of its values.
         private static IEnumerable<(string Where, string Sksl)> Sources()
         {
-            yield return ("Scanlines", BuiltInShaders.ScanlinesSksl);
-            yield return ("Simple CRT", BuiltInShaders.CrtSksl);
-            yield return ("the reducing pass", FilterChain.ReduceSksl);
+            yield return ("Scanlines", BuiltInShaders.ScanlinesGlsl);
+            yield return ("Simple CRT", BuiltInShaders.CrtGlsl);
+            yield return ("the reducing pass", BuiltInPreset.ReduceGlsl);
             foreach (ScreenFilter filter in ScreenFilters.All.Select(c => c.Filter).OfType<ScreenFilter>())
             {
-                for (int i = 0; i < filter.Passes.Count; i++) yield return ($"{filter.Name} pass {i}", filter.Passes[i].Sksl);
+                for (int i = 0; i < filter.Passes.Count; i++) yield return ($"{filter.Name} pass {i}", filter.Passes[i].Glsl);
                 if (filter.Build is not { } build) continue;
                 foreach (string? console in (filter.Consoles ?? Array.Empty<string>()).Cast<string?>().Append(null))
                 {
@@ -64,7 +64,7 @@ namespace EmuSen.WiseMan.Serenity
                     foreach (var (what, values) in sets)
                     {
                         IReadOnlyList<FilterPass> passes = build(values);
-                        for (int i = 0; i < passes.Count; i++) yield return ($"{filter.Name} on {console ?? "any console"}, {what}, pass {i} ({passes[i].Name ?? "the last"})", passes[i].Sksl);
+                        for (int i = 0; i < passes.Count; i++) yield return ($"{filter.Name} on {console ?? "any console"}, {what}, pass {i} ({passes[i].Name ?? "the last"})", passes[i].Glsl);
                     }
                 }
             }
@@ -90,9 +90,9 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void A_kept_word_is_found_as_a_name_and_nowhere_else()
         {
-            Assert.Equal(new[] { "device" }, KeptIn("half4 main(float2 coord) { float2 device = coord; return half4(device, 0.0, 1.0); }"));
+            Assert.Equal(new[] { "device" }, KeptIn("vec4 filter_main(vec2 coord) { vec2 device = coord; return vec4(device, 0.0, 1.0); }"));
             Assert.Equal(new[] { "kernel", "new" }, KeptIn("float blur(float kernel) { float new = kernel; return new; }").OrderBy(w => w, StringComparer.Ordinal));
-            Assert.Empty(KeptIn("// the device's pixels\n/* a new kernel */ half4 main(float2 coord) { float2 devicePixel = coord; float renew = 1.0; return half4(devicePixel, renew, 1.0); }"));
+            Assert.Empty(KeptIn("// the device's pixels\n/* a new kernel */ vec4 filter_main(vec2 coord) { vec2 devicePixel = coord; float renew = 1.0; return vec4(devicePixel, renew, 1.0); }"));
         }
     }
 }

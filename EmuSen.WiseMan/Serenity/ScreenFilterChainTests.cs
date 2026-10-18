@@ -18,13 +18,13 @@ namespace EmuSen.WiseMan.Serenity
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(ScreenFilterChainTests).GetTypeInfo().Assembly);
 
-        private const string Head = "uniform shader source;\n";
+        private const string Head = "uniform sampler2D source;\n";
 
         // Writes values no 8-bit surface holds: a negative, one above white, and an alpha that is not coverage.
-        private const string Wide = "half4 main(float2 coord) { return half4(-0.25, 2.0, 0.1, 0.25); }";
+        private const string Wide = "vec4 filter_main(vec2 coord) { return vec4(-0.25, 2.0, 0.1, 0.25); }";
 
         // Brings them back into range, so a picture of mid grey says all three arrived.
-        private const string Narrow = Head + "half4 main(float2 coord) { half4 c = source.eval(coord); return half4(-2.0 * c.r, 0.25 * c.g, 2.0 * c.a, 1.0); }";
+        private const string Narrow = Head + "vec4 filter_main(vec2 coord) { vec4 c = source_eval(coord); return vec4(-2.0 * c.r, 0.25 * c.g, 2.0 * c.a, 1.0); }";
 
         private static byte[] Solid(int width, int height, byte r, byte g, byte b)
         {
@@ -92,8 +92,8 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_pass_is_as_wide_as_it_says_and_as_tall_as_the_frame_times_its_factor() => Session.Dispatch(() =>
         {
-            const string size = Head + "uniform float2 inputSize; uniform float2 viewportSize; half4 main(float2 coord) { return half4(inputSize.x / 255.0, inputSize.y / 255.0, viewportSize.x / 255.0, 1.0); }";
-            var sized = new FilterPass("half4 main(float2 coord) { return half4(0.0, 0.0, 0.0, 1.0); }", PassScale.Source) { Width = PassSize.Fixed(40), Height = new PassSize(PassAxis.Source, 2.5f) };
+            const string size = Head + "uniform vec2 inputSize; uniform vec2 viewportSize; vec4 filter_main(vec2 coord) { return vec4(inputSize.x / 255.0, inputSize.y / 255.0, viewportSize.x / 255.0, 1.0); }";
+            var sized = new FilterPass("vec4 filter_main(vec2 coord) { return vec4(0.0, 0.0, 0.0, 1.0); }", PassScale.Source) { Width = PassSize.Fixed(40), Height = new PassSize(PassAxis.Source, 2.5f) };
             using Shown shown = Show(Of(sized, new FilterPass(size, PassScale.Viewport)), 16, 16);
             Near((40, 20, 16), shown.Frame(Solid(8, 8, 0, 0, 0), 4, 4), 0, "the sizes the second pass was told");
         }, default);
@@ -101,9 +101,9 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_feedback_pass_reads_its_last_frame_s_output_and_a_redraw_reads_the_same_one() => Session.Dispatch(() =>
         {
-            const string count = "uniform shader feedback; half4 main(float2 coord) { return half4(feedback.eval(coord).r + 10.0 / 255.0, 0.0, 0.0, 1.0); }";
+            const string count = "uniform sampler2D feedback; vec4 filter_main(vec2 coord) { return vec4(feedback_eval(coord).r + 10.0 / 255.0, 0.0, 0.0, 1.0); }";
             byte[] frame = Solid(8, 8, 0, 0, 0);
-            using Shown shown = Show(Of(new FilterPass(count, PassScale.Source) { Feedback = true, Float = true }, new FilterPass(Head + "half4 main(float2 coord) { return half4(source.eval(coord).rgb, 1.0); }", PassScale.Viewport)));
+            using Shown shown = Show(Of(new FilterPass(count, PassScale.Source) { Feedback = true, Float = true }, new FilterPass(Head + "vec4 filter_main(vec2 coord) { return vec4(source_eval(coord).rgb, 1.0); }", PassScale.Viewport)));
             Near((10, 0, 0), shown.Frame(frame, 4, 4), 1, "the first frame, over black");
             Near((20, 0, 0), shown.Frame(frame, 4, 4), 1, "the second");
             Near((30, 0, 0), shown.Frame(frame, 4, 4), 1, "the third");
@@ -115,9 +115,9 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_later_pass_reads_an_earlier_one_by_name_with_its_size() => Session.Dispatch(() =>
         {
-            const string red = "half4 main(float2 coord) { return half4(0.4, 0.0, 0.0, 1.0); }";
-            const string green = Head + "half4 main(float2 coord) { return half4(0.0, 0.2 + source.eval(coord).r, 0.0, 1.0); }";
-            const string both = Head + "uniform shader first; uniform float2 firstSize; half4 main(float2 coord) { return half4(first.eval(float2(0.5, 0.5)).r, source.eval(coord).g, firstSize.x / 255.0, 1.0); }";
+            const string red = "vec4 filter_main(vec2 coord) { return vec4(0.4, 0.0, 0.0, 1.0); }";
+            const string green = Head + "vec4 filter_main(vec2 coord) { return vec4(0.0, 0.2 + source_eval(coord).r, 0.0, 1.0); }";
+            const string both = Head + "uniform sampler2D first; uniform vec2 firstSize; vec4 filter_main(vec2 coord) { return vec4(first_eval(vec2(0.5, 0.5)).r, source_eval(coord).g, firstSize.x / 255.0, 1.0); }";
             using Shown shown = Show(Of(new FilterPass(red, PassScale.Source) { Name = "first", Width = PassSize.Fixed(3) }, new FilterPass(green, PassScale.Source), new FilterPass(both, PassScale.Viewport)));
             Near((102, 153, 3), shown.Frame(Solid(8, 8, 0, 0, 0), 4, 4), 1, "the first pass's red, the second's green, the first's width");
         }, default);
@@ -133,9 +133,9 @@ namespace EmuSen.WiseMan.Serenity
             Build = values =>
             {
                 built?.Invoke();
-                var first = new FilterPass("uniform float tint; half4 main(float2 coord) { return half4(tint, 0.0, 0.0, 1.0); }", values["stages"] > 1.5f ? PassScale.Source : PassScale.Viewport);
+                var first = new FilterPass("uniform float tint; vec4 filter_main(vec2 coord) { return vec4(tint, 0.0, 0.0, 1.0); }", values["stages"] > 1.5f ? PassScale.Source : PassScale.Viewport);
                 return values["stages"] > 1.5f
-                    ? new[] { first, new FilterPass(Head + "half4 main(float2 coord) { return half4(0.0, source.eval(coord).r, 0.0, 1.0); }", PassScale.Viewport) }
+                    ? new[] { first, new FilterPass(Head + "vec4 filter_main(vec2 coord) { return vec4(0.0, source_eval(coord).r, 0.0, 1.0); }", PassScale.Viewport) }
                     : new[] { first };
             },
         };
@@ -167,7 +167,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_filter_that_states_a_shape_is_drawn_in_that_shape_and_the_others_in_the_frame_s() => Session.Dispatch(() =>
         {
-            var white = new FilterPass("half4 main(float2 coord) { return half4(1.0, 1.0, 1.0, 1.0); }", PassScale.Viewport);
+            var white = new FilterPass("vec4 filter_main(vec2 coord) { return vec4(1.0, 1.0, 1.0, 1.0); }", PassScale.Viewport);
             byte[] frame = Solid(8, 8, 0, 0, 0);
             using (Shown square = Show(Of(white), 400, 300))
             {
@@ -182,7 +182,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_console_s_values_that_are_not_parameters_reach_the_passes_and_any_console_takes_the_general_ones() => Session.Dispatch(() =>
         {
-            var pass = new FilterPass("uniform float clock; uniform float tint; half4 main(float2 coord) { return half4(clock, tint, 0.0, 1.0); }", PassScale.Viewport);
+            var pass = new FilterPass("uniform float clock; uniform float tint; vec4 filter_main(vec2 coord) { return vec4(clock, tint, 0.0, 1.0); }", PassScale.Viewport);
             var filter = new ScreenFilter("constants", new[] { pass }, null, "", new[] { Tint })
             {
                 ConsoleDefaults = new Dictionary<string, IReadOnlyDictionary<string, float>>
@@ -203,7 +203,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_filter_that_counts_scanlines_is_given_the_frame_s_rows_once() => Session.Dispatch(() =>
         {
-            var pass = new FilterPass("uniform float2 originalSize; half4 main(float2 coord) { return half4(originalSize.y / 255.0, 0.0, 0.0, 1.0); }", PassScale.Viewport);
+            var pass = new FilterPass("uniform vec2 originalSize; vec4 filter_main(vec2 coord) { return vec4(originalSize.y / 255.0, 0.0, 0.0, 1.0); }", PassScale.Viewport);
             byte[] frame = Solid(8, 8, 0, 0, 0);
             foreach (var (filter, rows) in new[] { (Of(pass), 16), (Of(pass) with { RowsOnce = true }, 8) })
             {
@@ -219,7 +219,7 @@ namespace EmuSen.WiseMan.Serenity
             }
         }, default);
 
-        private static FilterPass Colour(string rgb) => new($"half4 main(float2 coord) {{ return half4({rgb}, 1.0); }}", PassScale.Viewport);
+        private static FilterPass Colour(string rgb) => new($"vec4 filter_main(vec2 coord) {{ return vec4({rgb}, 1.0); }}", PassScale.Viewport);
 
         // A filter whose build waits for the test, so the render thread's behaviour while it builds can be seen.
         private static ScreenFilter Held(System.Threading.ManualResetEventSlim gate, string rgb) => new("held", Array.Empty<FilterPass>(), null, "", new[] { Stages })
@@ -274,7 +274,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void A_child_or_a_uniform_no_pass_provides_is_refused_by_name()
         {
-            var chain = (IDisposable)Activator.CreateInstance(typeof(GameFrameControl).Assembly.GetType("EmuSen.Serenity.Shaders.FilterChain")!, Of(new FilterPass("uniform shader feedback; half4 main(float2 coord) { return feedback.eval(coord); }", PassScale.Viewport)))!;
+            var chain = (IDisposable)Activator.CreateInstance(typeof(GameFrameControl).Assembly.GetType("EmuSen.Serenity.Shaders.FilterChain")!, Of(new FilterPass("uniform sampler2D feedback; vec4 filter_main(vec2 coord) { return feedback_eval(coord); }", PassScale.Viewport)))!;
             using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(8, 8));
             using var image = SkiaSharp.SKImage.FromPixelCopy(new SkiaSharp.SKImageInfo(8, 8, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Unpremul), Solid(8, 8, 0, 0, 0));
             MethodInfo draw = chain.GetType().GetMethod("Draw")!;

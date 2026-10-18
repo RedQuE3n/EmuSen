@@ -235,7 +235,7 @@ namespace EmuSen.WiseMan.Serenity
         public Task A_filter_that_draws_no_screen_takes_the_frame_at_its_internal_resolution() => Session.Dispatch(() =>
         {
             if (CrtDevice.Value is not { } device) return;
-            const string through = "uniform shader source; uniform float2 inputSize; uniform float2 outputSize; half4 main(float2 coord) { return source.eval(coord * inputSize / outputSize); }";
+            const string through = "uniform sampler2D source; uniform vec2 inputSize; uniform vec2 outputSize; vec4 filter_main(vec2 coord) { return source_eval(coord * inputSize / outputSize); }";
             byte[] columns = Paint(1280, 480, (x, _) => x % 2 == 0 ? (1.0, 1.0, 1.0) : (0.0, 0.0, 0.0));
             byte[] Drawn(int lines)
             {

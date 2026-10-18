@@ -26,8 +26,8 @@ namespace EmuSen.WiseMan.Serenity
         public Task On_a_device_a_float_pass_keeps_a_negative_a_value_above_white_and_its_alpha() => Session.Dispatch(() =>
         {
             if (string.IsNullOrEmpty(Device)) return;
-            const string wide = "half4 main(float2 coord) { return half4(-0.25, 2.0, 0.1, 0.25); }";
-            const string narrow = "uniform shader source; half4 main(float2 coord) { half4 c = source.eval(coord); return half4(-2.0 * c.r, 0.25 * c.g, 2.0 * c.a, 1.0); }";
+            const string wide = "vec4 filter_main(vec2 coord) { return vec4(-0.25, 2.0, 0.1, 0.25); }";
+            const string narrow = "uniform sampler2D source; vec4 filter_main(vec2 coord) { vec4 c = source_eval(coord); return vec4(-2.0 * c.r, 0.25 * c.g, 2.0 * c.a, 1.0); }";
             var filter = new ScreenFilter("test", new[] { new FilterPass(wide, PassScale.Source) { Float = true }, new FilterPass(narrow, PassScale.Viewport) }, null, "");
             var control = new GameFrameControl { ActiveFilter = filter };
             byte[] picture = ShaderBench.Picture(control, new byte[]?[] { new byte[8 * 8 * 4] }, 8, 8, 1, 16, 16, Device);
@@ -39,9 +39,9 @@ namespace EmuSen.WiseMan.Serenity
         public Task On_a_device_a_new_filter_is_warmed_a_pass_a_draw_before_it_takes_over() => Session.Dispatch(() =>
         {
             if (string.IsNullOrEmpty(Device)) return;
-            static FilterPass Pass(string body, bool last) => new($"uniform shader source; half4 main(float2 coord) {{ {body} }}", last ? PassScale.Viewport : PassScale.Source) { Float = !last };
-            var red = new ScreenFilter("red", new[] { Pass("return half4(0.8, 0.0, 0.0, 1.0);", true) }, null, "");
-            var green = new ScreenFilter("green", new[] { Pass("return half4(0.0, 0.8, 0.0, 1.0);", false), Pass("return source.eval(coord);", false), Pass("return half4(source.eval(coord).rgb, 1.0);", true) }, null, "");
+            static FilterPass Pass(string body, bool last) => new($"uniform sampler2D source; vec4 filter_main(vec2 coord) {{ {body} }}", last ? PassScale.Viewport : PassScale.Source) { Float = !last };
+            var red = new ScreenFilter("red", new[] { Pass("return vec4(0.8, 0.0, 0.0, 1.0);", true) }, null, "");
+            var green = new ScreenFilter("green", new[] { Pass("return vec4(0.0, 0.8, 0.0, 1.0);", false), Pass("return source_eval(coord);", false), Pass("return vec4(source_eval(coord).rgb, 1.0);", true) }, null, "");
 
             using var gl = ShaderBench.GlContext.Create(Device);
             using SkiaSharp.GRGlInterface glInterface = SkiaSharp.GRGlInterface.CreateOpenGl(name => ShaderBench.GlContext.GetProc(name))!;
@@ -72,8 +72,8 @@ namespace EmuSen.WiseMan.Serenity
         public Task On_a_device_a_feedback_pass_counts_frames_and_not_redraws() => Session.Dispatch(() =>
         {
             if (string.IsNullOrEmpty(Device)) return;
-            const string count = "uniform shader feedback; half4 main(float2 coord) { return half4(feedback.eval(coord).r + 10.0 / 255.0, 0.0, 0.0, 1.0); }";
-            const string show = "uniform shader source; half4 main(float2 coord) { return half4(source.eval(coord).rgb, 1.0); }";
+            const string count = "uniform sampler2D feedback; vec4 filter_main(vec2 coord) { return vec4(feedback_eval(coord).r + 10.0 / 255.0, 0.0, 0.0, 1.0); }";
+            const string show = "uniform sampler2D source; vec4 filter_main(vec2 coord) { return vec4(source_eval(coord).rgb, 1.0); }";
             var filter = new ScreenFilter("test", new[] { new FilterPass(count, PassScale.Source) { Feedback = true, Float = true }, new FilterPass(show, PassScale.Viewport) }, null, "");
             var control = new GameFrameControl { ActiveFilter = filter };
             byte[] frame = new byte[8 * 8 * 4];

@@ -4708,7 +4708,7 @@ case the page for eval
 target none
 covers 1
 $ man eval
-out 4271
+out 5659
 NAME
     eval - evaluate an expression against live core state
 
@@ -4751,6 +4751,31 @@ SYMBOLS
     run with something armed, so it is empty after frames that ran plain.
     'scanline', 'cycle' and 'opaddr' are not among them: the ABI carries no
     timing view and no last-instruction address.
+
+UNITS
+    A core of the stable ABI may also list units: the parts of the machine
+    that run no code, such as a PPU, an APU and its channels, or a
+    cartridge's board. Their registers are symbols too, after everything
+    above, in every scope ('eval', 'eval <cpu>', conditions, logpoints):
+
+    <unit>.<register>  always, the unit's name lowercased with anything but
+                       letters, digits and '_' dropped: 'ppu.PPUCTRL',
+                       'pulse1.Duty', 'board.Mapper'
+    <register>         alone, where only one unit has a register of that
+                       name: 'PPUCTRL'
+
+    Case does not matter. A name the processor, the system pack or a label
+    already answers stays theirs, so nothing that resolved before a core
+    listed units changes meaning: on the NES 'x' is the CPU's X and
+    'ppu.x' the PPU's fine X, and with a label PPUCTRL defined 'PPUCTRL'
+    is the label's address while 'ppu.PPUCTRL' is the register. A register
+    name two units share is not a symbol alone ('Duty' is refused on the
+    NES; write 'pulse1.Duty'). A name the language cannot spell, such as
+    the APU's '$4000', is not a symbol; 'regs' shows it.
+
+    A unit register is read from the core when the expression is evaluated,
+    at the hit for a condition, and reading it changes nothing in the
+    machine. 'eval symbols' lists the '<unit>.<register>' forms.
 
 NUMBERS AND MEMORY
     Numbers     123 decimal, $1F or 0x1F hex, %1010 binary

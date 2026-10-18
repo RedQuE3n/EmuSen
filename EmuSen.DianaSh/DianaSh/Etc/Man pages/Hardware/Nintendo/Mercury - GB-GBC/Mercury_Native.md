@@ -3766,7 +3766,8 @@ the goldens, the corpus baseline and the kit are as they were.*
   `MercuryNative` are deleted, and with them `EMUSEN_MERCURY_NATIVE`.
 - **What the debugger shows** comes from MercuryRT's own surfaces: the CPU's registers (`DEBUG_REGISTERS`), its units
   for the PPU, the APU, the timer, the four channels and HDMA (core ABI 1.13), its disassembly (`DEBUG_DISASSEMBLE` on
-  `emusen-sm83`), and the Game Boy pack's views over its spaces and units (`Mercury_Debug.md`, head note).
+  `emusen-sm83`), and the Game Boy pack's views over its spaces and units, in C# and in `emusen-systems` from platform
+  interface 21 (`Mercury_Debug.md`, head note).
 - **The ROM is a read-only space**, a write refused with `READ_ONLY`, as the shim's target showed it.
 - **An illegal opcode** stops a frame with status −20, its detail word `(opcode << 16) | pc` and the words "opcode $XX
   at $YYYY is no SM83's", on the plain and the observed frame alike; WiseMan's rig turns it into the `IllegalOpcode`

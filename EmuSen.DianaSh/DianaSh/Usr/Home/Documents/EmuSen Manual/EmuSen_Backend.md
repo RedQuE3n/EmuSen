@@ -3059,7 +3059,8 @@ reads the machine's state. Two surface changes came with them:
 - `ISystemDebugViews` gained `Palettes` and `PaletteSwatch` overloads taking the units, defaulting to the old
   members, since a Game Boy's palettes are registers; `CoreDebugTarget` passes them, and its view ring learns again
   when machine info changes, as a state from the other console changes it.
-- **Platform interface 20**: `emusen_systems_view` takes the systems `gb` and `gbc`, a request's `units` (each a name,
+- **Platform interface 21** (MarsRT's N64 pack took 20 first, §18.10.2): `emusen_systems_view` takes the systems
+  `gb` and `gbc`, a request's `units` (each a name,
   a kind and its registers) and `mutes`; `NativeDebugViews` sends the units with each view that takes them, and a
   units-reading summary to the library first, a system without that view (the NES today) answering from the C#
   views. This is the pattern the NES's Rust twins can follow.

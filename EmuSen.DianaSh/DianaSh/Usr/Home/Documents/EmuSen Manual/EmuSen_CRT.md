@@ -3367,3 +3367,18 @@ same grey held from the start by more than a quarter and no more than the whole 
 of 0.83%), is within 2% of that share 82 frames on (measured 0.0002%), equals it held (0.0000%), and with
 persistence 0 equals it at once. It passes as the filter stands; it guards the bound of §30.6 against a feedback
 gain or an unnormalised sum, which would break it, and it is the case to change with option 2 or 3.
+
+### 30.10 The cause: the television's adaptive contrast (2026-10-18)
+
+The change the tester saw was made after the filter, as §30.7's test allowed. The handheld was docked to a 4K
+television over DisplayPort with HDR on: gamescope reported `GAMESCOPE_DISPLAY_HDR_ENABLED` 1, SDR content placed at
+203 nits, and EmuSen draws an SDR picture, which gamescope maps. HDR was ruled out first: the change remained with it.
+The television's own adaptive contrast was the cause: with it turned off, the change on walking through a door and
+back is gone. Such processing measures each frame and moves the panel's light over about a second, and the filter's
+picture, bright lines with dark gaps between them and the glow around them, gives it different statistics from the
+unfiltered picture, which is why the change came and went with the filter.
+
+The filter's own change, 0.19% at the default persistence on the scene of §30.8, is not what was seen, and none of
+§30.8's options is taken; §30.9's test stays as the guard on its bound. A report of light moving a second after a scene
+change is checked first against the display's dynamic processing (adaptive contrast, dynamic tone mapping, a panel's
+automatic brightness), with the filter on and off.

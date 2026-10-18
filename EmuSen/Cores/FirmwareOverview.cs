@@ -94,8 +94,7 @@ namespace EmuSen.Cores
 
         private static FirmwareItem Item(FirmwareRequest request, string label, IReadOnlyList<string> folders)
         {
-            FirmwareFound? found = FirmwareLibrary.Find(request, folders);
-            string? wrong = found is null ? folders.FirstOrDefault(folder => File.Exists(Path.Combine(folder, request.FileName)) && new FileInfo(Path.Combine(folder, request.FileName)).Length != request.Size) : null;
+            var (found, wrong) = FirmwareLibrary.Locate(request, folders);
             return new FirmwareItem(label, request.FileName, request.Size, found is not null, wrong is not null, request.ReplacementEffect, request.ReplacementCost)
             {
                 FoundIn = Role(found?.Folder), WrongSizeIn = Role(wrong),

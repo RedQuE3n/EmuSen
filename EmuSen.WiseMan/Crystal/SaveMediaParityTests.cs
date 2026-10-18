@@ -175,7 +175,7 @@ namespace EmuSen.WiseMan.Crystal
             return title.Take(64).ToArray();
         }
 
-        private static byte[] RandomCard(Random r, ISaveMediumFormat format)
+        internal static byte[] RandomCard(Random r, ISaveMediumFormat format)
         {
             byte[] card = format.Format()!;
             var free = Enumerable.Range(0, 15).OrderBy(_ => r.Next()).ToList();
@@ -261,7 +261,7 @@ namespace EmuSen.WiseMan.Crystal
             }
         }
 
-        private static byte[] RandomPak(Random r)
+        internal static byte[] RandomPak(Random r)
         {
             byte[] pak = Managed(N64PakFormat.Id).Format()!;
             var free = Enumerable.Range(5, 123).OrderBy(_ => r.Next()).ToList();
@@ -339,7 +339,7 @@ namespace EmuSen.WiseMan.Crystal
             return name;
         }
 
-        private static byte[] RandomBram(Random r, ISaveMediumFormat format)
+        internal static byte[] RandomBram(Random r, ISaveMediumFormat format)
         {
             byte[] image = format.Format()!;
             int files = r.Next(0, 6);

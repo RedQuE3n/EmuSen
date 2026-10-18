@@ -30,7 +30,7 @@ namespace EmuSen.WiseMan.Crystal
         };
 
         // Every string literal of the sources, and every argument after `cheat` in the golden corpus, as written.
-        private static IReadOnlyList<string> TestCodes()
+        internal static IReadOnlyList<string> TestCodes()
         {
             var codes = new SortedSet<string>(StringComparer.Ordinal);
             foreach (string source in Sources)
@@ -54,7 +54,7 @@ namespace EmuSen.WiseMan.Crystal
         private static string Joined(Random r, IEnumerable<string> parts) => string.Join(Separators[r.Next(Separators.Length)], parts);
 
         // Codes of every family's shape and of none, with the separators, placeholders and characters the codecs treat specially.
-        private static IReadOnlyList<string> GeneratedCodes()
+        internal static IReadOnlyList<string> GeneratedCodes()
         {
             var r = new Random(20261017);
             var codes = new List<string> { "", " ", "+", "++", " + ", " ", "-", ":" };

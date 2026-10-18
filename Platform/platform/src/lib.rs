@@ -11,6 +11,9 @@ pub mod dianash;
 pub mod disc;
 pub mod endymion;
 pub mod endymion_devices;
+pub mod cheats;
+pub mod firmware;
+pub mod savemedia;
 pub mod galaxia;
 pub mod galaxia_config;
 pub mod serenity;
@@ -19,7 +22,7 @@ pub mod systems;
 pub mod systems_debug;
 
 /// The interface's one number, matched exactly by the host that was built against it.
-pub const ABI_VERSION: u32 = 15;
+pub const ABI_VERSION: u32 = 16;
 
 /// Every status the interface returns. Zero and up is success: a count or a length.
 pub mod status {
@@ -264,6 +267,9 @@ mod tests {
         exported.extend(exports_in(include_str!("serenity_device.rs")));
         exported.extend(exports_in(include_str!("systems.rs")));
         exported.extend(exports_in(include_str!("systems_debug.rs")));
+        exported.extend(exports_in(include_str!("firmware.rs")));
+        exported.extend(exports_in(include_str!("savemedia.rs")));
+        exported.extend(exports_in(include_str!("cheats.rs")));
         exported.sort();
         let mut declared = declared_in(include_str!("../../include/emusen_platform.h"));
         declared.sort();

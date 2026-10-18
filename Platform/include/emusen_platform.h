@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 15u
+#define EMUSEN_PLATFORM_ABI_VERSION 16u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -502,6 +502,77 @@ int64_t emusen_systems_board_name(int32_t mapper, uint8_t *out, size_t len);
  * system or view there is not; PARSE for a request that is not one.
  */
 int64_t emusen_systems_view(const uint8_t *request, size_t request_len, const uint8_t *tape, size_t tape_len, uint8_t *out, size_t len);
+
+/* ---- The file services: emusen-firmware, emusen-savemedia, emusen-cheats (EmuSen_Backend.md, section 15). Since interface 16. ---- */
+
+/*
+ * Firmware (EmuSen_Firmware.md, section 2). A request is a JSON object: file (the canonical name), size, alternates
+ * (names) and parts (split forms, each a list of names). Folders are a list of full paths, searched first to last.
+ */
+/* In: {"setting": the FirmwareDirectory value or null, "home": the player's home, "store": home/Firmware}. Out: folders,
+ * state (Unset, Usable, Missing, Relative or File), path, written and problem. A refused or absent value's line is queued
+ * for emusen_platform_diagnostics once, and again only when the value changes. */
+int64_t emusen_firmware_folders(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+/* In: {"request", "folders"}. Out: an envelope, the JSON's length as four little-endian bytes, the JSON (folder, names,
+ * lengths), then each part's bytes in order. ABSENT when no folder holds the image. */
+int64_t emusen_firmware_find(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+/* In: {"request", "folders"}. Out: found (folder, names, whole; or null), each file opened and measured but not read,
+ * and wrong (the first folder with a file of the canonical name and another size, looked for only when nothing is found). */
+int64_t emusen_firmware_locate(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+/* In: {"request", "source", "store"}. 1 when the source, of the request's size, was copied to the store under the
+ * canonical name; 0 when its size is not the request's; IO with the words when the store could not be written. */
+int32_t emusen_firmware_install(const uint8_t *request, size_t request_len);
+
+/*
+ * The card manager (EmuSen_SaveMedia.md, section 6). The request is a JSON object: op (open, copy, move, delete,
+ * import, new, duplicate, rename), its files (file; from and to; card; to and from, a list, for import), save, and
+ * media, an object naming each file the request names with the medium id its extension makes it, or null. Out: open's
+ * {"card": {exists, length, listing} or null}, or {done, words}. A change takes the lock below as "the card manager".
+ * BAD_ARGUMENT for a damaged directory that reaches outside its image; NOT_FOUND, ACCESS or IO for a rename the system
+ * refused. A read or a write that failed is queued for emusen_platform_diagnostics.
+ */
+int64_t emusen_savemedia_op(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+
+/*
+ * The cheat files and the player's cheat database (EmuSen_Cheats.md; `man cheat`). A cheat crosses as {desc, enabled,
+ * kind (RamPoke or RomPatch), writes}, each write {space, address, value, width, type, bit (or null), big_endian,
+ * repeat, repeat_address, repeat_value}, as emusen_systems_cheat_decode writes one.
+ */
+/* A .cht text read: {"text", "codec", "space", "patch"}, each codec an emusen_systems_cheat_codecs id or null. Out:
+ * {"cheats", "skipped"}. BAD_ARGUMENT where a codec's index fell outside its code, which the C# let escape. */
+int64_t emusen_cheats_parse(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+/* Cheats written as a .cht text: {"cheats": [...]}. */
+int64_t emusen_cheats_write(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+/* A database scanned from its folder once, and never changed after, so any thread may ask it; null for a path that is
+ * not UTF-8. A folder that is absent or cannot be listed whole holds no files. Opaque to the host. */
+typedef struct emusen_cheats_database emusen_cheats_database;
+emusen_cheats_database *emusen_cheats_database_open(const uint8_t *directory, size_t directory_len);
+void emusen_cheats_database_free(emusen_cheats_database *db);
+/* Every file, in the database's order: [[system, game, path], ...]. */
+int64_t emusen_cheats_database_entries(const emusen_cheats_database *db, uint8_t *out, size_t len);
+/* {"op": "systems"} gives [[system, count], ...]; {"op": "games", "system", "filter"} and {"op": "find", "text",
+ * "limit"} give the files' places in the entries' list, in order. */
+int64_t emusen_cheats_database_query(const emusen_cheats_database *db, const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+/* A prune's plan: {"keep": [...]}. Out: {"removing": [{system, path, files, bytes}], "keeping", "reason" (or null)}. */
+int64_t emusen_cheats_prune_plan(const emusen_cheats_database *db, const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+/* A plan applied inside its folder: {"directory", "removing": [{system, path}]}. Out: {"removed", "failed": [...]}. */
+int64_t emusen_cheats_prune_apply(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+/* A downloaded zip installed under `target`: out {"installed", "skipped"}. NOT_SUPPORTED, nothing written, for a form
+ * the host reads itself (Zip64, spanned, encrypted, a method other than stored and deflate, a name holding a NUL, a
+ * directory that is not one); IO, NOT_FOUND or ACCESS where the target could not be made. */
+int64_t emusen_cheats_install(const uint8_t *zip, size_t zip_len, const uint8_t *target, size_t target_len, uint8_t *out, size_t len);
+
+/*
+ * A save medium's lock (EmuSen_SaveMedia.md, section 3.5): <file>.lock, locked with flock while held and removed with
+ * the last handle, holding the holder's words and the process's id. Within the process shared handles may hold one file
+ * together; a file another process or an unshared handle holds is refused.
+ */
+/* A handle above zero, or zero when the file is held. */
+uint64_t emusen_galaxia_medium_lock_take(const uint8_t *file, size_t file_len, const uint8_t *holder, size_t holder_len, int32_t shared);
+/* 1 when the handle was held, 0 when it was let go already. */
+int32_t emusen_galaxia_medium_lock_release(uint64_t handle);
+/* The latest holder's words in this process, "another program" for a lock held elsewhere; ABSENT when no one holds it. */
+int64_t emusen_galaxia_medium_lock_holder(const uint8_t *file, size_t file_len, uint8_t *out, size_t len);
 
 /* ---- Endymion: the logic half (EmuSen_Audio_Sync.md, sections 1 to 3; EmuSen_Input.md, sections 7 and 8) ---- */
 

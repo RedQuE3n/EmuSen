@@ -1,6 +1,6 @@
 # EmuSen — the backend in Rust: the line, the frontend API, the system packs and the services
 
-*This revision: the first, 2026-10-17. A design; B1 has since been built (§12, 2026-10-17), and B2's first three parts (§14, 2026-10-17). It answers the tester's goal of 2026-10-16, "to
+*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), and B2's first three parts (§14, 2026-10-17). It answers the tester's goal of 2026-10-16, "to
 get the entire backend ported to rust", after which the frontend's move is planned, and the request of 2026-10-17 to
 design two things: one frontend API by which every frontend drives the cores, and the system packs and the remaining C#
 platform services in Rust. Every claim about the code was read on `WiseMan` at `165e60b4`. Claims are marked as
@@ -674,7 +674,7 @@ behind a switch until the tester agrees to state 3, and says how it is proven. T
 | **B2** | **The frontend API v1 and its C# implementation.** `emusen_crystal.h` and its baseline; `EmuSen.Crystal.Client`; a managed implementation in `EmuSen` written from `EmulatorSession`, `CoreFactory` and the three loops' frame-end order, which is then written once; Pharaoh, emusen-shell and Mistress moved onto the binding in that order; `HostAction` synthesised from events for the C# shell; the session service 1.3 with `games`, `open_game` and `open_console` | one test per row of `EmuSen_Surfaces.md` §4.1's divergence table, run through every client (rewind gated by the engine in each; one post-load sequence); F3 and F4, and the candidates C1 to C7 of §3.12, each shown by a test that fails first or recorded as no defect; Pharaoh's `framesum` and `audiosum` equal before and after on the bench games; the shell's golden corpus; the shape check that only C-expressible types appear in the contract layer (`EmuSen_CoreAPI.md` §9.3) [R]; the header and the binding agreeing by a test | each frontend's old path stays until its own move is merged; afterwards git, since the implementation is the same C# moved |
 | **B3** | **Pack code in Rust**: the recognisers and routing, header readers, cheat codecs, the card formats (`PsxCardFormat`, `N64PakFormat`, `SegaCdBramFormat`), debugger views, the OpenVGDB transform; the console code of the shims moved in (`N64GameSharkCodec`, `MoonBoards`, `GbCartridge`, the SM83 disassembler) and the VR4300's onto `emusen-mips` | a parity class per pack on generated inputs: synthetic discs and cartridges for the recognisers, every code of the cheat tests both ways, cards written by each side read by the other and edited to the same bytes, and cards written by Diamond's and Nephrite's open firmware read by the pack's modules (F21), every tile and tilemap entry of the debug-view tests; seeded faults shown to be caught (`EmuSen_RustPlatform.md` §6.5) [R]; the golden corpus's `cheat`, `cards`, `tile` and `dis` files | `EMUSEN_SYSTEMS_NATIVE=0` |
 | **B4** | **The per-core shims retired.** What each adds above the ABI goes into its core's own exports, as optional capabilities of the core ABI v1 where one exists (`DEBUG_REGISTERS`, `EmuSen_DianaSh.md` Q28 [R]) and a minor where none does; MarsRT's private exports (`marsrt_core_counters`, `_cpu_registers`, `_gpu_report` and the rest, `MarsRtCore.cs:21–32` [M]) become telemetry or debug capabilities; the shims, `PortEngine` and the pre-stable host deleted; the three dead classes deleted | each core's goldens and corpus baseline unchanged (`EmuSen_Stack.md` §2.1, 2026-10-16) [R]; the kit's corpus on each core; the debugger's golden corpus on each core unchanged, or each difference recorded and decided; `grep` for a type under `EmuSen.Cores.Nintendo.` in shipped code: 0 | per core: its shim stays until its core's exports pass, reached through `CoreFactory` as now |
-| **B5** | **The file services in Rust**: `emusen-firmware` (the store, the folders' order, the overview), `emusen-savemedia` (the card manager over B3's formats and Galaxia's `MediumLock`), `emusen-cheats`' files and database (`.cht`, the list files, the database's install, prune and import) | a parity class per service over generated trees (firmware whole and split, cards of each medium held and free, `.cht` files of the cheat tests); the golden corpus's `cards`, `cheat db` and `firmware` cases | `EMUSEN_SERVICES_NATIVE=0` |
+| **B5** | **The file services in Rust**: `emusen-firmware` (the store, the folders' order, the overview), `emusen-savemedia` (the card manager over B3's formats and Galaxia's `MediumLock`), `emusen-cheats`' files and database (`.cht`, the list files, the database's install, prune and import) | a parity class per service over generated trees (firmware whole and split, cards of each medium held and free, `.cht` files of the cheat tests); the golden corpus's `cards`, `cheat db` and `firmware` cases. *Built 2026-10-17, §15; the download waits on SR9's choice (§15.4)* | `EMUSEN_SERVICES_NATIVE=0` |
 | **B6** | **The core host in Rust, shared with the kit**: `emusen-core-host` in `EmuSen/Cores/Shared/` (discovery from sidecars, trust and the manifest, the checks of `EmuSen_CoreAPI.md` §7.2, the v1 calls, the input latch, the state layout), which the kit's `api.rs`, `sidecar.rs` and `lender.rs` fold into | the kit's corpus on every core gives the same report through the new crate; discovery's listing as JSON equal from the C# and the Rust over the published tree and over trees with a missing, altered and unapproved library | the kit keeps its own loader until its corpus passes; the C# host is untouched by this step |
 | **B7** | **Crystal in Rust**: `emusen-crystal` over B1 to B6: sessions and the frame call, input, speed, rewind, states and `states.db`, settings and `consoles.json`, save-media placement, cheat application, the debugger's registries, expressions and bridge, telemetry, the recorder, the session service's table; exported as `emusen_crystal_*` from the platform library. Built in four parts, each graded before the next: (a) life, frame, input, speed, rewind, states, settings, media; (b) the debugger; (c) the service table; (d) the per-program switch | the parity class runs scripted sessions through the binding on both implementations and compares frame and audio digests, state bytes, files written, events drained and every service function's JSON; the debugger's golden corpus with Crystal's table; then state 2 per program: **Pharaoh first**, then emusen-shell, then Mistress, each after a full blast-radius run on Linux and the three systems' CI | `EMUSEN_CRYSTAL_NATIVE=0`, per process, the B2 implementation |
 | **B8** | **The library in Rust**: `emusen-library` and `emusen_library.h`; the scan, identity over Galaxia's extended `RomHash`, `games.db` with its migrations, play time, collections and edits; Mistress's `Library/` behind the binding | a parity class: a generated library scanned by both into separate databases, compared row for row; every `games.db` version of the migration tests opened by both; the SQLite rule of `EmuSen_RustPlatform.md` §2.8 kept, one copy of SQLite per process (the C# lends `e_sqlite3` as Q25 there decided) [R] | `EMUSEN_LIBRARY_NATIVE=0` |
@@ -720,7 +720,7 @@ what it consolidates. Each step reports its real figure beside this one, as the 
 | B2 | 3,600 of EmulatorSession, CoreFactory and the three loops' frame-end code | — | header and baseline 1,100; C# contract and binding 1,900; managed implementation 2,500; tests 2,000 | about 1,600 from the frontends at once |
 | B3 | about 2,950 | 7,400 (5,900–8,900); *parts (a) to (c) built: about 4,000 for about 1,860 replaced, §13.5* | 300 of C# facade; *built: about 630* | 2,950 |
 | B4 | about 5,480 deleted unported | 1,500–3,000 in the cores' own exports | 300 in the generic C# adapter | 5,480 |
-| B5 | 1,250 | 3,100 (2,500–3,750) | 300 of C# facade | 1,250 |
+| B5 | 1,250 | 3,100 (2,500–3,750); *built: 2,497 for about 1,020 replaced, §15.5* | 300 of C# facade; *built: about 730* | 1,250 |
 | B6 | 1,735 in C#, 704 in the kit | 3,600 (3,000–4,300), net of what the kit brings | — | (with B7) |
 | B7 | about 7,800, and B2's 2,500 | 23,000 (18,000–27,000), with the API's C layer and the service's table | — | about 13,400, with the service's provider and B2's implementation |
 | B8 | about 1,900 | 4,700 (3,800–5,700) | 300 of binding | 1,900 |
@@ -824,6 +824,9 @@ finished (`EmuSen_RustPlatform.md` §31), so a gate here written for the three s
 - **SR9. A new dependency: an HTTP and TLS client in the platform library**, for the cheat database's download and
   scraping (§10, R6). *Recommended: one crate for the whole platform, chosen at B5 by a measured comparison of two
   candidates on the three systems, its licence recorded in `THIRD_PARTY_NOTICES.md`; until decided, downloads stay C#.*
+  *Decided 2026-10-18 by the tester, on B5's measurement (§15.4): `ureq` 3 with `rustls` is the platform's one HTTP and
+  TLS client, and certificates are checked against each system's own store through `rustls-platform-verifier`, as
+  .NET's `HttpClient` checks them today, not against a bundled `webpki-roots`.*
 - **SR10. Where a game's own core settings live** (§3.6): the file per game `EmuSen_CoreAPI.md` §8.5 adopted
   (`/etc/EmuSen/games/<game id>.json`), `games.db`'s `altemulator`, or a package's `settings.json`? *Recommended: the
   file per game, migrated once from `games.db`'s engine field by copying, with a package's file read in its place when
@@ -1796,3 +1799,261 @@ This lets `core test …` swap the test core's games, which the registry never o
 - The window still gives Endymion's `AudioPlayer.Submit` an array of exactly the samples drained, one a frame, as
   before. Endymion's C# rate control copies the samples whatever it is given.
 - Passing a span would need an Endymion overload, and it would save nothing until that copy goes.
+
+---
+
+## 15. What was built, 2026-10-17: B5, the file services in Rust
+
+*Measured on 2026-10-17 on branch `b5-services`, from `WiseMan` at `53117c71`. The step of §6's B5 row, built in the
+three parts that row names, each graded and committed before the next: (a) the firmware store, (b) the card manager,
+(c) the cheat files and the database. The decisions that bear on it: SR5 (one writer per settings file: none of the
+three writes `appsettings.json`, and the firmware store reads `FirmwareDirectory` from the C#'s load and passes it
+down), SR7 (the C# as failover, behind one switch, `EMUSEN_SERVICES_NATIVE`, in state 2 of `EmuSen_RustPlatform.md`
+§3.9), SR9 (the HTTP client, §15.4), SR11 (JSON for every request; no new store) and D4 (the crates in `Platform/`,
+exported from `emusen_platform`).*
+
+**The switch.** `ServiceLibrary` in Crystal holds it: the library unless the variable is `0`; a library absent,
+refused or without one of the services' exports leaves all three on the C#, said once. Each service keeps its C# as a
+`Managed` twin (`FirmwareLibrary.Managed`, `SaveMediaManager.Managed`, `ChtFile.Managed`, `CheatDatabase.Managed`,
+`CheatDatabasePruner.ManagedPlan` and `ManagedApply`, `CheatDatabaseInstaller.ManagedInstall`), which is the failover
+and the parity classes' oracle; a call whose text cannot cross (a NUL in a path, half a surrogate pair) stays on the
+C#, which refuses it as it always did. Every public type and signature the C# services had is unchanged, so their
+callers, the frontend API's managed implementation among them, compile and behave as before.
+
+### 15.1 Part (a): the firmware store, `emusen-firmware`
+
+- **The crate** (`Platform/firmware/`) is `FirmwareLibrary` and the facts of `FirmwareOverview`'s rows: the folders'
+  order (the player's `FirmwareDirectory` when its value is usable, then `home/Firmware`, the same folder searched
+  once), an image found whole by its canonical name and then its alternates, or as a split form taken whole from one
+  folder, size the only test (`EmuSen_Firmware.md` §2.1 to §2.3); where an image is without reading it, and the first
+  folder holding a file of its name and another size, which is what an overview row says; and the install into
+  `home/Firmware` under the canonical name. The chosen folder is only read.
+- **The folder setting's rules are Galaxia's**, so their Rust half went into Galaxia's crate as `setting_folders`
+  (blank is unset, `~` and `~/` are the home, a relative path or a file is refused, a folder that does not exist is
+  accepted and said), with `SettingFolders.Checked`'s words; `emusen-firmware` calls it. The C# `SettingFolders` is
+  unchanged: the two halves are a deliberate pair until state 3, held by the parity class. The line said of a refused
+  or absent value is said once and again only when the value changes, by each half's own memory of it; the library
+  queues it for the host's diagnostics, which report it through `ConfigDiagnostics` as the C# did.
+- **The overview's enumeration stays C#.** Which systems a build runs and which engine each will run are
+  `CoreCatalog`'s and discovery's (B6, B7); for each item it names, `FirmwareOverview` asks `FirmwareLibrary.Locate`,
+  which is the library's. The question before a launch (`MissingFrom`) and `IsInstalled` ask `Locate` too, which opens
+  and measures each file and reads none; `Find`, which the cores' hand-over calls, reads the bytes.
+- **The C layer** is four exports taking one JSON request each (`emusen_firmware_folders`, `_find`, `_locate`,
+  `_install`, `EmuSen_RustPlatform.md` §35); `_find` answers with an envelope carrying the parts' bytes, its first
+  buffer the request's size, so a whole image costs one call and one read.
+- **One defect, shown and fixed in both halves.** A firmware file given as a symbolic link was measured by the link's
+  own length, the length of the path it holds, while the target's bytes were read: a linked image of the right size
+  was passed over, and a link whose path happened to be as long as the image passed off a file of another size as the
+  image, which §2.1 of the firmware page exists to prevent. The parity class found it on its first run (its generated
+  trees hold links), and `FirmwareLibraryTests.An_image_given_as_a_link_is_measured_by_its_target` and
+  `A_link_whose_own_length_is_the_size_does_not_pass_off_another_size` showed it, both failing on the C#. A file is now
+  measured as reading it finds it, a link by its final target, and a link to nothing is neither the image nor a file
+  of the wrong size.
+
+| Gate | Result |
+|---|---|
+| `cargo test --release -p emusen-firmware -p emusen-galaxia` | 5 pass; 70 pass, 4 of them `setting_folders`' |
+| `FirmwareParityTests` | 4 pass: 27 setting values of every kind, the folders and every line said compared; every request of 150 generated trees (three folders of right-sized, wrong-sized, empty, linked, dangling and unreadable files and folders named as files, each request with alternates and split forms of every size, including none and a negative one), found with its bytes and located alike; installs from right, short, unreadable and absent sources into new, nested and blocked stores; the public calls through the facade |
+| The blast radius, with `EMUSEN_SERVICES_NATIVE` unset and `0` | 218 pass of 219, 218 of 219: the one failure each way is `VenusGoldenTests.No_corpus_verdict_is_worse_than_the_csharp_baseline`, a golden trace missing from the tree, which fails the same way on `WiseMan` without this step (187 traces for a baseline of 295) |
+
+The blast radius was the parity class, `FirmwareLibraryTests`, `FirmwareFolderTests`, `FirmwareOverviewTests`,
+`NephriteFirmwareTests`, `FirmwarePageTests`, `SettingFoldersTests`, `EsdeSettingsMenusTests`, the NEC DSP's firmware
+classes, `DiamondLaunchTimeTests`, `VenusRtCoreAbiTests`, `VenusGoldenTests`, and, for the interface's number,
+`GalaxiaParityTests`, `EndymionParityTests`, `SystemTableParityTests`, `SessionHeaderTests`, `NativeSwitchTests` and
+`LeafAssemblyTests`.
+
+**Seeded faults**, each made, built, run and reverted:
+
+| Fault | Caught by |
+|---|---|
+| the alternates searched before the canonical name | the parity class (generated trees) |
+| a split form held to the request's size when it gives none | the parity class (generated trees) |
+| folders compared with a trailing separator, so `home/Firmware/` was searched twice | the parity class (the settings) |
+| the wrong-size scan over every name rather than the canonical one | the parity class (generated trees) |
+| a refused value reported every time it is read | the parity class (the settings' lines) |
+| the facade reading every part from the envelope's first | the parity class (generated trees and the public calls) |
+
+### 15.2 Part (b): the card manager, `emusen-savemedia`, and Galaxia's medium lock
+
+- **The crate** (`Platform/savemedia/`) is `SaveMediaManager` (`EmuSen_SaveMedia.md` §6): a card opened and listed,
+  a save copied, moved (copied, read back, then deleted), deleted and imported all or none, and a card made,
+  duplicated and renamed, each change one atomic write (Galaxia's `atomic`) under the manager's own lock, every
+  outcome in the C#'s words. It reads the media through B3's format modules in `emusen-systems` and their words from
+  the systems table. Which medium a file is, by its extension, is not the pack's (F28) and stays the C#'s: the host
+  names each file's medium in the request.
+- **The lock moved into the library whole.** `MediumLock` keeps a process-wide table of who holds which card, which
+  is how a refusal names the game; a card manager in Rust that could not read the C#'s table would have said "another
+  program" of the game in the same window. So the lock gained a Rust half in Galaxia's crate, `medium_lock`: the same
+  `flock` on `<file>.lock` that .NET's `FileShare.None` takes on Unix (measured: a second exclusive open is refused,
+  and Python's `flock` from another process is refused with `EAGAIN`), the holder's words and the process id written
+  into it, the file removed with the last handle, shared handles for the program's own machines. The C# `MediumLock`
+  forwards to it under **Galaxia's** switch, since the class is Galaxia's; its exports are among `GalaxiaNative`'s.
+  The games' placement (`MemoryCards`, B7) and the manager therefore hold one table in the process, and a lock taken
+  by either half refuses the other as another program's would. The manager's Rust is used where the services' switch,
+  the packs' code (`EMUSEN_SYSTEMS_NATIVE`) and Galaxia's lock all chose the library.
+- **One behaviour reproduced on purpose**: a rename onto a folder of the new name is refused with the `IOException`
+  .NET's `File.Move` throws, which links and then unlinks, and so meets an existing name of any kind. Found by the
+  parity class's first run (the Rust had renamed over the empty folder).
+- **Measured and kept**: .NET's refusal of an exclusive open does not remove the holder's lock file, so a third
+  program still finds it.
+
+| Gate | Result |
+|---|---|
+| `cargo test --release -p emusen-savemedia -p emusen-galaxia` | 3 pass; 72 pass, 2 of them `medium_lock`'s |
+| `SaveMediaManagerParityTests` | 4 pass: 60 generated trees of every medium's cards (random cards, paks and backup RAMs from B3's generators, empty, blank and all-zero files, a file that will not open, a folder named as a card, a file of no medium, cards in a folder not yet made), each a script of 30 operations run on a copy by each half, about half of them with a card held by a game of the program, shared or not, or by another program's lock, every outcome's words and every file compared after every operation (of the 1,800, 174 changed a card, 1,403 were refused, 216 of those because a card was held, and the rest opened a card or threw alike); an import that exactly fills the card and one a block over; what a card that will not read reports; the two locks' sequences and their refusing each other |
+| The blast radius, with `EMUSEN_SERVICES_NATIVE` unset and `0` | 238 pass, 238 pass |
+| The lock's consumers with `EMUSEN_GALAXIA_NATIVE=0` | 133 pass |
+
+The blast radius was the parity class and part (a)'s, `SaveMediaParityTests`, `SaveMediaManagerTests`,
+`SaveMediaTests`, `SegaCdBramFormatTests`, `N64PakFormatTests`, `DiamondCardsTests`, `DiamondShellTests`,
+`MemoryCardsOfferTests`, `NephriteMediaTests`, the Memory Cards window's fit audit, `GoldenCorpusTests` (its `memcard`
+file unchanged), `GalaxiaParityTests`, `SystemTableParityTests` and `LeafAssemblyTests`.
+
+**Seeded faults**, each made, built, run and reverted:
+
+| Fault | Caught by |
+|---|---|
+| an import refused when its saves exactly fill the card | not by the scripts, which never met the case; then by the case written for it |
+| a medium's words with their acronyms lower-cased | the parity class (scripts) |
+| a save's place counted from 0 | the parity class (scripts) |
+| the holder not asked before the manager's lock is taken | the parity class (scripts) |
+| a move deleting without its read-back | none: an equivalent mutant here, since the copy the read-back checks was just written under the lock; recorded |
+| a move that does not ask who holds the first card | the parity class (scripts) |
+| a shared take joining an unshared holder | the parity class (the locks) |
+| the facade dropping a save's damaged flag | the parity class (scripts) |
+| a rename onto a folder not refused first | the parity class (scripts) |
+
+### 15.3 Part (c): the cheat files and the database, `emusen-cheats`
+
+- **The crate** (`Platform/cheats/`) is `ChtFile` (`.cht` read and written; a code decoded by emusen-systems' codecs
+  named by id, the whole code first and then each `+` part, a patch told apart as `cheat add` tells it), `CheatDatabase`
+  (the tree indexed as .NET's `Directory.EnumerateFiles(..., AllDirectories)` gives it: a folder's files in the
+  system's order, its folders visited after in turn, links to folders followed, any error leaving the index empty;
+  then sorted by system and game without regard to case, ties in that order; searched by game), `CheatDatabasePruner`
+  (the plan with its four refusals, each folder measured as `FileInfo.Length` measures a link, by the link; the apply
+  inside the tree only, never through a link, and `Directory.Delete`'s rule of trying every entry and giving the first
+  failure after) and `CheatDatabaseInstaller.Install` (each entry written as `ExtractToFile` writes it: its Unix mode on
+  a file it makes and not on one it overwrites, an existing file truncated only once locked, its time read as local
+  time with the standard offset where the time falls twice or never, all measured on .NET 10.0.112 on 2026-10-17; no
+  CRC check, as .NET makes none).
+- **What stays C#.** The registry a session applies (`CheatRegistry`, B7) and so `CheatImport`, which reads a file with
+  `ChtFile.Parse` and adds what it read; the download (§15.4). **The list files** (`cheats/<game>.json`) were Galaxia's
+  in Rust already (`EmuSen_RustPlatform.md` §20), so nothing of theirs moved.
+- **The archive.** A zip is read here only where it is plainly one of stored and deflated entries; a Zip64 or spanned
+  archive, an encrypted entry, another method, a name holding a NUL or a directory that is not one is left to the C#,
+  which reads every form .NET does and refuses the rest as before, nothing having been written. Inflate is `flate2`
+  over `zlib-rs`, already in the workspace through `emusen-disc`'s CHD reader; `libc` gives `mktime` and `localtime_r`.
+  On Windows and macOS, paused (`EmuSen_RustPlatform.md` §31), the local time waits for the port and reads as UTC.
+- **A database is a handle** in the C layer, scanned once and never changed, so any thread may ask it; the C# index
+  holds it for its life and is freed with it. `Games` and `Find` cross as places in the entries' list, so a system of
+  thousands of files is not sent twice.
+- **Two defects, shown and fixed in both halves.** A `.cht` file whose count is far past its entries
+  (`cheats = 2147483647`) walked every number below the count, reading nothing for each, which held `cheat db load`
+  and Mistress's import for minutes; shown by `ChtFileTests.A_count_far_past_the_entries_reads_them_without_walking_every_number`
+  failing its five-second bound on the C#. Now only the numbers some field is named for are visited, and the rest are
+  counted as skipped, which is what the walk counted. And an install into a folder written with a trailing separator,
+  as a player may type `CheatDatabaseDirectory`, skipped every entry as one reaching outside the folder, since the
+  folder's full path kept its separator and the test added another; shown by
+  `CheatDatabaseTests.An_update_into_a_folder_written_with_a_trailing_separator_installs_every_cheat` failing on the C#
+  (0 installed, 2 skipped). The folder's path is now taken without its trailing separator.
+- **A rule of .NET's, reproduced where it was missing**: `int.TryParse` and `long.TryParse` accept NULs at the very end
+  of a number, after any white space (measured: `"5\0"` and `"5 \0"` read as 5, `"5\0\0 "` and `"\05"` do not), which
+  a `.cht` value may carry. `emusen-dotnet`'s reading did not; a failing test showed it, and the shell's reading, which
+  shares it, gains the rule too, with its golden corpus unchanged.
+
+| Gate | Result |
+|---|---|
+| `cargo test --release -p emusen-cheats -p emusen-dotnet -p emusen-platform` | 8, 27 and 29 pass, the platform's header test reading the three new C layers |
+| `emusen_platform.h` as C99 and C++17, `-Wall -Wextra -pedantic -Werror` | clean |
+| `CheatServicesParityTests` | 4 pass: every `.cht` text the cheat tests hold and 1,500 generated ones (entries in any order and case, codes from B3's corpus of the cheat tests' codes and generated ones, explicit writes with every field and malformed numbers, comments, quotes, CRLF, counts past and short of the entries), each read with every system's pair of codecs and with none, about 15,000 reads; 2,000 generated cheat lists written; 80 generated trees indexed, every system's games with five filters and twelve texts at four limits searched, planned against five keep-sets and pruned, the trees compared after; 300 generated archives installed, some over existing files, some damaged, some into a folder with a trailing separator, every file's bytes, mode and time compared |
+| The blast radius, with `EMUSEN_SERVICES_NATIVE` unset and `0` | 535 pass and 8 skipped of 543, each way |
+
+The blast radius was the three parity classes and the systems table's, `CheatCodecParityTests`, every cheat class
+(`ChtFileTests`, the `CheatDatabase…` classes, `CheatPruneCommandTests`, `CheatChtCommandTests`,
+`CheatMasterSwitchTests`, `CheatPersistenceCommandTests`, `GenesisCheatFormatsTests`, `PsxCheatFormatsTests`,
+`MarsCheatTests`, `RomPatchResolutionTests`, `CoreFactoryCheatWiringTests`), Mistress's cheat windows and lists
+(`CheatDatabaseWindowTests`, `CheatDatabasePruneWindowTests`, `ActiveCheatsWindowTests`, `GameCheatListTests`,
+`MainWindowCheatListTests`, `PadCheatsTests`, `MarsRtEngineTests`, the cheat pad's fit audit, `AccessibilityTests`,
+`SheetLookTests`, `SettingPathsOpenTests`), `SessionServiceParityTests`, and, for `emusen-dotnet`'s rule,
+`GoldenCorpusTests` (its `cheat` file, `cheat db` cases included, unchanged), `TextModuleParityTests`,
+`NativeSwitchTests` and `DianaShSwitchTests`; with `GalaxiaParityTests` and `LeafAssemblyTests`.
+
+**Seeded faults**, each made, built, run and reverted:
+
+| Fault | Caught by |
+|---|---|
+| a `.cht` flag read as true only in lower case | the parity class (texts) |
+| the quotes kept on an empty quoted value | the parity class (texts) |
+| a four-byte search size read as two | the parity class (texts) |
+| a write's raw repeat count written | the parity class (written lists) |
+| a game starting with the text ranked as one named by it | not at first, since a game named by the text sorts before one starting with it; caught once the trees held a game whose name the search shortens (`Mario.zip`) |
+| a games filter not trimmed | the parity class (trees) |
+| a linked system folder taken as inside the tree | the parity class (trees) |
+| a link measured by its target | not at first, since the trees' only links were folders; caught once they held a linked file in a system folder |
+| an entry's Unix mode not given to the file it makes | the parity class (archives) |
+| every zip time read as standard time | the parity class (archives, through July and the two DST edges) |
+| the target's trailing separator kept | the parity class (archives) |
+| the facade reading every cheat as a RAM poke | the parity class (texts) |
+
+### 15.4 SR9: the HTTP client, measured and chosen; the download still C#
+
+SR9 chose one HTTP and TLS crate for the whole platform by a measured comparison of two candidates. The step measured
+them on Linux on 2026-10-17, each in a scratch crate outside the repository built as the platform is (release, fat
+LTO, one codegen unit, panic abort), downloading the libretro cheat archive (`CheatDatabaseInstaller.LibretroCheatsUrl`,
+36,872,908 bytes) three times. Windows and macOS are paused (`EmuSen_RustPlatform.md` §31), so the comparison there
+waits for the port, as §31 says of this gate.
+
+| | `ureq` 3, `rustls` | `reqwest` 0.12, blocking, `rustls-tls` |
+|---|---|---|
+| Crates in its tree on Linux | 23 | 87 |
+| Clean build of the tree | 20.4 s | 24.5 s |
+| Added to a library | about 2.48 MB | about 3.34 MB |
+| Download, three runs | 0.24–0.27 s | 0.25–0.27 s |
+| Peak memory, the body held | 41 MB | 77 MB |
+| Licences | MIT, Apache-2.0, ISC, BSD-3-Clause, and `webpki-roots`' CDLA-Permissive-2.0 | the same, with Unicode-3.0 and more |
+
+For scale, `emusen_platform` is 4.74 MB today, and `curl` took the same 0.22–0.25 s; the network, not the client,
+bounded every run. Both bundle Mozilla's root certificates (`webpki-roots`) unless told to read the system's.
+
+Recommended to the tester: `ureq` with `rustls`, a quarter of the crates, three quarters of the size, half the memory
+and no asynchronous runtime for what is one blocking download, at the same speed; and for the certificates, each
+system's store (`rustls-platform-verifier`), which is what .NET's `HttpClient` does today, rather than Mozilla's roots
+bundled, one more licence and a list the project would have to keep current.
+
+*Decided 2026-10-18 by the tester, each as recommended:* `ureq` 3 with `rustls` is the platform's one HTTP and TLS
+client (SR9, §11.1), and certificates are checked against each system's own store through `rustls-platform-verifier`,
+not a bundled `webpki-roots`. Nothing was adopted in this step: the download (`CheatDatabaseInstaller.Fetch`) stays
+C#, and `Cargo.lock` gained no HTTP crate. **Moving the cheat database's download to Rust on `ureq` is the next piece
+of work after this step is merged**; the install then takes its bytes from the Rust download rather than from the C#.
+
+*Also decided 2026-10-18 by the tester:* `MediumLock` stays backed by the library under Galaxia's own switch, as §15.2
+built it.
+
+### 15.5 Sizes, against §7, and what is left
+
+| | §7's estimate | Built |
+|---|---:|---:|
+| C# replaced | 1,250 | about 1,020 (`FirmwareLibrary` 125 and the overview's rows, `SaveMediaManager` 181, `MediumLock` 106, `ChtFile` 270, `CheatDatabase` 118, the pruner 131, the install about 45; `CheatImport` and `CheatWrite` stay) |
+| Rust, with in-crate tests and the C layers | 3,100 (2,500–3,750) | 2,497: `emusen-firmware` 337 with Galaxia's `setting_folders` 160 and its C layer 96; `emusen-savemedia` 466 with Galaxia's `medium_lock` 168 and its C layer 142; `emusen-cheats` 865 and its C layer 263 |
+| C# facade | 300 | about 730 (`ServiceLibrary` 152, `FirmwareNative` 76, `SaveMediaNative` 80, `MediumLockNative` 47, `CheatsNative` 228, and the forwarding in the services) |
+| The parity classes | — | 690 (175, 235 and 280) |
+
+On the finished branch the three parts' blast radii together, less the missing Venus golden of §15.1, gave 699 pass
+and 8 skipped of 707 with `EMUSEN_SERVICES_NATIVE` unset and the same with it `0`. Rebased on 2026-10-18 onto `WiseMan`
+at `73bffab6` (B2's first three parts and MoonRT's PAL machine in), with the interface renumbered 16, the same run gave
+the same counts both ways, and the three parity classes with Endymion's device and Serenity's parity classes 36 pass.
+
+The Rust ran at about 2.4 times the C# it replaced, at §7's central ratio. The facade is more than twice §7's figure,
+as B3's was, because each service has its own call shapes and the cheat database its handle; it is deleted whole at
+state 3.
+
+**Left for later:**
+
+- State 3, the C# services deleted, at the tester's word after goldens (§6, B10). Until then a change to a service is
+  made in both halves, and the parity classes fail on one alone.
+- The download on `ureq`, next after this step (§15.4); the install then takes its bytes from it rather than from the C#.
+- The overview's enumeration of systems and engines, with B6 and B7; `CheatImport` with the registry at B7; the
+  firmware store's reading of `FirmwareDirectory` from Rust once a Rust host loads `appsettings.json` itself.
+- On Windows and macOS: the zip times' local zone, and every gate of this section, when the port resumes. The
+  portable job of `EmuSen_RustPlatform.md` §31 compiles the three crates for both; it was not run here, since this
+  machine's toolchain carries no standard library for either target.

@@ -252,6 +252,7 @@ namespace EmuSen.Galaxia.Native
             "emusen_galaxia_log_path", "emusen_galaxia_log_format", "emusen_galaxia_log_append", "emusen_galaxia_log_reset", "emusen_galaxia_suggest_distance",
             "emusen_galaxia_suggest", "emusen_galaxia_number_format", "emusen_galaxia_text_decode",
             "emusen_galaxia_map", "emusen_galaxia_mapped_bytes", "emusen_galaxia_unmap", "emusen_galaxia_mapped_advise",
+            "emusen_galaxia_medium_lock_take", "emusen_galaxia_medium_lock_release", "emusen_galaxia_medium_lock_holder",
         };
 
         // Resolves the exports and hands the library what only the host knows; the name of a missing export, or null.

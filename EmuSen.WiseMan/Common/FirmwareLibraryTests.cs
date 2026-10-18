@@ -39,6 +39,28 @@ namespace EmuSen.WiseMan.Common
 
         // --- Discovery ---
 
+        // A file given as a symbolic link is measured by what it links to, which is what is read - see EmuSen_Backend.md §15.1.
+        [Fact]
+        public void An_image_given_as_a_link_is_measured_by_its_target()
+        {
+            string target = Path.Combine(Directory.CreateDirectory(Path.Combine(_dir, "elsewhere")).FullName, "dump.bin");
+            File.WriteAllBytes(target, new byte[64]);
+            File.CreateSymbolicLink(Path.Combine(_dir, "widget.rom"), target);
+            Assert.Equal(64, FirmwareLibrary.TryLoad(Request)?.Length);
+            Assert.Empty(FirmwareLibrary.MissingFrom([Request]));
+        }
+
+        // A link's own length is the length of the path it holds; one of 64 characters must not pass off a file of 37 bytes as the image.
+        [Fact]
+        public void A_link_whose_own_length_is_the_size_does_not_pass_off_another_size()
+        {
+            string name = new string('a', 60) + ".bin";
+            File.WriteAllBytes(Path.Combine(_dir, name), new byte[37]);
+            File.CreateSymbolicLink(Path.Combine(_dir, "widget.rom"), name);
+            Assert.Null(FirmwareLibrary.Find(Request));
+            Assert.Single(FirmwareLibrary.MissingFrom([Request]));
+        }
+
         [Fact]
         public void An_empty_library_reports_the_image_as_missing()
         {

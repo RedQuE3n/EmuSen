@@ -1,3 +1,5 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.Cores.Native;
 using System;
 using System.IO;
 using System.Linq;
@@ -10,7 +12,6 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EmuSen.Common;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -223,7 +224,7 @@ namespace EmuSen.WiseMan.Mistress
 
         private long SavedFrames()
         {
-            using var core = new MarsRtCore() { Options = TestCores.NoBattery };
+            using var core = new MarsRtTestCore() { Options = TestCores.NoBattery };
             core.LoadRom(_romPath);
             core.LoadState(ResumeState);
             return core.TotalFrames;

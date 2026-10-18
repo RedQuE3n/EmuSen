@@ -227,11 +227,15 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
             let (name, offset, addressable) = n64::views::physical_in(m, address as u32);
             (object(vec![("space", Value::string(name)), ("offset", Value::number(offset)), ("addressable", Value::Bool(addressable))]), Vec::new())
         }
-        ("n64", "video_registers") => {
-            let rows = n64::views::video_registers(m).into_iter().map(|(name, value)| object(vec![("name", Value::string(name)), ("value", Value::number(value))])).collect();
-            (object(vec![("registers", Value::Array(rows))]), Vec::new())
+        ("n64", "summary") => {
+            let vi: Option<Vec<(String, u64)>> = match r.get("vi") {
+                Some(Value::Array(items)) => Some(
+                    items.iter().map(|x| (text(x.get("name")).unwrap_or_default().to_string(), match x.get("value") { Some(Value::Number(n)) => n.parse().unwrap_or(0), _ => 0 })).collect(),
+                ),
+                _ => None,
+            };
+            textual(n64::views::summary(&registers, vi.as_deref()))
         }
-        ("n64", "summary") => textual(n64::views::summary(&registers, m)),
         _ => return fail(status::ABSENT, format!("{system} has no view {view}")) as i64,
     };
     let out_bytes = if memory.wants.is_empty() {

@@ -1,3 +1,5 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -5,7 +7,6 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using EmuSen.Cores;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
@@ -40,7 +41,7 @@ namespace EmuSen.WiseMan.Cores
             string? output = Environment.GetEnvironmentVariable(OutVariable);
             string? games = Environment.GetEnvironmentVariable(GamesVariable);
             if (string.IsNullOrWhiteSpace(output) || string.IsNullOrWhiteSpace(games)) return;
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            Assert.True(MarsRt.Available, MarsRt.Report);
             Directory.CreateDirectory(output);
             string scratch = Path.Combine(output, "states");
             Directory.CreateDirectory(scratch);
@@ -99,19 +100,21 @@ namespace EmuSen.WiseMan.Cores
         private sealed class Run : IDisposable
         {
             private readonly StreamWriter _out;
-            private readonly MarsRtCore _core;
+            private readonly MarsRtTestCore _core;
             private long _serial;
 
             public Run(string path, (string Key, string Value)[] settings, bool expansionPak = true)
             {
                 _out = new StreamWriter(path);
-                _core = new MarsRtCore(expansionPak) { Options = TestCores.NoBattery };
+                _core = new MarsRtTestCore(expansionPak) { Options = TestCores.NoBattery };
                 foreach (var (key, value) in settings) ((ICoreSettings)_core).Set(key, value);
             }
 
             public void Load(string rom)
             {
                 _core.LoadRom(rom);
+                // One player, as Mistress's router seats one pad: ports 2 to 4 emptied before the first frame - see EmuSen_Backend.md §18.10.
+                for (int port = 1; port < 4; port++) _core.SetControllerConnected(port, false);
                 Line("load", -1);
             }
 

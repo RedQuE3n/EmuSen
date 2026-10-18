@@ -1700,7 +1700,8 @@ the console's lines the picture holds, so the CRT filter draws the console's sca
 - **A struct of 56 bytes is still taken**: a core writes what both sides know, `min(size, 64) - 4` bytes after `size`,
   and refuses only a struct shorter than 1.0's 56 with `EMUSEN_BAD_STRUCT`. `emusen-native` before 1.13 refused
   anything shorter than its own struct; it now keeps §4.2's rule here as it did for the create params.
-- **The host**: `ICore.DisplayLines` on `CoreEngine` is the last frame's `lines`.
+- **The host**: `ICore.DisplayLines` on `CoreEngine` is the last frame's `lines`, times `row_repeat` where the
+  engine repeats the rows itself, so that it counts the rows `ScreenHeight` holds (`EmuSen_Backend.md` §18.10).
 - **The kit.** Every frame C6, C7 and the rest run: `lines` is 0 or divides `height`. The test core writes 2 when its
   `Wide` setting is on; `FAULT_LINES_UNEVEN` (1 << 30), lines of 3 over 4 rows, fails C6 and the cases that rerun
   frames (C12, C22).
@@ -3964,7 +3965,10 @@ views out, and `CoreDebugTarget.GetMemorySpaces` reads a space byte by byte, its
 not, and is not reached today: `CoreDebugTarget.ViewSpaces` copies each space without side effects whole when a system
 pack's views first touch it, so a pack for a system with such a view would ask for a 2 GiB copy. The PlayStation's pack
 has no views. Reading a `view` space live there, as a space with side effects already is, would remove the hazard; it
-is recorded and not changed, since nothing yet calls it on a view.
+is recorded and not changed, since nothing yet calls it on a view. *Changed 2026-10-18 (`EmuSen_Backend.md` §18.10):*
+the N64's pack is the first with views over a system with such a view (MarsRT's `CPU`), so `ViewSpaces` reads a view
+live; and `GetMemorySpaces` reads a view at the address asked, unwrapped, since wrapping at the clamped size read the
+wrong byte for any address past `int.MaxValue`, as KSEG0's are (shown by a test that failed first).
 
 ---
 
@@ -4506,6 +4510,11 @@ platform library's C interface did not change: `emusen_systems_view` takes a vie
 does not know answers "none", which `NativeDebugViews` turns into the C# views' answer; the new members forward to the
 C# views until a console adds its Rust twins, which is when the platform interface takes its next number. An address
 the core translates first (`DEBUG_TRANSLATE`, §6.38) reaches `ResolvePhysical` translated.
+
+*Added 2026-10-18, with MarsRT's switch (`EmuSen_Backend.md` §18.10):* a seventh member, **`Disassemble`** (a space,
+an address and a count; each instruction with the address it names), which `CoreDebugTarget` asks when a core claims no
+`DEBUG_DISASSEMBLE`, keeping each reference for `ClassifyStaticReference`. The N64's pack is the first to fill it, and
+its summary and `ResolvePhysical` (`N64DebugViews`), the VI read from MarsRT's `video` unit.
 
 ---
 

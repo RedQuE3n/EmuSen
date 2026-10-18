@@ -1,8 +1,8 @@
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Crystal.Systems.N64;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
@@ -28,18 +28,18 @@ namespace EmuSen.WiseMan.Cores
         private const uint PiDramAddress = 0x0460_0000, PiCartAddress = 0x0460_0004, PiWriteLength = 0x0460_000C;
 
         private readonly List<string> _temporaryFiles = new();
-        private readonly List<MarsRtCore> _cores = new();
+        private readonly List<MarsRtTestCore> _cores = new();
 
         public void Dispose()
         {
-            foreach (MarsRtCore core in _cores) core.Dispose();
+            foreach (MarsRtTestCore core in _cores) core.Dispose();
             foreach (string path in _temporaryFiles)
             {
                 try { File.Delete(path); } catch { }
             }
         }
 
-        private MarsRtCore Load(bool expansionPak = false)
+        private MarsRtTestCore Load(bool expansionPak = false)
         {
             string path = SyntheticN64Rom.WriteTemp(SyntheticN64Rom.Build(
                 length: 0x2000,
@@ -48,17 +48,17 @@ namespace EmuSen.WiseMan.Cores
             return Started(path, expansionPak);
         }
 
-        private MarsRtCore Started(string path, bool expansionPak = false)
+        private MarsRtTestCore Started(string path, bool expansionPak = false)
         {
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
-            var core = new MarsRtCore(expansionPak) { Options = TestCores.NoBattery };
+            Assert.True(MarsRt.Available, MarsRt.Report);
+            var core = new MarsRtTestCore(expansionPak) { Options = TestCores.NoBattery };
             _cores.Add(core);
             core.LoadRom(path);
             return core;
         }
 
         // RDRAM by byte and by range, read and written through the library's memory space.
-        private sealed class Memory(MarsRtCore core)
+        private sealed class Memory(MarsRtTestCore core)
         {
             public byte this[int address]
             {
@@ -69,11 +69,11 @@ namespace EmuSen.WiseMan.Cores
             public byte[] this[Range range] => core.ReadSpace(MarsRtSpace.Rdram, (uint)range.Start.Value, range.End.Value - range.Start.Value);
         }
 
-        private static Memory Rdram(MarsRtCore core) => new(core);
+        private static Memory Rdram(MarsRtTestCore core) => new(core);
 
         private static CheatWrite Only(string code) => Assert.Single(N64GameSharkCodec.DecodeWrites(code));
 
-        private static void Apply(MarsRtCore core, string code)
+        private static void Apply(MarsRtTestCore core, string code)
         {
             core.Cheats.AddCheat(CheatKind.RamPoke, N64GameSharkCodec.DecodeWrites(code), null, code);
             core.ApplyCheats();
@@ -263,7 +263,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_16_bit_write_lands_high_byte_first_as_the_processor_reads_it()
         {
-            MarsRtCore core = Load();
+            MarsRtTestCore core = Load();
 
             Apply(core, "81000100 1234");
 
@@ -276,7 +276,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void An_8_bit_write_lands_on_its_own_byte()
         {
-            MarsRtCore core = Load();
+            MarsRtTestCore core = Load();
 
             Apply(core, "80000101 FF42");
 
@@ -286,7 +286,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void An_equal_test_guards_only_the_next_write()
         {
-            MarsRtCore core = Load();
+            MarsRtTestCore core = Load();
             Rdram(core)[0x200] = 0x06;
 
             Apply(core, "D0000200 0005+80000100 0001+80000101 0002");
@@ -303,7 +303,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_16_bit_test_compares_in_rdram_byte_order()
         {
-            MarsRtCore core = Load();
+            MarsRtTestCore core = Load();
             Rdram(core)[0x200] = 0x34;
             Rdram(core)[0x201] = 0x12;
 
@@ -319,7 +319,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_not_equal_tests_pass_where_the_equal_ones_fail()
         {
-            MarsRtCore core = Load();
+            MarsRtTestCore core = Load();
             Rdram(core)[0x200] = 0x05;
             Rdram(core)[0x202] = 0x12;
             Rdram(core)[0x203] = 0x34;
@@ -339,7 +339,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(0x05, 0x06, 0x00)]
         public void A_run_of_tests_must_all_pass(byte first, byte second, byte expected)
         {
-            MarsRtCore core = Load();
+            MarsRtTestCore core = Load();
             Rdram(core)[0x200] = first;
             Rdram(core)[0x201] = second;
 
@@ -351,7 +351,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_repeater_steps_its_address_and_its_value()
         {
-            MarsRtCore core = Load();
+            MarsRtTestCore core = Load();
 
             Apply(core, "50000302 0001+80000100 0010");
 
@@ -361,7 +361,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_16_bit_repeater_steps_in_halfwords_high_byte_first()
         {
-            MarsRtCore core = Load();
+            MarsRtTestCore core = Load();
 
             Apply(core, "50000204 0101+81000100 1234");
 
@@ -372,7 +372,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void An_8_bit_repeater_wraps_its_value_at_a_byte()
         {
-            MarsRtCore core = Load();
+            MarsRtTestCore core = Load();
 
             Apply(core, "50000201 0001+800001FF 00FF");
 
@@ -385,7 +385,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(0x00, 0x00)]
         public void A_test_before_a_repeater_guards_every_repetition(byte flag, byte expected)
         {
-            MarsRtCore core = Load();
+            MarsRtTestCore core = Load();
             Rdram(core)[0x200] = flag;
 
             Apply(core, "D0000200 0001+50000301 0000+80000100 0007");
@@ -397,7 +397,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Past_installed_rdram_a_write_is_dropped_and_a_test_reads_zero()
         {
-            MarsRtCore core = Load();
+            MarsRtTestCore core = Load();
 
             Apply(core, "80500000 0001");
             Apply(core, "D0500000 0000+80000100 0007");
@@ -412,7 +412,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void With_the_expansion_pak_the_same_write_lands()
         {
-            MarsRtCore core = Load(expansionPak: true);
+            MarsRtTestCore core = Load(expansionPak: true);
 
             Apply(core, "80500000 0001");
 
@@ -422,7 +422,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_other_writable_spaces_take_a_poke_and_an_unknown_one_is_ignored()
         {
-            MarsRtCore core = Load();
+            MarsRtTestCore core = Load();
 
             core.Cheats.AddRamPoke("dmem", 0x10, 0x5A, "dmem");
             core.Cheats.AddRamPoke("PIFRAM", 0x3F, 0x5B, "pif");
@@ -443,13 +443,13 @@ namespace EmuSen.WiseMan.Cores
             0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00,
         };
 
-        private MarsRtCore LoadRunning(byte[] program)
+        private MarsRtTestCore LoadRunning(byte[] program)
         {
             string path = SyntheticN64Rom.WriteTemp(SyntheticN64Rom.Build(patches: (0, program)));
             _temporaryFiles.Add(path);
 
-            MarsRtCore core = Started(path);
-            core.Cheats.AddRamPoke(MarsDebugSpaces.Rdram, 0x100, 0x42, "poke");
+            MarsRtTestCore core = Started(path);
+            core.Cheats.AddRamPoke(MarsRt.Rdram, 0x100, 0x42, "poke");
             return core;
         }
 
@@ -457,11 +457,11 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_frame_end_applies_nothing_while_interrupts_are_disabled()
         {
-            MarsRtCore booting = LoadRunning(SpinForever);
+            MarsRtTestCore booting = LoadRunning(SpinForever);
             booting.RunFrame();
             Assert.Equal(0x00, Rdram(booting)[0x100]);
 
-            MarsRtCore running = LoadRunning(EnableInterruptsThenSpin);
+            MarsRtTestCore running = LoadRunning(EnableInterruptsThenSpin);
             running.RunFrame();
             Assert.Equal(0x42, Rdram(running)[0x100]);
         }
@@ -470,7 +470,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void An_explicit_apply_does_not_wait_for_interrupts()
         {
-            MarsRtCore booting = LoadRunning(SpinForever);
+            MarsRtTestCore booting = LoadRunning(SpinForever);
             booting.ApplyCheats();
             Assert.Equal(0x42, Rdram(booting)[0x100]);
         }
@@ -482,7 +482,7 @@ namespace EmuSen.WiseMan.Cores
             string path = Path.Combine(N64TestRomLibrary.Root, "Super Mario 64 (Europe) (En,Fr,De).z64");
             if (!File.Exists(path)) return;
 
-            MarsRtCore core = Started(path);
+            MarsRtTestCore core = Started(path);
             core.Cheats.AddCheat(CheatKind.RamPoke, N64GameSharkCodec.DecodeWrites("803094DD 0064"), null, "Infinite lives");
 
             for (int frame = 0; frame < 4; frame++) core.RunFrame();
@@ -496,7 +496,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_rom_patch_reaches_a_processor_load_by_rom_offset()
         {
-            MarsRtCore core = Load();
+            MarsRtTestCore core = Load();
             uint physical = CartDomain1Address2 + RomOffset;
 
             Assert.Equal(Original, (byte)(core.ReadBus32(physical) >> 24));
@@ -511,7 +511,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_rom_patch_reaches_a_transfer_into_rdram()
         {
-            MarsRtCore core = Load();
+            MarsRtTestCore core = Load();
             core.Cheats.AddRomPatch(RomOffset + 1, 0xEE, null, "patch");
             core.ApplyCheats();
 
@@ -525,7 +525,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_disabled_rom_patch_gives_the_cartridge_byte_back()
         {
-            MarsRtCore core = Load();
+            MarsRtTestCore core = Load();
             uint physical = CartDomain1Address2 + RomOffset;
 
             int id = core.Cheats.AddRomPatch(RomOffset, 0xAD, null, "patch");
@@ -539,7 +539,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_handed_over_registry_patches_the_already_loaded_cartridge()
         {
-            MarsRtCore core = Load();
+            MarsRtTestCore core = Load();
             var handed = new CheatRegistry();
             core.Cheats = handed;
 
@@ -551,17 +551,17 @@ namespace EmuSen.WiseMan.Cores
 
         // --- Through the shell ---
 
-        private DianaShInterpreter Shell(out MarsRtCore core)
+        private DianaShInterpreter Shell(out MarsRtTestCore core)
         {
             core = Load();
-            var target = new MarsRtDebugTarget(core);
-            return DianaShInterpreter.CreateDefault(target, null, MarsCheatCodecs.GameShark(), null);
+            var target = core.CreateDebugTarget();
+            return DianaShInterpreter.CreateDefault(target, null, N64System.GameShark(), null);
         }
 
         [Fact]
         public void Cheat_add_takes_a_multi_line_code_whole()
         {
-            DianaShInterpreter shell = Shell(out MarsRtCore core);
+            DianaShInterpreter shell = Shell(out MarsRtTestCore core);
             Rdram(core)[0x200] = 0x05;
 
             string output = shell.Submit("cheat add D00002000005+800001000001 lives").Output;
@@ -576,7 +576,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Cheat_add_says_why_it_refuses_a_code()
         {
-            DianaShInterpreter shell = Shell(out MarsRtCore core);
+            DianaShInterpreter shell = Shell(out MarsRtTestCore core);
 
             string output = shell.Submit("cheat add 880001000001").Output;
 
@@ -632,7 +632,7 @@ namespace EmuSen.WiseMan.Cores
                 """;
 
             var registry = new CheatRegistry();
-            CheatImportResult result = CheatImport.FromChtText(registry, text, MarsCheatCodecs.GameShark());
+            CheatImportResult result = CheatImport.FromChtText(registry, text, N64System.GameShark());
 
             Assert.Equal(2, result.Loaded);
             Assert.Equal(1, result.Skipped);

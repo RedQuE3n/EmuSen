@@ -1,9 +1,10 @@
-//! What the host is told beside the frame: the two processors' registers for `DEBUG_REGISTERS`, the setting notes for
-//! `SETTING_NOTES`, the IS-Viewer's lines and the device's report in the log, and the frame rate machine info gives, each
-//! through a surface the core ABI v1 already has. See Mars_Native.md §9.
+//! What the host is told beside the frame: the two processors' registers and the VI's as a unit for `DEBUG_REGISTERS`,
+//! the setting notes for `SETTING_NOTES`, the IS-Viewer's lines and the device's report in the log, the frame rate
+//! machine info gives, and since core ABI 1.13 the counters for `TELEMETRY`, the picture's lines and the frame that holds
+//! cheats. See Mars_Native.md §9 and §10.
 
 use emusen_native::core::outbox::{Level, log};
-use emusen_native::core::event;
+use emusen_native::core::{Counter, Unit, UNIT_FIRST_ID, event};
 
 use super::Core;
 use crate::machine::CYCLE_CAP;
@@ -31,6 +32,72 @@ pub fn rsp_registers() -> Vec<(String, u32)> {
     [("PC".to_string(), 16), ("Halted".to_string(), 1)].into_iter().chain(GPR.iter().map(|n| (n.to_string(), 32))).collect()
 }
 
+/// The VI, the one part that runs no code whose registers the debugger shows: a `video` unit, by libultra's names.
+pub const VI_UNIT: u32 = UNIT_FIRST_ID;
+pub const VI_REGISTERS: [&str; 14] =
+    ["CONTROL", "ORIGIN", "WIDTH", "V_INTR", "V_CURRENT", "BURST", "V_SYNC", "H_SYNC", "LEAP", "H_START", "V_START", "V_BURST", "X_SCALE", "Y_SCALE"];
+
+/// Machine info's units: the VI, its fourteen registers of 32 bits as stored.
+pub fn units() -> Vec<Unit> {
+    vec![Unit { id: VI_UNIT, name: "VI".into(), kind: "video".into(), registers: VI_REGISTERS.iter().map(|n| (n.to_string(), 32)).collect() }]
+}
+
+/// The counters `telemetry` gives, in order: the machine's seven, the display processor's thread's, the recompiler's.
+pub const COUNTERS: usize = 7 + super::threads::COUNTERS + crate::cpu::blocks::COUNTERS;
+
+/// The display processor's thread's sites by `dp_threads::site`'s numbers.
+const SITES: [&str; crate::memory::dp_threads::site::COUNT] =
+    ["bus_read", "bus_write", "load", "store", "fetch", "block", "si", "ai", "vi", "cheat", "take", "sp_dma"];
+
+fn counter(name: &str, label: &str, unit: &str, kind: &str) -> Counter {
+    Counter { name: name.into(), label: label.into(), unit: unit.into(), kind: kind.into() }
+}
+
+/// Machine info's `telemetry`, the same list for every machine, its parts that are off reading 0.
+pub fn counters() -> Vec<Counter> {
+    let mut list = vec![
+        counter("cpu.cycles", "Processor cycles", "cycles", "total"),
+        counter("frames", "Frames run", "count", "total"),
+        counter("frame.cycles", "Cycles in the last frame", "cycles", "frame"),
+        counter("cpu.instructions", "Instructions", "instructions", "total"),
+        counter("cpu.idle.turns", "Idle loop turns passed whole", "count", "total"),
+        counter("cpu.idle.instructions", "Instructions the idle loop passed", "instructions", "total"),
+        counter("cpu.exceptions", "Exceptions entered", "count", "total"),
+        counter("rdp.thread", "Display processor on its own thread", "count", "level"),
+        counter("rdp.drain.words", "Words the display processor's thread drained", "count", "total"),
+        counter("rdp.drain.starts", "Drains started", "count", "total"),
+        counter("rdp.drain.ns", "Time draining", "ns", "total"),
+        counter("rdp.wait.page", "Waits for a page", "count", "total"),
+        counter("rdp.wait.page.ns", "Time waiting for a page", "ns", "total"),
+        counter("rdp.wait.range", "Waits for a range", "count", "total"),
+        counter("rdp.wait.range.ns", "Time waiting for a range", "ns", "total"),
+        counter("rdp.join", "Joins with the drain", "count", "total"),
+        counter("rdp.join.ns", "Time joining the drain", "ns", "total"),
+        counter("rdp.bystanders", "Accesses past marks of other pages", "count", "total"),
+        counter("rdp.reads.narrowed", "Reads narrowed to their bytes", "count", "total"),
+        counter("rdp.reads.freed", "Reads freed of a wait", "count", "total"),
+        counter("vi.repeated_scans", "Scans that repeated the last", "count", "total"),
+    ];
+    list.extend(SITES.iter().map(|s| counter(&format!("rdp.site.{s}.waits"), &format!("Waits at {s}"), "count", "total")));
+    list.extend(SITES.iter().map(|s| counter(&format!("rdp.site.{s}.ns"), &format!("Time waiting at {s}"), "ns", "total")));
+    list.extend([
+        counter("blocks.live", "Compiled blocks alive", "count", "level"),
+        counter("blocks.shaped", "Blocks shaped", "count", "total"),
+        counter("blocks.discarded", "Blocks discarded", "count", "total"),
+        counter("blocks.entries", "Block entries", "count", "total"),
+        counter("blocks.instructions", "Instructions run in blocks", "instructions", "total"),
+        counter("blocks.stepped", "Instructions the interpreter stepped", "instructions", "total"),
+        counter("blocks.mapped", "Entries into mapped code", "count", "total"),
+        counter("blocks.compiled", "Blocks compiled", "count", "total"),
+        counter("blocks.compile.ns", "Time compiling", "ns", "total"),
+        counter("blocks.code.bytes", "Bytes of compiled code", "bytes", "level"),
+        counter("blocks.compiled.entries", "Entries into compiled blocks", "count", "total"),
+        counter("blocks.compiled.instructions", "Instructions run compiled", "instructions", "total"),
+        counter("blocks.refused", "Blocks the code generator refused", "count", "total"),
+    ]);
+    list
+}
+
 /// The antialiasing row's note as `N64Console.AntialiasingNote` wrote it: what the chosen level becomes at the chosen
 /// resolution, when that is less (Mars_Performance.md §42.5).
 pub fn antialiasing_note(scale: i32, antialiasing: i32) -> Option<String> {
@@ -48,9 +115,34 @@ pub fn antialiasing_note(scale: i32, antialiasing: i32) -> Option<String> {
 }
 
 impl Core {
-    /// `debug_registers`' values for processor 0 or 1, as the shim's `CpuRegisters` and `RspRegisters` read them.
+    /// `telemetry`'s values in `counters`' order into `out` as far as it holds them; how many there are. No allocation.
+    pub fn telemetry_into(&self, out: &mut [i64]) -> usize {
+        let m = &self.machine;
+        let head = [m.bus.cycles, m.total_frames, m.last_frame_cycles, m.cpu.instructions, m.cpu.run.idle_turns_passed, m.cpu.run.idle_instructions, m.cpu.run.exceptions];
+        let threads = self.thread_counters();
+        let blocks = m.blocks.counters();
+        for (o, v) in out.iter_mut().zip(head.iter().chain(threads.iter()).chain(blocks.iter())) {
+            *o = *v;
+        }
+        COUNTERS
+    }
+
+    /// The picture's lines: its rows over the multiple its width is of the raster's, or none where it is no multiple.
+    pub fn lines(width: u32, height: u32) -> i32 {
+        let raster = crate::vi::scan::RASTER_WIDTH as u32;
+        if width >= raster && width % raster == 0 { (height / (width / raster)) as i32 } else { 0 }
+    }
+
+    /// Whether the frame just run ended where Project64 holds its cheats, interrupts disabled (Mars_Cheats.md §5.1).
+    pub fn cheats_held(&self) -> bool {
+        self.machine.cpu.cop0[crate::cpu::cop0::STATUS] & 1 == 0
+    }
+
+    /// `debug_registers`' values for processor 0 or 1, as the shim's `CpuRegisters` and `RspRegisters` read them, and the
+    /// VI's unit.
     pub fn registers(&self, processor: u32) -> Option<Vec<i64>> {
         match processor {
+            VI_UNIT => Some((0..crate::vi::REGISTERS).map(|i| self.machine.bus.vi.read32(i * 4) as i64).collect()),
             0 => {
                 let cpu = &self.machine.cpu;
                 let mut values = Vec::with_capacity(36);
@@ -134,7 +226,6 @@ impl Core {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ffi::space;
     use crate::ffi::v1::*;
     use emusen_native::core::exports::core_of_mut;
     use emusen_native::core::sys::{ABI_VERSION, CreateParams, Event, FileEntry, Machine as Handle};
@@ -223,19 +314,59 @@ mod tests {
     }
 
     #[test]
-    fn the_vi_space_is_its_registers_big_endian_and_takes_no_write() {
+    fn the_vi_is_a_video_unit_whose_registers_debug_registers_reads() {
         let (m, _image) = make();
         let core = unsafe { core_of_mut::<Core>(m) }.unwrap();
         core.machine.bus.vi.registers[1] = 0x0011_2233;
-        assert_eq!(unsafe { emusen_core_space_size(m, space::VI) }, 56);
-        let mut out = [0xEEu8; 8];
-        assert_eq!(unsafe { emusen_core_space_read(m, space::VI, 4, out.as_mut_ptr(), 8) }, 8);
-        assert_eq!(out, [0x00, 0x11, 0x22, 0x33, 0, 0, 0, 0]);
-        let mut past = [0xEEu8; 2];
-        unsafe { emusen_core_space_read(m, space::VI, 55, past.as_mut_ptr(), 2) };
-        assert_eq!(past, [0, 0]);
-        assert!(unsafe { emusen_core_space_write(m, space::VI, 4, [1u8].as_ptr(), 1) } < 0);
-        assert!(info(m).contains(r#"{"id":6,"name":"VI","#), "{}", info(m));
+        assert!(info(m).contains(r#""units":[{"id":256,"name":"VI","kind":"video","registers":[{"name":"CONTROL","bits":32}"#), "{}", info(m));
+        let n = unsafe { emusen_core_debug_registers(m, VI_UNIT, null_mut(), 0) };
+        let mut v = vec![0i64; n as usize];
+        unsafe { emusen_core_debug_registers(m, VI_UNIT, v.as_mut_ptr(), v.len()) };
+        assert_eq!((v.len(), v[1]), (14, 0x0011_2233));
+        assert!(!info(m).contains(r#""name":"VI","read_only""#), "the VI is no space");
+        unsafe { emusen_core_free(m) };
+    }
+
+    #[test]
+    fn telemetry_gives_every_counter_machine_info_names_without_allocating_a_list() {
+        let (m, _image) = make();
+        assert_eq!(info(m).matches(r#""kind":"total""#).count() + info(m).matches(r#""kind":"level""#).count() + info(m).matches(r#""kind":"frame""#).count(), COUNTERS);
+        assert_eq!(unsafe { emusen_core_advance(m, null_mut()) }, 0);
+        let n = unsafe { emusen_core_telemetry(m, null_mut(), 0) };
+        assert_eq!(n, COUNTERS as i64);
+        let mut v = vec![0i64; COUNTERS];
+        unsafe { emusen_core_telemetry(m, v.as_mut_ptr(), v.len()) };
+        let core = unsafe { core_of_mut::<Core>(m) }.unwrap();
+        assert_eq!((v[0], v[1], v[2], v[3]), (core.machine.bus.cycles, 1, core.machine.last_frame_cycles, core.machine.cpu.instructions));
+        unsafe { emusen_core_free(m) };
+    }
+
+    #[test]
+    fn a_frame_ended_with_interrupts_disabled_holds_cheats_and_the_lines_follow_the_multiple() {
+        let (m, _image) = make();
+        unsafe { emusen_core_advance(m, null_mut()) };
+        let core = unsafe { core_of_mut::<Core>(m) }.unwrap();
+        core.machine.cpu.cop0[crate::cpu::cop0::STATUS] &= !1;
+        assert_ne!(<Core as emusen_native::core::Core>::frame_info(core).flags & emusen_native::core::flags::FRAME_CHEATS_HELD, 0);
+        core.machine.cpu.cop0[crate::cpu::cop0::STATUS] |= 1;
+        assert_eq!(<Core as emusen_native::core::Core>::frame_info(core).flags & emusen_native::core::flags::FRAME_CHEATS_HELD, 0);
+        assert_eq!((Core::lines(640, 480), Core::lines(1280, 1152), Core::lines(2560, 960), Core::lines(320, 240)), (480, 576, 240, 0));
+        unsafe { emusen_core_free(m) };
+    }
+
+    #[test]
+    fn presence_and_translation_reach_the_machine() {
+        let (m, _image) = make();
+        assert!(unsafe { core_of_mut::<Core>(m) }.unwrap().machine.bus.si.controllers.iter().all(|c| c.present), "every port holds a controller at create");
+        assert_eq!(unsafe { emusen_core_set_present(m, 2, 0) }, 0);
+        assert!(!unsafe { core_of_mut::<Core>(m) }.unwrap().machine.bus.si.controllers[2].present);
+        assert_eq!(unsafe { emusen_core_set_present(m, 2, 1) }, 0);
+        assert!(unsafe { core_of_mut::<Core>(m) }.unwrap().machine.bus.si.controllers[2].present);
+        assert!(unsafe { emusen_core_set_present(m, 4, 1) } < 0);
+        let mut bus = 0u32;
+        assert_eq!(unsafe { emusen_core_debug_translate(m, 0, 0x8000_1234, &mut bus) }, 1);
+        assert_eq!(bus, 0x1234);
+        assert_eq!(unsafe { emusen_core_debug_translate(m, 0, 0x0000_1000, &mut bus) }, 0);
         unsafe { emusen_core_free(m) };
     }
 

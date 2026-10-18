@@ -3635,6 +3635,132 @@ a Genesis value with its bytes swapped today. Recommended: Nephrite's owner stat
 out a word, with a test like MarsRT's; it is left null here because setting it changes that core's output.
 *Answered 2026-10-18: `big` for all three, the byte-order paragraph above and `Nephrite_Native.md` §66.*
 
+### 18.10 Built 2026-10-18: steps 5 to 9 for MarsRT, on the generic host alone
+
+*Built on branch `b4-marsrt` from `WiseMan` at `e75ad6bf` (core ABI 1.13 and §22's host pieces), then merged with
+`WiseMan` at `9eb357a9`, which carries MoonRT's last phase (§23). What was asked: §18.7's steps 5 to 9, the N64 pack's
+views wired into `ISystemDebugViews` and the generic target, platform interface 20 if the pack needed one, and the
+golden corpus re-recorded only as §20 decided. MarsRT now runs on `CoreEngine` and `CoreDebugTarget` alone. `PortEngine`
+and the pre-stable host stay, for MercuryRT's shim (§22.7). What MarsRT itself does is `Mars_Native.md` §10.*
+
+#### 18.10.1 Step 5: the five items, and the units
+
+- **Units: one, the VI.** It is the one part that runs no code whose registers the debugger showed, so it is a `video`
+  unit, id 256, its fourteen registers read by `debug_registers`. §9's `VI` space, the same registers as bytes, is
+  removed, so the registers have one owner. The AI, PI, SI, MI and RI were never shown and are not listed.
+- **TELEMETRY**: 58 counters, the shim's three counter extensions' values under names in machine info; `Blocks::counters`
+  became an array, so a read allocates nothing.
+- **PRESENCE**: `set_present` for ports 0 to 3. **`frame_info.lines`**: rows over the width's multiple of the 640-wide
+  raster, counting stored rows as §6.35 says. **`EMUSEN_FRAME_CHEATS_HELD`** on a frame that ended with `Status.IE`
+  clear (`Mars_Cheats.md` §5.1). **DEBUG_TRANSLATE** for processor 0, kernel mode's view through the TLB.
+- MarsRT claims `0x3819fde` and defines 53 `emusen_core_` symbols. Its own symbols left are ten `marsrt_core_`
+  extensions that only WiseMan's fixture reads by name (`run_steps`, `is_viewer_text`, `cop0`, `bus_write32`,
+  `bus_read32`, `set_cop0`, `mi_raise`, `rsp_step`, `state_kind`, `load_fields`) and the eight `mars_vi_scan_*` of the VI
+  differential.
+
+#### 18.10.2 The N64 pack in the generic target, and platform interface 20
+
+`N64DebugViews` fills §31.7's members: `Summary` with the VI's line read from the unit, `ResolvePhysical` from the pack's
+physical map, and a new member, `ISystemDebugViews.Disassemble(space, address, count)`, empty by default. The generic
+target lists a space's code through it where the core claims no `DEBUG_DISASSEMBLE`, which MarsRT does not. The
+processor is chosen by the space, so IMEM is RSP code. `emusen_systems_view`'s `n64` `summary` now takes the VI's
+registers as a `vi` array, and the `video_registers` view went with the space it read, so the platform interface moves
+to **22** (`PlatformLibrary.InterfaceVersion`, `emusen_platform.h`, `lib.rs`).
+
+#### 18.10.3 Step 6: the switch
+
+The N64 leaves `SoleEngines` for `SoleDiscoveredEngines`, so the factory's v1 arm opens it as it opens the SNES and the
+NES. The factory's N64 arm (now "missing engine"), its `Running` and `Bundle` cases, the catalog's N64 rows for buttons,
+settings and axes (`AxesByConsole` is gone) and `ControllerPorts`' N64 case are deleted. A new
+`CoreCatalog.SoleEngineSystem` reads the sole engine's system entry from its sidecar, so `ButtonsFor`, `AxesFor` and
+`ControllerPorts` need no library loaded. `SettingsFor` falls back to the sole engine's sidecar settings. Two effects
+reach other consoles, both read in the registration golden. With no game loaded, the SNES now lists VenusRT's
+`sa1_catch_up` and the NES MoonRT's `region`, as they list when a game runs. With no game running, the settings window
+shows no antialiasing note, as Q15 decided.
+
+#### 18.10.4 Step 7: the tests moved
+
+Every test reaches MarsRT through `CoreEngine`, `CoreDebugTarget` or the factory. `Fixtures/MarsRt.cs` opens
+`libmarsrt.so` beside the tests by its path, with no discovery, and reads what the shim's members read. It uses 1.13's
+surfaces (units, telemetry, setting notes) and the ten extensions, as C# 14 extension members on `CoreEngine`.
+`MarsRtTestCore` is a `CoreEngine` with the typed setting properties the tests set. `MarsMachine` moved to the fixtures.
+Changed or replaced, each because its claim was the shim's alone:
+
+| Was | Now | Why |
+|---|---|---|
+| `MarsCoreSettingsTests.The_catalogue_offers_the_console_s_eight_settings_and_the_core_answers_them_and_its_own` | `The_catalogue_offers_the_schema_s_settings_with_no_game_loaded` | the catalog reads the schema; nine settings, `Recompiler` among them |
+| `…A_count_outside_its_range_is_clamped_and_text_that_is_neither_is_refused` | `…A_value_outside_the_schema_is_refused_and_an_unknown_key_reads_as_nothing` | the adapter refuses where the shim clamped (§18.2's B4) |
+| `GraphicsSettingsWindowLayoutTests.The_antialiasing_row_says_when_the_resolution_holds_it_back`, `…The_antialiasing_note_follows_the_resolution_as_it_changes` | `With_no_game_running_the_antialiasing_row_has_no_note`; the note itself in `MarsCoreSettingsTests` on a running machine | Q15 |
+| `MarsRtFrontendTests.A_state_of_the_other_memory_size_carries_the_pak_with_it` | `…rebuilds_the_machine_and_leaves_the_setting` | the adapter's rule for a state of the other size |
+| `MarsRtEngineTests.With_the_library_turned_off_an_n64_game_says_the_core_is_not_in_this_build` and its child process | `With_no_marsrt_beside_the_program_an_n64_game_says_the_engine_is_missing`, in process | `EMUSEN_MARS_NATIVE` is retired; discovery is read per call |
+
+The presence asserts in `MultiplayerTests`, `DisplayAspectTests` and `ScreenFilterRenderTests`' lines case were also
+changed. They now run a frame or load a game first, because the adapter sends a port's change as the next frame starts
+and a shape comes from a frame. `NativeHostTests` holds `mars_rsp_new` and `mars_machine_new` absent.
+
+#### 18.10.5 Step 8: what was deleted
+
+The shim's nine files: eight in this step (1,204 lines) and `RspDisassembler.cs` in step 4. In MarsRT, `ffi/rdp.rs`,
+the RSP's C ABI and the counter, register, physical, presence and `save_cpu` extensions (355 lines). Also
+`EMUSEN_MARS_NATIVE` (the registration test's switch list now holds MercuryRT's alone) and `PortLibrary`'s use for
+MarsRT. The B4 grep, `Nintendo.MarsRT` over shipped code, finds only the PGO driver, which holds no type of it: its
+check is `CoreEngine { Info.Id: "marsrt" }`.
+
+#### 18.10.6 Defects the switch showed, each failing first
+
+| Defect | Shown by | Fix |
+|---|---|---|
+| **C1**, the shim's: a refused N64 state reached the frontend API as a fault (-1108), not `StateRefused` (-1114) | `SharedHostTests.A_refused_state_reaches_the_API_as_state_refused(n64)`, failing on a probe build at `8feb278c` with the shim | the generic adapter; passes after the switch |
+| The setting note was read only after a setting changed, so a game opened at 2× resolution and 4× antialiasing showed no note | `MarsCoreSettingsTests.The_note_is_read_when_the_game_is_loaded` | `CoreEngine.Adopt` reads the notes once the settings are applied |
+| A view space's read wrapped at its length, so the kseg0 view gave `0x00` for a byte at its address where `0x5A` was | `MarsRtCoreAbiTests`' kseg0 view case | `CoreDebugTarget` wraps only spaces that are not views |
+| `CoreEngine.DisplayLines` gave the stored rows' lines (240) for a frame it hands over 480 rows tall, its rows repeated. The CRT filter would have averaged two rows and two columns into each line | the digest's `lines` column on all 26 runs; `ScreenFilterRenderTests.A_field_s_lines_are_counted_in_the_rows_the_frame_is_handed_with` (480 expected, 240) | `DisplayLines` is multiplied by the repeat when the engine repeats the rows, so it counts the rows `ScreenHeight` holds (`EmuSen_CoreAPI.md` §6.35's host line) |
+| MarsRT created only port 0 holding a controller, where §6.36 says every port holds one. The latch holds a change only, so a pad plugged into port 2 after the frontend had emptied it was never sent | `MultiplayerTests.Four_pads_play_the_n64s_four_ports_in_a_big_screen_session` (ports 2 to 4 stayed empty); `ffi::host`'s presence test | MarsRT's `create` fills the four ports. The digest probe empties ports 2 to 4 after loading, as Mistress's router does for one player, so its runs stay the baseline's |
+
+#### 18.10.7 What was re-recorded
+
+| Record | What changed |
+|---|---|
+| The debugger's corpus, `marsrt` cases | Only §18.6.3's kinds. "MarsRT" for "N64" in `cpus`, `mem`, `regs`, `spaces` and `vectors`. "CPU" and "RSP" for "VR4300 (MarsRT)" and "RSP (MarsRT)" in `cpus` and `setreg`. The generic head in `summary`, and the VI line without the picture's size. `eval` loses the VI's fourteen names and the RSP's `Halted` and gains `stackdepth` (F15). `regs` lists the same values, the VI's from the unit. `disasm` is unchanged, through the pack |
+| `CoreRegistrationGolden.txt` | Re-recorded on `WiseMan`'s NES rows. For the N64, as §23.4 for the NES: `CoreEngine` and `CoreDebugTarget` for the shim's types, "MarsRT" as the identity's name, `registered[MarsRT (Rust)] = False` (discovered, not registered by hand), the "off" world running MarsRT since its switch is retired, and the settings and hints from the schema, `Recompiler` among them. For the SNES and the NES, the offline settings of 18.10.3 |
+
+The schema's hints arrive with the host's cost sentence appended. Where MarsRT's help already says the cost (`RenderScale`,
+`DeferredPresentation`, `Antialiasing`), the hint says it twice (18.10.9).
+
+#### 18.10.8 The gates, measured on 2026-10-18
+
+After the merge with `WiseMan`, from the branch's last build, against the baselines of 18.9 and 18.6.3:
+
+| Gate | Result |
+|---|---|
+| WiseMan, §18.5's first filter with the classes the switch reaches (44 classes: 18.9's 31, plus `SystemTableParityTests`, `CoreDiscoveryTests`, `CoreDebugViewTests`, `CoreAdapterTests`, `CoreEngineThreadTests`, `SnesSystemPackTests`, `MercuryRtDebugTargetTests`, MoonRT's frontend and ABI classes, VenusRT's two debugger classes, Nephrite's and Diamond's debugger classes) and the new allocation case | **1,098 of 1,098** |
+| WiseMan, the second filter and `MoonRtEngineTests`, the GPU's classes on the RX 6800 alone | **438 of 438**. The first run, before the presence fix, failed two: the multiplayer case (18.10.6), and `GraphicsSettingsWindowLayoutTests.The_N64s_controls_show_the_configs_values_and_the_defaults_where_it_has_none`, which read 4 workers where the config said 2. It passed in the next two runs. 18.9 also recorded one case of this class failing once. Recorded as intermittent |
+| The digest probe, Super Mario 64 and Ocarina of Time only, 26 runs and 8,654 lines, and the two runs at 2x on the RX 6800, 606 lines | **Every picture, drain of sound, state, length, shape, `lines` and aspect identical to the step-1 baseline.** The rate column differs on 8,587 and 599 lines: it is machine info's limit, 50.016020, where the shim gave each field's own rate (Q6, 18.9). The 41 and 5 frames of the cycle cap keep 22.865854 |
+| The corpus, n64-systemtest | *Failed 46 of 4637 tests*, and the recompiler's transcript is the interpreter's |
+| The kit, 600 frames on each game | 22 cases passing on each, core ABI 1.13, capabilities `0x3819fde`; one unit with its registers, 58 counters read twice alike, `set_present` refused past the ports |
+| MarsRT's crate, `--profile test-checked`, with the measurement states, the corpus and the GPU tests | 507 of 507: 18.9's 505 and the two cases of `ffi::host` that step 5 added; the presence case now also holds every port full at create, and failed on that before the fix |
+| C1 | failing on the shim (a probe build at `8feb278c`: -1108 for -1114), passing on the generic engine |
+| Allocation (§14.5) | `ManagedCrystalTests.MarsRTs_frame_picture_and_sound_allocate_nothing`: 300 frames, pictures and drains, 0 bytes on the calling thread. MarsRT's debugger snapshots are still 0 bytes |
+| Speed (P3), the PGO driver, `mistress=1 warmup=120`, 600 frames from the measurement states, 8 rounds interleaved with the order swapped each round, under the timing lock and a quiet gate of half a processor | Super Mario 64, the loop: before 3.606 ms a frame (3.543 to 3.941), after 3.556 (3.512 to 3.780), paired median -1.3%. Ocarina of Time: before 4.585 (4.527 to 4.774), after 4.533 (4.511 to 4.693), -1.1%. `RunFrame` alone: -1.4% and -1.2%. The ranges overlap, and each game ends on one state hash in both builds. "Before" is `be199ca2` (the shim, with step 5 done); "after" is this branch before the presence fix, which touches `create` alone. Both are unguided `dist` builds. An earlier set of 8 rounds ran under a gate of three processors, with the machine busy in four of them. It gave +2.4% and -1.5%, with outliers up to 6.5 ms, and is kept beside the runs but not used |
+| The B4 grep | `Nintendo.MarsRT` in shipped code: only the PGO driver's path, no type |
+
+The timing files are kept under `~/.cache/emusen/probe/mars/b4/timing/` (`r1.tsv`, `r2.tsv`), and the digest files beside them.
+
+#### 18.10.9 Left, and for the tester
+
+- **A state's ports and the latch.** §6.36 makes presence part of a state, and Mistress re-sends every port each poll
+  "since a state loaded carries the ports it was saved with". But the latch sends only a change from what it last
+  held, not from what the core holds. Suppose a state is loaded whose ports differ from the router's. The frontend's
+  view then never reaches the core until a pad is plugged in or pulled out. Not shown by a test yet. *Recommended*:
+  after a state loads, `CoreEngine` marks every port's presence changed, so the next frame sends the frontend's view.
+  This is a host change for every core with `PRESENCE`.
+- **A frontend that routes no ports.** Since the ABI's rule is now MarsRT's, an N64 game opened by a host that never
+  calls `SetControllerConnected` sees four controllers where the shim gave it one. Mistress's router empties the
+  ports no player holds, so play in Mistress is unchanged.
+- **The doubled cost sentence** in three N64 hints (18.10.7). *Recommended*: MarsRT's help drops the sentence the
+  schema's cost restates. That is a change of text the player reads, so it is for the tester.
+- **The units' registers in expressions**, as §23.6 recommends for every core: the VI's names are no longer symbols.
+- **The PGO profile** is still void (`Mars_Native.md` §7.6), so the speed figures are unguided against unguided.
+
 ---
 
 ## 19. B4 for MoonRT and VenusRT, phase 1, 2026-10-18: what the two shims add, where each piece goes, and the gates

@@ -10,9 +10,4 @@ impl Core {
         let verify = verify || crate::cpu::blocks::Blocks::verify_by_default();
         self.machine.blocks.configure(Tier::from_number(tier & 0xF), verify);
     }
-
-    /// The counters in `Blocks::counters`' order.
-    pub fn block_counters(&self) -> Vec<i64> {
-        self.machine.blocks.counters().to_vec()
-    }
 }

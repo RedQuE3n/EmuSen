@@ -1,5 +1,6 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.Cores.Native;
 using System;
-using EmuSen.Cores.Nintendo.MarsRT;
 
 namespace EmuSen.WiseMan.Fixtures
 {
@@ -9,14 +10,14 @@ namespace EmuSen.WiseMan.Fixtures
         // The raster's lines, a PAL field's - see Mars_Video.md §2.
         public const int RasterHeight = 625;
 
-        private static readonly delegate* unmanaged<nint> NewExport = (delegate* unmanaged<nint>)MarsNative.Export("mars_vi_scan_new");
-        private static readonly delegate* unmanaged<nint, void> FreeExport = (delegate* unmanaged<nint, void>)MarsNative.Export("mars_vi_scan_free");
-        private static readonly delegate* unmanaged<nint, uint*, int*, uint, int> SetExport = (delegate* unmanaged<nint, uint*, int*, uint, int>)MarsNative.Export("mars_vi_scan_set");
-        private static readonly delegate* unmanaged<nint, int*, int> HeldExport = (delegate* unmanaged<nint, int*, int>)MarsNative.Export("mars_vi_scan_held");
-        private static readonly delegate* unmanaged<nint, uint, void> RepeatExport = (delegate* unmanaged<nint, uint, void>)MarsNative.Export("mars_vi_scan_repeat_rows");
-        private static readonly delegate* unmanaged<nint, byte*, nuint, byte*, nuint, int> RunExport = (delegate* unmanaged<nint, byte*, nuint, byte*, nuint, int>)MarsNative.Export("mars_vi_scan_run");
-        private static readonly delegate* unmanaged<nint, uint*, byte*, nuint, long> FrameExport = (delegate* unmanaged<nint, uint*, byte*, nuint, long>)MarsNative.Export("mars_vi_scan_frame");
-        private static readonly delegate* unmanaged<nint, byte*, nuint, long> RasterExport = (delegate* unmanaged<nint, byte*, nuint, long>)MarsNative.Export("mars_vi_scan_raster");
+        private static readonly delegate* unmanaged<nint> NewExport = (delegate* unmanaged<nint>)MarsRt.Export("mars_vi_scan_new");
+        private static readonly delegate* unmanaged<nint, void> FreeExport = (delegate* unmanaged<nint, void>)MarsRt.Export("mars_vi_scan_free");
+        private static readonly delegate* unmanaged<nint, uint*, int*, uint, int> SetExport = (delegate* unmanaged<nint, uint*, int*, uint, int>)MarsRt.Export("mars_vi_scan_set");
+        private static readonly delegate* unmanaged<nint, int*, int> HeldExport = (delegate* unmanaged<nint, int*, int>)MarsRt.Export("mars_vi_scan_held");
+        private static readonly delegate* unmanaged<nint, uint, void> RepeatExport = (delegate* unmanaged<nint, uint, void>)MarsRt.Export("mars_vi_scan_repeat_rows");
+        private static readonly delegate* unmanaged<nint, byte*, nuint, byte*, nuint, int> RunExport = (delegate* unmanaged<nint, byte*, nuint, byte*, nuint, int>)MarsRt.Export("mars_vi_scan_run");
+        private static readonly delegate* unmanaged<nint, uint*, byte*, nuint, long> FrameExport = (delegate* unmanaged<nint, uint*, byte*, nuint, long>)MarsRt.Export("mars_vi_scan_frame");
+        private static readonly delegate* unmanaged<nint, byte*, nuint, long> RasterExport = (delegate* unmanaged<nint, byte*, nuint, long>)MarsRt.Export("mars_vi_scan_raster");
 
         private nint _handle;
 
@@ -24,7 +25,7 @@ namespace EmuSen.WiseMan.Fixtures
 
         public MarsRTViScan()
         {
-            if (!Available) throw new InvalidOperationException($"MarsRT is not in use: {MarsNative.Report}");
+            if (!Available) throw new InvalidOperationException($"MarsRT is not in use: {MarsRt.Report}");
             _handle = NewExport();
         }
 

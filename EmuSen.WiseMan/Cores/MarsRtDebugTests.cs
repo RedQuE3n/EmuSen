@@ -1,8 +1,9 @@
+using EmuSen.Crystal.Systems.N64;
+using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Crystal.Debugger;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
@@ -18,7 +19,7 @@ namespace EmuSen.WiseMan.Cores
         public MarsRtDebugTests(ITestOutputHelper output)
         {
             _output = output;
-            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            Assert.True(MarsRt.Available, MarsRt.Report);
         }
 
         protected override MarsDebugRig Rig(string rom) => MarsDebugRig.MarsRt(rom);
@@ -72,9 +73,9 @@ namespace EmuSen.WiseMan.Cores
         public void A_state_saved_at_a_halt_is_the_unstopped_run_s_state_at_the_same_instruction()
         {
             MarsDebugRig halted = Load(CountForever);
-            var through = (MarsRtCore)Load(CountForever).Core;
+            var through = (MarsRtTestCore)Load(CountForever).Core;
             halted.Breakpoints.AddBreakpoint(Entry + 12);
-            var haltedCore = (MarsRtCore)halted.Core;
+            var haltedCore = (MarsRtTestCore)halted.Core;
 
             for (int frame = 1; frame <= 3; frame++)
             {
@@ -94,7 +95,7 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        private static long Taken(MarsRtCore core) => core.Instructions + core.DebugCounterValues()[2];
+        private static long Taken(CoreEngine core) => core.Instructions + core.DebugCounterValues()[2];
 
         // Every table armed and nothing that halts, against the same game run plain, frame by frame in state, picture and sound: unthreaded, then four workers deferred.
         [Theory]
@@ -107,16 +108,16 @@ namespace EmuSen.WiseMan.Cores
             int frames = Frames(300);
             foreach (bool threaded in new[] { false, true })
             {
-                using MarsRtCore plain = Production(threaded);
-                using MarsRtCore armed = Production(threaded);
-                foreach (MarsRtCore core in new[] { plain, armed })
+                using MarsRtTestCore plain = Production(threaded);
+                using MarsRtTestCore armed = Production(threaded);
+                foreach (MarsRtTestCore core in new[] { plain, armed })
                 {
                     core.LoadRom(game.Rom);
                     core.LoadState(game.State);
                 }
                 // The page of RDRAM the game's state writes most, so the watch logs and the data breakpoint stops every frame; the registry says no to each stop, since no byte is 256.
                 int page = romName switch { "sm64.z64" => 0x0020_1000, "oot.z64" => 0x0011_C000, _ => 0x003A_9000 };
-                var target = new MarsRtDebugTarget(armed);
+                var target = armed.CreateDebugTarget();
                 armed.Breakpoints.AddBreakpoint(0);
                 armed.Breakpoints.AddDataBreakpoint("RDRAM", page, page + 0xFF, value: 256, onRead: false, changedOnly: false, condition: null);
                 armed.Breakpoints.AddForbidRange(0x0040_0000, 0x0040_0FFF);
@@ -160,9 +161,9 @@ namespace EmuSen.WiseMan.Cores
             const int Vector = unchecked((int)0x8000_0180);
             foreach (bool threaded in new[] { false, true })
             {
-                using MarsRtCore through = Production(threaded);
-                using MarsRtCore halted = Production(threaded);
-                foreach (MarsRtCore core in new[] { through, halted })
+                using MarsRtTestCore through = Production(threaded);
+                using MarsRtTestCore halted = Production(threaded);
+                foreach (MarsRtTestCore core in new[] { through, halted })
                 {
                     core.LoadRom(game.Rom);
                     core.LoadState(game.State);
@@ -200,7 +201,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // Production's configuration, as MarsRtThreadsTests.Bench builds it, or the same on one thread.
-        private static MarsRtCore Production(bool threaded) => new(expansionPak: true)
+        private static MarsRtTestCore Production(bool threaded) => new(expansionPak: true)
         {
             Options = TestCores.NoBattery,
             SkipRendering = false,
@@ -213,7 +214,7 @@ namespace EmuSen.WiseMan.Cores
         private static int Frames(int otherwise) => int.TryParse(Environment.GetEnvironmentVariable("EMUSEN_MARSRT_FRAMES"), out int n) ? n : otherwise;
 
         // MarsRtTests.Drive: a button pattern and a stick sweep that change every frame.
-        private static void Drive(MarsRtCore core, int frame)
+        private static void Drive(MarsRtTestCore core, int frame)
         {
             EmuSen.Galaxia.Input.PadButton[] buttons = { EmuSen.Galaxia.Input.PadButton.A, EmuSen.Galaxia.Input.PadButton.B, EmuSen.Galaxia.Input.PadButton.Start, EmuSen.Galaxia.Input.PadButton.Up, EmuSen.Galaxia.Input.PadButton.L2, EmuSen.Galaxia.Input.PadButton.R };
             var button = buttons[frame % 6];

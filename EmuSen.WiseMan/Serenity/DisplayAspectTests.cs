@@ -1,3 +1,4 @@
+using EmuSen.Crystal.Systems.N64;
 using System;
 using System.IO;
 using System.Linq;
@@ -8,7 +9,6 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
-using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -50,7 +50,8 @@ namespace EmuSen.WiseMan.Serenity
                 File.Delete(nes);
                 Assert.Equal(DisplayShape.Television, moonRt.DisplayAspect, 9);
             }
-            using var marsRt = new MarsRtCore();
+            using var marsRt = new MarsRtTestCore { Options = TestCores.NoBattery };
+            marsRt.LoadRom(SyntheticN64Rom.WriteTemp(SyntheticN64Rom.Build()));
             Assert.Equal(DisplayShape.Television, marsRt.DisplayAspect);
             using (var gameBoy = new MercuryRtCore()) Assert.Equal(DisplayShape.GameBoy, gameBoy.DisplayAspect);
             Assert.Equal(DisplayShape.Television, CrtFilter.Filter.Aspect);

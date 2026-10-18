@@ -3922,3 +3922,24 @@ Asked each on its own; none is decided by this section.
   the v1 trait now touches VenusRT's create path for no change in behaviour, and the module goes then in any case.
 - **Q10. The order**: MoonRT's steps 1 to 3 of §19.8, which need no ABI change, built while Q1 is open? *Recommended:
   yes*: they are independent of Q1, each is graded on the goldens as it lands, and they leave the switch small.
+
+---
+
+## 20. B4's decisions, 2026-10-18
+
+The three first phases (§17, §18, §19) were answered by the tester on 2026-10-18, each as its section recommended:
+
+- **Core ABI 1.13 is one minor of six items**: the registers of the parts that are no processor (§17.3's `units` and
+  §19.4's `devices`, one proposal under two names, built once under one name), and §18.4's five: `TELEMETRY`,
+  `frame_info.lines`, `PRESENCE`, `EMUSEN_FRAME_CHEATS_HELD` and `DEBUG_TRANSLATE`. P3 is retired as wrong (§9).
+- **The names a retired shim showed give way to the generic host's**: the engine's name in the shell's headings and log
+  folders ("MoonRT", "MercuryRT" for "NES", "GB"), "CPU" for "2A03", one load bar for the shim's several; the debugger's
+  golden corpus is re-recorded with each difference listed, as §17.4, §18.6.3 and §19.7 list them.
+- **The order**: one branch builds the host pieces the three cores share (§17.7 step 2, §18.7, §19.8) and the minor,
+  merged before any core switches to the generic host; meanwhile each core's steps that need no ABI change go ahead.
+- **Every other question** of §17.8, §18.8 and §19.10 as recommended, among them: the switches `EMUSEN_MOON_NATIVE`,
+  `EMUSEN_MERCURY_NATIVE`, `EMUSEN_MARS_NATIVE` and `EMUSEN_VENUS_NATIVE` retired with their shims, there being no C#
+  left to fall back to; Hotaru's pad bindings keyed by console rather than engine, fixed before a switch; the SM83 and
+  6502 disassemblers in shared crates the cores and the packs both use; the IS-Viewer's output in the core's log; the
+  oracles' exception types retired, so a refused game reaches the frontend API as a fault and a refused state as
+  `StateRefused`.

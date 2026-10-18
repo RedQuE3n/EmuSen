@@ -6,9 +6,9 @@ fn number_white(c: char) -> bool {
     matches!(c, '\u{9}'..='\u{D}' | ' ')
 }
 
-/// `long.TryParse(text)`: white space around, one sign, ASCII digits, no overflow.
+/// `long.TryParse(text)`: white space around, one sign, ASCII digits, no overflow, and NULs at the very end.
 pub fn parse_i64(text: &str) -> Option<i64> {
-    let body = text.trim_matches(number_white);
+    let body = text.trim_end_matches('\0').trim_matches(number_white);
     let (negative, digits) = match body.chars().next() {
         Some('-') => (true, &body[1..]),
         Some('+') => (false, &body[1..]),
@@ -29,7 +29,7 @@ pub fn parse_i64(text: &str) -> Option<i64> {
 
 /// Whether text has an integer's form, white space, a sign and ASCII digits, whatever its size.
 fn integer_form(text: &str) -> bool {
-    let body = text.trim_matches(number_white);
+    let body = text.trim_end_matches('\0').trim_matches(number_white);
     let digits = body.strip_prefix(['-', '+']).unwrap_or(body);
     !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())
 }
@@ -158,6 +158,16 @@ pub fn convert_to_i32_hex(text: &str) -> Result<i32, String> {
 
 #[cfg(test)]
 mod tests {
+
+    // Measured on .NET 10.0.112 on 2026-10-17: after the number and any white space, NULs may follow and nothing else.
+    #[test]
+    fn trailing_nuls_end_a_number_as_dotnet_reads_it() {
+        assert_eq!(parse_i64("5\0"), Some(5));
+        assert_eq!(parse_i64("5 \0\0"), Some(5));
+        assert_eq!(parse_i64("5\0\0 "), None);
+        assert_eq!(parse_i64("\05"), None);
+        assert_eq!(parse_i32("-7\0"), Some(-7));
+    }
     use super::*;
 
     #[test]

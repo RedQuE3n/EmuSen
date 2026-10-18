@@ -534,6 +534,35 @@ int32_t emusen_firmware_install(const uint8_t *request, size_t request_len);
 int64_t emusen_savemedia_op(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
 
 /*
+ * The cheat files and the player's cheat database (EmuSen_Cheats.md; `man cheat`). A cheat crosses as {desc, enabled,
+ * kind (RamPoke or RomPatch), writes}, each write {space, address, value, width, type, bit (or null), big_endian,
+ * repeat, repeat_address, repeat_value}, as emusen_systems_cheat_decode writes one.
+ */
+/* A .cht text read: {"text", "codec", "space", "patch"}, each codec an emusen_systems_cheat_codecs id or null. Out:
+ * {"cheats", "skipped"}. BAD_ARGUMENT where a codec's index fell outside its code, which the C# let escape. */
+int64_t emusen_cheats_parse(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+/* Cheats written as a .cht text: {"cheats": [...]}. */
+int64_t emusen_cheats_write(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+/* A database scanned from its folder once, and never changed after, so any thread may ask it; null for a path that is
+ * not UTF-8. A folder that is absent or cannot be listed whole holds no files. Opaque to the host. */
+typedef struct emusen_cheats_database emusen_cheats_database;
+emusen_cheats_database *emusen_cheats_database_open(const uint8_t *directory, size_t directory_len);
+void emusen_cheats_database_free(emusen_cheats_database *db);
+/* Every file, in the database's order: [[system, game, path], ...]. */
+int64_t emusen_cheats_database_entries(const emusen_cheats_database *db, uint8_t *out, size_t len);
+/* {"op": "systems"} gives [[system, count], ...]; {"op": "games", "system", "filter"} and {"op": "find", "text",
+ * "limit"} give the files' places in the entries' list, in order. */
+int64_t emusen_cheats_database_query(const emusen_cheats_database *db, const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+/* A prune's plan: {"keep": [...]}. Out: {"removing": [{system, path, files, bytes}], "keeping", "reason" (or null)}. */
+int64_t emusen_cheats_prune_plan(const emusen_cheats_database *db, const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+/* A plan applied inside its folder: {"directory", "removing": [{system, path}]}. Out: {"removed", "failed": [...]}. */
+int64_t emusen_cheats_prune_apply(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+/* A downloaded zip installed under `target`: out {"installed", "skipped"}. NOT_SUPPORTED, nothing written, for a form
+ * the host reads itself (Zip64, spanned, encrypted, a method other than stored and deflate, a name holding a NUL, a
+ * directory that is not one); IO, NOT_FOUND or ACCESS where the target could not be made. */
+int64_t emusen_cheats_install(const uint8_t *zip, size_t zip_len, const uint8_t *target, size_t target_len, uint8_t *out, size_t len);
+
+/*
  * A save medium's lock (EmuSen_SaveMedia.md, section 3.5): <file>.lock, locked with flock while held and removed with
  * the last handle, holding the holder's words and the process's id. Within the process shared handles may hold one file
  * together; a file another process or an unshared handle holds is refused.

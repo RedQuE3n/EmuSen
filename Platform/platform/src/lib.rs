@@ -11,6 +11,7 @@ pub mod dianash;
 pub mod disc;
 pub mod endymion;
 pub mod endymion_devices;
+pub mod cheats;
 pub mod firmware;
 pub mod savemedia;
 pub mod galaxia;
@@ -268,6 +269,7 @@ mod tests {
         exported.extend(exports_in(include_str!("systems_debug.rs")));
         exported.extend(exports_in(include_str!("firmware.rs")));
         exported.extend(exports_in(include_str!("savemedia.rs")));
+        exported.extend(exports_in(include_str!("cheats.rs")));
         exported.sort();
         let mut declared = declared_in(include_str!("../../include/emusen_platform.h"));
         declared.sort();

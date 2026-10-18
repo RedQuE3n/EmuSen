@@ -289,5 +289,14 @@ namespace EmuSen.WiseMan.DianaSh
 
             Assert.Contains("cheat0_code = \"7E0DBF63+7E0019FF\"", text);
         }
+
+        // A count far past the entries there is reads only the entries there are, and every other one is skipped, at once - see EmuSen_Backend.md §14.3.
+        [Fact]
+        public void A_count_far_past_the_entries_reads_them_without_walking_every_number()
+        {
+            var parse = System.Threading.Tasks.Task.Run(() => ChtFile.Parse("cheats = 2147483647\ncheat0_address = 16\ncheat9_address = 32\n", null, "CpuBus"));
+            Assert.True(parse.Wait(TimeSpan.FromSeconds(5)), "a count of 2,147,483,647 walked every number");
+            Assert.Equal((2, 2147483645), (parse.Result.Cheats.Count, parse.Result.Skipped));
+        }
     }
 }

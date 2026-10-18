@@ -170,6 +170,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-cheats"
+version = "0.1.0"
+dependencies = [
+ "emusen-dotnet",
+ "emusen-galaxia",
+ "emusen-systems",
+ "flate2",
+ "libc",
+]
+
+[[package]]
 name = "emusen-crystal"
 version = "0.1.0"
 
@@ -254,6 +265,7 @@ dependencies = [
  "dianash-module",
  "dianash-text",
  "emusen-cheat",
+ "emusen-cheats",
  "emusen-debug",
  "emusen-dianash",
  "emusen-disc",

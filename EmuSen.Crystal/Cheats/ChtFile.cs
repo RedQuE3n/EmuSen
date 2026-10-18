@@ -39,194 +39,225 @@ namespace EmuSen.Crystal.Cheats
         private const int TypeIncrease = 2;
         private const int TypeDecrease = 3;
 
-        public static ChtParseResult Parse(string text, ICheatCodeCodec? codeDecoder, string spaceName, ICheatCodeCodec? patchCodec = null)
+        public static ChtParseResult Parse(string text, ICheatCodeCodec? codeDecoder, string spaceName, ICheatCodeCodec? patchCodec = null) =>
+            text is not null && spaceName is not null && CheatsNative.Active && CheatsNative.TakesParse(text, codeDecoder, spaceName, patchCodec)
+                ? CheatsNative.Parse(text, codeDecoder, spaceName, patchCodec)
+                : Managed.Parse(text!, codeDecoder, spaceName, patchCodec);
+
+        // RomPatch has no equivalent in RetroArch's model; filtering is the caller's - see `man cheat`.
+        public static string Write(IReadOnlyList<ChtCheat> cheats) =>
+            CheatsNative.Active && CheatsNative.TakesWrite(cheats) ? CheatsNative.Write(cheats) : Managed.Write(cheats);
+
+        // The C# reader and writer: the failover, and the parity class's oracle - see EmuSen_Backend.md §14.3.
+        public static class Managed
         {
-            Dictionary<string, string> fields = ReadFields(text);
-            var cheats = new List<ChtCheat>();
-            int skipped = 0;
-
-            if (!fields.TryGetValue("cheats", out string? countText) ||
-                !int.TryParse(countText, NumberStyles.Integer, CultureInfo.InvariantCulture, out int count))
+            public static ChtParseResult Parse(string text, ICheatCodeCodec? codeDecoder, string spaceName, ICheatCodeCodec? patchCodec = null)
             {
-                return new ChtParseResult { Cheats = cheats, Skipped = 0 };
-            }
+                Dictionary<string, string> fields = ReadFields(text);
+                var cheats = new List<ChtCheat>();
+                int skipped = 0;
 
-            for (int i = 0; i < count; i++)
-            {
-                if (TryReadCheat(fields, i, codeDecoder, spaceName, patchCodec, out ChtCheat cheat)) cheats.Add(cheat);
-                else skipped++;
-            }
-
-            return new ChtParseResult { Cheats = cheats, Skipped = skipped };
-        }
-
-        private static bool TryReadCheat(Dictionary<string, string> fields, int index, ICheatCodeCodec? codeDecoder, string spaceName, ICheatCodeCodec? patchCodec, out ChtCheat cheat)
-        {
-            cheat = default;
-
-            string prefix = $"cheat{index}_";
-            string description = Get(fields, prefix + "desc") ?? $"cheat{index}";
-            bool enabled = string.Equals(Get(fields, prefix + "enable"), "true", StringComparison.OrdinalIgnoreCase);
-
-            string? code = Get(fields, prefix + "code");
-            bool patch = !HasField(fields, prefix + "address") && ClaimsPatch(code, codeDecoder, patchCodec);
-            List<CheatWrite>? writes = HasField(fields, prefix + "address")
-                ? ReadExplicit(fields, prefix, spaceName)
-                : patch ? ReadPatch(code!, patchCodec!) : ReadCode(code, codeDecoder, spaceName);
-
-            if (writes is null || writes.Count == 0) return false;
-
-            cheat = new ChtCheat { Description = description, Enabled = enabled, Writes = writes, Kind = patch ? CheatKind.RomPatch : CheatKind.RamPoke };
-            return true;
-        }
-
-        // Every number in these fields is decimal, unlike the code string's hex.
-        private static List<CheatWrite>? ReadExplicit(Dictionary<string, string> fields, string prefix, string spaceName)
-        {
-            int cheatType = Int(fields, prefix + "cheat_type", TypeSet);
-            if (cheatType == TypeDisabled) return null;
-
-            CheatWriteType type = cheatType switch
-            {
-                TypeIncrease => CheatWriteType.Increase,
-                TypeDecrease => CheatWriteType.Decrease,
-                _ => CheatWriteType.Set,
-            };
-
-            long address = Long(fields, prefix + "address", -1);
-            if (address < 0) return null;
-
-            int searchSize = Int(fields, prefix + "memory_search_size", SizeByte);
-            int width = searchSize switch
-            {
-                SizeWord => 2,
-                SizeDword => 4,
-                _ => 1,
-            };
-
-            // Sub-byte sizes are bit writes; address_bit_position says which.
-            int? bitPosition = searchSize < SizeByte ? Int(fields, prefix + "address_bit_position", 0) : null;
-
-            return new List<CheatWrite>
-            {
-                new CheatWrite
+                if (!fields.TryGetValue("cheats", out string? countText) ||
+                    !int.TryParse(countText, NumberStyles.Integer, CultureInfo.InvariantCulture, out int count))
                 {
-                    Space = spaceName,
-                    Address = (int)address,
-                    Value = (uint)Long(fields, prefix + "value", 0),
-                    Width = width,
-                    Type = type,
-                    BitPosition = bitPosition,
-                    BigEndian = string.Equals(Get(fields, prefix + "big_endian"), "true", StringComparison.OrdinalIgnoreCase),
-                    RepeatCount = Int(fields, prefix + "repeat_count", 1),
-                    RepeatAddAddress = Int(fields, prefix + "repeat_add_to_address", 0),
-                    RepeatAddValue = (uint)Long(fields, prefix + "repeat_add_to_value", 0),
-                },
-            };
-        }
-
-        // A code is a patch when only the patch codec claims it, the same rule `cheat add` follows - see EmuSen_Cheats.md §8.
-        private static bool ClaimsPatch(string? code, ICheatCodeCodec? codeDecoder, ICheatCodeCodec? patchCodec) =>
-            !string.IsNullOrWhiteSpace(code) && patchCodec is { Kind: CheatCodeKind.RomPatch } && codeDecoder?.CanDecode(code) != true &&
-            (patchCodec.CanDecode(code) || code.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).All(patchCodec.CanDecode));
-
-        // A patch with a compare value has nowhere to keep it here, so it is skipped rather than made wrong - see EmuSen_Cheats.md §3.
-        private static List<CheatWrite>? ReadPatch(string code, ICheatCodeCodec patchCodec)
-        {
-            try
-            {
-                if (patchCodec.DecodeWrites(code) is { } whole) return whole.ToList();
-                var writes = new List<CheatWrite>();
-                foreach (string token in code.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                {
-                    if (patchCodec.DecodeCompare(token) is not null) return null;
-                    (int address, byte value) = patchCodec.Decode(token);
-                    writes.Add(CheatWrite.Patch(address, value));
+                    return new ChtParseResult { Cheats = cheats, Skipped = 0 };
                 }
-                return writes;
-            }
-            catch (FormatException)
-            {
-                return null;
-            }
-        }
 
-        // The core-native form: one or more codes joined with '+'.
-        private static List<CheatWrite>? ReadCode(string? code, ICheatCodeCodec? codeDecoder, string spaceName)
-        {
-            if (string.IsNullOrWhiteSpace(code) || codeDecoder is null) return null;
+                // Only an entry with fields can read as a cheat; every other number below the count is skipped without being visited - see EmuSen_Backend.md §14.3.
+                int visited = 0;
+                foreach (int i in Entries(fields, count))
+                {
+                    visited++;
+                    if (TryReadCheat(fields, i, codeDecoder, spaceName, patchCodec, out ChtCheat cheat)) cheats.Add(cheat);
+                    else skipped++;
+                }
 
-            // Handed the whole string, because one of such a codec's codes can span a '+' - see EmuSen_Cheats.md §7.
-            try
-            {
-                if (codeDecoder.DecodeWrites(code) is { } whole) return whole.ToList();
-            }
-            catch (FormatException)
-            {
-                return null;
+                return new ChtParseResult { Cheats = cheats, Skipped = skipped + Math.Max(0, count) - visited };
             }
 
-            var writes = new List<CheatWrite>();
-            foreach (string token in code.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            // The numbers below the count that some field is named for, as cheat<n>_ with n written plainly, in order.
+            private static IEnumerable<int> Entries(Dictionary<string, string> fields, int count)
             {
-                if (!codeDecoder.CanDecode(token)) return null;
+                var found = new SortedSet<int>();
+                foreach (string key in fields.Keys)
+                {
+                    if (!key.StartsWith("cheat", StringComparison.OrdinalIgnoreCase)) continue;
+                    int end = key.IndexOf('_', 5);
+                    if (end <= 5) continue;
+                    string digits = key[5..end];
+                    if (!digits.All(char.IsAsciiDigit) || (digits.Length > 1 && digits[0] == '0')) continue;
+                    if (int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out int n) && n < count) found.Add(n);
+                }
+                return found;
+            }
+
+            private static bool TryReadCheat(Dictionary<string, string> fields, int index, ICheatCodeCodec? codeDecoder, string spaceName, ICheatCodeCodec? patchCodec, out ChtCheat cheat)
+            {
+                cheat = default;
+
+                string prefix = $"cheat{index}_";
+                string description = Get(fields, prefix + "desc") ?? $"cheat{index}";
+                bool enabled = string.Equals(Get(fields, prefix + "enable"), "true", StringComparison.OrdinalIgnoreCase);
+
+                string? code = Get(fields, prefix + "code");
+                bool patch = !HasField(fields, prefix + "address") && ClaimsPatch(code, codeDecoder, patchCodec);
+                List<CheatWrite>? writes = HasField(fields, prefix + "address")
+                    ? ReadExplicit(fields, prefix, spaceName)
+                    : patch ? ReadPatch(code!, patchCodec!) : ReadCode(code, codeDecoder, spaceName);
+
+                if (writes is null || writes.Count == 0) return false;
+
+                cheat = new ChtCheat { Description = description, Enabled = enabled, Writes = writes, Kind = patch ? CheatKind.RomPatch : CheatKind.RamPoke };
+                return true;
+            }
+
+            // Every number in these fields is decimal, unlike the code string's hex.
+            private static List<CheatWrite>? ReadExplicit(Dictionary<string, string> fields, string prefix, string spaceName)
+            {
+                int cheatType = Int(fields, prefix + "cheat_type", TypeSet);
+                if (cheatType == TypeDisabled) return null;
+
+                CheatWriteType type = cheatType switch
+                {
+                    TypeIncrease => CheatWriteType.Increase,
+                    TypeDecrease => CheatWriteType.Decrease,
+                    _ => CheatWriteType.Set,
+                };
+
+                long address = Long(fields, prefix + "address", -1);
+                if (address < 0) return null;
+
+                int searchSize = Int(fields, prefix + "memory_search_size", SizeByte);
+                int width = searchSize switch
+                {
+                    SizeWord => 2,
+                    SizeDword => 4,
+                    _ => 1,
+                };
+
+                // Sub-byte sizes are bit writes; address_bit_position says which.
+                int? bitPosition = searchSize < SizeByte ? Int(fields, prefix + "address_bit_position", 0) : null;
+
+                return new List<CheatWrite>
+                {
+                    new CheatWrite
+                    {
+                        Space = spaceName,
+                        Address = (int)address,
+                        Value = (uint)Long(fields, prefix + "value", 0),
+                        Width = width,
+                        Type = type,
+                        BitPosition = bitPosition,
+                        BigEndian = string.Equals(Get(fields, prefix + "big_endian"), "true", StringComparison.OrdinalIgnoreCase),
+                        RepeatCount = Int(fields, prefix + "repeat_count", 1),
+                        RepeatAddAddress = Int(fields, prefix + "repeat_add_to_address", 0),
+                        RepeatAddValue = (uint)Long(fields, prefix + "repeat_add_to_value", 0),
+                    },
+                };
+            }
+
+            // A code is a patch when only the patch codec claims it, the same rule `cheat add` follows - see EmuSen_Cheats.md §8.
+            private static bool ClaimsPatch(string? code, ICheatCodeCodec? codeDecoder, ICheatCodeCodec? patchCodec) =>
+                !string.IsNullOrWhiteSpace(code) && patchCodec is { Kind: CheatCodeKind.RomPatch } && codeDecoder?.CanDecode(code) != true &&
+                (patchCodec.CanDecode(code) || code.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).All(patchCodec.CanDecode));
+
+            // A patch with a compare value has nowhere to keep it here, so it is skipped rather than made wrong - see EmuSen_Cheats.md §3.
+            private static List<CheatWrite>? ReadPatch(string code, ICheatCodeCodec patchCodec)
+            {
                 try
                 {
-                    (int address, byte value) = codeDecoder.Decode(token);
-                    writes.Add(CheatWrite.Poke(spaceName, address, value));
+                    if (patchCodec.DecodeWrites(code) is { } whole) return whole.ToList();
+                    var writes = new List<CheatWrite>();
+                    foreach (string token in code.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    {
+                        if (patchCodec.DecodeCompare(token) is not null) return null;
+                        (int address, byte value) = patchCodec.Decode(token);
+                        writes.Add(CheatWrite.Patch(address, value));
+                    }
+                    return writes;
                 }
                 catch (FormatException)
                 {
                     return null;
                 }
             }
-            return writes;
-        }
 
-        // RomPatch has no equivalent in RetroArch's model; filtering is the caller's - see `man cheat`.
-        public static string Write(IReadOnlyList<ChtCheat> cheats)
-        {
-            var sb = new StringBuilder();
-            sb.Append("cheats = ").Append(cheats.Count).Append('\n');
-
-            for (int i = 0; i < cheats.Count; i++)
+            // The core-native form: one or more codes joined with '+'.
+            private static List<CheatWrite>? ReadCode(string? code, ICheatCodeCodec? codeDecoder, string spaceName)
             {
-                ChtCheat cheat = cheats[i];
+                if (string.IsNullOrWhiteSpace(code) || codeDecoder is null) return null;
 
-                // One entry holds one write, so extra writes ride the code string as RetroArch's do.
-                CheatWrite first = cheat.Writes.Count > 0 ? cheat.Writes[0] : default;
-                string prefix = $"cheat{i}_";
-
-                sb.Append('\n');
-                sb.Append(prefix).Append("desc = \"").Append(Escape(cheat.Description)).Append("\"\n");
-                sb.Append(prefix).Append("handler = 1\n");
-                sb.Append(prefix).Append("enable = ").Append(cheat.Enabled ? "true" : "false").Append('\n');
-                sb.Append(prefix).Append("cheat_type = ").Append(first.Type switch
+                // Handed the whole string, because one of such a codec's codes can span a '+' - see EmuSen_Cheats.md §7.
+                try
                 {
-                    CheatWriteType.Increase => TypeIncrease,
-                    CheatWriteType.Decrease => TypeDecrease,
-                    _ => TypeSet,
-                }).Append('\n');
-                sb.Append(prefix).Append("memory_search_size = ").Append(first.BitPosition.HasValue
-                    ? 0
-                    : first.EffectiveWidth switch { 2 => SizeWord, 4 => SizeDword, _ => SizeByte }).Append('\n');
-                sb.Append(prefix).Append("address = ").Append(first.Address).Append('\n');
-                sb.Append(prefix).Append("value = ").Append(first.Value).Append('\n');
-                sb.Append(prefix).Append("address_bit_position = ").Append(first.BitPosition ?? 0).Append('\n');
-                sb.Append(prefix).Append("big_endian = ").Append(first.BigEndian ? "true" : "false").Append('\n');
-                sb.Append(prefix).Append("repeat_count = ").Append(first.EffectiveRepeatCount).Append('\n');
-                sb.Append(prefix).Append("repeat_add_to_address = ").Append(first.RepeatAddAddress).Append('\n');
-                sb.Append(prefix).Append("repeat_add_to_value = ").Append(first.RepeatAddValue).Append('\n');
-
-                if (cheat.Writes.Count > 1)
-                {
-                    sb.Append(prefix).Append("code = \"")
-                      .Append(string.Join("+", cheat.Writes.Select(w => $"{w.Address:X6}{w.Value:X2}")))
-                      .Append("\"\n");
+                    if (codeDecoder.DecodeWrites(code) is { } whole) return whole.ToList();
                 }
+                catch (FormatException)
+                {
+                    return null;
+                }
+
+                var writes = new List<CheatWrite>();
+                foreach (string token in code.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (!codeDecoder.CanDecode(token)) return null;
+                    try
+                    {
+                        (int address, byte value) = codeDecoder.Decode(token);
+                        writes.Add(CheatWrite.Poke(spaceName, address, value));
+                    }
+                    catch (FormatException)
+                    {
+                        return null;
+                    }
+                }
+                return writes;
             }
 
-            return sb.ToString();
+            public static string Write(IReadOnlyList<ChtCheat> cheats)
+            {
+                var sb = new StringBuilder();
+                sb.Append("cheats = ").Append(cheats.Count).Append('\n');
+
+                for (int i = 0; i < cheats.Count; i++)
+                {
+                    ChtCheat cheat = cheats[i];
+
+                    // One entry holds one write, so extra writes ride the code string as RetroArch's do.
+                    CheatWrite first = cheat.Writes.Count > 0 ? cheat.Writes[0] : default;
+                    string prefix = $"cheat{i}_";
+
+                    sb.Append('\n');
+                    sb.Append(prefix).Append("desc = \"").Append(Escape(cheat.Description)).Append("\"\n");
+                    sb.Append(prefix).Append("handler = 1\n");
+                    sb.Append(prefix).Append("enable = ").Append(cheat.Enabled ? "true" : "false").Append('\n');
+                    sb.Append(prefix).Append("cheat_type = ").Append(first.Type switch
+                    {
+                        CheatWriteType.Increase => TypeIncrease,
+                        CheatWriteType.Decrease => TypeDecrease,
+                        _ => TypeSet,
+                    }).Append('\n');
+                    sb.Append(prefix).Append("memory_search_size = ").Append(first.BitPosition.HasValue
+                        ? 0
+                        : first.EffectiveWidth switch { 2 => SizeWord, 4 => SizeDword, _ => SizeByte }).Append('\n');
+                    sb.Append(prefix).Append("address = ").Append(first.Address).Append('\n');
+                    sb.Append(prefix).Append("value = ").Append(first.Value).Append('\n');
+                    sb.Append(prefix).Append("address_bit_position = ").Append(first.BitPosition ?? 0).Append('\n');
+                    sb.Append(prefix).Append("big_endian = ").Append(first.BigEndian ? "true" : "false").Append('\n');
+                    sb.Append(prefix).Append("repeat_count = ").Append(first.EffectiveRepeatCount).Append('\n');
+                    sb.Append(prefix).Append("repeat_add_to_address = ").Append(first.RepeatAddAddress).Append('\n');
+                    sb.Append(prefix).Append("repeat_add_to_value = ").Append(first.RepeatAddValue).Append('\n');
+
+                    if (cheat.Writes.Count > 1)
+                    {
+                        sb.Append(prefix).Append("code = \"")
+                          .Append(string.Join("+", cheat.Writes.Select(w => $"{w.Address:X6}{w.Value:X2}")))
+                          .Append("\"\n");
+                    }
+                }
+
+                return sb.ToString();
+            }
         }
 
         private static string Escape(string text) => text.Replace("\"", "'");

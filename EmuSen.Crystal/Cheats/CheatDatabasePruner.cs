@@ -38,7 +38,10 @@ namespace EmuSen.Crystal.Cheats
     public static class CheatDatabasePruner
     {
         // Refuses the two cases where an empty or unmatched keep-set would wipe everything - see §4.16.
-        public static CheatPrunePlan Plan(CheatDatabase database, IReadOnlyCollection<string> keep)
+        public static CheatPrunePlan Plan(CheatDatabase database, IReadOnlyCollection<string> keep) => database.NativePlan(keep) ?? ManagedPlan(database, keep);
+
+        // The C# plan: the failover, and the parity class's oracle - see EmuSen_Backend.md §14.3.
+        public static CheatPrunePlan ManagedPlan(CheatDatabase database, IReadOnlyCollection<string> keep)
         {
             var keepSet = new HashSet<string>(keep, StringComparer.OrdinalIgnoreCase);
             IReadOnlyList<(string System, int Count)> present = database.Systems();
@@ -79,6 +82,13 @@ namespace EmuSen.Crystal.Cheats
 
         // Failures are reported, not thrown: one locked folder must not abort the other forty.
         public static (int Removed, IReadOnlyList<string> Failed) Apply(CheatDatabase database, CheatPrunePlan plan)
+        {
+            if (!plan.CanApply) return (0, Array.Empty<string>());
+            if (CheatsNative.Active && Services.ServiceLibrary.Takes(database.Directory) && plan.Removing.All(s => Services.ServiceLibrary.Takes(s.System) && Services.ServiceLibrary.Takes(s.Path))) return CheatsNative.Apply(database.Directory, plan);
+            return ManagedApply(database, plan);
+        }
+
+        public static (int Removed, IReadOnlyList<string> Failed) ManagedApply(CheatDatabase database, CheatPrunePlan plan)
         {
             if (!plan.CanApply) return (0, Array.Empty<string>());
 

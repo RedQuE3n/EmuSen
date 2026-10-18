@@ -232,6 +232,18 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Equal(1, result.Skipped);
         }
 
+        // A target written with a separator at its end, as a player may type the folder, is the same folder - see EmuSen_Backend.md §14.3.
+        [Fact]
+        public void An_update_into_a_folder_written_with_a_trailing_separator_installs_every_cheat()
+        {
+            using Stream zip = BuildZip(("cht/SNES/Game.cht", OneCheat), ("cht/PS/Other.cht", OneCheat));
+
+            CheatDatabaseInstallResult result = CheatDatabaseInstaller.Install(zip, _dbDir + Path.DirectorySeparatorChar);
+
+            Assert.Equal((2, 0), (result.Installed, result.Skipped));
+            Assert.True(File.Exists(Path.Combine(_dbDir, "cht", "SNES", "Game.cht")));
+        }
+
         [Fact]
         public void An_update_reinstalls_over_an_existing_file_rather_than_failing()
         {

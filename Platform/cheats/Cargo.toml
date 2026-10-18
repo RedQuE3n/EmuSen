@@ -1,0 +1,23 @@
+[package]
+name = "emusen-cheats"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The cheat files and the player's cheat database: RetroArch's .cht read and written, the .cht tree indexed and searched, its systems pruned, and a downloaded archive installed. The download itself is the C#'s until an HTTP client is chosen (EmuSen_Backend.md SR9). See EmuSen_Cheats.md, `man cheat` and EmuSen_Backend.md §14.
+[lib]
+name = "emusen_cheats"
+
+[dependencies]
+# Each console's codecs, by which a .cht code becomes writes.
+emusen-systems = { path = "../systems" }
+# .NET's path and text rules, and how a folder is listed.
+emusen-galaxia = { path = "../galaxia" }
+emusen-dotnet = { path = "../dotnet" }
+# Inflate, for a zip archive's entries; already in the workspace through emusen-disc's CHD reader.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+
+[target.'cfg(unix)'.dependencies]
+# mktime and localtime_r, for a zip entry's local time as .NET reads it.
+libc = "0.2"

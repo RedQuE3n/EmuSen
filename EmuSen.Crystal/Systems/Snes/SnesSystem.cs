@@ -58,6 +58,6 @@ namespace EmuSen.Crystal.Systems.Snes
 
         public static ICheatCodeCodec GameGenie() => SystemCode.Codec("snes.gg", ManagedGameGenie());
 
-        public static readonly SystemPack Pack = new(Entry, ProActionReplay, GameGenie, DebugViews: SystemCode.Views(Id, SnesDebugViews.Instance));
+        public static readonly SystemPack Pack = new(Entry, ProActionReplay, GameGenie, DebugViews: SystemCode.Views(Id, SnesDebugViews.Instance), ByteOrder: "little");
     }
 }

@@ -13,11 +13,8 @@ namespace EmuSen.Cores.Nintendo.MarsRT
     {
         private static readonly string[] RegisterNames = MarsOperands.Gpr;
 
-        // The VI's fourteen registers by their libultra names, in the order MarsRT's register export returns them.
-        private static readonly string[] VideoRegisterNames =
-        {
-            "CONTROL", "ORIGIN", "WIDTH", "V_INTR", "V_CURRENT", "BURST", "V_SYNC", "H_SYNC", "LEAP", "H_START", "V_START", "V_BURST", "X_SCALE", "Y_SCALE",
-        };
+        // The VI's fourteen registers by the N64 pack's names, in the order MarsRT's register export returns them.
+        private static readonly IReadOnlyList<string> VideoRegisterNames = N64Views.VideoRegisterNames;
 
         private readonly MarsRtCore _core;
         private readonly List<IDebugMemorySpace> _spaces = new();
@@ -52,7 +49,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             _spaces.Add(Space(MarsDebugSpaces.Cpu, MarsRtSpace.Cpu, true));
 
             _cpuRegisters = new(36, slot => _core.CpuRegisters(slot), CpuRegistersOf);
-            _videoRegisters = new(VideoRegisterNames.Length, slot => _core.ViRegisters(slot), VideoRegistersOf);
+            _videoRegisters = new(VideoRegisterNames.Count, slot => _core.ViRegisters(slot), VideoRegistersOf);
             _coprocessorRegisters = new(3 + RegisterNames.Length, slot => _core.RspRegisters(slot), RspRegistersOf);
         }
 
@@ -141,7 +138,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
 
         private static IReadOnlyList<DebugRegisterValue> VideoRegistersOf(uint[] values, int count)
         {
-            var registers = new DebugRegisterValue[Math.Min(count, VideoRegisterNames.Length)];
+            var registers = new DebugRegisterValue[Math.Min(count, VideoRegisterNames.Count)];
             for (int i = 0; i < registers.Length; i++) registers[i] = new DebugRegisterValue(VideoRegisterNames[i], values[i], 32);
             return registers;
         }
@@ -174,18 +171,9 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             return decoded.Kind is { } kind ? (kind, (int)decoded.Target) : null;
         }
 
-        private static MarsInstruction Decode(string space, IReadOnlyList<byte> bytes, int at)
-        {
-            uint word = (uint)((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]);
-            return space switch
-            {
-                MarsDebugSpaces.Imem or MarsDebugSpaces.Dmem => RspDisassembler.Decode(word, (uint)at & 0xFFC),
-                MarsDebugSpaces.Rdram => Vr4300Disassembler.Decode(word, 0x8000_0000u | (uint)at),
-                MarsDebugSpaces.Rom => Vr4300Disassembler.Decode(word, 0xB000_0000u + (uint)at),
-                MarsDebugSpaces.PifRam => Vr4300Disassembler.Decode(word, 0xBFC0_07C0u + (uint)at),
-                _ => Vr4300Disassembler.Decode(word, (uint)at),
-            };
-        }
+        // The N64 pack decodes each space by the processor that runs code there - see EmuSen_Backend.md §18.7.
+        private static MarsInstruction Decode(string space, IReadOnlyList<byte> bytes, int at) =>
+            N64Views.DecodeIn(space, (uint)((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]), (uint)at);
 
         private string Canonical(string spaceName)
         {

@@ -5,7 +5,7 @@
 use crate::{bytes, fail, given, put, required, status};
 use emusen_dotnet::json::{self, Value};
 use emusen_systems::debug::{Memory, Reference, Space, Tape};
-use emusen_systems::{gb, nes, snes};
+use emusen_systems::{gb, n64, nes, snes};
 
 fn object(members: Vec<(&str, Value)>) -> Value {
     Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect())
@@ -21,8 +21,8 @@ fn reference(r: Option<(Reference, i64)>) -> Value {
     r.map_or(Value::Null, |(kind, target)| object(vec![("kind", Value::string(kind.name())), ("target", Value::number(target))]))
 }
 
-/// One instruction of `processor` (`6502`, `sm83` or `vr4300`) from its bytes (the VR4300's one big-endian word) at
-/// `pc`, as JSON: length, mnemonic, operands and reference (kind and target, or null), the last classified from
+/// One instruction of `processor` (`6502`, `sm83`, `vr4300` or, since interface 19, `rsp`) from its bytes (a MIPS
+/// processor's one big-endian word) at `pc`, as JSON: length, mnemonic, operands and reference (kind and target, or null), the last classified from
 /// `operand` for the two 8-bit processors as their C# classifiers took it. ABSENT for another processor.
 ///
 /// # Safety
@@ -46,7 +46,11 @@ pub unsafe extern "C" fn emusen_systems_disassemble(processor: *const u8, proces
             (gb::disasm::length_of(op), gb::disasm::mnemonic_of(op, b(1)), gb::disasm::format_operand(op, pc, b(1), b(2)), r)
         }
         "vr4300" => {
-            let (mnemonic, operands, r) = emusen_systems::n64::disasm::decode(u32::from_be_bytes([b(0), b(1), b(2), b(3)]), pc as u32);
+            let (mnemonic, operands, r) = n64::disasm::decode(u32::from_be_bytes([b(0), b(1), b(2), b(3)]), pc as u32);
+            (4, mnemonic, operands, r.map(|(k, t)| (k, t as i64)))
+        }
+        "rsp" => {
+            let (mnemonic, operands, r) = n64::disasm::decode_rsp(u32::from_be_bytes([b(0), b(1), b(2), b(3)]), pc as u32);
             (4, mnemonic, operands, r.map(|(k, t)| (k, t as i64)))
         }
         _ => return fail(status::ABSENT, format!("no disassembler is named {processor}")) as i64,
@@ -200,6 +204,34 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
         ("snes", "symbol_names") => (object(vec![("names", Value::Array(snes::views::symbol_names().into_iter().map(Value::string).collect()))]), Vec::new()),
         ("snes", "symbol") => (object(vec![("value", snes::views::symbol(text(r.get("name")).unwrap_or_default(), &registers).map_or(Value::Null, Value::number))]), Vec::new()),
         ("snes", "summary") => textual(snes::views::summary(&registers)),
+        ("n64", "disassemble") => {
+            let rows = n64::views::disassemble(m, &space, address, int(r.get("count")).unwrap_or(0) as i32)
+                .into_iter()
+                .map(|l| {
+                    object(vec![
+                        ("address", Value::number(l.address)),
+                        ("bytes", Value::Array(l.bytes.iter().map(|&b| Value::number(b)).collect())),
+                        ("mnemonic", Value::string(l.mnemonic)),
+                        ("operands", Value::string(l.operands)),
+                        ("reference", reference(l.reference.map(|(k, t)| (k, t as i64)))),
+                    ])
+                })
+                .collect();
+            (object(vec![("instructions", Value::Array(rows))]), Vec::new())
+        }
+        ("n64", "instruction") => {
+            let (mnemonic, operands, r) = n64::views::decode_in(&space, int(r.get("word")).unwrap_or(0) as u32, address as u32);
+            (object(vec![("mnemonic", Value::string(mnemonic)), ("operands", Value::string(operands)), ("reference", reference(r.map(|(k, t)| (k, t as i64))))]), Vec::new())
+        }
+        ("n64", "physical") => {
+            let (name, offset, addressable) = n64::views::physical_in(m, address as u32);
+            (object(vec![("space", Value::string(name)), ("offset", Value::number(offset)), ("addressable", Value::Bool(addressable))]), Vec::new())
+        }
+        ("n64", "video_registers") => {
+            let rows = n64::views::video_registers(m).into_iter().map(|(name, value)| object(vec![("name", Value::string(name)), ("value", Value::number(value))])).collect();
+            (object(vec![("registers", Value::Array(rows))]), Vec::new())
+        }
+        ("n64", "summary") => textual(n64::views::summary(&registers, m)),
         _ => return fail(status::ABSENT, format!("{system} has no view {view}")) as i64,
     };
     let out_bytes = if memory.wants.is_empty() {

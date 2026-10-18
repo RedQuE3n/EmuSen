@@ -50,6 +50,9 @@ pub struct System {
     pub cheat_space: Option<String>,
     /// The console's save media, each read by a format module of its family's; none for a console that has no medium.
     pub media: Vec<Medium>,
+    /// The order of a multi-byte value in the console's memory, `big` or `little`, as every engine's spaces hold it; none
+    /// where no one has stated it yet, which a reader takes as little-endian (EmuSen_Backend.md §18.7).
+    pub byte_order: Option<String>,
 }
 
 /// A save medium as the console's own manager names it (EmuSen_SaveMedia.md §6.2).
@@ -74,7 +77,7 @@ impl std::fmt::Display for Error {
 }
 
 /// Every key a data file holds, in the order the table writes them; a file with any other key is refused.
-pub const KEYS: [&str; 16] = [
+pub const KEYS: [&str; 17] = [
     "id",
     "name",
     "console",
@@ -91,6 +94,7 @@ pub const KEYS: [&str; 16] = [
     "screenscraper_system",
     "cheat_space",
     "media",
+    "byte_order",
 ];
 
 /// Every key a medium's object holds, in the order the table writes them.
@@ -225,6 +229,10 @@ pub fn parse(file: &str, text: &str) -> Result<System, Error> {
         attached_to: f.optional_text("attached_to")?,
         media: Vec::new(),
         cheat_space: f.optional_text("cheat_space")?,
+        byte_order: match f.optional_text("byte_order")? {
+            Some(order) if order != "big" && order != "little" => return f.fail(format!("byte_order {order} is neither big nor little")),
+            order => order,
+        },
         screenscraper_system: if f.value("screenscraper_system")?.is_null() {
             None
         } else {
@@ -308,6 +316,7 @@ pub fn to_json(systems: &[System]) -> String {
                         })
                         .collect(),
                 ),
+                or_null(s.byte_order.as_deref().map(Value::string)),
             ];
             Value::Object(KEYS.iter().zip(values).map(|(key, value)| (json::Text::new(*key), value)).collect())
         })
@@ -347,6 +356,14 @@ mod tests {
 
     fn nes() -> String {
         DATA[0].1.to_string()
+    }
+
+    #[test]
+    fn a_byte_order_is_big_little_or_unstated() {
+        let table = build(&DATA).unwrap();
+        let order = |id: &str| table.iter().find(|s| s.id == id).unwrap().byte_order.clone();
+        assert_eq!((order("n64").as_deref(), order("nes").as_deref(), order("md")), (Some("big"), Some("little"), None));
+        assert_eq!(refused("nes", &nes().replace("\"byte_order\": \"little\"", "\"byte_order\": \"middle\"")), "byte_order middle is neither big nor little");
     }
 
     fn refused(file: &str, text: &str) -> String {

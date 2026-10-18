@@ -3128,7 +3128,7 @@ The destinations, in order of preference, each later one widening a surface more
 | H3 | `marsrt_core_block_counters`: the recompiler's 13 (`cpu/blocks/mod.rs:260–281`) | none outside the shim's `BlockCounterValues` [M] | **minor**, `TELEMETRY`, since `Mars_Recompiler.md` reads them when measuring; or **dead** if the tester prefers (Q1) |
 | H4 | The third value of `marsrt_core_debug_counters`, the exceptions entered (`v1.rs:972–977`; the first two are v1's `debug_counters`) | `MarsRtDebugTests:97` | **minor**, `TELEMETRY` |
 | H5 | `marsrt_core_gpu_report`: what the device setting got, a sentence when it got nothing (`ffi/multiple.rs:29–32`) | test output and the digest probe only | **cap**: `SETTING_NOTES` for `Gpu` when the setting is not honoured, the sentence §6.13 of the core ABI page made notes for; and a log line naming the device when it is (`log_drain`, v1). No new export (Q9) |
-| H6 | `marsrt_core_is_viewer_text`: the IS-Viewer's transcript, a game's or test ROM's debug output (`v1.rs:803–805`) | `MarsRtTests:59`, the corpus's summary | **host**: the core's log, a line for each newline written, through `log_drain` and `EVENT_LOG` (v1); the corpus test reads the log. The transcript stays in the state as now (Q8) |
+| H6 | `marsrt_core_is_viewer_text`: the IS-Viewer's transcript, a game's or test ROM's debug output (`v1.rs:803–805`) | `MarsRtTests:59`, the corpus's summary | **host**: the core's log, a line for each newline written, through `log_drain` and `EVENT_LOG` (v1); the corpus test reads the log. *Corrected 2026-10-18 (§18.9):* the transcript is the harness's (`Skip`), in no state, so a load does not replay it (Q8) |
 
 **(i) The loader and the component exports**
 
@@ -3501,6 +3501,84 @@ taken without the rest.
 | **Q14** | `EMUSEN_MARS_NATIVE=0` (I1): retired with `PortLibrary`'s use for MarsRT, since nothing is left to fall back to? | Retire it |
 | **Q15** | The antialiasing note with no game running (B3): none, since a note comes from a machine; or kept by a rule in the settings window? | None: a rule in the window is per-core code, and the note appears as soon as a game runs |
 | **Q16** | A processor that cannot halt (F7): known from `debug_set_breakpoints`' refusal, with §6.14 of the core ABI page saying so in a clarification; or a `halts` field on machine info's processors? | The refusal and the clarification: the crate's default already answers so for every core built on it, and a field would state the same fact twice |
+
+### 18.9 Built 2026-10-18: steps 1 to 4 for MarsRT, the parts that need no ABI change
+
+*Measured on 2026-10-18 on branch `b4-marsrt`, from `WiseMan` at `4b42f4f1`, under the decisions of §20. What was
+asked: §18.7's step 1, step 2 for MarsRT's own candidates, step 3, and step 4's pack parts with platform interface 19.
+Steps 5 (the minor, which another branch builds with the host pieces the cores share) and 6 onward are not begun, and
+the shim is untouched but for reading the pack's code.*
+
+**Step 1, the baselines**, taken from the branch's base before any change, with copies of the measurement games
+(`~/.cache/emusen/pgo/games/measure`) and the build kept beside them (`~/.cache/emusen/probe/mars/b4/`):
+
+| Baseline | Result |
+|---|---|
+| WiseMan, §18.5's classes, the same two filters | 902 of 902 and 443 of 443 (the GPU classes on the RX 6800 alone) |
+| MarsRT's crate, `--profile test-checked`, with the measurement states, the corpus and the GPU tests | 498 of 498 |
+| The digest probe, Super Mario 64 and Ocarina of Time only | 26 runs, 8,654 lines; and the two runs at 2× on the RX 6800 |
+| The corpus, n64-systemtest | *Failed 46 of 4637 tests*, the recompiler's transcript the interpreter's |
+| The kit, 600 frames on each game | 22 cases passing on each; 48 exports, capabilities `0x1fde`, six spaces |
+
+The golden corpus through the generic adapter is §18.6.3's, measured in the first phase; nothing in this step changed
+what the adapter shows of MarsRT, so it was not run again.
+
+**Step 2.** C1 is MarsRT's own (the shim's rethrow), and the generic adapter is its fix, at the switch; it is to be
+shown failing then. C2 and C3 are the bridge's and go to the shared branch, with the halting probe (F7).
+
+**Step 3, MarsRT's own work** (`src/ffi/host.rs`; `Mars_Native.md` §9): `DEBUG_REGISTERS` for both processors with
+their names in machine info (F3, F4); the `VI` space, read-only, the registers big-endian (F5); `SETTING_NOTES` for the
+antialiasing note and the device's report (B3, H5); the device's report and the IS-Viewer's lines in the log (H5, H6);
+machine info's frame rate from the VI, with `MACHINE_INFO` when it moves (A5); `RdpWorkers`' help (B2). The shim reads
+none of it yet, so nothing a frontend or the debugger shows changes.
+
+**Step 4's pack parts.** The RSP's table is `emusen-mips`' `rsp.rs` (`EmuSen_Mips.md` §7), the item §13.6 left; its C#
+moved to `Crystal/Systems/N64/RspDisassembler.cs` as the failover, `Decode` forwarding to the library. The N64 module
+of `emusen-systems` gains `n64::views`: each space's code listed by the processor that runs it at the address it sees
+it at (F8), the physical map (F9's second half), the VI's registers by name from the `VI` space (F5) and the summary's
+CPU and VI lines (F10). The C# facade is `Crystal/Systems/N64/N64Views.cs`, each answer the library's unless
+`EMUSEN_SYSTEMS_NATIVE=0`, each `…Managed` twin the C# the shim held, moved: `DecodeIn`, `Physical`,
+`VideoRegisters`, `Summary`. The shim now reads `DecodeIn` and `Physical` and the register names from it. Wiring them
+into `ISystemDebugViews` and the generic target is the shared branch's; the facade's shapes are what it needs.
+
+**Platform interface 19.** `emusen_systems_disassemble` takes the processor `rsp`, and `emusen_systems_view` the system
+`n64` with the views `disassemble`, `instruction`, `physical`, `video_registers` and `summary`; no export is added, but
+an older library would refuse them, so the number moves (`PlatformLibrary.InterfaceVersion`, `emusen_platform.h`,
+`lib.rs` together). The header compiles clean as C99 and as C++17.
+
+**The frame log's byte order** (F14) is a fact of the table: each data file gains `byte_order`, `big` for the N64,
+`little` for the NES, SNES, PlayStation and Game Boy, and null for the Genesis family, which no one has stated yet and
+a reader takes as little-endian, as today (a question below). `SystemPack.ByteOrder` is the literal, `SystemPacks.BigEndian`
+reads the table's under the switch, and `CoreEngine` keeps the answer per machine and reads a frame log's value in that
+order. No core's output changes today: MarsRT's shim reads its own, and every other system's order is the one the
+adapter already read. `MarsRtCoreAbiTests.The_v1_adapter_logs_an_n64_value_big_end_first` failed first, the adapter
+logging `0x3412` for the bytes `12 34`, and passes with the change.
+
+**The gates, after:**
+
+| Gate | Result |
+|---|---|
+| WiseMan, §18.5's first filter and the parity classes the step touches (`DebugCodeParityTests`, `SystemTableParityTests`, `CheatCodecParityTests`, `SystemCodeParityTests`, `SaveMediaParityTests`, `GalaxiaParityTests`) | 990 of 990: the 902 of the baseline, `MarsRtCoreAbiTests` 5 (one new), `DebugCodeParityTests` 7 (two new), `SystemTableParityTests` 8 (one new), and the others' 72 |
+| WiseMan, the second filter | 442 of 443 in the first run: `GraphicsSettingsWindowLayoutTests`' case of 3× resolution and 3× antialiasing found the note hidden, a window that reads `CoreCatalog`'s C# rows, which this step did not touch; the class alone three times, 14 of 14 each, and the filter again, 443 of 443. Recorded as intermittent, not pursued |
+| The crate | 505 of 505: the 498 and the seven of `ffi::host` |
+| The digest probe | every line of the 26 runs and of the two GPU runs identical to the baseline's |
+| The corpus | the same summary and transcript |
+| The kit | 22 cases passing on each game; 50 exports, capabilities `0x19fde`, seven spaces |
+| `emusen-mips`, `emusen-systems`, `emusen-platform` (`--profile test-checked`) | 13, 23, and 31 with the four of `dianash_abi` |
+| The parity class on the RSP | every primary opcode crossed with every function and with eleven element and register patterns, four ways, and 200,000 random words: over 340,000 words at five IMEM addresses, the library and the C# alike |
+| The parity class on the N64's views | 4,000 words decoded in nine spaces (names in two cases and one unknown), the physical map at its 26 boundaries and 2,000 random addresses with three RDRAM sizes, the VI's registers and the summary on 50 generated memories, a short VI space and a lower-case name among them |
+
+**Seeded faults**, each made, built, run and reverted:
+
+| Fault | Caught by |
+|---|---|
+| the RSP's half-selectors counted from 3 rather than 4 | `Every_rsp_word_disassembles_alike`, and `The_n64_views_answer_alike` through IMEM and DMEM |
+| PIF RAM's offset in the physical map one too high | `The_n64_views_answer_alike` |
+
+**A question this step raises**, for the tester: the Genesis family's `byte_order`. The 68000 and the SH-2 are
+big-endian, and if Nephrite's spaces hold memory in the processors' own byte order, as MarsRT's do, the frame log reads
+a Genesis value with its bytes swapped today. Recommended: Nephrite's owner states it after reading how its spaces lay
+out a word, with a test like MarsRT's; it is left null here because setting it changes that core's output.
 
 ---
 

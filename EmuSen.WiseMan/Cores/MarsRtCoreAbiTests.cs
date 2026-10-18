@@ -88,6 +88,20 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(State(shim), State(adapter));
         }
 
+        // The adapter's frame log reads a value in the N64 pack's byte order, the big end first, as the shim did - see EmuSen_Backend.md §18.7.
+        [Fact]
+        public void The_v1_adapter_logs_an_n64_value_big_end_first()
+        {
+            string rom = Rom(SyntheticN64Rom.BuildHomebrew(N64SaveType.Eeprom4k));
+            using var adapter = new CoreEngine(MarsNative.Library.Library!, new System.Collections.Generic.Dictionary<string, string> { ["ExpansionPak"] = "true" }) { Options = TestCores.NoBattery };
+            adapter.LoadRom(rom);
+            adapter.WriteSpace("RDRAM", 0x7F_0000, 0x12);
+            adapter.WriteSpace("RDRAM", 0x7F_0001, 0x34);
+            int id = adapter.FrameLog.AddEntry("RDRAM", 0x7F_0000, 2);
+            adapter.RunFrame();
+            Assert.Equal(0x1234, adapter.FrameLog.GetSamples(id).Single().Value);
+        }
+
         private static byte[] State(ICore core)
         {
             using var stream = new MemoryStream();

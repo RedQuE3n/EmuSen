@@ -14,5 +14,6 @@
   "attached_to": null,
   "screenscraper_system": 9,
   "cheat_space": "CPUBUS",
-  "media": []
+  "media": [],
+  "byte_order": "little"
 }

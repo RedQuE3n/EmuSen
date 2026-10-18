@@ -32,16 +32,18 @@ namespace EmuSen.Crystal.Systems
         // The C# views this one fronts, the failover and the parity class's oracle.
         public ISystemDebugViews Managed { get; }
 
-        private sealed record Answer(JsonElement Root, byte[] Payload);
+        internal sealed record Answer(JsonElement Root, byte[] Payload);
 
-        // A request for one view over the spaces given, each with its size and whether a read disturbs it; null where the library has no such view.
-        private Answer? Ask(string view, IReadOnlyList<IDebugMemorySpace> spaces, Action<Utf8JsonWriter>? fields = null)
+        private Answer? Ask(string view, IReadOnlyList<IDebugMemorySpace> spaces, Action<Utf8JsonWriter>? fields = null) => Request(_system, view, spaces, fields);
+
+        // A request for one view of a system's over the spaces given, each with its size and whether a read disturbs it; null where the library has no such view.
+        internal static Answer? Request(string system, string view, IReadOnlyList<IDebugMemorySpace> spaces, Action<Utf8JsonWriter>? fields = null)
         {
             var stream = new MemoryStream();
             using (var w = new Utf8JsonWriter(stream))
             {
                 w.WriteStartObject();
-                w.WriteString("system", _system);
+                w.WriteString("system", system);
                 w.WriteString("view", view);
                 w.WriteStartArray("spaces");
                 foreach (IDebugMemorySpace s in spaces)

@@ -4311,6 +4311,18 @@ The three first phases (§17, §18, §19) were answered by the tester on 2026-10
   oracles' exception types retired, so a refused game reaches the frontend API as a fault and a refused state as
   `StateRefused`.
 
+
+**Later the same day**, on the second phases' questions, each as recommended:
+
+- The Game Boy's processor shows as "CPU", as the NES's does (§17.10).
+- The Game Boy summary's sound line goes without `buffered=`, the queue's length being the engine's and no pack's (§17.10).
+- A breakpoint condition refreshes the register providers alone at a hit, not the pack's views (§24.5); built after B4.
+- `EmuSen_CoreAPI.md` §6.33 gains a sentence that reading a unit through `debug_registers` changes nothing in the
+  machine, a clarification and no minor (§24).
+- After a state loads, the host sends each port's presence again, for every core that claims `PRESENCE` (§18.10.9);
+  built after B4.
+- The three N64 hints whose cost sentence the schema repeats are reworded (§18.10.9).
+
 ---
 
 ## 21. B4's second phase for MoonRT, steps 1 to 3, 2026-10-18: the core's own exports, the pack's fixed map, the tests moved

@@ -1,4 +1,4 @@
-//! The PGO profile a build is given, checked against this compiler and this source - see Mars_Native.md §6.17.
+//! The PGO profile a build is given, checked against this compiler and this source - see Mars_Native.md §6.17; and the unoptimised build's cfg, §8.
 
 use std::env;
 use std::fs;
@@ -16,6 +16,12 @@ fn main() {
         println!("cargo:rerun-if-changed={dependency}/Cargo.toml");
     }
     let source = format!("{:016x}", source_digest(&root));
+
+    // An unoptimised build runs the long suites shortened, whatever its debug assertions - see Mars_Native.md §8.
+    println!("cargo:rustc-check-cfg=cfg(marsrt_unoptimised)");
+    if env::var("OPT_LEVEL").is_ok_and(|level| level == "0") {
+        println!("cargo:rustc-cfg=marsrt_unoptimised");
+    }
 
     let flags: Vec<String> = env::var("CARGO_ENCODED_RUSTFLAGS")
         .unwrap_or_default()

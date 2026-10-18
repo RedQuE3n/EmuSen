@@ -1625,7 +1625,8 @@ Each failure was found by a test.
   - `MarsThreadedRdpTests`' cases, ported;
   - the split's cases, with two to four workers;
   - a seeded stress of lists handed over in pieces, with loads from what was drawn, and processor reads and writes of
-    every image between them (24 seeds with one worker, 12 each with two, three and four);
+    every image between them (24 seeds with one worker, 12 each with two, three and four; 3 and 2 in an unoptimised
+    build, §8);
   - the cases for the level of detail, the barrier and the hazard load above;
   - two written because a mutant survived without them (§5.6.9): a lost wake-up, and a depth slope carried into a
     primitive drawn alone.
@@ -6411,6 +6412,16 @@ suggests a smaller gain there; it is a suggestion, not a measurement, and should
   stale profile beside the fresh one before replacing it.
 - **Mario's `stale` reading** (−4.0 per cent, rounds overlapping both builds) was not re-run.
 
+##### 6.17.13 The unoptimised build's cfg, and the digest (2026-10-18)
+
+`build.rs` gained a second output on 2026-10-18: the cfg `marsrt_unoptimised`, set when the build's `OPT_LEVEL` is 0,
+which §8 describes. The change touched `build.rs` and `src/tests/` alone, and the digest reads neither (§6.17.12: `src/`
+without its tests, `Cargo.toml`, `Cargo.lock` and the path dependencies). It was confirmed rather than assumed: the
+verdict files of the `release` and `test-checked` builds before and after the change are identical, source
+`e387ce8425aecf09`, state `none` (a plain cargo build passes no profile). The profile itself was already stale before
+this change, trained on `36a5237755f1c652` (`EmuSen_RustPlatform.md` §37.1), and in effect unguided since §6.17.12; it
+was not retrained, and nothing here adds a reason to.
+
 ##### 6.17.11 The Mac, measured (2026-09-28): slower, and not committed
 
 §6.17.9's recipe was run on the Mac mini (Apple M1, four performance and four efficiency cores, macOS 26.6.2), with
@@ -6759,3 +6770,83 @@ and a pass writes it opaque into a `PictureOut` slot handed from the device thre
 the scan-out to be proven exact against the host's raster, as §6.4 and Mars_Gpu.md §15 proved the averaged path, and it
 was not begun here; `DEVICE_PICTURE` is not claimed, and the kit's C20 says so. Nothing about it is a question: it is
 the next step for MarsRT on that page.
+
+## 8. The suites in an unoptimised build (2026-10-18)
+
+Three of MarsRT's tests take a count that an unoptimised build cannot afford: the threaded RDP's two seeded stresses
+(`src/tests/threads.rs`, 24 seeds with one worker and 12 with each of two to four) and the games' runs
+(`src/tests/games.rs`, 300 frames). An unoptimised build runs them shortened, to 3 and 2 seeds and 20 frames, and
+`EMUSEN_MARSRT_STRESS` and `EMUSEN_MARSRT_FRAMES` override either count in any build.
+
+### 8.1 What the shortening was keyed on, and why it moved
+
+Until 2026-10-18 the three read `cfg!(debug_assertions)`. That conflated two properties of a build which coincide in
+cargo's defaults and nowhere else: whether it is slow, and whether it checks its debug assertions. CI's `test-checked`
+profile (`EmuSen_RustPlatform.md` §37) is release code with checks added; turning debug assertions on in it, which §37.2
+measured and deferred, would have cut MarsRT's suites to the debug counts in a build that runs them at release speed,
+so that the stricter profile tested less. *Decided 2026-10-18 by the tester:* the shortening is keyed on a switch of
+MarsRT's own, so that debug assertions can be turned on later without weakening MarsRT's suites, and every existing
+build keeps its counts.
+
+### 8.2 The switch
+
+`build.rs` emits `cargo:rustc-cfg=marsrt_unoptimised` when cargo's `OPT_LEVEL` for the build is `0`, and declares the
+cfg with `rustc-check-cfg`; the three tests read `cfg!(marsrt_unoptimised)`. The cost the shortening answers is the
+optimiser's absence, so the switch names that property directly. Three alternatives were weighed:
+
+- **A Cargo feature.** Features are chosen per invocation, not per profile, so no feature can be on in `cargo test` and
+  off in `cargo test --release` without every release invocation naming `--no-default-features`.
+- **An environment variable read by the tests.** Cargo sets no variable per profile, and `.cargo/config.toml`'s `[env]`
+  applies to all of them, so `cargo test` would need a wrapper to shorten.
+- **Cargo's `PROFILE` variable.** It reads `debug` or `release`, after the profile a custom one inherits from, so it
+  would give the same answers today; but it names a profile rather than the property, and a `dev` profile raised to
+  `opt-level = 1` for speed would still be called `debug`.
+
+`OPT_LEVEL` and `debug_assertions` agree in every profile MarsRT has: `dev` and `test` at level 0 with assertions,
+`release`, `dist` and `test-checked` at level 3 without. A build script runs once per profile, in that profile's own
+output folder, so the cfg cannot leak from one profile into another. This was checked: `cargo test --no-run` with
+`CARGO_PROFILE_DEV_OPT_LEVEL=1` compiled MarsRT without the cfg, and the plain `cargo test --no-run` that followed
+compiled it with the cfg again.
+
+### 8.3 What stays on debug assertions
+
+Every other use was read, in MarsRT and in the path crates it builds from (`emusen-native`, `emusen-gpu`, which use
+none):
+
+- **`Options::default`'s RDP mark verification** (`src/machine.rs`, §5.6.2) stays on `cfg!(debug_assertions)`. It is a
+  check, not a count: it makes the drain compare every byte it touches with the marks, in every machine a build with
+  assertions makes, the libraries a frontend loads included, and it shortens nothing. A build that checks its debug
+  assertions should check this too. The tests that depend on the verifier turn it on themselves with
+  `set_verify_rdp(true)`, so the default reaches only machines made with the default options, among them the games'
+  runs.
+- **The four `debug_assert!`s** under `src/` are checks of their own and are untouched.
+
+### 8.4 The proof (measured 2026-10-18)
+
+Each build ran the whole suite, before and after the change, with a temporary print of the three counts that was not
+committed, on the desktop (Ryzen 7 7700X) at CPU weight 20 beside other work. `EMUSEN_MARSRT_STATES` was unset, as in
+CI, so the games' bodies skipped and only the count they would have used was printed.
+
+| Build | Counts before (seeds, seeds, frames) | Counts after | Tests | Suite time before / after |
+| --- | --- | --- | --- | --- |
+| `cargo test` (`test` profile) | 3, 2, 20 | 3, 2, 20 | 499 passed | 550.9 s / 564.6 s |
+| `cargo test --release` | 24, 12, 300 | 24, 12, 300 | 499 passed | 46.6 s / 48.0 s |
+| `cargo test --profile test-checked` | 24, 12, 300 | 24, 12, 300 | 499 passed | 47.3 s / 44.3–44.7 s |
+| `test-checked` with debug assertions | 3, 2, 20 | **24, 12, 300** | 499 passed | 47.8 s / 46.0 s |
+
+The last row set `CARGO_PROFILE_TEST_CHECKED_DEBUG_ASSERTIONS=true`, in a target folder of its own. It is the one
+build whose counts were meant to change, and they did: MarsRT's suites now run in full under debug assertions. They
+cost nothing measurable there. The full counts at 46.0 s sit within the spread of the profile without assertions
+(44.3–47.3 s), since the two stresses are a small part of the suite's time. With `EMUSEN_MARSRT_STATES` set, the games
+would run 300 frames under debug assertions with the verifier on by default (§8.3), which §5.6.2 prices at 0.44 s a
+frame in the Dam; that run reads the player's library and was not made.
+
+*A crash found on the way, not caused by this change.* The first `test-checked` run after the change stopped with
+SIGSEGV after 312 tests. The core dump puts it in the Vulkan loader, `loader_get_icd_and_device` under
+`vkGetDeviceProcAddr`, called from `GpuDevice::try_create` through `DpInterface::remake_gpu` in
+`tests::gpu::the_device_s_processor_behind_replays_the_loads_the_native_ones_read`, while
+`the_device_is_never_given_the_machine_s_own_picture` was panicking by design on another thread. The kernel's line
+reads an address of `0x1c4a`, a device handle the loader could not find. The same test binary then passed four runs in
+a row, 499 each. A `test-checked` build compiles the same library and test sources as before the change, so this is an
+intermittent defect that predates it: one crash in five runs, in a device being created while another test's device is
+torn down by a panic. It is recorded here and not pursued.

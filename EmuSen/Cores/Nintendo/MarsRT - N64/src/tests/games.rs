@@ -279,7 +279,7 @@ const GAMES: [(&str, Option<&str>); 8] = [
 ];
 
 fn frames() -> u64 {
-    std::env::var("EMUSEN_MARSRT_FRAMES").ok().and_then(|v| v.parse().ok()).unwrap_or(if cfg!(debug_assertions) { 20 } else { 300 })
+    std::env::var("EMUSEN_MARSRT_FRAMES").ok().and_then(|v| v.parse().ok()).unwrap_or(if cfg!(marsrt_unoptimised) { 20 } else { 300 })
 }
 
 fn each_game(mode: Mode, how: Compare) {

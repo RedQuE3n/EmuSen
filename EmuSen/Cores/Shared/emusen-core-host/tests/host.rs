@@ -297,6 +297,29 @@ fn a_missing_an_altered_and_an_unapproved_library_are_listed_and_refused_at_open
 }
 
 #[test]
+fn a_loaded_library_is_judged_by_the_image_that_runs_not_by_the_file_now_on_disk() {
+    let dir = scratch("replaced");
+    let lib = installed(&dir, "host_test_core", "libtest.so", false);
+    manifest(&dir, &[&lib]);
+    let first = Discovery::scan(std::slice::from_ref(&dir), false);
+    first.found()[0].open(&Trust::new(std::slice::from_ref(&dir), &[])).unwrap();
+    // Another build of the same core, one byte longer, put in its place with its sidecar and the manifest rewritten.
+    let was = sha256::file_hex(&lib).unwrap();
+    let mut bytes = std::fs::read(&lib).unwrap();
+    bytes.push(0);
+    let fresh = dir.join("libtest.so.new");
+    std::fs::write(&fresh, bytes).unwrap();
+    std::fs::rename(&fresh, &lib).unwrap();
+    let now = sha256::file_hex(&lib).unwrap();
+    let text = std::fs::read_to_string(sidecar::path_for(&lib)).unwrap().replace(&was, &now);
+    std::fs::write(sidecar::path_for(&lib), text).unwrap();
+    manifest(&dir, &[&lib]);
+    let second = Discovery::scan(std::slice::from_ref(&dir), false);
+    let refused = second.found()[0].open(&Trust::new(std::slice::from_ref(&dir), &[])).err();
+    assert_eq!(refused, Some("libtest.so is not the library its sidecar describes (its SHA-256 differs); it was not loaded"), "the image this process would run is the first file's, which nothing now vouches for");
+}
+
+#[test]
 fn the_scan_keeps_the_first_id_skips_development_and_other_majors_and_files_that_are_not_sidecars() {
     let first = scratch("first");
     let second = scratch("second");

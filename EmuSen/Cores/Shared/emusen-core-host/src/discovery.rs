@@ -2,13 +2,14 @@
 //! game is opened on one; the C# host's `CoreDiscovery`, rule for rule, with §7.2's rules 1 to 3 added
 //! (EmuSen_CoreAPI.md §7, EmuSen_Backend.md §27.5).
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 use emusen_native::json;
 
 use crate::descriptors::{CoreSystem, deep_equal};
-use crate::library::Library;
+use crate::library::{Library, full_path};
 use crate::sidecar::{SUFFIX, Sidecar};
 use crate::trust::Trust;
 
@@ -43,7 +44,10 @@ impl Discovered {
             return Err(format!("{name} is missing beside its sidecar"));
         }
         trust.check_file(path).map_err(|why| format!("{name} {why}; it was not loaded"))?;
-        let hash = crate::sha256::file_hex(path).map_err(|_| format!("{name} cannot be read; it was not loaded"))?;
+        let hash = match loaded_hash(path) {
+            Some(h) => h,
+            None => crate::sha256::file_hex(path).map_err(|_| format!("{name} cannot be read; it was not loaded"))?,
+        };
         if !hash.eq_ignore_ascii_case(&self.sidecar.sha256) {
             return Err(format!("{name} is not the library its sidecar describes (its SHA-256 differs); it was not loaded"));
         }
@@ -51,6 +55,7 @@ impl Discovered {
             return Err(format!("{name} is in no cores manifest and has not been approved; it was not loaded"));
         }
         let lib = Library::load(path).map_err(|e| format!("{name}: {}", e.host_words()))?;
+        hashes().lock().unwrap_or_else(|e| e.into_inner()).entry(full_path(path)).or_insert(hash);
         let checked = lib.check().map_err(|_| lib.report())?;
         let same = json::parse(checked.info.as_bytes()).is_ok_and(|v| deep_equal(&v, &self.sidecar.info_json));
         if !same {
@@ -72,6 +77,17 @@ impl Discovered {
     pub fn available(&self) -> bool {
         self.sidecar.library_path.is_file()
     }
+}
+
+/// The SHA-256 each library this process loaded had when it was hashed before the load, by its full path. A library is
+/// never unloaded, so the image a later open runs is that file's, whatever is on disk now (EmuSen_Backend.md §29.26).
+fn hashes() -> &'static Mutex<HashMap<PathBuf, String>> {
+    static HASHES: OnceLock<Mutex<HashMap<PathBuf, String>>> = OnceLock::new();
+    HASHES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn loaded_hash(path: &Path) -> Option<String> {
+    hashes().lock().unwrap_or_else(|e| e.into_inner()).get(&full_path(path)).cloned()
 }
 
 /// The engines in a list of cores directories.

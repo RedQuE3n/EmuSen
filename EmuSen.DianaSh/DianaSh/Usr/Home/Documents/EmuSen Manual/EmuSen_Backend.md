@@ -7216,7 +7216,7 @@ built on it run on the Rust too.
   - Run with `GoldenCorpusTests`, `SessionServiceParityTests`, `SessionHeaderTests`, `SessionService13Tests` and
     `ShellOverSessionTests`: 125 of 125 pass at `EMUSEN_CRYSTAL_NATIVE=0` and at `1`.
   - The corpus is 95 files, 32 of them with cases on the seven core targets.
-  - The Rust run took 27 seconds and the C# 11; that was not looked into.
+  - The Rust run took 27 seconds and the C# 11; the cause was found and fixed in §29.26.
   - `SessionService13Tests` reads the open options of the C# implementation's sessions, which the Rust's do not
     have, so that one assertion is made on the C# alone. The machine script of §29.21 holds the Rust's open options.
 - **Seeded faults through the corpus**, on the Rust table, three caught and one not:
@@ -7257,6 +7257,71 @@ tables, and the golden corpus passes on Crystal's table both ways. The binding's
   A table used after its session closed answers `NO_SESSION` rather than reading freed memory.
 - **Registers.** `set_register` refuses every register on the generic engine, as the C# does (§13.11 of
   `EmuSen_DianaSh.md`).
+
+### 29.26 Built 2026-10-19: part (d), step 0, the golden corpus's slowdown on the Rust runtime
+
+*Decided 2026-10-19 by the tester: part (d) starts, in the order of §29.8, with the slowdown §29.25 left unexplained,
+measured before anything is changed. Mistress's move waits for `core_approve` (§29.40).*
+
+**The measurement.** The golden corpus on Crystal's table (`EMUSEN_GOLDEN_CRYSTAL=1`, filter `GoldenCorpus`, 100 tests)
+took 26 s on the Rust runtime and 10 s on the C# (the test host's durations; 28.2 s and 11.8 s of wall time) [M]. The
+Rust frame call is the cheaper of the two (§29.25's P2), so the time was looked for elsewhere. `GoldenRunner` was timed
+phase by phase for one run of each, with a stopwatch around each phase, summed over the run and never committed [M]:
+
+| Phase, summed over the run | Rust | C# |
+|---|---:|---:|
+| `CrystalRuntime`'s construction, all runners | 65 ms | 2 ms |
+| `open`, all 438 opens | **18,275 ms** | 967 ms |
+| the frames a case runs before its first line (`open` and frames less `open`) | 3,484 ms | 3,470 ms |
+| the shell's construction | 1,168 ms | 1,243 ms |
+| the lines of the cases on a core | 1,140 ms | 2,024 ms |
+| the lines of the other cases | 1,515 ms | 1,789 ms |
+| the sessions' closes; the runtimes' disposal | 20 ms; 7 ms | 14 ms; 1 ms |
+
+The opens take 17.3 s more on the Rust, which is the whole difference. An open cost about the time it takes to hash
+the core's library: MarsRT's 103 ms an open against 114 ms to hash its 37.8 MB library, MoonRT's 31 ms against 38 ms
+for 12.4 MB, Nephrite's 47 ms against 48 ms for 15.7 MB. The hashes were timed with `emusen-core-host`'s own
+`sha256::file_hex` in a release build, 333 MB/s on every library [M].
+
+**The cause.** Every `GoldenRunner` makes a runtime of its own, and the corpus makes one for each file it runs, three
+times over (once for the file's own test, twice for `Two_recordings_of_the_corpus_are_identical`). The Rust runtime
+makes its `Discovery` when it is made (§29.6), and `Discovered::open` hashes the library before every first open in that
+discovery. So each runtime hashed each core it opened. The C# host's discovery is process-wide (`CoreDiscovery.Found`, a
+static that only `UseDirectories`, `UseDevelopment` and `Rescan` clear), so the C# hashed each library once in the
+process. The cause is in the core host and not in the harness, since a program that makes a second runtime, or rescans,
+pays it again.
+
+**A defect found with it.** Hashing the file again does not check what runs. A library is never unloaded, and
+`Library::load` answers a path it has loaded with the library it loaded first (§27.3). Suppose a file is replaced on
+disk after it was loaded, and its sidecar and the manifest are rewritten to vouch for the new file. A second discovery
+then hashed the new file, found the sidecar and manifest agreed with it, and was handed the old image, which nothing
+vouched for any more. `a_loaded_library_is_judged_by_the_image_that_runs_not_by_the_file_now_on_disk`
+(`tests/host.rs`) makes exactly that case, with the test core and a copy one byte longer. It failed before the fix (the
+open succeeded) and passes after it.
+
+**The fix** (`emusen-core-host`'s `discovery.rs`). The core host keeps, for the process, the SHA-256 that each library it
+loaded had when it was hashed before the load, keyed by the same full path as `Library::load`'s registry. An open of a
+library this process has already loaded compares that hash with the sidecar and asks the manifest about it, and does not
+read the file again. A library that was never loaded is hashed as before. Rule 3's checks still read the file at every
+open: its owner, its mode, its size and its header. Nothing is added to the crate's surface.
+
+**Measured on 2026-10-19 after the fix** [M], Debug build of WiseMan, development scope's CPU weight:
+
+| Run | Rust | C# |
+|---|---:|---:|
+| The phase table's `open`, all 438 opens | 1,110 ms | 967 ms |
+| The corpus, run 1 (test host's duration; wall time) | 10 s; 11.2 s | 10 s; 11.9 s |
+| The corpus, run 2 | 9 s; 11.1 s | 9 s; 12.0 s |
+
+All 100 pass both ways in each run. Also run: the core host's crate tests (`--profile test-checked`, 7, 1 and 14, the
+new test among them); `emusen-crystal`'s and the platform library's (6, 6, 1, 31 and 4); and `CoreHostParityTests`,
+`CrystalParityTests` and `CrystalDebugParityTests` (52 of 52).
+
+**Left alone:** the hash's speed. `sha256::file_hex` reads at 333 MB/s, where coreutils' `sha256sum`, which uses the
+processor's SHA instructions, hashed MarsRT's library in 20 ms. So a program's first open of MarsRT on the Rust
+runtime costs about 95 ms more than on the C#, once in the process. Making it faster would mean the processor's SHA
+instructions behind a runtime check in the crate, or the `sha2` crate in the core host. Either is a change to the kit's
+and the cores' locks, so neither is made for one open in a process.
 
 ### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
 

@@ -2,7 +2,8 @@
 
 `beryl-sms-vdp`, in `EmuSen/Cores/Sega/Beryl-HW/`, created 2026-10-19 at Endou's stage 3 (`Endou_Native.md` §10). The
 315-5124 (the Mark III and the first Master System), the 315-5246 (the Master System II) and the 315-5378 (the Game Gear)
-in mode 4; the TMS9918's modes, the TMS9918A itself and the Genesis's mode 4 are stage 4's (`Endou_Plan.md` §3.3, §7).
+in mode 4; since stage 4 (`Endou_Native.md` §11) the TMS9918's modes on all of them, the TMS9918A itself (the
+SG-1000), and the Genesis's mode 4 through `compose`, which Nephrite draws with (`Endou_Plan.md` §3.3, §7).
 It keeps the contract of `README.md`'s "A chip that is not a processor", with the additions §3.3 of the plan made: the
 caller owns the clock; VRAM is read through a trait by the composition, so a console whose VRAM lies elsewhere keeps its
 map; the picture is CRAM entries, never colours, so that the console's DAC levels stay the console's; nothing is
@@ -30,6 +31,14 @@ Marks as in `Endou_Plan.md`: **[M]** measured on 2026-10-19 with the tool named;
   expects: the H counter's table of reads, the dots of the interrupts, the V counter's step and the flags (its readme's
   HClock list), and the expectation of each of its 54 Master System cases.
 
+- **Texas Instruments, *TMS9918A/TMS9928A/TMS9929A Video Display Processors* data manual** (`TMS9918.pdf`, read at
+  stage 4 as page images): the CPU interface and Table 2-1's transfers (§2.1), the registers (§2.2, Figure 2-3), the
+  status register (§2.3), the display planes and modes (§2.4), Table 2-3's colours, the sprites (§2.4.5).
+- **Sean Young, *Texas Instruments TMS9918A VDP*** (0.4.2): the undocumented modes (§3.5-§3.7), the Graphics II masks
+  (§3.3), the fifth sprite number when no fifth sprite is flagged (§4.3), the 4K mode (§2.1, MacDonald's letter).
+- **MacDonald, *Sega SC-3000 Hardware Notes*** (`sc3000h` §6): the TMS9929A's register writes, its read buffer and its
+  4K mode, tested on a console.
+
 No emulator's source and no RTL was opened (`Endou_Plan.md` §1.4).
 
 ## 2. The chip
@@ -48,23 +57,30 @@ No emulator's source and no RTL was opened (`Endou_Plan.md` §1.4).
 
 ### 2.2 The variants
 
-`Variant` is a set of flags, as `beryl-sn76489`'s is, so that stage 4's TMS9918A and Genesis are further constants:
+`Variant` is a set of flags, as `beryl-sn76489`'s is:
 
-| | `SMS1` (315-5124) | `SMS2` (315-5246) | `GG` (315-5378) |
-|---|---|---|---|
-| Register 2 bit 0, 3, 4, 5 bit 0 and 6 bits 1-0 mask mode 4's addresses [R "VDP Registers"] | yes | no | no |
-| The 224-line display / the 240-line display [R MacDonald §6, §14] | no / no | yes / yes | yes / no |
-| Sprites zoomed horizontally | the first N - 4 of N on a line (D-6) | all | all |
-| Register 0 bit 5, the left column's mask [R MacDonald §7] | yes | yes | no effect |
-| CRAM | 32 bytes | 32 bytes | 64 in GG mode, through the latch |
-| The invalid text mode | M4 with M1 | M4 with M1 and M2 clear | as `SMS2` |
+| | `SMS1` (315-5124) | `SMS2` (315-5246) | `GG` (315-5378) | `TMS9918A` | `GENESIS` (`compose` only) |
+|---|---|---|---|---|---|
+| Register 2 bit 0, 3, 4, 5 bit 0 and 6 bits 1-0 mask mode 4's addresses [R "VDP Registers"]; registers 3 and 4 mask Graphics II's tables [R MacDonald §15; Young §3.3] | yes | no | no | Graphics II's | no |
+| The 224-line display / the 240-line display [R MacDonald §6, §14] | no / no | yes / yes | yes / no | no / no | no / no |
+| Sprites zoomed by register 1's bit 0 in mode 4 [R MacDonald §13] | the first N - 4 of N widened (D-6) | all | all | (no mode 4) | none |
+| Register 0 bit 5, the left column's mask [R MacDonald §7] | yes | yes | no effect | — | yes |
+| The fine scroll's first pixels | the backdrop (D-7) | the backdrop | the backdrop | — | the column before, wrapped |
+| The right columns' vertical lock | by the column counter [R MacDonald §9] | the same | the same | — | by the pixel, from 192 (§9.4) |
+| CRAM | 32 bytes | 32 bytes | 64 in GG mode, through the latch | none | the console's |
+| A TMS9918 colour code shows | a fixed colour of the 64 [R SMS Power!'s "Palette"] | the same | CRAM's entry 16 plus the code [R MacDonald §14] | the code, the console's to colour | black (Nephrite's own) |
+| The invalid text mode | M4 with M1 | M4 with M1 and M2 clear | as `SMS2` | — | — |
+
+The `GENESIS` variant is never a `Vdp`: the 315-5313 is Nephrite's chip, and only its mode 4's composition is shared.
 
 The Game Gear's window, the central 160 by 144 of the picture [R "GG VDP"], is `GG_WINDOW`, for the Game Gear's stage.
 
 ### 2.3 Modes and heights
 
-Mode 4 is M4 set and not the invalid text mode; the TMS9918's modes and the invalid text mode show the backdrop until
-stage 4 builds them, with no sprites [C]. The display has 224 lines where M2 is set with M1 alone and 240 where it is
+Mode 4 is M4 set and not the invalid text mode; M4 clear selects the TMS9918's modes (§9), and the TMS9918A has no M4.
+The invalid text mode, MacDonald's "identical to TMS9918 text mode" with CRAM's colours and tiles "repeated four
+times", is not modelled: it shows the backdrop, with no sprites [C], a named loss, since no document read says how its
+tiles repeat. The display has 224 lines where M2 is set with M1 alone and 240 where it is
 set with M3 alone, on the chips that have them, else 192 [R MacDonald §6].
 
 ### 2.4 At power-on [C]
@@ -157,11 +173,14 @@ the mix, each a function over a `Vram`, the registers and the variant, writing C
   its pixel is not colour 0 of either palette; then register 0's bit 5 puts the backdrop, CRAM entry 16 plus register
   7, over pixels 0-7.
 
-### 4.4 A blanked display, and the modes stage 4 builds
+`line` composes a span: the background, the sprites mixed over it, then the left column's mask. The Genesis's
+variant differs only by the flags of §2.2.
+
+### 4.4 A blanked display
 
 Register 1's bit 6 clear shows the backdrop over the active display [A: MacDonald's §11 describes the border, not a
-blanked picture; every reference shows the backdrop]; no sprite collides. The TMS9918's modes show the backdrop too
-until stage 4.
+blanked picture; every reference shows the backdrop]; no sprite collides. In the TMS9918's modes the backdrop is
+register 7's colour code [R TI §2.4], and the sprite system is inactive [R Young §1.2].
 
 ## 5. The dot-stamped renderer
 
@@ -178,14 +197,20 @@ some dots before its pixel on the console; no document read gives the fetch orde
 ## 6. The state block
 
 `write_state`/`read_state`: the variant's byte, PAL and the GG mode, the registers, VRAM, all 64 bytes of CRAM, the
-address, the code, the buffer and the latch, the five flags, the line counter, both scrolls, the latched H counter,
-the clock, the line's start, the line, the pixels drawn and the height, the next event, and the line's eight sprites
-(their X, width and planes), whose pixels are made again on loading. A block of another variant or standard, or of an
+address, the code, the buffer and the latch, the five flags and whether the line's sprites are the TMS9918's, the
+line counter, both scrolls, the latched H counter and the TMS9918A's fifth sprite number, the clock, the line's start,
+the line, the pixels drawn and the height, the next event, and the line's eight sprites (their X, width and planes),
+whose pixels are made again on loading by the rules that found them. Stage 4 added the second and fourth (two bytes). A block of another variant or standard, or of an
 impossible line, is refused and changes nothing. No picture is in it (§3.3).
 
 ## 7. Tests (2026-10-19)
 
-The crate's 23 [M `cargo test`, and on `test-checked`]: the timing tables (MacDonald's six V counter sequences, the H
+At stage 4 the crate has 37 [M `cargo test --profile test-checked`]: stage 3's 23, and fourteen for the TMS9918's modes
+and the variants (the modes' selection, Graphics I, Graphics II's masks by chip, Text's high six bits and the 1+3
+bars, Multicolor's nibbles, four sprites and the fifth's number, the early clock, the size, the magnification and the
+colour 0 collision, the 4K map one to one, the TMS9918A's register write and lack of CRAM, the fifth sprite flag with
+the frame flag, the codes and fixed colours drawn, the 4K mode on the CPU's cells, a TMS mode's state round trip and
+skipping's neutrality, and the Genesis's composition). Stage 3's 23 [M `cargo test`, and on `test-checked`]: the timing tables (MacDonald's six V counter sequences, the H
 counter's run); the composition (the Y plus 1 and `$D0`, the ninth sprite, sprite priority and collision, the 315-5124's
 zoom, the background's scroll and blank, the Y wrap and the column lock, the 315-5124's masks, the priority); and the
 chip (the command word, the registers, CRAM in both forms, the frame interrupt, the line counter over a frame, the H
@@ -206,11 +231,57 @@ loses no access: `Endou_Disputes.md` D-8 gives the evidence, chiefly that 122 of
 port faster than the manual's 29 cycles during the active display, and every reference keeps every write of a program
 written to find a loss.
 
-## 9. For stage 4
+## 9. The TMS9918's modes and the TMS9918A (stage 4, 2026-10-19)
 
-- **The TMS9918's modes** and **the TMS9918A** as a variant: Graphic I and II, Text, Multicolor and the undocumented
-  combinations, with the 315-5246's fixed palette, through `mode4()`'s complement; the invalid text mode.
-- **The Genesis** as a variant, its composition through `compose` with a `Vram` of Nephrite's D-7 map: its differences
-  are MacDonald's §13 (the first byte latched, CRAM by code bit 1, no buffer refill on a write, no zoom, no taller
-  displays, no register 2 mask) and its left column's garbage under a fine scroll, which `background`'s fine-scroll
-  blank then becomes a variant's choice.
+### 9.1 The modes (`tms`)
+
+M1 (register 1's bit 4), M2 (register 0's bit 1) and M3 (register 1's bit 3), named as MacDonald and Young name them
+(TI's manual calls the last two M3 and M2), select [R TI §2.2-§2.4; Young §3; MacDonald §6]:
+
+| Mode | The pattern plane | Sprites |
+|---|---|---|
+| Graphics I | 32 by 24 names; a pattern's byte a row, its set bits the high nibble of the colour byte of its group of eight names, its clear bits the low | yes |
+| Graphics II | the screen's thirds each with their own 256 patterns and colour rows: register 4's bit 2 and register 3's bit 7 place the tables, their lower bits an AND mask over the third's index on the TMS9918A and the 315-5124 (§2.2) | yes |
+| Text | 40 columns of 6 pixels between borders of 8, a pattern's high six bits [R TI §2.4.4: "the least significant 2 bits ... are ignored"; Young §3.2 says the highest, read as TI's bit numbering] in register 7's two colours | no |
+| Multicolor | 4 by 4 blocks, two bytes a name chosen by the row, each byte's high nibble the left block [R TI §2.4.3] | yes |
+| 1+2, 2+3 | Text and Multicolor with Graphics II's thirds and masks [R Young §3.5, §3.6] | no, yes |
+| 1+3, 1+2+3 | forty columns of four pixels of the text colour and two of the backdrop [R Young §3.7] | no |
+
+A code of 0 is transparent and shows the backdrop, register 7's low nibble.
+
+### 9.2 Sprites in these modes
+
+32 entries of four bytes at register 5 times `$80`: Y, X, the name, and the colour with the early clock bit, which moves
+the sprite 32 pixels left [R TI §2.4.5]. A sprite shows from the line after its Y; `$D0` ends the table; 8 or 16 pixels
+square (register 1's bit 1), the 16-pixel pattern four quarters from the name with its low two bits clear, doubled by
+register 1's bit 0. **Four a line**: a fifth sets the status's bit 6, and on the TMS9918A its number goes in bits 4-0
+[R TI §2.3.3]. The Sega chips keep four too (`Endou_Disputes.md` D-10) and shift sprites a further eight pixels by
+register 0's bit 3 [R MacDonald §15]. An earlier sprite's set pixel shows over a later one's unless its colour is 0;
+two set pixels meet as a collision whatever their colours [R TI §2.3.2, §2.4], among the four shown, never past pixel 255.
+
+### 9.3 The TMS9918A
+
+- **Registers**: eight. A second control byte with bit 7 set writes the register its bits 2-0 name, bits 6-3 ignored [R
+  TI Table 2-1; `sc3000h` §6]; else bit 6 chooses a write or a read with its prefetch. No CRAM. The first byte is taken
+  at once, as the 315-5124 takes it [A: no document read says otherwise].
+- **Status**: F, 5S, C and the fifth sprite's number. 5S is set on an active line with a fifth sprite only while F is
+  clear [R TI §2.3.3]; while it is clear the number bits hold where each line's scan ended, the terminator's number or
+  31 [R Young §4.3, "not fully checked"]. A read clears F, 5S and C. Every bit is driven (`status_bits`).
+- **No line interrupt**, no M4 and no counters at ports `$40`-`$7F` [R TI §2.2; SMS Power!'s "I/O Port Map - SG-1000"].
+- **The 4K mode**: register 1's bit 7 clear makes the chip put out a 4K DRAM's row and column, so that every access,
+  the CPU's and the display's, reaches the cell `tms::address_4k` names [R `sc3000h` §6, tested by MacDonald on a
+  TMS9929A; Young §2.1]. `D-12` records that no reference models it so.
+- **Colour codes** are the picture; Endou colours them by TI's Table 2-3 (`Endou_Disputes.md` D-11).
+- **Timing** is the family's (§3) [A]: TI's manual puts the interrupt "at the end of each active-display scan" and gives
+  no dot; the CPU's access windows (TI's Table 2-2, 2 to 8 microseconds in the Graphics modes) are not modelled, as the
+  Sega chips' are not (D-8).
+
+### 9.4 The Genesis's mode 4
+
+`Variant::GENESIS` carries MacDonald's §13 differences that a composition sees (no zoom, no taller displays, no masks)
+and two rules Nephrite drew before the move and keeps: the fine scroll's first pixels are the wrapped column, where the
+board shows garbage (`Nephrite_Native.md` §15.2), and the right columns' lock begins at pixel 192 rather than at the
+column counter's column 24. The second is not a measured difference: it is Nephrite's rule, kept so that the move
+changed nothing, and whether the 315-5313 locks by the counter as MacDonald says of the Master System's chips is a
+question for the board (`Endou_Native.md` §11.15). The chip's other differences (the first byte latched, CRAM by code
+bit 1, no buffer refill) are Nephrite's VDP's, outside the composition.

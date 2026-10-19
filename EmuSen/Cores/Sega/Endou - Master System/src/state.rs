@@ -1,7 +1,7 @@
 //! Endou's own state format, "ENDO" (Endou_Plan.md §5.7, Endou_Native.md §9.7, §10.6): the magic, the version, the
 //! console and model, the frame count and the clocks, the Z80's block, the PSG's, the bus's ports and the mapper's
 //! registers, the work RAM, the VDP's block with VRAM and CRAM, then the cartridge's RAM where the board has it.
-//! Version 3 is stage 3's; versions 1 and 2 reached no player and are refused. The layout listing is pinned by a test.
+//! Version 4 is stage 4's; versions 1 to 3 reached no player and are refused. The layout listing is pinned by a test.
 
 use emusen_native::ffi::{StateMachine, Status, status};
 use emusen_native::{StateReader, StateWriter, Truncated};
@@ -10,7 +10,7 @@ use crate::machine::Machine;
 use crate::media::Console;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"ENDO");
-pub const STATE_VERSION: i32 = 3;
+pub const STATE_VERSION: i32 = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StateError {
@@ -178,7 +178,7 @@ mod tests {
     }
 
     #[test]
-    fn the_version_3_layout_is_pinned() {
+    fn the_version_4_layout_is_pinned() {
         let m = machine(&cartridge(0x8000, 4));
         let layout = m.layout();
         let lines: Vec<&str> = layout.lines().collect();
@@ -186,12 +186,12 @@ mod tests {
         let at = lines.iter().position(|l| l.ends_with(" RAM")).unwrap();
         assert_eq!(&lines[at..at + 5], ["125 8192 u8[8192] RAM", "8317 1 u8 VdpVariant", "8318 2 bool[2] PalGgMode", "8320 11 u8[11] VdpRegisters", "8331 16384 u8[16384] Vram"], "{layout}");
         assert_eq!(lines[at + 5], "24715 64 u8[64] Cram");
-        assert_eq!(lines.last(), Some(&"24872 7 u8[7] Sprite"));
-        assert_eq!(m.state_size(), 24_879);
+        assert_eq!(lines.last(), Some(&"24874 7 u8[7] Sprite"));
+        assert_eq!(m.state_size(), 24_881);
         let sg = machine(&[0u8; 0x2000]);
-        assert_eq!(sg.state_size(), 24_879 - 0x2000 + 0x400);
+        assert_eq!(sg.state_size(), 24_881 - 0x2000 + 0x400);
         let big = machine(&cartridge(0x20000, 4));
-        assert_eq!(big.state_size(), 24_879 + 0x8000, "a board with RAM keeps it");
+        assert_eq!(big.state_size(), 24_881 + 0x8000, "a board with RAM keeps it");
     }
 
     // The kit's C7 found a plain 32 KiB board's state refused by a fresh machine (Endou_Native.md §9.12).

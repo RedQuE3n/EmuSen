@@ -1,5 +1,5 @@
-//! The stage 2 test programs for the referees (Endou_Native.md §9.11): writes each program's image into a folder for
-//! the reference probe to run, and prints what Endou leaves in RAM after ten frames on each model, one line a run:
+//! The test programs for the referees (Endou_Native.md §9.11, §11): writes each program's image into a folder for the
+//! reference probe to run, a Master System's as `.sms` and an SG-1000's as `.sg`, and prints what Endou leaves in RAM after ten frames on each model, one line a run:
 //! `<program> <model> <the first 16 bytes of RAM>`. `cargo run --release --example referee -- <folder>`.
 
 #[path = "../programs/images.rs"]
@@ -11,10 +11,11 @@ use endou::machine::Machine;
 fn main() {
     let dir = std::path::PathBuf::from(std::env::args().nth(1).expect("a folder"));
     std::fs::create_dir_all(&dir).expect("the folder");
-    for p in images::PROGRAMS.iter().filter(|p| p.header.is_some()) {
+    for p in images::PROGRAMS {
         let image = images::image(p);
-        std::fs::write(dir.join(format!("{}.sms", p.name)), &image).expect("the image written");
-        for model in ["mark3", "sms1", "sms2"] {
+        let (extension, models): (&str, &[&str]) = if p.header.is_some() { ("sms", &["mark3", "sms1", "sms2"]) } else { ("sg", &["sg1000", "mark3"]) };
+        std::fs::write(dir.join(format!("{}.{extension}", p.name)), &image).expect("the image written");
+        for &model in models {
             let mut settings = vec![("model".to_owned(), model.to_owned())];
             if model == "mark3" {
                 settings.push(("region".to_owned(), "sms.jp".to_owned()));

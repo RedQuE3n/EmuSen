@@ -266,3 +266,101 @@ fn skipping_the_picture_leaves_the_state_as_drawing_it() {
     assert_eq!(state(&a), state(&b));
     assert!(a.overflow && a.collision);
 }
+
+/// The TMS9918A's Graphics I with name 0 everywhere, colour 6 on 12, and `sprites` 8 by 8 sprites of pattern 1 (all
+/// set) on lines 50-57 at X 0, 20, 40...; the sprite table at $3B00, its patterns at $0000.
+fn tms_screen(variant: Variant, sprites: usize) -> Vdp {
+    let mut v = Vdp::new(variant, false);
+    for (r, d) in [(0, 0x00), (1, 0xC0), (2, 0x0E), (3, 0x80), (4, 0x00), (5, 0x76), (6, 0x00), (7, 0xF4)] {
+        reg(&mut v, r, d);
+    }
+    for row in 0..8 {
+        v.vram[row] = 0xF0;
+        v.vram[8 + row] = 0xFF;
+    }
+    v.vram[0x2000] = 0x6C;
+    for i in 0..sprites {
+        v.vram[0x3B00 + 4 * i..0x3B00 + 4 * i + 4].copy_from_slice(&[49, 20 * i as u8, 1, 0x0A]);
+    }
+    v.vram[0x3B00 + 4 * sprites] = 0xD0;
+    v
+}
+
+#[test]
+fn the_tms9918a_takes_bit_7_as_a_register_write_of_bits_2_to_0_and_has_no_cram() {
+    let mut v = Vdp::new(Variant::TMS9918A, false);
+    reg(&mut v, 0x0F, 0x5A);
+    assert_eq!((v.regs[7], v.regs[0x0F & 7]), (0x5A, 0x5A), "register 15 is register 7");
+    v.write_control(0x34);
+    v.write_control(0xC2);
+    assert_eq!((v.regs[2], v.code), (0x34, 2), "$C0 is a register write too");
+    address(&mut v, 0xC010);
+    v.write_data(0x77);
+    assert_eq!((v.vram[0x0010], v.cram[0x10]), (0x77, 0), "no CRAM: the write lands in VRAM");
+    assert_eq!(v.status_bits(), 0xFF);
+}
+
+#[test]
+fn the_tms9918a_flags_the_fifth_sprite_while_the_frame_flag_is_clear_and_names_it() {
+    let mut v = tms_screen(Variant::TMS9918A, 6);
+    reg(&mut v, 0, 0x10);
+    reg(&mut v, 10, 0);
+    v.run(at(262 + 20, 0));
+    assert!(!v.irq(), "no line interrupt on the TMS9918A");
+    v.read_control();
+    v.run(at(262 + 58, 0));
+    assert_eq!(v.read_control(), 0x40 | 4, "the fifth sprite, number 4");
+    v.run(at(262 * 2 + 58, 0));
+    assert_eq!(v.read_control(), 0x80 | 6, "the frame flag was set through lines 50-57: no fifth sprite flagged, and the later lines' scans ended at the terminator, 6");
+    v.vram[0x3B00 + 16] = 0xD0;
+    v.run(at(262 * 3 + 58, 0));
+    assert_eq!(v.read_control() & 0x5F, 4, "four sprites and the terminator at 4: the scan's end");
+}
+
+#[test]
+fn the_tms9918a_draws_codes_and_the_sega_chips_their_fixed_colours_with_sprites_over_the_pattern_plane() {
+    for (variant, want) in [(Variant::TMS9918A, [6u16, 12, 10, 4]), (Variant::SMS2, [0x01, 0x04, 0x05, 0x10]), (Variant::SMS1, [0x01, 0x04, 0x05, 0x10])] {
+        let mut v = tms_screen(variant, 1);
+        v.run(at(262 * 2, 0));
+        let p = v.picture();
+        assert_eq!((p[10 * 256], p[10 * 256 + 4], p[50 * 256 + 1], p[50 * 256 + 4]), (want[0], want[1], want[2], want[2]), "{variant:?}");
+        reg(&mut v, 1, 0x80);
+        v.run(at(262 * 3, 0));
+        assert_eq!(v.picture()[0], want[3], "{variant:?}: blanked, the backdrop's code 4");
+    }
+}
+
+#[test]
+fn the_tms9918a_s_4k_mode_moves_the_cpu_s_cells_and_its_own_alike() {
+    let mut v = tms_screen(Variant::TMS9918A, 0);
+    address(&mut v, 0x4000 | 0x3E00);
+    v.write_data(0xA5);
+    assert_eq!(v.vram[0x3E00], 0xA5);
+    reg(&mut v, 1, 0x40);
+    address(&mut v, 0x3E00);
+    assert_eq!(v.read_data(), v.vram[crate::tms::address_4k(0x3E00) as usize], "the 4K mode reads its own cell");
+    address(&mut v, 0x4000 | 0x3E00);
+    v.write_data(0x5A);
+    assert_eq!((v.vram[crate::tms::address_4k(0x3E00) as usize], v.vram[0x3E00]), (0x5A, 0xA5), "a write reaches the 4K cell too");
+    address(&mut v, 0x4000 | 0x0001);
+    v.write_data(0x0F);
+    assert_eq!(v.vram[1], 0x0F, "an address below $40 is the same cell in either mode");
+}
+
+#[test]
+fn a_tms_mode_state_round_trips_and_skipping_its_picture_leaves_the_state_alike() {
+    let mut a = tms_screen(Variant::TMS9918A, 6);
+    let mut b = tms_screen(Variant::TMS9918A, 6);
+    a.vram[0x3B00 + 4..0x3B00 + 8].copy_from_slice(&[49, 4, 1, 0x00]);
+    b.vram[0x3B00 + 4..0x3B00 + 8].copy_from_slice(&[49, 4, 1, 0x00]);
+    b.skip = true;
+    for v in [&mut a, &mut b] {
+        v.run(at(262 + 52, 30));
+    }
+    assert_eq!(state(&a), state(&b));
+    assert!(a.collision && a.overflow, "a colour 0 sprite at X 4 collides with sprite 0");
+    let saved = state(&a);
+    let mut c = Vdp::new(Variant::TMS9918A, false);
+    assert!(c.read_state(&mut StateReader::new(&saved)).unwrap());
+    assert_eq!((state(&c), c.sprites.pixels), (saved, a.sprites.pixels), "the sprites' pixels are made again by the TMS9918's rules");
+}

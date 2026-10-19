@@ -160,15 +160,38 @@ fn pixel(m: &Machine, x: usize, y: usize) -> [u8; 3] {
 // The picture equals Genesis Plus GX's, PicoDrive's and SMS Plus GX's up to a colour map, measured 2026-10-19 (Endou_Native.md §10.8).
 #[test]
 fn a_program_s_picture_is_its_tiles_sprite_scroll_mask_and_mid_frame_colour() {
-    for model in [Model::Sms1, Model::Sms2] {
+    // The 315-5124's grey, `$15`, has its boosted first blue (D-1); the 315-5246's is the stage 3 picture.
+    for (model, want, blue1) in [(Model::Sms1, 0x41E1_DA4C_62B5_7FE5, 0x68), (Model::Sms2, 0xFDEA_985F_7BF4_6025, 85)] {
         let mut m = machine(image(&images::PICTURE), model);
         frames(&mut m, 10);
-        assert_eq!((m.height, digest(&m)), (192, 0xFDEA_985F_7BF4_6025), "{model:?}");
-        let (grey, blue, red, green, white) = ([85, 85, 85], [0, 0, 255], [255, 0, 0], [0, 255, 0], [255, 255, 255]);
+        assert_eq!((m.height, digest(&m)), (192, want), "{model:?}");
+        let (grey, blue, red, green, white) = ([85, 85, blue1], [0, 0, 255], [255, 0, 0], [0, 255, 0], [255, 255, 255]);
         assert_eq!((pixel(&m, 0, 0), pixel(&m, 7, 98), pixel(&m, 0, 100)), (grey, grey, blue), "the masked column, its colour changed by line 100");
         assert_eq!((pixel(&m, 8, 0), pixel(&m, 11, 0), pixel(&m, 15, 0)), (green, red, green), "tile 1 scrolled right by 3");
         assert_eq!((pixel(&m, 100, 80), pixel(&m, 107, 87), pixel(&m, 108, 80), pixel(&m, 100, 79)), (white, white, red, red), "the sprite at Y 79 + 1");
     }
+}
+
+// The TMS9918's modes on the SG-1000: each picture equals Genesis Plus GX's and PicoDrive's up to a colour map, measured
+// 2026-10-19 (Endou_Native.md §11.6); the fifth sprite and the collision in the status, and the 4K mode's map.
+#[test]
+fn an_sg_1000_program_s_pictures_status_and_4k_reads_are_the_tms9918a_s() {
+    let mut m = machine(image(&images::TMS), Model::Sg1000);
+    let mut digests = Vec::new();
+    for f in 1..=105 {
+        m.advance();
+        if [20, 45, 75, 105].contains(&f) {
+            digests.push(digest(&m));
+        }
+    }
+    assert_eq!(digests, [0xB13C_A092_386B_D85F, 0x549B_517B_3286_BAD5, 0x8807_656A_3C9C_CC95, 0x692F_94EF_7352_26C5], "Graphics II, Graphics I, Text, Multicolor");
+    assert_eq!(m.bus.ram[0], 0x80, "the first status read: the frame flag alone");
+    assert!(m.bus.ram[1..16].iter().all(|&s| s == 0xE4), "then the fifth sprite, number 4, and the collision every frame: {:02X?}", &m.bus.ram[..16]);
+    assert_eq!(m.bus.ram[0x11], 0xA5, "the 4K mode reads the cell $3C40 named as $3E00");
+    let mut mark3 = machine_on(image(&images::TMS), Console::Sg1000, Model::MarkIII, crate::board::identify(&image(&images::TMS), Console::Sg1000));
+    frames(&mut mark3, 20);
+    assert_eq!((mark3.bus.ram[0x10], mark3.bus.ram[1] & 0xE0), (0xA5, 0xE0), "the 315-5124 has no 4K mode; its status's low bits are the bus's");
+    assert_eq!(digest(&mark3), 0x43EF_CC4C_FBED_CA02, "the Mark III's fixed colours, its blue boosted");
 }
 
 // The latch's dot is the one FluBBa's VDP test measures (Beryl_SmsVdp.md §3.2); without the corpus this holds it.

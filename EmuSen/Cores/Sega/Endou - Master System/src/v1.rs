@@ -44,10 +44,11 @@ pub const REGION_KEY: &str = "region";
 pub const REGIONS: [(&str, &str, Market); 4] =
     [("sms.jp", "Japan (NTSC)", Market::Japan), ("sms.us", "Americas (NTSC)", Market::Americas), ("sms.eu", "Europe (PAL)", Market::Europe), ("sms.br", "Brazil (NTSC)", Market::Brazil)];
 
-/// The model setting (Endou_Plan.md §5.8): from the market, or a console chosen; the SG-1000's system has one model
-/// until stage 4.
+/// The model setting (Endou_Plan.md §5.8): from the market, or a console chosen. An SG-1000 cartridge runs on the
+/// SG-1000 or the Mark III, the consoles whose slot takes it; a Master System cartridge on any but the SG-1000.
 pub const MODEL_KEY: &str = "model";
-pub const MODELS: [(&str, &str, Model); 3] = [("mark3", "Mark III", Model::MarkIII), ("sms1", "Master System", Model::Sms1), ("sms2", "Master System II", Model::Sms2)];
+pub const MODELS: [(&str, &str, Model); 4] =
+    [("mark3", "Mark III", Model::MarkIII), ("sms1", "Master System", Model::Sms1), ("sms2", "Master System II", Model::Sms2), ("sg1000", "SG-1000", Model::Sg1000)];
 
 fn schema() -> Vec<Setting> {
     let mut choices = vec![Choice { value: "auto".into(), label: "From the cartridge".into(), help: None }];
@@ -57,7 +58,7 @@ fn schema() -> Vec<Setting> {
     vec![Setting {
         key: MODEL_KEY.into(),
         label: "Model".into(),
-        help: "The console a Master System game runs on. From the region, a Japanese game runs on a Mark III and any other on a Master System II; the first Master System has the Reset button the later one lacks. Takes effect when a game is next loaded.".into(),
+        help: "The console a game runs on. From the region, a Japanese Master System game runs on a Mark III and any other on a Master System II; the first Master System has the Reset button the later one lacks. An SG-1000 game runs on the SG-1000, or on the Mark III, whose video chip shows the SG-1000's pictures in its own colours. Takes effect when a game is next loaded.".into(),
         kind: SettingKind::Choice(models),
         default: "auto".into(),
         scope: Scope::Create,
@@ -87,13 +88,15 @@ pub fn market_of(media: &Media, setting: Option<&str>) -> Market {
     REGIONS.iter().find(|r| Some(r.0) == setting).map_or(media.market().unwrap_or(Market::Japan), |r| r.2)
 }
 
-/// The console a machine is: the SG-1000 for its cartridges; else the setting's, else a Mark III for Japan and a Master
-/// System II for every other market (Endou_Plan.md §10 Q9).
+/// The console a machine is: for an SG-1000 cartridge the Mark III where the setting names it, else the SG-1000; for a
+/// Master System cartridge the setting's console where its slot takes one, else a Mark III for Japan and a Master
+/// System II for every other market (Endou_Plan.md §5.8, §10 Q9).
 pub fn model_of(console: Console, market: Market, setting: Option<&str>) -> Model {
-    if console == Console::Sg1000 {
-        return Model::Sg1000;
+    let chosen = MODELS.iter().find(|m| Some(m.0) == setting).map(|m| m.2);
+    match console {
+        Console::Sg1000 => if chosen == Some(Model::MarkIII) { Model::MarkIII } else { Model::Sg1000 },
+        Console::Sms => chosen.filter(|&m| m != Model::Sg1000).unwrap_or(if market == Market::Japan { Model::MarkIII } else { Model::Sms2 }),
     }
-    MODELS.iter().find(|m| Some(m.0) == setting).map_or(if market == Market::Japan { Model::MarkIII } else { Model::Sms2 }, |m| m.2)
 }
 
 fn system(id: &str, name: &str, extension: &str, controller: Controller) -> emusen_native::core::System {
@@ -157,7 +160,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sega Master System and the SG-1000 in Rust, written from hardware documents and graded by test programs. At this stage it runs the processor, the cartridge's board, the controllers and the Master System's video chip, with silence until the sound chip is wired and a black picture on the SG-1000 until its video chip is built.".into()),
+            description: Some("The Sega Master System and the SG-1000 in Rust, written from hardware documents and graded by test programs. At this stage it runs the processor, the cartridge's board, the controllers and the video chips of the Master System and the SG-1000, with silence until the sound chip is wired.".into()),
             systems: vec![
                 system("sms", "Sega Master System / Mark III", ".sms", pad(SMS_PAD, "Control Pad", 8)),
                 system("sg1000", "Sega SG-1000", ".sg", pad(SG1000_PAD, "Joystick", 7)),
@@ -412,6 +415,20 @@ mod tests {
         assert_eq!(m.machine_info().battery.iter().map(|b| (b.which, b.suffix.as_str())).collect::<Vec<_>>(), [(0, ".srm")]);
         let plain = make(&request, &[]).unwrap();
         assert!(plain.battery(0).unwrap().0.is_empty() && plain.machine_info().battery.is_empty(), "a board without a battery takes no file");
+    }
+
+    // Endou_Plan.md §5.8: an SG-1000 cartridge on the SG-1000 or the Mark III, a Master System cartridge never on the SG-1000.
+    #[test]
+    fn the_model_setting_offers_each_cartridge_the_consoles_whose_slot_takes_it() {
+        let sg = [0x00u8; 0x4000];
+        let on = |image: &[u8], model: &str| create(image, &[(MODEL_KEY, model)]).unwrap().model();
+        assert_eq!([on(&sg, "auto"), on(&sg, "mark3"), on(&sg, "sms2"), on(&sg, "sg1000")], [Model::Sg1000, Model::MarkIII, Model::Sg1000, Model::Sg1000]);
+        let export = cartridge(0x8000, 4);
+        assert_eq!([on(&export, "auto"), on(&export, "sg1000"), on(&export, "sms1"), on(&export, "mark3")], [Model::Sms2, Model::Sms2, Model::Sms1, Model::MarkIII]);
+        let mark3 = create(&sg, &[(MODEL_KEY, "mark3")]).unwrap();
+        let info = mark3.machine_info();
+        assert_eq!((info.system.as_str(), mark3.bus.ram.len(), mark3.bus.vdp.variant, mark3.bus.psg.variant), ("sg1000", 0x2000, beryl_sms_vdp::Variant::SMS1, beryl_sn76489::Variant::SEGA));
+        assert!(info.spaces.iter().any(|s| s.name == "CRAM"), "the Mark III has CRAM");
     }
 
     #[test]

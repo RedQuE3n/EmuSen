@@ -148,6 +148,20 @@ namespace EmuSen.WiseMan.Fixtures
             (0xBF, 0x00), (0xBF, 0xC0), (0xBE, 0x30), (0xBF, 0x11), (0xBF, 0xC0), (0xBE, 0x0C),
         }));
 
+        // An SG-1000 cartridge in Graphics I: name 0 everywhere, its rows four pixels of colour 6 then four of colour 12, no sprites - see Endou_Native.md §11.
+        public static byte[] TmsPicture()
+        {
+            var writes = new List<(byte, byte)>();
+            foreach (var (register, value) in new (int, byte)[] { (0, 0x00), (1, 0x80), (2, 0x0E), (3, 0x80), (4, 0x00), (5, 0x76), (6, 0x00), (7, 0xF4) })
+                writes.AddRange(new (byte, byte)[] { (0xBF, value), (0xBF, (byte)(0x80 | register)) });
+            writes.AddRange(new (byte, byte)[] { (0xBF, 0x00), (0xBF, 0x7B), (0xBE, 0xD0), (0xBF, 0x00), (0xBF, 0x60), (0xBE, 0x6C), (0xBF, 0x00), (0xBF, 0x40) });
+            for (int row = 0; row < 8; row++) writes.Add((0xBE, 0xF0));
+            writes.AddRange(new (byte, byte)[] { (0xBF, 0xC0), (0xBF, 0x81) });
+            var rom = new byte[0x4000];
+            Ports(writes).CopyTo(rom, 0);
+            return rom;
+        }
+
         private static byte Bcd(int n) => (byte)(n / 10 << 4 | n % 10);
     }
 }

@@ -290,7 +290,7 @@ namespace EmuSen.Cores.Native
                 var saves = system?.Battery is { } listed
                     ? listed.Select(b => (b.Which, Save: SaveFor(b))).ToList()
                     : new List<(uint Which, BatterySave Save)> { (0, BatteryFile(path, console, 0, EmuSen.Galaxia.Library.SaveLibrary.SramExtension)) };
-                machine = Create(disc, firmware, saves, placement);
+                machine = Create(disc, firmware, saves, placement, system?.Id);
                 kept = Lends;
                 wanted = machine.Info.Battery.Select(b => (b.Which, Save: SaveFor(b))).ToList();
                 // Machine info is the authority: a file it names that exists and was not passed means the machine is made again with it.
@@ -299,7 +299,7 @@ namespace EmuSen.Cores.Native
                     machine.Dispose();
                     kept = false;
                     if (Lends) disc = set.Open(0);
-                    machine = Create(disc, firmware, wanted, placement);
+                    machine = Create(disc, firmware, wanted, placement, system?.Id);
                     kept = Lends;
                 }
             }
@@ -402,11 +402,11 @@ namespace EmuSen.Cores.Native
             _placement = null;
         }
 
-        // The machine for a disc: lent where the core borrows, when the machine takes the files' keeping, else read by the core within the call.
-        private CoreMachine Create(DiscFiles disc, List<(uint, byte[])> firmware, List<(uint Which, BatterySave Save)> saves, MediaPlacement placement)
+        // The machine for a disc, as the system it was routed to: lent where the core borrows, else read by the core within the call - see EmuSen_CoreAPI.md §6.40.
+        private CoreMachine Create(DiscFiles disc, List<(uint, byte[])> firmware, List<(uint Which, BatterySave Save)> saves, MediaPlacement placement, string? system)
         {
             var lend = Library.Has(CoreInterface.CapDevicePicture) ? DeviceLender?.Invoke() : null;
-            return new CoreMachine(Library, Held(disc.Image), MediaOf(disc), SettingsText(createScope: true), FilesFor(firmware, saves, placement), Lends ? disc : null, sharedRemovable: placement.RemovableApart, sharedConsole: placement.ConsoleApart, device: lend);
+            return new CoreMachine(Library, Held(disc.Image), MediaOf(disc), SettingsText(createScope: true), FilesFor(firmware, saves, placement), Lends ? disc : null, sharedRemovable: placement.RemovableApart, sharedConsole: placement.ConsoleApart, device: lend, system: system);
         }
 
         // The firmware, then each battery file that holds bytes or a console medium's formatted blank.

@@ -1580,7 +1580,8 @@ manager, the Sega CD's backup RAM manager and CD player, and the like on later d
   as the core chooses it with no game. An image of no bytes with `system` missing, unknown, or naming a system without
   the field, or in a struct too short to hold it, is refused with `EMUSEN_BAD_IMAGE` (−264) and words, before the core
   sees it where the core is built on `emusen-native`. A host sets `system` only with an image of no bytes, and a core
-  ignores it beside an image. No status code, flag or export is added.
+  ignores it beside an image. No status code, flag or export is added. *Widened at 1.15 (§6.40): beside an image the
+  field names the system the host routed the image to.*
 - **Firmware.** `firmware_for` takes an image and there is none, so a host does not call it: it passes every file of
   the system's `firmware` list (§6.3) that the player has. The core chooses among them as with a game.
 - **The drive afterwards** is `MEDIA`'s (§6.23): lid open, insert, lid closed. A system that starts empty and lists a
@@ -1793,6 +1794,59 @@ console whose processors disagree (the Genesis's 68000 and its Z80) has spaces o
   anything, states its `ROM` `big` (its system `test` is in no table, so little); `FAULT_BYTE_ORDER_MISSPELT`
   (1 << 34), the order spelt `Big`, fails C14 alone. The plain core states none.
 - **The first core** to state one is Nephrite: `Z80RAM` and `Z80BUS` `little` (`Nephrite_Native.md` §66.5).
+
+### 6.40 The routed system beside an image: `system` widened (1.15, 2026-10-19)
+
+*Decided 2026-10-19 by the tester, as `Endou_Plan.md` §3.7 designed it, with the two departures this section states
+and `EmuSen_CoreAPI_Extensions.md` §17 weighs. This section is the normative text; `EmuSen_Backend.md` §31 records
+the build.* A host routes every file to a system before it opens it (`route` by extension, then a recogniser where an
+extension is shared), and until 1.15 a core was never told which: a core of two systems whose images carry nothing
+that tells them apart had to guess again what the host already knew. Endou is such a core: an SG-1000 cartridge has
+no Sega header, nor have some Japanese Master System ones (`Endou_Native.md` §2.3).
+
+- **The field.** `emusen_create_params.system`, the `const char *` at offset 104 that 1.11 added (§6.31), unchanged in
+  type and place. Its meaning widens: beside an image it names the system the host routed the image to, an id as core
+  info lists it. With an image of no bytes it keeps 1.11's meaning.
+- **How a host fills it.** A host of 1.15 or later sets it with every image it routes, from the routing it already
+  does: the system of the core's info the file runs as (`CoreCatalog.SystemOfFile` in C#, `open::system_of_info` in
+  Rust), the routed system where the core lists it and else the core's system that claims the extension. A host that
+  opens a file without routing it sets the system it chose, or null.
+- **What a core does with it.** A system core info does not list is refused with `EMUSEN_BAD_IMAGE` and words, as an
+  unknown system with an empty image is, before the core sees it where the core is built on `emusen-native`. A listed
+  one leaves the core three answers: it makes a machine of that system (*honoured*); it refuses the image, as it may
+  refuse any; or, **where its own rule tells its systems apart without a guess**, from the image's contents and the
+  settings the player chose, it makes the machine it makes when none is named (*kept*). A core that would otherwise
+  guess honours the field. Null, or a struct too short to hold it, leaves the core's rule as it was. A core of one
+  system honours any listed system by making its machine.
+- **Machine info** reports the system of the machine made: the named one where it is honoured, the core's own where
+  it is kept.
+- **Older and newer peers.** A host of 1.11 to 1.14 sets `system` only with an empty image, and an older one passes a
+  struct too short to hold it; beside an image either reads as none, and the core keeps its rule, so nothing an older
+  host could observe changes. A core built before 1.15 ignores the field beside an image, as §6.31 told it to, so a
+  newer host's value changes nothing for it. The minor gates nothing in a host or a core (§4.1): the field's presence
+  is the whole signal. A core built on `emusen-native` 1.15 refuses an unlisted system beside an image that an older
+  build would have ignored; no host of the project names one, since every host names a system from the core's info.
+- **The Rust side.** `Core::create_as(system, request)`, called when a listed system is named beside an image,
+  defaulted to `create`, so that a core that keeps its rule, and every core of one system, is unchanged in its code.
+  The export refuses an unlisted id, or one not UTF-8, before it. `Endou_Plan.md` §3.7 sketched a field of `Create`
+  instead; a field would have changed each of the 28 `Create { .. }` literals in six cores' tests and examples, where
+  a defaulted method touches only the core that honours, as 1.11's `create_empty` did
+  (`EmuSen_CoreAPI_Extensions.md` §17.2).
+- **The hosts.** `CoreEngine.LoadRom` passes `SystemOfFile`'s id to `CoreMachine`, which has passed `system` since
+  1.11; Crystal in Rust passes `system_of_info`'s id to `Machine::create` through `emusen-core-host`'s `Create::system`.
+  Both make the same choice from the same routing, held by `CrystalParityTests`.
+- **The kit.** C24 (§28.19).
+
+The project's cores of two or more systems, under a 1.15 host:
+
+| Core | Systems | Answer | Why |
+|---|---|---|---|
+| Endou | `sms`, `sg1000` | honoured | its images share no telling header; the stage-1 rule guesses by size and is wrong for 3 of the 370 files in the tester's library, each now run as its extension's system (`Endou_Native.md` §2.3) |
+| MercuryRT | `gb`, `gbc` | kept | the console is the Model setting's, which by default follows the cartridge header's colour flag; machine info names the console made, and a state of the other console changes it (§26). Honouring would override a Model the player chose and put 17 colour-enhanced `.gb` files of the tester's library (Pokémon Yellow among them) on a Game Boy (measured on 2026-10-19) |
+| Nephrite | `md`, `mcd`, `32x` | kept | a disc, a cartridge and a 32X cartridge are told apart by their contents. The tester's library holds 18 32X cartridges named `.bin` in `genesis/`, which `.bin`'s routing names `md`; kept, they run as `32x` as before (measured on 2026-10-19) |
+| Test core (`TWO_SYSTEMS`) | `test`, `test2` | honoured, or kept under `KEEPS_ITS_RULE` | the kit's own cases |
+
+MarsRT, MoonRT, VenusRT and Diamond list one system each and are unchanged but for the rebuild.
 
 ## 7. Core discovery and trust
 
@@ -2620,6 +2674,14 @@ reads `CoreSpace.ByteOrder` and `CoreEngine`'s frame log reads a space in its or
 C14 checks the spelling where a space states one; the test core states its ROM `big`, and `FAULT_BYTE_ORDER_MISSPELT`
 (1 << 34) fails C14 alone. Nephrite states `Z80RAM` and `Z80BUS` `little`; no other core states one, and their kit
 reports are unchanged but for the minor's number (`EmuSen_Backend.md` §25).
+
+**v1.15, 2026-10-19** (§6.40), decided by the tester as `Endou_Plan.md` §3.7 designed it: `emusen_create_params.system`
+widened, so that beside an image it names the system the host routed the image to. A listed system is honoured, or
+kept by a core whose own rule tells its systems apart, and an unlisted one is refused with `BAD_IMAGE` before the core
+sees it. No export, struct, status or bit; baseline 510 facts with the minor's two lines moved, `--check` and
+`--against` 1.14 passing; the header compiles as C99, C11 and C++17. `emusen-native` gains `Core::create_as`, defaulted
+to `create`; both hosts name the routed system; Endou honours it. The kit's C24 is added; the test core lists a second
+system under `TWO_SYSTEMS`, and three seeded faults (1 << 36 to 1 << 38) each fail C24 alone (`EmuSen_Backend.md` §31).
 
 **Clarified 2026-10-18, no minor** (§6.14): a processor whose `debug_set_breakpoints` refuses cannot halt, and an
 interrupt stopped for with no call logged is noted from the stop reason.
@@ -3983,6 +4045,26 @@ lists none passes, with a note of the count.
 The test cores pass, `kit_test_core` listing one made-up checksum for its boot ROM. `FAULT_MD5_SHORT` (the checksum a
 digit short) fails C23 alone; it is among `kit_faulty_full_core`'s faults, so that core fails C23 in the single-image
 form and in the corpus form.
+
+### 28.19 C24, the routed system (1.15, 2026-10-19)
+
+C24 runs for every image, among the image's cases, and judges a library of 1.15 or later that lists two or more
+systems; any other passes with a note. It makes the session's image with no system named and reads the system machine
+info reports, the core's own choice, which must be listed. Then it makes the image naming each listed system and one
+no system has (`x-no-such-system`), and holds each answer to §6.40:
+
+- named as its own choice, the image is accepted, the machine reports that system, and it runs the session's script
+  for up to 60 frames as a machine made unnamed does, frame for frame and sample for sample, to the same state;
+- named as another listed system, it is refused, or the machine reports the system named (honoured), or it reports
+  the core's own choice and runs as the unnamed machine does (kept); a machine that reports its own choice and runs
+  otherwise, or reports a third system, fails;
+- named as a system the library does not list, it is refused with `EMUSEN_BAD_IMAGE`.
+
+The note says what each system named did: "2 systems, unnamed test; named: test as unnamed, test2 honoured; an
+unlisted one refused; 60 frames compared". `kit_two_system_core`, the test core under `TWO_SYSTEMS`, passes in the
+single-image form and in the corpus form, and passes with `KEEPS_ITS_RULE` too ("test2 kept as test").
+`FAULT_ROUTED_HALF_KEPT` (named `test2`, the machine reports `test` and runs otherwise), `FAULT_ROUTED_RUNS_OTHERWISE`
+(named `test`, it runs otherwise) and `FAULT_ROUTED_OWN_REFUSED` (named `test`, it is refused) each fail C24 alone.
 
 ## 29. A space that is a view, 2026-10-07
 

@@ -132,11 +132,11 @@ namespace EmuSen.WiseMan.Cores
             CoreManifest.Write(dir);
             CoreDiscovery.UseDirectories(new[] { dir });
             var found = CoreDiscovery.Found.Single();
-            Assert.Equal(("v1-plain-core", 0UL, "1.14", CoreSidecar.HashOf(library)), (found.Info.Id, found.Sidecar.Capabilities, found.Sidecar.Abi, found.Sidecar.Sha256));
+            Assert.Equal(("v1-plain-core", 0UL, "1.15", CoreSidecar.HashOf(library)), (found.Info.Id, found.Sidecar.Capabilities, found.Sidecar.Abi, found.Sidecar.Sha256));
             Assert.False(CoreLibrary.IsOpen(library));
             Assert.NotNull(found.Open());
             Assert.Equal("not yet loaded", new DiscoveredCore(found.Sidecar).Report);
-            Assert.EndsWith("core ABI 1.14", found.Report);
+            Assert.EndsWith("core ABI 1.15", found.Report);
         }
 
         // Rules 1 and 2 in the C# host: a library in no manifest waits for the player's approval, read from the config directory - see EmuSen_Backend.md §29.40.6.

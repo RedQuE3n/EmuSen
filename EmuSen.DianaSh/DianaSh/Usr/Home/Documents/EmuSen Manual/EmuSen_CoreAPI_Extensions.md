@@ -1749,3 +1749,46 @@ Nothing a frame for a core that states none: the field is read with machine info
 name once more for each value, beside the lookup it made for every byte, and the lookup became a loop over the
 descriptors, which allocates nothing where the query it replaced made a closure at every byte. Nothing breaks: a value the frame log reads from a
 space that states an order changes only where that order differs from the system's, which is the defect it fixes.
+
+## 17. The routed system beside an image (1.15), decided 2026-10-19
+
+*Found at Endou's stage 1 (`Endou_Native.md` §2.3), designed in `Endou_Plan.md` §3.7, accepted by the tester on
+2026-10-19 and built the same day (`EmuSen_Backend.md` §31). The normative text is `EmuSen_CoreAPI.md` §6.40.*
+
+### 17.1 What existed
+
+A host routed each file to a system before opening it, and passed the image alone: `emusen_create_params.system`
+(1.11) was set only with an image of no bytes, and a core ignored it beside an image (`EmuSen_CoreAPI.md` §6.31). A
+core of two systems chose between them from the image, which Endou cannot do reliably: its stage-1 rule takes an image
+without Sega's header and no larger than 48 KiB for the SG-1000's, and gets 3 of the tester's 370 Master System and
+SG-1000 files wrong.
+
+### 17.2 The forms weighed
+
+The surface was settled by the design: the existing field, widened, as a minor. Two of its details were weighed again
+when built.
+
+| Detail | Form | For | Against |
+|---|---|---|---|
+| How `emusen-native` gives the system to a core | (a) a field of `Create`, `system: Option<&str>`, as `Endou_Plan.md` §3.7 sketched | every create sees it in one place | every `Create { .. }` literal in the cores' tests and examples changes, 28 in six cores, four of them of one system; a branch building a core at the same time breaks on merge wherever it writes one |
+| | (b) **`Core::create_as(system, request)`**, defaulted to `create` | a core that does nothing with the field is unchanged in its code; the shape of 1.11's `create_empty` | a second create entry, which a core that honours implements beside `create` |
+| What a core of two systems must do with a listed system | (c) always make that system's machine, the kit holding every listed system to it, as §3.7 wrote | one answer for every core | MercuryRT's Model setting chooses the console, by default from the cartridge's colour flag: honouring would override a Model the player chose, and put 17 colour-enhanced `.gb` files of the tester's library on a Game Boy; Nephrite would have to make a Sega CD of a cartridge or refuse 18 32X cartridges named `.bin` it runs today |
+| | (d) **honour, refuse, or keep the core's own rule where that rule guesses nothing**, the kit holding a kept machine to the unnamed one frame for frame | the core that guesses (Endou) is fixed, and the cores whose contents or settings decide are left as they are; a half-applied system still fails | a host cannot assume the machine is the system it named, and reads machine info's, as it already does |
+
+**Chosen: (b) and (d)** [C]: both keep the change to the core that needs it. (d) is a departure from §3.7's text,
+recorded as such for the tester in `EmuSen_Backend.md` §31.5.
+
+### 17.3 The surface change
+
+- `emusen_create_params.system`'s comment and `emusen_core_create`'s in `emusen_core.h`; `EMUSEN_CORE_ABI_MINOR` 15.
+  No export, struct, field, constant, status or bit is added or moved.
+- `emusen-native`: `Core::create_as`, and the export's refusal of an unlisted system beside an image.
+- `emusen-core-host`: nothing but its documentation; `Create::system` has carried the field since 1.11.
+- The C# host: `CoreEngine.LoadRom` names `SystemOfFile`'s system; `CoreInterface.Minor` 15.
+- Crystal in Rust: `Engine::load_rom` names `system_of_info`'s system.
+- The kit: C24, a two-system test core and its seeded faults.
+
+### 17.4 Cost, and what it breaks
+
+One string a create, beside the image; nothing a frame. A core built on `emusen-native` 1.15 refuses an unlisted
+system named beside an image, which a 1.14 build ignored; no host of the project names one.

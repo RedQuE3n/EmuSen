@@ -54,8 +54,8 @@ fn manifest(dir: &Path, libraries: &[&Path]) {
 fn the_test_core_loads_and_passes_rule_4_and_its_report_names_it() {
     let lib = Library::load(&example("host_test_core")).unwrap();
     let c = lib.check().unwrap();
-    assert_eq!(c.version, (1 << 16) | 14);
-    assert_eq!(lib.report(), format!("{}, V1TestCore (test) 1.0.0, core ABI 1.14", example("host_test_core").display()));
+    assert_eq!(c.version, (1 << 16) | 15);
+    assert_eq!(lib.report(), format!("{}, V1TestCore (test) 1.0.0, core ABI 1.15", example("host_test_core").display()));
     assert!(std::ptr::eq(lib, Library::load(&example("host_test_core")).unwrap()), "one library per path");
     let plain = Library::load(&example("host_plain_core")).unwrap();
     assert!(plain.check().is_ok() && plain.capabilities() == 0);
@@ -79,7 +79,7 @@ fn each_lie_is_refused_by_rule_4_in_its_own_words() {
         (0, ""),
         (1, "speaks core ABI major 2, this host major 1"),
         (2, "lacks emusen_core_reset but claims its capability"),
-        (3, "its info says abi 1.13, its export 1.14"),
+        (3, "its info says abi 1.13, its export 1.15"),
         (4, "it requires the host obligation teleport, which this host does not know"),
         (5, "its info is not UTF-8 text under 1 MiB"),
         (6, "its info is not UTF-8 text under 1 MiB"),
@@ -154,6 +154,17 @@ fn a_refused_create_carries_the_cores_status_and_words() {
     assert_eq!((r.status, r.words.as_str()), (emusen_native::core::sys::status::BAD_IMAGE, "the image is empty and no system was named to start empty"));
     let r = Machine::create(lib, &Create::new(b"junk!!")).err().unwrap();
     assert_eq!(r.words, "not a test core image");
+}
+
+// Since 1.15 (EmuSen_CoreAPI.md §6.40): the system a host routed an image to is passed beside it, and one the core does not list is refused with words.
+#[test]
+fn a_routed_system_goes_beside_the_image_and_an_unlisted_one_is_refused() {
+    let lib = Library::load(&example("host_test_core")).unwrap();
+    let image = [b"V1TC".as_slice(), &[3, 0, 1, 2, 3]].concat();
+    let m = Machine::create(lib, &Create { system: Some(c"test"), ..Create::new(&image) }).unwrap();
+    assert!(m.machine_info().unwrap().contains(r#""system":"test""#));
+    let r = Machine::create(lib, &Create { system: Some(c"elsewhere"), ..Create::new(&image) }).err().unwrap();
+    assert_eq!((r.status, r.words.as_str()), (emusen_native::core::sys::status::BAD_IMAGE, "the image was routed to elsewhere, which is not a system of this core"));
 }
 
 #[derive(Default)]
@@ -255,7 +266,7 @@ fn discovery_lists_from_sidecars_alone_and_opens_under_the_trust_rules() {
         c.open(&trust).unwrap();
     }
     let v = listed(&d);
-    assert_eq!(reports(&v)[1], format!("{}, V1TestCore (test) 1.0.0, core ABI 1.14", dir.join("libtest.so").display()));
+    assert_eq!(reports(&v)[1], format!("{}, V1TestCore (test) 1.0.0, core ABI 1.15", dir.join("libtest.so").display()));
     let engine = &v.get("engines").and_then(Value::as_array).unwrap()[1];
     assert_eq!(engine.get("systems"), Some(&Value::Array(vec![Value::Str("test".into())])));
     assert_eq!(engine.get("available"), Some(&Value::Bool(true)));
@@ -327,7 +338,7 @@ fn the_scan_keeps_the_first_id_skips_development_and_other_majors_and_files_that
     installed(&second, "host_test_core", "liba.so", false);
     installed(&second, "host_plain_core", "libdev.so", true);
     let other = installed(&second, "host_liar_core", "libother.so", false);
-    let text = std::fs::read_to_string(sidecar::path_for(&other)).unwrap().replace("\"abi\":\"1.14\",\"capabilities\"", "\"abi\":\"2.0\",\"capabilities\"");
+    let text = std::fs::read_to_string(sidecar::path_for(&other)).unwrap().replace("\"abi\":\"1.15\",\"capabilities\"", "\"abi\":\"2.0\",\"capabilities\"");
     std::fs::write(sidecar::path_for(&other), text).unwrap();
     std::fs::write(second.join("junk.core.json"), "{\"sidecar\":2}").unwrap();
     std::fs::write(second.join("path.core.json"), "{\"sidecar\":1,\"library\":\"../libb.so\",\"info\":{}}").unwrap();

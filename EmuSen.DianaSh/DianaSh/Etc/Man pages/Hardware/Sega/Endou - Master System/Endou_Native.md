@@ -83,6 +83,17 @@ ABI's next minor, letting a host set `system` beside an image as well, the field
 reads it takes the routed system, and an older core ignores it as today. Stage 4, which makes the SG-1000 a modelled
 console, is the first stage whose behaviour depends on it.
 
+**Built 2026-10-19, core ABI 1.15** (`EmuSen_CoreAPI.md` §6.40, `EmuSen_Backend.md` §31). Endou honours the routed
+system: `Core::create_as` reads it with `Console::of_id`, and `Media::read_as` takes it in place of the rule, which
+`Media::read` keeps for a host that names none. The rule is unchanged, and so is every image's board, market and
+model given its console; a system Endou does not list is refused by `emusen-native` before Endou sees it, and
+`create_as` refuses one again in words should the export ever pass one. Under a 1.15 host the three images above run as
+their extensions' systems, the 512 KiB `.sg` as an SG-1000 and the two 8 KiB `.sms` as Master Systems, and the other
+367 as before. `EndouTests.A_headerless_image_runs_as_the_system_it_was_routed_to` opens a 64 KiB `.sg` and an 8 KiB
+`.sms` without the header through `CoreFactory`, the host's own routing. With the host passing no system beside the
+image, as at the base, both failed, the machines reporting `sms` and `sg1000`, the rule's guesses; on the build they
+pass, and the same images made with no system named still get the rule's guesses (measured on 2026-10-19).
+
 ## 3. The systems and the packs
 
 `Platform/systems/data/sms.json` and `sg1000.json`, appended to the table after `n64`, and the C# literals

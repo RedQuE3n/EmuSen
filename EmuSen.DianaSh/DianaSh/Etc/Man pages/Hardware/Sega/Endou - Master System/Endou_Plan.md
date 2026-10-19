@@ -330,7 +330,8 @@ of it [C]:
 - **The routed system beside an image** (found at stage 1, `Endou_Native.md` §2.3): a host sets `system` in the create
   parameters only with an image of no bytes, so a core of two systems that share no telling header must guess. An
   extension of the existing field, a minor letting a host set it beside an image too. *Decided 2026-10-19:* accepted,
-  designed in §3.7 and built as its own piece of work before stage 4.
+  designed in §3.7 and built as its own piece of work before stage 4. *Built 2026-10-19 as core ABI 1.15*
+  (`EmuSen_CoreAPI.md` §6.40).
 - **An `sms` module of `emusen-systems`** (stages 7 and 8) for the codecs and the views: a module beside the others,
   which the crate's design provides for [R `EmuSen_Backend.md` §5.2], so no new surface.
 
@@ -367,6 +368,12 @@ an existing surface (`EmuSen_CoreAPI.md` §4.4): no export, struct, status or ca
 - **Endou's use.** At stage 4, when the SG-1000 becomes a modelled console, Endou takes the routed system and keeps
   the stage-1 rule only for a host that passes none; the three images that rule gets wrong in the tester's library
   (§10 Q10, `Endou_Native.md` §2.3) then run on the system their extension names.
+
+*Built 2026-10-19 as core ABI 1.15* (`EmuSen_CoreAPI.md` §6.40, `EmuSen_Backend.md` §31), with two departures from
+this design, weighed in `EmuSen_CoreAPI_Extensions.md` §17.2: `emusen-native` gives the system to a core as
+`Core::create_as(system, request)`, defaulted to `create`, rather than as a field of `Create`; and a core whose own
+rule tells its systems apart without a guess may keep it (MercuryRT's Model setting, Nephrite's contents), the kit
+holding such a machine to the unnamed one. Endou takes the routed system from 1.15 on, ahead of stage 4.
 
 ---
 

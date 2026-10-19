@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
-# The conformance kit's core suite: loads a library through the core ABI v1 and nothing else, and runs C1-C17 on an
+# The conformance kit's core suite: loads a library through the core ABI v1 and nothing else, and runs C1-C24 on an
 # image its author supplies, or on a library of images; also writes a library's sidecar. See EmuSen_CoreAPI.md §12,
 # §21, §24 and §28.
 [lib]
@@ -56,6 +56,11 @@ crate-type = ["cdylib"]
 
 [[example]]
 name = "kit_hung_core"
+crate-type = ["cdylib"]
+
+# Two systems, and core ABI 1.15's seeded faults behind EMUSEN_TEST_CORE_FAULTS (C24).
+[[example]]
+name = "kit_two_system_core"
 crate-type = ["cdylib"]
 
 # What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.

@@ -38,9 +38,22 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             try { Directory.Delete(_root, recursive: true); } catch { }
         }
 
+        // The fake server's answers with their Content-Type's charset replaced, as a server misconfigured would send them.
+        private sealed class Charset(HttpMessageHandler inner, string charset) : DelegatingHandler(inner)
+        {
+            protected override async System.Threading.Tasks.Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                HttpResponseMessage response = await base.SendAsync(request, cancellationToken);
+                if (response.Content.Headers.ContentType is { } type) type.CharSet = charset;
+                return response;
+            }
+        }
+
+        private HttpMessageHandler? _handler;
+
         private Scraper Start(ScrapeChoices? choices = null, Func<string, string, bool>? handCover = null, bool start = true, Func<string, string>? folderOf = null)
         {
-            var client = new ScreenScraperClient(new HttpClient(_server), FakeScreenScraper.Developer, null);
+            var client = new ScreenScraperClient(new HttpClient(_handler ?? _server), FakeScreenScraper.Developer, null);
             ScrapeChoices chosen = choices ?? new ScrapeChoices();
             var scraper = new Scraper(client, _store, _quota, () => chosen, handCover ?? ((_, _) => false),
                 path => CoreCatalog.ByExtension(Path.GetExtension(path))?.OpenVgdbBytes, _results.Add, _clock)
@@ -86,6 +99,22 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         }
 
         private string Stored(params string[] parts) => Path.Combine([Media, .. parts]);
+
+        [Fact]
+        public void An_answer_in_a_charset_dotnet_has_not_is_an_answer_that_could_not_be_read_and_the_run_goes_on()
+        {
+            string rom = Rom("Charset (USA).sfc", Filled(512, 9));
+            _server.Games.Add(new FakeGame(78, "Charset", RomHashes.Of(rom).Md5));
+            _handler = new Charset(_server, "klingon");
+            Scraper scraper = Start();
+
+            Queue(scraper, rom, "snes", ScrapePriority.Shown);
+            ScrapeResult result = Next();
+
+            Assert.Equal(ScrapeOutcome.Retry, result.Outcome);
+            Assert.Contains("character set", result.Detail);
+            Assert.True(scraper.IsRunning);
+        }
 
         [Fact]
         public void A_game_found_by_its_file_s_hashes_gets_its_text_and_each_default_kind_in_es_de_s_layout()

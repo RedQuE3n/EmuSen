@@ -50,6 +50,9 @@ pub const FIRST: [Kind; 5] = [COVER, SCREENSHOT, MARQUEE, TITLE_SCREEN, MIXIMAGE
 /// Every kind, in `ScrapeRules.AllKinds`' order.
 pub const ALL: [Kind; 11] = [COVER, SCREENSHOT, MARQUEE, TITLE_SCREEN, MIXIMAGE, BACK_COVER, BOX_3D, PHYSICAL_MEDIA, FAN_ART, MANUAL, VIDEO];
 
+/// The kinds in the order Big Picture's `EsdeMediaFolder.Folders` lists them, which `present` and `stamp` walk.
+pub const ALL_FOLDER_ORDER: [Kind; 11] = [MIXIMAGE, MARQUEE, SCREENSHOT, TITLE_SCREEN, COVER, BACK_COVER, BOX_3D, PHYSICAL_MEDIA, FAN_ART, VIDEO, MANUAL];
+
 pub fn by_type(esde_type: &str) -> Option<Kind> {
     ALL.iter().copied().find(|k| k.esde_type == esde_type)
 }

@@ -6,14 +6,21 @@
 
 pub mod abi;
 pub mod answer;
+pub mod artwork;
+pub mod client;
 pub mod clock;
+pub mod consoles;
 pub mod credentials;
 mod json;
 pub mod kinds;
 pub mod layout;
+pub mod media;
+pub mod metadata;
+pub mod openemu;
 pub mod quota;
 pub mod redact;
 pub mod rules;
+pub mod run;
 pub mod store;
 pub mod zone;
 
@@ -80,6 +87,8 @@ pub struct Settings {
     pub user_agent: Option<String>,
     /// Whether the developer file may be read from the machine's config directory; a test harness says no.
     pub developer_files: bool,
+    /// The systems each engine runs together, by id: the runtime's fact (EmuSen_Backend.md §30.12).
+    pub cores: Vec<Vec<String>>,
     pub test: Test,
 }
 
@@ -107,6 +116,19 @@ impl Settings {
             s.user_agent = json::text_or_none(r, "user_agent")?;
         }
         s.developer_files = json::flag(r, "developer_files", s.developer_files)?;
+        if let Some(cores) = r.get("cores") {
+            s.cores = match cores {
+                Value::Array(groups) => groups
+                    .iter()
+                    .map(|g| match g {
+                        Value::Array(ids) => ids.iter().map(|i| i.as_str().map(str::to_string).ok_or_else(|| Error::BadRequest("The request's cores holds a system that is not text.".into()))).collect(),
+                        _ => Err(Error::BadRequest("The request's cores is not a list of lists.".into())),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+                Value::Null => Vec::new(),
+                _ => return Err(Error::BadRequest("The request's cores is not a list of lists.".into())),
+            };
+        }
         if let Some(t) = r.get("test") {
             if !t.is_null() {
                 let connect = json::text_or_none(t, "connect")?.map(|c| c.parse::<SocketAddr>().map_err(|_| Error::BadRequest("The request's test.connect is not an address.".into()))).transpose()?;
@@ -129,9 +151,18 @@ pub struct Scraper {
     pub quota: quota::Manager,
     settings: RwLock<Settings>,
     embedded: Vec<u8>,
-    #[allow(dead_code)]
-    sqlite: Arc<Sqlite>,
+    pub(crate) sqlite: Arc<Sqlite>,
     library: Option<&'static emusen_library::Library>,
+    pub(crate) runs: run::Runs,
+    art: RwLock<artwork::Index>,
+    root: String,
+}
+
+impl Drop for Scraper {
+    fn drop(&mut self) {
+        self.stop_workers();
+        self.stop_failover();
+    }
 }
 
 impl Scraper {
@@ -145,13 +176,42 @@ impl Scraper {
         };
         let store = store::Store::open(sqlite.clone(), root)?;
         let quota = quota::Manager::new(&store, &clock)?;
-        let scraper = Scraper { store: Mutex::new(store), clock, quota, settings: RwLock::new(settings), embedded: embedded.to_vec(), sqlite, library };
+        let art = artwork::Index::scan(settings.art.as_deref(), &consoles::cores(&settings.cores));
+        let scraper = Scraper {
+            store: Mutex::new(store),
+            clock,
+            quota,
+            settings: RwLock::new(settings),
+            embedded: embedded.to_vec(),
+            sqlite,
+            library,
+            runs: run::Runs::default(),
+            art: RwLock::new(art),
+            root: root.to_string(),
+        };
         scraper.put_in_folders()?;
         Ok(scraper)
     }
 
     pub(crate) fn store(&self) -> MutexGuard<'_, store::Store> {
         self.store.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    pub fn root(&self) -> String {
+        self.root.clone()
+    }
+
+    /// The failover's own folder, apart from the player's art: `<store>/openemu/<console>/`.
+    pub fn openemu_root(&self) -> String {
+        emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &self.root, "openemu")
+    }
+
+    pub fn art(&self) -> std::sync::RwLockReadGuard<'_, artwork::Index> {
+        self.art.read().unwrap_or_else(|p| p.into_inner())
+    }
+
+    pub(crate) fn add_art(&self, console: Option<String>, stem: &str, file: &str) {
+        self.art.write().unwrap_or_else(|p| p.into_inner()).add(console, stem, file);
     }
 
     pub fn settings(&self) -> Settings {
@@ -189,7 +249,9 @@ impl Scraper {
 
     pub(crate) fn apply_settings(&self, r: &Value) -> Result<(), Error> {
         let merged = Settings::merge(self.settings(), r)?;
+        let art = artwork::Index::scan(merged.art.as_deref(), &consoles::cores(&merged.cores));
         *self.settings.write().unwrap_or_else(|p| p.into_inner()) = merged;
+        *self.art.write().unwrap_or_else(|p| p.into_inner()) = art;
         self.quota.settings_changed();
         self.put_in_folders()?;
         Ok(())
@@ -198,3 +260,4 @@ impl Scraper {
 
 mod changes;
 mod reads;
+mod requests;

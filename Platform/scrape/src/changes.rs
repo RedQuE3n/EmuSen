@@ -26,14 +26,14 @@ fn offset_written(text: &str) -> i64 {
 }
 
 #[cfg(unix)]
-fn local_offset(seconds: i64) -> i64 {
+pub(crate) fn local_offset(seconds: i64) -> i64 {
     let t = seconds as libc::time_t;
     let mut tm: libc::tm = unsafe { std::mem::zeroed() };
     if unsafe { libc::localtime_r(&t, &mut tm) }.is_null() { 0 } else { tm.tm_gmtoff as i64 }
 }
 
 #[cfg(not(unix))]
-fn local_offset(_: i64) -> i64 {
+pub(crate) fn local_offset(_: i64) -> i64 {
     0
 }
 
@@ -69,8 +69,21 @@ pub(crate) fn change(s: &Scraper, r: &Value) -> Result<String, Error> {
         }
         "sign_out" => {
             let had = credentials::Member::delete().map_err(|e| Error::Io(emusen_dotnet::file::io_message(&e, &credentials::Member::path())))?;
+            s.set_run_member(None);
             out.push_str(&format!("{{\"had\":{had}}}"));
         }
+        "sign_in" => {
+            let user = json::text(r, "user")?;
+            out.push_str(&s.sign_in(credentials::Member::new(user.trim_matches(char::is_whitespace), &json::text(r, "password")?))?);
+        }
+        "check" => out.push_str(&s.sign_in(credentials::Member::load())?),
+        "search" => out.push_str(&s.search(r)?),
+        "art_added" => {
+            s.add_art(json::text_or_none(r, "console")?, &json::text(r, "stem")?, &json::text(r, "path")?);
+            out.push_str("true");
+        }
+        "openvgdb_download" => out.push_str(&s.openvgdb_download()?),
+        "openvgdb_remove" => out.push_str(&s.openvgdb_remove()?),
         _ => return Err(Error::BadRequest(format!("The request's op, {op}, is not one the scraper makes."))),
     }
     Ok(out)

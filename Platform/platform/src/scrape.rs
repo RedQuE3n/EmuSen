@@ -167,3 +167,76 @@ pub unsafe extern "C" fn emusen_scrape_change(s: *mut Scraper, request: *const u
     };
     unsafe { answer(2, request, out, out_len, || scraper.change_request(request)) }
 }
+
+/// Starts a run over the request's games; how many are queued, or a status. Zero starts nothing.
+///
+/// # Safety
+/// `s` a live handle; `request` valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_scrape_start(s: *mut Scraper, request: *const u8, len: usize) -> i64 {
+    let scraper = match unsafe { handle(s) } {
+        Ok(h) => h,
+        Err(st) => return st as i64,
+    };
+    let request = match unsafe { text(request, len) } {
+        Ok(r) => r,
+        Err(st) => return st as i64,
+    };
+    match scraper.start_request(request) {
+        Ok(n) => n as i64,
+        Err(e) => failed(e) as i64,
+    }
+}
+
+/// The run as it stands, `{"since"}` naming the last result already drained; the answer's length, or a status.
+///
+/// # Safety
+/// As `emusen_scrape_get`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_scrape_progress(s: *mut Scraper, request: *const u8, len: usize, out: *mut u8, out_len: usize) -> i64 {
+    let scraper = match unsafe { handle(s) } {
+        Ok(h) => h,
+        Err(st) => return st as i64,
+    };
+    let request = match unsafe { text(request, len) } {
+        Ok(r) => r,
+        Err(st) => return st as i64,
+    };
+    unsafe { answer(3, request, out, out_len, || scraper.progress_request(request)) }
+}
+
+/// Waits until the run's serial passes `serial`, or the timeout ends; the serial then.
+///
+/// # Safety
+/// `s` a live handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_scrape_wait(s: *mut Scraper, serial: u64, timeout_ms: u32) -> i64 {
+    match unsafe { handle(s) } {
+        Ok(h) => h.wait(serial, timeout_ms) as i64,
+        Err(st) => st as i64,
+    }
+}
+
+/// Pauses or resumes the run's ScreenScraper requests: 1 when it changed, 0 when it did not.
+///
+/// # Safety
+/// `s` a live handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_scrape_pause(s: *mut Scraper, paused: i32) -> i32 {
+    match unsafe { handle(s) } {
+        Ok(h) => h.pause(paused != 0) as i32,
+        Err(st) => st,
+    }
+}
+
+/// Cancels the run: 1 when one was going, 0 when none was.
+///
+/// # Safety
+/// `s` a live handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_scrape_cancel(s: *mut Scraper) -> i32 {
+    match unsafe { handle(s) } {
+        Ok(h) => h.cancel() as i32,
+        Err(st) => st,
+    }
+}

@@ -29,6 +29,8 @@ namespace EmuSen.WiseMan.Crystal
 
         public bool Has(string name) => _export("emusen_crystal_" + name) != 0;
 
+        public nint Export(string name) => Fn(name);
+
         public string LastError()
         {
             var f = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, long>)Fn("last_error");
@@ -156,6 +158,67 @@ namespace EmuSen.WiseMan.Crystal
         public string DiscChange(nint rt, uint session, uint index) => Status(((delegate* unmanaged[Cdecl]<nint, uint, uint, int>)Fn("disc_change"))(rt, session, index));
 
         public string DiscLid(nint rt, uint session, bool open) => Status(((delegate* unmanaged[Cdecl]<nint, uint, uint, int>)Fn("disc_lid"))(rt, session, open ? 1u : 0u));
+
+        // A frame's status and every field of its frame_info, the struct given at size bytes (0 for its own).
+        public string Frame(nint rt, uint session, uint size = 0)
+        {
+            var info = new CrystalFrameInfo { size = size != 0 ? size : (uint)sizeof(CrystalFrameInfo), reserved = 0xFEEDu, picture_on_device = 7 };
+            int status = ((delegate* unmanaged[Cdecl]<nint, uint, CrystalFrameInfo*, int>)Fn("frame"))(rt, session, &info);
+            if (status != 0) return Status(status);
+            return $"ran {info.ran} halted {info.halted} rendered {info.rendered} serial {info.picture_serial} {info.width}x{info.height} repeat {info.row_repeat} lines {info.display_lines} aspect {info.display_aspect:R} "
+                + $"audio {info.audio_frames}@{info.audio_rate} play {info.play_audio} speed {info.speed_percent} interval {info.frame_interval_ns} total {info.total_frames} hz {info.frame_rate_hz:R} paused {info.paused} "
+                + $"at {info.halted_processor}:{info.halted_address} device {info.picture_on_device} reserved {info.reserved}";
+        }
+
+        // The picture's length and SHA-256, or the length asked of a buffer len bytes long.
+        public string Picture(nint rt, uint session, int len = -1)
+        {
+            var f = (delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, long>)Fn("picture_copy");
+            long n = f(rt, session, null, 0);
+            if (n < 0) return $"status {n}: {LastError()}";
+            var bytes = new byte[len >= 0 ? len : n];
+            long again;
+            fixed (byte* b = bytes) again = f(rt, session, b, (nuint)bytes.Length);
+            if (again < 0) return $"status {again}: {LastError()}";
+            return len >= 0 ? $"{n} {again}" : $"{again} {Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))}";
+        }
+
+        // The sound held, then drained in at most frames frames: the frames, the rate and the samples' SHA-256.
+        public string Audio(nint rt, uint session, int frames = 4096)
+        {
+            var f = (delegate* unmanaged[Cdecl]<nint, uint, short*, nuint, uint*, long>)Fn("audio_drain");
+            uint rate = 0, held = 0;
+            long buffered = f(rt, session, null, 0, &held);
+            var samples = new short[frames * 2];
+            long n;
+            fixed (short* o = samples) n = f(rt, session, o, (nuint)frames, &rate);
+            if (n < 0 || buffered < 0) return $"status {Math.Min(n, buffered)}: {LastError()}";
+            if (frames == 0) return $"{buffered}@{held} {n}@{rate} (a null buffer asks what is held)";
+            byte[] bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(samples.AsSpan(0, (int)n * 2)).ToArray();
+            return $"{buffered}@{held} {n}@{rate} {Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))}";
+        }
+
+        public string Phases(nint rt, uint session)
+        {
+            long n = ((delegate* unmanaged[Cdecl]<nint, uint, double*, nuint, long>)Fn("phases"))(rt, session, null, 0);
+            return n < 0 ? $"status {n}: {LastError()}" : $"{n} {Read("phase_names", rt, session)}";
+        }
+
+        public string Wait(nint rt, uint session, uint ms)
+        {
+            int r = ((delegate* unmanaged[Cdecl]<nint, uint, uint, int>)Fn("wait"))(rt, session, ms);
+            return r < 0 ? Status(r) : r.ToString();
+        }
+
+        public string Button(nint rt, uint session, uint port, uint control, bool pressed) => Status(((delegate* unmanaged[Cdecl]<nint, uint, uint, uint, uint, int>)Fn("input_button"))(rt, session, port, control, pressed ? 1u : 0u));
+
+        public string Axis(nint rt, uint session, uint port, uint axis, double value) => Status(((delegate* unmanaged[Cdecl]<nint, uint, uint, uint, double, int>)Fn("input_axis"))(rt, session, port, axis, value));
+
+        public string Connected(nint rt, uint session, uint port, bool connected) => Status(((delegate* unmanaged[Cdecl]<nint, uint, uint, uint, int>)Fn("input_connected"))(rt, session, port, connected ? 1u : 0u));
+
+        public string Speed(nint rt, uint session, uint percent, uint turbo, uint slow, uint flags) => Status(((delegate* unmanaged[Cdecl]<nint, uint, uint, uint, uint, uint, int>)Fn("speed_set"))(rt, session, percent, turbo, slow, flags));
+
+        public string SpeedMode(nint rt, uint session, uint mode) => Status(((delegate* unmanaged[Cdecl]<nint, uint, uint, int>)Fn("speed_mode"))(rt, session, mode));
 
         private delegate long CopyOut(byte* o, nuint n);
 

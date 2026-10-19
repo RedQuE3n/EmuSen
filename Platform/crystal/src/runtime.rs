@@ -232,25 +232,25 @@ impl Runtime {
     /// The battery save written, the save media let go, the session ended, `ManagedSession.Close`.
     pub fn close(&self, id: u32) -> Result<(), Refused> {
         let s = self.sessions.get(id)?;
-        {
-            let mut e = s.engine.lock().unwrap_or_else(|p| p.into_inner());
+        s.close(|e| {
             e.save_sram();
             e.dispose();
             for line in e.take_said() {
                 self.say(line);
             }
-        }
+        })?;
         self.sessions.remove(s.id);
         Ok(())
     }
 
     /// The console's reset, `ManagedSession.Reset`.
     pub fn reset(&self, id: u32) -> Result<(), Refused> {
-        let s = self.sessions.get(id)?;
-        let mut e = s.engine.lock().unwrap_or_else(|p| p.into_inner());
-        e.reset().map_err(|r| (r.status, r.words))?;
-        s.run.lock().unwrap_or_else(|p| p.into_inner()).halted = false;
-        Ok(())
+        self.sessions.get(id)?.change(|e, run| {
+            e.reset().map_err(|r| (r.status, r.words))?;
+            run.halted = false;
+            e.refresh_debugger();
+            Ok(())
+        })
     }
 
     /// `[{"id","engine","current"}]`, `ManagedRuntime.SessionsJson`.
@@ -285,11 +285,12 @@ impl Runtime {
         let catalog = Catalog::new(&discovery);
         let tree = emusen_galaxia::tree::tree();
         let is_image = |e: &str| crate::route::is_image_extension(&catalog, &discovery, e);
-        let mut e = s.engine.lock().unwrap_or_else(|p| p.into_inner());
-        if !e.can_change_disc() {
-            return Err((emusen_session_service::abi::status::NOT_SUPPORTED, format!("{} has no drive whose disc can be changed", e.name)));
-        }
-        change(&mut e, &tree, &is_image)
+        s.change(|e, _| {
+            if !e.can_change_disc() {
+                return Err((emusen_session_service::abi::status::NOT_SUPPORTED, format!("{} has no drive whose disc can be changed", e.name)));
+            }
+            change(e, &tree, &is_image)
+        })
     }
 
     pub fn disc_insert(&self, id: u32, at: &str) -> Result<(), Refused> {

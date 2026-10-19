@@ -28,3 +28,7 @@ emusen-savemedia = { path = "../savemedia" }
 emusen-session-service = { path = "../session-service" }
 # .NET's text rules and JSON writer, so each answer is the C# implementation's to the byte.
 emusen-dotnet = { path = "../dotnet" }
+
+[[example]]
+name = "crystal_test_core"
+crate-type = ["cdylib"]

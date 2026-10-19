@@ -6690,6 +6690,68 @@ by the engine and reach the `log` event with piece 6. A battery file that cannot
 silently, where the C# writes a warning to the error log; the error log's writer comes with the retired-engine line
 (§29.13). A 1.1 open's `device` is read by piece 7's lend.
 
+### 29.16 Built 2026-10-19: part (a), piece 3, the frame
+
+**The piece** (this commit). The engine runs §29.4's frame in its order (`Engine::run_frame`: the lid's timer, the
+cheats' refresh, the audio limit, the latch, the raw encoding, the advance or the debugger's frame, the frame-end work,
+the battery's period, `present`, the events, the log every 60 frames), copies the picture with its rows repeated or not,
+drains the sound in whole stereo frames and reads the phases. The session holds §29.4's gate: a change counts itself
+while it waits, so the frame thread lets it land before its next frame; a second frame thread is `BUSY`; a thread that
+holds the gate and asks for it again is refused with `BUSY`, not deadlocked; `wait` parks on a condition variable that
+any change from another thread wakes. `speed` is the C# `SpeedController`, with `TimeSpan.FromSeconds`' truncation to
+ticks in the frame interval. `input` routes a canonical control to each bit and axis the port's controller gives it, as
+`SetButton` and `SetAxis` do, from routes the engine rebuilds when machine info changes, so a control never takes the
+gate. The platform library exports `frame`, `picture_copy`, `audio_drain`, `wait`, `phase_names`, `phases`, the three
+input calls, `speed_set` and `speed_mode`.
+
+**The seam for part (b).** `seam::Debugger` has the surface `emusen-crystal-debug` gives (§29.30): `attach`,
+`info_changed`, `detach`, `refresh_cheats`, `armed`, `run_frame` (a `Ran`, completed or halted on a processor at an
+address), `frame_end`, `refresh` (after a frame, a halt and a reset; pieces 4 and 5 add the state load and the rewind
+step) and `take_said`, with the recorder's `recording` and `capture`. Each session runs on `NoDebugger`, whose calls do
+nothing. Part (b) fills the points without moving a line of the order.
+
+**Measured on 2026-10-19** [M]:
+- **Parity.** The parity class's two new cases pass, each comparing every answer and then the trees left.
+  - On the test core, 827 answers: every frame's whole `frame_info` (the struct at 100 bytes refused, at 1.0's 104
+    with its later fields left alone, and in full), the picture's hash every third frame, the sound every fourth, in
+    small buffers and large; buttons held and let go, axes past their range, a port pulled out and put back; the speed
+    at 350%, turbo, slow motion, unthrottled with nothing drawn, and normal again; a disc changed and the lid closed by
+    its timer; seven refusals of the controls and the speed; a closed session's calls; a session with single rows.
+  - On the build's eight engines and the PlayStation started empty, 1,559 answers: 120 frames each with the controls
+    moved, the picture and the sound every tenth frame.
+- **Seeded faults**, six of seven caught: the interval rounded instead of truncated (both cases), `rendered` blind to
+  a skipped frame (one), the lid's timer ignored (one), samples answered as frames (both), the draw-none flag ignored
+  (one), and a button never let go (one). The seventh, an axis passed on unclamped, was not caught, because the test
+  core clamps the value it is given; no engine of the build shows the difference.
+- **Allocations.** The crate's `frame_alloc` test drives 1,000 frames of the test core through a runtime after 400 to
+  warm (past the first battery flush, which gives the battery's buffer its size), with `frame`, `picture_copy` and
+  `audio_drain` called as the C layer calls them and a button and an axis moved each frame, and counts no allocation.
+  - The button is port 2's. Port 1's marks the test core's battery changed, and the battery file written on that
+    event is a file's allocations, as in the C#.
+  - Two seeded faults were each caught with 1,000 allocations: the events' scratch made at each drain, and a buffer
+    made in each picture copy. The second needed `black_box`, since an unused vector is elided.
+- **Other tests.** The crate's tests 3, 6 and 1; the platform library's 31 and 4; every case of the parity class, 14 of
+  14.
+
+**P2 at B7**, measured on 2026-10-19 in Release on the v1 test core, the best of five rounds of 20,000 frames, at the
+development scope's CPU weight (`CrystalFrameCostTool`, run with `EMUSEN_CRYSTAL_P2=1`):
+
+| Path | µs a frame | Against RunFrame |
+|---|---:|---:|
+| The C# engine's `RunFrame`, the debugger's refresh and the drain, called directly | 2.573 | — |
+| The C# frame call and drain through its exports | 3.218 | +0.646 |
+| The Rust frame call and drain through its exports | 0.479 | −2.094 |
+
+The Rust frame has no debugger to refresh, where the C# refreshes its providers, so the Rust row is measured again
+once part (b) fills the seam.
+
+**Left, and recorded.**
+- A drive's read-ahead on `MEDIA_SEEK` (`CoreEngine.ReadAhead`) is not in Galaxia's Rust `DiscFiles`. It only fetches
+  pages early and changes no answer.
+- `picture_on_device` is false until piece 7's lend.
+- The `run` and `log` events come with piece 6, rewind's capture with piece 4.
+- The phases' times are compared by count and name only, since they are wall-clock.
+
 ### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
 
 *Part (b) numbers its sections from §29.30, so that part (a)'s pieces, built at the same time, keep §29.16 to §29.29.*

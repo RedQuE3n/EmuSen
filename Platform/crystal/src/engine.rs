@@ -4,7 +4,7 @@
 //! work on.
 
 use std::ffi::CString;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use emusen_core_host::{Create, InputLatch, Library, Machine};
 use emusen_galaxia::disc_set::{DiscFiles, DiscSet};
@@ -18,6 +18,7 @@ use crate::firmware::Entry as Firmware;
 use crate::info::{self, BatteryFile, SystemDetail};
 use crate::machine_info::{self, MachineInfo, SettingDesc};
 use crate::media::{self, Choice, Placement};
+use crate::seam::{Debugger, NoDebugger, Ran};
 
 /// What every machine of the session is made with.
 #[derive(Clone, Copy, Debug, Default)]
@@ -89,7 +90,23 @@ pub struct Engine {
     pub firmware_notice: Option<String>,
     pub media_notice: Option<String>,
     pub notes: Vec<(String, String)>,
-    pub latch: InputLatch,
+    pub latch: Arc<InputLatch>,
+    pub routes: Arc<Mutex<crate::input::Routes>>,
+    pub debug: Box<dyn Debugger>,
+    /// The processor (machine info's id) and address a halt left the frame open at.
+    pub halted: Option<(u32, u32)>,
+    frame_scratch: Vec<u8>,
+    event_scratch: Vec<(u32, i64)>,
+    battery_scratch: Vec<u8>,
+    phase_scratch: Vec<i64>,
+    last_frame_ms: f64,
+    audio_limit_sent: i64,
+    /// The raw encoding asked for (piece 7 sets it), and what was last sent to the machine.
+    pub raw_wanted: Option<String>,
+    raw_asked: Option<String>,
+    raw_current: bool,
+    raw_index: i32,
+    pub picture_on_device: bool,
     said: Mutex<Vec<String>>,
     fresh: bool,
     pub options: Options,
@@ -145,7 +162,21 @@ impl Engine {
             firmware_notice: None,
             media_notice: None,
             notes: Vec::new(),
-            latch: InputLatch::default(),
+            latch: Arc::new(InputLatch::default()),
+            routes: Arc::new(Mutex::new(crate::input::Routes::default())),
+            debug: Box::new(NoDebugger),
+            halted: None,
+            frame_scratch: Vec::new(),
+            event_scratch: Vec::with_capacity(16),
+            battery_scratch: Vec::new(),
+            phase_scratch: vec![0; 32],
+            last_frame_ms: 0.0,
+            audio_limit_sent: -1,
+            raw_wanted: None,
+            raw_asked: None,
+            raw_current: false,
+            raw_index: -1,
+            picture_on_device: false,
             said: Mutex::new(Vec::new()),
             fresh: false,
             options,
@@ -159,6 +190,18 @@ impl Engine {
             log_text: String::new(),
             made: Made::Nothing,
         }
+        .with_routes()
+    }
+
+    fn with_routes(self) -> Engine {
+        self.reroute();
+        self
+    }
+
+    /// The input routes for the machine's info as it now stands, or for no machine.
+    fn reroute(&self) {
+        let routes = crate::input::Routes::of(&self.info, self.machine.as_ref().map(|_| &self.mi));
+        *self.routes.lock().unwrap_or_else(|p| p.into_inner()) = routes;
     }
 
     pub fn claims(&self, bit: u64) -> bool {
@@ -383,6 +426,10 @@ impl Engine {
             self.loans.push((self.mi.drives.first().map_or(0, |d| d.drive), loan));
         }
         self.machine = Some(machine);
+        self.halted = None;
+        if let Some(m) = self.machine.as_mut() {
+            self.debug.attach(m);
+        }
         self.firmware_notice = self.notice_for(asked);
         for line in self.firmware_lines(asked) {
             self.say(line);
@@ -398,7 +445,11 @@ impl Engine {
         self.console = console;
         let axes = self.axes_of();
         self.latch.reset(self.mi.ports.len().max(2), axes);
+        self.reroute();
         self.fresh = true;
+        self.audio_limit_sent = -1;
+        (self.raw_current, self.raw_index) = (false, -1);
+        self.log.clear();
         let skip = self.skip_rendering;
         let run = self.settings_text(false);
         let settings = self.claims(caps::SETTINGS);
@@ -412,6 +463,7 @@ impl Engine {
         self.notes = if notes { m.setting_notes().ok().map(|t| machine_info::notes(&t)).unwrap_or_default() } else { Vec::new() };
         self.drain();
         self.shape = self.machine.as_ref().and_then(|m| m.frame_info().ok()).unwrap_or_default();
+        self.frame_scratch = vec![0; self.shape.bytes as usize];
     }
 
     /// One past the highest axis any controller of the machine's system names.
@@ -464,8 +516,12 @@ impl Engine {
     /// Events after a call that can raise them, `CoreEngine.Drain`.
     pub fn drain(&mut self) {
         let Some(m) = self.machine.as_mut() else { return };
-        let events: Vec<(u32, i64)> = m.events().map(|e| e.iter().map(|e| (e.kind, e.a)).collect()).unwrap_or_default();
-        for (kind, a) in events {
+        let mut events = std::mem::take(&mut self.event_scratch);
+        events.clear();
+        if let Ok(list) = m.events() {
+            events.extend(list.iter().map(|e| (e.kind, e.a)));
+        }
+        for &(kind, a) in &events {
             match kind {
                 event::GEOMETRY => self.shape = self.machine.as_ref().and_then(|m| m.frame_info().ok()).unwrap_or(self.shape),
                 event::AUDIO_RATE => self.audio_rate = a as i32,
@@ -481,9 +537,18 @@ impl Engine {
                         self.shape = m.frame_info().unwrap_or(self.shape);
                     }
                     self.latch.grow(self.mi.ports.len());
+                    self.raw_current = false;
+                    self.reroute();
+                    if let Some(m) = self.machine.as_mut() {
+                        self.debug.info_changed(m);
+                    }
                 }
                 _ => {}
             }
+        }
+        self.event_scratch = events;
+        if self.frame_scratch.len() < self.shape.bytes as usize {
+            self.frame_scratch.resize(self.shape.bytes as usize, 0);
         }
     }
 
@@ -491,20 +556,20 @@ impl Engine {
     pub fn save_sram(&mut self) {
         let dirty = self.claims(caps::BATTERY_DIRTY);
         let Some(m) = self.machine.as_mut() else { return };
-        let mut data = Vec::new();
+        let data = &mut self.battery_scratch;
         for (which, save) in &self.battery {
             if save.path.is_none() {
                 continue;
             }
             data.clear();
-            let Ok(state) = m.battery(*which, &mut data) else { continue };
+            let Ok(state) = m.battery(*which, data) else { continue };
             if data.is_empty() {
                 continue;
             }
             if dirty && state & flags::BATTERY_TRACKED != 0 && state & flags::BATTERY_CHANGED == 0 {
                 continue;
             }
-            if save.write(&data) {
+            if save.write(data) {
                 let _ = m.battery_saved(*which);
             }
         }
@@ -512,6 +577,249 @@ impl Engine {
 
     pub fn total_frames(&self) -> i64 {
         self.machine.as_ref().map_or(0, |m| m.frame_count())
+    }
+
+    /// The audio limit the session was opened with, 128,000 samples where it gave none, `CoreOptions`.
+    fn audio_limit(&self) -> i64 {
+        match self.options.audio_buffer_max_samples {
+            0 => 128_000,
+            n => (n as i64).min(i32::MAX as i64),
+        }
+    }
+
+    fn sync_audio_limit(&mut self) {
+        let limit = self.audio_limit();
+        if self.audio_limit_sent == limit {
+            return;
+        }
+        if let Some(m) = self.machine.as_mut() {
+            let _ = m.set_audio_limit(limit.max(0) as u64);
+        }
+        self.audio_limit_sent = limit;
+    }
+
+    /// The raw encoding sent to the machine before a frame, and only when it changed, `SyncRaw`.
+    fn sync_raw(&mut self) {
+        if self.raw_current && self.raw_wanted == self.raw_asked {
+            return;
+        }
+        let index = match &self.raw_wanted {
+            Some(wanted) => self.mi.raw.iter().take(64).position(|e| e == wanted).map_or(-1, |i| i as i32),
+            None => -1,
+        };
+        if self.claims(caps::RAW_PICTURE)
+            && let Some(m) = self.machine.as_mut()
+        {
+            let _ = m.raw_select(if index < 0 { 0 } else { 1u64 << index });
+        }
+        if self.raw_asked != self.raw_wanted {
+            self.raw_asked.clone_from(&self.raw_wanted);
+        }
+        (self.raw_current, self.raw_index) = (true, index);
+    }
+
+    pub fn set_skip_rendering(&mut self, skip: bool) {
+        self.skip_rendering = skip;
+        if let Some(m) = self.machine.as_mut() {
+            let _ = m.set_options(if skip { flags::OPTION_SKIP_RENDERING } else { 0 });
+        }
+    }
+
+    /// Advance, the frame-end work, present, then the events: the runtime's order, `CoreEngine.RunFrame`.
+    pub fn run_frame(&mut self) -> Result<(), Refused> {
+        if self.machine.is_none() {
+            return Err(Refused::fault("InvalidOperationException: RunFrame() called before LoadRom().".to_string()));
+        }
+        if self.close_lid_at >= 0 && self.total_frames() >= self.close_lid_at {
+            self.set_lid(false)?;
+        }
+        self.fresh = false;
+        if let Some(m) = self.machine.as_mut() {
+            self.debug.refresh_cheats(m);
+        }
+        self.sync_audio_limit();
+        if let Some(m) = self.machine.as_mut() {
+            self.latch.send(m);
+        }
+        self.sync_raw();
+        let start = std::time::Instant::now();
+        if !self.advance_frame()? {
+            self.last_frame_ms = start.elapsed().as_secs_f64() * 1000.0;
+            self.drain();
+            return Ok(());
+        }
+        self.end_frame();
+        if !self.skip_rendering && self.claims(caps::PRESENT) {
+            let name = &self.display_name;
+            let m = self.machine.as_mut().expect("a machine");
+            m.present().map_err(|s| Refused::fault(format!("{name} could not present the picture: {}.", m.words(s as i64))))?;
+        }
+        self.picture_on_device = false;
+        self.last_frame_ms = start.elapsed().as_secs_f64() * 1000.0;
+        self.drain();
+        if self.total_frames() % 60 == 0 {
+            self.drain_log();
+        }
+        Ok(())
+    }
+
+    /// The machine to the frame's end; false is a halt with the frame left open, which skips the frame-end work.
+    fn advance_frame(&mut self) -> Result<bool, Refused> {
+        let resuming = self.halted.take().is_some();
+        let name = &self.display_name;
+        let m = self.machine.as_mut().expect("a machine");
+        let stopped = |m: &Machine, (s, detail): (i32, u64)| Refused::fault(format!("{name} stopped: {} (detail {detail:X}).", m.words(s as i64)));
+        if !resuming && !self.debug.armed() {
+            return match m.advance() {
+                Ok(()) => Ok(true),
+                Err(e) => Err(stopped(m, e)),
+            };
+        }
+        match self.debug.run_frame(m, resuming) {
+            Ok(Ran::Completed) => Ok(true),
+            Ok(Ran::Halted { processor, address }) => {
+                self.halted = Some((processor, address));
+                Ok(false)
+            }
+            Err(e) => Err(stopped(m, e)),
+        }
+    }
+
+    /// The frame-end work in the runtime's order, `CoreEngine.EndFrame`.
+    fn end_frame(&mut self) {
+        let total = self.total_frames();
+        if let Some(m) = self.machine.as_mut() {
+            self.debug.frame_end(m);
+        }
+        if crate::battery::is_flush_frame(total) {
+            self.save_sram();
+        }
+    }
+
+    /// The picture as RGBA8888 into `into`, rows repeated unless the frontend repeats them; the bytes it takes,
+    /// written only when `into` holds them, `CoreEngine.CopyPicture`.
+    pub fn copy_picture(&mut self, into: &mut [u8], repeat_rows: bool) -> Result<usize, Refused> {
+        let Some(m) = self.machine.as_ref() else { return Ok(0) };
+        self.shape = m.frame_info().map_err(|s| Refused::fault(format!("{} could not describe its picture: {}.", self.display_name, m.words(s as i64))))?;
+        let (width, height) = (self.shape.width.max(0) as usize, self.shape.height.max(0) as usize);
+        let stride = if self.shape.stride == 0 { width * 4 } else { self.shape.stride.max(0) as usize };
+        let repeat = if repeat_rows { self.shape.row_repeat.max(1) as usize } else { 1 };
+        let bytes = width * 4 * height * repeat;
+        if into.len() < bytes {
+            return Ok(bytes);
+        }
+        let held = self.shape.bytes.max(0) as usize;
+        if repeat == 1 && stride == width * 4 && held <= into.len() {
+            let _ = m.frame_copy(&mut into[..held]);
+            return Ok(bytes);
+        }
+        if self.frame_scratch.len() < held {
+            self.frame_scratch.resize(held, 0);
+        }
+        let _ = m.frame_copy(&mut self.frame_scratch[..held]);
+        let row = width * 4;
+        for y in 0..height {
+            let from = &self.frame_scratch[y * stride..y * stride + row];
+            for r in 0..repeat {
+                into[(y * repeat + r) * row..(y * repeat + r + 1) * row].copy_from_slice(from);
+            }
+        }
+        Ok(bytes)
+    }
+
+    /// Stereo frames the core holds undrained.
+    pub fn buffered_audio_frames(&self) -> i64 {
+        self.machine.as_ref().map_or(0, |m| m.audio_buffered().clamp(0, i32::MAX as i64) / 2)
+    }
+
+    /// The sound's rate: the machine's last, 44,100 before there is one.
+    pub fn audio_sample_rate(&self) -> i32 {
+        if self.machine.is_none() { 44100 } else { self.audio_rate }
+    }
+
+    /// Whole stereo frames into `into`, allocating nothing; the frames written and their rate, `CoreEngine.DrainAudio`.
+    pub fn drain_audio(&mut self, into: &mut [i16]) -> (usize, i32) {
+        let Some(m) = self.machine.as_mut() else { return (0, self.audio_sample_rate()) };
+        let mut wanted = into.len().min(m.audio_buffered().clamp(0, i32::MAX as i64) as usize);
+        wanted -= wanted & 1;
+        let rate = m.audio_rate();
+        if wanted == 0 {
+            return (0, rate);
+        }
+        let (n, rate) = match m.audio_drain(&mut into[..wanted]) {
+            Ok(done) => done,
+            Err(_) => (0, rate),
+        };
+        self.audio_rate = rate;
+        (n / 2, rate)
+    }
+
+    /// The last frame's phases in milliseconds into `into`, or the whole frame's time where the core times none; how
+    /// many there are, `LastFramePhases` without its allocation.
+    pub fn phases(&mut self, into: &mut [f64]) -> usize {
+        let n = match self.machine.as_ref() {
+            Some(m) if self.lib.claims(caps::PHASES) => {
+                let n = m.phases(&mut []).unwrap_or(0);
+                if self.phase_scratch.len() < n {
+                    self.phase_scratch.resize(n, 0);
+                }
+                if n > 0 { m.phases(&mut self.phase_scratch[..n]).unwrap_or(0).min(n) } else { 0 }
+            }
+            _ => 0,
+        };
+        if n == 0 {
+            if let Some(first) = into.first_mut() {
+                *first = self.last_frame_ms;
+            }
+            return 1;
+        }
+        for (o, v) in into.iter_mut().zip(&self.phase_scratch[..n]) {
+            *o = *v as f64 / 1e6;
+        }
+        n
+    }
+
+    /// The phases' names as `LastFramePhases` gives them.
+    pub fn phase_names(&mut self) -> Vec<String> {
+        let n = self.phases(&mut []);
+        let timed = self.machine.is_some() && self.lib.claims(caps::PHASES) && self.machine.as_ref().and_then(|m| m.phases(&mut []).ok()).unwrap_or(0) > 0;
+        if !timed {
+            return vec!["frame".to_string()];
+        }
+        (0..n).map(|i| self.mi.phases.get(i).cloned().unwrap_or_else(|| format!("phase {i}"))).collect()
+    }
+
+    /// The picture's serial, the frame's where the core gives one.
+    pub fn frame_serial(&self) -> u64 {
+        self.machine.as_ref().and_then(|m| m.frame_info().ok()).map_or(0, |f| f.serial as u64)
+    }
+
+    pub fn frame_rate_hz(&self) -> f64 {
+        if self.machine.is_some() { self.mi.frame_rate_hz() } else { 60.0 }
+    }
+
+    pub fn display_aspect(&self) -> f64 {
+        let s = &self.shape;
+        if s.aspect_num > 0 && s.aspect_den > 0 {
+            s.aspect_num as f64 / s.aspect_den as f64
+        } else if self.machine.is_some() && self.mi.aspect_num > 0 && self.mi.aspect_den > 0 {
+            self.mi.aspect_num as f64 / self.mi.aspect_den as f64
+        } else {
+            0.0
+        }
+    }
+
+    /// The debugger's snapshots refreshed, after a frame, a halt or a reset.
+    pub fn refresh_debugger(&mut self) {
+        if let Some(m) = self.machine.as_mut() {
+            self.debug.refresh(m, self.last_frame_ms);
+        }
+    }
+
+    /// The index in machine info of the processor a halt names, 0 where it names none listed.
+    pub fn halted_index(&self) -> u32 {
+        let Some((processor, _)) = self.halted else { return 0 };
+        self.mi.processors.iter().position(|(id, _)| *id == processor).map_or(0, |i| i as u32)
     }
 
     /// The console's own reset, refused where the core claims none.
@@ -669,6 +977,7 @@ impl Engine {
 
     /// Lets go of the media and the machine.
     pub fn dispose(&mut self) {
+        self.debug.detach();
         self.release_media();
         self.machine = None;
         self.loans.clear();

@@ -209,6 +209,17 @@ namespace EmuSen.Mistress.Scraping
             Changed?.Invoke();
         }
 
+        // The player changed Preferences: a stop for the credentials or the API (403, 423, 426) is lifted, as §4.60 of the settings reference says.
+        public void SettingsChanged()
+        {
+            lock (_gate)
+            {
+                if (_sessionStop is null) return;
+                _sessionStop = null;
+            }
+            Changed?.Invoke();
+        }
+
         public QuotaSnapshot Snapshot()
         {
             QuotaGate gate = Check(out DateTimeOffset? until, out string? why);

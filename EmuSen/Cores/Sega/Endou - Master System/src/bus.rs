@@ -1,17 +1,14 @@
 //! The Z80's bus (Endou_Native.md §9.3, §9.6): the memory map with port $3E's enables, the I/O ports decoded by A7, A6
 //! and A0, and the clock. The bus owns the time: every machine cycle the Z80 reports advances it, and the devices are
 //! brought to it when an access reaches them. The VDP is Beryl's `beryl-sms-vdp`: the 315-5124 or 315-5246 on the
-//! Master System's consoles, the TMS9918A on the SG-1000 (Endou_Native.md §10, §11).
+//! Master System's consoles, the TMS9918A on the SG-1000 (Endou_Native.md §10, §11); the PSG is `sound`'s.
 
 use beryl_sms_vdp::Vdp;
-use beryl_sn76489::Sn76489;
 
 use crate::cart::Cartridge;
 use crate::io::Io;
 use crate::model::Model;
-
-/// The Z80's clock over the PSG's internal one [R SMS Power!'s "SN76489"; `Beryl_SN76489.md` §2].
-pub const PSG_DIVIDER: u64 = 16;
+use crate::sound::Sound;
 
 /// The VDP's clock, the master clock over five, against the Z80's over fifteen (Endou_Plan.md §5.1).
 pub const VDP_PER_Z80: u64 = 3;
@@ -30,9 +27,7 @@ pub struct Bus {
     pub ram: Vec<u8>,
     pub cart: Cartridge,
     pub io: Io,
-    pub psg: Sn76489,
-    /// The PSG's internal clocks run so far.
-    pub psg_ticks: u64,
+    pub sound: Sound,
     /// Port $3E as last written.
     pub memory_control: u8,
     /// The last byte on the data bus, which an access nothing drives reads on the consoles that float it.
@@ -43,15 +38,14 @@ pub struct Bus {
 }
 
 impl Bus {
-    pub fn new(model: Model, cart: Cartridge, ram: usize, psg: Sn76489, vdp: Vdp) -> Bus {
+    pub fn new(model: Model, cart: Cartridge, ram: usize, sound: Sound, vdp: Vdp) -> Bus {
         Bus {
             model,
             clock: 0,
             ram: vec![0; ram],
             cart,
             io: Io::default(),
-            psg,
-            psg_ticks: 0,
+            sound,
             memory_control: model.memory_control_at_start(),
             data_bus: 0xFF,
             nmi: false,
@@ -97,16 +91,6 @@ impl Bus {
         }
     }
 
-    /// The PSG brought to the present, its output discarded until stage 5 mixes it.
-    fn catch_up_psg(&mut self) {
-        let now = self.clock / PSG_DIVIDER;
-        while self.psg_ticks < now {
-            let n = (now - self.psg_ticks).min(u32::MAX as u64) as u32;
-            self.psg.advance(n, |_, _| {});
-            self.psg_ticks += n as u64;
-        }
-    }
-
     /// The VDP brought to the present.
     fn catch_up_vdp(&mut self) {
         self.vdp.run(self.clock * VDP_PER_Z80);
@@ -114,7 +98,7 @@ impl Bus {
 
     /// The machine's end: every device at the bus's time.
     pub fn settle(&mut self) {
-        self.catch_up_psg();
+        self.sound.run(self.clock);
         self.catch_up_vdp();
     }
 
@@ -159,15 +143,12 @@ impl Bus {
                     }
                 }
             }
-            1 => {
-                self.catch_up_psg();
-                self.psg.write(v);
-            }
+            1 => self.sound.write(v, self.clock),
             2 => {
                 self.catch_up_vdp();
                 if port & 1 != 0 { self.vdp.write_control(v) } else { self.vdp.write_data(v) }
             }
-            // Ports $C0-$FF take no write before stage 9's FM.
+            // Ports $C0-$FF take no write: with no FM unit, $F0-$F2 are nothing (Endou_Native.md §12.4, D-13).
             _ => {}
         }
     }
@@ -234,13 +215,13 @@ impl beryl_z80::Bus for Bus {
 mod tests {
     use super::*;
     use crate::board::{Board, Mapper, SEGA_RAM, Why};
-    use beryl_sn76489::Variant;
+    use beryl_sn76489::{Sn76489, Variant};
     use beryl_z80::Bus as _;
 
     fn bus(model: Model, mapper: Mapper, rom: Vec<u8>) -> Bus {
         let ram = if model == Model::Sg1000 { 0x400 } else { 0x2000 };
         let board = Board { mapper, ram: if mapper == Mapper::Sega { SEGA_RAM } else { 0 }, battery: false, why: Why::Size };
-        Bus::new(model, Cartridge::new(board, rom), ram, Sn76489::new(Variant::SEGA), Vdp::new(beryl_sms_vdp::Variant::SMS2, false))
+        Bus::new(model, Cartridge::new(board, rom), ram, Sound::new(Sn76489::new(Variant::SEGA), 53_693_175, 15), Vdp::new(beryl_sms_vdp::Variant::SMS2, false))
     }
 
     #[test]
@@ -296,7 +277,7 @@ mod tests {
         b.output(0x7F, 0x9F);
         assert_eq!(b.clock - t, 4);
         b.output(0x40, 0x8F);
-        assert_ne!(b.psg, Sn76489::new(Variant::SEGA), "the PSG is written through any port $40-$7F");
+        assert_ne!(b.sound.psg, Sn76489::new(Variant::SEGA), "the PSG is written through any port $40-$7F");
     }
 
     #[test]
@@ -315,6 +296,6 @@ mod tests {
         assert_eq!((s1.acknowledge(), b.acknowledge()), (0x5A, 0xFF), "a write leaves its byte on the bus the first Master System floats");
         b.clock = 1000;
         b.settle();
-        assert_eq!(b.psg_ticks, 1000 / 16);
+        assert_eq!(b.sound.ticks, 1000 / 16);
     }
 }

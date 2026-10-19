@@ -49,5 +49,8 @@ against clocking one tick at a time over 50,000 ticks, outputs and state alike.
 
 - The discrete chip's behaviour at half-period 0, and its power-on registers (the document reports a discrete chip
   starting with a tone), are not modelled; the crate starts as Sega's copy does, silent.
+- *Since 2026-10-19 Endou sounds both variants* (`Endou_Native.md` §12): the two registers' periodic noise measured
+  from its output, 16 shifts on the Master System's consoles and 15 on the SG-1000, and two of five references found
+  to tell them apart the same way (`Endou_Disputes.md` D-0). Nothing in the crate changed.
 - The chip's analogue imperfections (the decay of a held level that the document describes) are not modelled; the
   Genesis's are its board's, which Nephrite's later steps take up.

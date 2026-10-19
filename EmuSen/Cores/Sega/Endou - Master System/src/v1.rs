@@ -160,7 +160,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sega Master System and the SG-1000 in Rust, written from hardware documents and graded by test programs. At this stage it runs the processor, the cartridge's board, the controllers and the video chips of the Master System and the SG-1000, with silence until the sound chip is wired.".into()),
+            description: Some("The Sega Master System and the SG-1000 in Rust, written from hardware documents and graded by test programs. At this stage it runs the processor, the cartridge's board, the controllers, the video chips and the sound chip of the Master System and the SG-1000; the FM unit is not yet built.".into()),
             systems: vec![
                 system("sms", "Sega Master System / Mark III", ".sms", pad(SMS_PAD, "Control Pad", 8)),
                 system("sg1000", "Sega SG-1000", ".sg", pad(SG1000_PAD, "Joystick", 7)),
@@ -240,19 +240,19 @@ impl Core for Machine {
     }
 
     fn audio_buffered(&self) -> usize {
-        self.silence * 2
+        self.audio.len()
     }
 
     fn drain_audio(&mut self, out: &mut [i16], max_frames: usize) -> usize {
-        let frames = self.silence.min(max_frames).min(out.len() / 2);
-        out[..frames * 2].fill(0);
-        self.silence -= frames;
-        frames * 2
+        self.audio.drain(out, max_frames)
     }
 
     fn set_audio_limit(&mut self, samples: usize) {
-        self.audio_limit = samples;
-        self.silence = self.silence.min(samples / 2);
+        self.audio.set_limit(samples);
+    }
+
+    fn peek_audio(&self, out: &mut [i16]) -> usize {
+        self.audio.peek(out)
     }
 
     fn set_buttons(&mut self, port: u32, mask: u32, changed: u32) -> Result<(), i32> {
@@ -337,7 +337,7 @@ mod tests {
     }
 
     #[test]
-    fn a_frame_is_black_and_silent_at_the_output_rate() {
+    fn a_quiet_cartridge_is_black_and_silent_at_the_output_rate() {
         let mut m = create(&cartridge(0x8000, 4), &[]).unwrap();
         let mut out = vec![1i16; 4000];
         let mut total = 0;
@@ -347,7 +347,8 @@ mod tests {
             assert!(out[..n].iter().all(|&s| s == 0));
             total += n / 2;
         }
-        assert_eq!(total as u128, AUDIO_RATE as u128 * 60 * NTSC_FRAME.1 as u128 / NTSC_FRAME.0 as u128);
+        let want = AUDIO_RATE as f64 * 60.0 * NTSC_FRAME.1 as f64 / NTSC_FRAME.0 as f64;
+        assert!((total as f64 - want).abs() < 2.0, "{total} for {want}");
         assert_eq!(m.audio_buffered(), 0);
     }
 
@@ -427,7 +428,7 @@ mod tests {
         assert_eq!([on(&export, "auto"), on(&export, "sg1000"), on(&export, "sms1"), on(&export, "mark3")], [Model::Sms2, Model::Sms2, Model::Sms1, Model::MarkIII]);
         let mark3 = create(&sg, &[(MODEL_KEY, "mark3")]).unwrap();
         let info = mark3.machine_info();
-        assert_eq!((info.system.as_str(), mark3.bus.ram.len(), mark3.bus.vdp.variant, mark3.bus.psg.variant), ("sg1000", 0x2000, beryl_sms_vdp::Variant::SMS1, beryl_sn76489::Variant::SEGA));
+        assert_eq!((info.system.as_str(), mark3.bus.ram.len(), mark3.bus.vdp.variant, mark3.bus.sound.psg.variant), ("sg1000", 0x2000, beryl_sms_vdp::Variant::SMS1, beryl_sn76489::Variant::SEGA));
         assert!(info.spaces.iter().any(|s| s.name == "CRAM"), "the Mark III has CRAM");
     }
 

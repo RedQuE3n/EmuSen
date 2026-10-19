@@ -118,10 +118,67 @@ fn an_sg_1000_ram_board_mirrors_its_ram_through_the_slot() {
 #[test]
 fn the_psg_is_written_through_its_ports_and_the_vdp_s_counter_and_status_read() {
     let mut m = machine(image(&images::PSG), Model::Sms2);
-    let fresh = m.bus.psg.clone();
+    let fresh = m.bus.sound.psg.clone();
     frames(&mut m, 1);
-    assert_ne!(m.bus.psg, fresh);
+    assert_ne!(m.bus.sound.psg, fresh);
     assert_eq!(&m.bus.ram[..2], [0xFF, 0x1F], "the frame's first line reads $FF; no flag, and the undriven bits high");
+}
+
+/// The sound a program makes over `n` frames, one side, at the output rate.
+fn sound_of(m: &mut Machine, n: usize) -> Vec<f64> {
+    let mut out = vec![0i16; 4096];
+    let mut left = Vec::new();
+    for _ in 0..n {
+        m.advance();
+        let k = m.audio.drain(&mut out, usize::MAX);
+        left.extend(out[..k].iter().step_by(2).map(|&s| s as f64));
+    }
+    left
+}
+
+/// The amplitude of the frequency `f` over `x` at the output rate, its mean removed, under a Hann window.
+fn amplitude(x: &[f64], f: f64) -> f64 {
+    let (mean, len) = (x.iter().sum::<f64>() / x.len() as f64, x.len() as f64);
+    let (mut re, mut im) = (0.0, 0.0);
+    for (n, &v) in x.iter().enumerate() {
+        let w = 0.5 - 0.5 * (2.0 * std::f64::consts::PI * n as f64 / len).cos();
+        let a = 2.0 * std::f64::consts::PI * f * n as f64 / crate::sound::RATE as f64;
+        re += (v - mean) * w * a.cos();
+        im += (v - mean) * w * a.sin();
+    }
+    4.0 * (re * re + im * im).sqrt() / len
+}
+
+/// D-0 on each console, by the voices program's periodic noise at rate 0: the shift register's period is 16 shifts on
+/// Sega's PSG, a fundamental of 3,579,545 / 16 / 32 / 16 = 436.9 Hz, and 15 on the SG-1000's discrete chip, 466.1 Hz.
+/// The program's first voice, tone 0 at $0FE, is 440.4 Hz on every console.
+#[test]
+fn each_console_s_psg_sounds_its_own_periodic_noise() {
+    for (model, discrete) in [(Model::MarkIII, false), (Model::Sms1, false), (Model::Sms2, false), (Model::Sg1000, true)] {
+        let rom = image(if model == Model::Sg1000 { &images::VOICES_SG } else { &images::VOICES });
+        let mut m = machine(rom, model);
+        let x = sound_of(&mut m, 240);
+        let second = |k: usize| &x[k * 48_000 + 9_600..k * 48_000 + 38_400];
+        let tone = amplitude(second(0), 440.4);
+        assert!((tone / 2607.6 - 1.0).abs() < 0.01, "{model:?}: the tone's fundamental {tone}");
+        let (sega, sg) = (amplitude(second(3), 436.9), amplitude(second(3), 466.1));
+        let (strong, weak) = if discrete { (sg, sega) } else { (sega, sg) };
+        assert!(strong > 400.0 && weak < strong / 100.0, "{model:?}: 436.9 Hz {sega}, 466.1 Hz {sg}");
+    }
+}
+
+/// With no FM unit the detection finds none (SMS Power!'s "FM Chip Detection"): with the I/O chip off each read of $F2
+/// is the console's undriven bus, $FF on the Master System II and the instruction's last byte, $F2, on the others, so
+/// no read matches; writes to $F0-$F2 leave the PSG sounding (Endou_Native.md §12.4, D-13).
+#[test]
+fn the_fm_unit_s_ports_are_nothing_without_it() {
+    for (model, read) in [(Model::MarkIII, 0xF2), (Model::Sms1, 0xF2), (Model::Sms2, 0xFF)] {
+        let mut m = machine(image(&images::FM), model);
+        let x = sound_of(&mut m, 60);
+        assert_eq!((m.bus.ram[0], m.bus.ram[1]), (0, 0), "{model:?}: no match, no FM");
+        assert_eq!(&m.bus.ram[0x10..0x17], [read; 7], "{model:?}");
+        assert!(amplitude(&x[12_000..], 440.4) > 2_500.0, "{model:?}: the tone still sounds");
+    }
 }
 
 /// ZEXDOC and ZEXALL for the Master System (`Endou_References.md` §2), found through `EMUSEN_ENDOU_CORPUS`

@@ -20,7 +20,10 @@ Master System is the next new console, ahead of the PlayStation 2; building star
   against the references, the state's version 3, the kit, the seeded faults, and the questions before stage 4. Stage 4
   (§11, 2026-10-19): the TMS9918's modes, the TMS9918A and the SG-1000 as a modelled console with the Mark III as its
   second model, the 315-5124's boosted blue, Nephrite moved onto the shared composition, the library's SG-1000 games
-  against the references, SMS_MiSTer under GHDL, the seeded faults, and the questions before stage 5.
+  against the references, SMS_MiSTer under GHDL, the seeded faults, and the questions before stage 5, decided 2026-10-19.
+  Stage 5 (§12, 2026-10-19): the PSG mixed and resampled in both variants, port `$F2` with no FM unit, the voices,
+  sound test programs and library games against the references' audio, no allocation on the audio path, the state's
+  version 5, the seeded faults, SMS_MiSTer's dispute step weighed and left, and the questions before stage 6.
 - [`Endou_References.md`](Endou_References.md) — the documents, test programs, references and referees with their URL,
   version, licence and SHA-256, as stage 1 fetched and pinned them, the corrections to what stage 0 recalled, and GHDL
   (stage 4).
@@ -29,7 +32,8 @@ Master System is the next new console, ahead of the PlayStation 2; building star
   Mark III's TH), D-4 (port `$3E` and the undriven reads) and D-5 (Codemasters' slots), each argued; stage 3 added D-6
   (the 315-5124's zoom), D-7 (the fine scroll's first pixels), D-8 (the access slots, open) and D-9 (the line's
   timing, measured by FluBBa's test); stage 4 settled D-1 by the tester's decision and added D-10 (four sprites a line
-  in the TMS9918's modes), D-11 (the TMS9918A's colours) and D-12 (its 4K mode), each argued.
+  in the TMS9918's modes), D-11 (the TMS9918A's colours) and D-12 (its 4K mode), each argued; stage 5 measured D-0 on
+  the output and added D-13 (the audio control port with no FM unit), argued.
 
 The CPU, its assembler, the PSG and the VDP are documented with their crates in [`../Beryl-HW/`](../Beryl-HW/) (Beryl Hardware). The Game
 Gear's pages, when its stages start, go in [`../Jadeite - Game Gear/`](../Jadeite%20-%20Game%20Gear/).

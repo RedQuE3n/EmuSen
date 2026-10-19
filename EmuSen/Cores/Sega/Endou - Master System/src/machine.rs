@@ -1,10 +1,11 @@
-//! The machine (Endou_Native.md §9.6, §10, §11): Beryl's Z80 on the bus, run a frame of the master clock at a time, the
-//! Pause button's edge on NMI at the frame's start, the VDP's picture in the console's colours, and the spaces a host
-//! reads. No sound is made before stage 5.
+//! The machine (Endou_Native.md §9.6, §10, §11, §12): Beryl's Z80 on the bus, run a frame of the master clock at a time,
+//! the Pause button's edge on NMI at the frame's start, the VDP's picture in the console's colours, the PSG's samples
+//! queued for the host, and the spaces a host reads.
 
 use beryl_sms_vdp::Vdp;
 use beryl_sn76489::Sn76489;
 use beryl_z80::Z80;
+use emusen_native::samples::SampleQueue;
 
 use crate::board::{Board, identify};
 use crate::bus::Bus;
@@ -12,6 +13,7 @@ use crate::cart::Cartridge;
 use crate::io::PAUSE;
 use crate::media::{Console, Market, Media};
 use crate::model::Model;
+use crate::sound::Sound;
 
 pub const RAM_ID: u32 = 1;
 pub const VRAM_ID: u32 = 2;
@@ -21,8 +23,8 @@ pub const CARTRAM_ID: u32 = 5;
 
 pub const CRAM: usize = 32;
 
-/// The output rate, at which the silence is made; the mix resamples to it from stage 5.
-pub const AUDIO_RATE: i32 = 48_000;
+/// The output rate (`sound::RATE`).
+pub const AUDIO_RATE: i32 = crate::sound::RATE as i32;
 
 /// Z80 clocks a line, and lines a frame [D: `msvdp.txt` §1; Endou_Plan.md §5.1].
 pub const LINE: u64 = 228;
@@ -54,9 +56,8 @@ pub struct Machine {
     pub height: u32,
     pub skip: bool,
     pub pads: [u32; 2],
-    /// Silent stereo frames made and not yet drained, and the bound on them in samples.
-    pub silence: usize,
-    pub audio_limit: usize,
+    /// The samples made and not yet drained, the oldest dropped past the host's limit.
+    pub audio: SampleQueue,
 }
 
 impl Machine {
@@ -68,9 +69,11 @@ impl Machine {
     }
 
     pub fn with_board(media: Media, market: Market, model: Model, board: Board, rom: Vec<u8>) -> Machine {
-        let psg = Sn76489::new(model.psg());
-        let vdp = Vdp::new(model.vdp(), market == Market::Europe);
-        let bus = Bus::new(model, Cartridge::new(board, rom), model.ram(), psg, vdp);
+        let pal = market == Market::Europe;
+        let (num, _) = if pal { PAL_FRAME } else { NTSC_FRAME };
+        let sound = Sound::new(Sn76489::new(model.psg()), num, 15);
+        let vdp = Vdp::new(model.vdp(), pal);
+        let bus = Bus::new(model, Cartridge::new(board, rom), model.ram(), sound, vdp);
         Machine {
             media,
             market,
@@ -83,8 +86,7 @@ impl Machine {
             height: HEIGHT,
             skip: false,
             pads: [0; 2],
-            silence: 0,
-            audio_limit: usize::MAX,
+            audio: SampleQueue::default(),
         }
     }
 
@@ -155,15 +157,9 @@ impl Machine {
         })
     }
 
-    /// The stereo frames of silence frame `n` makes, so that every frame's count sums to the rate exactly.
-    pub fn samples_in(&self, n: i64) -> usize {
-        let (num, den) = self.frame_rate();
-        let upto = |k: i64| (AUDIO_RATE as u128 * k as u128 * den as u128 / num as u128) as usize;
-        upto(n + 1) - upto(n)
-    }
-
     /// One frame: the pads latched and a Pause press made an NMI edge at its start, then the Z80 run until the bus's
-    /// clock passes the frame's end, the overshoot carried into the next frame, and the VDP's picture taken.
+    /// clock passes the frame's end, the overshoot carried into the next frame, the VDP's picture taken and the sound's
+    /// samples up to the bus's clock queued.
     pub fn advance(&mut self) {
         self.bus.vdp.skip = self.skip;
         let pause = self.pads[0] as u8 & PAUSE != 0;
@@ -180,7 +176,8 @@ impl Machine {
         if !self.skip {
             self.take_picture();
         }
-        self.silence = (self.silence + self.samples_in(self.frames)).min(self.audio_limit / 2);
+        let audio = &mut self.audio;
+        self.bus.sound.take(self.bus.clock, |l, r| audio.push_pair(l, r));
         self.frames += 1;
     }
 
@@ -304,19 +301,26 @@ mod tests {
         assert_eq!((machine(&cartridge(0x8000, 4), Market::Americas).frame_clocks(), machine(&cartridge(0x8000, 4), Market::Europe).frame_clocks()), (59_736, 71_364));
     }
 
+    /// Ten seconds of frames make ten seconds of samples, to the one the synthesiser holds back and the instruction a
+    /// frame overruns by; the queue's bound drops the oldest.
     #[test]
-    fn a_seconds_frames_make_a_seconds_silence_exactly() {
+    fn a_seconds_frames_make_a_seconds_samples() {
         for market in [Market::Americas, Market::Europe] {
             let mut m = machine(&cartridge(0x8000, 4), market);
             let (num, den) = m.frame_rate();
             let frames = (num * 10 / den) as i64;
-            let made: usize = (0..frames).map(|n| m.samples_in(n)).sum();
-            assert_eq!(made as u128, AUDIO_RATE as u128 * frames as u128 * den as u128 / num as u128);
-            assert!((800..=966).contains(&m.samples_in(0)), "{}", m.samples_in(0));
-            m.audio_limit = 1000;
+            let mut made = 0usize;
+            let mut out = vec![0i16; 4096];
+            for _ in 0..frames {
+                m.advance();
+                made += m.audio.drain(&mut out, usize::MAX) / 2;
+            }
+            let want = AUDIO_RATE as f64 * frames as f64 * den as f64 / num as f64;
+            assert!((made as f64 - want).abs() < 2.0, "{made} for {want}");
+            m.audio.set_limit(1000);
             m.advance();
             m.advance();
-            assert_eq!(m.silence, 500, "the bound drops the oldest");
+            assert_eq!(m.audio.len(), 1000, "the bound drops the oldest");
         }
     }
 
@@ -327,7 +331,7 @@ mod tests {
         assert_eq!([RAM_ID, VRAM_ID, CRAM_ID, ROM_ID].map(|i| sms.space(i).unwrap().len()), [0x2000, 0x4000, 32, 0x8000]);
         let sg = machine(&[0x00; 0x2000], Market::Japan);
         assert_eq!(sg.spaces().iter().map(|s| (s.1, sg.space(s.0).unwrap().len())).collect::<Vec<_>>(), [("RAM", 0x400), ("VRAM", 0x4000), ("ROM", 0x2000)]);
-        assert_eq!((sms.bus.psg.variant, sg.bus.psg.variant), (beryl_sn76489::Variant::SEGA, beryl_sn76489::Variant::DISCRETE));
+        assert_eq!((sms.bus.sound.psg.variant, sg.bus.sound.psg.variant), (beryl_sn76489::Variant::SEGA, beryl_sn76489::Variant::DISCRETE));
         assert!(sms.frame_bytes().chunks(4).all(|p| p == [0, 0, 0, 255]) && sms.frame_bytes().len() == 256 * 192 * 4);
         assert_eq!(sms.cpu.regs, Z80::power_on().regs);
         let big = machine(&cartridge(0x20000, 4), Market::Americas);

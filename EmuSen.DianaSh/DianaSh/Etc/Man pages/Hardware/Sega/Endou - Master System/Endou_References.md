@@ -79,7 +79,7 @@ its program, as a test's source says what it expects. Licences are as the page o
 | *YM2413 TestRom* | JoppyFurr | 1.00, 2024-03-27 | **MIT** (`LICENSE.txt`) | included | the OPLL, stage 9 | `15b3f259cc96719219e5ebd539ce4fc757ad0979332623275cc954b085342d19` |
 | *Sega Master System YM2413 FM Tool* | ccovell | 1.00, 2015-03-27 | none stated | included | the OPLL's registers by hand | `514d06d9b3d760491616fa9bd0f85ac4d107b32ca571c0252aa802ec30e7583a` |
 | *Sega Master System 48KB Test* | ichigo | 1, 2021-03-14 | none stated | not stated | a 48 KiB board | `42ef6ae564f0dee2b0f217caf002c123449371f94e6d4879148f1bcc49f78bf8` |
-| *PFR Detect* | Eric R. Quinn | 2.00, 2001-03-20 | none stated | included | FM detection by the audio control port | `dda8ae7e52f81484eb3950ea7c82f077454e0f16a8337fb2f575cb489a6ba351` |
+| *PFR Detect* | Eric R. Quinn | 2.00, 2001-03-20 | none stated | included | ~~FM detection by the audio control port~~ the paging registers ("determines the system's currently available paging capabilities", its source; corrected at stage 5) | `dda8ae7e52f81484eb3950ea7c82f077454e0f16a8337fb2f575cb489a6ba351` |
 
 **The search, with its negative results** [M the homebrew index's `Technical` and `Tool` listings and web searches]:
 no self-grading suite like AccuracyCoin for the Master System; FluBBa's *SMS VDP Test* and ZEXALL report on screen,
@@ -188,6 +188,18 @@ MacDonald's `sc3000h` §1-§7 and `msvdp` §4-§7, §10, §13-§15 again, Guttag
 and SMS Power!'s "Palette", "SMS1/SMS2 VDPs", "GG VDP", "VDP Registers", "Sprites" and "I/O Port Map - SG-1000". Run on
 Endou and on the five references through the probe: the program `tms.s` on the SG-1000 and Mark III settings, and the
 library's 54 SG-1000 images, read in place, on both (`Endou_Native.md` §11.10).
+
+## 6d. Used at stage 5 (2026-10-19)
+
+Nothing was fetched. Read from the stage 1 fetch: MacDonald's `smstech` §1, §3, §4 and §7; the PSG and memory enables
+sections of Sega's Mark III manual; SMS Power!'s "Audio Control Port", "FM Chip Detection", "Sound", "Port $3E", "I/O
+Port Map - SMS", "Game Gear Stereo" and "YM2413"; JoppyFurr's *SN76489 TestRom* `main.c` for its controls, the *SMS
+Sound Test*'s readme, and *PFR Detect*'s source's opening and strings, which showed it a paging test (§2). Run on Endou
+and on the five references through the probe, recording their audio (`--wav`): the programs `voices.s` (on both
+systems), the *SMS Sound Test* and both *SN76489 TestRom*s with pad presses, and eleven of the library's games read in
+place, the references' FM units pinned off with `genesis_plus_gx_ym2413=disabled`, `gearsystem_ym2413=Disabled` and
+`smsplus_fm_sound=disabled` (`Endou_Native.md` §12.6). Of SMS_MiSTer, GHDL's messages on analysing its `rtl/`, which
+printed two lines of it (`Endou_Native.md` §12.13), and the names of the files in `rtl/jt89/`.
 
 ## 7. What was read for this page
 

@@ -38,6 +38,13 @@ by the region setting, with no per-game table; MAME is not used, as a reference 
 MercuryRT and Nephrite keep their own system rules, routing being left to a separate piece of work. The go for stage 4
 came with them.
 
+**Decided by the tester, 2026-10-19, on stage 4's questions** (`Endou_Native.md` §11.15), each as recommended: a
+Nephrite dispute step asks the board about the 315-5313's right-column lock the next time Nephrite is worked on; a
+logged dispute step may write stand-ins for SMS_MiSTer's `altera_mf` memory blocks so that it runs under GHDL as a
+black-box referee for D-6, D-7, D-8 and Space Harrier's opening, reading only the entity interfaces the stand-ins need,
+optional within stage 5; the SG-1000 stays the default model for SG-1000 games, the Mark III offered; and the SG-1000
+gets its own shelf (stage 7). The go for stage 5 came with them.
+
 Every claim carries one of six marks:
 
 - **[M]** *measured* on 2026-10-19, with the tool named. Nothing was run to write this page beyond listings, the local
@@ -650,9 +657,9 @@ before the next begins. The core carries the `InDevelopment` mark from stage 1 u
 | **2** | *Built 2026-10-19, `Endou_Native.md` §9.* The machine without its picture: the bus, RAM, `$3E`, `$3F`, the controller ports, the region read-back, the Pause NMI and the Reset bit; cartridges (plain, Sega's mapper with its RAM, Codemasters', the SG-1000's RAM boards) and the board table's form; the battery form (§4.4); the scheduler on the master clock; `beryl-z80`'s assembler | Synthetic programs for each port, mapper and interrupt rule; an SMS-hosted ZEXALL on the whole machine; RAM against the references at anchors on test programs | 3 |
 | **3** | *Built 2026-10-19, `Endou_Native.md` §10.* `beryl-sms-vdp`, mode 4: ports, registers, VRAM and CRAM, the counters and the TH latch, the interrupts, the status flags, the composition with sprites (limits, zoom, tall, collision, overflow), the scroll locks, the mask, the 315-5246's heights, the access slots, the dot-stamped renderer, PAL | The VDP test programs (self-reporting ones by their verdicts); pictures equal to the references up to a colour map, or a dispute; the skip-versus-draw state test | 5 |
 | **4** | *Built 2026-10-19, `Endou_Native.md` §11.* The VDP's TMS9918 modes and the TMS9918A variant; the SG-1000 as a system; **Nephrite moved onto the crate's composition** | SG-1000 programs and cartridges' pictures against the references; **Nephrite's D-7 tests and its corpus digests unchanged** (P4) | 3 |
-| **5** | Sound: the PSG's wiring in both variants, the mix and the resampler, the analogue stage as far as recordings allow, `$F2` with no FM unit | Synthetic voices against the references' audio; recordings if any | 2 |
+| **5** | *Built 2026-10-19, `Endou_Native.md` §12.* Sound: the PSG's wiring in both variants, the mix and the resampler, the analogue stage as far as recordings allow (none: a named loss), `$F2` with no FM unit | Synthetic voices against the references' audio; recordings if any | 2 |
 | **6** | Firmware: `Endou_OpenBoot.md` written first (§5.5); the player's BIOS by region and size, with `md5` from a public description; the open boot program; `starts_empty` for `sms` | **G9**: every bench game with no firmware folder, machine info naming the replacement; the same games on the player's BIOS when given; `firmwarecheck.py` if the tester's images are in the probe cache | 3 |
-| **7** | The Master System to players: the data files completed (`esde_full_name`, `cover_aspect`, `cheat_space`), routing (and `.bin` if the library needs it), the shelf from the pack, scraper ids checked, the codecs (`sms.par`, `sms.gg`), the settings, battery files, states with rewind, the kit in corpus form (`kit/sms-sample.txt`, as Nephrite's `kit/genesis-sample.txt` [R]), the core host's listing, Mistress's settings and its Graphics tab | **G4**: the kit's cases on the tester's games; `.srm` round trips; the fit audit at both sizes; the cheats decode; the sidecar and manifest verified over a publish before any install. The mark is removed only by the tester's decision | 3 |
+| **7** | The Master System to players: the data files completed (`esde_full_name`, `cover_aspect`, `cheat_space`), routing (and `.bin` if the library needs it), the shelf from the pack, scraper ids checked, the codecs (`sms.par`, `sms.gg`), the settings, battery files, states with rewind, the kit in corpus form (`kit/sms-sample.txt`, as Nephrite's `kit/genesis-sample.txt` [R]), the core host's listing, Mistress's settings and its Graphics tab; the SG-1000 on a shelf of its own, its console `"SG-1000"` apart from `"Master System"` (decided 2026-10-19) | **G4**: the kit's cases on the tester's games; a test that `sms` and `sg1000` land on two shelves; `.srm` round trips; the fit audit at both sizes; the cheats decode; the sidecar and manifest verified over a publish before any install. The mark is removed only by the tester's decision | 3 |
 | **8** | The debugger: `Z80` through the observer, registers, disassembly, breakpoints, stepping, watches, coverage, the call stack; the VDP's and PSG's units; the `sms` views module in `emusen-systems` | **G7**: each claim a test; every table armed gives the plain run's digests (C15) | 2 |
 | **9** | The YM2413 and its models (the Japanese Master System, the Mark III with the FM Sound Unit), `$F0`–`$F2`, detection; D-2; the operator ROMs' move if D-2 allows | The referee sample for sample on synthetic voices; FM games against the references' audio; Nephrite's FM tests unchanged if the ROMs move | 4 |
 | **10** | The Paddle, the Sports Pad (axes behind port settings) and the 3-D glasses with their display setting | Test programs and the named games at anchors against the references | 2 |
@@ -816,11 +823,12 @@ console for disputes, is decided in the tester's own terms. "Please continue" wa
 - **P1.** At the gate the desktop mean is at most 0.6 ms a frame on the bench games, and at most 0.9 ms with the OPLL
   after stage 9. *At stage 3 (2026-10-19), with the VDP and without sound: 0.22-0.26 ms on five games, the desktop
   busy [M `Endou_Native.md` §10.7]. At stage 4: 0.19-0.22 ms on three Master System games, 0.18 on two SG-1000 games
-  [M §11.9].*
+  [M §11.9]. At stage 5, with the PSG mixed: 0.20-0.23 ms on three Master System games, 0.18 on an SG-1000 game, the
+  sound 0.005-0.014 ms of it [M §12.8].*
 - **P2.** The Master System and the SG-1000 take 32–42 steps and the Game Gear 4–6; the VDP's stage overruns first.
 - **P3.** At least half the disputes entries fall in §6.2's thin areas, most of them the VDP's access slots and
   interrupt dots. *At stage 3: of D-0 to D-9, D-1, D-2, D-3, D-4, D-6, D-8 and D-9 are in them (the colour levels, the
-  OPLL's ROMs, the region read-back, the decoding, the 315-5124's zoom, the access slots, the interrupt dots).*
+  OPLL's ROMs, the region read-back, the decoding, the 315-5124's zoom, the access slots, the interrupt dots).* *At stage 5: D-13, the audio control port with no FM unit, is in them too.*
 - **P4.** Nephrite's move onto the shared composition leaves its D-7 tests and every corpus digest unchanged. *Retired
   at stage 4 (2026-10-19) as predicted: both D-7 tests pass, the kit's 64 image reports are identical, and 200,000
   random lines drew the same before the old renderer was deleted [M `Endou_Native.md` §11.6].*

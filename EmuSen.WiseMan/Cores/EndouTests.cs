@@ -197,6 +197,41 @@ namespace EmuSen.WiseMan.Cores
                     Assert.Equal(x % 8 < 4 ? ((byte)0xD4, (byte)0x52, (byte)0x4D) : ((byte)0x21, (byte)0xB0, (byte)0x3B), picture.At(x, y));
         }
 
+        // The PSG through the v1 adapter at 48 kHz: a tone's fundamental at 440.4 Hz, 4/pi of its 0-4,096 square's half swing, on both consoles - see Endou_Native.md §12.
+        [Fact]
+        public void The_psg_sounds_a_synthetic_program_s_tone()
+        {
+            var library = CoreLibrary.Open(LibraryPath);
+            foreach (bool sg1000 in new[] { false, true })
+            {
+                using var machine = new CoreMachine(library, SyntheticSmsRom.Tone(sg1000), "", Array.Empty<(uint, byte[])>());
+                var left = new List<double>();
+                for (int frame = 0; frame < 60; frame++)
+                {
+                    machine.Advance();
+                    var (samples, rate) = machine.DrainAudio(4096);
+                    Assert.Equal(48000, rate);
+                    for (int i = 0; i < samples.Length; i += 2)
+                    {
+                        Assert.Equal(samples[i], samples[i + 1]);
+                        left.Add(samples[i]);
+                    }
+                }
+                Assert.InRange(left.Count, 48060, 48064);
+                var second = left.Skip(9600).Take(28800).ToArray();
+                double mean = second.Average(), re = 0, im = 0;
+                for (int n = 0; n < second.Length; n++)
+                {
+                    double w = 0.5 - 0.5 * Math.Cos(2 * Math.PI * n / second.Length), a = 2 * Math.PI * 440.4 * n / 48000;
+                    re += (second[n] - mean) * w * Math.Cos(a);
+                    im += (second[n] - mean) * w * Math.Sin(a);
+                }
+                double amplitude = 4 * Math.Sqrt(re * re + im * im) / second.Length;
+                Assert.InRange(amplitude, 2607.6 * 0.99, 2607.6 * 1.01);
+                Assert.InRange(second.Max() - second.Min(), 4096, 4096 * 1.2);
+            }
+        }
+
         // A developer asking for development cores opens the files; the system packs name the consoles.
         [Fact]
         public void A_cartridge_opens_on_the_discovered_engine_when_development_cores_are_asked_for()
@@ -264,6 +299,8 @@ namespace EmuSen.WiseMan.Cores
                 ("copier.sms", SyntheticSmsRom.WithCopierHeader(SyntheticSmsRom.Cartridge())),
                 ("cartridge.sg", SyntheticSmsRom.Sg1000()),
                 ("tms.sg", SyntheticSmsRom.TmsPicture()),
+                ("tone.sms", SyntheticSmsRom.Tone()),
+                ("tone.sg", SyntheticSmsRom.Tone(sg1000: true)),
             })
             {
                 var start = new ProcessStartInfo(runner) { RedirectStandardOutput = true, RedirectStandardError = true };

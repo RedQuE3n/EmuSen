@@ -33,8 +33,11 @@ pub const SLOTS: Program = program("slots", include_str!("slots.s"), 2);
 pub const PICTURE: Program = program("picture", include_str!("picture.s"), 2);
 pub const H_LATCH: Program = program("hlatch", include_str!("hlatch.s"), 2);
 pub const TMS: Program = Program { header: None, ..program("tms", include_str!("tms.s"), 1) };
+pub const VOICES: Program = program("voices", include_str!("voices.s"), 2);
+pub const VOICES_SG: Program = Program { header: None, ..program("voices-sg", include_str!("voices.s"), 1) };
+pub const FM: Program = program("fm", include_str!("fm.s"), 2);
 
-pub const PROGRAMS: [&Program; 12] = [&PADS, &PAUSE, &REGION, &SEGA, &CODEMASTERS, &PORT_3E, &SG_RAM, &PSG, &SLOTS, &PICTURE, &H_LATCH, &TMS];
+pub const PROGRAMS: [&Program; 15] = [&PADS, &PAUSE, &REGION, &SEGA, &CODEMASTERS, &PORT_3E, &SG_RAM, &PSG, &SLOTS, &PICTURE, &H_LATCH, &TMS, &VOICES, &VOICES_SG, &FM];
 
 pub fn image(p: &Program) -> Vec<u8> {
     let mut rom = vec![0u8; p.banks * 0x4000];

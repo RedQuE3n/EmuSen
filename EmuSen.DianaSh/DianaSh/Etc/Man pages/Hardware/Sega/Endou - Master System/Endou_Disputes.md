@@ -51,6 +51,13 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
 - Pinned by: `beryl-sn76489`'s test of white noise's feedback in both variants (`Beryl_SN76489.md` §3); Endou's
   per-model choice gains its own test at stage 5.
 - Implemented in: `beryl-sn76489` (2026-10-05) for the two registers; Endou's choice at stage 5.
+- *At stage 5 (2026-10-19):* the test program promised above is `programs/voices.s`, its periodic noise at rates 0 and
+  2 and from tone 2, the period read from the output: 16 shifts (436.9 Hz at rate 0) on the Mark III and both Master
+  Systems, 15 (466.1 Hz) on the SG-1000, pinned by `programs::each_console_s_psg_sounds_its_own_periodic_noise`. The
+  references, run as black boxes on the same images: Genesis Plus GX and Gearsystem give the SG-1000's image the 15-bit
+  register and the Master System's the 16-bit one; PicoDrive, BlastEm and SMS Plus GX give both the 16-bit one, modelling
+  no discrete chip (`Endou_Native.md` §12.6). Every reference that tells the consoles apart agrees with the conclusion,
+  which stays argued: they are emulators, and no recording of an SG-1000 was found.
 
 ### D-1. The Master System's colour output: the level at which each value of a CRAM entry's two-bit component is shown
 - Opened: 2026-10-19, at stage 0. `msvdp.txt` §5 gives CRAM's format, `--BBGGRR`, and "up to 64 possible colors",
@@ -326,3 +333,28 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
 - Pinned by: `tms::tests::the_4k_mode_puts_a_row_and_column_of_six_bits_with_the_high_bits_above_them`,
   `tests::the_tms9918a_s_4k_mode_moves_the_cpu_s_cells_and_its_own_alike`, and the program's test.
 - Implemented in: the stage 4 commit.
+
+### D-13. The audio control port with no FM unit: a read of `$F2` is the I/O chip's port, or with the I/O chip off the console's undriven bus; a write does nothing
+- Opened: 2026-10-19, at stage 5, by two documents that disagree in part. MacDonald: "The SMS normally assigns reads
+  from $C0-$FF to the I/O chip. You must disable the I/O chip by setting bit 2 of port $3E if you want to read port $F2
+  to perform YM2413 detection", and "When bit 2 is set, all ports at $C0 through $FF return $FF on a SMS 2, Game Gear,
+  and Genesis. For a SMS, these ports return the last byte of the instruction which read the port" (`smstech` §4, §7).
+  SMS Power!'s "Audio Control Port": "If no YM2413 is present, reading from the audio control port returns varying
+  results. It always returns %10 in the lowermost two bits on a non-japanese SMS. On a Mark III without FM unit, it
+  returns the input from port 0. Writing to the audio control port has no effect if no YM2413 is present."
+- Documents read: those; SMS Power!'s "FM Chip Detection" and "I/O Port Map - SMS" ("$F2 ... depends"); Sega's Mark III
+  manual, "Memory enables" (bit 2, "disable joysticks").
+- Test program: `programs/fm.s`, the detection as "FM Chip Detection" gives it (the I/O chip off, bit 0 written to
+  `$F2` and read back seven times), each read kept, then a tone and writes to `$F2`, `$F0` and `$F1`.
+- Referee: none run. The references' own FM units are on by default in three of them, which is the Japanese console's
+  behaviour, not the one disputed.
+- Conclusion: **argued** for MacDonald's account, which is a measurement of each port range on each export console;
+  SMS Power!'s %10 agrees with it on the first Master System, whose floating bus returns the `IN A,($F2)` instruction's
+  last byte, `$F2`, whose low bits are %10, and its "always" is taken as said of that console, the page naming no
+  model. On the Mark III without the unit, "the input from port 0" is read as port `$DC` with the I/O chip on; with it
+  off, the Mark III floats its bus as the first Master System does (§9.3 of the build record, argued). Either reading
+  of either document finds no FM unit: a read of `$FF` or `$F2` never matches bit 0 written, and port `$DC` with the pad
+  idle reads 7 in its low three bits. Writes to `$F0`-`$F2` do nothing.
+- Pinned by: `programs::the_fm_unit_s_ports_are_nothing_without_it` (each read `$FF` on the Master System II and `$F2` on
+  the Mark III and the first Master System; no FM; the tone sounding after the writes).
+- Implemented in: the stage 5 commit; the bus's decoding is stage 2's, unchanged.

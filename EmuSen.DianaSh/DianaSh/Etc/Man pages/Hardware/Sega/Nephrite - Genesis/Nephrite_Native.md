@@ -4867,3 +4867,8 @@ dependency, `beryl-sms-vdp`, said here as the project's rules ask.
 A fault seeded in the shared composition, the Genesis's fine scroll blanked as the Master System's is, was caught by
 the crate's own test and by none of Nephrite's crate tests: D-7's pictures leave the left five pixels out, where the
 board shows garbage (`Endou_Native.md` §11.12).
+
+**Pending: the right columns' lock on the board.** *Decided 2026-10-19:* the next time Nephrite is worked on, a
+dispute step runs Nuked-MD's board as a black box to learn whether the 315-5313 locks the right columns' vertical
+scroll by the column counter, as MacDonald says of the Master System's chips, or from pixel 192, as `Variant::GENESIS`
+draws it (`Endou_Native.md` §11.15). Until then the rule stays as moved, unmeasured.

@@ -1,7 +1,8 @@
 //! Endou's own state format, "ENDO" (Endou_Plan.md §5.7, Endou_Native.md §9.7, §10.6): the magic, the version, the
-//! console and model, the frame count and the clocks, the Z80's block, the PSG's, the bus's ports and the mapper's
-//! registers, the work RAM, the VDP's block with VRAM and CRAM, then the cartridge's RAM where the board has it.
-//! Version 4 is stage 4's; versions 1 to 3 reached no player and are refused. The layout listing is pinned by a test.
+//! console and model, the frame count and the clocks, the Z80's block, the sound's (the PSG, its clock and the step
+//! synthesiser's pending differences), the bus's ports and the mapper's registers, the work RAM, the VDP's block with
+//! VRAM and CRAM, then the cartridge's RAM where the board has it. Version 5 is stage 5's; versions 1 to 4 reached no
+//! player and are refused. The layout listing is pinned by a test.
 
 use emusen_native::ffi::{StateMachine, Status, status};
 use emusen_native::{StateReader, StateWriter, Truncated};
@@ -10,7 +11,7 @@ use crate::machine::Machine;
 use crate::media::Console;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"ENDO");
-pub const STATE_VERSION: i32 = 4;
+pub const STATE_VERSION: i32 = 5;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StateError {
@@ -57,8 +58,7 @@ impl Machine {
         w.u64("Clock", b.clock);
         w.u64("FrameEnd", self.frame_end);
         w.structure("Cpu", &self.cpu);
-        b.psg.write_state(w);
-        w.u64("PsgTicks", b.psg_ticks);
+        b.sound.write_state(w);
         w.u8("MemoryControl", b.memory_control);
         w.u8("IoControl", b.io.control);
         w.u8("DataBus", b.data_bus);
@@ -95,9 +95,8 @@ impl StateMachine for Machine {
         let (clock, frame_end) = (r.u64()?, r.u64()?);
         let mut cpu = self.cpu.clone();
         emusen_native::State::read_state(&mut cpu, &mut r)?;
-        let mut psg = self.bus.psg.clone();
-        psg.read_state(&mut r)?;
-        let psg_ticks = r.u64()?;
+        let mut sound = self.bus.sound.clone();
+        sound.read_state(&mut r)?;
         let (memory_control, io_control, data_bus) = (r.u8()?, r.u8()?, r.u8()?);
         let (nmi, pause_held) = (r.bool()?, r.bool()?);
         let mut regs = [0u8; 4];
@@ -123,8 +122,7 @@ impl StateMachine for Machine {
         self.pause_held = pause_held;
         let b = &mut self.bus;
         b.clock = clock;
-        b.psg = psg;
-        b.psg_ticks = psg_ticks;
+        b.sound = sound;
         b.memory_control = memory_control;
         b.io.control = io_control;
         b.data_bus = data_bus;
@@ -178,20 +176,22 @@ mod tests {
     }
 
     #[test]
-    fn the_version_4_layout_is_pinned() {
+    fn the_version_5_layout_is_pinned() {
         let m = machine(&cartridge(0x8000, 4));
         let layout = m.layout();
         let lines: Vec<&str> = layout.lines().collect();
         assert_eq!(&lines[..7], ["0 4 u32 Magic", "4 4 i32 Version", "8 1 u8 Console", "9 1 u8 Model", "10 8 i64 Frames", "18 8 u64 Clock", "26 8 u64 FrameEnd"]);
+        let sound = lines.iter().position(|l| l.ends_with(" Tone")).unwrap();
+        assert_eq!(&lines[sound..sound + 10], ["69 6 u16[3] Tone", "75 4 u8[4] Volume", "79 3 u8[3] NoiseLatchStereo", "82 8 u16[4] Counter", "90 4 bool[4] Bit", "94 2 u16 Shift", "96 8 u64 PsgTicks", "104 8 i32[2] Level", "112 24 u64[3] Sum", "136 1024 u64[128] Pending"], "{layout}");
         let at = lines.iter().position(|l| l.ends_with(" RAM")).unwrap();
-        assert_eq!(&lines[at..at + 5], ["125 8192 u8[8192] RAM", "8317 1 u8 VdpVariant", "8318 2 bool[2] PalGgMode", "8320 11 u8[11] VdpRegisters", "8331 16384 u8[16384] Vram"], "{layout}");
-        assert_eq!(lines[at + 5], "24715 64 u8[64] Cram");
-        assert_eq!(lines.last(), Some(&"24874 7 u8[7] Sprite"));
-        assert_eq!(m.state_size(), 24_881);
+        assert_eq!(&lines[at..at + 5], ["1181 8192 u8[8192] RAM", "9373 1 u8 VdpVariant", "9374 2 bool[2] PalGgMode", "9376 11 u8[11] VdpRegisters", "9387 16384 u8[16384] Vram"], "{layout}");
+        assert_eq!(lines[at + 5], "25771 64 u8[64] Cram");
+        assert_eq!(lines.last(), Some(&"25930 7 u8[7] Sprite"));
+        assert_eq!(m.state_size(), 25_937);
         let sg = machine(&[0u8; 0x2000]);
-        assert_eq!(sg.state_size(), 24_881 - 0x2000 + 0x400);
+        assert_eq!(sg.state_size(), 25_937 - 0x2000 + 0x400);
         let big = machine(&cartridge(0x20000, 4));
-        assert_eq!(big.state_size(), 24_881 + 0x8000, "a board with RAM keeps it");
+        assert_eq!(big.state_size(), 25_937 + 0x8000, "a board with RAM keeps it");
     }
 
     // The kit's C7 found a plain 32 KiB board's state refused by a fresh machine (Endou_Native.md §9.12).
@@ -218,14 +218,14 @@ mod tests {
         a.bus.cart.write(0x8000, 0x77);
         a.bus.io.control = 0x55;
         a.cpu.regs.pc = 0x0038;
-        a.bus.psg.write(0x9F);
+        a.bus.sound.write(0x9F, a.bus.clock);
         let mut s = vec![0; a.state_size()];
         a.save_state(&mut s).unwrap();
         let mut b = machine(&image);
         b.load_state(&s).unwrap();
         assert_eq!((b.frames, b.bus.ram[5], b.bus.vdp.vram[0x3FFF], b.cpu.regs.pc, b.bus.clock), (1, 0x5A, 0xA5, 0x0038, a.bus.clock));
         assert_eq!((b.bus.cart.regs, b.bus.cart.slots, b.space(CARTRAM_ID).unwrap()[0], b.bus.io.control), (a.bus.cart.regs, a.bus.cart.slots, 0x77, 0x55));
-        assert_eq!(b.bus.psg, a.bus.psg);
+        assert_eq!(b.bus.sound.psg, a.bus.sound.psg);
 
         let before = b.space(RAM_ID).unwrap().to_vec();
         assert_eq!(b.load_state(&s[..s.len() - 1]).unwrap_err().status(), status::TRUNCATED);

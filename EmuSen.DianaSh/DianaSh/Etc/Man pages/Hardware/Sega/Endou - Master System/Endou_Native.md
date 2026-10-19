@@ -655,6 +655,8 @@ without it:
   (the routine itself over a table of literal and repeated runs, with an interrupt counting the frames) give the same
   count on Endou and on every reference; the cycles a frame are equal too (1,659 polls of the frame flag on each). The
   cause is not found; the goldens' stage (G5) takes it with the commercial games' anchors.
+  *At stage 5 (2026-10-19):* BlastEm, not among the four, plays Space Harrier's sound on Endou's course, matching it at
+  lag 0, while the four keep theirs (§12.6).
 - **The fine scroll's first pixels** (D-7) and **the access slots** (D-8) are argued.
 - **A mid-line write's dot** is the dot of the write; the chip's fetch pipeline, which runs ahead of its pixels, is not
   modelled (`Beryl_SmsVdp.md` §5).
@@ -915,3 +917,247 @@ crate; Nephrite's `render.rs` and `pictures.rs`, its D-7 and `Nephrite_Native.md
 3. **The SG-1000's default model** stays the SG-1000, and the Mark III is offered: is the setting's wording right for the
    tester's front end? Recommended: as built.
 4. **Stage 5** (sound) as the plan has it, the PSG's wiring in both variants and the mix. Recommended: the go.
+
+*Decided 2026-10-19 by the tester: each of the four as recommended.* The go for stage 5 came with the decisions; it
+covers stage 5 alone. No real hardware is used for any of them (`Endou_Plan.md` §10 Q11), and MAME is not used.
+
+1. **The Genesis's right-column lock:** a Nephrite dispute step asks Nuked-MD's board whether the 315-5313 locks the
+   right columns by the column counter or by the pixel, the next time Nephrite is worked on. It is not done at
+   Endou's stages; it is recorded as pending in `Nephrite_Native.md` §67 and `Beryl_SmsVdp.md` §9.4.
+2. **SMS_MiSTer's `altera_mf`:** a logged dispute step may write stand-ins for the memory blocks of `altera_mf` that
+   SMS_MiSTer uses, so that the core runs under GHDL as a black-box referee for D-6, D-7, D-8 and Space Harrier's
+   opening. The step lists every RTL file it reads and reads only what the stand-ins need: the entity interfaces of
+   the `altera_mf` components the core instantiates. The PSG, `jt89`, is Verilog, which GHDL cannot run, so sound stays
+   out of the referee unless a VHDL path exists. The step is optional within stage 5: it is taken only if it fits
+   beside the sound work and does not hold it up, else left for a later stage.
+3. **The SG-1000's default model** stays the SG-1000, with the Mark III offered, as built.
+4. **The SG-1000 gets its own shelf.** Its console is `"SG-1000"` in `Platform/systems/data/sg1000.json`, apart from
+   `"Master System"`, so the catalog gives it a row of its own once it is offered; stage 7 holds this with a test that
+   `sms` and `sg1000` land on two shelves (`Endou_Plan.md` §7).
+
+---
+
+## 12. Stage 5: the sound (2026-10-19)
+
+### 12.1 In one paragraph
+
+The Master System and the SG-1000 now sound. Beryl's `beryl-sn76489`, clocked since stage 2 and its output discarded,
+is mixed and output: `src/sound.rs` brings the chip to the bus's clock at each write and at the frame's end, places
+every change of its output as a step at the Z80 clock it happened on, and resamples the steps to 48 kHz with
+`emusen-native`'s band-limited step synthesiser, the one Nephrite mixes through, its two sides kept apart so that the
+Game Gear's stereo register needs only its port at J2. Sega's PSG sounds on the Mark III and both Master Systems and
+the discrete chip on the SG-1000 (D-0), each console's periodic noise measured from the output. Port `$F2` and the FM
+unit's other ports are nothing on these consoles, and the FM unit's detection finds none on any of them (D-13). No
+analogue stage is modelled, since no recording of a Master System's output is in the corpus: a named loss. The state
+is version 5. The samples queue for the host through the v1 drain, peek and limit calls, and a sounding frame
+allocates nothing.
+
+### 12.2 The wiring
+
+| Rule | Source |
+|---|---|
+| The PSG's internal clock is the Z80's over 16, 223,722 Hz NTSC | [R SMS Power!'s "SN76489"; `Beryl_SN76489.md` §2]; Sega's Mark III manual, "Tone generator frequency", for the counter's rule |
+| A write through any port `$40`-`$7F` reaches the chip at the I/O cycle's clock: the chip is first run to its last clock at or before it, and the level the write makes is the output from that clock, between the chip's clocks | [R `smstech` §3]; the step's place [A], held by `a_write_s_step_is_at_its_own_clock_within_the_psg_s` |
+| Each change of the chip's output is a step at the Z80 clock of the PSG clock that made it, and the synthesiser runs at the Z80's clock, `num / 15` Hz of the master clock, into 48,000 Hz; samples are taken up to the bus's clock at each frame's end, so each frame's count follows the frame's own end and a second's frames make a second's samples to the sample | `EmuSen_NativeCores.md` §12.6 for the synthesiser |
+| `Variant::SEGA` on the Mark III, the Master System and the Master System II, `Variant::DISCRETE` on the SG-1000; on the Mark III an SG-1000 cartridge sounds through Sega's | D-0; `model.rs`, the one owner |
+| Both sides are the chip's two sums: alike until a console writes the stereo register, which none does before J2 | [R SMS Power!'s "Game Gear Stereo"] |
+
+The synthesiser is shared, not copied: Nephrite's `genesis/sound.rs` and Endou's `sound.rs` each own a `Steps` for the
+same chip, and what differs is what lies after it (Nephrite's measured circuits and its YM2612; nothing yet here).
+
+### 12.3 The level and the analogue stage
+
+**The level** [C]: the chip's 8,192 for a channel at full volume is 4,096 in the output, so the four channels at full
+volume fill half of a 16-bit sample and leave room for the YM2413 at stage 9, whose level against the PSG's is that
+stage's measurement. A full-volume tone's fundamental is then 2,608; the five references put it at 1,470 (BlastEm),
+2,672 (Genesis Plus GX), 2,933 (PicoDrive), 3,860 (SMS Plus GX) and 8,793 (Gearsystem), their median 2,933 [M §12.6].
+The absolute level is no property of the console a player can compare, its line output being an analogue level.
+
+**The analogue stage is not modelled**: a named loss. `Endou_Plan.md` §5.4 takes the consoles' filters and levels from
+recordings where they exist; none is in the corpus (Nephrite's MDFourier recordings are the Genesis's and the Sega
+CD's), and no console is run for the project (`Endou_Plan.md` §10 Q11). So the output is the chip's unipolar levels,
+band-limited: no low-pass beyond the synthesiser's 21.6 kHz and no coupling capacitor, so a held level, which sample
+playback writes, stays as the chip holds it. Of the references, PicoDrive and SMS Plus GX keep the held levels too;
+Genesis Plus GX, Gearsystem and BlastEm remove them with a high-pass of their own [M §12.6]. Whether a recording of a
+Master System's output can be found and fetched is a question for the tester (§12.12).
+
+### 12.4 Port `$F2` with no FM unit
+
+On the Mark III without the FM Sound Unit and on the export consoles, ports `$F0`-`$F2` are what A7, A6 and A0 make
+them (§9.3): a write does nothing, and a read is the I/O chip's port `$DC`, or, with the I/O chip switched off by port
+`$3E`, the console's undriven bus [R `smstech` §4, §7]. The FM unit's detection (SMS Power!'s "FM Chip Detection", the
+routine taken from Phantasy Star) switches the I/O chip off, writes bit 0 to `$F2` and reads it back seven times;
+`programs/fm.s` runs it and finds no FM unit on the Mark III and both Master Systems, each read `$FF` on the Master
+System II and `$F2`, the instruction's last byte, on the others, and its tone still sounding after `$F2`, `$F0` and
+`$F1` are written as an FM game writes them. The documents differ on what such a read returns: D-13. The Japanese
+Master System and the Mark III with the FM unit, whose `$F2` is a register, come with the YM2413 at stage 9.
+
+### 12.5 No allocation on the audio path
+
+The synthesiser's finished samples and the queue keep their storage from frame to frame. `tests/alloc.rs`, a test
+binary of its own with a counting allocator, runs the voices program for 720 frames on the Master System II, the
+SG-1000 and the Mark III, draining each frame as a host does, after four frames of warming: **no allocation** [M].
+Seeded fault F6 (§12.9), a frame's samples gathered in a vector of their own, fails it.
+
+### 12.6 Against the references
+
+**The voices.** `programs/voices.s`, assembled as `voices.sms` and `voices-sg.sg`, writes the PSG from a table, each
+voice held for a second by the frame interrupt: tone 0 at `$0FE` at full volume and 8 dB down, tone 1 at `$020`,
+periodic noise at rates 0 and 2 and from tone 2's `$040`, white noise at rates 0 and 1, a tone held high stepped
+through the sixteen attenuations, and the four channels together. Endou (`examples/screen.rs --wav`) and the five
+references through the probe (`--wav`), each recording aligned at its first sound, the second of each voice measured
+from 0.2 s for 0.6 s under a Hann window (`audiotool` in the step's scratch) [M 2026-10-19]:
+
+| | Endou | Genesis Plus GX | PicoDrive | BlastEm | Gearsystem | SMS Plus GX |
+|---|---|---|---|---|---|---|
+| Tone 0, `$0FE`: frequency, fundamental | 440.40 Hz, 2,608 | 440.40, 2,672 | 440.40, 2,933 | 440.40, 1,470 | 440.60, 8,793 | 440.40, 3,860 |
+| Attenuation 4 against 0 | 8.00 dB | 8.01 | 8.00 | 8.07 | 8.61 | 8.01 |
+| Tone 1, `$020` | 3,495.5 Hz | 3,495.5 | 3,496.0 | 3,495.5 | 3,497.5 | **3,390**: a period rounded to its output samples |
+| `voices.sms`, periodic noise rate 0: 436.9 Hz (16 bits) against 466.1 Hz (15 bits) | 508 / 0 | 521 / 0 | 572 / 0 | 286 / 0 | 1,689 / 0 | 752 / 1 |
+| `voices-sg.sg`, the same on an SG-1000 | **0 / 542** | **0 / 555** | 572 / 0 | 286 / 0 | **4 / 1,805** | 752 / 1 |
+| Rate 2 and from tone 2 (109.2 Hz against 116.5) | as rate 0 on each system | as rate 0 | 16 bits on both | 16 bits on both | as rate 0 | 16 bits on both; from tone 2 at half the others' level |
+| White noise, rate 0: its null at 6,991 Hz | 0.0 | 0.0 | 0.8 | 0.2 | 0.3 | 9.8, no null |
+| The held tone stepped through the attenuations | levels held, 4,096 to 163 by 2 dB, then 0 | removed by a high-pass | held, 2,112 to 49 | removed | removed | held, 2,780 to 64 |
+
+**D-0, by the references** [M]: Genesis Plus GX and Gearsystem give an SG-1000 cartridge the 15-bit register and a
+Master System's the 16-bit one, as Endou does; PicoDrive, BlastEm and SMS Plus GX give every system the 16-bit one,
+modelling no discrete chip. Where a reference models the difference it agrees with D-0. `programs::each_console_s_psg_sounds_its_own_periodic_noise`
+pins the rule on the four consoles from the output.
+
+**The fetched sound test programs**, played by pad presses (Heliophobe and Maxim's *SMS Sound Test* 1.2: the cursor to
+tone 0's volume, its volume to 0, its pitch moved, the noise's volume and type; JoppyFurr's *SN76489 TestRom* 1.00 for
+the Master System and for the SG-1000, NTSC: the cursor to the keyboard, three keys held in turn): at six moments of each
+run the strongest frequency between 50 Hz and 4 kHz is the same on Endou, Genesis Plus GX, PicoDrive, Gearsystem and
+SMS Plus GX to the half-hertz step of the search, 109.5 Hz, 112 Hz, 155.5 Hz, 164.5-165 Hz, 174.5 Hz and 207.5 Hz, and
+its level stands to each core's own full-volume tone as the program set it. BlastEm took no pad press from the probe,
+as at stage 3 (D-9's note), and stayed silent in all three.
+
+**Library games** (read in place, 900 frames, no input on the Master System's; the SG-1000's with button 1 pressed at
+frames 120, 240 and 360 and right held from 480; the references with their FM units off, Genesis Plus GX's, Gearsystem's
+and SMS Plus GX's being on by default): each recording's band envelopes (twenty bands from 100 Hz to 10 kHz, a sixtieth
+of a second a window) from 2 s to 14 s, correlated with another's at the best lag within half a second [M]:
+
+| Game | Endou's audio digest (FNV-1a over the samples), samples | Endou against Genesis Plus GX / PicoDrive / BlastEm / Gearsystem / SMS Plus GX | Genesis Plus GX against PicoDrive / Gearsystem / SMS Plus GX |
+|---|---|---|---|
+| Sonic the Hedgehog | `84266002961E9FF1`, 720,929 | 0.983 / 0.973 / 0.980 / 0.976 / 0.978 | 0.971 / 0.973 / 0.971 |
+| Alex Kidd in Miracle World | `34103FC0494AB8F1` | 0.966 / 0.956 / 0.977 / 0.950 / 0.960 | 0.953 / 0.943 / 0.954 |
+| Phantasy Star | `54D60BDB25A00099` | 0.929 / 0.889 / 0.949 / 0.919 / 0.888 | 0.915 / 0.880 / 0.913 |
+| Fantasy Zone | `2868F5FF1A569EA9` | 0.963 / 0.958 / 0.979 / 0.949 / 0.950 | 0.958 / 0.938 / 0.954 |
+| Golden Axe | `281A40695DA6B9CD` | 0.973 / 0.964 / 0.980 / 0.972 / 0.957 | 0.970 / 0.954 / 0.965 |
+| OutRun | `5E5DFA61070344B9` | 0.866 / 0.822 / silent / 0.878 / 0.818 | 0.898 / 0.855 / 0.894 |
+| Micro Machines (E), Europe | `33B059B58F9DF21D`, 869,190 | 0.958 / 0.942 / no run / 0.984 / 0.943 | 0.945 / 0.956 / 0.947 |
+| Space Harrier | `58A5E079EDB12A29` | 0.70-0.72 at the half second's edge / **0.983 to BlastEm at lag 0** | 0.910 / 0.914 / 0.909 |
+| Girl's Garden (SG-1000) | `12973C7A9A747509` | 0.875 / 0.902 / silent / 0.866 / 0.893 | 0.855 / 0.881 / 0.859 |
+| Flicky (SG-1000) | `5DEE3B43878EEF69` | 0.826 / 0.827 / silent / 0.878 / 0.841 | 0.895 / 0.828 / 0.875 |
+| Zaxxon (SG-1000) | `22B281F3BDFD07A1` | 0.933 / 0.923 / silent / 0.928 / 0.917 | 0.918 / 0.913 / 0.907 |
+
+Endou's agreement with each reference lies within the references' agreement with each other on every game but Space
+Harrier. A first run with the references' FM units at their defaults put OutRun's Endou at 0.50-0.53 against the three
+that played its FM music, 0.82 against PicoDrive, whose unit is off by default; with the units off it is as above.
+**Space Harrier** is §10.10's late start heard: over 5-13 s Genesis Plus GX, PicoDrive, Gearsystem and SMS Plus GX
+best match Endou 1.3-1.9 s apart (lags 77-113 windows) and at 0.80, while BlastEm, which was not among the pictures of
+§10.8, follows Endou at lag 0 at 0.98 [M]. Two black boxes now take each course; the question stays G5's (§12.11).
+
+### 12.7 The gate (`Endou_Plan.md` §7, stage 5), measured 2026-10-19
+
+| Gate item | Result [M] |
+|---|---|
+| The fetched sound test programs | *SMS Sound Test* 1.2 and both *SN76489 TestRom*s: Endou's frequencies at six moments equal four references' (§12.6); no program self-reports. *PFR Detect*, which `Endou_References.md` §2 listed as FM detection, is a test of the paging registers (its source's title, read for this stage); the FM detection is held by `fm.s` |
+| `SyntheticSmsRom` cases | `EndouTests` **15 of 15**: the new `The_psg_sounds_a_synthetic_program_s_tone` hears tone 0 through the v1 adapter on both systems, its fundamental within 1% of 2,607.6 and 48,062 samples in 60 frames, and the kit's case runs on the two tone cartridges too |
+| Audio against black-box referees on library games | §12.6, eleven games and the voices on both systems |
+| The kit | in corpus form, 600 frames, four at a time: **30 of 30 images pass** and the core's cases pass (C1-C15, C17-C24 where they run; C6, C7, C8 and C12 with the audio in their digests): the 15 program images, the three sound test programs, and eight Master System and three SG-1000 games of the tester's, read in place |
+| Seeded faults | §12.9: 12, every one caught, two only after a test was added |
+| No allocation per frame on the audio path | §12.5 |
+| The crate's tests | **65 of 65** in the library and `tests/alloc.rs`, on release and on `test-checked` with the corpus (ZEXDOC, ZEXALL and FluBBa's test run) |
+| Pictures | unchanged: at frames 600 and 3,600 the frame digests of Sonic the Hedgehog, Space Harrier, OutRun and Girl's Garden equal the base's (§12.8) |
+| The cost | §12.8 |
+
+Toolchains: rustc 1.99.0, .NET 10.0.112, on the desktop (Ryzen 7 7700X).
+
+### 12.8 The cost
+
+The desktop's mean a frame, release, `examples/screen.rs` draining the sound each frame, the median of three
+differences between runs of 3,600 and 600 frames over 3,000, the base (WiseMan `67944957`, its silence drained) and this
+stage measured alternately within minutes, load about 1.7 [M]: Sonic the Hedgehog 0.204 → **0.213 ms**, Space Harrier
+0.189 → **0.203**, OutRun 0.219 → **0.232**, Girl's Garden (SG-1000) 0.175 → **0.180**; each range within 0.004 ms.
+The sound costs 0.005-0.014 ms a frame. P1's budget is 0.6 ms without the OPLL. The frame digests at 600 and 3,600
+frames were equal between the two builds on all four.
+
+### 12.9 Seeded faults (2026-10-19)
+
+Each made in the source, the crate's tests run on release (the library's and `tests/alloc.rs`), the file restored and
+compared byte for byte (`seed.py` in the step's scratch):
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | the PSG clocked at the Z80's over 8 | the periodic noise program, the bus's cycle test, the allocation test |
+| F2 | a write's step placed at the PSG's last clock, not the write's | **nothing at first**: the write's test wrote two clocks past a PSG clock, a step a fortieth of a sample late. `a_write_s_step_is_at_its_own_clock_within_the_psg_s` was added: a write 15 clocks later rises a fifth of a sample later, to 5%; it catches it |
+| F3 | the SG-1000 given Sega's PSG | the console's PSG test, the periodic noise program |
+| F4 | the synthesiser's pending differences not loaded with a state | `a_state_continues_the_sound` |
+| F5 | the two sides swapped as the chip runs | **nothing at first**: the Game Gear's test held both channels, so nothing changed as the chip ran. It now sounds tone 0 on the right alone, and catches it |
+| F6 | a frame's samples gathered in a vector of their own | `tests/alloc.rs` |
+| F7 | the synthesiser given the master clock over 16 | the second's samples (machine and v1), the noise and FM programs |
+| F8 | the chip's levels unscaled | the noise program's tone level, the four channels' test |
+| F9 | writes to `$C0`-`$FF` reaching the PSG | `fm.s`'s test |
+| F10 | the PSG's clock count saved as 0 | `a_state_continues_the_sound` |
+| F11 | the stereo register's write lost | the Game Gear's test |
+| F12 | the PSG not brought up at the frame's end | the bus's cycle test |
+
+### 12.10 The state, version 5
+
+`ENDO` version 5: version 4's fields, the PSG's block followed by its clock count and the step synthesiser's held
+levels, sums and 64 pending differences a side, 1,056 bytes more: 25,937 bytes for a plain `sms` board, pinned by
+`the_version_5_layout_is_pinned`. A state continues the sound exactly (`a_state_continues_the_sound`; the kit's C7 and
+C8 over the audio). Version 4 reached no player and is refused. The queue of samples not yet drained is not part of a
+state, as Nephrite's is not.
+
+### 12.11 Open
+
+- **The analogue stage** is not modelled (§12.3), a named loss until a recording is found.
+- **The discrete chip's half-period 0** and its power-on registers stay as `Beryl_SN76489.md` §4 leaves them; no
+  SG-1000 recording is in the corpus.
+- **Space Harrier's course** (§10.10, §12.6): BlastEm's audio follows Endou's, the other four references another.
+- **SMS_MiSTer** was not run (§12.13).
+- **D-13**, the read of `$F2` with no FM unit, is argued.
+
+### 12.12 What was read for this stage
+
+No emulator source, no firmware or firmware listing; of SMS_MiSTer's RTL, only the two lines GHDL printed in its error
+messages (§12.13). Read: `Endou_Plan.md`, `Endou_Native.md`, `Endou_References.md`, `Endou_Disputes.md`;
+`Beryl_SN76489.md` and the crate; Nephrite's `genesis/sound.rs` and `Nephrite_Native.md` §18-§19 for how it mixes;
+`emusen-native`'s `steps.rs` and `samples.rs`; the kit's C6-C8 and C12; MacDonald's `smstech` §1, §3, §4 and §7; Sega's
+Mark III manual, "Programmable sound generator" and "Memory enables"; SMS Power!'s "Audio Control Port", "FM Chip
+Detection", "Sound", "Port $3E", "I/O Port Map - SMS", "Game Gear Stereo" and "YM2413"; JoppyFurr's *SN76489 TestRom*
+`main.c`, for its controls; the *SMS Sound Test*'s readme; *PFR Detect*'s source's opening and strings.
+
+### 12.13 SMS_MiSTer's dispute step, not taken
+
+*Decided 2026-10-19* (§11.15): a logged dispute step may write stand-ins for `altera_mf`'s memory blocks so that
+SMS_MiSTer runs under GHDL for D-6, D-7, D-8 and Space Harrier's opening, optional within this stage. It was weighed
+and left for a later stage. Analysing the RTL with GHDL (the messages only, nothing opened) shows what the step needs
+beyond the stand-ins [M]: `dpram.vhd`, line 4, is the file naming `altera_mf` (the console's other memories may
+name it too, which only their files would show); and the console's top entity `system` uses `work.jt89`
+(`system.vhd`, line 6), the PSG, whose `rtl/jt89/` holds one `.vhd` beside six Verilog files, so that `system` cannot
+be elaborated without a stand-in for the PSG as well, which the decision does not cover. The VDP's entity alone needs
+only the memories, but a test bench for it would drive the VDP's own ports, which is reading more than the top
+level's port list. And a program's verdict leaves the console only as its picture, so the bench must decode the video
+output. Those two lines are the only RTL text seen, printed by GHDL; they are logged here as the rule asks. The
+choices are the tester's (§12.14).
+
+### 12.14 Questions before stage 6
+
+1. **A recording of a Master System's output.** The analogue stage is a named loss for want of one (§12.3). May a
+   search be made for a published recording of a Master System's or Mark III's audio output (a test tone or a
+   test program's sweep, as MDFourier's are for the Genesis), and any found be fetched and recorded in
+   `Endou_References.md`? Recommended: yes, the search and fetch as a step of their own; a filter fitted to it would
+   be built as Nephrite's circuits were.
+2. **SMS_MiSTer's step** (§12.13). Running `system` needs a stand-in for the Verilog PSG `jt89` beside `altera_mf`'s
+   memories, reading its instantiation as the memories' are read; or the step runs the `vdp` entity alone, reading its
+   port list, with a test bench that plays the CPU's accesses. Either decodes the picture to read a verdict.
+   Recommended: the `vdp` entity alone for D-8 (the access slots, the open dispute most worth a referee), with the
+   memories' stand-ins, its port list and every line read logged; `system` with a PSG stand-in only if Space Harrier's
+   course is to be refereed.
+3. **Stage 6** (firmware) as the plan has it: `Endou_OpenBoot.md` first, then the open boot program. The tester's own
+   Master System BIOS images are now in `~/Documents/BIOS/SMS/` (Europe v2.0, Japan v2.1, USA/Europe v1.3, 8 KiB each);
+   nothing of them was read, hashed or run at this stage, and how they serve as the player's own image under
+   `EmuSen_Firmware.md` §0 is stage 6's question for the tester. Recommended: the go for stage 6, opened by the page.

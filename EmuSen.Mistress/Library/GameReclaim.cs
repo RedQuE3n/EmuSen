@@ -7,6 +7,9 @@ using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Mistress.Library
 {
+    // A reclaim's work between finding the orphans and moving them.
+    public sealed record ReclaimPlan(IReadOnlyList<(string Path, string Md5, long Bytes)> Orphans, IReadOnlyList<(string Path, long Bytes, long Modified, string? Md5)> Candidates);
+
     // A game known by its contents, and rows that follow a renamed game, out of the window: the library's identity and reclaim, and their C# twins - see EmuSen_Settings_Reference.md §4.37, EmuSen_Backend.md §28.5.
     public sealed partial class GameRecords
     {
@@ -80,9 +83,15 @@ namespace EmuSen.Mistress.Library
                 using JsonDocument d = JsonDocument.Parse(n.Lib.Change(System.Text.Encoding.UTF8.GetString(stream.ToArray())));
                 return d.RootElement.GetProperty("moved").GetInt32();
             }
+            return Apply(Hash(Plan(games)));
+        }
+
+        // What a reclaim of the C# must hash: the orphans, and the games without a row of an orphan's size with any hash the cache has; null where there is nothing to do.
+        public ReclaimPlan? Plan(IReadOnlyList<string> games)
+        {
             var present = new HashSet<string>(games, StringComparer.Ordinal);
             IReadOnlyList<(string Path, string Md5, long Bytes)> orphans = Orphans(present);
-            if (orphans.Count == 0) return 0;
+            if (orphans.Count == 0) return null;
             var sizes = orphans.Select(o => o.Bytes).ToHashSet();
             IReadOnlyDictionary<string, GameRecord> rows = All();
             var candidates = new List<(string Path, long Bytes, long Modified, string? Md5)>();
@@ -91,14 +100,22 @@ namespace EmuSen.Mistress.Library
                 if (rows.ContainsKey(path) || Stat(path) is not { } stat || !sizes.Contains(stat.Bytes)) continue;
                 candidates.Add((path, stat.Bytes, stat.Modified, KnownHash(path, stat.Bytes, stat.Modified)));
             }
-            if (candidates.Count == 0) return 0;
-            var hashed = candidates.Select(c => c with { Md5 = c.Md5 ?? TryMd5(c.Path) }).ToList();
-            foreach (var c in hashed.Where(c => c.Md5 is not null)) StoreHash(c.Path, c.Bytes, c.Modified, c.Md5!);
+            return candidates.Count == 0 ? null : new ReclaimPlan(orphans, candidates);
+        }
+
+        // The candidates the cache had no hash for, hashed; touches no database, so it may run on a worker.
+        public static ReclaimPlan? Hash(ReclaimPlan? plan) => plan is null ? null : plan with { Candidates = plan.Candidates.Select(c => c with { Md5 = c.Md5 ?? TryMd5(c.Path) }).ToList() };
+
+        // The hashes stored and each orphan moved to the first unclaimed game of its contents; how many moved.
+        public int Apply(ReclaimPlan? plan)
+        {
+            if (plan is null) return 0;
+            foreach (var c in plan.Candidates.Where(c => c.Md5 is not null)) StoreHash(c.Path, c.Bytes, c.Modified, c.Md5!);
             var claimed = new HashSet<string>(StringComparer.Ordinal);
             int moved = 0;
-            foreach ((string path, string md5, long _) in orphans)
+            foreach ((string path, string md5, long _) in plan.Orphans)
             {
-                var match = hashed.FirstOrDefault(c => c.Md5 == md5 && !claimed.Contains(c.Path));
+                var match = plan.Candidates.FirstOrDefault(c => c.Md5 == md5 && !claimed.Contains(c.Path));
                 if (match.Path is null) continue;
                 Move(path, match.Path);
                 claimed.Add(match.Path);

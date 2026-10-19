@@ -25,28 +25,26 @@ namespace EmuSen.Mistress.Views
         private bool _recordsClosed;
         private bool _reclaiming;
 
-        private static (long Bytes, long Modified)? Stat(string path)
-        {
-            try
-            {
-                var file = new FileInfo(path);
-                return file.Exists ? (file.Length, file.LastWriteTimeUtc.Ticks) : null;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                return null;
-            }
-        }
+        private static (long Bytes, long Modified)? Stat(string path) => GameRecords.Stat(path);
 
-        private static string? TryMd5(string path)
-        {
-            try { return RomHash.Md5(path); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
-        }
+        private static string? TryMd5(string path) => GameRecords.TryMd5(path);
 
-        // From the cache when the file is unchanged, otherwise hashed on a worker and written back on the UI thread.
+        // Through the library, the whole identity on a worker; on the C#, from the cache when the file is unchanged, else hashed on a worker and written back on the UI thread.
         private void IdentifyLater(string path)
         {
+            if (_records.ThroughLibrary)
+            {
+                Task.Run(() =>
+                {
+                    try { return _records.IdentifyFile(path); }
+                    catch (Exception e) when (e is ObjectDisposedException or EmuSen.Crystal.Client.Library.GameLibraryException or Microsoft.Data.Sqlite.SqliteException) { return null; }
+                }).ContinueWith(identifying =>
+                {
+                    if (identifying.Result is not { } id) return;
+                    Dispatcher.UIThread.Post(() => { if (!_recordsClosed) Current(path, id.Md5, id.Bytes); });
+                });
+                return;
+            }
             if (Stat(path) is not { } stat) return;
             if (_records.KnownHash(path, stat.Bytes, stat.Modified) is string known)
             {
@@ -68,47 +66,37 @@ namespace EmuSen.Mistress.Views
         private void Identified(string path, string md5, long bytes)
         {
             _records.Identify(path, md5, bytes);
+            Current(path, md5, bytes);
+        }
+
+        private void Current(string path, string md5, long bytes)
+        {
             if (path != _currentRomPath) return;
             _currentRomBytes = bytes;
             _currentRomMd5 = md5;
         }
 
-        // Rows whose file has gone, matched by contents against files nobody has a row for; only files of a missing one's size are hashed.
+        // Rows whose file has gone, matched by contents against files nobody has a row for; only files of a missing one's size are hashed, on a worker.
         private void ReclaimMovedGames()
         {
             if (_reclaiming) return;
-            var present = new HashSet<string>(_allScan.Entries.Select(e => e.FullPath), StringComparer.Ordinal);
-            IReadOnlyList<(string Path, string Md5, long Bytes)> orphans = _records.Orphans(present);
-            if (orphans.Count == 0) return;
-
-            var sizes = orphans.Select(o => o.Bytes).ToHashSet();
-            IReadOnlyDictionary<string, Library.GameRecord> rows = _records.All();
-            var candidates = new List<(string Path, long Bytes, long Modified, string? Md5)>();
-            foreach (Library.RomEntry entry in _allScan.Entries)
-            {
-                if (rows.ContainsKey(entry.FullPath) || Stat(entry.FullPath) is not { } stat || !sizes.Contains(stat.Bytes)) continue;
-                candidates.Add((entry.FullPath, stat.Bytes, stat.Modified, _records.KnownHash(entry.FullPath, stat.Bytes, stat.Modified)));
-            }
-            if (candidates.Count == 0) return;
+            List<string> games = _allScan.Entries.Select(e => e.FullPath).ToList();
+            ReclaimPlan? plan = _records.ThroughLibrary ? null : _records.Plan(games);
+            if (!_records.ThroughLibrary && plan is null) return;
 
             _reclaiming = true;
-            Task.Run(() => candidates.Select(c => c with { Md5 = c.Md5 ?? TryMd5(c.Path) }).ToList()).ContinueWith(hashing =>
+            Task.Run(() =>
+            {
+                if (!_records.ThroughLibrary) return (Plan: GameRecords.Hash(plan), Moved: -1);
+                try { return (Plan: (ReclaimPlan?)null, Moved: _records.Reclaim(games)); }
+                catch (Exception e) when (e is ObjectDisposedException or EmuSen.Crystal.Client.Library.GameLibraryException or Microsoft.Data.Sqlite.SqliteException) { return (Plan: null, Moved: 0); }
+            }).ContinueWith(reclaiming =>
             {
                 Dispatcher.UIThread.Post(() =>
                 {
                     _reclaiming = false;
-                    if (_recordsClosed || !hashing.IsCompletedSuccessfully) return;
-                    var claimed = new HashSet<string>(StringComparer.Ordinal);
-                    int moved = 0;
-                    foreach (var c in hashing.Result.Where(c => c.Md5 is not null)) _records.StoreHash(c.Path, c.Bytes, c.Modified, c.Md5!);
-                    foreach ((string path, string md5, long _) in orphans)
-                    {
-                        var match = hashing.Result.FirstOrDefault(c => c.Md5 == md5 && !claimed.Contains(c.Path));
-                        if (match.Path is null) continue;
-                        _records.Move(path, match.Path);
-                        claimed.Add(match.Path);
-                        moved++;
-                    }
+                    if (_recordsClosed || !reclaiming.IsCompletedSuccessfully) return;
+                    int moved = reclaiming.Result.Moved >= 0 ? reclaiming.Result.Moved : _records.Apply(reclaiming.Result.Plan);
                     if (moved == 0) return;
                     StatusText.Text = $"Found {moved} renamed or moved game{(moved == 1 ? "" : "s")}; {(moved == 1 ? "its" : "their")} favourites, play time and collections came along.";
                     if (LibraryView.IsVisible) ShowLibraryEntries();

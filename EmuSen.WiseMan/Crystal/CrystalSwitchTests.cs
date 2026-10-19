@@ -56,7 +56,7 @@ namespace EmuSen.WiseMan.Crystal
         // Each program's own default, set by EmuSenCrystalNative in its project; Hotaru runs inside emusen-shell.
         [Theory]
         [InlineData("EmuSen.Pharaoh", true)]
-        [InlineData("emusen-shell", false)]
+        [InlineData("emusen-shell", true)]
         [InlineData("EmuSen.Mistress", false)]
         public void Each_program_names_its_default(string program, bool rust) => Assert.Equal(rust, CrystalContract.DefaultsToRust(Assembly.Load(program)));
     }

@@ -7483,6 +7483,28 @@ Graded on 2026-10-19 [M]:
   `EMUSEN_CRYSTAL_NATIVE=0`, and 463 with 5 skipped (§29.27) at `1`. The golden corpus on Crystal's table: 100 of 100
   both ways.
 
+**emusen-shell's default is the Rust** (state 2, SR7; this commit). Its project sets `EmuSenCrystalNative`, and with
+`EMUSEN_CRYSTAL_NATIVE=0` it runs on the C# again. Hotaru is a library inside emusen-shell, so it follows emusen-shell's
+entry assembly. Hotaru files the runtime's lines (Q2) as §29.12 built it: once its log is in place, and between frames
+in its window.
+
+Graded on 2026-10-19 [M], on `WiseMan` at `97f74b73` with the refusal above:
+- `CrystalSwitchTests` holds emusen-shell's key.
+- `ShellRuntimeAgreementTests` gained the case of `EMUSEN_DIANASH_NATIVE=0` with `EMUSEN_CRYSTAL_NATIVE` unset. Its
+  refusal shows the process read emusen-shell's own default.
+- The shell's classes (Hotaru on the API, the frontend defects and references, the shell window, launch mode, feed
+  window, Hotaru's key and hotkey tables, accessibility, windowing, pad template, sandbox escape, shared host and leaf
+  assembly classes), with the golden corpus, `ShellOverSessionTests`, `ShellRuntimeAgreementTests` and
+  `CrystalSwitchTests`: 262 of 262 at `EMUSEN_CRYSTAL_NATIVE` `0`, `1` and unset.
+- `ShellOverSessionTests`: 4 of 4 at each of the four pairings of the two variables.
+- The golden corpus on Crystal's table: 100 of 100 both ways.
+- A seeded fault, the property's name misspelt in emusen-shell's project, was caught by `CrystalSwitchTests` and by
+  the process case with the variable unset.
+- MSBuild's conditions read `yes` and `on` as `true`, so `<EmuSenCrystalNative>yes</EmuSenCrystalNative>` sets the key
+  too. A first attempt at the fault used `yes`, and so was not a fault.
+
+Mistress's move waits for `core_approve` (§29.40), as §29.11 Q3 decided.
+
 ### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
 
 *Part (b) numbers its sections from §29.30, so that part (a)'s pieces, built at the same time, keep §29.16 to §29.29.*

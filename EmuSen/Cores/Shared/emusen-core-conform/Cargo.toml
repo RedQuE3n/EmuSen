@@ -16,11 +16,12 @@ path = "src/main.rs"
 
 [dependencies]
 emusen-native = { path = "../emusen-native" }
+# The core host: the loader, the export table, the sidecar's format and the hash it records (EmuSen_Backend.md §27).
+emusen-core-host = { path = "../emusen-core-host" }
 # The set module, which names a sheet's companions as the runtime's reading does (EmuSen_CoreAPI_Extensions.md §2.3).
 emusen-disc = { path = "../emusen-disc" }
 # Galaxia's mapped file, the one place a file is mapped, for the case that lends an image as a host does (C17).
 emusen-galaxia = { path = "../../../../Platform/galaxia" }
-libloading = "0.8"
 # Vulkan's declarations and loader, for C20's lender (EmuSen_CoreAPI.md §6.29); the version emusen-gpu takes.
 ash = "0.38"
 

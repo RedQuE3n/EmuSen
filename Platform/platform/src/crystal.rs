@@ -3,7 +3,7 @@
 //! only once every export of major 1 is here (EmuSen_Backend.md §29.3).
 
 use std::cell::RefCell;
-use emusen_crystal::abi::{self, emusen_crystal_config, emusen_crystal_frame_info, emusen_crystal_open_params, emusen_crystal_runtime, emusen_crystal_subscription};
+use emusen_crystal::abi::{self, emusen_crystal_config, emusen_crystal_frame_info, emusen_crystal_open_params, emusen_crystal_raw_info, emusen_crystal_runtime, emusen_crystal_subscription};
 use emusen_crystal::runtime::{Config, Runtime};
 use emusen_session_service::abi::status as svc;
 
@@ -84,7 +84,7 @@ fn cores_of(text: &str) -> Result<Vec<String>, i32> {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_crystal_new(config: *const emusen_crystal_config) -> *mut emusen_crystal_runtime {
     let made = || -> Result<Runtime, i32> {
-        let mut c = Config::default();
+        let mut c = Config { lender: Some(std::sync::Arc::new(SerenityLender)), ..Config::default() };
         if !config.is_null() {
             let size = unsafe { (*config).size } as usize;
             if size < 8 {
@@ -280,7 +280,11 @@ pub unsafe extern "C" fn emusen_crystal_open(rt: *mut emusen_crystal_runtime, pa
             path: unsafe { text(p.path, p.path_len) }?,
             console: unsafe { text(p.console, p.console_len) }?,
             engine: unsafe { text(p.engine, p.engine_len) }?,
-            opened: emusen_crystal::session::OpenedWith { flags: p.flags, audio_buffer_max_samples: p.audio_buffer_max_samples },
+            opened: emusen_crystal::session::OpenedWith {
+                flags: p.flags,
+                audio_buffer_max_samples: p.audio_buffer_max_samples,
+                device: if p.size as usize >= std::mem::size_of::<emusen_crystal_open_params>() { p.device as usize } else { 0 },
+            },
         };
         r.open(&asked).map_err(|(status, words)| fail(status, words))
     };
@@ -826,4 +830,107 @@ pub unsafe extern "C" fn emusen_crystal_game_setting_set(rt: *mut emusen_crystal
         let v = unsafe { text(value, value_len) }?;
         done(r.game_setting_set(p, k, v))
     })())
+}
+
+/// The runtime's lender over Serenity's lend of the presenter's device, `PlatformLend`.
+struct SerenityLender;
+
+/// The platform library's last words, as `emusen_platform_last_error` gives them.
+fn platform_words() -> String {
+    let mut words = vec![0u8; 4096];
+    let n = unsafe { crate::emusen_platform_last_error(words.as_mut_ptr(), words.len()) }.clamp(0, 4096) as usize;
+    String::from_utf8_lossy(&words[..n]).into_owned()
+}
+
+impl emusen_crystal::lend::Lender for SerenityLender {
+    fn make(&self, device: usize) -> Result<(usize, emusen_native::core::sys::DeviceLend), String> {
+        let mut info = crate::serenity_device::LendInfo {
+            size: std::mem::size_of::<crate::serenity_device::LendInfo>() as u32,
+            api_version: 0,
+            get_instance_proc_addr: 0,
+            instance: 0,
+            physical_device: 0,
+            device: 0,
+            queue_family: 0,
+            queue_index: 0,
+            host_queue_family: 0,
+            reserved: 0,
+            done: 0,
+        };
+        let made = unsafe { crate::serenity_device::emusen_serenity_lend_new(device as *const _, &mut info) };
+        if made.is_null() {
+            return Err(platform_words());
+        }
+        let proc_addr: Option<unsafe extern "C" fn()> = if info.get_instance_proc_addr == 0 { None } else { Some(unsafe { std::mem::transmute::<usize, unsafe extern "C" fn()>(info.get_instance_proc_addr as usize) }) };
+        let lend = emusen_native::core::sys::DeviceLend {
+            size: std::mem::size_of::<emusen_native::core::sys::DeviceLend>() as u32,
+            api_version: info.api_version,
+            get_instance_proc_addr: proc_addr,
+            instance: info.instance,
+            physical_device: info.physical_device,
+            device: info.device,
+            queue_family: info.queue_family,
+            queue_index: info.queue_index,
+            host_queue_family: info.host_queue_family,
+            reserved: 0,
+            done: info.done,
+        };
+        Ok((made as usize, lend))
+    }
+
+    fn take(&self, lend: usize, f: &emusen_native::core::sys::DeviceFrame) -> Result<bool, String> {
+        match unsafe { crate::serenity_device::emusen_serenity_lend_take(lend as *const _, f.buffer, f.offset, f.width, f.height, f.stride, f.ready, f.value) } {
+            status if status < 0 => Err(platform_words()),
+            status => Ok(status == 1),
+        }
+    }
+
+    fn settle(&self, lend: usize) -> Result<(), String> {
+        if unsafe { crate::serenity_device::emusen_serenity_lend_settle(lend as *const _) } < 0 { Err(platform_words()) } else { Ok(()) }
+    }
+
+    fn free(&self, lend: usize) {
+        unsafe { crate::serenity_device::emusen_serenity_lend_free(lend as *mut _) };
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_picture_lend(rt: *mut emusen_crystal_runtime, session: u32) -> *const () {
+    let lent = || -> Result<usize, i32> { unsafe { session_of(rt, session) }?.picture_lend().map_err(|(st, w)| fail(st, w)) };
+    lent().unwrap_or(0) as *const ()
+}
+
+/// # Safety
+/// `rt` a live runtime; `encoding` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_raw_select(rt: *mut emusen_crystal_runtime, session: u32, encoding: *const u8, len: usize) -> i32 {
+    code((|| {
+        let s = unsafe { session_of(rt, session) }?;
+        let chosen = unsafe { text(encoding, len) }?;
+        done(s.raw_select(chosen))
+    })())
+}
+
+/// # Safety
+/// `rt` a live runtime; `info` null or valid for its `size` bytes; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_raw_copy(rt: *mut emusen_crystal_runtime, session: u32, info: *mut emusen_crystal_raw_info, out: *mut u8, len: usize) -> i64 {
+    let copied = || -> Result<i64, i32> {
+        let s = unsafe { session_of(rt, session) }?;
+        let info = unsafe { info.as_mut() };
+        if let Some(i) = &info
+            && (i.size as usize) < std::mem::size_of::<emusen_crystal_raw_info>()
+        {
+            return Err(fail(abi::status::BAD_STRUCT, format!("emusen_crystal_raw_info of {} bytes; version 1.0's is {}", i.size, std::mem::size_of::<emusen_crystal_raw_info>())));
+        }
+        let into: &mut [u8] = if out.is_null() { &mut [] } else { unsafe { std::slice::from_raw_parts_mut(out, len.min(i32::MAX as usize)) } };
+        let (shape, bytes) = s.raw_copy(into).map_err(|(st, w)| fail(st, w))?;
+        if let Some(i) = info {
+            (i.element, i.width, i.height, i.stride, i.reserved) = (shape.element, shape.width, shape.height, shape.stride, 0);
+        }
+        Ok(bytes as i64)
+    };
+    copied().unwrap_or_else(|status| status as i64)
 }

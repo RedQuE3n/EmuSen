@@ -123,7 +123,7 @@ namespace EmuSen.WiseMan.Crystal
         }
 
         // A session opened, its id or "status <n>: <words>"; size 0 gives the struct's own, a smaller one asks for a refusal.
-        public string Open(nint rt, string? path, string? console = null, string? engine = null, uint flags = 0, uint size = 0)
+        public string Open(nint rt, string? path, string? console = null, string? engine = null, uint flags = 0, uint size = 0, nint device = 0)
         {
             byte[]? p = path is null ? null : Encoding.UTF8.GetBytes(path), c = console is null ? null : Encoding.UTF8.GetBytes(console), e = engine is null ? null : Encoding.UTF8.GetBytes(engine);
             fixed (byte* pp = p, cp = c, ep = e)
@@ -138,6 +138,7 @@ namespace EmuSen.WiseMan.Crystal
                     console_len = (nuint)(c?.Length ?? 0),
                     engine = e is null ? null : ep,
                     engine_len = (nuint)(e?.Length ?? 0),
+                    device = (void*)device,
                 };
                 long id = ((delegate* unmanaged[Cdecl]<nint, CrystalOpenParams*, long>)Fn("open"))(rt, &o);
                 return id < 0 ? $"status {id}: {LastError()}" : id.ToString();
@@ -347,6 +348,37 @@ namespace EmuSen.WiseMan.Crystal
         }
 
         public string Unsubscribe(nint sub) => Status(((delegate* unmanaged[Cdecl]<nint, int>)Fn("unsubscribe"))(sub));
+
+        // A frame's whole frame_info, for a caller that reads its fields.
+        public CrystalFrameInfo FrameInfo(nint rt, uint session)
+        {
+            var info = new CrystalFrameInfo { size = (uint)sizeof(CrystalFrameInfo) };
+            int status = ((delegate* unmanaged[Cdecl]<nint, uint, CrystalFrameInfo*, int>)Fn("frame"))(rt, session, &info);
+            return status == 0 ? info : throw new InvalidOperationException($"{Name}: status {status}: {LastError()}");
+        }
+
+        public nint PictureLend(nint rt, uint session) => ((delegate* unmanaged[Cdecl]<nint, uint, nint>)Fn("picture_lend"))(rt, session);
+
+        public string RawSelect(nint rt, uint session, string? encoding)
+        {
+            byte[]? e = Utf8(encoding);
+            fixed (byte* ep = e) return Status(((delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, int>)Fn("raw_select"))(rt, session, ep, (nuint)(e?.Length ?? 0)));
+        }
+
+        // raw_copy's answer: the bytes, the shape and their SHA-256, or the bytes asked of a buffer len long.
+        public string RawCopy(nint rt, uint session, uint size = 0, int len = -1)
+        {
+            var f = (delegate* unmanaged[Cdecl]<nint, uint, CrystalRawInfo*, byte*, nuint, long>)Fn("raw_copy");
+            var info = new CrystalRawInfo { size = size != 0 ? size : (uint)sizeof(CrystalRawInfo), reserved = 0xBEEF };
+            long n = f(rt, session, &info, null, 0);
+            if (n < 0) return $"status {n}: {LastError()}";
+            var bytes = new byte[len >= 0 ? len : n];
+            long again;
+            fixed (byte* b = bytes) again = f(rt, session, &info, b, (nuint)bytes.Length);
+            if (again < 0) return $"status {again}: {LastError()}";
+            string shape = $"{info.element} {info.width}x{info.height} stride {info.stride} reserved {info.reserved}";
+            return len >= 0 ? $"{n} {again} {shape}" : $"{again} {shape} {Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))}";
+        }
 
         private delegate long CopyOut(byte* o, nuint n);
 

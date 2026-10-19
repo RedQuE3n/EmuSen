@@ -25,6 +25,8 @@ use crate::seam::{Debugger, NoDebugger, Ran};
 pub struct Options {
     pub battery_disabled: bool,
     pub audio_buffer_max_samples: u32,
+    /// The presenter's device, 0 for none.
+    pub device: usize,
 }
 
 /// A refusal in the C# engine's words, and the status the API answers it with.
@@ -41,6 +43,28 @@ impl Refused {
 
     pub fn io(words: String) -> Refused {
         Refused { status: crate::abi::status::IO, words }
+    }
+}
+
+/// A machine just made and its lend of the device, settled before the machine is freed and freed after it.
+pub struct Built {
+    machine: Option<Machine>,
+    lend: Option<crate::lend::MachineLend>,
+}
+
+impl Built {
+    fn machine(&self) -> &Machine {
+        self.machine.as_ref().expect("built")
+    }
+}
+
+impl Drop for Built {
+    fn drop(&mut self) {
+        if let (Some(_), Some(l)) = (&self.machine, &self.lend) {
+            l.settle();
+        }
+        self.machine = None;
+        self.lend = None;
     }
 }
 
@@ -108,6 +132,12 @@ pub struct Engine {
     raw_current: bool,
     raw_index: i32,
     pub picture_on_device: bool,
+    /// The runtime's lender and the presenter's device, where the session was given one.
+    pub device_lender: Option<(Arc<dyn crate::lend::Lender>, usize)>,
+    /// Whether the session's refusal to lend was logged, once a session.
+    lend_refused: bool,
+    /// The current machine's lend of the device.
+    pub lend: Option<crate::lend::MachineLend>,
     said: Mutex<Vec<String>>,
     fresh: bool,
     pub options: Options,
@@ -179,6 +209,9 @@ impl Engine {
             raw_current: false,
             raw_index: -1,
             picture_on_device: false,
+            device_lender: None,
+            lend_refused: false,
+            lend: None,
             said: Mutex::new(Vec::new()),
             fresh: false,
             options,
@@ -292,10 +325,6 @@ impl Engine {
         None
     }
 
-    fn battery_file(&self, tree: &Tree, rom: &str, console: &str, suffix: &str) -> BatterySave {
-        BatterySave::open(tree, rom, console, self.options.battery_disabled, suffix)
-    }
-
     pub fn release_media(&mut self) {
         self.placement = None;
     }
@@ -305,7 +334,24 @@ impl Engine {
     }
 
     /// A machine for a disc and its files.
-    fn create(&self, disc: &DiscFiles, firmware: &[(u32, Vec<u8>)], saves: &[(u32, BatterySave)], placement: &Placement, system: Option<&str>) -> Result<Machine, Refused> {
+    /// A lend of the device for the next machine, where the core takes one and the session was given a device; a
+    /// refusal logged once a session.
+    fn new_lend(&mut self) -> Option<crate::lend::MachineLend> {
+        let (lender, device) = self.device_lender.clone().filter(|_| self.claims(caps::DEVICE_PICTURE))?;
+        match lender.make(device) {
+            Ok((handle, lent)) => Some(crate::lend::MachineLend { lender, handle, device: lent }),
+            Err(why) => {
+                if !self.lend_refused {
+                    self.lend_refused = true;
+                    crate::error_log::warning("picture", &format!("no device is lent to the core: {why}"));
+                }
+                None
+            }
+        }
+    }
+
+    fn create(&mut self, disc: &DiscFiles, firmware: &[(u32, Vec<u8>)], saves: &[(u32, BatterySave)], placement: &Placement, system: Option<&str>) -> Result<Built, Refused> {
+        let lend = self.new_lend();
         let mut owned: Vec<(u32, Vec<u8>)> = firmware.to_vec();
         for (which, save) in saves {
             let bytes = save.read().or_else(|| placement.fresh.iter().find(|(w, _)| w == which).and_then(|(_, module)| emusen_systems::media::format(module)));
@@ -324,7 +370,9 @@ impl Engine {
         create.files = &files;
         create.flags = if self.lends() { 1 } else { 0 } | if placement.removable_apart { 2 } else { 0 } | if placement.console_apart { 4 } else { 0 };
         create.system = system.as_deref();
-        Machine::create(self.lib, &create).map_err(|r| Refused::fault(format!("{} refused the game: {}.", self.display_name, r.words)))
+        create.device = lend.as_ref().map(|l| &l.device);
+        let machine = Machine::create(self.lib, &create).map_err(|r| Refused::fault(format!("{} refused the game: {}.", self.display_name, r.words)))?;
+        Ok(Built { machine: Some(machine), lend })
     }
 
     /// A game loaded, `CoreEngine.LoadRom`.
@@ -339,15 +387,15 @@ impl Engine {
         let disabled = self.options.battery_disabled;
         let own = |b: &BatteryFile| BatterySave::open(tree, at, &console, disabled, &b.suffix);
         let placement = media::place(tree, &console, system.as_ref(), &self.media_choices, &stem, &own, disabled);
-        let save_for = |b: &BatteryFile| placement.file(b.which).cloned().unwrap_or_else(|| self.battery_file(tree, at, &console, &b.suffix));
+        let save_for = |b: &BatteryFile| placement.file(b.which).cloned().unwrap_or_else(|| BatterySave::open(tree, at, &console, disabled, &b.suffix));
         let saves: Vec<(u32, BatterySave)> = match system.as_ref().and_then(|s| s.battery.as_ref()) {
             Some(listed) => listed.iter().map(|b| (b.which, save_for(b))).collect(),
-            None => vec![(0, self.battery_file(tree, at, &console, emusen_galaxia::saves::SRAM_EXTENSION))],
+            None => vec![(0, BatterySave::open(tree, at, &console, disabled, emusen_galaxia::saves::SRAM_EXTENSION))],
         };
         let mut machine = self.create(&disc, &firmware, &saves, &placement, None)?;
         let mut kept = self.lends();
         let mut disc = Some(disc);
-        let mi = MachineInfo::read(&machine.machine_info().unwrap_or_default());
+        let mi = MachineInfo::read(&machine.machine().machine_info().unwrap_or_default());
         let wanted: Vec<(u32, BatterySave)> = mi
             .battery
             .iter()
@@ -403,7 +451,7 @@ impl Engine {
     fn adopt(
         &mut self,
         _tree: &Tree,
-        machine: Machine,
+        mut built: Built,
         placement: Placement,
         asked: &[Firmware],
         wanted: Vec<(u32, BatterySave)>,
@@ -421,8 +469,10 @@ impl Engine {
         self.set = set;
         self.close_lid_at = -1;
         self.started_empty = empty;
+        self.release_machine();
         self.loans.clear();
-        self.machine = None;
+        let machine = built.machine.take().expect("built");
+        self.lend = built.lend.take();
         self.mi = MachineInfo::read(&machine.machine_info().unwrap_or_default());
         if let Some(loan) = loan {
             self.loans.push((self.mi.drives.first().map_or(0, |d| d.drive), loan));
@@ -656,7 +706,7 @@ impl Engine {
             let m = self.machine.as_mut().expect("a machine");
             m.present().map_err(|s| Refused::fault(format!("{name} could not present the picture: {}.", m.words(s as i64))))?;
         }
-        self.picture_on_device = false;
+        self.picture_on_device = !self.skip_rendering && self.take_device_frame()?;
         self.last_frame_ms = start.elapsed().as_secs_f64() * 1000.0;
         self.drain();
         if self.total_frames() % 60 == 0 {
@@ -1073,12 +1123,53 @@ impl Engine {
         }
     }
 
+    /// The machine freed, its lend's copies settled before and the lend freed after.
+    fn release_machine(&mut self) {
+        if self.machine.is_some()
+            && let Some(l) = &self.lend
+        {
+            l.settle();
+        }
+        self.machine = None;
+        self.lend = None;
+    }
+
     /// Lets go of the media and the machine.
     pub fn dispose(&mut self) {
         self.debug.detach();
         self.release_media();
-        self.machine = None;
+        self.release_machine();
         self.loans.clear();
+    }
+
+    /// The frame's picture taken from the lent device where it lies there, `TakeDeviceFrame`.
+    fn take_device_frame(&mut self) -> Result<bool, Refused> {
+        let Some(lend) = &self.lend else { return Ok(false) };
+        if !self.lib.claims(caps::DEVICE_PICTURE) {
+            return Ok(false);
+        }
+        let m = self.machine.as_mut().expect("a machine");
+        let frame = m.frame_device().map_err(|s| Refused::fault(format!("{} could not say where its picture is: {}.", self.display_name, m.words(s as i64))))?;
+        let Some(f) = frame else { return Ok(false) };
+        lend.lender.take(lend.handle, &f).map_err(|words| Refused::fault(format!("InvalidOperationException: {words}")))?;
+        Ok(true)
+    }
+
+    /// The raw picture's bytes into `into` and its shape; none where the core kept none, `CopyRaw`.
+    pub fn copy_raw(&self, into: &mut [u8]) -> Result<Option<(emusen_native::core::sys::RawFrame, usize)>, Refused> {
+        let Some(m) = self.machine.as_ref() else { return Ok(None) };
+        if self.raw_index < 0 || self.raw_asked.is_none() || !self.claims(caps::RAW_PICTURE) {
+            return Ok(None);
+        }
+        let f = m
+            .raw_info(self.raw_index as u32)
+            .map_err(|s| Refused::fault(format!("{} could not describe its picture before the palette: {}.", self.display_name, m.words(s as i64))))?;
+        let Some(f) = f else { return Ok(None) };
+        let bytes = f.bytes.max(0) as usize;
+        if into.len() >= bytes {
+            let _ = m.raw_copy(self.raw_index as u32, &mut into[..bytes]);
+        }
+        Ok(Some((f, bytes)))
     }
 }
 
@@ -1111,5 +1202,12 @@ impl crate::rewind::Snapshots for Snap<'_, '_> {
 
     fn total_frames(&self) -> i64 {
         self.engine.total_frames()
+    }
+}
+
+impl Drop for Engine {
+    fn drop(&mut self) {
+        self.release_machine();
+        self.loans.clear();
     }
 }

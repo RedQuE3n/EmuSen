@@ -331,10 +331,15 @@ impl Machine {
         self.lib.exports().raw_select.map_or(Err(status::NOT_SUPPORTED), |f| ok(unsafe { f(self.h(), mask) }))
     }
 
-    pub fn raw_info(&self, raw: u32) -> Result<RawFrame, Status> {
+    /// The shape of the frame's picture in encoding `raw`, or none where the frame keeps none (status 0).
+    pub fn raw_info(&self, raw: u32) -> Result<Option<RawFrame>, Status> {
         let f = self.lib.exports().raw_info.ok_or(status::NOT_SUPPORTED)?;
         let mut out = RawFrame { size: std::mem::size_of::<RawFrame>() as u32, ..RawFrame::default() };
-        ok(unsafe { f(self.h(), raw, &mut out) }).map(|_| out)
+        match unsafe { f(self.h(), raw, &mut out) } {
+            1 => Ok(Some(out)),
+            0 => Ok(None),
+            e => Err(e.min(-1)),
+        }
     }
 
     pub fn raw_copy(&self, raw: u32, into: &mut [u8]) -> Result<usize, Status> {

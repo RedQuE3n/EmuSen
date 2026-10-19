@@ -9221,7 +9221,7 @@ The three faults of the test core are permanent and run by the kit's own test: `
   system was edited and a branch writing `Create { .. }` meanwhile (Endou's stage 3) merges unbroken.
 - **Routing, not the core, for the 32X's `.bin`.** Those 18 files run as `32x` today only because Nephrite reads their
   header; a recogniser of the 32X's header for `.bin` in `emusen-systems` would route them to `32x` once that system
-  leaves development. Not built here.
+  leaves development. Not built here; built in §32.
 
 ### 31.6 The blast radius
 
@@ -9236,3 +9236,86 @@ WiseMan, rebuilt: `CoreAbi113Tests` to `CoreAbi115Tests` (the last new; 1.14's f
 every `Nephrite` class, `MercuryRt*`, `MercuryModelTests`, the CoreAbi classes of MarsRT, MoonRT and VenusRT,
 `DiamondTests` and the goldens of MoonRT, VenusRT and MercuryRT: **831 of 831** in 13 min 47 s. Three counts of the
 kit's passing cases moved with C24 (Endou's list, MarsRT's 23 and Diamond's 24); no golden was re-recorded.
+
+---
+
+## 32. A 32X cartridge named `.bin` routed by its header, 2026-10-19
+
+*Decided by the tester on 2026-10-19, as §31.5 recommended: the 32X's `.bin` is routing's to fix, not Nephrite's,
+whose rule stays as §31 left it. Built on branch `route-32x` from `WiseMan` at `bac87b11`. Claims are marked as at the
+head of this page.*
+
+### 32.1 The defect, shown first
+
+`.bin` was the systems table's for two systems, `md` and `psx`, and the Mega Drive's recogniser claimed every file that
+is no compact disc, so a 32X cartridge named `.bin` routed to `md` in any folder. The new
+`probe::tests::a_32x_cartridge_named_bin_routes_to_the_32x_by_its_header` routes a synthetic cartridge whose system
+name at `$100` is `SEGA 32X` among the table's systems for `.bin`, with each recogniser's claim; at the base it
+**failed, routing it to `md`** [M].
+
+### 32.2 What was built
+
+- **The table**: `32x` takes `.bin` beside `.32x` (`data/32x.json`, the C# literal), as ES-DE's `sega32x` folder does.
+  `.bin` is now `md`'s, `32x`'s and `psx`'s, in the table's order.
+- **The recogniser**: `genesis::is_32x`, the header rule Nephrite reads (`Nephrite_Native.md` §2.2: `32X` in the
+  system name, the 16 bytes at `$100`, of a file long enough to hold the 256-byte header), and `is_cartridge`, no
+  compact disc and of the 32X or not. The Mega Drive claims a cartridge whose header does not name the 32X, the 32X
+  one whose header does; a file is claimed by at most one of the two, so the folder is never asked between them. Both
+  read the same 0x8010 bytes the Mega Drive read before, so no recogniser reads more of a file than it did.
+- **The C# twin**, behind `EMUSEN_SYSTEMS_NATIVE=0`: `GenesisSystems.Is32x` and `IsCartridge`, the 32X literal's
+  `Recognise`, and the Mega Drive's narrowed alike.
+- **One owner per fact, as far as a boundary allows.** The rule's statement is Nephrite's page; Nephrite's code
+  (`s32x::is_32x`) cannot be called from the platform, which depends on no core, so `emusen-systems` and the C# restate
+  it, each pointing at the page, as the disc tests of §13.3 already do. The parity class holds the two restatements
+  equal.
+
+**What a host sees today** [A]. A host routes to a system only where an engine offers it, and Nephrite's info lists
+`.32x` alone for `32x`: the kit refuses a system in development that shares an extension with an offered one
+(`EmuSen_CoreAPI.md` §27.4), and the 32X is in development. So Mistress and the Rust Crystal route a 32X `.bin` among
+`md` and `psx` as before, except that neither claims it now, and its folder decides: in `genesis/` it is `md`, as it was
+(`SegaCdRoutingTests` on the tester's library, below); **in a folder named for no system it is now routed nowhere**,
+with the words naming `genesis` or `psx`, where it was `md`. No file of the tester's library is in such a folder, and
+the 32X's machine runs no game yet (`Nephrite_Plan.md` §5.6). The day the 32X is offered, Nephrite's info gains `.bin`
+for `32x` and every host routes these files to it with no change here.
+
+### 32.3 The tester's library
+
+Measured on 2026-10-19 with `emusen-library`'s `tests/routing.rs`, which routes every `.bin` of the library named by
+`EMUSEN_ROUTING_LIBRARY` (read only) with every system of the table named, through the scan's own `route` [M]:
+
+| Folder | Before | After |
+|---|---|---|
+| `genesis/`, 946 `.bin` | `md` 946 | `md` 928, `32x` 18 |
+| `psx/`, 70 `.bin` | `md` 50, `psx` 20 | the same |
+| `SCD/`, 114 `.bin` | `md` 109, none 5 | the same |
+
+The 18 are the files whose names say 32X, and no other; every other `genesis/` file stays `md`, which the test
+asserts. The `md` rows of `psx/` and `SCD/` are discs' audio tracks routed one file at a time, which the scan never
+does, since a sheet takes its tracks (§28.4); they are unchanged. With the 32X not named, as in a player's build,
+`SegaCdRoutingTests.The_testers_discs_and_cartridges_each_route_to_their_own_engine` still routes every `genesis/`
+cartridge to the Genesis on Nephrite.
+
+### 32.4 Tested
+
+| What | Result |
+|---|---|
+| `emusen-systems`, `cargo test --profile test-checked` | 29 passed (one new, §32.1; the head test gains the 32X's claims: the bytes asked for, a header cut at 255 bytes the Mega Drive's, a raw track's sync neither's) |
+| `emusen-library` | 11 passed, `tests/routing.rs` new: synthetic 32X and Genesis cartridges in `genesis/`, `sega32x/` and `roms/` with the 32X named and not; the library case above |
+| `emusen-crystal`, `emusen-platform` | 13 and 35 passed, unchanged |
+| WiseMan, `EMUSEN_SYSTEMS_NATIVE` unset and `0`, each a run of its own | 145 of 145 each: `SystemCodeParityTests` (one new, the routing in both halves; the 32X's cartridges and cuts at 511 and 512 bytes added to the recognisers' images), `SystemTableParityTests`, `LibraryParityTests` (a 32X `.bin` in `genesis/`, `sega32x/` or `Misc/`), `CrystalParityTests`, every `Nephrite` class, `SegaCdRoutingTests` on the tester's library, `GenesisCheatFormatsTests`, `GenesisSettingsTests`, `LibraryScreenTests` |
+
+`NephriteTests.The_library_is_on_the_core_abi_and_its_systems_are_the_packs` held each pack's extensions equal to the
+core info's; it now holds a system in development to the pack's less those an offered system has, which is §27.4's
+rule, so the 32X's info is `.32x` while its pack is `.32x` and `.bin`.
+
+### 32.5 Seeded faults
+
+Each was made in the source, run, and reverted, the file compared byte for byte with its kept copy [M]:
+
+| Fault | Caught by |
+|---|---|
+| A. The Mega Drive claims a 32X cartridge again | the systems crate's two tests, the library's synthetic case; `SystemCodeParityTests`' routing case and its recogniser parity |
+| B. The Rust header test takes a file of 272 bytes, not 512 | the systems crate's head test; the recogniser parity (a 32X cartridge cut at 511 bytes) |
+| C. The C# 32X literal has no recogniser | `Every_system_has_code_where_its_literal_has`, the routing case |
+| D. The 32X's data file drops `.bin` | the systems crate's two routing tests, the library's case; `SystemTableParityTests` (two cases), the routing case |
+| E. `probe::recognises` leaves out `32x`, so its recogniser is never asked | the systems crate's routing test, the library's case; `Every_system_has_code_where_its_literal_has` |

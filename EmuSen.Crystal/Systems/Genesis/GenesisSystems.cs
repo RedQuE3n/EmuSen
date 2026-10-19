@@ -29,7 +29,7 @@ namespace EmuSen.Crystal.Systems.Genesis
             "genesis",
             "Sega Genesis",
             SelfDelimitingImages: false,
-            Recognise: probe => IsCompactDisc(probe.Read(0x8010)) ? null : new Recognition(MegaDriveId),
+            Recognise: probe => IsCartridge(probe.Read(0x8010), s32x: false) ? new Recognition(MegaDriveId) : null,
             ScreenScraperSystem: 1);
 
         public static readonly SystemEntry MegaCdLiteral = new(
@@ -57,7 +57,7 @@ namespace EmuSen.Crystal.Systems.Genesis
             "32X",
             "Sega",
             1994,
-            new[] { ".32x" },
+            new[] { ".32x", ".bin" },
             new[] { "Sega - 32X" },
             new[] { "32X" },
             file => file,
@@ -65,6 +65,8 @@ namespace EmuSen.Crystal.Systems.Genesis
             "sega32x",
             "Sega Mega Drive 32X",
             SelfDelimitingImages: false,
+            // A .bin is the 32X's by its header's system name, as Nephrite reads it - see EmuSen_Backend.md §32.
+            Recognise: probe => IsCartridge(probe.Read(0x8010), s32x: true) ? new Recognition(S32xId) : null,
             AttachedTo: MegaDriveLiteral.Console,
             ScreenScraperSystem: 19);
 
@@ -75,6 +77,12 @@ namespace EmuSen.Crystal.Systems.Genesis
         // A compact disc's image rather than a cartridge's: a raw track's sync, or an .iso's volume descriptor at sector 16 - Nephrite's own rule, media.rs.
         public static bool IsCompactDisc(ReadOnlySpan<byte> head) =>
             (head.Length >= 12 && head[..12].SequenceEqual(Sync)) || (head.Length >= 0x8006 && head.Slice(0x8001, 5).SequenceEqual("CD001"u8));
+
+        // A 32X cartridge's header: 32X in its system name at $100, Nephrite's rule - see Nephrite_Native.md §2.2.
+        public static bool Is32x(ReadOnlySpan<byte> head) => head.Length >= 0x200 && head.Slice(0x100, 16).IndexOf("32X"u8) >= 0;
+
+        // A cartridge, no compact disc, of the 32X or not.
+        public static bool IsCartridge(ReadOnlySpan<byte> head, bool s32x) => !IsCompactDisc(head) && Is32x(head) == s32x;
 
         // A Sega CD's disc: SEGADISCSYSTEM at the start of its first sector's data.
         public static bool IsSegaCd(ReadOnlySpan<byte> head)

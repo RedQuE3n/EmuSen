@@ -345,6 +345,13 @@ sector's data, a 32X cartridge by its header's system name, and anything else as
 (interleaved, with a 512-byte header) joined `md` at stage 3 (`Nephrite_Native.md` §11.2). **Later:** `.cue` with its
 track files and `.chd` (§5.8, §9 Q5), `.68k`, `.sgd`.
 
+*Decided 2026-10-19:* routing reads the same header rule. The systems table gives `32x` the extension `.bin` beside
+`.32x`, and `emusen-systems` recognises a 32X cartridge by `32X` in its system name, the Mega Drive declining it, so a
+host that routes among `md`, `32x` and the PlayStation sends a 32X cartridge named `.bin` to `32x` whatever its folder
+(`EmuSen_Backend.md` §32). Nephrite's own info keeps `.32x` alone for `32x` while that system is marked in development,
+since the kit refuses a system in development that shares an extension with an offered one (`EmuSen_CoreAPI.md`
+§27.4); the day the 32X is offered, its info gains `.bin` and the hosts route to it.
+
 ### 4.2 Controllers
 
 `md.pad3` (eight bits) and `md.pad6` (twelve), on ports 0 and 1. The bits follow the hardware's two reads (Up, Down,

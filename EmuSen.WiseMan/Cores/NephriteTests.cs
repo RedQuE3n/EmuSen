@@ -55,7 +55,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(packs.Select(p => p.Id), library.Info.Systems.Select(s => s.Id));
             foreach (var (pack, system) in packs.Zip(library.Info.Systems))
             {
-                Assert.Equal(pack.Extensions, system.Extensions);
+                // A system in development lists none of an offered one's extensions, so the 32X's info leaves out the .bin its pack routes - see EmuSen_Backend.md §32.
+                Assert.Equal(system.Development ? pack.Extensions.Except(GenesisSystems.MegaDrive.Extensions) : pack.Extensions, system.Extensions);
                 Assert.Same(pack, SystemPacks.For(system.Id)!.Entry);
                 Assert.All(system.Firmware, f => Assert.False(f.Required));
                 Assert.Equal(new[] { 8, 12 }, system.Controllers.Select(c => c.Buttons.Count));

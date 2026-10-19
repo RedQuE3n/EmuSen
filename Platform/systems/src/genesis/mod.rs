@@ -27,3 +27,25 @@ pub fn recognise(system: &str, head: &Head) -> Result<Option<Recognition>, Need>
     })
 }
 
+
+/// Each player's pad from the two port settings: port 1's pads, then port 2's unless a 4 Way Play has it, the C#
+/// `GenesisSystems.PlayerControllers` (EmuSen_Settings_Reference.md §4.101).
+pub fn player_controllers(setting: &dyn Fn(&str) -> Option<String>) -> Vec<String> {
+    fn plug(value: Option<&str>) -> (usize, &'static str, bool) {
+        match value {
+            Some("md.pad6") => (1, "md.pad6", false),
+            Some("md.teamplayer3") => (4, "md.pad3", false),
+            Some("md.teamplayer6") => (4, "md.pad6", false),
+            Some("md.4way3") => (4, "md.pad3", true),
+            Some("md.4way6") => (4, "md.pad6", true),
+            _ => (1, "md.pad3", false),
+        }
+    }
+    let first = plug(setting("pad1").as_deref());
+    let mut players = vec![first.1.to_string(); first.0];
+    if !first.2 {
+        let second = plug(setting("pad2").as_deref());
+        players.extend(std::iter::repeat_n(second.1.to_string(), if second.2 { 1 } else { second.0 }));
+    }
+    players
+}

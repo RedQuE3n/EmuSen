@@ -5,8 +5,20 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
-# Crystal in Rust, begun with the frontend API's types and numbers as emusen_crystal.h declares them, and the tests that
-# hold the header to its baseline and to the session service's table. The runtime itself is step B7. See
-# EmuSen_Backend.md §3 and §14.
+# Crystal in Rust: the frontend API's types and numbers as emusen_crystal.h declares them, the tests that hold the
+# header to its baseline and to the session service's table, and the runtime that serves the API, step B7. See
+# EmuSen_Backend.md §3, §14 and §29.
 [lib]
 name = "emusen_crystal"
+
+[dependencies]
+# The core host: discovery from sidecars, trust, the v1 calls (EmuSen_Backend.md §27).
+emusen-core-host = { path = "../../EmuSen/Cores/Shared/emusen-core-host" }
+# Core info's JSON as the host reads it.
+emusen-native = { path = "../../EmuSen/Cores/Shared/emusen-native" }
+# The systems table, routing and the packs' rules.
+emusen-systems = { path = "../systems" }
+# The tree, the config files, the save names and the files a probe reads.
+emusen-galaxia = { path = "../galaxia" }
+# .NET's text rules and JSON writer, so each answer is the C# implementation's to the byte.
+emusen-dotnet = { path = "../dotnet" }

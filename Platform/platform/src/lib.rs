@@ -12,6 +12,8 @@ pub mod disc;
 pub mod endymion;
 pub mod endymion_devices;
 pub mod cheats;
+// The frontend API's stable header, emusen_crystal.h, exported beside this interface as step B7 builds it (EmuSen_Backend.md §29).
+pub mod crystal;
 pub mod firmware;
 pub mod savemedia;
 pub mod galaxia;

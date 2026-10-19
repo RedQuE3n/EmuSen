@@ -41,5 +41,9 @@ emusen-library = { path = "../library" }
 # Scraping, under its own stable header (EmuSen_Backend.md §30).
 emusen-scrape = { path = "../scrape" }
 emusen-sqlite = { path = "../sqlite" }
+# Crystal in Rust, the runtime the frontend API's exports call (EmuSen_Backend.md §29).
+emusen-crystal = { path = "../crystal" }
+# The session service's numbers, which the frontend API's statuses share.
+emusen-session-service = { path = "../session-service" }
 # .NET's JSON, for the requests the systems' C layer reads.
 emusen-dotnet = { path = "../dotnet" }

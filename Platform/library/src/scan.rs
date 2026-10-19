@@ -6,9 +6,9 @@
 use crate::{Error, Progress};
 use emusen_dotnet::text::{compare_ignore_case, equals_ignore_case};
 use emusen_galaxia::dotnet_path::{self as path, Style};
+use emusen_galaxia::image_probe::{self, ImageProbe, head_of};
 use emusen_galaxia::{archive, dotnet_files, image_sets};
-use emusen_systems::probe::{self, Candidate, Head, Recognition};
-use std::io::Read;
+use emusen_systems::probe::{self, Candidate, Recognition};
 use std::sync::atomic::Ordering;
 
 /// Why a scan can list nothing, `RomLibraryStatus`.
@@ -77,110 +77,17 @@ impl Systems {
     }
 }
 
-/// A file's first bytes, at most `length`, as `MappedFile.Head` reads them.
-fn head_of(file: &str, length: usize) -> Result<Vec<u8>, String> {
-    let mut out = Vec::new();
-    std::fs::File::open(file).map_err(|e| e.to_string())?.take(length as u64).read_to_end(&mut out).map_err(|e| e.to_string())?;
-    Ok(out)
-}
-
-/// How a recogniser is shown a library file's image, the C# `MediaProbe`: a file's own bytes, a sheet's first track's,
-/// an `.m3u`'s first disc's, an archive's image entry's.
-enum Probe {
-    Empty,
-    File(String),
-    Sheet(String),
-    Entry(String, String),
-    SheetEntry(String, String),
-}
-
-impl Probe {
-    fn of(at: &str, systems: &Systems) -> Result<Probe, String> {
-        if archive::is_archive(at) {
-            return Ok(match archive::image_entry(at, |e| systems.takes(e))? {
-                None => Probe::Empty,
-                Some(entry) if image_sets::is_sheet(&entry) => Probe::SheetEntry(at.to_string(), entry),
-                Some(entry) => Probe::Entry(at.to_string(), entry),
-            });
-        }
-        if image_sets::is_playlist(at) {
-            return match image_sets::discs(at)?.into_iter().next() {
-                Some(disc) if dotnet_files::file_exists(&disc) => Probe::of(&disc, systems),
-                _ => Ok(Probe::Empty),
-            };
-        }
-        if image_sets::is_sheet(at) {
-            return Ok(Probe::Sheet(at.to_string()));
-        }
-        Ok(Probe::File(at.to_string()))
-    }
-
-    fn read(&self, length: usize) -> Result<Vec<u8>, String> {
-        match self {
-            Probe::Empty => Ok(Vec::new()),
-            Probe::File(file) => head_of(file, length),
-            Probe::Sheet(sheet) => match image_sets::companions(sheet)?.into_iter().next() {
-                Some(track) if dotnet_files::file_exists(&track) => head_of(&track, length),
-                _ => Ok(Vec::new()),
-            },
-            Probe::Entry(zip, entry) => archive::read_entry(zip, entry, length),
-            Probe::SheetEntry(zip, entry) => {
-                let sheet = String::from_utf8_lossy(&archive::read_entry(zip, entry, 1 << 20)?).into_owned();
-                let Some(first) = image_sets::companion_names(&sheet)?.into_iter().next().map(|f| f.replace('\\', "/")) else { return Ok(Vec::new()) };
-                let dir = path::directory_name(Style::Unix, entry).unwrap_or_default();
-                archive::read_entry(zip, &if dir.is_empty() { first } else { format!("{dir}/{first}") }, length)
-            }
-        }
-    }
-}
-
-/// The claims of each candidate that has a recogniser, by its place; a read that fails ends the asking, keeping what
-/// was claimed before it, as the C#'s one `catch` round the loop does.
+/// The claims of each candidate that has a recogniser, by its place, the file read through Galaxia's image probe; a
+/// probe that cannot be made claims nothing.
 fn claims(at: &str, candidates: &[&emusen_systems::System], systems: &Systems) -> Vec<(usize, Recognition)> {
-    let mut claims = Vec::new();
-    let Ok(probe) = Probe::of(at, systems) else { return claims };
-    let (mut head, mut cached) = (Vec::new(), 0usize);
-    for (place, system) in candidates.iter().enumerate() {
-        if !probe::recognises(&system.id) {
-            continue;
-        }
-        let mut asked = 0usize;
-        loop {
-            let shown: &[u8] = if asked == 0 { &[] } else { &head[..head.len().min(asked)] };
-            match probe::recognise(&system.id, &Head { bytes: shown, asked }) {
-                Ok(Some(claim)) => {
-                    claims.push((place, claim));
-                    break;
-                }
-                Ok(None) => break,
-                Err(probe::Need(need)) => {
-                    if need <= asked {
-                        return claims;
-                    }
-                    if need > cached {
-                        match probe.read(need) {
-                            Ok(bytes) => head = bytes,
-                            Err(_) => return claims,
-                        }
-                        cached = need;
-                    }
-                    asked = need;
-                }
-            }
-        }
-    }
-    claims
+    let Ok(probe) = ImageProbe::of(at, &|e| systems.takes(e)) else { return Vec::new() };
+    let ids: Vec<&str> = candidates.iter().map(|s| s.id.as_str()).collect();
+    probe::claims(&ids, &mut |length| probe.read(length))
 }
 
 /// The extension that decides a file's system: an archive's image entry's, else its own, in lower case.
 fn image_extension(at: &str, systems: &Systems) -> String {
-    if !archive::is_archive(at) {
-        return emusen_dotnet::text::to_lower(path::extension(Style::HOST, at));
-    }
-    match archive::image_entry(at, |e| systems.takes(e)) {
-        Ok(Some(entry)) => emusen_dotnet::text::to_lower(path::extension(Style::Unix, &entry)),
-        _ => String::new(),
-    }
+    image_probe::image_extension(at, &|e| systems.takes(e))
 }
 
 /// `CoreCatalog.IsGameBoyColor`'s reading: the file's own extension, and its byte at 0x143 where it is longer.

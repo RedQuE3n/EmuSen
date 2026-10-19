@@ -175,6 +175,44 @@ pub fn recognise(system: &str, head: &Head) -> Result<Option<Recognition>, Need>
     }
 }
 
+/// Each candidate's claim that has a recogniser, by its place, reading the file through `read` as each recogniser asks
+/// for more; a read that fails ends the asking, keeping what was claimed before it, as the C#'s one `catch` round the
+/// loop does (`SystemRouting.Recognised`).
+pub fn claims(candidates: &[&str], read: &mut dyn FnMut(usize) -> Result<Vec<u8>, String>) -> Vec<(usize, Recognition)> {
+    let mut claims = Vec::new();
+    let (mut head, mut cached) = (Vec::new(), 0usize);
+    for (place, system) in candidates.iter().enumerate() {
+        if !recognises(system) {
+            continue;
+        }
+        let mut asked = 0usize;
+        loop {
+            let shown: &[u8] = if asked == 0 { &[] } else { &head[..head.len().min(asked)] };
+            match recognise(system, &Head { bytes: shown, asked }) {
+                Ok(Some(claim)) => {
+                    claims.push((place, claim));
+                    break;
+                }
+                Ok(None) => break,
+                Err(Need(need)) => {
+                    if need <= asked {
+                        return claims;
+                    }
+                    if need > cached {
+                        match read(need) {
+                            Ok(bytes) => head = bytes,
+                            Err(_) => return claims,
+                        }
+                        cached = need;
+                    }
+                    asked = need;
+                }
+            }
+        }
+    }
+    claims
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

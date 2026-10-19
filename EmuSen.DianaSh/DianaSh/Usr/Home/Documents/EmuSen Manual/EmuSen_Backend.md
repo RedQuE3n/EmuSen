@@ -6518,6 +6518,43 @@ firmware, battery, card and media classes, Hotaru on the API, the frontend defec
 options, core registration, Mistress's log folder and run control, breakpoint conditions, the divergence rows, the
 golden corpus and the shell over a session), **325 of 325 pass**.
 
+### 29.13 Built 2026-10-19: part (a), piece 1, the runtime and what it reads
+
+**What moved to a shared owner first** (`46dd19fb`). The library's scan held the probe a recogniser is shown a file
+through and the loop that asks each recogniser for more; the runtime's route needs both, so they became Galaxia's
+`image_probe` and `emusen-systems`' `probe::claims`, the scan composing them with its behaviour unchanged
+(`LibraryParityTests` and `LibraryRecordsParityTests` pass). Galaxia gained `consoles.json` (`consoles`: the read, and
+the one copy of `graphics.json`'s map on a first load, with the file's schema beside the models' and no
+`EMUSEN_GALAXIA_MODEL_*` number, since the C# binds it itself), and `emusen-systems` the Genesis family's and the
+PlayStation's player rules, twins of the packs' `PlayerControllers`.
+
+**The piece** (`cfe21461`). `emusen-crystal` holds `runtime` (the 1.2 config, discovery and trust through
+`emusen-core-host`), `catalog` (the C# `CoreCatalog`'s joins: its four hand rows, the consoles discovery adds, the
+registry of names, the shelves in release order, each console's pad, ports and players, the engines of a system),
+`route`, `settings` (a game's own file and the engine its layers choose), `info` (the controllers and settings core info
+and a schema give) and `json` (the default `Utf8JsonWriter`'s bytes over `emusen-dotnet`). The platform library exports
+the piece's eleven functions; the binding still reaches the Rust only once every export is there, so the parity class
+drives both implementations through the C ABI by their exports' names (`CrystalImpl`), one after the other over the
+same directories.
+
+**Measured on 2026-10-19** [M]: `CrystalParityTests` 7 of 7, comparing every answer of the build's tree's four
+listings, asked twice so that the reports after the libraries the players' controllers open are compared too; a tree of
+the test cores with a core in development, with and without the flag, with a directory missing and one named twice; a
+rescan after a sidecar went; `consoles.json` as each implementation's first listing copies it, byte for byte; twenty-two
+files routed, with the routes themselves held to what the C# decides (a zipped NES game, a Game Boy game shelved as the
+Color by its header, a Sega CD and a PlayStation disc told apart by content, a sheet, a folder named for the system, a
+disc no console recognises, no path); a game's own engine, a retired name, and its console's. Four seeded faults, each
+caught: the registry's names not lowercased (two cases), the Color's shelf by extension alone (one), `consoles.json`
+left uncopied (one), the release order without the year (two). The crate's tests 2 and 6 (the ABI's test, its export
+check now holding the eleven exports to the header), the platform library's 31 and 4; with `CrystalHeaderTests`,
+`CoreHostParityTests` and the table, code and Galaxia parity classes, 87 of 87.
+
+**Found while building, and recorded.** The C# implementation honours the config's development flag and cores through
+`CoreDiscovery`, whose state is the process's: a flag one runtime is given stays for the next runtime of the process, so
+the parity class puts it back before each. Any one program makes one runtime, so no program meets it; the Rust runtime
+holds its own. **Left**: the C# writes a line to the error log the first time a retired engine's name is read; the Rust
+reads the name as its replacement and writes no line yet, which a later piece adds with the runtime's error log.
+
 ---
 
 ## 30. B9, scraping in Rust: the design, 2026-10-18

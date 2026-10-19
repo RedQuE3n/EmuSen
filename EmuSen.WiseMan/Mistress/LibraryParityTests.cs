@@ -75,6 +75,7 @@ namespace EmuSen.WiseMan.Mistress
             Put(Path.Combine(root, Pick("segacd", "Misc"), Name() + ".iso"), SyntheticMdRom.Disc());
             Put(Path.Combine(root, "segacd", "Raw Disc.bin"), SyntheticMdRom.Disc());
             Put(Path.Combine(root, "32x", Name() + ".32x"), SyntheticMdRom.Cartridge("SEGA 32X"));
+            Put(Path.Combine(root, Pick("genesis", "sega32x", "Misc"), "Mars " + Name() + ".bin"), SyntheticMdRom.Cartridge("SEGA 32X"));
 
             PsxDisc disc = SyntheticPsxDisc.Build(audioSeconds: 0);
             string psx = Path.Combine(root, Pick("psx", "PlayStation", "Misc"));

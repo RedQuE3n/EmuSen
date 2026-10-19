@@ -69,7 +69,8 @@ are those documents' and are re-checked against the pinned copies at stage 3.
   16 in a raw 2,352-byte one. Its header follows at `$100` of the system area.
 - **A 32X cartridge** has `32X` in its header's system name. *Argued, unchecked:* a 32X image whose header does not say
   so would be taken for a Genesis cartridge; the 32X's own security header (the plan's §5.6) is the firmer test, read
-  at stage 12.
+  at stage 12. *Measured on 2026-10-19* over the 946 `.bin` files of the tester's `genesis/` folder: 18 headers name the
+  32X, the same 18 whose file names say 32X, and no other; routing reads the same rule (`EmuSen_Backend.md` §32).
 - **The region field** in its old form (`J`, `U`, `E` letters) and its new single hex digit (bit 0 Japan, bit 2 the
   Americas, bit 3 Europe; `E` is read as the letter). The machine is PAL only when Europe is the one market allowed; a
   Sega CD's BIOS is chosen Americas first, then Japan, then Europe (the plan's §9, Q6).

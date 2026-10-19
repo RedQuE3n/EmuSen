@@ -81,6 +81,8 @@ namespace EmuSen.WiseMan.Crystal
             discs.Add(("sega cd", SyntheticMdRom.Disc()));
             discs.Add(("sega cd europe", SyntheticMdRom.Disc("E", 0x20000)));
             discs.Add(("genesis", SyntheticMdRom.Cartridge()));
+            discs.Add(("32x", SyntheticMdRom.Cartridge("SEGA 32X")));
+            discs.Add(("32x at the name's end", SyntheticMdRom.Cartridge("SEGA SATURN 32X")));
             byte[] raw = new byte[0x9000];
             new byte[] { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 }.CopyTo(raw, 0);
             raw[15] = 1;
@@ -93,7 +95,7 @@ namespace EmuSen.WiseMan.Crystal
             foreach (var (label, image) in discs)
             {
                 yield return (label, image);
-                foreach (int cut in new[] { 0, 12, 15, 16, 30, 0x40, 0x8005, 0x8006, 0x8010, 8223, 8224, 9463, 9464, 12 * 1024, 20 * 2048, 21 * 2048 + 10 })
+                foreach (int cut in new[] { 0, 12, 15, 16, 30, 0x40, 0x1FF, 0x200, 0x8005, 0x8006, 0x8010, 8223, 8224, 9463, 9464, 12 * 1024, 20 * 2048, 21 * 2048 + 10 })
                     if (cut < image.Length) yield return ($"{label} cut {cut}", image[..cut]);
                 for (int n = 0; n < 6; n++)
                 {
@@ -151,6 +153,26 @@ namespace EmuSen.WiseMan.Crystal
                 if (m != n) differences.Add($"{file} in {folder ?? "null"} among {string.Join(",", candidates.Select(c => c.Id))} claimed by {string.Join(",", claims.Select(c => c.Item1))}:\n  library: {n}\n  C#:      {m}");
             }
             Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(10)));
+        }
+
+        // A 32X cartridge named .bin goes to the 32X by its header and a Genesis cartridge to the Genesis, wherever it sits, in both halves - see EmuSen_Backend.md §32.
+        [Fact]
+        public void A_32x_cartridge_named_bin_routes_to_the_32x_in_both_halves()
+        {
+            Assert.True(SystemTable.Ready, SystemTable.Report);
+            var candidates = SystemPacks.All.Select(p => p.Entry).Where(e => e.Extensions.Contains(".bin")).ToArray();
+            Assert.Equal(new[] { "md", "32x", "psx" }, candidates.Select(c => c.Id));
+            foreach (var (system, expected) in new[] { ("SEGA 32X", "32x"), ("SEGA GENESIS", "md"), ("SEGA MEGA DRIVE", "md") })
+            {
+                byte[] image = SyntheticMdRom.Cartridge(system);
+                var managed = Enumerable.Range(0, candidates.Length).Select(at => (at, candidates[at].Recognise?.Invoke(new Probe(image)))).Where(c => c.Item2 is not null).Select(c => (c.at, c.Item2!)).ToArray();
+                var native = Enumerable.Range(0, candidates.Length).Select(at => (at, SystemCode.Recognise(candidates[at].Id, new Probe(image)))).Where(c => c.Item2 is not null).Select(c => (c.at, c.Item2!)).ToArray();
+                foreach (string? folder in new[] { null, "genesis", "sega32x", "roms" })
+                {
+                    Assert.Equal(expected, SystemRouting.DecideManaged("game.bin", () => folder, candidates, managed).System?.Id);
+                    Assert.Equal(expected, SystemCode.Route("game.bin", folder, candidates, native)!.System?.Id);
+                }
+            }
         }
 
         private static string Show(Routed routed) => $"{routed.System?.Id ?? "-"} | {(routed.Recognition is { } c ? $"{c.SystemId} {c.Serial} {c.Region}" : "-")} | {routed.Reason ?? "-"}";

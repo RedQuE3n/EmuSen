@@ -163,13 +163,13 @@ pub fn route(file_name: &str, folder: Option<&str>, candidates: &[Candidate], cl
 
 /// Whether a system has a recogniser, which only consoles sharing an extension with another need.
 pub fn recognises(system: &str) -> bool {
-    matches!(system, "md" | "mcd" | "psx")
+    matches!(system, "md" | "mcd" | "32x" | "psx")
 }
 
 /// The system's recogniser over the head; none for a system without one.
 pub fn recognise(system: &str, head: &Head) -> Result<Option<Recognition>, Need> {
     match system {
-        "md" | "mcd" => crate::genesis::recognise(system, head),
+        "md" | "mcd" | "32x" => crate::genesis::recognise(system, head),
         "psx" => crate::psx::disc::recognise(head),
         _ => Ok(None),
     }
@@ -227,6 +227,14 @@ mod tests {
         sega[..14].copy_from_slice(b"SEGADISCSYSTEM");
         assert_eq!(recognise("mcd", &Head { bytes: &sega, asked: 0x40 }).unwrap().map(|r| r.system), Some("mcd".into()));
         assert_eq!(recognise("nes", &Head { bytes: &[], asked: 0 }), Ok(None));
+        let mut mars = [0u8; 0x200];
+        mars[0x104..0x107].copy_from_slice(b"32X");
+        let claimant = |image: &[u8]| ["md", "32x"].into_iter().filter(|s| recognise(s, &Head { bytes: image, asked: 0x8010 }).unwrap().is_some()).collect::<Vec<_>>();
+        assert_eq!(recognise("32x", &Head { bytes: &mars, asked: 0 }), Err(Need(0x8010)));
+        assert_eq!((claimant(&mars), claimant(&mars[..0x1FF])), (vec!["32x"], vec!["md"]), "a header needs its 256 bytes");
+        let mut disc = mars;
+        disc[..12].copy_from_slice(&SYNC);
+        assert!(claimant(&disc).is_empty(), "a disc is neither's");
     }
 
     #[test]
@@ -242,7 +250,7 @@ mod tests {
         assert_eq!(route("a.x", None, &[], &[]).reason.as_deref(), Some("no system takes a.x"));
     }
 
-    // .sms and .sg are each one system's, chosen at once whatever the folder; .bin stays the Genesis's and the PlayStation's (Endou_Plan.md §4.1).
+    // .sms and .sg are each one system's, chosen at once whatever the folder; .bin stays the Genesis's, the 32X's and the PlayStation's (Endou_Plan.md §4.1, EmuSen_Backend.md §32).
     #[test]
     fn a_master_system_or_sg1000_image_routes_to_its_one_system() {
         let table = crate::table().unwrap();
@@ -256,7 +264,28 @@ mod tests {
                 assert_eq!((routed.system.as_deref(), routed.recognition, routed.reason), (Some(system), None, None), "{file} in {folder:?}");
             }
         }
-        assert_eq!(candidates("game.bin").iter().map(|c| c.id).collect::<Vec<_>>(), ["md", "psx"]);
+        assert_eq!(candidates("game.bin").iter().map(|c| c.id).collect::<Vec<_>>(), ["md", "32x", "psx"]);
         assert!(candidates("game.gg").is_empty(), "the Game Gear is not a system before J3");
+    }
+
+    // A cartridge's .bin routes by its header's system name, whatever its folder: a 32X's to the 32X, a Genesis's to the Genesis (EmuSen_Backend.md §32).
+    #[test]
+    fn a_32x_cartridge_named_bin_routes_to_the_32x_by_its_header() {
+        let table = crate::table().unwrap();
+        let candidates: Vec<Candidate> = table.iter().filter(|s| s.extensions.iter().any(|e| e == ".bin")).map(|s| Candidate { id: &s.id, name: &s.name, esde_system: &s.esde_system }).collect();
+        let ids: Vec<&str> = candidates.iter().map(|c| c.id).collect();
+        let cartridge = |system: &[u8]| {
+            let mut image = vec![0u8; 0x20000];
+            image[0x100..0x110].copy_from_slice(&[system, &b"                "[system.len()..]].concat());
+            image
+        };
+        for (system, expected) in [(&b"SEGA 32X"[..], "32x"), (b"SEGA GENESIS", "md"), (b"SEGA MEGA DRIVE", "md")] {
+            let image = cartridge(system);
+            for folder in [None, Some("genesis"), Some("sega32x"), Some("roms")] {
+                let claims = claims(&ids, &mut |n| Ok(image[..n.min(image.len())].to_vec()));
+                let routed = route("game.bin", folder, &candidates, &claims);
+                assert_eq!(routed.system.as_deref(), Some(expected), "{} in {folder:?}", String::from_utf8_lossy(system));
+            }
+        }
     }
 }

@@ -4,7 +4,7 @@
   "console": "32X",
   "manufacturer": "Sega",
   "release_year": 1994,
-  "extensions": [".32x"],
+  "extensions": [".32x", ".bin"],
   "cheat_systems": ["Sega - 32X"],
   "openvgdb_systems": ["32X"],
   "cover_aspect": 0.7,

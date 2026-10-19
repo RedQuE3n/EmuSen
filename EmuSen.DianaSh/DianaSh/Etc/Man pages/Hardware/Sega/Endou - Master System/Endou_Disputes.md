@@ -52,7 +52,7 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   per-model choice gains its own test at stage 5.
 - Implemented in: `beryl-sn76489` (2026-10-05) for the two registers; Endou's choice at stage 5.
 
-### D-1. OPEN. The Master System's colour output: the level at which each value of a CRAM entry's two-bit component is shown
+### D-1. The Master System's colour output: the level at which each value of a CRAM entry's two-bit component is shown
 - Opened: 2026-10-19, at stage 0. `msvdp.txt` §5 gives CRAM's format, `--BBGGRR`, and "up to 64 possible colors",
   with no output levels. Nephrite measured the 315-5313's levels in mode 4 on Nuked-MD's board (red and green 0, 95,
   161, 255; blue 0, 109, 161, 255) and recorded that "no measurement of a console's mode 4 output is in the corpus"
@@ -74,9 +74,15 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   model, as stage 0 settled them; whether to take the page's boosted blue for the 315-5124 is a question for the
   tester (`Endou_Native.md` §10.12). The crate outputs CRAM entries (`Beryl_SmsVdp.md` §1), so either answer is a table
   of Endou's alone.
-- Pinned by: `machine::SMS_COLOURS` through `programs::a_program_s_picture_is_its_tiles_sprite_scroll_mask_and_mid_frame_colour`
-  and `EndouTests.The_vdp_draws_a_synthetic_program_s_picture`.
-- Implemented in: the stage 3 commit, as the equal steps.
+- *Decided 2026-10-19 by the tester, at stage 4:* the page's boosted blue is taken for the 315-5124. **Conclusion, as
+  implemented:** the 315-5246 shows each component at 0, 85, 170 and 255; the 315-5124 (the Mark III and the first
+  Master System) the same but for blue's first level, `#68`. Both are **read from a document, not measured**: the equal
+  steps are the page's values for the 315-5246, the boost its statement for the 315-5124. What a console puts out
+  stays unmeasured, and no console is run for the project.
+- Pinned by: `machine::SMS_COLOURS` and `SMS1_COLOURS` through `machine::tests::the_315_5124_boosts_only_its_first_blue_level`,
+  `programs::a_program_s_picture_is_its_tiles_sprite_scroll_mask_and_mid_frame_colour` (a digest for each chip) and
+  `EndouTests.The_vdp_draws_a_synthetic_program_s_picture`.
+- Implemented in: the stage 3 commit, as the equal steps; the stage 4 commit, the 315-5124's blue.
 
 ### D-2. OPEN. The YM2413's operator ROMs: whether its log-sine and exponent tables are the OPL2's, entry for entry
 - Opened: 2026-10-19, at stage 0. *OPLx decapsulated* gives the YM3812's two 256-entry ROMs, read from its die.
@@ -180,6 +186,13 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   sprites, and MacDonald's sentence describes the case of eight, where the two agree.
 - Pinned by: `compose::tests::the_first_master_system_widens_only_n_minus_four_of_n_zoomed_sprites`.
 - Implemented in: the stage 3 commit.
+- *At stage 4 (2026-10-19):* the tester approved a VHDL simulator, and GHDL 6.0.0 was installed for the project
+  (`Endou_References.md` §4a). SMS_MiSTer could not be run under it. Its VHDL imports cleanly as VHDL-93, but its
+  console's top entity, `system`, and its `vdp` and `t80s` entities each need the resource library `altera_mf`, Intel's
+  simulation models for the FPGA's memories, which is not free to fetch and not on the desktop, and its PSG, `jt89`, is
+  Verilog, which GHDL does not elaborate [M: `ghdl -m`'s messages; nothing of the RTL was opened]. Writing stand-ins for
+  `altera_mf`'s parts would need the RTL's use of them, which is reading the RTL outside a dispute step, so it was not
+  done. The entry stays as it was.
 
 ### D-7. The background's first pixels under a fine X scroll show the backdrop
 - Opened: 2026-10-19, at stage 3, by the references disagreeing with the document. MacDonald: the column counter starts
@@ -197,6 +210,15 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   (`Nephrite_Native.md` §15.2) is its own, a variant's choice at stage 4.
 - Pinned by: `compose::tests::the_background_scrolls_by_its_column_counter_and_blanks_the_fine_scroll`.
 - Implemented in: the stage 3 commit.
+- *At stage 4 (2026-10-19):* the tester approved a VHDL simulator, and GHDL 6.0.0 was installed for the project
+  (`Endou_References.md` §4a). SMS_MiSTer could not be run under it. Its VHDL imports cleanly as VHDL-93, but its
+  console's top entity, `system`, and its `vdp` and `t80s` entities each need the resource library `altera_mf`, Intel's
+  simulation models for the FPGA's memories, which is not free to fetch and not on the desktop, and its PSG, `jt89`, is
+  Verilog, which GHDL does not elaborate [M: `ghdl -m`'s messages; nothing of the RTL was opened]. Writing stand-ins for
+  `altera_mf`'s parts would need the RTL's use of them, which is reading the RTL outside a dispute step, so it was not
+  done. The entry stays as it was.
+- *At stage 4 (2026-10-19):* the Genesis's own rule, the wrapped column, is now a variant of the shared composition
+  (`Variant::GENESIS`), which Nephrite draws with; nothing of either console's rule changed.
 
 ### D-8. OPEN. The CPU's access to VRAM and CRAM: when an access made faster than the chip serves it is lost
 - Opened: 2026-10-19, at stage 3, by the plan's thin area (`Endou_Plan.md` §5.2, P3). Sega's Mark III manual: "The VDP
@@ -226,6 +248,13 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   tester's to allow (`Endou_Native.md` §10.12).
 - Pinned by: `programs::data_port_writes_at_every_rate_land`.
 - Implemented in: the stage 3 commit.
+- *At stage 4 (2026-10-19):* the tester approved a VHDL simulator, and GHDL 6.0.0 was installed for the project
+  (`Endou_References.md` §4a). SMS_MiSTer could not be run under it. Its VHDL imports cleanly as VHDL-93, but its
+  console's top entity, `system`, and its `vdp` and `t80s` entities each need the resource library `altera_mf`, Intel's
+  simulation models for the FPGA's memories, which is not free to fetch and not on the desktop, and its PSG, `jt89`, is
+  Verilog, which GHDL does not elaborate [M: `ghdl -m`'s messages; nothing of the RTL was opened]. Writing stand-ins for
+  `altera_mf`'s parts would need the RTL's use of them, which is reading the RTL outside a dispute step, so it was not
+  done. The entry stays open, implemented as no access lost. The TMS9918A's CPU windows (TI's Table 2-2) are not modelled either (`Beryl_SmsVdp.md` §9.3).
 
 ### D-9. The H counter's run and where a line's events fall, by FluBBa's test rather than MacDonald's Genesis
 - Opened: 2026-10-19, at stage 3, by two documents that disagree. MacDonald's §11 gives the H counter's jump at
@@ -244,3 +273,56 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   given the same timing [A].
 - Pinned by: `programs::flubba_s_vdp_test_passes_on_every_model` (with the corpus), `timing::tests`, `tests::the_h_counter_is_latched_on_th_rising_and_holds_its_value`.
 - Implemented in: the stage 3 commit.
+
+### D-10. The 315-5124 and 315-5246 in the TMS9918's modes show four sprites a line, as the TMS9918A does
+- Opened: 2026-10-19, at stage 4, by the documents' silence. TI's manual gives the TMS9918A four sprites a line and a
+  fifth sprite flag (§2.4.5, §2.3.3); MacDonald gives the Sega chips eight in mode 4 and says of the TMS9918's modes
+  only that register 0's bit 3 moves their sprites too (§15); SMS Power!'s pages say nothing of the count.
+- Documents read: TI §2.3.3, §2.4.5; MacDonald `msvdp` §10, §15; SMS Power!'s "Sprites", "VDP Registers".
+- Test program: `programs/tms.s`, six sprites on lines 100-107, the fifth at X 100 and the sixth at X 130, run on the
+  Mark III's model; with eight a line both would show.
+- Referee: the references as black boxes on their Master System or Mark III settings (Genesis Plus GX's `mark-III`,
+  Gearsystem's "Master System / Mark III", SMS Plus GX's "master system", PicoDrive's "Master System"): their pictures
+  at frames 20, 45, 75 and 105 equal Endou's with four a line up to a colour map, 0 pixels each; and the library's 54
+  SG-1000 images run on the Mark III's model agree with them as on the SG-1000 (`Endou_Native.md` §11.10) [M
+  2026-10-19]. Their agreement is weak evidence, being emulators; SMS_MiSTer could not be run (D-6's note).
+- Conclusion: **argued**, four a line on every chip in the TMS9918's modes, the fifth flagged in the status's bit 6 on an
+  active line; the Sega chips' bits 4-0 stay undriven [R MacDonald §4].
+- Pinned by: `tms::tests::four_sprites_a_line_the_fifth_named_and_208_ends_the_table`,
+  `programs::an_sg_1000_program_s_pictures_status_and_4k_reads_are_the_tms9918a_s`.
+- Implemented in: the stage 4 commit.
+
+### D-11. The TMS9918A's sixteen colours: TI's colour difference levels as RGB
+- Opened: 2026-10-19, at stage 4. The SG-1000's TMS9918A puts out composite video; TI's Table 2-3 gives its 16 colours as
+  a luminance and a chrominance amplitude with no phase, and the TMS9928A's and TMS9929A's same colours as Y, R-Y and
+  B-Y levels in volts. SMS Power!'s "Palette" gives RGB values taken from Young's document, which says they were "taken
+  from mess/vidhrdrw/tms9928a.c in MESS" and computed from TI's levels by a formula it states.
+- Documents read: TI's manual, Table 2-3 and its note that "the gray levels differ slightly for the TMS9918A"; Young §1.1;
+  SMS Power!'s "Palette".
+- Test program: `machine::tests::the_tms9918a_s_colours_are_ti_s_levels_as_rgb` recomputes the table from TI's levels.
+- Referee: none; the references show the SG-1000's pictures in their own palettes, and the pictures are compared up to
+  a colour map.
+- Conclusion: **argued**: Endou derives the colours from TI's levels itself, by the procedure Young's document states (a
+  colour difference's zero at 0.47 V, R = Y + (R-Y), B = Y + (B-Y), G from the NTSC luminance weights, each clipped and
+  scaled to 255 and rounded), not from the emulator's table. The result equals SMS Power!'s values in 47 of 48
+  components; cyan's green is `#EC` against the page's `#EB`, the page having rounded green to two decimals first. The
+  colour difference levels stand for the TMS9918A's colours, whose own table gives no phase; transparent over no
+  external video is black [R TI §2.4, its note].
+- Pinned by: that test, and `EndouTests.The_tms9918a_draws_an_sg_1000_program_s_picture`.
+- Implemented in: the stage 4 commit.
+
+### D-12. The TMS9918A's 4K mode moves every access to the cell a 4K DRAM's row and column name
+- Opened: 2026-10-19, at stage 4, by the references disagreeing with the documents. MacDonald (`sc3000h` §6, and his letter
+  in Young §2.1): with register 1's bit 7 clear the chip puts out six bits of row and column with the address's bits 12
+  and 13 above them, so that "even in 4K mode, all 16K of VRAM can be accessed", only at other cells; he tested a
+  TMS9929A.
+- Documents read: `sc3000h` §6; Young §2.1; TI §2.2.2 ("4/16K selection").
+- Test program: `programs/tms.s` writes `$A5` at `$3C40` in the 16K mode and reads `$3C40` and `$3E00` back in the 4K mode.
+- Referee: as black boxes, Genesis Plus GX reads `$00` and `$3F`, Gearsystem `$00` and `$00`, PicoDrive and SMS Plus GX
+  `$A5` and `$00`; Endou, by the document, reads `$3E00`'s cell as `$A5` [M 2026-10-19]. No two references agree with
+  each other, so none is evidence against the document.
+- Conclusion: **argued** from the documents, the one source tested on a console. No game of the library has been seen
+  to clear the bit; a game that shows otherwise reopens the entry.
+- Pinned by: `tms::tests::the_4k_mode_puts_a_row_and_column_of_six_bits_with_the_high_bits_above_them`,
+  `tests::the_tms9918a_s_4k_mode_moves_the_cpu_s_cells_and_its_own_alike`, and the program's test.
+- Implemented in: the stage 4 commit.

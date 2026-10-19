@@ -4861,7 +4861,7 @@ dependency, `beryl-sms-vdp`, said here as the project's rules ask.
   included; the summaries differ only in the library's path, the timings, the memory figures and C13's count of rounds.
 - **The open Sega CD BIOS** built by each is byte-identical (`open_bios.bin` and its symbols, SHA-256 `fb4a1877…` and
   `9a61aab0…`).
-- **`NephriteTests`** with the corpus and the games: see `Endou_Native.md` §11.9.
+- **WiseMan's Nephrite classes** with the corpus and the games: 56 of 56 (`NephriteTests` 22).
 
 A fault seeded in the shared composition, the Genesis's fine scroll blanked as the Master System's is, was caught by
 the crate's own test and by none of Nephrite's crate tests: D-7's pictures leave the left five pixels out, where the

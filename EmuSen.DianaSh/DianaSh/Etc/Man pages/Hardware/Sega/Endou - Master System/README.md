@@ -17,14 +17,19 @@ Master System is the next new console, ahead of the PlayStation 2; building star
   2026-10-19): the bus, the boards and their table, the I/O chip and the models, the scheduler, the state's version 2,
   the test programs, ZEXDOC and ZEXALL on the machine, the library survey, the referees, the gate and the seeded faults.
   Stage 3 (§10, 2026-10-19): the VDP's mode 4 wired to the machine, FluBBa's VDP test passing whole, the pictures
-  against the references, the state's version 3, the kit, the seeded faults, and the questions before stage 4.
+  against the references, the state's version 3, the kit, the seeded faults, and the questions before stage 4. Stage 4
+  (§11, 2026-10-19): the TMS9918's modes, the TMS9918A and the SG-1000 as a modelled console with the Mark III as its
+  second model, the 315-5124's boosted blue, Nephrite moved onto the shared composition, the library's SG-1000 games
+  against the references, SMS_MiSTer under GHDL, the seeded faults, and the questions before stage 5.
 - [`Endou_References.md`](Endou_References.md) — the documents, test programs, references and referees with their URL,
-  version, licence and SHA-256, as stage 1 fetched and pinned them, and the corrections to what stage 0 recalled.
+  version, licence and SHA-256, as stage 1 fetched and pinned them, the corrections to what stage 0 recalled, and GHDL
+  (stage 4).
 - [`Endou_Disputes.md`](Endou_Disputes.md) — the disputes log, opened with D-0 (the PSG's noise register by console),
   D-1 (the Master System's colour levels, open) and D-2 (the YM2413's operator ROMs, open); stage 2 added D-3 (the
   Mark III's TH), D-4 (port `$3E` and the undriven reads) and D-5 (Codemasters' slots), each argued; stage 3 added D-6
   (the 315-5124's zoom), D-7 (the fine scroll's first pixels), D-8 (the access slots, open) and D-9 (the line's
-  timing, measured by FluBBa's test).
+  timing, measured by FluBBa's test); stage 4 settled D-1 by the tester's decision and added D-10 (four sprites a line
+  in the TMS9918's modes), D-11 (the TMS9918A's colours) and D-12 (its 4K mode), each argued.
 
 The CPU, its assembler, the PSG and the VDP are documented with their crates in [`../Beryl-HW/`](../Beryl-HW/) (Beryl Hardware). The Game
 Gear's pages, when its stages start, go in [`../Jadeite - Game Gear/`](../Jadeite%20-%20Game%20Gear/).

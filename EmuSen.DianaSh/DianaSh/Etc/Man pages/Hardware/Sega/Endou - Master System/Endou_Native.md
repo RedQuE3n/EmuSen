@@ -701,3 +701,217 @@ decisions; it covers stage 4 alone. No real hardware is used for any of them (`E
 4. **MAME is not used** as a reference or a referee.
 5. **Under core ABI 1.15, MercuryRT and Nephrite keep their own system rules**; a 32X header recogniser in
    `emusen-systems`' routing is a separate piece of work, and Endou's stages leave routing alone.
+
+---
+
+## 11. Stage 4: the TMS9918's modes, the SG-1000, and Nephrite on the shared composition (2026-10-19)
+
+### 11.1 In one paragraph
+
+`beryl-sms-vdp` gains the TMS9918's modes (Graphics I and II, Text, Multicolor and the four undocumented combinations)
+with their sprites, on the 315-5124 and 315-5246 and on a fourth chip, the TMS9918A itself (`Beryl_SmsVdp.md` §9).
+The SG-1000 is now a modelled console: the TMS9918A in place of stage 2's stand-in, its colours TI's (D-11), the
+discrete PSG and 1 KiB of RAM, and the Mark III offered as its second model, whose 315-5124 shows the SG-1000's pictures
+in its fixed colours. The 315-5124 takes the boosted blue the tester decided (D-1). Nephrite's mode 4 is drawn by the
+crate's composition with a Genesis variant, its D-7 tests and its corpus digests unchanged (§11.6). Every SG-1000 game
+of the library passes the kit on both models, and its pictures equal the references' up to a colour map but where the
+references differ among themselves or a game's play takes another course (§11.10). SMS_MiSTer could not be run as a referee: GHDL is installed, but the core
+needs Intel's `altera_mf` and a Verilog PSG (§11.11).
+
+### 11.2 The decisions of 2026-10-19, as built
+
+| Decision | Built |
+|---|---|
+| D-1's boosted blue for the 315-5124 | `machine::SMS1_COLOURS`, blue's first level `#68`, for the Mark III and the first Master System; `SMS_COLOURS` for the Master System II (D-1, read from a document) |
+| A VHDL simulator for SMS_MiSTer | GHDL 6.0.0, installed without the administrator's rights (`Endou_References.md` §4a); the referee could not be elaborated (§11.11) |
+| (E) images in PAL by the region setting only | nothing to build: the region setting already chooses PAL; no table was added |
+| MAME not used | struck from the plan's references (`Endou_Plan.md` §1.7) and `Endou_References.md` §3 |
+| MercuryRT and Nephrite keep their system rules; routing untouched | no change to `emusen-systems` or to either core's `create_as` |
+
+### 11.3 The TMS9918's modes on the Master System's chips
+
+`beryl-sms-vdp`'s new module `tms` composes a line in these modes as TMS9918 colour codes, 0 transparent; `Vdp` turns a
+code into what the chip puts out (`Beryl_SmsVdp.md` §2.2, §9). On the 315-5124 and 315-5246 that is a fixed colour of
+their 64, from SMS Power!'s "Palette" table [R], so that Endou colours it as it colours CRAM's, the 315-5124's blue
+boosted. Register 0's bit 2 (M4) clear selects them; the Sega chips keep their line interrupt and counters in them [A:
+they are the chip's, not the mode's]; their status's low five bits stay undriven [R MacDonald §4]; sprites are four a
+line (D-10) and move a further eight pixels by register 0's bit 3 [R MacDonald §15]; and the 315-5124's registers 3
+and 4 mask Graphics II's tables as the TMS9918A's do, the 315-5246's not [R MacDonald §15]. The invalid text mode (M4
+with M1) is not modelled and shows the backdrop, a named loss: no document read says how its tiles "repeat four
+times". `F-16 Fighting Falcon`, the one Master System game the documents name in these modes, is not in the library.
+
+### 11.4 The TMS9918A, and the SG-1000 as a console
+
+`Variant::TMS9918A` (`Beryl_SmsVdp.md` §9.3): eight registers written by a second byte with bit 7 set, the number in
+bits 2-0; no CRAM; F, 5S, C and the fifth sprite's number in the status, 5S only while F is clear; no line interrupt;
+the 4K mode's map (D-12). `model.rs` is the one owner of what each console holds, now its VDP, PSG and RAM too:
+
+| | SG-1000 | Mark III running an SG-1000 cartridge |
+|---|---|---|
+| VDP | TMS9918A | 315-5124 |
+| PSG | discrete SN76489AN (D-0) | Sega's |
+| Work RAM | 1 KiB, mirrored | 8 KiB |
+| Ports `$40`-`$7F` read | the open bus [R SMS Power!'s "I/O Port Map - SG-1000"] | the V and H counters |
+| Status bits 4-0 | the fifth sprite's number | the bus's |
+| Colours | TI's Table 2-3 as RGB (D-11) | the 315-5124's fixed colours |
+| Spaces | RAM, VRAM, ROM | RAM, VRAM, CRAM, ROM |
+
+**The model setting** (`Endou_Plan.md` §5.8) gains `sg1000`: an SG-1000 cartridge runs on the SG-1000, or on the Mark
+III where the setting names it, the consoles whose slot takes it; a Master System cartridge never on the SG-1000, a
+setting naming it falling back to the region's console. The SG-1000's system stays `sg1000` on either model.
+`v1::tests::the_model_setting_offers_each_cartridge_the_consoles_whose_slot_takes_it` holds it. The stand-in and its
+`has_vdp` are gone from `bus.rs`; the status's driven bits are the chip's (`Vdp::status_bits`).
+
+### 11.5 What is argued
+
+- **The TMS9918A's timing** is the family's (`Beryl_SmsVdp.md` §3): TI gives no dot for the interrupt or the sprite scan.
+- **The TMS9918A's first control byte** is taken at once, as the 315-5124's is; no document read says otherwise.
+- **The fifth sprite number while none is flagged** is where each line's scan ended, Young's account, which his document
+  says was "not fully checked".
+- **Collisions** among the four sprites shown, never past pixel 255, on any line, as mode 4's are measured to be; TI
+  says sprites "partially or completely off the screen are also considered", which this reading takes as the lines
+  outside the display.
+- **The CPU's access windows** of TI's Table 2-2 are not modelled: no access is lost, as on the Sega chips (D-8).
+
+### 11.6 Nephrite on the shared composition
+
+`compose` gained the Genesis's variant and a `line` call that composes a span with the mix and the left column's mask,
+which Endou's `Vdp` now uses as well. Nephrite's `render_mode4` is now that call with `Variant::GENESIS` and a `Vram` of
+D-7's map; it is recorded in `Nephrite_Native.md` §67. The variant keeps two rules Nephrite drew that the Master
+System's chips do not: the wrapped column under a fine scroll, and the right columns' lock from pixel 192 rather than
+by the column counter (`Beryl_SmsVdp.md` §9.4), the second a question for the tester (§11.15).
+
+**Unchanged, measured 2026-10-19** [M]: 200,000 random mode 4 lines drawn equal by the old and the new code before the
+old was deleted, and again after the background was made to draw a column at a time, which a first measurement of the
+cost asked for (§11.9); the crate's 194 tests on `test-checked`, D-7's two among them; the kit's corpus on `genesis-sample.txt`,
+the 64 image reports of the base's library and this one's identical, digests included; the open Sega CD BIOS
+byte-identical; WiseMan's Nephrite classes with the corpus and the games, **56 of 56** (`NephriteTests` 22, its debugger's, firmware's, media's, players' and start's 34). P4 of the plan is retired as predicted.
+
+### 11.7 The test programs and the synthetic cartridge
+
+`programs/tms.s`, an SG-1000 program: a Graphics II picture of all three pattern and colour tables with six sprites on
+one line (two overlapping, one moved by its early clock bit, a fifth and a sixth), then Graphics I from frame 30, Text
+from 60 and Multicolor from 90; the frame interrupt keeps each of the first 16 frames' status, and the program reads a
+byte written in the 16K mode back in the 4K mode. `programs::an_sg_1000_program_s_pictures_status_and_4k_reads_are_the_tms9918a_s`
+holds its four pictures' digests, the status `$E4` (the fifth sprite, number 4, and the collision) every frame after
+the first, the 4K read, and the Mark III's picture and status. `examples/referee.rs` writes `.sg` images too, and
+`examples/screen.rs` takes `--system`.
+
+WiseMan's `SyntheticSmsRom.TmsPicture()` is an SG-1000 cartridge in Graphics I; `EndouTests.The_tms9918a_draws_an_sg_1000_program_s_picture`
+holds TI's colours 6 and 12 through the v1 adapter, and the kit's case runs on it.
+
+### 11.8 The state, version 4
+
+`ENDO` version 4: version 3's layout with the VDP's block two bytes longer (whether the line's sprites are the
+TMS9918's, and the fifth sprite's number; `Beryl_SmsVdp.md` §6): 24,881 bytes for a plain `sms` board, pinned by
+`the_version_4_layout_is_pinned`. Version 3 reached no player and is refused.
+
+### 11.9 The gate (`Endou_Plan.md` §7, stage 4), measured 2026-10-19
+
+| Gate item | Result [M] |
+|---|---|
+| TMS9918 test programs where fetched | none exists in a form that runs on an SG-1000 (`Endou_References.md` §2); `tms.s` was written for the purpose, and the crate's tests hold each mode's rules |
+| `SyntheticSmsRom` cases | `EndouTests` **14 of 14**, the new picture case among them; with `SystemTableParity`, the registration and the debugger's parity, and the Nephrite classes, 83 of 83 |
+| The kit | **every case it runs passes** (C1-C15, C17-C24): in corpus form on the library's 54 SG-1000 images, 600 frames, on the SG-1000 (54 of 54) and on the Mark III (54 of 54); on the 12 program images, 300 frames; and on WiseMan's synthetic cartridges, `tms.sg` among them |
+| Pictures against the references on the library's SG-1000 games | §11.10 |
+| Nephrite unchanged | §11.6 |
+| The crates' tests | `beryl-sms-vdp` **37 of 37** on `test-checked`; `endou` **54 of 54** with the corpus (ZEXDOC, ZEXALL and FluBBa's test run); Nephrite 194 of 194 |
+| Seeded faults | §11.12: 16, every one caught, three only after a test was added |
+| The cost | the desktop's mean a frame, release, the median of three differences between runs of 3,600 and 600 frames, over 3,000, the desktop lightly loaded: Sonic the Hedgehog 0.206 ms, Space Harrier 0.190, OutRun 0.223, against 0.203, 0.202 and 0.221 for the base's build measured the same way within the hour; on the SG-1000 Girl's Garden 0.178 and Zaxxon 0.181, and Girl's Garden on the Mark III 0.188. The first build of the shared background, choosing its column a pixel at a time, cost 0.231-0.269 ms on the three games; it now draws a column at a time (§11.6) |
+
+Toolchains: rustc 1.99.0, .NET 10.0.112, GHDL 6.0.0, on the desktop (Ryzen 7 7700X).
+
+### 11.10 Pictures against the references
+
+Each image run to frames 300 and 600 with no input on Endou and on the five references as black boxes through the
+probe (`.sg` routed as the SG-1000; for the Mark III, Genesis Plus GX's `mark-III`, Gearsystem's "Master System / Mark
+III", SMS Plus GX's and PicoDrive's "Master System", BlastEm's `sms1`), every other option at its default, and the
+pictures compared up to a colour map, both ways (`compare.py` in the step's scratch; BlastEm's 256 by 224 aligned at
+row 16). The library is read in place; no picture is committed.
+
+**`tms.s`** at frames 20, 45, 75 and 105 (Graphics II, Graphics I, Text, Multicolor): equal, 0 pixels, to Genesis Plus GX
+and PicoDrive in all four, to Gearsystem and SMS Plus GX in all but Text (66 and 19,604 pixels), and to BlastEm in
+Text alone; the same on the Mark III's model. The status bytes equal Genesis Plus GX's, Gearsystem's and PicoDrive's
+from the second frame on (`$E4`); the first read differs among them (`$80` Endou and Gearsystem, `$C0` Genesis Plus GX,
+`$C4` PicoDrive). The 4K read is D-12's.
+
+**The library's 54 SG-1000 images**, on the SG-1000 [M]:
+
+| | Frame 300 | Frame 600 |
+|---|---:|---:|
+| Equal to at least one of Genesis Plus GX, Gearsystem, SMS Plus GX and PicoDrive | 49 | 45 |
+| Equal to at least three | 46 | 44 |
+| Equal to all four | 38 | 38 |
+| Equal to Genesis Plus GX / Gearsystem / SMS Plus GX / PicoDrive / BlastEm | 43 / 48 / 44 / 47 / 35 | 43 / 44 / 41 / 44 / 30 |
+
+Of the images equal to none: *Gulkave* at 300 and *Soukoban* at 600 are a single colour on Endou and on every reference;
+*Terebi Oekaki* waits on its drawing tablet, which no setting gives; *Drol*, *Hustle Chummy*, *Pachinko 2*, *Golgo 13*,
+*Flicky* and *Safari Race* differ from every reference by about as much as the references differ from each other
+(*Drol*'s radar box, 50-72 pixels against 52-70 between the references). *Champion Pro Wrestling* at 600 is the one
+image where three references (Genesis Plus GX, Gearsystem, PicoDrive, within 217-434 pixels of each other) agree against
+Endou (2,632-3,066): the pictures show the wrestlers in other holds, a different course of play, and Endou's is within
+434 pixels of SMS Plus GX's; it is drawn alike, and which course is the console's is the goldens' question (G5). On the Mark III's model the counts are the same within one image a row.
+
+### 11.11 SMS_MiSTer, under GHDL
+
+Approved 2026-10-19 for D-6, D-7, D-8 and Space Harrier's opening, run as a black box. Its VHDL imports, but its console
+cannot be elaborated: `system`, `vdp` and `t80s` each need Intel's `altera_mf` library, and the PSG is Verilog
+(`Endou_References.md` §4a). Making stand-ins would mean reading the RTL outside a dispute step, so it was not done, and
+those disputes, and §10.10's Space Harrier, stay as they were.
+
+### 11.12 Seeded faults (2026-10-19)
+
+Each made in the source, the crates' tests run (`beryl-sms-vdp`'s, Endou's with the corpus but ZEXDOC and ZEXALL, and
+Nephrite's for F9), the file restored and compared byte for byte (`seed.py` in the step's scratch):
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | Text shows a pattern's low six bits (Young's wording, against TI's) | `tms`'s Text test, `tms.s`'s digests |
+| F2 | Graphics II unmasked on the TMS9918A | **nothing at first**: the test's TMS9918A case set every mask bit, and the 315-5124's case had the patterns of both thirds alike. It now clears the masks on the TMS9918A with the thirds' patterns apart, and catches it |
+| F3 | the fifth sprite flagged with the frame flag set | the fifth sprite's test |
+| F4 | eight sprites a line in the TMS9918's modes | the fifth sprite's and the TMS state's tests, `tms.s` |
+| F5 | a colour 0 sprite not colliding | `tms`'s sprite test, the TMS state's test |
+| F6 | the early clock bit ignored | `tms`'s sprite test, `tms.s` |
+| F7 | the TMS9918A's register number from bits 3-0 | the register write's test |
+| F8 | the boosted blue on the 315-5246 | `the_315_5124_boosts_only_its_first_blue_level`, the mode 4 picture program's digest |
+| F9 | the Genesis's fine scroll blanked | the crate's Genesis test, and **none of Nephrite's** (§67 of its record) |
+| F10 | the 4K mode not applied to a CPU write | **nothing at first**: the test wrote in the 16K mode and read in the 4K. It writes in the 4K mode now, and catches it |
+| F11 | a state's sprites remade by mode 4's rules | the TMS state's test |
+| F12 | an SG-1000 cartridge never on the Mark III | the model setting's test |
+| F13 | Multicolor's nibbles swapped | `tms`'s Multicolor test, `tms.s` |
+| F14 | a blanked TMS9918 mode showing CRAM's backdrop | the codes and colours test |
+| F15 | the SG-1000's status bits 4-0 undriven | `tms.s`'s status |
+| F16 | the Mark III's TMS9918 colours from the TMS9918A's table | **nothing at first**: no test ran an SG-1000 program on the Mark III's colours. The program's test now holds the Mark III's digest, and catches it |
+
+### 11.13 Open
+
+- **The invalid text mode** is not modelled (§11.3).
+- **D-6, D-7 and D-8** stay as stage 3 left them; SMS_MiSTer cannot be elaborated without `altera_mf` (§11.11).
+- **Space Harrier's late start** (§10.10) is not found.
+- **The Genesis's right-column lock** is Nephrite's rule, unmeasured (§11.6).
+- **A fifth sprite on the first status read**: the references disagree with each other (§11.10).
+- **Champion Pro Wrestling's course of play** at frame 600 differs from three references' (§11.10).
+
+### 11.14 What was read for this stage
+
+No emulator source, no SMS_MiSTer RTL (only GHDL's messages and the entity names it lists), no firmware or firmware
+listing. Read: `Endou_Plan.md`, `Endou_Native.md`, `Endou_References.md`, `Endou_Disputes.md`; `Beryl_SmsVdp.md` and the
+crate; Nephrite's `render.rs` and `pictures.rs`, its D-7 and `Nephrite_Native.md` §15 and §38; `EmuSen_CoreAPI.md`
+§6.40; TI's TMS9918A data manual §2.1-§2.4.5 as page images; Young's `tms9918a.txt`; MacDonald's `sc3000h` and `msvdp`
+§4-§7, §10, §13-§15; Guttag's symposium draft; SMS Power!'s "Palette", "SMS1/SMS2 VDPs", "GG VDP", "VDP Registers",
+"Sprites", "I/O Port Map - SG-1000".
+
+### 11.15 Questions before stage 5
+
+1. **The Genesis's right-column lock** (`Beryl_SmsVdp.md` §9.4): Nephrite locks the right columns' vertical scroll from
+   pixel 192, the Master System's chips by the column counter. The move kept Nephrite's rule so that nothing changed.
+   Should a Nephrite dispute step ask the board which the 315-5313 does? Recommended: yes, when Nephrite is next worked
+   on; a game that needs it is unlikely, mode 4 on a Genesis being the Master System's games.
+2. **SMS_MiSTer's `altera_mf`**: Intel's simulation library comes with Quartus, which needs a licence agreement and an
+   account. Three ways remain: install Quartus's free edition for its `altera_mf` (the tester's to allow); write
+   stand-ins for its memories in a logged dispute step, reading only the RTL lines that instantiate them; or leave
+   SMS_MiSTer aside and keep D-6, D-7 and D-8 argued. Recommended: the dispute step, its files and lines logged, if the
+   tester wants the referee; else leave them argued.
+3. **The SG-1000's default model** stays the SG-1000, and the Mark III is offered: is the setting's wording right for the
+   tester's front end? Recommended: as built.
+4. **Stage 5** (sound) as the plan has it, the PSG's wiring in both variants and the mix. Recommended: the go.

@@ -405,6 +405,27 @@ fn a_debug_table_is_counted_in_pairs_and_triples() {
     m.debug_set_stack(&[1, 2]).unwrap();
 }
 
+/// The cheat tables are counted as the header counts them, triples and quads, so a core takes no entry past the
+/// caller's: a poke after the table's one, in the same array, is never written (EmuSen_Backend.md §29.29).
+#[test]
+fn a_cheat_table_is_counted_in_triples_and_quads() {
+    let lib = Library::load(&example("host_test_core")).unwrap();
+    lib.check().unwrap();
+    let img = image(b"cheat tables");
+    let mut m = Machine::create(lib, &Create::new(&img)).unwrap();
+    const NONE: u32 = emusen_native::core::sys::flags::NO_COMPARE;
+    let pokes = [0, 5, 0x42, NONE, 0, 6, 0x43, NONE, 0, 7, 0x44, NONE, 0, 8, 0x45, NONE];
+    assert_eq!(m.set_cheat_pokes(&pokes[..4]), Ok(1), "the core took more pokes than the table holds");
+    let mut before = [0u8; 4];
+    m.space_read(0, 5, &mut before).unwrap();
+    m.advance().unwrap();
+    let mut ram = [0u8; 4];
+    m.space_read(0, 5, &mut ram).unwrap();
+    assert_eq!(ram, [0x42, before[1], before[2], before[3]], "a poke past the table was written");
+    let patches = [1, 2, NONE, 3, 4, NONE, 5, 6, NONE];
+    assert_eq!(m.set_rom_patches(&patches[..3]), Ok(1), "the core took more patches than the table holds");
+}
+
 fn field<'a>(v: &'a Value, key: &str) -> &'a Value {
     v.get(key).unwrap_or_else(|| panic!("no {key}"))
 }

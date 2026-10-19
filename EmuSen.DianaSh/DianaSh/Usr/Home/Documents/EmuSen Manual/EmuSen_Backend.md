@@ -6292,6 +6292,51 @@ Nothing else in this design changes what a player sees: the parity class holds e
 implementations equal but the ones §29.7 sets aside, none of which a player reads, and the unapproved core's refusal,
 decided by §27.9's Q1.
 
+### 29.12 Built 2026-10-18 and 19: Q4, the API's 1.2, the runtime's log lines, and a defect of the binding
+
+*In the order §29.11's decisions set, each graded and committed on its own.*
+
+**Q4, `emusen-core-host` on `libloading` 0.9.0** (`2e2701fb`). One lookup by a built name passes a slice, 0.9's
+`AsSymbolName`. The kit's lock holds 0.9.0 through the host beside the 0.8.9 that `ash` still takes, and Diamond's lock,
+whose tests pull in the kit, followed on `WiseMan`. Measured on 2026-10-18 [M]: the host's crate 7, 12 and 1 tests as
+§27.10 counted them; the kit 8 and 27; the kit's corpus on §26.4's set (B6's kit against the kit on the 0.9 host, one
+release build of each core) 265 reports of 265 equal once normalised.
+
+**The API's 1.2** (`800d34f6`). `emusen_crystal_config` is 32 bytes: `sqlite` at 8, `cores` and `cores_len` at 16 and
+24, and `EMUSEN_CRYSTAL_CONFIG_DEVELOPMENT`; a config of 1.0's 8 bytes is still taken. The baseline gained four lines at
+`@1.2` and kept the struct's 1.0 line. **One rule of the baseline's test changed**, found by building it: the struct's
+alignment rises from 4 to 8 with its first pointer, which the test's "grown" refused as a changed fact. It now accepts a
+struct aligned more strictly where its recorded size is a multiple of the new alignment, so that no recorded field
+moves, and still refuses one that is not (shown by recording the 1.0 size as 12). The C# implementation honours the
+cores and the flag through `CoreDiscovery`; the binding gained `CrystalRuntimeOptions` and lends SQLite only when the
+platform library serves the API, through a `SqliteLend` the library's binding now shares. `CrystalApi12Tests` (five)
+holds the sizes, offsets and refusals; with the header, shape, managed and library classes, 57 tests, one failing on
+its own hard-coded "1.1", then corrected.
+
+**The runtime's lines** (`13ba9207`). The log event carries `"source"`, `"runtime"` or `"core"`. The engine keeps what
+it says (`CoreEngine.Say`) until the session raises it, at the open, after each change and in the frame's last step, a
+firmware install's line on session 0; `BatterySave`, `MemoryCards`, `FirmwareLibrary`, `FrameRecorder` and the watch
+registry are handed where to say a line, and none writes to the console. The binding's `CrystalRuntimeLog`, made with
+the runtime, writes the runtime's lines to `Console.Out` when a program files them: Mistress after an open, a close and
+between frames, Hotaru's session once its log is in place and its window between frames, Pharaoh after its open and each
+frame. `RuntimeLogTests` (three) holds that the lines reach a subscriber and not the console and that the filer writes
+them; `NephriteFirmwareTests` reads the firmware lines through the filer, as a per-game log now receives them. The frame
+still allocates nothing (`The_frame_call_allocates_nothing`).
+
+**A defect of the binding, shown and fixed** (`9c8c9a0e`), met while writing `RuntimeLogTests`. `StartRecording`,
+`StopRecording` and the card ops that change a card read their answer with the copy-out protocol's two calls, so each
+change was made twice: the second `record_start` refused with "already recording", the second `record_stop` with "not
+recording", and a card made by `NEW` was answered "already exists" after the first call had made it. Hotaru's F6,
+Pharaoh's `record` and Mistress's card window use these calls. `BindingChangesOnceTests` failed on both before the fix
+and passes after: a change answers through one call into a buffer that holds any answer a change gives
+(`CrystalRuntime.Once`), as `CheatChange` already did (§14.13). The Rust Crystal answers a change once by the library's
+rule (§28.8), so a client of either implementation is safe.
+
+The blast radius of the last three, measured on 2026-10-19 [M]: 29 classes (the Crystal and binding classes, the
+firmware, battery, card and media classes, Hotaru on the API, the frontend defects, the frame runner and Pharaoh's
+options, core registration, Mistress's log folder and run control, breakpoint conditions, the divergence rows, the
+golden corpus and the shell over a session), **325 of 325 pass**.
+
 ---
 
 ## 30. B9, scraping in Rust: the design, 2026-10-18

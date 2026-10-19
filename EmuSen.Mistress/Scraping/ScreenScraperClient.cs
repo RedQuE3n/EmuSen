@@ -298,7 +298,8 @@ namespace EmuSen.Mistress.Scraping
                 string body = await response.Content.ReadAsStringAsync(stop);
                 return (StatusOf(response.StatusCode), body, clock.Elapsed);
             }
-            catch (Exception ex) when (ex is HttpRequestException or IOException || (ex is TaskCanceledException && !stop.IsCancellationRequested))
+            // ReadAsStringAsync refuses a charset .NET has not with InvalidOperationException; an answer that cannot be read - see EmuSen_Backend.md §30.12.
+            catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidOperationException || (ex is TaskCanceledException && !stop.IsCancellationRequested))
             {
                 return (ScrapeStatus.Failed, ex.Message, clock.Elapsed);
             }

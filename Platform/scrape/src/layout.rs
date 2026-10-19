@@ -45,8 +45,6 @@ pub fn folder_of(relative: &str) -> String {
     if p.len() > 3 { p[2..p.len() - 1].join("/") } else { String::new() }
 }
 
-/// The type folders in the order Big Picture's `EsdeMediaFolder.Folders` lists them.
-const FOLDER_ORDER: [&str; 11] = ["miximages", "marquees", "screenshots", "titlescreens", "covers", "backcovers", "3dboxes", "physicalmedia", "fanart", "videos", "manuals"];
 
 fn root_prefix(root: &str) -> String {
     let full = path::full_path(root);
@@ -58,7 +56,7 @@ pub fn forget(store: &Store, rom: &str, system: Option<&str>, folder: &str) -> R
     let mut files: Vec<String> = store.forget_rows(rom)?.iter().map(|r| path::combine(STYLE, &store.root, r)).collect();
     if let Some(system) = system.filter(|s| !s.is_empty()) {
         let stem = path::file_name_without_extension(STYLE, rom).to_string();
-        for ty in FOLDER_ORDER {
+        for ty in kinds::ALL_FOLDER_ORDER.iter().map(|k| k.folder) {
             let dir = path::combine_all(STYLE, &[&store.root, system, ty, &folder.replace('/', &STYLE.separator().to_string())]);
             if !dotnet_files::directory_exists(&dir) {
                 continue;
@@ -172,7 +170,7 @@ pub fn put_in_folders(store: &Store, folder_of_rom: &dyn Fn(&str) -> String, now
 pub fn orphans(store: &Store, names_by_system: &BTreeMap<String, HashSet<String>>) -> Vec<String> {
     let mut found = Vec::new();
     let mut folders: Vec<&str> = Vec::new();
-    for f in FOLDER_ORDER {
+    for f in kinds::ALL_FOLDER_ORDER.iter().map(|k| k.folder) {
         if !folders.contains(&f) {
             folders.push(f);
         }

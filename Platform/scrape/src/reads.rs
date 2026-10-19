@@ -158,6 +158,73 @@ pub(crate) fn get(s: &Scraper, r: &Value) -> Result<String, Error> {
             out.push('}');
         }
         "folder" => out.push_str(&quoted(&s.settings().folder_of(&json::text(r, "path")?))),
+        "plan" => out.push_str(&s.plan(r)?),
+        "delays" => {
+            let delays: Vec<String> = s.clock.drain_delays().iter().map(|d| d.to_string()).collect();
+            out.push_str(&format!("[{}]", delays.join(",")));
+        }
+        "media" => {
+            let file = json::text(r, "path")?;
+            let folder = json::flag(r, "folder", false)?;
+            let folder_path = match json::text_or_none(r, "folder_path")? {
+                Some(f) => f,
+                None => s.settings().folder_of(&file),
+            };
+            let game = crate::media::Game { file: &file, folder_path, folder };
+            match s.locate(&json::text(r, "system")?, &game, &json::text(r, "type")?) {
+                Some((source, found)) => out.push_str(&format!("{{\"source\":\"{}\",\"path\":{}}}", source.word(), quoted(&found))),
+                None => out.push_str("null"),
+            }
+        }
+        "metadata" => {
+            let rom = json::text(r, "path")?;
+            let edits: Vec<(String, String)> = match s.library() {
+                Ok(library) => {
+                    let text = library.get_request(&format!("{{\"what\":\"edits\",\"path\":{}}}", quoted(&rom))).map_err(|e| Error::Io(e.words()))?;
+                    match emusen_dotnet::json::parse(&text) {
+                        Ok(Value::Object(members)) => members.into_iter().filter_map(|(k, v)| v.as_str().map(|t| (k.text, t.to_string()))).collect(),
+                        _ => Vec::new(),
+                    }
+                }
+                Err(_) if json::flag(r, "no_edits", false)? => Vec::new(),
+                Err(e) => return Err(e),
+            };
+            let record = s.store().found_for(&rom)?;
+            out.push('{');
+            for (i, (field, value, source)) in crate::metadata::resolve(&rom, record.as_ref(), &edits, json::flag(r, "scraped_names", false)?).iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                out.push_str(&format!("\"{field}\":{{\"value\":"));
+                text_or_null(&mut out, value.as_deref());
+                out.push_str(&format!(",\"source\":\"{source}\"}}"));
+            }
+            out.push('}');
+        }
+        "present" => {
+            let system = json::text(r, "system")?;
+            let settings = s.settings();
+            let games: Vec<(String, String, bool)> = match r.get("games") {
+                Some(Value::Array(items)) => items
+                    .iter()
+                    .map(|g| {
+                        let file = json::text(g, "path")?;
+                        let folder_path = json::text_or_none(g, "folder_path")?.unwrap_or_else(|| settings.folder_of(&file));
+                        Ok((file, folder_path, json::flag(g, "folder", false)?))
+                    })
+                    .collect::<Result<_, Error>>()?,
+                _ => Vec::new(),
+            };
+            json::strings_into(&mut out, s.present(&system, &games));
+        }
+        "stamp" => out.push_str(&quoted(&s.stamp(&json::text(r, "system")?, &json::text_or_none(r, "choice")?.unwrap_or_default()))),
+        "openvgdb" => {
+            let at = crate::openemu::default_path();
+            let bytes = std::fs::metadata(&at).ok().map(|m| m.len() as i64);
+            out.push_str(&format!("{{\"present\":{},\"path\":{},\"bytes\":", bytes.is_some(), quoted(&at)));
+            number_or_null(&mut out, bytes);
+            out.push('}');
+        }
         _ => return Err(Error::BadRequest(format!("The request's what, {what}, is not one the scraper answers."))),
     }
     Ok(out)

@@ -1,6 +1,6 @@
 # EmuSen — the backend in Rust: the line, the frontend API, the system packs and the services
 
-*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18), and B4's shared part with core ABI 1.13 (§22, 2026-10-18), and MoonRT's units, pack views and switch (§23, 2026-10-18), and debugger expressions naming the units' registers (§24, 2026-10-18), and B4's last step, the deletion across the cores that finishes it (§26, 2026-10-18), and B6's design, the core host in Rust, with three questions before it is built (§27, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
+*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18), and B4's shared part with core ABI 1.13 (§22, 2026-10-18), and MoonRT's units, pack views and switch (§23, 2026-10-18), and debugger expressions naming the units' registers (§24, 2026-10-18), and B4's last step, the deletion across the cores that finishes it (§26, 2026-10-18), and B6's design, the core host in Rust, with three questions before it is built (§27, 2026-10-18), and B8's design, the library in Rust (§28, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
 get the entire backend ported to rust", after which the frontend's move is planned, and the request of 2026-10-17 to
 design two things: one frontend API by which every frontend drives the cores, and the system packs and the remaining C#
 platform services in Rust. Every claim about the code was read on `WiseMan` at `165e60b4`. Claims are marked as
@@ -5275,3 +5275,278 @@ records, `CoreMachine`'s device and media loans).
   `frame_device`'s answer, as `CoreMachine` does with `IDeviceLend`. Folded, every host would carry `ash` and a second
   job. *Recommended: the lend's types (already `emusen-native`'s) and the two calls in the crate; the kit's own device
   and its read-back stay in the kit, as C20's stand-in for a frontend.*
+
+---
+
+## 28. B8, the library in Rust: the design, 2026-10-18
+
+*Written on branch `b8-library` from `WiseMan` at `8b76f30e`, before anything was built, as §6's B8 row asks: the
+library's header and its JSON, the crates, where the exports live, how SQLite is reached under Q25, how Mistress moves
+behind the binding, and the statuses from −1140 (D12). The decisions that bear on it: D3 (the library is backend data,
+a component of its own, not Crystal), D4 (the platform's crates exported from `emusen_platform`), D12, SR7 (the C# as
+failover through the three states), SR10 (`games.db`'s engine choices copied once to the per-game files), SR11
+(records stay SQLite) and `EmuSen_RustPlatform.md` Q25 (one SQLite per process, the one the program ships, lent).
+Another branch is adding §27 at the same time, so this section's number may move at the merge.*
+
+### 28.1 What moves, read from the code
+
+`Library/` is 2,326 lines today [M: `wc -l` at `8b76f30e`], more than §4.1's 1,889 because `RuntimeCatalog`, the shader
+catalog and the two downloads have arrived since. By §2's line, file by file:
+
+| File | Lines | Where it goes |
+|---|---:|---|
+| `GameRecords.cs`, `.Edits.cs`, `.Crop.cs` (`games.db`: rows, the hash cache, collections, cover lookups, edits, crops, the six migrations) | 551 | **B8**, whole: a database moves with one owner at a time (R4) |
+| `RomLibrary.cs` (the walk, the extension filter, the sets, the order, the four outcomes and their words) | 116 | **B8**; `DescribeEmpty`'s words stay with the frontend, which shows them |
+| `PlayTime.cs` (what one launch adds) | 22 | **B8**, the rule `Tracked`; the choices' words stay with the frontend |
+| `MainWindow.Identity.cs`'s `IdentifyLater` and `ReclaimMovedGames` (a game known by its contents; rows following a renamed game) | about 90 of its 138 | **B8**: backend decisions now made in a window's code; they become the library's `identity` and `reclaim` |
+| `RuntimeCatalog.cs` | 235 | stays: it is the frontend API's reader (§14.13), not library code |
+| `FileRecords.cs` (`records.db`) | 295 | B7 (D8), not here |
+| `GameMetadata.cs`, `MetadataDraft.cs` | 289 | stay for now: `Resolve` lays the player's edits over `media.db`'s scraped record, which is B9's; the edits themselves are B8's |
+| `OpenVgdb.cs`, `OpenVgdbBytes.cs`, `OpenVgdbDownload.cs`, `ArtworkIndex.cs`, `CoverFetcher.cs` | 406 | B9, with the media they find |
+| `MediaLibrary.cs` | 66 | B7: it lists states and screenshots, which are Crystal's |
+| `GameFolders.cs` | 45 | stays: path arithmetic for the folder view's presentation |
+| `CoverArtCache.cs`, `RecentCache.cs`, `ShaderCatalog.cs`, `SlangPackDownload.cs` | 301 | stay: decoded bitmaps, a read-ahead cache of pictures and the shader pack are the frontend's (§2.3, §4.5) |
+
+So B8 replaces about 780 lines of C#, not 1,900: §4.1 counted the cover and OpenVGDB files that the scraping step
+needs, and they are moved with it. The Rust is expected at about 2,000 to 2,600 lines with its tests and C layer, by
+the platform steps' ratio, plus what moves into Galaxia and the SQLite crate (§28.2); §28.8 will measure it.
+
+**Read on the way, candidates and not yet shown** (each to be shown by a failing test before anything is changed; the
+parity class reproduces each as it stands):
+
+- **Two rules for "recent".** The library screen's Recent lists games with a last-played time, newest first
+  (`MainWindow.Library.cs:166`); Big Picture's Last Played takes games with a time *or* a play count, ordering a game
+  with no time last (`CollectionShelves.cs:79`). A game whose counters were set by the editor with no launch shows in
+  one and not the other. The library's `recent` answers the first; the second is put to the tester (§28.7).
+- **A zipped Game Boy Color game is shelved by the zip's own byte.** `CoreCatalog.IsGameBoyColor` reads offset 0x143
+  of the file it is given, which for a `.zip` is the archive, not the cartridge (`CoreCatalog.cs:179–194`).
+- **A `.chd` is recognised by its container's header.** `MediaProbe.Of` hands a recogniser a `.chd`'s first bytes,
+  which are the CHD header, so a disc in a CHD is routed by its folder alone (`MediaProbe.cs:62`).
+
+### 28.2 The crates, and where the exports live
+
+- **`emusen-library`** (`Platform/library/`), a Rust library: `db` (opening `games.db`, the migrations, Microsoft.Data.
+  Sqlite's behaviours of §28.3), `records` (every row operation of `GameRecords`), `scan` (the walk, the sets, the
+  routing, the order), `identity` (hashes, the cache, `identify`, `reclaim`), `clock` (.NET's round-trip text of a local
+  time, for the calls that do not pass one) and the handle. It depends on `emusen-galaxia`, `emusen-systems`,
+  `emusen-dotnet`, `emusen-disc` and `emusen-sqlite`, every one below it, and never on Crystal: a test reads its
+  `Cargo.toml` and fails on `emusen-crystal` or `emusen-session`.
+- **`emusen-sqlite`** (`Platform/sqlite/`): Serenity's `sqlite.rs` (§16.2 there) moved out whole and given the text,
+  real and null bindings and columns the library needs; the SPIR-V cache calls it from there. Two crates needing one
+  binding of one lent library is the reuse rule's case. It adds no outside crate (`libloading` is the workspace's).
+- **Galaxia's Rust half gains what the library reads files by**, each the twin of a C# Galaxia rule that has none yet,
+  held to it by the parity class: `rom_hash::hashes` (MD5 and CRC-32 taken in one read, of the whole file or a byte
+  range, `EmuSen_GamePackages.md` §2.2; the CRC-32 is the C# `Crc32` of `Scraping/RomHashes.cs` ported, not a crate);
+  `media::sets` (a sheet's companions, an `.m3u`'s discs and `ImageSets.Beside`'s case-blind lookup over `emusen-disc`'s
+  set module, `AllFiles` and `Shelved`); `media::archive` (a zip's central directory and an entry's first bytes, moved
+  from `emusen-cheats`' installer, which then calls it); `dotnet_files` (`Directory.EnumerateFiles` with
+  `EnumerationOptions`, moved from `emusen-cheats`' database and given the skip of hidden entries and the ignoring of
+  unreadable folders; `FileInfo`'s length and `LastWriteTimeUtc` ticks).
+- **`emusen-systems` gains one rule**, `gb::shelved_as_color`: a `.gbc`, or a `.gb` whose header byte at 0x143 is 0x80
+  or 0xC0, shelves as the Game Boy Color. It is `CoreCatalog.IsGameBoyColor` (console knowledge in the systems table's
+  god object, F18's kind) put where §5 says it belongs; the C# copy stays until B7.
+- **The C layer** is `Platform/platform/src/library.rs`; the header is `Platform/library/include/emusen_library.h`; the
+  baseline `Platform/library/abi/v1/baseline.txt`, held by `Platform/library/tests/library_abi.rs` as Crystal's and
+  DianaSh's are (constants, signatures, the one struct's layout, C99 and C++17, any `emusen_library_` export of the
+  platform library held to the header, a removed or changed line failing against the base branch).
+
+**Exported from the platform library, under its own stable header** [C]. The other answer, a library of its own, was
+weighed and not chosen. The library calls Galaxia, `emusen-systems` and `emusen-disc`, which already live in
+`emusen_platform`; a second shared library would link second copies of them, so a second copy of Galaxia's tree and
+overrides would answer differently from the first in one process, which is what `EmuSen_RustPlatform.md` §2.2 made one
+library to prevent, and it would need SQLite lent to it a second time. D4 placed Crystal's crates there for the same
+reason, and DianaSh's host API is the precedent of a stable header exported from that library beside the unstable one.
+`emusen_platform.h` itself does not change: the library's exports carry their own version, `emusen_library_abi_version`,
+under §3.2's policy, as `dianash.h`'s do. **So the platform interface stays 21**; interface 22 is not taken.
+
+### 28.3 SQLite, under Q25
+
+- **The host lends its SQLite in the open call** (`emusen_library_config.sqlite`, the platform loader's handle of the
+  `e_sqlite3` it has loaded, as the C# lends Serenity's in `SerenityNative.Lend`). The library never loads SQLite. A
+  null handle is `EMUSEN_LIBRARY_NO_SQLITE`; a Rust program with no C# beside it decides then where its SQLite comes
+  from, as Q25 recorded.
+- **One copy in the process.** Mistress's C# twin, Crystal's SR10 copy (which reads `game_edit` read-only once,
+  `ManagedRuntime.States.cs:90`) and the library all reach `games.db` through the one `e_sqlite3`, so their POSIX locks
+  are one set (§2.8 there). The parity class opens separate files in any case.
+- **Microsoft.Data.Sqlite's behaviours are reproduced**, since the C# that wrote every existing `games.db` ran on them:
+  the file opened read-write and created, its folder made first; one connection a handle (`Pooling = false`);
+  `PRAGMA foreign_keys = ON` before anything else, which the cascade from `collection` to `collection_game` needs; a
+  transaction as `PRAGMA read_uncommitted = 0; BEGIN IMMEDIATE;` (measured for the SPIR-V cache, §16.3 there); a busy
+  or locked file tried again every 150 ms for the default command timeout of 30 s; a refusal's words as
+  `SQLite Error <code>: '<message>'.`; a parameter bound by its value's type (text, integer, real, null).
+- **The migrations are the same six texts, in a second list until state 3.** A list of SQL is data that both halves
+  could read from one file; it is not done, because the C# list is a `static readonly` the tests read
+  (`GameRecords.SchemaVersion`) and moving it would change the C# for no behaviour. Instead the parity class opens a
+  file at every version 0 to 6 with each half and compares `sqlite_master` and every row after, so a seventh migration
+  added to one list alone fails it. A file of a newer schema is refused unwritten, with the C#'s words.
+
+### 28.4 The header
+
+`emusen_library.h`, version 1.0. The rules of §3.3 hold: the host calls and the library returns; reads are copied out
+by the length-query idiom (a null `out` asks the length, and a short buffer is written nothing); statuses are signed;
+text is UTF-8 as pointer and length; lists and records cross as JSON, which is never on a per-frame path. Nothing is
+pushed: a scan's progress is drained.
+
+```c
+typedef struct emusen_library emusen_library;          /* a handle: one games.db */
+typedef struct emusen_library_config {
+    uint32_t size;                                       /* sizeof, so fields may be appended */
+    const uint8_t *database; size_t database_len;        /* games.db's path */
+    void *sqlite;                                        /* the host's loaded e_sqlite3, lent for the handle's life */
+} emusen_library_config;
+
+uint32_t emusen_library_abi_version(void);               /* (MAJOR << 16) | MINOR */
+int64_t  emusen_library_last_error(uint8_t *out, size_t len);   /* the words of this thread's last failing call */
+int32_t  emusen_library_open(const emusen_library_config *config, emusen_library **out);
+int32_t  emusen_library_close(emusen_library *lib);
+int64_t  emusen_library_scan(emusen_library *lib, const uint8_t *request, size_t len);     /* games found, or a status */
+int64_t  emusen_library_progress(emusen_library *lib, uint8_t *out, size_t len);
+int32_t  emusen_library_cancel(emusen_library *lib);
+int64_t  emusen_library_games(emusen_library *lib, const uint8_t *filter, size_t len, uint8_t *out, size_t out_len);
+int64_t  emusen_library_identity(emusen_library *lib, const uint8_t *request, size_t len, uint8_t *out, size_t out_len);
+int64_t  emusen_library_get(emusen_library *lib, const uint8_t *request, size_t len, uint8_t *out, size_t out_len);
+int64_t  emusen_library_change(emusen_library *lib, const uint8_t *request, size_t len, uint8_t *out, size_t out_len);
+```
+
+**Threads.** Any call may come from any thread. The handle serialises calls on its database, except `progress` and
+`cancel`, which never wait. A scan and a reclaim read files without holding the database, so a window's reads are
+answered while one runs; a second scan on a handle while one runs is refused with `EMUSEN_LIBRARY_BUSY`.
+
+**`scan`** walks the roots and keeps the result in the handle, answering how many games it found. Request:
+
+```json
+{ "roots": ["/home/p/Roms"], "systems": ["snes", "nes", "gb", "gbc", "n64", "md", "mcd", "32x", "psx"] }
+```
+
+`systems` is which systems this build opens, the `system` of each shelf of Crystal's `shelves` answer, passed as data:
+which engines exist is the runtime's fact and the library does not ask Crystal for it. A file is listed when its
+extension is one a named system's table entry gives, or an archive's; files a sheet or a list among them names are
+that game's and not games of their own (`Shelved`); each file is routed among the named systems that take its image's
+extension (an archive's chosen entry's, else its own) by `emusen-systems`' recognisers over the first bytes Galaxia
+reads (the file's, a sheet's first track's, an `.m3u`'s first disc's, an archive entry's), then by its folder's ES-DE
+name, and a Game Boy file is shelved by `gb::shelved_as_color`; the games are ordered by title ignoring case, ties in
+the walk's order. Hidden entries are skipped and unreadable folders ignored, as `RomLibrary`'s `EnumerationOptions`
+have it. The outcome is `RomLibraryStatus`: `no_directory` (no root that is not blank), `not_found` (a root missing or
+unreadable), `empty`, `ok`.
+
+**`progress`** answers `{"running": true, "phase": "walk" | "route" | "hash", "files": 1204, "games": 860,
+"hashed": 2, "to_hash": 5}` from counters the running call updates; **`cancel`** stops a running scan or reclaim at its
+next file, which then returns `EMUSEN_LIBRARY_CANCELLED` and leaves the last finished scan in place.
+
+**`games`** answers the last scan, narrowed by an optional filter, `{"system": "gbc"}` today; other keys are added by
+minors as a client needs them:
+
+```json
+{ "status": "ok", "roots": ["/home/p/Roms"], "games": [ { "path": "/home/p/Roms/gb/Tetris DX.gb", "system": "gbc" } ] }
+```
+
+A game no named system takes has `"system": null`. Narrowing recomputes `ok` and `empty`, as `RomLibrary.Narrow` does.
+
+**`identity`** answers what a dump is: `{"path": …, "systems": [...]?, "record": true}` gives `{"path": …, "bytes":
+40976, "modified": 638000000000000000, "md5": "…", "crc32": "…", "system": "nes", "cached": true}`. `modified` is
+.NET's `LastWriteTimeUtc.Ticks`, the hash cache's key with the size. The MD5 comes from the cache while the file is the
+size and age it was hashed at. With `record`, the hash is stored in the cache and the game's row given its identity,
+which is what Mistress's `IdentifyLater` does today. The hashing runs outside the database. `system` is routed as
+`scan` routes, among the request's systems or the last scan's.
+
+**`get`** answers one read, `{"what": …}`, in `GameRecords`' vocabulary, each answer what its C# method returns:
+
+| `what` | Arguments | Answer |
+|---|---|---|
+| `record` | `path` | `{"favourite", "last_played", "play_count", "play_seconds"}` or `null` |
+| `records` | — | every row so, by path |
+| `game` | `path` | §3.7's `game(id)`: the record with `md5`, `bytes`, `crop`, `edits` and `collections`, or `null` |
+| `edits`, `all_edits` | `path`; — | `{field: value}`; by path |
+| `collections`, `members`, `collections_of` | —; `id`; `path` | `[{"id", "name", "count"}]` in name order ignoring case; paths; ids |
+| `crop` | `path` | `{"left", "right", "top", "bottom"}` or `null` |
+| `cover_lookup` | `path` | `"Found"`, `"Unknown"`, `"NoArt"` or `null` |
+| `known_hash`, `path_by_hash`, `orphans` | `path`, `bytes`, `modified`; `md5`; `present` | the MD5 or `null`; a path or `null`; `[{"path", "md5", "bytes"}]` |
+| `recent` | `limit` | the last scan's games with a last-played time, newest first |
+
+**`change`** makes one change, `{"op": …}`, each a `GameRecords` method's: `toggle_favourite`, `set_favourite`,
+`started` (`at`), `played` (`seconds`, and `max_hours`, under which `PlayTime.Tracked`'s rule records nothing),
+`set_play_stats`, `set_crop`, `clear_crop`, `save_edits` (`changes`, a value or `null` a field, `at`), `clear_edits`
+(the cover choice and the television standard kept), `create_collection` (`name`, `at`; the id, or `null` for a name
+taken in any case), `rename_collection` (answers whether it was renamed), `delete_collection`, `add_to_collection`,
+`remove_from_collection`, `store_hash`, `identify`, `move` (a renamed game's row, collections, edits, the covers others
+borrow from it and its cover lookup following it, merged into what the new path had), `record_cover_lookup`,
+`forget_cover_lookup`, and `reclaim`: the rows whose file the last scan did not find, each matched by contents with a
+game of its size that has no row and moved to it, answering `{"moved": 2}`. `at` is the time to record as .NET's
+round-trip text (`"2026-10-18T14:03:11.2510000+02:00"`); left out, the library's clock gives it in the same form.
+
+**Statuses**, the band D12 reserved, −1140 to −1159, beside the shared −1 (`NULL`), −5 (`BAD_STRING`) and −256
+(`NOT_SUPPORTED`):
+
+| Code | Name | Meaning |
+|---:|---|---|
+| −1140 | `EMUSEN_LIBRARY_NEWER_FILE` | `games.db` is of a newer schema; refused, nothing written |
+| −1141 | `EMUSEN_LIBRARY_DATABASE` | SQLite refused: busy past its wait, a damaged file, a full disc; the words are SQLite's |
+| −1142 | `EMUSEN_LIBRARY_NO_SQLITE` | no SQLite was lent |
+| −1143 | `EMUSEN_LIBRARY_BAD_REQUEST` | a request that is not what the header says: not JSON, an unknown `what` or `op`, a field missing |
+| −1144 | `EMUSEN_LIBRARY_CANCELLED` | a scan or reclaim was cancelled |
+| −1145 | `EMUSEN_LIBRARY_BUSY` | a scan or reclaim is already running on this handle |
+| −1146 | `EMUSEN_LIBRARY_IO` | a file the call had to read could not be read: the identity of a missing file |
+
+### 28.5 Mistress behind the binding
+
+- **The binding** joins the frontend API's in `EmuSen.Crystal.Client` (one binding assembly, §3.9): `Library/`
+  holds the contract layer, the eleven exports found in the platform library by name, and `GameLibrary`, a disposable
+  class over a handle whose methods write the requests and read the answers. It lends SQLite as Serenity does.
+- **`GameRecords` keeps every public member and signature.** Its bodies move to `GameRecords.Managed`, unchanged, the
+  failover and the parity class's oracle; a second body forwards each member to `GameLibrary`. `Open` chooses once per
+  file by the switch. Every caller in Mistress, Big Picture included, is untouched.
+- **`RomLibrary.Scan` forwards** with the shelves' systems from `RuntimeCatalog`; each `RomEntry` then carries the
+  shelf the library routed it to (its record equality stays its path), so the sidebar's counts and the console filter
+  do not ask the runtime's route again for every file. `Narrow` and `DescribeEmpty` are unchanged.
+- **`MainWindow.Identity`'s decisions leave the window.** `IdentifyLater` asks `identity` with `record` on a worker
+  and keeps only its last step, the current game's MD5 for the state's record; `ReclaimMovedGames` runs the `reclaim`
+  change on a worker and keeps its status line. Their C# moves to `Library/` as the twin, `GameReclaim`, so the two
+  halves are compared on the same calls.
+- **The switch is `EMUSEN_LIBRARY_NATIVE`**, through Galaxia's `PlatformSwitch` as the file services' is. Parts 2 and 3
+  are built in state 1 (the C# by default, the library at `1`), with the parity class calling both halves directly;
+  part 4 moves to **state 2**, the library by default and the C# at `0`, a library absent or without an export leaving
+  the C# with one line in the log, as every platform step reached. One switch for the whole of `games.db`, because a
+  database moves whole (R4).
+
+### 28.6 The gates
+
+- **The parity class, `LibraryParityTests`**, generated libraries only: trees of SyntheticRom images and plain files in
+  a temporary folder (every system's extensions, archives, sheets with their tracks and lists with their discs,
+  Game Boy headers of each flag, recognisable and unrecognisable discs, folders named for ES-DE systems and not, hidden
+  files and folders, an unreadable folder, links to files and folders, names that differ only by case), each scanned by
+  both halves into separate copies of one seeded `games.db` (rows for games that have been renamed, moved, deleted and
+  duplicated), then identified and reclaimed; every row of every table compared, with the scan's list and its shelves.
+  **P5** is retired by this class: no row may differ in any column, since every time the two record is passed in.
+- **Every version of `games.db`** from 0 to 6, with rows of every table its schema has, opened by both: the schema and
+  the rows compared after, and a version 7 file refused by both with the same words.
+- **The records**: scripts of a few thousand calls of every `get` and `change` over generated paths (non-ASCII, quotes,
+  case twins), collections named in mixed case, edits with nulls, crops of extreme doubles, run against both halves and
+  compared call by call and row by row.
+- **Seeded faults**, each made, run and reverted, recorded with the step: a migration's text changed in the Rust alone;
+  `foreign_keys` left off; a `move` that drops the cover borrowers' rewrite; hidden files listed; the walk's order
+  sorted; a title compared by case; a playlist's discs listed as games; a Game Boy file shelved by its extension alone;
+  the hash cache keyed without the time; `played` recording past `max_hours`; a REAL written as text.
+- **The blast radius through both settings**: the library's classes (`GameRecordsTests`, `RomLibraryTests`,
+  `IdentityAndCollectionsTests`, `GameCropTests`, `GameMetadataTests`, `GameStandardTests`, `CoverChoiceTests`,
+  `GameEngineAndPlayTimeTests`, `LibraryScreenTests`, `MainWindowLibraryTests`, `RomBrowserWindowTests`,
+  `PlayStationLibraryTests`, `LibraryArtworkAndMediaTests`, `ResumeWhereYouLeftOffTests`, `OnlineCoverWindowTests`),
+  Big Picture's (`ThemedCollectionsTests`, `ThemedGameOptionsTests`, `MetadataEditorLayoutTests`, the themed library
+  and fit audits), the launch classes, and for the moved Rust, Serenity's cache classes, the cheat services' parity
+  class and `GalaxiaParityTests`.
+
+### 28.7 For the tester
+
+Nothing in this design waits on an answer; each of these is a recommendation that can be taken later.
+
+- **SHA-1 for the dump's identity.** `EmuSen_GamePackages.md` §2.2 gives `RomHash` CRC-32 and SHA-1 beside its MD5.
+  Nothing B8 builds reads SHA-1 (`games.db` keys on the MD5; OpenVGDB matches on it), and the Rust has no SHA-1: it
+  would be a new crate. *Recommended: `sha1` 0.11 of RustCrypto, the family of the `md-5` and `sha2` crates already in
+  the workspace, so it adds one crate and no new transitive one; taken at B9, whose scraper is its reader, when
+  `identity` gains `sha1` as a key by a minor and `Scraping/RomHashes.cs` becomes `RomHash`'s caller.* Until then B8's
+  `identity` gives MD5 and CRC-32.
+- **One rule for recent games** (§28.1): should Big Picture's Last Played and the library screen's Recent be one list,
+  the library's `recent`? *Recommended: yes, the library screen's rule, with a game's counters set by the editor not
+  making it recent*; shown first by a failing test, as every candidate is.
+- **Two routers until B7.** Until Crystal is Rust, which shelf a file is on is decided by Crystal's C# for opening it and
+  by the library for listing it, held equal by the parity class. At B7 Crystal's route composes the same Galaxia
+  reading and `emusen-systems` decision, so the two become one by construction. Recorded, not asked.

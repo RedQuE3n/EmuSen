@@ -4,7 +4,6 @@
 use emusen_dotnet::text::{compare_ignore_case, contains_ignore_case, ends_with_ignore_case, equals_ignore_case, is_blank, starts_with_ignore_case, trim};
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use std::cmp::Ordering;
-use std::collections::VecDeque;
 
 /// One `.cht` file in the tree: its folder's name, its name without `.cht`, and its path.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -14,35 +13,8 @@ pub struct Entry {
     pub path: String,
 }
 
-/// `Path.Join` of a folder and a name in it, as .NET's enumeration builds each path it gives.
-pub(crate) fn join(folder: &str, name: &str) -> String {
-    if folder.is_empty() || path::ends_in_separator(Style::HOST, folder) { format!("{folder}{name}") } else { format!("{folder}{}{name}", Style::HOST.separator()) }
-}
-
-/// Whether a listed entry is a directory as .NET's enumeration takes it: a link is taken as what it links to.
-pub(crate) fn listed_as_directory(entry: &std::fs::DirEntry) -> bool {
-    std::fs::metadata(entry.path()).is_ok_and(|m| m.is_dir())
-}
-
-/// Every file under a folder, handed over as `Directory.EnumerateFiles(folder, pattern, AllDirectories)` yields them: a
-/// folder's files in the system's order, its folders queued and visited after, links to folders followed. An error
-/// ends the walk, after what was handed over before it, as it ends .NET's lazy enumeration.
-pub(crate) fn visit_files(folder: &str, mut each: impl FnMut(&str, &str)) -> std::io::Result<()> {
-    let mut queue = VecDeque::from([folder.to_string()]);
-    while let Some(dir) = queue.pop_front() {
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
-            let name = entry.file_name().to_string_lossy().into_owned();
-            let at = join(&dir, &name);
-            if listed_as_directory(&entry) {
-                queue.push_back(at);
-            } else {
-                each(&at, &name);
-            }
-        }
-    }
-    Ok(())
-}
+/// Every file under a folder, as `Directory.EnumerateFiles(folder, pattern, AllDirectories)` yields them: Galaxia's walk.
+pub(crate) use emusen_galaxia::dotnet_files::visit_files;
 
 /// Whether a name ends as `*.cht` asks, by case on Linux, as .NET's enumeration matches there.
 fn is_cht(name: &str) -> bool {

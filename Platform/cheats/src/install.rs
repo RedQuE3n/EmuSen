@@ -22,16 +22,7 @@ pub enum Refusal {
     Io(std::io::Error),
 }
 
-struct Entry {
-    platform: u8,
-    method: u16,
-    dos_time: u32,
-    compressed: usize,
-    length: u64,
-    external: u32,
-    offset: usize,
-    full_name: String,
-}
+use emusen_galaxia::archive::ZipEntry as Entry;
 
 fn u16_at(b: &[u8], at: usize) -> Option<u16> {
     b.get(at..at + 2).map(|s| u16::from_le_bytes([s[0], s[1]]))
@@ -41,51 +32,10 @@ fn u32_at(b: &[u8], at: usize) -> Option<u32> {
     b.get(at..at + 4).map(|s| u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
 }
 
-fn unsupported<T>(why: &str) -> Result<T, Refusal> {
-    Err(Refusal::Unsupported(why.to_string()))
-}
-
-/// The central directory, read whole before anything is written; a form .NET reads differently or refuses is left to it.
+/// The central directory, read whole by Galaxia's reader before anything is written; a form .NET reads differently or
+/// refuses is left to it.
 fn entries(zip: &[u8]) -> Result<Vec<Entry>, Refusal> {
-    let lowest = zip.len().saturating_sub(22 + 0xFFFF);
-    let end = (lowest..=zip.len().saturating_sub(22)).rev().find(|&at| u32_at(zip, at) == Some(0x0605_4B50));
-    let Some(end) = end.filter(|_| zip.len() >= 22) else { return unsupported("no end of central directory") };
-    if end >= 20 && u32_at(zip, end - 20) == Some(0x0706_4B50) {
-        return unsupported("a Zip64 archive");
-    }
-    let (disk, cd_disk) = (u16_at(zip, end + 4).unwrap_or(1), u16_at(zip, end + 6).unwrap_or(1));
-    let (on_disk, total) = (u16_at(zip, end + 8).unwrap_or(0), u16_at(zip, end + 10).unwrap_or(0));
-    let (size, start) = (u32_at(zip, end + 12).unwrap_or(0), u32_at(zip, end + 16).unwrap_or(0));
-    if disk != 0 || cd_disk != 0 || on_disk != total || total == 0xFFFF || size == u32::MAX || start == u32::MAX {
-        return unsupported("a spanned or Zip64 archive");
-    }
-    let mut at = start as usize;
-    let mut list = Vec::new();
-    while u32_at(zip, at) == Some(0x0201_4B50) {
-        let h = |o: usize| u16_at(zip, at + o).ok_or(Refusal::Unsupported("a short header".into()));
-        let w = |o: usize| u32_at(zip, at + o).ok_or(Refusal::Unsupported("a short header".into()));
-        let (made_by, flags, method) = (h(4)?, h(8)?, h(10)?);
-        let dos_time = (w(12)? as u32) | ((h(14)? as u32) << 16);
-        let (compressed, length, n, m, k) = (w(20)?, w(24)?, h(28)? as usize, h(30)? as usize, h(32)? as usize);
-        let (external, offset) = (w(38)?, w(42)?);
-        if compressed == u32::MAX || length == u32::MAX || offset == u32::MAX || h(34)? != 0 {
-            return unsupported("a Zip64 or spanned entry");
-        }
-        if flags & 1 != 0 || (method != 0 && method != 8) {
-            return unsupported("an encrypted entry or a method other than stored and deflate");
-        }
-        let Some(name) = zip.get(at + 46..at + 46 + n) else { return unsupported("a short name") };
-        let full_name = String::from_utf8_lossy(name).into_owned();
-        if full_name.contains('\0') {
-            return unsupported("a name holding a NUL");
-        }
-        list.push(Entry { platform: (made_by >> 8) as u8, method, dos_time, compressed: compressed as usize, length: length as u64, external, offset: offset as usize, full_name });
-        at += 46 + n + m + k;
-    }
-    if list.len() != total as usize {
-        return unsupported("an entry count the directory does not hold");
-    }
-    Ok(list)
+    emusen_galaxia::archive::entries_in(zip).map_err(Refusal::Unsupported)
 }
 
 /// `ZipArchiveEntry.Name`: after the last `/`, and for an entry made on Windows also after `\` or `:`.

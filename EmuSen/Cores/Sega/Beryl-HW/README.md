@@ -10,6 +10,8 @@ first were the processors.
 - `beryl-sh2` — the Hitachi SH-2 (SH7604): Nephrite's 32X, and later Zoisite (Saturn).
 - `beryl-sn76489` — the Texas Instruments SN76489 and Sega's copy of it in the VDP: the Genesis's PSG, and later
   Endou's and Jadeite's (with the Game Gear's stereo register).
+- `beryl-sms-vdp` — the Master System's VDP family (315-5124, 315-5246, 315-5378) in mode 4: Endou's picture, and at
+  its stage 4 the TMS9918A's and the Genesis's mode 4 composition (`Beryl_SmsVdp.md`).
 - `beryl-asm` — the front half the processors' assemblers share (expressions, labels, constants, conditionals,
   includes); a development tool, linked by no core's library.
 

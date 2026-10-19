@@ -12,6 +12,9 @@ below is the processors'; a crate of another kind keeps the contract its own sec
 - [`Beryl_SH2.md`](Beryl_SH2.md) — `beryl-sh2`, the Hitachi SH-2 (SH7604), for which no single-step suite exists.
 - [`Beryl_SN76489.md`](Beryl_SN76489.md) — `beryl-sn76489`, the SN76489 PSG and Sega's copy of it, written from SMS
   Power's document; the first crate here that is not a processor.
+- [`Beryl_SmsVdp.md`](Beryl_SmsVdp.md) — `beryl-sms-vdp`, the Master System's VDP family (315-5124, 315-5246, 315-5378)
+  in mode 4, its line composition to be shared with the Genesis's mode 4; a chip that is not a processor, keeping the
+  contract below with the additions its opening lists. Created 2026-10-19 at Endou's stage 3.
 - `beryl-asm` — the front half of the processors' assemblers, below; no record page of its own, the processors' §8 being
   where its readings are measured.
 

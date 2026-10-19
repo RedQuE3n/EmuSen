@@ -1,0 +1,19 @@
+[package]
+name = "beryl-sms-vdp"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Beryl's Master System VDP: the 315-5124, the 315-5246 and the 315-5378 in mode 4, and the line composition the
+# Genesis's mode 4 is to share. Written from MacDonald's VDP document, SMS Power!'s pages and Sega's Mark III manual.
+# See Endou_Plan.md §3.3 and Beryl_SmsVdp.md.
+[lib]
+name = "beryl_sms_vdp"
+
+[dependencies]
+emusen-native = { path = "../../../Shared/emusen-native" }
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

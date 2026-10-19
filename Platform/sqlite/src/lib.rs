@@ -15,6 +15,7 @@ pub const NOT_A_DATABASE: i32 = 26;
 const OK: c_int = 0;
 const ROW: c_int = 100;
 const DONE: c_int = 101;
+const OPEN_READONLY: c_int = 0x1;
 const OPEN_READWRITE: c_int = 0x2;
 const OPEN_CREATE: c_int = 0x4;
 const INTEGER: c_int = 1;
@@ -220,9 +221,18 @@ unsafe impl Send for Connection {}
 impl Connection {
     /// Opens the file for reading and writing, making it when it is not there.
     pub fn open(sqlite: Arc<Sqlite>, path: &str) -> Result<Connection, Failure> {
+        Connection::open_with(sqlite, path, OPEN_READWRITE | OPEN_CREATE)
+    }
+
+    /// Opens the file for reading only, as Microsoft.Data.Sqlite's `Mode=ReadOnly`: a missing file is refused, nothing made.
+    pub fn open_read_only(sqlite: Arc<Sqlite>, path: &str) -> Result<Connection, Failure> {
+        Connection::open_with(sqlite, path, OPEN_READONLY)
+    }
+
+    fn open_with(sqlite: Arc<Sqlite>, path: &str, flags: c_int) -> Result<Connection, Failure> {
         let Ok(name) = CString::new(path) else { return Err(Failure { code: 14, message: "SQLite Error 14: 'unable to open database file'.".to_string() }) };
         let mut db = std::ptr::null_mut();
-        let code = unsafe { (sqlite.f.open_v2)(name.as_ptr(), &mut db, OPEN_READWRITE | OPEN_CREATE, std::ptr::null()) };
+        let code = unsafe { (sqlite.f.open_v2)(name.as_ptr(), &mut db, flags, std::ptr::null()) };
         let connection = Connection { sqlite, db, timeout: TIMEOUT };
         if code != OK {
             return Err(connection.failure(code));

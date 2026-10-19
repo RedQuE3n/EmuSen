@@ -25,7 +25,7 @@ namespace EmuSen.Mistress.Views
 
         // The library's systems followed by ES-DE's collections, from the same records the sidebar shows.
         private IReadOnlyList<ThemedShelf> WithCollections(IReadOnlyList<ThemedShelf> systems) =>
-            CollectionShelves.Build(systems, CustomCollections(), _appSettings.BigPictureCollections, ThemeHasFolderFor);
+            CollectionShelves.Build(systems, CustomCollections(), _appSettings.BigPictureCollections, ThemeHasFolderFor, _recentSnapshot.Select(e => e.FullPath).ToList());
 
         private IReadOnlyList<CustomCollection> CustomCollections() =>
             _collections.Select(c => new CustomCollection(c.Id, c.Name, _records.Members(c.Id))).ToList();

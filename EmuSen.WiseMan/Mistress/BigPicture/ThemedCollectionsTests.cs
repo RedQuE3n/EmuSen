@@ -180,6 +180,29 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal([ThemedSession.GbGames[0], ThemedSession.NesGames[0], ThemedSession.SnesGames[0]], Listed(s));
         }, default);
 
+        // Decided 2026-10-18 (EmuSen_Backend.md §28.11): Last Played is the library screen's Recently Played, the library's recent call.
+        [Fact]
+        public Task Last_played_is_the_library_screen_s_recently_played_list() => Session.Dispatch(() =>
+        {
+            static string Played(int i) => $"Played {i:D2} (Synthetic).sfc";
+            using var s = new ThemedSession(settings: AllAuto, roms: dir => { for (int i = 0; i < 40; i++) File.WriteAllBytes(Path.Combine(dir, Played(i)), SyntheticRom.BuildBlank()); });
+            GameRecords records = Records(s);
+            var start = new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Local);
+            for (int i = 0; i < 36; i++) records.Started(Path.Combine(s.RomDirectory, Played(i)), i is 5 or 6 ? start.AddDays(30) : start.AddHours(i));
+            records.SaveEdits(Path.Combine(s.RomDirectory, Played(5)), new Dictionary<string, string?> { ["sortname"] = "Zz" }, start);
+            records.SetPlayStats(Path.Combine(s.RomDirectory, Played(38)), 4, 600);
+            records.SetPlayStats(Path.Combine(s.RomDirectory, Played(39)), 2, 60);
+
+            s.Settings.LibraryCollection = MainWindow.RecentKey;
+            Refresh(s);
+            string[] library = ((IReadOnlyList<RomEntry>)typeof(MainWindow).GetField("_shownEntries", Hidden)!.GetValue(s.Window)!).Select(e => e.FileName).ToArray();
+            Assert.Equal(MainWindow.RecentLimit, library.Length);
+            Assert.Equal([Played(5), Played(6), Played(35)], library.Take(3));
+
+            Enter(s, "recent");
+            Assert.Equal(library, s.Themed.Stage!.Current.Data.System.Games.Select(g => Path.GetFileName(g.File)));
+        }, default);
+
         [Fact]
         public Task The_collection_settings_sheet_applies_each_switch_and_choice_beneath_it_at_once_and_saves_them() => Run(s =>
         {

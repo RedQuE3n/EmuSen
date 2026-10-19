@@ -5885,6 +5885,75 @@ the scope is the same; the facade is more than twice §7's figure, as B3's and B
 - **On Windows and macOS**, paused (`EmuSen_RustPlatform.md` §31): the walk's hidden rule there (a flag, not a leading
   period), the local time's offset, and every gate of this section when the port resumes.
 
+### 28.11 One rule for recent games, built 2026-10-18
+
+*On branch `recent-one-rule` from `WiseMan` at `ab580e57`, after §28.10's decision: the library screen's Recently
+Played and Big Picture's Last Played follow one rule, the library screen's, with the library's `recent` its one owner.*
+
+**The two rules, as the code had them.**
+
+| | The library screen's Recently Played (`MainWindow.Library.cs`) | Big Picture's Last Played (`CollectionShelves.Build`) |
+|---|---|---|
+| The games looked at | the scan's listed games (a hidden game left out unless hidden games are shown), as narrowed by the console filter | the listed games of every console's shelf, less a game excluded from the game counter (ES-DE's rule for every collection) |
+| Which plays count | a last-played time | a last-played time **or** a play count above zero, so counters set in the metadata editor without a launch made a game recent |
+| Order | newest first, comparing `DateTime`s | newest first, a counted game with no time last; then shown re-sorted by the gamelist's default, last played descending and then the name |
+| Ties | the scan's order, the title ignoring case (a stable sort) | the name, or the sort name where the player set one |
+| Limit | 30 (OpenEmu's) | 50 (ES-DE's guide) |
+| Files gone from disk | not listed: both read the last scan | the same |
+| Time zone | local wall-clock readings: a text with an offset converted to the machine's zone, a text without one read as local, so the hour a clock is set back orders by the clock and not by the instant | the same |
+
+The library's `recent` (§28.4) answered the first rule with two differences: it orders by the instant each time names
+(§28.8), and its Rust read a text without an offset as UTC where its C# twin, `GameRecords.Recent`, reads it as local
+time. No caller used it before this step.
+
+**Shown first, by two failing tests.** `ThemedCollectionsTests.Last_played_is_the_library_screen_s_recently_played_list`
+generates 48 games in a themed session: 36 started at distinct local times except two started at the same instant, one
+of those two given the sort name "Zz", and two whose counters are set by the editor and which were never started. The
+library screen listed 30; Big Picture's list differed at its first game, the tie ordered by the sort name, and by the
+rules above it also held the six older games and the two never started (38 in all).
+`LibraryRecordsParityTests.Recent_orders_times_with_and_without_an_offset_alike` starts 700 games around 2026's four
+clock changes in Europe and North America and on an ordinary day, half at local times without an offset and half at
+instants with one, and compares `recent` from both halves: on this machine (America/New_York) the Rust and the C#
+differed at the ninth game.
+
+**The change.**
+
+- Mistress asks `GameRecords.Recent`, the library's `recent` in state 2 and its C# twin with `EMUSEN_LIBRARY_NATIVE=0`,
+  over the listed games of the whole scan with `MainWindow.RecentLimit`, once each time the library is shown. The
+  sidebar's count and Big Picture's Last Played read that answer. Recently Played asks again over its own games, which
+  the console filter can narrow, so its rule is the same call.
+- `CollectionShelves.Build` takes that list. Last Played is its games in its order, less a game excluded from the game
+  counter; `LastPlayedLimit` and the play-count clause are gone. The shelf is `InGivenOrder`: it is shown as given
+  until the player picks a sort in Gamelist Options, which still reads "last played, descending", so the gamelist's
+  tie by name does not reorder it.
+- `clock::instant` reads a text without an offset as a local time, as .NET's `ToUniversalTime` reads an unspecified
+  one: the offset in force at that wall time, or the standard (smaller) one where the clock skips or repeats it.
+  Mistress always records a time with its offset (`DateTime.Now`, `clock::now`), so this reaches only a `games.db`
+  written otherwise.
+
+**The rule, as it now stands.** Of the games given, those with a last-played time, newest first by the instant each
+names, a time without an offset taken as local; ties keep the given order, which is the scan's; at most thirty. A game
+whose file the scan did not find is not given. Big Picture leaves out a game excluded from the game counter after the
+rule, so its list is the library screen's or a part of it, never longer and never in another order.
+
+**Where the library screen itself changed.** Only within the hour a clock is set back: a game started in the second
+pass through that hour now comes before one started in the first, where the `DateTime` comparison put it after.
+
+**Recorded, not changed.** The theme's `lastplayed` game selector (`GameSelectors`, `EmuSen_Settings_Reference.md`
+§4.74) picks up to the theme's `gameCount` of one system's games, newest first, as THEMES.md describes it; it is a theme
+element and not the collection. `MediaLibrary`, `RecentCache` and the presentation files stay as §28.10 lists.
+
+**The gates**, measured on 2026-10-18 on the desktop (America/New_York). Both new tests failed before the change, as
+above, and pass after it. `cargo test --profile test-checked -p emusen-library`: 1, 2 and 6 pass. The blast radius,
+every class of `EmuSen.WiseMan.Mistress.BigPicture` (the themed library, the collections, the gamelist options and all
+of `WindowFitAuditTests`) and every class whose name holds `Library` (both parity classes, the library screen, the ROM
+library, the artwork and media), with `EMUSEN_LIBRARY_NATIVE` unset and with it `0`: **1,520 pass, 41 skip and 8 fail
+each way**, the eight being the `WindowFitAuditTests` Graphics Settings cases §28.8 found failing on the base, owned
+elsewhere. `GamelistOptionsTests`' Last Played case was rewritten for the rule, and `CollectionsBenchTool` gives the
+shelves a list. The call's cost over 3,508 games with 702 played, in a Debug build, median of 21: the C# twin 1.13 ms
+(its `All` 0.85 ms), the library 1.46 ms (its `all` 1.56 ms), once for each showing of the library and once more while
+Recently Played is the chosen row.
+
 ---
 
 ## 29. B7, Crystal in Rust: the design, 2026-10-18
@@ -6818,3 +6887,67 @@ and the windows say the same words, each held by §30.7's classes. Recommendatio
 `GameFolders.Of` moved to Galaxia as the store's layout rule (§30.1); the platform interface left at the number B9 finds
 (§30.2); and a DianaSh command module over `emusen_scrape.h`, which the shell does not have and which would be proposed
 on its own when wanted.
+
+### 30.10 Built 2026-10-18: part 2, below the scraper
+
+*On branch `b9-scrape`, after the eight questions were decided and the 403 stop of §30.1 was shown and fixed. Measured
+on 2026-10-18 against .NET 10.0.112 with a probe of its own on 127.0.0.1, kept outside the repository.*
+
+- **Galaxia's `rom_hash`** gained `hashes_with` (MD5, CRC-32 and, when asked, SHA-1 in one read, a stop asked before
+  each 64 KiB read and answered as an interrupted read, as `RomHashes.Of` checks its token), `hashes_of` (all three of
+  bytes held, the transformed image of §5.2's second step) and `sha1` (a kept media file's, `Scraper.Sha1Of`). The crate
+  `sha1` 0.11.0 joined Galaxia's dependencies, as decided; it brought no crate the workspace did not already have, and
+  the two other locks that build Galaxia (the conformance kit's and Diamond's) gained it with `cpufeatures` 0.3.1, the
+  version the platform's lock already held.
+- **Galaxia's `game_folders::of`**, `GameFolders.Of` ported: the folders between the console folder and the file, `""`
+  at the top, outside the ROM folder or with none; the full paths as `Path.GetFullPath` makes them; case-sensitive, as
+  .NET's `GetRelativePath` is on Linux. The C# stays its twin until state 3; part 6's parity class holds them equal.
+- **`emusen_library.h` 1.1**: `identity` takes `"sha1": true` and answers `"sha1"` only when asked, so a 1.0 host sees
+  the answer it saw; the baseline is unchanged, since a JSON key is not one of its facts.
+- **`emusen-sqlite`** gained `Connection::open_read_only` (`SQLITE_OPEN_READONLY`, Microsoft.Data.Sqlite's
+  `Mode=ReadOnly`): a missing file refused with code 14 and nothing made, a write refused with code 8.
+- **`emusen-dotnet`'s `json_document`**, JSON as `JsonDocument.Parse(string)` reads it with its default options, and
+  System.Text.Json's words for each refusal with `LineNumber` and `BytePositionInLine`. 161 inputs were measured; the
+  rules the words follow, several of them not what a reader would guess, are held by the table in
+  `json_document/tests.rs`: a literal's refusal quotes the whole rest of the text, however long; a number that ends the
+  text inside a container is "an invalid end of a number" naming its last digit; an exponent missing its digit is
+  refused "immediately after a sign character" whether or not a sign was written; the end of the text after a comma is
+  placed at the comma when nothing followed it and where the white space ended when some did; a byte not printable is
+  named `0xNN`, a non-ASCII character by its first byte; positions count bytes of UTF-8 from the line's start. A
+  string with an escaped lone surrogate reads, as .NET's reader lets it, and carries the words `JsonElement.GetString`
+  refuses it in (`Text::refusal`): "Cannot read incomplete UTF-16 JSON text as string with missing low surrogate." for a
+  high surrogate with no escape after it, "Cannot read invalid UTF-16 JSON text as string. Invalid surrogate value:
+  '0xDC00'." for a low one or for what followed a high one, the value written `X2`.
+- **`emusen-dotnet`'s `parse_f64_invariant_float`**, `double.TryParse(text, NumberStyles.Float,
+  CultureInfo.InvariantCulture)`: no thousands separator, `Infinity` and `NaN` in any case, never `∞`.
+- **`emusen-net`'s extension** (Q1), its C layer unchanged:
+  - `Request` gained `headers` (sent after `Host`, which is where .NET 10 put the `User-Agent` its client's
+    `DefaultRequestHeaders` carried), `test_connect` (every connection to one address, the URL's host still the TLS name)
+    and `offline` (every request refused with `NoNetwork`'s words, "The test harness allows no network.").
+  - `fetch_answer`: the final answer of any status, its body held, its `Content-Type` as sent.
+  - `fetch_into`: a 200's body handed to a sink as it comes, the sink saying when to stop; another status answered
+    with no body read. `request.timeout` covers the call up to the head and a second duration the whole of it: measured,
+    .NET's `HttpClient.Timeout` does not reach the body under `ResponseHeadersRead`, and a linked token's cancel says
+    only "The operation was canceled.".
+  - `text`, `ReadAsStringAsync`'s decoding: the charset when one is named (its preamble taken off only when the bytes
+    begin with it, so a UTF-8 mark under `iso-8859-1` stays three characters, as measured), else a UTF-8, UTF-32 or
+    UTF-16 mark, else UTF-8, each undecodable sequence one U+FFFD; a charset .NET does not have without a code-page
+    provider refused in its words.
+  - **A given address is written as .NET's `Uri` writes it** (`location.rs`): 45 addresses were sent by .NET and their
+    request lines recorded. An escaped unreserved character is unescaped (`%41` is `A`, `%7e` is `~`, `%2e` a dot that
+    then counts in removing dot segments); an escaped UTF-8 sequence that decodes is written again in upper case
+    (`%c3%a9` is `%C3%A9`), any other escape kept as written (`%2f` stays `%2f`, `%C0%AF` stays); a `%` that starts no
+    escape becomes `%25`; spaces, controls, non-ASCII and `"<>\^`{|}` are escaped in upper case, `[]` and
+    `'!*;,:@$+?&=()~` left; `\` is `/` in a path and `%5C` in a query. The cheat database's download goes through the
+    same rule; its URLs have none of these characters.
+  - Not compared by a WiseMan class in this part: these calls are the Rust's alone until the scraper uses them, so
+    their rules are held by `emusen-net`'s tests against the measured values (18 against a server of their own, 7 of
+    the text and address tables), and part 4's replay compares the two halves' requests directly.
+
+**Tests, measured on 2026-10-18.** `cargo test --profile test-checked` of `emusen-galaxia`, `emusen-library`,
+`emusen-sqlite`, `emusen-net`, `emusen-dotnet`, `emusen-platform`, `emusen-cheats`, `emusen-serenity`,
+`emusen-firmware`, `emusen-savemedia` and `emusen-systems`: 256 passed, none failed. One firmware test,
+`a_name_is_taken_before_content_in_a_folder_and_the_chosen_folder_wholly_before_the_store`, failed once in a combined
+run and passed in three runs of its crate alone; it touches nothing this part changed, and is recorded for its owner.
+Seeded faults in the JSON reader (the comma's place, the depth limit off by one) were each caught by the table. `cargo
+metadata --locked` passes over the three tracked locks that build Galaxia.

@@ -74,6 +74,9 @@ fn a_tree_is_scanned_shelved_and_a_renamed_game_keeps_its_row() {
     let b = t.at("roms/nes/b.nes");
     let id = lib.identity_request(&format!("{{\"path\":{},\"record\":true}}", emusen_dotnet::json::quoted(&b))).unwrap();
     assert!(id.contains("\"system\":\"nes\"") && id.contains("\"cached\":false"), "{id}");
+    assert!(!id.contains("\"sha1\""), "a 1.0 request sees no sha1: {id}");
+    let with = lib.identity_request(&format!("{{\"path\":{},\"sha1\":true}}", emusen_dotnet::json::quoted(&b))).unwrap();
+    assert!(with.contains("\"crc32\":\"") && with.contains("\"sha1\":\"2fbb1a94481697640581db35542dabf3dee0a72b\""), "{with}");
     lib.change_request(&format!("{{\"op\":\"toggle_favourite\",\"path\":{}}}", emusen_dotnet::json::quoted(&b))).unwrap();
     let id = lib.change_request("{\"op\":\"create_collection\",\"name\":\"RPGs\",\"at\":\"2026-10-18T12:00:00.0000000+02:00\"}").unwrap();
     lib.change_request(&format!("{{\"op\":\"add_to_collection\",\"id\":{id},\"path\":{}}}", emusen_dotnet::json::quoted(&b))).unwrap();

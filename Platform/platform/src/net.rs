@@ -21,7 +21,7 @@ fn request(data: *const u8, len: usize) -> Result<Request, i32> {
         Some(Value::String(pem)) => emusen_net::pem_certificates(&pem.text).ok_or_else(|| fail(status::PARSE, "test_roots holds a certificate that does not read"))?,
         _ => return Err(fail(status::PARSE, "test_roots is not text")),
     };
-    Ok(Request { url, timeout, test_roots })
+    Ok(Request { test_roots, ..Request::new(url, timeout) })
 }
 
 /// A download started: `{"url", "timeout_ms", "test_roots"}` in, a handle out, freed with `emusen_net_download_free`;

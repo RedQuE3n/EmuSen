@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use emusen_net::{Download, Failure, Kind, Progress, Request, State, fetch};
+use emusen_net::{Download, Failure, Kind, Progress, Request, State, Streamed, fetch, fetch_answer, fetch_into};
 use rcgen::{BasicConstraints, CertificateParams, CertifiedIssuer, DnType, IsCa, KeyPair};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 
@@ -24,7 +24,7 @@ fn certs() -> Certs {
     root_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
     root_params.distinguished_name.push(DnType::CommonName, "EmuSen Test Root");
     let root = CertifiedIssuer::self_signed(root_params, root_key).unwrap();
-    let names = vec!["localhost".to_string(), "127.0.0.1".to_string()];
+    let names = vec!["localhost".to_string(), "127.0.0.1".to_string(), "api.screenscraper.test".to_string()];
     let leaf_key = KeyPair::generate().unwrap();
     let leaf = CertificateParams::new(names.clone()).unwrap().signed_by(&leaf_key, &root).unwrap();
     let stranger_key = KeyPair::generate().unwrap();
@@ -97,7 +97,7 @@ fn serve(socket: TcpStream, config: Arc<rustls::ServerConfig>, handler: Handler,
 }
 
 fn request(url: String, roots: &[CertificateDer<'static>], timeout: Duration) -> Request {
-    Request { url, timeout, test_roots: roots.to_vec() }
+    Request { test_roots: roots.to_vec(), ..Request::new(url, timeout) }
 }
 
 fn get(server: &Server, path: &str, certs: &Certs) -> Result<Vec<u8>, Failure> {
@@ -293,4 +293,95 @@ fn a_refused_connection_names_its_host_and_port() {
 fn a_url_dotnet_refuses_is_refused_in_its_words() {
     let failure = fetch(&request("ftp://example.org/".into(), &[], Duration::from_secs(1)), &Progress::default()).unwrap_err();
     assert_eq!((failure.kind, failure.message.as_str()), (Kind::Scheme, "The 'ftp' scheme is not supported."));
+}
+
+#[test]
+fn a_programs_user_agent_follows_the_host_as_dotnet_writes_them() {
+    let c = certs();
+    let server = Server::start(&c.leaf, reply("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"));
+    let mut r = request(server.url("/api2/jeuInfos.php?x=1"), std::slice::from_ref(&c.root), Duration::from_secs(10));
+    r.headers.push(("User-Agent".into(), "EmuSen/9.9.9".into()));
+    assert_eq!(fetch_answer(&r, &Progress::default()).unwrap().body, b"ok");
+    // .NET 10 sent `GET <target> HTTP/1.1`, `Host`, then `User-Agent`, measured on 2026-10-18; names compare without case.
+    assert_eq!(server.heads.lock().unwrap().as_slice(), [format!("GET /api2/jeuInfos.php?x=1 HTTP/1.1\r\nhost: localhost:{}\r\nuser-agent: EmuSen/9.9.9\r\n\r\n", server.port)]);
+}
+
+#[test]
+fn an_answer_of_any_status_comes_with_its_body_and_type() {
+    let c = certs();
+    let server = Server::start(&c.leaf, reply("HTTP/1.1 404 Not Found\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: 6\r\n\r\nErreur"));
+    let r = request(server.url("/"), std::slice::from_ref(&c.root), Duration::from_secs(10));
+    let answer = fetch_answer(&r, &Progress::default()).unwrap();
+    assert_eq!((answer.status, answer.content_type.as_deref(), answer.body.as_slice()), (404, Some("text/html; charset=utf-8"), &b"Erreur"[..]));
+    assert_eq!(emusen_net::text(answer.content_type.as_deref(), &answer.body).unwrap(), "Erreur");
+}
+
+#[test]
+fn a_body_is_handed_on_as_it_comes_and_stops_when_the_sink_says() {
+    let c = certs();
+    let body: Vec<u8> = (0..200_000u32).map(|i| (i * 3) as u8).collect();
+    let served = body.clone();
+    let server = Server::start(&c.leaf, Arc::new(move |path, w| {
+        if path == "/gone" {
+            let _ = w.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 4\r\n\r\nnope");
+            return;
+        }
+        let _ = w.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: {}\r\n\r\n", served.len()).as_bytes());
+        let _ = w.write_all(&served);
+    }));
+    let r = request(server.url("/m"), std::slice::from_ref(&c.root), Duration::from_secs(10));
+    let mut got = Vec::new();
+    let streamed = fetch_into(&r, Duration::from_secs(10), &Progress::default(), &mut |chunk| {
+        got.extend_from_slice(chunk);
+        Ok(true)
+    })
+    .unwrap();
+    assert_eq!(streamed, Streamed { status: 200, content_type: Some("image/png".into()), received: 200_000, whole: true });
+    assert_eq!(got, body);
+    let mut chunks = 0;
+    let stopped = fetch_into(&r, Duration::from_secs(10), &Progress::default(), &mut |_| {
+        chunks += 1;
+        Ok(false)
+    })
+    .unwrap();
+    assert!(!stopped.whole && chunks == 1 && stopped.received < 200_000, "{stopped:?}");
+    let gone = request(server.url("/gone"), std::slice::from_ref(&c.root), Duration::from_secs(10));
+    let none = fetch_into(&gone, Duration::from_secs(10), &Progress::default(), &mut |_| panic!("no body of a 404 is read")).unwrap();
+    assert_eq!((none.status, none.received), (404, 0));
+}
+
+#[test]
+fn the_head_has_the_clients_timeout_and_the_body_the_linked_one() {
+    let c = certs();
+    let silent = Server::start(&c.leaf, Arc::new(|_, _| thread::sleep(Duration::from_secs(4))));
+    let slow = Server::start(&c.leaf, Arc::new(|_, w| {
+        let _ = w.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n0123456789");
+        let _ = w.flush();
+        thread::sleep(Duration::from_secs(4));
+    }));
+    let started = Instant::now();
+    let r = request(silent.url("/"), std::slice::from_ref(&c.root), Duration::from_millis(1000));
+    let failure = fetch_into(&r, Duration::from_secs(3), &Progress::default(), &mut |_| Ok(true)).unwrap_err();
+    assert_eq!(failure.message, "The request was canceled due to the configured HttpClient.Timeout of 1 seconds elapsing.");
+    assert!(started.elapsed() < Duration::from_millis(2500), "{:?}", started.elapsed());
+    // .NET 10: with ResponseHeadersRead the client's timeout stops at the head; a linked token's cancel says only this.
+    let started = Instant::now();
+    let r = request(slow.url("/"), std::slice::from_ref(&c.root), Duration::from_millis(500));
+    let failure = fetch_into(&r, Duration::from_millis(1500), &Progress::default(), &mut |_| Ok(true)).unwrap_err();
+    assert_eq!((failure.kind, failure.message.as_str()), (Kind::Timeout, "The operation was canceled."));
+    assert!(started.elapsed() >= Duration::from_millis(1400) && started.elapsed() < Duration::from_millis(3000), "{:?}", started.elapsed());
+}
+
+#[test]
+fn a_test_connect_sends_every_name_to_the_tests_server_and_offline_sends_nothing() {
+    let c = certs();
+    let server = Server::start(&c.leaf, reply("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"));
+    let mut r = request(format!("https://api.screenscraper.test/api2/x.php?a=1"), std::slice::from_ref(&c.root), Duration::from_secs(10));
+    r.test_connect = Some(format!("127.0.0.1:{}", server.port).parse().unwrap());
+    assert_eq!(fetch(&r, &Progress::default()).unwrap(), b"ok");
+    assert_eq!(server.heads.lock().unwrap().as_slice(), ["GET /api2/x.php?a=1 HTTP/1.1\r\nhost: api.screenscraper.test\r\n\r\n".to_string()]);
+    r.offline = true;
+    let failure = fetch_answer(&r, &Progress::default()).unwrap_err();
+    assert_eq!(failure.message, "The test harness allows no network.");
+    assert_eq!(server.connections.load(Ordering::SeqCst), 1);
 }

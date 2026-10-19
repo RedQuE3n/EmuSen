@@ -5281,6 +5281,41 @@ directory and the sidecar-less listing left to `core_approve`'s minor, and the h
   job. *Recommended: the lend's types (already `emusen-native`'s) and the two calls in the crate; the kit's own device
   and its read-back stay in the kit, as C20's stand-in for a frontend.*
 
+### 27.10 Built 2026-10-18: parts 2 and 3, the crate and the kit on it
+
+**Part 2, the crate** (`994b9c51`), as §27.2 and §27.3 laid it out, with these points settled by building it:
+
+- **The load and the check are two steps.** `Library::load` resolves the required exports and nothing more, so that the
+  kit can still load a library that fails rule 4 and report each failure in its own case; `check()` is rule 4, run once
+  with its verdict kept. A library whose required export is missing is refused at load, and `LoadError::host_words`
+  names the version first where the library has one of another major, as the C# host's order does; the kit keeps its
+  own words (`could not be loaded: …`, `lacks the required export …`), which its reports carry.
+- **A failed load is never unloaded** (§7.2): the handle is kept, and the refusal is cached by full path like a success.
+- **Rule 3's owner** is the process's user, root or the owner of the cores directory that holds the resolved file; its
+  write check is the world-write bit alone, as decided. On Windows the owner and mode checks are skipped (paused).
+- **The listing's paths** are the directory as given joined with the file name, and a report's path is that made
+  absolute with `.` and `..` folded and links left alone, as .NET's `Path.GetFullPath` makes it.
+- **The test cores.** `host_test_core` and `host_plain_core` are emusen-native's; `host_liar_core` has the 32 required
+  exports and descriptors that lie as `liar_set` asks (twelve lies, each refused in its words), and `host_partial_core`
+  exports the version alone.
+- **Measured on 2026-10-18** [M], `cargo test --profile test-checked`: the library's 7, `tests/host.rs` 12 and
+  `tests/alloc.rs` 1, all passing. The last runs 120 frames of the test core through the latch, the frame calls, the
+  registers, the counters and a space read with a counting allocator, and counts none; with the latch's send made to
+  clone its buffers instead (a seeded fault), it counts 720 and fails.
+
+**Part 3, the kit on the crate.** The kit's `api.rs` keeps the skewed host of C12 and the cases' shapes of the calls;
+the export table, the loader, the length-query reader, the sidecar's writer and the SHA-256 are the crate's, and each
+kit `Machine` is owned by a crate `Machine`, which frees it. One departure from §27.4: the kit's plain machine calls
+stay the kit's, as one-line calls through the crate's table, because they take `&self` and return the shapes the cases
+read (owned buffers, canary counts), and moving them would change the 2,700 lines of cases for no behaviour. The kit
+drops its `libloading` dependency. The oracle was the kit built from `WiseMan` before the change, run on the same
+libraries, so the old loader served as the failover until the gate passed and is gone from the tree after it.
+
+| Gate | Result, measured on 2026-10-18 [M] |
+|---|---|
+| The kit's crate, `cargo test --profile test-checked` | 8 and 27 passed, the counts of §25.3 |
+| **The kit's corpus on every core**, §26.4's set (MoonRT 4 images `--self-delimiting`, MercuryRT 4, VenusRT 2, MarsRT 2, Nephrite `genesis-sample.txt` 64, Diamond `psx-sample.txt` 9 at 1,800 frames, MercuryRT's 173 hardware-test ROMs), the kit of `9ee965f7` against the kit on the crate, one build of each core's release library | every case of every image passing in both; **265 reports, 265 the same** once the library's path and the timings are set aside |
+
 ---
 
 ## 28. B8, the library in Rust: the design, 2026-10-18

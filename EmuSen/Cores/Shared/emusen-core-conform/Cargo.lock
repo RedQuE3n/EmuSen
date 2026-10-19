@@ -124,8 +124,16 @@ name = "emusen-core-conform"
 version = "0.1.0"
 dependencies = [
  "ash",
+ "emusen-core-host",
  "emusen-disc",
  "emusen-galaxia",
+ "emusen-native",
+]
+
+[[package]]
+name = "emusen-core-host"
+version = "0.1.0"
+dependencies = [
  "emusen-native",
  "libloading",
 ]
@@ -145,7 +153,9 @@ version = "0.1.0"
 name = "emusen-galaxia"
 version = "0.1.0"
 dependencies = [
+ "emusen-disc",
  "emusen-dotnet",
+ "flate2",
  "md-5",
  "memmap2",
 ]

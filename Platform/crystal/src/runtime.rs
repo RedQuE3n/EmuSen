@@ -25,6 +25,8 @@ pub struct Runtime {
     development: bool,
     trust: Trust,
     discovery: Mutex<Arc<Discovery>>,
+    /// The runtime's own lines no session said, kept until the events raise them on session 0 (§29.11, Q2).
+    said: Mutex<Vec<String>>,
 }
 
 impl Runtime {
@@ -39,7 +41,17 @@ impl Runtime {
         let development = config.development.unwrap_or_else(|| std::env::var(emusen_core_host::discovery::DEVELOPMENT_VARIABLE).as_deref() == Ok("1"));
         let trust = Trust::new(&directories, &[]);
         let discovery = Mutex::new(Arc::new(Discovery::scan(&directories, development)));
-        Runtime { directories, development, trust, discovery }
+        Runtime { directories, development, trust, discovery, said: Mutex::new(Vec::new()) }
+    }
+
+    /// A line of the runtime's own that no session said.
+    pub fn say(&self, line: String) {
+        self.said.lock().unwrap_or_else(|p| p.into_inner()).push(line);
+    }
+
+    /// The lines said since the last call.
+    pub fn take_said(&self) -> Vec<String> {
+        std::mem::take(&mut *self.said.lock().unwrap_or_else(|p| p.into_inner()))
     }
 
     pub fn trust(&self) -> &Trust {

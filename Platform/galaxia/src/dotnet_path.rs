@@ -22,7 +22,7 @@ impl Style {
         }
     }
 
-    const fn is_separator(self, byte: u8) -> bool {
+    pub const fn is_separator(self, byte: u8) -> bool {
         match self {
             Style::Unix => byte == b'/',
             Style::Windows => byte == b'\\' || byte == b'/',

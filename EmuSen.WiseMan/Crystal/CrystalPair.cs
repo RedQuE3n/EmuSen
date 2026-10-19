@@ -72,6 +72,33 @@ namespace EmuSen.WiseMan.Crystal
             }
         }
 
+        public string FirmwareNeeded(nint rt, string path, string? engine)
+        {
+            var f = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, byte*, nuint, long>)Fn("firmware_needed");
+            byte[] p = Encoding.UTF8.GetBytes(path);
+            byte[]? e = engine is null ? null : Encoding.UTF8.GetBytes(engine);
+            fixed (byte* pp = p)
+            fixed (byte* ep = e)
+            {
+                byte* a = pp;
+                byte* b = ep;
+                return Copy((o, n) => f(rt, a, (nuint)p.Length, b, (nuint)(e?.Length ?? 0), o, n));
+            }
+        }
+
+        // A firmware install's status, with the words where it failed.
+        public string FirmwareInstall(nint rt, string request, string source)
+        {
+            var f = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, int>)Fn("firmware_install");
+            byte[] r = Encoding.UTF8.GetBytes(request), s = Encoding.UTF8.GetBytes(source);
+            fixed (byte* rp = r)
+            fixed (byte* sp = s)
+            {
+                int status = f(rt, rp, (nuint)r.Length, sp, (nuint)s.Length);
+                return status == 0 ? "0" : $"status {status}: {LastError()}";
+            }
+        }
+
         private delegate long CopyOut(byte* o, nuint n);
 
         private string Copy(CopyOut call)

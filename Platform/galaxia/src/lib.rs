@@ -9,6 +9,7 @@ pub mod atomic;
 pub mod cheats;
 pub mod config;
 pub mod consoles;
+pub mod disc_set;
 pub mod dotnet_files;
 pub mod dotnet_path;
 pub mod dotnet_text;

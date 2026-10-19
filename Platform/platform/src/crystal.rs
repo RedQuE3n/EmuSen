@@ -169,3 +169,50 @@ pub unsafe extern "C" fn emusen_crystal_route(rt: *mut emusen_crystal_runtime, p
         Err(status) => status as i64,
     }
 }
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length; `out` valid for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_firmware_needed(rt: *mut emusen_crystal_runtime, path: *const u8, path_len: usize, engine: *const u8, engine_len: usize, out: *mut u8, len: usize) -> i64 {
+    let answer = || -> Result<String, i32> {
+        let r = unsafe { runtime(rt) }?;
+        let at = unsafe { text(path, path_len) }?.filter(|p| !p.is_empty()).ok_or_else(|| fail(svc::BAD_ARGUMENT, "the path must be given"))?;
+        let engine = unsafe { text(engine, engine_len) }?;
+        Ok(emusen_crystal::firmware::needed_json(r, at, engine))
+    };
+    match answer() {
+        Ok(json) => unsafe { put(json.as_bytes(), out, len) },
+        Err(status) => status as i64,
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_firmware_install(rt: *mut emusen_crystal_runtime, request: *const u8, request_len: usize, source: *const u8, source_len: usize) -> i32 {
+    let done = || -> Result<(), i32> {
+        let r = unsafe { runtime(rt) }?;
+        if request.is_null() && request_len > 0 {
+            return Err(fail(svc::NULL, "a null buffer with a length"));
+        }
+        let bytes = if request.is_null() { &[][..] } else { unsafe { std::slice::from_raw_parts(request, request_len) } };
+        let request = std::str::from_utf8(bytes).map_err(|_| fail(svc::BAD_ARGUMENT, "the argument is not JSON: it is not UTF-8"))?;
+        let source = unsafe { text(source, source_len) }?.filter(|p| !p.is_empty()).ok_or_else(|| fail(svc::BAD_ARGUMENT, "the source file must be given"))?;
+        let tree = emusen_galaxia::tree::tree();
+        emusen_crystal::firmware::install(&tree, request, source, &|line| r.say(line)).map_err(|(status, words)| fail(status, words))
+    };
+    match done() {
+        Ok(()) => 0,
+        Err(status) => status,
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` valid for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_firmware_overview(rt: *mut emusen_crystal_runtime, out: *mut u8, len: usize) -> i64 {
+    match unsafe { runtime(rt) } {
+        Ok(r) => unsafe { put(emusen_crystal::firmware::overview_json(r).as_bytes(), out, len) },
+        Err(status) => status as i64,
+    }
+}

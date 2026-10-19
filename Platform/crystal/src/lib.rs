@@ -4,6 +4,7 @@
 
 pub mod abi;
 pub mod catalog;
+pub mod firmware;
 pub mod info;
 pub mod json;
 pub mod route;

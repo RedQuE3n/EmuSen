@@ -6,6 +6,7 @@
 
 pub mod args;
 pub mod machine;
+pub mod registries;
 
 use std::sync::Mutex;
 
@@ -82,6 +83,12 @@ impl Call<'_> {
         let mut held = self.s.lock()?;
         let run = self.s.run.lock().unwrap_or_else(|p| p.into_inner());
         f(&mut held.engine, &run)
+    }
+
+    /// A call the C#'s export holds the gate around whether it reads or changes: an op-coded group's, which refuses a
+    /// read-only table's change itself, after the op is known.
+    pub fn gated<T>(&self, f: impl FnOnce(&mut Engine, &mut Run) -> Answer<T>) -> Answer<T> {
+        self.s.change(f)
     }
 
     /// A change: the gate held around it, refused first where the table is a read-only context's, as `GateScope` and

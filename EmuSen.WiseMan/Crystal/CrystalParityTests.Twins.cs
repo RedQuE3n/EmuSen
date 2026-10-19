@@ -99,5 +99,31 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void The_session_run_control_memory_processors_states_logs_and_games_answer_alike_on_the_test_core() =>
             SameTwins("machine", new[] { TestTree(plain: false) }, TestGames());
+
+        [Fact]
+        public void The_registries_answer_alike_on_the_test_core() =>
+            SameTwins("registries", new[] { TestTree(plain: false) }, TestGames());
+    
+        [Fact]
+        public void The_registries_answer_alike_on_MoonRT()
+        {
+            byte[] head =
+            {
+                0xA2, 0x05, 0xA9, 0x10, 0x8D, 0x00, 0x20, 0xA9, 0x03, 0x8D, 0x05, 0x20, 0x8D, 0x05, 0x20, 0xA9, 0x21, 0x8D, 0x06, 0x20, 0xA9, 0x08, 0x8D, 0x06, 0x20,
+                0xA9, 0xC0, 0x8D, 0x00, 0x40, 0xA9, 0x3F, 0x8D, 0x06, 0x20, 0xA9, 0x00, 0x8D, 0x06, 0x20, 0xA9, 0x21, 0x8D, 0x07, 0x20, 0xA9, 0x16, 0x8D, 0x07, 0x20,
+                0xA9, 0x00, 0x8D, 0x03, 0x20, 0xA9, 0x40, 0x8D, 0x04, 0x20, 0xA9, 0x05, 0x8D, 0x04, 0x20, 0xA9, 0x41, 0x8D, 0x04, 0x20, 0xA9, 0x80, 0x8D, 0x04, 0x20,
+                0xE6, 0x42,
+            };
+            int call = 0x8000 + head.Length, sub = call + 6;
+            byte[] code = head.Concat(new byte[] { 0x20, (byte)sub, (byte)(sub >> 8), 0x4C, 0x00, 0x80, 0xA5, 0x42, 0x60 }).ToArray();
+            string dir = Path.Combine(_root, "Roms");
+            Directory.CreateDirectory(dir);
+            string image = Path.Combine(dir, "Loop.nes");
+            File.WriteAllBytes(image, SyntheticNesRom.Build(patches: new (int, byte[])[] { (0, code) }));
+            SameTwins("moonrt-registries", BuildTree, new Dictionary<string, string>
+            {
+                ["IMAGE"] = image, ["W"] = "66", ["SUB"] = sub.ToString(), ["CALL"] = call.ToString(), ["INC"] = (call - 2).ToString(),
+            });
+        }
     }
 }

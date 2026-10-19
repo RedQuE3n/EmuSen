@@ -66,6 +66,9 @@ namespace EmuSen.Galaxia.Library
         // Archives opened for play, unpacked here and never beside the library's file - see EmuSen_Galaxia.md §3.7.
         public static string Unpacked => At(GalaxiaDirectory.Unpacked, "Unpacked");
 
+        // The player's own core libraries, approved before they load - see EmuSen_Backend.md §29.40.4.
+        public static string Cores => At(GalaxiaDirectory.Cores, "Cores");
+
         // The C# rules: the default, and what the library's are held to until Galaxia's gate - see EmuSen_RustPlatform.md §3.9.
         internal static class Managed
         {

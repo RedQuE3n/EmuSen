@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 21u
+#define EMUSEN_PLATFORM_ABI_VERSION 22u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -94,6 +94,7 @@ int64_t emusen_platform_diagnostics(uint8_t *out, size_t len);
 #define EMUSEN_GALAXIA_DIR_LEGACY_ROOT 18u    /* DataMigration.LegacyRoot */
 #define EMUSEN_GALAXIA_DIR_LOG_DEFAULT 19u    /* ErrorLog.DefaultRoot */
 #define EMUSEN_GALAXIA_DIR_UNPACKED 20u       /* DataStore.Unpacked: archives unpacked for play */
+#define EMUSEN_GALAXIA_DIR_CORES 21u          /* DataStore.Cores: the player's core libraries, since 22 */
 
 /* The redirects a test moves. */
 #define EMUSEN_GALAXIA_OVERRIDE_CONFIG 0u /* ConfigStore.OverrideDirectory */

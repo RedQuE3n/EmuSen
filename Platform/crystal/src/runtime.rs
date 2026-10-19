@@ -88,14 +88,14 @@ impl Runtime {
     /// `[{"name","id","version","systems","available","report"}]`.
     pub fn engines_json(&self) -> String {
         let mut j = HostJson::new();
-        listing::engines(&mut j, &self.discovery());
+        listing::engines(&mut j, &self.discovery(), self.trust());
         j.finish()
     }
 
     /// `[{"library","sidecar","sha256","abi","development","engine","report"}]`.
     pub fn cores_json(&self) -> String {
         let mut j = HostJson::new();
-        listing::cores(&mut j, &self.discovery());
+        listing::cores(&mut j, &self.discovery(), self.trust());
         j.finish()
     }
 

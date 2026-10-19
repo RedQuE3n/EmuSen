@@ -7,7 +7,7 @@ use emusen_core_host::latch::Inputs;
 use emusen_core_host::library::LoadError;
 use emusen_core_host::machine::Status;
 use emusen_core_host::sidecar::{self, Sidecar};
-use emusen_core_host::trust::MANIFEST;
+use emusen_core_host::trust::{self, MANIFEST, Standing};
 use emusen_core_host::{Create, Discovery, InputLatch, Library, Machine, StateLayout, Trust, listing, sha256};
 use emusen_native::json::{self, Value};
 
@@ -232,7 +232,7 @@ fn the_layout_reads_and_writes_fields_and_names_differences() {
 }
 
 fn listed(d: &Discovery) -> Value {
-    json::parse(listing::both(d).as_bytes()).unwrap()
+    json::parse(listing::both(d, &Trust::default()).as_bytes()).unwrap()
 }
 
 fn reports(v: &Value) -> Vec<String> {
@@ -403,4 +403,149 @@ fn a_debug_table_is_counted_in_pairs_and_triples() {
     let ranges = [0u32, 4, 4, 0, 0, 0xFFFF];
     m.debug_set_ranges(0, &ranges[..3]).unwrap();
     m.debug_set_stack(&[1, 2]).unwrap();
+}
+
+fn field<'a>(v: &'a Value, key: &str) -> &'a Value {
+    v.get(key).unwrap_or_else(|| panic!("no {key}"))
+}
+
+#[test]
+fn the_players_directory_comes_after_the_installation_its_manifest_unread_and_its_libraries_hashed() {
+    let install = scratch("p-install");
+    let player = scratch("p-player");
+    let test = installed(&install, "host_test_core", "libtest.so", false);
+    manifest(&install, &[&test]);
+    // A player's copy of a project core's id is dropped, and is not listed as unread either.
+    installed(&player, "host_test_core", "libshadow.so", false);
+    let plain = installed(&player, "host_plain_core", "libplain.so", false);
+    manifest(&player, &[&plain]);
+    std::fs::copy(example("host_partial_core"), player.join("libbare.so")).unwrap();
+    let stale = installed(&player, "host_liar_core", "libstale.so", false);
+    let mut bytes = std::fs::read(&stale).unwrap();
+    bytes.push(0);
+    std::fs::write(&stale, bytes).unwrap();
+    std::fs::write(player.join("notes.txt"), "not a library").unwrap();
+    let (inst, mine) = (vec![install.clone()], vec![player.clone()]);
+    let d = Discovery::scan_with_player(&inst, &mine, false);
+    let names: Vec<_> = d.found().iter().map(|c| (c.sidecar.library_path.clone(), c.player)).collect();
+    assert_eq!(names, [(test.clone(), false), (plain.clone(), true)]);
+    let unread: Vec<_> = d.unread().iter().map(|u| (u.library_path.clone(), u.sha256.clone())).collect();
+    assert_eq!(unread, [(player.join("libbare.so"), sha256::file_hex(&player.join("libbare.so")).unwrap()), (stale.clone(), sha256::file_hex(&stale).unwrap())]);
+    assert!(d.lists_hash(&sha256::file_hex(&stale).unwrap().to_uppercase()) && !d.lists_hash(&"00".repeat(32)));
+    let trust = Trust::new(&inst, &[]).with_player(&mine);
+    assert_eq!(d.found()[0].standing(&trust), Standing::Manifest);
+    assert_eq!(d.found()[1].standing(&trust), Standing::NeedsApproval, "a manifest in the player's directory is not read");
+    assert_eq!(d.found()[1].open(&trust).err(), Some("libplain.so is in no cores manifest and has not been approved; it was not loaded"));
+    assert!(d.found()[1].awaits_approval() && !d.found()[0].awaits_approval());
+    let v = json::parse(listing::both(&d, &trust).as_bytes()).unwrap();
+    let cores = field(&v, "cores").as_array().unwrap();
+    assert_eq!(cores.len(), 4);
+    assert_eq!(field(&cores[0], "directory"), &Value::Str("installation".into()));
+    assert_eq!(field(&cores[0], "trust"), &Value::Str("manifest".into()));
+    assert_eq!(field(&cores[0], "systems"), &Value::Array(vec![Value::Str("test".into())]));
+    assert_eq!(field(&cores[1], "directory"), &Value::Str("player".into()));
+    assert_eq!(field(&cores[1], "trust"), &Value::Str("needs_approval".into()));
+    let bare = &cores[2];
+    assert_eq!(field(bare, "trust"), &Value::Str("not_read".into()));
+    assert_eq!(field(bare, "report"), &Value::Str("not yet read".into()));
+    for k in ["sidecar", "abi", "engine", "name", "license"] {
+        assert_eq!(field(bare, k), &Value::Null, "{k}");
+    }
+    let engines = field(&v, "engines").as_array().unwrap();
+    assert_eq!(engines.len(), 2, "a library not yet read is no engine");
+    assert_eq!(field(&engines[1], "trust"), &Value::Str("needs_approval".into()));
+    let approved = Trust::new(&inst, &[sha256::file_hex(&plain).unwrap()]).with_player(&mine);
+    let again = Discovery::scan_with_player(&inst, &mine, false);
+    assert_eq!(again.found()[1].standing(&approved), Standing::Approved);
+    assert!(again.found()[1].open(&approved).is_ok(), "approved, the player's library loads");
+    let h = sha256::file_hex(&plain).unwrap();
+    let text = std::fs::read_to_string(sidecar::path_for(&plain)).unwrap().replace(&h, &h.to_uppercase());
+    std::fs::write(sidecar::path_for(&plain), text).unwrap();
+    let capitals = Discovery::scan_with_player(&inst, &mine, false);
+    assert_eq!(capitals.found()[1].standing(&approved), Standing::Approved, "a hash in capitals is the same hash");
+}
+
+#[test]
+fn a_library_not_yet_read_is_read_once_approved_and_then_listed_by_its_sidecar() {
+    let player = scratch("read-player");
+    let lib = player.join("libread.so");
+    std::fs::copy(example("host_plain_core"), &lib).unwrap();
+    let mine = vec![player.clone()];
+    let d = Discovery::scan_with_player(&[], &mine, false);
+    let u = &d.unread()[0];
+    assert_eq!(u.read(&Trust::new(&[], &[]).with_player(&mine)), Err("libread.so has not been approved; it was not read".into()));
+    assert!(!Library::is_loaded(&lib), "nothing is loaded before the approval");
+    let trust = Trust::new(&[], &[u.sha256.clone()]).with_player(&mine);
+    assert_eq!(u.read(&trust), Ok(sidecar::path_for(&lib)));
+    let after = Discovery::scan_with_player(&[], &mine, false);
+    assert!(after.unread().is_empty());
+    assert_eq!(after.found()[0].standing(&trust), Standing::Approved);
+    assert!(after.found()[0].open(&trust).is_ok());
+    // A library changed between the listing and the approval is not read.
+    let other = scratch("read-changed");
+    let changed = other.join("libchanged.so");
+    std::fs::copy(example("host_test_core"), &changed).unwrap();
+    let mine = vec![other.clone()];
+    let d = Discovery::scan_with_player(&[], &mine, false);
+    let listed = d.unread()[0].sha256.clone();
+    let mut bytes = std::fs::read(&changed).unwrap();
+    bytes.push(0);
+    std::fs::write(&changed, bytes).unwrap();
+    let trust = Trust::new(&[], &[listed]).with_player(&mine);
+    assert_eq!(d.unread()[0].read(&trust), Err("libchanged.so changed after it was listed; it was not loaded".into()));
+    assert!(!sidecar::path_for(&changed).exists());
+}
+
+#[test]
+fn a_players_library_is_hashed_once_while_its_identity_length_and_time_stay() {
+    let player = scratch("hash-once");
+    let lib = player.join("libonce.so");
+    std::fs::copy(example("host_plain_core"), &lib).unwrap();
+    let mine = vec![player.clone()];
+    let first = Discovery::scan_with_player(&[], &mine, false).unread()[0].sha256.clone();
+    let time = std::fs::metadata(&lib).unwrap().modified().unwrap();
+    let mut bytes = std::fs::read(&lib).unwrap();
+    let last = bytes.len() - 1;
+    bytes[last] ^= 0xFF;
+    std::fs::write(&lib, &bytes).unwrap();
+    std::fs::File::options().write(true).open(&lib).unwrap().set_modified(time).unwrap();
+    assert_eq!(Discovery::scan_with_player(&[], &mine, false).unread()[0].sha256, first, "the record is kept while the file looks the same");
+    std::fs::File::options().write(true).open(&lib).unwrap().set_modified(time + std::time::Duration::from_secs(1)).unwrap();
+    assert_eq!(Discovery::scan_with_player(&[], &mine, false).unread()[0].sha256, sha256::file_hex(&lib).unwrap(), "and read again once it does not");
+}
+
+#[cfg(unix)]
+#[test]
+fn rule_3_refuses_a_library_under_a_directory_others_may_write_unless_it_is_sticky() {
+    use std::os::unix::fs::PermissionsExt;
+    let parent = scratch("open-parent");
+    let dir = parent.join("cores");
+    std::fs::create_dir(&dir).unwrap();
+    let lib = installed(&dir, "host_test_core", "libin.so", false);
+    let trust = Trust::new(std::slice::from_ref(&dir), &[]);
+    assert_eq!(trust.check_file(&lib), Ok(()));
+    let real = std::fs::canonicalize(&parent).unwrap();
+    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o777)).unwrap();
+    assert_eq!(trust.check_file(&lib), Err(format!("lies under {}, which others may write", real.display())));
+    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o1777)).unwrap();
+    assert_eq!(trust.check_file(&lib), Ok(()), "a sticky directory lets no one rename another's file");
+    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o777)).unwrap();
+    assert_eq!(trust.check_file(&lib), Err(format!("lies under {}, which others may write", std::fs::canonicalize(&dir).unwrap().display())));
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn the_approvals_file_is_read_by_hash_its_stray_lines_skipped_and_refused_when_others_may_write_it() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = scratch("approvals");
+    let file = dir.join(trust::APPROVALS);
+    assert_eq!(trust::read_approvals(&file), Ok(Vec::new()), "no file, no approvals");
+    let (a, b) = ("AB".repeat(32), "cd".repeat(32));
+    std::fs::write(&file, format!("# the player's\n{a}  libone.so\nnonsense\n{b} *libtwo.so\n")).unwrap();
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!(trust::read_approvals(&file), Ok(vec!["ab".repeat(32), b.clone()]));
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o646)).unwrap();
+    assert_eq!(trust::read_approvals(&file), Err(format!("{} is writable by others; its approvals were not read", file.display())));
 }

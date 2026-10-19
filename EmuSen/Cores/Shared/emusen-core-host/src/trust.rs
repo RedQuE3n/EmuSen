@@ -1,6 +1,6 @@
 //! Which libraries are loaded at all: `EmuSen_CoreAPI.md` §7.2's rule 3, checked before loading without running
-//! anything, and rules 1 and 2, a hash in the installation's `cores.manifest` or among the approvals the caller passes
-//! (EmuSen_Backend.md §27.5).
+//! anything, and rules 1 and 2, a hash in the installation's `cores.manifest` or among the player's approvals, whose
+//! file, `cores.approved`, has the manifest's format (EmuSen_Backend.md §27.5, §29.40.3).
 
 use std::collections::HashSet;
 use std::io::Read;
@@ -8,6 +8,9 @@ use std::path::{Path, PathBuf};
 
 /// The manifest's file name in an installation directory.
 pub const MANIFEST: &str = "cores.manifest";
+
+/// The approvals' file's name in the config directory: the hashes the player approved, one `sha256sum` line each.
+pub const APPROVALS: &str = "cores.approved";
 
 /// The largest library rule 3 lets through.
 pub const MAX_LIBRARY_BYTES: u64 = 512 << 20;
@@ -34,11 +37,84 @@ pub fn parse_manifest(text: &str) -> Vec<Entry> {
     out
 }
 
+/// Whether `text` is a SHA-256 written as 64 hex digits, in either case.
+pub fn is_hash(text: &str) -> bool {
+    text.len() == 64 && text.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// The hashes an approvals' file at `path` lists, none where it is absent; refused, in words, where others may write it.
+pub fn read_approvals(path: &Path) -> Result<Vec<String>, String> {
+    let Ok(meta) = std::fs::metadata(path) else { return Ok(Vec::new()) };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if meta.mode() & 0o002 != 0 {
+            return Err(format!("{} is writable by others; its approvals were not read", path.display()));
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = meta;
+    let text = std::fs::read(path).map_err(|e| format!("{}: {e}; its approvals were not read", path.display()))?;
+    Ok(parse_manifest(&String::from_utf8_lossy(&text)).into_iter().map(|e| e.sha256).collect())
+}
+
+/// The approvals' text with `sha256` added under the library's file name, every other line kept; none where it is there.
+pub fn with_approval(text: &str, sha256: &str, name: &str) -> Option<String> {
+    let hash = sha256.to_ascii_lowercase();
+    if parse_manifest(text).iter().any(|e| e.sha256 == hash) {
+        return None;
+    }
+    let name = if name.is_empty() || name.contains('/') || name.chars().any(char::is_control) { "-" } else { name };
+    let mut out = text.to_owned();
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(&format!("{hash}  {name}\n"));
+    Some(out)
+}
+
+/// The approvals' text without the lines of `sha256`, every other line kept; none where it has none.
+pub fn without_approval(text: &str, sha256: &str) -> Option<String> {
+    let hash = sha256.to_ascii_lowercase();
+    let mut removed = false;
+    let mut out = String::new();
+    for line in text.split_inclusive('\n') {
+        if parse_manifest(line).first().is_some_and(|e| e.sha256 == hash) {
+            removed = true;
+        } else {
+            out.push_str(line);
+        }
+    }
+    removed.then_some(out)
+}
+
+/// How far a library is trusted, as the listing says it (EmuSen_Backend.md §29.40.5).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Standing {
+    Manifest,
+    Approved,
+    NeedsApproval,
+    NotRead,
+}
+
+impl Standing {
+    pub fn word(self) -> &'static str {
+        match self {
+            Standing::Manifest => "manifest",
+            Standing::Approved => "approved",
+            Standing::NeedsApproval => "needs_approval",
+            Standing::NotRead => "not_read",
+        }
+    }
+}
+
 /// The installation's manifests and the player's approvals, over the cores directories.
 #[derive(Clone, Debug, Default)]
 pub struct Trust {
-    /// Each cores directory resolved, beside the entries of the manifest it holds.
+    /// Each installation directory resolved, beside the entries of the manifest it holds.
     directories: Vec<(PathBuf, Vec<Entry>)>,
+    /// The player's directories resolved, whose manifests are not read.
+    player: Vec<PathBuf>,
     approvals: HashSet<String>,
 }
 
@@ -59,7 +135,14 @@ impl Trust {
                 Some((real, entries))
             })
             .collect();
-        Trust { directories, approvals: approvals.iter().map(|a| a.to_ascii_lowercase()).collect() }
+        Trust { directories, player: Vec::new(), approvals: approvals.iter().map(|a| a.to_ascii_lowercase()).collect() }
+    }
+
+    /// The same trust with the player's directories, which rule 3 counts as cores directories and whose manifests it
+    /// does not read.
+    pub fn with_player(mut self, player: &[PathBuf]) -> Trust {
+        self.player = player.iter().filter_map(|d| std::fs::canonicalize(d).ok()).collect();
+        self
     }
 
     /// Rule 3 but the hash, in words that follow the library's name; nothing of the file is run.
@@ -69,7 +152,8 @@ impl Trust {
         if !meta.is_file() {
             return Err("is not a regular file".to_owned());
         }
-        let Some((home, _)) = self.directories.iter().find(|(d, _)| real.parent() == Some(d.as_path())) else {
+        let parent = real.parent();
+        let Some(home) = self.directories.iter().map(|(d, _)| d).chain(self.player.iter()).find(|d| parent == Some(d.as_path())) else {
             return Err("lies outside the cores directories once its links are resolved".to_owned());
         };
         #[cfg(unix)]
@@ -83,6 +167,9 @@ impl Trust {
             }
             if meta.mode() & 0o002 != 0 {
                 return Err("is writable by others".to_owned());
+            }
+            if let Some(open) = home.ancestors().find(|d| std::fs::metadata(d).is_ok_and(|m| m.mode() & 0o002 != 0 && m.mode() & 0o1000 == 0)) {
+                return Err(format!("lies under {}, which others may write", open.display()));
             }
         }
         #[cfg(not(unix))]
@@ -100,12 +187,30 @@ impl Trust {
 
     /// Rules 1 and 2: the hash in the manifest of the library's own directory under its name, or approved.
     pub fn vouches(&self, library: &Path, sha256: &str) -> bool {
+        self.approved(sha256) || self.in_manifest(library, sha256)
+    }
+
+    /// Rule 2: the player approved the hash.
+    pub fn approved(&self, sha256: &str) -> bool {
+        self.approvals.contains(&sha256.to_ascii_lowercase())
+    }
+
+    /// Rule 1: the manifest of the library's own installation directory lists it under its name with this hash.
+    pub fn in_manifest(&self, library: &Path, sha256: &str) -> bool {
         let hash = sha256.to_ascii_lowercase();
-        if self.approvals.contains(&hash) {
-            return true;
-        }
         let (Some(dir), Some(name)) = (library.parent().and_then(|d| std::fs::canonicalize(d).ok()), library.file_name().and_then(|n| n.to_str())) else { return false };
         self.directories.iter().any(|(d, entries)| *d == dir && entries.iter().any(|e| e.name == name && e.sha256 == hash))
+    }
+
+    /// Where the listing places a library that has a sidecar: by its manifest, its approval, or neither.
+    pub fn standing(&self, library: &Path, sha256: &str) -> Standing {
+        if self.in_manifest(library, sha256) {
+            Standing::Manifest
+        } else if self.approved(sha256) {
+            Standing::Approved
+        } else {
+            Standing::NeedsApproval
+        }
     }
 }
 
@@ -181,6 +286,19 @@ mod tests {
         let text = format!("{h}  libone.so\n{} *libtwo.so\n# a remark\nshort  libx.so\n{h}  sub/lib.so\n{h} libsingle.so\n", "cd".repeat(32));
         let e = parse_manifest(&text);
         assert_eq!(e, vec![Entry { name: "libone.so".into(), sha256: "ab".repeat(32) }, Entry { name: "libtwo.so".into(), sha256: "cd".repeat(32) }]);
+    }
+
+    #[test]
+    fn approvals_are_added_once_and_removed_with_every_other_line_kept() {
+        let (a, b) = ("ab".repeat(32), "cd".repeat(32));
+        let text = format!("# kept\n{a}  libone.so");
+        let added = with_approval(&text, &b.to_ascii_uppercase(), "libtwo.so").unwrap();
+        assert_eq!(added, format!("# kept\n{a}  libone.so\n{b}  libtwo.so\n"));
+        assert_eq!(with_approval(&added, &a, "other.so"), None);
+        assert_eq!(with_approval("", &a, "bad\nname"), Some(format!("{a}  -\n")));
+        assert_eq!(without_approval(&added, &a.to_ascii_uppercase()), Some(format!("# kept\n{b}  libtwo.so\n")));
+        assert_eq!(without_approval(&added, &"ef".repeat(32)), None);
+        assert!(is_hash(&a.to_ascii_uppercase()) && !is_hash("ab") && !is_hash(&"zz".repeat(32)));
     }
 
     #[test]

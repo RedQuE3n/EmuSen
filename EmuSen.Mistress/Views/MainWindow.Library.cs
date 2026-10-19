@@ -335,6 +335,7 @@ namespace EmuSen.Mistress.Views
                 string target = ArtworkIndex.Place(ArtworkDirectory, console, entry.Title, picture);
                 _covers.Forget(target);
                 _artwork.Add(console, entry.Title, target);
+                _native?.ArtAdded(console, entry.Title, target);
                 StatusText.Text = $"Cover art added for {entry.Title}";
                 LibraryGrid.Refresh(_shownEntries);
             }

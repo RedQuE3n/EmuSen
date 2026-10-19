@@ -105,7 +105,15 @@ int32_t emusen_scrape_cancel(emusen_scrape *s);
  *   quota                    the quota's snapshot
  *   account                  {"signed_in", "name", "verified"}, never a password
  *   developer                {"origin": "tree" | "user" | "embedded" | null}
- *   folder {path}            a ROM's game folder below its console's */
+ *   folder {path}            a ROM's game folder below its console's
+ *   plan {games, one, refresh, kinds, enabled}  ScrapePlan's numbers before a run
+ *   media {path, system, type, folder, folder_path}  {"source", "path"} or null: the order of a picture's sources
+ *   present {system, games}  the types some game of the shelf has
+ *   stamp {system, choice}   a text that changes when a picture could have
+ *   metadata {path, scraped_names}  {field: {"value", "source": "edited" | "scraped" | "default"}}
+ *   openvgdb                 {"present", "path", "bytes"}
+ *   now                      the handle's clock, the test clock's when one was started
+ *   delays                   the test clock's waits since the last such read, in ticks; [] on the system's clock */
 int64_t emusen_scrape_get(emusen_scrape *s, const uint8_t *request, size_t len, uint8_t *out, size_t out_len);
 
 /* One change, {"op": ...}:
@@ -113,7 +121,15 @@ int64_t emusen_scrape_get(emusen_scrape *s, const uint8_t *request, size_t len, 
  *   forget {path, system, folder}  a game's answer and pictures, from the store only; the files deleted
  *   forget_unfound {path}    an Unknown or Error answer of the path's game forgotten
  *   clean_up {relatives, at} each file moved to CLEANUP/<local date_time>/: {"moved", "bytes", "folder"}
- *   sign_out                 the member's file deleted: {"had"} */
+ *   sign_out                 the member's file deleted: {"had"}
+ *   sign_in {user, password} one ssuserInfos; the account kept only when accepted:
+ *                            {"result", "name", "level", "quota", "said"}
+ *   check                    the same of the stored account
+ *   search {path, system, text}  one jeuRecherche, paced and counted: {"status", "games": [{"pick", ...}], "detail"}
+ *   art_added {console, stem, path}  a picture the player placed, joined to the art index
+ *   openvgdb_download        OpenVGDB's newest release fetched: {"tag"} or {"failed"}
+ *   openvgdb_remove          OpenVGDB deleted: {"bytes"}
+ * A change that asks the server blocks for that one request; a host calls it off its interface thread. */
 int64_t emusen_scrape_change(emusen_scrape *s, const uint8_t *request, size_t len, uint8_t *out, size_t out_len);
 
 #ifdef __cplusplus

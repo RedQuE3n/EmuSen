@@ -48,7 +48,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Directory.CreateDirectory(_romDir);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            NoNetwork.HttpFactory.SetValue(null, (Func<HttpClient>)(() => new HttpClient(_server)));
+            NoNetwork.Serve(_server, _clock);
             NoNetwork.ScrapeClock.SetValue(null, _clock);
             ConfirmField.SetValue(null, (Func<MainWindow, string, string, Task<bool>>)((_, title, message) =>
             {
@@ -136,7 +136,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Invoke(window, "RefreshLibrary");
             Pump();
             Assert.Empty(_server.Asked);
-            Assert.Null(window.ScrapeWorker);
+            Assert.False(window.ScrapeWorkersLive);
             Assert.Null(CoverShown(window, _rom));
         });
 
@@ -345,7 +345,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Scrape(window, ScrapeScope.ThisGame(_rom));
             RunEnds(window);
             Assert.Equal(2, _server.JeuInfos.Count());
-            Assert.Equal(ScrapeRunState.Done, window.Progress!.State);
+            Assert.True(window.Progress!.State == ScrapeRunState.Done, $"{window.Progress.State}: {window.Progress.Why}");
             Assert.True(File.Exists(ScrapedCover));
         });
 
@@ -407,7 +407,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
             _server.Gate = new SemaphoreSlim(0);
             Scrape(window, new ScrapeScope(Shelf: EmuSen.Cores.CoreCatalog.GameBoyColorShelf));
-            Assert.Equal(["gbc"], window.ScrapeStore!.Queue().Select(q => q.System));
+            Assert.Equal(["gbc"], window.ScrapeQueue().Select(q => q.System));
             _server.Gate.Release(100);
             RunEnds(window);
         });
@@ -457,8 +457,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             MainWindow window = Open();
             Scrape(window, new ScrapeScope());
             WaitFor(() => _server.JeuInfos.Any(), "the first request");
-            Scraper worker = window.ScrapeWorker!;
-            MediaStore store = window.ScrapeStore!;
+            Assert.True(window.ScrapeWorkersLive && window.ScrapeStoreOpen);
 
             window.Close();
             int asked = _server.Asked.Count;
@@ -466,9 +465,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Pump();
 
             Assert.Equal(asked, _server.Asked.Count);
-            Assert.False(worker.IsRunning);
-            Assert.False(store.IsOpen);
-            Assert.Null(window.ScrapeWorker);
+            Assert.False(window.ScrapeWorkersLive);
+            Assert.False(window.ScrapeStoreOpen);
         });
 
         // --- where the player starts it ---

@@ -178,7 +178,7 @@ namespace EmuSen.Mistress.Views
         MetadataDraft IGameEditorHost.DraftFor(string path) =>
             new(path, ScrapedNow(path) ?? _scrapedText.GetValueOrDefault(path), _records.Edits(path), _records.Find(path), _appSettings.ScrapeGameNames);
 
-        public ScrapedRecord? ScrapedNow(string path) => _mediaStore is { IsOpen: true } store ? store.FoundFor(path) : _scrapedText.GetValueOrDefault(path);
+        public ScrapedRecord? ScrapedNow(string path) => _native is { } n ? n.FoundFor(path) : _mediaStore is { IsOpen: true } store ? store.FoundFor(path) : _scrapedText.GetValueOrDefault(path);
 
         Task<bool> IGameEditorHost.ScrapeGameAsync(string path) => ConfirmAndScrapeAsync(ScrapeScope.ThisGame(path));
 
@@ -201,7 +201,8 @@ namespace EmuSen.Mistress.Views
         {
             _records.ClearEdits(path);
             string? system = EmuSen.Mistress.Library.RuntimeCatalog.ShelfByName(EmuSen.Mistress.Library.RuntimeCatalog.ShelfFor(path) ?? "")?.EsdeSystem;
-            IReadOnlyList<string> gone = _mediaStore is { IsOpen: true } store ? store.Forget(path, system, GameFolders.Of(_appSettings.RomDirectory, path)) : [];
+            IReadOnlyList<string> gone = _native is { } n ? n.Forget(path, system, GameFolders.Of(_appSettings.RomDirectory, path))
+                : _mediaStore is { IsOpen: true } store ? store.Forget(path, system, GameFolders.Of(_appSettings.RomDirectory, path)) : [];
             _scrapeGeneration++;
             ReadScrapeSnapshot();
             StatusText.Text = $"Cleared the metadata of {Path.GetFileNameWithoutExtension(path)}" + (gone.Count > 0 ? $" and {gone.Count} scraped picture(s)" : "");

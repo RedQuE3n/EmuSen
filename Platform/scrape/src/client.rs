@@ -333,6 +333,10 @@ impl Client {
             let path = (no == MediaOutcome::Unchanged && emusen_galaxia::dotnet_files::file_exists(target)).then(|| target.to_string());
             return Ok(done(no, path, if no == MediaOutcome::NotAnImage { length } else { 0 }, None, detail));
         }
+        if cancel.is_cancelled() {
+            let _ = std::fs::remove_file(&temp);
+            return Err(());
+        }
         if !replace && emusen_galaxia::dotnet_files::file_exists(target) {
             let _ = std::fs::remove_file(&temp);
             let len = std::fs::metadata(target).map(|m| m.len()).unwrap_or(0);

@@ -50,6 +50,14 @@ namespace EmuSen.Mistress.Views
             if (SystemOf(new RomEntry(path)) is not string system || !Scraper.SystemIds.TryGetValue(system, out int systemId))
                 return new SearchAnswer(ScrapeStatus.BadRequest, [], null, "This game's console has no ScreenScraper system.", TimeSpan.Zero);
             if (!OpenMediaStore() || DeveloperSource() is not { } developer) return new SearchAnswer(ScrapeStatus.Failed, [], null, DeveloperCredentials.NoneHere, TimeSpan.Zero);
+            if (_native is { } native)
+            {
+                SearchAnswer found = await Task.Run(() => native.Search(path, system, name)).ConfigureAwait(false);
+                if (found.Status is not (ScrapeStatus.BadRequest or ScrapeStatus.DailyQuota) || found.Games.Count > 0) NameSearches++;
+                if (found.Status is not (ScrapeStatus.Found or ScrapeStatus.NotFound))
+                    ErrorLog.Error("scraping", "A name search failed", null, ScrapeRedactor.Redact($"{found.Status}: {found.Detail}"));
+                return found;
+            }
 
             ScrapeQuotaManager quota = _scrapeQuota!;
             _http ??= HttpFactory();
@@ -103,6 +111,7 @@ namespace EmuSen.Mistress.Views
         public IReadOnlyList<string> OrphanedMedia()
         {
             if (SettingFolders.Roms(_appSettings) is not { } roms || !Directory.Exists(roms) || !OpenMediaStore()) return [];
+            if (_native is { } n) return n.Orphans(_allScan.Entries.Where(e => SystemOf(e) is not null).Select(e => (e.FullPath, SystemOf(e)!)));
             return _mediaStore!.Orphans(StoreNames());
         }
 
@@ -112,11 +121,11 @@ namespace EmuSen.Mistress.Views
             if (ScrapeRunning) return "Wait for the run to end before cleaning up.";
             IReadOnlyList<string> orphans = OrphanedMedia();
             if (orphans.Count == 0) return "No orphaned media: every scraped file belongs to a game in the library.";
-            long bytes = orphans.Sum(f => new FileInfo(Path.Combine(_mediaStore!.Root, f)).Length);
+            long bytes = orphans.Sum(f => new FileInfo(Path.Combine(MediaStore.DefaultRoot, f)).Length);
             string message = $"{orphans.Count:N0} scraped file(s), {ScrapePreferencesPane.Size(bytes)}, belong to games no longer in the library. "
                 + $"They are moved to home/Media/{MediaStore.CleanupFolder}/, not deleted; delete that folder yourself when you are sure. The ROM folder is not touched.";
             if (!await ConfirmCleanUp(this, message)) return "Nothing was moved.";
-            (int moved, long size, string folder) = _mediaStore!.CleanUp(orphans, DateTimeOffset.Now);
+            (int moved, long size, string folder) = _native is { } native2 ? native2.CleanUp(orphans, DateTimeOffset.Now) : _mediaStore!.CleanUp(orphans, DateTimeOffset.Now);
             _scrapeGeneration++;
             ReadScrapeSnapshot();
             ShowLibraryEntries();

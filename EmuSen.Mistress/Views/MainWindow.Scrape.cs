@@ -73,7 +73,8 @@ namespace EmuSen.Mistress.Views
             };
             _developerOrigin = DeveloperSource()?.Origin;
             _member = MemberAccount.Load();
-            if (_mediaStore is null && File.Exists(Path.Combine(MediaStore.DefaultRoot, MediaStore.FileName))) OpenMediaStore();
+            if (_native is { } open) open.Settings(NativeSettings());
+            else if (_mediaStore is null && File.Exists(Path.Combine(MediaStore.DefaultRoot, MediaStore.FileName))) OpenMediaStore();
             _scrapeQuota?.SettingsChanged();
             ReadScrapeSnapshot();
             ScrapeChanged?.Invoke();
@@ -81,6 +82,7 @@ namespace EmuSen.Mistress.Views
 
         private bool OpenMediaStore()
         {
+            if (ScrapeNative) return OpenNative();
             if (_mediaStore is not null) return true;
             try
             {
@@ -129,12 +131,18 @@ namespace EmuSen.Mistress.Views
 
         private void ReadScrapeSnapshot()
         {
+            if (_native is { } n)
+            {
+                _scrapeOutcomes = n.OutcomesByPath();
+                _scrapedText = n.FoundByPath();
+                return;
+            }
             if (_mediaStore is not { IsOpen: true } store) return;
             _scrapeOutcomes = store.OutcomesByPath();
             _scrapedText = store.FoundByPath();
         }
 
-        internal MediaSources MediaSourcesNow() => new(
+        internal MediaSources MediaSourcesNow() => _native is { } n ? new MediaSources(n, CoverChoiceStamp, _appSettings.RomDirectory) : new(
             (console, title) => _artwork.Find(console, title), MediaStore.DefaultRoot, _appSettings.EsdeMediaDirectory,
             _appSettings.OpenEmuFallback ? OpenEmuCoverDirectory : null, CoverChoiceOf, CoverChoiceStamp, _appSettings.RomDirectory);
 
@@ -143,6 +151,11 @@ namespace EmuSen.Mistress.Views
         {
             if (!_appSettings.Scraping) return "it is switched off";
             if (!_developerPresent) return DeveloperCredentials.NoneHere;
+            if (_native is { } n)
+            {
+                QuotaSnapshot q = n.Quota();
+                return q.Gate == QuotaGate.Stopped ? q.Reason + (q.Until is { } stop ? $", until {stop.ToLocalTime():ddd HH:mm}" : "") : null;
+            }
             if (_scrapeQuota?.Check(out DateTimeOffset? until, out string? why) == QuotaGate.Stopped)
                 return why + (until is { } u ? $", until {u.ToLocalTime():ddd HH:mm}" : "");
             return null;
@@ -181,6 +194,8 @@ namespace EmuSen.Mistress.Views
         public ScrapePlan Plan(ScrapeScope scope)
         {
             List<RomEntry> games = ScopeGames(scope);
+            if (ScrapeNative && OpenNative())
+                return _native!.Plan(games.Select(g => g.FullPath), scope.Game is not null, scope.Refresh, _scrapeChoices.Kinds(), _appSettings.Scraping, _appSettings.OpenEmuFallback);
             string? why = ScreenScraperUnusable();
             int notAsked = scope.Game is not null ? games.Count : games.Count(g => !_scrapeOutcomes.ContainsKey(g.FullPath));
             var kinds = _scrapeChoices.Kinds().ToList();
@@ -215,7 +230,7 @@ namespace EmuSen.Mistress.Views
         public ScrapeProgress? Progress => _scrapeRun;
 
         // Games an interrupted run left queued; offered as Resume, never resumed by itself.
-        public int Interrupted => ScrapeRunning ? 0 : _mediaStore?.QueueLength ?? 0;
+        public int Interrupted => ScrapeRunning ? 0 : _native?.QueueLength ?? _mediaStore?.QueueLength ?? 0;
 
         // Asks the player with the count and the cost, then starts; false when they said no or there is nothing to do.
         public async Task<bool> ConfirmAndScrapeAsync(ScrapeScope scope)
@@ -242,6 +257,7 @@ namespace EmuSen.Mistress.Views
         private bool StartScrape(ScrapeScope scope, bool resume, ScrapedGame? chosen)
         {
             if (ScrapeRunning || _scrapeClosed || !OpenMediaStore()) return false;
+            if (_native is not null) return StartNative(scope, resume, chosen);
             MediaStore store = _mediaStore!;
             if (!resume)
             {
@@ -321,14 +337,15 @@ namespace EmuSen.Mistress.Views
         public bool ScrapePaused => _scrapeRun is { State: ScrapeRunState.Running, IsPaused: true };
 
         // Pause is offered only while ScreenScraper's workers run; the failover's lookups are not paused.
-        public bool CanPauseScrape => ScrapeRunning && _scraper is not null;
+        public bool CanPauseScrape => ScrapeRunning && (_native is not null ? _nativeWorkers : _scraper is not null);
 
         public void SetScrapePaused(bool paused)
         {
             if (!CanPauseScrape || _scrapeRun is not { } run || run.IsPaused == paused) return;
-            if (paused) _scraper!.Pause();
+            if (_native is { } n) n.Pause(paused);
+            else if (paused) _scraper!.Pause();
             else _scraper!.Resume();
-            run.SetPaused(paused, ScrapeClock.Now);
+            run.SetPaused(paused, ScrapeNow);
             ScrapeLine(run.Describe());
             ScrapeChanged?.Invoke();
         }
@@ -340,9 +357,9 @@ namespace EmuSen.Mistress.Views
             return true;
         }
 
-        public DateTimeOffset ScrapeNow => ScrapeClock.Now;
+        public DateTimeOffset ScrapeNow => _native is { } n ? n.Now : ScrapeClock.Now;
 
-        public ScrapeQuota? ScrapeLimits => _scrapeQuota?.Limits;
+        public ScrapeQuota? ScrapeLimits => _native is not null ? _nativeLimits : _scrapeQuota?.Limits;
 
         public MemberAccount Member => _member;
 
@@ -370,6 +387,13 @@ namespace EmuSen.Mistress.Views
         {
             if (!account.IsSet) return new SignInAnswer(SignInResult.Incomplete, null, "Type your ScreenScraper name and password first.");
             if (_scrapeClosed || DeveloperSource() is not { } developer) return SignInAnswer.NoDeveloper();
+            if (ScrapeNative && OpenNative())
+            {
+                NativeScraping n = _native!;
+                SignInAnswer said = await Task.Run(() => n.SignIn(account.User, account.Password));
+                ScrapeChanged?.Invoke();
+                return said;
+            }
             _http ??= HttpFactory();
             SignInAnswer answer;
             try { answer = await new ScreenScraperClient(_http, developer, account).SignInAsync(default); }
@@ -380,7 +404,7 @@ namespace EmuSen.Mistress.Views
 
         private void UseMember(MemberAccount account, ScrapeMember? checkedAs)
         {
-            account.Save();
+            if (_native is null) account.Save();
             _member = account;
             _memberChecked = checkedAs;
             if (_scrapeClient is { } client) client.Member = account;
@@ -390,7 +414,7 @@ namespace EmuSen.Mistress.Views
         // Log Out: the file is deleted, and a run in progress sends no ssid or sspassword from its next request.
         public string SignOut()
         {
-            bool had = MemberAccount.Delete();
+            bool had = _native is { } n ? n.SignOut() : MemberAccount.Delete();
             _member = new MemberAccount("", "");
             _memberChecked = null;
             if (_scrapeClient is { } client) client.Member = null;
@@ -405,6 +429,14 @@ namespace EmuSen.Mistress.Views
         public void CancelScrape()
         {
             if (!ScrapeRunning) return;
+            if (_native is { } native)
+            {
+                native.Cancel();
+                StopPump();
+                _nativeRun++;
+                EndRun(ScrapeRunEnd.Cancelled);
+                return;
+            }
             Scraper? scraper = _scraper;
             _scraper = null;
             _scrapeClient = null;
@@ -476,8 +508,8 @@ namespace EmuSen.Mistress.Views
         private void EndRun(ScrapeRunEnd end)
         {
             if (_scrapeRun is not { } run) return;
-            run.SetPaused(false, ScrapeClock.Now);
-            run.Ended = ScrapeClock.Now;
+            run.SetPaused(false, ScrapeNow);
+            run.Ended = ScrapeNow;
             run.State = end switch { ScrapeRunEnd.Done => ScrapeRunState.Done, ScrapeRunEnd.Stopped => ScrapeRunState.Stopped, _ => ScrapeRunState.Cancelled };
             run.Touch();
             if (!_scrapeClosed) ScrapeLine(run.Describe());
@@ -529,7 +561,7 @@ namespace EmuSen.Mistress.Views
         bool IScrapeHost.HasDeveloperCredentials => _developerPresent;
         DeveloperOrigin? IScrapeHost.DeveloperOrigin => _developerOrigin;
 
-        QuotaSnapshot? IScrapeHost.Quota => _scrapeQuota?.Snapshot();
+        QuotaSnapshot? IScrapeHost.Quota => _native is { } n ? n.Quota() : _scrapeQuota?.Snapshot();
 
         string IScrapeHost.Status
         {
@@ -554,6 +586,7 @@ namespace EmuSen.Mistress.Views
             _scraper = null;
             _scrapeClient = null;
             scraper?.Dispose();
+            StopNative();
             if (_scrapeQuota is not null) _scrapeQuota.Changed -= OnScrapeQuotaChanged;
             _mediaStore?.Dispose();
             _mediaStore = null;

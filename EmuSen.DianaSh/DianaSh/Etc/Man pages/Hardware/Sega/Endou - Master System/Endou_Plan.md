@@ -20,6 +20,12 @@ Master System, a Game Gear, an SG-1000 or a flash cartridge; disputes such as D-
 access slots are settled from documents, test programs and black-box referees only (§10, Q11). The go is for stage 1
 alone; each later stage waits for its own.
 
+**Decided by the tester, 2026-10-19, on stage 1's questions** (`Endou_Native.md` §8), each as recommended: the core
+ABI minor that lets a host set `system` beside an image is accepted, to be built as its own piece of work before
+stage 4 (§3.7); MAME is not installed before stage 3; a VHDL simulator for SMS_MiSTer is installed only when the
+first dispute needs it, and only after asking the tester; the copier's 512-byte header is confirmed against a
+document at stage 2. The go for stage 2 came with them.
+
 Every claim carries one of six marks:
 
 - **[M]** *measured* on 2026-10-19, with the tool named. Nothing was run to write this page beyond listings, the local
@@ -321,9 +327,44 @@ of it [C]:
   keys are listed in `Endou_Native.md` §5.2, and `.sg` names its system in the probe's log.
 - **The routed system beside an image** (found at stage 1, `Endou_Native.md` §2.3): a host sets `system` in the create
   parameters only with an image of no bytes, so a core of two systems that share no telling header must guess. An
-  extension of the existing field, a minor letting a host set it beside an image too, proposed before stage 4.
+  extension of the existing field, a minor letting a host set it beside an image too. *Decided 2026-10-19:* accepted,
+  designed in §3.7 and built as its own piece of work before stage 4.
 - **An `sms` module of `emusen-systems`** (stages 7 and 8) for the codecs and the views: a module beside the others,
   which the crate's design provides for [R `EmuSen_Backend.md` §5.2], so no new surface.
+
+### 3.7 The routed system beside an image: the core ABI minor's design
+
+*Accepted by the tester 2026-10-19; built before stage 4 as its own piece of work, across `emusen-native`'s header and
+Rust side, `emusen-core-host`, both Crystal implementations and the kit. Not built at stage 2.* It is an extension of
+an existing surface (`EmuSen_CoreAPI.md` §4.4): no export, struct, status or capability bit is added.
+
+- **The field.** `emusen_create_params.system`, the `const char *` at offset 104 that 1.11 added (§6.31), unchanged in
+  type and place. Its meaning widens: beside an image it names the system the host routed the file to, a system id as
+  core info lists it.
+- **The version.** The next minor of the core ABI, 1.15 at the time of writing (1.14 being the latest, §6.39). The
+  header's comment on the field gains "@since 1.15: beside an image too, the system the host routed the image to", and
+  `EmuSen_CoreAPI.md` gains a section that is the normative text.
+- **How a host fills it.** A host of 1.15 or later sets `system` with every image it routes to a system, from the
+  routing it already does (`route` by extension, then a recogniser where an extension is shared): the id of the system
+  chosen, the same string machine info will report. A host that launches a file without routing it (a direct launch
+  naming a core) sets the system it chose, or null if it chose none.
+- **What a core does with it.** Non-null beside an image, the core makes a machine of that system and does not guess
+  between its systems; a system the core's info does not list is refused with `EMUSEN_BAD_IMAGE` and words, as an
+  unknown system with an empty image is (§6.31). Null, the core chooses as before. A core of one system may ignore the
+  field. `emusen-native` reads it as `Create::system: Option<&str>`, `None` when the struct is shorter than 112 bytes
+  or the pointer is null.
+- **An older host's absence.** A host of 1.11 to 1.14 sets `system` only with an image of no bytes, and a host older
+  than 1.11 passes a struct too short to hold it; beside an image either reads as `None`, and the core keeps the rule
+  it has today (`Endou_Native.md` §2.3), so nothing an older host could observe changes. The minor gates nothing in a
+  host or a core (§4.1): the field's presence is the whole signal, so no version check is made.
+- **An older core.** A core built before 1.15 ignores the field beside an image, as §6.31 told it to, so a newer
+  host's value changes nothing for it.
+- **The kit.** A case for a library of 1.15 or later claiming two or more systems: for each system it lists, an image
+  created with `system` naming it reports that system in machine info; one created with a system it does not list is
+  refused. A library of one system passes the case unrun.
+- **Endou's use.** At stage 4, when the SG-1000 becomes a modelled console, Endou takes the routed system and keeps
+  the stage-1 rule only for a host that passes none; the three images that rule gets wrong in the tester's library
+  (§10 Q10, `Endou_Native.md` §2.3) then run on the system their extension names.
 
 ---
 

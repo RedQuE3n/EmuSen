@@ -204,7 +204,11 @@ contents list of Sega's Game Gear document; the opening of MacDonald's `smstech-
 README and directory names; Mesen 2's README; ES-DE's `es_systems.xml`; ScreenScraper's system pages' titles; the
 libretro cores' `.info` files; the run logs of §5.2.
 
-## 8. Questions before stage 2
+## 8. Questions before stage 2, decided 2026-10-19
+
+*Decided 2026-10-19 by the tester: each of the four as recommended.* The go for stage 2 came with the decisions; it
+covers stage 2 alone. No real hardware is used for any of them (`Endou_Plan.md` §10 Q11).
+
 
 1. **The system beside an image** (§2.3): may a host set `system` beside an image under the core ABI's next minor, so
    that a core running two systems takes the routed one? Recommended, before stage 4.
@@ -217,3 +221,14 @@ libretro cores' `.info` files; the run logs of §5.2.
    on the tester's word.
 4. **The copier's header and the 512 KiB `.sg`** (§2.2, §2.3): stage 2 confirms the copier rule from a document and
    identifies the 512 KiB image's board.
+
+*Decided 2026-10-19:*
+
+1. **The system beside an image: accepted.** A host may set `system` beside an image under the core ABI's next minor.
+   It is a change across components (`emusen-native`'s header, `emusen-core-host`, both Crystal implementations and
+   the kit), so it is a piece of work of its own, decided and built before stage 4 and not inside stage 2. Its design
+   is `Endou_Plan.md` §3.7.
+2. **MAME is not installed before stage 3**, and Mesen 2 is not built before then either.
+3. **A VHDL simulator** (GHDL or nvc) for SMS_MiSTer is installed only when the first dispute needs the referee, and
+   only after asking the tester.
+4. **The copier's header is confirmed against a document at stage 2**, with the 512 KiB `.sg`'s board.

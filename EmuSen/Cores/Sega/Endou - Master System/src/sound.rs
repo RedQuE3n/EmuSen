@@ -187,16 +187,39 @@ mod tests {
         assert!((out[mid][0] as i32 - level(VOLUME[0]) / 2).abs() < level(VOLUME[0]) / 20, "{:?}", &out[mid - 2..mid + 3]);
     }
 
-    /// The Game Gear's stereo register sends each channel to its sides, and the output keeps them apart (stage J2).
+    /// A write's step falls at its own clock, not at the PSG's last clock before it: a write 15 clocks later rises
+    /// later, by a fifth of an output sample (stage 5's seeded fault F2 passed the test above).
+    #[test]
+    fn a_write_s_step_is_at_its_own_clock_within_the_psg_s() {
+        let rise = |at: u64| {
+            let mut s = sound(Variant::SEGA);
+            s.write(0x81, 0);
+            s.write(0x00, 0);
+            s.write(0x90, at);
+            let out = samples(&mut s, SECOND / 5);
+            out[4_790..4_830].iter().map(|p| p[0] as i64).sum::<i64>()
+        };
+        let base = SECOND / 10 / PSG_DIVIDER * PSG_DIVIDER;
+        let (early, late) = (rise(base), rise(base + 15));
+        // A step later by 15 / 16 × 48,000 / 3,579,545 of a sample takes that much of its height from the rise's sum.
+        let want = 15.0 * RATE as f64 / SECOND as f64 * level(VOLUME[0]) as f64;
+        assert!(((early - late) as f64 / want - 1.0).abs() < 0.05, "{early} {late}, {want} apart wanted");
+    }
+
+    /// The Game Gear's stereo register sends each channel to its sides, and the output keeps them apart as the chip
+    /// runs (stage J2): tone 0 sounding on the right alone, tone 1 held on the left alone.
     #[test]
     fn the_two_sides_are_kept_apart_for_the_game_gear() {
         let mut s = sound(Variant::SEGA);
-        for v in [0x81, 0x00, 0x90, 0xA1, 0x00, 0xB6] {
+        for v in [0x8E, 0x0F, 0x90, 0xA1, 0x00, 0xB6] {
             s.write(v, 0);
         }
         s.write_stereo(0x21, 0);
-        let last = *samples(&mut s, SECOND / 10).last().unwrap();
-        assert_eq!(last, [level(VOLUME[6]) as i16, level(VOLUME[0]) as i16]);
+        let out = samples(&mut s, SECOND / 10);
+        let tail = &out[100..];
+        assert!(tail.iter().all(|p| p[0] == level(VOLUME[6]) as i16), "the left holds tone 1");
+        let (low, high) = (tail.iter().map(|p| p[1]).min().unwrap(), tail.iter().map(|p| p[1]).max().unwrap());
+        assert!(low <= 0 && high >= level(VOLUME[0]) as i16, "the right sounds tone 0: {low} to {high}");
     }
 
     /// A second's clocks give the output rate's samples, to the one the synthesiser holds back.

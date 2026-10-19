@@ -26,6 +26,11 @@ stage 4 (§3.7); MAME is not installed before stage 3; a VHDL simulator for SMS_
 first dispute needs it, and only after asking the tester; the copier's 512-byte header is confirmed against a
 document at stage 2. The go for stage 2 came with them.
 
+**Decided by the tester, 2026-10-19, on stage 2's questions** (`Endou_Native.md` §9.15), each as recommended: at
+stage 7 a public per-game listing may be fetched to complete the battery table; D-3 (the Mark III's TH) and D-4 (port
+`$3E`) stay as argued from the documents until a game shows otherwise, TH returning at the Light Phaser's stage; CI's
+testing of the Beryl crates with all their features is confirmed. The go for stage 3 came with them.
+
 Every claim carries one of six marks:
 
 - **[M]** *measured* on 2026-10-19, with the tool named. Nothing was run to write this page beyond listings, the local

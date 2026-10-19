@@ -498,3 +498,12 @@ its copier sections; ZEXALL-SMS's README and source; `CoreEngine.cs`'s battery h
 3. **The Mark III's TH** (D-3) is argued from SMS Power!'s pages and one reference. Recommended: as it is, until the
    Light Phaser's stage, which reads TH.
 4. **CI** now tests Beryl's crates with all their features, so both assemblers' tests run there.
+
+*Decided 2026-10-19 by the tester: each as recommended.* The go for stage 3 came with the decisions; it covers stage 3
+alone. No real hardware is used for any of them (`Endou_Plan.md` §10 Q11).
+
+1. **The battery table:** at stage 7, a public per-game listing (SMS Power!'s game pages or a No-Intro list of the
+   Master System) may be fetched to complete it, recorded in `Endou_References.md` as every fetch is.
+2. **D-3 and D-4 stay as argued** from the documents (the Mark III's TH, port `$3E`) until a game shows otherwise; TH
+   comes back at the Light Phaser's stage, which reads it.
+3. **CI testing the Beryl crates with `--all-features`** is confirmed.

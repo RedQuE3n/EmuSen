@@ -49,6 +49,11 @@ impl Mapped {
         Ok(Mapped { map: Some(map), _held: Some(file) })
     }
 
+    /// No file: nothing mapped, as a console started with no disc is given.
+    pub fn empty() -> Mapped {
+        Mapped { map: None, _held: None }
+    }
+
     pub fn bytes(&self) -> &[u8] {
         self.map.as_deref().unwrap_or(&[])
     }

@@ -6653,6 +6653,43 @@ every file left compared, passes; four seeded faults (the slots' suffixes not lo
 leading period, an extension's case on a drawer's file) were each caught, the third after the planted names were made
 to reach it.
 
+### 29.15 Built 2026-10-19: part (a), piece 2c, a session's life
+
+**The piece** (this commit). `emusen-crystal` gained `engine`, the C# `CoreEngine`'s part that loads and keeps a v1
+machine (a game or a console started empty, the firmware files each entry asks for found in the store's folders, the
+save media placed by `media::place`, each battery file read and written, a save kept in its earlier place copied in once,
+the discs and the drive's lid, the settings' values and a create-time value making a machine not yet run again, the
+machine's events drained); `battery`, the C# `BatterySave`; `machine_info`, machine info and the settings schema as the
+runtime reads them; `session`, a session's answers about itself (`session_info`, `save_media`); and `open`, the C#
+`ManagedRuntime.Open` with `CoreFactory`'s v1 branch and its refusals, the session table and the current session (the
+last opened that is still open). The platform library exports `open`, `close`, `reset`, `session_info`, `save_media`,
+`sessions` (in the header since 1.0, and not named in §29.8's list), `disc_insert`, `disc_eject`, `disc_change` and
+`disc_lid`. A change of disc closes the lid after a second of the game's time rounded as .NET's `Math.Round` rounds, to
+even. Freeing a runtime closes its sessions, as the C#'s `Dispose` does.
+
+**Measured on 2026-10-19** [M]: the parity class's two new cases pass, each comparing every answer and then the Saves
+and Unpacked trees each implementation leaves, file by file. On the test core alone: a game opened with a battery file,
+a named card, console memory shared and a game's own settings planted; the lid, a disc inserted, changed, refused past
+the end, ejected, refused for a file that is not there and for no path; a reset; a game with a card, with console
+memory, under each open flag, asking for its boot ROM, inside a zip; a cartridge, whose drive every disc call is refused;
+the sessions listed and the current one followed through a close; nine refusals of `open`; 66 answers. On the build's
+engines: a battery NES game whose save was kept beside it, a zipped NES game, the SNES, both Game Boys, an N64 game with
+EEPROM whose save was kept in the flat folder, a Genesis cartridge with SRAM, a Sega CD and a PlayStation disc, a
+two-disc `.m3u` changed, refused, given a third disc and emptied, the PlayStation started empty by its name and its
+system's id, three consoles that do not start empty, and the PlayStation started empty with a game open beside it; with
+one card named in both slots, so that the second slot's notice is compared; 91 answers. Six seeded faults, each caught:
+the current session after a close the lowest id (one case), a refused disc kept in the list (one), the earlier save
+not copied in (one, once the N64 save was planted, since a core that writes every battery file at close hid it for the
+NES), the single-rows flag refused (one), a change of disc without the lid opened (one), a card name not marked taken
+(one); a seventh, the notices joined otherwise, was no fault where a placement has one notice, and was replaced by the
+sixth. The crate's tests 2 and 6 (the export check holding the ten new exports to the header), Galaxia's 78 and 1,
+`emusen-dotnet`'s 30, the platform library's 31 and 4.
+
+**Left, and recorded.** The runtime's own lines (a firmware entry's source, a save copied in, a card's notice) are kept
+by the engine and reach the `log` event with piece 6. A battery file that cannot be written at close is let go
+silently, where the C# writes a warning to the error log; the error log's writer comes with the retired-engine line
+(§29.13). A 1.1 open's `device` is read by piece 7's lend.
+
 ---
 
 ## 30. B9, scraping in Rust: the design, 2026-10-18

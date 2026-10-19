@@ -3,11 +3,16 @@
 //! structs; the runtime's modules follow §29.2's layout, one job each.
 
 pub mod abi;
+pub mod battery;
 pub mod catalog;
+pub mod engine;
 pub mod firmware;
 pub mod info;
 pub mod json;
+pub mod machine_info;
 pub mod media;
+pub mod open;
 pub mod route;
 pub mod runtime;
+pub mod session;
 pub mod settings;

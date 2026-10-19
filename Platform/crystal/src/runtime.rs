@@ -27,6 +27,7 @@ pub struct Runtime {
     discovery: Mutex<Arc<Discovery>>,
     /// The runtime's own lines no session said, kept until the events raise them on session 0 (§29.11, Q2).
     said: Mutex<Vec<String>>,
+    pub sessions: crate::open::Sessions,
 }
 
 impl Runtime {
@@ -41,7 +42,7 @@ impl Runtime {
         let development = config.development.unwrap_or_else(|| std::env::var(emusen_core_host::discovery::DEVELOPMENT_VARIABLE).as_deref() == Ok("1"));
         let trust = Trust::new(&directories, &[]);
         let discovery = Mutex::new(Arc::new(Discovery::scan(&directories, development)));
-        Runtime { directories, development, trust, discovery, said: Mutex::new(Vec::new()) }
+        Runtime { directories, development, trust, discovery, said: Mutex::new(Vec::new()), sessions: crate::open::Sessions::default() }
     }
 
     /// A line of the runtime's own that no session said.
@@ -217,5 +218,106 @@ impl Runtime {
         }
         j.end_array();
         j.finish()
+    }
+}
+
+/// A refusal: its status and words.
+pub type Refused = (i32, String);
+
+impl Runtime {
+    pub fn open(&self, asked: &crate::open::Asked) -> Result<u32, Refused> {
+        crate::open::open(self, &self.sessions, asked).map(|s| s.id)
+    }
+
+    /// The battery save written, the save media let go, the session ended, `ManagedSession.Close`.
+    pub fn close(&self, id: u32) -> Result<(), Refused> {
+        let s = self.sessions.get(id)?;
+        {
+            let mut e = s.engine.lock().unwrap_or_else(|p| p.into_inner());
+            e.save_sram();
+            e.dispose();
+            for line in e.take_said() {
+                self.say(line);
+            }
+        }
+        self.sessions.remove(s.id);
+        Ok(())
+    }
+
+    /// The console's reset, `ManagedSession.Reset`.
+    pub fn reset(&self, id: u32) -> Result<(), Refused> {
+        let s = self.sessions.get(id)?;
+        let mut e = s.engine.lock().unwrap_or_else(|p| p.into_inner());
+        e.reset().map_err(|r| (r.status, r.words))?;
+        s.run.lock().unwrap_or_else(|p| p.into_inner()).halted = false;
+        Ok(())
+    }
+
+    /// `[{"id","engine","current"}]`, `ManagedRuntime.SessionsJson`.
+    pub fn sessions_json(&self) -> String {
+        let (all, current) = self.sessions.all_and_current();
+        let mut j = crate::json::Json::new();
+        j.begin_array();
+        for s in all {
+            let name = s.engine.lock().unwrap_or_else(|p| p.into_inner()).name.clone();
+            j.begin_object().int("id", s.id as i64).str("engine", &name).bool("current", s.id == current).end_object();
+        }
+        j.end_array();
+        j.finish()
+    }
+
+    pub fn session_info(&self, id: u32) -> Result<String, Refused> {
+        Ok(self.sessions.get(id)?.info_json())
+    }
+
+    pub fn save_media(&self, id: u32) -> Result<String, Refused> {
+        let s = self.sessions.get(id)?;
+        let discovery = self.discovery();
+        let catalog = Catalog::new(&discovery);
+        let tree = emusen_galaxia::tree::tree();
+        Ok(s.save_media_json(&catalog, &tree))
+    }
+
+    /// A change to a session's drive: the drive refused where the engine changes no discs.
+    fn disc(&self, id: u32, change: impl FnOnce(&mut crate::engine::Engine, &emusen_galaxia::tree::Tree, &dyn Fn(&str) -> bool) -> Result<(), Refused>) -> Result<(), Refused> {
+        let s = self.sessions.get(id)?;
+        let discovery = self.discovery();
+        let catalog = Catalog::new(&discovery);
+        let tree = emusen_galaxia::tree::tree();
+        let is_image = |e: &str| crate::route::is_image_extension(&catalog, &discovery, e);
+        let mut e = s.engine.lock().unwrap_or_else(|p| p.into_inner());
+        if !e.can_change_disc() {
+            return Err((emusen_session_service::abi::status::NOT_SUPPORTED, format!("{} has no drive whose disc can be changed", e.name)));
+        }
+        change(&mut e, &tree, &is_image)
+    }
+
+    pub fn disc_insert(&self, id: u32, at: &str) -> Result<(), Refused> {
+        self.disc(id, |e, tree, is_image| e.insert_path(tree, at, is_image).map_err(|r| (r.status, r.words)))
+    }
+
+    pub fn disc_eject(&self, id: u32) -> Result<(), Refused> {
+        self.disc(id, |e, tree, is_image| e.change_disc(tree, -1, is_image).map_err(|r| (r.status, r.words)))
+    }
+
+    pub fn disc_change(&self, id: u32, index: u32) -> Result<(), Refused> {
+        self.disc(id, |e, tree, is_image| {
+            if index as usize >= e.discs.len() {
+                return Err((emusen_session_service::abi::status::BAD_ARGUMENT, format!("no disc {index}; the game has {}", e.discs.len())));
+            }
+            e.change_disc(tree, index as i32, is_image).map_err(|r| (r.status, r.words))
+        })
+    }
+
+    pub fn disc_lid(&self, id: u32, open: bool) -> Result<(), Refused> {
+        self.disc(id, |e, _, _| e.set_lid(open).map_err(|r| (r.status, r.words)))
+    }
+}
+
+impl Drop for Runtime {
+    fn drop(&mut self) {
+        for s in self.sessions.all() {
+            let _ = self.close(s.id);
+        }
     }
 }

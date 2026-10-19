@@ -113,6 +113,50 @@ namespace EmuSen.WiseMan.Crystal
             }
         }
 
+        // A session opened, its id or "status <n>: <words>"; size 0 gives the struct's own, a smaller one asks for a refusal.
+        public string Open(nint rt, string? path, string? console = null, string? engine = null, uint flags = 0, uint size = 0)
+        {
+            byte[]? p = path is null ? null : Encoding.UTF8.GetBytes(path), c = console is null ? null : Encoding.UTF8.GetBytes(console), e = engine is null ? null : Encoding.UTF8.GetBytes(engine);
+            fixed (byte* pp = p, cp = c, ep = e)
+            {
+                var o = new CrystalOpenParams
+                {
+                    size = size != 0 ? size : (uint)sizeof(CrystalOpenParams),
+                    flags = flags,
+                    path = p is null ? null : pp,
+                    path_len = (nuint)(p?.Length ?? 0),
+                    console = c is null ? null : cp,
+                    console_len = (nuint)(c?.Length ?? 0),
+                    engine = e is null ? null : ep,
+                    engine_len = (nuint)(e?.Length ?? 0),
+                };
+                long id = ((delegate* unmanaged[Cdecl]<nint, CrystalOpenParams*, long>)Fn("open"))(rt, &o);
+                return id < 0 ? $"status {id}: {LastError()}" : id.ToString();
+            }
+        }
+
+        private string Status(int status) => status == 0 ? "0" : $"status {status}: {LastError()}";
+
+        // close, reset or disc_eject of a session, by the export's name.
+        public string Call(string name, nint rt, uint session) => Status(((delegate* unmanaged[Cdecl]<nint, uint, int>)Fn(name))(rt, session));
+
+        // session_info or save_media of a session, by the export's name.
+        public string Read(string name, nint rt, uint session)
+        {
+            var f = (delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, long>)Fn(name);
+            return Copy((o, n) => f(rt, session, o, n));
+        }
+
+        public string DiscInsert(nint rt, uint session, string? path)
+        {
+            byte[]? p = path is null ? null : Encoding.UTF8.GetBytes(path);
+            fixed (byte* pp = p) return Status(((delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, int>)Fn("disc_insert"))(rt, session, pp, (nuint)(p?.Length ?? 0)));
+        }
+
+        public string DiscChange(nint rt, uint session, uint index) => Status(((delegate* unmanaged[Cdecl]<nint, uint, uint, int>)Fn("disc_change"))(rt, session, index));
+
+        public string DiscLid(nint rt, uint session, bool open) => Status(((delegate* unmanaged[Cdecl]<nint, uint, uint, int>)Fn("disc_lid"))(rt, session, open ? 1u : 0u));
+
         private delegate long CopyOut(byte* o, nuint n);
 
         private string Copy(CopyOut call)

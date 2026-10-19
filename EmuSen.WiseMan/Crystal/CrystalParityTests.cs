@@ -16,7 +16,7 @@ namespace EmuSen.WiseMan.Crystal
 {
     // The parity class of step B7: each call made of the C# implementation and of Rust's through the C ABI, and their answers and the files they leave compared - see EmuSen_Backend.md §29.7. Part (a)'s first piece: the runtime, its engines and cores, the systems, the shelves and a file's route.
     [Collection(TestCollections.ProcessGlobals)]
-    public class CrystalParityTests : IDisposable
+    public partial class CrystalParityTests : IDisposable
     {
         private readonly ITestOutputHelper _output;
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenCrystalParity_" + Guid.NewGuid().ToString("N"));
@@ -56,6 +56,11 @@ namespace EmuSen.WiseMan.Crystal
             normal ??= s => s;
             List<string> managed = Answers(CrystalImpl.Managed, cores, asks, development).Select(normal).ToList();
             List<string> native = Answers(CrystalImpl.Native, cores, asks, development).Select(normal).ToList();
+            Compare(managed, native);
+        }
+
+        private void Compare(List<string> managed, List<string> native)
+        {
             Assert.Equal(managed.Count, native.Count);
             string? first = null;
             for (int i = 0; i < managed.Count; i++)
@@ -74,12 +79,12 @@ namespace EmuSen.WiseMan.Crystal
         private static IReadOnlyList<string> BuildTree => new[] { AppContext.BaseDirectory, Path.Combine(AppContext.BaseDirectory, "cores") };
 
         // A tree of the two test cores and a manifest that vouches for both.
-        private string TestTree(bool manifest = true, bool development = false)
+        private string TestTree(bool manifest = true, bool development = false, bool plain = true)
         {
             string dir = Path.Combine(_root, "cores" + Guid.NewGuid().ToString("N")[..6]);
             Directory.CreateDirectory(dir);
             var lines = new List<string>();
-            foreach (string name in new[] { "v1_test_core", "v1_plain_core" })
+            foreach (string name in plain ? new[] { "v1_test_core", "v1_plain_core" } : new[] { "v1_test_core" })
             {
                 string source = CoreAdapterTests.LibraryPath(name);
                 string copy = Path.Combine(dir, Path.GetFileName(source));

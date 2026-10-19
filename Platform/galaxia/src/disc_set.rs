@@ -234,6 +234,11 @@ impl DiscFiles {
         Ok(DiscFiles { path: image_path.to_string(), image, companions, _hold: hold })
     }
 
+    /// No disc: an empty image and no companions, which a console started empty is made with.
+    pub fn empty() -> DiscFiles {
+        DiscFiles { path: String::new(), image: Mapped::empty(), companions: Vec::new(), _hold: None }
+    }
+
     /// Every byte of the disc on its medium.
     pub fn length(&self) -> u64 {
         self.image.bytes().len() as u64 + self.companions.iter().map(|c| c.bytes().len() as u64).sum::<u64>()

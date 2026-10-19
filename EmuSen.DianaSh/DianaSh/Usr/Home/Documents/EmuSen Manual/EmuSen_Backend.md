@@ -6690,6 +6690,96 @@ by the engine and reach the `log` event with piece 6. A battery file that cannot
 silently, where the C# writes a warning to the error log; the error log's writer comes with the retired-engine line
 (§29.13). A 1.1 open's `device` is read by piece 7's lend.
 
+### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
+
+*Part (b) numbers its sections from §29.30, so that part (a)'s pieces, built at the same time, keep §29.16 to §29.29.*
+
+**What is ported, read from the C# first.** A Rust runtime hosts v1 engines alone, through `emusen-core-host`, so its
+debug target is always the generic one, `CoreDebugTarget` over `CoreEngine` and `CoreDebugBridge`. The crate ports
+what that target reaches: the breakpoint, watch, frame-log, freeze, label, coverage and call-stack registries, the
+expression language, the contexts (`DebugCpuExpressionContext`, `DebugTargetExpressionContext`,
+`UnitExpressionContext`), `BreakpointExpressions`, the bridge, the snapshot rings of the providers, and the packs'
+views. Three registries are not ported: `AccessCounterRegistry`, `RegisterFlowRegistry` and `DmaLogRegistry` are fed by
+the retired C# engines' own targets, and on the generic target they are null, so the session service answers
+`NOT_SUPPORTED` for `counters`, `register_flow` and `dma_log`; a Rust session answers the same. The hardware conditions
+of `bp when` are ported in the registry, but the generic target lists none (`BreakConditions` is empty), so no
+condition can be armed on it; the order in which armed conditions are listed is therefore not reproduced from .NET's
+`Dictionary`, which reuses a removed entry's slot. Where a registry's C# enumerates a `Dictionary` that is only ever
+added to or cleared (coverage's entry points, the profile's counts, a watch's sites), the Rust keeps the insertion
+order, since ties in a sort and the bytes of `cov save` follow it.
+
+**Two dependencies beside §29.2's table.** `emusen-crystal-debug` takes `emusen-cheats`, because the session's cheat
+registry is the debugger's: `CoreEngine.ReadSpace` refreshes the cheats before every debugger read, the frame's end
+applies the host's pokes, and the session service's cheat calls reach the registry through the target. And it reads
+machine info's debug fields itself (each space's flags, each processor's registers, program counter width and code
+space, the units, the counters, the phases), where `emusen-crystal`'s `machine_info` reads the session's fields; the two
+readings are of different fields of one JSON text, and both could move into `emusen-core-host`'s `descriptors`, which
+§27.2 names as the owner of the fields a host reads, once both exist.
+
+**The recorder** writes files and runs a program, which the debugger crate may not, so it is to be a small crate of its own,
+`emusen-recorder` (`Platform/recorder/`): the recording's folder and its ledger, the stride, the encode by `ffmpeg` and
+the archive of the frames. The picture's PNG is the caller's, written into the path the recorder gives, as the C#
+`FrameRecorder.CaptureFrame` takes a delegate.
+
+**The surface part (a) calls at §29.4's (b) points**, one `Debugger` a session, settled on 2026-10-19 with part (a)'s
+piece 3, which calls it through a trait of its own (`emusen_crystal::seam::Debugger`) defaulted to a debugger that does
+nothing:
+
+```rust
+let mut d = Debugger::new();
+d.attach(&mut machine);         // a machine made: open, or made again; the call stack reset, as CoreDebugBridge.Attach does
+d.info_changed(&mut machine);   // a MACHINE_INFO event drained
+d.detach();                     // close
+// step 2, in order
+d.refresh_cheats(&mut machine);  // the patch table and the pokes, sent again only when the registry's version moved
+let ran = if resuming || d.armed() { d.run_frame(&mut machine, resuming)? } else { machine.advance()?; Ran::Completed };
+// Ran::Completed | Ran::Halted { processor /* machine info's id */, address }; Err((status, detail)) as advance fails
+if ran == Ran::Completed { d.frame_end(&mut machine); }  // frame log, host pokes unless the frame holds them, freezes, the breakpoints' frame
+// steps 3 and 4, and after a state load, a rewind step and a reset
+d.refresh(&mut machine, last_frame_ms);
+// step 7, the runtime's lines
+d.take_said(&mut lines);
+// step 6
+recorder.capture(frame, core_name, |path| write_png(path));
+```
+
+None of these is to allocate once warm with nothing armed; piece 3 measures it.
+
+**The parity harness, chosen as the simplest that compares each answer byte for byte.** The exports wait for part (c),
+so the class cannot reach the Rust through the C ABI. A script language of the debugger's calls, one call a line, is
+interpreted twice: by `emusen-crystal-debug`, a tool built from the crate's `src/bin/`, and by `CrystalDebugScript` in
+WiseMan over the C# classes. `CrystalDebugParityTests` runs each script under `EmuSen.WiseMan/Crystal/DebugScripts/`
+through both, the tool in a process of its own as `CoreHostParityTests` runs `emusen-core-host`, and compares the two
+outputs line for line, each line the call followed by its answer, the C#'s taken through UTF-8 as a client would read
+it. Recorded goldens were weighed and not chosen: they compare against a C# that no longer runs, and a change to either
+side would need a recording pass. WiseMan's project builds the tool with cargo beside the tests, as it builds the core
+host's; `EMUSEN_CRYSTAL_DEBUG_TOOL` points the class at another build, which is how a seeded fault is run. A script
+over plain data (registers, spaces, labels, units the script sets) grades the language, the contexts and the registries;
+from piece 3, a script over a machine opens the same core library and image in both.
+
+### 29.31 Built 2026-10-19: part (b), piece 1, the expression language and its contexts
+
+**The piece** (this commit). `emusen-crystal-debug` holds `expr`, the C# `ExpressionEvaluator` rule for rule and word
+for word: the tokenizer's characters as .NET classes them (`char.IsDigit` gained by `emusen-dotnet` from .NET's own
+answers, generated on 2026-10-19: 36 runs of ten above ASCII), the literals as `Convert.ToInt64` reads them in each base,
+a symbol still looked up in a branch a short circuit skips, the least long divided by -1 refused with .NET's overflow
+words, and `Format`; `context`, the three contexts and `Live` over a `Source` the debugger implements over its machine,
+and `UnitSymbols` with its two rules (a bare name two units share stands for neither; a spelling the scope answers is
+left out); `conditions`, `BreakpointExpressions`' prepare, condition and render; and `labels`, the C# `LabelRegistry`
+with `LoadFromLines`' split at white space into at most three parts and `int.TryParse`'s hex rule. The registries of
+piece 2 are in the crate already and are graded with it.
+
+**Measured on 2026-10-19** [M]: `CrystalDebugParityTests` 3 of 3, over three scripts of 148, 112 and 59 answers: every
+operator, base and refusal of the language, with non-ASCII digits, a character outside the Basic Multilingual Plane, the
+literals at and past 64 bits, and the overflow; each context's order (a register before a label, `frame` before both,
+the pack's symbols and `stackdepth` in the main processor's), its unnamed space, its symbols listed, and a breakpoint's
+live scope refreshing the main, video and sound rows once an evaluation names a symbol and never the coprocessor's;
+`prepare`'s refusals; labels added over each other, removed, described, loaded from fifteen lines with their errors and
+saved; the units' spellings and lookups with a clash, a taken name, an unspellable register and a unit whose name has
+no letters. Five seeded faults, each caught: `Format`'s byte threshold off by one, the unit prefix not lowercased, a
+label consulted before the registers, a skipped branch that asks no symbol (seen as one refresh fewer), a label's
+comment kept with its leading white space. The crate's tests 4 and `emusen-dotnet`'s 31.
+
 ---
 
 ## 30. B9, scraping in Rust: the design, 2026-10-18

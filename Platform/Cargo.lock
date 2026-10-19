@@ -346,6 +346,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-crystal-debug"
+version = "0.1.0"
+dependencies = [
+ "emusen-cheats",
+ "emusen-core-host",
+ "emusen-dotnet",
+ "emusen-native",
+ "emusen-systems",
+]
+
+[[package]]
 name = "emusen-debug"
 version = "0.1.0"
 dependencies = [

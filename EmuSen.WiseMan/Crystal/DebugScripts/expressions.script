@@ -1,0 +1,149 @@
+# The expression language alone: literals, operators, precedence, short circuits, memory reads and every refusal's words.
+space RAM 32 34 12 FF 00 7F 80 01 02
+space VRAM 4 AA BB CC DD
+regs cpu A=0x42/8 X=5/8 PC=0x8000/16 flag.c=1/1
+label 0x10 Start
+eval 1 + 2
+eval 2 * 3 + 4
+eval 4 + 2 * 3
+eval (4 + 2) * 3
+eval $FF
+eval $ff
+eval 0x10
+eval 0X10
+eval %1010
+eval 10 - 3 - 2
+eval 1 << 8
+eval $FF00 >> 8
+eval -1 >> 1
+eval 1 << 64
+eval 1 << 65
+eval $F0 & $3C
+eval $F0 | $0F
+eval $FF ^ $0F
+eval -5 + 8
+eval ~0 & $FF
+eval ~0
+eval !0
+eval !5
+eval !!7
+eval +3
+eval --3
+eval 7 % 4
+eval 7 % 0
+eval 7 / 0
+eval -7 / 2
+eval -7 % 2
+eval 7 %10
+eval 7%2
+eval 5 %1
+eval %
+eval %2
+eval 1 == 1
+eval 1 != 1
+eval 2 > 1
+eval 2 <= 1
+eval 2 >= 2
+eval 1 < 2 == 1
+eval 1 && 1
+eval 1 && 0
+eval 0 || 3
+eval 0 || 0
+eval 3 && 4
+eval 0 && Q
+eval 1 || Q
+eval 0 && [Q]
+eval 1 && Q
+eval 0 || [500]
+eval 1 && (1 / 0)
+eval 0 && (1 / 0)
+eval 0 && (1 2)
+eval A
+eval a
+eval A == $42 && X == 5
+eval flag.c
+eval .c
+eval _x
+eval Start
+eval start + 1
+eval frame
+eval [0]
+eval [1]
+eval {0}
+eval {2}
+eval [RAM:3]
+eval [ram:4]
+eval [VRAM:1]
+eval {VRAM:2}
+eval [VRAM:4]
+eval {VRAM:3}
+eval [31]
+eval {31}
+eval [32]
+eval [-1]
+eval [NOPE:0]
+eval [nope:$10]
+eval [$FFFFFFFFFF]
+eval [-$10]
+eval [A]
+eval [Start - $10]
+eval $8000000000000000
+eval $7FFFFFFFFFFFFFFF + 1
+eval $FFFFFFFFFFFFFFFF
+eval $10000000000000000
+eval 9223372036854775807
+eval 9223372036854775808
+eval -9223372036854775807 - 1
+eval $8000000000000000 / -1
+eval $8000000000000000 % -1
+eval -$8000000000000000
+eval %1111111111111111111111111111111111111111111111111111111111111111
+eval %11111111111111111111111111111111111111111111111111111111111111111
+eval 0x
+eval $
+eval $G
+eval 1 2
+eval 1 A
+eval (1
+eval 1)
+eval (
+eval )
+eval [1
+eval [1)
+eval {1]
+eval
+eval 1 +
+eval * 2
+eval 1 # 2
+eval 1 @
+eval 1 = 2
+eval 1 =
+eval a:b
+eval :
+eval [RAM: ]
+eval ١٢
+eval ٣ + 1
+eval 1 + 😀
+eval é + 1
+eval 1 ;
+check 1 + 2
+check Q
+check 0 && Q
+check [Q]
+check [500]
+check 1 / 0
+check (1
+check 1 2
+check $8000000000000000 / -1
+format 0
+format 255
+format 256
+format 65535
+format 65536
+format -1
+format -255
+format -65536
+format $FFFFFF
+format $1000000
+format 9223372036854775807
+format -9223372036854775808

@@ -184,6 +184,23 @@ pub fn is_letter_or_digit(c: char) -> bool {
     }).is_ok()
 }
 
+/// The runs of Unicode's decimal digits above ASCII where .NET 10.0.12's `char.IsDigit` holds, generated from it on
+/// 2026-10-19; each is ten long.
+static DIGIT_ZEROS: [u16; 36] = [
+    0x0660, 0x06F0, 0x07C0, 0x0966, 0x09E6, 0x0A66, 0x0AE6, 0x0B66, 0x0BE6, 0x0C66, 0x0CE6, 0x0D66, 0x0DE6, 0x0E50, 0x0ED0, 0x0F20, 0x1040, 0x1090,
+    0x17E0, 0x1810, 0x1946, 0x19D0, 0x1A80, 0x1A90, 0x1B50, 0x1BB0, 0x1C40, 0x1C50, 0xA620, 0xA8D0, 0xA900, 0xA9D0, 0xA9F0, 0xAA50, 0xABF0, 0xFF10,
+];
+
+/// `char.IsDigit`: a decimal digit of any script; outside the Basic Multilingual Plane a character is two surrogates to
+/// .NET, and neither is a digit.
+pub fn is_digit(c: char) -> bool {
+    if c.is_ascii() {
+        return c.is_ascii_digit();
+    }
+    let unit = c as u32;
+    DIGIT_ZEROS.iter().any(|&zero| unit >= zero as u32 && unit < zero as u32 + 10)
+}
+
 /// `string.Trim()`.
 pub fn trim(text: &str) -> &str {
     text.trim_matches(is_white_space)
@@ -250,6 +267,12 @@ pub fn pad_left(text: &str, width: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn digits_are_dotnets() {
+        assert!(is_digit('7') && is_digit('\u{663}') && is_digit('\u{FF19}') && is_digit('\u{1C59}'));
+        assert!(!is_digit('a') && !is_digit('\u{B2}') && !is_digit('\u{2163}') && !is_digit('\u{FF1A}') && !is_digit('\u{1D7CE}'));
+    }
 
     #[test]
     fn letters_and_digits_and_upper_case_are_dotnets() {

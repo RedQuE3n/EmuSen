@@ -1,0 +1,30 @@
+[package]
+name = "emusen-crystal-debug"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The debugger beneath Crystal in Rust: the registries, the expression language and its contexts, breakpoint
+# expressions, the bridge to a machine's debug calls, the snapshot rings and the views over the packs. It needs a
+# machine and the packs, nothing of sessions, states, settings or files. See EmuSen_Backend.md §29.2 and §29.30.
+[lib]
+name = "emusen_crystal_debug"
+
+# The parity tool: a script of the debugger's calls run over a machine, its answers printed for the C#'s to be compared
+# with (EmuSen_Backend.md §29.30).
+[[bin]]
+name = "emusen-crystal-debug"
+path = "src/bin/emusen-crystal-debug/main.rs"
+
+[dependencies]
+# A machine's v1 calls (EmuSen_Backend.md §27).
+emusen-core-host = { path = "../../EmuSen/Cores/Shared/emusen-core-host" }
+# Machine info's JSON as the host reads it.
+emusen-native = { path = "../../EmuSen/Cores/Shared/emusen-native" }
+# The packs' views, symbols and disassemblers.
+emusen-systems = { path = "../systems" }
+# The session's cheat registry and its application at the frame's points.
+emusen-cheats = { path = "../cheats" }
+# .NET's text rules, so each answer is the C# debugger's to the byte.
+emusen-dotnet = { path = "../dotnet" }

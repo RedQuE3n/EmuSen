@@ -1,0 +1,113 @@
+# Each context over plain data: what it names, in what order, its memory rule and its symbols; a breakpoint's live scope refreshing its registers.
+space CPUBUS 16 00 11 22 33 44 55 66 77 88 99 AA BB CC DD EE FF
+space SPCRAM 8 01 02 03 04 05 06 07 08
+regs cpu A=0x42/8 X=5/8 Y=6/8 PC=0x8000/16 frame=99/8 Start=7/8
+regs video LINE=120/16 PPUCTRL=0x80/8 A=9/8
+regs apu APU0=3/8 Board:NROM=0/8 Duty=2/8
+regs cop R15=0x1234/16 PC=0x10/16
+label 0x20 Start
+label 0x30 Loop extra words
+label 0x40 PPUCTRL
+frame 1234
+context target
+eval A
+eval LINE
+eval PPUCTRL
+eval apu0
+eval R15
+eval frame
+eval FRAME
+eval Start
+eval Loop
+eval Board:NROM
+eval [3]
+eval [SPCRAM:2]
+eval [spcram:7]
+eval {SPCRAM:7}
+symbols
+check Nope
+check LINE == 120
+context cpu cpu
+eval A
+eval frame
+eval Start
+eval LINE
+eval PPUCTRL
+eval [3]
+symbols
+context cpu video
+eval A
+eval PC
+eval PPUCTRL
+symbols
+context cpu cop SPCRAM
+eval PC
+eval R15
+eval [0]
+eval [CPUBUS:0]
+eval [8]
+eval [7]
+symbols
+context cpu cop nonesuch
+eval [0]
+pack flag.c 1
+pack flag.z 0
+pack A 77
+stack 3
+context main
+eval flag.c
+eval FLAG.Z
+eval A
+eval stackdepth
+eval STACKDEPTH
+eval Start
+symbols
+stack none
+eval stackdepth
+symbols
+pack stackdepth 12
+eval stackdepth
+symbols
+context target
+set cpu A 0x55
+set video LINE 121
+set cop R15 1
+eval A
+eval LINE
+cond A == $55
+eval A
+eval LINE
+eval R15
+render A, LINE ,  , R15
+render A,Nope,X
+render 1 / 0
+render
+render ,
+cond Nope
+cond 0 && Nope
+cond $8000000000000000 / -1
+cond 7
+cond 0
+cond (
+refreshes
+set cpu A 1
+cond 1
+eval A
+refreshes
+cond [0] == 0
+eval A
+refreshes
+refresh
+eval A
+refreshes
+prepare A == 1 | A, X
+prepare - | -
+prepare Nope | -
+prepare - | A, Nope
+prepare A | 1 2
+prepare ( | -
+prepare 0 && Nope | -
+context main
+prepare stackdepth | -
+prepare flag.c | flag.z
+symbols

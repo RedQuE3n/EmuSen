@@ -1,0 +1,60 @@
+# Labels, and the units' symbols a machine info names.
+label 0x10 Start a comment
+label 0x20 Loop
+label 0x10 Reset
+labels
+label 0x30 loop
+labels
+label 0x30 Tail
+labels
+unlabel LOOP
+unlabel nope
+unlabelat 0x10
+unlabelat 0x10
+labels
+describe 0x30 6
+describe 0x31 4
+describe -1 6
+label -1 Top
+describe -1 4
+labelsave
+labelload 1000 Alpha\n$2000 Beta   with   words\n0x3000\tGamma\n  # a comment\n\nzz Delta\n4000\n123456789 Big\n0X5000 Eps\n$$6000 Dollars\n  7000   Trim  \nFFFFFFFF Neg
+labels
+labelsave
+labelload
+labelload 1 A\r
+labels
+unit 1 PPU video PPUCTRL/8 PPUMASK/8 x/3 v/15
+unit 2 Pulse~1 audio Duty/2 LengthCounter/8 Volume/4
+unit 3 Pulse~2 audio Duty/2 LengthCounter/8
+unit 4 APU audio $4000/8 FrameCounter/8
+unit 5 Board cartridge Mapper/8
+unit 6 ~ timer Count/8
+unit 7 S-DD1! cartridge Bank0/8 bank0/8
+taken A X Y S P PC frame v
+unitnames
+unitfind ppu.PPUCTRL
+unitfind PPU.ppuctrl
+unitfind PPUCTRL
+unitfind x
+unitfind v
+unitfind ppu.v
+unitfind Duty
+unitfind pulse1.Duty
+unitfind pulse2.duty
+unitfind LengthCounter
+unitfind Volume
+unitfind apu.$4000
+unitfind $4000
+unitfind FrameCounter
+unitfind board.Mapper
+unitfind Count
+unitfind .Count
+unitfind sdd1.Bank0
+unitfind Bank0
+unitfind nope
+taken ppu.PPUCTRL Mapper
+unitnames
+unitfind ppu.PPUCTRL
+unitfind Mapper
+unitfind board.mapper

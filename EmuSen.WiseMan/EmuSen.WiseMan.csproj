@@ -140,6 +140,21 @@
       <None Include="$(EmuSenCoreHostTarget)\release\$(EmuSenCoreHostFile)" Link="$(EmuSenCoreHostFile)" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
   </Target>
+  <!-- The debugger's parity tool, built by cargo from the platform's workspace and run beside the tests, and the scripts both debuggers answer - see EmuSen_Backend.md §29.30. -->
+  <PropertyGroup>
+    <EmuSenDebugToolTarget>$(MSBuildThisFileDirectory)obj\emusen-crystal-debug</EmuSenDebugToolTarget>
+    <EmuSenDebugToolFile Condition="$([MSBuild]::IsOSPlatform('Windows'))">emusen-crystal-debug.exe</EmuSenDebugToolFile>
+    <EmuSenDebugToolFile Condition="'$(EmuSenDebugToolFile)' == ''">emusen-crystal-debug</EmuSenDebugToolFile>
+  </PropertyGroup>
+  <Target Name="BuildCrystalDebugTool" BeforeTargets="BeforeBuild" Condition="'$(EmuSenNative)' != 'false'">
+    <Exec Command="cargo build --release -p emusen-crystal-debug --bin emusen-crystal-debug --manifest-path &quot;$(MSBuildThisFileDirectory)..\Platform\Cargo.toml&quot; --target-dir &quot;$(EmuSenDebugToolTarget)&quot;" WorkingDirectory="$(MSBuildThisFileDirectory)..\Platform" StandardOutputImportance="low" />
+    <ItemGroup>
+      <None Include="$(EmuSenDebugToolTarget)\release\$(EmuSenDebugToolFile)" Link="$(EmuSenDebugToolFile)" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+  <ItemGroup>
+    <None Include="Crystal\DebugScripts\*.script" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
   <Import Project="..\LunaP.props" />
 
 </Project>

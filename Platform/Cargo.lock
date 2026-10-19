@@ -444,6 +444,7 @@ dependencies = [
  "emusen-native",
  "emusen-net",
  "emusen-savemedia",
+ "emusen-scrape",
  "emusen-serenity",
  "emusen-session",
  "emusen-sqlite",
@@ -462,6 +463,20 @@ dependencies = [
  "emusen-dotnet",
  "emusen-galaxia",
  "emusen-systems",
+]
+
+[[package]]
+name = "emusen-scrape"
+version = "0.1.0"
+dependencies = [
+ "emusen-dotnet",
+ "emusen-galaxia",
+ "emusen-library",
+ "emusen-net",
+ "emusen-sqlite",
+ "emusen-systems",
+ "flate2",
+ "libc",
 ]
 
 [[package]]

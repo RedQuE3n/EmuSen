@@ -38,6 +38,8 @@ emusen-cheats = { path = "../cheats" }
 emusen-net = { path = "../net" }
 # The player's library and the SQLite it is lent, under its own stable header (EmuSen_Backend.md §28).
 emusen-library = { path = "../library" }
+# Scraping, under its own stable header (EmuSen_Backend.md §30).
+emusen-scrape = { path = "../scrape" }
 emusen-sqlite = { path = "../sqlite" }
 # .NET's JSON, for the requests the systems' C layer reads.
 emusen-dotnet = { path = "../dotnet" }

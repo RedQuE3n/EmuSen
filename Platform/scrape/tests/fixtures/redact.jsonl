@@ -1,0 +1,111 @@
+{"input":"https://api.screenscraper.fr/api2/jeuInfos.php?devid=FAKEDEVID\u0026devpassword=FAKE%2Bpass%2Fword\u0026softname=x\u0026output=json\u0026ssid=me\u0026sspassword=secret\u0026md5=1","output":"https://api.screenscraper.fr/api2/jeuInfos.php?devid=***\u0026devpassword=***\u0026softname=x\u0026output=json\u0026ssid=***\u0026sspassword=***\u0026md5=1"}
+{"input":"DEVID=1 devpassword=FAKE2","output":"DEVID=*** devpassword=***"}
+{"input":"xdevid=keep _ssid=keep 9ssid=keep -ssid=gone","output":"xdevid=keep _ssid=keep 9ssid=keep -ssid=***"}
+{"input":"ssid=\u0022quoted\u0022 sspassword=\u0027q\u0027 devid=\u003Cx\u003E devpassword=FAKEa\\b ssid=a\u0060b ssid=a)b","output":"ssid=***\u0022quoted\u0022 sspassword=***\u0027q\u0027 devid=***\u003Cx\u003E devpassword=***\\b ssid=***\u0060b ssid=***)b"}
+{"input":"ssid= empty","output":"ssid=*** empty"}
+{"input":"the password FAKE\u002Bpass/word appears","output":"the password *** appears"}
+{"input":"abc is short","output":"abc is short"}
+{"input":"sspassword=x\u0026ssid=y\u0026devid=z","output":"sspassword=***\u0026ssid=***\u0026devid=***"}
+{"input":"ssid=a\u00A0b ssid=a\u2003b ssid=a\u0085b","output":"ssid=***\u00A0b ssid=***\u2003b ssid=***\u0085b"}
+{"input":"devidx=1 devid=","output":"devidx=1 devid=***"}
+{"input":"SSID=Up\u0026SsPassWord=Mix","output":"SSID=***\u0026SsPassWord=***"}
+{"input":"ssid\u0026\u0022\u0022?)","output":"ssid\u0026\u0022\u0022?)"}
+{"input":"\t   ?x","output":"\t   ?x"}
+{"input":"FAKEDEVIDa devpassworddevpassworda","output":"***a devpassworddevpassworda"}
+{"input":"ssiddevid?devpassword1 ","output":"ssiddevid?devpassword1 "}
+{"input":"==)\t\u0022?","output":"==)\t\u0022?"}
+{"input":"FAKEDEVIDx =asspassword","output":"***x =asspassword"}
+{"input":"\tdevidFAKEDEVIDFAKEDEVID1a","output":"\tdevid******1a"}
+{"input":"axFAKEDEVID=?_","output":"ax***=?_"}
+{"input":"\u0022devidsspassword \tsspassword","output":"\u0022devidsspassword \tsspassword"}
+{"input":" )\u0022devidsspassword=","output":" )\u0022devidsspassword="}
+{"input":"deviddevid)11=","output":"deviddevid)11="}
+{"input":"_devpassword\t=devpasswordsspassword","output":"_devpassword\t=devpasswordsspassword"}
+{"input":"ssid\u0022sspassword\t\u0022FAKEDEVID","output":"ssid\u0022sspassword\t\u0022***"}
+{"input":"1devidassid  ","output":"1devidassid  "}
+{"input":" ssid==)1","output":" ssid=***)1"}
+{"input":"FAKEDEVID)1x\u00221","output":"***)1x\u00221"}
+{"input":"_1\u0026x\u0022\u0026","output":"_1\u0026x\u0022\u0026"}
+{"input":"1sspassword1\t\u0026\u0026","output":"1sspassword1\t\u0026\u0026"}
+{"input":"\t\u0022\u0026\tsspasswordsspassword","output":"\t\u0022\u0026\tsspasswordsspassword"}
+{"input":"?)\u0022 =_","output":"?)\u0022 =_"}
+{"input":"\t =sspassworda=","output":"\t =sspassworda="}
+{"input":"=1\txsspassword?","output":"=1\txsspassword?"}
+{"input":"sspasswordFAKEDEVID xxx","output":"sspassword*** xxx"}
+{"input":"? a)=\u0026","output":"? a)=\u0026"}
+{"input":" FAKEDEVIDaaFAKEDEVID?","output":" ***aa***?"}
+{"input":"== ?xssid","output":"== ?xssid"}
+{"input":"ssid?  ?FAKEDEVID","output":"ssid?  ?***"}
+{"input":" a=_1FAKEDEVID","output":" a=_1***"}
+{"input":"?\u0026?devpassword_)","output":"?\u0026?devpassword_)"}
+{"input":"devidssidssid)?ssid","output":"devidssidssid)?ssid"}
+{"input":"FAKEDEVID?devpassword=)_","output":"***?devpassword=***)_"}
+{"input":"sspassword x=sspasswordFAKEDEVID","output":"sspassword x=sspassword***"}
+{"input":"1sspassword1sspassword FAKEDEVID","output":"1sspassword1sspassword ***"}
+{"input":"devida_sspassworddeviddevpassword","output":"devida_sspassworddeviddevpassword"}
+{"input":"\tsspassword\u0022FAKEDEVID?devpassword","output":"\tsspassword\u0022***?devpassword"}
+{"input":"\tdevpassworddevid=)devid","output":"\tdevpassworddevid=)devid"}
+{"input":"=ssid_\u0022FAKEDEVID=","output":"=ssid_\u0022***="}
+{"input":"x=devpasswordssid=?","output":"x=devpasswordssid=?"}
+{"input":"devid1FAKEDEVID )\t","output":"devid1*** )\t"}
+{"input":"= FAKEDEVID\t\u0026_","output":"= ***\t\u0026_"}
+{"input":"devpassword\u00221ssid=\t","output":"devpassword\u00221ssid=\t"}
+{"input":"FAKEDEVID x__\u0026","output":"*** x__\u0026"}
+{"input":"1\u0022ssid 1a","output":"1\u0022ssid 1a"}
+{"input":"\t)_)FAKEDEVID_","output":"\t)_)***_"}
+{"input":"FAKEDEVID xdeviddevid ","output":"*** xdeviddevid "}
+{"input":"\u0026=?devidxssid","output":"\u0026=?devidxssid"}
+{"input":" sspassword\tx\u00221","output":" sspassword\tx\u00221"}
+{"input":"\u0026devpassworddeviddevpassword?\u0026","output":"\u0026devpassworddeviddevpassword?\u0026"}
+{"input":")1FAKEDEVID)devid\u0022","output":")1***)devid\u0022"}
+{"input":"\t=\tssid\u00221","output":"\t=\tssid\u00221"}
+{"input":"?\u0022 1\u0026 ","output":"?\u0022 1\u0026 "}
+{"input":"a1devpassworddevid\t?","output":"a1devpassworddevid\t?"}
+{"input":"_?=)\u0022=","output":"_?=)\u0022="}
+{"input":"a=1)sspasswordsspassword","output":"a=1)sspasswordsspassword"}
+{"input":"1 =sspassworddevid\t","output":"1 =sspassworddevid\t"}
+{"input":"sspassword\u0026FAKEDEVIDssid?\t","output":"sspassword\u0026***ssid?\t"}
+{"input":"\u0026FAKEDEVID1FAKEDEVID\u00221","output":"\u0026***1***\u00221"}
+{"input":"sspassword)))sspassword=","output":"sspassword)))sspassword=***"}
+{"input":"sspassworddevid_FAKEDEVID=devpassword","output":"sspassworddevid_***=devpassword"}
+{"input":"devida\u0026x\t)","output":"devida\u0026x\t)"}
+{"input":"ssid\u0022_devpassword)\u0022","output":"ssid\u0022_devpassword)\u0022"}
+{"input":"devid?devid\u0026\u0022\t","output":"devid?devid\u0026\u0022\t"}
+{"input":"\u0022ssid_\t_devpassword","output":"\u0022ssid_\t_devpassword"}
+{"input":"devpassword)=deviddeviddevid","output":"devpassword)=deviddeviddevid"}
+{"input":"devpassword\u0022ssid\u0026devid)","output":"devpassword\u0022ssid\u0026devid)"}
+{"input":"\u0022ssidFAKEDEVID)\u0022devid","output":"\u0022ssid***)\u0022devid"}
+{"input":"devid)devid\u00261 ","output":"devid)devid\u00261 "}
+{"input":"=a\u00221ssidx","output":"=a\u00221ssidx"}
+{"input":"\u0026devid\tsspassworddeviddevid","output":"\u0026devid\tsspassworddeviddevid"}
+{"input":"FAKEDEVIDssid _devid=","output":"***ssid _devid="}
+{"input":" ??ssid)\u0026","output":" ??ssid)\u0026"}
+{"input":"=FAKEDEVIDFAKEDEVID_\t1","output":"=******_\t1"}
+{"input":"devpassword1ssid1ax","output":"devpassword1ssid1ax"}
+{"input":"\u0022\u0026\u0026_devid\t","output":"\u0022\u0026\u0026_devid\t"}
+{"input":"\t=ssid\u0022= ","output":"\t=ssid\u0022= "}
+{"input":"\u0022x)?\tdevpassword","output":"\u0022x)?\tdevpassword"}
+{"input":"1devpassword1ssid \u0022","output":"1devpassword1ssid \u0022"}
+{"input":"aFAKEDEVIDssidssid\tdevpassword","output":"a***ssidssid\tdevpassword"}
+{"input":"\ta\u0026devpasswordx?","output":"\ta\u0026devpasswordx?"}
+{"input":")???ssid\u0022","output":")???ssid\u0022"}
+{"input":"=_devpasswordssidx?","output":"=_devpasswordssidx?"}
+{"input":"\tFAKEDEVID)1devid ","output":"\t***)1devid "}
+{"input":"\u0026\u0026))ssid\u0026","output":"\u0026\u0026))ssid\u0026"}
+{"input":")1\u00261FAKEDEVID?","output":")1\u00261***?"}
+{"input":"ssidxdeviddevpasswordax","output":"ssidxdeviddevpasswordax"}
+{"input":"FAKEDEVIDsspasswordssid=_?","output":"***sspasswordssid=_?"}
+{"input":"xFAKEDEVID= sspassword=","output":"x***= sspassword=***"}
+{"input":"=ssid?)_1","output":"=ssid?)_1"}
+{"input":"adevidFAKEDEVIDdevpassword_x","output":"adevid***devpassword_x"}
+{"input":"ssid devpasswordFAKEDEVIDdevid\t","output":"ssid devpassword***devid\t"}
+{"input":"?a1FAKEDEVIDx1","output":"?a1***x1"}
+{"input":"\u0026ssidFAKEDEVIDx?\u0022","output":"\u0026ssid***x?\u0022"}
+{"input":"devid ?devid\u0022 ","output":"devid ?devid\u0022 "}
+{"input":"\tsspassword\u0022sspassword a","output":"\tsspassword\u0022sspassword a"}
+{"input":"a=\u00261devpassword=","output":"a=\u00261devpassword="}
+{"input":"\u0026?\u0022\u0026_\u0026","output":"\u0026?\u0022\u0026_\u0026"}
+{"input":" a_1\u0022?","output":" a_1\u0022?"}
+{"input":"x =ssiddevpassword=","output":"x =ssiddevpassword="}
+{"input":"FAKEDEVIDdevid)a?)","output":"***devid)a?)"}
+{"input":"\u0026\u0022xsspassword1\t","output":"\u0026\u0022xsspassword1\t"}

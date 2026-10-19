@@ -6955,3 +6955,60 @@ on 2026-10-18 against .NET 10.0.112 with a probe of its own on 127.0.0.1, kept o
 run and passed in three runs of its crate alone; it touches nothing this part changed, and is recorded for its owner.
 Seeded faults in the JSON reader (the comma's place, the depth limit off by one) were each caught by the table. `cargo
 metadata --locked` passes over the three tracked locks that build Galaxia.
+
+### 30.11 Built 2026-10-19: part 3, the scraper without a network
+
+*Measured on 2026-10-19. `Platform/scrape/` is a member of the platform's workspace and is linked into
+`emusen_platform`; nothing in Mistress calls it yet.*
+
+**The crate.** `emusen-scrape`: `kinds` (the eleven kinds, the one table of ES-DE's type folders, and each type's
+extensions), `rules` (`ScrapeRules`), `answer` (`ScreenScraperJson`, over `json_document`), `redact` (`ScrapeRedactor`,
+the regex's lookbehind and value set written out, a registry for the process), `store` (`media.db`: the three migrations
+to the byte, every `MediaStore` row operation), `layout` (the layout step, a game's Clear, the orphans and their
+cleanup), `quota` (`ScrapeQuotaManager`, with the 403 rule as fixed), `zone` (a TZif file and its POSIX footer, which
+modern `zic` output alone carries past 1996), `clock` (the system's, or the test clock that a delay advances and
+records), `credentials` (the developer file's two places, the embedded blob, the member's 0600 file) and the handle.
+`emusen-dotnet` gained `date` (civil days, 100 ns ticks, the stamps the scraper writes and reads), which the library's
+private copy of the same arithmetic may later be folded into.
+
+**The surface grows from this part on, frozen at part 6.** The parity classes need something to call, so the C layer
+(`Platform/platform/src/scrape.rs`), the header (`Platform/scrape/include/emusen_scrape.h`) and the binding
+(`EmuSen.Crystal.Client/Scrape/MediaService.cs`) were written now with what this part has: `abi_version`, `last_error`,
+`open`, `close`, `get` and `change`. Part 4 adds the run's calls; part 6 writes the baseline and its CI step, after
+which a line never changes. `GameLibrary` gained an internal `Handle` so that the binding can lend the library.
+
+**Built otherwise than §30.3 said, each for a reason found while building:**
+
+- **`config` became `developer_files`**: Galaxia's Rust tree already follows `ConfigStore`'s overrides in the process
+  (the C# pushes them when the platform library loads), so the scraper reads the credential files where the C# would,
+  and what a test harness needs is only a way to say "read none of the machine's"; `developer_files: false` is that.
+- **`test.clock` is .NET ticks from 1970** (100 ns), so that `FakeScrapeClock`'s instants, which carry ticks, cross whole.
+- **`orphans` takes the scan's games** (`[{"path", "system"}]`) rather than reading a scan the library keeps, since
+  Mistress scans with a handle of its own on `:memory:` (§28.8); with no ROM folder, or one that is missing, it answers
+  none, the guard `OrphanedMedia` had in the window.
+- **`clean_up` takes `at`**, a round-trip text with its offset, as the library's changes do: the folder is named by the
+  machine's local time of that instant (`now.ToLocalTime()`), the note in `cleanup.txt` by the time as given with its
+  offset, as the C# writes them.
+- **Two reads were added**, `game` (a record by its hashes, of any state) and `folder` (a ROM's game folder), and one
+  change, `forget_unfound`: the parity classes compare them, and part 4's run uses the first and the last.
+
+**Held to the C#, measured on 2026-10-19:**
+
+| Check | Result |
+|---|---|
+| `tests/rules.rs`: 231 dates, 223 notes, 163 file names (region, the four region orders, the search text), 111 texts redacted under four registered secrets, each against what the C# gave on 2026-10-18 | 4 pass |
+| `tests/answers.rs`: 160 answers through the five readers (generated from a real answer's shape and mutated at random, numbers written as strings and as numbers, members of every kind, lone surrogates escaped in names, quotas and ids), each reader's result or the words of what the C# threw | 1 pass |
+| `tests/quota.rs`: `ScrapeQuotaTests`' rules, and Paris's midnight in summer, in winter and on the two days the clocks change | 4 pass |
+| `ScrapeStoreParityTests`: every `media.db` version 0 to 3 opened by both to the same schema and rows, a version 4 refused by both in the same words and left as it was; 60 generated records with media, paths, a queue and a day read through both (`found`, `outcomes`, `record`, `game`, `stored`, `queue`); four generated stores and ROM folders taken through the layout step, a game's Clear, the orphans and their cleanup by both, the trees file by file, `media.db` row by row, `cleanup.txt` word for word; every game's folder; seven arrangements of the developer's credentials and three member files | 4 pass |
+
+The blast radius, measured on 2026-10-19: `cargo test --profile test-checked` of `emusen-scrape`, `emusen-dotnet`,
+`emusen-platform` and `emusen-library`, 85 passed; every class in `EmuSen.WiseMan.Mistress.Scraping` with the library's
+two parity classes and the media store's own, 255 passed and 5 skipped (the live tool and the picture tools, which run
+only when asked), none failed.
+
+**Seeded faults**, each made, run and reverted: in the JSON readers, the quota read after the game (caught once the
+fixture gained answers whose quota holds a lone surrogate, which the first fixture had not) and a broken string read as
+text; in the store, a migration's text changed by one space (the schema case) and a picture shared with a game at the
+top moved rather than copied (the layout case). A rating written as its decimal text was **not caught**: in this part
+the Rust writes no record, only reads them; part 4's replay, where it does, is its catcher, and the fault is to be made
+again there.

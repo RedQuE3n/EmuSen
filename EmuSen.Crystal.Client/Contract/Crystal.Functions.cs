@@ -23,6 +23,10 @@ namespace EmuSen.Crystal.Client.Contract
 
         public static int Rescan(nint rt) => Table->rescan(rt);
 
+        public static int CoreApprove(nint rt, byte* sha256, nuint sha256_len) => Table->core_approve(rt, sha256, sha256_len);
+
+        public static int CoreRevoke(nint rt, byte* sha256, nuint sha256_len) => Table->core_revoke(rt, sha256, sha256_len);
+
         public static long Route(nint rt, byte* path, nuint path_len, byte* out_, nuint len) => Table->route(rt, path, path_len, out_, len);
 
         public static long Open(nint rt, CrystalOpenParams* params_) => Table->open(rt, params_);

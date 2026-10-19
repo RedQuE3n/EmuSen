@@ -48,12 +48,17 @@ namespace EmuSen.WiseMan.Crystal
         }
 
         // A runtime of this implementation over the cores given, or the defaults; the status and words where it is refused.
-        public nint New(IReadOnlyList<string>? cores = null, bool development = false)
+        public nint New(IReadOnlyList<string>? cores = null, bool development = false, IReadOnlyList<string>? player = null)
         {
             byte[]? json = cores is null ? null : JsonSerializer.SerializeToUtf8Bytes(cores);
-            fixed (byte* c = json)
+            byte[]? own = player is null ? null : JsonSerializer.SerializeToUtf8Bytes(player);
+            fixed (byte* c = json, pc = own)
             {
-                var config = new CrystalConfig { size = (uint)sizeof(CrystalConfig), flags = development ? CrystalAbi.ConfigDevelopment : 0, cores = c, cores_len = (nuint)(json?.Length ?? 0), sqlite = (void*)LentSqlite.Value };
+                var config = new CrystalConfig
+                {
+                    size = (uint)sizeof(CrystalConfig), flags = development ? CrystalAbi.ConfigDevelopment : 0, cores = c, cores_len = (nuint)(json?.Length ?? 0), sqlite = (void*)LentSqlite.Value,
+                    player_cores = pc, player_cores_len = (nuint)(own?.Length ?? 0),
+                };
                 nint rt = ((delegate* unmanaged[Cdecl]<CrystalConfig*, nint>)Fn("new"))(&config);
                 return rt != 0 ? rt : throw new InvalidOperationException($"{Name}: {LastError()}");
             }
@@ -273,6 +278,13 @@ namespace EmuSen.WiseMan.Crystal
         {
             byte[]? p = path is null ? null : Encoding.UTF8.GetBytes(path);
             fixed (byte* pp = p) return Status(((delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, int>)Fn(name))(rt, session, pp, (nuint)(p?.Length ?? 0)));
+        }
+
+        // core_approve or core_revoke of a hash, by the export's name.
+        public string TrustChange(string name, nint rt, string sha256)
+        {
+            byte[] h = Encoding.UTF8.GetBytes(sha256);
+            fixed (byte* hp = h) return Status(((delegate* unmanaged[Cdecl]<nint, byte*, nuint, int>)Fn(name))(rt, hp, (nuint)h.Length));
         }
 
         public string Forget(nint rt, string path)

@@ -117,6 +117,16 @@ namespace EmuSen.Cores.Native
     public sealed record UnreadCore(string LibraryPath, string Sha256)
     {
         public string Report => CoreLibrary.IsOpen(LibraryPath) ? CoreLibrary.Open(LibraryPath).Report : "not yet read";
+
+        // The approved library loaded and checked, the hash it was listed with first; null, or why not.
+        public string? Load()
+        {
+            string name = System.IO.Path.GetFileName(LibraryPath);
+            if (!CoreDiscovery.Approved(Sha256)) return $"{name} has not been approved; it was not read";
+            if (!string.Equals(CoreSidecar.HashOf(LibraryPath), Sha256, StringComparison.OrdinalIgnoreCase)) return $"{name} changed after it was listed; it was not loaded";
+            var library = CoreLibrary.Open(LibraryPath);
+            return library.Available ? null : library.Report;
+        }
     }
 
     // The v1 engines in the cores directories, listed from their sidecars alone, so starting a frontend runs no core code - see EmuSen_CoreAPI.md §7.1, §19.

@@ -53,7 +53,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CRYSTAL_MAJOR 1u
-#define EMUSEN_CRYSTAL_MINOR 2u
+#define EMUSEN_CRYSTAL_MINOR 3u
 #define EMUSEN_CRYSTAL_VERSION ((EMUSEN_CRYSTAL_MAJOR << 16) | EMUSEN_CRYSTAL_MINOR)
 
 /* ---- Statuses (EmuSen_Backend.md section 3.2). The session service's keep their numbers and names; these follow. -- */
@@ -65,6 +65,9 @@ extern "C" {
 #define EMUSEN_CRYSTAL_STATE_REFUSED (-1114) /* since 1.1: the state is not this machine's: another console's, a version
                                               * outside machine info's loads_from, or the core's own refusal, whose
                                               * words follow; the machine is unchanged */
+#define EMUSEN_CRYSTAL_NOT_APPROVED (-1115) /* since 1.3: the engine's library is in no cores manifest and the player has
+                                             * not approved it; the words name the library, and cores gives its hash
+                                             * (section 29.40) */
 
 /* ---- Open enumerations ------------------------------------------------------------------------------------- */
 
@@ -110,7 +113,7 @@ typedef struct emusen_crystal_subscription emusen_crystal_subscription;
 #define EMUSEN_CRYSTAL_CONFIG_DEVELOPMENT 1u /* cores still in development are listed; without it, as the variable
                                               * EMUSEN_DEVELOPMENT_CORES says */
 
-typedef struct emusen_crystal_config { /* 32 bytes since 1.2; 8 in 1.0 */
+typedef struct emusen_crystal_config { /* 48 bytes since 1.3; 32 in 1.2; 8 in 1.0 */
     uint32_t size;
     uint32_t flags;                    /* EMUSEN_CRYSTAL_CONFIG_*; none in 1.0 and 1.1 */
     void *sqlite;                      /* since 1.2: the host's loaded SQLite (the e_sqlite3 the program ships), lent
@@ -120,6 +123,10 @@ typedef struct emusen_crystal_config { /* 32 bytes since 1.2; 8 in 1.0 */
                                         * order; absent for the directories the implementation uses by default, the
                                         * program's own and its cores folder */
     size_t cores_len;
+    const uint8_t *player_cores;       /* since 1.3: the player's own cores directories as a JSON array of paths, scanned
+                                        * after cores, their libraries loaded only once approved; absent for the
+                                        * player's /Cores where cores is absent too, and for none where it is not */
+    size_t player_cores_len;
 } emusen_crystal_config;
 
 typedef struct emusen_crystal_open_params { /* 72 bytes since 1.1; 64 in 1.0 */
@@ -205,14 +212,36 @@ int64_t emusen_crystal_systems(emusen_crystal_runtime *rt, uint8_t *out, size_t 
  * the core, a file's own in route's "shelf" (section 14.13). */
 int64_t emusen_crystal_shelves(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
 
-/* [{"name","id","version","systems":[id],"available","report"}]: every engine discovery found. */
+/* [{"name","id","version","systems":[id],"available","report"}]: every engine discovery found. Since 1.3 "trust" is
+ * "manifest", "approved" or "needs_approval", as cores says it. */
 int64_t emusen_crystal_engines(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
 
-/* [{"library","sidecar","sha256","abi","development","engine","report"}]: each core library found, unloaded. */
+/* [{"library","sidecar","sha256","abi","development","engine","report"}]: each core library found, unloaded. Since 1.3
+ * also "directory" ("installation" or "player"), "trust" ("manifest", "approved", "needs_approval" or "not_read"), and
+ * from the sidecar's info "name", "authors":[text], "license" and "systems":[id], what the player's approval shows. The
+ * libraries with a sidecar come first, then the player's not yet read, whose "sidecar", "abi", "engine", "name" and
+ * "license" are null. "sha256" is the sidecar's in an installation directory and the file's own in the player's
+ * (section 29.40.5). */
 int64_t emusen_crystal_cores(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
 
-/* changes. Lists the cores directories again; a session already open keeps its engine. */
+/* changes. Lists the cores directories again, and reads the player's approvals again; a session already open keeps its
+ * engine. */
 int32_t emusen_crystal_rescan(emusen_crystal_runtime *rt);
+
+/* changes, since 1.3. Records the player's one-time approval of the core library whose SHA-256 is `sha256` (64 hex
+ * digits, either case), one that cores lists by its "sha256", in the approvals' file /etc/EmuSen/cores.approved. A
+ * player's library not yet read that has the hash is then read: loaded once under the trust rules and its sidecar
+ * written beside it. Lists the cores directories again; a session already open keeps its engine. 0, also for a hash
+ * already approved; BAD_ARGUMENT for text that is not a hash; NO_SUCH_ID for a hash no listed library has; IO where the
+ * approvals' file or the sidecar could not be written, with the system's words. A library refused when read is not a
+ * failure of the call: the approval stands, and cores' "report" says why it was not loaded. */
+int32_t emusen_crystal_core_approve(emusen_crystal_runtime *rt, const uint8_t *sha256, size_t sha256_len);
+
+/* changes, since 1.3. Removes every approval of `sha256` from the approvals' file and lists the cores directories again.
+ * A library this process already loaded stays loaded, as a library is never unloaded; the next open of it is refused.
+ * 0; BAD_ARGUMENT for text that is not a hash; NO_SUCH_ID where nothing approves it; IO where the file could not be
+ * written. */
+int32_t emusen_crystal_core_revoke(emusen_crystal_runtime *rt, const uint8_t *sha256, size_t sha256_len);
 
 /* {"system","console","engine","reason","cartridge","shelf"}: what opens the file and with which engine, as open would;
  * "system" and "engine" null with the decision's words in "reason" when nothing does. Since 1.1 "shelf" names the shelf
@@ -225,7 +254,8 @@ int64_t emusen_crystal_route(emusen_crystal_runtime *rt, const uint8_t *path, si
 
 /* changes. Opens a game, or starts a console empty, and returns the session's id: NO_ENGINE with the routing
  * decision's words when nothing opens it, FIRMWARE when required firmware is missing, FAULT with the engine's words
- * when it refuses the game. Any thread; the session has no frame thread until one calls frame. */
+ * when it refuses the game, and since 1.3 NOT_APPROVED when the engine's library awaits the player's approval
+ * (core_approve). Any thread; the session has no frame thread until one calls frame. */
 int64_t emusen_crystal_open(emusen_crystal_runtime *rt, const emusen_crystal_open_params *params);
 
 /* changes. Writes the battery save, lets go of the save media and ends the session. */

@@ -24,11 +24,12 @@ namespace EmuSen.Crystal.Client
         public nint Device { get; init; }
     }
 
-    // What a runtime is told when it is made, since 1.2: its cores directories, absent for the defaults, and whether cores in development are listed.
+    // What a runtime is told when it is made, since 1.2: its cores directories, absent for the defaults, and whether cores in development are listed; since 1.3 the player's own directories.
     public sealed record CrystalRuntimeOptions
     {
         public IReadOnlyList<string>? Cores { get; init; }
         public bool Development { get; init; }
+        public IReadOnlyList<string>? PlayerCores { get; init; }
     }
 
     // A copy-out call as the contract layer makes one: the whole length returned, written only when the buffer holds it.
@@ -42,7 +43,8 @@ namespace EmuSen.Crystal.Client
         public CrystalRuntime(CrystalRuntimeOptions? options)
         {
             byte[]? cores = options?.Cores is { } dirs ? JsonSerializer.SerializeToUtf8Bytes(dirs) : null;
-            fixed (byte* c = cores)
+            byte[]? player = options?.PlayerCores is { } own ? JsonSerializer.SerializeToUtf8Bytes(own) : null;
+            fixed (byte* c = cores, p = player)
             {
                 var config = new CrystalConfig
                 {
@@ -51,6 +53,8 @@ namespace EmuSen.Crystal.Client
                     sqlite = Contract.Crystal.Native ? (void*)SqliteLend.Handle : null,
                     cores = c,
                     cores_len = (nuint)(cores?.Length ?? 0),
+                    player_cores = p,
+                    player_cores_len = (nuint)(player?.Length ?? 0),
                 };
                 Handle = Contract.Crystal.New(&config);
             }
@@ -119,6 +123,11 @@ namespace EmuSen.Crystal.Client
         public string Cores() => Text((o, n) => Contract.Crystal.Cores(Handle, o, n));
 
         public void Rescan() => Check(Contract.Crystal.Rescan(Handle));
+
+        // Since 1.3: the player's one-time approval of a core library by the SHA-256 cores lists, and its withdrawal - see EmuSen_Backend.md §29.40.
+        public void CoreApprove(string sha256) => WithText(sha256, (t, n) => Check(Contract.Crystal.CoreApprove(Handle, (byte*)t, n)));
+
+        public void CoreRevoke(string sha256) => WithText(sha256, (t, n) => Check(Contract.Crystal.CoreRevoke(Handle, (byte*)t, n)));
 
         public string Route(string path) => WithText(path, (p, pl) => Text((o, n) => Contract.Crystal.Route(Handle, (byte*)p, pl, o, n)));
 

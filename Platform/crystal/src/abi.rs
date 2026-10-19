@@ -6,7 +6,7 @@
 use std::ffi::c_void;
 
 pub const MAJOR: u32 = 1;
-pub const MINOR: u32 = 2;
+pub const MINOR: u32 = 3;
 pub const VERSION: u32 = (MAJOR << 16) | MINOR;
 
 pub mod status {
@@ -16,6 +16,8 @@ pub mod status {
     pub const BAD_STRUCT: i32 = -1112;
     pub const IO: i32 = -1113;
     pub const STATE_REFUSED: i32 = -1114;
+    /// Since 1.3.
+    pub const NOT_APPROVED: i32 = -1115;
 }
 
 /// Since 1.2: config's flag listing cores still in development.
@@ -74,7 +76,13 @@ pub struct emusen_crystal_config {
     /// Since 1.2: the cores directories as a JSON array of paths; null for the defaults.
     pub cores: *const u8,
     pub cores_len: usize,
+    /// Since 1.3: the player's own cores directories as a JSON array of paths; null for the default.
+    pub player_cores: *const u8,
+    pub player_cores_len: usize,
 }
+
+/// The config's size in 1.2, the least that holds `sqlite` and `cores`.
+pub const CONFIG_SIZE_12: usize = 32;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]

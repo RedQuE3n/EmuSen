@@ -235,6 +235,7 @@ fn every_constant_is_the_header_s() {
         ("EMUSEN_CRYSTAL_BAD_STRUCT", status::BAD_STRUCT.into()),
         ("EMUSEN_CRYSTAL_IO", status::IO.into()),
         ("EMUSEN_CRYSTAL_STATE_REFUSED", status::STATE_REFUSED.into()),
+        ("EMUSEN_CRYSTAL_NOT_APPROVED", status::NOT_APPROVED.into()),
         ("EMUSEN_CRYSTAL_CONFIG_DEVELOPMENT", CONFIG_DEVELOPMENT.into()),
         ("EMUSEN_CRYSTAL_OPEN_NO_BATTERY", OPEN_NO_BATTERY.into()),
         ("EMUSEN_CRYSTAL_OPEN_SINGLE_ROWS", OPEN_SINGLE_ROWS.into()),
@@ -376,7 +377,7 @@ fn rust_layouts() -> Vec<(&'static str, usize, usize, Vec<(&'static str, usize)>
         };
     }
     vec![
-        layout!("emusen_crystal_config", emusen_crystal_config, [size, flags, sqlite, cores, cores_len]),
+        layout!("emusen_crystal_config", emusen_crystal_config, [size, flags, sqlite, cores, cores_len, player_cores, player_cores_len]),
         layout!("emusen_crystal_open_params", emusen_crystal_open_params, [size, flags, path, path_len, console, console_len, engine, engine_len, audio_buffer_max_samples, reserved, device]),
         layout!(
             "emusen_crystal_frame_info",

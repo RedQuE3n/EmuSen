@@ -41,10 +41,12 @@ fn missing(discovery: &Discovery, console: &str, engine: &str) -> Refused {
 /// The library a game opens on, `CoreFactory.Create`'s v1 branch and its refusals.
 fn library_for<'d>(catalog: &Catalog, discovery: &'d Discovery, trust: &Trust, at: &str, engine: Option<&str>) -> Result<(&'d Discovered, &'static Library), Refused> {
     let found = crate::route::v1_engine(catalog, discovery, at, engine).map_err(|why| (crate::abi::status::NO_ENGINE, why))?;
-    if let Some(core) = found
-        && let Ok(lib) = core.open(trust)
-    {
-        return Ok((core, lib));
+    if let Some(core) = found {
+        match core.open(trust) {
+            Ok(lib) => return Ok((core, lib)),
+            Err(why) if core.awaits_approval() => return Err((crate::abi::status::NOT_APPROVED, why.to_string())),
+            Err(_) => {}
+        }
     }
     let extension = crate::route::image_extension(catalog, discovery, at);
     Err(match extension.as_str() {
@@ -209,7 +211,7 @@ fn open_game(
         let list: Vec<String> = missing.iter().map(|m| format!("{core_name} {} firmware - {}, {} bytes", m.label, m.name, crate::firmware::n0(m.size))).collect();
         return Err((crate::abi::status::FIRMWARE, format!("{} needs firmware the library does not hold: {}", path::file_name(Style::HOST, at), list.join("; "))));
     }
-    let (core, lib) = library_for(catalog, discovery, rt.trust(), at, chosen.as_deref())?;
+    let (core, lib) = library_for(catalog, discovery, &rt.trust(), at, chosen.as_deref())?;
     let system = system_of_info(catalog, discovery, at, core);
     let (row, _) = crate::route::route(catalog, discovery, at);
     let row_console = row.map(|r| catalog.rows[r].console().to_string());
@@ -256,7 +258,10 @@ fn start_console(
         discovery.for_system(&system_id).filter(|c| c.sidecar.info.systems.iter().any(|s| s.id == system_id && s.starts_empty)).collect();
     candidates.sort_by_key(|c| if Some(c.engine_name()) == chosen.as_deref() { 0 } else { 1 });
     let core = *candidates.first().ok_or_else(not_here)?;
-    let lib = core.open(rt.trust()).map_err(|why| (crate::abi::status::NO_ENGINE, format!("{} is not in use: {why}", core.engine_name())))?;
+    let lib = core.open(&rt.trust()).map_err(|why| {
+        let status = if core.awaits_approval() { crate::abi::status::NOT_APPROVED } else { crate::abi::status::NO_ENGINE };
+        (status, format!("{} is not in use: {why}", core.engine_name()))
+    })?;
     let probe = Engine::new(lib, core.sidecar.info_json.clone(), &[], options);
     let values = stored_settings(&probe.settings, stored, Some(&console));
     let mut e = Engine::new(lib, core.sidecar.info_json.clone(), &values, options);

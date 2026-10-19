@@ -14,9 +14,10 @@ namespace EmuSen.Mistress.Views
         internal static Func<MainWindow, string, string, Task<bool>> ConfirmCardImport =
             (owner, title, message) => Dialogs.ConfirmAsync(owner, title, message, "Copy Saves", "Not Now");
 
-        // Everything asked before a game starts: its firmware, then the cards' import.
+        // Everything asked before a game starts: its core's approval, its firmware, then the cards' import.
         private async Task PrepareGameAsync(string romPath)
         {
+            await AskCoreApprovalAsync(romPath);
             await PromptForMissingFirmwareAsync(romPath);
             await OfferCardImportAsync(romPath);
         }

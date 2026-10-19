@@ -6,6 +6,8 @@ using System.Text.Json;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
 using EmuSen.Crystal.Systems;
+using EmuSen.Galaxia.Library;
+using EmuSen.Crystal.Session;
 
 namespace EmuSen.Crystal.Managed
 {
@@ -151,6 +153,52 @@ namespace EmuSen.Crystal.Managed
             }
             w.WriteEndArray();
         });
+
+        // core_approve: the hash recorded, a player's library not yet read of that hash read, the directories listed again - see EmuSen_Backend.md §29.40.2.
+        public static void ApproveCore(string sha256, Action<string> say)
+        {
+            string name = ListedName(sha256);
+            string file = CoreTrust.ApprovalsPath;
+            if (CoreTrust.WithApproval(ApprovalsText(file), sha256, name) is { } changed) WriteApprovals(file, changed);
+            CoreDiscovery.Rescan();
+            bool written = false;
+            foreach (UnreadCore u in CoreDiscovery.Unread.Where(u => string.Equals(u.Sha256, sha256, StringComparison.OrdinalIgnoreCase)).ToArray())
+            {
+                if (u.Load() is { } why) { say(why); continue; }
+                try { CoreSidecar.Write(u.LibraryPath); written = true; }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { throw new CrystalException(CrystalNumbers.Io, $"{CoreSidecar.PathFor(u.LibraryPath)}: {e.Message}"); }
+            }
+            if (written) CoreDiscovery.Rescan();
+        }
+
+        // core_revoke: every approval of the hash removed and the directories listed again.
+        public static void RevokeCore(string sha256)
+        {
+            if (!CoreTrust.IsHash(sha256)) throw NotAHash(sha256);
+            string file = CoreTrust.ApprovalsPath;
+            string changed = CoreTrust.WithoutApproval(ApprovalsText(file), sha256)
+                ?? throw new CrystalException(SessionAbi.NoSuchId, $"no approval of {sha256.ToLowerInvariant()} is recorded");
+            WriteApprovals(file, changed);
+            CoreDiscovery.Rescan();
+        }
+
+        private static CrystalException NotAHash(string text) => new(SessionAbi.BadArgument, $"'{text}' is not a SHA-256 of 64 hex digits");
+
+        private static string ApprovalsText(string file) => AtomicFile.TryRead(file) is { } bytes ? System.Text.Encoding.UTF8.GetString(bytes) : "";
+
+        private static void WriteApprovals(string file, string text)
+        {
+            if (!AtomicFile.Write(file, System.Text.Encoding.UTF8.GetBytes(text))) throw new CrystalException(CrystalNumbers.Io, $"{file} could not be written; the previous file is unchanged");
+        }
+
+        // The file name of a library the listing shows with this hash, or why it cannot be approved.
+        private static string ListedName(string sha256)
+        {
+            if (!CoreTrust.IsHash(sha256)) throw NotAHash(sha256);
+            string? path = CoreDiscovery.Found.FirstOrDefault(c => string.Equals(c.Sidecar.Sha256, sha256, StringComparison.OrdinalIgnoreCase))?.Sidecar.LibraryPath
+                ?? CoreDiscovery.Unread.FirstOrDefault(u => string.Equals(u.Sha256, sha256, StringComparison.OrdinalIgnoreCase))?.LibraryPath;
+            return path is null ? throw new CrystalException(SessionAbi.NoSuchId, $"no core library listed has the SHA-256 {sha256.ToLowerInvariant()}") : Path.GetFileName(path);
+        }
 
         public static byte[] CoresJson() => CrystalJson.Write(w =>
         {

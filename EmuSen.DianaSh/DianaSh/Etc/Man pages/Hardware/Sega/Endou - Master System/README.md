@@ -24,6 +24,10 @@ Master System is the next new console, ahead of the PlayStation 2; building star
   Stage 5 (§12, 2026-10-19): the PSG mixed and resampled in both variants, port `$F2` with no FM unit, the voices,
   sound test programs and library games against the references' audio, no allocation on the audio path, the state's
   version 5, the seeded faults, SMS_MiSTer's dispute step weighed and left, and the questions before stage 6.
+- [`Endou_OpenBoot.md`](Endou_OpenBoot.md) — the open boot program's design, written 2026-10-19 before its code (stage
+  6): what Sega's manual and the public documents say the BIOS does that a game can see, what they leave unsaid and
+  what Endou chooses, the checksum's range measured on the library's export headers, the player's own BIOS as an
+  opt-in per model, the steps with their oracles, the cost's words and the questions for the tester.
 - [`Endou_References.md`](Endou_References.md) — the documents, test programs, references and referees with their URL,
   version, licence and SHA-256, as stage 1 fetched and pinned them, the corrections to what stage 0 recalled, and GHDL
   (stage 4).

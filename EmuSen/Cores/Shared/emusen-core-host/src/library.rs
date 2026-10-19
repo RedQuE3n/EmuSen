@@ -191,7 +191,7 @@ impl Library {
         let mut n = name.as_bytes().to_vec();
         n.push(0);
         // SAFETY: the symbol is only looked up, never called.
-        unsafe { self.lib.get::<*const ()>(&n) }.is_ok()
+        unsafe { self.lib.get::<*const ()>(n.as_slice()) }.is_ok()
     }
 
     /// Core info as the library writes it now, by the length query.

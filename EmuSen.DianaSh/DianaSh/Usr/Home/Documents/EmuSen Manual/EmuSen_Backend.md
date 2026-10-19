@@ -1,6 +1,6 @@
 # EmuSen — the backend in Rust: the line, the frontend API, the system packs and the services
 
-*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18), and B4's shared part with core ABI 1.13 (§22, 2026-10-18), and MoonRT's units, pack views and switch (§23, 2026-10-18), and debugger expressions naming the units' registers (§24, 2026-10-18), and B4's last step, the deletion across the cores that finishes it (§26, 2026-10-18), and B6, the core host in Rust, designed and built (§27, 2026-10-18), and B8, the library in Rust, designed and built (§28, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
+*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18), and B4's shared part with core ABI 1.13 (§22, 2026-10-18), and MoonRT's units, pack views and switch (§23, 2026-10-18), and debugger expressions naming the units' registers (§24, 2026-10-18), and B4's last step, the deletion across the cores that finishes it (§26, 2026-10-18), and B6, the core host in Rust, designed and built (§27, 2026-10-18), and B8, the library in Rust, designed and built (§28, 2026-10-18), and B7, Crystal in Rust, designed with four questions for the tester (§29, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
 get the entire backend ported to rust", after which the frontend's move is planned, and the request of 2026-10-17 to
 design two things: one frontend API by which every frontend drives the cores, and the system packs and the remaining C#
 platform services in Rust. Every claim about the code was read on `WiseMan` at `165e60b4`. Claims are marked as
@@ -676,7 +676,7 @@ behind a switch until the tester agrees to state 3, and says how it is proven. T
 | **B4** | **The per-core shims retired.** What each adds above the ABI goes into its core's own exports, as optional capabilities of the core ABI v1 where one exists (`DEBUG_REGISTERS`, `EmuSen_DianaSh.md` Q28 [R]) and a minor where none does; MarsRT's private exports (`marsrt_core_counters`, `_cpu_registers`, `_gpu_report` and the rest, `MarsRtCore.cs:21–32` [M]) become telemetry or debug capabilities; the shims, `PortEngine` and the pre-stable host deleted; the three dead classes deleted | each core's goldens and corpus baseline unchanged (`EmuSen_Stack.md` §2.1, 2026-10-16) [R]; the kit's corpus on each core; the debugger's golden corpus on each core unchanged, or each difference recorded and decided; `grep` for a type under `EmuSen.Cores.Nintendo.` in shipped code: 0 | per core: its shim stays until its core's exports pass, reached through `CoreFactory` as now. *Built 2026-10-18: VenusRT §19.9, MoonRT §21 and §23, MercuryRT §17.9 and §17.10, MarsRT §18.9 and §18.10, the shared host and core ABI 1.13 §22, the deletion across the cores §26; every gate as measured in §26.4* |
 | **B5** | **The file services in Rust**: `emusen-firmware` (the store, the folders' order, the overview), `emusen-savemedia` (the card manager over B3's formats and Galaxia's `MediumLock`), `emusen-cheats`' files and database (`.cht`, the list files, the database's install, prune and import) | a parity class per service over generated trees (firmware whole and split, cards of each medium held and free, `.cht` files of the cheat tests); the golden corpus's `cards`, `cheat db` and `firmware` cases. *Built 2026-10-17, §15; the download on SR9's client built 2026-10-18, §16* | `EMUSEN_SERVICES_NATIVE=0` |
 | **B6** | **The core host in Rust, shared with the kit**: `emusen-core-host` in `EmuSen/Cores/Shared/` (discovery from sidecars, trust and the manifest, the checks of `EmuSen_CoreAPI.md` §7.2, the v1 calls, the input latch, the state layout), which the kit's `api.rs`, `sidecar.rs` and `lender.rs` fold into | the kit's corpus on every core gives the same report through the new crate; discovery's listing as JSON equal from the C# and the Rust over the published tree and over trees with a missing, altered and unapproved library | the kit keeps its own loader until its corpus passes; the C# host is untouched by this step. *Designed 2026-10-18, §27, its three questions decided the same day (§27.9); built the same day, §27.10 to §27.12: the kit's corpus 265 reports of 265 the same, the listings equal on every tree but the pinned unapproved report, seven seeded faults caught* |
-| **B7** | **Crystal in Rust**: `emusen-crystal` over B1 to B6: sessions and the frame call, input, speed, rewind, states and `states.db`, settings and `consoles.json`, save-media placement, cheat application, the debugger's registries, expressions and bridge, telemetry, the recorder, the session service's table; exported as `emusen_crystal_*` from the platform library. Built in four parts, each graded before the next: (a) life, frame, input, speed, rewind, states, settings, media; (b) the debugger; (c) the service table; (d) the per-program switch | the parity class runs scripted sessions through the binding on both implementations and compares frame and audio digests, state bytes, files written, events drained and every service function's JSON; the debugger's golden corpus with Crystal's table; then state 2 per program: **Pharaoh first**, then emusen-shell, then Mistress, each after a full blast-radius run on Linux and the three systems' CI | `EMUSEN_CRYSTAL_NATIVE=0`, per process, the B2 implementation |
+| **B7** | **Crystal in Rust**: `emusen-crystal` over B1 to B6: sessions and the frame call, input, speed, rewind, states and `states.db`, settings and `consoles.json`, save-media placement, cheat application, the debugger's registries, expressions and bridge, telemetry, the recorder, the session service's table; exported as `emusen_crystal_*` from the platform library. Built in four parts, each graded before the next: (a) life, frame, input, speed, rewind, states, settings, media; (b) the debugger; (c) the service table; (d) the per-program switch | the parity class runs scripted sessions through the binding on both implementations and compares frame and audio digests, state bytes, files written, events drained and every service function's JSON; the debugger's golden corpus with Crystal's table; then state 2 per program: **Pharaoh first**, then emusen-shell, then Mistress, each after a full blast-radius run on Linux and the three systems' CI | `EMUSEN_CRYSTAL_NATIVE=0`, per process, the B2 implementation. *Designed 2026-10-18, §29; four questions in §29.11* |
 | **B8** | **The library in Rust**: `emusen-library` and `emusen_library.h`; the scan, identity over Galaxia's extended `RomHash`, `games.db` with its migrations, play time, collections and edits; Mistress's `Library/` behind the binding | a parity class: a generated library scanned by both into separate databases, compared row for row; every `games.db` version of the migration tests opened by both; the SQLite rule of `EmuSen_RustPlatform.md` §2.8 kept, one copy of SQLite per process (the C# lends `e_sqlite3` as Q25 there decided) [R]. *Built 2026-10-18, §28: state 2* | `EMUSEN_LIBRARY_NATIVE=0` |
 | **B9** | **Scraping in Rust**, if D13 says so: `emusen-scrape`, the ScreenScraper client, its quota, the media store and `media.db` | recorded ScreenScraper answers replayed to both, the requests compared byte for byte with the credentials redacted (`ScrapeRedactor`), and the stores compared; no live request in a test | `EMUSEN_SCRAPE_NATIVE=0` |
 | **B10** | **State 3, one component at a time**: goldens recorded from the C# where a step's parity class does not already leave a record (`EmuSen_RustPlatform.md` §6.6) [R], then the C# deleted at the tester's word after a release played | per component, the tester's word | none, by definition |
@@ -722,7 +722,7 @@ what it consolidates. Each step reports its real figure beside this one, as the 
 | B4 | about 5,480 deleted unported; *built: 4,334, §26.5* | 1,500–3,000 in the cores' own exports; *built: 1,622 added in the four cores and 305 in two shared decoders* | 300 in the generic C# adapter; *built: about 430* | 5,480; *built: 4,334* |
 | B5 | 1,250 | 3,100 (2,500–3,750); *built: 2,497 for about 1,020 replaced, §15.5* | 300 of C# facade; *built: about 730* | 1,250 |
 | B6 | 1,735 in C#, 704 in the kit | 3,600 (3,000–4,300), net of what the kit brings; *built: 2,554, the kit 183 lighter, §27.12* | *built: 224 of C# parity class, 34 of build and workflow* | (with B7) |
-| B7 | about 7,800, and B2's 2,500 | 23,000 (18,000–27,000), with the API's C layer and the service's table | — | about 13,400, with the service's provider and B2's implementation |
+| B7 | about 7,800, and B2's 2,500; *re-measured by §29.10: about 15,700* | 23,000 (18,000–27,000), with the API's C layer and the service's table; *re-estimated by §29.10: 26,500 (22,000–32,000)* | — | about 13,400, with the service's provider and B2's implementation; *about 18,100 by §29.10* |
 | B8 | about 1,900; *built: about 780, the rest with B9 and B7, §28.9* | 4,700 (3,800–5,700); *built: about 2,960* | 300 of binding; *built: about 730* | 1,900 |
 | B9 | about 2,750 | 6,900 (5,500–8,250) | 300 of binding | 2,750 |
 | **Total** | | **about 52,000 (41,000–62,000)** | | **about 30,000** |
@@ -5881,3 +5881,408 @@ the scope is the same; the facade is more than twice §7's figure, as B3's and B
   `MediaLibrary` (B7), `RecentCache` and the presentation files (the frontend's).
 - **On Windows and macOS**, paused (`EmuSen_RustPlatform.md` §31): the walk's hidden rule there (a flag, not a leading
   period), the local time's offset, and every gate of this section when the port resumes.
+
+---
+
+## 29. B7, Crystal in Rust: the design, 2026-10-18
+
+*Written on branch `b7-crystal` from `WiseMan` at `c9f81568` (B1 to B6 and B8 in, core ABI 1.14, the frontend API at
+1.1, the session service at 1.3), before any of the runtime was built, as §6's B7 row asks. Claims are marked as at the
+head of this page. The decisions that bear on it: SR2 (frontends name no runtime type), SR3 (the API stable, additive
+minors), SR4 (every service function has a twin, the table built from the twins), SR5 (one writer per settings file),
+SR6 (the client owns the frame thread and the pacer), SR7 (C# as failover through the three states, state 2 per
+program), SR8 (no per-core code above the ABI), D1, D2, D4 (Crystal's crates in `Platform/`, exported from
+`emusen_platform`), D8 (`states.db`), §27.9's Q1 (the Rust host builds §7.2's rules 1 to 3 in full) and
+`EmuSen_RustPlatform.md` Q25 (one SQLite per process, lent). Four questions for the tester are in §29.11; part (a) needs
+the first of them answered before it can be built, so nothing past this section is built yet. Another branch is adding
+§30 at the same time.*
+
+### 29.1 What exists today, read before designing
+
+**The crate `emusen-crystal`** (`Platform/crystal/`, 878 lines [M]) holds the header's numbers and structs (`abi`, 130),
+the baseline (`abi/v1/baseline.txt`, 222 lines) and the test that holds the header to the baseline, to the C compiler,
+to the session service's table and to the platform library's exports (`tests/crystal_abi.rs`, 508). It holds no
+runtime. The platform library exports no `emusen_crystal_` symbol, so the test's last check is a subset check (§14.1).
+
+**The binding** chooses once per process, in the static initialiser of `Crystal` (`EmuSen.Crystal.Client/Contract/
+Crystal.cs`): the platform library's exports when `EMUSEN_CRYSTAL_NATIVE` is `1` and the library has **every** export
+of major 1, else the C# implementation. So a partial Rust implementation is never reached through the switch: the
+parts of B7 can be built and graded one at a time behind it, and only the whole table turns the switch [M].
+
+**The C# being replaced** [M: `wc -l` at `c9f81568`]:
+
+| Where | Lines | What it is | B7's part |
+|---|---:|---|---|
+| `EmuSen/Crystal/` | 4,171 | the managed implementation: `ManagedCrystal` (the exports, 841, and the 78 twins' entries, 846), `ManagedRuntime` (1,014), `ManagedSession` (847), `ManagedEvents` 144, `StateRecords` 211, `PlatformLend` 102, `CrystalJson` and `CrystalNumbers` 166 | (a), the twins (c) |
+| `EmuSen/Cores/Native/CoreEngine.cs` | 1,013 | the session over a machine: load, firmware, media placement, battery, discs, the frame, picture, sound, raw picture, states, cheats' refresh | (a); its cheat and debugger points (b) |
+| `CoreCatalog` 423, `CoreFactory` 200, `ControllerPorts` 47, `CoreCapabilities` 90, `ConsoleSession` 8 | 768 | the catalog's joins of the systems table and core info, the engine's choice, the settings rows | (a) |
+| `MemoryCards` 263, `BatterySave` 80, `FirmwareOverview` 80 | 423 | save-media placement, battery files, the firmware overview's words | (a) |
+| `RewindBuffer` 302, `RewindThumbnail` 81, `XorDeltaCodec` 91, `SpeedController` 81 | 555 | rewind and speed | (a) |
+| `ICore`, `CoreOptions`, `CoreHooks`, `IDevicePicture`, `IDeviceLend`, `FrameBufferLending`, `CoreRawPicture`, `ICheatRegistryHost`, `EmulatorSession`, `SampleQueue` | 500 | the engine SPI and the old session front | not ported: the SPI disappears behind the API (§4.1) |
+| `EmuSen.Crystal/Debugger/` | 3,067 | ten registries, `ExpressionEvaluator`, `BreakpointExpressions`, `DebugExpressions`, the contexts, `IDebugTarget` | (b) |
+| `CoreDebugBridge` 304, `CoreDebugTarget` 442, `UnitExpressionContext` 114 | 860 | the bridge to the core's debug calls and the generic target | (b) |
+| `EmuSen.Crystal/Telemetry/` 469, `Recording/FrameRecorder` 169, `Cheats/CheatRegistry` 462 | 1,100 | snapshot rings and providers, the recorder, the cheat registry and its application | (b) |
+| `EmuSen.Crystal/Session/` | 3,269 | the session service's C# provider: its JSON (`SessionService.*`, 1,820), its entries (`SessionExports`, 1,031) and its table | (c) |
+| the C# host B6 replaced (`CoreLibrary`, `CoreMachine`, `CoreInterface`, `CoreDescriptors`, `CoreDiscovery`, `InputLatch`, `StateLayout`) | 1,898 | — | deleted with B7's state 3 (§7's B6 row) |
+
+**What B6 left for B7** (§27.3, §27.12): the crate `emusen-core-host`'s `Library`, `Machine`, `InputLatch`,
+`StateLayout`, `Discovery`, `Trust` and `listing`, with no allocation per frame; the frame-end order, settings layers,
+cheats, rewind and states' files expressly left to Crystal; and the one pinned difference of `CoreHostParityTests`, the
+unapproved library that the C# lists and loads and the Rust refuses.
+
+**What the managed implementation writes outside the API** [M: `grep Console.Write`]: the firmware lines at each load
+(`CoreEngine.cs:361`), the battery file's copy notice (`BatterySave.cs:65`), the cards' words (`MemoryCards.cs:259`), a
+firmware install's failure (`FirmwareLibrary.cs:73,115`), the recorder's lines and a watch's hit (`FrameRecorder.cs`,
+`WatchRegistry.cs:141`). They reach each program's per-game log because the program points `Console.Out` at its
+`CategorizedLogWriter` (`MainWindow.axaml.cs:1672`, `HotaruSession.cs:45`). A Rust runtime cannot write to .NET's
+`Console.Out`; §29.11 Q2 is the consequence.
+
+### 29.2 The crates
+
+| Crate | Where | Its one job | Depends on |
+|---|---|---|---|
+| **`emusen-crystal`** | `Platform/crystal/` (the crate that exists, grown) | the runtime: discovery under trust, the catalog, routing, sessions, the frame and its frame-end order, input, speed, rewind, states and `states.db`, settings, save-media placement, battery, discs, firmware's use, events; in (c) the session service's functions | `emusen-core-host`, `emusen-systems`, `emusen-galaxia`, `emusen-firmware`, `emusen-savemedia`, `emusen-cheats`, `emusen-sqlite`, `emusen-disc`, `emusen-dotnet`, `emusen-native`, and from (b) `emusen-crystal-debug` |
+| **`emusen-crystal-debug`** | `Platform/crystal-debug/` | the debugger: the registries, the expression evaluator and its contexts (units included, §24), breakpoint expressions, the bridge to a machine's debug calls, the views' and registers' snapshot rings, telemetry's providers | `emusen-core-host` (a `&mut Machine` at each hook), `emusen-systems` (the packs' views and symbols), `emusen-dotnet` |
+| `emusen-cheats` (exists) | `Platform/cheats/` | gains the registry and its application (`CheatRegistry`), §4.1's "registry in B7", beside its files and database | as now |
+| `emusen-platform` (exists) | `Platform/platform/` | gains `crystal.rs` (the exports of §3.5's groups) and `crystal_twins.rs` (the twins and the service's table), and the device lender over `serenity_device.rs` | `emusen-crystal` |
+
+**Why the debugger is a crate of its own.** It is about 9,000 lines of the step's 27,000 (§29.10), it has one job and a
+test corpus of its own (the registries' tests, the expression cases, P4's bench), and it needs a machine and the packs
+but nothing of sessions, states, settings or files. A runtime crate that held it would compile and test 9,000 lines
+for any change to a state's path. The runtime calls it at fixed points of the frame (§29.4) and the service's functions
+of (c) call it for their answers. Nothing else links it, which is what §5.2's pruning test asks a boundary to buy:
+the runtime is built and tested without the debugger's corpus, and P4's bench runs on a machine with no session.
+
+**Inside `emusen-crystal`**, one module per job: `runtime` (the runtime's sessions by id, its config, discovery and
+trust), `catalog` (the joins `CoreCatalog` makes of the systems table and core info: a console's engines, the engine
+chosen, the settings rows, `systems`' and `shelves`' JSON), `route` (a file's system, engine and shelf), `session`
+(the gate, run control, the wait), `engine` (`CoreEngine`'s part: a machine over a game or an empty console, its
+firmware, battery files, discs and picture), `frame` (the frame-end order, written once), `media` (`MemoryCards`'
+placement over `emusen-savemedia`'s formats and Galaxia's `MediumLock`), `battery`, `speed`, `rewind` (the chain, the
+XOR delta codec and the thumbnails), `states` (paths, slots, resume, the one sequence after a load), `records`
+(`states.db`), `settings` (the schema, the layers, `consoles.json` and the game files), `events`, `picture` (the
+repeated rows and a PNG writer), `json` (over `emusen-dotnet`'s System.Text.Json writer, so every answer is the C#'s to
+the byte), `lend` (the device lender's trait), and in (c) `service`.
+
+**What each B-step's crate gives it.**
+
+- **`emusen-core-host`** (B6): `Discovery::scan` over the runtime's cores directories, `Discovered::open(&Trust)` for
+  every library a session opens, `listing::cores` and `listing::engines` for `emusen_crystal_cores` and
+  `emusen_crystal_engines`, `Machine` for every v1 call, `InputLatch` for input from any thread, `StateLayout` for the
+  debugger's state reads (b). Its descriptors give the listing's fields; the machine-info fields Crystal reads beyond
+  them (ports, controllers, drives, battery files, spaces, units, `loads_from`) are parsed in `engine` over
+  `emusen-native`'s JSON reader, the part of `CoreDescriptors.cs` §27.12 left to B7.
+- **`emusen-systems`** (B1, B3): the table (`systems`' first half and `shelves`), routing and the recognisers (`route`,
+  and every `open` of a file), the cartridge reading in `route`'s `"cartridge"`, `gb::shelved_as_color`, the byte order
+  a frame log reads by (§25), the cheat codecs (b, c), the debugger views and the disassemblers (b). B8 noted two
+  routers until B7 (§28.7); from part (a) the Rust Crystal's route is `emusen-systems`' decision over Galaxia's reading,
+  which is what the library already calls, so the two are one by construction.
+- **`emusen-galaxia`**: the tree and its overrides, the save library's names (`saves.rs`: state, resume, picture and
+  battery paths), `AppSettings`' folders read at each use, the config store and its models, `AtomicFile`, the medium
+  lock, `ErrorLog`, the crash log's name, the image sets that `DiscSet` reads, `RomHash`. It gains the `ConsolesConfig`
+  model and the game settings file's (the C# `ConsolesConfig` is Galaxia's, which owns the file's name, §14.12), and
+  `tree::base_directory()`, which it already has, gives the cores directories' default.
+- **`emusen-firmware`** (B5): the files a machine's firmware requests name, found in the player's folders in their
+  order, and the overview's data; `firmware_install`'s copy.
+- **`emusen-savemedia`** (B5): `cards_op` whole, and the formats that make a console medium's formatted blank.
+- **`emusen-cheats`** (B5): the database's ops on session 0 and a game's `.cht` file; the registry from (b).
+- **`emusen-sqlite`** (B8): `states.db`, over the SQLite the host lends (§29.5).
+- **Endymion's Rust half**: nothing. The runtime's input is the core ABI's canonical controls (`emusen_control`,
+  `emusen_axis`), which `emusen-native` defines and Endymion's vocabulary already equals; devices, the router and the
+  rate control are the frontend's (§2.3).
+- **Serenity's Rust half**: the device lend. `emusen-crystal` declares a trait, `lend::Lender` (make a lend for a
+  machine from the presenter's device, take, settle, free), and the platform library's `crystal.rs` implements it over
+  the functions `serenity_device.rs` already exports as `emusen_serenity_lend_*`, so the runtime crate links nothing of
+  Vulkan and the lend stays the runtime's, as §14.12 decided.
+
+`emusen-core-host` is a path dependency from `EmuSen/Cores/Shared/`, as `emusen-native` already is. It takes
+`libloading` 0.8 and the Platform workspace 0.9, so the platform library would link two copies; §29.11 Q4.
+
+### 29.3 The C layer, the exports and the binding's switch
+
+`crystal.rs` exports the API's own functions and `crystal_twins.rs` the twins, each as `emusen_crystal.h` declares it,
+held by `tests/crystal_abi.rs`'s existing check (a subset while parts (a) and (b) are built; equality from (c), when
+the check is made exact). Every export follows §3.3 as the C# does: statuses for failures with the words in
+`last_error` on the calling thread, copy-out by the length query, and an answer made once where a short buffer would
+otherwise make a change twice (the library's rule, §28.8, and `CrystalSession.CheatChange`'s defect, §14.13). The
+struct sizes are checked against their 1.0 sizes (`BAD_STRUCT`), and a struct of 1.1's size is written whole.
+
+The binding does not change for parts (a) to (c): its switch reaches the Rust only when every export is there. The
+parity class (§29.7) fills two export tables of its own, one from each implementation, through the contract layer's
+`Fill`, which `EmuSen.Crystal.Client` makes visible to WiseMan alone (an `InternalsVisibleTo`, as `EmuSen` already has).
+
+### 29.4 The frame, its order and its threads
+
+**The frame-end order** is §14.4's, written once in `frame::advance` and called by `emusen_crystal_frame`:
+
+1. Rendering decided by speed: drawn unless `DRAW_NONE` or the speed's frame skip says not, always while recording.
+2. The machine's frame: the lid's timer, the cheats' patch table refreshed (b), the audio limit, the latch sent, the
+   raw encoding synchronised, then `advance`, or the debugger's `run_frame` when it is armed or resuming (b); then the
+   engine's frame end in its order: the frame log (b), the host's cheat pokes unless the frame holds them (b), the
+   freezes (b), the breakpoints' frame (b), the battery's period; `present`; the device picture taken; the machine's
+   events drained; the log kept every 60 frames.
+3. A halt stops there: the debugger's snapshots refreshed (b), a `run` event `halted`, `ran` 0.
+4. The debugger's snapshots refreshed (b).
+5. Rewind's capture, where rewind is on and the engine allows it, with the picture attached when the reel keeps one.
+6. The recorder's picture, when recording (b).
+7. The core's new log lines as a `log` event.
+
+Each (b) point is a call into `emusen-crystal-debug` or the cheat registry that part (a) builds as a call on an empty
+debugger, so the order is complete from the first commit and (b) fills it without moving a line of it.
+
+**No allocation in a frame.** The frame's own state is made when the session opens or its machine is made again: the
+picture's scratch (the machine's), the event array (the machine's, §27.3), the latch's arrays, the log's ring of 512
+lines, the rewind chain's arena (below), the `frame_info` the call fills. A `log` event allocates its JSON only when
+the core logged a line, as the C# does. Rewind is where the Rust departs from the C#'s mechanism and not its answers:
+`RewindBuffer` makes a new delta array at each capture, a linked list's node and a state-sized array whenever its spare
+does not fit, and encodes on the thread pool (`RewindBuffer.cs:114, 131, 251`). The Rust keeps the chain in one arena that
+grows to the budget and no further, reuses its oldest delta's room once the budget is reached, and encodes on one
+worker thread per session with rewind on, handed each job through a one-slot mailbox, so a capture allocates nothing
+once the arena has grown. The chain's accounting, `depth`, `buffered_bytes` and `snapshot_bytes` and the order in which
+deltas are dropped, is the C#'s, and the codec's bytes are `XorDeltaCodec`'s, so `rewind_reel` answers alike (§29.7).
+
+Measured as §14.5 measured it, on the calling thread: a counting global allocator in a crate test around 1,000 frames
+of the test core after 200 to warm, rewind off and then on, through `frame`, `picture_copy` and `audio_drain` as the C
+layer calls them, required to count none; and the same crate test with a seeded fault (the latch's buffers cloned, a
+delta allocated per capture) shown to fail.
+
+**Threads, under the pull rule.** A session's gate is a `Mutex` over the session's mutable state with a count of
+waiting changes: a change from another thread counts itself, takes the gate and uncounts, so it lands after the frame
+in progress; the frame thread waits for the count to reach zero before it takes the gate, so a waiting change lands
+before the next frame, not after it; a change on the frame thread between frames takes the gate at once. That is
+§14.3's rule. The C# lock is reentrant and a Rust `Mutex` is not, so a change called on a thread that already holds the
+gate is refused with `EMUSEN_CRYSTAL_BUSY` rather than deadlocking (R7); no path of the API holds the gate across a
+return to the client, so the refusal is a guard and never an answer a client sees, and a test holds that. A second
+thread's `frame` while one is inside a frame is `BUSY`, as in the C#. `wait` parks on a `Condvar` woken by any change
+from another thread and by run control. Reads that name the machine (`picture_copy`, `raw_copy`, `audio_drain`) take
+the gate, as the C#'s do, so a picture is whole (C3); reads of the frame's facts (`session_info`'s run state, picture
+and frames) are answered from a snapshot the frame publishes at its end. The runtime starts two kinds of thread of its
+own, the rewind worker and one worker for the game's hash at open (`StartIdentifying`), and calls nothing of the
+client's from either.
+
+**Panics.** The platform library's profile aborts on a panic once the crash log is written (`Platform/Cargo.toml`), so
+nothing unwinds through an export, as §3.3 requires.
+
+### 29.5 States and `states.db`, under Q25
+
+`states.db` keeps the schema `StateRecords` creates (`state_record` with records.db's columns less `source`, stamped
+with the file's size and time, and `copied`, the one copy of records.db's rows, §14.12), opened by `emusen-sqlite` with
+Microsoft.Data.Sqlite's behaviours that B8 reproduced (§28.3): `foreign_keys` on, `BEGIN IMMEDIATE`, the 150 ms retry
+for 30 s, the refusal's words. D8's one copy of records.db's state rows is made by whichever implementation opens
+`states.db` first, marked in `copied` as now, so a second process on the other implementation finds it done.
+
+**The SQLite.** Q25 allows one SQLite in a process, the one the program ships, lent by the host. The library is lent
+it in its open call (`emusen_library_config.sqlite`), and Serenity by `emusen_serenity_sqlite_lend`. The frontend API
+has no way to be lent one: `emusen_crystal_config` is `{size, flags}` and no flag is defined (§14.1). Reading
+Serenity's lent copy from inside the platform library would make a static of Serenity's C layer the wire between two
+components; opening `e_sqlite3` from its file would be a second SQLite. So `states.db` needs a minor of the frontend
+API: **§29.11 Q1** proposes `emusen_crystal_config.sqlite`, the library's field again. With none lent, the records'
+calls answer `NOT_SUPPORTED` with words saying so, a save writes no record and a load refuses nothing by record (the
+core still refuses a state that is not its own, §14.12); a Rust frontend with no C# beside it decides where its SQLite
+comes from, as Q25 recorded.
+
+**The state's files.** A state is the core's bytes, written and read whole as `CoreEngine.Write` and `LoadState` do,
+with a state made over another disc of the set loaded with that disc put back first (`LoadOverItsDisc`); its picture is
+a PNG of the shown picture, rows repeated. The PNG writer is about 80 lines over `flate2`, which Galaxia and the cheat
+services already take (with `zlib-rs`), so it adds no crate. Its bytes differ from SkiaSharp's encoder; its pixels do
+not, which is what the parity class compares (§29.7).
+
+### 29.6 Discovery, trust, and the pinned difference closed
+
+The runtime discovers through `emusen-core-host` and nothing else: `Discovery::scan` over its cores directories (the
+program's directory as Galaxia was given it at `emusen_galaxia_init`, and its `cores` folder, which is
+`CoreDiscovery.Directories`' default), and every library a session opens through `Discovered::open(&Trust)`, the trust
+made from the installation's manifests in those directories and no approvals, since the API has no `core_approve` yet
+(§14.2). `emusen_crystal_cores` and `emusen_crystal_engines` are `listing::cores` and `listing::engines`, the shapes
+`CoreHostParityTests` already holds equal to the C#'s.
+
+**The pinned difference** of §27.11 is the C# host's gap: over a library in no manifest and never approved, the C#
+lists it, loads it and reports it loaded, where §7.2 has a host refuse it. The Rust Crystal closes it by being the host
+that refuses: its `cores` and `engines` reports and its `open` are the crate's, so on that tree `open` fails with the
+crate's words and the report says why. The parity class pins the same one difference on the same tree (the C# loads;
+the Rust refuses), and each program's move to state 2 (§29.8) ends the gap for that program: its runtime is then the
+Rust one, which follows §7.2 whole. The gap is gone from the tree at B10, when the C# host is deleted. Until then
+`EMUSEN_CRYSTAL_NATIVE=0` brings it back for one process, which is what a failover is.
+
+The consequence, decided by §27.9's Q1 and stated here so that it is not met by surprise: a core library a player adds
+by hand, in no manifest, cannot be opened by the Rust Crystal until the API can approve it. §29.11 Q3 asks when
+`core_approve` should come.
+
+**Directories in a test.** WiseMan points the C# at a tree with `CoreDiscovery.UseDirectories`, a static. The Rust
+needs the same directories given to it, which §29.11 Q1 puts in the same config field's neighbour, `cores`; the fixtures
+that copy a test core into a tree (`CrystalFixture` and its kin) then write the tree's `cores.manifest` beside it, as an
+installation carries one, so the Rust loads the test core for the same reason it loads a published core.
+
+### 29.7 The parity class
+
+**What it runs.** `CrystalParityTests` (WiseMan) runs **scripted sessions**: each script is a list of calls of the
+API in a small line format (one call per line, its arguments, and `frames N` for N frame calls with the picture copied
+and the sound drained after each), kept beside the class as text files. Each script runs on the C# implementation in
+one temporary tree and then on the Rust in another, never at once, so a core's process-wide state (its crash log's
+path, a worker pool) is never shared by two live machines; Galaxia's overrides move between the two runs.
+
+**What it compares**, call by call:
+
+- every status, and every answer's bytes: the JSON of every read, value for value as `JsonNode.DeepEquals` compares
+  (the C#'s own order is then also asked of the Rust, member for member, since a client may read a stream);
+- every `emusen_crystal_frame_info` field by field;
+- each frame's picture by a digest of `picture_copy`'s bytes and the sound by a digest of the samples drained and the
+  rate, as Pharaoh's `framesum` and `audiosum` digest them;
+- the state files' bytes, each state's picture by its decoded pixels, and `states.db`'s rows, every column;
+- every file the script left in its tree: battery files, cards, `consoles.json`, the game settings files and the
+  marker of SR10's copy, byte for byte;
+- the events drained by a subscription to every kind, line for line;
+- in (c), every function of the service's table, through the table and through its twin.
+
+**What it sets aside, each named in the class**: `version_text`, which says which implementation answers; the
+`build` column and `"build"` key of a state's record, which name the build that wrote it; times (`saved_at`, a state's
+file time, SR10's marker's date), compared as present and well formed rather than equal; a library's path in a core's
+report; and the rewind chain's bytes in the moment a delta is still encoding (both settle before `rewind_reel`
+answers, so the reel is compared after a settle). Anything else that differs fails.
+
+**The cores and games, all synthetic or test ROMs.** The v1 test core and plain core (`emusen-native`'s examples, as
+`CrystalFixture` uses them), whose images are made by `CoreAdapterTests.Image`; MoonRT with `SyntheticNesRom`; VenusRT with `SyntheticRom` (its boot stub, so the auto-joypad read gates
+input) and `BuildSuperFx`/`BuildSa1`; MercuryRT with `SyntheticGbRom` for the Game Boy and the Color; MarsRT with
+`SyntheticN64Rom`; Nephrite with `SyntheticMdRom`; Diamond with `SyntheticPsExe`, `SyntheticPsxDisc` and its console
+started empty. The hardware test ROMs (`HardwareTestRomLibrary`), which are
+not in the repository, are run where a machine holds them and skipped where it does not. No commercial ROM is read by
+the class.
+
+**The scripts**, one or more per row of what B7 builds: life (open a game, open each starts-empty console, a file no
+engine opens, a game missing required firmware, reset on a core that claims it and one that does not, close writing
+the battery); discs (insert, change, eject, the lid, a state over another disc); the frame (600 frames with a scripted
+pad on each core, speed's three modes, `DRAW_NONE`, the frame skip, a held frame); input (buttons, axes, a port
+connected and pulled, presence after a load, §26.8); rewind (on, steps, `rewind_to`, the reel, a picture, off, an engine
+that withholds); states (each slot, the resume state, a load refused by its record and by the core, `state_record`
+and `state_forget`); settings (the schema, the layers, a value refused, a value applied to a running session, a game's
+own file with no session, `consoles.json`'s first copy, SR10's copy); save media (each mode on Diamond's and
+Nephrite's media, `cards_op`'s nine ops); events (overflow and the dropped line); and in (b) and (c) the debugger's
+calls on each core.
+
+**Seeded faults**, each made in the Rust alone, run through the class and reverted, recorded with the part that built
+the code: the frame-end order with rewind's capture before the snapshots; rewind's capture ungated by the engine; a
+state's load that keeps the rewind history; speed's frame skip off by one; a setting's layers read console over game;
+the settings file written without .NET's indentation; a delta codec that writes its run before its length; the battery
+period off by a frame; an event dropped newest rather than oldest; the picture's rows not repeated. A fault no script
+catches is a script missing, and one is added before the part is graded.
+
+**Beside the parity class**, at each part: the crate's own tests (`cargo test --profile test-checked -p emusen-crystal
+-p emusen-platform`, and from (b) `-p emusen-crystal-debug -p emusen-cheats`), the allocation test of §29.4,
+`tests/crystal_abi.rs`, and the WiseMan classes in the blast radius of the C# a part changes. In (c) the debugger's
+golden corpus runs on Crystal's table from the Rust and from the C# (`EMUSEN_CRYSTAL_NATIVE` at `1` and `0`), with
+`SessionServiceParityTests`, `SessionHeaderTests` and `SessionService13Tests`. P2 is measured again at (a) as §14.9
+measured it (the frame call and the drain through the binding against the machine's own calls, the best of five rounds
+of 20,000 frames of the test core).
+
+### 29.8 The order of the work
+
+**Part (a)**, each piece graded and committed before the next:
+
+1. **The runtime and what it reads**: `new` with 1.2's config (Q1), `free`, `abi_version`, `version_text`,
+   `last_error`; discovery and trust; `systems`, `shelves`, `engines`, `cores`, `rescan`, `route`. Graded by the JSON of
+   each over the build's tree, a generated tree and §27.11's fault trees, the unapproved one's difference pinned.
+2. **A session's life**: `open` for a game and an empty console with the firmware it asks for, the battery files and
+   the save media placed (`MemoryCards`' modes and locks), `close`, `reset`, `session_info`, the discs, `save_media`,
+   `cards_op`, `firmware_needed`, `firmware_install`, `firmware_overview`.
+3. **The frame**: `frame` with §29.4's order (its (b) points on an empty debugger), `picture_copy`, `audio_drain`,
+   `wait`, `phase_names`, `phases`, the three input calls, `speed_set`, `speed_mode`; the allocation test; P2.
+4. **Rewind**: `rewind_set`, `rewind_step`, `rewind_reel`, `rewind_picture`, `rewind_to`, the arena and its worker.
+5. **States**: `state_slots`, the slot and resume saves and loads, the three state twins (`state_save`, `state_load`,
+   `state_default_path`, which Pharaoh's verbs call), `state_record`, `state_forget`, `states.db` and D8's copy, the
+   refusals, the PNG pictures.
+6. **Settings and events**: `settings_schema`, `settings_get`, `settings_set`, `game_setting_get` and `_set`,
+   `consoles.json`'s first copy, SR10's copy, a change applied to open sessions between frames; `subscribe`,
+   `subscription_drain`, `subscription_wait`, `unsubscribe`, and the `log` event (Q2).
+7. **The picture's other ways**: `picture_lend`, `raw_select`, `raw_copy`, the device lend through `lend::Lender`, with
+   `ApiDeviceLendTests`' cases on the Rust, on the RX 6800 alone.
+
+**Part (b)**: `emusen-crystal-debug` (the registries, expressions, breakpoint expressions, the bridge, snapshot rings
+and telemetry, the views over `emusen-systems`), the cheat registry in `emusen-cheats` and its application at the
+frame's points, the recorder, and P4 (§29.9). Its exports wait for (c), which builds the twins over it.
+
+**Part (c)**: the 80 twins and `session_service`, the table filled from them (§29.3); the export check made exact; the
+golden corpus on Crystal's table both ways.
+
+**Part (d)**: the per-program switch (§29.11 Q3's mechanism), each program filing its `log` events (Q2), then state 2
+for **Pharaoh**, after a full blast-radius run: Pharaoh's classes, its `framesum 600` and `audiosum 600` with
+`--nobattery` equal under `EMUSEN_CRYSTAL_NATIVE` `0` and `1` on the seven bench games of §14.8, read in place from the
+library as B2 read them; then **emusen-shell** (Hotaru's and the shell's classes, `ShellOverSessionTests` on both
+shells); then **Mistress** (its three sets of §14.13's gate and the fit audit), each a separate commit after its own
+run, each with the C# one variable away.
+
+### 29.9 P4's measurement
+
+P4 says the Rust registries cost no more per breakpoint check than the C#'s, measured as `EmuSen_DianaSh.md` §13.12
+measured conditions. `BreakpointConditionCostBench` (`EMUSEN_BP_BENCH=1`, Release) measures µs a hit over a breakpoint
+the program reaches every iteration and whose condition never holds, against the same run with the condition `0`, on
+the generic engine, through the debug target. For P4 the bench gains a mode that adds the same breakpoints through the
+binding's `bp_add` twin, so both implementations are measured through one seam, and runs every row of §26.7's table
+(MoonRT `A==0x99` and `ppu.PPUCTRL==0x99`, MercuryRT `HL==0x1234`, MarsRT `t0==0` and `vi.ORIGIN==1`, Nephrite `D2==0`,
+and each row's `if 0` floor) with `EMUSEN_CRYSTAL_NATIVE` at `0` and at `1`, two runs of each, a row whose floor reads
+far from the others' set aside as §24.6 set one aside. P4 holds if every Rust row is at or below the C# row within the
+spread between two runs of one build; a row above it is recorded and its cause found before (c) builds the twins on it.
+
+### 29.10 Sizes, re-estimated against §7
+
+§7 estimated about 7,800 lines of C# replaced and B2's 2,500, and 23,000 of Rust (18,000 to 27,000). What exists now is
+larger on the C# side, because B2's implementation came to 4,171 (§14.9 counted 3,271 before parts 3 and 4) and
+`CoreEngine` grew with B4's generic engine, and smaller on the Rust side by the host B6 built. Estimated [A] by part,
+Rust with its in-crate tests and its C layer, at the platform steps' and B8's measured 2.3 for logic and about 1.3 for
+entry glue and JSON writers:
+
+| Part | C# replaced [M] | Rust, central (range) |
+|---|---:|---:|
+| (a) | about 6,200: the managed implementation less its twins 3,325, `CoreEngine`'s part 860, the catalog's 768, media, battery and firmware 423, rewind and speed 555, the machine-info records B6 left about 300 | 12,000 (10,000–14,500), of which the C layer about 1,300 |
+| (b) | about 5,400: the debugger 3,067, the bridge, target and units 860, telemetry 469, the cheat registry 462, the recorder 169, the views' C# reach 215, `CoreEngine`'s debug part 150 | 9,500 (8,000–11,500) |
+| (c) | about 4,100: the provider 3,269 and the twins' entries 846 | 5,000 (4,000–6,000), of which the twins and the table about 1,600 |
+| (d) | — | — (about 300 of C# in the binding and the programs) |
+| **B7** | **about 15,700**, and B6's C# host 1,898 deleted with it | **about 26,500 (22,000–32,000)** |
+
+The parity class is about 2,000 lines of C# and its scripts. At state 3 about 18,100 lines of C# are deleted: the
+15,700 replaced, B6's host, and the 500 of the engine SPI that is not ported. §7's total of about 52,000 moves to
+about 55,000 by this row alone.
+
+### 29.11 Questions for the tester
+
+Q1 is needed before part (a) can be built; Q2 before its sixth piece; Q3 before part (d); Q4 before the crate is
+linked into the platform library, the first piece of part (a).
+
+- **Q1. The frontend API's 1.2: what the runtime is told when it is made.** `emusen_crystal_config` grows from 8 bytes
+  to 32, each field appended at the recorded size as SR3's policy has it, 8 still taken as its least: `void *sqlite`
+  (offset 8), the host's loaded `e_sqlite3` lent for the runtime's life, as `emusen_library_config.sqlite` is (§29.5);
+  `const uint8_t *cores; size_t cores_len` (offsets 16 and 24), the cores directories as a JSON array of paths, absent
+  for the program's directory and its `cores` folder (§29.6); and a config flag, `EMUSEN_CRYSTAL_CONFIG_DEVELOPMENT`
+  (1), listing cores in development, absent for `EMUSEN_DEVELOPMENT_CORES`' answer, which is what
+  `CoreDiscovery.UseDevelopment` sets in the C# today. The C# implementation honours all three (its `new` passing them
+  to `CoreDiscovery` and `StateRecords`), the binding fills them, the baseline gains their lines at `@1.2`. Without the
+  first, `states.db` cannot be reached under Q25 (§29.5); without the second and third, a test cannot point the Rust at
+  a tree but by an environment variable, which would be a second surface for one fact. *Recommended: yes, the three
+  as written.* Weighed and not chosen: a separate export to lend SQLite (a second way to configure a runtime), and
+  reading Serenity's lent copy (a static of one component's C layer used as a wire).
+- **Q2. The runtime's own log lines.** The managed implementation writes its firmware lines, the battery copy notice,
+  the cards' words and the recorder's lines to `Console.Out`, which each program points at its per-game log (§29.1); the
+  Rust cannot. *Recommended:* the runtime's lines join the `log` event with an additive 1.2 key, `"source":
+  "runtime"`, the core's lines `"source": "core"` (§3.5 already planned log lines as events); the C# implementation
+  raises them the same way in part (a) instead of writing to the console, and each program, at its own move in part
+  (d), writes the `"runtime"` lines of its session to `Console.Out` as before, so that **no per-game log changes**. The
+  core's lines stay out of the per-game logs, as today; filing them too is a later choice for each program. The other
+  answer, a new event kind for the runtime's lines, was weighed: it is one more kind for clients to ask for, for lines
+  that are the same thing.
+- **Q3. The per-program switch of part (d).** State 2 per program needs each program to say that its default is the
+  Rust, while `EMUSEN_CRYSTAL_NATIVE` still overrides both ways. *Recommended:* the program's assembly carries
+  `[assembly: AssemblyMetadata("EmuSen.CrystalNative", "1")]` (a BCL attribute, set by one MSBuild property in the
+  program's project), which the binding reads from the entry assembly when the variable is unset; the key is documented
+  as the binding's in `EmuSen_Surfaces.md` §6.2. It has no call that must come before the binding's first use, which a
+  public method set in `Main` would have, and adds no type to the binding's surface. **And `core_approve`:** the Rust
+  refuses a hand-added core until the API can approve one (§29.6). *Recommended:* nothing needed for Pharaoh's and
+  emusen-shell's state 2, which are the project's own tools; `core_approve`, the approvals' file and the player's
+  `/Cores` as the frontend API's next minor, built before Mistress's state 2.
+- **Q4. One `libloading` in the platform library.** `emusen-core-host` takes `libloading` 0.8.9 and the Platform
+  workspace 0.9.0 (Endymion, Serenity, `emusen-sqlite`), so linking the host into the platform library would put two
+  versions of one crate in it. *Recommended:* the host moves to 0.9, which the platform has vetted and shipped; the
+  host's lock changes one line and its tests and the kit's corpus are run again on it, as §27.10 ran them. No crate is
+  added anywhere.
+
+Nothing else in this design changes what a player sees: the parity class holds every answer, file and event of the two
+implementations equal but the ones §29.7 sets aside, none of which a player reads, and the unapproved core's refusal,
+decided by §27.9's Q1.

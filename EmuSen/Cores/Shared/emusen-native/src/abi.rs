@@ -1,6 +1,6 @@
 //! What the pre-stable common native interface left to the core ABI v1, which `core` re-exports: the capability bits
 //! 0 to 13, the status codes and the fault band, `Region`, `File`, `Settings` and the crash log. The interface itself,
-//! its trait, its `emusen_native_*` exports and their macro, was deleted with B4 on 2026-10-18 (EmuSen_Backend.md §25).
+//! its trait, its `emusen_native_*` exports and their macro, was deleted with B4 on 2026-10-18 (EmuSen_Backend.md §26).
 
 use std::ffi::{CStr, c_char};
 use std::io::Write;

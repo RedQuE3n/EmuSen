@@ -10,6 +10,10 @@ matching, §3.4's create signature, §3.6's `FrameInfo`, §3.7's drain, §3.8's 
 registration records for native engines, §9 Q3 and Q4, and one item of §10. What is not marked stands, and its calls
 carry over into the stable set (`EmuSen_CoreAPI.md` §6).*
 
+*Deleted on 2026-10-18 by B4's last step (`EmuSen_Backend.md` §26): no core exports an `emusen_native_` symbol and the
+C# host of §5 is gone; `emusen-native`'s `abi` module keeps the vocabulary the core ABI v1 inherited (the capability
+bits 0 to 13, the status codes, `Region`, `File`, `Settings`, the crash log). This page is kept as the record.*
+
 *This revision: the first, 2026-09-28. A design, not an implementation: nothing described here is built. It
 defines one C ABI that every Rust core exports, one generic C# host over it, one place a console and its engines are
 registered, and the order in which the three Rust cores move onto it. Every claim about the code is cited to a file and

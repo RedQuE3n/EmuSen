@@ -49,7 +49,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { "Model" }, library.Settings.Select(s => s.Key));
         }
 
-        // The pre-stable interface and its six mercuryrt_ exports left with B4; the test extensions on the v1 handle stay - see EmuSen_Backend.md §25.
+        // The pre-stable interface and its six mercuryrt_ exports left with B4; the test extensions on the v1 handle stay - see EmuSen_Backend.md §26.
         [Fact]
         public void The_library_is_on_the_core_abi_alone()
         {

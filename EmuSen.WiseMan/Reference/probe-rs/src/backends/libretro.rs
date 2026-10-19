@@ -165,6 +165,7 @@ fn system_from_rom(rom_path: &str) -> &'static str {
         "gb" | "gbc" => "gb",
         "gba" => "gba",
         "sms" | "gg" => "sms",
+        "sg" => "sg1000",
         "md" | "gen" | "smd" => "megadrive",
         "32x" => "32x",
         "exe" | "psexe" => "psx",
@@ -987,6 +988,7 @@ mod tests {
         assert_eq!(system_from_rom("/roms/x.gba"), "gba");
         assert_eq!(system_from_rom("/roms/sonic.md"), "megadrive");
         assert_eq!(system_from_rom("/roms/knuckles.32x"), "32x");
+        assert_eq!(system_from_rom("/roms/flicky.sg"), "sg1000");
         assert_eq!(system_from_rom("/tests/timers.exe"), "psx");
         assert_eq!(system_from_rom("/tests/x.PSEXE"), "psx");
         assert_eq!(system_from_rom("/roms/sonic.bin"), "unknown", "ambiguous: --system says");

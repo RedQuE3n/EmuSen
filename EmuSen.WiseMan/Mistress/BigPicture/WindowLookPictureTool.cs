@@ -115,11 +115,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
 
         // A game running in a big-screen session with the sidebar library, as the in-game windows are opened over it.
-        private (MainWindow Window, PadDriver Pad) InGame(int w, int h, bool resumeAsk = false)
+        private (MainWindow Window, PadDriver Pad) InGame(int w, int h, bool resumeAsk = false, bool n64 = false)
         {
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            File.WriteAllBytes(Path.Combine(_romDir, "Cobalt Harbor (Synthetic).sfc"), PadRewindReelTests.ChangingBackdrop());
+            if (n64) File.WriteAllBytes(Path.Combine(_romDir, "Cobalt Harbor (Synthetic).z64"), WindowFitAuditTests.N64Game());
+            else File.WriteAllBytes(Path.Combine(_romDir, "Cobalt Harbor (Synthetic).sfc"), PadRewindReelTests.ChangingBackdrop());
             var app = new AppSettings
             {
                 RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, BigScreen = true,
@@ -196,10 +197,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Save(window, $"graphics-settings-{p}", _out);
                     CloseAll(window);
 
-                    WindowFitAuditTests.ShowN64WithNote(window);
-                    Save(window, $"graphics-settings-n64-aa-{p}", _out);
-                    CloseAll(window);
-
                     Call(window, "ShowShaderSettings");
                     Save(window, $"shader-settings-{p}", _out);
                     CloseAll(window);
@@ -226,6 +223,27 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Save(window, $"controller-bindings-switch-focused-{p}", _out);
                     for (int i = 0; i < 8 && tabs.SelectedIndex != tabs.ItemCount - 1; i++) pad.R1();
                     Save(window, $"controller-bindings-n64-{p}", _out);
+                    CloseAll(window);
+                }
+                finally
+                {
+                    Stop(window);
+                    window.Close();
+                }
+            }
+        }, default);
+
+        // The N64 tab's antialiasing note, which only a running N64 game words (EmuSen_Backend.md §18.10.11).
+        [WindowLookPngFact]
+        public Task N64_note() => Session.Dispatch(() =>
+        {
+            foreach ((int w, int h) in Sizes)
+            {
+                (MainWindow window, _) = InGame(w, h, n64: true);
+                try
+                {
+                    WindowFitAuditTests.ShowN64WithNote(window);
+                    Save(window, $"graphics-settings-n64-aa-{w}x{h}", _out);
                     CloseAll(window);
                 }
                 finally

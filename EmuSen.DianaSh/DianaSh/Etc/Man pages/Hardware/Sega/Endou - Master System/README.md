@@ -2,14 +2,15 @@
 
 The Master System core (`EmuSen/Cores/Sega/Endou - Master System/`, crate `endou` once built), to be written from
 hardware documents under a clean-room protocol, on the core ABI v1 from its first commit. *Decided 2026-10-19:* the
-Master System is the next new console, ahead of the PlayStation 2; building starts on the tester's go.
+Master System is the next new console, ahead of the PlayStation 2; building starts on the tester's go. *Decided
+2026-10-19:* the plan's questions as recommended, with no real hardware used for any dispute; the go for stage 1.
 
 - [`Endou_Plan.md`](Endou_Plan.md) — the plan, written 2026-10-19 before any emulation: the machines in scope and what
   is in or out and why, the Game Gear as a follow-on and the forms it could take, what comes from Beryl and what Beryl
   gains (the VDP family as a shared crate, its line composition shared with Nephrite's mode 4), what a frontend gets,
   the design decisions (the master clock, the VDP's granularity, sound, the open boot program, cartridge boards, the
   state, settings, the speed budget), the oracles by component, the stages with their gates and sizes, and the
-  questions for the tester.
+  questions, decided 2026-10-19.
 - [`Endou_References.md`](Endou_References.md) — the documents, test programs, references and referees with their
   provenance and licence, before fetching: what Nephrite's fetch already put in the probe's cache, and what stage 1
   fetches on the tester's go.

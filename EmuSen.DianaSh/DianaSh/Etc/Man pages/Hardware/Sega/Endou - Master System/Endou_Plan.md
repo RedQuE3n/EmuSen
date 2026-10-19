@@ -14,6 +14,12 @@ which shares most of the machine. No code is written at stage 0.
 - The core is named **Endou**. Its folders, `EmuSen/Cores/Sega/Endou - Master System/` and this one, exist with a
   README each. Endymion, the name first reserved, is now the SDL crate's (`EmuSen_Core_Naming_Scheme.md` §3, §10).
 
+**Decided by the tester, 2026-10-19, after the plan was read:** every question of §10 as recommended, with one change:
+**no real hardware is used.** The tester's consoles are out of use for their age and fragility, so nothing is run on a
+Master System, a Game Gear, an SG-1000 or a flash cartridge; disputes such as D-1 (the colour levels) and the VDP's
+access slots are settled from documents, test programs and black-box referees only (§10, Q11). The go is for stage 1
+alone; each later stage waits for its own.
+
 Every claim carries one of six marks:
 
 - **[M]** *measured* on 2026-10-19, with the tool named. Nothing was run to write this page beyond listings, the local
@@ -23,7 +29,7 @@ Every claim carries one of six marks:
   for it. The stage that builds the fact cites the document's section, and a fact found to read otherwise is corrected
   in place, struck through, with the date.
 - **[A]** *argued*: reasoning from the documents or from other cores' measurements, with no measurement behind it here.
-- **[C]** *a choice*: a rule set for this core, said so, or a recommendation awaiting the tester (§10).
+- **[C]** *a choice*: a rule set for this core, said so, or a recommendation, each of §10's decided 2026-10-19.
 - **P1–P10** *predicted*, numbered in §12 so that a later stage can retire each.
 
 ---
@@ -84,7 +90,7 @@ result is visible to software.
 | The card slot | **Mapped, empty; cards run from the cartridge slot** | A Sega Card's dump is a ROM image like a cartridge's, and only a BIOS's media selection tells the slots apart [A]; a separate slot would need a second image, which v1 passes only as numbered files |
 | The BIOS's built-in games (Hang-On, Alex Kidd in Miracle World, the hidden maze and the rest) | **With the player's image only** | They are the firmware's own code; the open boot program carries no game. A console started empty (`starts_empty`, `EmuSen_CoreAPI.md` §6.31) runs a player's BIOS into its built-in game [R §6.31: "a console starting into its firmware with an empty cartridge slot"] |
 | The border | **Active display only**, the border a later setting | As Nephrite's Q15 decided [R `Nephrite_Plan.md` §9] |
-| The Game Gear | **A follow-on**, §2 | The tester has not decided whether it is planned together (§10 Q1) |
+| The Game Gear | **A follow-on**, §2 | Planned now, built after the Master System's gate as a system of Endou's library (§10 Q1, decided 2026-10-19) |
 
 ### 1.4 Who may read what
 
@@ -101,7 +107,7 @@ is a separate, supervised step whose only product is an entry in `Endou_Disputes
 | Test programs, their sources and READMEs | yes | yes, unless the source is a BIOS listing | yes | A test's source says what it expects |
 | Reference emulators **run** through the probe (§1.7) | outputs only | outputs of games, never a trace of a BIOS | yes | Memory, picture, sound |
 | Nuked-MD's board **run** as a black box (§1.6) | outputs only, each finding a disputes entry | no | yes, as Nephrite's dispute steps ran it | Evidence for the 315-5313's mode 4 only |
-| SMS_MiSTer's RTL (§1.6) | **no** | **no** | after the documents and a test program, each file logged; never transcribed | By Nephrite's rule for the Sega cores, unless the tester sets Diamond's stricter one (§10 Q6) |
+| SMS_MiSTer's RTL (§1.6) | **no** | **no** | after the documents and a test program, each file logged; never transcribed | By Nephrite's rule for the Sega cores (§10 Q6, decided 2026-10-19) |
 | Any emulator's **source**: Genesis Plus GX, SMS Plus and SMS Plus GX, PicoDrive, BlastEm, Gearsystem, MEKA, Emulicious, Kega Fusion, MAME's Sega 8-bit and TMS9918 drivers, Mesen 2, Ares and higan, openMSX, blueMSX, emu2413, Nuked-OPLL's code, ymfm and the rest | **no** | **no** | **no** | Not in a dispute step either |
 | Firmware images (the BIOS, the Game Gear's boot ROM) | **no**: not read, disassembled or traced | **no** | **no** | §5.5 |
 
@@ -130,8 +136,9 @@ core that uses the crate.
 **How a referee is run.** First as a black box: SMS_MiSTer under Verilator or GHDL, its simulation's scripts and top
 level's port list read to learn how to feed it a program, as Diamond's FPGA referees were run [R `Diamond_Plan.md`
 §1.5]; the board as Nephrite's dispute steps ran it. Only then, and only in a dispute step under Nephrite's rule, a file
-of SMS_MiSTer's RTL, each file and its lines logged in the entry. Which rule binds is §10's Q6: Nephrite's plan is clear
+of SMS_MiSTer's RTL, each file and its lines logged in the entry. Which rule binds was §10's Q6: Nephrite's plan is clear
 for the Sega cores, but Diamond's decision of 2026-10-11 says "of each FPGA core", which could be read as general.
+*Decided 2026-10-19:* Nephrite's rule binds Endou, the core run as a black box first.
 
 ### 1.7 The black-box references
 
@@ -146,8 +153,8 @@ hash in `EmuSen.WiseMan/Reference/libretro-cores.sha256` for the Genesis [R]:
 
 Genesis Plus GX lists the Master System's BIOSes (`bios_E.sms`, `bios_U.sms`, `bios_J.sms`) and the Game Gear's
 (`bios.gg`) as optional, with no checksums [R its `.info`]. Whether each runs every model, which memory it exposes and
-what it costs are measured at stage 1, as Nephrite measured its four [A]. Further references, to be fetched on the
-tester's go (§10 Q4) and listed in `Endou_References.md` §3: **Gearsystem** and **SMS Plus GX** (libretro cores), **MAME**
+what it costs are measured at stage 1, as Nephrite measured its four [A]. Further references, fetched at stage 1 on
+the tester's go (§10 Q4, decided 2026-10-19) and listed in `Endou_References.md` §3: **Gearsystem** and **SMS Plus GX** (libretro cores), **MAME**
 (its Sega 8-bit drivers, run headless with a Lua script reading memory), **Mesen 2** (through the probe's Mesen
 backend, whose patch would gain the console) and **Emulicious** (a desktop program with no headless mode, so a
 reference only by the tester's own runs). Every reference is compared, not trusted; their disagreement is the evidence
@@ -208,8 +215,8 @@ GameGear I have behaves like a NTSC SMS2"]:
 **Recommended [C]: (a).** The Game Gear differs from the Master System II as the Game Boy Color differs from the Game
 Boy, by variants of the same chips and a few registers; the precedent of one library per lineage is MercuryRT's. The
 name Jadeite then names the Game Gear's module and its record pages, which stay in `Jadeite - Game Gear/` as the
-naming scheme placed them; the engine a player sees is Endou. Whether the name should instead retire to the pool is
-the tester's (§10 Q1).
+naming scheme placed them; the engine a player sees is Endou. *Decided 2026-10-19 (§10 Q1):* (a), the name Jadeite
+kept for the module and its pages.
 
 ### 2.3 What is built now for it, and what waits
 
@@ -529,8 +536,8 @@ speed lever is planned; if one is ever needed it is exact or an opt-in setting, 
 ## 6. References, oracles and referees
 
 The sources, the test programs and the references are recorded with their provenance and licence in
-**`Endou_References.md`**, which says what is already in the probe's cache from Nephrite's fetch and what is to be
-fetched on the tester's go (§10 Q4). Nothing is fetched at stage 0.
+**`Endou_References.md`**, which says what is already in the probe's cache from Nephrite's fetch and what stage 1
+fetched on the tester's go (§10 Q4, decided 2026-10-19). Nothing was fetched at stage 0.
 
 ### 6.1 Oracles by component
 
@@ -541,7 +548,7 @@ fetched on the tester's go (§10 Q4). Nothing is fetched at stage 0.
 | VDP, mode 4 | the homebrew VDP test programs (`Endou_References.md` §2), self-reporting where they report | references' pictures up to a colour map; the board for the 315-5313's rules; SMS_MiSTer in disputes | access slots; the line interrupt's dot; the 315-5124's zoom; colour levels (D-1) |
 | VDP, TMS9918 modes | SG-1000 programs and cartridges against the references | Young's document; TI's data manual | the undocumented modes' details |
 | PSG | already met in `beryl-sn76489` by SMS Power's document [R] | references' audio | the discrete chip's half-period 0 [R `Beryl_SN76489.md` §4] |
-| YM2413 | a referee run sample for sample (Nuked-OPLL as a black box, if the tester allows, §10 Q4) | recordings; references' audio | ROM tables (D-2), the instrument table, the rhythm channels |
+| YM2413 | a referee run sample for sample (Nuked-OPLL as a black box, allowed by §10 Q4) | recordings; references' audio | ROM tables (D-2), the instrument table, the rhythm channels |
 | Open boot program | the bench games with no firmware folder, against the same games on the player's BIOS | references with the player's BIOS | what the documents leave unsaid of the hand-over |
 | Peripherals | test programs and games at anchors against the references | — | the Paddle's Japanese and export protocols |
 | Frontend | the kit's cases on synthetic images, then on games (corpus form) | the fit audit | — |
@@ -657,47 +664,62 @@ documents are thinnest; P2 records the prediction.
 
 ---
 
-## 10. Questions for the tester
+## 10. Questions, decided 2026-10-19
 
-Each with a recommendation. "Please continue" is not taken as an answer to any of them.
+Each question as it was put, and its decision. The tester answered all of them as recommended, changing one: Q11, the
+console for disputes, is decided in the tester's own terms. "Please continue" was not taken as an answer to any of them.
 
 1. **Q1, the Game Gear: together or after, and in what form?** *Recommended:* planned now as §2 has it, built after the
    Master System's gate (J1–J3), as a system of Endou's library like `gbc` in MercuryRT's; the shared crates carry its
    variants from the start. The name Jadeite stays on the Game Gear's module and pages; the alternative is to retire it
-   to the pool.
+   to the pool. *Decided as recommended.*
 2. **Q2, the YM2413 in v1?** *Recommended:* not before the gate, but the stage directly after it (stage 9). Until then a
    Japanese cartridge runs on a Mark III without the FM unit, a real console, so the default stays accurate; the stage
-   adds the Japanese Master System as the Japanese default.
+   adds the Japanese Master System as the Japanese default. *Decided as recommended.*
 3. **Q3, which peripherals?** *Recommended:* the pad, Pause and Reset at the gate; the Paddle, the Sports Pad and the
    3-D glasses at stage 10; the Light Phaser at stage 11 with the core ABI's pointer minor (`set_pointer` behind a bit,
    a controller kind), proposed then for approval; the Handle Controller, the Graphic Board and the keyboard out.
+   *Decided as recommended.*
 4. **Q4, may the named sources be fetched?** *Recommended:* yes, at stage 1, into `~/.cache/emusen/probe/endou/`, never
    committed, each file with its source, date, hash and licence in `PROVENANCE.txt` and `DOCS.txt`, the search for
    test programs recorded with its negative results as Nephrite's was; the libretro cores Gearsystem and SMS Plus GX
    pinned beside the three already in the cache; MAME and Mesen 2 built as black boxes; Nuked-OPLL built from its
-   public release and driven through its header alone, as a black box for stage 9.
+   public release and driven through its header alone, as a black box for stage 9. *Decided as recommended*, for
+   stage 1's fetch; as with every reference, no emulator's source is read, Nuked-OPLL's beyond its public header
+   included, and prebuilt binaries are preferred to builds from source.
 5. **Q5, the BIOS replacement's scope?** *Recommended:* an open Z80 program run by the emulated CPU (§5.5): the
    documented set-up, the medium's choice, the export models' header check with a refusal in words, the hand-over
    through `$3E` with the value at `$C000`, and a screen of its own with no logo; no built-in game. The Game Gear's
-   boot ROM in the same form at J2.
+   boot ROM in the same form at J2. *Decided as recommended.*
 6. **Q6, may SMS_MiSTer's RTL be read in a dispute step?** Nephrite's rule for the Sega cores allows it after the
    documents and a test program, each file logged and nothing transcribed; Diamond's decision of 2026-10-11 allows
    only the README, licence, file names, top-level ports and simulation scripts "of each FPGA core". *Recommended:*
-   Nephrite's rule, the Sega precedent, the core run as a black box first.
+   Nephrite's rule, the Sega precedent, the core run as a black box first. *Decided as recommended:* black box
+   first; its RTL read only in a logged dispute step, each file listed.
 7. **Q7, the shared VDP crate.** *Recommended:* `beryl-sms-vdp`, the 315-5124/5246/5378 family with the TMS9918A as a
-   variant, its line composition shared with Nephrite, which moves onto it at stage 4 under its own digests.
+   variant, its line composition shared with Nephrite, which moves onto it at stage 4 under its own digests. *Decided
+   as recommended.*
 8. **Q8, the SG-1000.** *Recommended:* a system of its own, `sg1000`, on a modelled SG-1000 by default (the TMS9918A,
-   the discrete PSG), the Mark III as a model setting; the SC-3000 and the Othello Multivision out.
+   the discrete PSG), the Mark III as a model setting; the SC-3000 and the Othello Multivision out. *Decided as
+   recommended.*
 9. **Q9, the default models and region.** *Recommended:* an export cartridge on a Master System II, NTSC, the Americas;
    Europe and PAL by the Region setting; a Japanese cartridge on a Mark III until stage 9, then on the Japanese Master
-   System. A table of PAL-only games is added only when one is shown to need it.
+   System. A table of PAL-only games is added only when one is shown to need it. *Decided as recommended.*
 10. **Q10, the tester's library.** The desktop library has no Master System folder [M: `~/Documents/Roms`'s listing];
     the handheld's card holds `ROMs/mastersystem` (371 files) and `ROMs/gamegear` (1). *Recommended:* copied into
     `AppSettings.RomDirectory` when stage 1 needs a corpus, read only and copied to scratch for every use, as the
-    Genesis library was [R `Nephrite_Plan.md` §9 Q13].
+    Genesis library was [R `Nephrite_Plan.md` §9 Q13]. *Decided as recommended:* the library was copied on
+    2026-10-19 into `AppSettings.RomDirectory`'s `mastersystem/`, 370 files (316 `.sms` and 54 `.sg`), each md5 checked
+    against the handheld's; there are no Game Gear games. It is read in place and never written, and nothing from it is
+    committed; tests build their own images with `SyntheticSmsRom`.
 11. **Q11, a console for disputes?** If the tester owns a Master System, a Game Gear or a flash cartridge for either,
     a test program run on it settles D-1 and the access slots outright. *Recommended:* not required; references and
-    referees as for Diamond, a console's run welcome where one exists.
+    referees as for Diamond, a console's run welcome where one exists. *Decided otherwise:* **no real hardware is
+    used.** The tester's consoles are out of use for their age and fragility, so no program is run on a console, a Game
+    Gear or a flash cartridge, and no capture of a console's output is made for the project. D-1, the access slots and
+    every other dispute are settled from documents, test programs and black-box referees, a published measurement made
+    by others counting as a document. A rule that only a console could settle is implemented as the evidence argues and
+    marked argued, not measured.
 
 ---
 
@@ -708,7 +730,8 @@ Each with a recommendation. "Please continue" is not taken as an answer to any o
 - No measurement of a Master System's colour output exists in the corpus; Nephrite's mode 4 levels are the board's DAC
   model's [R `Nephrite_Disputes.md` D-7].
 - No SMS_MiSTer clone is on the desktop [M: `~/Projects`].
-- The desktop library has no Master System or Game Gear folder [M].
+- The desktop library had no Master System or Game Gear folder when this page was written [M]. ~~Measured
+  2026-10-19, at stage 0.~~ *Since 2026-10-19 it has `mastersystem/` (§10 Q10); still no Game Gear folder.*
 - No transcription of the 315-5124 from die images is known to this page; the network was not searched for one, by
   this stage's rule, and stage 1's fetch searches.
 

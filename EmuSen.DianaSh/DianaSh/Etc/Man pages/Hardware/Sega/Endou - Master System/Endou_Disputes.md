@@ -41,7 +41,8 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   2025-09-04, fetched 2026-10-04).
 - Test program: none yet. At stage 5, periodic noise at each rate on each model, its period read from the output.
 - Referee: none yet. The references run every model; their agreement is weak evidence, being emulators. A recording
-  of an SG-1000's noise, if one is found or the tester has the console, would settle the discrete side.
+  of an SG-1000's noise, if a published one is found, would settle the discrete side; no console is run for the
+  project (`Endou_Plan.md` §10 Q11, decided 2026-10-19).
 - Conclusion: **argued** for SMS Power's account. It is the later document, it carries MacDonald's own noise samples
   of three of the consoles (`Beryl_SN76489.md` §1), and it is specific where `msvdp.txt` is general; `beryl-sn76489`
   already implements both registers as `Variant::SEGA` and `Variant::DISCRETE` (§2 there). The Mark III is not in the
@@ -59,8 +60,9 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   board model is no evidence for them.
 - Documents read: `msvdp.txt` §5; `Nephrite_Disputes.md` D-7.
 - Test program: to be written at stage 3: the 64 colours in mode 4, as Nephrite's `mode4-colours-0` and `-32`.
-- Referee: SMS_MiSTer's output levels are its author's choice, so weak; a capture of a console's RGB output, if the
-  tester has a console (`Endou_Plan.md` §10 Q11), or a published measurement found at the fetch, would settle it.
+- Referee: SMS_MiSTer's output levels are its author's choice, so weak. No console is run or captured for the
+  project (`Endou_Plan.md` §10 Q11, decided 2026-10-19), so only a published measurement of a console's RGB output,
+  made by others and read as a document, would settle it; failing one, the levels stay argued.
 - Conclusion: **open.** Until it is settled the VDP crate outputs CRAM indices (`Endou_Plan.md` §3.3) and Endou shows a
   two-bit component at four equal steps, 0, 85, 170 and 255, the plainest reading of a two-bit DAC, named as a loss in
   the build record. The Game Gear's twelve bits (J1) are the same question at four bits a component.
@@ -77,7 +79,7 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
 - Test program: at stage 9, a single carrier at fixed attenuations on the OPLL, its samples compared with the referee's;
   then each of the 512 entries moved up and down by one in a build made for the purpose, as Nephrite's D-16 did for the
   OPN2.
-- Referee: Nuked-OPLL run as a black box, if the tester allows it (`Endou_Plan.md` §10 Q4); its agreement is evidence
+- Referee: Nuked-OPLL run as a black box, allowed by `Endou_Plan.md` §10 Q4 (decided 2026-10-19); its agreement is evidence
   about a console only so far as its own tables came from a die. The SMS Power page the summary came from is a
   document, and is read at the fetch.
 - Conclusion: **open.** P5 of `Endou_Plan.md` predicts equality. If the tables are the OPL2's, they move to a Beryl

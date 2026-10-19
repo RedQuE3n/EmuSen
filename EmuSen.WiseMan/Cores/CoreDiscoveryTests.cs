@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json.Nodes;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
+using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 
@@ -19,13 +20,16 @@ namespace EmuSen.WiseMan.Cores
         {
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
+            ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
         }
 
         public void Dispose()
         {
             CoreDiscovery.UseDirectories(null);
             CoreDiscovery.UseDevelopment(null);
+            CoreDiscovery.Say = null;
             DataStore.OverrideDirectory = null;
+            ConfigStore.OverrideDirectory = null;
             // Windows refuses to delete a library the process has loaded, and answers it as access denied.
             try { Directory.Delete(_root, recursive: true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
@@ -38,6 +42,7 @@ namespace EmuSen.WiseMan.Cores
             string copy = Path.Combine(dir, Path.GetFileName(source));
             File.Copy(source, copy);
             CoreSidecar.Write(copy);
+            CoreManifest.Write(dir);
             return copy;
         }
 
@@ -50,6 +55,7 @@ namespace EmuSen.WiseMan.Cores
             var sidecar = (JsonObject)JsonNode.Parse(File.ReadAllText(CoreSidecar.PathFor(library)))!;
             edit?.Invoke(sidecar);
             File.WriteAllText(CoreSidecar.PathFor(copy), sidecar.ToJsonString());
+            CoreManifest.Write(dir);
             return copy;
         }
 
@@ -123,6 +129,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(process.ExitCode == 0, output);
             Assert.Equal(CoreSidecar.PathFor(library), output.Trim());
 
+            CoreManifest.Write(dir);
             CoreDiscovery.UseDirectories(new[] { dir });
             var found = CoreDiscovery.Found.Single();
             Assert.Equal(("v1-plain-core", 0UL, "1.14", CoreSidecar.HashOf(library)), (found.Info.Id, found.Sidecar.Capabilities, found.Sidecar.Abi, found.Sidecar.Sha256));
@@ -130,6 +137,39 @@ namespace EmuSen.WiseMan.Cores
             Assert.NotNull(found.Open());
             Assert.Equal("not yet loaded", new DiscoveredCore(found.Sidecar).Report);
             Assert.EndsWith("core ABI 1.14", found.Report);
+        }
+
+        // Rules 1 and 2 in the C# host: a library in no manifest waits for the player's approval, read from the config directory - see EmuSen_Backend.md §29.40.6.
+        [Fact]
+        public void A_library_in_no_manifest_waits_for_the_players_approval()
+        {
+            string dir = Path.Combine(_root, "unlisted");
+            string library = Install("v1_test_core", dir);
+            File.Delete(Path.Combine(dir, CoreTrust.ManifestName));
+            CoreDiscovery.UseDirectories(new[] { dir });
+            var found = CoreDiscovery.Found.Single();
+            Assert.Equal("needs_approval", found.Standing);
+            Assert.Null(found.Open());
+            Assert.True(found.AwaitsApproval);
+            Assert.Equal($"{Path.GetFileName(library)} is in no cores manifest and has not been approved; it was not loaded", found.Report);
+
+            Directory.CreateDirectory(Path.GetDirectoryName(CoreTrust.ApprovalsPath)!);
+            File.WriteAllText(CoreTrust.ApprovalsPath, $"{CoreSidecar.HashOf(library).ToUpperInvariant()}  {Path.GetFileName(library)}\n");
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(CoreTrust.ApprovalsPath, File.GetUnixFileMode(CoreTrust.ApprovalsPath) | UnixFileMode.OtherWrite);
+                string? said = null;
+                CoreDiscovery.Say = s => said = s;
+                CoreDiscovery.Rescan();
+                Assert.Null(CoreDiscovery.Found.Single().Open());
+                Assert.Equal($"{CoreTrust.ApprovalsPath} is writable by others; its approvals were not read", said);
+                File.SetUnixFileMode(CoreTrust.ApprovalsPath, File.GetUnixFileMode(CoreTrust.ApprovalsPath) & ~UnixFileMode.OtherWrite);
+            }
+            CoreDiscovery.Rescan();
+            var again = CoreDiscovery.Found.Single();
+            Assert.Equal("approved", again.Standing);
+            Assert.NotNull(again.Open());
+            Assert.False(again.AwaitsApproval);
         }
 
         [Fact]

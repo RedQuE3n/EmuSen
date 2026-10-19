@@ -8012,6 +8012,53 @@ cores.manifest` passing in `lib/EmuSen`.
 
 `CoreHostParityTests` differs from this piece by 1.3's keys until the C# writes them, in piece 2.
 
+### 29.42 Built 2026-10-19: 1.3's piece 2, the C# discovery and the parity class
+
+**The C# host grows rules 1 and 2** (Q3 as decided), in `CoreDiscovery` and a new `CoreTrust`, which owns the two file
+names, the one `sha256sum` reader and the approvals' text added to and taken from, as the Rust trust module does.
+`DiscoveredCore.Open` checks, after the hash, that the installation directory's manifest lists the library under its name
+with that hash or that the player approved it, and refuses otherwise in the Rust's words, setting `AwaitsApproval`. The
+scan reads each installation directory's manifest and the approvals' file in the config directory (refused, and said
+through `CoreDiscovery.Say`, where others may write it), then the player's directories with the Rust's rules: a library
+hashed once while its length and time stay, a sidecar used only where its library has its hash, and a library no sidecar
+describes listed as an `UnreadCore`. `PlayerDirectories` is `/Cores` where the installation's directories are the
+defaults and none where a caller names them (`UseDirectories`), as 1.3's config field will have it; `UsePlayerDirectories`
+names others. `ManagedRuntime.CoresJson` and `EnginesJson` write 1.3's keys. The C# has no rule 3, as §29.40.6 says.
+
+**A defect of the new C#, found by the parity before the commit**: the build's tree is named with a trailing separator
+(`AppContext.BaseDirectory`), so the manifest's directory and the library's were two spellings of one directory, and
+every project core of the build's tree was listed as needing approval. The Rust compares resolved directories. Both
+spellings are now made the same before they are compared.
+
+**The test trees.** With the C# refusing a library in no manifest, the classes that copy a core into a tree of their own
+and open it needed the tree's manifest: of the 47 classes that build a tree or use `CrystalFixture` (356 tests), five tests
+failed before the change, four of `CoreDiscoveryTests` and one of `NephriteTests`; `CrystalFixture` and the parity trees
+already wrote one. They write it through one helper, `Fixtures/CoreManifest`, as an installation carries one. No test
+approves outside its own config directory: `CoreDiscoveryTests` and `CoreHostParityTests` now redirect config as well.
+
+**The parity class**, `CoreHostParityTests`, as §29.40.9 listed it. The tool is given the test's approvals' file and its
+player's directories. The unapproved case is now equal in full, the pinned difference of §27.11 deleted: both hosts
+refuse the library with the same words, and both load it once the approvals' file names its hash. Two cases are new: a
+player's directory (a copy of a project core's id, which both drop; an unapproved core; and a manifest of its own, which
+both ignore; then the core approved), and libraries without a sidecar or with a stale one, listed as not yet read. The
+build's tree is compared with no approvals' file at all, so the build's cores load on the manifest alone. A C# case,
+`A_library_in_no_manifest_waits_for_the_players_approval`, holds the C#'s refusal, its words, an approvals' file others
+may write being refused and said, and the approval in capitals taking effect after a rescan.
+
+**Measured on 2026-10-19** [M]:
+
+| Gate | Result |
+|---|---|
+| `CoreHostParityTests`, `CoreDiscoveryTests`, `NephriteTests` | **40 of 40** |
+| The 47 classes that build a cores tree or use `CrystalFixture`, before the trees' manifests | 351 of 356, the five named above failing as expected; after, those five pass |
+| Seeded faults in the Rust tool, run through the class by `EMUSEN_CORE_HOST_TOOL` | **five of five caught**: the player's manifest read and the player's directory scanned first (the player's case), a stale sidecar trusted and a library not yet read given the words "not yet loaded" (the sidecar-less case), and libraries without a sidecar listed in an installation directory (the build's tree, which holds the platform library, SkiaSharp and SQLite) |
+
+**A publish before the rule reaches a player** (Q3). The handheld's installation (`/home/deck/Apps/Mistress`, checked
+read only on 2026-10-19) and its two backups have no `cores.manifest`, nor has the local `out/linux-x64/Mistress`: both
+predate §27.11. Every directory from the handheld's `lib/EmuSen` up to `/` is `drwxr-xr-x` or stricter, so Q7's check
+passes there. A build that enforces the manifest in the C# must therefore reach the handheld only as a fresh publish,
+which carries the manifest; copying new binaries over the old `lib/EmuSen` would leave every core needing approval.
+
 ---
 
 ## 30. B9, scraping in Rust: the design, 2026-10-18

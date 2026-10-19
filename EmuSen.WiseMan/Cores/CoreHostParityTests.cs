@@ -7,12 +7,13 @@ using System.Text;
 using System.Text.Json.Nodes;
 using EmuSen.Cores.Native;
 using EmuSen.Crystal.Managed;
+using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // Discovery's listing as JSON from the C# host and from the Rust core host, equal over the build's tree and trees with a missing, altered and unapproved library - see EmuSen_Backend.md §27.6.
+    // Discovery's listing as JSON from the C# host and from the Rust core host, equal over the build's tree, faulty trees and the player's directory - see EmuSen_Backend.md §27.6, §29.40.9.
     [Collection(TestCollections.ProcessGlobals)]
     public class CoreHostParityTests : IDisposable
     {
@@ -28,14 +29,17 @@ namespace EmuSen.WiseMan.Cores
         {
             Directory.CreateDirectory(_root);
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
+            ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             CoreDiscovery.UseDevelopment(false);
         }
 
         public void Dispose()
         {
             CoreDiscovery.UseDirectories(null);
+            CoreDiscovery.UsePlayerDirectories(null);
             CoreDiscovery.UseDevelopment(null);
             DataStore.OverrideDirectory = null;
+            ConfigStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
 
@@ -43,9 +47,10 @@ namespace EmuSen.WiseMan.Cores
             : Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "emusen-core-host.exe" : "emusen-core-host");
 
         // The C# host's listing, as the frontend API's cores and engines answer it, with every core opened first when asked.
-        private static JsonObject CSharp(string[] directories, bool open)
+        private static JsonObject CSharp(string[] directories, bool open, params string[] player)
         {
             CoreDiscovery.UseDirectories(directories);
+            CoreDiscovery.UsePlayerDirectories(player);
             if (open) foreach (DiscoveredCore core in CoreDiscovery.Found) core.Open();
             return new JsonObject
             {
@@ -55,13 +60,15 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // The Rust core host's listing of the same directories, from its tool in a process of its own.
-        private static JsonObject Rust(string[] directories, bool open, params string[] approvals)
+        private static JsonObject Rust(string[] directories, bool open, params string[] player)
         {
             var start = new ProcessStartInfo(Tool) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
             start.Environment.Remove(CoreDiscovery.DevelopmentVariable);
             start.ArgumentList.Add("list");
             if (open) start.ArgumentList.Add("--open");
-            foreach (string a in approvals) { start.ArgumentList.Add("--approve"); start.ArgumentList.Add(a); }
+            start.ArgumentList.Add("--approvals");
+            start.ArgumentList.Add(CoreTrust.ApprovalsPath);
+            foreach (string d in player) { start.ArgumentList.Add("--player"); start.ArgumentList.Add(d); }
             foreach (string d in directories) start.ArgumentList.Add(d);
             using var process = Process.Start(start)!;
             string output = process.StandardOutput.ReadToEnd();
@@ -75,11 +82,20 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(JsonNode.DeepEquals(expected, actual), $"{what}\nC#:   {expected.ToJsonString()}\nRust: {actual.ToJsonString()}");
 
         // Both listings of one tree, as listed and after every core is opened, equal value for value.
-        private static void BothEqual(string[] directories, string what)
+        private static void BothEqual(string[] directories, string what, params string[] player)
         {
-            AssertEqual(CSharp(directories, open: false), Rust(directories, open: false), $"{what}, as listed");
-            AssertEqual(CSharp(directories, open: true), Rust(directories, open: true), $"{what}, opened");
+            AssertEqual(CSharp(directories, open: false, player), Rust(directories, open: false, player), $"{what}, as listed");
+            AssertEqual(CSharp(directories, open: true, player), Rust(directories, open: true, player), $"{what}, opened");
         }
+
+        // The player's approvals' file in the test's own config directory.
+        private static void Approve(params string[] libraries)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(CoreTrust.ApprovalsPath)!);
+            File.WriteAllText(CoreTrust.ApprovalsPath, "# approved by the test\n" + string.Concat(libraries.Select(l => $"{CoreSidecar.HashOf(l)}  {Path.GetFileName(l)}\n")) + "not a line of hashes\n");
+        }
+
+        private static string Lib(string stem) => OperatingSystem.IsWindows() ? $"{stem}.dll" : OperatingSystem.IsMacOS() ? $"lib{stem}.dylib" : $"lib{stem}.so";
 
         // A test core with its sidecar written in a build folder, as the build writes it, then copied with it into dir.
         private string Install(string name, string dir, string? file = null)
@@ -115,6 +131,7 @@ namespace EmuSen.WiseMan.Cores
         {
             string dir = AppContext.BaseDirectory;
             Assert.True(File.Exists(Path.Combine(dir, "cores.manifest")), "the build writes cores.manifest beside the cores");
+            Assert.False(File.Exists(CoreTrust.ApprovalsPath), "the build's cores load with no approval at all");
             var listed = CSharp(new[] { dir }, open: false);
             Assert.True(listed["cores"]!.AsArray().Count >= 6, listed.ToJsonString());
             BothEqual(new[] { dir }, "the build's tree");
@@ -153,27 +170,55 @@ namespace EmuSen.WiseMan.Cores
             Assert.Contains(CSharp(new[] { dir }, open: true)["cores"]!.AsArray(), c => ((string)c!["report"]!).Contains("its SHA-256 differs", StringComparison.Ordinal));
         }
 
-        // The one designed difference: the C# host has no manifest, so it opens what the Rust refuses; closes at B7 (EmuSen_Backend.md §27.9 Q1).
+        // §27.11's pinned difference, closed: both hosts refuse a library in no manifest until the player approves it (EmuSen_Backend.md §29.40.6).
         [Fact]
-        public void An_unapproved_library_differs_only_in_its_report_once_opened()
+        public void An_unapproved_library_is_refused_by_both_hosts_until_approved()
         {
             string dir = Path.Combine(_root, "unapproved");
             string full = Install("v1_test_core", dir);
             string plain = Install("v1_plain_core", dir);
             Manifest(dir, full);
-            AssertEqual(CSharp(new[] { dir }, open: false), Rust(new[] { dir }, open: false), "an unapproved library, as listed");
-
-            JsonObject expected = CSharp(new[] { dir }, open: true);
+            BothEqual(new[] { dir }, "an unapproved library");
             string words = $"{Path.GetFileName(plain)} is in no cores manifest and has not been approved; it was not loaded";
-            int changed = 0;
-            foreach (JsonNode? c in expected["cores"]!.AsArray())
-                if ((string)c!["library"]! == plain) { Assert.EndsWith("core ABI 1.14", (string)c["report"]!); c["report"] = words; changed++; }
-            foreach (JsonNode? e in expected["engines"]!.AsArray())
-                if ((string)e!["id"]! == "v1-plain-core") { e["report"] = words; changed++; }
-            Assert.Equal(2, changed);
-            AssertEqual(expected, Rust(new[] { dir }, open: true), "an unapproved library, opened: equal but for its report");
+            var opened = CSharp(new[] { dir }, open: true);
+            Assert.Contains(opened["cores"]!.AsArray(), c => (string)c!["report"]! == words && (string)c["trust"]! == "needs_approval");
+            Approve(plain);
+            BothEqual(new[] { dir }, "the same library approved by its hash");
+            Assert.All(CSharp(new[] { dir }, open: true)["cores"]!.AsArray(), c => Assert.EndsWith("core ABI 1.14", (string)c!["report"]!));
+        }
 
-            AssertEqual(CSharp(new[] { dir }, open: true), Rust(new[] { dir }, open: true, CoreSidecar.HashOf(plain)), "the same library approved by its hash");
+        [Fact]
+        public void The_players_directory_lists_the_same_from_both_hosts()
+        {
+            string dir = Path.Combine(_root, "installed");
+            Manifest(dir, Install("v1_test_core", dir));
+            string player = Path.Combine(_root, "Cores");
+            Install("v1_test_core", player, Lib("shadow"));
+            string own = Install("v1_plain_core", player, Lib("own"));
+            Manifest(player, own);
+            BothEqual(new[] { dir }, "a player's directory with a project core's id, an unapproved core and a manifest of its own", player);
+            var listed = CSharp(new[] { dir }, open: false, player);
+            Assert.Equal(new[] { "manifest", "needs_approval" }, listed["cores"]!.AsArray().Select(c => (string)c!["trust"]!));
+            Assert.Equal("player", (string)listed["cores"]![1]!["directory"]!);
+            Approve(own);
+            BothEqual(new[] { dir }, "the player's core approved", player);
+            Assert.EndsWith("core ABI 1.14", (string)CSharp(new[] { dir }, open: true, player)["cores"]![1]!["report"]!);
+        }
+
+        [Fact]
+        public void Libraries_without_a_sidecar_and_with_a_stale_one_list_the_same_from_both_hosts()
+        {
+            string player = Path.Combine(_root, "Cores");
+            Directory.CreateDirectory(player);
+            File.Copy(CoreAdapterTests.LibraryPath("v1_plain_core"), Path.Combine(player, Lib("bare")));
+            string stale = Install("v1_test_core", player, Lib("stale"));
+            File.AppendAllText(stale, "\0");
+            File.WriteAllText(Path.Combine(player, "notes.txt"), "not a library");
+            BothEqual(Array.Empty<string>(), "a library with no sidecar and one whose sidecar is stale", player);
+            var cores = CSharp(Array.Empty<string>(), open: false, player)["cores"]!.AsArray();
+            Assert.Equal(2, cores.Count);
+            Assert.All(cores, c => { Assert.Equal("not_read", (string)c!["trust"]!); Assert.Equal("not yet read", (string)c["report"]!); Assert.Null(c["sidecar"]); });
+            Assert.Equal(CoreSidecar.HashOf(stale), (string)cores[1]!["sha256"]!);
         }
 
         [Fact]

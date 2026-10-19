@@ -40,7 +40,7 @@ fn main() -> ExitCode {
             _ => dirs.push(PathBuf::from(a)),
         }
     }
-    if dirs.is_empty() {
+    if dirs.is_empty() && player.is_empty() {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
     }

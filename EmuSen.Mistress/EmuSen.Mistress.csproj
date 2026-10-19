@@ -16,6 +16,8 @@
     <PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
     <!-- The crescent-and-E icon; its sources and build script are in Assets/Icon - see EmuSen_Settings_Reference.md §4.55. -->
     <ApplicationIcon>Assets\Icon\emusen.ico</ApplicationIcon>
+    <!-- The frontend API on the Rust Crystal unless EMUSEN_CRYSTAL_NATIVE is 0 - see EmuSen_Backend.md §29.29. -->
+    <EmuSenCrystalNative>true</EmuSenCrystalNative>
   </PropertyGroup>
 
   <!-- macOS: a publish for osx-* is EmuSen.app, laid out by DianaShPublishLayout.targets - see EmuSen_Settings_Reference.md §4.82. The id is the GitHub Pages domain of the project's owner, reversed. -->

@@ -3778,5 +3778,6 @@ the goldens, the corpus baseline and the kit are as they were.*
   the corpus's verdicts and the goldens' transcripts record.
 - **The tests** hold MercuryRT through `Fixtures/MercuryEngines` and `MercuryRig`, both on the generic engine; the rig's
   `CoreName` is the console the machine runs as, from machine info.
-- **Left** for the step that deletes the pre-stable interface: `src/ffi/mod.rs` and its six `mercuryrt_*` exports,
-  which only `NativeHostTests` still loads.
+- **The pre-stable half is gone** since B4's last step (`EmuSen_Backend.md` §26): `src/ffi/mod.rs` keeps the status
+  codes, the patch table and the helpers the `mercuryrt_core_*` test extensions call, and the library defines no
+  `emusen_native_` symbol and none of the six `mercuryrt_*` exports.

@@ -154,10 +154,7 @@ namespace EmuSen.WiseMan.Cores
             CoreLibrary library = VenusRtSnesEngine.Library;
             Assert.True(library.Available, library.Report);
             Assert.Equal("venusrt", library.Info.Id);
-            nint handle = NativeLibrary.Load(VenusRtSnesEngine.LibraryPath);
-            foreach (string name in NativeInterface.Required) Assert.False(NativeLibrary.TryGetExport(handle, name, out _), name);
-            foreach (var (_, name, exports) in NativeInterface.Optional)
-                foreach (string export in exports) Assert.False(NativeLibrary.TryGetExport(handle, export, out _), $"{name}: {export}");
+            PreStableExports.AssertNone(VenusRtSnesEngine.LibraryPath);
 
             using var m = VenusRtSnesEngine.Machine(new byte[0x8000 + 512]);
             for (int i = 0; i < 3; i++) m.Advance();

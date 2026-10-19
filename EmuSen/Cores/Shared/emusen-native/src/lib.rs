@@ -1,4 +1,5 @@
-//! What every Rust core builds from: its state, its audio queue, and the common native interface. The state is the C# `StateSerializer`'s byte format, so a core's state is a C# core's, byte for byte.
+//! What every Rust core builds from: its state, its audio queue, and the core ABI v1. The state is the byte format the C#
+//! `StateSerializer` wrote (deleted with B4), so a core's state is laid out byte for byte as a C# core's was.
 //!
 //! - [`StateWriter`] writes a state, counts one, or lists its layout; [`StateReader`] reads one back.
 //! - [`State`] is one C# class or struct, walked in the C# ordinal order; its `Error` is the core's own.
@@ -7,8 +8,8 @@
 //! - [`SampleQueue`] is C#'s `EmuSen.Common.SampleQueue`, a core's undrained audio with its drop-oldest limit.
 //! - [`steps`] is a band-limited step synthesiser: a held source resampled to the output rate (EmuSen_NativeCores.md §12.6).
 //! - [`debug`] is the debugger's hooks as data: the tables, the logs and their drain (EmuSen_NativeCores.md §3.14).
-//! - [`abi`] is the pre-stable common native interface: the `NativeCore` trait and `native_exports!`, the fixed
-//!   `emusen_native_*` names, the version, the capability bits and the interface's status codes (EmuSen_NativeCores.md §3).
+//! - [`abi`] is what the pre-stable interface left to v1: the capability bits 0 to 13, the status codes, `Region`, `File`,
+//!   `Settings` and the crash log, which [`core`] re-exports.
 //! - [`core`] is the stable core ABI, version 1: the `Core` trait and `core_exports!`, which generate every
 //!   `emusen_core_*` export of `include/emusen_core.h`, the descriptors, the events and the log (EmuSen_CoreAPI.md).
 //! - [`json`] reads the single-step suites' files for a core's tests, with no dependency.

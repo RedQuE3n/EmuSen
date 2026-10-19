@@ -1,17 +1,18 @@
 //! VenusRT on the stable core ABI, version 1: `Core` over the machine and `core_exports!`, its only exports since
 //! 2026-10-18. See EmuSen_CoreAPI.md §18.6, VenusRT_Native.md §31 and EmuSen_Backend.md §19.9.
 
-use emusen_native::abi::NativeCore;
 use emusen_native::core::*;
 
-use crate::ffi::STATUS_IMAGE_TOO_SHORT;
 use crate::machine::{DSP_RATE, Machine};
 use crate::state::STATE_VERSION;
+
+/// An image shorter than one 32 KiB bank after any copier header.
+pub const STATUS_IMAGE_TOO_SHORT: i32 = -9;
 
 /// The space names, in id order; `CpuBus` and `WRAM` are the SNES system pack's, which its cheat codecs target.
 pub const SPACES: [&str; 8] = ["CpuBus", "IO", "WRAM", "VRAM", "CGRAM", "OAM", "SRAM", "APURAM"];
 
-/// The chips' spaces, ids 8 to 14, listed for a cartridge that has the chip (`ffi::GSURAM` and on).
+/// The chips' spaces, ids 8 to 14, listed for a cartridge that has the chip (`spaces::GSURAM` and on).
 pub const CHIP_SPACES: [&str; 7] = ["GSURAM", "GSUBUS", "SA1IRAM", "BWRAM", "SA1BUS", "DSPRAM", "DSPPRG"];
 
 /// The pad's bits as `set_buttons` takes them: bit n is `PadButton` n.
@@ -151,9 +152,9 @@ impl Machine {
             Processor { id: 1, name: "SPC".into(), pc_bits: 16, registers: named(&SPC_REGISTERS), code_space: Some(7) },
         ];
         match self.chip() {
-            Some(Chip::Sa1) => list.push(Processor { id: 2, name: "SA1".into(), pc_bits: 24, registers: named(&CPU_REGISTERS), code_space: Some(crate::ffi::SA1BUS) }),
-            Some(Chip::Gsu) => list.push(Processor { id: 2, name: "GSU".into(), pc_bits: 24, registers: named(&GSU_REGISTERS), code_space: Some(crate::ffi::GSUBUS) }),
-            Some(Chip::Dsp) => list.push(Processor { id: 2, name: "DSP".into(), pc_bits: 16, registers: named(&DSP_REGISTERS), code_space: Some(crate::ffi::DSPPRG) }),
+            Some(Chip::Sa1) => list.push(Processor { id: 2, name: "SA1".into(), pc_bits: 24, registers: named(&CPU_REGISTERS), code_space: Some(crate::spaces::SA1BUS) }),
+            Some(Chip::Gsu) => list.push(Processor { id: 2, name: "GSU".into(), pc_bits: 24, registers: named(&GSU_REGISTERS), code_space: Some(crate::spaces::GSUBUS) }),
+            Some(Chip::Dsp) => list.push(Processor { id: 2, name: "DSP".into(), pc_bits: 16, registers: named(&DSP_REGISTERS), code_space: Some(crate::spaces::DSPPRG) }),
             None => {}
         }
         list
@@ -271,7 +272,7 @@ impl Core for Machine {
     }
 
     fn create(request: &Create<'_>) -> Result<Self, i32> {
-        let mut m = <Machine as NativeCore>::create(request.image, &Settings::default(), &request.files)?;
+        let mut m = open(request.image, &request.files)?;
         if let (Some((dsp, _)), Some(file)) = (m.sys.cart.dsp.as_mut().filter(|(d, _)| d.st()), request.files.iter().find(|f| f.which == 0)) {
             for (i, &b) in file.data.iter().enumerate().take(2 * dsp.ram().len()) {
                 dsp.host_write(crate::chips::necdsp::Port::Ram(i), b);
@@ -320,19 +321,19 @@ impl Core for Machine {
     }
 
     /// The frame, with nothing of the debugger's fitted, then what follows every frame.
-    fn advance(&mut self, detail: &mut u64) -> Result<(), i32> {
+    fn advance(&mut self, _detail: &mut u64) -> Result<(), i32> {
         self.disarm();
-        NativeCore::advance(self, detail)?;
+        self.run_frame();
         self.frame_end();
         Ok(())
     }
 
     fn set_options(&mut self, flags: u32) {
-        NativeCore::set_options(self, flags)
+        self.sys.ppu.skip = flags & 1 != 0;
     }
 
     fn frame_count(&self) -> i64 {
-        NativeCore::frame_count(self)
+        self.total_frames()
     }
 
     fn frame_info(&self) -> FrameInfo {
@@ -340,47 +341,126 @@ impl Core for Machine {
     }
 
     fn frame(&self) -> &[u8] {
-        NativeCore::frame(self)
+        self.sys.ppu.picture()
     }
 
     fn audio_rate(&self) -> i32 {
-        NativeCore::audio_rate(self)
+        DSP_RATE
     }
 
     fn audio_buffered(&self) -> usize {
-        NativeCore::audio_buffered(self)
+        self.samples.len()
     }
 
     fn drain_audio(&mut self, out: &mut [i16], max_frames: usize) -> usize {
-        NativeCore::drain_audio(self, out, max_frames)
+        self.samples.drain(out, max_frames)
     }
 
     fn set_audio_limit(&mut self, samples: usize) {
-        NativeCore::set_audio_limit(self, samples)
+        self.samples.set_limit(samples);
     }
 
     fn set_buttons(&mut self, port: u32, mask: u32, changed: u32) -> Result<(), i32> {
         if port > 1 {
             return Err(status::NO_SUCH_PORT);
         }
-        NativeCore::set_buttons(self, port, mask, changed)
+        if let Some(pad) = self.pads.get_mut(port as usize) {
+            *pad = (*pad & !(changed as u16)) | (mask as u16 & changed as u16 & 0x0FFF);
+        }
+        Ok(())
     }
 
     fn space_size(&self, space: u32) -> Result<i64, i32> {
-        NativeCore::space_size(self, space)
+        Ok(match space {
+            0 => 0x100_0000,
+            1 => self.sys.io.len() as i64,
+            2 => self.sys.wram.len() as i64,
+            3 => 2 * self.sys.ppu.vram.len() as i64,
+            4 => 2 * self.sys.ppu.cgram.len() as i64,
+            5 => self.sys.ppu.oam.len() as i64,
+            6 => match self.sys.cart.dsp.as_ref().filter(|(d, _)| d.st()) {
+                Some((dsp, _)) => 2 * dsp.ram().len() as i64,
+                None => self.sys.cart.sram.len() as i64,
+            },
+            7 => self.sys.apu.ram.len() as i64,
+            _ => return self.chip_space_size(space).ok_or(status::NO_SUCH_SPACE),
+        })
     }
 
+    /// CpuBus is read as the CPU would see it, but with no side effect and open bus as the MDR stands; past a
+    /// space's end reads zero.
     fn space_read(&mut self, space: u32, address: u32, out: &mut [u8]) -> Result<(), i32> {
-        NativeCore::space_read(self, space, address, out)
+        for (i, b) in out.iter_mut().enumerate() {
+            let a = address as usize + i;
+            *b = match space {
+                0 => self.sys.read_value(a as u32 & 0xFF_FFFF, false).unwrap_or(self.sys.mdr),
+                1 => self.sys.io.get(a).copied().unwrap_or(0),
+                2 => self.sys.wram.get(a).copied().unwrap_or(0),
+                3 => self.sys.ppu.vram.get(a / 2).map_or(0, |w| w.to_le_bytes()[a & 1]),
+                4 => self.sys.ppu.cgram.get(a / 2).map_or(0, |w| w.to_le_bytes()[a & 1]),
+                5 => self.sys.ppu.oam.get(a).copied().unwrap_or(0),
+                6 => match self.st_ram() {
+                    Some(dsp) if a < 2 * dsp.ram().len() => dsp.host_read(crate::chips::necdsp::Port::Ram(a), false),
+                    Some(_) => 0,
+                    None => self.sys.cart.sram.get(a).copied().unwrap_or(0),
+                },
+                7 => self.sys.apu.ram.get(a).copied().unwrap_or(0),
+                _ => self.chip_space_read(space, a).ok_or(status::NO_SUCH_SPACE)?,
+            };
+        }
+        Ok(())
     }
 
+    /// Past a space's end is dropped; CpuBus lands where the bus would take a write in memory (`System::poke`), and
+    /// IO is not written from outside.
     fn space_write(&mut self, space: u32, address: u32, data: &[u8]) -> Result<(), i32> {
-        NativeCore::space_write(self, space, address, data)
+        for (i, &b) in data.iter().enumerate() {
+            let a = address as usize + i;
+            let slot = match space {
+                0 => {
+                    self.sys.poke(a as u32 & 0xFF_FFFF, b);
+                    continue;
+                }
+                1 => return Err(status::READ_ONLY),
+                2 => self.sys.wram.get_mut(a),
+                3 | 4 => {
+                    let words = if space == 3 { &mut self.sys.ppu.vram } else { &mut self.sys.ppu.cgram };
+                    if let Some(w) = words.get_mut(a / 2) {
+                        let mut bytes = w.to_le_bytes();
+                        bytes[a & 1] = b;
+                        *w = u16::from_le_bytes(bytes);
+                    }
+                    continue;
+                }
+                5 => self.sys.ppu.oam.get_mut(a),
+                6 => {
+                    if let Some(dsp) = self.st_ram() {
+                        if a < 2 * dsp.ram().len() {
+                            dsp.host_write(crate::chips::necdsp::Port::Ram(a), b);
+                        }
+                        continue;
+                    }
+                    self.sys.cart.sram.get_mut(a)
+                }
+                7 => self.sys.apu.ram.get_mut(a),
+                _ => {
+                    self.chip_space_write(space, a, b)?;
+                    continue;
+                }
+            };
+            if let Some(slot) = slot {
+                *slot = b;
+            }
+        }
+        Ok(())
     }
 
     fn battery(&self, which: u32) -> Result<(&[u8], u32), i32> {
-        let (bytes, _) = NativeCore::battery(self, which)?;
-        let bytes = if self.st_battery.is_empty() { bytes } else { &self.st_battery[..] };
+        if which != 0 {
+            return Err(status::BAD_FILE);
+        }
+        let cart = &self.sys.cart;
+        let bytes = if !self.st_battery.is_empty() { &self.st_battery[..] } else if cart.header.battery() { &cart.sram[..] } else { &[] };
         Ok((bytes, flags::BATTERY_TRACKED | if self.battery_changed { flags::BATTERY_CHANGED } else { 0 }))
     }
 
@@ -450,7 +530,7 @@ impl Core for Machine {
     fn debug_disassemble(&mut self, processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<Instruction>, i32> {
         use crate::debugger::Chip;
         use crate::disasm::{gsu, spc700, upd77c25, w65816};
-        use crate::ffi::{BWRAM, DSPPRG, GSUBUS, GSURAM, SA1BUS, SA1IRAM};
+        use crate::spaces::{BWRAM, DSPPRG, GSUBUS, GSURAM, SA1BUS, SA1IRAM};
         #[derive(Clone, Copy, PartialEq)]
         enum Isa {
             Cpu,
@@ -459,7 +539,7 @@ impl Core for Machine {
             Gsu,
             Dsp,
         }
-        NativeCore::space_size(self, space)?;
+        <Machine as Core>::space_size(self, space)?;
         let chip = self.chip();
         let isa = match (space, processor, chip) {
             (7, _, _) => Isa::Spc,
@@ -491,7 +571,7 @@ impl Core for Machine {
                 return machine.borrow().sys.apu.boot[(a - 0xFFC0) as usize];
             }
             let mut byte = [0u8];
-            let _ = NativeCore::space_read(&mut **machine.borrow_mut(), space, a, &mut byte);
+            let _ = <Machine as Core>::space_read(&mut **machine.borrow_mut(), space, a, &mut byte);
             byte[0]
         };
         let mut list = Vec::new();
@@ -526,9 +606,74 @@ impl Core for Machine {
 
 emusen_native::core_exports!(Machine; reset, rom_patches, cheat_pokes, settings, debug, debug_stack, debug_registers, debug_disassemble);
 
+/// The machine from the image and the files: the battery save is file 0, clipped to the cartridge's RAM; file 1 is the
+/// player's SPC700 boot image in place of VenusRT's own program (D-38); file 2 is a NEC DSP's firmware, 8,192 or 53,248
+/// bytes, for a cartridge whose header names one, or its program with file 3 its data (6,144 and 2,048, or 49,152 and 4,096).
+fn open(image: &[u8], files: &[File<'_>]) -> Result<Machine, i32> {
+    let mut m = Machine::load_rom(image).map_err(|_| STATUS_IMAGE_TOO_SHORT)?;
+    // File 1 is the player's SPC700 boot image, used in place of VenusRT's own program (D-38).
+    if let Some(f) = files.iter().find(|f| f.which == 1) {
+        m.attach_boot(f.data.try_into().map_err(|_| status::BAD_FILE)?);
+    }
+    // File 2 is the DSP's firmware whole, or its program with file 3 its data.
+    let program = files.iter().find(|f| f.which == 2).map(|f| f.data);
+    let data = files.iter().find(|f| f.which == 3).map(|f| f.data);
+    let firmware: Option<Vec<u8>> = match (program, data) {
+        (Some(p), Some(d)) => Some([p, d].concat()),
+        (Some(p), None) => Some(p.to_vec()),
+        (None, Some(_)) => return Err(status::BAD_FILE),
+        (None, None) => None,
+    };
+    match firmware {
+        Some(f) if !m.attach_dsp(&f) => return Err(status::BAD_FILE),
+        Some(_) => {}
+        None if m.sys.cart.wants_dsp() => {
+            m.attach_replacement();
+        }
+        None => {}
+    }
+    for file in files {
+        if file.which > 3 {
+            return Err(status::BAD_FILE);
+        }
+        if file.which != 0 {
+            continue;
+        }
+        let sram = &mut m.sys.cart.sram;
+        let n = sram.len().min(file.data.len());
+        sram[..n].copy_from_slice(&file.data[..n]);
+    }
+    Ok(m)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn create_refuses_what_it_cannot_take_and_the_spaces_reach_the_machine() {
+        let image = crate::machine::tests::rom(&[0x80, 0xFE]);
+        assert_eq!(open(&image[..0x4000], &[]).err(), Some(STATUS_IMAGE_TOO_SHORT));
+        assert_eq!(open(&image, &[File { which: 1, data: &[0; 63] }]).err(), Some(status::BAD_FILE));
+        assert!(open(&image, &[File { which: 1, data: &[0; 64] }]).unwrap().sys.apu.boot_file);
+        assert_eq!(open(&image, &[File { which: 2, data: &[1] }]).err(), Some(status::BAD_FILE));
+        assert_eq!(open(&image, &[File { which: 4, data: &[1] }]).err(), Some(status::BAD_FILE));
+        let mut m = open(&image, &[File { which: 0, data: &[1, 2] }]).unwrap();
+        assert_eq!(m.sys.apu.cpu.pc, 0xFFC0);
+        assert_eq!(Core::space_size(&m, 0), Ok(0x100_0000));
+        assert_eq!(Core::space_size(&m, 6), Ok(0));
+        assert_eq!(Core::space_size(&m, 8), Err(status::NO_SUCH_SPACE));
+        Core::space_write(&mut m, 2, 0x1234, &[7]).unwrap();
+        let mut b = [0u8; 2];
+        Core::space_read(&mut m, 0, 0x7E_1234, &mut b[..1]).unwrap();
+        Core::space_read(&mut m, 0, 0x00_8000, &mut b[1..]).unwrap();
+        assert_eq!(b, [7, 0x80]);
+        Core::space_write(&mut m, 3, 0xFFFF, &[9]).unwrap();
+        Core::space_read(&mut m, 3, 0xFFFF, &mut b[..1]).unwrap();
+        assert_eq!(b[0], 9);
+        Core::set_buttons(&mut m, 1, 0xFFFF, 0xFFFF).unwrap();
+        assert_eq!(m.pads, [0, 0x0FFF]);
+    }
 
     fn machine() -> Machine {
         let mut image = crate::machine::tests::rom(&[0x80, 0xFE]);
@@ -693,7 +838,7 @@ mod tests {
         Core::advance(&mut m, &mut 0).unwrap();
         assert_eq!(m.sys.apu.cpu.pc, 0xFFC0, "the image's loop at its vector");
         let mut b = [0u8; 2];
-        NativeCore::space_read(&mut m, 0, 0x2140, &mut b).unwrap();
+        Core::space_read(&mut m, 0, 0x2140, &mut b).unwrap();
         assert_ne!(b, [0xAA, 0xBB], "VenusRT's own program would have signalled ready");
         Core::reset(&mut m).unwrap();
         assert!(m.sys.apu.boot_file && m.sys.apu.boot == image);

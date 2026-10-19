@@ -1,4 +1,4 @@
-//! VenusRT, the SNES core in Rust, called through the common native interface (EmuSen_NativeCores.md).
+//! VenusRT, the SNES core in Rust, called through the core ABI v1 (EmuSen_CoreAPI.md).
 //! Written from hardware documents under VenusRT_Plan.md §1's clean-room protocol; the build record is VenusRT_Native.md.
 //!
 //! Built so far: the 65816 (`cpu`), the cartridge (`cart`) and the S-CPU's bus and master clock (`bus`); the PPU, the
@@ -11,7 +11,7 @@ pub mod disasm;
 pub mod bus;
 pub mod cart;
 pub mod chips;
-pub mod ffi;
+pub mod spaces;
 pub mod machine;
 pub mod ppu;
 pub mod probe;

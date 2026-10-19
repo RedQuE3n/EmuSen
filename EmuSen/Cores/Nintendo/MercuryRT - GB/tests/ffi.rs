@@ -1,8 +1,7 @@
-//! MercuryRT's half of the common interface driven through `NativeCore` alone: the create setting, the battery file, the
-//! input mask and the patch table, each where the C# host always passes the same value and so cannot tell. See
-//! Mercury_Native.md §8.7.
+//! MercuryRT's create through the core ABI v1: the Model setting, the battery file, the input mask and the patch table,
+//! each where a host always passes the same value and so cannot tell. See Mercury_Native.md §8.7.
 
-use emusen_native::abi::{File, NativeCore, Settings, status};
+use emusen_native::core::{Core, Create, File, Settings, status};
 use mercuryrt::ffi::{STATUS_UNKNOWN_MODEL, build_rom_patches};
 use mercuryrt::machine::Machine;
 use mercuryrt::memory::cartridge::{HEADER_CHECKSUM_ADDRESS, header_checksum};
@@ -19,41 +18,51 @@ fn rom(kind: u8) -> Vec<u8> {
 }
 
 fn create(kind: u8, settings: &str, files: &[File<'_>]) -> Result<Machine, i32> {
-    <Machine as NativeCore>::create(&rom(kind), &Settings::parse(settings.as_bytes()).unwrap(), files)
+    let image = rom(kind);
+    let request = Create {
+        image: &image,
+        settings: Settings::parse(settings.as_bytes()).unwrap(),
+        files: files.to_vec(),
+        pixel_formats: 1,
+        host_abi_version: 0,
+        shared_removable: false,
+        shared_console: false,
+        device: None,
+    };
+    <Machine as Core>::create(&request)
 }
 
 #[test]
-fn the_model_is_the_only_setting_and_must_be_one_of_three() {
+fn the_model_must_be_one_of_three() {
     assert!(!create(0x00, "", &[]).unwrap().cgb_hardware());
-    assert!(!create(0x00, "Model=1", &[]).unwrap().cgb_hardware());
-    assert!(create(0x00, "Model=2", &[]).unwrap().cgb_hardware());
-    assert_eq!(create(0x00, "Model=3", &[]).err(), Some(STATUS_UNKNOWN_MODEL));
-    assert_eq!(create(0x00, "Model=1\nSpeed=2", &[]).err(), Some(status::UNKNOWN_SETTING));
+    assert!(!create(0x00, "Model=Game Boy", &[]).unwrap().cgb_hardware());
+    assert!(create(0x00, "Model=Game Boy Color", &[]).unwrap().cgb_hardware());
+    assert_eq!(create(0x00, "Model=2", &[]).err(), Some(STATUS_UNKNOWN_MODEL));
 }
 
 #[test]
-fn the_battery_file_fills_cartridge_ram_clipped_and_comes_back_only_with_a_battery() {
+fn the_battery_file_fills_cartridge_ram_clipped_only_with_a_battery() {
     let save: Vec<u8> = (0..9000u32).map(|i| (i * 7) as u8).collect();
     let m = create(0x03, "", &[File { which: 0, data: &save }]).unwrap();
-    let (data, _) = m.battery(0).unwrap();
+    let (data, _) = Core::battery(&m, 0).unwrap();
     assert_eq!(data, &save[..8192]);
     assert_eq!(create(0x03, "", &[File { which: 1, data: &save }]).err(), Some(status::BAD_FILE));
 
     let m = create(0x02, "", &[File { which: 0, data: &save }]).unwrap();
-    assert_eq!(m.bus.cart.ram[..8192], save[..8192]);
-    assert!(m.battery(0).unwrap().0.is_empty(), "a cartridge without a battery has RAM and no save");
+    assert!(m.bus.cart.ram.iter().all(|&b| b == 0), "a cartridge without a battery keeps no save");
+    assert!(Core::battery(&m, 0).unwrap().0.is_empty(), "a cartridge without a battery has RAM and no save");
 }
 
 #[test]
 fn set_buttons_moves_only_the_changed_bits_and_only_on_the_first_port() {
     let mut m = create(0x00, "", &[]).unwrap();
     let (a, b) = (1u32 << 4, 1u32 << 5);
-    m.set_buttons(0, a, a).unwrap();
-    m.set_buttons(0, b, b).unwrap();
+    Core::set_buttons(&mut m, 0, a, a).unwrap();
+    Core::set_buttons(&mut m, 0, b, b).unwrap();
     assert!(m.bus.joypad.a && m.bus.joypad.b);
-    m.set_buttons(1, 0, 0xFF).unwrap();
+    Core::set_buttons(&mut m, 1, 0, 0xFF).unwrap();
     assert!(m.bus.joypad.a && m.bus.joypad.b, "port 1 is not a Game Boy's");
-    m.set_buttons(0, 0, a).unwrap();
+    Core::set_buttons(&mut m, 0, 0, a).unwrap();
     assert!(!m.bus.joypad.a && m.bus.joypad.b);
 }
 

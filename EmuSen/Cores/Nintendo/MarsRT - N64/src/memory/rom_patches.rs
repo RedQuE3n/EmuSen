@@ -1,4 +1,4 @@
-//! `CheatRomPatcher` beside the cartridge: the registry's ROM patches resolved to bytes by the host, consulted on every cartridge read (Mars_Native.md §6.6.1).
+//! Beside the cartridge, the registry's ROM patches resolved to bytes by the host, consulted on every cartridge read (Mars_Native.md §6.6.1).
 
 /// One patched byte: the ROM offset, the value, and the byte the cartridge must hold for it to apply, or none.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

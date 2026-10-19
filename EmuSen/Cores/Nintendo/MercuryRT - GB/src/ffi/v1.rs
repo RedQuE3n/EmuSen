@@ -1,5 +1,5 @@
-//! MercuryRT on the core ABI v1, the host's only way to it since B4 retired its C# shim; the pre-stable exports beside it
-//! serve the native host's tests until that interface goes. See EmuSen_CoreAPI.md §13.1, §23, EmuSen_Backend.md §17.
+//! MercuryRT on the core ABI v1, the host's only way to it since B4 retired its C# shim and the pre-stable interface.
+//! See EmuSen_CoreAPI.md §13.1, §23, EmuSen_Backend.md §17.
 
 use emusen_native::core::{
     self as v1, Battery, Button, Choice, Control, Controller, Create, Effect, FrameInfo, Info, Instruction, MachineInfo, Port, Processor, Reference, Region,
@@ -283,7 +283,7 @@ impl v1::Core for Machine {
 
     /// Port 0 alone; another port is ignored, as `MercuryCore.SetButton` ignores it.
     fn set_buttons(&mut self, port: u32, mask: u32, changed: u32) -> Result<(), i32> {
-        <Machine as emusen_native::abi::NativeCore>::set_buttons(self, port, mask, changed)
+        self.press(port, mask, changed)
     }
 
     fn space_size(&self, space: u32) -> Result<i64, i32> {
@@ -462,7 +462,7 @@ impl v1::Core for Machine {
 
 emusen_native::core_exports!(Machine; audio_peek, mutes, rom_patches, debug, debug_stack, debug_registers, debug_disassemble);
 
-/// `mercuryrt_rom_patch` for a machine of the core ABI v1: the exhaustive patch test's view through the v1 loader.
+/// The byte a CPU read of `address` returns for `original` under the current patches, or -1 for none: the exhaustive patch test's view.
 ///
 /// # Safety
 /// `machine` must be null or a live handle `emusen_core_create` returned.
@@ -471,7 +471,7 @@ pub unsafe extern "C" fn mercuryrt_core_rom_patch(machine: *const v1::sys::Machi
     unsafe { v1::exports::core_of::<Machine>(machine) }.map_or(STATUS_NULL, |m| rom_patch(m, address, original))
 }
 
-/// `mercuryrt_step` for a machine of the core ABI v1: one instruction with the frame loop's acknowledge and stall, a test extension
+/// One instruction with the frame loop's acknowledge and stall, a test extension
 /// (Mercury_Native.md §12).
 ///
 /// # Safety
@@ -505,7 +505,7 @@ pub unsafe extern "C" fn mercuryrt_core_stop(machine: *mut v1::sys::Machine) -> 
     0
 }
 
-/// `mercuryrt_serial` for a machine of the core ABI v1: the link port's log, oldest first, copied up to `len`; its count.
+/// The link port's log, oldest first, copied up to `len`; its count.
 ///
 /// # Safety
 /// `machine` must be null or a live handle `emusen_core_create` returned; `out` valid for `len` bytes, or null.

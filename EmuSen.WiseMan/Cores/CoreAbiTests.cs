@@ -138,7 +138,7 @@ namespace EmuSen.WiseMan.Cores
             public readonly delegate* unmanaged<nint, void> SetCrashLog;
         }
 
-        // The pre-stable host calls the crash-log export as returning void (NativeCoreLibrary.cs), and the check finds it - see EmuSen_CoreAPI.md §1.2 item 8.
+        // The deleted pre-stable host called the crash-log export as returning void, and the check finds such a declaration - see EmuSen_CoreAPI.md §1.2 item 8.
         [Fact]
         public void The_check_finds_a_declaration_whose_return_disagrees_with_the_header()
         {

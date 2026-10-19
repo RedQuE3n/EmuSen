@@ -1,6 +1,6 @@
 # EmuSen — the backend in Rust: the line, the frontend API, the system packs and the services
 
-*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18), and B4's shared part with core ABI 1.13 (§22, 2026-10-18), and MoonRT's units, pack views and switch (§23, 2026-10-18), and debugger expressions naming the units' registers (§24, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
+*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18), and B4's shared part with core ABI 1.13 (§22, 2026-10-18), and MoonRT's units, pack views and switch (§23, 2026-10-18), and debugger expressions naming the units' registers (§24, 2026-10-18), and B4's last step, the deletion across the cores that finishes it (§26, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
 get the entire backend ported to rust", after which the frontend's move is planned, and the request of 2026-10-17 to
 design two things: one frontend API by which every frontend drives the cores, and the system packs and the remaining C#
 platform services in Rust. Every claim about the code was read on `WiseMan` at `165e60b4`. Claims are marked as
@@ -673,7 +673,7 @@ behind a switch until the tester agrees to state 3, and says how it is proven. T
 | **B1** ★ | **The systems table as data.** `emusen-systems` with nine data files (NES, SNES, Mega Drive, Mega-CD, 32X, PlayStation, Game Boy, Game Boy Color, N64), the table and nothing else; `SystemPacks` builds each `SystemEntry` from it, keeping its C# recognisers and codecs; `CoreCatalog`'s Game Boy and N64 rows become packs; `CoreDescriptor` is derived and never written by hand | `CoreRegistrationEquivalenceTests` and `CoreRegistrationGolden.txt` unchanged (`EmuSen_CoreAPI.md` §25) [R]; a parity class holding each C# literal entry equal to its data file field by field, run before the literals are deleted; the crate's own tests | `EMUSEN_SYSTEMS_NATIVE=0`, the C# literals, until state 3 |
 | **B2** | **The frontend API v1 and its C# implementation.** `emusen_crystal.h` and its baseline; `EmuSen.Crystal.Client`; a managed implementation in `EmuSen` written from `EmulatorSession`, `CoreFactory` and the three loops' frame-end order, which is then written once; Pharaoh, emusen-shell and Mistress moved onto the binding in that order; `HostAction` synthesised from events for the C# shell; the session service 1.3 with `games`, `open_game` and `open_console` | one test per row of `EmuSen_Surfaces.md` §4.1's divergence table, run through every client (rewind gated by the engine in each; one post-load sequence); F3 and F4, and the candidates C1 to C7 of §3.12, each shown by a test that fails first or recorded as no defect; Pharaoh's `framesum` and `audiosum` equal before and after on the bench games; the shell's golden corpus; the shape check that only C-expressible types appear in the contract layer (`EmuSen_CoreAPI.md` §9.3) [R]; the header and the binding agreeing by a test | each frontend's old path stays until its own move is merged; afterwards git, since the implementation is the same C# moved |
 | **B3** | **Pack code in Rust**: the recognisers and routing, header readers, cheat codecs, the card formats (`PsxCardFormat`, `N64PakFormat`, `SegaCdBramFormat`), debugger views, the OpenVGDB transform; the console code of the shims moved in (`N64GameSharkCodec`, `MoonBoards`, `GbCartridge`, the SM83 disassembler) and the VR4300's onto `emusen-mips` | a parity class per pack on generated inputs: synthetic discs and cartridges for the recognisers, every code of the cheat tests both ways, cards written by each side read by the other and edited to the same bytes, and cards written by Diamond's and Nephrite's open firmware read by the pack's modules (F21), every tile and tilemap entry of the debug-view tests; seeded faults shown to be caught (`EmuSen_RustPlatform.md` §6.5) [R]; the golden corpus's `cheat`, `cards`, `tile` and `dis` files | `EMUSEN_SYSTEMS_NATIVE=0` |
-| **B4** | **The per-core shims retired.** What each adds above the ABI goes into its core's own exports, as optional capabilities of the core ABI v1 where one exists (`DEBUG_REGISTERS`, `EmuSen_DianaSh.md` Q28 [R]) and a minor where none does; MarsRT's private exports (`marsrt_core_counters`, `_cpu_registers`, `_gpu_report` and the rest, `MarsRtCore.cs:21–32` [M]) become telemetry or debug capabilities; the shims, `PortEngine` and the pre-stable host deleted; the three dead classes deleted | each core's goldens and corpus baseline unchanged (`EmuSen_Stack.md` §2.1, 2026-10-16) [R]; the kit's corpus on each core; the debugger's golden corpus on each core unchanged, or each difference recorded and decided; `grep` for a type under `EmuSen.Cores.Nintendo.` in shipped code: 0 | per core: its shim stays until its core's exports pass, reached through `CoreFactory` as now |
+| **B4** | **The per-core shims retired.** What each adds above the ABI goes into its core's own exports, as optional capabilities of the core ABI v1 where one exists (`DEBUG_REGISTERS`, `EmuSen_DianaSh.md` Q28 [R]) and a minor where none does; MarsRT's private exports (`marsrt_core_counters`, `_cpu_registers`, `_gpu_report` and the rest, `MarsRtCore.cs:21–32` [M]) become telemetry or debug capabilities; the shims, `PortEngine` and the pre-stable host deleted; the three dead classes deleted | each core's goldens and corpus baseline unchanged (`EmuSen_Stack.md` §2.1, 2026-10-16) [R]; the kit's corpus on each core; the debugger's golden corpus on each core unchanged, or each difference recorded and decided; `grep` for a type under `EmuSen.Cores.Nintendo.` in shipped code: 0 | per core: its shim stays until its core's exports pass, reached through `CoreFactory` as now. *Built 2026-10-18: VenusRT §19.9, MoonRT §21 and §23, MercuryRT §17.9 and §17.10, MarsRT §18.9 and §18.10, the shared host and core ABI 1.13 §22, the deletion across the cores §26; every gate as measured in §26.4* |
 | **B5** | **The file services in Rust**: `emusen-firmware` (the store, the folders' order, the overview), `emusen-savemedia` (the card manager over B3's formats and Galaxia's `MediumLock`), `emusen-cheats`' files and database (`.cht`, the list files, the database's install, prune and import) | a parity class per service over generated trees (firmware whole and split, cards of each medium held and free, `.cht` files of the cheat tests); the golden corpus's `cards`, `cheat db` and `firmware` cases. *Built 2026-10-17, §15; the download on SR9's client built 2026-10-18, §16* | `EMUSEN_SERVICES_NATIVE=0` |
 | **B6** | **The core host in Rust, shared with the kit**: `emusen-core-host` in `EmuSen/Cores/Shared/` (discovery from sidecars, trust and the manifest, the checks of `EmuSen_CoreAPI.md` §7.2, the v1 calls, the input latch, the state layout), which the kit's `api.rs`, `sidecar.rs` and `lender.rs` fold into | the kit's corpus on every core gives the same report through the new crate; discovery's listing as JSON equal from the C# and the Rust over the published tree and over trees with a missing, altered and unapproved library | the kit keeps its own loader until its corpus passes; the C# host is untouched by this step |
 | **B7** | **Crystal in Rust**: `emusen-crystal` over B1 to B6: sessions and the frame call, input, speed, rewind, states and `states.db`, settings and `consoles.json`, save-media placement, cheat application, the debugger's registries, expressions and bridge, telemetry, the recorder, the session service's table; exported as `emusen_crystal_*` from the platform library. Built in four parts, each graded before the next: (a) life, frame, input, speed, rewind, states, settings, media; (b) the debugger; (c) the service table; (d) the per-program switch | the parity class runs scripted sessions through the binding on both implementations and compares frame and audio digests, state bytes, files written, events drained and every service function's JSON; the debugger's golden corpus with Crystal's table; then state 2 per program: **Pharaoh first**, then emusen-shell, then Mistress, each after a full blast-radius run on Linux and the three systems' CI | `EMUSEN_CRYSTAL_NATIVE=0`, per process, the B2 implementation |
@@ -719,7 +719,7 @@ what it consolidates. Each step reports its real figure beside this one, as the 
 | B1 | about 450 of entries | 1,100 (900–1,400); *built: 438, §12.2* | 320 of data; 200 of C# facade; *built: 144 and 103* | 450 |
 | B2 | 3,600 of EmulatorSession, CoreFactory and the three loops' frame-end code | — | header and baseline 1,100; C# contract and binding 1,900; managed implementation 2,500; tests 2,000 | about 1,600 from the frontends at once |
 | B3 | about 2,950 | 7,400 (5,900–8,900); *parts (a) to (c) built: about 4,000 for about 1,860 replaced, §13.5* | 300 of C# facade; *built: about 630* | 2,950 |
-| B4 | about 5,480 deleted unported | 1,500–3,000 in the cores' own exports | 300 in the generic C# adapter | 5,480 |
+| B4 | about 5,480 deleted unported; *built: 4,334, §26.5* | 1,500–3,000 in the cores' own exports; *built: 1,622 added in the four cores and 305 in two shared decoders* | 300 in the generic C# adapter; *built: about 430* | 5,480; *built: 4,334* |
 | B5 | 1,250 | 3,100 (2,500–3,750); *built: 2,497 for about 1,020 replaced, §15.5* | 300 of C# facade; *built: about 730* | 1,250 |
 | B6 | 1,735 in C#, 704 in the kit | 3,600 (3,000–4,300), net of what the kit brings | — | (with B7) |
 | B7 | about 7,800, and B2's 2,500 | 23,000 (18,000–27,000), with the API's C layer and the service's table | — | about 13,400, with the service's provider and B2's implementation |
@@ -4968,3 +4968,93 @@ No golden was re-recorded.
   order stands for them.
 - **The frame log alone reads the field**, as it was the one caller of `SystemPacks.BigEndian`. A cheat's order is its
   code format's (`CheatWrite.BigEndian`), not the space's, and is unchanged.
+
+---
+
+## 26. B4's last step, 2026-10-18: the pre-stable interface, `PortEngine` and the dead classes deleted; B4 finished
+
+*With all four switches on `WiseMan` (VenusRT §19.9, MoonRT §23, MercuryRT §17.10, MarsRT §18.10), nothing calls the
+pre-stable common interface of `EmuSen_NativeCores.md` §3, `PortEngine` or the three dead classes of §4.1, so they are
+deleted here in one commit across the cores, as §17.6's member list and §17.7's step 8 planned. Nothing a player sees
+changes, and the kit's reports are the same to the byte once timings are set aside (§26.4).*
+
+### 26.1 What was deleted
+
+| Piece | Lines | Its last caller, gone before this step |
+|---|---:|---|
+| `PortEngine.cs` (`PortEngine`, `PortMachine`, `PortLibrary`) | 288 | the MoonRT and MercuryRT shims; MarsRT's `MarsNative` |
+| The pre-stable host: `NativeCoreLibrary` 89, `NativeInterface` 188, `NativeMachine` 236, `NativeRtCore` (with `INativeDebugBridge`) 328, `NativeDebugBridge` 244 | 1,085 | the shims, and `NativeHostTests`; `RomPatchTriples` had already moved to `CoreEngine` |
+| The dead classes: `CheatRomPatcher` 16, `TeeTextWriter` 26, `StateSerializer` (with its three attributes) 189 | 231 | none in shipped code (§4.1); `StateSerializerTests` alone named the last |
+| `emusen-native`'s `NativeCore` trait, `native_exports!` with its two helper macros, `hooks_of`, `slice`, `slice_mut`, `NativeFile`, the pre-stable `FrameInfo`, `COMMON_VERSION` and `version` | 675 removed, 6 added | MercuryRT's `impl NativeCore` and VenusRT's helper |
+| MercuryRT's pre-stable half: `impl NativeCore for Machine`, its `native_exports!` (37 `emusen_native_` symbols) and the six `mercuryrt_*` exports (`_set_sample_rate`, `_serial`, `_cgb_hardware`, `_step`, `_rom_patch`, `_ram_length`) | 206 removed, 13 added | `NativeHostTests` |
+| VenusRT's `ffi.rs`, the `NativeCore` helper §19.9 Q9 kept | 300 removed; 73 into `spaces.rs`, 171 into `v1.rs` | v1's `create`, `battery` and the spaces |
+
+`emusen_native_` occurs in no core's library, source or test but as an absence the tests assert. `grep` for a type under
+`EmuSen.Cores.Nintendo.` in shipped code: 0; the only `.cs` file under a core's folder is MarsRT's PGO driver, tooling
+that §4.1 keeps, which builds against `CoreEngine`. The `CS0108` warnings of the shims' `Labels` are gone: a full
+rebuild of `EmuSen.sln` warns `CS0108` once, in LunaP's `SliderRow.Name`, which is not this repository's.
+
+### 26.2 What moved, and what was folded
+
+- **`emusen-native`'s `abi` module keeps only what v1 inherited**: the capability bits 0 to 13, the status codes and the
+  fault band, `Region`, `File`, `Settings` and the crash log, which `core` re-exports and every core and the platform
+  library use. Renaming the module would touch every core for no change in behaviour, so its name stays and its page
+  comment says what it now is.
+- **VenusRT** (§19.9 Q9): the helper's bodies are in v1's `Core` implementation, the create's in a private `open` there;
+  the chips' spaces and their reads and writes stay in `spaces.rs` (formerly `ffi.rs`). Its test of what a create
+  refuses moved into v1's tests with one assertion dropped, the unknown `SampleRate` setting, which v1 leaves to the
+  host's schema and so never reached the helper through v1.
+- **MercuryRT**: `set_buttons`' body is `Machine::press`; `tests/ffi.rs` drives `Core::create` with the Model setting's
+  names, and its battery case now holds v1's rule of §17.10 (a board without a battery keeps no save).
+- **`export_check.py`** reports any `emusen_native_` symbol as a problem. On `WiseMan` before this step it fails
+  MercuryRT with 37 of them; after, every core passes.
+- **CI** (`rust-cores.yml`) checks MercuryRT's library for `emusen_core_`, as it checks the others.
+
+### 26.3 The tests deleted or moved, each named
+
+- **`NativeHostTests`** is deleted. It tested the pre-stable loader itself: `The_three_loaders_keep_their_switches_and_crash_logs`
+  (a `NativeCoreLibrary`'s switch, crash-log stem and version refusal), `MercuryRTs_library_is_on_the_common_interface_and_a_missing_one_is_refused`
+  and `Each_machine_describes_the_shared_codes_and_its_own` (`NativeMachine.Shared`). Its two cases on surviving code
+  moved: `The_rom_patch_triples_keep_the_registrys_order_within_their_bounds` to `SharedHostTests`, and
+  `MarsRTs_state_handle_is_a_v1_machine_of_the_size_asked`, with the MarsRT export and status-word checks of the other
+  two, to `MarsRtCoreAbiTests.MarsRTs_state_handle_is_a_v1_machine_with_its_own_words`.
+- **`StateSerializerTests`** (nine cases) is deleted with the class it tested.
+- **`StateProperties.StateSerializer_write_then_read_is_the_identity`** is deleted: in spite of its name it exercised
+  only the test's own `FakeCore`, which never used the serializer.
+- `MoonRtFrontendTests`, `VenusRtTestRomRunnerTests` and `MarsRtCoreAbiTests` asserted the absence of pre-stable exports
+  through `NativeInterface`'s tables; they now share `Fixtures/PreStableExports`, five entry points of the old interface.
+  `MercuryRtCoreAbiTests.The_library_is_on_the_core_abi_alone` is new: no pre-stable export, none of the six
+  `mercuryrt_*`, and the five `mercuryrt_core_*` test extensions present.
+
+### 26.4 The gates, measured on 2026-10-18
+
+The kit's corpus and the export check were run on two builds side by side, `WiseMan` at `04e6ebae` (before) and this
+step (after), each core and the kit built from its own tree; then again after `WiseMan`'s core ABI 1.14 was merged.
+
+| Gate | Result |
+|---|---|
+| `grep` for a type under `EmuSen.Cores.Nintendo.` in shipped code | 0 |
+| `export_check.py` (with the `emusen_native_` rule) on the six libraries | before: MercuryRT fails, 37 `emusen_native_` symbols; the other five pass. After: all six pass, `nm` finding no `emusen_native_` symbol in any; after the 1.14 merge the same, at ABI 1.14 |
+| The kit's corpus on every core, §22.5's set: MoonRT 4 images (`--self-delimiting`), MercuryRT 4, VenusRT 2, MarsRT 2, Nephrite `genesis-sample.txt` 64, Diamond `psx-sample.txt` 9 at 1,800 frames, and MercuryRT's 173 hardware-test ROMs | every core's cases and every image pass on both builds. **265 reports, 265 the same** once the library's path and the timings are set aside (C13's count of rounds and the ABI number were the same too). After the 1.14 merge, 265 of 265 the same once the ABI number and Nephrite's new byte-order note are set aside |
+| Each core's crate, `cargo test --profile test-checked`, after the 1.14 merge | `emusen-native` 80, the kit 35, MercuryRT 43, VenusRT 145, MoonRT 27, MarsRT 507, Nephrite 194, Diamond 306 and its `v1` 5, the platform library 35; none failed |
+| WiseMan, 77 classes: the core-ABI and host classes (`CoreAbiTests`, `CoreAbi113Tests`, `CoreAdapterTests`, `CoreDiscoveryTests`, `SharedHostTests`, `CoreEngineThreadTests`, `DebugPlumbingTests`, `CoreDebugViewTests`, `DebugCodeParityTests`), `GoldenCorpusTests`, `CoreRegistrationEquivalenceTests`, `BreakpointConditionTests`, `UnitExpressionTests`, the cheat, battery, rewind, refusal and frontend classes, and each core's ABI, golden, engine and debug classes (MoonRT 7, VenusRT 7, MarsRT 8, MercuryRT 21 with the seven `MercuryCommercialRom*`, Nephrite 3, Diamond 3), `EMUSEN_COMMERCIAL_ROMS` naming the project's `TestRoms`, read in place and unchanged after | **1,249 tests, 1,249 passed**; after the 1.14 merge, with `CoreAbi114Tests`, **1,256 of 1,256**. Each `MercuryCommercialRom*` class 7 of 7 |
+
+### 26.5 Sizes, against §7's B4 row
+
+[M: `git show --numstat` of each deleting commit, and `git diff --numstat` from `a9361ac3^`, B4's first commit's parent,
+to this step] **C# deleted unported: 4,334 lines**, the four shims as they stood when each was deleted (VenusRT 67,
+MoonRT 649, MercuryRT 904, MarsRT 1,110) and this step's 1,604. §7 estimated about 5,480 from §4.1's inventory; the
+1,150 between are mostly code that left the shims before B4 began (the console code B3 moved into the packs, so the
+shims measured 3,116 at B4's start against §4.1's 3,853) and MarsRT's `MarsMachine`, which moved to WiseMan's fixtures
+rather than being deleted. **Rust in the cores' exports: 1,622 lines added** in the four cores (MercuryRT 409, MoonRT
+450, VenusRT 248, MarsRT 515), with 1,146 removed there, and 305 in the two decoders the cores now share
+(`emusen-sm83` 154, `emusen-6502` 151, moved out of `emusen-systems` rather than written), inside §7's 1,500 to 3,000.
+`emusen-native` gained about 400 (the 1.13 items and 1.14's byte order) and lost 745, this step's 675 among them. **The
+generic C# host gained about 430** (`CoreDebugTarget`'s units and views, the bridge's detail word, `CoreEngine`'s
+frame end and settle, discovery's sole engines), against §7's 300, and lost what the shims and the pre-stable host held.
+
+### 26.6 Left
+
+B4 is finished: every console runs on the generic engine and target, through the core ABI v1 alone. What stays open is
+the tester's, as each phase recorded it: `SM83` read as `CPU` (§17.10), the summary's sound queue (§17.10), and the
+other consoles' Rust twins of the new view members (§17.10, §23). B6, the core host in Rust, may now start (§6).

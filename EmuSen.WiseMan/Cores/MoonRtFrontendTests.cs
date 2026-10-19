@@ -89,10 +89,8 @@ namespace EmuSen.WiseMan.Cores
         public void The_library_is_on_the_core_abi_alone()
         {
             Assert.True(MoonEngines.Available, MoonEngines.Report);
+            PreStableExports.AssertNone(MoonEngines.LibraryPath);
             nint handle = NativeLibrary.Load(MoonEngines.LibraryPath);
-            foreach (string name in NativeInterface.Required) Assert.False(NativeLibrary.TryGetExport(handle, name, out _), name);
-            foreach (var (_, name, exports) in NativeInterface.Optional)
-                foreach (string export in exports) Assert.False(NativeLibrary.TryGetExport(handle, export, out _), $"{name}: {export}");
             foreach (string gone in new[] { "moonrt_step", "moonrt_rom_patch", "moon_machine_new" }) Assert.False(NativeLibrary.TryGetExport(handle, gone, out _), gone);
             foreach (string kept in new[] { "moonrt_core_step", "moonrt_core_rom_patch" }) Assert.True(NativeLibrary.TryGetExport(handle, kept, out _), kept);
         }
@@ -203,6 +201,9 @@ namespace EmuSen.WiseMan.Cores
             rust.Dispose();
         }
 
+        // EMUSEN_FAULT_BASE, the top of the core ABI's fault band.
+        private const int FaultBase = -320;
+
         // An image with no PRG is refused at the load as a fault, in the core's words with its status, the oracle's exception types retired - see EmuSen_Backend.md §20.
         [Fact]
         public void An_image_without_prg_is_refused()
@@ -213,7 +214,7 @@ namespace EmuSen.WiseMan.Cores
             using var core = MoonEngines.Create(TestCores.NoBattery);
             var refused = Assert.Throws<CoreRefusedException>(() => core.LoadRom(Rom(empty, "NoPrg.nes")));
             _output.WriteLine(refused.Status + ": " + refused.Message);
-            Assert.InRange(refused.Status, NativeInterface.FaultBase - 63, NativeInterface.FaultBase);
+            Assert.InRange(refused.Status, FaultBase - 63, FaultBase);
             Assert.StartsWith($"{CoreCatalog.MoonRtEngine} refused the game: ", refused.Message);
             Assert.False(core.IsRomLoaded);
         }

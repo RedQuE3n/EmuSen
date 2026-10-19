@@ -29,7 +29,7 @@ pub struct Mixer {
     pub sample_count: i32,
     pub cycles_per_sample: f64,
     pub cycle_fraction: f64,
-    /// Its limit is the host's `AudioSettings.AudioBufferMaxSamples`, sent through `emusen_native_set_audio_limit`.
+    /// Its limit is the host's `AudioSettings.AudioBufferMaxSamples`, sent through `emusen_core_set_audio_limit`.
     pub samples: SampleQueue,
     pub hp90: f64,
     pub hp90_prev: f64,

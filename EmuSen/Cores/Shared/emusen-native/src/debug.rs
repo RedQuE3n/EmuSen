@@ -24,7 +24,7 @@ pub mod stop {
     pub const READ: u32 = 64;
 }
 
-/// The flags `emusen_native_debug_set` takes; coverage of processor n is bit `COVERAGE + n`.
+/// The flags `emusen_core_debug_set` takes; coverage of processor n is bit `COVERAGE + n`.
 pub mod flag {
     pub const CALLS: u32 = 1;
     pub const WRITES: u32 = 2;
@@ -44,7 +44,7 @@ pub mod range {
     pub const READ_BREAK: u32 = 3;
 }
 
-/// The flags `emusen_native_debug_run_frame` takes.
+/// The flags `emusen_core_debug_run_frame` takes.
 pub mod run {
     /// The first instruction is not checked: the host has already decided to run it.
     pub const UNCHECKED: u32 = 1;
@@ -200,7 +200,7 @@ impl Hooks {
         }
     }
 
-    /// `emusen_native_debug_set`'s flags applied at once, the profile's run closed first.
+    /// `emusen_core_debug_set`'s flags applied at once, the profile's run closed first.
     pub fn configure(&mut self, flags: u32, depth_target: i32, depth_guard: i32) {
         self.flush();
         let on = |bit: u32| flags & bit != 0;
@@ -399,7 +399,7 @@ impl Hooks {
         true
     }
 
-    /// `emusen_native_debug_counters`: the depth, the unmatched returns, then a core's own.
+    /// `emusen_core_debug_counters`: the depth, the unmatched returns, then a core's own.
     pub fn counters(&self) -> [i64; 2] {
         [self.stack.len() as i64, self.unmatched_returns]
     }

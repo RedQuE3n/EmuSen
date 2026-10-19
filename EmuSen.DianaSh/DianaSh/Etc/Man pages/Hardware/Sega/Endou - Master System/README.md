@@ -11,9 +11,11 @@ Master System is the next new console, ahead of the PlayStation 2; building star
   the design decisions (the master clock, the VDP's granularity, sound, the open boot program, cartridge boards, the
   state, settings, the speed budget), the oracles by component, the stages with their gates and sizes, and the
   questions, decided 2026-10-19.
-- [`Endou_References.md`](Endou_References.md) — the documents, test programs, references and referees with their
-  provenance and licence, before fetching: what Nephrite's fetch already put in the probe's cache, and what stage 1
-  fetches on the tester's go.
+- [`Endou_Native.md`](Endou_Native.md) — the build record, from stage 1 (2026-10-19): the stub crate `endou` on the
+  core ABI v1, marked in development; the systems `sms` and `sg1000` as data; `SyntheticSmsRom`; the kit's gate; the
+  five references' costs; the seeded faults; and the questions before stage 2.
+- [`Endou_References.md`](Endou_References.md) — the documents, test programs, references and referees with their URL,
+  version, licence and SHA-256, as stage 1 fetched and pinned them, and the corrections to what stage 0 recalled.
 - [`Endou_Disputes.md`](Endou_Disputes.md) — the disputes log, opened with D-0 (the PSG's noise register by console),
   D-1 (the Master System's colour levels, open) and D-2 (the YM2413's operator ROMs, open).
 

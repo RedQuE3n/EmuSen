@@ -317,7 +317,11 @@ of it [C]:
 - **A battery that appears after create** (stage 2), only if the host does not already save a battery file that machine
   info lists after a `MACHINE_INFO` event; if it does not, §4.4's table form is used and nothing is proposed.
 - **The probe's options for the Master System** (stage 1): each reference's model, region and FM options pinned through
-  `GET_VARIABLE`, as Nephrite's §1.6 did for the Genesis.
+  `GET_VARIABLE`, as Nephrite's §1.6 did for the Genesis. *Built 2026-10-19:* nothing was needed beyond `--option`; the
+  keys are listed in `Endou_Native.md` §5.2, and `.sg` names its system in the probe's log.
+- **The routed system beside an image** (found at stage 1, `Endou_Native.md` §2.3): a host sets `system` in the create
+  parameters only with an image of no bytes, so a core of two systems that share no telling header must guess. An
+  extension of the existing field, a minor letting a host set it beside an image too, proposed before stage 4.
 - **An `sms` module of `emusen-systems`** (stages 7 and 8) for the codecs and the views: a module beside the others,
   which the crate's design provides for [R `EmuSen_Backend.md` §5.2], so no new surface.
 
@@ -339,14 +343,15 @@ Three files in `Platform/systems/data/`, the fields being the table's seventeen 
 | `cheat_systems` | `Sega - Master System - Mark III` [M: the cheat database's folder] | `Sega - SG-1000` [M] | `Sega - Game Gear` [M] |
 | `openvgdb_systems` | `SMS` [M: OpenVGDB's `SYSTEMS`, 513 ROMs] | `SG1000` [M, 187] | `GG` [M, 490] |
 | `esde_system` | `mastersystem` [R the theme's file names] | `sg-1000` [R] | `gamegear` [R] |
-| `screenscraper_system` | 2 [A, to be confirmed against ScreenScraper's list at stage 1] | 109 [A] | 21 [A] |
+| `screenscraper_system` | 2 ~~[A, to be confirmed against ScreenScraper's list at stage 1]~~ [R ScreenScraper's system page, 2026-10-19] | 109 [R] | 21 [R] |
 | `self_delimiting_images` | false | false | false |
 | `byte_order` | little | little | little |
 | `media` | none | none | none |
 
 `esde_full_name`, `cover_aspect` and `cheat_space` are set at stage 7 from ES-DE's `es_systems.xml` and the boxes, as
 Nephrite's were [R `Nephrite_Plan.md` §1.7]. ES-DE also lists a Mark III system: Art Book Next names its file `mark3`
-[R]; its id in ES-DE is read then. No system of its own is recommended for it [C], since `.sms` is the Master System's
+[R]; its id in ES-DE is read then. *Read at stage 1 (2026-10-19):* ES-DE's `es_systems.xml` names it `mark3`,
+"Sega Mark III", with the platform `mastersystem` [R `Endou_Native.md` §3]. No system of its own is recommended for it [C], since `.sms` is the Master System's
 alone and routing by extension never consults the folder (below).
 
 **Routing.** `.sms`, `.sg` and `.gg` are each one system's, so `route` chooses without a recogniser [R `probe.rs`'s
@@ -573,7 +578,7 @@ before the next begins. The core carries the `InDevelopment` mark from stage 1 u
 | Stage | What it covers | Its gate: what passes, measured how | Steps |
 |---|---|---|---|
 | **0** | This plan, its references page and disputes log | The tester's go | 1 (2026-10-19) |
-| **1** | The crate `endou` on the core ABI v1 as a stub: core info for `sms` and `sg1000`, the header read, a black picture; its row in `RustCores.props` with `<InDevelopment>true</InDevelopment>`, so the build writes its sidecar marked and lists it in `cores.manifest` [R `EmuSen_Backend.md` §27.11]; CI's matrix row; the data files `sms.json` and `sg1000.json`; WiseMan's `SyntheticSmsRom` (a header with its checksum and region, a boot stub, a pad reader, as `SyntheticMdRom` serves Nephrite [R `NephriteTests.cs`]); on the tester's go, the documents, test programs and references fetched and pinned (`Endou_References.md`), the three local references and any fetched ones run through the probe with their costs and spaces | The kit's C1–C23 on synthetic images; the systems crate's tests; a published tree's `sha256sum -c cores.manifest`; the references' costs recorded | 2 |
+| **1** | *Built 2026-10-19, `Endou_Native.md` §1–§6.* The crate `endou` on the core ABI v1 as a stub: core info for `sms` and `sg1000`, the header read, a black picture; its row in `RustCores.props` with `<InDevelopment>true</InDevelopment>`, so the build writes its sidecar marked and lists it in `cores.manifest` [R `EmuSen_Backend.md` §27.11]; CI's matrix row; the data files `sms.json` and `sg1000.json`; WiseMan's `SyntheticSmsRom` (a header with its checksum and region, a boot stub, a pad reader, as `SyntheticMdRom` serves Nephrite [R `NephriteTests.cs`]); on the tester's go, the documents, test programs and references fetched and pinned (`Endou_References.md`), the three local references and any fetched ones run through the probe with their costs and spaces | The kit's C1–C23 on synthetic images; the systems crate's tests; a published tree's `sha256sum -c cores.manifest`; the references' costs recorded | 2 |
 | **2** | The machine without its picture: the bus, RAM, `$3E`, `$3F`, the controller ports, the region read-back, the Pause NMI and the Reset bit; cartridges (plain, Sega's mapper with its RAM, Codemasters', the SG-1000's RAM boards) and the board table's form; the battery form (§4.4); the scheduler on the master clock; `beryl-z80`'s assembler | Synthetic programs for each port, mapper and interrupt rule; an SMS-hosted ZEXALL on the whole machine; RAM against the references at anchors on test programs | 3 |
 | **3** | `beryl-sms-vdp`, mode 4: ports, registers, VRAM and CRAM, the counters and the TH latch, the interrupts, the status flags, the composition with sprites (limits, zoom, tall, collision, overflow), the scroll locks, the mask, the 315-5246's heights, the access slots, the dot-stamped renderer, PAL | The VDP test programs (self-reporting ones by their verdicts); pictures equal to the references up to a colour map, or a dispute; the skip-versus-draw state test | 5 |
 | **4** | The VDP's TMS9918 modes and the TMS9918A variant; the SG-1000 as a system; **Nephrite moved onto the crate's composition** | SG-1000 programs and cartridges' pictures against the references; **Nephrite's D-7 tests and its corpus digests unchanged** (P4) | 3 |
@@ -710,8 +715,10 @@ console for disputes, is decided in the tester's own terms. "Please continue" wa
     `AppSettings.RomDirectory` when stage 1 needs a corpus, read only and copied to scratch for every use, as the
     Genesis library was [R `Nephrite_Plan.md` §9 Q13]. *Decided as recommended:* the library was copied on
     2026-10-19 into `AppSettings.RomDirectory`'s `mastersystem/`, 370 files (316 `.sms` and 54 `.sg`), each md5 checked
-    against the handheld's; there are no Game Gear games. It is read in place and never written, and nothing from it is
-    committed; tests build their own images with `SyntheticSmsRom`.
+    against the handheld's; ~~there are no Game Gear games.~~ *The same day the tester supplied six Game Gear games
+    in `gamegear/` (zips holding one `.gg` each: Ecco the Dolphin, Chuck Rock, Chuck Rock II, Mega Man, Marble Madness
+    and Sonic The Hedgehog 2), candidates for the Game Gear's gates at J1–J3.* It is read in place and never written,
+    and nothing from it is committed; tests build their own images with `SyntheticSmsRom`.
 11. **Q11, a console for disputes?** If the tester owns a Master System, a Game Gear or a flash cartridge for either,
     a test program run on it settles D-1 and the access slots outright. *Recommended:* not required; references and
     referees as for Diamond, a console's run welcome where one exists. *Decided otherwise:* **no real hardware is
@@ -729,11 +736,12 @@ console for disputes, is decided in the tester's own terms. "Please continue" wa
   YM2413 document outside an unextracted archive is in the probe's cache [M: `ls`, `DOCS.txt`, 2026-10-19].
 - No measurement of a Master System's colour output exists in the corpus; Nephrite's mode 4 levels are the board's DAC
   model's [R `Nephrite_Disputes.md` D-7].
-- No SMS_MiSTer clone is on the desktop [M: `~/Projects`].
+- No SMS_MiSTer clone is on the desktop [M: `~/Projects`]. *Since stage 1 a shallow clone is in the probe's cache,
+  read only as far as its README and directory names (`Endou_References.md` §4).*
 - The desktop library had no Master System or Game Gear folder when this page was written [M]. ~~Measured
-  2026-10-19, at stage 0.~~ *Since 2026-10-19 it has `mastersystem/` (§10 Q10); still no Game Gear folder.*
+  2026-10-19, at stage 0.~~ *Since 2026-10-19 it has `mastersystem/` and `gamegear/` (§10 Q10).*
 - No transcription of the 315-5124 from die images is known to this page; the network was not searched for one, by
-  this stage's rule, and stage 1's fetch searches.
+  this stage's rule, and stage 1's fetch searches. *Stage 1's fetch found none (`Endou_References.md` §8).*
 
 ## 12. Predictions to be retired
 

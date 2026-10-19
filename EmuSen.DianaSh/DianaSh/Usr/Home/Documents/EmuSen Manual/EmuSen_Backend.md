@@ -5576,8 +5576,11 @@ libraries, so the old loader served as the failover until the gate passed and is
 
 **The manifest, Q2 as decided.** `EmuSen.csproj`'s `BuildRustCores` hashes every built core library with MSBuild's
 `GetFileHash` and writes `obj/…/cores.manifest`, lowercase, in `sha256sum`'s format, copied to the build output and to
-a publish beside the libraries; a library in development is listed too, harmlessly, since a publish does not carry the
-file a line names. A publish for another platform (`RustCoresPublish.targets`) drops the host's manifest with the host's
+a publish beside the libraries; ~~a library in development is listed too, harmlessly, since a publish does not carry
+the file a line names.~~ *Amended 2026-10-19 (`Endou_Native.md` §5.3): it was not harmless. With a core in
+development, a publish's manifest named a library the publish did not carry, and `sha256sum -c` failed on it. The
+build now writes two: the build output's, listing every library it holds, and a publish's, listing only those not in
+development.* A publish for another platform (`RustCoresPublish.targets`) drops the host's manifest with the host's
 libraries and writes one of the prebuilt libraries instead. CI's WiseMan job builds with `EmuSenNative=false`, so it
 writes the manifest of the libraries it places beside the tests, in the same format. The C# reads none of them.
 `sha256sum -c cores.manifest` passes over the build's output and over a fresh publish [M]. **The handheld's files**

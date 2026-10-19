@@ -101,7 +101,7 @@ pub const KEYS: [&str; 17] = [
 pub const MEDIUM_KEYS: [&str; 3] = ["id", "title", "noun"];
 
 /// The data files, by the id each is named for, in the table's order.
-pub const DATA: [(&str, &str); 9] = [
+pub const DATA: [(&str, &str); 11] = [
     ("nes", include_str!("../data/nes.json")),
     ("snes", include_str!("../data/snes.json")),
     ("md", include_str!("../data/md.json")),
@@ -111,6 +111,8 @@ pub const DATA: [(&str, &str); 9] = [
     ("gb", include_str!("../data/gb.json")),
     ("gbc", include_str!("../data/gbc.json")),
     ("n64", include_str!("../data/n64.json")),
+    ("sms", include_str!("../data/sms.json")),
+    ("sg1000", include_str!("../data/sg1000.json")),
 ];
 
 struct Fields<'a> {
@@ -385,7 +387,7 @@ mod tests {
     fn the_embedded_table_reads_whole_in_its_order() {
         let systems = table().expect("the committed data files are a table");
         let ids: Vec<&str> = systems.iter().map(|s| s.id.as_str()).collect();
-        assert_eq!(ids, ["nes", "snes", "md", "mcd", "32x", "psx", "gb", "gbc", "n64"]);
+        assert_eq!(ids, ["nes", "snes", "md", "mcd", "32x", "psx", "gb", "gbc", "n64", "sms", "sg1000"]);
         for (file, _) in DATA {
             assert!(find(file).is_some(), "{file} is in the table");
         }
@@ -406,6 +408,22 @@ mod tests {
         assert!(!snes.self_delimiting_images);
         assert_eq!(snes.attached_to, None);
         assert_eq!(find("gbc").unwrap().release_year, 1998);
+    }
+
+    // Endou's two systems as Endou_Native.md §3 sources each fact: ES-DE's names, ScreenScraper's ids, the cheat database's folders.
+    #[test]
+    fn the_master_system_and_the_sg1000_are_two_systems_of_one_extension_each() {
+        let sms = find("sms").unwrap();
+        assert_eq!((sms.console.as_str(), sms.esde_system.as_str(), sms.esde_full_name.as_str(), sms.screenscraper_system), ("Master System", "mastersystem", "Sega Master System", Some(2)));
+        assert_eq!((sms.extensions.as_slice(), sms.cheat_systems.as_slice(), sms.release_year), (&[".sms".to_string()][..], &["Sega - Master System - Mark III".to_string()][..], 1985));
+        let sg = find("sg1000").unwrap();
+        assert_eq!((sg.console.as_str(), sg.esde_system.as_str(), sg.screenscraper_system, sg.openvgdb_systems.as_slice()), ("SG-1000", "sg-1000", Some(109), &["SG1000".to_string()][..]));
+        let table = table().unwrap();
+        for e in sms.extensions.iter().chain(&sg.extensions) {
+            assert_eq!(table.iter().filter(|s| s.extensions.contains(e)).count(), 1, "{e} is one system's, so routing needs no recogniser");
+        }
+        assert!(!crate::probe::recognises("sms") && !crate::probe::recognises("sg1000"));
+        assert_eq!((sms.byte_order.as_deref(), sms.cheat_space.as_deref(), sms.media.len()), (Some("little"), None, 0));
     }
 
     #[test]

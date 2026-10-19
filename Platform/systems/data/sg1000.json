@@ -1,0 +1,19 @@
+{
+  "id": "sg1000",
+  "name": "Sega SG-1000",
+  "console": "SG-1000",
+  "manufacturer": "Sega",
+  "release_year": 1983,
+  "extensions": [".sg"],
+  "cheat_systems": ["Sega - SG-1000"],
+  "openvgdb_systems": ["SG1000"],
+  "cover_aspect": 0.7,
+  "esde_system": "sg-1000",
+  "esde_full_name": "Sega SG-1000",
+  "self_delimiting_images": false,
+  "attached_to": null,
+  "screenscraper_system": 109,
+  "cheat_space": null,
+  "media": [],
+  "byte_order": "little"
+}

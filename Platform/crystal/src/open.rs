@@ -12,7 +12,7 @@ use emusen_session_service::abi::status as svc;
 use crate::catalog::{self, Catalog};
 use crate::engine::{Ctx, Engine, Options};
 use crate::info::SystemDetail;
-use crate::session::{OpenedWith, Run, Session};
+use crate::session::{OpenedWith, Session};
 
 /// A refusal: its status and words.
 pub type Refused = (i32, String);
@@ -156,15 +156,8 @@ pub fn open(rt: &crate::runtime::Runtime, sessions: &Sessions, asked: &Asked) ->
     } else {
         asked.path.and_then(|p| crate::route::route(&catalog, &discovery, p).0).map(|r| catalog.rows[r].console().to_string()).unwrap_or_else(|| engine.display_name.clone())
     };
-    let session = Arc::new(Session {
-        id: sessions.next_id(),
-        engine: Mutex::new(engine),
-        game_path: asked.path.map(str::to_string),
-        console: name,
-        empty_console: if asked.path.is_none() { console_asked } else { None },
-        opened: asked.opened,
-        run: Mutex::new(Run::default()),
-    });
+    let empty = if asked.path.is_none() { console_asked } else { None };
+    let session = Arc::new(Session::new(sessions.next_id(), engine, asked.path.map(str::to_string), name, empty, asked.opened));
     apply_stored(&session, &ctx, &stored);
     sessions.add(session.clone());
     Ok(session)

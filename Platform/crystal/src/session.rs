@@ -1,15 +1,35 @@
 //! One open session: its engine, what it was opened with, and its answers about itself, the C# `ManagedSession`'s
 //! life and `Info` (EmuSen_Backend.md §29.2). The frame, input, speed, rewind and states join it in their pieces.
 
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+
+use emusen_core_host::InputLatch;
 
 use emusen_galaxia::tree::Tree;
 use emusen_native::core::sys::caps;
 use emusen_native::json::Value;
 
 use crate::catalog::Catalog;
+use crate::abi::{self, emusen_crystal_frame_info};
 use crate::engine::Engine;
+use crate::input::Routes;
 use crate::json::Json;
+use crate::speed::{NORMAL_PERCENT, Speed};
+use emusen_session_service::abi::status as svc;
+
+/// A refusal: its status and words.
+pub type Refused = (i32, String);
+
+/// 1.0's `emusen_crystal_frame_info`, the shortest taken.
+pub const FRAME_INFO_SIZE_10: u32 = 104;
+
+/// A number for the calling thread, never 0, as `Environment.CurrentManagedThreadId` is one.
+pub fn thread_id() -> u64 {
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    thread_local! { static ID: u64 = NEXT.fetch_add(1, Ordering::Relaxed); }
+    ID.with(|id| *id)
+}
 
 /// What a session was opened with besides its game.
 #[derive(Clone, Copy, Debug, Default)]
@@ -18,11 +38,45 @@ pub struct OpenedWith {
     pub audio_buffer_max_samples: u32,
 }
 
-/// The state a session's frame thread and run control share.
-#[derive(Debug, Default)]
+/// The state a session's frame thread and run control share: whether it runs, and at what speed.
+#[derive(Debug)]
 pub struct Run {
     pub paused: bool,
     pub halted: bool,
+    pub run_requested: bool,
+    pub speed: Speed,
+    pub draw_none: bool,
+    base_percent: u32,
+    mode: u32,
+}
+
+impl Default for Run {
+    fn default() -> Run {
+        Run { paused: false, halted: false, run_requested: false, speed: Speed::default(), draw_none: false, base_percent: NORMAL_PERCENT as u32, mode: abi::SPEED_NORMAL }
+    }
+}
+
+impl Run {
+    fn apply_mode(&mut self) {
+        let percent = match self.mode {
+            abi::SPEED_TURBO => self.speed.turbo(),
+            abi::SPEED_SLOW => self.speed.slow(),
+            _ => self.base_percent.min(i32::MAX as u32) as i32,
+        };
+        self.speed.set_percent(percent);
+    }
+}
+
+/// The gate held: the engine, and the thread that holds it marked so that it cannot take it again.
+pub struct Held<'a> {
+    owner: &'a AtomicU64,
+    pub engine: MutexGuard<'a, Engine>,
+}
+
+impl Drop for Held<'_> {
+    fn drop(&mut self) {
+        self.owner.store(0, Ordering::Release);
+    }
 }
 
 pub struct Session {
@@ -34,6 +88,17 @@ pub struct Session {
     pub empty_console: Option<String>,
     pub opened: OpenedWith,
     pub run: Mutex<Run>,
+    pub latch: Arc<InputLatch>,
+    pub routes: Arc<Mutex<Routes>>,
+    pending: AtomicU32,
+    in_frame: AtomicU64,
+    frame_thread: AtomicU64,
+    owner: AtomicU64,
+    closed: AtomicBool,
+    woken: Mutex<bool>,
+    wake: Condvar,
+    /// The picture as shown, for the recorder.
+    shown: Mutex<Vec<u8>>,
 }
 
 fn controllers_of_system(info: &Value, system: &str) -> Vec<Value> {
@@ -43,6 +108,275 @@ fn controllers_of_system(info: &Value, system: &str) -> Vec<Value> {
 }
 
 impl Session {
+    pub fn new(id: u32, engine: Engine, game_path: Option<String>, console: String, empty_console: Option<String>, opened: OpenedWith) -> Session {
+        let (latch, routes) = (engine.latch.clone(), engine.routes.clone());
+        Session {
+            id,
+            engine: Mutex::new(engine),
+            game_path,
+            console,
+            empty_console,
+            opened,
+            run: Mutex::new(Run::default()),
+            latch,
+            routes,
+            pending: AtomicU32::new(0),
+            in_frame: AtomicU64::new(0),
+            frame_thread: AtomicU64::new(0),
+            owner: AtomicU64::new(0),
+            closed: AtomicBool::new(false),
+            woken: Mutex::new(false),
+            wake: Condvar::new(),
+            shown: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn closed_refusal(&self) -> Refused {
+        (svc::NO_SESSION, format!("session {} was closed", self.id))
+    }
+
+    /// The gate taken plainly, as a read naming the machine takes it: after the frame in progress.
+    pub fn lock(&self) -> Result<Held<'_>, Refused> {
+        let me = thread_id();
+        if self.owner.load(Ordering::Acquire) == me {
+            return Err((abi::status::BUSY, format!("this thread already holds session {}'s gate", self.id)));
+        }
+        let engine = self.engine.lock().unwrap_or_else(|p| p.into_inner());
+        self.owner.store(me, Ordering::Release);
+        let held = Held { owner: &self.owner, engine };
+        if self.closed.load(Ordering::Acquire) {
+            return Err(self.closed_refusal());
+        }
+        Ok(held)
+    }
+
+    /// The gate taken for a change: counted while waiting, so that the frame thread lets it land before its next frame.
+    pub fn enter(&self) -> Result<Held<'_>, Refused> {
+        self.pending.fetch_add(1, Ordering::AcqRel);
+        let held = self.lock();
+        self.pending.fetch_sub(1, Ordering::AcqRel);
+        held
+    }
+
+    /// A change between two frames, the caller waiting for the frame in progress, `ManagedSession.Change`.
+    pub fn change<T>(&self, change: impl FnOnce(&mut Engine, &mut Run) -> Result<T, Refused>) -> Result<T, Refused> {
+        let result = {
+            let mut held = self.enter()?;
+            let mut run = self.run.lock().unwrap_or_else(|p| p.into_inner());
+            change(&mut held.engine, &mut run)
+        };
+        if thread_id() != self.frame_thread.load(Ordering::Acquire) {
+            self.wake_up();
+        }
+        result
+    }
+
+    /// The session closed under its gate: whatever comes after is refused.
+    pub fn close(&self, done: impl FnOnce(&mut Engine)) -> Result<(), Refused> {
+        self.change(|e, _| {
+            done(e);
+            self.closed.store(true, Ordering::Release);
+            Ok(())
+        })?;
+        self.wake_up();
+        Ok(())
+    }
+
+    fn wake_up(&self) {
+        let mut woken = self.woken.lock().unwrap_or_else(|p| p.into_inner());
+        *woken = true;
+        self.wake.notify_all();
+    }
+
+    /// The paused frame thread's wait: true when a change was applied or run control asked to run.
+    pub fn wait(&self, timeout_ms: u32) -> bool {
+        self.frame_thread.store(thread_id(), Ordering::Release);
+        let mut woken = self.woken.lock().unwrap_or_else(|p| p.into_inner());
+        if !*woken {
+            woken = self.wake.wait_timeout(woken, std::time::Duration::from_millis(timeout_ms.min(i32::MAX as u32) as u64)).unwrap_or_else(|p| p.into_inner()).0;
+        }
+        std::mem::replace(&mut *woken, false)
+    }
+
+    /// One frame, or none while paused or halted, its facts into `info`, `ManagedSession.Frame`.
+    pub fn frame(&self, info: Option<&mut emusen_crystal_frame_info>) -> Result<(), Refused> {
+        if let Some(i) = &info
+            && i.size < FRAME_INFO_SIZE_10
+        {
+            return Err((abi::status::BAD_STRUCT, format!("emusen_crystal_frame_info of {} bytes; version 1.0's is {FRAME_INFO_SIZE_10}", i.size)));
+        }
+        let me = thread_id();
+        let other = match self.in_frame.compare_exchange(0, me, Ordering::AcqRel, Ordering::Acquire) {
+            Ok(_) => 0,
+            Err(other) => other,
+        };
+        if other != 0 && other != me {
+            return Err((abi::status::BUSY, format!("another thread is inside a frame of session {}; a session has one frame thread", self.id)));
+        }
+        let result = (|| {
+            while self.pending.load(Ordering::Acquire) > 0 {
+                std::thread::yield_now();
+            }
+            let mut held = self.enter()?;
+            self.frame_thread.store(me, Ordering::Release);
+            let mut run = self.run.lock().unwrap_or_else(|p| p.into_inner());
+            let ran = if (!run.paused && !run.halted) || run.run_requested { self.advance(&mut held.engine, &mut run)? } else { false };
+            if let Some(info) = info {
+                self.fill(&held.engine, &run, info, ran);
+            }
+            Ok(())
+        })();
+        if other == 0 {
+            self.in_frame.store(0, Ordering::Release);
+        }
+        result
+    }
+
+    /// The frame-end order, written once, EmuSen_Backend.md §29.4.
+    fn advance(&self, e: &mut Engine, run: &mut Run) -> Result<bool, Refused> {
+        run.run_requested = false;
+        let recording = e.debug.recording();
+        let skip = !recording && (run.draw_none || !run.speed.should_render(e.total_frames()));
+        e.set_skip_rendering(skip);
+        run.halted = false;
+        e.run_frame().map_err(|r| (r.status, r.words))?;
+        if e.halted.is_some() {
+            run.halted = true;
+            e.refresh_debugger();
+            return Ok(false);
+        }
+        e.refresh_debugger();
+        if recording && !skip {
+            self.capture(e);
+        }
+        Ok(true)
+    }
+
+    /// The recorder's picture of the frame, its rows repeated as shown, `CaptureFrame`.
+    fn capture(&self, e: &mut Engine) {
+        let mut shown = self.shown.lock().unwrap_or_else(|p| p.into_inner());
+        let bytes = e.copy_picture(&mut [], true).unwrap_or(0);
+        shown.resize(bytes, 0);
+        let _ = e.copy_picture(&mut shown, true);
+        let (width, height) = (e.shape.width, e.shape.height * e.shape.row_repeat.max(1));
+        let frame = e.total_frames();
+        e.debug.capture(frame, &shown, width, height);
+    }
+
+    fn fill(&self, e: &Engine, run: &Run, info: &mut emusen_crystal_frame_info, ran: bool) {
+        let hz = e.frame_rate_hz();
+        let repeat = self.repeat_rows();
+        let rows = e.shape.row_repeat.max(1);
+        info.ran = ran as u32;
+        info.halted = run.halted as u32;
+        info.rendered = (ran && !e.skip_rendering) as u32;
+        info.picture_serial = e.frame_serial();
+        info.width = e.shape.width;
+        info.height = e.shape.height * if repeat { rows } else { 1 };
+        info.row_repeat = if repeat { 1 } else { rows };
+        info.display_lines = e.shape.lines * if repeat { rows } else { 1 };
+        info.display_aspect = e.display_aspect();
+        info.audio_frames = e.buffered_audio_frames().max(0) as u32;
+        info.audio_rate = e.audio_sample_rate().max(0) as u32;
+        info.play_audio = run.speed.should_play_audio() as u32;
+        info.speed_percent = run.speed.percent() as u32;
+        info.frame_interval_ns = run.speed.frame_interval_ns(hz);
+        info.total_frames = e.total_frames().max(0) as u64;
+        info.frame_rate_hz = hz;
+        info.paused = run.paused as u32;
+        info.halted_processor = if run.halted { e.halted_index() } else { 0 };
+        info.halted_address = if run.halted { e.halted.map_or(0, |(_, address)| address as u64) } else { 0 };
+        if (info.size as usize) < std::mem::size_of::<emusen_crystal_frame_info>() {
+            return;
+        }
+        info.picture_on_device = (ran && e.picture_on_device) as u32;
+        info.reserved = 0;
+    }
+
+    /// The picture as RGBA8888 into `into`, read whole; the bytes it takes.
+    pub fn copy_picture(&self, into: &mut [u8]) -> Result<usize, Refused> {
+        let mut held = self.lock()?;
+        held.engine.copy_picture(into, self.repeat_rows()).map_err(|r| (r.status, r.words))
+    }
+
+    /// The sound drained into `into`, or with none the frames held; and the rate.
+    pub fn drain_audio(&self, into: Option<&mut [i16]>) -> Result<(i64, u32), Refused> {
+        let mut held = self.lock()?;
+        let e = &mut held.engine;
+        match into {
+            None => Ok((e.buffered_audio_frames(), e.audio_sample_rate().max(0) as u32)),
+            Some(into) => {
+                let (n, rate) = e.drain_audio(into);
+                Ok((n as i64, rate.max(0) as u32))
+            }
+        }
+    }
+
+    /// The phases' times into `into`; how many there are.
+    pub fn phases(&self, into: &mut [f64]) -> Result<usize, Refused> {
+        Ok(self.lock()?.engine.phases(into))
+    }
+
+    /// `["name",…]`, the phases' names.
+    pub fn phase_names_json(&self) -> Result<String, Refused> {
+        let names = self.lock()?.engine.phase_names();
+        let mut j = Json::new();
+        j.begin_array();
+        for n in &names {
+            j.str_value(n);
+        }
+        j.end_array();
+        Ok(j.finish())
+    }
+
+    pub fn button(&self, port: u32, control: u32, pressed: bool) -> Result<(), Refused> {
+        if control as usize >= crate::info::BUTTONS.len() {
+            return Err((svc::NOT_SUPPORTED, format!("no control {control} in 1.{}", abi::MINOR)));
+        }
+        crate::input::button(&self.routes, &self.latch, port, control as usize, pressed);
+        Ok(())
+    }
+
+    pub fn axis(&self, port: u32, axis: u32, value: f64) -> Result<(), Refused> {
+        if axis as usize >= crate::info::AXES.len() {
+            return Err((svc::NOT_SUPPORTED, format!("no axis {axis} in 1.{}", abi::MINOR)));
+        }
+        if value.is_nan() {
+            return Err((svc::BAD_ARGUMENT, "an axis value that is not a number".to_string()));
+        }
+        crate::input::axis(&self.routes, &self.latch, port, axis as usize, value);
+        Ok(())
+    }
+
+    pub fn connected(&self, port: u32, connected: bool) {
+        self.latch.connect(port as usize, connected);
+    }
+
+    pub fn speed_set(&self, percent: u32, turbo: u32, slow: u32, flags: u32) -> Result<(), Refused> {
+        if flags & !abi::SPEED_DRAW_NONE != 0 {
+            return Err((svc::NOT_SUPPORTED, format!("speed flags 0x{flags:X} are not known to 1.{}", abi::MINOR)));
+        }
+        self.change(|_, run| {
+            run.base_percent = percent;
+            run.speed.set_turbo(turbo.min(i32::MAX as u32) as i32);
+            run.speed.set_slow(slow.min(i32::MAX as u32) as i32);
+            run.draw_none = flags & abi::SPEED_DRAW_NONE != 0;
+            run.apply_mode();
+            Ok(())
+        })
+    }
+
+    pub fn speed_mode(&self, mode: u32) -> Result<(), Refused> {
+        if mode > abi::SPEED_SLOW {
+            return Err((svc::NOT_SUPPORTED, format!("no speed mode {mode} in 1.{}", abi::MINOR)));
+        }
+        self.change(|_, run| {
+            run.mode = mode;
+            run.apply_mode();
+            Ok(())
+        })
+    }
+
     pub fn repeat_rows(&self) -> bool {
         self.opened.flags & crate::abi::OPEN_SINGLE_ROWS == 0
     }

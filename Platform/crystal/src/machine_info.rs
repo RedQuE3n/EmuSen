@@ -68,6 +68,10 @@ pub struct MachineInfo {
     /// Each firmware entry's source, `absent` where none says.
     pub firmware: Vec<(u32, String)>,
     pub processors: Vec<(u32, String)>,
+    /// The frame's phases' names, in the order `phases` times them.
+    pub phases: Vec<String>,
+    /// The raw pictures' encodings, in their order.
+    pub raw: Vec<String>,
 }
 
 impl MachineInfo {
@@ -106,6 +110,8 @@ impl MachineInfo {
             patch_high: patches.map(|p| int(Some(p), "high", 0)),
             drives: arr(r, "drives").iter().map(|d| Drive { drive: int(Some(d), "drive", 0) as u32, lid_open: text(Some(d), "lid") == Some("open") }).collect(),
             firmware: arr(r, "firmware").iter().map(|f| (int(Some(f), "which", 0) as u32, text(Some(f), "source").unwrap_or("absent").to_string())).collect(),
+            phases: arr(r, "phases").iter().filter_map(Value::as_str).map(str::to_string).collect(),
+            raw: arr(video, "raw").iter().map(|e| text(Some(e), "encoding").unwrap_or("").to_string()).collect(),
             processors: arr(r, "processors").iter().map(|p| (int(Some(p), "id", 0) as u32, text(Some(p), "name").unwrap_or("").to_string())).collect(),
         }
     }

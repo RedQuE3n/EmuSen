@@ -3,7 +3,7 @@
 //! only once every export of major 1 is here (EmuSen_Backend.md §29.3).
 
 use std::cell::RefCell;
-use emusen_crystal::abi::{self, emusen_crystal_config, emusen_crystal_open_params, emusen_crystal_runtime};
+use emusen_crystal::abi::{self, emusen_crystal_config, emusen_crystal_frame_info, emusen_crystal_open_params, emusen_crystal_runtime};
 use emusen_crystal::runtime::{Config, Runtime};
 use emusen_session_service::abi::status as svc;
 
@@ -354,4 +354,129 @@ pub unsafe extern "C" fn emusen_crystal_disc_lid(rt: *mut emusen_crystal_runtime
         Ok(r) => status_of(r.disc_lid(session, open != 0)),
         Err(status) => status,
     }
+}
+
+/// The session a call names, the runtime's current one for 0.
+unsafe fn session_of<'a>(rt: *mut emusen_crystal_runtime, session: u32) -> Result<std::sync::Arc<emusen_crystal::session::Session>, i32> {
+    let r: &'a Runtime = unsafe { runtime(rt) }?;
+    r.sessions.get(session).map_err(|(s, w)| fail(s, w))
+}
+
+fn done(result: Result<(), (i32, String)>) -> Result<(), i32> {
+    result.map_err(|(s, w)| fail(s, w))
+}
+
+fn code(result: Result<(), i32>) -> i32 {
+    match result {
+        Ok(()) => 0,
+        Err(status) => status,
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for its `size` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_frame(rt: *mut emusen_crystal_runtime, session: u32, out: *mut emusen_crystal_frame_info) -> i32 {
+    code((|| {
+        let s = unsafe { session_of(rt, session) }?;
+        done(s.frame(unsafe { out.as_mut() }))
+    })())
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_picture_copy(rt: *mut emusen_crystal_runtime, session: u32, out: *mut u8, len: usize) -> i64 {
+    let copied = || -> Result<i64, i32> {
+        let s = unsafe { session_of(rt, session) }?;
+        let into: &mut [u8] = if out.is_null() { &mut [] } else { unsafe { std::slice::from_raw_parts_mut(out, len.min(i32::MAX as usize)) } };
+        s.copy_picture(into).map(|n| n as i64).map_err(|(st, w)| fail(st, w))
+    };
+    copied().unwrap_or_else(|status| status as i64)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `frames` stereo frames; `rate` null or valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_audio_drain(rt: *mut emusen_crystal_runtime, session: u32, out: *mut i16, frames: usize, rate: *mut u32) -> i64 {
+    let drained = || -> Result<i64, i32> {
+        let s = unsafe { session_of(rt, session) }?;
+        let into = if out.is_null() { None } else { Some(unsafe { std::slice::from_raw_parts_mut(out, frames.saturating_mul(2).min(i32::MAX as usize)) }) };
+        let (n, r) = s.drain_audio(into).map_err(|(st, w)| fail(st, w))?;
+        if !rate.is_null() {
+            unsafe { *rate = r };
+        }
+        Ok(n)
+    };
+    drained().unwrap_or_else(|status| status as i64)
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_wait(rt: *mut emusen_crystal_runtime, session: u32, timeout_ms: u32) -> i32 {
+    match unsafe { session_of(rt, session) } {
+        Ok(s) => s.wait(timeout_ms) as i32,
+        Err(status) => status,
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_phase_names(rt: *mut emusen_crystal_runtime, session: u32, out: *mut u8, len: usize) -> i64 {
+    match unsafe { session_of(rt, session) } {
+        Ok(s) => copy_of(s.phase_names_json(), out, len),
+        Err(status) => status as i64,
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `count` values.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_phases(rt: *mut emusen_crystal_runtime, session: u32, out: *mut f64, count: usize) -> i64 {
+    let timed = || -> Result<i64, i32> {
+        let s = unsafe { session_of(rt, session) }?;
+        let into: &mut [f64] = if out.is_null() { &mut [] } else { unsafe { std::slice::from_raw_parts_mut(out, count) } };
+        s.phases(into).map(|n| n as i64).map_err(|(st, w)| fail(st, w))
+    };
+    timed().unwrap_or_else(|status| status as i64)
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_input_button(rt: *mut emusen_crystal_runtime, session: u32, port: u32, control: u32, pressed: u32) -> i32 {
+    code((|| done(unsafe { session_of(rt, session) }?.button(port, control, pressed != 0)))())
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_input_axis(rt: *mut emusen_crystal_runtime, session: u32, port: u32, axis: u32, value: f64) -> i32 {
+    code((|| done(unsafe { session_of(rt, session) }?.axis(port, axis, value)))())
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_input_connected(rt: *mut emusen_crystal_runtime, session: u32, port: u32, connected: u32) -> i32 {
+    code((|| {
+        unsafe { session_of(rt, session) }?.connected(port, connected != 0);
+        Ok(())
+    })())
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_speed_set(rt: *mut emusen_crystal_runtime, session: u32, percent: u32, turbo_percent: u32, slow_percent: u32, flags: u32) -> i32 {
+    code((|| done(unsafe { session_of(rt, session) }?.speed_set(percent, turbo_percent, slow_percent, flags)))())
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_speed_mode(rt: *mut emusen_crystal_runtime, session: u32, mode: u32) -> i32 {
+    code((|| done(unsafe { session_of(rt, session) }?.speed_mode(mode)))())
 }

@@ -139,11 +139,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return faults;
         }
 
-        private (MainWindow Window, PadDriver Pad) InGame(int w, int h, bool resumeAsk = false, string game = "Cobalt Harbor (Synthetic)", bool bigScreen = true, Action<AppSettings>? more = null)
+        private (MainWindow Window, PadDriver Pad) InGame(int w, int h, bool resumeAsk = false, string game = "Cobalt Harbor (Synthetic)", bool bigScreen = true, Action<AppSettings>? more = null, bool n64 = false)
         {
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            File.WriteAllBytes(Path.Combine(_romDir, game + ".sfc"), PadRewindReelTests.ChangingBackdrop());
+            if (n64) File.WriteAllBytes(Path.Combine(_romDir, game + ".z64"), SyntheticN64Rom.BuildRunningFromRdram(new MipsAssembler().Lui(5, 0x8000).Addiu(8, 8, 1).Sw(8, 5, 0x3F0).Beq(0, 0, -3).Nop().ToArray()));
+            else File.WriteAllBytes(Path.Combine(_romDir, game + ".sfc"), PadRewindReelTests.ChangingBackdrop());
             var app = new AppSettings
             {
                 RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, BigScreen = bigScreen,
@@ -184,13 +185,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private static object Field(MainWindow w, string name) => typeof(MainWindow).GetField(name, Hidden)!.GetValue(w)!;
 
-        // The N64 tab at 3x resolution with 3x antialiasing, where the Antialiasing row carries its note (Mars_Performance.md §42.5).
+        // The states that run an N64 game, whose note comes from the running machine (EmuSen_Backend.md §20, Q15).
+        internal static bool RunsN64(string which) => which == "GraphicsSettingsN64Note";
+
+        // The N64 tab at 3x resolution with 3x antialiasing while an N64 game runs, where the Antialiasing row carries MarsRT's note (Mars_Performance.md §42.5).
         internal static void ShowN64WithNote(MainWindow window)
         {
-            var graphics = ConsolesConfig.Load();
-            graphics.SetValue("N64", "RenderScale", "3");
-            graphics.SetValue("N64", "Antialiasing", "3x");
-            graphics.Save();
+            MistressGame.Runtime.SetSetting("N64", "RenderScale", "3");
+            MistressGame.Runtime.SetSetting("N64", "Antialiasing", "3x");
+            Settle(window);
             Call(window, "ShowGraphicsSettings");
             Settle(window);
             var tabs = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<EmuSen.LunaP.Controls.Tabs>().First(t => t.Name == "ConsoleTabs");
@@ -629,7 +632,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             if (InGameWindows.Contains(which))
             {
                 (MainWindow window, PadDriver pad) = InGame(width, height, resumeAsk: which.StartsWith("Resume", StringComparison.Ordinal),
-                    game: which.EndsWith("LongTitle", StringComparison.Ordinal) ? LongTitle : "Cobalt Harbor (Synthetic)");
+                    game: which.EndsWith("LongTitle", StringComparison.Ordinal) ? LongTitle : "Cobalt Harbor (Synthetic)", n64: RunsN64(which));
                 try
                 {
                     OpenInGame(window, pad, which);

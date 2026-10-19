@@ -179,9 +179,14 @@ namespace EmuSen.Mistress.Library
         public static IReadOnlyList<PadAxis> AxesFor(string console) => PadOf(console).Axes;
 
         // A console's settings as its schema stands now, the engine's row first where it has one; read afresh, since a row's note follows the stored values.
-        public static IReadOnlyList<SettingRow> SettingsFor(string console)
+        public static IReadOnlyList<SettingRow> SettingsFor(string console) => Rows(CoreSettings.Runtime.SettingsSchema(console));
+
+        // The running game's settings, with the notes its machine words for the values in use - see EmuSen_Backend.md §18.10.11.
+        public static IReadOnlyList<SettingRow> SettingsOf(EmuSen.Crystal.Client.CrystalSession session) => Rows(session.SettingsSchema());
+
+        private static IReadOnlyList<SettingRow> Rows(string json)
         {
-            using JsonDocument schema = JsonDocument.Parse(CoreSettings.Runtime.SettingsSchema(console));
+            using JsonDocument schema = JsonDocument.Parse(json);
             return schema.RootElement.EnumerateArray().Select(r =>
             {
                 JsonElement with = r.TryGetProperty("shown_with", out JsonElement w) && w.ValueKind == JsonValueKind.Object ? w : default;

@@ -3894,6 +3894,44 @@ tree. All four consoles match their info. The NES's and SNES's buttons and ports
 (`NesSystem.PadButtons`, `SnesSystem.PadButtons`, `Ports`), which equal MoonRT's and VenusRT's info in order and count;
 they are two owners of one fact, a question for the tester.
 
+#### 18.10.11 After the switch, 2026-10-19: the antialiasing note in a running game, and three other cases
+
+Nine cases failed on `WiseMan` at `668dfbb1`. Each was bisected over the first-parent merges in a throwaway checkout,
+filtered to those cases, and is classified below.
+
+| Cases | First failing | Cause | Standing |
+|---|---|---|---|
+| `WindowFitAuditTests`, `GraphicsSettingsN64Note`: four, both audits at both sizes | `08812dde` (passes at `08812dde^1`) | the note left the catalog's C# rule for MarsRT's `SETTING_NOTES` (B3), and Mistress never read a running session's schema | **a product defect**, fixed |
+| `WindowFitAuditTests`, `GraphicsSettingsNesEngine` and `GraphicsSettingsCustomCrop`: four recordings | `a17ff513`, MoonRT's switch (passes at `a17ff513^1`) | the NES tab shows MoonRT's Region row from its sidecar where "No core settings yet" stood | stale recordings; the change follows §17.8 Q11, decided in §20 |
+| `IdentityAndCollectionsTests.A_state_from_another_console_is_refused_before_the_core_reads_it` | `8618add5`, B2 part 4b, which rewrote it (passes at `701dade7^1`) | the load runs on `Task.Run` and posts its status, and the test read the status after one `RunJobs` | a racing test; it now waits for the status, which is the refusal in the runtime's words |
+
+**The note, shown and fixed.** Q15 decided that a note comes from a machine, so it appears as soon as a game runs and not
+before. Graphics Settings read every tab from `settings_schema` on session 0, the console's schema, whose rows come from
+the sidecar and carry no note. A note therefore never appeared in Mistress, even with an N64 game running at 3x
+resolution and 3x antialiasing. The audit's `GraphicsSettingsN64Note` state ran a SNES game, which was correct before Q15. It
+now runs a synthetic N64 game and sets the two values through the runtime. Against the unchanged Mistress it failed
+with no note control at all. The fix is in Mistress alone, for every core: `GraphicsSettingsWindow` takes the running
+game's rows for its own console from the session (`RuntimeCatalog.SettingsOf`, `CrystalSession.SettingsSchema`), and
+reads every other tab from session 0 as before, the pattern the cheat window follows for its running tab.
+
+**Recordings re-recorded, each following a decision.**
+
+- `GraphicsSettingsN64Note-1280x800.spec`, `GraphicsSettingsN64Note-1920x1200.spec`. MarsRT's note ("Off at 3x
+  resolution: the two together are held to four, so 3x has no effect.", Q15 and B3). The RenderScale and Antialiasing
+  hints as reworded (§20, later the same day). One row more below, Recompiler, from the schema (18.10.4). Each row
+  stacked with its note, which a running engine gives every row, hidden while empty. With the N64's game running, the
+  window opens on the N64 tab with the focus in it, so the state needs no shoulder presses to enter (`entered` goes) and
+  the presses start from the Shaders button.
+- `GraphicsSettingsNesEngine-1280x800.spec`, `GraphicsSettingsNesEngine-1920x1200.spec`,
+  `GraphicsSettingsCustomCrop-1280x800.spec`, `GraphicsSettingsCustomCrop-1920x1200.spec`. MoonRT's Region row (built in
+  `46287cc7`) and the focus edges it adds. The sheet grows to hold it, and nothing is cut off.
+- `GraphicsSettings`, `GraphicsSettingsSnesEngine` and `GraphicsSettingsGameCropNote`, each at both sizes, follow
+  from the fix. Their SNES game's tab is now read from its session, so its core row past the viewport sits in its note's
+  stack, and only that control's path in five focus edges changes. Nothing drawn changes.
+
+The opt-in `WindowLookPictureTool` (`EMUSEN_BIGPICTURE_PNG=1`) still opens `ShowN64WithNote` over its SNES game, so
+its N64 picture has failed since `08812dde`. It is left for its next run.
+
 ## 19. B4 for MoonRT and VenusRT, phase 1, 2026-10-18: what the two shims add, where each piece goes, and the gates
 
 *Read on 2026-10-18 on branch `b4-moon-venus`, from `WiseMan` at `480bf5e2`, against the core ABI at 1.12

@@ -240,7 +240,7 @@ EmuSen Project/
 │   │   │   ├── Luna - DS/README.md              # Reserved - future DS core (guardian cat)
 │   │   │   └── Artemis - 3DS-New3DS/README.md   # Reserved - future 3DS/New 3DS core (guardian cat)
 │   │   ├── Sega/                             # Dark Kingdom / Shitennou codenames
-│   │   │   ├── Endymion - Master System/README.md  # Reserved - future Master System core
+│   │   │   ├── Endou - Master System/README.md     # Reserved - future Master System core
 │   │   │   ├── Beryl-HW/                     # Beryl Hardware, the shared Sega crates: beryl-m68k, beryl-z80, beryl-sh2
 │   │   │   ├── Jadeite - Game Gear/README.md # Reserved - future Game Gear core
 │   │   │   ├── Nephrite - Genesis/           # Genesis / Mega Drive with Sega CD and 32X (crate nephrite)

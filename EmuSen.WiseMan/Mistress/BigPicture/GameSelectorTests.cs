@@ -39,9 +39,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             using var theme = new SyntheticTheme();
             theme.Capabilities("").Theme($"<view name=\"{view}\">{elements}</view>");
             ThemeSystem system = SyntheticTheme.Snes;
-            var systems = new List<SceneSystem> { new(system, theme.Load(new ThemeChoices { ScreenWidth = W, ScreenHeight = H }, system), games ?? SyntheticLibrary.Games(system, ".sfc")) };
-            var data = new SceneData(systems, new Size(W, H)) { Media = new SceneAssets.Media(), Shuffle = shuffle, GameIndex = 2 };
+            games ??= SyntheticLibrary.Games(system, ".sfc");
+            using var records = SyntheticRecords.Of(games);
+            var systems = new List<SceneSystem> { new(system, theme.Load(new ThemeChoices { ScreenWidth = W, ScreenHeight = H }, system), games) };
+            var data = new SceneData(systems, new Size(W, H)) { Media = new SceneAssets.Media(), Shuffle = shuffle, GameIndex = 2, Recent = records.Recent };
             SceneBuilder scene = SceneBuilder.Build(data.System.Theme.View(view), data);
+            _ = scene.Selectors;
             scene.Canvas.Measure(new Size(W, H));
             scene.Canvas.Arrange(new Rect(0, 0, W, H));
             return scene;
@@ -66,6 +69,17 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             string xml = Selector("last", "lastplayed", 5) + Row("last", 5);
             Assert.Equal(["Brass Lantern", "Cobalt Harbor", "Ember Circuit", "Fable of Tiles", "Hollow Comet"], Shown(Scene(xml), "last", 5));
             Assert.Equal(["Brass Lantern", null, null, null, null], Shown(Scene(xml, Few()), "last", 5));
+        });
+
+        // The picks are the library's recent call's answer, so a scene given no such call has no recent games (EmuSen_Backend.md §28.11).
+        [Fact]
+        public Task Without_the_library_s_recent_call_lastplayed_picks_nothing() => UiTest.Run(() =>
+        {
+            using var theme = new SyntheticTheme();
+            theme.Capabilities("").Theme($"<view name=\"system\">{Selector("last", "lastplayed", 5)}</view>");
+            ThemeSystem system = SyntheticTheme.Snes;
+            var data = new SceneData([new SceneSystem(system, theme.Load(new ThemeChoices { ScreenWidth = W, ScreenHeight = H }, system), SyntheticLibrary.Games(system, ".sfc"))], new Size(W, H));
+            Assert.Empty(SceneBuilder.Build(data.System.Theme.View("system"), data).Selectors.Games("last"));
         });
 
         // Measured: MOST read Lumen, Kestrel, Juniper, Ivory, Hollow; on the gba probe only the game played three times.

@@ -79,6 +79,9 @@ namespace EmuSen.Mistress.BigPicture
 
         public SceneMotion Motion { get; set; } = SceneMotion.Esde;
 
+        // The library's recent call, which a theme's lastplayed gameselector asks (EmuSen_Backend.md §28.11).
+        public RecentGames? Recent { get; set; }
+
         // The player's interface switches: clock, help, status, quick system select, startup and the scroll overlay (§29).
         public BigPictureInterface Interface { get; set; } = new();
 
@@ -237,7 +240,7 @@ namespace EmuSen.Mistress.BigPicture
             {
                 SystemIndex = system, GameIndex = game, Media = _media, Motion = Motion, Family = Family, SwapFaceButtons = SwapFaceButtons, Status = Status, Now = Now(), ShowClock = Interface.DisplayClock, LiveClock = LiveClock,
                 ShowHelp = Interface.DisplayHelp, StatusShown = StatusShown, ScrollOverlay = Interface.ListScrollOverlay, Help = HelpContext,
-                Shuffle = unchecked(_shuffle += 7919),
+                Shuffle = unchecked(_shuffle += 7919), Recent = Recent,
             };
         }
 

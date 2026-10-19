@@ -6019,6 +6019,53 @@ Recently Played is the chosen row.
 counter; the limit stays 30; a theme's `lastplayed` game selector takes the library's `recent` over its system's games
 too; and the library screen ordering by the instant in the hour a clock is set back is accepted as the defect's fix.*
 
+**2026-10-19: the theme's `lastplayed` game selector takes `recent`.** The third of those decisions, built on branch
+`lastplayed-selector` from `WiseMan` at `2310e297`.
+
+*The selector's rule, as found* (`GameSelectors.Pick`). The games looked at were the system view's pool: the system's
+listed games (its counted games where folders are shown), less folders and games excluded from the game counter.
+Compared with `recent` over the same games:
+
+| | The selector | `recent` |
+|---|---|---|
+| Which plays count | a last-played time | the same |
+| Order | newest first, comparing the `DateTime`s `GameRecords.All` gives, local wall-clock readings | newest first by the instant each time names |
+| Ties | the list's order: favourites first unless the player turned that off, then the sort, a sort name where set | the given order; for a console in the library screen, the scan's (the title ignoring case) |
+| Limit | the theme's `gameCount`, clamped to 1–30 | the limit asked |
+| Time zone | the hour a clock is set back ordered by the clock | ordered by the instant |
+
+So the plays counted and the limit were the same. The order differed in the hour a clock is set back, as the library
+screen's did before §28.11, and the ties differed wherever two games of one console carry the same time.
+
+*Shown first, by a failing test.* `ThemedGameSelectorTests.A_lastplayed_selector_picks_the_console_s_recently_played_games`
+gives a themed session's SNES system a selector of three games. Aurora Drift and Brass Lantern are started at one
+instant, Brass is made a favourite, and Dune Relay and Ember Circuit are started one and two hours earlier. The library
+screen's Recently Played, narrowed to the SNES, lists Aurora, Brass, Dune, Ember. The selector picked Brass, Aurora, Dune:
+the favourite first, by the list's order. The test failed so before the change and passes after it.
+
+*The change.* `SceneData.Recent` carries the library's recent call (a `RecentGames`: files and a limit in, files out).
+A `lastplayed` selector hands it the files of its pool with its own `gameCount` and shows the games named in the answer,
+in the answer's order. It no longer sorts anything itself. Mistress gives `ThemedLibrary.Recent` its `ThemedRecent`,
+which calls `GameRecords.Recent` (the library's `recent` in state 2, the C# twin at `EMUSEN_LIBRARY_NATIVE=0`) over those
+files, put into the scan's order first. That is the order Recently Played gives a console's games, so a selector's picks
+are that console's Recently Played: the first `gameCount`, less folders and games excluded from the counter, with its
+ties. A scene given no call, as a picture tool or a test builds one alone, picks nothing for `lastplayed`: without
+records there are no recent games. The tests that draw scenes alone (`GameSelectorTests`, `SceneMappingTests`,
+`Pass14PictureTool`) get the call from `SyntheticRecords`, a `games.db` of their own holding each synthetic game's
+time.
+
+*The cost.* There is one call each time the system view is built with such a selector: once a showing, and again at
+each move of the carousel, since every move rebuilds the view. Measured on 2026-10-19 in a Debug build, median of 21,
+over 3,508 games with 702 played: over one console's 501 games the library took 0.40 ms and the C# twin 0.94 ms, and
+over all 3,508 the library took 1.27 ms and the twin 1.13 ms. That is a move of the carousel, not a frame, so nothing is
+cached.
+
+*The gates*, measured on 2026-10-19 on the desktop (America/New_York), with `EMUSEN_LIBRARY_NATIVE` unset and set to
+`0`. The blast radius was the new class, `GameSelectorTests` (with a new case: no call, no picks), `SceneMappingTests`,
+`ThemeCatalogTests`, `ThemedCollectionsTests`, `GamelistOptionsTests`, `LibraryParityTests`, `LibraryRecordsParityTests`
+and all of `WindowFitAuditTests`. **605 pass and 8 fail each way.** The eight are the Graphics Settings cases of
+`WindowFitAuditTests` that fail on the base and are fixed elsewhere.
+
 ---
 
 ## 29. B7, Crystal in Rust: the design, 2026-10-18

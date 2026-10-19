@@ -29,7 +29,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public IReadOnlyList<SceneEntry> Entries => _entries;
 
         // The system view's gameselectors, picked once per build; none in the gamelist view (§36).
-        public GameSelectors Selectors => _selectors ??= View.Name == "system" ? GameSelectors.For(View, Data.System, Data.Shuffle) : GameSelectors.None;
+        public GameSelectors Selectors => _selectors ??= View.Name == "system" ? GameSelectors.For(View, Data.System, Data.Shuffle, Data.Recent) : GameSelectors.None;
 
         private GameSelectors? _selectors;
 

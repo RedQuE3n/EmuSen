@@ -70,6 +70,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public string? FolderLink { get; init; }
     }
 
+    // The library's recent call: of the files given, those with a last-played time, newest first, at most limit (EmuSen_Backend.md §28.11).
+    public delegate IReadOnlyList<string> RecentGames(IReadOnlyList<string> files, int limit);
+
     // A system with the theme resolved for it and its games; the carousel reads each system's own resolved view.
     public sealed record SceneSystem(ThemeSystem System, ResolvedTheme Theme, IReadOnlyList<SceneGame> Games)
     {
@@ -154,6 +157,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         // The seed of the system view's random gameselectors; a view moves it on at each navigation, so the picks change as ES-DE's do (§36).
         public int Shuffle { get; init; }
+
+        // What a lastplayed gameselector asks for its picks; with none it picks nothing (§36).
+        public RecentGames? Recent { get; init; }
 
         public SceneSystem System => Systems[Math.Clamp(SystemIndex, 0, Systems.Count - 1)];
 

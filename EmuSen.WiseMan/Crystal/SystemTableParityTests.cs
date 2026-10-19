@@ -45,7 +45,7 @@ namespace EmuSen.WiseMan.Crystal
         public void The_library_gives_a_table()
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
-            Assert.Equal(9, SystemTable.Rows.Count);
+            Assert.Equal(11, SystemTable.Rows.Count);
         }
 
         [Fact]

@@ -1,0 +1,19 @@
+{
+  "id": "sms",
+  "name": "Sega Master System / Mark III",
+  "console": "Master System",
+  "manufacturer": "Sega",
+  "release_year": 1985,
+  "extensions": [".sms"],
+  "cheat_systems": ["Sega - Master System - Mark III"],
+  "openvgdb_systems": ["SMS"],
+  "cover_aspect": 0.7,
+  "esde_system": "mastersystem",
+  "esde_full_name": "Sega Master System",
+  "self_delimiting_images": false,
+  "attached_to": null,
+  "screenscraper_system": 2,
+  "cheat_space": null,
+  "media": [],
+  "byte_order": "little"
+}

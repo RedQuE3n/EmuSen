@@ -241,4 +241,22 @@ mod tests {
         );
         assert_eq!(route("a.x", None, &[], &[]).reason.as_deref(), Some("no system takes a.x"));
     }
+
+    // .sms and .sg are each one system's, chosen at once whatever the folder; .bin stays the Genesis's and the PlayStation's (Endou_Plan.md §4.1).
+    #[test]
+    fn a_master_system_or_sg1000_image_routes_to_its_one_system() {
+        let table = crate::table().unwrap();
+        let candidates = |file: &str| -> Vec<Candidate> {
+            let ext = &file[file.rfind('.').unwrap()..];
+            table.iter().filter(|s| s.extensions.iter().any(|e| e == ext)).map(|s| Candidate { id: &s.id, name: &s.name, esde_system: &s.esde_system }).collect()
+        };
+        for (file, system) in [("Alex Kidd.sms", "sms"), ("Flicky.sg", "sg1000")] {
+            for folder in [None, Some("mastersystem"), Some("sg-1000"), Some("genesis")] {
+                let routed = route(file, folder, &candidates(file), &[]);
+                assert_eq!((routed.system.as_deref(), routed.recognition, routed.reason), (Some(system), None, None), "{file} in {folder:?}");
+            }
+        }
+        assert_eq!(candidates("game.bin").iter().map(|c| c.id).collect::<Vec<_>>(), ["md", "psx"]);
+        assert!(candidates("game.gg").is_empty(), "the Game Gear is not a system before J3");
+    }
 }

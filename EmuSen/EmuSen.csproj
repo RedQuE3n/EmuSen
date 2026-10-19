@@ -50,7 +50,7 @@
     <EmuSenHostLibrarySuffix Condition="$([MSBuild]::IsOSPlatform('Windows'))">.dll</EmuSenHostLibrarySuffix>
     <EmuSenHostLibrarySuffix Condition="$([MSBuild]::IsOSPlatform('OSX'))">.dylib</EmuSenHostLibrarySuffix>
     <EmuSenHostLibrarySuffix Condition="'$(EmuSenHostLibrarySuffix)' == ''">.so</EmuSenHostLibrarySuffix>
-    <DefaultItemExcludes>$(DefaultItemExcludes);Cores/*/*RT - */target/**;Cores/*/*RT - */pgo/**;Cores/Shared/*/target/**;Cores/Sega/Nephrite - Genesis/target/**;Cores/Sega/Beryl-HW/*/target/**;Cores/Sony/Diamond - PlayStation/target/**;Cores/Sony/BlackMoon-HW/*/target/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Cores/*/*RT - */target/**;Cores/*/*RT - */pgo/**;Cores/Shared/*/target/**;Cores/Sega/Nephrite - Genesis/target/**;Cores/Sega/Endou - Master System/target/**;Cores/Sega/Beryl-HW/*/target/**;Cores/Sony/Diamond - PlayStation/target/**;Cores/Sony/BlackMoon-HW/*/target/**</DefaultItemExcludes>
     <!-- A crate holding pgo/<name>.<this machine's Rust target>.profdata is built profile-guided unless this is false - see Mars_Native.md §6.17. -->
     <EmuSenPgo Condition="'$(EmuSenPgo)' == ''">true</EmuSenPgo>
     <_EmuSenHostArch>$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)</_EmuSenHostArch>
@@ -90,10 +90,14 @@
     </GetFileHash>
     <ItemGroup>
       <_EmuSenManifestLine Include="$([System.String]::Copy('%(_EmuSenRustLibraryHashed.FileHash)').ToLowerInvariant())  %(_EmuSenRustLibraryHashed.Filename)%(_EmuSenRustLibraryHashed.Extension)" Condition="'@(_EmuSenRustLibraryHashed)' != ''" />
+      <_EmuSenPublishManifestLine Include="$([System.String]::Copy('%(_EmuSenRustLibraryHashed.FileHash)').ToLowerInvariant())  %(_EmuSenRustLibraryHashed.Filename)%(_EmuSenRustLibraryHashed.Extension)" Condition="'@(_EmuSenRustLibraryHashed)' != '' And '%(_EmuSenRustLibraryHashed.InDevelopment)' != 'true'" />
     </ItemGroup>
+    <!-- The build output lists every library it holds; a publish lists only those it carries, so sha256sum -c passes over it with a crate in development - see EmuSen_Backend.md §27.11. -->
     <WriteLinesToFile File="$(IntermediateOutputPath)cores.manifest" Lines="@(_EmuSenManifestLine)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <WriteLinesToFile File="$(IntermediateOutputPath)publish-manifest/cores.manifest" Lines="@(_EmuSenPublishManifestLine)" Overwrite="true" WriteOnlyWhenDifferent="true" />
     <ItemGroup>
-      <None Include="$(IntermediateOutputPath)cores.manifest" Link="cores.manifest" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <None Include="$(IntermediateOutputPath)cores.manifest" Link="cores.manifest" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+      <None Include="$(IntermediateOutputPath)publish-manifest/cores.manifest" Link="cores.manifest" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
   </Target>
 

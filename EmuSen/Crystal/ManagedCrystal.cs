@@ -1,9 +1,11 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using EmuSen.Cores.Native;
 using EmuSen.Crystal.Session;
 
 namespace EmuSen.Crystal.Managed
@@ -62,6 +64,18 @@ namespace EmuSen.Crystal.Managed
             catch (DecoderFallbackException) { throw new CrystalException(SessionAbi.BadString, "text that is not UTF-8"); }
         }
 
+        // config's cores, a JSON array of directories; anything else is refused.
+        internal static string[] CoresOf(byte* p, nuint n)
+        {
+            try
+            {
+                if (System.Text.Json.Nodes.JsonNode.Parse(Text(p, n) ?? "") is System.Text.Json.Nodes.JsonArray list && list.All(d => d is System.Text.Json.Nodes.JsonValue v && v.TryGetValue(out string? _)))
+                    return list.Select(d => d!.GetValue<string>()).ToArray();
+            }
+            catch (System.Text.Json.JsonException) { }
+            throw new CrystalException(SessionAbi.BadArgument, "config's cores must be a JSON array of directories");
+        }
+
         internal static string Required(byte* p, nuint n, string what) =>
             Text(p, n) is { Length: > 0 } text ? text : throw new CrystalException(SessionAbi.BadArgument, $"{what} must be given");
 
@@ -93,8 +107,10 @@ namespace EmuSen.Crystal.Managed
         {
             try
             {
-                if (config != null && config->size < sizeof(ConfigV1)) throw CrystalException.BadStruct("emusen_crystal_config", config->size, sizeof(ConfigV1));
-                if (config != null && config->flags != 0) throw new CrystalException(SessionAbi.NotSupported, $"config flags 0x{config->flags:X} are not known to 1.{CrystalNumbers.Minor}");
+                if (config != null && config->size < ConfigV1.Size10) throw CrystalException.BadStruct("emusen_crystal_config", config->size, ConfigV1.Size10);
+                if (config != null && (config->flags & ~CrystalNumbers.ConfigDevelopment) != 0) throw new CrystalException(SessionAbi.NotSupported, $"config flags 0x{config->flags:X} are not known to 1.{CrystalNumbers.Minor}");
+                if (config != null && (config->flags & CrystalNumbers.ConfigDevelopment) != 0) CoreDiscovery.UseDevelopment(true);
+                if (config != null && config->size >= sizeof(ConfigV1) && config->cores != null) CoreDiscovery.UseDirectories(CoresOf(config->cores, config->cores_len));
                 return new ManagedRuntime().Handle;
             }
             catch (Exception e)

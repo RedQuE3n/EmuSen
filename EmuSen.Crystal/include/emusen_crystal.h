@@ -53,7 +53,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CRYSTAL_MAJOR 1u
-#define EMUSEN_CRYSTAL_MINOR 1u
+#define EMUSEN_CRYSTAL_MINOR 2u
 #define EMUSEN_CRYSTAL_VERSION ((EMUSEN_CRYSTAL_MAJOR << 16) | EMUSEN_CRYSTAL_MINOR)
 
 /* ---- Statuses (EmuSen_Backend.md section 3.2). The session service's keep their numbers and names; these follow. -- */
@@ -103,9 +103,20 @@ extern "C" {
 typedef struct emusen_crystal_runtime emusen_crystal_runtime;
 typedef struct emusen_crystal_subscription emusen_crystal_subscription;
 
-typedef struct emusen_crystal_config { /* 8 bytes */
+/* config's flags, since 1.2. */
+#define EMUSEN_CRYSTAL_CONFIG_DEVELOPMENT 1u /* cores still in development are listed; without it, as the variable
+                                              * EMUSEN_DEVELOPMENT_CORES says */
+
+typedef struct emusen_crystal_config { /* 32 bytes since 1.2; 8 in 1.0 */
     uint32_t size;
-    uint32_t flags;                    /* none is defined in 1.0; 0 */
+    uint32_t flags;                    /* EMUSEN_CRYSTAL_CONFIG_*; none in 1.0 and 1.1 */
+    void *sqlite;                      /* since 1.2: the host's loaded SQLite (the e_sqlite3 the program ships), lent
+                                        * for the runtime's life so the process holds one SQLite; states.db is reached
+                                        * through it, and with none the records' calls answer NOT_SUPPORTED */
+    const uint8_t *cores;              /* since 1.2: the cores directories as a JSON array of paths, scanned in its
+                                        * order; absent for the directories the implementation uses by default, the
+                                        * program's own and its cores folder */
+    size_t cores_len;
 } emusen_crystal_config;
 
 typedef struct emusen_crystal_open_params { /* 72 bytes since 1.1; 64 in 1.0 */

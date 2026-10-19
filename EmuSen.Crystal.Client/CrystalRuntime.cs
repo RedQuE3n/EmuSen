@@ -24,16 +24,36 @@ namespace EmuSen.Crystal.Client
         public nint Device { get; init; }
     }
 
+    // What a runtime is told when it is made, since 1.2: its cores directories, absent for the defaults, and whether cores in development are listed.
+    public sealed record CrystalRuntimeOptions
+    {
+        public IReadOnlyList<string>? Cores { get; init; }
+        public bool Development { get; init; }
+    }
+
     // A copy-out call as the contract layer makes one: the whole length returned, written only when the buffer holds it.
     public unsafe delegate long CrystalCopyOut(byte* out_, nuint len);
 
     // The runtime: the systems, the engines, a file's route, and the sessions it opens - see EmuSen_Backend.md §3.9 and §14.
     public sealed unsafe class CrystalRuntime : IDisposable
     {
-        public CrystalRuntime()
+        public CrystalRuntime() : this(null) { }
+
+        public CrystalRuntime(CrystalRuntimeOptions? options)
         {
-            var config = new CrystalConfig { size = (uint)sizeof(CrystalConfig) };
-            Handle = Contract.Crystal.New(&config);
+            byte[]? cores = options?.Cores is { } dirs ? JsonSerializer.SerializeToUtf8Bytes(dirs) : null;
+            fixed (byte* c = cores)
+            {
+                var config = new CrystalConfig
+                {
+                    size = (uint)sizeof(CrystalConfig),
+                    flags = options?.Development == true ? CrystalAbi.ConfigDevelopment : 0,
+                    sqlite = Contract.Crystal.Native ? (void*)SqliteLend.Handle : null,
+                    cores = c,
+                    cores_len = (nuint)(cores?.Length ?? 0),
+                };
+                Handle = Contract.Crystal.New(&config);
+            }
             if (Handle == 0) throw Failure(CrystalSessionAbi.Null);
         }
 

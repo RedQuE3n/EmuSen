@@ -4,10 +4,13 @@ namespace EmuSen.Crystal.Client.Contract
 {
     // emusen_crystal_config, field for field; CrystalHeaderTests holds it to the header.
     [StructLayout(LayoutKind.Sequential)]
-    public struct CrystalConfig
+    public unsafe struct CrystalConfig
     {
         public uint size;
         public uint flags;
+        public void* sqlite;
+        public byte* cores;
+        public nuint cores_len;
     }
 
     // emusen_crystal_open_params, field for field.

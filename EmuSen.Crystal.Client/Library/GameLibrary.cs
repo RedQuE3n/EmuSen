@@ -69,16 +69,8 @@ namespace EmuSen.Crystal.Client.Library
                 Change = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, long>)found[10],
             };
             if (t.AbiVersion() >> 16 != Major) return (null, $"{PlatformLibrary.FileName} speaks another major of emusen_library.h");
-            try
-            {
-                SQLitePCL.Batteries_V2.Init();
-                if (!NativeLibrary.TryLoad(SQLitePCL.raw.GetNativeLibraryName(), typeof(SQLitePCL.SQLite3Provider_e_sqlite3).Assembly, null, out t.Sqlite))
-                    return (null, "SQLite could not be found as the C# loads it");
-            }
-            catch (Exception e) when (e is DllNotFoundException or FileNotFoundException or TypeInitializationException or InvalidOperationException)
-            {
-                return (null, $"SQLite could not be lent ({e.GetType().Name}: {e.Message.Split('\n')[0]})");
-            }
+            t.Sqlite = SqliteLend.Handle;
+            if (t.Sqlite == 0) return (null, SqliteLend.Problem);
             return (t, $"{PlatformLibrary.FileName}, the library {t.AbiVersion() >> 16}.{t.AbiVersion() & 0xFFFF}");
         }
 

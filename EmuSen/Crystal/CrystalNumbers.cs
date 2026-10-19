@@ -6,7 +6,7 @@ namespace EmuSen.Crystal.Managed
     internal static class CrystalNumbers
     {
         public const uint Major = 1u;
-        public const uint Minor = 1u;
+        public const uint Minor = 2u;
         public const uint Version = (Major << 16) | Minor;
         public const int NoEngine = -1109;
         public const int Firmware = -1110;
@@ -14,6 +14,7 @@ namespace EmuSen.Crystal.Managed
         public const int BadStruct = -1112;
         public const int Io = -1113;
         public const int StateRefused = -1114;
+        public const uint ConfigDevelopment = 1u;
         public const uint OpenNoBattery = 1u;
         public const uint OpenSingleRows = 2u;
         public const uint SpeedNormal = 0u;
@@ -43,10 +44,16 @@ namespace EmuSen.Crystal.Managed
 
     // emusen_crystal_config as the implementation reads it.
     [StructLayout(LayoutKind.Sequential)]
-    internal struct ConfigV1
+    internal unsafe struct ConfigV1
     {
+        // 1.0's size, the shortest taken; the fields after flags are read only from a struct that holds them.
+        public const int Size10 = 8;
+
         public uint size;
         public uint flags;
+        public void* sqlite;
+        public byte* cores;
+        public nuint cores_len;
     }
 
     // emusen_crystal_open_params as the implementation reads it.

@@ -235,6 +235,7 @@ fn every_constant_is_the_header_s() {
         ("EMUSEN_CRYSTAL_BAD_STRUCT", status::BAD_STRUCT.into()),
         ("EMUSEN_CRYSTAL_IO", status::IO.into()),
         ("EMUSEN_CRYSTAL_STATE_REFUSED", status::STATE_REFUSED.into()),
+        ("EMUSEN_CRYSTAL_CONFIG_DEVELOPMENT", CONFIG_DEVELOPMENT.into()),
         ("EMUSEN_CRYSTAL_OPEN_NO_BATTERY", OPEN_NO_BATTERY.into()),
         ("EMUSEN_CRYSTAL_OPEN_SINGLE_ROWS", OPEN_SINGLE_ROWS.into()),
         ("EMUSEN_CRYSTAL_SPEED_NORMAL", SPEED_NORMAL.into()),
@@ -335,7 +336,7 @@ fn rust_layouts() -> Vec<(&'static str, usize, usize, Vec<(&'static str, usize)>
         };
     }
     vec![
-        layout!("emusen_crystal_config", emusen_crystal_config, [size, flags]),
+        layout!("emusen_crystal_config", emusen_crystal_config, [size, flags, sqlite, cores, cores_len]),
         layout!("emusen_crystal_open_params", emusen_crystal_open_params, [size, flags, path, path_len, console, console_len, engine, engine_len, audio_buffer_max_samples, reserved, device]),
         layout!(
             "emusen_crystal_frame_info",
@@ -454,12 +455,13 @@ fn layout(value: &str) -> Option<(usize, usize)> {
     }
 }
 
-/// Whether the header's struct is the baseline's with fields appended: larger, its alignment the same. The baseline's
+/// Whether the header's struct is the baseline's with fields appended: larger, and aligned no less strictly, its old size
+/// a multiple of the new alignment so that no recorded field moves. The baseline's
 /// line then stands as the size a callee still accepts, the core ABI's rule (EmuSen_CoreAPI.md §4.2), and the new
 /// fields' own lines record the growth, each at or past that size.
 fn grown(key: &str, was: &str, now: &str, facts: &BTreeMap<String, String>) -> bool {
     let (Some(name), Some((was_size, was_align)), Some((now_size, now_align))) = (key.strip_prefix("struct "), layout(was), layout(now)) else { return false };
-    now_size > was_size && was_align == now_align
+    now_size > was_size && now_align >= was_align && was_size % now_align == 0
         && facts.iter().filter_map(|(k, v)| k.strip_prefix(&format!("field {name}.")).map(|_| v)).all(|v| v.strip_prefix("offset ").and_then(|o| o.parse::<usize>().ok()).is_some())
 }
 

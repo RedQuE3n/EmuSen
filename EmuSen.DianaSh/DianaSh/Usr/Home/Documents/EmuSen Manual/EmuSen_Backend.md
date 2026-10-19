@@ -6906,6 +6906,50 @@ only flaw is the dash and the pokes a boundary case on a byte no other cheat wri
 quads themselves reach a machine only through `set_cheat_pokes`, so their parity is the bridge's piece, on the test
 core, which claims `CHEAT_POKES` and a patch range.
 
+### 29.34 Built 2026-10-19: part (b), piece 4a, the debugger over a machine
+
+**A defect of the core host, shown and fixed first** (this commit). `emusen-core-host`'s `debug_set_breakpoints`,
+`debug_set_ranges` and `debug_set_stack` passed the slice's length where `emusen_core.h` counts pairs and triples, so a
+core read twice or three times the values the caller gave, past the end of the caller's buffer. No caller existed
+until the debugger. `a_debug_table_is_counted_in_pairs_and_triples` gives the test core a table of one pair, at
+address 100, from an array whose next pair covers every address, and runs a frame at address 0: before the fix the
+frame halted at 0 (reasons 1), after it the frame completes (reasons 0). `translate` answered `Ok` for an address the
+core maps to nothing, since the export's 0 and 1 are both successes; it now answers `Ok(None)` for 0, as the C#
+`CoreMachine.Translate` answers null, and nothing called it before. The host's tests 7, 13 and 1, the kit built.
+
+**The piece.** `emusen-crystal-debug` gained `debugger`, one session's `Debugger`: the C# `CoreDebugBridge` (each
+processor's registry and coverage kept across a machine made again, the halting probe, the tables pushed before each
+step, `debug_run_frame` stepped until a registry decides, the stores, loads, calls, profile and coverage drained into
+the registries in the C# observers' order, an interrupt stopped for with none in the call log noted as an IRQ), the C#
+`CoreDebugTarget`'s spaces, processors, registers, counters, load, the expression contexts of each scope with the units
+after a scope's own names, and `CoreEngine`'s debugger points (the cheats refreshed before a read, the frame log in a
+space's byte order else the system's, the host's pokes unless the frame holds them, the freezes, the main processor's
+frame); `machined`, the machine read as `CoreEngine.ReadSpace` reads it and the views' memory, `ViewSpaces` with
+`ViewSpaceCopy`; `ring`, the snapshot rings; `info`, machine info's debug fields; and `views`, every pack's views by
+system over `emusen-systems`, which piece 4b grades. A registry evaluates a condition through an `Evaluate` made at the
+call over the registry's scope, the main processor's registry reading the target's context and another its own
+processor's, as `BreakpointExpressions.Live.Scope` chooses. The surface of §29.30 is the debugger's, and
+`cheats_stale` was added for part (a)'s state loads.
+
+**Measured on 2026-10-19** [M]: `CrystalDebugParityTests` 8 of 8, the new `testcore` script of 167 answers over the v1
+test core, its images written by the class (a plain game, one with a second processor that cannot halt, one whose
+loop stops for interrupts it never logs): spaces, processors, each register set, counters and the load's names;
+expressions in the session's scope and processor 0's, with the units, `stackdepth`, `frame`, labels and every memory
+read's edge; reads and writes of a read-only space, past a space and of a space that is not there; breakpoints by
+address and range, conditional, logging, refused at the add, a condition that cannot read, on processor 0, resumed;
+steps by count on the session's registry and processor 0's; run-to a frame and an interrupt; coverage armed and
+queried; the profile; the frame log in each byte order; a freeze; pokes the core gates and one the host writes, the
+master switch, two ROM patches, `ApplyCheats`; watches; mutes; the second processor's empty registers and its
+registry. With `CoreHostParityTests` and `CrystalParityTests`, 30 of 30. Five seeded faults, each caught: a
+breakpoint's pair without its end, the unlogged interrupt as an NMI, the frame log's default order reversed, the
+timer units out of the sound rows, coverage not arming the frame.
+
+**No allocation in a frame** [M]: `tests/alloc.rs` counts each thread's allocations with a counting global allocator
+over the debugger's points of 1,000 frames of the test core after 200 to warm, with a poke the core gates and one the
+host writes: 0. The seeded fault of the host's registry cloned at each frame's end counts 4,000, four a frame; a first
+form of the test, with no cheat the host writes, did not see that fault, and the second cheat was added for it. The
+count is a thread's own, as a global count picked up the allocations of the test running beside it.
+
 ---
 
 ## 30. B9, scraping in Rust: the design, 2026-10-18

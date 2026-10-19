@@ -345,16 +345,19 @@ impl Machine {
         self.lib.exports().debug_set.map_or(Err(status::NOT_SUPPORTED), |f| ok(unsafe { f(self.h(), what, a, b) }))
     }
 
-    pub fn debug_set_stack(&mut self, depths: &[u32]) -> Result<(), Status> {
-        self.lib.exports().debug_set_stack.map_or(Err(status::NOT_SUPPORTED), |f| ok(unsafe { f(self.h(), depths.as_ptr(), depths.len()) }))
+    /// The call stack as (source, target) pairs laid flat, innermost last; the header counts the pairs.
+    pub fn debug_set_stack(&mut self, pairs: &[u32]) -> Result<(), Status> {
+        self.lib.exports().debug_set_stack.map_or(Err(status::NOT_SUPPORTED), |f| ok(unsafe { f(self.h(), pairs.as_ptr(), pairs.len() / 2) }))
     }
 
+    /// A processor's breakpoints as (first, last) pairs laid flat; the header counts the pairs.
     pub fn debug_set_breakpoints(&mut self, processor: u32, table: &[i32]) -> Result<(), Status> {
-        self.lib.exports().debug_set_breakpoints.map_or(Err(status::NOT_SUPPORTED), |f| ok(unsafe { f(self.h(), processor, table.as_ptr(), table.len()) }))
+        self.lib.exports().debug_set_breakpoints.map_or(Err(status::NOT_SUPPORTED), |f| ok(unsafe { f(self.h(), processor, table.as_ptr(), table.len() / 2) }))
     }
 
+    /// Ranges as (space, first, last) triples laid flat; the header counts the triples.
     pub fn debug_set_ranges(&mut self, what: u32, ranges: &[u32]) -> Result<(), Status> {
-        self.lib.exports().debug_set_ranges.map_or(Err(status::NOT_SUPPORTED), |f| ok(unsafe { f(self.h(), what, ranges.as_ptr(), ranges.len()) }))
+        self.lib.exports().debug_set_ranges.map_or(Err(status::NOT_SUPPORTED), |f| ok(unsafe { f(self.h(), what, ranges.as_ptr(), ranges.len() / 3) }))
     }
 
     /// `debug_run_frame`: its answer, the processor that stopped, the address and the detail.
@@ -409,11 +412,15 @@ impl Machine {
         text(|o, l| unsafe { f(h, processor, space, address, lines, o, l) }).map_err(|e| e as i32)
     }
 
-    /// `debug_translate` (since 1.13): the processor's address on its bus.
-    pub fn translate(&self, processor: u32, address: u32) -> Result<u32, Status> {
+    /// `debug_translate` (since 1.13): the processor's address on its bus, or none for an address nothing is mapped at.
+    pub fn translate(&self, processor: u32, address: u32) -> Result<Option<u32>, Status> {
         let f = self.lib.exports().debug_translate.ok_or(status::NOT_SUPPORTED)?;
         let mut bus = 0u32;
-        ok(unsafe { f(self.h(), processor, address, &mut bus) }).map(|_| bus)
+        match unsafe { f(self.h(), processor, address, &mut bus) } {
+            1 => Ok(Some(bus)),
+            e if e < 0 => Err(e),
+            _ => Ok(None),
+        }
     }
 
     /// The machine's log since the last drain, appended to `into`; nothing is allocated when the core logged nothing.

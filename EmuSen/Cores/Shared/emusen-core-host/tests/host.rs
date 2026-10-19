@@ -357,3 +357,20 @@ fn a_manifest_vouches_only_for_its_own_directory() {
     assert!(!trust.vouches(&lb, &h), "b's copy is not in a manifest of b's");
     assert!(!trust.vouches(&a.join("liby.so"), &h), "a line names its file");
 }
+
+/// The tables are counted as the header counts them, pairs and triples, so a core reads no value past the caller's.
+#[test]
+fn a_debug_table_is_counted_in_pairs_and_triples() {
+    let lib = Library::load(&example("host_test_core")).unwrap();
+    lib.check().unwrap();
+    let img = image(b"debug tables");
+    let mut m = Machine::create(lib, &Create::new(&img)).unwrap();
+    // A breakpoint at 100 alone; the pair after it in the same array, over every address, is not the table's.
+    let table = [100, 100, 0, 255];
+    m.debug_set_breakpoints(0, &table[..2]).unwrap();
+    let (reasons, _, at, _) = m.debug_run_frame(0).unwrap();
+    assert_eq!(reasons, 0, "the frame at 0 runs; a halt at {at} read the pair past the table");
+    let ranges = [0u32, 4, 4, 0, 0, 0xFFFF];
+    m.debug_set_ranges(0, &ranges[..3]).unwrap();
+    m.debug_set_stack(&[1, 2]).unwrap();
+}

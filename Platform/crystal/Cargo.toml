@@ -28,6 +28,10 @@ emusen-savemedia = { path = "../savemedia" }
 emusen-session-service = { path = "../session-service" }
 # .NET's text rules and JSON writer, so each answer is the C# implementation's to the byte.
 emusen-dotnet = { path = "../dotnet" }
+# states.db, through the SQLite the host lends (EmuSen_Backend.md §29.5, Q1).
+emusen-sqlite = { path = "../sqlite" }
+# A state's picture deflated into its PNG; the workspace's, as Galaxia takes it.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 
 [[example]]
 name = "crystal_test_core"

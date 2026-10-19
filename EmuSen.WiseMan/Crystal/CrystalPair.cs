@@ -23,6 +23,13 @@ namespace EmuSen.WiseMan.Crystal
 
         public static CrystalImpl Managed { get; } = new("C#", ManagedCrystal.Export);
 
+        // The e_sqlite3 the C# loads, lent to each runtime as a program lends it, so both keep states.db.
+        private static readonly Lazy<nint> LentSqlite = new(() =>
+        {
+            SQLitePCL.Batteries_V2.Init();
+            return System.Runtime.InteropServices.NativeLibrary.TryLoad(SQLitePCL.raw.GetNativeLibraryName(), typeof(SQLitePCL.SQLite3Provider_e_sqlite3).Assembly, null, out nint handle) ? handle : 0;
+        });
+
         public static CrystalImpl Native { get; } = new("Rust", PlatformLibrary.Export);
 
         private nint Fn(string name) => _export("emusen_crystal_" + name) is var f and not 0 ? f : throw new InvalidOperationException($"the {Name} implementation has no emusen_crystal_{name}");
@@ -46,7 +53,7 @@ namespace EmuSen.WiseMan.Crystal
             byte[]? json = cores is null ? null : JsonSerializer.SerializeToUtf8Bytes(cores);
             fixed (byte* c = json)
             {
-                var config = new CrystalConfig { size = (uint)sizeof(CrystalConfig), flags = development ? CrystalAbi.ConfigDevelopment : 0, cores = c, cores_len = (nuint)(json?.Length ?? 0) };
+                var config = new CrystalConfig { size = (uint)sizeof(CrystalConfig), flags = development ? CrystalAbi.ConfigDevelopment : 0, cores = c, cores_len = (nuint)(json?.Length ?? 0), sqlite = (void*)LentSqlite.Value };
                 nint rt = ((delegate* unmanaged[Cdecl]<CrystalConfig*, nint>)Fn("new"))(&config);
                 return rt != 0 ? rt : throw new InvalidOperationException($"{Name}: {LastError()}");
             }
@@ -244,6 +251,33 @@ namespace EmuSen.WiseMan.Crystal
             long again;
             fixed (byte* b = bytes) again = f(rt, session, frame, b, (nuint)n);
             return again < 0 ? $"status {again}: {LastError()}" : $"{again} {Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))}";
+        }
+
+        // A runtime-level copy-out read of a path: state_record.
+        public string Read(string name, nint rt, string path)
+        {
+            var f = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, long>)Fn(name);
+            byte[] p = Encoding.UTF8.GetBytes(path);
+            fixed (byte* pp = p)
+            {
+                byte* at = pp;
+                return Copy((o, n) => f(rt, at, (nuint)p.Length, o, n));
+            }
+        }
+
+        public string SlotCall(string name, nint rt, uint session, uint slot) => Status(((delegate* unmanaged[Cdecl]<nint, uint, uint, int>)Fn(name))(rt, session, slot));
+
+        // state_save or state_load, the twins, at a path or with none at the default.
+        public string StateTwin(string name, nint rt, uint session, string? path)
+        {
+            byte[]? p = path is null ? null : Encoding.UTF8.GetBytes(path);
+            fixed (byte* pp = p) return Status(((delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, int>)Fn(name))(rt, session, pp, (nuint)(p?.Length ?? 0)));
+        }
+
+        public string Forget(nint rt, string path)
+        {
+            byte[] p = Encoding.UTF8.GetBytes(path);
+            fixed (byte* pp = p) return Status(((delegate* unmanaged[Cdecl]<nint, byte*, nuint, int>)Fn("state_forget"))(rt, pp, (nuint)p.Length));
         }
 
         private delegate long CopyOut(byte* o, nuint n);

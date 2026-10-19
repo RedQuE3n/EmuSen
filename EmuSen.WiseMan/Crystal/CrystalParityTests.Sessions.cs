@@ -15,11 +15,20 @@ namespace EmuSen.WiseMan.Crystal
     // Piece 2c of the parity class: a session's life, its discs and its save media, the answers and the files left compared - see EmuSen_Backend.md §29.15.
     public partial class CrystalParityTests
     {
+        // Each file and its hash, a PNG's by its pixels, since the two encoders' bytes differ and their pictures do not.
         private static string TreeOf(string dir) => !Directory.Exists(dir) ? "" : string.Join("\n", Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
-            .Select(f => $"{Path.GetRelativePath(dir, f)} {Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(f)))}"));
+            .Select(f => $"{Path.GetRelativePath(dir, f)} {Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(f.EndsWith(".png") ? PixelsOf(f) : File.ReadAllBytes(f)))}"));
+
+        private static byte[] PixelsOf(string png)
+        {
+            using var bitmap = SkiaSharp.SKBitmap.Decode(png);
+            if (bitmap is null) return File.ReadAllBytes(png);
+            using var rgba = bitmap.Copy(SkiaSharp.SKColorType.Rgba8888);
+            return System.Text.Encoding.ASCII.GetBytes($"{rgba.Width}x{rgba.Height} ").Concat(rgba.Bytes).ToArray();
+        }
 
         // Each implementation over the same planted files, its answers followed by the Saves and Unpacked trees it leaves.
-        private void SameWithFiles(IReadOnlyList<string> cores, Action plant, Func<CrystalImpl, nint, IEnumerable<string>> asks)
+        private void SameWithFiles(IReadOnlyList<string> cores, Action plant, Func<CrystalImpl, nint, IEnumerable<string>> asks, Func<string>? also = null)
         {
             var runs = new List<List<string>>();
             foreach (CrystalImpl impl in new[] { CrystalImpl.Managed, CrystalImpl.Native })
@@ -30,6 +39,7 @@ namespace EmuSen.WiseMan.Crystal
                 List<string> answers = Answers(impl, cores, asks);
                 answers.Add(TreeOf(DataStore.Saves));
                 answers.Add(TreeOf(DataStore.Unpacked));
+                if (also is not null) answers.Add(also());
                 runs.Add(answers);
             }
             for (int k = 0; k < runs[0].Count; k++) _output.WriteLine($"{k}: {runs[0][k]}");

@@ -6798,6 +6798,62 @@ and `RewindThumbnail`'s pictures, sampled four times a pixel and held as RGB565.
 
 **Left.** The `rewind` events (`cleared`, `stepped`, `moved`) come with piece 6.
 
+### 29.18 Built 2026-10-19: part (a), piece 5, states and states.db
+
+**The piece** (this commit).
+- **`states`** is the C# `StateRecords` over `emusen-sqlite`, through the SQLite the host lends in 1.2's config (Q1):
+  - its schema and migration;
+  - WAL;
+  - D8's one copy of `records.db`'s rows, marked in `copied`;
+  - a record read only while the state's size and last write, in .NET's ticks, are the ones it was written with;
+  - the sidecar JSON of builds before 2026-09-26, read where no row is, bound as `ConfigJson.Options` binds it
+    (comments, a trailing comma, names in any case, a required member missing or of the wrong type gives no record).
+- **`saving`** is the session's states:
+  - the eight slots and the resume state in the player's state folder;
+  - a state written whole with its record and, for a slot or the resume state, its picture;
+  - a load refused by the record (another console's, or this engine's version outside what the machine reads) or
+    by the core;
+  - the jump's sequence: the history cleared, the halt let go, the debugger refreshed.
+- **`png`** is the picture's writer, about 60 lines over `flate2`, which the crate now takes, as §29.5 planned.
+- **Galaxia's `clock`** gives local times as .NET writes them with "o": now, a file's last write, and a text read back
+  as `RoundtripKind` reads it. For the system's offset, Galaxia takes `libc` on Unix as a dependency of its own, where
+  it was a test's; it is the workspace's, from `emusen-library`. The kit's and Diamond's locks gain that one line.
+- **The platform library.** `new` takes the lent SQLite. It exports `state_slots`, `state_slot_save`,
+  `state_slot_load`, `resume_save`, `resume_load`, `state_record`, `state_forget`, and the three twins
+  `state_save`, `state_load` and `state_default_path`, whose refusals are the session service's: a state's own
+  refusals kept, anything else a fault in its words.
+- **Without a lent SQLite** the records' calls answer `NOT_SUPPORTED`, and a save writes no record.
+- **The build a record names** is the Rust runtime's version, where the C#'s names its assembly's. The parity class
+  puts both to one spelling.
+
+**Measured on 2026-10-19** [M]:
+- **Parity.** The parity class's three new cases pass, comparing every answer and the trees left, a PNG by its
+  decoded pixels.
+  - The test core, 61 answers:
+    - slots refused and empty; saves to slots 1 and 3 and the resume state;
+    - the records of a state just saved, of D8's copied row, of a file changed since its row, of two sidecars (one
+      with a comment, a trailing comma and a name in lower case) and of a broken one;
+    - loads refused by console, by version and by the core;
+    - the twins at a path, at a new folder and at the default;
+    - a load across a disc change that puts the earlier disc back;
+    - a record forgotten; a second game refused a first game's state by its disc.
+  - Each time and build compared by its shape, its digits hidden.
+  - On four of the build's engines (NES, SNES, N64, PlayStation), 32 answers: a slot saved, run past and loaded, the
+    picture after it.
+  - **Shared records.** A third case runs the implementations on one `states.db`:
+    - the C# opens it first and copies D8's row;
+    - the Rust then reads the C#'s record and the copied row to the byte, and copies nothing again;
+    - the C# reads the Rust's record to the byte.
+- **Seeded faults**, seven, each caught: the ticks without .NET's epoch (two cases); the version refusal never made
+  (one); a sidecar's names read with their case (one); D8's copy skipped (one); no picture beside a slot (two); the
+  fraction of a time a digit short (one, the shared case); and the twin writing a picture (one).
+- **Other tests.** The crate's tests 5, 6 and 1, the PNG's among them; Galaxia's 79 and 1, the clock's among them.
+
+**Left.**
+- The `state` events come with piece 6.
+- Three crates already hold a copy of the local offset (`emusen-library`'s, `dianash-text`'s and `scrape`'s clocks).
+  Galaxia's `clock` is the place they can share; folding them is left for a change of their own.
+
 ### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
 
 *Part (b) numbers its sections from §29.30, so that part (a)'s pieces, built at the same time, keep §29.16 to §29.29.*

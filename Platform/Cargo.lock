@@ -342,7 +342,9 @@ dependencies = [
  "emusen-native",
  "emusen-savemedia",
  "emusen-session-service",
+ "emusen-sqlite",
  "emusen-systems",
+ "flate2",
 ]
 
 [[package]]

@@ -248,6 +248,7 @@ impl Runtime {
         self.sessions.get(id)?.change(|e, run| {
             e.reset().map_err(|r| (r.status, r.words))?;
             run.halted = false;
+            run.rewind.clear();
             e.refresh_debugger();
             Ok(())
         })
@@ -320,5 +321,17 @@ impl Drop for Runtime {
         for s in self.sessions.all() {
             let _ = self.close(s.id);
         }
+    }
+}
+
+impl Runtime {
+    /// What loading a disc needs of the runtime, made for a call that may load a state over another disc.
+    pub fn with_ctx<T>(&self, call: impl FnOnce(&crate::engine::Ctx) -> T) -> T {
+        let tree = emusen_galaxia::tree::tree();
+        let discovery = self.discovery();
+        let catalog = Catalog::new(&discovery);
+        let folders = crate::firmware::folders(&tree);
+        let is_image = |e: &str| crate::route::is_image_extension(&catalog, &discovery, e);
+        call(&crate::engine::Ctx { tree: &tree, is_image: &is_image, folders: &folders })
     }
 }

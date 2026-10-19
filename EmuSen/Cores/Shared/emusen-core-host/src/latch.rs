@@ -34,6 +34,8 @@ struct Held {
     moved: Vec<bool>,
     present: Vec<bool>,
     presence_changed: Vec<bool>,
+    /// Every port's presence sent with the next frame, whether or not it changed.
+    resend: bool,
     axes_per_port: usize,
 }
 
@@ -46,6 +48,7 @@ impl Held {
             moved: vec![false; ports * axes_per_port],
             present: vec![true; ports],
             presence_changed: vec![false; ports],
+            resend: false,
             axes_per_port,
         }
     }
@@ -62,6 +65,7 @@ impl Held {
         self.moved.clone_from(&from.moved);
         self.present.clone_from(&from.present);
         self.presence_changed.clone_from(&from.presence_changed);
+        self.resend = from.resend;
         self.axes_per_port = from.axes_per_port;
     }
 }
@@ -134,6 +138,11 @@ impl InputLatch {
         }
     }
 
+    /// Every port's presence sent with the next frame, as after a state load, whether or not it changed.
+    pub fn resend_presence(&self) {
+        self.gate().resend = true;
+    }
+
     /// An axis's latest value replaces any not yet sent.
     pub fn move_axis(&self, port: usize, axis: usize, value: f64) {
         let mut h = self.gate();
@@ -153,10 +162,11 @@ impl InputLatch {
             h.changed.fill(0);
             h.moved.fill(false);
             h.presence_changed.fill(false);
+            h.resend = false;
         }
         let per = s.axes_per_port;
         for port in 0..s.ports() {
-            if s.presence_changed[port] {
+            if s.resend || s.presence_changed[port] {
                 let _ = to.set_present(port as u32, s.present[port]);
             }
             if s.changed[port] != 0 {

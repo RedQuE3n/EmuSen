@@ -22,6 +22,9 @@ pub trait Debugger: Send {
     /// The session closed.
     fn detach(&mut self) {}
 
+    /// The cheats sent again before the next frame whatever their version, as after a state load.
+    fn cheats_stale(&mut self) {}
+
     /// The cheats' patch table and pokes brought up to date before the frame.
     fn refresh_cheats(&mut self, _m: &mut Machine) {}
 

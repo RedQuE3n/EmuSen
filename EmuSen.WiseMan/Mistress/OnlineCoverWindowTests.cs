@@ -24,10 +24,7 @@ namespace EmuSen.WiseMan.Mistress
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(OnlineCoverWindowTests).GetTypeInfo().Assembly);
 
-        private static readonly FieldInfo Factory = typeof(MainWindow).GetField("HttpFactory", BindingFlags.Static | BindingFlags.NonPublic)!;
-
         private readonly string _root, _romDir;
-        private readonly object _realFactory = Factory.GetValue(null)!;
         private readonly OnlineCoverTests.FakeServer _server = new() { Answer = _ => OnlineCoverTests.FakeServer.Png() };
 
         public OnlineCoverWindowTests()
@@ -37,14 +34,14 @@ namespace EmuSen.WiseMan.Mistress
             Directory.CreateDirectory(_romDir);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            Factory.SetValue(null, (Func<HttpClient>)(() => new HttpClient(_server)));
+            EmuSen.WiseMan.Mistress.Scraping.NoNetwork.Serve(_server);
             File.WriteAllBytes(Path.Combine(_romDir, "F-Zero (USA).sfc"), SyntheticRom.BuildBlank());
             OnlineCoverTests.BuildOpenVgdb(OpenVgdb.DefaultPath, ("SNES", "F-Zero (USA)", "00", null));
         }
 
         public void Dispose()
         {
-            Factory.SetValue(null, _realFactory);
+            EmuSen.WiseMan.Mistress.Scraping.NoNetwork.Refuse();
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }

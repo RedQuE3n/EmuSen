@@ -193,6 +193,22 @@ namespace EmuSen.Mistress.Scraping
             Touch();
         }
 
+        // The run as the scraper in Rust drained it: every count, the step, the last picture and the recent games replaced at once.
+        internal void Mirror(int done, int found, int unknown, int failed, int skipped, int retrying, int unchanged, int requests, string? lastFailure,
+            int failoverAsked, int failoverFound, ScrapeActivity? current, string? picture, IReadOnlyList<ScrapeRecent> recentNewestFirst)
+        {
+            (Done, Found, Unknown, Failed, Skipped, Retrying, Unchanged, LastFailure, FailoverAsked, FailoverFound) = (done, found, unknown, failed, skipped, retrying, unchanged, lastFailure, failoverAsked, failoverFound);
+            Volatile.Write(ref _requests, requests);
+            lock (_gate)
+            {
+                _current = current;
+                _picture = picture;
+                _recent.Clear();
+                _recent.AddRange(recentNewestFirst.Take(RecentLimit));
+            }
+            Touch();
+        }
+
         // The failover filled a game's cover: its row says so.
         public void FilledByFailover(string path)
         {

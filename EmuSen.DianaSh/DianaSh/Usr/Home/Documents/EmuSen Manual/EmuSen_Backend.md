@@ -7369,3 +7369,86 @@ The blast radius, measured on 2026-10-19: `cargo test --profile test-checked` of
 `emusen-net`, `emusen-library` and `emusen-dotnet`, 110 passed; every class in `EmuSen.WiseMan.Mistress.Scraping`
 (the replay and the store's parity classes among them) with the library's two parity classes, the cheat download's and
 the online covers', 292 passed and 5 skipped (the live and picture tools), none failed.
+
+### 30.13 Built 2026-10-19: part 5, the sources and the metadata, graded
+
+*Measured on 2026-10-19.* Part 4 built `artwork`, `media` and `metadata` with the run, which needed them (§30.12); part 5
+is their parity class. `ScrapeMediaParityTests` generates three stores from seeds: eighteen games across SNES, NES, Game
+Boy and Game Boy Color, at the top of a console's folder and in nested folders, with each picture type placed at random
+in the scraper's store, in an ES-DE folder or in both, under the folder-and-stem name or the stem alone; hand-placed art
+under a console's folder, a libretro name, the root or an alias, by its full title or its title without tags; OpenEmu
+covers; covers chosen from other games (with chains and loops) and edited fields in `games.db`; and scraped answers with
+ratings both in twentieths, as ScreenScraper gives them, and arbitrary. Every game is then asked every type through the
+C#'s `MediaSources.Locate` and the Rust's `media` read, every field through `GameMetadata.Resolve` and the `metadata`
+read, with and without scraped names, and every shelf's present types through both; all agree.
+
+**Seeded faults**, each made, run and reverted: the ES-DE folder tried before the scraper's store; a game in a folder
+not found by its stem alone; scraped names used when switched off; present types read from a console's top folder only;
+a rating written to two decimals; a borrowed cover looked up on the borrowing game's shelf. The first run caught four.
+The ES-DE fault survived because the generator put each picture in one place, never both, so the order never mattered;
+the rating fault survived because every generated rating was a twentieth, which two decimals already write exactly. With
+the generator widened as above, both fail.
+
+### 30.14 Built 2026-10-19: part 6, the surface frozen and Mistress in state 2
+
+*Measured on 2026-10-19.*
+
+**The surface.** `emusen_scrape.h` 1.0 is now held as the library's is (§28.4): `Platform/scrape/tests/scrape_abi.rs`
+checks every constant against `emusen_scrape::abi`, every prototype against the platform library's `emusen_scrape_`
+exports in both directions, the config's size and each field's offset against a C compiler's, and compiles the header as
+C99 and C++17 with `-Wall -Wextra -Werror -pedantic`; its 33 facts are recorded in `Platform/scrape/abi/v1/baseline.txt`
+at `@1.0`, and CI's step "The scraper's surface" fails a change that removes or alters a line of the base branch's
+baseline. The statuses sit in −1160 to −1179.
+
+**Mistress in state 2.** With `EMUSEN_SCRAPE_NATIVE` unset, and the library itself reached through Rust, the window
+opens the scraper through the binding: `NativeScraping` wraps `MediaService` and answers in the C# types the window
+already reads (`ScrapedRecord`, `StoredMedia`, `ScrapeQuota`, `SignInAnswer`, `ScrapedGame`), and
+`MainWindow.ScrapeNative.cs` starts runs, drains `progress` on a thread of its own that waits on the serial, and posts
+each snapshot to the interface thread, where `ScrapeProgress.Mirror` lays the counts, the step, the last picture and the
+recent games onto the same object the status window and the shelves already read. Every place the window touched
+`MediaStore`, `Scraper`, `ScrapeQuotaManager`, `ScreenScraperClient`, `MediaSources`, OpenVGDB's download or the credential
+files branches on the handle: the preferences (`settings`), the plan, a single game's scrape and a refresh, pause, cancel,
+Log In, Check and Log Out, the name search and its Choose, a picture placed by hand, forgetting a game's answer, orphans
+and their clean-up, OpenVGDB's download and removal, and the sources of every picture shown. `0` keeps the C# as it was.
+
+**Built otherwise than §30.8 said.**
+
+- §30.8 kept every public member of the six classes and gave each a forwarding body beside a `.Managed` twin. The window
+  branches at its own seams instead, and the six classes stay whole as the failover and the oracle. Forwarding bodies
+  would have turned members that return live objects (`MediaStore.Open`, `Scraper`'s events) into a second facade over
+  the first, for code that state 3 deletes; the seams are about thirty-five, in the window's partial classes and `MediaSources`.
+- `GameMetadata.Resolve` stays in C# for the editor, fed by the record the scraper returns; the `metadata` read gives the
+  same answer (§30.13) and is what a frontend without the C# reads.
+- State 2 needs the library through Rust as well (`GameRecords.ThroughLibrary`), since the scraper keeps the failover's
+  cover lookups in `games.db` and follows covers chosen there. A library on the C# leaves the scraper on the C# too.
+- A sign-in opens `media.db` for its handle even when no run follows, as the quota the answer carries lives there.
+- A retry's line in the error log is not written in state 2; a game that could not be identified and a run's stop are,
+  by the window, from the drained results (§30.12).
+- The tests reach the scraper through one seam, `MainWindow.ScrapeTest`, which gives the settings' `test` member; a test
+  that installs a fake server through `NoNetwork.Serve` has it served to both halves, the C#'s `HttpClient` directly and
+  the Rust's over HTTPS through `ReplayServer`, on the test's clock when it sets one. Every window opened without one
+  gets `{"offline": true}`, so no test can reach the network through either half.
+
+**Faults in the new code, found by the window's tests before state 2 passed:** the native name search waited on its
+task from the interface thread and deadlocked when the task's continuation was posted back there (it no longer resumes
+on that thread); a cancelled run's last snapshot, posted before the cancel, could end the next run (each run now
+carries a number and a stale snapshot is dropped); the scraper's workers could keep a cancel waiting on a request that
+had not answered (each request now runs detached and is let go of at cancel, its result discarded). None was in the
+C# that state 0 runs.
+
+**Sizes, against §30.8's re-estimate.** Rust, with in-crate tests and the C layer: about 8,100 lines (5,840 in the crate's
+sources, 750 in its test files, 240 in the C layer, about 1,300 below it at part 2), inside 7,100–10,600. The C# binding
+and facade: about 940 (`MediaService` 240, `NativeScraping` 250, the window's native partial 180 and about 270 changed in
+the other partials), against about 900. Parity classes and the replay server: about 1,020, against about 1,000.
+
+**The blast radius, measured on 2026-10-19:** `cargo test --profile test-checked` of `emusen-scrape`,
+`emusen-platform`, `emusen-net`, `emusen-library` and `emusen-dotnet`, 116 passed; the whole of
+`EmuSen.WiseMan.Mistress` (every scraping class, the library's and Big Picture's, the window fit audit) in state 2,
+2,223 passed and 2 failed, both `OnlineCoverWindowTests`, which had installed their fake server for the C#'s
+`HttpClient` alone and now use `NoNetwork.Serve` (their 3 cases then passed in both states); with
+`EMUSEN_SCRAPE_NATIVE=0`, 2,225 passed, none failed, 53 skipped in each. After WiseMan's B7 piece 2b was merged in, the
+scraping classes, the online covers', `CrystalParityTests`, the window fit audit, the metadata and cover-choice classes
+and the library's and the cheat download's parity classes, 859 cases: 854 passed and 5 skipped with
+`EMUSEN_SCRAPE_NATIVE=0`; in state 2 the same but for one case of `ScraperTests`' thread limit, which drives the C#
+`Scraper` whatever the switch says, allows 300 ms for two workers to reach the server and passed three times of three
+when run alone. `cargo test` of `emusen-scrape` and `emusen-platform` after the merge, 52 passed.

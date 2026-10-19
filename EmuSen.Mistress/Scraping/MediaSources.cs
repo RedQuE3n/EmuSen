@@ -36,6 +36,18 @@ namespace EmuSen.Mistress.Scraping
 
         private readonly string? _romDirectory;
 
+        private readonly NativeScraping? _native;
+
+        // The sources as the scraper in Rust orders them (state 2); the choice stamp is the window's, as before.
+        public MediaSources(NativeScraping native, string choiceStamp, string? romDirectory)
+        {
+            _native = native;
+            _handPlaced = (_, _) => null;
+            _scraped = new EsdeMediaFolder("");
+            _choiceStamp = choiceStamp;
+            _romDirectory = romDirectory;
+        }
+
         public string? Find(ThemeSystem system, SceneGame game, string mediaType) => Locate(system.Name, game, mediaType, null).Path;
 
         // A ROM as the media folders name it: its stem, below the folder it sits in under its console's (§30).
@@ -44,6 +56,7 @@ namespace EmuSen.Mistress.Scraping
         // The folders' own listings for the variant triggers (§16), and a cover from the player's folder or OpenEmu's counts too.
         public IReadOnlySet<string> Present(ThemeSystem system, IReadOnlyList<SceneGame> games)
         {
+            if (_native is { } n) return n.Present(system.Name, games.Select(g => (g.File, g.FolderPath, g is { Folder: true, IsCollection: false })));
             var found = new HashSet<string>(_scraped.Present(system, games), StringComparer.Ordinal);
             if (_esde is not null) found.UnionWith(_esde.Present(system, games));
             if (!found.Contains(ScrapeRules.Cover.EsdeType) && games.Any(g => Locate(system.Name, g, ScrapeRules.Cover.EsdeType, null).Path is not null)) found.Add(ScrapeRules.Cover.EsdeType);
@@ -53,6 +66,7 @@ namespace EmuSen.Mistress.Scraping
         // Changes when a file is added to or taken from any folder a picture could come from; the player's folder is the caller's to key.
         public string? Stamp(ThemeSystem system)
         {
+            if (_native is { } n) return n.Stamp(system.Name, _choiceStamp);
             string openEmu = _openEmu is not null && Directory.Exists(_openEmu)
                 ? string.Join(",", Directory.EnumerateDirectories(_openEmu).Select(d => Directory.GetLastWriteTimeUtc(d).Ticks))
                 : "";
@@ -62,11 +76,13 @@ namespace EmuSen.Mistress.Scraping
         // The library's cover for a ROM on the shelf ES-DE calls esdeSystem.
         public string? Cover(string esdeSystem, string romPath) => Locate(esdeSystem, romPath, ScrapeRules.Cover.EsdeType).Path;
 
-        public (MediaSource Source, string? Path) Locate(string esdeSystem, string romPath, string mediaType) => Locate(esdeSystem, GameAt(romPath), mediaType, null);
+        public (MediaSource Source, string? Path) Locate(string esdeSystem, string romPath, string mediaType) =>
+            _native is { } n ? n.Locate(esdeSystem, romPath, mediaType) : Locate(esdeSystem, GameAt(romPath), mediaType, null);
 
         // A chosen game's cover is whatever that game shows, its own choice followed too; a chain that comes back round stops at the game it reached twice.
         private (MediaSource Source, string? Path) Locate(string esdeSystem, SceneGame game, string mediaType, HashSet<string>? seen)
         {
+            if (_native is { } n) return n.Locate(esdeSystem, game.File, mediaType, game.FolderPath, game is { Folder: true, IsCollection: false });
             string romPath = game.File;
             bool cover = mediaType == ScrapeRules.Cover.EsdeType, file = !game.Folder;
             if (cover && file && _coverFrom?.Invoke(romPath) is { Length: > 0 } from && (seen ??= new HashSet<string>(StringComparer.Ordinal) { romPath }).Add(from)

@@ -58,7 +58,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Directory.CreateDirectory(RomDir);
             ConfigStore.OverrideDirectory = Path.Combine(Root, "Config");
             DataStore.OverrideDirectory = Path.Combine(Root, "Home");
-            NoNetwork.HttpFactory.SetValue(null, (Func<HttpClient>)(() => new HttpClient(Server)));
+            NoNetwork.Serve(Server, Clock);
             NoNetwork.ScrapeClock.SetValue(null, Clock);
             ConfirmField.SetValue(null, (Func<MainWindow, string, string, Task<bool>>)((_, _, _) => Task.FromResult(true)));
             CancelField.SetValue(null, (Func<Window, Task<bool>>)(_ => { CancelAsked++; return Task.FromResult(CancelAnswer); }));

@@ -245,6 +245,17 @@ jobs:
             export LIBRARY_ABI_AGAINST="$RUNNER_TEMP/library-base-baseline.txt"
           fi
           cd Platform && cargo test --profile test-checked -p emusen-library --test library_abi
+      # The scraper's header, stable from part 6: the same checks over emusen_scrape.h and its baseline (EmuSen_Backend.md §30.14).
+      - name: The scraper's surface
+        shell: bash
+        run: |
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          path=Platform/scrape/abi/v1/baseline.txt
+          if [ -n "$base" ] && git cat-file -e "$base:$path" 2>/dev/null; then
+            git show "$base:$path" > "$RUNNER_TEMP/scrape-base-baseline.txt"
+            export SCRAPE_ABI_AGAINST="$RUNNER_TEMP/scrape-base-baseline.txt"
+          fi
+          cd Platform && cargo test --profile test-checked -p emusen-scrape --test scrape_abi
 
   # While Windows and macOS are paused, every crate is still compiled for them here, so their code cannot break unseen (EmuSen_RustPlatform.md §31, §36).
   # Windows is checked as x86_64-pc-windows-gnu with MinGW-w64, the C toolchain ring's build script needs; x86_64-pc-windows-msvc checks the crates without C. Apple's target is checked on the Mac mini, whose Xcode builds ring.

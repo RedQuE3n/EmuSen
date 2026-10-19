@@ -93,3 +93,19 @@ impl Clock {
         matches!(self, Clock::Test { .. })
     }
 }
+
+/// `f` run on a thread of its own and waited for, the wait ending at once when `stop` is: the answer, or none when
+/// stopped. A request in flight is then left to end on its own by its timeout, its cancel flag set by the caller.
+pub fn detached<T: Send + 'static>(stop: &Stop, f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(f());
+    });
+    loop {
+        match rx.recv_timeout(Duration::from_millis(20)) {
+            Ok(v) => return Some(v),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) if !stop.is_stopped() => continue,
+            Err(_) => return None,
+        }
+    }
+}

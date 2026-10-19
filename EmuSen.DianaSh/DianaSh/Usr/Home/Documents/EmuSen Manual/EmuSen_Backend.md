@@ -3933,6 +3933,15 @@ reads every other tab from session 0 as before, the pattern the cheat window fol
 The opt-in `WindowLookPictureTool` (`EMUSEN_BIGPICTURE_PNG=1`) still opens `ShowN64WithNote` over its SNES game, so
 its N64 picture has failed since `08812dde`. It is left for its next run.
 
+**Decided 2026-10-19, the two questions this left.**
+
+- *The NES's and SNES's pads.* `NesSystem`/`SnesSystem.PadButtons` and `Ports` hold the same fact as MoonRT's and
+  VenusRT's core info, and so have two owners. The packs read the engines' info, as the Game Boy's and the N64's do
+  since 18.10.10. Building it is a step of its own.
+- *A running game's rows.* Every row of a running game's tab sits in a stack with its note, hidden while empty, since a
+  running engine may word a note for any row. That stands. An engine does not declare which rows can carry one: the
+  stack draws nothing while empty, and a declaration would widen the core's settings surface for no change on screen.
+
 ## 19. B4 for MoonRT and VenusRT, phase 1, 2026-10-18: what the two shims add, where each piece goes, and the gates
 
 *Read on 2026-10-18 on branch `b4-moon-venus`, from `WiseMan` at `480bf5e2`, against the core ABI at 1.12
@@ -6065,6 +6074,11 @@ cached.
 `ThemeCatalogTests`, `ThemedCollectionsTests`, `GamelistOptionsTests`, `LibraryParityTests`, `LibraryRecordsParityTests`
 and all of `WindowFitAuditTests`. **605 pass and 8 fail each way.** The eight are the Graphics Settings cases of
 `WindowFitAuditTests` that fail on the base and are fixed elsewhere.
+
+**Decided 2026-10-19, the two questions this left.** A `lastplayed` selector's ties keep the scan's order, so its picks
+are the console's Recently Played and the two screens hold one rule; the list's own order (favourites first) is not
+used. A scene given no recent call, as a picture tool or a test builds one alone, picks nothing for `lastplayed`, and
+no fallback sort is kept, since a fallback would be a second copy of the rule.
 
 ---
 

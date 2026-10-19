@@ -46,6 +46,7 @@ namespace EmuSen.WiseMan.Crystal
 
         private string? RegistryAnswer(string verb, string rest, string[] words)
         {
+            if (verb.StartsWith("cheat.", StringComparison.Ordinal)) return CheatAnswer(verb, rest, words);
             Chosen();
             BreakpointRegistry bp = _fake.Breakpoints;
             _fake.Watches.Say ??= _said.Add;

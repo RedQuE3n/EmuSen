@@ -3871,6 +3871,29 @@ The timing files are kept under `~/.cache/emusen/probe/mars/b4/timing/` (`r1.tsv
 
 ---
 
+#### 18.10.10 After the switch, 2026-10-18: the N64's stick in the catalog test
+
+`ManagedCrystalCatalogTests.Each_system_s_controllers_are_the_engine_s_as_the_settings_stand` failed on `WiseMan`: the
+`n64` system's `controllers.axes` was empty where it asserted `PadAxis.LeftX`. It passes at `08812dde^1` (3 of 3) and
+fails at `08812dde` (1 of 3), MarsRT's switch. Until then the axes were the catalog's literal row (`AxesByConsole`,
+`N64Console.PadAxes`); since 18.10.3 they are MarsRT's core info, read from its sidecar (§17.8 Q11). The test's runtime
+(`CrystalFixture`) discovers the v1 test core alone, so it has no MarsRT sidecar to read, and an N64 with no engine
+installed lists no stick, as decided.
+
+**The product is right; the expectation was stale.** With discovery at its defaults, the cores beside the program,
+the frontend API's `systems` gives the N64 the four axes of MarsRT's info, and Mistress's `RuntimeCatalog` lists both
+sticks. The literal assertion left the fixture's test, and two tests took its place:
+
+- `ManagedCrystalCatalogTests.Each_catalog_console_s_controllers_are_its_engine_s_core_info`: for each console with a
+  sole discovered engine (NES, SNES, Game Boy, N64), `systems`' buttons, axes, ports and players are the engine's core
+  info, compared with the sidecar itself rather than through `CoreCatalog`, and the N64 holds `LeftX`.
+- `RuntimeCatalogTests.An_n64_pad_lists_its_sticks`: the N64's axes and both sticks' controls in Mistress's catalog.
+
+Both failed with `AxesFor` reading `DiscoveredSystem` alone, the switch's sidecar fallback seeded out, and pass on the
+tree. All four consoles match their info. The NES's and SNES's buttons and ports are still the packs' literals
+(`NesSystem.PadButtons`, `SnesSystem.PadButtons`, `Ports`), which equal MoonRT's and VenusRT's info in order and count;
+they are two owners of one fact, a question for the tester.
+
 ## 19. B4 for MoonRT and VenusRT, phase 1, 2026-10-18: what the two shims add, where each piece goes, and the gates
 
 *Read on 2026-10-18 on branch `b4-moon-venus`, from `WiseMan` at `480bf5e2`, against the core ABI at 1.12

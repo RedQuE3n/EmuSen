@@ -1161,3 +1161,22 @@ choices are the tester's (§12.14).
    Master System BIOS images are now in `~/Documents/BIOS/SMS/` (Europe v2.0, Japan v2.1, USA/Europe v1.3, 8 KiB each);
    nothing of them was read, hashed or run at this stage, and how they serve as the player's own image under
    `EmuSen_Firmware.md` §0 is stage 6's question for the tester. Recommended: the go for stage 6, opened by the page.
+
+*Decided 2026-10-19 by the tester: yes to all four.* The go for stage 6 came with the decisions; it covers stage 6
+alone. No real hardware is used for any of them (`Endou_Plan.md` §10 Q11), and MAME is not used.
+
+1. **A published recording of a Master System's audio output may be searched for and fetched**, so that the console's
+   analogue output filter can be fitted as Nephrite's was from MDFourier's recordings. Its provenance and licence are
+   recorded in `Endou_References.md`, and the filter is fitted only from it. If no suitable recording is found, the
+   search and its negative result are recorded and the filter stays a named loss.
+2. **SMS_MiSTer's `vdp` entity may be run alone under GHDL**, with stand-ins for its `altera_mf` memory blocks, in a
+   logged dispute step for D-8 (the access slots). The step may read the `vdp` entity's port list and the interfaces of
+   the `altera_mf` components it uses, and lists every file it reads; nothing else of the RTL is read. It may run
+   beside the boot work, and its outcome is recorded in D-8.
+3. **The go for stage 6**: the open boot program, opened by its design page `Endou_OpenBoot.md`, written before any of
+   its code.
+4. **The player's own BIOS is an opt-in accuracy upgrade per console model**, the open boot program being the default.
+   A player who has a console's BIOS chooses it for that model in the settings; without the choice, or without the
+   file, the open boot program runs. The tester's own images (`~/Documents/BIOS/SMS/`: Europe v2.0, Japan v2.1,
+   USA/Europe v1.3, 8 KiB each) are run only by the tester; the path is built and tested with a synthetic stand-in
+   image that the tests make, and no real BIOS is read, hashed or run for the project.

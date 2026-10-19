@@ -45,6 +45,13 @@ black-box referee for D-6, D-7, D-8 and Space Harrier's opening, reading only th
 optional within stage 5; the SG-1000 stays the default model for SG-1000 games, the Mark III offered; and the SG-1000
 gets its own shelf (stage 7). The go for stage 5 came with them.
 
+**Decided by the tester, 2026-10-19, on stage 5's questions** (`Endou_Native.md` §12.14), all four: a published
+recording of a Master System's audio output may be searched for and fetched, and the analogue filter fitted only from
+it, else left a named loss; SMS_MiSTer's `vdp` entity may be run alone under GHDL with stand-ins for its `altera_mf`
+memories in a logged dispute step for D-8, reading only that entity's port list and those components' interfaces; the
+go for stage 6, opened by `Endou_OpenBoot.md`; and the player's own BIOS is an opt-in accuracy upgrade per console
+model, the open boot program the default (§5.8, amended).
+
 Every claim carries one of six marks:
 
 - **[M]** *measured* on 2026-10-19, with the tool named. Nothing was run to write this page beyond listings, the local
@@ -599,7 +606,9 @@ C3]:
 - **3-D glasses' picture** (stage 10), an `enhancement` setting: its `hardware` value, the default, shows the picture
   as the console outputs it, both eyes alternating; its other value shows one eye, with its cost ("The 3-D picture is
   shown flat, as the left eye sees it").
-- **BIOS**: the player's image when present, else the open program; no setting, by the firmware policy.
+- ~~**BIOS**: the player's image when present, else the open program; no setting, by the firmware policy.~~
+  *Decided 2026-10-19:* **BIOS, per model with one**: the open boot program by default; the player's own image of that
+  console's BIOS as an opt-in accuracy upgrade, used when chosen and present, else the open program.
 - The output sample rate.
 
 ### 5.9 The speed budget

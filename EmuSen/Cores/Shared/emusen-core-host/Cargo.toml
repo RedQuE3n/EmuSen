@@ -1,0 +1,41 @@
+[package]
+name = "emusen-core-host"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The core host: discovery from sidecars, trust and the manifest, the checks before and after loading, the v1 calls, the
+# input latch and the state layout. The conformance kit and Crystal in Rust both build on it. See EmuSen_Backend.md §27
+# and EmuSen_CoreAPI.md §7.
+[lib]
+name = "emusen_core_host"
+
+[[bin]]
+name = "emusen-core-host"
+path = "src/bin/emusen-core-host.rs"
+
+[dependencies]
+emusen-native = { path = "../emusen-native" }
+libloading = "0.8"
+
+# emusen-native's two test cores and a core whose descriptors lie, built here so that this crate's tests load them.
+[[example]]
+name = "host_test_core"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "host_plain_core"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "host_liar_core"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "host_partial_core"
+crate-type = ["cdylib"]
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

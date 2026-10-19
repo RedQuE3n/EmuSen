@@ -18,6 +18,7 @@ using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Cores;
+using EmuSen.WiseMan.Crystal;
 using EmuSen.WiseMan.Fixtures;
 using SDL3;
 
@@ -102,7 +103,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         // The SNES auto-read's two words, as the game reads them at $4218 and $421A and copies them to WRAM.
-        private static (ushort One, ushort Two) SnesPads(MainWindow w) => SyntheticRom.Pads(SessionOf(w).Core!);
+        private static (ushort One, ushort Two) SnesPads(MainWindow w) => MistressGame.SnesPads(w);
 
         private const ushort SnesB = 0x8000, SnesA = 0x0080, SnesStart = 0x1000;
 
@@ -246,7 +247,7 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         // Four pads on the N64, each port plugged in as its player's pad is, and a fifth pad, which no port hears.
-        [Fact]
+        [CSharpImplementationFact("reads MarsRT's ports from the C# machine's state layout; the Rust session's ports are held by the parity class's input cases")]
         public Task Four_pads_play_the_n64s_four_ports_in_a_big_screen_session() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver first) = Playing("Four.z64", SyntheticN64Rom.Build(patches: (0, new byte[] { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 })), ByConnection, bigScreen: true);
@@ -284,14 +285,13 @@ namespace EmuSen.WiseMan.Mistress
                 graphics.SetValue("Genesis", "pad1", "md.pad6");
                 graphics.Save();
                 (MainWindow window, PadDriver first) = Playing("JCart.md", NephritePlayersTests.JCartReader(), ByConnection, bigScreen: true);
-                var core = Assert.IsType<CoreEngine>(SessionOf(window).Core);
                 Assert.Equal(4, SessionOf(window).ControllerPorts);
                 PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4") };
                 others[1].Pad.Press(SDL.GamepadButton.DPadUp);
                 others[2].Pad.Press(SDL.GamepadButton.DPadRight);
                 Poll(window);
-                for (int f = 0; f < 3; f++) core.RunFrame();
-                int Word(int at) => core.ReadSpace("WRAM", at) << 8 | core.ReadSpace("WRAM", at + 1);
+                MistressGame.RunFrames(window, 3);
+                int Word(int at) => MistressGame.Peek(window, "WRAM", at) << 8 | MistressGame.Peek(window, "WRAM", at + 1);
                 Assert.Equal((0x33B2, 0x37FE), (Word(0), Word(2)));
 
                 typeof(MainWindow).GetMethod("ShowControllerBindings", Hidden)!.Invoke(window, null);
@@ -324,7 +324,6 @@ namespace EmuSen.WiseMan.Mistress
             try
             {
                 (MainWindow window, PadDriver first) = Playing("Four.md", NephritePlayersTests.TeamPlayerReader(), ByConnection);
-                var core = Assert.IsType<CoreEngine>(SessionOf(window).Core);
                 PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4") };
                 first.Pad.Press(SDL.GamepadButton.DPadUp);
                 others[1].Pad.Press(SDL.GamepadButton.DPadLeft);
@@ -334,12 +333,12 @@ namespace EmuSen.WiseMan.Mistress
 
                 // Through the runtime's settings, as Graphics Settings sets it; with the window's loop stopped here, the frame runs by hand and the window reads its ports again as its loop does after a setting's event.
                 MistressGame.Runtime.SetSetting(MistressGame.Of(window).Console, "pad1", "md.teamplayer3");
-                core.RunFrame();
+                MistressGame.RunFrames(window, 1);
                 MistressGame.Of(window).RefreshPorts();
                 Assert.Equal(5, SessionOf(window).ControllerPorts);
                 Poll(window);
-                for (int f = 0; f < 4; f++) core.RunFrame();
-                int[] nibbles = Enumerable.Range(6, 8).Select(n => core.ReadSpace("WRAM", n) & 0xF).ToArray();
+                MistressGame.RunFrames(window, 4);
+                int[] nibbles = Enumerable.Range(6, 8).Select(n => MistressGame.Peek(window, "WRAM", n) & 0xF).ToArray();
                 Assert.Equal(new[] { 0xE, 0xF, 0xF, 0xF, 0xB, 0xF, 0xF, 0x7 }, nibbles);
                 window.Close();
             }

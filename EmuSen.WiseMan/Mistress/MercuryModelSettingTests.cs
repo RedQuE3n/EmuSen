@@ -83,9 +83,8 @@ namespace EmuSen.WiseMan.Mistress
             WaitFor(() => Game(window).TotalFrames > 20);
 
             WindowGame game = Game(window);
-            Assert.IsType<CoreEngine>(game.Core);
-            Assert.Equal(runsAs, ((CoreEngine)game.Core).Machine.Info.System.ToUpperInvariant());
-            Assert.Equal(model, ((ICoreSettings)game.Core).Get(MercuryEngines.ModelKey));
+            Assert.Equal(runsAs, MistressGame.Info(window).GetProperty("system").GetString()!.ToUpperInvariant());
+            Assert.Equal(model, MistressGame.Runtime.Setting("GB", MercuryEngines.ModelKey));
             Assert.Equal("GB", (string)typeof(MainWindow).GetField("_activeConsole", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!);
             window.Close();
         });

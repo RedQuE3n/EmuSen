@@ -148,6 +148,6 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         private static byte Peek(MainWindow window, int address) =>
-            MistressGame.Target(window).GetMemorySpaces().First(s => s.Name == "CpuBus").Read(address);
+            MistressGame.Peek(window, "CpuBus", address);
     }
 }

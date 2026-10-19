@@ -7508,6 +7508,154 @@ Graded on 2026-10-19 [M], on `WiseMan` at `97f74b73` with the refusal above:
 
 Mistress's move waits for `core_approve` (§29.40), as §29.11 Q3 decided.
 
+### 29.29 Built 2026-10-19: part (d), step 3, Mistress on the Rust Crystal; part (d) closed
+
+*Approved 2026-10-19 by the tester as the last step of part (d): Mistress's gate on both runtimes before any flip, its
+log, then the flip as a commit of its own. B10, which deletes the C#, waits for the tester after a release is played.*
+
+**Where Mistress hands a session's table to DianaSh.** In one place: the DianaSh console window, which builds its shell
+over the running game's table when it opens and again each time the game changes. The hardware dashboard reads the
+session through `SessionReadout`, and the window's commands (`pause`, `resume`, `coretop`, `vstop`, `feed`, `clear`) are
+`HostCommand`s; neither takes a table. The window now calls option (a)'s `DianaShInterpreter.CheckService` (§29.28)
+before `CreateForService`. Where the C# shell meets the Rust runtime's table, it builds a shell with no game and shows
+`[ERROR]` and the refusal's words under the welcome banner, and again under each "ROM changed" line. The game keeps
+running, since only the console needs the shell. Before this the window's constructor threw
+`DianaShTableRefusedException`, out of a menu's click. `MistressRuntimeTests` holds both outcomes, run at each pairing
+of the two variables: the refusal and the window's own `pause` still working, or a breakpoint set from the console
+stopping the game. With the window's change reverted, its case failed with the exception at the C# shell over the Rust
+runtime. The words for Mistress are added to `EmuSen_Settings_Reference.md` §4.117.
+
+**Mistress's log** (§29.11 Q2). Mistress already filed the runtime's `"source": "runtime"` lines in its game log: its
+one runtime subscribes at its making (`CoreSettings`), and the lines are filed after each open, between frames, and
+after each close. It now also writes `[ROM] Runtime: …` after the open's lines and the core's notice, for a game and
+for a console started empty, as Pharaoh and Hotaru do. `MistressRuntimeTests` reads it from the game's `general.log`.
+
+**The gate before the flip, first run**, measured on 2026-10-19 [M]: the whole `EmuSen.WiseMan.Mistress` namespace
+with `CrystalSwitchTests`, `FrontendReferenceTests` and `ShellOverSessionTests`, 2,300 cases, about 18 minutes a run.
+
+| `EMUSEN_CRYSTAL_NATIVE` | Passed | Skipped | Failed |
+|---|---:|---:|---:|
+| `0` | 2,245 | 54 | 1 |
+| `1` | 2,173 | 54 | 73 |
+
+The 73, by cause:
+- **67 reached the C# implementation through the test fixtures.** `MistressGame` read the frame count, the picture's
+  size, memory, the SNES pads and the state records from the C# session behind the binding
+  (`ManagedCrystal.SessionOf`), which is null on the Rust. Every fact the API serves is now read through it, as
+  Mistress reads it: `session_info` (`total_frames`, `picture`, `engine`, `system`, `game`, `state_version`),
+  `space_read`, `frame` where the window's loop is stopped, `cheat_op` LIST and `state_record`. With that, the fit
+  audit, the multiplayer, run control, resume, retention and PlayStation library classes run on the Rust.
+- **Twenty cases test the C# implementation itself**, and now carry `CSharpImplementationFact` or its new theory twin,
+  `CSharpImplementationTheory`, each with its reason:
+  - five move the C# discovery's directories (`CoreDiscovery.UseDirectories`), which the Rust takes from its config
+    once a process (§29.27): `CoreApprovalTests`' two, and the "without the library" cases of VenusRT, MoonRT and
+    MercuryRT;
+  - twelve read the C# engine's machine, rewind buffer or state layout: six of `PadRewindReelTests`, three of
+    `MarsRtEngineTests`, one each of VenusRT's, MoonRT's and `MainWindowSaveStateThreadTests`;
+  - one reads MarsRT's four ports from the C# machine's state layout (`MultiplayerTests`' N64 case);
+  - two forge a record in states.db through the C# `StateRecords` (`IdentityAndCollectionsTests`).
+
+  `state_load`'s refusals, `state_record`, the input calls and rewind are held equal on the Rust by the parity class.
+  `MarsRtEngineTests`' cheat case, marked at first, was rewritten over `cheat_op` and `space_read` instead, and runs on
+  both.
+- **One was a scraping case's concurrency count** (`ScraperTests`, 4 threads for 2 games), which passed in every later
+  run on both.
+- **The rest were a defect of the Rust**: Mistress's C5 case and its pad-cheats case read no poke at `CpuBus` $7E0100
+  on VenusRT. It is described next.
+
+**A defect of the core host, shown and fixed.** A probe, run on 2026-10-19 [M] and never committed, opened the same
+synthetic SNES image through the binding on each implementation and imported the same RAM poke. Both cheat lists held
+it enabled. After three frames the C# machine read $42 and the Rust's $00. `emusen-core-host`'s `set_rom_patches` and
+`set_cheat_pokes` passed the table's length in words, where `emusen_core.h` and `emusen-native` count entries
+(`count * 3` and `count * 4` words). So a core read three or four times the table, past the end of the host's buffer.
+§29.34 had fixed the same mistake in the debug tables. VenusRT refuses a poke table that names a space other than
+CpuBus or WRAM, and the words read past the buffer made it refuse every table. The v1 test core skips a quad it does
+not know, so the parity class's poke cases still saw their pokes land.
+
+The fix counts the entries (`len / 3`, `len / 4`). `a_cheat_table_is_counted_in_triples_and_quads` (`tests/host.rs`)
+hands the test core the first entry of a longer array. It failed before the fix (the core took 4 pokes from a table of
+1) and passes after, with the crate's other tests (8, 1 and 20). Pharaoh and emusen-shell had run on the Rust by
+default since §29.27 and §29.28, so their RAM pokes on VenusRT were refused there too, and every Rust core that claims
+`ROM_PATCHES` was handed three times its patch table.
+
+**A race in a scraping case, shown and fixed.** At `0`, `ThemedScrapeTests`'
+`Moving_through_the_gamelist_asks_nothing_and_scrape_this_game_fills_its_text_and_pictures` failed late in each whole
+run, twice on this branch. It also failed in a build of the base, `c4ecd3dc`, run the same way (2,298 cases: 2,243
+passed, 54 skipped, that one failed). It passed alone, and in its own namespace. The scrape records a game's text before
+it downloads the game's pictures (`run.rs`'s `keep`), and the case asserted the pictures as soon as the text showed.
+With the fake server's media replies held back 1.5 s, it failed alone on both implementations. It now waits for the
+pictures within its 20 s, and passes both ways with and without the hold.
+
+**The gate before the flip, final** [M], same filter:
+
+| Run | Result |
+|---|---|
+| `EMUSEN_CRYSTAL_NATIVE=0` | 2,246 passed, 54 skipped, 1 failed: the scraping race above, fixed after this run |
+| `EMUSEN_CRYSTAL_NATIVE=1` | 2,226 passed, 75 skipped (54 skipped both ways and the 21 then marked), none failed |
+| `MistressRuntimeTests` at each pairing of the two variables | 2 of 2 at each |
+| Every class of `EmuSen.WiseMan.Crystal`, `ShellOverSessionTests`, `CoreHostParityTests` and the golden corpus | 362 of 364 at `0`, 357 with 5 skipped (§29.27) at `1`; the two failing both ways were the flip's own new cases, which the flip passes |
+| The golden corpus on Crystal's table (`EMUSEN_GOLDEN_CRYSTAL=1`) | 100 of 100 both ways |
+| `emusen-crystal`, `emusen-crystal-debug` and the platform library's tests, `--profile test-checked` | 6, 6 and 1; 4 and 2; 31 and 4 |
+
+**Mistress's default is the Rust** (state 2, SR7). Its project sets `EmuSenCrystalNative`. With `EMUSEN_CRYSTAL_NATIVE=0`
+it runs on the C# again, one variable away.
+- `CrystalSwitchTests` expects Mistress's key.
+- `MistressCrystalDefaultTests` reads Mistress's built entry assembly, beside the tests and in its own project's output,
+  without opening a window: once from the file's metadata tables, and once through the binding's own reader over the
+  file loaded apart from the tests' copy.
+- A seeded fault, the property misspelt `EmuSenCrystalNatve`, was caught by all three cases.
+
+**The gate after the flip** [M], the same filter with `MistressCrystalDefaultTests`:
+
+| Run | Result |
+|---|---|
+| `EMUSEN_CRYSTAL_NATIVE` unset | 2,248 passed, 54 skipped |
+| `EMUSEN_CRYSTAL_NATIVE=0` | 2,248 passed, 54 skipped |
+| `EMUSEN_CRYSTAL_NATIVE=1` | 2,228 passed, 74 skipped (the 54 and the twenty marked) |
+| `MistressRuntimeTests` and `ShellOverSessionTests` at `EMUSEN_DIANASH_NATIVE=0`, with the Crystal variable unset, `0` and `1` | 6 of 6 at each; with DianaSh's variable unset they ran in the three runs above |
+| Every class of `EmuSen.WiseMan.Crystal`, `CoreHostParityTests` and the golden corpus, unset | 360 of 360 |
+
+In a test process the entry assembly is the test host, which carries no key, so "unset" there is the C#. Mistress's
+own default is held by `MistressCrystalDefaultTests`, which reads the file a Mistress process enters through. After
+every run that read games, nothing in the ROM library or the test ROMs was newer than the gate's start (`find -newer`).
+
+**Part (d) closed.** Pharaoh, emusen-shell and Mistress each run on the Rust Crystal by default, and each goes back to
+the C# with `EMUSEN_CRYSTAL_NATIVE=0`.
+
+**Left before state 3**, gathered here so that B10 has one list:
+- From part (a) (§29.20):
+  - a drive's read-ahead on `MEDIA_SEEK` is not in Galaxia's Rust `DiscFiles`. It fetches pages early and changes no
+    answer (§29.16);
+  - a freed runtime's subscription handles stay allocated until the process ends (§29.19);
+  - three crates keep a copy of the local offset that Galaxia's `clock` can replace (§29.18).
+
+  P2, the fourth item there, was measured again in §29.25.
+- From part (c) (§29.25):
+  - the cheat database's archive: one the Rust installer does not read is a fault in its words, where the C# falls back
+    to .NET's zip reader. With no C#, the installer must read every form .NET reads, or the refusal must be decided;
+  - DB_UPDATE's download is never run by the parity class. A case that reaches the fetch needs a test server or a
+    runtime with no fetch, never the network;
+  - a table is kept until its runtime is freed, where the C#'s is freed with its session. A table used after its
+    session closed answers `NO_SESSION`;
+  - `set_register` refuses every register on the generic engine, as the C# does.
+- From part (b): §29.36 left nothing open. The recorder's archive is the crate's own deflate, so its bytes differ from
+  .NET's while its entries are the same files.
+- From step 0 (§29.26): the core host hashes a library at 333 MB/s, so a process's first open of MarsRT costs about
+  95 ms more than on the C#. Once the C# is gone every program pays it, once a process.
+- From 1.3 (§29.44):
+  - the Preferences page that lists every core with its trust and revokes an approval;
+  - a console started empty on a player's core, which answers `NOT_APPROVED`'s words;
+  - a DianaSh command to list and approve cores;
+  - a build that enforces the manifest reaches the handheld only as a fresh publish, which carries `cores.manifest`.
+- From part (d):
+  - the 25 cases that carry `CSharpImplementationFact` or `CSharpImplementationTheory`, five from §29.27 and twenty
+    above. Each is deleted with the C# or rewritten over the API, its reason saying which;
+  - `EMUSEN_DIANASH_NATIVE=0` means the C# shell and the C# runtime together (§29.28). With no C# runtime, the C# shell
+    can go over no session's table, so that pairing is refused for good until DianaSh's own C# shell is retired on its
+    own schedule (`EmuSen_Settings_Reference.md` §4.117);
+  - goldens recorded from the C# where a step's parity class leaves no record (B10's row, §6);
+  - a release played by the tester.
+
 ### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
 
 *Part (b) numbers its sections from §29.30, so that part (a)'s pieces, built at the same time, keep §29.16 to §29.29.*

@@ -48,6 +48,7 @@ namespace EmuSen.Mistress.Views
                 GameSession session = OpenSession(new CrystalOpen { Console = console });
                 _session = session;
                 CoreSettings.FileRuntimeLog();
+                SayRuntime();
                 _activeConsole = console;
                 ApplyScreenFilter(_activeConsole);
                 WireSession(session, name, restoredCheats, newGame: !reset);

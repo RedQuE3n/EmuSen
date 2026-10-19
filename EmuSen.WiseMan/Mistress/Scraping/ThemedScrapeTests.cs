@@ -75,9 +75,16 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 (game.Developer, game.Publisher, game.Genre, game.Players, game.Rating, game.ReleaseDate));
             Assert.Equal([ThemedSession.SnesGames[0] + ".sfc"], _server.JeuInfos.Select(u => FakeScreenScraper.Param(u, "romnom")));
 
-            ISceneMedia media = (ISceneMedia)typeof(MainWindow).GetMethod("ThemedMedia", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(s.Window, null)!;
-            Assert.Equal(Path.Combine(DataStore.Media, "snes", "screenshots", ThemedSession.SnesGames[0] + ".png"), media.Find(s.Themed.SelectedSystem!.System, game, "screenshot"));
-            Assert.Equal(Path.Combine(DataStore.Media, "snes", "miximages", ThemedSession.SnesGames[0] + ".png"), media.Find(s.Themed.SelectedSystem!.System, game, "miximage"));
+            // The text is recorded before the pictures are downloaded, so the pictures are waited for too - see EmuSen_Backend.md §29.29.
+            string? Found(string type) => ((ISceneMedia)typeof(MainWindow).GetMethod("ThemedMedia", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(s.Window, null)!).Find(s.Themed.SelectedSystem!.System, game, type);
+            while (Found("screenshot") is null || Found("miximage") is null)
+            {
+                s.Settle();
+                if (clock.ElapsedMilliseconds > 20_000) break;
+                Thread.Sleep(5);
+            }
+            Assert.Equal(Path.Combine(DataStore.Media, "snes", "screenshots", ThemedSession.SnesGames[0] + ".png"), Found("screenshot"));
+            Assert.Equal(Path.Combine(DataStore.Media, "snes", "miximages", ThemedSession.SnesGames[0] + ".png"), Found("miximage"));
         }, default);
     }
 }

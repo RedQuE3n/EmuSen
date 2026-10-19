@@ -57,7 +57,7 @@ namespace EmuSen.WiseMan.Crystal
         [Theory]
         [InlineData("EmuSen.Pharaoh", true)]
         [InlineData("emusen-shell", true)]
-        [InlineData("EmuSen.Mistress", false)]
+        [InlineData("EmuSen.Mistress", true)]
         public void Each_program_names_its_default(string program, bool rust) => Assert.Equal(rust, CrystalContract.DefaultsToRust(Assembly.Load(program)));
     }
 }

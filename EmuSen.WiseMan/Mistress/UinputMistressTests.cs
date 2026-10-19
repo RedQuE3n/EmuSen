@@ -83,7 +83,7 @@ namespace EmuSen.WiseMan.Mistress
 
         private static ushort SnesPlayer1(MainWindow w)
         {
-            return SyntheticRom.Pads(MistressGame.Core(w)).One;
+            return MistressGame.SnesPads(w).One;
         }
 
         public static TheoryData<string> Screens => new() { "library", "big picture", "game" };

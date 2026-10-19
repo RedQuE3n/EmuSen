@@ -8870,7 +8870,12 @@ exits with code 1:
 
 emusen-shell's window shows the same words at its prompt when a game is launched from it.
 
-| `EMUSEN_DIANASH_NATIVE` | `EMUSEN_CRYSTAL_NATIVE` | Pharaoh and emusen-shell |
+Mistress (since 2026-10-19, `EmuSen_Backend.md` §29.29) keeps the game running, since only its DianaSh console needs
+the shell. Its console window opens a shell with no game and shows the words at its prompt under the welcome banner,
+again each time the game changes. The window's own commands (`pause`, `resume`, `coretop`, `vstop`, `feed`, `clear`)
+still work; the commands that need the game report that none is loaded.
+
+| `EMUSEN_DIANASH_NATIVE` | `EMUSEN_CRYSTAL_NATIVE` | Pharaoh, emusen-shell and Mistress's console |
 |---|---|---|
 | unset | unset | the Rust shell over the Rust runtime |
 | `0` | `0` | the C# shell over the C# runtime, the whole failover |
@@ -8878,7 +8883,8 @@ emusen-shell's window shows the same words at its prompt when a game is launched
 | unset | `0` | the Rust shell over the C# runtime |
 
 The check is DianaSh's own (`DianaShInterpreter.CheckService`, which `CreateForService` makes first, raising
-`DianaShTableRefusedException`). Each program calls it once, right after its session opens.
+`DianaShTableRefusedException`). Pharaoh and emusen-shell call it once, right after their session opens; Mistress's
+console window calls it each time it builds a shell over the running game's table.
 
 **Tests.** `DianaShSwitchTests` (each fallback: no library, another major, a missing export, no shell made; the
 library chosen unless the variable is 0); `NativeSwitchTests`; the golden corpus and WiseMan's DianaSh tests, run with

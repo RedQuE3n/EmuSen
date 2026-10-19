@@ -19,6 +19,7 @@ using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Views;
+using EmuSen.WiseMan.Crystal;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
@@ -80,7 +81,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        [Fact]
+        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
         public Task A_game_runs_on_MarsRT_with_rewind_and_still_does_when_the_retired_Mars_is_stored() => Session.Dispatch(() =>
         {
             Assert.True(MarsRt.Available, MarsRt.Report);
@@ -105,7 +106,7 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         // The hotkey held on MarsRT with its workers and deferred picture: the game goes back, then plays on when let go - see Mars_Native.md §6.6.3.
-        [Fact]
+        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
         public Task Holding_rewind_on_MarsRT_steps_the_game_back_and_letting_go_plays_it_on() => Session.Dispatch(() =>
         {
             Choose(CoreCatalog.MarsRtEngine);
@@ -125,7 +126,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        [Fact]
+        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
         public Task A_state_saved_and_loaded_by_the_hotkeys_on_MarsRT_takes_the_game_back_to_it() => Session.Dispatch(() =>
         {
             Choose(CoreCatalog.MarsRtEngine);
@@ -179,14 +180,13 @@ namespace EmuSen.WiseMan.Mistress
         {
             Choose(CoreCatalog.MarsRtEngine);
             MainWindow window = Start();
-            WindowGame game = Game(window);
 
             var (added, words) = MistressGame.Cheats(window).AddCode("80000300 0042", "Poke");
             Assert.True(added, words);
-            Assert.Single(game.DebugTarget.Cheats.GetCheats());
+            using var listed = System.Text.Json.JsonDocument.Parse(MistressGame.Of(window).Crystal.CheatOp(EmuSen.Crystal.Client.Contract.CrystalSessionAbi.CheatList, "{}"));
+            Assert.Single(listed.RootElement.GetProperty("cheats").EnumerateArray());
 
-            var core = (CoreEngine)game.Core;
-            WaitFor(() => core.Peek(MarsRtSpace.Rdram, 0x300) == 0x42);
+            WaitFor(() => MistressGame.Peek(window, "RDRAM", 0x300) == 0x42);
             window.Close();
         }, default);
 

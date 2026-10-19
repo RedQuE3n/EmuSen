@@ -138,12 +138,13 @@ namespace EmuSen.WiseMan.Mistress
             var window = StartGame();
             object? before = Field(window, "_session");
             Assert.NotNull(before);
-            object machine = MistressGame.Core(window);
+            // The machine itself is the C# implementation's to show; on the Rust the session staying is what the API shows - see EmuSen_Backend.md §29.29.
+            object? machine = EmuSen.Crystal.Client.CrystalRuntime.Native ? null : MistressGame.Core(window);
 
             Click(window, "ResetMenuItem");
 
             Assert.Same(before, Field(window, "_session"));
-            Assert.Same(machine, MistressGame.Core(window));
+            if (machine is not null) Assert.Same(machine, MistressGame.Core(window));
             Assert.Equal("Reset: Playable.smc", Status(window).Text);
             Assert.True(GameFrame(window).IsVisible);
             Assert.False(LibraryView(window).IsVisible);

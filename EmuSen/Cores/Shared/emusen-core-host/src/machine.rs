@@ -280,12 +280,14 @@ impl Machine {
         ok(unsafe { (self.lib.exports().battery_saved)(self.h(), which) })
     }
 
+    /// ROM patches as (address, value, compare) triples laid flat; the header counts the triples.
     pub fn set_rom_patches(&mut self, triples: &[u32]) -> Result<usize, Status> {
-        self.lib.exports().set_rom_patches.map_or(Err(status::NOT_SUPPORTED), |f| count(unsafe { f(self.h(), triples.as_ptr(), triples.len()) }))
+        self.lib.exports().set_rom_patches.map_or(Err(status::NOT_SUPPORTED), |f| count(unsafe { f(self.h(), triples.as_ptr(), triples.len() / 3) }))
     }
 
+    /// Pokes as (space, address, value, compare) quads laid flat; the header counts the quads.
     pub fn set_cheat_pokes(&mut self, quads: &[u32]) -> Result<usize, Status> {
-        self.lib.exports().set_cheat_pokes.map_or(Err(status::NOT_SUPPORTED), |f| count(unsafe { f(self.h(), quads.as_ptr(), quads.len()) }))
+        self.lib.exports().set_cheat_pokes.map_or(Err(status::NOT_SUPPORTED), |f| count(unsafe { f(self.h(), quads.as_ptr(), quads.len() / 4) }))
     }
 
     pub fn set_settings(&mut self, settings: &str) -> Result<(), Status> {

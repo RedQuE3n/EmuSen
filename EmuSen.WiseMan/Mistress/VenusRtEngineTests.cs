@@ -18,6 +18,7 @@ using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Cores;
+using EmuSen.WiseMan.Crystal;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
@@ -67,7 +68,7 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         // A fresh config runs an .sfc on VenusRT on the adapter with rewind, and a stored Venus (C#) runs VenusRT with no notice and one line on the log.
-        [Fact]
+        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
         public Task A_game_runs_on_venusrt_and_a_stored_venus_choice_runs_it_too() => Session.Dispatch(() =>
         {
             if (!Found) return;
@@ -93,7 +94,7 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         // Without VenusRT's library an SNES game does not load, and the status line says why.
-        [Fact]
+        [CSharpImplementationFact("moves the C# discovery's directories (CoreDiscovery.UseDirectories), which the Rust takes from its config once a process")]
         public Task Without_the_library_an_snes_game_does_not_load_and_the_status_says_why() => Session.Dispatch(() =>
         {
             if (!Found) return;

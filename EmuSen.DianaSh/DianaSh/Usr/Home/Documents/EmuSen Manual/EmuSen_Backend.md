@@ -7253,6 +7253,248 @@ capture after the stop, a second recording of every frame under a stride of 0; t
 name and content; and, with no ffmpeg on the path, the words that leave the pictures as they are. Three seeded faults,
 each caught: the stride off by one, the pictures kept after the archive, the pictures' names of six digits.
 
+### 29.40 The frontend API's 1.3: `core_approve`, the approvals' file and the player's `/Cores`, the design
+
+*Written on 2026-10-19 on branch `b7-approve` from `WiseMan` at `db593514` (part (a) and part (b) closed, the API at
+1.2), before any of it was built, as §29.11's Q3 decided: `core_approve`, the approvals' file and the player's `/Cores`
+as the API's next minor, built before Mistress's state 2. Claims are marked as at the head of this page. Seven questions
+for the tester are in §29.40.10; nothing a question decides is built before it is answered.*
+
+#### 29.40.1 What exists, and what the minor adds
+
+**Read before designing** [M]: `emusen-core-host`'s `Trust` takes the installation's directories and a list of approved
+hashes, reads `cores.manifest` in each, and `Discovered::open` checks rule 3 (`check_file`), the sidecar's hash, then
+rules 1 and 2 (`vouches`) before loading (§27.5). The Rust runtime makes its trust with no approvals
+(`runtime.rs`, `Trust::new(&directories, &[])`), and its open answers an engine refused for any reason with a
+per-extension "This build has no … core" or "No core in this build handles …" (`open.rs`, `library_for`), so a player's
+core refused for want of approval is reported as missing. The C# host has no manifest and no approvals: its
+`DiscoveredCore.Open` checks the sidecar's hash alone, which is §27.11's pinned difference. Neither host has a player's
+directory nor lists a library without a sidecar.
+
+**What the minor adds**, each an extension of a surface that exists: one export, `emusen_crystal_core_approve` (and a
+second, `core_revoke`, if Q1 is answered yes); one status, `EMUSEN_CRYSTAL_NOT_APPROVED`; two config fields for the
+player's directory; additive keys on `cores` and `engines`; Galaxia's directory number for `/Cores`; and in
+`emusen-core-host`, the player's directory, the approvals' file and the sidecar-less listing. No session function
+changes, so the session service's table and the twins of part (c) are untouched.
+
+#### 29.40.2 `emusen_crystal_core_approve`
+
+```c
+#define EMUSEN_CRYSTAL_NOT_APPROVED (-1115) /* since 1.3: the engine's library is in no manifest and the player has not
+                                             * approved it; the words name the library, and cores gives its hash */
+
+/* changes, since 1.3. Records the player's one-time approval of the core library whose SHA-256 is `sha256` (64 hex
+ * digits, either case): one that cores lists, by its "sha256". A library without a sidecar that has that hash is then
+ * read: loaded once under the trust rules and its sidecar written beside it. Lists the cores directories again; a
+ * session already open keeps its engine. 0, also for a hash already vouched for; BAD_ARGUMENT for text that is not a
+ * hash; NO_SUCH_ID for a hash no listed library has; IO where the approvals' file or the sidecar could not be written,
+ * with the system's words. A library that fails a check when read is not an error of the call: the approval stands and
+ * cores' "report" says why it was not loaded. */
+int32_t emusen_crystal_core_approve(emusen_crystal_runtime *rt, const uint8_t *sha256, size_t sha256_len);
+```
+
+**Approval is of bytes, by their hash**, as §7.2 has it ("records the hash; a changed file is a new library"). The call
+does not hash a file: it records the hash the player was shown, and the open checks a file against it as it checks one
+against a manifest, by hashing the file then. So what the player is shown and what is loaded can differ only by being
+refused: a sidecar that claims another library's hash describes bytes that are not on disk, and its library is refused
+at open because its own hash differs from the sidecar's. Refusing a hash no listed library has keeps the file a record
+of the player's decisions about libraries they saw, not a list any caller can pre-fill.
+
+**Open's refusal.** Where the engine a game opens on is refused by rules 1 and 2 alone, `open_game` and `open_console`
+return `NOT_APPROVED`, with the refusal's words of §27.11 ("<file> is in no cores manifest and has not been approved; it
+was not loaded"), in place of today's "no … core" words. Every other refusal keeps its status and words. This is what a
+frontend asks the player on (§29.40.8).
+
+#### 29.40.3 The approvals' file
+
+- **Where**: `cores.approved` in Galaxia's config directory, `/etc/EmuSen/cores.approved` in the shell's tree
+  (`emusen_galaxia_config_path` with no category, `ConfigStore.For` in C#). The config directory holds the player's
+  decisions, and a test that redirects config (`ConfigStore.OverrideDirectory`, Galaxia's config override) has its own
+  approvals, so a test approves only inside its sandbox. Not in `/Cores` itself: what may be loaded is not decided by a
+  file beside what is loaded, as a manifest in the player's directory is not read (§27.5).
+- **Format**: the manifest's, `sha256sum`'s `<64 hex digits>  <file name>`, one approval per line, the hash lowercase.
+  The name is the library's file name when it was approved, for a person reading the file; it is not matched, since an
+  approval is of the hash wherever the bytes lie in a cores directory. One reader for both files (`trust::parse_manifest`,
+  and its C# twin); a line that does not parse is skipped and kept.
+- **One owner**: the trust module of `emusen-core-host` names the file and its format beside `MANIFEST` and writes it;
+  the runtime calls it from `core_approve`. The C# implementation is the failover of that one owner, as with every
+  settings file (SR5), not a second writer: one process writes through one implementation.
+- **Writes are atomic**: the file is read again just before the write, the line appended, and the whole written through
+  Galaxia's atomic write (`<file>.tmp`, then renamed; `AtomicFile` in C#), so a reader sees the whole old file or the
+  whole new one. Two programs approving at the same instant can lose one line; the player is then asked again, which is
+  safe, so no lock is taken. Recorded, not fixed.
+- **Read** at `new`, at `rescan` and after the call's own write, so an approval made in Mistress reaches Hotaru at its
+  next rescan. **An approvals' file writable by others is not read**, by rule 3's reasoning, and the runtime says so in
+  a `"runtime"` log line.
+- **A changed or stale hash.** A library replaced by a new build has a new hash: it is listed as needing approval and
+  asked about again. Its old line stays: the player may go back to the old build, and a line nothing matches loads
+  nothing. Lines are removed only by `core_revoke` (Q1) or by hand.
+
+#### 29.40.4 The player's `/Cores`, and the sidecar-less listing
+
+- **The directory** is `<home>/Cores`, `/Cores` in the shell's tree as `EmuSen_CoreAPI.md` §7.1 names it. Galaxia owns
+  its path: `Directory::Cores`, `EMUSEN_GALAXIA_DIR_CORES` 21, `DataStore.Cores`, which moves the platform interface
+  from 21 to 22 (it is matched exactly). Nothing creates it but a frontend asked to show it; a missing one is skipped,
+  as a missing installation directory is. `man hier` gains it.
+- **Discovery adds it after the installation's directories**, so that "the first of two sidecars with one id is kept"
+  keeps the installation's: a player's core cannot shadow a project core by taking its id, and where routing takes "the
+  routed system's first" engine (`route::v1_engine`) the installation's is first. `Trust` learns which directories are
+  the player's: their manifests are not read, and rule 3's "inside a cores directory" counts them.
+- **The config**, 1.3's two fields appended to `emusen_crystal_config` (48 bytes; 8 and 32 still taken):
+  `const uint8_t *player_cores; size_t player_cores_len`, a JSON array of paths as `cores` is. Absent, the player's
+  directory is Galaxia's `/Cores` where `cores` is absent too, and none where the caller names the installation's
+  directories in `cores`; so every fixture that names its tree today scans no player's directory and stays hermetic,
+  and a program that names nothing gets `/Cores` (Q4).
+- **The player's directory is hashed at the scan**; the installation's still is not. Approval is decided by the file's
+  own hash there, and a sidecar beside a player's library may be stale (the library replaced, its sidecar left). Each
+  library is hashed once per process, kept by its device, inode, length and modification time; the player's directory
+  holds the player's own few files, and the cost is to be measured on a 20 MB library before it is taken (Q5).
+- **The sidecar-less listing**, the player's directory only. A file with the platform's library suffix (`.so`,
+  `.dylib`, `.dll`) and no sidecar beside it, or one whose sidecar's hash is not the file's, is listed by `cores` as
+  not yet read; `engines` and `systems` do not list it, since nothing is known of it without loading it. Not the
+  installation's directories: the program's own directory holds the platform library, SkiaSharp and SQLite, which are
+  not cores.
+- **Reading one** (§7.1, "only when the player asks"): approving its hash is the asking. The runtime then opens it
+  under rules 1 to 4 as a game's open would, and writes its sidecar beside it with the host's one writer (the build's
+  step and the kit's `--sidecar`, `sidecar::write`; `CoreSidecar.Write` in C#), so that later starts list it without
+  loading it (P6). If `/Cores` cannot be written, the call answers `IO` and the library stays not yet read (Q6).
+
+#### 29.40.5 What `cores` and `engines` say
+
+`cores` gains, since 1.3, `"directory"`: `"installation"` or `"player"`; `"trust"`: `"manifest"`, `"approved"`,
+`"needs_approval"` or `"not_read"`; and from the sidecar's info `"name"`, `"authors"` (`[]` where none), `"license"`
+and `"systems"` (the ids it claims, offered or not), what §7.2 says an approval shows. A not-yet-read entry has
+`"sidecar"`, `"abi"`, `"engine"`, `"name"` and `"license"` null, `"authors"` and `"systems"` empty, `"development"`
+false and `"report"` "not yet read" (§7.1's words). `"sha256"` is the sidecar's in an installation directory, as in 1.0,
+and the file's own, hashed at the scan, in the player's.
+
+`"trust"` is decided without loading: in an installation directory from the sidecar's hash (a line of that directory's
+manifest with the library's name and that hash, else an approval, else `needs_approval`), checked against the file at
+open as now; in the player's from the file's hash (an approval, else `needs_approval`, or `not_read` without a usable
+sidecar). `"report"` keeps its 1.0 meaning, so before an open a core that needs approval still says "not yet loaded",
+and after one the refusal's words. `engines` gains `"trust"` with the same values but `not_read`, so a frontend can
+mark a system whose only engine needs approval without reading `cores`.
+
+#### 29.40.6 Both implementations
+
+**The Rust** grows in `emusen-core-host` (the trust module's player's directories and approvals' file, the discovery's
+hashing and sidecar-less listing, the listing's keys) and in `emusen-crystal` (the config's fields, a trust that is
+replaced on approval and rescan, `core_approve`, open's status). Its tool, `emusen-core-host list`, gains
+`--player DIR` and `--approvals FILE`, which the parity class runs.
+
+**The C# grows the same rule** in `CoreDiscovery` and `ManagedCrystal`: the manifest and the approvals (rules 1 and 2)
+in `DiscoveredCore.Open`, between the hash check it has and the load; the player's directory; the hashing and the
+sidecar-less listing; the read; the approvals' file through `AtomicFile`; `core_approve`, open's status and the keys.
+That closes §27.11's pinned difference: on the unapproved tree both refuse with the same words. What the C# does not
+grow is **rule 3** (a regular file inside a cores directory once links are resolved, its owner, others' write bit, the
+architecture, the size, and §29.40.7's directory check): the BCL has no call for a file's owner, and the C# host is
+deleted at B10. No parity case reaches rule 3 today, and none is added; the crate's own tests grade it (§27.6 gate 1).
+
+**Nothing a player has changes**: every project core is in the installation's manifest (§27.11: the build's output, a
+publish and CI's tree all carry one), so it loads as now with no prompt, in either implementation. The one thing that
+changes in the C#: a library added by hand to the program's directory, which the C# loads today with no question, is
+then refused until approved. No such library is known, and Q3 asks that the prompt land with the rule.
+
+**Test trees.** The C# classes that build a tree of cores without a manifest (`CoreDiscoveryTests`,
+`ManagedCrystalCatalogTests`, `NephriteTests`, `FirmwareOverviewTests`, `VenusRtCoreAbiTests`, `CrystalFixture` and
+`CoreRegistrationEquivalenceTests`, to be confirmed by running them) write the tree's manifest, as an installation
+carries one, through one helper beside `CoreSidecar`, rather than approving: no test approves outside its own
+sandboxed config directory.
+
+#### 29.40.7 The hash-then-open window
+
+Both hosts hash the file by name and then load it by name (§27.5, §27.8), so a file renamed into place between the two
+is loaded unhashed. **Recommended (Q7): close it in rule 3 rather than in the load.** The directory that holds the
+resolved file, and each directory above it, must not be writable by others unless it has the sticky bit, and the
+library's own directory must be owned by the player, by root or by the installation's owner, as `ssh`'s `StrictModes`
+checks a key's path. Then only someone the trust already includes can rename a file there, and the window gives no one
+anything. The check is a `stat` per directory at open, before the hash.
+
+Weighed and not chosen: loading the very descriptor that was hashed, through `/proc/self/fd/<n>` on Linux. It closes
+the rename but not a write into the same file, and the loaded object's name in the process's link map becomes
+`/proc/self/fd/<n>`, which the crash log, `perf` and `ipsample.py` would then show in place of the library's name;
+copying the bytes into a sealed `memfd` closes both, at a copy of every library loaded and the same loss of names.
+Neither is portable to the paused platforms. The C# keeps the window, having no rule 3, recorded with it.
+
+#### 29.40.8 What a player sees, and the Mistress side
+
+The API gives a frontend: open's `NOT_APPROVED` and its words; `cores`' entry with that hash, holding what §7.2 says the
+question shows (the file's name, the core's name, authors, licence, systems claimed, its hash, the directory);
+`core_approve`; `engines`' `"trust"`; and `/Cores` by Galaxia's number, to show the folder.
+
+In Mistress, as a later step before its state 2: **at open**, a game whose engine needs approval opens a sheet naming
+the library, its core, authors, licence and systems, its SHA-256, and saying plainly that a core runs with the player's
+full permissions; Approve calls `core_approve` and opens the game again, Cancel leaves it closed. **In Preferences**, a
+Cores page lists `cores` with each library's trust; a library not yet read is offered for approval by its file name and
+hash alone, since nothing more is known of it before it runs (§7.2's boundary is the decision to load), and an approved
+player's library can be revoked if Q1 is answered yes. Hotaru and Pharaoh, the project's own tools, need no prompt:
+their cores are the installation's. A DianaSh command to list and approve cores is left for later.
+
+#### 29.40.9 The header, the baseline, the binding, and how it is graded
+
+**The header and baseline.** `EMUSEN_CRYSTAL_MINOR` 3; the baseline gains, at `@1.3`, the export (and `core_revoke`'s,
+if Q1), `EMUSEN_CRYSTAL_NOT_APPROVED`, and the config's two fields at offsets 32 and 40, with the struct grown as the
+1.2 rule allows (§29.12); `cores`' and `engines`' comments name the keys. `abi.rs`, both export tables (the platform
+library's `crystal.rs` and `ManagedCrystal.Exports.cs`) and `CrystalNumbers` follow. The platform header gains
+`EMUSEN_GALAXIA_DIR_CORES` and version 22. **The binding** gains `CrystalRuntime.CoreApprove(sha256)` (and `CoreRevoke`),
+`CrystalRuntimeOptions.PlayerCores`, and `NotApproved` among its statuses; its rule of choosing the platform library only
+when it has every export of major 1 needs no change.
+
+**Graded by**, for each piece:
+
+1. **The crate's tests** (`cargo test --profile test-checked`): a manifest in the player's directory not read; the
+   player's directory after the installation's, its id losing to the installation's; the approvals' file read, written
+   atomically, its junk lines kept, refused when writable by others; the player's hashing and its cache; a sidecar-less
+   and a stale-sidecar library listed as not read; the directory check on a world-writable parent, with and without the
+   sticky bit; and B6's 7, 12 and 1 still passing.
+2. **`CoreHostParityTests`**, the C# against the tool: the unapproved case equal in full, its pinned difference
+   deleted; new cases for a player's directory (needs approval, then approved through an approvals' file), a library
+   without a sidecar and one with a stale sidecar, a player's core with a project core's id, a manifest in the player's
+   directory, an approvals' file with a stray line; and the build's tree and a fresh publish loading every core with no
+   approvals' file at all.
+3. **`CrystalParityTests`** through both implementations: `core_approve`'s statuses (not a hash, a hash no library has,
+   a new approval, the same again), the approvals' file's lines equal, `open_game` answering `NOT_APPROVED` before and
+   opening after, a not-yet-read library read and listed as an engine, `cores` and `engines` equal throughout; and
+   `CrystalHeaderTests`, `ContractShapeTests` and `CrystalApi12Tests`' successors for the sizes and offsets.
+4. **Seeded faults** (§6.5 of `EmuSen_RustPlatform.md`), each made in the Rust alone and shown failing a case: the
+   player's manifest read; the player's directory scanned first; an approval compared with regard to case; the
+   installation's directory given the sidecar-less listing; `core_approve` accepting a hash no library has; the trust not
+   replaced after approving; a stale sidecar trusted.
+5. **Blast radius**: `CoreDiscoveryTests`, `ManagedCrystalCatalogTests`, the classes of §29.40.6's trees, `RuntimeLogTests`,
+   `GameRefusalTests` and the Galaxia directory classes; `cargo metadata --locked` over every lock, and the kit
+   (`emusen-core-conform`) and Diamond built against the changed host.
+
+**Pieces**, each graded and committed on its own: (1) Galaxia's `/Cores` and the crate; (2) the C# discovery and the
+parity class; (3) the API's 1.3 in both implementations and the binding; (4) the directory check, if Q7. Mistress's
+sheet and page follow, as Q3 decides.
+
+#### 29.40.10 Questions for the tester
+
+- **Q1. A way back.** §29.11 decided `core_approve`; an approval made by mistake can then be undone only by editing
+  `cores.approved` by hand. *Recommended:* `emusen_crystal_core_revoke(rt, sha256)` in the same minor, removing every
+  line of that hash (`NO_SUCH_ID` where none), with no effect on a library already loaded in the process, which §7.2
+  never unloads; the next open after a rescan refuses it.
+- **Q2. The approvals' file: `/etc/EmuSen/cores.approved`, in `sha256sum`'s format** (§29.40.3). *Recommended: yes.*
+  The other answer, a JSON file in the settings' manner (`EmuSen_Stack.md` §4.1), was weighed: the approvals are the
+  manifest's kind of fact, a list of vouched hashes, and one format lets one reader serve both and `sha256sum -c` check
+  either by hand.
+- **Q3. The C# grows rules 1 and 2, and when the rule reaches Mistress.** (§29.40.6) *Recommended:* the C# grows the
+  rule in this branch, closing §27.11's difference, and Mistress's open-time sheet (§29.40.8) is built as this branch's
+  last piece, so that no merged build refuses a core with no way to approve it; the Preferences page can follow. The
+  other answer, the C# left without the rule until B10, keeps the pinned difference and makes `core_approve` a call the
+  C# records and never needs.
+- **Q4. The player's directory in the config** (§29.40.4): 1.3's `player_cores`, absent meaning `/Cores` only where
+  `cores` is absent too. *Recommended: yes.* Without it a test runtime would scan the real `/Cores` of whoever runs the
+  tests.
+- **Q5. Hashing the player's directory at the scan**, once per file per process. *Recommended: yes, measured first;*
+  without it a stale sidecar and a sidecar-less library cannot be given the hash an approval needs.
+- **Q6. A library read on approval gets its sidecar written beside it in `/Cores`.** *Recommended: yes;* the other
+  answer, a cache of read sidecars under `/etc/EmuSen`, keeps the player's directory as the player left it, at the cost
+  of a second place a library's descriptors live.
+- **Q7. The window closed by rule 3's directory check** (§29.40.7), in the Rust. *Recommended: yes.* Its risk: an
+  installation under a directory writable by others without the sticky bit would have every core refused; the
+  publish's tree and the handheld's are to be checked before the rule is switched on.
+
 ---
 
 ## 30. B9, scraping in Rust: the design, 2026-10-18

@@ -49,8 +49,8 @@ fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
     era * 146_097 + doe - 719_468
 }
 
-/// The instant a round-trip text names, in 100 ns ticks from 1970 in UTC; a text with no offset is taken as written.
-/// None for a text that is not one.
+/// The instant a round-trip text names, in 100 ns ticks from 1970 in UTC; a text with no offset is a local time, as
+/// .NET's `ToUniversalTime` reads one (`wall_offset`). None for a text that is not one.
 pub fn instant(text: &str) -> Option<i64> {
     let b = text.as_bytes();
     let num = |from: usize, len: usize| -> Option<i64> { text.get(from..from + len)?.parse::<i64>().ok() };
@@ -70,17 +70,30 @@ pub fn instant(text: &str) -> Option<i64> {
         let padded = format!("{:0<7}", &digits[..digits.len().min(7)]);
         fraction = padded.parse().ok()?;
     }
+    let wall = days_from_civil(y, mo, d) * 86_400 + h * 3600 + mi * 60 + s;
     let offset = match b.get(at) {
-        None => 0,
+        None => wall_offset(wall),
         Some(b'Z') => 0,
         Some(sign @ (b'+' | b'-')) => {
             let minutes = num(at + 1, 2)? * 60 + num(at + 4, 2)?;
-            if *sign == b'-' { -minutes } else { minutes }
+            60 * if *sign == b'-' { -minutes } else { minutes }
         }
         _ => return None,
     };
-    let seconds = days_from_civil(y, mo, d) * 86_400 + h * 3600 + mi * 60 + s - offset * 60;
-    Some(seconds * 10_000_000 + fraction)
+    Some((wall - offset) * 10_000_000 + fraction)
+}
+
+/// The local zone's offset, in seconds, for a wall time counted as if in UTC: the one in force there, or the standard
+/// (smaller) one where the clock skips or repeats that time, as .NET's `TimeZoneInfo.ConvertTimeToUtc` takes it.
+fn wall_offset(wall: i64) -> i64 {
+    let (before, after) = (local_offset(wall - 86_400), local_offset(wall + 86_400));
+    let fits = |offset: i64| local_offset(wall - offset) == offset;
+    match (fits(before), fits(after)) {
+        (true, false) => before,
+        (false, true) => after,
+        _ if before == after => before,
+        _ => before.min(after),
+    }
 }
 
 #[cfg(test)]

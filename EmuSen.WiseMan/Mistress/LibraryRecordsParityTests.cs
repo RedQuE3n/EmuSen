@@ -171,5 +171,26 @@ namespace EmuSen.WiseMan.Mistress
                     Assert.Equal(managed is null ? "null" : managed.Value.TotalSeconds.ToString("R", CultureInfo.InvariantCulture), native == "null" ? "null" : double.Parse(native, CultureInfo.InvariantCulture).ToString("R", CultureInfo.InvariantCulture));
                 }
         }
+
+        // Times without an offset are local in both halves, across both of 2026's clock changes where the zone has them (EmuSen_Backend.md §28.11).
+        [Fact]
+        public void Recent_orders_times_with_and_without_an_offset_alike()
+        {
+            var times = new List<DateTime>();
+            foreach (DateTime day in new[] { new DateTime(2026, 3, 8), new DateTime(2026, 3, 29), new DateTime(2026, 9, 1), new DateTime(2026, 10, 25), new DateTime(2026, 11, 1) })
+            {
+                for (int m = -120; m <= 300; m += 10) times.Add(DateTime.SpecifyKind(day.AddMinutes(m), DateTimeKind.Unspecified));
+                for (int m = -720; m <= 720; m += 15) times.Add(DateTime.SpecifyKind(day.AddMinutes(m), DateTimeKind.Utc).ToLocalTime());
+            }
+            var games = times.Select((_, i) => $"/r/{i}.sfc").ToList();
+            using GameRecords managed = GameRecords.OpenManaged(Path.Combine(_root, "zone-a.db"));
+            using GameRecords native = GameRecords.OpenNative(Path.Combine(_root, "zone-b.db"));
+            for (int i = 0; i < times.Count; i++)
+            {
+                managed.Started(games[i], times[i]);
+                native.Started(games[i], times[i]);
+            }
+            Assert.Equal(managed.Recent(games, times.Count), native.Recent(games, times.Count));
+        }
     }
 }

@@ -29,6 +29,7 @@ namespace EmuSen.Mistress.Views
 
         private RomLibraryResult _allScan = new(RomLibraryStatus.NoDirectoryConfigured, null, Array.Empty<RomEntry>());
         private IReadOnlyDictionary<string, GameRecord> _recordSnapshot = new Dictionary<string, GameRecord>();
+        private IReadOnlyList<RomEntry> _recentSnapshot = Array.Empty<RomEntry>();
         private ArtworkIndex _artwork = ArtworkIndex.Empty;
         private readonly CoverArtCache _covers = new();
         private IReadOnlyList<RomEntry> _shownEntries = Array.Empty<RomEntry>();
@@ -163,12 +164,19 @@ namespace EmuSen.Mistress.Views
         private IReadOnlyList<RomEntry> InCollection(IReadOnlyList<RomEntry> entries) => CollectionKey switch
         {
             FavouritesKey => entries.Where(e => _recordSnapshot.TryGetValue(e.FullPath, out GameRecord? r) && r.Favourite).ToList(),
-            RecentKey => entries.Where(e => _recordSnapshot.TryGetValue(e.FullPath, out GameRecord? r) && r.LastPlayed is not null)
-                .OrderByDescending(e => _recordSnapshot[e.FullPath].LastPlayed).Take(RecentLimit).ToList(),
+            RecentKey => Recent(entries),
             _ when ShownCollection is GameCollection collection && _records.Members(collection.Id) is var members =>
                 entries.Where(e => members.Contains(e.FullPath)).ToList(),
             _ => entries,
         };
+
+        // The library's recent call over these games, the one rule for Recently Played and big picture's Last Played (EmuSen_Backend.md §28.11).
+        private IReadOnlyList<RomEntry> Recent(IReadOnlyList<RomEntry> entries)
+        {
+            var byPath = new Dictionary<string, RomEntry>(entries.Count, StringComparer.Ordinal);
+            foreach (RomEntry e in entries) byPath.TryAdd(e.FullPath, e);
+            return _records.Recent(entries.Select(e => e.FullPath).ToList(), RecentLimit).Select(p => byPath[p]).ToList();
+        }
 
         private string SidebarKey =>
             CollectionKey != AllGamesKey ? CollectionKey
@@ -178,7 +186,7 @@ namespace EmuSen.Mistress.Views
         private void FillSidebar()
         {
             int favourites = _allScan.Entries.Where(Listed).Count(e => _recordSnapshot.TryGetValue(e.FullPath, out GameRecord? r) && r.Favourite);
-            int recent = Math.Min(RecentLimit, _allScan.Entries.Where(Listed).Count(e => _recordSnapshot.TryGetValue(e.FullPath, out GameRecord? r) && r.LastPlayed is not null));
+            int recent = _recentSnapshot.Count;
             var library = new SourceListGroup("Library", new[]
             {
                 new SourceListItem(AllGamesKey, "All Games", _allScan.Entries.Count(Listed).ToString()),

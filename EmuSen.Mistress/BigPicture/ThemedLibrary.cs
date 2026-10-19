@@ -20,6 +20,9 @@ namespace EmuSen.Mistress.BigPicture
         public bool FavoritesFirst { get; init; } = true;
         public bool Stars { get; init; } = true;
         public GameSort? DefaultSort { get; init; }
+
+        // Listed as given until the player picks a sort, as Last Played is (EmuSen_Backend.md §28.11).
+        public bool InGivenOrder { get; init; }
         public long? CollectionId { get; init; }
 
         // The player's flatten switch for this console: its games in one list, as before folders were shown (§30).

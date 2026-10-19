@@ -5885,6 +5885,75 @@ the scope is the same; the facade is more than twice §7's figure, as B3's and B
 - **On Windows and macOS**, paused (`EmuSen_RustPlatform.md` §31): the walk's hidden rule there (a flag, not a leading
   period), the local time's offset, and every gate of this section when the port resumes.
 
+### 28.11 One rule for recent games, built 2026-10-18
+
+*On branch `recent-one-rule` from `WiseMan` at `ab580e57`, after §28.10's decision: the library screen's Recently
+Played and Big Picture's Last Played follow one rule, the library screen's, with the library's `recent` its one owner.*
+
+**The two rules, as the code had them.**
+
+| | The library screen's Recently Played (`MainWindow.Library.cs`) | Big Picture's Last Played (`CollectionShelves.Build`) |
+|---|---|---|
+| The games looked at | the scan's listed games (a hidden game left out unless hidden games are shown), as narrowed by the console filter | the listed games of every console's shelf, less a game excluded from the game counter (ES-DE's rule for every collection) |
+| Which plays count | a last-played time | a last-played time **or** a play count above zero, so counters set in the metadata editor without a launch made a game recent |
+| Order | newest first, comparing `DateTime`s | newest first, a counted game with no time last; then shown re-sorted by the gamelist's default, last played descending and then the name |
+| Ties | the scan's order, the title ignoring case (a stable sort) | the name, or the sort name where the player set one |
+| Limit | 30 (OpenEmu's) | 50 (ES-DE's guide) |
+| Files gone from disk | not listed: both read the last scan | the same |
+| Time zone | local wall-clock readings: a text with an offset converted to the machine's zone, a text without one read as local, so the hour a clock is set back orders by the clock and not by the instant | the same |
+
+The library's `recent` (§28.4) answered the first rule with two differences: it orders by the instant each time names
+(§28.8), and its Rust read a text without an offset as UTC where its C# twin, `GameRecords.Recent`, reads it as local
+time. No caller used it before this step.
+
+**Shown first, by two failing tests.** `ThemedCollectionsTests.Last_played_is_the_library_screen_s_recently_played_list`
+generates 48 games in a themed session: 36 started at distinct local times except two started at the same instant, one
+of those two given the sort name "Zz", and two whose counters are set by the editor and which were never started. The
+library screen listed 30; Big Picture's list differed at its first game, the tie ordered by the sort name, and by the
+rules above it also held the six older games and the two never started (38 in all).
+`LibraryRecordsParityTests.Recent_orders_times_with_and_without_an_offset_alike` starts 700 games around 2026's four
+clock changes in Europe and North America and on an ordinary day, half at local times without an offset and half at
+instants with one, and compares `recent` from both halves: on this machine (America/New_York) the Rust and the C#
+differed at the ninth game.
+
+**The change.**
+
+- Mistress asks `GameRecords.Recent`, the library's `recent` in state 2 and its C# twin with `EMUSEN_LIBRARY_NATIVE=0`,
+  over the listed games of the whole scan with `MainWindow.RecentLimit`, once each time the library is shown. The
+  sidebar's count and Big Picture's Last Played read that answer. Recently Played asks again over its own games, which
+  the console filter can narrow, so its rule is the same call.
+- `CollectionShelves.Build` takes that list. Last Played is its games in its order, less a game excluded from the game
+  counter; `LastPlayedLimit` and the play-count clause are gone. The shelf is `InGivenOrder`: it is shown as given
+  until the player picks a sort in Gamelist Options, which still reads "last played, descending", so the gamelist's
+  tie by name does not reorder it.
+- `clock::instant` reads a text without an offset as a local time, as .NET's `ToUniversalTime` reads an unspecified
+  one: the offset in force at that wall time, or the standard (smaller) one where the clock skips or repeats it.
+  Mistress always records a time with its offset (`DateTime.Now`, `clock::now`), so this reaches only a `games.db`
+  written otherwise.
+
+**The rule, as it now stands.** Of the games given, those with a last-played time, newest first by the instant each
+names, a time without an offset taken as local; ties keep the given order, which is the scan's; at most thirty. A game
+whose file the scan did not find is not given. Big Picture leaves out a game excluded from the game counter after the
+rule, so its list is the library screen's or a part of it, never longer and never in another order.
+
+**Where the library screen itself changed.** Only within the hour a clock is set back: a game started in the second
+pass through that hour now comes before one started in the first, where the `DateTime` comparison put it after.
+
+**Recorded, not changed.** The theme's `lastplayed` game selector (`GameSelectors`, `EmuSen_Settings_Reference.md`
+§4.74) picks up to the theme's `gameCount` of one system's games, newest first, as THEMES.md describes it; it is a theme
+element and not the collection. `MediaLibrary`, `RecentCache` and the presentation files stay as §28.10 lists.
+
+**The gates**, measured on 2026-10-18 on the desktop (America/New_York). Both new tests failed before the change, as
+above, and pass after it. `cargo test --profile test-checked -p emusen-library`: 1, 2 and 6 pass. The blast radius,
+every class of `EmuSen.WiseMan.Mistress.BigPicture` (the themed library, the collections, the gamelist options and all
+of `WindowFitAuditTests`) and every class whose name holds `Library` (both parity classes, the library screen, the ROM
+library, the artwork and media), with `EMUSEN_LIBRARY_NATIVE` unset and with it `0`: **1,520 pass, 41 skip and 8 fail
+each way**, the eight being the `WindowFitAuditTests` Graphics Settings cases §28.8 found failing on the base, owned
+elsewhere. `GamelistOptionsTests`' Last Played case was rewritten for the rule, and `CollectionsBenchTool` gives the
+shelves a list. The call's cost over 3,508 games with 702 played, in a Debug build, median of 21: the C# twin 1.13 ms
+(its `All` 0.85 ms), the library 1.46 ms (its `all` 1.56 ms), once for each showing of the library and once more while
+Recently Played is the chosen row.
+
 ---
 
 ## 29. B7, Crystal in Rust: the design, 2026-10-18

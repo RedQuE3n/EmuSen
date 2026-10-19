@@ -1,19 +1,21 @@
 using System;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.Crystal.Systems.Snes;
+using EmuSen.Cores.Native;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.WiseMan.Cores
 {
     // Each console's pad as a subset of PadButton, the SNES's being its first twelve - see EmuSen_Input.md §3.
+    [Collection(Fixtures.TestCollections.ProcessGlobals)]
     public class PadButtonTests
     {
-        // The SNES's twelve are PadButton's first twelve, in the pad's order; what follows is RetroPad's own - see EmuSen_Input.md §7.1.
+        // The SNES's twelve, as VenusRT's info lists them, are PadButton's first twelve in the pad's order; what follows is RetroPad's own - see EmuSen_Input.md §7.1.
         [Fact]
         public void The_snes_pad_is_PadButtons_first_twelve()
         {
-            Assert.Equal(Enum.GetValues<PadButton>().Take(12), SnesSystem.PadButtons);
+            CoreDiscovery.UseDirectories(null);
+            Assert.Equal(Enum.GetValues<PadButton>().Take(12), CoreCatalog.ButtonsFor("SNES"));
             Assert.Equal(new[] { "L2", "R2", "L3", "R3" }, Enum.GetNames<PadButton>().Skip(12));
         }
 

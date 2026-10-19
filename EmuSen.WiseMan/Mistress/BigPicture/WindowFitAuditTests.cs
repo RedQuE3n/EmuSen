@@ -143,7 +143,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            if (n64) File.WriteAllBytes(Path.Combine(_romDir, game + ".z64"), SyntheticN64Rom.BuildRunningFromRdram(new MipsAssembler().Lui(5, 0x8000).Addiu(8, 8, 1).Sw(8, 5, 0x3F0).Beq(0, 0, -3).Nop().ToArray()));
+            if (n64) File.WriteAllBytes(Path.Combine(_romDir, game + ".z64"), N64Game());
             else File.WriteAllBytes(Path.Combine(_romDir, game + ".sfc"), PadRewindReelTests.ChangingBackdrop());
             var app = new AppSettings
             {
@@ -184,6 +184,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private static void Stop(MainWindow w) => typeof(MainWindow).GetMethod("StopEmulationThread", Hidden)!.Invoke(w, null);
 
         private static object Field(MainWindow w, string name) => typeof(MainWindow).GetField(name, Hidden)!.GetValue(w)!;
+
+        // A synthetic N64 game that runs, counting in RDRAM, for the states whose note comes from the running machine.
+        internal static byte[] N64Game() => SyntheticN64Rom.BuildRunningFromRdram(new MipsAssembler().Lui(5, 0x8000).Addiu(8, 8, 1).Sw(8, 5, 0x3F0).Beq(0, 0, -3).Nop().ToArray());
 
         // The states that run an N64 game, whose note comes from the running machine (EmuSen_Backend.md §20, Q15).
         internal static bool RunsN64(string which) => which == "GraphicsSettingsN64Note";

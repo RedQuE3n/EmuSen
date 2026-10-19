@@ -3942,6 +3942,62 @@ its N64 picture has failed since `08812dde`. It is left for its next run.
   running engine may word a note for any row. That stands. An engine does not declare which rows can carry one: the
   stack draws nothing while empty, and a declaration would widen the core's settings surface for no change on screen.
 
+#### 18.10.12 Built 2026-10-19: the NES's and SNES's pads read from their engines' info
+
+*Built on branch `nes-snes-pads` from `WiseMan` at `d36176d7`, as 18.10.11 decided.* The NES's and SNES's buttons and
+ports had two owners: the packs' literals (`NesSystem.PadButtons`, `SnesSystem.PadButtons`, `NesSystem.Ports`,
+`SnesSystem.Ports`) and MoonRT's and VenusRT's core info (`nes.pad` and `snes.pad`, ports 0 and 1). The literals are
+deleted, and the two consoles take the route the Game Boy and the N64 already took:
+
+- `CoreCatalog.ButtonsFor` lost its `ButtonsByConsole` table. A console's pad is now always its engine's info, a
+  discovered console's (`DiscoveredSystem`) or a catalog console's sole engine's, read from the sidecar beside the
+  program (`SoleEngineSystem`, §17.8 Q11).
+- `ControllerPorts.ForConsole` lost its `"NES"` and `"SNES"` cases; the count is the most ports that info lists.
+
+Nothing else read the literals. The bindings window, the controller diagram, Preferences' player rows, the frontend
+API's `systems` (and so Mistress's `RuntimeCatalog` and Hotaru) and the multiplayer router all ask `ButtonsFor`,
+`ControlsFor` or `ForConsole`, so all of them now read the engine's info. Every fact the literals held is in that info:
+the NES's eight buttons in the order a bindings screen lists them (MoonRT's `PAD`), the SNES's twelve in
+`PadButton`'s order (VenusRT's `BUTTONS`), and both consoles' two ports. The core ABI is unchanged.
+
+**What the player sees is unchanged** while the engines are beside the program, as they ship. The literals equalled the
+info in order and count (18.10.10), and every recording below passes as recorded. A build missing MoonRT or VenusRT now
+lists every button and one port for that console, as one missing MercuryRT or MarsRT already did. Such a console opens
+no game, since the factory names the missing engine.
+
+**Proof, measured on 2026-10-19.**
+
+- `ManagedCrystalCatalogTests.The_nes_and_snes_pads_follow_their_engine_s_sidecar` is new. It copies MoonRT's and
+  VenusRT's sidecars with their buttons reversed and their ports cut to port 0, then discovers only those copies. The
+  catalog's pad and ports and the frontend API's `systems` must follow the copies. On the tree before the change it
+  failed, the NES's pad still `Up, Down, Left, ...` where the copy said `A, B, Start, ...`, because the literal
+  answered first. It passes after.
+- `Each_catalog_console_s_controllers_are_its_engine_s_core_info` (18.10.10) failed before the change with the two
+  literals seeded out of step: the NES's `B` and `A` swapped and the SNES's `Ports` set to 3.
+- After the change, both tests failed with `ButtonsFor` and `ForConsole` seeded to read `DiscoveredSystem` alone,
+  without the sole engine's sidecar, and both pass on the tree.
+- Two assertions that named `SnesSystem.PadButtons` now name the engine. `ConsoleBindingsTests` compares the catalog
+  with a VenusRT core's `SupportedButtons`. `PadButtonTests` checks the catalog's SNES pad against `PadButton`'s first
+  twelve, and is now in the process-globals collection, since it reads discovery.
+
+**The blast radius, measured on 2026-10-19: 551 cases, 551 passed.** These were `ManagedCrystalCatalogTests` (5),
+`RuntimeCatalogTests` (4), `ControllerPortTests` (4), `ConsoleBindingsTests` (16), `PadButtonTests` (3),
+`InputSettingsWindowTests`, `InputSettingsWindowLayoutTests` and `InputSettingsWindowRenderTests` (23, 4, 3),
+`ControllerBindingsDiagramTests` (24), `MultiplayerTests` (11), `PadSettingsWindowTests` (63),
+`PlayerBindingsWindowTests` (3), `PortRouterTests` (11), `PlayerClaimsTests` (16) and
+`CoreRegistrationEquivalenceTests` (3, its golden unchanged). The MoonRT and VenusRT engine, frontend, debug and pack
+classes (`SnesSystemPackTests` among them) ran too. So did `WindowFitAuditTests`' 144 controller-bindings and
+player-row cases, fit and specification at both sizes. Nothing was re-recorded.
+
+**The window-look picture.** `WindowLookPictureTool` (`EMUSEN_BIGPICTURE_PNG=1`) took its N64 note picture over its SNES
+game, which has failed since `08812dde` (18.10.11). The picture is now a test of its own, `N64_note`, and it runs the
+synthetic N64 game the fit audit's `GraphicsSettingsN64Note` state runs (`WindowFitAuditTests.N64Game`, one builder for
+both). Run once on 2026-10-19 into a trial folder, it passed at both sizes, with MarsRT's note under Antialiasing.
+`In_game_windows`, without that picture, passed too.
+
+**Left.** MoonRT's `PAD` comment still says its order is `MoonCore.PadButtons`', a class deleted on 2026-10-16. It is
+left for that core's next change, so that no library is rebuilt for a comment.
+
 ## 19. B4 for MoonRT and VenusRT, phase 1, 2026-10-18: what the two shims add, where each piece goes, and the gates
 
 *Read on 2026-10-18 on branch `b4-moon-venus`, from `WiseMan` at `480bf5e2`, against the core ABI at 1.12

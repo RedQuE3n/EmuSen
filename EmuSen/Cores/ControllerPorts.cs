@@ -35,13 +35,10 @@ namespace EmuSen.Cores
         public static int ForConsole(string? console, Func<string, string?> stored) =>
             console is not null && CoreCatalog.PlayerControllersFor(console, stored) is { Count: > 0 } players ? players.Count : ForConsole(console);
 
-        // The C# cores' own counts, which every engine of the console shares; a console this build does not know reads one.
-        public static int ForConsole(string? console) => console?.ToUpperInvariant() switch
-        {
-            "NES" => Crystal.Systems.Nes.NesSystem.Ports,
-            "SNES" => Crystal.Systems.Snes.SnesSystem.Ports,
-            _ when console is not null && (CoreCatalog.DiscoveredSystem(console) ?? CoreCatalog.SoleEngineSystem(console)) is { } system => Math.Max(1, system.Controllers.SelectMany(c => c.Ports).Select(p => (int)p + 1).DefaultIfEmpty(0).Max()),
-            _ => 1,
-        };
+        // The most ports the console's engine's info lists; a console no engine of this build serves reads one - see EmuSen_Backend.md §18.10.12.
+        public static int ForConsole(string? console) =>
+            console is not null && (CoreCatalog.DiscoveredSystem(console) ?? CoreCatalog.SoleEngineSystem(console)) is { } system
+                ? Math.Max(1, system.Controllers.SelectMany(c => c.Ports).Select(p => (int)p + 1).DefaultIfEmpty(0).Max())
+                : 1;
     }
 }

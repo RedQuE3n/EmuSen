@@ -1,0 +1,8 @@
+<Project>
+
+  <!-- A program whose frontend API runs on the Rust Crystal unless EMUSEN_CRYSTAL_NATIVE says otherwise sets EmuSenCrystalNative to true, which the binding reads from its entry assembly - see EmuSen_Backend.md §29.27 and EmuSen_Surfaces.md §6.2. -->
+  <ItemGroup Condition="'$(EmuSenCrystalNative)' == 'true'">
+    <AssemblyMetadata Include="EmuSen.CrystalNative" Value="1" />
+  </ItemGroup>
+
+</Project>

@@ -7323,6 +7323,26 @@ runtime costs about 95 ms more than on the C#, once in the process. Making it fa
 instructions behind a runtime check in the crate, or the `sha2` crate in the core host. Either is a change to the kit's
 and the cores' locks, so neither is made for one open in a process.
 
+### 29.27 Built 2026-10-19: part (d), step 1, the per-program switch, and Pharaoh on the Rust Crystal
+
+**The switch** (§29.11 Q3). The binding's `Crystal.Choose` asks `Asked(variable, entry assembly)`:
+- with `EMUSEN_CRYSTAL_NATIVE` set, `1` is the Rust and any other value the C#, as before;
+- unset (or empty), the program's own default decides: the Rust when its entry assembly carries
+  `[assembly: AssemblyMetadata("EmuSen.CrystalNative", "1")]`, else the C#.
+
+A program sets the key with one MSBuild property, `<EmuSenCrystalNative>true</EmuSenCrystalNative>`, which the repository's
+`Directory.Build.targets` turns into the attribute. The key is documented as the binding's in `EmuSen_Surfaces.md` §6.2.
+A program whose default is the Rust still falls back to the C# with one announced line when the platform library does
+not serve the whole API, as a variable of `1` always did. The C# implementation's report now says why it was chosen:
+the variable's value, or that it is unset and the program's default is the C#.
+
+`CrystalSwitchTests` (8) holds the four cases the tester named over programs made in the test, each with or without
+the key: unset plus the key gives the Rust, `0` overrides it to the C#, `1` gives the Rust without the key, and neither
+gives the C#. It also holds that only the key's value `1` counts, and which programs carry it. Two seeded faults, each
+made in the binding, run and reverted, were each caught by one test:
+- the variable's `0` ignored when the program asks for the Rust;
+- the key accepted with any value.
+
 ### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
 
 *Part (b) numbers its sections from §29.30, so that part (a)'s pieces, built at the same time, keep §29.16 to §29.29.*

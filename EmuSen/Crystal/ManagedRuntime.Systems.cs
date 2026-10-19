@@ -146,6 +146,7 @@ namespace EmuSen.Crystal.Managed
                 CrystalJson.Strings(w, "systems", c.Info.Systems.Where(CoreDiscovery.Offered).Select(s => s.Id));
                 w.WriteBoolean("available", File.Exists(c.Sidecar.LibraryPath));
                 w.WriteString("report", c.Report);
+                w.WriteString("trust", c.Standing);
                 w.WriteEndObject();
             }
             w.WriteEndArray();
@@ -164,6 +165,30 @@ namespace EmuSen.Crystal.Managed
                 w.WriteBoolean("development", c.Sidecar.Development);
                 w.WriteString("engine", c.EngineName);
                 w.WriteString("report", c.Report);
+                w.WriteString("directory", c.Player ? "player" : "installation");
+                w.WriteString("trust", c.Standing);
+                w.WriteString("name", c.Info.Name);
+                CrystalJson.Strings(w, "authors", c.Info.Authors);
+                w.WriteString("license", c.Info.License);
+                CrystalJson.Strings(w, "systems", c.Info.Systems.Select(s => s.Id));
+                w.WriteEndObject();
+            }
+            foreach (UnreadCore u in CoreDiscovery.Unread)
+            {
+                w.WriteStartObject();
+                w.WriteString("library", u.LibraryPath);
+                w.WriteNull("sidecar");
+                w.WriteString("sha256", u.Sha256);
+                w.WriteNull("abi");
+                w.WriteBoolean("development", false);
+                w.WriteNull("engine");
+                w.WriteString("report", u.Report);
+                w.WriteString("directory", "player");
+                w.WriteString("trust", "not_read");
+                w.WriteNull("name");
+                CrystalJson.Strings(w, "authors", Array.Empty<string>());
+                w.WriteNull("license");
+                CrystalJson.Strings(w, "systems", Array.Empty<string>());
                 w.WriteEndObject();
             }
             w.WriteEndArray();

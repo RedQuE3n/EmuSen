@@ -126,6 +126,7 @@ namespace EmuSen.WiseMan.Cores
             string copy = Path.Combine(built, Path.GetFileName(LibraryPath));
             File.Copy(LibraryPath, copy);
             Assert.False(CoreSidecar.Write(copy).Development);
+            CoreManifest.Write(built);
             CoreDiscovery.UseDirectories(new[] { built });
             try
             {

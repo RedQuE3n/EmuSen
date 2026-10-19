@@ -7997,6 +7997,8 @@ sheet and page follow, as Q3 decides.
 
 #### 29.40.10 Questions for the tester
 
+*Decided 2026-10-19 by the tester, each as recommended: Q1, `core_revoke` in the same minor; Q2, `cores.approved` in the manifest's `sha256sum` format; Q3, the C# grows rules 1 and 2 in this branch and Mistress's open-time sheet is the branch's last piece; Q4, `player_cores` in the config, 48 bytes; Q5, the player's `/Cores` hashed at the scan, once per file per process, measured, through the one per-process record of hashes §29.26 added rather than a second cache; Q6, the sidecar written beside the approved library in `/Cores`; Q7, the directory check, in the Rust alone.*
+
 - **Q1. A way back.** §29.11 decided `core_approve`; an approval made by mistake can then be undone only by editing
   `cores.approved` by hand. *Recommended:* `emusen_crystal_core_revoke(rt, sha256)` in the same minor, removing every
   line of that hash (`NO_SUCH_ID` where none), with no effect on a library already loaded in the process, which §7.2
@@ -8021,6 +8023,108 @@ sheet and page follow, as Q3 decides.
 - **Q7. The window closed by rule 3's directory check** (§29.40.7), in the Rust. *Recommended: yes.* Its risk: an
   installation under a directory writable by others without the sticky bit would have every core refused; the
   publish's tree and the handheld's are to be checked before the rule is switched on.
+
+### 29.41 Built 2026-10-19: 1.3's piece 1, Galaxia's `/Cores` and the core host
+
+**Galaxia.** `Directory::Cores`, `EMUSEN_GALAXIA_DIR_CORES` 21, `<home>/Cores`, and `DataStore.Cores`; the platform
+interface moved from 21 to 22 (it was 21 when moved), in the header, `ABI_VERSION` and `PlatformLibrary.InterfaceVersion`.
+`man hier` names `/Cores` and `cores.approved`.
+
+**`emusen-core-host`**, as §29.40 laid it out, with these points settled by building it:
+
+- `Trust::with_player` adds the player's directories: rule 3 counts them as cores directories, and their manifests are
+  not read. `in_manifest`, `approved` and `standing` split `vouches` so the listing can say which rule vouched.
+- The approvals' file is the trust module's: its name, `APPROVALS`, its reader, `read_approvals` (none where absent,
+  refused in words where others may write it), and the text with a line added or removed (`with_approval`,
+  `without_approval`), every other line kept. The crate writes no file of it: the runtime writes the text through
+  Galaxia's atomic write in piece 3, since the crate, shared with the kit, takes no dependency on Galaxia.
+- `Discovery::scan_with_player` scans the player's directories after the installation's. There a sidecar is used only
+  where its library's hash is the sidecar's; a library that no usable sidecar describes is an `Unread`, by its hash. A
+  player's sidecar dropped for an id already found still describes its library, so a player's copy of a project core
+  is neither an engine nor a library not yet read.
+- **One record of hashes** (Q5 as decided): §29.26's map of loaded libraries' hashes now holds two kinds of entry, the
+  hash a library had when this process loaded it (the image that runs, never replaced) and one the scan read, good
+  while the file's device, inode, length and modification time stay those it was read at. The open still hashes a
+  library this process has not loaded, as before; only the listing uses the scan's entries.
+- `Unread::read` is §7.1's reading: approved, rule 3, the hash it was listed with, the load and rule 4, then the
+  sidecar written by the build's one writer, `sidecar::write`. `Discovered::awaits_approval` says that an open refused
+  for want of an approval alone, which open's `NOT_APPROVED` will read in piece 3.
+- The listing writes 1.3's keys of §29.40.5 and the libraries not yet read after those with a sidecar; the tool takes
+  `--player DIR` and `--approvals FILE`.
+- **Q7's check** refuses a library whose resolved directory, or any directory above it, others may write and which is
+  not sticky, in the words "lies under <directory>, which others may write". The directory owner's part of §29.40.7 was
+  dropped when built: rule 3 already takes "the installation" to be the owner of the directory that holds the file, so
+  requiring that directory to be owned by the installation would test nothing.
+
+**Measured on 2026-10-19** [M]:
+
+| Gate | Result |
+|---|---|
+| The crate, `cargo test --profile test-checked` | the library's 8 (one new: the approvals' text), `alloc` 1, `host` 19 (five new), all passing |
+| Seeded faults, each in the crate alone | **six of six caught**: the player's manifest read, the player's directory scanned first and a stale sidecar trusted (each by the player's-directory case), the sticky bit ignored (the directory case), an approval compared with regard to case (by a sidecar with its hash in capitals, a line added to the player's case after the fault first survived), and a library read without an approval (the reading case) |
+| The kit and Diamond against the changed host | both build; their tests compile |
+| `emusen-galaxia`, `emusen-crystal`, `emusen-platform` | 79, 6, 6, 1, 31 and 4 passing |
+| WiseMan's Galaxia classes (`GalaxiaParityTests` with `Cores` among the named directories) | 208 passed, 8 skipped, none failed |
+| `cargo metadata --locked` over every tracked lock but Diamond's kernel and kernel shell | every lock current |
+
+**The scan's hash, measured** for Q5: the crate's own SHA-256 reads a 20 MB file in 64 ms (328 MB/s, release build),
+once per file per process; §29.26 measured 333 MB/s on the cores' libraries.
+
+**Q7's risk, checked** on the local publish, `out/linux-x64/Mistress`, read only: the publish directory and every one
+above it are `drwxr-xr-x`, owned by the player or root, and no directory inside the tree is writable by others. That
+publish (2026-10-18 00:42) predates the build's manifest and carries none; a fresh publish carries one (§27.11), so it is
+the publish, not the rule, that a player's tree must be brought to. The handheld's tree is to be checked by hand: every
+directory from its `lib/EmuSen` up to `/` without the world-write bit or with the sticky bit, and `sha256sum -c
+cores.manifest` passing in `lib/EmuSen`.
+
+`CoreHostParityTests` differs from this piece by 1.3's keys until the C# writes them, in piece 2.
+
+### 29.42 Built 2026-10-19: 1.3's piece 2, the C# discovery and the parity class
+
+**The C# host grows rules 1 and 2** (Q3 as decided), in `CoreDiscovery` and a new `CoreTrust`, which owns the two file
+names, the one `sha256sum` reader and the approvals' text added to and taken from, as the Rust trust module does.
+`DiscoveredCore.Open` checks, after the hash, that the installation directory's manifest lists the library under its name
+with that hash or that the player approved it, and refuses otherwise in the Rust's words, setting `AwaitsApproval`. The
+scan reads each installation directory's manifest and the approvals' file in the config directory (refused, and said
+through `CoreDiscovery.Say`, where others may write it), then the player's directories with the Rust's rules: a library
+hashed once while its length and time stay, a sidecar used only where its library has its hash, and a library no sidecar
+describes listed as an `UnreadCore`. `PlayerDirectories` is `/Cores` where the installation's directories are the
+defaults and none where a caller names them (`UseDirectories`), as 1.3's config field will have it; `UsePlayerDirectories`
+names others. `ManagedRuntime.CoresJson` and `EnginesJson` write 1.3's keys. The C# has no rule 3, as §29.40.6 says.
+
+**A defect of the new C#, found by the parity before the commit**: the build's tree is named with a trailing separator
+(`AppContext.BaseDirectory`), so the manifest's directory and the library's were two spellings of one directory, and
+every project core of the build's tree was listed as needing approval. The Rust compares resolved directories. Both
+spellings are now made the same before they are compared.
+
+**The test trees.** With the C# refusing a library in no manifest, the classes that copy a core into a tree of their own
+and open it needed the tree's manifest: of the 47 classes that build a tree or use `CrystalFixture` (356 tests), five tests
+failed before the change, four of `CoreDiscoveryTests` and one of `NephriteTests`; `CrystalFixture` and the parity trees
+already wrote one. They write it through one helper, `Fixtures/CoreManifest`, as an installation carries one. No test
+approves outside its own config directory: `CoreDiscoveryTests` and `CoreHostParityTests` now redirect config as well.
+
+**The parity class**, `CoreHostParityTests`, as §29.40.9 listed it. The tool is given the test's approvals' file and its
+player's directories. The unapproved case is now equal in full, the pinned difference of §27.11 deleted: both hosts
+refuse the library with the same words, and both load it once the approvals' file names its hash. Two cases are new: a
+player's directory (a copy of a project core's id, which both drop; an unapproved core; and a manifest of its own, which
+both ignore; then the core approved), and libraries without a sidecar or with a stale one, listed as not yet read. The
+build's tree is compared with no approvals' file at all, so the build's cores load on the manifest alone. A C# case,
+`A_library_in_no_manifest_waits_for_the_players_approval`, holds the C#'s refusal, its words, an approvals' file others
+may write being refused and said, and the approval in capitals taking effect after a rescan.
+
+**Measured on 2026-10-19** [M]:
+
+| Gate | Result |
+|---|---|
+| `CoreHostParityTests`, `CoreDiscoveryTests`, `NephriteTests` | **40 of 40** |
+| The 47 classes that build a cores tree or use `CrystalFixture`, before the trees' manifests | 351 of 356, the five named above failing as expected; after, those five pass |
+| Seeded faults in the Rust tool, run through the class by `EMUSEN_CORE_HOST_TOOL` | **five of five caught**: the player's manifest read and the player's directory scanned first (the player's case), a stale sidecar trusted and a library not yet read given the words "not yet loaded" (the sidecar-less case), and libraries without a sidecar listed in an installation directory (the build's tree, which holds the platform library, SkiaSharp and SQLite) |
+
+**A publish before the rule reaches a player** (Q3). The handheld's installation (`/home/deck/Apps/Mistress`, checked
+read only on 2026-10-19) and its two backups have no `cores.manifest`, nor has the local `out/linux-x64/Mistress`: both
+predate §27.11. Every directory from the handheld's `lib/EmuSen` up to `/` is `drwxr-xr-x` or stricter, so Q7's check
+passes there. A build that enforces the manifest in the C# must therefore reach the handheld only as a fresh publish,
+which carries the manifest; copying new binaries over the old `lib/EmuSen` would leave every core needing approval.
 
 ---
 

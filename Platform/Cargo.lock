@@ -388,6 +388,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-library"
+version = "0.1.0"
+dependencies = [
+ "emusen-dotnet",
+ "emusen-galaxia",
+ "emusen-sqlite",
+ "emusen-systems",
+ "libc",
+]
+
+[[package]]
 name = "emusen-mcd-bram"
 version = "0.1.0"
 
@@ -428,11 +439,13 @@ dependencies = [
  "emusen-endymion",
  "emusen-firmware",
  "emusen-galaxia",
+ "emusen-library",
  "emusen-native",
  "emusen-net",
  "emusen-savemedia",
  "emusen-serenity",
  "emusen-session",
+ "emusen-sqlite",
  "emusen-systems",
  "emusen-trace",
 ]

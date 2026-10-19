@@ -1,0 +1,30 @@
+# The library, emusen_library.h, version 1: one fact per line, sorted; struct layouts are a 64-bit target's.
+# Written by `LIBRARY_ABI_EMIT=1 cargo test -p emusen-library --test library_abi`; a line is never edited once its minor is released.
+# See EmuSen_Backend.md section 28.
+const EMUSEN_LIBRARY_BAD_REQUEST -1143 @1.0
+const EMUSEN_LIBRARY_BAD_STRING -5 @1.0
+const EMUSEN_LIBRARY_BUSY -1145 @1.0
+const EMUSEN_LIBRARY_CANCELLED -1144 @1.0
+const EMUSEN_LIBRARY_DATABASE -1141 @1.0
+const EMUSEN_LIBRARY_IO -1146 @1.0
+const EMUSEN_LIBRARY_MAJOR 1 @1.0
+const EMUSEN_LIBRARY_NEWER_FILE -1140 @1.0
+const EMUSEN_LIBRARY_NOT_SUPPORTED -256 @1.0
+const EMUSEN_LIBRARY_NO_SQLITE -1142 @1.0
+const EMUSEN_LIBRARY_NULL -1 @1.0
+field emusen_library_config.database offset 8 @1.0
+field emusen_library_config.database_len offset 16 @1.0
+field emusen_library_config.size offset 0 @1.0
+field emusen_library_config.sqlite offset 24 @1.0
+fn emusen_library_abi_version uint32_t (void) @1.0
+fn emusen_library_cancel int32_t (emusen_library *) @1.0
+fn emusen_library_change int64_t (emusen_library *, const uint8_t *, size_t, uint8_t *, size_t) @1.0
+fn emusen_library_close int32_t (emusen_library *) @1.0
+fn emusen_library_games int64_t (emusen_library *, const uint8_t *, size_t, uint8_t *, size_t) @1.0
+fn emusen_library_get int64_t (emusen_library *, const uint8_t *, size_t, uint8_t *, size_t) @1.0
+fn emusen_library_identity int64_t (emusen_library *, const uint8_t *, size_t, uint8_t *, size_t) @1.0
+fn emusen_library_last_error int64_t (uint8_t *, size_t) @1.0
+fn emusen_library_open int32_t (const emusen_library_config *, emusen_library * *) @1.0
+fn emusen_library_progress int64_t (emusen_library *, uint8_t *, size_t) @1.0
+fn emusen_library_scan int64_t (emusen_library *, const uint8_t *, size_t) @1.0
+struct emusen_library_config size 32 align 8 @1.0

@@ -16,6 +16,8 @@ pub mod firmware;
 pub mod savemedia;
 pub mod galaxia;
 pub mod galaxia_config;
+// The library's stable header, emusen_library.h, exported beside this interface (EmuSen_Backend.md §28).
+pub mod library;
 pub mod net;
 pub mod serenity;
 pub mod serenity_device;

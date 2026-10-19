@@ -1,0 +1,24 @@
+[package]
+name = "emusen-library"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The player's library: the scan, a dump's identity and games.db with the player's records, below every frontend and beside Crystal, never in it. See EmuSen_Backend.md §2.4, §3.7 and §28.
+[lib]
+name = "emusen_library"
+
+[dependencies]
+# Where a file lives and how it is read: the walk, the sets, the archives and a dump's hashes.
+emusen-galaxia = { path = "../galaxia" }
+# What each system is and how a file is routed among them.
+emusen-systems = { path = "../systems" }
+# .NET's text and JSON rules.
+emusen-dotnet = { path = "../dotnet" }
+# The SQLite the program ships, lent by the host (EmuSen_RustPlatform.md Q25).
+emusen-sqlite = { path = "../sqlite" }
+
+[target.'cfg(unix)'.dependencies]
+# The local time's offset, for a time recorded with none given.
+libc = "0.2"

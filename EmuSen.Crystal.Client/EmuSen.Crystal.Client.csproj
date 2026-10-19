@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The frontend API's C# binding, the one assembly a frontend references to drive the cores: the contract layer, C-shaped
+  <!-- The frontend API's C# binding, the one assembly a frontend references to drive the cores and, in Library/, to reach the player's library (emusen_library.h, EmuSen_Backend.md §28): the contract layer, C-shaped
        functions over emusen_crystal.h's exports, and the binding over it, classes that dispose their handles. The
        contract layer calls whichever implementation the switch chose: the platform library's exports, or the C#
        implementation of step B2 in EmuSen/Crystal - see EmuSen_Backend.md §3.9 and §14. -->
@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <None Include="..\EmuSen.Crystal\include\emusen_crystal.h" Link="include\emusen_crystal.h" />
+    <None Include="..\Platform\library\include\emusen_library.h" Link="include\emusen_library.h" />
   </ItemGroup>
 
 </Project>

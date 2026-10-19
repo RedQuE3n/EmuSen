@@ -88,6 +88,9 @@ namespace EmuSen.Mistress.Library
 
         public static int SchemaVersion => Migrations.Length;
 
+        // The migrations' texts, which the library holds a second copy of until state 3; the parity class compares the two.
+        public static IReadOnlyList<string> MigrationSteps => Migrations;
+
         private readonly SqliteConnection _db;
 
         private GameRecords(SqliteConnection db) => _db = db;
@@ -96,7 +99,11 @@ namespace EmuSen.Mistress.Library
 
         public static GameRecords Load() => Open(DefaultPath);
 
-        public static GameRecords Open(string path)
+        // Through the library when the switch says so, else the C# below - see EmuSen_Backend.md §28.5.
+        public static GameRecords Open(string path) => EmuSen.Crystal.Client.Library.GameLibrary.Active ? OpenNative(path) : OpenManaged(path);
+
+        // games.db through the C#, the failover and the parity class's oracle.
+        public static GameRecords OpenManaged(string path)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
@@ -122,6 +129,7 @@ namespace EmuSen.Mistress.Library
 
         public GameRecord? Find(string path)
         {
+            if (_native is { } n) return n.Find(path);
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "SELECT favourite, last_played, play_count, play_seconds FROM game WHERE path = $path";
             command.Parameters.AddWithValue("$path", path);
@@ -132,6 +140,7 @@ namespace EmuSen.Mistress.Library
         // Every stored row, for a library that shows many games at once.
         public IReadOnlyDictionary<string, GameRecord> All()
         {
+            if (_native is { } n) return n.All();
             var all = new Dictionary<string, GameRecord>(StringComparer.Ordinal);
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "SELECT path, favourite, last_played, play_count, play_seconds FROM game";
@@ -144,24 +153,31 @@ namespace EmuSen.Mistress.Library
 
         public DateTime? LastPlayed(string path) => Find(path)?.LastPlayed;
 
-        public void ToggleFavourite(string path) => Write(path,
+        public void ToggleFavourite(string path) => _ = _native is { } n ? Native(() => n.ToggleFavourite(path)) : Write(path,
             "INSERT INTO game (path, favourite) VALUES ($path, 1) ON CONFLICT(path) DO UPDATE SET favourite = 1 - favourite");
 
-        public void Started(string path, DateTime now) => Write(path,
+        public void Started(string path, DateTime now) => _ = _native is { } n ? Native(() => n.Started(path, now)) : Write(path,
             "INSERT INTO game (path, play_count, last_played) VALUES ($path, 1, $value) ON CONFLICT(path) DO UPDATE SET play_count = play_count + 1, last_played = excluded.last_played",
             now.ToString("o", CultureInfo.InvariantCulture));
 
-        public void Played(string path, TimeSpan time) => Write(path,
+        public void Played(string path, TimeSpan time) => _ = _native is { } n ? Native(() => n.Played(path, time)) : Write(path,
             "INSERT INTO game (path, play_seconds) VALUES ($path, $value) ON CONFLICT(path) DO UPDATE SET play_seconds = play_seconds + excluded.play_seconds",
             time.TotalSeconds);
 
-        private void Write(string path, string sql, object? value = null)
+        private static bool Native(Action call)
+        {
+            call();
+            return true;
+        }
+
+        private bool Write(string path, string sql, object? value = null)
         {
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = sql;
             command.Parameters.AddWithValue("$path", path);
             if (value is not null) command.Parameters.AddWithValue("$value", value);
             command.ExecuteNonQuery();
+            return true;
         }
 
         // --- Identity by hash, so a renamed file keeps its row - see EmuSen_Settings_Reference.md §4.37.
@@ -169,6 +185,7 @@ namespace EmuSen.Mistress.Library
         // The cached hash of a file, while its size and modification time are the ones it was taken at.
         public string? KnownHash(string path, long bytes, long modified)
         {
+            if (_native is { } n) return n.KnownHash(path, bytes, modified);
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "SELECT md5 FROM file_hash WHERE path = $path AND bytes = $bytes AND modified = $modified";
             command.Parameters.AddWithValue("$path", path);
@@ -179,6 +196,7 @@ namespace EmuSen.Mistress.Library
 
         public void StoreHash(string path, long bytes, long modified, string md5)
         {
+            if (_native is { } n) { n.StoreHash(path, bytes, modified, md5); return; }
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "INSERT INTO file_hash (path, bytes, modified, md5) VALUES ($path, $bytes, $modified, $md5) "
                 + "ON CONFLICT(path) DO UPDATE SET bytes = excluded.bytes, modified = excluded.modified, md5 = excluded.md5";
@@ -192,6 +210,7 @@ namespace EmuSen.Mistress.Library
         // Some file that had this hash when it was last looked at, for a state that names its ROM by contents.
         public string? PathByHash(string md5)
         {
+            if (_native is { } n) return n.PathByHash(md5);
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "SELECT path FROM file_hash WHERE md5 = $md5 ORDER BY path LIMIT 1";
             command.Parameters.AddWithValue("$md5", md5);
@@ -201,6 +220,7 @@ namespace EmuSen.Mistress.Library
         // Gives a game's row the identity a rename cannot take away.
         public void Identify(string path, string md5, long bytes)
         {
+            if (_native is { } n) { n.Identify(path, md5, bytes); return; }
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "INSERT INTO game (path, md5, bytes) VALUES ($path, $md5, $bytes) ON CONFLICT(path) DO UPDATE SET md5 = excluded.md5, bytes = excluded.bytes";
             command.Parameters.AddWithValue("$path", path);
@@ -212,6 +232,7 @@ namespace EmuSen.Mistress.Library
         // Rows whose file is not among those present, and which carry the hash that could find it again.
         public IReadOnlyList<(string Path, string Md5, long Bytes)> Orphans(IReadOnlySet<string> present)
         {
+            if (_native is { } n) return n.Orphans(present);
             var orphans = new List<(string, string, long)>();
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "SELECT path, md5, bytes FROM game WHERE md5 IS NOT NULL AND bytes IS NOT NULL";
@@ -224,6 +245,7 @@ namespace EmuSen.Mistress.Library
         // A renamed or moved game: its row and its collections follow it, and a row the new path already had is merged in.
         public void Move(string from, string to)
         {
+            if (_native is { } n) { n.Move(from, to); return; }
             using SqliteTransaction step = _db.BeginTransaction();
             Execute(_db, step, "INSERT INTO game (path) VALUES ($to) ON CONFLICT(path) DO NOTHING", ("$to", to));
             Execute(_db, step, """
@@ -257,6 +279,7 @@ namespace EmuSen.Mistress.Library
 
         public string? CoverLookup(string path)
         {
+            if (_native is { } n) return n.CoverLookup(path);
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "SELECT outcome FROM cover_lookup WHERE path = $path";
             command.Parameters.AddWithValue("$path", path);
@@ -266,6 +289,7 @@ namespace EmuSen.Mistress.Library
         // A failure is not recorded, so the next session asks again; an answer is, until the player asks again by hand.
         public void RecordCoverLookup(string path, CoverOutcome outcome, string? romName, DateTime now)
         {
+            if (_native is { } n) { n.RecordCoverLookup(path, outcome, romName, now); return; }
             if (outcome == CoverOutcome.Failed) return;
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "INSERT INTO cover_lookup (path, outcome, rom_name, checked) VALUES ($path, $outcome, $name, $now) "
@@ -279,6 +303,7 @@ namespace EmuSen.Mistress.Library
 
         public void ForgetCoverLookup(string path)
         {
+            if (_native is { } n) { n.ForgetCoverLookup(path); return; }
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "DELETE FROM cover_lookup WHERE path = $path";
             command.Parameters.AddWithValue("$path", path);
@@ -289,6 +314,7 @@ namespace EmuSen.Mistress.Library
 
         public IReadOnlyList<GameCollection> Collections()
         {
+            if (_native is { } n) return n.Collections();
             var all = new List<GameCollection>();
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "SELECT c.id, c.name, COUNT(g.path) FROM collection c LEFT JOIN collection_game g ON g.collection = c.id GROUP BY c.id ORDER BY c.name COLLATE NOCASE";
@@ -300,6 +326,7 @@ namespace EmuSen.Mistress.Library
         // Null when a collection of that name, in any case, already exists.
         public long? CreateCollection(string name, DateTime now)
         {
+            if (_native is { } n) return n.CreateCollection(name, now);
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "INSERT INTO collection (name, created) VALUES ($name, $now) ON CONFLICT(name) DO NOTHING RETURNING id";
             command.Parameters.AddWithValue("$name", name);
@@ -310,6 +337,7 @@ namespace EmuSen.Mistress.Library
         // False when another collection already has the name.
         public bool RenameCollection(long id, string name)
         {
+            if (_native is { } n) return n.RenameCollection(id, name);
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "UPDATE OR IGNORE collection SET name = $name WHERE id = $id";
             command.Parameters.AddWithValue("$name", name);
@@ -320,6 +348,7 @@ namespace EmuSen.Mistress.Library
 
         public void DeleteCollection(long id)
         {
+            if (_native is { } n) { n.DeleteCollection(id); return; }
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "DELETE FROM collection WHERE id = $id";
             command.Parameters.AddWithValue("$id", id);
@@ -328,6 +357,7 @@ namespace EmuSen.Mistress.Library
 
         public void AddToCollection(long id, string path)
         {
+            if (_native is { } n) { n.AddToCollection(id, path); return; }
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "INSERT OR IGNORE INTO collection_game (collection, path) VALUES ($id, $path)";
             command.Parameters.AddWithValue("$id", id);
@@ -337,6 +367,7 @@ namespace EmuSen.Mistress.Library
 
         public void RemoveFromCollection(long id, string path)
         {
+            if (_native is { } n) { n.RemoveFromCollection(id, path); return; }
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "DELETE FROM collection_game WHERE collection = $id AND path = $path";
             command.Parameters.AddWithValue("$id", id);
@@ -346,6 +377,7 @@ namespace EmuSen.Mistress.Library
 
         public IReadOnlySet<string> Members(long id)
         {
+            if (_native is { } n) return n.Members(id);
             var members = new HashSet<string>(StringComparer.Ordinal);
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "SELECT path FROM collection_game WHERE collection = $id";
@@ -357,6 +389,7 @@ namespace EmuSen.Mistress.Library
 
         public IReadOnlySet<long> CollectionsOf(string path)
         {
+            if (_native is { } n) return n.CollectionsOf(path);
             var ids = new HashSet<long>();
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "SELECT collection FROM collection_game WHERE path = $path";
@@ -398,6 +431,10 @@ namespace EmuSen.Mistress.Library
             command.ExecuteNonQuery();
         }
 
-        public void Dispose() => _db.Dispose();
+        public void Dispose()
+        {
+            if (_native is { } n) n.Lib.Dispose();
+            else _db.Dispose();
+        }
     }
 }

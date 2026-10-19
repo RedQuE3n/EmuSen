@@ -325,6 +325,30 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Equal(1, window.Interrupted);
         });
 
+        [Theory]
+        [InlineData(403)]
+        [InlineData(423)]
+        [InlineData(426)]
+        public Task A_stop_for_the_credentials_or_the_api_lasts_until_preferences_change_and_no_longer(int code) => OnUi(() =>
+        {
+            _server.Games.Add(new FakeGame(77, "F-Zero", Md5));
+            _server.ForcedStatus = code;
+            MainWindow window = Open(settings: a => a.OpenEmuFallback = false);
+            Scrape(window, ScrapeScope.ThisGame(_rom));
+            RunEnds(window);
+            Assert.Equal(ScrapeRunState.Stopped, window.Progress!.State);
+            _server.ForcedStatus = 0;
+            Scrape(window, ScrapeScope.ThisGame(_rom));
+            RunEnds(window);
+            Assert.Single(_server.JeuInfos);
+            Invoke(window, "ApplyScraping");
+            Scrape(window, ScrapeScope.ThisGame(_rom));
+            RunEnds(window);
+            Assert.Equal(2, _server.JeuInfos.Count());
+            Assert.Equal(ScrapeRunState.Done, window.Progress!.State);
+            Assert.True(File.Exists(ScrapedCover));
+        });
+
         [Fact]
         public Task A_day_already_used_up_goes_straight_to_the_failover_and_the_plan_says_so() => OnUi(() =>
         {

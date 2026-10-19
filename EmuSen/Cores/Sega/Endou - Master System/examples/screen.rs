@@ -1,7 +1,8 @@
 //! Runs an image with pad presses and shows what is on its screen (Endou_Native.md §10.8): the name table at $3800 as
 //! text, for test programs whose font is ASCII from tile 0 at space, and the picture as a PPM.
 //! `cargo run --release --example screen -- <image> <frames> [--system s] [--model m] [--region r] [--press F:BUTTON[:DUR]]...
-//! [--text] [--regs] [--ppm <file>] [--rgba <file>] [--ram <file>]`; buttons Up, Down, Left, Right, 1, 2, Pause, Reset.
+//! [--text] [--regs] [--ppm <file>] [--rgba <file>] [--ram <file>] [--wav <file>]`; buttons Up, Down, Left, Right, 1, 2,
+//! Pause, Reset. `--wav` writes the sound of every frame run as a 16-bit stereo WAV file at the output rate.
 
 use emusen_native::core::{Core, Create, Settings, sys};
 use endou::machine::{Machine, WIDTH};
@@ -35,10 +36,17 @@ fn main() {
         None => Machine::create(&request),
     }
     .unwrap_or_else(|e| panic!("refused: {e}"));
+    let mut sound = Vec::new();
+    let mut buf = vec![0i16; 1 << 14];
     for f in 0..frames {
         let held = presses.iter().filter(|&&(at, _, d)| (at..at + d).contains(&f)).fold(0, |b, p| b | p.1);
         m.set_buttons(0, held, 0xFF).unwrap();
         Core::advance(&mut m, &mut 0).unwrap();
+        let n = m.drain_audio(&mut buf, usize::MAX);
+        sound.extend_from_slice(&buf[..n]);
+    }
+    if let Some(path) = flags("--wav").pop() {
+        std::fs::write(path, wav(&sound, endou::sound::RATE)).expect("the WAV file");
     }
     if args.iter().any(|a| a == "--regs") {
         let v = &m.bus.vdp;
@@ -65,4 +73,24 @@ fn main() {
         std::fs::write(path, rgba).expect("the picture");
     }
     eprintln!("{} frames, {}x{}, frame digest {:016X}", m.frames, WIDTH, height, rgba.iter().fold(0xCBF29CE484222325u64, |h, &b| (h ^ b as u64).wrapping_mul(0x100000001B3)));
+}
+
+/// 16-bit stereo samples as a WAV file.
+fn wav(samples: &[i16], rate: u32) -> Vec<u8> {
+    let data = (samples.len() * 2) as u32;
+    let mut out = Vec::with_capacity(44 + data as usize);
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + data).to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    out.extend_from_slice(&16u32.to_le_bytes());
+    out.extend_from_slice(&[1, 0, 2, 0]);
+    out.extend_from_slice(&rate.to_le_bytes());
+    out.extend_from_slice(&(rate * 4).to_le_bytes());
+    out.extend_from_slice(&[4, 0, 16, 0]);
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&data.to_le_bytes());
+    for s in samples {
+        out.extend_from_slice(&s.to_le_bytes());
+    }
+    out
 }

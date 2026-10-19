@@ -148,6 +148,19 @@ namespace EmuSen.WiseMan.Fixtures
             (0xBF, 0x00), (0xBF, 0xC0), (0xBE, 0x30), (0xBF, 0x11), (0xBF, 0xC0), (0xBE, 0x0C),
         }));
 
+        // Tone 0 at half-period $0FE and full volume through port $7F, 440.4 Hz - see Endou_Native.md §12.
+        public static byte[] Tone(bool sg1000 = false)
+        {
+            var program = Ports(new (byte, byte)[] { (0x7F, 0x9F), (0x7F, 0xBF), (0x7F, 0xDF), (0x7F, 0xFF), (0x7F, 0x8E), (0x7F, 0x0F), (0x7F, 0x90) });
+            if (sg1000)
+            {
+                var rom = new byte[0x4000];
+                program.CopyTo(rom, 0);
+                return rom;
+            }
+            return Banked(2, program);
+        }
+
         // An SG-1000 cartridge in Graphics I: name 0 everywhere, its rows four pixels of colour 6 then four of colour 12, no sprites - see Endou_Native.md §11.
         public static byte[] TmsPicture()
         {

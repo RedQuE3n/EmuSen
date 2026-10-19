@@ -15,5 +15,6 @@ pub mod media;
 pub mod model;
 #[cfg(test)]
 mod programs;
+pub mod sound;
 pub mod state;
 pub mod v1;

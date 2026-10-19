@@ -38,6 +38,13 @@ by the region setting, with no per-game table; MAME is not used, as a reference 
 MercuryRT and Nephrite keep their own system rules, routing being left to a separate piece of work. The go for stage 4
 came with them.
 
+**Decided by the tester, 2026-10-19, on stage 4's questions** (`Endou_Native.md` §11.15), each as recommended: a
+Nephrite dispute step asks the board about the 315-5313's right-column lock the next time Nephrite is worked on; a
+logged dispute step may write stand-ins for SMS_MiSTer's `altera_mf` memory blocks so that it runs under GHDL as a
+black-box referee for D-6, D-7, D-8 and Space Harrier's opening, reading only the entity interfaces the stand-ins need,
+optional within stage 5; the SG-1000 stays the default model for SG-1000 games, the Mark III offered; and the SG-1000
+gets its own shelf (stage 7). The go for stage 5 came with them.
+
 Every claim carries one of six marks:
 
 - **[M]** *measured* on 2026-10-19, with the tool named. Nothing was run to write this page beyond listings, the local
@@ -652,7 +659,7 @@ before the next begins. The core carries the `InDevelopment` mark from stage 1 u
 | **4** | *Built 2026-10-19, `Endou_Native.md` §11.* The VDP's TMS9918 modes and the TMS9918A variant; the SG-1000 as a system; **Nephrite moved onto the crate's composition** | SG-1000 programs and cartridges' pictures against the references; **Nephrite's D-7 tests and its corpus digests unchanged** (P4) | 3 |
 | **5** | Sound: the PSG's wiring in both variants, the mix and the resampler, the analogue stage as far as recordings allow, `$F2` with no FM unit | Synthetic voices against the references' audio; recordings if any | 2 |
 | **6** | Firmware: `Endou_OpenBoot.md` written first (§5.5); the player's BIOS by region and size, with `md5` from a public description; the open boot program; `starts_empty` for `sms` | **G9**: every bench game with no firmware folder, machine info naming the replacement; the same games on the player's BIOS when given; `firmwarecheck.py` if the tester's images are in the probe cache | 3 |
-| **7** | The Master System to players: the data files completed (`esde_full_name`, `cover_aspect`, `cheat_space`), routing (and `.bin` if the library needs it), the shelf from the pack, scraper ids checked, the codecs (`sms.par`, `sms.gg`), the settings, battery files, states with rewind, the kit in corpus form (`kit/sms-sample.txt`, as Nephrite's `kit/genesis-sample.txt` [R]), the core host's listing, Mistress's settings and its Graphics tab | **G4**: the kit's cases on the tester's games; `.srm` round trips; the fit audit at both sizes; the cheats decode; the sidecar and manifest verified over a publish before any install. The mark is removed only by the tester's decision | 3 |
+| **7** | The Master System to players: the data files completed (`esde_full_name`, `cover_aspect`, `cheat_space`), routing (and `.bin` if the library needs it), the shelf from the pack, scraper ids checked, the codecs (`sms.par`, `sms.gg`), the settings, battery files, states with rewind, the kit in corpus form (`kit/sms-sample.txt`, as Nephrite's `kit/genesis-sample.txt` [R]), the core host's listing, Mistress's settings and its Graphics tab; the SG-1000 on a shelf of its own, its console `"SG-1000"` apart from `"Master System"` (decided 2026-10-19) | **G4**: the kit's cases on the tester's games; a test that `sms` and `sg1000` land on two shelves; `.srm` round trips; the fit audit at both sizes; the cheats decode; the sidecar and manifest verified over a publish before any install. The mark is removed only by the tester's decision | 3 |
 | **8** | The debugger: `Z80` through the observer, registers, disassembly, breakpoints, stepping, watches, coverage, the call stack; the VDP's and PSG's units; the `sms` views module in `emusen-systems` | **G7**: each claim a test; every table armed gives the plain run's digests (C15) | 2 |
 | **9** | The YM2413 and its models (the Japanese Master System, the Mark III with the FM Sound Unit), `$F0`–`$F2`, detection; D-2; the operator ROMs' move if D-2 allows | The referee sample for sample on synthetic voices; FM games against the references' audio; Nephrite's FM tests unchanged if the ROMs move | 4 |
 | **10** | The Paddle, the Sports Pad (axes behind port settings) and the 3-D glasses with their display setting | Test programs and the named games at anchors against the references | 2 |

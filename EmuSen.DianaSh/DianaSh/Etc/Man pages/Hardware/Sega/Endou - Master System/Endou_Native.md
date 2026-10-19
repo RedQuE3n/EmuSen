@@ -915,3 +915,20 @@ crate; Nephrite's `render.rs` and `pictures.rs`, its D-7 and `Nephrite_Native.md
 3. **The SG-1000's default model** stays the SG-1000, and the Mark III is offered: is the setting's wording right for the
    tester's front end? Recommended: as built.
 4. **Stage 5** (sound) as the plan has it, the PSG's wiring in both variants and the mix. Recommended: the go.
+
+*Decided 2026-10-19 by the tester: each of the four as recommended.* The go for stage 5 came with the decisions; it
+covers stage 5 alone. No real hardware is used for any of them (`Endou_Plan.md` §10 Q11), and MAME is not used.
+
+1. **The Genesis's right-column lock:** a Nephrite dispute step asks Nuked-MD's board whether the 315-5313 locks the
+   right columns by the column counter or by the pixel, the next time Nephrite is worked on. It is not done at
+   Endou's stages; it is recorded as pending in `Nephrite_Native.md` §67 and `Beryl_SmsVdp.md` §9.4.
+2. **SMS_MiSTer's `altera_mf`:** a logged dispute step may write stand-ins for the memory blocks of `altera_mf` that
+   SMS_MiSTer uses, so that the core runs under GHDL as a black-box referee for D-6, D-7, D-8 and Space Harrier's
+   opening. The step lists every RTL file it reads and reads only what the stand-ins need: the entity interfaces of
+   the `altera_mf` components the core instantiates. The PSG, `jt89`, is Verilog, which GHDL cannot run, so sound stays
+   out of the referee unless a VHDL path exists. The step is optional within stage 5: it is taken only if it fits
+   beside the sound work and does not hold it up, else left for a later stage.
+3. **The SG-1000's default model** stays the SG-1000, with the Mark III offered, as built.
+4. **The SG-1000 gets its own shelf.** Its console is `"SG-1000"` in `Platform/systems/data/sg1000.json`, apart from
+   `"Master System"`, so the catalog gives it a row of its own once it is offered; stage 7 holds this with a test that
+   `sms` and `sg1000` land on two shelves (`Endou_Plan.md` §7).

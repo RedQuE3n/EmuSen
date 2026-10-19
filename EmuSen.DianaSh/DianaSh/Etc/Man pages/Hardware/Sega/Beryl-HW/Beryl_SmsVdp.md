@@ -283,5 +283,6 @@ and two rules Nephrite drew before the move and keeps: the fine scroll's first p
 board shows garbage (`Nephrite_Native.md` §15.2), and the right columns' lock begins at pixel 192 rather than at the
 column counter's column 24. The second is not a measured difference: it is Nephrite's rule, kept so that the move
 changed nothing, and whether the 315-5313 locks by the counter as MacDonald says of the Master System's chips is a
-question for the board (`Endou_Native.md` §11.15). The chip's other differences (the first byte latched, CRAM by code
+question for the board (`Endou_Native.md` §11.15), which a Nephrite dispute step asks the next time Nephrite is worked on
+(decided 2026-10-19; pending, `Nephrite_Native.md` §67). The chip's other differences (the first byte latched, CRAM by code
 bit 1, no buffer refill) are Nephrite's VDP's, outside the composition.

@@ -10,6 +10,7 @@ namespace EmuSen.Mistress.Library
     {
         public IReadOnlyDictionary<string, string> Edits(string path)
         {
+            if (_native is { } n) return n.Edits(path);
             var edits = new Dictionary<string, string>(StringComparer.Ordinal);
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "SELECT field, value FROM game_edit WHERE path = $path";
@@ -22,6 +23,7 @@ namespace EmuSen.Mistress.Library
         // Every game's edits, for a library that shows many games at once.
         public IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> AllEdits()
         {
+            if (_native is { } n) return n.AllEdits();
             var all = new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "SELECT path, field, value FROM game_edit";
@@ -39,6 +41,7 @@ namespace EmuSen.Mistress.Library
         // One save of the editor: a value is kept as the player's edit, a null returns the field to its scraped or default value.
         public void SaveEdits(string path, IReadOnlyDictionary<string, string?> changes, DateTime now)
         {
+            if (_native is { } n) { n.SaveEdits(path, changes, now); return; }
             using SqliteTransaction step = _db.BeginTransaction();
             foreach ((string field, string? value) in changes)
             {
@@ -60,7 +63,7 @@ namespace EmuSen.Mistress.Library
         }
 
         // The editor's Clear; a cover borrowed from another game (§4.65) and a television standard chosen are the player's choices, not metadata, and stay.
-        public void ClearEdits(string path) => Write(path, $"DELETE FROM game_edit WHERE path = $path AND field NOT IN ('{GameMetadata.CoverFrom}', '{GameMetadata.TelevisionStandard}')");
+        public void ClearEdits(string path) => _ = _native is { } n ? Native(() => n.ClearEdits(path)) : Write(path, $"DELETE FROM game_edit WHERE path = $path AND field NOT IN ('{GameMetadata.CoverFrom}', '{GameMetadata.TelevisionStandard}')");
 
         // Q45: the game whose cover this one shows, or null to show its own again; nothing on disk but games.db changes.
         public void SetCoverChoice(string path, string? from, DateTime now) =>
@@ -74,12 +77,13 @@ namespace EmuSen.Mistress.Library
 
         public string? CoverChoice(string path) => Edits(path).TryGetValue(GameMetadata.CoverFrom, out string? from) && from.Length > 0 ? from : null;
 
-        public void SetFavourite(string path, bool favourite) => Write(path,
+        public void SetFavourite(string path, bool favourite) => _ = _native is { } n ? Native(() => n.SetFavourite(path, favourite)) : Write(path,
             "INSERT INTO game (path, favourite) VALUES ($path, $value) ON CONFLICT(path) DO UPDATE SET favourite = excluded.favourite", favourite ? 1 : 0);
 
         // ES-DE's editor lets the player correct the two counters; they are Mistress's records, not edits laid over them.
         public void SetPlayStats(string path, int count, double seconds)
         {
+            if (_native is { } n) { n.SetPlayStats(path, count, seconds); return; }
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "INSERT INTO game (path, play_count, play_seconds) VALUES ($path, $count, $seconds) "
                 + "ON CONFLICT(path) DO UPDATE SET play_count = excluded.play_count, play_seconds = excluded.play_seconds";

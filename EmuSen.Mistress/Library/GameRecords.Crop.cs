@@ -29,6 +29,7 @@ namespace EmuSen.Mistress.Library
         // Null for a game with no crop of its own, which is drawn with its console's.
         public GameCrop? Crop(string path)
         {
+            if (_native is { } n) return n.Crop(path);
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = "SELECT crop_left, crop_right, crop_top, crop_bottom FROM game WHERE path = $path AND crop_left IS NOT NULL";
             command.Parameters.AddWithValue("$path", path);
@@ -38,6 +39,7 @@ namespace EmuSen.Mistress.Library
 
         public void SetCrop(string path, GameCrop crop)
         {
+            if (_native is { } n) { n.SetCrop(path, crop); return; }
             using SqliteCommand command = _db.CreateCommand();
             command.CommandText = """
                 INSERT INTO game (path, crop_left, crop_right, crop_top, crop_bottom) VALUES ($path, $left, $right, $top, $bottom)
@@ -51,6 +53,6 @@ namespace EmuSen.Mistress.Library
             command.ExecuteNonQuery();
         }
 
-        public void ClearCrop(string path) => Write(path, "UPDATE game SET crop_left = NULL, crop_right = NULL, crop_top = NULL, crop_bottom = NULL WHERE path = $path");
+        public void ClearCrop(string path) => _ = _native is { } n ? Native(() => n.ClearCrop(path)) : Write(path, "UPDATE game SET crop_left = NULL, crop_right = NULL, crop_top = NULL, crop_bottom = NULL WHERE path = $path");
     }
 }

@@ -20,12 +20,20 @@ namespace EmuSen.Mistress.Library
         public string FileName => Path.GetFileName(FullPath);
         public string Title => Path.GetFileNameWithoutExtension(FullPath);
 
+        // The shelf the library's scan routed the file to, so it is not asked again; an entry is still its path alone - see EmuSen_Backend.md §28.5.
+        internal string? KnownShelf { get; init; }
+
         // Which console this file belongs to, by extension and, where several take it, by content - see EmuSen_Multicore.md §10.
-        public string CoreDisplayName =>
-            RuntimeCatalog.CoreForRom(FullPath)?.DisplayName ?? "Unknown";
+        public string CoreDisplayName => KnownShelf is { } known
+            ? RuntimeCatalog.ShelfByName(known)?.Core.DisplayName ?? "Unknown"
+            : RuntimeCatalog.CoreForRom(FullPath)?.DisplayName ?? "Unknown";
 
         // The library shelf, which splits the Game Boy's core into Game Boy and Game Boy Color - see EmuSen_Settings_Reference.md §4.46.
-        public string Shelf => RuntimeCatalog.ShelfFor(FullPath) ?? "Unknown";
+        public string Shelf => KnownShelf ?? RuntimeCatalog.ShelfFor(FullPath) ?? "Unknown";
+
+        public bool Equals(RomEntry? other) => other is not null && FullPath == other.FullPath;
+
+        public override int GetHashCode() => FullPath.GetHashCode();
     }
 
     // CoreDisplayName is the console the scan was narrowed to, null when it was not.
@@ -49,8 +57,51 @@ namespace EmuSen.Mistress.Library
             AttributesToSkip = FileAttributes.Hidden | FileAttributes.System,
         };
 
-        // <coreDisplayName> narrows to one console; null or RuntimeCatalog.AllConsoles keeps everything.
-        public static RomLibraryResult Scan(string? romDirectory, string? coreDisplayName = null)
+        // <coreDisplayName> narrows to one console; null or RuntimeCatalog.AllConsoles keeps everything; the library's scan when the switch says so.
+        public static RomLibraryResult Scan(string? romDirectory, string? coreDisplayName = null) =>
+            EmuSen.Crystal.Client.Library.GameLibrary.Active ? ScanNative(romDirectory, coreDisplayName) : ScanManaged(romDirectory, coreDisplayName);
+
+        // The library's scan, on a database of its own that lives for the call.
+        public static RomLibraryResult ScanNative(string? romDirectory, string? coreDisplayName = null)
+        {
+            using var lib = EmuSen.Crystal.Client.Library.GameLibrary.Open(":memory:");
+            return ScanWith(lib, romDirectory, coreDisplayName);
+        }
+
+        // A scan through a handle, kept there for the reclaim and identity that follow it.
+        internal static RomLibraryResult ScanWith(EmuSen.Crystal.Client.Library.GameLibrary lib, string? romDirectory, string? coreDisplayName = null)
+        {
+            var stream = new MemoryStream();
+            using (var w = new System.Text.Json.Utf8JsonWriter(stream))
+            {
+                w.WriteStartObject();
+                w.WriteStartArray("roots");
+                w.WriteStringValue(romDirectory ?? "");
+                w.WriteEndArray();
+                w.WriteStartArray("systems");
+                foreach (string system in RuntimeCatalog.Shelves.Select(s => s.System).Distinct()) w.WriteStringValue(system);
+                w.WriteEndArray();
+                w.WriteEndObject();
+            }
+            lib.Scan(System.Text.Encoding.UTF8.GetString(stream.ToArray()));
+            using var games = System.Text.Json.JsonDocument.Parse(lib.Games(""));
+            var shelves = RuntimeCatalog.Shelves.GroupBy(s => s.System).ToDictionary(g => g.Key, g => g.First().Name);
+            var entries = games.RootElement.GetProperty("games").EnumerateArray()
+                .Select(g => new RomEntry(g.GetProperty("path").GetString()!) { KnownShelf = g.GetProperty("system").GetString() is { } system && shelves.TryGetValue(system, out string? shelf) ? shelf : "Unknown" })
+                .ToList();
+            RomLibraryStatus status = games.RootElement.GetProperty("status").GetString() switch
+            {
+                "no_directory" => RomLibraryStatus.NoDirectoryConfigured,
+                "not_found" => RomLibraryStatus.DirectoryNotFound,
+                "empty" => RomLibraryStatus.Empty,
+                _ => RomLibraryStatus.Ok,
+            };
+            var all = new RomLibraryResult(status, status == RomLibraryStatus.NoDirectoryConfigured ? null : romDirectory, status is RomLibraryStatus.Ok or RomLibraryStatus.Empty ? entries : None);
+            return Narrow(all, coreDisplayName);
+        }
+
+        // The C# scan: the failover and the parity class's oracle.
+        public static RomLibraryResult ScanManaged(string? romDirectory, string? coreDisplayName = null)
         {
             if (string.IsNullOrWhiteSpace(romDirectory))
             {

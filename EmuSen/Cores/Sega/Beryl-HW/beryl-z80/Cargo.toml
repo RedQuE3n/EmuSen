@@ -8,8 +8,13 @@ publish = false
 [lib]
 name = "beryl_z80"
 
+# The assembler is a development tool, for test programs and the open boot programs built at compile time (Beryl_Z80.md §8).
+[features]
+asm = ["dep:beryl-asm"]
+
 [dependencies]
 emusen-native = { path = "../../../Shared/emusen-native" }
+beryl-asm = { path = "../beryl-asm", optional = true }
 
 # What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
 [profile.test-checked]

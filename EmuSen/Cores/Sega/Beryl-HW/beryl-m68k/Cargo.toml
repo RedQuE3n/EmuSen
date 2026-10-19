@@ -10,10 +10,11 @@ name = "beryl_m68k"
 
 # The assembler is a development tool, for test programs and the open firmware built at compile time (Beryl_M68k.md §8).
 [features]
-asm = []
+asm = ["dep:beryl-asm"]
 
 [dependencies]
 emusen-native = { path = "../../../Shared/emusen-native" }
+beryl-asm = { path = "../beryl-asm", optional = true }
 
 # What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
 [profile.test-checked]

@@ -634,3 +634,10 @@ differently and the first could not be assembled back as a target. It now prints
 map test, which reads the mode only, is unchanged.
 
 **Measured (2026-10-15)**: the crate's 26 tests with the feature, 21 without, pass, the map tests with TomHarte's map.
+
+### 8.4 The front half moved to `beryl-asm` (2026-10-19)
+
+Expressions, labels, constants, conditionals, includes and the splitting of lines are now the crate `beryl-asm`, shared
+with the Z80's assembler (`Beryl_Z80.md` §8.3). What stays here is the 68000's own: operands, encoding, data sizes and
+alignment, and the absolute and branch sizing of §8.2. Nothing it produces changed: the 26 tests pass, and Nephrite's
+open Sega CD BIOS is the same file before and after [M 2026-10-19, its SHA-256].

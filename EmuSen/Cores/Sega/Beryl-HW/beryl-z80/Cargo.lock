@@ -3,9 +3,14 @@
 version = 4
 
 [[package]]
+name = "beryl-asm"
+version = "0.1.0"
+
+[[package]]
 name = "beryl-z80"
 version = "0.1.0"
 dependencies = [
+ "beryl-asm",
  "emusen-native",
 ]
 

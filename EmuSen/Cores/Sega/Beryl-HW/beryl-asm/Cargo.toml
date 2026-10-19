@@ -1,0 +1,14 @@
+[package]
+name = "beryl-asm"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The front half the Beryl processors' assemblers share: expressions, labels, constants, conditionals and includes. A development tool; no core's library links it. See Beryl-HW/README.md, "The assemblers".
+[lib]
+name = "beryl_asm"
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

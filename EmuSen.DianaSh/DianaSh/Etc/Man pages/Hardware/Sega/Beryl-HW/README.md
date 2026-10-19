@@ -12,6 +12,8 @@ below is the processors'; a crate of another kind keeps the contract its own sec
 - [`Beryl_SH2.md`](Beryl_SH2.md) — `beryl-sh2`, the Hitachi SH-2 (SH7604), for which no single-step suite exists.
 - [`Beryl_SN76489.md`](Beryl_SN76489.md) — `beryl-sn76489`, the SN76489 PSG and Sega's copy of it, written from SMS
   Power's document; the first crate here that is not a processor.
+- `beryl-asm` — the front half of the processors' assemblers, below; no record page of its own, the processors' §8 being
+  where its readings are measured.
 
 ## The interface every crate keeps
 
@@ -50,3 +52,13 @@ Its contract, first kept by `beryl-sn76489`:
   is a variant the caller picks (`Variant::SEGA`).
 - **State through `StateWriter`/`StateReader`**, a fixed block in the console's state.
 
+
+## The assemblers
+
+Each processor's assembler is a development tool behind its crate's `asm` feature, for test programs and the open
+firmware a core assembles at compile time (`Beryl_M68k.md` §8, `Beryl_Z80.md` §8). *Since 2026-10-19* their common front
+half is the crate `beryl-asm`: expressions in C's order with `$`, `0x` and `%` numbers and character constants; labels,
+with local ones (`.name`, `@name`) scoped to the label before them; constants, by the words each processor names;
+`if`/`else`/`endif` over constants and the caller's defines; `include` through a reader the caller passes; and the
+splitting of a line into its label, word and operands. A processor's crate keeps its operands, its encoding, its data
+directives and its layout. `beryl-asm` depends on nothing, and no core's library links it.

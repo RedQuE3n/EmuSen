@@ -149,7 +149,7 @@ code `$2`, a code no document lists, states the sum of its first 32 KiB while it
 | U6 | The "buggy" size codes `$D` and `$2`, and codes no document lists | `$D` and `$2` summed as their sizes say, the bugs being unknown; an unlisted code refused | [A] |
 | U7 | What the screen shows, and for how long | The program's own screen, its name in text and no logo, shown while it checks; a refusal or an empty console adds a line in words and waits | [C], `Endou_Plan.md` §5.5 |
 | U8 | The RAM, the VRAM and the PSG left at the hand-over | RAM all zero but `$C000` (the value handed over), the program left at `$C700`, and `$DFFF` holding 2 where the sum paged slot 2, which is put back to bank 2 as the mapper powers on; VRAM and CRAM cleared; the PSG's four channels silenced | [C] |
-| U9 | The processor at the hand-over | Interrupts disabled, mode 1, the stack pointer `$DFF0`, A the value handed over | [C], mode 1 [D] |
+| U9 | The processor at the hand-over | Interrupts disabled, mode 1, the stack pointer `$DFF0`, A the value handed over; R as the program's own fetches leave it, as any boot program's do | [C], mode 1 [D] |
 | U10 | When in the frame the game starts | On the VDP's last line, as the console is at power-on (`Beryl_SmsVdp.md` §2.4): the program waits for the V counter to read `$FF` and then hands over, so that a game starts at the phase it starts at with no BIOS, some frames later | [C] |
 | U11 | The VDP's pending flags | The status read once before the hand-over, so no interrupt is pending | [C] |
 | U12 | The pace of the program's own VDP writes | At least 16 cycles apart with the display off and 29 with it on, MK3's rates, so that the program would run on a console whatever the slots of D-8 are | [D] |
@@ -182,10 +182,11 @@ its own console's tiles from them (a Genesis's packed four-bit pixels, a Master 
 
 ### 3.3 The words
 
-On its own screen, in capitals, the program's name; then one of: "NO GAME IS IN THE CONSOLE."; "THIS GAME HAS NO SEGA
-HEADER. IT MAY BE FOR A JAPANESE CONSOLE."; "THIS GAME IS FOR A JAPANESE CONSOLE."; "THIS GAME IS NOT FOR THIS
-CONSOLE."; "THE HEADER'S SIZE CODE IS NOT ONE SEGA LISTS."; "THE GAME'S CHECKSUM DOES NOT MATCH ITS DATA." After a
-refusal or with no game it waits with interrupts off; a Pause press returns to the wait.
+On its own screen, in capitals, the program's name, "ENDOU OPEN BOOT"; then "NO GAME IS IN THE CONSOLE.", or "THE
+GAME CANNOT START." and one of: "IT HAS NO SEGA HEADER. IT MAY BE A JAPANESE GAME."; "IT IS FOR A JAPANESE CONSOLE.";
+"IT IS NOT FOR THIS CONSOLE."; "ITS HEADER'S SIZE CODE IS NOT ONE SEGA LISTS."; "ITS CHECKSUM DOES NOT MATCH ITS
+DATA." After a refusal or with no game it waits halted with interrupts off; a Pause press returns to the wait. *The
+words as built, 2026-10-19; this page first gave them in a draft form.*
 
 ## 4. The machine around it
 
@@ -262,3 +263,13 @@ time, and the BIOS's built-in games are absent."
    for how the console maps a BIOS larger than 8 KiB, or a screener's reading of the excluded pages.
 4. **`firmwarecheck.py`** compares the open program with real images, which only the tester may run. *Recommended:* the
    tester runs it on their three images when convenient, and its numbers are recorded.
+
+## 10. As built (2026-10-19)
+
+The steps of §7 were built the same day; `Endou_Native.md` §13 is their record. In brief [M]: the image is 8,192
+bytes (the ROM program 800 bytes from `$0000`, the font's 64 tiles at `$1000`, the RAM program's 669 bytes at `$1800`),
+SHA-256 `625a92bd6aa6dd5ea523cd10a2eedef2947a0bba951d0a4cf6a0bb82f694f9f7`, the same from four builds in three target
+directories; a 32 KiB check hands over in the 25th frame, a 128 KiB one in the 64th and a 256 KiB one in the 116th
+(1.9 s); 29 of 31 export games from the library reach the same pictures 300 and 600 frames after the hand-over as with no
+BIOS, the other two explained by the hand-over's phase and the Z80's R register; the four images of §1.6 that no range
+explains are refused in words, as §9's first question says.

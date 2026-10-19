@@ -201,6 +201,28 @@ place, the references' FM units pinned off with `genesis_plus_gx_ym2413=disabled
 `smsplus_fm_sound=disabled` (`Endou_Native.md` §12.6). Of SMS_MiSTer, GHDL's messages on analysing its `rtl/`, which
 printed two lines of it (`Endou_Native.md` §12.13), and the names of the files in `rtl/jt89/`.
 
+## 6e. Used at stage 6 (2026-10-19)
+
+Nothing was fetched. Read from the stage 1 fetch, by the open boot program's writer, who opened neither excluded
+document of §5: Sega's Mark III manual, its contents and the sections `Endou_OpenBoot.md` §0 names, screened
+mechanically for program text first (it holds none but a two-instruction trackball set-up); MacDonald's `smstech`
+§1-§5 and §7, its lines 434-458 (§6) skipped; Talbot-Watkins's VDP registers; the SMS Power! pages `Endou_Native.md`
+§13.13 lists; the libretro cores' `.info` firmware lines (Gearsystem's one MD5 names no console). Run on Endou: the
+library's 31 export games and the fetched test programs, read in place (`Endou_Native.md` §13.8). The headers of the
+library's 310 game images and of the 27 fetched programs were read for the checksum's range (`Endou_OpenBoot.md` §1.6);
+the six firmware files of the library were left out by name and nothing of them was read.
+
+**SMS_MiSTer** (the logged step for D-8): GHDL 6.0.0's messages on analysing seven of its files, with
+`-fno-caret-diagnostics` so that no source text is printed (`Endou_Disputes.md` D-8). No file of it was opened.
+
+**The search for a recording of a Master System's audio output** (decided 2026-10-19), 2026-10-19, with a negative
+result [R]: MDFourier's page, `https://junkerhq.net/MDFourier/`, lists the Master System under "Unreleased Platforms",
+"Release pending", its recordings being the Mega Drive's with the Sega CD's and the PC Engine's, with no licence stated
+for them; SMS Power!'s "SN76489", `https://www.smspower.org/Development/SN76489`, links the noise's bit patterns
+(`SN76489WhiteNoise.zip`, `SegaVDPWhiteNoise.zip`), not audio, and marks its waveform figures as needing "a real output
+sample"; two web searches for a Master System's recorded or measured output found none. Nothing was fetched, and the
+analogue stage stays a named loss (`Endou_Native.md` §12.3, §13.11).
+
 ## 7. What was read for this page
 
 The pages and listings of §1–§4 as far as needed to identify, date and license each item: titles, contents lists,

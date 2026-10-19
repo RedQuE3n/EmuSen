@@ -18,6 +18,9 @@ For every emulator the project builds, present and future:
    2026-10-17* a player may also name a folder of their own in Preferences (`FirmwareDirectory`, §2.3), searched
    before `home/Firmware`. The setting is consistent with this policy: it is optional and blank by default, nothing
    asks for it at launch or says that firmware is missing, and EmuSen only reads the folder.
+   *Decided 2026-10-19 by the tester, for Endou (the Master System):* the player's image there is an opt-in accuracy
+   upgrade per console model, chosen in the core's settings, the open boot program running by default even when the
+   file is present (`Endou_OpenBoot.md` §5).
 3. **Nothing copyrighted ships or is fetched.** No firmware is committed, bundled or downloaded on the player's behalf
    (§5); the unofficial BIOS collections hosted online are unauthorised copies and are not a source.
 4. **A core may state the checksums of the firmware it accepts.** *Decided 2026-10-18 by the tester, as a standing

@@ -23,7 +23,11 @@ Master System is the next new console, ahead of the PlayStation 2; building star
   against the references, SMS_MiSTer under GHDL, the seeded faults, and the questions before stage 5, decided 2026-10-19.
   Stage 5 (§12, 2026-10-19): the PSG mixed and resampled in both variants, port `$F2` with no FM unit, the voices,
   sound test programs and library games against the references' audio, no allocation on the audio path, the state's
-  version 5, the seeded faults, SMS_MiSTer's dispute step weighed and left, and the questions before stage 6.
+  version 5, the seeded faults, SMS_MiSTer's dispute step weighed and left, and the questions before stage 6. Stage 6
+  (§13, 2026-10-19): the open boot program and the BIOS's slot, the player's own BIOS as an opt-in per console with a
+  stand-in boot ROM, the empty console, the checksum's range measured on the library, test programs and games against
+  the start with no BIOS, the state's version 6, the seeded faults, D-8's GHDL step, the search for a recording, and the
+  questions before stage 7.
 - [`Endou_OpenBoot.md`](Endou_OpenBoot.md) — the open boot program's design, written 2026-10-19 before its code (stage
   6): what Sega's manual and the public documents say the BIOS does that a game can see, what they leave unsaid and
   what Endou chooses, the checksum's range measured on the library's export headers, the player's own BIOS as an
@@ -37,7 +41,9 @@ Master System is the next new console, ahead of the PlayStation 2; building star
   (the 315-5124's zoom), D-7 (the fine scroll's first pixels), D-8 (the access slots, open) and D-9 (the line's
   timing, measured by FluBBa's test); stage 4 settled D-1 by the tester's decision and added D-10 (four sprites a line
   in the TMS9918's modes), D-11 (the TMS9918A's colours) and D-12 (its 4K mode), each argued; stage 5 measured D-0 on
-  the output and added D-13 (the audio control port with no FM unit), argued.
+  the output and added D-13 (the audio control port with no FM unit), argued; stage 6 took D-8's GHDL step, which GHDL
+  could not complete, and added D-14 (the Mark III has no BIOS) and D-15 (port `$3F` at the hand-over), argued, and
+  D-16 (the export check's sum), measured on the games.
 
 The CPU, its assembler, the PSG and the VDP are documented with their crates in [`../Beryl-HW/`](../Beryl-HW/) (Beryl Hardware). The Game
 Gear's pages, when its stages start, go in [`../Jadeite - Game Gear/`](../Jadeite%20-%20Game%20Gear/).

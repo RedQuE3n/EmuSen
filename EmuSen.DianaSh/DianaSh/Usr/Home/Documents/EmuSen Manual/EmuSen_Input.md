@@ -57,7 +57,9 @@ Explicitly *not* remapping X onto A or L onto B. A binding for a button the cons
 ## 3. Why the names match `SnesButton` exactly
 
 *Since 2026-10-16* `SnesButton` and its cast left with C# Venus (`VenusRT_Native.md` §68.4); the SNES pad is the pack's
-`SnesSystem.PadButtons`, still `PadButton`'s first twelve, and the section below is the record of why.
+`SnesSystem.PadButtons`, still `PadButton`'s first twelve, and the section below is the record of why. *Since
+2026-10-19* that literal is gone too, and the pad is VenusRT's core info, in the same order (`EmuSen_Backend.md`
+§18.10.12).
 
 `PadButton`'s members are declared in the same order, with the same names, as `Venus/Input/Input.cs`'s `SnesButton`. That is deliberate and it bought two things:
 
@@ -126,7 +128,9 @@ Galaxia still cannot hold it, and that part of the original argument stands: Gal
 
 `InputSettingsWindow` used to iterate `Enum.GetValues<PadButton>()` and build twelve rows unconditionally — so with an NES ROM loaded it offered to rebind X, Y, L and R, four buttons that core drops on the floor.
 
-It filters to the console's own pad instead. The button list comes from `CoreCatalog.ButtonsFor(console)`, which reads each core's `PadButtons` **static** — `VenusCore.PadButtons` and `MoonCore.PadButtons`, the same arrays their instance `SupportedButtons` returns. It has to be static because the window lists every console's pad whether or not a ROM is loaded, and restating the lists in the catalog is how they would drift from what the core actually reads. `ConsoleBindingsTests` pins the two against each other.
+It filters to the console's own pad instead. The button list comes from `CoreCatalog.ButtonsFor(console)`, which reads each core's `PadButtons` **static** — `VenusCore.PadButtons` and `MoonCore.PadButtons`, the same arrays their instance `SupportedButtons` returns. It has to be static because the window lists every console's pad whether or not a ROM is loaded, and restating the lists in the catalog is how they would drift from what the core actually reads. `ConsoleBindingsTests` pins the two against each other. *Since 2026-10-19* there is no static list for any console:
+`ButtonsFor` reads the console's engine's core info from its sidecar, with no library loaded (`EmuSen_Backend.md`
+§18.10.12).
 
 ## 5.1 One tab per console, and bindings that do not collide
 
@@ -286,8 +290,8 @@ the count with no game loaded, for the bindings window.
 
 | Console | Engine | Ports | Source of the count | Players 2-4 reach the game |
 |---|---|---|---|---|
-| NES | MoonRT (Rust); Moon (C#) until it was deleted on 2026-10-16 | 2 | `NesSystem.Ports`, the NES system pack | player 2 |
-| SNES | VenusRT (Rust); Venus (C#) until it was deleted on 2026-10-16 | 2 | `SnesSystem.Ports`, the SNES system pack | player 2 |
+| NES | MoonRT (Rust); Moon (C#) until it was deleted on 2026-10-16 | 2 | MoonRT's core info; `NesSystem.Ports`, the pack's, until 2026-10-19 (`EmuSen_Backend.md` §18.10.12) | player 2 |
+| SNES | VenusRT (Rust); Venus (C#) until it was deleted on 2026-10-16 | 2 | VenusRT's core info; `SnesSystem.Ports`, the pack's, until 2026-10-19 (`EmuSen_Backend.md` §18.10.12) | player 2 |
 | SNES | VenusRT (Rust, ABI v1) | 2 | machine info's `ports` (`EmuSen_CoreAPI.md` §6.4) | player 2 |
 | Game Boy | MercuryRT (Rust); Mercury (C#) until it was deleted on 2026-10-16 | 1 | the console | none, by the hardware |
 | N64 | Mars (C#), MarsRT (Rust) | 4 | `MarsCore.Ports` | players 2, 3 and 4 |

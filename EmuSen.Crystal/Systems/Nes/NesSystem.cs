@@ -1,18 +1,15 @@
 using System.Collections.Generic;
 using EmuSen.Crystal.Cheats;
-using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Crystal.Systems.Nes
 {
-    // The NES's system pack: its systems-table entry, its pad, its two cheat formats and its debugger views - see EmuSen_CoreAPI.md §20, §31.
+    // The NES's system pack: its systems-table entry, its two cheat formats and its debugger views - see EmuSen_CoreAPI.md §20, §31.
     public static class NesSystem
     {
         public const string Id = "nes";
 
         // The space names every NES engine publishes, so a cheat or a view means the same memory on each.
         public const string Ram = "RAM", PrgRam = "PRGRAM", Chr = "CHR", Ciram = "CIRAM", Oam = "OAM", Palette = "PALETTE", CpuBus = "CPUBUS", PpuRegisters = "PPUREG", ApuRegisters = "APUREG";
-
-        public const int Ports = 2;
 
         // The C# literal, the failover, Entry being the systems table's row with this literal's code; Famicom Disk System is other hardware and is not claimed - see EmuSen_Backend.md §12.
         public static readonly SystemEntry Literal = new(
@@ -31,13 +28,6 @@ namespace EmuSen.Crystal.Systems.Nes
             ScreenScraperSystem: 3);
 
         public static readonly SystemEntry Entry = SystemTable.Entry(Literal);
-
-        // The pad in the order a bindings screen lists it.
-        public static readonly IReadOnlyList<PadButton> PadButtons = new[]
-        {
-            PadButton.Up, PadButton.Down, PadButton.Left, PadButton.Right,
-            PadButton.Select, PadButton.Start, PadButton.B, PadButton.A,
-        };
 
         // OpenVGDB's NES row gives a 16-byte header to skip, which is the iNES header when the file has one.
         public static byte[] WithoutInesHeader(byte[] file) =>

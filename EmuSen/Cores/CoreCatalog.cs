@@ -193,18 +193,9 @@ namespace EmuSen.Cores
                 }
             });
 
-        // Read off the core itself rather than restated here, so a pad cannot drift from what the core reads.
-        private static readonly Dictionary<string, IReadOnlyList<Galaxia.Input.PadButton>> ButtonsByConsole =
-            new(StringComparer.OrdinalIgnoreCase)
-            {
-                [Venus.Console] = Crystal.Systems.Snes.SnesSystem.PadButtons,
-                [Moon.Console] = Crystal.Systems.Nes.NesSystem.PadButtons,
-            };
-
-        // The console's pad with no ROM loaded, from its engine's info where no row names it, or every button for a console this build does not know.
+        // The console's pad with no ROM loaded, from its engine's info, or every button for a console no engine of this build serves - see EmuSen_Backend.md §18.10.12.
         public static IReadOnlyList<Galaxia.Input.PadButton> ButtonsFor(string console) =>
-            ButtonsByConsole.TryGetValue(console, out var buttons) ? buttons
-            : (DiscoveredSystem(console) ?? SoleEngineSystem(console)) is { } system && system.Controllers.SelectMany(c => c.Buttons).Select(b => b.Control).OfType<Galaxia.Input.PadButton>().Distinct().ToArray() is { Length: > 0 } pad ? pad
+            (DiscoveredSystem(console) ?? SoleEngineSystem(console)) is { } system && system.Controllers.SelectMany(c => c.Buttons).Select(b => b.Control).OfType<Galaxia.Input.PadButton>().Distinct().ToArray() is { Length: > 0 } pad ? pad
             : Enum.GetValues<Galaxia.Input.PadButton>();
 
         // The controller a port of a console discovery added is set to, by its id: the engine's "pad<n>" setting as stored, else its default; null where the engine has no such setting.

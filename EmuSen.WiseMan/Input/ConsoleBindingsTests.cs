@@ -193,7 +193,7 @@ namespace EmuSen.WiseMan.Input
         public void The_catalogs_button_list_is_the_cores_own()
         {
             using (var moonRt = Fixtures.MoonEngines.Create()) Assert.Equal(moonRt.SupportedButtons, CoreCatalog.ButtonsFor("NES"));
-            Assert.Equal(EmuSen.Crystal.Systems.Snes.SnesSystem.PadButtons, CoreCatalog.ButtonsFor("SNES"));
+            using (var venusRt = (IDisposable)Fixtures.SyntheticRom.LoadCore(Fixtures.SyntheticRom.BuildBlank())) Assert.Equal(((ICore)venusRt).SupportedButtons, CoreCatalog.ButtonsFor("SNES"));
             using (var gameBoy = MercuryEngines.Create()) Assert.Equal(gameBoy.SupportedButtons.Order(), CoreCatalog.ButtonsFor("GB").Order());
             using var marsRt = new MarsRtTestCore();
             Assert.Equal(marsRt.SupportedButtons, CoreCatalog.ButtonsFor("N64"));

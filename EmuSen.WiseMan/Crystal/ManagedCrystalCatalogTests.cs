@@ -76,6 +76,36 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Contains((int)PadAxis.LeftX, n64.GetProperty("axes").EnumerateArray().Select(a => a.GetInt32()));
         }
 
+        // The NES's and SNES's pad and ports move with their engine's sidecar, so the core info is their one owner - see EmuSen_Backend.md §18.10.12.
+        [Fact]
+        public void The_nes_and_snes_pads_follow_their_engine_s_sidecar()
+        {
+            CoreDiscovery.UseDirectories(null);
+            string edited = Path.Combine(_f.Root, "edited-sidecars");
+            Directory.CreateDirectory(edited);
+            var want = new System.Collections.Generic.Dictionary<string, PadButton[]>();
+            foreach (string console in new[] { "NES", "SNES" })
+            {
+                DiscoveredCore core = Assert.IsType<DiscoveredCore>(CoreDiscovery.ByEngineName(CoreCatalog.SoleDiscoveredEngine(console)));
+                var sidecar = (System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(core.Sidecar.SidecarPath))!;
+                var controller = sidecar["info"]!["systems"]![0]!["controllers"]![0]!.AsObject();
+                controller["buttons"] = new System.Text.Json.Nodes.JsonArray(controller["buttons"]!.AsArray().Reverse().Select(b => b!.DeepClone()).ToArray());
+                controller["ports"] = new System.Text.Json.Nodes.JsonArray(0);
+                File.WriteAllText(Path.Combine(edited, Path.GetFileName(core.Sidecar.SidecarPath)), sidecar.ToJsonString());
+                want[console] = core.Info.Systems[0].Controllers[0].Buttons.Select(b => b.Control).OfType<PadButton>().Reverse().ToArray();
+            }
+            CoreDiscovery.UseDirectories(new[] { edited });
+            JsonElement[] systems = Json(_f.Runtime.Systems()).EnumerateArray().ToArray();
+            foreach ((string console, PadButton[] buttons) in want)
+            {
+                Assert.Equal(buttons, CoreCatalog.ButtonsFor(console));
+                Assert.Equal(1, ControllerPorts.ForConsole(console));
+                JsonElement c = systems.Single(s => s.TryGetProperty("console", out JsonElement n) && n.GetString() == console).GetProperty("controllers");
+                Assert.Equal(buttons.Select(b => (int)b), c.GetProperty("buttons").EnumerateArray().Select(b => b.GetInt32()));
+                Assert.Equal((1, 1), (c.GetProperty("ports").GetInt32(), c.GetProperty("players").GetArrayLength()));
+            }
+        }
+
         // A Game Boy Color game sits on the Color's shelf, a Game Boy game on the Game Boy's, and a file no core takes on none.
         [Fact]
         public void Route_names_the_file_s_shelf()

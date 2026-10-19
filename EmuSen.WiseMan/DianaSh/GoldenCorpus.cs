@@ -5,6 +5,8 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using EmuSen.Cores;
+using EmuSen.Crystal.Client;
+using EmuSen.Crystal.Client.Contract;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.DianaSh.DianaSh.Etc;
@@ -199,6 +201,11 @@ namespace EmuSen.WiseMan.DianaSh
         private readonly bool _logging = DebugLogging.MasterEnabled;
         private readonly GoldenTargets _targets;
 
+        // Set, the corpus's core cases run over a session of Crystal's with its table handed to the shell - see EmuSen_Backend.md §29.25.
+        public static bool OnCrystal => Environment.GetEnvironmentVariable("EMUSEN_GOLDEN_CRYSTAL") == "1";
+
+        private CrystalRuntime? _crystal;
+
         public string Home => Path.Combine(_temp, "home");
 
         public GoldenRunner()
@@ -213,6 +220,7 @@ namespace EmuSen.WiseMan.DianaSh
 
         public void Dispose()
         {
+            _crystal?.Dispose();
             Environment.CurrentDirectory = _cwd;
             DataStore.OverrideDirectory = _dataOverride;
             ConfigStore.OverrideDirectory = _configOverride;
@@ -302,13 +310,15 @@ namespace EmuSen.WiseMan.DianaSh
             foreach (string user in DianaShUserRegistry.Users.Where(u => !u.Equals("root", StringComparison.OrdinalIgnoreCase)).ToList()) DianaShUserRegistry.TryRemove(user);
             DebugLogging.MasterEnabled = false;
 
-            using GoldenTargets.Built built = Target(c);
+            bool crystal = OnCrystal && GoldenTargets.Cores.Contains(c.Target);
+            using GoldenTargets.Built built = crystal ? _targets.Build("none", 0) : Target(c);
+            using CrystalSession? session = crystal ? OpenOnCrystal(c) : null;
             string statePath = Path.Combine(DataStore.SaveStates, "golden.state");
             IDianaShCommand[] extras = HostCommands(() => statePath, window: !c.NoWindow);
             DianaShSessionManager? sessions = c.NoSessions ? null : new DianaShSessionManager();
             CoreBundle? b = built.Bundle;
-            DianaShInterpreter Build() => DianaShInterpreter.CreateDefault(built.Target, extras, b?.CheatAutoDetectCodec, b?.CheatExplicitCodec, b?.CpuTraceSwitch, sessions,
-                () => CoreCatalog.SupportedCheatSystems);
+            DianaShInterpreter Build() => session is not null ? DianaShInterpreter.CreateForService(session.ServiceTable(), extras, sessions)
+                : DianaShInterpreter.CreateDefault(built.Target, extras, b?.CheatAutoDetectCodec, b?.CheatExplicitCodec, b?.CpuTraceSwitch, sessions, () => CoreCatalog.SupportedCheatSystems);
             DianaShInterpreter? alone = sessions is null ? Build() : null;
             sessions?.RegisterInitial(new DianaShSession("main", Build()));
 
@@ -317,7 +327,8 @@ namespace EmuSen.WiseMan.DianaSh
             {
                 // A case that reaches such a line is the file system's from there on, and is left uncompared, as the crate-alone runner leaves it.
                 if (AsksTheSystemsCase(s.Input)) { SystemsCase = true; break; }
-                if (s.RunBefore > 0) RunFrames(b?.Core ?? throw new InvalidDataException($"'run {s.RunBefore}' needs a core, and case '{c.Title}' has none"), s.RunBefore);
+                if (s.RunBefore > 0 && session is not null) RunFrames(session, s.RunBefore);
+                else if (s.RunBefore > 0) RunFrames(b?.Core ?? throw new InvalidDataException($"'run {s.RunBefore}' needs a core, and case '{c.Title}' has none"), s.RunBefore);
                 DianaShInterpreter shell = alone ?? sessions!.Current!.Interpreter;
                 var (needsMore, output, action) = shell.Submit(s.Input);
                 steps.Add(new GoldenStep
@@ -331,6 +342,34 @@ namespace EmuSen.WiseMan.DianaSh
                 });
             }
             return steps;
+        }
+
+        // A core case's game opened on the binding's runtime, whichever implementation the switch chose, and its frames run.
+        private CrystalSession OpenOnCrystal(GoldenCase c)
+        {
+            // EMUSEN_GOLDEN_CRYSTAL_EXPECT names the implementation the run must be on, so a fallback fails it.
+            if (Environment.GetEnvironmentVariable("EMUSEN_GOLDEN_CRYSTAL_EXPECT") is { Length: > 0 } expect && (expect == "rust") != EmuSen.Crystal.Client.Contract.Crystal.Native)
+                throw new InvalidOperationException($"the corpus ran on {EmuSen.Crystal.Client.Contract.Crystal.Report}, not {expect}");
+            _crystal ??= new CrystalRuntime();
+            CrystalSession session = _crystal.Open(new CrystalOpen { Path = _targets.ImageOf(c.Target), Engine = GoldenTargets.EngineOf(c.Target), NoBattery = true });
+            for (int f = 0; f < c.Frames; f++)
+            {
+                var info = new CrystalFrameInfo();
+                session.Frame(ref info);
+            }
+            return session;
+        }
+
+        // As a frontend's loop runs a session's frames: a halted session resumed first, as a core's RunFrame resumes, and a halt ends the run.
+        private static void RunFrames(CrystalSession session, int frames)
+        {
+            if (session.Info().Contains("\"run\":\"halted\"", StringComparison.Ordinal)) session.Run(CrystalSessionAbi.RunResume);
+            for (int f = 0; f < frames; f++)
+            {
+                var info = new CrystalFrameInfo();
+                session.Frame(ref info);
+                if (info.halted != 0) return;
+            }
         }
 
         // As a frontend's loop runs them: a halted core resumes, and a halt ends the run.

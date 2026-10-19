@@ -25,7 +25,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
         private readonly List<GCHandle> _weak = new();
         private readonly Dictionary<uint, DianaShInterpreter> _facades = new();
         private readonly Dictionary<uint, DianaShSession> _sessions = new();
-        private readonly List<SessionService> _services = new();
+        private readonly List<ServiceTable> _services = new();
 
         // The providers this shell made and ends with it; a runtime's own provider, handed in, is the runtime's to end.
         private readonly List<SessionService> _owned = new();
@@ -87,8 +87,17 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
         {
             lock (_gate)
             {
-                _services.Add(service);
                 if (owned) _owned.Add(service);
+            }
+            SetSessionService(session, new ServiceTable(service));
+        }
+
+        // A session's table, whichever implementation of the service made it.
+        public void SetSessionService(uint session, ServiceTable service)
+        {
+            lock (_gate)
+            {
+                _services.Add(service);
             }
             byte[] name = Encoding.UTF8.GetBytes("emusen.session");
             fixed (byte* n = name)
@@ -109,9 +118,9 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
         public string? DrainRunRequest()
         {
             string? last = null;
-            List<SessionService> services;
-            lock (_gate) services = new List<SessionService>(_services);
-            foreach (SessionService service in services)
+            List<ServiceTable> services;
+            lock (_gate) services = new List<ServiceTable>(_services);
+            foreach (ServiceTable service in services)
                 foreach (string op in service.DrainRunRequests()) last = op;
             return last;
         }

@@ -52,7 +52,9 @@ namespace EmuSen.WiseMan.Crystal
             Assert.True(id > 0 && id != first.Id, $"open_game answered {id}: {LastError(t)}");
             JsonElement opened = JsonDocument.Parse(events.Drain()).RootElement.EnumerateArray().Single();
             Assert.Equal(("session", (uint)id, "opened"), (opened.GetProperty("kind").GetString(), opened.GetProperty("session").GetUInt32(), opened.GetProperty("op").GetString()));
-            Assert.Equal(ManagedCrystal.SessionOf(_f.Runtime.Handle, first.Id).OpenedWith, ManagedCrystal.SessionOf(_f.Runtime.Handle, (uint)id).OpenedWith);
+            // The open options are read from the C# implementation's sessions; the Rust's are held by CrystalParityTests' machine script.
+            if (!EmuSen.Crystal.Client.Contract.Crystal.Native)
+                Assert.Equal(ManagedCrystal.SessionOf(_f.Runtime.Handle, first.Id).OpenedWith, ManagedCrystal.SessionOf(_f.Runtime.Handle, (uint)id).OpenedWith);
             Assert.Equal(2, JsonDocument.Parse(_f.Runtime.Sessions()).RootElement.GetArrayLength());
 
             using CrystalSession second = _f.Runtime.SessionOf((uint)id);

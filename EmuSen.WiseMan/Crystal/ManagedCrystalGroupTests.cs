@@ -318,7 +318,7 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Contains("RAM", shell.Execute("spaces"));
             shell.Execute("watch add RAM 3 1");
             Assert.Single(Json(s.WatchList()).EnumerateArray());
-            Assert.Throws<ArgumentException>(() => EmuSen.DianaSh.DianaSh.Bin.DianaShInterpreter.CreateForService(1234));
+            Assert.Throws<ArgumentNullException>(() => EmuSen.DianaSh.DianaSh.Bin.DianaShInterpreter.CreateForService(0));
         }
 
         // A struct shorter than 1.0's is refused; a longer one has its tail left as the client wrote it - EmuSen_CoreAPI.md §4.2's rule, one layer up.

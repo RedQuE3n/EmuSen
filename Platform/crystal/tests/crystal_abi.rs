@@ -2,7 +2,7 @@
 //! every function's signature, every struct's size and every field's offset, the C side read from `emusen_crystal.h`
 //! by a C compiler and the Rust side from `emusen_crystal::abi`; the header compiled as C99 and as C++17; each of the
 //! session service's functions held to its twin, both ways and in order (§3.8); and any `emusen_crystal_` export of
-//! the platform library held to the header. The facts are then held to `Platform/crystal/abi/v1/baseline.txt`: a fact
+//! the platform library held to the header both ways. The facts are then held to `Platform/crystal/abi/v1/baseline.txt`: a fact
 //! missing from it fails until the baseline is recorded with it (`CRYSTAL_ABI_EMIT=1`), a line of it no longer a fact
 //! fails always, and `CRYSTAL_ABI_AGAINST=<file>`, the base branch's baseline, fails on any line of that file this one
 //! removed or changed.
@@ -311,21 +311,61 @@ fn every_session_service_function_has_its_twin_both_ways() {
     assert_eq!(twins, expected, "the header's twins, in order, are the table's functions but last_error, declared with the library's calls, and those named elsewhere");
 }
 
-/// Any `emusen_crystal_` function the platform's crates export is declared by the header with its signature. At 1.0
-/// none is: the C# implementation serves the API until step B7 exports it whole.
+/// The exports a source's macros make: each `macro_rules!` whose body defines `extern "C" fn $name(…)`, at each of its
+/// invocations whose first argument names an `emusen_crystal_` function.
+fn macro_exports(source: &str) -> BTreeMap<String, (String, Vec<String>)> {
+    let mut found = BTreeMap::new();
+    for chunk in source.split("macro_rules! ").skip(1) {
+        let name: String = chunk.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
+        let Some(open) = chunk.find('{') else { continue };
+        let mut depth = 0;
+        let mut end = open;
+        for (i, c) in chunk[open..].char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = open + i;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let body = &chunk[open..end];
+        let Some((_, template)) = rust_exports(&body.replace("extern \"C\" fn $name", "extern \"C\" fn emusen_crystal_template")).into_iter().next() else { continue };
+        for call in source.split(&format!("{name}!(")).skip(1) {
+            let export: String = call.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
+            if export.starts_with("emusen_crystal_") {
+                found.insert(export, template.clone());
+            }
+        }
+    }
+    found
+}
+
+/// The platform library's `emusen_crystal_` exports are exactly the functions `emusen_crystal.h` declares, each with its
+/// signature, those its macros make counted: part (c) completed the API, so the check holds both ways (EmuSen_Backend.md
+/// §29.3, §29.25).
 #[test]
-fn every_export_is_the_header_s() {
+fn every_export_is_the_header_s_and_every_function_exported() {
     let declared: BTreeMap<String, (String, Vec<String>)> = prototypes(&code(&header()), "emusen_crystal_").into_iter().map(|(n, r, p)| (n, (r, p))).collect();
     let mut sources = Vec::new();
     rust_sources(&repo().join("Platform"), &mut sources);
+    let mut exported = BTreeSet::new();
     for source in sources {
-        for (name, (returns, params)) in rust_exports(&read(&source)) {
+        let text = read(&source);
+        for (name, (returns, params)) in rust_exports(&text).into_iter().chain(macro_exports(&text)) {
             let (c_returns, c_params) = declared.get(&name).unwrap_or_else(|| panic!("{} exports {name}, which emusen_crystal.h does not declare", source.display()));
             let expected: Vec<String> = c_params.iter().map(|p| rust_type(p)).collect();
             let expected = if expected == ["()"] || expected.is_empty() { vec!["()".to_string()] } else { expected };
             assert_eq!((rust_type(c_returns), expected), (returns, params), "{name} in {}", source.display());
+            assert!(exported.insert(name.clone()), "{name} is exported twice");
         }
     }
+    let missing: Vec<&String> = declared.keys().filter(|n| !exported.contains(*n)).collect();
+    assert!(missing.is_empty(), "the header declares what the platform library does not export: {missing:?}");
 }
 
 /// Every struct as Rust lays it out: its size and alignment, and each field's offset.

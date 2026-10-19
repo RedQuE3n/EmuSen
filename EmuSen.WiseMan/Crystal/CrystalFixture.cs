@@ -24,8 +24,10 @@ namespace EmuSen.WiseMan.Crystal
             string copy = Path.Combine(cores, Path.GetFileName(source));
             File.Copy(source, copy);
             CoreSidecar.Write(copy);
+            // The tree's manifest, as an installation carries one, so either implementation loads the core - see EmuSen_Backend.md §29.6.
+            File.WriteAllText(Path.Combine(cores, "cores.manifest"), $"{CoreSidecar.HashOf(copy)}  {Path.GetFileName(copy)}\n");
             CoreDiscovery.UseDirectories(new[] { cores });
-            Runtime = new CrystalRuntime();
+            Runtime = new CrystalRuntime(new CrystalRuntimeOptions { Cores = new[] { cores } });
         }
 
         public CrystalRuntime Runtime { get; }

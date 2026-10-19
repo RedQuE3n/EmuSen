@@ -5134,3 +5134,27 @@ state). In the run of §26.7: `MarsRtCoreAbiTests` 8, `MultiplayerTests` 11, `St
 `MistressStateRefusalTests` 1, `RustStateHeaderTests` 3, `MarsRtRewindTests` 16, `MarsRtRewindToMomentTests` 3,
 `MarsNativeStateTests` 4, `CoreAbi113Tests` 7 (its presence case among them) and `SharedHostTests` 14, every one
 passing.
+
+### 26.9 After B4, 2026-10-18: the three N64 hints say their cost once
+
+*Decided 2026-10-18 by the tester (§20), as §18.10.9 recommended.* The host words a setting's hint as the core's help
+followed by the schema's cost (`CoreSettingDescriptor`), and MarsRT's help for `DeferredPresentation`, `RenderScale`
+and `Antialiasing` already said what the cost then said again.
+
+**Shown first.** `CoreSettingHintTests` reads every discovered core's schema, development cores included, and fails
+a setting whose cost shares a run of five words with its help, or whose hint holds a sentence twice. On the tree before
+the rewording it named the three, by "reaches the screen one frame", "each step costs its square" and "it multiplies
+the drawing's cost", and no other setting of any core. A first form that compared every pair of a hint's sentences was
+set aside: it named MercuryRT's `Model`, whose sentences for the Game Boy and the Game Boy Color share their words by
+design.
+
+**Reworded**, in MarsRT's schema (`ffi/v1.rs`), each hint now saying its cost once, last: the deferred scan-out's help
+drops "so it reaches the screen one frame late", which its cost says; the internal resolution's cost carries "2x is
+four times the pixels, 4x sixteen" beside "Each step costs its square in drawing", and its help keeps the picture and
+what most machines hold; antialiasing's help keeps that the two settings together are held to four, and its cost alone
+says it multiplies the drawing's cost.
+
+**Re-recorded**: `CoreRegistrationGolden.txt`, the three hints' lines, each in the catalogue's and the settings
+window's rows of both worlds (12 lines), and no other line. **Tested**, Debug, in the run of §26.7:
+`CoreSettingHintTests` 1, `MarsCoreSettingsTests` 13, `GraphicsSettingsWindowLayoutTests` 5 and
+`CoreRegistrationEquivalenceTests` 3, every one passing.

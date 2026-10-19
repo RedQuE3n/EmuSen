@@ -21,6 +21,8 @@ pub struct MachineScript {
     audio_limit_sent: bool,
     raw_selected: bool,
     display: (String, String),
+    /// The core and image last opened, which the bench opens again for each of its runs.
+    opened: (String, String),
 }
 
 fn number(word: &str) -> i64 {
@@ -107,7 +109,7 @@ fn scope(word: &str) -> Option<usize> {
 
 impl MachineScript {
     pub fn new() -> MachineScript {
-        MachineScript { machine: None, d: Debugger::new(), halted: false, halted_processor: 0, halted_address: 0, audio_limit_sent: false, raw_selected: false, display: (String::new(), String::new()) }
+        MachineScript { machine: None, d: Debugger::new(), halted: false, halted_processor: 0, halted_address: 0, audio_limit_sent: false, raw_selected: false, display: (String::new(), String::new()), opened: (String::new(), String::new()) }
     }
 
     /// The events drained as `CoreEngine.Drain` handles those a debugger sees: a new machine info read, a log drained.
@@ -133,6 +135,7 @@ impl MachineScript {
     }
 
     fn open(&mut self, core: &str, image: &str) -> Result<(), String> {
+        self.opened = (core.to_string(), image.to_string());
         let lib = Library::load(std::path::Path::new(core)).map_err(|e| format!("{e:?}"))?;
         lib.check().map_err(str::to_string)?;
         let bytes = std::fs::read(image).map_err(|e| e.to_string())?;
@@ -163,6 +166,14 @@ impl MachineScript {
 
     /// `CoreEngine.RunFrame` with the debugger's points, then the session's refresh.
     fn frame(&mut self) -> Result<(), String> {
+        self.engine_frame()?;
+        let m = self.machine.as_mut().unwrap();
+        self.d.refresh(m, 0.0);
+        Ok(())
+    }
+
+    /// `CoreEngine.RunFrame` alone, as the bench times it.
+    fn engine_frame(&mut self) -> Result<(), String> {
         let m = self.machine.as_mut().ok_or("no machine")?;
         self.d.refresh_cheats(m);
         if !self.audio_limit_sent {
@@ -199,9 +210,55 @@ impl MachineScript {
                 let _ = m.log_drain(&mut s);
             }
         }
-        let m = self.machine.as_mut().unwrap();
-        self.d.refresh(m, 0.0);
         Ok(())
+    }
+
+    /// `BreakpointConditionCostBench`'s method: a fresh machine for each of five runs (nothing armed, a breakpoint never
+    /// reached, a logpoint, `if 0` and the condition at a hot address), 30 frames to warm, the median of 300; each
+    /// hot row's cost a hit over the cold breakpoint, the hits a frame counted by the logpoint.
+    fn bench(&mut self, address: i32, condition: &str, log: &str) -> Result<String, String> {
+        const FRAMES: usize = 300;
+        let (core, image) = self.opened.clone();
+        let runs: [(Option<i32>, Option<&str>, Option<&str>); 5] =
+            [(None, None, None), (Some(0x7FFE), None, None), (Some(address), None, Some(log)), (Some(address), Some("0"), None), (Some(address), Some(condition), None)];
+        let mut medians = [0f64; 5];
+        let mut hits = 0f64;
+        for (i, &(at, c, l)) in runs.iter().enumerate() {
+            self.open(&core, &image)?;
+            let m = self.machine.as_mut().unwrap();
+            if let Some(at) = at {
+                self.d.add_breakpoint(m, None, at, at, c, l)?;
+            }
+            for _ in 0..30 {
+                self.engine_frame()?;
+            }
+            if self.halted {
+                return Err(format!("run {i} halts at every hit"));
+            }
+            let before: i64 = self.d.breakpoints().breakpoints().iter().map(|b| b.hits).sum();
+            let mut times = Vec::with_capacity(FRAMES);
+            for _ in 0..FRAMES {
+                let start = std::time::Instant::now();
+                self.engine_frame()?;
+                times.push(start.elapsed().as_secs_f64() * 1e6);
+            }
+            times.sort_by(f64::total_cmp);
+            medians[i] = times[FRAMES / 2];
+            if l.is_some() {
+                let after: i64 = self.d.breakpoints().breakpoints().iter().map(|b| b.hits).sum();
+                hits = (after - before) as f64 / FRAMES as f64;
+            }
+        }
+        let per = |median: f64| if hits > 0.0 { (median - medians[1]) / hits } else { 0.0 };
+        Ok(format!(
+            "frame {:.1} us, cold {:.1} us, {:.0} hits a frame; a hit: log {:.2} us, if 0 {:.2} us, if {condition} {:.2} us",
+            medians[0],
+            medians[1],
+            hits,
+            per(medians[2]),
+            per(medians[3]),
+            per(medians[4])
+        ))
     }
 
     pub fn run(&mut self, verb: &str, rest: &str) -> Option<String> {
@@ -210,6 +267,12 @@ impl MachineScript {
         if verb == "m.open" {
             return Some(match self.open(w(0), w(1)) {
                 Ok(()) => "ok".into(),
+                Err(e) => format!("! {e}"),
+            });
+        }
+        if verb == "m.bench" {
+            return Some(match self.bench(number(w(0)) as i32, w(1), w(2)) {
+                Ok(row) => row,
                 Err(e) => format!("! {e}"),
             });
         }
@@ -268,6 +331,8 @@ impl MachineScript {
                 None => "bad set".into(),
             },
             "m.counters" => join(d.counters(), |c| format!("{}:{}:{}:{}:{}", c.name, c.label, c.unit, c.kind, c.value)),
+            // A core whose counters time a thread of its own, named but not compared.
+            "m.counternames" => join(d.counters(), |c| format!("{}:{}:{}:{}", c.name, c.label, c.unit, c.kind)),
             "m.load" => join(d.load(), |(n, _)| n),
             "m.eval" => {
                 let (p, e) = rest.split_once(' ').unwrap_or((rest, ""));
@@ -363,6 +428,44 @@ impl MachineScript {
             "m.cheat.apply" => {
                 d.apply_cheats(m);
                 "ok".into()
+            }
+            "m.palettes" => join(d.palettes(m), |(i, c)| format!("{i}:{}", c.iter().map(|(r, g, b)| format!("{r},{g},{b}")).collect::<Vec<_>>().join(","))),
+            "m.sprites" => join(d.sprites(m), |s| format!("{}:{}:{}:{}:{}:{}:{}:{}:{}:{}", s.0, s.1, s.2, s.3, s.4, s.5, s.6, s.7, s.8, s.9)),
+            "m.channels" => join(d.audio_channels(m), |c| format!("{}:{}:{}:{}:{}:{}", c.0, c.1, c.2, c.3, c.4, c.5)),
+            "m.tiles" => {
+                let (rgba, w, h) = d.tile_sheet(m);
+                format!("{w} {h} {}", emusen_core_host::sha256::sha256_hex(&rgba))
+            }
+            "m.swatch" => {
+                let (rgba, w, h) = d.palette_swatch(m);
+                format!("{w} {h} {}", emusen_core_host::sha256::sha256_hex(&rgba))
+            }
+            "m.tilemap" => d.decode_tilemap_entry(m, w(0), number(w(1)) as i32),
+            "m.tilepixels" => match d.decode_tile_pixels(m, w(0), number(w(1)) as i32, number(w(2)) as i32) {
+                Ok(p) => p.iter().map(|b| format!("{b:X}")).collect(),
+                Err(e) => format!("! {e}"),
+            },
+            "m.dma" => join(d.dma_channels(m), |c| format!("{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}", c.0, c.1, c.2, c.3, c.4, c.5, c.6, c.7, c.8, c.9, c.10)),
+            "m.vectors" => join(d.interrupt_vectors().iter(), |v| format!("{}:{}:{}:{}", v.0, v.1, v.2, v.3)),
+            "m.dmaname" => d.name_dma_destination(number(w(0)) as u8).unwrap_or_else(|| "-".into()),
+            "m.maxsprites" => d.max_sprites().to_string(),
+            "m.stride" => d.tilemap_entry_stride().to_string(),
+            "m.summary" => {
+                let (name, version) = self.display.clone();
+                self.d.summary(self.machine.as_mut().unwrap(), &name, &version).replace('\n', "|")
+            }
+            "m.disasm" => {
+                let listed = d.disassemble(m, w(0), number(w(1)) as i32, number(w(2)) as i32);
+                join(listed.iter(), |i| {
+                    let reference = d.reference(i.address).map_or("-".to_string(), |(k, t)| format!("{}/{t}", k.name()));
+                    format!("{}:{}:{}:{}:{reference}", i.address, i.bytes.iter().map(|b| format!("{b:02X}")).collect::<String>(), i.mnemonic, i.operands)
+                })
+            }
+            "m.physical" => d.resolve_physical(m, number(w(0)) as i32).map_or("-".into(), |(s, o, a)| format!("{s}:{o}:{a}")),
+            "m.audio" => {
+                let (samples, rate) = d.audio_samples(m);
+                let bytes: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
+                format!("{} {rate} {}", samples.len(), emusen_core_host::sha256::sha256_hex(&bytes))
             }
             "m.mute" => {
                 d.set_channel_muted(m, number(w(0)) as i32, w(1) == "1");

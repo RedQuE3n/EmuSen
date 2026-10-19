@@ -22,6 +22,15 @@ use emusen_native::core::caps;
 use emusen_native::debug::{flag, range, run, stop};
 use emusen_systems::debug::{Reference, Unit};
 use std::collections::HashMap;
+use std::sync::Arc;
+
+/// What a scope's context reads besides the machine: its code space, the pack's names and its unit symbols.
+#[derive(Clone, Debug, Default)]
+struct ScopeData {
+    code: Option<String>,
+    names: Vec<String>,
+    units: UnitSymbols,
+}
 
 /// How a frame ended: whole, or halted in front of `address` on processor `processor` (machine info's id).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -139,8 +148,9 @@ pub struct Debugger {
     views: [ViewRing; 3],
     mutes: u32,
     references: HashMap<i32, (Reference, i32)>,
-    units_main: UnitSymbols,
-    units_cpus: Vec<UnitSymbols>,
+    /// Each scope's code space, extra names and unit symbols, made once a machine info so an evaluation makes none.
+    scope_main: Arc<ScopeData>,
+    scope_cpus: Vec<Arc<ScopeData>>,
     big_endian: bool,
     last_frame_ms: f64,
 }
@@ -199,8 +209,8 @@ impl Debugger {
             views: [view_ring(View::Palettes), view_ring(View::Sprites), view_ring(View::Channels)],
             mutes: 0,
             references: HashMap::new(),
-            units_main: UnitSymbols::default(),
-            units_cpus: Vec::new(),
+            scope_main: Arc::default(),
+            scope_cpus: Vec::new(),
             big_endian: false,
             last_frame_ms: 0.0,
         }
@@ -257,11 +267,20 @@ impl Debugger {
         self.big_endian = emusen_systems::find(&self.info.system).and_then(|s| s.byte_order.as_deref()) == Some("big");
         let pack = views::symbol_names(&self.info.system);
         let stack = self.supported;
-        self.units_main = match self.info.processors.first() {
-            Some(p) => UnitSymbols::new(&self.info.units, &own_names(&p.registers, &pack, stack)),
-            None => UnitSymbols::default(),
-        };
-        self.units_cpus = self.info.processors.iter().map(|p| UnitSymbols::new(&self.info.units, &own_names(&p.registers, &[], false))).collect();
+        let mut names = pack.clone();
+        if stack {
+            names.push("stackdepth".to_string());
+        }
+        self.scope_main = Arc::new(match self.info.processors.first() {
+            Some(p) => ScopeData { code: self.code_space_of(p).map(str::to_string), names, units: UnitSymbols::new(&self.info.units, &own_names(&p.registers, &pack, stack)) },
+            None => ScopeData::default(),
+        });
+        self.scope_cpus = self
+            .info
+            .processors
+            .iter()
+            .map(|p| Arc::new(ScopeData { code: self.code_space_of(p).map(str::to_string), names: Vec::new(), units: UnitSymbols::new(&self.info.units, &own_names(&p.registers, &[], false)) }))
+            .collect();
     }
 
     /// `_cheatVersion = -1`: the next `refresh_cheats` sends the patch table and pokes again, as after a state load.
@@ -1312,14 +1331,6 @@ struct Scoped<'d, 'm> {
 }
 
 impl Scoped<'_, '_> {
-    fn pack_names(&self) -> Vec<String> {
-        let mut names = views::symbol_names(&self.d.info.system);
-        if self.d.halts() {
-            names.push("stackdepth".to_string());
-        }
-        names
-    }
-
     /// `DebugExpressions.For`: with no processors the zero-per-core context; else processor 0's with the pack's symbols
     /// for the session's scope, or a processor's own, each then the units'.
     fn context<R>(&mut self, live: bool, f: impl FnOnce(&mut dyn Context) -> R) -> R {
@@ -1331,11 +1342,9 @@ impl Scoped<'_, '_> {
             None => (0, true),
             Some(n) => (n.min(self.d.info.processors.len() - 1), false),
         };
-        let code = self.d.code_space_of(&self.d.info.processors[index]).map(str::to_string);
-        let names = if main { self.pack_names() } else { Vec::new() };
-        let units = if main { self.d.units_main.clone() } else { self.d.units_cpus.get(index).cloned().unwrap_or_default() };
-        let scope = CpuContext { source: self, set: Set::Processor(index), default_space: code.as_deref(), extra: Extra { names: &names, main } };
-        let scope = UnitContext { scope, units: &units };
+        let data = if main { Arc::clone(&self.d.scope_main) } else { self.d.scope_cpus.get(index).cloned().unwrap_or_default() };
+        let scope = CpuContext { source: self, set: Set::Processor(index), default_space: data.code.as_deref(), extra: Extra { names: &data.names, main } };
+        let scope = UnitContext { scope, units: &data.units };
         if live { f(&mut Live { scope, fresh: false }) } else { f(&mut { scope }) }
     }
 }

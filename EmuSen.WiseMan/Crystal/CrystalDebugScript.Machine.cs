@@ -39,6 +39,8 @@ namespace EmuSen.WiseMan.Crystal
             _ => int.TryParse(word, out int n) ? (n < _target!.DebugCpus.Count ? _target.DebugCpus[n].Registers?.Current ?? Array.Empty<DebugRegisterValue>() : Array.Empty<DebugRegisterValue>()) : null,
         };
 
+        private static IDebugMemorySpace? SpaceNamed(IDebugTarget t, string name) => t.GetMemorySpaces().FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+
         private static string RegistryLine(BreakpointRegistry b) =>
             $"code[{Join(b.GetBreakpoints(), x => $"{x.Id}:{x.Address}:{x.EndAddress}:{Lower(x.Enabled)}:{x.HitCount}:{Dash(x.Condition)}:{Dash(x.LogExpression)}")}] "
             + $"data[{Join(b.GetDataBreakpoints(), x => $"{x.Id}:{x.Space}:{x.Address}:{x.EndAddress}:{x.Value}:{Lower(x.OnRead)}:{Lower(x.Enabled)}:{x.HitCount}")}] "
@@ -100,6 +102,7 @@ namespace EmuSen.WiseMan.Crystal
                     return Join(t.DebugCpus, c => $"{c.Name}:{c.Description}:{Lower(c.CanHalt)}:{Lower(c.Coverage is not null)}:{Lower(c.CallStack is not null)}:{c.CodeSpace ?? "-"}:{(c.ProgramCounter is { } pc ? pc().ToString("X", CultureInfo.InvariantCulture) : "-")}");
                 case "m.regs": return SetOf(W(0)) is { } set ? Join(set, r => $"{r.Name}={r.Value}/{r.BitWidth}") : "bad set";
                 case "m.counters": return Join(t.Counters.Current, c => $"{c.Name}:{c.Label}:{c.Unit}:{c.Kind}:{c.Value}");
+                case "m.counternames": return Join(t.Counters.Current, c => $"{c.Name}:{c.Label}:{c.Unit}:{c.Kind}");
                 case "m.load": return Join(t.HardwareLoad.Current, l => l.Name);
                 case "m.eval":
                 {
@@ -170,6 +173,34 @@ namespace EmuSen.WiseMan.Crystal
                 case "m.cheat.master": engine.Cheats.MasterEnabled = W(0) == "1"; return "ok";
                 case "m.cheat.clear": engine.Cheats.Clear(); return "ok";
                 case "m.cheat.apply": engine.ApplyCheats(); return "ok";
+                case "m.palettes": return Join(t.Palettes.Current, p => $"{p.Index}:{string.Join(",", p.Colors.Select(c => $"{c.r},{c.g},{c.b}"))}");
+                case "m.sprites": return Join(t.Sprites.Current, s => $"{s.Index}:{s.X}:{s.Y}:{s.Width}:{s.Height}:{s.TileIndex}:{s.PaletteIndex}:{s.Priority}:{Lower(s.FlipX)}:{Lower(s.FlipY)}");
+                case "m.channels": return Join(t.AudioChannels.Current, c => $"{c.Index}:{c.Name}:{Lower(c.Active)}:{c.Level}:{Lower(c.Muted)}:{c.Info}");
+                case "m.tiles": { var (rgba, w, h) = t.RenderTileSheet(); return $"{w} {h} {Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(rgba))}"; }
+                case "m.swatch": { var (rgba, w, h) = t.RenderPaletteSwatch(); return $"{w} {h} {Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(rgba))}"; }
+                case "m.tilemap": return SpaceNamed(t, W(0)) is { } sm ? t.DecodeTilemapEntry(sm, (int)Number(W(1))) : "";
+                case "m.tilepixels":
+                {
+                    if (SpaceNamed(t, W(0)) is not { } sp) return "";
+                    try { return string.Concat(t.DecodeTilePixels(sp, (int)Number(W(1)), (int)Number(W(2))).Select(b => b.ToString("X", CultureInfo.InvariantCulture))); }
+                    catch (ArgumentException e) { return "! " + e.Message; }
+                }
+                case "m.dma": return Join(t.DmaChannels, c => $"{c.Index}:{Lower(c.GeneralEnabled)}:{Lower(c.HdmaEnabled)}:{c.Control}:{c.DestinationRegister}:{c.SourceAddress}:{c.TransferSize}:{Lower(c.HdmaActive)}:{c.TableAddress}:{c.LineCounter}:{c.IndirectAddress}");
+                case "m.vectors": return Join(t.InterruptVectors, v => $"{v.Name}:{v.Address}:{v.Width}:{v.Mode}");
+                case "m.dmaname": return t.NameDmaDestination((byte)Number(W(0))) ?? "-";
+                case "m.maxsprites": return t.MaxSprites.ToString(CultureInfo.InvariantCulture);
+                case "m.stride": return t.TilemapEntryStride.ToString(CultureInfo.InvariantCulture);
+                case "m.summary": return t.GetSummaryText().Replace("\n", "|", StringComparison.Ordinal);
+                case "m.disasm":
+                    return Join(t.Disassemble(W(0), (int)Number(W(1)), (int)Number(W(2))), i =>
+                        $"{i.Address}:{string.Concat(i.Bytes.Select(b => b.ToString("X2", CultureInfo.InvariantCulture)))}:{i.Mnemonic}:{i.OperandText}:{(t.ClassifyStaticReference(i) is { } r ? $"{r.Kind}/{r.Target}" : "-")}");
+                case "m.physical": return t.ResolvePhysical((int)Number(W(0))) is { } ph ? $"{ph.Space}:{ph.Offset}:{Lower(ph.IsAddressable)}" : "-";
+                case "m.audio":
+                {
+                    var (samples, rate) = t.GetAudioSamples();
+                    byte[] bytes = samples.SelectMany(s => BitConverter.GetBytes(s)).ToArray();
+                    return $"{samples.Length} {rate} {Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes))}";
+                }
                 case "m.mute": t.SetChannelMuted((int)Number(W(0)), W(1) == "1"); return "ok";
                 default: return $"unknown verb {verb}";
             }

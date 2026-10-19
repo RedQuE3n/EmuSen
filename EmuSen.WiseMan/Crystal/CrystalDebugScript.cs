@@ -41,7 +41,7 @@ namespace EmuSen.WiseMan.Crystal
         private string Answer(string verb, string rest)
         {
             string[] words = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            return MachineAnswer(verb, rest, words) ?? FakeAnswer(verb, rest, words);
+            return RecordingAnswer(verb, words) ?? MachineAnswer(verb, rest, words) ?? FakeAnswer(verb, rest, words);
         }
 
         private static long Number(string word)

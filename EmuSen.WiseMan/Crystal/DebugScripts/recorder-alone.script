@@ -1,0 +1,8 @@
+# The recorder where no encoder is installed: the pictures and the ledger left as they are.
+rec.start $BASE 2
+rec.capture 4 $PNG
+rec.capture 5 $PNG
+rec.capture 6 $PNG
+rec.stop
+rec.files
+rec.ledger

@@ -1,0 +1,152 @@
+# The debugger over MoonRT on a synthetic NES game whose loop writes the PPU, the APU, OAM, the palette and RAM, and calls a subroutine.
+m.open $CORE $IMAGE
+m.spaces
+m.procs
+m.regs cpu
+m.regs video
+m.regs apu
+m.counters
+m.maxsprites
+m.stride
+m.vectors
+m.dmaname 4
+m.palettes
+m.sprites
+m.channels
+m.run 3
+m.regs cpu
+m.regs video
+m.regs apu
+m.palettes
+m.sprites
+m.channels
+m.tiles
+m.swatch
+m.tilemap CIRAM 33
+m.tilemap ciram 0
+m.tilemap NOPE 0
+m.tilepixels CHR 16 2
+m.tilepixels CHR 16 4
+m.tilepixels CHR -1 2
+m.dma
+m.summary
+m.physical 0x0042
+m.physical 0x0842
+m.physical 0x2002
+m.physical 0x4015
+m.physical 0x6000
+m.physical 0x8000
+m.disasm CPUBUS 0x8000 6
+m.disasm CPUBUS $CALL 2
+m.disasm cpubus $SUB 2
+m.disasm PRGROM 0 3
+m.disasm NOPE 0 3
+m.eval - A
+m.eval - X
+m.eval - ppu.PPUCTRL
+m.eval - PPUCTRL
+m.eval - pulse1.Duty
+m.eval - Duty
+m.eval - ppu.v
+m.eval - v
+m.eval - [$42]
+m.eval - [RAM:$42]
+m.eval - {$FFFC}
+m.eval - stackdepth
+m.eval 0 A
+m.eval 0 ppu.x
+m.symbols -
+m.symbols 0
+m.peek RAM $40 4
+m.peek CPUBUS $8000 4
+m.peek PALETTE 0 4
+m.peek OAM 0 4
+m.label $2000 PPUCTRL
+m.eval - PPUCTRL
+m.eval - ppu.PPUCTRL
+m.watch.add RAM $42 1 0
+m.watch.add CPUBUS $42 1 2
+m.watch.add RAM $40 8 1
+m.armed
+m.run 2
+m.watch.events 1 4
+m.watch.events 2 4
+m.watch.events 3 4
+m.cs.status
+m.cs.bt 4
+m.bp.add - $SUB $SUB ; - ; -
+m.run 5
+m.bp.state -
+m.cs.bt 4
+m.cs.status
+m.eval - stackdepth
+m.bp.stepdepth - 0
+m.run 3
+m.bp.state -
+m.cs.status
+m.bp.step - 1
+m.run 2
+m.bp.state -
+m.bp.remove - 1
+m.bp.add - $INC $INC ; ppu.PPUCTRL == 0x10 && pulse1.Duty == 3 ; -
+m.bp.add - $CALL $CALL ; - ; A, ppu.v, [$42], stackdepth
+m.run 3
+m.bp.state -
+m.bp.log - 3
+m.bp.list -
+m.bp.remove - 2
+m.bp.remove - 3
+m.bp.data - RAM $42 $42 -1 0 0 ; - ; -
+m.armed
+m.run 3
+m.bp.state -
+m.bp.list -
+m.run 1
+m.bp.state -
+m.bp.data - RAM $42 $42 -1 1 0 ; - ; A
+m.run 2
+m.bp.state -
+m.bp.log - 3
+m.bp.data - CPUBUS $2000 $2000 0x10 0 0 ; - ; -
+m.run 2
+m.bp.state -
+m.bp.list -
+m.bp.remove - 4
+m.bp.remove - 5
+m.bp.remove - 6
+m.watch.remove 1
+m.watch.remove 2
+m.watch.remove 3
+m.cov.arm 0
+m.cs.profile on
+m.run 3
+m.cov.status 0
+m.cov.query 0 $8000 128 8
+m.cov.entries 0 4
+m.cs.status
+m.cs.hot 4
+m.fl.add RAM $42 1
+m.fl.add CPUBUS $FFFC 2
+m.run 2
+m.fl.samples 1 4
+m.fl.samples 2 4
+m.fz.add RAM $42 0x55
+m.run 2
+m.peek RAM $42
+m.fz.list
+m.fz.clear
+m.cheat.poke RAM $43 0x77
+m.cheat.patch $8001 0x07 0x05
+m.run 2
+m.peek RAM $43
+m.regs cpu
+m.eval - X
+m.cheat.clear
+m.run 1
+m.mute 1 1
+m.mute 3 1
+m.run 1
+m.channels
+m.audio
+m.summary
+m.frame

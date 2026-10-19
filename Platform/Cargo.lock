@@ -355,6 +355,7 @@ dependencies = [
  "emusen-core-host",
  "emusen-dotnet",
  "emusen-native",
+ "emusen-recorder",
  "emusen-systems",
 ]
 
@@ -489,6 +490,14 @@ dependencies = [
 [[package]]
 name = "emusen-psx-card"
 version = "0.1.0"
+
+[[package]]
+name = "emusen-recorder"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "libc",
+]
 
 [[package]]
 name = "emusen-savemedia"

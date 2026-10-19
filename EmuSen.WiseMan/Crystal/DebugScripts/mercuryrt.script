@@ -1,0 +1,64 @@
+# The debugger over MercuryRT on a synthetic Game Boy game, and the same as a Game Boy Color game.
+m.open $CORE $IMAGE
+m.spaces
+m.procs
+m.regs cpu
+m.regs video
+m.regs apu
+m.counters
+m.maxsprites
+m.stride
+m.vectors
+m.dmaname 0
+m.run 3
+m.regs video
+m.palettes
+m.sprites
+m.channels
+m.tiles
+m.swatch
+m.tilemap VRAM 0x1800
+m.tilepixels VRAM 0 2
+m.tilepixels VRAM 0 4
+m.dma
+m.summary
+m.physical 0x0150
+m.physical 0x8000
+m.physical 0xC000
+m.physical 0xD000
+m.physical 0xFE00
+m.physical 0xFF40
+m.physical 0xFF90
+m.physical 0xFFFF
+m.physical 0x4000
+m.disasm CPUBUS 0x0150 5
+m.eval - A
+m.eval - HL
+m.eval - ppu.LCDC
+m.eval - LCDC
+m.symbols -
+m.watch.add WRAM 0 1 0
+m.run 2
+m.watch.events 1 4
+m.bp.add - $SUB $SUB ; - ; -
+m.run 3
+m.bp.state -
+m.cs.bt 4
+m.bp.add - $CALL $CALL ; A == 0x12 ; HL, ppu.LCDC
+m.run 2
+m.bp.state -
+m.bp.log - 2
+m.mute 2 1
+m.run 1
+m.channels
+m.open $CORE $COLOR
+m.procs
+m.regs video
+m.run 3
+m.palettes
+m.swatch
+m.tilemap VRAM 0x1800
+m.summary
+m.physical 0x8000
+m.physical 0xD000
+m.frame

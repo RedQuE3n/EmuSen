@@ -16,6 +16,11 @@ name = "emusen_crystal_debug"
 [[bin]]
 name = "emusen-crystal-debug"
 path = "src/bin/emusen-crystal-debug/main.rs"
+required-features = ["tool"]
+
+# The tool alone takes the recorder, whose files the debugger's library has no business with.
+[features]
+tool = ["dep:emusen-recorder"]
 
 [dependencies]
 # A machine's v1 calls (EmuSen_Backend.md §27).
@@ -28,6 +33,8 @@ emusen-systems = { path = "../systems" }
 emusen-cheats = { path = "../cheats" }
 # .NET's text rules, so each answer is the C# debugger's to the byte.
 emusen-dotnet = { path = "../dotnet" }
+# The recorder, for the parity tool's recordings.
+emusen-recorder = { path = "../recorder", optional = true }
 
 # emusen-native's test core, built here so that this crate's tests load it.
 [[example]]

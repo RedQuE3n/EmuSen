@@ -147,7 +147,7 @@
     <EmuSenDebugToolFile Condition="'$(EmuSenDebugToolFile)' == ''">emusen-crystal-debug</EmuSenDebugToolFile>
   </PropertyGroup>
   <Target Name="BuildCrystalDebugTool" BeforeTargets="BeforeBuild" Condition="'$(EmuSenNative)' != 'false'">
-    <Exec Command="cargo build --release -p emusen-crystal-debug --bin emusen-crystal-debug --manifest-path &quot;$(MSBuildThisFileDirectory)..\Platform\Cargo.toml&quot; --target-dir &quot;$(EmuSenDebugToolTarget)&quot;" WorkingDirectory="$(MSBuildThisFileDirectory)..\Platform" StandardOutputImportance="low" />
+    <Exec Command="cargo build --release -p emusen-crystal-debug --features tool --bin emusen-crystal-debug --manifest-path &quot;$(MSBuildThisFileDirectory)..\Platform\Cargo.toml&quot; --target-dir &quot;$(EmuSenDebugToolTarget)&quot;" WorkingDirectory="$(MSBuildThisFileDirectory)..\Platform" StandardOutputImportance="low" />
     <ItemGroup>
       <None Include="$(EmuSenDebugToolTarget)\release\$(EmuSenDebugToolFile)" Link="$(EmuSenDebugToolFile)" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>

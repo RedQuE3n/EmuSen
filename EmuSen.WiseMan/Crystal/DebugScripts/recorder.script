@@ -1,0 +1,27 @@
+# The recorder: a recording started twice, every third frame kept, stopped with the video encoded and the pictures archived, and a second recording of every frame.
+rec.recording
+rec.stop
+rec.start $BASE 3
+rec.recording
+rec.start $BASE 1
+rec.capture 10 $PNG
+rec.capture 11 $PNG
+rec.capture 12 $PNG
+rec.capture 13 $PNG
+rec.capture 14 $PNG
+rec.capture 15 $PNG
+rec.capture 16 $PNG
+rec.files
+rec.ledger
+rec.stop
+rec.recording
+rec.files
+rec.ledger
+rec.capture 17 $PNG
+rec.start $BASE/second 0
+rec.capture 1 $PNG
+rec.capture 2 $PNG
+rec.files
+rec.stop
+rec.files
+rec.ledger

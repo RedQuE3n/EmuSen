@@ -1,0 +1,13 @@
+[package]
+name = "emusen-sqlite"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# SQLite as the platform's crates call it: the e_sqlite3 the program ships, lent by the host or opened from its file, so one process holds one SQLite. The SPIR-V cache and the library use it. See EmuSen_RustPlatform.md §2.8, §16.2 and EmuSen_Backend.md §28.3.
+[lib]
+name = "emusen_sqlite"
+
+[dependencies]
+libloading = "0.9"

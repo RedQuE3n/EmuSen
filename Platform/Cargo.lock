@@ -379,7 +379,9 @@ dependencies = [
 name = "emusen-galaxia"
 version = "0.1.0"
 dependencies = [
+ "emusen-disc",
  "emusen-dotnet",
+ "flate2",
  "libc",
  "md-5",
  "memmap2",
@@ -454,6 +456,7 @@ version = "0.1.0"
 dependencies = [
  "ash",
  "emusen-galaxia",
+ "emusen-sqlite",
  "libloading",
  "sha2",
 ]
@@ -476,6 +479,13 @@ dependencies = [
 [[package]]
 name = "emusen-sm83"
 version = "0.1.0"
+
+[[package]]
+name = "emusen-sqlite"
+version = "0.1.0"
+dependencies = [
+ "libloading",
+]
 
 [[package]]
 name = "emusen-systems"

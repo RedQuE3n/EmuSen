@@ -8110,8 +8110,42 @@ listed as an engine, `"trust":"approved"`).
 | `emusen-crystal` and `emusen-platform` (the ABI test with the baseline, the header against the C compiler and the platform library's exports) | 6, 6, 1, 31 and 4 passing |
 | `emusen-core-host`, the kit built against it | 8, 1 and 19 passing; the kit builds |
 | WiseMan, the blast radius: `CrystalParityTests`, `CrystalHeaderTests`, `ContractShapeTests`, `CrystalApi12Tests`, `SessionHeaderTests`, `CoreHostParityTests`, `CoreDiscoveryTests`, the `ManagedCrystal` classes, `GameRefusalTests`, `RuntimeLogTests`, `HotaruOnTheApiTests`, `BindingChangesOnceTests`, `FrontendDefectTests`, `SharedHostTests`, `NephriteTests`, `CoreRegistrationEquivalenceTests`, `FirmwareOverviewTests`, `GalaxiaParityTests` | **224 of 224**; before their correction, `CrystalHeaderTests`' count of 142 exports and two of `CrystalApi12Tests`' 1.2 constants failed, as an added minor should make them |
-| Seeded faults in the Rust runtime and its C layer, each run through the cases above | **six of six caught**: no rescan after an approval (both cases), a hash no library has taken, `NOT_APPROVED` answered as `NO_ENGINE`, a revocation of nothing answered 0 (the sidecar case), 1.2's config read only at the struct's size (the 1.2-size case), and a library not yet read left unread (the sidecar-less case) |
+| Seeded faults in the Rust runtime and its C layer, each run through the cases above | **six of six caught**: no rescan after an approval (both cases), a hash no library has taken, `NOT_APPROVED` answered as `NO_ENGINE`, a revocation of nothing answered 0 (the approval case), 1.2's config read only at the struct's size (the 1.2-size case), and a library not yet read left unread (the sidecar-less case) |
 | `cargo metadata --locked` over every tracked lock but Diamond's kernel and kernel shell | every lock current |
+
+### 29.44 Built 2026-10-19: 1.3's last piece, Mistress's question before a game opens on a core the player added
+
+**What a player sees** (Q3 as decided). Before a game starts, `PrepareGameAsync` now asks first whether the engine the
+game would open on waits for the player's approval: `route`'s engine, looked up in `cores`, whose `"trust"` is
+`"needs_approval"`. If it does, a sheet (LunaP's `Dialogs.ConfirmAsync`, as the cards' import asks) titled "Approve a
+Core" names the core and its file, says that it is not one this installation ships and has not been approved, lists its
+authors, licence, systems and SHA-256, and says plainly that a core runs with the player's full permissions and that a
+changed file is asked about again. **Approve** calls `core_approve` with the hash `cores` gave and the game opens;
+**Not Now** records nothing, and the open is refused with `NOT_APPROVED`'s words in the status line, as any refused open
+is. A core the installation's manifest lists is never asked about. The text of the descriptors is shown as plain text,
+never interpreted (`EmuSen_CoreAPI.md` §7.2, rule 5). The sheet is reached by every way a game starts (the library, the
+states' list, big picture), since all three call `PrepareGameAsync`. Mistress names no runtime type for it: it reads the
+binding's `Route`, `Cores` and `CoreApprove` (`FrontendReferenceTests` passes).
+
+**Left for later**, as §29.40.8 says: the Preferences page that lists every core with its trust and revokes an
+approval, a console started empty on a player's core (it answers `NOT_APPROVED`'s words in the status line), and a DianaSh
+command.
+
+**Measured on 2026-10-19** [M]:
+
+| Gate | Result |
+|---|---|
+| `CoreApprovalTests` (headless `MainWindow`, the question answered by a stand-in) | 2 of 2: a player's core asked about once and its line written to the test's own `cores.approved`; declined, nothing written; a core in the installation's manifest never asked about |
+| Seeded faults in the sheet | **three of three caught**: asking about every engine whatever its trust (both cases), the approval never recorded and the hash left out of the question (the first case) |
+| Mistress's blast radius: `CoreApprovalTests`, `MemoryCardsOfferTests`, `FrontendReferenceTests`, `ResumeWhereYouLeftOffTests`, `VenusRtEngineTests`, the fit audits, `FirmwarePageTests` | 40 of 40 |
+| A fresh `dotnet publish` of Mistress, linux-x64, Release, self-contained, measured on 2026-10-19 | `sha256sum -c cores.manifest` passes for the six cores in its `lib/EmuSen`; `CoreHostParityTests` with `EMUSEN_PUBLISHED_TREE` naming it, 10 of 10, its case now also holding that every published core is `"trust":"manifest"` and loads with no approvals' file at all, in both hosts |
+| `cargo metadata --locked` over every tracked lock but Diamond's kernel and kernel shell | every lock current |
+
+**1.3 closed.** §29.40's decisions are built in §29.41 to §29.44: Galaxia's `/Cores`, the core host's player's
+directory, approvals and libraries not yet read, the C# host's rules 1 and 2 (§27.11's pinned difference closed), the
+API's 1.3 in both implementations and the binding, Q7's directory check in the Rust, and Mistress's question. **Before a
+build that enforces the manifest in the C# reaches the handheld** it must go there as a fresh publish, which carries
+`cores.manifest` (§29.42).
 
 ---
 

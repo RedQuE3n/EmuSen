@@ -1824,7 +1824,9 @@ An in-process core can also crash the process. The crash log records it; nothing
    SHA-256. A library whose hash matches is loaded without asking.
 2. **A library the project did not build** is loaded only after the player approves it once. The approval shows its
    name, author, licence, the systems it claims and its hash, says plainly that a core runs with the player's full
-   permissions, and records the hash. A changed file is a new library and is asked about again.
+   permissions, and records the hash. A changed file is a new library and is asked about again. Built 2026-10-19 as
+   the frontend API's 1.3: `core_approve` and `core_revoke`, the approvals in `/etc/EmuSen/cores.approved`, the player's
+   `/Cores` (`EmuSen_Backend.md` §29.40 to §29.44).
 3. **Before loading**, the runtime checks, without running anything:
    - the file is a regular file inside a cores directory after resolving links, owned by the player or the
      installation, and not writable by others;

@@ -264,6 +264,8 @@ namespace EmuSen.WiseMan.Cores
             if (string.IsNullOrEmpty(tree)) return;
             Assert.True(File.Exists(Path.Combine(tree, "cores.manifest")), $"{tree} holds no cores.manifest");
             BothEqual(new[] { tree }, $"the published tree {tree}");
+            Assert.False(File.Exists(CoreTrust.ApprovalsPath), "the published cores load with no approval at all");
+            Assert.All(CSharp(new[] { tree }, open: true)["cores"]!.AsArray(), c => { Assert.Equal("manifest", (string)c!["trust"]!); Assert.Contains("core ABI 1.", (string)c["report"]!); });
         }
     }
 }

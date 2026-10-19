@@ -3860,7 +3860,7 @@ The timing files are kept under `~/.cache/emusen/probe/mars/b4/timing/` (`r1.tsv
   held, not from what the core holds. Suppose a state is loaded whose ports differ from the router's. The frontend's
   view then never reaches the core until a pad is plugged in or pulled out. Not shown by a test yet. *Recommended*:
   after a state loads, `CoreEngine` marks every port's presence changed, so the next frame sends the frontend's view.
-  This is a host change for every core with `PRESENCE`.
+  This is a host change for every core with `PRESENCE`. *Built after B4, §26.8.*
 - **A frontend that routes no ports.** Since the ABI's rule is now MarsRT's, an N64 game opened by a host that never
   calls `SetControllerConnected` sees four controllers where the shim gave it one. Mistress's router empties the
   ports no player holds, so play in Mistress is unchanged.
@@ -5108,3 +5108,29 @@ The first row of the first run after was set aside, its `if 0` floor reading 1.9
 else, as §24.6 set aside the first row of a run. A register condition now costs 1.0 to 1.4 µs a hit on every core
 measured, MoonRT's and MercuryRT's a third of what they were, MarsRT's and Nephrite's a little less. The `if 0` floor,
 a condition naming no symbol, does not move, as it refreshes nothing before or after.
+
+### 26.8 After B4, 2026-10-18: after a state loads, the host sends each port's presence again
+
+*Decided 2026-10-18 by the tester (§20), as §18.10.9 recommended.* The input latch sends a port's presence only when
+it changes from what the latch last held, not from what the machine holds. A state carries the ports it was saved
+with (`EmuSen_CoreAPI.md` §6.36), so after a load the machine and the frontend could disagree until a pad was plugged
+in or pulled out.
+
+**Shown first.** `MarsRtCoreAbiTests.After_a_state_loads_each_port_holds_the_frontends_controller_again`, run
+on the host before the fix: two MarsRT machines, one with ports 2 to 4 emptied and one with four
+pads, each run five frames and saved; each loads the other's state and runs a frame. It failed: the machine whose
+frontend had four pads still held one controller, `[True, False, False, False]` where four were expected.
+
+**Built**, in the host for every core that claims `PRESENCE`, MarsRT unchanged: `CoreEngine.LoadState` asks the latch
+to resend presence, and the latch's next send gives every port's flag whether it changed or not, then clears the
+request. It is a flag of its own, not every port's change bit set, because `Connect` toggles that bit so that a pad
+pulled out and put back within a frame sends nothing; after a load such a pair must still send, and the test does
+that on port 3 between the load and the frame. A core without the bit is never called, as before; a rewind step, a
+load like any other, sends at most one `set_present` a port. The machine holds the state's ports until the next frame
+starts, as it holds the state's buttons.
+
+**Tested**, Debug: the case above passes, either way round (four pads over a one-pad state, one pad over a four-pad
+state). In the run of §26.7: `MarsRtCoreAbiTests` 8, `MultiplayerTests` 11, `StateRefusalTests` 2,
+`MistressStateRefusalTests` 1, `RustStateHeaderTests` 3, `MarsRtRewindTests` 16, `MarsRtRewindToMomentTests` 3,
+`MarsNativeStateTests` 4, `CoreAbi113Tests` 7 (its presence case among them) and `SharedHostTests` 14, every one
+passing.

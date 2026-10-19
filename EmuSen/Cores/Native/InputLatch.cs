@@ -14,6 +14,9 @@ namespace EmuSen.Cores.Native
         // Whether each port holds a controller, every port full at a new machine, and which changed since the last send - see EmuSen_CoreAPI.md §6.36.
         private bool[] _present = { true, true }, _presenceChanged = new bool[2];
 
+        // Set when a state has loaded: the machine holds the state's ports, so the next send gives every port's presence - see EmuSen_Backend.md §26.8.
+        private bool _resendPresence;
+
         // What Send copies out under the gate and passes to the machine outside it, kept so a frame allocates nothing.
         private uint[] _sendHeld = Array.Empty<uint>(), _sendChanged = Array.Empty<uint>();
         private double[] _sendAxes = Array.Empty<double>();
@@ -85,6 +88,12 @@ namespace EmuSen.Cores.Native
             }
         }
 
+        // Every port's presence sent with the next frame, whether or not it changed.
+        public void ResendPresence()
+        {
+            lock (_gate) _resendPresence = true;
+        }
+
         // An axis's latest value replaces any not yet sent.
         public void Move(int port, uint axis, double value)
         {
@@ -101,6 +110,7 @@ namespace EmuSen.Cores.Native
         public void Send(CoreMachine machine)
         {
             int ports, perPort;
+            bool allPresence;
             lock (_gate)
             {
                 ports = _held.Length;
@@ -111,6 +121,8 @@ namespace EmuSen.Cores.Native
                 _present.CopyTo(_sendPresent, 0);
                 _presenceChanged.CopyTo(_sendPresenceChanged, 0);
                 Array.Clear(_presenceChanged);
+                allPresence = _resendPresence;
+                _resendPresence = false;
                 _held.CopyTo(_sendHeld, 0);
                 _changed.CopyTo(_sendChanged, 0);
                 _axes.CopyTo(_sendAxes, 0);
@@ -120,7 +132,7 @@ namespace EmuSen.Cores.Native
             }
             for (int port = 0; port < ports; port++)
             {
-                if (_sendPresenceChanged[port]) machine.SetPresent(port, _sendPresent[port]);
+                if (allPresence || _sendPresenceChanged[port]) machine.SetPresent(port, _sendPresent[port]);
                 if (_sendChanged[port] != 0) machine.SetButtons(port, _sendHeld[port], _sendChanged[port]);
                 for (int axis = 0; axis < perPort; axis++)
                     if (_sendMoved[port * perPort + axis]) machine.SetAxis(port, (uint)axis, _sendAxes[port * perPort + axis]);

@@ -2,6 +2,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using EmuSen.Cores;
+using EmuSen.Cores.Native;
 using EmuSen.Crystal.Client;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Models;
@@ -49,6 +50,28 @@ namespace EmuSen.WiseMan.Crystal
                 System.Func<string, string?> stored = key => ConsolesConfig.Load().Value(console, key);
                 Assert.Equal(ControllerPorts.ForConsole(console, stored), c.GetProperty("players").GetArrayLength());
             }
+        }
+
+        // A catalog console's pad, ports and players are its sole engine's core info, read from the sidecars beside the program (§17.8 Q11) - see EmuSen_Backend.md §18.10.10.
+        [Fact]
+        public void Each_catalog_console_s_controllers_are_its_engine_s_core_info()
+        {
+            CoreDiscovery.UseDirectories(null);
+            var seen = new System.Collections.Generic.List<string>();
+            foreach (JsonElement system in Json(_f.Runtime.Systems()).EnumerateArray().Where(s => s.TryGetProperty("console", out _)))
+            {
+                string id = system.GetProperty("id").GetString()!, console = system.GetProperty("console").GetString()!;
+                if (CoreCatalog.SoleDiscoveredEngine(console) is not { } engine) continue;
+                CoreSystem info = Assert.Single(Assert.IsType<DiscoveredCore>(CoreDiscovery.ByEngineName(engine)).Info.Systems, s => s.Id == id);
+                JsonElement c = system.GetProperty("controllers");
+                int ports = info.Controllers.SelectMany(k => k.Ports).Select(p => (int)p + 1).Max();
+                Assert.Equal(info.Controllers.SelectMany(k => k.Buttons).Select(b => b.Control).OfType<PadButton>().Distinct().Select(b => (int)b), c.GetProperty("buttons").EnumerateArray().Select(b => b.GetInt32()));
+                Assert.Equal(info.Controllers.SelectMany(k => k.Axes).Select(a => a.Control).OfType<PadAxis>().Distinct().Select(a => (int)a), c.GetProperty("axes").EnumerateArray().Select(a => a.GetInt32()));
+                Assert.Equal(ports, c.GetProperty("ports").GetInt32());
+                Assert.Equal(ports, c.GetProperty("players").GetArrayLength());
+                seen.Add(id);
+            }
+            Assert.Superset(new System.Collections.Generic.HashSet<string> { "nes", "snes", "gb", "n64" }, seen.ToHashSet());
             JsonElement n64 = Json(_f.Runtime.Systems()).EnumerateArray().First(s => s.GetProperty("id").GetString() == "n64").GetProperty("controllers");
             Assert.Contains((int)PadAxis.LeftX, n64.GetProperty("axes").EnumerateArray().Select(a => a.GetInt32()));
         }

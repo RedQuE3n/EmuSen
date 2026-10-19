@@ -8,7 +8,7 @@ use std::sync::Mutex;
 
 use emusen_crystal::abi::{self, emusen_crystal_runtime};
 use emusen_crystal::runtime::Runtime;
-use emusen_crystal::service::{Answer, Call, Raw, machine, registries};
+use emusen_crystal::service::{Answer, Call, Raw, machine, registries, views};
 use emusen_session_service::abi::{emusen_session_v1, status as svc};
 
 use crate::crystal::{fail, put, runtime};
@@ -879,6 +879,229 @@ unsafe extern "C" fn label_clear(ctx: *mut c_void, session: u32) -> i32 {
     code(unsafe { table(ctx, session, |c| registries::label_clear(c)) })
 }
 
+// ---- Chip views, expressions, trace and telemetry --------------------------------------------------------------
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_dma_channels(rt: *mut emusen_crystal_runtime, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| views::dma_channels(c)) }, o, len)
+}
+
+unsafe extern "C" fn dma_channels(ctx: *mut c_void, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| views::dma_channels(c)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_dma_log_op(rt: *mut emusen_crystal_runtime, session: u32, op: u32, args: *const u8, args_len: usize, o: *mut u8, len: usize) -> i64 {
+    let args = unsafe { Raw::new(args, args_len) };
+    out(unsafe { twin(rt, session, |c| views::dma_log_op(c, { let _ = op; args })) }, o, len)
+}
+
+unsafe extern "C" fn dma_log_op(ctx: *mut c_void, session: u32, op: u32, args: *const u8, args_len: usize, o: *mut u8, len: usize) -> i64 {
+    let args = unsafe { Raw::new(args, args_len) };
+    out(unsafe { table(ctx, session, |c| views::dma_log_op(c, { let _ = op; args })) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_register_flow_op(rt: *mut emusen_crystal_runtime, session: u32, op: u32, args: *const u8, args_len: usize, o: *mut u8, len: usize) -> i64 {
+    let args = unsafe { Raw::new(args, args_len) };
+    out(unsafe { twin(rt, session, |c| views::register_flow_op(c, { let _ = op; args })) }, o, len)
+}
+
+unsafe extern "C" fn register_flow_op(ctx: *mut c_void, session: u32, op: u32, args: *const u8, args_len: usize, o: *mut u8, len: usize) -> i64 {
+    let args = unsafe { Raw::new(args, args_len) };
+    out(unsafe { table(ctx, session, |c| views::register_flow_op(c, { let _ = op; args })) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_coprocessor_history(rt: *mut emusen_crystal_runtime, session: u32, count: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| views::coprocessor_history({ let _ = count; c })) }, o, len)
+}
+
+unsafe extern "C" fn coprocessor_history(ctx: *mut c_void, session: u32, count: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| views::coprocessor_history({ let _ = count; c })) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_vectors(rt: *mut emusen_crystal_runtime, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| views::vectors(c)) }, o, len)
+}
+
+unsafe extern "C" fn vectors(ctx: *mut c_void, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| views::vectors(c)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_tilemap_entry(rt: *mut emusen_crystal_runtime, session: u32, space: *const u8, space_len: usize, address: u32, o: *mut u8, len: usize) -> i64 {
+    let space = unsafe { Raw::new(space, space_len) };
+    out(unsafe { twin(rt, session, |c| views::tilemap_entry(c, space, address)) }, o, len)
+}
+
+unsafe extern "C" fn tilemap_entry(ctx: *mut c_void, session: u32, space: *const u8, space_len: usize, address: u32, o: *mut u8, len: usize) -> i64 {
+    let space = unsafe { Raw::new(space, space_len) };
+    out(unsafe { table(ctx, session, |c| views::tilemap_entry(c, space, address)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_tile_pixels(rt: *mut emusen_crystal_runtime, session: u32, space: *const u8, space_len: usize, address: u32, bpp: u32, o: *mut u8, len: usize) -> i64 {
+    let space = unsafe { Raw::new(space, space_len) };
+    out(unsafe { twin(rt, session, |c| views::tile_pixels(c, space, address, bpp)) }, o, len)
+}
+
+unsafe extern "C" fn tile_pixels(ctx: *mut c_void, session: u32, space: *const u8, space_len: usize, address: u32, bpp: u32, o: *mut u8, len: usize) -> i64 {
+    let space = unsafe { Raw::new(space, space_len) };
+    out(unsafe { table(ctx, session, |c| views::tile_pixels(c, space, address, bpp)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_sprites(rt: *mut emusen_crystal_runtime, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| views::sprites(c)) }, o, len)
+}
+
+unsafe extern "C" fn sprites(ctx: *mut c_void, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| views::sprites(c)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_palettes(rt: *mut emusen_crystal_runtime, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| views::palettes(c)) }, o, len)
+}
+
+unsafe extern "C" fn palettes(ctx: *mut c_void, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| views::palettes(c)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_audio_channels(rt: *mut emusen_crystal_runtime, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| views::audio_channels(c)) }, o, len)
+}
+
+unsafe extern "C" fn audio_channels(ctx: *mut c_void, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| views::audio_channels(c)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_set_channel_muted(rt: *mut emusen_crystal_runtime, session: u32, channel: u32, muted: u32) -> i32 {
+    code(unsafe { twin(rt, session, |c| views::set_channel_muted(c, channel, muted != 0)) })
+}
+
+unsafe extern "C" fn set_channel_muted(ctx: *mut c_void, session: u32, channel: u32, muted: u32) -> i32 {
+    code(unsafe { table(ctx, session, |c| views::set_channel_muted(c, channel, muted != 0)) })
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_evaluate(rt: *mut emusen_crystal_runtime, session: u32, processor: u32, text: *const u8, text_len: usize, o: *mut u8, len: usize) -> i64 {
+    let text = unsafe { Raw::new(text, text_len) };
+    out(unsafe { twin(rt, session, |c| views::evaluate(c, processor, text)) }, o, len)
+}
+
+unsafe extern "C" fn evaluate(ctx: *mut c_void, session: u32, processor: u32, text: *const u8, text_len: usize, o: *mut u8, len: usize) -> i64 {
+    let text = unsafe { Raw::new(text, text_len) };
+    out(unsafe { table(ctx, session, |c| views::evaluate(c, processor, text)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_symbols(rt: *mut emusen_crystal_runtime, session: u32, processor: u32, filter: *const u8, filter_len: usize, o: *mut u8, len: usize) -> i64 {
+    let filter = unsafe { Raw::new(filter, filter_len) };
+    out(unsafe { twin(rt, session, |c| views::symbols(c, processor, filter)) }, o, len)
+}
+
+unsafe extern "C" fn symbols(ctx: *mut c_void, session: u32, processor: u32, filter: *const u8, filter_len: usize, o: *mut u8, len: usize) -> i64 {
+    let filter = unsafe { Raw::new(filter, filter_len) };
+    out(unsafe { table(ctx, session, |c| views::symbols(c, processor, filter)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_trace(rt: *mut emusen_crystal_runtime, session: u32, processor: u32, count: u32) -> i32 {
+    code(unsafe { twin(rt, session, |c| views::trace(c, processor, count)) })
+}
+
+unsafe extern "C" fn trace(ctx: *mut c_void, session: u32, processor: u32, count: u32) -> i32 {
+    code(unsafe { table(ctx, session, |c| views::trace(c, processor, count)) })
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_trace_off(rt: *mut emusen_crystal_runtime, session: u32, processor: u32) -> i32 {
+    code(unsafe { twin(rt, session, |c| views::trace_off(c, processor)) })
+}
+
+unsafe extern "C" fn trace_off(ctx: *mut c_void, session: u32, processor: u32) -> i32 {
+    code(unsafe { table(ctx, session, |c| views::trace_off(c, processor)) })
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_telemetry(rt: *mut emusen_crystal_runtime, session: u32, kind: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| views::telemetry(c, kind)) }, o, len)
+}
+
+unsafe extern "C" fn telemetry(ctx: *mut c_void, session: u32, kind: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| views::telemetry(c, kind)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_tile_sheet(rt: *mut emusen_crystal_runtime, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| views::tile_sheet(c)) }, o, len)
+}
+
+unsafe extern "C" fn tile_sheet(ctx: *mut c_void, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| views::tile_sheet(c)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_palette_swatch(rt: *mut emusen_crystal_runtime, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| views::palette_swatch(c)) }, o, len)
+}
+
+unsafe extern "C" fn palette_swatch(ctx: *mut c_void, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| views::palette_swatch(c)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_audio_peek(rt: *mut emusen_crystal_runtime, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| views::audio_peek(c)) }, o, len)
+}
+
+unsafe extern "C" fn audio_peek(ctx: *mut c_void, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| views::audio_peek(c)) }, o, len)
+}
+
 // ---- The table ------------------------------------------------------------------------------------------------------
 
 /// A table with no entries, the start of one filled as the groups are built.
@@ -954,6 +1177,25 @@ fn template() -> emusen_session_v1 {
         label_load: Some(label_load),
         label_save: Some(label_save),
         label_clear: Some(label_clear),
+        dma_channels: Some(dma_channels),
+        dma_log_op: Some(dma_log_op),
+        register_flow_op: Some(register_flow_op),
+        coprocessor_history: Some(coprocessor_history),
+        vectors: Some(vectors),
+        tilemap_entry: Some(tilemap_entry),
+        tile_pixels: Some(tile_pixels),
+        sprites: Some(sprites),
+        palettes: Some(palettes),
+        audio_channels: Some(audio_channels),
+        set_channel_muted: Some(set_channel_muted),
+        evaluate: Some(evaluate),
+        symbols: Some(symbols),
+        trace: Some(trace),
+        trace_off: Some(trace_off),
+        telemetry: Some(telemetry),
+        tile_sheet: Some(tile_sheet),
+        palette_swatch: Some(palette_swatch),
+        audio_peek: Some(audio_peek),
         ..unbuilt()
     }
 }

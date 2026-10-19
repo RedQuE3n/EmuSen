@@ -7102,6 +7102,35 @@ variables are put in before `$S`, so a variable named `SUB` is no longer read as
   and 2, the platform library's 31 and 4. WiseMan's Crystal, debug, header, session service, Hotaru on the API and
   contract shape classes, 78 of 78.
 
+### 29.23 Built 2026-10-19: part (c), piece 3, the views, expressions, trace and telemetry
+
+**The piece** (this commit). `service::views` is the C# `SessionService.Views` but its cheats, 19 twins and their table
+entries: the DMA channels with each destination's name, the vectors, sprites, palettes and sound channels as the last
+refresh copied them, the tile sheet and palette swatch as `tile_sheet`'s picture, the sound held but not drained
+(`audio_peek`, its rate the engine's last as the C#'s `AudioSampleRate` is), a tilemap entry and a tile's pixels
+over a space named in any case, a channel muted by its 32-bit pattern, `evaluate` and `symbols` in each scope, and
+telemetry's eight kinds. What the generic target has none of answers `NOT_SUPPORTED` in the C#'s words: the DMA log,
+the coprocessor's register flow and history (§29.30), and the instruction trace, since no engine's bundle carries a
+trace switch (§13.11 of `EmuSen_DianaSh.md`). A tile depth a pack refuses is a fault in `ArgumentException`'s words,
+its parameter named, as the C#'s export answers an exception that is not the service's own.
+
+**Set aside in the comparison, and named in the runner:** telemetry's hardware load is each phase's share of the
+wall-clock frame, so its percentages are compared by presence and its names and kinds in full, as §29.16 compared the
+phases' times.
+
+**Measured on 2026-10-19** [M]:
+- **Parity.** The new case passes: a script of 68 calls run after three frames on each of the build's seven engines and
+  on the test core, 544 in all, through the twins, the full table, a stranger's and the read-only table. It covers every
+  view of each pack, the pictures by digest, the tilemap and tile refusals (a space not there, unnamed, a depth the NES
+  pack refuses, a depth past 31 bits), all eight telemetry kinds and a ninth refused, the symbols filtered in any case
+  and in each scope, expressions with the pack's names, `stackdepth`, `frame` and the parser's refusals, mutes, the
+  trace refused four ways, and the DMA log, register flow and history.
+- **Seeded faults**, four, each caught: no DMA destination named (the SNES's channels), a picture's width and height
+  swapped, a symbol filter that matches case, an expression's refusal answered `BAD_ARGUMENT`.
+- **Other tests.** The crates' tests, `--profile test-checked`: `emusen-crystal` 6, 6 and 1, `emusen-crystal-debug` 4
+  and 2, the platform library's 31 and 4. WiseMan's Crystal, debug, header, session service, Hotaru on the API and
+  contract shape classes, 79 of 79.
+
 ### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
 
 *Part (b) numbers its sections from §29.30, so that part (a)'s pieces, built at the same time, keep §29.16 to §29.29.*

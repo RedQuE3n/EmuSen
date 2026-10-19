@@ -7,6 +7,7 @@
 pub mod args;
 pub mod machine;
 pub mod registries;
+pub mod views;
 
 use std::sync::Mutex;
 

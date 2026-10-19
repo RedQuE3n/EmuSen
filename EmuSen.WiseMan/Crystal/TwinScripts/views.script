@@ -1,0 +1,73 @@
+# One game's chip views, expressions, trace and telemetry, through the twins and the table, after a few frames.
+open $GAME
+frames 3
+dma_channels
+vectors
+sprites
+palettes
+audio_channels
+tile_sheet
+palette_swatch
+audio_peek
+tilemap_entry $TSPACE 0
+tilemap_entry $TSPACE 33
+tilemap_entry NOPE 0
+tilemap_entry - 0
+tile_pixels $PSPACE 16 2
+tile_pixels $PSPACE 16 4
+tile_pixels $PSPACE 0 3
+tile_pixels $PSPACE 0xFFFFFFFF 2
+tile_pixels $PSPACE 0 0x80000000
+telemetry 0
+telemetry 1
+telemetry 2
+telemetry 3
+telemetry 4
+telemetry 5
+telemetry 6
+telemetry 7
+telemetry 8
+symbols 4294967295 -
+symbols 0 -
+symbols 1 -
+symbols 4294967295 ppu
+symbols 4294967295 A
+symbols 9 -
+evaluate 4294967295 "A + 1"
+evaluate 0 A
+evaluate 4294967295 stackdepth
+evaluate 4294967295 frame
+evaluate 4294967295 Nope
+evaluate 4294967295 -
+evaluate 1 PC
+evaluate 9 A
+set_channel_muted 1 1
+set_channel_muted 0xFFFFFFFF 1
+frames 1
+audio_channels
+set_channel_muted 1 0
+trace 0 0
+trace 0 4
+trace 1 4
+trace_off 0
+trace_off 1
+dma_log_op 3 -
+dma_log_op 0 'x'
+register_flow_op 3 -
+coprocessor_history 4
+via table
+telemetry 7
+evaluate 4294967295 "frame * 2"
+symbols 4294967295 ppu
+trace 0 4
+via ro
+set_channel_muted 1 1
+trace 0 4
+trace_off 0
+evaluate 4294967295 frame
+palettes
+via stranger
+palettes
+tile_sheet
+via twin
+close

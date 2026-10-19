@@ -282,6 +282,8 @@ namespace EmuSen.WiseMan.Crystal
         private static string Shown(string name, byte[] bytes, List<string?> args)
         {
             bool binary = Binary.Contains(name) || (name == "coverage_op" && args.Count > 1 && args[1] == "9");
+            // The hardware load is each phase's wall-clock share, compared by its names and kinds alone.
+            if (name == "telemetry" && args.Count > 0 && args[0] == "7") return System.Text.RegularExpressions.Regex.Replace(Encoding.UTF8.GetString(bytes), "\"percent\":[^,}]+", "\"percent\":#");
             if (!binary) return Encoding.UTF8.GetString(bytes);
             return bytes.Length <= 64 ? $"{bytes.Length} bytes {Convert.ToHexString(bytes)}" : $"{bytes.Length} bytes {Convert.ToHexString(SHA256.HashData(bytes))}";
         }

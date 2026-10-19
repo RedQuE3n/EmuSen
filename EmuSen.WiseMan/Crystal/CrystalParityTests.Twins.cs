@@ -125,5 +125,20 @@ namespace EmuSen.WiseMan.Crystal
                 ["IMAGE"] = image, ["W"] = "66", ["SUB"] = sub.ToString(), ["CALL"] = call.ToString(), ["INC"] = (call - 2).ToString(),
             });
         }
+    
+        [Fact]
+        public void The_views_expressions_trace_and_telemetry_answer_alike_on_the_test_core_and_the_build_s_engines()
+        {
+            Dictionary<string, string> games = EngineGames();
+            var spaces = new Dictionary<string, (string Map, string Tiles)>
+            {
+                ["NES"] = ("CIRAM", "CHR"), ["SFC"] = ("VRAM", "VRAM"), ["GB"] = ("VRAM", "VRAM"), ["GBC"] = ("VRAM", "VRAM"), ["N64"] = ("RDRAM", "RDRAM"), ["MD"] = ("VRAM", "VRAM"), ["PSX"] = ("VRAM", "VRAM"),
+            };
+            string block = File.ReadAllText(TwinScriptPath("views"));
+            string text = string.Concat(games.Select(g => block.Replace("$GAME", g.Value).Replace("$TSPACE", spaces[g.Key].Map).Replace("$PSPACE", spaces[g.Key].Tiles)));
+            SameTwinText(text, BuildTree, games);
+            Dictionary<string, string> test = TestGames();
+            SameTwinText(block.Replace("$GAME", test["GAME"]).Replace("$TSPACE", "RAM").Replace("$PSPACE", "RAM"), new[] { TestTree(plain: false) }, test);
+        }
     }
 }

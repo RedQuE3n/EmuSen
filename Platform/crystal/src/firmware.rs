@@ -133,7 +133,7 @@ pub fn needed(rt: &Runtime, tree: &Tree, at: &str, engine: Option<&str>) -> (Str
     });
     let _ = emusen_galaxia::consoles::load(tree);
     let Ok(Some(core)) = crate::route::v1_engine(&catalog, &discovery, at, chosen.as_deref()) else { return (String::new(), Vec::new()) };
-    let Ok(lib) = core.open(rt.trust()) else { return (String::new(), Vec::new()) };
+    let Ok(lib) = core.open(&rt.trust()) else { return (String::new(), Vec::new()) };
     if !can_require(&core.sidecar.info_json) {
         return (core.sidecar.info.name.clone(), Vec::new());
     }

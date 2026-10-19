@@ -110,8 +110,11 @@ namespace EmuSen.Crystal.Managed
                 if (config != null && config->size < ConfigV1.Size10) throw CrystalException.BadStruct("emusen_crystal_config", config->size, ConfigV1.Size10);
                 if (config != null && (config->flags & ~CrystalNumbers.ConfigDevelopment) != 0) throw new CrystalException(SessionAbi.NotSupported, $"config flags 0x{config->flags:X} are not known to 1.{CrystalNumbers.Minor}");
                 if (config != null && (config->flags & CrystalNumbers.ConfigDevelopment) != 0) CoreDiscovery.UseDevelopment(true);
-                if (config != null && config->size >= sizeof(ConfigV1) && config->cores != null) CoreDiscovery.UseDirectories(CoresOf(config->cores, config->cores_len));
-                return new ManagedRuntime().Handle;
+                if (config != null && config->size >= ConfigV1.Size12 && config->cores != null) CoreDiscovery.UseDirectories(CoresOf(config->cores, config->cores_len));
+                if (config != null && config->size >= sizeof(ConfigV1) && config->player_cores != null) CoreDiscovery.UsePlayerDirectories(CoresOf(config->player_cores, config->player_cores_len));
+                var runtime = new ManagedRuntime();
+                CoreDiscovery.Say = runtime.SayRuntime;
+                return runtime.Handle;
             }
             catch (Exception e)
             {

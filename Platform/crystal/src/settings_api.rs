@@ -168,17 +168,17 @@ pub fn schema(rt: &Runtime, catalog: &Catalog, discovery: &Discovery, tree: &Tre
     }
     let named = engine.and_then(|n| engines.iter().find(|e| e.engine_name() == n)).copied();
     let mut own = match named {
-        Some(core) => sidecar_rows(core, rt.trust()),
+        Some(core) => sidecar_rows(core, &rt.trust()),
         None => {
             let core = catalog::discovered_for(discovery, console).or_else(|| catalog::sole_engine(console).and_then(|e| discovery.by_engine_name(e)));
-            core.map(|c| sidecar_rows(c, rt.trust())).unwrap_or_default()
+            core.map(|c| sidecar_rows(c, &rt.trust())).unwrap_or_default()
         }
     };
     if own.is_empty()
         && named.is_none()
         && let Some(sole) = engines.first()
     {
-        own = sidecar_rows(sole, rt.trust());
+        own = sidecar_rows(sole, &rt.trust());
     }
     rows.extend(own);
     rows.extend(media);

@@ -11,6 +11,8 @@ namespace EmuSen.Crystal.Client.Contract
         public void* sqlite;
         public byte* cores;
         public nuint cores_len;
+        public byte* player_cores;
+        public nuint player_cores_len;
     }
 
     // emusen_crystal_open_params, field for field.

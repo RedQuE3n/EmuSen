@@ -8059,6 +8059,60 @@ predate §27.11. Every directory from the handheld's `lib/EmuSen` up to `/` is `
 passes there. A build that enforces the manifest in the C# must therefore reach the handheld only as a fresh publish,
 which carries the manifest; copying new binaries over the old `lib/EmuSen` would leave every core needing approval.
 
+### 29.43 Built 2026-10-19: 1.3's piece 3, the API's 1.3 in both implementations and the binding
+
+**The header** (`emusen_crystal.h`, `EMUSEN_CRYSTAL_MINOR` 3): `EMUSEN_CRYSTAL_NOT_APPROVED` (−1115); the config's
+`player_cores` and `player_cores_len` at 32 and 40, the struct 48 bytes; `emusen_crystal_core_approve` and
+`emusen_crystal_core_revoke` (Q1) after `rescan`; `open`'s comment naming `NOT_APPROVED`; `cores`' and `engines`' 1.3
+keys. The baseline gained six lines at `@1.3` (the status, the two fields, the two functions), the struct's line kept by
+the rule §29.12 added. The C# implementation's table and the binding's `CrystalExports` hold 144 exports.
+
+**Both implementations**, the C# failover of the Rust's one owner of each fact:
+
+- **`core_approve`**: the hash checked as 64 hex digits (`BAD_ARGUMENT`), found among the listing's `"sha256"`s
+  (`NO_SUCH_ID`), its line added to `cores.approved` through Galaxia's atomic write (`AtomicFile` in C#; `IO` where it
+  fails), the directories listed again, and each player's library not yet read of that hash loaded under the trust rules
+  and its sidecar written by the one writer (`IO` where it cannot be). A library refused when read is said in a
+  `"runtime"` log line and the call still answers 0, as the header has it. The Rust's is `Runtime::approve`, over the
+  host's `Unread::load` and `sidecar::write`; the C#'s `ManagedRuntime.ApproveCore`, over `UnreadCore.Load` and
+  `CoreSidecar.Write`.
+- **`core_revoke`**: the lines of the hash removed and every other kept (`NO_SUCH_ID` where none), the directories listed
+  again. A library the process loaded stays loaded; the next open of it is refused.
+- **Open's `NOT_APPROVED`**: where the engine a game or an empty console opens on is refused by rules 1 and 2 alone. The
+  Rust reads `Discovered::awaits_approval`; the C# throws a `CoreNotApprovedException`, a `NotSupportedException`, from
+  `CoreFactory`, so that every caller that took the old refusal still takes it, and `ManagedRuntime` answers it with the
+  new status.
+- **The config's player's directories**: the trust and the discovery are made from them; `rescan` reads the approvals
+  again; the Rust runtime's trust is now replaced with its discovery (`Runtime::trust` answers the current one).
+
+**A defect of the config's growth, shown and fixed.** Both implementations read 1.2's `sqlite` and `cores` only from a
+config of the whole struct's size (`size >= sizeof`), so a 1.2 client's 32-byte config, once the struct grew to 48, would
+have had its directories and its SQLite ignored. Both now read 1.2's fields from 32 bytes and 1.3's from 48.
+`A_config_of_1_2_s_size_still_names_its_cores` makes such a config of each implementation and lists its engine; with the
+Rust's test put back to the struct's size (a seeded fault) it fails.
+
+**The binding**: `CrystalRuntime.CoreApprove(sha256)` and `CoreRevoke`, `CrystalRuntimeOptions.PlayerCores`,
+`CrystalAbi.NotApproved` and `Minor` 3, the config's two fields; its rule of choosing the platform library only where it
+has every export of major 1 needed no change.
+
+**The parity**, two cases of `CrystalParityTests` through both implementations' exports, each answer compared as text
+and the C#'s also held to what it should be: a player's core with a sidecar (both listings; `open` with its engine
+answering `NOT_APPROVED` in the refusal's words; `core_approve` of text that is no hash, of a hash no library has, and
+`core_revoke` of a hash nothing approves; the approval in capitals, the file's line, the same approval again leaving the
+file as it was; the listings, `"trust":"approved"`; the game opened and closed; the revocation and the file left empty;
+the listing again), and a player's library without a sidecar (listed as not read, approved, its sidecar written, then
+listed as an engine, `"trust":"approved"`).
+
+**Measured on 2026-10-19** [M]:
+
+| Gate | Result |
+|---|---|
+| `emusen-crystal` and `emusen-platform` (the ABI test with the baseline, the header against the C compiler and the platform library's exports) | 6, 6, 1, 31 and 4 passing |
+| `emusen-core-host`, the kit built against it | 8, 1 and 19 passing; the kit builds |
+| WiseMan, the blast radius: `CrystalParityTests`, `CrystalHeaderTests`, `ContractShapeTests`, `CrystalApi12Tests`, `SessionHeaderTests`, `CoreHostParityTests`, `CoreDiscoveryTests`, the `ManagedCrystal` classes, `GameRefusalTests`, `RuntimeLogTests`, `HotaruOnTheApiTests`, `BindingChangesOnceTests`, `FrontendDefectTests`, `SharedHostTests`, `NephriteTests`, `CoreRegistrationEquivalenceTests`, `FirmwareOverviewTests`, `GalaxiaParityTests` | **224 of 224**; before their correction, `CrystalHeaderTests`' count of 142 exports and two of `CrystalApi12Tests`' 1.2 constants failed, as an added minor should make them |
+| Seeded faults in the Rust runtime and its C layer, each run through the cases above | **six of six caught**: no rescan after an approval (both cases), a hash no library has taken, `NOT_APPROVED` answered as `NO_ENGINE`, a revocation of nothing answered 0 (the sidecar case), 1.2's config read only at the struct's size (the 1.2-size case), and a library not yet read left unread (the sidecar-less case) |
+| `cargo metadata --locked` over every tracked lock but Diamond's kernel and kernel shell | every lock current |
+
 ---
 
 ## 30. B9, scraping in Rust: the design, 2026-10-18

@@ -130,9 +130,15 @@ impl Unread {
         }
     }
 
-    /// §7.1's reading, once the player approved it: rule 3, the hash it was listed with, the load and rule 4, then its
-    /// sidecar written beside it by the build's one writer. The path of the sidecar, or why not.
+    /// §7.1's reading, once the player approved it: `load`, then its sidecar written beside it by the build's one
+    /// writer. The path of the sidecar, or why not.
     pub fn read(&self, trust: &Trust) -> Result<PathBuf, String> {
+        self.load(trust)?;
+        crate::sidecar::write(&self.library_path, false)
+    }
+
+    /// The approved library loaded and checked: rule 3, the hash it was listed with, the load and rule 4.
+    pub fn load(&self, trust: &Trust) -> Result<&'static Library, String> {
         let name = self.file_name();
         let path = &self.library_path;
         if !trust.approved(&self.sha256) {
@@ -149,7 +155,7 @@ impl Unread {
         let lib = Library::load(path).map_err(|e| format!("{name}: {}", e.host_words()))?;
         record_loaded(path, hash);
         lib.check().map_err(|_| lib.report())?;
-        crate::sidecar::write(path, false)
+        Ok(lib)
     }
 }
 

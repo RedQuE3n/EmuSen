@@ -103,7 +103,7 @@ pub unsafe extern "C" fn emusen_crystal_new(config: *const emusen_crystal_config
             if flags & abi::CONFIG_DEVELOPMENT != 0 {
                 c.development = Some(true);
             }
-            if size >= std::mem::size_of::<emusen_crystal_config>() {
+            if size >= abi::CONFIG_SIZE_12 {
                 let lent = unsafe { (*config).sqlite };
                 if !lent.is_null() {
                     let sqlite = unsafe { emusen_sqlite::Sqlite::lent(lent) }.map_err(|why| fail(svc::BAD_ARGUMENT, format!("the SQLite lent could not be used: {why}")))?;
@@ -112,6 +112,12 @@ pub unsafe extern "C" fn emusen_crystal_new(config: *const emusen_crystal_config
                 let (cores, cores_len) = unsafe { ((*config).cores, (*config).cores_len) };
                 if let Some(t) = unsafe { text(cores, cores_len) }? {
                     c.cores = Some(cores_of(t)?);
+                }
+            }
+            if size >= std::mem::size_of::<emusen_crystal_config>() {
+                let (player, player_len) = unsafe { ((*config).player_cores, (*config).player_cores_len) };
+                if let Some(t) = unsafe { text(player, player_len) }? {
+                    c.player_cores = Some(cores_of(t)?);
                 }
             }
         }
@@ -166,6 +172,33 @@ pub unsafe extern "C" fn emusen_crystal_rescan(rt: *mut emusen_crystal_runtime) 
         }
         Err(status) => status,
     }
+}
+
+/// `core_approve` and `core_revoke`: the hash as text, then the runtime's change, its refusal as a status with words.
+unsafe fn trust_change(rt: *mut emusen_crystal_runtime, sha256: *const u8, sha256_len: usize, change: fn(&Runtime, &str) -> Result<(), (i32, String)>) -> i32 {
+    let done = || -> Result<(), i32> {
+        let r = unsafe { runtime(rt) }?;
+        let hash = unsafe { text(sha256, sha256_len) }?.unwrap_or_default();
+        change(r, hash).map_err(|(status, words)| fail(status, words))
+    };
+    match done() {
+        Ok(()) => 0,
+        Err(status) => status,
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime; `sha256` valid for `sha256_len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_core_approve(rt: *mut emusen_crystal_runtime, sha256: *const u8, sha256_len: usize) -> i32 {
+    unsafe { trust_change(rt, sha256, sha256_len, Runtime::approve) }
+}
+
+/// # Safety
+/// `rt` a live runtime; `sha256` valid for `sha256_len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_core_revoke(rt: *mut emusen_crystal_runtime, sha256: *const u8, sha256_len: usize) -> i32 {
+    unsafe { trust_change(rt, sha256, sha256_len, Runtime::revoke) }
 }
 
 /// # Safety

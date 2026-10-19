@@ -8,6 +8,9 @@ using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Cores.Native
 {
+    // An engine whose library waits for the player's approval, which the frontend API answers as NOT_APPROVED - see EmuSen_Backend.md §29.40.2.
+    public sealed class CoreNotApprovedException(string message) : NotSupportedException(message);
+
     // The installation's cores.manifest and the player's cores.approved, one sha256sum format for both - see EmuSen_Backend.md §29.40.3.
     public static class CoreTrust
     {

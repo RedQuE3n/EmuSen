@@ -75,7 +75,8 @@ namespace EmuSen.Cores
                 : CoreCatalog.IsCatalogExtension(extension) ? null
                 : routed is not null ? Native.CoreDiscovery.ForSystem(routed).FirstOrDefault(c => !CoreCatalog.IsRegisteredEngine(c.EngineName))
                 : Native.CoreDiscovery.ForExtension(extension).FirstOrDefault());
-            return found is null || CoreCatalog.IsRegisteredEngine(found.EngineName) ? null : found.Open();
+            if (found is null || CoreCatalog.IsRegisteredEngine(found.EngineName)) return null;
+            return found.Open() ?? (found.AwaitsApproval ? throw new Native.CoreNotApprovedException(found.Report) : null);
         }
 
         // A console started with nothing in it, on the engine asked for where it starts the console empty, else the first that does - see Diamond_Shell.md §1.5.
@@ -85,7 +86,8 @@ namespace EmuSen.Cores
             bool Starts(Native.DiscoveredCore c) => c.Info.Systems.Any(s => s.Id == start.SystemId && s.StartsEmpty);
             var found = Native.CoreDiscovery.ForSystem(start.SystemId).Where(Starts).OrderBy(c => c.EngineName == engine ? 0 : 1).FirstOrDefault()
                 ?? throw new NotSupportedException($"No core in this build starts the {console} with nothing in it.");
-            var library = found.Open() ?? throw new NotSupportedException($"{found.EngineName} is not in use: {found.Report}");
+            var library = found.Open() ?? throw (found.AwaitsApproval ? new Native.CoreNotApprovedException($"{found.EngineName} is not in use: {found.Report}")
+                : new NotSupportedException($"{found.EngineName} is not in use: {found.Report}"));
             var config = ConsolesConfig.Load();
             var settings = library.Settings.Select(s => (s.Key, Value: config.Value(console, s.Key))).Where(p => p.Value is not null).ToDictionary(p => p.Key, p => p.Value!);
             var system = library.Info.Systems.First(s => s.Id == start.SystemId);

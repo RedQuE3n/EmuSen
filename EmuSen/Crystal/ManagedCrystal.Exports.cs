@@ -17,6 +17,8 @@ namespace EmuSen.Crystal.Managed
             ["emusen_crystal_engines"] = (nint)(delegate* unmanaged[Cdecl]<nint, byte*, nuint, long>)&emusen_crystal_engines,
             ["emusen_crystal_cores"] = (nint)(delegate* unmanaged[Cdecl]<nint, byte*, nuint, long>)&emusen_crystal_cores,
             ["emusen_crystal_rescan"] = (nint)(delegate* unmanaged[Cdecl]<nint, int>)&emusen_crystal_rescan,
+            ["emusen_crystal_core_approve"] = (nint)(delegate* unmanaged[Cdecl]<nint, byte*, nuint, int>)&emusen_crystal_core_approve,
+            ["emusen_crystal_core_revoke"] = (nint)(delegate* unmanaged[Cdecl]<nint, byte*, nuint, int>)&emusen_crystal_core_revoke,
             ["emusen_crystal_route"] = (nint)(delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, long>)&emusen_crystal_route,
             ["emusen_crystal_open"] = (nint)(delegate* unmanaged[Cdecl]<nint, OpenParamsV1*, long>)&emusen_crystal_open,
             ["emusen_crystal_close"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, int>)&emusen_crystal_close,

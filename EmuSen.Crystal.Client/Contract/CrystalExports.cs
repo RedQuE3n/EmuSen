@@ -13,6 +13,8 @@ namespace EmuSen.Crystal.Client.Contract
         public delegate* unmanaged[Cdecl]<nint, byte*, nuint, long> engines;
         public delegate* unmanaged[Cdecl]<nint, byte*, nuint, long> cores;
         public delegate* unmanaged[Cdecl]<nint, int> rescan;
+        public delegate* unmanaged[Cdecl]<nint, byte*, nuint, int> core_approve;
+        public delegate* unmanaged[Cdecl]<nint, byte*, nuint, int> core_revoke;
         public delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, long> route;
         public delegate* unmanaged[Cdecl]<nint, CrystalOpenParams*, long> open;
         public delegate* unmanaged[Cdecl]<nint, uint, int> close;

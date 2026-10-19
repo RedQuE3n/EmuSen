@@ -48,6 +48,20 @@ namespace EmuSen.Crystal.Managed
         }
 
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static int emusen_crystal_core_approve(nint rt, byte* sha256, nuint sha256_len)
+        {
+            try { var runtime = RuntimeOf(rt); return Done(() => ManagedRuntime.ApproveCore(Text(sha256, sha256_len) ?? "", runtime.SayRuntime)); }
+            catch (Exception e) { return (int)Fail(e); }
+        }
+
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static int emusen_crystal_core_revoke(nint rt, byte* sha256, nuint sha256_len)
+        {
+            try { RuntimeOf(rt); return Done(() => ManagedRuntime.RevokeCore(Text(sha256, sha256_len) ?? "")); }
+            catch (Exception e) { return (int)Fail(e); }
+        }
+
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static long emusen_crystal_route(nint rt, byte* path, nuint path_len, byte* out_, nuint len)
         {
             try { RuntimeOf(rt); return Copy(ManagedRuntime.RouteJson(Required(path, path_len, "the path")), out_, len); }

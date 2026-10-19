@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use emusen_core_host::{Discovery, Trust, listing};
+use emusen_core_host::{Discovery, Trust, listing, trust};
 use emusen_native::core::jsonw::Json as HostJson;
 
 use crate::catalog::Catalog;
@@ -16,6 +16,9 @@ use crate::json::Json;
 pub struct Config {
     /// The cores directories in their order; none for the program's directory and its `cores` folder.
     pub cores: Option<Vec<String>>,
+    /// The player's own cores directories, since 1.3; none for `/Cores` where `cores` is none too, and for no directory
+    /// where it is not (EmuSen_Backend.md §29.40.4).
+    pub player_cores: Option<Vec<String>>,
     /// Whether cores in development are listed; none for `EMUSEN_DEVELOPMENT_CORES`' answer.
     pub development: Option<bool>,
     /// The SQLite the host lends, for states.db; none keeps no records of states.
@@ -31,8 +34,9 @@ pub type Fetch = Arc<dyn Fn(&str) -> Result<Vec<u8>, String> + Send + Sync>;
 
 pub struct Runtime {
     directories: Vec<PathBuf>,
+    player: Vec<PathBuf>,
     development: bool,
-    trust: Trust,
+    trust: Mutex<Arc<Trust>>,
     discovery: Mutex<Arc<Discovery>>,
     pub sessions: crate::open::Sessions,
     pub events: Arc<crate::events::Events>,
@@ -54,10 +58,16 @@ impl Runtime {
                 vec![PathBuf::from(&base), PathBuf::from(emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &base, "cores"))]
             }
         };
+        let player: Vec<PathBuf> = match (&config.player_cores, &config.cores) {
+            (Some(dirs), _) => dirs.iter().map(PathBuf::from).collect(),
+            (None, None) => emusen_galaxia::tree::tree().directory(emusen_galaxia::tree::Directory::Cores).map(PathBuf::from).into_iter().collect(),
+            (None, Some(_)) => Vec::new(),
+        };
         let development = config.development.unwrap_or_else(|| std::env::var(emusen_core_host::discovery::DEVELOPMENT_VARIABLE).as_deref() == Ok("1"));
-        let trust = Trust::new(&directories, &[]);
-        let discovery = Mutex::new(Arc::new(Discovery::scan(&directories, development)));
-        Runtime { directories, development, trust, discovery, sessions: crate::open::Sessions::default(), events: Arc::new(crate::events::Events::default()), sqlite: config.sqlite.clone(), lender: config.lender.clone(), fetch: config.fetch.clone(), no_game: crate::service::Provider::default(), records: Mutex::new(None) }.with_engine_choices_copied()
+        let events = Arc::new(crate::events::Events::default());
+        let trust = Mutex::new(Arc::new(trust_of(&directories, &player, &events)));
+        let discovery = Mutex::new(Arc::new(Discovery::scan_with_player(&directories, &player, development)));
+        Runtime { directories, player, development, trust, discovery, sessions: crate::open::Sessions::default(), events, sqlite: config.sqlite.clone(), lender: config.lender.clone(), fetch: config.fetch.clone(), no_game: crate::service::Provider::default(), records: Mutex::new(None) }.with_engine_choices_copied()
     }
 
     /// A line of the runtime's own that no session said, raised on session 0, `SayRuntime`.
@@ -65,8 +75,9 @@ impl Runtime {
         self.events.raise_runtime_lines(0, &[line]);
     }
 
-    pub fn trust(&self) -> &Trust {
-        &self.trust
+    /// The trust the runtime opens under now; an approval, a revocation and a rescan replace it.
+    pub fn trust(&self) -> Arc<Trust> {
+        self.trust.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
     /// The discovery the runtime answers from now; a rescan replaces it, and a session already open keeps its engine.
@@ -80,22 +91,67 @@ impl Runtime {
         Catalog::new(&discovery).supported_cheat_systems()
     }
 
+    /// The cores directories listed again and the approvals read again.
     pub fn rescan(&self) {
-        let fresh = Arc::new(Discovery::scan(&self.directories, self.development));
+        let trust = Arc::new(trust_of(&self.directories, &self.player, &self.events));
+        *self.trust.lock().unwrap_or_else(|p| p.into_inner()) = trust;
+        let fresh = Arc::new(Discovery::scan_with_player(&self.directories, &self.player, self.development));
         *self.discovery.lock().unwrap_or_else(|p| p.into_inner()) = fresh;
+    }
+
+    /// `core_approve`: the hash recorded in the approvals' file, a player's library not yet read of that hash read, and
+    /// the directories listed again (EmuSen_Backend.md §29.40.2).
+    pub fn approve(&self, sha256: &str) -> Result<(), crate::open::Refused> {
+        let discovery = self.discovery();
+        let name = listed_name(&discovery, sha256)?;
+        let file = approvals_path();
+        let text = read_text(&file)?;
+        if let Some(changed) = trust::with_approval(&text, sha256, &name) {
+            emusen_galaxia::atomic::write(&file, changed.as_bytes()).map_err(|why| (crate::abi::status::IO, why))?;
+        }
+        self.rescan();
+        let (discovery, trust) = (self.discovery(), self.trust());
+        let mut written = false;
+        for u in discovery.unread().iter().filter(|u| u.sha256.eq_ignore_ascii_case(sha256)) {
+            match u.load(&trust) {
+                Ok(_) => {
+                    emusen_core_host::sidecar::write(&u.library_path, false).map_err(|why| (crate::abi::status::IO, why))?;
+                    written = true;
+                }
+                Err(why) => self.say(why),
+            }
+        }
+        if written {
+            self.rescan();
+        }
+        Ok(())
+    }
+
+    /// `core_revoke`: every approval of the hash removed and the directories listed again.
+    pub fn revoke(&self, sha256: &str) -> Result<(), crate::open::Refused> {
+        if !trust::is_hash(sha256) {
+            return Err(not_a_hash(sha256));
+        }
+        let file = approvals_path();
+        let Some(changed) = trust::without_approval(&read_text(&file)?, sha256) else {
+            return Err((emusen_session_service::abi::status::NO_SUCH_ID, format!("no approval of {} is recorded", sha256.to_ascii_lowercase())));
+        };
+        emusen_galaxia::atomic::write(&file, changed.as_bytes()).map_err(|why| (crate::abi::status::IO, why))?;
+        self.rescan();
+        Ok(())
     }
 
     /// `[{"name","id","version","systems","available","report"}]`.
     pub fn engines_json(&self) -> String {
         let mut j = HostJson::new();
-        listing::engines(&mut j, &self.discovery(), self.trust());
+        listing::engines(&mut j, &self.discovery(), &self.trust());
         j.finish()
     }
 
     /// `[{"library","sidecar","sha256","abi","development","engine","report"}]`.
     pub fn cores_json(&self) -> String {
         let mut j = HostJson::new();
-        listing::cores(&mut j, &self.discovery(), self.trust());
+        listing::cores(&mut j, &self.discovery(), &self.trust());
         j.finish()
     }
 
@@ -194,8 +250,8 @@ impl Runtime {
             j.int_value(a as i64);
         }
         j.end_array().int("ports", catalog.ports_for(console) as i64).key_array("players");
-        for p in 0..catalog.players_for(console, &value, &self.trust) {
-            match catalog.controller_for(console, p, &value, &self.trust) {
+        for p in 0..catalog.players_for(console, &value, &self.trust()) {
+            match catalog.controller_for(console, p, &value, &self.trust()) {
                 Some(id) => j.str_value(&id),
                 None => j.null_value(),
             };
@@ -433,4 +489,42 @@ impl Runtime {
         self.records_needed()?;
         self.with_records(|r| r.map_or(Ok(()), |r| r.forget(at)))
     }
+}
+
+/// The approvals' file in the config directory, so a test's follows its config override (EmuSen_Backend.md §29.40.3).
+fn approvals_path() -> String {
+    emusen_galaxia::tree::tree().config_path(None, trust::APPROVALS)
+}
+
+/// The installation's manifests and the player's approvals; an approvals' file refused is said, and approves nothing.
+fn trust_of(directories: &[PathBuf], player: &[PathBuf], events: &crate::events::Events) -> Trust {
+    let approvals = trust::read_approvals(std::path::Path::new(&approvals_path())).unwrap_or_else(|why| {
+        events.raise_runtime_lines(0, &[why]);
+        Vec::new()
+    });
+    Trust::new(directories, &approvals).with_player(player)
+}
+
+fn read_text(file: &str) -> Result<String, crate::open::Refused> {
+    let bytes = emusen_galaxia::atomic::try_read(file).map_err(|why| (crate::abi::status::IO, why))?;
+    Ok(bytes.map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default())
+}
+
+fn not_a_hash(text: &str) -> crate::open::Refused {
+    (emusen_session_service::abi::status::BAD_ARGUMENT, format!("'{text}' is not a SHA-256 of 64 hex digits"))
+}
+
+/// The file name of a library the listing shows with this hash, or why it cannot be approved.
+fn listed_name(discovery: &Discovery, sha256: &str) -> Result<String, crate::open::Refused> {
+    if !trust::is_hash(sha256) {
+        return Err(not_a_hash(sha256));
+    }
+    let name = |p: &std::path::Path| p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    discovery
+        .found()
+        .iter()
+        .find(|c| c.sidecar.sha256.eq_ignore_ascii_case(sha256))
+        .map(|c| name(&c.sidecar.library_path))
+        .or_else(|| discovery.unread().iter().find(|u| u.sha256.eq_ignore_ascii_case(sha256)).map(|u| name(&u.library_path)))
+        .ok_or_else(|| (emusen_session_service::abi::status::NO_SUCH_ID, format!("no core library listed has the SHA-256 {}", sha256.to_ascii_lowercase())))
 }

@@ -83,22 +83,41 @@ namespace EmuSen.WiseMan.Crystal
         }
 
         [Fact]
-        public void A_flag_unknown_to_1_2_and_cores_that_are_no_list_are_refused()
+        public void A_flag_unknown_to_the_minor_and_cores_that_are_no_list_are_refused()
         {
             var (flagged, flagWords) = New(new CrystalConfig { size = (uint)sizeof(CrystalConfig), flags = 2 });
             Assert.Equal(0, flagged);
-            Assert.Contains("not known to 1.2", flagWords);
+            Assert.Contains($"not known to 1.{CrystalAbi.Minor}", flagWords);
             var (listed, listWords) = New(new CrystalConfig { size = (uint)sizeof(CrystalConfig) }, Encoding.UTF8.GetBytes("{\"cores\":1}"));
             Assert.Equal(0, listed);
             Assert.Contains("JSON array of directories", listWords);
         }
 
         [Fact]
-        public void The_config_is_32_bytes_and_its_fields_at_the_header_s_offsets()
+        public void The_config_holds_1_2_s_fields_at_the_header_s_offsets()
         {
-            Assert.Equal(32, sizeof(CrystalConfig));
+            Assert.True(sizeof(CrystalConfig) >= 32);
             Assert.Equal((8, 16, 24), ((int)System.Runtime.InteropServices.Marshal.OffsetOf<CrystalConfig>("sqlite"), (int)System.Runtime.InteropServices.Marshal.OffsetOf<CrystalConfig>("cores"), (int)System.Runtime.InteropServices.Marshal.OffsetOf<CrystalConfig>("cores_len")));
-            Assert.Equal(2u, CrystalAbi.Minor);
+        }
+
+        // A config of 1.2's 32 bytes still names its directories in both implementations, once the struct grew past it - see EmuSen_Backend.md §29.40.9.
+        [Fact]
+        public void A_config_of_1_2_s_size_still_names_its_cores()
+        {
+            string plain = PlainTree("sized", development: false);
+            CoreManifest.Write(plain);
+            byte[] cores = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new[] { plain }));
+            foreach (CrystalImpl impl in new[] { CrystalImpl.Managed, CrystalImpl.Native })
+            {
+                fixed (byte* c = cores)
+                {
+                    var config = new CrystalConfig { size = 32, cores = c, cores_len = (nuint)cores.Length };
+                    nint rt = ((delegate* unmanaged[Cdecl]<CrystalConfig*, nint>)impl.Export("new"))(&config);
+                    Assert.True(rt != 0, $"{impl.Name}: {impl.LastError()}");
+                    try { Assert.Contains("v1-plain-core", impl.Read("engines", rt)); }
+                    finally { impl.Free(rt); }
+                }
+            }
         }
     }
 }

@@ -3074,7 +3074,7 @@ case the page for hier
 target none
 covers 1
 $ man hier
-out 8941
+out 9370
 NAME
     hier - this shell's own filesystem layout
 
@@ -3105,10 +3105,16 @@ DESCRIPTION
                       as FirmwareDirectory on Preferences > Firmware, is
                       searched first and only ever read
     /Cheats           your own .cht tree - see 'man cheat'
+    /Cores            core libraries you add yourself. Each is loaded only
+                      once you approve it, by its SHA-256; a changed file
+                      is asked about again. The approvals are kept in
+                      /etc/EmuSen/cores.approved, one 'sha256sum' line
+                      each. See EmuSen_Backend.md section 29.40
     /Logs             'dump'/'load'/screenshot/recording output
     /etc/EmuSen       every config file the emulator keeps: appsettings.json,
                       keybindings.json, gamepadbindings.json,
-                      hotkeybindings.json, audio.json, graphics.json, and
+                      hotkeybindings.json, audio.json, graphics.json,
+                      cores.approved (the cores you approved, see /Cores), and
                       cheats/<name>.json, and themes/<name>.axaml or
                       themes/<name>.css (either a ResourceDictionary or a
                       restricted CSS, both overriding EmuSen.LunaP's Luna*

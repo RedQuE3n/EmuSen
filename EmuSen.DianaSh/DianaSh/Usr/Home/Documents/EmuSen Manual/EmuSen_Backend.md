@@ -7343,6 +7343,56 @@ made in the binding, run and reverted, were each caught by one test:
 - the variable's `0` ignored when the program asks for the Rust;
 - the key accepted with any value.
 
+**Pharaoh files the runtime's lines** (Q2) as §29.12 built it: after its open, after each frame of the classic and
+`--commands` loops, and in `--probe`. The `--testroms` and `--index-library` modes print tables of their own and file no
+runtime line, as before. Pharaoh now also says which implementation serves it, in one line after the core's,
+`[ROM] Runtime: …`: the platform library and the API's version on the Rust, or the C# implementation and why.
+
+**Pharaoh's default is the Rust** (state 2, SR7). Its project sets `EmuSenCrystalNative`. With `EMUSEN_CRYSTAL_NATIVE=0`
+it runs on the C# again, one variable away.
+
+`PharaohCrystalDefaultTests` (2) runs Pharaoh as its own process for one frame of a synthetic NES image. With the
+variable unset it reports the Rust; with `0` it reports the C#. A seeded fault, the binding reading its own assembly
+(`typeof(Crystal).Assembly`) in place of the entry assembly, passes every in-process test. This class caught it.
+
+**The gate, measured on 2026-10-19** [M]. Each program was run for `framesum 600` then `audiosum 600`, with
+`--nobattery` and a 1,300-frame cap (Debug build). Each game was read in place from the ROM library:
+
+| Game | File under the library |
+|---|---|
+| Super Mario Bros. 3 (NES) | `NES/USA/Super Mario Bros 3 (U) (PRG 0).nes` |
+| Donkey Kong Country 2 (SNES) | `SNES/Donkey Kong Country 2 - Diddy's Kong Quest (U) (V1.1) [!].smc` |
+| Tetris 2 (Game Boy) | `GB/T/Tetris 2 (USA).gb` |
+| 10-Pin Bowling (Game Boy Color) | `GBC/10-Pin Bowling (U) [C][!].gbc` |
+| Super Mario 64 (N64) | `N64/Super Mario 64 (Europe) (En,Fr,De).z64` |
+| Sonic the Hedgehog 2 (Mega Drive) | `genesis/Sonic the Hedgehog 2 (JUE) [!].bin` |
+| Ape Escape (PlayStation) | `psx/Ape Escape (USA).cue` |
+
+- Before the flip, under `EMUSEN_CRYSTAL_NATIVE` `0` and `1`, both digests were **equal on all seven**.
+- After the flip, under the variable unset, `0` and `1`, the digests were **equal on all seven**. The whole of each log
+  was equal too, the runtime line aside, including the runtime's own firmware line for Ape Escape. Unset reported the
+  Rust on every game.
+- Both implementations drain silence over the second 600 frames of Super Mario Bros. 3 and of Ape Escape, so those
+  two audio digests compare silence of equal length.
+- Each run had a fresh, empty home of its own (`HOME` pointed at a temporary folder). Afterwards nothing in the ROM
+  library was newer than the gate's start (`find -newer`), and nothing new was in the tree's data folder.
+
+**Pharaoh's classes**, as §14.8 lists them, with every class of `EmuSen.WiseMan.Crystal`, the two new classes among
+them, run at `EMUSEN_CRYSTAL_NATIVE` `0` and `1`:
+- At `0`: 328 of 328 pass.
+- At `1`: 323 pass and 5 are skipped. Five cases failed at `1` as the tree stood before this commit, because each reaches the
+  C# implementation's own types or statics:
+  - the C# implementation serving the API with the variable unset;
+  - two catalog cases that move the C# discovery's directories (`CoreDiscovery.UseDirectories`), which the Rust takes
+    from its config (§29.6);
+  - divergence row 1, which attaches a C# engine that withholds rewind to the C# runtime. Every v1 engine allows
+    rewind, and the Rust answers `rewind_capture` true;
+  - a card made in the fixture's tree, where no engine names the card's medium. That is §29.14's recorded difference
+    (F28).
+
+  Each now carries `CSharpImplementationFact`, which skips it under `EMUSEN_CRYSTAL_NATIVE=1` and says why. None is a
+  difference of the Rust's answers.
+
 ### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
 
 *Part (b) numbers its sections from §29.30, so that part (a)'s pieces, built at the same time, keep §29.16 to §29.29.*

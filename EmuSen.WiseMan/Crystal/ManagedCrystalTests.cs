@@ -42,7 +42,7 @@ namespace EmuSen.WiseMan.Crystal
             return bytes;
         }
 
-        [Fact]
+        [CSharpImplementationFact("it asks which implementation answers when the variable is unset; CrystalSwitchTests holds the choice")]
         public void The_C_sharp_implementation_serves_the_API_while_the_switch_is_unset()
         {
             Assert.False(CrystalRuntime.Native);

@@ -53,7 +53,7 @@ namespace EmuSen.WiseMan.Crystal
         }
 
         // A catalog console's pad, ports and players are its sole engine's core info, read from the sidecars beside the program (§17.8 Q11) - see EmuSen_Backend.md §18.10.10.
-        [Fact]
+        [CSharpImplementationFact("it moves the C# discovery's directories, which the Rust takes from its config; CrystalParityTests compares the systems' JSON")]
         public void Each_catalog_console_s_controllers_are_its_engine_s_core_info()
         {
             CoreDiscovery.UseDirectories(null);
@@ -77,7 +77,7 @@ namespace EmuSen.WiseMan.Crystal
         }
 
         // The NES's and SNES's pad and ports move with their engine's sidecar, so the core info is their one owner - see EmuSen_Backend.md §18.10.12.
-        [Fact]
+        [CSharpImplementationFact("it moves the C# discovery's directories, which the Rust takes from its config; CrystalParityTests compares the systems' JSON")]
         public void The_nes_and_snes_pads_follow_their_engine_s_sidecar()
         {
             CoreDiscovery.UseDirectories(null);

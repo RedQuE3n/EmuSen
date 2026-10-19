@@ -27,7 +27,7 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Equal(dir, s.StopRecording());
         }
 
-        [Fact]
+        [CSharpImplementationFact("the fixture's tree has no engine that names a card's medium, which the Rust reads from core info (EmuSen_Backend.md §29.14)")]
         public void A_card_made_through_the_binding_is_made_once_and_said_done()
         {
             string card = Path.Combine(_f.Root, "Cards", "New.mcr");

@@ -105,6 +105,51 @@ impl Json {
         self
     }
 
+    /// A parsed document written again as this writer writes, `JsonSerializer.Serialize` into a default writer.
+    pub fn value(&mut self, v: &emusen_dotnet::json::Value) -> &mut Json {
+        use emusen_dotnet::json::Value;
+        match v {
+            Value::Null => self.null_value(),
+            Value::Bool(b) => {
+                self.comma();
+                self.out.push_str(if *b { "true" } else { "false" });
+                self
+            }
+            Value::Number(token) => {
+                self.comma();
+                self.out.push_str(token);
+                self
+            }
+            Value::String(t) => self.str_value(&t.text),
+            Value::Array(items) => {
+                self.begin_array();
+                for item in items {
+                    self.value(item);
+                }
+                self.end_array()
+            }
+            Value::Object(members) => {
+                self.begin_object();
+                for (key, item) in members {
+                    self.name(&key.text);
+                    self.value(item);
+                }
+                self.end_object()
+            }
+        }
+    }
+
+    /// A member's name, its value written next.
+    pub fn key(&mut self, key: &str) -> &mut Json {
+        self.name(key)
+    }
+
+    /// A member whose value is a parsed document.
+    pub fn key_value(&mut self, key: &str, v: &emusen_dotnet::json::Value) -> &mut Json {
+        self.name(key);
+        self.value(v)
+    }
+
     pub fn null_value(&mut self) -> &mut Json {
         self.comma();
         self.out.push_str("null");

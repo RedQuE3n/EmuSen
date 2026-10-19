@@ -75,7 +75,7 @@ fn a_frame_through_the_runtime_allocates_nothing() {
     }
     let game = root.join("game.tst");
     std::fs::write(&game, [b'V', b'1', b'T', b'C', 4, 0, 1, 2, 3, 4]).unwrap();
-    let rt = Runtime::new(&Config { cores: Some(vec![cores.to_string_lossy().into_owned()]), development: Some(false), sqlite: None, lender: None });
+    let rt = Runtime::new(&Config { fetch: None, cores: Some(vec![cores.to_string_lossy().into_owned()]), development: Some(false), sqlite: None, lender: None });
     let game = game.to_string_lossy().into_owned();
     let id = rt.open(&Asked { path: Some(&game), console: None, engine: None, opened: OpenedWith::default() }).unwrap();
     let s = rt.sessions.get(id).unwrap();

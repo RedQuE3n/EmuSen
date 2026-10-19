@@ -77,6 +77,12 @@ fn cores_of(text: &str) -> Result<Vec<String>, i32> {
     }
 }
 
+/// A URL's body through the platform's one HTTP client, within `CheatDatabaseInstaller.FetchTimeout`'s five minutes.
+fn fetch(url: &str) -> Result<Vec<u8>, String> {
+    let request = emusen_net::Request::new(url, std::time::Duration::from_secs(300));
+    emusen_net::fetch(&request, &emusen_net::Progress::default()).map_err(|f| f.to_string())
+}
+
 /// A runtime; null on failure, the words in `last_error`.
 ///
 /// # Safety
@@ -84,7 +90,7 @@ fn cores_of(text: &str) -> Result<Vec<String>, i32> {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_crystal_new(config: *const emusen_crystal_config) -> *mut emusen_crystal_runtime {
     let made = || -> Result<Runtime, i32> {
-        let mut c = Config { lender: Some(std::sync::Arc::new(SerenityLender)), ..Config::default() };
+        let mut c = Config { lender: Some(std::sync::Arc::new(SerenityLender)), fetch: Some(std::sync::Arc::new(fetch)), ..Config::default() };
         if !config.is_null() {
             let size = unsafe { (*config).size } as usize;
             if size < 8 {
@@ -874,4 +880,30 @@ pub unsafe extern "C" fn emusen_crystal_raw_copy(rt: *mut emusen_crystal_runtime
         Ok(bytes as i64)
     };
     copied().unwrap_or_else(|status| status as i64)
+}
+
+/// # Safety
+/// `rt` a live runtime; `base` valid for `base_len` bytes; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_record_start(rt: *mut emusen_crystal_runtime, session: u32, base: *const u8, base_len: usize, stride: u32, out: *mut u8, len: usize) -> i64 {
+    let started = || -> Result<String, i32> {
+        let s = unsafe { session_of(rt, session) }?;
+        let at = unsafe { required(base, base_len, "the folder") }?;
+        s.start_recording(at, stride).map_err(|(st, w)| fail(st, w))
+    };
+    match started() {
+        Ok(folder) => unsafe { put(folder.as_bytes(), out, len) },
+        Err(status) => status as i64,
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_record_stop(rt: *mut emusen_crystal_runtime, session: u32, out: *mut u8, len: usize) -> i64 {
+    let stopped = || -> Result<String, i32> { unsafe { session_of(rt, session) }?.stop_recording().map_err(|(st, w)| fail(st, w)) };
+    match stopped() {
+        Ok(folder) => unsafe { put(folder.as_bytes(), out, len) },
+        Err(status) => status as i64,
+    }
 }

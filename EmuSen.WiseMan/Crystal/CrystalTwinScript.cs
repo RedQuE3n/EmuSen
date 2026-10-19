@@ -120,6 +120,12 @@ namespace EmuSen.WiseMan.Crystal
                     return _route == "twin" ? _impl.Read("sessions", _rt) : CopyOut("sessions", (o, n) => Table()->sessions(Table()->ctx, o, n));
                 case "games":
                     return _route == "twin" ? _impl.Read("systems", _rt) : CopyOut("games", (o, n) => Table()->games(Table()->ctx, o, n));
+                case "record_start":
+                    return Recorded(args[0], uint.Parse(args[1]!));
+                case "record_stop":
+                    return Recorded(null, 0);
+                case "record_files":
+                    return RecordedFiles();
                 case "service":
                     nint t = _x->session_service(_rt, _session, U(args[0]));
                     return t == 0 ? $"null: {_impl.LastError()}" : "a table";
@@ -128,6 +134,48 @@ namespace EmuSen.WiseMan.Crystal
             string name = verb.TrimEnd('?');
             if (!Signatures.TryGetValue(name, out var signature)) throw new InvalidOperationException($"no function {name}");
             return Call(name, signature.Args, signature.Int, args, lengthOnly);
+        }
+
+        private string? _recording;
+
+        // record_start into a folder under base, or record_stop with none; the folder's time hidden.
+        private string Recorded(string? at, uint stride)
+        {
+            byte[]? b = at is null ? null : Encoding.UTF8.GetBytes(at);
+            long n;
+            var buffer = new byte[4096];
+            fixed (byte* bp = b)
+            fixed (byte* o = buffer)
+                n = at is null && stride == 0 && b is null ? _x->record_stop(_rt, _session, o, (nuint)buffer.Length) : _x->record_start(_rt, _session, bp, (nuint)(b?.Length ?? 0), stride, o, (nuint)buffer.Length);
+            if (n < 0) return $"status {n}: {Hidden(_impl.LastError())}";
+            _recording = Encoding.UTF8.GetString(buffer, 0, (int)n);
+            return Hidden(_recording);
+        }
+
+        private static string Hidden(string text) => System.Text.RegularExpressions.Regex.Replace(text, "_[0-9]{8}_[0-9]{6}", "_<time>");
+
+        // What the last recording left: its files by name, the ledger's lines, and each archived picture's pixels by digest.
+        private string RecordedFiles()
+        {
+            if (_recording is null || !System.IO.Directory.Exists(_recording)) return "none";
+            var names = System.IO.Directory.EnumerateFiles(_recording).Select(System.IO.Path.GetFileName).Order(StringComparer.Ordinal).ToList();
+            string ledger = System.IO.File.Exists(System.IO.Path.Combine(_recording, "frames.log")) ? $"{System.IO.File.ReadAllLines(System.IO.Path.Combine(_recording, "frames.log")).Length} lines" : "no ledger";
+            var pictures = new List<string>();
+            string zip = System.IO.Path.Combine(_recording, "frames.zip");
+            if (System.IO.File.Exists(zip))
+            {
+                using var archive = System.IO.Compression.ZipFile.OpenRead(zip);
+                foreach (var e in archive.Entries.OrderBy(e => e.FullName, StringComparer.Ordinal))
+                {
+                    using var s = e.Open();
+                    using var m = new System.IO.MemoryStream();
+                    s.CopyTo(m);
+                    using var bitmap = SkiaSharp.SKBitmap.Decode(m.ToArray());
+                    using var rgba = bitmap?.Copy(SkiaSharp.SKColorType.Rgba8888);
+                    pictures.Add($"{e.FullName}:{(rgba is null ? "undecoded" : $"{rgba.Width}x{rgba.Height} {Convert.ToHexString(SHA256.HashData(rgba.Bytes))[..16]}")}");
+                }
+            }
+            return $"{string.Join(",", names)} | {ledger} | {string.Join(",", pictures)}";
         }
 
         private string Opened(string answer)

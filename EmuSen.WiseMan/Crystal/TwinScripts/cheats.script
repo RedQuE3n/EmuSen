@@ -1,0 +1,86 @@
+# One game's cheats through the twins and the tables: the registry, its files, the codecs and the database.
+open $GAME
+cheat_codecs
+cheat_op 0 -
+cheat_op 2 '{"space":"$SPACE","address":66,"value":9,"description":"poke"}'
+cheat_op 2 '{"space":"nope","address":66,"value":9}'
+cheat_op 2 '{"space":"$SPACE","address":66,"value":256}'
+cheat_op 3 '{"address":32768,"value":234,"compare":169,"description":"patch"}'
+cheat_op 3 '{"address":32768,"value":234,"compare":300}'
+cheat_op 1 '{"kind":"ram","writes":[{"space":"$SPACE","address":64,"value":4660,"width":2,"type":"increase","big_endian":true,"repeat":2,"repeat_address":2,"repeat_value":1}],"description":"wide"}'
+cheat_op 1 '{"kind":"ram","writes":[{"space":"$SPACE","address":64,"value":1,"type":"IfEqual"},{"space":"$SPACE","address":65,"value":2,"bit":3}]}'
+cheat_op 1 '{"kind":"rom","writes":[{"address":32769,"value":1}],"compare":2,"enabled":false}'
+cheat_op 1 '{"kind":"ram","writes":[]}'
+cheat_op 1 '{"kind":"ram","writes":7}'
+cheat_op 1 '{"kind":"xyz","writes":[]}'
+cheat_op 1 '{"kind":"ram","writes":[{"address":1,"value":-1}]}'
+cheat_op 1 '{"kind":"ram","writes":[{"address":1,"value":1,"type":"Sideways"}]}'
+cheat_op 1 '{"kind":"ram","writes":[{"address":1,"value":1,"type":"5"}]}'
+cheat_op 1 '{"kind":"ram","writes":[3]}'
+cheat_op 0 -
+cheat_op 4 '{"id":1}'
+cheat_op 5 '{"id":1}'
+cheat_op 5 '{"id":99}'
+cheat_op 6 '{"id":2}'
+cheat_op 6 '{"id":2}'
+cheat_op 8 -
+cheat_op 8 '{"enabled":false}'
+cheat_op 8 -
+cheat_op 8 '{"enabled":true}'
+frames 2
+cheat_op 9 -
+cheat_op 17 -
+cheat_op 20 '{"name":"saved list"}'
+cheat_op 20 '{"name":"bad/name"}'
+cheat_op 18 -
+cheat_op 19 '{"name":"saved list"}'
+cheat_op 19 '{"name":"missing"}'
+cheat_op 19 '{"name":".."}'
+cheat_op 7 -
+cheat_op 0 -
+cheat_op 10 '{"Cheats":[{"Description":"In","Kind":"RamPoke","Writes":[{"Space":"$SPACE","Address":"42","Value":"07"}]},{"Description":"Patch","Kind":"RomPatch","Writes":[{"Address":"8000","Value":"EA"}],"Compare":"A9"},{"Writes":null}]}'
+cheat_op 10 'null'
+cheat_op 10 '{"Cheats":7}'
+cheat_op 10 '[1]'
+cheat_op 0 -
+cheat_op 11 '{"code":"$CODE"}'
+cheat_op 11 '{"code":"$CODE","unchecked":true}'
+cheat_op 11 '{"code":"$GENIE","codec":"explicit"}'
+cheat_op 11 '{"code":"$GENIE","codec":"explicit","unchecked":true}'
+cheat_op 11 '{"code":"ZZZZ"}'
+cheat_op 11 '{"code":"ZZZZ","unchecked":true}'
+cheat_op 11 '{"code":"ZZZZ","codec":"explicit","unchecked":true}'
+cheat_op 11 '{"code":"1","codec":"sideways"}'
+cheat_op 15 '{"code":"$CODE"}'
+cheat_op 15 '{"code":"$GENIE"}'
+cheat_op 16 '{"text":"cheats = 2\ncheat0_desc = \"Lives\"\ncheat0_code = \"$CODE\"\ncheat0_enable = true\ncheat1_desc = \"Raw\"\ncheat1_address = 66\ncheat1_value = 9\ncheat1_handler = 1\ncheat1_memory_search_size = 3\ncheat1_cheat_type = 1\n"}'
+cheat_op 16 '{"text":""}'
+cheat_op 12 -
+cheat_op 13 '{"system":"$CHEATSYSTEM"}'
+cheat_op 13 '{"system":"$CHEATSYSTEM","filter":"lo"}'
+cheat_op 14 '{"text":"loop"}'
+cheat_op 14 '{"text":"loop.sfc","limit":1}'
+cheat_op 21 -
+cheat_op 22 '{"game":"Loop"}'
+cheat_op 22 '{"game":"Nothing at all"}'
+cheat_op 23 -
+cheat_op 25 -
+cheat_op 3 'not json'
+via table
+cheat_codecs
+cheat_op 0 -
+cheat_op 2 '{"space":"$SPACE","address":67,"value":1}'
+via ro
+cheat_op 2 '{"space":"$SPACE","address":67,"value":1}'
+cheat_op 8 '{"enabled":false}'
+cheat_op 8 -
+cheat_op 23 '{"apply":true}'
+cheat_op 24 -
+cheat_op 0 -
+cheat_op? 0 -
+via stranger
+cheat_codecs
+cheat_op 12 -
+via twin
+cheat_op? 0 -
+close

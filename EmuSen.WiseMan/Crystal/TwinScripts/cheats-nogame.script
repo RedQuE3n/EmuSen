@@ -1,0 +1,19 @@
+# Session 0's cheat ops, answered with no game, and the database pruned through the length query's protocol.
+log_switch 0
+via twin0
+cheat_op 12 -
+cheat_op 13 '{"system":"Nintendo - Nintendo Entertainment System"}'
+cheat_op 14 '{"text":"loop"}'
+cheat_op 16 '{"text":"cheats = 1\ncheat0_desc = \"Raw\"\ncheat0_address = 66\ncheat0_value = 9\n"}'
+cheat_op 18 -
+cheat_op 19 '{"name":"missing"}'
+cheat_op 21 -
+cheat_op 22 '{"game":"Loop"}'
+cheat_op 0 -
+cheat_op 2 '{"space":"RAM","address":1,"value":1}'
+cheat_op 99 -
+cheat_op 23 -
+cheat_op? 23 '{"apply":true}'
+cheat_op 23 '{"apply":true}'
+cheat_op 23 '{"apply":true}'
+cheat_op 12 -

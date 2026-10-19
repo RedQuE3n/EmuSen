@@ -18,6 +18,7 @@ pub mod machine_info;
 pub mod media;
 pub mod open;
 pub mod png;
+pub mod recording;
 pub mod rewind;
 pub mod route;
 pub mod runtime;

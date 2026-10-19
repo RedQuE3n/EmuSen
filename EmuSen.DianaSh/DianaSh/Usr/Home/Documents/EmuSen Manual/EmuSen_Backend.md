@@ -7131,6 +7131,56 @@ phases' times.
   and 2, the platform library's 31 and 4. WiseMan's Crystal, debug, header, session service, Hotaru on the API and
   contract shape classes, 79 of 79.
 
+### 29.24 Built 2026-10-19: part (c), piece 4, the cheats and the recorder's calls; every export in place
+
+**The piece** (this commit).
+- **`service::cheats`** is the C# `CheatOp` and `CheatCodecs`: the session's registry (part (b)'s, the debugger's),
+  the codecs of the machine's system by `emusen-systems`' pairs, the player's cheat lists through Galaxia's `CheatFile`
+  model, and the database through `emusen-cheats`' index, pruner and installer.
+  - EXPORT writes the list as `ConfigJson.Options` serialises it, through Galaxia's model formatter; FILE_READ embeds
+    the file compact, as `JsonSerializer.Serialize` into a default writer does.
+  - DB_PRUNE with `"apply"` and DB_UPDATE apply on their first call and keep their record until a buffer takes it.
+  - The cheat systems the database is pruned to keep are the catalog's `SupportedCheatSystems`, the registry's rows in
+    its order and then those discovery added; `Catalog` gained them.
+- **Session 0's cheat ops** go to the runtime's provider with no game, as the C#'s `NoGame` provider answers them: the ten
+  ops that need no game, each other op refused with `NO_SESSION` in the C#'s words.
+- **`service::cheat_file`** reads CHEAT_IMPORT's list as the C# reads it. `JsonSerializer.Deserialize<CheatFile>`
+  refuses a value of the wrong kind with the .NET type it wanted, the JSON path and the reader's line and byte, which
+  Galaxia's binder words otherwise; and `LoadFrom` reads through a null (a null list, entry, list of writes, or a write
+  after writes that parsed), so the C# faults after loading the entries before it. Both are reproduced, as measured.
+- **The download** is the platform's: the runtime's config gained `fetch`, the body of a URL or the words of why not,
+  which the platform library fills over `emusen-net` with `CheatDatabaseInstaller.FetchTimeout`'s five minutes. So
+  `emusen-crystal` takes no HTTP client of its own, as the device lender keeps it free of Vulkan (§29.2).
+- **`recording`** is the C# `StartRecording` and `StopRecording` over part (b)'s recorder, each a change between
+  frames; a recording a close finds is stopped first. The platform library exports `record_start` and `record_stop`.
+
+**Every export in place.** With this piece the platform library exports all 142 functions `emusen_crystal.h` declares
+and the session's table has every entry, measured on 2026-10-19 by `nm -D` on the built library against the header's
+prototypes: equal both ways. The binding's switch (§29.3) can now reach the Rust under `EMUSEN_CRYSTAL_NATIVE=1`; no
+program's default is changed.
+
+**Differences kept, and named.** An archive the installer does not read (§15.3) is a fault in its words, where the C#
+falls back to .NET's zip reader; the download cannot run in the parity class, which holds only its refusals.
+
+**Measured on 2026-10-19** [M]:
+- **Parity.** Two new cases pass, comparing every answer, the Saves tree, the cheat database's tree and the saved
+  lists' folder.
+  - 421 calls: a script on the NES, the SNES, the Game Boy, the Genesis and the test core (no codecs), and session 0's
+    script. Every op and its refusals; writes of every field and type, by name and by number; the lists saved, listed and read
+    back, names refused; imports of a list with a null list of writes, of `null`, of a value of the wrong kind at the
+    root and at `Cheats`; decodes checked and unchecked through both codecs with each codec's own words; claims;
+    `.cht` text parsed; the planted database's systems, games, finds, best match, status, a plan and a plan applied
+    through the length query's protocol, which applies it once.
+  - The recorder through the API, 17 calls on MoonRT: the refusals, a recording of every third frame with its
+    ledger and its archived pictures compared by decoded pixels, a second start refused, a recording a close ends; the
+    folder's time hidden. ffmpeg ran locally in the test's folder.
+- **Seeded faults**, five, each caught: a cheat's kind words swapped, a write type's name in lower case, the explicit
+  codec's claim answered by the automatic one, session 0 answering LIST, and the second start's refusal without its
+  folder.
+- **Other tests.** The crates' tests, `--profile test-checked`: `emusen-cheats` 9, `emusen-crystal` 6, 6 and 1,
+  `emusen-crystal-debug` 4 and 2, the platform library's 31 and 4. WiseMan's Crystal, debug, header, session service,
+  Hotaru on the API, contract shape, binding and cheat classes, 479 of 481, the two skipped being `SettingPathsOpenTests`' own.
+
 ### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
 
 *Part (b) numbers its sections from §29.30, so that part (a)'s pieces, built at the same time, keep §29.16 to §29.29.*

@@ -8,7 +8,7 @@ use std::sync::Mutex;
 
 use emusen_crystal::abi::{self, emusen_crystal_runtime};
 use emusen_crystal::runtime::Runtime;
-use emusen_crystal::service::{Answer, Call, Raw, machine, registries, views};
+use emusen_crystal::service::{Answer, Call, Raw, cheats, machine, registries, views};
 use emusen_session_service::abi::{emusen_session_v1, status as svc};
 
 use crate::crystal::{fail, put, runtime};
@@ -1102,13 +1102,57 @@ unsafe extern "C" fn audio_peek(ctx: *mut c_void, session: u32, o: *mut u8, len:
     out(unsafe { table(ctx, session, |c| views::audio_peek(c)) }, o, len)
 }
 
-// ---- The table ------------------------------------------------------------------------------------------------------
+// ---- Cheats -----------------------------------------------------------------------------------------------------
 
-/// A table with no entries, the start of one filled as the groups are built.
-fn unbuilt() -> emusen_session_v1 {
-    // SAFETY: every field is an integer, a pointer or an optional function pointer, for which zero is valid.
-    unsafe { std::mem::zeroed() }
+/// A cheat op's answer: its record copied out where it has one, else its value.
+fn cheat_answer(result: Result<(Option<Vec<u8>>, i64), i32>, o: *mut u8, len: usize) -> i64 {
+    match result {
+        Ok((Some(record), _)) => unsafe { put(&record, o, len) },
+        Ok((None, value)) => value,
+        Err(status) => status as i64,
+    }
 }
+
+fn room_of(o: *mut u8, len: usize) -> Option<usize> {
+    if o.is_null() { None } else { Some(len) }
+}
+
+/// # Safety
+/// `rt` a live runtime; `args` valid for `args_len` bytes; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_cheat_op(rt: *mut emusen_crystal_runtime, session: u32, op: u32, args: *const u8, args_len: usize, o: *mut u8, len: usize) -> i64 {
+    let args = unsafe { Raw::new(args, args_len) };
+    let result = if session == 0 {
+        match unsafe { runtime(rt) } {
+            Ok(r) => cheats::cheat_op_without_game(r, op, args, room_of(o, len)).map_err(|(st, w)| {
+                service_fail(st, &w);
+                fail(st, w)
+            }),
+            Err(status) => Err(status),
+        }
+    } else {
+        unsafe { twin(rt, session, |c| cheats::cheat_op(c, op, args, room_of(o, len))) }
+    };
+    cheat_answer(result, o, len)
+}
+
+unsafe extern "C" fn cheat_op(ctx: *mut c_void, session: u32, op: u32, args: *const u8, args_len: usize, o: *mut u8, len: usize) -> i64 {
+    let args = unsafe { Raw::new(args, args_len) };
+    cheat_answer(unsafe { table(ctx, session, |c| cheats::cheat_op(c, op, args, room_of(o, len))) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_cheat_codecs(rt: *mut emusen_crystal_runtime, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, cheats::cheat_codecs) }, o, len)
+}
+
+unsafe extern "C" fn cheat_codecs(ctx: *mut c_void, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, cheats::cheat_codecs) }, o, len)
+}
+
+// ---- The table ------------------------------------------------------------------------------------------------------
 
 /// Every entry of the table, its ctx set by the slot that holds it.
 fn template() -> emusen_session_v1 {
@@ -1196,7 +1240,8 @@ fn template() -> emusen_session_v1 {
         tile_sheet: Some(tile_sheet),
         palette_swatch: Some(palette_swatch),
         audio_peek: Some(audio_peek),
-        ..unbuilt()
+        cheat_op: Some(cheat_op),
+        cheat_codecs: Some(cheat_codecs),
     }
 }
 

@@ -403,3 +403,106 @@ pub fn cards_op(catalog: &crate::catalog::Catalog, tree: &Tree, op: u32, args: &
         _ => Err((emusen_session_service::abi::status::NOT_SUPPORTED, format!("no cards op {op} in 1.{}", crate::abi::MINOR))),
     }
 }
+
+/// The files of a game's save media at one load, the flags its machine is made with, and the locks held on them,
+/// `MediaPlacement`; the locks go when it is dropped.
+#[derive(Default)]
+pub struct Placement {
+    pub files: Vec<(u32, crate::battery::BatterySave)>,
+    /// The console media's slots a new machine finds formatted where no file exists yet, by their module.
+    pub fresh: Vec<(u32, &'static str)>,
+    pub removable_apart: bool,
+    pub console_apart: bool,
+    pub notices: Vec<String>,
+    locks: Vec<emusen_galaxia::medium_lock::MediumLock>,
+}
+
+impl Placement {
+    pub fn file(&self, which: u32) -> Option<&crate::battery::BatterySave> {
+        self.files.iter().find(|(w, _)| *w == which).map(|(_, s)| s)
+    }
+
+    fn set(&mut self, which: u32, save: crate::battery::BatterySave) {
+        match self.files.iter_mut().find(|(w, _)| *w == which) {
+            Some(slot) => slot.1 = save,
+            None => self.files.push((which, save)),
+        }
+    }
+}
+
+/// Each slot's file at a load: under shared or named its medium's file, locked for `holder`, else the game's own;
+/// none with no battery, `MemoryCards.Place`.
+pub fn place(
+    tree: &Tree,
+    console: &str,
+    system: Option<&SystemDetail>,
+    choices: &[(String, Choice)],
+    holder: &str,
+    own: &dyn Fn(&BatteryFile) -> crate::battery::BatterySave,
+    disabled: bool,
+) -> Placement {
+    let mut placed = Placement::default();
+    let mut taken: Vec<String> = Vec::new();
+    for medium in media_of(console, system) {
+        let choice = choices.iter().find(|(id, _)| *id == medium.id).map(|(_, c)| c.clone()).unwrap_or(Choice { mode: PER_GAME.to_string(), names: Vec::new() });
+        for slot in 0..medium.slots.len() {
+            let file = medium.slots[slot].clone();
+            if medium.is_console()
+                && let Some(module) = medium.entry.as_ref().and_then(|e| e.module)
+            {
+                match placed.fresh.iter_mut().find(|(w, _)| *w == file.which) {
+                    Some(f) => f.1 = module.id,
+                    None => placed.fresh.push((file.which, module.id)),
+                }
+            }
+            if choice.apart() {
+                let name = medium.name_for(&choice, slot);
+                if let Some(save) = apart(tree, &medium, &name, slot, holder, &mut taken, &mut placed, disabled) {
+                    placed.set(file.which, save);
+                    if medium.is_console() {
+                        placed.console_apart = true;
+                    } else {
+                        placed.removable_apart = true;
+                    }
+                    continue;
+                }
+            }
+            let save = own(&file);
+            if let Some(at) = &save.path
+                && let Some(held) = emusen_galaxia::medium_lock::try_take(at, holder, true)
+            {
+                placed.locks.push(held);
+            }
+            placed.set(file.which, save);
+        }
+    }
+    placed
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apart(tree: &Tree, medium: &SaveMedium, name: &str, slot: usize, holder: &str, taken: &mut Vec<String>, placed: &mut Placement, disabled: bool) -> Option<crate::battery::BatterySave> {
+    let save = crate::battery::BatterySave::medium(tree, &medium.console, medium.is_console(), name, &medium.extension, disabled);
+    let key = medium.path_of(tree, name);
+    if taken.iter().any(|t| equals_ignore_case(t, &key)) {
+        placed.notices.push(format!("{name} is already in another slot; {} keeps the game's own {}.", medium.slot_label(slot), emusen_savemedia::in_text(&medium.noun)));
+        return None;
+    }
+    taken.push(key);
+    let Some(at) = save.path.clone() else { return Some(save) };
+    match emusen_galaxia::medium_lock::try_take(&at, holder, true) {
+        Some(held) => {
+            placed.locks.push(held);
+            Some(save)
+        }
+        None => {
+            let by = emusen_galaxia::medium_lock::holder_of(&at).unwrap_or_else(|| "another program".to_string());
+            placed.notices.push(format!("{name} is in use by {by}; {} keeps the game's own {} until it is free.", medium.slot_label(slot), emusen_savemedia::in_text(&medium.noun)));
+            None
+        }
+    }
+}
+
+/// Every medium's stored choice, by medium id, `MemoryCards.Stored`.
+pub fn stored_choices(media: &[SaveMedium], stored: &dyn Fn(&str) -> Option<String>) -> Vec<(String, Choice)> {
+    media.iter().map(|m| (m.id.clone(), m.read(stored))).collect()
+}

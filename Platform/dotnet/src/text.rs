@@ -207,6 +207,14 @@ pub fn to_lower(text: &str) -> String {
     text.chars().map(lower_invariant).collect()
 }
 
+/// `string.ToUpperInvariant()`.
+pub fn to_upper(text: &str) -> String {
+    if text.is_ascii() {
+        return text.to_ascii_uppercase();
+    }
+    text.chars().map(simple_upper).collect()
+}
+
 /// `text.StartsWith(prefix, OrdinalIgnoreCase)`.
 pub fn starts_with_ignore_case(text: &str, prefix: &str) -> bool {
     if text.is_ascii() && prefix.is_ascii() {

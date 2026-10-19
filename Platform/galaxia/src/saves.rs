@@ -8,6 +8,11 @@ pub const STATE_EXTENSION: &str = ".state";
 /// The slot that keeps the plain `<rom>.state` name.
 pub const DEFAULT_STATE_SLOT: i32 = 1;
 
+/// The name a console started empty goes by, `SaveLibrary.ConsoleSessionName`.
+pub fn console_session_name(console: &str) -> String {
+    format!("{console} (no disc)")
+}
+
 const STYLE: Style = Style::HOST;
 
 fn stem(rom_path: &str) -> &str {

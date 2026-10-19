@@ -3,7 +3,7 @@
 //! only once every export of major 1 is here (EmuSen_Backend.md §29.3).
 
 use std::cell::RefCell;
-use emusen_crystal::abi::{self, emusen_crystal_config, emusen_crystal_runtime};
+use emusen_crystal::abi::{self, emusen_crystal_config, emusen_crystal_open_params, emusen_crystal_runtime};
 use emusen_crystal::runtime::{Config, Runtime};
 use emusen_session_service::abi::status as svc;
 
@@ -141,6 +141,7 @@ listing!(emusen_crystal_systems, systems_json);
 listing!(emusen_crystal_shelves, shelves_json);
 listing!(emusen_crystal_engines, engines_json);
 listing!(emusen_crystal_cores, cores_json);
+listing!(emusen_crystal_sessions, sessions_json);
 
 /// # Safety
 /// `rt` a live runtime.
@@ -236,5 +237,121 @@ pub unsafe extern "C" fn emusen_crystal_cards_op(rt: *mut emusen_crystal_runtime
     match answer() {
         Ok(json) => unsafe { put(json.as_bytes(), out, len) },
         Err(status) => status as i64,
+    }
+}
+
+fn status_of(result: Result<(), (i32, String)>) -> i32 {
+    match result {
+        Ok(()) => 0,
+        Err((status, words)) => fail(status, words),
+    }
+}
+
+fn copy_of(result: Result<String, (i32, String)>, out: *mut u8, len: usize) -> i64 {
+    match result {
+        Ok(json) => unsafe { put(json.as_bytes(), out, len) },
+        Err((status, words)) => fail(status, words) as i64,
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime; `params` valid for its `size` bytes, its texts for their lengths.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_open(rt: *mut emusen_crystal_runtime, params: *const emusen_crystal_open_params) -> i64 {
+    let opened = || -> Result<u32, i32> {
+        let r = unsafe { runtime(rt) }?;
+        if params.is_null() {
+            return Err(fail(svc::NULL, "null open parameters"));
+        }
+        let p = unsafe { &*params };
+        if p.size < 64 {
+            return Err(fail(abi::status::BAD_STRUCT, format!("emusen_crystal_open_params of {} bytes; version 1.0's is 64", p.size)));
+        }
+        let known = abi::OPEN_NO_BATTERY | abi::OPEN_SINGLE_ROWS;
+        if p.flags & !known != 0 {
+            return Err(fail(svc::NOT_SUPPORTED, format!("open flags 0x{:X} are not known to 1.{}", p.flags & !known, abi::MINOR)));
+        }
+        let asked = emusen_crystal::open::Asked {
+            path: unsafe { text(p.path, p.path_len) }?,
+            console: unsafe { text(p.console, p.console_len) }?,
+            engine: unsafe { text(p.engine, p.engine_len) }?,
+            opened: emusen_crystal::session::OpenedWith { flags: p.flags, audio_buffer_max_samples: p.audio_buffer_max_samples },
+        };
+        r.open(&asked).map_err(|(status, words)| fail(status, words))
+    };
+    match opened() {
+        Ok(id) => id as i64,
+        Err(status) => status as i64,
+    }
+}
+
+macro_rules! session_call {
+    ($name:ident, $method:ident) => {
+        /// # Safety
+        /// `rt` a live runtime.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn $name(rt: *mut emusen_crystal_runtime, session: u32) -> i32 {
+            match unsafe { runtime(rt) } {
+                Ok(r) => status_of(r.$method(session)),
+                Err(status) => status,
+            }
+        }
+    };
+}
+
+session_call!(emusen_crystal_close, close);
+session_call!(emusen_crystal_reset, reset);
+session_call!(emusen_crystal_disc_eject, disc_eject);
+
+macro_rules! session_read {
+    ($name:ident, $method:ident) => {
+        /// # Safety
+        /// `rt` a live runtime; `out` valid for `len` bytes, or null.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn $name(rt: *mut emusen_crystal_runtime, session: u32, out: *mut u8, len: usize) -> i64 {
+            match unsafe { runtime(rt) } {
+                Ok(r) => copy_of(r.$method(session), out, len),
+                Err(status) => status as i64,
+            }
+        }
+    };
+}
+
+session_read!(emusen_crystal_session_info, session_info);
+session_read!(emusen_crystal_save_media, save_media);
+
+/// # Safety
+/// `rt` a live runtime; `path` valid for `path_len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_disc_insert(rt: *mut emusen_crystal_runtime, session: u32, path: *const u8, path_len: usize) -> i32 {
+    let done = || -> Result<(), i32> {
+        let r = unsafe { runtime(rt) }?;
+        r.sessions.get(session).map_err(|(s, w)| fail(s, w))?;
+        let at = unsafe { text(path, path_len) }?.filter(|p| !p.is_empty()).ok_or_else(|| fail(svc::BAD_ARGUMENT, "the disc's path must be given"))?;
+        r.disc_insert(session, at).map_err(|(s, w)| fail(s, w))
+    };
+    match done() {
+        Ok(()) => 0,
+        Err(status) => status,
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_disc_change(rt: *mut emusen_crystal_runtime, session: u32, index: u32) -> i32 {
+    match unsafe { runtime(rt) } {
+        Ok(r) => status_of(r.disc_change(session, index)),
+        Err(status) => status,
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_disc_lid(rt: *mut emusen_crystal_runtime, session: u32, open: u32) -> i32 {
+    match unsafe { runtime(rt) } {
+        Ok(r) => status_of(r.disc_lid(session, open != 0)),
+        Err(status) => status,
     }
 }

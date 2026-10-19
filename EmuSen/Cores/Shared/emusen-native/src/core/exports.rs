@@ -335,6 +335,31 @@ unsafe fn empty_system<T: Core>(system: *const std::ffi::c_char) -> Result<Strin
     Ok(id.to_owned())
 }
 
+/// Since 1.15: the system a host routed an image to, `None` where it named none; one core info does not list, or one
+/// not UTF-8, is `BAD_IMAGE` (EmuSen_CoreAPI.md §6.40).
+unsafe fn routed_system<T: Core>(system: *const std::ffi::c_char) -> Result<Option<String>, i32> {
+    if system.is_null() {
+        return Ok(None);
+    }
+    let refuse = |why: String| {
+        super::detail(&why);
+        status::BAD_IMAGE
+    };
+    // SAFETY: the host passes a NUL-terminated string valid for the call.
+    let id = unsafe { std::ffi::CStr::from_ptr(system) }.to_str().map_err(|_| refuse("the system's id is not UTF-8".into()))?;
+    if !T::info().systems.iter().any(|s| s.id == id) {
+        return Err(refuse(format!("the image was routed to {id}, which is not a system of this core")));
+    }
+    Ok(Some(id.to_owned()))
+}
+
+/// Which create a request reaches: an empty console, a routed system's machine, or the core's own choice.
+enum Made {
+    Empty(String),
+    Routed(String),
+    Chosen,
+}
+
 pub unsafe fn create<T: Core>(params: *const CreateParams, status_out: *mut i32) -> *mut Machine {
     let outbox = Outbox::default();
     let mut error: (*mut u8, usize) = (std::ptr::null_mut(), 0);
@@ -360,14 +385,15 @@ pub unsafe fn create<T: Core>(params: *const CreateParams, status_out: *mut i32)
                 _ => None,
             };
             let request = Create { image: unsafe { input(p.image, p.image_len) }, settings, files, pixel_formats: p.pixel_formats | 1, host_abi_version: p.host_abi_version, shared_removable: p.flags & flags::CREATE_SHARED_REMOVABLE != 0, shared_console: p.flags & flags::CREATE_SHARED_CONSOLE != 0, device };
-            let empty = match request.image.is_empty() {
-                true => Some(unsafe { empty_system::<T>(p.system) }?),
-                false => None,
+            let which = match request.image.is_empty() {
+                true => Made::Empty(unsafe { empty_system::<T>(p.system) }?),
+                false => unsafe { routed_system::<T>(p.system) }?.map_or(Made::Chosen, Made::Routed),
             };
-            let lend = lent::<T>(p.flags & flags::CREATE_LENT != 0 && empty.is_none(), request.image, &request.files);
-            let made = match &empty {
-                Some(system) => T::create_empty(system, &request),
-                None => T::create(&request),
+            let lend = lent::<T>(p.flags & flags::CREATE_LENT != 0 && !matches!(which, Made::Empty(_)), request.image, &request.files);
+            let made = match &which {
+                Made::Empty(system) => T::create_empty(system, &request),
+                Made::Routed(system) => T::create_as(system, &request),
+                Made::Chosen => T::create(&request),
             };
             let loan = lend.map(Lend::close);
             match (made, loan) {

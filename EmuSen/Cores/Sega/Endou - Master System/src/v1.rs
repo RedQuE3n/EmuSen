@@ -110,7 +110,12 @@ fn system(id: &str, name: &str, extension: &str, controller: Controller) -> emus
 
 /// A machine for the request, its board from `table` and the rules (Endou_Native.md §9.2), its battery file loaded.
 pub fn make(request: &Create<'_>, table: &[Row]) -> Result<Machine, i32> {
-    let media = match Media::read(request.image) {
+    make_as(request, table, None)
+}
+
+/// The same as the console a host routed the image to, where it named one (core ABI 1.15, Endou_Native.md §2.3).
+pub fn make_as(request: &Create<'_>, table: &[Row], console: Option<Console>) -> Result<Machine, i32> {
+    let media = match Media::read_as(request.image, console) {
         Ok(m) => m,
         Err(Refusal::Empty) => {
             detail("the image has no bytes");
@@ -175,6 +180,15 @@ impl Core for Machine {
 
     fn create(request: &Create<'_>) -> Result<Self, i32> {
         make(request, TABLE)
+    }
+
+    /// The console the host routed the image to; the export has refused every system core info does not list.
+    fn create_as(system: &str, request: &Create<'_>) -> Result<Self, i32> {
+        let console = Console::of_id(system).ok_or_else(|| {
+            detail(&format!("{system} is not a system of Endou"));
+            status::BAD_IMAGE
+        })?;
+        make_as(request, TABLE, Some(console))
     }
 
     fn machine_info(&self) -> MachineInfo {
@@ -353,6 +367,22 @@ mod tests {
             Core::advance(&mut m, &mut 0).unwrap();
             assert_eq!((m.space_size(ROM_ID), m.frame_count()), (Ok(len as i64), 1));
         }
+    }
+
+    // Since core ABI 1.15 a host names the system it routed the image to: a 512 KiB `.sg` and an 8 KiB `.sms`, both without
+    // Sega's header, run as the systems their extensions name, which the stage-1 rule gets wrong (Endou_Native.md §2.3).
+    #[test]
+    fn a_routed_system_is_the_machine_s_and_the_rule_stands_without_one() {
+        let request = |image: &'static [u8]| Create { image, settings: Settings::default(), files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None };
+        static MUSIC: [u8; 512 * 1024] = [0xC3; 512 * 1024];
+        static BIOS: [u8; 8 * 1024] = [0xF3; 8 * 1024];
+        let system = |m: Machine| m.machine_info().system;
+        assert_eq!((system(Machine::create(&request(&MUSIC)).unwrap()), system(Machine::create(&request(&BIOS)).unwrap())), ("sms".to_owned(), "sg1000".to_owned()));
+        let music = Machine::create_as("sg1000", &request(&MUSIC)).unwrap();
+        assert_eq!((music.machine_info().system.as_str(), music.model(), music.machine_info().ports[0].controller.as_deref()), ("sg1000", Model::Sg1000, Some(SG1000_PAD)));
+        let bios = Machine::create_as("sms", &request(&BIOS)).unwrap();
+        assert_eq!((bios.machine_info().system.as_str(), bios.model()), ("sms", Model::MarkIII));
+        assert_eq!(Machine::create_as("gg", &request(&BIOS)).err(), Some(status::BAD_IMAGE));
     }
 
     #[test]

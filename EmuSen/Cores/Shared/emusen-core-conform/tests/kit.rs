@@ -34,9 +34,9 @@ fn verdicts(name: &str) -> Vec<(&'static str, bool)> {
 
 const ALL: [&str; 15] = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13", "C14", "C15"];
 
-/// The cases a core is run through: the fifteen, C16 where it claims MEDIA, and C17 to C23.
+/// The cases a core is run through: the fifteen, C16 where it claims MEDIA, and C17 to C24.
 fn cases(media: bool) -> Vec<&'static str> {
-    ALL.iter().chain(media.then_some(&"C16")).chain(&["C17", "C18", "C19", "C20", "C21", "C22", "C23"]).copied().collect()
+    ALL.iter().chain(media.then_some(&"C16")).chain(&["C17", "C18", "C19", "C20", "C21", "C22", "C23", "C24"]).copied().collect()
 }
 
 #[test]
@@ -198,7 +198,7 @@ fn a_report_says_what_was_run_and_a_missing_library_fails_c1() {
     let v = json::parse(report.json().as_bytes()).unwrap();
     assert_eq!(v.get("passed"), Some(&Value::Bool(true)));
     assert_eq!(v.get("id").and_then(Value::as_str), Some("v1-test-core"));
-    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(23));
+    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(24));
     let none = run(&library("no_such_core"), &options());
     assert!(!none.passed());
     assert_eq!(none.cases[0].id, "C1");
@@ -223,7 +223,7 @@ fn a_sidecar_carries_the_librarys_own_descriptors_and_hash() {
     assert_eq!(v.get("sidecar").and_then(Value::as_i64), Some(1));
     assert_eq!(v.get("library").and_then(Value::as_str), lib.file_name().and_then(|n| n.to_str()));
     assert_eq!(v.get("sha256").and_then(Value::as_str), Some(digest::sha256_hex(&std::fs::read(&lib).unwrap()).as_str()));
-    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.14"));
+    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.15"));
     assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0x3FFFFFF));
     assert_eq!(v.get("info").and_then(|i| i.get("id")).and_then(Value::as_str), Some("v1-test-core"));
     assert_eq!(v.get("settings").and_then(Value::as_array).map(|a| a.len()), Some(4));
@@ -284,7 +284,7 @@ fn a_corpus_runs_the_cores_cases_once_and_the_images_cases_for_every_image() {
         }
         assert!(c.passed());
         let all: std::collections::BTreeSet<&str> = corpus::CORE_CASES.iter().chain(corpus::IMAGE_CASES.iter()).copied().collect();
-        assert_eq!(all, ALL.iter().chain(&["C16", "C17", "C18", "C19", "C20", "C21", "C22", "C23"]).copied().collect());
+        assert_eq!(all, ALL.iter().chain(&["C16", "C17", "C18", "C19", "C20", "C21", "C22", "C23", "C24"]).copied().collect());
     }
 }
 
@@ -366,7 +366,7 @@ fn the_runner_takes_a_directory_or_a_list_and_writes_a_report_for_each_image() {
             let file = i.get("report").and_then(Value::as_str).unwrap();
             let report = json::parse(&std::fs::read(reports.join(file)).unwrap()).unwrap();
             assert_eq!(report.get("image"), i.get("image"));
-            assert_eq!(report.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(11), "the five image cases, C16, MEDIA being claimed, C17, C18, C19, C20 and C21");
+            assert_eq!(report.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(12), "the five image cases, C16, MEDIA being claimed, C17, C18, C19, C20, C21 and C24");
         }
         assert_eq!(text.lines().filter(|l| l.starts_with("pass [") || l.starts_with("FAIL [")).count(), count, "{text}");
     }
@@ -588,4 +588,49 @@ fn the_items_of_1_13_are_reported_only_where_claimed() {
     assert!(c15.passed && c15.evidence.last().unwrap().ends_with("; each processor's translation answered alike twice, changing nothing"), "{:?}", c15.evidence);
     let plain = of("kit_plain_core", &options(), "C14");
     assert_eq!(plain.evidence, ["2 spaces, 1 battery files of the 3 core info lists, 1 processors"]);
+}
+
+/// The runner on the two-system core with `mask`'s faults, over `images` (a file or a directory): the cases failed, and its output.
+fn two_systems(mask: u64, images: &std::path::Path) -> (Vec<String>, String) {
+    let flag = if images.is_dir() { "--images" } else { "--image" };
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_emusen-core-conform"));
+    command.args(["--self-delimiting", "--frames", "120", "--core"]).arg(library("kit_two_system_core")).arg(flag).arg(images);
+    if images.is_dir() {
+        command.arg("--image").arg(images.join("image 0.v1tc"));
+    }
+    let out = command.env("EMUSEN_TEST_CORE_FAULTS", mask.to_string()).output().unwrap();
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    (text.lines().filter_map(|l| l.strip_prefix("FAIL ")).filter_map(|l| l.split_whitespace().next()).map(str::to_owned).collect(), text)
+}
+
+// Core ABI 1.15 (EmuSen_CoreAPI.md §6.40): a core of two systems that makes each named system's machine passes C24, in
+// the single-image form and in a corpus, an unlisted system refused before it sees it; so does one that keeps its own
+// machine whatever is named, the default; each seeded fault, alone, fails C24 and no other case. A core of one system
+// passes it unrun.
+#[test]
+fn a_core_of_two_systems_is_held_to_the_routed_system_and_each_fault_of_1_15_fails_c24_alone() {
+    const TWO: u64 = 1 << 35;
+    let file = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("kit-1-15.v1tc");
+    std::fs::write(&file, image(&[1, 2, 3, 0x20, 0x41])).unwrap();
+    let (failed, text) = two_systems(TWO, &file);
+    assert!(failed.is_empty(), "{text}");
+    assert!(text.contains("2 systems, unnamed test; named: test as unnamed, test2 honoured; an unlisted one refused; 60 frames compared"), "{text}");
+    let (dir, _) = corpus_files("two-systems");
+    let (failed, text) = two_systems(TWO, &dir);
+    assert!(failed.is_empty(), "{text}");
+    for (fault, words) in [
+        (1u64 << 36, r#"named test2, the machine reports "test", its own choice, yet runs otherwise than the unnamed one over 60 frames or ends in another state"#),
+        (1 << 37, "named test, the system it is made as unnamed, the machine runs otherwise over 60 frames or ends in another state"),
+        (1 << 38, "named test, the system it is made as unnamed, the image was refused: status -264"),
+    ] {
+        let (failed, text) = two_systems(TWO | fault, &file);
+        assert_eq!(failed, ["C24"], "fault {fault}:\n{text}");
+        assert!(text.contains(words), "fault {fault}: {words:?} not in\n{text}");
+    }
+    let kept = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("kit-1-15-kept.tst2");
+    std::fs::write(&kept, image(&[7, 7])).unwrap();
+    let (failed, text) = two_systems(TWO | 1 << 39, &kept);
+    assert!(failed.is_empty() && text.contains("named: test as unnamed, test2 kept as test;"), "{text}");
+    let single = run(&library("kit_test_core"), &options()).cases.into_iter().find(|c| c.id == "C24").unwrap();
+    assert_eq!((single.passed, single.evidence), (true, vec!["the library lists one system, so a routed system is always its own".to_owned()]));
 }

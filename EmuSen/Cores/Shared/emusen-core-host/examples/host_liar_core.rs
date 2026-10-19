@@ -37,7 +37,7 @@ unsafe fn copy(text: &[u8], out: *mut u8, len: usize) -> i64 {
 
 fn info() -> Vec<u8> {
     let field = |k: &str, v: &str| format!("\"{k}\":\"{v}\",");
-    let abi = if mode() == ABI_SAYS_13 { "1.13" } else { "1.14" };
+    let abi = if mode() == ABI_SAYS_13 { "1.13" } else { "1.15" };
     let id = if mode() == BAD_ID { "Liar" } else { "liar-core" };
     let license = if mode() == NO_LICENSE { String::new() } else { field("license", "GPL-3.0-or-later") };
     let systems = if mode() == INFO_OFF_SCHEMA { "5" } else { r#"[{"id":"liar","name":"Liar","extensions":[".liar"]}]"# };
@@ -54,7 +54,7 @@ fn info() -> Vec<u8> {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn emusen_core_abi_version() -> u32 {
-    if mode() == MAJOR_2 { 2 << 16 } else { (1 << 16) | 14 }
+    if mode() == MAJOR_2 { 2 << 16 } else { (1 << 16) | 15 }
 }
 
 #[unsafe(no_mangle)]

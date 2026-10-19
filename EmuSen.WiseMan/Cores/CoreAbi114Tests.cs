@@ -35,10 +35,10 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void The_interface_is_1_14()
+        public void The_interface_is_1_14_or_later()
         {
-            Assert.Equal((1u, 14u), (CoreInterface.Major, CoreInterface.Minor));
-            Assert.Equal(0x1000Eu, CoreAdapterTests.Full.AbiVersion);
+            Assert.True(CoreInterface.Major == 1 && CoreInterface.Minor >= 14);
+            Assert.True(CoreAdapterTests.Full.AbiVersion >= 0x1000Eu);
         }
 
         // §6.39: a stated order is read into the space's descriptor; a space that states none, and every space of the plain core, has none.

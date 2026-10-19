@@ -400,7 +400,9 @@ impl Engine {
             Some(listed) => listed.iter().map(|b| (b.which, save_for(b))).collect(),
             None => vec![(0, BatterySave::open(tree, at, &console, disabled, emusen_galaxia::saves::SRAM_EXTENSION))],
         };
-        let mut machine = self.create(&disc, &firmware, &saves, &placement, None)?;
+        // The system the file was routed to goes beside the image, so a core of two systems makes that one (EmuSen_CoreAPI.md §6.40).
+        let routed = system.as_ref().map(|s| s.id.clone());
+        let mut machine = self.create(&disc, &firmware, &saves, &placement, routed.as_deref())?;
         let mut kept = self.lends();
         let mut disc = Some(disc);
         let mi = MachineInfo::read(&machine.machine().machine_info().unwrap_or_default());
@@ -412,7 +414,7 @@ impl Engine {
         if wanted.iter().any(|(w, s)| s.read().is_some() && !saves.iter().any(|(sw, ss)| sw == w && ss.path == s.path)) {
             drop(machine);
             let again = if self.lends() { set.open(tree, 0, is_image).map_err(Refused::io)? } else { disc.take().expect("held") };
-            machine = self.create(&again, &firmware, &wanted, &placement, None)?;
+            machine = self.create(&again, &firmware, &wanted, &placement, routed.as_deref())?;
             kept = self.lends();
             disc = Some(again);
         }

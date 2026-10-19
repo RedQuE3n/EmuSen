@@ -93,7 +93,7 @@ fn every_descriptor_validates_against_its_committed_schema() {
         assert_eq!(schema::validate(s, doc), Vec::<String>::new(), "{doc}");
     }
     let v = crate::json::parse(info.as_bytes()).unwrap();
-    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.14"));
+    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.15"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
     assert_eq!(names.len(), 26);
     assert!(
@@ -531,7 +531,7 @@ fn read_ranges_reach_a_core_that_claims_them_and_an_unknown_kind_is_refused() {
 
 #[test]
 fn the_crates_constants_are_the_headers_own_numbers() {
-    assert_eq!(ABI_VERSION, 0x0001_000E);
+    assert_eq!(ABI_VERSION, 0x0001_000F);
     assert_eq!((std::mem::size_of::<CreateParams>(), std::mem::offset_of!(CreateParams, system)), (112, 104), "since 1.11");
     assert_eq!(caps::DEVICE_PICTURE, 1 << 21, "since 1.9");
     assert_eq!((caps::RAW_PICTURE, caps::UNASSIGNED & caps::RAW_PICTURE, std::mem::size_of::<RawFrame>(), std::mem::offset_of!(RawFrame, bytes)), (1 << 22, 0, 32, 24), "since 1.10");
@@ -809,14 +809,37 @@ fn an_empty_image_starts_a_system_that_starts_empty_and_nothing_else() {
         assert_eq!(code, status::BAD_IMAGE);
         assert!(std::ffi::CStr::from_bytes_until_nul(&words).unwrap().to_str().unwrap().contains(says));
     }
-    let img = image(&[1]);
-    let named = CreateParams { system: c"nope".as_ptr(), ..params(&img, "", &[]) };
-    let m = unsafe { emusen_core_create(&named, &mut code) };
-    assert_eq!(code, 0, "a system named beside an image is ignored");
-    assert_eq!(unsafe { emusen_core_free(m) }, 0);
     let short = CreateParams { size: 104, system: c"test".as_ptr(), ..params(&[], "", &[]) };
     assert!(unsafe { emusen_core_create(&short, &mut code) }.is_null(), "a struct of 1.10 carries no system");
     assert_eq!(code, status::BAD_IMAGE);
+}
+
+/// Since 1.15 (EmuSen_CoreAPI.md §6.40): a system named beside an image is the one the host routed it to; a listed one
+/// reaches the core, which makes its machine, and one the core does not list, or one not UTF-8, is refused with
+/// BAD_IMAGE and words before the core sees it. None, or a struct of 1.10 too short to hold one, is the core's choice.
+#[test]
+fn a_system_named_beside_an_image_is_the_routed_one_and_an_unlisted_one_is_refused() {
+    let img = image(&[1, 2, 3]);
+    let mut code = 1;
+    let named = CreateParams { system: c"test".as_ptr(), ..params(&img, "", &[]) };
+    let m = unsafe { emusen_core_create(&named, &mut code) };
+    assert_eq!(code, 0);
+    assert!(text(|o, l| unsafe { emusen_core_machine_info(m, o, l) }).contains(r#""system":"test""#));
+    assert_eq!(unsafe { emusen_core_free(m) }, 0);
+    let mut words = [0u8; 96];
+    for (system, says) in [(c"nope", "the image was routed to nope, which is not a system of this core"), (c"\xFFtest", "the system's id is not UTF-8"), (c"", "the image was routed to , which is not a system of this core")] {
+        let mut p = CreateParams { system: system.as_ptr(), ..params(&img, "", &[]) };
+        (p.error, p.error_len) = (words.as_mut_ptr(), words.len());
+        code = 1;
+        assert!(unsafe { emusen_core_create(&p, &mut code) }.is_null(), "{system:?}");
+        assert_eq!(code, status::BAD_IMAGE);
+        assert_eq!(std::ffi::CStr::from_bytes_until_nul(&words).unwrap().to_str().unwrap(), says);
+    }
+    for p in [params(&img, "", &[]), CreateParams { size: 104, system: c"nope".as_ptr(), ..params(&img, "", &[]) }] {
+        let m = unsafe { emusen_core_create(&p, &mut code) };
+        assert_eq!(code, 0, "no system named, or a struct of 1.10, is the core's own choice");
+        assert_eq!(unsafe { emusen_core_free(m) }, 0);
+    }
 }
 
 // Core ABI 1.13's items on the test core (EmuSen_CoreAPI.md §6.33-§6.38): the unit and the counters in machine info,

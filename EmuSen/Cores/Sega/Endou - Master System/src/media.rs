@@ -10,11 +10,18 @@ pub enum Console {
 }
 
 impl Console {
+    pub const ALL: [Console; 2] = [Console::Sms, Console::Sg1000];
+
     pub fn id(self) -> &'static str {
         match self {
             Console::Sms => "sms",
             Console::Sg1000 => "sg1000",
         }
+    }
+
+    /// The console a system id names, as core info lists it; none for another.
+    pub fn of_id(id: &str) -> Option<Console> {
+        Console::ALL.into_iter().find(|c| c.id() == id)
     }
 }
 
@@ -98,8 +105,13 @@ pub struct Media {
 }
 
 impl Media {
-    /// The image's facts, or why it is no image at all.
+    /// The image's facts, or why it is no image at all; its console by the stage-1 rule (Endou_Native.md §2.3).
     pub fn read(image: &[u8]) -> Result<Media, Refusal> {
+        Media::read_as(image, None)
+    }
+
+    /// The same for an image a host routed to `console` (core ABI 1.15), which the stage-1 rule then does not guess.
+    pub fn read_as(image: &[u8], console: Option<Console>) -> Result<Media, Refusal> {
         if image.is_empty() {
             return Err(Refusal::Empty);
         }
@@ -109,7 +121,8 @@ impl Media {
         let skipped = if image.len() > COPIER_HEADER && image.len() % 0x4000 == COPIER_HEADER { COPIER_HEADER } else { 0 };
         let rom = &image[skipped..];
         let header = HEADER_PLACES.iter().find_map(|&at| header_at(rom, at));
-        let console = if header.is_none() && rom.len() <= SG1000_MAX { Console::Sg1000 } else { Console::Sms };
+        let guessed = if header.is_none() && rom.len() <= SG1000_MAX { Console::Sg1000 } else { Console::Sms };
+        let console = console.unwrap_or(guessed);
         Ok(Media { console, skipped, header })
     }
 
@@ -207,6 +220,21 @@ mod tests {
         small[0x3FF0..0x3FF8].copy_from_slice(SIGNATURE);
         let m = Media::read(&small).unwrap();
         assert_eq!((m.console, m.header.unwrap().at), (Console::Sms, 0x3FF0));
+    }
+
+    // The three images of the library the stage-1 rule takes for the other console, each read as the system it was routed to (Endou_Native.md §2.3).
+    #[test]
+    fn a_routed_console_is_taken_and_the_rule_guesses_only_without_one() {
+        let music = vec![0xC3; 512 * 1024];
+        let bios = vec![0xF3; 8 * 1024];
+        assert_eq!((Media::read(&music).unwrap().console, Media::read(&bios).unwrap().console), (Console::Sms, Console::Sg1000));
+        assert_eq!(Media::read_as(&music, Some(Console::Sg1000)).unwrap().console, Console::Sg1000);
+        assert_eq!(Media::read_as(&bios, Some(Console::Sms)).unwrap().console, Console::Sms);
+        let headed = cartridge(0x8000, 0x4);
+        assert_eq!(Media::read_as(&headed, Some(Console::Sg1000)).unwrap(), Media { console: Console::Sg1000, ..Media::read(&headed).unwrap() });
+        assert_eq!(Media::read_as(&[], Some(Console::Sms)), Err(Refusal::Empty));
+        assert_eq!(Console::ALL.map(|c| Console::of_id(c.id())), [Some(Console::Sms), Some(Console::Sg1000)]);
+        assert_eq!(Console::of_id("gg"), None);
     }
 
     #[test]

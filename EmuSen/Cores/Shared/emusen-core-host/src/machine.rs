@@ -22,7 +22,7 @@ pub struct Create<'a> {
     pub flags: u32,
     /// Passed only to a core that claims `DEVICE_PICTURE`.
     pub device: Option<&'a DeviceLend>,
-    /// With an empty image, the system to start empty (since 1.11).
+    /// With an empty image, the system to start empty (since 1.11); beside an image, the system the host routed it to (since 1.15).
     pub system: Option<&'a CStr>,
 }
 

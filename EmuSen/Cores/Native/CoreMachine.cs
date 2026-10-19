@@ -44,19 +44,20 @@ namespace EmuSen.Cores.Native
         public CoreLibrary Library { get; }
         public CoreMachineInfo Info { get; private set; }
 
-        // The image, the settings text and the files, and the pixel formats offered: RGBA8888 only, the one ICore knows.
-        public CoreMachine(CoreLibrary library, byte[] image, string settings, IReadOnlyList<(uint Which, byte[] Data)> files)
+        // The image, the settings text and the files, and the pixel formats offered: RGBA8888 only, the one ICore knows; system as the next constructor takes it.
+        public CoreMachine(CoreLibrary library, byte[] image, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, string? system = null)
         {
             if (!library.Available) throw new InvalidOperationException($"{library.Info?.DisplayName ?? library.Path} is not in use: {library.Report}");
             Library = library;
             _api = library.Api;
-            fixed (byte* img = image) _handle = Create(new CoreBytes(img, image.Length), Array.Empty<(uint, CoreBytes)>(), settings, files, lent: false, sharedRemovable: false, sharedConsole: false);
+            fixed (byte* img = image) _handle = Create(new CoreBytes(img, image.Length), Array.Empty<(uint, CoreBytes)>(), settings, files, lent: false, sharedRemovable: false, sharedConsole: false, system: system);
             Info = ReadInfo();
         }
 
         // The same from bytes the host holds in place, the media files among them; with a loan they are lent, and the loan is released when the machine is freed or its drive takes another disc.
         // sharedRemovable and sharedConsole ask the core to leave those kinds of battery file out of what a state load restores - see EmuSen_CoreAPI.md §6.27, §6.28.
         // device is the host's Vulkan device lent to a core that claims DEVICE_PICTURE, the machine's from then on - see EmuSen_CoreAPI.md §6.29.
+        // system is the console to start with an empty image, or beside an image the system it was routed to - see EmuSen_CoreAPI.md §6.31, §6.40.
         public CoreMachine(CoreLibrary library, CoreBytes image, IReadOnlyList<(uint Which, CoreBytes Data)> media, string settings, IReadOnlyList<(uint Which, byte[] Data)> files, IDisposable? loan = null, bool sharedRemovable = false, bool sharedConsole = false, IDeviceLend? device = null, string? system = null)
         {
             Lend = device is not null && library.Has(CoreInterface.CapDevicePicture) ? device : null;

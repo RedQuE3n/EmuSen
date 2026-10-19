@@ -88,6 +88,14 @@ pub trait Core: Sized + StateMachine {
         Err(status::BAD_IMAGE)
     }
 
+    /// Since 1.15: a machine for `request.image` given `system`, the system the host routed it to, which core info lists;
+    /// the export refuses every other system before the core sees it. A core that cannot tell its systems apart makes a
+    /// machine of that system; any core may refuse the image (EmuSen_CoreAPI.md §6.40). Defaulted to `create`: a core of
+    /// one system, or one whose image and settings tell its systems apart without a guess, keeps its own rule.
+    fn create_as(_system: &str, request: &Create<'_>) -> Result<Self, i32> {
+        Self::create(request)
+    }
+
     fn machine_info(&self) -> MachineInfo;
 
     /// `RESET`.

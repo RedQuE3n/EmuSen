@@ -1,7 +1,7 @@
-//! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C23 on a library loaded through the core
+//! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C24 on a library loaded through the core
 //! ABI v1 alone, and a library's sidecar (§7.1). Each case reports its verdict and its evidence; §21 and §24 record what each
 //! checks and how, §28 the corpus form, which runs the checks that do not depend on the image once, §6.24 C17 and
-//! §6.25 C18, §6.27 and §6.28 C19, §6.29 C20, §6.30 C21, §6.31 C22, §6.32 C23, §6.39 C14's byte orders.
+//! §6.25 C18, §6.27 and §6.28 C19, §6.29 C20, §6.30 C21, §6.31 C22, §6.32 C23, §6.39 C14's byte orders, §6.40 C24.
 
 pub mod api;
 mod lender;
@@ -488,6 +488,7 @@ pub fn run(path: &Path, opts: &Options) -> Report {
     report.cases.push(c21(&mut s));
     report.cases.push(c22(&mut s));
     report.cases.push(c23(&mut s));
+    report.cases.push(c24(&mut s));
     report
 }
 
@@ -533,7 +534,8 @@ pub(crate) fn core_c11(path: &Path, opts: &Options, statuses: BTreeSet<i32>) -> 
     }
 }
 
-/// The cases that depend on the image: C4's half image and firmware rule, C6, C7, C8 (its first run C6's) and C14.
+/// The cases that depend on the image: C4's half image and firmware rule, C6, C7, C8 (its first run C6's), C14 and
+/// C16 to C21 and C24.
 pub(crate) fn image_cases(lib: &Lib, path: &Path, opts: &Options) -> (Vec<Case>, BTreeSet<i32>) {
     let mut s = session(lib, opts);
     let mut cases = vec![c4(&mut s, path, C4::IMAGE), c6(&mut s), c7(&mut s), c8(&mut s), c14(&mut s)];
@@ -545,6 +547,7 @@ pub(crate) fn image_cases(lib: &Lib, path: &Path, opts: &Options) -> (Vec<Case>,
     cases.push(c19(&mut s));
     cases.push(c20(&mut s));
     cases.push(c21(&mut s));
+    cases.push(c24(&mut s));
     (cases, s.statuses)
 }
 
@@ -2374,6 +2377,78 @@ fn c23(s: &mut Session<'_>) -> Case {
     }
     c.note(format!("{count} checksum(s) over {} entries of core info and {} of firmware_for", listed.len(), asked.len()));
     c.done("C23", "firmware checksums")
+}
+
+/// The frames C24 runs a named machine beside an unnamed one, or the session's where they are fewer.
+const ROUTED_FRAMES: u64 = 60;
+
+/// C24 (since 1.15, EmuSen_CoreAPI.md §6.40), on a library that lists two or more systems. The session's image created
+/// naming no system is made as some listed system, its own; created naming that system it is accepted, reports it and
+/// runs as the unnamed machine does, frame for frame and to the same state. Created naming each other listed system it
+/// is refused, or made as that system (honoured), or made exactly as the unnamed machine (kept, the core's rule telling
+/// its systems apart); never anything between. Created naming a system the library does not list it is refused with
+/// `EMUSEN_BAD_IMAGE`. A library of one system, or older than 1.15, passes unrun.
+fn c24(s: &mut Session<'_>) -> Case {
+    let mut c = Check::new();
+    let minor = unsafe { (s.lib.f.abi_version)() } & 0xFFFF;
+    let systems: Vec<String> = s.lib.info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("systems")?.as_array().map(<[Value]>::to_vec)).unwrap_or_default().iter().filter_map(|v| v.get("id")?.as_str().map(str::to_owned)).collect();
+    if minor < 15 {
+        c.note(format!("the library is of core ABI 1.{minor}, before a host named the system it routed an image to"));
+        return c.done("C24", "the routed system");
+    }
+    if systems.len() < 2 {
+        c.note("the library lists one system, so a routed system is always its own");
+        return c.done("C24", "the routed system");
+    }
+    let system_of = |m: &Machine<'_>| m.machine_info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("system")?.as_str().map(str::to_owned)).unwrap_or_default();
+    let body = |s: &mut Session<'_>, c: &mut Check| -> Result<(), String> {
+        let settings = s.opts.settings.clone();
+        let own = system_of(&s.machine(&settings)?);
+        c.that(systems.contains(&own), || format!("unnamed, the image is made as {own:?}, which core info does not list"));
+        let frames = s.opts.frames.min(ROUTED_FRAMES);
+        // Whether `m` runs as a machine made unnamed does over the frames, to the same state.
+        let alike = |s: &mut Session<'_>, m: &Machine<'_>| -> Result<bool, String> {
+            let unnamed = s.machine(&settings)?;
+            let (a, b) = (s.play(&unnamed, 0, frames, false)?, s.play(m, 0, frames, false)?);
+            Ok(a.digests == b.digests && s.state_digest(&unnamed)? == s.state_digest(m)?)
+        };
+        let (image, files) = (s.opts.image.clone(), s.opts.files.clone());
+        let mut notes = Vec::new();
+        for id in systems.iter().chain(std::iter::once(&"x-no-such-system".to_owned())) {
+            let name = std::ffi::CString::new(id.as_str()).map_err(|_| format!("{id} holds a NUL"))?;
+            let made = s.lib.create_as(&name, &image, &settings, &files);
+            if let Err((code, _)) = &made {
+                s.statuses.insert(*code);
+            }
+            match (made, systems.contains(id)) {
+                (Err((code, _)), false) => c.that(code == status::BAD_IMAGE, || format!("named {id}, which core info does not list, the image was refused with {code}, not EMUSEN_BAD_IMAGE")),
+                (Ok(_), false) => c.that(false, || format!("named {id}, which core info does not list, the image was accepted")),
+                (Err((code, text)), true) if *id == own => c.that(false, || format!("named {id}, the system it is made as unnamed, the image was refused: status {code} ({text})")),
+                (Err((code, _)), true) => notes.push(format!("{id} refused ({code})")),
+                (Ok(m), true) => {
+                    let reported = system_of(&m);
+                    if *id == own {
+                        c.that(reported == own, || format!("named {id}, the system it is made as unnamed, the machine reports {reported:?}"));
+                        c.that(alike(s, &m)?, || format!("named {id}, the system it is made as unnamed, the machine runs otherwise over {frames} frames or ends in another state"));
+                        notes.push(format!("{id} as unnamed"));
+                    } else if reported == *id {
+                        notes.push(format!("{id} honoured"));
+                    } else if reported == own {
+                        c.that(alike(s, &m)?, || format!("named {id}, the machine reports {own:?}, its own choice, yet runs otherwise than the unnamed one over {frames} frames or ends in another state"));
+                        notes.push(format!("{id} kept as {own}"));
+                    } else {
+                        c.that(false, || format!("named {id}, the machine reports {reported:?}, neither the system named nor its own choice, {own}"));
+                    }
+                }
+            }
+        }
+        c.note(format!("{} systems, unnamed {own}; named: {}; an unlisted one refused; {frames} frames compared", systems.len(), notes.join(", ")));
+        Ok(())
+    };
+    if let Err(e) = body(s, &mut c) {
+        c.that(false, || e);
+    }
+    c.done("C24", "the routed system")
 }
 
 /// The encodings EmuSen_CoreAPI.md §6.30 registers: each name's element width and its largest value.

@@ -107,11 +107,20 @@ impl Lib {
         self.create_full(&[], settings, files, 1, 0, std::ptr::null(), Some(system))
     }
 
+    /// A machine of `system`, the system a host routed `image` to (since 1.15), passed by a host of 1.15 or later.
+    pub fn create_as(&self, system: &std::ffi::CStr, image: &[u8], settings: &str, files: &[(u32, Vec<u8>)]) -> Result<Machine<'_>, (i32, String)> {
+        self.create_full(image, settings, &slices(files), 1, 0, std::ptr::null(), Some(system))
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn create_full(&self, image: &[u8], settings: &str, files: &[(u32, &[u8])], pixel_formats: u64, flags: u32, device: *const DeviceLend, system: Option<&std::ffi::CStr>) -> Result<Machine<'_>, (i32, String)> {
-        // A host that names a system to start empty knows 1.11, whichever older host the kit otherwise plays.
+        // A host that names a system to start empty knows 1.11, and one that names it beside an image 1.15, whichever older host the kit otherwise plays.
         let (minor, pad) = self.host();
-        let minor = if system.is_some() { minor.max(11) } else { minor };
+        let minor = match system {
+            Some(_) if image.is_empty() => minor.max(11),
+            Some(_) => minor.max(15),
+            None => minor,
+        };
         let known = if minor >= 11 {
             std::mem::size_of::<CreateParams>()
         } else if minor >= 9 {

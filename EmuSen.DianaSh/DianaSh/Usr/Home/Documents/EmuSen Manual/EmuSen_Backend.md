@@ -9127,3 +9127,112 @@ and the library's and the cheat download's parity classes, 859 cases: 854 passed
 `EMUSEN_SCRAPE_NATIVE=0`; in state 2 the same but for one case of `ScraperTests`' thread limit, which drives the C#
 `Scraper` whatever the switch says, allows 300 ms for two workers to reach the server and passed three times of three
 when run alone. `cargo test` of `emusen-scrape` and `emusen-platform` after the merge, 52 passed.
+
+---
+
+## 31. Core ABI 1.15, 2026-10-19: the routed system beside an image
+
+*Built on 2026-10-19 on branch `abi-system`, from `WiseMan` at `d1cb6ee7`, under the tester's decision of the same day
+to accept the minor `Endou_Plan.md` §3.7 designed: `emusen_create_params.system` widened so that a host names, beside
+an image, the system it routed the image to. Claims are marked as at the head of this page. The normative text is
+`EmuSen_CoreAPI.md` §6.40 with its changelog's row and the kit's §28.19; the forms weighed are
+`EmuSen_CoreAPI_Extensions.md` §17, and Endou's part `Endou_Native.md` §2.3.*
+
+### 31.1 The defect, shown first
+
+Both hosts routed a file to a system, then passed the image alone, and a core of two systems guessed again. Endou's
+stage-1 rule takes an image without Sega's header and no larger than 48 KiB for the SG-1000's, and is wrong for 3 of
+the 370 files in the tester's `mastersystem/` [R `Endou_Native.md` §2.3]. `EndouTests.A_headerless_image_runs_as_the_system_it_was_routed_to`
+opens three headerless images through `CoreFactory`, the host's own routing: a 64 KiB `.sg`, an 8 KiB `.sms` and a
+16 KiB `.sg`. With the C# host passing no system beside the image, as it did at the base, **2 of 3 failed** [M]: the
+64 KiB `.sg` ran as `sms` and the 8 KiB `.sms` as `sg1000`, the rule's guesses; the 16 KiB `.sg`, which the rule gets
+right, passed. On the build all three pass, and the same images made with no system named still get the rule's
+guesses, which the test also holds.
+
+### 31.2 What was built
+
+- **`emusen_core.h`**: version 1.15; the field's comment and `emusen_core_create`'s say what `system` means beside an
+  image. No export, struct, field, constant, status or bit is added; the baseline moves only the minor's two lines
+  (`EMUSEN_CORE_ABI_MINOR 0xf`, `EMUSEN_CORE_ABI_VERSION 0x1000f`, both `@1.15`).
+- **`emusen-native`**: `Core::create_as(system, request)`, defaulted to `create`; the export reads `system` beside an
+  image and refuses one core info does not list, or one not UTF-8, with `BAD_IMAGE` and words ("the image was routed to
+  X, which is not a system of this core") before the core sees it; null, or a struct shorter than 112 bytes, reaches
+  `create` as before. `ABI_MINOR` 15. No core's code needed an edit to compile.
+- **`emusen-core-host`**: its `Create::system` has carried the field since 1.11; its comment says what it is beside an
+  image.
+- **The C# host**: `CoreInterface.Minor` 15; `CoreEngine.LoadRom` passes `CoreCatalog.SystemOfFile`'s id, the system
+  that already chose the battery folder and the console, to both of its creates; `CoreMachine`'s byte-array
+  constructor takes `system` as its other constructor did.
+- **Crystal in Rust**: `Engine::load_rom` passes `open::system_of_info`'s id to both of its creates; a reload
+  (`Made::Game`) keeps it.
+- **Endou**: `Console::of_id`, `Media::read_as(image, console)` with `Media::read` the rule as before, and
+  `make_as`; `create_as` makes the routed console. Its change is confined to `media.rs` and `v1.rs`.
+- **The kit**: C24 (§28.19 there), an image case, so the corpus form runs it for every image; `Lib::create_as` plays a
+  host of 1.15 or later naming a system beside an image. The test core gains `TWO_SYSTEMS` (a second system, `test2`,
+  whose machine reports the system named), `KEEPS_ITS_RULE` (the default's behaviour, for the kept answer) and three
+  seeded faults, built as `kit_two_system_core`.
+
+MercuryRT and Nephrite keep their rules, the default; MarsRT, MoonRT, VenusRT and Diamond list one system. None was
+edited but for the rebuild; each one's answer is `EmuSen_CoreAPI.md` §6.40's table.
+
+### 31.3 Tested
+
+Measured on 2026-10-19 [M]:
+
+| What | Result |
+|---|---|
+| `emusen-native`, `cargo test --profile test-checked` | 81 passed (one new: a listed system beside an image is made, an unlisted one, one not UTF-8 and an empty one refused with their words, none and a 104-byte struct the core's choice; 1.11's test no longer holds that a system beside an image is ignored) |
+| `emusen-core-abi-check` tests; `--check --against` the 1.14 baseline | 6 passed (two assertions added: `system`'s line stands at offset 104 `@1.11`, the minor `@1.15`); 510 facts agree on 4 triples |
+| The header as C99, C11 and C++17, `-Wall -Wextra -pedantic -Werror` | compiles |
+| `emusen-core-host` | 20 passed (one new: a routed system goes beside the image, an unlisted one refused in words) |
+| `emusen-core-conform` | 8 and 28 passed (one new: the two-system core passes C24 in the single-image form, in a corpus of three and keeping its rule; each seeded fault fails C24 alone, with its words) |
+| Endou's crate | 45 passed (two new: `Media::read_as` and `create_as`) |
+| The kit on MercuryRT (a Game Boy, a Game Boy Color and a dual-mode image) and Nephrite (a Genesis cartridge), 120 frames | every case passes; C24: "2 systems, unnamed gb; named: gb as unnamed, gbc kept as gb", "unnamed gbc; named: gb kept as gbc, gbc as unnamed" for both colour images, and "3 systems, unnamed md; named: md as unnamed, mcd kept as md, 32x kept as md"; Endou's synthetic cartridges: "sg1000 honoured" |
+| WiseMan, the blast radius | see §31.6 |
+
+### 31.4 Seeded faults
+
+Each was made in the source, run, and reverted, the file compared byte for byte with its kept copy [M]:
+
+| Fault | Caught by |
+|---|---|
+| A. The C# host passes no system beside the image (`CoreEngine.Create(…, null)`) | `EndouTests.A_headerless_image_runs_as_the_system_it_was_routed_to`, 2 of 3 cases; `CrystalParityTests.Both_runtimes_name_the_routed_system_beside_the_image` ("answer 1 differs": C# `sms`, Rust `sg1000`) |
+| B. Crystal in Rust passes none (`routed = None`) | the parity case, the Rust session reporting `sms` for the 64 KiB `.sg` and `sg1000` for the 8 KiB `.sms` |
+| C. The export takes an unlisted system | `emusen-native`'s new test, `emusen-core-host`'s new test, and the kit's ("named x-no-such-system, which core info does not list, the image was accepted") |
+| D. The export calls `create` in place of `create_as` | the kit's test (the two-system core's `test2` no longer honoured), and on Endou the WiseMan theory's 2 cases and the parity case's held values; C24 itself passes Endou then, its machines kept and alike, as §6.40 allows |
+| E. `Media::read_as` ignores the console | Endou's two new crate tests |
+| F. Endou's `create_as` names no console | Endou's `create_as` test |
+| G. C24 drops its check that a kept machine runs as the unnamed one | the kit's test, `FAULT_ROUTED_HALF_KEPT` passing where it must fail |
+
+The three faults of the test core are permanent and run by the kit's own test: `FAULT_ROUTED_HALF_KEPT` (1 << 36),
+`FAULT_ROUTED_RUNS_OTHERWISE` (1 << 37) and `FAULT_ROUTED_OWN_REFUSED` (1 << 38), each failing C24 alone.
+
+### 31.5 For the tester
+
+- **A departure from §3.7, to decide.** §3.7 has a core of two systems always make the named system's machine, and
+  the kit hold every listed system to it. Built that way, MercuryRT would have to override its Model setting (machine
+  info's system is the console made, held by `MercuryModelTests` and §26's state test), putting 17 colour-enhanced
+  `.gb` files of the library (Pokémon Yellow and its betas and translations) on a Game Boy, and Nephrite would have to
+  make a Sega CD of a cartridge or refuse the 18 32X cartridges named `.bin` in `genesis/`, which `.bin`'s routing
+  names `md`. Both instead keep their rules, which guess nothing, and C24 holds a kept machine to the unnamed one frame
+  for frame (`EmuSen_CoreAPI_Extensions.md` §17.2 (d)). Should either honour instead, it is one `create_as` in its
+  `v1.rs`; MercuryRT is paused, so nothing was changed there.
+- **The other departure** is `Core::create_as` in place of a field of `Create` (§17.2 (b)), so that no core of one
+  system was edited and a branch writing `Create { .. }` meanwhile (Endou's stage 3) merges unbroken.
+- **Routing, not the core, for the 32X's `.bin`.** Those 18 files run as `32x` today only because Nephrite reads their
+  header; a recogniser of the 32X's header for `.bin` in `emusen-systems` would route them to `32x` once that system
+  leaves development. Not built here.
+
+### 31.6 The blast radius
+
+Every crate whose build changed, `cargo test --profile test-checked` after the faults were reverted [M]: `emusen-native`
+81, `emusen-core-host` 29, `emusen-core-conform` 36, `emusen-core-abi-check` 6, Endou 45, MercuryRT 43, MoonRT 27,
+VenusRT 145, Nephrite 194, MarsRT 507 and Diamond 306, all passing. `cargo metadata --locked --offline` passes on every
+tracked lock but Diamond's `kernel` and `kernel-shell`; no lock changed.
+
+WiseMan, rebuilt: `CoreAbi113Tests` to `CoreAbi115Tests` (the last new; 1.14's first case now holds 1.14 or later),
+`CoreAbiTests`, `CoreAdapterTests`, `CoreDiscoveryTests`, `CoreHostParityTests`, `CrystalHeaderTests`,
+`CrystalParityTests` (one new case), `SharedHostTests`, `CoreRegistrationEquivalence`, `EndouTests` (three new cases),
+every `Nephrite` class, `MercuryRt*`, `MercuryModelTests`, the CoreAbi classes of MarsRT, MoonRT and VenusRT,
+`DiamondTests` and the goldens of MoonRT, VenusRT and MercuryRT: **831 of 831** in 13 min 47 s. Three counts of the
+kit's passing cases moved with C24 (Endou's list, MarsRT's 23 and Diamond's 24); no golden was re-recorded.

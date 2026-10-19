@@ -113,6 +113,19 @@ pub const FAULT_POKES_WHILE_HELD: u64 = 1 << 32;
 pub const FAULT_TRANSLATE_UNSTABLE: u64 = 1 << 33;
 /// Seeded fault for core ABI 1.14's byte order (EmuSen_CoreAPI.md §6.39): ROM's order, stated by a core claiming anything, spelt `Big` (C14).
 pub const FAULT_BYTE_ORDER_MISSPELT: u64 = 1 << 34;
+/// Not a fault, since 1.15: core info lists a second system, `TEST2`, and a machine reports the system a host routed its
+/// image to, `test` where it named none (EmuSen_CoreAPI.md §6.40).
+pub const TWO_SYSTEMS: u64 = 1 << 35;
+pub const TEST2: &str = "test2";
+/// Seeded faults for core ABI 1.15's routed system (C24): named `TEST2`, the machine reports `test`, its own choice, yet
+/// runs otherwise than the unnamed one; named `test`, the system chosen unnamed, it runs otherwise; and the image named
+/// as `test` is refused although it is taken unnamed.
+pub const FAULT_ROUTED_HALF_KEPT: u64 = 1 << 36;
+pub const FAULT_ROUTED_RUNS_OTHERWISE: u64 = 1 << 37;
+pub const FAULT_ROUTED_OWN_REFUSED: u64 = 1 << 38;
+/// Not a fault, since 1.15: under `TWO_SYSTEMS` the machine is `create`'s whatever system is named, as a core whose own
+/// rule tells its systems apart may make it (EmuSen_CoreAPI.md §6.40).
+pub const KEEPS_ITS_RULE: u64 = 1 << 39;
 /// Not a fault, since 1.13: an image whose payload begins with `HELD_CHEATS` holds the cheats at the end of every
 /// fourth frame, its own pokes and a host's, as a console whose cheat device holds off does (EmuSen_CoreAPI.md §6.37).
 pub const HELD_CHEATS: u8 = 0xC4;
@@ -220,6 +233,8 @@ pub struct TestCore {
     cheats_held: bool,
     /// Reads of `telemetry` and of `debug_translate`, which their seeded faults answer by.
     reads: std::cell::Cell<i64>,
+    /// The system machine info reports: `test`, or under `TWO_SYSTEMS` the one a host routed the image to.
+    system: &'static str,
 }
 
 /// The test core's one encoding of its picture before the palette: each pixel's red byte (EmuSen_CoreAPI.md §6.30).
@@ -307,6 +322,7 @@ impl TestCore {
             holds: body.first() == Some(&HELD_CHEATS),
             cheats_held: false,
             reads: std::cell::Cell::new(0),
+            system: "test",
         };
         m.draw();
         Ok(m)
@@ -314,7 +330,7 @@ impl TestCore {
 
     fn info_of(&self) -> MachineInfo {
         MachineInfo {
-            system: "test".into(),
+            system: self.system.into(),
             region: Some(Region::Ntsc),
             frame_rate: (60, 1),
             video: Video { base_width: 8, base_height: 4, max_width: 16, max_height: 4, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
@@ -468,7 +484,13 @@ impl Core for TestCore {
                     md5: vec![if faults() & FAULT_MD5_SHORT != 0 { BOOT_MD5[..31].into() } else { BOOT_MD5.into() }],
                 }],
                 development: false,
-            }],
+            }]
+            .into_iter()
+            .flat_map(|test| {
+                let second = (faults() & TWO_SYSTEMS != 0).then(|| System { id: TEST2.into(), name: "Second test system".into(), extensions: vec![".tst2".into()], firmware: Vec::new(), ..test.clone() });
+                std::iter::once(test).chain(second)
+            })
+            .collect(),
             deterministic: true,
             accuracy: Some(Accuracy { measured_with: "defaults".into(), suite: "the crate's tests".into(), notes: String::new() }),
             ..Info::default()
@@ -494,6 +516,25 @@ impl Core for TestCore {
 
     fn create(r: &Create<'_>) -> Result<Self, i32> {
         TestCore::make(r, payload(r.image)?, false)
+    }
+
+    /// Under `TWO_SYSTEMS` the machine is the system named, a seeded fault apart; else `create`'s, as the default makes it.
+    fn create_as(system: &str, r: &Create<'_>) -> Result<Self, i32> {
+        let mut m = TestCore::create(r)?;
+        if faults() & TWO_SYSTEMS == 0 || faults() & KEEPS_ITS_RULE != 0 {
+            return Ok(m);
+        }
+        if system == "test" && faults() & FAULT_ROUTED_OWN_REFUSED != 0 {
+            detail("the image was named as the system it is");
+            return Err(status::BAD_IMAGE);
+        }
+        if (system == "test" && faults() & FAULT_ROUTED_RUNS_OTHERWISE != 0) || (system == TEST2 && faults() & FAULT_ROUTED_HALF_KEPT != 0) {
+            m.ram[2] ^= 0x5A;
+        }
+        if system == TEST2 && faults() & FAULT_ROUTED_HALF_KEPT == 0 {
+            m.system = TEST2;
+        }
+        Ok(m)
     }
 
     fn starts_empty(system: &str) -> bool {

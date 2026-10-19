@@ -116,6 +116,34 @@ namespace EmuSen.WiseMan.Crystal
             });
         }
 
+        // Core ABI 1.15: both runtimes name the system they routed a file to beside its image, so Endou runs a headerless image as its extension's system - see EmuSen_CoreAPI.md §6.40.
+        [Fact]
+        public void Both_runtimes_name_the_routed_system_beside_the_image()
+        {
+            string dir = Path.Combine(_root, "Roms");
+            Directory.CreateDirectory(dir);
+            var games = new[] { ("Music.sg", 0x10000), ("Bios.sms", 0x2000), ("Small.sg", 0x4000) }.Select(g =>
+            {
+                string path = Path.Combine(dir, g.Item1);
+                File.WriteAllBytes(path, SyntheticSmsRom.Sg1000(g.Item2));
+                return path;
+            }).ToList();
+            IEnumerable<string> Asks(CrystalImpl i, nint rt)
+            {
+                foreach (string game in games)
+                {
+                    string o = i.Open(rt, game);
+                    yield return o;
+                    yield return i.Read("session_info", rt, Id(o));
+                    yield return i.Call("close", rt, Id(o));
+                }
+            }
+            List<string> managed = Answers(CrystalImpl.Managed, BuildTree, Asks, development: true), native = Answers(CrystalImpl.Native, BuildTree, Asks, development: true);
+            for (int k = 0; k < managed.Count; k++) _output.WriteLine($"{k}: {managed[k]}");
+            Compare(managed, native);
+            Assert.Equal(new[] { "sg1000", "sms", "sg1000" }, new[] { 1, 4, 7 }.Select(k => (string?)System.Text.Json.Nodes.JsonNode.Parse(managed[k])!["system"]));
+        }
+
         [Fact]
         public void The_build_s_engines_open_games_and_empty_consoles_and_close_them_the_same()
         {

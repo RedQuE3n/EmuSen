@@ -184,7 +184,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Contains(opened["cores"]!.AsArray(), c => (string)c!["report"]! == words && (string)c["trust"]! == "needs_approval");
             Approve(plain);
             BothEqual(new[] { dir }, "the same library approved by its hash");
-            Assert.All(CSharp(new[] { dir }, open: true)["cores"]!.AsArray(), c => Assert.EndsWith("core ABI 1.14", (string)c!["report"]!));
+            Assert.All(CSharp(new[] { dir }, open: true)["cores"]!.AsArray(), c => Assert.EndsWith("core ABI 1.15", (string)c!["report"]!));
         }
 
         [Fact]
@@ -202,7 +202,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal("player", (string)listed["cores"]![1]!["directory"]!);
             Approve(own);
             BothEqual(new[] { dir }, "the player's core approved", player);
-            Assert.EndsWith("core ABI 1.14", (string)CSharp(new[] { dir }, open: true, player)["cores"]![1]!["report"]!);
+            Assert.EndsWith("core ABI 1.15", (string)CSharp(new[] { dir }, open: true, player)["cores"]![1]!["report"]!);
         }
 
         [Fact]
@@ -254,7 +254,7 @@ namespace EmuSen.WiseMan.Cores
             sidecar["info"] = reversed;
             File.WriteAllText(CoreSidecar.PathFor(full), sidecar.ToJsonString());
             BothEqual(new[] { dir }, "a sidecar whose hash is in capitals and whose info's members are in another order");
-            Assert.All(CSharp(new[] { dir }, open: true)["cores"]!.AsArray(), c => Assert.EndsWith("core ABI 1.14", (string)c!["report"]!));
+            Assert.All(CSharp(new[] { dir }, open: true)["cores"]!.AsArray(), c => Assert.EndsWith("core ABI 1.15", (string)c!["report"]!));
         }
 
         [Fact]

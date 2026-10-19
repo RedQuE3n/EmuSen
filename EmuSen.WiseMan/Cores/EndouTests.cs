@@ -185,6 +185,22 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // Core ABI 1.15: the host names the system it routed the file to, so an image without Sega's header runs as its extension's system where the stage-1 rule guessed the other - see Endou_Native.md §2.3.
+        [Theory]
+        [InlineData("Music.sg", 0x10000, "sg1000", "sms")]
+        [InlineData("Bios.sms", 0x2000, "sms", "sg1000")]
+        [InlineData("Small.sg", 0x4000, "sg1000", "sg1000")]
+        public void A_headerless_image_runs_as_the_system_it_was_routed_to(string name, int size, string routed, string guessed)
+        {
+            string path = Write(name, SyntheticSmsRom.Sg1000(size));
+            var bundle = CoreFactory.Load(path);
+            using var core = Assert.IsType<CoreEngine>(bundle.Core);
+            Assert.Equal(("endou", routed), (core.Info.Id, core.Machine.Info.System));
+            core.RunFrame();
+            using var unnamed = new CoreMachine(core.Library, File.ReadAllBytes(path), "", Array.Empty<(uint, byte[])>());
+            Assert.Equal(guessed, unnamed.Info.System);
+        }
+
         // The stage 1 mark: the build writes the sidecar marked, and a player's discovery sees neither system - see EmuSen_CoreAPI.md §27.
         [Fact]
         public void A_player_is_not_offered_the_core_in_development()
@@ -209,7 +225,7 @@ namespace EmuSen.WiseMan.Cores
         {
             string runner = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "emusen-core-conform.exe" : "emusen-core-conform");
             Assert.True(File.Exists(runner), $"no kit runner at {runner}");
-            var expected = Enumerable.Range(1, 23).Where(n => n != 16).Select(n => $"C{n}").ToArray();
+            var expected = Enumerable.Range(1, 24).Where(n => n != 16).Select(n => $"C{n}").ToArray();
             foreach (var (name, image) in new[]
             {
                 ("export.sms", SyntheticSmsRom.Cartridge()),

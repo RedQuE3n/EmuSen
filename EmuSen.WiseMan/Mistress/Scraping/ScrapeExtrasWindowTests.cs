@@ -99,7 +99,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Empty(Server.JeuInfos);
             Assert.Equal(4, Server.MediaAsked.Count());
             Assert.Equal(5, Server.Asked.Count);
-            ScrapedRecord kept = window.ScrapeStore!.FoundFor(hack)!;
+            ScrapedRecord kept = window.ScrapedNow(hack)!;
             Assert.Equal((900L, "name", "Super Mario World (US title)"), (kept.GameId!.Value, kept.MatchedBy, kept.Name));
             Pump(200);
             Assert.Equal(Stored("snes", "covers", "SMW Hack (USA) [Hack].png"), CoverShown(window, hack));
@@ -156,11 +156,12 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             string rom = Game("Nameless", 9);
             Server.User = FakeScreenScraper.Quota(maxThreads: 1, perMinute: 6, perDay: 20000, koPerDay: 2000, today: 10, koToday: 1);
             MainWindow window = Open();
-            DateTimeOffset start = Clock.Now;
+            window.Plan(ScrapeScope.ThisGame(rom));
+            DateTimeOffset start = window.ScrapeNow;
             for (int i = 0; i < 3; i++) window.SearchByNameAsync(rom, "Nothing " + i).GetAwaiter().GetResult();
             // The first answer sets 6 a minute less 10%; the third waits that interval after the second.
             Assert.Equal(3, Server.Searches.Count());
-            Assert.True(Clock.Now - start >= TimeSpan.FromSeconds(60 / 5.4), $"{(Clock.Now - start).TotalSeconds} s");
+            Assert.True(window.ScrapeNow - start >= TimeSpan.FromSeconds(60 / 5.4), $"{(window.ScrapeNow - start).TotalSeconds} s");
         });
 
         [Fact]
@@ -236,7 +237,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             PadAudit.Reach(sheet, pad, e => e is Button { Name: "FindByNameResult_1" });
             pad.A();
             RunEnds(window);
-            Assert.Equal(901L, window.ScrapeStore!.FoundFor(rom)!.GameId);
+            Assert.Equal(901L, window.ScrapedNow(rom)!.GameId);
         });
 
         // --- the criteria and the plan ---
@@ -410,7 +411,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Directory.CreateDirectory(Stored("nes", "covers"));
             File.WriteAllBytes(Stored("nes", "covers", "Elsewhere.png"), new byte[100]);
             (string goneMd5, long goneBytes) = (Md5(gone), new FileInfo(gone).Length);
-            Assert.NotEmpty(window.ScrapeStore!.Media(goneMd5, goneBytes));
+            Assert.NotEmpty(window.ScrapeMedia(goneMd5, goneBytes));
             Directory.CreateDirectory(Stored("snes", "manuals"));
             File.WriteAllBytes(Stored("snes", "manuals", "Gone (USA).pdf"), System.Text.Encoding.ASCII.GetBytes("%PDF-1.4 a manual"));
             File.Delete(gone);
@@ -440,7 +441,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.False(File.Exists(Stored("snes", "covers", "Gone (USA).png")));
             Assert.True(File.Exists(Stored("snes", "covers", "Kept (USA).png")));
             Assert.True(File.Exists(Stored("nes", "covers", "Elsewhere.png")));
-            Assert.Empty(window.ScrapeStore!.Media(goneMd5, goneBytes));
+            Assert.Empty(window.ScrapeMedia(goneMd5, goneBytes));
             Assert.Empty(window.OrphanedMedia());
             Assert.Equal(roms, Fingerprint(RomDir));
             Assert.Equal(requests, Server.Asked.Count);

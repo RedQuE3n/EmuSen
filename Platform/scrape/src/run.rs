@@ -187,7 +187,9 @@ impl Default for Progress {
 
 /// The ScreenScraper workers' shared state for one run.
 struct Workers {
-    client: Client,
+    client: Arc<Client>,
+    /// Set when the run stops, so that a request left to end on its own stops at its next read.
+    cancel: Arc<emusen_net::Progress>,
     choices: Choices,
     stop: Stop,
     held: Mutex<HashSet<String>>,
@@ -332,7 +334,8 @@ impl Scraper {
         let member = Some(crate::credentials::Member::load()).filter(|m| m.is_set());
         let wire = Wire::of(&self.settings());
         let workers = Arc::new(Workers {
-            client: Client { wire, developer, member: std::sync::RwLock::new(member) },
+            client: Arc::new(Client { wire, developer, member: std::sync::RwLock::new(member) }),
+            cancel: Arc::new(emusen_net::Progress::default()),
             choices,
             stop: Stop::default(),
             held: Mutex::new(HashSet::new()),
@@ -573,6 +576,7 @@ impl Scraper {
     pub(crate) fn stop_workers(&self) {
         let workers = self.runs.workers.lock().unwrap_or_else(|p| p.into_inner()).take();
         if let Some(w) = workers {
+            w.cancel.cancel();
             w.stop.stop();
             w.signal.stop();
             *self.runs.paused.lock().unwrap_or_else(|p| p.into_inner()) = false;
@@ -663,7 +667,7 @@ impl Scraper {
         };
         self.note(Activity { path: rom.into(), system: item.system.clone(), step: "looking_up", kind: None, saved: None });
         let file_name = path::file_name(STYLE, rom).to_string();
-        let mut answer = self.ask(&w.client, system_id, &hashes, &file_name, if by_name { known.as_ref().and_then(|k| k.game_id) } else { None });
+        let Some(mut answer) = self.ask(w, system_id, hashes, &file_name, if by_name { known.as_ref().and_then(|k| k.game_id) } else { None }) else { return Ok(None) };
         let mut matched_by = if by_name { "name" } else { "file" };
 
         if answer.status == Status::NotFound && bytes as u64 <= openemu::HASH_LIMIT {
@@ -678,7 +682,7 @@ impl Scraper {
                     }
                     self.note(Activity { path: rom.into(), system: item.system.clone(), step: "looking_up", kind: None, saved: None });
                     let h = emusen_galaxia::rom_hash::hashes_of(&changed);
-                    let second = self.ask(&w.client, system_id, &Hashes { md5: h.md5, crc32: h.crc32, sha1: h.sha1.unwrap_or_default(), size: h.size }, &file_name, None);
+                    let Some(second) = self.ask(w, system_id, Hashes { md5: h.md5, crc32: h.crc32, sha1: h.sha1.unwrap_or_default(), size: h.size }, &file_name, None) else { return Ok(None) };
                     if second.status == Status::Found {
                         matched_by = "transformed";
                     }
@@ -718,15 +722,17 @@ impl Scraper {
         }
     }
 
-    fn ask(&self, client: &Client, system_id: i32, hashes: &Hashes, file_name: &str, game_id: Option<i64>) -> client::JeuInfos {
-        let answer = client.jeu_infos(system_id, hashes, file_name, game_id, &emusen_net::Progress::default());
+    /// One `jeuInfos`, its quota observed and counted; none when the run stopped while it was asked.
+    fn ask(&self, w: &Workers, system_id: i32, hashes: Hashes, file_name: &str, game_id: Option<i64>) -> Option<client::JeuInfos> {
+        let (client, cancel, name) = (w.client.clone(), w.cancel.clone(), file_name.to_string());
+        let answer = crate::clock::detached(&w.stop, move || client.jeu_infos(system_id, &hashes, &name, game_id, &cancel))?;
         let store = self.store();
         let _ = self.quota.observe(&store, &self.clock, answer.quota);
         if matches!(answer.status, Status::Found | Status::NotFound | Status::Malformed | Status::BadRequest) {
             let _ = self.quota.counted(&store, &self.clock, answer.status == Status::NotFound);
         }
         let _ = self.quota.answered(&store, &self.clock, answer.status);
-        answer
+        Some(answer)
     }
 
     fn stopped(&self, item: &Queued) -> Finished {
@@ -807,10 +813,10 @@ impl Scraper {
             self.note(Activity { path: rom.into(), system: item.system.clone(), step: "downloading", kind: Some(kind.esde_type.into()), saved: None });
             let replace = kept.is_some_and(|k| k.relative_path == relative);
             let target = path::combine(STYLE, &root, &relative);
-            let cancel = emusen_net::Progress::default();
-            let got = match w.client.download(&media.url, &target, &cancel, kind.payload, local_sha1.as_deref(), replace, media.size) {
-                Ok(g) => g,
-                Err(()) => return Ok(None),
+            let (client, cancel, url, at, payload, size) = (w.client.clone(), w.cancel.clone(), media.url.clone(), target.clone(), kind.payload, media.size);
+            let got = match crate::clock::detached(&w.stop, move || client.download(&url, &at, &cancel, payload, local_sha1.as_deref(), replace, size)) {
+                Some(Ok(g)) => g,
+                _ => return Ok(None),
             };
             if w.stop.is_stopped() {
                 return Ok(None);

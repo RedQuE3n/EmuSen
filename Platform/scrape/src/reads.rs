@@ -159,6 +159,7 @@ pub(crate) fn get(s: &Scraper, r: &Value) -> Result<String, Error> {
         }
         "folder" => out.push_str(&quoted(&s.settings().folder_of(&json::text(r, "path")?))),
         "plan" => out.push_str(&s.plan(r)?),
+        "now" => out.push_str(&quoted(&crate::credentials::round_trip_utc(s.clock.now()))),
         "delays" => {
             let delays: Vec<String> = s.clock.drain_delays().iter().map(|d| d.to_string()).collect();
             out.push_str(&format!("[{}]", delays.join(",")));

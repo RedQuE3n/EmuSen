@@ -91,6 +91,38 @@ namespace EmuSen.Mistress.Scraping
             }
         }
 
+        // This build's embedded blob as it is, for the scraper in Rust to decode; null when the build carries none.
+        internal static byte[]? EmbeddedBlob()
+        {
+            try
+            {
+                using Stream? stream = EmbeddedSource();
+                if (stream is null) return null;
+                using var memory = new MemoryStream();
+                stream.CopyTo(memory);
+                return memory.ToArray();
+            }
+            catch (IOException)
+            {
+                return null;
+            }
+        }
+
+        // Credentials in the embedded blob's layout, so that a test's own reach the scraper in Rust as a build's would.
+        internal static byte[] Encode(DeveloperCredentials developer)
+        {
+            byte[] body = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { devid = developer.DevId, devpassword = developer.DevPassword, softname = developer.SoftName }));
+            byte[] key = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+            byte[] blob = new byte[6 + key.Length + body.Length];
+            "ESSD"u8.CopyTo(blob);
+            blob[4] = 1;
+            blob[5] = (byte)key.Length;
+            key.CopyTo(blob, 6);
+            for (int i = 0; i < body.Length; i++) blob[6 + key.Length + i] = (byte)(body[i] ^ key[i % key.Length]);
+            Array.Clear(body);
+            return blob;
+        }
+
         // What ScreenScraperDeveloper.targets writes: "ESSD", a version, the key's length, the key, then the JSON XORed with it; null for anything else.
         public static DeveloperCredentials? Decode(byte[] blob)
         {

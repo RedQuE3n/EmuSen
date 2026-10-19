@@ -17,7 +17,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
     // An HTTPS server on 127.0.0.1 that answers at the real addresses (ScreenScraper's, libretro's, GitHub's) from a handler the test gives, recording every request as it came, so two clients' requests compare byte for byte - see EmuSen_Backend.md §30.7.
     public sealed class ReplayServer : IDisposable
     {
-        public static readonly string[] Hosts = ["api.screenscraper.fr", "neoclone.screenscraper.fr", "thumbnails.libretro.com", "api.github.com", "github.com", "objects.githubusercontent.com", "localhost"];
+        public static readonly string[] Hosts = ["api.screenscraper.fr", "neoclone.screenscraper.fr", "thumbnails.libretro.com", "api.github.com", "github.com", "objects.githubusercontent.com", "github.example", "gamefaqs.example", "x", "localhost"];
 
         private static readonly Lazy<(X509Certificate2 Root, X509Certificate2 Leaf)> Made = new(Make);
 

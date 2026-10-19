@@ -1,0 +1,35 @@
+# The scraper, emusen_scrape.h, version 1: one fact per line, sorted; struct layouts are a 64-bit target's.
+# Written by `SCRAPE_ABI_EMIT=1 cargo test -p emusen-scrape --test scrape_abi`; a line is never edited once its minor is released.
+# See EmuSen_Backend.md section 30.
+const EMUSEN_SCRAPE_BAD_REQUEST -1163 @1.0
+const EMUSEN_SCRAPE_BAD_STRING -5 @1.0
+const EMUSEN_SCRAPE_BUSY -1164 @1.0
+const EMUSEN_SCRAPE_DATABASE -1161 @1.0
+const EMUSEN_SCRAPE_IO -1165 @1.0
+const EMUSEN_SCRAPE_MAJOR 1 @1.0
+const EMUSEN_SCRAPE_NEWER_FILE -1160 @1.0
+const EMUSEN_SCRAPE_NOT_SUPPORTED -256 @1.0
+const EMUSEN_SCRAPE_NO_LIBRARY -1166 @1.0
+const EMUSEN_SCRAPE_NO_SQLITE -1162 @1.0
+const EMUSEN_SCRAPE_NULL -1 @1.0
+field emusen_scrape_config.embedded offset 40 @1.0
+field emusen_scrape_config.embedded_len offset 48 @1.0
+field emusen_scrape_config.library offset 32 @1.0
+field emusen_scrape_config.root offset 8 @1.0
+field emusen_scrape_config.root_len offset 16 @1.0
+field emusen_scrape_config.settings offset 56 @1.0
+field emusen_scrape_config.settings_len offset 64 @1.0
+field emusen_scrape_config.size offset 0 @1.0
+field emusen_scrape_config.sqlite offset 24 @1.0
+fn emusen_scrape_abi_version uint32_t (void) @1.0
+fn emusen_scrape_cancel int32_t (emusen_scrape *) @1.0
+fn emusen_scrape_change int64_t (emusen_scrape *, const uint8_t *, size_t, uint8_t *, size_t) @1.0
+fn emusen_scrape_close int32_t (emusen_scrape *) @1.0
+fn emusen_scrape_get int64_t (emusen_scrape *, const uint8_t *, size_t, uint8_t *, size_t) @1.0
+fn emusen_scrape_last_error int64_t (uint8_t *, size_t) @1.0
+fn emusen_scrape_open int32_t (const emusen_scrape_config *, emusen_scrape * *) @1.0
+fn emusen_scrape_pause int32_t (emusen_scrape *, int32_t) @1.0
+fn emusen_scrape_progress int64_t (emusen_scrape *, const uint8_t *, size_t, uint8_t *, size_t) @1.0
+fn emusen_scrape_start int64_t (emusen_scrape *, const uint8_t *, size_t) @1.0
+fn emusen_scrape_wait int64_t (emusen_scrape *, uint64_t, uint32_t) @1.0
+struct emusen_scrape_config size 72 align 8 @1.0

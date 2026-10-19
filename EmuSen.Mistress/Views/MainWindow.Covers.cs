@@ -107,6 +107,33 @@ namespace EmuSen.Mistress.Views
 
         long? IScrapeHost.OpenVgdbBytes => File.Exists(OpenVgdbPath) ? new FileInfo(OpenVgdbPath).Length : null;
 
+        // OpenVGDB fetched by the scraper in Rust; the tag, or the reason why not.
+        private async Task<string> DownloadOpenVgdbNativeAsync(NativeScraping native)
+        {
+            _downloadingDatabase = true;
+            ScrapeChanged?.Invoke();
+            try
+            {
+                (string? tag, string? failed) = await Task.Run(native.DownloadOpenVgdb);
+                if (_recordsClosed) return "";
+                if (tag is null)
+                {
+                    ErrorLog.Error("covers", "Could not download OpenVGDB", null, failed);
+                    return $"Could not download OpenVGDB: {ScrapeRedactor.Redact(failed)}";
+                }
+                _appSettings.OpenEmuFallback = true;
+                _appSettings.Save();
+                native.Settings(NativeSettings());
+                StatusText.Text = $"OpenVGDB {tag} downloaded.";
+                return $"OpenVGDB {tag} was downloaded, and OpenEmu's fallback is on.";
+            }
+            finally
+            {
+                _downloadingDatabase = false;
+                ScrapeChanged?.Invoke();
+            }
+        }
+
         bool IScrapeHost.OpenVgdbBusy => _downloadingDatabase || ScrapeRunning;
 
         async Task<string?> IScrapeHost.RemoveOpenVgdbAsync()
@@ -121,10 +148,12 @@ namespace EmuSen.Mistress.Views
             try
             {
                 long bytes = new FileInfo(OpenVgdbPath).Length;
+                if (_native is { } n) n.RemoveOpenVgdb();
                 File.Delete(OpenVgdbPath);
                 if (File.Exists(OpenVgdbPath + ".part")) File.Delete(OpenVgdbPath + ".part");
                 _appSettings.OpenEmuFallback = false;
                 _appSettings.Save();
+                _native?.Settings(NativeSettings());
                 StatusText.Text = "OpenVGDB removed";
                 ScrapeChanged?.Invoke();
                 return $"OpenVGDB was removed ({ScrapePreferencesPane.Size(bytes)} freed). OpenEmu's fallback is off until it is downloaded again.";
@@ -140,6 +169,7 @@ namespace EmuSen.Mistress.Views
         async Task<string> IScrapeHost.DownloadOpenVgdbAsync()
         {
             if (_downloadingDatabase || ScrapeRunning) return "A run is using OpenEmu's fallback; download when it has finished.";
+            if (ScrapeNative && OpenNative()) return await DownloadOpenVgdbNativeAsync(_native!);
             _http ??= HttpFactory();
             _downloadingDatabase = true;
             ScrapeChanged?.Invoke();

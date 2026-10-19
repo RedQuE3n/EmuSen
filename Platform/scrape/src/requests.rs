@@ -224,6 +224,20 @@ impl Scraper {
         text_or_null(&mut out, found.as_ref().map(|m| m.name.as_str()));
         out.push_str(",\"level\":");
         text_or_null(&mut out, found.as_ref().and_then(|m| m.level.as_deref()));
+        out.push_str(",\"quota\":");
+        match found.as_ref().map(|m| m.quota) {
+            Some(q) => {
+                out.push('[');
+                for (i, v) in [q.max_threads, q.max_download_kbps, q.requests_today, q.requests_ko_today, q.max_requests_per_minute, q.max_requests_per_day, q.max_requests_ko_per_day].iter().enumerate() {
+                    if i > 0 {
+                        out.push(',');
+                    }
+                    number_or_null(&mut out, v.map(i64::from));
+                }
+                out.push(']');
+            }
+            None => out.push_str("null"),
+        }
         out.push_str(&format!(",\"said\":{}}}", quoted(&said)));
         Ok(out)
     }

@@ -48,8 +48,8 @@ extern "C" {
 typedef struct emusen_scrape emusen_scrape;
 struct emusen_library;
 
-/* Settings: {"roms", "art", "esde_media", "openemu", "user_agent", "developer_files", "test": {"connect", "roots",
- * "clock", "offline"}}, every member optional; "test" is for tests alone, reached by no setting, variable or command. */
+/* Settings: {"roms", "art", "esde_media", "openemu", "user_agent", "developer_files", "cores": [[system ids], ...],
+ * "test": {"connect", "roots", "clock" (.NET ticks from 1970), "offline"}}, every member optional; "test" is for tests alone, reached by no setting, variable or command. */
 typedef struct emusen_scrape_config {
     uint32_t size;                           /* sizeof, so fields may be appended */
     const uint8_t *root; size_t root_len;    /* the media store; media.db in it */
@@ -70,6 +70,27 @@ int32_t emusen_scrape_open(const emusen_scrape_config *config, emusen_scrape **o
 
 /* Closes a handle: a run is cancelled and its workers joined, then media.db is closed. */
 int32_t emusen_scrape_close(emusen_scrape *s);
+
+/* Starts a run: {"games": [{"path", "system"}], "priority": "shown" | "console" | "library", "one", "resume",
+ * "refresh", "pick", "enabled", "choices": {"kinds": [...], "region", "language", "region_fallback", "threads"}}.
+ * The games queued, or a status; zero starts nothing; a run already going is EMUSEN_SCRAPE_BUSY. */
+int64_t emusen_scrape_start(emusen_scrape *s, const uint8_t *request, size_t len);
+
+/* The run as it stands: {"serial", "state": "idle" | "running" | "done" | "stopped" | "cancelled", "paused", "why",
+ * "total", "done", "found", "unknown", "failed", "skipped", "retrying", "unchanged", "requests", "last_failure",
+ * "failover": {"asked", "found", "pending"}, "current", "last_picture", "started", "ended", "paused_ticks",
+ * "working_ticks", "workers", "interrupted", "results": [...], "quota": {...}}; {"since": n} gives the results after
+ * serial n. */
+int64_t emusen_scrape_progress(emusen_scrape *s, const uint8_t *request, size_t len, uint8_t *out, size_t out_len);
+
+/* Waits until the run's serial passes serial, or timeout_ms ends; the serial then. A blocking wait, not a callback. */
+int64_t emusen_scrape_wait(emusen_scrape *s, uint64_t serial, uint32_t timeout_ms);
+
+/* Pauses (1) or resumes (0) the run's ScreenScraper requests; 1 when it changed. */
+int32_t emusen_scrape_pause(emusen_scrape *s, int32_t paused);
+
+/* Cancels the run: its workers joined, the failover let go of; 1 when one was going. */
+int32_t emusen_scrape_cancel(emusen_scrape *s);
 
 /* One read, {"what": ...}:
  *   kinds                    [{"type", "folder", "screenscraper": [...], "payload"}], ES-DE's eleven kinds

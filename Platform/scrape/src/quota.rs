@@ -68,6 +68,14 @@ impl Status {
     }
 }
 
+/// One look at a turn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Turn {
+    Go,
+    Wait(i64),
+    Stopped,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Gate {
     Go,
@@ -218,32 +226,63 @@ impl Manager {
         Ok((Gate::Go, None, None))
     }
 
-    /// Waits for the next request's turn: the pace, then any back-off; false when the quota is stopped or the run is.
+    /// One look at the next request's turn: go now (the slot taken), wait so long, or stopped.
+    pub fn try_turn(&self, store: &Store, clock: &Clock) -> Result<Turn, Error> {
+        let (gate, until, _) = self.check(store, clock)?;
+        if gate == Gate::Stopped {
+            return Ok(Turn::Stopped);
+        }
+        let mut inner = self.lock();
+        let now = clock.now();
+        let mut ready = if gate == Gate::Wait { until.unwrap_or(now) } else { now };
+        if inner.next_slot > ready {
+            ready = inner.next_slot;
+        }
+        let wait = ready - now;
+        if wait <= 0 {
+            inner.next_slot = now + Manager::interval_of(&inner);
+            return Ok(Turn::Go);
+        }
+        Ok(Turn::Wait(wait))
+    }
+
+    /// Waits for the next request's turn, the store taken only to look: Some(true) to go, Some(false) stopped, None
+    /// when the run was.
+    pub fn take_turn_with<'a>(&self, store: &dyn Fn() -> std::sync::MutexGuard<'a, Store>, clock: &Clock, stop: &Stop) -> Result<Option<bool>, Error> {
+        loop {
+            if stop.is_stopped() {
+                return Ok(None);
+            }
+            let step = {
+                let guard = store();
+                self.try_turn(&guard, clock)?
+            };
+            match step {
+                Turn::Go => return Ok(Some(true)),
+                Turn::Stopped => return Ok(Some(false)),
+                Turn::Wait(wait) => {
+                    if !clock.delay(wait, stop) {
+                        return Ok(None);
+                    }
+                }
+            }
+        }
+    }
+
+    /// As [`Manager::take_turn_with`], over a store the caller holds alone.
     pub fn take_turn(&self, store: &Store, clock: &Clock, stop: &Stop) -> Result<Option<bool>, Error> {
         loop {
             if stop.is_stopped() {
                 return Ok(None);
             }
-            let (gate, until, _) = self.check(store, clock)?;
-            if gate == Gate::Stopped {
-                return Ok(Some(false));
-            }
-            let wait = {
-                let mut inner = self.lock();
-                let now = clock.now();
-                let mut ready = if gate == Gate::Wait { until.unwrap_or(now) } else { now };
-                if inner.next_slot > ready {
-                    ready = inner.next_slot;
+            match self.try_turn(store, clock)? {
+                Turn::Go => return Ok(Some(true)),
+                Turn::Stopped => return Ok(Some(false)),
+                Turn::Wait(wait) => {
+                    if !clock.delay(wait, stop) {
+                        return Ok(None);
+                    }
                 }
-                let wait = ready - now;
-                if wait <= 0 {
-                    inner.next_slot = now + Manager::interval_of(&inner);
-                    return Ok(Some(true));
-                }
-                wait
-            };
-            if !clock.delay(wait, stop) {
-                return Ok(None);
             }
         }
     }

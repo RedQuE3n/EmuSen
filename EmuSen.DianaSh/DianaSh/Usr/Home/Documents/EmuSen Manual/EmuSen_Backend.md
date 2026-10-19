@@ -6485,3 +6485,80 @@ text; in the store, a migration's text changed by one space (the schema case) an
 top moved rather than copied (the layout case). A rating written as its decimal text was **not caught**: in this part
 the Rust writes no record, only reads them; part 4's replay, where it does, is its catcher, and the fault is to be made
 again there.
+
+### 30.12 Built 2026-10-19: part 4, the client and the run (with part 5's sources)
+
+*Measured on 2026-10-19. A second candidate defect was shown and fixed first; the console facts were settled with the
+coordinating plan before the run was written.*
+
+**A charset .NET has not.** Reading `ScreenScraperClient` for the port showed that `GetTextAsync` caught the network's
+exceptions but not the `InvalidOperationException` with which `ReadAsStringAsync` refuses a `Content-Type` charset .NET
+has no encoding for: the worker's task faulted, the game gave no result and the run went on as though it had not been
+queued. `An_answer_in_a_charset_dotnet_has_not_is_an_answer_that_could_not_be_read_and_the_run_goes_on` failed ("no
+result" after ten seconds); the refusal is now a failed answer, retried as any other, in both halves (`emusen-net`'s
+`text` gives the same words, §30.10).
+
+**The console facts have one owner.** A game's failover needs its core's console (the OpenEmu folder's name), its
+libretro folders and its OpenVGDB names. All four per-system facts are columns of the systems table, in each of the
+nine data files (`console`, `esde_system`, `cheat_systems`, `openvgdb_systems`), so the scraper reads them from
+`emusen-systems`; no field was added and no data file changed. What the table does not hold is which systems one engine
+runs together (Mercury runs `gb` and `gbc`, the Genesis core `md`, `mcd` and `32x`): that comes from core info and
+depends on the engines installed, and `attached_to` covers only the Sega add-ons. The C#'s `ConsoleCore` joins over that
+grouping (the console of its first system, the union of its systems' libretro folders and OpenVGDB names), so the
+settings carry the grouping alone, `"cores": [["gb","gbc"], ["md","mcd","32x"], …]`, as system ids, and `consoles.rs`
+joins the rest from the table. The other answer, each game's own system's row, was weighed and not chosen: a Game Boy
+Color game's failover covers would move from `openemu/GB/` to `openemu/GBC/`, and those already fetched would no
+longer be found.
+
+**What was built.**
+
+- `client` (`ScreenScraperClient`): the URLs with `Uri.EscapeDataString`'s escaping, `jeuInfos`, `jeuRecherche`,
+  `ssuserInfos`, the media download streamed to `.part` with its 64-byte head, its SHA-1 and the 128 MiB stop, the
+  payload checks, `SHA1OK` and `NOMEDIA`, the transfer timeout, and a sign-in's result from its status and body.
+- `run` (`Scraper` and the window's half of a run): the workers up to the quota's threads, the queue's due order and the
+  held set, identity's two steps (the file's hashes, then the transformed bytes' after a 404 within 384 MiB), a game's
+  text and each kind's file, renames followed, the back-offs, the stops and their reasons, the throttle after a file
+  that came faster than `maxdownloadspeed`, pause, cancel, and the failover's hand-off: a game with no cover shown from
+  any source goes to OpenEmu's sources once a session, after OpenVGDB is downloaded if it is not there, and the run
+  ends when both halves have answered.
+- `openemu` (`OpenVgdb`, `OpenVgdbDownload`, `CoverFetcher`), `artwork` (`ArtworkIndex`), `media` (`MediaSources`:
+  the order of a picture's sources, `present` and `stamp`) and `metadata` (`GameMetadata.Resolve`). The failover's
+  cover lookups are kept in `games.db` through the lent library, and a cover chosen from another game is followed there.
+  The art index and the order of sources were planned for part 5; the run's hand-off asks "does this game show a
+  cover?", so they came with it, and part 5 kept the metadata, `present` and `stamp`.
+- The header's run calls: `start`, `progress` (with its results after a serial), `wait`, `pause`, `cancel`; the reads
+  `plan`, `media`, `metadata`, `present`, `stamp`, `openvgdb` and, for tests, `delays` (the test clock's waits); the
+  changes `sign_in`, `check`, `search`, `art_added`, `openvgdb_download` and `openvgdb_remove`.
+
+**Built otherwise than §30.3 said:** OpenVGDB's download is a blocking change rather than a job drained by `progress`,
+since the window awaits it whole and shows no progress for it; the error log's lines for a failed game, a retry and a
+stop are written by the host from the drained results, as the C# writes them in the window, so that the error log keeps
+one writer.
+
+**The replay, measured on 2026-10-19.** `ScrapeReplayParityTests`: `ReplayServer` serves WiseMan's `FakeScreenScraper`
+over HTTPS on 127.0.0.1 with a certificate made at test time for ScreenScraper's, libretro's and GitHub's names; the C#
+`Scraper` reaches it through a `SocketsHttpHandler` whose `ConnectCallback` dials it, the Rust through `test.connect`
+and `test.roots`, each from a copy of the same store and on a test clock started at the same instant. Every case
+compares the results game by game, every request's line and head after the C#'s redactor (with each carrying exactly
+the test's own credentials), `media.db` row by row, the media tree file by file, and the clocks' waits, which are the
+pace and the back-offs:
+
+| Case | Result |
+|---|---|
+| found games in three regions and a folder, a game ScreenScraper does not know, a headered NES game found by its transformed bytes, an answer that is not JSON (five attempts, then Error), a 400 | pass |
+| every kind, Japanese region, French text, the fallback off; then the defaults with videos and manuals in German | pass |
+| a second run over the first's store, refreshed with one kind's files changed upstream and one game renamed into a folder; and the same unrefreshed | pass |
+| a 430, a 403, and a 429 and a 401 that each answer once | 4 pass |
+| the failover alone (ScreenScraper switched off): OpenVGDB by name and by the NES's headerless MD5, the thumbnail server's names with tags dropped, a game OpenVGDB lacks and one with no art | pass |
+
+**Seeded faults**, each made, run against the replay and reverted: a rating written as its decimal text (part 3's
+uncaught fault, caught here by seven cases); the pace without its 10% (seven); a media address keeping `ssid` with no
+member (seven); `wheel` tried before `wheel-hd` (six); any region taken with the fallback off (one); a 429 not halving
+the pace (one); a refresh fetching a file whose SHA-1 the answer matched (one); a thumbnail name never shortened, which
+the first failover case did not catch because its fake server answered any address holding `Named` and every
+thumbnail address holds `Named_Boxarts`; with the condition named exactly, it fails.
+
+The blast radius, measured on 2026-10-19: `cargo test --profile test-checked` of `emusen-scrape`, `emusen-platform`,
+`emusen-net`, `emusen-library` and `emusen-dotnet`, 110 passed; every class in `EmuSen.WiseMan.Mistress.Scraping`
+(the replay and the store's parity classes among them) with the library's two parity classes, the cheat download's and
+the online covers', 292 passed and 5 skipped (the live and picture tools), none failed.

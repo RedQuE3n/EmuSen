@@ -39,7 +39,11 @@ namespace EmuSen.Crystal.Client.Scrape
             public delegate* unmanaged[Cdecl]<byte*, nuint, long> LastError;
             public delegate* unmanaged[Cdecl]<Config*, nint*, int> Open;
             public delegate* unmanaged[Cdecl]<nint, int> Close;
-            public delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, long> Get, Change;
+            public delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, long> Get, Change, Progress;
+            public delegate* unmanaged[Cdecl]<nint, byte*, nuint, long> Start;
+            public delegate* unmanaged[Cdecl]<nint, ulong, uint, long> Wait;
+            public delegate* unmanaged[Cdecl]<nint, int, int> Pause;
+            public delegate* unmanaged[Cdecl]<nint, int> Cancel;
             public nint Sqlite;
         }
 
@@ -47,6 +51,7 @@ namespace EmuSen.Crystal.Client.Scrape
         public static readonly IReadOnlyList<string> ExportNames = new[]
         {
             "emusen_scrape_abi_version", "emusen_scrape_last_error", "emusen_scrape_open", "emusen_scrape_close", "emusen_scrape_get", "emusen_scrape_change",
+            "emusen_scrape_start", "emusen_scrape_progress", "emusen_scrape_wait", "emusen_scrape_pause", "emusen_scrape_cancel",
         };
 
         private static readonly Lazy<(Exports? Table, string Report)> Loaded = new(Load);
@@ -64,6 +69,11 @@ namespace EmuSen.Crystal.Client.Scrape
                 Close = (delegate* unmanaged[Cdecl]<nint, int>)found[3],
                 Get = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, long>)found[4],
                 Change = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, long>)found[5],
+                Start = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, long>)found[6],
+                Progress = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, long>)found[7],
+                Wait = (delegate* unmanaged[Cdecl]<nint, ulong, uint, long>)found[8],
+                Pause = (delegate* unmanaged[Cdecl]<nint, int, int>)found[9],
+                Cancel = (delegate* unmanaged[Cdecl]<nint, int>)found[10],
             };
             if (t.AbiVersion() >> 16 != Major) return (null, $"{PlatformLibrary.FileName} speaks another major of emusen_scrape.h");
             try
@@ -174,6 +184,46 @@ namespace EmuSen.Crystal.Client.Scrape
         public string Get(string request) => Call(_t.Get, request);
 
         public string Change(string request) => Call(_t.Change, request);
+
+        // The run as it stands, its results after the serial named.
+        public string Progress(long since = 0) => Call(_t.Progress, $"{{\"since\":{since}}}");
+
+        // Starts a run; the games queued.
+        public long Start(string request)
+        {
+            byte[] r = Encoding.UTF8.GetBytes(request);
+            long n;
+            nint h = Enter();
+            try
+            {
+                fixed (byte* rp = r) n = _t.Start(h, rp, (nuint)r.Length);
+            }
+            finally { Leave(); }
+            if (n < 0) throw Fault(_t, n);
+            return n;
+        }
+
+        // Waits until the run's serial passes serial, or the timeout ends; the serial then.
+        public long Wait(long serial, int timeoutMs)
+        {
+            nint h = Enter();
+            try { return _t.Wait(h, (ulong)Math.Max(0, serial), (uint)Math.Max(0, timeoutMs)); }
+            finally { Leave(); }
+        }
+
+        public bool Pause(bool paused)
+        {
+            nint h = Enter();
+            try { return _t.Pause(h, paused ? 1 : 0) == 1; }
+            finally { Leave(); }
+        }
+
+        public bool Cancel()
+        {
+            nint h = Enter();
+            try { return _t.Cancel(h) == 1; }
+            finally { Leave(); }
+        }
 
         // Waits for every call in progress, then closes the handle, which cancels a run and joins its workers.
         public void Dispose()

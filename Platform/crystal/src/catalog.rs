@@ -200,8 +200,19 @@ impl<'d> Catalog<'d> {
         info::systems(&core.sidecar.info_json).into_iter().find(|s| ids.contains(&s.id.as_str()))
     }
 
-    fn engine_system(&self, console: &str) -> Option<SystemDetail> {
+    fn pad_system(&self, console: &str) -> Option<SystemDetail> {
         self.discovered_system(console).or_else(|| self.sole_engine_system(console))
+    }
+
+    /// The system a console's v1 engine gives, a discovered console's or a hand console's first engine's, for its
+    /// save media, `EngineSystem`.
+    pub fn engine_system(&self, console: &str) -> Option<SystemDetail> {
+        self.discovered_system(console).or_else(|| {
+            system_ids_for(console)
+                .into_iter()
+                .flat_map(|id| self.discovery.for_system(id).filter_map(move |c| info::systems(&c.sidecar.info_json).into_iter().find(|s| s.id == id)))
+                .next()
+        })
     }
 
     pub fn buttons_for(&self, console: &str) -> Vec<usize> {
@@ -211,14 +222,14 @@ impl<'d> Catalog<'d> {
         if eq_ic(console, "NES") {
             return NES_PAD.to_vec();
         }
-        match self.engine_system(console).map(|s| s.buttons()) {
+        match self.pad_system(console).map(|s| s.buttons()) {
             Some(pad) if !pad.is_empty() => pad,
             _ => (0..info::BUTTONS.len()).collect(),
         }
     }
 
     pub fn axes_for(&self, console: &str) -> Vec<usize> {
-        self.engine_system(console).map(|s| s.axes()).unwrap_or_default()
+        self.pad_system(console).map(|s| s.axes()).unwrap_or_default()
     }
 
     /// `ControllerPorts.ForConsole(console)`.
@@ -226,7 +237,7 @@ impl<'d> Catalog<'d> {
         if eq_ic(console, "NES") || eq_ic(console, "SNES") {
             return 2;
         }
-        self.engine_system(console).map(|s| s.ports().max(1)).unwrap_or(1)
+        self.pad_system(console).map(|s| s.ports().max(1)).unwrap_or(1)
     }
 
     /// The settings a console's engine offers, from its library, `SettingsFor`; opening a library under the trust rules

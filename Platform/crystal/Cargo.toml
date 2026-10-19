@@ -22,6 +22,8 @@ emusen-systems = { path = "../systems" }
 emusen-galaxia = { path = "../galaxia" }
 # The firmware store: the folders searched, an image found, installed or located (EmuSen_Backend.md §15.1).
 emusen-firmware = { path = "../firmware" }
+# The card manager over the media's files (EmuSen_Backend.md §15.2).
+emusen-savemedia = { path = "../savemedia" }
 # The session service's numbers, which the API's statuses share.
 emusen-session-service = { path = "../session-service" }
 # .NET's text rules and JSON writer, so each answer is the C# implementation's to the byte.

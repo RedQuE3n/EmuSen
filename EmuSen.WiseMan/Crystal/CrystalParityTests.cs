@@ -275,6 +275,69 @@ namespace EmuSen.WiseMan.Crystal
             });
         }
 
+        // A tree of save media planted the same way before each implementation runs: drawers, games' own files, stored modes.
+        private void PlantCards()
+        {
+            string saves = DataStore.Saves;
+            if (Directory.Exists(saves)) Directory.Delete(saves, recursive: true);
+            byte[] Card(params (string Name, int[] Blocks)[] saves) => saves.Aggregate(EmuSen.Crystal.Systems.Psx.PsxCardFormat.Instance.Managed.Format()!, (card, s) => SaveMediaManagerTests.WithSave(card, s.Name, s.Name, s.Blocks, 0x5A));
+            string psx = Path.Combine(saves, "PlayStation"), drawer = Path.Combine(psx, "Cards");
+            Directory.CreateDirectory(drawer);
+            File.WriteAllBytes(Path.Combine(drawer, "Card 1.mcr"), Card(("BASLUS-00001ONE", new[] { 0 })));
+            File.WriteAllBytes(Path.Combine(drawer, "mine.mcr"), Card(("BASLUS-00002TWO", new[] { 0, 1 }), ("BASLUS-00003RED", new[] { 2 })));
+            File.WriteAllBytes(Path.Combine(drawer, "UPPER.MCR"), Card());
+            File.WriteAllBytes(Path.Combine(psx, "Ape Escape.mcr"), Card(("BASCUS-94423APE", new[] { 0 })));
+            File.WriteAllBytes(Path.Combine(psx, "Ape Escape.2.mcr"), Card());
+            File.WriteAllBytes(Path.Combine(psx, "notes.txt"), new byte[3]);
+            Directory.CreateDirectory(Path.Combine(saves, "Sega CD", "Console"));
+            var stored = new ConsolesConfig();
+            stored.SetValue("PlayStation", "Cards", "named");
+            stored.SetValue("PlayStation", "Card1", "mine");
+            stored.SetValue("PlayStation", "Card2", ".hidden");
+            stored.SetValue("Nintendo 64", "Cards", "named");
+            stored.SetValue("Nintendo 64", "Card1", "sub/dir");
+            stored.SetValue("Nintendo 64", "Card2", " padded");
+            stored.SetValue("Sega CD", "ConsoleMemory", "sideways");
+            stored.Save();
+        }
+
+        [Fact]
+        public void The_card_manager_lists_opens_and_changes_cards_the_same()
+        {
+            string drawer = Path.Combine(DataStore.Saves, "PlayStation", "Cards");
+            string Card(string name) => Path.Combine(drawer, name);
+            string J(params (string Key, object Value)[] pairs) => System.Text.Json.JsonSerializer.Serialize(pairs.ToDictionary(p => p.Key, p => p.Value));
+            var trees = new List<string>();
+            var answers = new List<List<string>>();
+            foreach (CrystalImpl impl in new[] { CrystalImpl.Managed, CrystalImpl.Native })
+            {
+                PlantCards();
+                answers.Add(Answers(impl, BuildTree, (i, rt) => new[]
+                {
+                    i.CardsOp(rt, 0, J(("console", "PlayStation"))), i.CardsOp(rt, 0, J(("console", "Sega CD"))), i.CardsOp(rt, 0, J(("console", "Nintendo 64"))),
+                    i.CardsOp(rt, 0, J(("console", "SNES"))), i.CardsOp(rt, 0, J(("console", "Nowhere"))), i.CardsOp(rt, 0, "{}"),
+                    i.CardsOp(rt, 1, J(("path", Card("mine.mcr")))), i.CardsOp(rt, 1, J(("path", Card("New.mcr")))), i.CardsOp(rt, 1, J(("path", Card("x.txt")))),
+                    i.CardsOp(rt, 6, J(("path", Card("New.mcr")))), i.CardsOp(rt, 6, J(("path", Card("New.mcr")))),
+                    i.CardsOp(rt, 2, J(("from", Card("mine.mcr")), ("save", "BASLUS-00002TWO"), ("to", Card("New.mcr")))),
+                    i.CardsOp(rt, 2, J(("from", Card("mine.mcr")), ("save", "9"), ("to", Card("New.mcr")))),
+                    i.CardsOp(rt, 3, J(("from", Card("mine.mcr")), ("save", "2"), ("to", Card("Card 1.mcr")))),
+                    i.CardsOp(rt, 4, J(("card", Card("Card 1.mcr")), ("save", "BASLUS-00001ONE"))),
+                    i.CardsOp(rt, 5, J(("to", Card("Card 1.mcr")), ("from", new[] { Card("mine.mcr"), Path.Combine(DataStore.Saves, "PlayStation", "Ape Escape.mcr") }))),
+                    i.CardsOp(rt, 5, J(("to", Card("Card 1.mcr")))),
+                    i.CardsOp(rt, 7, J(("from", Card("mine.mcr")), ("to", Card("Copy.mcr")))), i.CardsOp(rt, 7, J(("from", Card("mine.mcr")), ("to", Card("Copy.mcr")))),
+                    i.CardsOp(rt, 8, J(("from", Card("Copy.mcr")), ("to", Card("Renamed.mcr")))), i.CardsOp(rt, 8, J(("from", Card("Gone.mcr")), ("to", Card("x.mcr")))),
+                    i.CardsOp(rt, 99, "{}"), i.CardsOp(rt, 0, J(("console", "PlayStation"))),
+                }).ToList());
+                trees.Add(string.Join("\n", Directory.EnumerateFiles(DataStore.Saves, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
+                    .Select(f => $"{Path.GetRelativePath(DataStore.Saves, f)} {Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(f)))}")));
+            }
+            for (int k = 0; k < answers[0].Count; k++)
+                if (answers[0][k] != answers[1][k]) _output.WriteLine($"answer {k}\nC#:   {answers[0][k]}\nRust: {answers[1][k]}");
+            Assert.Equal(answers[0], answers[1]);
+            Assert.Equal(trees[0], trees[1]);
+            Assert.Contains("\"done\":true", answers[0][11]);
+        }
+
         [Fact]
         public void The_test_tree_routes_the_test_core_s_files_the_same()
         {

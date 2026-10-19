@@ -29,10 +29,51 @@ pub struct Controller {
     pub axes: Vec<Option<usize>>,
 }
 
+/// The kind of a battery file, `CoreBatteryKind`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BatteryKind {
+    Game,
+    Removable,
+    Console,
+}
+
+impl BatteryKind {
+    /// `CoreBatteryFile.KindNamed`: a name it does not know, or none, is the game's own.
+    pub fn named(name: Option<&str>) -> BatteryKind {
+        match name {
+            Some("removable") => BatteryKind::Removable,
+            Some("console") => BatteryKind::Console,
+            _ => BatteryKind::Game,
+        }
+    }
+
+    /// The kind's name in lower case, as a medium's group key spells it.
+    pub fn word(self) -> &'static str {
+        match self {
+            BatteryKind::Game => "game",
+            BatteryKind::Removable => "removable",
+            BatteryKind::Console => "console",
+        }
+    }
+}
+
+/// A battery file a system lists, `CoreBatteryFile`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BatteryFile {
+    pub which: u32,
+    pub suffix: String,
+    pub kind: BatteryKind,
+    pub medium: Option<String>,
+    pub label: Option<String>,
+    pub port: Option<i64>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SystemDetail {
     pub id: String,
     pub controllers: Vec<Controller>,
+    /// The system's battery files, none where it lists no `battery`.
+    pub battery: Option<Vec<BatteryFile>>,
 }
 
 fn arr<'a>(v: &'a Value, key: &str) -> &'a [Value] {
@@ -58,6 +99,18 @@ pub fn systems(info: &Value) -> Vec<SystemDetail> {
                     axes: arr(c, "axes").iter().map(|a| named(&AXES, opt_str(a, "control"))).collect(),
                 })
                 .collect(),
+            battery: s.get("battery").and_then(Value::as_array).map(|list| {
+                list.iter()
+                    .map(|b| BatteryFile {
+                        which: b.get("which").and_then(Value::as_i64).unwrap_or(0) as u32,
+                        suffix: opt_str(b, "suffix").unwrap_or("").to_string(),
+                        kind: BatteryKind::named(opt_str(b, "kind")),
+                        medium: opt_str(b, "medium").map(str::to_string),
+                        label: opt_str(b, "label").map(str::to_string),
+                        port: b.get("port").and_then(Value::as_i64),
+                    })
+                    .collect()
+            }),
         })
         .collect()
 }

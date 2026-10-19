@@ -340,6 +340,7 @@ dependencies = [
  "emusen-firmware",
  "emusen-galaxia",
  "emusen-native",
+ "emusen-savemedia",
  "emusen-session-service",
  "emusen-systems",
 ]

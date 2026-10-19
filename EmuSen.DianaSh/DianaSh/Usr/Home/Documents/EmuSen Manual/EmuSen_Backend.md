@@ -5954,6 +5954,10 @@ shelves a list. The call's cost over 3,508 games with 702 played, in a Debug bui
 (its `All` 0.85 ms), the library 1.46 ms (its `all` 1.56 ms), once for each showing of the library and once more while
 Recently Played is the chosen row.
 
+*Decided 2026-10-19 by the tester, as recommended: Last Played keeps ES-DE's exclusion of games kept out of the game
+counter; the limit stays 30; a theme's `lastplayed` game selector takes the library's `recent` over its system's games
+too; and the library screen ordering by the instant in the hour a clock is set back is accepted as the defect's fix.*
+
 ---
 
 ## 29. B7, Crystal in Rust: the design, 2026-10-18

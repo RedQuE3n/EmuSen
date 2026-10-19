@@ -98,6 +98,9 @@ namespace EmuSen.Crystal.Client.Library
         private int _calls;
         private bool _closing;
 
+        // The handle, for lending to the scraper while this library is open.
+        internal nint Handle => _handle;
+
         private GameLibrary(Exports t, nint handle)
         {
             _t = t;

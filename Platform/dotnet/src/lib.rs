@@ -4,6 +4,7 @@
 //! writes it, and the C# `Suggestion`. Pure functions, no state, no dependency: Galaxia, the shell and the
 //! shell's command modules share them, and a module may not link Galaxia (EmuSen_DianaSh.md §16 Q11).
 
+pub mod date;
 pub mod file;
 pub mod json;
 pub mod json_document;

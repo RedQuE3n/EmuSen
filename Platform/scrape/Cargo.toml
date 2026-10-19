@@ -1,0 +1,32 @@
+[package]
+name = "emusen-scrape"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Scraping below every frontend, a component of its own beside the library and Crystal and never in either: the
+# ScreenScraper client, its quota, the queue's run, OpenVGDB's failover, the media store and media.db, and the order a
+# game's pictures are found in. See EmuSen_Backend.md §2.4 and §30.
+[lib]
+name = "emusen_scrape"
+
+[dependencies]
+# The platform's one HTTP client (SR9, §16).
+emusen-net = { path = "../net" }
+# Where a file lives, a dump's hashes and a game's folder.
+emusen-galaxia = { path = "../galaxia" }
+# What each system is: ScreenScraper's ids, ES-DE's names, the OpenVGDB rule.
+emusen-systems = { path = "../systems" }
+# .NET's text, number and JSON rules.
+emusen-dotnet = { path = "../dotnet" }
+# The SQLite the program ships, lent by the host (EmuSen_RustPlatform.md Q25).
+emusen-sqlite = { path = "../sqlite" }
+# The player's library, lent by the host: covers chosen from another game, edits, cover lookups (§30.9 Q3).
+emusen-library = { path = "../library" }
+# Inflate, for OpenVGDB's zip; the workspace's.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+
+[target.'cfg(unix)'.dependencies]
+# The local time's offset, for CLEANUP's folder name.
+libc = "0.2"

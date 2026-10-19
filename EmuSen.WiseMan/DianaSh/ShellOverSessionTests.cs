@@ -4,6 +4,7 @@ using System.Text.Json;
 using EmuSen.Crystal.Client;
 using EmuSen.Crystal.Client.Contract;
 using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.DianaSh.DianaSh.Bin.Native;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.DianaSh.DianaSh.Var.Shell;
 using EmuSen.WiseMan.Crystal;
@@ -38,13 +39,25 @@ namespace EmuSen.WiseMan.DianaSh
             return f;
         }
 
+        // The shell over the session's table; null where the C# shell meets the Rust runtime's table, whose refusal is held instead - see EmuSen_Backend.md §29.28.
+        private static DianaShInterpreter? Over(CrystalSession s, DianaShSessionManager? sessions = null)
+        {
+            if (CrystalRuntime.Native && !DianaShNative.Active)
+            {
+                var refused = Assert.Throws<DianaShTableRefusedException>(() => DianaShInterpreter.CreateForService(s.ServiceTable(), null, sessions));
+                Assert.Equal(DianaShInterpreter.ForeignTableRefusal, refused.Message);
+                return null;
+            }
+            return DianaShInterpreter.CreateForService(s.ServiceTable(), null, sessions);
+        }
+
         [Fact]
         public void Resume_typed_runs_the_halted_session_and_says_so()
         {
             using CrystalSession s = _f.Open();
             Halted(s);
             using CrystalSubscription run = _f.Runtime.Subscribe(s.Id, CrystalAbi.EventRun);
-            var shell = DianaShInterpreter.CreateForService(s.ServiceTable());
+            if (Over(s) is not { } shell) return;
             (_, _, HostAction? action) = shell.Submit("resume");
             Assert.IsType<HostAction.Resume>(action);
             Assert.Equal("running", Json(s.Info()).GetProperty("run").GetString());
@@ -56,7 +69,7 @@ namespace EmuSen.WiseMan.DianaSh
         {
             using CrystalSession s = _f.Open();
             ulong at = Halted(s).total_frames;
-            var shell = DianaShInterpreter.CreateForService(s.ServiceTable());
+            if (Over(s) is not { } shell) return;
             (_, _, HostAction? action) = shell.Submit("step");
             Assert.IsType<HostAction.Step>(action);
             CrystalFrameInfo after = Frame(s);
@@ -70,7 +83,7 @@ namespace EmuSen.WiseMan.DianaSh
         {
             using CrystalSession s = _f.Open();
             Halted(s);
-            var shell = DianaShInterpreter.CreateForService(s.ServiceTable());
+            if (Over(s) is not { } shell) return;
             s.Run(CrystalSessionAbi.RunResume);
             (_, _, HostAction? action) = shell.Submit("spaces");
             Assert.Null(action);
@@ -83,7 +96,7 @@ namespace EmuSen.WiseMan.DianaSh
             using CrystalSession s = _f.Open();
             Frame(s);
             var sessions = new DianaShSessionManager();
-            var shell = DianaShInterpreter.CreateForService(s.ServiceTable(), null, sessions);
+            if (Over(s, sessions) is not { } shell) return;
             sessions.RegisterInitial(new DianaShSession("main", shell));
             shell.Execute("tmux new second");
             DianaShInterpreter second = sessions.Current!.Interpreter;

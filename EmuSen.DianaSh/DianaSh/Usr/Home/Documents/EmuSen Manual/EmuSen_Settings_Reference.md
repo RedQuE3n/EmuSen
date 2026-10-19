@@ -8857,6 +8857,29 @@ version are not the ones this build speaks, or when it cannot make a shell:
 | Windows | the Rust shell where the published tree carries the library; the C# where it does not (release 0.9.0 ships none) | no: the Rust shell has not been run on Windows, and the C# is kept as its failover until it has |
 | macOS | the Rust shell where the bundle carries the library | no: not run on a Mac yet; the C# is kept likewise |
 
+**With the frontend API on the Rust runtime** (*decided 2026-10-19 by the tester*, `EmuSen_Backend.md` §29.28).
+`EMUSEN_DIANASH_NATIVE=0` means the C# shell and the C# runtime together. The C# shell's commands need the C#
+runtime's own provider, so it cannot be put over a session that the platform library's Crystal made. A program whose
+frontend API is on the Rust runtime refuses such a pairing before it builds anything on the session. Today that is
+Pharaoh and emusen-shell, by their own default or by `EMUSEN_CRYSTAL_NATIVE=1`. The program prints one line and
+exits with code 1:
+
+```
+[ERROR] EMUSEN_DIANASH_NATIVE=0 puts the shell on its C# implementation, which needs the frontend API's C# implementation too: set EMUSEN_CRYSTAL_NATIVE=0 beside it, or unset EMUSEN_DIANASH_NATIVE
+```
+
+emusen-shell's window shows the same words at its prompt when a game is launched from it.
+
+| `EMUSEN_DIANASH_NATIVE` | `EMUSEN_CRYSTAL_NATIVE` | Pharaoh and emusen-shell |
+|---|---|---|
+| unset | unset | the Rust shell over the Rust runtime |
+| `0` | `0` | the C# shell over the C# runtime, the whole failover |
+| `0` | unset or `1` | refused, in the words above |
+| unset | `0` | the Rust shell over the C# runtime |
+
+The check is DianaSh's own (`DianaShInterpreter.CheckService`, which `CreateForService` makes first, raising
+`DianaShTableRefusedException`). Each program calls it once, right after its session opens.
+
 **Tests.** `DianaShSwitchTests` (each fallback: no library, another major, a missing export, no shell made; the
 library chosen unless the variable is 0); `NativeSwitchTests`; the golden corpus and WiseMan's DianaSh tests, run with
 the variable unset and with it 0.

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 using EmuSen.Crystal.Client;
+using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.Galaxia.Library;
@@ -38,6 +39,8 @@ namespace EmuSen.Hotaru
             CrystalSession session = Open(runtime, launch);
             try
             {
+                // Before the log takes the console, so a refusal reaches the prompt that asked - see EmuSen_Backend.md §29.28.
+                DianaShInterpreter.CheckService(session.ServiceTable());
                 string coreName = CoreNameOf(session);
                 // Needs the engine's name, so it cannot be built any earlier - see EmuSen_Frontend_Driver.md §1 step 3.
                 string logDir = Path.Combine(DianaShSandbox.LogsDirectory, coreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");

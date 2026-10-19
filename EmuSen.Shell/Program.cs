@@ -109,6 +109,12 @@ namespace EmuSen.Shell
                 // Blocks until the window closes; GameWindow's own Closing handler does the teardown - see EmuSen_Frontend_Driver.md §1.
                 BuildAvaloniaApp(session.OpenWindow).StartWithClassicDesktopLifetime(args);
             }
+            catch (DianaShTableRefusedException refused)
+            {
+                // The shell's switch and the runtime's disagree, said before any window opens - see EmuSen_Backend.md §29.28.
+                Console.WriteLine($"[ERROR] {refused.Message}");
+                Environment.ExitCode = 1;
+            }
             catch (Exception ex)
             {
                 Console.WriteLine($"\n[CPU HALT] {ex.Message}");

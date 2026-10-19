@@ -156,6 +156,13 @@ class Program
             string coreName = JsonDocument.Parse(session.ServiceInfo()).RootElement.GetProperty("engine").GetString() ?? "";
             Emit($"[ROM] Core: {coreName}");
             Emit($"[ROM] Runtime: {CrystalRuntime.Implementation}");
+            // The shell's switch and the runtime's agree, or nothing runs - see EmuSen_Backend.md §29.28.
+            try { DianaShInterpreter.CheckService(session.ServiceTable()); }
+            catch (DianaShTableRefusedException refused)
+            {
+                Emit($"[ERROR] {refused.Message}");
+                return 1;
+            }
 
             // Jumping straight to a saved moment sidesteps scripting menu navigation whose timing is not known.
             if (options.LoadStatePath != null)

@@ -89,6 +89,17 @@ namespace EmuSen.Crystal.Client
 
         public static string Text(CrystalCopyOut call) => Encoding.UTF8.GetString(Bytes(call));
 
+        // A change's answer from one call into a buffer that holds any answer a change gives, so the change is made once.
+        public static string Once(CrystalCopyOut call)
+        {
+            var buffer = new byte[1 << 16];
+            fixed (byte* b = buffer)
+            {
+                long n = Check(call(b, (nuint)buffer.Length));
+                return n <= buffer.Length ? Encoding.UTF8.GetString(buffer, 0, (int)n) : throw new InvalidOperationException($"a change's answer of {n} bytes did not fit the {buffer.Length} it was given; the change was made");
+            }
+        }
+
         public static JsonDocument Json(CrystalCopyOut call) => JsonDocument.Parse(Bytes(call));
 
         // Text as the contract takes it: UTF-8 bytes pinned for one call; null is the absent string.
@@ -170,7 +181,9 @@ namespace EmuSen.Crystal.Client
         public string FirmwareOverview() => Text((o, n) => Contract.Crystal.FirmwareOverview(Handle, o, n));
 
         public string CardsOp(uint op, string argsJson) =>
-            WithText(argsJson, (a, al) => Text((o, n) => Contract.Crystal.CardsOp(Handle, op, (byte*)a, al, o, n)));
+            WithText(argsJson, (a, al) => op >= CrystalAbi.CardsCopy
+                ? Once((o, n) => Contract.Crystal.CardsOp(Handle, op, (byte*)a, al, o, n))
+                : Text((o, n) => Contract.Crystal.CardsOp(Handle, op, (byte*)a, al, o, n)));
 
         public string SettingsSchema(string console, string? engine = null) =>
             WithText(console, (c, cl) => WithText(engine, (e, el) => Text((o, n) => Contract.Crystal.SettingsSchema(Handle, 0, (byte*)c, cl, (byte*)e, el, o, n))));

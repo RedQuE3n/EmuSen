@@ -7176,6 +7176,83 @@ host writes: 0. The seeded fault of the host's registry cloned at each frame's e
 form of the test, with no cheat the host writes, did not see that fault, and the second cheat was added for it. The
 count is a thread's own, as a global count picked up the allocations of the test running beside it.
 
+### 29.35 Built 2026-10-19: part (b), piece 4b, the views and the debugger on the shipped engines, and P4
+
+**The piece** (this commit). The NES pack's views that existed only in C# (`NesDebugViews`' sprites, sound channels,
+the board's label and the summary) moved into `emusen-systems`' `nes::views` beside its palettes and tiles, in the GB
+views' pattern: a unit found by its exact name, a register ignoring case, a level rounded as `Math.Round` rounds, to
+even. The parity tool and `CrystalDebugScript` gained the views' verbs, and the class gained a script for each of the
+shipped engines but Diamond, on the synthetic images the debug classes use: MoonRT on a loop that writes the PPU, the
+APU, OAM, the palette and RAM and calls a subroutine; VenusRT on the boot stub with a store and a call; MercuryRT on the
+Game Boy and the Color; MarsRT on the counting loop the bench uses; Nephrite on a cartridge, a console with no views.
+Each engine's library is copied under the test's folder, whose path a script can split at spaces.
+
+**Measured on 2026-10-19** [M]: `CrystalDebugParityTests` 16 of 16 with the recorder's two (§29.36). The engine scripts' answers, MoonRT
+151, VenusRT 55, MercuryRT 63, MarsRT 55 and Nephrite 24, cover every view of each pack (palettes, sprites, channels, the tile sheet's and swatch's pixels by digest, tilemap entries, tile pixels and a
+refused depth, DMA channels and a register's name, vectors, the summary, the physical map, the listing with each
+reference); stores watched on RAM and on RDRAM (and none seen through MoonRT's bus, which reports no stores); the call
+stack a JSR pushes, stepped out of; a condition on two units' registers; a data breakpoint halting on a store, beside
+one on a load and one on a value that a store's halt came before; coverage and the profile; a ROM
+patch that changes an immediate operand, and its effect on X; the mutes in the channels. MarsRT's counters time its
+display processor's thread, so its script names them and compares no value: a first run differed in the drains
+started and the nanoseconds spent, which no debugger computes. Five seeded faults, each caught: a sprite's y without
+its line's offset, the mirroring's names swapped, the units read from a view's copy one register late (in MoonRT's
+channels and MercuryRT's palettes), a write's reference listed as a read (in MoonRT's and VenusRT's listings), the
+Color given no views.
+
+**P4** (§29.9). The per-hit cost needs no export: the breakpoint is added once and the cost is the debugger's at each
+hit, inside the frame. So P4 is measured now, by `BreakpointConditionCostBench`'s own method on its own images and
+addresses, with the Rust side run by the parity tool's `m.bench` (`CrystalDebugCostBench`, `EMUSEN_BP_BENCH=1`,
+Release): a fresh machine for each of five runs, 30 frames to warm, the median of 300, each hot row's cost over the
+cold breakpoint divided by the hits a frame the logpoint counts. Where §29.9 has the Rust reached through the binding's
+`bp_add` twin, which part (c) builds, the twin would change how the breakpoint is added and not what a hit costs; the
+frame around it is the tool's `CoreEngine.RunFrame` order rather than part (a)'s runtime, which adds nothing per hit.
+
+**Measured on 2026-10-19** [M], µs a hit, Release, on the same machine one bench after the other, the C# by
+`BreakpointConditionCostBench` and the Rust by `CrystalDebugCostBench`, two runs of each:
+
+| Row | Condition, C# | Condition, Rust | `if 0`, C# | `if 0`, Rust |
+|---|---|---|---|---|
+| MoonRT, `A==0x99` | 1.47, 1.38 | 0.88, 0.89 | 0.40, 0.38 | 0.17, 0.18 |
+| MoonRT, `ppu.PPUCTRL==0x99` | 1.25, 1.25 | 0.99, 0.96 | 0.39, 0.48 | 0.18, 0.17 |
+| MercuryRT on the generic engine, `HL==0x1234` | 1.36, 1.34 | 0.78, 0.77 | 0.36, 0.35 | 0.15, 0.15 |
+| MarsRT, `t0==0` | 1.37, 1.32 | 0.59, 0.58 | 0.42, 0.39 | 0.21, 0.20 |
+| MarsRT, `vi.ORIGIN==1` | set aside, 1.03 | 0.62, 0.62 | 1.89, 0.47 | 0.20, 0.20 |
+| Nephrite, `D2==0` | 1.33, 1.24 | 0.61, 0.63 | 0.54, 0.53 | 0.23, 0.23 |
+
+The C#'s first MarsRT `vi.ORIGIN` row of its first run is set aside, its `if 0` floor reading 1.89 against 0.35 to
+0.54 everywhere else, as §24.6 and §26.7 set one aside. **P4 holds**: every Rust row is below the C#'s, the spread
+between two runs of either a few hundredths. The Rust MarsRT rows run on a frame of 820,000 hits where the C#'s run on
+394, because the C# rig shortens the video field through a test export of the core's (`MarsDebugRig.ProgramVideo`)
+that no ABI call reaches; the cost a hit is the quotient either way.
+
+**A row above the C#'s, recorded and its cause found before this commit.** The first measurement, before the scopes
+were cached, had MoonRT at 3.46 and 3.49 µs a hit and MercuryRT at 3.04, two to three times the C#'s, with the `if 0`
+floor at 2.77 and 2.24 against the C#'s 0.4, where Nephrite (no units) and MarsRT (one unit) were already below the C#.
+The floor named the cause, since `if 0` names no symbol: each evaluation built its scope again, cloning the unit
+symbols' table (MoonRT's and MercuryRT's many unit registers) and the pack's names and formatting the code space's name. The
+scopes are now made once a machine info (`ScopeData`, shared by reference), as the C# target makes its contexts, and the
+table above is after that change; the parity class passes before and after it.
+
+### 29.36 Built 2026-10-19: part (b), piece 5, the recorder
+
+**The piece** (this commit). `emusen-recorder` (`Platform/recorder/`, §29.30), the C# `FrameRecorder`: the folder
+`<engine>_<yyyyMMdd_HHmmss>` in the local time, the ledger `frames.log` (`Frame`, `WallClock` in milliseconds, `Core`,
+`ImageFile`), every `stride`th drawn frame's picture written by the caller into `frame_<frame:D8>.png`, and on stopping
+ffmpeg run in the folder over the pictures, libx264rgb then ffv1, and the pictures archived into `frames.zip` and
+deleted; every line the C# wrote is said, for the runtime's log. The archive is written by the crate (stored names, the
+best deflate, each entry's DOS time from its file's), since no zip writer is in the workspace; its bytes are not .NET's
+and its entries are the same files. The local time is `localtime_r`, as `emusen-cheats` already reads it. The parity
+tool takes the recorder through a feature of its own, `tool`, so the debugger's library links nothing of files, and
+WiseMan builds the tool with it.
+
+**Measured on 2026-10-19** [M]: the parity class's two recorder cases, 26 and 7 answers: a stop before any start, a
+start refused while recording, every third frame of seven kept, the files and the ledger before and after the stop (the
+video and the archive by presence, the pictures and the ledger by size), the said lines with the folder taken out, a
+capture after the stop, a second recording of every frame under a stride of 0; the two archives' entries compared by
+name and content; and, with no ffmpeg on the path, the words that leave the pictures as they are. Three seeded faults,
+each caught: the stride off by one, the pictures kept after the archive, the pictures' names of six digits.
+
 ---
 
 ## 30. B9, scraping in Rust: the design, 2026-10-18

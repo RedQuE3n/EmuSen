@@ -1,0 +1,25 @@
+# The debugger over Nephrite on a synthetic Mega Drive cartridge: a console with no views, its processors and registers.
+m.open $CORE $IMAGE
+m.spaces
+m.procs
+m.regs cpu
+m.regs 1
+m.regs cop
+m.regs video
+m.counters
+m.palettes
+m.vectors
+m.summary
+m.physical 0
+m.run 3
+m.regs cpu
+m.eval - D2
+m.eval - PC
+m.eval 1 PC
+m.symbols -
+m.symbols 1
+m.disasm CPUBUS 0x200 4
+m.bp.add - 0x200 0x400 ; D2 == 0 ; -
+m.run 3
+m.bp.state -
+m.frame

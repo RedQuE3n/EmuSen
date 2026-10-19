@@ -4,6 +4,7 @@
 
 mod fake;
 mod machine;
+mod recording;
 mod regs;
 
 use std::io::Write;
@@ -29,13 +30,20 @@ fn main() {
     let mut out = String::new();
     let mut script = fake::Script::new();
     let mut machine = machine::MachineScript::new();
+    let mut recording = recording::RecordingScript::default();
     for line in text.lines() {
         let line = line.trim_end_matches('\r');
         if line.trim().is_empty() || line.starts_with('#') {
             continue;
         }
         let (verb, rest) = line.split_once(' ').unwrap_or((line, ""));
-        let answer = if verb.starts_with("m.") { machine.run(verb, rest).unwrap_or_else(|| format!("unknown verb {verb}")) } else { script.run(verb, rest) };
+        let answer = if verb.starts_with("m.") {
+            machine.run(verb, rest).unwrap_or_else(|| format!("unknown verb {verb}"))
+        } else if verb.starts_with("rec.") {
+            recording.run(verb, rest).unwrap_or_else(|| format!("unknown verb {verb}"))
+        } else {
+            script.run(verb, rest)
+        };
         out.push_str(&format!("{line} => {answer}\n"));
     }
     std::io::stdout().write_all(out.as_bytes()).unwrap();

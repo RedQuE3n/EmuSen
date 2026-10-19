@@ -1,0 +1,56 @@
+# The debugger over MarsRT on a synthetic N64 game whose loop, run from the signal processor's memory, counts a word of RDRAM in t0; its counters time the display processor's thread, so they are named, not compared.
+m.open $CORE $IMAGE
+m.spaces
+m.procs
+m.regs cpu
+m.regs video
+m.regs apu
+m.regs 1
+m.counternames
+m.maxsprites
+m.vectors
+m.run 3
+m.regs video
+m.summary
+m.physical 0x80000400
+m.physical 0xA4000000
+m.physical 0xA4001000
+m.physical 0xB0000000
+m.physical 0xBFC007C0
+m.physical 0x00000400
+m.disasm DMEM 0x40 6
+m.disasm RDRAM 0x400 2
+m.disasm ROM 0x40 4
+m.disasm IMEM 0 2
+m.eval - vi.ORIGIN
+m.eval 1 PC
+m.symbols -
+m.symbols 1
+m.watch.add RDRAM 0x100000 4 0
+m.run 1
+m.watch.events 1 3
+m.watch.remove 1
+m.bp.add - 0xA400004C 0xA400004C ; t0 == 0x20000 ; -
+m.run 3
+m.bp.state -
+m.bp.list -
+m.bp.add - 0xA4000048 0xA4000048 ; - ; t0, vi.ORIGIN
+m.run 1
+m.bp.log - 2
+m.bp.remove - 1
+m.bp.remove - 2
+m.bp.add - 0xA400004C 0xA400004C ; - ; -
+m.run 2
+m.bp.state -
+m.eval - t0
+m.eval - [RDRAM:0x100003]
+m.bp.step - 2
+m.run 1
+m.bp.state -
+m.fl.add RDRAM 0x100000 4
+m.bp.remove - 3
+m.run 2
+m.fl.samples 1 2
+m.palettes
+m.sprites
+m.frame

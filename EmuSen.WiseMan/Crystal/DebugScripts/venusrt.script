@@ -1,0 +1,56 @@
+# The debugger over VenusRT on a synthetic SNES game whose loop stores to WRAM and calls a subroutine.
+m.open $CORE $IMAGE
+m.spaces
+m.procs
+m.regs cpu
+m.regs video
+m.regs apu
+m.regs cop
+m.counters
+m.maxsprites
+m.stride
+m.vectors
+m.dmaname 0x18
+m.dmaname 0x80
+m.run 3
+m.regs cpu
+m.palettes
+m.sprites
+m.channels
+m.tiles
+m.swatch
+m.tilemap VRAM 0
+m.tilepixels VRAM 0 2
+m.tilepixels VRAM 0 4
+m.tilepixels VRAM 0 8
+m.tilepixels VRAM 0 3
+m.dma
+m.summary
+m.physical 0x7E0042
+m.physical 0x008000
+m.disasm CPUBUS 0x8000 6
+m.eval - A
+m.eval - flag.c
+m.eval - flag.n
+m.eval - stackdepth
+m.eval - [$42]
+m.symbols -
+m.symbols 1
+m.watch.add WRAM $42 1 0
+m.run 2
+m.watch.events 1 4
+m.cs.bt 4
+m.bp.add - 0x800F 0x800F ; - ; -
+m.run 3
+m.bp.state -
+m.cs.bt 4
+m.bp.add - 0x8005 0x8005 ; flag.n == 0 ; A, flag.z
+m.run 2
+m.bp.state -
+m.bp.log - 3
+m.cov.arm 0
+m.run 2
+m.cov.query 0 0x8000 32 8
+m.peek WRAM $42
+m.summary
+m.frame

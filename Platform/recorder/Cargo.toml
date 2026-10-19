@@ -1,0 +1,20 @@
+[package]
+name = "emusen-recorder"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The recorder, the C# `FrameRecorder`: a recording's folder and its ledger, every Nth drawn frame's picture written by
+# the caller, the video encoded by ffmpeg when the recording stops and the pictures archived. See EmuSen_Backend.md
+# §29.30 and §29.36.
+[lib]
+name = "emusen_recorder"
+
+[dependencies]
+# Deflate and the CRC-32, for the archive of the pictures; already in the workspace.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+
+[target.'cfg(unix)'.dependencies]
+# localtime_r, for the folder's and the ledger's local time as .NET's DateTime.Now gives it.
+libc = "0.2"

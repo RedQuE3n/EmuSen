@@ -183,6 +183,20 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // The SG-1000's TMS9918A through the v1 adapter: Graphics I in TI's colours 6 and 12 - see Endou_Native.md §11.
+        [Fact]
+        public void The_tms9918a_draws_an_sg_1000_program_s_picture()
+        {
+            var engine = new CoreAbiTestRomEngine(LibraryPath);
+            Assert.True(engine.Available, engine.Report);
+            var run = engine.Run(Write("tms.sg", SyntheticSmsRom.TmsPicture()), new[] { 5 }, Array.Empty<RomPress>());
+            var picture = run.At(5)!.Picture!;
+            Assert.Equal((256, 192), (picture.Width, picture.Height));
+            for (int y = 0; y < 192; y += 37)
+                for (int x = 0; x < 256; x += 13)
+                    Assert.Equal(x % 8 < 4 ? ((byte)0xD4, (byte)0x52, (byte)0x4D) : ((byte)0x21, (byte)0xB0, (byte)0x3B), picture.At(x, y));
+        }
+
         // A developer asking for development cores opens the files; the system packs name the consoles.
         [Fact]
         public void A_cartridge_opens_on_the_discovered_engine_when_development_cores_are_asked_for()
@@ -249,6 +263,7 @@ namespace EmuSen.WiseMan.Cores
                 ("japan.sms", SyntheticSmsRom.Cartridge(0x3, 0x40000)),
                 ("copier.sms", SyntheticSmsRom.WithCopierHeader(SyntheticSmsRom.Cartridge())),
                 ("cartridge.sg", SyntheticSmsRom.Sg1000()),
+                ("tms.sg", SyntheticSmsRom.TmsPicture()),
             })
             {
                 var start = new ProcessStartInfo(runner) { RedirectStandardOutput = true, RedirectStandardError = true };

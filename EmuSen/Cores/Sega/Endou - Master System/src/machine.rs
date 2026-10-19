@@ -1,9 +1,9 @@
-//! The machine (Endou_Native.md §9.6, §10): Beryl's Z80 on the bus, run a frame of the master clock at a time, the
+//! The machine (Endou_Native.md §9.6, §10, §11): Beryl's Z80 on the bus, run a frame of the master clock at a time, the
 //! Pause button's edge on NMI at the frame's start, the VDP's picture in the console's colours, and the spaces a host
-//! reads. No sound is made before stage 5, and the SG-1000's picture stays black until stage 4.
+//! reads. No sound is made before stage 5.
 
 use beryl_sms_vdp::Vdp;
-use beryl_sn76489::{Sn76489, Variant};
+use beryl_sn76489::Sn76489;
 use beryl_z80::Z80;
 
 use crate::board::{Board, identify};
@@ -19,9 +19,6 @@ pub const CRAM_ID: u32 = 3;
 pub const ROM_ID: u32 = 4;
 pub const CARTRAM_ID: u32 = 5;
 
-/// The Mark III's and the Master System's 8 KiB of RAM, the SG-1000's 1 KiB [D: `smstech` §2; `sc3000h`].
-pub const SMS_RAM: usize = 0x2000;
-pub const SG1000_RAM: usize = 0x400;
 pub const CRAM: usize = 32;
 
 /// The output rate, at which the silence is made; the mix resamples to it from stage 5.
@@ -71,10 +68,9 @@ impl Machine {
     }
 
     pub fn with_board(media: Media, market: Market, model: Model, board: Board, rom: Vec<u8>) -> Machine {
-        let sg = media.console == Console::Sg1000;
-        let psg = Sn76489::new(if sg { Variant::DISCRETE } else { Variant::SEGA });
+        let psg = Sn76489::new(model.psg());
         let vdp = Vdp::new(model.vdp(), market == Market::Europe);
-        let bus = Bus::new(model, Cartridge::new(board, rom), if sg { SG1000_RAM } else { SMS_RAM }, psg, vdp);
+        let bus = Bus::new(model, Cartridge::new(board, rom), model.ram(), psg, vdp);
         Machine {
             media,
             market,
@@ -113,10 +109,15 @@ impl Machine {
         LINE * if self.pal() { PAL_LINES } else { NTSC_LINES }
     }
 
+    /// Whether the console has CRAM: every one but the SG-1000, whose TMS9918A has none.
+    pub fn has_cram(&self) -> bool {
+        self.model() != Model::Sg1000
+    }
+
     /// The spaces in id order: (id, name, read-only).
     pub fn spaces(&self) -> Vec<(u32, &'static str, bool)> {
         let mut s = vec![(RAM_ID, "RAM", false), (VRAM_ID, "VRAM", false)];
-        if self.console() == Console::Sms {
+        if self.has_cram() {
             s.push((CRAM_ID, "CRAM", false));
         }
         s.push((ROM_ID, "ROM", true));
@@ -131,7 +132,7 @@ impl Machine {
         Some(match id {
             RAM_ID => &b.ram,
             VRAM_ID => &b.vdp.vram,
-            CRAM_ID if self.media.console == Console::Sms => &b.vdp.cram[..CRAM],
+            CRAM_ID if self.has_cram() => &b.vdp.cram[..CRAM],
             ROM_ID => &b.cart.rom,
             CARTRAM_ID if !b.cart.ram.is_empty() => &b.cart.ram,
             _ => return None,
@@ -140,7 +141,7 @@ impl Machine {
 
     /// A writable space; the ROM is none.
     pub fn space_mut(&mut self, id: u32) -> Option<&mut [u8]> {
-        let sms = self.media.console == Console::Sms;
+        let sms = self.has_cram();
         let b = &mut self.bus;
         Some(match id {
             RAM_ID => &mut b.ram,
@@ -176,19 +177,25 @@ impl Machine {
             self.cpu.step(&mut self.bus);
         }
         self.bus.settle();
-        if !self.skip && self.console() == Console::Sms {
+        if !self.skip {
             self.take_picture();
         }
         self.silence = (self.silence + self.samples_in(self.frames)).min(self.audio_limit / 2);
         self.frames += 1;
     }
 
-    /// The VDP's CRAM entries in the console's colours (Endou_Disputes.md D-1).
+    /// The VDP's colour codes in the console's colours: the 315-5124's or the 315-5246's 64 (Endou_Disputes.md D-1), or
+    /// the TMS9918A's 16 (D-11).
     fn take_picture(&mut self) {
         let vdp = &self.bus.vdp;
         self.height = vdp.height;
+        let (colours, mask): (&[[u8; 4]], usize) = match self.model() {
+            Model::MarkIII | Model::Sms1 => (&SMS1_COLOURS, 0x3F),
+            Model::Sms2 => (&SMS_COLOURS, 0x3F),
+            Model::Sg1000 => (&TMS_COLOURS, 0x0F),
+        };
         for (out, &e) in self.picture.as_chunks_mut::<4>().0.iter_mut().zip(vdp.picture()) {
-            out.copy_from_slice(&SMS_COLOURS[e as usize & 0x3F]);
+            out.copy_from_slice(&colours[e as usize & mask]);
         }
     }
 
@@ -198,23 +205,48 @@ impl Machine {
     }
 }
 
-/// A two-bit component's level, four equal steps, until D-1 is settled (Endou_Disputes.md D-1).
+/// A two-bit component's level on the 315-5246, four equal steps (Endou_Disputes.md D-1).
 pub const LEVELS: [u8; 4] = [0, 85, 170, 255];
 
-/// The 64 colours of a `--BBGGRR` CRAM entry, as RGBA.
-pub const SMS_COLOURS: [[u8; 4]; 64] = {
+/// The 315-5124's blue, its first level boosted to #68, read from SMS Power!'s "Palette", not measured (D-1, decided
+/// 2026-10-19).
+pub const BLUE_5124: [u8; 4] = [0, 0x68, 170, 255];
+
+const fn colours(blue: [u8; 4]) -> [[u8; 4]; 64] {
     let mut t = [[0u8; 4]; 64];
     let mut i = 0;
     while i < 64 {
-        t[i] = [LEVELS[i & 3], LEVELS[(i >> 2) & 3], LEVELS[(i >> 4) & 3], 255];
+        t[i] = [LEVELS[i & 3], LEVELS[(i >> 2) & 3], blue[(i >> 4) & 3], 255];
         i += 1;
     }
     t
-};
-
-pub fn ram_bytes(console: Console) -> usize {
-    if console == Console::Sg1000 { SG1000_RAM } else { SMS_RAM }
 }
+
+/// The 64 colours of a `--BBGGRR` entry as RGBA: the 315-5246's (the Master System II), and the 315-5124's (the Mark III
+/// and the first Master System).
+pub const SMS_COLOURS: [[u8; 4]; 64] = colours(LEVELS);
+pub const SMS1_COLOURS: [[u8; 4]; 64] = colours(BLUE_5124);
+
+/// The TMS9918A's 16 colours: TI's colour difference levels (TMS9918A data manual, Table 2-3) as RGB, each difference
+/// taken from 0.47, rounded to the nearest of 255 steps, held by a test (Endou_Disputes.md D-11).
+pub const TMS_COLOURS: [[u8; 4]; 16] = [
+    [0x00, 0x00, 0x00, 255],
+    [0x00, 0x00, 0x00, 255],
+    [0x21, 0xC8, 0x42, 255],
+    [0x5E, 0xDC, 0x78, 255],
+    [0x54, 0x55, 0xED, 255],
+    [0x7D, 0x76, 0xFC, 255],
+    [0xD4, 0x52, 0x4D, 255],
+    [0x42, 0xEC, 0xF5, 255],
+    [0xFC, 0x55, 0x54, 255],
+    [0xFF, 0x79, 0x78, 255],
+    [0xD4, 0xC1, 0x54, 255],
+    [0xE6, 0xCE, 0x80, 255],
+    [0x21, 0xB0, 0x3B, 255],
+    [0xC9, 0x5B, 0xBA, 255],
+    [0xCC, 0xCC, 0xCC, 255],
+    [0xFF, 0xFF, 0xFF, 255],
+];
 
 #[cfg(test)]
 mod tests {
@@ -225,6 +257,43 @@ mod tests {
         let media = Media::read(image).unwrap();
         let model = if media.console == Console::Sg1000 { Model::Sg1000 } else { Model::Sms2 };
         Machine::new(media, market, model, image)
+    }
+
+    /// TI's Table 2-3, the TMS9928A's luminance and colour difference levels in volts for codes 1-15.
+    const TI_LEVELS: [(f64, f64, f64); 15] = [
+        (0.00, 0.47, 0.47),
+        (0.53, 0.07, 0.20),
+        (0.67, 0.17, 0.27),
+        (0.40, 0.40, 1.00),
+        (0.53, 0.43, 0.93),
+        (0.47, 0.83, 0.30),
+        (0.73, 0.00, 0.70),
+        (0.53, 0.93, 0.27),
+        (0.67, 0.93, 0.27),
+        (0.73, 0.57, 0.07),
+        (0.80, 0.57, 0.17),
+        (0.47, 0.13, 0.23),
+        (0.53, 0.73, 0.67),
+        (0.80, 0.47, 0.47),
+        (1.00, 0.47, 0.47),
+    ];
+
+    #[test]
+    fn the_tms9918a_s_colours_are_ti_s_levels_as_rgb() {
+        for (code, &(y, ry, by)) in TI_LEVELS.iter().enumerate() {
+            let (r, b) = (y + ry - 0.47, y + by - 0.47);
+            let g = (y - 0.299 * r - 0.114 * b) / 0.587;
+            let q = |v: f64| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+            assert_eq!(TMS_COLOURS[code + 1], [q(r), q(g), q(b), 255], "code {}", code + 1);
+        }
+        assert_eq!(TMS_COLOURS[0], TMS_COLOURS[1], "transparent over no external video is black");
+    }
+
+    #[test]
+    fn the_315_5124_boosts_only_its_first_blue_level() {
+        let differ: Vec<usize> = (0..64).filter(|&i| SMS1_COLOURS[i] != SMS_COLOURS[i]).collect();
+        assert_eq!(differ, (16..32).collect::<Vec<_>>());
+        assert_eq!((SMS1_COLOURS[0x10], SMS_COLOURS[0x10]), ([0, 0, 0x68, 255], [0, 0, 0x55, 255]));
     }
 
     #[test]
@@ -258,7 +327,7 @@ mod tests {
         assert_eq!([RAM_ID, VRAM_ID, CRAM_ID, ROM_ID].map(|i| sms.space(i).unwrap().len()), [0x2000, 0x4000, 32, 0x8000]);
         let sg = machine(&[0x00; 0x2000], Market::Japan);
         assert_eq!(sg.spaces().iter().map(|s| (s.1, sg.space(s.0).unwrap().len())).collect::<Vec<_>>(), [("RAM", 0x400), ("VRAM", 0x4000), ("ROM", 0x2000)]);
-        assert_eq!((sms.bus.psg.variant, sg.bus.psg.variant), (Variant::SEGA, Variant::DISCRETE));
+        assert_eq!((sms.bus.psg.variant, sg.bus.psg.variant), (beryl_sn76489::Variant::SEGA, beryl_sn76489::Variant::DISCRETE));
         assert!(sms.frame_bytes().chunks(4).all(|p| p == [0, 0, 0, 255]) && sms.frame_bytes().len() == 256 * 192 * 4);
         assert_eq!(sms.cpu.regs, Z80::power_on().regs);
         let big = machine(&cartridge(0x20000, 4), Market::Americas);

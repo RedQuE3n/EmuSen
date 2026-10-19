@@ -31,6 +31,13 @@ stage 7 a public per-game listing may be fetched to complete the battery table; 
 `$3E`) stay as argued from the documents until a game shows otherwise, TH returning at the Light Phaser's stage; CI's
 testing of the Beryl crates with all their features is confirmed. The go for stage 3 came with them.
 
+**Decided by the tester, 2026-10-19, on stage 3's questions** (`Endou_Native.md` §10.12), each as recommended: D-1's
+boosted blue is taken for the 315-5124, marked as read from a document; a VHDL simulator is approved for SMS_MiSTer as
+a black-box referee, installed by the tester, its RTL read only in a logged dispute step; an (E) image runs in PAL only
+by the region setting, with no per-game table; MAME is not used, as a reference or a referee; and under core ABI 1.15
+MercuryRT and Nephrite keep their own system rules, routing being left to a separate piece of work. The go for stage 4
+came with them.
+
 Every claim carries one of six marks:
 
 - **[M]** *measured* on 2026-10-19, with the tool named. Nothing was run to write this page beyond listings, the local
@@ -165,8 +172,8 @@ hash in `EmuSen.WiseMan/Reference/libretro-cores.sha256` for the Genesis [R]:
 Genesis Plus GX lists the Master System's BIOSes (`bios_E.sms`, `bios_U.sms`, `bios_J.sms`) and the Game Gear's
 (`bios.gg`) as optional, with no checksums [R its `.info`]. Whether each runs every model, which memory it exposes and
 what it costs are measured at stage 1, as Nephrite measured its four [A]. Further references, fetched at stage 1 on
-the tester's go (§10 Q4, decided 2026-10-19) and listed in `Endou_References.md` §3: **Gearsystem** and **SMS Plus GX** (libretro cores), **MAME**
-(its Sega 8-bit drivers, run headless with a Lua script reading memory), **Mesen 2** (through the probe's Mesen
+the tester's go (§10 Q4, decided 2026-10-19) and listed in `Endou_References.md` §3: **Gearsystem** and **SMS Plus GX** (libretro cores), ~~**MAME**
+(its Sega 8-bit drivers, run headless with a Lua script reading memory)~~ (*decided 2026-10-19: MAME is not used*), **Mesen 2** (through the probe's Mesen
 backend, whose patch would gain the console) and **Emulicious** (a desktop program with no headless mode, so a
 reference only by the tester's own runs). Every reference is compared, not trusted; their disagreement is the evidence
 that a dispute is needed.
@@ -263,7 +270,8 @@ form for; a later netplay-like design would decide it, and few games need it to 
   `Beryl_Z80.md`, no assembler recorded]. It assembles Endou's test programs and the open boot program at build time.
   Stage 2. *Built 2026-10-19 (`Beryl_Z80.md` §8), its front half shared with the 68000's in `beryl-asm`.*
 - **`beryl-sms-vdp`**, the VDP family as one chip crate (§3.3). Stages 3 and 4. *Mode 4 built 2026-10-19
-  (`Beryl_SmsVdp.md`, `Endou_Native.md` §10).*
+  (`Beryl_SmsVdp.md`, `Endou_Native.md` §10); the TMS9918's modes, the TMS9918A and the Genesis's variant the same day
+  at stage 4 (`Endou_Native.md` §11).*
 - **Conditionally, the operator ROMs.** If D-2 finds that the YM2413's log-sine and exponent ROMs are the OPL2's, as
   they are for the OPN2 on Nuked-MD's board [R `Nephrite_OperatorTables.md` §4], the two tables Nephrite holds in
   `fm_tables.rs` [R] would be needed by two Sega cores, and move to a Beryl crate of their own with their provenance
@@ -300,7 +308,9 @@ So the shared part is the **composition of a line**, not the chip. Recommended [
   Nephrite's: D-7's two tests unchanged (`mode_4_writes_land_where_the_board_put_them`,
   `mode_4_shows_the_master_system_colours`) and its corpus digests unchanged (P4). Its two known mode 4 losses, the
   left column's garbage under a fine scroll and the H40 mode [R `Nephrite_Native.md` §15.2], stay losses unless the
-  crate's tests on the board settle them, which would be a Nephrite dispute entry.
+  crate's tests on the board settle them, which would be a Nephrite dispute entry. *Moved 2026-10-19 at stage 4, its
+  D-7 tests, its corpus reports and the open Sega CD BIOS unchanged (`Endou_Native.md` §11.6, `Nephrite_Native.md`
+  §67); the variant also keeps Nephrite's right-column lock by the pixel, a question for the board.*
 
 ### 3.4 What stays in Endou
 
@@ -639,7 +649,7 @@ before the next begins. The core carries the `InDevelopment` mark from stage 1 u
 | **1** | *Built 2026-10-19, `Endou_Native.md` §1–§6.* The crate `endou` on the core ABI v1 as a stub: core info for `sms` and `sg1000`, the header read, a black picture; its row in `RustCores.props` with `<InDevelopment>true</InDevelopment>`, so the build writes its sidecar marked and lists it in `cores.manifest` [R `EmuSen_Backend.md` §27.11]; CI's matrix row; the data files `sms.json` and `sg1000.json`; WiseMan's `SyntheticSmsRom` (a header with its checksum and region, a boot stub, a pad reader, as `SyntheticMdRom` serves Nephrite [R `NephriteTests.cs`]); on the tester's go, the documents, test programs and references fetched and pinned (`Endou_References.md`), the three local references and any fetched ones run through the probe with their costs and spaces | The kit's C1–C23 on synthetic images; the systems crate's tests; a published tree's `sha256sum -c cores.manifest`; the references' costs recorded | 2 |
 | **2** | *Built 2026-10-19, `Endou_Native.md` §9.* The machine without its picture: the bus, RAM, `$3E`, `$3F`, the controller ports, the region read-back, the Pause NMI and the Reset bit; cartridges (plain, Sega's mapper with its RAM, Codemasters', the SG-1000's RAM boards) and the board table's form; the battery form (§4.4); the scheduler on the master clock; `beryl-z80`'s assembler | Synthetic programs for each port, mapper and interrupt rule; an SMS-hosted ZEXALL on the whole machine; RAM against the references at anchors on test programs | 3 |
 | **3** | *Built 2026-10-19, `Endou_Native.md` §10.* `beryl-sms-vdp`, mode 4: ports, registers, VRAM and CRAM, the counters and the TH latch, the interrupts, the status flags, the composition with sprites (limits, zoom, tall, collision, overflow), the scroll locks, the mask, the 315-5246's heights, the access slots, the dot-stamped renderer, PAL | The VDP test programs (self-reporting ones by their verdicts); pictures equal to the references up to a colour map, or a dispute; the skip-versus-draw state test | 5 |
-| **4** | The VDP's TMS9918 modes and the TMS9918A variant; the SG-1000 as a system; **Nephrite moved onto the crate's composition** | SG-1000 programs and cartridges' pictures against the references; **Nephrite's D-7 tests and its corpus digests unchanged** (P4) | 3 |
+| **4** | *Built 2026-10-19, `Endou_Native.md` §11.* The VDP's TMS9918 modes and the TMS9918A variant; the SG-1000 as a system; **Nephrite moved onto the crate's composition** | SG-1000 programs and cartridges' pictures against the references; **Nephrite's D-7 tests and its corpus digests unchanged** (P4) | 3 |
 | **5** | Sound: the PSG's wiring in both variants, the mix and the resampler, the analogue stage as far as recordings allow, `$F2` with no FM unit | Synthetic voices against the references' audio; recordings if any | 2 |
 | **6** | Firmware: `Endou_OpenBoot.md` written first (§5.5); the player's BIOS by region and size, with `md5` from a public description; the open boot program; `starts_empty` for `sms` | **G9**: every bench game with no firmware folder, machine info naming the replacement; the same games on the player's BIOS when given; `firmwarecheck.py` if the tester's images are in the probe cache | 3 |
 | **7** | The Master System to players: the data files completed (`esde_full_name`, `cover_aspect`, `cheat_space`), routing (and `.bin` if the library needs it), the shelf from the pack, scraper ids checked, the codecs (`sms.par`, `sms.gg`), the settings, battery files, states with rewind, the kit in corpus form (`kit/sms-sample.txt`, as Nephrite's `kit/genesis-sample.txt` [R]), the core host's listing, Mistress's settings and its Graphics tab | **G4**: the kit's cases on the tester's games; `.srm` round trips; the fit audit at both sizes; the cheats decode; the sidecar and manifest verified over a publish before any install. The mark is removed only by the tester's decision | 3 |
@@ -805,12 +815,15 @@ console for disputes, is decided in the tester's own terms. "Please continue" wa
 
 - **P1.** At the gate the desktop mean is at most 0.6 ms a frame on the bench games, and at most 0.9 ms with the OPLL
   after stage 9. *At stage 3 (2026-10-19), with the VDP and without sound: 0.22-0.26 ms on five games, the desktop
-  busy [M `Endou_Native.md` §10.7].*
+  busy [M `Endou_Native.md` §10.7]. At stage 4: 0.19-0.22 ms on three Master System games, 0.18 on two SG-1000 games
+  [M §11.9].*
 - **P2.** The Master System and the SG-1000 take 32–42 steps and the Game Gear 4–6; the VDP's stage overruns first.
 - **P3.** At least half the disputes entries fall in §6.2's thin areas, most of them the VDP's access slots and
   interrupt dots. *At stage 3: of D-0 to D-9, D-1, D-2, D-3, D-4, D-6, D-8 and D-9 are in them (the colour levels, the
   OPLL's ROMs, the region read-back, the decoding, the 315-5124's zoom, the access slots, the interrupt dots).*
-- **P4.** Nephrite's move onto the shared composition leaves its D-7 tests and every corpus digest unchanged.
+- **P4.** Nephrite's move onto the shared composition leaves its D-7 tests and every corpus digest unchanged. *Retired
+  at stage 4 (2026-10-19) as predicted: both D-7 tests pass, the kit's 64 image reports are identical, and 200,000
+  random lines drew the same before the old renderer was deleted [M `Endou_Native.md` §11.6].*
 - **P5.** The YM2413's log-sine and exponent ROMs are the OPL2's, entry for entry (D-2).
 - **P6.** No bench game behaves differently on the open boot program than on the player's BIOS after the hand-over,
   start-up time apart.

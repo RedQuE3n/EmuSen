@@ -5,6 +5,7 @@ use emusen_native::{StateReader, StateWriter, Truncated};
 
 use crate::Vdp;
 use crate::compose::{self, Sprite};
+use crate::tms;
 
 impl Vdp {
     pub fn write_state(&self, w: &mut StateWriter) {
@@ -15,8 +16,8 @@ impl Vdp {
         w.bytes("Cram", &self.cram);
         w.u16("Address", self.address);
         w.bytes("CodeBufferLatch", &[self.code, self.buffer, self.gg_latch]);
-        w.bools("SecondFlags", &[self.second, self.frame_flag, self.line_flag, self.overflow, self.collision]);
-        w.bytes("CounterScrollsH", &[self.line_counter, self.hscroll, self.vscroll, self.h_latch]);
+        w.bools("SecondFlags", &[self.second, self.frame_flag, self.line_flag, self.overflow, self.collision, self.tms_sprites]);
+        w.bytes("CounterScrollsHFifth", &[self.line_counter, self.hscroll, self.vscroll, self.h_latch, self.fifth]);
         w.u64("VdpClock", self.clock);
         w.u64("LineStart", self.line_start);
         w.u32s("LineDrawnHeight", &[self.line, self.drawn, self.height]);
@@ -41,12 +42,12 @@ impl Vdp {
         let mut b = [0u8; 3];
         r.bytes(&mut b)?;
         (v.code, v.buffer, v.gg_latch) = (b[0], b[1], b[2]);
-        let mut f = [false; 5];
+        let mut f = [false; 6];
         r.bools(&mut f)?;
-        (v.second, v.frame_flag, v.line_flag, v.overflow, v.collision) = (f[0], f[1], f[2], f[3], f[4]);
-        let mut c = [0u8; 4];
+        (v.second, v.frame_flag, v.line_flag, v.overflow, v.collision, v.tms_sprites) = (f[0], f[1], f[2], f[3], f[4], f[5]);
+        let mut c = [0u8; 5];
         r.bytes(&mut c)?;
-        (v.line_counter, v.hscroll, v.vscroll, v.h_latch) = (c[0], c[1], c[2], c[3]);
+        (v.line_counter, v.hscroll, v.vscroll, v.h_latch, v.fifth) = (c[0], c[1], c[2], c[3], c[4]);
         v.clock = r.u64()?;
         v.line_start = r.u64()?;
         let mut l = [0u32; 3];
@@ -72,7 +73,7 @@ impl Vdp {
             return Ok(false);
         }
         v.gg_mode = pg[1];
-        compose::sprite_pixels(&mut v.sprites);
+        if v.tms_sprites { tms::sprite_pixels(&mut v.sprites) } else { compose::sprite_pixels(&mut v.sprites) }
         *self = v;
         Ok(true)
     }

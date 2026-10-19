@@ -98,7 +98,7 @@ homebrew BIOS replacements (*Simple BIOS*, *DBIOS*), which are firmware, not tes
 | BlastEm | pinned | 1.0.1-pre | GPLv3 | run [M] |
 | **Gearsystem** | `buildbot.libretro.com/nightly/linux/x86_64/latest/gearsystem_libretro.so.zip`, nightly of 2026-10-19; `.so` SHA-256 `c6cf3b7ed31bf264be362937fdbf45a0f680824474cb147509d5185ca7b7e766` | 3.9.22-20-g190873a | GPLv3 | **pinned and run** [M] |
 | **SMS Plus GX** | `…/smsplus_libretro.so.zip`, nightly of 2026-10-19; `.so` SHA-256 `e2b29b3571a28fbb49275cb7c213d26bddef5a077db006d195d5210bb28c93c2` | 1.8 `3844b46` | GPLv2 | **pinned and run** [M] |
-| MAME | Fedora's `mame` 0.289 is in the repositories and not installed | — | GPL-2.0 or later [A] | not fetched: installing a system package is the tester's to allow (`Endou_Native.md` §8) |
+| MAME | Fedora's `mame` 0.289 is in the repositories and not installed | — | GPL-2.0 or later [A] | not fetched; *decided 2026-10-19: not used, as a reference or a referee* |
 | Mesen 2 | `github.com/SourMesen/Mesen2`, head `b9fa69d` (2026-06-04) | — | GPL-3.0 [R GitHub] | not built. Its README: "This repository is an archive of Mesen as it was around version 2.1.1 in mid-2025", the latest being MesenCE (`nesdev-org/MesenCE`); it lists "SMS/Game Gear" among its systems [R] |
 | Emulicious | its author's site | — | freeware, closed [A] | not fetched: no headless mode |
 | Nuked-OPLL | `codeload.github.com/nukeykt/Nuked-OPLL/tar.gz/1269cf5a783b65583b50fa2464d08be75830aaa0` (2023-01-19, the repository's last commit) → `refs/nuked-opll/Nuked-OPLL-1269cf5.tar.gz` | — | GPL-2.0 [R GitHub's detection] | **fetched, not extracted**; it holds `LICENSE`, `opll.c`, `opll.h` and a funding file [M `tar tzf`]. Stage 9 opens `opll.h` only. No public release or prebuilt binary exists |
@@ -116,6 +116,24 @@ Each core's cost, timing and spaces are in `Endou_Native.md` §5.2.
 |---|---|---|---|
 | SMS_MiSTer | `github.com/MiSTer-devel/SMS_MiSTer`, cloned with depth 1 to `~/.cache/emusen/probe/endou/refs/SMS_MiSTer` at `8443a0d19a88aff7a5900011bccf386daf146945` (2026-10-14) | **no licence file** at the top level, and GitHub detects none [M] | README and directory names read, nothing else, by Nephrite's rule (`Endou_Plan.md` §10 Q6). It names itself "a port of Ben's Sega Master System implementation for the Papilio" [R]. Its folders: `rtl/T80` (the Z80, confirming the plan's guess), `rtl/VM2413` (the OPLL), `rtl/jt89` (the PSG), the VDP as `vdp*.vhd`; VHDL throughout [M file names]. No simulation folder or script [M]. Not run: no VHDL simulator is installed (`Endou_Native.md` §8) |
 | Nuked-MD's board | `~/.cache/emusen/probe/nukedmd-board` | GPLv2 | unchanged; run in a dispute step for the 315-5313's mode 4 |
+
+### 4a. The VHDL simulator (stage 4, 2026-10-19)
+
+On the tester's decision of 2026-10-19 (`Endou_Native.md` §10.12), **GHDL 6.0.0** with its mcode back end was installed for
+the project without the administrator's rights: the release's `ghdl-mcode-6.0.0-ubuntu24.04-x86_64.tar.gz` from
+`https://github.com/ghdl/ghdl/releases/download/v6.0.0`, SHA-256
+`30d6a977b8456d140bbafecbbe64b1947a3d92eeae8f5e6d9f528a174f9566e7`, matching the release's `inventory.json`
+(SHA-256 `b85d5efd810e014208a30c617fc4d47fc5caf876d8598e49edb880f6be97c0be`), unpacked under
+`~/.cache/emusen/toolchains/ghdl-6.0.0/` and called by its path; it reports `GHDL 6.0.0 (6.0.0.r0.ge589c698c)`, its
+`bin/ghdl` SHA-256 `c7d63e138a5f2edb40c50f523465462d0bd707a8e2ff43c76a72ae5d393eab55` [M]. Licence: GPL-2.0 [R its
+repository].
+
+**SMS_MiSTer under it** [M 2026-10-19]: its `rtl/` VHDL (with `T80/` and `VM2413/`) imports as VHDL-93 with no error
+(VHDL-2008 rejects one file of the OPLL); `ghdl -m` of the console's top entity `system`, and of `vdp` and `t80s`, stops
+on the resource library `altera_mf`, Intel's simulation models of the FPGA's memories, which is not free to fetch; and
+its PSG is the Verilog `jt89`, which GHDL does not elaborate. Only the tool's messages and the entities' names it lists
+were read; no RTL file was opened. A stand-in for `altera_mf` would need the RTL's use of its parts, which is reading
+the RTL outside a dispute step, so the referee was not run and D-6, D-7 and D-8 stay as they were.
 
 ## 5. Exclusions, as `docs/DOCS.txt` records them
 
@@ -162,6 +180,15 @@ Test*, *Color Check*, *Checkstate*, *SMS Palette*, *Fullscreen Palette Test* and
 the five references through the probe (`Endou_Native.md` §10.7-§10.8). The SMS Power! "Palette" page's colour values
 were read from its HTML's styles, as the page shows them (D-1).
 
+## 6c. Used at stage 4 (2026-10-19)
+
+Nothing was fetched but GHDL (§4a). Read from the stage 1 fetch: TI's TMS9918A data manual (`ti/TMS9918.pdf`, as page
+images: the contents, §2.1-§2.4.5 with Tables 2-1 to 2-5 and Figures 2-3 and 2-19), Young's `tms9918a.txt` whole,
+MacDonald's `sc3000h` §1-§7 and `msvdp` §4-§7, §10, §13-§15 again, Guttag's *TMS9918 Arizona Technical Symposium Draft*,
+and SMS Power!'s "Palette", "SMS1/SMS2 VDPs", "GG VDP", "VDP Registers", "Sprites" and "I/O Port Map - SG-1000". Run on
+Endou and on the five references through the probe: the program `tms.s` on the SG-1000 and Mark III settings, and the
+library's 54 SG-1000 images, read in place, on both (`Endou_Native.md` §11.10).
+
 ## 7. What was read for this page
 
 The pages and listings of §1–§4 as far as needed to identify, date and license each item: titles, contents lists,
@@ -173,6 +200,7 @@ systems file; ScreenScraper's page titles. No emulator source, firmware or firmw
 - No self-grading suite for the Master System; no TMS9918A test for the SG-1000 beyond its PSG test; no Light Phaser,
   Paddle or Sports Pad test (§2).
 - No YM2413 datasheet fetched; no die-level research on the OPLL (§6).
-- No VHDL simulator; MAME and Mesen 2 not built (§3, §4).
+- ~~No VHDL simulator~~ *GHDL since stage 4 (§4a), which cannot elaborate SMS_MiSTer without Intel's `altera_mf`*; MAME
+  not used (decided 2026-10-19) and Mesen 2 not built (§3, §4).
 - None of the five references exposes VRAM through the standard calls but PicoDrive, whose 64 KiB is the Genesis's
   size (`Endou_Native.md` §5.2).

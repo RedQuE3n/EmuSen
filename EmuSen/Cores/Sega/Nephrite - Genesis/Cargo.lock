@@ -34,6 +34,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "beryl-sms-vdp"
+version = "0.1.0"
+dependencies = [
+ "emusen-native",
+]
+
+[[package]]
 name = "beryl-sn76489"
 version = "0.1.0"
 dependencies = [
@@ -148,6 +155,7 @@ version = "0.1.0"
 dependencies = [
  "beryl-m68k",
  "beryl-sh2",
+ "beryl-sms-vdp",
  "beryl-sn76489",
  "beryl-z80",
  "emusen-disc",

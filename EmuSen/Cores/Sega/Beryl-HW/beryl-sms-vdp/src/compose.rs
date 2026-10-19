@@ -1,7 +1,7 @@
 //! Mode 4's composition of a line (Beryl_SmsVdp.md §4): the sprites a line holds and their pixels, the background's
-//! pixels with the scroll locks and the fine scroll's blank, and the mix of the two. It reads VRAM through `Vram`, so
-//! that a console whose VRAM lies elsewhere (the Genesis, stage 4) keeps its own map, and it writes CRAM indices, never
-//! colours. Nothing here allocates.
+//! pixels with the scroll locks and the fine scroll's blank, and the mix of the two with the left column's mask. It
+//! reads VRAM through `Vram`, so that a console whose VRAM lies elsewhere (the Genesis, Nephrite_Disputes.md D-7) keeps
+//! its own map, and it writes CRAM indices, never colours. Nothing here allocates.
 
 use crate::Variant;
 
@@ -63,7 +63,7 @@ pub fn find_sprites<V: Vram + ?Sized>(vram: &V, regs: &[u8; 11], variant: Varian
     let base = (regs[5] as u32 & 0x7E) << 7;
     let xn = if variant.masks && regs[5] & 1 == 0 { base } else { base | 0x80 };
     let tall = regs[1] & 2 != 0;
-    let zoom = regs[1] & 1 != 0;
+    let zoom = variant.zoom && regs[1] & 1 != 0;
     let height = (if tall { 16 } else { 8 }) << zoom as u32;
     let shift: i16 = if regs[0] & 8 != 0 { 8 } else { 0 };
     let mut mask = 0x3FFF;
@@ -140,32 +140,38 @@ pub struct Background {
 }
 
 /// The background's pixels from `x0` for `out.len()` pixels [R MacDonald §9; SMS Power!'s "VDP Registers" and
-/// "Tilemap"]. The first fine-scroll pixels show the backdrop, the column counter drawing nothing there.
+/// "Tilemap"]. The column counter draws from the fine scroll's pixel; the pixels before it show the backdrop (D-7), or
+/// on the Genesis the column before it, wrapped.
 pub fn background<V: Vram + ?Sized>(vram: &V, regs: &[u8; 11], variant: Variant, bg: Background, x0: u32, out: &mut [u8]) {
     let hs = if regs[0] & 0x40 != 0 && bg.line < 16 { 0 } else { bg.hscroll as u32 };
-    let fine = hs & 7;
-    let mut column = u32::MAX;
-    let mut row = [0u8; 8];
-    for (i, o) in out.iter_mut().enumerate() {
-        let x = x0 + i as u32;
-        if x < fine {
-            *o = backdrop(regs);
-            continue;
+    let (fine, coarse) = (hs & 7, hs >> 3);
+    let lock = regs[0] & 0x80 != 0;
+    let end = x0 + out.len() as u32;
+    let mut x = x0;
+    while x < end {
+        // The column counter plus one, 0 for the pixels before its first column, and where its column ends.
+        let c = (x + 8 - fine) >> 3;
+        let mut stop = c * 8 + fine;
+        if lock && !variant.lock_by_counter && x < 192 && stop > 192 {
+            stop = 192;
         }
-        let k = (x - fine) >> 3;
-        if k != column {
-            column = k;
-            row = tile_row(vram, regs, variant, bg, k, hs >> 3);
+        let span = &mut out[(x - x0) as usize..(stop.min(end) - x0) as usize];
+        if c == 0 && variant.fine_blank {
+            span.fill(backdrop(regs));
+        } else {
+            // The lock is by the column counter, not the name table's column [R MacDonald §9].
+            let locked = lock && if variant.lock_by_counter { c >= 25 } else { x >= 192 };
+            let row = tile_row(vram, regs, variant, bg, (c + 31 - coarse) & 31, locked);
+            let first = ((x + 8 - fine) & 7) as usize;
+            span.copy_from_slice(&row[first..first + span.len()]);
         }
-        *o = row[((x - fine) & 7) as usize];
+        x = stop.min(end);
     }
 }
 
-/// The eight pixels of the `k`th column the counter draws on the line.
-fn tile_row<V: Vram + ?Sized>(vram: &V, regs: &[u8; 11], variant: Variant, bg: Background, k: u32, coarse: u32) -> [u8; 8] {
-    let column = (k + 32 - coarse) & 31;
-    // The lock is by the column counter, not the name table's column [R MacDonald §9].
-    let vs = if regs[0] & 0x80 != 0 && k >= 24 { 0 } else { bg.vscroll as u32 };
+/// The eight pixels of name table column `column` on the line, its vertical scroll 0 where `locked`.
+fn tile_row<V: Vram + ?Sized>(vram: &V, regs: &[u8; 11], variant: Variant, bg: Background, column: u32, locked: bool) -> [u8; 8] {
+    let vs = if locked { 0 } else { bg.vscroll as u32 };
     let y = if bg.tall_table { (bg.line + vs) & 0xFF } else { (bg.line + vs) % 224 };
     let cell = (y >> 3) << 6 | column << 1;
     let at = if bg.tall_table {
@@ -199,6 +205,18 @@ fn tile_row<V: Vram + ?Sized>(vram: &V, regs: &[u8; 11], variant: Variant, bg: B
 #[inline]
 pub fn mix(bg: u8, sprite: u8) -> u8 {
     if sprite != 0 && (bg & PRIORITY == 0 || bg & 0x0F == 0) { sprite } else { bg & 0x1F }
+}
+
+/// Pixels `x0..x0 + out.len()` of a line as CRAM indices: the background, the line's sprite pixels mixed over it, and
+/// the left column's mask, the backdrop over pixels 0-7 [R MacDonald §7, §9-§10].
+pub fn line<V: Vram + ?Sized>(vram: &V, regs: &[u8; 11], variant: Variant, bg: Background, sprites: &[u8; 256], x0: u32, out: &mut [u8]) {
+    background(vram, regs, variant, bg, x0, out);
+    let mask = variant.left_mask && regs[0] & 0x20 != 0;
+    let back = backdrop(regs);
+    for (i, o) in out.iter_mut().enumerate() {
+        let x = x0 as usize + i;
+        *o = if mask && x < 8 { back } else { mix(*o, sprites[x]) };
+    }
 }
 
 #[cfg(test)]
@@ -342,6 +360,45 @@ mod tests {
         assert_eq!(out[0], 8, "register 3 clear: planes 0 and 1 from tile 0, planes 2 and 3 still tile 2's");
         background(&vram[..], &r, Variant::SMS2, bg, 0, &mut out);
         assert_eq!(out[0], 9, "the 315-5246 ignores it");
+    }
+
+    #[test]
+    fn the_genesis_shows_the_wrapped_column_under_a_fine_scroll_locks_by_the_pixel_and_never_zooms() {
+        let mut vram = vec![0u8; 0x4000];
+        let mut r = regs();
+        mark(&mut vram, 1, 0, 9);
+        // Name column 31 of row 0 is tile 1; with a scroll of 3 its last pixels are the line's first.
+        vram[0x3800 + 31 * 2] = 1;
+        let mut out = [0u8; 8];
+        let bg = Background { line: 0, hscroll: 3, vscroll: 0, tall_table: false };
+        background(&vram[..], &r, Variant::GENESIS, bg, 0, &mut out);
+        assert_eq!(out[..3], [0, 0, 0], "tile 1's pixels 5-7, colour 0");
+        mark(&mut vram, 1, 0, 0);
+        vram[32 + 1] = 0x01;
+        background(&vram[..], &r, Variant::GENESIS, bg, 0, &mut out);
+        assert_eq!(out[2], 2, "its last pixel, plane 1's");
+        background(&vram[..], &r, Variant::SMS2, bg, 0, &mut out);
+        assert_eq!(out[2], 16 | (r[7] & 15), "the 315-5246's backdrop there (D-7)");
+        // The right columns' lock: pixel 192 with a fine scroll of 3 is the counter's column 23 on the 315-5246.
+        r[0] |= 0x80;
+        // Tile 2's row 0 colour 5 across, at row 2 and column 23 of the names.
+        vram[64] = 0xFF;
+        vram[66] = 0xFF;
+        vram[0x3800 + 2 * 64 + 23 * 2] = 2;
+        let bg = Background { line: 0, hscroll: 3, vscroll: 16, tall_table: false };
+        let mut px = [0u8; 1];
+        background(&vram[..], &r, Variant::SMS2, bg, 192, &mut px);
+        assert_eq!(px[0] & 0x0F, 5, "the column counter's 23 scrolls");
+        background(&vram[..], &r, Variant::GENESIS, bg, 192, &mut px);
+        assert_ne!(px[0] & 0x0F, 5, "Nephrite's lock by the pixel");
+        r[1] |= 1;
+        vram[0x3F00] = 9;
+        vram[0x3F01] = 0xD0;
+        let mut line = SpriteLine::default();
+        find_sprites(&vram[..], &r, Variant::GENESIS, 10, true, &mut line);
+        assert!(!line.sprites[0].wide);
+        assert_eq!(find_sprites(&vram[..], &r, Variant::GENESIS, 18, true, &mut line), false);
+        assert_eq!(line.count, 0, "eight lines tall: register 1's bit 0 does nothing");
     }
 
     #[test]

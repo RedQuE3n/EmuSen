@@ -1,6 +1,6 @@
 //! Runs an image with pad presses and shows what is on its screen (Endou_Native.md §10.8): the name table at $3800 as
 //! text, for test programs whose font is ASCII from tile 0 at space, and the picture as a PPM.
-//! `cargo run --release --example screen -- <image> <frames> [--model m] [--region r] [--press F:BUTTON[:DUR]]...
+//! `cargo run --release --example screen -- <image> <frames> [--system s] [--model m] [--region r] [--press F:BUTTON[:DUR]]...
 //! [--text] [--regs] [--ppm <file>] [--rgba <file>] [--ram <file>]`; buttons Up, Down, Left, Right, 1, 2, Pause, Reset.
 
 use emusen_native::core::{Core, Create, Settings, sys};
@@ -30,7 +30,11 @@ fn main() {
         })
         .collect();
     let request = Create { image: &image, settings: Settings::from_pairs(settings), files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None };
-    let mut m = Machine::create(&request).unwrap_or_else(|e| panic!("refused: {e}"));
+    let mut m = match flags("--system").pop() {
+        Some(system) => Machine::create_as(&system, &request),
+        None => Machine::create(&request),
+    }
+    .unwrap_or_else(|e| panic!("refused: {e}"));
     for f in 0..frames {
         let held = presses.iter().filter(|&&(at, _, d)| (at..at + d).contains(&f)).fold(0, |b, p| b | p.1);
         m.set_buttons(0, held, 0xFF).unwrap();

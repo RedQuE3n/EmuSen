@@ -1,9 +1,9 @@
 //! The Z80's bus (Endou_Native.md §9.3, §9.6): the memory map with port $3E's enables, the I/O ports decoded by A7, A6
 //! and A0, and the clock. The bus owns the time: every machine cycle the Z80 reports advances it, and the devices are
-//! brought to it when an access reaches them. The VDP is Beryl's `beryl-sms-vdp` on the Master System's consoles; the
-//! SG-1000's TMS9918A is stage 4's, its ports a stand-in until then (Endou_Native.md §10).
+//! brought to it when an access reaches them. The VDP is Beryl's `beryl-sms-vdp`: the 315-5124 or 315-5246 on the
+//! Master System's consoles, the TMS9918A on the SG-1000 (Endou_Native.md §10, §11).
 
-use beryl_sms_vdp::{STATUS_BITS, Vdp};
+use beryl_sms_vdp::Vdp;
 use beryl_sn76489::Sn76489;
 
 use crate::cart::Cartridge;
@@ -118,27 +118,20 @@ impl Bus {
         self.catch_up_vdp();
     }
 
-    /// Whether the VDP is wired: on the Master System's consoles; the SG-1000's chip is stage 4's.
-    fn has_vdp(&self) -> bool {
-        self.model != Model::Sg1000
-    }
-
     fn port_in(&mut self, port: u8) -> u8 {
         let odd = port & 1 != 0;
         match port >> 6 {
             0 => self.undriven(),
-            1 if !self.has_vdp() => self.undriven(),
-            // The SG-1000's VDP reads $FF until stage 4 [C].
-            2 if !self.has_vdp() => 0xFF,
+            1 if !self.model.has_counters() => self.undriven(),
             1 => {
                 self.catch_up_vdp();
                 if odd { self.vdp.read_h() } else { self.vdp.read_v() }
             }
             2 if odd => {
                 self.catch_up_vdp();
-                // The status's low five bits are undriven [R MacDonald's `msvdp` §4] (Endou_Native.md §10.4).
-                let undriven = self.undriven();
-                (self.vdp.read_control() & STATUS_BITS) | (undriven & !STATUS_BITS)
+                // The Sega VDPs' status leaves its low five bits undriven [R MacDonald's `msvdp` §4] (Endou_Native.md §10.4).
+                let (undriven, driven) = (self.undriven(), self.vdp.status_bits());
+                (self.vdp.read_control() & driven) | (undriven & !driven)
             }
             2 => {
                 self.catch_up_vdp();
@@ -160,7 +153,7 @@ impl Bus {
                     self.io.control = v;
                     let after = self.io.th_levels(self.model);
                     // TH rising on either port latches the H counter [R MacDonald's `msvdp` §11].
-                    if (0..2).any(|p| !before[p] && after[p]) && self.has_vdp() {
+                    if (0..2).any(|p| !before[p] && after[p]) {
                         self.catch_up_vdp();
                         self.vdp.latch_h();
                     }
@@ -170,7 +163,7 @@ impl Bus {
                 self.catch_up_psg();
                 self.psg.write(v);
             }
-            2 if self.has_vdp() => {
+            2 => {
                 self.catch_up_vdp();
                 if port & 1 != 0 { self.vdp.write_control(v) } else { self.vdp.write_data(v) }
             }
@@ -222,9 +215,6 @@ impl beryl_z80::Bus for Bus {
 
     /// The VDP's INT, as it stands at the instruction's end.
     fn int_line(&mut self) -> bool {
-        if !self.has_vdp() {
-            return false;
-        }
         self.catch_up_vdp();
         self.vdp.irq()
     }

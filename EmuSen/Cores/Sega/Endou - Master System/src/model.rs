@@ -1,5 +1,6 @@
-//! The consoles Endou models and what each differs in at stage 2: the I/O chip's control port, the region it reads
-//! back, the Reset button, and what an undriven read returns (Endou_Native.md §9.4). The one owner of these facts.
+//! The consoles Endou models and what each differs in: the I/O chip's control port, the region it reads back, the Reset
+//! button, what an undriven read returns, the VDP, the PSG and the work RAM (Endou_Native.md §9.4, §11). The one owner
+//! of these facts.
 
 /// A real console. The Japanese Master System joins with the YM2413 at stage 9 (Endou_Plan.md §5.8).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -13,7 +14,7 @@ pub enum Model {
     /// The Master System II (315-5246): no Reset button, undriven reads $FF [R `smstech` §3, §4].
     Sms2,
     /// The SG-1000: no memory or I/O control port, its pads read through the joystick ports [R SMS Power!'s "I/O Port
-    /// Map - SG-1000 and SC-3000"].
+    /// Map - SG-1000 and SC-3000"], a TMS9918A, a discrete SN76489AN and 1 KiB of work RAM.
     Sg1000,
 }
 
@@ -41,12 +42,30 @@ impl Model {
     }
 
     /// The VDP: the 315-5124 in the Mark III and the first Master System, the 315-5246 in the second [R MacDonald's
-    /// `msvdp` §1]. The SG-1000's TMS9918A is stage 4's; until then its machine holds a 315-5246 it never wires.
+    /// `msvdp` §1], the TMS9918A in the SG-1000 [R SMS Power!'s "Palette"; MacDonald's `sc3000h` §2 for its family].
     pub fn vdp(self) -> beryl_sms_vdp::Variant {
         match self {
             Model::MarkIII | Model::Sms1 => beryl_sms_vdp::Variant::SMS1,
-            Model::Sms2 | Model::Sg1000 => beryl_sms_vdp::Variant::SMS2,
+            Model::Sms2 => beryl_sms_vdp::Variant::SMS2,
+            Model::Sg1000 => beryl_sms_vdp::Variant::TMS9918A,
         }
+    }
+
+    /// The PSG: the discrete SN76489AN in the SG-1000, Sega's copy in the VDP from the Mark III on (Endou_Disputes.md
+    /// D-0).
+    pub fn psg(self) -> beryl_sn76489::Variant {
+        if self == Model::Sg1000 { beryl_sn76489::Variant::DISCRETE } else { beryl_sn76489::Variant::SEGA }
+    }
+
+    /// Work RAM: the SG-1000's 1 KiB, the others' 8 KiB [D: `smstech` §2; `sc3000h`].
+    pub fn ram(self) -> usize {
+        if self == Model::Sg1000 { 0x400 } else { 0x2000 }
+    }
+
+    /// Whether the V and H counters answer at ports $40-$7F: the Sega VDPs'; the TMS9918A has none, and the SG-1000
+    /// reads the open bus there [R SMS Power!'s "I/O Port Map - SG-1000 and SC-3000"].
+    pub fn has_counters(self) -> bool {
+        self != Model::Sg1000
     }
 
     /// Whether ports $3E and $3F exist: every console from the Mark III on.

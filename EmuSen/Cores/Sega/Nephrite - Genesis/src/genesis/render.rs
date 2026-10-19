@@ -2,11 +2,14 @@
 //! 5: planes A and B with full, cell and line horizontal scrolling and full or 2-cell vertical scrolling, the window
 //! and its bug, sprites through the link list parsed on the line before they show, with their per-line and per-frame
 //! limits and masking, priority, shadow/highlight, interlace's double resolution, the eight-colour palette and the
-//! CRAM dots. Mode 4, the Master System's. MacDonald's "Sega Genesis VDP documentation" §12-§17 and "Sega Master
-//! System VDP documentation" §7-§10 are the sources, with Nemesis's sprite masking and overflow findings (SpritesMind
-//! topic 541), plutiedev's shadow/highlight page and TmEE's measured output levels (topic 2188), and what Nuked-MD's
-//! board showed where they are silent (Nephrite_Disputes.md D-4 to D-10). Nephrite_Native.md §14 to §16 are the
-//! record, with what is argued.
+//! CRAM dots. Mode 4, the Master System's, composed by Beryl's `beryl-sms-vdp`. MacDonald's "Sega Genesis VDP
+//! documentation" §12-§17 and "Sega Master System VDP documentation" §7-§10 are the sources, with Nemesis's sprite
+//! masking and overflow findings (SpritesMind topic 541), plutiedev's shadow/highlight page and TmEE's measured output
+//! levels (topic 2188), and what Nuked-MD's board showed where they are silent (Nephrite_Disputes.md D-4 to D-10).
+//! Nephrite_Native.md §14 to §16 are the record, with what is argued.
+
+use beryl_sms_vdp::Variant;
+use beryl_sms_vdp::compose::{self, Background, SpriteLine as Mode4Sprites};
 
 use crate::genesis::vdp::Vdp;
 
@@ -92,6 +95,16 @@ const MODE4_B: [u8; 4] = [0, 109, 161, 255];
 /// Where mode 4's byte address `a` lies in VRAM: bits 1-8 one place up, bit 9 at bit 1, an even address the low byte.
 pub(in crate::genesis) fn vram4_address(a: usize) -> usize {
     (a & 0x3C00) | (a & 0x1FE) << 1 | (a >> 8) & 2 | (a & 1) ^ 1
+}
+
+/// Mode 4's 16 KiB as the shared composition reads them, through the board's map (D-7).
+struct Mode4Vram<'a>(&'a [u8]);
+
+impl compose::Vram for Mode4Vram<'_> {
+    #[inline(always)]
+    fn byte(&self, address: u32) -> u8 {
+        self.0[vram4_address(address as usize)]
+    }
 }
 
 fn tile_px(vram: &[u8], entry: u16, x: usize, y: usize, rows: usize) -> Px {
@@ -657,61 +670,18 @@ impl Vdp {
         }
     }
 
-    /// A byte of mode 4's 16 KiB (measured on the board, Nephrite_Disputes.md D-7).
-    fn vram4(&self, a: usize) -> u8 {
-        self.vram[vram4_address(a)]
-    }
-
-    /// Mode 4, the Master System's: a 32 by 24 name table of little-endian words in planar patterns, scrolled by
-    /// registers 8 and 9 with the top two rows' and right eight columns' locks, eight sprites a line from a 64-entry
-    /// table, and the left column's mask (MacDonald's SMS VDP §7-§10), read through mode 4's map of VRAM, its colours
-    /// CRAM's first 32 entries (D-7).
+    /// Mode 4, the Master System's, through Beryl's shared composition with the Genesis's variant (Beryl_SmsVdp.md §4,
+    /// Endou_Plan.md §3.3): its sprites, background, mix and left column's mask, read through mode 4's map of VRAM, its
+    /// colours CRAM's first 32 entries (D-7).
     fn render_mode4(&mut self, line: usize, draw: bool, frame: &mut Frame) {
         let width = 256;
-        let backdrop = 16 | (self.regs[7] & 0xF);
-        let mut sprite = [0u8; 256];
+        let regs: [u8; 11] = self.regs[..11].try_into().expect("eleven registers");
+        let vram = Mode4Vram(&self.vram);
+        let mut sprites = Mode4Sprites::default();
         if self.display() {
-            let base = ((self.regs[5] & 0x7E) as usize) << 7;
-            let tall = self.regs[1] & 2 != 0;
-            let h = if tall { 16 } else { 8 };
-            let mut found = 0;
-            for i in 0..64 {
-                let y = self.vram4(base + i) as usize;
-                if y == 0xD0 {
-                    break;
-                }
-                let top = y + 1;
-                let row = (line + 256 - top) % 256;
-                if row >= h {
-                    continue;
-                }
-                found += 1;
-                if found > 8 {
-                    self.sprite_overflow = true;
-                    break;
-                }
-                let x0 = self.vram4(base + 0x80 + 2 * i) as i32 - if self.regs[0] & 8 != 0 { 8 } else { 0 };
-                let mut n = self.vram4(base + 0x81 + 2 * i) as usize | if self.regs[6] & 4 != 0 { 0x100 } else { 0 };
-                if tall {
-                    n &= !1;
-                }
-                let a = n * 32 + row * 4;
-                for px in 0..8 {
-                    let x = x0 + px;
-                    if !(0..256).contains(&x) {
-                        continue;
-                    }
-                    let bit = 7 - px as usize;
-                    let c = (0..4).fold(0u8, |c, p| c | ((self.vram4(a + p) >> bit) & 1) << p);
-                    if c != 0 {
-                        if sprite[x as usize] != 0 {
-                            self.sprite_collision = true;
-                        } else {
-                            sprite[x as usize] = 16 | c;
-                        }
-                    }
-                }
-            }
+            self.sprite_overflow |= compose::find_sprites(&vram, &regs, Variant::GENESIS, line as u8, true, &mut sprites);
+            compose::sprite_pixels(&mut sprites);
+            self.sprite_collision |= sprites.collision < 256;
         }
         if !draw || line >= MAX_H {
             return;
@@ -725,30 +695,17 @@ impl Vdp {
             p.copy_from_slice(&[0, 0, 0, 255]);
         }
         if !self.display() {
+            let backdrop = compose::backdrop(&regs) as usize;
             for p in row.chunks_mut(4).take(width) {
-                p.copy_from_slice(&palette[backdrop as usize]);
+                p.copy_from_slice(&palette[backdrop]);
             }
             return;
         }
-        let name_base = ((self.regs[2] & 0x0E) as usize) << 10;
-        let hs = if self.regs[0] & 0x40 != 0 && line < 16 { 0 } else { self.regs[8] as usize };
-        for x in 0..width {
-            let vs = if self.regs[0] & 0x80 != 0 && x >= 192 { 0 } else { self.regs[9] as usize };
-            let bx = (x + 256 - hs) % 256;
-            let by = (line + vs) % 224;
-            let at = name_base + ((by / 8) * 32 + bx / 8) * 2;
-            let e = self.vram4(at) as u16 | (self.vram4(at + 1) as u16) << 8;
-            let (hflip, vflip) = (e & 0x200 != 0, e & 0x400 != 0);
-            let (px, py) = (if hflip { 7 - bx % 8 } else { bx % 8 }, if vflip { 7 - by % 8 } else { by % 8 });
-            let a = (e as usize & 0x1FF) * 32 + py * 4;
-            let bit = 7 - px;
-            let c = (0..4).fold(0u8, |c, p| c | ((self.vram4(a + p) >> bit) & 1) << p);
-            let bg = if e & 0x800 != 0 { 16 } else { 0 } | c;
-            let pri = e & 0x1000 != 0;
-            let s = sprite[x];
-            let colour = if s != 0 && !(pri && c != 0) { s } else { bg };
-            let colour = if self.regs[0] & 0x20 != 0 && x < 8 { backdrop } else { colour };
-            row[x * 4..x * 4 + 4].copy_from_slice(&palette[colour as usize & 31]);
+        let bg = Background { line: line as u32, hscroll: regs[8], vscroll: regs[9], tall_table: false };
+        let mut out = [0u8; 256];
+        compose::line(&vram, &regs, Variant::GENESIS, bg, &sprites.pixels, 0, &mut out);
+        for (p, &i) in row.chunks_mut(4).zip(&out) {
+            p.copy_from_slice(&palette[i as usize & 31]);
         }
     }
 }

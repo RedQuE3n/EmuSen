@@ -2,7 +2,7 @@ using System.Text;
 
 namespace EmuSen.WiseMan.Fixtures
 {
-    // Builds a synthetic Master System or SG-1000 cartridge: Sega's header with its checksum and region, a boot stub and a pad reader - never real game data - see Endou_Native.md §4.
+    // Builds a synthetic Master System or SG-1000 cartridge: Sega's header with its checksum and region, a boot stub and a pad reader, and the mappers' banking programs - never real game data - see Endou_Native.md §4, §9.8.
     public static class SyntheticSmsRom
     {
         // DI; IM 1; LD SP,nn; then forever IN A,($DC); LD ($C000),A; IN A,($DD); LD ($C001),A - the pads' two ports copied to the first bytes of RAM.
@@ -59,6 +59,77 @@ namespace EmuSen.WiseMan.Fixtures
             for (int i = 0; i < end; i++)
                 if (i != headerAt + 10 && i != headerAt + 11) sum += rom[i];
             return sum;
+        }
+
+        // A step of a banking program: a byte written to an address, or a byte read from one and kept in RAM.
+        public readonly record struct Step(ushort Address, byte Value, bool Write)
+        {
+            public static Step Put(ushort address, byte value) => new(address, value, true);
+            public static Step Keep(ushort address) => new(address, 0, false);
+        }
+
+        // DI; LD SP,$DFF0; each step as LD A,n; LD (nn),A or LD A,(nn); LD ($C000+k),A; then JR $ - the k-th kept byte at $C000+k.
+        public static byte[] Program(IEnumerable<Step> steps)
+        {
+            var code = new List<byte> { 0xF3, 0x31, 0xF0, 0xDF };
+            int kept = 0;
+            foreach (var s in steps)
+            {
+                if (s.Write) code.AddRange(new byte[] { 0x3E, s.Value, 0x32, (byte)s.Address, (byte)(s.Address >> 8) });
+                else
+                {
+                    code.AddRange(new byte[] { 0x3A, (byte)s.Address, (byte)(s.Address >> 8), 0x32, (byte)kept, 0xC0 });
+                    kept++;
+                }
+            }
+            code.AddRange(new byte[] { 0x18, 0xFE });
+            return code.ToArray();
+        }
+
+        // A Master System image of `banks` 16 KiB banks, each holding its own number at $3F00, the program at $0000 and Sega's export header.
+        public static byte[] Banked(int banks, byte[] program)
+        {
+            var rom = new byte[banks * 0x4000];
+            for (int b = 0; b < banks; b++) rom[b * 0x4000 + 0x3F00] = (byte)b;
+            program.CopyTo(rom, 0);
+            Encoding.ASCII.GetBytes("TMR SEGA").CopyTo(rom, HeaderAt);
+            rom[HeaderAt + 15] = 0x4C;
+            return rom;
+        }
+
+        // Sega's mapper: each slot banked, the first kilobyte kept, a bank past the ROM wrapped, RAM's copy of $FFFF, the cartridge's RAM in slot 2 in both banks - see Endou_Native.md §9.3.
+        public static byte[] SegaMapper(int banks = 32) => Banked(banks, Program(new[]
+        {
+            Step.Put(0xFFFF, 5), Step.Keep(0xBF00), Step.Put(0xFFFE, 6), Step.Keep(0x7F00), Step.Put(0xFFFD, 7), Step.Keep(0x3F00), Step.Keep(0x0000),
+            Step.Put(0xFFFF, (byte)(banks + 1)), Step.Keep(0xBF00), Step.Keep(0xFFFF),
+            Step.Put(0xFFFC, 0x08), Step.Put(0x8000, 0x77), Step.Keep(0x8000), Step.Put(0xFFFC, 0x0C), Step.Keep(0x8000), Step.Put(0xFFFC, 0x00), Step.Keep(0xBF00),
+        }));
+
+        // Codemasters' mapper: slots 2 and 1 banked by their own addresses, the first kilobyte not kept, the RAM over $A000-$BFFF - see Endou_Native.md §9.3.
+        public static byte[] CodemastersMapper(int banks = 8) => WithCodemastersHeader(Banked(banks, Program(new[]
+        {
+            Step.Put(0x8000, 5), Step.Keep(0xBF00), Step.Put(0x4000, 3), Step.Keep(0x7F00), Step.Put(0xFFFF, 1), Step.Keep(0xBF00),
+            Step.Put(0x4000, 0x84), Step.Put(0xA000, 0x5A), Step.Keep(0xA000), Step.Keep(0x8000), Step.Keep(0x7F00),
+        })));
+
+        // A board without a mapper: 48 KiB read straight, and Sega's registers meaning nothing - see Endou_Native.md §9.3.
+        public static byte[] Plain(int banks = 3) => Banked(banks, Program(new[] { Step.Put(0xFFFF, 0), Step.Keep(0xBF00), Step.Keep(0x7F00), Step.Keep(0x3F00) }));
+
+        // Codemasters' header at $7FE0 over every bank: the little-endian words summed with Sega's header left out, and the word that cancels it (SMS Power!'s "Codemasters Header").
+        public static byte[] WithCodemastersHeader(byte[] rom)
+        {
+            Array.Clear(rom, 0x7FE0, 16);
+            rom[0x7FE0] = (byte)(rom.Length / 0x4000);
+            new byte[] { 0x31, 0x08, 0x93, 0x10, 0x59 }.CopyTo(rom, 0x7FE1);
+            ushort sum = 0;
+            for (int i = 0; i < rom.Length; i += 2)
+                if (i < 0x7FF0 || i >= 0x8000) sum += (ushort)(rom[i] | rom[i + 1] << 8);
+            ushort neg = (ushort)-sum;
+            rom[0x7FE6] = (byte)sum;
+            rom[0x7FE7] = (byte)(sum >> 8);
+            rom[0x7FE8] = (byte)neg;
+            rom[0x7FE9] = (byte)(neg >> 8);
+            return rom;
         }
 
         private static byte Bcd(int n) => (byte)(n / 10 << 4 | n % 10);

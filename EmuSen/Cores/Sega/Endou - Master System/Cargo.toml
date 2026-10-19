@@ -15,6 +15,10 @@ emusen-native = { path = "../../Shared/emusen-native" }
 beryl-z80 = { path = "../Beryl-HW/beryl-z80" }
 beryl-sn76489 = { path = "../Beryl-HW/beryl-sn76489" }
 
+# The test programs are assembled with Beryl's Z80 assembler (Beryl_Z80.md §8, Endou_Native.md §9.8).
+[dev-dependencies]
+beryl-z80 = { path = "../Beryl-HW/beryl-z80", features = ["asm"] }
+
 [profile.release]
 panic = "abort"
 opt-level = 3

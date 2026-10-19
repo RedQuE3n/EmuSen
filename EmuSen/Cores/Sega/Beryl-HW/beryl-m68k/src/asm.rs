@@ -4,302 +4,11 @@
 //! form (ADD #n becomes ADDI, MOVE to An becomes MOVEA, an unsized branch the short form when its target is near).
 
 use std::collections::{BTreeMap, HashMap};
-use std::fmt;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AsmError {
-    /// One-based line of the source; 0 for the assembler as a whole.
-    pub line: usize,
-    pub message: String,
-}
+use beryl_asm::{Ctx, Expr, Kind, Word, err, eval, fits_either, fits_signed, parse_expr, split_top, top_open};
+pub use beryl_asm::{AsmError, Program};
 
-impl fmt::Display for AsmError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "line {}: {}", self.line, self.message)
-    }
-}
-
-impl std::error::Error for AsmError {}
-
-fn err<T>(line: usize, message: impl Into<String>) -> Result<T, AsmError> {
-    Err(AsmError { line, message: message.into() })
-}
-
-/// An assembled program: its bytes from `origin`, gaps between `org`s filled, and every label's and constant's value.
-#[derive(Clone, Debug, Default)]
-pub struct Program {
-    pub origin: u32,
-    pub bytes: Vec<u8>,
-    pub symbols: BTreeMap<String, i64>,
-}
-
-// ---------------------------------------------------------------------------------------------------------------------
-// Expressions
-
-#[derive(Clone, Debug)]
-enum Expr {
-    Num(i64),
-    Sym(String),
-    Pc,
-    Neg(Box<Expr>),
-    Not(Box<Expr>),
-    LNot(Box<Expr>),
-    Bin(char, Box<Expr>, Box<Expr>),
-}
-
-struct Lexer<'a> {
-    s: &'a [u8],
-    i: usize,
-}
-
-impl<'a> Lexer<'a> {
-    fn ws(&mut self) {
-        while self.i < self.s.len() && (self.s[self.i] == b' ' || self.s[self.i] == b'\t') {
-            self.i += 1;
-        }
-    }
-
-    fn peek(&mut self) -> Option<u8> {
-        self.ws();
-        self.s.get(self.i).copied()
-    }
-
-    fn eat(&mut self, t: &str) -> bool {
-        self.ws();
-        if self.s[self.i..].starts_with(t.as_bytes()) {
-            self.i += t.len();
-            true
-        } else {
-            false
-        }
-    }
-}
-
-fn is_sym_start(c: u8) -> bool {
-    c.is_ascii_alphabetic() || c == b'_' || c == b'.' || c == b'@'
-}
-
-fn is_sym(c: u8) -> bool {
-    c.is_ascii_alphanumeric() || c == b'_' || c == b'.' || c == b'@'
-}
-
-fn parse_expr(text: &str, scope: &str) -> Result<Expr, String> {
-    let mut l = Lexer { s: text.as_bytes(), i: 0 };
-    let e = expr_cmp(&mut l, scope)?;
-    l.ws();
-    if l.i != l.s.len() {
-        return Err(format!("unexpected `{}` in expression `{text}`", &text[l.i..]));
-    }
-    Ok(e)
-}
-
-fn expr_cmp(l: &mut Lexer, sc: &str) -> Result<Expr, String> {
-    let e = expr_or(l, sc)?;
-    for (t, op) in [("==", 'e'), ("!=", 'n'), ("<>", 'n'), ("<=", 'l'), (">=", 'g'), ("=", 'e'), ("<", 'L'), (">", 'G')] {
-        let save = l.i;
-        if l.eat(t) {
-            if (t == "<" || t == ">") && l.s.get(l.i) == Some(&t.as_bytes()[0]) {
-                l.i = save;
-                continue;
-            }
-            return Ok(Expr::Bin(op, Box::new(e), Box::new(expr_or(l, sc)?)));
-        }
-    }
-    Ok(e)
-}
-
-fn expr_or(l: &mut Lexer, sc: &str) -> Result<Expr, String> {
-    let mut e = expr_xor(l, sc)?;
-    while l.peek() == Some(b'|') {
-        l.i += 1;
-        e = Expr::Bin('|', Box::new(e), Box::new(expr_xor(l, sc)?));
-    }
-    Ok(e)
-}
-
-fn expr_xor(l: &mut Lexer, sc: &str) -> Result<Expr, String> {
-    let mut e = expr_and(l, sc)?;
-    while l.peek() == Some(b'^') {
-        l.i += 1;
-        e = Expr::Bin('^', Box::new(e), Box::new(expr_and(l, sc)?));
-    }
-    Ok(e)
-}
-
-fn expr_and(l: &mut Lexer, sc: &str) -> Result<Expr, String> {
-    let mut e = expr_shift(l, sc)?;
-    while l.peek() == Some(b'&') {
-        l.i += 1;
-        e = Expr::Bin('&', Box::new(e), Box::new(expr_shift(l, sc)?));
-    }
-    Ok(e)
-}
-
-fn expr_shift(l: &mut Lexer, sc: &str) -> Result<Expr, String> {
-    let mut e = expr_add(l, sc)?;
-    loop {
-        if l.eat("<<") {
-            e = Expr::Bin('<', Box::new(e), Box::new(expr_add(l, sc)?));
-        } else if l.eat(">>") {
-            e = Expr::Bin('>', Box::new(e), Box::new(expr_add(l, sc)?));
-        } else {
-            return Ok(e);
-        }
-    }
-}
-
-fn expr_add(l: &mut Lexer, sc: &str) -> Result<Expr, String> {
-    let mut e = expr_mul(l, sc)?;
-    loop {
-        match l.peek() {
-            Some(c @ (b'+' | b'-')) => {
-                l.i += 1;
-                e = Expr::Bin(c as char, Box::new(e), Box::new(expr_mul(l, sc)?));
-            }
-            _ => return Ok(e),
-        }
-    }
-}
-
-fn expr_mul(l: &mut Lexer, sc: &str) -> Result<Expr, String> {
-    let mut e = expr_unary(l, sc)?;
-    loop {
-        match l.peek() {
-            Some(c @ (b'*' | b'/' | b'%')) => {
-                l.i += 1;
-                e = Expr::Bin(c as char, Box::new(e), Box::new(expr_unary(l, sc)?));
-            }
-            _ => return Ok(e),
-        }
-    }
-}
-
-fn expr_unary(l: &mut Lexer, sc: &str) -> Result<Expr, String> {
-    match l.peek() {
-        Some(b'-') => {
-            l.i += 1;
-            Ok(Expr::Neg(Box::new(expr_unary(l, sc)?)))
-        }
-        Some(b'+') => {
-            l.i += 1;
-            expr_unary(l, sc)
-        }
-        Some(b'~') => {
-            l.i += 1;
-            Ok(Expr::Not(Box::new(expr_unary(l, sc)?)))
-        }
-        Some(b'!') => {
-            l.i += 1;
-            Ok(Expr::LNot(Box::new(expr_unary(l, sc)?)))
-        }
-        _ => expr_primary(l, sc),
-    }
-}
-
-fn expr_primary(l: &mut Lexer, sc: &str) -> Result<Expr, String> {
-    let c = l.peek().ok_or("expression ends early")?;
-    let start = l.i;
-    let digits = |l: &mut Lexer, radix: u32| -> Result<i64, String> {
-        let from = l.i;
-        while l.i < l.s.len() && ((l.s[l.i] as char).is_digit(radix) || l.s[l.i] == b'_') {
-            l.i += 1;
-        }
-        let t: String = std::str::from_utf8(&l.s[from..l.i]).unwrap().replace('_', "");
-        i64::from_str_radix(&t, radix).map_err(|_| format!("bad number `{}`", std::str::from_utf8(&l.s[start..l.i]).unwrap()))
-    };
-    match c {
-        b'(' => {
-            l.i += 1;
-            let e = expr_or(l, sc)?;
-            if !l.eat(")") {
-                return Err("missing `)`".into());
-            }
-            Ok(e)
-        }
-        b'$' => {
-            l.i += 1;
-            Ok(Expr::Num(digits(l, 16)?))
-        }
-        b'%' => {
-            l.i += 1;
-            Ok(Expr::Num(digits(l, 2)?))
-        }
-        b'*' => {
-            l.i += 1;
-            Ok(Expr::Pc)
-        }
-        b'\'' | b'"' => {
-            l.i += 1;
-            let mut v: i64 = 0;
-            let mut n = 0;
-            while l.i < l.s.len() && l.s[l.i] != c {
-                v = v << 8 | l.s[l.i] as i64;
-                l.i += 1;
-                n += 1;
-            }
-            if l.i >= l.s.len() || n == 0 || n > 4 {
-                return Err("bad character constant".into());
-            }
-            l.i += 1;
-            Ok(Expr::Num(v))
-        }
-        b'0' if l.s.get(l.i + 1).is_some_and(|x| *x == b'x' || *x == b'X') => {
-            l.i += 2;
-            Ok(Expr::Num(digits(l, 16)?))
-        }
-        b'0'..=b'9' => Ok(Expr::Num(digits(l, 10)?)),
-        c if is_sym_start(c) => {
-            while l.i < l.s.len() && is_sym(l.s[l.i]) {
-                l.i += 1;
-            }
-            let name = std::str::from_utf8(&l.s[start..l.i]).unwrap();
-            Ok(Expr::Sym(scoped(name, sc)))
-        }
-        _ => Err(format!("unexpected `{}`", c as char)),
-    }
-}
-
-/// A local label (`.name` or `@name`) belongs to the global label before it.
-fn scoped(name: &str, scope: &str) -> String {
-    if name.starts_with('.') || name.starts_with('@') { format!("{scope}{name}") } else { name.to_string() }
-}
-
-struct Ctx<'a> {
-    symbols: &'a HashMap<String, i64>,
-    pc: i64,
-}
-
-fn eval(e: &Expr, c: &Ctx) -> Option<i64> {
-    Some(match e {
-        Expr::Num(n) => *n,
-        Expr::Sym(s) => *c.symbols.get(s)?,
-        Expr::Pc => c.pc,
-        Expr::Neg(a) => eval(a, c)?.wrapping_neg(),
-        Expr::Not(a) => !eval(a, c)?,
-        Expr::LNot(a) => (eval(a, c)? == 0) as i64,
-        Expr::Bin(op, a, b) => {
-            let (a, b) = (eval(a, c)?, eval(b, c)?);
-            match op {
-                '+' => a.wrapping_add(b),
-                '-' => a.wrapping_sub(b),
-                '*' => a.wrapping_mul(b),
-                '/' => a.checked_div(b)?,
-                '%' => a.checked_rem(b)?,
-                '&' => a & b,
-                '|' => a | b,
-                '^' => a ^ b,
-                '<' => a.wrapping_shl(b as u32),
-                '>' => a.wrapping_shr(b as u32),
-                'e' => (a == b) as i64,
-                'n' => (a != b) as i64,
-                'l' => (a <= b) as i64,
-                'g' => (a >= b) as i64,
-                'L' => (a < b) as i64,
-                _ => (a > b) as i64,
-            }
-        }
-    })
-}
+type Stmt = beryl_asm::Stmt<Line>;
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Operands
@@ -394,38 +103,6 @@ fn index(t: &str) -> Option<Index> {
     Some(Index { reg, addr, long })
 }
 
-fn split_top(s: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let (mut depth, mut quote, mut cur) = (0i32, None::<char>, String::new());
-    for c in s.chars() {
-        match (quote, c) {
-            (Some(q), c) if c == q => {
-                quote = None;
-                cur.push(c);
-            }
-            (Some(_), c) => cur.push(c),
-            (None, '\'' | '"') => {
-                quote = Some(c);
-                cur.push(c);
-            }
-            (None, '(') => {
-                depth += 1;
-                cur.push(c);
-            }
-            (None, ')') => {
-                depth -= 1;
-                cur.push(c);
-            }
-            (None, ',') if depth == 0 => out.push(std::mem::take(&mut cur)),
-            (None, c) => cur.push(c),
-        }
-    }
-    if !cur.trim().is_empty() || !out.is_empty() {
-        out.push(cur);
-    }
-    out.into_iter().map(|s| s.trim().to_string()).collect()
-}
-
 fn parse_operand(t: &str, sc: &str) -> Result<Op, String> {
     let u = t.to_ascii_uppercase();
     match u.as_str() {
@@ -509,25 +186,6 @@ fn parse_operand(t: &str, sc: &str) -> Result<Op, String> {
     Ok(Op::Abs(parse_expr(t, sc)?))
 }
 
-/// The `(` that opens an operand's final parenthesised group.
-fn top_open(t: &str) -> Option<usize> {
-    let b = t.as_bytes();
-    let mut depth = 0;
-    for i in (0..b.len()).rev() {
-        match b[i] {
-            b')' => depth += 1,
-            b'(' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(i);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
 // ---------------------------------------------------------------------------------------------------------------------
 // Statements
 
@@ -537,10 +195,9 @@ enum Data {
     Bytes(Vec<u8>),
 }
 
+/// A line the 68000's assembler reads itself; labels, constants, conditionals and includes are `beryl_asm`'s.
 #[derive(Clone, Debug)]
-enum Kind {
-    Label(String),
-    Equ(String, Expr),
+enum Line {
     Org(Expr),
     Even,
     Align(Expr),
@@ -549,176 +206,52 @@ enum Kind {
     Inst { name: String, size: Option<char>, ops: Vec<Op> },
 }
 
-#[derive(Clone, Debug)]
-struct Stmt {
-    line: usize,
-    kind: Kind,
-}
-
-/// The source's statements, conditionals resolved with the constants known in order and those given.
-fn parse(source: &str, defines: &HashMap<String, i64>, include: &dyn Fn(&str) -> Option<String>, out: &mut Vec<Stmt>, depth: usize) -> Result<(), AsmError> {
-    if depth > 16 {
-        return err(0, "includes nested too deeply");
-    }
-    let mut scope = String::new();
-    let mut consts = defines.clone();
-    // Each open `if`: whether its lines are taken, and whether a branch was taken.
-    let mut conds: Vec<(bool, bool)> = Vec::new();
-    for (n, raw) in source.lines().enumerate() {
-        let line = n + 1;
-        let text = strip_comment(raw);
-        if text.trim().is_empty() {
-            continue;
-        }
-        let (label, rest) = split_label(text);
-        let (word, args) = split_word(rest);
-        let w = word.to_ascii_lowercase();
-        let active = conds.iter().all(|c| c.0);
-        match w.as_str() {
-            "if" => {
-                let v = if active {
-                    let e = parse_expr(args, &scope).map_err(|m| AsmError { line, message: m })?;
-                    eval(&e, &Ctx { symbols: &consts, pc: 0 }).ok_or(AsmError { line, message: "a condition must be a known constant".into() })? != 0
+/// A line's word: a directive, data, or an instruction with its size suffix.
+fn word(w: &Word) -> Result<Line, AsmError> {
+    let line = w.line;
+    let e = |s: &str| w.expr(s);
+    let (base, size) = match w.word.rsplit_once('.') {
+        Some((b, s)) if !b.is_empty() && s.len() == 1 => (b.to_string(), s.chars().next()),
+        _ => (w.word.to_string(), None),
+    };
+    let data_size = |s: Option<char>| match s {
+        Some('b') => Ok(Sz::B),
+        Some('w') | None => Ok(Sz::W),
+        Some('l') => Ok(Sz::L),
+        _ => err(line, "bad size"),
+    };
+    let args = w.args;
+    Ok(match base.as_str() {
+        "org" => Line::Org(e(args)?),
+        "even" => Line::Even,
+        "align" => Line::Align(e(args)?),
+        "dc" => {
+            let sz = data_size(size)?;
+            let mut items = Vec::new();
+            for a in split_top(args) {
+                let q = a.as_bytes();
+                if q.len() >= 2 && (q[0] == b'"' || (q[0] == b'\'' && sz == Sz::B)) && q[q.len() - 1] == q[0] {
+                    if sz != Sz::B {
+                        return err(line, "a string is a list of bytes: dc.b");
+                    }
+                    items.push(Data::Bytes(q[1..q.len() - 1].to_vec()));
                 } else {
-                    false
-                };
-                conds.push((v, v));
-                continue;
-            }
-            "else" => {
-                let c = conds.last_mut().ok_or(AsmError { line, message: "`else` without `if`".into() })?;
-                c.0 = !c.1;
-                c.1 = true;
-                continue;
-            }
-            "endif" | "endc" => {
-                conds.pop().ok_or(AsmError { line, message: "`endif` without `if`".into() })?;
-                continue;
-            }
-            _ => {}
-        }
-        if !active {
-            continue;
-        }
-        if matches!(w.as_str(), "equ" | "=" | "set") {
-            let name = label.ok_or(AsmError { line, message: "a constant needs a name".into() })?;
-            let e = parse_expr(args, &scope).map_err(|m| AsmError { line, message: m })?;
-            let name = scoped(name, &scope);
-            if let Some(v) = eval(&e, &Ctx { symbols: &consts, pc: 0 }) {
-                consts.insert(name.clone(), v);
-            }
-            out.push(Stmt { line, kind: Kind::Equ(name, e) });
-            continue;
-        }
-        if let Some(l) = label {
-            if !l.starts_with('.') && !l.starts_with('@') {
-                scope = l.to_string();
-            }
-            out.push(Stmt { line, kind: Kind::Label(scoped(l, &scope)) });
-        }
-        if word.is_empty() {
-            continue;
-        }
-        let e = |s: &str| parse_expr(s, &scope).map_err(|m| AsmError { line, message: m });
-        let (base, size) = match w.rsplit_once('.') {
-            Some((b, s)) if !b.is_empty() && s.len() == 1 => (b.to_string(), s.chars().next()),
-            _ => (w.clone(), None),
-        };
-        let data_size = |s: Option<char>| match s {
-            Some('b') => Ok(Sz::B),
-            Some('w') | None => Ok(Sz::W),
-            Some('l') => Ok(Sz::L),
-            _ => err(line, "bad size"),
-        };
-        let kind = match base.as_str() {
-            "org" => Kind::Org(e(args)?),
-            "even" => Kind::Even,
-            "align" => Kind::Align(e(args)?),
-            "include" => {
-                let name = args.trim().trim_matches('"');
-                let text = include(name).ok_or(AsmError { line, message: format!("cannot include `{name}`") })?;
-                let mut inner = Vec::new();
-                parse(&text, &consts, include, &mut inner, depth + 1).map_err(|x| AsmError { line, message: format!("in {name}: {x}") })?;
-                for s in &inner {
-                    if let Kind::Equ(n, x) = &s.kind {
-                        if let Some(v) = eval(x, &Ctx { symbols: &consts, pc: 0 }) {
-                            consts.insert(n.clone(), v);
-                        }
-                    }
+                    items.push(Data::Expr(e(&a)?));
                 }
-                out.extend(inner.into_iter().map(|s| Stmt { line, kind: s.kind }));
-                continue;
             }
-            "dc" => {
-                let sz = data_size(size)?;
-                let mut items = Vec::new();
-                for a in split_top(args) {
-                    let q = a.as_bytes();
-                    if q.len() >= 2 && (q[0] == b'"' || (q[0] == b'\'' && sz == Sz::B)) && q[q.len() - 1] == q[0] {
-                        if sz != Sz::B {
-                            return err(line, "a string is a list of bytes: dc.b");
-                        }
-                        items.push(Data::Bytes(q[1..q.len() - 1].to_vec()));
-                    } else {
-                        items.push(Data::Expr(e(&a)?));
-                    }
-                }
-                Kind::Dc(sz, items)
-            }
-            "ds" | "dcb" => {
-                let sz = data_size(size)?;
-                let a = split_top(args);
-                let fill = if a.len() > 1 { e(&a[1])? } else { Expr::Num(0) };
-                Kind::Ds(sz, e(a.first().map(String::as_str).unwrap_or(""))?, fill)
-            }
-            _ => {
-                let ops = if args.trim().is_empty() { Vec::new() } else { split_top(args).iter().map(|o| parse_operand(o, &scope).map_err(|m| AsmError { line, message: m })).collect::<Result<_, _>>()? };
-                Kind::Inst { name: base.to_ascii_uppercase(), size, ops }
-            }
-        };
-        out.push(Stmt { line, kind });
-    }
-    if !conds.is_empty() {
-        return err(0, "an `if` is not closed");
-    }
-    Ok(())
-}
-
-fn strip_comment(s: &str) -> &str {
-    if s.trim_start().starts_with('*') {
-        return "";
-    }
-    let mut quote = None;
-    for (i, c) in s.char_indices() {
-        match (quote, c) {
-            (Some(q), c) if c == q => quote = None,
-            (None, '\'' | '"') => quote = Some(c),
-            (None, ';') => return &s[..i],
-            _ => {}
+            Line::Dc(sz, items)
         }
-    }
-    s
-}
-
-/// A label starts in the first column, or ends with `:`.
-fn split_label(s: &str) -> (Option<&str>, &str) {
-    let first = s.chars().next().is_some_and(|c| !c.is_whitespace());
-    let t = s.trim_start();
-    let end = t.find(|c: char| c.is_whitespace()).unwrap_or(t.len());
-    let tok = &t[..end];
-    if let Some(name) = tok.strip_suffix(':') {
-        return (Some(name), &t[end..]);
-    }
-    if first {
-        return (Some(tok), &t[end..]);
-    }
-    (None, t)
-}
-
-fn split_word(s: &str) -> (&str, &str) {
-    let t = s.trim_start();
-    let end = t.find(|c: char| c.is_whitespace()).unwrap_or(t.len());
-    (&t[..end], t[end..].trim())
+        "ds" | "dcb" => {
+            let sz = data_size(size)?;
+            let a = split_top(args);
+            let fill = if a.len() > 1 { e(&a[1])? } else { Expr::Num(0) };
+            Line::Ds(sz, e(a.first().map(String::as_str).unwrap_or(""))?, fill)
+        }
+        _ => {
+            let ops = if args.trim().is_empty() { Vec::new() } else { split_top(args).iter().map(|o| parse_operand(o, w.scope).map_err(|m| AsmError { line, message: m })).collect::<Result<_, _>>()? };
+            Line::Inst { name: base.to_ascii_uppercase(), size, ops }
+        }
+    })
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -782,16 +315,6 @@ fn fits_short_abs(v: i64) -> bool {
 /// The distance from `from` to `to` over the 68000's 24 address lines.
 fn rel(to: i64, from: i64) -> i64 {
     (to - from) << 40 >> 40
-}
-
-fn fits_signed(v: i64, bits: u32) -> bool {
-    let lim = 1i64 << (bits - 1);
-    (-lim..lim).contains(&v)
-}
-
-fn fits_either(v: i64, bits: u32) -> bool {
-    let lim = 1i64 << (bits - 1);
-    (-lim..(lim << 1)).contains(&v)
 }
 
 /// An operand's mode and register, and its extension words after the opcode, the first at `ext_pc`.
@@ -1477,22 +1000,22 @@ fn walk(stmts: &[Stmt], origin: u32, lay: &mut Layout, emit: Option<&mut BTreeMa
                     return err(line, format!("constant `{n}` cannot be evaluated"));
                 }
             }
-            Kind::Org(e) => {
+            Kind::Line(Line::Org(e)) => {
                 let v = eval(e, &Ctx { symbols: &lay.symbols, pc }).ok_or(AsmError { line, message: "`org` needs a known value".into() })?;
                 if v < pc {
                     return err(line, "`org` moves backward");
                 }
                 pc = v;
             }
-            Kind::Even => pc += pc & 1,
-            Kind::Align(e) => {
+            Kind::Line(Line::Even) => pc += pc & 1,
+            Kind::Line(Line::Align(e)) => {
                 let a = eval(e, &Ctx { symbols: &lay.symbols, pc }).ok_or(AsmError { line, message: "`align` needs a known value".into() })?;
                 if a <= 0 {
                     return err(line, "bad alignment");
                 }
                 pc = (pc + a - 1) / a * a;
             }
-            Kind::Dc(sz, items) => {
+            Kind::Line(Line::Dc(sz, items)) => {
                 let n = data_bytes(*sz);
                 if n > 1 && pc & 1 != 0 {
                     return err(line, "a word or long at an odd address");
@@ -1519,7 +1042,7 @@ fn walk(stmts: &[Stmt], origin: u32, lay: &mut Layout, emit: Option<&mut BTreeMa
                     }
                 }
             }
-            Kind::Ds(sz, count, fill) => {
+            Kind::Line(Line::Ds(sz, count, fill)) => {
                 let n = data_bytes(*sz);
                 if n > 1 && pc & 1 != 0 {
                     return err(line, "a word or long at an odd address");
@@ -1532,7 +1055,7 @@ fn walk(stmts: &[Stmt], origin: u32, lay: &mut Layout, emit: Option<&mut BTreeMa
                     pc += n;
                 }
             }
-            Kind::Inst { name, size, ops } => {
+            Kind::Line(Line::Inst { name, size, ops }) => {
                 if pc & 1 != 0 {
                     return err(line, "an instruction at an odd address");
                 }
@@ -1573,7 +1096,7 @@ fn is_branch(n: &str) -> bool {
 pub fn assemble_with(source: &str, origin: u32, defines: &[(&str, i64)], include: &dyn Fn(&str) -> Option<String>) -> Result<Program, AsmError> {
     let defs: HashMap<String, i64> = defines.iter().map(|(k, v)| (k.to_string(), *v)).collect();
     let mut stmts = Vec::new();
-    parse(source, &defs, include, &mut stmts, 0)?;
+    beryl_asm::parse(source, &defs, include, &mut stmts, 0, &["equ", "=", "set"], &word)?;
     let mut lay = Layout { symbols: defs, abs: vec![Vec::new(); stmts.len()], short: vec![false; stmts.len()] };
     walk(&stmts, origin, &mut lay, None, true)?;
     let mut rounds = 0;
@@ -1585,15 +1108,7 @@ pub fn assemble_with(source: &str, origin: u32, defines: &[(&str, i64)], include
     }
     let mut bytes = BTreeMap::new();
     walk(&stmts, origin, &mut lay, Some(&mut bytes), false)?;
-    let end = bytes.keys().next_back().map_or(origin as i64, |k| k + 1);
-    let mut image = vec![0u8; (end - origin as i64).max(0) as usize];
-    for (k, v) in bytes {
-        if k < origin as i64 {
-            return err(0, "bytes placed before the origin");
-        }
-        image[(k - origin as i64) as usize] = v;
-    }
-    Ok(Program { origin, bytes: image, symbols: lay.symbols.into_iter().collect() })
+    beryl_asm::image(origin, bytes, lay.symbols)
 }
 
 /// A program with no includes or defines.

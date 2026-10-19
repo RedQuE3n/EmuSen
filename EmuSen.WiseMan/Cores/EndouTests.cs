@@ -11,7 +11,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // Endou's stage 1 stub through the v1 adapter, discovery, the generic test-ROM runner and the conformance kit, on SyntheticSmsRom's images - see Endou_Native.md §2-§5.
+    // Endou through the v1 adapter, discovery, the generic test-ROM runner and the conformance kit, on SyntheticSmsRom's images - see Endou_Native.md §2-§5, §9.
     [Collection(TestCollections.ProcessGlobals)]
     public class EndouTests : IDisposable
     {
@@ -57,7 +57,7 @@ namespace EmuSen.WiseMan.Cores
             }
             Assert.Same(SmsSystems.MasterSystem, SystemPacks.For("sms")!.Entry);
             Assert.Equal(new[] { ("sms.pad", 8), ("sg1000.pad", 7) }, library.Info.Systems.Select(s => (s.Controllers.Single().Id, s.Controllers.Single().Buttons.Count)));
-            Assert.Equal(new[] { "region" }, library.Settings.Select(s => s.Key));
+            Assert.Equal(new[] { "model", "region" }, library.Settings.Select(s => s.Key));
         }
 
         [Fact]
@@ -81,6 +81,52 @@ namespace EmuSen.WiseMan.Cores
             }
             var refused = Assert.Throws<CoreRefusedException>(() => new CoreMachine(library, new byte[(4 << 20) + 513], "", Array.Empty<(uint, byte[])>()));
             _output.WriteLine(refused.Message);
+        }
+
+        // The kept bytes a banking program leaves at $C000 after two frames, and the spaces its board shows - see Endou_Native.md §9.3.
+        private static (byte[] Kept, string[] Spaces) Run(CoreLibrary library, byte[] image, int count)
+        {
+            using var machine = new CoreMachine(library, image, "", Array.Empty<(uint, byte[])>());
+            machine.Advance();
+            machine.Advance();
+            var kept = new byte[count];
+            Assert.True(machine.ReadSpace(1, 0, kept));
+            return (kept, machine.Info.Spaces.Select(s => s.Name).ToArray());
+        }
+
+        [Fact]
+        public void Each_mapper_banks_its_slots_as_its_board_does()
+        {
+            var library = CoreLibrary.Open(LibraryPath);
+            var sega = Run(library, SyntheticSmsRom.SegaMapper(), 10);
+            Assert.Equal(new byte[] { 5, 6, 7, 0xF3, 1, 33, 0x77, 0x00, 1, 0 }, sega.Kept);
+            Assert.Contains("CARTRAM", sega.Spaces);
+            var small = Run(library, SyntheticSmsRom.SegaMapper(8), 6);
+            Assert.Equal(new byte[] { 5, 6, 7, 0xF3, 1, 9 }, small.Kept);
+            var codemasters = Run(library, SyntheticSmsRom.CodemastersMapper(), 7);
+            Assert.Equal(new byte[] { 5, 3, 5, 0x5A, 0x00, 4, 0 }, codemasters.Kept);
+            var plain = Run(library, SyntheticSmsRom.Plain(), 4);
+            Assert.Equal(new byte[] { 2, 1, 0, 0 }, plain.Kept);
+            Assert.DoesNotContain("CARTRAM", plain.Spaces);
+            var mirrored = Run(library, SyntheticSmsRom.Plain(2), 3);
+            Assert.Equal(new byte[] { 0, 1, 0 }, mirrored.Kept);
+        }
+
+        // The stub's pad reader: ports $DC and $DD copied to $C000 and $C001, active low, the Reset button only on the first Master System - see Endou_Native.md §9.5.
+        [Fact]
+        public void The_pads_and_the_reset_button_read_through_the_joystick_ports()
+        {
+            var library = CoreLibrary.Open(LibraryPath);
+            foreach (var (settings, dd) in new[] { ("model=sms1", 0b1110_1101), ("model=sms2", 0b1111_1101), ("", 0b1111_1101) })
+            {
+                using var machine = new CoreMachine(library, SyntheticSmsRom.Cartridge(), settings, Array.Empty<(uint, byte[])>());
+                machine.SetButtons(0, 0b1001_0001, 0xFF);
+                machine.SetButtons(1, 0b0000_1010, 0xFF);
+                machine.Advance();
+                var ports = new byte[2];
+                Assert.True(machine.ReadSpace(1, 0, ports));
+                Assert.Equal(new byte[] { 0b0110_1110, (byte)dd }, ports);
+            }
         }
 
         [Fact]

@@ -20,6 +20,12 @@ Master System, a Game Gear, an SG-1000 or a flash cartridge; disputes such as D-
 access slots are settled from documents, test programs and black-box referees only (§10, Q11). The go is for stage 1
 alone; each later stage waits for its own.
 
+**Decided by the tester, 2026-10-19, on stage 1's questions** (`Endou_Native.md` §8), each as recommended: the core
+ABI minor that lets a host set `system` beside an image is accepted, to be built as its own piece of work before
+stage 4 (§3.7); MAME is not installed before stage 3; a VHDL simulator for SMS_MiSTer is installed only when the
+first dispute needs it, and only after asking the tester; the copier's 512-byte header is confirmed against a
+document at stage 2. The go for stage 2 came with them.
+
 Every claim carries one of six marks:
 
 - **[M]** *measured* on 2026-10-19, with the tool named. Nothing was run to write this page beyond listings, the local
@@ -250,7 +256,7 @@ form for; a later netplay-like design would decide it, and few games need it to 
 - **`beryl-z80`'s assembler**, behind an `asm` feature as `beryl-m68k`'s is [R Nephrite's `Cargo.toml`], which every
   Beryl crate was to carry as a development tool [R `Beryl-HW/README.md`] and the Z80 crate does not yet [R
   `Beryl_Z80.md`, no assembler recorded]. It assembles Endou's test programs and the open boot program at build time.
-  Stage 2.
+  Stage 2. *Built 2026-10-19 (`Beryl_Z80.md` §8), its front half shared with the 68000's in `beryl-asm`.*
 - **`beryl-sms-vdp`**, the VDP family as one chip crate (§3.3). Stages 3 and 4.
 - **Conditionally, the operator ROMs.** If D-2 finds that the YM2413's log-sine and exponent ROMs are the OPL2's, as
   they are for the OPN2 on Nuked-MD's board [R `Nephrite_OperatorTables.md` §4], the two tables Nephrite holds in
@@ -315,15 +321,52 @@ of it [C]:
   kit case, the hosts' input latch, and a frontend's mapping of a mouse or a touch onto it. Endou would be its first
   user; the NES's Zapper and the SNES's Super Scope would be later ones [A].
 - **A battery that appears after create** (stage 2), only if the host does not already save a battery file that machine
-  info lists after a `MACHINE_INFO` event; if it does not, §4.4's table form is used and nothing is proposed.
+  info lists after a `MACHINE_INFO` event; if it does not, §4.4's table form is used and nothing is proposed. *Settled
+  at stage 2:* the host takes its battery files at create only, so the table form is used and nothing is proposed
+  (`Endou_Native.md` §9.2).
 - **The probe's options for the Master System** (stage 1): each reference's model, region and FM options pinned through
   `GET_VARIABLE`, as Nephrite's §1.6 did for the Genesis. *Built 2026-10-19:* nothing was needed beyond `--option`; the
   keys are listed in `Endou_Native.md` §5.2, and `.sg` names its system in the probe's log.
 - **The routed system beside an image** (found at stage 1, `Endou_Native.md` §2.3): a host sets `system` in the create
   parameters only with an image of no bytes, so a core of two systems that share no telling header must guess. An
-  extension of the existing field, a minor letting a host set it beside an image too, proposed before stage 4.
+  extension of the existing field, a minor letting a host set it beside an image too. *Decided 2026-10-19:* accepted,
+  designed in §3.7 and built as its own piece of work before stage 4.
 - **An `sms` module of `emusen-systems`** (stages 7 and 8) for the codecs and the views: a module beside the others,
   which the crate's design provides for [R `EmuSen_Backend.md` §5.2], so no new surface.
+
+### 3.7 The routed system beside an image: the core ABI minor's design
+
+*Accepted by the tester 2026-10-19; built before stage 4 as its own piece of work, across `emusen-native`'s header and
+Rust side, `emusen-core-host`, both Crystal implementations and the kit. Not built at stage 2.* It is an extension of
+an existing surface (`EmuSen_CoreAPI.md` §4.4): no export, struct, status or capability bit is added.
+
+- **The field.** `emusen_create_params.system`, the `const char *` at offset 104 that 1.11 added (§6.31), unchanged in
+  type and place. Its meaning widens: beside an image it names the system the host routed the file to, a system id as
+  core info lists it.
+- **The version.** The next minor of the core ABI, 1.15 at the time of writing (1.14 being the latest, §6.39). The
+  header's comment on the field gains "@since 1.15: beside an image too, the system the host routed the image to", and
+  `EmuSen_CoreAPI.md` gains a section that is the normative text.
+- **How a host fills it.** A host of 1.15 or later sets `system` with every image it routes to a system, from the
+  routing it already does (`route` by extension, then a recogniser where an extension is shared): the id of the system
+  chosen, the same string machine info will report. A host that launches a file without routing it (a direct launch
+  naming a core) sets the system it chose, or null if it chose none.
+- **What a core does with it.** Non-null beside an image, the core makes a machine of that system and does not guess
+  between its systems; a system the core's info does not list is refused with `EMUSEN_BAD_IMAGE` and words, as an
+  unknown system with an empty image is (§6.31). Null, the core chooses as before. A core of one system may ignore the
+  field. `emusen-native` reads it as `Create::system: Option<&str>`, `None` when the struct is shorter than 112 bytes
+  or the pointer is null.
+- **An older host's absence.** A host of 1.11 to 1.14 sets `system` only with an image of no bytes, and a host older
+  than 1.11 passes a struct too short to hold it; beside an image either reads as `None`, and the core keeps the rule
+  it has today (`Endou_Native.md` §2.3), so nothing an older host could observe changes. The minor gates nothing in a
+  host or a core (§4.1): the field's presence is the whole signal, so no version check is made.
+- **An older core.** A core built before 1.15 ignores the field beside an image, as §6.31 told it to, so a newer
+  host's value changes nothing for it.
+- **The kit.** A case for a library of 1.15 or later claiming two or more systems: for each system it lists, an image
+  created with `system` naming it reports that system in machine info; one created with a system it does not list is
+  refused. A library of one system passes the case unrun.
+- **Endou's use.** At stage 4, when the SG-1000 becomes a modelled console, Endou takes the routed system and keeps
+  the stage-1 rule only for a host that passes none; the three images that rule gets wrong in the tester's library
+  (§10 Q10, `Endou_Native.md` §2.3) then run on the system their extension names.
 
 ---
 
@@ -380,7 +423,9 @@ have a battery** is open: the header cannot say, and Sega's mapper enables RAM b
 stage 2]: a machine info that gains its battery entry with `MACHINE_INFO` the first time a game enables cartridge RAM,
 if the host saves a battery that appears after create; or a table of battery boards keyed by the image's checksum,
 from a public per-game listing, as Nephrite identifies its EEPROM boards by serial [R `Nephrite_Plan.md` §1.2]. The
-first is preferred if the host already honours it, since it needs no list.
+first is preferred if the host already honours it, since it needs no list. *Settled at stage 2 (`Endou_Native.md`
+§9.2):* the host does not, so the table, keyed by the image's CRC-32, names the battery boards; a battery game it does
+not name keeps its RAM only while the game runs.
 
 ### 4.5 Cheats
 
@@ -579,7 +624,7 @@ before the next begins. The core carries the `InDevelopment` mark from stage 1 u
 |---|---|---|---|
 | **0** | This plan, its references page and disputes log | The tester's go | 1 (2026-10-19) |
 | **1** | *Built 2026-10-19, `Endou_Native.md` §1–§6.* The crate `endou` on the core ABI v1 as a stub: core info for `sms` and `sg1000`, the header read, a black picture; its row in `RustCores.props` with `<InDevelopment>true</InDevelopment>`, so the build writes its sidecar marked and lists it in `cores.manifest` [R `EmuSen_Backend.md` §27.11]; CI's matrix row; the data files `sms.json` and `sg1000.json`; WiseMan's `SyntheticSmsRom` (a header with its checksum and region, a boot stub, a pad reader, as `SyntheticMdRom` serves Nephrite [R `NephriteTests.cs`]); on the tester's go, the documents, test programs and references fetched and pinned (`Endou_References.md`), the three local references and any fetched ones run through the probe with their costs and spaces | The kit's C1–C23 on synthetic images; the systems crate's tests; a published tree's `sha256sum -c cores.manifest`; the references' costs recorded | 2 |
-| **2** | The machine without its picture: the bus, RAM, `$3E`, `$3F`, the controller ports, the region read-back, the Pause NMI and the Reset bit; cartridges (plain, Sega's mapper with its RAM, Codemasters', the SG-1000's RAM boards) and the board table's form; the battery form (§4.4); the scheduler on the master clock; `beryl-z80`'s assembler | Synthetic programs for each port, mapper and interrupt rule; an SMS-hosted ZEXALL on the whole machine; RAM against the references at anchors on test programs | 3 |
+| **2** | *Built 2026-10-19, `Endou_Native.md` §9.* The machine without its picture: the bus, RAM, `$3E`, `$3F`, the controller ports, the region read-back, the Pause NMI and the Reset bit; cartridges (plain, Sega's mapper with its RAM, Codemasters', the SG-1000's RAM boards) and the board table's form; the battery form (§4.4); the scheduler on the master clock; `beryl-z80`'s assembler | Synthetic programs for each port, mapper and interrupt rule; an SMS-hosted ZEXALL on the whole machine; RAM against the references at anchors on test programs | 3 |
 | **3** | `beryl-sms-vdp`, mode 4: ports, registers, VRAM and CRAM, the counters and the TH latch, the interrupts, the status flags, the composition with sprites (limits, zoom, tall, collision, overflow), the scroll locks, the mask, the 315-5246's heights, the access slots, the dot-stamped renderer, PAL | The VDP test programs (self-reporting ones by their verdicts); pictures equal to the references up to a colour map, or a dispute; the skip-versus-draw state test | 5 |
 | **4** | The VDP's TMS9918 modes and the TMS9918A variant; the SG-1000 as a system; **Nephrite moved onto the crate's composition** | SG-1000 programs and cartridges' pictures against the references; **Nephrite's D-7 tests and its corpus digests unchanged** (P4) | 3 |
 | **5** | Sound: the PSG's wiring in both variants, the mix and the resampler, the analogue stage as far as recordings allow, `$F2` with no FM unit | Synthetic voices against the references' audio; recordings if any | 2 |

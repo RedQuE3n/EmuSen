@@ -4,6 +4,8 @@
 
 pub use emusen_native::debug::{Observer, Unobserved};
 
+#[cfg(feature = "asm")]
+pub mod asm;
 #[cfg(test)]
 mod boundary;
 #[cfg(test)]
@@ -88,6 +90,15 @@ impl Z80 {
         Z80::default()
     }
 
+    /// The processor after its RESET pin: PC, I, R, IFF1, IFF2 and the interrupt mode cleared (Zilog's UM0080, "Reset"),
+    /// and every other register $FFFF, AF and SP as measured on Z80s and the rest as "The Undocumented Z80 Documented"
+    /// §2.4 advises an emulator to set the registers it calls undefined.
+    pub fn power_on() -> Z80 {
+        let f = 0xFFFF;
+        let regs = Registers { af: f, bc: f, de: f, hl: f, af_: f, bc_: f, de_: f, hl_: f, ix: f, iy: f, sp: f, wz: f, ..Registers::default() };
+        Z80 { regs, ..Z80::default() }
+    }
+
     /// One instruction through `bus`.
     pub fn step<B: Bus>(&mut self, bus: &mut B) -> Step {
         self.step_observed(bus, &mut Unobserved)
@@ -96,5 +107,18 @@ impl Z80 {
     /// The step a debugger watches: `observer.before` at the instruction boundary, stores and calls as they happen.
     pub fn step_observed<B: Bus, O: Observer>(&mut self, bus: &mut B, observer: &mut O) -> Step {
         exec::step(self, bus, observer)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn power_on_clears_what_reset_clears_and_sets_the_rest() {
+        let z = Z80::power_on();
+        assert_eq!((z.regs.pc, z.regs.i, z.regs.r, z.regs.iff1, z.regs.iff2, z.regs.im), (0, 0, 0, false, false, 0));
+        assert_eq!((z.regs.af, z.regs.sp, z.regs.hl_, z.regs.iy), (0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF));
+        assert!(!z.halted);
     }
 }

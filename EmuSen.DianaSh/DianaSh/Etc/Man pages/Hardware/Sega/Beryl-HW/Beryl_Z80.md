@@ -160,3 +160,62 @@ budget.
 
 The probe's work of `Nephrite_Plan.md` §1.6. Its next steps carry it. The Z80's own oracle is met in full: the suite,
 ZEXDOC and ZEXALL.
+
+## 8. The assembler and the power-on state (2026-10-19)
+
+*Built for Endou's stage 2 (`Endou_Plan.md` §3.2, §7): its test programs, and at stage 6 its open boot program.*
+`src/asm.rs`, behind the crate's `asm` feature as `beryl-m68k`'s is (`Beryl_M68k.md` §8): a development tool, so no
+core's library compiles it. Endou takes it as a development dependency.
+
+### 8.1 What it reads
+
+Zilog's syntax, as the Z80 CPU User Manual (UM0080) writes the instructions and as §6.2's disassembler prints them,
+case-insensitive in mnemonics and registers:
+
+- **Instructions**: the whole documented set and the undocumented forms by "The Undocumented Z80 Documented"'s names
+  (`IXH`, `IXL`, `IYH`, `IYL`, `SLL`, `IN (C)`, `OUT (C),0`, the indexed rotations and `RES`/`SET` that also write a
+  register, `SET 0,(IY-$01),B`). `ADD A,r` and `SUB r` are both taken for every operation of the ALU, as the manual
+  writes some with `A,` and some without. `C` is the register or the condition as the instruction's form says.
+- **Operands**: `(HL)`, `(BC)`, `(DE)`, `(SP)`, `(C)`, `(IX+d)`, `(IX-d)` and `(IX)`, an address in parentheses; an
+  operand wholly in parentheses that names no register is an address, so `(2+3)*4` is a value and `(2+3)` is not.
+  `JR` and `DJNZ` name their target, as the disassembler prints it, and the displacement is counted from the next
+  instruction.
+- **Directives**: `org`, `align`, `db` (`defb`, `defm`) with strings, `dw` (`defw`) little-endian, `ds` (`defs`)
+  with a fill; constants by `equ`, `=` or `defl`, never `set`, which is the instruction.
+
+Labels, local labels, constants, expressions, `if`/`else`/`endif` and `include` are the shared front half's, below.
+
+**The encoding is the one written**; where two encodings do the same, the documented and shorter is taken: `LD HL,(nn)`
+as `$2A`, not `$ED $6B`; `IM 0` as `$ED $46`; `NEG` and `RETN` as `$ED $44` and `$ED $45`; an indexed `BIT` with the
+memory operand's field. Anything out of range (a byte, a displacement, a relative jump, a bit number, `RST`'s
+address), undefined or impossible (an index half beside `H`, `L` or a memory operand; `IX` with `IY`; `LD (HL),(HL)`;
+`JR PE`) is an error naming its line.
+
+### 8.2 The oracle
+
+`every_instruction_form_assembles_back_to_its_bytes`: every instruction the disassembler decodes (the 256 opcodes
+alone and behind `CB`, `ED`, `DD` and `FD`, and `DD CB d op` and `FD CB d op` with five displacements), each with three
+sets of operand bytes, is disassembled at `$4000`, its text assembled at the same address, and the bytes compared.
+**Measured 2026-10-19: of the 11,490 texts so made, 8,748 assemble to their own bytes**; the other 2,742 are the
+opcodes the disassembler prints by another encoding's text (a `DD` or `FD` that changes nothing, 1,002; an indexed `BIT` with a register field, 1,680;
+`NEG` 21, `RETN` 18 and `IM` 15 of their duplicates; `ED`'s `LD` of `HL`, 6), and each of them assembles to bytes that
+disassemble to the same text. Beside it, the manual's encodings of a sample, labels and data, and errors by line.
+The crate's tests: **19 with the feature, 15 without**.
+
+### 8.3 The shared front half, `beryl-asm`
+
+The front half of an assembler is the same for every processor: expressions, labels and their scopes, constants,
+conditionals, includes, and the splitting of a line into label, word and operands. It was `beryl-m68k`'s; it is now
+the crate `beryl-asm` (`Beryl-HW/README.md`, "The assemblers"), which both processors' assemblers use behind their
+`asm` features, so that it has one owner. The move changed nothing the 68000's assembler produces: its 26 tests pass
+and Nephrite's open Sega CD BIOS built at compile time is the same file, SHA-256 `fb4a1877…62efcb9` before and after
+[M 2026-10-19]. Two readings were added for the Z80, neither of which the 68000's sources use: a `$` that begins no
+number is the current address (`JR $`), and a `'` after a letter or digit is part of a name (`AF'`), not a quote.
+Each processor names its constant words, since `SET` is a Z80 instruction.
+
+### 8.4 The power-on state
+
+`Z80::power_on()`: PC, I, R, IFF1, IFF2 and the interrupt mode cleared, as the manual's RESET clears them, and every
+other register `$FFFF`: AF and SP as measured on Z80s, the rest as "The Undocumented Z80 Documented" §2.4 advises an
+emulator to set the registers it calls undefined. `Z80::new()` keeps its zeros, so Nephrite, which builds its Z80
+with it, is unchanged. Endou's machine starts from `power_on()`.

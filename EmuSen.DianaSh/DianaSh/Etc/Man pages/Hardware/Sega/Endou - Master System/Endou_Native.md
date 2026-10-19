@@ -33,7 +33,7 @@ The documents, test programs and referees the plan named were fetched and pinned
 | Frame rate | NTSC 53,693,175 / (15 × 228 × 262) = 59.922743 Hz; PAL 53,203,424 / (15 × 228 × 313) = 49.701459 Hz | §5.1 [D]; §5.2 for a witness |
 | Region | `auto` (the header's), Japan, the Americas, Europe (PAL), Brazil; a header naming no market, or none, runs as Japan | §5.8, §10 Q9 |
 | Firmware | none declared | §2.5 |
-| State | `ENDO` version 1: magic, version, console byte, frames, the Z80's block, the PSG's, then RAM, VRAM and CRAM; 24,687 bytes for `sms`, 17,487 for `sg1000`, pinned by `the_version_1_layout_is_pinned` | §5.7 |
+| State | `ENDO` version 1: magic, version, console byte, frames, the Z80's block, the PSG's, then RAM, VRAM and CRAM; 24,687 bytes for `sms`, 17,487 for `sg1000`, pinned by `the_version_1_layout_is_pinned`. *Replaced by version 2 at stage 2 (§9.7)* | §5.7 |
 | Refused | an empty image, and one larger than 4 MiB and a copier's header, with words (`-9`, or the ABI's `BAD_IMAGE` for no bytes); any other file number than 0 | below |
 
 **Why no registers.** Nephrite lists the Z80's eighteen registers in a table of its own
@@ -56,7 +56,7 @@ sums is stage 6's question, since only the open boot program acts on the sum. At
 reported, never acted on.
 
 **A copier's header.** An image whose length is 512 bytes more than a multiple of 16 KiB has its first 512 bytes set
-aside [A: the copier convention]. 11 of the tester's 316 `.sms` files have such lengths (33,280, 262,656 and 524,800
+aside ~~[A: the copier convention]~~ [R, M: confirmed against a document at stage 2, §9.2]. 11 of the tester's 316 `.sms` files have such lengths (33,280, 262,656 and 524,800
 bytes), and every one of them has Sega's header 512 bytes later than the others [M below], which is the rule's
 evidence so far; it is to be confirmed against a document at stage 2, where boards are mapped.
 
@@ -204,7 +204,11 @@ contents list of Sega's Game Gear document; the opening of MacDonald's `smstech-
 README and directory names; Mesen 2's README; ES-DE's `es_systems.xml`; ScreenScraper's system pages' titles; the
 libretro cores' `.info` files; the run logs of §5.2.
 
-## 8. Questions before stage 2
+## 8. Questions before stage 2, decided 2026-10-19
+
+*Decided 2026-10-19 by the tester: each of the four as recommended.* The go for stage 2 came with the decisions; it
+covers stage 2 alone. No real hardware is used for any of them (`Endou_Plan.md` §10 Q11).
+
 
 1. **The system beside an image** (§2.3): may a host set `system` beside an image under the core ABI's next minor, so
    that a core running two systems takes the routed one? Recommended, before stage 4.
@@ -217,3 +221,280 @@ libretro cores' `.info` files; the run logs of §5.2.
    on the tester's word.
 4. **The copier's header and the 512 KiB `.sg`** (§2.2, §2.3): stage 2 confirms the copier rule from a document and
    identifies the 512 KiB image's board.
+
+*Decided 2026-10-19:*
+
+1. **The system beside an image: accepted.** A host may set `system` beside an image under the core ABI's next minor.
+   It is a change across components (`emusen-native`'s header, `emusen-core-host`, both Crystal implementations and
+   the kit), so it is a piece of work of its own, decided and built before stage 4 and not inside stage 2. Its design
+   is `Endou_Plan.md` §3.7.
+2. **MAME is not installed before stage 3**, and Mesen 2 is not built before then either.
+3. **A VHDL simulator** (GHDL or nvc) for SMS_MiSTer is installed only when the first dispute needs the referee, and
+   only after asking the tester.
+4. **The copier's header is confirmed against a document at stage 2**, with the 512 KiB `.sg`'s board.
+
+---
+
+## 9. Stage 2: the machine without its picture (2026-10-19)
+
+### 9.1 In one paragraph
+
+Endou now runs Beryl's Z80 on a bus of its own a frame of the master clock at a time: the memory map with port `$3E`'s
+enables and the work RAM's mirrors; the ports decoded by A7, A6 and A0, with what an undriven read returns on each
+console; the I/O chip's port `$3F`, the joystick ports `$DC` and `$DD`, the region they read back and the Reset button;
+the Pause button's edge on NMI; and the cartridge's board: plain ROM, Sega's mapper with its RAM, Codemasters' mapper
+and the SG-1000's RAM board, chosen by a table keyed by the image's CRC-32, Codemasters' own header, then the size.
+The models are a setting: the Mark III, the Master System and the Master System II for `sms`, the SG-1000 for `sg1000`.
+The battery file is the cartridge's RAM on the boards the table names. `beryl-z80` gained an assembler behind its
+`asm` feature, its front half shared with the 68000's in a new crate, `beryl-asm`, and a power-on state. The VDP is
+not built: its ports are a stand-in that reads `$FF` and takes no write until stage 3, so the picture stays black,
+and the PSG is written and clocked but not mixed until stage 5. ZEXDOC and ZEXALL for the Master System pass on the
+machine, 79 of 79 each, reporting through the cartridge's RAM.
+
+### 9.2 Which board an image is on
+
+`src/board.rs`, the rule of `Endou_Plan.md` §5.6 [C]: the **table** of boards keyed by the CRC-32 of the image (the
+copier's header set aside), the key public per-game listings use; else **Codemasters' header** at `$7FE0` when its
+checksum agrees [R SMS Power!'s "Codemasters Header": the little-endian words of the banks byte `$7FE0` names, summed
+with Sega's header at `$7FF0`–`$7FFF` left out, the word after it summing with it to zero, `$7FEA`–`$7FEF` zero]; else
+**Sega's mapper** for anything larger than 48 KiB; else **plain ROM**. A board the table cannot place runs on Sega's
+mapper and is named by the survey (§9.10).
+
+**Sega's boards are given the mapper's 32 KiB of RAM** unless the table says otherwise [C]: the board's RAM is not in
+the image, and a program that enables it expects it (ZEXALL writes its report there, §9.9); it is no battery file.
+
+**The table** (`TABLE`, nine rows): eight images of seven games on Sega's mapper with 8 KiB of battery RAM, and one
+SG-1000 RAM board. Penguin Land and Phantasy Star are the games SMS Power!'s "SMS Paging Chips" lists with "Battery
+Back-up RAM" [R]; Golden Axe Warrior, Golf Mania, Ultima IV and Ys are the others the survey saw write their
+cartridge's RAM, and all eight wrote only its first 8 KiB [M §9.10], so 8 KiB with a battery is argued for them [A].
+The Castle is the one SG-1000 image the survey saw write `$8000`–`$9FFF` [M], an 8 KiB board at `$8000` of the kind
+MacDonald describes (`sc3000h` §3, RAM on the cartridge's `$8000`–`$BFFF` select) [R]. A battery game the table does
+not name keeps its RAM only while the game runs: a named loss until a public listing completes the table (§9.15).
+
+**Why a table and not a battery that appears.** `Endou_Plan.md` §4.4 preferred a machine info that gains its battery
+the first time a game enables cartridge RAM, if the host saves a battery that appears after create. It does not:
+`CoreEngine` takes the battery files machine info names at create, and a `MACHINE_INFO` event re-reads machine info
+without taking them again [R `CoreEngine.cs`, `LoadRom` and `Drain`]. So the table form is used and nothing is
+proposed (§3.6 of the plan).
+
+**The copier's header, confirmed against a document** (stage 1's question 4, decided 2026-10-19). d0nut's *The
+complete documentation about Genesis ROM format* (version 1.1, January 1998, in the probe's cache from Nephrite's fetch:
+`nephrite/docs/zophar/genesis-rom-format.txt`, SHA-256 `2f7353ea…`) gives the Super Magic Drive's 512-byte header,
+"Number of blocks" of 16 KiB in its first byte and the rest fixed values or zeros, and says to "skip the 512 bytes
+header" [R]. The same copier family loads Master System cartridges: two of its own boot programs are in the tester's
+library filed as `.sms`. **Measured on the 11 images** of §2.2: each one's first byte is its number of 16 KiB blocks (2,
+16 or 32), its second `$01`, and the rest zero but for a title from byte 132 in three [M, a Python reader]; the
+document's fixed `$03` and `$AA $BB` are the Genesis format's and do not appear, and the data after the header is not
+interleaved, as Sega's header 512 bytes in shows. The rule (an image 512 bytes longer than a multiple of 16 KiB has its
+first 512 bytes set aside) is kept as stage 1 built it, now [R] and [M].
+
+**The 512 KiB `.sg`** (*Music Station*, stage 1's question 4): no Sega header, an 8 KiB-RAM stack pointer, and writes
+to `$FFFC`–`$FFFF` in its first frames [M §9.10]: a cartridge on Sega's mapper, which the size rule already gives it.
+
+### 9.3 The bus and the boards
+
+`src/bus.rs` and `src/cart.rs`. The rules, each with its source, and the test that pins it (§9.8):
+
+| Rule | Source |
+|---|---|
+| `$0000`–`$BFFF` the slot area, `$C000`–`$FFFF` 8 KiB of work RAM mirrored; on the SG-1000 1 KiB mirrored every kilobyte | [R SMS Power!'s "Memory Map", "RAM"; MacDonald's `smstech` §2] |
+| Port `$3E`: bit 6 the cartridge, bit 4 the work RAM, bit 2 the I/O chip, each enabled when clear; the BIOS, card and expansion slots hold nothing until stage 6, so only the cartridge drives the slot area. A write to the slot area reaches the cartridge only while its slot is enabled; a write at `$C000` and above reaches it always, since Sega's registers lie there | [R `smstech` §4; Sega's Mark III manual, "Memory enables"; the always-reaching write [A]] |
+| `$3E` at the start: `$AB`, what both export BIOSes MacDonald watched leave for a cartridge, since no BIOS runs before stage 6 | [R `smstech` §4] |
+| Ports by A7, A6 and A0: `$00`–`$3F` even `$3E`, odd `$3F`; `$40`–`$7F` the PSG on write, the counters on read; `$80`–`$BF` the VDP; `$C0`–`$FF` `$DC` even and `$DD` odd on read, nothing on write; the high byte not decoded | [R `smstech` §3; SMS Power!'s "I/O Port Map - SMS"] |
+| A read nothing drives: `$FF` on the Master System II; on the first Master System the bus's last byte, "the last byte of the instruction which read the port" — the bus keeps the last byte it carried; the Mark III and the SG-1000 taken as the first. The same for the acknowledge cycle's byte, `$FF` on the Master System II, "random" on the first | [R `smstech` §3–§5; the Mark III and SG-1000 [A]] |
+| Ports `$C0`–`$FF` with the I/O chip off: undriven, as above | [R `smstech` §4] |
+| Sega's mapper: `$FFFD`–`$FFFF` bank the three slots, `$0000`–`$03FF` stays bank 0, a bank past the ROM wraps; `$FFFC` bit 3 puts the RAM in slot 2, bit 2 its second 16 KiB, bit 4 the RAM over `$C000` (its first bank [A]); bits 1–0 shift every bank by `$00`, `$18`, `$10` or `$08` when a bank register is next written; the registers start at `0, 0, 1, 2`; the work RAM keeps a copy of each write | [R SMS Power!'s "Mappers"; `smstech` §2] |
+| Codemasters' mapper: a write anywhere in a slot banks it, the first kilobyte not kept; banks 0, 1, 0 at the start; bit 7 of slot 1's value maps 8 KiB of RAM over `$A000`–`$BFFF` | [R "Mappers"; Endou_Disputes.md D-5] |
+| Plain ROM mirrored over `$0000`–`$BFFF`; an SG-1000 RAM board's RAM mirrored through `$8000`–`$BFFF` | [A from the boards' address lines; `sc3000h` §3 for the RAM] |
+| ROM writes do nothing; `$FFFC` bit 7, the "ROM write" enable, is not modelled, no known software using it | [R "Mappers"] |
+
+**Each machine cycle takes the manual's length** (fetch 4, read and write 3, input and output 4 with the automatic
+wait, the acknowledge 6), its time added before its access, as Nephrite's Z80 bus does; the Master System adds no wait
+states [D `Endou_Plan.md` §5.1].
+
+### 9.4 The models
+
+`src/model.rs`, the one owner of the consoles' differences at this stage, and the `model` setting (`auto`, `mark3`,
+`sms1`, `sms2`; `Endou_Plan.md` §5.8): from the region, a Japanese cartridge runs on a Mark III and any other on a
+Master System II (§10 Q9); the `sg1000` system is the SG-1000 alone until stage 4.
+
+| | Mark III | Master System | Master System II | SG-1000 |
+|---|---|---|---|---|
+| Ports `$3E`, `$3F` | yes | yes | yes | no |
+| TH, TR as `$3F` sets them | TR an input; a TH output reads low, an input high (D-3) | yes | yes | — |
+| Reset button | no | yes | no | no |
+| An undriven read | the bus's last byte [A] | the bus's last byte | `$FF` | the bus's last byte [A] |
+
+### 9.5 The I/O chip
+
+`src/io.rs`. Port `$3F` starts `$FF`, every pin an input, as software's region checks assume [R "Peripheral Ports"].
+`$DC`: port A's Up, Down, Left, Right, TL (button 1) and TR (button 2), then port B's Up and Down; `$DD`: port B's
+Left, Right, TL and TR, the Reset button, CONT (high), and the two TH pins; active low [R `smstech` §4]. A pin set as an
+output reads its level on the export consoles, so the region check of SMS Power!'s "Region Detection" finds an export
+console on the Master System and II and a Japanese one on the Mark III [M §9.8]. The SG-1000's `$DD` reads its high four
+bits as unconnected inputs [A]. **The Pause button** is an edge on NMI: a press reaches the latch at the frame's start,
+so a held button makes one NMI [R Sega's Mark III manual, "NMI": "if the PAUSE button is held down, you will get a
+single interrupt only"].
+
+### 9.6 The scheduler
+
+`src/machine.rs`: the bus counts Z80 clocks, the master clock's over 15. A frame ends at an absolute clock, 59,736 Z80
+clocks later NTSC (228 a line, 262 lines) and 71,364 PAL (313 lines); the Z80 runs until the bus passes it, the
+overshoot carried into the next frame. The PSG is brought to the bus's time at each write and at the frame's end, a
+clock of it every 16 of the Z80's [R `Beryl_SN76489.md` §2], its output discarded until stage 5. The VDP joins at stage
+3, brought to the present at each port access and line end (`Endou_Plan.md` §5.1). The Z80 starts from
+`Z80::power_on()` (`Beryl_Z80.md` §8.4).
+
+### 9.7 The state, version 2
+
+`ENDO` version 2: the magic, the version, the console and model bytes, the frame count, the bus clock and the frame's
+end, the Z80's block, the PSG's with its clock count, ports `$3E` and `$3F`, the data bus, the pending NMI, the Pause
+latch, the mapper's registers and the three slots' offsets, then RAM, VRAM, CRAM and the cartridge's RAM where the
+board has it: 24,733 bytes for a plain `sms` board, 57,501 with Sega's 32 KiB, pinned by `the_version_2_layout_is_pinned`.
+Version 1, stage 1's stub, reached no player and is refused; a state of another console or model is foreign, and one
+whose slot offsets lie outside the ROM is refused.
+
+### 9.8 The test programs
+
+`programs/*.s`, assembled at test time with `beryl-z80`'s assembler and run on the machine (`src/programs.rs`), and the
+same images through the v1 adapter in `EndouTests` (`SyntheticSmsRom`'s hand-assembled programs):
+
+| Program | What it pins |
+|---|---|
+| `pads.s` | the joystick ports, the Reset button and TH on each model, the SG-1000's pads |
+| `pause.s` | one NMI a press, none more while held, RETN |
+| `region.s` | SMS Power!'s region check: export on the Master System and II, Japanese on the Mark III |
+| `sega.s` | Sega's mapper: each slot, the kept first kilobyte, the wrap, the RAM's copy of `$FFFF`, the cartridge RAM in both banks |
+| `codemasters.s` | Codemasters' mapper: slots 2 and 1 by their addresses, the RAM over `$A000` with `$8000` still ROM |
+| `port3e.s` | the cartridge and the work RAM off the bus from a routine in RAM, a lost write, port `$3E`'s own read, per model |
+| `sgram.s` | the SG-1000 RAM board's mirror and the 1 KiB work RAM's |
+| `psg.s` | the PSG written through `$7F` and `$41`; the VDP stand-in's `$FF` |
+
+`examples/run.rs` runs an image and prints the cartridge RAM's report; `examples/survey.rs` is §9.10's;
+`examples/referee.rs` writes the programs' images for the references and prints Endou's RAM (§9.11).
+
+### 9.9 ZEXDOC and ZEXALL on the machine
+
+The Master System port of ZEXALL, 0.20 (`Endou_References.md` §2), writes its report to the cartridge's RAM at
+`$8000` through Sega's mapper, as well as to the SDSC console and the screen. Its source was read for that, and for its
+start: it looks for a mode 4 VDP by the status port, and with the stand-in's `$FF` it reports "TMS9918 Text Mode" and
+goes on. **Measured 2026-10-19 on the desktop, release build:**
+
+| Program | Tests | Frames to "Tests complete" | Z80 clocks | Wall time |
+|---|---:|---:|---:|---:|
+| ZEXDOC | **79 of 79 OK** | 267,420 (74.4 minutes of the console's time) | 15,974,601,124 | 20.2 s, 0.076 ms a frame |
+| ZEXALL | **79 of 79 OK** | 316,800 (88.1 minutes) | 18,924,364,804 | 23.5 s, 0.074 ms a frame |
+
+The SCF/CCF pre-test, which the program says differs between Z80 makes, printed `0000 0000 1fff 1fff 0000 0000` and
+`1fff` six times, twice over: Beryl's Z80, whose Q rule follows the published measurements (`Beryl_Z80.md` §4.2). The
+test `zexdoc_and_zexall_pass_on_the_machine` runs both where `EMUSEN_ENDOU_CORPUS` names the probe's cache, and passes
+unrun without it: 43.9 s for the two on the `test-checked` profile [M].
+
+The frame's cost with no VDP, 0.074–0.076 ms, is the Z80 and the bus alone; §5.9's budget is for the whole machine.
+
+### 9.10 The library survey
+
+`examples/survey.rs` over `mastersystem/`, read in place: each image's board as the core chooses it, then 3,000 frames
+(50 seconds of the console's time) with no VDP, every write to Sega's registers, to the slot area and to cartridge RAM
+tallied. **Six of the 370 files are firmware** (four Master System BIOS images, two copier boot programs) and are left
+out by the clean-room rule (`Endou_Plan.md` §1.4); 364 game images remain. Measured 2026-10-19 [M]:
+
+| | Images | Board |
+|---|---:|---|
+| `.sms`, larger than 48 KiB | 297 | Sega's mapper by size; 277 wrote its registers within the 3,000 frames, 20 did not (most waiting on the VDP; two Korean images and a Brazilian one are other mappers, stage 12) |
+| `.sms`, 48 KiB or less | 11 | plain ROM: ten of 32 KiB and one with a copier's header |
+| `.sms` with Codemasters' header | 2 | Codemasters' mapper, the header's checksum right in both; no other image has one |
+| `.sg`, 48 KiB or less | 53 | plain ROM, but The Castle, on its RAM board by the table |
+| `.sg`, larger | 1 | *Music Station*, Sega's mapper (§9.2), its registers written |
+
+36 of the 277 wrote bank numbers past their ROM, most with bit 7 set (`$82`, `$87`), which the wrap answers as the
+mapper's page says [R "Mappers": "Some software may also set higher-order bits"]. Nine images enabled Sega's cartridge
+RAM: eight wrote it, every one below its 8 KiB mark, and one (*Desert Speedtrap*) enabled it and wrote nothing in the
+frames run. None put the RAM over `$C000`. On the SG-1000, The Castle wrote `$8000`–`$9FFF`, and *Sinbad Mystery*
+wrote `$FFFF` and `$0000`, which its plain board ignores. The tallies are in the step's scratch; the table of §9.2 holds
+what they decided.
+
+### 9.11 The referees, run as black boxes
+
+The programs of §9.8 as `.sms` images (Sega's export header added), run for ten frames on the five pinned libretro
+cores through the probe, each pinned to a model and region by `--option`, and RAM's first 16 bytes compared with Endou's
+on the same model [M 2026-10-19]:
+
+- **`region.s`**: export on every export configuration; Japanese on Genesis Plus GX's Mark III, SMS Plus GX's and
+  Gearsystem's Japanese settings; PicoDrive's and BlastEm's Japanese settings say export. Endou agrees with the three.
+- **`pause.s`** with Start pressed at frame 3 for three frames and at frame 7: two NMIs on Genesis Plus GX, SMS Plus
+  GX, Gearsystem and PicoDrive, as `a_pause_press_is_one_nmi_and_a_held_button_no_more` pins; none on BlastEm, whose
+  Start is not the Pause button.
+- **`sega.s`**: every reference and Endou agree on every bank, the kept first kilobyte, the wrap and the RAM's copy of
+  `$FFFF`. The cartridge RAM's second bank, never written, reads `$FF` on Genesis Plus GX and Gearsystem and `$00` on
+  the others and Endou: a power-on fill, not a rule.
+- **`codemasters.s`**: only PicoDrive took the synthetic image as Codemasters' board, and its bytes equal Endou's
+  exactly; Genesis Plus GX, SMS Plus GX and Gearsystem ran it on Sega's mapper, and BlastEm stopped with a fault.
+- **`port3e.s`**: the references disagree with each other and with MacDonald. BlastEm, Gearsystem and PicoDrive read
+  the cartridge with its slot off and keep a write to work RAM switched off; Genesis Plus GX and SMS Plus GX lost the
+  program; every one reads port `$3E` as `$FF`, the first Master System's setting included. Endou follows the document
+  (Endou_Disputes.md D-4).
+- **`pads.s`**: idle pads `$FF $FF` everywhere but BlastEm, whose `$DD` reads CONT low as a Genesis's does
+  [R `smstech` §4]. Genesis Plus GX's Mark III reads TH high as an input, which D-3 took.
+- **`psg.s`**: the counters and the status differ, as the stand-in reads `$FF` until stage 3.
+
+### 9.12 The gate (`Endou_Plan.md` §7, stage 2), measured 2026-10-19
+
+| Gate item | Result [M] |
+|---|---|
+| The crate's tests | **43 of 43** (board 2, bus 4, cart 5, io 3, machine 4, media 4, programs 10, state 3, v1 8), ZEXDOC and ZEXALL's run where the corpus is given |
+| The SMS-hosted ZEXALL on the whole machine | **79 of 79**, and ZEXDOC 79 of 79 (§9.9) |
+| Synthetic programs for each port, mapper and interrupt rule | §9.8, every one passing; `EndouTests` **9 of 9**, two new: each mapper's banking on `SyntheticSmsRom`'s images, and the pads with the Reset button |
+| The kit | every case it runs passes (C1–C15, C17–C23) on `EndouTests`' four synthetic images, the seven program images, ZEXALL, *SMS VDP Test*, both SG-1000 PSG programs, and four of the tester's games read in place (one on each board kind: a battery board, Codemasters', Sega's, the SG-1000 RAM board), 120 or 300 frames each. **C7 found a defect first**: a plain 32 KiB board's state was refused by a fresh machine (its third slot's offset lay past the ROM's end); fixed, and `every_board_s_state_loads_on_a_machine_just_made` added |
+| RAM against the references at anchors on test programs | §9.11 |
+| `beryl-z80` | **19 of 19** with the assembler, 15 without; `beryl-asm` 3 of 3; `beryl-m68k` 26 with its assembler, 21 without; Nephrite's crate **194 of 194** on `test-checked` and `NephriteTests` with the corpus 58 of 58; the open Sega CD BIOS byte-identical; **the kit's corpus on Nephrite** (`genesis-sample.txt`, 64 images, 600 frames), the base's library against this branch's: 64 of 64 pass on both, **the 64 image reports identical**, the summaries differing only in the library's path, the timings, the peak memory and C13's count of rounds |
+
+Toolchains: rustc 1.99.0, .NET 10.0.112, on the desktop (Ryzen 7 7700X).
+
+### 9.13 Seeded faults (2026-10-19)
+
+Each made in the source, the crate's tests run, the file restored and compared byte for byte (`seed.py` in the step's
+scratch):
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | Sega's first kilobyte banked with slot 0 | `cart`'s and the program's Sega tests |
+| F2 | Sega's bank shift applied when `$FFFC` is written | `sega_s_shift_applies_when_a_bank_is_next_written` |
+| F3 | Codemasters' RAM over all of slot 2 | `cart`'s and the program's Codemasters tests |
+| F4 | an export console's TH output read as its input | the `io` region test and `the_region_reads_back_as_each_console_s` |
+| F5 | the Reset button on every console | `only_the_first_master_system_has_a_reset_button` and the pads program |
+| F6 | a held Pause button an NMI every frame | `a_pause_press_is_one_nmi_and_a_held_button_no_more` |
+| F7 | `$DC` and `$DD` swapped by A0 | the pads and region programs |
+| F8 | port `$3E`'s cartridge bit ignored | `bus` and `port3e.s` |
+| F9 | the Master System II floating its bus | `bus` and `port3e.s` |
+| F10 | a write leaving the data bus as it was | **nothing at first**: no program reads the bus right after a write without an instruction byte between. Pinned by the acknowledge cycle after a write in `each_machine_cycle_takes_its_length`, which catches it |
+| F11 | Sega's RAM bank bit ignored | `sega_s_ram_takes_slot_2_in_either_bank` and the Sega program |
+| F12 | the battery file not loaded at create | **nothing at first**: no test made a battery board through `create`. `create` now goes through `make` with the table as a parameter, and `a_battery_board_takes_its_file_at_create_and_gives_it_back` catches it |
+| F13 | Codemasters' header taken without its sum | the board test |
+| F14 | port `$3F` not restored by a state | the state round trip |
+| F15 | the assembler's `JR` counted from the instruction | three assembler tests |
+| F16 | the assembler's index displacement losing its sign | two assembler tests |
+
+### 9.14 What was read for this stage
+
+No emulator source, no SMS_MiSTer RTL, and no firmware or firmware listing; the firmware images in the library were
+left out of the survey. Read: `Endou_Plan.md`, `Endou_Native.md`, `Endou_References.md`, `Endou_Disputes.md`; the Beryl
+pages and crates; SMS Power!'s "Mappers", "SMS Paging Chips", "Memory Map", "RAM", "Port $3E", "I/O Port Map" (SMS and
+SG-1000), "Peripheral Ports", "Controller Port", "Joypad", "Region Detection", "Reset Button", "Pause Button",
+"Interrupt Mechanism", "Clock Rate", "TV Type Detection", "ROM Header", "Codemasters Header", "Cartridge Slot";
+MacDonald's `smstech` §1–§5 and `sc3000h` §2–§5; Sega's Mark III manual, "The CPU", "Memory management" and
+"Input/Output ports" with appendix B; "The Undocumented Z80 Documented" §2.4; d0nut's Genesis ROM format document,
+its copier sections; ZEXALL-SMS's README and source; `CoreEngine.cs`'s battery handling; `EmuSen_CoreAPI.md` §4,
+§6.11, §6.19, §6.27, §6.31–§6.32 and §6.39.
+
+### 9.15 Questions before stage 3
+
+1. **The battery table.** Seven games have their battery boards in the table, from one SMS Power! page and the survey.
+   May a public per-game listing (SMS Power!'s per-game pages, or a No-Intro listing of the Master System) be fetched
+   at stage 7 to complete it? Recommended: yes, at stage 7, recorded in `Endou_References.md` as every fetch is.
+2. **Port `$3E`** (D-4): the references disagree with the document and with each other, so the documents' rules stand,
+   argued. SMS_MiSTer would referee it, which needs a VHDL simulator (§8, question 3). Recommended: not now; a game
+   shown to need otherwise reopens it.
+3. **The Mark III's TH** (D-3) is argued from SMS Power!'s pages and one reference. Recommended: as it is, until the
+   Light Phaser's stage, which reads TH.
+4. **CI** now tests Beryl's crates with all their features, so both assemblers' tests run there.

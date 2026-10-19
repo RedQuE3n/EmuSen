@@ -4,8 +4,10 @@
 use emusen_native::abi::Region;
 use emusen_native::core::*;
 
+use crate::board::{Row, TABLE, identify_with};
 use crate::machine::{AUDIO_RATE, HEIGHT, MAX_HEIGHT, Machine, RAM_ID, WIDTH};
 use crate::media::{Console, Market, Media, Refusal};
+use crate::model::Model;
 use crate::state::STATE_VERSION;
 
 /// An image of no bytes, or larger than any board.
@@ -42,10 +44,30 @@ pub const REGION_KEY: &str = "region";
 pub const REGIONS: [(&str, &str, Market); 4] =
     [("sms.jp", "Japan (NTSC)", Market::Japan), ("sms.us", "Americas (NTSC)", Market::Americas), ("sms.eu", "Europe (PAL)", Market::Europe), ("sms.br", "Brazil (NTSC)", Market::Brazil)];
 
+/// The model setting (Endou_Plan.md §5.8): from the market, or a console chosen; the SG-1000's system has one model
+/// until stage 4.
+pub const MODEL_KEY: &str = "model";
+pub const MODELS: [(&str, &str, Model); 3] = [("mark3", "Mark III", Model::MarkIII), ("sms1", "Master System", Model::Sms1), ("sms2", "Master System II", Model::Sms2)];
+
 fn schema() -> Vec<Setting> {
     let mut choices = vec![Choice { value: "auto".into(), label: "From the cartridge".into(), help: None }];
     choices.extend(REGIONS.iter().map(|&(v, l, _)| Choice { value: v.into(), label: l.into(), help: None }));
+    let mut models = vec![Choice { value: "auto".into(), label: "From the region".into(), help: None }];
+    models.extend(MODELS.iter().map(|&(v, l, _)| Choice { value: v.into(), label: l.into(), help: None }));
     vec![Setting {
+        key: MODEL_KEY.into(),
+        label: "Model".into(),
+        help: "The console a Master System game runs on. From the region, a Japanese game runs on a Mark III and any other on a Master System II; the first Master System has the Reset button the later one lacks. Takes effect when a game is next loaded.".into(),
+        kind: SettingKind::Choice(models),
+        default: "auto".into(),
+        scope: Scope::Create,
+        category: Some("Console".into()),
+        effect: Effect::None,
+        advanced: false,
+        hidden: false,
+        restart: true,
+    },
+    Setting {
         key: REGION_KEY.into(),
         label: "Region".into(),
         help: "The console's market, which sets the picture's rate, 60 frames a second for NTSC and 50 for PAL. From the cartridge, a game whose header names an export market runs as an American console and any other as a Japanese one. Takes effect when a game is next loaded.".into(),
@@ -65,6 +87,15 @@ pub fn market_of(media: &Media, setting: Option<&str>) -> Market {
     REGIONS.iter().find(|r| Some(r.0) == setting).map_or(media.market().unwrap_or(Market::Japan), |r| r.2)
 }
 
+/// The console a machine is: the SG-1000 for its cartridges; else the setting's, else a Mark III for Japan and a Master
+/// System II for every other market (Endou_Plan.md §10 Q9).
+pub fn model_of(console: Console, market: Market, setting: Option<&str>) -> Model {
+    if console == Console::Sg1000 {
+        return Model::Sg1000;
+    }
+    MODELS.iter().find(|m| Some(m.0) == setting).map_or(if market == Market::Japan { Model::MarkIII } else { Model::Sms2 }, |m| m.2)
+}
+
 fn system(id: &str, name: &str, extension: &str, controller: Controller) -> emusen_native::core::System {
     emusen_native::core::System {
         id: id.into(),
@@ -75,6 +106,39 @@ fn system(id: &str, name: &str, extension: &str, controller: Controller) -> emus
         firmware: Vec::new(),
         development: true,
     }
+}
+
+/// A machine for the request, its board from `table` and the rules (Endou_Native.md §9.2), its battery file loaded.
+pub fn make(request: &Create<'_>, table: &[Row]) -> Result<Machine, i32> {
+    let media = match Media::read(request.image) {
+        Ok(m) => m,
+        Err(Refusal::Empty) => {
+            detail("the image has no bytes");
+            return Err(STATUS_NO_CARTRIDGE);
+        }
+        Err(Refusal::TooLarge(n)) => {
+            detail(&format!("the image is {n} bytes; no board holds more than 4 MiB"));
+            return Err(STATUS_NO_CARTRIDGE);
+        }
+    };
+    if let Some(f) = request.files.iter().find(|f| f.which != 0) {
+        detail(&format!("file {} is not one Endou names", f.which));
+        return Err(status::BAD_FILE);
+    }
+    let market = market_of(&media, request.settings.get(REGION_KEY));
+    let model = model_of(media.console, market, request.settings.get(MODEL_KEY));
+    let rom = request.image[media.skipped..].to_vec();
+    let board = identify_with(&rom, media.console, table);
+    let mut m = Machine::with_board(media, market, model, board, rom);
+    // The battery file, where the board keeps one; bytes past the RAM's size are not the board's.
+    if let Some(f) = request.files.iter().find(|f| f.which == 0) {
+        if m.bus.cart.board.battery {
+            let ram = &mut m.bus.cart.ram;
+            let n = ram.len().min(f.data.len());
+            ram[..n].copy_from_slice(&f.data[..n]);
+        }
+    }
+    Ok(m)
 }
 
 impl Core for Machine {
@@ -88,7 +152,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sega Master System and the SG-1000 in Rust, written from hardware documents and graded by test programs. At this stage it reads a cartridge's header and shows a black picture; nothing is emulated yet.".into()),
+            description: Some("The Sega Master System and the SG-1000 in Rust, written from hardware documents and graded by test programs. At this stage it runs the processor, the cartridge's board and the controllers, with a black picture and silence until the video and sound chips are built.".into()),
             systems: vec![
                 system("sms", "Sega Master System / Mark III", ".sms", pad(SMS_PAD, "Control Pad", 8)),
                 system("sg1000", "Sega SG-1000", ".sg", pad(SG1000_PAD, "Joystick", 7)),
@@ -110,23 +174,7 @@ impl Core for Machine {
     }
 
     fn create(request: &Create<'_>) -> Result<Self, i32> {
-        let media = match Media::read(request.image) {
-            Ok(m) => m,
-            Err(Refusal::Empty) => {
-                detail("the image has no bytes");
-                return Err(STATUS_NO_CARTRIDGE);
-            }
-            Err(Refusal::TooLarge(n)) => {
-                detail(&format!("the image is {n} bytes; no board holds more than 4 MiB"));
-                return Err(STATUS_NO_CARTRIDGE);
-            }
-        };
-        if let Some(f) = request.files.iter().find(|f| f.which != 0) {
-            detail(&format!("file {} is not one Endou names", f.which));
-            return Err(status::BAD_FILE);
-        }
-        let market = market_of(&media, request.settings.get(REGION_KEY));
-        Ok(Machine::new(media, market, request.image))
+        make(request, TABLE)
     }
 
     fn machine_info(&self) -> MachineInfo {
@@ -138,9 +186,9 @@ impl Core for Machine {
             video: Video { base_width: WIDTH, base_height: HEIGHT, max_width: WIDTH, max_height: MAX_HEIGHT, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
             ports: (0..2).map(|p| Port { port: p, controller: Some(pad.into()) }).collect(),
-            spaces: self.memories.iter().map(|m| Space { read_only: m.read_only, cheats: m.id == RAM_ID, ..Space::new(m.id, m.name) }).collect(),
+            spaces: self.spaces().into_iter().map(|(id, name, read_only)| Space { read_only, cheats: id == RAM_ID, ..Space::new(id, name) }).collect(),
             processors: vec![Processor { id: 0, name: "Z80".into(), pc_bits: 16, registers: Vec::new(), code_space: None }],
-            battery: Vec::new(),
+            battery: if self.bus.cart.board.battery { vec![Battery::game(0, ".srm")] } else { Vec::new() },
             state: StateFormat { format: "ENDO".into(), version: STATE_VERSION as i64, loads_from: vec![STATE_VERSION as i64] },
             phases: Vec::new(),
             patches: None,
@@ -197,32 +245,34 @@ impl Core for Machine {
     }
 
     fn space_size(&self, space: u32) -> Result<i64, i32> {
-        self.memory(space).map(|m| m.bytes.len() as i64).ok_or(status::NO_SUCH_SPACE)
+        self.space(space).map(|m| m.len() as i64).ok_or(status::NO_SUCH_SPACE)
     }
 
     fn space_read(&mut self, space: u32, address: u32, out: &mut [u8]) -> Result<(), i32> {
-        let m = self.memory(space).ok_or(status::NO_SUCH_SPACE)?;
+        let m = self.space(space).ok_or(status::NO_SUCH_SPACE)?;
         for (i, b) in out.iter_mut().enumerate() {
-            *b = m.bytes.get(address as usize + i).copied().unwrap_or(0);
+            *b = m.get(address as usize + i).copied().unwrap_or(0);
         }
         Ok(())
     }
 
     fn space_write(&mut self, space: u32, address: u32, data: &[u8]) -> Result<(), i32> {
-        let m = self.memory_mut(space).ok_or(status::NO_SUCH_SPACE)?;
-        if m.read_only {
-            return Err(status::READ_ONLY);
+        if self.space(space).is_none() {
+            return Err(status::NO_SUCH_SPACE);
         }
+        let m = self.space_mut(space).ok_or(status::READ_ONLY)?;
         for (i, &b) in data.iter().enumerate() {
-            if let Some(d) = m.bytes.get_mut(address as usize + i) {
+            if let Some(d) = m.get_mut(address as usize + i) {
                 *d = b;
             }
         }
         Ok(())
     }
 
+    /// File 0 is the cartridge's RAM where its board keeps it with a battery, else empty.
     fn battery(&self, which: u32) -> Result<(&[u8], u32), i32> {
         match which {
+            0 if self.bus.cart.board.battery => Ok((&self.bus.cart.ram, 0)),
             0 => Ok((&[], 0)),
             _ => Err(status::BAD_FILE),
         }
@@ -317,6 +367,21 @@ mod tests {
         m.set_buttons(0, 0b0001, 0b0001).unwrap();
         assert_eq!(m.pads[0], 0b1010_0001);
         assert_eq!(m.set_buttons(2, 1, 1), Err(status::NO_SUCH_PORT));
+    }
+
+    // A seeded fault that dropped the battery file at create passed every test (Endou_Native.md §9.13).
+    #[test]
+    fn a_battery_board_takes_its_file_at_create_and_gives_it_back() {
+        let image = cartridge(0x40000, 4);
+        let table = [Row { crc: crate::board::crc32(&image), mapper: crate::board::Mapper::Sega, ram: 0x2000, battery: true }];
+        let save: Vec<u8> = (0..0x2000).map(|i| (i * 13) as u8).collect();
+        let file = emusen_native::abi::File { which: 0, data: &save };
+        let request = Create { image: &image, settings: Settings::default(), files: vec![file], pixel_formats: 1, host_abi_version: sys::ABI_VERSION, shared_removable: false, shared_console: false, device: None };
+        let m = make(&request, &table).unwrap();
+        assert_eq!(m.battery(0).unwrap().0, &save[..]);
+        assert_eq!(m.machine_info().battery.iter().map(|b| (b.which, b.suffix.as_str())).collect::<Vec<_>>(), [(0, ".srm")]);
+        let plain = make(&request, &[]).unwrap();
+        assert!(plain.battery(0).unwrap().0.is_empty() && plain.machine_info().battery.is_empty(), "a board without a battery takes no file");
     }
 
     #[test]

@@ -117,7 +117,9 @@ jobs:
         run: |
           for crate in EmuSen/Cores/Shared/*/ "EmuSen/Cores/Sega/Beryl-HW"/*/ "EmuSen/Cores/Sony/BlackMoon-HW"/*/; do
             case "$crate" in *emusen-core-abi-check/) continue ;; esac
-            (cd "$crate" && cargo test --profile test-checked)
+            # Beryl's processors carry their assemblers behind a feature, tested with it (Beryl_Z80.md §8).
+            case "$crate" in *Beryl-HW/*) features=--all-features ;; *) features= ;; esac
+            (cd "$crate" && cargo test --profile test-checked $features)
           done
 
       # The platform's crates: their own rules with no .NET present, the header against the exports, and the header as C99 and C++17. Not yet a gate, as nothing of the platform's is until Galaxia's own (EmuSen_RustPlatform.md §3.9, §10.6): a failure here is reported and does not stop the cores.

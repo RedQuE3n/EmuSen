@@ -7304,3 +7304,22 @@ The blast radius, measured on 2026-10-19: `cargo test --profile test-checked` of
 `emusen-net`, `emusen-library` and `emusen-dotnet`, 110 passed; every class in `EmuSen.WiseMan.Mistress.Scraping`
 (the replay and the store's parity classes among them) with the library's two parity classes, the cheat download's and
 the online covers', 292 passed and 5 skipped (the live and picture tools), none failed.
+
+### 30.13 Built 2026-10-19: part 5, the sources and the metadata, graded
+
+*Measured on 2026-10-19.* Part 4 built `artwork`, `media` and `metadata` with the run, which needed them (§30.12); part 5
+is their parity class. `ScrapeMediaParityTests` generates three stores from seeds: eighteen games across SNES, NES, Game
+Boy and Game Boy Color, at the top of a console's folder and in nested folders, with each picture type placed at random
+in the scraper's store, in an ES-DE folder or in both, under the folder-and-stem name or the stem alone; hand-placed art
+under a console's folder, a libretro name, the root or an alias, by its full title or its title without tags; OpenEmu
+covers; covers chosen from other games (with chains and loops) and edited fields in `games.db`; and scraped answers with
+ratings both in twentieths, as ScreenScraper gives them, and arbitrary. Every game is then asked every type through the
+C#'s `MediaSources.Locate` and the Rust's `media` read, every field through `GameMetadata.Resolve` and the `metadata`
+read, with and without scraped names, and every shelf's present types through both; all agree.
+
+**Seeded faults**, each made, run and reverted: the ES-DE folder tried before the scraper's store; a game in a folder
+not found by its stem alone; scraped names used when switched off; present types read from a console's top folder only;
+a rating written to two decimals; a borrowed cover looked up on the borrowing game's shelf. The first run caught four.
+The ES-DE fault survived because the generator put each picture in one place, never both, so the order never mattered;
+the rating fault survived because every generated rating was a twentieth, which two decimals already write exactly. With
+the generator widened as above, both fail.

@@ -28,3 +28,8 @@ emusen-systems = { path = "../systems" }
 emusen-cheats = { path = "../cheats" }
 # .NET's text rules, so each answer is the C# debugger's to the byte.
 emusen-dotnet = { path = "../dotnet" }
+
+# emusen-native's test core, built here so that this crate's tests load it.
+[[example]]
+name = "debug_test_core"
+crate-type = ["cdylib"]

@@ -1,0 +1,169 @@
+# The debugger over the v1 test core: spaces, processors, registers and units, telemetry, expressions, breakpoints
+# halting and logging through debug_run_frame, steps, coverage, the profile, the frame log, freezes and cheats.
+m.open $CORE $IMAGE
+m.spaces
+m.procs
+m.regs cpu
+m.regs video
+m.regs apu
+m.regs cop
+m.regs 0
+m.regs 1
+m.counters
+m.load
+m.armed
+m.frame
+m.run 3
+m.regs cpu
+m.regs apu
+m.counters
+m.eval - F
+m.eval - Count
+m.eval - timer.Count
+m.eval - TIMER.frames
+m.eval - frame
+m.eval - stackdepth
+m.eval 0 F
+m.eval 0 stackdepth
+m.eval - [2]
+m.eval - [ROM:0]
+m.eval - {RAM:2}
+m.eval - [RAM:255]
+m.eval - [RAM:256]
+m.eval - Nope
+m.symbols -
+m.symbols 0
+m.peek RAM 0 8
+m.poke RAM 7 0x55
+m.peek RAM 7
+m.poke ROM 0 1
+m.peek ROM 0 4
+m.peek RAM 300 2
+m.peek NOPE 0 2
+m.bp.add - 5 5 ; - ; -
+m.armed
+m.run 10
+m.bp.state -
+m.bp.list -
+m.procs
+m.run 1
+m.bp.state -
+m.bp.add - 0x10 0x12 ; F == 17 ; -
+m.run 20
+m.bp.state -
+m.run 1
+m.run 1
+m.bp.state -
+m.bp.add - 0x20 0x20 ; - ; F, timer.Count, [2]
+m.run 40
+m.bp.log - 5
+m.bp.add - 0x30 0x30 ; Nope ; -
+m.bp.add - 0x30 0x30 ; [9999] ; -
+m.bp.add 0 0x31 0x31 ; timer.Frames == 0x31 ; -
+m.run 20
+m.bp.state -
+m.bp.list -
+m.run 3
+m.bp.state -
+m.bp.step - 3
+m.run 5
+m.bp.state -
+m.bp.step 0 2
+m.run 5
+m.bp.state 0
+m.bp.runframe - 80
+m.run 30
+m.bp.state -
+m.bp.list -
+m.bp.remove - 1
+m.bp.remove - 2
+m.bp.remove - 3
+m.bp.remove - 4
+m.bp.remove - 5
+m.bp.remove - 6
+m.armed
+m.cov.arm 0
+m.cov.status 0
+m.armed
+m.run 5
+m.cov.status 0
+m.cov.query 0 0 256 300
+m.cov.entries 0 5
+m.cs.status
+m.cs.profile on
+m.run 3
+m.cs.status
+m.cs.hot 5
+m.cs.bt 5
+m.fl.add RAM 2 1
+m.fl.add RAM 1 2
+m.fl.add ROM 0 2
+m.run 3
+m.fl.samples 1 5
+m.fl.samples 2 5
+m.fl.samples 3 5
+m.fz.add RAM 2 0x77
+m.run 2
+m.peek RAM 2
+m.fz.list
+m.fz.clear
+m.cheat.poke RAM 8 0x99
+m.run 1
+m.peek RAM 8
+m.cheat.wide RAM 9 0x1234
+m.run 1
+m.peek RAM 9 2
+m.cheat.master 0
+m.poke RAM 8 0
+m.poke RAM 9 0
+m.run 1
+m.peek RAM 8 3
+m.cheat.master 1
+m.cheat.patch 0x10 0xAB -
+m.cheat.patch 0x11 0xCD 0x00
+m.run 1
+m.peek RAM 8 3
+m.cheat.apply
+m.peek RAM 8 3
+m.cheat.clear
+m.poke RAM 8 0
+m.run 1
+m.peek RAM 8 3
+m.watch.add RAM 2 1 0
+m.watch.add RAM 0 255 2
+m.run 2
+m.watch.events 1 5
+m.watch.events 2 5
+m.label 0x40 Here
+m.eval - Here
+m.eval - Here + 1
+m.symbols -
+m.mute 0 1
+m.mute 40 1
+m.run 1
+m.counters
+m.bp.uninit - RAM 8
+m.run 2
+m.bp.state -
+m.frame
+m.open $CORE $HELPER
+m.procs
+m.regs 1
+m.regs cop
+m.eval 1 F
+m.symbols 1
+m.bp.add 1 0 255 ; - ; -
+m.run 3
+m.bp.state 1
+m.bp.list 1
+m.bp.step 1 1
+m.run 2
+m.bp.state 1
+m.open $CORE $UNLOGGED
+m.bp.runto - irq
+m.run 10
+m.bp.state -
+m.run 10
+m.cs.status
+m.bp.list -
+m.frame

@@ -1,6 +1,6 @@
 //! The NES's debugger views, decoded from the spaces any NES engine publishes (Moon_Debug.md §4, EmuSen_CoreAPI.md §31).
 
-use crate::debug::{Memory, find};
+use crate::debug::{Memory, Unit, find, register};
 
 pub const PALETTE: &str = "PALETTE";
 pub const CHR: &str = "CHR";
@@ -148,6 +148,167 @@ pub fn resolve_physical(cpu_address: i32) -> Option<(&'static str, i32, bool)> {
         a if a < 0x8000 => Some(("PRGRAM", a & 0x1FFF, true)),
         _ => None,
     }
+}
+
+/// The units an NES engine lists, by the names the views read them under (EmuSen_Backend.md §23).
+pub const PPU: &str = "PPU";
+pub const BOARD: &str = "Board";
+pub const CARTRIDGE: &str = "Cartridge";
+pub const OAM: &str = "OAM";
+pub const MAX_SPRITES: i32 = 64;
+
+/// A unit by its exact name, as the NES pack finds one.
+fn unit_named<'a>(units: &'a [Unit], name: &str) -> Option<&'a Unit> {
+    units.iter().find(|u| u.name == name)
+}
+
+fn value(unit: Option<&Unit>, name: &str) -> i64 {
+    unit.and_then(|u| register(&u.registers, name)).map_or(0, |v| v as i64)
+}
+
+fn flag(unit: Option<&Unit>, name: &str) -> bool {
+    value(unit, name) != 0
+}
+
+/// A sprite as `DebugSpriteInfo` holds it: index, x, y, width, height, tile, palette, priority, flip x, flip y.
+pub type Sprite = (i32, i32, i32, i32, i32, i32, i32, i32, bool, bool);
+
+/// The 64 OAM entries, 8x8 or 8x16 by PPUCTRL bit 5; one parked below the visible lines is hidden.
+pub fn sprites(memory: &mut dyn Memory, units: &[Unit]) -> Vec<Sprite> {
+    let Some(oam) = find(memory, OAM).filter(|s| s.size >= 256).map(|s| s.name.clone()) else { return Vec::new() };
+    let Some(ppu) = unit_named(units, PPU) else { return Vec::new() };
+    let height = if value(Some(ppu), "PPUCTRL") & 0x20 != 0 { 16 } else { 8 };
+    let table = memory.run(&oam, 256);
+    let mut out = Vec::new();
+    for i in 0..64usize {
+        let (y, tile, a, x) = (table[i * 4] as i32, table[i * 4 + 1] as i32, table[i * 4 + 2], table[i * 4 + 3] as i32);
+        if y >= 240 {
+            continue;
+        }
+        out.push((i as i32, x, y + 1, 8, height, tile, (a & 0x03) as i32, if a & 0x20 != 0 { 0 } else { 1 }, a & 0x40 != 0, a & 0x80 != 0));
+    }
+    out
+}
+
+/// A channel as `DebugAudioChannelInfo` holds it: index, name, active, level, muted, the line.
+pub type Channel = (i32, &'static str, bool, i32, bool, String);
+
+/// `Math.Round`'s default, to even.
+fn scale(value: i64, max: i64) -> i32 {
+    (value as f64 / max as f64 * 100.0).round_ties_even() as i32
+}
+
+fn shown(b: bool) -> &'static str {
+    if b { "True" } else { "False" }
+}
+
+/// The 2A03's five channels from their units, Moon_Native.md §9.4's three display rules: a pulse silenced below
+/// period 8 or past a sweep target of $7FF, an envelope's output its volume when constant and else its decay, the DMC
+/// active while bytes remain.
+pub fn audio_channels(units: &[Unit], mutes: u32) -> Vec<Channel> {
+    if unit_named(units, "Pulse 1").is_none() {
+        return Vec::new();
+    }
+    let muted = |i: u32| mutes & (1 << i) != 0;
+    let envelope = |u: Option<&Unit>| if flag(u, "ConstantVolume") { value(u, "Volume") } else { value(u, "Decay") };
+    let pulse = |index: u32, name: &'static str| -> Channel {
+        let u = unit_named(units, name);
+        let period = value(u, "TimerPeriod");
+        let change = period >> (value(u, "SweepShift") & 63);
+        let target = if flag(u, "SweepNegate") { period - change - if flag(u, "OnesComplement") { 1 } else { 0 } } else { period + change };
+        let silenced = period < 8 || target > 0x7FF;
+        let (length, volume) = (value(u, "LengthCounter"), envelope(u));
+        let line = format!("Duty={} Period={period} Vol={volume} Len={length} Sweep={}", value(u, "Duty"), shown(flag(u, "SweepEnabled")));
+        (index as i32, name, length > 0 && !silenced, scale(volume, 15), muted(index), line)
+    };
+    let (triangle, noise, dmc) = (unit_named(units, "Triangle"), unit_named(units, "Noise"), unit_named(units, "DMC"));
+    let (triangle_length, triangle_period, noise_length) = (value(triangle, "LengthCounter"), value(triangle, "TimerPeriod"), value(noise, "LengthCounter"));
+    let (noise_volume, dmc_out) = (envelope(noise), value(dmc, "OutputLevel"));
+    vec![
+        pulse(0, "Pulse 1"),
+        pulse(1, "Pulse 2"),
+        (
+            2,
+            "Triangle",
+            triangle_length > 0,
+            if triangle_length > 0 && triangle_period >= 2 { 100 } else { 0 },
+            muted(2),
+            format!("Period={triangle_period} Len={triangle_length} Halt={}", shown(flag(triangle, "ControlFlag"))),
+        ),
+        (
+            3,
+            "Noise",
+            noise_length > 0,
+            scale(noise_volume, 15),
+            muted(3),
+            format!("PeriodIndex={} Vol={noise_volume} Len={noise_length} Short={}", value(noise, "PeriodIndex"), shown(flag(noise, "ShortMode"))),
+        ),
+        (
+            4,
+            "DMC",
+            value(dmc, "BytesRemaining") > 0,
+            scale(dmc_out, 127),
+            muted(4),
+            format!(
+                "Rate={} Out={dmc_out} Addr=0x{:04X} Len={} Loop={}",
+                value(dmc, "RateIndex"),
+                value(dmc, "SampleAddress"),
+                value(dmc, "SampleLength"),
+                shown(flag(dmc, "Loop"))
+            ),
+        ),
+    ]
+}
+
+/// A cartridge's board by its mapper number's name; "?" for a number no board is named for; none for another unit.
+pub fn unit_label(unit: &Unit) -> Option<String> {
+    if unit.kind != "cartridge" {
+        return None;
+    }
+    let mapper = register(&unit.registers, "Mapper")?;
+    Some(super::boards::name(mapper as i32).unwrap_or("?").to_string())
+}
+
+/// `NesMirroring`'s members by number; another number as itself.
+fn mirroring(n: i64) -> String {
+    match n {
+        0 => "Horizontal".into(),
+        1 => "Vertical".into(),
+        2 => "SingleScreenLower".into(),
+        3 => "SingleScreenUpper".into(),
+        4 => "FourScreen".into(),
+        _ => n.to_string(),
+    }
+}
+
+/// The cartridge, the processor and the PPU, from the spaces' sizes and the units, after the host's head line.
+pub fn summary(registers: &[(String, u64)], memory: &mut dyn Memory, units: &[Unit]) -> Option<String> {
+    let ppu = Some(unit_named(units, PPU)?);
+    let (board, cartridge) = (unit_named(units, BOARD), unit_named(units, CARTRIDGE));
+    let r = |name: &str| register(registers, name).map_or(0, |v| v as i64);
+    let p = |name: &str| value(ppu, name);
+    let mapper = value(board, "Mapper") as i32;
+    let prg = find(memory, "PRGROM").map_or(0, |s| s.size) / 0x4000;
+    let chr = find(memory, CHR).map_or(0, |s| s.size) / 0x2000;
+    let chr_text = if flag(cartridge, "ChrRam") { "8K CHR RAM".to_string() } else { format!("{chr}x8K CHR ROM") };
+    let mut text = String::new();
+    text.push_str(&format!(
+        "Mapper {mapper} ({}), {prg}x16K PRG, {chr_text}, mirroring {}{}\n",
+        super::boards::name(mapper).unwrap_or("?"),
+        mirroring(value(cartridge, "Mirroring")),
+        if flag(cartridge, "Battery") { ", battery" } else { "" }
+    ));
+    text.push_str(&format!("CPU  A={:02X} X={:02X} Y={:02X} S={:02X} PC={:04X} P={:02X}\n", r("A"), r("X"), r("Y"), r("S"), r("PC"), r("P")));
+    let (mask, status) = (p("PPUMASK"), p("PPUSTATUS"));
+    text.push_str(&format!("PPU  CTRL={:02X} MASK={mask:02X} STATUS={status:02X} v={:04X} t={:04X} x={}\n", p("PPUCTRL"), p("v"), p("t"), p("x")));
+    text.push_str(&format!(
+        "     rendering={} vblank={} sprite0={} scanline={}",
+        if mask & 0x18 != 0 { "on" } else { "off" },
+        (status >> 7) & 1,
+        (status >> 6) & 1,
+        p("Scanline")
+    ));
+    Some(text)
 }
 
 #[cfg(test)]

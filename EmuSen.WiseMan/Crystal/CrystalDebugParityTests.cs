@@ -12,12 +12,29 @@ namespace EmuSen.WiseMan.Crystal
 
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenDebugParity_" + Guid.NewGuid().ToString("N"));
 
-        public CrystalDebugParityTests() => Directory.CreateDirectory(_root);
+        public CrystalDebugParityTests()
+        {
+            Directory.CreateDirectory(_root);
+            EmuSen.Galaxia.Library.DataStore.OverrideDirectory = Path.Combine(_root, "Home");
+        }
 
         public void Dispose()
         {
+            EmuSen.Galaxia.Library.DataStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
         }
+
+        // An image written under the test's folder, its path for both scripts.
+        private string Write(string name, byte[] image)
+        {
+            string path = Path.Combine(_root, name);
+            File.WriteAllBytes(path, image);
+            return path;
+        }
+
+        private static string TestCore => EmuSen.WiseMan.Cores.CoreAdapterTests.LibraryPath("v1_test_core");
+
+        private static byte[] TestImage(params byte[] payload) => EmuSen.WiseMan.Cores.CoreAdapterTests.Image(payload);
 
         private static string Tool => Environment.GetEnvironmentVariable(ToolVariable) is { Length: > 0 } tool ? tool
             : Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "emusen-crystal-debug.exe" : "emusen-crystal-debug");
@@ -75,5 +92,14 @@ namespace EmuSen.WiseMan.Crystal
 
         [Fact]
         public void The_cheat_registry_answers_alike() => Same("cheats");
+
+        [Fact]
+        public void The_debugger_over_the_test_core_answers_alike() => Same("testcore", new Dictionary<string, string>
+        {
+            ["CORE"] = Write(Path.GetFileName(TestCore), File.ReadAllBytes(TestCore)),
+            ["IMAGE"] = Write("game.tst", TestImage(1, 2, 3, 4, 5, 6, 7, 8)),
+            ["HELPER"] = Write("helper.tst", TestImage(0xC2, 9, 8, 7)),
+            ["UNLOGGED"] = Write("irq.tst", TestImage(0x16, 1, 2)),
+        });
     }
 }

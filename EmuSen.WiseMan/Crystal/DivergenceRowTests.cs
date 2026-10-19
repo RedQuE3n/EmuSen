@@ -47,7 +47,7 @@ namespace EmuSen.WiseMan.Crystal
         }
 
         // Row 1: rewind capture is gated by the engine's opt-out in the frame call, whatever the client (Mistress gated it, Hotaru and Pharaoh did not).
-        [Fact]
+        [CSharpImplementationFact("it attaches a C# engine that withholds rewind to the C# runtime; every v1 engine allows rewind, and the Rust answers rewind_capture true")]
         public void Row_1_rewind_capture_is_gated_by_the_engine_for_every_client()
         {
             CrystalSession withheld = AttachWithholding();

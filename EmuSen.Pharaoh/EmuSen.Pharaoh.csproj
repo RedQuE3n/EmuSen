@@ -5,6 +5,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- The frontend API on the Rust Crystal unless EMUSEN_CRYSTAL_NATIVE is 0 - see EmuSen_Backend.md §29.27. -->
+    <EmuSenCrystalNative>true</EmuSenCrystalNative>
   </PropertyGroup>
 
   <ItemGroup>

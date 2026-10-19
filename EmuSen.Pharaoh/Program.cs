@@ -155,6 +155,7 @@ class Program
         {
             string coreName = JsonDocument.Parse(session.ServiceInfo()).RootElement.GetProperty("engine").GetString() ?? "";
             Emit($"[ROM] Core: {coreName}");
+            Emit($"[ROM] Runtime: {CrystalRuntime.Implementation}");
 
             // Jumping straight to a saved moment sidesteps scripting menu navigation whose timing is not known.
             if (options.LoadStatePath != null)

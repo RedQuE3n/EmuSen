@@ -1,12 +1,16 @@
+using System.Reflection;
 using System.Runtime.InteropServices;
 using EmuSen.Galaxia.Native;
 
 namespace EmuSen.Crystal.Client.Contract
 {
-    // Which implementation serves the API, chosen once: the platform library's exports when EMUSEN_CRYSTAL_NATIVE is 1 and it has all of them, else the C# of step B2 - see EmuSen_Backend.md §3.9 and §14.
+    // Which implementation serves the API, chosen once: the platform library's exports when asked for and it has all of them, else the C# of step B2 - see EmuSen_Backend.md §3.9, §14 and §29.27.
     public static unsafe partial class Crystal
     {
         internal const string Variable = "EMUSEN_CRYSTAL_NATIVE";
+
+        // The program's own default, [assembly: AssemblyMetadata("EmuSen.CrystalNative", "1")] on its entry assembly - see EmuSen_Surfaces.md §6.2.
+        internal const string MetadataKey = "EmuSen.CrystalNative";
 
         // True when the platform library serves the API; false on the C# implementation.
         internal static bool Native { get; private set; }
@@ -20,7 +24,8 @@ namespace EmuSen.Crystal.Client.Contract
         private static CrystalExports* Choose()
         {
             var table = (CrystalExports*)NativeMemory.AllocZeroed((nuint)sizeof(CrystalExports));
-            if (Environment.GetEnvironmentVariable(Variable) == "1")
+            string? variable = Environment.GetEnvironmentVariable(Variable);
+            if (Asked(variable, Assembly.GetEntryAssembly()))
             {
                 string? missing = Fill(table, PlatformLibrary.Export);
                 if (missing is null && table->abi_version() >> 16 == CrystalAbi.Major)
@@ -34,9 +39,16 @@ namespace EmuSen.Crystal.Client.Contract
             }
             string? absent = Fill(table, EmuSen.Crystal.Managed.ManagedCrystal.Export);
             if (absent is not null) throw new InvalidOperationException($"the C# implementation has no {absent}");
-            Report = string.IsNullOrEmpty(Report) ? $"the C# implementation ({Variable} is not 1)" : Report;
+            Report = string.IsNullOrEmpty(Report) ? $"the C# implementation ({(string.IsNullOrEmpty(variable) ? $"{Variable} is unset and the program's default is the C#" : $"{Variable} is {variable}")})" : Report;
             return table;
         }
+
+        // Whether the Rust is asked for: the variable when it is set (1 the Rust, anything else the C#), else the program's default.
+        internal static bool Asked(string? variable, Assembly? program) => string.IsNullOrEmpty(variable) ? DefaultsToRust(program) : variable == "1";
+
+        // Whether a program's assembly names the Rust as its default.
+        internal static bool DefaultsToRust(Assembly? program) =>
+            program?.GetCustomAttributes<AssemblyMetadataAttribute>().Any(a => a.Key == MetadataKey && a.Value == "1") == true;
 
         // Every field of the table from an export of its name, those found filled; the first name missing, or null when all were found.
         internal static string? Fill(CrystalExports* table, Func<string, nint> export)

@@ -22,7 +22,12 @@ pub struct Config {
     pub sqlite: Option<Arc<emusen_sqlite::Sqlite>>,
     /// The platform's lender of the presenter's device; none lends nothing.
     pub lender: Option<Arc<dyn crate::lend::Lender>>,
+    /// The platform's download of a URL's body, for the cheat database's update; none downloads nothing.
+    pub fetch: Option<Fetch>,
 }
+
+/// A URL's body, or the words of why there is none.
+pub type Fetch = Arc<dyn Fn(&str) -> Result<Vec<u8>, String> + Send + Sync>;
 
 pub struct Runtime {
     directories: Vec<PathBuf>,
@@ -33,6 +38,9 @@ pub struct Runtime {
     pub events: Arc<crate::events::Events>,
     sqlite: Option<Arc<emusen_sqlite::Sqlite>>,
     pub lender: Option<Arc<dyn crate::lend::Lender>>,
+    pub fetch: Option<Fetch>,
+    /// The session service's provider with no game, which answers the cheat ops a frontend asks of session 0.
+    pub no_game: crate::service::Provider,
     /// states.db and the path it was opened at, opened on first use and again where the data folder moved.
     records: Mutex<Option<(String, crate::states::StateRecords)>>,
 }
@@ -49,7 +57,7 @@ impl Runtime {
         let development = config.development.unwrap_or_else(|| std::env::var(emusen_core_host::discovery::DEVELOPMENT_VARIABLE).as_deref() == Ok("1"));
         let trust = Trust::new(&directories, &[]);
         let discovery = Mutex::new(Arc::new(Discovery::scan(&directories, development)));
-        Runtime { directories, development, trust, discovery, sessions: crate::open::Sessions::default(), events: Arc::new(crate::events::Events::default()), sqlite: config.sqlite.clone(), lender: config.lender.clone(), records: Mutex::new(None) }.with_engine_choices_copied()
+        Runtime { directories, development, trust, discovery, sessions: crate::open::Sessions::default(), events: Arc::new(crate::events::Events::default()), sqlite: config.sqlite.clone(), lender: config.lender.clone(), fetch: config.fetch.clone(), no_game: crate::service::Provider::default(), records: Mutex::new(None) }.with_engine_choices_copied()
     }
 
     /// A line of the runtime's own that no session said, raised on session 0, `SayRuntime`.
@@ -64,6 +72,12 @@ impl Runtime {
     /// The discovery the runtime answers from now; a rescan replaces it, and a session already open keeps its engine.
     pub fn discovery(&self) -> Arc<Discovery> {
         self.discovery.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    /// The cheat systems the database is pruned to keep, `CoreCatalog.SupportedCheatSystems`.
+    pub fn supported_cheat_systems(&self) -> Vec<String> {
+        let discovery = self.discovery();
+        Catalog::new(&discovery).supported_cheat_systems()
     }
 
     pub fn rescan(&self) {
@@ -239,6 +253,7 @@ impl Runtime {
     pub fn close(&self, id: u32) -> Result<(), Refused> {
         let s = self.sessions.get(id)?;
         s.close(|e| {
+            crate::recording::stop_at_close(e);
             e.save_sram();
             e.dispose();
         })?;

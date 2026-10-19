@@ -153,6 +153,21 @@ impl<'d> Catalog<'d> {
         Catalog { discovery, rows, registry }
     }
 
+    /// `SupportedCheatSystems`: each row's cheat systems, the registry's rows in its order and then those discovery
+    /// added, each name once without regard to case.
+    pub fn supported_cheat_systems(&self) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        let rows = self.registry.iter().map(|(_, r)| *r).chain((0..self.rows.len()).filter(|&r| self.rows[r].discovered));
+        for r in rows {
+            for c in self.rows[r].cheat_systems() {
+                if !out.iter().any(|o| eq_ic(o, &c)) {
+                    out.push(c);
+                }
+            }
+        }
+        out
+    }
+
     /// The rows in release order: by manufacturer without regard to case, then year, then console without regard to case.
     pub fn consoles_in_release_order(&self) -> Vec<usize> {
         let mut order: Vec<usize> = (0..self.rows.len()).collect();

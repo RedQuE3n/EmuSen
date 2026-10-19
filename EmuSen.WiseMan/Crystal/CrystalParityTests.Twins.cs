@@ -35,6 +35,8 @@ namespace EmuSen.WiseMan.Crystal
                         return run.Run(text);
                     });
                     answers.Add(TreeOf(DataStore.Saves));
+                    answers.Add(TreeOf(DataStore.Cheats));
+                    answers.Add(TreeOf(Path.Combine(ConfigStore.Directory, "cheats")));
                     runs.Add(answers);
                 }
             }
@@ -139,6 +141,53 @@ namespace EmuSen.WiseMan.Crystal
             SameTwinText(text, BuildTree, games);
             Dictionary<string, string> test = TestGames();
             SameTwinText(block.Replace("$GAME", test["GAME"]).Replace("$TSPACE", "RAM").Replace("$PSPACE", "RAM"), new[] { TestTree(plain: false) }, test);
+        }
+    
+        // A cheat database of three systems and a saved list, planted before each implementation runs.
+        private static void PlantCheats()
+        {
+            if (Directory.Exists(DataStore.Cheats)) Directory.Delete(DataStore.Cheats, recursive: true);
+            string cheats = Path.Combine(ConfigStore.Directory, "cheats");
+            if (Directory.Exists(cheats)) Directory.Delete(cheats, recursive: true);
+            void W(string system, string game, string text)
+            {
+                string dir = Path.Combine(DataStore.Cheats, system);
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(Path.Combine(dir, game + ".cht"), text);
+            }
+            W("Nintendo - Nintendo Entertainment System", "Loop", "cheats = 2\ncheat0_desc = \"Lives\"\ncheat0_code = \"SXIOPO\"\ncheat0_enable = true\ncheat1_desc = \"Raw\"\ncheat1_address = 66\ncheat1_value = 9\ncheat1_handler = 1\ncheat1_memory_search_size = 3\ncheat1_cheat_type = 1\n");
+            W("Nintendo - Nintendo Entertainment System", "Other Game", "cheats = 0\n");
+            W("Nintendo - Super Nintendo Entertainment System", "Loop Plus", "cheats = 1\ncheat0_desc = \"Par\"\ncheat0_code = \"7E0DBF63\"\n");
+            W("Unclaimed - Nobody", "Stray", "cheats = 0\n");
+        }
+
+        [Fact]
+        public void The_cheats_answer_alike_on_the_test_core_and_the_build_s_engines()
+        {
+            Dictionary<string, string> games = EngineGames();
+            string block = File.ReadAllText(TwinScriptPath("cheats"));
+            var rows = new[]
+            {
+                (games["NES"], "RAM", "0042:09", "SXIOPO", "Nintendo - Nintendo Entertainment System"),
+                (games["SFC"], "CpuBus", "7E0DBF63", "C264-64D7", "Nintendo - Super Nintendo Entertainment System"),
+                (games["GB"], "CPUBUS", "010F04C1", "00A-17B-C49", "Nintendo - Game Boy"),
+                (games["MD"], "CpuBus", "FFFE00:0063", "ATBT-AA4L", "Sega - Mega Drive - Genesis"),
+            };
+            string text = string.Concat(rows.Select(r => block.Replace("$GAME", r.Item1).Replace("$SPACE", r.Item2).Replace("$CODE", r.Item3).Replace("$GENIE", r.Item4).Replace("$CHEATSYSTEM", r.Item5)));
+            SameTwinText(text, BuildTree, games, PlantCheats);
+            Dictionary<string, string> test = TestGames();
+            SameTwinText(block.Replace("$GAME", test["GAME"]).Replace("$SPACE", "RAM").Replace("$CODE", "0042:09").Replace("$GENIE", "SXIOPO").Replace("$CHEATSYSTEM", "Nintendo - Nintendo Entertainment System"),
+                new[] { TestTree(plain: false) }, test, PlantCheats);
+            SameTwins("cheats-nogame", BuildTree, games, PlantCheats);
+        }
+    
+        [Fact]
+        public void The_recorder_answers_alike_through_the_api()
+        {
+            Dictionary<string, string> games = EngineGames();
+            string rec = Path.Combine(_root, "Recordings");
+            void Clear() { if (Directory.Exists(rec)) Directory.Delete(rec, recursive: true); }
+            SameTwinText(File.ReadAllText(TwinScriptPath("recorder")).Replace("$GAME", games["NES"]).Replace("$REC", rec), BuildTree, games, Clear);
         }
     }
 }

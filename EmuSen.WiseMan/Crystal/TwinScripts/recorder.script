@@ -1,0 +1,19 @@
+# The recorder over a game: refusals, a recording of every third drawn frame, a second refused, the files it left,
+# and a recording a close ends.
+open $GAME
+record_stop
+record_start - 1
+record_start $REC 3
+record_start $REC 1
+frames 7
+record_stop
+record_files
+record_stop
+record_start $REC 0
+frames 2
+close
+record_files
+open $GAME
+record_start $REC 2
+frames 1
+record_stop

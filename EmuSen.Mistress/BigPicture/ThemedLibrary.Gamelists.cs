@@ -96,7 +96,8 @@ namespace EmuSen.Mistress.BigPicture
                 games = ShelfOf(system)!.Folders!.OrderBy(f => f.System.Name, StringComparer.OrdinalIgnoreCase).Select(f => CollectionShelves.Folder(f, Random)).ToList();
             IEnumerable<SceneGame> shown = _filter.Length == 0 ? games : games.Where(g => g.Folder || FilterBar.Matches(_filter, g.Name));
             shown = GamelistOptions.Apply(shown, _gameFilters.GetValueOrDefault(key, GameFilter.None));
-            return _listed[key] = Marked(folders ? shown.ToList() : GamelistOptions.Sort(shown, SortOf(system), favoritesFirst));
+            bool asGiven = OpenFolder(system) is null && ShelfOf(system)?.InGivenOrder == true && !_sorts.ContainsKey(ListKey(system));
+            return _listed[key] = Marked(folders || asGiven ? shown.ToList() : GamelistOptions.Sort(shown, SortOf(system), favoritesFirst));
         }
 
         // What a gamelistinfo counts here: the whole list's games over every folder, the ones search and filters keep, and whether a folder is open (§39).

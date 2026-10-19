@@ -18,9 +18,6 @@ namespace EmuSen.Mistress.BigPicture
         public static readonly ThemeSystem LastPlayed = new(BigPictureCollections.LastPlayed, "last played", "auto-lastplayed", ThemeSystemKind.AutoCollection);
         public static readonly ThemeSystem Grouped = new("collections", "collections", "custom-collections", ThemeSystemKind.CustomCollection);
 
-        // USERGUIDE: "a list of the 50 last games you have launched".
-        public const int LastPlayedLimit = 50;
-
         public const string FolderPrefix = "collection:";
 
         // USERGUIDE's characters a collection name cannot hold.
@@ -40,7 +37,7 @@ namespace EmuSen.Mistress.BigPicture
         }
 
         // As ES-DE 3.4.1 was measured to order them (§22.2): the regular systems, the grouped custom collections, then all games, favorites and last played; discrete custom collections sit beside the grouped one.
-        public static IReadOnlyList<ThemedShelf> Build(IReadOnlyList<ThemedShelf> systems, IReadOnlyList<CustomCollection> custom, BigPictureCollections settings, Func<string, bool> themedByTheme)
+        public static IReadOnlyList<ThemedShelf> Build(IReadOnlyList<ThemedShelf> systems, IReadOnlyList<CustomCollection> custom, BigPictureCollections settings, Func<string, bool> themedByTheme, IReadOnlyList<string> recent)
         {
             // USERGUIDE: a game excluded from the game counter is left out of every automatic and custom collection.
             var all = systems.SelectMany(s => s.Games.Where(g => !g.NotCounted).Select(g => g.Source is null ? g with { Source = s.System } : g)).ToList();
@@ -76,9 +73,10 @@ namespace EmuSen.Mistress.BigPicture
                 {
                     BigPictureCollections.AllGames => new ThemedShelf(AllGames, all) { FavoritesFirst = favFirst },
                     BigPictureCollections.Favorites => new ThemedShelf(Favorites, all.Where(g => g.Favorite).ToList()) { FavoritesFirst = favFirst, Stars = false },
-                    _ => new ThemedShelf(LastPlayed, all.Where(g => g.LastPlayed is not null || g.PlayCount > 0).OrderByDescending(g => g.LastPlayed ?? DateTime.MinValue).Take(LastPlayedLimit).ToList())
+                    // The library screen's Recently Played, in its order, less the games every collection leaves out (EmuSen_Backend.md §28.11).
+                    _ => new ThemedShelf(LastPlayed, recent.Where(byFile.ContainsKey).Select(f => byFile[f]).ToList())
                     {
-                        FavoritesFirst = false, DefaultSort = new GameSort(GameSortKey.LastPlayed, true),
+                        FavoritesFirst = false, DefaultSort = new GameSort(GameSortKey.LastPlayed, true), InGivenOrder = true,
                     },
                 });
             }

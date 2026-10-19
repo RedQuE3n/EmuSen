@@ -63,7 +63,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var shelf = new ThemedShelf(Snes, [G("Counted") with { File = "/s/a.sfc", Favorite = true }, G("Setup") with { File = "/s/b.sfc", Favorite = true, NotCounted = true }]);
             var settings = new BigPictureCollections { AutoCollections = [BigPictureCollections.AllGames, BigPictureCollections.Favorites] };
             var custom = new[] { new CustomCollection(1, "Mine", new HashSet<string> { "/s/a.sfc", "/s/b.sfc" }) };
-            IReadOnlyList<ThemedShelf> shelves = CollectionShelves.Build([shelf], custom, settings, _ => true);
+            IReadOnlyList<ThemedShelf> shelves = CollectionShelves.Build([shelf], custom, settings, _ => true, []);
             Assert.All(shelves.Skip(1), s => Assert.Equal(["Counted"], s.Games.Select(g => g.Name)));
             Assert.Equal(2, shelves[0].Games.Count);
         }
@@ -137,7 +137,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var custom = new[] { new CustomCollection(1, "Platform", new HashSet<string> { "/s/a.sfc", "/n/fable.nes", "/gone.sfc" }), new CustomCollection(2, "Beat", new HashSet<string> { "/s/b.sfc" }) };
             var settings = new BigPictureCollections { AutoCollections = [BigPictureCollections.LastPlayed, BigPictureCollections.AllGames, BigPictureCollections.Favorites] };
 
-            IReadOnlyList<ThemedShelf> shelves = CollectionShelves.Build([nes, snes], custom, settings, _ => false);
+            IReadOnlyList<ThemedShelf> shelves = CollectionShelves.Build([nes, snes], custom, settings, _ => false, []);
             Assert.Equal(["nes", "snes", "collections", "all", "favorites", "recent"], shelves.Select(s => s.System.Name));
             ThemedShelf grouped = shelves[2];
             Assert.Equal(["Beat", "Platform"], grouped.Folders!.Select(f => f.System.Name));
@@ -150,37 +150,30 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(shelves[3].Stars);
 
             // A theme folder of the collection's name makes it a system of its own, beside the grouped one; Always groups it anyway, Never groups nothing.
-            Assert.Equal(["nes", "snes", "collections", "Platform", "all", "favorites", "recent"], CollectionShelves.Build([nes, snes], custom, settings, n => n == "Platform").Select(s => s.System.Name));
+            Assert.Equal(["nes", "snes", "collections", "Platform", "all", "favorites", "recent"], CollectionShelves.Build([nes, snes], custom, settings, n => n == "Platform", []).Select(s => s.System.Name));
             settings.GroupCustomCollections = BigPictureCollections.GroupAlways;
-            Assert.Equal(["nes", "snes", "collections", "all", "favorites", "recent"], CollectionShelves.Build([nes, snes], custom, settings, n => n == "Platform").Select(s => s.System.Name));
+            Assert.Equal(["nes", "snes", "collections", "all", "favorites", "recent"], CollectionShelves.Build([nes, snes], custom, settings, n => n == "Platform", []).Select(s => s.System.Name));
             settings.GroupCustomCollections = BigPictureCollections.GroupNever;
-            Assert.Equal(["nes", "snes", "Beat", "Platform", "all", "favorites", "recent"], CollectionShelves.Build([nes, snes], custom, settings, _ => false).Select(s => s.System.Name));
-            Assert.Equal(ThemeSystemKind.CustomCollection, CollectionShelves.Build([nes, snes], custom, settings, _ => false)[2].System.Kind);
+            Assert.Equal(["nes", "snes", "Beat", "Platform", "all", "favorites", "recent"], CollectionShelves.Build([nes, snes], custom, settings, _ => false, []).Select(s => s.System.Name));
+            Assert.Equal(ThemeSystemKind.CustomCollection, CollectionShelves.Build([nes, snes], custom, settings, _ => false, [])[2].System.Kind);
 
             // A hidden collection is left out; with nothing on, the systems alone.
             settings.HiddenCustomCollections = [1, 2];
             settings.AutoCollections = [];
-            Assert.Equal(["nes", "snes"], CollectionShelves.Build([nes, snes], custom, settings, _ => false).Select(s => s.System.Name));
+            Assert.Equal(["nes", "snes"], CollectionShelves.Build([nes, snes], custom, settings, _ => false, []).Select(s => s.System.Name));
         }
 
         [Fact]
-        public void Last_played_is_newest_first_across_systems_fifty_at_most_with_a_counted_game_without_a_date_last()
+        public void Last_played_is_the_library_s_recent_list_in_its_order_less_the_games_no_collection_holds()
         {
-            var start = new DateTime(2026, 9, 1);
-            var played = Enumerable.Range(0, 60).Select(i => G($"G{i:D2}", played: start.AddHours(i), count: 1) with { File = $"/s/{i}.sfc" }).ToList();
-            played.Add(G("Counted", count: 9) with { File = "/s/c.sfc" });
-            played.Add(G("Never") with { File = "/s/n.sfc" });
+            SceneGame[] games = [G("Older") with { File = "/s/o.sfc" }, G("Newer") with { File = "/s/n.sfc" }, G("Setup") with { File = "/s/u.sfc", NotCounted = true }, G("Counted", count: 9) with { File = "/s/c.sfc" }];
             var settings = new BigPictureCollections { AutoCollections = [BigPictureCollections.LastPlayed] };
-            ThemedShelf recent = CollectionShelves.Build([new ThemedShelf(Snes, played)], [], settings, _ => false).Last();
+            ThemedShelf recent = CollectionShelves.Build([new ThemedShelf(Snes, games)], [], settings, _ => false, ["/s/n.sfc", "/s/u.sfc", "/gone.sfc", "/s/o.sfc"]).Last();
             Assert.Equal(CollectionShelves.LastPlayed, recent.System);
-            Assert.Equal(CollectionShelves.LastPlayedLimit, recent.Games.Count);
-            Assert.Equal("G59", recent.Games[0].Name);
+            Assert.Equal(["Newer", "Older"], recent.Games.Select(g => g.Name));
+            Assert.True(recent.InGivenOrder);
             Assert.Equal(new GameSort(GameSortKey.LastPlayed, true), recent.DefaultSort);
             Assert.False(recent.FavoritesFirst);
-
-            var few = played.Skip(57).ToList();
-            ThemedShelf short_ = CollectionShelves.Build([new ThemedShelf(Snes, few)], [], settings, _ => false).Last();
-            Assert.Equal(["G59", "G58", "G57", "Counted"], GamelistOptions.Sort(short_.Games, short_.DefaultSort!.Value, false).Select(g => g.Name));
         }
 
         [Fact]

@@ -1165,6 +1165,7 @@ namespace EmuSen.Mistress.Views
             UpdateStartConsoleButton();
             string search = LibraryFilter.SearchText;
             _recordSnapshot = _records.All();
+            _recentSnapshot = Recent(Listed(_allScan.Entries));
             _editSnapshot = _records.AllEdits();
             _collections = _records.Collections();
             ShowThemedLibrary();

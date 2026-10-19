@@ -64,6 +64,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var custom = Enumerable.Range(0, 3).Select(c => new CustomCollection(c + 1, $"Mine {c}",
                 systems.SelectMany(s => s.Games).Where((g, i) => i % (7 + c) == 0).Take(200).Select(g => g.File).ToHashSet())).ToList();
             var settings = new BigPictureCollections { AutoCollections = [BigPictureCollections.AllGames, BigPictureCollections.Favorites, BigPictureCollections.LastPlayed] };
+            IReadOnlyList<string> recent = systems.SelectMany(s => s.Games).Where(g => g.LastPlayed is not null).Take(EmuSen.Mistress.Views.MainWindow.RecentLimit).Select(g => g.File).ToList();
             TimeSpan now = TimeSpan.Zero;
             var screen = new Size(1280, 800);
             var lines = new List<string> { $"games {systems.Sum(s => s.Games.Count)}, Debug build, headless, no window (the scene is built, not laid out or drawn)" };
@@ -71,7 +72,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var plain = new ThemedLibrary(() => now);
             var withCollections = new ThemedLibrary(() => now);
             plain.Show(theme.Root, screen, systems, null);
-            withCollections.Show(theme.Root, screen, CollectionShelves.Build(systems, custom, settings, _ => false), null);
+            withCollections.Show(theme.Root, screen, CollectionShelves.Build(systems, custom, settings, _ => false, recent), null);
             var a = new List<double>();
             var b = new List<double>();
             var build = new List<double>();
@@ -81,7 +82,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 plain.Show(theme.Root, screen, systems, null);
                 a.Add(clock.Elapsed.TotalMilliseconds);
                 clock.Restart();
-                IReadOnlyList<ThemedShelf> shelves = CollectionShelves.Build(systems, custom, settings, _ => false);
+                IReadOnlyList<ThemedShelf> shelves = CollectionShelves.Build(systems, custom, settings, _ => false, recent);
                 build.Add(clock.Elapsed.TotalMilliseconds);
                 withCollections.Show(theme.Root, screen, shelves, null);
                 b.Add(clock.Elapsed.TotalMilliseconds);
@@ -101,7 +102,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
             double Steps(string system)
             {
-                withCollections.Show(theme.Root, screen, CollectionShelves.Build(systems, custom, settings, _ => false), null);
+                withCollections.Show(theme.Root, screen, CollectionShelves.Build(systems, custom, settings, _ => false, recent), null);
                 Goto(system);
                 withCollections.Command(UiButton.Accept, now += TimeSpan.FromMilliseconds(600));
                 withCollections.Advance(now += TimeSpan.FromSeconds(1));

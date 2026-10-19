@@ -4750,6 +4750,17 @@ navigation: 566 passed, 15 skipped, none failed) and the one broad Mistress run 
 `ShaderBrowseBench` and `SceneGpuBench`: 878 tests, 863 passed, 15 skipped, none failed, 3 min 16 s). LunaP's suite after
 its merge: 1,350 of 1,350.
 
+### 22.14 Last played is the library's Recently Played (2026-10-18)
+
+Decided 2026-10-18 by the tester (`EmuSen_Backend.md` §28.10): Last Played follows the library screen's rule, not
+§22.2's measurement of ES-DE. `CollectionShelves.Build` is given the library's `recent` answer, the thirty games started
+last, newest first by instant, and lists those games in that order less a game excluded from the game counter. The
+fifty of ES-DE's guide and the counted game with no date are gone, and the shelf is shown in the order given until the
+player picks a sort (`ThemedShelf.InGivenOrder`). §22.7's test `Last_played_is_newest_first_across_systems_fifty_at_most_with_a_counted_game_without_a_date_last`
+became `Last_played_is_the_library_s_recent_list_in_its_order_less_the_games_no_collection_holds`, and
+`ThemedCollectionsTests.Last_played_is_the_library_screen_s_recently_played_list` holds the two screens' lists equal.
+The record is `EmuSen_Backend.md` §28.11.
+
 ## 23. The game options menu and the metadata editor (2026-09-26)
 
 *Opened 2026-09-26, on the third item of the list of what big picture lacks against ES-DE:* the per-game options

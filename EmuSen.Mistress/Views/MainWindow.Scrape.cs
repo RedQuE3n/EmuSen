@@ -74,6 +74,7 @@ namespace EmuSen.Mistress.Views
             _developerOrigin = DeveloperSource()?.Origin;
             _member = MemberAccount.Load();
             if (_mediaStore is null && File.Exists(Path.Combine(MediaStore.DefaultRoot, MediaStore.FileName))) OpenMediaStore();
+            _scrapeQuota?.SettingsChanged();
             ReadScrapeSnapshot();
             ScrapeChanged?.Invoke();
         }

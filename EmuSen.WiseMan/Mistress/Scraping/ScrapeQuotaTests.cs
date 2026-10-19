@@ -133,6 +133,22 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Equal(QuotaGate.Stopped, quota.Check(out _, out _));
         }
 
+        [Theory]
+        [InlineData(ScrapeStatus.BadCredentials)]
+        [InlineData(ScrapeStatus.ApiClosed)]
+        [InlineData(ScrapeStatus.Blacklisted)]
+        public void A_change_in_preferences_lifts_a_403_423_or_426_and_nothing_else(ScrapeStatus status)
+        {
+            var quota = new ScrapeQuotaManager(_store, _clock);
+            quota.Answered(status);
+            quota.SettingsChanged();
+            Assert.Equal(QuotaGate.Go, quota.Check(out _, out _));
+            quota.Answered(ScrapeStatus.DailyQuota);
+            quota.SettingsChanged();
+            Assert.Equal(QuotaGate.Stopped, quota.Check(out _, out string? why));
+            Assert.Contains("430", why);
+        }
+
         [Fact]
         public void Counts_are_kept_for_the_day_and_a_server_s_count_replaces_them()
         {

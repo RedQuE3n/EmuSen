@@ -6368,7 +6368,11 @@ parity class reproduces each as it stands):
   stop is `ScrapeQuotaManager._sessionStop`, which nothing clears, and the quota manager is made once, when `media.db`
   is first opened (`MainWindow.Scrape.cs:88`), and never again while the window lives; so a corrected developer file
   is not used until Mistress is started again. The parity class reproduces it; whether the page or the code is right is
-  for a failing test and the tester.
+  for a failing test and the tester. *Shown and fixed 2026-10-18:* `A_stop_for_the_credentials_or_the_api_lasts_until_
+  preferences_change_and_no_longer` failed for 403, 423 and 426 (one `jeuInfos` where two were expected after
+  Preferences closed), the settings reference §4.60 saying the same as the Big Picture page; `ScrapeQuotaManager.
+  SettingsChanged`, called from `ApplyScraping`, lifts that stop and nothing else (a 430 stays, held by
+  `A_change_in_preferences_lifts_a_403_423_or_426_and_nothing_else`). The Rust reproduces the fixed rule.
 
 ### 30.2 The crate, and where its exports live
 
@@ -6581,8 +6585,8 @@ read from every answer, a server's counts replacing the scraper's own; workers n
 answer says; a pace of `maxrequestspermin` less 10%, media downloads included, 30 a minute assumed; after a file that
 came faster than `maxdownloadspeed`, the difference waited; the day stopped at the day's limit less 2%, or the
 unrecognised allowance less 2%, or on 430 or 431, until midnight in Paris, written to `quota_day`; 429 halves the pace
-and waits 60 s, 401 waits five minutes, 403, 423 and 426 stop for the handle's life, as the C# stops for the window's
-(a candidate, §30.1). **Paris's day** is
+and waits 60 s, 401 waits five minutes, 403, 423 and 426 stop until the handle's settings change (the rule as fixed,
+§30.1). **Paris's day** is
 read as .NET reads it, from the system's time-zone file (`/usr/share/zoneinfo/Europe/Paris`, its TZif transitions), with
 .NET's fallback to UTC when it is absent [C]; no time-zone crate is added, and a summer-time rule written into the code
 is not chosen, since it would part from .NET the day the rule changes. The clock is the handle's: the system's, or the
@@ -6726,6 +6730,8 @@ The total of §7 rises by about 1,600 lines of Rust, to about 53,600 (42,600–6
 ratio.
 
 ### 30.9 Questions for the tester
+
+*Decided 2026-10-18 by the tester: all eight, each as recommended.*
 
 Each is a new dependency, a surface change, or a cross-component choice; none changes what a player sees. A player's
 requests leave with the same bytes (the `User-Agent` stays `EmuSen/<build>`), the store holds the same files and rows,

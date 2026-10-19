@@ -507,3 +507,171 @@ alone. No real hardware is used for any of them (`Endou_Plan.md` §10 Q11).
 2. **D-3 and D-4 stay as argued** from the documents (the Mark III's TH, port `$3E`) until a game shows otherwise; TH
    comes back at the Light Phaser's stage, which reads it.
 3. **CI testing the Beryl crates with `--all-features`** is confirmed.
+
+---
+
+## 10. Stage 3: the VDP's mode 4 (2026-10-19)
+
+### 10.1 In one paragraph
+
+The Master System's consoles now have their picture. A new shared crate, `beryl-sms-vdp` (`Beryl-HW/Beryl_SmsVdp.md`),
+is the 315-5124, the 315-5246 and the 315-5378 in mode 4: the ports and the command word, the registers, VRAM and
+CRAM, the H and V counters with the H counter's latch, the frame and line interrupts, the status flags, the 224- and
+240-line displays, the 315-5124's mask bits, and a composition of sprites (eight a line, tall, zoomed, the early clock,
+collision and overflow) and background (scroll locks, the fine scroll's blank, the left column's mask) drawn up to the
+dot of every write. Its timing within a line is held to FluBBa's *SMS VDP Test*, whose 54 Master System cases all pass
+on every model, NTSC and PAL. Endou wires it to the bus at the master clock over five, gives the status's undriven bits
+the console's bus, latches the H counter as TH rises, takes INT at each instruction's end, and turns the chip's CRAM
+entries into colours at D-1's equal steps. The SG-1000 keeps stage 2's stand-in until stage 4 builds its TMS9918A. The
+access slots are not modelled: no access is lost, which the library's games argue for (D-8).
+
+### 10.2 Why a crate, and what it holds
+
+`Endou_Plan.md` §3.3 (decided 2026-10-19, Q7): the family's chip is one Beryl crate, its line composition a public
+module that the Genesis's mode 4 is to share at stage 4. The crate holds the chip whole; Endou holds the wiring and the
+colours. The surface Endou uses: `Vdp::new(variant, pal)`, `run(to)`, the five port calls, `latch_h`, `irq`,
+`picture` and `height`, `skip`, and the state block. A new dependency of Endou's, said here as the project's rules ask;
+nothing else gains one, and no existing Beryl crate changed.
+
+### 10.3 The wiring
+
+`src/bus.rs`, as `Endou_Native.md` §9.3's decoding gives the ports:
+
+| Rule | Source |
+|---|---|
+| The VDP's clock is the bus's times three, the master clock over five against the Z80's over fifteen; it is brought to the present at each of its ports, at each instruction's end where INT is sampled, and at the frame's end | `Endou_Plan.md` §5.1 |
+| Ports `$40`-`$7F` read the V counter at even addresses and the latched H counter at odd ones; `$80`-`$BF` the data port at even addresses and the status at odd ones, and write the data and control ports | [R MacDonald's `smstech` §3, `msvdp` §2] |
+| The status's bits 4-0 are the console's undriven read: the bus's last byte on the Mark III and the first Master System, `$FF` on the second | [R `msvdp` §4: "garbage"; the undriven read of §9.3] |
+| A write to port `$3F` that makes either TH pin rise, as §9.5 gives each console's TH, latches the H counter | [R `msvdp` §11; D-3's note of stage 3] |
+| The 315-5124 in the Mark III and the first Master System, the 315-5246 in the second | [R `msvdp` §1] |
+| The SG-1000's VDP ports keep stage 2's stand-in: the counters undriven and the VDP `$FF`, the picture black | stage 4's |
+
+The machine's frame of 262 or 313 lines starts on the chip's last line (`Beryl_SmsVdp.md` §3.3): a frame's picture is
+whole before the frame ends, and nothing of the next is drawn.
+
+### 10.4 The picture
+
+The chip's picture is CRAM entries; `machine::SMS_COLOURS` turns a `--BBGGRR` entry into RGBA at 0, 85, 170 and 255 a
+component (D-1), once a frame and never when the frame's picture is skipped. The picture's height is the frame's active
+lines, 192, 224 or 240; machine info keeps 256 by 192 with a largest of 256 by 240, and frame info gives each frame's.
+Machine info now says `skip_rendering_state_neutral`, which the kit's C8 checks on every image of §10.7.
+
+### 10.5 The test programs
+
+Three join `programs/` (`Endou_Native.md` §9.8): `picture.s`, a mode 4 picture of tiles, a sprite, a fine scroll, the
+masked column and a CRAM entry changed mid-line by the line interrupt and back by the frame interrupt; `slots.s`, the
+data port written at four rates and read back (D-8); and `hlatch.s`, the H counter latched by TH rising through port
+`$3F` and not by it falling. WiseMan's `SyntheticSmsRom` gains `Ports` and `Picture`, a program of port writes and a
+mode 4 picture whose masked column shows the backdrop, which `EndouTests.The_vdp_draws_a_synthetic_program_s_picture`
+holds through the v1 adapter. `examples/screen.rs` runs an image with pad presses and shows its name table as text,
+its picture as a PPM or raw RGBA, its RAM, VRAM and registers.
+
+### 10.6 The state, version 3
+
+`ENDO` version 3: version 2's fields to the slots, then RAM, the VDP's block (`Beryl_SmsVdp.md` §6) with VRAM and
+CRAM, then the cartridge's RAM where the board has it: 24,879 bytes for a plain `sms` board, 57,647 with Sega's 32 KiB,
+pinned by `the_version_3_layout_is_pinned`. Version 2 reached no player and is refused.
+
+### 10.7 The gate (`Endou_Plan.md` §7, stage 3), measured 2026-10-19
+
+| Gate item | Result [M] |
+|---|---|
+| The VDP test programs, self-reporting ones by their verdicts | **FluBBa's *SMS VDP Test* 1.31: all 54 Master System cases pass** (pages 1-3: the data port, the counters and interrupts, the sprites) on the Mark III, the Master System and the Master System II, NTSC, and the Master System II in PAL; `flubba_s_vdp_test_passes_on_every_model` with the corpus. Of the references Gearsystem and SMS Plus GX pass every case, Genesis Plus GX all but "Offscreen Y, col", PicoDrive fails the five H count cases, and BlastEm did not start the test from a pad press (D-9). **sverx's *SMS Test Suite* 0.36**, which reads the console it runs on, names "Master System II" with "USA/BRA 60Hz (NTSC)" on the default, "Master System" on the first Master System, "Master System" with "JPN/KOR" on the Mark III (a 315-5124) and "EUR/AUS 50Hz (PAL)" in Europe |
+| Pictures equal to the references up to a colour map, or a dispute | §10.8 |
+| The skip-versus-draw state test | `skipping_rendering_leaves_the_state_as_drawing` on `picture.s`, the crate's own, and the kit's C8 with rendering skipped on alternate frames on all 24 images below, eight of them games (P9) |
+| The kit | **every case it runs passes** (C1-C15, C17-C23), 600 frames, on the eleven program images, *SMS VDP Test*, *SMS Test Suite*, MacDonald's *64 Color Palette*, *Scroll Test* and Bock's *Fullscreen Palette Test*, eight of the tester's games read in place (Sonic the Hedgehog, Space Harrier, Micro Machines, Cosmic Spacehead, Phantasy Star, Alex Kidd in Miracle World, After Burner, OutRun) and an SG-1000 game |
+| The crates' tests | `beryl-sms-vdp` **23 of 23**, on `test-checked` too; `endou` **48 of 48** (ZEXDOC, ZEXALL and FluBBa's test where the corpus is given); `EndouTests` **10 of 10**, with `SystemTableParity` and `CoreRegistration` 21 of 21 |
+| Seeded faults | §10.9 |
+| The cost | the desktop's mean a frame, release, median of three runs of 3,600 frames with the machine otherwise busy (load 5-6): Sonic the Hedgehog 0.22 ms, Space Harrier 0.22, Golden Axe 0.26, OutRun 0.23, Micro Machines 0.23; stage 2's machine without the VDP was 0.075. P1's budget is 0.6 ms with the sound still to come |
+
+Toolchains: rustc 1.99.0, .NET 10.0.112, on the desktop (Ryzen 7 7700X).
+
+### 10.8 Pictures against the references
+
+Each program or game run to a frame on Endou's Master System II and on the five references as black boxes through the
+probe, every option at its default, and the pictures compared up to a colour map (`compare.py` in the step's scratch;
+BlastEm's 256 by 224 cropped at row 16, PicoDrive's 248-wide pictures against Endou's columns 8-255). Digests are
+Endou's frame, FNV-1a over its RGBA; no picture is committed.
+
+| Image, frame | Endou's digest | Genesis Plus GX | Gearsystem | SMS Plus GX | PicoDrive | Note |
+|---|---|---|---|---|---|---|
+| *SMS VDP Test*, menu (300) and page 1 (700) | `027107BD777DCA10`, `F6EDA2E6A2D8EE03` | 0 | 0 | 0 | 0 | BlastEm stays on its menu |
+| `picture.s` (10) | `FDEA985F7BF46025` | 0 | 8, one line | 0 | 0 | Gearsystem changes the colour a line earlier |
+| *Color Check*, *Checkstate*, *SMS Palette*, *Fullscreen Palette*, *Mark III BG Test*, *V Counter Test* (300-600) | | 0 each | 0 each | 0 each | 0 each | on the Master System II; on the Mark III, which a cartridge with no region gets, *Color Check* shows the 315-5124's name table mirroring its first rows, as `msvdp` §7 and "Tilemap Mirroring" describe for homebrew assuming a 315-5246 |
+| *Scroll Test* (300) | `45A050A0FFC88C21` | 511 | 511 | other phase | 5,208 | the fine scroll's first pixels: D-7 |
+| *64 Color Palette* (600) | `76BA586C31A8B325` | 448 | 832 | 672 | 416 | CRAM written during each band's first line; the four disagree with each other on which pixels take the new colours, so the dot of a mid-line write stands as `Beryl_SmsVdp.md` §3.2 and §5 have it |
+| *SMS Test Suite* (600) | `521C73F1B9F96C1B` | blank | blank | blank | 304, one text line | PicoDrive names itself "Genesis/MegaDrive"; the other three show a blank screen at this frame |
+| Sonic the Hedgehog (600) | `1D034E67A78698FD` | 0 | 0 | 0 | 0 | |
+| Phantasy Star (600) | `12DC77F77BA1D5BE` | 0 | 0 | 0 | 0 | |
+| Fantasy Zone (600) | `8733F30473C625D7` | 0 | 0 | 0 | 0 | |
+| Alex Kidd in Miracle World (600) | `21C1F9765DFA24F4` | 213 | 0 | 0 | 0 | |
+| Cosmic Spacehead (600), 224 lines | `4835AB494F15F669` | probe crashed | 0 | 0 | 0 | |
+| Micro Machines (600), 224 lines | `0083A0F3A6AFC66F` | probe crashed | 5,966 | 5,966 | 5,966 | the references run the (E) image in PAL by their own databases; Endou's region setting at Europe gives `8BB6DDD1A9EC173F`, equal to all three |
+| Space Harrier (600) | `996D9B42D3ACFB7D` | 51 | 51 | 51 | 51 | Endou's picture is the references' four frames later: §10.10 |
+| OutRun (600) | `79F18FD1D7D3B16A` | 471 | 471 | 462 | 462 | a different moment of the attract mode's road, the references agreeing with each other |
+
+### 10.9 Seeded faults (2026-10-19)
+
+Each made in the source, the crates' tests run with the corpus (but ZEXDOC and ZEXALL), the file restored and compared
+byte for byte (`seed.py` in the step's scratch); then those caught only by the corpus or by nothing were run again
+without it:
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | the V counter's NTSC jump a line late | `the_v_counter_runs_as_the_document_lists_it`, FluBBa's test |
+| F2 | the line counter not stepping on the line after the display | **only FluBBa's test at first**: the line counter's test ran register 10 at 2, whose interrupts miss line 192. It now runs it at 0 as well, and catches it |
+| F3 | overflow at the eighth sprite | `a_ninth_sprite_is_overflow_and_the_first_eight_keep_their_order` |
+| F4 | a priority tile's colour 0 covering sprites | `a_priority_tile_covers_sprites_but_not_with_its_colour_0` |
+| F5 | the left column's mask seven pixels wide | the crate's mask test and the picture program |
+| F6 | a status read leaving the line flag | the line counter's test and the picture program |
+| F7 | code 0 not reading ahead | the command word's test, `slots.s`, FluBBa's test |
+| F8 | the H counter latched at TH's rise, not a dot after | **only FluBBa's test at first**: the latch's test latched at a dot where the two give one value. It latches at the next dot now, and catches it |
+| F9 | the Y scroll taken every line | **nothing at first**: no test wrote register 9 mid-frame. `the_y_scroll_is_taken_as_a_frame_begins_and_the_x_scroll_as_each_line_does` was added, and catches it |
+| F10 | the 315-5124's name table mask ignored | `the_first_master_system_masks_name_rows_and_pattern_fetches_with_its_old_registers` |
+| F11 | the X scroll not restored by a state | **nothing at first**: the state's round trip saved with both scrolls at 0. It sets them first now, and catches it |
+| F12 | collisions found only while drawing an active line | the crate's skip test, FluBBa's test |
+| F13 | the status's undriven bits read as 0 | the PSG program's status read |
+| F14 | red and green swapped in the colours | the picture program |
+| F15 | the H counter latched as TH falls | **only FluBBa's test at first**; `hlatch.s` and `the_h_counter_is_latched_as_th_rises_through_port_3f_and_not_as_it_falls` were added, and catch it |
+| F16 | the frame interrupt a line early | **only FluBBa's test at first**: the frame interrupt's test looked for INT a clock before line `$C0` rather than `$C1`. It looks before `$C1` now, and catches it |
+
+### 10.10 Open
+
+- **Space Harrier starts four to five frames later than on all four references.** Its RAM equals Gearsystem's from frame
+  4 to 10; during its opening, a run-length copy of 16 KiB of patterns to VRAM with the display off, Endou's VRAM fills
+  at about 0.86 of PicoDrive's rate (PicoDrive exposes VRAM), so that Endou's frame 34 is the references' 29. The copy
+  is one routine of plain instructions with no port read, and three test programs that run the same instruction mix
+  (the routine itself over a table of literal and repeated runs, with an interrupt counting the frames) give the same
+  count on Endou and on every reference; the cycles a frame are equal too (1,659 polls of the frame flag on each). The
+  cause is not found; the goldens' stage (G5) takes it with the commercial games' anchors.
+- **The fine scroll's first pixels** (D-7) and **the access slots** (D-8) are argued.
+- **A mid-line write's dot** is the dot of the write; the chip's fetch pipeline, which runs ahead of its pixels, is not
+  modelled (`Beryl_SmsVdp.md` §5).
+- **The probe's Genesis Plus GX crashed** on the two Codemasters images; the probe's other cores ran them.
+
+### 10.11 What was read for this stage
+
+No emulator source, no SMS_MiSTer RTL, no firmware or firmware listing. Read: `Endou_Plan.md`, `Endou_Native.md`,
+`Endou_References.md`, `Endou_Disputes.md`; the Beryl pages and `beryl-sn76489`'s and `beryl-z80`'s surfaces;
+Nephrite's `render.rs` mode 4 and its D-7 and `Nephrite_Native.md` §15; MacDonald's `msvdp` whole and `smstech` §3;
+SMS Power!'s "VDP Registers", "Scanline Counter", "SMS1/SMS2 VDPs", "Sprites", "Tilemap", "Tilemap Mirroring", "VRAM
+Memory Map", "Tiles", "Palette", "Pixel Aspect Ratio", "Video Output", "VDP", "Tec Toy VDP", "TV Type Detection",
+"Interrupt Mechanism", "GG VDP", "I/O Port Map - SMS"; Sega's Mark III manual, "Interrupt system" and "VDP registers"
+through register 10; Talbot-Watkins's VDP registers; FluBBa's *SMS VDP Test* readme and `testmain.asm`; MacDonald's
+*Scroll Test*'s and *64 Color Palette*'s `TEST.ASM` and `vdp.inc`. Of Space Harrier's cartridge, for §10.10, the bytes of
+its reset code and of the copy routine at `$06A6`, as hexadecimal; nothing of it is kept.
+
+### 10.12 Questions before stage 4
+
+1. **D-1's boosted blue.** SMS Power!'s "Palette" gives the 315-5124 (the Mark III and the first Master System) a
+   first blue level of `#68` where the 315-5246's is `#55`, naming no measurement. Should Endou take it for those two
+   models? Recommended: yes, as the one document that speaks to the 315-5124's levels, marked [R] and not [M]; the
+   equal steps stay on the 315-5246.
+2. **A VHDL simulator for SMS_MiSTer** (GHDL or nvc), to place the access slots (D-8) with `slots.s` stepped from 11 to
+   29 cycles, and to referee D-6, D-7 and Space Harrier's opening as a black box. Recommended: yes, run as Nephrite's
+   rule and §1.6 of the plan allow, the RTL opened only in a logged dispute step.
+3. **The region of an (E) image.** Micro Machines (E) carries an export header, so Endou runs it as an American NTSC
+   console; the references run it in PAL from their databases. Recommended: as `Endou_Plan.md` §10 Q9 decided, PAL by the
+   region setting, and a table of PAL-only games only when one is shown to need it; Micro Machines runs in either.
+4. **MAME** as a fourth witness for the pictures (`Endou_Native.md` §8, question 2): recommended not yet; the four
+   libretro references agreed with each other or disagreed in ways MAME would not settle.

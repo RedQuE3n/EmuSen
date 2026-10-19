@@ -132,6 +132,22 @@ namespace EmuSen.WiseMan.Fixtures
             return rom;
         }
 
+        // DI; LD SP,$DFF0; each write as LD A,n; OUT (p),A; then JR $.
+        public static byte[] Ports(IEnumerable<(byte Port, byte Value)> writes)
+        {
+            var code = new List<byte> { 0xF3, 0x31, 0xF0, 0xDF };
+            foreach (var (port, value) in writes) code.AddRange(new byte[] { 0x3E, value, 0xD3, port });
+            code.AddRange(new byte[] { 0x18, 0xFE });
+            return code.ToArray();
+        }
+
+        // Mode 4 with the left column masked: CRAM 0, blue, under every pixel, and the backdrop, CRAM 17, green, over the first eight columns - see Endou_Native.md §10.8.
+        public static byte[] Picture() => Banked(2, Ports(new (byte, byte)[]
+        {
+            (0xBF, 0x26), (0xBF, 0x80), (0xBF, 0x40), (0xBF, 0x81), (0xBF, 0x01), (0xBF, 0x87),
+            (0xBF, 0x00), (0xBF, 0xC0), (0xBE, 0x30), (0xBF, 0x11), (0xBF, 0xC0), (0xBE, 0x0C),
+        }));
+
         private static byte Bcd(int n) => (byte)(n / 10 << 4 | n % 10);
     }
 }

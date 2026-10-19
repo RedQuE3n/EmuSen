@@ -166,6 +166,23 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // The VDP through the v1 adapter: CRAM entries at the D-1 levels, the backdrop in the masked column - see Endou_Native.md §10.8.
+        [Fact]
+        public void The_vdp_draws_a_synthetic_program_s_picture()
+        {
+            var engine = new CoreAbiTestRomEngine(LibraryPath);
+            Assert.True(engine.Available, engine.Report);
+            var run = engine.Run(Write("picture.sms", SyntheticSmsRom.Picture()), new[] { 5 }, Array.Empty<RomPress>());
+            var picture = run.At(5)!.Picture!;
+            Assert.Equal((256, 192), (picture.Width, picture.Height));
+            for (int y = 0; y < 192; y += 37)
+            {
+                Assert.Equal(((byte)0, (byte)255, (byte)0), picture.At(7, y));
+                Assert.Equal(((byte)0, (byte)0, (byte)255), picture.At(8, y));
+                Assert.Equal(((byte)0, (byte)0, (byte)255), picture.At(255, y));
+            }
+        }
+
         // A developer asking for development cores opens the files; the system packs name the consoles.
         [Fact]
         public void A_cartridge_opens_on_the_discovered_engine_when_development_cores_are_asked_for()

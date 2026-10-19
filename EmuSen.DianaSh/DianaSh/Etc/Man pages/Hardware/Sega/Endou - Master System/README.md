@@ -16,13 +16,17 @@ Master System is the next new console, ahead of the PlayStation 2; building star
   five references' costs; the seeded faults; and the questions before stage 2, decided 2026-10-19. Stage 2 (§9,
   2026-10-19): the bus, the boards and their table, the I/O chip and the models, the scheduler, the state's version 2,
   the test programs, ZEXDOC and ZEXALL on the machine, the library survey, the referees, the gate and the seeded faults.
+  Stage 3 (§10, 2026-10-19): the VDP's mode 4 wired to the machine, FluBBa's VDP test passing whole, the pictures
+  against the references, the state's version 3, the kit, the seeded faults, and the questions before stage 4.
 - [`Endou_References.md`](Endou_References.md) — the documents, test programs, references and referees with their URL,
   version, licence and SHA-256, as stage 1 fetched and pinned them, and the corrections to what stage 0 recalled.
 - [`Endou_Disputes.md`](Endou_Disputes.md) — the disputes log, opened with D-0 (the PSG's noise register by console),
   D-1 (the Master System's colour levels, open) and D-2 (the YM2413's operator ROMs, open); stage 2 added D-3 (the
-  Mark III's TH), D-4 (port `$3E` and the undriven reads) and D-5 (Codemasters' slots), each argued.
+  Mark III's TH), D-4 (port `$3E` and the undriven reads) and D-5 (Codemasters' slots), each argued; stage 3 added D-6
+  (the 315-5124's zoom), D-7 (the fine scroll's first pixels), D-8 (the access slots, open) and D-9 (the line's
+  timing, measured by FluBBa's test).
 
-The CPU, its assembler and the PSG are documented with their crates in [`../Beryl-HW/`](../Beryl-HW/) (Beryl Hardware). The Game
+The CPU, its assembler, the PSG and the VDP are documented with their crates in [`../Beryl-HW/`](../Beryl-HW/) (Beryl Hardware). The Game
 Gear's pages, when its stages start, go in [`../Jadeite - Game Gear/`](../Jadeite%20-%20Game%20Gear/).
 
 The core was first reserved as Endymion, a name now held by the SDL crate; see `Man pages/EmuSen_Core_Naming_Scheme.md`

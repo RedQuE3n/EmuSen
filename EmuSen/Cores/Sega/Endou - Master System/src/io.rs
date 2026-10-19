@@ -50,6 +50,11 @@ impl Io {
         }
     }
 
+    /// Both ports' TH levels, as the VDP's H counter latch sees them rise (Endou_Native.md §10.4).
+    pub fn th_levels(&self, model: Model) -> [bool; 2] {
+        [self.th(model, 0), self.th(model, 1)]
+    }
+
     /// Port $DC: port A's directions, TL and TR, then port B's Up and Down [R MacDonald's `smstech` §4; on the SG-1000
     /// the gamepad row of MacDonald's `sc3000h` §5, the same bits].
     pub fn port_dc(&self, model: Model) -> u8 {

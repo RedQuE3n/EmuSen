@@ -40,6 +40,15 @@ impl Model {
         [Model::MarkIII, Model::Sms1, Model::Sms2, Model::Sg1000].into_iter().find(|m| m.byte() == b)
     }
 
+    /// The VDP: the 315-5124 in the Mark III and the first Master System, the 315-5246 in the second [R MacDonald's
+    /// `msvdp` §1]. The SG-1000's TMS9918A is stage 4's; until then its machine holds a 315-5246 it never wires.
+    pub fn vdp(self) -> beryl_sms_vdp::Variant {
+        match self {
+            Model::MarkIII | Model::Sms1 => beryl_sms_vdp::Variant::SMS1,
+            Model::Sms2 | Model::Sg1000 => beryl_sms_vdp::Variant::SMS2,
+        }
+    }
+
     /// Whether ports $3E and $3F exist: every console from the Mark III on.
     pub fn has_control_ports(self) -> bool {
         self != Model::Sg1000

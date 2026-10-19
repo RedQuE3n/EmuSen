@@ -152,7 +152,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sega Master System and the SG-1000 in Rust, written from hardware documents and graded by test programs. At this stage it runs the processor, the cartridge's board and the controllers, with a black picture and silence until the video and sound chips are built.".into()),
+            description: Some("The Sega Master System and the SG-1000 in Rust, written from hardware documents and graded by test programs. At this stage it runs the processor, the cartridge's board, the controllers and the Master System's video chip, with silence until the sound chip is wired and a black picture on the SG-1000 until its video chip is built.".into()),
             systems: vec![
                 system("sms", "Sega Master System / Mark III", ".sms", pad(SMS_PAD, "Control Pad", 8)),
                 system("sg1000", "Sega SG-1000", ".sg", pad(SG1000_PAD, "Joystick", 7)),
@@ -192,7 +192,7 @@ impl Core for Machine {
             state: StateFormat { format: "ENDO".into(), version: STATE_VERSION as i64, loads_from: vec![STATE_VERSION as i64] },
             phases: Vec::new(),
             patches: None,
-            skip_rendering_state_neutral: false,
+            skip_rendering_state_neutral: true,
             firmware: Vec::new(),
         }
     }
@@ -211,11 +211,11 @@ impl Core for Machine {
     }
 
     fn frame_info(&self) -> FrameInfo {
-        FrameInfo::rgba(WIDTH as i32, HEIGHT as i32)
+        FrameInfo::rgba(WIDTH as i32, self.height as i32)
     }
 
     fn frame(&self) -> &[u8] {
-        &self.picture
+        self.frame_bytes()
     }
 
     fn audio_rate(&self) -> i32 {

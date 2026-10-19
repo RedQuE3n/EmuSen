@@ -7,6 +7,13 @@ name = "beryl-asm"
 version = "0.1.0"
 
 [[package]]
+name = "beryl-sms-vdp"
+version = "0.1.0"
+dependencies = [
+ "emusen-native",
+]
+
+[[package]]
 name = "beryl-sn76489"
 version = "0.1.0"
 dependencies = [
@@ -29,6 +36,7 @@ version = "0.1.0"
 name = "endou"
 version = "0.1.0"
 dependencies = [
+ "beryl-sms-vdp",
  "beryl-sn76489",
  "beryl-z80",
  "emusen-native",

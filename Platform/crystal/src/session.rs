@@ -161,13 +161,16 @@ impl Session {
         (svc::NO_SESSION, format!("session {} was closed", self.id))
     }
 
-    /// The gate taken plainly, as a read naming the machine takes it: after the frame in progress.
+    /// The gate, taken after the frame in progress and before the next: counted while waiting, so that the frame thread
+    /// lets every waiter in, a read naming the machine as well as a change (EmuSen_Backend.md §29.28).
     pub fn lock(&self) -> Result<Held<'_>, Refused> {
         let me = thread_id();
         if self.owner.load(Ordering::Acquire) == me {
             return Err((abi::status::BUSY, format!("this thread already holds session {}'s gate", self.id)));
         }
+        self.pending.fetch_add(1, Ordering::AcqRel);
         let engine = self.engine.lock().unwrap_or_else(|p| p.into_inner());
+        self.pending.fetch_sub(1, Ordering::AcqRel);
         self.owner.store(me, Ordering::Release);
         let held = Held { owner: &self.owner, engine };
         if self.closed.load(Ordering::Acquire) {
@@ -176,18 +179,10 @@ impl Session {
         Ok(held)
     }
 
-    /// The gate taken for a change: counted while waiting, so that the frame thread lets it land before its next frame.
-    pub fn enter(&self) -> Result<Held<'_>, Refused> {
-        self.pending.fetch_add(1, Ordering::AcqRel);
-        let held = self.lock();
-        self.pending.fetch_sub(1, Ordering::AcqRel);
-        held
-    }
-
     /// A change between two frames, the caller waiting for the frame in progress, `ManagedSession.Change`.
     pub fn change<T>(&self, change: impl FnOnce(&mut Engine, &mut Run) -> Result<T, Refused>) -> Result<T, Refused> {
         let (result, said) = {
-            let mut held = self.enter()?;
+            let mut held = self.lock()?;
             let mut run = self.run.lock().unwrap_or_else(|p| p.into_inner());
             let result = change(&mut held.engine, &mut run);
             (result, held.engine.take_said())
@@ -269,7 +264,7 @@ impl Session {
             while self.pending.load(Ordering::Acquire) > 0 {
                 std::thread::yield_now();
             }
-            let mut held = self.enter()?;
+            let mut held = self.lock()?;
             self.frame_thread.store(me, Ordering::Release);
             let mut run = self.run.lock().unwrap_or_else(|p| p.into_inner());
             let ran = if (!run.paused && !run.halted) || run.run_requested { self.advance(&mut held.engine, &mut run)? } else { false };

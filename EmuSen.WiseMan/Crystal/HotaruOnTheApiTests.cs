@@ -166,6 +166,25 @@ namespace EmuSen.WiseMan.Crystal
             }
         });
 
+        // A game's log says which implementation serves it, as Pharaoh's does - see EmuSen_Backend.md §29.28.
+        [Fact]
+        public void A_game_s_log_names_the_implementation_that_serves_it()
+        {
+            TextWriter original = Console.Out;
+            var echoed = new StringWriter();
+            HotaruSession hotaru = HotaruSession.Build(_f.Game("Named.tst"), echoed, _f.Runtime);
+            try
+            {
+                hotaru.Session.Dispose();
+            }
+            finally
+            {
+                Console.SetOut(original);
+                hotaru.LogWriter.Dispose();
+            }
+            Assert.Contains($"[ROM] Runtime: {CrystalRuntime.Implementation}", echoed.ToString().Split(Environment.NewLine));
+        }
+
         // `core <name>` on the API knows every name the catalog's registry knows, each with the same display name, console and extensions, so its words are unchanged.
         [Fact]
         public void The_core_vocabulary_read_from_the_API_is_the_registry_s()
@@ -176,6 +195,38 @@ namespace EmuSen.WiseMan.Crystal
                 Assert.True(cores.TryGetValue(name, out var choice), $"`core {name}` is not known on the API");
                 Assert.Equal((descriptor.DisplayName, descriptor.Console, string.Join(",", descriptor.Extensions)), (choice!.DisplayName, choice.Console, string.Join(",", choice.Extensions)));
             }
+        }
+
+        // C3's other half: a copy waiting beside a frame loop that never pauses lands before the loop's next frame or so, never starved by it - see EmuSen_Backend.md §29.28.
+        [Fact]
+        public void C3_a_copy_beside_a_frame_loop_that_never_pauses_is_not_starved()
+        {
+            using CrystalSession s = _f.Open();
+            bool stop = false;
+            long ran = 0;
+            var frames = new Thread(() => { var info = new CrystalFrameInfo(); while (!Volatile.Read(ref stop)) { s.Frame(ref info); Interlocked.Increment(ref ran); } });
+            frames.Start();
+            while (Interlocked.Read(ref ran) < 5) Thread.Yield();
+            double longest = 0;
+            int copies = 0;
+            var copier = new Thread(() =>
+            {
+                var rgba = new byte[(int)s.PictureBytes];
+                for (; copies < 20; copies++)
+                {
+                    long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+                    s.CopyPicture(rgba);
+                    longest = Math.Max(longest, System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
+                }
+            });
+            copier.Start();
+            bool done = copier.Join(TimeSpan.FromSeconds(30));
+            int landed = Volatile.Read(ref copies);
+            Volatile.Write(ref stop, true);
+            frames.Join();
+            copier.Join();
+            Assert.True(done, $"{landed} of 20 copies in 30 s beside the frames");
+            Assert.True(longest < 1000, $"a copy waited {longest:F0} ms beside the frames");
         }
 
         // C3 on the API: the feed window's copy, taken on another thread while frames run, is always one whole picture of the test core's, never a mix of two.

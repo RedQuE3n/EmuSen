@@ -15,11 +15,11 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public static GameSelectors None { get; } = new();
 
         // Every gameselector of a system view, picked from one system's games; the seed varies the random picks between navigations.
-        public static GameSelectors For(ResolvedView view, SceneSystem system, int seed)
+        public static GameSelectors For(ResolvedView view, SceneSystem system, int seed, RecentGames? recent)
         {
             var selectors = new GameSelectors();
             foreach (ResolvedElement e in view.OfType("gameselector"))
-                selectors._byName[e.Name] = (e, Pick(e, system, seed ^ StableHash(e.Name)));
+                selectors._byName[e.Name] = (e, Pick(e, system, seed ^ StableHash(e.Name), recent));
             return selectors;
         }
 
@@ -39,15 +39,15 @@ namespace EmuSen.Mistress.BigPicture.Scene
             return entry < chosen.Games.Count ? chosen.Games[entry] : null;
         }
 
-        // The games one selector picks: the played ones by date or count, or a shuffle, without the excluded or folders (§36).
-        public static IReadOnlyList<SceneGame> Pick(ResolvedElement e, SceneSystem system, int seed)
+        // The games one selector picks: the library's recent ones, the played ones by count, or a shuffle, without the excluded or folders (§36).
+        public static IReadOnlyList<SceneGame> Pick(ResolvedElement e, SceneSystem system, int seed, RecentGames? recent)
         {
             int count = (int)Math.Clamp(e.UInt("gameCount") ?? 1, 1, 30);
             List<SceneGame> pool = (system.Counted ?? system.Games).Where(g => !g.Folder && !g.NotCounted).ToList();
             switch (e.String("selection"))
             {
                 case "lastplayed":
-                    return pool.Where(g => g.LastPlayed is not null).OrderByDescending(g => g.LastPlayed).Take(count).ToList();
+                    return recent is null ? [] : Recent(pool, count, recent);
                 case "mostplayed":
                     return pool.Where(g => g.PlayCount > 0).OrderByDescending(g => g.PlayCount).Take(count).ToList();
                 default:
@@ -57,6 +57,14 @@ namespace EmuSen.Mistress.BigPicture.Scene
                         while (picked.Count < count && pool.Count > 0) picked.Add(pool[random.Next(pool.Count)]);
                     return picked;
             }
+        }
+
+        // The library's recent call over the pool's files, its answer mapped back to the pool's games (EmuSen_Backend.md §28.11).
+        private static IReadOnlyList<SceneGame> Recent(List<SceneGame> pool, int count, RecentGames recent)
+        {
+            var byFile = new Dictionary<string, SceneGame>(pool.Count, StringComparer.Ordinal);
+            foreach (SceneGame g in pool) byFile.TryAdd(g.File, g);
+            return recent(pool.Select(g => g.File).ToList(), count).Select(f => byFile[f]).ToList();
         }
 
         private static int StableHash(string s)

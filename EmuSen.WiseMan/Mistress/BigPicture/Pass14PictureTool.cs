@@ -66,10 +66,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var systems = Order.Select(s => new ThemeSystem(s.Name, s.FullName, s.Name)).Select(t => new SceneSystem(t, ThemeLoader.Load(caps, t, choices, new MediaPresence(new HashSet<string> { "cover", "screenshot", "marquee", "fanart", "titlescreen", "miximage" })), Games(t.Name)))
                 .Select(sys => sys.System.Name == system && adjust is not null ? adjust(sys) : sys).ToList();
             foreach (ThemeDiagnostic d in systems.SelectMany(s => s.Theme.Errors).Distinct()) _out.WriteLine($"{label}: {d.Message}");
+            using var records = SyntheticRecords.Of(systems.SelectMany(s => s.Games));
             var data = new SceneData(systems, new Size(w, h))
             {
                 SystemIndex = systems.FindIndex(s => s.System.Name == system), GameIndex = 0, Media = new EsdeMediaFolder(Media), Shuffle = shuffle,
-                Now = new DateTime(2026, 9, 27, 5, 0, 0), ShowClock = false, Status = status ?? new EmuSen.LunaP.Controls.DeviceStatus(Bluetooth: true),
+                Now = new DateTime(2026, 9, 27, 5, 0, 0), ShowClock = false, Status = status ?? new EmuSen.LunaP.Controls.DeviceStatus(Bluetooth: true), Recent = records.Recent,
             };
             SceneBuilder scene = SceneBuilder.Build(data.System.Theme.View(view), data);
             foreach (var a in scene.Entries.Select(e => e.Control).OfType<EmuSen.LunaP.Controls.FrameSequenceImage>()) a.Time = TimeSpan.FromSeconds(animationSeconds);

@@ -5364,6 +5364,11 @@ a rating. Mistress now draws them:
 - **A theme with no such picker** shows no game pictures, names or ratings in the system view. Before, Mistress showed
   the console's last selected game there, which ES-DE does not.
 - A random picker shows other games than ES-DE would in the same state; both are random.
+- *Changed 2026-10-19:* **most recently played** is now the console's Recently Played from the library screen (§4.33),
+  the first games up to the number the theme asks for. One rule gives the library screen's list, big picture's Last
+  Played and this picker (`EmuSen_Backend.md` §28.11). Games started at the same moment are now listed in the library's
+  order rather than with favourites first. A game started in the hour a clock is set back is ordered by the moment it
+  started.
 
 **Carousels that turn.** Nine listed themes lay their console or game carousel out as a **wheel**, vertical or
 horizontal; some mirror a row's pictures in a **reflection** beneath it. Mistress now draws both, placed within a pixel

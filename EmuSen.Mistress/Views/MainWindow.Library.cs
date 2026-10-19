@@ -178,6 +178,13 @@ namespace EmuSen.Mistress.Views
             return _records.Recent(entries.Select(e => e.FullPath).ToList(), RecentLimit).Select(p => byPath[p]).ToList();
         }
 
+        // The same call over a theme system's games, given in the scan's order as Recently Played gives a console's (EmuSen_Backend.md §28.11).
+        private IReadOnlyList<string> ThemedRecent(IReadOnlyList<string> files, int limit)
+        {
+            var wanted = new HashSet<string>(files, StringComparer.Ordinal);
+            return _records.Recent(_allScan.Entries.Select(e => e.FullPath).Where(wanted.Contains).ToList(), limit);
+        }
+
         private string SidebarKey =>
             CollectionKey != AllGamesKey ? CollectionKey
             : SelectedConsole == EmuSen.Mistress.Library.RuntimeCatalog.AllConsoles ? AllGamesKey

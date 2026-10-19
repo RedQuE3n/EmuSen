@@ -192,6 +192,15 @@ pub static GRAPHICS_CONFIG: Schema = Schema {
     ],
 };
 
+/// `ConsolesConfig`, the runtime's file `consoles.json`: each console's core settings by key (EmuSen_Backend.md §14.12).
+pub static CONSOLES_CONFIG: Schema = Schema { name: "ConsolesConfig", fields: &[Field::new("Consoles", Type::Map(&STRING_MAP), Initial::EmptyMap)] };
+
+/// The model of `consoles.json`, which C# binds itself and so has no `EMUSEN_GALAXIA_MODEL_*` number.
+pub static CONSOLES_MODEL: Model = Model { schema: &CONSOLES_CONFIG, upgrade: None };
+
+pub const CONSOLES_FILE: &str = "consoles.json";
+pub const GRAPHICS_FILE: &str = "graphics.json";
+
 /// `CheatFileWrite`: one write inside a saved cheat, its addresses and values hex text.
 pub static CHEAT_FILE_WRITE: Schema = Schema {
     name: "CheatFileWrite",

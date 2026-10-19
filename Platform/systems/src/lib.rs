@@ -346,6 +346,16 @@ pub fn table_json() -> Result<&'static str, &'static Error> {
 }
 
 /// A system by its id.
+/// Each player's controller id from the console's settings, where the system's pack counts them; none where it does
+/// not (`SystemPack.PlayerControllers`).
+pub fn player_controllers(id: &str, setting: &dyn Fn(&str) -> Option<String>) -> Option<Vec<String>> {
+    match id {
+        "md" | "mcd" | "32x" => Some(genesis::player_controllers(setting)),
+        "psx" => Some(psx::player_controllers(setting)),
+        _ => None,
+    }
+}
+
 pub fn find(id: &str) -> Option<&'static System> {
     table().ok()?.iter().find(|s| s.id == id)
 }
@@ -481,5 +491,21 @@ mod tests {
         let unknown = nes().replace("\"screenscraper_system\": 3", "\"screenscraper_system\": null");
         assert_eq!(parse("nes", &unknown).unwrap().screenscraper_system, None);
         assert_eq!(refused("nes", &nes().replace(",\n  \"screenscraper_system\": 3", "")), "screenscraper_system is missing");
+    }
+}
+
+#[cfg(test)]
+mod player_tests {
+    use super::player_controllers;
+
+    #[test]
+    fn players_follow_the_genesis_and_playstation_port_rules() {
+        let of = |pairs: &'static [(&'static str, &'static str)]| move |k: &str| pairs.iter().find(|(key, _)| *key == k).map(|(_, v)| v.to_string());
+        assert_eq!(player_controllers("md", &of(&[])).unwrap(), ["md.pad3", "md.pad3"]);
+        assert_eq!(player_controllers("mcd", &of(&[("pad1", "md.4way6"), ("pad2", "md.pad6")])).unwrap(), ["md.pad6"; 4]);
+        assert_eq!(player_controllers("32x", &of(&[("pad1", "md.pad6"), ("pad2", "md.4way3")])).unwrap(), ["md.pad6", "md.pad3"]);
+        assert_eq!(player_controllers("md", &of(&[("pad2", "md.teamplayer3")])).unwrap().len(), 5);
+        assert_eq!(player_controllers("psx", &of(&[("pad2", "none")])).unwrap(), ["psx.dualshock"]);
+        assert!(player_controllers("snes", &of(&[])).is_none());
     }
 }

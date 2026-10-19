@@ -13,6 +13,8 @@ name = "emusen_galaxia"
 # .NET's text rules and File.ReadAllText's decoding, which the shell's command modules share without linking Galaxia.
 emusen-dotnet = { path = "../dotnet" }
 md-5 = "0.11"
+# The unpacked folder's name, a hash of the archive's path, length and time (disc_set.rs); the workspace's, from DianaSh and Serenity.
+sha2 = "0.11"
 # SHA-1 beside them, which ScreenScraper asks for (EmuSen_Backend.md §30.4, decided 2026-10-18).
 sha1 = "0.11"
 # A sheet's and a list's meaning, for the files an image brings beside it (image_sets.rs).

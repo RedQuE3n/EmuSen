@@ -18,7 +18,7 @@ pub struct Routed {
 }
 
 /// An extension some console's engine opens: a catalog row's, or a discovered engine's, `IsImageExtension`.
-fn is_image_extension(catalog: &Catalog, discovery: &Discovery, extension: &str) -> bool {
+pub fn is_image_extension(catalog: &Catalog, discovery: &Discovery, extension: &str) -> bool {
     catalog.rows.iter().any(|r| r.supports(extension)) || discovery.for_extension(&emusen_dotnet::text::to_lower(extension)).next().is_some()
 }
 
@@ -163,4 +163,33 @@ fn cartridge(j: &mut Json, system: Option<&str>, at: &str) {
             j.null("cartridge");
         }
     }
+}
+
+/// The v1 engine a file opens on, `CoreFactory.V1Library`: the one asked for by name, else the console's sole engine,
+/// else the routed system's first, else the extension's first; the decision's words where several consoles take the
+/// file and none is chosen.
+pub fn v1_engine<'d>(catalog: &Catalog, discovery: &'d Discovery, at: &str, engine: Option<&str>) -> Result<Option<&'d emusen_core_host::Discovered>, String> {
+    let extension = image_extension(catalog, discovery, at);
+    let (row, decision) = route(catalog, discovery, at);
+    if engine.is_none() && row.is_none() {
+        if let Some(Routed { system: None, reason: Some(why) }) = &decision {
+            return Err(why.clone());
+        }
+    }
+    let routed = decision.as_ref().and_then(|d| d.system.map(|s| s.id.clone())).or_else(|| {
+        row.filter(|r| catalog.rows[*r].discovered)
+            .and_then(|r| emusen_systems::table().unwrap_or(&[]).iter().find(|s| s.console == catalog.rows[r].console()).map(|s| s.id.clone()))
+    });
+    let sole = row.and_then(|r| catalog::sole_engine(catalog.rows[r].console()));
+    let named = |name: &str| discovery.for_extension(&extension).find(|c| c.engine_name() == name);
+    let found = engine.and_then(named).or_else(|| match sole {
+        Some(sole) => named(sole),
+        None if engine.is_some() => None,
+        None if catalog.rows.iter().any(|r| !r.discovered && r.supports(&extension)) => None,
+        None => match &routed {
+            Some(system) => discovery.found().iter().find(|c| c.sidecar.info.systems.iter().any(|s| s.id == *system && discovery.offered(s))),
+            None => discovery.for_extension(&extension).next(),
+        },
+    });
+    Ok(found)
 }

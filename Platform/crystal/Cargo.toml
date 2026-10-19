@@ -20,5 +20,9 @@ emusen-native = { path = "../../EmuSen/Cores/Shared/emusen-native" }
 emusen-systems = { path = "../systems" }
 # The tree, the config files, the save names and the files a probe reads.
 emusen-galaxia = { path = "../galaxia" }
+# The firmware store: the folders searched, an image found, installed or located (EmuSen_Backend.md §15.1).
+emusen-firmware = { path = "../firmware" }
+# The session service's numbers, which the API's statuses share.
+emusen-session-service = { path = "../session-service" }
 # .NET's text rules and JSON writer, so each answer is the C# implementation's to the byte.
 emusen-dotnet = { path = "../dotnet" }

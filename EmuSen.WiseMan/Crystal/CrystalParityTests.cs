@@ -221,6 +221,60 @@ namespace EmuSen.WiseMan.Crystal
             Same(BuildTree, (impl, rt) => new[] { impl.Route(rt, nes), impl.Route(rt, sfc) });
         }
 
+        // Every file of the bench of routes asked what firmware it needs, and an archive whose engine can require none left unpacked by both.
+        [Fact]
+        public void Firmware_needed_and_the_overview_are_the_same_and_an_archive_unpacks_alike()
+        {
+            IReadOnlyList<string> cases = RouteCases();
+            string zippedDisc = Path.Combine(_root, "Roms", "Disc.zip");
+            using (var archive = ZipFile.Open(zippedDisc, ZipArchiveMode.Create))
+            {
+                var disc = SyntheticPsxDisc.Build();
+                using (var e = archive.CreateEntry("Disc (Track 1).bin").Open()) e.Write(disc.DataTrack);
+                using (var e = archive.CreateEntry("Disc (Track 2).bin").Open()) e.Write(disc.AudioTrack);
+                using (var e = new StreamWriter(archive.CreateEntry("Disc.cue").Open())) e.Write(disc.Cue.Replace("{name}", "Disc"));
+            }
+            var unpacked = new List<string>();
+            foreach (CrystalImpl impl in new[] { CrystalImpl.Managed, CrystalImpl.Native })
+            {
+                if (Directory.Exists(DataStore.Unpacked)) Directory.Delete(DataStore.Unpacked, recursive: true);
+                Answers(impl, BuildTree, (i, rt) => new[] { i.FirmwareNeeded(rt, zippedDisc, null) });
+                unpacked.Add(!Directory.Exists(DataStore.Unpacked) ? "" : string.Join("\n", Directory.EnumerateFiles(DataStore.Unpacked, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
+                    .Select(f => $"{Path.GetRelativePath(DataStore.Unpacked, f)} {Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(f)))}")));
+            }
+            Assert.Equal(unpacked[0], unpacked[1]);
+            Directory.CreateDirectory(DataStore.Firmware);
+            File.WriteAllBytes(Path.Combine(DataStore.Firmware, "scph5501.bin"), new byte[12]);
+            Same(BuildTree, (impl, rt) => cases.Select(c => impl.FirmwareNeeded(rt, c, null))
+                .Append(impl.FirmwareNeeded(rt, cases[0], "No Such Engine")).Append(impl.FirmwareNeeded(rt, zippedDisc, null))
+                .Append(impl.Read("firmware_overview", rt)));
+        }
+
+        [Fact]
+        public void A_firmware_install_is_the_same_and_writes_the_same_file()
+        {
+            string tree = TestTree();
+            string right = Path.Combine(_root, "picked.rom"), wrong = Path.Combine(_root, "short.rom");
+            File.WriteAllBytes(right, Enumerable.Range(0, 64).Select(i => (byte)i).ToArray());
+            File.WriteAllBytes(wrong, new byte[3000]);
+            string request = "{\"core\":\"V1TestCore\",\"chip\":\"Boot ROM\",\"file\":\"boot.rom\",\"size\":64,\"purpose\":\"optional\",\"alternate_names\":[]}";
+            string big = request.Replace("\"size\":64", "\"size\":1024");
+            var written = new List<string>();
+            foreach (CrystalImpl impl in new[] { CrystalImpl.Managed, CrystalImpl.Native })
+            {
+                if (Directory.Exists(DataStore.Firmware)) Directory.Delete(DataStore.Firmware, recursive: true);
+                Answers(impl, new[] { tree }, (i, rt) => new[] { i.FirmwareInstall(rt, request, right) });
+                written.Add(Convert.ToHexString(File.ReadAllBytes(Path.Combine(DataStore.Firmware, "boot.rom"))));
+            }
+            Assert.Equal(written[0], written[1]);
+            Same(new[] { tree }, (impl, rt) => new[]
+            {
+                impl.FirmwareInstall(rt, request, right), impl.FirmwareInstall(rt, big, wrong), impl.FirmwareInstall(rt, request, Path.Combine(_root, "absent.rom")),
+                impl.FirmwareInstall(rt, "{\"core\":\"V1TestCore\"}", right), impl.FirmwareInstall(rt, "{\"size\":64,\"core\":\"V1TestCore\"}", right),
+                impl.FirmwareInstall(rt, request, ""), impl.Read("firmware_overview", rt),
+            });
+        }
+
         [Fact]
         public void The_test_tree_routes_the_test_core_s_files_the_same()
         {

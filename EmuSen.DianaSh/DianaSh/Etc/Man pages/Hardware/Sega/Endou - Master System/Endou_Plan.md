@@ -31,6 +31,13 @@ stage 7 a public per-game listing may be fetched to complete the battery table; 
 `$3E`) stay as argued from the documents until a game shows otherwise, TH returning at the Light Phaser's stage; CI's
 testing of the Beryl crates with all their features is confirmed. The go for stage 3 came with them.
 
+**Decided by the tester, 2026-10-19, on stage 3's questions** (`Endou_Native.md` §10.12), each as recommended: D-1's
+boosted blue is taken for the 315-5124, marked as read from a document; a VHDL simulator is approved for SMS_MiSTer as
+a black-box referee, installed by the tester, its RTL read only in a logged dispute step; an (E) image runs in PAL only
+by the region setting, with no per-game table; MAME is not used, as a reference or a referee; and under core ABI 1.15
+MercuryRT and Nephrite keep their own system rules, routing being left to a separate piece of work. The go for stage 4
+came with them.
+
 Every claim carries one of six marks:
 
 - **[M]** *measured* on 2026-10-19, with the tool named. Nothing was run to write this page beyond listings, the local
@@ -165,8 +172,8 @@ hash in `EmuSen.WiseMan/Reference/libretro-cores.sha256` for the Genesis [R]:
 Genesis Plus GX lists the Master System's BIOSes (`bios_E.sms`, `bios_U.sms`, `bios_J.sms`) and the Game Gear's
 (`bios.gg`) as optional, with no checksums [R its `.info`]. Whether each runs every model, which memory it exposes and
 what it costs are measured at stage 1, as Nephrite measured its four [A]. Further references, fetched at stage 1 on
-the tester's go (§10 Q4, decided 2026-10-19) and listed in `Endou_References.md` §3: **Gearsystem** and **SMS Plus GX** (libretro cores), **MAME**
-(its Sega 8-bit drivers, run headless with a Lua script reading memory), **Mesen 2** (through the probe's Mesen
+the tester's go (§10 Q4, decided 2026-10-19) and listed in `Endou_References.md` §3: **Gearsystem** and **SMS Plus GX** (libretro cores), ~~**MAME**
+(its Sega 8-bit drivers, run headless with a Lua script reading memory)~~ (*decided 2026-10-19: MAME is not used*), **Mesen 2** (through the probe's Mesen
 backend, whose patch would gain the console) and **Emulicious** (a desktop program with no headless mode, so a
 reference only by the tester's own runs). Every reference is compared, not trusted; their disagreement is the evidence
 that a dispute is needed.

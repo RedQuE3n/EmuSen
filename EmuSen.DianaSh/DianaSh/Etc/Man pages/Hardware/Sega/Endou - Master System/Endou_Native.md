@@ -686,3 +686,18 @@ its reset code and of the copy routine at `$06A6`, as hexadecimal; nothing of it
    region setting, and a table of PAL-only games only when one is shown to need it; Micro Machines runs in either.
 4. **MAME** as a fourth witness for the pictures (`Endou_Native.md` §8, question 2): recommended not yet; the four
    libretro references agreed with each other or disagreed in ways MAME would not settle.
+
+*Decided 2026-10-19 by the tester: each of the four as recommended, and one more.* The go for stage 4 came with the
+decisions; it covers stage 4 alone. No real hardware is used for any of them (`Endou_Plan.md` §10 Q11).
+
+1. **D-1's boosted blue is taken** for the 315-5124 (the Mark III and the first Master System): blue level 1 shown at
+   `#68`, as SMS Power!'s "Palette" gives it, marked as read from a document, not measured. The 315-5246 keeps the
+   equal steps.
+2. **A VHDL simulator (GHDL or nvc) is approved** for SMS_MiSTer as a black-box referee. The tester installs it, since
+   it needs the administrator's rights. When it is present, SMS_MiSTer may be run as a black box for D-6, D-7 and D-8
+   (`slots.s` stepped from 11 to 29 cycles) and for Space Harrier's opening; its RTL is read only in a logged dispute
+   step, each file listed, by Nephrite's rule. When it is absent, those disputes stay open and the record says so.
+3. **An (E) image runs in PAL only by the region setting**; no per-game table of PAL games is kept.
+4. **MAME is not used** as a reference or a referee.
+5. **Under core ABI 1.15, MercuryRT and Nephrite keep their own system rules**; a 32X header recogniser in
+   `emusen-systems`' routing is a separate piece of work, and Endou's stages leave routing alone.

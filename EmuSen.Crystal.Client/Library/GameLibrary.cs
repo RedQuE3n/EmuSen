@@ -87,11 +87,16 @@ namespace EmuSen.Crystal.Client.Library
 
         public static string Report => Loaded.Value.Report;
 
-        // State 1: the C# unless the variable is 1 and the library serves every call.
-        public static bool Active => Environment.GetEnvironmentVariable(Variable) == "1" && Ready;
+        private static readonly PlatformSwitch Chosen = new(() => Environment.GetEnvironmentVariable(Variable), () => (Ready, Report), PlatformSwitch.Announce, "the library");
+
+        // State 2: the library unless the variable is 0; a library absent or without an export leaves the C#, said once.
+        public static bool Active => Chosen.Active;
 
         private readonly Exports _t;
         private nint _handle;
+        private readonly object _gate = new();
+        private int _calls;
+        private bool _closing;
 
         private GameLibrary(Exports t, nint handle)
         {
@@ -123,13 +128,37 @@ namespace EmuSen.Crystal.Client.Library
             return new GameLibraryException((int)status, Encoding.UTF8.GetString(words));
         }
 
-        private nint Handle => _handle != 0 ? _handle : throw new ObjectDisposedException(nameof(GameLibrary));
+        // A call begun, so that Dispose waits for it rather than freeing the handle under it.
+        private nint Enter()
+        {
+            lock (_gate)
+            {
+                if (_handle == 0 || _closing) throw new ObjectDisposedException(nameof(GameLibrary));
+                _calls++;
+                return _handle;
+            }
+        }
+
+        private void Leave()
+        {
+            lock (_gate)
+                if (--_calls == 0) Monitor.PulseAll(_gate);
+        }
 
         // An answer by the length-query idiom: a stack buffer first, then once more at the length asked.
         private string Call(delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, long> call, string request)
         {
             byte[] r = Encoding.UTF8.GetBytes(request);
-            nint h = Handle;
+            nint h = Enter();
+            try
+            {
+                return Answer(call, h, r);
+            }
+            finally { Leave(); }
+        }
+
+        private string Answer(delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, long> call, nint h, byte[] r)
+        {
             fixed (byte* rp = r)
             {
                 byte* first = stackalloc byte[1024];
@@ -151,7 +180,12 @@ namespace EmuSen.Crystal.Client.Library
         {
             byte[] r = Encoding.UTF8.GetBytes(request);
             long n;
-            fixed (byte* rp = r) n = _t.Scan(Handle, rp, (nuint)r.Length);
+            nint h = Enter();
+            try
+            {
+                fixed (byte* rp = r) n = _t.Scan(h, rp, (nuint)r.Length);
+            }
+            finally { Leave(); }
             if (n < 0) throw Fault(_t, n);
             return n;
         }
@@ -166,23 +200,41 @@ namespace EmuSen.Crystal.Client.Library
 
         public string Progress()
         {
-            nint h = Handle;
-            byte* buffer = stackalloc byte[512];
-            long n = _t.Progress(h, buffer, 512);
-            if (n < 0) throw Fault(_t, n);
-            if (n <= 512) return Encoding.UTF8.GetString(buffer, (int)n);
-            var out_ = new byte[n];
-            fixed (byte* o = out_) n = _t.Progress(h, o, (nuint)out_.Length);
-            return Encoding.UTF8.GetString(out_, 0, (int)n);
+            nint h = Enter();
+            try
+            {
+                byte* buffer = stackalloc byte[512];
+                long n = _t.Progress(h, buffer, 512);
+                if (n < 0) throw Fault(_t, n);
+                return Encoding.UTF8.GetString(buffer, (int)Math.Min(n, 512));
+            }
+            finally { Leave(); }
         }
 
-        public void Cancel() => _t.Cancel(Handle);
+        public void Cancel()
+        {
+            nint h = Enter();
+            try { _t.Cancel(h); }
+            finally { Leave(); }
+        }
 
+        // Cancels what runs on the handle, waits for every call in progress, then closes it.
         public void Dispose()
         {
-            if (_handle == 0) return;
-            _t.Close(_handle);
-            _handle = 0;
+            nint h;
+            lock (_gate)
+            {
+                if (_handle == 0 || _closing) return;
+                _closing = true;
+                h = _handle;
+            }
+            _t.Cancel(h);
+            lock (_gate)
+            {
+                while (_calls > 0) Monitor.Wait(_gate);
+                _t.Close(h);
+                _handle = 0;
+            }
         }
     }
 }

@@ -45,6 +45,12 @@ pub fn ticks_of(time: std::time::SystemTime) -> i64 {
     }
 }
 
+/// Now as local ticks from 1970, the system's offset added.
+pub fn local_ticks_now() -> i64 {
+    let utc = ticks_of(std::time::SystemTime::now());
+    utc + local_offset(utc.div_euclid(TICKS_PER_SECOND)) * TICKS_PER_SECOND
+}
+
 /// `DateTime.Now.ToString("o")`.
 pub fn now() -> String {
     local_of_utc(ticks_of(std::time::SystemTime::now()))

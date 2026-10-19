@@ -101,6 +101,9 @@ pub struct Session {
     shown: Mutex<Vec<u8>>,
     /// The game's MD5 and size, read once on a worker as the session opens; none until then.
     pub identity: Arc<Mutex<(Option<String>, i64)>>,
+    pub events: Arc<crate::events::Events>,
+    /// The core's log lines already raised as events.
+    logged_lines: std::sync::atomic::AtomicI64,
 }
 
 fn controllers_of_system(info: &Value, system: &str) -> Vec<Value> {
@@ -110,7 +113,7 @@ fn controllers_of_system(info: &Value, system: &str) -> Vec<Value> {
 }
 
 impl Session {
-    pub fn new(id: u32, engine: Engine, game_path: Option<String>, console: String, empty_console: Option<String>, opened: OpenedWith) -> Session {
+    pub fn new(id: u32, engine: Engine, game_path: Option<String>, console: String, empty_console: Option<String>, opened: OpenedWith, events: Arc<crate::events::Events>) -> Session {
         let (latch, routes) = (engine.latch.clone(), engine.routes.clone());
         let identity = Arc::new(Mutex::new((None, 0)));
         if let Some(at) = game_path.clone() {
@@ -143,6 +146,8 @@ impl Session {
             wake: Condvar::new(),
             shown: Mutex::new(Vec::new()),
             identity,
+            events,
+            logged_lines: std::sync::atomic::AtomicI64::new(0),
         }
     }
 
@@ -175,15 +180,41 @@ impl Session {
 
     /// A change between two frames, the caller waiting for the frame in progress, `ManagedSession.Change`.
     pub fn change<T>(&self, change: impl FnOnce(&mut Engine, &mut Run) -> Result<T, Refused>) -> Result<T, Refused> {
-        let result = {
+        let (result, said) = {
             let mut held = self.enter()?;
             let mut run = self.run.lock().unwrap_or_else(|p| p.into_inner());
-            change(&mut held.engine, &mut run)
+            let result = change(&mut held.engine, &mut run);
+            (result, held.engine.take_said())
         };
+        self.events.raise_runtime_lines(self.id, &said);
         if thread_id() != self.frame_thread.load(Ordering::Acquire) {
             self.wake_up();
         }
         result
+    }
+
+    /// The engine's lines said since the last time, as one log event of source "runtime", `RaiseSaid`.
+    pub fn raise_said(&self, e: &Engine) {
+        let said = e.take_said();
+        self.events.raise_runtime_lines(self.id, &said);
+    }
+
+    /// The core's lines logged since the last time, as one log event of source "core", `RaiseLog`.
+    fn raise_log(&self, e: &Engine) {
+        let total = e.logged_lines;
+        let seen = self.logged_lines.swap(total, Ordering::AcqRel);
+        if total == seen {
+            return;
+        }
+        let recent = e.recent_log();
+        let fresh = ((total - seen).max(0) as usize).min(recent.len());
+        self.events.raise(self.id, abi::EVENT_LOG, "log", |j| {
+            j.key_array("lines");
+            for l in recent.iter().skip(recent.len() - fresh) {
+                j.str_value(l);
+            }
+            j.end_array().str("source", "core");
+        });
     }
 
     /// The session closed under its gate: whatever comes after is refused.
@@ -255,9 +286,13 @@ impl Session {
         e.set_skip_rendering(skip);
         run.halted = false;
         e.run_frame().map_err(|r| (r.status, r.words))?;
-        if e.halted.is_some() {
+        if let Some((processor, address)) = e.halted {
             run.halted = true;
             e.refresh_debugger();
+            let name = e.mi.processors.iter().find(|(id, _)| *id == processor).map_or("CPU".to_string(), |(_, n)| n.clone());
+            self.events.raise(self.id, abi::EVENT_RUN, "run", |j| {
+                j.str("op", "halted").str("processor", &name).int("address", address as i64);
+            });
             return Ok(false);
         }
         e.refresh_debugger();
@@ -270,6 +305,8 @@ impl Session {
         if recording && !skip {
             self.capture(e);
         }
+        self.raise_said(e);
+        self.raise_log(e);
         Ok(true)
     }
 
@@ -302,6 +339,9 @@ impl Session {
             } else if !enabled && r.enabled {
                 r.enabled = false;
                 r.clear();
+                self.events.raise(self.id, abi::EVENT_REWIND, "rewind", |j| {
+                    j.str("op", "cleared");
+                });
             }
             Ok(())
         })
@@ -326,6 +366,12 @@ impl Session {
                 self.fill(e, run, info, false);
                 info.rendered = (done > 0) as u32;
             }
+            if done > 0 {
+                let frame = run.rewind.frame();
+                self.events.raise(self.id, abi::EVENT_REWIND, "rewind", |j| {
+                    j.str("op", "stepped").int("frame", frame);
+                });
+            }
             Ok(done)
         })
     }
@@ -339,6 +385,9 @@ impl Session {
             }
             run.halted = false;
             e.refresh_debugger();
+            self.events.raise(self.id, abi::EVENT_REWIND, "rewind", |j| {
+                j.str("op", "moved").int("frame", at);
+            });
             Ok(())
         })
     }

@@ -280,6 +280,74 @@ namespace EmuSen.WiseMan.Crystal
             fixed (byte* pp = p) return Status(((delegate* unmanaged[Cdecl]<nint, byte*, nuint, int>)Fn("state_forget"))(rt, pp, (nuint)p.Length));
         }
 
+        // Texts as the API takes them: null for none, UTF-8 otherwise, each pinned for the call.
+        private static byte[]? Utf8(string? text) => text is null ? null : Encoding.UTF8.GetBytes(text);
+
+        public string SettingsSchema(nint rt, uint session, string? console, string? engine)
+        {
+            var f = (delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, byte*, nuint, byte*, nuint, long>)Fn("settings_schema");
+            byte[]? c = Utf8(console), e = Utf8(engine);
+            fixed (byte* cp = c, ep = e)
+            {
+                byte* a = cp, b = ep;
+                return Copy((o, n) => f(rt, session, a, (nuint)(c?.Length ?? 0), b, (nuint)(e?.Length ?? 0), o, n));
+            }
+        }
+
+        public string SettingsGet(nint rt, uint session, uint scope, string? console, string? key)
+        {
+            var f = (delegate* unmanaged[Cdecl]<nint, uint, uint, byte*, nuint, byte*, nuint, byte*, nuint, long>)Fn("settings_get");
+            byte[]? c = Utf8(console), k = Utf8(key);
+            fixed (byte* cp = c, kp = k)
+            {
+                byte* a = cp, b = kp;
+                return Copy((o, n) => f(rt, session, scope, a, (nuint)(c?.Length ?? 0), b, (nuint)(k?.Length ?? 0), o, n));
+            }
+        }
+
+        public string SettingsSet(nint rt, uint session, uint scope, string? console, string? key, string? value)
+        {
+            byte[]? c = Utf8(console), k = Utf8(key), v = Utf8(value);
+            fixed (byte* cp = c, kp = k, vp = v)
+                return Status(((delegate* unmanaged[Cdecl]<nint, uint, uint, byte*, nuint, byte*, nuint, byte*, nuint, int>)Fn("settings_set"))(rt, session, scope, cp, (nuint)(c?.Length ?? 0), kp, (nuint)(k?.Length ?? 0), vp, (nuint)(v?.Length ?? 0)));
+        }
+
+        public string GameSettingGet(nint rt, string path, string key)
+        {
+            var f = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, byte*, nuint, long>)Fn("game_setting_get");
+            byte[] p = Encoding.UTF8.GetBytes(path), k = Encoding.UTF8.GetBytes(key);
+            fixed (byte* pp = p, kp = k)
+            {
+                byte* a = pp, b = kp;
+                return Copy((o, n) => f(rt, a, (nuint)p.Length, b, (nuint)k.Length, o, n));
+            }
+        }
+
+        public string GameSettingSet(nint rt, string path, string key, string? value)
+        {
+            byte[] p = Encoding.UTF8.GetBytes(path), k = Encoding.UTF8.GetBytes(key);
+            byte[]? v = Utf8(value);
+            fixed (byte* pp = p, kp = k, vp = v)
+                return Status(((delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, byte*, nuint, int>)Fn("game_setting_set"))(rt, pp, (nuint)p.Length, kp, (nuint)k.Length, vp, (nuint)(v?.Length ?? 0)));
+        }
+
+        // A subscription's handle, zero with the words in LastError where it was refused.
+        public nint Subscribe(nint rt, uint session, uint kinds) => ((delegate* unmanaged[Cdecl]<nint, uint, uint, nint>)Fn("subscribe"))(rt, session, kinds);
+
+        public string Drain(nint sub)
+        {
+            var f = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, long>)Fn("subscription_drain");
+            return Copy((o, n) => f(sub, o, n));
+        }
+
+        public string SubscriptionWait(nint sub, uint ms)
+        {
+            int r = ((delegate* unmanaged[Cdecl]<nint, uint, int>)Fn("subscription_wait"))(sub, ms);
+            return r < 0 ? Status(r) : r.ToString();
+        }
+
+        public string Unsubscribe(nint sub) => Status(((delegate* unmanaged[Cdecl]<nint, int>)Fn("unsubscribe"))(sub));
+
         private delegate long CopyOut(byte* o, nuint n);
 
         private string Copy(CopyOut call)

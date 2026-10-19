@@ -7,9 +7,26 @@ use emusen_galaxia::tree::{Directory, Tree};
 /// A retired engine's name a player's settings may still hold, and the engine that runs instead (`RetiredEngines`).
 const RETIRED: [(&str, &str); 4] = [("Mars (C#)", "MarsRT (Rust)"), ("Mercury (C#)", "MercuryRT (Rust)"), ("Moon (C#)", "MoonRT (Rust)"), ("Venus (C#)", "VenusRT (Rust)")];
 
-/// A stored engine's name as the engine that runs: a retired one's replacement, any other as it is (`Current`).
+/// The retired names already logged, once a process.
+static RETIRED_LOGGED: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());
+
+/// A stored engine's name as the engine that runs: a retired one's replacement, logged once a process, any other as
+/// it is (`Current`).
 pub fn current(stored: Option<String>) -> Option<String> {
-    stored.map(|s| RETIRED.iter().find(|(old, _)| *old == s).map_or(s, |(_, new)| new.to_string()))
+    let s = stored?;
+    let Some((old, new)) = RETIRED.iter().find(|(old, _)| *old == s) else { return Some(s) };
+    let first = {
+        let mut logged = RETIRED_LOGGED.lock().unwrap_or_else(|p| p.into_inner());
+        let first = !logged.contains(old);
+        if first {
+            logged.push(old);
+        }
+        first
+    };
+    if first {
+        crate::error_log::warning("engine", &format!("{old} was retired; {new} runs its games instead."));
+    }
+    Some(new.to_string())
 }
 
 /// Where a game's own settings are kept.

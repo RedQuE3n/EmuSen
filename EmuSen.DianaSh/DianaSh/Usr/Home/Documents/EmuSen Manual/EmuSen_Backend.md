@@ -6854,6 +6854,75 @@ and `RewindThumbnail`'s pictures, sampled four times a pixel and held as RGB565.
 - Three crates already hold a copy of the local offset (`emusen-library`'s, `dianash-text`'s and `scrape`'s clocks).
   Galaxia's `clock` is the place they can share; folding them is left for a change of their own.
 
+### 29.19 Built 2026-10-19: part (a), piece 6, settings and events
+
+**The piece** (this commit).
+- **`events`** is the C# `ManagedEvents` and `ManagedSubscription`. An event is made once, and only when a
+  subscription wants it: `{"kind","session",…}`. Each wanting subscription gets it in a bounded queue of 256; when the
+  queue is full the oldest is dropped and counted, and the count leads the next drain. A drain takes the queue whole
+  only when the buffer holds it all, and a wait blocks with a timeout.
+- **Events raised.** The runtime and its sessions raise every event the C# raises, at the C#'s points:
+  - `session` opened and closed;
+  - `run` halted, at the seam's halt;
+  - `state` saved and loaded;
+  - `rewind` cleared, stepped and moved;
+  - `settings`;
+  - `disc` inserted, ejected, changed and lid;
+  - `log`: the core's new lines after a frame (source `core`), and the runtime's own lines (source `runtime`, Q2). The
+    runtime's lines are raised after each change and at open, one event per change, as the C#'s `RaiseSaid` raises
+    them; a runtime line no session said is raised on session 0.
+- **Handles.** A subscription's handle is checked against the handles given out before it is read. After it is
+  ended, or its runtime freed, it answers "not a subscription", as a freed `GCHandle` does.
+- **`settings_api`** is the C# settings:
+  - **The rows.** The engine's choice comes first, from the engines discovered for the console's systems. Then the
+    running engine's own settings, with its notes, or a named or sole engine's from its library. Then the save media's
+    rows: each mode, and each slot with the note an earlier slot of the same name gives, shown with Named.
+  - **Values in layers.** The game's own over the console's over the row's default; a retired engine's name is read as
+    its replacement.
+  - **A change.** It is checked as the C#'s `Refusal` checks it (a switch's words trimmed and in any case, a count by
+    `int.TryParse`, a choice by its list) and written to `consoles.json` or to the game's own file, indented as
+    `JsonSerializer` writes a dictionary. It is then applied between frames to each open session it reaches, and
+    raised as an event.
+  - **A game's own value** is read and written with no session.
+  - **SR10.** A runtime made copies games.db's engine choices once, through the lent SQLite, and writes the marker as
+    the C#'s does.
+- **Galaxia's `consoles`** gained `set_value` and `forget`, the C#'s.
+- **The platform library** exports `subscribe`, `subscription_drain`, `subscription_wait`, `unsubscribe`,
+  `settings_schema`, `settings_get`, `settings_set`, `game_setting_get` and `game_setting_set`.
+- **Closed from §29.13.** The first read of a retired engine's name in a process writes the C#'s warning to the error
+  log, through `error_log`, over Galaxia's error log with the time of this machine's calendar.
+
+**Found, proved and fixed.** A step of rewind dropped the sound it skipped by draining until the core held none. The
+C#'s `DequeueAudioSamples(int.MaxValue)` drains once, and a core's drain never crosses a change of rate. So when the
+settings case changed the test core's rate and then stepped back, the C# kept the later rate's samples (6,396 frames)
+and the Rust kept none. The step now drains once, into a buffer kept for it. The rewind case passed before and after,
+since it changes no rate.
+
+**Measured on 2026-10-19** [M]:
+- **Parity.** The parity class's two new cases pass, each comparing every answer, then the trees left and the config
+  folder file by file.
+  - On the test core, 77 answers:
+    - subscriptions to everything, to logs and sessions, to one session's discs and settings, to a session not open;
+    - every settings call's refusals; changes at both scopes, a forgotten value, words with spaces;
+    - a game's own values with no session, and a system no table names;
+    - the disc, state and rewind events;
+    - 300 changes of the lid, so that 45 are dropped and counted;
+    - a drain asked of a buffer too small, an ended subscription, a null one;
+    - the session closed.
+  - On the build's engines, 25 answers: each console's rows and engine, SR10's copy from a planted games.db (copied,
+    a game with an engine of its own, an engine no row offers, a file no system runs), a PlayStation session's rows
+    with two named cards of one name in different case.
+- **Seeded faults**, eight, each caught: the queue's bound a place late; a drain that empties on a size query; a hint
+  without its space (both cases); a switch's words untrimmed; a change not applied to the open session; SR10's copy
+  skipped; the core's log lines not raised; a card's name compared with its case.
+- **Other tests.** Cargo's crystal, platform, galaxia, dotnet and crystal-debug, 164.
+
+**Left.**
+- A game's settings file that is not a map of strings is read as none. The C# also writes a warning naming
+  `System.Text.Json`'s message, which the Rust does not reproduce.
+- A battery file that cannot be written at close is still let go silently (§29.15).
+- A handle whose runtime was freed stays allocated until the process ends.
+
 ### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
 
 *Part (b) numbers its sections from §29.30, so that part (a)'s pieces, built at the same time, keep §29.16 to §29.29.*

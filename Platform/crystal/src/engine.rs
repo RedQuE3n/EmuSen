@@ -98,6 +98,7 @@ pub struct Engine {
     frame_scratch: Vec<u8>,
     event_scratch: Vec<(u32, i64)>,
     battery_scratch: Vec<u8>,
+    audio_scratch: Vec<i16>,
     phase_scratch: Vec<i64>,
     last_frame_ms: f64,
     audio_limit_sent: i64,
@@ -169,6 +170,7 @@ impl Engine {
             frame_scratch: Vec::new(),
             event_scratch: Vec::with_capacity(16),
             battery_scratch: Vec::new(),
+            audio_scratch: Vec::new(),
             phase_scratch: vec![0; 32],
             last_frame_ms: 0.0,
             audio_limit_sent: -1,
@@ -728,12 +730,21 @@ impl Engine {
     }
 
     /// Every sample held drained and dropped, `DequeueAudioSamples(int.MaxValue)`.
+    /// One drain of every sample held, as `CoreMachine.DrainAudio(int.MaxValue)` makes it: whole frames, never across a
+    /// change of rate, so a later rate's samples stay.
     pub fn drop_audio(&mut self) {
-        let mut sink = [0i16; 4096];
-        while self.buffered_audio_frames() > 0 {
-            if self.drain_audio(&mut sink).0 == 0 {
-                break;
-            }
+        let Some(m) = self.machine.as_mut() else { return };
+        let mut wanted = m.audio_buffered().clamp(0, i32::MAX as i64) as usize;
+        wanted -= wanted & 1;
+        if wanted == 0 {
+            self.audio_rate = m.audio_rate();
+            return;
+        }
+        if self.audio_scratch.len() < wanted {
+            self.audio_scratch.resize(wanted, 0);
+        }
+        if let Ok((_, rate)) = m.audio_drain(&mut self.audio_scratch[..wanted]) {
+            self.audio_rate = rate;
         }
     }
 

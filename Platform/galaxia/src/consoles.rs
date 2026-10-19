@@ -19,6 +19,31 @@ impl Consoles {
         self.consoles.iter().find(|(c, _)| c == console)?.1.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
     }
 
+    /// `SetValue`: the value replaced where the key is held, else added after the console's others.
+    pub fn set_value(&mut self, console: &str, key: &str, value: &str) {
+        let at = match self.consoles.iter().position(|(c, _)| c == console) {
+            Some(at) => at,
+            None => {
+                self.consoles.push((console.to_string(), Vec::new()));
+                self.consoles.len() - 1
+            }
+        };
+        let values = &mut self.consoles[at].1;
+        match values.iter_mut().find(|(k, _)| k == key) {
+            Some(slot) => slot.1 = value.to_string(),
+            None => values.push((key.to_string(), value.to_string())),
+        }
+    }
+
+    /// `Forget`: the key let go, and the console with its last value.
+    pub fn forget(&mut self, console: &str, key: &str) {
+        let Some(at) = self.consoles.iter().position(|(c, _)| c == console) else { return };
+        self.consoles[at].1.retain(|(k, _)| k != key);
+        if self.consoles[at].1.is_empty() {
+            self.consoles.remove(at);
+        }
+    }
+
     fn of(map: Option<&Value>) -> Consoles {
         let mut out = Consoles::default();
         if let Some(Value::Object(members)) = map {

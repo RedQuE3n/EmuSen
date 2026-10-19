@@ -97,6 +97,9 @@ impl Session {
         if let Some(records) = records {
             records.write(at, &self.record(e))?;
         }
+        self.events.raise(self.id, abi::EVENT_STATE, "state", |j| {
+            j.str("op", "saved").str("path", at);
+        });
         if picture {
             let (rgba, width, height) = self.shown_picture(e);
             if width > 0 && height > 0 {
@@ -123,6 +126,9 @@ impl Session {
         run.rewind.clear();
         run.halted = false;
         e.refresh_debugger();
+        self.events.raise(self.id, abi::EVENT_STATE, "state", |j| {
+            j.str("op", "loaded").str("path", at);
+        });
         Ok(())
     }
 

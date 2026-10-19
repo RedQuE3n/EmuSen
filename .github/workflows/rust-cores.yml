@@ -245,7 +245,7 @@ jobs:
             export LIBRARY_ABI_AGAINST="$RUNNER_TEMP/library-base-baseline.txt"
           fi
           cd Platform && cargo test --profile test-checked -p emusen-library --test library_abi
-      # The scraper's header, stable from part 6: the same checks over emusen_scrape.h and its baseline (EmuSen_Backend.md §30.13).
+      # The scraper's header, stable from part 6: the same checks over emusen_scrape.h and its baseline (EmuSen_Backend.md §30.14).
       - name: The scraper's surface
         shell: bash
         run: |

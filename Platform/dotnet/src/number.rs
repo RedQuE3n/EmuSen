@@ -58,13 +58,23 @@ pub fn parse_i32(text: &str) -> Option<i32> {
 /// exponent, `∞` for infinity and `NaN` in any case. The C# read the machine's culture; this reads en-US's on every
 /// machine, which is what the C# read where it was recorded (EmuSen_DianaSh.md §13.8).
 pub fn parse_f64(text: &str) -> Option<f64> {
+    parse_float(text, true)
+}
+
+/// `double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture)`: as [`parse_f64`] with no thousands
+/// separator, and the invariant culture's `Infinity` in place of `∞`, measured on .NET 10 on 2026-10-18 (EmuSen_Backend.md §30).
+pub fn parse_f64_invariant_float(text: &str) -> Option<f64> {
+    parse_float(text, false)
+}
+
+fn parse_float(text: &str, en_us: bool) -> Option<f64> {
     let body = text.trim_matches(number_white);
     let (negative, rest) = match body.chars().next() {
         Some('-') => (true, &body[1..]),
         Some('+') => (false, &body[1..]),
         _ => (false, body),
     };
-    if rest == "\u{221E}" {
+    if (en_us && rest == "\u{221E}") || (!en_us && rest.eq_ignore_ascii_case("Infinity")) {
         return Some(if negative { f64::NEG_INFINITY } else { f64::INFINITY });
     }
     if rest.eq_ignore_ascii_case("NaN") {
@@ -79,7 +89,7 @@ pub fn parse_f64(text: &str) -> Option<f64> {
                 digits.push(c);
                 seen_digit = true;
             }
-            ',' if seen_digit => {}
+            ',' if en_us && seen_digit => {}
             _ => break,
         }
         chars.next();

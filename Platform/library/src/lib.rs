@@ -220,13 +220,18 @@ impl Library {
             None | Some(emusen_dotnet::json::Value::Null) => None,
             Some(_) => Some(json::strings(&r, "systems")?),
         };
-        let id = self.identity(&path, systems.as_deref(), json::flag(&r, "crc32")?, json::flag(&r, "record")?)?;
+        let sha1 = json::flag(&r, "sha1")?;
+        let id = self.identity(&path, systems.as_deref(), json::flag(&r, "crc32")?, sha1, json::flag(&r, "record")?)?;
         let mut out = String::from("{\"path\":");
         out.push_str(&emusen_dotnet::json::quoted(&id.path));
         out.push_str(&format!(",\"bytes\":{},\"modified\":{},\"md5\":", id.bytes, id.modified));
         out.push_str(&emusen_dotnet::json::quoted(&id.md5));
         out.push_str(",\"crc32\":");
         json::write_text_or_null(&mut out, id.crc32.as_deref());
+        if sha1 {
+            out.push_str(",\"sha1\":");
+            json::write_text_or_null(&mut out, id.sha1.as_deref());
+        }
         out.push_str(",\"system\":");
         json::write_text_or_null(&mut out, id.system.as_deref());
         out.push_str(&format!(",\"cached\":{}}}", id.cached));

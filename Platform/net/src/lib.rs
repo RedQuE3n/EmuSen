@@ -10,13 +10,15 @@
 mod download;
 mod failure;
 mod fetch;
-mod location;
+pub mod location;
+mod text;
 mod tls;
 mod wire;
 
 pub use download::{Download, State};
 pub use failure::{Failure, Kind};
-pub use fetch::{Progress, Request, fetch};
+pub use fetch::{Answer, Progress, Request, Streamed, fetch, fetch_answer, fetch_into};
+pub use text::text;
 
 pub use rustls::pki_types::CertificateDer;
 

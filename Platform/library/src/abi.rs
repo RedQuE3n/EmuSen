@@ -4,7 +4,7 @@
 use std::ffi::c_void;
 
 pub const MAJOR: u32 = 1;
-pub const MINOR: u32 = 0;
+pub const MINOR: u32 = 1;
 
 /// `(MAJOR << 16) | MINOR`.
 pub const VERSION: u32 = (MAJOR << 16) | MINOR;

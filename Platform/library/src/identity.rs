@@ -16,21 +16,23 @@ pub struct Identity {
     pub modified: i64,
     pub md5: String,
     pub crc32: Option<String>,
+    pub sha1: Option<String>,
     pub system: Option<String>,
     pub cached: bool,
 }
 
 impl Library {
     /// The dump at `path`: its MD5 from the cache while the file is the size and age it was hashed at, else read; with
-    /// `crc32` the file is read for its CRC-32 too; with `record` the cache and the game's row are written.
-    pub fn identity(&self, path: &str, systems: Option<&[String]>, crc32: bool, record: bool) -> Result<Identity, Error> {
+    /// `crc32` the file is read for its CRC-32 too, with `sha1` (1.1) for its SHA-1 as well; with `record` the cache and
+    /// the game's row are written.
+    pub fn identity(&self, path: &str, systems: Option<&[String]>, crc32: bool, sha1: bool, record: bool) -> Result<Identity, Error> {
         let Some((bytes, modified)) = dotnet_files::file_info(path) else { return Err(Error::Io(format!("Could not find file '{path}'."))) };
         let known = records::known_hash(&*self.db()?, path, bytes, modified)?;
-        let (md5, crc, cached) = match known {
-            Some(md5) if !crc32 => (md5, None, true),
+        let (md5, crc, sha, cached) = match known {
+            Some(md5) if !crc32 && !sha1 => (md5, None, None, true),
             known => {
-                let hashes = rom_hash::hashes(path, None).map_err(|e| Error::Io(emusen_dotnet::file::io_message(&e, path)))?;
-                (hashes.md5, Some(hashes.crc32), known.is_some())
+                let hashes = rom_hash::hashes_with(path, None, sha1, &|| false).map_err(|e| Error::Io(emusen_dotnet::file::io_message(&e, path)))?;
+                (hashes.md5, Some(hashes.crc32), hashes.sha1, known.is_some())
             }
         };
         if record {
@@ -47,7 +49,7 @@ impl Library {
                 if ids.is_empty() { None } else { crate::scan::route(path, &crate::scan::Systems::named(&ids)) }
             }
         };
-        Ok(Identity { path: path.to_string(), bytes, modified, md5, crc32: crc, system, cached })
+        Ok(Identity { path: path.to_string(), bytes, modified, md5, crc32: crc, sha1: sha, system, cached })
     }
 
     /// The rows whose file is not among `games` (the last scan's where none are given), each moved to the first game of

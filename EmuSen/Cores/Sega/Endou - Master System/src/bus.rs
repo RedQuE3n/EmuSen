@@ -1,7 +1,8 @@
-//! The Z80's bus (Endou_Native.md §9.3, §9.6): the memory map with port $3E's enables, the I/O ports decoded by A7, A6
-//! and A0, and the clock. The bus owns the time: every machine cycle the Z80 reports advances it, and the devices are
-//! brought to it when an access reaches them. The VDP is Beryl's `beryl-sms-vdp`: the 315-5124 or 315-5246 on the
-//! Master System's consoles, the TMS9918A on the SG-1000 (Endou_Native.md §10, §11); the PSG is `sound`'s.
+//! The Z80's bus (Endou_Native.md §9.3, §9.6): the memory map with port $3E's enables, the BIOS's slot beside the
+//! cartridge's (Endou_OpenBoot.md §4), the I/O ports decoded by A7, A6 and A0, and the clock. The bus owns the time:
+//! every machine cycle the Z80 reports advances it, and the devices are brought to it when an access reaches them. The
+//! VDP is Beryl's `beryl-sms-vdp`: the 315-5124 or 315-5246 on the Master System's consoles, the TMS9918A on the SG-1000
+//! (Endou_Native.md §10, §11); the PSG is `sound`'s.
 
 use beryl_sms_vdp::Vdp;
 
@@ -17,6 +18,7 @@ pub const VDP_PER_Z80: u64 = 3;
 /// enables"].
 pub const CARTRIDGE_OFF: u8 = 1 << 6;
 pub const WORK_RAM_OFF: u8 = 1 << 4;
+pub const BIOS_OFF: u8 = 1 << 3;
 pub const IO_OFF: u8 = 1 << 2;
 
 #[derive(Clone, Debug)]
@@ -35,22 +37,22 @@ pub struct Bus {
     /// A falling edge on NMI not yet taken.
     pub nmi: bool,
     pub vdp: Vdp,
+    /// The BIOS's ROM, empty on a console without one or a machine started with none (`boot::Boot`).
+    pub bios: Vec<u8>,
 }
 
 impl Bus {
+    /// A bus with no BIOS: port $3E as a BIOS leaves it for a cartridge.
     pub fn new(model: Model, cart: Cartridge, ram: usize, sound: Sound, vdp: Vdp) -> Bus {
-        Bus {
-            model,
-            clock: 0,
-            ram: vec![0; ram],
-            cart,
-            io: Io::default(),
-            sound,
-            memory_control: model.memory_control_at_start(),
-            data_bus: 0xFF,
-            nmi: false,
-            vdp,
-        }
+        Bus::with_bios(model, cart, ram, sound, vdp, Vec::new())
+    }
+
+    /// A bus whose BIOS slot holds `bios`, port $3E at its reset value with the BIOS alone in the slot area
+    /// (Endou_OpenBoot.md §2, U1); with none, as `new`.
+    pub fn with_bios(model: Model, cart: Cartridge, ram: usize, sound: Sound, vdp: Vdp, bios: Vec<u8>) -> Bus {
+        assert!(bios.is_empty() || bios.len().is_power_of_two(), "a BIOS mirrors by its size, a power of two");
+        let memory_control = if bios.is_empty() { model.memory_control_at_start() } else { crate::boot::RESET_MEMORY_CONTROL };
+        Bus { model, clock: 0, ram: vec![0; ram], cart, io: Io::default(), sound, memory_control, data_bus: 0xFF, nmi: false, vdp, bios }
     }
 
     /// A read nothing drives: the bus's last byte on the consoles that float it, $FF on the Master System II.
@@ -70,13 +72,18 @@ impl Bus {
             }
             return if self.enabled(WORK_RAM_OFF) { self.ram[a as usize & (self.ram.len() - 1)] } else { self.undriven() };
         }
-        // The BIOS, the card and the expansion slot hold nothing until stage 6; only the cartridge drives the slot area.
-        if self.enabled(CARTRIDGE_OFF) {
-            if let Some(v) = self.cart.read(a) {
-                return v;
-            }
+        // The card and the expansion slots hold nothing; the BIOS's 8 KiB mirror through the slot area [A]. With both on,
+        // the cartridge wins on the first Master System and the two are ANDed on the second [R `smstech` §4].
+        let cart = if self.enabled(CARTRIDGE_OFF) { self.cart.read(a) } else { None };
+        if self.bios.is_empty() || !self.enabled(BIOS_OFF) {
+            return cart.unwrap_or_else(|| self.undriven());
         }
-        self.undriven()
+        let b = self.bios[a as usize & (self.bios.len() - 1)];
+        match cart {
+            Some(c) if self.model.bios_and_cartridge_are_anded() => b & c,
+            Some(c) => c,
+            None => b,
+        }
     }
 
     fn store(&mut self, a: u16, v: u8) {

@@ -62,8 +62,11 @@ impl Cartridge {
         if self.rom.is_empty() { 0xFF } else { self.rom[offset % self.rom.len()] }
     }
 
-    /// The byte at `a`, below $C000, or none where the board drives nothing.
+    /// The byte at `a`, below $C000, or none where the board drives nothing; an empty slot drives nothing anywhere.
     pub fn read(&self, a: u16) -> Option<u8> {
+        if self.rom.is_empty() {
+            return None;
+        }
         let a = a as usize;
         Some(match self.board.mapper {
             Mapper::Plain => self.rom_at(a),

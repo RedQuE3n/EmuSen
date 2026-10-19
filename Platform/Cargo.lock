@@ -379,7 +379,9 @@ dependencies = [
 name = "emusen-galaxia"
 version = "0.1.0"
 dependencies = [
+ "emusen-disc",
  "emusen-dotnet",
+ "flate2",
  "libc",
  "md-5",
  "memmap2",

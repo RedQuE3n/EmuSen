@@ -13,6 +13,10 @@ name = "emusen_galaxia"
 # .NET's text rules and File.ReadAllText's decoding, which the shell's command modules share without linking Galaxia.
 emusen-dotnet = { path = "../dotnet" }
 md-5 = "0.11"
+# A sheet's and a list's meaning, for the files an image brings beside it (image_sets.rs).
+emusen-disc = { path = "../../EmuSen/Cores/Shared/emusen-disc" }
+# Inflate, for an archive entry's first bytes (archive.rs); the workspace's, from emusen-cheats.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 # A file mapped read-only, on every system the project builds for (mapped.rs).
 memmap2 = "0.9"
 

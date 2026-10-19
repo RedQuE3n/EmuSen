@@ -14,7 +14,9 @@ name = "emusen_serenity"
 ash = { version = "0.38", default-features = false, features = ["std", "debug"] }
 # .NET's path and text rules, and the JSON the results cross in.
 emusen-galaxia = { path = "../galaxia" }
-# Shaderc and SQLite, called in the libraries the program ships (§2.8), and Vulkan's loader, which is the system's.
+# Shaderc, called in the library the program ships (§2.8), and Vulkan's loader, which is the system's.
 libloading = "0.9"
+# SQLite as the program ships it, shared with the library.
+emusen-sqlite = { path = "../sqlite" }
 # The cache's keys and each row's digest.
 sha2 = "0.11"

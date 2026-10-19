@@ -183,7 +183,7 @@ namespace EmuSen.WiseMan.Crystal
                 case "taken": _taken = words; return "ok";
                 case "unitnames": return string.Join(",", new UnitSymbols(Info(_units), _taken).Names);
                 case "unitfind": return new UnitSymbols(Info(_units), _taken).TryFind(rest, out uint u, out int index, out int count) ? $"{u} {index} {count}" : "none";
-                default: return $"unknown verb {verb}";
+                default: return RegistryAnswer(verb, rest, words) ?? $"unknown verb {verb}";
             }
         }
 
@@ -237,6 +237,8 @@ namespace EmuSen.WiseMan.Crystal
             public BreakpointRegistry Breakpoints { get; } = new();
             public CheatRegistry Cheats { get; } = new();
             public LabelRegistry Labels { get; } = new();
+            public FreezeRegistry Freezes { get; } = new();
+            FreezeRegistry? IDebugTarget.Freezes => Freezes;
             LabelRegistry? IDebugTarget.Labels => Labels;
             public IExpressionContext? Expressions { get; set; }
             IExpressionContext? IDebugTarget.Expressions => Expressions;

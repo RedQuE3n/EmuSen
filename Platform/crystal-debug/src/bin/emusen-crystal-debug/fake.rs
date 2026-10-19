@@ -1,6 +1,7 @@
 //! The script over plain data: registers, labels, spaces and units a script sets, the contexts and the registries over
 //! them, with no machine. `CrystalDebugScript.Fake` in WiseMan runs the same verbs over the C# classes.
 
+use emusen_crystal_debug::breakpoints::Evaluate;
 use emusen_crystal_debug::conditions;
 use emusen_crystal_debug::context::{CpuContext, Extra, Live, Register, Set, Source, TargetContext, UnitInfo, UnitSymbols};
 use emusen_crystal_debug::expr::{self, Context, Evaluator};
@@ -103,6 +104,7 @@ enum Chosen {
 
 pub struct Script {
     pub data: Data,
+    pub registries: crate::regs::Registries,
     chosen: Chosen,
     units: Vec<UnitInfo>,
     taken: Vec<String>,
@@ -118,7 +120,7 @@ fn number(word: &str) -> i64 {
 
 impl Script {
     pub fn new() -> Script {
-        Script { data: Data::default(), chosen: Chosen::Target, units: Vec::new(), taken: Vec::new() }
+        Script { data: Data::default(), registries: crate::regs::Registries::new(), chosen: Chosen::Target, units: Vec::new(), taken: Vec::new() }
     }
 
     fn pack_names(&self) -> Vec<String> {
@@ -132,22 +134,13 @@ impl Script {
     /// The chosen context over the data, wrapped as a breakpoint's live scope when `live`.
     fn with_context<T>(&mut self, live: bool, f: impl FnOnce(&mut dyn Context) -> T) -> T {
         let names = self.pack_names();
-        let chosen = self.chosen.clone();
-        let source: &mut dyn Source = &mut self.data;
-        match chosen {
-            Chosen::Target => {
-                let scope = TargetContext { source };
-                if live { f(&mut Live { scope, fresh: false }) } else { f(&mut { scope }) }
-            }
-            Chosen::Cpu(set, space) => {
-                let scope = CpuContext { source, set, default_space: space.as_deref(), extra: Extra { names: &[], main: false } };
-                if live { f(&mut Live { scope, fresh: false }) } else { f(&mut { scope }) }
-            }
-            Chosen::Main => {
-                let scope = CpuContext { source, set: Set::Processor(0), default_space: None, extra: Extra { names: &names, main: true } };
-                if live { f(&mut Live { scope, fresh: false }) } else { f(&mut { scope }) }
-            }
-        }
+        context(&mut self.data, &self.chosen, &names, live, f)
+    }
+
+    /// The evaluator over the chosen context, beside the registries it serves.
+    pub fn split(&mut self) -> (FakeEval<'_>, &mut crate::regs::Registries) {
+        let names = self.pack_names();
+        (FakeEval { data: &mut self.data, chosen: &self.chosen, names }, &mut self.registries)
     }
 
     pub fn run(&mut self, verb: &str, rest: &str) -> String {
@@ -270,7 +263,72 @@ impl Script {
                 Some((u, i, n)) => format!("{u} {i} {n}"),
                 None => "none".into(),
             },
-            _ => format!("unknown verb {verb}"),
+            _ => crate::regs::run(self, verb, rest, &words).unwrap_or_else(|| format!("unknown verb {verb}")),
         }
+    }
+}
+
+/// The chosen context over `data`, wrapped as a breakpoint's live scope when `live`.
+fn context<T>(data: &mut Data, chosen: &Chosen, names: &[String], live: bool, f: impl FnOnce(&mut dyn Context) -> T) -> T {
+    let source: &mut dyn Source = data;
+    match chosen {
+        Chosen::Target => {
+            let scope = TargetContext { source };
+            if live { f(&mut Live { scope, fresh: false }) } else { f(&mut { scope }) }
+        }
+        Chosen::Cpu(set, space) => {
+            let scope = CpuContext { source, set: *set, default_space: space.as_deref(), extra: Extra { names: &[], main: false } };
+            if live { f(&mut Live { scope, fresh: false }) } else { f(&mut { scope }) }
+        }
+        Chosen::Main => {
+            let scope = CpuContext { source, set: Set::Processor(0), default_space: None, extra: Extra { names, main: true } };
+            if live { f(&mut Live { scope, fresh: false }) } else { f(&mut { scope }) }
+        }
+    }
+}
+
+/// The registry's evaluator over the chosen context, as BreakpointExpressions points one.
+pub struct FakeEval<'a> {
+    pub data: &'a mut Data,
+    chosen: &'a Chosen,
+    names: Vec<String>,
+}
+
+impl FakeEval<'_> {
+    /// The chosen context, unwrapped, for checking an expression before it is added.
+    pub fn scope<T>(&mut self, f: impl FnOnce(&mut dyn Context) -> T) -> T {
+        context(self.data, self.chosen, &self.names, false, f)
+    }
+}
+
+impl Evaluate for FakeEval<'_> {
+    fn condition(&mut self, condition: &str) -> Result<bool, String> {
+        context(self.data, self.chosen, &self.names, true, |c| conditions::condition(c, condition))
+    }
+
+    fn render(&mut self, log: &str) -> Result<String, String> {
+        context(self.data, self.chosen, &self.names, true, |c| conditions::render(c, log))
+    }
+}
+
+impl Data {
+    /// A byte of a space by its name, 0 where there is none.
+    pub fn byte(&self, space: &str, address: i32) -> u8 {
+        if address < 0 {
+            return 0;
+        }
+        self.spaces.iter().find(|(n, _)| equals_ignore_case(n, space)).and_then(|(_, b)| b.get(address as usize).copied()).unwrap_or(0)
+    }
+
+    pub fn put(&mut self, space: &str, address: i32, value: u8) {
+        if let Some((_, b)) = self.spaces.iter_mut().find(|(n, _)| equals_ignore_case(n, space)) {
+            if address >= 0 && (address as usize) < b.len() {
+                b[address as usize] = value;
+            }
+        }
+    }
+
+    pub fn frame_now(&self) -> i64 {
+        self.frame
     }
 }

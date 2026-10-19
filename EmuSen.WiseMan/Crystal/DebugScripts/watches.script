@@ -1,0 +1,84 @@
+# Watches, the frame log and frozen bytes.
+space RAM 16 00 11 22 33 44 55 66 77 88 99 AA BB CC DD EE FF
+space VRAM 4 01 02 03 04
+watch.add RAM 4 4 0
+watch.add ram 6 1 1
+watch.add VRAM 0 2 2
+watch.add RAM 0 1 7
+watch.add RAM 15 0 0
+watch.list
+watch.rec w RAM 3 1 0x8000
+watch.rec w RAM 4 1 0x8000
+watch.rec w RAM 6 2 0x8002
+watch.rec r RAM 6 3 0x8004
+watch.rec r RAM 7 4 0x8004
+watch.rec w RAM 8 4 0x8004
+watch.rec w RAM 15 4 0x8004
+watch.rec r VRAM 1 9 0x12345
+watch.rec w vram 0 9 0x7
+watch.rec w RAM 0 9 0x7
+watch.events 1 100
+watch.events 2 100
+watch.events 3 1
+watch.events 3 0
+watch.events 9 5
+watch.sites 1
+watch.sites 3
+watch.counts 1
+watch.counts 9
+logging 1
+watch.rec w RAM 5 0xAB 0xBEEF
+watch.rec r RAM 6 0xCD 0x10
+said
+said
+logging 0
+watch.rec w RAM 5 0xAB 0xBEEF
+said
+watch.sites 1
+watch.counts 1
+watch.clear 1
+watch.counts 1
+watch.events 1 5
+watch.sites 1
+watch.remove 2
+watch.remove 2
+watch.list
+fl.add RAM 2 2
+fl.add vram 1 1
+fl.add RAM 15 4
+fl.add NONE 0 1
+fl.list
+fl.record 10
+poke RAM 2 0xEE
+fl.record 11
+fl.samples 1 5
+fl.samples 1 1
+fl.samples 2 5
+fl.samples 3 5
+fl.samples 4 5
+fl.samples 9 5
+fl.clear 1
+fl.samples 1 5
+fl.remove 4
+fl.remove 4
+fl.list
+fz.add RAM 3 0x77
+fz.add ram 3 0x78
+fz.add RAM 4 0x44
+fz.add VRAM 0 5
+fz.list
+fz.enforce
+peek RAM 3
+peek RAM 4
+peek VRAM 0
+fz.list
+fz.enforce
+fz.list
+poke RAM 3 0
+fz.enforce
+fz.list
+fz.remove 2
+fz.remove 2
+fz.list
+fz.clear
+fz.list

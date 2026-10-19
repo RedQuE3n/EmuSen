@@ -830,6 +830,21 @@ impl Engine {
         Ok(size)
     }
 
+    /// The whole state, kind 0, `CoreEngine.SaveState(path)`.
+    pub fn state_bytes(&mut self) -> Result<Vec<u8>, Refused> {
+        let name = &self.display_name;
+        let Some(m) = self.machine.as_mut() else { return Err(Refused::fault("InvalidOperationException: SaveState() called before LoadRom().".to_string())) };
+        let size = m.state_size(0).map_err(|s| Refused::fault(format!("{name} could not size its state: {}.", m.words(s as i64))))?;
+        let mut bytes = vec![0; size];
+        m.state_save(0, &mut bytes).map_err(|s| Refused::fault(format!("{name} could not write its state: {}.", m.words(s as i64))))?;
+        Ok(bytes)
+    }
+
+    /// The version of the state the machine writes, `StateVersion`.
+    pub fn state_version(&self) -> i32 {
+        if self.machine.is_some() { self.mi.state_version as i32 } else { 0 }
+    }
+
     /// A state loaded, over the disc it was made with where a set's other disc refuses it, `CoreEngine.LoadState`.
     pub fn load_state(&mut self, state: &[u8], ctx: Option<&Ctx>) -> Result<(), Refused> {
         if self.machine.is_none() {
@@ -850,7 +865,7 @@ impl Engine {
     fn load_once(&mut self, state: &[u8]) -> Result<(), (i32, Refused)> {
         let name = &self.display_name;
         let m = self.machine.as_mut().expect("a machine");
-        m.state_load(state).map_err(|s| (s, Refused::fault(format!("InvalidDataException: {name} refused the state: {}.", m.words(s as i64)))))
+        m.state_load(state).map_err(|s| (s, Refused { status: crate::abi::status::STATE_REFUSED, words: format!("{name} refused the state: {}.", m.words(s as i64)) }))
     }
 
     /// `LoadOverItsDisc`: a state of another disc of the set loads with that disc put back first.
@@ -1075,8 +1090,12 @@ impl crate::rewind::Snapshots for Snap<'_, '_> {
         self.engine.snapshot(into).map_err(|r| (r.status, r.words))
     }
 
+    /// A core's refusal reaches rewind's caller as the C#'s `InvalidDataException`.
     fn load(&mut self, state: &[u8]) -> Result<(), (i32, String)> {
-        self.engine.load_state(state, self.ctx).map_err(|r| (r.status, r.words))
+        self.engine.load_state(state, self.ctx).map_err(|r| match r.status {
+            crate::abi::status::STATE_REFUSED => (emusen_session_service::abi::status::FAULT, format!("InvalidDataException: {}", r.words)),
+            _ => (r.status, r.words),
+        })
     }
 
     fn total_frames(&self) -> i64 {

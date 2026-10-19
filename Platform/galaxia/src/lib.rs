@@ -7,6 +7,7 @@
 pub mod archive;
 pub mod atomic;
 pub mod cheats;
+pub mod clock;
 pub mod config;
 pub mod consoles;
 pub mod disc_set;

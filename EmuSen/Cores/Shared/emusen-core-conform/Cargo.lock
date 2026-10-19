@@ -165,6 +165,7 @@ dependencies = [
  "emusen-disc",
  "emusen-dotnet",
  "flate2",
+ "libc",
  "md-5",
  "memmap2",
  "sha1",

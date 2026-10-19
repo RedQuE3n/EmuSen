@@ -99,6 +99,8 @@ pub struct Session {
     wake: Condvar,
     /// The picture as shown, for the recorder.
     shown: Mutex<Vec<u8>>,
+    /// The game's MD5 and size, read once on a worker as the session opens; none until then.
+    pub identity: Arc<Mutex<(Option<String>, i64)>>,
 }
 
 fn controllers_of_system(info: &Value, system: &str) -> Vec<Value> {
@@ -110,6 +112,18 @@ fn controllers_of_system(info: &Value, system: &str) -> Vec<Value> {
 impl Session {
     pub fn new(id: u32, engine: Engine, game_path: Option<String>, console: String, empty_console: Option<String>, opened: OpenedWith) -> Session {
         let (latch, routes) = (engine.latch.clone(), engine.routes.clone());
+        let identity = Arc::new(Mutex::new((None, 0)));
+        if let Some(at) = game_path.clone() {
+            let theirs = identity.clone();
+            let _ = std::thread::Builder::new().name("crystal-identify".to_string()).spawn(move || {
+                if let Ok(m) = std::fs::metadata(&at) {
+                    theirs.lock().unwrap_or_else(|p| p.into_inner()).1 = m.len() as i64;
+                }
+                if let Ok(md5) = emusen_galaxia::rom_hash::md5(&at) {
+                    theirs.lock().unwrap_or_else(|p| p.into_inner()).0 = Some(md5);
+                }
+            });
+        }
         Session {
             id,
             engine: Mutex::new(engine),
@@ -128,6 +142,7 @@ impl Session {
             woken: Mutex::new(false),
             wake: Condvar::new(),
             shown: Mutex::new(Vec::new()),
+            identity,
         }
     }
 
@@ -370,6 +385,14 @@ impl Session {
             t.to_rgba(&mut bytes);
             Ok(bytes)
         })
+    }
+
+    /// The picture on show, rows repeated, as a state's or a recording's picture: RGBA, width and height.
+    pub fn shown_picture(&self, e: &mut Engine) -> (Vec<u8>, i32, i32) {
+        let bytes = e.copy_picture(&mut [], true).unwrap_or(0);
+        let mut rgba = vec![0; bytes];
+        let _ = e.copy_picture(&mut rgba, true);
+        (rgba, e.shape.width, e.shape.height * e.shape.row_repeat.max(1))
     }
 
     /// The recorder's picture of the frame, its rows repeated as shown, `CaptureFrame`.

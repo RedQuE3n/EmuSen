@@ -12,12 +12,14 @@ use crate::catalog::Catalog;
 use crate::json::Json;
 
 /// What a runtime is told when it is made.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct Config {
     /// The cores directories in their order; none for the program's directory and its `cores` folder.
     pub cores: Option<Vec<String>>,
     /// Whether cores in development are listed; none for `EMUSEN_DEVELOPMENT_CORES`' answer.
     pub development: Option<bool>,
+    /// The SQLite the host lends, for states.db; none keeps no records of states.
+    pub sqlite: Option<Arc<emusen_sqlite::Sqlite>>,
 }
 
 pub struct Runtime {
@@ -28,6 +30,9 @@ pub struct Runtime {
     /// The runtime's own lines no session said, kept until the events raise them on session 0 (§29.11, Q2).
     said: Mutex<Vec<String>>,
     pub sessions: crate::open::Sessions,
+    sqlite: Option<Arc<emusen_sqlite::Sqlite>>,
+    /// states.db and the path it was opened at, opened on first use and again where the data folder moved.
+    records: Mutex<Option<(String, crate::states::StateRecords)>>,
 }
 
 impl Runtime {
@@ -42,7 +47,7 @@ impl Runtime {
         let development = config.development.unwrap_or_else(|| std::env::var(emusen_core_host::discovery::DEVELOPMENT_VARIABLE).as_deref() == Ok("1"));
         let trust = Trust::new(&directories, &[]);
         let discovery = Mutex::new(Arc::new(Discovery::scan(&directories, development)));
-        Runtime { directories, development, trust, discovery, said: Mutex::new(Vec::new()), sessions: crate::open::Sessions::default() }
+        Runtime { directories, development, trust, discovery, said: Mutex::new(Vec::new()), sessions: crate::open::Sessions::default(), sqlite: config.sqlite.clone(), records: Mutex::new(None) }
     }
 
     /// A line of the runtime's own that no session said.
@@ -333,5 +338,44 @@ impl Runtime {
         let folders = crate::firmware::folders(&tree);
         let is_image = |e: &str| crate::route::is_image_extension(&catalog, &discovery, e);
         call(&crate::engine::Ctx { tree: &tree, is_image: &is_image, folders: &folders })
+    }
+}
+
+impl Runtime {
+    /// states.db, opened where the data folder now has it, for `call`; none where no SQLite was lent.
+    pub fn with_records<T>(&self, call: impl FnOnce(Option<&crate::states::StateRecords>) -> Result<T, Refused>) -> Result<T, Refused> {
+        let Some(sqlite) = &self.sqlite else { return call(None) };
+        let at = {
+            let tree = emusen_galaxia::tree::tree();
+            let library = tree.directory(emusen_galaxia::tree::Directory::Library).unwrap_or_default();
+            emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &library, crate::states::FILE_NAME)
+        };
+        let mut held = self.records.lock().unwrap_or_else(|p| p.into_inner());
+        if held.as_ref().is_none_or(|(p, _)| *p != at) {
+            *held = None;
+            *held = Some((at.clone(), crate::states::StateRecords::open(sqlite.clone(), &at)?));
+        }
+        call(held.as_ref().map(|(_, r)| r))
+    }
+
+    /// The records' calls, which need states.db: refused where no SQLite was lent.
+    pub fn records_needed(&self) -> Result<(), Refused> {
+        if self.sqlite.is_none() {
+            return Err((emusen_session_service::abi::status::NOT_SUPPORTED, "no SQLite was lent to this runtime, so it keeps no records of states".to_string()));
+        }
+        Ok(())
+    }
+
+    pub fn state_record_json(&self, at: &str) -> Result<String, Refused> {
+        self.records_needed()?;
+        self.with_records(|r| match r.map(|r| r.read(at)).transpose()?.flatten() {
+            Some(record) => Ok(crate::saving::record_json(&record)),
+            None => Err((emusen_session_service::abi::status::ABSENT, format!("no record of the state at {at}"))),
+        })
+    }
+
+    pub fn state_forget(&self, at: &str) -> Result<(), Refused> {
+        self.records_needed()?;
+        self.with_records(|r| r.map_or(Ok(()), |r| r.forget(at)))
     }
 }

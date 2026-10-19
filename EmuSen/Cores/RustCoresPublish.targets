@@ -16,7 +16,7 @@
           AfterTargets="ComputeResolvedFilesToPublishList"
           Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForeign)' == 'true'">
     <PropertyGroup>
-      <_EmuSenHostLibraryNames>;@(EmuSenRustCrate->'lib%(Identity).so;%(Identity).dll;lib%(Identity).dylib;lib%(Identity).so.core.json;%(Identity).dll.core.json;lib%(Identity).dylib.core.json');lib$(EmuSenPlatformLibraryName).so;$(EmuSenPlatformLibraryName).dll;lib$(EmuSenPlatformLibraryName).dylib;</_EmuSenHostLibraryNames>
+      <_EmuSenHostLibraryNames>;@(EmuSenRustCrate->'lib%(Identity).so;%(Identity).dll;lib%(Identity).dylib;lib%(Identity).so.core.json;%(Identity).dll.core.json;lib%(Identity).dylib.core.json');lib$(EmuSenPlatformLibraryName).so;$(EmuSenPlatformLibraryName).dll;lib$(EmuSenPlatformLibraryName).dylib;cores.manifest;</_EmuSenHostLibraryNames>
       <_EmuSenPlatformPublishFile>$(EmuSenPublishLibraryPrefix)$(EmuSenPlatformLibraryName)$(EmuSenPublishLibrarySuffix)</_EmuSenPlatformPublishFile>
       <_EmuSenPlatformForeign Condition="'$(EmuSenNativePrebuilt)' != ''">$(EmuSenNativePrebuilt)/$(RuntimeIdentifier)/$(_EmuSenPlatformPublishFile)</_EmuSenPlatformForeign>
       <_EmuSenPlatformForeignFound Condition="'$(_EmuSenPlatformForeign)' != '' And Exists('$(_EmuSenPlatformForeign)')">true</_EmuSenPlatformForeignFound>
@@ -49,6 +49,17 @@
       <_EmuSenForeignSidecarCandidate Include="@(_EmuSenForeignPrebuilt->'%(Identity).core.json')" />
       <_EmuSenForeignSidecar Include="@(_EmuSenForeignSidecarCandidate)" Condition="Exists('%(_EmuSenForeignSidecarCandidate.Identity)')" />
       <ResolvedFileToPublish Include="@(_EmuSenForeignSidecar)" RelativePath="%(_EmuSenForeignSidecar.PublishFile).core.json" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+    <!-- The host's cores.manifest names the host's libraries, so the publish carries one of the prebuilt ones instead - see EmuSen_Backend.md §27.5. -->
+    <GetFileHash Condition="'@(_EmuSenForeignPrebuilt)' != ''" Files="@(_EmuSenForeignPrebuilt)" Algorithm="SHA256" HashEncoding="hex">
+      <Output TaskParameter="Items" ItemName="_EmuSenForeignHashed" />
+    </GetFileHash>
+    <ItemGroup>
+      <_EmuSenForeignManifestLine Include="$([System.String]::Copy('%(_EmuSenForeignHashed.FileHash)').ToLowerInvariant())  %(_EmuSenForeignHashed.PublishFile)" Condition="'@(_EmuSenForeignHashed)' != ''" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(IntermediateOutputPath)$(RuntimeIdentifier).cores.manifest" Lines="@(_EmuSenForeignManifestLine)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(IntermediateOutputPath)$(RuntimeIdentifier).cores.manifest" RelativePath="cores.manifest" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
   </Target>
 </Project>

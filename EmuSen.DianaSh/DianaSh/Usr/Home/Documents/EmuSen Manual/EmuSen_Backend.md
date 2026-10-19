@@ -5445,6 +5445,63 @@ libraries, so the old loader served as the failover until the gate passed and is
 | The kit's crate, `cargo test --profile test-checked` | 8 and 27 passed, the counts of §25.3 |
 | **The kit's corpus on every core**, §26.4's set (MoonRT 4 images `--self-delimiting`, MercuryRT 4, VenusRT 2, MarsRT 2, Nephrite `genesis-sample.txt` 64, Diamond `psx-sample.txt` 9 at 1,800 frames, MercuryRT's 173 hardware-test ROMs), the kit of `9ee965f7` against the kit on the crate, one build of each core's release library | every case of every image passing in both; **265 reports, 265 the same** once the library's path and the timings are set aside |
 
+### 27.11 Built 2026-10-18: part 4, discovery's parity and the manifest
+
+**The manifest, Q2 as decided.** `EmuSen.csproj`'s `BuildRustCores` hashes every built core library with MSBuild's
+`GetFileHash` and writes `obj/…/cores.manifest`, lowercase, in `sha256sum`'s format, copied to the build output and to
+a publish beside the libraries; a library in development is listed too, harmlessly, since a publish does not carry the
+file a line names. A publish for another platform (`RustCoresPublish.targets`) drops the host's manifest with the host's
+libraries and writes one of the prebuilt libraries instead. CI's WiseMan job builds with `EmuSenNative=false`, so it
+writes the manifest of the libraries it places beside the tests, in the same format. The C# reads none of them.
+`sha256sum -c cores.manifest` passes over the build's output and over a fresh publish [M]. **The handheld's files**
+(`~/.cache/emusen/deck-build/20261016/publish.sh`, read only): the script publishes the whole tree and lists no file,
+and the tar beside it holds every file of the published `bin/` and `lib/` (400 entries, the tree's 370 and the licences
+and notices), so the manifest in `lib/EmuSen/` is carried with no change to either; `verify_tree.py` checks the six
+sidecars and names only extra sidecars, so it passes with the manifest present (`problems 0` over the publish below).
+
+**The parity class**, `CoreHostParityTests` (WiseMan), compares `ManagedRuntime.CoresJson` and `EnginesJson` with the
+crate's tool (`emusen-core-host list`), which WiseMan's project builds and copies beside the tests as it does the kit's
+runner, value for value as `JsonNode.DeepEquals` compares, each tree as listed and after every core is opened:
+
+| Case | What the tree holds |
+|---|---|
+| the build's tree | WiseMan's output: the six cores, their sidecars and the build's manifest |
+| a generated tree | the two test cores and a manifest; again with a directory that does not exist and one named twice |
+| a missing library | a third sidecar, of its own id, whose library is deleted |
+| an altered library | the plain core's last byte changed after its sidecar was written |
+| an unapproved library | the plain core in no manifest: equal as listed; opened, equal in every field but that core's two `report`s, which the test sets to the Rust's words before comparing, then equal in full once the hash is approved (Q1's pinned difference) |
+| a repeated id, a core in development, another major | two directories with one id twice, a development sidecar and a sidecar of `abi` 2.0 |
+| a sidecar spelt another way | the hash in capitals and the info's members in reverse order |
+| a published tree | the directory `EMUSEN_PUBLISHED_TREE` names, when set |
+
+**Seeded faults** (`EmuSen_RustPlatform.md` §6.5), each built into a tool of its own and run through the class by
+`EMUSEN_CORE_HOST_TOOL`, measured on 2026-10-18 [M]: the last of two ids kept, a development sidecar listed, the major
+check dropped, the hash compared with regard to case, the sidecars in directory order, the missing library's check
+skipped, and the info's members compared in order. **All seven were caught**, each failing one case (the first, the
+second and the third the repeated-id case, the fourth and the seventh the spelt-another-way case, the fifth the
+build's tree, the sixth the missing library), the clean tool passing all eight. The spelt-another-way case and the
+sidecar of another major were added for the fourth, the seventh and the third, which no tree caught before them.
+
+| Gate | Result, measured on 2026-10-18 [M] |
+|---|---|
+| `CoreHostParityTests` on the branch's build | **8 of 8** |
+| the same over a fresh `dotnet publish` of Mistress for linux-x64, Release, self-contained (`EMUSEN_PUBLISHED_TREE` its `lib/EmuSen`: the six cores, their sidecars and the publish's manifest) | equal as listed and opened, the six reports naming their cores at ABI 1.14 |
+| WiseMan, the blast radius of parts 3 and 4: `CoreHostParityTests` with the published tree named, `CoreDiscoveryTests` (the kit's runner writes a sidecar), `CoreAdapterTests`, `MarsRtCoreAbiTests` and `DiamondTests` (the kit run on their cores), `FirmwareOverviewTests` | **69 of 69**, 9 min 56 s |
+| `cargo metadata --locked` over every tracked `Cargo.lock` but Diamond's kernel and kernel shell | every lock current |
+
+### 27.12 Sizes, against §7, and what is left
+
+[M: `wc -l`, `git diff --numstat`] **`emusen-core-host`: 2,554 lines**, 1,992 in `src/` (with its unit tests), 427 in
+`tests/` and 135 in its four test cores, of which about 400 were moved from the kit (the export table and the
+SHA-256). **The kit lost 217 lines and gained 34.** In C#, 224 lines of parity class; in the build, 24 lines of MSBuild
+and 10 of workflow. §7 estimated 3,600 (3,000 to 4,300) net of what the kit brings and §27.7 about 3,000; the crate is
+smaller because the descriptors it reads are the listing's fields alone (the runtime's records, machine info and the
+settings, are B7's), and because the kit's plain machine calls stayed the kit's (§27.10).
+
+**Left:** the player's `/Cores` directory, the sidecar-less listing and the approvals' file, with `core_approve`'s minor
+(§27.5); the hash-then-open window, recorded; Q1's one difference, which closes when Crystal in Rust (B7) discovers
+through this crate; B7 itself, which takes the crate's `Machine`, `InputLatch`, `StateLayout`, `Discovery` and `Trust`.
+
 ---
 
 ## 28. B8, the library in Rust: the design, 2026-10-18

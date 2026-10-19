@@ -82,6 +82,18 @@
       <None Include="@(_EmuSenRustLibrary)" Condition="Exists('%(_EmuSenRustLibrary.FullPath)') And '%(_EmuSenRustLibrary.InDevelopment)' == 'true'" Link="%(_EmuSenRustLibrary.Filename)%(_EmuSenRustLibrary.Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
       <None Include="@(_EmuSenRustSidecar)" Condition="Exists('%(_EmuSenRustSidecar.FullPath)') And '%(_EmuSenRustSidecar.InDevelopment)' != 'true'" Link="%(_EmuSenRustSidecar.Filename)%(_EmuSenRustSidecar.Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
       <None Include="@(_EmuSenRustSidecar)" Condition="Exists('%(_EmuSenRustSidecar.FullPath)') And '%(_EmuSenRustSidecar.InDevelopment)' == 'true'" Link="%(_EmuSenRustSidecar.Filename)%(_EmuSenRustSidecar.Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+      <_EmuSenRustLibraryBuilt Include="@(_EmuSenRustLibrary)" Condition="Exists('%(_EmuSenRustLibrary.FullPath)')" />
+    </ItemGroup>
+    <!-- The installation's cores.manifest beside the libraries, each built library's SHA-256 in sha256sum's format, which the Rust core host trusts and the C# host does not read - see EmuSen_Backend.md §27.5. -->
+    <GetFileHash Condition="'@(_EmuSenRustLibraryBuilt)' != ''" Files="@(_EmuSenRustLibraryBuilt)" Algorithm="SHA256" HashEncoding="hex">
+      <Output TaskParameter="Items" ItemName="_EmuSenRustLibraryHashed" />
+    </GetFileHash>
+    <ItemGroup>
+      <_EmuSenManifestLine Include="$([System.String]::Copy('%(_EmuSenRustLibraryHashed.FileHash)').ToLowerInvariant())  %(_EmuSenRustLibraryHashed.Filename)%(_EmuSenRustLibraryHashed.Extension)" Condition="'@(_EmuSenRustLibraryHashed)' != ''" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(IntermediateOutputPath)cores.manifest" Lines="@(_EmuSenManifestLine)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <None Include="$(IntermediateOutputPath)cores.manifest" Link="cores.manifest" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
   </Target>
 

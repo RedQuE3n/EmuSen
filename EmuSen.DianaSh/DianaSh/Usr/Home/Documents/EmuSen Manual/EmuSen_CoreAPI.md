@@ -1648,8 +1648,10 @@ board's. v1 named registers only per processor.
 - **`kind`** is open: `video`, `audio`, `channel`, `timer`, `dma`, `cartridge`, or a core's own word.
 - **Read through `debug_registers`**, the export `DEBUG_REGISTERS` already has: the id may be a unit's, the values in
   its `registers` order, the count returned by the length-query idiom. An id machine info lists neither as a processor
-  nor as a unit is refused with `EMUSEN_NOT_SUPPORTED` and changes nothing. **Listing a unit is the claim**, and only a
-  core claiming `DEBUG_REGISTERS` lists one; no capability bit or export is added.
+  nor as a unit is refused with `EMUSEN_NOT_SUPPORTED` and changes nothing. Reading a unit changes nothing in the
+  machine either, as reading a processor's registers does not (the header's `const emusen_machine *`; clarified
+  2026-10-18, no minor). **Listing a unit is the claim**, and only a core claiming `DEBUG_REGISTERS` lists one; no
+  capability bit or export is added.
 - **Older and newer peers.** A 1.12 host ignores `units`. A 1.13 host reading an older core finds none and shows none.
 - **The host** (`CoreEngine`, `CoreDebugTarget`): `CoreMachineInfo.Units`; `video` units' registers are
   `IDebugTarget.VideoRegisters`, `audio`, `timer` and `cartridge` units' `ApuRegisters` in machine info's order, a
@@ -2618,6 +2620,9 @@ reports are unchanged but for the minor's number (`EmuSen_Backend.md` §25).
 
 **Clarified 2026-10-18, no minor** (§6.14): a processor whose `debug_set_breakpoints` refuses cannot halt, and an
 interrupt stopped for with no call logged is noted from the stop reason.
+
+**Clarified 2026-10-18, no minor** (§6.33): reading a unit through `debug_registers` changes nothing in the machine
+(`EmuSen_Backend.md` §24.5, decided in §20 there).
 
 **Kit, 2026-10-15**, no change to the ABI: C7 saves at every eighth of the run and once near its end, each state
 loaded by a machine just made and held to a machine that never loads, in place of once at the middle against a machine

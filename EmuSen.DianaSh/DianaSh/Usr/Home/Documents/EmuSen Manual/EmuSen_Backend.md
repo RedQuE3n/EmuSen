@@ -1,6 +1,6 @@
 # EmuSen — the backend in Rust: the line, the frontend API, the system packs and the services
 
-*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18), and B4's shared part with core ABI 1.13 (§22, 2026-10-18), and MoonRT's units, pack views and switch (§23, 2026-10-18), and debugger expressions naming the units' registers (§24, 2026-10-18), and B4's last step, the deletion across the cores that finishes it (§26, 2026-10-18), and B6, the core host in Rust, designed and built (§27, 2026-10-18), and B8, the library in Rust, designed and built (§28, 2026-10-18), and B7, Crystal in Rust, designed with four questions for the tester (§29, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
+*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18), and B4's shared part with core ABI 1.13 (§22, 2026-10-18), and MoonRT's units, pack views and switch (§23, 2026-10-18), and debugger expressions naming the units' registers (§24, 2026-10-18), and B4's last step, the deletion across the cores that finishes it (§26, 2026-10-18), and B6, the core host in Rust, designed and built (§27, 2026-10-18), and B8, the library in Rust, designed and built (§28, 2026-10-18), and B9, scraping in Rust, designed with nothing built (§30, 2026-10-18), and B7, Crystal in Rust, designed and its four questions decided (§29, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
 get the entire backend ported to rust", after which the frontend's move is planned, and the request of 2026-10-17 to
 design two things: one frontend API by which every frontend drives the cores, and the system packs and the remaining C#
 platform services in Rust. Every claim about the code was read on `WiseMan` at `165e60b4`. Claims are marked as
@@ -676,9 +676,9 @@ behind a switch until the tester agrees to state 3, and says how it is proven. T
 | **B4** | **The per-core shims retired.** What each adds above the ABI goes into its core's own exports, as optional capabilities of the core ABI v1 where one exists (`DEBUG_REGISTERS`, `EmuSen_DianaSh.md` Q28 [R]) and a minor where none does; MarsRT's private exports (`marsrt_core_counters`, `_cpu_registers`, `_gpu_report` and the rest, `MarsRtCore.cs:21–32` [M]) become telemetry or debug capabilities; the shims, `PortEngine` and the pre-stable host deleted; the three dead classes deleted | each core's goldens and corpus baseline unchanged (`EmuSen_Stack.md` §2.1, 2026-10-16) [R]; the kit's corpus on each core; the debugger's golden corpus on each core unchanged, or each difference recorded and decided; `grep` for a type under `EmuSen.Cores.Nintendo.` in shipped code: 0 | per core: its shim stays until its core's exports pass, reached through `CoreFactory` as now. *Built 2026-10-18: VenusRT §19.9, MoonRT §21 and §23, MercuryRT §17.9 and §17.10, MarsRT §18.9 and §18.10, the shared host and core ABI 1.13 §22, the deletion across the cores §26; every gate as measured in §26.4* |
 | **B5** | **The file services in Rust**: `emusen-firmware` (the store, the folders' order, the overview), `emusen-savemedia` (the card manager over B3's formats and Galaxia's `MediumLock`), `emusen-cheats`' files and database (`.cht`, the list files, the database's install, prune and import) | a parity class per service over generated trees (firmware whole and split, cards of each medium held and free, `.cht` files of the cheat tests); the golden corpus's `cards`, `cheat db` and `firmware` cases. *Built 2026-10-17, §15; the download on SR9's client built 2026-10-18, §16* | `EMUSEN_SERVICES_NATIVE=0` |
 | **B6** | **The core host in Rust, shared with the kit**: `emusen-core-host` in `EmuSen/Cores/Shared/` (discovery from sidecars, trust and the manifest, the checks of `EmuSen_CoreAPI.md` §7.2, the v1 calls, the input latch, the state layout), which the kit's `api.rs`, `sidecar.rs` and `lender.rs` fold into | the kit's corpus on every core gives the same report through the new crate; discovery's listing as JSON equal from the C# and the Rust over the published tree and over trees with a missing, altered and unapproved library | the kit keeps its own loader until its corpus passes; the C# host is untouched by this step. *Designed 2026-10-18, §27, its three questions decided the same day (§27.9); built the same day, §27.10 to §27.12: the kit's corpus 265 reports of 265 the same, the listings equal on every tree but the pinned unapproved report, seven seeded faults caught* |
-| **B7** | **Crystal in Rust**: `emusen-crystal` over B1 to B6: sessions and the frame call, input, speed, rewind, states and `states.db`, settings and `consoles.json`, save-media placement, cheat application, the debugger's registries, expressions and bridge, telemetry, the recorder, the session service's table; exported as `emusen_crystal_*` from the platform library. Built in four parts, each graded before the next: (a) life, frame, input, speed, rewind, states, settings, media; (b) the debugger; (c) the service table; (d) the per-program switch | the parity class runs scripted sessions through the binding on both implementations and compares frame and audio digests, state bytes, files written, events drained and every service function's JSON; the debugger's golden corpus with Crystal's table; then state 2 per program: **Pharaoh first**, then emusen-shell, then Mistress, each after a full blast-radius run on Linux and the three systems' CI | `EMUSEN_CRYSTAL_NATIVE=0`, per process, the B2 implementation. *Designed 2026-10-18, §29; four questions in §29.11* |
+| **B7** | **Crystal in Rust**: `emusen-crystal` over B1 to B6: sessions and the frame call, input, speed, rewind, states and `states.db`, settings and `consoles.json`, save-media placement, cheat application, the debugger's registries, expressions and bridge, telemetry, the recorder, the session service's table; exported as `emusen_crystal_*` from the platform library. Built in four parts, each graded before the next: (a) life, frame, input, speed, rewind, states, settings, media; (b) the debugger; (c) the service table; (d) the per-program switch | the parity class runs scripted sessions through the binding on both implementations and compares frame and audio digests, state bytes, files written, events drained and every service function's JSON; the debugger's golden corpus with Crystal's table; then state 2 per program: **Pharaoh first**, then emusen-shell, then Mistress, each after a full blast-radius run on Linux and the three systems' CI | `EMUSEN_CRYSTAL_NATIVE=0`, per process, the B2 implementation. *Designed 2026-10-18, §29; its four questions decided the same day (§29.11)* |
 | **B8** | **The library in Rust**: `emusen-library` and `emusen_library.h`; the scan, identity over Galaxia's extended `RomHash`, `games.db` with its migrations, play time, collections and edits; Mistress's `Library/` behind the binding | a parity class: a generated library scanned by both into separate databases, compared row for row; every `games.db` version of the migration tests opened by both; the SQLite rule of `EmuSen_RustPlatform.md` §2.8 kept, one copy of SQLite per process (the C# lends `e_sqlite3` as Q25 there decided) [R]. *Built 2026-10-18, §28: state 2* | `EMUSEN_LIBRARY_NATIVE=0` |
-| **B9** | **Scraping in Rust**, if D13 says so: `emusen-scrape`, the ScreenScraper client, its quota, the media store and `media.db` | recorded ScreenScraper answers replayed to both, the requests compared byte for byte with the credentials redacted (`ScrapeRedactor`), and the stores compared; no live request in a test | `EMUSEN_SCRAPE_NATIVE=0` |
+| **B9** | **Scraping in Rust**, if D13 says so: `emusen-scrape`, the ScreenScraper client, its quota, the media store and `media.db` | recorded ScreenScraper answers replayed to both, the requests compared byte for byte with the credentials redacted (`ScrapeRedactor`), and the stores compared; no live request in a test. *Designed 2026-10-18, §30; its questions in §30.9* | `EMUSEN_SCRAPE_NATIVE=0` |
 | **B10** | **State 3, one component at a time**: goldens recorded from the C# where a step's parity class does not already leave a record (`EmuSen_RustPlatform.md` §6.6) [R], then the C# deleted at the tester's word after a release played | per component, the tester's word | none, by definition |
 
 ★ The smallest first step that gives value.
@@ -5877,6 +5877,9 @@ the scope is the same; the facade is more than twice §7's figure, as B3's and B
   classes fail on one alone; the migrations stay two lists held equal by them.
 - **§28.7's three items stand**: SHA-1 with B9 (`identity` gains `sha1` by a minor), one rule for recent games, and the
   two routers until B7.
+  *Decided 2026-10-18 by the tester, as recommended: SHA-1 is taken at B9 with the crate `sha1` 0.11, `identity`
+  gaining `sha1` by a minor; the library screen's "Recent" and Big Picture's "Last Played" follow one rule, the library
+  screen's.*
 - **Not moved, by §28.1**: `GameMetadata`'s resolution over `media.db` and the cover and OpenVGDB files (B9),
   `MediaLibrary` (B7), `RecentCache` and the presentation files (the frontend's).
 - **On Windows and macOS**, paused (`EmuSen_RustPlatform.md` §31): the walk's hidden rule there (a flag, not a leading
@@ -6244,6 +6247,8 @@ about 55,000 by this row alone.
 
 ### 29.11 Questions for the tester
 
+*Decided 2026-10-18 by the tester, each as recommended: Q1, the frontend API's 1.2 with the config grown to 32 bytes (`sqlite`, `cores` and `cores_len`, `EMUSEN_CRYSTAL_CONFIG_DEVELOPMENT`), honoured by the C# implementation too; Q2, the runtime's lines through the `log` event with `"source": "runtime"` and the core's with `"source": "core"`, the C# no longer writing them to the console and each program filing the runtime's lines in its per-game log; Q3, the per-program default by `AssemblyMetadata("EmuSen.CrystalNative", "1")`, read when `EMUSEN_CRYSTAL_NATIVE` is unset, and `core_approve` as the frontend API's 1.3, built after part (a) and before Mistress's state 2; Q4, `emusen-core-host` on `libloading` 0.9.0, its tests and the kit's corpus run again. The order of the work: Q4, the API's 1.2, Q2's log source, then part (a) in §29.8's order.*
+
 Q1 is needed before part (a) can be built; Q2 before its sixth piece; Q3 before part (d); Q4 before the crate is
 linked into the platform library, the first piece of part (a).
 
@@ -6286,3 +6291,479 @@ linked into the platform library, the first piece of part (a).
 Nothing else in this design changes what a player sees: the parity class holds every answer, file and event of the two
 implementations equal but the ones §29.7 sets aside, none of which a player reads, and the unapproved core's refusal,
 decided by §27.9's Q1.
+
+---
+
+## 30. B9, scraping in Rust: the design, 2026-10-18
+
+*Written on branch `b9-scrape` from `WiseMan` at `c9f81568`, before anything was built, as §6's B9 row asks: the
+scraper's header and its JSON, the crate and where its exports live, how `emusen-net` is reused and the quota kept,
+the media store and `media.db` under Q25, the identity the scraper needs, OpenVGDB's place, the recorded-answer harness
+and how its requests are compared with the credentials redacted, and the order of parts with §7's sizes re-estimated.
+The decisions that bear on it: D13 (scraping is backend, last, a component of its own, §2.4), D4 (the platform's crates
+exported from `emusen_platform`), D12 (status bands), SR7 (the C# as failover through the three states), SR9 (`ureq` 3
+over `rustls`, the platform's one HTTP client, §16), SR11 (records stay SQLite), `EmuSen_RustPlatform.md` Q25 (one
+SQLite per process, lent), §28's pattern for B8, and `EmuSen_BigPicture.md` §5 (ScreenScraper), §17 (stage (d), what
+was built), §26 and §10.1 (OpenVGDB kept as a permanent fallback), §30 (the store's folders), §38 (the extras) and §46
+(disc and large files). Another branch is writing §29 at the same time. Nothing is built until §30.9's questions are
+answered.*
+
+**Decided 2026-10-18 by the tester** (§28.7, §28.10): SHA-1 is taken at B9 with the crate `sha1` 0.11 of RustCrypto,
+and the library's `identity` gains `sha1` by a minor of `emusen_library.h` (1.1). §30.4 builds on it.
+
+### 30.1 What moves, read from the code
+
+`Scraping/` is 2,800 lines in twelve files at `c9f81568` [M: `wc -l`], none naming Avalonia; §28.1 left five of
+`Library/`'s files to this step, and the window holds the run's orchestration. By §2's line, file by file:
+
+| File | Lines | Where it goes |
+|---|---:|---|
+| `ScreenScraperClient.cs` (the URLs, the statuses, `jeuInfos`, `jeuRecherche`, `ssuserInfos`, `systemesListe`, the media download and its rules) | 314 | **B9**, `emusen-scrape`'s `client` |
+| `ScreenScraperJson.cs` (every reading of an answer) | 143 | **B9**, `answer` |
+| `ScrapeRedactor.cs` | 31 | **B9**, `redact`; the C# copy stays for the C# text Mistress writes itself |
+| `ScrapeQuotaManager.cs` (§5.5's rules, the clock, Paris's day) | 251 | **B9**, `quota` |
+| `MediaStore.cs` (`media.db`, its three migrations, the queue, the hash cache, the layout step, orphans and cleanup) | 727 | **B9**, `store`, whole: a database moves with one owner at a time (R4) |
+| `Scraper.cs` (the workers, identity's two steps, keeping a game's text and media, renames) | 473 | **B9**, `run` |
+| `ScrapeRules.cs` (the kinds, region, language, genre, rating, date, extension, the search name) | 184 | **B9**, `rules` and `kinds` |
+| `ScrapeRun.cs` (`ScrapeScope`, `ScrapeCost`, `ScrapePlan`, `ScrapeProgress`) | 264 | **B9** for the counts, the cost table and the plan's numbers; the sentences of `Describe` stay with the frontend, which shows them |
+| `RomHashes.cs` (MD5, CRC-32, SHA-1 in one read) | 66 | Galaxia's `rom_hash::hashes`, which gains SHA-1 (§30.4) |
+| `ScreenScraperCredentials.cs` (the developer file's two places, the embedded blob, the member's 0600 file) | 188 | **B9**, `credentials` (§30.3, Q4 of §30.9) |
+| `ScrapeSignIn.cs` (a sign-in's result from the status and body) | 57 | **B9** for the result; the messages are the frontend's words |
+| `MediaSources.cs` (the order of a picture's sources, presence and stamp) | 102 | **B9**, `media`, the order; the `ISceneMedia` adapter stays with Big Picture |
+| `Library/OpenVgdb.cs`, `OpenVgdbDownload.cs`, `CoverFetcher.cs` (the failover: OpenVGDB names a file, libretro's thumbnails have its box) | 272 | **B9**, `openemu` (§30.6) |
+| `Library/OpenVgdbBytes.cs` (the C# reader of the systems table's rule) | 31 | deleted at state 3: the Rust calls `emusen-systems` directly |
+| `Library/ArtworkIndex.cs` (the player's art folder, matched by name) | 103 | **B9**, `artwork`: the first of a cover's sources |
+| `Library/GameMetadata.cs`'s `Resolve`, `Baseline`, `Scraped`, `Default` (the player's edit, else the scraped text, else the file's) | about 70 of 182 | **B9**, `metadata`; the field table's labels and choices are the editor's words and stay |
+| `Library/MetadataDraft.cs` | 107 | stays: the editor's draft |
+| `Views/MainWindow.Scrape.cs`, `.ScrapeExtras.cs`, `.Covers.cs` (starting, pausing, cancelling and ending a run, the failover's hand-off, the plan, signing in and out, the name search, orphans, OpenVGDB's download) | about 390 of 862 | **B9**, the run handle and its calls; the confirm dialogs, the status line and the refresh of the grid stay |
+| `Views/ScrapePreferencesPane.cs`, `ScrapeStatusWindow.cs`, `FindByNameWindow.cs` | 754 and more | stay: windows |
+
+So B9 replaces about **3,550 lines of C#**, not §7's 2,750: §7 counted `Scraping/` alone, and the five files §28.1
+moved here, the metadata resolution and the window's orchestration are backend decisions by §2.1's test, since both
+frontends' Big Picture must show the same cover and the same text for a game.
+
+**Read on the way, candidates and not yet shown** (each to be shown by a failing test before anything is changed; the
+parity class reproduces each as it stands):
+
+- **Two caches of a dump's MD5.** `media.db`'s `scrape_file` (path, size, write time, MD5) and `games.db`'s hash cache
+  (§28.4's `identity`) record the same fact for the same file, each hashing it once. `scrape_file` is more than a cache:
+  it is the path index `FoundByPath`, `OutcomesByPath`, `ForgetUnfound`, `Forget` and the rename rule join on. Kept in B9,
+  so that `media.db`'s schema does not change while two halves write it; folding it into the library's identity is a
+  schema change for after state 3 (§30.9, Q8).
+- **Two tables of ES-DE's type folders.** `ScrapeRules`' kinds name each kind's folder, and Big Picture's
+  `EsdeMediaFolder.Folders` names the same eleven again [M: equal today, compared entry by entry]. `MediaStore.Forget`
+  and `Orphans` read the second, a frontend type inside backend code (§4.5's kind). After B9 the scraper's `kinds` is the
+  one table and the frontend reads it (Q8).
+- **The rule for a game's folder**, `GameFolders.Of(roms, path)`, decides where a game's media are stored (§30 of the
+  Big Picture page), so it is backend; §28.1 kept it with the frontend as presentation arithmetic. It moves to Galaxia's
+  Rust half as `game_folder`, the C# kept as its twin until state 3, held equal by the parity class.
+- **A malformed answer's words reach `media.db`.** A fifth malformed answer records its `detail` as
+  System.Text.Json's exception message (`'<' is an invalid start of a value. LineNumber: 0 | BytePositionInLine: 0.`),
+  so a store compared row for row requires .NET's words for a malformed JSON text. `emusen-dotnet`'s reader is
+  `ConfigJson`'s (comments skipped, trailing commas allowed); `JsonDocument.Parse` with default options allows neither,
+  so the reader gains a strict mode and the words of its refusals, measured against .NET 10 as §5.2 of the platform
+  page did for the config reader. Not a defect; a cost recorded.
+- **A refusal of the credentials outlasts the change that would answer it.** §17.4 of the Big Picture page says a 403,
+  423 or 426 stops scraping "until the next start or change in Preferences, which is when the worker is rebuilt". The
+  stop is `ScrapeQuotaManager._sessionStop`, which nothing clears, and the quota manager is made once, when `media.db`
+  is first opened (`MainWindow.Scrape.cs:88`), and never again while the window lives; so a corrected developer file
+  is not used until Mistress is started again. The parity class reproduces it; whether the page or the code is right is
+  for a failing test and the tester.
+
+### 30.2 The crate, and where its exports live
+
+- **`emusen-scrape`** (`Platform/scrape/`), a Rust library: `client` (the four endpoints and the media download over
+  `emusen-net`), `answer` (the JSON reading), `redact`, `quota` (the rules and the clock), `store` (`media.db`), `run`
+  (the queue's workers and the run handle), `rules` and `kinds`, `credentials`, `openemu` (OpenVGDB, its download and
+  the thumbnail server), `artwork` (the player's art index), `media` (the order of a picture's sources), `metadata` (the
+  resolution), `json` and `abi`. It depends on `emusen-net`, `emusen-galaxia`, `emusen-systems`, `emusen-dotnet`,
+  `emusen-sqlite`, `emusen-library` (§30.9, Q3) and `flate2` (already the workspace's, for OpenVGDB's zip), every one
+  below it, and never on Crystal: a test reads its `Cargo.toml` and fails on `emusen-crystal` or `emusen-session`, as
+  the library's does.
+- **The C layer** is `Platform/platform/src/scrape.rs`; the header `Platform/scrape/include/emusen_scrape.h`; the
+  baseline `Platform/scrape/abi/v1/baseline.txt`, held by `Platform/scrape/tests/scrape_abi.rs` as the library's is
+  (constants, signatures, the config struct's layout, C99 and C++17, every `emusen_scrape_` export held to the header
+  both ways, a removed or changed line failing against the base branch), and run by a CI step "The scraper's surface"
+  beside "The library's surface" in `rust-cores.yml`.
+
+**Exported from the platform library, under its own stable header** [C], for §28.2's reason: the scraper calls
+Galaxia, the systems table, the library and the HTTP client, which already live in `emusen_platform`, and a second
+shared library would link second copies of them (a second Galaxia tree with its own overrides, a second library handle
+type that the first cannot lend to). `emusen_platform.h` does not change; the scraper's exports carry their own
+version, `emusen_scrape_abi_version`, under §3.2's policy. **So the platform interface stays where B9 finds it**
+(21 at `c9f81568`); this step takes no interface number, and 22 is left to the step that needs it.
+
+### 30.3 The header
+
+`emusen_scrape.h`, version 1.0, on §3.3's rules: the host calls and the scraper returns; reads are copied out by the
+length-query idiom, and an answer is made once (§28.8: a change answered into a short buffer waits on the calling
+thread for the same call, and is not made again); statuses are signed; text is UTF-8 as pointer and length; lists and
+records cross as JSON. Nothing is pushed: a run's progress is drained, and a host may wait for it to change.
+
+```c
+typedef struct emusen_scrape emusen_scrape;                /* a handle: one media store and its media.db */
+typedef struct emusen_scrape_config {
+    uint32_t size;                                          /* sizeof, so fields may be appended */
+    const uint8_t *root; size_t root_len;                   /* the media store, home/Media; media.db in it */
+    void *sqlite;                                           /* the host's loaded e_sqlite3, lent for the handle's life */
+    struct emusen_library *library;                         /* lent, may be null: covers chosen from another game,
+                                                               the player's edits, the failover's cover lookups (Q3) */
+    const uint8_t *embedded; size_t embedded_len;           /* the program's embedded developer blob ("ESSD"), or none */
+    const uint8_t *settings; size_t settings_len;           /* JSON, below; changed later by the "settings" change */
+} emusen_scrape_config;
+
+uint32_t emusen_scrape_abi_version(void);                  /* (MAJOR << 16) | MINOR */
+int64_t  emusen_scrape_last_error(uint8_t *out, size_t len);    /* this thread's last failing call, always redacted */
+int32_t  emusen_scrape_open(const emusen_scrape_config *config, emusen_scrape **out);
+int32_t  emusen_scrape_close(emusen_scrape *s);            /* cancels a run, joins its workers, closes media.db */
+int64_t  emusen_scrape_start(emusen_scrape *s, const uint8_t *request, size_t len);   /* games queued, or a status */
+int64_t  emusen_scrape_progress(emusen_scrape *s, const uint8_t *request, size_t len, uint8_t *out, size_t out_len);
+int64_t  emusen_scrape_wait(emusen_scrape *s, uint64_t serial, uint32_t timeout_ms);  /* the serial once past it */
+int32_t  emusen_scrape_pause(emusen_scrape *s, int32_t paused);
+int32_t  emusen_scrape_cancel(emusen_scrape *s);
+int64_t  emusen_scrape_get(emusen_scrape *s, const uint8_t *request, size_t len, uint8_t *out, size_t out_len);
+int64_t  emusen_scrape_change(emusen_scrape *s, const uint8_t *request, size_t len, uint8_t *out, size_t out_len);
+```
+
+**Threads.** Any call from any thread. The handle serialises calls on `media.db`; `progress`, `wait`, `pause` and
+`cancel` never wait on a request in flight. A run's workers are threads of the handle's own, up to the quota's
+threads (§5.5). `change`'s three operations that ask the server (`sign_in`, `check`, `search`) block for that one
+request, within the client's timeout; a host calls them off its interface thread, as Mistress already awaits them.
+
+**The settings**, at open and by `{"op": "settings", …}` when Preferences closes; every member optional:
+
+```json
+{ "roms": "/home/p/Roms", "art": "/home/p/Artwork", "esde_media": null, "openemu": true,
+  "user_agent": "EmuSen/0.9.3", "config": null,
+  "test": { "connect": "127.0.0.1:41733", "roots": "-----BEGIN CERTIFICATE-----…", "clock": 1760788800000, "offline": false } }
+```
+
+`roms` names each game's folder for the layout (§30.1); `art` is the player's art folder; `esde_media` an ES-DE media
+folder read in place; `openemu` whether the failover runs; `user_agent` is the program's (Mistress sends
+`EmuSen/<build>` today, `MainWindow.Covers.cs:21`), so that each program names itself; `config` overrides Galaxia's
+config directory for the credential files and is otherwise left out. **`test`** is for tests alone, as `emusen-net`'s
+`test_roots` is (§16.3): no setting, variable or command reaches it, and Mistress passes it only from its test seams.
+`connect` sends every connection to one address whatever the URL's host, so recorded answers are served at the real
+addresses and the requests are compared as they would be sent (§30.7); `roots` is trusted beside the system's store;
+`clock` starts a clock that a delay advances at once and records, `FakeScrapeClock`'s; `offline` refuses every request
+with the words of `NoNetwork` ("The test harness allows no network."), recording the redacted address (§30.7). Q5.
+
+**`start`** queues games and starts a run, answering how many are queued; a run already going is `BUSY`:
+
+```json
+{ "games": [ { "path": "/home/p/Roms/snes/Chrono Trigger (USA).sfc", "system": "snes" } ],
+  "priority": "shown", "one": true, "resume": false, "refresh": false, "pick": 3, "failover": true,
+  "choices": { "kinds": ["cover", "screenshot", "marquee", "miximage"], "region": "auto", "language": "en",
+               "region_fallback": true, "threads": 1 } }
+```
+
+`games` is the scope the frontend chose, passed as data, as §28.4's `scan` takes its systems: the scope's criteria
+(favourites, no metadata, no cover) read the library and the media and are answered by `get` before `start`; `system`
+is the ES-DE name, from which `emusen-systems` gives ScreenScraper's id and the pack's OpenVGDB rule (F17's one owner).
+`one` is "Scrape this game": its unfound answer and its cover lookup are forgotten first, as `StartScrape` does; `resume`
+goes on with what an interrupted run left and ignores `games`; `pick` is a game a name search returned (below). The
+choices are the player's preferences, `appsettings.json`'s keys (§2.3), passed with each run.
+
+**`progress`** answers the run, and with `{"since": 39}` the games finished after that serial:
+
+```json
+{ "serial": 41, "state": "running", "paused": false, "why": null,
+  "total": 120, "done": 37, "found": 30, "unknown": 4, "failed": 1, "skipped": 2, "retrying": 0, "unchanged": 3,
+  "requests": 151, "last_failure": null, "failover": { "asked": 3, "found": 1, "pending": 2 },
+  "current": { "path": "…", "system": "snes", "step": "downloading", "kind": "cover", "saved": null },
+  "last_picture": "snes/covers/Chrono Trigger (USA).png", "started": "2026-10-18T12:00:00.000Z", "ended": null,
+  "paused_ms": 0, "interrupted": 0,
+  "results": [ { "serial": 40, "path": "…", "system": "snes", "outcome": "found", "kinds": ["cover", "screenshot"],
+                 "detail": "", "skipped": false, "has_cover": true, "matched_by": "file", "from_failover": false } ],
+  "quota": { "day": "2026-10-18", "requests": 161, "max_per_day": 20000, "ko": 5, "max_ko_per_day": 2000,
+             "threads": 1, "per_minute": 60, "interval_ms": 1111, "gate": "go", "until": null, "reason": null,
+             "from_server": true, "max_kbps": 128 } }
+```
+
+It is `ScrapeProgress` and `QuotaSnapshot` as data; `state` is `idle`, `running`, `done`, `stopped` or `cancelled`. Every
+`detail`, `why` and `reason` has been through the redactor. **`wait`** returns the serial once it passes the one given,
+or the same serial at the timeout: a blocking wait, which §3.3 allows because it is not a callback. Mistress's facade
+waits on a worker and posts what changed to its window, where `ScrapeArrived` and `ScraperFinished` are called today.
+
+**`get`** answers one read, `{"what": …}`:
+
+| `what` | Arguments | Answer |
+|---|---|---|
+| `media` | `path`, `system`, `type` (an ES-DE type name) | `{"source": "other_game" \| "hand" \| "screenscraper" \| "esde" \| "openemu", "path"}` or `null`: `MediaSources.Locate` |
+| `present`, `stamp` | `system`, `games` (paths); `system` | the types some game has; the text that changes when a file is added or taken (§16.2 of the Big Picture page) |
+| `metadata` | `path` | `{field: {"value", "source": "default" \| "scraped" \| "edited"}}` in `GameMetadata`'s keys: `Resolve` |
+| `record`, `found`, `outcomes` | `path`; —; — | a scraped record, or `null`; every found record by path; `{path: {"state", "has_cover"}}` |
+| `stored` | `md5`, `bytes` | the kept media: `[{"type", "path", "region", "sha1"}]` |
+| `plan` | `games`, `one`, `refresh`, `choices` | `ScrapePlan`'s numbers: games, not yet asked, asked again, the bound and the expected requests, megabytes, time, requests left today, whether ScreenScraper can be used and why not |
+| `queue` | — | the queued games, `[{"path", "system", "priority", "attempts"}]` |
+| `orphans`, `moves` | —; — | the store's files whose game is gone, from the library's last scan of `roms`; the layout step's record |
+| `kinds` | — | the eleven kinds: `{"type", "folder", "screenscraper": [...], "payload"}`, Big Picture's one table (§30.1) |
+| `account`, `developer` | —; — | `{"signed_in", "name", "level", "verified"}`, never a password; `{"origin": "tree" \| "user" \| "embedded" \| null}` |
+| `openvgdb` | — | `{"present", "path"}` |
+
+**`change`** makes one change, `{"op": …}`: `settings`; `forget` (ES-DE's Clear for one game: its answer and its
+pictures, from the store only, `MediaStore.Forget`); `clean_up` (`relatives`, moved to `CLEANUP/<date_time>/`, never
+deleted); `sign_in` (`user`, `password`; one `ssuserInfos`; the account written to its 0600 file only when ScreenScraper
+accepts it); `check` (the stored account); `sign_out` (the file deleted); `search` (`path`, `system`, `text`: one
+`jeuRecherche`, paced and counted as every request is, answering up to 30 games as `{"pick", "id", "names", "dates",
+"publisher", "developer", "system_id", "kinds"}`, where `pick` is a number the handle keeps and a later `start` names; no
+media address crosses, since each carries the credentials); `openvgdb_download` (a job like a run, drained by the same
+`progress` under `"openvgdb"`); `openvgdb_remove` (§28 of the Big Picture page's Remove). A sign-in answers
+`{"result": "signed_in" | "wrong_account" | "developer_refused" | "no_developer" | "incomplete" | "busy" | "closed" |
+"blocked" | "too_many" | "unreachable" | "unreadable", "name", "level", "said"}`, `SignInResult` with what the server
+said, redacted; the sentences the player reads stay the frontend's.
+
+**Statuses**, the band after the library's, −1160 to −1179 (Q7), beside the shared −1 (`NULL`), −5 (`BAD_STRING`) and
+−256 (`NOT_SUPPORTED`):
+
+| Code | Name | Meaning |
+|---:|---|---|
+| −1160 | `EMUSEN_SCRAPE_NEWER_FILE` | `media.db` is of a newer schema; refused, nothing written |
+| −1161 | `EMUSEN_SCRAPE_DATABASE` | SQLite refused; the words are SQLite's |
+| −1162 | `EMUSEN_SCRAPE_NO_SQLITE` | no SQLite was lent |
+| −1163 | `EMUSEN_SCRAPE_BAD_REQUEST` | not what the header says: not JSON, an unknown `what` or `op`, a field missing |
+| −1164 | `EMUSEN_SCRAPE_BUSY` | a run, or OpenVGDB's download, already going |
+| −1165 | `EMUSEN_SCRAPE_IO` | a file of the store or a credential file could not be read or written |
+| −1166 | `EMUSEN_SCRAPE_NO_LIBRARY` | a read that needs the lent library (`metadata`, a cover chosen from another game) with none lent |
+
+**The credentials** [C, Q4]. The scraper owns both files, as the backend line asks of a file both frontends read and
+write (§2.1): the developer file's two places in order (Galaxia's config directory, then the legacy one, with the guard
+`DeveloperCredentials.Locations` has for a test that moved only the first), then the program's embedded blob, which is
+the host's build artefact (`ScreenScraperDeveloper.targets` embeds it in Mistress at publish) and is lent as bytes and
+decoded here (`"ESSD"`, a version, the key, the JSON XORed with it); and the member's `screenscraper.json`, read, written
+whole beside its name with mode 0600 from the moment it exists and moved into place, and deleted at sign-out. Each value
+is registered with the redactor the moment it is read; nothing in the header returns one. The password the player types
+crosses once, in `sign_in`'s request.
+
+### 30.4 Identity
+
+The scraper asks ScreenScraper with the listed file's MD5, CRC-32 and SHA-1, its size and its name (§5.2 and §46.4 of
+the Big Picture page), all from one read; then, after a 404 and only for a file within the 384 MiB ceiling whose
+system's OpenVGDB rule changes its bytes, the same hashes of the changed bytes. **SHA-1 is taken here, as decided.**
+Galaxia's `rom_hash::hashes` (§28.2: MD5 and CRC-32 of a whole file or a range in one read) gains SHA-1 through the
+crate `sha1` 0.11, RustCrypto's, the family of the `md-5` and `sha2` already in the workspace, which adds one crate and
+no new transitive one; the scraper calls it, and `Scraping/RomHashes.cs` stays the C# twin until state 3. The library's
+`identity` gains `sha1` by `emusen_library.h` 1.1: an optional request key, `"sha1": true`, under which the file is read
+for its SHA-1 beside the CRC-32, and an answer key `sha1`, which a 1.0 host never asks for and never sees.
+
+The scraper does not take its hashes from the library's `identity`: it keeps `media.db`'s own path index (§30.1) and
+asks for the CRC-32 and SHA-1 at the moment it sends a request, which the library's cache does not hold. One hashing
+owner, Galaxia; two path indexes, recorded in Q8.
+
+### 30.5 The HTTP client, the quota and the pace
+
+**One client** (SR9): every request the scraper makes, to ScreenScraper, libretro's thumbnail server, GitHub's API and
+OpenVGDB's release, is an `emusen-net` request, so its redirects, retries of an unanswered request, certificates from
+the system's store and words for a failure are §16's. What the cheat database's download did not need, and the scraper
+does, `emusen-net` gains as an **extension of its Rust API** (the C layer of §16.3 unchanged) [C, Q1], each measured
+against .NET 10's `HttpClient` with a server of the measurement's own before it is written, as §16.1's rules were:
+
+- **Request headers**: the program's `User-Agent`, which Mistress's scraping client sends and the cheat download does
+  not; the head as .NET writes it, header names compared without case (§16.1).
+- **An answer of any status, with its body**: `GetAsync` returns a 404 with its body, which the scraper reads for the
+  detail (`Snippet`) and the sign-in for its text; the cheat download's `fetch` makes a status not 2xx a failure. The new
+  call answers the status, the reason, the content type and the body, decoded as `ReadAsStringAsync` decodes it (the
+  content type's charset, else UTF-8, a byte-order mark honoured).
+- **A body streamed into a file**: a media file is written to `<target>.part` as it arrives, its first 64 bytes kept for
+  the payload check, its SHA-1 taken as it goes, and the read stopped at 128 MiB (`LargestFile`); the cheat download
+  holds its body whole.
+- **Two deadlines**: `HttpClient.Timeout`, 30 s in Mistress's factory, covers a text call whole
+  (`ResponseContentRead`) and a media call until its head (`ResponseHeadersRead`); the media call's own transfer timeout,
+  120 s and a second for every 64 KB the answer declared, covers it whole.
+- **.NET's `Uri` for a given address**: a media address comes from an answer and is sent as `new Uri(text)` makes it,
+  whose canonical form (what it escapes, what it leaves, `PathAndQuery`) is what crosses the wire; the request target is
+  written by the same rule, held to .NET on generated addresses. The addresses the scraper builds are `Uri.EscapeDataString`
+  of each value, reproduced.
+- **The test seams** of §30.3: a connect address and an offline refusal, beside §16's `test_roots`.
+
+**The quota and the pace** are `ScrapeQuotaManager`'s rules (§17.4 of the Big Picture page), moved whole: the limits
+read from every answer, a server's counts replacing the scraper's own; workers never more than `maxthreads`, one until an
+answer says; a pace of `maxrequestspermin` less 10%, media downloads included, 30 a minute assumed; after a file that
+came faster than `maxdownloadspeed`, the difference waited; the day stopped at the day's limit less 2%, or the
+unrecognised allowance less 2%, or on 430 or 431, until midnight in Paris, written to `quota_day`; 429 halves the pace
+and waits 60 s, 401 waits five minutes, 403, 423 and 426 stop for the handle's life, as the C# stops for the window's
+(a candidate, §30.1). **Paris's day** is
+read as .NET reads it, from the system's time-zone file (`/usr/share/zoneinfo/Europe/Paris`, its TZif transitions), with
+.NET's fallback to UTC when it is absent [C]; no time-zone crate is added, and a summer-time rule written into the code
+is not chosen, since it would part from .NET the day the rule changes. The clock is the handle's: the system's, or the
+test clock of §30.3.
+
+### 30.6 The media store, `media.db`, and OpenVGDB
+
+**`media.db` under Q25** as `games.db` under §28.3: the host lends its `e_sqlite3`; one copy in the process, so the C#
+twin and the scraper share one set of POSIX locks; Microsoft.Data.Sqlite's behaviours reproduced (opened read-write and
+created, the folder made first; one connection; a transaction as `BEGIN IMMEDIATE`; a busy file tried every 150 ms for
+30 s; a parameter bound by its value's type; a refusal's words). The **three migrations are the same texts in a second
+list until state 3**, held equal by opening a file at every version 0 to 3 with each half and comparing
+`sqlite_master` and every row; a version 4 file is refused by both, unwritten, with the C#'s words ("media.db is schema
+4; this build knows 3."). The **layout** is §30 of the Big Picture page's, `<system>/<type folder>/<game's folder>/<rom
+stem>.<ext>`; its one-time step (`PutInFolders`, recorded in `store_move` and `store_step`) runs when the settings first
+name `roms`. Writes follow §5.6's rule: beside the final name, moved into place, never over a file unless a refresh
+replaces it.
+
+**OpenVGDB belongs here** [C, Q2], as a module, not a component of its own. It is asked only inside a run the player
+started (§17.14 of the Big Picture page), for games of that run ScreenScraper left without a cover; it writes into the
+same store (`home/Media/openemu/<console>/`); it uses the same client; and its outcome joins the run's (`from_failover`).
+A component of its own would have no caller but the scraper. The module is OpenVGDB opened read-only through the lent
+SQLite (`emusen-sqlite` gains the read-only open flag), its lookups by name and by the MD5 of the systems table's bytes
+(`emusen_systems`' OpenVGDB rule, called directly, retiring `OpenVgdbBytes.cs`'s C# reader), the thumbnail server's
+names (`CoverFetcher.Names`, `Safe`), its one request a quarter second, OpenVGDB's download from GitHub's latest release
+(the release's JSON, its zip's entry inflated by `flate2`, opened as a database before it is moved into place), and the
+cover lookups recorded in `games.db` through the lent library (`record_cover_lookup`, §28.4).
+
+**The order of a picture's sources** (`MediaSources.Locate`) is the scraper's `media`: another game's cover the player
+chose (the library's `coverfrom` edit, followed with the cycle guard), the player's art folder (`ArtworkIndex`, scoped by
+console and libretro name from the systems table), ScreenScraper's store, an ES-DE folder, OpenEmu's folder. The
+metadata a view shows is the scraper's `metadata`: the player's edit (the library's), else the scraped text, else the
+file's. Both need the library; §30.9's Q3 asks for the handle to be lent.
+
+### 30.7 The recorded-answer harness
+
+The gate of §6's row, "recorded ScreenScraper answers replayed to both, the requests compared byte for byte with the
+credentials redacted, and the stores compared; no live request in a test", made concrete.
+
+**The server.** A WiseMan class's own HTTPS server on 127.0.0.1, as `CheatDownloadParityTests` has (§16.4), with a
+certificate made at test time for `api.screenscraper.fr`, `neoclone.screenscraper.fr`, `thumbnails.libretro.com`,
+`api.github.com` and the release's download host. The Rust reaches it through `test.connect` and `test.roots`; the C#
+through `MainWindow.HttpFactory`'s seam, a `SocketsHttpHandler` whose `ConnectCallback` dials the same address and whose
+certificate callback trusts the same root. Every request is therefore sent to its real address, `Host` included, and
+the two halves' requests are comparable as they would leave the machine. The server answers from a corpus of exchanges,
+each a matcher (the endpoint and the parameters that select an answer: the MD5, the game id, the search text, the media
+type and region, a `sha1`) and an answer (status, reason, head and body as bytes, and how to send it: whole, chunked,
+cut, slow).
+
+**The corpus** [C, Q6]. Committed: answers written in ScreenScraper's recorded shape and nothing of its data, generated
+by the class from `FakeScreenScraper`'s model and widened to every status of §5.1's table with its French body, numbers
+written as strings and as numbers, absent and null members, `jeuRecherche`'s `[{}]`, `NOMEDIA`, `SHA1OK`, `MD5OK` and
+`CRCOK` bodies, pictures under 80 bytes, a body over 128 MiB declared and sent, wrong content types, PDFs and MP4s, a
+malformed JSON text, a cut body, a slow head and a slow body against the two deadlines, OpenVGDB's database built as a
+SQLite file by the test, its release JSON and zip, and the thumbnail server's answers. Kept out of the repository: the
+live run's answers (`~/.cache/emusen/bigpicture/scrape-live/20260926-134821/answers/`, 43 `jeuInfos` bodies saved through
+the redactor on 2026-09-26, §17.9 of the Big Picture page), replayed by an opt-in case (`EMUSEN_SCRAPE_RECORDED=<folder>`)
+with the test's fake credentials put where the redactor left `***`. ScreenScraper's answers are community data and
+publishers' art that EmuSen stores for the player and redistributes none of (§5.8 of the Big Picture page), so none is
+committed.
+
+**What is compared, each run through both halves from one seeded store copied twice:**
+
+- **The requests**, in order with one thread and as a multiset per game with several: the method, the request target
+  and the head (names without case, values exactly). Each target is compared after `ScrapeRedactor.Redact`, the C#'s,
+  applied to both sides, so that the comparison is byte for byte and no credential reaches a failure's message; and
+  each unredacted target is checked to carry exactly the test's fake credentials, `devid`, `devpassword`, `softname`,
+  `output`, then `ssid` and `sspassword` when a member is signed in, in that order, so that redaction cannot hide a
+  credential sent wrongly or a member's sent after sign-out.
+- **The stores**: every row of every table of `media.db`, time columns included (both halves read one test clock that
+  starts at the same instant and is advanced by each delay); the media tree, path by path with each file's SHA-1;
+  `CLEANUP/`'s files and its `cleanup.txt`; `screenscraper.json`'s bytes and mode; `games.db`'s cover lookups.
+- **The run**: each game's result (outcome, kinds, detail, skipped, has cover, matched by), the final counts, the quota
+  snapshot after each answer, and the clock's recorded delays, which are the pace.
+- **The words**: every redacted detail and every sign-in result, and the redactor itself over generated texts holding
+  each credential name in every case, at every boundary its pattern names, and each registered literal.
+
+**No live request.** The committed classes have no route to the internet: the C# keeps `NoNetwork`'s module initialiser,
+and in state 2 Mistress's facade passes `test.offline` whenever `HttpFactory` is the refusing one and lends no embedded
+blob when `DeveloperSource` gives none, with `config` pointed at the test's config directory, so the Rust reads no
+developer file of the machine's. A class asserts it: with the native scraper and no server of the test's, a run and a
+sign-in each end with the refusal recorded and no connection made. `ScrapeCredentialTests`' guard over `git ls-files`
+stays, and gains the Rust sources and the committed corpus to its scan.
+
+**Parity classes beside the replay**, each over generated inputs and needing no server: `ScrapeStoreParityTests`
+(scripts of every `MediaStore` member, every schema version), `ScrapeRulesParityTests` (region, language, genre, rating,
+date, extension, search name, `ChooseMedia`), `ScrapeAnswerParityTests` (`ScreenScraperJson` over every answer of the
+corpus and their mutations), `ScrapeQuotaParityTests` (the rules under a scripted clock across Paris's two summer-time
+changes and midnight), `ScrapeCredentialParityTests` (blobs and files, damaged and whole), `ScrapeMediaParityTests`
+(`Locate`, `Present`, `Stamp` and `Resolve` over generated stores, art folders and edits).
+
+**Seeded faults**, each to be made, run and reverted, recorded with the step: a migration changed in the Rust alone;
+`devid` left out of the redactor; a credential's literal not registered; `ssid` sent after sign-out; the media address's
+`ssid` kept with no member; `wheel` tried before `wheel-hd`; the region fallback taken with the fallback off; the pace
+without its 10%; 429 not halving the pace; the day rolled at UTC midnight; the 2% left off the unrecognised allowance;
+an 80-byte picture refused; `SHA1OK` saved as a picture; a refresh fetching a file whose SHA-1 the answer matched; a
+renamed game's media copied where they should move; a 404 after a found answer recording Unknown; a fifth malformed
+answer retried; the member file written with mode 0644; a request target not in .NET's canonical form.
+
+### 30.8 Mistress behind the binding, the order of parts, and the sizes
+
+**The binding** joins the library's in `EmuSen.Crystal.Client`, under `Scrape/`: the contract layer, the exports found
+by name, and `MediaService`, a disposable class over a handle. **Mistress keeps every public member** of `MediaStore`,
+`Scraper`, `ScrapeQuotaManager`, `ScreenScraperClient`, `MediaSources` and `GameMetadata.Resolve`; their bodies move to
+`.Managed` twins, unchanged, the failover and the oracle, and a second body forwards to `MediaService`. `Scraper`'s
+events (`Finished`, `Activity`) are raised from the facade's waiting worker. **The switch is `EMUSEN_SCRAPE_NATIVE`**,
+through Galaxia's `PlatformSwitch`, one switch for `media.db`, the run, the credential files and OpenVGDB, because a
+database moves whole (R4): state 1 while parts 2 to 5 are built, state 2 at part 6, a library absent or without an export
+leaving the C# with one line in the log.
+
+**The order of parts**, each graded and committed before the next:
+
+1. This design.
+2. **Below the scraper**: `emusen-net`'s extension (§30.5) with its parity class widened (`CheatDownloadParityTests`'
+   server, new cases for the head, a status's body, a streamed body, the two deadlines and .NET's `Uri`); Galaxia's
+   `rom_hash::hashes` with SHA-1 and `game_folder`; the library's `identity` 1.1; `emusen-sqlite`'s read-only open;
+   `emusen-dotnet`'s strict JSON reader with .NET's words.
+3. **The scraper without a network**: `store`, `rules`, `kinds`, `answer`, `redact`, `quota` and its clock,
+   `credentials`; their parity classes.
+4. **The client and the run**: `client`, `run`, the name search, the sign-in, `openemu` with OpenVGDB's download; the
+   replay harness and its class.
+5. **The sources and the metadata**: `artwork`, `media`, `metadata`; their class.
+6. **The header, the C layer, the baseline and CI step, the binding, and Mistress behind it**, state 1 then state 2,
+   with the blast radius run through both settings: every class in `EmuSen.WiseMan.Mistress/Scraping/`, the library's
+   and Big Picture's classes that read media or metadata (`OnlineCoverTests`, `OnlineCoverWindowTests`,
+   `GameMetadataTests`, `MetadataEditorLayoutTests`, `ThemedMetadataScrapeTests`, `ThemedScrapeTests`,
+   `LibraryArtworkAndMediaTests`, `CoverChoiceTests`), the window fit audit, and for the moved Rust, the cheat download's,
+   the library's and Galaxia's parity classes.
+
+**Sizes, against §7's row**, by §7's method and B8's measured ratio (2.3):
+
+| | §7's estimate | Re-estimated |
+|---|---:|---:|
+| C# replaced | about 2,750 | about 3,550 (§30.1) |
+| Rust, with in-crate tests and the C layer | 6,900 (5,500–8,250) | 8,500 (7,100–10,600), with about 500 of `emusen-net`'s extension and 150 in Galaxia, the library and `emusen-dotnet` |
+| C# binding and facade | 300 | about 900, by B8's 730 for a smaller surface: every public member kept, and a run's events raised from a drained progress |
+| Parity classes and the replay server | — | about 1,000 |
+| C# removed at state 3 | 2,750 | about 3,550, with the facade |
+
+The total of §7 rises by about 1,600 lines of Rust, to about 53,600 (42,600–64,400); the scope is larger, not the
+ratio.
+
+### 30.9 Questions for the tester
+
+Each is a new dependency, a surface change, or a cross-component choice; none changes what a player sees. A player's
+requests leave with the same bytes (the `User-Agent` stays `EmuSen/<build>`), the store holds the same files and rows,
+and the windows say the same words, each held by §30.7's classes. Recommendations first.
+
+1. **`emusen-net`'s extension** (§30.5): request headers, an answer of any status with its body, a body streamed into a
+   file with a limit, its first bytes and its SHA-1, a deadline for the head beside the one for the whole, .NET's `Uri`
+   for a given address, and a test-only connect address and offline refusal. An extension of the crate's Rust API, its C
+   layer unchanged, measured against .NET before each rule is written. *Recommended: yes*; the alternative, a second
+   client in the scraper, is what SR9's one-client rule forbids.
+2. **OpenVGDB, libretro's thumbnails and the player's art index as modules of `emusen-scrape`** (§30.6), not a
+   component of their own and not left in the frontend. *Recommended: yes*: the failover runs only inside a scrape, writes
+   into its store and uses its client; the art index is the first of a cover's sources, whose order both frontends must
+   agree on.
+3. **`emusen-scrape` depends on `emusen-library`**, a new cross-component dependency inside the platform library: the
+   host lends its library handle at open, for a cover chosen from another game, the player's edits under the scraped
+   text, and the failover's cover lookups in `games.db`. *Recommended: yes*. The alternative, the host passing those as
+   data, would make each frontend follow `coverfrom`'s chain and lay the edits itself, two copies of a rule; the
+   dependency runs one way (the library never knows the scraper), and a null handle leaves the scraper working with those
+   three answers refused (`NO_LIBRARY`).
+4. **The credential files owned by the scraper** (§30.3): the developer file's two places and the embedded blob's
+   format decoded in Rust, the blob lent by the program that embeds it; the member's 0600 file read, written and deleted
+   in Rust. *Recommended: yes*, by §2.1's test, since both frontends must use the same account; the alternative, each
+   frontend reading the files and passing the values, keeps two readers of one file.
+5. **The test seams in the stable header**: the settings' `test` member (a connect address, a root, a test clock, an
+   offline refusal), documented as reached by no setting, variable or command. *Recommended: yes*, as `test_roots` was
+   accepted for §16; the alternative, a second, unstable export in `emusen_platform.h` for tests, would move the platform
+   interface for a test's sake.
+6. **The committed corpus synthetic, the real answers kept local** (§30.7): answers in ScreenScraper's recorded shape
+   committed, the live run's redacted answers replayed only by an opt-in case from `~/.cache`. *Recommended: yes*: §5.8 of
+   the Big Picture page says EmuSen redistributes none of ScreenScraper's data, and a committed answer would.
+7. **The scraper's status band, −1160 to −1179**, after the library's, in D12's pattern. *Recommended: yes.*
+8. **Two facts with two owners, settled in two speeds** (§30.1): the ES-DE type-folder table becomes the scraper's
+   `kinds`, which Big Picture's reader asks in state 2 (no schema involved); the two path indexes of a dump's MD5
+   (`media.db`'s `scrape_file`, `games.db`'s cache) stay two until state 3, when folding `scrape_file` into the library's
+   identity is a fourth migration of `media.db` proposed on its own. *Recommended: yes.*
+
+**Recorded, not asked**: Paris's day from the system's time-zone file with .NET's fallback to UTC, no crate (§30.5);
+`GameFolders.Of` moved to Galaxia as the store's layout rule (§30.1); the platform interface left at the number B9 finds
+(§30.2); and a DianaSh command module over `emusen_scrape.h`, which the shell does not have and which would be proposed
+on its own when wanted.

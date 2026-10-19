@@ -46,6 +46,7 @@ namespace EmuSen.Hotaru
                 Console.SetOut(logWriter);
                 runtimeLog.File();
                 if (NoticeOf(session) is { } notice) Console.WriteLine($"[core] {notice}");
+                Console.WriteLine($"[ROM] Runtime: {CrystalRuntime.Implementation}");
                 return new HotaruSession(runtime, session, coreName, logWriter);
             }
             catch

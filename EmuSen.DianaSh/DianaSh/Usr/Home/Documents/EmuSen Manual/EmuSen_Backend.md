@@ -7393,6 +7393,51 @@ them, run at `EMUSEN_CRYSTAL_NATIVE` `0` and `1`:
   Each now carries `CSharpImplementationFact`, which skips it under `EMUSEN_CRYSTAL_NATIVE=1` and says why. None is a
   difference of the Rust's answers.
 
+### 29.28 Built 2026-10-19: part (d), step 2, emusen-shell: a read starved by the frame loop, fixed first
+
+**The defect** (C3, §14.11). At `EMUSEN_CRYSTAL_NATIVE=1`, `C3_a_picture_copied_beside_the_frames_is_always_whole`
+failed once in a full run of the Crystal classes: no copy landed in 500 ms. Run alone, it passed. emusen-shell's feed
+window copies the picture beside running frames, so the cause was looked for before emusen-shell's move.
+
+**The cause, shown.** The Rust gate is a `Mutex`, which is not fair:
+- A change counted itself while it waited (§29.4), and the frame thread yields to any counted waiter before its next
+  frame.
+- A read that names the machine (`picture_copy`, `raw_copy`, `audio_drain`, `phases`, the service's reads) took the
+  gate plainly, not counted.
+- A frame loop that never pauses releases the gate and takes it again before a waiting reader's thread is woken.
+
+A probe was run on 2026-10-19 [M] and never committed. A thread ran frames of the v1 test core without pause, about
+one a millisecond; a second thread made 50 copies, each timed, with a limit of 3 s on starting another. Five trials
+of each:
+
+| | Copies landed | The longest wait for one copy | Median wait |
+|---|---|---|---|
+| Rust, before | 0, 0, 2, 0, 0 (a trial ran 3 to 63 s, the copy waiting the whole time) | 8.7 s among those that landed | — |
+| C# | 50 in each | 100.3 to 100.9 ms | 0.000 to 0.001 ms |
+| Rust, after | 50 in each | 1.1 to 1.4 ms | 1.03 ms |
+
+The C#'s `Monitor` does not starve a reader, though it can keep one waiting for about 100 ms. The Rust's could keep one
+waiting for a minute. The cause is the Rust gate, not the test's 500 ms under the development scope's CPU weight.
+
+**The fix** (`Session::lock`). Every taking of the gate is now counted while it waits, a read as well as a change, so a
+waiting read lands after the frame in progress and before the next. That is §14.3's rule for changes, extended to every
+caller. The separate `enter` is gone, since `lock` now does what it did. The frame's own path is unchanged: it already
+took the gate through `enter`, which counted. So the frame call gains nothing, and `a_frame_through_the_runtime_allocates_nothing`
+still counts no allocation.
+
+`C3_a_copy_beside_a_frame_loop_that_never_pauses_is_not_starved` (`HotaruOnTheApiTests`) makes 20 copies beside such
+a loop. It requires them all within 30 s and none waiting a second. Before the fix it failed in 5 runs of 5, each
+time after 30 s. After the fix it passed in 5 of 5 on the Rust and the C#, as did C3's first case. Also run after the
+fix:
+- the crates' tests (`emusen-crystal`, `emusen-crystal-debug`, the platform library), `--profile test-checked`, every
+  one passing;
+- every class of `EmuSen.WiseMan.Crystal`, `ShellOverSessionTests` and `CoreHostParityTests`: 255 of 255 at `0`, and
+  250 with 5 skipped (§29.27) at `1`;
+- the golden corpus on Crystal's table: 100 of 100 both ways.
+
+**emusen-shell's game log names its runtime.** Hotaru's session writes `[ROM] Runtime: …` after the core's notice, as
+Pharaoh does (§29.27). `A_game_s_log_names_the_implementation_that_serves_it` holds it.
+
 ### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
 
 *Part (b) numbers its sections from §29.30, so that part (a)'s pieces, built at the same time, keep §29.16 to §29.29.*

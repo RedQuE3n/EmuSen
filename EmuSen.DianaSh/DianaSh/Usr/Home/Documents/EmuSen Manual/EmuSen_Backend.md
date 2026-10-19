@@ -7181,6 +7181,83 @@ falls back to .NET's zip reader; the download cannot run in the parity class, wh
   `emusen-crystal-debug` 4 and 2, the platform library's 31 and 4. WiseMan's Crystal, debug, header, session service,
   Hotaru on the API, contract shape, binding and cheat classes, 479 of 481, the two skipped being `SettingPathsOpenTests`' own.
 
+### 29.25 Built 2026-10-19: part (c), piece 5, the export check made exact, the golden corpus on Crystal's table both ways, P2 again; part (c) closed
+
+**The export check, exact** (this commit). `tests/crystal_abi.rs` now holds the platform library's `emusen_crystal_`
+exports equal to the header's functions both ways, each with its signature. The exports that `crystal.rs`'s macros
+make (`listing!`, `session_call!`, `session_read!`, `state_call!`) are read from each macro's template at each
+invocation, so the source check counts all 142. Four seeded faults were each caught: an export renamed, an export the
+header does not declare, a macro's invocation removed, and a twin returning `int64_t` for `int32_t`.
+
+**A shell over a table the platform library made.** `DianaShInterpreter.CreateForService` refused any table its
+process's C# provider had not made, its words leaving the Rust Crystal's tables to B7. The Rust shell now takes one:
+- its modules call the table;
+- run control's requests come back through the table's `events_drain`, where the C# provider's came from its own list;
+- no C# command is given a target.
+
+The signature is unchanged. The C# shell (`EMUSEN_DIANASH_NATIVE=0`) still refuses such a table, since its commands
+need a target. A null table is refused with `ArgumentNullException`. The test that passed an arbitrary pointer now
+passes 0, since a pointer neither implementation made cannot be told from a valid one. `ServiceTable` in the shell's
+native folder holds either kind.
+
+**The golden corpus on Crystal's table** (§29.7, R8). `GoldenRunner` gained a mode, `EMUSEN_GOLDEN_CRYSTAL=1`, in which
+every case of a core target is run differently from the default:
+- the case's image is opened through the binding's runtime, whichever implementation `EMUSEN_CRYSTAL_NATIVE` chose;
+- its frames are run by the frame call;
+- the session's table is handed to the shell.
+
+`EMUSEN_GOLDEN_CRYSTAL_EXPECT` names the implementation the run must be on, so a fallback fails it. That is shown by
+running with the wrong one, which fails all 32 files whose cases reach a core. `CrystalFixture` now writes the
+`cores.manifest` an installation carries and gives the runtime its cores folder, as §29.6 planned, so the classes
+built on it run on the Rust too.
+
+**Measured on 2026-10-19** [M]:
+- **The golden corpus, both ways.**
+  - Run with `GoldenCorpusTests`, `SessionServiceParityTests`, `SessionHeaderTests`, `SessionService13Tests` and
+    `ShellOverSessionTests`: 125 of 125 pass at `EMUSEN_CRYSTAL_NATIVE=0` and at `1`.
+  - The corpus is 95 files, 32 of them with cases on the seven core targets.
+  - The Rust run took 27 seconds and the C# 11; that was not looked into.
+  - `SessionService13Tests` reads the open options of the C# implementation's sessions, which the Rust's do not
+    have, so that one assertion is made on the C# alone. The machine script of §29.21 holds the Rust's open options.
+- **Seeded faults through the corpus**, on the Rust table, three caught and one not:
+  - a space's `writable` inverted, caught by 4 files (`tile`, `spaces`, `counters`, `mem`);
+  - a mnemonic lowercased, caught by `disasm`;
+  - the cheat list's master switch inverted, caught by `cheat`;
+  - a register's width one bit wider, not caught, since no command the corpus records prints it. The parity class's
+    scripts catch it.
+- **P2**, measured on 2026-10-19 with each session's real debugger in the seam (§29.16's method, `CrystalFrameCostTool`,
+  `EMUSEN_CRYSTAL_P2=1`, Release, best of five rounds of 20,000 frames of the v1 test core, development scope's CPU
+  weight), two runs:
+
+| Path | Run 1, µs a frame | Run 2, µs a frame |
+|---|---:|---:|
+| The C# engine's `RunFrame`, the debugger's refresh and the drain, called directly | 2.464 | 1.351 |
+| The C# frame call and drain through its exports | 3.217 | 1.654 |
+| The Rust frame call and drain through its exports | 0.599 | 0.621 |
+
+  The Rust frame is 0.12 to 0.14 µs dearer than part (a)'s 0.479, which had no debugger to refresh. It is still below
+  the C#'s own `RunFrame` in both runs. The C# rows moved by nearly half between the two runs, and the Rust rows by 4%.
+- **Other tests.**
+  - WiseMan's DianaSh, Crystal, session service, Pharaoh and Hotaru classes: 1,287 of 1,287 at the default.
+  - The crates' tests, `--profile test-checked`: `emusen-cheats` 9; `emusen-crystal` 6, 6 and 1, the exact check among
+    them; `emusen-crystal-debug` 4 and 2; `emusen-dotnet` 31; the platform library's 31 and 4.
+
+**Part (c) closed.** Every one of the 80 twins and `session_service` is the platform library's. So is every function
+`emusen_crystal.h` declares, held by the exact check. Each answer has been compared with the C#'s through both export
+tables, and the golden corpus passes on Crystal's table both ways. The binding's switch reaches the Rust under
+`EMUSEN_CRYSTAL_NATIVE=1` (§29.3). No program's default has changed; that is part (d)'s, which waits for the tester.
+
+**Left over from part (c), to be settled before state 3:**
+- **The cheat database's archive.** One the Rust installer does not read (§15.3) is a fault in its words, where the
+  C# falls back to .NET's zip reader (§29.24). At state 3 there is no C# to fall back to, so the installer must read
+  every form .NET reads, or the refusal must be decided.
+- **The download.** DB_UPDATE's download is never run by the parity class, which holds only its refusals. Any case
+  that reaches the fetch must use a test server or a runtime with no fetch, never the network.
+- **A table's life.** A table is kept until its runtime is freed, where the C#'s is freed with its session (§29.21).
+  A table used after its session closed answers `NO_SESSION` rather than reading freed memory.
+- **Registers.** `set_register` refuses every register on the generic engine, as the C# does (§13.11 of
+  `EmuSen_DianaSh.md`).
+
 ### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
 
 *Part (b) numbers its sections from §29.30, so that part (a)'s pieces, built at the same time, keep §29.16 to §29.29.*

@@ -38,6 +38,9 @@ namespace EmuSen.WiseMan.Fixtures
             return new Built(bundle.DebugTarget, bundle, core as IDisposable);
         }
 
+        // A core target's image, written once, for a session of Crystal's to open.
+        public string ImageOf(string engine) => Image(engine);
+
         private string Image(string engine)
         {
             if (_images.TryGetValue(engine, out string? path)) return path;
@@ -57,6 +60,8 @@ namespace EmuSen.WiseMan.Fixtures
             File.WriteAllBytes(path, bytes);
             return _images[engine] = path;
         }
+
+        public static string? EngineOf(string engine) => EngineName(engine);
 
         private static string? EngineName(string engine) => engine switch
         {

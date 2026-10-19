@@ -29,7 +29,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
         private readonly uint _session;
 
         // The session service a frontend on Crystal's API handed this shell, whose run events answer Resume and Step.
-        private SessionService? _service;
+        private ServiceTable? _service;
 
         public CommandHistory History { get; }
 
@@ -126,7 +126,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             Func<DianaShInterpreter> selfAccessor = () => self!;
             Func<DianaShInterpreter>? newSession = sessions is null ? null : () => CreateManaged(target, extraCommands, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, sessions, supportedCheatSystems, service);
             List<IDianaShCommand> commands = DefaultCommands(target, extraCommands, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, sessions, supportedCheatSystems, selfAccessor, history, newSession);
-            self = new DianaShInterpreter(new Managed(target, commands, history)) { _service = service };
+            self = new DianaShInterpreter(new Managed(target, commands, history)) { _service = service is null ? null : new ServiceTable(service) };
             return self;
         }
 
@@ -253,14 +253,26 @@ namespace EmuSen.DianaSh.DianaSh.Bin
         // With sessions, `tmux` makes more shells over the same table; Resume and Step come back from the session's own run events - see EmuSen_Backend.md §14.11.
         public static unsafe DianaShInterpreter CreateForService(nint sessionService, IEnumerable<IDianaShCommand>? extraCommands = null, DianaShSessionManager? sessions = null)
         {
-            SessionService provider = SessionService.Of((EmuSenSessionV1*)sessionService)
-                ?? throw new ArgumentException("not a session service table this process's provider made; the Rust Crystal's tables are B7's", nameof(sessionService));
+            SessionService? provider = SessionService.Of((EmuSenSessionV1*)sessionService);
+            if (provider is null) return CreateForForeignService(sessionService, extraCommands, sessions);
             SessionServiceOptions o = provider.Options;
             DianaShSandbox.EnsureInitialWorkingDirectory();
             DianaShInterpreter shell = DianaShNative.Active
                 ? CreateNative(provider.DebugTarget, extraCommands, o.AutoDetectCodec, o.ExplicitCodec, o.Trace, sessions, o.CheatSystems, provider)
                 : CreateManaged(provider.DebugTarget, extraCommands, o.AutoDetectCodec, o.ExplicitCodec, o.Trace, sessions, o.CheatSystems, provider);
-            shell._service = provider;
+            shell._service = new ServiceTable(provider);
+            return shell;
+        }
+
+        // A table the platform library's Crystal made: its modules call it, and no C# command has a target - see EmuSen_Backend.md §29.25.
+        private static DianaShInterpreter CreateForForeignService(nint sessionService, IEnumerable<IDianaShCommand>? extraCommands, DianaShSessionManager? sessions)
+        {
+            if (sessionService == 0) throw new ArgumentNullException(nameof(sessionService));
+            if (!DianaShNative.Active) throw new ArgumentException("the C# shell's commands need this process's provider; a table the platform library made needs the Rust shell", nameof(sessionService));
+            DianaShSandbox.EnsureInitialWorkingDirectory();
+            var table = new ServiceTable(sessionService);
+            DianaShInterpreter shell = CreateNative(null, extraCommands, null, null, null, sessions, null, null, table);
+            shell._service = table;
             return shell;
         }
 
@@ -272,7 +284,8 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             ICpuTraceSwitch? cpuTraceSwitch,
             DianaShSessionManager? sessions,
             Func<IReadOnlyCollection<string>>? supportedCheatSystems,
-            SessionService? provider = null)
+            SessionService? provider = null,
+            ServiceTable? foreign = null)
         {
             NativeShell shell = sessions is null ? new NativeShell(keepsSessions: false) : sessions.Native ??= new NativeShell(keepsSessions: true);
             uint session = sessions is null ? 0 : shell.NewSession();
@@ -281,7 +294,8 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             IReadOnlyList<IDianaShCommand> Build() => DefaultCommands(target, extras, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, null, supportedCheatSystems, Unreachable, new CommandHistory());
             IReadOnlyList<IDianaShCommand> prototype = Build();
             // The session's own provider over its target, which the Rust command modules call - see EmuSen_DianaSh.md §13.11.
-            shell.SetSessionService(session, provider ?? new SessionService(target, new SessionServiceOptions
+            if (foreign is not null) shell.SetSessionService(session, foreign);
+            else shell.SetSessionService(session, provider ?? new SessionService(target, new SessionServiceOptions
             {
                 AutoDetectCodec = cheatAutoDetectCodec,
                 ExplicitCodec = cheatExplicitCodec,

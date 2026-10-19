@@ -324,8 +324,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-core-host"
+version = "0.1.0"
+dependencies = [
+ "emusen-native",
+ "libloading",
+]
+
+[[package]]
 name = "emusen-crystal"
 version = "0.1.0"
+dependencies = [
+ "emusen-core-host",
+ "emusen-dotnet",
+ "emusen-galaxia",
+ "emusen-native",
+ "emusen-systems",
+]
 
 [[package]]
 name = "emusen-debug"
@@ -433,6 +448,7 @@ dependencies = [
  "dianash-text",
  "emusen-cheat",
  "emusen-cheats",
+ "emusen-crystal",
  "emusen-debug",
  "emusen-dianash",
  "emusen-disc",
@@ -446,6 +462,7 @@ dependencies = [
  "emusen-savemedia",
  "emusen-serenity",
  "emusen-session",
+ "emusen-session-service",
  "emusen-sqlite",
  "emusen-systems",
  "emusen-trace",

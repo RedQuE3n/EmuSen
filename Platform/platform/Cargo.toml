@@ -39,5 +39,9 @@ emusen-net = { path = "../net" }
 # The player's library and the SQLite it is lent, under its own stable header (EmuSen_Backend.md §28).
 emusen-library = { path = "../library" }
 emusen-sqlite = { path = "../sqlite" }
+# Crystal in Rust, the runtime the frontend API's exports call (EmuSen_Backend.md §29).
+emusen-crystal = { path = "../crystal" }
+# The session service's numbers, which the frontend API's statuses share.
+emusen-session-service = { path = "../session-service" }
 # .NET's JSON, for the requests the systems' C layer reads.
 emusen-dotnet = { path = "../dotnet" }

@@ -66,8 +66,17 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
 - Conclusion: **open.** Until it is settled the VDP crate outputs CRAM indices (`Endou_Plan.md` §3.3) and Endou shows a
   two-bit component at four equal steps, 0, 85, 170 and 255, the plainest reading of a two-bit DAC, named as a loss in
   the build record. The Game Gear's twelve bits (J1) are the same question at four bits a component.
-- Pinned by: —
-- Implemented in: —
+- *Read at stage 3 (2026-10-19):* SMS Power!'s "Palette" page (fetched at stage 1, modified 2024-02-25) gives each
+  colour of the 315-5246 as `#00`, `#55`, `#AA` and `#FF` a component, the equal steps above, and says that "the Mark III
+  and SMS1's VDP has the first level of blue slightly boosted in brightness, affecting 16 colours", showing blue level
+  1 as `#68` on those chips where the 315-5246's is `#55`. The page names no measurement, instrument or console behind
+  the values, so they are a document's statement, not a published measurement. Endou keeps the equal steps on every
+  model, as stage 0 settled them; whether to take the page's boosted blue for the 315-5124 is a question for the
+  tester (`Endou_Native.md` §10.12). The crate outputs CRAM entries (`Beryl_SmsVdp.md` §1), so either answer is a table
+  of Endou's alone.
+- Pinned by: `machine::SMS_COLOURS` through `programs::a_program_s_picture_is_its_tiles_sprite_scroll_mask_and_mid_frame_colour`
+  and `EndouTests.The_vdp_draws_a_synthetic_program_s_picture`.
+- Implemented in: the stage 3 commit, as the equal steps.
 
 ### D-2. OPEN. The YM2413's operator ROMs: whether its log-sine and exponent tables are the OPL2's, entry for entry
 - Opened: 2026-10-19, at stage 0. *OPLx decapsulated* gives the YM3812's two 256-entry ROMs, read from its die.
@@ -110,6 +119,11 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
 - Pinned by: `io::tests::the_export_consoles_read_th_back_and_the_mark_iii_does_not`,
   `programs::the_region_reads_back_as_each_console_s`, `programs::the_pads_reset_button_and_th_lines_read_through_the_joystick_ports`.
 - Implemented in: the stage 2 commit.
+- *At stage 3 (2026-10-19):* the VDP latches its H counter when TH rises on either port (`msvdp` §11). The rise is taken
+  from the levels this entry gives each console, so on the Mark III a TH pin switched from an output to an input rises
+  and latches as on the others; a Mark III whose TH is tied to ground would never latch. FluBBa's VDP test latches
+  through port `$3F` and passes on the Mark III's model as on the others (`Endou_Native.md` §10.7). The Light Phaser's
+  stage reopens this with the entry.
 
 ### D-4. Port $3E: a slot or the work RAM switched off drives nothing, and port $3E reads as an undriven port
 - Opened: 2026-10-19, at stage 2, by the referees disagreeing with the document and with each other on
@@ -150,3 +164,83 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
 - Pinned by: `cart::tests::codemasters_mapper_banks_every_slot_by_its_own_addresses`,
   `programs::codemasters_mapper_banks_by_its_slots_addresses_and_maps_its_ram`, `EndouTests.Each_mapper_banks_its_slots_as_its_board_does`.
 - Implemented in: the stage 2 commit.
+
+### D-6. The 315-5124's zoomed sprites: of N sprites on a line, the first N - 4 are widened, the rest only heightened
+- Opened: 2026-10-19, at stage 3, by two documents that disagree. MacDonald: the 315-5124 "will only allow the first
+  four sprites of the eight shown on a scanline to be zoomed horizontally and vertically, and the remaining four will be
+  zoomed vertically" (`msvdp` §10). SMS Power!'s "Sprites" (modified 2025-10-29): "If N sprites on are a scanline, only
+  the first N minus 4 are double-width", with a table (two sprites `VV`, four `VVVV`, six `FFVVVV`, eight `FFFFVVVV`),
+  and "To get four sprites to zoom in both dimensions, four 'sacrificial' sprites will need to be added after them";
+  its "VDP Registers" says the same of register 1's bit 0.
+- Documents read: `msvdp` §10; SMS Power!'s "Sprites" and "VDP Registers".
+- Test program: none run; the two readings agree with eight sprites on a line and differ with fewer.
+- Referee: none. The references run a Master System II's chip by default; SMS_MiSTer is not run (no VHDL simulator).
+- Conclusion: **argued** for SMS Power!'s account. It is the later document, it is specific where MacDonald's is
+  general, its table and its advice to add sacrificial sprites describe a rule someone tested with fewer than eight
+  sprites, and MacDonald's sentence describes the case of eight, where the two agree.
+- Pinned by: `compose::tests::the_first_master_system_widens_only_n_minus_four_of_n_zoomed_sprites`.
+- Implemented in: the stage 3 commit.
+
+### D-7. The background's first pixels under a fine X scroll show the backdrop
+- Opened: 2026-10-19, at stage 3, by the references disagreeing with the document. MacDonald: the column counter starts
+  drawing "offset to the right by the fine scroll value", and "the SMS VDP does not [show part of the column], and
+  instead this area is filled with the backdrop color (and sometimes pattern data from sprite #0, but exactly how this
+  is selected is unknown)" (`msvdp` §9).
+- Documents read: `msvdp` §9; SMS Power!'s "Tilemap" ("glitches will be visible in the leftmost column").
+- Test program: MacDonald's *Scroll Test Program*, frame 300, its middle band scrolled with the left column unmasked.
+- Referee: the five references as black boxes: PicoDrive shows the backdrop there, as Endou does; Genesis Plus GX,
+  Gearsystem and BlastEm show CRAM entry 0, the colour of the background pixel a wrapped column would give; SMS Plus GX
+  was at another phase of the program's scroll. They disagree with each other, so they are no evidence against the
+  document.
+- Conclusion: **argued** from the document: the pixels before the column counter's first column are the backdrop.
+  "Pattern data from sprite #0" is not modelled; no document says when it shows. The Genesis's garbage there
+  (`Nephrite_Native.md` §15.2) is its own, a variant's choice at stage 4.
+- Pinned by: `compose::tests::the_background_scrolls_by_its_column_counter_and_blanks_the_fine_scroll`.
+- Implemented in: the stage 3 commit.
+
+### D-8. OPEN. The CPU's access to VRAM and CRAM: when an access made faster than the chip serves it is lost
+- Opened: 2026-10-19, at stage 3, by the plan's thin area (`Endou_Plan.md` §5.2, P3). Sega's Mark III manual: "The VDP
+  chip cannot process data any faster than the following rates: 16 Z80A T-States during VBLANK, 29 Z80A T-States during
+  active video. ... This constraint applies to Video RAM and Color RAM as well as the internal registers." MacDonald:
+  "When writing to CRAM rapidly during the active display, I've found that sometimes data is written to the wrong
+  address or that the data isn't written altogether. This happened with an SMS 2, but the same program runs fine on a
+  Genesis and Game Gear. I think the cause is that the VDP can only allow so many CPU accesses ... and if you write when
+  the VDP is busy processing a previous write, the data is simply gone" (`msvdp` §15). No document read gives the dots
+  at which the chip serves the CPU.
+- Documents read: those; `Endou_Plan.md` §5.2.
+- Test program: `programs/slots.s`: 64 bytes written to VRAM at three rates during the active display with the display
+  on (OTIR, 21 cycles apart; OUTI and JR, 28; OUTI, NOP and JR, 32) and at 16 during vertical blanking, read back slowly.
+  And a survey: the library's 310 game images (read in place, 1,200 frames each with button presses, on a Master System
+  II), every data port access timed against the one before it [M 2026-10-19, an instrumented build in scratch].
+- Referee: the five references as black boxes keep every byte of `slots.s` at every rate. SMS_MiSTer is not run (no
+  VHDL simulator, `Endou_Native.md` §8).
+- Survey [M]: 122 of the 310 images access the data port during the active display, display on, less than Sega's 29
+  cycles after the access before it; most at 26-28 cycles (Golden Axe: 523,271 such accesses in 1,200 frames, none
+  closer than 28), After Burner at 16, Space Harrier at 11. These games run on the console, so a rule that lost every
+  access closer than 29 cycles would break a third of the library; the manual's rates are a bound developers were
+  given, not the chip's slots.
+- Conclusion: **open; implemented as no access lost** [A]. The picture shows each write at its dot and nothing is
+  dropped. What MacDonald saw, at a rate higher than games use, needs the slots' positions, which only a referee or a
+  console can give, and no console is run for the project (`Endou_Plan.md` §10 Q11). SMS_MiSTer, run under a VHDL
+  simulator with `slots.s` at a rate stepped from 11 to 29 cycles, would place them; installing a simulator is the
+  tester's to allow (`Endou_Native.md` §10.12).
+- Pinned by: `programs::data_port_writes_at_every_rate_land`.
+- Implemented in: the stage 3 commit.
+
+### D-9. The H counter's run and where a line's events fall, by FluBBa's test rather than MacDonald's Genesis
+- Opened: 2026-10-19, at stage 3, by two documents that disagree. MacDonald's §11 gives the H counter's jump at
+  `$8B`-`$ED` and the active display at `$00`-`$7F`, "taken from the TMS9918 manual and my tests on a NTSC Genesis. Be
+  warned that a real SMS may have different results", and says "I don't have information about where events occur
+  within a single scanline". FluBBa's *SMS VDP Test* (2009) holds the H counter's reads to a table running `$00`-`$93`
+  and `$E9`-`$FF`, and its readme lists the interrupts, the V counter's step and the flags in HClock.
+- Documents read: `msvdp` §11; the test's readme and source.
+- Test program: the test itself, its 16 timing cases (`Beryl_SmsVdp.md` §3.2).
+- Referee: Gearsystem and SMS Plus GX pass every one of the test's Master System cases; Genesis Plus GX all but
+  "Offscreen Y, col"; PicoDrive fails the five H count cases; BlastEm did not start the test from a pad press [M,
+  2026-10-19, frame 1,500, RAM `$C900` on].
+- Conclusion: **measured** by the test program on Endou: the run of FluBBa's table, the events at the dots that pass its
+  cases (`Beryl_SmsVdp.md` §3.2), six dots earlier than the readme's HClock, which counts from its own emulator's
+  origin. The test's author's console was a Master System; which model is not said, and the 315-5124 and 315-5246 are
+  given the same timing [A].
+- Pinned by: `programs::flubba_s_vdp_test_passes_on_every_model` (with the corpus), `timing::tests`, `tests::the_h_counter_is_latched_on_th_rising_and_holds_its_value`.
+- Implemented in: the stage 3 commit.

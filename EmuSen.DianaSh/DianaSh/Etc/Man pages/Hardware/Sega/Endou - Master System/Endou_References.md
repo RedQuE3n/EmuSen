@@ -152,6 +152,16 @@ documentation about Genesis ROM format*, version 1.1 (`nephrite/docs/zophar/gene
 (`Endou_Native.md` §9.2). ZEXALL-SMS's source was read for where it writes its report and how it detects the VDP. The
 references and test programs were run as `Endou_Native.md` §9.9 and §9.11 record.
 
+## 6b. Used at stage 3 (2026-10-19)
+
+Nothing was fetched. Read from the stage 1 fetch: MacDonald's `msvdp-20021112.txt` whole and `smstech` §3; SMS
+Power!'s VDP pages and "GG VDP", "Palette" and "I/O Port Map - SMS"; the VDP sections of Sega's Mark III manual;
+Talbot-Watkins's VDP registers; FluBBa's *SMS VDP Test* readme and source, and the sources of MacDonald's *Scroll Test*
+and *64 Color Palette*, as a test's source says what it expects. Run: those programs, *SMS Test Suite*, *V Counter
+Test*, *Color Check*, *Checkstate*, *SMS Palette*, *Fullscreen Palette Test* and *Mark III BG Test*, on Endou and on
+the five references through the probe (`Endou_Native.md` §10.7-§10.8). The SMS Power! "Palette" page's colour values
+were read from its HTML's styles, as the page shows them (D-1).
+
 ## 7. What was read for this page
 
 The pages and listings of §1–§4 as far as needed to identify, date and license each item: titles, contents lists,

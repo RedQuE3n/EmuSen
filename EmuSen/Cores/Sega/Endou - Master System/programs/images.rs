@@ -1,4 +1,4 @@
-//! The stage 2 test programs as cartridge images (Endou_Native.md §9.8), shared by the crate's tests and the referee
+//! The test programs as cartridge images (Endou_Native.md §9.8), shared by the crate's tests and the referee
 //! example: each source assembled with Beryl's Z80 assembler at $0000, in an image of its banks with each bank's own
 //! number at $3F00.
 
@@ -29,8 +29,11 @@ pub const CODEMASTERS: Program = Program { codemasters: true, ..program("codemas
 pub const PORT_3E: Program = Program { patch: &[(0x100, 0x42)], ..program("port3e", include_str!("port3e.s"), 2) };
 pub const SG_RAM: Program = Program { header: None, ..program("sgram", include_str!("sgram.s"), 1) };
 pub const PSG: Program = program("psg", include_str!("psg.s"), 2);
+pub const SLOTS: Program = program("slots", include_str!("slots.s"), 2);
+pub const PICTURE: Program = program("picture", include_str!("picture.s"), 2);
+pub const H_LATCH: Program = program("hlatch", include_str!("hlatch.s"), 2);
 
-pub const PROGRAMS: [&Program; 8] = [&PADS, &PAUSE, &REGION, &SEGA, &CODEMASTERS, &PORT_3E, &SG_RAM, &PSG];
+pub const PROGRAMS: [&Program; 11] = [&PADS, &PAUSE, &REGION, &SEGA, &CODEMASTERS, &PORT_3E, &SG_RAM, &PSG, &SLOTS, &PICTURE, &H_LATCH];
 
 pub fn image(p: &Program) -> Vec<u8> {
     let mut rom = vec![0u8; p.banks * 0x4000];

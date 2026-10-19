@@ -26,6 +26,11 @@ stage 4 (§3.7); MAME is not installed before stage 3; a VHDL simulator for SMS_
 first dispute needs it, and only after asking the tester; the copier's 512-byte header is confirmed against a
 document at stage 2. The go for stage 2 came with them.
 
+**Decided by the tester, 2026-10-19, on stage 2's questions** (`Endou_Native.md` §9.15), each as recommended: at
+stage 7 a public per-game listing may be fetched to complete the battery table; D-3 (the Mark III's TH) and D-4 (port
+`$3E`) stay as argued from the documents until a game shows otherwise, TH returning at the Light Phaser's stage; CI's
+testing of the Beryl crates with all their features is confirmed. The go for stage 3 came with them.
+
 Every claim carries one of six marks:
 
 - **[M]** *measured* on 2026-10-19, with the tool named. Nothing was run to write this page beyond listings, the local
@@ -257,7 +262,8 @@ form for; a later netplay-like design would decide it, and few games need it to 
   Beryl crate was to carry as a development tool [R `Beryl-HW/README.md`] and the Z80 crate does not yet [R
   `Beryl_Z80.md`, no assembler recorded]. It assembles Endou's test programs and the open boot program at build time.
   Stage 2. *Built 2026-10-19 (`Beryl_Z80.md` §8), its front half shared with the 68000's in `beryl-asm`.*
-- **`beryl-sms-vdp`**, the VDP family as one chip crate (§3.3). Stages 3 and 4.
+- **`beryl-sms-vdp`**, the VDP family as one chip crate (§3.3). Stages 3 and 4. *Mode 4 built 2026-10-19
+  (`Beryl_SmsVdp.md`, `Endou_Native.md` §10).*
 - **Conditionally, the operator ROMs.** If D-2 finds that the YM2413's log-sine and exponent ROMs are the OPL2's, as
   they are for the OPN2 on Nuked-MD's board [R `Nephrite_OperatorTables.md` §4], the two tables Nephrite holds in
   `fm_tables.rs` [R] would be needed by two Sega cores, and move to a Beryl crate of their own with their provenance
@@ -632,7 +638,7 @@ before the next begins. The core carries the `InDevelopment` mark from stage 1 u
 | **0** | This plan, its references page and disputes log | The tester's go | 1 (2026-10-19) |
 | **1** | *Built 2026-10-19, `Endou_Native.md` §1–§6.* The crate `endou` on the core ABI v1 as a stub: core info for `sms` and `sg1000`, the header read, a black picture; its row in `RustCores.props` with `<InDevelopment>true</InDevelopment>`, so the build writes its sidecar marked and lists it in `cores.manifest` [R `EmuSen_Backend.md` §27.11]; CI's matrix row; the data files `sms.json` and `sg1000.json`; WiseMan's `SyntheticSmsRom` (a header with its checksum and region, a boot stub, a pad reader, as `SyntheticMdRom` serves Nephrite [R `NephriteTests.cs`]); on the tester's go, the documents, test programs and references fetched and pinned (`Endou_References.md`), the three local references and any fetched ones run through the probe with their costs and spaces | The kit's C1–C23 on synthetic images; the systems crate's tests; a published tree's `sha256sum -c cores.manifest`; the references' costs recorded | 2 |
 | **2** | *Built 2026-10-19, `Endou_Native.md` §9.* The machine without its picture: the bus, RAM, `$3E`, `$3F`, the controller ports, the region read-back, the Pause NMI and the Reset bit; cartridges (plain, Sega's mapper with its RAM, Codemasters', the SG-1000's RAM boards) and the board table's form; the battery form (§4.4); the scheduler on the master clock; `beryl-z80`'s assembler | Synthetic programs for each port, mapper and interrupt rule; an SMS-hosted ZEXALL on the whole machine; RAM against the references at anchors on test programs | 3 |
-| **3** | `beryl-sms-vdp`, mode 4: ports, registers, VRAM and CRAM, the counters and the TH latch, the interrupts, the status flags, the composition with sprites (limits, zoom, tall, collision, overflow), the scroll locks, the mask, the 315-5246's heights, the access slots, the dot-stamped renderer, PAL | The VDP test programs (self-reporting ones by their verdicts); pictures equal to the references up to a colour map, or a dispute; the skip-versus-draw state test | 5 |
+| **3** | *Built 2026-10-19, `Endou_Native.md` §10.* `beryl-sms-vdp`, mode 4: ports, registers, VRAM and CRAM, the counters and the TH latch, the interrupts, the status flags, the composition with sprites (limits, zoom, tall, collision, overflow), the scroll locks, the mask, the 315-5246's heights, the access slots, the dot-stamped renderer, PAL | The VDP test programs (self-reporting ones by their verdicts); pictures equal to the references up to a colour map, or a dispute; the skip-versus-draw state test | 5 |
 | **4** | The VDP's TMS9918 modes and the TMS9918A variant; the SG-1000 as a system; **Nephrite moved onto the crate's composition** | SG-1000 programs and cartridges' pictures against the references; **Nephrite's D-7 tests and its corpus digests unchanged** (P4) | 3 |
 | **5** | Sound: the PSG's wiring in both variants, the mix and the resampler, the analogue stage as far as recordings allow, `$F2` with no FM unit | Synthetic voices against the references' audio; recordings if any | 2 |
 | **6** | Firmware: `Endou_OpenBoot.md` written first (§5.5); the player's BIOS by region and size, with `md5` from a public description; the open boot program; `starts_empty` for `sms` | **G9**: every bench game with no firmware folder, machine info naming the replacement; the same games on the player's BIOS when given; `firmwarecheck.py` if the tester's images are in the probe cache | 3 |
@@ -798,16 +804,19 @@ console for disputes, is decided in the tester's own terms. "Please continue" wa
 ## 12. Predictions to be retired
 
 - **P1.** At the gate the desktop mean is at most 0.6 ms a frame on the bench games, and at most 0.9 ms with the OPLL
-  after stage 9.
+  after stage 9. *At stage 3 (2026-10-19), with the VDP and without sound: 0.22-0.26 ms on five games, the desktop
+  busy [M `Endou_Native.md` §10.7].*
 - **P2.** The Master System and the SG-1000 take 32–42 steps and the Game Gear 4–6; the VDP's stage overruns first.
 - **P3.** At least half the disputes entries fall in §6.2's thin areas, most of them the VDP's access slots and
-  interrupt dots.
+  interrupt dots. *At stage 3: of D-0 to D-9, D-1, D-2, D-3, D-4, D-6, D-8 and D-9 are in them (the colour levels, the
+  OPLL's ROMs, the region read-back, the decoding, the 315-5124's zoom, the access slots, the interrupt dots).*
 - **P4.** Nephrite's move onto the shared composition leaves its D-7 tests and every corpus digest unchanged.
 - **P5.** The YM2413's log-sine and exponent ROMs are the OPL2's, entry for entry (D-2).
 - **P6.** No bench game behaves differently on the open boot program than on the player's BIOS after the hand-over,
   start-up time apart.
 - **P7.** The Game Gear as a system of Endou costs at most 1,700 lines of Rust.
 - **P8.** The Light Phaser's minor needs one export, one capability bit and a controller kind, nothing more.
-- **P9.** The skip-versus-draw state test passes on every bench game from stage 3 on.
+- **P9.** The skip-versus-draw state test passes on every bench game from stage 3 on. *At stage 3: it passes on the
+  eight games and sixteen programs the kit ran with rendering skipped on alternate frames (`Endou_Native.md` §10.7).*
 - **P10.** No commercial game needs the 315-5124 rather than the 315-5246, so the Master System II is a safe export
   default; a game shown otherwise is added to the defaults' table.

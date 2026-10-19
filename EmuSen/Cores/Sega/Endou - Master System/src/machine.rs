@@ -1,7 +1,8 @@
-//! The machine (Endou_Native.md §9.6): Beryl's Z80 on the bus, run a frame of the master clock at a time, the Pause
-//! button's edge on NMI at the frame's start, and the spaces a host reads. No picture or sound is made before stages 3
-//! and 5: the picture stays black and the output silent.
+//! The machine (Endou_Native.md §9.6, §10): Beryl's Z80 on the bus, run a frame of the master clock at a time, the
+//! Pause button's edge on NMI at the frame's start, the VDP's picture in the console's colours, and the spaces a host
+//! reads. No sound is made before stage 5, and the SG-1000's picture stays black until stage 4.
 
+use beryl_sms_vdp::Vdp;
 use beryl_sn76489::{Sn76489, Variant};
 use beryl_z80::Z80;
 
@@ -21,7 +22,6 @@ pub const CARTRAM_ID: u32 = 5;
 /// The Mark III's and the Master System's 8 KiB of RAM, the SG-1000's 1 KiB [D: `smstech` §2; `sc3000h`].
 pub const SMS_RAM: usize = 0x2000;
 pub const SG1000_RAM: usize = 0x400;
-pub const VRAM: usize = 0x4000;
 pub const CRAM: usize = 32;
 
 /// The output rate, at which the silence is made; the mix resamples to it from stage 5.
@@ -52,7 +52,9 @@ pub struct Machine {
     pub frame_end: u64,
     /// Whether the Pause button was held at the last frame's start, so that a press is one edge.
     pub pause_held: bool,
+    /// The last picture in RGBA, `WIDTH` by `height` of it in use.
     pub picture: Vec<u8>,
+    pub height: u32,
     pub skip: bool,
     pub pads: [u32; 2],
     /// Silent stereo frames made and not yet drained, and the bound on them in samples.
@@ -71,7 +73,8 @@ impl Machine {
     pub fn with_board(media: Media, market: Market, model: Model, board: Board, rom: Vec<u8>) -> Machine {
         let sg = media.console == Console::Sg1000;
         let psg = Sn76489::new(if sg { Variant::DISCRETE } else { Variant::SEGA });
-        let bus = Bus::new(model, Cartridge::new(board, rom), if sg { SG1000_RAM } else { SMS_RAM }, psg, if sg { 0 } else { CRAM });
+        let vdp = Vdp::new(model.vdp(), market == Market::Europe);
+        let bus = Bus::new(model, Cartridge::new(board, rom), if sg { SG1000_RAM } else { SMS_RAM }, psg, vdp);
         Machine {
             media,
             market,
@@ -80,7 +83,8 @@ impl Machine {
             frames: 0,
             frame_end: 0,
             pause_held: false,
-            picture: [0, 0, 0, 255].repeat((WIDTH * HEIGHT) as usize),
+            picture: [0, 0, 0, 255].repeat((WIDTH * MAX_HEIGHT) as usize),
+            height: HEIGHT,
             skip: false,
             pads: [0; 2],
             silence: 0,
@@ -112,7 +116,7 @@ impl Machine {
     /// The spaces in id order: (id, name, read-only).
     pub fn spaces(&self) -> Vec<(u32, &'static str, bool)> {
         let mut s = vec![(RAM_ID, "RAM", false), (VRAM_ID, "VRAM", false)];
-        if !self.bus.cram.is_empty() {
+        if self.console() == Console::Sms {
             s.push((CRAM_ID, "CRAM", false));
         }
         s.push((ROM_ID, "ROM", true));
@@ -126,8 +130,8 @@ impl Machine {
         let b = &self.bus;
         Some(match id {
             RAM_ID => &b.ram,
-            VRAM_ID => &b.vram,
-            CRAM_ID if !b.cram.is_empty() => &b.cram,
+            VRAM_ID => &b.vdp.vram,
+            CRAM_ID if self.media.console == Console::Sms => &b.vdp.cram[..CRAM],
             ROM_ID => &b.cart.rom,
             CARTRAM_ID if !b.cart.ram.is_empty() => &b.cart.ram,
             _ => return None,
@@ -136,11 +140,12 @@ impl Machine {
 
     /// A writable space; the ROM is none.
     pub fn space_mut(&mut self, id: u32) -> Option<&mut [u8]> {
+        let sms = self.media.console == Console::Sms;
         let b = &mut self.bus;
         Some(match id {
             RAM_ID => &mut b.ram,
-            VRAM_ID => &mut b.vram,
-            CRAM_ID if !b.cram.is_empty() => &mut b.cram,
+            VRAM_ID => &mut b.vdp.vram,
+            CRAM_ID if sms => &mut b.vdp.cram[..CRAM],
             CARTRAM_ID if !b.cart.ram.is_empty() => {
                 b.cart.dirty = true;
                 &mut b.cart.ram
@@ -157,8 +162,9 @@ impl Machine {
     }
 
     /// One frame: the pads latched and a Pause press made an NMI edge at its start, then the Z80 run until the bus's
-    /// clock passes the frame's end, the overshoot carried into the next frame.
+    /// clock passes the frame's end, the overshoot carried into the next frame, and the VDP's picture taken.
     pub fn advance(&mut self) {
+        self.bus.vdp.skip = self.skip;
         let pause = self.pads[0] as u8 & PAUSE != 0;
         if pause && !self.pause_held {
             self.bus.nmi = true;
@@ -170,10 +176,41 @@ impl Machine {
             self.cpu.step(&mut self.bus);
         }
         self.bus.settle();
+        if !self.skip && self.console() == Console::Sms {
+            self.take_picture();
+        }
         self.silence = (self.silence + self.samples_in(self.frames)).min(self.audio_limit / 2);
         self.frames += 1;
     }
+
+    /// The VDP's CRAM entries in the console's colours (Endou_Disputes.md D-1).
+    fn take_picture(&mut self) {
+        let vdp = &self.bus.vdp;
+        self.height = vdp.height;
+        for (out, &e) in self.picture.as_chunks_mut::<4>().0.iter_mut().zip(vdp.picture()) {
+            out.copy_from_slice(&SMS_COLOURS[e as usize & 0x3F]);
+        }
+    }
+
+    /// The picture's bytes in use.
+    pub fn frame_bytes(&self) -> &[u8] {
+        &self.picture[..(WIDTH * self.height) as usize * 4]
+    }
 }
+
+/// A two-bit component's level, four equal steps, until D-1 is settled (Endou_Disputes.md D-1).
+pub const LEVELS: [u8; 4] = [0, 85, 170, 255];
+
+/// The 64 colours of a `--BBGGRR` CRAM entry, as RGBA.
+pub const SMS_COLOURS: [[u8; 4]; 64] = {
+    let mut t = [[0u8; 4]; 64];
+    let mut i = 0;
+    while i < 64 {
+        t[i] = [LEVELS[i & 3], LEVELS[(i >> 2) & 3], LEVELS[(i >> 4) & 3], 255];
+        i += 1;
+    }
+    t
+};
 
 pub fn ram_bytes(console: Console) -> usize {
     if console == Console::Sg1000 { SG1000_RAM } else { SMS_RAM }
@@ -222,7 +259,7 @@ mod tests {
         let sg = machine(&[0x00; 0x2000], Market::Japan);
         assert_eq!(sg.spaces().iter().map(|s| (s.1, sg.space(s.0).unwrap().len())).collect::<Vec<_>>(), [("RAM", 0x400), ("VRAM", 0x4000), ("ROM", 0x2000)]);
         assert_eq!((sms.bus.psg.variant, sg.bus.psg.variant), (Variant::SEGA, Variant::DISCRETE));
-        assert!(sms.picture.chunks(4).all(|p| p == [0, 0, 0, 255]) && sms.picture.len() == 256 * 192 * 4);
+        assert!(sms.frame_bytes().chunks(4).all(|p| p == [0, 0, 0, 255]) && sms.frame_bytes().len() == 256 * 192 * 4);
         assert_eq!(sms.cpu.regs, Z80::power_on().regs);
         let big = machine(&cartridge(0x20000, 4), Market::Americas);
         assert_eq!((big.spaces().last().copied(), big.space(CARTRAM_ID).map(<[u8]>::len)), (Some((CARTRAM_ID, "CARTRAM", false)), Some(0x8000)));

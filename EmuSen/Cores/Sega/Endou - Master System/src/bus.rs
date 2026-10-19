@@ -1,7 +1,9 @@
 //! The Z80's bus (Endou_Native.md §9.3, §9.6): the memory map with port $3E's enables, the I/O ports decoded by A7, A6
 //! and A0, and the clock. The bus owns the time: every machine cycle the Z80 reports advances it, and the devices are
-//! brought to it when an access reaches them. The VDP's ports are a stand-in until stage 3 builds `beryl-sms-vdp`.
+//! brought to it when an access reaches them. The VDP is Beryl's `beryl-sms-vdp` on the Master System's consoles; the
+//! SG-1000's TMS9918A is stage 4's, its ports a stand-in until then (Endou_Native.md §10).
 
+use beryl_sms_vdp::{STATUS_BITS, Vdp};
 use beryl_sn76489::Sn76489;
 
 use crate::cart::Cartridge;
@@ -10,6 +12,9 @@ use crate::model::Model;
 
 /// The Z80's clock over the PSG's internal one [R SMS Power!'s "SN76489"; `Beryl_SN76489.md` §2].
 pub const PSG_DIVIDER: u64 = 16;
+
+/// The VDP's clock, the master clock over five, against the Z80's over fifteen (Endou_Plan.md §5.1).
+pub const VDP_PER_Z80: u64 = 3;
 
 /// Port $3E's bits, each enabling its part when clear [R MacDonald's `smstech` §4; Sega's Mark III manual, "Memory
 /// enables"].
@@ -34,12 +39,11 @@ pub struct Bus {
     pub data_bus: u8,
     /// A falling edge on NMI not yet taken.
     pub nmi: bool,
-    pub vram: Vec<u8>,
-    pub cram: Vec<u8>,
+    pub vdp: Vdp,
 }
 
 impl Bus {
-    pub fn new(model: Model, cart: Cartridge, ram: usize, psg: Sn76489, cram: usize) -> Bus {
+    pub fn new(model: Model, cart: Cartridge, ram: usize, psg: Sn76489, vdp: Vdp) -> Bus {
         Bus {
             model,
             clock: 0,
@@ -51,8 +55,7 @@ impl Bus {
             memory_control: model.memory_control_at_start(),
             data_bus: 0xFF,
             nmi: false,
-            vram: vec![0; 0x4000],
-            cram: vec![0; cram],
+            vdp,
         }
     }
 
@@ -104,18 +107,43 @@ impl Bus {
         }
     }
 
+    /// The VDP brought to the present.
+    fn catch_up_vdp(&mut self) {
+        self.vdp.run(self.clock * VDP_PER_Z80);
+    }
+
     /// The machine's end: every device at the bus's time.
     pub fn settle(&mut self) {
         self.catch_up_psg();
+        self.catch_up_vdp();
+    }
+
+    /// Whether the VDP is wired: on the Master System's consoles; the SG-1000's chip is stage 4's.
+    fn has_vdp(&self) -> bool {
+        self.model != Model::Sg1000
     }
 
     fn port_in(&mut self, port: u8) -> u8 {
         let odd = port & 1 != 0;
         match port >> 6 {
             0 => self.undriven(),
-            1 if self.model == Model::Sg1000 => self.undriven(),
-            // The V and H counters, and the VDP's data and status, read $FF until stage 3 [C].
-            1 | 2 => 0xFF,
+            1 if !self.has_vdp() => self.undriven(),
+            // The SG-1000's VDP reads $FF until stage 4 [C].
+            2 if !self.has_vdp() => 0xFF,
+            1 => {
+                self.catch_up_vdp();
+                if odd { self.vdp.read_h() } else { self.vdp.read_v() }
+            }
+            2 if odd => {
+                self.catch_up_vdp();
+                // The status's low five bits are undriven [R MacDonald's `msvdp` §4] (Endou_Native.md §10.4).
+                let undriven = self.undriven();
+                (self.vdp.read_control() & STATUS_BITS) | (undriven & !STATUS_BITS)
+            }
+            2 => {
+                self.catch_up_vdp();
+                self.vdp.read_data()
+            }
             _ if !self.enabled(IO_OFF) => self.undriven(),
             _ if odd => self.io.port_dd(self.model),
             _ => self.io.port_dc(self.model),
@@ -128,14 +156,25 @@ impl Bus {
                 if port & 1 == 0 {
                     self.memory_control = v;
                 } else {
+                    let before = self.io.th_levels(self.model);
                     self.io.control = v;
+                    let after = self.io.th_levels(self.model);
+                    // TH rising on either port latches the H counter [R MacDonald's `msvdp` §11].
+                    if (0..2).any(|p| !before[p] && after[p]) && self.has_vdp() {
+                        self.catch_up_vdp();
+                        self.vdp.latch_h();
+                    }
                 }
             }
             1 => {
                 self.catch_up_psg();
                 self.psg.write(v);
             }
-            // The VDP's data and control ports are taken by stage 3; ports $C0-$FF take no write before stage 9's FM.
+            2 if self.has_vdp() => {
+                self.catch_up_vdp();
+                if port & 1 != 0 { self.vdp.write_control(v) } else { self.vdp.write_data(v) }
+            }
+            // Ports $C0-$FF take no write before stage 9's FM.
             _ => {}
         }
     }
@@ -181,9 +220,13 @@ impl beryl_z80::Bus for Bus {
         self.clock += t_states as u64;
     }
 
-    /// The VDP's interrupt arrives at stage 3.
+    /// The VDP's INT, as it stands at the instruction's end.
     fn int_line(&mut self) -> bool {
-        false
+        if !self.has_vdp() {
+            return false;
+        }
+        self.catch_up_vdp();
+        self.vdp.irq()
     }
 
     fn nmi_edge(&mut self) -> bool {
@@ -207,7 +250,7 @@ mod tests {
     fn bus(model: Model, mapper: Mapper, rom: Vec<u8>) -> Bus {
         let ram = if model == Model::Sg1000 { 0x400 } else { 0x2000 };
         let board = Board { mapper, ram: if mapper == Mapper::Sega { SEGA_RAM } else { 0 }, battery: false, why: Why::Size };
-        Bus::new(model, Cartridge::new(board, rom), ram, Sn76489::new(Variant::SEGA), 32)
+        Bus::new(model, Cartridge::new(board, rom), ram, Sn76489::new(Variant::SEGA), Vdp::new(beryl_sms_vdp::Variant::SMS2, false))
     }
 
     #[test]

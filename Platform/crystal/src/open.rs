@@ -157,7 +157,7 @@ pub fn open(rt: &crate::runtime::Runtime, sessions: &Sessions, asked: &Asked) ->
         asked.path.and_then(|p| crate::route::route(&catalog, &discovery, p).0).map(|r| catalog.rows[r].console().to_string()).unwrap_or_else(|| engine.display_name.clone())
     };
     let empty = if asked.path.is_none() { console_asked } else { None };
-    let session = Arc::new(Session::new(sessions.next_id(), engine, asked.path.map(str::to_string), name, empty, asked.opened));
+    let session = Arc::new(Session::new(sessions.next_id(), engine, asked.path.map(str::to_string), name, empty, asked.opened, rt.events.clone()));
     apply_stored(&session, &ctx, &stored);
     sessions.add(session.clone());
     Ok(session)
@@ -166,6 +166,7 @@ pub fn open(rt: &crate::runtime::Runtime, sessions: &Sessions, asked: &Asked) ->
 /// Every listed setting applied as the layers give it, game over console, `ApplyStored`.
 pub fn apply_stored(s: &Session, ctx: &Ctx, stored: &emusen_galaxia::consoles::Consoles) {
     let mut e = s.engine.lock().unwrap_or_else(|p| p.into_inner());
+    s.raise_said(&e);
     let system = e.machine.as_ref().map(|_| e.mi.system.clone());
     let game = crate::settings::game_values(ctx.tree, system.as_deref(), &s.game_key());
     for setting in e.listed() {
@@ -175,7 +176,11 @@ pub fn apply_stored(s: &Session, ctx: &Ctx, stored: &emusen_galaxia::consoles::C
             None => stored.value(&s.console, &setting.key).map(str::to_string),
         };
         let layered = if setting.key == catalog::ENGINE_KEY { crate::settings::current(layered) } else { layered };
+        if e.value(&setting.key) == Some(layered.as_deref().unwrap_or(&setting.default)) {
+            continue;
+        }
         e.apply(ctx, &setting.key, layered.as_deref());
+        s.raise_said(&e);
     }
 }
 

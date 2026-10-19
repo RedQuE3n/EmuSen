@@ -69,10 +69,17 @@ namespace EmuSen.WiseMan.Crystal
                 int at = Enumerable.Range(0, Math.Min(managed[i].Length, native[i].Length)).FirstOrDefault(k => managed[i][k] != native[i][k], Math.Min(managed[i].Length, native[i].Length));
                 int from = Math.Max(0, at - 160);
                 _output.WriteLine($"answer {i}, first difference at {at}\nC#:   ...{managed[i][from..Math.Min(managed[i].Length, at + 160)]}\nRust: ...{native[i][from..Math.Min(native[i].Length, at + 160)]}");
-                bool equalValues = !managed[i].StartsWith("status") && !native[i].StartsWith("status") && JsonNode.DeepEquals(JsonNode.Parse(managed[i]), JsonNode.Parse(native[i]));
+                bool equalValues = !managed[i].StartsWith("status") && !native[i].StartsWith("status") && SameJson(managed[i], native[i]);
                 first ??= equalValues ? $"answer {i} holds the same values in another order or spelling" : $"answer {i} differs";
             }
             if (first is not null) Assert.Fail(first);
+        }
+
+        // Whether two answers are JSON of the same values, false where either is not JSON.
+        private static bool SameJson(string a, string b)
+        {
+            try { return JsonNode.DeepEquals(JsonNode.Parse(a), JsonNode.Parse(b)); }
+            catch (System.Text.Json.JsonException) { return false; }
         }
 
         // The build's own tree: every project core, the two test cores, the build's manifest.

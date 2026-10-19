@@ -3,7 +3,7 @@
 //! only once every export of major 1 is here (EmuSen_Backend.md §29.3).
 
 use std::cell::RefCell;
-use emusen_crystal::abi::{self, emusen_crystal_config, emusen_crystal_frame_info, emusen_crystal_open_params, emusen_crystal_runtime};
+use emusen_crystal::abi::{self, emusen_crystal_config, emusen_crystal_frame_info, emusen_crystal_open_params, emusen_crystal_runtime, emusen_crystal_subscription};
 use emusen_crystal::runtime::{Config, Runtime};
 use emusen_session_service::abi::status as svc;
 
@@ -673,4 +673,157 @@ pub unsafe extern "C" fn emusen_crystal_state_default_path(rt: *mut emusen_cryst
         Ok(s) => unsafe { put(twin_path(&s, None).as_bytes(), out, len) },
         Err(status) => status as i64,
     }
+}
+
+/// A subscription's handle: its subscription and the events it was taken from.
+struct Held {
+    sub: std::sync::Arc<emusen_crystal::events::Subscription>,
+    events: std::sync::Arc<emusen_crystal::events::Events>,
+}
+
+/// The handles given out and not yet ended, so a handle is checked before it is read.
+static HANDLES: std::sync::Mutex<Vec<usize>> = std::sync::Mutex::new(Vec::new());
+
+/// # Safety
+/// `sub` a handle this library gave, or anything: it is looked up before it is read.
+unsafe fn subscription<'a>(sub: *mut emusen_crystal_subscription) -> Result<&'a Held, i32> {
+    if sub.is_null() {
+        return Err(fail(svc::NULL, "a null subscription"));
+    }
+    let known = HANDLES.lock().unwrap_or_else(|p| p.into_inner()).contains(&(sub as usize));
+    let held = if known { Some(unsafe { &*(sub as *const Held) }) } else { None };
+    match held {
+        Some(h) if h.sub.live.load(std::sync::atomic::Ordering::Acquire) => Ok(h),
+        _ => Err(fail(svc::NULL, "not a subscription")),
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_subscribe(rt: *mut emusen_crystal_runtime, session: u32, kinds: u32) -> *mut emusen_crystal_subscription {
+    let made = || -> Result<*mut emusen_crystal_subscription, i32> {
+        let r = unsafe { runtime(rt) }?;
+        if session != 0 {
+            r.sessions.get(session).map_err(|(st, w)| fail(st, w))?;
+        }
+        let held = Box::new(Held { sub: r.events.subscribe(session, kinds), events: r.events.clone() });
+        let handle = Box::into_raw(held) as *mut emusen_crystal_subscription;
+        HANDLES.lock().unwrap_or_else(|p| p.into_inner()).push(handle as usize);
+        Ok(handle)
+    };
+    made().unwrap_or(std::ptr::null_mut())
+}
+
+/// # Safety
+/// `sub` a subscription's handle; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_subscription_drain(sub: *mut emusen_crystal_subscription, out: *mut u8, len: usize) -> i64 {
+    match unsafe { subscription(sub) } {
+        Ok(h) => {
+            let into = if out.is_null() { None } else { Some(unsafe { std::slice::from_raw_parts_mut(out, len) }) };
+            h.sub.drain(into) as i64
+        }
+        Err(status) => status as i64,
+    }
+}
+
+/// # Safety
+/// `sub` a subscription's handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_subscription_wait(sub: *mut emusen_crystal_subscription, timeout_ms: u32) -> i32 {
+    match unsafe { subscription(sub) } {
+        Ok(h) => h.sub.wait(timeout_ms) as i32,
+        Err(status) => status,
+    }
+}
+
+/// # Safety
+/// `sub` a subscription's handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_unsubscribe(sub: *mut emusen_crystal_subscription) -> i32 {
+    match unsafe { subscription(sub) } {
+        Ok(h) => {
+            h.events.remove(&h.sub);
+            HANDLES.lock().unwrap_or_else(|p| p.into_inner()).retain(|x| *x != sub as usize);
+            drop(unsafe { Box::from_raw(sub as *mut Held) });
+            0
+        }
+        Err(status) => status,
+    }
+}
+
+/// A required text, refused as the C#'s `Required` refuses it.
+unsafe fn required<'a>(data: *const u8, len: usize, what: &str) -> Result<&'a str, i32> {
+    unsafe { text(data, len) }?.filter(|t| !t.is_empty()).ok_or_else(|| fail(svc::BAD_ARGUMENT, format!("{what} must be given")))
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_settings_schema(rt: *mut emusen_crystal_runtime, session: u32, console: *const u8, console_len: usize, engine: *const u8, engine_len: usize, out: *mut u8, len: usize) -> i64 {
+    let read = || -> Result<String, i32> {
+        let r = unsafe { runtime(rt) }?;
+        let (c, e) = (unsafe { text(console, console_len) }?, unsafe { text(engine, engine_len) }?);
+        r.settings_schema_json(session, c, e).map_err(|(st, w)| fail(st, w))
+    };
+    match read() {
+        Ok(json) => unsafe { put(json.as_bytes(), out, len) },
+        Err(status) => status as i64,
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_settings_get(rt: *mut emusen_crystal_runtime, session: u32, scope: u32, console: *const u8, console_len: usize, key: *const u8, key_len: usize, out: *mut u8, len: usize) -> i64 {
+    let read = || -> Result<String, i32> {
+        let k = unsafe { required(key, key_len, "the key") }?;
+        let r = unsafe { runtime(rt) }?;
+        let c = unsafe { text(console, console_len) }?;
+        r.settings_get(session, scope, c, k).map_err(|(st, w)| fail(st, w))
+    };
+    match read() {
+        Ok(value) => unsafe { put(value.as_bytes(), out, len) },
+        Err(status) => status as i64,
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_settings_set(rt: *mut emusen_crystal_runtime, session: u32, scope: u32, console: *const u8, console_len: usize, key: *const u8, key_len: usize, value: *const u8, value_len: usize) -> i32 {
+    code((|| {
+        let r = unsafe { runtime(rt) }?;
+        let (c, v) = (unsafe { text(console, console_len) }?, unsafe { text(value, value_len) }?);
+        let k = unsafe { required(key, key_len, "the key") }?;
+        done(r.settings_set(session, scope, c, k, v))
+    })())
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_game_setting_get(rt: *mut emusen_crystal_runtime, path: *const u8, path_len: usize, key: *const u8, key_len: usize, out: *mut u8, len: usize) -> i64 {
+    let read = || -> Result<String, i32> {
+        let r = unsafe { runtime(rt) }?;
+        let (p, k) = (unsafe { required(path, path_len, "the path") }?, unsafe { required(key, key_len, "the key") }?);
+        r.game_setting_get(p, k).map_err(|(st, w)| fail(st, w))
+    };
+    match read() {
+        Ok(value) => unsafe { put(value.as_bytes(), out, len) },
+        Err(status) => status as i64,
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_game_setting_set(rt: *mut emusen_crystal_runtime, path: *const u8, path_len: usize, key: *const u8, key_len: usize, value: *const u8, value_len: usize) -> i32 {
+    code((|| {
+        let r = unsafe { runtime(rt) }?;
+        let (p, k) = (unsafe { required(path, path_len, "the path") }?, unsafe { required(key, key_len, "the key") }?);
+        let v = unsafe { text(value, value_len) }?;
+        done(r.game_setting_set(p, k, v))
+    })())
 }

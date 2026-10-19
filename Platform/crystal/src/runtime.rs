@@ -27,9 +27,8 @@ pub struct Runtime {
     development: bool,
     trust: Trust,
     discovery: Mutex<Arc<Discovery>>,
-    /// The runtime's own lines no session said, kept until the events raise them on session 0 (§29.11, Q2).
-    said: Mutex<Vec<String>>,
     pub sessions: crate::open::Sessions,
+    pub events: Arc<crate::events::Events>,
     sqlite: Option<Arc<emusen_sqlite::Sqlite>>,
     /// states.db and the path it was opened at, opened on first use and again where the data folder moved.
     records: Mutex<Option<(String, crate::states::StateRecords)>>,
@@ -47,17 +46,12 @@ impl Runtime {
         let development = config.development.unwrap_or_else(|| std::env::var(emusen_core_host::discovery::DEVELOPMENT_VARIABLE).as_deref() == Ok("1"));
         let trust = Trust::new(&directories, &[]);
         let discovery = Mutex::new(Arc::new(Discovery::scan(&directories, development)));
-        Runtime { directories, development, trust, discovery, said: Mutex::new(Vec::new()), sessions: crate::open::Sessions::default(), sqlite: config.sqlite.clone(), records: Mutex::new(None) }
+        Runtime { directories, development, trust, discovery, sessions: crate::open::Sessions::default(), events: Arc::new(crate::events::Events::default()), sqlite: config.sqlite.clone(), records: Mutex::new(None) }.with_engine_choices_copied()
     }
 
-    /// A line of the runtime's own that no session said.
+    /// A line of the runtime's own that no session said, raised on session 0, `SayRuntime`.
     pub fn say(&self, line: String) {
-        self.said.lock().unwrap_or_else(|p| p.into_inner()).push(line);
-    }
-
-    /// The lines said since the last call.
-    pub fn take_said(&self) -> Vec<String> {
-        std::mem::take(&mut *self.said.lock().unwrap_or_else(|p| p.into_inner()))
+        self.events.raise_runtime_lines(0, &[line]);
     }
 
     pub fn trust(&self) -> &Trust {
@@ -231,7 +225,11 @@ pub type Refused = (i32, String);
 
 impl Runtime {
     pub fn open(&self, asked: &crate::open::Asked) -> Result<u32, Refused> {
-        crate::open::open(self, &self.sessions, asked).map(|s| s.id)
+        let s = crate::open::open(self, &self.sessions, asked)?;
+        self.events.raise(s.id, crate::abi::EVENT_SESSION, "session", |j| {
+            j.str("op", "opened");
+        });
+        Ok(s.id)
     }
 
     /// The battery save written, the save media let go, the session ended, `ManagedSession.Close`.
@@ -240,11 +238,11 @@ impl Runtime {
         s.close(|e| {
             e.save_sram();
             e.dispose();
-            for line in e.take_said() {
-                self.say(line);
-            }
         })?;
         self.sessions.remove(s.id);
+        self.events.raise(s.id, crate::abi::EVENT_SESSION, "session", |j| {
+            j.str("op", "closed");
+        });
         Ok(())
     }
 
@@ -299,12 +297,30 @@ impl Runtime {
         })
     }
 
+    fn disc_event(&self, id: u32, fields: impl FnOnce(&mut crate::json::Json)) {
+        let session = self.sessions.get(id).map_or(id, |s| s.id);
+        self.events.raise(session, crate::abi::EVENT_DISC, "disc", fields);
+    }
+
     pub fn disc_insert(&self, id: u32, at: &str) -> Result<(), Refused> {
-        self.disc(id, |e, tree, is_image| e.insert_path(tree, at, is_image).map_err(|r| (r.status, r.words)))
+        self.disc(id, |e, tree, is_image| {
+            e.insert_path(tree, at, is_image).map_err(|r| (r.status, r.words))?;
+            let index = e.disc_index;
+            self.disc_event(id, |j| {
+                j.str("op", "inserted").int("index", index as i64);
+            });
+            Ok(())
+        })
     }
 
     pub fn disc_eject(&self, id: u32) -> Result<(), Refused> {
-        self.disc(id, |e, tree, is_image| e.change_disc(tree, -1, is_image).map_err(|r| (r.status, r.words)))
+        self.disc(id, |e, tree, is_image| {
+            e.change_disc(tree, -1, is_image).map_err(|r| (r.status, r.words))?;
+            self.disc_event(id, |j| {
+                j.str("op", "ejected");
+            });
+            Ok(())
+        })
     }
 
     pub fn disc_change(&self, id: u32, index: u32) -> Result<(), Refused> {
@@ -312,12 +328,22 @@ impl Runtime {
             if index as usize >= e.discs.len() {
                 return Err((emusen_session_service::abi::status::BAD_ARGUMENT, format!("no disc {index}; the game has {}", e.discs.len())));
             }
-            e.change_disc(tree, index as i32, is_image).map_err(|r| (r.status, r.words))
+            e.change_disc(tree, index as i32, is_image).map_err(|r| (r.status, r.words))?;
+            self.disc_event(id, |j| {
+                j.str("op", "changed").int("index", index as i64);
+            });
+            Ok(())
         })
     }
 
     pub fn disc_lid(&self, id: u32, open: bool) -> Result<(), Refused> {
-        self.disc(id, |e, _, _| e.set_lid(open).map_err(|r| (r.status, r.words)))
+        self.disc(id, |e, _, _| {
+            e.set_lid(open).map_err(|r| (r.status, r.words))?;
+            self.disc_event(id, |j| {
+                j.str("op", "lid").bool("open", open);
+            });
+            Ok(())
+        })
     }
 }
 
@@ -326,6 +352,7 @@ impl Drop for Runtime {
         for s in self.sessions.all() {
             let _ = self.close(s.id);
         }
+        self.events.clear();
     }
 }
 
@@ -356,6 +383,16 @@ impl Runtime {
             *held = Some((at.clone(), crate::states::StateRecords::open(sqlite.clone(), &at)?));
         }
         call(held.as_ref().map(|(_, r)| r))
+    }
+
+    /// The SQLite the host lent, if any.
+    pub fn sqlite(&self) -> Option<Arc<emusen_sqlite::Sqlite>> {
+        self.sqlite.clone()
+    }
+
+    fn with_engine_choices_copied(self) -> Runtime {
+        self.copy_engine_choices();
+        self
     }
 
     /// The records' calls, which need states.db: refused where no SQLite was lent.

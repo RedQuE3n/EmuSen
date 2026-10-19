@@ -34,6 +34,7 @@ namespace EmuSen.Hotaru
 
         public static HotaruSession Build(HotaruLaunch launch, TextWriter originalOut, CrystalRuntime runtime)
         {
+            using var runtimeLog = new CrystalRuntimeLog(runtime);
             CrystalSession session = Open(runtime, launch);
             try
             {
@@ -43,6 +44,7 @@ namespace EmuSen.Hotaru
                 Directory.CreateDirectory(logDir);
                 var logWriter = new CategorizedLogWriter(originalOut, logDir);
                 Console.SetOut(logWriter);
+                runtimeLog.File();
                 if (NoticeOf(session) is { } notice) Console.WriteLine($"[core] {notice}");
                 return new HotaruSession(runtime, session, coreName, logWriter);
             }

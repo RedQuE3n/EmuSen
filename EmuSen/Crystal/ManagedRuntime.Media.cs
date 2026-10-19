@@ -60,13 +60,13 @@ namespace EmuSen.Crystal.Managed
             };
         }
 
-        public static void InstallFirmware(ReadOnlySpan<byte> requestJson, string source)
+        public static void InstallFirmware(ReadOnlySpan<byte> requestJson, string source, Action<string>? say = null)
         {
             FirmwareRequest request = RequestOf(CrystalJson.Parse(requestJson));
             if (!File.Exists(source)) throw new CrystalException(CrystalNumbers.Io, $"{source} does not exist");
             long length = new FileInfo(source).Length;
             if (length != request.Size) throw new CrystalException(SessionAbi.BadArgument, $"{Path.GetFileName(source)} is {length:N0} bytes, and {request.FileName} is {request.Size:N0}");
-            if (!FirmwareLibrary.Install(request, source)) throw new CrystalException(CrystalNumbers.Io, $"{request.FileName} could not be written to {FirmwareLibrary.Directory}");
+            if (!FirmwareLibrary.Install(request, source, say)) throw new CrystalException(CrystalNumbers.Io, $"{request.FileName} could not be written to {FirmwareLibrary.Directory}");
         }
 
         public static byte[] FirmwareOverviewJson() => CrystalJson.Write(w =>

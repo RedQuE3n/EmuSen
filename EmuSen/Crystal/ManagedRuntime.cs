@@ -24,6 +24,9 @@ namespace EmuSen.Crystal.Managed
 
         public ManagedEvents Events { get; } = new();
 
+        // A runtime line no session said, such as a firmware install's, raised on session 0.
+        public void SayRuntime(string line) => Events.RaiseRuntimeLines(0, new[] { line });
+
         // A session by id, or the current one for 0.
         public ManagedSession Session(uint id)
         {

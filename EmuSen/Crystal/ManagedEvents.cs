@@ -134,6 +134,17 @@ namespace EmuSen.Crystal.Managed
                     if (s.Wants(session, kind)) s.Add(json);
         }
 
+        // Lines of the runtime's own as one log event of source "runtime" - see EmuSen_Backend.md §29.11, Q2.
+        public void RaiseRuntimeLines(uint session, IReadOnlyList<string> lines)
+        {
+            if (lines.Count == 0) return;
+            Raise(session, CrystalNumbers.EventLog, "log", w =>
+            {
+                CrystalJson.Strings(w, "lines", lines);
+                w.WriteString("source", "runtime");
+            });
+        }
+
         public void Clear()
         {
             ManagedSubscription[] all;

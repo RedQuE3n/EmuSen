@@ -124,6 +124,7 @@ class Program
         foreach (string w in warnings) Emit(w);
 
         using var runtime = new CrystalRuntime();
+        using var runtimeLog = new CrystalRuntimeLog(runtime);
 
         // Off by default; on when asked, since it turns on every individually-enabled logging flag's console output.
         if (options.Verbose) runtime.LogSwitch = true;
@@ -141,6 +142,7 @@ class Program
         try
         {
             session = runtime.Open(new CrystalOpen { Path = options.RomPath, NoBattery = options.NoBattery });
+            runtimeLog.File();
             if (JsonDocument.Parse(session.Info()).RootElement.GetProperty("notices").GetProperty("engine").GetString() is { } notice) Emit($"[core] {notice}");
         }
         catch (CrystalException ex)
@@ -209,7 +211,7 @@ class Program
             if (options.CommandsPath != null)
             {
                 // Post-increment autoshot names in this mode; the frame call refreshes the debugger's snapshots itself - see §3.15.
-                var runner = current = new FrameRunner(session, options.FrameCount, Emit, n => CheckAutoshot(n)) { Verbose = options.Verbose };
+                var runner = current = new FrameRunner(session, options.FrameCount, Emit, n => CheckAutoshot(n)) { Verbose = options.Verbose, RuntimeLog = runtimeLog };
                 var scriptRunner = new CommandsScriptRunner(runner, debugCmd, Emit);
                 if (!scriptRunner.Run(options.CommandsPath))
                 {
@@ -225,7 +227,7 @@ class Program
             Emit($"[RUN] Executing {options.FrameCount} frames...");
 
             // The classic loop's autoshot names use the frame about to run, pre-increment - see §3.15.
-            var classicRunner = current = new FrameRunner(session, options.FrameCount, Emit, n => CheckAutoshot(n - 1)) { Verbose = options.Verbose };
+            var classicRunner = current = new FrameRunner(session, options.FrameCount, Emit, n => CheckAutoshot(n - 1)) { Verbose = options.Verbose, RuntimeLog = runtimeLog };
             while (classicRunner.CurrentFrame < options.FrameCount)
             {
                 // Captured before RunFrames(1) advances CurrentFrame, so --tap/--screenshot stay pre-increment (§3.15).

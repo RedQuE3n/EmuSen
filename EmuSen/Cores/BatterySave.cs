@@ -34,9 +34,9 @@ namespace EmuSen.Cores
         }
 
         // The save kept before copied into its own place, once a load knows the machine keeps the file; the original untouched.
-        public void Settle()
+        public void Settle(Action<string>? say = null)
         {
-            if (Path is not null && _previous is not null && !File.Exists(Path)) CopyIn(_previous, Path);
+            if (Path is not null && _previous is not null && !File.Exists(Path)) CopyIn(_previous, Path, say);
         }
 
         // A card shared between games, by its own path rather than a game's; --nobattery holds for it as for any save - see Diamond_Cards.md §9.2.
@@ -58,11 +58,11 @@ namespace EmuSen.Cores
         };
 
         // Copied, never moved: the old file is left exactly as it was.
-        private static void CopyIn(string previous, string path)
+        private static void CopyIn(string previous, string path, Action<string>? say)
         {
             if (string.Equals(System.IO.Path.GetFullPath(previous), System.IO.Path.GetFullPath(path), StringComparison.Ordinal)) return;
             if (AtomicFile.TryRead(previous) is not { } saved) return;
-            if (AtomicFile.Write(path, saved)) Console.WriteLine($"[BatterySave] Copied {previous} to {path}, where this game's battery save now lives; the original is untouched.");
+            if (AtomicFile.Write(path, saved)) say?.Invoke($"[BatterySave] Copied {previous} to {path}, where this game's battery save now lives; the original is untouched.");
         }
 
         public byte[]? Read() => Path is null ? null : AtomicFile.TryRead(Path) ?? (_previous is null || File.Exists(Path) ? null : AtomicFile.TryRead(_previous));

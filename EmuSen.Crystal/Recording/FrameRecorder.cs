@@ -20,10 +20,14 @@ namespace EmuSen.Crystal.Recording
         public bool IsRecording => _sessionDir != null;
         public string? SessionDir => _sessionDir;
 
-        public FrameRecorder(IDebugTarget target)
+        public FrameRecorder(IDebugTarget target, Action<string>? say = null)
         {
             _target = target;
+            _say = say;
         }
+
+        // Where its lines go: the runtime's log, filed by each program in its own - see EmuSen_Backend.md §29.11, Q2.
+        private readonly Action<string>? _say;
 
         // Every Nth frame; a long capture wants a stride rather than thinning afterwards - see §3.8.
         public string Start(string baseDir, int frameStride = 1)
@@ -102,30 +106,30 @@ namespace EmuSen.Crystal.Recording
 
                     if (proc.ExitCode == 0)
                     {
-                        Console.WriteLine($"[RECORD] Video encoded ({CodecAttempts[attempt][1]}) -> {outputPath}");
+                        _say?.Invoke($"[RECORD] Video encoded ({CodecAttempts[attempt][1]}) -> {outputPath}");
                         ZipAndCleanupFrames(sessionDir);
                         return;
                     }
 
                     bool moreAttemptsLeft = attempt < CodecAttempts.Length - 1;
-                    Console.WriteLine($"[RECORD] ffmpeg -c:v {CodecAttempts[attempt][1]} exited with code {proc.ExitCode}{(moreAttemptsLeft ? " - trying fallback codec" : "")}");
+                    _say?.Invoke($"[RECORD] ffmpeg -c:v {CodecAttempts[attempt][1]} exited with code {proc.ExitCode}{(moreAttemptsLeft ? " - trying fallback codec" : "")}");
                     if (!moreAttemptsLeft)
                     {
-                        Console.WriteLine(stderr);
-                        Console.WriteLine($"[RECORD] PNG sequence + frames.log are still in {sessionDir}");
+                        _say?.Invoke(stderr);
+                        _say?.Invoke($"[RECORD] PNG sequence + frames.log are still in {sessionDir}");
                     }
                 }
                 catch (Win32Exception)
                 {
                     // ffmpeg absent is not an error here, and the fallback codec cannot help.
-                    Console.WriteLine($"[RECORD] ffmpeg not found on PATH - leaving the PNG sequence + frames.log as-is in {sessionDir}. Install ffmpeg for automatic video output.");
+                    _say?.Invoke($"[RECORD] ffmpeg not found on PATH - leaving the PNG sequence + frames.log as-is in {sessionDir}. Install ffmpeg for automatic video output.");
                     return;
                 }
             }
         }
 
         // The PNGs are redundant after a lossless encode, so they are zipped rather than deleted - see §3.8.
-        private static void ZipAndCleanupFrames(string sessionDir)
+        private void ZipAndCleanupFrames(string sessionDir)
         {
             string[] pngFiles = Directory.GetFiles(sessionDir, "frame_*.png");
             if (pngFiles.Length == 0) return;
@@ -143,12 +147,12 @@ namespace EmuSen.Crystal.Recording
                 }
 
                 foreach (string png in pngFiles) File.Delete(png);
-                Console.WriteLine($"[RECORD] Archived {pngFiles.Length} frame PNGs -> {zipPath}");
+                _say?.Invoke($"[RECORD] Archived {pngFiles.Length} frame PNGs -> {zipPath}");
             }
             catch (Exception ex)
             {
                 // The video already succeeded, so a failed zip must not cost the frames.
-                Console.WriteLine($"[RECORD] Zipping frame PNGs failed ({ex.Message}); leaving them as loose files in {sessionDir}");
+                _say?.Invoke($"[RECORD] Zipping frame PNGs failed ({ex.Message}); leaving them as loose files in {sessionDir}");
             }
         }
 

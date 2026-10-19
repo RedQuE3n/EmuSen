@@ -66,6 +66,7 @@ namespace EmuSen.Crystal.Managed
             Bundle.DebugTarget.RefreshProviders();
             if (Rewind.Enabled && EngineFeatures.Of(Core).RewindCapture && Rewind.OnFrameCompleted(Core) && Rewind.ThumbnailWidth > 0 && !Core.SkipRendering) AttachThumbnail();
             if (recording && !Core.SkipRendering) _recorder!.CaptureFrame(WritePicture);
+            RaiseSaid();
             if (Engine is { } engine && engine.LoggedLines != _loggedLines) RaiseLog(engine);
             return true;
         }
@@ -234,13 +235,33 @@ namespace EmuSen.Crystal.Managed
             _loggedLines = total;
             if (!Runtime.Events.Wanted(Id, CrystalNumbers.EventLog)) return;
             string[] lines = engine.RecentLog.Skip(engine.RecentLog.Count - fresh).ToArray();
-            Runtime.Events.Raise(Id, CrystalNumbers.EventLog, "log", w => CrystalJson.Strings(w, "lines", lines));
+            Runtime.Events.Raise(Id, CrystalNumbers.EventLog, "log", w =>
+            {
+                CrystalJson.Strings(w, "lines", lines);
+                w.WriteString("source", "core");
+            });
+        }
+
+        private readonly List<string> _said = new();
+
+        // The runtime's lines the engine said since the last time, raised as one log event of source "runtime".
+        private void RaiseSaid()
+        {
+            if (Engine is not { } engine) return;
+            string[] lines;
+            lock (_said)
+            {
+                if (!engine.TakeSaid(_said)) return;
+                lines = _said.ToArray();
+                _said.Clear();
+            }
+            Runtime.Events.RaiseRuntimeLines(Id, lines);
         }
 
         public string StartRecording(string baseDir, uint stride) => Change(() =>
         {
             if (_recorder is { IsRecording: true }) throw new CrystalException(SessionAbi.BadArgument, $"session {Id} is already recording to {_recorder.SessionDir}");
-            _recorder = new FrameRecorder(Bundle.DebugTarget);
+            _recorder = new FrameRecorder(Bundle.DebugTarget, Engine is { } engine ? engine.Say : null);
             return _recorder.Start(baseDir, (int)Math.Max(1, Math.Min(stride, int.MaxValue)));
         });
 

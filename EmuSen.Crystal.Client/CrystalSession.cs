@@ -139,9 +139,9 @@ namespace EmuSen.Crystal.Client
         public void Lid(bool open) => Check(Contract.Crystal.DiscLid(Rt, Id, open ? 1u : 0u));
 
         public string StartRecording(string baseDir, uint stride) =>
-            WithText(baseDir, (b, bl) => Text((o, n) => Contract.Crystal.RecordStart(Rt, Id, (byte*)b, bl, stride, o, n)));
+            WithText(baseDir, (b, bl) => Once((o, n) => Contract.Crystal.RecordStart(Rt, Id, (byte*)b, bl, stride, o, n)));
 
-        public string StopRecording() => Text((o, n) => Contract.Crystal.RecordStop(Rt, Id, o, n));
+        public string StopRecording() => Once((o, n) => Contract.Crystal.RecordStop(Rt, Id, o, n));
 
         // The session's emusen_session_v1 table, for a shell's host to hand on: the twins' functions, alive as long as the session.
         public nint ServiceTable(bool readOnly = false)

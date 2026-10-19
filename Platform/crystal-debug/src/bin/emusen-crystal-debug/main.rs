@@ -3,6 +3,7 @@
 //! line for line (EmuSen_Backend.md §29.30). A `$NAME` in the script is the value given for it.
 
 mod fake;
+mod regs;
 
 use std::io::Write;
 

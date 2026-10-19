@@ -6842,6 +6842,38 @@ no letters. Five seeded faults, each caught: `Format`'s byte threshold off by on
 label consulted before the registers, a skipped branch that asks no symbol (seen as one refresh fewer), a label's
 comment kept with its leading white space. The crate's tests 4 and `emusen-dotnet`'s 31.
 
+### 29.32 Built 2026-10-19: part (b), piece 2, the registries
+
+**The piece** (this commit). The registries piece 1 carried are graded: `breakpoints`, the C# `BreakpointRegistry`
+(code, data and forbidden ranges, a changed-only data breakpoint's memory of the last value, the uninitialised read
+reported once an address, steps by count and to a depth, the depth guard, run-to an interrupt, a scanline and a frame,
+the hardware conditions and their log-only form, the log of 4,096 lines, a failing condition dropped with its words);
+`watches`, the C# `WatchRegistry` (the ring of 500 events, the sites counted whole-run, the line said while the
+process's logging switch is on, kept for the runtime's log rather than written), `FrameLogRegistry` (3,600 samples an
+entry) and `FreezeRegistry` (enforced once a frame, as a host that sees stores only after the fact does); and
+`coverage`, the C# `CoverageRegistry` (a bit for each of 2^24 addresses, 2 MB made when first armed, a core's own bitmap
+merged, the entry points, the mark, `cov save`'s bytes and their import) and `CallStackRegistry` (512 frames, the
+profile's exclusive counts by the routine innermost). A registry that evaluates a condition is handed the evaluator at
+the call (`breakpoints::Evaluate`) rather than holding a delegate, which a Rust registry beside the debugger's sources
+could not borrow; one never prepared is handed `Unprepared`, under which a condition holds and a log is its own text,
+as the C# registry's null evaluators make them. The call stack's depth is likewise passed to `should_break`, and
+whether the registry knows a stack is a flag, as `CallStack` being set is in C#. Each map the C# enumerates in a
+`Dictionary`'s order keeps the order it was added in (§29.30).
+
+**Measured on 2026-10-19** [M]: `CrystalDebugParityTests` 6 of 6, the three new scripts of 197, 83 and 93 answers: code
+breakpoints over ranges given backwards, disabled and removed; conditions and logpoints in the chosen context, a
+condition dropped for a read past its space, a logpoint that fails mid-way, a register changed and read at the hit; the
+forbidden range over a step, a depth step and the guard; data breakpoints by value, changed-only on stores and not on
+loads, on loads, conditional and logging; the uninitialised read; each run-to and its disarming; the conditions armed,
+noted, logged and disarmed; watches of each kind with the sites, the counts, the ring, the said lines and the switch;
+the frame log over two widths and a missing space; freezes enforced, re-pinned and cleared; coverage merged before and
+after arming, queried, marked, its entry points ordered and ranged, exported, imported into a fresh registry, into
+itself and refused three ways; the call stack pushed, popped past empty, and profiled to shares that are not whole.
+Five seeded faults: a site list least first was caught at once; four were not (a changed-only data breakpoint applied
+to loads, the profile cut to its limit before sorting, the depth guard ahead of the forbidden range, an import that
+replaces entry counts rather than adding), so a case for each was added to the scripts, and each is caught by it. The
+crate's tests 4.
+
 ---
 
 ## 30. B9, scraping in Rust: the design, 2026-10-18

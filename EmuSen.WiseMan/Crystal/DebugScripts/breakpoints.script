@@ -1,0 +1,198 @@
+# The breakpoint registry: code, data and forbidden ranges, conditions and logpoints in the chosen context, steps, depths, run-to and the uninitialised read.
+space RAM 16 00 11 22 33 44 55 66 77 88 99 AA BB CC DD EE FF
+regs cpu A=0x42/8 X=5/8
+label 0x10 Start
+bp.state
+bp.should 0x10
+bp.add 0x10 0x10 ; - ; -
+bp.add 0x30 0x20 ; - ; -
+bp.list
+bp.state
+bp.should 0x0F
+bp.should 0x10
+bp.should 0x25
+bp.should 0x30
+bp.should 0x31
+bp.list
+bp.enable 1 0
+bp.should 0x10
+bp.enable 1 1
+bp.enable 99 0
+bp.remove 2
+bp.remove 2
+bp.add 0x40 0x40 ; A == $42 ; -
+bp.add 0x41 0x41 ; A == 1 ; -
+bp.add 0x42 0x42 ; Nope ; -
+bp.add 0x42 0x42 ; ( ; -
+bp.add 0x43 0x43 ; - ; A, Nope
+bp.add 0x43 0x43 ; - ; A,  X , [0], {RAM:2}
+bp.add 0x44 0x44 ; [500] == 0 ; -
+bp.add 0x45 0x45 ; 1 ; 1 / 0
+bp.add 0x46 0x46 ; 0 && Nope ; -
+bp.list
+bp.should 0x40
+bp.should 0x41
+bp.should 0x43
+bp.should 0x43
+bp.log 10
+bp.should 0x44
+bp.list
+bp.should 0x44
+bp.should 0x45
+bp.log 10
+set cpu A 1
+bp.should 0x41
+bp.should 0x40
+bp.log 1
+bp.clearlog
+bp.log 5
+bp.forbid 0x40 0x41
+bp.should 0x41
+bp.should 0x10
+bp.list
+bp.step 3
+bp.state
+bp.should 0x41
+bp.should 0x00
+bp.should 0x00
+bp.should 0x00
+bp.step 0
+bp.should 0x41
+bp.step -5
+bp.should 0x00
+bp.stepdepth 1
+bp.guard 2
+bp.stack 3
+bp.stepdepth 1
+bp.state
+bp.should 0x00
+bp.stack 1
+bp.should 0x00
+bp.state
+bp.guard 2
+bp.list
+bp.should 0x00
+bp.stack 3
+bp.should 0x00
+bp.list
+bp.guard 1
+bp.unguard
+bp.list
+bp.guard 1
+bp.should 0x41
+bp.list
+bp.should 0x00
+bp.stack none
+bp.should 0x00
+bp.data RAM 13 13 -1 1 1 ; - ; -
+bp.read RAM 13 5
+bp.should 0x00
+bp.read RAM 13 5
+bp.should 0x00
+bp.remove 9
+bp.data RAM 4 6 -1 0 0 ; - ; -
+bp.data ram 8 8 0x99 0 0 ; - ; -
+bp.data RAM 9 9 -1 0 1 ; - ; -
+bp.data RAM 10 10 -1 1 0 ; - ; -
+bp.data RAM 11 11 -1 0 0 ; A == 1 ; A
+bp.data RAM 12 12 -1 0 0 ; - ; X, [3]
+bp.list
+bp.state
+bp.write RAM 3 7
+bp.state
+bp.write RAM 5 7
+bp.state
+bp.should 0x00
+bp.state
+bp.write VRAM 5 7
+bp.write RAM 8 0x98
+bp.write RAM 8 0x99
+bp.should 0x00
+bp.write RAM 9 1
+bp.should 0x00
+bp.write RAM 9 1
+bp.should 0x00
+bp.write RAM 9 2
+bp.should 0x00
+bp.read RAM 9 2
+bp.write RAM 10 1
+bp.read RAM 10 1
+bp.should 0x00
+bp.write RAM 11 1
+bp.should 0x00
+bp.write RAM 12 1
+bp.should 0x00
+bp.log 3
+bp.write RAM 10 3
+bp.forbid 0x00 0x00
+bp.read RAM 10 3
+bp.should 0x00
+bp.state
+bp.list
+bp.uninit RAM 0
+bp.uninit RAM 4
+bp.state
+bp.write RAM 1 0
+bp.read ram 1 0
+bp.read RAM 2 0
+bp.should 0x05
+bp.read RAM 2 0
+bp.read RAM 7 0
+bp.read RAM -1 0
+bp.read SPC 3 0
+bp.state
+bp.should 0x05
+bp.list
+bp.uninitoff
+bp.list
+bp.state
+bp.runto irq
+bp.state
+bp.interrupt nmi
+bp.should 0x05
+bp.interrupt irq
+bp.state
+bp.should 0x05
+bp.interrupt irq
+bp.should 0x05
+bp.scanline 100
+bp.notescanline 99
+bp.notescanline 100
+bp.should 0x05
+bp.notescanline 100
+bp.runframe 50
+bp.frame 49
+bp.should 0x05
+bp.frame 52
+bp.should 0x05
+bp.frame 60
+bp.state
+bp.runto brk
+bp.scanline 5
+bp.runframe 1
+bp.step 2
+bp.state
+bp.disarm
+bp.state
+bp.cond brk 0
+bp.cond COP 1
+bp.conds
+bp.armed BRK
+bp.armed nope
+bp.interrupt brk
+bp.state
+bp.should 0x05
+bp.interrupt cop
+bp.log 2
+bp.conds
+bp.condnote cop 0x1234 cop seen here
+bp.condnote nope 1 nothing
+bp.log 2
+bp.cond brk 1
+bp.conds
+bp.uncond BRK
+bp.uncond BRK
+bp.conds
+bp.state
+bp.uncond cop
+bp.state

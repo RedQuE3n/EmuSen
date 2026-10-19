@@ -20,6 +20,8 @@ pub struct Config {
     pub development: Option<bool>,
     /// The SQLite the host lends, for states.db; none keeps no records of states.
     pub sqlite: Option<Arc<emusen_sqlite::Sqlite>>,
+    /// The platform's lender of the presenter's device; none lends nothing.
+    pub lender: Option<Arc<dyn crate::lend::Lender>>,
 }
 
 pub struct Runtime {
@@ -30,6 +32,7 @@ pub struct Runtime {
     pub sessions: crate::open::Sessions,
     pub events: Arc<crate::events::Events>,
     sqlite: Option<Arc<emusen_sqlite::Sqlite>>,
+    pub lender: Option<Arc<dyn crate::lend::Lender>>,
     /// states.db and the path it was opened at, opened on first use and again where the data folder moved.
     records: Mutex<Option<(String, crate::states::StateRecords)>>,
 }
@@ -46,7 +49,7 @@ impl Runtime {
         let development = config.development.unwrap_or_else(|| std::env::var(emusen_core_host::discovery::DEVELOPMENT_VARIABLE).as_deref() == Ok("1"));
         let trust = Trust::new(&directories, &[]);
         let discovery = Mutex::new(Arc::new(Discovery::scan(&directories, development)));
-        Runtime { directories, development, trust, discovery, sessions: crate::open::Sessions::default(), events: Arc::new(crate::events::Events::default()), sqlite: config.sqlite.clone(), records: Mutex::new(None) }.with_engine_choices_copied()
+        Runtime { directories, development, trust, discovery, sessions: crate::open::Sessions::default(), events: Arc::new(crate::events::Events::default()), sqlite: config.sqlite.clone(), lender: config.lender.clone(), records: Mutex::new(None) }.with_engine_choices_copied()
     }
 
     /// A line of the runtime's own that no session said, raised on session 0, `SayRuntime`.

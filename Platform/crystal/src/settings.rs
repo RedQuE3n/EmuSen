@@ -39,13 +39,18 @@ pub fn game_settings_path(tree: &Tree, system: &str, game: &str) -> String {
 /// A game's own values, in the file's order; none where it has no file or one that is not a map of strings.
 pub fn game_values(tree: &Tree, system: Option<&str>, game: &str) -> Vec<(String, String)> {
     let Some(system) = system else { return Vec::new() };
-    let Ok(Some(bytes)) = emusen_galaxia::atomic::try_read(&game_settings_path(tree, system, game)) else { return Vec::new() };
+    let at = game_settings_path(tree, system, game);
+    let Ok(Some(bytes)) = emusen_galaxia::atomic::try_read(&at) else { return Vec::new() };
     let text = emusen_dotnet::file::decode(&bytes);
+    let none = |why: String| {
+        crate::error_log::warning("settings", &format!("{at} is not a game's settings, and is read as none: {why}"));
+        Vec::new()
+    };
     match emusen_dotnet::json::parse(&text) {
         Ok(emusen_dotnet::json::Value::Object(members)) => {
             let mut out: Vec<(String, String)> = Vec::new();
             for (k, v) in members {
-                let Some(v) = v.as_str() else { return Vec::new() };
+                let Some(v) = v.as_str() else { return none(format!("the value of \"{}\" is not a string.", k.text)) };
                 match out.iter_mut().find(|(key, _)| *key == k.text) {
                     Some(slot) => slot.1 = v.to_string(),
                     None => out.push((k.text, v.to_string())),
@@ -53,7 +58,9 @@ pub fn game_values(tree: &Tree, system: Option<&str>, game: &str) -> Vec<(String
             }
             out
         }
-        _ => Vec::new(),
+        Ok(emusen_dotnet::json::Value::Null) => Vec::new(),
+        Ok(_) => none("the document is not an object.".to_string()),
+        Err(e) => none(e.to_string()),
     }
 }
 
@@ -65,4 +72,32 @@ pub fn engine_for(tree: &Tree, game: &str, row_console: Option<&str>, system: Op
     }
     let console = row_console?;
     current(emusen_galaxia::consoles::load(tree).value(console, crate::catalog::ENGINE_KEY).map(str::to_string))
+}
+
+#[cfg(test)]
+mod tests {
+    use emusen_galaxia::tree::{Override, tree, tree_mut};
+
+    #[test]
+    fn a_game_file_that_is_not_a_map_of_strings_is_read_as_none_and_said_in_the_error_log() {
+        let root = std::env::temp_dir().join(format!("crystal-settings-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (config, logs) = (root.join("Config"), root.join("Logs"));
+        std::fs::create_dir_all(config.join("games").join("nes")).unwrap();
+        std::fs::write(config.join("appsettings.json"), format!("{{\"LogDirectory\":{:?}}}", logs.to_string_lossy())).unwrap();
+        std::fs::write(config.join("games").join("nes").join("Bad.json"), "{\"Engine\":5}").unwrap();
+        std::fs::write(config.join("games").join("nes").join("Good.json"), "{\"Engine\":\"MoonRT (Rust)\"}").unwrap();
+        {
+            let mut t = tree_mut();
+            t.set_override(Override::Config, Some(config.to_string_lossy().into_owned()));
+            t.set_override(Override::Data, Some(root.join("Home").to_string_lossy().into_owned()));
+        }
+        let t = tree().clone();
+        assert!(super::game_values(&t, Some("nes"), "/roms/Bad.nes").is_empty());
+        assert_eq!(super::game_values(&t, Some("nes"), "/roms/Good.nes"), vec![("Engine".to_string(), "MoonRT (Rust)".to_string())]);
+        let written: String = std::fs::read_dir(&logs).unwrap().flatten().map(|e| std::fs::read_to_string(e.path()).unwrap()).collect();
+        assert!(written.contains("WARN [settings]") && written.contains("Bad.json is not a game's settings, and is read as none: the value of \"Engine\" is not a string."), "{written}");
+        assert!(!written.contains("Good.json"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

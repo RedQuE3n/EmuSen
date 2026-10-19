@@ -6923,6 +6923,61 @@ since it changes no rate.
 - A battery file that cannot be written at close is still let go silently (§29.15).
 - A handle whose runtime was freed stays allocated until the process ends.
 
+### 29.20 Built 2026-10-19: part (a), piece 7, the picture's other ways, and part (a) closed
+
+**The piece** (this commit).
+- **`lend::Lender`** is §29.2's trait: make a machine's lend from the presenter's device, take a picture, settle the
+  copies, free. A `MachineLend` is settled before its machine is freed and freed after it, as `CoreMachine.Dispose`
+  orders it; a new machine is made with a new lend, and the old one goes with the old machine.
+- **The platform library's `SerenityLender`** implements the trait over `serenity_device.rs`'s
+  `emusen_serenity_lend_*`, called in the same crate, so `emusen-crystal` links nothing of Vulkan. A runtime the
+  platform library makes is given it.
+- **The device.** A 1.1 open's `device` is read where the struct holds it. A lend the device refuses is said once a
+  session in the error log, in the C#'s words.
+- **The frame** takes the picture where it lies on the device (`TakeDeviceFrame`), and `picture_on_device` answers it.
+- **`picture_lend`** answers the current machine's lend. **`raw_select`** and **`raw_copy`** keep and copy the picture
+  before its palette.
+- **`emusen-core-host`'s `raw_info`** now answers `Option`: a core's status 1 is a frame's raw picture, and its 0 is
+  none, which `ok` had read as the same. No caller of the crate's other than the runtime calls it.
+- **Found while building, and fixed.** A machine made again released the old machine's disc loans before freeing the
+  machine. The machine is now freed first, as the C#'s `CoreMachine` frees its loans after itself.
+
+**The two silent error-log gaps.**
+- **A game's settings file that is not a map of strings** now writes the C#'s warning, `<file> is not a game's
+  settings, and is read as none: <why>`. The reason's words are the Rust reader's, not `System.Text.Json`'s. A crate
+  test plants a bad file and a good one under a test `LogDirectory`, and reads the entry for the first alone; with the
+  warning removed it fails.
+- **A battery file not written at close** is no gap. The C#'s `catch` around `SaveSram` cannot be reached by a
+  write: `BatterySave.Write` is `AtomicFile.Write`, which catches its own exceptions and answers false, as Galaxia's
+  `atomic::write` does. Both implementations are silent there.
+
+**Measured on 2026-10-19** [M]:
+- **Parity.** The parity class's new case passes on the test core's raw encoding and on MoonRT's `nes.ppu`, comparing
+  every answer and the trees left: a copy before any choice, a choice before a frame, five frames' raw pictures with
+  their shapes, the struct refused short, a buffer too small, an encoding no machine lists, the choice cleared and
+  made again across a reset, a closed session. `picture_lend` answers 0 for a session with no device.
+- **On the RX 6800.** `ApiDeviceLendRustTests` runs `ApiDeviceLendTests`' case on the Rust runtime through its
+  exports. Each picture is taken and borrowed by a Slang chain: after open, after a reset (the same lend), after held
+  rewind's steps, after undrawn frames, in a session opened again (a new lend), and none for a session opened with no
+  device. It passes beside the C#'s case, which also passes.
+- **Seeded faults**, four, each caught: the raw choice's mask a bit off; `raw_info`'s `reserved` left as the caller
+  gave it; `picture_on_device` answered false for a taken picture; no lend made for the device.
+- **A fifth seeded fault, never taking the picture,** is not a case's to catch. The case did not end within ten
+  minutes, though neither the frames nor the free it watches was the call that hung, and the run was stopped. A
+  runtime that does not take each picture leaves the presenter's device waiting. The four faults above stand in for it.
+- **Other tests.** The crate's tests 6, 6 and 1, the game file's case among them; the platform library's 31 and 4;
+  `emusen-core-host`'s 7, 1 and 13.
+
+**Part (a) closed.** Every export of §29.8's pieces 1 to 7 is the platform library's, held to the header by the
+crate's export check. The binding still chooses the C# until part (c) adds the twins, since it changes only when
+every export is there.
+
+**Left over from part (a)**, each recorded in its piece's section:
+- the read-ahead on `MEDIA_SEEK` (§29.16);
+- P2 measured again once part (b) fills the seam (§29.16);
+- a freed runtime's subscription handles kept until the process ends (§29.19);
+- the three copies of the local offset that Galaxia's `clock` can replace (§29.18).
+
 ### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
 
 *Part (b) numbers its sections from §29.30, so that part (a)'s pieces, built at the same time, keep §29.16 to §29.29.*

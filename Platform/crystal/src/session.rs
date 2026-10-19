@@ -36,6 +36,8 @@ pub fn thread_id() -> u64 {
 pub struct OpenedWith {
     pub flags: u32,
     pub audio_buffer_max_samples: u32,
+    /// Since 1.1: the presenter's device, each machine lent it afresh; 0 for none.
+    pub device: usize,
 }
 
 /// The state a session's frame thread and run control share: whether it runs, at what speed, and its rewind.
@@ -483,6 +485,23 @@ impl Session {
         }
         info.picture_on_device = (ran && e.picture_on_device) as u32;
         info.reserved = 0;
+    }
+
+    /// The current machine's lend for the presenter to borrow, or 0.
+    pub fn picture_lend(&self) -> Result<usize, Refused> {
+        Ok(self.lock()?.engine.lend.as_ref().map_or(0, |l| l.handle))
+    }
+
+    /// The raw encoding kept from the next frame; none keeps none.
+    pub fn raw_select(&self, encoding: Option<&str>) -> Result<(), Refused> {
+        self.lock()?.engine.raw_wanted = encoding.map(str::to_string);
+        Ok(())
+    }
+
+    /// The last frame's raw picture into `into` and its shape; ABSENT for none.
+    pub fn raw_copy(&self, into: &mut [u8]) -> Result<(emusen_native::core::sys::RawFrame, usize), Refused> {
+        let held = self.lock()?;
+        held.engine.copy_raw(into).map_err(|r| (r.status, r.words))?.ok_or_else(|| (svc::ABSENT, "no picture before the palette is kept".to_string()))
     }
 
     /// The picture as RGBA8888 into `into`, read whole; the bytes it takes.

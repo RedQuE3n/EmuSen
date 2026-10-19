@@ -12,6 +12,7 @@ pub mod firmware;
 pub mod info;
 pub mod input;
 pub mod json;
+pub mod lend;
 pub mod machine_info;
 pub mod media;
 pub mod open;

@@ -7058,6 +7058,50 @@ the Rust over the same tree, the answers and the Saves tree compared.
   Crystal, debug, header, contract shape, 1.2, session service, Hotaru on the API, runtime log, binding and managed
   classes, 123 of 123.
 
+### 29.22 Built 2026-10-19: part (c), piece 2, the registries
+
+**The piece** (this commit). `service::registries` is the C# `SessionService.Debugger` over the debugger's
+registries: breakpoints (code, data and forbidden ranges, enabling and removing by id, the log, the hardware
+conditions, the depth guard, the uninitialised read), watches, frame logs, coverage, the profile, the access counters,
+the call stack, freezes and labels, 38 twins and their table entries. A condition or logpoint is prepared before
+anything is added and its words answered with `PARSE`, as §13.12 of `EmuSen_DianaSh.md` has it; the counters answer
+`NOT_SUPPORTED` on every session, as the generic target has no `AccessCounterRegistry` (§29.30).
+
+**What follows the C# where a reading of the header alone would not.**
+- The op-coded groups (`coverage_op`, `profile_op`, `counters_op`) hold the session's gate around a read as well as a
+  change, as the C#'s exports do, and refuse a read-only table's change only once the op is known, after the processor
+  and the registry; `Call::gated` is that gate without the early refusal.
+- An id is compared as the C# compares an `int` with a `uint`: a watch or frame-log id above 2^31 - 1 names none, and
+  a breakpoint's is cast and wraps.
+- `label_add` refuses a blank name before it asks which session it serves; `label_load`'s length query parses on a
+  scratch registry and loads nothing, and a call loads only when its buffer holds the record.
+- The profile's `HOTTEST` reads its JSON argument and `STATUS` does not, so malformed text is refused by the one and
+  ignored by the other.
+
+**The harness** gained a second read of an answer longer than its buffer (a coverage map is two megabytes), and its
+variables are put in before `$S`, so a variable named `SUB` is no longer read as the session's id and `UB`.
+
+**Measured on 2026-10-19** [M]:
+- **Parity.** Two new cases pass, every answer and the Saves tree compared.
+  - On the test core, 241 calls through the twins, the full table, a stranger's table and the read-only table:
+    breakpoints of every argument's kind and refusal (a 32-bit address written signed, one past 32 bits, a fraction, a
+    string, an array, no JSON, no argument), halts at a range and at a condition each resumed, data breakpoints by
+    value, on reads and changed-only, forbidden ranges, the depth guard and the uninitialised read; watches, frame logs
+    and freezes with every refusal and their samples over frames; coverage's twelve ops with a map exported and read
+    back refused, a merge, a mark; the profile's six; the counters; labels added blank, removed by name and address,
+    loaded from text with its errors, asked by length alone and saved.
+  - On MoonRT, 100 calls over a loop that stores to RAM and calls a subroutine: watch events by site, the call stack
+    at a halt inside the subroutine, step over, step out and a single step, a condition on two units' registers, a
+    logpoint's 526 lines over a frame, data breakpoints and a changed-only one with a log, coverage of 27,672
+    instructions with its entry point, the profile's shares, frame logs on RAM and the bus, a freeze, labels, the depth
+    guard and a forbidden range.
+- **Seeded faults**, four, each caught: a label's address in five hexadecimal digits (the test core's case), a
+  breakpoint's end written as its address (the test core's; MoonRT's breakpoints are single addresses), a label file
+  loaded by the length query (the test core's), the profile's share rounded (MoonRT's).
+- **Other tests.** The crates' tests, `--profile test-checked`: `emusen-crystal` 6, 6 and 1, `emusen-crystal-debug` 4
+  and 2, the platform library's 31 and 4. WiseMan's Crystal, debug, header, session service, Hotaru on the API and
+  contract shape classes, 78 of 78.
+
 ### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
 
 *Part (b) numbers its sections from §29.30, so that part (a)'s pieces, built at the same time, keep §29.16 to §29.29.*

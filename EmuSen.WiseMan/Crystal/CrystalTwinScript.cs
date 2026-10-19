@@ -249,6 +249,12 @@ namespace EmuSen.WiseMan.Crystal
                     var buffer = new byte[1 << 20];
                     long n;
                     fixed (byte* b = buffer) n = fill(b, (nuint)buffer.Length);
+                    // A read longer than the buffer, a coverage map, is asked again into one that holds it.
+                    if (n > buffer.Length)
+                    {
+                        buffer = new byte[n];
+                        fixed (byte* b = buffer) n = fill(b, (nuint)buffer.Length);
+                    }
                     return n < 0 ? $"status {n}: {words()}" : Shown(name, buffer.AsSpan(0, (int)n).ToArray(), args);
                 }
                 return CopyOut(name, fill, words, args);
@@ -357,9 +363,9 @@ namespace EmuSen.WiseMan.Crystal
 
         private string Expand(string text)
         {
-            string filled = text.Replace("$S", _session.ToString());
+            string filled = text;
             foreach (var (key, value) in _values.OrderByDescending(kv => kv.Key.Length)) filled = filled.Replace("$" + key, value);
-            return filled;
+            return filled.Replace("$S", _session.ToString());
         }
 
         private string Status(int status) => status >= 0 ? status.ToString() : $"status {status}: {(_route == "twin" ? _impl.LastError() : TableWords(Table()))}";

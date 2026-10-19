@@ -8,7 +8,7 @@ use std::sync::Mutex;
 
 use emusen_crystal::abi::{self, emusen_crystal_runtime};
 use emusen_crystal::runtime::Runtime;
-use emusen_crystal::service::{Answer, Call, Raw, machine};
+use emusen_crystal::service::{Answer, Call, Raw, machine, registries};
 use emusen_session_service::abi::{emusen_session_v1, status as svc};
 
 use crate::crystal::{fail, put, runtime};
@@ -97,7 +97,7 @@ fn out(result: Result<Vec<u8>, i32>, o: *mut u8, len: usize) -> i64 {
     }
 }
 
-fn value(result: Result<i64, i32>) -> i64 {
+fn number(result: Result<i64, i32>) -> i64 {
     result.unwrap_or_else(|status| status as i64)
 }
 
@@ -152,11 +152,11 @@ unsafe extern "C" fn summary(ctx: *mut c_void, session: u32, o: *mut u8, len: us
 /// `rt` a live runtime.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_crystal_run_control(rt: *mut emusen_crystal_runtime, session: u32, op: u32, processor: u32, argument: i64) -> i64 {
-    value(unsafe { twin(rt, session, |c| machine::run_control(c, op, processor, argument)) })
+    number(unsafe { twin(rt, session, |c| machine::run_control(c, op, processor, argument)) })
 }
 
 unsafe extern "C" fn run_control(ctx: *mut c_void, session: u32, op: u32, processor: u32, argument: i64) -> i64 {
-    value(unsafe { table(ctx, session, |c| machine::run_control(c, op, processor, argument)) })
+    number(unsafe { table(ctx, session, |c| machine::run_control(c, op, processor, argument)) })
 }
 
 /// # Safety
@@ -201,7 +201,7 @@ fn space_read_into(c: &Call, space: Raw, address: u32, o: *mut u8, len: usize) -
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_crystal_space_read(rt: *mut emusen_crystal_runtime, session: u32, space: *const u8, space_len: usize, address: u32, o: *mut u8, len: usize) -> i64 {
     let space = unsafe { Raw::new(space, space_len) };
-    value(unsafe { twin(rt, session, |c| space_read_into(c, space, address, o, len)) })
+    number(unsafe { twin(rt, session, |c| space_read_into(c, space, address, o, len)) })
 }
 
 unsafe extern "C" fn space_read(ctx: *mut c_void, session: u32, space: *const u8, space_len: usize, address: u32, o: *mut u8, len: usize) -> i64 {
@@ -209,7 +209,7 @@ unsafe extern "C" fn space_read(ctx: *mut c_void, session: u32, space: *const u8
         return len as i64;
     }
     let space = unsafe { Raw::new(space, space_len) };
-    value(unsafe { table(ctx, session, |c| space_read_into(c, space, address, o, len)) })
+    number(unsafe { table(ctx, session, |c| space_read_into(c, space, address, o, len)) })
 }
 
 /// # Safety
@@ -393,11 +393,11 @@ fn drain_into(c: &Call, kinds: u32, o: *mut u8, len: usize) -> Answer<i64> {
 /// `rt` a live runtime; `out` null or valid for `len` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_crystal_events_drain(rt: *mut emusen_crystal_runtime, session: u32, kinds: u32, o: *mut u8, len: usize) -> i64 {
-    value(unsafe { twin(rt, session, |c| drain_into(c, kinds, o, len)) })
+    number(unsafe { twin(rt, session, |c| drain_into(c, kinds, o, len)) })
 }
 
 unsafe extern "C" fn events_drain(ctx: *mut c_void, session: u32, kinds: u32, o: *mut u8, len: usize) -> i64 {
-    value(unsafe { table(ctx, session, |c| drain_into(c, kinds, o, len)) })
+    number(unsafe { table(ctx, session, |c| drain_into(c, kinds, o, len)) })
 }
 
 // ---- Games ----------------------------------------------------------------------------------------------------------
@@ -407,12 +407,12 @@ unsafe extern "C" fn events_drain(ctx: *mut c_void, session: u32, kinds: u32, o:
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_crystal_open_game(rt: *mut emusen_crystal_runtime, session: u32, path: *const u8, path_len: usize, engine: *const u8, engine_len: usize) -> i64 {
     let (path, engine) = unsafe { (Raw::new(path, path_len), Raw::new(engine, engine_len)) };
-    value(unsafe { twin(rt, session, |c| machine::open(c, path, Raw::none(), engine, true)) })
+    number(unsafe { twin(rt, session, |c| machine::open(c, path, Raw::none(), engine, true)) })
 }
 
 unsafe extern "C" fn open_game(ctx: *mut c_void, session: u32, path: *const u8, path_len: usize, engine: *const u8, engine_len: usize) -> i64 {
     let (path, engine) = unsafe { (Raw::new(path, path_len), Raw::new(engine, engine_len)) };
-    value(unsafe { table(ctx, session, |c| machine::open(c, path, Raw::none(), engine, true)) })
+    number(unsafe { table(ctx, session, |c| machine::open(c, path, Raw::none(), engine, true)) })
 }
 
 /// # Safety
@@ -420,12 +420,463 @@ unsafe extern "C" fn open_game(ctx: *mut c_void, session: u32, path: *const u8, 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_crystal_open_console(rt: *mut emusen_crystal_runtime, session: u32, console: *const u8, console_len: usize, engine: *const u8, engine_len: usize) -> i64 {
     let (console, engine) = unsafe { (Raw::new(console, console_len), Raw::new(engine, engine_len)) };
-    value(unsafe { twin(rt, session, |c| machine::open(c, Raw::none(), console, engine, false)) })
+    number(unsafe { twin(rt, session, |c| machine::open(c, Raw::none(), console, engine, false)) })
 }
 
 unsafe extern "C" fn open_console(ctx: *mut c_void, session: u32, console: *const u8, console_len: usize, engine: *const u8, engine_len: usize) -> i64 {
     let (console, engine) = unsafe { (Raw::new(console, console_len), Raw::new(engine, engine_len)) };
-    value(unsafe { table(ctx, session, |c| machine::open(c, Raw::none(), console, engine, false)) })
+    number(unsafe { table(ctx, session, |c| machine::open(c, Raw::none(), console, engine, false)) })
+}
+
+// ---- The registries: breakpoints, watches, frame logs, coverage, profile, counters, call stack, freezes, labels ----
+
+/// The room a change that answers with a record has, -1 for a length query, as `SessionExports.LabelLoad` passes it.
+fn room(o: *mut u8, len: usize) -> i64 {
+    if o.is_null() { -1 } else { len.min(i64::MAX as usize) as i64 }
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_bp_add(rt: *mut emusen_crystal_runtime, session: u32, processor: u32, spec: *const u8, spec_len: usize) -> i64 {
+    let spec = unsafe { Raw::new(spec, spec_len) };
+    number(unsafe { twin(rt, session, |c| registries::bp_add(c, processor, spec)) })
+}
+
+unsafe extern "C" fn bp_add(ctx: *mut c_void, session: u32, processor: u32, spec: *const u8, spec_len: usize) -> i64 {
+    let spec = unsafe { Raw::new(spec, spec_len) };
+    number(unsafe { table(ctx, session, |c| registries::bp_add(c, processor, spec)) })
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_bp_add_data(rt: *mut emusen_crystal_runtime, session: u32, processor: u32, spec: *const u8, spec_len: usize) -> i64 {
+    let spec = unsafe { Raw::new(spec, spec_len) };
+    number(unsafe { twin(rt, session, |c| registries::bp_add_data(c, processor, spec)) })
+}
+
+unsafe extern "C" fn bp_add_data(ctx: *mut c_void, session: u32, processor: u32, spec: *const u8, spec_len: usize) -> i64 {
+    let spec = unsafe { Raw::new(spec, spec_len) };
+    number(unsafe { table(ctx, session, |c| registries::bp_add_data(c, processor, spec)) })
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_bp_set_enabled(rt: *mut emusen_crystal_runtime, session: u32, processor: u32, id: u32, enabled: u32) -> i32 {
+    code(unsafe { twin(rt, session, |c| registries::bp_set_enabled(c, processor, id, enabled != 0)) })
+}
+
+unsafe extern "C" fn bp_set_enabled(ctx: *mut c_void, session: u32, processor: u32, id: u32, enabled: u32) -> i32 {
+    code(unsafe { table(ctx, session, |c| registries::bp_set_enabled(c, processor, id, enabled != 0)) })
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_bp_remove(rt: *mut emusen_crystal_runtime, session: u32, processor: u32, id: u32) -> i32 {
+    code(unsafe { twin(rt, session, |c| registries::bp_remove(c, processor, id)) })
+}
+
+unsafe extern "C" fn bp_remove(ctx: *mut c_void, session: u32, processor: u32, id: u32) -> i32 {
+    code(unsafe { table(ctx, session, |c| registries::bp_remove(c, processor, id)) })
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_bp_list(rt: *mut emusen_crystal_runtime, session: u32, processor: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| registries::bp_list(c, processor)) }, o, len)
+}
+
+unsafe extern "C" fn bp_list(ctx: *mut c_void, session: u32, processor: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| registries::bp_list(c, processor)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_bp_log(rt: *mut emusen_crystal_runtime, session: u32, processor: u32, count: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| registries::bp_log(c, processor, count)) }, o, len)
+}
+
+unsafe extern "C" fn bp_log(ctx: *mut c_void, session: u32, processor: u32, count: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| registries::bp_log(c, processor, count)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_bp_log_clear(rt: *mut emusen_crystal_runtime, session: u32, processor: u32) -> i32 {
+    code(unsafe { twin(rt, session, |c| registries::bp_log_clear(c, processor)) })
+}
+
+unsafe extern "C" fn bp_log_clear(ctx: *mut c_void, session: u32, processor: u32) -> i32 {
+    code(unsafe { table(ctx, session, |c| registries::bp_log_clear(c, processor)) })
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_bp_arm_condition(rt: *mut emusen_crystal_runtime, session: u32, processor: u32, name: *const u8, name_len: usize, flags: u32) -> i32 {
+    let name = unsafe { Raw::new(name, name_len) };
+    code(unsafe { twin(rt, session, |c| registries::bp_arm_condition(c, processor, name, flags)) })
+}
+
+unsafe extern "C" fn bp_arm_condition(ctx: *mut c_void, session: u32, processor: u32, name: *const u8, name_len: usize, flags: u32) -> i32 {
+    let name = unsafe { Raw::new(name, name_len) };
+    code(unsafe { table(ctx, session, |c| registries::bp_arm_condition(c, processor, name, flags)) })
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_bp_conditions(rt: *mut emusen_crystal_runtime, session: u32, processor: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| registries::bp_conditions(c, processor)) }, o, len)
+}
+
+unsafe extern "C" fn bp_conditions(ctx: *mut c_void, session: u32, processor: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| registries::bp_conditions(c, processor)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_bp_depth_guard(rt: *mut emusen_crystal_runtime, session: u32, processor: u32, depth: i32) -> i32 {
+    code(unsafe { twin(rt, session, |c| registries::bp_depth_guard(c, processor, depth)) })
+}
+
+unsafe extern "C" fn bp_depth_guard(ctx: *mut c_void, session: u32, processor: u32, depth: i32) -> i32 {
+    code(unsafe { table(ctx, session, |c| registries::bp_depth_guard(c, processor, depth)) })
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_bp_forbid_range(rt: *mut emusen_crystal_runtime, session: u32, processor: u32, address: u32, end: u32) -> i64 {
+    number(unsafe { twin(rt, session, |c| registries::bp_forbid_range(c, processor, address, end)) })
+}
+
+unsafe extern "C" fn bp_forbid_range(ctx: *mut c_void, session: u32, processor: u32, address: u32, end: u32) -> i64 {
+    number(unsafe { table(ctx, session, |c| registries::bp_forbid_range(c, processor, address, end)) })
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_bp_uninitialized(rt: *mut emusen_crystal_runtime, session: u32, processor: u32, space: *const u8, space_len: usize, size: u32) -> i32 {
+    let space = unsafe { Raw::new(space, space_len) };
+    code(unsafe { twin(rt, session, |c| registries::bp_uninitialized(c, processor, space, size)) })
+}
+
+unsafe extern "C" fn bp_uninitialized(ctx: *mut c_void, session: u32, processor: u32, space: *const u8, space_len: usize, size: u32) -> i32 {
+    let space = unsafe { Raw::new(space, space_len) };
+    code(unsafe { table(ctx, session, |c| registries::bp_uninitialized(c, processor, space, size)) })
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_watch_add(rt: *mut emusen_crystal_runtime, session: u32, space: *const u8, space_len: usize, address: u32, length: u32, kind: u32) -> i64 {
+    let space = unsafe { Raw::new(space, space_len) };
+    number(unsafe { twin(rt, session, |c| registries::watch_add(c, space, address, length, kind)) })
+}
+
+unsafe extern "C" fn watch_add(ctx: *mut c_void, session: u32, space: *const u8, space_len: usize, address: u32, length: u32, kind: u32) -> i64 {
+    let space = unsafe { Raw::new(space, space_len) };
+    number(unsafe { table(ctx, session, |c| registries::watch_add(c, space, address, length, kind)) })
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_watch_remove(rt: *mut emusen_crystal_runtime, session: u32, id: u32) -> i32 {
+    code(unsafe { twin(rt, session, |c| registries::watch_remove(c, id)) })
+}
+
+unsafe extern "C" fn watch_remove(ctx: *mut c_void, session: u32, id: u32) -> i32 {
+    code(unsafe { table(ctx, session, |c| registries::watch_remove(c, id)) })
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_watch_list(rt: *mut emusen_crystal_runtime, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| registries::watch_list(c)) }, o, len)
+}
+
+unsafe extern "C" fn watch_list(ctx: *mut c_void, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| registries::watch_list(c)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_watch_events(rt: *mut emusen_crystal_runtime, session: u32, id: u32, count: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| registries::watch_events(c, id, count)) }, o, len)
+}
+
+unsafe extern "C" fn watch_events(ctx: *mut c_void, session: u32, id: u32, count: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| registries::watch_events(c, id, count)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_watch_summary(rt: *mut emusen_crystal_runtime, session: u32, id: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| registries::watch_summary(c, id)) }, o, len)
+}
+
+unsafe extern "C" fn watch_summary(ctx: *mut c_void, session: u32, id: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| registries::watch_summary(c, id)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_watch_clear(rt: *mut emusen_crystal_runtime, session: u32, id: u32) -> i32 {
+    code(unsafe { twin(rt, session, |c| registries::watch_clear(c, id)) })
+}
+
+unsafe extern "C" fn watch_clear(ctx: *mut c_void, session: u32, id: u32) -> i32 {
+    code(unsafe { table(ctx, session, |c| registries::watch_clear(c, id)) })
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_framelog_add(rt: *mut emusen_crystal_runtime, session: u32, space: *const u8, space_len: usize, address: u32, width: u32) -> i64 {
+    let space = unsafe { Raw::new(space, space_len) };
+    number(unsafe { twin(rt, session, |c| registries::framelog_add(c, space, address, width)) })
+}
+
+unsafe extern "C" fn framelog_add(ctx: *mut c_void, session: u32, space: *const u8, space_len: usize, address: u32, width: u32) -> i64 {
+    let space = unsafe { Raw::new(space, space_len) };
+    number(unsafe { table(ctx, session, |c| registries::framelog_add(c, space, address, width)) })
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_framelog_remove(rt: *mut emusen_crystal_runtime, session: u32, id: u32) -> i32 {
+    code(unsafe { twin(rt, session, |c| registries::framelog_remove(c, id)) })
+}
+
+unsafe extern "C" fn framelog_remove(ctx: *mut c_void, session: u32, id: u32) -> i32 {
+    code(unsafe { table(ctx, session, |c| registries::framelog_remove(c, id)) })
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_framelog_list(rt: *mut emusen_crystal_runtime, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| registries::framelog_list(c)) }, o, len)
+}
+
+unsafe extern "C" fn framelog_list(ctx: *mut c_void, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| registries::framelog_list(c)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_framelog_samples(rt: *mut emusen_crystal_runtime, session: u32, id: u32, count: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| registries::framelog_samples(c, id, count)) }, o, len)
+}
+
+unsafe extern "C" fn framelog_samples(ctx: *mut c_void, session: u32, id: u32, count: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| registries::framelog_samples(c, id, count)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_framelog_clear(rt: *mut emusen_crystal_runtime, session: u32, id: u32) -> i32 {
+    code(unsafe { twin(rt, session, |c| registries::framelog_clear(c, id)) })
+}
+
+unsafe extern "C" fn framelog_clear(ctx: *mut c_void, session: u32, id: u32) -> i32 {
+    code(unsafe { table(ctx, session, |c| registries::framelog_clear(c, id)) })
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_coverage_op(rt: *mut emusen_crystal_runtime, session: u32, processor: u32, op: u32, args: *const u8, args_len: usize, o: *mut u8, len: usize) -> i64 {
+    let args = unsafe { Raw::new(args, args_len) };
+    out(unsafe { twin(rt, session, |c| registries::coverage_op(c, processor, op, args)) }, o, len)
+}
+
+unsafe extern "C" fn coverage_op(ctx: *mut c_void, session: u32, processor: u32, op: u32, args: *const u8, args_len: usize, o: *mut u8, len: usize) -> i64 {
+    let args = unsafe { Raw::new(args, args_len) };
+    out(unsafe { table(ctx, session, |c| registries::coverage_op(c, processor, op, args)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_profile_op(rt: *mut emusen_crystal_runtime, session: u32, processor: u32, op: u32, args: *const u8, args_len: usize, o: *mut u8, len: usize) -> i64 {
+    let args = unsafe { Raw::new(args, args_len) };
+    out(unsafe { twin(rt, session, |c| registries::profile_op(c, processor, op, args)) }, o, len)
+}
+
+unsafe extern "C" fn profile_op(ctx: *mut c_void, session: u32, processor: u32, op: u32, args: *const u8, args_len: usize, o: *mut u8, len: usize) -> i64 {
+    let args = unsafe { Raw::new(args, args_len) };
+    out(unsafe { table(ctx, session, |c| registries::profile_op(c, processor, op, args)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_counters_op(rt: *mut emusen_crystal_runtime, session: u32, op: u32, args: *const u8, args_len: usize, o: *mut u8, len: usize) -> i64 {
+    let args = unsafe { Raw::new(args, args_len) };
+    out(unsafe { twin(rt, session, |c| registries::counters_op(c, { let _ = op; args })) }, o, len)
+}
+
+unsafe extern "C" fn counters_op(ctx: *mut c_void, session: u32, op: u32, args: *const u8, args_len: usize, o: *mut u8, len: usize) -> i64 {
+    let args = unsafe { Raw::new(args, args_len) };
+    out(unsafe { table(ctx, session, |c| registries::counters_op(c, { let _ = op; args })) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_call_stack(rt: *mut emusen_crystal_runtime, session: u32, processor: u32, count: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| registries::call_stack(c, processor, count)) }, o, len)
+}
+
+unsafe extern "C" fn call_stack(ctx: *mut c_void, session: u32, processor: u32, count: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| registries::call_stack(c, processor, count)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_freeze_add(rt: *mut emusen_crystal_runtime, session: u32, space: *const u8, space_len: usize, address: u32, value: u32) -> i64 {
+    let space = unsafe { Raw::new(space, space_len) };
+    number(unsafe { twin(rt, session, |c| registries::freeze_add(c, space, address, value)) })
+}
+
+unsafe extern "C" fn freeze_add(ctx: *mut c_void, session: u32, space: *const u8, space_len: usize, address: u32, value: u32) -> i64 {
+    let space = unsafe { Raw::new(space, space_len) };
+    number(unsafe { table(ctx, session, |c| registries::freeze_add(c, space, address, value)) })
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_freeze_remove(rt: *mut emusen_crystal_runtime, session: u32, id: u32) -> i32 {
+    code(unsafe { twin(rt, session, |c| registries::freeze_remove(c, id)) })
+}
+
+unsafe extern "C" fn freeze_remove(ctx: *mut c_void, session: u32, id: u32) -> i32 {
+    code(unsafe { table(ctx, session, |c| registries::freeze_remove(c, id)) })
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_freeze_list(rt: *mut emusen_crystal_runtime, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| registries::freeze_list(c)) }, o, len)
+}
+
+unsafe extern "C" fn freeze_list(ctx: *mut c_void, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| registries::freeze_list(c)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_freeze_clear(rt: *mut emusen_crystal_runtime, session: u32) -> i32 {
+    code(unsafe { twin(rt, session, |c| registries::freeze_clear(c)) })
+}
+
+unsafe extern "C" fn freeze_clear(ctx: *mut c_void, session: u32) -> i32 {
+    code(unsafe { table(ctx, session, |c| registries::freeze_clear(c)) })
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_label_add(rt: *mut emusen_crystal_runtime, session: u32, address: u32, name: *const u8, name_len: usize, comment: *const u8, comment_len: usize) -> i32 {
+    let (name, comment) = unsafe { (Raw::new(name, name_len), Raw::new(comment, comment_len)) };
+    code(unsafe { twin(rt, session, |c| registries::label_add(c, address, name, comment)) })
+}
+
+unsafe extern "C" fn label_add(ctx: *mut c_void, session: u32, address: u32, name: *const u8, name_len: usize, comment: *const u8, comment_len: usize) -> i32 {
+    let (name, comment) = unsafe { (Raw::new(name, name_len), Raw::new(comment, comment_len)) };
+    code(unsafe { table(ctx, session, |c| registries::label_add(c, address, name, comment)) })
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_label_remove(rt: *mut emusen_crystal_runtime, session: u32, name: *const u8, name_len: usize, address: u32) -> i32 {
+    let name = unsafe { Raw::new(name, name_len) };
+    code(unsafe { twin(rt, session, |c| registries::label_remove(c, name, address)) })
+}
+
+unsafe extern "C" fn label_remove(ctx: *mut c_void, session: u32, name: *const u8, name_len: usize, address: u32) -> i32 {
+    let name = unsafe { Raw::new(name, name_len) };
+    code(unsafe { table(ctx, session, |c| registries::label_remove(c, name, address)) })
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_label_list(rt: *mut emusen_crystal_runtime, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| registries::label_list(c)) }, o, len)
+}
+
+unsafe extern "C" fn label_list(ctx: *mut c_void, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| registries::label_list(c)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_label_at(rt: *mut emusen_crystal_runtime, session: u32, address: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| registries::label_at(c, address)) }, o, len)
+}
+
+unsafe extern "C" fn label_at(ctx: *mut c_void, session: u32, address: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| registries::label_at(c, address)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_label_load(rt: *mut emusen_crystal_runtime, session: u32, text: *const u8, text_len: usize, o: *mut u8, len: usize) -> i64 {
+    let text = unsafe { Raw::new(text, text_len) };
+    out(unsafe { twin(rt, session, |c| registries::label_load(c, text, room(o, len))) }, o, len)
+}
+
+unsafe extern "C" fn label_load(ctx: *mut c_void, session: u32, text: *const u8, text_len: usize, o: *mut u8, len: usize) -> i64 {
+    let text = unsafe { Raw::new(text, text_len) };
+    out(unsafe { table(ctx, session, |c| registries::label_load(c, text, room(o, len))) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_label_save(rt: *mut emusen_crystal_runtime, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { twin(rt, session, |c| registries::label_save(c)) }, o, len)
+}
+
+unsafe extern "C" fn label_save(ctx: *mut c_void, session: u32, o: *mut u8, len: usize) -> i64 {
+    out(unsafe { table(ctx, session, |c| registries::label_save(c)) }, o, len)
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_label_clear(rt: *mut emusen_crystal_runtime, session: u32) -> i32 {
+    code(unsafe { twin(rt, session, |c| registries::label_clear(c)) })
+}
+
+unsafe extern "C" fn label_clear(ctx: *mut c_void, session: u32) -> i32 {
+    code(unsafe { table(ctx, session, |c| registries::label_clear(c)) })
 }
 
 // ---- The table ------------------------------------------------------------------------------------------------------
@@ -465,6 +916,44 @@ fn template() -> emusen_session_v1 {
         games: Some(games),
         open_game: Some(open_game),
         open_console: Some(open_console),
+        bp_add: Some(bp_add),
+        bp_add_data: Some(bp_add_data),
+        bp_set_enabled: Some(bp_set_enabled),
+        bp_remove: Some(bp_remove),
+        bp_list: Some(bp_list),
+        bp_log: Some(bp_log),
+        bp_log_clear: Some(bp_log_clear),
+        bp_arm_condition: Some(bp_arm_condition),
+        bp_conditions: Some(bp_conditions),
+        bp_depth_guard: Some(bp_depth_guard),
+        bp_forbid_range: Some(bp_forbid_range),
+        bp_uninitialized: Some(bp_uninitialized),
+        watch_add: Some(watch_add),
+        watch_remove: Some(watch_remove),
+        watch_list: Some(watch_list),
+        watch_events: Some(watch_events),
+        watch_summary: Some(watch_summary),
+        watch_clear: Some(watch_clear),
+        framelog_add: Some(framelog_add),
+        framelog_remove: Some(framelog_remove),
+        framelog_list: Some(framelog_list),
+        framelog_samples: Some(framelog_samples),
+        framelog_clear: Some(framelog_clear),
+        coverage_op: Some(coverage_op),
+        profile_op: Some(profile_op),
+        counters_op: Some(counters_op),
+        call_stack: Some(call_stack),
+        freeze_add: Some(freeze_add),
+        freeze_remove: Some(freeze_remove),
+        freeze_list: Some(freeze_list),
+        freeze_clear: Some(freeze_clear),
+        label_add: Some(label_add),
+        label_remove: Some(label_remove),
+        label_list: Some(label_list),
+        label_at: Some(label_at),
+        label_load: Some(label_load),
+        label_save: Some(label_save),
+        label_clear: Some(label_clear),
         ..unbuilt()
     }
 }

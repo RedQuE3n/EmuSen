@@ -35,10 +35,6 @@ const HAND_KEYS: [(&str, usize); 9] = [("venus", 0), ("snes", 0), ("moon", 1), (
 /// A console whose one engine is a discovered v1 engine, `SoleDiscoveredEngines`.
 const SOLE_ENGINES: [(&str, &str); 4] = [("SNES", "VenusRT (Rust)"), ("NES", "MoonRT (Rust)"), ("GB", "MercuryRT (Rust)"), ("N64", "MarsRT (Rust)")];
 
-/// The NES's and the SNES's pads and ports, the C# packs' constants (`NesSystem`, `SnesSystem`).
-const NES_PAD: [usize; 8] = [4, 5, 6, 7, 2, 3, 0, 8];
-const SNES_PAD: [usize; 12] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-
 fn eq_ic(a: &str, b: &str) -> bool {
     emusen_dotnet::text::equals_ignore_case(a, b)
 }
@@ -200,33 +196,36 @@ impl<'d> Catalog<'d> {
         info::systems(&core.sidecar.info_json).into_iter().find(|s| ids.contains(&s.id.as_str()))
     }
 
-    fn engine_system(&self, console: &str) -> Option<SystemDetail> {
+    fn pad_system(&self, console: &str) -> Option<SystemDetail> {
         self.discovered_system(console).or_else(|| self.sole_engine_system(console))
     }
 
+    /// The system a console's v1 engine gives, a discovered console's or a hand console's first engine's, for its
+    /// save media, `EngineSystem`.
+    pub fn engine_system(&self, console: &str) -> Option<SystemDetail> {
+        self.discovered_system(console).or_else(|| {
+            system_ids_for(console)
+                .into_iter()
+                .flat_map(|id| self.discovery.for_system(id).filter_map(move |c| info::systems(&c.sidecar.info_json).into_iter().find(|s| s.id == id)))
+                .next()
+        })
+    }
+
+    /// The console's pad from its engine's info, or every button for a console no engine serves (§18.10.12).
     pub fn buttons_for(&self, console: &str) -> Vec<usize> {
-        if eq_ic(console, "SNES") {
-            return SNES_PAD.to_vec();
-        }
-        if eq_ic(console, "NES") {
-            return NES_PAD.to_vec();
-        }
-        match self.engine_system(console).map(|s| s.buttons()) {
+        match self.pad_system(console).map(|s| s.buttons()) {
             Some(pad) if !pad.is_empty() => pad,
             _ => (0..info::BUTTONS.len()).collect(),
         }
     }
 
     pub fn axes_for(&self, console: &str) -> Vec<usize> {
-        self.engine_system(console).map(|s| s.axes()).unwrap_or_default()
+        self.pad_system(console).map(|s| s.axes()).unwrap_or_default()
     }
 
-    /// `ControllerPorts.ForConsole(console)`.
+    /// The most ports the console's engine's info lists, one for a console no engine serves, `ControllerPorts.ForConsole`.
     pub fn ports_for(&self, console: &str) -> usize {
-        if eq_ic(console, "NES") || eq_ic(console, "SNES") {
-            return 2;
-        }
-        self.engine_system(console).map(|s| s.ports().max(1)).unwrap_or(1)
+        self.pad_system(console).map(|s| s.ports().max(1)).unwrap_or(1)
     }
 
     /// The settings a console's engine offers, from its library, `SettingsFor`; opening a library under the trust rules

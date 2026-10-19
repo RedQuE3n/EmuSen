@@ -7,6 +7,7 @@ pub mod catalog;
 pub mod firmware;
 pub mod info;
 pub mod json;
+pub mod media;
 pub mod route;
 pub mod runtime;
 pub mod settings;

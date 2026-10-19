@@ -6625,6 +6625,34 @@ the parity class puts it back before each. Any one program makes one runtime, so
 holds its own. **Left**: the C# writes a line to the error log the first time a retired engine's name is read; the Rust
 reads the name as its replacement and writes no line yet, which a later piece adds with the runtime's error log.
 
+### 29.14 Built 2026-10-19: part (a), pieces 2a and 2b, firmware and the card manager
+
+**2a, firmware** (`e1019a5e`). `firmware_needed`, `firmware_install` and `firmware_overview` in `emusen-crystal`'s
+`firmware`, over `emusen-firmware`'s store: the engine a file opens on chosen as `CoreFactory.V1Library` chooses it
+(`route::v1_engine`), the library opened under the trust rules, the image read through Galaxia only where core info
+leaves the engine able to require firmware, each required request no folder holds listed; an install checked for its
+size and copied into the store; every system's firmware and the folder each file is found in. Galaxia gained
+`disc_set`, the C# `DiscSet`, `DiscFiles` and `ArchiveImages`' unpacking (the folder named by a hash of the archive's
+path, length and time, the image renamed for the archive's stem, the marker, the partial folder, the prune by size that
+a hold, a shared lock on the marker as .NET's `FileShare.Read` takes, refuses), and takes `sha2` 0.11, already the
+workspace's; the kit's and Diamond's locks carry it at the workspace's 0.11.0. Measured on 2026-10-19 [M]: the parity
+class's two new cases (every routed file and a zipped disc asked what it needs, beside a wrongly sized file in the store,
+and the overview; an install compared byte for byte, and six refusals) pass, and three seeded faults were each caught.
+No shipped core requires firmware today, every entry having a replacement, so the branch that lists a missing file and
+the unpacking are reached by the parity class only once a session opens a zipped game (piece 2c).
+
+**2b, the card manager** (this commit). `cards_op` in `media`, the C# `MemoryCards` (a console's media grouped from its
+engine's battery files, each medium's mode and names as `consoles.json` stores them, the drawer's cards and the games'
+own, the import offered, the next free name) over `emusen-savemedia`'s manager. Which medium a file is, by its
+extension, is read from the media core info's slots name (F28), where the C# reads its packs' literals; the two agree
+for every installed core, and differ only for a card of a medium no installed engine names, which the Rust then calls
+of no medium. Measured on 2026-10-19 [M]: the parity class's new case, a planted tree of drawers, games' own cards of
+both slots, a file of another extension and stored modes and names (a named mode, a name with a leading period, one
+with a separator, one with a space before it, a mode no one knows) through twenty-three calls of every op, answers and
+every file left compared, passes; four seeded faults (the slots' suffixes not longest first, the default mode, a name's
+leading period, an extension's case on a drawer's file) were each caught, the third after the planted names were made
+to reach it.
+
 ---
 
 ## 30. B9, scraping in Rust: the design, 2026-10-18

@@ -216,3 +216,25 @@ pub unsafe extern "C" fn emusen_crystal_firmware_overview(rt: *mut emusen_crysta
         Err(status) => status as i64,
     }
 }
+
+/// # Safety
+/// `rt` a live runtime; `args` valid for `args_len` bytes; `out` valid for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_cards_op(rt: *mut emusen_crystal_runtime, op: u32, args: *const u8, args_len: usize, out: *mut u8, len: usize) -> i64 {
+    let answer = || -> Result<String, i32> {
+        let r = unsafe { runtime(rt) }?;
+        if args.is_null() && args_len > 0 {
+            return Err(fail(svc::NULL, "a null buffer with a length"));
+        }
+        let bytes = if args.is_null() { &[][..] } else { unsafe { std::slice::from_raw_parts(args, args_len) } };
+        let args = std::str::from_utf8(bytes).map_err(|_| fail(svc::BAD_ARGUMENT, "the argument is not JSON: it is not UTF-8"))?;
+        let discovery = r.discovery();
+        let catalog = emusen_crystal::catalog::Catalog::new(&discovery);
+        let tree = emusen_galaxia::tree::tree();
+        emusen_crystal::media::cards_op(&catalog, &tree, op, args).map_err(|(status, words)| fail(status, words))
+    };
+    match answer() {
+        Ok(json) => unsafe { put(json.as_bytes(), out, len) },
+        Err(status) => status as i64,
+    }
+}

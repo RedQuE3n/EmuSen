@@ -99,6 +99,20 @@ namespace EmuSen.WiseMan.Crystal
             }
         }
 
+        // cards_op's answer, made with one call into a buffer that holds it, so a change is made once.
+        public string CardsOp(nint rt, uint op, string args)
+        {
+            var f = (delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, byte*, nuint, long>)Fn("cards_op");
+            byte[] a = Encoding.UTF8.GetBytes(args);
+            var buffer = new byte[1 << 16];
+            fixed (byte* ap = a)
+            fixed (byte* o = buffer)
+            {
+                long n = f(rt, op, ap, (nuint)a.Length, o, (nuint)buffer.Length);
+                return n < 0 ? $"status {n}: {LastError()}" : Encoding.UTF8.GetString(buffer, 0, (int)n);
+            }
+        }
+
         private delegate long CopyOut(byte* o, nuint n);
 
         private string Copy(CopyOut call)

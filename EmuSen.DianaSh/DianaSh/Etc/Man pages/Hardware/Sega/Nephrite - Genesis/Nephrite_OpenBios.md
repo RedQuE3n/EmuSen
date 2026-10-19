@@ -256,7 +256,8 @@ came with it: the PC-relative indexed mode now prints its target, as the PC-rela
 
 ## 8. The boot, the drive and the data reads, first proof (2026-10-15)
 
-Built with Q1's constants (D-41) in `src/mcd/bios/` (`main.s`, `sub.s`, `font.txt`), assembled by `build.rs` into a
+Built with Q1's constants (D-41) in `src/mcd/bios/` (`main.s`, `sub.s`, `font.txt`; *since 2026-10-19 the font is
+`beryl-font`'s, the same glyphs and the same image, `Beryl_Font.md`*), assembled by `build.rs` into a
 128 KiB boot ROM (`mcd::bios::OPEN_BIOS`): the main CPU's program from `$2000`, the font at `$E000`, the sub CPU's
 program at `$10000`, copied to PRG-RAM.
 

@@ -50,14 +50,14 @@ namespace EmuSen.WiseMan.Fixtures
             _ => 0x2,
         };
 
-        // The 16-bit sum over the size code's range, the checksum's two bytes left out, as Sega's Mark III manual states it - see Endou_Native.md §2.2.
+        // The 16-bit sum over the size code's range, the header's sixteen bytes left out, as the library's export cartridges state it - see Endou_OpenBoot.md §1.6.
         public static ushort Checksum(byte[] rom, int headerAt, int sizeCode)
         {
             int[] kib = { 256, 512, 1024, 0, 0, 0, 0, 0, 0, 0, 8, 16, 32, 48, 64, 128 };
             int end = Math.Min(kib[sizeCode] * 1024, rom.Length);
             ushort sum = 0;
             for (int i = 0; i < end; i++)
-                if (i != headerAt + 10 && i != headerAt + 11) sum += rom[i];
+                if (i < headerAt || i >= headerAt + 16) sum += rom[i];
             return sum;
         }
 
@@ -86,7 +86,7 @@ namespace EmuSen.WiseMan.Fixtures
             return code.ToArray();
         }
 
-        // A Master System image of `banks` 16 KiB banks, each holding its own number at $3F00, the program at $0000 and Sega's export header.
+        // A Master System image of `banks` 16 KiB banks, each holding its own number at $3F00, the program at $0000 and Sega's export header with its checksum.
         public static byte[] Banked(int banks, byte[] program)
         {
             var rom = new byte[banks * 0x4000];
@@ -94,6 +94,15 @@ namespace EmuSen.WiseMan.Fixtures
             program.CopyTo(rom, 0);
             Encoding.ASCII.GetBytes("TMR SEGA").CopyTo(rom, HeaderAt);
             rom[HeaderAt + 15] = 0x4C;
+            return WithSegaChecksum(rom);
+        }
+
+        // The export header's checksum over its first 32 KiB written again, after a change to those bytes, so that an export BIOS takes the image - see Endou_OpenBoot.md §1.5.
+        public static byte[] WithSegaChecksum(byte[] rom)
+        {
+            ushort sum = Checksum(rom, HeaderAt, 0xC);
+            rom[HeaderAt + 10] = (byte)sum;
+            rom[HeaderAt + 11] = (byte)(sum >> 8);
             return rom;
         }
 
@@ -106,11 +115,11 @@ namespace EmuSen.WiseMan.Fixtures
         }));
 
         // Codemasters' mapper: slots 2 and 1 banked by their own addresses, the first kilobyte not kept, the RAM over $A000-$BFFF - see Endou_Native.md §9.3.
-        public static byte[] CodemastersMapper(int banks = 8) => WithCodemastersHeader(Banked(banks, Program(new[]
+        public static byte[] CodemastersMapper(int banks = 8) => WithSegaChecksum(WithCodemastersHeader(Banked(banks, Program(new[]
         {
             Step.Put(0x8000, 5), Step.Keep(0xBF00), Step.Put(0x4000, 3), Step.Keep(0x7F00), Step.Put(0xFFFF, 1), Step.Keep(0xBF00),
             Step.Put(0x4000, 0x84), Step.Put(0xA000, 0x5A), Step.Keep(0xA000), Step.Keep(0x8000), Step.Keep(0x7F00),
-        })));
+        }))));
 
         // A board without a mapper: 48 KiB read straight, and Sega's registers meaning nothing - see Endou_Native.md §9.3.
         public static byte[] Plain(int banks = 3) => Banked(banks, Program(new[] { Step.Put(0xFFFF, 0), Step.Keep(0xBF00), Step.Keep(0x7F00), Step.Keep(0x3F00) }));
@@ -172,6 +181,18 @@ namespace EmuSen.WiseMan.Fixtures
             writes.AddRange(new (byte, byte)[] { (0xBF, 0xC0), (0xBF, 0x81) });
             var rom = new byte[0x4000];
             Ports(writes).CopyTo(rom, 0);
+            return rom;
+        }
+
+        // A stand-in for a console's own BIOS, written for the tests and no BIOS's code: it marks $C100 with $5C, then copies to $C700 and runs LD A,$AB; LD ($C000),A; OUT ($3E),A; JP $0000 - see Endou_OpenBoot.md §5.
+        public static byte[] StandInBios()
+        {
+            var rom = Enumerable.Repeat((byte)0xFF, 0x2000).ToArray();
+            new byte[]
+            {
+                0xF3, 0xED, 0x56, 0x31, 0xF0, 0xDF, 0x3E, 0x5C, 0x32, 0x00, 0xC1, 0x21, 0x19, 0x00, 0x11, 0x00, 0xC7, 0x01, 0x0A, 0x00, 0xED, 0xB0, 0xC3, 0x00, 0xC7,
+                0x3E, 0xAB, 0x32, 0x00, 0xC0, 0xD3, 0x3E, 0xC3, 0x00, 0x00,
+            }.CopyTo(rom, 0);
             return rom;
         }
 

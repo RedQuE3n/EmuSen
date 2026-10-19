@@ -8,6 +8,7 @@ use beryl_z80::Z80;
 use emusen_native::samples::SampleQueue;
 
 use crate::board::{Board, identify};
+use crate::boot::Boot;
 use crate::bus::Bus;
 use crate::cart::Cartridge;
 use crate::io::PAUSE;
@@ -20,6 +21,7 @@ pub const VRAM_ID: u32 = 2;
 pub const CRAM_ID: u32 = 3;
 pub const ROM_ID: u32 = 4;
 pub const CARTRAM_ID: u32 = 5;
+pub const BIOS_ID: u32 = 6;
 
 pub const CRAM: usize = 32;
 
@@ -44,6 +46,10 @@ pub const MAX_HEIGHT: u32 = 240;
 pub struct Machine {
     pub media: Media,
     pub market: Market,
+    /// What the console ran before the game: none, the open boot program or the player's BIOS.
+    pub boot: Boot,
+    /// The CRC-32 of the BIOS's image, 0 for none, which a state is held to.
+    pub bios_crc: u32,
     pub cpu: Z80,
     pub bus: Bus,
     pub frames: i64,
@@ -68,15 +74,26 @@ impl Machine {
         Machine::with_board(media, market, model, board, rom)
     }
 
+    /// A machine with no BIOS, the cartridge run from reset.
     pub fn with_board(media: Media, market: Market, model: Model, board: Board, rom: Vec<u8>) -> Machine {
+        Machine::with_boot(media, market, model, board, rom, Boot::None, Vec::new())
+    }
+
+    /// A machine whose BIOS slot holds `bios`, the open boot program's image or the player's, run from reset; with
+    /// `Boot::None`, none.
+    pub fn with_boot(media: Media, market: Market, model: Model, board: Board, rom: Vec<u8>, boot: Boot, bios: Vec<u8>) -> Machine {
         let pal = market == Market::Europe;
         let (num, _) = if pal { PAL_FRAME } else { NTSC_FRAME };
         let sound = Sound::new(Sn76489::new(model.psg()), num, 15);
         let vdp = Vdp::new(model.vdp(), pal);
-        let bus = Bus::new(model, Cartridge::new(board, rom), model.ram(), sound, vdp);
+        let bios = if boot == Boot::None { Vec::new() } else { bios };
+        let bios_crc = if bios.is_empty() { 0 } else { crate::board::crc32(&bios) };
+        let bus = Bus::with_bios(model, Cartridge::new(board, rom), model.ram(), sound, vdp, bios);
         Machine {
             media,
             market,
+            boot,
+            bios_crc,
             cpu: Z80::power_on(),
             bus,
             frames: 0,
@@ -116,15 +133,21 @@ impl Machine {
         self.model() != Model::Sg1000
     }
 
-    /// The spaces in id order: (id, name, read-only).
+    /// The spaces in id order: (id, name, read-only). An empty cartridge slot has no ROM, a console without a BIOS run no
+    /// BIOS.
     pub fn spaces(&self) -> Vec<(u32, &'static str, bool)> {
         let mut s = vec![(RAM_ID, "RAM", false), (VRAM_ID, "VRAM", false)];
         if self.has_cram() {
             s.push((CRAM_ID, "CRAM", false));
         }
-        s.push((ROM_ID, "ROM", true));
+        if !self.bus.cart.rom.is_empty() {
+            s.push((ROM_ID, "ROM", true));
+        }
         if !self.bus.cart.ram.is_empty() {
             s.push((CARTRAM_ID, "CARTRAM", false));
+        }
+        if !self.bus.bios.is_empty() {
+            s.push((BIOS_ID, "BIOS", true));
         }
         s
     }
@@ -135,8 +158,9 @@ impl Machine {
             RAM_ID => &b.ram,
             VRAM_ID => &b.vdp.vram,
             CRAM_ID if self.has_cram() => &b.vdp.cram[..CRAM],
-            ROM_ID => &b.cart.rom,
+            ROM_ID if !b.cart.rom.is_empty() => &b.cart.rom,
             CARTRAM_ID if !b.cart.ram.is_empty() => &b.cart.ram,
+            BIOS_ID if !b.bios.is_empty() => &b.bios,
             _ => return None,
         })
     }

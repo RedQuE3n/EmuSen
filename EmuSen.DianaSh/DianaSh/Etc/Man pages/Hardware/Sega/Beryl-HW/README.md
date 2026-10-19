@@ -18,6 +18,9 @@ below is the processors'; a crate of another kind keeps the contract its own sec
   2026-10-19 at Endou's stage 3, its TMS9918 modes and Nephrite's move at stage 4.
 - `beryl-asm` — the front half of the processors' assemblers, below; no record page of its own, the processors' §8 being
   where its readings are measured.
+- [`Beryl_Font.md`](Beryl_Font.md) — `beryl-font`, the open firmware's own five-by-seven font, drawn for Nephrite's open
+  Sega CD BIOS and shared with Endou's open boot program since 2026-10-19; a build dependency, each core making its own
+  tiles from the glyphs.
 
 ## The interface every crate keeps
 

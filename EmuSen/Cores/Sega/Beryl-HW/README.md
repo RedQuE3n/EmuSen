@@ -14,6 +14,8 @@ first were the processors.
   its stage 4 the TMS9918A's and the Genesis's mode 4 composition (`Beryl_SmsVdp.md`).
 - `beryl-asm` — the front half the processors' assemblers share (expressions, labels, constants, conditionals,
   includes); a development tool, linked by no core's library.
+- `beryl-font` — the open firmware's own five-by-seven font: Nephrite's open Sega CD BIOS and Endou's open boot program,
+  each `build.rs` making its console's tiles from the glyphs (`Beryl_Font.md`).
 
 Named for Queen Beryl, who commands the Shitennou (`EmuSen_Core_Naming_Scheme.md` §3). The interface and each crate's
 record are in `Man pages/Hardware/Sega/Beryl-HW/`.

@@ -53,11 +53,13 @@ namespace EmuSen.WiseMan.Cores
             {
                 var pack = SystemPacks.For(system.Id)!;
                 Assert.Equal(pack.Entry.Extensions, system.Extensions);
-                Assert.Empty(system.Firmware);
             }
+            Assert.Equal(new[] { (1u, "bios_sms1.sms", 8192L, false, "accuracy"), (2u, "bios_sms2.sms", 8192L, false, "accuracy") }, library.Info.Systems[0].Firmware.Select(f => (f.Which, f.Name, f.Size, f.Required, f.Replacement!.Effect)));
+            Assert.Empty(library.Info.Systems[1].Firmware);
+            Assert.Equal((true, false), (library.Info.Systems[0].StartsEmpty, library.Info.Systems[1].StartsEmpty));
             Assert.Same(SmsSystems.MasterSystem, SystemPacks.For("sms")!.Entry);
             Assert.Equal(new[] { ("sms.pad", 8), ("sg1000.pad", 7) }, library.Info.Systems.Select(s => (s.Controllers.Single().Id, s.Controllers.Single().Buttons.Count)));
-            Assert.Equal(new[] { "model", "region" }, library.Settings.Select(s => s.Key));
+            Assert.Equal(new[] { "model", "region", "bios_sms1", "bios_sms2" }, library.Settings.Select(s => s.Key));
         }
 
         [Fact]
@@ -83,12 +85,11 @@ namespace EmuSen.WiseMan.Cores
             _output.WriteLine(refused.Message);
         }
 
-        // The kept bytes a banking program leaves at $C000 after two frames, and the spaces its board shows - see Endou_Native.md §9.3.
+        // The kept bytes a banking program leaves at $C000 a second after the open boot program hands it over, and the spaces its board shows - see Endou_Native.md §9.3, §13.
         private static (byte[] Kept, string[] Spaces) Run(CoreLibrary library, byte[] image, int count)
         {
             using var machine = new CoreMachine(library, image, "", Array.Empty<(uint, byte[])>());
-            machine.Advance();
-            machine.Advance();
+            for (int frame = 0; frame < 60; frame++) machine.Advance();
             var kept = new byte[count];
             Assert.True(machine.ReadSpace(1, 0, kept));
             return (kept, machine.Info.Spaces.Select(s => s.Name).ToArray());
@@ -122,7 +123,7 @@ namespace EmuSen.WiseMan.Cores
                 using var machine = new CoreMachine(library, SyntheticSmsRom.Cartridge(), settings, Array.Empty<(uint, byte[])>());
                 machine.SetButtons(0, 0b1001_0001, 0xFF);
                 machine.SetButtons(1, 0b0000_1010, 0xFF);
-                machine.Advance();
+                for (int frame = 0; frame < 60; frame++) machine.Advance();
                 var ports = new byte[2];
                 Assert.True(machine.ReadSpace(1, 0, ports));
                 Assert.Equal(new byte[] { 0b0110_1110, (byte)dd }, ports);
@@ -138,6 +139,7 @@ namespace EmuSen.WiseMan.Cores
             ushort stated = (ushort)(rom[0x7FFA] | rom[0x7FFB] << 8);
             Assert.Equal(SyntheticSmsRom.Checksum(rom, 0x7FF0, 0xC), stated);
             rom[0x7FFA] ^= 0xFF;
+            rom[0x7FFE] ^= 0x01;
             Assert.Equal(stated, SyntheticSmsRom.Checksum(rom, 0x7FF0, 0xC));
             Assert.NotEqual(stated, (ushort)(SyntheticSmsRom.Cartridge(0x4, rightChecksum: false) is var bad ? bad[0x7FFA] | bad[0x7FFB] << 8 : 0));
         }
@@ -149,7 +151,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(engine.Available, engine.Report);
             foreach (var (name, image, spaces) in new (string, byte[], string[])[]
             {
-                ("export.sms", SyntheticSmsRom.Cartridge(), new[] { "cram", "ram", "rom", "vram" }),
+                ("export.sms", SyntheticSmsRom.Cartridge(), new[] { "bios", "cram", "ram", "rom", "vram" }),
                 ("japan.sms", SyntheticSmsRom.Cartridge(0x3), new[] { "cram", "ram", "rom", "vram" }),
                 ("cartridge.sg", SyntheticSmsRom.Sg1000(), new[] { "ram", "rom", "vram" }),
             })
@@ -172,8 +174,8 @@ namespace EmuSen.WiseMan.Cores
         {
             var engine = new CoreAbiTestRomEngine(LibraryPath);
             Assert.True(engine.Available, engine.Report);
-            var run = engine.Run(Write("picture.sms", SyntheticSmsRom.Picture()), new[] { 5 }, Array.Empty<RomPress>());
-            var picture = run.At(5)!.Picture!;
+            var run = engine.Run(Write("picture.sms", SyntheticSmsRom.Picture()), new[] { 60 }, Array.Empty<RomPress>());
+            var picture = run.At(60)!.Picture!;
             Assert.Equal((256, 192), (picture.Width, picture.Height));
             for (int y = 0; y < 192; y += 37)
             {
@@ -197,7 +199,7 @@ namespace EmuSen.WiseMan.Cores
                     Assert.Equal(x % 8 < 4 ? ((byte)0xD4, (byte)0x52, (byte)0x4D) : ((byte)0x21, (byte)0xB0, (byte)0x3B), picture.At(x, y));
         }
 
-        // The PSG through the v1 adapter at 48 kHz: a tone's fundamental at 440.4 Hz, 4/pi of its 0-4,096 square's half swing, on both consoles - see Endou_Native.md §12.
+        // The PSG through the v1 adapter at 48 kHz: a tone's fundamental at 440.4 Hz, 4/pi of its 0-4,096 square's half swing, on both consoles, measured after the open boot program's half second - see Endou_Native.md §12, §13.
         [Fact]
         public void The_psg_sounds_a_synthetic_program_s_tone()
         {
@@ -206,7 +208,7 @@ namespace EmuSen.WiseMan.Cores
             {
                 using var machine = new CoreMachine(library, SyntheticSmsRom.Tone(sg1000), "", Array.Empty<(uint, byte[])>());
                 var left = new List<double>();
-                for (int frame = 0; frame < 60; frame++)
+                for (int frame = 0; frame < 90; frame++)
                 {
                     machine.Advance();
                     var (samples, rate) = machine.DrainAudio(4096);
@@ -217,8 +219,8 @@ namespace EmuSen.WiseMan.Cores
                         left.Add(samples[i]);
                     }
                 }
-                Assert.InRange(left.Count, 48060, 48064);
-                var second = left.Skip(9600).Take(28800).ToArray();
+                Assert.InRange(left.Count, 72091, 72096);
+                var second = left.Skip(33600).Take(28800).ToArray();
                 double mean = second.Average(), re = 0, im = 0;
                 for (int n = 0; n < second.Length; n++)
                 {
@@ -283,6 +285,53 @@ namespace EmuSen.WiseMan.Cores
             }
             Assert.DoesNotContain("Master System", CoreCatalog.DiscoveredConsoles);
             Assert.Throws<NotSupportedException>(() => CoreFactory.Create(Write("game.sms", SyntheticSmsRom.Cartridge())));
+        }
+
+        // Decided 2026-10-19: the open boot program by default, machine info naming the replacement; an export cartridge handed over with $AB at $C000 - see Endou_Native.md §13.
+        [Fact]
+        public void A_master_system_runs_the_open_boot_program_first_and_names_it()
+        {
+            var library = CoreLibrary.Open(LibraryPath);
+            var image = SyntheticSmsRom.Banked(2, SyntheticSmsRom.Program(new[] { SyntheticSmsRom.Step.Keep(0xC000), SyntheticSmsRom.Step.Keep(0xC100) }));
+            using var machine = new CoreMachine(library, image, "", Array.Empty<(uint, byte[])>());
+            Assert.Equal(new[] { (2u, "replacement") }, machine.Info.Firmware.Select(f => (f.Which, f.Source)));
+            Assert.Contains("BIOS", machine.Info.Spaces.Select(s => s.Name));
+            for (int frame = 0; frame < 60; frame++) machine.Advance();
+            var kept = new byte[2];
+            Assert.True(machine.ReadSpace(1, 0, kept));
+            Assert.Equal(new byte[] { 0xAB, 0x00 }, kept);
+            using var mark3 = new CoreMachine(library, SyntheticSmsRom.Cartridge(0x3), "", Array.Empty<(uint, byte[])>());
+            Assert.Empty(mark3.Info.Firmware);
+        }
+
+        // The player's own BIOS for a console, opted into by its setting: a stand-in boot ROM written for the test runs and hands over; without the setting the open program runs - see Endou_OpenBoot.md §5.
+        [Fact]
+        public void The_player_s_own_bios_runs_when_its_setting_chooses_it()
+        {
+            var library = CoreLibrary.Open(LibraryPath);
+            var image = SyntheticSmsRom.Banked(2, SyntheticSmsRom.Program(new[] { SyntheticSmsRom.Step.Keep(0xC000), SyntheticSmsRom.Step.Keep(0xC100) }));
+            var files = new[] { (2u, SyntheticSmsRom.StandInBios()) };
+            foreach (var (settings, source, mark) in new[] { ("bios_sms2=player", "file", (byte)0x5C), ("", "replacement", (byte)0x00) })
+            {
+                using var machine = new CoreMachine(library, image, settings, files);
+                Assert.Equal(new[] { (2u, source) }, machine.Info.Firmware.Select(f => (f.Which, f.Source)));
+                for (int frame = 0; frame < 60; frame++) machine.Advance();
+                var kept = new byte[2];
+                Assert.True(machine.ReadSpace(1, 0, kept));
+                Assert.Equal(new byte[] { 0xAB, mark }, kept);
+            }
+        }
+
+        // The export check refuses a Japanese cartridge on an export console in words, on its own screen - see Endou_OpenBoot.md §3.3.
+        [Fact]
+        public void An_export_console_refuses_a_japanese_cartridge_in_words()
+        {
+            var library = CoreLibrary.Open(LibraryPath);
+            using var machine = new CoreMachine(library, SyntheticSmsRom.Cartridge(0x3), "model=sms2", Array.Empty<(uint, byte[])>());
+            for (int frame = 0; frame < 60; frame++) machine.Advance();
+            var names = new byte[64];
+            Assert.True(machine.ReadSpace(2, 0x3800 + 15 * 64, names));
+            Assert.Equal("IT IS FOR A JAPANESE CONSOLE.", new string(names.Where((_, i) => i % 2 == 0).Select(b => (char)(b + 32)).ToArray()).Trim());
         }
 
         // The gate of Endou_Plan.md §7's stage 1: every case the kit runs passes on each synthetic image, C16 being MEDIA's, which Endou does not claim.

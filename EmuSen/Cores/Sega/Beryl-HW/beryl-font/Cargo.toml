@@ -1,0 +1,15 @@
+[package]
+name = "beryl-font"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The open firmware's own font, five dots by seven, shared by the Sega cores' open boot programs, each build.rs making
+# its console's tiles from the glyphs. A development tool; no core's library links it. See Beryl_Font.md.
+[lib]
+name = "beryl_font"
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

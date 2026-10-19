@@ -20,6 +20,11 @@ beryl-sms-vdp = { path = "../Beryl-HW/beryl-sms-vdp" }
 [dev-dependencies]
 beryl-z80 = { path = "../Beryl-HW/beryl-z80", features = ["asm"] }
 
+# The open boot program is assembled at build time, its letters Beryl's font (Endou_OpenBoot.md §3).
+[build-dependencies]
+beryl-z80 = { path = "../Beryl-HW/beryl-z80", features = ["asm"] }
+beryl-font = { path = "../Beryl-HW/beryl-font" }
+
 [profile.release]
 panic = "abort"
 opt-level = 3

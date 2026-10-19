@@ -150,11 +150,12 @@ fn header_at(rom: &[u8], at: usize) -> Option<Header> {
     })
 }
 
-/// The 16-bit sum of every byte the size code's range holds, the checksum's own two excepted, as Sega's manual states
-/// it; the range ends at the image's end where the image is shorter (Endou_Native.md §2.2).
+/// The 16-bit sum of every byte the size code's range holds, the header's sixteen left out, as the library's export
+/// cartridges were measured to state it (Endou_OpenBoot.md §1.6); the range ends at the image's end where the image is
+/// shorter (Endou_Native.md §2.2).
 pub fn checksum(rom: &[u8], header_at: usize, size_code: u8) -> u16 {
     let end = size_of_code(size_code).unwrap_or(header_at + 16).min(rom.len());
-    let skip = header_at + 10..header_at + 12;
+    let skip = header_at..header_at + 16;
     rom[..end].iter().enumerate().filter(|(i, _)| !skip.contains(i)).fold(0u16, |s, (_, &b)| s.wrapping_add(u16::from(b)))
 }
 
@@ -197,13 +198,14 @@ mod tests {
     }
 
     #[test]
-    fn the_checksum_leaves_out_its_own_bytes_and_stops_at_the_coded_size() {
+    fn the_checksum_leaves_out_the_header_and_stops_at_the_coded_size() {
         let mut rom = cartridge(0x10000, 0x4);
         let before = Media::read(&rom).unwrap().header.unwrap().computed;
         rom[0x9000] = 0xFF;
         assert_eq!(Media::read(&rom).unwrap().header.unwrap().computed, before, "the size code names 32 KiB");
         rom[0x7FFA] ^= 0xFF;
-        assert_eq!(Media::read(&rom).unwrap().header.unwrap().computed, before);
+        rom[0x7FFE] ^= 0x01;
+        assert_eq!(Media::read(&rom).unwrap().header.unwrap().computed, before, "the header's bytes are not summed");
         assert_eq!(size_of_code(0x3), None);
     }
 

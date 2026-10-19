@@ -1161,3 +1161,264 @@ choices are the tester's (§12.14).
    Master System BIOS images are now in `~/Documents/BIOS/SMS/` (Europe v2.0, Japan v2.1, USA/Europe v1.3, 8 KiB each);
    nothing of them was read, hashed or run at this stage, and how they serve as the player's own image under
    `EmuSen_Firmware.md` §0 is stage 6's question for the tester. Recommended: the go for stage 6, opened by the page.
+
+*Decided 2026-10-19 by the tester: yes to all four.* The go for stage 6 came with the decisions; it covers stage 6
+alone. No real hardware is used for any of them (`Endou_Plan.md` §10 Q11), and MAME is not used.
+
+1. **A published recording of a Master System's audio output may be searched for and fetched**, so that the console's
+   analogue output filter can be fitted as Nephrite's was from MDFourier's recordings. Its provenance and licence are
+   recorded in `Endou_References.md`, and the filter is fitted only from it. If no suitable recording is found, the
+   search and its negative result are recorded and the filter stays a named loss.
+2. **SMS_MiSTer's `vdp` entity may be run alone under GHDL**, with stand-ins for its `altera_mf` memory blocks, in a
+   logged dispute step for D-8 (the access slots). The step may read the `vdp` entity's port list and the interfaces of
+   the `altera_mf` components it uses, and lists every file it reads; nothing else of the RTL is read. It may run
+   beside the boot work, and its outcome is recorded in D-8.
+3. **The go for stage 6**: the open boot program, opened by its design page `Endou_OpenBoot.md`, written before any of
+   its code.
+4. **The player's own BIOS is an opt-in accuracy upgrade per console model**, the open boot program being the default.
+   A player who has a console's BIOS chooses it for that model in the settings; without the choice, or without the
+   file, the open boot program runs. The tester's own images (`~/Documents/BIOS/SMS/`: Europe v2.0, Japan v2.1,
+   USA/Europe v1.3, 8 KiB each) are run only by the tester; the path is built and tested with a synthetic stand-in
+   image that the tests make, and no real BIOS is read, hashed or run for the project.
+
+---
+
+## 13. Stage 6: the firmware and the open boot program (2026-10-19)
+
+### 13.1 In one paragraph
+
+The Master System and the Master System II now start through a BIOS, as the consoles do. `Endou_OpenBoot.md`, the
+design page, was written and committed before any of the code. Endou's open boot program is Z80 assembly in
+`src/boot/`, assembled at compile time by `build.rs` with `beryl-z80`'s assembler into an 8 KiB image, its letters
+`beryl-font`'s, Nephrite's font moved into a Beryl crate of its own so that one crate owns the glyphs. The program sets
+the console up as Sega's Mark III manual says the BIOS does, shows its own screen with no logo, runs a program from
+`$C700` that tries the card, the cartridge and the expansion slot in that order, makes an export console's header check
+and refuses in words, and hands the game over on the VDP's last line with the slot's port `$3E` value at `$C000`. The bus
+gains the BIOS's slot. The player's own BIOS is an opt-in per console, the open program the default (decided
+2026-10-19); the Mark III and the SG-1000 have no BIOS and start their cartridges from reset, as before. `sms` starts
+empty. The state is version 6. The checksum's range was measured on the library: Sega's cartridges leave the whole
+header out of the sum, not only the checksum's two bytes as the manual's sentence reads, and *Micro Machines* states the
+sum read through its own board.
+
+### 13.2 The decisions of 2026-10-19, as built
+
+| Decision | Built |
+|---|---|
+| A recording of a Master System's audio output may be searched for and fetched | searched; none exists in a published form (§13.11); the analogue stage stays a named loss |
+| SMS_MiSTer's `vdp` entity alone under GHDL, a logged dispute step for D-8 | taken; GHDL cannot analyse the `vdp` entity's files in any one VHDL standard (§13.11, D-8) |
+| The go for stage 6, opened by `Endou_OpenBoot.md` | the page committed first (`17c5fa50`), then the program |
+| The player's own BIOS as an opt-in per console model, the open program the default | settings `bios_sms1` and `bios_sms2`, files 1 and 2 (§13.5) |
+
+### 13.3 The bus and the boot
+
+`src/boot.rs` owns what a console runs before its game: `Boot::None` (the cartridge from reset, port `$3E` at `$AB`, the
+Mark III's and the SG-1000's way and every machine stages 1–5 built), `Boot::Open` or `Boot::Player`; `model.rs` says
+which consoles have a BIOS (the Master System and the Master System II; the Mark III not, D-14). `bus.rs` gains the
+BIOS's slot by `Endou_OpenBoot.md` §2: port `$3E` is `$E3` at reset with a BIOS, the BIOS alone in the slot area; the
+8 KiB image mirrors through `$0000`–`$BFFF`; with the cartridge on as well, the cartridge's byte on the first Master
+System and the two ANDed on the second [R `smstech` §4]; an empty card, expansion or cartridge slot drives nothing.
+`Machine::with_boot` makes a machine with a boot; `Machine::with_board`, which the test programs use, keeps none. A
+`BIOS` space, read-only, shows the image; an empty cartridge slot has no `ROM` space.
+
+**The state, version 6**: version 5's layout with the boot's byte and the BIOS's CRC-32 after the model, 25,942 bytes
+for a plain `sms` board, pinned by `the_version_6_layout_is_pinned`; a state of another boot or BIOS image is foreign,
+as one of another model is. The CRC is taken once, when the machine is made. Version 5 reached no player and is refused.
+
+### 13.4 The open boot program
+
+| | |
+|---|---|
+| Sources | `src/boot/rom.s` (the ROM part, `Endou_OpenBoot.md` §3.1), `src/boot/ram.s` (the RAM program, §3.2) |
+| Image | 8,192 bytes: the ROM program's 800 bytes from `$0000`, `beryl-font`'s 64 tiles at `$1000` (bitplane 0), the RAM program's 669 bytes at `$1800`, `$FF` between |
+| SHA-256 | `625a92bd6aa6dd5ea523cd10a2eedef2947a0bba951d0a4cf6a0bb82f694f9f7`, FNV-1a `C16C9C33CA123EA4` pinned by `the_open_boot_program_is_8_kib_and_its_bytes_are_pinned` |
+| Rebuilt byte for byte [M] | the same SHA-256 from the debug and release builds in the crate's target directory and from two clean builds in target directories of their own |
+| Its pace | every VDP write at least 16 cycles after the one before with the display off and 29 with it on, Sega's manual's rates, so that it would not depend on D-8's slots |
+| The sum | 16-byte groups, sixteen bytes unrolled, about 23 cycles a byte |
+
+**When the game starts** [M, `examples/bootcheck.rs`]: a 32 KiB check hands over in the 25th frame (0.42 s NTSC), a
+64 KiB one in the 38th, a 128 KiB one in the 64th and a 256 KiB one in the 116th (1.9 s), always 76 to 81 Z80 clocks
+into the frame, on the VDP's last line (U10). Without a BIOS a game starts at frame 0's first clock.
+
+**The state at the hand-over** (`the_open_boot_hands_a_cartridge_over_in_the_state_sega_s_manual_gives`, on both
+consoles and in PAL): port `$3E` `$AB` and `$C000` `$AB`; port `$3F` `$A5`; the VDP's registers Sega's power-on values,
+the display off, VRAM and CRAM clear, no interrupt pending; RAM clear but `$C000` and the program at `$C700`; IM 1,
+interrupts disabled, SP `$DFF0`, A `$AB`; slot 2 back at bank 2 where the sum paged it, RAM's `$DFFF` keeping the 2.
+
+### 13.5 The player's own BIOS, the firmware entries and the empty console
+
+- **Settings**: `bios_sms1` and `bios_sms2` ("Master System BIOS", "Master System II BIOS"), each "Endou's open boot
+  program" (`open`, the default) or "Your own BIOS" (`player`), `effect: none` (`Endou_OpenBoot.md` §5).
+- **Firmware**: file 1, `bios_sms1.sms`, "The Master System's BIOS", and file 2, `bios_sms2.sms`, "The Master System
+  II's BIOS", 8,192 bytes each, `required: false`, `replacement: accuracy` with the cost of `Endou_OpenBoot.md` §8,
+  no MD5 (§13.12). Core info lists both for `sms`; `firmware_for` answers both for a Master System image, none for an
+  SG-1000 one. A BIOS file of another size is refused with words (`BAD_FILE`).
+- **Which runs**: the player's image where the console's setting chooses it and its file was given; the open program
+  otherwise, the given file unused. Machine info names file 1 or 2 as `file` or `replacement`.
+- **The stand-in**: a boot ROM written for the tests and no BIOS's code (`openboot.rs`'s `stand_in`, assembled at test
+  time; `SyntheticSmsRom.StandInBios` in WiseMan) marks `$C100`, copies a four-instruction hand-over to `$C700` and runs
+  it. Chosen and given, it runs and the cartridge finds its mark and `$AB` at `$C000`; given and not chosen, or chosen
+  and not given, the open program runs (`the_player_s_bios_runs_when_chosen_and_given_and_the_open_program_otherwise`,
+  `EndouTests.The_player_s_own_bios_runs_when_its_setting_chooses_it`). No real BIOS was read, hashed or run.
+- **`starts_empty`** for `sms` (core ABI 1.11): no cartridge, the region's console, the Americas for `auto`; the open
+  program shows "NO GAME IS IN THE CONSOLE." on both Master Systems; a Japanese region gives the Mark III, which has no
+  BIOS to start into (`an_empty_master_system_shows_the_open_program_s_words`; the kit's C22).
+
+### 13.6 The checksum's range, and stage 1's rule corrected
+
+Stage 1 summed every byte the size code names but the checksum's own two, reading Sega's manual's sentence so
+(§2.2). Measured on the library's 305 export headers (`Endou_OpenBoot.md` §1.6): that rule gives no image's stated
+checksum, the whole header left out gives 300, and the sum read through the board as the console reads it adds *Micro
+Machines*. `media::checksum` now leaves the 16-byte header out (it is informational outside the open program), and
+`SyntheticSmsRom.Checksum`, `SyntheticSmsRom.Banked` and the program images (`programs/images.rs`) carry such a sum,
+so that an export console takes them. Recorded as D-16.
+
+### 13.7 The gate (`Endou_Plan.md` §7, stage 6), measured 2026-10-19
+
+| Gate item | Result [M] |
+|---|---|
+| The open program boots every test program to the point it reaches with no BIOS, with the documented state | **Endou's 13 Master System programs** on both export consoles: the RAM they keep their results in, VRAM, CRAM and the picture equal 120 frames after the hand-over to 120 frames with no BIOS, but for two differences the hand-over makes (`every_program_boots_to_the_point_it_reaches_with_no_bios`, §13.8). **The fetched programs**: the 13 whose header names an export console boot, 11 to the same pictures at 300 and 600 frames and the other two explained; the other 11 run by default on the Mark III or the SG-1000, which have no BIOS (§13.8). The state at the hand-over: §13.4 |
+| A sample of library games, read in place | 31 export games: **29 to the same pictures** at 300 and 600 frames after the hand-over, RAM differing in 0–5 bytes but one game's 76; the other two explained (§13.8). 4 refused in words (§13.9) |
+| The export check refuses a Japanese cartridge on an export model in words | "THE GAME CANNOT START." / "IT IS FOR A JAPANESE CONSOLE." on both export consoles (`the_export_check_refuses_in_words`, `EndouTests.An_export_console_refuses_a_japanese_cartridge_in_words`); also no header, another region, an unlisted size code and a wrong checksum, each in its words; a Japanese cartridge runs on the Mark III by default |
+| The player's-image path, with the synthetic stand-in | §13.5, through the crate and through the v1 adapter; and the kit with the stand-in as file 2 and `bios_sms2=player` on *Sonic the Hedgehog*: every case it runs passes |
+| The kit | in corpus form, 600 frames, four at a time, on 15 library images (12 export games, *Bank Panic*, a refused Brazilian image and an SG-1000 game): **15 of 15 pass**, and the core's cases, C22 "sms started empty: two machines alike over 240 frames, a state carried to a third" and C23 "0 checksum(s) over 2 entries of core info and 2 of firmware_for" among them; on `EndouTests`' synthetic images as before |
+| Seeded faults, at least 6 | 13, every one caught, one only after a test was added (§13.10) |
+| The image rebuilds byte for byte | §13.4 |
+| The crates' tests | `endou` **77 of 77** (76 and `tests/alloc.rs`) on release, and on `test-checked` with the corpus (ZEXDOC, ZEXALL and FluBBa's test run); `beryl-font` 1 of 1; Nephrite **194 of 194** on `test-checked` and its open Sega CD BIOS byte-identical, `fb4a1877…62efcb9` |
+| WiseMan | `EndouTests` **18 of 18**, three new; with `SystemTableParity`, `CoreRegistration`, `FirmwareOverview`, the firmware page's and `CoreDiscovery`'s, **48 of 48**; the Nephrite classes with the corpus and the games **58 of 58** |
+| The cost | the desktop's mean a frame after the hand-over, release, the median of three differences between runs of 3,600 and 600 frames over 3,000, the base (`2b2f7989`) and this stage alternately, load about 1.2–1.6: Sonic the Hedgehog 0.220 → 0.222 ms, Space Harrier 0.201 → 0.206, OutRun 0.236 → 0.236. A first build that tested the BIOS's slot on every read cost 0.003–0.005 ms more; the slot area's read now leaves the BIOS out at once when it is off |
+
+Toolchains: rustc 1.99.0, .NET 10.0.112, GHDL 6.0.0, on the desktop (Ryzen 7 7700X).
+
+### 13.8 Against no BIOS
+
+Each image run on its default console through the core ABI's create, the open program first, and again with no BIOS;
+the booted run aligned at its hand-over (`examples/bootcheck.rs`). The library is read in place. [M 2026-10-19]
+
+**Endou's programs.** Of the 13, 10 equal in every byte compared. `picture.s` and `voices.s` do not write `$C000`, which
+holds the `$AB` the hand-over leaves there (documented, §1.3 of the design page). `hlatch.s` latches the H counter one
+step later, `$2D` against `$2C`: its poll of the V counter meets a start 76 clocks into the line.
+
+**The fetched test programs** (24 `.sms` files of `Endou_References.md` §2). 13 have a header naming an export console
+and boot. 11 of them, the two ZEXes, FluBBa's *SMS VDP Test*, sverx's *SMS Test Suite*, *SMS Padtest*, the *SMS Sound Test*, both
+*SN76489 TestRom*s, the *YM2413 TestRom*, the *FM Tool* and the *48KB Test* reach the same pictures at 300 and 600
+frames; their RAM differs in the program left at `$C700` where they do not clear it. FluBBa's *Pause Test* scrolls by
+RAM it never initialises: with the booted run's RAM at the hand-over given to the run with no BIOS, the two are equal.
+FluBBa's *SMS Cycle Counter* counts cycles from its own start: with the hand-over's phase and R given to the run with
+no BIOS, the two are equal. The other 11 (MacDonald's programs, *Checkstate*, *Color Check*, *SMS Palette*, *PFR
+Detect*, Enri's two) have region code 0 or `$2` or no header, run on the Mark III or the SG-1000 by default, and so are
+unchanged; on an export console the documented check would refuse them, region code 0 not being an export console's [A,
+not run].
+
+**31 export games**, chosen for what each exercises (the goldens' candidates of `Endou_Plan.md` §8, G5, and a spread
+of boards and sizes): 29 to the same pictures at 300 and 600 frames after the hand-over, their RAM differing in 0 to 5
+bytes, *Missile Defense 3D*'s in 76 at 600 with the same picture. *Sonic the Hedgehog 2* differs by the hand-over's
+phase alone: the run with no BIOS started 79 clocks into its first frame gives the booted run's pictures. *OutRun*'s
+attract mode reads the Z80's R register: the booted run with R cleared at the hand-over differs from itself at frame
+600, while a fresh VDP or PSG in its place changes nothing. R counts the fetches the boot program makes, as any boot
+program's does; a real BIOS's value is unknown, and the no-BIOS start's 0 is no console's after a BIOS.
+
+| Game | Its check | Handed over in frame |
+|---|---|---:|
+| 32 KiB code (*Cosmic Spacehead*, *Ghost House*, *Teddy Boy*) | `$C` | 25 |
+| *Great Ice Hockey* | `$E`, 64 KiB | 38 |
+| 128 KiB code (*Alex Kidd in Miracle World*, *Black Belt*, *R-Type* and 9 more) | `$F` | 63–64 |
+| 256 KiB code (*After Burner*, *Golden Axe*, *Phantasy Star*, *Sonic the Hedgehog*, *Micro Machines* and 10 more) | `$0` | 115–116 |
+
+### 13.9 What the export check refuses
+
+Under the default settings four of the library's images meet the check and fail it, all four refused in words ("ITS
+CHECKSUM DOES NOT MATCH ITS DATA."): three Brazilian images (*Felipe em Ação*, *Teddy Boy e Geraldinho*, *Treinamento
+do Mymo*) and a Korean one (*Toto World 3*, whose board is stage 12's), none of whose stated sums any range explains
+(`Endou_OpenBoot.md` §1.6). They ran before this stage, with no BIOS, and run on the Mark III by the Model setting.
+*Bank Panic* (UE), whose region code `$2` names no market, runs on the Mark III by default and is unchanged. Whether to
+keep the documented check for these is the tester's question (§13.14).
+
+### 13.10 Seeded faults (2026-10-19)
+
+Each made in the source, the crate's tests run on release with the image's pin left out (it catches every change to
+the program's bytes, so it would hide which test sees the behaviour), the file restored and compared byte for byte
+(`seed.py` in the step's scratch):
+
+| # | Fault | Caught by |
+|---|---|---|
+| F1 | Japan's region code taken as an export console's | the refusal test and the Japanese cartridge's |
+| F2 | the header summed where it lies inside the range | **nothing at first**: every test cartridge had its header at `$7FF0`, the range's end, where the second part of the sum is empty. `a_header_inside_the_range_is_left_out_of_the_sum` was added (headers at `$3FF0` and `$1FF0`), and catches it |
+| F3 | slot 2 not put back after the sum | the 256 KiB test |
+| F4 | the RAM not cleared before the hand-over | the programs' gate |
+| F5 | port `$3F` left at `$FF` | the hand-over's state test |
+| F6 | the Master System II giving the cartridge's byte where both are on | the BIOS slot's test |
+| F7 | the player's image run without its setting | the player's BIOS test |
+| F8 | the hand-over not waiting for the last line | the hand-over's state test, the programs' gate |
+| F9 | a state's boot and BIOS not checked | the foreign state's test |
+| F10 | the cartridge tried before the card | the programs' gate |
+| F11 | VRAM cleared only in part | the hand-over's state test, the programs' gate |
+| F12 | `firmware_for` answering nothing | the descriptors' test |
+| F13 | a wrong checksum let through | the refusal, Codemasters and programs' tests |
+
+### 13.11 D-8's dispute step, and the search for a recording
+
+**D-8, SMS_MiSTer's `vdp` entity under GHDL** (decided 2026-10-19). The step read no RTL text: GHDL 6.0.0 was run with
+`-fno-caret-diagnostics`, so that its messages name a file, a line, a column and a rule and print no source. It
+analysed the VDP's files (`dpram.vhd`, `vdp_cram.vhd`, `vdp_sprite_shifter.vhd`, `vdp_background.vhd`,
+`vdp_sprites.vhd`, `vdp_main.vhd`, `vdp.vhd`) with `-fsynopsys -fexplicit -frelaxed-rules`, an empty stand-in
+`altera_mf` package ready for the components the messages would name [M]:
+
+- under VHDL-93 (`--std=93c`): `vdp.vhd` is refused at two case choices whose subtype is not locally static,
+  `vdp_sprites.vhd` at five actuals that are not globally static and two such choices, `vdp_main.vhd` at one actual;
+- under VHDL-2008: `vdp_sprites.vhd` is refused at 26 case choices that are not locally static expressions, the other
+  files analysing;
+- GHDL keeps one standard for a library, so no standard analyses the entity whole. Quartus accepts the files; GHDL is
+  stricter. Making it analyse means editing those lines, which is reading the RTL beyond the port list the decision
+  allows. The step stopped there: the `vdp` entity's port list was not read, since nothing could be run with it, and
+  the `altera_mf` stand-ins were never reached. D-8 stays open, implemented as no access lost (its entry).
+
+**A recording of a Master System's output** (decided 2026-10-19). Searched on 2026-10-19 [R]: MDFourier's page
+(`junkerhq.net/MDFourier`) lists the Master System among its "unreleased platforms", "release pending", and publishes
+recordings only for the Mega Drive with the Sega CD and for the PC Engine; SMS Power!'s "SN76489" page links bit
+patterns of the noise, not audio, and marks its waveform figures as needing "a real output sample"; web searches for a
+Master System's output measured or recorded found none, an emulator's filter "picked entirely by ear" being the
+nearest. Nothing was fetched. The analogue stage stays a named loss (§12.3).
+
+### 13.12 Open
+
+- **The BIOS images' MD5s** are not listed: the one public description at hand (Gearsystem's `.info`) gives one MD5
+  for "bios.sms" without its console or version, and the page that would say (SMS Power!'s `BIOS`) is excluded for the
+  open program's writer.
+- **BIOS images other than 8 KiB** (those with a built-in game) are refused with words; how their ROM is mapped is in
+  no document read.
+- **`firmwarecheck.py`** against the real images is the tester's to run (`EmuSen_Firmware.md` §0).
+- **What a real BIOS leaves** beyond the documents (R, the hand-over's phase, its RAM and VRAM) is unknown; the open
+  program's choices are `Endou_OpenBoot.md` §2's.
+- **D-8**, the analogue stage, and the earlier stages' open items stand.
+
+### 13.13 What was read for this stage
+
+No emulator source, no firmware image or firmware listing, and no SMS_MiSTer RTL text (GHDL's location messages only,
+§13.11). The excluded `smstech` §6 and SMS Power!'s `BIOS` page were not opened; the six firmware files of the library
+were left out of every survey by name, and the tester's images in `~/Documents/BIOS/SMS/` were not touched. Read:
+`Endou_Plan.md`, `Endou_Native.md`, `Endou_References.md`, `Endou_Disputes.md`, `Nephrite_OpenBios.md` §1–§5 and §7–§8,
+`EmuSen_Firmware.md` §0–§2 and §7, `EmuSen_CoreAPI.md` §6.2, §6.3, §6.13, §6.31, §6.32 and §28.17–§28.18; Diamond's
+`bios()` and Nephrite's `build.rs`; Sega's *Software Reference Manual for the SEGA Mark III Console* (its contents and
+the sections `Endou_OpenBoot.md` §0 names, screened mechanically first); MacDonald's `smstech` §1–§5 and §7; Talbot-
+Watkins's VDP registers 2 and 5; SMS Power!'s "Port $3E", "RAM", "Memory Map", "ROM Header", "Card", "Card Slot",
+"Cartridge Slot", "Bus Signals", "Memory and IO Ports", "Reset Button", "Interrupt Vectors", "Peripheral Ports",
+"Region Detection", "TV Type Detection", "VDP Registers", "Mappers", "Codemasters Header", "FM Chip Detection",
+"Palette" and "Pro Action Replay" (the lines naming a BIOS), and "SN76489" (for its links, §13.11); the libretro cores'
+`.info` firmware lines; MDFourier's page. The headers of the library's game images and of the fetched test programs,
+read in place, for §1.6 of the design page and §13.8.
+
+### 13.14 Questions before stage 7
+
+1. **The four images the export check refuses** (§13.9). Keep the documented check, the four running on the Mark III
+   by the Model setting? Recommended: yes; a check of the header's presence alone would accept games an export
+   console refuses.
+2. **The BIOS checksums** (§13.12). Recommended: at stage 7, a public list naming each image's console and version
+   (No-Intro's Master System list, or SMS Power!'s `BIOS` page read by someone who writes no open boot program)
+   fetched and cited, each console's entry given its images' MD5s.
+3. **BIOS images with a built-in game.** Recommended: a later stage, with a document for how a BIOS larger than 8 KiB
+   is mapped, or a screener's reading of the excluded pages.
+4. **`firmwarecheck.py`**: recommended that the tester run it on their three images when convenient.
+5. **D-8's referee.** GHDL cannot analyse SMS_MiSTer's VDP. Two ways remain: nvc, another VHDL simulator, which may
+   accept the files as Quartus does (installing it is the tester's to allow); or a dispute step allowed to read and
+   edit the lines GHDL names, beyond the port list. Recommended: nvc, tried as GHDL was, before any further reading.
+6. **The go for stage 7** (the Master System to players), as the plan has it.

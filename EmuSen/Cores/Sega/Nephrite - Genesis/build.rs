@@ -1,5 +1,6 @@
 //! Builds Nephrite's open Sega CD BIOS from its assembly sources with Beryl's 68000 assembler (Nephrite_OpenBios.md):
-//! the sub CPU's program, the font, and the main CPU's program around them, into a 128 KiB boot ROM in `OUT_DIR`.
+//! the sub CPU's program, the font from `beryl-font`, and the main CPU's program around them, into a 128 KiB boot ROM
+//! in `OUT_DIR`.
 
 use std::path::Path;
 
@@ -24,7 +25,7 @@ fn main() {
     let main = build("main.s", assemble_with(&source("main.s"), 0, &[("SUB_SIZE", SUB_IMAGE as i64)], &read));
     let (font_at, sub_at) = (main.symbols["FONT_AT"] as usize, main.symbols["SUB_AT"] as usize);
     assert!(main.bytes.len() <= font_at, "the main CPU's program runs into the font");
-    let font = font(&source("font.txt"));
+    let font = font();
     assert!(font_at + font.len() <= sub_at && sub_at + sub.bytes.len() <= ROM_SIZE);
     let mut rom = vec![0xFF; ROM_SIZE];
     rom[..main.bytes.len()].copy_from_slice(&main.bytes);
@@ -43,17 +44,13 @@ fn build(name: &str, p: Result<Program, beryl_m68k::asm::AsmError>) -> Program {
     p.unwrap_or_else(|e| panic!("{name}: {e}"))
 }
 
-/// font.txt's glyphs as 64 tiles of 4-bit pixels, colour 1 on 0, each glyph's five columns from the tile's second and
-/// its seven rows from the first.
-fn font(text: &str) -> Vec<u8> {
+/// `beryl-font`'s glyphs as 64 tiles of 4-bit pixels, colour 1 on 0, each glyph's five columns from the tile's second
+/// and its seven rows from the first.
+fn font() -> Vec<u8> {
     let mut tiles = vec![0u8; 64 * 32];
-    for line in text.lines().filter(|l| !l.starts_with('#') && !l.trim().is_empty()) {
-        let mut f = line.split_whitespace();
-        let name = f.next().unwrap();
-        let c = if name == "space" { b' ' } else { name.as_bytes()[0] };
-        let tile = (c - 32) as usize;
-        for (row, hex) in f.enumerate() {
-            let bits = u8::from_str_radix(hex, 16).expect("a row");
+    for g in beryl_font::glyphs() {
+        let tile = (g.char - 32) as usize;
+        for (row, bits) in g.rows.into_iter().enumerate() {
             for x in 0..5 {
                 if bits & (0x10 >> x) != 0 {
                     let px = x + 1;

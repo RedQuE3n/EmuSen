@@ -89,6 +89,18 @@ impl Model {
         self != Model::Sms2
     }
 
+    /// Whether the console has a BIOS: the Master System and the Master System II; the Mark III has none
+    /// (Endou_Disputes.md D-14), nor the SG-1000.
+    pub fn has_bios(self) -> bool {
+        matches!(self, Model::Sms1 | Model::Sms2)
+    }
+
+    /// Whether a read with the BIOS and the cartridge both on is the two ANDed, as on the Master System II, rather than
+    /// the cartridge's, as on the first Master System [R MacDonald's `smstech` §4].
+    pub fn bios_and_cartridge_are_anded(self) -> bool {
+        self == Model::Sms2
+    }
+
     /// The memory control port's value when the cartridge starts with no BIOS run before it: $AB, the value both export
     /// BIOSes MacDonald watched leave for a cartridge [R `smstech` §4]; the SG-1000 has no such port.
     pub fn memory_control_at_start(self) -> u8 {

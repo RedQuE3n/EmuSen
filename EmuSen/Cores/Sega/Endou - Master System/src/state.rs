@@ -1,8 +1,8 @@
 //! Endou's own state format, "ENDO" (Endou_Plan.md §5.7, Endou_Native.md §9.7, §10.6): the magic, the version, the
-//! console and model, the frame count and the clocks, the Z80's block, the sound's (the PSG, its clock and the step
-//! synthesiser's pending differences), the bus's ports and the mapper's registers, the work RAM, the VDP's block with
-//! VRAM and CRAM, then the cartridge's RAM where the board has it. Version 5 is stage 5's; versions 1 to 4 reached no
-//! player and are refused. The layout listing is pinned by a test.
+//! console and model, the boot and its BIOS's CRC-32, the frame count and the clocks, the Z80's block, the sound's (the
+//! PSG, its clock and the step synthesiser's pending differences), the bus's ports and the mapper's registers, the work
+//! RAM, the VDP's block with VRAM and CRAM, then the cartridge's RAM where the board has it. Version 6 is stage 6's;
+//! versions 1 to 5 reached no player and are refused. The layout listing is pinned by a test.
 
 use emusen_native::ffi::{StateMachine, Status, status};
 use emusen_native::{StateReader, StateWriter, Truncated};
@@ -11,7 +11,7 @@ use crate::machine::Machine;
 use crate::media::Console;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"ENDO");
-pub const STATE_VERSION: i32 = 5;
+pub const STATE_VERSION: i32 = 6;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StateError {
@@ -20,6 +20,8 @@ pub enum StateError {
     Version(i32),
     /// A state of another console or model, by its bytes.
     Console(u8, u8),
+    /// A state of a machine started by another boot or BIOS: the boot's byte and the BIOS's CRC-32.
+    Boot(u8, u32),
     BufferTooSmall { needed: usize },
 }
 
@@ -27,7 +29,7 @@ impl Status for StateError {
     fn status(&self) -> i32 {
         match self {
             StateError::Truncated { .. } => status::TRUNCATED,
-            StateError::Foreign(_) | StateError::Console(..) => status::FOREIGN,
+            StateError::Foreign(_) | StateError::Console(..) | StateError::Boot(..) => status::FOREIGN,
             StateError::Version(_) => status::VERSION,
             StateError::BufferTooSmall { .. } => status::BUFFER_TOO_SMALL,
         }
@@ -54,6 +56,8 @@ impl Machine {
         w.i32("Version", STATE_VERSION);
         w.u8("Console", console_byte(self.console()));
         w.u8("Model", self.model().byte());
+        w.u8("Boot", self.boot.byte());
+        w.u32("Bios", self.bios_crc);
         w.i64("Frames", self.frames);
         w.u64("Clock", b.clock);
         w.u64("FrameEnd", self.frame_end);
@@ -90,6 +94,10 @@ impl StateMachine for Machine {
         let (console, model) = (r.u8()?, r.u8()?);
         if console != console_byte(self.console()) || model != self.model().byte() {
             return Err(StateError::Console(console, model));
+        }
+        let (boot, bios) = (r.u8()?, r.u32()?);
+        if boot != self.boot.byte() || bios != self.bios_crc {
+            return Err(StateError::Boot(boot, bios));
         }
         let frames = r.i64()?;
         let (clock, frame_end) = (r.u64()?, r.u64()?);
@@ -176,22 +184,22 @@ mod tests {
     }
 
     #[test]
-    fn the_version_5_layout_is_pinned() {
+    fn the_version_6_layout_is_pinned() {
         let m = machine(&cartridge(0x8000, 4));
         let layout = m.layout();
         let lines: Vec<&str> = layout.lines().collect();
-        assert_eq!(&lines[..7], ["0 4 u32 Magic", "4 4 i32 Version", "8 1 u8 Console", "9 1 u8 Model", "10 8 i64 Frames", "18 8 u64 Clock", "26 8 u64 FrameEnd"]);
+        assert_eq!(&lines[..9], ["0 4 u32 Magic", "4 4 i32 Version", "8 1 u8 Console", "9 1 u8 Model", "10 1 u8 Boot", "11 4 u32 Bios", "15 8 i64 Frames", "23 8 u64 Clock", "31 8 u64 FrameEnd"]);
         let sound = lines.iter().position(|l| l.ends_with(" Tone")).unwrap();
-        assert_eq!(&lines[sound..sound + 10], ["69 6 u16[3] Tone", "75 4 u8[4] Volume", "79 3 u8[3] NoiseLatchStereo", "82 8 u16[4] Counter", "90 4 bool[4] Bit", "94 2 u16 Shift", "96 8 u64 PsgTicks", "104 8 i32[2] Level", "112 24 u64[3] Sum", "136 1024 u64[128] Pending"], "{layout}");
+        assert_eq!(&lines[sound..sound + 10], ["74 6 u16[3] Tone", "80 4 u8[4] Volume", "84 3 u8[3] NoiseLatchStereo", "87 8 u16[4] Counter", "95 4 bool[4] Bit", "99 2 u16 Shift", "101 8 u64 PsgTicks", "109 8 i32[2] Level", "117 24 u64[3] Sum", "141 1024 u64[128] Pending"], "{layout}");
         let at = lines.iter().position(|l| l.ends_with(" RAM")).unwrap();
-        assert_eq!(&lines[at..at + 5], ["1181 8192 u8[8192] RAM", "9373 1 u8 VdpVariant", "9374 2 bool[2] PalGgMode", "9376 11 u8[11] VdpRegisters", "9387 16384 u8[16384] Vram"], "{layout}");
-        assert_eq!(lines[at + 5], "25771 64 u8[64] Cram");
-        assert_eq!(lines.last(), Some(&"25930 7 u8[7] Sprite"));
-        assert_eq!(m.state_size(), 25_937);
+        assert_eq!(&lines[at..at + 5], ["1186 8192 u8[8192] RAM", "9378 1 u8 VdpVariant", "9379 2 bool[2] PalGgMode", "9381 11 u8[11] VdpRegisters", "9392 16384 u8[16384] Vram"], "{layout}");
+        assert_eq!(lines[at + 5], "25776 64 u8[64] Cram");
+        assert_eq!(lines.last(), Some(&"25935 7 u8[7] Sprite"));
+        assert_eq!(m.state_size(), 25_942);
         let sg = machine(&[0u8; 0x2000]);
-        assert_eq!(sg.state_size(), 25_937 - 0x2000 + 0x400);
+        assert_eq!(sg.state_size(), 25_942 - 0x2000 + 0x400);
         let big = machine(&cartridge(0x20000, 4));
-        assert_eq!(big.state_size(), 25_937 + 0x8000, "a board with RAM keeps it");
+        assert_eq!(big.state_size(), 25_942 + 0x8000, "a board with RAM keeps it");
     }
 
     // The kit's C7 found a plain 32 KiB board's state refused by a fresh machine (Endou_Native.md §9.12).

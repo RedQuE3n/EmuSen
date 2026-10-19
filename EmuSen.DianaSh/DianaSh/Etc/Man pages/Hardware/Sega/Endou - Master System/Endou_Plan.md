@@ -45,6 +45,13 @@ black-box referee for D-6, D-7, D-8 and Space Harrier's opening, reading only th
 optional within stage 5; the SG-1000 stays the default model for SG-1000 games, the Mark III offered; and the SG-1000
 gets its own shelf (stage 7). The go for stage 5 came with them.
 
+**Decided by the tester, 2026-10-19, on stage 5's questions** (`Endou_Native.md` §12.14), all four: a published
+recording of a Master System's audio output may be searched for and fetched, and the analogue filter fitted only from
+it, else left a named loss; SMS_MiSTer's `vdp` entity may be run alone under GHDL with stand-ins for its `altera_mf`
+memories in a logged dispute step for D-8, reading only that entity's port list and those components' interfaces; the
+go for stage 6, opened by `Endou_OpenBoot.md`; and the player's own BIOS is an opt-in accuracy upgrade per console
+model, the open boot program the default (§5.8, amended).
+
 Every claim carries one of six marks:
 
 - **[M]** *measured* on 2026-10-19, with the tool named. Nothing was run to write this page beyond listings, the local
@@ -539,7 +546,7 @@ MD5s from a public description of them [R §6.32; `EmuSen_Firmware.md` §0 item 
 and the Master System II a BIOS each, in several versions and sizes, some with a game built in; some Game Gears a boot
 ROM. On a console without firmware Endou runs the cartridge from reset, which is exact.
 
-**What the BIOS does that a game can see** [D, to be cited at stage 6]: it initialises the VDP and RAM and shows Sega's
+**What the BIOS does that a game can see** [D, cited at stage 6 in `Endou_OpenBoot.md` §1]: it initialises the VDP and RAM and shows Sega's
 screen; it chooses the medium (the card, the cartridge, the expansion slot) by enabling each through `$3E` and looking
 for a header; an export BIOS checks the `TMR SEGA` header's checksum and region and refuses a cartridge that fails;
 it hands over by writing `$3E` to map the chosen medium and jumping to `$0000`, leaving the value it wrote in RAM at
@@ -599,7 +606,9 @@ C3]:
 - **3-D glasses' picture** (stage 10), an `enhancement` setting: its `hardware` value, the default, shows the picture
   as the console outputs it, both eyes alternating; its other value shows one eye, with its cost ("The 3-D picture is
   shown flat, as the left eye sees it").
-- **BIOS**: the player's image when present, else the open program; no setting, by the firmware policy.
+- ~~**BIOS**: the player's image when present, else the open program; no setting, by the firmware policy.~~
+  *Decided 2026-10-19:* **BIOS, per model with one**: the open boot program by default; the player's own image of that
+  console's BIOS as an opt-in accuracy upgrade, used when chosen and present, else the open program.
 - The output sample rate.
 
 ### 5.9 The speed budget
@@ -658,7 +667,7 @@ before the next begins. The core carries the `InDevelopment` mark from stage 1 u
 | **3** | *Built 2026-10-19, `Endou_Native.md` §10.* `beryl-sms-vdp`, mode 4: ports, registers, VRAM and CRAM, the counters and the TH latch, the interrupts, the status flags, the composition with sprites (limits, zoom, tall, collision, overflow), the scroll locks, the mask, the 315-5246's heights, the access slots, the dot-stamped renderer, PAL | The VDP test programs (self-reporting ones by their verdicts); pictures equal to the references up to a colour map, or a dispute; the skip-versus-draw state test | 5 |
 | **4** | *Built 2026-10-19, `Endou_Native.md` §11.* The VDP's TMS9918 modes and the TMS9918A variant; the SG-1000 as a system; **Nephrite moved onto the crate's composition** | SG-1000 programs and cartridges' pictures against the references; **Nephrite's D-7 tests and its corpus digests unchanged** (P4) | 3 |
 | **5** | *Built 2026-10-19, `Endou_Native.md` §12.* Sound: the PSG's wiring in both variants, the mix and the resampler, the analogue stage as far as recordings allow (none: a named loss), `$F2` with no FM unit | Synthetic voices against the references' audio; recordings if any | 2 |
-| **6** | Firmware: `Endou_OpenBoot.md` written first (§5.5); the player's BIOS by region and size, with `md5` from a public description; the open boot program; `starts_empty` for `sms` | **G9**: every bench game with no firmware folder, machine info naming the replacement; the same games on the player's BIOS when given; `firmwarecheck.py` if the tester's images are in the probe cache | 3 |
+| **6** | *Built 2026-10-19, `Endou_OpenBoot.md` and `Endou_Native.md` §13.* Firmware: `Endou_OpenBoot.md` written first (§5.5); the player's BIOS by region and size, with `md5` from a public description; the open boot program; `starts_empty` for `sms` | **G9**: every bench game with no firmware folder, machine info naming the replacement; the same games on the player's BIOS when given; `firmwarecheck.py` if the tester's images are in the probe cache | 3 |
 | **7** | The Master System to players: the data files completed (`esde_full_name`, `cover_aspect`, `cheat_space`), routing (and `.bin` if the library needs it), the shelf from the pack, scraper ids checked, the codecs (`sms.par`, `sms.gg`), the settings, battery files, states with rewind, the kit in corpus form (`kit/sms-sample.txt`, as Nephrite's `kit/genesis-sample.txt` [R]), the core host's listing, Mistress's settings and its Graphics tab; the SG-1000 on a shelf of its own, its console `"SG-1000"` apart from `"Master System"` (decided 2026-10-19) | **G4**: the kit's cases on the tester's games; a test that `sms` and `sg1000` land on two shelves; `.srm` round trips; the fit audit at both sizes; the cheats decode; the sidecar and manifest verified over a publish before any install. The mark is removed only by the tester's decision | 3 |
 | **8** | The debugger: `Z80` through the observer, registers, disassembly, breakpoints, stepping, watches, coverage, the call stack; the VDP's and PSG's units; the `sms` views module in `emusen-systems` | **G7**: each claim a test; every table armed gives the plain run's digests (C15) | 2 |
 | **9** | The YM2413 and its models (the Japanese Master System, the Mark III with the FM Sound Unit), `$F0`–`$F2`, detection; D-2; the operator ROMs' move if D-2 allows | The referee sample for sample on synthetic voices; FM games against the references' audio; Nephrite's FM tests unchanged if the ROMs move | 4 |
@@ -824,17 +833,22 @@ console for disputes, is decided in the tester's own terms. "Please continue" wa
   after stage 9. *At stage 3 (2026-10-19), with the VDP and without sound: 0.22-0.26 ms on five games, the desktop
   busy [M `Endou_Native.md` §10.7]. At stage 4: 0.19-0.22 ms on three Master System games, 0.18 on two SG-1000 games
   [M §11.9]. At stage 5, with the PSG mixed: 0.20-0.23 ms on three Master System games, 0.18 on an SG-1000 game, the
-  sound 0.005-0.014 ms of it [M §12.8].*
+  sound 0.005-0.014 ms of it [M §12.8]. At stage 6, after the hand-over: 0.206-0.236 ms on three games, within 0.005 ms of stage 5's
+  build measured alongside [M §13.7].*
 - **P2.** The Master System and the SG-1000 take 32–42 steps and the Game Gear 4–6; the VDP's stage overruns first.
 - **P3.** At least half the disputes entries fall in §6.2's thin areas, most of them the VDP's access slots and
   interrupt dots. *At stage 3: of D-0 to D-9, D-1, D-2, D-3, D-4, D-6, D-8 and D-9 are in them (the colour levels, the
-  OPLL's ROMs, the region read-back, the decoding, the 315-5124's zoom, the access slots, the interrupt dots).* *At stage 5: D-13, the audio control port with no FM unit, is in them too.*
+  OPLL's ROMs, the region read-back, the decoding, the 315-5124's zoom, the access slots, the interrupt dots).* *At stage 5: D-13, the audio control port with no FM unit, is in them too.* *At stage 6: D-14 to D-16 are the
+  firmware's, a thin area §6.2 did not name; D-16 was settled by measuring the games.*
 - **P4.** Nephrite's move onto the shared composition leaves its D-7 tests and every corpus digest unchanged. *Retired
   at stage 4 (2026-10-19) as predicted: both D-7 tests pass, the kit's 64 image reports are identical, and 200,000
   random lines drew the same before the old renderer was deleted [M `Endou_Native.md` §11.6].*
 - **P5.** The YM2413's log-sine and exponent ROMs are the OPL2's, entry for entry (D-2).
 - **P6.** No bench game behaves differently on the open boot program than on the player's BIOS after the hand-over,
-  start-up time apart.
+  start-up time apart. *At stage 6 (2026-10-19): not measurable by the project, which runs no real BIOS; against the
+  start with no BIOS, 29 of 31 export games reach the same pictures, the other two by the hand-over's phase and the
+  Z80's R register, which any BIOS also sets its own way (`Endou_Native.md` §13.8). The tester's runs on their own
+  images would retire it.*
 - **P7.** The Game Gear as a system of Endou costs at most 1,700 lines of Rust.
 - **P8.** The Light Phaser's minor needs one export, one capability bit and a controller kind, nothing more.
 - **P9.** The skip-versus-draw state test passes on every bench game from stage 3 on. *At stage 3: it passes on the

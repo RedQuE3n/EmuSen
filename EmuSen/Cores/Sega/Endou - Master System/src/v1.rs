@@ -4,7 +4,8 @@
 use emusen_native::abi::Region;
 use emusen_native::core::*;
 
-use crate::board::{Row, TABLE, identify_with};
+use crate::board::{Board, Mapper, Row, TABLE, Why, identify_with};
+use crate::boot::{BIOS_SIZE, Boot, OPEN_BOOT};
 use crate::machine::{AUDIO_RATE, HEIGHT, MAX_HEIGHT, Machine, RAM_ID, WIDTH};
 use crate::media::{Console, Market, Media, Refusal};
 use crate::model::Model;
@@ -50,6 +51,51 @@ pub const MODEL_KEY: &str = "model";
 pub const MODELS: [(&str, &str, Model); 4] =
     [("mark3", "Mark III", Model::MarkIII), ("sms1", "Master System", Model::Sms1), ("sms2", "Master System II", Model::Sms2), ("sg1000", "SG-1000", Model::Sg1000)];
 
+/// The BIOS settings, one per console that has a BIOS (Endou_OpenBoot.md §5, decided 2026-10-19): the open boot program
+/// by default, the player's own image as an opt-in.
+pub const BIOS_KEYS: [(&str, &str, Model); 2] = [("bios_sms1", "Master System BIOS", Model::Sms1), ("bios_sms2", "Master System II BIOS", Model::Sms2)];
+pub const BIOS_OPEN: &str = "open";
+pub const BIOS_PLAYER: &str = "player";
+
+/// File numbers of the BIOS by console (0 is the battery); the Japanese Master System's takes 3 at stage 9.
+pub const BIOS_SMS1: u32 = 1;
+pub const BIOS_SMS2: u32 = 2;
+
+/// The firmware page's words for running on the open boot program (Endou_OpenBoot.md §8).
+pub const BIOS_COST: &str = "Games start without Sega's logo screen. The open boot program sets the console up as Sega's manual says the BIOS does, checks an export cartridge's header as the documents describe, and hands the game over the same way; a game that reads the BIOS's code or relies on what the documents leave unsaid may behave differently, the start-up takes a different time, and the BIOS's built-in games are absent.";
+
+/// The BIOS file a console takes, where it has one.
+pub fn bios_file(model: Model) -> Option<u32> {
+    match model {
+        Model::Sms1 => Some(BIOS_SMS1),
+        Model::Sms2 => Some(BIOS_SMS2),
+        _ => None,
+    }
+}
+
+/// The firmware entry of a console's BIOS.
+pub fn bios(model: Model) -> Option<Firmware> {
+    let (name, label) = match model {
+        Model::Sms1 => ("bios_sms1.sms", "The Master System's BIOS"),
+        Model::Sms2 => ("bios_sms2.sms", "The Master System II's BIOS"),
+        _ => return None,
+    };
+    Some(Firmware {
+        which: bios_file(model)?,
+        name: name.into(),
+        label: label.into(),
+        size: BIOS_SIZE as u64,
+        required: false,
+        parts: vec![vec![name.into()]],
+        replacement: Some(Replacement::Accuracy { cost: BIOS_COST.into() }),
+        md5: Vec::new(),
+    })
+}
+
+fn bios_list() -> Vec<Firmware> {
+    [Model::Sms1, Model::Sms2].into_iter().filter_map(bios).collect()
+}
+
 fn schema() -> Vec<Setting> {
     let mut choices = vec![Choice { value: "auto".into(), label: "From the cartridge".into(), help: None }];
     choices.extend(REGIONS.iter().map(|&(v, l, _)| Choice { value: v.into(), label: l.into(), help: None }));
@@ -81,6 +127,24 @@ fn schema() -> Vec<Setting> {
         hidden: false,
         restart: true,
     }]
+    .into_iter()
+    .chain(BIOS_KEYS.iter().map(|&(key, label, _)| Setting {
+        key: key.into(),
+        label: label.into(),
+        help: "What the console runs before the game. Endou's open boot program sets the console up as Sega's manual describes and checks an export cartridge's header, with a screen of its own; your own BIOS, when its file is in the firmware folder, is the console's own start-up, its logo and any built-in game included. Takes effect when a game is next loaded.".into(),
+        kind: SettingKind::Choice(vec![
+            Choice { value: BIOS_OPEN.into(), label: "Endou's open boot program".into(), help: None },
+            Choice { value: BIOS_PLAYER.into(), label: "Your own BIOS".into(), help: None },
+        ]),
+        default: BIOS_OPEN.into(),
+        scope: Scope::Create,
+        category: Some("Console".into()),
+        effect: Effect::None,
+        advanced: false,
+        hidden: false,
+        restart: true,
+    }))
+    .collect()
 }
 
 /// The market a machine runs as: the setting's, else the header's, else Japan's (Endou_Plan.md §10 Q9).
@@ -99,16 +163,46 @@ pub fn model_of(console: Console, market: Market, setting: Option<&str>) -> Mode
     }
 }
 
-fn system(id: &str, name: &str, extension: &str, controller: Controller) -> emusen_native::core::System {
+fn system(id: &str, name: &str, extension: &str, controller: Controller, firmware: Vec<Firmware>) -> emusen_native::core::System {
     emusen_native::core::System {
         id: id.into(),
         name: name.into(),
         extensions: vec![extension.into()],
         regions: vec![Region::Ntsc, Region::Pal],
         controllers: vec![controller],
-        firmware: Vec::new(),
+        firmware,
         development: true,
     }
+}
+
+/// What a console runs before its game: none where it has no BIOS; the player's image where its setting chooses it and
+/// the file was given; else the open boot program (Endou_OpenBoot.md §5).
+pub fn boot_for(model: Model, settings: &Settings, files: &[emusen_native::abi::File<'_>]) -> (Boot, Vec<u8>) {
+    let Some(which) = bios_file(model) else { return (Boot::None, Vec::new()) };
+    let chosen = BIOS_KEYS.iter().find(|k| k.2 == model).is_some_and(|k| settings.get(k.0) == Some(BIOS_PLAYER));
+    match files.iter().find(|f| f.which == which) {
+        Some(f) if chosen => (Boot::Player, f.data.to_vec()),
+        _ => (Boot::Open, OPEN_BOOT.to_vec()),
+    }
+}
+
+/// Every file is the battery or a BIOS of 8 KiB; any other is refused with words.
+fn check_files(files: &[emusen_native::abi::File<'_>]) -> Result<(), i32> {
+    for f in files {
+        match f.which {
+            0 => {}
+            BIOS_SMS1 | BIOS_SMS2 if f.data.len() == BIOS_SIZE => {}
+            BIOS_SMS1 | BIOS_SMS2 => {
+                detail(&format!("file {} is {} bytes; a Master System BIOS Endou maps is 8,192 bytes, and the larger ones with a built-in game are not mapped yet", f.which, f.data.len()));
+                return Err(status::BAD_FILE);
+            }
+            n => {
+                detail(&format!("file {n} is not one Endou names"));
+                return Err(status::BAD_FILE);
+            }
+        }
+    }
+    Ok(())
 }
 
 /// A machine for the request, its board from `table` and the rules (Endou_Native.md §9.2), its battery file loaded.
@@ -129,15 +223,13 @@ pub fn make_as(request: &Create<'_>, table: &[Row], console: Option<Console>) ->
             return Err(STATUS_NO_CARTRIDGE);
         }
     };
-    if let Some(f) = request.files.iter().find(|f| f.which != 0) {
-        detail(&format!("file {} is not one Endou names", f.which));
-        return Err(status::BAD_FILE);
-    }
+    check_files(&request.files)?;
     let market = market_of(&media, request.settings.get(REGION_KEY));
     let model = model_of(media.console, market, request.settings.get(MODEL_KEY));
     let rom = request.image[media.skipped..].to_vec();
     let board = identify_with(&rom, media.console, table);
-    let mut m = Machine::with_board(media, market, model, board, rom);
+    let (boot, bios) = boot_for(model, &request.settings, &request.files);
+    let mut m = Machine::with_boot(media, market, model, board, rom, boot, bios);
     // The battery file, where the board keeps one; bytes past the RAM's size are not the board's.
     if let Some(f) = request.files.iter().find(|f| f.which == 0) {
         if m.bus.cart.board.battery {
@@ -147,6 +239,18 @@ pub fn make_as(request: &Create<'_>, table: &[Row], console: Option<Console>) ->
         }
     }
     Ok(m)
+}
+
+/// A Master System with nothing in its slots (core ABI 1.11): the region's console, the Americas for `auto`, since an
+/// empty console is started to see its BIOS, which the Mark III lacks (Endou_OpenBoot.md §4).
+pub fn make_empty(request: &Create<'_>) -> Result<Machine, i32> {
+    check_files(&request.files)?;
+    let media = Media { console: Console::Sms, skipped: 0, header: None };
+    let market = REGIONS.iter().find(|r| Some(r.0) == request.settings.get(REGION_KEY)).map_or(Market::Americas, |r| r.2);
+    let model = model_of(Console::Sms, market, request.settings.get(MODEL_KEY));
+    let board = Board { mapper: Mapper::Plain, ram: 0, battery: false, why: Why::Size };
+    let (boot, bios) = boot_for(model, &request.settings, &request.files);
+    Ok(Machine::with_boot(media, market, model, board, Vec::new(), boot, bios))
 }
 
 impl Core for Machine {
@@ -162,8 +266,8 @@ impl Core for Machine {
             authors: vec!["EmuSen".into()],
             description: Some("The Sega Master System and the SG-1000 in Rust, written from hardware documents and graded by test programs. At this stage it runs the processor, the cartridge's board, the controllers, the video chips and the sound chip of the Master System and the SG-1000; the FM unit is not yet built.".into()),
             systems: vec![
-                system("sms", "Sega Master System / Mark III", ".sms", pad(SMS_PAD, "Control Pad", 8)),
-                system("sg1000", "Sega SG-1000", ".sg", pad(SG1000_PAD, "Joystick", 7)),
+                system("sms", "Sega Master System / Mark III", ".sms", pad(SMS_PAD, "Control Pad", 8), bios_list()),
+                system("sg1000", "Sega SG-1000", ".sg", pad(SG1000_PAD, "Joystick", 7), Vec::new()),
             ],
             deterministic: true,
             ..Info::default()
@@ -172,6 +276,14 @@ impl Core for Machine {
 
     fn settings_schema() -> Vec<Setting> {
         schema()
+    }
+
+    /// A Master System image may take either console's BIOS, chosen by the settings; an SG-1000 image none.
+    fn firmware_for(image: &[u8]) -> Vec<Firmware> {
+        match Media::read(image) {
+            Ok(m) if m.console == Console::Sms => bios_list(),
+            _ => Vec::new(),
+        }
     }
 
     fn status_text(code: i32) -> Option<String> {
@@ -183,6 +295,15 @@ impl Core for Machine {
 
     fn create(request: &Create<'_>) -> Result<Self, i32> {
         make(request, TABLE)
+    }
+
+    /// The Master System starts with nothing in it, into its BIOS; the SG-1000 has none to start into.
+    fn starts_empty(system: &str) -> bool {
+        system == Console::Sms.id()
+    }
+
+    fn create_empty(_system: &str, request: &Create<'_>) -> Result<Self, i32> {
+        make_empty(request)
     }
 
     /// The console the host routed the image to; the export has refused every system core info does not list.
@@ -210,7 +331,10 @@ impl Core for Machine {
             phases: Vec::new(),
             patches: None,
             skip_rendering_state_neutral: true,
-            firmware: Vec::new(),
+            firmware: bios_file(self.model())
+                .map(|which| (which, if self.boot == Boot::Player { FirmwareSource::File } else { FirmwareSource::Replacement }))
+                .into_iter()
+                .collect(),
         }
     }
 
@@ -315,7 +439,7 @@ mod tests {
         let us = create(&cartridge(0x8000, 4), &[]).unwrap();
         let info = us.machine_info();
         assert_eq!((info.system.as_str(), info.region, info.frame_rate), ("sms", Some(Region::Ntsc), NTSC_FRAME));
-        assert_eq!(info.spaces.iter().map(|s| (s.name.as_str(), s.read_only, s.cheats)).collect::<Vec<_>>(), [("RAM", false, true), ("VRAM", false, false), ("CRAM", false, false), ("ROM", true, false)]);
+        assert_eq!(info.spaces.iter().map(|s| (s.name.as_str(), s.read_only, s.cheats)).collect::<Vec<_>>(), [("RAM", false, true), ("VRAM", false, false), ("CRAM", false, false), ("ROM", true, false), ("BIOS", true, false)]);
         assert_eq!((info.video.base_width, info.video.base_height, info.video.aspect), (256, 192, (4, 3)));
         assert_eq!(info.ports.iter().map(|p| p.controller.as_deref()).collect::<Vec<_>>(), [Some(SMS_PAD), Some(SMS_PAD)]);
         assert!(us.frame().chunks(4).all(|p| p == [0, 0, 0, 255]));
@@ -436,7 +560,12 @@ mod tests {
     fn the_descriptors_are_the_consoles() {
         let info = Machine::info();
         let ids: Vec<_> = info.systems.iter().map(|s| (s.id.as_str(), s.extensions.clone(), s.development, s.firmware.len())).collect();
-        assert_eq!(ids, [("sms", vec![".sms".to_string()], true, 0), ("sg1000", vec![".sg".to_string()], true, 0)]);
+        assert_eq!(ids, [("sms", vec![".sms".to_string()], true, 2), ("sg1000", vec![".sg".to_string()], true, 0)]);
+        let bios: Vec<_> = info.systems[0].firmware.iter().map(|f| (f.which, f.name.as_str(), f.size, f.required, f.md5.len())).collect();
+        assert_eq!(bios, [(BIOS_SMS1, "bios_sms1.sms", 8192, false, 0), (BIOS_SMS2, "bios_sms2.sms", 8192, false, 0)]);
+        assert!(info.systems[0].firmware.iter().all(|f| f.replacement == Some(Replacement::Accuracy { cost: BIOS_COST.into() })));
+        assert_eq!(BIOS_COST.split(". ").next(), Some("Games start without Sega's logo screen"), "the firmware page's summary is one short sentence");
+        assert_eq!((Machine::firmware_for(&cartridge(0x8000, 4)).len(), Machine::firmware_for(&[0u8; 0x4000]).len()), (2, 0));
         let sms = &info.systems[0].controllers[0];
         assert_eq!(sms.buttons.iter().map(|b| (b.bit, b.label.as_str())).collect::<Vec<_>>()[4..], [(4, "1"), (5, "2"), (6, "Pause"), (7, "Reset")]);
         assert_eq!(info.systems[1].controllers[0].buttons.len(), 7, "the SG-1000 has no Reset button");

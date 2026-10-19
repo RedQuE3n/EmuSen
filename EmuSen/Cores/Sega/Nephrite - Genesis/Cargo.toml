@@ -22,9 +22,10 @@ emusen-disc = { path = "../../Shared/emusen-disc", optional = true }
 [dev-dependencies]
 emusen-mcd-bram = { path = "../../Shared/emusen-mcd-bram" }
 
-# The open Sega CD BIOS is assembled at build time (Nephrite_OpenBios.md).
+# The open Sega CD BIOS is assembled at build time (Nephrite_OpenBios.md), its font Beryl's (Beryl_Font.md).
 [build-dependencies]
 beryl-m68k = { path = "../Beryl-HW/beryl-m68k", features = ["asm"] }
+beryl-font = { path = "../Beryl-HW/beryl-font" }
 
 # The attachments, both built by default; each off is a check of the boundary, never a shipped library
 # (Nephrite_Attachments.md §5.4).

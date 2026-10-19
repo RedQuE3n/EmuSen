@@ -13,7 +13,8 @@ pub struct Program {
     pub codemasters: bool,
     /// Bytes placed after assembly, as (offset, value).
     pub patch: &'static [(usize, u8)],
-    /// Sega's header at $7FF0 with this region code, so that a host takes the image as the Master System's.
+    /// Sega's header at $7FF0 with this region code and the size code for 32 KiB, its checksum the first 32 KiB's less the
+    /// header (Endou_OpenBoot.md §1.6), so that a host takes the image as the Master System's and an export BIOS takes it.
     pub header: Option<u8>,
 }
 
@@ -49,11 +50,14 @@ pub fn image(p: &Program) -> Vec<u8> {
     for &(at, v) in p.patch {
         rom[at] = v;
     }
+    let mut rom = if p.codemasters { with_codemasters_header(rom) } else { rom };
     if let Some(region) = p.header {
         rom[0x7FF0..0x7FF8].copy_from_slice(b"TMR SEGA");
         rom[0x7FFF] = region << 4 | 0xC;
+        let sum = rom[..0x7FF0].iter().fold(0u16, |s, &b| s.wrapping_add(u16::from(b)));
+        rom[0x7FFA..0x7FFC].copy_from_slice(&sum.to_le_bytes());
     }
-    if p.codemasters { with_codemasters_header(rom) } else { rom }
+    rom
 }
 
 /// The image with Codemasters' header written over all its banks, its checksum right [R SMS Power!'s "Codemasters

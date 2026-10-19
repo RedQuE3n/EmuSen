@@ -263,6 +263,20 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   `altera_mf`'s parts would need the RTL's use of them, which is reading the RTL outside a dispute step, so it was not
   done. The entry stays open, implemented as no access lost. The TMS9918A's CPU windows (TI's Table 2-2) are not modelled either (`Beryl_SmsVdp.md` §9.3).
 
+- *At stage 6 (2026-10-19), the logged dispute step* the tester decided the same day: SMS_MiSTer's `vdp` entity alone
+  under GHDL, with stand-ins for its `altera_mf` memories, reading only that entity's port list and those components'
+  interfaces. **Files read: none of the RTL's text.** GHDL 6.0.0 analysed `dpram.vhd`, `vdp_cram.vhd`,
+  `vdp_sprite_shifter.vhd`, `vdp_background.vhd`, `vdp_sprites.vhd`, `vdp_main.vhd` and `vdp.vhd` with
+  `-fsynopsys -fexplicit -frelaxed-rules -fno-caret-diagnostics`, its messages giving a file, a line, a column and a
+  rule and no source [M]. Under VHDL-93 `vdp.vhd` is refused at two case choices whose subtype is not locally static,
+  `vdp_sprites.vhd` at five actuals not globally static and two such choices, and `vdp_main.vhd` at one actual; under
+  VHDL-2008 `vdp_sprites.vhd` is refused at 26 case choices that are not locally static expressions while the rest
+  analyse. GHDL keeps one standard to a library, so no standard analyses the entity whole, and making one do so means
+  editing the lines named, which is reading the RTL beyond what the step allows. The step stopped before the port list,
+  since nothing could be run with it, and before the `altera_mf` stand-ins were needed. The entry stays open,
+  implemented as no access lost (`Endou_Native.md` §13.11). The next way is the tester's: nvc, another VHDL simulator,
+  run as GHDL was, or a step allowed to read the lines GHDL names (§13.14 of the build record).
+
 ### D-9. The H counter's run and where a line's events fall, by FluBBa's test rather than MacDonald's Genesis
 - Opened: 2026-10-19, at stage 3, by two documents that disagree. MacDonald's §11 gives the H counter's jump at
   `$8B`-`$ED` and the active display at `$00`-`$7F`, "taken from the TMS9918 manual and my tests on a NTSC Genesis. Be
@@ -358,3 +372,60 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
 - Pinned by: `programs::the_fm_unit_s_ports_are_nothing_without_it` (each read `$FF` on the Master System II and `$F2` on
   the Mark III and the first Master System; no FM; the tone sounding after the writes).
 - Implemented in: the stage 5 commit; the bus's decoding is stage 2's, unchanged.
+
+### D-14. The BIOS: the Master System and the Master System II have one, the Mark III none
+- Opened: 2026-10-19, at stage 6, by documents that disagree. MacDonald's `smstech` §1 gives the Mark III a BIOS slot
+  ("y" in its table). Sega's *Software Reference Manual for the SEGA Mark III Console*, "Memory selection at power-on",
+  describes a resident 8 KiB ROM that checks the "front card slot" first, so that "if both the card and cartridge are
+  plugged in, the card will be enabled". SMS Power!'s "Port $3E": the Mark III and earlier "used a hardware method to
+  activate only one slot: the cartridge provides a bridge ... thereby disabling the card", a precedence "reversed in
+  BIOS-using systems"; its "Card Slot": on a Master System the card takes priority, "on the Mark III, the cartridge".
+- Documents read: those (`Endou_OpenBoot.md` §0).
+- Test program: none can tell, no console being run for the project (`Endou_Plan.md` §10 Q11).
+- Referee: none.
+- Conclusion: **argued.** The manual's boot gives the card priority, which SMS Power! gives the Master System and
+  denies the Mark III, whose priority is wired; so the manual, though named for the Mark III, describes the Master
+  System's boot, and the Mark III has no BIOS, as `Endou_Plan.md` §5.5 had it. MacDonald's "y" is taken as the slot's
+  enable bit, which no BIOS answers on that console [A].
+- Pinned by: `openboot::a_japanese_cartridge_starts_on_the_mark_iii_and_is_refused_on_an_export_console`,
+  `an_empty_master_system_shows_the_open_program_s_words` (the Mark III starts with no BIOS).
+- Implemented in: the stage 6 commit (`model::Model::has_bios`).
+
+### D-15. Port $3F at the hand-over: $A5, both TH pins outputs at a high level
+- Opened: 2026-10-19, at stage 6. Sega's Mark III manual, "How the trackball works": before the trackball is used,
+  `LD A,10100101b` and `OUT (03FH),A` "should be executed ... NOTE: these instructions are executed in the power-on
+  initialization." SMS Power!'s "Peripheral Ports": the port "defaults to an input-only state (ie. with all the low
+  bits set) on startup."
+- Documents read: those.
+- Test program: none can tell without a console.
+- Referee: none.
+- Conclusion: **argued.** The manual's note reads as the system's initialisation doing what the paragraph asks, as its
+  "The boot ROM executes the IM 1 instruction at power-on" does; SMS Power!'s default is the I/O chip's reset, before
+  any program runs. Both hold: the chip resets to `$FF`, the boot writes `$A5`. A pad reads the same either way, TH
+  being unread by it and high both ways on an export console; region checks and the Light Phaser's games write the port
+  themselves. Stage 11, which reads TH, reopens the entry if a game needs otherwise.
+- Pinned by: `openboot::the_open_boot_hands_a_cartridge_over_in_the_state_sega_s_manual_gives`.
+- Implemented in: the stage 6 commit (`src/boot/rom.s`).
+
+### D-16. The export check's sum: the size code's range less the whole 16-byte header, banks past 32 KiB read through slot 2
+- Opened: 2026-10-19, at stage 6, by the document's sentence against the games. Sega's Mark III manual, "The cartridge
+  header": "A 16-bit checksum for the ROM (low-hi order). $7FFA and $7FFB are not included in this checksum." SMS
+  Power!'s "ROM Header": the size code "may be used by the BIOS to determine the range", `$D` and `$2` "buggy"; "Mappers":
+  Sega's mapper "is assumed to be there (for games larger than 48KB) by the BIOS"; "Codemasters Header": "the normal
+  BIOS checksum routine does not work due to the different mapper".
+- Documents read: those.
+- Test program: the library's 305 export headers measured, read in place (`Endou_OpenBoot.md` §1.6): the manual's
+  reading gives no stated sum; the range less the whole header gives 300; read as the console reads it, `$0000`-`$7FFF`
+  directly and each further bank paged into slot 2 by `$FFFF`, *Micro Machines* on Codemasters' board as well, its
+  stated `$E352` being bank 0 read fourteen times through slot 2. Four images agree with no range tried; *Bank Panic*'s
+  first 32 KiB give its sum though its size code says 256 KiB.
+- Referee: none; the games are the evidence, each having been mastered to pass an export BIOS.
+- Conclusion: **measured on the games** for the range and the paging; **argued** for the codes the documents call buggy
+  (`$D`, `$2`, summed as their sizes say), for refusing an unlisted code, and for requiring region code `$4`. *Bank
+  Panic* suggests a BIOS that once summed 32 KiB whatever the code said; it runs on the Mark III by default, its region
+  code naming no market, and is unchanged.
+- Pinned by: `openboot::a_codemasters_board_is_summed_as_the_console_reads_it`,
+  `a_cartridge_past_32_kib_is_summed_through_slot_2_and_slot_2_is_put_back`,
+  `a_header_inside_the_range_is_left_out_of_the_sum`, `the_export_check_refuses_in_words`;
+  `media::tests::the_checksum_leaves_out_the_header_and_stops_at_the_coded_size`.
+- Implemented in: the stage 6 commit (`src/boot/ram.s`, `media::checksum`).

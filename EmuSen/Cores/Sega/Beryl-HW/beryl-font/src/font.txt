@@ -1,5 +1,5 @@
-# The open BIOS's own font, drawn for it: one glyph a line, its character and seven rows of five dots, the leftmost
-# the highest bit. build.rs makes each an 8x8 tile of colour 1, tile n for the character 32 + n.
+# The open firmware's own font, drawn for Nephrite's open Sega CD BIOS and shared with Endou's open boot program: one
+# glyph a line, its character and seven rows of five dots, the leftmost the highest bit (Beryl_Font.md).
 space 00 00 00 00 00 00 00
 0 0E 11 13 15 19 11 0E
 1 04 0C 04 04 04 04 0E

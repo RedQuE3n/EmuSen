@@ -8,6 +8,7 @@ using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Cores;
+using EmuSen.WiseMan.Crystal;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
@@ -71,7 +72,7 @@ namespace EmuSen.WiseMan.Mistress
             return path;
         }
 
-        [Fact]
+        [CSharpImplementationFact("moves the C# discovery's directories (CoreDiscovery.UseDirectories), which the Rust takes from its config once a process")]
         public Task A_players_core_is_asked_about_once_and_approved_through_the_runtime() => Session.Dispatch(() =>
         {
             string player = Path.Combine(_root, "Cores");
@@ -90,7 +91,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        [Fact]
+        [CSharpImplementationFact("moves the C# discovery's directories (CoreDiscovery.UseDirectories), which the Rust takes from its config once a process")]
         public Task Declined_nothing_is_recorded_and_a_shipped_core_is_never_asked_about() => Session.Dispatch(() =>
         {
             string player = Path.Combine(_root, "Cores");

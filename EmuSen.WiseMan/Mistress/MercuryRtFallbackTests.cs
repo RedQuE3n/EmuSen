@@ -18,6 +18,7 @@ using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Cores;
+using EmuSen.WiseMan.Crystal;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
@@ -52,7 +53,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         // Discovery pointed at a folder with no cores, as a build without the library finds none.
-        [Fact]
+        [CSharpImplementationFact("moves the C# discovery's directories (CoreDiscovery.UseDirectories), which the Rust takes from its config once a process")]
         public Task Without_the_library_a_game_boy_game_does_not_load_and_the_status_says_why() => Session.Dispatch(() =>
         {
             CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "NoCores") });

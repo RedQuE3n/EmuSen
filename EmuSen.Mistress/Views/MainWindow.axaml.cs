@@ -976,6 +976,7 @@ namespace EmuSen.Mistress.Views
                 _session = session;
                 CoreSettings.FileRuntimeLog();
                 if (session.EngineNotice is { } engineNotice) Console.WriteLine("[core] " + engineNotice);
+                SayRuntime();
 
                 // The runtime's console, not the core's name: a Game Boy core says GBC while it is a Color, and the GB tab is its settings - see §4.47.
                 _activeConsole = session.Console;
@@ -1661,6 +1662,9 @@ namespace EmuSen.Mistress.Views
         {
             Close();
         }
+
+        // Which implementation of the frontend API serves the game, in its log as Pharaoh's and Hotaru's say it - see EmuSen_Backend.md §29.29.
+        private static void SayRuntime() => Console.WriteLine($"[ROM] Runtime: {CrystalRuntime.Implementation}");
 
         // Redirected per ROM, and unconditionally - see EmuSen_Settings_Reference.md §4.22.
         private void StartLogging(string coreName)

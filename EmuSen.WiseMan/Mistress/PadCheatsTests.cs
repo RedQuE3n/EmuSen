@@ -74,11 +74,7 @@ namespace EmuSen.WiseMan.Mistress
         private static void Picture(MainWindow w, string name) => UiTest.Dump("pad-" + name, UiTest.Capture(w));
         private static EmuSen.Mistress.CheatList Cheats(MainWindow w) => MistressGame.Cheats(w);
 
-        private static byte Peek(MainWindow w, int address)
-        {
-            IDebugTarget target = MistressGame.Target(w);
-            return target.GetMemorySpaces().First(s => s.Name == "CpuBus").Read(address);
-        }
+        private static byte Peek(MainWindow w, int address) => MistressGame.Peek(w, "CpuBus", address);
 
         private static void Stop(MainWindow window) =>
             typeof(MainWindow).GetMethod("StopEmulationThread", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);

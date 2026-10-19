@@ -87,7 +87,8 @@ namespace EmuSen.WiseMan.Mistress
             Launch(window, 0);
 
             Cheats(window).Import(ListOf("WRAM", 0x9C, 0x63, "infinite lives"));
-            Assert.Equal("infinite lives", MistressGame.Target(window).Cheats.GetCheats().Single().Description);
+            using var listed = System.Text.Json.JsonDocument.Parse(MistressGame.Of(window).Crystal.CheatOp(EmuSen.Crystal.Client.Contract.CrystalSessionAbi.CheatList, "{}"));
+            Assert.Equal("infinite lives", Assert.Single(listed.RootElement.GetProperty("cheats").EnumerateArray()).GetProperty("description").GetString());
 
             window.Close();
         }, default);

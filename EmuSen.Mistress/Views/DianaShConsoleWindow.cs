@@ -62,7 +62,8 @@ namespace EmuSen.Mistress.Views
 
             // Printed once, right here - opening this window IS launching this frontend's shell.
             _console.AppendLine(_shell.GetWelcomeBanner(SupportedCores));
-            if (session is null) _console.AppendLine("No ROM loaded yet - commands needing a real target will report so until one is.");
+            if (_refusal is not null) _console.AppendLine($"[ERROR] {_refusal}");
+            else if (session is null) _console.AppendLine("No ROM loaded yet - commands needing a real target will report so until one is.");
 
             Opened += (_, _) => _console.FocusInput();
         }
@@ -83,12 +84,31 @@ namespace EmuSen.Mistress.Views
             SyncSchedulersToSessions();
             _console.ResetHistoryRecall();
             _console.AppendLine(romDisplayName != null ? $"--- ROM changed: {romDisplayName} ---" : "--- ROM unloaded ---");
+            if (_refusal is not null) _console.AppendLine($"[ERROR] {_refusal}");
         }
 
-        private DianaShInterpreter BuildInterpreter() =>
-            _session is { Closed: false } session
-                ? DianaShInterpreter.CreateForService(session.ServiceTable(), _extraCommands, _sessions)
-                : DianaShInterpreter.CreateWithoutSession(_extraCommands, () => EmuSen.Mistress.Library.RuntimeCatalog.SupportedCheatSystems);
+        // The words the shell refused the running game's table in, said at the prompt; null where the shell is over the table - see EmuSen_Backend.md §29.29.
+        private string? _refusal;
+
+        // Over the running game's table where this process's shell can go over it, else a shell with no game that says why.
+        private DianaShInterpreter BuildInterpreter()
+        {
+            _refusal = null;
+            if (_session is { Closed: false } session)
+            {
+                nint table = session.ServiceTable();
+                try
+                {
+                    DianaShInterpreter.CheckService(table);
+                    return DianaShInterpreter.CreateForService(table, _extraCommands, _sessions);
+                }
+                catch (DianaShTableRefusedException refused)
+                {
+                    _refusal = refused.Message;
+                }
+            }
+            return DianaShInterpreter.CreateWithoutSession(_extraCommands, () => EmuSen.Mistress.Library.RuntimeCatalog.SupportedCheatSystems);
+        }
 
         // Syncs _schedulers to whatever sessions currently exist - see `man tmux`.
         private void SyncSchedulersToSessions()

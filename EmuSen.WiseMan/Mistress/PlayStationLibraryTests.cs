@@ -95,10 +95,10 @@ namespace EmuSen.WiseMan.Mistress
                 Assert.True(list.SelectedIndex >= 0, $"the list holds {string.Join(", ", list.Items.Cast<object>())}");
                 pad.A();
                 Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
-                var core = Assert.IsType<CoreEngine>(MistressGame.Core(window));
-                Assert.Equal(("diamond", "psx", path), (core.Info.Id, core.Machine.Info.System, core.RomPath));
+                System.Text.Json.JsonElement info = MistressGame.Info(window);
+                Assert.Equal(("Diamond", "psx", path), (info.GetProperty("engine").GetString(), info.GetProperty("system").GetString(), info.GetProperty("game").GetProperty("path").GetString()));
                 Assert.Equal("PlayStation", (string)typeof(MainWindow).GetField("_activeConsole", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!);
-                Assert.True(SpinWait.SpinUntil(() => core.TotalFrames > 5, TimeSpan.FromSeconds(20)), "the game runs");
+                Assert.True(SpinWait.SpinUntil(() => MistressGame.TotalFrames(window) > 5, TimeSpan.FromSeconds(20)), "the game runs");
             }
             finally
             {

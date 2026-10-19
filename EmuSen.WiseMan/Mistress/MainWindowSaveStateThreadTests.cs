@@ -13,6 +13,7 @@ using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
+using EmuSen.WiseMan.Crystal;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
@@ -90,7 +91,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        [Fact]
+        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
         public Task A_state_loaded_by_the_hotkey_while_the_game_runs_takes_the_machine_back_to_it() => Session.Dispatch(() =>
         {
             MainWindow window = Start();

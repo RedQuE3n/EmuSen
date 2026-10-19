@@ -17,6 +17,7 @@ using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Views;
+using EmuSen.WiseMan.Crystal;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
@@ -112,8 +113,8 @@ namespace EmuSen.WiseMan.Mistress
 
             StateRecord record = States(window).ReadState(SaveLibrary.StatePathFor(rom, 1, _states))!;
             Assert.Equal("N64", record.Console);
-            Assert.Equal(EmuSen.Cores.CoreFactory.Running(MistressGame.Core(window)), record.Core);
-            Assert.Equal(((EmuSen.Cores.IStateFormat)MistressGame.Core(window)).StateVersion, record.StateVersion);
+            Assert.Equal(MistressGame.Info(window).GetProperty("engine").GetString(), record.Core);
+            Assert.Equal(MistressGame.Info(window).GetProperty("state_version").GetInt32(), record.StateVersion);
             Assert.Equal(RomHash.Md5(rom), record.RomMd5);
             Assert.Equal(new FileInfo(rom).Length, record.RomBytes);
             Assert.Equal("Counter.z64", record.RomFile);
@@ -148,7 +149,7 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         // The runtime's refusal by the record, in its words, posted when the load returns; a version the machine does not read is StateRefusalTests' - see EmuSen_Backend.md §14.12, §18.10.11.
-        [Theory]
+        [CSharpImplementationTheory("forges a record in states.db through the C# implementation's StateRecords; state_load's refusal by the record is held by the parity class")]
         [InlineData("SNES", 0, "SNES core")]
         public Task A_state_from_another_console_is_refused_before_the_core_reads_it(string? console, int newer, string says) => Session.Dispatch(() =>
         {
@@ -170,7 +171,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        [Fact]
+        [CSharpImplementationFact("forges a record in states.db through the C# implementation's StateRecords; state_record is held equal by the parity class")]
         public Task A_state_from_a_different_copy_of_the_game_is_asked_about_and_not_loaded_if_declined() => Session.Dispatch(() =>
         {
             string rom = Counter();
@@ -241,7 +242,10 @@ namespace EmuSen.WiseMan.Mistress
         // The runtime's records, read and written as records.db's were.
         private sealed class RuntimeStates
         {
-            public StateRecord? ReadState(string path) => MistressGame.States.Read(path);
+            public StateRecord? ReadState(string path) =>
+                MistressGame.Runtime.StateRecord(path) is string json ? System.Text.Json.JsonSerializer.Deserialize<StateRecord>(json, RecordJson) : null;
+
+            private static readonly System.Text.Json.JsonSerializerOptions RecordJson = new() { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower };
 
             public bool WriteState(string path, StateRecord record)
             {

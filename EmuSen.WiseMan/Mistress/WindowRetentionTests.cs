@@ -64,7 +64,7 @@ namespace EmuSen.WiseMan.Mistress
                 UiTest.Capture(window);
                 Assert.NotNull(window.GetControl<SheetLayer>("Sheets").Current);
             }
-            object core = MistressGame.Core(window);
+            object core = EmuSen.Crystal.Client.CrystalRuntime.Native ? MistressGame.Of(window) : MistressGame.Core(window);
             window.Close();
             return (new WeakReference(window), new WeakReference(core));
         }

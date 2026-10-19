@@ -90,7 +90,7 @@ namespace EmuSen.WiseMan.Mistress
                 Assert.Equal("PlayStation (no disc).state", Path.GetFileName(state));
                 Assert.Equal(new[] { "Insert Disc..." }, Rows(Call(window, "DriveRows")));
                 Assert.Contains("Insert Disc...", Rows(Call(window, "GameMenuRows")));
-                Assert.Equal("psx", MistressGame.Engine(window)!.StartedEmpty);
+                Assert.Equal(("psx", System.Text.Json.JsonValueKind.Null), (MistressGame.Info(window).GetProperty("system").GetString(), MistressGame.Info(window).GetProperty("game").ValueKind));
             }
             finally
             {

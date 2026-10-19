@@ -17,6 +17,7 @@ using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Cores;
+using EmuSen.WiseMan.Crystal;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
@@ -67,7 +68,7 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         // A stored Moon (C#) runs the game on MoonRT with no notice; frames, rewind and a state saved and loaded all work there.
-        [Fact]
+        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
         public Task A_stored_csharp_choice_plays_on_MoonRT_with_rewind_and_its_states() => Session.Dispatch(() =>
         {
             Assert.True(MoonEngines.Available, MoonEngines.Report);
@@ -90,7 +91,7 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         // A build without MoonRT's library, or its sidecar, loads no NES game, and the status says why in the player's words; discovery is per process call, so no child process is needed.
-        [Fact]
+        [CSharpImplementationFact("moves the C# discovery's directories (CoreDiscovery.UseDirectories), which the Rust takes from its config once a process")]
         public Task Without_its_library_an_nes_game_does_not_load_and_the_status_says_why() => Session.Dispatch(() =>
         {
             EmuSen.Cores.Native.CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "nothing") });

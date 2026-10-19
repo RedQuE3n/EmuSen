@@ -29,7 +29,43 @@ namespace EmuSen.WiseMan.Fixtures
 
         public static RewindBuffer Rewind(MainWindow window) => Managed(Of(window)).Rewind;
 
-        public static long TotalFrames(MainWindow window) => Core(window).TotalFrames;
+        // The session as the API answers it, so a fact it serves is read the same on either implementation - see EmuSen_Backend.md §29.29.
+        public static System.Text.Json.JsonElement Info(MainWindow window)
+        {
+            using var info = System.Text.Json.JsonDocument.Parse(Of(window).Crystal.Info());
+            return info.RootElement.Clone();
+        }
+
+        public static long TotalFrames(MainWindow window) => Info(window).GetProperty("total_frames").GetInt64();
+
+        // A byte of one of the session's memory spaces, read through space_read.
+        public static byte Peek(MainWindow window, string space, int address)
+        {
+            System.Span<byte> one = stackalloc byte[1];
+            Of(window).Crystal.ReadSpace(space, (uint)address, one);
+            return one[0];
+        }
+
+        // Frames run by the test through the session where the window's loop is stopped, else waited for as the loop runs them.
+        public static void RunFrames(MainWindow window, int frames)
+        {
+            if (typeof(MainWindow).GetField("_emuThread", Hidden)!.GetValue(window) is null)
+            {
+                var info = new EmuSen.Crystal.Client.Contract.CrystalFrameInfo();
+                for (int i = 0; i < frames; i++) Of(window).Crystal.Frame(ref info);
+                return;
+            }
+            long until = TotalFrames(window) + frames;
+            System.Threading.SpinWait.SpinUntil(() => TotalFrames(window) >= until, 10_000);
+        }
+
+        // The SNES auto-read's two words, as SyntheticRom's game copies them to WRAM, after the frames - see SyntheticRom.Pads.
+        public static (ushort One, ushort Two) SnesPads(MainWindow window, int frames = 2)
+        {
+            RunFrames(window, frames);
+            ushort Word(int at) => (ushort)(Peek(window, "WRAM", at) | Peek(window, "WRAM", at + 1) << 8);
+            return (Word(0), Word(2));
+        }
 
         // The window's own open, which a test wraps to hold a launch back or time it.
         public static System.Func<EmuSen.Crystal.Client.CrystalOpen, GameSession> OwnOpen(MainWindow window) =>
@@ -74,17 +110,17 @@ namespace EmuSen.WiseMan.Fixtures
     public sealed class WindowGame(EmuSen.Mistress.Views.MainWindow window)
     {
         public EmuSen.Cores.ICore Core => MistressGame.Core(window);
-        public long TotalFrames => Core.TotalFrames;
+        public long TotalFrames => MistressGame.TotalFrames(window);
         public long? FrameSerial => (Core as EmuSen.Cores.IFrameSerial)?.FrameSerial;
         public string? EngineNotice => MistressGame.Of(window).EngineNotice;
         public string Engine => MistressGame.Of(window).Engine;
         public EmuSen.Crystal.Debugger.IDebugTarget DebugTarget => MistressGame.Target(window);
         public int ControllerPorts => MistressGame.Of(window).ControllerPorts;
         public bool IsRomLoaded => MistressGame.Live(window) is not null;
-        public int ScreenWidth => Core.ScreenWidth;
-        public int ScreenHeight => Core.ScreenHeight;
+        public int ScreenWidth => MistressGame.Info(window).GetProperty("picture").GetProperty("width").GetInt32();
+        public int ScreenHeight => MistressGame.Info(window).GetProperty("picture").GetProperty("height").GetInt32();
         public string? TelevisionStandard => MistressGame.Of(window).TelevisionStandard;
         public string CoreName => Core.CoreName;
-        public double FrameRateHz => Core.FrameRateHz;
+        public double FrameRateHz => MistressGame.Of(window).FrameRateHz;
     }
 }

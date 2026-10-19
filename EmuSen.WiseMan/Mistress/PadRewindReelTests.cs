@@ -20,6 +20,7 @@ using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Views;
+using EmuSen.WiseMan.Crystal;
 using EmuSen.WiseMan.Fixtures;
 using SDL3;
 using Xunit.Abstractions;
@@ -158,7 +159,7 @@ namespace EmuSen.WiseMan.Mistress
 
         private static string Shown(RewindReelWindow reel) => reel.Strip.Selected!.Label;
 
-        [Fact]
+        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
         public Task A_rewinds_to_the_moment_the_reel_shows_byte_for_byte_and_leaves_a_paused_game_paused() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = WithAGame(bigScreen: true);
@@ -219,7 +220,7 @@ namespace EmuSen.WiseMan.Mistress
             return seen;
         }
 
-        [Fact]
+        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
         public Task B_cancels_leaving_the_machine_and_the_history_exactly_as_they_were() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = WithAGame(bigScreen: true);
@@ -253,7 +254,7 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         // The present is a tile, and choosing it is no rewind: the machine and the history are untouched.
-        [Fact]
+        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
         public Task A_on_now_changes_nothing() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = WithAGame(bigScreen: true);
@@ -282,7 +283,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        [Fact]
+        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
         public Task A_from_the_menu_rewinds_and_resumes_the_game_the_menu_paused() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = WithAGame(bigScreen: true);
@@ -376,7 +377,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        [Fact]
+        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
         public Task With_no_history_the_entry_says_so_and_opens_nothing() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = WithAGame(bigScreen: true);
@@ -454,7 +455,7 @@ namespace EmuSen.WiseMan.Mistress
             }
         }, default);
 
-        [Fact]
+        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
         public Task On_the_desktop_a_click_chooses_and_a_double_click_rewinds() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver _) = WithAGame(bigScreen: false);

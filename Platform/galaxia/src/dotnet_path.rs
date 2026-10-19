@@ -147,6 +147,15 @@ pub fn file_name_without_extension(style: Style, path: &str) -> &str {
     }
 }
 
+/// `Path.GetExtension`: the file name from its last period, or nothing where it has none or ends with one.
+pub fn extension(style: Style, path: &str) -> &str {
+    let name = file_name(style, path);
+    match name.rfind('.') {
+        Some(period) if period + 1 < name.len() => &name[period..],
+        _ => "",
+    }
+}
+
 /// `Path.ChangeExtension` with an extension given: the last period of the last part is where the old one began.
 pub fn change_extension(style: Style, path: &str, extension: &str) -> String {
     if path.is_empty() {

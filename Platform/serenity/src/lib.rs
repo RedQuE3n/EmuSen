@@ -14,7 +14,8 @@ pub mod parameters;
 pub mod preset;
 pub mod reflection;
 pub mod source;
-pub mod sqlite;
+// SQLite, moved to its own crate for the library to share (EmuSen_Backend.md §28.2).
+pub use emusen_sqlite as sqlite;
 pub mod text;
 pub mod vulkan;
 pub mod word;

@@ -1,0 +1,359 @@
+//! The host on emusen-native's test cores, a core whose descriptors lie, and generated cores directories.
+
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, Ordering};
+
+use emusen_core_host::latch::Inputs;
+use emusen_core_host::library::LoadError;
+use emusen_core_host::machine::Status;
+use emusen_core_host::sidecar::{self, Sidecar};
+use emusen_core_host::trust::MANIFEST;
+use emusen_core_host::{Create, Discovery, InputLatch, Library, Machine, StateLayout, Trust, listing, sha256};
+use emusen_native::json::{self, Value};
+
+fn example(name: &str) -> PathBuf {
+    let profile = std::env::current_exe().unwrap().parent().unwrap().parent().unwrap().to_path_buf();
+    let file = if cfg!(windows) { format!("{name}.dll") } else if cfg!(target_os = "macos") { format!("lib{name}.dylib") } else { format!("lib{name}.so") };
+    profile.join("examples").join(file)
+}
+
+fn image(payload: &[u8]) -> Vec<u8> {
+    let mut v = b"V1TC".to_vec();
+    v.extend_from_slice(&(payload.len() as u16).to_le_bytes());
+    v.extend_from_slice(payload);
+    v
+}
+
+/// A fresh directory of its own under the target's scratch directory.
+fn scratch(name: &str) -> PathBuf {
+    static N: AtomicU32 = AtomicU32::new(0);
+    let d = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("host-{}-{name}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    d
+}
+
+/// `example`'s library copied into `dir` as `file` with its sidecar, written in a build directory of its own as the
+/// build writes it, so that the copy in `dir` is never loaded by the writing.
+fn installed(dir: &Path, example_name: &str, file: &str, development: bool) -> PathBuf {
+    let build = scratch("build").join(file);
+    std::fs::copy(example(example_name), &build).unwrap();
+    let written = sidecar::write(&build, development).unwrap();
+    let to = dir.join(file);
+    std::fs::copy(&build, &to).unwrap();
+    std::fs::copy(&written, sidecar::path_for(&to)).unwrap();
+    to
+}
+
+fn manifest(dir: &Path, libraries: &[&Path]) {
+    let text: String = libraries.iter().map(|l| format!("{}  {}\n", sha256::file_hex(l).unwrap(), l.file_name().unwrap().to_str().unwrap())).collect();
+    std::fs::write(dir.join(MANIFEST), text).unwrap();
+}
+
+#[test]
+fn the_test_core_loads_and_passes_rule_4_and_its_report_names_it() {
+    let lib = Library::load(&example("host_test_core")).unwrap();
+    let c = lib.check().unwrap();
+    assert_eq!(c.version, (1 << 16) | 14);
+    assert_eq!(lib.report(), format!("{}, V1TestCore (test) 1.0.0, core ABI 1.14", example("host_test_core").display()));
+    assert!(std::ptr::eq(lib, Library::load(&example("host_test_core")).unwrap()), "one library per path");
+    let plain = Library::load(&example("host_plain_core")).unwrap();
+    assert!(plain.check().is_ok() && plain.capabilities() == 0);
+}
+
+#[test]
+fn a_library_without_the_required_exports_is_refused_in_both_words() {
+    let e = Library::load(&example("host_partial_core")).err().unwrap();
+    assert_eq!(e.to_string(), "lacks the required export emusen_core_capabilities");
+    assert_eq!(e.host_words(), "lacks the required export emusen_core_capabilities");
+    assert_eq!(LoadError::Missing { export: "x".into(), abi: None }.host_words(), "has no emusen_core_abi_version; it is not on the core ABI");
+    assert_eq!(LoadError::Missing { export: "x".into(), abi: Some(2 << 16) }.host_words(), "speaks core ABI major 2, this host major 1");
+    let missing = scratch("missing").join("libnone.so");
+    assert!(matches!(Library::load(&missing), Err(LoadError::Unloadable(_))));
+}
+
+#[test]
+fn each_lie_is_refused_by_rule_4_in_its_own_words() {
+    let dir = scratch("liars");
+    let cases: &[(u32, &str)] = &[
+        (0, ""),
+        (1, "speaks core ABI major 2, this host major 1"),
+        (2, "lacks emusen_core_reset but claims its capability"),
+        (3, "its info says abi 1.13, its export 1.14"),
+        (4, "it requires the host obligation teleport, which this host does not know"),
+        (5, "its info is not UTF-8 text under 1 MiB"),
+        (6, "its info is not UTF-8 text under 1 MiB"),
+        (7, "its info is not JSON: at byte"),
+        (8, "its info lacks id, name, version or license"),
+        (9, "its info does not validate: "),
+        (10, "its settings schema is not JSON: at byte"),
+        (11, "its settings schema does not validate: "),
+        (12, "its id Liar is not [a-z0-9-]+"),
+    ];
+    for &(mode, words) in cases {
+        let path = dir.join(format!("libliar{mode}.so"));
+        std::fs::copy(example("host_liar_core"), &path).unwrap();
+        let raw = unsafe { libloading::Library::new(&path) }.unwrap();
+        unsafe { raw.get::<unsafe extern "C" fn(u32)>(b"liar_set\0").unwrap()(mode) };
+        let lib = Library::load(&path).unwrap();
+        match lib.check() {
+            Ok(_) => assert_eq!(mode, 0, "mode {mode} passed"),
+            Err(why) => {
+                assert!(why.starts_with(words) && !words.is_empty(), "mode {mode}: {why}");
+                assert_eq!(lib.report(), format!("libliar{mode}.so: {why}"));
+            }
+        }
+        std::mem::forget(raw);
+    }
+}
+
+#[test]
+fn a_machine_runs_frames_states_spaces_and_input_through_the_calls() {
+    let lib = Library::load(&example("host_test_core")).unwrap();
+    let img = image(&[1, 2, 3]);
+    let mut m = Machine::create(lib, &Create::new(&img)).unwrap();
+    let mut picture = vec![0u8; 1 << 20];
+    let mut sound = vec![0i16; 8192];
+    for _ in 0..3 {
+        m.advance().unwrap();
+        m.present().unwrap();
+        let fi = m.frame_info().unwrap();
+        assert!(fi.width > 0 && fi.height > 0);
+        assert_eq!(m.frame_copy(&mut picture).unwrap() as i64, fi.bytes);
+        let (n, rate) = m.audio_drain(&mut sound).unwrap();
+        assert!(n > 0 && rate > 0);
+        m.events().unwrap();
+    }
+    assert_eq!(m.frame_count(), 3);
+    let mut state = vec![0u8; m.state_size(0).unwrap()];
+    let n = m.state_save(0, &mut state).unwrap();
+    state.truncate(n);
+    let mut ram = [0u8; 4];
+    m.space_read(0, 0, &mut ram).unwrap();
+    m.advance().unwrap();
+    m.state_load(&state).unwrap();
+    let mut again = [0u8; 4];
+    m.space_read(0, 0, &mut again).unwrap();
+    assert_eq!(ram, again, "a load puts the RAM back");
+    let layout = StateLayout::parse("test", &m.layout(0).unwrap()).unwrap();
+    assert_eq!(layout.length(), state.len());
+    let latch = InputLatch::new(2, 1);
+    latch.hold(0, 1, 1);
+    latch.send(&mut m);
+    let before = { let mut b = [0u8; 4]; m.space_read(0, 0, &mut b).unwrap(); b[3] };
+    m.advance().unwrap();
+    let after = { let mut b = [0u8; 4]; m.space_read(0, 0, &mut b).unwrap(); b[3] };
+    assert_eq!(after, before.wrapping_add(1), "button A held reaches the machine");
+    assert_eq!(m.space_write(1, 0, &[9]), Err(emusen_native::core::sys::status::READ_ONLY));
+}
+
+#[test]
+fn a_refused_create_carries_the_cores_status_and_words() {
+    let lib = Library::load(&example("host_test_core")).unwrap();
+    let r = Machine::create(lib, &Create::new(&[])).err().unwrap();
+    assert_eq!((r.status, r.words.as_str()), (emusen_native::core::sys::status::BAD_IMAGE, "the image is empty and no system was named to start empty"));
+    let r = Machine::create(lib, &Create::new(b"junk!!")).err().unwrap();
+    assert_eq!(r.words, "not a test core image");
+}
+
+#[derive(Default)]
+struct Recorder(Vec<String>);
+
+impl Inputs for Recorder {
+    fn set_buttons(&mut self, port: u32, mask: u32, changed: u32) -> Result<(), Status> {
+        self.0.push(format!("buttons {port} {mask:#x} {changed:#x}"));
+        Ok(())
+    }
+    fn set_axis(&mut self, port: u32, axis: u32, value: f64) -> Result<(), Status> {
+        self.0.push(format!("axis {port} {axis} {value}"));
+        Ok(())
+    }
+    fn set_present(&mut self, port: u32, present: bool) -> Result<(), Status> {
+        self.0.push(format!("present {port} {present}"));
+        Ok(())
+    }
+}
+
+#[test]
+fn the_latch_sends_changes_once_the_latest_axis_and_presence_only_when_it_changed() {
+    let latch = InputLatch::new(2, 2);
+    latch.hold(0, 0b11, 0b01);
+    latch.hold(0, 0b10, 0b10);
+    latch.move_axis(1, 1, 0.25);
+    latch.move_axis(1, 1, -0.5);
+    latch.connect(1, true);
+    latch.connect(1, false);
+    latch.hold(5, 1, 1);
+    latch.move_axis(0, 2, 1.0);
+    let mut r = Recorder::default();
+    latch.send(&mut r);
+    assert_eq!(r.0, ["buttons 0 0x3 0x3", "present 1 false", "axis 1 1 -0.5"], "port by port, presence before buttons before axes");
+    let mut r = Recorder::default();
+    latch.send(&mut r);
+    assert!(r.0.is_empty(), "nothing is sent twice");
+    latch.connect(1, true);
+    latch.connect(1, false);
+    latch.connect(1, false);
+    latch.send(&mut r);
+    assert!(r.0.is_empty(), "a plug and a pull that cancel send nothing");
+    latch.grow(3);
+    latch.hold(2, 4, 4);
+    latch.send(&mut r);
+    assert_eq!(r.0, ["buttons 2 0x4 0x4"]);
+    assert_eq!(latch.buttons(0), 0b11);
+}
+
+#[test]
+fn the_layout_reads_and_writes_fields_and_names_differences() {
+    let text = "0 1 u8 a\n1 2 i16 b\n3 4 i32[1] c\n7 8 f64 d\n15 3 u8[3] e\n";
+    let l = StateLayout::parse("t", text).unwrap();
+    let mut s = vec![0u8; l.length()];
+    l.set(&mut s, "a", 200).unwrap();
+    l.set(&mut s, "d", 1.5f64.to_bits() as i64).unwrap();
+    l.bytes(&mut s, "e").unwrap()[1] = 7;
+    s[1] = 0xFE;
+    s[2] = 0xFF;
+    assert_eq!(l.get(&s, "a").unwrap(), 200);
+    assert_eq!(l.get(&s, "b").unwrap(), -2);
+    assert_eq!(l.double(&s, "d").unwrap(), 1.5);
+    assert_eq!(l.count("c").unwrap(), 1);
+    assert_eq!(l.int(&s, "c", 0).unwrap(), 0);
+    assert!(l.int(&s, "c", 1).is_err() && l.get(&s, "e").is_err() && l.field("z").is_err());
+    let t = vec![0u8; l.length()];
+    assert_eq!(l.differences(&s, &t), ["a: 200 against 0", "b: -2 against 0", &format!("d: {} against 0", 1.5f64.to_bits() as i64), "e[1]: 07 against 00"]);
+    assert!(StateLayout::parse("t", "x y z\n").is_err());
+}
+
+fn listed(d: &Discovery) -> Value {
+    json::parse(listing::both(d).as_bytes()).unwrap()
+}
+
+fn reports(v: &Value) -> Vec<String> {
+    v.get("cores").and_then(Value::as_array).unwrap().iter().map(|c| c.get("report").and_then(Value::as_str).unwrap().to_owned()).collect()
+}
+
+#[test]
+fn discovery_lists_from_sidecars_alone_and_opens_under_the_trust_rules() {
+    let dir = scratch("tree");
+    let test = installed(&dir, "host_test_core", "libtest.so", false);
+    let plain = installed(&dir, "host_plain_core", "libplain.so", false);
+    manifest(&dir, &[&test, &plain]);
+    let d = Discovery::scan(std::slice::from_ref(&dir), false);
+    assert_eq!(d.found().len(), 2);
+    assert!(!Library::is_loaded(&dir.join("libtest.so")), "listing loads nothing");
+    assert_eq!(d.found()[0].engine_name(), "V1PlainCore (test)", "ordinal order: libplain before libtest");
+    assert_eq!(reports(&listed(&d)), ["not yet loaded", "not yet loaded"]);
+    let trust = Trust::new(std::slice::from_ref(&dir), &[]);
+    for c in d.found() {
+        c.open(&trust).unwrap();
+    }
+    let v = listed(&d);
+    assert_eq!(reports(&v)[1], format!("{}, V1TestCore (test) 1.0.0, core ABI 1.14", dir.join("libtest.so").display()));
+    let engine = &v.get("engines").and_then(Value::as_array).unwrap()[1];
+    assert_eq!(engine.get("systems"), Some(&Value::Array(vec![Value::Str("test".into())])));
+    assert_eq!(engine.get("available"), Some(&Value::Bool(true)));
+    assert_eq!(d.for_extension(".TST").count(), 2);
+    assert_eq!(d.for_system("test").count(), 2);
+    assert!(d.by_engine_name("V1TestCore (test)").is_some());
+}
+
+#[test]
+fn a_missing_an_altered_and_an_unapproved_library_are_listed_and_refused_at_open() {
+    let dir = scratch("faults");
+    let test = installed(&dir, "host_test_core", "libtest.so", false);
+    manifest(&dir, &[&test]);
+    let altered = installed(&dir, "host_plain_core", "libaltered.so", false);
+    let mut bytes = std::fs::read(&altered).unwrap();
+    let last = bytes.len() - 1;
+    bytes[last] ^= 0xFF;
+    std::fs::write(&altered, bytes).unwrap();
+    // The unapproved library is a copy of the test core under another id, so that the first id does not hide it.
+    let unapproved = installed(&dir, "host_liar_core", "libunapproved.so", false);
+    let missing = installed(&dir, "host_test_core", "libmissing.so", false);
+    let text = std::fs::read_to_string(sidecar::path_for(&missing)).unwrap().replace("\"v1-test-core\"", "\"v1-missing-core\"");
+    std::fs::write(sidecar::path_for(&missing), text).unwrap();
+    std::fs::remove_file(&missing).unwrap();
+    let d = Discovery::scan(std::slice::from_ref(&dir), false);
+    assert_eq!(d.found().len(), 4, "every one is listed, as the C# host lists them");
+    let trust = Trust::new(std::slice::from_ref(&dir), &[]);
+    for c in d.found() {
+        let _ = c.open(&trust);
+    }
+    let r = reports(&listed(&d));
+    assert_eq!(r[0], "libaltered.so is not the library its sidecar describes (its SHA-256 differs); it was not loaded");
+    assert_eq!(r[1], "libmissing.so is missing beside its sidecar");
+    assert_eq!(r[3], "libunapproved.so is in no cores manifest and has not been approved; it was not loaded");
+    assert!(!Library::is_loaded(&unapproved) && !Library::is_loaded(&altered));
+    let approved = Trust::new(std::slice::from_ref(&dir), &[sha256::file_hex(&unapproved).unwrap().to_uppercase()]);
+    let again = Discovery::scan(std::slice::from_ref(&dir), false);
+    assert!(again.found()[3].open(&approved).is_ok(), "an approval by hash lets it load");
+}
+
+#[test]
+fn the_scan_keeps_the_first_id_skips_development_and_other_majors_and_files_that_are_not_sidecars() {
+    let first = scratch("first");
+    let second = scratch("second");
+    installed(&first, "host_test_core", "libb.so", false);
+    installed(&second, "host_test_core", "liba.so", false);
+    installed(&second, "host_plain_core", "libdev.so", true);
+    let other = installed(&second, "host_liar_core", "libother.so", false);
+    let text = std::fs::read_to_string(sidecar::path_for(&other)).unwrap().replace("\"abi\":\"1.14\",\"capabilities\"", "\"abi\":\"2.0\",\"capabilities\"");
+    std::fs::write(sidecar::path_for(&other), text).unwrap();
+    std::fs::write(second.join("junk.core.json"), "{\"sidecar\":2}").unwrap();
+    std::fs::write(second.join("path.core.json"), "{\"sidecar\":1,\"library\":\"../libb.so\",\"info\":{}}").unwrap();
+    let dirs = [first.clone(), second.clone(), first.clone()];
+    let d = Discovery::scan(&dirs, false);
+    let libs: Vec<_> = d.found().iter().map(|c| c.sidecar.library_path.clone()).collect();
+    assert_eq!(libs, [first.join("libb.so")]);
+    let d = Discovery::scan(&dirs, true);
+    let libs: Vec<_> = d.found().iter().map(|c| c.sidecar.library_path.clone()).collect();
+    assert_eq!(libs, [first.join("libb.so"), second.join("libdev.so")]);
+    assert!(Sidecar::read(&second.join("junk.core.json")).is_none() && Sidecar::read(&second.join("path.core.json")).is_none());
+}
+
+#[cfg(unix)]
+#[test]
+fn rule_3_refuses_a_link_out_a_file_others_may_write_a_foreign_header_and_a_huge_file() {
+    use std::os::unix::fs::PermissionsExt;
+    let outside = scratch("outside");
+    let dir = scratch("rule3");
+    let away = installed(&outside, "host_test_core", "libaway.so", false);
+    std::os::unix::fs::symlink(&away, dir.join("liblink.so")).unwrap();
+    let trust = Trust::new(std::slice::from_ref(&dir), &[]);
+    assert_eq!(trust.check_file(&dir.join("liblink.so")), Err("lies outside the cores directories once its links are resolved".into()));
+    let open = installed(&dir, "host_test_core", "libopen.so", false);
+    std::fs::set_permissions(&open, std::fs::Permissions::from_mode(0o757)).unwrap();
+    assert_eq!(trust.check_file(&open), Err("is writable by others".into()));
+    let foreign = dir.join("libforeign.so");
+    let mut bytes = std::fs::read(example("host_test_core")).unwrap();
+    bytes[18] ^= 0x55;
+    std::fs::write(&foreign, bytes).unwrap();
+    assert_eq!(trust.check_file(&foreign), Err("is not a library for this machine's architecture".into()));
+    let huge = dir.join("libhuge.so");
+    std::fs::copy(example("host_test_core"), &huge).unwrap();
+    std::fs::OpenOptions::new().write(true).open(&huge).unwrap().set_len((512 << 20) + 1).unwrap();
+    assert_eq!(trust.check_file(&huge), Err("is larger than 512 MB".into()));
+    let fine = installed(&dir, "host_test_core", "libfine.so", false);
+    assert_eq!(trust.check_file(&fine), Ok(()));
+    // Through discovery, the words follow the name.
+    let alone = scratch("rule3-alone");
+    let open = installed(&alone, "host_test_core", "libopen.so", false);
+    std::fs::set_permissions(&open, std::fs::Permissions::from_mode(0o757)).unwrap();
+    let d = Discovery::scan(std::slice::from_ref(&alone), false);
+    let trust = Trust::new(std::slice::from_ref(&alone), &[]);
+    assert_eq!(d.found()[0].open(&trust).err(), Some("libopen.so is writable by others; it was not loaded"));
+}
+
+#[test]
+fn a_manifest_vouches_only_for_its_own_directory() {
+    let a = scratch("vouch-a");
+    let b = scratch("vouch-b");
+    let la = installed(&a, "host_test_core", "libx.so", false);
+    let lb = installed(&b, "host_test_core", "libx.so", false);
+    manifest(&a, &[&la]);
+    let trust = Trust::new(&[a.clone(), b.clone()], &[]);
+    let h = sha256::file_hex(&la).unwrap();
+    assert!(trust.vouches(&la, &h));
+    assert!(!trust.vouches(&lb, &h), "b's copy is not in a manifest of b's");
+    assert!(!trust.vouches(&a.join("liby.so"), &h), "a line names its file");
+}

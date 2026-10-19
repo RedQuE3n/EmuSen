@@ -39,13 +39,18 @@ namespace EmuSen.Mistress.Views
         // A console's line under its Overscan row, or null: what replaces the setting for the game now running.
         private Func<string, string?>? OverscanNote { get; }
 
+        // A console's rows from the session running it, null for any other console: a running machine words the notes.
+        private Func<string, IReadOnlyList<SettingRow>?>? RunningSettings { get; }
+
         // What a shader change calls instead of the constructor's callback, so a slider does not re-apply the core's settings.
         public Action<string>? ShadersChanged { get; set; }
 
         public GraphicsSettingsWindow(GraphicsConfig config, Action<string>? changed, string? selectedConsole,
-            Func<System.Net.Http.HttpClient>? http = null, string? pack = null, Func<string, string?>? overscanNote = null)
+            Func<System.Net.Http.HttpClient>? http = null, string? pack = null, Func<string, string?>? overscanNote = null,
+            Func<string, IReadOnlyList<SettingRow>?>? runningSettings = null)
         {
             OverscanNote = overscanNote;
+            RunningSettings = runningSettings;
             _config = config;
             _changed = changed;
             _http = http ?? (() => new System.Net.Http.HttpClient());
@@ -125,10 +130,13 @@ namespace EmuSen.Mistress.Views
         // A stored value naming a preset in the downloaded pack, by its path inside it - see EmuSen_Settings_Reference.md §4.41.
         public const string SlangPrefix = "slang:";
 
+        // The running game's rows for its own console, the console's schema for every other - see EmuSen_Backend.md §18.10.11.
+        private IReadOnlyList<SettingRow> SettingsFor(string console) => RunningSettings?.Invoke(console) ?? RuntimeCatalog.SettingsFor(console);
+
         private Control BuildConsolePanel(string console)
         {
             // The schema's rows sorted as the tab shows them: the engine's, a medium's mode and the slots shown with it, then the core's own.
-            IReadOnlyList<SettingRow> schema = RuntimeCatalog.SettingsFor(console);
+            IReadOnlyList<SettingRow> schema = SettingsFor(console);
             foreach (SettingRow s in schema) _core.Add((console, s.Key));
             var shownWith = schema.Select(r => r.ShownWithKey).OfType<string>().ToHashSet();
             SettingRow? engineRow = schema.FirstOrDefault(r => r.Key == RuntimeCatalog.EngineKey && r.Choices.Count > 1);
@@ -296,7 +304,7 @@ namespace EmuSen.Mistress.Views
             bool first = true;
             void Show()
             {
-                string? said = first ? setting.Note : RuntimeCatalog.SettingsFor(console).FirstOrDefault(r => r.Key == setting.Key)?.Note;
+                string? said = first ? setting.Note : SettingsFor(console).FirstOrDefault(r => r.Key == setting.Key)?.Note;
                 first = false;
                 text.Text = said ?? "";
                 text.IsVisible = said is not null;

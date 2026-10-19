@@ -31,7 +31,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             if (InGameWindows.Contains(which))
             {
                 (MainWindow window, PadDriver pad) = InGame(width, height, resumeAsk: which.StartsWith("Resume", StringComparison.Ordinal),
-                    game: which.EndsWith("LongTitle", StringComparison.Ordinal) ? LongTitle : "Cobalt Harbor (Synthetic)");
+                    game: which.EndsWith("LongTitle", StringComparison.Ordinal) ? LongTitle : "Cobalt Harbor (Synthetic)", n64: RunsN64(which));
                 InterfaceRecorder.Normalise = InterfaceSpecFiles.Normaliser(_root);
                 InterfaceRecorder.Volatile = Volatile;
                 try

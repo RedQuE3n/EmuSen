@@ -8381,6 +8381,9 @@ help bar for a theme that has none and Mistress does not):
 games than ES-DE's in the same state. A text of a metadata field a game lacks shows nothing, where ES-DE writes
 "unknown" (§3.6; the same holds in the gamelist). A `mostplayed` tie keeps the list's order, which was not measured.
 
+*Changed 2026-10-19:* `lastplayed` no longer sorts the games itself. It asks the library's `recent` call over the
+pool, through `SceneData.Recent`, and picks nothing when a scene is given no such call (`EmuSen_Backend.md` §28.11).
+
 ### 36.5 Predictions
 
 None was written before the runs: the rules were read off the first captures and each later probe was designed from

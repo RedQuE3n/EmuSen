@@ -38,6 +38,8 @@ emusen-cheats = { path = "../cheats" }
 emusen-net = { path = "../net" }
 # The player's library and the SQLite it is lent, under its own stable header (EmuSen_Backend.md §28).
 emusen-library = { path = "../library" }
+# Scraping, under its own stable header (EmuSen_Backend.md §30).
+emusen-scrape = { path = "../scrape" }
 emusen-sqlite = { path = "../sqlite" }
 # Crystal in Rust, the runtime the frontend API's exports call (EmuSen_Backend.md §29).
 emusen-crystal = { path = "../crystal" }

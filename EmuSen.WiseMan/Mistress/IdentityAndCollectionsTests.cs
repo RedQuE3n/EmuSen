@@ -147,7 +147,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // The runtime's refusal by the record, in its words; a version the machine does not read is the runtime's and the core's to judge, held by StateRefusalTests - see EmuSen_Backend.md §14.12.
+        // The runtime's refusal by the record, in its words, posted when the load returns; a version the machine does not read is StateRefusalTests' - see EmuSen_Backend.md §14.12, §18.10.11.
         [Theory]
         [InlineData("SNES", 0, "SNES core")]
         public Task A_state_from_another_console_is_refused_before_the_core_reads_it(string? console, int newer, string says) => Session.Dispatch(() =>
@@ -163,7 +163,7 @@ namespace EmuSen.WiseMan.Mistress
 
             Status(window).Text = "";
             Invoke(window, "LoadState");
-            Dispatcher.UIThread.RunJobs();
+            WaitFor(() => !string.IsNullOrEmpty(Status(window).Text));
 
             Assert.StartsWith("Load State:", Status(window).Text);
             Assert.Contains(says, Status(window).Text);

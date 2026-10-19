@@ -12,11 +12,12 @@ using Xunit.Abstractions;
 namespace EmuSen.WiseMan.Mistress.BigPicture
 {
     // Every property the scene claims to map changes the rendered pixels: one synthetic theme per pair, rendered with two values - see EmuSen_BigPicture.md §13.5.
-    public class SceneMappingTests
+    public class SceneMappingTests : IClassFixture<SyntheticRecords>
     {
         private readonly ITestOutputHelper _output;
+        private readonly SyntheticRecords _records;
 
-        public SceneMappingTests(ITestOutputHelper output) => _output = output;
+        public SceneMappingTests(ITestOutputHelper output, SyntheticRecords records) => (_output, _records) = (output, records);
 
         private const int W = 320, H = 200;
 
@@ -419,14 +420,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return systems.Select(s => new SceneSystem(s.System, theme.Load(new ThemeChoices { ScreenWidth = W, ScreenHeight = H }, s.System), s.Games)).ToList();
         }
 
-        private static (RenderedFrame Frame, ResolvedTheme Theme) Render(Case c, string value)
+        private (RenderedFrame Frame, ResolvedTheme Theme) Render(Case c, string value)
         {
             using var theme = new SyntheticTheme();
             theme.Capabilities("").Theme(Element(c, value));
             IReadOnlyList<SceneSystem> systems = Systems(theme);
             var data = new SceneData(systems, new Size(W, H))
             {
-                SystemIndex = c.System, GameIndex = c.Game, Media = new SceneAssets.Media(), HideMetadata = c.HideMetadata,
+                SystemIndex = c.System, GameIndex = c.Game, Media = new SceneAssets.Media(), HideMetadata = c.HideMetadata, Recent = _records.Recent,
                 Status = new EmuSen.LunaP.Controls.DeviceStatus(Wifi: true, BatteryPercent: 70),
             };
             string view = Element(c, value).Contains("<view name=\"system\"") ? "system" : "gamelist";

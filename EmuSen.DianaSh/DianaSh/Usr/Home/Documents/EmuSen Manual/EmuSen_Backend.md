@@ -3872,6 +3872,67 @@ The timing files are kept under `~/.cache/emusen/probe/mars/b4/timing/` (`r1.tsv
 
 ---
 
+#### 18.10.10 After the switch, 2026-10-18: the N64's stick in the catalog test
+
+`ManagedCrystalCatalogTests.Each_system_s_controllers_are_the_engine_s_as_the_settings_stand` failed on `WiseMan`: the
+`n64` system's `controllers.axes` was empty where it asserted `PadAxis.LeftX`. It passes at `08812dde^1` (3 of 3) and
+fails at `08812dde` (1 of 3), MarsRT's switch. Until then the axes were the catalog's literal row (`AxesByConsole`,
+`N64Console.PadAxes`); since 18.10.3 they are MarsRT's core info, read from its sidecar (§17.8 Q11). The test's runtime
+(`CrystalFixture`) discovers the v1 test core alone, so it has no MarsRT sidecar to read, and an N64 with no engine
+installed lists no stick, as decided.
+
+**The product is right; the expectation was stale.** With discovery at its defaults, the cores beside the program,
+the frontend API's `systems` gives the N64 the four axes of MarsRT's info, and Mistress's `RuntimeCatalog` lists both
+sticks. The literal assertion left the fixture's test, and two tests took its place:
+
+- `ManagedCrystalCatalogTests.Each_catalog_console_s_controllers_are_its_engine_s_core_info`: for each console with a
+  sole discovered engine (NES, SNES, Game Boy, N64), `systems`' buttons, axes, ports and players are the engine's core
+  info, compared with the sidecar itself rather than through `CoreCatalog`, and the N64 holds `LeftX`.
+- `RuntimeCatalogTests.An_n64_pad_lists_its_sticks`: the N64's axes and both sticks' controls in Mistress's catalog.
+
+Both failed with `AxesFor` reading `DiscoveredSystem` alone, the switch's sidecar fallback seeded out, and pass on the
+tree. All four consoles match their info. The NES's and SNES's buttons and ports are still the packs' literals
+(`NesSystem.PadButtons`, `SnesSystem.PadButtons`, `Ports`), which equal MoonRT's and VenusRT's info in order and count;
+they are two owners of one fact, a question for the tester.
+
+#### 18.10.11 After the switch, 2026-10-19: the antialiasing note in a running game, and three other cases
+
+Nine cases failed on `WiseMan` at `668dfbb1`. Each was bisected over the first-parent merges in a throwaway checkout,
+filtered to those cases, and is classified below.
+
+| Cases | First failing | Cause | Standing |
+|---|---|---|---|
+| `WindowFitAuditTests`, `GraphicsSettingsN64Note`: four, both audits at both sizes | `08812dde` (passes at `08812dde^1`) | the note left the catalog's C# rule for MarsRT's `SETTING_NOTES` (B3), and Mistress never read a running session's schema | **a product defect**, fixed |
+| `WindowFitAuditTests`, `GraphicsSettingsNesEngine` and `GraphicsSettingsCustomCrop`: four recordings | `a17ff513`, MoonRT's switch (passes at `a17ff513^1`) | the NES tab shows MoonRT's Region row from its sidecar where "No core settings yet" stood | stale recordings; the change follows §17.8 Q11, decided in §20 |
+| `IdentityAndCollectionsTests.A_state_from_another_console_is_refused_before_the_core_reads_it` | `8618add5`, B2 part 4b, which rewrote it (passes at `701dade7^1`) | the load runs on `Task.Run` and posts its status, and the test read the status after one `RunJobs` | a racing test; it now waits for the status, which is the refusal in the runtime's words |
+
+**The note, shown and fixed.** Q15 decided that a note comes from a machine, so it appears as soon as a game runs and not
+before. Graphics Settings read every tab from `settings_schema` on session 0, the console's schema, whose rows come from
+the sidecar and carry no note. A note therefore never appeared in Mistress, even with an N64 game running at 3x
+resolution and 3x antialiasing. The audit's `GraphicsSettingsN64Note` state ran a SNES game, which was correct before Q15. It
+now runs a synthetic N64 game and sets the two values through the runtime. Against the unchanged Mistress it failed
+with no note control at all. The fix is in Mistress alone, for every core: `GraphicsSettingsWindow` takes the running
+game's rows for its own console from the session (`RuntimeCatalog.SettingsOf`, `CrystalSession.SettingsSchema`), and
+reads every other tab from session 0 as before, the pattern the cheat window follows for its running tab.
+
+**Recordings re-recorded, each following a decision.**
+
+- `GraphicsSettingsN64Note-1280x800.spec`, `GraphicsSettingsN64Note-1920x1200.spec`. MarsRT's note ("Off at 3x
+  resolution: the two together are held to four, so 3x has no effect.", Q15 and B3). The RenderScale and Antialiasing
+  hints as reworded (§20, later the same day). One row more below, Recompiler, from the schema (18.10.4). Each row
+  stacked with its note, which a running engine gives every row, hidden while empty. With the N64's game running, the
+  window opens on the N64 tab with the focus in it, so the state needs no shoulder presses to enter (`entered` goes) and
+  the presses start from the Shaders button.
+- `GraphicsSettingsNesEngine-1280x800.spec`, `GraphicsSettingsNesEngine-1920x1200.spec`,
+  `GraphicsSettingsCustomCrop-1280x800.spec`, `GraphicsSettingsCustomCrop-1920x1200.spec`. MoonRT's Region row (built in
+  `46287cc7`) and the focus edges it adds. The sheet grows to hold it, and nothing is cut off.
+- `GraphicsSettings`, `GraphicsSettingsSnesEngine` and `GraphicsSettingsGameCropNote`, each at both sizes, follow
+  from the fix. Their SNES game's tab is now read from its session, so its core row past the viewport sits in its note's
+  stack, and only that control's path in five focus edges changes. Nothing drawn changes.
+
+The opt-in `WindowLookPictureTool` (`EMUSEN_BIGPICTURE_PNG=1`) still opens `ShowN64WithNote` over its SNES game, so
+its N64 picture has failed since `08812dde`. It is left for its next run.
+
 ## 19. B4 for MoonRT and VenusRT, phase 1, 2026-10-18: what the two shims add, where each piece goes, and the gates
 
 *Read on 2026-10-18 on branch `b4-moon-venus`, from `WiseMan` at `480bf5e2`, against the core ABI at 1.12
@@ -5954,6 +6015,57 @@ shelves a list. The call's cost over 3,508 games with 702 played, in a Debug bui
 (its `All` 0.85 ms), the library 1.46 ms (its `all` 1.56 ms), once for each showing of the library and once more while
 Recently Played is the chosen row.
 
+*Decided 2026-10-19 by the tester, as recommended: Last Played keeps ES-DE's exclusion of games kept out of the game
+counter; the limit stays 30; a theme's `lastplayed` game selector takes the library's `recent` over its system's games
+too; and the library screen ordering by the instant in the hour a clock is set back is accepted as the defect's fix.*
+
+**2026-10-19: the theme's `lastplayed` game selector takes `recent`.** The third of those decisions, built on branch
+`lastplayed-selector` from `WiseMan` at `2310e297`.
+
+*The selector's rule, as found* (`GameSelectors.Pick`). The games looked at were the system view's pool: the system's
+listed games (its counted games where folders are shown), less folders and games excluded from the game counter.
+Compared with `recent` over the same games:
+
+| | The selector | `recent` |
+|---|---|---|
+| Which plays count | a last-played time | the same |
+| Order | newest first, comparing the `DateTime`s `GameRecords.All` gives, local wall-clock readings | newest first by the instant each time names |
+| Ties | the list's order: favourites first unless the player turned that off, then the sort, a sort name where set | the given order; for a console in the library screen, the scan's (the title ignoring case) |
+| Limit | the theme's `gameCount`, clamped to 1–30 | the limit asked |
+| Time zone | the hour a clock is set back ordered by the clock | ordered by the instant |
+
+So the plays counted and the limit were the same. The order differed in the hour a clock is set back, as the library
+screen's did before §28.11, and the ties differed wherever two games of one console carry the same time.
+
+*Shown first, by a failing test.* `ThemedGameSelectorTests.A_lastplayed_selector_picks_the_console_s_recently_played_games`
+gives a themed session's SNES system a selector of three games. Aurora Drift and Brass Lantern are started at one
+instant, Brass is made a favourite, and Dune Relay and Ember Circuit are started one and two hours earlier. The library
+screen's Recently Played, narrowed to the SNES, lists Aurora, Brass, Dune, Ember. The selector picked Brass, Aurora, Dune:
+the favourite first, by the list's order. The test failed so before the change and passes after it.
+
+*The change.* `SceneData.Recent` carries the library's recent call (a `RecentGames`: files and a limit in, files out).
+A `lastplayed` selector hands it the files of its pool with its own `gameCount` and shows the games named in the answer,
+in the answer's order. It no longer sorts anything itself. Mistress gives `ThemedLibrary.Recent` its `ThemedRecent`,
+which calls `GameRecords.Recent` (the library's `recent` in state 2, the C# twin at `EMUSEN_LIBRARY_NATIVE=0`) over those
+files, put into the scan's order first. That is the order Recently Played gives a console's games, so a selector's picks
+are that console's Recently Played: the first `gameCount`, less folders and games excluded from the counter, with its
+ties. A scene given no call, as a picture tool or a test builds one alone, picks nothing for `lastplayed`: without
+records there are no recent games. The tests that draw scenes alone (`GameSelectorTests`, `SceneMappingTests`,
+`Pass14PictureTool`) get the call from `SyntheticRecords`, a `games.db` of their own holding each synthetic game's
+time.
+
+*The cost.* There is one call each time the system view is built with such a selector: once a showing, and again at
+each move of the carousel, since every move rebuilds the view. Measured on 2026-10-19 in a Debug build, median of 21,
+over 3,508 games with 702 played: over one console's 501 games the library took 0.40 ms and the C# twin 0.94 ms, and
+over all 3,508 the library took 1.27 ms and the twin 1.13 ms. That is a move of the carousel, not a frame, so nothing is
+cached.
+
+*The gates*, measured on 2026-10-19 on the desktop (America/New_York), with `EMUSEN_LIBRARY_NATIVE` unset and set to
+`0`. The blast radius was the new class, `GameSelectorTests` (with a new case: no call, no picks), `SceneMappingTests`,
+`ThemeCatalogTests`, `ThemedCollectionsTests`, `GamelistOptionsTests`, `LibraryParityTests`, `LibraryRecordsParityTests`
+and all of `WindowFitAuditTests`. **605 pass and 8 fail each way.** The eight are the Graphics Settings cases of
+`WindowFitAuditTests` that fail on the base and are fixed elsewhere.
+
 ---
 
 ## 29. B7, Crystal in Rust: the design, 2026-10-18
@@ -6988,3 +7100,60 @@ on 2026-10-18 against .NET 10.0.112 with a probe of its own on 127.0.0.1, kept o
 run and passed in three runs of its crate alone; it touches nothing this part changed, and is recorded for its owner.
 Seeded faults in the JSON reader (the comma's place, the depth limit off by one) were each caught by the table. `cargo
 metadata --locked` passes over the three tracked locks that build Galaxia.
+
+### 30.11 Built 2026-10-19: part 3, the scraper without a network
+
+*Measured on 2026-10-19. `Platform/scrape/` is a member of the platform's workspace and is linked into
+`emusen_platform`; nothing in Mistress calls it yet.*
+
+**The crate.** `emusen-scrape`: `kinds` (the eleven kinds, the one table of ES-DE's type folders, and each type's
+extensions), `rules` (`ScrapeRules`), `answer` (`ScreenScraperJson`, over `json_document`), `redact` (`ScrapeRedactor`,
+the regex's lookbehind and value set written out, a registry for the process), `store` (`media.db`: the three migrations
+to the byte, every `MediaStore` row operation), `layout` (the layout step, a game's Clear, the orphans and their
+cleanup), `quota` (`ScrapeQuotaManager`, with the 403 rule as fixed), `zone` (a TZif file and its POSIX footer, which
+modern `zic` output alone carries past 1996), `clock` (the system's, or the test clock that a delay advances and
+records), `credentials` (the developer file's two places, the embedded blob, the member's 0600 file) and the handle.
+`emusen-dotnet` gained `date` (civil days, 100 ns ticks, the stamps the scraper writes and reads), which the library's
+private copy of the same arithmetic may later be folded into.
+
+**The surface grows from this part on, frozen at part 6.** The parity classes need something to call, so the C layer
+(`Platform/platform/src/scrape.rs`), the header (`Platform/scrape/include/emusen_scrape.h`) and the binding
+(`EmuSen.Crystal.Client/Scrape/MediaService.cs`) were written now with what this part has: `abi_version`, `last_error`,
+`open`, `close`, `get` and `change`. Part 4 adds the run's calls; part 6 writes the baseline and its CI step, after
+which a line never changes. `GameLibrary` gained an internal `Handle` so that the binding can lend the library.
+
+**Built otherwise than §30.3 said, each for a reason found while building:**
+
+- **`config` became `developer_files`**: Galaxia's Rust tree already follows `ConfigStore`'s overrides in the process
+  (the C# pushes them when the platform library loads), so the scraper reads the credential files where the C# would,
+  and what a test harness needs is only a way to say "read none of the machine's"; `developer_files: false` is that.
+- **`test.clock` is .NET ticks from 1970** (100 ns), so that `FakeScrapeClock`'s instants, which carry ticks, cross whole.
+- **`orphans` takes the scan's games** (`[{"path", "system"}]`) rather than reading a scan the library keeps, since
+  Mistress scans with a handle of its own on `:memory:` (§28.8); with no ROM folder, or one that is missing, it answers
+  none, the guard `OrphanedMedia` had in the window.
+- **`clean_up` takes `at`**, a round-trip text with its offset, as the library's changes do: the folder is named by the
+  machine's local time of that instant (`now.ToLocalTime()`), the note in `cleanup.txt` by the time as given with its
+  offset, as the C# writes them.
+- **Two reads were added**, `game` (a record by its hashes, of any state) and `folder` (a ROM's game folder), and one
+  change, `forget_unfound`: the parity classes compare them, and part 4's run uses the first and the last.
+
+**Held to the C#, measured on 2026-10-19:**
+
+| Check | Result |
+|---|---|
+| `tests/rules.rs`: 231 dates, 223 notes, 163 file names (region, the four region orders, the search text), 111 texts redacted under four registered secrets, each against what the C# gave on 2026-10-18 | 4 pass |
+| `tests/answers.rs`: 160 answers through the five readers (generated from a real answer's shape and mutated at random, numbers written as strings and as numbers, members of every kind, lone surrogates escaped in names, quotas and ids), each reader's result or the words of what the C# threw | 1 pass |
+| `tests/quota.rs`: `ScrapeQuotaTests`' rules, and Paris's midnight in summer, in winter and on the two days the clocks change | 4 pass |
+| `ScrapeStoreParityTests`: every `media.db` version 0 to 3 opened by both to the same schema and rows, a version 4 refused by both in the same words and left as it was; 60 generated records with media, paths, a queue and a day read through both (`found`, `outcomes`, `record`, `game`, `stored`, `queue`); four generated stores and ROM folders taken through the layout step, a game's Clear, the orphans and their cleanup by both, the trees file by file, `media.db` row by row, `cleanup.txt` word for word; every game's folder; seven arrangements of the developer's credentials and three member files | 4 pass |
+
+The blast radius, measured on 2026-10-19: `cargo test --profile test-checked` of `emusen-scrape`, `emusen-dotnet`,
+`emusen-platform` and `emusen-library`, 85 passed; every class in `EmuSen.WiseMan.Mistress.Scraping` with the library's
+two parity classes and the media store's own, 255 passed and 5 skipped (the live tool and the picture tools, which run
+only when asked), none failed.
+
+**Seeded faults**, each made, run and reverted: in the JSON readers, the quota read after the game (caught once the
+fixture gained answers whose quota holds a lone surrogate, which the first fixture had not) and a broken string read as
+text; in the store, a migration's text changed by one space (the schema case) and a picture shared with a game at the
+top moved rather than copied (the layout case). A rating written as its decimal text was **not caught**: in this part
+the Rust writes no record, only reads them; part 4's replay, where it does, is its catcher, and the fault is to be made
+again there.

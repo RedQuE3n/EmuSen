@@ -61,7 +61,7 @@ namespace EmuSen.Mistress.Views
 
         private void SetUpThemedLibrary()
         {
-            _themed = new ThemedLibrary(() => UiClock());
+            _themed = new ThemedLibrary(() => UiClock()) { Recent = ThemedRecent };
             _themedSearch = new TextBox { Name = "ThemedSearchBox", Watermark = "Search titles", FontSize = 22, MinWidth = 420 };
             PadKeyboard.FollowSetting(_themedSearch, "Search");
             _themedSearch.TextChanged += (_, _) => { _themed.SetFilter(_themedSearch.Text ?? "", UiClock()); ShowThemedSearchBar(); ScheduleThemedFrame(); };

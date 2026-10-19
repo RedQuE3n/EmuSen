@@ -35,6 +35,15 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(CoreCatalog.ConsolesThatStartEmpty.Select(e => e.Console), RuntimeCatalog.ConsolesThatStartEmpty);
         }
 
+        // The N64's pad, read from MarsRT's sidecar since §18.10, keeps both sticks in Mistress's bindings.
+        [Fact]
+        public void An_n64_pad_lists_its_sticks()
+        {
+            Assert.Contains(EmuSen.Galaxia.Input.PadAxis.LeftX, RuntimeCatalog.AxesFor("N64"));
+            Assert.Contains(EmuSen.Galaxia.Input.PadControl.LeftStickUp, RuntimeCatalog.ControlsFor("N64"));
+            Assert.Contains(EmuSen.Galaxia.Input.PadControl.RightStickLeft, RuntimeCatalog.ControlsFor("N64"));
+        }
+
         [Fact]
         public void A_file_s_console_and_shelf_are_routing_s()
         {

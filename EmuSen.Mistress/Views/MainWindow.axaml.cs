@@ -443,7 +443,8 @@ namespace EmuSen.Mistress.Views
             var window = new GraphicsSettingsWindow(_graphics, console =>
             {
                 if (_session is not null && console == _activeConsole) ApplyScreenFilter(console);
-            }, _session is null ? null : _activeConsole, HttpFactory, overscanNote: RunningGameCropNote) { ShadersChanged = ShaderChanged };
+            }, _session is null ? null : _activeConsole, HttpFactory, overscanNote: RunningGameCropNote,
+                runningSettings: console => _session is { } running && console == _activeConsole ? RuntimeCatalog.SettingsOf(running.Crystal) : null) { ShadersChanged = ShaderChanged };
             _ = SheetLayer.Show(window, this);
         }
 

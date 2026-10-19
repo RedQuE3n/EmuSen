@@ -4858,7 +4858,7 @@ the pairs move in both directions. A unit-register condition on MoonRT costs wha
   the spaces they read, at every hit. Refreshing only the register providers there would bring it near MercuryRT's;
   that is `BreakpointExpressions`' rule (`EmuSen_DianaSh.md` §13.12), so it is proposed, not built. MercuryRT will
   meet the same cost once it lists units; MarsRT's, its VI listed and the N64 pack's views
-  refreshed, cost 1.4 to 1.9 µs a hit (§24.6).
+  refreshed, cost 1.4 to 1.9 µs a hit (§24.6). *Built after B4, §26.7.*
 - **§6.33's text** says units are read through `debug_registers` but not, in words, that the read changes nothing;
   the header's `const` and the trait's `&self` say it. *Recommended*: a clarification of one sentence there, no minor.
 - **MercuryRT's switch** needs nothing more: once its target is `CoreDebugTarget`, its units are in every scope by
@@ -5058,3 +5058,53 @@ frame end and settle, discovery's sole engines), against §7's 300, and lost wha
 B4 is finished: every console runs on the generic engine and target, through the core ABI v1 alone. What stays open is
 the tester's, as each phase recorded it: `SM83` read as `CPU` (§17.10), the summary's sound queue (§17.10), and the
 other consoles' Rust twins of the new view members (§17.10, §23). B6, the core host in Rust, may now start (§6).
+
+### 26.7 After B4, 2026-10-18: a breakpoint condition refreshes the registers alone
+
+*Decided 2026-10-18 by the tester (§20), as §24.5 proposed.* `BreakpointExpressions` refreshed every provider of the
+target once an evaluation first named a symbol, a rule the MoonRT and MercuryRT shims forced (`EmuSen_DianaSh.md`
+§13.12) and that outlived them. On the generic target it made the pack's view rings copy the spaces they read at every
+hit.
+
+**Shown first.** `BreakpointConditionCostBench`, Release, `EMUSEN_BP_BENCH=1`, every row, on `WiseMan` at `8b76f30e`:
+a register condition on MoonRT cost 4.8 to 5.1 µs a hit, and MercuryRT, which now lists its units and has its pack's
+views refreshed on the generic target, 3.5 to 3.9 µs, against the 1.1 µs §24.4 measured for it before its switch;
+§24.5 predicted it would meet MoonRT's cost.
+
+**Built.** `DebugExpressions.RefreshRegisters`, beside the choice of context it serves, refreshes the providers every
+context reads its symbols from: `CpuRegisters`, `VideoRegisters`, `ApuRegisters` and each `DebugCpu`'s registers once
+(a coprocessor's registers are one of them on every target). `Live` calls it in place of `RefreshProviders`. No
+surface changed. No context names a view: a pack's symbols (the SNES's `flag.c`) are computed from the main
+processor's registers, which are refreshed; the generic target reads a unit's registers live (§24.2); and the
+zero-per-core context's video, sound and coprocessor rows are among the providers refreshed. So every symbol a
+condition can name is still read as it stands at the hit.
+
+**Tested**, Debug, failing first where a defect was claimed (the shape of the refresh is not a defect a test sees,
+only its cost): `BreakpointConditionTests` gained a target with no context of its own whose providers count their
+refreshes, on which two hits and a coprocessor's hit read `LINE`, `APU0` and `R15` fresh and refresh no sprite,
+palette, channel or load provider, and whose `RefreshProviders` throws; and, on MoonRT, MercuryRT and MarsRT, 300
+refreshes of the registers allocating 0 bytes. `VenusRtDebugViewTests` gained a condition on `flag.n` at the
+program's loop, made before the first frame: `flag.n==1` halts there and `flag.n==0` never does, so the pack's symbol
+is read from P at the hit. With item 3's and item 4's classes (§26.8, §26.9), the blast radius ran as one: 28 classes,
+**382 tests, 378 passed, 4 failed**, all four in `MoonDebugTargetContractOnMoonRt` (the console's name "NES" where B4
+made it "MoonRT", the summary's words, a watch and the bus's side-effect flag), which fail the same way on `WiseMan` at
+`8b76f30e` with none of this section's changes (24 tests, 20 passed) and are outside the gates of §26.4. `man bp`'s
+CONDITIONS paragraph was rewritten, so the corpus's three `man bp` cases in `man.golden` were re-recorded: the
+paragraph and the output's length (15,475 to 15,811), nothing else; `GoldenCorpusTests` **100 of 100**.
+
+**Measured**, µs a hit over a breakpoint never reached, two runs of each build:
+
+| Row | Condition, before | Condition, after | `if 0`, before / after |
+|---|---|---|---|
+| MoonRT, `A==0x99` | 4.83 / 5.09 | 1.37 / 1.42 | 0.40, 0.41 / 0.41, 0.39 |
+| MoonRT, `ppu.PPUCTRL==0x99` | 4.64 / 4.91 | 1.24 / 1.26 | 0.39, 0.51 / 0.40, 0.49 |
+| MercuryRT through `CoreFactory`, `HL==0x1234` | 3.50 / 3.67 | 1.31 / 1.36 | 0.33, 0.33 / 0.35, 0.34 |
+| MercuryRT on the generic engine (`mercuryrt-v1`), `HL==0x1234` | 3.86 / 3.69 | 1.33 / 1.38 | 0.33, 0.34 / 0.35, 0.34 |
+| MarsRT, `t0==0` | 1.74 / 1.72 | 1.30 / 1.34 | 0.41, 0.39 / 0.39, 0.39 |
+| MarsRT, `vi.ORIGIN==1` | 1.44 / 1.42 | set aside / 1.02 | 0.51, 0.43 / 1.92, 0.43 |
+| Nephrite, `D2==0` | 1.38 / 1.40 | 1.29 / 1.26 | 0.53, 0.55 / 0.59, 0.52 |
+
+The first row of the first run after was set aside, its `if 0` floor reading 1.92 against 0.39 to 0.59 everywhere
+else, as §24.6 set aside the first row of a run. A register condition now costs 1.0 to 1.4 µs a hit on every core
+measured, MoonRT's and MercuryRT's a third of what they were, MarsRT's and Nephrite's a little less. The `if 0` floor,
+a condition naming no symbol, does not move, as it refreshes nothing before or after.

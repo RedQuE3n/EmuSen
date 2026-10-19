@@ -40,7 +40,7 @@ namespace EmuSen.Crystal.Debugger
         // A logpoint's comma-separated parts, each rendered as expr=value.
         private static string[] Parts(string log) => log.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        // The registry's scope as `eval` reads it, its registers refreshed once an evaluation first names a symbol.
+        // The registry's scope as `eval` reads it, its registers (not the views) refreshed once an evaluation first names a symbol.
         private sealed class Live(IDebugTarget target, BreakpointRegistry registry) : IExpressionContext
         {
             private IExpressionContext _scope = null!;
@@ -84,7 +84,7 @@ namespace EmuSen.Crystal.Debugger
                 if (!_fresh)
                 {
                     _fresh = true;
-                    target.RefreshProviders();
+                    DebugExpressions.RefreshRegisters(target);
                 }
                 return _scope.TryGetSymbol(name, out value);
             }

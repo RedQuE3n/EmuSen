@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using EmuSen.Cores;
+using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Debugger;
+using EmuSen.Crystal.Telemetry;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.WiseMan.Fixtures;
 
@@ -33,17 +36,23 @@ namespace EmuSen.WiseMan.Cores
 
         private (ICore Core, DianaShInterpreter Shell) Load(string name)
         {
+            var (core, target) = LoadTarget(name);
+            return (core, DianaShInterpreter.CreateDefault(target));
+        }
+
+        private (ICore Core, IDebugTarget Target) LoadTarget(string name)
+        {
             if (name == "marsrt")
             {
                 string rom = SyntheticN64Rom.WriteTemp(SyntheticN64Rom.Build(patches: (0, MarsDebugClaims.CountForever)));
                 _files.Add(rom);
                 MarsDebugRig rig = MarsDebugRig.MarsRt(rom);
-                return (rig.Core, DianaShInterpreter.CreateDefault(rig.Target));
+                return (rig.Core, rig.Target);
             }
             string path = name == "moonrt" ? NesRom() : SyntheticGbRom.WriteTemp(SyntheticGbRom.Build(patches: new (int, byte[])[] { (0, new byte[] { 0x21, 0x00, 0xC0, 0x34, 0x18, 0xFD }) }));
             _files.Add(path);
             CoreBundle bundle = CoreFactory.Load(path, options: TestCores.NoBattery);
-            return (bundle.Core, DianaShInterpreter.CreateDefault(bundle.DebugTarget));
+            return (bundle.Core, bundle.DebugTarget);
         }
 
         private static string NesRom()
@@ -119,6 +128,93 @@ namespace EmuSen.WiseMan.Cores
                 Assert.StartsWith("Error: ", shell.Submit($"bp add {c.Address} log \"(A\"").Output);
                 Assert.Equal("No active breakpoints.", shell.Submit("bp list").Output.TrimEnd());
             }
+        }
+
+        // What a hit refreshes before its condition reads a register allocates nothing - see `man bp`.
+        [Theory]
+        [MemberData(nameof(Cores))]
+        public void A_hits_refresh_of_the_registers_allocates_nothing(string name)
+        {
+            var (core, target) = LoadTarget(name);
+            using (core as IDisposable)
+            {
+                Run(core, 2);
+                DebugExpressions.RefreshRegisters(target);
+                long before = GC.GetAllocatedBytesForCurrentThread();
+                for (int i = 0; i < 300; i++) DebugExpressions.RefreshRegisters(target);
+                Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+            }
+        }
+
+        // A hit refreshes the registers each scope names, the video and sound rows the zero-per-core context reads among them, and none of the views.
+        [Fact]
+        public void A_hit_reads_every_register_fresh_and_refreshes_no_view()
+        {
+            var target = new CountingTarget();
+            BreakpointExpressions.Add(target, target.Breakpoints, 0x10, 0x10, "LINE==2 && APU0==2", null);
+            Assert.False(target.Breakpoints.ShouldBreak(0x10));
+            Assert.True(target.Breakpoints.ShouldBreak(0x10));
+            BreakpointExpressions.Add(target, target.Gsu.Breakpoints, 0x20, 0x20, "R15==3", null);
+            Assert.True(target.Gsu.Breakpoints.ShouldBreak(0x20));
+            Assert.Equal((3, 3, 3, 3), (target.Cpu.Refreshes, target.Video.Refreshes, target.Apu.Refreshes, target.Cop.Refreshes));
+            Assert.Equal((0, 0, 0, 0), (target.SpriteRows.Refreshes, target.PaletteRows.Refreshes, target.ChannelRows.Refreshes, target.LoadRows.Refreshes));
+        }
+
+        // A provider whose value is the number of times it was refreshed.
+        private sealed class Counted<T>(Func<int, T> value) : IRealtimeProvider<T>
+        {
+            public int Refreshes { get; private set; }
+            public T Current { get; private set; } = value(0);
+            public void Refresh() => Current = value(++Refreshes);
+        }
+
+        // A target with no context of its own, so a condition reads the zero-per-core context's rows, and a coprocessor with its own registry.
+        private sealed class CountingTarget : IDebugTarget
+        {
+            private static IReadOnlyList<DebugRegisterValue> Row(string name, int n) => new[] { new DebugRegisterValue(name, (ulong)n, 16) };
+
+            public readonly Counted<IReadOnlyList<DebugRegisterValue>> Cpu = new(n => Row("A", n)), Video = new(n => Row("LINE", n)), Apu = new(n => Row("APU0", n)), Cop = new(n => Row("R15", n));
+            public readonly Counted<IReadOnlyList<DebugSpriteInfo>> SpriteRows = new(_ => Array.Empty<DebugSpriteInfo>());
+            public readonly Counted<IReadOnlyList<DebugPaletteInfo>> PaletteRows = new(_ => Array.Empty<DebugPaletteInfo>());
+            public readonly Counted<IReadOnlyList<DebugAudioChannelInfo>> ChannelRows = new(_ => Array.Empty<DebugAudioChannelInfo>());
+            public readonly Counted<IReadOnlyList<DebugLoadInfo>> LoadRows = new(_ => Array.Empty<DebugLoadInfo>());
+            public readonly DebugCpu Gsu;
+            private readonly DebugCpu[] _cpus;
+
+            public CountingTarget()
+            {
+                Gsu = new DebugCpu("gsu", "a coprocessor", new BreakpointRegistry()) { Registers = Cop };
+                _cpus = new[] { new DebugCpu(EmuSen.Crystal.Debugger.DebugCpus.MainName, "the main processor", Breakpoints) { Registers = Cpu }, Gsu };
+            }
+
+            public string CoreName => "COUNTING";
+            public long FrameCount => 0;
+            public int MaxSprites => 0;
+            public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CpuRegisters => Cpu;
+            public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> VideoRegisters => Video;
+            public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> ApuRegisters => Apu;
+            public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CoprocessorRegisters => Cop;
+            public IRealtimeProvider<IReadOnlyList<DebugSpriteInfo>> Sprites => SpriteRows;
+            public IRealtimeProvider<IReadOnlyList<DebugPaletteInfo>> Palettes => PaletteRows;
+            public IRealtimeProvider<IReadOnlyList<DebugAudioChannelInfo>> AudioChannels => ChannelRows;
+            public IRealtimeProvider<IReadOnlyList<DebugLoadInfo>> HardwareLoad => LoadRows;
+            public void RefreshProviders() => throw new InvalidOperationException("a hit refreshed every provider");
+            public (byte[] Rgba, int Width, int Height) RenderTileSheet() => (Array.Empty<byte>(), 0, 0);
+            public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => (Array.Empty<byte>(), 0, 0);
+            public (short[] Samples, int SampleRate) GetAudioSamples() => (Array.Empty<short>(), 0);
+            public string GetSummaryText() => "";
+            public IReadOnlyList<IDebugMemorySpace> GetMemorySpaces() => Array.Empty<IDebugMemorySpace>();
+            public WatchRegistry Watches { get; } = new();
+            public FrameLogRegistry FrameLog { get; } = new();
+            public BreakpointRegistry Breakpoints { get; } = new();
+            public CheatRegistry Cheats { get; } = new();
+            public IReadOnlyList<DebugCpu> DebugCpus => _cpus;
+            public IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count) => Array.Empty<DisassembledInstruction>();
+            public (StaticReferenceKind Kind, int Target)? ClassifyStaticReference(DisassembledInstruction instr) => null;
+            public int TilemapEntryStride => 0;
+            public string DecodeTilemapEntry(IDebugMemorySpace space, int address) => "";
+            public byte[] DecodeTilePixels(IDebugMemorySpace space, int address, int bpp) => Array.Empty<byte>();
+            public void SetChannelMuted(int index, bool muted) { }
         }
     }
 }

@@ -2408,6 +2408,14 @@ read their registers out of a state snapshot that only `RefreshProviders` retake
 ABI's `DEBUG_REGISTERS`. The golden case "a true condition read at the hit" shows the reading is live: `S==0xF4` passes
 over the hit at which S is `$F7` and halts at the next.
 
+*Changed 2026-10-18* (`EmuSen_Backend.md` §26.7, decided in §20 there): with the shims retired, every core reads its
+registers through `DEBUG_REGISTERS`, so the reason above no longer holds, and refreshing every provider had become the
+cost: on a core whose pack decodes views, the view rings copied the spaces they read at every hit. A hit now refreshes
+the register providers alone, through `DebugExpressions.RefreshRegisters`, beside the choice of context it serves:
+`CpuRegisters`, `VideoRegisters`, `ApuRegisters` and each `DebugCpu`'s registers (a coprocessor's is one of them), the
+rows the zero-per-core context reads among them. No context names a view: a pack's symbols are computed from the
+registers just refreshed, and the generic target reads a unit's registers live (§24 there).
+
 **The session service's 1.2.** `bp_add` and `bp_add_data` now evaluate the condition and log that 1.1 stored unread,
 and refuse with `EMUSEN_SVC_PARSE`, the evaluator's words following, a condition or a log part that does not parse or
 names an unknown symbol, adding nothing, as `eval` already refused such an expression. Nothing else changed: the

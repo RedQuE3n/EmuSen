@@ -205,6 +205,21 @@ namespace EmuSen.WiseMan.Cores
                 Assert.StartsWith($"{bit} ", Shell(game.Target, $"eval {symbol}"));
         }
 
+        // A condition naming a pack's symbol reads it from the registers at the hit, though a hit refreshes no view; P is A5h at the loop - see `man bp`.
+        [Fact]
+        public void A_condition_on_a_flag_symbol_reads_P_at_the_hit()
+        {
+            var code = new List<byte>();
+            Program(code);
+            int loop = 0x8005 + code.Count - 2;
+            foreach (var (condition, halts) in new[] { ("flag.n==1", true), ("flag.n==0", false) })
+            {
+                using var game = One(Image(Program), before: t => Assert.Contains("added at", Shell(t, $"bp add {loop:X6} if {condition}")));
+                Assert.Equal(halts, game.Core.IsHaltedAtBreakpoint);
+                if (halts) Assert.Equal(loop, game.Core.HaltedAddress);
+            }
+        }
+
         // The pack's CPU line under VenusRT's heading.
         [Fact]
         public void The_summary_carries_the_CPU_line()

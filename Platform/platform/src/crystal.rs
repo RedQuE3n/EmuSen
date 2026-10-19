@@ -480,3 +480,53 @@ pub unsafe extern "C" fn emusen_crystal_speed_set(rt: *mut emusen_crystal_runtim
 pub unsafe extern "C" fn emusen_crystal_speed_mode(rt: *mut emusen_crystal_runtime, session: u32, mode: u32) -> i32 {
     code((|| done(unsafe { session_of(rt, session) }?.speed_mode(mode)))())
 }
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_rewind_set(rt: *mut emusen_crystal_runtime, session: u32, enabled: u32, interval_frames: u32, budget_bytes: u64, thumbnail_width: u32) -> i32 {
+    code((|| done(unsafe { session_of(rt, session) }?.rewind_set(enabled != 0, interval_frames, budget_bytes, thumbnail_width)))())
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for its `size` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_rewind_step(rt: *mut emusen_crystal_runtime, session: u32, count: u32, out: *mut emusen_crystal_frame_info) -> i64 {
+    let stepped = || -> Result<i64, i32> {
+        let r = unsafe { runtime(rt) }?;
+        let s = r.sessions.get(session).map_err(|(st, w)| fail(st, w))?;
+        r.with_ctx(|ctx| s.rewind_step(count, unsafe { out.as_mut() }, ctx)).map_err(|(st, w)| fail(st, w))
+    };
+    stepped().unwrap_or_else(|status| status as i64)
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_rewind_reel(rt: *mut emusen_crystal_runtime, session: u32, out: *mut u8, len: usize) -> i64 {
+    match unsafe { session_of(rt, session) } {
+        Ok(s) => copy_of(s.rewind_reel_json(), out, len),
+        Err(status) => status as i64,
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` null or valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_rewind_picture(rt: *mut emusen_crystal_runtime, session: u32, frame: u64, out: *mut u8, len: usize) -> i64 {
+    match unsafe { session_of(rt, session) }.and_then(|s| s.rewind_picture(frame).map_err(|(st, w)| fail(st, w))) {
+        Ok(bytes) => unsafe { put(&bytes, out, len) },
+        Err(status) => status as i64,
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_rewind_to(rt: *mut emusen_crystal_runtime, session: u32, frame: u64) -> i32 {
+    code((|| {
+        let r = unsafe { runtime(rt) }?;
+        let s = r.sessions.get(session).map_err(|(st, w)| fail(st, w))?;
+        done(r.with_ctx(|ctx| s.rewind_to(frame, ctx)))
+    })())
+}

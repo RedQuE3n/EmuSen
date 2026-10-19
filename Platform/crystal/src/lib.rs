@@ -13,6 +13,7 @@ pub mod json;
 pub mod machine_info;
 pub mod media;
 pub mod open;
+pub mod rewind;
 pub mod route;
 pub mod runtime;
 pub mod seam;

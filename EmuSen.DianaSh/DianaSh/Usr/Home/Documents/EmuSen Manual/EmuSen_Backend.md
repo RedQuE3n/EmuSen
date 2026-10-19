@@ -6752,6 +6752,52 @@ once part (b) fills the seam.
 - The `run` and `log` events come with piece 6, rewind's capture with piece 4.
 - The phases' times are compared by count and name only, since they are wall-clock.
 
+### 29.17 Built 2026-10-19: part (a), piece 4, rewind
+
+**The piece** (this commit). `rewind` holds three C# classes' work: `RewindBuffer`'s chain, `XorDeltaCodec`'s bytes,
+and `RewindThumbnail`'s pictures, sampled four times a pixel and held as RGB565.
+- **The chain.** It keeps the newest snapshot whole and a chain of XOR deltas back from it. The moments a reel shows
+  stay in step with the chain. The accounting is the C#'s: `depth` counts a delta still encoding, while
+  `buffered_bytes` counts it only once it settles at the next capture or look; the reel reads its counts before it
+  settles the chain, as the C#'s does.
+- **The worker.** Each session with rewind on encodes on a worker thread of its own, handed one job at a time through
+  a one-slot mailbox. The job carries the earlier state, the newer and the delta's buffer, and hands all three back.
+- **Departure from §29.4.** The chain is not one arena. Each delta is a buffer of its own, and a buffer the chain lets
+  go (trimmed to the budget, stepped back past, cleared) goes onto a free list and is used again. The property §29.4
+  asks for holds: once the chain has reached its budget, a capture allocates nothing. It is simpler than an arena of
+  variable-length records popped from both ends.
+- **The engine.** It gained `snapshot` (kind 1 where the core claims SNAPSHOT) and `load_state`. A state made over
+  another disc of the set loads with that disc put back first (`LoadOverItsDisc`); after a load, machine info is read
+  again where the core claims MEDIA, every port's presence is sent again, and the cheats are marked stale.
+- **The session.** It answers `rewind_set`, `rewind_step` (the skipped sound drained and dropped, the frame's facts
+  filled, `rendered` for a step taken), `rewind_to`, `rewind_reel` and `rewind_picture`. A frame captures and attaches
+  the picture on show, and a reset clears the chain. The platform library exports the five.
+
+**Outside the crate.** Two surfaces grew by one call each:
+- `emusen-core-host`'s `InputLatch` gained `resend_presence`, the C#'s `ResendPresence`, with a line in its latch test.
+- The seam gained `cheats_stale`. Part (b)'s `Debugger` gives the same call.
+
+**Measured on 2026-10-19** [M]:
+- **Parity.** The parity class's two new cases pass, each comparing every answer and then the trees left.
+  - On the test core, 440 answers: the reel off and on; a seed snapshot; 120 frames with pictures at 64 pixels; the
+    pictures of held, unpictured and absent moments; steps of 5 and of 1000; the struct refused short; a jump to a held
+    moment and to one not held; a disc changed and a jump back over the change, which loads with the earlier disc put
+    back; a small budget that trims the oldest deltas; a reset; rewind turned off; a missing session.
+  - On six of the build's engines (NES, SNES, Game Boy, N64, Genesis, PlayStation), 516 answers: 60 frames at an
+    interval of 3 with pictures 100 wide, the reel, a picture, four steps, a jump, and ten more frames.
+- **Seeded faults**, seven, each caught:
+  - Caught on the first run: `depth` without the delta still encoding (both cases); the trim keeping the oldest moment
+    (one); a step that leaves the skipped sound (both); a step that leaves rewind's frame count where it was (one);
+    a reset that keeps the chain (one).
+  - Caught once the cases were sharpened: the pictures' height floored instead of rounded, caught once the width was
+    100, since 80 divided every picture of the build exactly; and a load over another disc not retried, caught once the
+    jump went back across the disc change. A jump to frame 44 had been captured after it.
+- **Allocations.** The `frame_alloc` test now also runs 1,000 frames with rewind on at a budget of 512 bytes, after 400
+  to warm, and counts no allocation.
+- **Other tests.** The crate's tests 4, 6 and 1; `emusen-core-host`'s latch test with the new call.
+
+**Left.** The `rewind` events (`cleared`, `stepped`, `moved`) come with piece 6.
+
 ### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
 
 *Part (b) numbers its sections from §29.30, so that part (a)'s pieces, built at the same time, keep §29.16 to §29.29.*

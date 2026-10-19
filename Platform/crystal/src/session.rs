@@ -38,21 +38,21 @@ pub struct OpenedWith {
     pub audio_buffer_max_samples: u32,
 }
 
-/// The state a session's frame thread and run control share: whether it runs, and at what speed.
-#[derive(Debug)]
+/// The state a session's frame thread and run control share: whether it runs, at what speed, and its rewind.
 pub struct Run {
     pub paused: bool,
     pub halted: bool,
     pub run_requested: bool,
     pub speed: Speed,
     pub draw_none: bool,
+    pub rewind: crate::rewind::Rewind,
     base_percent: u32,
     mode: u32,
 }
 
 impl Default for Run {
     fn default() -> Run {
-        Run { paused: false, halted: false, run_requested: false, speed: Speed::default(), draw_none: false, base_percent: NORMAL_PERCENT as u32, mode: abi::SPEED_NORMAL }
+        Run { paused: false, halted: false, run_requested: false, speed: Speed::default(), draw_none: false, rewind: crate::rewind::Rewind::default(), base_percent: NORMAL_PERCENT as u32, mode: abi::SPEED_NORMAL }
     }
 }
 
@@ -246,10 +246,130 @@ impl Session {
             return Ok(false);
         }
         e.refresh_debugger();
+        if run.rewind.enabled {
+            let took = run.rewind.on_frame_completed(&mut crate::engine::Snap { engine: e, ctx: None })?;
+            if took && run.rewind.thumbnail_width > 0 && !e.skip_rendering {
+                self.attach_thumbnail(e, &mut run.rewind);
+            }
+        }
         if recording && !skip {
             self.capture(e);
         }
         Ok(true)
+    }
+
+    /// The picture on show attached to the snapshot just taken, `AttachThumbnail`.
+    fn attach_thumbnail(&self, e: &mut Engine, rewind: &mut crate::rewind::Rewind) {
+        let repeat = self.repeat_rows();
+        let rr = e.shape.row_repeat.max(1);
+        let mut shown = self.shown.lock().unwrap_or_else(|p| p.into_inner());
+        let bytes = e.copy_picture(&mut [], repeat).unwrap_or(0);
+        shown.resize(bytes, 0);
+        let _ = e.copy_picture(&mut shown, repeat);
+        let (width, rows) = (e.shape.width, e.shape.height * if repeat { rr } else { 1 });
+        rewind.attach_thumbnail(&shown, width, rows, if repeat { 1 } else { rr });
+    }
+
+    /// Rewind's settings; turned on, it takes its first snapshot; turned off, it lets go of its chain.
+    pub fn rewind_set(&self, enabled: bool, interval: u32, budget: u64, thumbnail_width: u32) -> Result<(), Refused> {
+        self.change(|e, run| {
+            let r = &mut run.rewind;
+            if interval > 0 {
+                r.set_interval(interval.min(i32::MAX as u32) as i32);
+            }
+            if budget > 0 {
+                r.budget = budget.min(i64::MAX as u64) as i64;
+            }
+            r.thumbnail_width = thumbnail_width.min(i32::MAX as u32) as i32;
+            if enabled && !r.enabled {
+                r.enabled = true;
+                r.capture_now(&mut crate::engine::Snap { engine: e, ctx: None })?;
+            } else if !enabled && r.enabled {
+                r.enabled = false;
+                r.clear();
+            }
+            Ok(())
+        })
+    }
+
+    /// Held rewind's step in place of a frame: the sound it skipped dropped, the picture the snapshot left on show.
+    pub fn rewind_step(&self, count: u32, info: Option<&mut emusen_crystal_frame_info>, ctx: &crate::engine::Ctx) -> Result<i64, Refused> {
+        if let Some(i) = &info
+            && i.size < FRAME_INFO_SIZE_10
+        {
+            return Err((abi::status::BAD_STRUCT, format!("emusen_crystal_frame_info of {} bytes; version 1.0's is {FRAME_INFO_SIZE_10}", i.size)));
+        }
+        self.change(|e, run| {
+            e.set_skip_rendering(false);
+            let mut done = 0i64;
+            while done < count as i64 && run.rewind.step(&mut crate::engine::Snap { engine: e, ctx: Some(ctx) })? {
+                done += 1;
+            }
+            e.refresh_debugger();
+            e.drop_audio();
+            if let Some(info) = info {
+                self.fill(e, run, info, false);
+                info.rendered = (done > 0) as u32;
+            }
+            Ok(done)
+        })
+    }
+
+    /// Straight to a held moment.
+    pub fn rewind_to(&self, frame: u64, ctx: &crate::engine::Ctx) -> Result<(), Refused> {
+        self.change(|e, run| {
+            let at = frame.min(i64::MAX as u64) as i64;
+            if !run.rewind.to(&mut crate::engine::Snap { engine: e, ctx: Some(ctx) }, at)? {
+                return Err((svc::ABSENT, format!("no moment at frame {frame} is held")));
+            }
+            run.halted = false;
+            e.refresh_debugger();
+            Ok(())
+        })
+    }
+
+    /// `{"enabled",…,"moments":[…]}`, `ReelJson`: the counts read before the chain settles, as the C#'s are.
+    pub fn rewind_reel_json(&self) -> Result<String, Refused> {
+        self.change(|e, run| {
+            let r = &mut run.rewind;
+            let mut j = Json::new();
+            j.begin_object()
+                .bool("enabled", r.enabled)
+                .int("interval_frames", r.interval() as i64)
+                .int("budget_bytes", r.budget)
+                .int("depth", r.depth())
+                .int("buffered_bytes", r.buffered_bytes())
+                .int("snapshot_bytes", r.snapshot_bytes())
+                .f64("seconds", r.buffered_seconds(e.frame_rate_hz()))
+                .key_array("moments");
+            for m in r.moments() {
+                j.begin_object().int("frame", m.frame).int("core_frames", m.core_frames);
+                match &m.thumbnail {
+                    None => {
+                        j.null("picture");
+                    }
+                    Some(t) => {
+                        j.key_object("picture").int("width", t.width as i64).int("height", t.height as i64).end_object();
+                    }
+                }
+                j.end_object();
+            }
+            j.end_array().end_object();
+            Ok(j.finish())
+        })
+    }
+
+    /// A moment's picture: its width and height, little-endian, then RGBA8888.
+    pub fn rewind_picture(&self, frame: u64) -> Result<Vec<u8>, Refused> {
+        self.change(|_, run| {
+            let moment = run.rewind.moments().iter().find(|m| m.frame as u64 == frame);
+            let Some(t) = moment.and_then(|m| m.thumbnail.as_ref()) else { return Err((svc::ABSENT, format!("no picture is held for frame {frame}"))) };
+            let mut bytes = Vec::with_capacity(8 + (t.width * t.height * 4) as usize);
+            bytes.extend_from_slice(&(t.width as u32).to_le_bytes());
+            bytes.extend_from_slice(&(t.height as u32).to_le_bytes());
+            t.to_rgba(&mut bytes);
+            Ok(bytes)
+        })
     }
 
     /// The recorder's picture of the frame, its rows repeated as shown, `CaptureFrame`.

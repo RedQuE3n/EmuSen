@@ -727,6 +727,16 @@ impl Engine {
         Ok(bytes)
     }
 
+    /// Every sample held drained and dropped, `DequeueAudioSamples(int.MaxValue)`.
+    pub fn drop_audio(&mut self) {
+        let mut sink = [0i16; 4096];
+        while self.buffered_audio_frames() > 0 {
+            if self.drain_audio(&mut sink).0 == 0 {
+                break;
+            }
+        }
+    }
+
     /// Stereo frames the core holds undrained.
     pub fn buffered_audio_frames(&self) -> i64 {
         self.machine.as_ref().map_or(0, |m| m.audio_buffered().clamp(0, i32::MAX as i64) / 2)
@@ -807,6 +817,68 @@ impl Engine {
         } else {
             0.0
         }
+    }
+
+    /// The snapshot rewind keeps into `into`, sized to it, kind 1 where the core claims SNAPSHOT, `SaveSnapshot`.
+    pub fn snapshot(&mut self, into: &mut Vec<u8>) -> Result<usize, Refused> {
+        let kind = if self.claims(caps::SNAPSHOT) { emusen_native::core::sys::kind::SNAPSHOT } else { emusen_native::core::sys::kind::FULL };
+        let name = &self.display_name;
+        let Some(m) = self.machine.as_mut() else { return Err(Refused::fault("InvalidOperationException: SaveState() called before LoadRom().".to_string())) };
+        let size = m.state_size(kind).map_err(|s| Refused::fault(format!("{name} could not size its state: {}.", m.words(s as i64))))?;
+        into.resize(size, 0);
+        m.state_save(kind, into).map_err(|s| Refused::fault(format!("{name} could not write its state: {}.", m.words(s as i64))))?;
+        Ok(size)
+    }
+
+    /// A state loaded, over the disc it was made with where a set's other disc refuses it, `CoreEngine.LoadState`.
+    pub fn load_state(&mut self, state: &[u8], ctx: Option<&Ctx>) -> Result<(), Refused> {
+        if self.machine.is_none() {
+            return Err(Refused::fault("InvalidOperationException: LoadState() called before LoadRom().".to_string()));
+        }
+        self.load_over_its_disc(state, ctx)?;
+        if self.claims(caps::MEDIA) {
+            self.reread();
+        }
+        self.latch.resend_presence();
+        self.fresh = false;
+        self.debug.cheats_stale();
+        self.halted = None;
+        self.drain();
+        Ok(())
+    }
+
+    fn load_once(&mut self, state: &[u8]) -> Result<(), (i32, Refused)> {
+        let name = &self.display_name;
+        let m = self.machine.as_mut().expect("a machine");
+        m.state_load(state).map_err(|s| (s, Refused::fault(format!("InvalidDataException: {name} refused the state: {}.", m.words(s as i64)))))
+    }
+
+    /// `LoadOverItsDisc`: a state of another disc of the set loads with that disc put back first.
+    fn load_over_its_disc(&mut self, state: &[u8], ctx: Option<&Ctx>) -> Result<(), Refused> {
+        let first = match self.load_once(state) {
+            Ok(()) => return Ok(()),
+            Err(e) => e,
+        };
+        let wrong = emusen_native::core::sys::status::WRONG_MEDIA;
+        let Some(ctx) = ctx.filter(|_| first.0 == wrong && self.can_change_disc()) else { return Err(first.1) };
+        let was = self.disc_index;
+        let tried: Vec<i32> = (0..self.discs.len() as i32).chain([-1]).filter(|i| *i != was).collect();
+        for i in tried {
+            self.insert_index(ctx.tree, i, true, ctx.is_image)?;
+            match self.load_once(state) {
+                Ok(()) => {
+                    self.close_lid_at = -1;
+                    return Ok(());
+                }
+                Err((s, _)) if s == wrong => {}
+                Err((_, words)) => {
+                    self.insert_index(ctx.tree, was, true, ctx.is_image)?;
+                    return Err(words);
+                }
+            }
+        }
+        self.insert_index(ctx.tree, was, true, ctx.is_image)?;
+        Err(first.1)
     }
 
     /// The debugger's snapshots refreshed, after a frame, a halt or a reset.
@@ -990,4 +1062,24 @@ fn info_starts_empty(info: &Value, system: &str) -> bool {
         .unwrap_or(&[])
         .iter()
         .any(|s| s.get("id").and_then(Value::as_str) == Some(system) && matches!(s.get("starts_empty"), Some(Value::Bool(true))))
+}
+
+/// The engine as rewind sees it, with what a state load over another disc needs.
+pub struct Snap<'a, 'c> {
+    pub engine: &'a mut Engine,
+    pub ctx: Option<&'a Ctx<'c>>,
+}
+
+impl crate::rewind::Snapshots for Snap<'_, '_> {
+    fn snapshot(&mut self, into: &mut Vec<u8>) -> Result<usize, (i32, String)> {
+        self.engine.snapshot(into).map_err(|r| (r.status, r.words))
+    }
+
+    fn load(&mut self, state: &[u8]) -> Result<(), (i32, String)> {
+        self.engine.load_state(state, self.ctx).map_err(|r| (r.status, r.words))
+    }
+
+    fn total_frames(&self) -> i64 {
+        self.engine.total_frames()
+    }
 }

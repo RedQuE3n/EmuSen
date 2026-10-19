@@ -220,6 +220,32 @@ namespace EmuSen.WiseMan.Crystal
 
         public string SpeedMode(nint rt, uint session, uint mode) => Status(((delegate* unmanaged[Cdecl]<nint, uint, uint, int>)Fn("speed_mode"))(rt, session, mode));
 
+        public string RewindSet(nint rt, uint session, bool enabled, uint interval, ulong budget, uint thumbnail) =>
+            Status(((delegate* unmanaged[Cdecl]<nint, uint, uint, uint, ulong, uint, int>)Fn("rewind_set"))(rt, session, enabled ? 1u : 0u, interval, budget, thumbnail));
+
+        // A step back of count snapshots: how many were taken and the frame_info it fills.
+        public string RewindStep(nint rt, uint session, uint count, uint size = 0)
+        {
+            var info = new CrystalFrameInfo { size = size != 0 ? size : (uint)sizeof(CrystalFrameInfo), reserved = 0xFEEDu };
+            long done = ((delegate* unmanaged[Cdecl]<nint, uint, uint, CrystalFrameInfo*, long>)Fn("rewind_step"))(rt, session, count, &info);
+            if (done < 0) return $"status {done}: {LastError()}";
+            return $"{done} rendered {info.rendered} serial {info.picture_serial} {info.width}x{info.height} audio {info.audio_frames} total {info.total_frames} speed {info.speed_percent} reserved {info.reserved}";
+        }
+
+        public string RewindTo(nint rt, uint session, ulong frame) => Status(((delegate* unmanaged[Cdecl]<nint, uint, ulong, int>)Fn("rewind_to"))(rt, session, frame));
+
+        // A moment's picture: its length and SHA-256.
+        public string RewindPicture(nint rt, uint session, ulong frame)
+        {
+            var f = (delegate* unmanaged[Cdecl]<nint, uint, ulong, byte*, nuint, long>)Fn("rewind_picture");
+            long n = f(rt, session, frame, null, 0);
+            if (n < 0) return $"status {n}: {LastError()}";
+            var bytes = new byte[n];
+            long again;
+            fixed (byte* b = bytes) again = f(rt, session, frame, b, (nuint)n);
+            return again < 0 ? $"status {again}: {LastError()}" : $"{again} {Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))}";
+        }
+
         private delegate long CopyOut(byte* o, nuint n);
 
         private string Copy(CopyOut call)

@@ -201,6 +201,13 @@ fn the_latch_sends_changes_once_the_latest_axis_and_presence_only_when_it_change
     latch.send(&mut r);
     assert_eq!(r.0, ["buttons 2 0x4 0x4"]);
     assert_eq!(latch.buttons(0), 0b11);
+    latch.resend_presence();
+    let mut r = Recorder::default();
+    latch.send(&mut r);
+    assert_eq!(r.0, ["present 0 true", "present 1 false", "present 2 true"], "after a state load every port's presence, once");
+    let mut r = Recorder::default();
+    latch.send(&mut r);
+    assert!(r.0.is_empty());
 }
 
 #[test]

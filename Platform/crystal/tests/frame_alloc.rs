@@ -1,6 +1,7 @@
 //! A frame through the runtime allocates nothing once its session has its buffers: `frame`, `picture_copy` and
-//! `audio_drain` as the C layer calls them, with the controls held and moved between (EmuSen_Backend.md §29.4). The
-//! core's own allocations are its standard library's, not this binary's, so the count is the runtime's alone.
+//! `audio_drain` as the C layer calls them, with the controls held and moved between, rewind off and then on
+//! (EmuSen_Backend.md §29.4). The core's own allocations are its standard library's, not this binary's, so the count
+//! is the runtime's alone.
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::path::{Path, PathBuf};
@@ -100,6 +101,19 @@ fn a_frame_through_the_runtime_allocates_nothing() {
         frame(i);
     }
     let made = ALLOCATIONS.load(Ordering::Relaxed) - before;
+    // Rewind on, its budget small enough that the chain reaches it while warming and lets its oldest deltas go after.
+    rt.sessions.get(id).unwrap().rewind_set(true, 4, 512, 0).unwrap();
+    for i in 1400..1800 {
+        frame(i);
+    }
+    let rewinding = ALLOCATIONS.load(Ordering::Relaxed);
+    for i in 1800..2800 {
+        frame(i);
+    }
+    let made_rewinding = ALLOCATIONS.load(Ordering::Relaxed) - rewinding;
+    let reel = rt.sessions.get(id).unwrap().rewind_reel_json().unwrap();
     rt.close(id).unwrap();
     assert_eq!(made, 0, "allocations in 1,000 frames");
+    assert_eq!(made_rewinding, 0, "allocations in 1,000 frames with rewind on");
+    assert!(reel.contains("\"enabled\":true") && !reel.contains("\"depth\":0,"), "{reel}");
 }

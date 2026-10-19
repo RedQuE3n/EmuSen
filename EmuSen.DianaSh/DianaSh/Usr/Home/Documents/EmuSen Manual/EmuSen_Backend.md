@@ -6978,6 +6978,86 @@ every export is there.
 - a freed runtime's subscription handles kept until the process ends (§29.19);
 - the three copies of the local offset that Galaxia's `clock` can replace (§29.18).
 
+### 29.21 Built 2026-10-19: part (c), piece 1, the debugger in the session, the service's shape, and its first groups
+
+*Part (c) numbers its sections from §29.21, the room part (a) left. Its pieces follow the header's groups: this one the
+session, run control, memory, processors, disassembly, states, the log switch, the provider's events and the games;
+the next the registries; then the chip views, expressions, trace and telemetry; then the cheats and the recorder's
+calls; and last the export check, the golden corpus and P2.*
+
+**The debugger in the session.** Part (b) built `emusen-crystal-debug` and left each session on a debugger whose calls
+did nothing. `emusen-crystal` now depends on it, on `emusen-cheats` (the session's registry is the debugger's) and on
+`emusen-recorder`, and a new module, `debug`, holds one session's `SessionDebugger`: the debugger, the recorder and the
+engine's name the recorder files under. It implements the seam of §29.16, so the frame's order is the one part (a)
+wrote, not a line of it moved; the engine holds it concretely, so the service reaches the debugger's typed API (§29.30)
+without a cast. A watch's line is said into the debugger and moved among the engine's own after each frame, where the
+C# engine's `Watches.Say` wrote it, so it reaches the `log` event in the order it was said. `session_info`'s
+`"halted"` now names the processor and address of a halt, which part (a) left null with nothing able to halt.
+
+**Where the service lives.** §29.2 placed it in `emusen-crystal`: a module `service`, the C# `SessionService` file for
+file (`machine` here; `registries`, `views` and `cheats` in the pieces after). Each function takes a `Call`: the
+runtime, the session the table or twin serves, the session the caller named, and whether the table is a read-only
+context's. `Call::change` takes the session's gate and refuses a read-only table inside it, before any argument is read,
+as the C#'s `GateScope` and `Binding.Change` order them; `Call::read` takes the gate as §29.4 decided reads that name
+the machine do. Text and bytes reach a function as `Raw`, read where the C# reads them, so a read-only refusal comes
+before a malformed name in a change and after it in a read, as in the C#. The provider's own state, run control's
+requests for `events_drain` and the last one `halt_state` names, is a `Provider` on each session.
+
+**The C layer.** `crystal_twins.rs` exports each twin and defines its table entry beside it; both call the one
+function, a twin through the runtime's session (0 the current one), an entry through the table it was handed, so a
+module and a frontend reach one implementation, as SR4 asks. A twin's failure sets its words in the frontend API's
+`last_error` and the table's, as the C#'s twin copies the table's words into its own; an entry's sets the table's
+alone. `session_service` makes a session's two tables (the full and the read-only) on first asking, each a slot holding
+the table and the binding its ctx points at, kept until the runtime is freed: a table handed out after its session
+closed answers `NO_SESSION` rather than pointing at freed memory, which the C# frees. The three state twins moved
+here from `crystal.rs`, now over the service's functions, unchanged in what they answer. Until the last piece, the
+table's entries of the groups not yet built are null, which `EMUSEN_SESSION_HAS` reads as absent; the binding's switch
+still reaches the Rust only once every export is there (§29.3).
+
+**`emusen-dotnet` gained `parse_value`.** The C#'s `SessionJson.Parse` reads an argument with `JsonDocument.ParseValue`
+from a fresh reader, which stops at the end of the first value and never reads what follows; `json_document::parse`
+refuses trailing text, as `JsonDocument.Parse` does. The new function is the first without the second. A hint list with
+text after it is held equal both ways by the parity class.
+
+**The parity harness, and the contract layer's `Fill`.** `Fill` is now `internal`, visible to WiseMan (an
+`InternalsVisibleTo`, as §29.3 planned), and fills every export it finds rather than stopping at the first missing,
+which changes nothing for the binding (a table with any export missing is refilled from the C# whole). The class's new
+runner, `CrystalTwinScript`, fills one `CrystalExports` from each implementation through `Fill` and runs a script of the
+service's calls, a call a line, through the route the script names: the twin with its session or with 0, the full
+table with 0, with the session's id or with a session it does not serve, or the read-only table. Each answer is printed
+with its status and words, the words read from the route's own `last_error`; a binary answer as its bytes or their
+SHA-256; a change that answers with a record is made once into a buffer that holds any answer, and `?` after a name asks
+the length alone. The scripts are text files beside the class (`Crystal/TwinScripts/`), each run on the C# and then on
+the Rust over the same tree, the answers and the Saves tree compared.
+
+**Found while building, and kept as the C# answers it.**
+- `set_register` with no processor named, on a session that lists processors, is the C#'s `NullReferenceException`:
+  `FAULT`, "Object reference not set to an instance of an object."
+- `disassemble`'s hints are read and a hint that is not a string or null is a fault in `JsonElement.GetString`'s words,
+  though no disassembler reads them (§13.11 of `EmuSen_DianaSh.md`).
+- `run_control(PAUSE)` reaches no provider in the C#, so it names no session it checks: a table's pause for a session
+  it does not serve answers 0.
+
+**Measured on 2026-10-19** [M]:
+- **Parity.** The class's two new cases pass, each comparing every answer and then the Saves tree.
+  - On the test core, 179 calls through every route: `info`, `summary`, `sessions`, `games` and `service`'s flags; a
+    processor that cannot halt (the helper image); run control's every op, its refusals and its requests drained, a
+    pause held across a frame, a step halted and resumed; every memory call with a space named in another case, past
+    the end of the space, unnamed, absent, not UTF-8, read-only, and the length asked alone; registers and their
+    refusals; disassembly with hints of each kind; states saved and loaded at a path and at the default, a missing
+    one; the log switch both ways; games opened from a table and a twin and refused six ways.
+  - On the build's seven engines (NES, SNES, both Game Boys, N64, Genesis, PlayStation), 231 calls: the session
+    group, registers by every scope, spaces, disassembly at two addresses, four physical addresses, a step halted on
+    the main processor and, on the SNES, on the sound processor through the table, step over and out, `set_register`.
+- **Seeded faults**, four, each caught: the processors' names in a refusal joined without their space (by the engines'
+  case, the SNES naming two; the test core names one), step out at the same depth as step over (both cases), `labels`
+  listed after `freezes` in `info` (both), and a change made through the read-only table (the test core's).
+- **Other tests.** The crates' tests, `--profile test-checked`: `emusen-crystal` 6, 6 and 1 (the export check holding
+  the twins to the header, and `frame_alloc` now with the real debugger in every session, counting no allocation);
+  `emusen-crystal-debug` 4 and 2; `emusen-cheats` 9; `emusen-dotnet` 31; the platform library's 31 and 4. WiseMan's
+  Crystal, debug, header, contract shape, 1.2, session service, Hotaru on the API, runtime log, binding and managed
+  classes, 123 of 123.
+
 ### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
 
 *Part (b) numbers its sections from §29.30, so that part (a)'s pieces, built at the same time, keep §29.16 to §29.29.*

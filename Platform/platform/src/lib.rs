@@ -14,6 +14,8 @@ pub mod endymion_devices;
 pub mod cheats;
 // The frontend API's stable header, emusen_crystal.h, exported beside this interface as step B7 builds it (EmuSen_Backend.md §29).
 pub mod crystal;
+// The session service's twins and its table over Crystal in Rust (EmuSen_Backend.md §29.3, §29.21).
+pub mod crystal_twins;
 pub mod firmware;
 pub mod savemedia;
 pub mod galaxia;

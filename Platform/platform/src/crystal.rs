@@ -11,7 +11,7 @@ thread_local! {
     static LAST_ERROR: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
-fn fail(status: i32, words: impl Into<String>) -> i32 {
+pub(crate) fn fail(status: i32, words: impl Into<String>) -> i32 {
     LAST_ERROR.with_borrow_mut(|last| *last = words.into());
     status
 }
@@ -20,7 +20,7 @@ fn fail(status: i32, words: impl Into<String>) -> i32 {
 ///
 /// # Safety
 /// `out` must be valid for `len` bytes, or null.
-unsafe fn put(bytes: &[u8], out: *mut u8, len: usize) -> i64 {
+pub(crate) unsafe fn put(bytes: &[u8], out: *mut u8, len: usize) -> i64 {
     if !out.is_null() && bytes.len() <= len {
         unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), out, bytes.len()) };
     }
@@ -39,7 +39,7 @@ unsafe fn text<'a>(data: *const u8, len: usize) -> Result<Option<&'a str>, i32> 
 
 /// # Safety
 /// `rt` a runtime this library made and has not freed, or null.
-unsafe fn runtime<'a>(rt: *mut emusen_crystal_runtime) -> Result<&'a Runtime, i32> {
+pub(crate) unsafe fn runtime<'a>(rt: *mut emusen_crystal_runtime) -> Result<&'a Runtime, i32> {
     if rt.is_null() {
         return Err(fail(svc::NULL, "a null runtime"));
     }
@@ -124,6 +124,7 @@ pub unsafe extern "C" fn emusen_crystal_free(rt: *mut emusen_crystal_runtime) ->
     if rt.is_null() {
         return fail(svc::NULL, "a null runtime");
     }
+    crate::crystal_twins::forget(rt);
     drop(unsafe { Box::from_raw(rt as *mut Runtime) });
     0
 }
@@ -540,21 +541,6 @@ pub unsafe extern "C" fn emusen_crystal_rewind_to(rt: *mut emusen_crystal_runtim
     })())
 }
 
-/// A refusal as the session service's twins give it: a state's own refusals kept, anything else a fault in its words.
-fn twin(result: Result<(), (i32, String)>) -> i32 {
-    match result {
-        Ok(()) => 0,
-        Err((status, words)) if status == svc::ABSENT || status == abi::status::STATE_REFUSED => fail(status, words),
-        Err((_, words)) => {
-            let bare = match words.split_once(": ") {
-                Some((kind, rest)) if kind.ends_with("Exception") && !kind.contains(' ') => rest.to_string(),
-                _ => words,
-            };
-            fail(svc::FAULT, bare)
-        }
-    }
-}
-
 /// # Safety
 /// `rt` a live runtime; `out` null or valid for `len` bytes.
 #[unsafe(no_mangle)]
@@ -632,51 +618,6 @@ pub unsafe extern "C" fn emusen_crystal_state_forget(rt: *mut emusen_crystal_run
         let at = unsafe { text(path, path_len) }?.filter(|p| !p.is_empty()).ok_or_else(|| fail(svc::BAD_ARGUMENT, "the path must be given"))?;
         done(r.state_forget(at))
     })())
-}
-
-/// The twins' state path: the one given, or the session's default, slot 1.
-fn twin_path(s: &emusen_crystal::session::Session, given: Option<&str>) -> String {
-    given.map(str::to_string).unwrap_or_else(|| s.state_path(&emusen_galaxia::tree::tree(), emusen_crystal::saving::DEFAULT_SLOT))
-}
-
-/// # Safety
-/// `rt` a live runtime; `path` null or valid for `path_len` bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_crystal_state_save(rt: *mut emusen_crystal_runtime, session: u32, path: *const u8, path_len: usize) -> i32 {
-    code((|| {
-        let r = unsafe { runtime(rt) }?;
-        let s = r.sessions.get(session).map_err(|(st, w)| fail(st, w))?;
-        let at = twin_path(&s, unsafe { text(path, path_len) }?);
-        match twin(r.with_records(|records| s.save_state(&at, records, false))) {
-            0 => Ok(()),
-            status => Err(status),
-        }
-    })())
-}
-
-/// # Safety
-/// `rt` a live runtime; `path` null or valid for `path_len` bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_crystal_state_load(rt: *mut emusen_crystal_runtime, session: u32, path: *const u8, path_len: usize) -> i32 {
-    code((|| {
-        let r = unsafe { runtime(rt) }?;
-        let s = r.sessions.get(session).map_err(|(st, w)| fail(st, w))?;
-        let at = twin_path(&s, unsafe { text(path, path_len) }?);
-        match twin(r.with_records(|records| r.with_ctx(|ctx| s.load_state(&at, records, ctx)))) {
-            0 => Ok(()),
-            status => Err(status),
-        }
-    })())
-}
-
-/// # Safety
-/// `rt` a live runtime; `out` null or valid for `len` bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_crystal_state_default_path(rt: *mut emusen_crystal_runtime, session: u32, out: *mut u8, len: usize) -> i64 {
-    match unsafe { session_of(rt, session) } {
-        Ok(s) => unsafe { put(twin_path(&s, None).as_bytes(), out, len) },
-        Err(status) => status as i64,
-    }
 }
 
 /// A subscription's handle: its subscription and the events it was taken from.

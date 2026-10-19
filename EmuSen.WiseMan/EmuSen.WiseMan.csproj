@@ -154,6 +154,8 @@
   </Target>
   <ItemGroup>
     <None Include="Crystal\DebugScripts\*.script" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The session service's scripts, run through each implementation's twins and tables - see EmuSen_Backend.md §29.21. -->
+    <None Include="Crystal\TwinScripts\*.script" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <Import Project="..\LunaP.props" />
 

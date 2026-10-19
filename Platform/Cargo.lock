@@ -335,11 +335,14 @@ dependencies = [
 name = "emusen-crystal"
 version = "0.1.0"
 dependencies = [
+ "emusen-cheats",
  "emusen-core-host",
+ "emusen-crystal-debug",
  "emusen-dotnet",
  "emusen-firmware",
  "emusen-galaxia",
  "emusen-native",
+ "emusen-recorder",
  "emusen-savemedia",
  "emusen-session-service",
  "emusen-sqlite",

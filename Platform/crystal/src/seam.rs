@@ -1,7 +1,7 @@
 //! The frame's (b) points, EmuSen_Backend.md §29.4, in the shape `emusen-crystal-debug`'s `Debugger` gives them:
-//! what the debugger, the cheat registry and the recorder do at each, called by the frame in its order. Part (a) runs
-//! every session on `NoDebugger`, whose calls do nothing, so the order is whole before part (b) fills each point
-//! without moving a line of it.
+//! what the debugger, the cheat registry and the recorder do at each, called by the frame in its order. Part (a) ran
+//! every session on a debugger whose calls did nothing, so the order was whole before part (b) filled each point; since
+//! part (c) each session's is `debug::SessionDebugger`, the order unmoved (§29.21).
 
 use emusen_core_host::Machine;
 
@@ -56,8 +56,3 @@ pub trait Debugger: Send {
     /// The recorder's picture of a drawn frame: RGBA rows, the width and the height as shown.
     fn capture(&mut self, _frame: i64, _rgba: &[u8], _width: i32, _height: i32) {}
 }
-
-/// Part (a)'s debugger: nothing armed, no cheats, no recorder.
-pub struct NoDebugger;
-
-impl Debugger for NoDebugger {}

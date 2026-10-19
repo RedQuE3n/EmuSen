@@ -1,0 +1,224 @@
+# The session, run control, memory, processors, disassembly, states, the log switch, the provider's events and the
+# games, through the twins and the tables, on the v1 test core.
+log_switch 0
+subscribe
+open $GAME
+service 0
+service 2
+service 1
+info
+summary
+sessions
+games
+processors
+registers 0
+registers 4294967295
+registers 1
+registers 2
+registers 9
+via table
+info
+summary
+sessions
+processors
+registers 0
+via tableid
+info
+via stranger
+info
+summary
+processors
+halt_state 0
+via ro
+info
+spaces
+via twin0
+info
+# Run control
+via twin
+halt_state 0
+halt_state 4294967295
+halt_state 9
+run_control 0 0 0
+info_of
+frames 1
+info_of
+run_control 1 0 0
+info_of
+run_control 2 0 0
+run_control 2 0 1
+halt_state 0
+frames 1
+halt_state 0
+info_of
+events_drain 0
+events_drain 2
+events_drain? 1
+run_control 3 0 0
+run_control 4 0 0
+run_control 5 0 0x8000
+run_control 5 0 0x1FFFFFFFF
+run_control 5 0 -1
+run_control 6 0 0
+run_control 6 0 9
+run_control 6 0 2
+run_control 7 0 100
+run_control 7 0 0x80000000
+run_control 8 0 50
+run_control 9 0 0
+run_control 2 9 1
+run_control 2 4294967295 1
+run_control 2 1 1
+halt_state 1
+events_drain 1
+events_drain 0
+frames 2
+info_of
+halt_state 0
+run_control 1 0 0
+frames 1
+via table
+run_control 2 0 3
+run_control 0 0 0
+halt_state 0
+events_drain 0
+via ro
+run_control 1 0 0
+run_control 0 0 0
+events_drain 0
+via stranger
+run_control 1 0 0
+run_control 0 0 0
+events_drain 0
+via twin
+run_control 1 0 0
+frames 1
+drain
+# Memory
+spaces
+space_read RAM 0 8
+space_read ram 2 4
+space_read? RAM 0 7
+space_read NOPE 0 4
+space_read - 0 4
+space_read x:FF 0 4
+space_write RAM 0 x:0102A0
+space_read RAM 0 4
+space_write ROM 0 x:01
+space_write NOPE 0 x:01
+space_write - 0 x:01
+space_write RAM 0 -
+space_read RAM 0xFFFFFFFE 4
+resolve_physical 0
+resolve_physical 0x8000
+via table
+space_read RAM 0 4
+space_write RAM 1 x:77
+space_read RAM 0 4
+via ro
+space_write RAM 1 x:55
+space_read RAM 0 4
+via stranger
+space_read RAM 0 4
+space_write RAM 1 x:55
+# Registers and disassembly
+via twin
+set_register 0 A 5
+set_register 4294967295 A 5
+set_register 0 Nope 1
+set_register 9 A 1
+set_register 0 - 1
+disassemble 0 - 0 4 -
+disassemble 4294967295 - 0 4 -
+disassemble 1 - 0 4 -
+disassemble 0 ROM 0 3 -
+disassemble 0 RAM 0 4 '["m8","x16"]'
+disassemble 0 - 0 4 '[1]'
+disassemble 0 - 0 4 '[null,"a"]'
+disassemble 0 - 0 4 '{}'
+disassemble 0 - 0 4 'nope'
+disassemble 0 - 0 4 '["a"] trailing'
+disassemble 0 - 0 0x80000000 -
+disassemble 9 - 0 4 -
+via ro
+set_register 0 A 5
+disassemble 0 - 0 2 -
+# States
+via twin
+state_default_path
+state_save -
+state_load -
+state_save $DIR/saved.state
+state_load $DIR/saved.state
+state_load $DIR/missing.state
+via table
+state_default_path
+state_save $DIR/table.state
+state_load $DIR/table.state
+via ro
+state_save $DIR/ro.state
+state_load $DIR/table.state
+state_default_path
+via stranger
+state_default_path
+state_save $DIR/stranger.state
+# The log switch, the process's
+via twin
+log_status
+log_switch 1
+log_status
+via table
+log_status
+log_switch 0
+log_status
+via ro
+log_switch 1
+log_status
+via twin
+log_switch 7
+log_status
+log_switch 0
+log_status_null
+# Games opened from a session
+via table
+open_game $OTHER -
+open_game - -
+open_game $DIR/absent.tst -
+open_console TEST -
+open_console Nowhere -
+open_console - -
+via ro
+open_game $OTHER -
+via stranger
+open_game $OTHER -
+via twin
+open_game $OTHER No-Such-Engine
+open_console TEST -
+via twin0
+info
+via twin
+info
+drain
+open $HELPER
+processors
+info
+halt_state 1
+registers 1
+run_control 2 1 1
+run_control 5 1 4
+run_control 2 0 1
+frames 1
+halt_state 0
+info_of
+disassemble 1 - 0 2 -
+via table
+processors
+run_control 1 0 0
+frames 1
+via twin
+drain
+use 1
+close
+info
+via twin0
+info

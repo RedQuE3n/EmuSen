@@ -1,0 +1,36 @@
+# One game of a build's engine through the session group, run control, memory and processors.
+open $GAME
+info
+summary
+processors
+registers 4294967295
+registers 0
+registers 1
+registers 2
+spaces
+halt_state 0
+disassemble 4294967295 - 0 4 -
+disassemble 0 - 0x8000 6 -
+resolve_physical 0
+resolve_physical 0x8000
+resolve_physical 0x2002
+resolve_physical 0x80000400
+frames 2
+run_control 2 0 1
+frames 1
+info_of
+halt_state 0
+processors
+run_control 3 0 0
+run_control 4 0 0
+via table
+run_control 2 1 2
+halt_state 1
+run_control 1 0 0
+via twin
+frames 1
+set_register 0 A 1
+set_register 0 PC 1
+summary
+events_drain 0
+close

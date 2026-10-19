@@ -15,6 +15,7 @@ use crate::abi::{self, emusen_crystal_frame_info};
 use crate::engine::Engine;
 use crate::input::Routes;
 use crate::json::Json;
+use crate::seam::Debugger as _;
 use crate::speed::{NORMAL_PERCENT, Speed};
 use emusen_session_service::abi::status as svc;
 
@@ -106,6 +107,8 @@ pub struct Session {
     pub events: Arc<crate::events::Events>,
     /// The core's log lines already raised as events.
     logged_lines: std::sync::atomic::AtomicI64,
+    /// The session service's own state for this session: run control's requests and the records kept.
+    pub provider: crate::service::Provider,
 }
 
 fn controllers_of_system(info: &Value, system: &str) -> Vec<Value> {
@@ -150,6 +153,7 @@ impl Session {
             identity,
             events,
             logged_lines: std::sync::atomic::AtomicI64::new(0),
+            provider: crate::service::Provider::default(),
         }
     }
 
@@ -291,7 +295,7 @@ impl Session {
         if let Some((processor, address)) = e.halted {
             run.halted = true;
             e.refresh_debugger();
-            let name = e.mi.processors.iter().find(|(id, _)| *id == processor).map_or("CPU".to_string(), |(_, n)| n.clone());
+            let name = e.halted_name(processor);
             self.events.raise(self.id, abi::EVENT_RUN, "run", |j| {
                 j.str("op", "halted").str("processor", &name).int("address", address as i64);
             });
@@ -613,7 +617,14 @@ impl Session {
             }
         }
         j.str("run", if run.halted { "halted" } else if run.paused { "paused" } else { "running" });
-        j.null("halted");
+        match e.halted.filter(|_| run.halted) {
+            Some((processor, address)) => {
+                j.key_object("halted").str("processor", &e.halted_name(processor)).int("address", address as i64).end_object();
+            }
+            None => {
+                j.null("halted");
+            }
+        }
         let controllers = controllers_of_system(&e.info, &e.mi.system);
         let named = e.mi.ports.iter().filter(|p| p.controller.is_some()).map(|p| p.port as usize + 1).max().unwrap_or(0);
         let ports = if loaded && named > 0 {

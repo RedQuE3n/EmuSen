@@ -87,3 +87,66 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   Endou's own, with a provenance page of their own.
 - Pinned by: —
 - Implemented in: —
+
+### D-3. The I/O chip: on the Mark III a TH pin set as an output reads low and one left an input reads high
+- Opened: 2026-10-19, at stage 2, by the documents and a referee disagreeing. SMS Power!'s "Peripheral Ports" says the
+  TH function "is not present on the Mark III (there's no TH at all)", and its "Controller Port" gives pin 7 as "TH
+  (Gnd on Mark III)", which would read low whatever port `$3F` says. Sega's Mark III manual lists port `$3F`'s TH
+  directions and levels and `$DD`'s TH bits for the Light Phaser ("P1 TH (L.Gun Synch)", appendix B), as if the pin
+  worked. The same "Peripheral Ports" gives the Japanese Master System's: with TH set as an output, `$DD`'s bits 7 and
+  6 "are always zero regardless".
+- Documents read: SMS Power!'s "Peripheral Ports", "Controller Port", "Region Detection"; Sega's Mark III manual,
+  "Input/Output (I/O) ports" and appendix B; MacDonald's `smstech` §4.
+- Test program: `programs/region.s` (SMS Power!'s region check) and `programs/pads.s`, on each model.
+- Referee: the five libretro cores, as black boxes (`Endou_Native.md` §9.11). Genesis Plus GX's Mark III model finds a
+  Japanese console by the region check and reads TH high with the pins left as inputs; SMS Plus GX and Gearsystem in
+  their Japanese settings agree; PicoDrive and BlastEm find an export console. SMS_MiSTer is not run (no VHDL
+  simulator, `Endou_Native.md` §8).
+- Conclusion: **argued.** On the Mark III, TH as an output reads low, as the Japanese Master System's is documented to,
+  which every account agrees software sees (a Japanese console); TH as an input reads high, as a pin no pad drives
+  does on the other consoles and as the one referee with a Mark III model has it. A pin tied to ground would read low
+  as an input too; nothing that reads TH as an input on a Mark III (the Light Phaser) is built before stage 11, which
+  reopens the entry if its test program needs it. TR stays an input on the Mark III [A].
+- Pinned by: `io::tests::the_export_consoles_read_th_back_and_the_mark_iii_does_not`,
+  `programs::the_region_reads_back_as_each_console_s`, `programs::the_pads_reset_button_and_th_lines_read_through_the_joystick_ports`.
+- Implemented in: the stage 2 commit.
+
+### D-4. Port $3E: a slot or the work RAM switched off drives nothing, and port $3E reads as an undriven port
+- Opened: 2026-10-19, at stage 2, by the referees disagreeing with the document and with each other on
+  `programs/port3e.s` (`Endou_Native.md` §9.11). MacDonald: "Writes to even addresses go to memory control register",
+  reads of `$00`–`$3F` "return the last byte of the instruction which read the port" on the first Master System and
+  `$FF` on the second; with a slot enabled and nothing in it, a read returns "the last byte of the instruction which
+  read memory" (`smstech` §3, §4). SMS Power!'s "RAM": "Bit 4 of I/O Port $3E must be 0 for RAM to be enabled".
+- Documents read: `smstech` §3–§4; SMS Power!'s "Port $3E", "RAM", "I/O Port Map - SMS"; Sega's Mark III manual,
+  "Memory enables".
+- Test program: `programs/port3e.s`: the cartridge switched off from a routine in RAM and `$0100` read, the work RAM
+  switched off and written, port `$3E` read; on each model.
+- Referee: BlastEm, Gearsystem and PicoDrive read the cartridge with its slot off and keep the write to work RAM
+  switched off; Genesis Plus GX and SMS Plus GX did not finish the program; every one reads port `$3E` as `$FF`, on the
+  first Master System's setting too. None agrees with another closely enough to be evidence against the document.
+- Conclusion: **argued** from the document: a slot switched off drives nothing, and the read is the floating bus on the
+  first Master System and the Mark III [A for the Mark III] and `$FF` on the Master System II; work RAM switched off
+  takes no write and reads the same way (MacDonald "haven't checked" the read [R], so it is argued); port `$3E` reads
+  as an undriven port. SMS_MiSTer would referee it when a simulator is allowed; a game shown to need otherwise reopens
+  the entry.
+- Pinned by: `bus::tests::port_3e_disables_the_cartridge_and_the_ram`, `programs::port_3e_takes_the_cartridge_and_the_ram_off_the_bus`.
+- Implemented in: the stage 2 commit.
+
+### D-5. Codemasters' mapper: every one of the three slots is banked by a write to its own addresses
+- Opened: 2026-10-19, at stage 2, by two documents that disagree. MacDonald: "All SMS and GG games by Codemasters have
+  a fixed 32K ROM area at $0000-$7FFF and a 16K bank at $8000-$BFFF. The bank can be selected by writing a byte to
+  address $8000" (`smstech` §2, 2002). SMS Power!'s "Mappers" (modified 2024): the control registers "are mapped to all
+  16KB of each bank and the first 1KB is no longer protected", writes at `$0000`, `$4000` and `$8000` banking slots 0,
+  1 and 2, initialised to banks 0, 1 and 0, and bit 7 of slot 1's value mapping Ernie Els Golf's 8 KiB of RAM at
+  `$A000`.
+- Documents read: `smstech` §2; SMS Power!'s "Mappers", "Codemasters Header".
+- Test program: `programs/codemasters.s`, banking slot 2 then slot 1 by their own addresses, then the RAM bit.
+- Referee: PicoDrive, the one reference that took the synthetic image as Codemasters' board, banks slot 1 by a write
+  to `$4000` and maps the RAM, its bytes equal to Endou's; the others ran it on Sega's mapper.
+- Conclusion: **argued** for the later page: it is a superset of MacDonald's account (a game that banks only slot 2
+  runs the same under both), it names the RAM board, and the referee agrees. Neither of the library's two Codemasters
+  images wrote a bank register in the survey's 3,000 frames with no VDP [M `Endou_Native.md` §9.10], so the library
+  has not yet told the two accounts apart; stage 3 runs them further.
+- Pinned by: `cart::tests::codemasters_mapper_banks_every_slot_by_its_own_addresses`,
+  `programs::codemasters_mapper_banks_by_its_slots_addresses_and_maps_its_ram`, `EndouTests.Each_mapper_banks_its_slots_as_its_board_does`.
+- Implemented in: the stage 2 commit.

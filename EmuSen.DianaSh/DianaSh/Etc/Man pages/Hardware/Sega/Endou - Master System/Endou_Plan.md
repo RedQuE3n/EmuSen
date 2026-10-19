@@ -256,7 +256,7 @@ form for; a later netplay-like design would decide it, and few games need it to 
 - **`beryl-z80`'s assembler**, behind an `asm` feature as `beryl-m68k`'s is [R Nephrite's `Cargo.toml`], which every
   Beryl crate was to carry as a development tool [R `Beryl-HW/README.md`] and the Z80 crate does not yet [R
   `Beryl_Z80.md`, no assembler recorded]. It assembles Endou's test programs and the open boot program at build time.
-  Stage 2.
+  Stage 2. *Built 2026-10-19 (`Beryl_Z80.md` §8), its front half shared with the 68000's in `beryl-asm`.*
 - **`beryl-sms-vdp`**, the VDP family as one chip crate (§3.3). Stages 3 and 4.
 - **Conditionally, the operator ROMs.** If D-2 finds that the YM2413's log-sine and exponent ROMs are the OPL2's, as
   they are for the OPN2 on Nuked-MD's board [R `Nephrite_OperatorTables.md` §4], the two tables Nephrite holds in
@@ -321,7 +321,9 @@ of it [C]:
   kit case, the hosts' input latch, and a frontend's mapping of a mouse or a touch onto it. Endou would be its first
   user; the NES's Zapper and the SNES's Super Scope would be later ones [A].
 - **A battery that appears after create** (stage 2), only if the host does not already save a battery file that machine
-  info lists after a `MACHINE_INFO` event; if it does not, §4.4's table form is used and nothing is proposed.
+  info lists after a `MACHINE_INFO` event; if it does not, §4.4's table form is used and nothing is proposed. *Settled
+  at stage 2:* the host takes its battery files at create only, so the table form is used and nothing is proposed
+  (`Endou_Native.md` §9.2).
 - **The probe's options for the Master System** (stage 1): each reference's model, region and FM options pinned through
   `GET_VARIABLE`, as Nephrite's §1.6 did for the Genesis. *Built 2026-10-19:* nothing was needed beyond `--option`; the
   keys are listed in `Endou_Native.md` §5.2, and `.sg` names its system in the probe's log.
@@ -421,7 +423,9 @@ have a battery** is open: the header cannot say, and Sega's mapper enables RAM b
 stage 2]: a machine info that gains its battery entry with `MACHINE_INFO` the first time a game enables cartridge RAM,
 if the host saves a battery that appears after create; or a table of battery boards keyed by the image's checksum,
 from a public per-game listing, as Nephrite identifies its EEPROM boards by serial [R `Nephrite_Plan.md` §1.2]. The
-first is preferred if the host already honours it, since it needs no list.
+first is preferred if the host already honours it, since it needs no list. *Settled at stage 2 (`Endou_Native.md`
+§9.2):* the host does not, so the table, keyed by the image's CRC-32, names the battery boards; a battery game it does
+not name keeps its RAM only while the game runs.
 
 ### 4.5 Cheats
 
@@ -620,7 +624,7 @@ before the next begins. The core carries the `InDevelopment` mark from stage 1 u
 |---|---|---|---|
 | **0** | This plan, its references page and disputes log | The tester's go | 1 (2026-10-19) |
 | **1** | *Built 2026-10-19, `Endou_Native.md` §1–§6.* The crate `endou` on the core ABI v1 as a stub: core info for `sms` and `sg1000`, the header read, a black picture; its row in `RustCores.props` with `<InDevelopment>true</InDevelopment>`, so the build writes its sidecar marked and lists it in `cores.manifest` [R `EmuSen_Backend.md` §27.11]; CI's matrix row; the data files `sms.json` and `sg1000.json`; WiseMan's `SyntheticSmsRom` (a header with its checksum and region, a boot stub, a pad reader, as `SyntheticMdRom` serves Nephrite [R `NephriteTests.cs`]); on the tester's go, the documents, test programs and references fetched and pinned (`Endou_References.md`), the three local references and any fetched ones run through the probe with their costs and spaces | The kit's C1–C23 on synthetic images; the systems crate's tests; a published tree's `sha256sum -c cores.manifest`; the references' costs recorded | 2 |
-| **2** | The machine without its picture: the bus, RAM, `$3E`, `$3F`, the controller ports, the region read-back, the Pause NMI and the Reset bit; cartridges (plain, Sega's mapper with its RAM, Codemasters', the SG-1000's RAM boards) and the board table's form; the battery form (§4.4); the scheduler on the master clock; `beryl-z80`'s assembler | Synthetic programs for each port, mapper and interrupt rule; an SMS-hosted ZEXALL on the whole machine; RAM against the references at anchors on test programs | 3 |
+| **2** | *Built 2026-10-19, `Endou_Native.md` §9.* The machine without its picture: the bus, RAM, `$3E`, `$3F`, the controller ports, the region read-back, the Pause NMI and the Reset bit; cartridges (plain, Sega's mapper with its RAM, Codemasters', the SG-1000's RAM boards) and the board table's form; the battery form (§4.4); the scheduler on the master clock; `beryl-z80`'s assembler | Synthetic programs for each port, mapper and interrupt rule; an SMS-hosted ZEXALL on the whole machine; RAM against the references at anchors on test programs | 3 |
 | **3** | `beryl-sms-vdp`, mode 4: ports, registers, VRAM and CRAM, the counters and the TH latch, the interrupts, the status flags, the composition with sprites (limits, zoom, tall, collision, overflow), the scroll locks, the mask, the 315-5246's heights, the access slots, the dot-stamped renderer, PAL | The VDP test programs (self-reporting ones by their verdicts); pictures equal to the references up to a colour map, or a dispute; the skip-versus-draw state test | 5 |
 | **4** | The VDP's TMS9918 modes and the TMS9918A variant; the SG-1000 as a system; **Nephrite moved onto the crate's composition** | SG-1000 programs and cartridges' pictures against the references; **Nephrite's D-7 tests and its corpus digests unchanged** (P4) | 3 |
 | **5** | Sound: the PSG's wiring in both variants, the mix and the resampler, the analogue stage as far as recordings allow, `$F2` with no FM unit | Synthetic voices against the references' audio; recordings if any | 2 |

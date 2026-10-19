@@ -13,13 +13,16 @@ Master System is the next new console, ahead of the PlayStation 2; building star
   questions, decided 2026-10-19.
 - [`Endou_Native.md`](Endou_Native.md) — the build record, from stage 1 (2026-10-19): the stub crate `endou` on the
   core ABI v1, marked in development; the systems `sms` and `sg1000` as data; `SyntheticSmsRom`; the kit's gate; the
-  five references' costs; the seeded faults; and the questions before stage 2.
+  five references' costs; the seeded faults; and the questions before stage 2, decided 2026-10-19. Stage 2 (§9,
+  2026-10-19): the bus, the boards and their table, the I/O chip and the models, the scheduler, the state's version 2,
+  the test programs, ZEXDOC and ZEXALL on the machine, the library survey, the referees, the gate and the seeded faults.
 - [`Endou_References.md`](Endou_References.md) — the documents, test programs, references and referees with their URL,
   version, licence and SHA-256, as stage 1 fetched and pinned them, and the corrections to what stage 0 recalled.
 - [`Endou_Disputes.md`](Endou_Disputes.md) — the disputes log, opened with D-0 (the PSG's noise register by console),
-  D-1 (the Master System's colour levels, open) and D-2 (the YM2413's operator ROMs, open).
+  D-1 (the Master System's colour levels, open) and D-2 (the YM2413's operator ROMs, open); stage 2 added D-3 (the
+  Mark III's TH), D-4 (port `$3E` and the undriven reads) and D-5 (Codemasters' slots), each argued.
 
-The CPU and the PSG are documented with their crates in [`../Beryl-HW/`](../Beryl-HW/) (Beryl Hardware). The Game
+The CPU, its assembler and the PSG are documented with their crates in [`../Beryl-HW/`](../Beryl-HW/) (Beryl Hardware). The Game
 Gear's pages, when its stages start, go in [`../Jadeite - Game Gear/`](../Jadeite%20-%20Game%20Gear/).
 
 The core was first reserved as Endymion, a name now held by the SDL crate; see `Man pages/EmuSen_Core_Naming_Scheme.md`

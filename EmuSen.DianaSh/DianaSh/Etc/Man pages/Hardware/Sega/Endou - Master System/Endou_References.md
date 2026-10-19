@@ -144,6 +144,14 @@ Each core's cost, timing and spaces are in `Endou_Native.md` §5.2.
 - **MAME** was not fetched (§3); **Mesen 2** is archived, its successor MesenCE.
 - **SMS_MiSTer's Z80 is T80**, as the plan guessed, by its folder's name; it has no licence file.
 
+## 6a. Used at stage 2 (2026-10-19)
+
+Nothing was fetched. One document already in the probe's cache from Nephrite's fetch was used: d0nut's *The complete
+documentation about Genesis ROM format*, version 1.1 (`nephrite/docs/zophar/genesis-rom-format.txt`, SHA-256
+`2f7353ea8e361019afaf6da1b3fea597b18982f59e58f63cc63f4ff6876dcaf0`, none stated), for the copier's 512-byte header
+(`Endou_Native.md` §9.2). ZEXALL-SMS's source was read for where it writes its report and how it detects the VDP. The
+references and test programs were run as `Endou_Native.md` §9.9 and §9.11 record.
+
 ## 7. What was read for this page
 
 The pages and listings of §1–§4 as far as needed to identify, date and license each item: titles, contents lists,

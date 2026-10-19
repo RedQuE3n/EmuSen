@@ -5877,6 +5877,9 @@ the scope is the same; the facade is more than twice §7's figure, as B3's and B
   classes fail on one alone; the migrations stay two lists held equal by them.
 - **§28.7's three items stand**: SHA-1 with B9 (`identity` gains `sha1` by a minor), one rule for recent games, and the
   two routers until B7.
+  *Decided 2026-10-18 by the tester, as recommended: SHA-1 is taken at B9 with the crate `sha1` 0.11, `identity`
+  gaining `sha1` by a minor; the library screen's "Recent" and Big Picture's "Last Played" follow one rule, the library
+  screen's.*
 - **Not moved, by §28.1**: `GameMetadata`'s resolution over `media.db` and the cover and OpenVGDB files (B9),
   `MediaLibrary` (B7), `RecentCache` and the presentation files (the frontend's).
 - **On Windows and macOS**, paused (`EmuSen_RustPlatform.md` §31): the walk's hidden rule there (a flag, not a leading

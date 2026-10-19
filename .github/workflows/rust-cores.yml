@@ -159,6 +159,8 @@ jobs:
             EmuSen/Cores/Shared/emusen-native/target/test-checked/examples/*v1_plain_core.*
             EmuSen/Cores/Shared/emusen-core-conform/target/test-checked/emusen-core-conform
             EmuSen/Cores/Shared/emusen-core-conform/target/test-checked/emusen-core-conform.exe
+            EmuSen/Cores/Shared/emusen-core-host/target/test-checked/emusen-core-host
+            EmuSen/Cores/Shared/emusen-core-host/target/test-checked/emusen-core-host.exe
           if-no-files-found: error
 
   # Diamond's open kernel (Diamond_OpenKernel.md §6, §7): its harness on blackmoon-r3000, and its image rebuilt by the pinned nightly to the committed bytes.
@@ -588,7 +590,11 @@ jobs:
           out=EmuSen-Project/EmuSen.WiseMan/bin/Release/net10.0
           # The test cores' artefact keeps its two crates' folders, since it holds the kit's runner too; every file goes beside the tests.
           find native -type f -exec cp {} "$out/" \;
-          chmod +x "$out"/emusen-core-conform* || true
+          chmod +x "$out"/emusen-core-conform* "$out"/emusen-core-host* || true
+          # The installation's manifest the local build writes beside the cores, written here from the libraries placed (EmuSen_Backend.md §27.5).
+          py=$(command -v python3 || command -v python)
+          "$py" -c "import hashlib, os, sys; d = sys.argv[1]; libs = sorted(f[:-10] for f in os.listdir(d) if f.endswith('.core.json') and os.path.isfile(os.path.join(d, f[:-10]))); open(os.path.join(d, 'cores.manifest'), 'w', newline='\\n').write(''.join(hashlib.sha256(open(os.path.join(d, l), 'rb').read()).hexdigest() + '  ' + l + '\\n' for l in libs))" "$out"
+          cat "$out/cores.manifest"
           # The shell's shipped program goes where the shell looks for it, dianash/ beside the tests (EmuSen_DianaSh.md §7).
           mkdir -p "$out/dianash"
           for f in native/nano native/nano.exe native/nano.dianash.json; do if [ -f "$f" ]; then mv "$f" "$out/dianash/"; rm -f "$out/$(basename "$f")"; fi; done
@@ -603,7 +609,7 @@ jobs:
 
       - name: Test the Rust cores against the C# cores
         working-directory: EmuSen-Project
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery|FullyQualifiedName~MoonRtCoreAbi|FullyQualifiedName~MercuryRtCoreAbi|FullyQualifiedName~Nephrite|FullyQualifiedName~Diamond|FullyQualifiedName~TestRomRunner" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery|FullyQualifiedName~CoreHostParity|FullyQualifiedName~MoonRtCoreAbi|FullyQualifiedName~MercuryRtCoreAbi|FullyQualifiedName~Nephrite|FullyQualifiedName~Diamond|FullyQualifiedName~TestRomRunner" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       # The platform's steps run whatever the cores' comparison above found, since neither depends on the other (EmuSen_RustPlatform.md §27.3).
       # Galaxia on its C#, which EMUSEN_GALAXIA_NATIVE=0 selects. These tests had not run on Windows or macOS before step 2a, so it reports and does not yet gate.

@@ -112,7 +112,7 @@
     <None Include="Cores\MercuryCorpusBaseline.tsv" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Cores\MercuryCorpusBaseline.tsv')" />
     <None Include="..\EmuSen\Cores\Shared\emusen-native\abi\v1\baseline.txt" Link="Cores\CoreAbiBaseline.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-  <!-- The core ABI's test cores and the conformance kit's runner, built by cargo and copied beside the tests that drive the v1 adapter; CI copies the shared job's builds instead - see EmuSen_CoreAPI.md §19, §21. -->
+  <!-- The core ABI's test cores and the conformance kit's runner and the core host's tool, built by cargo and copied beside the tests that drive the v1 adapter; CI copies the shared job's builds instead - see EmuSen_CoreAPI.md §19, §21. -->
   <PropertyGroup>
     <EmuSenTestCoreDir>$(MSBuildThisFileDirectory)..\EmuSen\Cores\Shared\emusen-native\</EmuSenTestCoreDir>
     <EmuSenTestCoreTarget>$(MSBuildThisFileDirectory)obj\emusen-native</EmuSenTestCoreTarget>
@@ -120,6 +120,10 @@
     <EmuSenConformTarget>$(MSBuildThisFileDirectory)obj\emusen-core-conform</EmuSenConformTarget>
     <EmuSenConformFile Condition="$([MSBuild]::IsOSPlatform('Windows'))">emusen-core-conform.exe</EmuSenConformFile>
     <EmuSenConformFile Condition="'$(EmuSenConformFile)' == ''">emusen-core-conform</EmuSenConformFile>
+    <EmuSenCoreHostDir>$(MSBuildThisFileDirectory)..\EmuSen\Cores\Shared\emusen-core-host\</EmuSenCoreHostDir>
+    <EmuSenCoreHostTarget>$(MSBuildThisFileDirectory)obj\emusen-core-host</EmuSenCoreHostTarget>
+    <EmuSenCoreHostFile Condition="$([MSBuild]::IsOSPlatform('Windows'))">emusen-core-host.exe</EmuSenCoreHostFile>
+    <EmuSenCoreHostFile Condition="'$(EmuSenCoreHostFile)' == ''">emusen-core-host</EmuSenCoreHostFile>
     <EmuSenTestCorePrefix Condition="!$([MSBuild]::IsOSPlatform('Windows'))">lib</EmuSenTestCorePrefix>
     <EmuSenTestCoreSuffix Condition="$([MSBuild]::IsOSPlatform('Windows'))">.dll</EmuSenTestCoreSuffix>
     <EmuSenTestCoreSuffix Condition="$([MSBuild]::IsOSPlatform('OSX'))">.dylib</EmuSenTestCoreSuffix>
@@ -127,11 +131,13 @@
   </PropertyGroup>
   <Target Name="BuildV1TestCore" BeforeTargets="BeforeBuild" Condition="'$(EmuSenNative)' != 'false'">
     <Exec Command="cargo build --release --bin emusen-core-conform --manifest-path &quot;$(EmuSenConformDir)Cargo.toml&quot; --target-dir &quot;$(EmuSenConformTarget)&quot;" WorkingDirectory="$(EmuSenConformDir)" StandardOutputImportance="low" />
+    <Exec Command="cargo build --release --bin emusen-core-host --manifest-path &quot;$(EmuSenCoreHostDir)Cargo.toml&quot; --target-dir &quot;$(EmuSenCoreHostTarget)&quot;" WorkingDirectory="$(EmuSenCoreHostDir)" StandardOutputImportance="low" />
     <Exec Command="cargo build --release --example v1_test_core --example v1_plain_core --manifest-path &quot;$(EmuSenTestCoreDir)Cargo.toml&quot; --target-dir &quot;$(EmuSenTestCoreTarget)&quot;" WorkingDirectory="$(EmuSenTestCoreDir)" StandardOutputImportance="low" />
     <ItemGroup>
       <None Include="$(EmuSenTestCoreTarget)\release\examples\$(EmuSenTestCorePrefix)v1_test_core$(EmuSenTestCoreSuffix)" Link="$(EmuSenTestCorePrefix)v1_test_core$(EmuSenTestCoreSuffix)" CopyToOutputDirectory="PreserveNewest" />
       <None Include="$(EmuSenTestCoreTarget)\release\examples\$(EmuSenTestCorePrefix)v1_plain_core$(EmuSenTestCoreSuffix)" Link="$(EmuSenTestCorePrefix)v1_plain_core$(EmuSenTestCoreSuffix)" CopyToOutputDirectory="PreserveNewest" />
       <None Include="$(EmuSenConformTarget)\release\$(EmuSenConformFile)" Link="$(EmuSenConformFile)" CopyToOutputDirectory="PreserveNewest" />
+      <None Include="$(EmuSenCoreHostTarget)\release\$(EmuSenCoreHostFile)" Link="$(EmuSenCoreHostFile)" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
   </Target>
   <Import Project="..\LunaP.props" />

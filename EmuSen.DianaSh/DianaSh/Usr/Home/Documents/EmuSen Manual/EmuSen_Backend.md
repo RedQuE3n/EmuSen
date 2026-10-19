@@ -1,6 +1,6 @@
 # EmuSen — the backend in Rust: the line, the frontend API, the system packs and the services
 
-*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18), and B4's shared part with core ABI 1.13 (§22, 2026-10-18), and MoonRT's units, pack views and switch (§23, 2026-10-18), and debugger expressions naming the units' registers (§24, 2026-10-18), and B4's last step, the deletion across the cores that finishes it (§26, 2026-10-18), and B6's design, the core host in Rust, its three questions decided the same day (§27, 2026-10-18), and B8's design, the library in Rust (§28, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
+*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18), and B4's shared part with core ABI 1.13 (§22, 2026-10-18), and MoonRT's units, pack views and switch (§23, 2026-10-18), and debugger expressions naming the units' registers (§24, 2026-10-18), and B4's last step, the deletion across the cores that finishes it (§26, 2026-10-18), and B6, the core host in Rust, designed and built (§27, 2026-10-18), and B8's design, the library in Rust (§28, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
 get the entire backend ported to rust", after which the frontend's move is planned, and the request of 2026-10-17 to
 design two things: one frontend API by which every frontend drives the cores, and the system packs and the remaining C#
 platform services in Rust. Every claim about the code was read on `WiseMan` at `165e60b4`. Claims are marked as
@@ -675,7 +675,7 @@ behind a switch until the tester agrees to state 3, and says how it is proven. T
 | **B3** | **Pack code in Rust**: the recognisers and routing, header readers, cheat codecs, the card formats (`PsxCardFormat`, `N64PakFormat`, `SegaCdBramFormat`), debugger views, the OpenVGDB transform; the console code of the shims moved in (`N64GameSharkCodec`, `MoonBoards`, `GbCartridge`, the SM83 disassembler) and the VR4300's onto `emusen-mips` | a parity class per pack on generated inputs: synthetic discs and cartridges for the recognisers, every code of the cheat tests both ways, cards written by each side read by the other and edited to the same bytes, and cards written by Diamond's and Nephrite's open firmware read by the pack's modules (F21), every tile and tilemap entry of the debug-view tests; seeded faults shown to be caught (`EmuSen_RustPlatform.md` §6.5) [R]; the golden corpus's `cheat`, `cards`, `tile` and `dis` files | `EMUSEN_SYSTEMS_NATIVE=0` |
 | **B4** | **The per-core shims retired.** What each adds above the ABI goes into its core's own exports, as optional capabilities of the core ABI v1 where one exists (`DEBUG_REGISTERS`, `EmuSen_DianaSh.md` Q28 [R]) and a minor where none does; MarsRT's private exports (`marsrt_core_counters`, `_cpu_registers`, `_gpu_report` and the rest, `MarsRtCore.cs:21–32` [M]) become telemetry or debug capabilities; the shims, `PortEngine` and the pre-stable host deleted; the three dead classes deleted | each core's goldens and corpus baseline unchanged (`EmuSen_Stack.md` §2.1, 2026-10-16) [R]; the kit's corpus on each core; the debugger's golden corpus on each core unchanged, or each difference recorded and decided; `grep` for a type under `EmuSen.Cores.Nintendo.` in shipped code: 0 | per core: its shim stays until its core's exports pass, reached through `CoreFactory` as now. *Built 2026-10-18: VenusRT §19.9, MoonRT §21 and §23, MercuryRT §17.9 and §17.10, MarsRT §18.9 and §18.10, the shared host and core ABI 1.13 §22, the deletion across the cores §26; every gate as measured in §26.4* |
 | **B5** | **The file services in Rust**: `emusen-firmware` (the store, the folders' order, the overview), `emusen-savemedia` (the card manager over B3's formats and Galaxia's `MediumLock`), `emusen-cheats`' files and database (`.cht`, the list files, the database's install, prune and import) | a parity class per service over generated trees (firmware whole and split, cards of each medium held and free, `.cht` files of the cheat tests); the golden corpus's `cards`, `cheat db` and `firmware` cases. *Built 2026-10-17, §15; the download on SR9's client built 2026-10-18, §16* | `EMUSEN_SERVICES_NATIVE=0` |
-| **B6** | **The core host in Rust, shared with the kit**: `emusen-core-host` in `EmuSen/Cores/Shared/` (discovery from sidecars, trust and the manifest, the checks of `EmuSen_CoreAPI.md` §7.2, the v1 calls, the input latch, the state layout), which the kit's `api.rs`, `sidecar.rs` and `lender.rs` fold into | the kit's corpus on every core gives the same report through the new crate; discovery's listing as JSON equal from the C# and the Rust over the published tree and over trees with a missing, altered and unapproved library | the kit keeps its own loader until its corpus passes; the C# host is untouched by this step. *Designed 2026-10-18, §27; three questions for the tester (§27.9), decided the same day* |
+| **B6** | **The core host in Rust, shared with the kit**: `emusen-core-host` in `EmuSen/Cores/Shared/` (discovery from sidecars, trust and the manifest, the checks of `EmuSen_CoreAPI.md` §7.2, the v1 calls, the input latch, the state layout), which the kit's `api.rs`, `sidecar.rs` and `lender.rs` fold into | the kit's corpus on every core gives the same report through the new crate; discovery's listing as JSON equal from the C# and the Rust over the published tree and over trees with a missing, altered and unapproved library | the kit keeps its own loader until its corpus passes; the C# host is untouched by this step. *Designed 2026-10-18, §27, its three questions decided the same day (§27.9); built the same day, §27.10 to §27.12: the kit's corpus 265 reports of 265 the same, the listings equal on every tree but the pinned unapproved report, seven seeded faults caught* |
 | **B7** | **Crystal in Rust**: `emusen-crystal` over B1 to B6: sessions and the frame call, input, speed, rewind, states and `states.db`, settings and `consoles.json`, save-media placement, cheat application, the debugger's registries, expressions and bridge, telemetry, the recorder, the session service's table; exported as `emusen_crystal_*` from the platform library. Built in four parts, each graded before the next: (a) life, frame, input, speed, rewind, states, settings, media; (b) the debugger; (c) the service table; (d) the per-program switch | the parity class runs scripted sessions through the binding on both implementations and compares frame and audio digests, state bytes, files written, events drained and every service function's JSON; the debugger's golden corpus with Crystal's table; then state 2 per program: **Pharaoh first**, then emusen-shell, then Mistress, each after a full blast-radius run on Linux and the three systems' CI | `EMUSEN_CRYSTAL_NATIVE=0`, per process, the B2 implementation |
 | **B8** | **The library in Rust**: `emusen-library` and `emusen_library.h`; the scan, identity over Galaxia's extended `RomHash`, `games.db` with its migrations, play time, collections and edits; Mistress's `Library/` behind the binding | a parity class: a generated library scanned by both into separate databases, compared row for row; every `games.db` version of the migration tests opened by both; the SQLite rule of `EmuSen_RustPlatform.md` §2.8 kept, one copy of SQLite per process (the C# lends `e_sqlite3` as Q25 there decided) [R] | `EMUSEN_LIBRARY_NATIVE=0` |
 | **B9** | **Scraping in Rust**, if D13 says so: `emusen-scrape`, the ScreenScraper client, its quota, the media store and `media.db` | recorded ScreenScraper answers replayed to both, the requests compared byte for byte with the credentials redacted (`ScrapeRedactor`), and the stores compared; no live request in a test | `EMUSEN_SCRAPE_NATIVE=0` |
@@ -721,7 +721,7 @@ what it consolidates. Each step reports its real figure beside this one, as the 
 | B3 | about 2,950 | 7,400 (5,900–8,900); *parts (a) to (c) built: about 4,000 for about 1,860 replaced, §13.5* | 300 of C# facade; *built: about 630* | 2,950 |
 | B4 | about 5,480 deleted unported; *built: 4,334, §26.5* | 1,500–3,000 in the cores' own exports; *built: 1,622 added in the four cores and 305 in two shared decoders* | 300 in the generic C# adapter; *built: about 430* | 5,480; *built: 4,334* |
 | B5 | 1,250 | 3,100 (2,500–3,750); *built: 2,497 for about 1,020 replaced, §15.5* | 300 of C# facade; *built: about 730* | 1,250 |
-| B6 | 1,735 in C#, 704 in the kit | 3,600 (3,000–4,300), net of what the kit brings | — | (with B7) |
+| B6 | 1,735 in C#, 704 in the kit | 3,600 (3,000–4,300), net of what the kit brings; *built: 2,554, the kit 183 lighter, §27.12* | *built: 224 of C# parity class, 34 of build and workflow* | (with B7) |
 | B7 | about 7,800, and B2's 2,500 | 23,000 (18,000–27,000), with the API's C layer and the service's table | — | about 13,400, with the service's provider and B2's implementation |
 | B8 | about 1,900 | 4,700 (3,800–5,700) | 300 of binding | 1,900 |
 | B9 | about 2,750 | 6,900 (5,500–8,250) | 300 of binding | 2,750 |
@@ -5444,6 +5444,63 @@ libraries, so the old loader served as the failover until the gate passed and is
 |---|---|
 | The kit's crate, `cargo test --profile test-checked` | 8 and 27 passed, the counts of §25.3 |
 | **The kit's corpus on every core**, §26.4's set (MoonRT 4 images `--self-delimiting`, MercuryRT 4, VenusRT 2, MarsRT 2, Nephrite `genesis-sample.txt` 64, Diamond `psx-sample.txt` 9 at 1,800 frames, MercuryRT's 173 hardware-test ROMs), the kit of `9ee965f7` against the kit on the crate, one build of each core's release library | every case of every image passing in both; **265 reports, 265 the same** once the library's path and the timings are set aside |
+
+### 27.11 Built 2026-10-18: part 4, discovery's parity and the manifest
+
+**The manifest, Q2 as decided.** `EmuSen.csproj`'s `BuildRustCores` hashes every built core library with MSBuild's
+`GetFileHash` and writes `obj/…/cores.manifest`, lowercase, in `sha256sum`'s format, copied to the build output and to
+a publish beside the libraries; a library in development is listed too, harmlessly, since a publish does not carry the
+file a line names. A publish for another platform (`RustCoresPublish.targets`) drops the host's manifest with the host's
+libraries and writes one of the prebuilt libraries instead. CI's WiseMan job builds with `EmuSenNative=false`, so it
+writes the manifest of the libraries it places beside the tests, in the same format. The C# reads none of them.
+`sha256sum -c cores.manifest` passes over the build's output and over a fresh publish [M]. **The handheld's files**
+(`~/.cache/emusen/deck-build/20261016/publish.sh`, read only): the script publishes the whole tree and lists no file,
+and the tar beside it holds every file of the published `bin/` and `lib/` (400 entries, the tree's 370 and the licences
+and notices), so the manifest in `lib/EmuSen/` is carried with no change to either; `verify_tree.py` checks the six
+sidecars and names only extra sidecars, so it passes with the manifest present (`problems 0` over the publish below).
+
+**The parity class**, `CoreHostParityTests` (WiseMan), compares `ManagedRuntime.CoresJson` and `EnginesJson` with the
+crate's tool (`emusen-core-host list`), which WiseMan's project builds and copies beside the tests as it does the kit's
+runner, value for value as `JsonNode.DeepEquals` compares, each tree as listed and after every core is opened:
+
+| Case | What the tree holds |
+|---|---|
+| the build's tree | WiseMan's output: the six cores, their sidecars and the build's manifest |
+| a generated tree | the two test cores and a manifest; again with a directory that does not exist and one named twice |
+| a missing library | a third sidecar, of its own id, whose library is deleted |
+| an altered library | the plain core's last byte changed after its sidecar was written |
+| an unapproved library | the plain core in no manifest: equal as listed; opened, equal in every field but that core's two `report`s, which the test sets to the Rust's words before comparing, then equal in full once the hash is approved (Q1's pinned difference) |
+| a repeated id, a core in development, another major | two directories with one id twice, a development sidecar and a sidecar of `abi` 2.0 |
+| a sidecar spelt another way | the hash in capitals and the info's members in reverse order |
+| a published tree | the directory `EMUSEN_PUBLISHED_TREE` names, when set |
+
+**Seeded faults** (`EmuSen_RustPlatform.md` §6.5), each built into a tool of its own and run through the class by
+`EMUSEN_CORE_HOST_TOOL`, measured on 2026-10-18 [M]: the last of two ids kept, a development sidecar listed, the major
+check dropped, the hash compared with regard to case, the sidecars in directory order, the missing library's check
+skipped, and the info's members compared in order. **All seven were caught**, each failing one case (the first, the
+second and the third the repeated-id case, the fourth and the seventh the spelt-another-way case, the fifth the
+build's tree, the sixth the missing library), the clean tool passing all eight. The spelt-another-way case and the
+sidecar of another major were added for the fourth, the seventh and the third, which no tree caught before them.
+
+| Gate | Result, measured on 2026-10-18 [M] |
+|---|---|
+| `CoreHostParityTests` on the branch's build | **8 of 8** |
+| the same over a fresh `dotnet publish` of Mistress for linux-x64, Release, self-contained (`EMUSEN_PUBLISHED_TREE` its `lib/EmuSen`: the six cores, their sidecars and the publish's manifest) | equal as listed and opened, the six reports naming their cores at ABI 1.14 |
+| WiseMan, the blast radius of parts 3 and 4: `CoreHostParityTests` with the published tree named, `CoreDiscoveryTests` (the kit's runner writes a sidecar), `CoreAdapterTests`, `MarsRtCoreAbiTests` and `DiamondTests` (the kit run on their cores), `FirmwareOverviewTests` | **69 of 69**, 9 min 56 s |
+| `cargo metadata --locked` over every tracked `Cargo.lock` but Diamond's kernel and kernel shell | every lock current |
+
+### 27.12 Sizes, against §7, and what is left
+
+[M: `wc -l`, `git diff --numstat`] **`emusen-core-host`: 2,554 lines**, 1,992 in `src/` (with its unit tests), 427 in
+`tests/` and 135 in its four test cores, of which about 400 were moved from the kit (the export table and the
+SHA-256). **The kit lost 217 lines and gained 34.** In C#, 224 lines of parity class; in the build, 24 lines of MSBuild
+and 10 of workflow. §7 estimated 3,600 (3,000 to 4,300) net of what the kit brings and §27.7 about 3,000; the crate is
+smaller because the descriptors it reads are the listing's fields alone (the runtime's records, machine info and the
+settings, are B7's), and because the kit's plain machine calls stayed the kit's (§27.10).
+
+**Left:** the player's `/Cores` directory, the sidecar-less listing and the approvals' file, with `core_approve`'s minor
+(§27.5); the hash-then-open window, recorded; Q1's one difference, which closes when Crystal in Rust (B7) discovers
+through this crate; B7 itself, which takes the crate's `Machine`, `InputLatch`, `StateLayout`, `Discovery` and `Trust`.
 
 ---
 

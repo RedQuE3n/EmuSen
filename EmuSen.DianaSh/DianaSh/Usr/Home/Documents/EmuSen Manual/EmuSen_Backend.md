@@ -1,6 +1,6 @@
 # EmuSen — the backend in Rust: the line, the frontend API, the system packs and the services
 
-*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18), and B4's shared part with core ABI 1.13 (§22, 2026-10-18), and MoonRT's units, pack views and switch (§23, 2026-10-18), and debugger expressions naming the units' registers (§24, 2026-10-18), and B4's last step, the deletion across the cores that finishes it (§26, 2026-10-18), and B6's design, the core host in Rust, with three questions before it is built (§27, 2026-10-18), and B8's design, the library in Rust (§28, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
+*This revision: the first, 2026-10-17. A design; B1, B3 and B5 have since been built (§12, §13, §15, 2026-10-17), B2's first three parts (§14, 2026-10-17), the cheat database's download on SR9's client (§16, 2026-10-18), B4's first phase for MercuryRT and for MarsRT, each an inventory and a proposal with nothing built (§17 and §18, 2026-10-18), and for MoonRT and VenusRT, VenusRT's shim retired (§19, 2026-10-18), with the decisions (§20) and MoonRT's steps that need no ABI change (§21, 2026-10-18), and B4's shared part with core ABI 1.13 (§22, 2026-10-18), and MoonRT's units, pack views and switch (§23, 2026-10-18), and debugger expressions naming the units' registers (§24, 2026-10-18), and B4's last step, the deletion across the cores that finishes it (§26, 2026-10-18), and B6's design, the core host in Rust, with three questions before it is built (§27, 2026-10-18), and B8, the library in Rust, designed and built (§28, 2026-10-18). It answers the tester's goal of 2026-10-16, "to
 get the entire backend ported to rust", after which the frontend's move is planned, and the request of 2026-10-17 to
 design two things: one frontend API by which every frontend drives the cores, and the system packs and the remaining C#
 platform services in Rust. Every claim about the code was read on `WiseMan` at `165e60b4`. Claims are marked as
@@ -677,7 +677,7 @@ behind a switch until the tester agrees to state 3, and says how it is proven. T
 | **B5** | **The file services in Rust**: `emusen-firmware` (the store, the folders' order, the overview), `emusen-savemedia` (the card manager over B3's formats and Galaxia's `MediumLock`), `emusen-cheats`' files and database (`.cht`, the list files, the database's install, prune and import) | a parity class per service over generated trees (firmware whole and split, cards of each medium held and free, `.cht` files of the cheat tests); the golden corpus's `cards`, `cheat db` and `firmware` cases. *Built 2026-10-17, §15; the download on SR9's client built 2026-10-18, §16* | `EMUSEN_SERVICES_NATIVE=0` |
 | **B6** | **The core host in Rust, shared with the kit**: `emusen-core-host` in `EmuSen/Cores/Shared/` (discovery from sidecars, trust and the manifest, the checks of `EmuSen_CoreAPI.md` §7.2, the v1 calls, the input latch, the state layout), which the kit's `api.rs`, `sidecar.rs` and `lender.rs` fold into | the kit's corpus on every core gives the same report through the new crate; discovery's listing as JSON equal from the C# and the Rust over the published tree and over trees with a missing, altered and unapproved library | the kit keeps its own loader until its corpus passes; the C# host is untouched by this step. *Designed 2026-10-18, §27; three questions for the tester (§27.9) before it is built* |
 | **B7** | **Crystal in Rust**: `emusen-crystal` over B1 to B6: sessions and the frame call, input, speed, rewind, states and `states.db`, settings and `consoles.json`, save-media placement, cheat application, the debugger's registries, expressions and bridge, telemetry, the recorder, the session service's table; exported as `emusen_crystal_*` from the platform library. Built in four parts, each graded before the next: (a) life, frame, input, speed, rewind, states, settings, media; (b) the debugger; (c) the service table; (d) the per-program switch | the parity class runs scripted sessions through the binding on both implementations and compares frame and audio digests, state bytes, files written, events drained and every service function's JSON; the debugger's golden corpus with Crystal's table; then state 2 per program: **Pharaoh first**, then emusen-shell, then Mistress, each after a full blast-radius run on Linux and the three systems' CI | `EMUSEN_CRYSTAL_NATIVE=0`, per process, the B2 implementation |
-| **B8** | **The library in Rust**: `emusen-library` and `emusen_library.h`; the scan, identity over Galaxia's extended `RomHash`, `games.db` with its migrations, play time, collections and edits; Mistress's `Library/` behind the binding | a parity class: a generated library scanned by both into separate databases, compared row for row; every `games.db` version of the migration tests opened by both; the SQLite rule of `EmuSen_RustPlatform.md` §2.8 kept, one copy of SQLite per process (the C# lends `e_sqlite3` as Q25 there decided) [R] | `EMUSEN_LIBRARY_NATIVE=0` |
+| **B8** | **The library in Rust**: `emusen-library` and `emusen_library.h`; the scan, identity over Galaxia's extended `RomHash`, `games.db` with its migrations, play time, collections and edits; Mistress's `Library/` behind the binding | a parity class: a generated library scanned by both into separate databases, compared row for row; every `games.db` version of the migration tests opened by both; the SQLite rule of `EmuSen_RustPlatform.md` §2.8 kept, one copy of SQLite per process (the C# lends `e_sqlite3` as Q25 there decided) [R]. *Built 2026-10-18, §28: state 2* | `EMUSEN_LIBRARY_NATIVE=0` |
 | **B9** | **Scraping in Rust**, if D13 says so: `emusen-scrape`, the ScreenScraper client, its quota, the media store and `media.db` | recorded ScreenScraper answers replayed to both, the requests compared byte for byte with the credentials redacted (`ScrapeRedactor`), and the stores compared; no live request in a test | `EMUSEN_SCRAPE_NATIVE=0` |
 | **B10** | **State 3, one component at a time**: goldens recorded from the C# where a step's parity class does not already leave a record (`EmuSen_RustPlatform.md` §6.6) [R], then the C# deleted at the tester's word after a release played | per component, the tester's word | none, by definition |
 
@@ -723,7 +723,7 @@ what it consolidates. Each step reports its real figure beside this one, as the 
 | B5 | 1,250 | 3,100 (2,500–3,750); *built: 2,497 for about 1,020 replaced, §15.5* | 300 of C# facade; *built: about 730* | 1,250 |
 | B6 | 1,735 in C#, 704 in the kit | 3,600 (3,000–4,300), net of what the kit brings | — | (with B7) |
 | B7 | about 7,800, and B2's 2,500 | 23,000 (18,000–27,000), with the API's C layer and the service's table | — | about 13,400, with the service's provider and B2's implementation |
-| B8 | about 1,900 | 4,700 (3,800–5,700) | 300 of binding | 1,900 |
+| B8 | about 1,900; *built: about 780, the rest with B9 and B7, §28.9* | 4,700 (3,800–5,700); *built: about 2,960* | 300 of binding; *built: about 730* | 1,900 |
 | B9 | about 2,750 | 6,900 (5,500–8,250) | 300 of binding | 2,750 |
 | **Total** | | **about 52,000 (41,000–62,000)** | | **about 30,000** |
 
@@ -763,7 +763,8 @@ about 5,480 lines are deleted unported and 3,117 are replaced by the table Cryst
   behind `addr` have no v1 home; §18.4 proposes them.*
 - **P4.** The debugger's registries in Rust cost no more per breakpoint check than in C#, measured as `EmuSen_DianaSh.md`
   §13.12 measured conditions. Retired at B7(b).
-- **P5.** No `games.db` row differs between the two scans of B8 except in columns that record a time. Retired at B8.
+- **P5.** No `games.db` row differs between the two scans of B8 except in columns that record a time. Retired at B8. *Retired 2026-10-18 (§28.8): no row differs in any column, time columns included, since every time recorded is
+  given to both.*
 - **P6.** B1's data files reproduce every field of every C# entry with no field the C# computes rather than states,
   except `OpenVgdbBytes`, which is code (B3). Retired at B1. *Retired 2026-10-17 (§12.3), with one correction:
   `Recognise` is code as well, and both are kept from the literal.*
@@ -5550,3 +5551,107 @@ Nothing in this design waits on an answer; each of these is a recommendation tha
 - **Two routers until B7.** Until Crystal is Rust, which shelf a file is on is decided by Crystal's C# for opening it and
   by the library for listing it, held equal by the parity class. At B7 Crystal's route composes the same Galaxia
   reading and `emusen-systems` decision, so the two become one by construction. Recorded, not asked.
+
+### 28.8 What was built, measured on 2026-10-18
+
+*On branch `b8-library`, in the four parts §6's row and this section planned, each graded and committed before the
+next: the design (§28.1 to §28.7), the two moves it named (Serenity's SQLite binding to `emusen-sqlite`; the zip
+reader and the walk from `emusen-cheats` to Galaxia), the scan, identity and `games.db` with their parity class, the
+player's records with theirs, and Mistress behind the binding in state 2.*
+
+**The artefacts.** `Platform/library/` (`emusen-library`: `db`, `records`, `scan`, `identity`, `clock`, `json`, `abi`;
+`include/emusen_library.h` 1.0; `abi/v1/baseline.txt`; `tests/library.rs` and `tests/library_abi.rs`);
+`Platform/platform/src/library.rs`, the C layer; `Platform/sqlite/`; Galaxia's `archive`, `dotnet_files`, `image_sets`
+and `rom_hash::hashes`; `emusen-systems`' `gb::shelved_as_color`; the CI step "The library's surface" in
+`rust-cores.yml`; `EmuSen.Crystal.Client/Library/GameLibrary.cs`, the binding; Mistress's
+`Library/GameRecords.Native.cs` and `GameReclaim.cs` and the forwarding in `GameRecords` and `RomLibrary`;
+`LibraryParityTests` and `LibraryRecordsParityTests`.
+
+**Built otherwise than §28.4 said, each for a reason found while building:**
+
+- **`reclaim` and `recent` take an optional `games` list**, the last scan's standing in when it is left out. Mistress
+  scans with `RomLibrary.Scan`, which has no `GameRecords` to hand, so the list it scanned is passed to the reclaim
+  rather than the reclaim reading a scan kept in another handle.
+- **`RomLibrary.Scan` on the library opens a handle of its own on `:memory:`** for the call, since a scan needs no
+  records and the ROM browser and the tests scan with no `games.db`; the migrations of an empty database cost under a
+  millisecond.
+- **An answer is made once.** A change answered into a buffer too short for it is not made again when asked again at
+  the right length: the answer waits on the calling thread for the same call with the same request, as Serenity's
+  results do (`EmuSen_RustPlatform.md` §16.2). The header says so.
+- **`identity` reads the file for its CRC-32 only when asked (`crc32`) or when the cache has no MD5**, so an unchanged
+  game is identified from the cache, as `IdentifyLater` identified it, without a read.
+- **Microsoft.Data.Sqlite's refusal of a NaN** ("Cannot store 'NaN' values.", thrown before the statement runs) is the
+  library's too, found by the records' scripts on their first run; Mistress's facade gives it back as the
+  `InvalidOperationException` the C# threw, and SQLite's own refusals as the `SqliteException` with its code.
+- **`GameLibrary.Dispose` cancels what runs on the handle and waits for every call in progress** before closing it,
+  since Mistress's reclaim and identity now run on a worker and the window may close under them.
+- **Several roots**: a missing or unreadable root makes the outcome `not_found` and the other roots' games are kept;
+  with one root, as Mistress has, that is `RomLibrary`'s `DirectoryNotFound` with nothing listed.
+- **`recent` orders by the instant each time names**, where the C# `DateTime` comparison orders local times; the two
+  differ only within the hour a clock is set back, and no caller of today's sorts by `recent` (the library screen's
+  Recent and Big Picture's Last Played keep their own rules, §28.7). Its C# twin, `GameRecords.Recent`, orders as the
+  library does.
+
+**What the parity classes reproduce rather than fix** (§5.3 of the platform page's rule): the zipped Game Boy Color
+game shelved by the zip's own byte, the `.chd` routed by its folder because its recogniser is shown the CHD header,
+and the hash cache's length and time of a symbolic link taken as the link's own, as .NET's `FileInfo` takes them.
+
+**The switch, state 2.** `GameLibrary.Active` is Galaxia's `PlatformSwitch` over `EMUSEN_LIBRARY_NATIVE`: the library
+unless the variable is `0`, a platform library that is absent, lacks an export or cannot be lent SQLite leaving the C#
+with one line in the log. One switch serves `GameRecords.Open` and `RomLibrary.Scan`, so `games.db` has one owner in
+the process. `MainWindow.Identity`'s identity and reclaim run whole on a worker through the library; on the C# their
+three steps stay as they were (the plan and the writes on the UI thread, the hashing on a worker), now as
+`GameRecords.Plan`, `Hash` and `Apply`, which `Reclaim` composes.
+
+| Gate | Result |
+|---|---|
+| `cargo test --profile test-checked -p emusen-library -p emusen-platform -p emusen-galaxia -p emusen-systems -p emusen-cheats -p emusen-serenity` | the library 1, 2 (a generated tree scanned, shelved, identified and a renamed game reclaimed; a newer file refused unwritten) and 6 (the header held to the Rust, to the C compiler as C99 and C++17, to the platform library's exports both ways, to its baseline, and the crate's dependencies holding nothing of Crystal's); the platform 31 and `dianash_abi` 4; Galaxia 76; the systems 25; the cheats 8; Serenity 31; none failed |
+| `LibraryParityTests` | 3 pass: six generated libraries (every system's extensions in upper and lower case, recognisable and unrecognisable discs and cartridges, sheets with their tracks, a sheet naming a missing track and one that is no sheet, a list of two sheets named in another case, zips holding a cartridge, a disc's sheet and track, nothing playable, a Color cartridge, and a file that is no zip, hidden files and folders, an unreadable folder, links to a file, to a folder and to nothing, names differing only by case, non-ASCII and quoted names) scanned by both under every console filter and an unknown one, more than 150 games compared, and a blank, absent and unreadable root; five seeded `games.db` files, their libraries then renamed, moved, pruned and copied, identified and reclaimed by both into separate copies, every row of every table equal (**P5**), with at least ten rows moved and a hundred games identified; every schema version 0 to 6 opened by both to the same file, version 7 refused by both with the same words and left unwritten |
+| `LibraryRecordsParityTests` | 2 pass: eight scripts of 500 calls of every `GameRecords` member, 4,000 calls, every answer and every thrown word equal and every row after; the play-time limit at seven limits and seven lengths |
+| The blast radius, with `EMUSEN_LIBRARY_NATIVE` unset and `0`: every class in `EmuSen.WiseMan.Mistress` (the library's, Big Picture's, the launch and window classes, scraping), with `SpirvCacheTests`, `SerenityParityTests`, `CheatServicesParityTests`, `GalaxiaParityTests`, `SystemTableParityTests`, `SystemCodeParityTests`, `LeafAssemblyTests` and `CrystalHeaderTests` | **2,313 pass, 53 skip, 9 fail, each way, the same nine**: eight `WindowFitAuditTests` cases of the Graphics Settings window (`GraphicsSettingsN64Note`, `GraphicsSettingsCustomCrop`, `GraphicsSettingsNesEngine`) and `IdentityAndCollectionsTests.A_state_from_another_console_is_refused_before_the_core_reads_it`; all nine fail the same way on the branch's base before any of this step's C#, measured in a separate build of `668dfbb1` (`WindowFitAuditTests` 8 of 518 failing there, `IdentityAndCollectionsTests` 1 of 6), so they are not this step's and are left to their owners |
+
+**Seeded faults**, each made, built, run and reverted:
+
+| Fault | Caught by |
+|---|---|
+| a migration's text changed in the Rust alone (one space) | the schema versions (`sqlite_master` differs) |
+| `foreign_keys` left off | the records' scripts (a deleted collection's games kept) |
+| a move that drops the rewrite of the covers others borrow | the records' scripts and the seeded `games.db` |
+| hidden files listed | the generated libraries |
+| the walk's files sorted before the sets | the generated libraries |
+| a title compared by case | the generated libraries |
+| a list's discs listed as games | the generated libraries |
+| a Game Boy game shelved by its extension alone | the generated libraries |
+| the hash cache keyed without the time | the records' scripts |
+| play time recorded a second past the limit | the play-time case |
+| the facade reading every crop edge as the left | the records' scripts |
+| a played time bound as text | none: an equivalent mutant, since the column's REAL affinity stores a number's text as the number, and the one text it would not take, an infinity, cannot reach it (`TimeSpan.FromSeconds` refuses one); recorded |
+
+**P5, retired.** No `games.db` row differs between the two halves' scans, identities and reclaims, in any column,
+time columns included, because every time the two record is given to both; the prediction allowed time columns to
+differ, and none needed to.
+
+### 28.9 Sizes, against §7
+
+| | §7's estimate | Built |
+|---|---:|---:|
+| C# replaced | about 1,900 | about 780 (§28.1: `GameRecords` 551, `RomLibrary`'s scan, `PlayTime`'s rule and the window's identity and reclaim); the cover, OpenVGDB and media files §7 counted go with B9 and B7 |
+| Rust, with in-crate tests and the C layer | 4,700 (3,800–5,700) | about 2,960: `emusen-library` 1,584 and its tests 527, the C layer 227, what Galaxia gained 540 (`archive` 150, `dotnet_files` 142, `image_sets` 130, `rom_hash::hashes` 96, `extension` 9) less 78 net that left `emusen-cheats`, `emusen-sqlite`'s 90 added, `gb::shelved_as_color` 19; with the header's 144 and the baseline's 32 besides |
+| C# binding and facade | 300 | about 730: `GameLibrary` 240, `GameRecords.Native` 240, `GameReclaim` 152 (of it the reclaim's C# twin, moved out of the window), and the forwarding in `GameRecords` and `RomLibrary` about 100 |
+| The parity classes | — | 474 (299 and 175) |
+
+The Rust ran at about 2.3 times the C# it replaced (1,811 of crate and C layer for 780), at §7's central ratio once
+the scope is the same; the facade is more than twice §7's figure, as B3's and B5's were, because Mistress keeps every
+`GameRecords` member and the binding guards its handle across threads. Both are deleted whole at state 3.
+
+### 28.10 Left, and for the tester
+
+- **State 3**, the C# `GameRecords` bodies, `RomLibrary.ScanManaged` and `GameReclaim`'s C# deleted at the tester's
+  word after a release played (§6, B10). Until then a change to `games.db` is made in both halves, and the parity
+  classes fail on one alone; the migrations stay two lists held equal by them.
+- **§28.7's three items stand**: SHA-1 with B9 (`identity` gains `sha1` by a minor), one rule for recent games, and the
+  two routers until B7.
+- **Not moved, by §28.1**: `GameMetadata`'s resolution over `media.db` and the cover and OpenVGDB files (B9),
+  `MediaLibrary` (B7), `RecentCache` and the presentation files (the frontend's).
+- **On Windows and macOS**, paused (`EmuSen_RustPlatform.md` §31): the walk's hidden rule there (a flag, not a leading
+  period), the local time's offset, and every gate of this section when the port resumes.

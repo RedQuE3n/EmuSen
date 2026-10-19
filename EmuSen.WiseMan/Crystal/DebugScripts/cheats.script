@@ -1,0 +1,107 @@
+# The cheat registry: pokes with tests, bits, widths, byte orders and repeats applied; patches resolved; the saved list written and read.
+space RAM 32 00 11 22 33 44 55 66 77 88 99 AA BB CC DD EE FF 10 20 30 40 50 60 70 80 90 A0 B0 C0 D0 E0 F0 01
+cheat.version
+cheat.poke RAM 2 0x5A Lives
+cheat.patch 0x8000 0xEA - NOP
+cheat.patch 0x8001 0x60 0x20 Return
+cheat.version
+cheat.list
+cheat.add ramPoke - Empty
+cheat.add romPatch - Inc ; -:0x10:1:1:Increase:-:0:1:0:0
+cheat.add romPatch 0x10 Wide ; -:0x10:0x1234:2:Set:-:0:1:0:0
+cheat.add ramPoke - Test ; RAM:0:0:1:IfEqual:3:0:1:0:0 ; RAM:1:5:1:Set:-:0:1:0:0
+cheat.add ramPoke - Test ; RAM:0:0:1:IfEqual:-:0:2:0:0 ; RAM:1:5:1:Set:-:0:1:0:0
+cheat.add ramPoke - Bad ; RAM:0:0:1:Sideways:-:0:1:0:0
+cheat.version
+cheat.add ramPoke - Inc~wide ; RAM:4:0x0101:2:Increase:-:0:1:0:0
+cheat.add ramPoke - Dec~big ; RAM:6:0x0001:2:decrease:-:1:1:0:0
+cheat.add ramPoke - Bits ; RAM:8:1:1:Set:7:0:1:0:0 ; RAM:9:0:1:Set:4:0:1:0:0
+cheat.add ramPoke - Run ; RAM:16:0x10:1:Set:-:0:4:2:1
+cheat.add ramPoke - Four ; RAM:24:0xDEADBEEF:4:Set:-:1:1:0:0
+cheat.add ramPoke - Odd ; RAM:28:0x7:3:Set:-:0:0:0:0
+cheat.add ramPoke - Gate ; RAM:1:0x11:1:IfEqual:-:0:1:0:0 ; RAM:2:0x22:1:IfNotEqual:-:0:1:0:0 ; RAM:3:0x99:1:Set:-:0:1:0:0 ; RAM:4:0x99:1:Set:-:0:1:0:0
+cheat.add ramPoke - Less ; RAM:5:0x60:1:IfLess:-:0:1:0:0 ; RAM:10:0x01:1:Set:-:0:1:0:0 ; RAM:5:0x50:1:IfGreater:-:0:1:0:0 ; RAM:11:0x02:1:Set:-:0:1:0:0
+cheat.add ramPoke - WideTest ; RAM:12:0xFFCC:1:IfEqual:-:0:1:0:0 ; RAM:13:0x03:1:Set:-:0:1:0:0
+cheat.add ramPoke - Off ; RAM:30:0x77:1:Set:-:0:1:0:0 ; RAM:31:0x77:1:Set:-:0:1:0:0
+cheat.add ramPoke - Neg ; RAM:20:0x5:1:Set:-:0:3:-2:2
+cheat.add ramPoke - Num ; RAM:21:0x1:1:2:-:0:1:0:0
+cheat.add ramPoke - NoSpace ; NOPE:0:1:1:Set:-:0:1:0:0
+cheat.add ramPoke - Edge ; RAM:19:0x40:1:IfLess:-:0:1:0:0 ; RAM:14:0x01:1:Set:-:0:1:0:0 ; RAM:19:0x40:1:IfGreater:-:0:1:0:0 ; RAM:15:0x02:1:Set:-:0:1:0:0
+cheat.enable 15 0
+cheat.list
+cheat.apply
+peek RAM 1
+peek RAM 2
+peek RAM 3
+peek RAM 4
+peek RAM 5
+peek RAM 6
+peek RAM 7
+peek RAM 8
+peek RAM 9
+peek RAM 10
+peek RAM 11
+peek RAM 13
+peek RAM 14
+peek RAM 15
+peek RAM 16
+peek RAM 18
+peek RAM 20
+peek RAM 21
+peek RAM 22
+peek RAM 24
+peek RAM 25
+peek RAM 26
+peek RAM 27
+peek RAM 28
+peek RAM 30
+peek RAM 31
+cheat.apply
+peek RAM 4
+peek RAM 6
+peek RAM 7
+cheat.master 0
+cheat.apply
+peek RAM 4
+cheat.version
+cheat.rom 0x8000 0
+cheat.master 1
+cheat.version
+cheat.rom 0x8000 0
+cheat.rom 0x8001 0x20
+cheat.rom 0x8001 0x21
+cheat.rom 0x8002 0
+cheat.add romPatch - Patches ; -:0x100:0xAABB:2:Set:-:1:3:4:1 ; -:0x200:0x11:1:Set:-:0:3:0:1 ; -:0x300:0x22:1:Set:-:0:3:-1:1
+cheat.add romPatch 0x05 One ; -:0x400:0x33:1:Set:-:0:1:0:0
+cheat.rom 0x100 0
+cheat.rom 0x101 0
+cheat.rom 0x104 0
+cheat.rom 0x105 0
+cheat.rom 0x108 0
+cheat.rom 0x109 0
+cheat.rom 0x10C 0
+cheat.rom 0x102 0
+cheat.rom 0x200 0
+cheat.rom 0x2FF 0
+cheat.rom 0x300 0
+cheat.rom 0x2FE 0
+cheat.rom 0x400 5
+cheat.rom 0x400 6
+cheat.resolve 9223372036854775807
+cheat.resolve 0x300
+cheat.triples 0x100 0x2FF
+cheat.triples 0 0x8000
+cheat.version
+cheat.enable 99 1
+cheat.remove 99
+cheat.remove 2
+cheat.version
+cheat.file
+cheat.clear
+cheat.version
+cheat.list
+cheat.load {"Cheats":[{"Kind":"RamPoke","Writes":[{"Space":"RAM","Address":"0x1F","Value":"$42","Width":1,"Type":"set"}],"Description":"Loaded","Enabled":false},{"Kind":"romPatch","Compare":"0x20","Writes":[{"Address":"008001","Value":"60"}],"Description":"Patch"},{"Kind":"RamPoke","Space":"RAM","Address":"3","Value":"FF","Description":"Flat"},{"Kind":"RamPoke","Description":"Nothing"},{"Kind":"RomPatch","Compare":" - ","Writes":[{"Address":"5","Value":"6"}],"Description":"Dash"},{"Kind":"RamPoke","Compare":"zz","Writes":[{"Address":"1"}],"Description":"Bad compare"},{"Kind":"RamPoke","Writes":[{"Address":"xyz"}],"Description":"Bad address"},{"Kind":"RamPoke","Writes":[{"Address":"1","Type":"Sideways"}],"Description":"Bad type"},{"Kind":"RomPatch","Writes":[{"Address":"1","Type":"Increase"}],"Description":"Refused"},{"Kind":"RamPoke","Writes":[{"Address":" 0x10 ","Value":"$ff","RepeatCount":2,"RepeatAddAddress":"","RepeatAddValue":"1","Type":"3"}],"Compare":"-","Description":"Spaces"}]}
+cheat.load {not json
+cheat.list
+cheat.version
+cheat.file

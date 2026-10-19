@@ -6888,6 +6888,70 @@ no letters. Five seeded faults, each caught: `Format`'s byte threshold off by on
 label consulted before the registers, a skipped branch that asks no symbol (seen as one refresh fewer), a label's
 comment kept with its leading white space. The crate's tests 4 and `emusen-dotnet`'s 31.
 
+### 29.32 Built 2026-10-19: part (b), piece 2, the registries
+
+**The piece** (this commit). The registries piece 1 carried are graded: `breakpoints`, the C# `BreakpointRegistry`
+(code, data and forbidden ranges, a changed-only data breakpoint's memory of the last value, the uninitialised read
+reported once an address, steps by count and to a depth, the depth guard, run-to an interrupt, a scanline and a frame,
+the hardware conditions and their log-only form, the log of 4,096 lines, a failing condition dropped with its words);
+`watches`, the C# `WatchRegistry` (the ring of 500 events, the sites counted whole-run, the line said while the
+process's logging switch is on, kept for the runtime's log rather than written), `FrameLogRegistry` (3,600 samples an
+entry) and `FreezeRegistry` (enforced once a frame, as a host that sees stores only after the fact does); and
+`coverage`, the C# `CoverageRegistry` (a bit for each of 2^24 addresses, 2 MB made when first armed, a core's own bitmap
+merged, the entry points, the mark, `cov save`'s bytes and their import) and `CallStackRegistry` (512 frames, the
+profile's exclusive counts by the routine innermost). A registry that evaluates a condition is handed the evaluator at
+the call (`breakpoints::Evaluate`) rather than holding a delegate, which a Rust registry beside the debugger's sources
+could not borrow; one never prepared is handed `Unprepared`, under which a condition holds and a log is its own text,
+as the C# registry's null evaluators make them. The call stack's depth is likewise passed to `should_break`, and
+whether the registry knows a stack is a flag, as `CallStack` being set is in C#. Each map the C# enumerates in a
+`Dictionary`'s order keeps the order it was added in (§29.30).
+
+**Measured on 2026-10-19** [M]: `CrystalDebugParityTests` 6 of 6, the three new scripts of 197, 83 and 93 answers: code
+breakpoints over ranges given backwards, disabled and removed; conditions and logpoints in the chosen context, a
+condition dropped for a read past its space, a logpoint that fails mid-way, a register changed and read at the hit; the
+forbidden range over a step, a depth step and the guard; data breakpoints by value, changed-only on stores and not on
+loads, on loads, conditional and logging; the uninitialised read; each run-to and its disarming; the conditions armed,
+noted, logged and disarmed; watches of each kind with the sites, the counts, the ring, the said lines and the switch;
+the frame log over two widths and a missing space; freezes enforced, re-pinned and cleared; coverage merged before and
+after arming, queried, marked, its entry points ordered and ranged, exported, imported into a fresh registry, into
+itself and refused three ways; the call stack pushed, popped past empty, and profiled to shares that are not whole.
+Five seeded faults: a site list least first was caught at once; four were not (a changed-only data breakpoint applied
+to loads, the profile cut to its limit before sorting, the depth guard ahead of the forbidden range, an import that
+replaces entry counts rather than adding), so a case for each was added to the scripts, and each is caught by it. The
+crate's tests 4.
+
+### 29.33 Built 2026-10-19: part (b), piece 3, the cheat registry and its application
+
+*Built before the bridge, which reads memory through it: `CoreEngine.ReadSpace` refreshes the cheats before every
+debugger read.*
+
+**The piece** (this commit). `emusen-cheats` gained `registry`, the C# `CheatRegistry` beside the crate's files and
+database: RAM pokes and ROM patches over `emusen-systems`' `Write`, the refusals in `ArgumentException`'s words (the
+first with its parameter, as .NET appends it), the version every change moves, the master switch, `ApplyAll` with a
+failed test holding until the next write that is not a test and a test compared at its own width, `TryPatchRom` and
+`ResolveRomPatches` by `TryResolveRepetition`'s two ways (division for a forward stride, a bounded walk otherwise), and
+`ToCheatFile` and `LoadFrom` over Galaxia's `CheatFile` model as JSON. The registry has no lock of its own: the C#'s
+copy-on-write served readers on any thread, where in Rust the registry is the session's and every reader holds the
+session's gate. And `Applied`, the registry's application at the frame's points, `CoreEngine.RefreshCheats`: nothing
+when the version has not moved, else the patch table as triples within the machine's range, each enabled poke a core
+can gate itself (a set of one byte in a space the machine names, no bit, no repeat, the master switch on) as a quad,
+the rest kept as the host's registry for the frame's end, and the session's whole registry the host's where the core
+takes no pokes; `stale` is `_cheatVersion = -1`, which part (a) calls on every state load as `cheats_stale`.
+
+**Measured on 2026-10-19** [M]: `CrystalDebugParityTests` 7 of 7, the new `cheats` script of 106 answers: five refusals
+and a write type that is no member; pokes of every write type, wide and big-endian, by bit, repeated forward and back,
+of an odd width, gated by each test (at the boundary of a less-than and a greater-than, and wider than its width), into
+a space that is not there, disabled, and under the master switch; patches with and without a compare, repeated three
+ways, resolved below a limit and as triples within a range; the version after each change; the saved list as Galaxia's
+model binds it; a list of ten entries read back, among them a flat entry of before writes were a list, a compare of a
+dash with spaces, and five broken entries skipped. `emusen-cheats`' tests 9, among them the application's division
+into quads, the host's registry and a stale refresh. Six seeded faults: four caught at once (a decrease that adds, a
+patch's compare ignored, the range's low bound excluded, a ROM patch's address written with four digits); two not (a
+compare of a dash read as a number, a less-than that holds at equality), so the read-back list gained an entry whose
+only flaw is the dash and the pokes a boundary case on a byte no other cheat writes, and each is caught by it. The
+quads themselves reach a machine only through `set_cheat_pokes`, so their parity is the bridge's piece, on the test
+core, which claims `CHEAT_POKES` and a patch range.
+
 ---
 
 ## 30. B9, scraping in Rust: the design, 2026-10-18

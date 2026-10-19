@@ -1,3 +1,5 @@
+using EmuSen.Crystal.Debugger;
+
 namespace EmuSen.WiseMan.Crystal
 {
     // The scripts' verbs over a machine - see EmuSen_Backend.md §29.30.
@@ -5,6 +7,7 @@ namespace EmuSen.WiseMan.Crystal
     {
         private string? MachineAnswer(string verb, string rest, string[] words) => null;
 
-        public void Dispose() { }
+        // The logging switch is the process's, so a script leaves it off.
+        public void Dispose() => DebugLogging.MasterEnabled = false;
     }
 }

@@ -63,5 +63,17 @@ namespace EmuSen.WiseMan.Crystal
 
         [Fact]
         public void The_labels_answer_alike() => Same("labels");
+
+        [Fact]
+        public void The_breakpoints_answer_alike() => Same("breakpoints");
+
+        [Fact]
+        public void The_watches_frame_log_and_freezes_answer_alike() => Same("watches");
+
+        [Fact]
+        public void Coverage_and_the_call_stack_answer_alike() => Same("coverage");
+
+        [Fact]
+        public void The_cheat_registry_answers_alike() => Same("cheats");
     }
 }

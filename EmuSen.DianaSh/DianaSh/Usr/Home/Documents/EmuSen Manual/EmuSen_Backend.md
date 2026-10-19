@@ -7438,6 +7438,73 @@ fix:
 **emusen-shell's game log names its runtime.** Hotaru's session writes `[ROM] Runtime: …` after the core's notice, as
 Pharaoh does (§29.27). `A_game_s_log_names_the_implementation_that_serves_it` holds it.
 
+**The C# shell over the Rust runtime, refused in words** (*decided 2026-10-19 by the tester*, option (a)). This came
+up while grading emusen-shell. `ShellOverSessionTests` failed 4 of 4 with the C# shell (`EMUSEN_DIANASH_NATIVE=0`)
+over a table of the Rust Crystal, which is the refusal §29.25 recorded. Once a program's default is the Rust,
+DianaSh's failover alone meets that refusal. Pharaoh, already on the Rust (§29.27), was shown aborting with code 134 on
+an unhandled `ArgumentException` when `EMUSEN_DIANASH_NATIVE=0` was set alone; the step 1 gate had not run the C#
+shell. The options weighed:
+- (a) record the pairing and refuse it cleanly;
+- (b) the binding yielding to the C# when DianaSh's variable is `0`, which would wire one component's switch to
+  another's;
+- (c) a C# target over a Rust table, which is part (c)'s deferred work;
+- (d) Pharaoh's flip reverted.
+
+The tester chose (a): `EMUSEN_DIANASH_NATIVE=0` means the C# shell and the C# runtime together.
+
+Built (this commit):
+- DianaSh owns the check and its words: `DianaShInterpreter.CheckService(table)` throws `DianaShTableRefusedException`
+  with `ForeignTableRefusal` when the shell is the C# and the table is not this process's C# provider's.
+  `CreateForService` makes the same check first, in place of the `ArgumentException`.
+- Pharaoh calls the check after its open, prints `[ERROR]` and the words, and exits with code 1.
+- Hotaru's `HotaruSession.Build`, the one way every launch of emusen-shell opens a game, calls it before the log takes
+  the console. The terminal's launch prints the words and exits with code 1, before any window. A launch from the
+  shell's window shows the words at its prompt, where its launch failures already land.
+- The words, and the table of the four pairings, are in `EmuSen_Settings_Reference.md` §4.117.
+
+Graded on 2026-10-19 [M]:
+- `PharaohCrystalDefaultTests` gained two cases, run on a synthetic NES image through a shared `ProgramRun` fixture
+  that removes the display:
+  - `EMUSEN_DIANASH_NATIVE=0` alone gives exit 1 and the words, with no unhandled exception;
+  - both variables `0` give exit 0 on the C#.
+- `ShellRuntimeAgreementTests` runs emusen-shell as a process, `--console` over a synthetic Game Boy image, at
+  `EMUSEN_CRYSTAL_NATIVE=1` and `EMUSEN_DIANASH_NATIVE=0`: exit 1 and the words, no `[CPU HALT]`. Its other pairing,
+  both `0`, opens the game's window, which the harness does not do. The shell over the C# runtime's table on both
+  shells is held in-process by `ShellOverSessionTests`.
+- `ShellOverSessionTests` now expects the refusal, its type and its words, where the C# shell meets the Rust table. It
+  passes 4 of 4 at each of the four pairings.
+- A seeded fault, the check made to do nothing, was caught by both refusal cases. At the C# shell over the Rust
+  runtime it also crashed `ShellOverSessionTests`' test host, calling a null function pointer.
+  - It crashed the unset case's process too. That was found to be the check's other effect: its read of
+    `DianaShNative.Active` is what attaches the Rust shell before `CreateForService` builds on it.
+  - The real check reproduced no failure in 30 sequential and 30 concurrent unset runs, nor in 8 rounds of the four
+    pairings run at once.
+- Pharaoh's, Hotaru's and the shell's classes, with every class of `EmuSen.WiseMan.Crystal`: 468 of 468 at
+  `EMUSEN_CRYSTAL_NATIVE=0`, and 463 with 5 skipped (§29.27) at `1`. The golden corpus on Crystal's table: 100 of 100
+  both ways.
+
+**emusen-shell's default is the Rust** (state 2, SR7; this commit). Its project sets `EmuSenCrystalNative`, and with
+`EMUSEN_CRYSTAL_NATIVE=0` it runs on the C# again. Hotaru is a library inside emusen-shell, so it follows emusen-shell's
+entry assembly. Hotaru files the runtime's lines (Q2) as §29.12 built it: once its log is in place, and between frames
+in its window.
+
+Graded on 2026-10-19 [M], on `WiseMan` at `97f74b73` with the refusal above:
+- `CrystalSwitchTests` holds emusen-shell's key.
+- `ShellRuntimeAgreementTests` gained the case of `EMUSEN_DIANASH_NATIVE=0` with `EMUSEN_CRYSTAL_NATIVE` unset. Its
+  refusal shows the process read emusen-shell's own default.
+- The shell's classes (Hotaru on the API, the frontend defects and references, the shell window, launch mode, feed
+  window, Hotaru's key and hotkey tables, accessibility, windowing, pad template, sandbox escape, shared host and leaf
+  assembly classes), with the golden corpus, `ShellOverSessionTests`, `ShellRuntimeAgreementTests` and
+  `CrystalSwitchTests`: 262 of 262 at `EMUSEN_CRYSTAL_NATIVE` `0`, `1` and unset.
+- `ShellOverSessionTests`: 4 of 4 at each of the four pairings of the two variables.
+- The golden corpus on Crystal's table: 100 of 100 both ways.
+- A seeded fault, the property's name misspelt in emusen-shell's project, was caught by `CrystalSwitchTests` and by
+  the process case with the variable unset.
+- MSBuild's conditions read `yes` and `on` as `true`, so `<EmuSenCrystalNative>yes</EmuSenCrystalNative>` sets the key
+  too. A first attempt at the fault used `yes`, and so was not a fault.
+
+Mistress's move waits for `core_approve` (§29.40), as §29.11 Q3 decided.
+
 ### 29.30 Part (b): the debugger crate, its surface for the frame, and how it is graded
 
 *Part (b) numbers its sections from §29.30, so that part (a)'s pieces, built at the same time, keep §29.16 to §29.29.*

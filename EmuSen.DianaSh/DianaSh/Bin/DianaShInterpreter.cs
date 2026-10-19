@@ -264,11 +264,20 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             return shell;
         }
 
+        // The words a shell over a table is refused in when EMUSEN_DIANASH_NATIVE=0 meets the Rust runtime's table - see EmuSen_Settings_Reference.md §4.117.
+        public const string ForeignTableRefusal = "EMUSEN_DIANASH_NATIVE=0 puts the shell on its C# implementation, which needs the frontend API's C# implementation too: set EMUSEN_CRYSTAL_NATIVE=0 beside it, or unset EMUSEN_DIANASH_NATIVE";
+
+        // Throws DianaShTableRefusedException where this process's shell cannot go over the table, before a program builds anything on it - see EmuSen_Backend.md §29.28.
+        public static unsafe void CheckService(nint sessionService)
+        {
+            if (sessionService != 0 && SessionService.Of((EmuSenSessionV1*)sessionService) is null && !DianaShNative.Active) throw new DianaShTableRefusedException(ForeignTableRefusal);
+        }
+
         // A table the platform library's Crystal made: its modules call it, and no C# command has a target - see EmuSen_Backend.md §29.25.
         private static DianaShInterpreter CreateForForeignService(nint sessionService, IEnumerable<IDianaShCommand>? extraCommands, DianaShSessionManager? sessions)
         {
             if (sessionService == 0) throw new ArgumentNullException(nameof(sessionService));
-            if (!DianaShNative.Active) throw new ArgumentException("the C# shell's commands need this process's provider; a table the platform library made needs the Rust shell", nameof(sessionService));
+            CheckService(sessionService);
             DianaShSandbox.EnsureInitialWorkingDirectory();
             var table = new ServiceTable(sessionService);
             DianaShInterpreter shell = CreateNative(null, extraCommands, null, null, null, sessions, null, null, table);

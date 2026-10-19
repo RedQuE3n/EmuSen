@@ -1,4 +1,4 @@
-/* emusen_library.h - the player's library, version 1.0. Owned by the library component, emusen-library.
+/* emusen_library.h - the player's library, version 1.1. Owned by the library component, emusen-library.
  *
  * The library of games below every frontend: the scan of the player's ROM folders, a dump's identity, and games.db
  * with the player's records (favourites, play time, collections, metadata edits, a crop stored for the frontend, cover
@@ -43,7 +43,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_LIBRARY_MAJOR 1u
-#define EMUSEN_LIBRARY_MINOR 0u
+#define EMUSEN_LIBRARY_MINOR 1u
 #define EMUSEN_LIBRARY_VERSION ((EMUSEN_LIBRARY_MAJOR << 16) | EMUSEN_LIBRARY_MINOR)
 
 /* ---- Statuses: the band -1140 to -1159 (EmuSen_Backend.md D12), beside the platform's shared codes ------------- */
@@ -99,10 +99,11 @@ int32_t emusen_library_cancel(emusen_library *lib);
  *   {"status": "ok" | "empty" | "not_found" | "no_directory", "roots": [...], "games": [{"path": "...", "system": "gbc" | null}]} */
 int64_t emusen_library_games(emusen_library *lib, const uint8_t *filter, size_t len, uint8_t *out, size_t out_len);
 
-/* What a dump is. Request {"path": "...", "systems": [...] (else the last scan's), "crc32": false, "record": false}.
- * Answer {"path", "bytes", "modified" (.NET's LastWriteTimeUtc.Ticks), "md5", "crc32" | null, "system" | null,
- * "cached"}. The MD5 comes from the hash cache while the file is the size and age it was hashed at; with crc32 the
- * file is read; with record the cache and the game's row are written. */
+/* What a dump is. Request {"path": "...", "systems": [...] (else the last scan's), "crc32": false, "sha1": false,
+ * "record": false}. Answer {"path", "bytes", "modified" (.NET's LastWriteTimeUtc.Ticks), "md5", "crc32" | null,
+ * "sha1" (only when asked), "system" | null, "cached"}. The MD5 comes from the hash cache while the file is the size
+ * and age it was hashed at; with crc32 or sha1 the file is read; with record the cache and the game's row are written.
+ * @since 1.1: "sha1" in the request and the answer. */
 int64_t emusen_library_identity(emusen_library *lib, const uint8_t *request, size_t len, uint8_t *out, size_t out_len);
 
 /* One read, {"what": ...}:

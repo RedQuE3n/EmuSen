@@ -13,6 +13,8 @@ name = "emusen_galaxia"
 # .NET's text rules and File.ReadAllText's decoding, which the shell's command modules share without linking Galaxia.
 emusen-dotnet = { path = "../dotnet" }
 md-5 = "0.11"
+# SHA-1 beside them, which ScreenScraper asks for (EmuSen_Backend.md §30.4, decided 2026-10-18).
+sha1 = "0.11"
 # A sheet's and a list's meaning, for the files an image brings beside it (image_sets.rs).
 emusen-disc = { path = "../../EmuSen/Cores/Shared/emusen-disc" }
 # Inflate, for an archive entry's first bytes (archive.rs); the workspace's, from emusen-cheats.

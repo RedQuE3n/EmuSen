@@ -12,11 +12,13 @@ use std::fmt;
 pub struct Text {
     pub text: String,
     pub broken: bool,
+    /// `JsonElement.GetString`'s words for the first lone surrogate of a broken text, where the reader recorded them.
+    pub refusal: Option<String>,
 }
 
 impl Text {
     pub fn new(text: impl Into<String>) -> Text {
-        Text { text: text.into(), broken: false }
+        Text { text: text.into(), broken: false, refusal: None }
     }
 }
 
@@ -287,7 +289,7 @@ impl<'a> Reader<'a> {
             }
         }
         // The input was a str and only whole characters were copied or appended.
-        Ok(Text { text: String::from_utf8(out).expect("the text was UTF-8 and was cut only at ASCII"), broken })
+        Ok(Text { text: String::from_utf8(out).expect("the text was UTF-8 and was cut only at ASCII"), broken, refusal: None })
     }
 
     fn enter(&mut self) -> Result<(), Error> {

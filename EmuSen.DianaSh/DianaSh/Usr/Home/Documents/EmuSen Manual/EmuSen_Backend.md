@@ -6874,6 +6874,38 @@ to loads, the profile cut to its limit before sorting, the depth guard ahead of 
 replaces entry counts rather than adding), so a case for each was added to the scripts, and each is caught by it. The
 crate's tests 4.
 
+### 29.33 Built 2026-10-19: part (b), piece 3, the cheat registry and its application
+
+*Built before the bridge, which reads memory through it: `CoreEngine.ReadSpace` refreshes the cheats before every
+debugger read.*
+
+**The piece** (this commit). `emusen-cheats` gained `registry`, the C# `CheatRegistry` beside the crate's files and
+database: RAM pokes and ROM patches over `emusen-systems`' `Write`, the refusals in `ArgumentException`'s words (the
+first with its parameter, as .NET appends it), the version every change moves, the master switch, `ApplyAll` with a
+failed test holding until the next write that is not a test and a test compared at its own width, `TryPatchRom` and
+`ResolveRomPatches` by `TryResolveRepetition`'s two ways (division for a forward stride, a bounded walk otherwise), and
+`ToCheatFile` and `LoadFrom` over Galaxia's `CheatFile` model as JSON. The registry has no lock of its own: the C#'s
+copy-on-write served readers on any thread, where in Rust the registry is the session's and every reader holds the
+session's gate. And `Applied`, the registry's application at the frame's points, `CoreEngine.RefreshCheats`: nothing
+when the version has not moved, else the patch table as triples within the machine's range, each enabled poke a core
+can gate itself (a set of one byte in a space the machine names, no bit, no repeat, the master switch on) as a quad,
+the rest kept as the host's registry for the frame's end, and the session's whole registry the host's where the core
+takes no pokes; `stale` is `_cheatVersion = -1`, which part (a) calls on every state load as `cheats_stale`.
+
+**Measured on 2026-10-19** [M]: `CrystalDebugParityTests` 7 of 7, the new `cheats` script of 106 answers: five refusals
+and a write type that is no member; pokes of every write type, wide and big-endian, by bit, repeated forward and back,
+of an odd width, gated by each test (at the boundary of a less-than and a greater-than, and wider than its width), into
+a space that is not there, disabled, and under the master switch; patches with and without a compare, repeated three
+ways, resolved below a limit and as triples within a range; the version after each change; the saved list as Galaxia's
+model binds it; a list of ten entries read back, among them a flat entry of before writes were a list, a compare of a
+dash with spaces, and five broken entries skipped. `emusen-cheats`' tests 9, among them the application's division
+into quads, the host's registry and a stale refresh. Six seeded faults: four caught at once (a decrease that adds, a
+patch's compare ignored, the range's low bound excluded, a ROM patch's address written with four digits); two not (a
+compare of a dash read as a number, a less-than that holds at equality), so the read-back list gained an entry whose
+only flaw is the dash and the pokes a boundary case on a byte no other cheat writes, and each is caught by it. The
+quads themselves reach a machine only through `set_cheat_pokes`, so their parity is the bridge's piece, on the test
+core, which claims `CHEAT_POKES` and a patch range.
+
 ---
 
 ## 30. B9, scraping in Rust: the design, 2026-10-18

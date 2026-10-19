@@ -72,5 +72,8 @@ namespace EmuSen.WiseMan.Crystal
 
         [Fact]
         public void Coverage_and_the_call_stack_answer_alike() => Same("coverage");
+
+        [Fact]
+        public void The_cheat_registry_answers_alike() => Same("cheats");
     }
 }

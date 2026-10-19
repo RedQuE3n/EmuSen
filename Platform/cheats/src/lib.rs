@@ -6,3 +6,4 @@ pub mod cht;
 pub mod database;
 pub mod install;
 pub mod prune;
+pub mod registry;

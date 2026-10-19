@@ -2,7 +2,9 @@
 //! and the call stack. `CrystalDebugScript.Registries` runs the same verbs over the C# registries.
 
 use crate::fake::Script;
+use emusen_cheats::registry::{CheatRegistry, parse_write_type};
 use emusen_core_host::sha256;
+use emusen_systems::cheats::{Kind, Write, WriteType};
 use emusen_crystal_debug::breakpoints::{BreakpointRegistry, CallKind, Evaluate, Unprepared};
 use emusen_crystal_debug::conditions;
 use emusen_crystal_debug::coverage::{CallStackRegistry, CoverageRegistry};
@@ -17,6 +19,7 @@ pub struct Registries {
     pub freezes: FreezeRegistry,
     pub coverage: CoverageRegistry,
     pub stack: CallStackRegistry,
+    pub cheats: CheatRegistry,
 }
 
 impl Registries {
@@ -29,6 +32,7 @@ impl Registries {
             freezes: FreezeRegistry::new(),
             coverage: CoverageRegistry::new(),
             stack: CallStackRegistry::new(),
+            cheats: CheatRegistry::new(),
         }
     }
 }
@@ -74,6 +78,9 @@ fn join<T>(items: impl IntoIterator<Item = T>, f: impl Fn(T) -> String) -> Strin
 
 /// The answer to a registry's verb; none for a verb that is not one.
 pub fn run(script: &mut Script, verb: &str, rest: &str, words: &[&str]) -> Option<String> {
+    if verb.starts_with("cheat.") {
+        return cheat(script, verb, rest, words);
+    }
     let (mut eval, r) = script.split();
     let depth = r.depth.unwrap_or(0);
     let mut unprepared = Unprepared;
@@ -355,6 +362,127 @@ pub fn run(script: &mut Script, verb: &str, rest: &str, words: &[&str]) -> Optio
             r.stack.reset();
             "ok".into()
         }
+        _ => return None,
+    })
+}
+
+fn kind_name(kind: Kind) -> &'static str {
+    if kind == Kind::RomPatch { "RomPatch" } else { "RamPoke" }
+}
+
+fn type_number(kind: WriteType) -> i32 {
+    kind as i32
+}
+
+/// A write as a script spells it: space:address:value:width:type:bit:big:repeat:repeat-address:repeat-value.
+fn write_of(text: &str) -> Option<Write> {
+    let f: Vec<&str> = text.trim().split(':').collect();
+    let g = |i: usize| f.get(i).copied().unwrap_or("");
+    Some(Write {
+        space: if g(0) == "-" { String::new() } else { g(0).to_string() },
+        address: number(g(1)) as i32,
+        value: number(g(2)) as u32,
+        width: number(g(3)) as i32,
+        kind: parse_write_type(Some(g(4)))?,
+        bit_position: (g(5) != "-" && !g(5).is_empty()).then(|| number(g(5)) as i32),
+        big_endian: g(6) == "1",
+        repeat_count: number(g(7)) as i32,
+        repeat_add_address: number(g(8)) as i32,
+        repeat_add_value: number(g(9)) as u32,
+    })
+}
+
+fn cheat(script: &mut Script, verb: &str, rest: &str, words: &[&str]) -> Option<String> {
+    let (eval, r) = script.split();
+    let c = &mut r.cheats;
+    let w = |i: usize| words.get(i).copied().unwrap_or("");
+    let desc = |s: &str| s.replace('~', " ");
+    Some(match verb {
+        "cheat.add" => {
+            let fields: Vec<&str> = rest.split(" ; ").collect();
+            let head: Vec<&str> = fields[0].split(' ').filter(|x| !x.is_empty()).collect();
+            let kind = if head.first() == Some(&"romPatch") { Kind::RomPatch } else { Kind::RamPoke };
+            let compare = head.get(1).filter(|x| **x != "-").map(|x| number(x) as u8);
+            let mut writes = Vec::new();
+            for f in &fields[1..] {
+                match write_of(f) {
+                    Some(x) => writes.push(x),
+                    None => return Some("bad write".into()),
+                }
+            }
+            match c.add(kind, writes, compare, &desc(head.get(2).copied().unwrap_or("")), head.get(3) != Some(&"0")) {
+                Ok(id) => id.to_string(),
+                Err(e) => format!("! {e}"),
+            }
+        }
+        "cheat.poke" => c.add_ram_poke(w(0), number(w(1)) as i32, number(w(2)) as u8, &desc(w(3)), true).map_or_else(|e| format!("! {e}"), |id| id.to_string()),
+        "cheat.patch" => c
+            .add_rom_patch(number(w(0)) as i32, number(w(1)) as u8, (w(2) != "-").then(|| number(w(2)) as u8), &desc(w(3)), true)
+            .map_or_else(|e| format!("! {e}"), |id| id.to_string()),
+        "cheat.remove" => c.remove(number(w(0)) as i32).to_string(),
+        "cheat.enable" => c.set_enabled(number(w(0)) as i32, w(1) == "1").to_string(),
+        "cheat.master" => {
+            c.set_master_enabled(w(0) == "1");
+            "ok".into()
+        }
+        "cheat.clear" => {
+            c.clear();
+            "ok".into()
+        }
+        "cheat.version" => format!("{} {} {}", c.version(), c.enabled_rom_patches(), c.master_enabled()),
+        "cheat.list" => join(c.cheats(), |x| {
+            format!(
+                "{}:{}:{}:{}:{}:[{}]",
+                x.id,
+                kind_name(x.kind),
+                x.compare.map_or("-".to_string(), |v| v.to_string()),
+                x.description,
+                x.enabled,
+                x.writes
+                    .iter()
+                    .map(|v| format!(
+                        "{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
+                        v.space,
+                        v.address,
+                        v.value,
+                        v.width,
+                        type_number(v.kind),
+                        v.bit_position.map_or("-".to_string(), |b| b.to_string()),
+                        v.big_endian,
+                        v.repeat_count,
+                        v.repeat_add_address,
+                        v.repeat_add_value
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        }),
+        "cheat.apply" => {
+            let data = std::cell::RefCell::new(&mut *eval.data);
+            c.apply_all(&mut |s, a| data.borrow().byte(s, a), &mut |s, a, v| data.borrow_mut().put(s, a, v));
+            "ok".into()
+        }
+        "cheat.rom" => c.try_patch_rom(number(w(0)) as u32, number(w(1)) as u8).map_or("none".to_string(), |v| v.to_string()),
+        "cheat.resolve" => join(c.resolve_rom_patches(number(w(0))), |p| format!("{}:{}:{}", p.address, p.value, p.compare.map_or("-".to_string(), |v| v.to_string()))),
+        "cheat.triples" => {
+            let mut applied = emusen_cheats::registry::Applied::default();
+            match applied.refresh(c, Some((number(w(0)), number(w(1)))), false, &|_| None) {
+                emusen_cheats::registry::Send::Tables { triples: Some(t), .. } => join(t, |x| x.to_string()),
+                _ => "none".into(),
+            }
+        }
+        "cheat.file" => {
+            let mut out = String::new();
+            emusen_dotnet::json::write_compact(&mut out, &c.to_file());
+            out
+        }
+        "cheat.load" => match emusen_dotnet::json::parse(rest) {
+            Ok(v) => {
+                let (loaded, skipped) = c.load(&v);
+                format!("{loaded} {skipped}")
+            }
+            Err(_) => "bad json".into(),
+        },
         _ => return None,
     })
 }

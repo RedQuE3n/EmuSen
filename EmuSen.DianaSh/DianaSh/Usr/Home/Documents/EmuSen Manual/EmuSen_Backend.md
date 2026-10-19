@@ -3860,7 +3860,7 @@ The timing files are kept under `~/.cache/emusen/probe/mars/b4/timing/` (`r1.tsv
   held, not from what the core holds. Suppose a state is loaded whose ports differ from the router's. The frontend's
   view then never reaches the core until a pad is plugged in or pulled out. Not shown by a test yet. *Recommended*:
   after a state loads, `CoreEngine` marks every port's presence changed, so the next frame sends the frontend's view.
-  This is a host change for every core with `PRESENCE`.
+  This is a host change for every core with `PRESENCE`. *Built after B4, §26.8.*
 - **A frontend that routes no ports.** Since the ABI's rule is now MarsRT's, an N64 game opened by a host that never
   calls `SetControllerConnected` sees four controllers where the shim gave it one. Mistress's router empties the
   ports no player holds, so play in Mistress is unchanged.
@@ -4858,7 +4858,7 @@ the pairs move in both directions. A unit-register condition on MoonRT costs wha
   the spaces they read, at every hit. Refreshing only the register providers there would bring it near MercuryRT's;
   that is `BreakpointExpressions`' rule (`EmuSen_DianaSh.md` §13.12), so it is proposed, not built. MercuryRT will
   meet the same cost once it lists units; MarsRT's, its VI listed and the N64 pack's views
-  refreshed, cost 1.4 to 1.9 µs a hit (§24.6).
+  refreshed, cost 1.4 to 1.9 µs a hit (§24.6). *Built after B4, §26.7.*
 - **§6.33's text** says units are read through `debug_registers` but not, in words, that the read changes nothing;
   the header's `const` and the trait's `&self` say it. *Recommended*: a clarification of one sentence there, no minor.
 - **MercuryRT's switch** needs nothing more: once its target is `CoreDebugTarget`, its units are in every scope by
@@ -5058,6 +5058,135 @@ frame end and settle, discovery's sole engines), against §7's 300, and lost wha
 B4 is finished: every console runs on the generic engine and target, through the core ABI v1 alone. What stays open is
 the tester's, as each phase recorded it: `SM83` read as `CPU` (§17.10), the summary's sound queue (§17.10), and the
 other consoles' Rust twins of the new view members (§17.10, §23). B6, the core host in Rust, may now start (§6).
+
+### 26.7 After B4, 2026-10-18: a breakpoint condition refreshes the registers alone
+
+*Decided 2026-10-18 by the tester (§20), as §24.5 proposed.* `BreakpointExpressions` refreshed every provider of the
+target once an evaluation first named a symbol, a rule the MoonRT and MercuryRT shims forced (`EmuSen_DianaSh.md`
+§13.12) and that outlived them. On the generic target it made the pack's view rings copy the spaces they read at every
+hit.
+
+**Shown first.** `BreakpointConditionCostBench`, Release, `EMUSEN_BP_BENCH=1`, every row, on `WiseMan` at `8b76f30e`:
+a register condition on MoonRT cost 4.8 to 5.1 µs a hit, and MercuryRT, which now lists its units and has its pack's
+views refreshed on the generic target, 3.5 to 3.9 µs, against the 1.1 µs §24.4 measured for it before its switch;
+§24.5 predicted it would meet MoonRT's cost.
+
+**Built.** `DebugExpressions.RefreshRegisters`, beside the choice of context it serves, refreshes the providers every
+context reads its symbols from: `CpuRegisters`, `VideoRegisters`, `ApuRegisters` and each `DebugCpu`'s registers once
+(a coprocessor's registers are one of them on every target). `Live` calls it in place of `RefreshProviders`. No
+surface changed. No context names a view: a pack's symbols (the SNES's `flag.c`) are computed from the main
+processor's registers, which are refreshed; the generic target reads a unit's registers live (§24.2); and the
+zero-per-core context's video, sound and coprocessor rows are among the providers refreshed. So every symbol a
+condition can name is still read as it stands at the hit.
+
+**Tested**, Debug, failing first where a defect was claimed (the shape of the refresh is not a defect a test sees,
+only its cost): `BreakpointConditionTests` gained a target with no context of its own whose providers count their
+refreshes, on which two hits and a coprocessor's hit read `LINE`, `APU0` and `R15` fresh and refresh no sprite,
+palette, channel or load provider, and whose `RefreshProviders` throws; and, on MoonRT, MercuryRT and MarsRT, 300
+refreshes of the registers allocating 0 bytes. `VenusRtDebugViewTests` gained a condition on `flag.n` at the
+program's loop, made before the first frame: `flag.n==1` halts there and `flag.n==0` never does, so the pack's symbol
+is read from P at the hit. With item 3's and item 4's classes (§26.8, §26.9), the blast radius ran as one: 28 classes,
+**382 tests, 378 passed, 4 failed**, all four in `MoonDebugTargetContractOnMoonRt` (the console's name "NES" where B4
+made it "MoonRT", the summary's words, a watch and the bus's side-effect flag), which fail the same way on `WiseMan` at
+`8b76f30e` with none of this section's changes (24 tests, 20 passed) and are outside the gates of §26.4. `man bp`'s
+CONDITIONS paragraph was rewritten, so the corpus's three `man bp` cases in `man.golden` were re-recorded: the
+paragraph and the output's length (15,475 to 15,811), nothing else; `GoldenCorpusTests` **100 of 100**.
+
+**Measured**, µs a hit over a breakpoint never reached, two runs of each build:
+
+| Row | Condition, before | Condition, after | `if 0`, before / after |
+|---|---|---|---|
+| MoonRT, `A==0x99` | 4.83 / 5.09 | 1.37 / 1.42 | 0.40, 0.41 / 0.41, 0.39 |
+| MoonRT, `ppu.PPUCTRL==0x99` | 4.64 / 4.91 | 1.24 / 1.26 | 0.39, 0.51 / 0.40, 0.49 |
+| MercuryRT through `CoreFactory`, `HL==0x1234` | 3.50 / 3.67 | 1.31 / 1.36 | 0.33, 0.33 / 0.35, 0.34 |
+| MercuryRT on the generic engine (`mercuryrt-v1`), `HL==0x1234` | 3.86 / 3.69 | 1.33 / 1.38 | 0.33, 0.34 / 0.35, 0.34 |
+| MarsRT, `t0==0` | 1.74 / 1.72 | 1.30 / 1.34 | 0.41, 0.39 / 0.39, 0.39 |
+| MarsRT, `vi.ORIGIN==1` | 1.44 / 1.42 | set aside / 1.02 | 0.51, 0.43 / 1.92, 0.43 |
+| Nephrite, `D2==0` | 1.38 / 1.40 | 1.29 / 1.26 | 0.53, 0.55 / 0.59, 0.52 |
+
+The first row of the first run after was set aside, its `if 0` floor reading 1.92 against 0.39 to 0.59 everywhere
+else, as §24.6 set aside the first row of a run. A register condition now costs 1.0 to 1.4 µs a hit on every core
+measured, MoonRT's and MercuryRT's a third of what they were, MarsRT's and Nephrite's a little less. The `if 0` floor,
+a condition naming no symbol, does not move, as it refreshes nothing before or after.
+
+### 26.8 After B4, 2026-10-18: after a state loads, the host sends each port's presence again
+
+*Decided 2026-10-18 by the tester (§20), as §18.10.9 recommended.* The input latch sends a port's presence only when
+it changes from what the latch last held, not from what the machine holds. A state carries the ports it was saved
+with (`EmuSen_CoreAPI.md` §6.36), so after a load the machine and the frontend could disagree until a pad was plugged
+in or pulled out.
+
+**Shown first.** `MarsRtCoreAbiTests.After_a_state_loads_each_port_holds_the_frontends_controller_again`, run
+on the host before the fix: two MarsRT machines, one with ports 2 to 4 emptied and one with four
+pads, each run five frames and saved; each loads the other's state and runs a frame. It failed: the machine whose
+frontend had four pads still held one controller, `[True, False, False, False]` where four were expected.
+
+**Built**, in the host for every core that claims `PRESENCE`, MarsRT unchanged: `CoreEngine.LoadState` asks the latch
+to resend presence, and the latch's next send gives every port's flag whether it changed or not, then clears the
+request. It is a flag of its own, not every port's change bit set, because `Connect` toggles that bit so that a pad
+pulled out and put back within a frame sends nothing; after a load such a pair must still send, and the test does
+that on port 3 between the load and the frame. A core without the bit is never called, as before; a rewind step, a
+load like any other, sends at most one `set_present` a port. The machine holds the state's ports until the next frame
+starts, as it holds the state's buttons.
+
+**Tested**, Debug: the case above passes, either way round (four pads over a one-pad state, one pad over a four-pad
+state). In the run of §26.7: `MarsRtCoreAbiTests` 8, `MultiplayerTests` 11, `StateRefusalTests` 2,
+`MistressStateRefusalTests` 1, `RustStateHeaderTests` 3, `MarsRtRewindTests` 16, `MarsRtRewindToMomentTests` 3,
+`MarsNativeStateTests` 4, `CoreAbi113Tests` 7 (its presence case among them) and `SharedHostTests` 14, every one
+passing.
+
+### 26.9 After B4, 2026-10-18: the three N64 hints say their cost once
+
+*Decided 2026-10-18 by the tester (§20), as §18.10.9 recommended.* The host words a setting's hint as the core's help
+followed by the schema's cost (`CoreSettingDescriptor`), and MarsRT's help for `DeferredPresentation`, `RenderScale`
+and `Antialiasing` already said what the cost then said again.
+
+**Shown first.** `CoreSettingHintTests` reads every discovered core's schema, development cores included, and fails
+a setting whose cost shares a run of five words with its help, or whose hint holds a sentence twice. On the tree before
+the rewording it named the three, by "reaches the screen one frame", "each step costs its square" and "it multiplies
+the drawing's cost", and no other setting of any core. A first form that compared every pair of a hint's sentences was
+set aside: it named MercuryRT's `Model`, whose sentences for the Game Boy and the Game Boy Color share their words by
+design.
+
+**Reworded**, in MarsRT's schema (`ffi/v1.rs`), each hint now saying its cost once, last: the deferred scan-out's help
+drops "so it reaches the screen one frame late", which its cost says; the internal resolution's cost carries "2x is
+four times the pixels, 4x sixteen" beside "Each step costs its square in drawing", and its help keeps the picture and
+what most machines hold; antialiasing's help keeps that the two settings together are held to four, and its cost alone
+says it multiplies the drawing's cost.
+
+**Re-recorded**: `CoreRegistrationGolden.txt`, the three hints' lines, each in the catalogue's and the settings
+window's rows of both worlds (12 lines), and no other line. **Tested**, Debug, in the run of §26.7:
+`CoreSettingHintTests` 1, `MarsCoreSettingsTests` 13, `GraphicsSettingsWindowLayoutTests` 5 and
+`CoreRegistrationEquivalenceTests` 3, every one passing.
+
+### 26.10 After B4, 2026-10-18: the NES debug target's contract held to B4's decisions
+
+`MoonDebugTargetContractOnMoonRt`, the cases every NES debug target is held to through `IDebugTarget` alone, failed 4
+of its 24 since MoonRT's switch (`a17ff513`); B4's gates (§23.5, §26.4) did not list the class. Each failure was read
+against §20, §19.3.3 and §23.4 before its expectation was touched:
+
+| Case | What it found | Classed |
+|---|---|---|
+| The target's name | "MoonRT" where it held "NES" | decided: the engine's name for a retired shim's (§20, §23.4) |
+| The summary | the generic head, "MoonRT (Rust) 0.1.0, nes, frame 1", where it held "NES (Moon" | decided (§20, §23.4's `summary` row); the mapper and the CPU line still follow |
+| The spaces with side effects | `PPUREG` and `APUREG` declare them beside `CPUBUS` | decided: D15 lists the two as view spaces with `side_effects` (§19.3.3, §23) |
+| A watch on RAM | no event for a store made through `CPUBUS` | decided: D16 retired the report of the debugger's own store (§19.3.3, §23.4) |
+
+The watch was the one that could have hidden a loss, the case's point being that the program's stores are logged. So
+the case now runs a program whose `STA $42` stores `$7E`: the debugger's store through `CPUBUS` before the frame logs
+nothing, and the program's store logs one event, `$42` and `$7E`. It passes, so nothing was lost and the host needed no
+change; `MoonDebugEngineTests` already held both halves on their own. Each changed case's comment cites its decision,
+and the class was not retired. **24 of 24** pass.
+
+**The sibling classes**: the other shared claim sets, `MercuryDebugTargetClaims` (`MercuryRtDebugTargetTests`),
+`MercuryDebugClaims` (`MercuryRtDebugTests`) and `MarsDebugClaims` (`MarsRtDebugTests`), were updated by their own
+switches and pass; Nephrite and VenusRT have no shared contract, and their debug classes (`NephriteDebugTests`,
+`VenusRtDebugTests`, `VenusRtDebugViewTests`) pass.
+
+**Tested**, Debug, after `WiseMan` at `02d006c8` (B6's and B8's parts) was merged: §26.7's 28 classes with
+`VenusRtDebugTests`, **401 tests, 401 passed**, among them `MoonDebugTargetContractOnMoonRt` 24, `MercuryRtDebugTargetTests`
+34, `MercuryRtDebugTests` 33, `MarsRtDebugTests` 33, `NephriteDebugTests` 9, `VenusRtDebugTests` 19,
+`VenusRtDebugViewTests` 12 and `GoldenCorpusTests` 100.
 
 ---
 

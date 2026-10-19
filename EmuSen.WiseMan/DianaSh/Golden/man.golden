@@ -329,7 +329,7 @@ out 1
 status 0
 action none
 $ man BP
-out 15475
+out 15811
 NAME
     bp - manage execution breakpoints
 
@@ -374,14 +374,18 @@ CONDITIONS
     Conditions are evaluated on the emulation thread, once per matching
     hit, so an expensive one costs real frame time: each hit leaves the
     core's frame and re-enters it, and a condition that names a register
-    first refreshes the debugger's view of the machine. Measured on
-    2026-10-16, that is a third of a microsecond a hit for a condition of
-    literals and about one to nine for one naming a register, depending on
-    the core; the Debugging Tools Reference, section 3.67, has the
-    numbers. A breakpoint without a condition costs nothing more than it
-    did. Reading an I/O register in a condition reads it for real, with
-    whatever side effect that has on hardware - 'man eval' covers which
-    reads are and aren't safe.
+    first re-reads the registers: every processor's, and the video and
+    sound rows. It does not re-read the console's views (palettes,
+    sprites, channels), which no expression names; a pack's symbols, such
+    as the SNES's flag.c, are worked out from the registers just read, and
+    a unit's register (ppu.PPUCTRL) is read live, so every symbol is as it
+    stands at the hit. Measured on 2026-10-18 on MoonRT, MercuryRT, MarsRT
+    and Nephrite, that is a third to half a microsecond a hit for a
+    condition of literals and about 1.0 to 1.4 for one naming a register;
+    EmuSen_Backend.md, section 26.7, has the numbers. A breakpoint without
+    a condition costs nothing more than it did. Reading an I/O register in
+    a condition reads it for real, with whatever side effect that has on
+    hardware - 'man eval' covers which reads are and aren't safe.
 
     A condition that passes the check can still fail when it is evaluated:
     a division by zero, or an address its space cannot read. Such a
@@ -625,7 +629,7 @@ SEE ALSO
 status 0
 action none
 $ man Bp
-out 15475
+out 15811
 NAME
     bp - manage execution breakpoints
 
@@ -670,14 +674,18 @@ CONDITIONS
     Conditions are evaluated on the emulation thread, once per matching
     hit, so an expensive one costs real frame time: each hit leaves the
     core's frame and re-enters it, and a condition that names a register
-    first refreshes the debugger's view of the machine. Measured on
-    2026-10-16, that is a third of a microsecond a hit for a condition of
-    literals and about one to nine for one naming a register, depending on
-    the core; the Debugging Tools Reference, section 3.67, has the
-    numbers. A breakpoint without a condition costs nothing more than it
-    did. Reading an I/O register in a condition reads it for real, with
-    whatever side effect that has on hardware - 'man eval' covers which
-    reads are and aren't safe.
+    first re-reads the registers: every processor's, and the video and
+    sound rows. It does not re-read the console's views (palettes,
+    sprites, channels), which no expression names; a pack's symbols, such
+    as the SNES's flag.c, are worked out from the registers just read, and
+    a unit's register (ppu.PPUCTRL) is read live, so every symbol is as it
+    stands at the hit. Measured on 2026-10-18 on MoonRT, MercuryRT, MarsRT
+    and Nephrite, that is a third to half a microsecond a hit for a
+    condition of literals and about 1.0 to 1.4 for one naming a register;
+    EmuSen_Backend.md, section 26.7, has the numbers. A breakpoint without
+    a condition costs nothing more than it did. Reading an I/O register in
+    a condition reads it for real, with whatever side effect that has on
+    hardware - 'man eval' covers which reads are and aren't safe.
 
     A condition that passes the check can still fail when it is evaluated:
     a division by zero, or an address its space cannot read. Such a
@@ -1464,7 +1472,7 @@ case the page for bp
 target none
 covers 1
 $ man bp
-out 15475
+out 15811
 NAME
     bp - manage execution breakpoints
 
@@ -1509,14 +1517,18 @@ CONDITIONS
     Conditions are evaluated on the emulation thread, once per matching
     hit, so an expensive one costs real frame time: each hit leaves the
     core's frame and re-enters it, and a condition that names a register
-    first refreshes the debugger's view of the machine. Measured on
-    2026-10-16, that is a third of a microsecond a hit for a condition of
-    literals and about one to nine for one naming a register, depending on
-    the core; the Debugging Tools Reference, section 3.67, has the
-    numbers. A breakpoint without a condition costs nothing more than it
-    did. Reading an I/O register in a condition reads it for real, with
-    whatever side effect that has on hardware - 'man eval' covers which
-    reads are and aren't safe.
+    first re-reads the registers: every processor's, and the video and
+    sound rows. It does not re-read the console's views (palettes,
+    sprites, channels), which no expression names; a pack's symbols, such
+    as the SNES's flag.c, are worked out from the registers just read, and
+    a unit's register (ppu.PPUCTRL) is read live, so every symbol is as it
+    stands at the hit. Measured on 2026-10-18 on MoonRT, MercuryRT, MarsRT
+    and Nephrite, that is a third to half a microsecond a hit for a
+    condition of literals and about 1.0 to 1.4 for one naming a register;
+    EmuSen_Backend.md, section 26.7, has the numbers. A breakpoint without
+    a condition costs nothing more than it did. Reading an I/O register in
+    a condition reads it for real, with whatever side effect that has on
+    hardware - 'man eval' covers which reads are and aren't safe.
 
     A condition that passes the check can still fail when it is evaluated:
     a division by zero, or an address its space cannot read. Such a

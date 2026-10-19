@@ -150,6 +150,51 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // Each port's controller as MarsRT's state holds it, found by the state layout's names - see Mars_Serial.md §3.
+        private static bool[] Present(CoreEngine core)
+        {
+            byte[] state = State(core);
+            int[] at = core.Machine.Layout().Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Split(' '))
+                .Where(f => f.Length >= 4 && f[3].Contains("Controllers") && f[3].EndsWith("Present", StringComparison.Ordinal)).Select(f => int.Parse(f[0])).ToArray();
+            Assert.Equal(4, at.Length);
+            return at.Select(i => state[i] != 0).ToArray();
+        }
+
+        // EmuSen_CoreAPI.md §6.36: the ports a state was saved with give way to the frontend's at the next frame, either way round - see EmuSen_Backend.md §26.8.
+        [Fact]
+        public void After_a_state_loads_each_port_holds_the_frontends_controller_again()
+        {
+            string rom = Rom(SyntheticN64Rom.Build());
+            bool[] alone = { true, false, false, false }, all = { true, true, true, true };
+            using var one = new MarsRtTestCore { Options = TestCores.NoBattery };
+            using var four = new MarsRtTestCore { Options = TestCores.NoBattery };
+            one.LoadRom(rom);
+            four.LoadRom(rom);
+            for (int port = 1; port < 4; port++)
+            {
+                one.SetControllerConnected(port, false);
+                four.SetControllerConnected(port, true);
+            }
+            for (int f = 0; f < 5; f++)
+            {
+                one.RunFrame();
+                four.RunFrame();
+            }
+            Assert.Equal(alone, Present(one));
+            Assert.Equal(all, Present(four));
+            byte[] savedAlone = State(one), savedAll = State(four);
+            four.LoadState(savedAlone);
+            one.LoadState(savedAll);
+            Assert.Equal(alone, Present(four));
+            Assert.Equal(all, Present(one));
+            one.SetControllerConnected(2, true);
+            one.SetControllerConnected(2, false);
+            four.RunFrame();
+            one.RunFrame();
+            Assert.Equal(all, Present(four));
+            Assert.Equal(alone, Present(one));
+        }
+
         // The conformance kit on synthetic cartridges, one with each kind of save chip it builds: all 22 cases a core without a drive has.
         [Fact]
         public void The_kit_passes_on_synthetic_cartridges()

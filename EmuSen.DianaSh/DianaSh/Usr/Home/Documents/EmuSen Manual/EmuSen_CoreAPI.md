@@ -1648,8 +1648,10 @@ board's. v1 named registers only per processor.
 - **`kind`** is open: `video`, `audio`, `channel`, `timer`, `dma`, `cartridge`, or a core's own word.
 - **Read through `debug_registers`**, the export `DEBUG_REGISTERS` already has: the id may be a unit's, the values in
   its `registers` order, the count returned by the length-query idiom. An id machine info lists neither as a processor
-  nor as a unit is refused with `EMUSEN_NOT_SUPPORTED` and changes nothing. **Listing a unit is the claim**, and only a
-  core claiming `DEBUG_REGISTERS` lists one; no capability bit or export is added.
+  nor as a unit is refused with `EMUSEN_NOT_SUPPORTED` and changes nothing. Reading a unit changes nothing in the
+  machine either, as reading a processor's registers does not (the header's `const emusen_machine *`; clarified
+  2026-10-18, no minor). **Listing a unit is the claim**, and only a core claiming `DEBUG_REGISTERS` lists one; no
+  capability bit or export is added.
 - **Older and newer peers.** A 1.12 host ignores `units`. A 1.13 host reading an older core finds none and shows none.
 - **The host** (`CoreEngine`, `CoreDebugTarget`): `CoreMachineInfo.Units`; `video` units' registers are
   `IDebugTarget.VideoRegisters`, `audio`, `timer` and `cartridge` units' `ApuRegisters` in machine info's order, a
@@ -1718,7 +1720,8 @@ console whose games tell an empty port from a full one (the N64's, a PlayStation
   `EMUSEN_NOT_SUPPORTED` (the crate refuses it before the core sees it). Every port holds a controller at create.
 - **The host** (`CoreEngine.SetControllerConnected`, which `ICore` had and the adapter did not answer) holds the
   flags in the input latch, as buttons are, and sends only a change, as the next frame starts; a port the machine
-  lacks is ignored. A core without the bit is never called.
+  lacks is ignored. After a state loads, the machine holding the state's ports, the next frame sends every port's
+  flag whether it changed or not (2026-10-18, `EmuSen_Backend.md` §26.8). A core without the bit is never called.
 - **The kit.** C5 holds the bit and the export together and asks port 0 to be full; C14 holds a port past the list
   refused with `NO_SUCH_PORT`, a `present` of 2 refused, and the state unchanged by both. The test core keeps the
   empty ports as bits of its RAM byte 5; `FAULT_PRESENCE_ANY_PORT` (1 << 31) fails C14 alone.
@@ -2618,6 +2621,13 @@ reports are unchanged but for the minor's number (`EmuSen_Backend.md` §25).
 
 **Clarified 2026-10-18, no minor** (§6.14): a processor whose `debug_set_breakpoints` refuses cannot halt, and an
 interrupt stopped for with no call logged is noted from the stop reason.
+
+**Clarified 2026-10-18, no minor** (§6.33): reading a unit through `debug_registers` changes nothing in the machine
+(`EmuSen_Backend.md` §24.5, decided in §20 there).
+
+**Host, 2026-10-18**, no change to the ABI: after a state loads, the reference host sends every port's presence
+again with the next frame, so a state saved with other ports gives way to the frontend's (§6.36, `EmuSen_Backend.md`
+§26.8).
 
 **Kit, 2026-10-15**, no change to the ABI: C7 saves at every eighth of the run and once near its end, each state
 loaded by a machine just made and held to a machine that never loads, in place of once at the middle against a machine

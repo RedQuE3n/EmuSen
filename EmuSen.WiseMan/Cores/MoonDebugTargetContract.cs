@@ -30,11 +30,12 @@ namespace EmuSen.WiseMan.Cores
 
         private static IDebugMemorySpace Space(IDebugTarget target, string name) => target.GetMemorySpaces().First(s => s.Name == name);
 
+        // The engine's name for the console's, as EmuSen_Backend.md §20 decided for every retired shim and §23.4 recorded.
         [Fact]
-        public void The_target_names_the_console_and_its_sprite_capacity()
+        public void The_target_names_the_engine_and_the_consoles_sprite_capacity()
         {
             IDebugTarget target = Load().Target;
-            Assert.Equal("NES", target.CoreName);
+            Assert.Equal("MoonRT", target.CoreName);
             Assert.Equal(64, target.MaxSprites);
             Assert.Equal(1, target.TilemapEntryStride);
         }
@@ -71,11 +72,11 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(before, prg.Read(0x10));
         }
 
-        // Reading $2002 clears vblank and $2007 moves the pointer, so the bus space must declare it.
+        // Reading $2002 clears vblank and $2007 moves the pointer, so the bus and the two register views declare it - see EmuSen_Backend.md §19.3.3 D15.
         [Fact]
-        public void Only_the_cpu_bus_space_declares_side_effects()
+        public void Only_the_cpu_bus_and_the_register_views_declare_side_effects()
         {
-            foreach (var space in Load().Target.GetMemorySpaces()) Assert.Equal(space.Name == "CPUBUS", space.HasSideEffects);
+            foreach (var space in Load().Target.GetMemorySpaces()) Assert.Equal(space.Name is "CPUBUS" or "PPUREG" or "APUREG", space.HasSideEffects);
         }
 
         // $2006 written twice through the bus, as a program writes it.
@@ -211,14 +212,16 @@ namespace EmuSen.WiseMan.Cores
             Assert.DoesNotContain(target.Sprites.Current, s => s.Index == 1);
         }
 
-        // The write observer is the seam the whole watch mechanism hangs off.
+        // The program's STA $42 is logged; the debugger's own store through CPUBUS lands unlogged - see EmuSen_Backend.md §19.3.3 D16, §23.4.
         [Fact]
         public void A_watch_records_a_write_the_cpu_makes_to_ram()
         {
-            IDebugTarget target = Load().Target;
-            int id = target.Watches.AddWatch("RAM", 0x0042, 1);
-            Space(target, "CPUBUS").Write(0x0042, 0x7E);
-            var e = Assert.Single(target.Watches.GetEvents(id));
+            NesDebugRig rig = Load(false, (0, new byte[] { 0xA9, 0x7E, 0x85, 0x42, 0x4C, 0x04, 0x80 }));
+            int id = rig.Target.Watches.AddWatch("RAM", 0x0042, 1);
+            Space(rig.Target, "CPUBUS").Write(0x0042, 0x11);
+            Assert.Empty(rig.Target.Watches.GetEvents(id));
+            rig.Core.RunFrame();
+            var e = Assert.Single(rig.Target.Watches.GetEvents(id));
             Assert.Equal((0x42, (byte)0x7E), (e.Address, e.Value));
         }
 
@@ -243,6 +246,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Contains(target.AudioChannels.Current, c => c.Name == "Triangle");
         }
 
+        // The generic head, engine, system and frame, before the pack's lines, as EmuSen_Backend.md §20 decided and §23.4 recorded.
         [Fact]
         public void The_summary_names_the_mapper_and_the_current_frame()
         {
@@ -250,7 +254,8 @@ namespace EmuSen.WiseMan.Cores
             rig.Core.RunFrame();
             rig.Target.RefreshProviders();
             string summary = rig.Target.GetSummaryText();
-            Assert.Contains("NES (Moon", summary);
+            Assert.StartsWith("MoonRT (Rust) ", summary);
+            Assert.Contains(", nes, frame 1\n", summary);
             Assert.Contains("NROM", summary);
             Assert.Contains("CPU", summary);
         }

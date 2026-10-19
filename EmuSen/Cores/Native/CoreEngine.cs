@@ -800,6 +800,7 @@ namespace EmuSen.Cores.Native
                 LoadOverItsDisc(m, copy.ToArray());
             }
             if (Library.Has(CoreInterface.CapMedia)) m.ReadInfo();
+            _input.ResendPresence();
             _fresh = false;
             _cheatVersion = -1;
             IsHaltedAtBreakpoint = false;

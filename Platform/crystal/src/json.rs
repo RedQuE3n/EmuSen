@@ -87,6 +87,24 @@ impl Json {
         self
     }
 
+    pub fn u64_value(&mut self, value: u64) -> &mut Json {
+        self.comma();
+        self.out.push_str(&value.to_string());
+        self
+    }
+
+    pub fn u64(&mut self, key: &str, value: u64) -> &mut Json {
+        self.name(key);
+        self.u64_value(value)
+    }
+
+    /// A double as .NET writes it, as an array's element.
+    pub fn f64_value(&mut self, value: f64) -> &mut Json {
+        self.comma();
+        self.out.push_str(&format_f64(value).unwrap_or_else(|| "0".to_string()));
+        self
+    }
+
     pub fn null_value(&mut self) -> &mut Json {
         self.comma();
         self.out.push_str("null");

@@ -5,6 +5,7 @@
 pub mod abi;
 pub mod battery;
 pub mod catalog;
+pub mod debug;
 pub mod engine;
 pub mod error_log;
 pub mod events;
@@ -22,6 +23,7 @@ pub mod route;
 pub mod runtime;
 pub mod saving;
 pub mod seam;
+pub mod service;
 pub mod session;
 pub mod settings;
 pub mod settings_api;

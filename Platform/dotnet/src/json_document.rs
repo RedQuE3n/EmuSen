@@ -336,5 +336,16 @@ pub fn parse(text: &str) -> Result<Value, String> {
     Ok(value)
 }
 
+/// One JSON value as `JsonDocument.ParseValue(ref reader)` reads it from a fresh reader over the whole text: as `parse`,
+/// except that what follows the value is never read, so it is not refused.
+pub fn parse_value(text: &str) -> Result<Value, String> {
+    let mut reader = Reader { b: text.as_bytes(), at: 0, line: 0, line_start: 0, depth: 0 };
+    reader.skip_white_space();
+    if reader.end() {
+        return reader.fail("The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true.", reader.at);
+    }
+    reader.value()
+}
+
 #[cfg(test)]
 mod tests;

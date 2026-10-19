@@ -38,19 +38,20 @@ namespace EmuSen.Crystal.Client.Contract
             return table;
         }
 
-        // Every field of the table from an export of its name; the first name missing, or null when all were found.
-        private static string? Fill(CrystalExports* table, Func<string, nint> export)
+        // Every field of the table from an export of its name, those found filled; the first name missing, or null when all were found.
+        internal static string? Fill(CrystalExports* table, Func<string, nint> export)
         {
             var fields = typeof(CrystalExports).GetFields();
             nint* slots = (nint*)table;
+            string? missing = null;
             for (int i = 0; i < fields.Length; i++)
             {
                 string name = "emusen_crystal_" + fields[i].Name;
                 nint found = export(name);
-                if (found == 0) return name;
+                missing ??= found == 0 ? name : null;
                 slots[(int)(Marshal.OffsetOf<CrystalExports>(fields[i].Name) / sizeof(nint))] = found;
             }
-            return null;
+            return missing;
         }
     }
 }

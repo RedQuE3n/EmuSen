@@ -87,7 +87,7 @@ impl Session {
     }
 
     /// The state written whole and its record kept, `ManagedSession.SaveState`; with a picture beside it when asked.
-    fn save_in(&self, e: &mut Engine, at: &str, records: Option<&StateRecords>, picture: bool) -> Result<(), Refused> {
+    pub(crate) fn save_in(&self, e: &mut Engine, at: &str, records: Option<&StateRecords>, picture: bool) -> Result<(), Refused> {
         let full = path::full_path(at);
         if let Some(folder) = path::directory_name(Style::HOST, &full).filter(|f| !f.is_empty()) {
             std::fs::create_dir_all(&folder).map_err(|err| (abi::status::IO, emusen_dotnet::file::io_message(&err, &folder)))?;
@@ -111,7 +111,7 @@ impl Session {
     }
 
     /// A state loaded unless its record refuses it, then the jump's sequence, `ManagedSession.LoadState`.
-    fn load_in(&self, e: &mut Engine, run: &mut Run, at: &str, records: Option<&StateRecords>, ctx: &Ctx) -> Result<(), Refused> {
+    pub(crate) fn load_in(&self, e: &mut Engine, run: &mut Run, at: &str, records: Option<&StateRecords>, ctx: &Ctx) -> Result<(), Refused> {
         if !emusen_galaxia::dotnet_files::file_exists(at) {
             return Err((svc::ABSENT, format!("no state at {at}")));
         }

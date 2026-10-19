@@ -18,7 +18,7 @@ use crate::firmware::Entry as Firmware;
 use crate::info::{self, BatteryFile, SystemDetail};
 use crate::machine_info::{self, MachineInfo, SettingDesc};
 use crate::media::{self, Choice, Placement};
-use crate::seam::{Debugger, NoDebugger, Ran};
+use crate::seam::{Debugger, Ran};
 
 /// What every machine of the session is made with.
 #[derive(Clone, Copy, Debug, Default)]
@@ -116,7 +116,8 @@ pub struct Engine {
     pub notes: Vec<(String, String)>,
     pub latch: Arc<InputLatch>,
     pub routes: Arc<Mutex<crate::input::Routes>>,
-    pub debug: Box<dyn Debugger>,
+    /// The session's debugger, its cheats and its recorder, at the frame's (b) points.
+    pub debug: crate::debug::SessionDebugger,
     /// The processor (machine info's id) and address a halt left the frame open at.
     pub halted: Option<(u32, u32)>,
     frame_scratch: Vec<u8>,
@@ -171,6 +172,7 @@ impl Engine {
                 slot.1 = value.clone();
             }
         }
+        let core_name = name.clone();
         Engine {
             lib,
             info,
@@ -195,7 +197,7 @@ impl Engine {
             notes: Vec::new(),
             latch: Arc::new(InputLatch::default()),
             routes: Arc::new(Mutex::new(crate::input::Routes::default())),
-            debug: Box::new(NoDebugger),
+            debug: crate::debug::SessionDebugger { core_name, ..Default::default() },
             halted: None,
             frame_scratch: Vec::new(),
             event_scratch: Vec::with_capacity(16),
@@ -246,6 +248,12 @@ impl Engine {
     /// A line of the runtime's own, kept until the session raises it (§29.11, Q2).
     pub fn say(&self, line: String) {
         self.said.lock().unwrap_or_else(|p| p.into_inner()).push(line);
+    }
+
+    /// The debugger's lines, a watch's hits, moved among the runtime's in the order they were said.
+    pub fn gather_said(&mut self) {
+        let mut said = self.said.lock().unwrap_or_else(|p| p.into_inner());
+        self.debug.take_said(&mut said);
     }
 
     /// The runtime's lines said since the last call.
@@ -695,7 +703,9 @@ impl Engine {
         }
         self.sync_raw();
         let start = std::time::Instant::now();
-        if !self.advance_frame()? {
+        let advanced = self.advance_frame();
+        self.gather_said();
+        if !advanced? {
             self.last_frame_ms = start.elapsed().as_secs_f64() * 1000.0;
             self.drain();
             return Ok(());
@@ -962,6 +972,11 @@ impl Engine {
         if let Some(m) = self.machine.as_mut() {
             self.debug.refresh(m, self.last_frame_ms);
         }
+    }
+
+    /// The name machine info gives the processor a halt names, "CPU" where it lists none, `HaltedProcessorName`.
+    pub fn halted_name(&self, processor: u32) -> String {
+        self.mi.processors.iter().find(|(id, _)| *id == processor).map_or("CPU".to_string(), |(_, n)| n.clone())
     }
 
     /// The index in machine info of the processor a halt names, 0 where it names none listed.

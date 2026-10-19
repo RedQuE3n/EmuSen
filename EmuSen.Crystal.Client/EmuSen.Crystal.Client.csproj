@@ -20,6 +20,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The parity class fills one table of exports from each implementation through the contract layer's Fill (EmuSen_Backend.md §29.3). -->
+    <InternalsVisibleTo Include="EmuSen.WiseMan" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="..\EmuSen.Crystal\include\emusen_crystal.h" Link="include\emusen_crystal.h" />
     <None Include="..\Platform\library\include\emusen_library.h" Link="include\emusen_library.h" />
     <None Include="..\Platform\scrape\include\emusen_scrape.h" Link="include\emusen_scrape.h" />

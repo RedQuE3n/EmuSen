@@ -4829,3 +4829,40 @@ unchanged. The crate's `the_stub_reports_each_system_and_a_blank_picture` holds 
 of 21 (`--profile test-checked`); the kit's corpus on `genesis-sample.txt`, 64 of 64 images passing as before, each
 report the same as at 1.13 but for the minor's number and C14's note, which now ends "2 space(s) state their byte
 order".
+
+## 67. Mode 4 drawn by Beryl's shared composition (2026-10-19)
+
+Nephrite's Q9 (decided 2026-10-04) moved mode 4 into a shared crate when the Master System's core began, and
+`Endou_Plan.md` §3.3 (decided 2026-10-19) placed it: `beryl-sms-vdp`'s `compose` module, built at Endou's stage 3, with
+a `Variant` for each chip. At Endou's stage 4 Nephrite moved onto it, gated on its D-7 tests and its corpus digests
+staying exactly unchanged (`Endou_Plan.md` §7, P4).
+
+**What moved.** `render.rs`'s `render_mode4`, about a hundred lines of sprite pass, background and mix, is now a call of
+`compose::find_sprites`, `sprite_pixels` and `line` with `Variant::GENESIS`, reading VRAM through `Mode4Vram`, which
+applies D-7's map (`vram4_address`), and colouring CRAM indices at the board's levels as before (`rgb4`). What a mode 4
+line does to the VDP's state stays Nephrite's: the sprite pass runs only with the display on, and its overflow and
+collision set the status flags as they did. `Variant::GENESIS` carries what MacDonald's §13 says a composition sees (no
+zoom, no taller displays, no masks) and two rules the old code had that the Master System's chips do not: the fine
+scroll's first pixels are the wrapped column (§15.2's argued loss), and the right columns' vertical lock starts at
+pixel 192 rather than at the column counter's 24th column (`Beryl_SmsVdp.md` §9.4). The second was kept so that the move
+changed nothing; whether the 315-5313 locks by the column counter is unmeasured, and the board could say. A new
+dependency, `beryl-sms-vdp`, said here as the project's rules ask.
+
+**Measured unchanged (2026-10-19)** [M]:
+
+- **The two renderers drew the same lines.** Before the old code was deleted, a test built both into one library and
+  drew 200,000 lines from random VRAM, CRAM and registers in mode 4 (the sprite table crowded about the line on half,
+  the display off on a quarter, a fine scroll with the right columns' lock on 72,550), comparing each line's RGBA and
+  the overflow and collision flags: all 200,000 equal. The test was not kept; it held two copies of one renderer.
+- **The crate's tests**: 194 of 194 on `--profile test-checked`, D-7's `mode_4_writes_land_where_the_board_put_them`
+  and `mode_4_shows_the_master_system_colours` among them.
+- **The kit's corpus** (`kit/genesis-sample.txt`, 64 images, 600 frames), the base's release library (`bac87b11`)
+  against this one's: 64 of 64 pass on both, and **the 64 image reports are identical**, frame, audio and state digests
+  included; the summaries differ only in the library's path, the timings, the memory figures and C13's count of rounds.
+- **The open Sega CD BIOS** built by each is byte-identical (`open_bios.bin` and its symbols, SHA-256 `fb4a1877…` and
+  `9a61aab0…`).
+- **`NephriteTests`** with the corpus and the games: see `Endou_Native.md` §11.9.
+
+A fault seeded in the shared composition, the Genesis's fine scroll blanked as the Master System's is, was caught by
+the crate's own test and by none of Nephrite's crate tests: D-7's pictures leave the left five pixels out, where the
+board shows garbage (`Endou_Native.md` §11.12).

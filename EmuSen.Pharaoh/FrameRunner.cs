@@ -17,6 +17,9 @@ namespace EmuSen.Pharaoh
 
         public bool Verbose { get; set; }
 
+        // The runtime's own lines, written to the console after each frame as they were said within it.
+        public CrystalRuntimeLog? RuntimeLog { get; init; }
+
         private readonly Action<string> emit;
         private readonly Action<long>? onFrameAdvanced;
         private readonly Dictionary<(PadButton Button, int Controller), bool> held = new();
@@ -75,6 +78,7 @@ namespace EmuSen.Pharaoh
                 if (_info.halted != 0) Session.Run(CrystalSessionAbi.RunResume);
                 ApplyHeld();
                 Session.Frame(ref _info);
+                RuntimeLog?.File();
                 if (_info.halted != 0)
                 {
                     HaltedAtBreakpoint = true;

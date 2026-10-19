@@ -44,7 +44,9 @@ namespace EmuSen.Pharaoh.Reference
             }
 
             using var runtime = new CrystalRuntime();
+            using var runtimeLog = new CrystalRuntimeLog(runtime);
             using CrystalSession session = runtime.Open(new CrystalOpen { Path = romPath });
+            runtimeLog.File();
             if (JsonDocument.Parse(session.Info()).RootElement.GetProperty("notices").GetProperty("engine").GetString() is { } notice) Console.WriteLine($"[core] {notice}");
 
             return PeerProbe.Run(runtime, session, romPath, dumpDir, startFrame, endFrame, stride, wantSignature, taps,

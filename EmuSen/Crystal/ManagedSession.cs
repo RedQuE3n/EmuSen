@@ -54,6 +54,7 @@ namespace EmuSen.Crystal.Managed
                 Open = OpenAsThis,
             });
             StartIdentifying();
+            RaiseSaid();
         }
 
         // The session service's open_game and open_console: a session opened as this one was, its id answered in the service's statuses.
@@ -103,6 +104,7 @@ namespace EmuSen.Crystal.Managed
         public void Exit()
         {
             Monitor.Exit(_lock);
+            RaiseSaid();
             if (Environment.CurrentManagedThreadId != Volatile.Read(ref _frameThread)) Wake();
         }
 

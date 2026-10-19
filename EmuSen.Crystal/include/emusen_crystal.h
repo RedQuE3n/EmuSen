@@ -96,7 +96,10 @@ extern "C" {
 #define EMUSEN_CRYSTAL_EVENT_REWIND   8u   /* {"op":"stepped"|"moved"|"cleared","frame"} */
 #define EMUSEN_CRYSTAL_EVENT_SETTINGS 16u  /* {"scope","key","value"} */
 #define EMUSEN_CRYSTAL_EVENT_DISC     32u  /* {"op":"inserted"|"ejected"|"changed"|"lid","index","open"} */
-#define EMUSEN_CRYSTAL_EVENT_LOG      64u  /* {"lines":[text]}: what the core logged, oldest first */
+#define EMUSEN_CRYSTAL_EVENT_LOG      64u  /* {"lines":[text],"source"}: lines oldest first; since 1.2 "source" is "core"
+                                            * for what the core logged and "runtime" for the runtime's own lines (the
+                                            * firmware a load used, a battery file copied in, a card's notice, the
+                                            * recorder's words), which a program files where its own log goes */
 
 /* ---- Types ------------------------------------------------------------------------------------------------- */
 

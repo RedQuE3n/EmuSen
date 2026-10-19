@@ -1,6 +1,7 @@
 using EmuSen.Common.Firmware;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
+using EmuSen.Crystal.Client;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -42,15 +43,17 @@ namespace EmuSen.WiseMan.Cores
             return cue;
         }
 
-        // The lines the load writes to the console, which Mistress's per-game log holds.
+        // The lines the load says, filed to the console as each program files them for its per-game log - see EmuSen_Backend.md §29.11, Q2.
         private static List<string> Load(string path)
         {
             var was = Console.Out;
             var text = new StringWriter();
+            using var runtime = new CrystalRuntime();
+            using var log = new CrystalRuntimeLog(runtime);
             Console.SetOut(text);
             try
             {
-                using var core = Assert.IsType<CoreEngine>(CoreFactory.Load(path, options: TestCores.NoBattery).Core);
+                using (runtime.Open(new CrystalOpen { Path = path, NoBattery = true })) log.File();
             }
             finally
             {

@@ -89,6 +89,7 @@ namespace EmuSen.Cores.Native
             if (!library.Available) throw new InvalidOperationException($"{System.IO.Path.GetFileName(library.Path)} is not in use: {library.Report}");
             Library = library;
             Debug = new CoreDebugBridge(this);
+            Watches.Say = Say;
             foreach (var s in library.Settings) _values[s.Key] = s.Default;
             if (settings is not null)
                 foreach (var (key, value) in settings)
@@ -358,12 +359,13 @@ namespace EmuSen.Cores.Native
             _machine = machine;
             _bigEndian = EmuSen.Crystal.Systems.SystemPacks.BigEndian(machine.Info.System);
             FirmwareNotice = NoticeFor(machine, asked);
-            foreach (string line in FirmwareLines(Info.DisplayName, machine.Info.Firmware, asked, _firmwareFolders)) System.Console.WriteLine(line);
+            foreach (string line in FirmwareLines(Info.DisplayName, machine.Info.Firmware, asked, _firmwareFolders)) Say(line);
+            foreach (string notice in placement.Notices) Say($"[MemoryCards] {notice}");
             IsHaltedAtBreakpoint = false;
             AttachDebugger(machine);
             _battery.Clear();
             _battery.AddRange(wanted);
-            foreach (var (_, save) in wanted) save.Settle();
+            foreach (var (_, save) in wanted) save.Settle(Say);
             RomPath = path;
             Console = console;
             _input.Reset(Math.Max(2, machine.Info.Ports.Count), AxesOf(machine));
@@ -574,6 +576,26 @@ namespace EmuSen.Cores.Native
             MappedFile? held = file == CoreInterface.FileImage ? disc.Image
                 : file >= CoreInterface.FileMedia && file - CoreInterface.FileMedia < disc.Companions.Count ? disc.Companions[(int)(file - CoreInterface.FileMedia)] : null;
             if (held is not null && place.B >= 0 && place.B < held.Length) disc.ReadAhead(held, place.B);
+        }
+
+        private readonly List<string> _said = new();
+
+        // A line of the runtime's own, kept until the session raises it as a log event of source "runtime" - see EmuSen_Backend.md §29.11, Q2.
+        public void Say(string line)
+        {
+            lock (_said) _said.Add(line);
+        }
+
+        // The runtime's lines said since the last call, moved into into; false when there were none, which allocates nothing.
+        public bool TakeSaid(List<string> into)
+        {
+            lock (_said)
+            {
+                if (_said.Count == 0) return false;
+                into.AddRange(_said);
+                _said.Clear();
+                return true;
+            }
         }
 
         private void KeepLog(IReadOnlyList<string> lines)

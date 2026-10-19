@@ -256,7 +256,6 @@ namespace EmuSen.Cores
 
         private static void Note(MediaPlacement placed, string words)
         {
-            Console.WriteLine($"[MemoryCards] {words}");
             placed.Notices.Add(words);
         }
     }

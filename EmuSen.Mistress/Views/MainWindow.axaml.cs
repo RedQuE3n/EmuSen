@@ -950,6 +950,7 @@ namespace EmuSen.Mistress.Views
             _session = null;
             _slotPaths = null;
             closing?.Dispose();
+            CoreSettings.FileRuntimeLog();
         }
 
         internal static string? PlayArgument(string[] args)
@@ -972,6 +973,7 @@ namespace EmuSen.Mistress.Views
                 StartLogging(RuntimeCatalog.ConsoleForRom(path) ?? "Unknown");
                 GameSession session = loading?.GetAwaiter().GetResult() ?? OpenSession(new CrystalOpen { Path = path });
                 _session = session;
+                CoreSettings.FileRuntimeLog();
                 if (session.EngineNotice is { } engineNotice) Console.WriteLine("[core] " + engineNotice);
 
                 // The runtime's console, not the core's name: a Game Boy core says GBC while it is a Color, and the GB tab is its settings - see §4.47.
@@ -1323,6 +1325,7 @@ namespace EmuSen.Mistress.Views
         // The events a frame thread acts on between frames: a load resets the rate control (C7), a setting can move the ports, the rest are the window's.
         private void DrainEvents(GameSession session)
         {
+            CoreSettings.FileRuntimeLog();
             if (_events is not { } events || !events.Wait(0)) return;
             using System.Text.Json.JsonDocument drained = System.Text.Json.JsonDocument.Parse(events.Drain());
             foreach (System.Text.Json.JsonElement e in drained.RootElement.EnumerateArray())

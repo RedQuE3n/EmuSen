@@ -64,13 +64,13 @@ namespace EmuSen.Common.Firmware
         }
 
         // Copies a file the player picked into home/Firmware under its canonical name, so nothing has to ask again.
-        public static bool Install(FirmwareRequest request, string sourcePath)
+        public static bool Install(FirmwareRequest request, string sourcePath, Action<string>? say = null)
         {
-            if (!FirmwareNative.Active || !FirmwareNative.Takes(request, [sourcePath, Directory])) return Managed.Install(request, sourcePath);
+            if (!FirmwareNative.Active || !FirmwareNative.Takes(request, [sourcePath, Directory])) return Managed.Install(request, sourcePath, say);
             try { return FirmwareNative.Install(request, sourcePath, Directory); }
             catch (Crystal.Services.ServiceFault fault) when (fault.Status == Crystal.Services.ServiceFault.Io)
             {
-                Console.WriteLine($"[Firmware] Could not install {request.FileName}: {fault.Message}");
+                say?.Invoke($"[Firmware] Could not install {request.FileName}: {fault.Message}");
                 return false;
             }
         }
@@ -99,7 +99,7 @@ namespace EmuSen.Common.Firmware
                 return (found is null ? null : new FirmwareLocated(found.Folder, found.Names, found.Whole, found.ByContent), wrong);
             }
 
-            public static bool Install(FirmwareRequest request, string sourcePath)
+            public static bool Install(FirmwareRequest request, string sourcePath, Action<string>? say = null)
             {
                 byte[]? bytes = TryReadExact(sourcePath, request.Size);
                 if (bytes == null) return false;
@@ -112,7 +112,7 @@ namespace EmuSen.Common.Firmware
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
-                    Console.WriteLine($"[Firmware] Could not install {request.FileName}: {ex.Message}");
+                    say?.Invoke($"[Firmware] Could not install {request.FileName}: {ex.Message}");
                     return false;
                 }
             }

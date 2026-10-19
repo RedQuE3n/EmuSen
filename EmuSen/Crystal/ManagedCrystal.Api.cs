@@ -323,8 +323,8 @@ namespace EmuSen.Crystal.Managed
         {
             try
             {
-                RuntimeOf(rt);
-                ManagedRuntime.InstallFirmware(Bytes(request, request_len), Required(source, source_len, "the source file"));
+                ManagedRuntime runtime = RuntimeOf(rt);
+                ManagedRuntime.InstallFirmware(Bytes(request, request_len), Required(source, source_len, "the source file"), runtime.SayRuntime);
                 return 0;
             }
             catch (Exception e) { return (int)Fail(e); }

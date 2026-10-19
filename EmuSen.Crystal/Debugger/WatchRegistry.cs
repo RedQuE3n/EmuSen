@@ -52,6 +52,9 @@ namespace EmuSen.Crystal.Debugger
     {
         private readonly List<Watch> _watches = new();
 
+        // Where a hit's line goes while logging is on: the runtime's log - see EmuSen_Backend.md §29.11, Q2.
+        public Action<string>? Say { get; set; }
+
         // False exactly when RecordWrite and RecordRead would do nothing, so a core may skip reporting - see §3.5.
         public bool HasWatches => _watches.Count > 0;
         private int _nextId = 1;
@@ -138,7 +141,7 @@ namespace EmuSen.Crystal.Debugger
                 if (DebugLogging.MasterEnabled)
                 {
                     string tag = accessKind == WatchKind.Write ? "W" : "R";
-                    Console.WriteLine($"[WATCH #{w.Id}] {tag} {spaceName}:0x{address:X} = 0x{value:X2} ({context})");
+                    Say?.Invoke($"[WATCH #{w.Id}] {tag} {spaceName}:0x{address:X} = 0x{value:X2} ({context})");
                 }
             }
         }

@@ -9,13 +9,19 @@ namespace EmuSen.Hotaru
     public sealed class HotaruEvents : IDisposable
     {
         private readonly CrystalSubscription _events;
+        private readonly CrystalRuntimeLog _log;
 
         // Every session's, so a swap needs no new subscription; each drain keeps the current session's.
-        public HotaruEvents(CrystalRuntime runtime) => _events = runtime.Subscribe(0, CrystalAbi.EventState | CrystalAbi.EventSession);
+        public HotaruEvents(CrystalRuntime runtime)
+        {
+            _events = runtime.Subscribe(0, CrystalAbi.EventState | CrystalAbi.EventSession);
+            _log = new CrystalRuntimeLog(runtime);
+        }
 
         // True when the current session was closed under the window; stateLoaded once for each state it loaded.
         public bool Drain(uint current, Action stateLoaded)
         {
+            _log.File();
             if (!_events.Wait(0)) return false;
             using JsonDocument events = JsonDocument.Parse(_events.Drain());
             bool closed = false;
@@ -29,6 +35,10 @@ namespace EmuSen.Hotaru
             return closed;
         }
 
-        public void Dispose() => _events.Dispose();
+        public void Dispose()
+        {
+            _log.Dispose();
+            _events.Dispose();
+        }
     }
 }

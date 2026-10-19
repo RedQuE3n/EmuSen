@@ -5159,6 +5159,35 @@ window's rows of both worlds (12 lines), and no other line. **Tested**, Debug, i
 `CoreSettingHintTests` 1, `MarsCoreSettingsTests` 13, `GraphicsSettingsWindowLayoutTests` 5 and
 `CoreRegistrationEquivalenceTests` 3, every one passing.
 
+### 26.10 After B4, 2026-10-18: the NES debug target's contract held to B4's decisions
+
+`MoonDebugTargetContractOnMoonRt`, the cases every NES debug target is held to through `IDebugTarget` alone, failed 4
+of its 24 since MoonRT's switch (`a17ff513`); B4's gates (§23.5, §26.4) did not list the class. Each failure was read
+against §20, §19.3.3 and §23.4 before its expectation was touched:
+
+| Case | What it found | Classed |
+|---|---|---|
+| The target's name | "MoonRT" where it held "NES" | decided: the engine's name for a retired shim's (§20, §23.4) |
+| The summary | the generic head, "MoonRT (Rust) 0.1.0, nes, frame 1", where it held "NES (Moon" | decided (§20, §23.4's `summary` row); the mapper and the CPU line still follow |
+| The spaces with side effects | `PPUREG` and `APUREG` declare them beside `CPUBUS` | decided: D15 lists the two as view spaces with `side_effects` (§19.3.3, §23) |
+| A watch on RAM | no event for a store made through `CPUBUS` | decided: D16 retired the report of the debugger's own store (§19.3.3, §23.4) |
+
+The watch was the one that could have hidden a loss, the case's point being that the program's stores are logged. So
+the case now runs a program whose `STA $42` stores `$7E`: the debugger's store through `CPUBUS` before the frame logs
+nothing, and the program's store logs one event, `$42` and `$7E`. It passes, so nothing was lost and the host needed no
+change; `MoonDebugEngineTests` already held both halves on their own. Each changed case's comment cites its decision,
+and the class was not retired. **24 of 24** pass.
+
+**The sibling classes**: the other shared claim sets, `MercuryDebugTargetClaims` (`MercuryRtDebugTargetTests`),
+`MercuryDebugClaims` (`MercuryRtDebugTests`) and `MarsDebugClaims` (`MarsRtDebugTests`), were updated by their own
+switches and pass; Nephrite and VenusRT have no shared contract, and their debug classes (`NephriteDebugTests`,
+`VenusRtDebugTests`, `VenusRtDebugViewTests`) pass.
+
+**Tested**, Debug, after `WiseMan` at `02d006c8` (B6's and B8's parts) was merged: §26.7's 28 classes with
+`VenusRtDebugTests`, **401 tests, 401 passed**, among them `MoonDebugTargetContractOnMoonRt` 24, `MercuryRtDebugTargetTests`
+34, `MercuryRtDebugTests` 33, `MarsRtDebugTests` 33, `NephriteDebugTests` 9, `VenusRtDebugTests` 19,
+`VenusRtDebugViewTests` 12 and `GoldenCorpusTests` 100.
+
 ---
 
 ## 27. B6's design, 2026-10-18: the core host in Rust, shared with the kit

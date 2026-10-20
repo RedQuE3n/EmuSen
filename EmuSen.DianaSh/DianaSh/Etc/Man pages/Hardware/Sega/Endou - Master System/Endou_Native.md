@@ -1882,3 +1882,11 @@ classes; DianaSh's `regs` and `vectors`.
    Beryl crate. Recommended: keep it; the alternative, a copy of the tables in the pack as the NES pack keeps its own,
    gives the colours two owners.
 4. **The go for stage 9** (the YM2413 and its models), as the plan has it.
+
+*Decided 2026-10-19 by the tester, all as recommended:*
+
+1. **The profile's allocation** is fixed as a step of its own in `emusen-native`, apart from Endou's stages; stage 9
+   leaves the profile's code as it is.
+2. **The views stay without vectors**, the entry points being shown by the listing and the call stack.
+3. **`beryl-sms-colours` stays a crate of its own**, the one owner of the colour tables.
+4. **The go for stage 9.**

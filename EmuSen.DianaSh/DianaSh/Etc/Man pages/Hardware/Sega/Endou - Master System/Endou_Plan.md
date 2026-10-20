@@ -65,6 +65,10 @@ SG-1000's joystick as drawings of their own, a separate piece of work; the cover
 Genesis's 0.7 checked in a Nephrite step; the export check refusing a Game Genie-patched game stays; and the go for
 stage 8.
 
+**Decided by the tester, 2026-10-19, on stage 8's questions** (`Endou_Native.md` §15.13), all as recommended: the
+profile's allocation in `emusen-native` is fixed as a step of its own, apart from Endou; the views stay without vectors;
+`beryl-sms-colours` stays a crate of its own; and the go for stage 9.
+
 Every claim carries one of six marks:
 
 - **[M]** *measured* on 2026-10-19, with the tool named. Nothing was run to write this page beyond listings, the local

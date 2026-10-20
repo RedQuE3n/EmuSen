@@ -72,7 +72,7 @@ edge 3 down 29
 edge 29 up 3
 edge 29 down 34
 edge 29 left same
-edge 29 right 3
+edge 29 right 50
 edge 34 up 29
 edge 34 down 50
 edge 50 up 34
@@ -82,7 +82,7 @@ edge 50 right 52
 edge 52 up 34
 edge 52 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/5/1/3
 edge 52 left 50
-edge 52 right 3
+edge 52 right same
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/5/1/2 up 50
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/5/1/2 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/5/2/2
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/5/1/2 left 29

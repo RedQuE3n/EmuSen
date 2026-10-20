@@ -1610,6 +1610,20 @@ another header. Left and right on the strip change tab. Down from the strip goes
 workaround: Avalonia 12.1's search, asked for the control below a tab header, answers the header beside it on the same
 row, and alternates between two headers for as long as it is asked.
 
+Up from the strip, when nothing lies above it, goes to the nearest control on the strip's own row outside it, which on
+a settings sheet is the Close button at the right end of the row. Until 2026-10-19 Close was reached only by up from
+the right-hand column of a page, because the tab headers stopped short of it. The Master System and SG-1000 tabs
+lengthened the shader sheet's strip to under the Close button, so up from that column landed on the strip, and the
+audit found Close unreachable on eight of the nine tabs. The rule does not depend on where the headers end.
+
+The same lengthening put headers above the page's right-hand column, and on a sheet made shorter by a taller status
+bar Avalonia's search, asked for the control right of a shader in the list, answered one of those headers; the router
+then moved to the selected tab and from there into the page's first control, so the sliders could not be walked to.
+A left or right move from the page below a strip now never lands on its headers, and falls back to the nearest control
+that way. A control on the strip's own row, such as Close, still moves left onto the selected tab: a first form of the
+rule that kept every sideways move off the headers sent left from Close into the shader list, a path the audit's
+replay could not repeat once a selection had rebuilt the right-hand column, and lost the list's rows to the audit.
+
 **Dropdowns.** Accept opens one; up and down then move the highlight, which moves the focus and not the choice;
 accept chooses; back closes without choosing. Previously up and down set the choice at every step, so passing over
 "RetroArch Preset..." on the way to another entry opened the preset picker.

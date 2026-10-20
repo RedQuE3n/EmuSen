@@ -102,7 +102,7 @@ tree
           86 Button at=1102,149,90,44 by=clip drawn focus heard=CLOSE limit=1102,149,90,44 op paints=#55555AFF,#9C9CA0FF role=button text=Close
             87 TextBlock at=1119,155,56,32 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=55.51,31.2 limit=1102,149,90,44 owner=86 paints=#EEEEF0FF role=text size=26 text=CLOSE
 focus 86
-edge 16 up same
+edge 16 up 86
 edge 16 down 26
 edge 26 up 16
 edge 26 down 34

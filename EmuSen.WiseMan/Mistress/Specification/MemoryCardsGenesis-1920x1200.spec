@@ -52,7 +52,7 @@ tree
 focus 25
 edge 6 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/0/5/0/2/0
 edge 6 down same
-edge 6 left 11
+edge 6 left path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/0/5/0/2/0
 edge 6 right same
 edge 11 up same
 edge 11 down 25

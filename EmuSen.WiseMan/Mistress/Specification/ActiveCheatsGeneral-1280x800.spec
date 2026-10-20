@@ -91,7 +91,7 @@ edge 3 down 26
 edge 26 up 3
 edge 26 down 51
 edge 26 left same
-edge 26 right 3
+edge 26 right 55
 edge 39 up 65
 edge 39 down same
 edge 39 left same

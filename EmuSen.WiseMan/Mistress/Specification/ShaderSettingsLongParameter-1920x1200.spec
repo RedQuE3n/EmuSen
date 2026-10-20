@@ -127,7 +127,7 @@ tree
           111 Button at=1653,205,135,66 by=clip drawn focus heard=CLOSE limit=1653,205,135,66 op paints=#55555AFF,#9C9CA0FF role=button text=Close
             112 TextBlock at=1678.5,214,84,48 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=55.51,31.2 limit=1653,205,135,66 owner=111 paints=#9C9CA0FF role=text size=26 text=CLOSE
 focus 58
-edge 8 up same
+edge 8 up 111
 edge 8 down 26
 edge 26 up 8
 edge 26 down 34
@@ -188,7 +188,7 @@ edge "item:90/2/0/0/1/Shadow mask strength (0 = off, 1 = the whole of the phosph
 edge "row:32/4/Simple CRT" up row:32/3/Scanlines
 edge "row:32/4/Simple CRT" down "row:32/5/bezel / Mega Bezel / Presets / Base CRT Presets: MBZ 0 SMOOTH-ADV GDV"
 edge "row:32/4/Simple CRT" left same
-edge "row:32/4/Simple CRT" right 8
+edge "row:32/4/Simple CRT" right 87
 edge "row:32/5/bezel / Mega Bezel / Presets / Base CRT Presets: MBZ 0 SMOOTH-ADV GDV" up "row:32/4/Simple CRT"
 edge "row:32/5/bezel / Mega Bezel / Presets / Base CRT Presets: MBZ 0 SMOOTH-ADV GDV" down 34
 edge "row:32/5/bezel / Mega Bezel / Presets / Base CRT Presets: MBZ 0 SMOOTH-ADV GDV" left same

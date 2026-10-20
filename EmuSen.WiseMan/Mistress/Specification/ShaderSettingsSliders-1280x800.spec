@@ -140,7 +140,7 @@ tree
           124 Button at=1102,136,90,44 by=clip drawn focus heard=CLOSE limit=1102,136,90,44 op paints=#55555AFF,#9C9CA0FF role=button text=Close
             125 TextBlock at=1119,142,56,32 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CLOSE layout=55.51,31.2 limit=1102,136,90,44 owner=124 paints=#9C9CA0FF role=text size=26 text=CLOSE
 focus 57
-edge 8 up same
+edge 8 up 124
 edge 8 down 26
 edge 26 up 8
 edge 26 down 36
@@ -151,11 +151,11 @@ edge 29 right 84
 edge 34 up row:32/1/CRT
 edge 34 down 36
 edge 34 left same
-edge 34 right 8
+edge 34 right 89
 edge 36 up 34
 edge 36 down 42
 edge 36 left same
-edge 36 right 8
+edge 36 right 89
 edge 42 up 36
 edge 42 down 48
 edge 42 left same
@@ -213,7 +213,7 @@ edge "item:92/3/0/0/0/0/Reset Parameter 0003" right same
 edge row:32/1/CRT up "row:32/0/Built into EmuSen: None"
 edge row:32/1/CRT down 34
 edge row:32/1/CRT left same
-edge row:32/1/CRT right 8
+edge row:32/1/CRT right 89
 edge row:32/8/crt-royale-kurozumi up 66
 edge row:32/8/crt-royale-kurozumi down "row:32/9/handheld: lcd-grid-v2"
 edge row:32/8/crt-royale-kurozumi left same

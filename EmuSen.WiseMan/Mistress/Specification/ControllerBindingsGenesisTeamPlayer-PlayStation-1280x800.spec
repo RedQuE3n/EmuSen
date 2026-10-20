@@ -85,7 +85,7 @@ edge 32 left 33
 edge 32 right 34
 edge 33 up 31
 edge 33 down 32
-edge 33 left 21
+edge 33 left same
 edge 33 right 34
 edge 34 up 31
 edge 34 down 32

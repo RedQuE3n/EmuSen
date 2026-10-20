@@ -389,7 +389,7 @@ A `ScreenFilter` is a list of `FilterPass`es, each an SkSL program drawn either 
 
 ### 3.4 CRT (Lottes)
 
-Timothy Lottes' CRT shader, in the public domain, ported from libretro's `crt/shaders/crt-lottes.slang` at its default parameters: Gaussian scanlines (`hardScan -8`) and pixels (`hardPix -3`), a small bloom (`0.15`), the barrel warp (`0.031`, `0.041`) with black outside it, and shadow mask 3 (the stretched VGA mask, dark `0.5`, light `1.5`), in linear light with the sRGB curve both ways. The port changed nothing but spelling: `vec` to `float`, the texture fetch to `source.eval` at a texel's centre, the output-pixel mask coordinate to SkSL's `coord`, and the parameters to constants. Offered for the NES, SNES and N64. *(2026-09-24: eleven of the constants are uniforms again, with the slang file's defaults and ranges, so a player can set them; §3.7.)* *(2026-10-16: offered for every console that had a television, the Genesis and the PlayStation added, and the Sega CD through its host; §3.12.)*
+Timothy Lottes' CRT shader, in the public domain, ported from libretro's `crt/shaders/crt-lottes.slang` at its default parameters: Gaussian scanlines (`hardScan -8`) and pixels (`hardPix -3`), a small bloom (`0.15`), the barrel warp (`0.031`, `0.041`) with black outside it, and shadow mask 3 (the stretched VGA mask, dark `0.5`, light `1.5`), in linear light with the sRGB curve both ways. The port changed nothing but spelling: `vec` to `float`, the texture fetch to `source.eval` at a texel's centre, the output-pixel mask coordinate to SkSL's `coord`, and the parameters to constants. Offered for the NES, SNES and N64. *(2026-09-24: eleven of the constants are uniforms again, with the slang file's defaults and ranges, so a player can set them; §3.7.)* *(2026-10-16: offered for every console that had a television, the Genesis and the PlayStation added, and the Sega CD through its host; §3.12.)* *(2026-10-20: and the Master System and the SG-1000, `EmuSen_CRT.md` §31.)*
 
 ### 3.5 Handheld LCDs
 
@@ -605,7 +605,8 @@ wanted as a key of `CrtFilter.ConsoleTiming` (a second Genesis row, two numbers 
 **The form.** The fact belongs to the console, so it goes in the console's system pack, which is the record of what
 a console is beyond any engine: `SystemEntry.AttachedTo`, an optional field, names the console an attachment plugs
 into. The Genesis pack sets it on the Sega CD and on the 32X, both of which draw through the Genesis's video output
-and read its pads. `CoreCatalog.HostOf(console)` answers the attachment's host, or the console itself, and the
+and read its pads. *(2026-10-20: true of the Sega CD; the 32X puts the mixed picture out through an output stage of its
+own, recorded as a gap in `ConsoleScreens`, `EmuSen_CRT.md` §31.4.)* `CoreCatalog.HostOf(console)` answers the attachment's host, or the console itself, and the
 frontend asks it wherever a console stands for its screen or its pads:
 
 - the filters a console is offered (`ShaderCatalog.BuiltIns`, so the Shaders window and its list) and the console the
@@ -622,7 +623,9 @@ attachments; it is handed the host's name, as it was handed a console's before.
 named the NES, SNES and N64 because those were the consoles of the build it was ported in (2026-09-21); it holds no
 console's constants, its mask and scanlines being the same on any picture, so nothing restricted it to them, and it
 is now offered for the Genesis, the PlayStation and, through the host, the Sega CD as well. The CRT keeps its console
-rows: those are the consoles' own clocks, and an attachment uses its host's.
+rows: those are the consoles' own clocks, and an attachment uses its host's. *(2026-10-20: the list is no longer typed: it is
+`ConsoleScreens.Televisions`, derived from the one table of each console's screen and profile, and the Master System and
+the SG-1000 joined it with rows of their own; `EmuSen_CRT.md` §31.)*
 
 **What the audit found the same, or different on purpose.** The screen filters, overscan and pads now follow
 `HostOf`. graphics.json has no per-console defaults: every console starts at None. The per-console settings are the

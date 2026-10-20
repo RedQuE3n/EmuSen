@@ -1,6 +1,8 @@
+using EmuSen.Crystal.Cheats;
+
 namespace EmuSen.Crystal.Systems.Sms
 {
-    // The Master System's and the SG-1000's system packs, one extension each; codecs, views and settings come with Endou's later stages - see Endou_Plan.md §4, Endou_Native.md §3.
+    // The Master System's and the SG-1000's system packs, one extension each, which share the two cheat formats - see Endou_Plan.md §4, Endou_Native.md §3 and §14.
     public static class SmsSystems
     {
         public const string MasterSystemId = "sms", Sg1000Id = "sg1000";
@@ -16,7 +18,7 @@ namespace EmuSen.Crystal.Systems.Sms
             new[] { "Sega - Master System - Mark III" },
             new[] { "SMS" },
             file => file,
-            0.7,
+            1.4,
             "mastersystem",
             "Sega Master System",
             SelfDelimitingImages: false,
@@ -32,7 +34,7 @@ namespace EmuSen.Crystal.Systems.Sms
             new[] { "Sega - SG-1000" },
             new[] { "SG1000" },
             file => file,
-            0.7,
+            1.4,
             "sg-1000",
             "Sega SG-1000",
             SelfDelimitingImages: false,
@@ -40,7 +42,21 @@ namespace EmuSen.Crystal.Systems.Sms
 
         public static readonly SystemEntry MasterSystem = SystemTable.Entry(MasterSystemLiteral), Sg1000 = SystemTable.Entry(Sg1000Literal);
 
-        public static readonly SystemPack MasterSystemPack = new(MasterSystem, null, null, ByteOrder: "little");
-        public static readonly SystemPack Sg1000Pack = new(Sg1000, null, null, ByteOrder: "little");
+        // The space a Pro Action Replay code writes, as Endou names the work RAM.
+        public const string Ram = "RAM";
+
+        public static ICheatCodeCodec ManagedProActionReplay() => new DelegateCheatCodec("Pro Action Replay", CheatCodeKind.RamPoke, Ram,
+            SmsCheatFormats.IsProActionReplay, SmsCheatFormats.DecodeProActionReplay);
+
+        public static ICheatCodeCodec ManagedGameGenie() => new DelegateCheatCodec("Game Genie", CheatCodeKind.RomPatch, null,
+            SmsCheatFormats.IsGameGenie, SmsCheatFormats.DecodeGameGenie, SmsCheatFormats.GameGenieCompare);
+
+        // Each codec is emusen-systems' under its id, its Managed twin the C# - see EmuSen_Backend.md §13.
+        public static ICheatCodeCodec ProActionReplay() => SystemCode.Codec("sms.par", ManagedProActionReplay());
+
+        public static ICheatCodeCodec GameGenie() => SystemCode.Codec("sms.gg", ManagedGameGenie());
+
+        public static readonly SystemPack MasterSystemPack = new(MasterSystem, ProActionReplay, GameGenie, ByteOrder: "little");
+        public static readonly SystemPack Sg1000Pack = new(Sg1000, ProActionReplay, GameGenie, ByteOrder: "little");
     }
 }

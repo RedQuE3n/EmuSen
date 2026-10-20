@@ -525,6 +525,14 @@ nothing. With the pad, Up past the drawing's top row is the selector and Up agai
 the selector step the players. `PadSettingsWindowTests`' audit of every control by pad found the selector reachable on
 the SNES tab alone before that route was given, since Up from the other drawings' top rows reached the tab strip first.
 
+*Moved 2026-10-19, when the Master System and the SG-1000 were offered* (`Endou_Native.md` §14.8): with nine console
+tabs the strip runs under the selector at both sizes of the fit audit, and a row above the drawing or a second row of
+tabs costs the drawing its readable size again. Each console's page now has its own *Player* selector and *Use Player
+1's* in a row below the drawing, outside the drawing's height. With the pad, Down past the drawing's last row is the
+selector and Up from it returns to the region last chosen. The tabs' `SelectionChanged` handler acts only on the tabs'
+own change: a selector inside a page raises the same routed event, and refilling it from there is refused by Avalonia's
+selection model.
+
 **The desktop Preferences window** is now at most 720 pixels tall. It sized itself to its tallest tab, and with three
 pads and a kept seat the Controllers tab made it 1,080 pixels, past a 1280 by 800 screen; its panes scroll.
 

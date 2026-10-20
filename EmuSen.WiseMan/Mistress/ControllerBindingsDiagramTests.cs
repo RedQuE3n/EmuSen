@@ -86,6 +86,12 @@ namespace EmuSen.WiseMan.Mistress
                 bool knobs = diagram.Layout == ControllerLayout.DualShock;
                 foreach (PadControl control in controls.Where(c => !(knobs && c.ToString().Contains("Stick", StringComparison.Ordinal) && c is not (PadControl.L3 or PadControl.R3))))
                     Assert.True(regions.Contains(ControllerDiagrams.RegionFor(console, control)), $"{console} has no region for {control}");
+                // A console drawn on another's pad until LunaP draws its own may leave one region with no control, as the SG-1000's Select, and no more, so the pad borrowed is the nearest (Endou_Native.md §14).
+                if (ControllerDiagrams.BorrowsLayout(console))
+                {
+                    Assert.True(regions.Count(r => ControllerDiagrams.ControlFor(console, r, controls) is null) <= 1, $"{console} borrows a drawing with regions it does not use");
+                    continue;
+                }
                 foreach (string region in regions.Where(r => !(knobs && r == "Analog")))
                     Assert.True(ControllerDiagrams.ControlFor(console, region, controls) is not null, $"{console}'s {region} stands for no control");
                 Assert.Equal(regions.Count, diagram.Regions.Count);

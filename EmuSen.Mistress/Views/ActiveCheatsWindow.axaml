@@ -12,7 +12,7 @@
 
         <!-- General first, then consoles oldest-first; console tabs are appended
              by BuildConsoleTabs so a new core needs no XAML - see §4.14. -->
-        <lunac:Tabs DockPanel.Dock="Top" x:Name="Tabs" SelectionChanged="OnTabChanged" Margin="0,0,0,12">
+        <lunac:Tabs DockPanel.Dock="Top" x:Name="Tabs" SelectionChanged="OnTabChanged" Margin="0">
 
             <TabItem Header="General">
                 <StackPanel Spacing="10" Margin="0,8,0,0">

@@ -82,11 +82,13 @@ start:  ld a,$E3                ; the BIOS, the work RAM and the I/O chip on, ev
         ldir
         jp RAM_PROGRAM
 
-; No game in any slot: the reason 0. A refusal: the reason in A. The ROM is on again, the display still on.
+; No game in any slot: the reason 0. A refusal: the reason in A, and below it that the Mark III, which checks no header,
+; plays the game (decided 2026-10-19). The ROM is on again, the display still on.
 no_game:
         xor a
 refuse: ld sp,STACK
         add a,a
+        push af
         ld e,a
         ld d,0
         ld hl,reasons
@@ -95,6 +97,11 @@ refuse: ld sp,STACK
         inc hl
         ld h,(hl)
         ld l,a
+        call text
+        pop af
+        or a
+        jr z,wait
+        ld hl,mark3_text
         call text
 wait:   halt
         jr wait
@@ -211,6 +218,13 @@ size_text:
         db "ITS HEADER'S SIZE CODE IS",0
         dw NAMES+16*64+7*2
         db "NOT ONE SEGA LISTS.",0
+        dw 0
+
+mark3_text:
+        dw NAMES+18*64+4*2
+        db "IT PLAYS ON THE MARK III:",0
+        dw NAMES+19*64+5*2
+        db "CHOOSE IT AS THE MODEL.",0
         dw 0
 
 checksum_text:

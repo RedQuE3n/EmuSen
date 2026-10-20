@@ -35,7 +35,7 @@ tree
         19 DockPanel at=152,198,480,199 by=panel limit=128,124,1024,440 role=none
           20 TextBlock at=152,198,480,29 box=480,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard=Installed layout=69.24,28.8 limit=128,124,1024,440 paints=#9C9CA0FF role=text size=24 text=Installed
           21 LunaList at=152,231,480,166 by=panel heard="Systems with cheat files" limit=128,124,1024,440 name=SystemsList paints=#FFFFFFFF role=list
-            22 ScrollViewer at=152,231,480,166 fades=b name=PART_ScrollViewer overflow=212 paints=#55555AFF,#FFFFFFFF part role=scrollviewer viewport=152,231,480,166
+            22 ScrollViewer at=152,231,480,166 fades=b name=PART_ScrollViewer overflow=296 paints=#55555AFF,#FFFFFFFF part role=scrollviewer viewport=152,231,480,166
               23 ListBoxItem at=152,231,480,42 by=scroll drawn focus heard="Nintendo - Game Boy  (1)" in=22 limit=152,231,480,166 op paints=#333337FF,#9C9CA0FF role=listitem text="Nintendo - Game Boy  (1)"
                 24 TextBlock at=162,237,460,29 box=460,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Nintendo - Game Boy  (1)" in=22 layout=197.06,28.8 limit=152,231,480,42 owner=23 paints=#9C9CA0FF role=text size=24 text="Nintendo - Game Boy  (1)"
               25 ListBoxItem at=152,273,480,42 by=scroll drawn focus heard="Nintendo - Nintendo Entertainment System  (2)" in=22 limit=152,231,480,166 op paints=#333337FF,#9C9CA0FF role=listitem text="Nintendo - Nintendo Entertainment System  (2)"
@@ -118,7 +118,7 @@ edge "row:21/4/Nintendo - Nintendo 64  (not downloaded)" down "row:21/5/Nintendo
 edge "row:21/4/Nintendo - Nintendo 64  (not downloaded)" left same
 edge "row:21/4/Nintendo - Nintendo 64  (not downloaded)" right 35
 edge "row:21/5/Nintendo - Satellaview  (not downloaded)" up "row:21/4/Nintendo - Nintendo 64  (not downloaded)"
-edge "row:21/5/Nintendo - Satellaview  (not downloaded)" down "row:21/6/Sega - Mega Drive - Genesis  (not downloaded)"
+edge "row:21/5/Nintendo - Satellaview  (not downloaded)" down "row:21/6/Sega - Master System - Mark III  (not downloaded)"
 edge "row:21/5/Nintendo - Satellaview  (not downloaded)" left same
 edge "row:21/5/Nintendo - Satellaview  (not downloaded)" right 35
 edge "row:40/0/Fable of Tiles (USA)" up 35

@@ -123,7 +123,7 @@ namespace EmuSen.WiseMan.Crystal
             SameWithFiles(BuildTree, Plant, (i, rt) =>
             {
                 var a = new List<string>();
-                foreach (string console in new[] { "NES", "SNES", "GB", "GBC", "N64", "Genesis", "Sega CD", "PlayStation", "Nowhere" })
+                foreach (string console in new[] { "NES", "SNES", "GB", "GBC", "N64", "Genesis", "Sega CD", "PlayStation", "Master System", "SG-1000", "Nowhere" })
                     a.AddRange(new[] { i.SettingsSchema(rt, 0, console, null), i.SettingsGet(rt, 0, 0, console, "Engine") });
                 a.AddRange(new[] { i.GameSettingGet(rt, nes, "Engine"), i.GameSettingGet(rt, owned, "Engine"), i.GameSettingGet(rt, sfc, "Engine") });
                 uint s = Id(i.Open(rt, psx));

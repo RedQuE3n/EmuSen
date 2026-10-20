@@ -3513,6 +3513,13 @@ registration golden is re-recorded with the Genesis's lines, and the Nephrite te
 the test core in `CoreDiscoveryTests` and by a copy of Nephrite's library with a development sidecar in
 `FirmwareOverviewTests`; the Sega CD and the 32X stay marked by §27.4.
 
+*Amended 2026-10-19: the Master System and the SG-1000 are offered to players* (`Endou_Native.md` §14). Endou's row of
+`RustCores.props` and `rust-cores.yml` carries no mark and neither system of its info does; the registration golden is
+re-recorded with Endou's lines, and `EndouTests.A_player_is_not_offered_the_core_in_development` is now
+`A_player_is_offered_the_master_system_and_the_sg_1000_on_two_shelves`. A catalog now gives an engine's name to the
+console of the first system its info offers, not to the first of its consoles in release order, which for Endou is the
+SG-1000.
+
 ### 27.4 A system in development, 2026-10-06
 
 A core may run one of its systems before the others: Nephrite runs the Genesis at stage 6, and its Sega CD and 32X

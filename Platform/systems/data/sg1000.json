@@ -7,13 +7,13 @@
   "extensions": [".sg"],
   "cheat_systems": ["Sega - SG-1000"],
   "openvgdb_systems": ["SG1000"],
-  "cover_aspect": 0.7,
+  "cover_aspect": 1.4,
   "esde_system": "sg-1000",
   "esde_full_name": "Sega SG-1000",
   "self_delimiting_images": false,
   "attached_to": null,
   "screenscraper_system": 109,
-  "cheat_space": null,
+  "cheat_space": "RAM",
   "media": [],
   "byte_order": "little"
 }

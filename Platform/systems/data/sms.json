@@ -7,13 +7,13 @@
   "extensions": [".sms"],
   "cheat_systems": ["Sega - Master System - Mark III"],
   "openvgdb_systems": ["SMS"],
-  "cover_aspect": 0.7,
+  "cover_aspect": 1.4,
   "esde_system": "mastersystem",
   "esde_full_name": "Sega Master System",
   "self_delimiting_images": false,
   "attached_to": null,
   "screenscraper_system": 2,
-  "cheat_space": null,
+  "cheat_space": "RAM",
   "media": [],
   "byte_order": "little"
 }

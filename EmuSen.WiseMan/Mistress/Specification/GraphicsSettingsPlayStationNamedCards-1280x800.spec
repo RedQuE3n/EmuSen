@@ -30,36 +30,39 @@ tree
           14 TextBlock at=402,216,53,36 box=53,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=SNES layout=52.41,36 limit=390,210,77,48 owner=13 paints=#86868AFF role=text size=30 text=SNES
         15 TabItem at=467,210,64,48 by=clip drawn focus heard=N64 limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text=N64
           16 TextBlock at=479,216,40,36 box=40,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=N64 layout=39.54,36 limit=467,210,64,48 owner=15 paints=#86868AFF role=text size=30 text=N64
-        17 TabItem at=531,210,110,48 by=clip drawn focus heard=GENESIS limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text=Genesis
-          18 TextBlock at=543,216,86,36 box=86,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=GENESIS layout=85.47,36 limit=531,210,110,48 owner=17 paints=#86868AFF role=text size=30 text=GENESIS
-        19 TabItem at=641,210,109,48 by=clip drawn focus heard="SEGA CD" limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text="Sega CD"
-          20 TextBlock at=653,216,85,36 box=85,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="SEGA CD" layout=84.18,36 limit=641,210,109,48 owner=19 paints=#86868AFF role=text size=30 text="SEGA CD"
-        21 TabItem at=750,210,156,48 by=clip drawn focus heard=PLAYSTATION limit=274,210,733,392 op paints=#EEEEF0FF role=tabitem sideways text=PlayStation
-          22 TextBlock at=762,216,132,36 box=132,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=PLAYSTATION layout=131.91,36 limit=750,210,156,48 owner=21 paints=#EEEEF0FF role=text size=30 text=PLAYSTATION
-        23 ScrollViewer at=286,260,709,342 by=clip fades=b limit=274,260,733,342 overflow=2725 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=286,260,709,342
-          24 StackPanel at=286,268,709,3059 by=scroll in=23 limit=286,260,709,342 paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF,#B4B4B8FF role=none seen=286,268,709,334
-            25 FieldRow at=286,268,709,129 by=scroll heard="Shader and shape" in=23 limit=286,260,709,342 paints=#9C9CA0FF role=group
-              26 TextBlock at=286,268,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Shader and shape" in=23 layout=145.94,28.8 limit=286,268,709,129 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Shader and shape"
-              27 HintText at=286,301,709,48 box=709,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square." in=23 layout=699.98,48 limit=286,268,709,129 paints=#86868AFF part role=text size=20 text="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square."
-              28 DockPanel at=286,353,709,44 by=clip heard="Shader and shape" in=23 limit=286,268,709,129 role=none
-                29 Button at=286,353,128,44 by=clip drawn focus heard=SHADERS... in=23 limit=286,268,709,129 name=PlayStation.Shaders op paints=#55555AFF,#9C9CA0FF role=button text=Shaders...
-                  30 TextBlock at=303,359,94,32 box=94,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=SHADERS... in=23 layout=93.96,31.2 limit=286,353,128,44 owner=29 paints=#EEEEF0FF role=text size=26 text=SHADERS...
-                31 Dropdown at=870,353,125,44 by=clip drawn focus heard="Shader and shape" in=23 limit=286,268,709,129 name=PlayStation.PictureShape op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
-                  32 TextBlock at=882,358,81,32 box=81,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="TV shape" in=23 layout=80.81,31.2 limit=882,358,81,32 owner=31 paints=#9C9CA0FF role=text size=26 text="TV shape"
-                  33 ViewboxContainer at=973,371.73,12,6.54 by=clip in=23 limit=973,371.73,12,6.54 nohit role=none
-                34 TextBlock at=426,361,432,29 box=432,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=None in=23 layout=41.74,28.8 limit=286,268,709,129 name=PlayStation.ShaderInUse paints=#9C9CA0FF role=text size=24 text=None
-            35 FieldRow at=286,409,709,105 by=scroll heard=Overscan in=23 limit=286,260,709,342 paints=#9C9CA0FF role=group
-              36 TextBlock at=286,409,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Overscan in=23 layout=75.29,28.8 limit=286,409,709,105 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Overscan
-              37 HintText at=286,442,709,24 box=709,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The whole picture, the part a television showed, or a crop of your own." in=23 layout=474.92,24 limit=286,409,709,105 paints=#86868AFF part role=text size=20 text="The whole picture, the part a television showed, or a crop of your own."
-              38 StackPanel at=286,470,709,44 by=clip heard=Overscan in=23 limit=286,409,709,105 role=none
-                39 Dropdown at=286,470,166,44 by=clip drawn focus heard=Overscan in=23 limit=286,409,709,105 name=PlayStation.Overscan op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
-                  40 TextBlock at=298,475,122,32 box=122,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Whole picture" in=23 layout=121.45,31.2 limit=298,475,122,32 owner=39 paints=#9C9CA0FF role=text size=26 text="Whole picture"
-                  41 ViewboxContainer at=430,488.73,12,6.54 by=clip in=23 limit=430,488.73,12,6.54 nohit role=none
-            42 FieldRow at=286,526,709,201 by=scroll heard="Memory Card" in=23 limit=286,260,709,342 name=PlayStation.Cards.Row paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=group seen=286,526,709,76
-              43 TextBlock at=286,526,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Memory Card" in=23 layout=106.42,28.8 limit=286,526,709,201 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Memory Card"
-              44 HintText at=286,559,709,120 box=709,120 by=clip caps=13.999 drawn face="Barlow Condensed" heard="Per game: each game keeps its own, as before. Shared: one card in each slot, used by every game, as a console with it always there. Named: a drawer of them, each a file of the save folder, and you choose which is in each slot. A save state never rolls a shared or named card back. Changing this moves, copies and deletes nothing: each game's own are used again when Per game is chosen again. Takes effect when a game is next loaded." in=23 layout=706.08,120 limit=286,526,709,201 paints=#86868AFF part role=text seen=286,559,709,43 size=20 text="Per game: each game keeps its own, as before. Shared: one card in each slot, used by every game, as a console with it always there. Named: a drawer of them, each a file of the save folder, and you choose which is in each slot. A save state never rolls a shared or named card back. Changing this moves, copies and deletes nothing: each game's own are used again when Per game is chosen again. Takes effect when a game is next loaded."
-focus 29
-edge 4 up 21
+        17 TabItem at=531,210,107,48 by=clip drawn focus heard=SG-1000 limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text=SG-1000
+          18 TextBlock at=543,216,83,36 box=83,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=SG-1000 layout=82.68,36 limit=531,210,107,48 owner=17 paints=#86868AFF role=text size=30 text=SG-1000
+        19 TabItem at=638,210,186,48 by=clip drawn focus heard="MASTER SYSTEM" limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text="Master System"
+          20 TextBlock at=650,216,162,36 box=162,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="MASTER SYSTEM" layout=161.79,36 limit=638,210,186,48 owner=19 paints=#86868AFF role=text size=30 text="MASTER SYSTEM"
+        21 TabItem at=824,210,110,48 by=clip drawn focus heard=GENESIS limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text=Genesis
+          22 TextBlock at=836,216,86,36 box=86,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=GENESIS layout=85.47,36 limit=824,210,110,48 owner=21 paints=#86868AFF role=text size=30 text=GENESIS
+        23 TabItem at=274,258,109,48 by=clip drawn focus heard="SEGA CD" limit=274,210,733,392 paints=#86868AFF role=tabitem sideways text="Sega CD"
+          24 TextBlock at=286,264,85,36 box=85,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="SEGA CD" layout=84.18,36 limit=274,258,109,48 owner=23 paints=#86868AFF role=text size=30 text="SEGA CD"
+        25 TabItem at=383,258,156,48 by=clip drawn focus heard=PLAYSTATION limit=274,210,733,392 op paints=#EEEEF0FF role=tabitem sideways text=PlayStation
+          26 TextBlock at=395,264,132,36 box=132,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=PLAYSTATION layout=131.91,36 limit=383,258,156,48 owner=25 paints=#EEEEF0FF role=text size=30 text=PLAYSTATION
+        27 ScrollViewer at=286,308,709,294 by=clip fades=b limit=274,308,733,294 overflow=2773 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=286,308,709,294
+          28 StackPanel at=286,316,709,3059 by=scroll in=27 limit=286,308,709,294 paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF,#B4B4B8FF role=none seen=286,316,709,286
+            29 FieldRow at=286,316,709,129 by=scroll heard="Shader and shape" in=27 limit=286,308,709,294 paints=#9C9CA0FF role=group
+              30 TextBlock at=286,316,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Shader and shape" in=27 layout=145.94,28.8 limit=286,316,709,129 name=PART_Label paints=#9C9CA0FF part role=text size=24 text="Shader and shape"
+              31 HintText at=286,349,709,48 box=709,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square." in=27 layout=699.98,48 limit=286,316,709,129 paints=#86868AFF part role=text size=20 text="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square."
+              32 DockPanel at=286,401,709,44 by=clip heard="Shader and shape" in=27 limit=286,316,709,129 role=none
+                33 Button at=286,401,128,44 by=clip drawn focus heard=SHADERS... in=27 limit=286,316,709,129 name=PlayStation.Shaders op paints=#55555AFF,#9C9CA0FF role=button text=Shaders...
+                  34 TextBlock at=303,407,94,32 box=94,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=SHADERS... in=27 layout=93.96,31.2 limit=286,401,128,44 owner=33 paints=#EEEEF0FF role=text size=26 text=SHADERS...
+                35 Dropdown at=870,401,125,44 by=clip drawn focus heard="Shader and shape" in=27 limit=286,316,709,129 name=PlayStation.PictureShape op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
+                  36 TextBlock at=882,406,81,32 box=81,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="TV shape" in=27 layout=80.81,31.2 limit=882,406,81,32 owner=35 paints=#9C9CA0FF role=text size=26 text="TV shape"
+                  37 ViewboxContainer at=973,419.73,12,6.54 by=clip in=27 limit=973,419.73,12,6.54 nohit role=none
+                38 TextBlock at=426,409,432,29 box=432,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=None in=27 layout=41.74,28.8 limit=286,316,709,129 name=PlayStation.ShaderInUse paints=#9C9CA0FF role=text size=24 text=None
+            39 FieldRow at=286,457,709,105 by=scroll heard=Overscan in=27 limit=286,308,709,294 paints=#9C9CA0FF role=group
+              40 TextBlock at=286,457,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Overscan in=27 layout=75.29,28.8 limit=286,457,709,105 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Overscan
+              41 HintText at=286,490,709,24 box=709,24 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The whole picture, the part a television showed, or a crop of your own." in=27 layout=474.92,24 limit=286,457,709,105 paints=#86868AFF part role=text size=20 text="The whole picture, the part a television showed, or a crop of your own."
+              42 StackPanel at=286,518,709,44 by=clip heard=Overscan in=27 limit=286,457,709,105 role=none
+                43 Dropdown at=286,518,166,44 by=clip drawn focus heard=Overscan in=27 limit=286,457,709,105 name=PlayStation.Overscan op paints=#0E0E10FF,#55555AFF,#9C9CA0FF role=combobox sideways
+                  44 TextBlock at=298,523,122,32 box=122,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="Whole picture" in=27 layout=121.45,31.2 limit=298,523,122,32 owner=43 paints=#9C9CA0FF role=text size=26 text="Whole picture"
+                  45 ViewboxContainer at=430,536.73,12,6.54 by=clip in=27 limit=430,536.73,12,6.54 nohit role=none
+            46 FieldRow at=286,574,709,201 by=scroll heard="Memory Card" in=27 limit=286,308,709,294 name=PlayStation.Cards.Row paints=#0E0E10FF,#55555AFF,#86868AFF,#9C9CA0FF role=group seen=286,574,709,28
+              47 TextBlock at=286,574,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Memory Card" in=27 layout=106.42,28.8 limit=286,574,709,201 name=PART_Label paints=#9C9CA0FF part role=text seen=286,574,709,28 size=24 text="Memory Card"
+focus 33
+edge 4 up 25
 edge 4 down same
 edge 4 left path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/18/0/2/0
 edge 4 right 6
@@ -67,16 +70,16 @@ edge 6 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/18/0/2/0
 edge 6 down same
 edge 6 left 4
 edge 6 right same
-edge 21 up same
-edge 21 down 29
-edge 29 up 21
-edge 29 down 39
-edge 29 left same
-edge 29 right 31
-edge 31 up 21
-edge 31 down 39
-edge 39 up 29
-edge 39 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0
+edge 25 up same
+edge 25 down 33
+edge 33 up 25
+edge 33 down 43
+edge 33 left same
+edge 33 right 35
+edge 35 up 25
+edge 35 down 43
+edge 43 up 33
+edge 43 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/10/0/2/0 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/9/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/10/0/2/0 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/11/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/11/0/2/0 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/10/0/2/0
@@ -88,16 +91,16 @@ edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/13/0/2/0 down path:0/3/0/0/2
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/15/0/2/0 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/13/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/15/0/2/0 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/16/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/15/0/2/0 left same
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/15/0/2/0 right 21
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/15/0/2/0 right 25
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/16/0/2/0 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/15/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/16/0/2/0 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/17/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/17/0/2/0 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/16/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/17/0/2/0 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/18/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/17/0/2/0 left same
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/17/0/2/0 right 21
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/17/0/2/0 right 25
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/18/0/2/0 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/17/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/18/0/2/0 down 4
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0 up 39
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0 up 43
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/4/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/4/0/2/0 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0
 edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/4/0/2/0 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/5/0/2/0/0

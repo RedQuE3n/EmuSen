@@ -54,18 +54,27 @@ const fn battery(crc: u32) -> Row {
     Row { crc, mapper: Mapper::Sega, ram: 8 * 1024, battery: true }
 }
 
-/// The boards the rules below would place wrongly, each with its source in Endou_Native.md §9.2: Sega boards with 8 KiB
-/// of battery RAM, the games SMS Power!'s "SMS Paging Chips" lists with battery RAM and those the library survey saw
-/// write their cartridge RAM; and The Castle's SG-1000 board with 8 KiB at $8000, as the survey saw it written.
+/// The boards the rules below would place wrongly, each with its source in Endou_Native.md §9.2 and §14.6: Sega boards
+/// with 8 KiB of battery RAM, the games SMS Power! tags "Memory Backup" in every release No-Intro's DAT lists, betas,
+/// demos and re-releases left out; and The Castle's SG-1000 board with 8 KiB at $8000, as the survey saw it written.
 pub const TABLE: &[Row] = &[
-    battery(0xC7DE_D988),
-    battery(0x4865_1325),
-    battery(0xF97E_9875),
-    battery(0x7597_1BEF),
-    battery(0x747E_83B5),
-    battery(0x00BE_F1D7),
-    battery(0xB52D_60C8),
-    battery(0xB33E_2827),
+    battery(0xC7DE_D988), // Golden Axe Warrior (USA, Europe, Brazil)
+    battery(0x4865_1325), // Golfamania (Europe, Brazil)
+    battery(0xF97E_9875), // Penguin Land (USA, Europe)
+    battery(0x2BCD_B8FA), // Doki Doki Penguin Land - Uchuu Daibouken (Japan)
+    battery(0x7597_1BEF), // Phantasy Star (Brazil)
+    battery(0x747E_83B5), // Phantasy Star (Korea)
+    battery(0x00BE_F1D7), // Phantasy Star (USA, Europe) (Rev A)
+    battery(0xE4A6_5E79), // Phantasy Star (USA, Europe)
+    battery(0x6605_D36A), // Phantasy Star (Japan)
+    battery(0x0730_1F83), // Phantasy Star (Japan) (Rev 1)
+    battery(0xB52D_60C8), // Ultima IV - Quest of the Avatar (Europe, Brazil)
+    battery(0xB33E_2827), // Ys - The Vanished Omens (USA, Europe, Brazil)
+    battery(0x3275_9751), // Ys (Japan)
+    battery(0x0E33_3B6E), // Miracle Warriors - Seal of The Dark Lord (USA, Europe, Brazil)
+    battery(0xB9FD_F6D9), // Haja no Fuuin (Japan)
+    battery(0x6953_8469), // Monopoly (USA, Europe)
+    battery(0x026D_94A4), // Monopoly (USA, Europe) (Rev A)
     Row { crc: 0x092F_29D6, mapper: Mapper::SgRam, ram: 8 * 1024, battery: false },
 ];
 
@@ -148,5 +157,35 @@ mod tests {
         let crcs: Vec<u32> = TABLE.iter().map(|r| r.crc).collect();
         assert!(crcs.iter().enumerate().all(|(i, c)| !crcs[..i].contains(c)), "one row an image");
         assert!(TABLE.iter().all(|r| r.mapper != Mapper::SgRam || r.ram > 0), "an SG-1000 RAM board has RAM");
+    }
+
+    // A seeded fault that dropped a row of the table passed every test (Endou_Native.md §14.10): the releases of the eight games
+    // SMS Power! tags "Memory Backup", by their CRC-32 in No-Intro's DAT, each a battery board.
+    #[test]
+    fn every_release_of_a_memory_backup_game_has_its_battery_board() {
+        let releases: [(u32, &str); 17] = [
+            (0xC7DE_D988, "Golden Axe Warrior"),
+            (0x4865_1325, "Golfamania"),
+            (0xF97E_9875, "Penguin Land"),
+            (0x2BCD_B8FA, "Doki Doki Penguin Land"),
+            (0x7597_1BEF, "Phantasy Star (Brazil)"),
+            (0x747E_83B5, "Phantasy Star (Korea)"),
+            (0x00BE_F1D7, "Phantasy Star (Rev A)"),
+            (0xE4A6_5E79, "Phantasy Star"),
+            (0x6605_D36A, "Phantasy Star (Japan)"),
+            (0x0730_1F83, "Phantasy Star (Japan) (Rev 1)"),
+            (0xB52D_60C8, "Ultima IV"),
+            (0xB33E_2827, "Ys - The Vanished Omens"),
+            (0x3275_9751, "Ys (Japan)"),
+            (0x0E33_3B6E, "Miracle Warriors"),
+            (0xB9FD_F6D9, "Haja no Fuuin"),
+            (0x6953_8469, "Monopoly"),
+            (0x026D_94A4, "Monopoly (Rev A)"),
+        ];
+        for (crc, name) in releases {
+            let row = TABLE.iter().find(|r| r.crc == crc).unwrap_or_else(|| panic!("{name} has no row"));
+            assert_eq!((row.mapper, row.ram, row.battery), (Mapper::Sega, 0x2000, true), "{name}");
+        }
+        assert_eq!(TABLE.iter().filter(|r| r.battery).count(), releases.len(), "no battery row the tag does not name");
     }
 }

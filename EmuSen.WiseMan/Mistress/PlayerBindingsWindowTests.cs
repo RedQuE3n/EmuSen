@@ -9,6 +9,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using EmuSen.Cores;
 using EmuSen.Endymion.Input;
 using EmuSen.Galaxia;
@@ -46,6 +47,14 @@ namespace EmuSen.WiseMan.Mistress
         private static T? Named<T>(Control root, string name) where T : Control =>
             root.GetLogicalDescendants().OfType<T>().FirstOrDefault(c => c.Name == name);
 
+        // Each console's page has its own player selector, so the one meant is the tab shown's, in the visual tree.
+        private static T? Shown<T>(Control root, string name) where T : Control
+        {
+            Dispatcher.UIThread.RunJobs();
+            root.UpdateLayout();
+            return root.GetVisualDescendants().OfType<T>().FirstOrDefault(c => c.Name == name);
+        }
+
         private static (InputSettingsWindow Window, SimulatedPad One, SimulatedPad Two, GamepadManager Gamepad, GamepadBindings Pads) Open(string console)
         {
             SimulatedPad one = new() { Name = "One" }, two = new() { Name = "Two" };
@@ -66,23 +75,23 @@ namespace EmuSen.WiseMan.Mistress
         {
             (InputSettingsWindow window, _, _, _, _) = Open("SNES");
             var tabs = Named<TabControl>(window, "Tabs")!;
-            Control bar = Named<StackPanel>(window, "PlayerBar")!;
-            Dropdown choice = Named<Dropdown>(window, "PlayerSelector")!;
             int[] counts = new int[Consoles.Length];
             for (int i = 0; i < Consoles.Length; i++)
             {
                 tabs.SelectedIndex = i + 1;
-                counts[i] = bar.IsVisible ? choice.ItemCount : 1;
+                Control? shown = Shown<StackPanel>(window, "PlayerBar");
+                counts[i] = shown is { IsVisible: true } ? Shown<Dropdown>(window, "PlayerSelector")!.ItemCount : 1;
             }
             // The Genesis's two pads as its port rows stand by default; an adapter set there adds its players.
             Assert.Equal(Consoles.Select(c => ControllerPorts.ForConsole(c, _ => null)), counts);
-            // The PlayStation's two ports since 2026-10-11 (EmuSen_InterfaceSpec.md §6.3.5), then the Sega CD's, the Genesis's two pads, since 2026-10-16.
-            Assert.Equal(new[] { 2, 1, 2, 4, 2, 2, 2 }, counts);
+            // The PlayStation's two ports since 2026-10-11 (EmuSen_InterfaceSpec.md §6.3.5), then the Sega CD's, the Genesis's two pads, since 2026-10-16, and the SG-1000's and the Master System's two since 2026-10-19.
+            Assert.Equal(new[] { 2, 1, 2, 4, 2, 2, 2, 2, 2 }, counts);
             tabs.SelectedIndex = 0;
-            Assert.False(bar.IsVisible);
+            Assert.Null(Shown<StackPanel>(window, "PlayerBar"));
             tabs.SelectedIndex = Array.IndexOf(Consoles, "SNES") + 1;
+            Dropdown choice = Shown<Dropdown>(window, "PlayerSelector")!;
             Assert.Equal(new[] { "Player 1", "Player 2" }, choice.Items.Cast<string>());
-            Assert.False(Named<Button>(window, "UsePlayer1Button")!.IsEnabled);
+            Assert.False(Shown<Button>(window, "UsePlayer1Button")!.IsEnabled);
             window.Close();
         });
 
@@ -91,7 +100,7 @@ namespace EmuSen.WiseMan.Mistress
         public Task Rebinding_for_player_2_gives_it_its_own_buttons() => UiTest.Run(() =>
         {
             (InputSettingsWindow window, SimulatedPad one, SimulatedPad two, GamepadManager gamepad, GamepadBindings pads) = Open("SNES");
-            Named<Dropdown>(window, "PlayerSelector")!.SelectedItem = "Player 2";
+            Shown<Dropdown>(window, "PlayerSelector")!.SelectedItem = "Player 2";
             Assert.Equal(2, window.PlayerOf("SNES"));
             Assert.Equal(1, window.PlayerOf("NES"));
             Assert.Contains("player 1's gamepad buttons until", Named<TextBlock>(window, "PlayerWordsSNES")!.Text);
@@ -118,7 +127,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(diagram.IsPressed("B"));
             two.Release(SDL.GamepadButton.North);
 
-            Button back = Named<Button>(window, "UsePlayer1Button")!;
+            Button back = Shown<Button>(window, "UsePlayer1Button")!;
             Assert.True(back.IsEnabled);
             back.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             Assert.False(pads.HasOwn("SNES", 2));
@@ -126,14 +135,14 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         });
 
-        // The selector stands at the tab strip's end and the pad reaches it.
+        // The selector stands below the drawing and the pad reaches it.
         [Fact]
         public Task The_pad_alone_reaches_the_player_selector() => UiTest.Run(() =>
         {
             (InputSettingsWindow window, _, _, _, _) = Open("N64");
             window.DiagramFor("N64")!.Select(window.DiagramFor("N64")!.Regions[0].Id, NavigationMethod.Directional);
             HashSet<InputElement> reached = PadAudit.Reachable(PadWindowRouter.RootOf(window), b => PadWindowRouter.Send(window, b));
-            Assert.Contains(Named<Dropdown>(window, "PlayerSelector")!, reached);
+            Assert.Contains(Shown<Dropdown>(window, "PlayerSelector")!, reached);
             window.Close();
         });
     }

@@ -189,6 +189,9 @@ namespace EmuSen.WiseMan.Crystal
                 W(Path.Combine("segacd", "Folder.iso"), new byte[0x10000]),
                 W(Path.Combine("psx", "Folder.iso"), new byte[0x10000]),
                 W("Unknown.xyz", new byte[16]),
+                W("Game.sms", SyntheticSmsRom.Cartridge()),
+                W("Game.sg", SyntheticSmsRom.Sg1000()),
+                W("Headerless.sms", SyntheticSmsRom.Sg1000(0x2000)),
                 SyntheticPsxDisc.Build("Europe").WriteSet(dir, "Amber Set"),
                 Path.Combine(dir, "Missing.nes"),
             };

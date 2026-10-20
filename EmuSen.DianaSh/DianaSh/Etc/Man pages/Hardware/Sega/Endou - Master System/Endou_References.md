@@ -223,6 +223,35 @@ for them; SMS Power!'s "SN76489", `https://www.smspower.org/Development/SN76489`
 sample"; two web searches for a Master System's recorded or measured output found none. Nothing was fetched, and the
 analogue stage stays a named loss (`Endou_Native.md` §12.3, §13.11).
 
+## 6f. Fetched and used at stage 7 (2026-10-19)
+
+Each fetch on a decision of 2026-10-19, recorded in the probe cache's `PROVENANCE.txt`; nothing is committed.
+
+| Item | Where it was fetched | SHA-256 | What was read |
+|---|---|---|---|
+| No-Intro's DAT, "Sega - Master System - Mark III (20261013-064924)" | DAT-o-MATIC's download page for system 26, default options with the BIOS included, as a zip (`f60be67e…`) | `458374e5…5525d` | the 13 `[BIOS]` rows' names, sizes, CRC-32s, MD5s and SHA-1s, and the CRC-32 of each release of the eight games below; nothing describes a BIOS's code or behaviour in a DAT |
+| libretro-database's copy of the same DAT, `metadat/no-intro/`, at `9a899f5` | raw.githubusercontent.com | `3ea6caad…7f78b` | searched for the BIOS rows: it holds none (a negative result) |
+| libretro-database's `dat/System.dat`, at `9a899f5` | the same | `57f83609…7544b` | its Master System rows name files (`bios.sms`, `bios_E.sms`, `bios_J.sms`, `bios_U.sms`), not consoles or versions; not used |
+| SMS Power!'s tag page "Memory Backup", `https://www.smspower.org/Tags/MemoryBackup?action=print` | smspower.org | `0417698c…cc1e3` | the list of games: eight for the Master System (Golden Axe Warrior, Golfamania, Miracle Warriors, Monopoly, Penguin Land, Phantasy Star, Ultima IV, Y's) and 34 for the Game Gear |
+
+**The BIOS rows used** (`Endou_Native.md` §14.4): the first Master System's two released 8 KiB images, `[BIOS] Sega
+Master System (USA, Europe) (v1.3)` (CRC-32 `0072ed54`, MD5 `840481177270d5642a14ca71ee72844c`, SHA-1
+`c315672807d8ddb8d91443729405c766dd95cae7`, "verified") and `[BIOS] Sega Master System (Europe) (v2.0)` (CRC-32
+`b3d854f8`, MD5 `bdb34f2c471e5d0c358eeec621f9d029`, SHA-1 `fc7eb9141f38c92bf98d9134816f64b45e811112`). Kept for stage 9:
+`[BIOS] Sega Master System (Japan) (v2.1)`, 8 KiB, CRC-32 `48d44a13`, MD5 `24a519c53f67b00640d0048ef7089105`, SHA-1
+`a8c1b39a2e41137835eda6a5de6d46dd9fadbaf2`, the Japanese Master System's. Not listed: the two USA prototypes (8 KiB, of
+no released console) and the "Store Display Unit" (16 KiB); the images with a built-in game (Alex Kidd in Miracle World,
+three; Hang On v3.4; Hang On & Safari Hunt v2.4; Missile Defense 3-D v4.4; Sonic The Hedgehog), 128 and 256 KiB, which
+Endou does not map yet (decided 2026-10-19).
+
+**Read for the codecs** (`EmuSen_Cheats.md` §11): SMS Power!'s "Pro Action Replay" and "Game Genie" pages, in the
+cache since stage 1, their sections "Code format"; the libretro cheat database's `Sega - Master System - Mark III` and
+`Sega - SG-1000` folders, as a published build carries them, read for their codes' forms and measured through the
+codecs.
+
+**Read for the boxes' shape**: one retailer's listing of box protectors, which says the same sleeve fits the Genesis's
+cardboard boxes and the Master System's; no measurement of a Master System box was found.
+
 ## 7. What was read for this page
 
 The pages and listings of §1–§4 as far as needed to identify, date and license each item: titles, contents lists,

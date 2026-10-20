@@ -21,7 +21,7 @@ pub struct Codec {
 }
 
 /// Every codec, and each system's pair: the one a code is detected by, and the one asked for by name.
-pub const CODECS: [Codec; 11] = [
+pub const CODECS: [Codec; 13] = [
     Codec { id: "nes.raw", name: "NES address:value", kind: Kind::RamPoke },
     Codec { id: "nes.gg", name: "Game Genie", kind: Kind::RomPatch },
     Codec { id: "snes.par", name: "Pro Action Replay", kind: Kind::RamPoke },
@@ -33,10 +33,12 @@ pub const CODECS: [Codec; 11] = [
     Codec { id: "gb.gs", name: "GameShark", kind: Kind::RamPoke },
     Codec { id: "gb.gg", name: "Game Genie", kind: Kind::RomPatch },
     Codec { id: "n64.gs", name: "GameShark", kind: Kind::RamPoke },
+    Codec { id: "sms.par", name: "Pro Action Replay", kind: Kind::RamPoke },
+    Codec { id: "sms.gg", name: "Game Genie", kind: Kind::RomPatch },
 ];
 
 /// Each system's codecs by id: detected, then explicit.
-pub const PAIRS: [(&str, Option<&str>, Option<&str>); 9] = [
+pub const PAIRS: [(&str, Option<&str>, Option<&str>); 11] = [
     ("nes", Some("nes.raw"), Some("nes.gg")),
     ("snes", Some("snes.par"), Some("snes.gg")),
     ("md", Some("md.ar"), Some("md.gg")),
@@ -46,6 +48,8 @@ pub const PAIRS: [(&str, Option<&str>, Option<&str>); 9] = [
     ("gb", Some("gb.gs"), Some("gb.gg")),
     ("gbc", Some("gb.gs"), Some("gb.gg")),
     ("n64", Some("n64.gs"), None),
+    ("sms", Some("sms.par"), Some("sms.gg")),
+    ("sg1000", Some("sms.par"), Some("sms.gg")),
 ];
 
 pub fn codec(id: &str) -> Option<&'static Codec> {
@@ -146,7 +150,7 @@ pub struct Answer {
 
 /// A code's answers from the codec `id`; none for a codec no family has.
 pub fn decode(id: &str, code: &str) -> Option<Answer> {
-    use crate::{gb, genesis, n64, nes, psx, snes};
+    use crate::{gb, genesis, n64, nes, psx, sms, snes};
     Some(match codec(id)?.id {
         "nes.raw" => Answer { can_decode: nes::cheats::raw_can_decode(code), decode: nes::cheats::raw_decode(code), compare: Ok(None), writes: Ok(None) },
         "nes.gg" => Answer {
@@ -184,6 +188,8 @@ pub fn decode(id: &str, code: &str) -> Option<Answer> {
         }
         "gb.gs" => Answer { can_decode: gb::cheats::shark_can_decode(code), decode: gb::cheats::shark_decode(code), compare: Ok(None), writes: Ok(None) },
         "gb.gg" => Answer { can_decode: gb::cheats::genie_can_decode(code), decode: gb::cheats::genie_decode(code), compare: gb::cheats::genie_compare(code), writes: Ok(None) },
+        "sms.par" => Answer { can_decode: sms::cheats::par_can_decode(code), decode: sms::cheats::par_decode(code), compare: Ok(None), writes: Ok(None) },
+        "sms.gg" => Answer { can_decode: sms::cheats::genie_can_decode(code), decode: sms::cheats::genie_decode(code), compare: sms::cheats::genie_compare(code), writes: Ok(None) },
         _ => {
             let writes = n64::cheats::decode_writes(code);
             Answer { can_decode: n64::cheats::can_decode(code), decode: writes.clone().and_then(|w| n64::cheats::one_byte(&w, code)), compare: Ok(None), writes: writes.map(Some) }
@@ -265,6 +271,16 @@ pub fn codecs_json() -> String {
     let mut out = String::new();
     json::write_compact(&mut out, &object(vec![("codecs", Value::Array(codecs)), ("systems", Value::Array(systems))]));
     out
+}
+
+/// Galoob's Game Genie cipher of the Game Boy and the Game Gear, over a code's six or nine hex digits, upper case: the
+/// address with its top digit last and inverted, the value the first two digits, and for nine digits the reference
+/// from the seventh and ninth, rotated right by two and XORed with $BA (Mercury_Cheats.md §2, EmuSen_Cheats.md §11).
+pub(crate) fn genie_cipher(d: &[char]) -> (i32, u8, Option<u8>) {
+    let n = |i: usize| hex_value(d[i]);
+    let address = ((n(5) ^ 0x0F) << 12 | n(2) << 8 | n(3) << 4 | n(4)) as i32;
+    let reference = (d.len() == 9).then(|| ((n(6) << 4 | n(8)) as u8).rotate_right(2) ^ 0xBA);
+    (address, (n(0) << 4 | n(1)) as u8, reference)
 }
 
 /// Hex digits as `Uri.IsHexDigit` takes them: ASCII only.

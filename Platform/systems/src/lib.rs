@@ -16,6 +16,7 @@ pub mod nes;
 pub mod openvgdb;
 pub mod probe;
 pub mod psx;
+pub mod sms;
 pub mod snes;
 
 use emusen_dotnet::json::{self, Value};
@@ -423,7 +424,9 @@ mod tests {
             assert_eq!(table.iter().filter(|s| s.extensions.contains(e)).count(), 1, "{e} is one system's, so routing needs no recogniser");
         }
         assert!(!crate::probe::recognises("sms") && !crate::probe::recognises("sg1000"));
-        assert_eq!((sms.byte_order.as_deref(), sms.cheat_space.as_deref(), sms.media.len()), (Some("little"), None, 0));
+        assert_eq!((sms.byte_order.as_deref(), sms.cheat_space.as_deref(), sms.media.len()), (Some("little"), Some("RAM"), 0));
+        assert_eq!((sms.cover_aspect, sg.cover_aspect, sg.cheat_space.as_deref()), (1.4, 1.4, Some("RAM")), "stage 7's values, Endou_Native.md §14");
+        assert_eq!(crate::cheats::PAIRS.iter().filter(|p| p.1 == Some("sms.par") && p.2 == Some("sms.gg")).map(|p| p.0).collect::<Vec<_>>(), ["sms", "sg1000"]);
     }
 
     #[test]

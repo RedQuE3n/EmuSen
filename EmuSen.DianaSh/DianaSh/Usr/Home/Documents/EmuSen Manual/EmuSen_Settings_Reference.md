@@ -9030,3 +9030,23 @@ shorter, since there may be two.
 | `WindowFitAuditTests.The_firmware_page_in_preferences_is_whole_at_both_sizes` (4) | with a chosen folder holding one file and `home/Firmware` another and one of the wrong size: nothing cut or overlapping at 1280 × 800 and 1920 × 1200 on both looks; on the desktop the folder row's box, Browse and Clear reached by the pad; on the big screen every row's footer whole, the folder's row a text row with Select in its hints and the others without |
 | `EsdeSettingsMenusTests.The_firmware_page_under_a_theme_is_a_menu_of_rows_the_pad_reads` (2) | under a theme, the folder's row a text row whose A opens the text popup and whose B puts it away with nothing kept |
 | LunaP `PathPickerTypingTests` (2 new) | Clear and a committed blank box picking the empty string; no Clear on a row that is not clearable |
+
+### 4.122 The Master System and the SG-1000 offered to players (2026-10-19)
+
+*Decided 2026-10-19: the Master System and the SG-1000 are offered to players* (`Endou_Plan.md` §7, `Endou_Native.md`
+§14), Endou's stage 7 gate met. The build no longer marks Endou in development, so every build has two shelves of their
+own, "Master System (Endou)" for `.sms` and "SG-1000 (Endou)" for `.sg`, and a tab for each in Controller Bindings,
+Active Cheats, Graphics Settings and Shaders. The Graphics Settings tab is core info's schema: **Model** (from the
+region; Mark III, Master System, Master System II, SG-1000), **Region** (from the cartridge; Japan, the Americas,
+Europe, Brazil) and, on the Master System's tab, **Master System BIOS** and **Master System II BIOS**: Endou's open boot
+program by default, or the player's own image from a firmware folder, each choice with its accuracy words
+(`Endou_OpenBoot.md` §5, §8). The firmware page lists the two BIOS files as optional, the first with the MD5s of the
+two released 8 KiB images, so a file under another name is found by its content (`EmuSen_Firmware.md` §7). Cheats: the
+Pro Action Replay and the Game Genie (`EmuSen_Cheats.md` §11). Battery saves under `Saves/Master System` and
+`Saves/SG-1000`.
+
+**The player selector in Controller Bindings** moved below the drawing, one on each console's page, since nine
+console tabs leave the tab strip no room for it (`EmuSen_Input.md` §8.4); the Active Cheats window's tab strip lost its
+bottom margin so that its list keeps two rows when the strip wraps (`EmuSen_InterfaceSpec.md` §6.3.9). The Master
+System and the SG-1000 are drawn on the NES's pad until LunaP has their own (`Endou_Native.md` §14.3).
+

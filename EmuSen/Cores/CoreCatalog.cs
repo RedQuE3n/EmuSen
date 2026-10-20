@@ -39,10 +39,14 @@ namespace EmuSen.Cores
             var registry = new Dictionary<string, CoreDescriptor>(StringComparer.OrdinalIgnoreCase);
             foreach (var (key, core) in CatalogKeys) registry[key] = core;
             foreach (var row in discovered)
-                foreach (string? name in new[] { row.Console, DiscoveredFor(row.Console)?.EngineName })
+                foreach (string? name in new[] { row.Console, FirstOfferedConsole(DiscoveredFor(row.Console)) == row.Console ? DiscoveredFor(row.Console)?.EngineName : null })
                     if (name is { Length: > 0 } && !name.Any(char.IsWhiteSpace)) registry.TryAdd(name.ToLowerInvariant(), row);
             return registry;
         }
+
+        // The console of the first system an engine's info offers, which its name reaches, as Endou's reaches the Master System - see Endou_Native.md §14.
+        private static string? FirstOfferedConsole(Native.DiscoveredCore? core) =>
+            core?.Info.Systems.FirstOrDefault(s => !s.Development) is { } system ? Crystal.Systems.SystemPacks.For(system.Id)?.Entry.Console : null;
 
         // What `cheat db prune` keeps: the catalog's systems and those of the consoles discovery adds.
         public static IReadOnlyCollection<string> SupportedCheatSystems =>

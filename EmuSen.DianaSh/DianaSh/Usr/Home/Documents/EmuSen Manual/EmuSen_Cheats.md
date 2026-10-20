@@ -2,7 +2,7 @@
 
 How a typed cheat code becomes a running cheat, and what a core has to supply to take part. The mechanism itself — write widths, byte order, repeat runs, bit positions, the master switch — is `man cheat` and `CheatRegistry`'s own header; this document is only about the **seam between a core and the cheat engine**, which is what a second core exercised for the first time.
 
-Per-console behaviour: `Hardware/Nintendo/Moon - NES/Moon_Cheats.md` for the NES, `Venus_Memory.md` §6 for the SNES, `Hardware/Nintendo/Mars - N64/Mars_Cheats.md` for the N64, §9 below for the Genesis.
+Per-console behaviour: `Hardware/Nintendo/Moon - NES/Moon_Cheats.md` for the NES, `Venus_Memory.md` §6 for the SNES, `Hardware/Nintendo/Mars - N64/Mars_Cheats.md` for the N64, §9 below for the Genesis, §10 for the PlayStation, §11 for the Master System and the SG-1000.
 
 ---
 
@@ -173,6 +173,52 @@ auto-detect codec claims every such code, so no PlayStation code reaches that pa
 kind is `RomPatch` (`ChtFile.ClaimsPatch`); every console's patch codec is that kind, so nothing else changes. It was
 argued from the code, not shown by a failing import, since the configuration that would have shown it was never
 committed.
+
+## 11. The Master System's and the SG-1000's two formats (2026-10-19)
+
+*Built at Endou's stage 7 (`Endou_Native.md` §14.5), in `emusen-systems`' `sms::cheats` and its C# twin
+`Crystal/Systems/Sms/SmsCheatFormats.cs`, shared by the Master System and the SG-1000.* Read for them: SMS Power!'s
+"Pro Action Replay" and "Game Genie" pages, their "Code format" sections; the libretro database's two folders, for
+their codes' forms. No emulator's source was read.
+
+**The Pro Action Replay** (`sms.par`, the auto-detect codec, a RAM poke in `RAM`). The page: "`00AA AADD` ... The
+first two digits seem to have no effect; the middle four are the address (in the Z80 memory map) of the selected RAM
+variable; the last two digits are the value which is written there every frame", the address "always between $C000 and
+$DFFF". Taken: eight hex digits, dashes and spaces between them; the first two not read; an address from `$C000`,
+folded through the work RAM's 8 KiB mirror to its offset in `RAM` (the SG-1000's 1 KiB holds every address the
+database's SG-1000 codes name, `$C000`–`$C3FF`); an address below `$C000` refused in words.
+
+**The Game Genie** (`sms.gg`, the explicit codec, a ROM patch). The page: `DDA-AAA-RRR`, the value the first two digits,
+the address the next four with "the last digit [moved] to the start" and its bits inverted, the last three optional, the
+first and third of them "rotated right by 2 bits" and XORed with `$BA` giving the reference byte, the original value
+the patch expects. That is the Game Boy Game Genie's cipher digit for digit (`Mercury_Cheats.md` §2), so both codecs now
+call one owner of it, `genie_cipher` in Rust and `GenieCipher` in C#, each with its own words for a refusal. The
+reference is the patch's compare (§3), so a nine-digit code patches only where the cartridge holds the byte it names.
+The core takes the patches over `$0000`–`$BFFF`, the cartridge's slot area, the reads the device sits on.
+
+**Nothing but digits, dashes and spaces.** The Game Boy's codecs keep the hex digits of a code and drop the rest, so in
+the Master System's database `00D5-BD??`, a Pro Action Replay code whose value the player picks, would read as the six
+digits `00D5BD`, a Game Genie code. The Master System's codecs refuse a code with anything else in it; before the rule, 122 such
+codes of the database (88 `xxxx-xx??` and 34 `xxxx-xxXX`) loaded as patches [M].
+
+**Measured against the libretro database** (the folders a published build carries, through `ChtFile` with both codecs,
+`SmsCheatFormatsTests.The_databases_master_system_and_sg_1000_files_import`, opt-in by `EMUSEN_SMS_CHEAT_DB`,
+2026-10-19):
+
+| Folder | Files | Entries load | Pokes | Patches |
+|---|---:|---:|---:|---:|
+| Sega - Master System - Mark III | 724 | 3,307 of 4,749 (69.6%) | 3,282 | 25 |
+| Sega - SG-1000 | 26 | 40 of 70 (57.1%) | 40 | 0 |
+
+Of the Master System's 1,442 entries that do not load, 1,181 are nine-digit Game Genie codes, skipped because a
+`.cht` entry has nowhere to keep a compare (§8); typed in the Active Cheats window they work. The rest are 88 `xxxx-xx??`,
+34 `xxxx-xxXX`, 29 `xxxx-xxx?` and 27 `xxxx-xxxX` (a value the player picks), 68 empty, 6 `xxxx:XX` and 2
+`xxxxxx:xx` (other emulators' forms), 3 addresses below `$C000` and 2 notes. The SG-1000's 30 are 29 nine-digit Game
+Genie codes and one empty entry.
+
+**What is argued, not measured**: the RAM's mirror for an address from `$E000`; the Game Genie on a console with an
+export BIOS, whose checksum reads the patched byte (`Endou_Native.md` §14.4); the SG-1000's codes, written for emulators
+of a console no device was sold for.
 
 ## The two combinations `AddCheat` refuses
 

@@ -465,3 +465,21 @@ window has is audited. The fit audit and the recorded rules find nothing in any 
 Outside the audit, `memcard.golden` (DianaSh's corpus) was re-recorded for that file alone with
 `EMUSEN_DIANASH_GOLDEN=record`. Its two changed lines are `memcard ls notes.txt`'s list of known media, which gained
 ".mpk (Controller Pak)" with 5000bc5a, and `memcard new`'s "a formatted backup RAM cartridge", which said "backup ram".
+#### 6.3.9 Two consoles more: the Master System and the SG-1000 offered (2026-10-19)
+
+Offering Endou's two consoles (`Endou_Native.md` §14) added two tabs to every console tab strip. The fit audit then
+failed 16 of its cases: the Controller Bindings window's strip ran under the player selector at its right end (14
+cases, both sizes), and the Active Cheats window's strip wrapped to a second row, leaving its list 75 design pixels high
+at 1280 × 800 and 114 at 1920 × 1200 with a long cheat, under the two rows of 42 the audit requires. The selector moved
+below the drawing, one on each console's page (`EmuSen_Input.md` §8.4), and the Active Cheats strip's bottom margin of
+12 went. The audit then passes in all 518 cases.
+
+The recordings were taken again: 156 changed and 28 new, Controller Bindings' two new tabs in its seven cases at both
+sizes. Read with the controls' ids, their rectangles and the focus edges taken out, the differences are these, and
+nothing else **[M]**: the tabs "SG-1000" and "Master System" in every console tab strip (Controller Bindings, Active
+Cheats, Graphics Settings, Shaders), the tabs after them moved; the player selector, its label and Use Player 1's gone
+from the Controller Bindings views, now below the drawing out of view; the rows a wrapped strip pushes below their
+scroller's view in Graphics Settings (the SNES's SA-1 setting, the NES's console help, the card and backup RAM modes'
+help, a crop's help) and Active Cheats (its last two cheats); the new consoles' rows in Collection Settings'
+list and the Cheat Database's systems, below their views; and the pad's paths through all of these.
+

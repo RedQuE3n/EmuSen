@@ -200,7 +200,7 @@ fn a_key_on_damps_and_restarts_the_phase() {
     run(&mut o, 2);
     assert_eq!(o.slots[1].stage, Stage::Damp);
     let mut n = 0;
-    while o.slots[1].stage == Stage::Damp {
+    while o.slots[1].stage == Stage::Damp && n < 2000 {
         run(&mut o, 1);
         n += 1;
     }
@@ -234,6 +234,14 @@ fn a_fast_attack_weighs_each_sample() {
     assert_eq!(rate51, [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 2], "three groups of four doubled at rate 51");
     o.counter = 0;
     assert_eq!(o.attack_weight(56, 1), 4);
+}
+
+// §3.5: below rate 48 a decay steps on the fourth sample of its tick: rate 16's ticks are 512 samples.
+#[test]
+fn a_slow_decay_steps_on_its_tick_s_fourth_sample() {
+    let mut o = Opll::new();
+    let at = |o: &mut Opll, c: u32| { o.counter = c; o.step(16, 1) };
+    assert_eq!([511, 512, 513, 514, 515].map(|c| at(&mut o, c)), [0, 0, 0, 1, 0]);
 }
 
 // §3.5: from rate 48 a decay steps on some samples of each four, by the rate's low bits.
@@ -300,6 +308,21 @@ fn a_modulator_restarts_its_phase_with_its_carrier() {
     o.sample();
     assert_eq!((o.slots[0].stage, o.slots[1].stage), (Stage::Damp, Stage::Attack));
     assert_eq!((o.slots[0].phase, o.slots[1].phase), (4608, 4608), "both restarted with the carrier's attack");
+}
+
+// §3.5: a modulator whose damp ends before its carrier's starts its attack but keeps its phase running.
+#[test]
+fn a_modulator_s_own_damp_end_keeps_its_phase() {
+    let mut o = chip(&[0x21, 0x21, 0x10, 0, 0xF0, 0xF0, 0x0F, 0x0F], 0x120, 4);
+    run(&mut o, 100);
+    o.slots[0].stage = Stage::Damp;
+    o.slots[0].level = QUIET;
+    o.slots[1].stage = Stage::Damp;
+    o.slots[1].level = 100;
+    let phase = o.slots[0].phase;
+    o.sample();
+    assert_eq!((o.slots[0].stage, o.slots[0].level, o.slots[1].stage), (Stage::Attack, 0, Stage::Damp));
+    assert_eq!(o.slots[0].phase, (phase + 4608) & 0x7FFFF);
 }
 
 // §3.5: a damp ends at level 124 and the attack starts from the level it reached; at rate 60 or more the attack's
@@ -382,7 +405,7 @@ fn every_instrument_and_drum_sounds_and_the_exact_ones_are_their_registers() {
         }
         assert!((0..4000).map(|_| o.sample().1).any(|v| v.abs() > 20), "drum {bit:02x}");
     }
-    for inst in [1u8, 2, 5, 6, 7, 8, 9, 10, 12, 13, 14] {
+    for inst in [1u8, 2, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15] {
         let play = |original: bool| {
             let mut o = Opll::new();
             for (i, &v) in INSTRUMENTS[inst as usize - 1].iter().enumerate() {

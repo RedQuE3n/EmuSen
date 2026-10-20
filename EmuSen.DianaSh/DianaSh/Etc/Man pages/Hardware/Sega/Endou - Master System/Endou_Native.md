@@ -1951,9 +1951,14 @@ the first by default (decided 2026-10-19, `Endou_Plan.md` §10 Q9). Their YM2413
 with its tables and tests, keeping the chip contract: the sound runs it a sample every 72 Z80 clocks and steps its sum
 into the synthesiser beside the PSG, port `$F2` choosing which sounds. Its rules come from Yamaha's application manual
 where it gives them and otherwise from Genesis Plus GX's `nuked` YM2413 run as a black box (`Endou_Opll.md`), which
-also measured the instrument ROM: five of the fifteen instruments equal to it exactly, the rest best fits. The
-referee the plan named, Nuked-OPLL built from its tarball and compared sample for sample, was not run: its bench is
-written and waits on the tester's approval to compile fetched code, so the gate's first line and D-2 stand open. The
+also measured the instrument ROM. **The referee the plan named, Nuked-OPLL built from its tarball and compared sample
+for sample, then ran on 2026-10-20 by the tester's leave (§16.16)**:
+
+- every synthetic voice is exact on channels 1-3;
+- thirteen of its rules were corrected;
+- D-2 and D-19 are settled;
+- twelve of the fifteen instruments are exact;
+- the drums and a few samples on channels 4-9 stay open (D-24). The
 Japanese Master System gets its BIOS setting and an open boot program that checks no header; the state is version 7,
 a version 6 state still loading where no FM unit is; the debugger lists the FM unit. FM games on the Japanese Master
 System follow the references' FM units as closely as the references follow each other (§16.10): on eleven games that switch the unit on, Endou's band envelopes correlate with the references' at 0.93-0.998 on ten, within or under 0.01 below the references' agreement with each other on eight, and at 0.73-0.79 on *Lord of the Sword*, whose music leans on the rhythm.
@@ -1993,19 +1998,28 @@ others, by the tester (§16.15).
 
 ### 16.5 The chip
 
-`Endou_Opll.md` is its record. In brief: a sample's outputs, then its envelopes, phases and LFOs; 19-bit phases; the
-OPL2's log-sine and exponent tables (D-2, argued); TL, VOL and Table III-5's key scale, its codes measured (D-18);
-envelope rates fitted to the black box's slopes, a damp at rate 48 before each attack and the phase restarted there,
-silence from level 124; the tremolo's 0-13 triangle over 13,440 samples and the vibrato's eight steps; the carrier
-taking the modulator's output of the sample before; the rhythm's drums on channels 7-9, sounding twice. The instrument
-ROM is measured (`Endou_Opll.md` §4); the rhythm's patches are best fits.
+`Endou_Opll.md` is its record. In brief, as held to the referee since 2026-10-20 (§16.16):
+
+- **The sample.** A sample's outputs, then its envelopes (each carrier before its modulator), phases and LFOs; 19-bit
+  phases.
+- **The tables.** The OPL2's log-sine and exponent tables (D-2, measured).
+- **The output.** Ones' complement outputs; the DAC as sign and top eight bits (D-19).
+- **Levels.** TL, VOL and Table III-5's key scale, its codes measured (D-18).
+- **The envelope.** Rates whose ticks and attack windows are the referee's. A damp at rate 12 to level 124, and the
+  attack from there, with the phase restarting at the carrier's damp end. The cut to 127 from level 124. The
+  modulator holding at key-off and reading the count a sample ahead.
+- **The LFOs.** The tremolo's 0-105 triangle without holds, and the vibrato's eight steps.
+- **Modulation.** The carrier takes the modulator's previous output with its lowest bit dropped.
+- **The rhythm.** Drums on channels 7-9, sounding twice.
+
+The instrument ROM is measured, twelve exact (`Endou_Opll.md` §4). The rhythm's patches are best fits.
 
 ### 16.6 The sound
 
 `sound.rs` owns the chip as an `Fm` beside the PSG: its run interleaves the PSG's changes and the FM's samples in clock
 order, each a step of the sum, so a frame allocates nothing (`tests/alloc.rs` now runs `programs/opll.s` on both FM
-consoles too: 0 in 720 frames). The FM's nine-bit sum is scaled by 3, so that a full sine on one channel is 0.59 of a
-full-volume PSG tone's fundamental, near the median of the references' 0.53, 0.56 and 1.53 (D-20). No analogue stage
+consoles too: 0 in 720 frames). The FM's sum in the DAC's units is scaled by 6 (by 3 in nine-bit units until D-19's
+rule of 2026-10-20), so that a full sine on one channel is 0.59 of a full-volume PSG tone's fundamental, near the median of the references' 0.53, 0.56 and 1.53 (D-20). No analogue stage
 is modelled, as for the PSG.
 
 ### 16.7 The state, version 7
@@ -2015,7 +2029,10 @@ keys and last two outputs, the sample counter, the tremolo, the noise, then the 
 level, 267 bytes; 26,209 bytes for a Japanese Master System with a plain board, pinned by
 `the_fm_unit_s_state_is_pinned_and_continues_the_sound`. A console without an FM unit has version 6's layout, so a
 version 6 state, which players have had since stage 7, loads there and machine info says so (`loads_from` 6 and 7).
-A state continues the FM's sound exactly.
+A state continues the FM's sound exactly. Its model byte is 0 for the Mark III, 1 and 2 for the
+two Master Systems, 3 for the SG-1000, 4 for the Game Gear (stage J1), 5 for the Mark III with the FM unit and 6 for the
+Japanese Master System. Before the merge with J1 the last two were 4 and 5, but no state of theirs was ever released.
+`the_fm_unit_s_state_is_pinned_and_continues_the_sound` pins the table.
 
 ### 16.8 The debugger
 
@@ -2034,11 +2051,11 @@ list, the allocation test and the state test. `examples/opllref.rs` holds the re
 
 | Gate item | Result [M] |
 |---|---|
-| The referee sample for sample on synthetic voices | **not run**: Nuked-OPLL's bench (`EmuSen.WiseMan/Reference/opll/`) compiles against `opll.h`; building `opll.c` from the fetched tarball waits on the tester's approval. In its place the black box of `Endou_Opll.md` §0: every rule of §3 there measured or argued, and five instruments equal to it exactly by recordings that differ only in data bytes |
+| The referee sample for sample on synthetic voices | **run 2026-10-20** (§16.16). 54 synthetic voices are exact, as are 40 random modulated ones, 640 for the key scales, 72 retriggers and 348 key-offs, all on channels 1-3. Channels 4-9 differ in a few samples (D-24), and the drums are open. *As first measured*: not run, the black box of `Endou_Opll.md` §0 in its place |
 | FM games against the references' audio | eleven export games that switch the FM unit on when they find it, run on the Japanese Master System, read in place, 900 frames with no input, against Genesis Plus GX with each of its YM2413 cores, Gearsystem and SMS Plus GX with their units on and their regions Japanese; each recording's twenty band envelopes from 2 s to 14 s correlated at the best lag within 1.5 s (Endou's lags of 11-15 windows are its open boot program's start) [M `games.py`]. The table below |
 | Nephrite's FM tests unchanged if the ROMs move | the ROMs did not move (D-2 open), so nothing of Nephrite changed and its tests were not in the blast radius |
 | The Model setting's two models; the Japanese default | offered (§16.3); Japan's default the Japanese Master System, its BIOS setting and open boot program (§16.4) |
-| The crate's tests | **108 of 108** in the library and `tests/alloc.rs` 3, on release; 21 of them new for the stage, `opll::tests` 15 |
+| The crate's tests | **108 of 108** in the library and `tests/alloc.rs` 3, on release; 21 of them new for the stage, `opll::tests` 15. After the referee and the merge with J1: **129 of 129** and `tests/alloc.rs` 4, `opll::tests` 26 |
 | WiseMan | `EndouTests` (three updated for the Japanese default), `FirmwareOverviewTests`, `EndouPlayersTests` with the library given, `CrystalDebugParityTests` and `CoreDebugViewTests` (one updated, the same reason): **53 of 53**. The Model setting's six choices and the third BIOS setting reach Mistress's sheets: `ThemedLibraryHostTests` 16 of 17 and `PadSettingsWindowTests` with the fit audit 590 of 615 (and the four long-preset cases), every failure the same on stage 8's build (`1f599218`), shader sheets of every console where the pad cannot reach Close (§16.15, question 6) |
 | The kit | in corpus form on `kit/sms-sample.txt`, 600 frames, four at a time: **33 of 33 images pass** with the core's cases (C23 "6 checksum(s) over 3 entries of core info and 3 of firmware_for"); `programs/opll.s` on the Japanese Master System and on the Mark III with the unit, each "EmuSen v1 compliant on this image"; `EndouTests.The_kit_passes_on_synthetic_cartridges` |
 | Seeded faults | 16, every one caught (§16.11) |
@@ -2111,17 +2128,23 @@ each of its three passes took 0.08 ms of it, by `examples/run.rs` on *Phantasy S
 0.39 ms a frame). P1's budget with the OPLL is 0.9 ms; the heaviest
 game here is 0.374.
 
+The referee's rules cost nothing measurable. *Phantasy Star* on the Japanese Master System was run with
+`examples/run.rs`, 3,000 frames, alternately on the build before them (`a2160ad1`) and after, under a light load: 0.356
+and 0.332 ms a frame before, 0.325 and 0.327 after [M 2026-10-20].
+
 ### 16.13 Open
 
-- The referee's comparison, D-2, and the instruments' exactness where their residual is not 0 (`Endou_Opll.md` §4, §7).
-- The rhythm's patches and noise, best fits; the DAC's small signals (D-19); the attack's last steps.
+- The drums, and a few samples on channels 4-9 (D-24, `Endou_Opll.md` §3.8, §3.9).
+- Instruments 3, 4 and 11, not yet exact on the referee (`Endou_Opll.md` §4).
+- The game correlations of §16.10 were measured before the referee's rules and were not rerun.
 - The FM's level against the PSG's (D-20) and the analogue stage, for want of a recording.
 - The FM's channels in the views; `MUTES`.
 - The earlier stages' open items stand.
 
 ### 16.14 What was read for this stage
 
-No emulator source, no firmware image, no SMS_MiSTer RTL; of Nuked-OPLL its header alone. Read: `Endou_Plan.md`,
+No emulator source, no firmware image, no SMS_MiSTer RTL; of Nuked-OPLL its header alone, its `opll.c` built and run
+unread from 2026-10-20 (§16.16). Read: `Endou_Plan.md`,
 `Endou_Native.md`, `Endou_Disputes.md`, `Endou_References.md`, `Endou_OpenBoot.md`; `Nephrite_OperatorTables.md` and
 `Nephrite_Disputes.md` D-16 to D-18; the documents of `Endou_Opll.md` §0; `emusen-native`'s `steps.rs`; Endou's own
 crate. The library's games only through the probe, the kit and `examples/screen.rs`, in place.
@@ -2154,3 +2177,83 @@ crate. The library's games only through the probe, the kit and `examples/screen.
    a Close button the pad cannot reach on the shader sheets of every console. Nothing of Endou's is on those sheets.
    Recommended: a step outside Endou's stages to find which LunaP or Mistress change it follows.
 7. **The go for stage 10** (the Paddle, the Sports Pad and the 3-D glasses), as the plan has it.
+
+*Answered 2026-10-20:*
+
+1. Approved, and run (§16.16).
+2. Black-box measurement is the table's provenance; the referee has since confirmed twelve entries.
+3. 0.59 is kept.
+6. Done on WiseMan in `6adcdf04`.
+
+Questions 4, 5 and 7 stand. Two more follow from the referee:
+
+8. **D-2's tables to a Beryl crate.** The referee shows the OPL2's tables in every entry an output can show, so
+   `Endou_Plan.md` §3.2 has them move to a Beryl crate that Nephrite and Endou both read. That touches Nephrite's crate
+   and its tests. Recommended: a small step of its own, Nephrite's FM tests in its blast radius.
+9. **The slot order and the drums (D-24).** Recommended: observe the referee's pins cycle by cycle for each slot, model
+   the order that the drums' early start and channels 4-9 need, then fit the three rhythm patches and the three
+   instruments not yet exact.
+
+### 16.16 The referee (2026-10-20)
+
+The tester approved compiling Nuked-OPLL on 2026-10-20 (question 1 of §16.15). `build-opll.sh` built `opll.c` into the
+probe's cache, unread, and `tb_opll.c` drives it through the header. Two of the bench's settings were measured, not
+assumed (`Endou_Opll.md` §7): where its sample starts (cycle 5) and where its data write falls (call 6). With them,
+every channel answers a write one sample later than Endou's chip, which applies writes between samples.
+
+What it found, each rule in `Endou_Opll.md` §3 with the voice that showed it:
+
+- **Output.** Ones' complement outputs and negative zeros, and the DAC as sign and top eight bits. This settles D-19:
+  a quiet note's −4 floor is the box's "louder than truncation".
+- **Modulation.** Modulation and feedback drop the outputs' lowest bit.
+- **The phase step.** It halves before the multiple. The stage's own seeded fault F5 had been the chip's rule.
+- **The envelope's timing.** A carrier reads the sample count plus one, a modulator plus two, and the modulator also
+  reads the LFOs a sample ahead.
+- **The attack.** It steps on four running samples of each tick at slow rates, and weighs every sample at fast ones.
+  Fast decays step by groups of four.
+- **Damp and cut.** The damp runs at rate 12 with the key scale and ends at 124, and the attack starts from there. A
+  falling envelope at 124 is cut to 127, and only level 127 is silent.
+- **Key-off.** The modulator holds its level. Only a percussive tone without SUS steps on the key-off's update. A
+  modulator restarts its phase when its carrier's damp ends.
+- **The tremolo.** It runs 0-105 with no holds.
+
+D-2 is measured: every one of the 1,010 table changes that an output can show alters a sample. The instrument table
+was refitted on the referee, and twelve of its fifteen instruments are now exact (`Endou_Opll.md` §4).
+
+Seeded faults for the new rules, each made in `src/opll.rs`, `opll::tests` run, and the file restored and compared
+byte for byte (`seed.py`):
+
+| # | Fault | Caught by |
+|---|---|---|
+| F17 | two's complement on the negative half | `a_sine_at_full_level_peaks_at_the_operator_s_full_scale` |
+| F18 | a half wave's negative half a positive zero | `a_sine_at_full_level_peaks_at_the_operator_s_full_scale` |
+| F19 | the DAC as twelve bits shifted by three | `the_dac_is_sign_and_magnitude_offset_by_one` |
+| F20 | the carrier's modulation keeping its lowest bit | `the_carrier_takes_the_modulator_s_output_of_the_sample_before` |
+| F21 | feedback as the sum shifted by 9 - FB | `feedback_halves_each_output_before_the_sum` |
+| F22 | the phase step without block 0's lost half | `the_phase_step_keeps_half_a_unit` |
+| F23 | the attack's earlier step, (level >> 2) + 1 | `a_slow_attack_steps_four_samples_running` |
+| F24 | a slow attack stepping on a tick's first sample alone | `a_slow_attack_steps_four_samples_running` |
+| F25 | the groups of four read a group late | `a_fast_decay_steps_by_its_groups` |
+| F26 | a decay stepping on a tick's first sample | `a_slow_decay_steps_on_its_tick_s_fourth_sample` |
+| F27 | the damp at rate 48, the stage's earlier rule | `a_key_on_damps_and_restarts_the_phase` |
+| F28 | the damp ending at 127 | `a_damp_ends_at_124_and_the_attack_starts_there` |
+| F29 | no cut at level 124 | `a_slot_reaching_level_124_is_cut_to_silence` |
+| F30 | the modulator released at key-off | `a_key_off_releases_the_carrier_alone` |
+| F31 | a percussive tone's key-off update not stepping | `a_key_off_releases_the_carrier_alone` |
+| F32 | a modulator restarting its phase at its own damp's end | `a_modulator_s_own_damp_end_keeps_its_phase` |
+| F33 | the tremolo held at its ends | `the_lfos_have_their_measured_shapes` |
+| F34 | the modulator reading the count with its carrier | `a_modulator_reads_the_count_a_sample_ahead` |
+| F35 | an instant attack starting its decay at the damp's end | `a_damp_ends_at_124_and_the_attack_starts_there` and the two modulator tests |
+
+All nineteen caught. Three were first missed, and their tests were added or strengthened, then the faults rerun:
+F26, F32, and F35 (whose first seeding changed nothing the chip could show). F27's first form, a damp of rate 0, hung
+the damp test, so the test's loop is now bounded. The scratch's `seed.py`, `seed2.py` and `seed3.py` hold them.
+
+F5 of §16.11 was "the phase step truncated before the multiple", and the referee shows that it is the chip's rule.
+F22 above is its inverse, the stage's first rule. The table of §16.11 is kept as it was run.
+
+The blast radius on the merged tree (`blast.sh WiseMan endou-s9`), run once on 2026-10-20 [M]:
+
+- the crate, 129 of 129 and `tests/alloc.rs` 4;
+- `CoreDebugViewTests`, `EndouPlayersTests` with the library given, `EndouTests` and `FirmwareOverviewTests`, 38 of 38;
+- the kit on `kit/sms-sample.txt`, 600 frames four at a time: the core's cases pass and 33 of 33 images pass.

@@ -74,6 +74,11 @@ No emulator's source and no RTL was opened (`Endou_Plan.md` §1.4).
 The `GENESIS` variant is never a `Vdp`: the 315-5313 is Nephrite's chip, and only its mode 4's composition is shared.
 
 The Game Gear's window, the central 160 by 144 of the picture [R "GG VDP"], is `GG_WINDOW`, for the Game Gear's stage.
+*At the Game Gear's stage J1 (2026-10-20):* `gg_window_top(height)` places it, lines 24-167 of a 192-line display and
+40-183 of a 224-line one, the window keeping its place in the frame (`Endou_Disputes.md` D-21); GG mode keeps the
+315-5246's heights, as the four references that run a Game Gear agree. Endou's module `gg` draws the window and, for a
+Master System cartridge, the LCD's shrink (D-22), since both need the console's colours, which this crate never makes
+(`Hardware/Sega/Jadeite - Game Gear/Jadeite_Native.md` §3).
 
 ### 2.3 Modes and heights
 
@@ -179,7 +184,8 @@ variant differs only by the flags of §2.2.
 ### 4.4 A blanked display
 
 Register 1's bit 6 clear shows the backdrop over the active display [A: MacDonald's §11 describes the border, not a
-blanked picture; every reference shows the backdrop]; no sprite collides. In the TMS9918's modes the backdrop is
+blanked picture; every reference shows the backdrop]; no sprite collides. `Vdp::border` gives that entry, which the
+Game Gear's LCD also shows for the border lines a Master System cartridge's picture is padded with (J1, 2026-10-20). In the TMS9918's modes the backdrop is
 register 7's colour code [R TI §2.4], and the sprite system is inactive [R Young §1.2].
 
 ## 5. The dot-stamped renderer
@@ -218,6 +224,10 @@ latch, a write at its dot, the mask and a blanked display, sprites over the back
 collision at their dots, the scrolls' latches, the heights per variant, the state's round trip, and skipping's
 neutrality). Sixteen faults were seeded across the crate and Endou (`Endou_Native.md` §10.9); the four the tests here
 missed at first, or caught only through FluBBa's test, each gained a test.
+
+*At the Game Gear's stage J1 (2026-10-20)* it has 39: two for the 315-5378 (GG mode's 224-line display with its
+taller tables and its window's place; the TMS9918's codes as CRAM's entries 16-31 in words and in bytes, and the
+border), beside stage 3's test of the latch.
 
 On the machine, `Endou_Native.md` §10.7: FluBBa's *SMS VDP Test*, its 54 Master System cases, all pass on the
 315-5124 and the 315-5246, NTSC and PAL, and Endou's own programs.

@@ -92,6 +92,13 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   `programs::a_program_s_picture_is_its_tiles_sprite_scroll_mask_and_mid_frame_colour` (a digest for each chip) and
   `EndouTests.The_vdp_draws_a_synthetic_program_s_picture`.
 - Implemented in: the stage 3 commit, as the equal steps; the stage 4 commit, the 315-5124's blue.
+- *Read at the Game Gear's stage J1 (2026-10-20):* the Game Gear's GG mode has four bits a component [R MacDonald §5;
+  Sega's Game Gear VDP manual, "Color RAM": "Four bits each of the 12-bit data are assigned to R, G and B"]. No document
+  read gives the LCD's levels for them. `beryl-sms-colours`' `gg_colour` shows each at sixteen equal steps, 17 apart,
+  the four-bit form of this entry's equal steps, **argued**; a Master System cartridge's `--BBGGRR` entries on the Game
+  Gear take the 315-5246's table, the chip being "identical to an SMS2 VDP" but for GG mode [R SMS Power!'s "GG VDP"].
+  What the panel makes of either is the LCD model's question (`Endou_Plan.md` §2.5), not the VDP's. Pinned by
+  `beryl-sms-colours`' `a_game_gear_word_is_red_green_and_blue_from_its_low_bits_at_equal_steps`.
 
 ### D-2. OPEN. The YM2413's operator ROMs: whether its log-sine and exponent tables are the OPL2's, entry for entry
 - Opened: 2026-10-19, at stage 0. *OPLx decapsulated* gives the YM3812's two 256-entry ROMs, read from its die.
@@ -431,3 +438,101 @@ outside. A dispute in a Beryl crate goes to that crate's record page.
   `a_header_inside_the_range_is_left_out_of_the_sum`, `the_export_check_refuses_in_words`;
   `media::tests::the_checksum_leaves_out_the_header_and_stops_at_the_coded_size`.
 - Implemented in: the stage 6 commit (`src/boot/ram.s`, `media::checksum`).
+
+### D-21. The Game Gear's VDP in GG mode: M1 and M2 give the 224-line display as on the 315-5246, and the LCD's window stays where it is in the frame, display lines 40-183
+- Opened: 2026-10-20, at the Game Gear's stage J1, by a sentence open to two readings. MacDonald §6: "If the GameGear is
+  in GG mode, it's resolution is fixed and does not change when the extended resolutions are used. However, the
+  differences in sprite and background processing are still used. (e.g. end of sprite list marker doesn't work,
+  background starts at $0700 offsets, etc.)" Read one way, the chip keeps a 192-line display (its counters and frame
+  interrupt) and only the tables change; read the other, the chip makes a 224-line display and the LCD, whose size is
+  what is "fixed", shows 160 by 144 of it. Neither says where the window falls in a 224-line display.
+- Documents read: MacDonald's `msvdp` §6, §7 and §14; SMS Power!'s "GG VDP" (the window "the central 160×144 pixel
+  section"); Sega's Game Gear VDP manual, "Effective area and LCD display area" ("Line 24 and line 167 are equivalent to
+  the top and bottom lines, respectively, on the LCD screen", for the 192-line display) and its name table figure (cells
+  102-121 of row 3, columns 6-25); SMS Power!'s "Game Gear LCD" (a Master System cartridge's mode: the LCD shows the
+  same 218 lines of the frame whichever height, D-22).
+- Test program: `programs/gg.s` asks for 224 lines from its frame 30 with a name table that marks the old window, and
+  keeps the V counter read in its frame interrupt. **The first reading was built first** (the display held at 192, the
+  window at lines 24-167). On the four references that run the Game Gear as a 160 by 144 picture (Genesis Plus GX,
+  Gearsystem, SMS Plus GX, PicoDrive) [M 2026-10-20]: every one read the V counter as `$E1` in its frame interrupt, a
+  224-line display's, against `$C1` on Endou, and showed lines 40-183, about 6,000 pixels from Endou's picture each;
+  BlastEm, which shows its whole frame, placed the window otherwise (4,640 pixels from the conclusion's picture).
+- Referee: none run; SMS_MiSTer cannot be elaborated (`Endou_Native.md` §11.11).
+- Conclusion: **the second reading, argued:** GG mode is no exception to the 315-5246's heights (224 lines, not 240, as
+  MacDonald §14 has it for both modes); what is fixed is the LCD's window, which keeps its place in the frame, so that
+  a 224-line display, starting 16 lines higher in the frame than a 192-line one [R MacDonald §14: the 192-line display
+  has "a 16 line overscan area at the top and bottom"], shows it from display line 40. It is the same rule as D-22's,
+  that the LCD samples a fixed part of the frame, and it agrees with the four references. The first reading is
+  retired: it was a guess that the references contradicted, and nothing in a document preferred it. No game known to
+  this page uses the 224-line display in GG mode, so the rule matters to test programs and to games not yet found.
+- Pinned by: `beryl-sms-vdp`'s `the_game_gear_s_own_mode_takes_the_224_line_display_and_its_window_stays_in_the_frame`;
+  `endou`'s `gg::tests::a_game_gear_program_shows_its_window_in_twelve_bits_and_moves_it_for_224_lines`.
+- Implemented in: the J1 commits (`beryl_sms_vdp::gg_window_top`, `endou::gg::window`).
+
+### D-22. The Game Gear's LCD in a Master System cartridge's mode: 218 lines of the frame onto 146 rows, three lines into two with weights in sixths, three columns into two by their colour elements
+- Opened: 2026-10-20, at stage J1, by three documents that disagree on the vertical and are thin on the weights.
+  MacDonald §14: "I don't know how the GG modifies the display to pack 224 lines of graphics into just 144 lines, but it
+  seems like some rows are skipped"; horizontally "only the middle 240 pixels are displayed", two of each LCD pixel's
+  three colour elements standing for an SMS dot. SMS Power!'s "Game Gear LCD" (modified 2022-09-06): a 160 by 146
+  panel; the 192-line display "padded with 13 rows of border color at the top and 13 at the bottom to give 218 lines";
+  the 224-line display less three rows at each end, 218 lines; "scaled down to fit the 146 lines of the display";
+  vertically "not incrementing the Y value at every third row, additionally, a duplicate pixel is rendered at Y + 1 for
+  each third pixel"; horizontally `[RGB]1 [RGB]2 [RGB]3 = [RG1B2] [R2GB3]`. SMS Power!'s "Pixel Aspect Ratio": the
+  central 240 by 192 "vertically four source pixels are spread across three output pixels (with some blurring)",
+  "shown on the central 160x144 pixels of the screen".
+- Documents read: those three; and the source the LCD page cites, SMS Power!'s forum topic 9562, "Game Gear SMS mode
+  video scaling" (read 2026-10-20; `Endou_References.md` §6g): Maxim's account of the columns (2007-01-09, after
+  MacDonald); **benryves's measurements from photographs of a Game Gear** (2007-01-10): on the 224-line display lines
+  0-2 and 221-223 "do not appear to have any influence", line 3 "appears as the top line of the LCD", three lines make
+  two rows of the panel and a lit line lights one row brightly and its neighbours dimly or two rows alike, by its place
+  in the three; his two diagrams of a single lit line's response, one for each height; his weights, "a guess", of 1/6,
+  1/3, 1/3 and 1/6 for one row and 1/3 three times (192) or 1/6, 1/3, 1/3, 1/6 (224) for the other; and **enik's
+  comparisons with photographs** (2016-05-15): benryves's 192-line weights "do not look right" against a photograph of
+  Altered Beast, whose one-line hyphen is shown "using 2 pixel height", which the 224-line weights give, and the guess
+  that "the scaling is done by the LCD circuit without knowing which screen mode is set inside the VDP chip".
+- Test program: `programs/ggsms.s`, every eighth line and column lit on black in each phase of three, a blue border,
+  192 lines then 224.
+- Referee: none. The black-box references show a Master System cartridge on a Game Gear unscaled, 256 by 192 or 224
+  (Gearsystem's and SMS Plus GX's Game Gear modes for Master System cartridges, measured 2026-10-20), so they grade the
+  VDP's picture before the LCD, not the scaling.
+- Conclusion: **argued, from the documents**, each part reversible in `endou::gg`:
+  1. The columns: 8-247, each three into two as `R1 G1 B2` and `R2 G3 B3`. The three documents and Maxim agree.
+  2. The lines: a fixed window of the frame, 218 lines, which is the 224-line display's lines 3-220 and the 192-line
+     display's lines -13 to 204, its border's 13 at each end. This is the LCD page's account, and with one rule for
+     both heights it gives exactly enik's weights for the 192-line display (its line 0 on rows 8 and 9 alike, the
+     hyphen's two rows) and benryves's 224-line ones; benryves's own 192-line diagram, which places each line half a
+     row from that, is the one account it overrides, as enik found against photographs. It is also D-21's rule.
+  3. The weights: of each three lines from the window's first, the panel's even row is 1/6, 1/3, 1/3, 1/6 of the line
+     before and the three, its odd row 1/6, 1/3, 1/3, 1/6 of the three and the line after: benryves's 224-line
+     weights, which reproduce both diagrams' two levels, "bright" 1/3 and "dim" 1/6, and conserve each line's light
+     (2/3 of a row each, three into two). The ratio of the levels is **unmeasured**: the photographs show two levels.
+     The arithmetic is on the components' 8-bit levels, rounded to nearest.
+  4. The rows: 146, the panel's (the LCD page), not 144 (the aspect ratio page): with 144, line 220 could not light a
+     row, which benryves saw it do. One disagreement remains and is **open**: with 146 rows, line 221 is bright on the
+     last row, and benryves saw "no influence" from it; with 145 it would not be, and the LCD page's count would be
+     wrong by one. The border's eight rows at each end of a 192-line display, benryves's "top 8 and bottom 8", come
+     out of 146.
+  5. The border rows take register 7's backdrop as the frame's picture ends (`Vdp::border`); a game that changes the
+     backdrop between the display and the border shows the later colour throughout: a **named loss**.
+- Pinned by: `gg::tests::three_columns_become_two_by_their_colour_elements`,
+  `a_224_line_display_s_lines_light_the_rows_benryves_measured`, `a_192_line_display_is_letterboxed_by_its_border`,
+  `a_master_system_cartridge_is_shrunk_onto_the_panel_in_both_heights`.
+- Implemented in: the J1 commit (`endou::gg::Shrink`).
+
+### D-23. Which mode a Game Gear cartridge sets: GG mode unless its header's region code names the Master System
+- Opened: 2026-10-20, at stage J1. GG mode is "enabled by the cartridge hardware" [R SMS Power!'s "GG VDP"], a line of
+  the cartridge connector that an image does not carry; a Master System cartridge in an adapter does not set it. Sega's
+  header gives region codes `$3` and `$4` to the Master System and `$5`, `$6` and `$7` to the Game Gear [R SMS Power!'s
+  "ROM Header"].
+- Documents read: those; MacDonald §5 ("only available in GG mode").
+- Test program: none can show a pin. The tester's six Game Gear cartridges carry `$6` (five) and `$7` (one) [M]. Of
+  the references, only SMS Plus GX ran a `.gg` image whose header carries `$4` as a Master System cartridge, 256 by
+  192; the other four ran it in GG mode [M 2026-10-20].
+- Referee: none.
+- Conclusion: **argued:** a cartridge routed as `gg` is in GG mode unless its header's region code is `$3` or `$4`, and
+  one with no header is in GG mode; a Master System cartridge (`sms`) on the Game Gear model is in the Master System's
+  mode. A cartridge whose header and pin disagree would need a table of its own, which the stage does not keep; none
+  is known to this page.
+- Pinned by: `media::tests::a_game_gear_cartridge_chooses_its_mode_by_its_header`;
+  `v1::tests::a_game_gear_cartridge_runs_on_the_game_gear_in_the_mode_its_header_chooses`.
+- Implemented in: the J1 commit (`Media::gg_mode`).

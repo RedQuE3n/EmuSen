@@ -219,3 +219,12 @@ Each processor names its constant words, since `SET` is a Z80 instruction.
 other register `$FFFF`: AF and SP as measured on Z80s, the rest as "The Undocumented Z80 Documented" §2.4 advises an
 emulator to set the registers it calls undefined. `Z80::new()` keeps its zeros, so Nephrite, which builds its Z80
 with it, is unchanged. Endou's machine starts from `power_on()`.
+
+## 9. The register list (2026-10-19, Endou's stage 8)
+
+`REGISTERS`, the eighteen names and widths a debugger lists (AF, BC, DE, HL, their alternates, IX, IY, SP, PC, I, R, WZ,
+IM, IFF1, IFF2), and `Registers::values`, their values in that order. Nephrite listed them in a table of its own
+(`genesis/debugger.rs`); Endou, the second user, needed the same list, so the crate is now its one owner and both read it
+(`Endou_Native.md` §2.1 and §15.2). Nephrite's `Z80_REGISTERS` is the crate's list under its old name, and its Z80
+registers are `values()`, the order and widths unchanged: its crate tests, `NephriteTests` and its debug parity script
+pass as before [M 2026-10-19]. `each_register_listed_reads_its_own_field` holds each name to its own field.

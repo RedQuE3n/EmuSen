@@ -414,13 +414,7 @@ impl Machine {
                 v.extend([r.pc as i64, r.sr as i64, r.usp() as i64, r.ssp() as i64]);
                 Some(v)
             }
-            Z80 => {
-                let r = &self.z80().regs;
-                Some(vec![
-                    r.af, r.bc, r.de, r.hl, r.af_, r.bc_, r.de_, r.hl_, r.ix, r.iy, r.sp, r.pc,
-                    r.i as u16, r.r as u16, r.wz, r.im as u16, r.iff1 as u16, r.iff2 as u16,
-                ].into_iter().map(i64::from).collect())
-            }
+            Z80 => Some(self.z80().regs.values().to_vec()),
             _ => None,
         }
     }

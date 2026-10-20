@@ -52,6 +52,13 @@ memories in a logged dispute step for D-8, reading only that entity's port list 
 go for stage 6, opened by `Endou_OpenBoot.md`; and the player's own BIOS is an opt-in accuracy upgrade per console
 model, the open boot program the default (§5.8, amended).
 
+**Decided by the tester, 2026-10-19, on stage 6's questions** (`Endou_Native.md` §13.14), all as recommended: the
+documented export check stays, the four library images it refuses playing on the Mark III, the refusal's words saying
+so; a public BIOS checksum list (No-Intro's DAT or SMS Power!'s `BIOS` page) may be fetched to cite each model's BIOS
+MD5 and SHA-1, only its checksum table read and its provenance recorded, the clean room holding; BIOS images with a
+built-in game stay refused, for a later stage; `firmwarecheck.py` is measured with a control at stage 7; D-8's referee
+(nvc) is set up apart, and D-8 is not worked on at stage 7; and the go for stage 7.
+
 Every claim carries one of six marks:
 
 - **[M]** *measured* on 2026-10-19, with the tool named. Nothing was run to write this page beyond listings, the local

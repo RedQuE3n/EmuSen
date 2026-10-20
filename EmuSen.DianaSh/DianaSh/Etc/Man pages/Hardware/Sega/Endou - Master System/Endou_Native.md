@@ -1422,3 +1422,18 @@ read in place, for §1.6 of the design page and §13.8.
    accept the files as Quartus does (installing it is the tester's to allow); or a dispute step allowed to read and
    edit the lines GHDL names, beyond the port list. Recommended: nvc, tried as GHDL was, before any further reading.
 6. **The go for stage 7** (the Master System to players), as the plan has it.
+
+*Decided 2026-10-19 by the tester: all six as recommended.* No real hardware is used for any of them (`Endou_Plan.md`
+§10 Q11).
+
+1. **The documented export check stays.** The four library images it refuses (three Brazilian, one Korean) play on the
+   Mark III by the Model setting, and the refusal's words say so.
+2. **A public BIOS checksum list may be fetched**, No-Intro's DAT or SMS Power!'s `BIOS` page, to cite each model's
+   BIOS MD5 and SHA-1 in Endou's firmware list, as the other cores' firmware lists do. Only the checksum table is read,
+   never a page's description of a BIOS's code or behaviour, since the reader is the open boot program's writer's
+   successor and the clean room still holds; the fetch's provenance is recorded.
+3. **BIOS images with a built-in game** (larger than 8 KiB) stay refused for now, recorded for a later stage.
+4. **`firmwarecheck.py`** was run by the tester on their three images; stage 7 measures it as the tool's docstring
+   prescribes for compiled code, with a control and the explained runs (`Endou_OpenBoot.md` §11).
+5. **D-8's referee**: nvc is being set up apart from Endou's stages; D-8 is not worked on at stage 7.
+6. **The go for stage 7.**
